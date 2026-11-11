@@ -233,11 +233,11 @@ Les scripts de lot sont sous `~/.cache/rag3weaver-build/`, sur le portable.
 
 ## Les tickets ouverts
 
-- `docs/tickets/2026-11-09-cinq-clients-de-production-attendent-sans-delai.md` : il attend la
+- `docs/rag3weaver-archi/tickets/2026-11-09-cinq-clients-de-production-attendent-sans-delai.md` : il attend la
   décision de Lucie sur les délais.
-- `docs/tickets/2026-11-08-le-juge-du-rappel-coupe-sa-reponse-sous-400-jetons.md` : il faut
+- `docs/rag3weaver-archi/tickets/2026-11-08-le-juge-du-rappel-coupe-sa-reponse-sous-400-jetons.md` : il faut
   relever le plafond du juge, ou couper la réflexion de Gemini.
-- `docs/tickets/2026-11-07-search-structured-le-score-d-une-ligne-n-est-pas-comparable-d-un-signal-a-l-autre.md` :
+- `docs/rag3weaver-archi/tickets/2026-11-07-search-structured-le-score-d-une-ligne-n-est-pas-comparable-d-un-signal-a-l-autre.md` :
   reste le seuil mesuré de `recall_min_score`.
-- `docs/tickets/2026-11-07-un-test-de-la-lib-qui-parle-au-service-d-embarquement-attend-sans-delai.md` :
+- `docs/rag3weaver-archi/tickets/2026-11-07-un-test-de-la-lib-qui-parle-au-service-d-embarquement-attend-sans-delai.md` :
   relevé par archi, sans porteur.

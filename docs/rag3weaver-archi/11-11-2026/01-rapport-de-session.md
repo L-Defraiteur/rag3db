@@ -158,7 +158,7 @@ Rien n'a été effacé pour ce passage.
 
 ## Les tickets ouverts qui me concernent
 
-Ils sont tous sous `docs/tickets/`. Je ne les ai pas déplacés : c7 dira quand.
+Ils sont sous `docs/rag3weaver-archi/tickets/`, déplacés de `docs/tickets/` le 11 novembre.
 
 - `2026-11-09-cinq-clients-de-production-attendent-sans-delai.md` : cinq clients HTTP hors des
   tests attendent un hôte sans délai. Il attend une décision de conception de Lucie.
