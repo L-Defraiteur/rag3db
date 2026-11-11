@@ -212,3 +212,20 @@ chat de l’IDE disposant d’un parcours complet de travail de code. Répartiti
 et convention `cx-` pour branches/worktrees consignés dans `05-cap-produit-vues-et-chat.md`.
 La convention s’applique aussi aux reprises de lots existants, au prochain point sûr si une passe
 est active ; aucune suppression des anciennes branches distantes.
+
+
+### Contrat des vues atterri, implémentation à suivre
+
+- **599cf78b2bd07a60ce2b85b37ac7442b93f0704e**, docs seules, arbre principal : contrat commun
+  ED/recherche dans `docs/arbre-principal/11-11-2026/03-contrats-et-lots-des-vues.md` et correction
+  de la conception historique. Hash et diff relus ; la session a confirmé les trois contrôles.
+- Contrat : contenus partagés sans fusionner occurrences/arêtes, empreinte de l’entrée réellement
+  découpée et de ses versions de traitement, vecteurs par modèle, parents et générations épinglés,
+  tombstones, masque obligatoire avant top-k de chaque signal, visibilité des deux bouts des arêtes,
+  lectures de branches sans worktree et migration prouvée sur copies.
+- Découpage : garde-fou, contenu partagé sur ancre (1a), migration (1b), couches/résolution (2a),
+  filtrage/outils (2b), ouverture des worktrees sans copie (3a), fusion/rejet/rétention (3b).
+  L’orchestration a donné suite à 1a avec témoins rouges et coordination ED/codeparsers sur les
+  fichiers communs ; aucun tour de push code et aucune activation sur les bases vivantes.
+- Les mesures M3–M5 restent différées jusqu’à un créneau libre et aux vérifications de format
+  sur copies ; leur absence ne bloque pas les témoins fonctionnels des invariants de 1a.
