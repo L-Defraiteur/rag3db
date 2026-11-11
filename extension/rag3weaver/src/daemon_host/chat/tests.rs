@@ -1751,3 +1751,63 @@ fn l_accueil_parle_en_depots_et_en_worktrees() {
     assert_eq!(statut, 200);
     fil.join().unwrap();
 }
+
+/// Les actions déjà accomplies restent visibles lorsqu'un appel modèle suivant
+/// échoue ; une nouvelle demande repart sans effacer leur résultat.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn une_erreur_du_modele_garde_les_actions_du_chat_et_permet_la_reprise() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    let Some(binaire) = navigateur_ou_saut("une_erreur_du_modele_garde_les_actions_du_chat_et_permet_la_reprise") else { return };
+    let vus = Arc::new(Mutex::new(Vec::<Vec<String>>::new()));
+    let model: ChatModel = {
+        let vus = vus.clone();
+        Arc::new(move |_| {
+            let vus = vus.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-erreur", 8192, move |turns, opts, sink| {
+                vus.lock().unwrap().push(opts.tools.iter().map(|t| t.name.clone()).collect());
+                let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
+                if turns[depuis].content == "reprends" {
+                    return MockLlm::new("Repris après la panne.").generate(turns, opts, sink);
+                }
+                if turns[depuis..].iter().any(|t| t.role == "tool") {
+                    return Err(crate::llm::LlmError::Model("panne-apres-lecture".into()));
+                }
+                MockLlm::new("").with_tool_calls(vec![("read_file", r#"{"path":"main.rs"}"#)]).generate(turns, opts, sink)
+            })))
+        })
+    };
+    let (d, h, m, id) = banc(model.clone());
+    drop(h);
+    let (chats, taches, runs) = (d.path().join("chats"), d.path().join("taches"), d.path().join("runs"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_chats_root(chats).with_racine_des_taches(taches).with_runs_root(runs).with_chat_model(model)
+    });
+    let racine = format!("http://{adresse}");
+    let mut r = crate::daemon::agent_de_temoin().post(format!("{racine}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j").header("content-type", "application/json")
+        .send(json!({ "manifest": m }).to_string()).unwrap();
+    let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(v["ok"], true, "{v}");
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{racine}/ide/code/{id}/chat"),
+        "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    n.evaluer("document.querySelector('#message').value = 'lis puis rencontre la panne'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === 'Erreur' && document.body.innerText.includes('panne-apres-lecture')", "la panne du modèle est dite");
+    let action = "!!document.querySelector('.outil[data-outil=read_file]') && document.querySelector('.outil[data-outil=read_file]').textContent.includes('fn main()')";
+    assert_eq!(n.evaluer(action), json!(true), "une panne n'efface pas la lecture déjà exécutée");
+    let proposes = vus.lock().unwrap().first().cloned().unwrap();
+    println!("INVENTAIRE navigateur dépôt hors tâche : {proposes:?}");
+    assert!(proposes.iter().any(|nom| nom == "read_file"));
+    assert!(proposes.iter().any(|nom| nom == "search_code"));
+    assert!(!proposes.iter().any(|nom| nom == "run_command" || nom == "edit_file"));
+    n.evaluer("document.querySelector('#message').value = 'reprends'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini' && document.body.innerText.includes('Repris après la panne.')", "une demande reprend après l'erreur");
+    assert_eq!(n.evaluer(action), json!(true), "la reprise garde l'historique des actions");
+    assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
+    drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
