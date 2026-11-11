@@ -19,13 +19,17 @@ Les expériences précédentes modifient les valeurs enum et la présentation de
 
 Ce vert ciblé ne constitue pas la passe complète.
 
-## Passe et essai sur copie en cours
+## Passe historique et essai sur copie
 
-La passe est lancée par l’unité `cx-memoire-alias-passe` : cinq jeux de features, lib entière, étape navigateur, `e2e_archiviste`, `e2e_postgres`. Le script arrête au premier échec ; aucun verdict VERT n’est écrit tant que toutes ces étapes n’ont pas passé. Journaux `~/.cache/rag3weaver-build/cx-memoire-alias-*` à luciepc.
+La passe historique a terminé verte sous l’unité `cx-memoire-alias-passe` : cinq jeux de features, lib entière, étape navigateur, `e2e_archiviste`, `e2e_postgres`. Résultats : features **5/5** ; lib **2 094 passés, 0 échoué, 58 ignorés** ; navigateur **33 passés, 0 échoué, 0 ignoré** ; archivage **5 passés, 0 échoué, 0 ignoré** ; PostgreSQL **34 passés, 0 échoué, 0 ignoré**. Les deux suites e2e ont aussi joué leurs deux gardes préalables, verts. Verdict `cx-memoire-alias-verdict` : `VERT`. Aucun échec n’a été masqué. Journaux `~/.cache/rag3weaver-build/cx-memoire-alias-*` à luciepc.
 
 Le premier document réel est aussi rejoué sur une copie neuve de l’instantané, avec les deux scripts exacts du lot et le binaire certifié d1345a115 fourni par optimiseur (SHA256 `597f6a29de486a9161996e8e4f460731802e090c71f0859a7ad80808ad7da7ee`). Résultat : **7/7 sections, zéro erreur, zéro requête refusée**, 331,5 s pour le processus entier. Ce temps n’est pas une mesure exclusive ni une durée par section ; aucune cause de sa variation n’est établie. Son dossier est `validation-correctif-alias/` sous la racine temporaire des essais de la [note précédente](03-reprise-codex-archivage.md). Les maps du processus ont confirmé la lib épinglée, dans `lib-chargee.txt`. Le résultat est consigné dans `resultats.jsonl` ; aucune durée par section n’est mesurée.
 
-Les cinquante documents ne sont pas lancés et la mémoire réelle est inchangée. Le ticket reste ouvert tant que la validation et la livraison du correctif ne sont pas achevées.
+Les cinquante documents ne sont pas lancés et la mémoire réelle est inchangée. Le ticket est déplacé dans `docs/tickets/closed/` dans le lot du correctif ; sa livraison sur master reste en attente.
+
+## Rejeu requis après rebase
+
+Master a reçu `1904e04e42cd3666d6b3a64fee5bd51f0629c020`, un garde-fou Rust dans les tests de backend. Après la passe historique, rebaser sous un nom de branche cx- neuf, pousser la branche, relire le diff puis rejouer features, lib entière et suites du changement hors verrou push. Les journaux historiques restent intacts ; le script préparé pour ce rejeu utilise le préfixe `cx-memoire-alias-r2-`. Aucun tour de push n’est accordé à ce stade.
 
 ## Où reprendre
 

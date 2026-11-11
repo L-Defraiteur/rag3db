@@ -1,6 +1,6 @@
 # Les noms des fiches du juge font refuser les décisions de l’archiviste
 
-- **État** : ouvert, reproduit le 11 novembre 2026 sur une copie isolée de la mémoire de Lucie ; diagnostic comparatif confirmé, correctif de production non livré.
+- **État** : corrigé par `9bf3bb33a`, sur la branche du lot ; livraison sur master en attente du rejeu après rebase et du tour de l’orchestration.
 - **Famille** : produit
 - **Gravité** : blocage partiel de l’archivage : des sections restent sans apport.
 - **Atteignable en service** : oui, si archive rappelle des fiches dont les noms sont des bilans longs.
@@ -30,3 +30,7 @@ Chaque copie part de l’instantané `~/.local/share/rag3weaver/instantanes/avan
 ## Pour fermer
 
 Isoler la cause par comparaison, poser un témoin rouge puis vert avec un binaire de provenance vérifiée, et livrer le correctif après la passe. Des identifiants courts doivent se résoudre vers les noms exacts des fiches, sans créer de fiches sous les alias ni écarter silencieusement les fiches du juge. Les cinquante documents attendent ce diagnostic ; la mémoire réelle attend toujours la décision de Lucie.
+
+## Correctif et preuves du lot
+
+Les alias courts sont résolus vers les noms exacts avec refus explicite des identifiants inconnus ou ambigus. Rouge ciblé (un échec attendu), puis cinq témoins verts ; essai réel sur copie neuve et binaire de provenance vérifiée : sept sections sur sept, zéro erreur, zéro refus. Passe historique sur base 133b9013e : features 5/5, lib 2094/0 (58 ignorés dans cette étape), navigateur 33/0/0, e2e_archiviste 5/0/0 et e2e_postgres 34/0/0. Le Rust arrivé sur master impose encore un rejeu court. La [note du lot](../../memoire/11-11-2026/04-alias-candidats.md) garde les journaux et le point de reprise.
