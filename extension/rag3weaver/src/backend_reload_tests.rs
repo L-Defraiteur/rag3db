@@ -76,7 +76,7 @@ fn toy() -> (tempfile::TempDir, Backend) {
         reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         runs_in_flight: crate::dataflow::RunsInFlight::new(),
         ecarts_des_fichiers: Mutex::new(None),
-        ferme: std::sync::atomic::AtomicBool::new(false),
+        resultat_arret: None,
     };
     (dir, backend)
 }

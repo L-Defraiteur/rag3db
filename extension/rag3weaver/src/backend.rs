@@ -2354,7 +2354,7 @@ impl PreparedBackend {
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             runs_in_flight: crate::dataflow::RunsInFlight::new(),
             ecarts_des_fichiers: Mutex::new(None),
-            ferme: std::sync::atomic::AtomicBool::new(false),
+            resultat_arret: None,
         };
         // **Une réaction déclarée est une réaction qui tourne.** Elle se monte
         // ici, pas sur un appel que l'hôte pourrait oublier : une section
@@ -2989,8 +2989,10 @@ pub struct Backend {
     /// base** (lot M3c) : chaque fichier propre contre sa ligne, dans les deux
     /// sens, et les fichiers composés régénérés. `index_state` le dit.
     ecarts_des_fichiers: Mutex<Option<Value>>,
-    /// Fermé par `shutdown()` : une fois suffit, le Drop n'a alors rien à refaire.
-    ferme: std::sync::atomic::AtomicBool,
+    /// Résultat de la tentative unique d'arrêt. Une erreur ne prouve pas la
+    /// fermeture : elle reste rendue, sans fermer sous une réaction détachée.
+    /// `shutdown` et `Drop` ont un accès exclusif (`&mut self`).
+    resultat_arret: Option<Result<(), String>>,
 }
 /// Entre deux essais de rejoindre un service d'embarquement manquant.
 pub const INTERVALLE_DE_RETENTE_EMBARQUEUR: std::time::Duration = std::time::Duration::from_secs(30);
@@ -5350,10 +5352,18 @@ impl Backend {
     /// Les erreurs des réactions arrêtées sont **dites** ici : leur réacteur
     /// est parti avec elles, et personne d'autre ne les relira.
     pub fn shutdown(&mut self) -> Result<(), String> {
-        // Une fois suffit : le Drop d'un backend déjà fermé n'a rien à refaire.
-        if self.ferme.swap(true, std::sync::atomic::Ordering::SeqCst) {
-            return Ok(());
+        // Une seule tentative : les réacteurs figés ont été détachés et ne
+        // peuvent plus être attendus par un nouvel appel. Conserver aussi
+        // l'erreur, sinon le second appel annoncerait une fermeture fictive.
+        if let Some(resultat) = &self.resultat_arret {
+            return resultat.clone();
         }
+        let resultat = self.arreter_une_fois();
+        self.resultat_arret = Some(resultat.clone());
+        resultat
+    }
+
+    fn arreter_une_fois(&mut self) -> Result<(), String> {
         let mut figees = Vec::new();
         for erreur in self.stop_reactions() {
             eprintln!("[réaction] {erreur}");
@@ -5399,7 +5409,9 @@ impl Backend {
 /// ses fils tenir le catalogue, qui se fermait plus tard sur un autre fil, quand
 /// son dossier n'était peut-être plus là : des TempDir à moitié effacés, une
 /// fermeture du plein texte en erreur, un SIGSEGV à la sortie. Une réaction figée
-/// se dit ici comme à `shutdown()`, et le catalogue reste alors ouvert.
+/// se dit ici comme à `shutdown()`, et le catalogue reste alors ouvert. Le
+/// résultat de l'unique tentative est conservé : un arrêt échoué est encore
+/// dit au Drop, jamais remplacé par un succès.
 impl Drop for Backend {
     fn drop(&mut self) {
         if let Err(e) = self.shutdown() {
@@ -5888,7 +5900,7 @@ mod tests {
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             runs_in_flight: crate::dataflow::RunsInFlight::new(),
             ecarts_des_fichiers: Mutex::new(None),
-            ferme: std::sync::atomic::AtomicBool::new(false),
+            resultat_arret: None,
         };
         let response = backend.run_search_program(&program).unwrap();
         assert_eq!(response["result"][0]["uuid"], "note-1");
@@ -6117,7 +6129,7 @@ mod tests {
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             runs_in_flight: crate::dataflow::RunsInFlight::new(),
             ecarts_des_fichiers: Mutex::new(None),
-            ferme: std::sync::atomic::AtomicBool::new(false),
+            resultat_arret: None,
         }
     }
 

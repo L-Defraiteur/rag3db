@@ -113,7 +113,7 @@ fn reactif_sur(conn: CallbackConnection) -> (tempfile::TempDir, Backend) {
         reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         runs_in_flight: crate::dataflow::RunsInFlight::new(),
         ecarts_des_fichiers: Mutex::new(None),
-        ferme: std::sync::atomic::AtomicBool::new(false),
+        resultat_arret: None,
         decider: None,
         #[cfg(feature = "code")]
         worktree_host: std::sync::Mutex::new(None),
@@ -634,5 +634,26 @@ fn un_arret_echoue_ne_devient_pas_un_succes_sans_fermer() {
     let erreur = premier.expect_err("une réaction figée empêche la fermeture");
     assert!(erreur.contains("catalogue laissé ouvert"), "{erreur}");
     assert!(vue_encore_ouverte, "le premier arrêt ne doit pas fermer sous la réaction figée");
-    assert!(second.is_err(), "faux succès : le second shutdown rend {second:?} sans avoir fermé le catalogue");
+    assert_eq!(second, Err(erreur), "le second arrêt doit conserver l'erreur sans annoncer une fermeture");
+}
+
+
+#[test]
+fn un_arret_reussi_ne_ferme_le_catalogue_qu_une_fois() {
+    let (_dir, mut backend) = reactif();
+    backend.catalog.lock().unwrap().publish_read_view();
+    let mut evenements = backend.catalog.lock().unwrap().subscribe();
+    backend.shutdown().expect("premier arrêt réussi");
+    assert!(backend.read_view.current().is_none(), "la vue de lecture est fermée");
+    backend.shutdown().expect("second arrêt réussi et idempotent");
+    drop(backend);
+    let (mut debuts, mut fins) = (0, 0);
+    while let Ok(evenement) = evenements.try_recv() {
+        match evenement {
+            Event::ShutdownStarted { .. } => debuts += 1,
+            Event::ShutdownCompleted { .. } => fins += 1,
+            _ => {},
+        }
+    }
+    assert_eq!((debuts, fins), (1, 1), "un second appel ou le Drop ne doit pas refaire la fermeture");
 }
