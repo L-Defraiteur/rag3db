@@ -1999,6 +1999,9 @@ fn read_threads() -> u64 {
 
         if let Some(old_config) = self.entity_configs.get(entity_name) {
             // ── Idempotent path: entity already registered ──
+            if old_config.derived.as_ref().map(|d| &d.identity) != config.derived.as_ref().map(|d| &d.identity) {
+                return Err(CatalogError::SchemaError(format!("{entity_name} : changement d'identité dérivée interdit sans migration déclarée")));
+            }
             self.migrate_entity(entity_name, old_config.clone(), &config)?;
         } else {
             // ── Fresh registration: create tables + indexes ──
@@ -2015,6 +2018,19 @@ fn read_threads() -> u64 {
         self.persist_entity_config(entity_name, &config)?;
         self.config.entities.insert(entity_name.to_string(), entity_def);
         self.entity_configs.insert(entity_name.to_string(), config.clone());
+        if let Some(derived) = config.derived.as_ref().filter(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. })) {
+            // La relation générée rejoint les contrats communs de lien, d'annulation
+            // et de fermeture de ressources ; aucune écriture parallèle au graphe.
+            let relation = crate::config::RelationDef {
+                from: entity_name.to_string(), to: derived.from.clone(),
+                properties: Some(HashMap::from([(crate::config::DerivedConfig::RENDER_HASH.to_string(), crate::config::FieldDef {
+                    field_type: FieldType::Text, title_for: None, content_for: None, boost: None, default_value: None,
+                })])),
+            };
+            let name = crate::schema::derived_rel_name(entity_name);
+            self.persist_relation(&name, &relation)?;
+            self.config.relations.insert(name, relation);
+        }
         self.publish_read_view();
         if config.derived.is_some() {
             // Une dérivée neuve sur des racines déjà posées : à rendre.
@@ -2183,8 +2199,11 @@ fn read_threads() -> u64 {
 
         // Une dérivée pointe sa racine : `{Entité}_DERIVED_FROM`.
         if let Some(racine) = &entity_def.derived_from {
-            let rel_ddl = crate::schema::generate_derived_rel_ddl_with_dialect(entity_name, racine, self.dialect.as_ref())
-                .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
+            let rel_ddl = if config.derived.as_ref().is_some_and(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. })) {
+                crate::schema::generate_content_derived_rel_ddl_with_dialect(entity_name, racine, self.dialect.as_ref())
+            } else {
+                crate::schema::generate_derived_rel_ddl_with_dialect(entity_name, racine, self.dialect.as_ref())
+            }.map_err(|e| CatalogError::SchemaError(e.to_string()))?;
             self.conn.execute(&rel_ddl).map_err(|e| CatalogError::DbError(e.to_string()))?;
             self.poser_index(self.dialect.relation_indexes(&crate::schema::derived_rel_name(entity_name)));
         }
@@ -6121,6 +6140,7 @@ fn read_threads() -> u64 {
         records: Vec<BTreeMap<String, CypherValue>>,
         exige: crate::disponibilite::Disponibilites,
     ) -> Result<FlushResult, CatalogError> {
+        self.verifier_ecriture_de_version(entity_name)?;
         // **Un lot écrit dans une autre cellule que celle du catalogue**
         // (marche 1 bis) : ses lignes portent déjà leur cellule, posée par le
         // nœud de l'appel. Il s'écrit dans cette cellule, ses index plein texte
@@ -6974,7 +6994,13 @@ fn read_threads() -> u64 {
             par_entite.entry(d.entity.clone()).or_default().push(CypherValue::String(d.root_uuid.clone()));
         }
         for (entite, uuids) in par_entite {
-            let requete = self.dialect.marquer_derivees_a_rendre(&entite);
+            let derived = self.entity_configs.get(&entite).and_then(|c| c.derived.as_ref());
+            let requete = if let Some(d) = derived.filter(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. })) {
+                // Avant L3, seules des écritures en file existent : aucune dette
+                // persistante n'est née. Son rollback doit garder l'état validé.
+                if !self.in_transaction { continue; }
+                self.dialect.mark_derived_references_pending(&entite, &d.from, &crate::schema::derived_rel_name(&entite))
+            } else { self.dialect.marquer_derivees_a_rendre(&entite) };
             if let Err(e) = self.conn.execute_with_params(&requete, &[QueryParam::new("uuids", CypherValue::List(uuids))]) {
                 // La dette reste en mémoire ; seule sa trace en base manque.
                 self.emit_event(CatalogEvent::Warning {
@@ -7021,9 +7047,15 @@ fn read_threads() -> u64 {
                 )))?;
                 Ok(res.rows.iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::to_string)).collect())
             };
-            uuids.extend(lire(self, self.dialect.select_derivees_a_rendre(&entite, limite))?);
             let rel = crate::schema::derived_rel_name(&entite);
-            uuids.extend(lire(self, self.dialect.select_racines_sans_derivee(&racine, &entite, &rel, limite))?);
+            let content = self.entity_configs.get(&entite).and_then(|c| c.derived.as_ref()).is_some_and(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. }));
+            if content {
+                uuids.extend(lire(self, self.dialect.pending_derived_references(&entite, &racine, &rel, limite))?);
+                uuids.extend(lire(self, self.dialect.missing_derived_references(&entite, &racine, &rel, limite))?);
+            } else {
+                uuids.extend(lire(self, self.dialect.select_derivees_a_rendre(&entite, limite))?);
+                uuids.extend(lire(self, self.dialect.select_racines_sans_derivee(&racine, &entite, &rel, limite))?);
+            }
             uuids.sort();
             uuids.dedup();
             if uuids.is_empty() {
@@ -7050,12 +7082,21 @@ fn read_threads() -> u64 {
         Ok(total)
     }
 
+    fn verifier_ecriture_de_version(&self, entity: &str) -> Result<(), CatalogError> {
+        if self.entity_configs.get(entity).and_then(|c| c.derived.as_ref())
+            .is_some_and(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. })) {
+            return Err(CatalogError::SchemaError(format!("{entity} : version de contenu immuable ; modifier sa racine")));
+        }
+        Ok(())
+    }
+
     fn mettre_en_file_la_creation(
         &mut self,
         entity_name: &str,
         data: BTreeMap<String, CypherValue>,
     ) -> Result<EntityRef, CatalogError> {
         self.check_initialized()?;
+        self.verifier_ecriture_de_version(entity_name)?;
         self.check_ecriture("create")?;
         let entity_def = self.check_entity(entity_name)?.clone();
 
@@ -7790,6 +7831,7 @@ fn read_threads() -> u64 {
         data: BTreeMap<String, CypherValue>,
     ) -> Result<(), CatalogError> {
         self.check_initialized()?;
+        self.verifier_ecriture_de_version(entity_name)?;
         self.check_ecriture("update")?;
         self.check_entity(entity_name)?;
         let new_content = self.build_content_text(entity_name, &data);
@@ -7839,6 +7881,7 @@ fn read_threads() -> u64 {
         uuid: &str,
     ) -> Result<(), CatalogError> {
         self.check_initialized()?;
+        self.verifier_ecriture_de_version(entity_name)?;
         self.check_ecriture("delete")?;
         self.check_entity(entity_name)?;
         // Les dérivées : celles dont c'est la racine partent avec elle ; celles
@@ -7849,6 +7892,9 @@ fn read_threads() -> u64 {
         let racines: Vec<(String, String)> = self
             .derivations_pour_racine(entity_name, &uuids)
             .into_iter()
+            // Une version partagée survit à la suppression d'une origine.
+            // DETACH DELETE retire son lien ; la rétention des orphelins est séparée.
+            .filter(|d| !self.entity_configs.get(&d.entity).and_then(|c| c.derived.as_ref()).is_some_and(|cfg| matches!(cfg.identity, crate::config::DerivedIdentity::Content { .. })))
             .map(|d| (d.entity.clone(), crate::dataflow::derive_nodes::derived_uuid(&d.entity, &d.root_uuid)))
             .collect();
         for (derivee, uuid_derive) in racines {
@@ -8035,11 +8081,18 @@ fn read_threads() -> u64 {
         if !self.dialect.capabilities().cypher || self.in_transaction {
             return Ok(false);
         }
+        self.commencer_lot_atomique()?;
+        Ok(true)
+    }
+
+    /// Le mécanisme L3, également utilisable par un graphe dont le contrat
+    /// impose l'atomicité (les références vers des versions immuables).
+    fn commencer_lot_atomique(&mut self) -> Result<(), CatalogError> {
         self.prepare_schema_for_ingest()?;
         self.conn.begin().map_err(|e| CatalogError::DbError(format!("BEGIN du lot : {e}")))?;
         self.set_in_transaction(true);
         self.fts_tampon = Some(Arc::new(crate::fts_tampon::TamponPleinTexte::default()));
-        Ok(true)
+        Ok(())
     }
 
     /// **Valider un lot** : COMMIT, puis le plein texte du tampon appliqué
@@ -8530,6 +8583,63 @@ fn read_threads() -> u64 {
         avec_decoupage: bool,
         cible: Option<(&str, bool)>,
     ) -> FlushResult {
+        // Une nouvelle version et son rattachement font une seule écriture
+        // logique. Composer L3 conserve aussi le suivi de rendu et le tampon
+        // plein texte si un nœud échoue ; jamais un lien neuf à moitié posé.
+        let fermeture = cible.map(|(graine, ecriture)| self.fermeture(graine, ecriture));
+        let references_immuables = self.pending.derivations.iter().any(|d| {
+            fermeture.as_ref().is_none_or(|tables| tables.contains(&d.entity)) &&
+            self.entity_configs.get(&d.entity).and_then(|c| c.derived.as_ref())
+                .is_some_and(|cfg| matches!(cfg.identity, crate::config::DerivedIdentity::Content { .. }))
+        });
+        if references_immuables && !self.in_transaction {
+            let lot = match fermeture {
+                Some(tables) => self.pending.extraire_les_tables(&tables, &Self::bouts_des_relations(&self.config)),
+                None => std::mem::take(&mut self.pending),
+            };
+            // Le rollback L3 vide sa file ; les ressources indépendantes restent
+            // à part et seront rendues au catalogue quel que soit le verdict.
+            let mut hors_lot = std::mem::replace(&mut self.pending, lot);
+            if let Err(error) = self.commencer_lot_atomique() {
+                self.pending.entities.append(&mut hors_lot.entities);
+                self.pending.relations.append(&mut hors_lot.relations);
+                self.pending.updates.append(&mut hors_lot.updates);
+                self.pending.deletes.append(&mut hors_lot.deletes);
+                self.pending.derivations.append(&mut hors_lot.derivations);
+                return FlushResult { failed: 1, warnings: vec![error.to_string()], rendu_pret: Some(crate::disponibilite::Disponibilites::AUCUNE), ..Default::default() };
+            }
+            let mut result = self.drainer(avec_embarquement, avec_decoupage, None);
+            if result.failed > 0 {
+                self.rollback_lot();
+                result.failed += result.processed;
+                result.processed = 0;
+                result.unchanged = 0;
+                result.rendu_pret = Some(crate::disponibilite::Disponibilites::AUCUNE);
+                for update in &mut result.update_results {
+                    update.status = crate::records::UpdateStatus::Failed("lot de références annulé".into());
+                    update.reembedded = false;
+                    update.chunks_created = 0;
+                    update.chunks_deleted = 0;
+                }
+                for delete in &mut result.delete_results {
+                    delete.echec = Some("lot de références annulé".into());
+                    delete.chunks_deleted = 0;
+                    delete.relations_deleted = 0;
+                }
+                result.warnings.push("lot de références annulé ; versions et rattachements antérieurs conservés".into());
+            } else if let Err(error) = self.commit_lot() {
+                result.failed += 1;
+                result.rendu_pret = Some(crate::disponibilite::Disponibilites::AUCUNE);
+                result.warnings.push(error.to_string());
+            }
+            self.pending.entities.append(&mut hors_lot.entities);
+            self.pending.relations.append(&mut hors_lot.relations);
+            self.pending.updates.append(&mut hors_lot.updates);
+            self.pending.deletes.append(&mut hors_lot.deletes);
+            self.pending.derivations.append(&mut hors_lot.derivations);
+            return result;
+        }
+
         // Le journal de ce drain seulement.
         self.journal_des_ecritures.prendre();
         let avec_embarquement = self.peut_embarquer(avec_embarquement);
