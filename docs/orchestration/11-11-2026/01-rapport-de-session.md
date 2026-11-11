@@ -255,3 +255,8 @@ est active ; aucune suppression des anciennes branches distantes.
 - Lot1a : témoins dd5f30465 joués, deux tests dont un rouge pour la bonne raison : même contenu
   embarqué deux fois au lieu d’une, occurrences et positions distinctes vérifiées ; docstrings
   différentes : témoin vert. Preuve `~/.cache/rag3weaver-build/cx-scope-version-rouge.log`.
+
+- **Retour suivant : nettoyage terminé**, confirmé par arbre principal : wt-deplace et branche
+  locale au portable, wt-deplace-codex détaché à luciepc et target-A-plan inactif supprimés ;
+  refs distantes intactes. Worktrees1a conservés aux deux postes, preuves rouges sauvegardées
+  hors target supprimé ; prochain target unique1a : cx-target-scope-version.
