@@ -1,5 +1,39 @@
 # Rapport de session — everything declarative, au 11 novembre 2026
 
+## Dernier point de reprise — passe08 verte, schéma nommé en revue
+
+Sur `08fedf6ef`, la passe est terminée : features5, gardes20, lib2121/0/64
+ignorés (41,73s), navigateur39/0/0 (132,88s), sept e2e sans SAUTÉ : dérivées4,
+lectures24, PG34, txvecteurs3, txarrêt18, txmerge1, txligne3. Preuves copiées aux
+deux postes `I-luciepc/ouverture-20261111/{*-passe-1.log,verdict-passe-1}`.
+
+Ce vert ne suffit pas à pousser : le même ticket ordre porte la revue du schéma
+nommé `workspace.index=code`. Après fin08, comparaison séquentielle dans le même
+WT/target : baseline `6cf2bc8b5` (2e+tests seuls) et candidat `db79fd2a1`, tous deux
+0/3/0 (0,01s). Relation custom→Scope refusée identiquement sur les deux : aucune
+régression de ce chemin établie. Dérivée fromScope/gather du schéma nommé refusées
+sur baseline par hashsafe, sur candidat par racine absente des entités explicites.
+C'est une limite de composition préexistante, encore ouverte. Logs et commits
+`nomme-{baseline,candidat}.log`, `commit-nomme-*` sauvegardés aux deux postes.
+
+HEAD courant `464242e36`, branche `cx-ed-ouverture-2`, deux W `cx-ed-ouverture`.
+Aucun cargo actif après comparaison. La branche `cx-ed-ouverture-nomme-baseline`
+(6cf) est un témoin, pas une base à intégrer. Lecture croisée root/content validée
+par arbre, mais provider nommé reste à composer depuis ses vraies définitions,
+sans pseudo-config ou duplication Scope. Primitive pure configs/relations partagée
+plan_schema/register_code_schema demandée à arbre (code.rs son périmètre), décision
+avec orchestration. Pas de source 1a importée, pas de tour de push accordé.
+Alias public search_index et preuve combinée1a restent distincts et non livrés.
+
+Avant retrait du parent : appliquer la garde commune des sous-modules. Inventaire
+lecture seule initial deux postes : codeparsers a730 sous administration privée
+.git/worktrees/cx-ed-ouverture/modules/..., aucun autre worktree lié observé ;
+réappliquer juste avant tout retrait. Ne pas réutiliser un ancien script de
+cleanup qui ne vérifie que la propreté du parent. Incident suivi par codeparsers,
+aucun prune/GC/réparation dans ce lot.
+Les sections suivantes restent les étapes précédentes, pas le prochain geste.
+
+
 ## Reprise actuelle — contrats d'ouverture du backend
 
 Le relais contextuel a atterri en `68b9ede17` et son nettoyage ED/archi est
