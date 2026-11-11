@@ -3,7 +3,7 @@ import { Square, SendHorizontal, MessageSquare, FileDiff, Scale, ChevronDown, Ch
 import { Button } from "@/components/ui/button";
 import { marked } from "marked";
 import { forgetSymbols, highlightBlock, inlineCodeHtml, onHostHighlight, withInlineCode } from "@/lib/code";
-import { ToolResultView } from "@/lib/toolview";
+import { ToolResultView, toolContext } from "@/lib/toolview";
 import { RagDesDepots, UiDuTour } from "@/components/UiDuTour";
 import { Breadcrumb, ChatSidebar } from "@/views/ChatSidebar";
 import DOMPurify from "dompurify";
@@ -23,7 +23,7 @@ import { displayName, fetchChat, onEtat, onFlux, sendChat, stopRun, type Backend
 marked.setOptions({ gfm: true, breaks: true });
 // Le dépôt de la conversation rendue : le code en ligne d'une réponse y cherche ses
 // chemins (posé par `renderMarkdown`, un rendu à la fois).
-let renderBackend = "";
+let renderBackend: string | null = "";
 marked.use({
   renderer: {
     code({ text, lang }) {
@@ -32,21 +32,21 @@ marked.use({
     codespan({ text }) {
       // `text` arrive échappé par marked : on le rend brut au module, qui échappe.
       const brut = text.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
-      return inlineCodeHtml(brut, renderBackend);
+      return renderBackend === null ? `<code>${text}</code>` : inlineCodeHtml(brut, renderBackend);
     },
   },
 });
-function renderMarkdown(text: string, backendId = ""): string {
+function renderMarkdown(text: string, backendId: string | null = ""): string {
   renderBackend = backendId;
   // Rogné : marked finit par un retour à la ligne, qui ferait un nœud texte de plus
   // dans `.body` (un témoin compare son texte à l'égal).
-  return DOMPurify.sanitize(marked.parse(text, { async: false }) as string, { USE_PROFILES: { html: true } }).trim();
+  return DOMPurify.sanitize(marked.parse(text, { async: false }) as string, { USE_PROFILES: { html: true }, ...(backendId === null ? { FORBID_TAGS: ["a"] } : {}) }).trim();
 }
 
 // Un appel d'outil dans une bulle : son départ (`at`) et son retour (`end`) en ms
 // epoch, quand on les sait ; `result` est l'extrait du flux (`truncated`) puis le
 // résultat entier relu dans la session à la fin du tour.
-type ToolBlock = { id: string; name: string; args: string; result?: string; ok?: boolean; truncated?: boolean; at?: number; end?: number; ui?: UiComposant[] };
+type ToolBlock = { id: string; name: string; args: string; result?: string; ok?: boolean; truncated?: boolean; at?: number; end?: number; ui?: UiComposant[]; metadata?: unknown };
 // **Une bulle d'agent = ses parties dans l'ordre d'arrivée** (ticket « les outils
 // changent de place quand la réponse arrive ») : mots, appel, mots, appel… la
 // réponse à la fin ; le flux et la relecture rendent la même suite.
@@ -80,6 +80,7 @@ function fromTurns(turns: ChatTurn[]): Item[] {
       if (b) {
         b.result = t.content ?? "";
         b.end = t.at_ms;
+        b.metadata = t.metadata;
         if (t.ui?.length) b.ui = t.ui;
       }
       continue;
@@ -462,7 +463,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
           ...m,
           parts: m.parts.map((p) =>
             p.kind === "tool" && p.id === String(ev.call_id)
-              ? { ...p, ok, result: excerpt ?? (ok ? "" : `refusé (${ev.error_kind ?? "erreur"})`), truncated: ev.truncated === true, end: p.at !== undefined && typeof ev.ms === "number" ? p.at + ev.ms : d.at_ms, ui: Array.isArray(ev.ui) ? (ev.ui as UiComposant[]) : p.ui }
+              ? { ...p, ok, metadata: ev.metadata, result: excerpt ?? (ok ? "" : `refusé (${ev.error_kind ?? "erreur"})`), truncated: ev.truncated === true, end: p.at !== undefined && typeof ev.ms === "number" ? p.at + ev.ms : d.at_ms, ui: Array.isArray(ev.ui) ? (ev.ui as UiComposant[]) : p.ui }
               : p,
           ),
         }));
@@ -722,8 +723,9 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                   {it.role === "user" ? "Vous" : it.role === "error" ? "Erreur" : "Agent"}
                 </div>
                 {it.live && !it.parts.length ? <div className="body whitespace-pre-wrap break-words" /> : null}
-                {it.parts.map((p, n) =>
-                  p.kind === "text" ? (
+                {it.parts.map((p, n) => {
+                  const contexte = p.kind === "tool" ? toolContext(p.args, p.metadata, id) : { id };
+                  return p.kind === "text" ? (
                     it.role === "assistant" && !it.live ? (
                       <div key={n} className="body markdown break-words" dangerouslySetInnerHTML={{ __html: renderMarkdown(p.text, id) }} />
                     ) : (
@@ -741,16 +743,18 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                         <div className="arguments font-mono whitespace-pre-wrap break-words">{p.args}</div>
                         {p.result !== undefined ? (
                           <>
-                            <ToolResultView text={p.result} render={(md) => renderMarkdown(md, id)} />
+                            {contexte.label ? <p className="contexte-outil text-[11px]">contexte : {contexte.label}</p> : null}
+                            {contexte.id === null ? <p className="contexte-outil text-[11px]">contexte non disponible — liens inactifs</p> : null}
+                            <ToolResultView text={p.result} render={(md) => renderMarkdown(md, contexte.id)} />
                             {p.truncated ? <p className="text-[11px]">… (extrait ; le résultat entier se relit à la fin du tour)</p> : null}
                           </>
                         ) : null}
                       </div>
                     </details>
-                    <UiDuTour ui={p.ui} />
+                    {contexte.id !== null ? <UiDuTour ui={p.ui} /> : null}
                     </Fragment>
-                  ),
-                )}
+                  );
+                })}
                 {it.propositions.map((p) => (
                   <p key={p.id} className="proposition-du-tour text-sm">
                     <a href={`/ide/code/${id}/propositions/${p.id}`} data-proposition={p.id} className="underline">
