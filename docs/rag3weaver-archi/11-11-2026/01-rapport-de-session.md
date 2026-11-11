@@ -153,24 +153,20 @@ commit exactement joué `bc3a1d779` ; aucun code n'a changé après la passe.
 
 ## Ce qui reste sur disque
 
-Rien n'a été effacé pour ce passage.
+Les worktrees de code de ce lot (`wt-flux`, `cx-wt-flux`, `cx-wt-chat-erreurs`) et le target
+`flux` sont supprimés sur les deux postes, après sauvegarde et trois contrôles du push.
+La base PostgreSQL privée `rw_archi_flux_chat_bc3a_20261111` est supprimée après contrôle
+zéro connexion. Ne pas relancer leurs anciens scripts en supposant ces chemins présents.
 
-- **Portable**, sous `/home/lucied/.cache/rag3weaver-build/` :
-  - `wt-flux` : le worktree de la branche `ide-par-le-flux`, propre, à `a9c5a3108` ;
-  - `flux` : son target cargo, 11 Gio ;
-  - `wt-docs-archi` : mon worktree de documentation, sans branche (tête détachée) ;
-  - `wt-flux-passe.sh` et `wt-flux-push.sh` : les scripts de la passe et du push du lot ;
-  - les scripts `wt-*-passe.sh` et `wt-*-push.sh` des lots atterris, que l'on peut copier comme
-    modèles.
-  - Les autres worktrees de ce dossier (`wt-deplace`, `wt-docs-hooks-essai`, `wt-fuite3`,
-    `wt-gabarits`, `wt-juge`, `wt-mf-96`, `wt-react5`) appartiennent à d'autres sessions.
-- **Branches sur origin** laissées par mes lots, déjà fusionnées et à ne pas supprimer sans le
-  mot de Lucie : `atelier-lire-ecrire` et `-2`, `delai-des-temoins-de-l-hote` et `-2`,
-  `atelier-commandes-sur-la-carte` et `-2`, `atelier-chemin-relance`, `jauge-du-contexte`.
-  Un suffixe `-2` est la branche rebasée, poussée sous un nom neuf parce qu'on ne force jamais
-  un push.
-- **luciepc** (l'autre poste) : aucun worktree ni target de cette session. Celui qui s'y trouve,
-  `wt-lib-arbre`, n'est pas à moi.
+Les preuves sont conservées sur le portable et luciepc sous
+`~/.cache/rag3weaver-build/cx-flux-chat-bc3a1d779-prive-r2-20261111/` ; les anciens journaux
+rouges/interrompus restent séparés. Les lanceurs et journaux de push/nettoyage restent dans
+le dossier de build. Toutes les branches distantes sont conservées, y compris la branche
+finale `cx-archi-ide-par-le-flux-chat-4-final-20261111185614`.
+
+Les autres worktrees, les futurs lots outils d'ED, l'ancien worktree de docs `wt-docs-archi`
+et le worktree moteur `wt-lib-arbre` n'ont pas été touchés. Le bref worktree du bilan docs
+est lui aussi retiré après son push ; aucun target n'a été créé pour la documentation.
 
 ## Ce qui reste en attente
 
