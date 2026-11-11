@@ -1386,6 +1386,8 @@ impl PreparedBackend {
                 .collect();
             let _ = m.dossiers_voisins.set(voisins);
         }
+        let provided_schema = backend_schema::provided_schema(manifest.workspace.as_ref());
+        let schema = backend_schema::SchemaFacts::compose(&entities, &manifest.relations, &provided_schema)?;
         if let Some(ui) = &manifest.ui_state {
             if !entities.contains_key(&ui.entity) {
                 return Err(format!(
@@ -1396,7 +1398,7 @@ impl PreparedBackend {
         }
         for (name, relation) in &manifest.relations {
             crate::schema::validate_identifier(name, "relation").map_err(|e| e.to_string())?;
-            if !entities.contains_key(&relation.from) || !entities.contains_key(&relation.to) {
+            if !schema.entities.contains_key(relation.from.as_str()) || !schema.entities.contains_key(relation.to.as_str()) {
                 return Err(format!("{name}: unknown relation endpoint"));
             }
             // Les états permis d'un bout : il faut un cycle de vie, et des
@@ -1407,7 +1409,7 @@ impl PreparedBackend {
                 ("to_states", &relation.to, &relation.to_states),
             ] {
                 let Some(permis) = permis else { continue };
-                let Some(cycle) = entities[entite].lifecycle.as_ref() else {
+                let Some(cycle) = schema.entities[entite.as_str()].lifecycle.as_ref() else {
                     return Err(format!(
                         "relation « {name} » : {cle} sur « {entite} », qui n'a pas de cycle de vie — \
                          retirez {cle}, ou déclarez un lifecycle sur l'entité"
@@ -1828,7 +1830,10 @@ impl PreparedBackend {
         let template_drift = serde_json::from_slice::<serde_json::Value>(&brut)
             .map(|v| crate::builtin_templates::drift_avec(&directory, &v, lecteur))
             .unwrap_or_default();
-        backend_schema::registration_order(&entities, &manifest.relations)?;
+        schema.registration_order()?;
+        let relation_defs = schema.relations.clone();
+        drop(schema);
+        drop(provided_schema);
         Ok(Self {
             lecteurs_du_creux,
             search_tools,
@@ -1838,11 +1843,7 @@ impl PreparedBackend {
             scripted_types,
             components,
             routes,
-            relation_defs: manifest
-                .relations
-                .iter()
-                .map(|(k, v)| (k.clone(), v.def.clone()))
-                .collect(),
+            relation_defs,
             manifest,
             embed,
             directory,
@@ -2097,7 +2098,9 @@ impl PreparedBackend {
         embedder: Option<Box<dyn Embedder>>,
         raison: Option<String>,
     ) -> Result<Backend, String> {
-        let schema_order = backend_schema::registration_order(&self.entities, &self.manifest.relations)?;
+        let provided_schema = backend_schema::provided_schema(self.manifest.workspace.as_ref());
+        let schema = backend_schema::SchemaFacts::compose(&self.entities, &self.manifest.relations, &provided_schema)?;
+        let schema_order = schema.registration_order()?;
         // Un backend en mots seuls démarre sans service d'embarquement. Un
         // backend qui déclare du vecteur démarre aussi (décision du
         // 10 octobre 2026, pour le paquet npm) : il le dit en le nommant —
@@ -2256,7 +2259,8 @@ impl PreparedBackend {
         // Les racines d'abord, puis le schéma nommé du workspace inchangé.
         for step in &schema_order {
             if let backend_schema::SchemaStep::Entity(name) = step {
-                let config = &self.entities[*name];
+                if provided_schema.0.contains_key(name) { continue; }
+                let config = &self.entities[name];
                 if config.derived.is_none() {
                     cat.register_entity(name, config.clone()).map_err(|e| e.to_string())?;
                 }
@@ -2314,16 +2318,19 @@ impl PreparedBackend {
         // relation attend ses deux extrémités, y compris dérivées.
         for step in schema_order {
             match step {
-                backend_schema::SchemaStep::Entity(name) if self.entities[name].derived.is_some() =>
-                    cat.register_entity(name, self.entities[name].clone()).map_err(|e|e.to_string())?,
+                backend_schema::SchemaStep::Entity(name) if !provided_schema.0.contains_key(&name) && self.entities[&name].derived.is_some() =>
+                    cat.register_entity(&name, self.entities[&name].clone()).map_err(|e|e.to_string())?,
                 backend_schema::SchemaStep::Entity(_) => {},
                 backend_schema::SchemaStep::Relation(name) => {
-                    let r = &self.manifest.relations[name];
-                    cat.register_relation_with(name, &r.from, &r.to, r.properties.clone().unwrap_or_default())
+                    if !self.manifest.relations.contains_key(&name) { continue; }
+                    let r = &schema.relations[&name];
+                    cat.register_relation_with(&name, &r.from, &r.to, r.properties.clone().unwrap_or_default())
                         .map_err(|e|e.to_string())?;
                 }
             }
         }
+        drop(schema);
+        drop(provided_schema);
         #[cfg(feature = "code")]
         let (file_source, garde) = match &self.manifest.workspace {
             Some(w) => (
