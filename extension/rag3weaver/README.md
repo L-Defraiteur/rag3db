@@ -299,7 +299,14 @@ root. In the chat, the workshop:
 - attaches a worktree already on disk (`attach_worktree`), or opens a branch in a sibling worktree
   (`open_branch`, the git command it ran said in the answer); each is registered, opened and
   indexed in the background, and its progress and end show under the call and in the sidebar;
-  `list_worktrees` gives each one's path, repository, branch and index; nothing is cloned or pushed;
+  `list_worktrees` gives each one's path, repository, branch, index and explicit context reference;
+  nothing is cloned or pushed;
+- searches and navigates an explicitly selected attached context with `search_code`, `grep_files`,
+  `list_files`, `outline`, `usages`, `impact`, `callees` and `schema`. Pass the context returned by
+  `list_worktrees` as `context: {target: {kind: "backend", id: "..."}}`, alongside the usual tool
+  arguments (`query` and `options` for search, `path` for outline). Unknown or ambiguous targets,
+  self-calls and unsupported views are refused; the runtime never selects the first repository;
+- follows a command's returned journal with `wait_output`, using the existing bounded journal reader;
 - reads a file 200 lines at a time (`read_file`), or a scope from the index of an attached worktree
   by its name (`read_scope`);
 - writes with `replace_text` (an old text that appears exactly once), `replace_lines` and
