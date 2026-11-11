@@ -3,6 +3,17 @@
 *Pour un agent sans aucune mémoire des échanges précédents. L'état du jour (version, PR, tickets,
 reprise) est dans `01-rapport-de-session.md`, à côté.*
 
+## Mise à jour : publication 4.3.3
+
+Source : Lucie, transmise par l’orchestration le 11 novembre. Version 4.3.3
+publiée et vérifiée sur les trois registres ; PR #22 à #25 fusionnées,
+`main` `663975a` avant tag `v4.3.3`, workflow vert, note `CLAUDE.md` `e805235`.
+Démo en 4.3.2, format d’index inchangé. Cette session a relu les objets Git locaux
+(tag/CHANGELOG, note et présence du témoin de fermeture), sans rejouer tests,
+workflow ni contrôles des registres. Le rapport adjacent précise les limites.
+Recherche porte dépendances et lock rag3weaver vers 4.3.3, avec les preuves de
+compatibilité et de fermeture en erreur ; ce lot n’est pas déclaré livré ici.
+
 ## 1. Ce qu'est lucivy
 
 Un moteur de recherche plein texte écrit en Rust, dérivé de tantivy. Il fait :
@@ -38,7 +49,7 @@ Notions internes qu'on croise partout :
   - `RELEASE.md` décrit la publication ;
   - `CHANGELOG.md` décrit chaque version ;
   - `docs/<jour>/` contient les rapports.
-- **Paquets publiés**, tous au même numéro (`X.Y.Z`, 4.3.2 aujourd'hui) :
+- **Paquets publiés**, tous au même numéro (`X.Y.Z`, 4.3.3 selon la publication transmise par Lucie) :
   - **crates.io** : `ld-lucivy` (le moteur), `lucivy-core` (l'API haut niveau, `ShardedHandle`,
     `QueryConfig`), `luciole`, `lucistore`, `sparse-vector`. Deux exceptions :
     - `lucivy-fst` a sa propre version (0.1.1) ;
@@ -114,7 +125,7 @@ Le détail est dans `docs/25-10-2026/01-pipeline-de-publication.md`, sur la bran
 
 - **Une dépendance publiée.** `extension/rag3weaver/Cargo.toml` prend `lucivy-core = "4.3.2"`,
   `ld-lucivy = "4.3.2"` et `sparse-vector = "4.3.2"` de crates.io. Il n'y a plus de chemin local ni de
-  `[patch.crates-io]` : monter la version de lucivy dans rag3weaver est un lot de rag3weaver.
+  `[patch.crates-io]` : monter la version de lucivy dans rag3weaver est le lot 4.3.3 de recherche, encore à vérifier avant de le déclarer livré.
 - **La recherche par défaut** envoie la **requête entière** à lucivy comme un seul `contains` relâché,
   à distance 1 jusqu'à 900 caractères. En parallèle part une recherche par mots (`parse`, un OU des
   mots, au plus 64 termes). Ce que la requête entière trouve passe devant la fusion.
@@ -144,8 +155,8 @@ Le détail est dans `docs/25-10-2026/01-pipeline-de-publication.md`, sur la bran
   - jamais de push en force : après un rebase qui réécrit l'historique, pousser sous un nom neuf
     (`-2`) ;
   - ne jamais effacer une branche distante sans Lucie ;
-  - les branches de travail s'empilent par fonctionnalité finie et se nomment `<version>.N-nom`, par
-    exemple `4.3.2.1-corpus-absent`.
+  - les nouvelles branches et les nouveaux worktrees portent le préfixe `cx-` ;
+    les noms sans ce préfixe dans les archives désignent les anciens lots.
 - **Les défauts** : un défaut connu non corrigé devient un ticket. Il se prouve par un **témoin rouge
   d'abord** (un test qui échoue sur l'ancien code), puis viennent le correctif et le témoin vert.
 
@@ -153,8 +164,9 @@ Le détail est dans `docs/25-10-2026/01-pipeline-de-publication.md`, sur la bran
 
 - **Le corpus des tests.** Les tests de vérité terrain lisent le noyau Linux sous `/tmp/lucivy-cmp`
   et `/tmp/lucivy-cmp-90k`, ou un clone de rag3db sous `/tmp/rag3db-bench` (ou le chemin donné par
-  `V3_CORPUS`). Sans ce corpus, sur `main`, ils passent sans rien vérifier, sur un synthétique de
-  onze mots ou une liste vide ; la PR #22 les fait échouer. Pour recréer le corpus :
+  `V3_CORPUS`). Avant la PR #22, sans ce corpus, ils passaient sans rien vérifier, sur un synthétique de
+  onze mots ou une liste vide. La PR #22, publiée en 4.3.3, les fait échouer sauf
+  permission explicite `LUCIVY_CORPUS_ABSENT_OK=1` ; cette permission ne vaut pas une preuve. Pour recréer le corpus :
   - `git clone --depth=1 --branch v7.2 https://github.com/torvalds/linux ~/lucivy_bench/linux-7.2`
     (le comparatif est épinglé sur le commit `8d3ae59288f1`) ;
   - `ln -sfn ~/lucivy_bench/linux-7.2 /tmp/lucivy-cmp`, et de même pour `-90k`.
@@ -182,24 +194,24 @@ Le détail est dans `docs/25-10-2026/01-pipeline-de-publication.md`, sur la bran
   - aucun rebase en cours ;
   - `git log -1 origin/main`, après `fetch`, montre le bon hash.
 
-## 8. Les tickets ouverts de lucivy
+## 8. Tickets et état à relire
 
-Sur la branche `tickets-2026-11-07` du dépôt lucivy, dans `docs/tickets/` :
+Inventaire historique de `tickets-2026-11-07`, dans `docs/tickets/` du dépôt lucivy.
+Les PR #22 à #25 sont annoncées fusionnées par Lucie ; l’état rédactionnel actuel
+des tickets n’a pas été revérifié :
 
 - `2026-11-07-apostrophe-typographique.md` — `’` contre `'` : corrigé à la requête en 4.3.2. Reste à
   décider la normalisation à l'indexation, qui change le format.
 - `2026-11-07-cles-de-requete-ignorees.md` — `boost`, `offset`, `slop` ignorés : avertis en 4.3.2.
   Reste à décider le refus, qui serait une 4.4.0.
-- `2026-11-07-un-passage-exact-long-n-est-plus-trouve.md` — corrigé en 4.3.2, à fermer.
-- `2026-11-08-un-test-de-corpus-sans-son-corpus-passe-vert.md` — corrigé par la PR #22, pas
-  fusionnée.
-- `2026-11-08-close-sort-sur-l-erreur-sans-arreter-ses-pools.md` — corrigé par la PR #23, pas
-  fusionnée.
+- `2026-11-07-un-passage-exact-long-n-est-plus-trouve.md` — corrigé en 4.3.2 ; état rédactionnel à relire.
+- `2026-11-08-un-test-de-corpus-sans-son-corpus-passe-vert.md` — corrigé par la PR #22, publiée en 4.3.3 selon Lucie.
+- `2026-11-08-close-sort-sur-l-erreur-sans-arreter-ses-pools.md` — corrigé par la PR #23, publiée en 4.3.3 selon Lucie.
 
-Dans `docs/tickets/` de rag3db : `2026-11-07-une-requete-floue-de-lucivy-coute-en-proportion-de-ses-termes.md`,
-corrigé par la 4.3.2, à fermer. L'orchestration dira quand déplacer les tickets.
+Dans `docs/tickets/closed/` de rag3db (chemin et contenu relus) : `2026-11-07-une-requete-floue-de-lucivy-coute-en-proportion-de-ses-termes.md`,
+corrigé par la 4.3.2 et déjà fermé.
 
-À ouvrir : dans `luciole`, un acteur qui meurt devrait répondre une erreur à chaque message de sa
+État actuel à vérifier avant d’ouvrir un doublon : dans `luciole`, un acteur qui meurt devrait répondre une erreur à chaque message de sa
 boîte, au lieu de les jeter.
 
 ## 9. Où lire la suite
