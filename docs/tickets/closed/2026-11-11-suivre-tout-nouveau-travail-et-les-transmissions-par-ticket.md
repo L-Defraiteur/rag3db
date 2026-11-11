@@ -1,6 +1,6 @@
 # Suivre tout nouveau travail et les transmissions par ticket
 
-- **État** : ouvert (11 novembre 2026), mise à jour de la procédure et transmission aux sessions en cours.
+- **État** : fait b8f608c17 (11 novembre 2026), procédure écrite et consigne transmise aux treize autres sessions actuelles.
 - **Famille** : produit
 - **Gravité** : suivi ; une suite de travail peut se perdre lorsqu’elle reste seulement dans un message.
 - **Atteignable en service** : non, règle de travail des sessions.
@@ -23,3 +23,15 @@ les actions encore sans ticket lors des reprises, sans prétendre avoir audité 
 Règle enregistrée dans `docs/README.md`, `docs/tickets/README.md`, la procédure de push et les
 décisions de l’orchestration ; vérification des tickets ; consigne envoyée aux treize autres
 sessions actuelles. Citer le commit et le résultat de la transmission à la clôture.
+
+## Réalisation et preuve
+
+Le commit `b8f608c17` met à jour les quatre références et ouvre aussi le ticket de la suite
+archiviste M9, jusque-là portée seulement par sa conception. Le contrôle des tickets est vert :
+353 en-têtes valides avant clôture.
+
+La consigne de Lucie a été envoyée avec succès aux treize sessions : recherche, déclaratif,
+architecture IDE, arbre principal, codeparsers, cœur C++, optimiseur, mémoire, lucivy, hotfixs,
+banc, embarquement et tty. Les treize appels de transmission ont rendu sans erreur. La consigne
+demande à chacune de relier ses actions en cours aux tickets et de régulariser les manquants
+à sa reprise ; cela ne constitue pas un audit achevé de leurs travaux passés.
