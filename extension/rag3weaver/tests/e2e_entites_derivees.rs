@@ -527,6 +527,12 @@ fn le_contenu_derive_partage_son_embarquement_sans_fusionner_les_occurrences() {
         embedding_dim: 4, allow_mock_embedder: true, ..Default::default()
     });
     catalog.initialize().unwrap();
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
+    (cache, catalog)
+}
+
+fn catalogue_projection_sur(conn: Rag3dbConnection) -> (tempfile::TempDir, Catalog) {
+    let (cache, mut catalog) = ouvrir_catalogue_projection(conn);
     catalog.register_entity("Occurrence", EntityConfig {
         fields: HashMap::from([
             ("file".into(), champ(FieldType::String, false, false)),
@@ -593,7 +599,7 @@ fn catalogue_projection_publique() -> (tempfile::TempDir, Catalog) {
     catalogue_projection_sur(Rag3dbConnection::in_memory().unwrap())
 }
 
-fn catalogue_projection_sur(conn: Rag3dbConnection) -> (tempfile::TempDir, Catalog) {
+fn ouvrir_catalogue_projection(conn: Rag3dbConnection) -> (tempfile::TempDir, Catalog) {
     let cache = tempfile::tempdir().unwrap();
     let sync = conn.create_sync_connection().unwrap();
     load_extensions(&conn);
@@ -838,7 +844,11 @@ fn projection_publique_lit_l_etat_de_son_index_physique() {
 }
 
 fn projection_dans_deux_cellules() -> (tempfile::TempDir, Catalog) {
-    let (cache, mut catalog) = catalogue_projection_publique();
+    projection_deux_cellules_sur(Rag3dbConnection::in_memory().unwrap())
+}
+
+fn projection_deux_cellules_sur(conn: Rag3dbConnection) -> (tempfile::TempDir, Catalog) {
+    let (cache, mut catalog) = catalogue_projection_sur(conn);
     let root = catalog.entity_config("Occurrence").unwrap().clone();
     let index = catalog.entity_config("IndexOccurrence").unwrap().clone();
     for (cell, files) in [("alpha", vec!["a.rs", "a2.rs"]), ("beta", vec!["b.rs"])] {
@@ -870,4 +880,117 @@ fn projection_recette_nouvelle_ne_transfere_pas_les_origines_entre_cellules() {
     catalog.set_scope(rag3weaver::scope::Scope::new("acme", "alpha")).unwrap();
     assert_eq!(catalog.rendre_le_retard(None, 50, true).unwrap(), 2, "la dette alpha reste à rendre après beta");
     assert_eq!(compte(&catalog, "MATCH (v:IndexOccurrence)-[:IndexOccurrence_DERIVED_FROM]->(r:Occurrence) WHERE v._project <> r._project RETURN count(r)"), 0);
+}
+
+#[test]
+#[ignore]
+fn projection_lecture_alpha_rattrape_alpha_et_preserve_la_file_beta() {
+    let (_cache, mut catalog) = projection_dans_deux_cellules();
+    // Racines durables et références absentes : dette reconstituable après arrêt.
+    catalog.conn().execute("MATCH (r:Occurrence) WHERE r._project = 'alpha' SET r.body = 'marquealphaapres'").unwrap();
+    catalog.conn().execute("MATCH (:IndexOccurrence)-[link:IndexOccurrence_DERIVED_FROM]->(r:Occurrence) WHERE r._project = 'alpha' DELETE link").unwrap();
+    catalog.create("Occurrence", BTreeMap::from([
+        ("file".into(), s("beta-en-file.rs")), ("line".into(), CypherValue::Int(9)), ("body".into(), s("betanouveau")),
+    ])).unwrap();
+    let (mut catalog, response) = cherche(catalog, "Occurrence", "marquealphaapres", SearchOptions {
+        scope: Some(rag3weaver::scope::Scope::new("acme", "alpha")),
+        consistency: Consistency::Strict, signals: Some(SearchSignals::BM25), strict_signals: true, ..Default::default()
+    });
+    assert_eq!(catalog.scope(), &rag3weaver::scope::Scope::new("acme", "beta"));
+    assert_eq!(compte(&catalog, "MATCH (r:Occurrence) WHERE r.file = 'beta-en-file.rs' RETURN count(r)"), 0,
+        "la lecture alpha ne draine pas une écriture bêta");
+    assert_eq!(response.results.len(), 2, "{:?}", response.meta);
+    assert_eq!(compte(&catalog, "MATCH (v:IndexOccurrence)-[:IndexOccurrence_DERIVED_FROM]->(r:Occurrence) WHERE v._project <> r._project RETURN count(r)"), 0);
+    let result = catalog.drain();
+    assert_eq!(result.failed, 0, "{:?}", result.warnings);
+    assert_eq!(compte(&catalog, "MATCH (r:Occurrence) WHERE r.file = 'beta-en-file.rs' AND r._project = 'beta' RETURN count(r)"), 1,
+        "l'écriture bêta a été préservée pour son propre drain");
+}
+
+#[test]
+#[ignore]
+fn projection_publique_masque_la_cellule_avant_et_apres_les_signaux() {
+    let (_cache, mut catalog) = projection_dans_deux_cellules();
+    // Arête canonique étrangère injectée : la lecture doit résister même à
+    // un graphe incohérent, sans exposer la racine bêta depuis la version alpha.
+    catalog.conn().execute("MATCH (a:IndexOccurrence), (b:IndexOccurrence)-[old:IndexOccurrence_DERIVED_FROM]->(r:Occurrence) WHERE a._project = 'alpha' AND b._project = 'beta' CREATE (a)-[:IndexOccurrence_DERIVED_FROM {_render_hash: old._render_hash}]->(r)").unwrap();
+    for signal in [SearchSignals::VECTOR, SearchSignals::BM25, SearchSignals::SPARSE] {
+        for mode in [ResultMode::Aggregated, ResultMode::Detailed, ResultMode::SourceResolved] {
+            for (scope, expected) in [
+                (Some(rag3weaver::scope::Scope::new("acme", "alpha")), vec!["a.rs", "a2.rs"]),
+                (None, vec!["b.rs"]),
+            ] {
+                let (c, response) = cherche(catalog, "Occurrence", "marquecellule", SearchOptions {
+                    scope: scope.clone(), signals: Some(signal), result_mode: mode,
+                    consistency: Consistency::Immediate, strict_signals: true, ..Default::default()
+                });
+                catalog = c;
+                let mut files: Vec<_> = response.results.iter().map(|r| {
+                    assert_eq!(r.entity.as_deref(), Some("Occurrence"));
+                    r.data.as_ref().unwrap()["file"].as_str().unwrap().to_string()
+                }).collect();
+                files.sort();
+                assert_eq!(files, expected, "{scope:?}, {signal:?}, {mode:?}: {:?}", response.meta);
+                assert_eq!(catalog.scope(), &rag3weaver::scope::Scope::new("acme", "beta"));
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore]
+fn projection_rollback_alpha_preserve_la_file_beta() {
+    let (_cache, mut catalog) = projection_dans_deux_cellules();
+    catalog.create("Occurrence", BTreeMap::from([
+        ("file".into(), s("beta-rollback.rs")), ("line".into(), CypherValue::Int(9)), ("body".into(), s("betapreserve")),
+    ])).unwrap();
+    catalog.set_scope(rag3weaver::scope::Scope::new("acme", "alpha")).unwrap();
+    let query = "MATCH (v:IndexOccurrence)-[link:IndexOccurrence_DERIVED_FROM]->(r:Occurrence) RETURN r._uuid, r.body, r._project, v._uuid, v._project, link._render_hash ORDER BY r._uuid";
+    let before = catalog.execute_raw(query).unwrap().rows;
+    catalog.injecter_faute_de_lien("IndexOccurrence_DERIVED_FROM", 1);
+    let failed = catalog.ingest_entities("Occurrence", vec![BTreeMap::from([
+        ("file".into(), s("a.rs")), ("line".into(), CypherValue::Int(1)), ("body".into(), s("alphaannule")),
+    ])]).unwrap();
+    assert!(failed.failed > 0, "{:?}", failed.warnings);
+    assert_eq!(failed.processed, 0);
+    assert_eq!(catalog.execute_raw(query).unwrap().rows, before);
+    assert_eq!(compte(&catalog, "MATCH (r:Occurrence) WHERE r.file = 'beta-rollback.rs' RETURN count(r)"), 0);
+    catalog.retirer_les_fautes_de_test();
+    catalog.set_scope(rag3weaver::scope::Scope::new("acme", "beta")).unwrap();
+    let result = catalog.drain();
+    assert_eq!(result.failed, 0, "{:?}", result.warnings);
+    assert!(!result.warnings.iter().any(|w| w.contains("aucun index plein texte ouvert")), "{:?}", result.warnings);
+    assert_eq!(compte(&catalog, "MATCH (r:Occurrence) WHERE r.file = 'beta-rollback.rs' AND r._project = 'beta' RETURN count(r)"), 1);
+    assert_eq!(compte(&catalog, "MATCH (v:IndexOccurrence)-[:IndexOccurrence_DERIVED_FROM]->(r:Occurrence) WHERE v._project <> r._project RETURN count(r)"), 0);
+}
+
+#[test]
+#[ignore]
+fn projection_reouverture_retrouve_la_dette_de_l_autre_cellule() {
+    let database = tempfile::tempdir().unwrap();
+    let path = database.path().join("cellules.db").to_string_lossy().to_string();
+    let (cache, mut catalog) = projection_deux_cellules_sur(Rag3dbConnection::new(&path).unwrap());
+    let mut next = catalog.entity_config("IndexOccurrence").unwrap().clone();
+    next.chunking.overlap_lines += 1;
+    catalog.register_entity("IndexOccurrence", next).unwrap();
+    assert_eq!(catalog.rendre_le_retard(None, 50, true).unwrap(), 1);
+    catalog.shutdown().unwrap();
+    drop(catalog);
+    drop(cache);
+    // Aucune réinscription de schéma : association, recette et dette viennent
+    // exclusivement de la base, comme après le redémarrage d'un processus.
+    let (_cache, mut reopened) = ouvrir_catalogue_projection(Rag3dbConnection::new(&path).unwrap());
+    assert_eq!(reopened.entity_config("Occurrence").unwrap().search_index.as_deref(), Some("IndexOccurrence"));
+    reopened.set_scope(rag3weaver::scope::Scope::new("acme", "alpha")).unwrap();
+    assert_eq!(reopened.rendre_le_retard(None, 50, true).unwrap(), 2);
+    assert_eq!(compte(&reopened, "MATCH (v:IndexOccurrence)-[:IndexOccurrence_DERIVED_FROM]->(r:Occurrence) WHERE v._project <> r._project RETURN count(r)"), 0);
+    assert_eq!(compte(&reopened, "MATCH (v:IndexOccurrence) RETURN count(v)"), 4);
+    for (scope, expected) in [(None, 2), (Some(rag3weaver::scope::Scope::new("acme", "beta")), 1)] {
+        let (cat, result) = cherche(reopened, "Occurrence", "marquecellule", SearchOptions {
+            scope, consistency: Consistency::Strict, signals: Some(SearchSignals::BM25), strict_signals: true, ..Default::default()
+        });
+        reopened = cat;
+        assert_eq!(result.results.len(), expected, "{:?}", result.meta);
+        assert_eq!(reopened.scope(), &rag3weaver::scope::Scope::new("acme", "alpha"));
+    }
 }
