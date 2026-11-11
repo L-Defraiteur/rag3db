@@ -4,6 +4,8 @@
 n’est livré par ce document. Les comportements ci-dessous fixent le cap du chantier. Les noms
 d’outils et d’événements proposés restent à confronter aux contrats du runtime.
 
+Suivi du travail restant : [ticket M9, porté par la session mémoire](../tickets/2026-11-11-raccorder-l-archiviste-automatique-aux-frontieres-du-chat.md). Cette liaison n’ouvre aucun lot d’implémentation.
+
 ## 1. L’intention
 
 Pendant que l’agent de code travaille avec Lucie, un archiviste examine les échanges terminés et
