@@ -65,6 +65,46 @@ regrouper avec le lot de la session « recherche ».
   Si elle reste lente, regarder ensuite `publier_l_etat_de_l_hote`, appelé après chaque
   `RepoIndexed` : il refait tout `GET /etat`.
 
+## Reprendre
+
+Un seul worktree a un travail non fini : celui de l'IDE par le flux. Aucun sur luciepc.
+
+- **Où** : sur le portable, `/home/lucied/.cache/rag3weaver-build/wt-flux`.
+- **Branche** : `ide-par-le-flux`, suivie par `origin/ide-par-le-flux`.
+- **Dernier commit** : `a9c5a3108`, poussé.
+- **Base** : `ab8272deb`. Master a avancé depuis : le script de push rebase lui-même.
+- **Fait** :
+  - le témoin rouge et la page (`5ef9a7fcf`) ;
+  - la publication d'états et `onEtat`, pour lesquels le témoin est vert (`41ad15263`) ;
+  - l'usage du tour compté sans attendre le journal (`a9c5a3108`, **non joué**).
+- **Reste** :
+  - jouer le témoin sur `a9c5a3108` ;
+  - jouer la passe complète, et vérifier que la lib entière revient vers 33 s et au vert ;
+  - pousser au feu de c7.
+- **Le target** : `/home/lucied/.cache/rag3weaver-build/flux`, 11 Gio. Il a été bâti par ce
+  worktree ; la passe le réutilise.
+- **Le dossier de verdict** : `/home/lucied/.cache/rag3weaver-build/flux-passe/`. Il ne
+  contient que le journal et le log de la passe tuée : il n'y a pas de verdict.
+- **Les commandes**, depuis `/home/lucied/.cache/rag3weaver-build` :
+  1. le témoin seul :
+     `rm -rf flux-passe; FILTRE=the_ide_asks_the_host_nothing ETAPE=navseul ./poste lourd bash wt-flux-passe.sh; cat flux-passe/verdict`
+  2. la passe complète :
+     `rm -rf flux-passe; ETAPE=complete ./poste lourd bash wt-flux-passe.sh; cat flux-passe/verdict flux-passe/journal`.
+     Regarder la durée de la lib entière dans `flux-passe/lib.log` : la ligne `test result`,
+     `finished in …`. Vers 33 s, c'est bon ; vers 100 s, chercher la cause (voir plus haut).
+  3. pour un rouge seul, le départager en le jouant seul cinq fois avec `ETAPE=module FILTRE=<nom>`.
+  4. au vert, et au feu de c7 :
+     `./poste push archi -- bash wt-flux-push.sh`. Le script :
+     - refuse si le verdict n'est pas `VERT` ;
+     - rebase sur master ;
+     - s'arrête en exit 3 si du Rust est arrivé. Il faut alors refaire l'étape 2, puis
+       relancer l'étape 4 ;
+     - pousse `HEAD:master`, puis la branche rebasée sous `ide-par-le-flux-2` ;
+     - fait les trois contrôles ;
+     - efface le worktree et le target.
+     
+     Ensuite, donner le hash à c7, G et ED.
+
 ## Les lots nommés, pas commencés
 
 - **Le découpage au survol de la jauge du contexte.** Au survol, la jauge dirait ce qui pèse
@@ -96,7 +136,7 @@ Rien n'a été effacé pour ce passage.
   - `wt-flux` : le worktree de la branche `ide-par-le-flux`, propre, à `a9c5a3108` ;
   - `flux` : son target cargo, 11 Gio ;
   - `wt-docs-archi` : mon worktree de documentation, sans branche (tête détachée) ;
-  - `wt-flux-passe.sh` et `wt-flux-push.sh` (ce dernier pas encore écrit) : les scripts du lot ;
+  - `wt-flux-passe.sh` et `wt-flux-push.sh` : les scripts de la passe et du push du lot ;
   - les scripts `wt-*-passe.sh` et `wt-*-push.sh` des lots atterris, que l'on peut copier comme
     modèles.
   - Les autres worktrees de ce dossier (`wt-deplace`, `wt-docs-hooks-essai`, `wt-fuite3`,
@@ -132,8 +172,8 @@ Ils sont tous sous `docs/tickets/`. Je ne les ai pas déplacés : c7 dira quand.
 ## Les trois prochains pas que je ferais
 
 1. **Finir l'IDE par le flux.** Jouer le témoin sur `a9c5a3108`, puis la passe complète. Si la
-   lib entière revient à environ 33 s et au vert, écrire `wt-flux-push.sh` sur le modèle de
-   `wt-jauge-push.sh`. Demander le feu à c7, puis pousser.
+   lib entière revient à environ 33 s et au vert, demander le feu à c7, puis pousser par
+   `wt-flux-push.sh` (voir « Reprendre »).
 2. **Le découpage au survol de la jauge**, avec son propre témoin rouge.
 3. **Les propositions et le fichier ouvert par le flux**, au même moule. Puis prendre les
    remarques d'ED quand elles viennent.
