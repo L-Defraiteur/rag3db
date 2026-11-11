@@ -119,7 +119,7 @@ index complet produit.
 
 ## 5. Les tickets
 
-- **Où ils vivent** (depuis le 11 novembre) : un ticket ouvert est dans `docs/tickets/<nom>.md` ou
+- **Où ils vivent** (depuis le 11 novembre ; détail dans `docs/README.md`, section « Les tickets ») : un ticket ouvert est dans `docs/tickets/<nom>.md` ou
   dans `docs/<session>/tickets/<nom>.md`. Un ticket fermé est dans `docs/tickets/closed/<nom>.md`.
   Fermer, c'est `git mv` vers `docs/tickets/closed/` en réécrivant l'État. Un nom ne vit qu'à un
   endroit. Le nom s'écrit `AAAA-MM-JJ-<phrase-du-defaut>.md`.
@@ -199,13 +199,14 @@ index complet produit.
 
 ## 8. Mes tickets ouverts
 
-Ce sont les tickets que la session hotfixs a ouverts ou portés. Tous sont dans `docs/tickets/`
-le 11 novembre, et iront dans `docs/coeur-cpp-hotfixs-tickets/tickets/` au mot de c7.
+Ce sont les tickets que la session hotfixs a ouverts ou portés. Le 11 novembre, cinq ont été
+déplacés dans `docs/coeur-cpp-hotfixs-tickets/tickets/` ; trois avaient déjà été pris par la
+session qui les tient.
 
-- `2026-11-08-un-index-complet-croise-les-deux-sens-des-petites-tables-de-relations.md` : corrigé en
-  29a7bc52a, 0 écart par l'hôte ; reste à le fermer.
-- `2026-11-08-le-create-vector-index-concurrent-lit-une-ligne-au-dela-de-la-colonne-en-cache.md` :
-  un dépassement de tampon trouvé par l'ASAN du cœur sous un CREATE VECTOR INDEX concurrent, pas
+Dans `docs/coeur-cpp-hotfixs-tickets/tickets/` :
+
+- `2026-11-08-le-create-vector-index-concurrent-lit-une-ligne-au-dela-de-la-colonne-en-cache.md` : un
+  dépassement de tampon trouvé par l'ASAN du cœur sous un CREATE VECTOR INDEX concurrent, pas
   encore traité.
 - `2026-11-08-le-nombre-de-lignes-hors-du-graphe-d-un-index-vectoriel-lisible-sans-ecrire.md` : faire
   lire `rows_outside_graph` sans écriture, après G3 et G5.
@@ -213,12 +214,17 @@ le 11 novembre, et iront dans `docs/coeur-cpp-hotfixs-tickets/tickets/` au mot d
   inscrit aux attendus probabilistes, la cause n'est pas écrite.
 - `2026-10-25-la-ci-de-master-est-rouge-depuis-le-18-octobre-cassert-dans-geo-et-format-clang.md` :
   le point 1 est fait, le point 2 (le format) attend sa fenêtre.
-- `2026-10-18-les-tests-ne-nettoient-pas-leurs-dossiers-temporaires.md` : le lot de l'équipier
-  (`agent/tests-bases-dans-tmp`) en fait une partie.
 - `2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md` : G3 a fait le chargement de
   toutes les extensions à l'ouverture ; reste à trancher le refus avec option.
-- `2026-10-25-le-temoin-des-vues-de-l-ide-rougit-sous-le-lot.md` : relevé pendant un rejeu de push,
-  pas repris.
+
+Ailleurs :
+
+- `docs/coeur-cpp/tickets/2026-11-08-un-index-complet-croise-les-deux-sens-des-petites-tables-de-relations.md` :
+  corrigé en 29a7bc52a, 0 écart par l'hôte ; le cœur le ferme.
+- `docs/recherche/tickets/2026-10-18-les-tests-ne-nettoient-pas-leurs-dossiers-temporaires.md` : le
+  lot de l'équipier (`agent/tests-bases-dans-tmp`) en fait une partie.
+- `docs/everything-declarative/tickets/2026-10-25-le-temoin-des-vues-de-l-ide-rougit-sous-le-lot.md` :
+  relevé pendant un rejeu de push, pas repris.
 
 ## 9. Les outils joints (`outils/`)
 

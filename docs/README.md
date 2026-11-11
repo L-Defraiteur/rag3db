@@ -43,9 +43,29 @@ sessions d'avant le 11 novembre : on y lit l'histoire d'un chantier, pas son ét
 
 - Un ticket ouvert vit dans `docs/<session>/tickets/` (la session qui le tient) ou, s'il n'a pas de
   session, dans `docs/tickets/`. Un ticket fermé va dans `docs/tickets/closed/` (`git mv`).
-- `python3 extension/rag3weaver/scripts/check_tickets.py --index` écrit l'index de tous les tickets ;
-  `--lot origin/master` dit ce qu'un lot ouvre, ferme ou change. Un défaut connu non corrigé est un
-  ticket, jamais une ligne de message.
+- **Fermer un ticket de session** : `git mv docs/<session>/tickets/<nom>.md docs/tickets/closed/<nom>.md`,
+  et dans le même commit son **État** réécrit avec un premier mot qui dit qu'il est clos (corrigé,
+  fermé, fait, résolu, abandonné, non reproduit, accepté, dissous, remplacé), suivi du hash.
+  **Déplacer** un ticket ouvert d'une session à une autre, c'est un `git mv` entre leurs dossiers
+  `tickets/`. Un même nom ne vit qu'à un endroit : le script refuse un ticket présent à deux places,
+  un ticket clos hors de `closed/`, et un ticket de `closed/` dont l'État dit « ouvert ».
+- `python3 extension/rag3weaver/scripts/check_tickets.py` contrôle les en-têtes (VERT ou ROUGE avec
+  la liste des refus) ; `--index` écrit `docs/tickets/INDEX.md` (non suivi par git), avec le dossier de
+  chaque ticket.
+- `--lot origin/master` liste, avant un push, ce que le lot fait aux tickets depuis sa fourche avec
+  origin/master (`git merge-base HEAD origin/master`, pas la pointe : ce que d'autres lots ont poussé
+  entre-temps n'y paraît pas). Une ligne par ticket :
+  - `ouvert   <session>/tickets/<nom>.md` ;
+  - `fermé    closed/<nom>.md` ;
+  - `rouvert  <nom>.md` ;
+  - `déplacé  <session>/tickets/<nom>.md (depuis <nom>.md)` ;
+  - `état     <nom>.md : « ancien » → « nouveau »` ;
+  - `retiré   <nom>.md`.
+
+  Un ticket de `docs/tickets/` s'écrit `<nom>.md` ou `closed/<nom>.md`, celui d'une session
+  `<session>/tickets/<nom>.md`. Un déplacement, même réécrit au point que git ne voit plus de
+  renommage, se lit « déplacé » ou « fermé », jamais comme un ouvert et un retiré.
+- Un défaut connu non corrigé est un ticket, jamais une ligne de message.
 
 ## Les règles qui ne se discutent pas
 

@@ -27,7 +27,8 @@ sens ne disaient plus la même chose : une relation rattachée au mauvais nœud,
 côté, une vue deux fois, ou une rangée vide lue comme « relation 0 vers le nœud 0 ». Le défaut était
 déterministe sous trois libs successives.
 
-Le ticket : `docs/tickets/2026-11-08-un-index-complet-croise-les-deux-sens-des-petites-tables-de-relations.md`.
+Le ticket : `docs/coeur-cpp/tickets/2026-11-08-un-index-complet-croise-les-deux-sens-des-petites-tables-de-relations.md`
+(déplacé par le cœur le 11 novembre).
 
 **Ce que j'ai fait, dans l'ordre :**
 
@@ -110,7 +111,7 @@ sur master :
 **La fenêtre de formatage clang-format-18** (passer `clang-format-18` sur tout le code C++ en un
 commit de format pur, pour remettre la CI au vert) devait avoir lieu dans la nuit du 8 au 9
 novembre. Elle n'a pas eu lieu de mon côté, et master n'en porte aucune trace. Le ticket :
-`docs/tickets/2026-10-25-la-ci-de-master-est-rouge-depuis-le-18-octobre-cassert-dans-geo-et-format-clang.md`,
+`docs/coeur-cpp-hotfixs-tickets/tickets/2026-10-25-la-ci-de-master-est-rouge-depuis-le-18-octobre-cassert-dans-geo-et-format-clang.md`,
 point 2.
 
 ## 4. Ce qui reste sur disque
