@@ -177,6 +177,11 @@ mod tests {
             serde_json::to_vec_pretty(&manifest).unwrap(),
         )
         .unwrap();
+        let session =
+            a.host
+                .open_session("recharger la déclaration du témoin", None, Vec::new(), None);
+        let opened = a.host.open(Some(&session), &target.manifest);
+        assert_eq!(opened["ok"], true, "{opened}");
         let error = relay
             .invoke(
                 &authority,
