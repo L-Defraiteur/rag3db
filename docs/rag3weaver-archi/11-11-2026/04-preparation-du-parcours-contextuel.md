@@ -77,3 +77,17 @@ jusqu'aux tours, événements et sessions (ou par référence stable), hors du b
 modèle. Si la présentation est coupée, la cible doit rester connue ; sinon l'action contextuelle
 refuse ou reste inactive, sans repli sur la conversation. Le premier petit cas du témoin relit
 le vrai reçu dans le transport actuel ; il ne constitue pas encore une preuve de ce cas de coupure.
+
+## Transport annoncé par ED, pas encore validé
+
+ED prépare sur `cx-ed-relais` un champ `Turn.metadata: Option<Value>` (serde compatible
+avec les anciennes sessions), copié depuis le reçu, relayé en `ToolCallFinished.metadata`
+et persisté avec le tour. La clé autoritaire sera donc `turn.metadata.invocation` /
+`event.metadata.invocation`, hors du texte soumis à coupure. Ce transport et la primitive
+ne sont pas annoncés comme compilés/disponibles.
+
+Le témoin `dbf3f7419` s'arrête à l'exposition, avant tout reçu. Une fois cette base disponible,
+remplacer son helper temporaire lisant le transport textuel par la lecture du champ structuré
+uniquement ; aucune reconstitution depuis un chemin, un label, la conversation ou un texte
+tronqué. Le rouge de 3,78 s reste conservé sous son SHA d'origine. Aucune compilation n'est
+à relancer sur une source ED encore non validée pour prétendre que le relais fonctionne.
