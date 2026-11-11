@@ -2969,7 +2969,7 @@ fn admitted_parent_uuids_for(
         let cell = ctx.service::<crate::scope::Scope>("scope").unwrap_or_else(|| v.scope());
         resolve(v.forme(), cell)
     } else if let Some(catalog) = ctx.service::<Arc<Mutex<Catalog>>>("catalog") {
-        let cat = catalog.lock().map_err(|_| "projection des occurrences : catalogue indisponible")?;
+        let cat = catalog.lock().map_err(|_| "projection des occurrences : catalogue indisponible")?; // L4 : repli sans vue, la forme est lue sous le mutex
         let cell = ctx.service::<crate::scope::Scope>("scope").unwrap_or_else(|| cat.scope());
         resolve(cat.forme(), cell)
     } else {
