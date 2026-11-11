@@ -36,3 +36,9 @@ Les critères de la section 7 de la conception sont vérifiés sur le parcours r
 classement sourcé, rappel utile avant le tour visé, absence de doublons, conservation à la
 compression et reprise après interruption. La clôture précise les commits, les preuves et
 le périmètre effectivement livré, ou explique l’abandon décidé et son éventuel remplacement.
+
+## Preuves du socle et précision de la reprise
+
+Le socle M4 et son correctif sont livrés sous `41526b29a` ; la [note de preuve](../11-11-2026/04-alias-candidats.md) conserve les passes et le premier document traité sur copie, sept sections sans refus. Ce résultat ne prouve pas le raccord automatique, ni la synthèse L2.
+
+Le repère examiné doit progresser aussi après une abstention, sans devenir un repère de rangement fictif. Une erreur ou des effets partiels ne constituent pas une réussite complète. Fiches/version et génération de contexte bornent le rappel avant le tour visé ; un nouveau message en cours de passage doit conserver sa propre frontière. Ces points sont des critères de la conception à vérifier, pas des garanties livrées. Le suivi est porté par mémoire, sans lot d’implémentation ouvert.

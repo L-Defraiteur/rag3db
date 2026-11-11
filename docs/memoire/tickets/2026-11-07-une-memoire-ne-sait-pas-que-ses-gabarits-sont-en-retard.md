@@ -38,3 +38,9 @@ champ, l'instantané existe, les champs propres sont gardés.
 
 Le lot M8 sur master avec son témoin ; puis la mémoire de Lucie montée une fois par la commande, au
 mot de l'orchestration, quand `archive` est sur master.
+
+## Reprise et dépendances au 11 novembre
+
+Porteur : session mémoire. La [page de conception M8](../../../extension/rag3weaver/docs/09-novembre-2026-memoire-longue/02-m8-la-montee-des-gabarits.md) attend la relecture d’everything declarative ; aucun lot de code n’est ouvert par cette régularisation. Le rapport du 11 novembre décrit aussi une remise documentaire de l’ancien worktree `wt-mf-96` à relire avant de la reprendre : ne pas l’appliquer aveuglément ni confondre cet état historique avec un travail déjà livré.
+
+Le correctif archive `41526b29a` ne monte pas la configuration réelle de Lucie. [L’archivage à blanc restant](2026-11-11-terminer-l-archivage-a-blanc-des-documents-sur-copie.md) est séparé ; [le raccord automatique M9](2026-11-11-raccorder-l-archiviste-automatique-au-chat.md) ne l’active pas non plus. Après relecture, préciser adoption/fusion/migration et leurs refus, poser les témoins puis la passe avant de demander un tour de code. La montée réelle garde sa décision explicite et son instantané.

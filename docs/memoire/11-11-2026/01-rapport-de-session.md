@@ -18,6 +18,17 @@ ici, à leur première apparition.
 
 Le lot 4xx a déjà atterri sur master sous `2d6a08a65` : les consignes de push de ce lot plus bas sont historiques. La reprise de l’archivage sur copies et les preuves du 400 sont dans [03-reprise-archivage.md](03-reprise-archivage.md). Aucun archivage dans la mémoire réelle n’a été effectué. Le correctif des alias courts conserve les noms exacts des fiches et refuse les alias inconnus ou ambigus ; sa passe complète puis son rejeu après rebase sont verts. Le lot est livré sur master sous `41526b29a` après le tour de l’orchestration et les trois contrôles ; les worktrees et le target du lot sont nettoyés, les preuves et les chemins de reprise sont dans [04-alias-candidats.md](04-alias-candidats.md).
 
+## Suivi des actions à reprendre, régularisé le 11 novembre
+
+Le porteur du suivi est la session mémoire. Ces tickets ne donnent aucun nouveau droit de code, de service ou d’écriture réelle ; une attente ou un transfert ne les ferme pas.
+
+- [M9, archiviste automatique et rappel aux frontières du chat](../tickets/2026-11-11-raccorder-l-archiviste-automatique-au-chat.md) : conception actuelle, contrats et reprise à cadrer avant tout lot.
+- [Archivage à blanc du corpus](../tickets/2026-11-11-terminer-l-archivage-a-blanc-des-documents-sur-copie.md) : premier document sans refus acquis, cinquante documents toujours en attente de consigne, proposition et mesure par section non livrées.
+- [Classeur local du rappel](../tickets/2026-11-11-trancher-et-verifier-le-classeur-local-du-rappel.md) : cinq décisions de Lucie encore ouvertes, aucune activation.
+- [M8, montée des gabarits](../tickets/2026-11-07-une-memoire-ne-sait-pas-que-ses-gabarits-sont-en-retard.md) : ticket existant complété ; relecture ED et reprise documentaire à vérifier.
+
+Le lot des alias est terminé et garde son [ticket clos et ses preuves](../../tickets/closed/2026-11-11-les-noms-des-fiches-du-juge-font-refuser-les-decisions-de-l-archiviste.md). Les autres tickets ouverts de la session restent à leur emplacement ; aucun défaut historique n’est rouvert artificiellement.
+
 ## 1. Ce qui est sur master
 
 | hash | ce que c'est |
