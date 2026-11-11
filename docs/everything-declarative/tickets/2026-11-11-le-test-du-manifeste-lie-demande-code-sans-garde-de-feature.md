@@ -47,3 +47,9 @@ Ciblés avec et sans code, puis lib native entière en cours : aucun vert global
 Premier résultat `a166474a0` sans code : ouverture6/0/0 (0,58 s), module
 builtin_templates9/0/0 (0,01 s). Lib native entière et ciblés avec code encore
 en cours ; preuve `cibles-3.log`, aucun verdict global anticipé.
+
+Ciblés terminés sur `a166474a0` : sans code, ouverture6/0/0 (0,58s),
+gabarits9/0/0 (0,01s), lib native entière1575/0/15 ignorés (20,44s).
+Avec code, ouverture6/0/0 (0,60s), gabarits9/0/0 (0,01s), aucun ignoré dans
+les ciblés. `cibles-3.log`, `lib-native-3.log`, `verdict-cibles-3`.
+Ce vert ciblé ne remplace pas la passe globale ni la lecture croisée avec 1a.
