@@ -168,6 +168,8 @@ fn opening_named_schema_accepts_a_manifest_relation_to_its_entity() {
     let backend = prepare(dir.path(),&m).unwrap_or_else(|e| panic!("relation vers le schéma nommé : {e}"))
         .open(Box::new(crate::Rag3dbConnection::in_memory().unwrap()),None).unwrap();
     assert!(backend.catalog.lock().unwrap().relation_names().iter().any(|n| n=="ANNOTATES"));
+    assert_eq!(backend.catalog.lock().unwrap().entity_config("Scope").unwrap().signals,
+        crate::search::SearchSignals::BM25,"l'overlay déclaré n'est pas un conflit avec le fournisseur");
 }
 
 #[cfg(feature = "code")]
@@ -176,6 +178,7 @@ fn opening_named_schema_accepts_a_derived_root_from_its_entity() {
     let (dir,mut m) = manifest();
     code_workspace(&mut m);
     set_derived(&mut m,"One","Scope",json!([]));
+    m["entities"]["One"]["config"]["derived"]["render"]["body"] = json!("{{ root.content }}");
     prepare(dir.path(),&m).unwrap_or_else(|e| panic!("racine du schéma nommé : {e}"))
         .open(Box::new(crate::Rag3dbConnection::in_memory().unwrap()),None).unwrap();
 }
@@ -185,8 +188,37 @@ fn opening_named_schema_accepts_a_derived_root_from_its_entity() {
 fn opening_named_schema_accepts_its_gather_relation_and_fields() {
     let (dir,mut m) = manifest();
     code_workspace(&mut m);
-    set_derived(&mut m,"One","Scope",json!([{"name":"file","relation":"HAS_SCOPE",
-        "direction":"in","fields":["path"]}]));
+    set_derived(&mut m,"One","Scope",json!([{"name":"file","relation":"DEFINED_IN",
+        "direction":"out","fields":["path"]}]));
+    m["entities"]["One"]["config"]["derived"]["render"]["body"] = json!("{{ root.content }}");
     prepare(dir.path(),&m).unwrap_or_else(|e| panic!("gather du schéma nommé : {e}"))
         .open(Box::new(crate::Rag3dbConnection::in_memory().unwrap()),None).unwrap();
+}
+
+#[cfg(feature = "code")]
+#[test]
+fn named_catalog_existing_relation_extension_is_additive() {
+    let (dir,mut m) = manifest();
+    code_workspace(&mut m);
+    let backend = prepare(dir.path(),&m).unwrap()
+        .open(Box::new(crate::Rag3dbConnection::in_memory().unwrap()),None).unwrap();
+    let mut cat = backend.catalog.lock().unwrap();
+    let note: crate::config::FieldDef = serde_json::from_value(json!({"type":"string"})).unwrap();
+    cat.register_relation_with("MENTIONS","Scope","Symbol",HashMap::from([("note".into(),note)])).unwrap();
+    let props = cat.get_relation_def("MENTIONS").unwrap().properties.as_ref().unwrap();
+    assert!(props.contains_key("kind") && props.contains_key("note"));
+}
+
+#[cfg(feature = "code")]
+#[test]
+fn named_catalog_existing_relation_endpoints_cannot_be_replaced() {
+    let (dir,mut m) = manifest();
+    code_workspace(&mut m);
+    let backend = prepare(dir.path(),&m).unwrap()
+        .open(Box::new(crate::Rag3dbConnection::in_memory().unwrap()),None).unwrap();
+    let mut cat = backend.catalog.lock().unwrap();
+    let error = cat.register_relation_with("MENTIONS","Symbol","Scope",HashMap::new()).unwrap_err();
+    assert!(error.to_string().contains("MENTIONS"));
+    let def = cat.get_relation_def("MENTIONS").unwrap();
+    assert_eq!((&def.from,&def.to),(&"Scope".to_string(),&"Symbol".to_string()));
 }
