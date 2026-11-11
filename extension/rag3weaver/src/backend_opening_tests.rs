@@ -152,3 +152,41 @@ fn opening_manifest_validates_the_whole_plan_before_any_database_call() {
     assert!(error.contains("cycle"),"{error}");
     assert_eq!(calls.load(Ordering::SeqCst),0,"ni initialisation ni schéma partiel");
 }
+
+#[cfg(feature = "code")]
+fn code_workspace(m: &mut Value) {
+    m["workspace"] = json!({"source":"working_tree","root":".","index":"code",
+        "index_signals":{"File":["bm25"],"Scope":["bm25"],"Library":["bm25"],"Symbol":["bm25"]}});
+}
+
+#[cfg(feature = "code")]
+#[test]
+fn opening_named_schema_accepts_a_manifest_relation_to_its_entity() {
+    let (dir,mut m) = manifest();
+    code_workspace(&mut m);
+    m["relations"] = json!({"ANNOTATES":{"from":"One","to":"Scope"}});
+    let backend = prepare(dir.path(),&m).unwrap_or_else(|e| panic!("relation vers le schéma nommé : {e}"))
+        .open(Box::new(crate::Rag3dbConnection::in_memory().unwrap()),None).unwrap();
+    assert!(backend.catalog.lock().unwrap().relation_names().iter().any(|n| n=="ANNOTATES"));
+}
+
+#[cfg(feature = "code")]
+#[test]
+fn opening_named_schema_accepts_a_derived_root_from_its_entity() {
+    let (dir,mut m) = manifest();
+    code_workspace(&mut m);
+    set_derived(&mut m,"One","Scope",json!([]));
+    prepare(dir.path(),&m).unwrap_or_else(|e| panic!("racine du schéma nommé : {e}"))
+        .open(Box::new(crate::Rag3dbConnection::in_memory().unwrap()),None).unwrap();
+}
+
+#[cfg(feature = "code")]
+#[test]
+fn opening_named_schema_accepts_its_gather_relation_and_fields() {
+    let (dir,mut m) = manifest();
+    code_workspace(&mut m);
+    set_derived(&mut m,"One","Scope",json!([{"name":"file","relation":"HAS_SCOPE",
+        "direction":"in","fields":["path"]}]));
+    prepare(dir.path(),&m).unwrap_or_else(|e| panic!("gather du schéma nommé : {e}"))
+        .open(Box::new(crate::Rag3dbConnection::in_memory().unwrap()),None).unwrap();
+}
