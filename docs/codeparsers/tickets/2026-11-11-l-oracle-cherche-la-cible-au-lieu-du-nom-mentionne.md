@@ -6,6 +6,9 @@
 - **Touche rag3weaver** : oui (outillage de validation des arêtes)
 - **Famille** : produit
 
+- **Pour** : session codeparsers
+- **Signalé par** : session codeparsers ; reprise et preuves dans [le bilan du 11 novembre](../11-11-2026/04-bilan-navigation-et-provenance.md)
+
 ## Preuve et cause
 
 La sonde A/B fournit `b.name` comme champ nom de l'arête. Dans
@@ -48,3 +51,15 @@ une autre ligne représentative : les retraits de tuples ne prouvent pas une
 perte de rappel. Le complément de 23 questions a été joué, avec ses réponses
 brutes conservées ; il ne ferme pas ce ticket général.
 Voir [le bilan et la chaîne de provenance](../11-11-2026/04-bilan-navigation-et-provenance.md).
+
+## Action bornée proposée et portage
+
+Porteur : codeparsers. Diagnostic terminé dans le bilan db0dbfcbb ; le défaut
+et la suite de validation restent ouverts. Prochaine action proposée à
+l'orchestration : capture de provenance avant perte sur les mêmes 23 questions,
+avec versions/options figées, clés de scopes, tokens et positions vérifiés,
+puis réutilisation des réponses LSP existantes. Ne pas attribuer les arêtes
+à partir du résultat LSP lui-même. Cette proposition ne déclenche aucune
+nouvelle campagne, schéma ou refonte générale sans cadrage supplémentaire.
+Reste : valider le périmètre, réaliser la capture, rendre explicites les cas
+non attribuables, et satisfaire les critères généraux de fermeture ci-dessus.
