@@ -239,6 +239,22 @@ class CheckTickets(unittest.TestCase):
         self.assertIn("ouvert   2026-11-11-du-lot.md", out)
         self.assertNotIn("2026-11-01-un.md", out)
 
+    def test_un_ticket_deplace_d_une_session_a_une_autre_se_lit_deplace(self):
+        # Le cas de banc (3e795b1f5, 11 novembre) : git mv de docs/banc/tickets/ vers
+        # docs/coeur-cpp/tickets/, même nom.
+        r = self.racine
+        self.ecrire_session("banc", "2026-10-18-fige.md", "Fige")
+        git(r, "init", "-q", "-b", "master")
+        git(r, "add", "-A")
+        git(r, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "base")
+        os.makedirs(os.path.join(r, "docs", "coeur-cpp", "tickets"))
+        git(r, "mv", "docs/banc/tickets/2026-10-18-fige.md", "docs/coeur-cpp/tickets/2026-10-18-fige.md")
+        git(r, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "rendre au cœur")
+        rc, out = jouer(r, "--lot", "HEAD~1")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("(1), à relire", out)
+        self.assertIn("déplacé  coeur-cpp/tickets/2026-10-18-fige.md (depuis banc/tickets/2026-10-18-fige.md)", out)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)
