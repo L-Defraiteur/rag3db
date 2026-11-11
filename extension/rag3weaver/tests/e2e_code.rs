@@ -1975,3 +1975,17 @@ fn require_object_reexport_navigates_from_module_exports() {
     ], "a.file_path = 'index.js' AND a.name STARTS WITH 'file_scope'");
     assert!(rows.iter().any(|r| matches!((&r[0], &r[1], &r[2]), (S(n), S(f), S(m)) if n == "Outil" && f == "outil.js" && m == "import")), "module.exports object: {rows:?}");
 }
+
+/// An explicit module extension must not admit the sibling with another extension.
+#[test]
+#[ignore]
+fn require_explicit_js_does_not_choose_a_typescript_sibling() {
+    use rag3weaver::connection::CypherValue::String as S;
+    let rows = require_navigation_rows(&[
+        ("outil.js", "class OutilJs {\n  agir() {}\n}\nmodule.exports = OutilJs;\n"),
+        ("outil.ts", "export default class OutilTs {\n  agir() {}\n}\n"),
+        ("app.js", "const Alias = require('./outil.js');\nfunction utiliser() {\n  return new Alias();\n}\n"),
+    ]);
+    assert_eq!(rows.len(), 1, "one explicit module, one export: {rows:?}");
+    assert!(matches!((&rows[0][0], &rows[0][1], &rows[0][2]), (S(n), S(f), S(m)) if n == "OutilJs" && f == "outil.js" && m == "import"), "no typescript sibling: {rows:?}");
+}
