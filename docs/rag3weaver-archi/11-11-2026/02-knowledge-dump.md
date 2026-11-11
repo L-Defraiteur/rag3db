@@ -18,6 +18,18 @@ les traces `Consumed`, qui restent la lecture de compatibilité des anciens jour
 Les bornes début/fin suffisent aux rôles : ne pas cloner toutes les traces d'un run pour
 faire une barre latérale. Les résultats absents ne se mettent pas en cache négatif.
 
+## Parcours chat : issue des tours et erreurs (branche suivante)
+
+Le lot `cx-archi-chat-erreurs`, worktree `cx-wt-chat-erreurs`, descend du lot flux.
+`ChatPousse.fin_du_tour` distingue succès/arrêt et erreur, lié à `tour` ; les tours relancés
+hors formulaire utilisent ce même contrat. Un échec HTTP conserve les actions et résultats
+déjà reçus, au lieu de supprimer la bulle en cours. L'état poussé tardif doit lui aussi dire
+l'erreur, jamais remplacer son statut par « fini ». Types et bundle se changent ensemble.
+L'inventaire de `03-inventaire-parcours-chat.md` est capturé dans `GenOptions.tools` après
+demande navigateur ; les absences de capacités de l'atelier décrivent cet état de branche,
+pas une politique qui interdirait de les ajouter. Dépôt hors tâche et tâche ont des politiques
+d'écriture différentes : prouver le chemin vers la tâche plutôt que retirer ces protections.
+
 ## Le décor
 
 - **rag3db** est le moteur de base de données de Lucie : un fork de Kuzu, en C++. Le dépôt est
