@@ -80,3 +80,20 @@ gabarits9/0/0 (0,01s), lib native entière1575/0/15 ignorés (20,44s).
 Avec code, ouverture6/0/0 (0,60s), gabarits9/0/0 (0,01s), aucun ignoré dans
 les ciblés. `cibles-3.log`, `lib-native-3.log`, `verdict-cibles-3`.
 Ce vert ciblé ne remplace pas la passe globale ni la lecture croisée avec 1a.
+
+## Complément de revue : schéma nommé du workspace
+
+Orchestration demande de vérifier que le plan compose aussi le fournisseur de
+schéma nommé `workspace.index=code` : entités et relations fournies par le moteur,
+absentes des entités explicites du manifeste. `code::plan_schema()` existe pour
+les faits des plans ; le montage réel utilise `code::register_code_schema`.
+Le plan candidat ne voit encore que les entités/relations explicites.
+
+Après la passe08, trois témoins comparent baseline et candidat : relation du
+manifeste vers une entité nommée, dérivée depuis cette entité, gather par une
+relation du schéma nommé. L'hypothèse de régression de la relation n'est pas encore
+reproduite : le chargement baseline vérifie déjà les extrémités contre ses seules
+entités explicites (backend.rs1397), donc la comparaison est nécessaire.
+Aucune duplication de schéma Scope ou pseudo-configuration ne sera utilisée ;
+les faits doivent venir du fournisseur existant. Source08 et sa passe restent
+inchangées. Ce point de revue peut empêcher l'intégration même si la passe08 est verte.
