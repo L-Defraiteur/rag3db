@@ -1,0 +1,62 @@
+# Parcours de code du chat : inventaire effectif, 11 novembre 2026
+
+État de branche, pas une livraison : `cx-archi-chat-erreurs`, code `816fc4824`,
+descend du lot flux `cx-archi-ide-par-le-flux-2` encore bloqué par la lib.
+Worktree sur les deux postes : `~/.cache/rag3weaver-build/cx-wt-chat-erreurs`.
+Le target de session `flux` est repris explicitement, sans cargo concurrent.
+
+## Ce qui a été observé
+
+Le témoin `le_navigateur_inventorie_les_outils_effectifs_atelier_depot_et_tache`
+envoie trois demandes depuis Chrome, sur les gabarits livrés, avec une tâche créée par
+`/ide/taches`. Le faux modèle relève `GenOptions.tools`, après filtrage. C'est une preuve
+d'exposition au modèle, pas encore l'exécution de chacun de ces outils.
+
+| capacité | atelier | dépôt hors tâche | tâche |
+|---|---|---|---|
+| lire un fichier | `read_file`, `read_scope` | `read_file` | `read_file` |
+| explorer / chercher les relations | absent de la liste | `list_files`, `grep_files`, `outline`, `search_code`, `usages`, `impact`, `callees`, `graph`, `schema` | mêmes outils |
+| écrire | `replace_text`, `replace_lines`, `insert_lines` | masqué | `edit_file` |
+| exécuter et attendre | `run_command`, mais aucun `wait_output` | `wait_output`, commandes masquées | `run_command`, `wait_output` |
+| worktrees et accords | `attach_worktree`, `list_worktrees`, `open_branch`, `ask_permission` | aucun dans cette liste | aucun dans cette liste |
+| déclarations | `proposals`, `propose`, `list_declarations`, `read_declaration` | mêmes outils | ajoute `declare`, `declare_set`, `apply`, `reject` |
+
+L'atelier propose aussi `show_progress` ; dépôt et tâche proposent `estimate` et `index`.
+La politique déclarée de l'atelier autorise commandes et écritures hors tâche ; le dépôt
+passe par sa tâche pour ces deux capacités. L'absence d'outils de recherche dans l'atelier
+est transmise à ED, qui tient outils et gabarits ; ticket dédié, sans doublon d'implémentation.
+
+## Premier blocage démontré et corrigé dans la branche
+
+`une_erreur_du_modele_garde_les_actions_du_chat_et_permet_la_reprise` lance une demande
+par le formulaire : `read_file` réussit, l'appel modèle suivant échoue. Avant correction
+(`1c0631b67`), le témoin est rouge en 0,91 s : la bulle en cours est supprimée, avec le
+résultat pourtant obtenu. Les actions ne doivent pas disparaître lorsqu'une étape suivante
+échoue.
+
+Le catch conserve maintenant la bulle et les résultats. Le message poussé `ChatPousse`
+porte `fin_du_tour`, résultat discriminé de ce tour : succès avec éventuel arrêt, ou erreur
+avec son message. Un tour parti ailleurs que dans le formulaire (une relance après carte,
+par exemple) utilise ce même contrat, au lieu de passer systématiquement à « fini ».
+Pas de polling ni de relecture temporisée ajoutés.
+
+Après correction (`816fc4824`), le même témoin passe en 1,28 s : lecture toujours visible,
+erreur dite, nouvelle demande réussie et historique conservé ; un autre tour lancé depuis
+le navigateur hors formulaire échoue ensuite et son état reste « Erreur », avec deux lectures
+visibles. L'inventaire des trois contextes passe en 1,94 s. Les types TypeScript sont verts
+et le bundle est rebâti avec les sources.
+
+## Validation et limites
+
+- Rouge : luciepc `cx-chat-erreurs-rouge-1c0631b67-20261111/`.
+- Ciblés verts : `cx-chat-erreurs-816fc4824-20261111-{erreur,inventaire}/` ;
+  captures exactes des outils dans `inventaire/navigateur.log`.
+- Régression navigateur en cours : `cx-chat-erreurs-816fc4824-20261111-navigateurs/`.
+- Lib complète et gate global non verts : le lot parent garde son rouge 606 vecteurs dus ;
+  attendre l'intégration du correctif ED, puis rebaser et rejouer les contrôles requis.
+- Aucun push master, aucun tour accordé. Fenêtre de stabilité recherche respectée.
+
+La chaîne complète explorer → lire → éditer → tester → montrer diff → livrer n'est pas encore
+prouvée par ce lot. Les accords, l'arrêt, les longues commandes, la réouverture après panne
+et la livraison de tâche doivent avoir leurs preuves de parcours ; les témoins antérieurs
+restent des indices à relire, pas un verdict global sur ce cap.
