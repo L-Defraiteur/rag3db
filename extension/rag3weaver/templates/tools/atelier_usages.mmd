@@ -1,0 +1,14 @@
+%% tool: usages
+%% description: Qui définit ce nom, et qui s'en sert — groupé par genre (appels, types, imports, héritage), avec fichier:ligne. À prendre pour mesurer l'impact avant d'éditer : la liste des sites est exacte, là où la recherche classe par pertinence. Exige l'index : avant le premier index, un nom introuvable ici ne veut rien dire — prenez search_code, qui balaye les fichiers tant que rien n'est indexé.
+%% param: context json! -- Contexte explicite : target {kind: backend, id: identifiant du dépôt attaché}. Une vue indisponible est refusée.
+%% param: name string! -- Le nom cherché (fonction, type, méthode…), tel qu'écrit dans le code.
+%% param: path string = "" -- Ne montrer que les définitions sous ce chemin (préfixe de fichier), pour lever une ambiguïté.
+%% param: scope string = "" -- Borner la réponse à ces chemins relatifs à la racine, séparés par | (src/|test/) ; vide : tout l'index. Ce qui est hors portée est compté, pas montré.
+%% param: language string = "" -- Borner la réponse à ces langages, séparés par | (cpp|rust) ; vide : tous.
+%% param: usage string = "all" -- Ne garder qu'un genre d'usage.
+%% param: limit int = 20 -- Usages rendus par genre (plafond 200) ; tous sont comptés.
+%% param: format string = "markdown" -- markdown (pour le modèle, le défaut) ou json (structuré : chemins, lignes, uuid — pour une interface).
+%% result: invoke.results
+
+graph LR
+    invoke["InvokeToolNode(operation='usages', context=$context, arguments={"name":"$name","path":"$path","scope":"$scope","language":"$language","usage":"$usage","limit":"$limit","format":"$format"})"]

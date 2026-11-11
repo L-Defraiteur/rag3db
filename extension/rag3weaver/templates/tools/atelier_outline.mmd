@@ -1,0 +1,11 @@
+%% tool: outline
+%% description: Le plan d'un fichier : ses scopes dans l'ordre (genre, nom qualifié, lignes, signature), lus dans l'index. À prendre pour s'orienter dans un fichier avant de le lire.
+%% param: context json! -- Contexte explicite : target {kind: backend, id: identifiant du dépôt attaché}. Une vue indisponible est refusée.
+%% param: path string! -- Le chemin du fichier, tel que list_files ou search_code le rendent (ex. 'src/main/database.cpp').
+%% param: source string = "" -- La source de l'index, quand le même chemin existe dans deux (vide : toutes).
+%% param: limit int = 500 -- Scopes rendus au plus (plafond 2000) ; le total est compté.
+%% param: format string = "markdown" -- markdown (pour le modèle, le défaut) ou json (structuré, pour une interface : {rows, total, provenance}, une ligne par scope).
+%% result: invoke.results
+
+graph LR
+    invoke["InvokeToolNode(operation='outline', context=$context, arguments={"path":"$path","source":"$source","limit":"$limit","format":"$format"})"]

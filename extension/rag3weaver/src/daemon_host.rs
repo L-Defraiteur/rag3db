@@ -236,6 +236,8 @@ mod symboles_cites;
 /// L'atelier : l'hôte attache les worktrees (page 03 du 7 novembre 2026, lot 0).
 #[cfg(feature = "code")]
 pub mod worktrees;
+#[cfg(feature = "code")]
+mod invocation;
 
 /// L'atelier lit et écrit : les outils de fichier, par l'hôte.
 #[cfg(feature = "code")]
@@ -594,6 +596,7 @@ impl DaemonHost {
             if let Some(soi) = self.soi.get() {
                 if let Some(b) = slot.as_ref() {
                     b.poser_l_hote_des_worktrees(Arc::new(worktrees::HoteDesWorktrees { hote: soi.clone() }));
+                    b.poser_l_hote_des_invocations(Arc::new(invocation::HostedInvocations { host: soi.clone() }));
                 }
             }
             // Son bus, relayé au flux de l'IDE ; un backend rouvert a un bus
