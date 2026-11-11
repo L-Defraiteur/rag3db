@@ -218,8 +218,7 @@ de page faux.
 
 ## 7. Les tickets ouverts du cœur
 
-À cette session (« cœur c++ »), les quatre premiers déplacés le 11 novembre dans
-`docs/coeur-cpp/tickets/` :
+À cette session (« cœur c++ »), tous dans `docs/coeur-cpp/tickets/` depuis le 11 novembre :
 - `docs/coeur-cpp/tickets/2026-11-09-sous-vingt-ecrivains-un-pool-plein-laisse-une-annulation-inachevee.md` — l'annulation
   inachevée après un pool plein ; témoin écrit, non joué.
 - `docs/coeur-cpp/tickets/2026-11-08-un-index-complet-croise-les-deux-sens-des-petites-tables-de-relations.md` — corrigé en
@@ -228,10 +227,11 @@ de page faux.
   mécanisme corrigé en `9bae60786`, première cause inconnue.
 - `docs/coeur-cpp/tickets/2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure.md` — reste la synchronisation du
   répertoire après création ou suppression du journal et du fichier fantôme, et son témoin.
-- `docs/banc/tickets/2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md` — réduit par
+- `docs/coeur-cpp/tickets/2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md` — réduit par
   V2-1c ; restent V2-2c (un écrivain qui entre pendant l'écriture du point de reprise) et V2-3.
-  Le banc l'a rangé dans son dossier le 11 novembre ; le travail de moteur qui reste est celui du
-  cœur.
+  Rendu par le banc au cœur le 11 novembre (3e795b1f5). Ses deux témoins d'écrivain sont dans
+  `known_red.txt` : `CheckpointNoStall.WriterCommittedDuringACheckpointSurvivesACrash` et
+  `CheckpointNoStall.WriterCommittedWhileTheCheckpointWritesSurvivesItsDeath`.
 
 Au nom du cœur, tenus surtout par hotfixs (la « seconde session cœur C++ ») : les tickets de
 `docs/tickets/` dont l'en-tête dit « seconde session cœur C++ », par exemple

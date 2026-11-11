@@ -175,6 +175,6 @@
   inconnue.
 - `docs/coeur-cpp/tickets/2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure.md` : reste la
   synchronisation du répertoire après création ou suppression du journal et du fichier fantôme.
-- `docs/banc/tickets/2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md` :
+- `docs/coeur-cpp/tickets/2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md` :
   réduit par V2-1c ; restent V2-2c (un écrivain qui entre pendant l'écriture du point de reprise)
   et V2-3.
