@@ -376,3 +376,53 @@ restent explicitement en cours. Les chiffres sont datés et leurs protocoles ré
   persistant/tombstones inchangés. Tests de collisions, bornes, répétitions et réouverture ajoutés.
   Suites ciblées et complètes ainsi que coût de plusieurs undo restent à vérifier.
 - Aucun code moteur ni nouvelle lib sur master ; fenêtre de stabilité recherche maintenue.
+
+
+### Preuve lucivy et note de vision
+
+- **9df6c7679**, docs seules, lucivy : témoin amont4.3.3 sur tag663975a, un test joué,
+  un passé, zéro échec/ignoré, processus0. Journal versionné close-4.3.3.log relu ici ;
+  strong_count des shards et état closed vérifiés par le témoin. Trois contrôles et nettoyage
+  worktree/target confirmés par la session ; aucune nouvelle épreuve de compatibilité d’index.
+- **bd9fd9852677a0a942ac775215be4dafc57eace6**, docs seules, orchestration : à la demande
+  de Lucie, avis sur applications déclaratives/contrats d’effets ajouté aux visions et à leur
+  index. Application, déploiement et autorisation distingués ; provenance, effets, limites de
+  preuve et dossier technique proposés pour plus tard. Aucun chantier immédiat ajouté.
+  Trois contrôles lus dans worktree documentaire isolé puis nettoyage effectué ; le dossier
+  temporaire non suivi de Lucie dans l’arbre principal est resté intact.
+
+### Rattrapage ED intégré après complément PostgreSQL
+
+- **91e5f760bc2c358cb93a3c4d70d207cbb45ca0b9**, pointe du lot ED intégré : réclamations
+  rendues à la sortie de l’index et dette restante affichée. Deux dialectes implémentés,
+  témoins du rattrapage et des morceaux refusés. Preuve rouge puis ciblés verts antérieurs.
+- Avant tour, orchestration a relu diff et journaux : passe5 surbbba12fb2, features5/5,
+  lib2096/0/58 ignorés, navigateur33/0/0, lectures24/0/0, quatre suites tx3+18+1+3,
+  toutes sans saut. Complément e2e_postgres34/0/0 en7,87s sur base privée, demandé car
+  SQL de restitution également ajouté. Source strictement identique après rebase documentaire.
+- Limite explicitement suivie : erreurs de restitution/lecture de dette masquées, ticket
+  `docs/everything-declarative/tickets/2026-11-11-les-erreurs-de-liberation-des-reclamations-et-de-lecture-de-dette-sont-masquees.md`.
+  Aucun test d’injection d’erreur revendiqué par ce lot ; le correctif de ces chemins est distinct.
+- Push sous poste push et garde VERT, trois contrôles lus après fetch, hash/diff relus ici.
+  ED confirme nettoyage aux deux postes, target et base PostgreSQL privée retirés, preuves et
+  refs distantes conservées ; lots remaining/relais préservés. Ancien Cargo.lock non suivi
+  sauvegardé et comparé avant retrait de l’ancien worktree de passe.
+
+### Fenêtre recherche réarbitrée, projection suivante
+
+- La relecture d’arrêt a trouvé puis fait reproduire un faux succès : premier shutdown Err,
+  second Ok avec vue encore ouverte. Rouge1,01s conservé. Correction en branche remplace le
+  booléen par le résultat mémorisé de la tentative ; erreur répétée sans nouvelle tentative,
+  succès idempotent, ciblés4/4 verts. Ce code n’est pas sur master.
+- R4 sur0a2d2dbd9 a échoué dans le juge réel :4/1/0,999,52s. Un bilan propose la bonne
+  correction mais cite des arguments au lieu du schéma required ; assertion maintenue.
+  L’autre test réel est passé après deux sessions très longues. Pas de timeout fournisseur
+  confirmé ; budget de reprises600s n’est pas plafond de suite. Restes du processus vérifiés
+  absents, étapes tx/features/lib/navigateur suivantes NON JOUÉES.
+- Fenêtre recherche libérée pour ED, pas de verrou push pendant attente. Un seul ciblé inchangé,
+  borné extérieurement à900s pour le diagnostic, est ensuite passé1/0/0 en50,72s avec preuve
+  required présente. R4 rouge conservée, variabilité observée à configuration fixe, cause exacte
+  inconnue ; aucune source vue par le juge reconstruite après coup présentée comme trace.
+- File suivante : pré-lot générique de projection des occurrences, puis flux/chat archi.
+  Stabilité de code réservée au rejeu de projection sur ED91e5 ; recherche attend une base
+  convenue pour sa future validation complète, son vert ciblé ne vaut pas vert global.
