@@ -527,12 +527,6 @@ fn le_contenu_derive_partage_son_embarquement_sans_fusionner_les_occurrences() {
         embedding_dim: 4, allow_mock_embedder: true, ..Default::default()
     });
     catalog.initialize().unwrap();
-    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
-    (cache, catalog)
-}
-
-fn catalogue_projection_sur(conn: Rag3dbConnection) -> (tempfile::TempDir, Catalog) {
-    let (cache, mut catalog) = ouvrir_catalogue_projection(conn);
     catalog.register_entity("Occurrence", EntityConfig {
         fields: HashMap::from([
             ("file".into(), champ(FieldType::String, false, false)),
@@ -610,6 +604,12 @@ fn ouvrir_catalogue_projection(conn: Rag3dbConnection) -> (tempfile::TempDir, Ca
     catalog.set_sync_connection(sync);
     catalog.set_sparse_embedder(std::sync::Arc::new(rag3weaver::embedder::MockSparseEmbedder::new()));
     catalog.initialize().unwrap();
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
+    (cache, catalog)
+}
+
+fn catalogue_projection_sur(conn: Rag3dbConnection) -> (tempfile::TempDir, Catalog) {
+    let (cache, mut catalog) = ouvrir_catalogue_projection(conn);
     catalog.register_entity("Occurrence", EntityConfig {
         fields: HashMap::from([
             ("file".into(), champ(FieldType::String, false, false)),
