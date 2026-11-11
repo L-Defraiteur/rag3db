@@ -18,7 +18,7 @@ Les sections de passation ci-dessous sont historiques ; les entrées finales dé
 | équipier | correction du reste explicite en branche, ciblés verts ; passe globale rouge sur18/26 bilans à600s, cause non établie ; ne pas confondre avec le relais livré |
 | codeparsers | complément23 positions terminé, six gains stricts attribués sans score global ; rebase sur68b et passe intégrée en cours, pas encore livré |
 | lucivy |4.3.3 publiée ; minimums et lock rag3weaver intégrésf96acc6cf, close en erreur rouge4.3.2 puis vert4.3.3 ; aucun changement de format |
-| pose du binaire | ancien artefactd134 non posé ; préparation exacte68b9ede17 demandée avec attestation UI servie, pose et activation encore distinctes |
+| pose du binaire | 68b9ede17 posé et contrôlé aux deux postes : luciepc 22:03:08–22:03:11, portable 22:03:56–22:04:04 (Paris), atelier principal 20 outils exposés, UI servie conforme et rendu navigateur sans erreur ; [preuves et retour](../../tickets/closed/2026-11-11-preparer-et-poser-le-binaire-regroupe-aux-deux-postes.md) ; ancien artefact d134 jamais posé |
 
 La règle de suivi couvre désormais toute nouvelle action et tout signalement entre sessions :
 ticket existant ou nouveau, porteur explicite, puis déplacement vers `docs/tickets/closed/`
