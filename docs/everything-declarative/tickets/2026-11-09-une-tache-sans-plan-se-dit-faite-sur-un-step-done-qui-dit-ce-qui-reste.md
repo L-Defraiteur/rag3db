@@ -31,3 +31,23 @@ un `step_done` déclaré valent fin, quel que soit `remaining`.
   demandé » et attend le superviseur.
 - Témoin : sans plan, un `step_done` avec `remaining` relance un pas ; sans `remaining`, la fin
   reste « fait sans plan » (le cas de la petite demande, `teammate_tests.rs`).
+
+## Correction partielle en branche — 11 novembre
+
+`cx-ed-reste-explicite-3`, source `51cf79843` : le dernier step_done depuis la dernière
+request fournit une notion unique de reste explicite, relue depuis la boîte durable pour
+continuer ou terminer. Une question ouverte garde priorité sur cette continuation.
+Rouge initial sur `06083905c` : un seul pas au lieu de deux, fin « fait sans plan » malgré
+remaining non vide (0,67 s). Première correction `0331e2246` insuffisante : la fin est empêchée
+mais la boucle attend sans travail ; test arrêté, aucun vert revendiqué sur cette version.
+
+Ciblés verts sur `51cf79843` : continuation et boîte déjà consommée 2/2 (0,72 s), petite
+demande sans plan et pause/reprise du plan 1/1 (1,13 s). Le report est réellement observé,
+et le reste est rappelé au modèle. La reprise testée restaure une boîte avec curseur déjà lu ;
+ce n'est pas une preuve d'un arrêt forcé du processus à toutes les instructions possibles.
+Preuves luciepc `I-luciepc/reste-explicite-20261111/`, rouge.log et vert-3-*.log.
+Passe complète et Gemini encore à jouer, aucun push master de cette correction.
+
+Le ticket reste ouvert : un remaining vide ne prouve pas l'existence du livrable demandé ni
+l'accord explicite du superviseur. Le contrat structuré d'achèvement et sa preuve de parcours
+restent à définir ; aucune autorisation nouvelle n'est déléguée au juge.

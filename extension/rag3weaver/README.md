@@ -258,6 +258,10 @@ weight and age with pinned runs. Since then:
 - **Each step starts a fresh thread**, carrying the request, the last 20 step
   results, the mailbox and the plan — a long task no longer drags its whole
   history into every call.
+- **Unfinished work continues without a plan.** A non-empty `step_done.remaining`
+  schedules another step and is recalled from the mailbox, even when its cursor
+  was already consumed. An outstanding supervisor question still suspends it;
+  an empty remainder alone does not establish that a requested deliverable exists.
 - **A question waits for its answer.** An unanswered question or approval
   suspends the teammate without calling the model; the mailbox says since when,
   and the step counts neither as done nor as failed.
