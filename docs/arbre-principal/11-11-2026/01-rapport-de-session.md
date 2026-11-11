@@ -15,6 +15,37 @@ la session d'orchestration (aujourd'hui `rag3db-5a`), et travaille avec les sess
 **recherche**, **everything declarative** ou « ED » (l'IDE et l'équipier).
 
 
+## Reprise ED et dernière série avant rebase
+
+ED a intégré **c693496a8c2b3b95dd63877d356ed80e62797bd9** avec ses trois contrôles
+propres/aucun rebase/origin-master=HEAD. Le même ticket ouvert est transféré à arbre :
+`docs/arbre-principal/tickets/2026-11-11-ordonner-les-entites-derivees-a-l-ouverture-du-backend.md`.
+À nous : validation statique commune de search_index et vrai manifeste combiné public,
+sans arête inverse de création ni activation de base utilisateur. Les preuves ED restent ED.
+
+Dernière source propre de notre branche3 : **b6f78bf878f1ee4f610c5db70b5a6de6a98e4f2d**.
+`cx-cellules-reouverture-v4.log` : **22 dérivées et 3 Scope privé verts**, rc0. Inclut titre
+non projetable refusé, FTS physique, rollback/reprise bêta, réouverture durable et ScopeNONE.
+`cx-contenu-pg-v4.log` : ingestion franchie, lecture publique bloquée ; aucune preuve PG
+verte. Trois sessions privées dont une idle-in-transaction, aucun bloqueur SQL selon
+pg_stat_activity. Attachement gdb refusé par Yama, sans contournement ; seul le PID du test
+**1166384**, chemin binaire et filtre exacts relus, a reçu SIGTERM. Zéro session privée
+restante ensuite. Le lanceur a terminé PG en échec puis les deux suites natives ci-dessus.
+Traces : `cx-pg-v4-piles.log` (refus), journal PGv4 et journal natif hors target.
+La suite v4 prévue sur ba879 n'avait jamais démarré (checkout refusé, témoin modifié) ;
+la v4 réellement exécutée porte bien b6f78 dans son en-tête.
+
+**Fournisseur terminé nettoyé au portable** : WT `cx-wt-schema-code-provider` retiré sans
+force après copie fidèle `/home/lucied/.cache/rag3weaver-build/cx-provider-nettoyage-c12/administration`
+et garde helper65aa SHA dca13abb…252f628 **VERT**, rapport neuf `garde.json` dans ce dossier.
+Aucun sous-module initialisé, aucun target créé dans ce WT. La branche distante c12 est
+conservée ; la branche locale aussi (pas de suppression forcée d'une histoire reprise par
+cherry-pick). Le worktree 1a, son target et le diagnostic baseline restent en place.
+
+Prochain pas : rebase 1a sur une branche neuve depuis master ED, relever le diff, raccord
+manifeste et diagnostic PG borné. Pas de relance lourde e2e_search avant recherche ; son
+correctif et le faux service léger sont désormais autorisés chez son porteur, pas ici.
+
 ## Suite 1a — gardes et cellules, après 06b3ee4cb
 
 **Périmètre courant : toujours hors master, lot 1a ouvert.** Branche
