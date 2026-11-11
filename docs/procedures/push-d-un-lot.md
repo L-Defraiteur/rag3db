@@ -194,6 +194,10 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   Une ambiguïté, une copie différente, un verrou, des données locales/ignorées non préservées
   ou un rapport déjà présent refusent le retrait. Le rapport JSON est créé exclusivement hors
   cible, hors administration et hors copie. Garder copies et rapport, ne pas réessayer en force.
+  Un lien source suivi dans l'index en mode 120000, inchangé et dans un arbre propre est une
+  feuille : readlink/lstat sont enregistrés sans suivre sa cible. Lien source modifié ou non
+  suivi, racine/admin/copie/.git liés restent refusés. Les administrations séparées sans nom
+  `.git` sous les sources sont aussi inventoriées et attribuées par Git avant retrait.
   La quiescence relève du propriétaire ; une réussite est périmée dès qu'un état change avant
   le retrait. La garde ne supprime ni ne répare et ne garantit pas l'arrêt de writers tiers.
   Incident : `docs/codeparsers/tickets/2026-11-11-le-nettoyage-du-parent-invalide-un-worktree-de-sous-module.md`.

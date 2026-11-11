@@ -196,6 +196,82 @@ class GardeWorktreeTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(guard.main(), 2)
 
+    def test_lien_source_suivi_vers_parent_est_feuille_sans_visite(self):
+        link = self.parent / 'retour-parent'
+        link.symlink_to('..', target_is_directory=True)
+        git(self.parent, 'add', 'retour-parent')
+        git(self.parent, 'commit', '-m', 'lien source')
+        archive = self.archive()
+        before = fingerprint(self.repo)
+        spec = importlib.util.spec_from_file_location('garde_fixture', SCRIPT)
+        guard = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guard)
+        original = os.scandir
+
+        def checked_scan(path):
+            self.assertNotIn('retour-parent', Path(path).parts)
+            return original(path)
+
+        argv = [str(SCRIPT), '--depot', str(self.repo), '--worktree', str(self.parent),
+                '--archive', str(self.admin), str(archive), '--rapport', str(self.report)]
+        with patch.object(sys, 'argv', argv), patch.object(guard.os, 'scandir', side_effect=checked_scan), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(guard.main(), 0)
+        self.assertEqual(before, fingerprint(self.repo))
+        entry = json.loads(self.report.read_text())['liens_sources'][0]
+        self.assertEqual(entry['readlink'], '..')
+        self.assertEqual(entry['index_mode'], '120000')
+
+    def test_lien_source_modifie_refuse(self):
+        link = self.parent / 'retour-parent'
+        link.symlink_to('..', target_is_directory=True)
+        git(self.parent, 'add', 'retour-parent')
+        git(self.parent, 'commit', '-m', 'lien source')
+        link.unlink()
+        link.symlink_to('../repo', target_is_directory=True)
+        self.assertEqual(self.check([(self.admin, self.archive())]).returncode, 2)
+
+    def test_lien_source_non_suivi_refuse(self):
+        (self.parent / 'non-suivi').symlink_to('..', target_is_directory=True)
+        self.assertEqual(self.check([(self.admin, self.archive())]).returncode, 2)
+
+    def test_administration_separee_sous_sources_partagee_refuse(self):
+        admin = self.parent / 'donnees'
+        external = self.base / 'externe'
+        external.mkdir()
+        git(external, 'init', '-b', 'master', '--separate-git-dir', str(admin))
+        git(external, 'config', 'core.worktree', str(external))
+        (external / 'source').write_text('source externe\n')
+        git(external, 'add', 'source')
+        git(external, 'commit', '-m', 'externe')
+        git(external, 'worktree', 'add', '-b', 'autre', str(self.base / 'autre-externe'))
+        git(self.parent, 'add', 'donnees')
+        git(self.parent, 'commit', '-m', 'administration sans nom git dans source')
+        self.assertEqual(git(self.parent, 'status', '--porcelain', '--ignored=matching'), '')
+        before = fingerprint(admin)
+        result = self.check([(self.admin, self.archive())])
+        self.assertEqual(result.returncode, 2, result.stderr + result.stdout)
+        self.assertTrue(any('autre worktree' in x for x in json.loads(self.report.read_text())['refus']))
+        self.assertEqual(before, fingerprint(admin))
+        self.report.rename(self.base / 'rapport-sans-archive-separee.json')
+        saved = self.base / 'archive-separee'
+        shutil.copytree(admin, saved)
+        result = self.check([(self.admin, self.base / 'archive'), (admin, saved)])
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertTrue(any('autre worktree' in x for x in json.loads(self.report.read_text())['refus']))
+        self.assertEqual(before, fingerprint(admin))
+
+    def test_racines_liees_non_protegees_refusees(self):
+        archive = self.archive()
+        for name, source, option in [('depot', self.repo, '--depot'),
+                                     ('cible', self.parent, '--worktree')]:
+            alias = self.base / ('alias-' + name)
+            alias.symlink_to(source, target_is_directory=True)
+            self.protected_check([option, str(alias)])
+        alias = self.base / 'alias-archive'
+        alias.symlink_to(archive, target_is_directory=True)
+        self.protected_check(['--archive', str(self.admin), str(alias)])
+
     def test_rapport_dans_cible_refuse_sans_ecriture(self):
         report = self.parent / 'rapport.json'
         self.assertEqual(self.check(report=report).returncode, 1)

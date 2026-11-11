@@ -27,6 +27,8 @@ def safe_path(path, strict=True):
     protected(path)
     resolved = Path(path).resolve(strict=strict)
     protected(resolved)
+    if Path(os.path.abspath(path)) != resolved:
+        raise ValueError('racine liée ou ambiguë : inspection refusée')
     return resolved
 
 
@@ -98,6 +100,31 @@ def inventory(root):
     return result
 
 
+def source_link(path):
+    """Lire le lien lui-même et le blob d'index, jamais ouvrir sa cible."""
+    before = path.lstat()
+    source = gitpath(path.parent, '--show-toplevel')
+    relative = str(path.relative_to(source))
+    rows = git(source, 'ls-files', '--stage', '-z', '--', ':(literal)' + relative).split(b'\0')
+    rows = [row for row in rows if row]
+    if len(rows) != 1 or b'\t' not in rows[0]:
+        raise Refus(f'lien source non suivi ou ambigu : {path}')
+    metadata, name = rows[0].split(b'\t', 1)
+    mode, oid, stage = metadata.split()
+    if mode != b'120000' or stage != b'0' or name != os.fsencode(relative):
+        raise Refus(f'lien source hors mode 120000 stable : {path}')
+    link = os.readlink(path)
+    if git(source, 'cat-file', 'blob', oid.decode('ascii')) != os.fsencode(link):
+        raise Refus(f'lien source modifié : {path}')
+    after = path.lstat()
+    fields = ('st_dev', 'st_ino', 'st_mode', 'st_size', 'st_mtime_ns', 'st_ctime_ns')
+    if any(getattr(before, field) != getattr(after, field) for field in fields):
+        raise Refus(f'lien source changeant pendant inspection : {path}')
+    return {'chemin': str(path), 'readlink': link, 'index_mode': '120000',
+            'index_blob': oid.decode('ascii'),
+            'lstat': {field: getattr(after, field) for field in fields}}
+
+
 def inspect(repo, target, archives, report):
     refus = []
     target_admin = gitpath(target, '--absolute-git-dir')
@@ -114,15 +141,26 @@ def inspect(repo, target, archives, report):
         raise ValueError('rapport situé dans la zone supprimable')
     admins = {target_admin}
     sources = {target}
+    links = []
     for directory, dirs, files in os.walk(target, followlinks=False, onerror=walk_error):
         p = Path(directory)
         if any(name in dirs or name in files for name in ('.env', '.vault')):
             raise Refus('zone protégée présente : refus avant parcours ou status')
-        for name in list(dirs):
+        # Une administration séparée peut être n'importe où sous les sources.
+        if 'HEAD' in files and ('config' in files or 'commondir' in files or 'objects' in dirs):
+            gitpath(p, '--git-common-dir', admin=True)
+            admins.add(p)
+            dirs[:] = []
+            continue
+        for name in list(dirs) + files:
             child = p / name
-            if child.is_symlink():
-                refus.append(f'répertoire lié non inspectable : {child}')
-                dirs.remove(name)
+            if child.is_symlink() and name != '.git':
+                try:
+                    links.append(source_link(child))
+                except (Refus, OSError) as exc:
+                    refus.append(str(exc))
+                if name in dirs:
+                    dirs.remove(name)
         if '.git' in dirs or '.git' in files:
             entry = p / '.git'
             if entry.is_symlink():
@@ -204,7 +242,8 @@ def inspect(repo, target, archives, report):
         if root not in roots:
             refus.append(f'preuve archive non attribuable : {root}')
     return {'verdict': 'ROUGE' if refus else 'VERT', 'worktree': str(target),
-            'administrations': descriptions, 'archives': evidence, 'refus': sorted(set(refus)),
+            'administrations': descriptions, 'archives': evidence, 'liens_sources': links,
+            'refus': sorted(set(refus)),
             'limite': 'Quiescence à la charge du propriétaire ; aucune suppression autorisée après modification.'}
 
 

@@ -206,3 +206,39 @@ le retrait ne ferait que délier et une dépendance administrative qui serait
 cassée, puis éventuel témoin et correctif de la garde. Pas de code supplémentaire
 avant cette revue. Le volet historique index/refs/reflogs reste non certifié,
 indépendamment du refus de nettoyage et de la garde livrée.
+
+### Témoins bornés avant le correctif suivant
+
+Le témoin du lien source suivi vers parent est rouge : la garde conservatrice
+le refuse ; le cadrage autorise désormais une feuille 120000 inchangée, sans
+visite de sa cible. Le témoin separate-git-dir est également rouge pour la
+bonne raison : administration placée sous parent/donnees, suivie dans les
+sources du parent (status propre), servant deux worktrees externes ; la version
+livrée retourne **VERT à tort**. Aucun retrait réel n'a été appelé. Les 17 tests
+(dont ces deux rouges) ont été joués uniquement sur fixtures temporaires.
+Il faut reconnaître les candidats administratifs hors des seuls chemins .git,
+les attribuer par Git et refuser leur partage même avec archive. Ce constat
+reste rattaché à cet incident et ne requalifie pas l'état historique du garde.
+
+### Correctif borné : liens source et administrations sans nom .git
+
+La garde distingue maintenant le lien source du stockage administratif. Un
+lien source suivi dans l'index en mode 120000, stade 0, dont readlink égale
+le blob d'index, est une feuille : lstat/readlink sont enregistrés, aucune
+descente ni ouverture de sa cible. Le status propre reste requis, notamment
+pour refuser une modification déjà staged. Un lien modifié ou non suivi refuse.
+Racines, administrations, copies et .git liés restent refusés ; composants
+protégés et données ignorées/non préservées restent refusés aussi.
+
+Les candidats HEAD+(config/commondir/objects) sont repérés dans toute la zone
+source supprimable, pas seulement sous les administrations déjà connues ;
+Git doit les attribuer. Le témoin separate-git-dir vu faussement vert avant
+correctif est désormais ROUGE pour partage, sans et avec archive fidèle,
+fichiers administratifs inchangés. Aucun retrait réel de fixture n'a servi
+à découvrir le défaut ; aucun dépôt réel n'a été interrogé par ces tests.
+
+19 témoins passent localement : 14 précédents, lien source vers parent sans
+visite ni mutation de cible, lien modifié, lien non suivi, administration
+séparée partagée, racines liées refusées. Quiescence à la charge du propriétaire,
+archives hors cible ; pas de reprise du nettoyage réel avant nouveau tour.
+Le volet historique index/refs/reflogs de l'ancien garde reste non certifié.

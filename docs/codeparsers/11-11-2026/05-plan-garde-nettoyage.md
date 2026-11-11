@@ -144,3 +144,13 @@ Six témoins supplémentaires portent la suite à 14 ; archive protégée valide
 alias canonique, composant suivi de .., rapport protégé, racines dépôt/cible/
 administration protégées et absence de parcours/status d'une zone .env de la
 fixture. Cela ne modifie pas la limite de quiescence ni l'archive hors cible.
+
+## Revue après première utilisation
+
+Le refus conservateur du lien source natif est distingué du partage administratif :
+une feuille source suivie index120000 et inchangée peut être déliée sans suivre
+sa cible, en enregistrant readlink/lstat. Racines/admin/copies/.git liés restent
+refusés. Une administration séparée sous un nom quelconque dans les sources
+est également repérée et attribuée par Git. Le témoin separate-git-dir avait
+vu VERT à tort avant ce correctif ; il voit maintenant le partage interdit,
+même avec archive fidèle, sans mutation de ses données. Suite portée à 19.
