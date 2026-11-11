@@ -18,10 +18,17 @@ const PRETE: &str = "document.querySelector('#send') && !document.querySelector(
 type Cibles = Arc<Mutex<HashMap<String, String>>>;
 type Retours = Arc<Mutex<HashMap<(String, String), Value>>>;
 
-fn depot(racine: &Path, nom: &str, marque: &str) -> PathBuf {
+fn depot(racine: &Path, nom: &str, marque: &str, tronque: bool) -> PathBuf {
     let depot = racine.join(nom);
     std::fs::create_dir_all(depot.join("src")).unwrap();
-    let contenu = format!("pub fn repere() -> &'static str {{\n    \"{marque}\"\n}}\n");
+    let mut contenu = format!("pub fn repere() -> &'static str {{\n    \"{marque}\"\n}}\n");
+    if tronque {
+        // Une vraie recherche volumineuse : le rendu précède sa metadata textuelle,
+        // que la borne du chat enlève. Aucun résultat n'est fabriqué par le témoin.
+        for i in 0..200 {
+            contenu.push_str(&format!("pub fn repere_{i:03}() -> &'static str {{ \"{marque}_{}\" }}\n", "x".repeat(350)));
+        }
+    }
     std::fs::write(depot.join("src/lib.rs"), contenu).unwrap();
     for args in [
         &["init", "-q", "-b", "essai"][..],
@@ -91,7 +98,7 @@ fn invocation(tour: &Turn) -> Value {
     tour.metadata.as_ref().and_then(|m| m.get("invocation")).cloned().unwrap_or(Value::Null)
 }
 
-fn modele(cibles: Cibles, exposes: Arc<Mutex<Vec<Value>>>, retours: Retours) -> ChatModel {
+fn modele(cibles: Cibles, exposes: Arc<Mutex<Vec<Value>>>, retours: Retours, tronque: bool) -> ChatModel {
     Arc::new(move |_| -> Result<Arc<dyn Llm>, String> {
         let (cibles, exposes, retours) = (cibles.clone(), exposes.clone(), retours.clone());
         Ok(Arc::new(CallbackLlm::new("faux-parcours-contextuel", 8192, move |turns: &[Turn], opts, sink| {
@@ -127,11 +134,15 @@ fn modele(cibles: Cibles, exposes: Arc<Mutex<Vec<Value>>>, retours: Retours) -> 
                     return Err(LlmError::Model(format!("reçu sans invocation structurée : {}", dernier.content)));
                 }
                 let nom = dernier.tool_name.clone().expect("nom du véritable outil exécuté");
+                if tronque && nom == "search_code" {
+                    assert!(dernier.content.contains("output truncated"), "la vraie recherche doit dépasser la borne du chat");
+                    assert!(!dernier.content.contains("Metadata:"), "la provenance textuelle doit être hors borne");
+                }
                 retours.lock().unwrap().insert((lettre.to_string(), nom), provenance);
             }
             let contexte = json!({ "target": { "kind": "backend", "id": cible } });
             let prochain = if !faits.iter().any(|t| t.tool_name.as_deref() == Some("search_code")) {
-                Some(("search_code", json!({ "context": contexte, "query": "repere", "options": {} })))
+                Some(("search_code", json!({ "context": contexte, "query": "repere", "options": { "limit": if tronque { 200 } else { 10 } } })))
             } else if !faits.iter().any(|t| t.tool_name.as_deref() == Some("outline")) {
                 Some(("outline", json!({ "context": contexte, "path": "src/lib.rs" })))
             } else {
@@ -151,6 +162,16 @@ fn modele(cibles: Cibles, exposes: Arc<Mutex<Vec<Value>>>, retours: Retours) -> 
     ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)"
 )]
 fn le_relais_du_chat_ouvre_la_cible_effective_et_la_garde_apres_rechargement() {
+    parcours(false);
+}
+
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : étape séparée")]
+fn le_relais_du_chat_garde_sa_cible_quand_le_texte_est_tronque() {
+    parcours(true);
+}
+
+fn parcours(tronque: bool) {
     let Some(binaire) = navigateur_ou_saut("le_relais_du_chat_ouvre_la_cible_effective_et_la_garde_apres_rechargement") else {
         return;
     };
@@ -158,9 +179,9 @@ fn le_relais_du_chat_ouvre_la_cible_effective_et_la_garde_apres_rechargement() {
     let cibles: Cibles = Arc::new(Mutex::new(HashMap::new()));
     let exposes = Arc::new(Mutex::new(Vec::new()));
     let retours: Retours = Arc::new(Mutex::new(HashMap::new()));
-    let a = atelier_avec(d.path(), modele(cibles.clone(), exposes.clone(), retours.clone()));
-    let da = depot(&a.racine, "depot-a", A);
-    let db = depot(&a.racine, "depot-b", B);
+    let a = atelier_avec(d.path(), modele(cibles.clone(), exposes.clone(), retours.clone(), tronque));
+    let da = depot(&a.racine, "depot-a", A, tronque);
+    let db = depot(&a.racine, "depot-b", B, tronque);
     let ida = attacher(&a, &da);
     let idb = attacher(&a, &db);
     assert_ne!(ida, idb, "deux occurrences distinctes, même chemin et même symbole");
