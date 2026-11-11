@@ -51,3 +51,10 @@ Passe complète et Gemini encore à jouer, aucun push master de cette correction
 Le ticket reste ouvert : un remaining vide ne prouve pas l'existence du livrable demandé ni
 l'accord explicite du superviseur. Le contrat structuré d'achèvement et sa preuve de parcours
 restent à définir ; aucune autorisation nouvelle n'est déléguée au juge.
+
+Validation complète : features 5/5, lib 2102 réussis / zéro échec, navigateur 36/36,
+lectures 24/24 et juge Gemini 5/5 verts. Équipier Gemini rouge : README/report livrés en
+26 pas et 491 s, mais seulement 18/26 bilans après 600 s. Le nouveau ticket ED du 11 novembre
+sur les bilans conserve ce défaut distinct ; aucun verdict vert global ni push master.
+Le target unique est ensuite repris par le worktree relais, sans cargo simultané : ne pas
+l'effacer lors d'un nettoyage de cette branche tant qu'il appartient au relais.
