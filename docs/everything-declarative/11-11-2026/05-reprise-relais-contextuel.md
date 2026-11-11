@@ -1,5 +1,45 @@
 # Reprise du relais contextuel — 11 novembre 2026
 
+## État courant après la passe du relais — priorité de reprise
+
+Le lot des réclamations a atterri en `91e5f760b` et ses artefacts propres ont été
+nettoyés ; les sections anciennes ci-dessous restent historiques. Le relais
+contextuel attend uniquement son intégration autorisée et son nettoyage : source
+ED finale `09e86e689`, branche `cx-ed-relais-commun-4`, worktree luciepc
+`~/git_workspaces/cx-ed-relais`. Ne pas relancer une passe ni toucher le lot remaining.
+
+Ticket du parcours commun :
+`docs/everything-declarative/tickets/2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md`
+(ED runtime/intégration, archi UI). Ticket de la version contrôlée/exécutée :
+`docs/everything-declarative/tickets/2026-11-11-une-invocation-peut-executer-une-autre-version-que-celle-verifiee.md`
+(ED). Tous deux restent ouverts avant atterrissage.
+
+Verdict agrégé relu : features 5/5, gardes 10/10, lib entière **2114/0/64 ignorés**
+en 42,84 s, lectures **24/0/0** en 10,24 s, PostgreSQL privé **34/0/0** en 7,67 s,
+2/2 suites sans SAUTÉ sur `09e86e689`, sous poste lourd. Les ignorés de la lib
+restent ses marques existantes, le navigateur étant joué séparément.
+Archi : **3/0/0 en 132,16 s** sur `36865616d`, ELF
+`6782d8a52d41986af857b99ba85d051dd79557dc97f67419b782caba9673a607`,
+220 chemins/contenus actuels présents. La réutilisation de cette preuve UI est
+acceptée par orchestration après lecture du seul ajout `#[cfg(test)]` au wrapper
+privé `call_tool` entre 368 et 09. Les 39 navigateurs sur a92 et les preuves 458
+restent distincts ; ni Gemini ni les 39 n'ont été rejoués pour ce diff.
+
+Preuves copiées aux deux postes : `~/.cache/rag3weaver-build/I-luciepc/relais-20261111/`
+(`verdict-final`, `verdict-final.json`, logs `*-commun-5.log`, rouge déterministe
+`version-rouge-949dcb556.log`, vert `version-vert.log`) et
+`cx-ui-contextuel-36865616d-cibles-final-20261111/` (navigateur et attestation ELF).
+Le rouge de compilation 368 (raccourci privé devenu mort hors tests) et le début
+de passe arrêté car lancé sans poste lourd sont conservés séparément ; aucun vert
+n'est revendiqué sur ces tentatives. Source finale et preuves restent immuables.
+
+Les suites séparées restent ouvertes : remaining (`cx-ed-reste-explicite-3`,
+`1acc67338`, juge rouge 18 bilans/26 après 600 s), erreurs SQL masquées de dette,
+et accord de commande hors domaine (ticket désormais dans le dossier ED).
+Ces problèmes ne sont pas corrigés par le relais. L'archiviste automatique reste
+une conception mémoire distincte, sans nouvelle activation ni orchestrateur livré.
+
+
 ## Sources et périmètre
 
 Branche `cx-ed-relais`, worktree `/home/lucied/git_workspaces/cx-ed-relais` aux deux postes.

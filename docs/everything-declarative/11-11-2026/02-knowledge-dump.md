@@ -203,3 +203,19 @@ le 8 novembre).
 
 La liste, une ligne chacun, est au § 7 du rapport de session (`01-rapport-de-session.md`). Ne pas
 les déplacer avant le mot de c7.
+
+
+## Relais contextuel et invariant de version (11 novembre, soir)
+
+Huit graphes atelier invoquent une opération littérale avec contexte et arguments
+JSON typés ; le résolveur exact de backend refuse les cibles ambiguës, inconnues,
+soi-même, espaces/vues non disponibles et capacités non prouvées en lecture seule.
+Le reçu canonique `metadata.invocation` survit hors du texte tronqué, jusqu'aux
+liens UI et au rechargement. wait_output compose le lecteur de journal existant.
+
+Une vérification sur A suivie de call_in, qui relisait prepared, pouvait exécuter B
+après apply_reload : témoin déterministe rouge949, puis vert074. Maintenant la même
+version préparée parcourt vérification, cellule/réactions, garde agent, harnais,
+graphe et présentation. call/call_in ordinaires composent les mêmes méthodes
+internes ; ne pas réintroduire une lecture prepared au milieu de ce parcours.
+État, sources, tickets et preuves finales : en tête du rapport de session.
