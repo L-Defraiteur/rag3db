@@ -3786,7 +3786,7 @@ impl Backend {
     /// `task_writes`, un outil qui écrit les fichiers est refusé sur le
     /// principal — l'agent écrit dans une tâche. L'IDE appelle
     /// [`call_humain`](Self::call_humain).
-    #[cfg(feature = "code")]
+    #[cfg(all(feature = "code", feature = "daemon"))]
     pub(crate) fn invoke_read(&self, authority: &crate::dataflow::invocation_nodes::InvocationAuthority,
         operation: &str, arguments: Value, cancel: crate::dataflow::node::CancelToken) -> Result<Value, String> {
         let prepared = self.prepared();
