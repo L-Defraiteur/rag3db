@@ -170,8 +170,12 @@ du wrapper copiés dans cx-passe-require-3/wrapper-final.
 
 Incident de nettoyage : codeparsers-garde distant était un worktree rattaché
 au sous-module de rag3db-brancher. Le retrait du parent invalidait son lien Git.
-Il a été rétabli en clone autonome au commit historique 672a0d5, sans écraser
-ses fichiers ; status propre après rétablissement. Ce clone ancien est conservé,
+Il a été rétabli par init/fetch/reset --mixed vers le commit historique
+672a0d5 ; status propre après rétablissement. Aucune comparaison initiale des
+fichiers, références ou writers ne permet de conclure à leur identité avant/après. Ce clone ancien est conservé,
 ainsi que la trace dans cx-passe-require-3/reparation-ancien-codeparsers-garde.log.
-Aucun travail restant pour cet incident ; les suites ouvertes sont les tickets
-oracle/provenance et homonyme (et les chantiers antérieurs distincts).
+Rectification : cet incident reste ouvert dans
+`docs/codeparsers/tickets/2026-11-11-le-nettoyage-du-parent-invalide-un-worktree-de-sous-module.md` ;
+revue et garde de nettoyage restent à faire. Pas de nouvelle intervention dans
+le garde ni de suppression des restes avant revue. Les suites oracle/provenance
+et homonyme restent distinctes, ouvertes également.
