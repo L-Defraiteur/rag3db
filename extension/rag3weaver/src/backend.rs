@@ -3875,6 +3875,7 @@ impl Backend {
         Ok(())
     }
 
+    #[cfg(test)]
     fn call_tool(&self, name: &str, args: Value) -> Result<Value, String> {
         self.call_tool_on(&self.prepared(), name, args)
     }
