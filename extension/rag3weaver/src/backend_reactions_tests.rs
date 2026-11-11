@@ -605,6 +605,19 @@ fn la_trace_livree_enregistre_un_appel_d_outil_sans_se_relancer() {
 /// Joué seul avec RAG3WEAVER_STOP_WAIT_S=1 : la réaction est libérée avant les assertions.
 #[test]
 fn un_arret_echoue_ne_devient_pas_un_succes_sans_fermer() {
+    // Le blocage intentionnel reste hors du runtime partagé de la lib entière.
+    // Le délai court est passé à cet enfant seulement, jamais posé globalement.
+    const ENFANT: &str = "RAG3WEAVER_TEST_ARRET_ENFANT";
+    if std::env::var_os(ENFANT).is_none() {
+        let rendu = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "backend::reactions_tests::un_arret_echoue_ne_devient_pas_un_succes_sans_fermer", "--nocapture"])
+            .env(ENFANT, "1")
+            .env("RAG3WEAVER_STOP_WAIT_S", "1")
+            .output().expect("le processus du témoin démarre");
+        eprintln!("{}{}", String::from_utf8_lossy(&rendu.stdout), String::from_utf8_lossy(&rendu.stderr));
+        assert!(rendu.status.success(), "le témoin enfant échoue : {}", rendu.status);
+        return;
+    }
     use std::sync::atomic::{AtomicBool, Ordering};
     let (_dir, mut backend) = reactif();
     backend.catalog.lock().unwrap().publish_read_view();
