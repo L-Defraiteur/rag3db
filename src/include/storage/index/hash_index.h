@@ -40,6 +40,7 @@ class PageManager;
 class OnDiskHashIndex {
 public:
     virtual ~OnDiskHashIndex() = default;
+    virtual void discardLocalRange(common::offset_t first, common::offset_t count) = 0;
     virtual bool checkpoint(PageAllocator& pageAllocator) = 0;
     virtual bool checkpointInMemory() = 0;
     virtual bool rollbackInMemory() = 0;
@@ -117,6 +118,9 @@ public:
     void deleteInternal(Key key) const { localStorage->deleteKey(key); }
     // Discards from local storage, but will not insert a deletion (used for rollbacks)
     bool discardLocal(Key key) const { return localStorage->discard(key); }
+    void discardLocalRange(common::offset_t first, common::offset_t count) override {
+        localStorage->discardRange(first, count);
+    }
 
     // For insertions, we first check in the local storage. There are three cases:
     // - the key is found in the local storage, return false;
@@ -467,6 +471,12 @@ public:
     inline void delete_(T key) {
         KU_ASSERT(indexInfo.keyDataTypes[0] == common::TypeUtils::getPhysicalTypeIDForType<T>());
         return getTypedHashIndex(key)->deleteInternal(key);
+    }
+
+    void discardLocalRange(common::offset_t first, common::offset_t count) {
+        for (auto& index : hashIndices) {
+            index->discardLocalRange(first, count);
+        }
     }
 
     bool discardLocal(common::ku_string_t key) { return discardLocal(key.getAsStringView()); }

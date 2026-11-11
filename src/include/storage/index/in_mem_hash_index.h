@@ -216,6 +216,45 @@ public:
         return false;
     }
 
+    // Retire les entrées par identité de ligne, sans reconstruire leurs clés. Les deux
+    // curseurs restent dans les slots existants ; déplacer une chaîne ne recopie pas ses octets.
+    void discardRange(common::offset_t first, common::offset_t count) {
+        static_assert(std::is_nothrow_move_assignable_v<SlotEntry<OwnedType>>);
+        if (empty() || count == 0) {
+            return;
+        }
+        for (slot_id_t slotID = 0; slotID < numPrimarySlots(); ++slotID) {
+            SlotIterator read{slotID, this};
+            auto write = read;
+            entry_pos_t writePos = 0;
+            do {
+                const auto numEntries = read.slot->header.numEntries();
+                for (entry_pos_t pos = 0; pos < numEntries; ++pos) {
+                    auto& entry = read.slot->entries[pos];
+                    if (entry.value >= first && entry.value - first < count) {
+                        entry = {};
+                        read.slot->header.setEntryInvalid(pos);
+                        --indexHeader.numEntries;
+                        continue;
+                    }
+                    if (writePos == SLOT_CAPACITY) {
+                        const auto advanced = nextChainedSlot(write);
+                        KU_ASSERT(advanced);
+                        writePos = 0;
+                    }
+                    if (write.slot != read.slot || writePos != pos) {
+                        const auto fingerprint = read.slot->header.fingerprints[pos];
+                        write.slot->entries[writePos] = std::move(entry);
+                        write.slot->header.setEntryValid(writePos, fingerprint);
+                        read.slot->header.setEntryInvalid(pos);
+                    }
+                    ++writePos;
+                }
+            } while (nextChainedSlot(read));
+            reclaimOverflowSlots(SlotIterator{slotID, this});
+        }
+    }
+
 private:
     // Assumes that space has already been allocated for the entry
     bool appendInternal(OwnedType&& key, common::offset_t value, common::hash_t hash,

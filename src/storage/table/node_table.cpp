@@ -169,24 +169,6 @@ struct UncommittedIndexInserter final : IndexScanHelper {
     std::unique_ptr<Index::InsertState> insertState;
 };
 
-struct RollbackPKDeleter final : IndexScanHelper {
-    RollbackPKDeleter(row_idx_t startNodeOffset, row_idx_t numRows, NodeTable* table,
-        PrimaryKeyIndex* pkIndex)
-        : IndexScanHelper(table, pkIndex),
-          semiMask(SemiMaskUtil::createMask(startNodeOffset + numRows)) {
-        semiMask->maskRange(startNodeOffset, startNodeOffset + numRows);
-        semiMask->enable();
-    }
-
-    std::unique_ptr<NodeTableScanState> initScanState(const Transaction* transaction,
-        DataChunk& dataChunk) override;
-
-    bool processScanOutput(main::ClientContext* context, NodeGroupScanResult scanResult,
-        const std::vector<ValueVector*>& scannedVectors) override;
-
-    std::unique_ptr<SemiMask> semiMask;
-};
-
 std::unique_ptr<NodeTableScanState> UncommittedIndexInserter::initScanState(
     const Transaction* transaction, DataChunk& dataChunk) {
     auto scanState = IndexScanHelper::initScanState(transaction, dataChunk);
@@ -212,56 +194,6 @@ bool UncommittedIndexInserter::processScanOutput(main::ClientContext* context,
     return true;
 }
 
-std::unique_ptr<NodeTableScanState> RollbackPKDeleter::initScanState(const Transaction* transaction,
-    DataChunk& dataChunk) {
-    auto scanState = IndexScanHelper::initScanState(transaction, dataChunk);
-    scanState->source = TableScanSource::COMMITTED;
-    scanState->semiMask = semiMask.get();
-    return scanState;
-}
-
-template<typename T>
-concept notIndexHashable = !IndexHashable<T>;
-
-bool RollbackPKDeleter::processScanOutput(main::ClientContext* context,
-    NodeGroupScanResult scanResult, const std::vector<ValueVector*>& scannedVectors) {
-    if (scanResult == NODE_GROUP_SCAN_EMPTY_RESULT) {
-        return false;
-    }
-    KU_ASSERT(scannedVectors.size() == 1);
-    auto& scannedVector = *scannedVectors[0];
-    auto& pkIndex = index->cast<PrimaryKeyIndex>();
-    const auto rollbackFunc = [&]<IndexHashable T>(T) {
-        for (idx_t i = 0; i < scannedVector.state->getSelSize(); ++i) {
-            const auto pos = scannedVector.state->getSelVector()[i];
-            T key = scannedVector.getValue<T>(pos);
-            static constexpr auto isVisible = [](offset_t) { return true; };
-            // Seulement si la clé ne mène pas à une ligne validée. Le balayage rend des blocs
-            // entiers, pas la seule plage annulée : on y trouve des lignes qui restent, et une
-            // ligne refusée pour clé en double porte la clé d'une ligne qui reste. Retirer ces
-            // clés faisait disparaître de l'index des lignes validées, tant que leur clé n'avait
-            // pas passé un point de reprise.
-            // Le critère n'est pas la plage de cet enregistrement : annuler un enregistrement
-            // rend invisibles toutes les lignes de son bloc ajoutées par la transaction
-            // (VectorVersionInfo::rollbackInsertions), celles des enregistrements qui restent à
-            // annuler comprises ; leur propre balayage ne les rend plus, et leurs clés doivent
-            // donc sortir ici.
-            // Avec plusieurs écrivains, les lignes non validées d'un autre écrivain du même bloc
-            // perdraient aussi leur clé : à reprendre avec les verrous.
-            if (offset_t lookupOffset = 0;
-                pkIndex.lookup(transaction::Transaction::Get(*context), key, lookupOffset,
-                    isVisible) &&
-                !table->isVisibleNoLock(&transaction::DUMMY_CHECKPOINT_TRANSACTION, lookupOffset)) {
-                // If we delete the key then it will not be visible to future transactions within
-                // this process
-                pkIndex.discardLocal(key);
-            }
-        }
-    };
-    TypeUtils::visit(scannedVector.dataType.getPhysicalType(), std::cref(rollbackFunc),
-        []<notIndexHashable T>(T) { KU_UNREACHABLE; });
-    return true;
-}
 } // namespace
 
 void NodeTableScanState::setToTable(const Transaction* transaction, Table* table_,
@@ -1087,13 +1019,15 @@ bool NodeTable::checkpoint(main::ClientContext* context, TableCatalogEntry* tabl
     return ret;
 }
 
-void NodeTable::rollbackPKIndexInsert(main::ClientContext* context, row_idx_t startRow,
+void NodeTable::rollbackPKIndexInsert(main::ClientContext* /*context*/, row_idx_t startRow,
     row_idx_t numRows_, node_group_idx_t nodeGroupIdx_) {
     const row_idx_t startNodeOffset =
         startRow + StorageUtils::getStartOffsetOfNodeGroup(nodeGroupIdx_);
 
-    RollbackPKDeleter pkDeleter{startNodeOffset, numRows_, this, getPKIndex()};
-    scanIndexColumns(context, pkDeleter, *nodeGroups);
+    // L’undo connaît les décalages réservés, et l’index tient déjà les clés et ces
+    // décalages. Les retirer par plage ne matérialise aucune chaîne et ne lit pas
+    // de page persistante. Une clé en double menant hors de la plage reste intacte.
+    getPKIndex()->discardLocalRange(startNodeOffset, numRows_);
 }
 
 // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
