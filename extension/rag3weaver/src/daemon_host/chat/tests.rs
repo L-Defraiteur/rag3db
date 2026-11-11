@@ -1871,7 +1871,8 @@ fn le_navigateur_inventorie_les_outils_effectifs_atelier_depot_et_tache() {
     let mut n = Navigateur::lancer(&binaire);
     n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
     for (nom, id, presents, absents) in [
-        ("atelier", aid, vec!["read_file", "read_scope", "replace_text", "run_command", "open_branch", "ask_permission"], vec!["search_code", "grep_files", "wait_output"]),
+        ("atelier", aid, vec!["read_file", "read_scope", "replace_text", "run_command", "open_branch", "ask_permission",
+            "search_code", "grep_files", "list_files", "outline", "usages", "impact", "callees", "schema", "wait_output"], vec![]),
         ("depot", did, vec!["read_file", "search_code", "grep_files", "list_files", "outline", "wait_output"], vec!["edit_file", "run_command"]),
         ("tache", tid, vec!["read_file", "search_code", "edit_file", "run_command", "wait_output"], vec![]),
     ] {
