@@ -115,6 +115,17 @@ et rejeu court hors verrou de push ; les docs seules n'imposent pas de rejeu.
 **Aucun tour de push master accordé.** L'ancien `wt-flux-push.sh` ne correspond plus aux chemins
 ni aux verdicts courants : préparer et relire un lanceur conforme avant de l'utiliser.
 
+## Lot suivant : garder les actions du chat après une panne
+
+Branche `cx-archi-chat-erreurs`, worktree `cx-wt-chat-erreurs` sur les deux postes,
+code `816fc4824`, dépendant du lot flux (pas encore sur master). Le premier blocage UI est
+corrigé et rouge/vert prouvé : une erreur modèle après lecture ne supprime plus les actions,
+et l'issue réelle du tour est portée par l'état poussé, y compris hors formulaire.
+L'inventaire effectif atelier/dépôt/tâche est vert depuis le navigateur ; le trou de recherche
+et de suivi de commande de l'atelier est transmis à ED en ticket. Types et bundle vérifiés.
+Régression navigateur en cours ; aucun verdict global, aucun push master.
+Détails, preuves, matrice et limites : `03-inventaire-parcours-chat.md`.
+
 ## Les lots nommés, pas commencés
 
 - **Le découpage au survol de la jauge du contexte.** Au survol, la jauge dirait ce qui pèse
