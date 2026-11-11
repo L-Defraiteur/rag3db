@@ -61,7 +61,17 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   `e2e_postgres` si `code.rs`, l'IR ou un gabarit sont touchés ; `e2e_lectures` si le bus,
   `Backend::run` ou l'hôte ; les `e2e_tx_*` si le catalogue ; `e2e_juge` et `e2e_equipier` (Gemini
   exigé, `RAG3WEAVER_EXIGER_GEMINI=1`, identifiants par le chemin de `.vault`, jamais leur contenu)
-  si le juge ou l'équipier.
+  si le juge ou l'équipier. Les trois lignes à poser au début de la passe, et rien d'autre (le crate
+  lit lui-même ces deux variables ; le fichier ne se lit, ne s'affiche et ne se copie jamais) :
+
+  ```bash
+  export GOOGLE_APPLICATION_CREDENTIALS=$HOME/git_workspaces/rag3db/.vault/vertex-sa.json
+  export GOOGLE_CLOUD_PROJECT=lr-hub-472010
+  export RAG3WEAVER_EXIGER_GEMINI=1
+  ```
+
+  Sans `RAG3WEAVER_EXIGER_GEMINI=1`, les témoins Gemini se sautent (« ignored ») et la suite se dit
+  verte à tort : lire « running N tests » et « 0 ignored » sur `e2e_juge` et `e2e_equipier`.
 - Un témoin qui se saute n'est pas vert : `SAUTÉ` compte comme un rouge dans la passe.
 - **Les bancs** ne sont pas des suites de la passe. Un banc à services (aujourd'hui
   `e2e_banc_fiches_classees`, sa voie : `RAG3WEAVER_BANC_VERTEX` avec la feature `openai-llm`, ou
