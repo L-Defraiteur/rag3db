@@ -7,6 +7,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **11 nov. — Un morceau partagé rend toutes ses occurrences admises.** En recherche dense et creuse,
+  chaque occurrence garde ses champs et ses positions ; ses meilleurs scores sont conservés, les
+  égalités ont un ordre stable et les filtres continuent de s'appliquer. (`6c4b5ad0c`)
+
 - **11 nov. — L’archiviste garde le nom des fiches, même long.** Il choisit une candidate par un identifiant court, puis range la section sous son nom exact ; un identifiant inconnu ou ambigu est refusé. Les noms des bilans restent lisibles par le modèle. (`cx-memoire-alias-candidats`)
 
 - **9 nov. — La jauge du contexte se voit avancer.** Elle écrit son pourcentage, garde une barre

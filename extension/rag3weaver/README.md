@@ -147,6 +147,13 @@ against the rows and reports a gap. A filtered search reads all its signals
 from the same committed state, and a filter applies to the learned-sparse
 signal too.
 
+When a dense or learned-sparse chunk points to several occurrences, search
+returns every occurrence admitted by the request, with its own fields, file
+positions and source attribution. Each occurrence keeps its best matching
+score; ties have a stable order. Existing filters and cell selection still
+apply. Content-addressed storage and layered worktree/branch views remain
+under development; this projection does not enable them.
+
 Full text is stored either **as files in `<base>.fts/`** (the default for a new
 database on disk: lower memory, faster reopen; the folder is part of the database,
 copy and back it up with it) or **in the database as blobs** (an existing database

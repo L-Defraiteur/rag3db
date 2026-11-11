@@ -76,10 +76,10 @@ nouveau n'est revendiqué.
 
 Lot 30b5b146e, sauvegardé sur arbre-principal/deplace-sans-reembarquer-2 après fetch et rebase
 (retard initial : 192 commits, sous le seuil 200). Worktree de vérification sur luciepc :
-~/.cache/rag3weaver-build/wt-deplace-codex ; target unique : target-A-plan ; lib épinglée :
+ancien worktree de validation distant (retiré) ; target alors utilisé : target-A-plan ; lib épinglée :
 rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF.
 
-Journaux luciepc dans ~/.cache/rag3weaver-build/deplace-codex/ : rouge.log détecte un texte
+Journaux luciepc dans ~/.cache/rag3weaver-build/cx-deplace-preuves/ : rouge.log détecte un texte
 réembarqué sur un, test échoué ; vert.log après restauration rend 1 passed, 0 failed et le diff
 produit est vide. La mutation temporaire neutralise le filtrage dense par marqueur et la
 réutilisation KnownVectors ; elle n'entre dans aucun commit. check_features : VERT 5/5.
@@ -110,3 +110,16 @@ Les deux témoins du lot1a sont sauvegardés sous dd5f30465 (cx-arbre-scope-vers
 occurrences dont les coordonnées sont pourtant correctes. L'implémentation produit1a n'est pas
 livrée. Le contrat reste déclaratif : composer les mécanismes existants et identifier la primitive
 manquante de partage/projection, plutôt que coder une seconde chaîne de recherche réservée à Scope.
+
+## Projection livrée séparément du stockage
+
+Master6c4b5ad0c livre la projection dense/creuse d'un morceau vers toutes ses occurrences admises,
+avec leurs champs, positions, attribution, meilleurs scores et ordre stable. La passe complète v3
+et le rejeu court après ED sont dans le rapport 01 : 87 tests e2e passés dans quatre suites, aucune
+suite sautée. Les nouveautés et le README expliquent cette capacité. Les versions de contenu et
+les vues en couches restent non livrées ; le ticket du double embarquement est ouvert.
+
+La préparation 1a est reprise sur cx-arbre-scope-version-3 ; lire
+[04-identite-des-derivees-et-projection.md](04-identite-des-derivees-et-projection.md). La relation
+vers la racine existe déjà pour les dérivées ; l'identité par contenu, le suivi par lien/racine et
+la projection déclarée doivent être composés et prouvés. Aucune migration de base vivante lancée.

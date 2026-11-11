@@ -29,28 +29,56 @@ Cette section prime sur les chemins et prochains pas historiques ci-dessous.
   seulement ; push dans if grep -qx VERT ; status propre, aucun rebase, origin/master égal à HEAD
   immédiatement après fetch. Branche sauvegardée : cx-arbre-deplace-sans-reembarquer-4.
 - **Nettoyage terminé** : wt-deplace et sa branche locale retirés au portable ;
-  wt-deplace-codex et target-A-plan retirés à luciepc après arrêt de tous nos travaux dessus.
+  le worktree de validation distant et target-A-plan retirés à luciepc après arrêt de tous nos travaux dessus.
   Aucune branche distante supprimée. Journaux conservés sur luciepc dans
-  ~/.cache/rag3weaver-build/deplace-codex/ ; preuve du push au portable dans cx-deplace-push/.
+  ~/.cache/rag3weaver-build/cx-deplace-preuves/ ; preuve du push au portable dans cx-deplace-push/.
 - **Contrat des vues relu** : ED et recherche, corrigé et livré en docs seules sous 599cf78b2.
   Voir [03-contrats-et-lots-des-vues.md](03-contrats-et-lots-des-vues.md). Le cap ancre unique et
   pyramide est confirmé par Lucie ; pas de nouvelle attente d'accord de principe.
-- **Lot 1a en cours, produit non implémenté** : branche cx-arbre-scope-version, témoin
-  dd5f30465 ; worktree cx-wt-scope-version aux deux postes. e2e_scope_versions joué sur luciepc :
-  1 réussi (docstrings distinctes), 1 échoué (deux occurrences correctement positionnées, mais
-  leur même texte embarqué deux fois au lieu d'une). Rouge vérifié, pas de vert revendiqué.
-  Journal hors target : ~/.cache/rag3weaver-build/cx-scope-version-rouge.log ; journal e2e
-  détaillé dans cx-wt-scope-version/extension/rag3weaver/target/e2e-last.log.
-  Rebaser ce lot sur le master comprenant le garde-fou avant validation ; nouveau target unique
-  prévu pour cette session : ~/.cache/rag3weaver-build/cx-target-scope-version (luciepc).
+- **Projection dense/creuse livrée** : master **6c4b5ad0c0f757ee17905c1643dd8b39174ccaa9**.
+  Un morceau peut rendre tous ses parents admis ; chaque parent conserve champs, positions et
+  attribution. Déduplication de la paire morceau/parent, meilleur score, égalités par identité,
+  réadmission sous filtre effectif et cellule de la même lecture. Aucun format ni stockage partagé
+  activé. Le [README](../../../extension/rag3weaver/README.md#search) et les nouveautés le décrivent.
+- **Preuves de projection** : rouge perte d'un parent ; rouge de fuite provoquée sans réadmission ;
+  rouge sur le choix ex aequo ; verts après restauration/correction. Passe complète 88136cc0e :
+  features5/5, lib2096/0/58 ignorés, navigateur33/0/0, quatre suites e2e sans saut. Rejeu après
+  ED91e5f760b sur 51a2faa1f : unités projection/L4 1/0 chacune, features5/5, lib2097/0/58 ignorés ;
+  e2e_projection_occurrences1/0, e2e_search40/0, e2e_scope12/0, e2e_postgres34/0 (87 tests, 4/4 suites).
+  Navigation non rejouée dans ce rejeu court. Journaux luciepc : cx-projection-passe-v3/ et
+  cx-projection-rejeu-ed/ sous ~/.cache/rag3weaver-build/ ; anciens lancements conservés séparément.
+- **Push et nettoyage de projection** : tour reçu, poste push, if grep -qx VERT ; dernier rebase
+  documentaire et sauvegarde cx-arbre-projection-occurrences-5. Trois contrôles lus : status propre,
+  aucun rebase, origin/master=HEAD6c4b5ad0c. Worktrees cx-wt-projection-occurrences et
+  cx-wt-projection-cellules retirés aux deux postes, branches locales retirées, target
+  cx-target-scope-version et base PG privée cx_projection_2191_20261111 supprimés. Références
+  distantes, preuves hors target et worktrees 1a conservés.
+- **Cellule explicite contrôlée séparément** : témoin diagnostique fdd710eb2, 12 cas verts
+  (dense/creux × 3 modes × alpha demandée/beta courante), deux parents alpha conservés via le
+  même morceau, parent beta exclu, catalogue toujours en beta. API Catalog::rechercher normalise
+  options.scope puis fournit le service scope de la cellule demandée. Aucun correctif runtime
+  supplémentaire, aucun changement de précédence. Ce témoin n'est pas dans le candidat livré ;
+  il est conservé dans la préparation 1a. Log cx-projection-cellules-v2.log. Le premier diagnostic
+  sparse était mal préparé ; le comparateur sans pré-lot s'arrête sur l'ancienne perte de parent
+  avant son contrôle no-handle prévu. Ne pas compter ces diagnostics comme rouge du lot livré.
+- **Lot 1a en cours, stockage non implémenté** : branche **cx-arbre-scope-version-3**, tête
+  **c22497935**, worktree cx-wt-scope-version aux deux postes. Rebasé après la livraison ; les
+  fichiers de runtime sont identiques au master6c4b5ad0c lors de ce rebase. Reliquat : témoins, registre e2e et préparation
+  déclarative [04-identite-des-derivees-et-projection.md](04-identite-des-derivees-et-projection.md).
+  Le témoin d'embarquement partagé reste un rouge connu (preuve antérieure : deux textes identiques
+  embarqués deux fois), ticket ouvert dans ce dossier. Aucun nouveau cargo après le nettoyage.
+  Prochain target unique prévu au besoin : ~/.cache/rag3weaver-build/cx-target-contenu-derive.
 - **Coordination code** : ED laisse code.rs et templates/backends/code à cette session.
-  Codeparsers demande de conserver default_exports, pending_defaults et la résolution @default
-  inter-lots ; aucune modification du sous-module, de son pointeur ou de stable_scope_keys.
+  Codeparsers tient analyze_in_project, default_export_symbol et resolve_across_batches ; conserver
+  default_exports/pending_defaults tuple3 et @default avec fichier exact, extension comprise.
+  Repère communiqué 3f8f1e319 / sous-module 72810b4, à réactualiser avant édition. Aucun changement
+  par cette session de code.rs, du gabarit, du sous-module, de son pointeur ou de stable_scope_keys.
 - **M3–M5 différées** : copies reflink privées possibles des avant-43 format42 sur btrfs ; lib29a7
   format43, ouverture/migration à vérifier sur copie. Ni copie ni mesure lancée ; attendre file
-  vide et mot orchestration, coordonné optimiseur. 7882 reste réservé au banc A/B codeparsers.
+  vide et mot orchestration, coordonné optimiseur. 7882 a été annoncé libéré après les index A/B ;
+  les sondes/oracle continuent hors GPU. Aucune fenêtre exclusive n’a été attribuée.
 
-## Ce qui est sur master (le dépôt `rag3db`, branche `master`)
+## Lots antérieurs sur master (le dépôt `rag3db`)
 
 | lot | commits | ce qu'il fait |
 |---|---|---|
@@ -68,55 +96,23 @@ lib par dossier, nommée par son dernier commit moteur) : 17a094d12 (bascule au 
 donné le 8 nov. à 11 h 57). **La lib en service (`courant`) aux deux postes est aujourd'hui
 29a7bc52a**, rebâtie depuis par une autre session dans le même worktree de bâti.
 
-## Chantiers en cours et leur état exact
+## Chantiers en cours et reprise
 
-1. **Les vues par worktree** (la demande de Lucie : un worktree n'indexe que ses diffs au grain du
-   scope, et les recherches se filtrent par worktree, branche ou pile de branches). **Page de
-   conception sur master (10b8affce), en attente de la relecture d'ED et de recherche, et de la
-   lecture de Lucie.** Aucun code de la marche n'est écrit. Le seul code prêt est un témoin garde-fou
-   (ci-dessous).
-2. **Le témoin « un scope seulement déplacé ne se réembarque pas »** :
-   branche `origin/arbre-principal/deplace-sans-reembarquer` (021340283), worktree
-   `~/.cache/rag3weaver-build/wt-deplace` sur le portable. Vert. Il entre dans le lot 1 des vues ;
-   pas de passe complète jouée, pas sur master.
-3. **Les mesures M3 à M5 du modèle des vues** (coût du filtre par appel, rappel sous filtre minuscule,
-   lignes mortes) : **non jouées**. Le témoin `e2e_mesure_vues` est sur
-   `origin/arbre-principal/mesure-vues` (b826a1147). Ses copies de base ont été effacées le 8 nov. ;
-   il faudra de nouvelles copies reflink des instantanés `avant-43`.
+### Le contenu partagé déclaré (lot 1a)
 
-## Reprendre
-
-### Le garde-fou du scope déplacé (le seul worktree au travail non fini)
-
-- **Où** : le portable, `~/.cache/rag3weaver-build/wt-deplace`.
-- **Branche** : `arbre-principal/deplace-sans-reembarquer`, poussée ; dernier commit **021340283**
-  (8 nov.), posé sur 326c145b4 ; **145 commits de retard** sur master au 11 nov. (la procédure refuse
-  un worktree au-delà de 200 : on en referait un neuf).
-- **Fait** : le témoin `backend::tests::a_scope_that_only_moves_is_not_embedded_again`
-  (`extension/rag3weaver/src/backend.rs`), et `backend_de_code_avec`, qui prend l'embarqueur du banc.
-  Joué seul, vert (8 nov.).
-- **Reste** : le faire entrer dans le lot 1 des vues (ou seul, si c7 le veut), avec une passe
-  complète, puis le push.
-- **Le target** : `~/.cache/rag3weaver-build/target-plan-local` (1,9 Go) ; il a été bâti par
-  d'autres worktrees, d'où `RAG3WEAVER_TARGET_REPRENDRE=1` au premier appel.
-- **Reprendre là** (tout se tape dans un shell bash ; l'outil Bash de Claude Code est zsh, voir le
-  knowledge dump) :
-
-```bash
-cd ~/.cache/rag3weaver-build/wt-deplace
-git fetch -q origin && git rebase origin/master && git submodule update --init -q
-git push origin HEAD:refs/heads/arbre-principal/deplace-sans-reembarquer-2   # un rebase se pousse sous un nom neuf
-cd extension/rag3weaver
-export CARGO_TARGET_DIR=~/.cache/rag3weaver-build/target-plan-local CARGO_INCREMENTAL=0 RAG3WEAVER_TARGET_REPRENDRE=1
-export RAG3DB_LIB=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
-# le témoin seul :
-~/.cache/rag3weaver-build/poste lourd timeout 30m scripts/cargo_magasin.sh test -j 8 --lib \
-  --features rag3db-native,code,daemon -- a_scope_that_only_moves_is_not_embedded_again
-# la passe complète avant tout push : voir « La passe d'un lot » dans 02-knowledge-dump.md
-```
-
-  Si master a déjà un moteur plus neuf que la lib en service, ajouter `RAG3WEAVER_MOTEUR_ANCIEN=1` en
-  le disant ; au 11 nov., la lib 29a7bc52a est celle du moteur de master.
+- **Où** : ~/.cache/rag3weaver-build/cx-wt-scope-version aux deux postes.
+- **Branche sauvegardée** : cx-arbre-scope-version-3 (c22497935). Aucun runtime propre au lot
+  ne reste à rejouer par-dessus la projection : conserver les corrections déjà sur master.
+- **Lire** : le contrat 03, puis la préparation 04. DeriveNode utilise une identité par racine et
+  un _render_hash par ligne ; une version partagée exige une identité de contenu et un suivi par
+  racine/lien, en composant la relation dérivée déjà existante. La déclaration exacte est à éprouver.
+- **Témoin rouge** : e2e_scope_versions::deux_occurrences_partagent_un_embarquement_et_gardent_leurs_positions.
+  Le compteur voit deux embarquements d'un même texte ; le partage du stockage n'est pas livré.
+- **Reste** : identité/liaison de contenu déclarées, projection sur occurrences conservée, preuves
+  de titre/docstring/recette/modèle et gestion explicite d'ancien format. Migration 1b sur copies
+  privées avant bases vivantes. Coordonnées et arêtes restent propres aux occurrences.
+- **Target** : cx-target-contenu-derive à créer seulement au prochain travail de compilation.
+  Ne pas recréer les targets nettoyés du garde-fou et de la projection.
 
 ### Les mesures M3 à M5 des vues (pas de worktree : il est effacé)
 
@@ -138,11 +134,11 @@ RAG3WEAVER_MESURE=1 MESURE_VUES_BASE=<copie>/code-principal.rag3db ./run_e2e.sh 
 MESURE_VUES_ECRIRE=1 MESURE_VUES_CYCLES=20 MESURE_VUES_BASE=<autre copie> ./run_e2e.sh --test e2e_mesure_vues   # M5
 ```
 
-## Branches distantes de cette session non atterries
+## Branches distantes historiques de cette session
 
 | branche | état |
 |---|---|
-| `arbre-principal/deplace-sans-reembarquer` (021340283) | le garde-fou ci-dessus, à garder |
+| `arbre-principal/deplace-sans-reembarquer` (021340283) | témoin livré sous 1904e04e4 ; référence distante conservée |
 | `arbre-principal/mesure-vues` (b826a1147) | le témoin de mesure M3-M5, à garder |
 | `arbre-principal/graphe-cite-intact` (4be482a00) | contenu atterri sous un autre commit (2fe3c114f) ; inutile |
 | `arbre-principal/vues-lecture-2` (0375a139b) | un ticket retiré exprès (doublon de celui de recherche) ; inutile |
@@ -150,7 +146,7 @@ MESURE_VUES_ECRIRE=1 MESURE_VUES_CYCLES=20 MESURE_VUES_BASE=<autre copie> ./run_
 
 **Aucune branche distante ne s'efface sans le mot de Lucie** (règle de Lucie).
 
-## L'arbre de Lucie (`~/git_workspaces/rag3db`, le portable)
+## L'arbre de Lucie — état historique de la passation
 
 - Sur `master`, à jour avec `origin/master` (3c0ec28b5 au 11 nov. à 16 h 20), sans modification
   suivie **sauf le sous-module** `extension/rag3weaver/codeparsers` : le pointeur commité est
@@ -161,9 +157,12 @@ MESURE_VUES_ECRIRE=1 MESURE_VUES_CYCLES=20 MESURE_VUES_BASE=<autre copie> ./run_
 
 ## Les worktrees de cette session
 
+Le worktree actif de reprise est cx-wt-scope-version. Les chemins hérités des autres lignes sont
+ceux de la passation ; leur état n'a pas été revérifié pour ce lot.
+
 | poste | chemin | branche | à effacer ? |
 |---|---|---|---|
-| portable | `~/.cache/rag3weaver-build/wt-deplace` | `arbre-principal/deplace-sans-reembarquer` | au mot de Lucie, ou quand le lot 1 l'aura repris |
+| portable et luciepc | `~/.cache/rag3weaver-build/cx-wt-scope-version` | `cx-arbre-scope-version-3` (portable), détaché (luciepc) | non : lot 1a en cours |
 | portable | `~/.cache/rag3weaver-build/wt-docs-73` | la branche de cette passation | après le push de cette passation |
 | luciepc | `~/.cache/rag3weaver-build/wt-lib-arbre` | détaché (29a7bc52a) | **non** : le worktree de bâti des libs, servi aussi par d'autres sessions |
 | luciepc | `~/git_workspaces/rag3db-plan` | détaché (f7df88003) | le worktree du verdict des libs (`lib58/verdict58.sh`) : à garder tant qu'on bâtit des libs |
@@ -203,9 +202,9 @@ Ouverts par cette session mais pour d'autres : `2026-11-08-le-temoin-de-la-porte
 
 ## Les trois prochains pas
 
-1. Lire les relectures de la page des vues ; y répondre ; puis écrire le lot 1 (la version de scope
-   sur l'ancre, et la migration sans index complet), témoins rouges d'abord, avec le garde-fou de
-   `wt-deplace`.
+1. Reprendre la préparation 04 et les témoins 1a sur cx-arbre-scope-version-3 ; composer l'identité
+   de contenu et la projection déclarées, après coordination des blocs code.rs avec codeparsers.
+   Le garde-fou et la primitive de projection sont déjà sur master ; la migration reste le lot 1b.
 2. Jouer M3 (le coût du filtre de vue par appel) sur des copies reflink des instantanés `avant-43`,
    dans une fenêtre de file vide : c'est elle qui décide la marche 2.
 3. Le ticket du juge sur Gemini : départager dans la consigne du juge `parametre_devrait_etre_optionnel`

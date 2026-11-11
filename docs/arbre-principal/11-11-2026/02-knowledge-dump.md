@@ -6,15 +6,21 @@ dérivé de Kuzu, sous `src/` et `extension/vector/`) ; le produit est le crate 
 servis à des agents par MCP). Deux postes : **le portable** (`lucie-tablette`, 32 cœurs) et
 **luciepc** (24 cœurs, joint par `ssh lucied@luciepc`, shell fish : passer par `bash -c '…'`).
 
-## Actualisation après le garde-fou
+## Actualisation après garde-fou et projection
 
-Le rapport de reprise et 03-contrats-et-lots-des-vues.md font foi pour l'état courant.
-Le garde-fou est sur master1904e04e4 ; wt-deplace, wt-deplace-codex et target-A-plan ont été
-nettoyés. Le lot1a vit dans cx-wt-scope-version, branche cx-arbre-scope-version ; son rouge a été
-joué (1 passé/1 échoué), sans implémentation produit. Employer ensuite le target unique
-cx-target-scope-version sur luciepc. Tous nouveaux noms de branches/worktrees commencent par cx-.
-Les chemins/commandes historiques plus bas restent l'historique de la passation, pas une invitation
-à recréer les anciens targets. Relectures ED/recherche et cap produit désormais acquis.
+Le rapport de reprise, le contrat 03 et la préparation 04 font foi pour l'état courant.
+Le garde-fou est sur master1904e04e4 ; la projection dense/creuse sur master6c4b5ad0c. Les worktrees
+et targets de ces deux lots sont nettoyés, la base PG privée aussi, les branches distantes et preuves
+conservées. Journaux du garde-fou : cx-deplace-preuves/ ; projection : cx-projection-passe-v3/ puis
+cx-projection-rejeu-ed/ sous ~/.cache/rag3weaver-build/ à luciepc.
+
+Le lot 1a vit dans cx-wt-scope-version, branche cx-arbre-scope-version-3 (c22497935) ; runtime identique
+au master6c4b5ad0c lors du rebase, stockage partagé encore non implémenté. Le compteur d'embarquement identique a son rouge
+en ticket. Le diagnostic de cellule explicite a passé 12 cas sans changer le runtime : il est
+conservé dans la préparation, distinct des 87 e2e du lot livré. Nouveau target unique prévu au besoin :
+cx-target-contenu-derive sur luciepc, pas encore créé. Tous nouveaux noms de branches/worktrees
+commencent par cx-. Les chemins/commandes historiques plus bas sont la passation, pas une invitation
+à recréer les anciens targets. Relectures ED/recherche et cap produit acquis ; M3–M5 restent différées.
 
 ## Les mots de la maison
 
