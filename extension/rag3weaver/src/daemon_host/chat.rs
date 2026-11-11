@@ -286,7 +286,8 @@ impl DaemonHost {
         // sous le verrou du journal ; un transfert ultérieur figure dans les
         // deux sources, mais un run ne contribue qu'une fois.
         let en_attente = self.journal.resumes_en_attente(backend_id);
-        let runs = self.journal.runs_de(backend_id);
+        let mut runs = self.journal.runs_de(backend_id);
+        runs.sort_by_key(|run| ordre_du_run(run));
         let mut usages = std::collections::HashMap::new();
         for r in runs.iter().rev().filter(|r| r.starts_with("agent-")).take(RUNS_DU_CHAT) {
             if let Some(u) = self.resume_du_run(backend_id, r, |v| (v["chat"] == backend_id).then(|| Value::Object(unites_consommees(v)))) {
@@ -303,10 +304,7 @@ impl DaemonHost {
         // Le nom porte le départ et un compteur : l'ordre logique des tours ne
         // dépend pas de l'ordre d'écriture de leurs fichiers par les fils.
         let mut usages: Vec<_> = usages.into_iter().collect();
-        usages.sort_by_key(|(run, _)| {
-            let mut champs = run.split('-').skip(1);
-            (champs.next().and_then(|h| u64::from_str_radix(h, 16).ok()).unwrap_or(0), champs.next().and_then(|n| n.parse::<u64>().ok()).unwrap_or(0))
-        });
+        usages.sort_by_key(|(run, _)| ordre_du_run(run));
         let mut session = serde_json::Map::new();
         let (mut tour, mut tour_run, mut tours) = (Value::Null, Value::Null, 0u64);
         for (r, u) in usages.into_iter().rev().take(RUNS_DU_CHAT) {
@@ -322,18 +320,15 @@ impl DaemonHost {
         }
         let mut taches: Vec<_> = en_attente.iter().filter(|(run, v)| run.starts_with("graph-") && !v["fin"].is_null())
             .filter_map(|(run, v)| tache_a_role(run, v)).collect();
-        taches.sort_by_key(|t| std::cmp::Reverse(t["at_ms"].as_u64().unwrap_or(0)));
-        taches.truncate(TACHES);
         for r in runs.iter().rev().filter(|r| r.starts_with("graph-")).take(GRAPHES_LUS) {
-            if taches.len() >= TACHES {
-                break;
-            }
             if !taches.iter().any(|t| t["run"] == r.as_str()) {
                 if let Some(t) = self.resume_du_run(backend_id, r, |v| tache_a_role(r, v)) {
                     taches.push(t);
                 }
             }
         }
+        taches.sort_by_key(|t| std::cmp::Reverse(ordre_du_run(t["run"].as_str().unwrap_or_default())));
+        taches.truncate(TACHES);
         // `lus_max` : la borne des tours lus ; la page dit « récents », la
         // conversation n'ayant ni début ni remise à zéro enregistrés.
         (json!({ "tour": tour, "tour_run": tour_run, "session": session, "tours": tours, "lus_max": RUNS_DU_CHAT }), taches)
@@ -982,6 +977,12 @@ fn propositions_du_tour(turns: &[crate::llm::Turn]) -> Vec<Value> {
 #[cfg(all(test, feature = "rag3db-native", feature = "code"))]
 fn chat_file(root: &std::path::Path, backend_id: &str) -> PathBuf {
     root.join(format!("{backend_id}.json"))
+}
+
+/// L'ordre porté par l'identité du run (`<préfixe>-<ms hex>-<compteur>`).
+fn ordre_du_run(run: &str) -> (u64, u64) {
+    let mut champs = run.split('-').skip(1);
+    (champs.next().and_then(|h| u64::from_str_radix(h, 16).ok()).unwrap_or(0), champs.next().and_then(|n| n.parse::<u64>().ok()).unwrap_or(0))
 }
 
 /// Le total scellé d'un run ; pour les anciens journaux, ses `Consumed`.
