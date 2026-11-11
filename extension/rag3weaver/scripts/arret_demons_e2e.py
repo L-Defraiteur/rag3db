@@ -20,6 +20,46 @@ def identite(pid):
         return None
 
 
+def proprietaire(pid):
+    proc = Path(f'/proc/{pid}')
+    try:
+        if proc.stat().st_uid != os.getuid():
+            return None
+        avant = identite(pid)
+        if avant is None or avant[1] == 'Z':
+            return None
+        environnement = (proc/'environ').read_bytes().split(b'\0')
+        apres = identite(pid)
+        if apres is None or apres[1] == 'Z':
+            return None
+        if avant[0] != apres[0]:
+            raise OSError('identité changée pendant inspection')
+        cle = b'RAG3WEAVER_PASSE_E2E='
+        marque = next((v[len(cle):] for v in environnement if v.startswith(cle)), b'')
+        return apres[0], marque
+    except (FileNotFoundError, ProcessLookupError):
+        return None
+
+
+def quiescent(prefixe):
+    # Le PID de passe figure déjà dans la marque héritée. Un PID recyclé
+    # peut conserver trop longtemps, jamais autoriser un effacement précoce.
+    if not prefixe.endswith('-') or not prefixe[:-1].isdigit():
+        return False
+    for proc in Path('/proc').iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            possession = proprietaire(int(proc.name))
+            if possession and possession[1].startswith(prefixe.encode()):
+                print(f'▸ ressources conservées : processus de la passe encore vivant (pid {proc.name})')
+                return False
+        except OSError as exc:
+            print(f'▸ quiescence non vérifiable : {exc} ; ressources conservées', file=sys.stderr)
+            return False
+    return True
+
+
 def arreter(marque, pids, delai=10):
     if not marque:
         raise ValueError('marque de passe absente')
@@ -29,21 +69,17 @@ def arreter(marque, pids, delai=10):
         if pid <= 1 or pid == os.getpid():
             continue
         try:
-            proc = Path(f'/proc/{pid}')
-            if proc.stat().st_uid != os.getuid():
-                continue
             fd = os.pidfd_open(pid)
             try:
-                avant = identite(pid)
-                if avant is None or avant[1] == 'Z':
+                possession = proprietaire(pid)
+                if possession is None or possession[1] != marque.encode():
                     continue
-                if ('RAG3WEAVER_PASSE_E2E='+marque).encode() not in (proc/'environ').read_bytes().split(b'\0'):
-                    continue
-                if identite(pid) != avant:
+                maintenant = identite(pid)
+                if maintenant is None or maintenant[0] != possession[0] or maintenant[1] == 'Z':
                     continue
                 # Le descripteur vise ce processus, même si son numéro est recyclé.
                 signal.pidfd_send_signal(fd, signal.SIGTERM)
-                retenus[pid] = avant[0]
+                retenus[pid] = possession[0]
                 print(f'▸ arrêt demandé au démon de la passe (pid {pid}, SIGTERM)', flush=True)
             finally:
                 os.close(fd)
@@ -75,4 +111,6 @@ def arreter(marque, pids, delai=10):
 
 
 if __name__ == '__main__':
+    if sys.argv[1] == '--quiescence':
+        sys.exit(0 if quiescent(sys.argv[2]) else 1)
     sys.exit(0 if arreter(sys.argv[1], map(int, sys.argv[2:])) else 1)

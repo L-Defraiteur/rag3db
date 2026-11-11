@@ -24,6 +24,7 @@ from pathlib import Path
 host, port = sys.argv[sys.argv.index('--adresse')+1].rsplit(':', 1)
 with open(os.environ['FAKE_PIDS'], 'a') as f: f.write(str(os.getpid())+'\n')
 def fini(*_):
+    with open(os.environ['FAKE_TERM'], 'a') as f: f.write(str(os.getpid())+'\n')
     if os.environ.get('FAKE_IGNORE_TERM'): return
     time.sleep(.15)
     Path(os.environ['FAKE_DONE']).write_text(str(os.getpid()))
@@ -130,7 +131,7 @@ class Journaux(unittest.TestCase):
         with socket.socket() as s:
             s.bind(('127.0.0.1', 0)); port = s.getsockname()[1]
         self.env.update(FAKE_PIDS=str(self.pids), FAKE_DONE=str(self.d/'fini'), FAKE_QUIT=str(self.d/'quitte'),
-                        FAKE_ATTACHE=str(self.attache), RAG3WEAVER_EMBEDDINGS_ADDR=f'127.0.0.1:{port}')
+                        FAKE_TERM=str(self.d/'term'), FAKE_ATTACHE=str(self.attache), RAG3WEAVER_EMBEDDINGS_ADDR=f'127.0.0.1:{port}')
         self.existants = []
         # L'énumération est confinée aux pids des faux services de ce cas.
         (self.d/'bin/pidof').write_text('#!/bin/sh\ncat "$FAKE_PIDS"\n')
@@ -260,14 +261,39 @@ exit $?
         preuve_tmp.write_text('ressource de la même passe')
         pid = int(self.pids.read_text().split()[0])
         with open(f'/proc/{pid}/stat') as f: naissance = f.read().rsplit(') ', 1)[1].split()[19]
+        signaux = (self.d/'term').read_bytes()
         second = self.jouer(parents_nommes=True)
         self.assertEqual(second.returncode, 0, second.stdout+second.stderr)
         self.assertTrue(journal.exists(), 'le prochain balayage ne doit pas effacer le journal vivant')
         self.assertEqual(journal.read_bytes(), avant)
         self.assertEqual(preuve_tmp.read_text(), 'ressource de la même passe')
         with open(f'/proc/{pid}/stat') as f: self.assertEqual(f.read().rsplit(') ', 1)[1].split()[19], naissance)
+        self.assertEqual((self.d/'term').read_bytes(), signaux, 'aucun signal supplémentaire du second lancement')
+        with open(f'/proc/{pid}/stat') as f: self.assertNotEqual(f.read().rsplit(') ', 1)[1].split()[0], 'Z')
         self.assertFalse((self.d/'fini').exists(), 'le second lancement ne signale pas ce démon')
         self.assertFalse((self.d/'quitte').exists())
+        # Après une fin décidée par le propriétaire du faux service seulement,
+        # un nouveau démarrage archive les deux parents, sans perdre la preuve.
+        import urllib.request
+        urllib.request.urlopen('http://'+self.env['RAG3WEAVER_EMBEDDINGS_ADDR']+'/quitter', timeout=2).close()
+        fin = time.monotonic()+2
+        while time.monotonic()<fin:
+            try:
+                if Path(f'/proc/{pid}/stat').read_text().rsplit(') ', 1)[1].split()[0] == 'Z': break
+            except FileNotFoundError: break
+            time.sleep(.01)
+        troisieme = self.jouer(parents_nommes=True)
+        self.assertEqual(troisieme.returncode, 0, troisieme.stdout+troisieme.stderr)
+        self.assertFalse(parents_disque[0].exists())
+        self.assertFalse(parents_tmp[0].exists())
+        archives = self.d/'disque/e2e-gardes'
+        ancien_journal = list(archives.glob('parent-'+parents_disque[0].name+'-*/demons/rag3weaver-embeddings.log'))
+        ancien_tmp = list(archives.glob('parent-'+parents_tmp[0].name+'-*/preuve-vivante'))
+        self.assertEqual(len(ancien_journal), 1)
+        self.assertEqual(ancien_journal[0].read_bytes(), avant)
+        self.assertEqual(len(ancien_tmp), 1)
+        self.assertEqual(ancien_tmp[0].read_text(), 'ressource de la même passe')
+
 
 
 if __name__ == '__main__': unittest.main(verbosity=2)

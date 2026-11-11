@@ -238,6 +238,17 @@ arreter_les_demons_de_la_passe() {
   read -r -a pids <<< "$(pidof rag3weaver-embeddings || true)"
   python3 "$WEAVER/scripts/arret_demons_e2e.py" "$RAG3WEAVER_PASSE_E2E" "${pids[@]}"
 }
+parent_de_passe_quiescent() {
+  local pid="${1##*-}"
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  [ ! -d "/proc/$pid" ] || return 1
+  python3 "$WEAVER/scripts/arret_demons_e2e.py" --quiescence "$pid-"
+}
+garder_parent_termine() {
+  local parent="$1" garde="$E2E_DISQUE_RACINE/e2e-gardes/parent-${1##*/}-$RAG3WEAVER_PASSE_E2E"
+  mkdir -p "$(dirname "$garde")" && mv -- "$parent" "$garde" || return 1
+  echo "▸ restes d'une passe quiescente archivés : $garde"
+}
 archiver_journaux_des_demons() {
   local dossier="${RAG3WEAVER_E2E_JOURNAUX_DEMONS:-}" garde
   [ -n "$dossier" ] && [ -d "$dossier" ] || return 0
@@ -1073,14 +1084,15 @@ residus_de_la_suite() {
 }
 
 # **Le parent des dossiers de la passe**, et les restes des passes mortes :
-# un parent dont le processus n'existe plus est effacé au départ (une passe
-# tuée ne nettoie pas derrière elle).
+# Un PID de passe disparu ne suffit pas : ses descendants portent encore sa
+# marque. Conserver tant qu'ils vivent (ou si doute), archiver après quiescence.
+E2E_DISQUE_RACINE="${HOME}/.cache/rag3weaver-build"
 E2E_TMP_RACINE="${TMPDIR:-/tmp}"
 E2E_TMP_PARENT="$E2E_TMP_RACINE/rag3weaver-e2e-$$"
 for d in "$E2E_TMP_RACINE"/rag3weaver-e2e-*; do
   [ -d "$d" ] || continue
-  if [ ! -d "/proc/${d##*-}" ]; then
-    rm -rf -- "$d" && echo "▸ restes d'une passe morte effacés : $d"
+  if parent_de_passe_quiescent "$d"; then
+    garder_parent_termine "$d"
   fi
 done
 mkdir -p "$E2E_TMP_PARENT"
@@ -1092,12 +1104,11 @@ mkdir -p "$E2E_TMP_PARENT"
 # dans `<parent>/<suite>/`, effacé derrière la suite comme son TMPDIR. Avant :
 # des bases gardées à chaque passe (arret-brutal, +4 par passe), et 955 Mo de
 # points de reprise de tests dans le vrai cache (11 octobre 2026).
-E2E_DISQUE_RACINE="${HOME}/.cache/rag3weaver-build"
 E2E_DISQUE_PARENT="$E2E_DISQUE_RACINE/e2e-$$"
 for d in "$E2E_DISQUE_RACINE"/e2e-[0-9]*; do
   [ -d "$d" ] || continue
-  if [ ! -d "/proc/${d##*-}" ]; then
-    rm -rf -- "$d" && echo "▸ restes disque d'une passe morte effacés : $d"
+  if parent_de_passe_quiescent "$d"; then
+    garder_parent_termine "$d"
   fi
 done
 mkdir -p "$E2E_DISQUE_PARENT"
