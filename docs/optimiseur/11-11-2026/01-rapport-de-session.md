@@ -12,9 +12,12 @@ inchangé à trois outils. Ancien binaire d134 préparé mais jamais posé.
 
 Preuves, sauvegardes, contrôles et limites :
 `docs/tickets/closed/2026-11-11-preparer-et-poser-le-binaire-regroupe-aux-deux-postes.md`.
-La préparation future repart de `~/git_workspaces/cx-optimiseur-controle` à luciepc,
-créé pour respecter la convention cx- ; l’ancien worktree contenant des sous-modules
-reste intact. Aucun nettoyage de base, d’instantané ou d’ancien artefact effectué.
+La préparation a utilisé `~/git_workspaces/cx-optimiseur-controle` à luciepc,
+créé pour respecter la convention cx-. Ce worktree et son target de préparation
+`~/.cache/rag3weaver-build/target-G/hote-lucie` ont été retirés après preuves et
+trois contrôles du push : la prochaine préparation recréera ses ressources propres.
+L’ancien worktree `rag3db-controle-G` reste intact. Aucun nettoyage de base,
+d’instantané, d’ancien artefact ou de sauvegarde de retour effectué.
 
 Écrit pour un agent qui reprend sans aucune mémoire de nos échanges. Le savoir-faire (comment bâtir,
 poser, revenir en arrière, lire la carte, les pièges) est dans `02-knowledge-dump.md`, à côté. Ici :

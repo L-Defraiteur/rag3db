@@ -180,3 +180,20 @@ Preuves conservées :
 
 Bilan heures, SHA et 20 outils transmis à l’orchestration avant clôture. Retour
 non nécessaire ; les anciens exécutables, sauvegardes et artefacts restent conservés.
+
+## Nettoyage après publication des preuves
+
+Clôture et rapport poussés en `a83fa83e22beaa15e7be1306962402605e2382e9` ;
+contrôles lus : worktree propre, aucun rebase, HEAD égal à origin/master.
+Sur instruction d’orchestration, worktree de préparation `cx-optimiseur-controle`
+et target `target-G/hote-lucie` retirés à luciepc entre 22:06:58 et 22:07:00,
+après vérification d’absence de processus utilisant le target. Le worktree de
+documentation `cx-optimiseur-suivi-pose` a également été retiré, sans supprimer
+de branche distante. L’ancien `rag3db-controle-G` reste intact.
+
+Avant retrait : source exacte des gabarits archivée dans
+`~/.cache/optimiseur-notes/pose-68/templates-source-68.tar`, fichier généré copié
+dans `builtin_templates.rs` au même endroit. Journal : `nettoyage.log`.
+Artefacts nuit, sauvegardes privées, anciens exécutables et preuves conservés ;
+aucune base ni instantané supprimé. Les chemins de préparation mentionnés plus
+haut décrivent le bâti réalisé et ne sont plus des ressources actives à reprendre.
