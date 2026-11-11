@@ -117,6 +117,30 @@ des derniers jours, trois juges sur les mêmes tours : aucun, Gemini, le classeu
 - **Le seuil d'adoption**, proposé : précision des fiches glissées au moins égale au juge Gemini
   moins 5 points, p95 du fils sous 3 s, et la VRAM dans ce que Lucie accorde.
 
+### L'écart du GGUF, mesuré (session banc, 11 novembre 2026)
+
+Le préalable ci-dessus est levé : `docs/banc/11-11-2026/03-le-juge-en-gguf.md` (master
+96a98a452). Qwen3-4B-Instruct-2507 converti en GGUF par le llama.cpp de Lucie, servi par
+llama-server sur card0 de luciepc, même jeu de 440 paires, oui/non par les logits du premier jeton.
+
+| forme | bonne première | AUC | par cas de 5 |
+|---|---|---|---|
+| bf16 torch (8 novembre), préfixe partagé, 2 k | 0,76 | 0,92 | 1 017 ms |
+| **Q8_0, `cache_prompt`, 2 k** | **0,76** | **0,92** | **1 076 ms** |
+| Q8_0, forme courte | 0,77 | — | 445 ms |
+| Q8_0 sans `cache_prompt` | — | — | 3 288 ms |
+| Q4_K_M, 2 k | 0,76 | — | pas plus rapide sur card0 |
+
+La même première fiche que bf16 dans 97 % des cas. **Q8_0 avec `cache_prompt` est le choix**,
+les cinq fiches d'un rappel à la suite sur le même slot, le contexte d'abord, la fiche à la fin :
+sans le cache, trois fois plus lent. Le client de référence est `~/.cache/rag3db-banc-notes/q_llama.py`
+à luciepc (gabarit appliqué côté client, `/completion` avec `n_predict` 1 et `n_probs` 50, score =
+sigmoïde(log P(oui, Oui) − log P(non, Non))). `LlamaServerDecider` doit donc prendre
+`cache_prompt: true` (§ 4) et ce score.
+
+La page 04 (la précision du rappel d'aujourd'hui) reste la condition de fond : le classeur ne
+vaut sa seconde que lorsque la mémoire de Lucie a du contenu à ranger.
+
 ## 8. Questions pour Lucie
 
 1. **La carte** : un llama-server de Qwen3-4B à luciepc, sur quelle carte et avec quel plafond de
