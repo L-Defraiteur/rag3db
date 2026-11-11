@@ -1,6 +1,6 @@
 # Un backend écrit encore dans son dossier pendant qu'on l'efface, après son Drop
 
-- **État** : corrigé (9 novembre 2026, lot arret-du-backend de la session recherche) : un backend qu'on laisse tomber attend ses fils et ferme son catalogue, comme `shutdown()`.
+- **État** : corrigé (3d1e3ae1e, 9 novembre 2026, lot arret-du-backend de la session recherche) : un backend qu'on laisse tomber attend ses fils et ferme son catalogue, comme `shutdown()`.
 - **Famille** : produit
 - **Gravité** : **plantage** — un processus de test meurt en SIGSEGV à sa sortie (96, 8 novembre
   18 h 49) ; et des TempDir à moitié effacés dans /tmp, qui est de la mémoire vive. Passe devant le
