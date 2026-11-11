@@ -1,5 +1,6 @@
 %% tool: archive_decide
 %% description: Une section (l'élément) : les fiches candidates par la recherche, puis la décision fermée du modèle (une candidate, none, create), rendue comme l'élément des écritures (kind, fiche, records, liens, provenance). Appelé une fois par section par le ForEachNode de archive.
+%% Les étiquettes candidate_N sont résolues par archive_decided vers les noms exacts ; les noms et descriptions restent dans le prompt.
 %% param: element json! -- La section : {title, level, text, anchor, index, chemin, titre, origine}.
 %% param: candidates int = 5 -- Fiches candidates gardées.
 %% param: allow_create bool = false -- create permis (éteint par défaut, comme archive).
