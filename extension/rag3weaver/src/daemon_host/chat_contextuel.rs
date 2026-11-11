@@ -116,6 +116,12 @@ fn modele(cibles: Cibles, exposes: Arc<Mutex<Vec<Value>>>, retours: Retours) -> 
             let cible = cibles.lock().unwrap().get(lettre).cloned().expect("id observé après l'attachement");
             let faits: Vec<_> = turns[depuis..].iter().filter(|t| t.role == "tool").collect();
             if let Some(dernier) = faits.last() {
+                eprintln!(
+                    "reçu réel {} : {} ; metadata {:?}",
+                    dernier.tool_name.as_deref().unwrap_or("?"),
+                    dernier.content,
+                    dernier.metadata
+                );
                 let provenance = invocation(dernier);
                 if provenance.is_null() {
                     return Err(LlmError::Model(format!("reçu sans invocation structurée : {}", dernier.content)));
@@ -196,6 +202,7 @@ fn le_relais_du_chat_ouvre_la_cible_effective_et_la_garde_apres_rechargement() {
             assert!(provenance["parent_run"].as_str().is_some_and(|s| !s.is_empty()));
             assert!(provenance["run"].as_str().is_some_and(|s| !s.is_empty()));
         }
+        eprintln!("rendu réel : {}", n.evaluer("[...document.querySelectorAll('.outil')].map(e => e.outerHTML).join('\n')"));
         n.attendre(&format!("!!({lien})"), "un lien de fichier issu du résultat réel");
         let attendu = format!("/ide/code/{id}/fichier/src/lib.rs");
         let href = n.evaluer(&format!("({lien}).getAttribute('href')"));
