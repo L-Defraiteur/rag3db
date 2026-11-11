@@ -116,7 +116,7 @@ et contrôler ; aucune restauration de base automatique.
 
 Atelier principal au portable : note de livraison présente, manifeste actuel avec
 11 outils (SHA256 `b06e821f92c4bf5a5940bde558d58c37f4b7004aefbf6350b87fe92b8adb1a6c`).
-Le gabarit cible en livre 21, dont search_code, outline, usages, callees, impact,
+Le gabarit cible en livre 20, dont search_code, outline, usages, callees, impact,
 grep_files, list_files, schema et wait_output. Vérifier après réveil le manifeste
 effectivement rafraîchi ET les outils exposés, puis le parcours IDE. L’atelier
 d’essai reste à trois outils ; son ancien refus de réinstallation reste réservé
