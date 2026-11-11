@@ -994,3 +994,28 @@ fn projection_reouverture_retrouve_la_dette_de_l_autre_cellule() {
         assert_eq!(reopened.scope(), &rag3weaver::scope::Scope::new("acme", "alpha"));
     }
 }
+
+#[test]
+#[ignore]
+fn projection_refuse_aussi_un_titre_indexe_sans_remappage() {
+    let (_cache, mut catalog) = catalogue_projection_publique();
+    let mut root = catalog.entity_config("Occurrence").unwrap().clone();
+    root.fields.insert("name".into(), champ(FieldType::String, true, false));
+    catalog.register_entity("Occurrence", root).unwrap();
+    let mut index = catalog.entity_config("IndexOccurrence").unwrap().clone();
+    index.fields.insert("name".into(), champ(FieldType::String, true, false));
+    index.derived.as_mut().unwrap().render.insert("name".into(), "prefixe {{ root.name }}".into());
+    catalog.register_entity("IndexOccurrence", index).unwrap();
+    catalog.create("Occurrence", BTreeMap::from([
+        ("file".into(), s("a.rs")), ("line".into(), CypherValue::Int(1)),
+        ("body".into(), s("corps identique")), ("name".into(), s("titre")),
+    ])).unwrap();
+    let result = catalog.drain();
+    assert_eq!(result.failed, 0, "{:?}", result.warnings);
+    let shared = std::sync::Arc::new(std::sync::Mutex::new(catalog));
+    let error = Catalog::rechercher(&shared, "Occurrence", "prefixe", SearchOptions {
+        signals: Some(SearchSignals::BM25), result_mode: ResultMode::Detailed,
+        consistency: Consistency::Immediate, strict_signals: true, ..Default::default()
+    }).expect_err("le titre indexé et rendu sur l'occurrence doit aussi porter des coordonnées valides");
+    assert!(error.to_string().contains("remappage"), "{error}");
+}
