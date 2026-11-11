@@ -6,6 +6,8 @@
   vive) ; à départager en service (un hôte arrêté dont un run finit d'écrire son journal).
 - **Atteignable en service** : à départager.
 - **Touche rag3weaver** : oui, `daemon_host/journal_des_runs.rs` et l'arrêt de `DaemonHost`.
+- **Pour** : recherche (suivi et lot ; toute réattribution passe par l’orchestration).
+- **Signalé par** : recherche ; sources et observations dans ce ticket et le [rapport de session](../11-11-2026/01-rapport-de-session.md).
 
 ## Ce que c'est
 

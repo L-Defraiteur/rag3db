@@ -8,6 +8,8 @@
   du poste à tout le monde.
 - **Touche rag3weaver** : oui, `tests/e2e_charge_ingestion.rs` et la place de cette mesure dans
   la passe.
+- **Pour** : recherche (suivi et lot ; toute réattribution passe par l’orchestration).
+- **Signalé par** : recherche ; sources et observations dans ce ticket et le [rapport de session](../11-11-2026/01-rapport-de-session.md).
 
 ## Ce que c'est
 

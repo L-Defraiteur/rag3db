@@ -5,6 +5,8 @@
 - **Gravité** : faux verdict de validation si le lanceur ne vérifie que le code de sortie.
 - **Atteignable en service** : non, outillage de validation.
 - **Touche rag3weaver** : oui (`run_e2e.sh` et scripts de passe).
+- **Pour** : recherche (suivi et lot ; toute réattribution passe par l’orchestration).
+- **Signalé par** : recherche ; sources et observations dans ce ticket et le [rapport de session](../11-11-2026/01-rapport-de-session.md).
 
 ## Preuve
 

@@ -6,6 +6,8 @@
   sous charge, ce que le chemin hors du verrou devait empêcher.
 - **Atteignable en service** : à départager (la réaction de la montre embarque par ce chemin).
 - **Touche rag3weaver** : oui, `Catalog::embarquer_le_retard_hors_verrou` et son témoin.
+- **Pour** : recherche (suivi et lot ; toute réattribution passe par l’orchestration).
+- **Signalé par** : recherche ; sources et observations dans ce ticket et le [rapport de session](../11-11-2026/01-rapport-de-session.md).
 
 ## Ce que c'est
 

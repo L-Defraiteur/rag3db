@@ -5,6 +5,8 @@
 - **Atteignable en service** : non (le test).
 - **Touche rag3weaver** : oui (`src/daemon_host/chat.rs`, `src/ide/page.html`).
 - **Famille** : produit
+- **Pour** : recherche (suivi et lot ; toute réattribution passe par l’orchestration).
+- **Signalé par** : recherche ; sources et observations dans ce ticket et le [rapport de session](../11-11-2026/01-rapport-de-session.md).
 
 ## Ce que c'est
 

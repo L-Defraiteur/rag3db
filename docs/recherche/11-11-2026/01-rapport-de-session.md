@@ -2,6 +2,8 @@
 
 ## Lot suivant : Lucivy 4.3.3, validation en cours
 
+Ticket porteur : `docs/recherche/tickets/2026-11-11-la-fermeture-fts-en-erreur-laisse-le-handle-actif.md` (recherche). La clôture attend la validation complète ; le seul rouge/vert ciblé ne clôt pas l’intégration.
+
 Branche `cx-recherche-lucivy-4-3-3`, worktree homonyme aux deux postes ; source de la passe `c1463b9ee`. L'arrêt précédent est livré (voir section suivante). Trois minimums passent à 4.3.3 (`lucivy-core`, `ld-lucivy`, `sparse-vector`) ; Cargo.lock ne change que les versions et sommes de ces trois paquets, `luciole` et `lucistore`, tous du registre, sans patch local. Aucun autre paquet mis à jour.
 
 Le nouveau témoin public `fts_handle::repro_drop::une_fermeture_fts_en_erreur_rend_le_handle_inerte_et_le_processus_sort` est commité avant le bump (`820f29840`). Il crée son propre index, indexe/commite, supprime ce stockage, constate l'erreur de close puis exige le rejet d'un nouveau document avec « closed ». Il détruit le handle et le parent exige la sortie normale de l'enfant en 20 s. En 4.3.2 : rouge 0/1/0, 0,05 s ; close échoue sur la sauvegarde shard_0 mais `index_apres=Ok(())`. Journal luciepc `journaux-cx-recherche-lucivy-433-11nov/rouge-432.log`, SHA256 `73d2dd9e011a89b6084f39a7e3a5d124bfa73d2108af353833cefa04e0d8edc1`.
@@ -367,3 +369,13 @@ for i in $(seq 1 10); do
     l_embarquement_du_retard_appelle_le_service_hors_du_verrou 2>&1 | grep -E "^test e2e_invariant.*(ok|FAILED)$"
 done
 ```
+
+## Actions encore ouvertes, rattachement aux tickets
+
+La consigne de Lucie du 11 novembre demande un ticket avant toute transmission d'une nouvelle action. Les tickets de recherche existants portent désormais leur session et leurs sources ; aucune duplication de l'historique. Les tâches déjà décrites restent dans leurs tickets, sans nouvelle autorisation implicite de lot :
+
+- Intégration Lucivy : `recherche/tickets/2026-11-11-la-fermeture-fts-en-erreur-laisse-le-handle-actif.md`, recherche, passe en cours et atterrissage restant.
+- Journal après arrêt hôte : `recherche/tickets/2026-11-09-le-journal-des-runs-ecrit-apres-l-arret-de-son-hote.md`, recherche, correctif et preuve encore requis.
+- Surveillant : `recherche/tickets/2026-11-08-le-temoin-de-l-embarquement-hors-verrou-rougit-sous-charge.md`, recherche, départage puis correction selon preuve.
+- Provenance des artefacts : `recherche/tickets/2026-11-11-un-target-repris-embarque-les-gabarits-d-un-autre-worktree.md`, recherche pour le suivi, correction durable du garde à attribuer avec orchestration ; récupération seule accomplie.
+- Preuve du juge, COPY interrompu, filtre vide : leurs trois tickets du 11 novembre dans `recherche/tickets/`, recherche pour le suivi ; les sections de ces tickets disent preuves et critères de fin. Le juge se départage avec everything declarative, sans cause d'environnement présumée.

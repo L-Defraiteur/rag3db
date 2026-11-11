@@ -7,6 +7,8 @@
   cache par défaut dans `/tmp/rag3weaver_cache`, en service aussi.
 - **Touche rag3weaver** : oui (ses e2e, ses tests et `Catalog`).
 - **Famille** : produit
+- **Pour** : recherche (suivi et lot ; toute réattribution passe par l’orchestration).
+- **Signalé par** : recherche ; sources et observations dans ce ticket et le [rapport de session](../11-11-2026/01-rapport-de-session.md).
 
 ## Ce que c'est
 
