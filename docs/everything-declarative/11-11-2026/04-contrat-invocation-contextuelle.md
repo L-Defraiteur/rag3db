@@ -109,3 +109,17 @@ avec le contrat de vue partagé ; elle est absente du premier cas nominal. Le la
 runtime, sans nom technique de backend à afficher. Le renderer choisit cette cible pour les
 liens et actions du résultat, y compris après rechargement. Le témoin navigateur clique uniquement
 sur le lien produit par le résultat réel, sans href injecté ni route de test de substitution.
+
+## Troncature du texte et conservation du contexte
+
+La métadonnée du reçu canonique ne suffit pas si elle est ensuite sérialisée après la présentation
+puis coupée par le budget textuel du retour d'outil. La cible effective doit parvenir structurellement
+au tour, aux événements et à l'historique UI (ou par une référence structurée stable), indépendamment
+de la présentation transmise au modèle. Le résultat tronqué conserve ainsi la cible de ses liens,
+cartes et actions. Une action contextuelle sans contexte récupérable refuse ou reste inactive ;
+elle ne retombe jamais sur le contexte de la conversation.
+
+Le témoin de parcours doit inclure un résultat assez long pour déclencher cette troncature et
+vérifier encore le clic vers le bon dépôt après rechargement, sans nouvel appel au modèle.
+La préparation navigateur d'archi `dbf3f7419` compile ; son parcours n'est pas encore joué, le relais
+runtime n'étant pas livré. Cette compilation ne prouve pas l'exécution du contrat.
