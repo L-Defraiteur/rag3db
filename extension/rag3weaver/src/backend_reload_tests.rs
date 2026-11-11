@@ -1521,7 +1521,7 @@ fn in_approval_mode_the_agent_proposes_and_does_not_declare() {
 #[test]
 fn invocation_executes_the_checked_declarations_after_reload() {
     let (dir, backend) = toy();
-    write(dir.path(), "echo.mmd", "%% tool: echo\n%% description: read the schema\n%% result: answer.result\ngraph LR\n answer[\"SchemaNode\"]\n");
+    write(dir.path(), "echo.mmd", "%% tool: echo\n%% description: read the schema\n%% param: value json! -- anything\n%% result: answer.result\ngraph LR\n answer[\"SchemaNode\"]\n");
     backend.reload().unwrap();
     let checked = backend.prepared();
     // Remplacement contrôlé après capture de A, sans délai ni course aléatoire.
