@@ -37,20 +37,35 @@ Runtime maintenant modifié ; lot 1a **incomplet**, aucun tour de push master.
   `cx-contenu-reference-vert.log`. Diagnostic `RAG3WEAVER_E2E_FEATURES=rag3db-native`,
   **pas une passe globale**. Les essais précédents ont échoué à la compilation du montage
   (variable rendue inutilisée par la mutation, puis `is_some` sur un Result), pas du produit.
-- Depuis ce vert, composition L3 posée autour des drains contenant des références immuables,
-  pour annuler ensemble racine, versions, liens, états et tampon plein texte. La file des ressources
-  indépendantes est gardée à part du rollback. Un nouveau témoin injecte un échec de création de
-  lien et compare les origines, versions et hashes avant/après. **Pas encore exécuté sur ce diff.**
-- Bloquants avant 1a complet : vérifier cette atomicité (dont échec d'insertion et de lien,
-  conservation de la file indépendante et reprise), déclarer la projection publique vers les
-  occurrences et appliquer son masque avant le top-k de chaque signal. Le schéma Scope et ses
-  gabarits ne sont pas basculés ; le compteur Scope partagé reste un rouge du lot à fermer.
+- Composition L3 vérifiée : sans enveloppe, le rouge perd le lien A et garde B
+  (`cx-contenu-atomicite-rouge-v2.log`). Avec elle, échecs d'insertion de version ET de lien :
+  racines, versions et hashes intacts ; zéro écriture validée ; file indépendante préservée et
+  texte annulé invisible. La dette est contrôlée sur Version : le premier essai de la fixture
+  comptait aussi une dette de la dérivée historique, hors de cette assertion.
+- Vérifications ciblées terminées : 3 tests de derive_nodes et 7 tests config/schéma
+  (`cx-contenu-invariants.log`) ; e2e_entites_derivees **8 réussis/0 échec**
+  (`cx-contenu-derivees-vert-v4.log`). Le compteur générique, rétabli par mutation en mode racine,
+  reçoit 2 textes au lieu de 1 (`cx-contenu-compteur-rouge.log`) ; restauration : partage d'un
+  embarquement, déplacement et retour à la version précédente sans nouvel appel. Son renforcement
+  modèles 4/6 passe seul (`cx-contenu-compteur-modeles.log`) : deux espaces de vecteurs et leurs
+  marqueurs, aucune nouvelle version de contenu. Ces diagnostics natifs restent distincts d'une passe
+  globale ; PostgreSQL et les autres features n'ont pas été rejoués sur ce lot.
+- Recette changée : nouvelle version et dette persistante par référence ; revenir à la recette
+  précédente réutilise ses chunks. Les écritures directes, le reindex et les liens manuels vers les
+  versions sont refusés. Les versions internes ne sont pas proposées comme cibles de recherche et
+  leur recherche est refusée tant que la projection publique n'est pas déclarée.
+- Bloquants avant 1a complet : association canonique explicite cible publique → index dérivé,
+  redéploiement vers les occurrences avant pagination, masque avant top-k de chaque signal dans
+  le même L6. Recherche confirme que from/DERIVED_FROM, filter_indirection, Forme et la réadmission
+  du pré-lot se composent pour cela ; ResolveParent après pagination ne convient pas. Aucun trajet
+  spécial Scope ni double déclaration indexed_by/projection. Le schéma Scope/gabarits restent
+  inchangés et leur compteur partagé reste rouge. Migration 1b requise avant bases de service.
 - Nouveau target unique en service sur luciepc :
   `~/.cache/rag3weaver-build/cx-target-contenu-derive`. Lib épinglée 29a7bc52a, `-j8`,
   poste lourd. Aucun accès aux bases de service, aucune mesure M3–M5 lancée.
 
 Fichiers tenus : config.rs, derive_nodes.rs, record_nodes.rs, derived_kb.rs, catalog.rs
-(hors réclamations ED), schema.rs, dialect.rs, e2e_entites_derivees.rs. ED a confirmé ne pas
+(hors réclamations ED), schema.rs, dialect.rs, read_view.rs, e2e_entites_derivees.rs. ED a confirmé ne pas
 avoir repéré de primitive de remplacement atomique dans LinkRecordNode ; composer L3 conserve
 les garanties communes. Codeparsers garde ses zones de code.rs ; aucun de ces blocs n'est édité.
 

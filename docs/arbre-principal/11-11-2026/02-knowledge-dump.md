@@ -6,6 +6,19 @@ dérivé de Kuzu, sous `src/` et `extension/vector/`) ; le produit est le crate 
 servis à des agents par MCP). Deux postes : **le portable** (`lucie-tablette`, 32 cœurs) et
 **luciepc** (24 cœurs, joint par `ssh lucied@luciepc`, shell fish : passer par `bash -c '…'`).
 
+## Actualisation après le premier stockage partagé générique
+
+Le rapport prioritaire décrit le checkpoint initial 7748fa53c et son renforcement sur
+cx-arbre-scope-version-3. Le runtime n'est plus identique à master : identité déclarée root/content,
+versions immuables, état par DERIVED_FROM, réutilisation des versions/chunks/vecteurs et L3 composé.
+Preuves : 10 unitaires ciblés, 8 e2e dérivées, compteur sensible 2→1, modèles 4/6 séparés. Tous
+les détails et journaux sont dans le rapport ; ce n'est pas une passe globale ni un 1a complet.
+Scope/gabarits inchangés, compteur Scope encore rouge. Projection publique et masque avant top-k
+restent à composer dans le même L6 ; la recherche sur les versions internes refuse explicitement.
+Un seul target actuel sur luciepc : cx-target-contenu-derive (2,4 Go au relevé de cette reprise),
+lib 29a7bc52a, -j8 et poste lourd. Les anciens chemins plus bas sont historiques.
+Aucune mesure M3–M5, aucun accès aux bases de service, aucun tour master pour ce lot.
+
 ## Actualisation après le garde-fou
 
 Le rapport de reprise et 03-contrats-et-lots-des-vues.md font foi pour l'état courant.

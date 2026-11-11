@@ -1,7 +1,28 @@
 # Identité des contenus dérivés et projection vers les occurrences
 
-11 novembre 2026. Préparation du lot 1a ; proposition, pas fonctionnalité livrée.
+11 novembre 2026. Lot 1a partiellement implémenté en branche ; aucune activation en service.
 Le cap et les contrats relus restent dans 03-contrats-et-lots-des-vues.md.
+
+## Première implémentation générique, après cette proposition
+
+Checkpoint initial 7748fa53c, branche cx-arbre-scope-version-3. DerivedIdentity déclare root
+(défaut historique) ou content avec format. L'adresse couvre champs réellement rendus, octets,
+rôles, découpage et cellule ; les références DERIVED_FROM portent leur état de rendu. Une origine
+changée repointe seule, une version déjà présente ne se réinsère pas, les versions restent retenues.
+La transaction L3 existante enveloppe le remplacement ; les ressources indépendantes de la cible
+restent en file même après rollback. Les mutations directes des versions/références sont refusées.
+
+Preuves ciblées : 10 unitaires, 8 e2e dérivées ; compteur générique 2→1, déplacement et réutilisation
+sans nouvel embarquement ; modèles 4/6 dans des stockages distincts sans dupliquer les contenus ;
+recette changée puis restaurée ; injections d'échec d'insertion et de lien sans perdre état, origines,
+file indépendante ou cohérence FTS. Voir le rapport pour les journaux et essais non concluants.
+Ce n'est ni une passe globale ni le partage du schéma Scope. Projection publique et masque avant
+top-k restent ouverts ; la recherche de versions internes est explicitement refusée jusque-là.
+Recherche recommande une seule association cible publique → index et la composition des relations,
+filter_indirection et Forme/L6 existantes, pas un ResolveParent après pagination.
+
+Les constats et propositions qui suivent décrivent le point de départ de cette implémentation ;
+le rapport prioritaire donne l'état de reprise courant. Aucune base vivante n'a été modifiée.
 
 ## Ce que le runtime prouve aujourd'hui
 

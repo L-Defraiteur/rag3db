@@ -2032,7 +2032,13 @@ fn read_threads() -> u64 {
 
         let entity_def = Self::entity_config_to_entity_def(&config);
 
+        let mut nouveau_rendu = false;
         if let Some(old_config) = self.entity_configs.get(entity_name) {
+            nouveau_rendu = config.derived.as_ref().is_some_and(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. })) && (
+                old_config.derived != config.derived || old_config.chunked != config.chunked ||
+                old_config.content_fields() != config.content_fields() || old_config.title_field() != config.title_field() ||
+                serde_json::to_value(&old_config.chunking).ok() != serde_json::to_value(&config.chunking).ok()
+            );
             // ── Idempotent path: entity already registered ──
             if old_config.derived.as_ref().map(|d| &d.identity) != config.derived.as_ref().map(|d| &d.identity) {
                 return Err(CatalogError::SchemaError(format!("{entity_name} : changement d'identité dérivée interdit sans migration déclarée")));
@@ -2067,6 +2073,20 @@ fn read_threads() -> u64 {
             self.config.relations.insert(name, relation);
         }
         self.publish_read_view();
+        if nouveau_rendu {
+            let derived = config.derived.as_ref().expect("nouveau rendu d'une dérivée");
+            let result = self.conn.execute(&self.dialect.select_all_uuids(&derived.from))
+                .map_err(|e| CatalogError::DbError(format!("racines à re-rendre : {e}")))?;
+            let roots: Vec<String> = result.rows.iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).collect();
+            // Ici la définition nouvelle est persistée : contrairement à une
+            // mise à jour seulement en file, sa dette doit survivre au processus.
+            let query = self.dialect.mark_derived_references_pending(entity_name, &derived.from, &crate::schema::derived_rel_name(entity_name));
+            for batch in roots.chunks(5_000) {
+                self.conn.execute_with_params(&query, &[QueryParam::new("uuids", CypherValue::List(batch.iter().cloned().map(CypherValue::String).collect()))])
+                    .map_err(|e| CatalogError::DbError(format!("dette de la nouvelle recette : {e}")))?;
+            }
+            self.mettre_en_file_les_derivations(roots.into_iter().map(|root_uuid| crate::records::Derivation { entity: entity_name.to_string(), root_uuid }).collect());
+        }
         if config.derived.is_some() {
             // Une dérivée neuve sur des racines déjà posées : à rendre.
             self.peut_devoir_un_rendu = true;
@@ -2733,6 +2753,7 @@ fn read_threads() -> u64 {
         mut properties: HashMap<String, crate::config::FieldDef>,
     ) -> Result<(), CatalogError> {
         self.check_initialized()?;
+        self.verifier_ecriture_de_reference(rel_name)?;
 
         // Validate identifiers
         crate::schema::validate_declared_name(rel_name, "relation")
@@ -3039,6 +3060,7 @@ fn read_threads() -> u64 {
     /// Clears the `needs_reindex:{entity}` flag on success.
     pub fn reindex(&mut self, entity_name: &str) -> Result<ReindexStats, CatalogError> {
         self.check_initialized()?;
+        self.verifier_ecriture_de_version(entity_name)?;
         let entity_def = self.check_entity(entity_name)?.clone();
 
         // Reindex = reconstruire, pas compléter. On détruit l'index FTS pour
@@ -7117,6 +7139,13 @@ fn read_threads() -> u64 {
         Ok(total)
     }
 
+    fn verifier_ecriture_de_reference(&self, relation: &str) -> Result<(), CatalogError> {
+        if let Some(entity) = relation.strip_suffix("_DERIVED_FROM") {
+            self.verifier_ecriture_de_version(entity)?;
+        }
+        Ok(())
+    }
+
     fn verifier_ecriture_de_version(&self, entity: &str) -> Result<(), CatalogError> {
         if self.entity_configs.get(entity).and_then(|c| c.derived.as_ref())
             .is_some_and(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. })) {
@@ -7265,6 +7294,7 @@ fn read_threads() -> u64 {
         liens: impl IntoIterator<Item = (String, String, BTreeMap<String, CypherValue>)>,
     ) -> Result<usize, CatalogError> {
         self.check_initialized()?;
+        self.verifier_ecriture_de_reference(rel_name)?;
         self.check_ecriture("link")?;
         let rel_def = self
             .config
@@ -7547,6 +7577,7 @@ fn read_threads() -> u64 {
         properties: BTreeMap<String, CypherValue>,
     ) -> Result<RelationRef, CatalogError> {
         self.check_initialized()?;
+        self.verifier_ecriture_de_reference(rel_name)?;
         self.check_ecriture("link")?;
 
         let rel_def = self.config.relations.get(rel_name)
@@ -7612,6 +7643,7 @@ fn read_threads() -> u64 {
         exige: crate::disponibilite::Disponibilites,
     ) -> Result<FlushResult, CatalogError> {
         self.check_initialized()?;
+        self.verifier_ecriture_de_reference(rel_name)?;
         self.check_ecriture("unlink")?;
         let rel_def = self
             .config
