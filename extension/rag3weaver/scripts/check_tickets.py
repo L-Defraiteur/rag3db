@@ -33,8 +33,9 @@ ouvert puis fermé.
 Usage :
   scripts/check_tickets.py [racine]               rc 0 : les en-têtes disent vrai ; 1 : refus nommés
   scripts/check_tickets.py --index [racine]       écrit docs/tickets/INDEX.md, puis contrôle
-  scripts/check_tickets.py --lot <base> [racine]  les tickets que le lot ouvre, ferme ou change
-                                                  d'état depuis <base>, à relire avant le push
+  scripts/check_tickets.py --lot <base> [racine]  les tickets que le lot ouvre, ferme, déplace ou
+                                                  change d'état depuis sa fourche avec <base>
+                                                  (git merge-base HEAD <base>), à relire avant le push
 """
 import os
 import re
@@ -181,8 +182,14 @@ def ecrire_index(dossier, lignes):
 
 
 def relire_le_lot(racine, base):
-    """Les tickets que le lot ouvre, ferme, déplace ou change d'état depuis base."""
-    diff = subprocess.run(["git", "-C", racine, "diff", "--name-status", "-M", base, "HEAD", "--",
+    """Les tickets que le lot ouvre, ferme, déplace ou change d'état depuis base.
+
+    On compare à la base de fourche (git merge-base HEAD base), pas à la pointe de base : si
+    origin/master a avancé entre le fetch et le contrôle, ce que d'autres lots y ont poussé
+    n'apparaît pas comme une œuvre du lot."""
+    fourche = subprocess.run(["git", "-C", racine, "merge-base", "HEAD", base],
+                             capture_output=True, text=True, check=True).stdout.strip()
+    diff = subprocess.run(["git", "-C", racine, "diff", "--name-status", "-M", fourche, "HEAD", "--",
                            "docs/tickets", ":(glob)docs/*/tickets/*.md"],
                           capture_output=True, text=True, check=True).stdout.splitlines()
     vus = []
@@ -214,7 +221,7 @@ def relire_le_lot(racine, base):
         elif statut.startswith("D"):
             retires[os.path.basename(chemins[-1])] = cible[:2]
         else:
-            avant = subprocess.run(["git", "-C", racine, "show", f"{base}:{chemins[-1]}"], capture_output=True, text=True).stdout
+            avant = subprocess.run(["git", "-C", racine, "show", f"{fourche}:{chemins[-1]}"], capture_output=True, text=True).stdout
             m = re.search(r"^- \*\*État\*\* ?: ?(.*)$", avant, re.M)
             _, champs = entete(os.path.join(racine, chemins[-1]))
             if m and premier_mot(m.group(1)) != premier_mot(champs.get("État", "")):

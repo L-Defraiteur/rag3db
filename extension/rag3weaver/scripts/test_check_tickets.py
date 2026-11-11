@@ -217,6 +217,28 @@ class CheckTickets(unittest.TestCase):
         self.assertNotIn("ouvert ", out)
         self.assertNotIn("retiré", out)
 
+    def test_le_lot_se_compare_a_sa_fourche_pas_a_la_pointe_de_master(self):
+        # Le lot part de master ; master avance ensuite (un autre lot y déplace un ticket). Le
+        # contrôle --lot master ne doit lister que ce que le lot fait lui-même.
+        r = self.racine
+        git(r, "init", "-q", "-b", "master")
+        git(r, "add", "-A")
+        git(r, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "base")
+        git(r, "checkout", "-q", "-b", "lot")
+        ecrire(r, "2026-11-11-du-lot.md", "Du lot")
+        git(r, "add", "-A")
+        git(r, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "lot")
+        git(r, "checkout", "-q", "master")
+        os.makedirs(os.path.join(r, "docs", "optimiseur", "tickets"))
+        git(r, "mv", "docs/tickets/2026-11-01-un.md", "docs/optimiseur/tickets/2026-11-01-un.md")
+        git(r, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "un autre lot")
+        git(r, "checkout", "-q", "lot")
+        rc, out = jouer(r, "--lot", "master")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("(1), à relire", out)
+        self.assertIn("ouvert   2026-11-11-du-lot.md", out)
+        self.assertNotIn("2026-11-01-un.md", out)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)
