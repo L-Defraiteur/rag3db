@@ -1,5 +1,10 @@
 # Rapport de session — everything declarative, au 11 novembre 2026
 
+> **Le premier lot à jouer** : le correctif des réclamations du rattrapage, branche
+> `reclamations-rendues`, commit **9da8e4433**, **jamais compilé ni joué**. Il rend la CI de master
+> verte (le témoin `owed_vectors_are_caught_up_on_open_when_the_manifest_declares_it` y rougit par
+> intermittence). Repartir de cette branche, pas de master : la marche est au § 8.1.
+
 *Écrit le 11 novembre 2026 vers 16 h 30 par la session « everything declarative » (abrégée **ED**)
 de Claude Code, pour un agent qui reprend sans aucune mémoire de nos échanges. Le savoir de fond
 (comment marchent les pièces) est dans `02-knowledge-dump.md`, à côté de ce fichier.*
@@ -103,13 +108,13 @@ livre.json », qui couvre le premier cas.
 Contexte : `extension/rag3weaver/docs/09-novembre-2026-memoire-longue/01-l-equipier-sur-les-readme.md`.
 Une tâche réelle sur Gemini : douze appels au modèle, l'un d'eux 1 004 s en reprises muettes, puis
 un seul `step_done` et l'hôte a clos la tâche « fait sans plan » sans rien livrer.
-- **Le recul invisible** (`docs/tickets/2026-11-09-le-recul-du-client-du-modele-ne-se-voit-pas-et-n-a-pas-de-borne-de-pas.md`) :
+- **Le recul invisible** (`docs/memoire/tickets/2026-11-09-le-recul-du-client-du-modele-ne-se-voit-pas-et-n-a-pas-de-borne-de-pas.md`) :
   **fait par 96** (a6637eeee : chaque reprise après un 429 ou un 503 se dit et se borne). Le ticket
   est encore ouvert : à fermer avec ce hash après relecture.
-- **La fin sans livrable** (`docs/tickets/2026-11-09-une-tache-sans-plan-se-dit-faite-sur-un-step-done-qui-dit-ce-qui-reste.md`) :
+- **La fin sans livrable** (`docs/memoire/tickets/2026-11-09-une-tache-sans-plan-se-dit-faite-sur-un-step-done-qui-dit-ce-qui-reste.md`) :
   **à ED**. Une tâche ne doit pas se dire faite sans le livrable demandé ni l'accord de la boîte
   (voir la règle de fin dans le knowledge dump, § 5).
-- **La cause des reculs** (`docs/tickets/2026-11-09-le-code-d-un-refus-du-modele-n-est-garde-nulle-part.md`) :
+- **La cause des reculs** (`docs/memoire/tickets/2026-11-09-le-code-d-un-refus-du-modele-n-est-garde-nulle-part.md`) :
   pour ED et Lucie (son quota Vertex) ; le run compte les reprises mais ne garde ni le code rendu
   (429, 503) ni l'heure.
 
@@ -142,9 +147,12 @@ la branche courante, seulement si les fichiers sont propres ; sinon refus dit su
 flux ; `TemplateRefreshed` porte le hash du commit. Aucune ligne de code, aucune branche.
 Dépend aussi de M8 (à relire d'abord).
 
-## 7. Mes tickets ouverts (dans `docs/tickets/`, ne pas déplacer avant le mot de c7)
+## 7. Mes tickets ouverts
 
-Une ligne chacun ; « pour ED » = le ticket nomme ED comme porteur.
+Huit sont dans `docs/everything-declarative/tickets/` (déplacés le 11 novembre). Les quatre du
+9 novembre, ouverts par la session mémoire (96) mais portés par ED, sont dans
+`docs/memoire/tickets/` (96 les y a déplacés, 14645b23c) : on les lit et on les ferme là. Une ligne
+chacun ; nom de fichier seul.
 - `2026-11-08-des-morceaux-refuses-par-le-service-ne-sont-jamais-repris.md` — perte ; correctif
   présumé dans `reclamations-rendues` (même cause que le rattrapage), à prouver par son témoin.
 - `2026-11-09-une-tache-sans-plan-se-dit-faite-sur-un-step-done-qui-dit-ce-qui-reste.md` — la fin
