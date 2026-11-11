@@ -18,9 +18,9 @@ La copie du premier binaire a le SHA256 `ff61a5b97f6b8ec119b4f4f15928828a3e2202c
 
 Racine des essais : `/tmp/claude-1000/-home-lucied-git-workspaces-rag3db/25b7ff4b-dabf-42ef-8580-86661c846fb9/scratchpad/blanc/` (mémoire vive).
 
-- `reprise-codex-11-11/resultats.jsonl` : rapport des sept sections.
-- `reprise-codex-11-11/etat/requetes-refusees/` : cinq requêtes et corps complets ; ne pas publier leurs en-têtes.
-- `reprise-codex-11-11/lib-chargee.txt` : chemins lus dans les maps du processus.
+- `reprise-11-11/resultats.jsonl` : rapport des sept sections.
+- `reprise-11-11/etat/requetes-refusees/` : cinq requêtes et corps complets ; ne pas publier leurs en-têtes.
+- `reprise-11-11/lib-chargee.txt` : chemins lus dans les maps du processus.
 - `diagnostic-etiquettes-courtes/` : essai avec des alias `candidate_N`, noms et descriptions conservés dans le prompt ; table inverse pour écrire sous le véritable nom de fiche.
 - `validation-alias-d1345a115/` : comparaison verte sur sept sections avec les alias courts sous le binaire vérifié.
 - `validation-d1345a115/` : copie neuve, gabarit original et binaire fourni par optimiseur, SHA256 `597f6a29de486a9161996e8e4f460731802e090c71f0859a7ad80808ad7da7ee`.

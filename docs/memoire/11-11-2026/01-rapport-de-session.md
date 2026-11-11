@@ -14,9 +14,9 @@ ici, à leur première apparition.
 - **La passe** (ou le **tour**) : la batterie de tests jouée à luciepc avant un push (§ 4 du
   second fichier).
 
-## Actualisation par Codex, 11 novembre 2026
+## Actualisation, 11 novembre 2026
 
-Le lot 4xx a déjà atterri sur master sous `2d6a08a65` : les consignes de push de ce lot plus bas sont historiques. La reprise de l’archivage sur copies et les preuves du 400 sont dans [03-reprise-codex-archivage.md](03-reprise-codex-archivage.md). Aucun archivage dans la mémoire réelle n’a été effectué.
+Le lot 4xx a déjà atterri sur master sous `2d6a08a65` : les consignes de push de ce lot plus bas sont historiques. La reprise de l’archivage sur copies et les preuves du 400 sont dans [03-reprise-archivage.md](03-reprise-archivage.md). Aucun archivage dans la mémoire réelle n’a été effectué.
 
 ## 1. Ce qui est sur master
 

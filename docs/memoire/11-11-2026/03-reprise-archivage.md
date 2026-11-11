@@ -32,14 +32,14 @@ L’archivage des cinquante documents attend ce diagnostic et un gabarit validé
 
 Racine temporaire : `/tmp/claude-1000/-home-lucied-git-workspaces-rag3db/25b7ff4b-dabf-42ef-8580-86661c846fb9/scratchpad/blanc/`.
 
-Les dossiers `reprise-codex-11-11`, `diagnostic-etiquettes-courtes`, `validation-d1345a115` contiennent chacun `lancer.py`, `templates/`, `copie/`, `resultats.jsonl` et `etat/`. `validation-alias-d1345a115` rejoue les alias sous le binaire vérifié. Chaque dossier pointe exclusivement sur sa propre copie. Les `lib-chargee.txt` gardent les chemins lus dans `/proc` ; les refus complets restent privés dans `etat/requetes-refusees/`, leurs en-têtes ne sont pas publiés.
+Les dossiers `reprise-11-11`, `diagnostic-etiquettes-courtes`, `validation-d1345a115` contiennent chacun `lancer.py`, `templates/`, `copie/`, `resultats.jsonl` et `etat/`. `validation-alias-d1345a115` rejoue les alias sous le binaire vérifié. Chaque dossier pointe exclusivement sur sa propre copie. Les `lib-chargee.txt` gardent les chemins lus dans `/proc` ; les refus complets restent privés dans `etat/requetes-refusees/`, leurs en-têtes ne sont pas publiés.
 
 Les preuves résumées ci-dessous omettent les en-têtes et le texte des fiches. `/tmp` disparaît au redémarrage : reconstruire depuis l’instantané et les scripts du gabarit, sans réutiliser une copie déjà écrite. Le gabarit original est inchangé ; les deux scripts modifiés pour le diagnostic sont dans `diagnostic-etiquettes-courtes/templates/backends/memory/scripts/`.
 
 ```json
 [
   {
-    "essai": "reprise-codex-11-11",
+    "essai": "reprise-11-11",
     "document": "extension/rag3weaver/docs/06-novembre-2026-orchestration/01-plan-du-week-end.md",
     "secondes_totales": 44.8,
     "sections": 7,
