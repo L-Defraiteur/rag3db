@@ -153,3 +153,21 @@ actuel. Travail restant lié à ce même ticket, sans doublon :
 
 Le ticket reste ouvert. La fenêtre de push de l’architecture est respectée :
 aucun tour C++ accordé, aucun code du lot sur master.
+
+### Rejeux isolés terminés — trois rouges à comparer à la base
+
+`annulation/departage.log` et `isole-*.{log,xml}`, à luciepc, même binaire :
+- `DdlEveryFifteenSeconds` : vert, code 0, 243,298 s.
+- `DdlEveryMinute` : rouge, 376,830 s, 14 lecteurs refusés pendant la création
+  d’index ; puis exception de liaison « Cannot find property b for d ».
+- `SetInBatchesOf64` : rouge, 8,330 ms/ligne à 15 000 contre 2,137 à 1 500
+  (borne 6,274).
+- `SetInBatchesOf64WithRelation` : rouge, 8,509 contre 2,421 (borne 6,842).
+
+Le lanceur 2956994 est terminé. La disparition du défaut d’annulation dans le
+témoin réduit ne suffit pas à expliquer ces rouges. Suite déjà portée par ce
+ticket : comparer les trois cas persistants au parent sans correctif `65486c02d`
+(moteur de `6e7f11680`), sous les mêmes conditions, avec sauvegarde des binaires
+du correctif avant rebâti. Mesurer les cas de plusieurs COPY annulés des deux
+côtés à partir des temps gtest, en distinguant mesure et garantie fonctionnelle.
+Aucun nouveau défaut attribué à ce stade, pas de changement des listes de rouges.
