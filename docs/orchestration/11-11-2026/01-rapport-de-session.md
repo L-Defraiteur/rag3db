@@ -203,3 +203,12 @@ communiqués par les sessions ; seuls le hash et le diff de l’atterrissage doc
   `flux-passe-complete-20261111-luciepc-2` ; aucun verdict global.
 - Le privé 7882 est transmis explicitement par hotfixs à codeparsers pour son A/B, réservation
   confirmée par optimiseur : même service granite-278m, aucun arrêt ni cinquième service card2.
+
+
+### Cap et convention confirmés par Lucie
+
+Deux axes produit parallèles : vues par worktree sur index commun, en pyramide de couches ;
+chat de l’IDE disposant d’un parcours complet de travail de code. Répartition, critères de preuve
+et convention `cx-` pour branches/worktrees consignés dans `05-cap-produit-vues-et-chat.md`.
+La convention s’applique aussi aux reprises de lots existants, au prochain point sûr si une passe
+est active ; aucune suppression des anciennes branches distantes.
