@@ -102,7 +102,7 @@ export function highlightBlock(code: string, lang?: string): string {
 }
 
 /// Un chemin du dépôt cité (`src/x.rs`, `src/x.rs:12`) : le chemin et la ligne.
-const CHEMIN = /^([\w.@-]+(?:\/[\w.@-]+)*\.[A-Za-z0-9]+)(?::(\d+))?$/;
+const CHEMIN = /^([\w.@-]+(?:\/[\w.@-]+)*\.[A-Za-z0-9]+)(?::(\d+)(?:-\d+)?)?$/;
 export function pathRef(texte: string): { path: string; line?: number } | null {
   const m = CHEMIN.exec(texte.trim());
   if (!m || !m[1].includes("/")) return null;
