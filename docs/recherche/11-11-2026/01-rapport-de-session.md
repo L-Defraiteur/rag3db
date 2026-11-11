@@ -111,7 +111,7 @@ master avec ce lot.
 
 ### 3. Le Surveillant : pas commencé
 
-Ticket : `docs/tickets/2026-11-08-le-temoin-de-l-embarquement-hors-verrou-rougit-sous-charge.md`.
+Ticket : `docs/recherche/tickets/2026-11-08-le-temoin-de-l-embarquement-hors-verrou-rougit-sous-charge.md`.
 - **Le test** : `e2e_invariant_des_vecteurs::l_embarquement_du_retard_appelle_le_service_hors_du_verrou`
   (`extension/rag3weaver/tests/e2e_invariant_des_vecteurs.rs`). Son embarqueur espion, le
   `Surveillant`, rougit si un autre fil tient le verrou du catalogue pendant un appel au service
@@ -133,7 +133,7 @@ fusionnables, sans relecture :
 
 Aucune action de ma part n'est due : elles attendent Lucie.
 
-## Tickets ouverts qui sont à moi (dans `docs/tickets/`, non déplacés)
+## Tickets ouverts qui sont à moi (dans `docs/recherche/tickets/` depuis le 11 novembre)
 
 - `2026-11-09-le-journal-des-runs-ecrit-apres-l-arret-de-son-hote.md` : dans la branche
   `arret-du-backend`, pas encore sur master. Le prochain lot.
@@ -145,8 +145,8 @@ Aucune action de ma part n'est due : elles attendent Lucie.
 - `2026-10-18-les-tests-ne-nettoient-pas-leurs-dossiers-temporaires.md` : le témoin des résidus
   et sa liste. Les suites restantes sont celles de la dette déclarée ; la branche de l'équipier
   (hotfixs) en rend une partie propre.
-- `2026-11-08-le-plein-texte-de-code-lourd-compte-plus-de-documents-que-de-lignes.md` : relevé par
-  G, pour la recherche et lucivy, pas encore regardé.
+- Le ticket du plein texte de code-lourd qui compte plus de documents que de lignes est passé à G,
+  dans `docs/optimiseur/tickets/` (11 novembre).
 - `2026-11-07-une-requete-floue-de-lucivy-coute-en-proportion-de-ses-termes.md` : côté lucivy ;
   rag3weaver borne déjà la requête longue (au plus 900 caractères avec flou, au plus 64 termes).
 - `2026-11-07-un-arret-ne-coupe-pas-une-requete-du-moteur-en-cours.md` : relevé par hooks-essai,
