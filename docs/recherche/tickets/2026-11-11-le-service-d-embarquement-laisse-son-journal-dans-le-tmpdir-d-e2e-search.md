@@ -1,6 +1,6 @@
 # Le service d'embarquement laisse son journal dans le TMPDIR d'e2e_search
 
-- **État** : ouvert ; diagnostic borné effectué par recherche sur les sources figées et le journal, correctif borné autorisé par orchestration, avant revue et sans passe lourde, antériorité dynamique non comparée.
+- **État** : ouvert ; correctif validé par la passe complète sur `43b57eb78`, tour de push non reçu. Messagerie intersessions indisponible après redémarrage ; demande de tour non envoyée.
 - **Famille** : produit
 - **Gravité** : la suite réussit ses assertions mais sa garde de résidus refuse la passe.
 - **Atteignable en service** : non établi ; lancement et nettoyage d'une passe de tests.
@@ -154,3 +154,27 @@ Base privée explicitement attribuée par orchestration : `cx_recherche_journal_
 Précontrôle avant lancement : santé des trois services confirmée, BGE existant non factice dense+creux1024 sur7879 ; son réglage gpu:0 et fd renderD129 correspondent à card2/PCI04:00.0, aucun fd renderD130/card0. Sommaire Vulkan et `mapping-avant.json` conservés. Les quatre variables Burn sont fixées à gpu:0 et SANS_DEMON=1 ; services préexistants seulement. Source propre/empreintes conformes, target97k absent au départ ; worktree distant isolé au commit43b avec ses sous-modules propres.
 
 Départ sous poste lourd le 12 novembre00:07Paris. Journaux absolus luciepc `~/.cache/rag3weaver-build/journaux-cx-recherche-journal-12nov/` ; wrapper externe `cx-recherche-journal-passe-12nov.py`, sessions propres par étape, arrêt contrôlé des seuls groupes détenus au premier rouge/échéance. Sept cas légers et19régressions déjà verts sur ce poste ; features en cours lors de cette actualisation. Aucun verdict global encore.
+
+## Verdict du 12 novembre : passe complète VERTE, atterrissage en attente
+
+Source exacte `43b57eb78c831a3ef6622fb362378bb09770f489`, code revu `18ea54b78`. Une seule passe autorisée, aucune reprise ni mutation de source. Exécution de00:07à00:20Paris, dans l'enveloppe6600s :
+
+- Sept cas à faux services privés verts ; 19 contrôles existants du lanceur verts.
+- Features5/5 et preuve compilation lue.
+- Lib **2132 réussis/0 échec/64 ignorés**, 41,76s (durée des tests, compilation comptée à part).
+- Navigateur **39/0/0**, 133,49s, étape distincte.
+- Premier appel e2e_search **40/0/0**, 2,58s ; second appel e2e_search_queue **5/0/0**, 0,31s. Les deux filets implicites sont contrôlés séparément dans chacun des appels, sans être présentés comme quatre tests uniques de recherche. Aucun saut nommé ni suite supplémentaire.
+
+Le journal de recherche nomme explicitement le BGE-M3 déjà servi, pas le lancement d'un démon de la passe. Cette preuve réelle reste distincte des sept cas de propriété/arrêt à faux services et de leur rejeu indépendant. Santé BGE inchangée en fin, même PID3415586 ; aucun service réel remplacé/arrêté, aucun cinquième service de modèles. Précontrôle de mapping conservé ; quatre variables Burn gpu:0/card2, jamais sélection card0.
+
+`attestation-artefacts.json` : **220** gabarits courants présents, zéro absent ; tables générées et dépendances du bon worktree. Trois ELF distincts (lib, navigateur, e2e unique utilisé dans les deux appels), SHA enregistrés. Section `.rag3db_compiled_against` relue dans chacun : lib complète `rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`, aucune dérogation. Sources/manifestes et état Git contrôlés avant/après étapes ; aucun exécutable de notre target encore actif à la fin.
+
+Dossier de preuve aux **deux postes** : `~/.cache/rag3weaver-build/journaux-cx-recherche-journal-12nov/`. `verdict-final.log`, logs par étape, plan amendé, lanceur figé, santé avant/après, mapping, tables générées, inventaire des gabarits, attestation des binaires, identités natives et `preuves.sha256`. Copie locale vérifiée contre chaque SHA. Base privée `cx_recherche_journal_20261112` toujours détenue par recherche ; dump `pg-prive.dump` et identité/propriété `pg-fin.tsv` sauvegardés. Pas de reset/drop de base tierce.
+
+### Blocage de transmission après redémarrage
+
+La mise à jour des outils après récupération a retiré le namespace `mcp__codex_tui`. L'inventaire disponible n'expose plus `send_message_to_thread` ni `read_thread`. Aucun envoi à l'orchestration n'est donc revendiqué depuis ce retrait. La passe distante a continué normalement et son état a été relu avant toute action ; aucune étape n'a été relancée.
+
+**Message prêt, non envoyé :** recherche, ticket présent, source43b57eb78 verte ; sept légers/19contrôles, features5, lib2132/0/64, nav39/0/0, search40 puis queue5 sans saut, 220gabarits et libnative attestés. Demande de tour pour le lot journal-embarquement, branche cx-recherche-journal-embarquement-2 ; aucun push master sans « à toi ».
+
+Le ticket reste ouvert : recevoir le tour, relire master et décider du rebase/rejeu selon procédure, clôturer par gitmv+État au commit de fin, pousser sous poste push puis lire les trois contrôles. Ensuite seulement : nettoyer cette seule base privée après preuves, préserver hors cible les fichiers ignorés de preuve et les administrations Git supprimables, appliquer le garde commun et retirer worktrees/branches/target si VERT et quiescence maintenue. Actuellement ces ressources sont conservées pour l'atterrissage ; leur absence de nettoyage n'est pas présentée comme une fin de lot.
