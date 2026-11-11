@@ -1522,6 +1522,8 @@ impl PreparedBackend {
             let types = crate::dataflow::foreach_node::resoudre_les_sous_graphes(&mut tool, &|chemin| lire_texte(lecteur, &directory.join(chemin)), &nodes)
                 .map_err(|e| format!("{name}: {e}"))?;
             types_des_sous_graphes.insert(name.clone(), types);
+            #[cfg(feature = "code")]
+            crate::dataflow::invocation_nodes::validate_declared_operations(tool.template())?;
             crate::dataflow::render_nodes::verifier_le_cablage(name, tool.template())?;
             for key in attachment.bindings.keys() {
                 if !tool.params().iter().any(|p| p.name == key.as_str()) {
