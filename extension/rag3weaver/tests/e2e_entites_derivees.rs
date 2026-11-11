@@ -589,12 +589,20 @@ fn le_contenu_derive_partage_son_embarquement_sans_fusionner_les_occurrences() {
 
 }
 
-fn catalogue_projection_publique() -> Catalog {
-    let conn = Rag3dbConnection::in_memory().unwrap();
+fn catalogue_projection_publique() -> (tempfile::TempDir, Catalog) {
+    catalogue_projection_sur(Rag3dbConnection::in_memory().unwrap())
+}
+
+fn catalogue_projection_sur(conn: Rag3dbConnection) -> (tempfile::TempDir, Catalog) {
+    let cache = tempfile::tempdir().unwrap();
+    let sync = conn.create_sync_connection().unwrap();
     load_extensions(&conn);
     let mut catalog = Catalog::new(Box::new(conn), Box::new(rag3weaver::embedder::HashEmbedder::new(8)), CatalogConfig {
         embedding_dim: 8, allow_mock_embedder: true, ..Default::default()
     });
+    catalog.set_cache_base(cache.path().join("indexes"));
+    catalog.set_sync_connection(sync);
+    catalog.set_sparse_embedder(std::sync::Arc::new(rag3weaver::embedder::MockSparseEmbedder::new()));
     catalog.initialize().unwrap();
     catalog.register_entity("Occurrence", EntityConfig {
         fields: HashMap::from([
@@ -607,20 +615,20 @@ fn catalogue_projection_publique() -> Catalog {
     }).unwrap();
     catalog.register_entity("IndexOccurrence", EntityConfig {
         fields: HashMap::from([("body".into(), champ(FieldType::Text, false, true))]),
-        signals: SearchSignals::HYBRID,
+        signals: SearchSignals::HYBRID | SearchSignals::SPARSE,
         derived: Some(DerivedConfig {
             from: "Occurrence".into(), identity: rag3weaver::config::DerivedIdentity::Content { format: "projection-v1".into() },
             gather: vec![], render: BTreeMap::from([("body".into(), "{{ root.body }}".into())]),
         }), ..Default::default()
     }).unwrap();
     catalog.regime_d_ecriture(RegimeEcriture::ParLot);
-    catalog
+    (cache, catalog)
 }
 
 #[test]
 #[ignore]
 fn index_derive_rend_les_occurrences_publiques_avant_pagination() {
-    let mut catalog = catalogue_projection_publique();
+    let (_cache, mut catalog) = catalogue_projection_publique();
     for (file, line) in [("a.rs", 1), ("b.rs", 20)] {
         catalog.create("Occurrence", BTreeMap::from([
             ("file".into(), s(file)), ("line".into(), CypherValue::Int(line)), ("body".into(), s("marqueprojection")),
@@ -629,7 +637,7 @@ fn index_derive_rend_les_occurrences_publiques_avant_pagination() {
     let result = catalog.drain();
     assert_eq!(result.failed, 0, "{:?}", result.warnings);
     assert_eq!(compte(&catalog, "MATCH (v:IndexOccurrence) RETURN count(v)"), 1);
-    for signal in [SearchSignals::VECTOR, SearchSignals::BM25] {
+    for signal in [SearchSignals::VECTOR, SearchSignals::BM25, SearchSignals::SPARSE] {
         for mode in [ResultMode::Aggregated, ResultMode::Detailed, ResultMode::SourceResolved] {
             let (c, result) = cherche(catalog, "Occurrence", "marqueprojection", SearchOptions {
                 signals: Some(signal), result_mode: mode, consistency: Consistency::Immediate, strict_signals: true, ..Default::default()
@@ -658,6 +666,135 @@ fn index_derive_rend_les_occurrences_publiques_avant_pagination() {
             });
             catalog = c;
             assert_eq!(page.results.len(), 1, "la page porte sur les occurrences, pas la version unique");
+            assert_eq!(page.results[0].uuid, result.results[1].uuid, "ordre stable entre les budgets de page");
         }
     }
+}
+
+fn verifier_masque_avant_topk(signal: SearchSignals) {
+    let (_cache, mut catalog) = catalogue_projection_publique();
+    catalog.set_embedder(std::sync::Arc::new(rag3weaver::embedder::CallbackEmbedder::new(8, |texts| {
+        Ok(texts.iter().map(|text| {
+            let mut vector = vec![0.0; 8];
+            vector[0] = if text.contains("visible") { 0.8 } else { 1.0 };
+            if text.contains("visible") { vector[1] = 0.6; }
+            vector
+        }).collect())
+    })));
+    let body = "marqueprojection visible";
+    let a = catalog.create("Occurrence", BTreeMap::from([
+        ("file".into(), s("a.rs")), ("line".into(), CypherValue::Int(1)), ("body".into(), s(body)),
+    ])).unwrap();
+    catalog.create("Occurrence", BTreeMap::from([
+        ("file".into(), s("b.rs")), ("line".into(), CypherValue::Int(20)), ("body".into(), s(body)),
+    ])).unwrap();
+    let mut orphans = Vec::new();
+    for i in 0..12 {
+        orphans.push(catalog.create("Occurrence", BTreeMap::from([
+            ("file".into(), s(&format!("ancien-{i}.rs"))), ("line".into(), CypherValue::Int(1)),
+            ("body".into(), s(&format!("{} ancien{i}", "marqueprojection ".repeat(24)))),
+        ])).unwrap());
+    }
+    assert_eq!(catalog.drain().failed, 0);
+    for orphan in orphans { catalog.delete("Occurrence", &orphan.uuid().unwrap()).unwrap(); }
+    assert_eq!(catalog.drain().failed, 0);
+    assert_eq!(compte(&catalog, "MATCH (v:IndexOccurrence) RETURN count(v)"), 13, "les anciennes versions sont retenues");
+    assert_eq!(compte(&catalog, "MATCH (c:IndexOccurrence_Chunk) RETURN count(c)"), 13, "les candidats invisibles sont encore indexés");
+    // Un lien quelconque vers une origine admise n'est pas une référence
+    // de dérivation et ne doit jamais admettre ces versions orphelines.
+    catalog.register_relation("AUTRE_LIEN", "IndexOccurrence", "Occurrence").unwrap();
+    let retired = catalog.execute_raw("MATCH (v:IndexOccurrence) WHERE v.body CONTAINS 'ancien' RETURN v._uuid").unwrap().rows;
+    for row in retired {
+        catalog.link("AUTRE_LIEN", row[0].as_str().unwrap().to_string(), a.uuid().unwrap(), BTreeMap::new()).unwrap();
+    }
+    assert_eq!(catalog.drain().failed, 0);
+    // Le budget du signal est 2 pour limit=1 : les douze orphelins mieux
+    // classés doivent être masqués avant, pas simplement retirés au retour.
+    let (c, all) = cherche(catalog, "Occurrence", "marqueprojection", SearchOptions {
+        signals: Some(signal), limit: 1, strict_signals: true, consistency: Consistency::Immediate, ..Default::default()
+    });
+    catalog = c;
+    assert_eq!(all.results.len(), 1, "rappel visible perdu sous saturation (signal={signal:?}) : {:?}", all.meta);
+    for mode in [ResultMode::Aggregated, ResultMode::Detailed, ResultMode::SourceResolved] {
+        let (c, filtered) = cherche(catalog, "Occurrence", "marqueprojection", SearchOptions {
+            signals: Some(signal), result_mode: mode, limit: 1, strict_signals: true, consistency: Consistency::Immediate,
+            filter_condition: Some(rag3weaver::filter::FilterCondition::Field { key: "file".into(), value: rag3weaver::filter::FilterValue::Direct(s("a.rs")) }),
+            ..Default::default()
+        });
+        catalog = c;
+        assert_eq!(filtered.results.len(), 1, "signal={signal:?}, mode={mode:?} : {:?}", filtered.meta);
+        assert_eq!(filtered.results[0].uuid, a.uuid().unwrap(), "la version admise par A n'admet pas B");
+        assert_eq!(filtered.results[0].data.as_ref().unwrap()["file"].as_str(), Some("a.rs"));
+    }
+}
+
+#[test]
+#[ignore]
+fn le_masque_dense_precede_le_topk_des_versions() { verifier_masque_avant_topk(SearchSignals::VECTOR); }
+
+#[test]
+#[ignore]
+fn le_masque_creux_precede_le_topk_des_versions() { verifier_masque_avant_topk(SearchSignals::SPARSE); }
+
+#[test]
+#[ignore]
+fn le_masque_texte_precede_le_topk_des_versions() { verifier_masque_avant_topk(SearchSignals::BM25); }
+
+
+#[test]
+#[ignore]
+fn une_projection_qui_change_les_octets_refuse_les_coordonnees() {
+    let (_cache, mut catalog) = catalogue_projection_publique();
+    let mut index = catalog.entity_config("IndexOccurrence").unwrap().clone();
+    index.derived.as_mut().unwrap().render.insert("body".into(), "préfixe {{ root.body }}".into());
+    catalog.register_entity("IndexOccurrence", index).unwrap();
+    catalog.create("Occurrence", BTreeMap::from([
+        ("file".into(), s("a.rs")), ("line".into(), CypherValue::Int(10)), ("body".into(), s("marqueprojection")),
+    ])).unwrap();
+    assert_eq!(catalog.drain().failed, 0);
+    let shared = std::sync::Arc::new(std::sync::Mutex::new(catalog));
+    let error = Catalog::rechercher(&shared, "Occurrence", "marqueprojection", SearchOptions {
+        signals: Some(SearchSignals::BM25), consistency: Consistency::Immediate, strict_signals: true, ..Default::default()
+    }).unwrap_err();
+    assert!(error.to_string().contains("remappage des coordonnées requis"), "{error}");
+}
+
+
+#[test]
+#[ignore]
+fn un_echec_du_rendu_en_lot_preserve_sources_et_references_apres_reouverture() {
+    let database = tempfile::tempdir().unwrap();
+    let path = database.path().join("reprise.db").to_string_lossy().to_string();
+    let (_cache, mut catalog) = catalogue_projection_sur(Rag3dbConnection::new(&path).unwrap());
+    let record = |file: &str, body: &str| BTreeMap::from([
+        ("file".into(), s(file)), ("line".into(), CypherValue::Int(1)), ("body".into(), s(body)),
+    ]);
+    assert_eq!(catalog.ingest_entities("Occurrence", vec![record("a.rs", "avant"), record("b.rs", "avant")]).unwrap().failed, 0);
+    let query = "MATCH (v:IndexOccurrence)-[r:IndexOccurrence_DERIVED_FROM]->(o:Occurrence) RETURN o.file, o.body, v.body, v._uuid, r._render_hash ORDER BY o.file";
+    let before = catalog.execute_raw(query).unwrap().rows;
+    assert_eq!(before.len(), 2);
+    catalog.injecter_faute_de_lien("IndexOccurrence_DERIVED_FROM", 1);
+    let failed = catalog.ingest_entities("Occurrence", vec![record("a.rs", "après")]).unwrap();
+    assert!(failed.failed > 0);
+    assert_eq!(catalog.execute_raw(query).unwrap().rows, before, "l'ingestion directe doit envelopper la source ET sa dérivation");
+    drop(catalog);
+
+    let conn = Rag3dbConnection::new(&path).unwrap();
+    let sync = conn.create_sync_connection().unwrap();
+    load_extensions(&conn);
+    let cache = tempfile::tempdir().unwrap();
+    let mut reopened = Catalog::new(Box::new(conn), Box::new(rag3weaver::embedder::HashEmbedder::new(8)), CatalogConfig {
+        embedding_dim: 8, allow_mock_embedder: true, ..Default::default()
+    });
+    reopened.set_cache_base(cache.path().join("indexes"));
+    reopened.set_sync_connection(sync);
+    reopened.set_sparse_embedder(std::sync::Arc::new(rag3weaver::embedder::MockSparseEmbedder::new()));
+    reopened.initialize().unwrap();
+    assert_eq!(reopened.execute_raw(query).unwrap().rows, before, "le disque garde la génération validée");
+    assert_eq!(reopened.ingest_entities("Occurrence", vec![record("a.rs", "après")]).unwrap().failed, 0);
+    let after = reopened.execute_raw(query).unwrap().rows;
+    assert_eq!(after.len(), 2);
+    assert_eq!(after[0][1].as_str(), Some("après"));
+    assert_eq!(after[0][2].as_str(), Some("après"));
+    assert_eq!(after[1], before[1], "l'autre origine ne change pas");
 }

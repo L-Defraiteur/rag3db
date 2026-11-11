@@ -15,6 +15,37 @@ la session d'orchestration (aujourd'hui `rag3db-5a`), et travaille avec les sess
 **recherche**, **everything declarative** ou « ED » (l'IDE et l'équipier).
 
 
+## Renforcement du masque et de l'ingestion — après 49caf64c6
+
+Action portée par [le ticket du contenu partagé](../tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md).
+Projection neutralisée : 1 version au lieu de 2 occurrences (cx-projection-publique-rouge.log).
+Sans préfiltre, dense/creux/texte perdent tous le résultat visible derrière 12 orphelins mieux
+classés (cx-projection-masque-rouge.log). Restauration : 13 e2e dérivées réussis/0 échec,
+lanceur accepté sans résidu (cx-projection-masques-vert.log). Les 9 cas des trois signaux et trois
+modes, l'ordre de pagination, un AUTRE_LIEN trompeur, les filtres A/B et le refus de remappage
+d'octets sont couverts. Le masque calcule les versions par la relation canonique DERIVED_FROM,
+puis emploie les filtres d'index existants ; la réadmission conserve le jeu des racines du même L6.
+Le premier rejeu sparse passait ses assertions mais laissait un cache de fixture : code 101,
+aucun vert global. Ordre de destruction des handles/TempDir corrigé avant les 13 verts ci-dessus.
+
+Ingestion directe par lot : source déjà écrite avant le drain des dérivées, donc échec injecté
+laissant A.body=après et version=avant (cx-projection-lot-reprise-rouge.log). Composition du même
+L3 par ecrire_un_lot_atomique pour le drain et cette ingestion ; ciblé sur fichier : 1/0 dans
+cx-projection-lot-reprise-vert.log. Après échec et réouverture sans réenregistrer le schéma,
+sources/références/hashes inchangés ; nouvelle tentative réussie sur A, B intacte. La suite native
+complète des dérivées reste à rejouer sur ce refactoring, puis le raccordement privé Scope.
+
+Tentative unitaire rag3db-native seule : 1 565 réussis, 1 échoué, 15 ignorés. Le test
+builtin_templates charge workspace/code sans feature code : la configuration est refusée comme
+attendu. Le lanceur s'est arrêté avant le rejeu e2e : pas de passe verte revendiquée.
+Suivi distinct, porteur ED :
+[montage du manifeste lié sans code](../../everything-declarative/tickets/2026-11-11-le-test-du-manifeste-lie-demande-code-sans-garde-de-feature.md).
+Configuration complète prévue ensuite. Accessibilité depuis un manifeste à éprouver aussi,
+porteur ED : [ordre des déclarations dérivées](../../everything-declarative/tickets/2026-11-11-ordonner-les-entites-derivees-a-l-ouverture-du-backend.md).
+Ce dernier point est issu de la lecture, pas d'un e2e reproduit : HashMap d'entités enregistrées
+avant les relations, alors que from/gather exigent leurs dépendances. Aucune modification de
+backend.rs, builtin_templates.rs, code.rs ou du gabarit code par ce lot à ce stade.
+
 ## Reprise suivante — association et projection publiques en branche
 
 Porteur et action : [ticket des occurrences partagées](../tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md).
