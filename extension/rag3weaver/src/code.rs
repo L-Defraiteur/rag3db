@@ -1073,6 +1073,8 @@ pub fn analyze_in_project(
     // une arête clignotait d'une exécution à l'autre (4 octobre 2026).
     let mut fichiers_tries: Vec<_> = result.files.iter().collect();
     fichiers_tries.sort_by(|a, b| a.0.cmp(b.0));
+    let known_project_files: std::collections::HashSet<String> = result.files.keys().map(|p| relative(root, p))
+        .chain(project_files.into_iter().flatten().map(|p| relative(root, p))).collect();
 
     // Fichiers
     for (abs, fa) in fichiers_tries.iter().copied() {
@@ -1609,13 +1611,10 @@ pub fn analyze_in_project(
                     && imp.alias.as_deref().unwrap_or(&imp.imported) == id
                     && imp.source.starts_with('.')).collect();
                 if let [imp] = imports.as_slice() {
-                    if let Some(module) = relative_js_module(&rel, &imp.source) {
-                        let known = result.files.keys().map(|p| relative(root, p))
-                            .chain(project_files.into_iter().flatten().map(|p| relative(root, p)))
-                            .any(|p| js_module_stem(&p) == module);
-                        if known {
-                            analysis.pending_defaults.push((key.clone(), id.to_string(), default_export_symbol(&source, &module)));
-                        }
+                    if let Some(module) = codeparsers::relationship_resolution::relationship_resolver::resolve_relative_js_module(
+                        &rel, &imp.source, &known_project_files,
+                    ) {
+                        analysis.pending_defaults.push((key.clone(), id.to_string(), default_export_symbol(&source, &module)));
                     }
                 }
             }
@@ -4097,30 +4096,8 @@ fn par_reexportation(modules: &[String], definers: &[String], fichiers: &HashMap
 /// Le module que désigne `source`, écrit dans `module` : `runtime` →
 /// `module::runtime`, `self::x` → `module::x`, `super::x` → le parent de
 /// `module` puis `x`, `crate::…` tel quel.
-fn js_module_stem(path: &str) -> String {
-    let path = Path::new(path);
-    match path.extension().and_then(|e| e.to_str()) {
-        Some("js" | "cjs" | "mjs" | "ts" | "tsx" | "jsx") => path.with_extension("").to_string_lossy().into_owned(),
-        _ => path.to_string_lossy().into_owned(),
-    }
-}
-
 fn default_export_symbol(source: &str, file: &str) -> String {
-    format!("@default:{source}#{}", js_module_stem(file))
-}
-
-fn relative_js_module(file: &str, module: &str) -> Option<String> {
-    let joined = Path::new(file).parent()?.join(module);
-    let mut parts = Vec::new();
-    for component in joined.components() {
-        match component {
-            std::path::Component::Normal(p) => parts.push(p.to_string_lossy().into_owned()),
-            std::path::Component::CurDir => {},
-            std::path::Component::ParentDir => { parts.pop()?; },
-            _ => return None,
-        }
-    }
-    Some(js_module_stem(&parts.join("/")))
+    format!("@default:{source}#{file}")
 }
 
 fn joindre_les_modules(module: &str, source: &str) -> String {
