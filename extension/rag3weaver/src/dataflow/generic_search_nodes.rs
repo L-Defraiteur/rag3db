@@ -1100,13 +1100,15 @@ impl Node for VectorSearchNode {
         // **Le dialecte du service, pas rag3db en dur** : sans lui, ce chemin
         // résolvait les chunks en Cypher sur PostgreSQL — B2 de la
         // réconciliation du 6 septembre 2026.
-        let results = crate::search::resolve_vector_chunks_with_dialect(
+        let admitted_parents = admitted_parent_uuids_for(ctx, &target, &options, &conn)?;
+        let results = crate::search::resolve_vector_chunks_admitted(
             &*conn,
             &target,
             chunk_results,
             &target.enrich_fields,
             self.result_mode.unwrap_or(options.result_mode),
             dialect.as_ref(),
+            admitted_parents.as_ref(),
         )
         ;
         let results = match results {
@@ -1858,13 +1860,15 @@ impl Node for SparseSearchNode {
             .service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
             .cloned()
             .ok_or("'dialect' service not found")?;
-        let results = crate::search::resolve_vector_chunks_with_dialect(
+        let admitted_parents = admitted_parent_uuids_for(ctx, &target, &options, &conn)?;
+        let results = crate::search::resolve_vector_chunks_admitted(
             &*conn,
             &target,
             chunk_results,
             &target.enrich_fields,
             self.result_mode.unwrap_or(options.result_mode),
             dialect.as_ref(),
+            admitted_parents.as_ref(),
         )
         ;
         let results = match results {
@@ -2931,6 +2935,57 @@ fn moteur_de_recherche(ctx: &NodeContext, conn: &Arc<dyn crate::connection::DbCo
     ctx.service::<Arc<Mutex<Catalog>>>("catalog")
         .and_then(|c| c.lock().ok().and_then(|c| c.search_backend())) // L4 : repli sans vue
         .unwrap_or_else(|| Arc::new(crate::rag3db_search_backend::Rag3dbSearchBackend::new(conn.clone())))
+}
+
+/// Les parents admis dans la forme et la cellule de l'appel. Le préfiltre des
+/// morceaux reste en amont du top-k ; cette sélection empêche qu'un morceau
+/// partagé rende aussi un parent qui n'a jamais été admis.
+fn admitted_parent_uuids_for(
+    ctx: &NodeContext,
+    target: &SearchTarget,
+    options: &SearchOptions,
+    conn: &Arc<dyn crate::connection::DbConnection>,
+) -> Result<Option<HashSet<String>>, String> {
+    use crate::filter::{FilterCondition, FilterValue};
+    let resolve = |forme: crate::read_view::Forme<'_>, cell: &crate::scope::Scope| {
+        let mut conditions: Vec<_> = options.filter_condition.iter().cloned().collect();
+        if forme.multi_cell {
+            for (key, value) in [
+                (crate::scope::ORG_COLUMN, &cell.org),
+                (crate::scope::PROJECT_COLUMN, &cell.project),
+            ] {
+                conditions.push(FilterCondition::Field {
+                    key: key.into(),
+                    value: FilterValue::Direct(crate::connection::CypherValue::String(value.clone())),
+                });
+            }
+        }
+        if conditions.is_empty() {
+            return Ok(None);
+        }
+        forme.resolve_filter_to_ids(&target.parent_table, &FilterCondition::Must(conditions), target)
+    };
+    let ids = if let Some(v) = vue_de(ctx) {
+        let cell = ctx.service::<crate::scope::Scope>("scope").unwrap_or_else(|| v.scope());
+        resolve(v.forme(), cell)
+    } else if let Some(catalog) = ctx.service::<Arc<Mutex<Catalog>>>("catalog") {
+        let cat = catalog.lock().map_err(|_| "projection des occurrences : catalogue indisponible")?;
+        let cell = ctx.service::<crate::scope::Scope>("scope").unwrap_or_else(|| cat.scope());
+        resolve(cat.forme(), cell)
+    } else {
+        if options.filter_condition.is_some() || options.scope.is_some() {
+            return Err("projection des occurrences : filtre demandé sans catalogue ni vue de lecture".into());
+        }
+        return Ok(None);
+    }.map_err(|e| format!("projection des occurrences : filtre non résolu : {e}"))?;
+    let Some(ids) = ids else { return Ok(None) };
+    if ids.is_empty() {
+        return Ok(Some(HashSet::new()));
+    }
+    let rows = moteur_de_recherche(ctx, conn)
+        .resolve_offsets(&target.parent_table, &ids, &[])
+        .map_err(|e| format!("projection des occurrences : identités non résolues : {e}"))?;
+    Ok(Some(rows.into_iter().map(|r| r.uuid).collect()))
 }
 
 fn allowed_ids_for(
