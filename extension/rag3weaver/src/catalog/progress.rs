@@ -289,14 +289,23 @@ impl Catalog {
         self.progress_of(self.vector_tables())
     }
 
+    /// Une association de lecture suit la même résolution que la recherche.
+    /// Les versions internes restent consultables pour l'entretien des index.
+    fn entite_de_l_index_public(&self, entity: &str) -> Result<String, CatalogError> {
+        let config = self.entity_configs.get(entity).ok_or_else(|| CatalogError::UnknownEntity(entity.to_string()))?;
+        if config.search_index.is_some() {
+            return self.resolve_search_target(entity).map(|target| target.parent_table);
+        }
+        Ok(entity.to_string())
+    }
+
     /// **Où en est l'index de cette entité** — ses morceaux à elle, pas ceux
     /// des autres. Une entité sans vecteurs (plein texte seul) est comptée sur
     /// ses lignes : cherchable par mots dès qu'elle en a, jamais par vecteurs.
     pub fn index_progress_for(&self, entity: &str) -> Result<IndexProgress, CatalogError> {
         self.check_initialized()?;
-        if !self.entity_configs.contains_key(entity) {
-            return Err(CatalogError::UnknownEntity(entity.to_string()));
-        }
+        let storage = self.entite_de_l_index_public(entity)?;
+        let entity = storage.as_str();
         let chunks = format!("{entity}_Chunk");
         if self.vector_tables().contains(&chunks) {
             return self.progress_of(vec![chunks]);
@@ -391,10 +400,8 @@ impl Catalog {
     /// méta, sa propre clé. C'est lui qu'une recherche ou un outil consulte
     /// pour sa cible.
     pub fn index_state_for(&self, entity: &str) -> Result<IndexState, CatalogError> {
-        if !self.entity_configs.contains_key(entity) {
-            return Err(CatalogError::UnknownEntity(entity.to_string()));
-        }
-        self.state_at(&entity_state_key(entity), || self.index_progress_for(entity))
+        let storage = self.entite_de_l_index_public(entity)?;
+        self.state_at(&entity_state_key(&storage), || self.index_progress_for(&storage))
     }
 
     /// **Les index d'une entité qui n'ont pas pu s'ouvrir ou se créer** —
@@ -402,6 +409,8 @@ impl Catalog {
     /// l'entité qu'elle porte (le plein texte), ou par son nom (`<Entité>`,
     /// `<Entité>_…`).
     pub fn index_failures_for(&self, entite: Option<&str>) -> Vec<(String, String)> {
+        let storage = entite.and_then(|entity| self.entite_de_l_index_public(entity).ok());
+        let entite = storage.as_deref().or(entite);
         self.index_failures()
             .into_iter()
             .filter(|((_, table), _)| match entite {
@@ -474,7 +483,8 @@ impl Catalog {
 
     /// Note l'état de l'index d'une entité.
     pub fn note_index_state_for(&self, entity: &str, state: IndexState) -> Result<(), CatalogError> {
-        self.note_state_at(&entity_state_key(entity), state)
+        let storage = self.entite_de_l_index_public(entity)?;
+        self.note_state_at(&entity_state_key(&storage), state)
     }
 
     fn note_state_at(&self, key: &str, state: IndexState) -> Result<(), CatalogError> {

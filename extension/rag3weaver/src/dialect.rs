@@ -714,12 +714,14 @@ pub trait SchemaDialect: Send + Sync {
 
     fn pending_derived_references(&self, entity: &str, root: &str, relation: &str, limit: usize) -> String {
         if !self.capabilities().cypher { return self.untranslated("pending_derived_references"); }
-        format!("MATCH (d:{})-[r:{}]->(s:{}) WHERE r._render_hash IS NULL OR r._render_hash = '' RETURN s._uuid LIMIT {limit}",
+        format!("MATCH (d:{})-[r:{}]->(s:{}) WHERE (r._render_hash IS NULL OR r._render_hash = '') AND s._org = $render_org AND s._project = $render_project RETURN s._uuid LIMIT {limit}",
             self.quote(entity), self.quote(relation), self.quote(root))
     }
 
     fn missing_derived_references(&self, entity: &str, root: &str, relation: &str, limit: usize) -> String {
-        self.select_racines_sans_derivee(root, entity, relation, limit)
+        if !self.capabilities().cypher { return self.untranslated("missing_derived_references"); }
+        format!("MATCH (s:{}) WHERE s._org = $render_org AND s._project = $render_project OPTIONAL MATCH (d:{})-[:{}]->(s) WITH s, d WHERE d._uuid IS NULL RETURN s._uuid LIMIT {limit}",
+            self.quote(root), self.quote(entity), self.quote(relation))
     }
 
     /// **Marquer les lignes d'une session de synchronisation** :
@@ -3383,12 +3385,12 @@ impl SchemaDialect for PostgresDialect {
         format!("UPDATE {} SET _render_hash = '' WHERE to_uuid IN (SELECT jsonb_array_elements_text($uuids::text::jsonb))", self.quote(relation))
     }
 
-    fn pending_derived_references(&self, _entity: &str, _root: &str, relation: &str, limit: usize) -> String {
-        format!("SELECT to_uuid FROM {} WHERE _render_hash IS NULL OR _render_hash = '' LIMIT {limit}", self.quote(relation))
+    fn pending_derived_references(&self, _entity: &str, root: &str, relation: &str, limit: usize) -> String {
+        format!("SELECT s._uuid FROM {} r JOIN {} s ON s._uuid = r.to_uuid WHERE (r._render_hash IS NULL OR r._render_hash = '') AND s._org = $render_org AND s._project = $render_project LIMIT {limit}", self.quote(relation), self.quote(root))
     }
 
     fn missing_derived_references(&self, _entity: &str, root: &str, relation: &str, limit: usize) -> String {
-        format!("SELECT s._uuid FROM {} s LEFT JOIN {} r ON r.to_uuid = s._uuid WHERE r.from_uuid IS NULL LIMIT {limit}", self.quote(root), self.quote(relation))
+        format!("SELECT s._uuid FROM {} s LEFT JOIN {} r ON r.to_uuid = s._uuid WHERE r.from_uuid IS NULL AND s._org = $render_org AND s._project = $render_project LIMIT {limit}", self.quote(root), self.quote(relation))
     }
 
     fn select_derivees_a_rendre(&self, derived_table: &str, limite: usize) -> String {
