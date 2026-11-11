@@ -96,6 +96,66 @@
       "policy": {
         "read_files": true
       }
+    },
+    "search_code": {
+      "graph": "../../tools/atelier_search_code.mmd",
+      "description": "Chercher dans le code, par mots et par sens — à prendre d'abord. L'outil choisit seul : l'index quand il est prêt, le balayage des fichiers (mots exacts) quand rien n'est indexé ; la réponse dit d'où elle vient. grep ne sert que pour un motif littéral exact. Choisir explicitement le contexte du dépôt attaché.",
+      "policy": {
+        "read_files": true
+      }
+    },
+    "grep_files": {
+      "graph": "../../tools/atelier_grep_files.mmd",
+      "description": "Motif littéral ou regex sur les fichiers du workspace. À prendre pour une chaîne exacte (un message d'erreur, un nom précis) ; pour une question de sens, search_code fait mieux. Choisir explicitement le contexte du dépôt attaché.",
+      "policy": {
+        "read_files": true
+      }
+    },
+    "list_files": {
+      "graph": "../../tools/atelier_list_files.mmd",
+      "description": "Lister les chemins du workspace sous un préfixe. À prendre pour s'orienter ; les fichiers écartés (règles d'exclusion, secrets probables) n'y figurent pas. Choisir explicitement le contexte du dépôt attaché.",
+      "policy": {
+        "read_files": true
+      }
+    },
+    "outline": {
+      "graph": "../../tools/atelier_outline.mmd",
+      "description": "Le plan d'un fichier : ses scopes dans l'ordre (genre, nom qualifié, lignes, signature), lus dans l'index. À prendre pour s'orienter dans un fichier avant de le lire. Choisir explicitement le contexte du dépôt attaché.",
+      "policy": {
+        "read_files": true
+      }
+    },
+    "usages": {
+      "graph": "../../tools/atelier_usages.mmd",
+      "description": "Qui définit ce nom, et qui s'en sert — groupé par genre (appels, types, imports, héritage), avec fichier:ligne. À prendre pour mesurer l'impact avant d'éditer : la liste des sites est exacte, là où la recherche classe par pertinence. Exige l'index : avant le premier index, un nom introuvable ici ne veut rien dire — prenez search_code, qui balaye les fichiers tant que rien n'est indexé. Choisir explicitement le contexte du dépôt attaché.",
+      "policy": {
+        "read_files": true
+      }
+    },
+    "impact": {
+      "graph": "../../tools/atelier_impact.mmd",
+      "description": "Ce que toucher ce nom impacterait : le code qui en dépend par niveau, et les tests qui le traversent — nommés, avec fichier et certitude, prêts à rejouer. À prendre AVANT d'éditer un symbole partagé ; usages dit qui s'en sert, impact dit quoi rejouer. Choisir explicitement le contexte du dépôt attaché.",
+      "policy": {
+        "read_files": true
+      }
+    },
+    "callees": {
+      "graph": "../../tools/atelier_callees.mmd",
+      "description": "Ce que ce nom appelle, par niveau, et les verrous pris en route (Classe::champ) — l'autre sens d'impact. À prendre pour savoir où se fait réellement un travail, ou où se prend un verrou que l'appelant ne tient pas. Choisir explicitement le contexte du dépôt attaché.",
+      "policy": {
+        "read_files": true
+      }
+    },
+    "schema": {
+      "graph": "../../tools/atelier_schema.mmd",
+      "description": "La carte du catalogue : les entités, leurs champs, leurs relations. À prendre pour savoir ce que search_code peut cibler. Choisir explicitement le contexte du dépôt attaché.",
+      "policy": {
+        "read_files": true
+      }
+    },
+    "wait_output": {
+      "graph": "../../tools/wait.mmd",
+      "description": "Attendre qu'une ligne apparaisse dans un journal (commande de fond ou indexation) ; timeout_s=0 : lire l'état sans attendre. Pour l'indexation : pattern='indexation terminée|indexation échouée'."
     }
   }
 }

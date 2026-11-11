@@ -62,6 +62,8 @@ pub mod worktree_nodes;
 /// L'atelier lit et écrit, par l'hôte (Lucie, 8 novembre 2026 au soir).
 #[cfg(feature = "code")]
 pub mod fichier_nodes;
+#[cfg(feature = "code")]
+pub mod invocation_nodes;
 /// **La carte du graphe**, en Mermaid, pour qu'un agent cesse d'inventer des relations.
 pub mod schema_nodes;
 pub mod filter_results_node;

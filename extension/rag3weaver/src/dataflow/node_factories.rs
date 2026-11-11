@@ -1582,6 +1582,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
         registry.register(Box::new(super::run_nodes::WaitOutputNodeFactory));
         registry.register(Box::new(super::run_nodes::TailNodeFactory));
         registry.register(Box::new(super::worktree_nodes::WorktreeNodeFactory));
+        registry.register(Box::new(super::invocation_nodes::InvokeToolNodeFactory));
         registry.register(Box::new(super::fichier_nodes::LireFichierNodeFactory));
         registry.register(Box::new(super::fichier_nodes::EcrireFichierNodeFactory));
     }
