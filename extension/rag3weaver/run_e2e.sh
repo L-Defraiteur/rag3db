@@ -227,15 +227,26 @@ fi
 # tuerait la passe en silence sous `set -e`. Une passe interrompue nettoie
 # aussi : c'est le piège de sortie.
 export RAG3WEAVER_PASSE_E2E="$$-$(date +%s%N)"
-arreter_les_demons_de_la_passe() {
-  local p
-  for p in $(pidof rag3weaver-embeddings || true); do
-    if tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null | grep -qx "RAG3WEAVER_PASSE_E2E=$RAG3WEAVER_PASSE_E2E"; then
-      echo "▸ démon d'embarquement né pendant la passe arrêté (pid $p, SIGTERM)"
-      kill -TERM "$p" 2>/dev/null || true
-    fi
-  done
+preparer_journaux_des_demons() {
+  # Une ressource partagée entre suites appartient à la passe, sur disque.
+  # Ticket recherche/tickets/2026-11-11-le-service-d-embarquement-laisse-son-journal-dans-le-tmpdir-d-e2e-search.md.
+  export RAG3WEAVER_E2E_JOURNAUX_DEMONS="$E2E_DISQUE_PARENT/demons"
+  mkdir -p "$RAG3WEAVER_E2E_JOURNAUX_DEMONS"
 }
+arreter_les_demons_de_la_passe() {
+  local pids=()
+  read -r -a pids <<< "$(pidof rag3weaver-embeddings || true)"
+  python3 "$WEAVER/scripts/arret_demons_e2e.py" "$RAG3WEAVER_PASSE_E2E" "${pids[@]}"
+}
+archiver_journaux_des_demons() {
+  local dossier="${RAG3WEAVER_E2E_JOURNAUX_DEMONS:-}" garde
+  [ -n "$dossier" ] && [ -d "$dossier" ] || return 0
+  [ -n "$(find "$dossier" -mindepth 1 -print -quit)" ] || return 0
+  garde="$E2E_DISQUE_RACINE/e2e-gardes/demons-$RAG3WEAVER_PASSE_E2E"
+  mkdir -p "$(dirname "$garde")" && mv -- "$dossier" "$garde" || return 1
+  echo "▸ journaux des démons terminés conservés : $garde"
+}
+
 # **Les vieux binaires de test s'effacent** (10 octobre 2026, disque plein) :
 # le hachage d'un binaire change avec le jeu de features, le profil, et le
 # **chemin du paquet** — chaque worktree qui partage un target y laisse les
@@ -269,7 +280,11 @@ balayer_les_vieux_binaires() {
 }
 a_la_sortie() {
   [ -n "$CHARGE_PID" ] && kill "$CHARGE_PID" 2>/dev/null || true
-  arreter_les_demons_de_la_passe
+  # Sans quiescence ni archive, conserver les parents : aucun effacement sous un écrivain.
+  if ! arreter_les_demons_de_la_passe || ! archiver_journaux_des_demons; then
+    echo "✗ fin de passe incomplète ; dossiers conservés : ${E2E_TMP_PARENT:-} ${E2E_DISQUE_PARENT:-}" >&2
+    exit 101
+  fi
   balayer_les_vieux_binaires
   # Le parent des dossiers de la passe (les suites ont effacé les leurs) :
   # même une passe interrompue nettoie. `RAG3WEAVER_GARDER=1` le garde.
@@ -952,7 +967,7 @@ for ligne in open(sys.argv[1]):
     # chemin et taille ; hors de la liste des suites connues pour en laisser, la suite
     # est rouge. Une suite de la liste qui finit propre (passe entière, sans filtre)
     # est rouge aussi : elle sort de la liste dans le commit qui la rend propre.
-    residus_de_la_suite "$nom" || code=101
+    residus_de_la_suite "$nom" || { statut=101; code=101; }
     # **Une suite rouge garde son dossier disque** (relecture du banc, 11
     # octobre 2026) : un rouge d'arrêt brutal tombe une fois sur vingt ou
     # trente, et sa base est ce qu'on vient chercher — `GARDER=1` demanderait
@@ -964,8 +979,14 @@ for ligne in open(sys.argv[1]):
        && [ -d "$E2E_DISQUE_PARENT/$nom" ]; then
       local gardes="$E2E_DISQUE_RACINE/e2e-gardes" garde
       garde="$gardes/$nom-$(date +%Y%m%d-%H%M%S)-$$"
-      mkdir -p "$gardes" && mv -- "$E2E_DISQUE_PARENT/$nom" "$garde" \
-        && echo "▸ $nom a rougi : son dossier est gardé dans $garde"
+      if mkdir -p "$gardes" && mv -- "$E2E_DISQUE_PARENT/$nom" "$garde" \
+         && mv -- "$E2E_TMP_PARENT/$nom" "$garde/tmpdir"; then
+        echo "▸ $nom a rougi : ses dossiers disque et TMPDIR sont gardés dans $garde"
+      else
+        echo "✗ archive de $nom incomplète ; parents conservés" >&2
+        export RAG3WEAVER_GARDER=1
+        code=101
+      fi
       ls -1dt "$gardes/$nom"-[0-9]* 2>/dev/null | tail -n +6 | while read -r vieux; do
         rm -rf -- "$vieux"
       done
@@ -1080,6 +1101,7 @@ for d in "$E2E_DISQUE_RACINE"/e2e-[0-9]*; do
   fi
 done
 mkdir -p "$E2E_DISQUE_PARENT"
+preparer_journaux_des_demons
 
 # **Le target a un plafond.** Au-delà, la passe refuse de partir en le
 # disant : un target qui grossit sans fin est ce qui a rempli le disque le
