@@ -27,3 +27,23 @@ Confirmer le contrat de la matrice de features et vérifier le témoin sur sa ba
 à code ou employer un manifeste portable qui conserve son intention. Prouver la configuration
 sans code et celle avec code, sans affaiblir le refus d'un workspace par un binaire qui ne le sait pas.
 Ne pas marquer la passe native précédente verte. Le transfert ou le simple signalement ne ferme pas ce ticket.
+
+## Reprise ED sur master, indépendante du lot 1a
+
+Base `fc3ca92aa`, source documentation seule `1fffe50dc` : le ciblé natif sans
+code échoue bien sur le refus de workspace (`0/1/0`, 0,00 s). Preuve luciepc :
+`I-luciepc/ouverture-20261111/baseline-native.log` et `commit-baseline`.
+Le premier lancement, sous-module codeparsers absent du worktree neuf, n'avait
+rien compilé ; log de montage conservé séparément.
+
+Le candidat rebasé sur master `2e910930d` garde le test historique sous feature
+code. Un témoin portable charge un graphe livré de schéma, le lie puis vérifie
+la dérive de sa copie modifiée ; un autre prouve le refus explicite de workspace
+sans code. Aucun refus produit n'est affaibli. Deux premières fixtures portables
+avaient un chemin qui ne désignait pas le gabarit et une clé workspace.source
+manquante ; ce ne sont pas des régressions produit. Corrections tests `a166474a0`.
+Ciblés avec et sans code, puis lib native entière en cours : aucun vert global.
+
+Premier résultat `a166474a0` sans code : ouverture6/0/0 (0,58 s), module
+builtin_templates9/0/0 (0,01 s). Lib native entière et ciblés avec code encore
+en cours ; preuve `cibles-3.log`, aucun verdict global anticipé.
