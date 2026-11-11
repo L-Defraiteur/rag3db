@@ -7913,6 +7913,10 @@ mod tests {
 #[path = "backend_reload_tests.rs"]
 mod reload_tests;
 
+#[cfg(all(test, feature = "rag3db-native"))]
+#[path = "backend_opening_tests.rs"]
+mod opening_tests;
+
 #[cfg(test)]
 #[path = "backend_reactions_tests.rs"]
 mod reactions_tests;
