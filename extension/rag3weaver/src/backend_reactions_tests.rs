@@ -599,3 +599,40 @@ fn la_trace_livree_enregistre_un_appel_d_outil_sans_se_relancer() {
     assert_eq!(handle.runs(), runs, "la trace s'est relancée sur son propre run");
     handle.stop();
 }
+
+
+/// Une erreur d'arrêt ne doit pas devenir un succès lors du second appel.
+/// Joué seul avec RAG3WEAVER_STOP_WAIT_S=1 : la réaction est libérée avant les assertions.
+#[test]
+fn un_arret_echoue_ne_devient_pas_un_succes_sans_fermer() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let (_dir, mut backend) = reactif();
+    backend.catalog.lock().unwrap().publish_read_view();
+    assert!(backend.read_view.current().is_some(), "la vue doit être ouverte au départ");
+    let bus = EventBus::new(16);
+    let (liberer, attente) = std::sync::mpsc::channel::<()>();
+    let attente = Mutex::new(attente);
+    let entre = Arc::new(AtomicBool::new(false));
+    let signal = entre.clone();
+    let handle = Reactor::new(bus.clone(), Arc::new(NodeRegistry::new()), Arc::new(ServiceRegistry::new()))
+        .on("figee", ["messages"], crate::dataflow::reactor::ReactPolicy::Each, move |_| {
+            signal.store(true, Ordering::SeqCst);
+            let _ = attente.lock().unwrap().recv();
+        }).spawn();
+    *backend.reactions.lock().unwrap() = Some(handle);
+    bus.send_message("r", "a", "b", "bloque");
+    let fin = std::time::Instant::now() + Duration::from_secs(5);
+    while !entre.load(Ordering::SeqCst) {
+        assert!(std::time::Instant::now() < fin, "la réaction n'est pas entrée");
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    let premier = backend.shutdown();
+    let vue_encore_ouverte = backend.read_view.current().is_some();
+    let second = backend.shutdown();
+    let _ = liberer.send(());
+    eprintln!("PREUVE premier={premier:?} second={second:?} vue_encore_ouverte={vue_encore_ouverte}");
+    let erreur = premier.expect_err("une réaction figée empêche la fermeture");
+    assert!(erreur.contains("catalogue laissé ouvert"), "{erreur}");
+    assert!(vue_encore_ouverte, "le premier arrêt ne doit pas fermer sous la réaction figée");
+    assert!(second.is_err(), "faux succès : le second shutdown rend {second:?} sans avoir fermé le catalogue");
+}
