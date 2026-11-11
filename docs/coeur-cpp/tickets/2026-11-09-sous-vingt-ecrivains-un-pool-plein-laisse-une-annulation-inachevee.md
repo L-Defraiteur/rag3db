@@ -52,3 +52,27 @@ annulation qui échoue faute de pool, puis un BEGIN.
 ## Pour le fermer
 
 La cause de l'annulation inachevée, le correctif, le témoin vert.
+
+## Reprise du 11 novembre — témoin réduit rouge
+
+Le témoin initial `6e7f11680` ne reproduit pas : `FullBufferRollback.*`, 3/3 verts
+à luciepc (3,325 s), journal `~/.cache/rag3db-moteur-notes/annulation/rouge.log`
+(le nom du fichier ne dit pas son verdict). La variante CREATE à clé STRING courte
+passe aussi (4/4 au total, `cle-string.log`) : ses lignes sont encore locales.
+
+Le COPY atteint au contraire `INSERT_INFO` puis `rollbackPKIndexInsert`. Le cas
+existant INT64 et sa variante STRING courte passent (2/2, `copy-string.log`).
+Avec 20 000 clés STRING préfixées de 128 caractères `k`, le défaut est reproduit :
+`CopyRollbackUnderAFullBuffer.StringKeysRemainUsableAfterRollback`, témoin sauvegardé
+sur `annulation-sous-pool-plein`, commit `65486c02d`.
+
+Recette : pool des tests de 64 Mio, point de reprise automatique coupé, COPY dans
+Doc sous transaction A ; B insère et valide dans Other, par lots depuis 5 000 avec
+division par deux après refus. B valide 155 077 lignes et subit 7 refus.
+Le premier ROLLBACK de A échoue explicitement avec « buffer pool is full », le second
+et le BEGIN suivant exigent de rouvrir la base, COUNT est refusé. Le fils ferme sans
+signal. Le voisin INT64 reste vert. Preuve : luciepc
+`~/.cache/rag3db-moteur-notes/annulation/copy-long-string.log` (1 vert, 1 rouge).
+
+Aucun correctif à ce stade. Prochain pas : tracer l’allocation durant le retrait des
+clés longues, puis comparer les stratégies des moteurs avant proposition à l’orchestration.

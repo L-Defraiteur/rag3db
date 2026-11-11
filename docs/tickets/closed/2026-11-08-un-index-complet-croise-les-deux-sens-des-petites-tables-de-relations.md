@@ -1,7 +1,6 @@
 # Un index complet croise les deux sens des petites tables de relations
 
-- **État** : ouvert (8 novembre 2026, session hotfixs) ; corrigé sur master en 29a7bc52a (9 novembre,
-  cœur c++), à fermer après la pose de la lib et un index complet vert sur une copie
+- **État** : corrigé en `29a7bc52aaf11e6204f9beafaffb154105417e13`, fermé le 11 novembre 2026 après les deux rejeux exacts verts par hotfixs sous la lib corrigée.
 - **Famille** : moteur
 - **Gravité** : perte — après une réindexation complète, des relations sont fausses en service :
   rattachées au mauvais nœud, présentes dans un seul sens, ou vues deux fois
@@ -202,3 +201,17 @@ règle « aucun index complet sur les bases de Lucie » ne se lève qu'à la pos
 3. Le correctif, dans la fusion du CSR en mémoire avec le persistant au point de reprise (piste du
    cœur : une région réécrite à côté d'une région qui ne l'est pas, ou les longueurs du sens arrière
    lues avant la compaction des lignes mortes).
+
+## Fermeture — 11 novembre 2026
+
+Hotfixs a rejoué les deux traces sur des copies neuves, sous `poste lourd`, avec la lib
+`rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`
+(lien vérifié par `ldd`). Aucun code changé et aucune base vivante touchée.
+
+- d796 : 797 instructions, 31 écritures surveillées, 0 erreur, aucun écart, code 0.
+- item2 sur fixture-729 : 2 instructions, 1 écriture surveillée, 0 erreur, aucun écart, code 0.
+
+Preuves relues par le cœur sur luciepc :
+`~/.cache/rag3db-tickets-notes/reprise-codex-11nov-29a7/d796.log` et `item2.log`.
+Elles complètent le contrôle vert par le chemin de l’hôte déjà décrit au rapport.
+La réparation des bases déjà abîmées reste un index complet décidé par Lucie.
