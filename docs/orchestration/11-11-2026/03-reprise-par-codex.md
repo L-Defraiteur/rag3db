@@ -40,7 +40,7 @@ puis son `02-knowledge-dump.md`, puis ses tickets dans `docs/<nom>/tickets/`.
 | session | dossier | premier travail (au 11 novembre) |
 |---|---|---|
 | everything declarative | `docs/everything-declarative/` | **le correctif des réclamations du rattrapage**, branche `reclamations-rendues` (9da8e4433), jamais compilé ni joué : rouge d'abord, passe, push — c'est lui qui rougit la CI par intermittence |
-| recherche | `docs/recherche/` | arret-du-backend (branche `arret-du-backend-7`) : trancher le rouge des trois CSV de COPY d'un processus tué, rebase, rejeu court, push ; puis le journal des runs écrit après l'arrêt ; puis le Surveillant |
+| recherche | `docs/recherche/` | arret-du-backend (branche `arret-du-backend-7`) : trancher le rouge des trois CSV de COPY d'un processus tué, rebase, rejeu court, push ; puis le journal des runs écrit après l'arrêt ; puis le Surveillant ; et le lot « lucivy-core 4.3.3 » (Cargo.toml et Cargo.lock, passe entière : un close() en échec arrête quand même ses pools, lié au SIGSEGV de sortie des e2e) |
 | rag3weaver archi | `docs/rag3weaver-archi/` | `ide-par-le-flux` (wt-flux, a9c5a3108) : rejouer la passe tuée (code 137), départager la lib entière lente, push ; puis le découpage au survol de la jauge ; relecture d'ED de l'atelier |
 | coeur c++ | `docs/coeur-cpp/` | le témoin de l'annulation sous pool plein (`annulation-sous-pool-plein`, 6e7f11680, jamais joué) : le jouer rouge, puis le correctif ; fermer le ticket de l'index complet quand hotfixs a rejoué sa trace |
 | coeur c++/hotfixs/tickets | `docs/coeur-cpp-hotfixs-tickets/` | rejouer la trace exacte des deux sens sous la lib 29a7bc52a (service 7882, hôte 7992 ; les outils dans `11-11-2026/outils/`) : c'est le vert qui ferme le ticket de l'index complet |
@@ -50,13 +50,12 @@ puis son `02-knowledge-dump.md`, puis ses tickets dans `docs/<nom>/tickets/`.
 | codeparsers | `docs/codeparsers/` | le lot require-js (pointeur 78888f5, branche `codeparsers/require-js`) : décider sur la mesure du 9 (lecture dans le rapport), passe, push ; le ticket import_binding |
 | banc | `docs/banc/` | le banc Qwen3-4B en GGUF est fait (96a98a452 : Q8_0 en cache de préfixe égale bf16, 0,76 / AUC 0,92, 1,3 s pour k = 5 ; Q4_K_M perd en forme courte) ; ensuite le décideur d'actions quand il y aura des accords journalisés, et le classeur dans le rappel au mot de Lucie |
 | arbre principal | `docs/arbre-principal/` | wt-deplace (le garde-fou) et les mesures M3 à M5, décrits dans « Reprendre » |
-| lucivy | `docs/lucivy/` | rien sans le mot de Lucie : PR #22, #23 et la branche des tickets attendent sa décision dans cette session |
+| lucivy | `docs/lucivy/` | la 4.3.3 est publiée le 11 (tag v4.3.3, main 663975a ; #22, #23, #24, #25 fusionnées au mot de Lucie) ; rien d'autre sans son mot. Côté rag3db, `extension/rag3weaver/Cargo.toml` prend encore `lucivy-core = "4.3.2"` : monter à 4.3.3 est un lot Rust de la session recherche (Cargo.lock, passe, push) |
 | tty | `docs/tty/` | rien d'inachevé ; les thèmes suivants de l'interface terminal au premier fichier |
 | hooks-essai (fermée) | `extension/rag3weaver/docs/07-novembre-2026-hooks-essai/` | sa page « la recherche de code par les hooks » attend le mot de Lucie ; à rouvrir seulement s'il le donne |
 
 ## 4. Ce qui attend Lucie (à lui rappeler, pas à faire à sa place)
 
-- Les fusions lucivy (PR #22, #23, branche des tickets), dans la session lucivy.
 - Un index complet de ses bases de code pour réparer l'écart des deux sens (le correctif empêche, il ne
   répare pas) ; sa carte, son heure.
 - Lire : la page des vues par worktree, celle de l'atelier, celle des hooks, celle du classeur local.

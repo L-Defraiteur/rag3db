@@ -229,3 +229,8 @@ est active ; aucune suppression des anciennes branches distantes.
   fichiers communs ; aucun tour de push code et aucune activation sur les bases vivantes.
 - Les mesures M3–M5 restent différées jusqu’à un créneau libre et aux vérifications de format
   sur copies ; leur absence ne bloque pas les témoins fonctionnels des invariants de 1a.
+- **17 h 46, lucivy 4.3.3 publiée** sur le mot de Lucie dans la session lucivy (tag v4.3.3 sur main 663975a, CI
+  et workflow de publication verts, vérifiée sur crates.io, npm dont lucivy-wasm, PyPI) ; fusionnées : #22,
+  #23, #24 (tickets), #25 (le numéro). Le correctif : un close() en échec arrête quand même ses pools et ses
+  acteurs (lié au SIGSEGV de sortie des e2e). **À faire par Codex (session recherche)** : monter
+  `lucivy-core` de 4.3.2 à 4.3.3 dans `extension/rag3weaver/Cargo.toml` et Cargo.lock, passe entière, push.
