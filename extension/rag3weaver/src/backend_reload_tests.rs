@@ -1524,6 +1524,7 @@ fn invocation_executes_the_checked_declarations_after_reload() {
     write(dir.path(), "echo.mmd", "%% tool: echo\n%% description: read the schema\n%% result: answer.result\ngraph LR\n answer[\"SchemaNode\"]\n");
     backend.reload().unwrap();
     let checked = backend.prepared();
+    let expected = backend.call("echo", json!({})).unwrap()["result"].clone();
     // Remplacement contrôlé après capture de A, sans délai ni course aléatoire.
     write(dir.path(), "echo.mmd", &GRAPH.replace("%% param: value json! -- anything\n", "").replace("value=$value", "value={}"));
     write(dir.path(), "answer.rhai", "#{version: 2, got: input}");
@@ -1538,5 +1539,5 @@ fn invocation_executes_the_checked_declarations_after_reload() {
         "B contient RhaiNode, dont la lecture seule n'est pas prouvée");
     let response = backend.invoke_read_on(&checked, &authority, "echo", json!({}), cancel).unwrap();
     assert_ne!(response["result"]["version"], json!(2), "B ne doit jamais être exécutée après vérification de A : {response}");
-    assert!(response["result"]["targets"].is_array(), "A doit avoir exécuté SchemaNode : {response}");
+    assert_eq!(response["result"], expected, "A doit avoir exécuté exactement sa lecture de schéma");
 }
