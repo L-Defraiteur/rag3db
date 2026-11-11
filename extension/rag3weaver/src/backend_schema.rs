@@ -94,6 +94,9 @@ impl SchemaFacts {
         use SchemaStep::*;
         let mut pending = BTreeMap::<SchemaStep, BTreeSet<SchemaStep>>::new();
         for (name, config) in &self.entities {
+            // Une association de lecture doit être valable avant toute ouverture,
+            // sans devenir l'arête inverse de la dépendance derived.from.
+            config.validate_search_index_context(name, |n| self.entities.get(n))?;
             let mut dependencies = BTreeSet::new();
             if let Some(d) = &config.derived {
                 d.validate_context(name, |n| self.entities.get(n), |n| self.relations.get(n))
