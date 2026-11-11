@@ -11,6 +11,8 @@ Il ne décrit pas une implémentation déjà livrée.
   titre, signature et docstring s'ils y participent, ainsi que les versions de normalisation et de
   découpage. Les vecteurs restent distingués par modèle et dimension. Deux positions ou deux
   fichiers peuvent réutiliser un contenu ; cela ne fusionne pas leurs occurrences ni leurs arêtes.
+  Au départ, conserver les octets du contenu : toute normalisation future exige un remappage prouvé
+  des highlights et coordonnées vers le texte de chaque occurrence.
 - **Résolution.** Une couche cite sa parente et sa génération épinglée. Résoudre une occurrence
   descend récursivement cette pile ; une ancre qui avance ne change pas silencieusement une vue.
   Le tombstone d'un scope ou d'un fichier masque tous ses ancêtres concernés. Une vue inconnue ou
@@ -19,10 +21,12 @@ Il ne décrit pas une implémentation déjà livrée.
   toujours une occurrence visible : mêmes champs publics de Scope, fichier, position et liens de
   la couche résolue. Le target Scope du manifeste ne se remplace pas simplement par ScopeVersion.
   Les comportements after, fraîcheur et rendu conservent ce contrat.
-- **Filtrage.** Vue ET domaine ET filtre utilisateur s'appliquent avant le top-k de chaque signal
+- **Filtrage.** Le masque de vue et les filtres usuels s'appliquent avant le top-k de chaque signal
   dense, creux et plein texte. L'admission porte sur l'occurrence visible, pas seulement sur
   (fichier, version). Un signal incapable de garantir ce masque refuse explicitement la requête ;
-  il ne cherche jamais sans masque. Les arêtes doivent avoir leur source ET leur cible visibles.
+  il ne cherche jamais sans masque. La précédence domaine/utilisateur existante reste une décision
+  séparée : ce contrat exige le masque de visibilité en plus du filtre effectif, sans réécrire cette
+  politique. Un filtre utilisateur visant un scope tombstoné ne le rend pas visible. Les arêtes doivent avoir leur source ET leur cible visibles.
 - **Cohérence.** Masque, candidats, enrichissement et provenance proviennent du même instantané L6.
   Un lecteur ne traverse pas deux générations pendant la résolution.
 - **Outils.** view est un paramètre typé commun aux graphes d'outils ; provenance est un booléen
@@ -93,3 +97,16 @@ versions distinctes ; modèles d'embarquement différents → vecteurs distincts
 position → contenu réutilisé ; projection vers deux occurrences → fichiers/lignes propres à
 chacune. La migration déclarée et ses preuves arrivent dans 1b avant toute bascule de base.
 Les lots suivants emploieront branches et worktrees préfixés cx-, selon la convention du 11 novembre.
+
+## Validation terminée et rouge du lot suivant
+
+Le garde-fou est livré sur master1904e04e4 : features5/5 ; lib2095/0/58 ignorés ;
+navigateur33/0/0 ; e2e_code27/0/0 ; e2e_code_sync17/0/0. Trois contrôles après push lus propres,
+worktrees du garde-fou et target-A-plan nettoyés. Cette mise à jour remplace l'état « en cours »
+de la section historique ci-dessus.
+
+Les deux témoins du lot1a sont sauvegardés sous dd5f30465 (cx-arbre-scope-version) et joués :
+1 passé, 1 échoué ; le défaut observé est deux embarquements d'un contenu identique pour deux
+occurrences dont les coordonnées sont pourtant correctes. L'implémentation produit1a n'est pas
+livrée. Le contrat reste déclaratif : composer les mécanismes existants et identifier la primitive
+manquante de partage/projection, plutôt que coder une seconde chaîne de recherche réservée à Scope.
