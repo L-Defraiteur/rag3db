@@ -2,6 +2,8 @@
 
 Le contact avec orchestration-sessions est établi depuis la session mémoire `01a1cb5c-4f39-7421-9a9f-4aa288d69402`. Les rapports précédents et les six tickets actuels ont été lus. Le lot des refus 4xx a déjà atterri sous `2d6a08a65` : ne pas relancer son ancien script de push.
 
+Actualisation : le correctif est livré sur master sous `41526b29a` ; les témoins, la passe, le rejeu et le nettoyage sont dans [04-alias-candidats.md](04-alias-candidats.md). Cette note garde le diagnostic historique.
+
 ## Essais réellement joués
 
 Le premier document figé (`06-novembre-2026-orchestration/01-plan-du-week-end.md`) a été rejoué sur des copies neuves distinctes de l’instantané avant-29a7bc52a. Les fiches du juge sont incluses, `allow_create=true` ne touche que les copies. Aucun changement de l’hôte ni de sa mémoire en service.
