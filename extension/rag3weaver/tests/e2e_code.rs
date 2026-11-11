@@ -1935,3 +1935,26 @@ fn require_missing_generated_and_external_keep_liaison() {
         assert!(rows.iter().any(|r| matches!((&r[0], &r[1], &r[2]), (S(n), S(f), S(m)) if n.starts_with("file_scope") && f == "app.js" && m == "liaison")), "repli inchangé pour {module} : {rows:?}");
     }
 }
+
+/// Default exports must meet aliases even when files arrive in separate batches.
+#[test]
+#[ignore]
+fn require_default_export_links_across_batches_in_both_orders() {
+    use rag3weaver::connection::CypherValue::String as S;
+    let files = [
+        ("outil.js", "class Outil {\n  agir() {}\n}\nmodule.exports = Outil;\n"),
+        ("app.js", "const Alias = require('./outil.js');\nfunction utiliser() {\n  return new Alias();\n}\n"),
+    ];
+    let known: Vec<String> = files.iter().map(|(p, _)| format!("/projet/{p}")).collect();
+    for order in [[0, 1], [1, 0]] {
+        let catalog = setup();
+        let mut cat = catalog.lock().unwrap();
+        for i in order {
+            let analysis = rag3weaver::code::analyze_in_project("/projet",
+                vec![(files[i].0.to_string(), files[i].1.to_string())], "worktree:/projet", Some(&known));
+            assert_eq!(cat.ingest_code(&analysis).unwrap().failed, 0);
+        }
+        let rows = cat.execute_raw("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE a.name = 'utiliser' RETURN b.name, b.file_path, r.resolution").unwrap().rows;
+        assert!(rows.iter().any(|r| matches!((&r[0], &r[1], &r[2]), (S(n), S(f), S(m)) if n == "Outil" && f == "outil.js" && m == "import")), "order {order:?}: {rows:?}");
+    }
+}
