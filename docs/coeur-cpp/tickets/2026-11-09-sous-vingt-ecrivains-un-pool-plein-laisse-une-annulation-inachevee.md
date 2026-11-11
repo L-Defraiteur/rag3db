@@ -101,3 +101,18 @@ notre annulation exige une réserve forfaitaire.
 Branche de reprise désormais `cx-coeur-annulation`, publiée, worktree
 `~/git_workspaces/cx-coeur-annulation`, même commit `65486c02d`.
 L’ancien worktree `rag3db-csr` reste sur disque, détaché, sans suppression.
+
+### Correctif en essai, non validé
+
+Commit `0511dece7` sur `cx-coeur-annulation` : les slots de l’index local détiennent
+déjà les clés et leurs décalages. `discardLocalRange(first,count)` retire celles
+qui appartiennent à la plage réservée par l’undo, sous verrou exclusif local,
+sans lecture des colonnes ni modification du persistant ou des tombstones.
+Les clés conservées sont déplacées dans les slots existants, en maintenant le
+préfixe compact de chaque chaîne. La comparaison par soustraction évite de faire
+déborder `first+count`. Le code impose un déplacement `noexcept`. Cela concerne
+ce retrait de clés, pas une preuve que toute annulation du moteur n’alloue rien.
+
+Compilation et tests ciblés en file à luciepc (`annulation/vert.log`) : aucun
+verdict sur ce correctif à ce point. Les suites entières et la mesure de coût
+restent à jouer ; le ticket reste ouvert.
