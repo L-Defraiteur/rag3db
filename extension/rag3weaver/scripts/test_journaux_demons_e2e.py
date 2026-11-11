@@ -111,6 +111,11 @@ class Journaux(unittest.TestCase):
         cls.attache = cls.root/'attache'
         subprocess.run(['rustc', '--edition=2021', str(source), '-o', str(cls.attache)], env=env, check=True, capture_output=True)
         script = (CRATE/'run_e2e.sh').read_text()
+        cls.balayages = []
+        for racine in ['E2E_TMP_RACINE', 'E2E_DISQUE_RACINE']:
+            a = script.index('for d in "$'+racine+'"')
+            z = script.index('\ndone\n', a)+len('\ndone\n')
+            cls.balayages.append(script[a:z])
         cls.fonctions = '\n'.join(m.group() for m in re.finditer(r'^[a-zA-Z_][a-zA-Z_0-9]*\(\) \{\n.*?^\}', script, re.M|re.S))
 
     @classmethod
@@ -160,17 +165,25 @@ class Journaux(unittest.TestCase):
             except OSError: time.sleep(.01)
         self.fail('le faux service privé ne démarre pas')
 
-    def jouer(self, residu=False, ignore_term=False, echec=False):
-        disque = self.d/'disque'; disque.mkdir()
-        parent = disque/'passe'; parent.mkdir()
-        tmp = self.d/'tmp'; tmp.mkdir()
+    def jouer(self, residu=False, ignore_term=False, echec=False, parents_nommes=False):
+        disque = self.d/'disque'; disque.mkdir(exist_ok=True)
+        parent = disque/'passe'; parent.mkdir(exist_ok=True)
+        tmp = self.d/'tmp'; tmp.mkdir(exist_ok=True)
         prelude = '\n'.join(f'{k}={__import__("shlex").quote(str(v))}' for k,v in {
             'WEAVER':CRATE, 'E2E_DISQUE_RACINE':disque, 'E2E_DISQUE_PARENT':parent,
-            'E2E_TMP_PARENT':tmp, 'CARGO_TARGET_DIR':self.d/'target', 'LISTE_DES_RESIDUS':CRATE/'tests/e2e/suites_qui_laissent_des_residus.txt',
+            'E2E_TMP_PARENT':tmp, 'E2E_TMP_RACINE':self.d/'tmp-racine', 'CARGO_TARGET_DIR':self.d/'target', 'LISTE_DES_RESIDUS':CRATE/'tests/e2e/suites_qui_laissent_des_residus.txt',
             'E2E_LOG':self.d/'e2e.log', 'FEATURES':'rag3db-native', 'TEST_FILTER':'', 'CHARGE_PID':'',
             'RAG3WEAVER_PASSE_E2E':'temoin-'+self.d.name}.items())
         harness = self.d/'harness.sh'
-        harness.write_text('set -u\n'+self.fonctions+'\n'+prelude+'''
+        demarrage = ''
+        if parents_nommes:
+            (self.d/'tmp-racine').mkdir(exist_ok=True)
+            demarrage = '''
+E2E_TMP_PARENT="$E2E_TMP_RACINE/rag3weaver-e2e-$$"
+E2E_DISQUE_PARENT="$E2E_DISQUE_RACINE/e2e-$$"
+RAG3WEAVER_PASSE_E2E="$$-temoin"
+'''+ '\n'.join(self.balayages)+ '\nmkdir -p "$E2E_TMP_PARENT" "$E2E_DISQUE_PARENT"\n'
+        harness.write_text('set -u\n'+self.fonctions+'\n'+prelude+'\n'+demarrage+'''
 export RAG3WEAVER_PASSE_E2E
 confined() { "$@"; }
 CARGO_ARGS=(--test e2e_search --test e2e_second)
@@ -233,6 +246,28 @@ exit $?
         self.assertEqual(r.returncode, 101, r.stdout+r.stderr)
         self.assertTrue((self.d/'disque/passe/demons/rag3weaver-embeddings.log').exists())
         self.assertFalse((self.d/'fini').exists())
+
+    def test_deux_lancements_preservent_les_parents_du_demon_encore_vivant(self):
+        premier = self.jouer(ignore_term=True, parents_nommes=True)
+        self.assertEqual(premier.returncode, 101)
+        parents_disque = list((self.d/'disque').glob('e2e-[0-9]*'))
+        parents_tmp = list((self.d/'tmp-racine').glob('rag3weaver-e2e-[0-9]*'))
+        self.assertEqual(len(parents_disque), 1)
+        self.assertEqual(len(parents_tmp), 1)
+        journal = parents_disque[0]/'demons/rag3weaver-embeddings.log'
+        avant = journal.read_bytes()
+        preuve_tmp = parents_tmp[0]/'preuve-vivante'
+        preuve_tmp.write_text('ressource de la même passe')
+        pid = int(self.pids.read_text().split()[0])
+        with open(f'/proc/{pid}/stat') as f: naissance = f.read().rsplit(') ', 1)[1].split()[19]
+        second = self.jouer(parents_nommes=True)
+        self.assertEqual(second.returncode, 0, second.stdout+second.stderr)
+        self.assertTrue(journal.exists(), 'le prochain balayage ne doit pas effacer le journal vivant')
+        self.assertEqual(journal.read_bytes(), avant)
+        self.assertEqual(preuve_tmp.read_text(), 'ressource de la même passe')
+        with open(f'/proc/{pid}/stat') as f: self.assertEqual(f.read().rsplit(') ', 1)[1].split()[19], naissance)
+        self.assertFalse((self.d/'fini').exists(), 'le second lancement ne signale pas ce démon')
+        self.assertFalse((self.d/'quitte').exists())
 
 
 if __name__ == '__main__': unittest.main(verbosity=2)

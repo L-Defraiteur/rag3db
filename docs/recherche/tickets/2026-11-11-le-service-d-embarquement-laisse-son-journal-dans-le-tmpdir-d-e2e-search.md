@@ -104,3 +104,7 @@ Journaux locaux hors worktree/target : `~/.cache/rag3weaver-build/cx-recherche-j
 ### Reste à faire
 
 Orchestration : relire patch et preuve légère, puis décider du rebase/périmètre et de l'autorisation de passe lourde. Recherche : appliquer les remarques, puis seulement jouer la validation autorisée. Pas de push master ni de tour demandé à ce stade. Le ticket reste ouvert. Les contrôles de propriété, quiescence et conservation sont les invariants cibles du correctif, pas des exemptions de résidus à retirer pour verdir.
+
+## Revue : la conservation doit survivre au lancement suivant
+
+Orchestration bloque le lourd sur 663d85781 : un démon qui ignore TERM survit au PID de passe ; les parents conservés restent dans les motifs que la passe suivante balaie seulement d'après ce PID disparu. Même défaut pour les parents TMP et disque. Nouveau témoin léger à deux lancements : premier arrêt refusé/101, puis deuxième lancement laissant démon et ressources intacts. Même ticket, correction de la preuve de quiescence du balayage ; aucune exemption ni service réel.
