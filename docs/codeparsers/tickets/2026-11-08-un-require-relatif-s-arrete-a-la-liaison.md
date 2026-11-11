@@ -122,3 +122,20 @@ sont strictement justes, marque import, vers leurs classes PreparedStatement
 et QueryResult attendues. Cette preuve complète les critères de correction,
 mais la décision de navigation et l'intégration restent ouvertes. Aucun push
 master fait ni autorisé par ce constat ; bilan envoyé pour revue.
+
+### Décision de navigation après revue
+
+Contrat retenu par l'orchestration pour ce lot : CONSUMES exprime une dépendance
+et navigation vers le symbole ou la valeur exportée d'un import relatif résolu,
+même si le nom local diffère. Une instance vise sa zone d'export, jamais une
+classe inventée ; absent/externe conserve la liaison marquée ; ambigu ne se
+devine pas. Ce contrat n'est pas une équivalence avec textDocument/definition.
+Les cinq usages alias restent strictement faux dans la comparaison LSP ;
+aucun score global mélangé, aucun changement de prédicat strict. La mention
+source reste distincte de sa cible ; ses pertes de provenance et le faux
+platform demeurent dans leurs tickets ouverts, capture 23 séparée.
+
+README et nouveautés explicitent ce contrat, sans nouveau code. La passe
+sur 50ebbb760 est inchangée ; seule la documentation est complétée depuis.
+Reste l'intégration sous tour explicite et la clôture avec ses preuves : le
+présent ticket n'est pas fermé par l'accord de conception.

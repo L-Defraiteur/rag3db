@@ -7,6 +7,14 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **11 nov. — Les imports relatifs suivent la valeur exportée.** En JavaScript/TypeScript,
+  les dépendances issues de `require` et des imports par défaut suivent le symbole ou la valeur
+  exportée, même sous un alias local ; une instance mène à sa zone d'export. Les modules absents
+  ou externes gardent une liaison marquée ; une ambiguïté reste non résolue. Ce contrat de
+  navigation ne promet pas la destination lexicale du LSP : cinq désaccords stricts restent
+  dans le [bilan de validation](codeparsers/11-11-2026/04-bilan-navigation-et-provenance.md),
+  sans score global de précision. (`d92c0f4b7`, codeparsers `a730a9b`)
+
 - **11 nov. — L’atelier cherche dans le dépôt choisi et suit ses commandes.** Huit lectures
   prennent une référence explicite de backend ; les liens gardent cette cible après troncature
   et rechargement. `wait_output` suit le journal d’une commande accordée. Une invocation vérifie

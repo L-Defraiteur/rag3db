@@ -141,3 +141,14 @@ déclarés par le dépôt. Les quatre mentions require à l'origine du ticket so
 strictement justes dans la mesure figée relue, sans nouveau LSP.
 Cette passe ne change pas les limites du bilan de qualité ni la décision de
 navigation en attente ; elle ne constitue pas un tour de push master.
+
+## Décision après revue de l'orchestration
+
+Le contrat retenu pour ce lot est celui de la dépendance/navigation CONSUMES :
+l'import relatif résolu suit le symbole ou la valeur exportée, malgré l'alias
+local ; l'instance vise la zone d'export, l'absent/externe garde la liaison
+marquée et l'ambiguïté reste sans cible devinée. Les cinq désaccords avec le
+LSP strict restent des verdicts strictement faux. L'accord sur ce contrat ne
+les requalifie pas et ne produit aucun score global de précision. README et
+nouveautés portent la même limite ; provenance des occurrences et faux
+platform restent ouverts, sans nouvelle capture ni campagne implicite.
