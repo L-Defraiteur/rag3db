@@ -232,3 +232,17 @@ les compose avant écriture avec un plan entités/relations (from/gather/endpoin
 Une erreur de plan refuse avant le premier appel DB ; jamais de suppression des
 contraintes pour rendre le graphe acyclique. La correspondance avec les modes
 d'identité de 1a reste à relire avant passe et intégration.
+
+
+## Composition effective des déclarations et du schéma nommé
+
+code::schema_configs(scope_chunking) expose les vrais EntityConfig et RelationDef
+(propriétés comprises), partagés par plan_schema et register_code_schema. Backend
+compose ces faits avec les déclarations, valide le fournisseur autoporté et le
+plan complet avant connexion, puis monte racines explicites, fournisseur/overlay
+index_signals et déclarations dépendantes. Pas de fausse configuration de Scope.
+Identiques coalescés ; propriétés de relation disjointes compatibles unies ;
+conflits de même champ ou d’extrémités, identités/configs d’entités divergentes
+refusés par nom avant DB. Les espaces de noms entité/relation restent distincts.
+L’association search_index de1a reste un raccord de lecture, jamais une dépendance
+de création inverse ; sa preuve publique appartient au ticket transféré ouvert.

@@ -1,11 +1,11 @@
 # Ordonner les entités dérivées à l'ouverture du backend
 
-- **État** : ouvert (11 novembre 2026), capacité à vérifier pour l'intégration déclarative du lot 1a.
+- **État** : ouvert, initialisation corrigée sur `bffbe5033` ; reste le raccord public search_index/manifeste du lot 1a.
 - **Famille** : produit
-- **Gravité** : planification et risque de refus à l'ouverture d'un manifeste dérivé ; pas de reproduction e2e encore établie.
-- **Atteignable en service** : à confirmer avec un manifeste déclarant une racine et sa dérivée.
+- **Gravité** : refus de chargement et d’ouverture reproduits puis corrigés ; preuve du raccord public 1a encore manquante.
+- **Atteignable en service** : oui sur les baselines décrites ; correctif d’ouverture éprouvé, association publique 1a non livrée.
 - **Touche rag3weaver** : oui, src/backend.rs, enregistrement du schéma ; DerivedConfig et Catalog::verifier_la_derivation.
-- **Pour** : everything-declarative ; arbre-principal porte le raccordement au lot 1a.
+- **Pour** : arbre-principal (raccord public/manifeste 1a) ; ED conserve les preuves du correctif d’initialisation.
 - **Signalé par** : arbre-principal, [ticket du contenu partagé](../../arbre-principal/tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md).
 
 ## Éléments relus
@@ -159,3 +159,41 @@ Le nouveau refus de conflits de type est prouvé dans la composition Backend,
 pas présenté comme une nouvelle garantie de l'API Catalog individuelle.
 Reste la passe globale de la composition, tour et intégration ; alias1a toujours
 à prouver après raccordement. Ce ticket reste ouvert jusque-là.
+
+## Validation finale et passage de lot
+
+Source Rust/UI/e2e `bffbe5033` : features5/5, gardes31/0/0, lib2132/0/64 ignorés
+(43,16s), navigateur39/0/0 (132,98s). Sept suites e2e sans SAUTÉ : dérivées4,
+lectures24, PG34, txvecteurs3, txarrêt18, txmerge1, txligne3. La suite txarrêt
+laisse un CSV connu (12K), suivi par
+`docs/recherche/tickets/2026-11-11-un-copy-tue-laisse-son-csv-dans-le-dossier-temporaire.md` :
+ce vert ne signifie pas absence de résidu. Les ignorés de la lib sont ses marques
+existantes ; les tests navigateur sont joués séparément.
+
+Native sans code sur11ea : ouverture6 et gabarits9 verts, lib1575/0/15 ignorés
+(20,60s). Avec code : ouverture16 et gabarits9, fournisseur1 verts. Les propriétés
+compatibles s'ajoutent, les identités et configurations incompatibles ne
+s'écrasent pas ; refus nommés avant le premier appel base. La baseline292 prouve
+le contrat Catalog additif et le refus d'extrémités, deux verts. Les anciens
+rouges de fixtures et les vrais rouges produit restent séparés dans les logs.
+
+Après rebase1365b872b, diff depuis bff strictement deux Markdown : Rust/UI/Cargo/
+gabarits et helper inchangés. Helper65aa SHA dca13abb7a84cf3c1419f728697837a6b1b9b20e34e34c144c9fbf835252f628,
+19 tests verts aux deux postes ; nouvelle exécution sur SHA documentaire final
+avant push. Tour « à toi » accordé par orchestration après lecture du verdict.
+Preuves sauvegardées aux deux postes : `~/.cache/rag3weaver-build/I-luciepc/ouverture-20261111/`
+(`verdict-final.json`, `*-passe-2.log`, `cibles-4.log`, logs baseline et garde).
+Push sous poste push/garde VERT, trois contrôles puis archives administratives
+fidèles hors cible et garde fraîche avant chaque retrait ; aucune suppression
+si refus. Worktrees/target/PG du reste-équipier restent hors de ce lot.
+
+## Reprendre après transfert ouvert à arbre principal
+
+Accord orchestration : ce même ticket passe à arbre principal avec le correctif
+ED validé ; aucun doublon, aucune clôture par transfert. Restent : charger/ouvrir
+le manifeste combiné1a, valider son association publique search_index avant toute
+écriture et prouver écriture racine/recherche par la cible publique. L'association
+est de lecture et ne crée pas d'arête de création Root→Index (Index.from dépend
+Root, l'inverse fabriquerait un faux cycle). Conserver les modes root/content,
+leurs règles d'identité et le refus des chaînes from→dérivée. Relier la preuve
+combinée et le commit1a avant git mv de ce ticket vers closed et État final.

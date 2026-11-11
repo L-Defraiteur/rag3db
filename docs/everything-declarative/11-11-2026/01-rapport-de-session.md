@@ -1,5 +1,28 @@
 # Rapport de session — everything declarative, au 11 novembre 2026
 
+## Clôture ED — code validé et raccord public transmis
+
+Ce lot clôt le ticket de matrice feature et transfère **ouvert** à arbre principal
+le ticket d’ordre des dérivées : l’initialisation explicite/nommée est corrigée,
+la preuve publique search_index/manifeste1a reste à faire. Pas d’import du code1a
+ou d’annonce de livraison de cette association. Sources/proofs finales : bff
+pour Rust/UI/e2e ; rebase1365 seulement deux Markdown ; helper65aa et 19 tests aux
+deux postes, puis vérification sur le SHA documentaire final avant atterrissage.
+
+Verdict : features5, gardes31, lib2132/0/64 ignorés43,16s, navigateur39/0/0
+132,98s, sept e2e sans SAUTÉ (4/24/34/3/18/1/3). Txarrêt a son CSV résiduel connu
+suivi chez recherche ; aucun vert « sans résidu » n’est annoncé. Native sans code
+1575/0/15 et cibléscode16+9+provider1 restent étiquetés11ea. La passe08 et les
+baselines6cf/292 restent des preuves distinctes, pas la source finale.
+
+Preuves deux postes I-luciepc/ouverture-20261111/ ; scripts externes de push et
+de préparation garde : archives fidèles des administrations Git privées, rapport
+neuf hors cible, retrait seulement VERT et quiescence, remotes conservés. Le
+nettoyage ne concerne que cx-ed-ouverture, ses branches sauvegardées, target-I-apres
+et PGcx_ed_ouverture_20261111 ; jamais le reste-équipier ni ses données. L’historique
+ci-dessous n’est plus la file de travail actuelle.
+
+
 ## Dernier état — fournisseur composé, ciblés verts avant passe finale
 
 `11ea6ec87`, branche cx-ed-ouverture-2 : fournisseur pur arbrec12 repris820,

@@ -1,6 +1,6 @@
 # Le test du manifeste lié demande code sans garde de feature
 
-- **État** : ouvert (11 novembre 2026).
+- **État** : corrigé, source `bffbe5033`, matrice avec/sans code et passe finale vertes ; clôture dans ce lot.
 - **Famille** : produit
 - **Gravité** : vérification bloquée dans la configuration rag3db-native sans code ; aucun défaut en service établi.
 - **Atteignable en service** : non, témoin unitaire ; le refus du manifeste sans feature est attendu.
@@ -58,3 +58,30 @@ La passe globale08 est verte (features5, lib2121/0/64, nav39 et sept e2e),
 preuves détaillées dans le rapport. Ticket encore ouvert avant tour/intégration ;
 le point de revue du schéma nommé est porté par l'autre ticket existant et peut
 retarder l'atterrissage du lot. Aucun nouveau défaut de matrice n'y est observé.
+
+## Validation finale et passage de lot
+
+Source Rust/UI/e2e `bffbe5033` : features5/5, gardes31/0/0, lib2132/0/64 ignorés
+(43,16s), navigateur39/0/0 (132,98s). Sept suites e2e sans SAUTÉ : dérivées4,
+lectures24, PG34, txvecteurs3, txarrêt18, txmerge1, txligne3. La suite txarrêt
+laisse un CSV connu (12K), suivi par
+`docs/recherche/tickets/2026-11-11-un-copy-tue-laisse-son-csv-dans-le-dossier-temporaire.md` :
+ce vert ne signifie pas absence de résidu. Les ignorés de la lib sont ses marques
+existantes ; les tests navigateur sont joués séparément.
+
+Native sans code sur11ea : ouverture6 et gabarits9 verts, lib1575/0/15 ignorés
+(20,60s). Avec code : ouverture16 et gabarits9, fournisseur1 verts. Les propriétés
+compatibles s'ajoutent, les identités et configurations incompatibles ne
+s'écrasent pas ; refus nommés avant le premier appel base. La baseline292 prouve
+le contrat Catalog additif et le refus d'extrémités, deux verts. Les anciens
+rouges de fixtures et les vrais rouges produit restent séparés dans les logs.
+
+Après rebase1365b872b, diff depuis bff strictement deux Markdown : Rust/UI/Cargo/
+gabarits et helper inchangés. Helper65aa SHA dca13abb7a84cf3c1419f728697837a6b1b9b20e34e34c144c9fbf835252f628,
+19 tests verts aux deux postes ; nouvelle exécution sur SHA documentaire final
+avant push. Tour « à toi » accordé par orchestration après lecture du verdict.
+Preuves sauvegardées aux deux postes : `~/.cache/rag3weaver-build/I-luciepc/ouverture-20261111/`
+(`verdict-final.json`, `*-passe-2.log`, `cibles-4.log`, logs baseline et garde).
+Push sous poste push/garde VERT, trois contrôles puis archives administratives
+fidèles hors cible et garde fraîche avant chaque retrait ; aucune suppression
+si refus. Worktrees/target/PG du reste-équipier restent hors de ce lot.

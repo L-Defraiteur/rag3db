@@ -7,6 +7,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **11 nov. — Les manifestes dérivés s’ouvrent selon leurs dépendances.** Racines, relations et
+  schémas nommés composent leurs vrais faits ; une dérivée garde l’identité définie par sa
+  dérivation, et les manques, cycles ou définitions incompatibles sont nommés avant tout appel
+  à la base. Les propriétés de relations compatibles restent additives. (`bffbe5033`)
+
 - **11 nov. — Les imports relatifs suivent la valeur exportée.** En JavaScript/TypeScript,
   les dépendances issues de `require` et des imports par défaut suivent le symbole ou la valeur
   exportée, même sous un alias local ; une instance mène à sa zone d'export. Les modules absents
