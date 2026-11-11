@@ -78,6 +78,10 @@ n'est jamais contourné par une autre session (blanchiment interdit) ; il remont
 
 ## Les décisions de Lucie qui tiennent (avec la date)
 
+- 11 nov. : tout nouveau travail à faire reçoit un ticket, y compris un signalement entre
+  sessions. Réutiliser l’existant ; transmettre son chemin et le porteur ; clôturer par
+  déplacement vers `docs/tickets/closed/` avec état et preuve ou raison d’abandon. Le message
+  seul ne porte pas l’action. La règle complète vit dans `docs/tickets/README.md`.
 - 6 nov. : un index par dépôt, des **vues par worktree** (une vue est un filtre : worktree, branche,
   pyramide ; page `extension/rag3weaver/docs/08-novembre-2026-arbre/01-conception-des-vues-marche-1.md`).
 - 7 nov. : fusionner dans master sans attendre ; ne pas s'empêcher de progresser ; vocabulaire git à

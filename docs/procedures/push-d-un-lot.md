@@ -5,6 +5,11 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
 
 ## Avant la passe
 
+- **Tout nouveau travail a un ticket**, y compris une suite de lot, une mesure, une conception
+  à compléter ou un signalement à une autre session. Créer ou compléter le ticket avant la
+  transmission ; citer son chemin, le porteur attendu, les preuves et les critères de fin.
+  Un envoi ne ferme pas le ticket. À la reprise, relier les actions encore sans ticket.
+  Convention complète : `docs/tickets/README.md` et `docs/README.md`.
 - **Un worktree par lot**, jamais l'arbre de Lucie (`~/git_workspaces/rag3db`) : on n'y commite
   pas, on n'y bascule pas, on n'y laisse rien. **Un seul target par session** (Lucie, 7 novembre
   2026) : le même dossier sous `~/.cache/rag3weaver-build/` d'un lot au suivant, effacé avec le
@@ -172,7 +177,11 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   La branche distante reste (rien ne s'efface sur origin sans Lucie). Les worktrees de luciepc
   suivent la même règle à la fin de chaque lot, plus seulement à la fin de la session.
 - Les rapports de session (`01-rapport`, `02-knowledge-dump` du jour) se tiennent à jour après
-  chaque lot ; un défaut connu non corrigé devient un ticket dans `docs/tickets/`.
+  chaque lot et citent les tickets de ses actions et de ses suites. Tout nouveau travail reçoit
+  un ticket dans le dossier de son porteur, ou `docs/tickets/` si celui-ci reste à attribuer.
+  Travail terminé ou abandonné : `git mv` vers `docs/tickets/closed/` et État mis à jour dans
+  le même commit, avec la preuve de réalisation ou la raison de l’abandon. Un blocage ou un
+  transfert ne vaut pas clôture.
 - **Le README suit ce que l'utilisateur voit** (Lucie, 8 novembre 2026) : un lot dont la ligne de
   `docs/nouveautes.md` change ce que l'utilisateur voit ou fait — un outil, une commande, un
   réglage, un comportement visible — met aussi à jour le README concerné (`README.md` à la racine,
