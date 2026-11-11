@@ -224,14 +224,22 @@ fn split_params(input: &str) -> Vec<&str> {
     let mut start = 0;
     let mut in_quote = false;
     let mut quote_char = '\'';
+    let mut depth = 0usize;
+    let mut escaped = false;
 
     for (i, ch) in input.char_indices() {
+        if escaped { escaped = false; continue; }
+        if in_quote && ch == '\\' { escaped = true; continue; }
         if !in_quote && (ch == '\'' || ch == '"') {
             in_quote = true;
             quote_char = ch;
         } else if in_quote && ch == quote_char {
             in_quote = false;
-        } else if !in_quote && ch == ',' {
+        } else if !in_quote && (ch == '{' || ch == '[') {
+            depth += 1;
+        } else if !in_quote && (ch == '}' || ch == ']') {
+            depth = depth.saturating_sub(1);
+        } else if !in_quote && depth == 0 && ch == ',' {
             parts.push(&input[start..i]);
             start = i + 1;
         }
@@ -246,6 +254,11 @@ fn parse_value(
     line_num: usize,
     vars: &HashMap<String, String>,
 ) -> Result<serde_json::Value, MermaidError> {
+    if raw.starts_with('{') || raw.starts_with('[') {
+        return serde_json::from_str(raw).map_err(|e| MermaidError::InvalidNodeDecl {
+            line: line_num, detail: format!("configuration JSON invalide : {e}")
+        });
+    }
     // Quoted string
     if (raw.starts_with('\'') && raw.ends_with('\''))
         || (raw.starts_with('"') && raw.ends_with('"'))

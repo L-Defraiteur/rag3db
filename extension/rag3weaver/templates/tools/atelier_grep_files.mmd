@@ -1,0 +1,15 @@
+%% tool: grep_files
+%% description: Motif littéral ou regex sur les fichiers du workspace. À prendre pour une chaîne exacte (un message d'erreur, un nom précis) ; pour une question de sens, search_code fait mieux.
+%% param: context json! -- Contexte explicite : target {kind: backend, id: identifiant du dépôt attaché}. Une vue indisponible est refusée.
+%% param: pattern string! -- Expression régulière (syntaxe Rust regex).
+%% param: path_prefix string = "" -- Ne chercher que sous ce préfixe de chemin (ex. 'src/').
+%% param: extension string = "" -- Ne chercher que cette extension, sans le point (ex. 'rs').
+%% param: max_results int = 50 -- Lignes rendues (plafond 500) ; toutes sont comptées.
+%% param: context_lines int = 0 -- Lignes de contexte avant et après (plafond 5).
+%% param: relation string = "" -- Relation du schéma à suivre depuis les scopes trouvés, pour voir à quoi ils mènent : CONSUMES (ce qu'ils utilisent), CONSUMED_BY (qui les utilise), PARENT_OF / HAS_PARENT, IMPLEMENTS, INHERITS_FROM, USES_LIBRARY. Vide = les lignes seules.
+%% param: relation_limit int = 5 -- Voisins rendus par scope (plafond 20).
+%% param: format string = "markdown" -- markdown (pour le modèle, le défaut) ou json (structuré : chemins, lignes, uuid — pour une interface).
+%% result: invoke.results
+
+graph LR
+    invoke["InvokeToolNode(operation='grep_files', context=$context, arguments={"pattern":"$pattern","path_prefix":"$path_prefix","extension":"$extension","max_results":"$max_results","context_lines":"$context_lines","relation":"$relation","relation_limit":"$relation_limit","format":"$format"})"]

@@ -2329,6 +2329,8 @@ impl PreparedBackend {
             decider,
             #[cfg(feature = "code")]
             worktree_host: Mutex::new(None),
+            #[cfg(feature = "code")]
+            invocation_host: Mutex::new(None),
             llm,
             avertissement_sans_service,
             avertissement_du_creux,
@@ -2968,6 +2970,8 @@ pub struct Backend {
     /// donné aux nœuds sous `WORKTREE_HOST_SERVICE`. Absent hors d'un hôte.
     #[cfg(feature = "code")]
     worktree_host: Mutex<Option<Arc<dyn crate::dataflow::worktree_nodes::WorktreeHost>>>,
+    #[cfg(feature = "code")]
+    invocation_host: Mutex<Option<Arc<dyn crate::dataflow::invocation_nodes::InvocationHost>>>,
     /// Le modèle de langage déclaré (`models.llm`), joint à l'ouverture et donné
     /// aux nœuds sous `crate::dataflow::LLM_SERVICE`. Tenu ici comme le decider :
     /// le catalogue le porte aussi, mais les graphes d'outil montent leurs services
@@ -3063,6 +3067,11 @@ impl Backend {
     /// L'intervalle entre deux essais (défaut
     /// [`INTERVALLE_DE_RETENTE_EMBARQUEUR`]) ; les témoins le raccourcissent.
     /// L'hôte des worktrees, posé par l'hôte qui ouvre ce backend (l'atelier).
+    #[cfg(feature = "code")]
+    pub fn poser_l_hote_des_invocations(&self, hote: Arc<dyn crate::dataflow::invocation_nodes::InvocationHost>) {
+        *self.invocation_host.lock().unwrap_or_else(|p| p.into_inner()) = Some(hote);
+    }
+
     #[cfg(feature = "code")]
     pub fn poser_l_hote_des_worktrees(&self, hote: Arc<dyn crate::dataflow::worktree_nodes::WorktreeHost>) {
         *self.worktree_host.lock().unwrap_or_else(|p| p.into_inner()) = Some(hote);
@@ -3775,6 +3784,37 @@ impl Backend {
     /// `task_writes`, un outil qui écrit les fichiers est refusé sur le
     /// principal — l'agent écrit dans une tâche. L'IDE appelle
     /// [`call_humain`](Self::call_humain).
+    #[cfg(feature = "code")]
+    pub(crate) fn invoke_read(&self, authority: &crate::dataflow::invocation_nodes::InvocationAuthority,
+        operation: &str, arguments: Value, cancel: crate::dataflow::node::CancelToken) -> Result<Value, String> {
+        let prepared = self.prepared();
+        let tool = prepared.tools.get(operation).ok_or("opération cible non exposée")?;
+        let attachment = &prepared.manifest.tools[operation];
+        let policy = attachment.policy;
+        if !authority.policy.read_files || policy.write_files || policy.run_commands || policy.call_models || policy.attach_worktrees {
+            return Err("invocation refusée : capacités de lecture de l'appelant et de la cible incompatibles".into());
+        }
+        if !attachment.harness.before.is_empty() || !attachment.harness.after.is_empty() || !attachment.harness.on_accept.is_empty() {
+            return Err("invocation refusée : effets du harnais cible non prouvés en lecture seule".into());
+        }
+        let mut resolved = arguments.as_object().ok_or("arguments cibles : objet attendu")?.clone();
+        for key in attachment.bindings.keys() {
+            if resolved.contains_key(key) { return Err(format!("cannot override binding {key}")); }
+        }
+        resolved.extend(attachment.bindings.clone());
+        let definition = tool.instantiate(&Value::Object(resolved)).map_err(|e| e.to_string())?;
+        if !prepared.nodes.snapshot_safe(&definition) {
+            return Err("invocation refusée : opération cible non prouvée en lecture seule (boucles comprises)".into());
+        }
+        if let Some(hook) = prepared.after_hooks.get(operation) {
+            if !prepared.nodes.snapshot_safe(hook.template()) { return Err("invocation refusée : crochet cible non prouvé en lecture seule".into()); }
+        }
+        let scope = self.catalog.lock().map_err(|_| "catalogue cible indisponible")?.scope().clone();
+        if scope != authority.scope { return Err("invocation refusée : domaines de l'appelant et de la cible différents".into()); }
+        crate::dataflow::invocation_nodes::during_parent_cancel(cancel,
+            || self.call_in(&authority.scope, operation, arguments))
+    }
+
     pub fn call(&self, name: &str, args: Value) -> Result<Value, String> {
         if !APPEL_HUMAIN.with(|h| h.get()) {
             self.refus_de_l_agent_hors_tache(name)?;
@@ -4315,6 +4355,10 @@ impl Backend {
         #[cfg(feature = "code")]
         if let Some(hote) = self.worktree_host.lock().unwrap_or_else(|p| p.into_inner()).clone() {
             services.register(crate::dataflow::worktree_nodes::WORKTREE_HOST_SERVICE, hote);
+        }
+        #[cfg(feature = "code")]
+        if let Some(host) = self.invocation_host.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+            services.register(crate::dataflow::invocation_nodes::HOST_SERVICE, host);
         }
         // La surface de code déclarée : la source et la porte du manifeste,
         // montées comme sur le chemin agent — sans elles, les nœuds de code
@@ -4938,6 +4982,17 @@ impl Backend {
         // Des services neufs à chaque appel : les appels parallèles de l'hôte
         // (lot L5) ne partagent rien d'ici, et l'arrêt garde toutes les poignées.
         let mut services = self.build_services(prepared);
+        #[cfg(feature = "code")]
+        if let Some(GraphTarget::Tool(name)) = &target {
+            if let Some(attachment) = prepared.manifest.tools.get(name) {
+                let scope = services.get::<crate::scope::Scope>("scope").cloned()
+                    .unwrap_or_else(|| self.catalog.lock().unwrap_or_else(|p| p.into_inner()).scope().clone());
+                services.register(crate::dataflow::invocation_nodes::AUTHORITY_SERVICE,
+                    crate::dataflow::invocation_nodes::InvocationAuthority {
+                        manifest:prepared.manifest_path.clone(), policy:attachment.policy, scope
+                    });
+            }
+        }
         if restauration {
             services.register(crate::backend_nodes::SERVICE_RESTAURATION, true);
         }
@@ -4991,7 +5046,15 @@ impl Backend {
             });
             fini
         });
-        let output = DataflowRuntime::with_services(100, services).execute_as(&mut graph, &run)?;
+        let runtime = DataflowRuntime::with_services(100, services);
+        #[cfg(feature = "code")]
+        crate::dataflow::invocation_nodes::with_parent_cancel(|cancel| {
+            if let Some(cancel) = cancel {
+                let handle = runtime.cancel_handle();
+                cancel.on_cancel(move || handle.cancel_by("parent"));
+            }
+        });
+        let output = runtime.execute_as(&mut graph, &run)?;
         let read = |node: &str, port: &str| -> Result<Value, String> {
             let value = output
                 .get(node, port)
@@ -5012,6 +5075,11 @@ impl Backend {
         }
         // `run` : l'id du run de cet appel, pour que l'appelant (l'hôte) range ce
         // qu'il a rendu dans le journal du run (page 04 du 25 octobre 2026).
+        if output.get(result_port.0, "metadata").is_some() {
+            let terminal = read(result_port.0, "metadata")?;
+            let fields = terminal.as_object().ok_or("les métadonnées terminales doivent être un objet")?;
+            metadata.extend(fields.clone());
+        }
         let mut response = json!({"result":result,"metadata":metadata,"run":run});
         if result_port.1 == "results" && output.get(result_port.0, "text").is_some() {
             response["presentation"] = read(result_port.0, "text")?;
@@ -5880,6 +5948,8 @@ mod tests {
             decider: None,
             #[cfg(feature = "code")]
             worktree_host: Mutex::new(None),
+            #[cfg(feature = "code")]
+            invocation_host: Mutex::new(None),
             llm: None,
             avertissement_sans_service: None,
             avertissement_du_creux: None,
@@ -6111,6 +6181,8 @@ mod tests {
             decider: None,
             #[cfg(feature = "code")]
             worktree_host: Mutex::new(None),
+            #[cfg(feature = "code")]
+            invocation_host: Mutex::new(None),
             llm: None,
             avertissement_sans_service: None,
             avertissement_du_creux: None,
