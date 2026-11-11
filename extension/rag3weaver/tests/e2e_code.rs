@@ -1877,3 +1877,61 @@ fn an_external_module_binding_is_marked_liaison() {
     let marques: Vec<Option<String>> = r.rows.iter().map(|r| match r.first() { Some(CypherValue::String(v)) => Some(v.clone()), _ => None }).collect();
     assert_eq!(marques, vec![Some("liaison".to_string())], "la mention va à la zone de son require, marquée liaison");
 }
+
+// Navigation vers une définition et définition LSP de la liaison locale sont deux contrats.
+// Ces témoins ne changent ni l'oracle ni le repli des imports externes.
+fn require_navigation_rows(files: &[(&str, &str)]) -> Vec<Vec<rag3weaver::connection::CypherValue>> {
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    let sources = files.iter().map(|(p, s)| (p.to_string(), s.to_string())).collect();
+    let report = cat.ingest_code(&rag3weaver::code::analyze("/projet", sources)).unwrap();
+    assert_eq!(report.failed, 0, "{report:?}");
+    cat.execute_raw("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE a.name = 'utiliser' RETURN b.name, b.file_path, r.resolution").unwrap().rows
+}
+
+#[test]
+#[ignore]
+fn require_alias_navigates_to_default_export() {
+    use rag3weaver::connection::CypherValue::String as S;
+    let rows = require_navigation_rows(&[
+        ("outil.js", "class Outil {\n  agir() {}\n}\nmodule.exports = Outil;\n"),
+        ("app.js", "const Alias = require('./outil.js');\nfunction utiliser() {\n  return new Alias();\n}\n"),
+    ]);
+    assert!(rows.iter().any(|r| matches!((&r[0], &r[1], &r[2]), (S(n), S(f), S(m)) if n == "Outil" && f == "outil.js" && m == "import")), "navigation vers l'export malgré l'alias : {rows:?}");
+}
+
+#[test]
+#[ignore]
+fn require_instance_navigates_to_export_zone() {
+    use rag3weaver::connection::CypherValue::String as S;
+    let rows = require_navigation_rows(&[
+        ("outil.js", "class Outil {\n  agir() {}\n}\nmodule.exports = new Outil();\n"),
+        ("app.js", "const Outil = require('./outil.js');\nfunction utiliser() {\n  return Outil;\n}\n"),
+    ]);
+    assert!(!rows.iter().any(|r| matches!((&r[0], &r[1]), (S(n), S(f)) if n == "Outil" && f == "outil.js")), "une instance ne désigne pas la classe : {rows:?}");
+    assert!(rows.iter().any(|r| matches!((&r[0], &r[1], &r[2]), (S(n), S(f), S(m)) if n.starts_with("file_scope") && f == "outil.js" && m == "import")), "navigation vers la zone d'export : {rows:?}");
+}
+
+#[test]
+#[ignore]
+fn require_reexport_navigates_past_local_binding() {
+    use rag3weaver::connection::CypherValue::String as S;
+    let rows = require_navigation_rows(&[
+        ("outil.js", "class Outil {\n  agir() {}\n}\nmodule.exports = Outil;\n"),
+        ("index.js", "const Alias = require('./outil.js');\nfunction utiliser() {\n  return { Alias };\n}\nmodule.exports = utiliser;\n"),
+    ]);
+    // Le LSP peut désigner la ligne const Alias : cette navigation plus loin n'est pas
+    // une récupération automatique des 17 verdicts stricts perdus de l'A/B.
+    assert!(rows.iter().any(|r| matches!((&r[0], &r[1], &r[2]), (S(n), S(f), S(m)) if n == "Outil" && f == "outil.js" && m == "import")), "réexportation : {rows:?}");
+}
+
+#[test]
+#[ignore]
+fn require_missing_generated_and_external_keep_liaison() {
+    use rag3weaver::connection::CypherValue::String as S;
+    for module in ["mtga-reader", "./generated.js"] {
+        let app = format!("const reader = require('{module}');\nfunction utiliser() {{\n  return reader;\n}}\n");
+        let rows = require_navigation_rows(&[("app.js", &app)]);
+        assert!(rows.iter().any(|r| matches!((&r[0], &r[1], &r[2]), (S(n), S(f), S(m)) if n.starts_with("file_scope") && f == "app.js" && m == "liaison")), "repli inchangé pour {module} : {rows:?}");
+    }
+}
