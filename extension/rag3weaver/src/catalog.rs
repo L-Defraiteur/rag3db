@@ -273,6 +273,9 @@ pub struct Catalog {
     /// Typed pending work queue. Populated by create()/link()/update()/delete(),
     /// consumed by build_ingestion_graph() → drain().
     pending: PendingWork,
+    /// Les écritures acceptées restent attachées à leur cellule lors des
+    /// bascules, y compris celles empruntées pour une lecture explicite.
+    parked_pending: HashMap<crate::scope::Scope, PendingWork>,
     /// **Un indice, pas une vérité** : a-t-on drainé sans l'étage GPU depuis
     /// le dernier rattrapage ?
     ///
@@ -699,6 +702,7 @@ fn read_threads() -> u64 {
             dual_embedder: None,
             config,
             pending: PendingWork::new(),
+            parked_pending: HashMap::new(),
             peut_devoir_un_embarquement: false,
             absent_signale: std::sync::atomic::AtomicBool::new(false),
             in_transaction: false,
@@ -2043,6 +2047,18 @@ fn read_threads() -> u64 {
             if old_config.derived.as_ref().map(|d| &d.identity) != config.derived.as_ref().map(|d| &d.identity) {
                 return Err(CatalogError::SchemaError(format!("{entity_name} : changement d'identité dérivée interdit sans migration déclarée")));
             }
+            if old_config.search_index != config.search_index {
+                // Changer la représentation publique d'une base peuplée exige
+                // une migration explicite, y compris lors d'une réouverture
+                // avec un ancien schéma qui omettrait l'association persistée.
+                let rows = self.conn.execute(&self.dialect.count_rows(entity_name))
+                    .map_err(|e| CatalogError::DbError(e.to_string()))?;
+                let count = rows.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64())
+                    .ok_or_else(|| CatalogError::DbError(format!("{entity_name} : comptage avant changement d'index public illisible")))?;
+                if count > 0 {
+                    return Err(CatalogError::SchemaError(format!("{entity_name} : changement d'index public interdit sur une entité peuplée sans migration déclarée")));
+                }
+            }
             self.migrate_entity(entity_name, old_config.clone(), &config)?;
         } else {
             // ── Fresh registration: create tables + indexes ──
@@ -2085,7 +2101,10 @@ fn read_threads() -> u64 {
                 self.conn.execute_with_params(&query, &[QueryParam::new("uuids", CypherValue::List(batch.iter().cloned().map(CypherValue::String).collect()))])
                     .map_err(|e| CatalogError::DbError(format!("dette de la nouvelle recette : {e}")))?;
             }
-            self.mettre_en_file_les_derivations(roots.into_iter().map(|root_uuid| crate::records::Derivation { entity: entity_name.to_string(), root_uuid }).collect());
+            // La recette concerne toutes les cellules, mais la file n'appartient
+            // qu'à la cellule courante. Le rattrapage relira la dette persistée
+            // de chaque cellule ; aucune racine étrangère n'entre dans ce lot.
+            self.peut_devoir_un_rendu = true;
         }
         if config.derived.is_some() {
             // Une dérivée neuve sur des racines déjà posées : à rendre.
@@ -3520,24 +3539,26 @@ fn read_threads() -> u64 {
             let e = dette.entry(table.to_string()).or_insert(D::AUCUNE);
             *e |= d;
         };
-        for e in &self.pending.entities {
-            doit(&e.entity_name, D::TOUT);
-        }
-        let bouts = Self::bouts_des_relations(&self.config);
-        for r in &self.pending.relations {
-            if let Some((de, vers)) = bouts(&r.rel_name) {
-                doit(&de, D::TOUT);
-                doit(&vers, D::TOUT);
+        for pending in std::iter::once(&self.pending).chain(self.parked_pending.values()) {
+            for e in &pending.entities {
+                doit(&e.entity_name, D::TOUT);
             }
-        }
-        for u in &self.pending.updates {
-            doit(&u.entity_name, D::TOUT);
-        }
-        for d in &self.pending.deletes {
-            doit(&d.entity_name, D::TOUT);
-        }
-        for d in &self.pending.derivations {
-            doit(&d.entity, D::TOUT);
+            let bouts = Self::bouts_des_relations(&self.config);
+            for r in &pending.relations {
+                if let Some((de, vers)) = bouts(&r.rel_name) {
+                    doit(&de, D::TOUT);
+                    doit(&vers, D::TOUT);
+                }
+            }
+            for u in &pending.updates {
+                doit(&u.entity_name, D::TOUT);
+            }
+            for d in &pending.deletes {
+                doit(&d.entity_name, D::TOUT);
+            }
+            for d in &pending.derivations {
+                doit(&d.entity, D::TOUT);
+            }
         }
         dette
     }
@@ -3649,6 +3670,10 @@ fn read_threads() -> u64 {
 
     /// Effacer la marque : plus rien n'attend chez nous.
     fn effacer_la_marque(&mut self) {
+        if self.parked_pending.values().any(|pending| !pending.is_empty()) {
+            self.annoncer_travail_en_attente();
+            return;
+        }
         if !self.marque_posee {
             return;
         }
@@ -3850,6 +3875,11 @@ fn read_threads() -> u64 {
             let avant = tables.len();
             let instantane: Vec<String> = tables.iter().cloned().collect();
             for t in &instantane {
+                // L'index public est une dépendance de lecture, pas de
+                // création du schéma : la cohérence doit rendre son contenu.
+                if let Some(index) = self.entity_configs.get(t).and_then(|c| c.search_index.as_ref()) {
+                    tables.insert(index.clone());
+                }
                 // **Les entités dérivées** : lire une dérivée dépend de sa racine
                 // et de ses voisines ; écrire une racine ou une voisine emporte
                 // les dérivées qui en dépendent.
@@ -5028,6 +5058,9 @@ fn read_threads() -> u64 {
     /// `_Project` sont créés s'ils manquent.
     pub fn set_scope(&mut self, scope: crate::scope::Scope) -> Result<(), CatalogError> {
         scope.validate().map_err(CatalogError::SchemaError)?;
+        if scope != self.scope && self.in_transaction {
+            return Err(CatalogError::SchemaError("changement de cellule interdit dans une transaction ouverte".into()));
+        }
         if !scope.is_default() {
             self.multi_cell = true;
         }
@@ -5048,6 +5081,11 @@ fn read_threads() -> u64 {
             return;
         }
         let old = std::mem::replace(&mut self.scope, scope);
+        let pending = std::mem::take(&mut self.pending);
+        if !pending.is_empty() {
+            self.parked_pending.insert(old.clone(), pending);
+        }
+        self.pending = self.parked_pending.remove(&self.scope).unwrap_or_default();
         let fts = std::mem::take(&mut self.fts_handles);
         let sparse = std::mem::take(&mut self.sparse_handles);
         if !fts.is_empty() {
@@ -5073,6 +5111,9 @@ fn read_threads() -> u64 {
             return f(self);
         }
         cell.validate().map_err(CatalogError::SchemaError)?;
+        if self.in_transaction {
+            return Err(CatalogError::SchemaError("emprunt d'une autre cellule interdit dans une transaction ouverte".into()));
+        }
         let avant = self.scope.clone();
         let deja = self.cellule_empruntee;
         self.cellule_empruntee = true;
@@ -7110,14 +7151,22 @@ fn read_threads() -> u64 {
         let mut total = 0usize;
         for (entite, racine) in derivees {
             let mut uuids: Vec<String> = Vec::new();
+            let content = self.entity_configs.get(&entite).and_then(|c| c.derived.as_ref()).is_some_and(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. }));
             let lire = |moi: &Self, requete: String| -> Result<Vec<String>, CatalogError> {
-                let res = moi.conn.execute(&requete).map_err(|e| CatalogError::DbError(format!(
+                let result = if content {
+                    moi.conn.execute_with_params(&requete, &[
+                        QueryParam::new("render_org", CypherValue::String(moi.scope.org.clone())),
+                        QueryParam::new("render_project", CypherValue::String(moi.scope.project.clone())),
+                    ])
+                } else {
+                    moi.conn.execute(&requete)
+                };
+                let res = result.map_err(|e| CatalogError::DbError(format!(
                     "lecture de la dette de rendu sur « {entite} » : {e}"
                 )))?;
                 Ok(res.rows.iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::to_string)).collect())
             };
             let rel = crate::schema::derived_rel_name(&entite);
-            let content = self.entity_configs.get(&entite).and_then(|c| c.derived.as_ref()).is_some_and(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. }));
             if content {
                 uuids.extend(lire(self, self.dialect.pending_derived_references(&entite, &racine, &rel, limite))?);
                 uuids.extend(lire(self, self.dialect.missing_derived_references(&entite, &racine, &rel, limite))?);
@@ -7145,7 +7194,7 @@ fn read_threads() -> u64 {
             }
             total += nombre;
         }
-        if total < limite {
+        if total < limite && !self.multi_cell {
             self.peut_devoir_un_rendu = false;
         }
         Ok(total)
@@ -8369,7 +8418,10 @@ fn read_threads() -> u64 {
         let names: std::collections::HashSet<String> =
             entity_names.iter().cloned().collect();
         for name in names {
-            if let Ok(target) = self.resolve_search_target(&name) {
+            // L'ingestion entretient la représentation physique de chaque
+            // entité, y compris une version interne. L'association publique
+            // ne doit ni détourner cet entretien ni cacher l'index source.
+            if let Ok(target) = self.forme().resolve_storage_target(&name, true) {
                 if target.default_signals.bm25() {
                     let table = target.parent_table.clone();
                     let fields = target.bm25_fields.clone();
@@ -10546,7 +10598,7 @@ impl Catalog {
             .conn
             .must_reopen()
             .or_else(|| self.sync_conn.as_ref().and_then(|c| c.must_reopen()))?;
-        let pending = self.pending.total_count();
+        let pending = self.pending.total_count() + self.parked_pending.values().map(PendingWork::total_count).sum::<usize>();
         Some(if pending == 0 {
             reason
         } else {
@@ -11361,6 +11413,43 @@ mod tests {
     }
 
     // ── lifecycle ──────────────────────────────────────────────────────
+
+    #[test]
+    fn borrowed_cell_restores_accepted_work_after_error_and_refuses_transaction_switch() {
+        let cache = tempfile::tempdir().unwrap();
+        let mut cat = make_catalog();
+        cat.set_cache_base(cache.path().join("indexes"));
+        cat.initialize().unwrap();
+        let alpha = crate::scope::Scope::new("acme", "alpha");
+        let beta = crate::scope::Scope::new("acme", "beta");
+        cat.set_scope(alpha.clone()).unwrap();
+        cat.create("Document", make_doc_data("A", "alpha queued")).unwrap();
+        let alpha_count = cat.pending.total_count();
+        let result: Result<(), CatalogError> = cat.dans_la_cellule(&beta, |cat| {
+            assert!(cat.pending.is_empty());
+            cat.create("Document", make_doc_data("B", "beta queued"))?;
+            Err(CatalogError::DbError("borrowed-cell failure".into()))
+        });
+        assert!(result.unwrap_err().to_string().contains("borrowed-cell failure"));
+        assert_eq!(cat.scope(), &alpha);
+        assert_eq!(cat.pending.total_count(), alpha_count);
+        assert_eq!(cat.parked_pending[&beta].entities[0].data["title"], CypherValue::String("B".into()));
+        cat.set_in_transaction(true);
+        assert!(cat.set_scope(beta.clone()).is_err());
+        assert!(cat.dans_la_cellule(&beta, |_| Ok(())).is_err());
+        assert_eq!(cat.scope(), &alpha);
+        assert_eq!(cat.pending.total_count(), alpha_count);
+        cat.set_in_transaction(false);
+        cat.set_scope(beta).unwrap();
+        assert_eq!(cat.pending.entities[0].data["title"], CypherValue::String("B".into()));
+        assert_eq!(cat.parked_pending[&alpha].total_count(), alpha_count);
+        // Un drain de l'autre cellule ne doit jamais effacer cette dette.
+        cat.pending = PendingWork::new();
+        cat.effacer_la_marque();
+        assert!(cat.marque_posee);
+        assert!(cat.dette_publiee.contains_key("Document"));
+        assert_eq!(cat.index_progress().unwrap().writes_pending, alpha_count);
+    }
 
     #[test]
     fn new_catalog() {
@@ -13282,8 +13371,7 @@ impl Drop for Catalog {
         // un `Drop` n'a personne à qui rendre une erreur), mais on peut refuser
         // de se taire. La marque d'ingestion, elle, reste posée et périmera
         // toute seule : un lecteur d'un autre processus saura donc aussi.
-        if !self.pending.is_empty() {
-            let p = &self.pending;
+        for p in std::iter::once(&self.pending).chain(self.parked_pending.values()).filter(|p| !p.is_empty()) {
             eprintln!(
                 "[rag3weaver] drop: {} opérations en file perdues, jamais écrites \
                  ({} entités, {} relations, {} dérivations, {} mises à jour, {} suppressions) \

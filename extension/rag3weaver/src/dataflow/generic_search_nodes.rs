@@ -438,6 +438,17 @@ impl Node for SearchSourceNode {
             .is_some();
         #[cfg(not(feature = "code"))]
         let has_source = false;
+        // Résoudre avant le choix du mode : une projection ne peut pas
+        // abandonner son masque d'occurrences pour balayer des fichiers.
+        let vue = vue_de(ctx);
+        let resolved = match &vue {
+            Some(v) => Some(v.forme().resolve_search_target(&self.target_name)),
+            None => catalog.try_lock().ok().map(|cat| cat.resolve_search_target(&self.target_name)),
+        }.transpose().map_err(|e| format!("SearchSourceNode: {e}"))?;
+        let projected = resolved.as_ref().is_some_and(|target| target.occurrence_projection.is_some());
+        if projected && self.mode == SearchMode::Scan {
+            return Err("SearchSourceNode: mode scan indisponible pour une projection d'occurrences sans masque de fichiers déclaré".into());
+        }
         let (scan_mode, ligne_etat) = match self.mode {
             SearchMode::Indexed => (false, None),
             SearchMode::Scan if has_source => (true, None),
@@ -457,7 +468,7 @@ impl Node for SearchSourceNode {
                     .try_lock()
                     .ok()
                     .and_then(|cat| cat.index_state_for(&self.target_name).ok());
-                adaptive_search_decision(state, has_source)
+                adaptive_search_decision(state, has_source && !projected)
             }
         };
 
@@ -468,10 +479,7 @@ impl Node for SearchSourceNode {
             // elle, les étages passent leur tour proprement.
             let mut options = self.options.clone();
             options.signals = Some(crate::search::SearchSignals::NONE);
-            let target = catalog
-                .try_lock()
-                .ok()
-                .and_then(|cat| cat.resolve_search_target(&self.target_name).ok());
+            let target = Some(resolved.ok_or("SearchSourceNode: cible indisponible ; impossible de garantir le masque du balayage")?);
             if let Some(l) = &ligne_etat {
                 ctx.warn(l);
             }
@@ -512,12 +520,11 @@ impl Node for SearchSourceNode {
         // **La forme se lit par la vue** (lot L4) : la cible et les champs ne
         // prennent pas le mutex que tient un écrivain (la réaction de la
         // montre). Sans vue valable pour la cellule de l'appel, le catalogue.
-        let vue = vue_de(ctx);
-        let target = match &vue {
-            Some(v) => v.forme().resolve_search_target(&self.target_name),
-            None => catalog.lock().unwrap().resolve_search_target(&self.target_name), // L4 : repli sans vue
-        }
-        .map_err(|e| format!("SearchSourceNode: {e}"))?;
+        let target = match resolved {
+            Some(target) => target,
+            None => catalog.lock().unwrap().resolve_search_target(&self.target_name) // L4 : repli sans vue
+                .map_err(|e| format!("SearchSourceNode: {e}"))?,
+        };
         let champs_de = |cible: &str| -> Option<std::collections::HashSet<String>> {
             let lire = |c: &crate::config::EntityConfig| c.fields.keys().cloned().collect::<std::collections::HashSet<_>>();
             match &vue {
@@ -664,21 +671,17 @@ impl Node for SearchSourceNode {
             let (exige, attendre_ailleurs) = options.ce_qui_doit_etre_pret();
             // Bornée à la fermeture de la cible : ce que d'autres entités ont
             // en file n'attend pas cette recherche, et ne la rend pas partielle.
-            let (reste, partiel) = cat.appliquer_la_consigne_pour(
-                &self.target_name, exige, attendre_ailleurs, options.timeout_ms, &mut w,
-            );
-            let signaux = options.signals.unwrap_or(target.default_signals);
-            // **L'index plein texte s'ouvre ici, paresseusement**, comme dans le
-            // monolithe : c'est le seul endroit qui connaisse à la fois la
-            // table, ses champs et le verrou. Un handle non ouvert était une
-            // erreur dure sur ce chemin — B9 de la réconciliation.
-            if signaux.bm25() && !cat.plein_texte_natif() {
-                cat.ensure_fts_handle(
-                    &target.parent_table,
-                    &target.bm25_fields,
-                    &crate::scope::fts_filter_fields(),
+            let wanted = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_else(|| cat.scope().clone());
+            let (reste, partiel) = cat.dans_la_cellule(&wanted, |cat| {
+                let result = cat.appliquer_la_consigne_pour(
+                    &self.target_name, exige, attendre_ailleurs, options.timeout_ms, &mut w,
                 );
-            }
+                if options.signals.unwrap_or(target.default_signals).bm25() && !cat.plein_texte_natif() {
+                    cat.ensure_fts_handle(&target.parent_table, &target.bm25_fields, &crate::scope::fts_filter_fields());
+                }
+                Ok(result)
+            }).map_err(|e| format!("SearchSourceNode: {e}"))?;
+            let signaux = options.signals.unwrap_or(target.default_signals);
             // **La requête s'embarque une fois**, dual si les deux signaux sont
             // demandés, avec le cache du catalogue — B6. Un échec ne casse pas
             // la recherche : les nœuds savent embarquer eux-mêmes, et ça se dit.
@@ -3263,6 +3266,49 @@ mod tests {
     use crate::search::SearchOptions;
 
     // ── Port tests ───────────────────────────────────────────────────────
+
+    #[cfg(feature = "code")]
+    #[test]
+    fn projected_search_never_falls_back_to_unmasked_files() {
+        let cache = tempfile::tempdir().unwrap();
+        let mut cat = Catalog::new(Box::new(crate::connection::MockConnection::new()),
+            Box::new(crate::embedder::MockEmbedder::new(4)), crate::CatalogConfig {
+                embedding_dim: 4, allow_mock_embedder: true, ..Default::default()
+            });
+        cat.set_cache_base(cache.path().join("indexes"));
+        cat.initialize().unwrap();
+        let fields = HashMap::from([("body".to_string(), crate::SimpleFieldDef {
+            field_type: crate::config::FieldType::Text, is_content: true, ..Default::default()
+        })]);
+        cat.register_entity("Origin", crate::EntityConfig {
+            fields: fields.clone(), search_index: Some("Storage".into()),
+            signals: crate::search::SearchSignals::VECTOR, ..Default::default()
+        }).unwrap();
+        cat.register_entity("Storage", crate::EntityConfig {
+            fields, signals: crate::search::SearchSignals::VECTOR,
+            derived: Some(crate::config::DerivedConfig {
+                from: "Origin".into(), identity: crate::config::DerivedIdentity::Content { format: "scan-guard".into() },
+                gather: vec![], render: BTreeMap::from([("body".into(), "{{ root.body }}".into())]),
+            }), ..Default::default()
+        }).unwrap();
+        let mut services = crate::dataflow::ServiceRegistry::new();
+        cat.register_search_services(&mut services);
+        services.register(crate::read_view::READ_VIEW_SERVICE, cat.read_view_cell());
+        services.register("catalog", Arc::new(Mutex::new(cat)));
+        let files: Arc<dyn crate::code_tools::FileSource> = Arc::new(crate::code_tools::Snapshot::new("scan", Vec::<(String, String)>::new()));
+        services.register(crate::code_tools::FILE_SOURCE_SERVICE, files);
+        let services = Arc::new(services);
+        let mut ctx = NodeContext::with_services(services.clone());
+        SearchSourceNode::new("source", "Origin", "needle", SearchOptions::default()).execute(&mut ctx).unwrap();
+        let outputs = ctx.drain_outputs();
+        let query = outputs["query"].downcast::<QueryPayload>().unwrap();
+        assert!(!query.scan, "auto must preserve the occurrence admission mask even for an empty index");
+        assert!(query.target.as_ref().unwrap().occurrence_projection.is_some());
+        let mut ctx = NodeContext::with_services(services);
+        let error = SearchSourceNode::new("source", "Origin", "needle", SearchOptions::default())
+            .with_mode(SearchMode::Scan).execute(&mut ctx).unwrap_err();
+        assert!(error.contains("projection"), "{error}");
+    }
 
     #[test]
     fn search_source_node_ports() {
