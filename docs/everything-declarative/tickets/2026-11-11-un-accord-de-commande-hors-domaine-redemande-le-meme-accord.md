@@ -1,7 +1,7 @@
 # Un accord de commande hors domaine redemande le même accord
 
 - **État** : ouvert (11 novembre 2026), relevé par archi, transmis à ED.
-- **Pour** : ED (décision et reprise de commande), prise en charge confirmée ; transfert de dossier après la passe figée.
+- **Pour** : ED (décision et reprise de commande), prise en charge confirmée ; transfert de dossier effectué après la passe figée a92.
 - **Signalé par** : archi, navigateur `b57313175` et journal ci-dessous.
 - **Famille** : produit
 - **Gravité** : l'accord annoncé dans la page ne permet pas de reprendre la commande.
