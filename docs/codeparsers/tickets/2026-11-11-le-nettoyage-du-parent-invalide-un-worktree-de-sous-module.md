@@ -242,3 +242,20 @@ visite ni mutation de cible, lien modifié, lien non suivi, administration
 séparée partagée, racines liées refusées. Quiescence à la charge du propriétaire,
 archives hors cible ; pas de reprise du nettoyage réel avant nouveau tour.
 Le volet historique index/refs/reflogs de l'ancien garde reste non certifié.
+
+### Revue finale du correctif et seconde livraison
+
+Correctif 8e9ceff85db54987027cb3f88979c2ccbaa268e8 relu ; 19 témoins verts sur
+le portable, à luciepc sous poste lourd (1,127 s), et rejoués par l'orchestration.
+Script SHA-256 dca13abb7a84cf3c1419f728697837a6b1b9b20e34e34c144c9fbf835252f628.
+Preuves luciepc : cx-garde-nettoyage/tests-liens-administrations-separees.log
+(SHA-256 8f4cfb4fadf601b35960a69a9a66ef82fa8f130df05329256db7bc73589a43ad)
+et hashes-liens-administrations-separees.txt. Tour explicite accordé pour ce
+correctif ; prévention livrée dans ce lot, volet historique toujours **ouvert**.
+
+Une seconde tentative d'auto-contrôle utilisera exclusivement la version livrée,
+des copies administratives neuves et des rapports exclusifs sous
+~/.cache/codeparsers-notes/cx-garde-nettoyage-livraison-v2/ sur le portable.
+Les premiers rapports/copies/refus restent conservés séparément, sans écrasement.
+Aucun retrait si le contrôle est rouge, aucun changement d'état entre archive
+et retrait, aucun accès à l'ancien garde ni GC/prune.

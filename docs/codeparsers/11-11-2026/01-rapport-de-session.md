@@ -346,3 +346,14 @@ garde non certifié. Pas de nouvelle intervention dans ce dépôt ni GC/prune.
 Cleanup des worktrees propres à ce suivi contrôlé par la garde elle-même,
 archives et rapports hors cible conservés dans
 `~/.cache/codeparsers-notes/cx-garde-nettoyage-livraison/` sur le portable.
+
+## Correctif après auto-contrôle de la garde
+
+Le lien source natif suivi en 120000 est désormais traité comme une feuille
+inchangée, sans descendre dans sa cible ; les administrations séparées sous
+un nom quelconque dans les sources sont détectées par candidats puis Git.
+Correctif 8e9ceff85, 19 témoins verts aux deux postes et rejoués en revue.
+Ticket incident toujours ouvert sur index/refs/reflogs historiques non certifiés.
+Nouvelle tentative de nettoyage avec la version livrée et copies/rapports neufs
+sous ~/.cache/codeparsers-notes/cx-garde-nettoyage-livraison-v2/ ; premières
+preuves de refus conservées, jamais remplacées par le nouveau verdict.
