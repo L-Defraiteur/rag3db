@@ -209,3 +209,9 @@ fidèle et helper65aa exact VERT : cx-provider-nettoyage-c12/{administration,gar
 sous ~/.cache/rag3weaver-build. Aucun target ni sous-module initialisé dans ce WT.
 Restant : validation partagée de l'association, sans nouvelle arête de création,
 vrai chargement/ouverture/écriture/recherche par cible publique dans le manifeste combiné.
+
+Deux témoins combinés sont posés sur le socle ED : vrai manifeste public root/content avec
+permutation des noms, deux racines/une version et trois modes de lecture ; refus des
+associations invalides à la préparation et après mutation du préparé avant le premier appel
+base. La validation d'association n'est pas encore raccordée : rouge attendu, pas affirmé.
+Le ticket reste ouvert, ED et 1a gardent leurs preuves distinctes.
