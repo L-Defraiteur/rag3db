@@ -625,8 +625,13 @@ fn le_role_fini_se_relit_avant_et_apres_son_fichier() {
         "evenements": [{ "kind": "RunStarted", "target": { "role": "archiviste", "tool": "list_files" } }],
         "fin": { "ok": true },
     })).unwrap());
+    host.journal.deposer(&id, "graph-200-1", json!({
+        "evenements": [{ "kind": "RunStarted", "target": { "role": "archiviste", "tool": "read_file" } }],
+        "fin": { "ok": true },
+    })).unwrap();
     let roles = host.usage_et_taches_a_role(&id).1;
-    assert_eq!(roles.len(), 1);
+    assert_eq!(roles.len(), 2);
+    assert_eq!(roles[0]["run"], "graph-200-1", "ordre des runs, pas priorité aux runs en mémoire");
     assert_eq!(roles[0]["state"], "fini");
     host.journal.ecrire(run);
     assert_eq!(host.usage_et_taches_a_role(&id).1, roles);
