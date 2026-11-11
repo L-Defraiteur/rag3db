@@ -30,3 +30,16 @@ et les prédicats IR existants. Les trois chemins List/In/NotIn doivent rester �
 le natif conserver IN, les paramètres et le masque avant top-k rester présents.
 Rejouer le vrai parcours public SQL et la suite PG entière (transactions comprises).
 Lien : [versions et occurrences](2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md).
+
+## Rouge et verts ciblés
+
+Rouge réel sur **5edd09b6f**, `cx-filter-membership-rouge.log`, 0/1 : IN émis au lieu de ANY.
+Correctif code isolé **d84c03432** : primitive SchemaDialect::filter_in, reprise par les
+chemins List/In/NotIn et les prédicats IR existants, ni paramètres ni sérialiseur modifiés.
+`cx-filter-membership-vert.log` : **49 tests filtres + 59 tests dialectes verts**, dont
+liste vide/non vide, négation, natif IN et SQL ANY. Même source figée pour les parcours
+suivants : `cx-contenu-pg-v5.log` **1/0** (0,71s) et `cx-pg-complet-v5.log` **36/0** (8,56s),
+rc0 sans résidu. Le masque reste en amont du classement ; la projection n'est pas désactivée
+pour obtenir ces résultats. Ces preuves portent les listes texte/UUID demandées ; aucune
+nouvelle garantie de tableaux numériques ou hétérogènes n'est ajoutée.
+Attente de la passe combinée 1a avant verdict d'intégration.

@@ -107,3 +107,13 @@ Le test complet reste **0/1** : première recherche refusée par SQL42601 (`_uui
 C'est un autre défaut, [appartenance scalaire du filtre](2026-11-12-les-listes-scalaires-de-filtre-produisent-du-cypher-sur-postgres.md).
 Ne pas transformer ce progrès de l'ingestion en vert global du cas complet ni attribuer
 l'erreur de filtre au mutex. Zéro session de la base privée après fin du processus.
+
+## Validation du parcours complet après raccord des filtres
+
+Source figée **d84c03432**, après609 (mutex) et le correctif dialectal de filtre :
+`cx-contenu-pg-v5.log` **1/0/0**, 0,71 s, rc0. Le même cas réel termine toutes ses étapes :
+ingestions alpha/bêta, douze lectures publiques, recette par cellule et rollback des
+sources/versions/références. `cx-pg-complet-v5.log` **36/0/0**, 8,56 s, rc0, sans résidu :
+contrats existants begin/commit/rollback, erreur et concurrence compris. Le comparateur
+direct32SELECT, vert avant correction, reste étiqueté ainsi ; aucune préexistence générale.
+La passe combinée 1a entière reste à jouer avant intégration et bilan livré.
