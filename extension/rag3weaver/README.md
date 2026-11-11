@@ -204,6 +204,11 @@ rag3weaver is not a library an agent calls; it is where the agent runs.
   When the root disappears from disk, `daemon_status` says « racine absente :
   <path> » and every tool that touches the files names the cause instead of
   returning a raw I/O error.
+  A manifest can declare rendered entities with `derived.from` and `gather`.
+  Omit `hashsafe` on a derived entity: the derivation defines its identity.
+  Opening orders entities and relations by their dependencies; missing roots,
+  invalid gather rules and dependency cycles are refused before any database call.
+  A derived entity cannot itself be used as another derivation's `from`.
 - **Sessions, postures, work domain** (`session.rs`, `postures.rs`,
   `work_domain.rs`): what is kept from one turn to the next and what stops
   being paid for; who stayed silent towards whom in a multi-party
