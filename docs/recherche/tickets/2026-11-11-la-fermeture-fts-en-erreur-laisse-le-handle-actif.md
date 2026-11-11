@@ -1,6 +1,6 @@
 # La fermeture FTS en erreur laisse le handle actif
 
-- **État** : ouvert ; correctif de dépendance `c1463b9ee` et témoin rouge/vert public vérifiés, intégration complète et atterrissage encore requis.
+- **État** : ouvert ; correctif de dépendance `c1463b9ee` et témoin rouge/vert public vérifiés, validation complète verte sur `c1463b9ee` ; tour de push et atterrissage encore requis.
 - **Famille** : produit
 - **Gravité** : une fermeture en erreur peut laisser les acteurs travailler après la fin supposée du stockage ; une nouvelle écriture reste acceptée.
 - **Atteignable en service** : oui, une erreur de persistance peut faire sortir close avant l'arrêt des pools dans la dépendance 4.3.2.
@@ -24,4 +24,10 @@ La preuve interne que les pools ne gardent plus leurs shards est le témoin amon
 
 ## Travail restant et critère de fin
 
-Porteur : recherche, lot `cx-recherche-lucivy-4-3-3`. Terminer les neuf e2e, features, lib entière et navigateur ; attester les paquets du registre, le lock ciblé et les gabarits embarqués. Conserver la preuve rouge/vert ; demander le tour et suivre la procédure de push. Clôture après validation complète du correctif avec son hash et ses preuves, déplacement dans closed dans le même commit. Une simple attente de résultat ou transmission ne ferme pas le travail.
+Porteur : recherche, lot `cx-recherche-lucivy-4-3-3`. Validation complète accomplie ; restent le tour puis le push et le nettoyage selon procédure. Le ticket reste ouvert dans cette attente, puis sera déplacé et son État clos dans le même commit du lot validé.
+
+## Passe complète verte
+
+Source testée `c1463b9eeae78b997af5c86d2f93a7597dc240dc`, base `fcf23114c`. Neuf e2e, 121 tests réussis/0 échec/0 ignoré : search 40 (réouverture sparse existante comprise), dense après suppressions 2, cited_by 3, lectures 24, code 27, arrêt par paquet 18, vecteurs après rollback 3, merge puis COPY 1, ligne à ligne 3. Features 5/5 et preuve de compilation lue ; lib 2105/0/61 ignorés en 57,93 s, témoins FTS de recherche/réouverture existants nommés verts ; navigateur 36/0/0 en 132,34 s. Aucun saut nommé dans les étapes exigées. Pas de scénario de compatibilité ni nouveau banc, pas de juge Gemini inchangé rejoué.
+
+Preuve luciepc : `~/.cache/rag3weaver-build/journaux-cx-recherche-lucivy-433-11nov/vert-433/verdict-final.log`, vérificateur `cx-recherche-lucivy433-verifier.py`. Ce dernier relit les comptes et noms utiles, les trois minimums, les cinq seuls paquets modifiés du lock (registre), les SHA sources et la preuve rouge. Attestation `attestation-artefacts.json` : 212 contenus courants dans les binaires lib/e2e/navigateur, chemins générés et `.d` du bon worktree. Générés copiés hors target. Lib native complète épinglée 29a7bc52a, sans dérogation ; sources inchangées à la fin. Fenêtre code réservée par orchestration jusqu'au verdict, aucun tour de push reçu lors de cette actualisation.
