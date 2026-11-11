@@ -786,6 +786,13 @@ pub struct CodeAnalysis {
     /// suivant se matérialiserait en `CONSUMES`, et l'ordre d'ingestion
     /// changerait le graphe.
     pub pending: Vec<(String, String, String)>,
+    /// Default exports offer an additional, file-qualified rendezvous symbol.
+    /// The target remains an existing scope; no import-binding scope is created.
+    #[serde(default)]
+    pub default_exports: Vec<(String, String)>,
+    /// (mentioning scope, local name, file-qualified default-export symbol).
+    #[serde(default)]
+    pub pending_defaults: Vec<(String, String, String)>,
     /// Les usages derrière chaque rendez-vous (clé du scope, nom) : toutes
     /// les références du scope à ce nom, pas seulement la première.
     #[serde(default)]
@@ -1424,6 +1431,26 @@ pub fn analyze_in_project(
         };
         let reexportes: Vec<(String, String, Option<usize>, Option<usize>)> =
             reexportes.into_iter().map(|(nom, module, ligne)| (nom, module, ligne, porteur_de(ligne))).collect();
+        // Use the same export facts as codeparsers' cross-file resolver. An instance
+        // offers its export zone, never the class used to construct it.
+        if famille_de_langage(&rel) == Some("typescript") || matches!(Path::new(&rel).extension().and_then(|e| e.to_str()), Some("js" | "cjs" | "mjs" | "ts" | "tsx" | "jsx")) {
+            use codeparsers::relationship_resolution::relationship_resolver::{default_export_target, DefaultExportTarget};
+            let targets: Vec<_> = fa.scopes.iter().enumerate().filter_map(|(i, sc)| {
+                match default_export_target(&sc.content, sc.r#type == ScopeInfoType::Module)? {
+                    DefaultExportTarget::Instance => Some(i),
+                    DefaultExportTarget::Name(name) => {
+                        let mut matches = fa.scopes.iter().enumerate().filter(|(_, s)| s.name == name && s.parent.is_none());
+                        let (target, _) = matches.next()?;
+                        matches.next().is_none().then_some(target)
+                    }
+                }
+            }).collect::<std::collections::BTreeSet<_>>().into_iter().collect();
+            if let [i] = targets.as_slice() {
+                if let Some(key) = cle_du_scope.get(&(rel.clone(), *i)) {
+                    analysis.default_exports.push((key.clone(), default_export_symbol(&source, &rel)));
+                }
+            }
+        }
         for (i, sc) in fa.scopes.iter().enumerate() {
             let Some(key) = cle_du_scope.get(&(rel.clone(), i)) else {
                 continue;
@@ -1575,6 +1602,22 @@ pub fn analyze_in_project(
                     sc, id, "", r,
                 ));
                 analysis.pending.push((key.clone(), id.to_string(), kind.to_string()));
+                // A default import names the export, independently of its local alias.
+                // Bare modules and absent/generated files retain the existing binding policy.
+                let imports: Vec<_> = fa.import_references.iter().filter(|imp|
+                    imp.kind == codeparsers::scope_extraction::types::ImportReferenceKind::Default
+                    && imp.alias.as_deref().unwrap_or(&imp.imported) == id
+                    && imp.source.starts_with('.')).collect();
+                if let [imp] = imports.as_slice() {
+                    if let Some(module) = relative_js_module(&rel, &imp.source) {
+                        let known = result.files.keys().map(|p| relative(root, p))
+                            .chain(project_files.into_iter().flatten().map(|p| relative(root, p)))
+                            .any(|p| js_module_stem(&p) == module);
+                        if known {
+                            analysis.pending_defaults.push((key.clone(), id.to_string(), default_export_symbol(&source, &module)));
+                        }
+                    }
+                }
             }
             // Les clauses d'héritage ne passent pas toujours par les
             // références d'identifiants — `codeparsers` les résout à part.
@@ -2356,10 +2399,11 @@ impl Catalog {
             })
             .collect();
         let offered: BTreeSet<&str> =
-            analysis.scopes.iter().map(|s| s.name.as_str()).chain(champs_definis.iter().map(|(_, n)| n.as_str())).collect();
+            analysis.scopes.iter().map(|s| s.name.as_str()).chain(champs_definis.iter().map(|(_, n)| n.as_str())).chain(analysis.default_exports.iter().map(|(_, n)| n.as_str())).collect();
         let expected: BTreeSet<&str> =
             analysis.pending.iter().map(|(_, n, _)| n.as_str()).chain(analysis.pending_locks.iter().map(|(_, n, _)| n.as_str())).collect();
         let mut names: BTreeSet<&str> = offered.union(&expected).copied().collect();
+        names.extend(analysis.pending_defaults.iter().map(|(_, _, n)| n.as_str()));
         // Les noms des tests par requêtes : ce qui est demandé, ce qui est
         // enregistré — des symboles comme les autres.
         names.extend(requetes.queries.iter().map(|(_, n, _)| n.as_str()));
@@ -2406,6 +2450,10 @@ impl Catalog {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, &sc.key, ""))?;
             let to = symbol_uuid(self, &sc.name)?;
             definitions.push((from, to, BTreeMap::new()));
+        }
+        for (key, name) in &analysis.default_exports {
+            let from = self.entity_uuid(SCOPE, &key_data(SCOPE, key, ""))?;
+            definitions.push((from, symbol_uuid(self, name)?, BTreeMap::new()));
         }
         for (i, champ) in &champs_definis {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, &analysis.scopes[*i].key, ""))?;
@@ -2488,9 +2536,11 @@ impl Catalog {
         let non_types: std::collections::HashSet<(&str, &str)> = analysis.pending_untyped.iter().map(|(k, n)| (k.as_str(), n.as_str())).collect();
         let reexports_of: HashMap<(&str, &str), &str> =
             analysis.pending_reexport.iter().map(|(k, n, m)| ((k.as_str(), n.as_str()), m.as_str())).collect();
+        let defaults: HashMap<(&str, &str), &str> = analysis.pending_defaults.iter()
+            .map(|(key, name, symbol)| ((key.as_str(), name.as_str()), symbol.as_str())).collect();
         for (scope_key, name, kind) in &analysis.pending {
             let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
-            let to = symbol_uuid(self, name)?;
+            let to = symbol_uuid(self, defaults.get(&(scope_key.as_str(), name.as_str())).copied().unwrap_or(name))?;
             // Le genre voyage avec le rendez-vous : c'est lui qui décide de
             // l'arête à poser quand la cible arrivera ; l'usage aussi, que
             // l'arête recopiera.
@@ -4047,6 +4097,32 @@ fn par_reexportation(modules: &[String], definers: &[String], fichiers: &HashMap
 /// Le module que désigne `source`, écrit dans `module` : `runtime` →
 /// `module::runtime`, `self::x` → `module::x`, `super::x` → le parent de
 /// `module` puis `x`, `crate::…` tel quel.
+fn js_module_stem(path: &str) -> String {
+    let path = Path::new(path);
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("js" | "cjs" | "mjs" | "ts" | "tsx" | "jsx") => path.with_extension("").to_string_lossy().into_owned(),
+        _ => path.to_string_lossy().into_owned(),
+    }
+}
+
+fn default_export_symbol(source: &str, file: &str) -> String {
+    format!("@default:{source}#{}", js_module_stem(file))
+}
+
+fn relative_js_module(file: &str, module: &str) -> Option<String> {
+    let joined = Path::new(file).parent()?.join(module);
+    let mut parts = Vec::new();
+    for component in joined.components() {
+        match component {
+            std::path::Component::Normal(p) => parts.push(p.to_string_lossy().into_owned()),
+            std::path::Component::CurDir => {},
+            std::path::Component::ParentDir => { parts.pop()?; },
+            _ => return None,
+        }
+    }
+    Some(js_module_stem(&parts.join("/")))
+}
+
 fn joindre_les_modules(module: &str, source: &str) -> String {
     if source.starts_with("crate::") || source == "crate" {
         return source.to_string();
