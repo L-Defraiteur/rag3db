@@ -38,6 +38,25 @@ export function readToolText(brut: string): ToolText {
   }
 }
 
+/// La cible d'une action vient du reçu structuré, jamais du texte du modèle.
+/// Les anciens outils locaux gardent le contexte de leur conversation.
+export function toolContext(args: string, metadata: unknown, localId: string): { id: string | null; label?: string } {
+  const object = (v: unknown): Record<string, unknown> | null => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : null;
+  const meta = object(metadata);
+  const invocation = object(meta?.invocation);
+  let requested: Record<string, unknown> | null;
+  try { requested = object(JSON.parse(args)); } catch { return { id: null }; }
+  if (!invocation && !Object.prototype.hasOwnProperty.call(requested ?? {}, "context") && !Object.prototype.hasOwnProperty.call(meta ?? {}, "invocation")) return { id: localId };
+  const target = object(invocation?.target);
+  const context = object(requested?.context);
+  if (!target || target.kind !== "backend" || typeof target.id !== "string" || !target.id.trim()
+      || typeof target.label !== "string" || !target.label.trim()
+      || typeof invocation?.parent_run !== "string" || !invocation.parent_run
+      || typeof invocation.run !== "string" || !invocation.run
+      || invocation.view != null || context?.view != null) return { id: null };
+  return { id: target.id, label: target.label };
+}
+
 /// Le retour d'un outil : le rendu humain, et le brut à un clic.
 export function ToolResultView({ text, render }: { text: string; render: (markdown: string) => string }) {
   const [brut, setBrut] = useState(false);
