@@ -8309,8 +8309,16 @@ fn read_threads() -> u64 {
             let decalages: HashMap<String, u64> = rows
                 .rows
                 .iter()
-                .filter_map(|r| Some((r.first()?.as_str()?.to_string(), r.get(1)?.as_i64()? as u64)))
-                .collect();
+                .map(|r| {
+                    let uuid = r.first().and_then(|v| v.as_str()).ok_or_else(|| err(format!("{entity} : UUID physique illisible")))?;
+                    let id = r.get(1).ok_or_else(|| err(format!("{entity} : identifiant physique absent pour {uuid}")))?;
+                    // select_node_ids rend table:offset en natif et row_id en SQL.
+                    let offset = id.as_i64().and_then(|n| u64::try_from(n).ok())
+                        .or_else(|| id.as_str().and_then(crate::node_id_cache::InternalNodeId::parse).map(|id| id.offset))
+                        .ok_or_else(|| err(format!("{entity} : identifiant physique illisible pour {uuid}")))?;
+                    Ok((uuid.to_string(), offset))
+                })
+                .collect::<Result<_, CatalogError>>()?;
             for (uuid, fields) in lignes {
                 let Some(&offset) = decalages.get(uuid) else { continue };
                 crate::fts_handle::reindex_document(h, fields, offset).map_err(|e| err(e.to_string()))?;

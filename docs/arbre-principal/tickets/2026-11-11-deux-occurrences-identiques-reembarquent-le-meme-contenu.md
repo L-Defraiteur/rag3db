@@ -279,3 +279,10 @@ Une requête BM25 « prefixe » rend l'occurrence au titre « titre » alors que
 est « prefixe titre », sans remappage déclaré. La garde inclut désormais le titre dans la
 liste existante des octets à préserver ; aucun nouveau format de cible ni règle spéciale Scope.
 Le correctif est candidat, à rejouer avec les lectures positives existantes.
+
+Le lancement prévu v4 sur ba879 n'a pas démarré : checkout distant refusé à cause du
+seul témoin de titre encore non commité (diff archivé avant restauration). Aucun test SQL
+ni natif de cette série n'est revendiqué. Avant relance, le consommateur de select_node_ids
+est raccordé à son contrat réel : ID natif table:offset, row_id entier en SQL ; le parseur
+InternalNodeId existant fournit l'offset natif. Une valeur physique illisible devient une
+erreur nommée, pas un index plein texte silencieusement vide. Aucun nouveau format d'ID.
