@@ -70,3 +70,86 @@ fn opening_manifest_registers_gather_relations_before_the_derived_entity() {
     p.open(Box::new(crate::Rag3dbConnection::in_memory().unwrap()),None)
         .unwrap_or_else(|e| panic!("racines et relation gather requises avant dérivée : {e}"));
 }
+
+fn set_derived(m: &mut Value, view: &str, root: &str, gather: Value) {
+    m["entities"][view]["config"].as_object_mut().unwrap().remove("hashsafe");
+    m["entities"][view]["config"]["derived"] = derived(root,gather);
+}
+
+#[test]
+fn opening_manifest_writes_the_root_and_searches_its_derived_entity_with_permuted_names() {
+    use crate::connection::CypherValue;
+    use crate::search::{Consistency,ResultMode,SearchOptions,SearchSignals};
+    // Les rôles changent de noms ; aucun ordre alphabétique ou de map attendu.
+    for (view,root,neighbor) in [("One","Two","Three"),("Three","One","Two"),("Two","Three","One")] {
+        let (dir,mut m) = manifest();
+        set_derived(&mut m,view,root,json!([{"name":"neighbors","relation":"LINK","fields":["body"]}]));
+        m["relations"] = json!({"LINK":{"from":root,"to":neighbor}});
+        m["entities"][view]["config"]["derived"]["render"]["body"] =
+            json!("{{ root.body }} {% for n in neighbors %}{{ n.body }} {% endfor %}");
+        let backend = prepare(dir.path(),&m).unwrap()
+            .open(Box::new(crate::Rag3dbConnection::in_memory().unwrap()),None).unwrap();
+        let source_uuid = {
+            let mut cat = backend.catalog.lock().unwrap();
+            cat.regime_d_ecriture(crate::disponibilite::RegimeEcriture::ParLot);
+            let record = |key: &str,body: &str| BTreeMap::from([
+                ("key".into(),CypherValue::String(key.into())),("body".into(),CypherValue::String(body.into()))]);
+            let source = cat.create(root,record("r","chaudiere")).unwrap();
+            let uuid = source.uuid().unwrap().to_string();
+            let other = cat.create(neighbor,record("n","thermostat")).unwrap();
+            cat.link("LINK",source,other,BTreeMap::new()).unwrap();
+            let drain = cat.drain();
+            assert_eq!(drain.failed,0,"{:?}",drain.warnings);
+            uuid
+        };
+        let result = Catalog::rechercher(&backend.catalog,view,"thermostat",SearchOptions {
+            signals:Some(SearchSignals::BM25),consistency:Consistency::Immediate,
+            result_mode:ResultMode::SourceResolved,..Default::default()
+        }).unwrap();
+        assert_eq!(result.results.len(),1);
+        assert_eq!(result.results[0].entity.as_deref(),Some(root));
+        assert_eq!(result.results[0].uuid,source_uuid);
+    }
+}
+
+#[test]
+fn opening_manifest_refuses_missing_roots_relations_chains_and_cycles_by_name() {
+    let (dir,base) = manifest();
+    for (root,gather,relations,expected) in [
+        ("Missing",json!([]),json!({}),"Missing"),
+        ("Two",json!([{"name":"n","relation":"ABSENT"}]),json!({}),"ABSENT"),
+        ("Two",json!([{"name":"n","relation":"LINK"}]),json!({"LINK":{"from":"Two","to":"One"}}),"cycle"),
+        ("Two",json!([{"name":"n","relation":"LINK","fields":["unknown"]}]),json!({"LINK":{"from":"Two","to":"Three"}}),"unknown"),
+        ("Two",json!([{"name":"n","relation":"LINK","direction":"in"}]),json!({"LINK":{"from":"Two","to":"Three"}}),"direction"),
+    ] {
+        let mut m = base.clone();
+        set_derived(&mut m,"One",root,gather);
+        m["relations"] = relations;
+        let error = prepare(dir.path(),&m).err().expect("refus avant ouverture");
+        assert!(error.contains(expected),"{expected}: {error}");
+        assert!(error.contains("One"),"la dérivée en cause doit être nommée : {error}");
+    }
+    let mut m = base;
+    set_derived(&mut m,"One","Two",json!([]));
+    set_derived(&mut m,"Two","Three",json!([]));
+    let error = prepare(dir.path(),&m).err().expect("chaîne refusée");
+    assert!(error.contains("elle-même dérivée"),"{error}");
+}
+
+#[test]
+fn opening_manifest_validates_the_whole_plan_before_any_database_call() {
+    use std::sync::atomic::{AtomicUsize,Ordering};
+    let (_dir,mut p) = prepared_for_open(true);
+    let derived_name = p.entities.iter().find(|(_,c)| c.derived.is_some()).unwrap().0.clone();
+    // La relation attend sa propre dérivée : cycle introduit après préparation.
+    p.manifest.relations.get_mut("LINK").unwrap().def.to = derived_name;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let observed = calls.clone();
+    let conn = crate::connection::CallbackConnection::new(move |_,_| {
+        observed.fetch_add(1,Ordering::SeqCst);
+        Ok(crate::connection::QueryResult::default())
+    });
+    let error = p.open(Box::new(conn),None).err().expect("plan cyclique refusé");
+    assert!(error.contains("cycle"),"{error}");
+    assert_eq!(calls.load(Ordering::SeqCst),0,"ni initialisation ni schéma partiel");
+}

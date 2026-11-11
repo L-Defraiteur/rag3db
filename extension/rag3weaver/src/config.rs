@@ -770,6 +770,41 @@ pub enum GatherDirection {
 }
 
 impl DerivedConfig {
+    /// Les mêmes dépendances vérifiées par le manifeste avant toute écriture
+    /// et par le catalogue lors d'un enregistrement individuel.
+    pub(crate) fn validate_context<'a>(&self, entity_name: &str,
+        entity: impl Fn(&str) -> Option<&'a EntityConfig>,
+        relation: impl Fn(&str) -> Option<&'a RelationDef>) -> Result<(), String> {
+        if self.from == entity_name {
+            return Err(format!("derived : « {entity_name} » ne peut pas dériver d'elle-même"));
+        }
+        let racine = entity(&self.from)
+            .ok_or_else(|| format!("derived : la racine « {} » n'est pas une entité enregistrée", self.from))?;
+        if racine.derived.is_some() {
+            return Err(format!("derived : la racine « {} » est elle-même dérivée ; une dérivée de dérivée n'est pas prise en charge", self.from));
+        }
+        for regle in &self.gather {
+            let rel = relation(&regle.relation)
+                .ok_or_else(|| format!("derived : la relation « {} » (règle « {} ») n'est pas déclarée", regle.relation, regle.name))?;
+            let (bout_racine, voisine) = match regle.direction {
+                GatherDirection::Out => (&rel.from, &rel.to),
+                GatherDirection::In => (&rel.to, &rel.from),
+            };
+            if bout_racine != &self.from {
+                return Err(format!(
+                    "derived : la relation « {} » va de « {} » vers « {} » ; en direction {:?} elle ne part pas de la racine « {} »",
+                    regle.relation, rel.from, rel.to, regle.direction, self.from
+                ));
+            }
+            let config_voisine = entity(voisine)
+                .ok_or_else(|| format!("derived : la voisine « {voisine} » (règle « {} ») n'est pas une entité enregistrée", regle.name))?;
+            if let Some(inconnu) = regle.fields.iter().find(|f| !config_voisine.fields.contains_key(*f)) {
+                return Err(format!("derived : « {inconnu} » n'est pas un champ de « {voisine} » (règle « {} »)", regle.name));
+            }
+        }
+        Ok(())
+    }
+
     /// Les colonnes posées d'office sur une entité dérivée, en plus de ses champs.
     pub const SOURCE_ENTITY: &'static str = "_source_entity";
     pub const SOURCE_UUID: &'static str = "_source_uuid";
