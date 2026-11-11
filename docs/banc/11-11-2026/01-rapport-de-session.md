@@ -74,8 +74,8 @@ en Q8_0 et Q4_K_M.
 
 Recommandation de production : Q8_0, avec `cache_prompt`.
 
-Les binaires copiés du portable dans `~/.cache/rag3db-banc-notes/llama/bin/` à luciepc sont
-inutiles : ils plantent par manque d'AVX-512. On peut les effacer.
+Les binaires copiés du portable dans `~/.cache/rag3db-banc-notes/llama/bin/` à luciepc étaient
+inutiles (ils plantaient par manque d'AVX-512) : effacés le 11 novembre, avant 17 h 14.
 
 ## 3. Les autres travaux de la session, tous sur master
 
@@ -108,7 +108,7 @@ inutiles : ils plantent par manque d'AVX-512. On peut les effacer.
 | `hf/qwen2.5-0.5b-instruct` | 954 Mio | poids, Apache 2.0 |
 | `hf/laya-multilingual` | 647 Mio | poids, Apache 2.0 |
 | `hf/smollm2-360m-instruct` | 694 Mio | poids, Apache 2.0, formats ONNX effacés |
-| `llama/bin/` | 1,4 Go | binaires du portable, inertes (AVX-512) : à effacer |
+| ~~`llama/bin/`~~ | — | **effacé le 11 novembre, avant 17 h 14** (binaires du portable, inertes faute d'AVX-512 ; la source reste sur le portable, paquets `llama-cpp` et `ggml`) |
 | `hf/qwen3-4b-{bf16,Q8_0,Q4_K_M}.gguf` | 14,8 Go | poids GGUF du banc du 11 novembre |
 | `h_petits.py`, `h_multi.py`, `gpu-*.sh`, `cpu-*.sh` | | scripts du juge local |
 | `paires2*.jsonl`, `cas2*.jsonl`, `petits-*.jsonl`, `multi-*.jsonl` | | jeux et résultats |
