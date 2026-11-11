@@ -152,8 +152,11 @@ fn modele(cibles: Cibles, exposes: Arc<Mutex<Vec<Value>>>, retours: Retours, tro
                 None
             };
             match prochain {
-                Some((nom, args)) => MockLlm::new("").with_tool_calls(vec![(nom.to_string(), args.to_string())]).generate(turns, opts, sink),
-                None => MockLlm::new("Cible consultée.").generate(turns, opts, sink),
+                Some((nom, args)) => MockLlm::new("")
+                    .with_context_len(131072)
+                    .with_tool_calls(vec![(nom.to_string(), args.to_string())])
+                    .generate(turns, opts, sink),
+                None => MockLlm::new("Cible consultée.").with_context_len(131072).generate(turns, opts, sink),
             }
         })))
     })
@@ -318,7 +321,10 @@ fn le_chat_attend_la_sortie_differee_d_une_commande_apres_accord() {
                     }
                 };
                 match appel {
-                    Some((nom, args)) => MockLlm::new("").with_tool_calls(vec![(nom.to_string(), args.to_string())]).generate(turns, opts, sink),
+                    Some((nom, args)) => MockLlm::new("")
+                        .with_context_len(131072)
+                        .with_tool_calls(vec![(nom.to_string(), args.to_string())])
+                        .generate(turns, opts, sink),
                     None => MockLlm::new("Issue observable.").generate(turns, opts, sink),
                 }
             })))
