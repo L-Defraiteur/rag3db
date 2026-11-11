@@ -83,3 +83,24 @@ Avant autorisation d'un lot, proposer un témoin léger du lanceur avec faux ser
 ## Préparation autorisée du correctif
 
 Orchestration autorise un worktree neuf depuis master, même ticket, code limité au lanceur et aux aides de tests : journal de portée passe, archivage rouge du processus ou du garde, arrêt et attente bornée des seuls démons créés par la passe, aucun remplacement de service tiers même périmé. Témoin léger à faux service/deux suites, sans GPU ni service réel. Partager patch et preuve avant toute passe lourde ; aucun push master autorisé pour cette préparation. Reprise dans cx-recherche-journal-embarquement depuis master630f5bdf8, sans importer le parent 1a des commits documentaires.
+
+## Correctif préparé, revue requise avant passe lourde
+
+Source rebasée `4e9cb120b4f564602060b5663cf8d16d5bbc6596`, branche `cx-recherche-journal-embarquement-2` depuis master incluant le lot ED. Diff limité au lanceur, à tests/common, au helper d'arrêt et au témoin léger, plus ce ticket ; aucun parent 1a importé. Aucun changement du runtime produit ni de la liste des résidus admis.
+
+- Le lanceur fournit aux aides de tests un dossier de journaux de portée passe sur disque, hors TMPDIRsuite, via `RAG3WEAVER_E2E_JOURNAUX_DEMONS` et la primitive existante `journal_dans`.
+- Rouge de processus ou de garde : les dossiers disque et TMPDIR de la suite sont conservés ensemble ; une archive ratée laisse les parents en place.
+- La fin de passe sélectionne seulement ses démons marqués, vérifie propriétaire et naissance, signale par pidfd puis attend leur disparition effective au plus dix secondes. Aucune escalade SIGKILL du lanceur. Refus ou délai dépassé : retour 101 et ressources conservées. Une fois terminés seulement, leurs journaux sont archivés hors des parents avant nettoyage.
+- L'aide de test refuse le démon préexistant périmé au lieu de lui demander de quitter ; le service déjà présent n'est jamais remplacé par ce chemin. Un appel hors lanceur garde le chemin de journal de repli antérieur ; ce lot ne promet pas de nettoyer tous les tests lancés à la main.
+
+### Preuve légère
+
+`python3 scripts/test_journaux_demons_e2e.py`, sans Cargo, modèle, GPU ni service réel. Le témoin charge les fonctions effectives du lanceur et compile la vraie fonction bge_m3_par_le_demon avec le vrai module Serveur, un adaptateur minimal DaemonEmbedder (identité/protocole simulés) et des services HTTP privés. Ce n'est pas une validation de l'API d'embarquement réelle ; elle reste à faire dans la passe autorisée ultérieurement.
+
+Même témoin final à six cas : ancien code de `4509efedf` (sources produit inchangées depuis master630f) = un vert / cinq rouges en 2,219 s ; correctif rebasé = six verts en 12,630 s. Cas : partage d'un seul démon entre deux suites et attente effective, rouge du garde réellement détecté et archivé, rouge du processus avec TMPDIR archivé, service existant courant intact, existant périmé refusé intact, refus de nettoyer après dépassement de délai. Les anciennes assertions de recherche 40/0 du cas réel ne sont pas recyclées comme preuve du correctif.
+
+Journaux locaux hors worktree/target : `~/.cache/rag3weaver-build/cx-recherche-journal-embarquement-{rouge-2,vert-rebase,regressions}.log`. Les régressions existantes `scripts/test_run_e2e.sh` passent également ; syntaxe bash et diff vérifiés. Les six cas n'arrêtent que leurs faux processus privés (la simulation du chemin périmé d'avant correction en fait partie). Aucun service 7878/7970 ou GPU du poste n'a été lancé/arrêté pour ce lot.
+
+### Reste à faire
+
+Orchestration : relire patch et preuve légère, puis décider du rebase/périmètre et de l'autorisation de passe lourde. Recherche : appliquer les remarques, puis seulement jouer la validation autorisée. Pas de push master ni de tour demandé à ce stade. Le ticket reste ouvert. Les contrôles de propriété, quiescence et conservation sont les invariants cibles du correctif, pas des exemptions de résidus à retirer pour verdir.

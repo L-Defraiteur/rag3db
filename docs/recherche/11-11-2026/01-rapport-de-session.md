@@ -1,5 +1,11 @@
 # Session « recherche » : rapport de reprise (11 novembre 2026)
 
+## Travail courant : journal du démon d'embarquement, patch prêt pour revue
+
+Ticket unique ouvert `docs/recherche/tickets/2026-11-11-le-service-d-embarquement-laisse-son-journal-dans-le-tmpdir-d-e2e-search.md`, porteur recherche, signalement arbre. Diagnostic et provenance du cas réel conservés dans ce ticket. Correctif borné autorisé par orchestration, préparé dans le worktree neuf `cx-recherche-journal-embarquement`, branche `cx-recherche-journal-embarquement-2`, source `4e9cb120b` après rebase sur le master qui inclut ED. Pas de parent 1a importé ni de runtime produit modifié.
+
+Portée passe pour les journaux partagés ; archivage sur rouge du processus ou du garde ; arrêt/attente bornée des seuls démons possédés avant nettoyage ; refus de remplacer un préexistant périmé. Témoin léger avec vraies fonctions du lanceur et aide Rust, adaptateur d'identité et faux services privés : ancien code un vert/cinq rouges, correctif six verts ; régressions existantes du lanceur vertes. Sans Cargo, GPU ni service réel ; aucune passe lourde lancée. Patch et preuves à relire avant toute autorisation de la suite, ticket non clos.
+
 ## Lot Lucivy 4.3.3 : livré sur master
 
 **Atterrissage confirmé :** `f96acc6cf97692804520e2d672de080bcae730a3`, après rebase documentaire sans conflit au tour d'orchestration. SHA des sources testées inchangés ; trois contrôles lus aux deux postes : status propre, aucun rebase, origin/master égal à HEAD. Worktrees et branches locales du lot supprimés aussitôt, target distant `target-97k` supprimé, local absent. Preuve `journaux-cx-recherche-lucivy-433-11nov/vert-433/pousse.log`. Journaux, attestations, générés et sauvegardes distantes conservés hors target. Ticket fermé dans `docs/tickets/closed/2026-11-11-la-fermeture-fts-en-erreur-laisse-le-handle-actif.md` ; aucun autre chantier activé.
