@@ -93,14 +93,14 @@ Le target `~/.cache/rag3weaver-build/target-tty` n'existe plus : le premier bât
 
 ## Ce qui est bloqué, et sur quoi
 
-- **Le ticket `docs/tickets/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md`** (ouvert, famille produit) : la lib `rag3weaver` ne compile pas sans la feature `rag3db-native`. Deux sorties possibles : poser deux `#[cfg(feature = "rag3db-native")]` (`src/backend.rs` vers la ligne 4411, `src/dataflow/record_nodes.rs` vers la ligne 4567), ou déclarer que la lib exige le moteur. Le choix revient à Lucie. Le terminal n'en souffre pas : il vit dans son propre crate.
+- **Le ticket `docs/tty/tickets/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md`** (ouvert, famille produit) : la lib `rag3weaver` ne compile pas sans la feature `rag3db-native`. Deux sorties possibles : poser deux `#[cfg(feature = "rag3db-native")]` (`src/backend.rs` vers la ligne 4411, `src/dataflow/record_nodes.rs` vers la ligne 4567), ou déclarer que la lib exige le moteur. Le choix revient à Lucie. Le terminal n'en souffre pas : il vit dans son propre crate.
 - **Rien d'autre n'est bloqué.** Lucie n'a pas encore dit si l'ordre des prochains pas lui convient.
 
 ## Les tickets ouverts qui sont à moi
 
 | Ticket | En une ligne |
 |---|---|
-| `docs/tickets/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md` | la lib ne compile pas sans `rag3db-native` (contourné par le crate à part du terminal) |
+| `docs/tty/tickets/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md` | la lib ne compile pas sans `rag3db-native` (contourné par le crate à part du terminal) |
 
 Il n'a pas été déplacé : c7 dira « déplace » quand le script d'index lira `docs/*/tickets/`.
 
