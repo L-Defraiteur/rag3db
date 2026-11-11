@@ -163,10 +163,7 @@ fn modele(cibles: Cibles, exposes: Arc<Mutex<Vec<Value>>>, retours: Retours, tro
 }
 
 #[test]
-#[cfg_attr(
-    not(feature = "navigateur"),
-    ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)"
-)]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : étape séparée")]
 fn le_relais_du_chat_ouvre_la_cible_effective_et_la_garde_apres_rechargement() {
     parcours(false);
 }
