@@ -51,8 +51,8 @@ les preuves runtime d'ED ; le parcours ambigu / inconnu sera complété avec sa 
 ## Vérification et point de reprise
 
 - `rustfmt --check` et `git diff --check` : verts (syntaxe/format uniquement).
-- Compilation des tests préparée à luciepc, sous `poste lourd`, `-j8`, jeu
-  `rag3db-native,code,daemon,navigateur`, **sans exécuter le témoin**. Nouveau target unique
+- Compilation des tests **VERTE** à luciepc sur `dbf3f7419`, en 1 min 31 s, sous
+  `poste lourd`, `-j8`, jeu `rag3db-native,code,daemon,navigateur`, **sans exécuter le témoin**. Nouveau target unique
   `~/.cache/rag3weaver-build/cx-archi-target`, après nettoyage du précédent.
 - Source et résultat du check :
   `~/.cache/rag3weaver-build/cx-ui-contextuel-dbf3f7419-check-20261111/`.
