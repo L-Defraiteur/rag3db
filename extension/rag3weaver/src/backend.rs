@@ -2254,9 +2254,13 @@ impl PreparedBackend {
         .map_err(|e| e.to_string())?;
         cat.initialize().map_err(|e| e.to_string())?;
         // Les racines d'abord, puis le schéma nommé du workspace inchangé.
-        for (name, config) in self.entities.iter().filter(|(_,c)| c.derived.is_none()) {
-            cat.register_entity(name, config.clone())
-                .map_err(|e| e.to_string())?;
+        for step in &schema_order {
+            if let backend_schema::SchemaStep::Entity(name) = step {
+                let config = &self.entities[*name];
+                if config.derived.is_none() {
+                    cat.register_entity(name, config.clone()).map_err(|e| e.to_string())?;
+                }
+            }
         }
         // Le schéma **nommé** du workspace, par le moteur : la vérité d'un
         // schéma ne se duplique pas en JSON (elle dériverait) — elle se
