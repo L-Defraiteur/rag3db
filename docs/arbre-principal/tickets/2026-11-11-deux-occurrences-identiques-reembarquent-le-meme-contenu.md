@@ -6,6 +6,9 @@
 - **Atteignable en service** : oui (deux fichiers ou branches portent le même scope).
 - **Touche rag3weaver** : oui (déclaration du gabarit code, identité de contenu, ingestion/recherche).
 
+- **Pour** : session arbre-principal, porteuse du lot 1a ; coordination recherche/ED pour les contrats communs, orchestration pour les créneaux et le tour de push.
+- **Signalé par** : reprise arbre-principal demandée par Lucie via [la prise de contact orchestration](../../orchestration/11-11-2026/04-contacter-orchestration-codex.md) ; [contrats et lots](../11-11-2026/03-contrats-et-lots-des-vues.md).
+
 ## Preuve
 
 Le témoin deux_occurrences_partagent_un_embarquement_et_gardent_leurs_positions,
@@ -18,12 +21,59 @@ le stockage ; aucun format de base vivante n'a été changé.
 
 ## Avancement générique du lot 1a
 
-Checkpoint 7748fa53c puis renforcement sur cx-arbre-scope-version-3 : versions dérivées par
+Checkpoints 7748fa53c et d63157d8c, poussés sur origin/cx-arbre-scope-version-3 : versions dérivées par
 contenu, références indépendantes, L3 composé et compteur générique sensible 2→1. Les tests
 ciblés prouvent aussi déplacement sans nouvel embarquement, retour à une ancienne version,
 recette et modèles 4/6 distincts, rollback des origines/liens/états/FTS. Le schéma Scope et ses
 gabarits ne sont pas basculés : son témoin initial reste rouge. Projection publique, masque avant
 top-k, passe globale et migration restent ouverts ; ce ticket n'est donc pas fermé.
+
+## Preuves du checkpoint générique
+
+Worktree cx-wt-scope-version aux deux postes, lib 29a7bc52a, target unique
+cx-target-contenu-derive sur luciepc. Diagnostic natif, sans passe globale :
+
+- 3 unitaires derive_nodes et 7 config/schéma : cx-contenu-invariants.log.
+- 8 e2e_entites_derivees : cx-contenu-derivees-vert-v4.log.
+- Compteur sensible 2 au lieu de 1 sous mutation : cx-contenu-compteur-rouge.log ;
+  restauration, déplacement/réutilisation et modèles 4/6 : cx-contenu-compteur-modeles.log.
+- Retrait de L3 : perte du lien A ; restauration : racines, versions, hashes, file indépendante
+  et FTS préservés après échec d'insertion ou de lien. cx-contenu-atomicite-rouge-v2.log,
+  cx-contenu-derivees-vert-v2.log puis les suites suivantes.
+
+Ces journaux sont dans ~/.cache/rag3weaver-build/ sur luciepc. Le témoin Scope initial reste
+rouge et aucun format de base vivante n'a été changé. PostgreSQL et les autres features ne sont
+pas encore rejoués sur cette implémentation.
+
+## Travail restant et responsabilités
+
+La session arbre-principal garde ce même ticket pour la suite du lot, sans duplication :
+
+1. Déclarer une seule association cible publique → index dérivé ; composer from/DERIVED_FROM,
+   filter_indirection, Forme et réadmission dans le même L6. Recherche a relu ces primitives :
+   ResolveParent après pagination ne suffit pas. Redéployer les occurrences avant pagination.
+2. Appliquer le masque d'occurrences avant le top-k dense, creux et plein texte ; refuser un
+   signal incapable de le garantir. Prouver absence de fuite, couverture et positions/arêtes.
+3. Raccorder le schéma/gabarit Scope en test privé et rendre vert son compteur initial.
+4. Passer les vérifications du lot sur son hash final, puis demander un tour à l'orchestration.
+5. Préparer la migration déclarée 1b et son refus d'un ancien format, sur copies privées seulement,
+   avec couverture, recherches, arêtes dans les deux sens et zéro embarquement.
+6. Pour M3–M5, arbre-principal garde la recette et les résultats attendus ; coordination avec
+   l'optimiseur pour copies et fenêtre exclusive, autorisée par l'orchestration. Aucune mesure
+   lancée, aucun chiffre disponible. L'attente de créneau ne ferme pas ce travail.
+
+Recevoir ce ticket ou relayer une demande n'autorise ni activation en service ni push master.
+Les transferts éventuels déplacent ce fichier et ne ferment pas l'action.
+
+## Ses filets
+
+- src/read_view.rs, Forme::resolve_search_target : refuse la recherche directe des versions
+  internes tant que projection publique et masque ne sont pas déclarés. À réévaluer avec leur
+  implémentation ; le refus ne constitue pas une livraison de recherche sur les occurrences.
+- Forme::search_target_names ne propose pas ces versions internes comme cibles publiques.
+- Catalog::verifier_ecriture_de_version et verifier_ecriture_de_reference préservent l'immuabilité
+  et les rattachements gérés. Ces garanties doivent rester après résolution ; ce ne sont pas
+  des replis temporaires à retirer avec le ticket.
 
 ## Pour le fermer
 

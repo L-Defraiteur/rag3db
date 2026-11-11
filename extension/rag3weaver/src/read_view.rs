@@ -177,6 +177,8 @@ impl Forme<'_> {
     pub fn resolve_search_target(&self, name: &str) -> Result<search::SearchTarget, CatalogError> {
         // Try simple entity (must have simple pipeline — KB-only entities are not searchable directly)
         if let Some(ec) = self.entity_configs.get(name) {
+            // Filet de recherche avant projection publique :
+            // docs/arbre-principal/tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md
             if ec.derived.as_ref().is_some_and(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. })) {
                 return Err(CatalogError::SchemaError(format!(
                     "{name} : versions partagées internes ; projection vers les occurrences non déclarée"
