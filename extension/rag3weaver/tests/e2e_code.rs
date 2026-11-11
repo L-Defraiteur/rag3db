@@ -1981,11 +1981,17 @@ fn require_object_reexport_navigates_from_module_exports() {
 #[ignore]
 fn require_explicit_js_does_not_choose_a_typescript_sibling() {
     use rag3weaver::connection::CypherValue::String as S;
-    let rows = require_navigation_rows(&[
-        ("outil.js", "class OutilJs {\n  agir() {}\n}\nmodule.exports = OutilJs;\n"),
-        ("outil.ts", "export default class OutilTs {\n  agir() {}\n}\n"),
-        ("app.js", "const Alias = require('./outil.js');\nfunction utiliser() {\n  return new Alias();\n}\n"),
-    ]);
-    assert_eq!(rows.len(), 1, "one explicit module, one export: {rows:?}");
-    assert!(matches!((&rows[0][0], &rows[0][1], &rows[0][2]), (S(n), S(f), S(m)) if n == "OutilJs" && f == "outil.js" && m == "import"), "no typescript sibling: {rows:?}");
+    for sibling in [
+        "export default class OutilTs {\n  agir() {}\n}\n",
+        "class OutilTs {\n  agir() {}\n}\nexport default OutilTs;\n",
+        "class OutilTs {\n  agir() {}\n}\nmodule.exports = OutilTs;\n",
+    ] {
+        let rows = require_navigation_rows(&[
+            ("outil.js", "class OutilJs {\n  agir() {}\n}\nmodule.exports = OutilJs;\n"),
+            ("outil.ts", sibling),
+            ("app.js", "const Alias = require('./outil.js');\nfunction utiliser() {\n  return new Alias();\n}\n"),
+        ]);
+        assert_eq!(rows.len(), 1, "one explicit module, one export, sibling {sibling}: {rows:?}");
+        assert!(matches!((&rows[0][0], &rows[0][1], &rows[0][2]), (S(n), S(f), S(m)) if n == "OutilJs" && f == "outil.js" && m == "import"), "no typescript sibling: {rows:?}");
+    }
 }
