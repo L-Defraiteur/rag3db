@@ -177,6 +177,11 @@ impl Forme<'_> {
     pub fn resolve_search_target(&self, name: &str) -> Result<search::SearchTarget, CatalogError> {
         // Try simple entity (must have simple pipeline — KB-only entities are not searchable directly)
         if let Some(ec) = self.entity_configs.get(name) {
+            if ec.derived.as_ref().is_some_and(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. })) {
+                return Err(CatalogError::SchemaError(format!(
+                    "{name} : versions partagées internes ; projection vers les occurrences non déclarée"
+                )));
+            }
             if !ec.has_simple_pipeline() {
                 // Les dérivées qui la rassemblent, pour une erreur qui aide.
                 let mut kb_names: Vec<&String> = self
@@ -420,7 +425,7 @@ impl Forme<'_> {
         let mut names: Vec<String> = self
             .entity_configs
             .iter()
-            .filter(|(_, ec)| ec.has_simple_pipeline())
+            .filter(|(_, ec)| ec.has_simple_pipeline() && !ec.derived.as_ref().is_some_and(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. })))
             .map(|(name, _)| name.clone())
             .collect();
         names.sort();
