@@ -1,0 +1,37 @@
+# L'oracle cherche la cible au lieu du nom réellement mentionné
+
+- **État** : ouvert — lecture du code et vérification des 415 lignes historiques le 11 novembre 2026 ; aucun changement d'oracle dans le lot des exports
+- **Gravité** : preuve incomplète (un faux peut devenir muet sans interrogation du LSP)
+- **Atteignable en service** : non (oracle de mesure seulement)
+- **Touche rag3weaver** : oui (outillage de validation des arêtes)
+- **Famille** : produit
+
+## Preuve et cause
+
+La sonde A/B fournit `b.name` comme champ nom de l'arête. Dans
+`scripts/oracle_lsp.py`, la boucle cherche `a['nom']` sur la ligne source,
+puis interroge le LSP seulement si ce texte y apparaît. Le verdict commence
+à muet. Une cible zone de fichier, ou une classe exportée dont le nom diffère
+de l'alias importé, peut donc être rendue muette sans question LSP.
+
+Vérification à luciepc : les 415 lignes marquées liaison de
+`~/.cache/codeparsers-notes/require-mesure-2/verdicts-ajoutees.tsv`
+ont été comparées à leurs lignes sources dans `oracle/arbre`, avec la même
+regex que l'oracle : 415 tokens absents, zéro source absente, zéro token présent.
+Le rapport ancien qui les décrit comme un silence du serveur ne démontre donc
+pas ce silence. Il démontre une absence de jugement.
+
+L'instance FS corrigée vers sa zone et un alias Alias vers une classe Outil
+rencontrent la même limite. Une baisse des faux accompagnée de nouveaux muets
+ne prouve pas un gain de précision.
+
+## Invariant requis pour le fermer
+
+Conserver séparément l'identité de la mention (texte et position source) et la
+cible proposée (fichier et plage). Interroger la mention réelle et juger la cible
+par les positions rendues, sans substituer son nom à celui de la mention.
+Une question non envoyée doit se distinguer d'un LSP interrogé sans réponse.
+Poser des témoins alias et zone, puis rejouer les mesures concernées avec les
+entrées corrigées, en conservant les anciennes preuves et les seuils.
+Cette correction d'outillage est distincte du lot de navigation ; aucune
+modification de l'oracle n'est autorisée implicitement par ce ticket.
