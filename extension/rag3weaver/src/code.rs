@@ -30,7 +30,7 @@ use codeparsers::relationship_resolution::types::{RelationshipResolverOptions, R
 use codeparsers::scope_extraction::types::{ScopeInfoType, UsageKind, UsageSite};
 
 use crate::catalog::{Catalog, CatalogError};
-use crate::config::{ChunkStrategy, ChunkingConfig, EntityConfig, FieldType, SimpleFieldDef};
+use crate::config::{ChunkStrategy, ChunkingConfig, EntityConfig, FieldType, RelationDef, SimpleFieldDef};
 use crate::connection::CypherValue;
 use crate::records::RefOrUuid;
 
@@ -554,86 +554,103 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
     ])
 }
 
-/// Déclare `File`, `Scope`, `Library` et les neuf relations. Idempotent
-/// (`register_entity` / `register_relation` le sont).
-/// **Le schéma du code, tel qu'un Plan déclaré le lit** : les champs de chaque entité (`_uuid`
-/// compris) et les deux bouts de chaque relation. Le chargeur d'un backend dont
-/// `workspace.index = "code"` l'ajoute au schéma de son manifeste, qui ne déclare pas ces
-/// entités : sans lui, un Plan sur `Scope` serait refusé au chargement.
-pub fn plan_schema() -> (BTreeMap<String, std::collections::BTreeSet<String>>, BTreeMap<String, (String, String)>) {
-    let tables = [(FILE, file_config()), (SCOPE, scope_config(ChunkingConfig::default())), (LIBRARY, library_config()), (SYMBOL, symbol_config())]
+/// Les configurations réelles du schéma nommé `code`, sans accès au catalogue.
+/// Le planificateur, l'ouverture du backend et l'enregistrement partagent ainsi
+/// les mêmes entités, extrémités et propriétés de relations.
+pub fn schema_configs(scope_chunking: ChunkingConfig) -> (BTreeMap<String, EntityConfig>, BTreeMap<String, RelationDef>) {
+    let entities = [(FILE, file_config()), (SCOPE, scope_config(scope_chunking)), (LIBRARY, library_config()), (SYMBOL, symbol_config())]
         .into_iter()
-        .map(|(nom, e)| (nom.to_string(), e.fields.keys().cloned().chain(["_uuid".to_string()]).collect()))
+        .map(|(name, config)| (name.to_string(), config))
         .collect();
-    let relations = RELATIONS.iter().map(|(rel, from, to)| (rel.to_string(), (from.to_string(), to.to_string()))).collect();
+    let relations = RELATIONS.into_iter().map(|(name, from, to)| {
+        (name.to_string(), RelationDef {
+            from: from.to_string(),
+            to: to.to_string(),
+            properties: Some(code_relation_properties(name)),
+        })
+    }).collect();
+    (entities, relations)
+}
+
+fn code_relation_properties(rel: &str) -> HashMap<String, crate::config::FieldDef> {
+    if rel == "MENTIONS" {
+        // Le rendez-vous porte le **genre** de l'arête à poser quand la
+        // cible arrivera : sans lui, un `IMPLEMENTS` dont l'interface est
+        // ingérée au lot suivant se matérialiserait en `CONSUMES`, et
+        // l'ordre d'ingestion changerait le graphe (doc 17 §10). Il porte
+        // aussi l'usage, que l'arête matérialisée recopiera.
+        let mut props = usage_property_defs();
+        props.insert("kind".to_string(), field_def(FieldType::String));
+        props.insert("qualifier_types".to_string(), field_def(FieldType::String));
+        props.insert("import_modules".to_string(), field_def(FieldType::String));
+        props.insert("self_types".to_string(), field_def(FieldType::String));
+        // Le type à lire ailleurs (codeparsers `DeferredType`, en JSON) :
+        // le champ d'une classe, le retour d'une fonction, et la chaîne
+        // à peler — résolu à la matérialisation, quand les classes sont
+        // en base.
+        props.insert("deferred".to_string(), field_def(FieldType::String));
+        // « oui » : toutes les références du mentionneur sont des appels
+        // sur un receveur local non typé — jamais relié par le seul nom.
+        props.insert("untyped_receiver".to_string(), field_def(FieldType::String));
+        // Le module source d'une réexportation (`runtime` pour `pub use
+        // runtime::X`) ; vide pour une mention ordinaire.
+        props.insert("reexport_from".to_string(), field_def(FieldType::String));
+        return props;
+    }
+    if rel == "QUERIES" {
+        // `via` : « nom » (un appel de la requête, rapproché sans casse
+        // d'un nom enregistré) ou « mot:COPY » (la table des mots-clés).
+        let mut props = std::collections::HashMap::new();
+        props.insert("via".to_string(), field_def(FieldType::String));
+        return props;
+    }
+    if rel == "LOCKS" {
+        // Le genre (`lock`, `shared_lock`) et la ligne du verrou ; `via` :
+        // d'où il vient — « champ » (une garde sur un champ mutex, que
+        // l'analyse relève) ou « appel » (l'appel d'une fonction de
+        // verrou déclarée, `workspace.locks_via`). Une base d'avant reçoit
+        // la colonne à l'enregistrement ; ses arêtes la lisent nulle.
+        let mut props = usage_property_defs();
+        props.insert("via".to_string(), field_def(FieldType::String));
+        return props;
+    }
+    if USAGE_RELATIONS.contains(&rel) {
+        // **Comment l'arête a été résolue** (`resolution`) : « fichier »
+        // (l'analyseur, dans le fichier), « import », « type » ou « nom »
+        // (le rendez-vous, voir `choose_target`). Une base d'avant reçoit
+        // la colonne à l'enregistrement ; ses arêtes la lisent nulle.
+        let mut props = usage_property_defs();
+        props.insert("resolution".to_string(), field_def(FieldType::String));
+        // C/C++ : par où le définisseur est visible du mentionneur — « inclusion » (son fichier
+        // est dans la fermeture des #include), « entete » (un en-tête de même nom de base l'est :
+        // la définition d'un .cpp que son .h déclare). Vide hors C/C++ et sur une base d'avant.
+        props.insert("visibility".to_string(), field_def(FieldType::String));
+        return props;
+    }
+    HashMap::new()
+}
+
+/// Le schéma du code tel qu'un Plan déclaré le lit : les champs de chaque
+/// entité (`_uuid` compris) et les extrémités de chaque relation.
+pub fn plan_schema() -> (BTreeMap<String, std::collections::BTreeSet<String>>, BTreeMap<String, (String, String)>) {
+    let (entities, relations) = schema_configs(ChunkingConfig::default());
+    let tables = entities.into_iter()
+        .map(|(name, config)| (name, config.fields.into_keys().chain(["_uuid".to_string()]).collect()))
+        .collect();
+    let relations = relations.into_iter().map(|(name, relation)| (name, (relation.from, relation.to))).collect();
     (tables, relations)
 }
 
+/// Déclare les quatre entités et les quatorze relations du schéma nommé `code`.
+/// L'ordre d'enregistrement reste celui du schéma historique.
 pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfig) -> Result<(), CatalogError> {
-    catalog.register_entity(FILE, file_config())?;
-    catalog.register_entity(SCOPE, scope_config(scope_chunking))?;
-    catalog.register_entity(LIBRARY, library_config())?;
-    catalog.register_entity(SYMBOL, symbol_config())?;
-    for (rel, from, to) in RELATIONS {
-        if rel == "MENTIONS" {
-            // Le rendez-vous porte le **genre** de l'arête à poser quand la
-            // cible arrivera : sans lui, un `IMPLEMENTS` dont l'interface est
-            // ingérée au lot suivant se matérialiserait en `CONSUMES`, et
-            // l'ordre d'ingestion changerait le graphe (doc 17 §10). Il porte
-            // aussi l'usage, que l'arête matérialisée recopiera.
-            let mut props = usage_property_defs();
-            props.insert("kind".to_string(), field_def(FieldType::String));
-            props.insert("qualifier_types".to_string(), field_def(FieldType::String));
-            props.insert("import_modules".to_string(), field_def(FieldType::String));
-            props.insert("self_types".to_string(), field_def(FieldType::String));
-            // Le type à lire ailleurs (codeparsers `DeferredType`, en JSON) :
-            // le champ d'une classe, le retour d'une fonction, et la chaîne
-            // à peler — résolu à la matérialisation, quand les classes sont
-            // en base.
-            props.insert("deferred".to_string(), field_def(FieldType::String));
-            // « oui » : toutes les références du mentionneur sont des appels
-            // sur un receveur local non typé — jamais relié par le seul nom.
-            props.insert("untyped_receiver".to_string(), field_def(FieldType::String));
-            // Le module source d'une réexportation (`runtime` pour `pub use
-            // runtime::X`) ; vide pour une mention ordinaire.
-            props.insert("reexport_from".to_string(), field_def(FieldType::String));
-            catalog.register_relation_with(rel, from, to, props)?;
-            continue;
-        }
-        if rel == "QUERIES" {
-            // `via` : « nom » (un appel de la requête, rapproché sans casse
-            // d'un nom enregistré) ou « mot:COPY » (la table des mots-clés).
-            let mut props = std::collections::HashMap::new();
-            props.insert("via".to_string(), field_def(FieldType::String));
-            catalog.register_relation_with(rel, from, to, props)?;
-            continue;
-        }
-        if rel == "LOCKS" {
-            // Le genre (`lock`, `shared_lock`) et la ligne du verrou ; `via` :
-            // d'où il vient — « champ » (une garde sur un champ mutex, que
-            // l'analyse relève) ou « appel » (l'appel d'une fonction de
-            // verrou déclarée, `workspace.locks_via`). Une base d'avant reçoit
-            // la colonne à l'enregistrement ; ses arêtes la lisent nulle.
-            let mut props = usage_property_defs();
-            props.insert("via".to_string(), field_def(FieldType::String));
-            catalog.register_relation_with(rel, from, to, props)?;
-            continue;
-        }
-        if USAGE_RELATIONS.contains(&rel) {
-            // **Comment l'arête a été résolue** (`resolution`) : « fichier »
-            // (l'analyseur, dans le fichier), « import », « type » ou « nom »
-            // (le rendez-vous, voir `choose_target`). Une base d'avant reçoit
-            // la colonne à l'enregistrement ; ses arêtes la lisent nulle.
-            let mut props = usage_property_defs();
-            props.insert("resolution".to_string(), field_def(FieldType::String));
-            // C/C++ : par où le définisseur est visible du mentionneur — « inclusion » (son fichier
-            // est dans la fermeture des #include), « entete » (un en-tête de même nom de base l'est :
-            // la définition d'un .cpp que son .h déclare). Vide hors C/C++ et sur une base d'avant.
-            props.insert("visibility".to_string(), field_def(FieldType::String));
-            catalog.register_relation_with(rel, from, to, props)?;
-            continue;
-        }
-        catalog.register_relation(rel, from, to)?;
+    let (mut entities, mut relations) = schema_configs(scope_chunking);
+    for name in [FILE, SCOPE, LIBRARY, SYMBOL] {
+        catalog.register_entity(name, entities.remove(name).expect("entité du schéma code"))?;
+    }
+    for (name, _, _) in RELATIONS {
+        let relation = relations.remove(name).expect("relation du schéma code");
+        catalog.register_relation_with(name, &relation.from, &relation.to, relation.properties.unwrap_or_default())?;
     }
     Ok(())
 }
@@ -4304,6 +4321,49 @@ fn dedent_after_first_line(texte: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn named_schema_preserves_configs_properties_and_plan() {
+        let mut chunking = default_scope_chunking();
+        chunking.max_lines = 17;
+        chunking.overlap_lines = 3;
+        let (entities, relations) = schema_configs(chunking.clone());
+        for (name, expected) in [
+            (FILE, file_config()), (SCOPE, scope_config(chunking)),
+            (LIBRARY, library_config()), (SYMBOL, symbol_config()),
+        ] {
+            assert_eq!(serde_json::to_value(&entities[name]).unwrap(), serde_json::to_value(expected).unwrap(), "{name}");
+        }
+        assert_eq!(entities.len(), 4);
+        assert_eq!(relations.len(), 14);
+        for (name, from, to) in RELATIONS {
+            let relation = &relations[name];
+            assert_eq!((&*relation.from, &*relation.to), (from, to));
+            let expected: &[&str] = match name {
+                "MENTIONS" => &["usage", "usages", "line", "kind", "qualifier_types", "import_modules", "self_types", "deferred", "untyped_receiver", "reexport_from"],
+                "LOCKS" => &["usage", "usages", "line", "via"],
+                "QUERIES" => &["via"],
+                "CONSUMES" | "CONSUMED_BY" | "INHERITS_FROM" | "IMPLEMENTS" | "DECORATES" | "USES_LIBRARY" => &["usage", "usages", "line", "resolution", "visibility"],
+                _ => &[],
+            };
+            let properties = relation.properties.as_ref().unwrap();
+            assert_eq!(properties.len(), expected.len(), "{name}");
+            for property in expected {
+                let expected = field_def(if *property == "line" { FieldType::Int64 } else { FieldType::String });
+                assert_eq!(serde_json::to_value(&properties[*property]).unwrap(), serde_json::to_value(expected).unwrap(), "{name}.{property}");
+            }
+        }
+        let (tables, endpoints) = plan_schema();
+        assert_eq!(tables.len(), entities.len());
+        assert_eq!(endpoints.len(), relations.len());
+        for (name, entity) in entities {
+            let fields = entity.fields.into_keys().chain(["_uuid".to_string()]).collect::<std::collections::BTreeSet<_>>();
+            assert_eq!(tables[&name], fields, "{name}");
+        }
+        for (name, relation) in relations {
+            assert_eq!(endpoints[&name], (relation.from, relation.to), "{name}");
+        }
+    }
 
     const RUST_SRC: &str = "use serde::Serialize;\n\npub struct Point {\n    x: i32,\n}\n\nimpl Point {\n    pub fn norm(&self) -> i32 {\n        self.x.abs()\n    }\n}\n\npub fn twice(p: &Point) -> i32 {\n    p.norm() * 2\n}\n";
 
