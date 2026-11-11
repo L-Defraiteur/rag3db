@@ -518,6 +518,7 @@ mod tests {
     /// `builtin:`, se charge sans dérive ; une copie modifiée qu'il désigne se
     /// relève à son chargement, par son nom de gabarit.
     #[test]
+    #[cfg(feature = "code")]
     fn a_linked_manifest_loads_and_a_modified_copy_is_reported() {
         let d = tempfile::tempdir().unwrap();
         let gabarit = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
@@ -537,6 +538,43 @@ mod tests {
         std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
         let p = crate::backend::PreparedBackend::load(&manifeste).unwrap();
         assert_eq!(p.template_drift(), &[Drift { path: copie.to_string_lossy().into_owned(), builtin: "tools/list.mmd".into() }]);
+    }
+
+    /// Même garantie de lien et de dérive sans dépendre d'un workspace.
+    #[test]
+    fn a_portable_linked_manifest_loads_and_reports_its_modified_copy() {
+        let d = tempfile::tempdir().unwrap();
+        let graph = d.path().join("schema.mmd");
+        std::fs::write(&graph, get("tools/schema.mmd").unwrap()).unwrap();
+        let mut m = json!({"version":1,"name":"portable","database":"test.rag3db",
+            "embeddings":{"address":"127.0.0.1:1","model":"toy","dimensions":8},
+            "entities":{},"tools":{"schema":{"graph":"schema.mmd"}}});
+        let (linked,kept) = link(d.path(),&mut m);
+        assert_eq!(linked.len(),1);
+        assert!(kept.is_empty());
+        let path = d.path().join("backend.json");
+        std::fs::write(&path,serde_json::to_vec(&m).unwrap()).unwrap();
+        assert!(crate::backend::PreparedBackend::load(&path).unwrap().template_drift().is_empty());
+        let mut changed = get("tools/schema.mmd").unwrap().to_vec();
+        changed.extend_from_slice(b"\n%% copie modifiee\n");
+        std::fs::write(&graph,changed).unwrap();
+        m["tools"]["schema"]["graph"] = json!(graph);
+        std::fs::write(&path,serde_json::to_vec(&m).unwrap()).unwrap();
+        assert_eq!(crate::backend::PreparedBackend::load(&path).unwrap().template_drift(),
+            &[Drift{path:graph.to_string_lossy().into_owned(),builtin:"tools/schema.mmd".into()}]);
+    }
+
+    #[cfg(not(feature = "code"))]
+    #[test]
+    fn a_workspace_still_requires_the_code_feature() {
+        let d = tempfile::tempdir().unwrap();
+        let m = json!({"version":1,"name":"workspace","database":"test.rag3db",
+            "embeddings":{"address":"127.0.0.1:1","model":"toy","dimensions":8},
+            "entities":{},"tools":{},"workspace":{"root":"."}});
+        let path = d.path().join("backend.json");
+        std::fs::write(&path,serde_json::to_vec(&m).unwrap()).unwrap();
+        let error = crate::backend::PreparedBackend::load(&path).err().expect("workspace refusé sans code");
+        assert!(error.contains("workspace") && error.contains("feature `code`"),"{error}");
     }
 
     /// **La dérive se dit, le lien ne garde que les copies modifiées** : une

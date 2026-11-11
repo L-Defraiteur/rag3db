@@ -1349,7 +1349,7 @@ impl PreparedBackend {
                      l'entité n'est ni cherchable ni découpée"
                 ));
             }
-            if config.hashsafe.as_ref().is_none_or(|v| v.is_empty()) {
+            if config.derived.is_none() && config.hashsafe.as_ref().is_none_or(|v| v.is_empty()) {
                 return Err(format!("{name}: stable hashsafe identity required"));
             }
             schemas.insert(name.clone(), schema);
@@ -1828,6 +1828,7 @@ impl PreparedBackend {
         let template_drift = serde_json::from_slice::<serde_json::Value>(&brut)
             .map(|v| crate::builtin_templates::drift_avec(&directory, &v, lecteur))
             .unwrap_or_default();
+        backend_schema::registration_order(&entities, &manifest.relations)?;
         Ok(Self {
             lecteurs_du_creux,
             search_tools,
@@ -2096,6 +2097,7 @@ impl PreparedBackend {
         embedder: Option<Box<dyn Embedder>>,
         raison: Option<String>,
     ) -> Result<Backend, String> {
+        let schema_order = backend_schema::registration_order(&self.entities, &self.manifest.relations)?;
         // Un backend en mots seuls démarre sans service d'embarquement. Un
         // backend qui déclare du vecteur démarre aussi (décision du
         // 10 octobre 2026, pour le paquet npm) : il le dit en le nommant —
@@ -2251,7 +2253,8 @@ impl PreparedBackend {
         ))
         .map_err(|e| e.to_string())?;
         cat.initialize().map_err(|e| e.to_string())?;
-        for (name, config) in &self.entities {
+        // Les racines d'abord, puis le schéma nommé du workspace inchangé.
+        for (name, config) in self.entities.iter().filter(|(_,c)| c.derived.is_none()) {
             cat.register_entity(name, config.clone())
                 .map_err(|e| e.to_string())?;
         }
@@ -2303,14 +2306,19 @@ impl PreparedBackend {
                 }
             }
         }
-        for (name, r) in &self.manifest.relations {
-            cat.register_relation_with(
-                name,
-                &r.from,
-                &r.to,
-                r.properties.clone().unwrap_or_default(),
-            )
-            .map_err(|e| e.to_string())?;
+        // Chaque dérivée attend sa racine et ses relations gather ; une
+        // relation attend ses deux extrémités, y compris dérivées.
+        for step in schema_order {
+            match step {
+                backend_schema::SchemaStep::Entity(name) if self.entities[name].derived.is_some() =>
+                    cat.register_entity(name, self.entities[name].clone()).map_err(|e|e.to_string())?,
+                backend_schema::SchemaStep::Entity(_) => {},
+                backend_schema::SchemaStep::Relation(name) => {
+                    let r = &self.manifest.relations[name];
+                    cat.register_relation_with(name, &r.from, &r.to, r.properties.clone().unwrap_or_default())
+                        .map_err(|e|e.to_string())?;
+                }
+            }
         }
         #[cfg(feature = "code")]
         let (file_source, garde) = match &self.manifest.workspace {
@@ -7912,6 +7920,9 @@ mod tests {
 #[cfg(test)]
 #[path = "backend_reload_tests.rs"]
 mod reload_tests;
+
+#[path = "backend_schema.rs"]
+mod backend_schema;
 
 #[cfg(all(test, feature = "rag3db-native"))]
 #[path = "backend_opening_tests.rs"]
