@@ -1,4 +1,4 @@
-# Orchestration — rapport de session du 11 novembre 2026 (16 h 30)
+# Orchestration — rapport de session du 11 novembre 2026
 
 Session « orchestration sessions » (c7). Ce rapport dit l'état du projet pour un agent qui reprend
 l'orchestration sans avoir lu nos échanges. Le knowledge dump (`02-knowledge-dump.md`) dit les règles.
@@ -9,16 +9,20 @@ Les sections de passation ci-dessous sont historiques ; les entrées finales dé
 
 | périmètre | état actuel |
 |---|---|
-| moteur/lib | lib complète29a7bc52a aux deux postes, inchangée ; correctif C++0511dece7 en branche, ciblés verts, suites entières en cours |
-| mémoire | alias d’archivage intégrés41526b29a ; mémoire réelle inchangée, cinquante documents non lancés |
+| moteur/lib | lib complète29a7bc52a aux deux postes, inchangée ; correctif C++0511dece7 en branche, ciblés verts, transaction357 verts/2 outils sautés ; concurrence25 rouges dont4 hors listes en départage, pas de code intégré |
+| mémoire | alias d’archivage intégrés41526b29a ; archiviste automatique conçu et ticket M9 ouvert, pas de branchement actif ; mémoire réelle inchangée, cinquante documents non lancés |
 | rattrapage | restitution des réclamations intégrée91e5f760b ; chemins d’erreur masqués suivis en ticket distinct |
-| vues | projection générique intégrée6c4b5ad0c ; partage de stockage1a en implémentation, couches et migration non livrées |
-| IDE | flux/usage/reprise après panne intégrés8d5139f9e ; recherche/wait_output de l’atelier encore à compléter chez ED |
-| arrêt des backends | correction du faux succès en branche, ciblés verts ; validation finale à reprendre sur base8d dans fenêtre réservée, juge variable suivi en ticket |
-| équipier | témoin de clôture prématurée en compilation ; relais contextuel au stade contrat, pas runtime livré |
-| codeparsers | seconde comparaison stricte terminée, nombreuses non-interrogations distinguées ; complément23 positions puis rebase/passe finale encore requis |
-| lucivy |4.3.3 publiée et témoin close amont vert ; dépendances rag3weaver encore4.3.2 |
-| pose du binaire | artefactd134 préparé mais non posé ; prochaine cible regroupée à fixer après arrêt, pas de coupure engagée |
+| vues | projection générique intégrée6c4b5ad0c ; 1a en branche49caf64c6 avec premier témoin dense/texte public vert ; sparse, masques avant top-k et passe restent à prouver ; couches et migration non livrées |
+| IDE | flux/usage/reprise8d5139f9e et outils contextuels/wait_output68b9ede17 intégrés ; deux dépôts homonymes, troncature, clics, rechargement et commande différée éprouvés |
+| arrêt des backends | intégré80b467dd3, erreur de fermeture conservée et arrêt idempotent ; défaut de provenance des gabarits suivi séparément, récupération attestée |
+| équipier | correction du reste explicite en branche, ciblés verts ; passe globale rouge sur18/26 bilans à600s, cause non établie ; ne pas confondre avec le relais livré |
+| codeparsers | complément23 positions terminé, six gains stricts attribués sans score global ; rebase sur68b et passe intégrée en cours, pas encore livré |
+| lucivy |4.3.3 publiée ; minimums et lock rag3weaver intégrésf96acc6cf, close en erreur rouge4.3.2 puis vert4.3.3 ; aucun changement de format |
+| pose du binaire | ancien artefactd134 non posé ; préparation exacte68b9ede17 demandée avec attestation UI servie, pose et activation encore distinctes |
+
+La règle de suivi couvre désormais toute nouvelle action et tout signalement entre sessions :
+ticket existant ou nouveau, porteur explicite, puis déplacement vers `docs/tickets/closed/`
+à la réalisation ou à l’abandon documenté. Voir `docs/tickets/README.md`.
 
 ## Ce qui se passe ce 11 novembre
 
@@ -511,3 +515,48 @@ restent explicitement en cours. Les chiffres sont datés et leurs protocoles ré
 - **4f21ff4cf**, docs seules archi : inventaire disque historique remplacé après nettoyage,
   diff relu ici. Son arrivée documentaire concurrente a fait refuser le premier push du suivi
   d’orchestration en avance rapide ; rebase sans conflit et sauvegarde sous nom neuf, aucun force.
+
+### Arrêt des backends et dépendance FTS intégrés
+
+- **80b467dd303769f81228149a7dfff5381c14db8b** : arrêt des backends livré après R5.
+  Quatre ciblés, huit e2e84/0/0 dont juge réel, features5/5, lib2104/0/61 ignorés et
+  navigateur36/0/0. Le résultat d’un premier arrêt raté reste en erreur aux appels suivants ;
+  la fermeture réussie n’est exécutée qu’une fois, y compris lors de Drop.
+- Le premier navigateur rouge utilisait deux anciens gabarits UI sur212. L’ancien ELF est
+  conservé ; une régénération sans modification de source a produit les212 bons gabarits,
+  puis les deux ciblés inchangés et les36 navigateurs verts. Le
+  [ticket de provenance](../../recherche/tickets/2026-11-11-un-target-repris-embarque-les-gabarits-d-un-autre-worktree.md)
+  reste ouvert : la récupération ponctuelle n’est pas une correction durable du garde.
+- **f96acc6cf97692804520e2d672de080bcae730a3** : dépendances Lucivy4.3.3 intégrées,
+  trois minimums et cinq paquets du lock registre seulement. Même témoin public close en
+  erreur : rouge4.3.2, vert4.3.3 avec handle fermé et sortie enfant normale. Neuf e2e121/0/0,
+  features5/5, lib2105/0/61, navigateur36/0/0,212 gabarits attestés. Format inchangé ; pas de
+  scénario de compatibilité ou de nouvelle campagne Gemini.
+- Les deux tours ont leurs trois contrôles relus et leur nettoyage aux deux postes terminé ;
+  preuves hors target et références distantes conservées. Sources jugées, détails et tickets
+  fermés sont dans le rapport de recherche ; bilan final documentaire1b5cfd941.
+
+### Outils contextuels de l’atelier intégrés
+
+- **68b9ede17c182487d3f823c2e5cc5906b62a4a46** : relais déclaré de recherche et navigation
+  vers un dépôt explicitement choisi, suivi `wait_output`, provenance structurelle conservée
+  dans les événements et l’historique. Les liens gardent la bonne cible même si le texte de
+  sortie est tronqué. Les vues non prises en charge refusent explicitement.
+- La revue a trouvé une fenêtre entre vérification de A et exécution de B après rechargement.
+  Témoin déterministe949dcb556 rouge ; correction60b/074 puis09 vérifiant et exécutant le
+  même prepared, sans contourner cellule, garde, harnais ni annulation. Les
+  [tickets outils](../../tickets/closed/2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md)
+  et [version vérifiée](../../tickets/closed/2026-11-11-une-invocation-peut-executer-une-autre-version-que-celle-verifiee.md)
+  sont clôturés dans le commit68.
+- Preuve finale ED09e86e689 : features5/5, gardes10/0/0, lib2114/0/64 ignorés en42,84s,
+  lectures24/0/0 et PostgreSQL privé34/0/0. Navigateur complet39/0/0 sura92 ; trois parcours
+  réels rejoués sur368 en132,16s,220 gabarits et ELF attestés. Réutilisation pour09 explicitement
+  acceptée après lecture du seul diff `#[cfg(test)]` d’un wrapper privé, sans changement UI.
+- Trois contrôles après push relus. Nettoyage ED et archi terminé aux deux postes : seuls
+  worktrees, branches locales, targets et basePG privés de ce lot retirés. Logs et sauvegardes
+  distantes conservés ; lot remaining et sa basePG intacts.
+- Restent distincts : accord de commande hors domaine encore ouvert, validation de l’autonomie
+  remaining rouge et archiviste automatique M9 conçu. Aucun nouveau mécanisme général
+  d’orchestration multiagents ni branchement mémoire automatique livré dans ce lot.
+- Base68 donnée à codeparsers pour la passe intégrée suivante et à optimiseur pour préparer
+  un artefact attesté. Cette préparation ne vaut pas pose chez Lucie.

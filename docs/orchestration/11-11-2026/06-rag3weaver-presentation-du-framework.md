@@ -104,7 +104,13 @@ aussi par SSH.
 L’état de l’hôte et la fin des tours du chat sont désormais poussés par le flux d’événements
 (`8d5139f9e`). L’usage du modèle est commun à l’API, à la barre et au récapitulatif ; après une
 panne, les actions et résultats déjà obtenus restent visibles et le chat peut reprendre.
-Cette livraison ne complète pas encore tous les outils accessibles depuis l’atelier.
+
+Le lot contextuel `68b9ede17` rend aussi la recherche et la navigation accessibles depuis le
+chat de l’atelier, dans un dépôt explicitement choisi, ainsi que le suivi des commandes longues
+par `wait_output`. Les résultats portent leur cible en métadonnées structurelles : les liens
+ouvrent le bon dépôt après troncature ou rechargement de la page. Les parcours navigateur ont
+éprouvé deux dépôts avec le même chemin et le même symbole, ainsi qu’une commande réellement
+différée. Le runtime vérifie et exécute une même version des déclarations lors d’une invocation.
 
 L’atelier sait notamment attacher un worktree, ouvrir une branche dans un worktree voisin,
 lire un fichier ou un scope, modifier du texte ou des lignes et rendre le diff.
@@ -185,8 +191,10 @@ du monde, avec les bons droits et une trace de ce qu’il a réellement fait.**
 - Des tests navigateur font réellement lire et modifier un dépôt depuis l’IDE.
 - Les traces exactes d’un défaut de relations du moteur ont été rejouées sans écart sous le
   correctif. D’autres défauts restent ouverts, dont une annulation sous pool mémoire plein.
-- Lucivy **4.3.3 est publiée**, avec arrêt des acteurs même si close() échoue. La montée de
-  dépendance de rag3weaver depuis 4.3.2 est encore à intégrer au moment de cette note.
+- Lucivy **4.3.3 est publiée et intégrée dans rag3weaver** (`f96acc6cf`), avec arrêt des acteurs
+  même si close() échoue. Le même témoin public échoue avec4.3.2 et passe avec4.3.3 : erreur
+  conservée, nouvelles écritures refusées, sortie normale de l’enfant. Le format d’index reste
+  inchangé. L’arrêt des backends et son résultat conservé sont également intégrés (`80b467dd3`).
 
 La maturité est celle d’un système en développement, utilisé sur son propre code, avec des
 capacités déjà démontrées et des garanties encore en consolidation. « Test ciblé vert »,
@@ -223,3 +231,6 @@ Les chemins ci-dessous sont relatifs au dépôt rag3db. Les pages anciennes déc
 - `docs/orchestration/11-11-2026/05-cap-produit-vues-et-chat.md` : priorités produit confirmées.
 - `docs/banc/11-11-2026/03-le-juge-en-gguf.md` : protocole et mesures du juge local.
 - `docs/orchestration/11-11-2026/01-rapport-de-session.md` : suivi des atterrissages et validations.
+- `docs/memoire/11-11-2026/05-archiviste-automatique-du-chat.md` : conception du classement et
+  du rappel automatiques aux frontières de tour, avec abstention et hiérarchie mémoire ;
+  ce parcours M9 reste à réaliser.
