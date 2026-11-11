@@ -101,7 +101,7 @@ fn invocation(tour: &Turn) -> Value {
 fn modele(cibles: Cibles, exposes: Arc<Mutex<Vec<Value>>>, retours: Retours, tronque: bool) -> ChatModel {
     Arc::new(move |_| -> Result<Arc<dyn Llm>, String> {
         let (cibles, exposes, retours) = (cibles.clone(), exposes.clone(), retours.clone());
-        Ok(Arc::new(CallbackLlm::new("faux-parcours-contextuel", 8192, move |turns: &[Turn], opts, sink| {
+        Ok(Arc::new(CallbackLlm::new("faux-parcours-contextuel", 131072, move |turns: &[Turn], opts, sink| {
             exposes
                 .lock()
                 .unwrap()
@@ -201,13 +201,20 @@ fn parcours(tronque: bool) {
     let chat = format!("{}/ide/code/{}/chat", serveur.racine(), a.h.id);
     // C'est le lien produit par le vrai search_code, jamais un href ajouté par le témoin.
     let lien = "[...document.querySelectorAll('.outil[data-outil=search_code]')].at(-1)?.querySelector('a.code-ref[data-path=\"src/lib.rs\"]')";
-    for (lettre, id, marque, autre) in [("B", &idb, B, A), ("A", &ida, A, B)] {
+    for (tour, (lettre, id, marque, autre)) in [("B", &idb, B, A), ("A", &ida, A, B)].into_iter().enumerate() {
         n.aller(&chat, PRETE);
         let demande = serde_json::to_string(&format!("cherche repere puis son outline dans le dépôt {lettre}")).unwrap();
         n.evaluer(&format!("document.querySelector('#message').value = {demande}; document.querySelector('#send').click()"));
         n.attendre(
-            "['fini', 'Erreur'].includes(document.querySelector('#status')?.textContent)",
-            "le tour atteint une issue observable",
+            &format!("document.querySelector('#status')?.textContent === 'Erreur' || (document.querySelectorAll('.outil[data-outil=search_code]').length >= {} && [...document.querySelectorAll('.message.assistant')].at(-1)?.textContent.includes('Cible consultée.') && document.querySelector('#status')?.textContent === 'fini')", tour + 1),
+            "ce nouveau tour atteint une issue observable",
+
+        );
+        assert_eq!(
+            n.evaluer("document.querySelector('#status')?.textContent"),
+            json!("fini"),
+            "issue du nouveau tour : {}",
+            n.evaluer("document.body.innerText")
         );
         let schemas = exposes.lock().unwrap().last().cloned().expect("un appel modèle depuis le navigateur");
         for outil in ["search_code", "outline"] {
