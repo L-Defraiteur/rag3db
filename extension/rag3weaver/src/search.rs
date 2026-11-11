@@ -2783,8 +2783,8 @@ mod tests {
             filter_indirection: None, title_field: None, title_boost: 1.0,
         };
         let conn = CallbackConnection::new(|_, _| {
-            let row = |id: &str, path: &str, source: &str| vec![
-                CypherValue::String("shared".into()), CypherValue::String(id.into()),
+            let row = |chunk: &str, id: &str, path: &str, source: &str| vec![
+                CypherValue::String(chunk.into()), CypherValue::String(id.into()),
                 CypherValue::String("body".into()), CypherValue::Int(0),
                 CypherValue::Int(0), CypherValue::Int(1), CypherValue::Int(0), CypherValue::Int(4),
                 CypherValue::String("stale-entity".into()), CypherValue::String("stale-source".into()),
@@ -2793,14 +2793,15 @@ mod tests {
             ];
             // Une jointure dupliquée ne doit pas dupliquer la paire morceau/parent.
             Ok(QueryResult { columns: vec![], rows: vec![
-                row("parent-b", "b.rs", "source-b"), row("parent-a", "a.rs", "source-a"),
-                row("parent-b", "b.rs", "source-b"),
+                row("shared", "parent-b", "b.rs", "source-b"), row("shared", "parent-a", "a.rs", "source-a"),
+                row("shared", "parent-b", "b.rs", "source-b"),
+                row("other", "parent-a", "a.rs", "source-a"),
             ] })
         });
         for mode in [ResultMode::Aggregated, ResultMode::Detailed, ResultMode::SourceResolved] {
             for admission in [None, Some(HashSet::from(["parent-b".into()])), Some(HashSet::new())] {
-                let hits = [0.25, 0.75].into_iter().map(|score| SearchResult {
-                    uuid: "shared".into(), score, entity: None, data: None, chunk: None, chunks: None,
+                let hits = [("shared", 0.25), ("shared", 0.75), ("other", 0.75)].into_iter().map(|(uuid, score)| SearchResult {
+                    uuid: uuid.into(), score, entity: None, data: None, chunk: None, chunks: None,
                 }).collect();
                 let rows = resolve_vector_chunks_admitted(&conn, &target, hits, &["file_path".into()],
                     mode, &crate::dialect::Rag3dbDialect, admission.as_ref()).unwrap();
@@ -2816,13 +2817,15 @@ mod tests {
                     assert_eq!(r.data.as_ref().unwrap()["file_path"].as_str(), Some(format!("{suffix}.rs").as_str()));
                     if mode == ResultMode::Detailed {
                         let chunks = r.chunks.as_ref().unwrap();
-                        assert_eq!(chunks.len(), 1);
+                        assert_eq!(chunks.len(), if suffix == "a" { 2 } else { 1 });
+                        assert_eq!(chunks[0].uuid, if suffix == "a" { "other" } else { "shared" });
                         assert_eq!(chunks[0].score, 0.75);
                         assert_eq!(chunks[0].source_entity, "Root");
                         assert_eq!(chunks[0].source_uuid, format!("source-{suffix}"));
                         assert_eq!(chunks[0].source_field, "body");
                     } else {
                         assert_eq!(r.chunk.as_ref().unwrap().score, 0.75);
+                        assert_eq!(r.chunk.as_ref().unwrap().uuid, if suffix == "a" { "other" } else { "shared" }, "à score égal, le choix ne doit pas dépendre de l’ordre des hits");
                     }
                 }
             }
