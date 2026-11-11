@@ -112,3 +112,16 @@ lib2121/0/64 ignorés (41,73s), navigateur39/0/0 (132,88s), sept suites e2e
 sans SAUTÉ : dérivées4, lectures24, PG34, txvecteurs3, txarrêt18, txmerge1,
 txligne3. Elle reste étiquetée08, ne valide pas le schéma nommé et n'autorise
 pas le push tant que ce point de revue n'est pas départagé/corrigé.
+
+## Sous-travail fournisseur confié à arbre principal
+
+Extraction pure autorisée par orchestration ; porteur arbre principal pour code.rs,
+ED pour la composition Backend. Worktree arbre neuf `cx-wt-schema-code-provider`,
+base master `c04c62021`, indépendant de la source 1a. Signature stabilisée :
+`code::schema_configs(scope_chunking: ChunkingConfig) ->
+(BTreeMap<String, EntityConfig>, BTreeMap<String, RelationDef>)`.
+La primitive alimente plan_schema et register_code_schema avec les mêmes configs
+et propriétés ; ordre de montage existant File/Scope/Library/Symbol puis RELATIONS
+conservé. Faits Scope (chunking, hashsafe) préservés, aucune pseudo-configuration
+construite dans Backend. SHA de livraison attendu avant compilation combinée.
+Ce sous-travail reprend ce même ticket, sans doublon ni clôture par transfert.
