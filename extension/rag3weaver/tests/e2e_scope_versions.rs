@@ -122,4 +122,22 @@ fn un_hit_partage_se_projette_vers_toutes_ses_occurrences() {
             assert_eq!(chunk, &uuid, "le contenu projeté doit être le hit d'origine");
         }
     }
+    // Le préfiltre du chunk ne suffit pas : admis via a.rs, il ne doit pas
+    // rendre aussi b.rs au passage vers ses parents.
+    let cat = Arc::new(Mutex::new(cat));
+    let options = rag3weaver::search::SearchOptions {
+        signals: Some(rag3weaver::search::SearchSignals::VECTOR),
+        strict_signals: true,
+        limit: 10,
+        filter_condition: Some(rag3weaver::filter::FilterCondition::Field {
+            key: "file_path".into(),
+            value: rag3weaver::filter::FilterValue::Direct(rag3weaver::connection::CypherValue::String("a.rs".into())),
+        }),
+        ..Default::default()
+    };
+    let response = Catalog::rechercher(&cat, "Scope", FONCTION.trim(), options).unwrap();
+    assert!(!response.results.is_empty(), "le filtre a perdu les occurrences visibles");
+    assert!(response.results.iter().all(|r| r.data.as_ref().unwrap()["file_path"].as_str() == Some("a.rs")),
+        "la projection a ressuscité une occurrence hors filtre : {:?}", response.results);
+
 }
