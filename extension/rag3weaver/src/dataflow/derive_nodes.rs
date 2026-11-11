@@ -11,7 +11,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
-use crate::config::{CatalogConfig, DerivedConfig, EntityConfig, GatherDirection};
+use crate::config::{CatalogConfig, DerivedConfig, DerivedIdentity, EntityConfig, GatherDirection};
 use crate::connection::{CypherValue, DbConnection, QueryParam};
 use crate::hash::content_hash;
 use crate::records::{Derivation, EntityRecord, RefOrUuid, RelationRecord};
@@ -97,6 +97,33 @@ pub fn derived_uuid(entity: &str, root_uuid: &str) -> String {
     hashsafe_uuid(entity, &[root_uuid])
 }
 
+/// Adresse d'une version rendue : les octets et la recette, jamais les coordonnées
+/// de la racine. La cellule appartient au domaine de l'adresse ; les vecteurs
+/// restent qualifiés séparément par modèle et dimension dans leur magasin.
+pub fn derived_content_uuid(
+    entity: &str,
+    format: &str,
+    cfg: &EntityConfig,
+    rendered: &BTreeMap<String, String>,
+    scope: &crate::scope::Scope,
+) -> Result<String, String> {
+    if format.trim().is_empty() {
+        return Err("derived.identity : un format de contenu non vide est obligatoire".into());
+    }
+    let recipe = serde_json::json!({
+        "identity": "derived-content-v1",
+        "format": format,
+        "scope": scope,
+        "fields": rendered,
+        "contentFields": cfg.content_fields(),
+        "titleField": cfg.title_field(),
+        "chunked": cfg.chunked,
+        "chunking": cfg.chunking,
+    });
+    let canonical = serde_json::to_string(&recipe).map_err(|e| format!("identité de contenu : {e}"))?;
+    Ok(hashsafe_uuid(entity, &["derived-content-v1", &canonical]))
+}
+
 impl Node for DeriveNode {
     fn name(&self) -> &str {
         &self.name
@@ -139,6 +166,8 @@ impl Node for DeriveNode {
             }
         }
 
+        let scope = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_default();
+        let mut versions_emises = HashSet::new();
         let mut lignes: Vec<EntityRecord> = Vec::new();
         let mut liens: Vec<RelationRecord> = Vec::new();
         let mut inchangees = 0usize;
@@ -208,8 +237,27 @@ impl Node for DeriveNode {
             }
 
             // 3. Ce qui est déjà rendu, et avec quelles entrées.
-            let uuids_derives: Vec<String> = racines.iter().map(|r| derived_uuid(entity, r)).collect();
-            let deja = lire_par_uuid(conn.as_ref(), dialect.as_ref(), entity, &[DerivedConfig::RENDER_HASH], &uuids_derives)?;
+            let rel_name = crate::schema::derived_rel_name(entity);
+            let mut references: HashMap<String, (String, String)> = HashMap::new();
+            let deja = if matches!(derived.identity, DerivedIdentity::Content { .. }) {
+                let query = dialect.derived_references(entity, &derived.from, &rel_name);
+                for batch in racines.chunks(5_000) {
+                    let result = conn.execute_with_params(&query, &[QueryParam::new("uuids", CypherValue::List(batch.iter().cloned().map(CypherValue::String).collect()))])
+                        .map_err(|e| format!("DeriveNode: références de {entity} : {e}"))?;
+                    for row in result.rows {
+                        let Some(root) = row.first().and_then(|v| v.as_str()) else { continue };
+                        let Some(version) = row.get(1).and_then(|v| v.as_str()) else { continue };
+                        let hash = row.get(2).and_then(|v| v.as_str()).unwrap_or_default();
+                        if references.insert(root.to_string(), (version.to_string(), hash.to_string())).is_some() {
+                            return Err(format!("DeriveNode: plusieurs versions actives de {entity} pour {root}"));
+                        }
+                    }
+                }
+                HashMap::new()
+            } else {
+                let ids: Vec<String> = racines.iter().map(|r| derived_uuid(entity, r)).collect();
+                lire_par_uuid(conn.as_ref(), dialect.as_ref(), entity, &[DerivedConfig::RENDER_HASH], &ids)?
+            };
 
             // 4. Rendre ce qui a changé.
             let champs_contenu: Vec<String> = cfg.content_fields().iter().map(|s| s.to_string()).collect();
@@ -227,13 +275,31 @@ impl Node for DeriveNode {
                     m
                 };
                 let contexte = render_context(ligne_racine, &regles);
-                let hash_entrees = render_inputs_hash(&contexte);
-                let uuid = derived_uuid(entity, racine);
-                if deja.get(&uuid).and_then(|l| l.get(DerivedConfig::RENDER_HASH)).and_then(|v| v.as_str()) == Some(hash_entrees.as_str()) {
+                let hash_entrees = if matches!(derived.identity, DerivedIdentity::Content { .. }) {
+                    render_inputs_hash(&serde_json::json!({
+                        "context": contexte, "derived": derived, "chunking": cfg.chunking,
+                        "chunked": cfg.chunked, "contentFields": cfg.content_fields(), "titleField": cfg.title_field(),
+                    }))
+                } else { render_inputs_hash(&contexte) };
+                let root_identity = derived_uuid(entity, racine);
+                let previous_hash = match &derived.identity {
+                    DerivedIdentity::Root => deja.get(&root_identity).and_then(|l| l.get(DerivedConfig::RENDER_HASH)).and_then(|v| v.as_str()),
+                    DerivedIdentity::Content { .. } => references.get(racine).map(|(_, hash)| hash.as_str()),
+                };
+                if previous_hash == Some(hash_entrees.as_str()) {
                     inchangees += 1;
                     continue;
                 }
                 let rendus = render_fields(derived, &contexte).map_err(|e| format!("DeriveNode: « {entity} » depuis {racine} : {e}"))?;
+                let uuid = match &derived.identity {
+                    DerivedIdentity::Root => root_identity,
+                    DerivedIdentity::Content { format } => derived_content_uuid(entity, format, cfg, &rendus, &scope)?,
+                };
+                let content_identity = matches!(derived.identity, DerivedIdentity::Content { .. });
+                let exists = content_identity && (
+                    versions_emises.contains(&uuid) ||
+                    !lire_par_uuid(conn.as_ref(), dialect.as_ref(), entity, &[], &[uuid.clone()])?.is_empty()
+                );
 
                 let mut data: Ligne = BTreeMap::new();
                 for (champ, texte) in &rendus {
@@ -246,23 +312,32 @@ impl Node for DeriveNode {
                     .join("\n\n");
                 data.insert("_uuid".into(), CypherValue::String(uuid.clone()));
                 data.insert("_content_hash".into(), CypherValue::String(content_hash(&contenu)));
-                data.insert(DerivedConfig::SOURCE_ENTITY.into(), CypherValue::String(derived.from.clone()));
-                data.insert(DerivedConfig::SOURCE_UUID.into(), CypherValue::String(racine.clone()));
-                data.insert(DerivedConfig::RENDER_HASH.into(), CypherValue::String(hash_entrees));
+                if !content_identity {
+                    data.insert(DerivedConfig::SOURCE_ENTITY.into(), CypherValue::String(derived.from.clone()));
+                    data.insert(DerivedConfig::SOURCE_UUID.into(), CypherValue::String(racine.clone()));
+                    data.insert(DerivedConfig::RENDER_HASH.into(), CypherValue::String(hash_entrees.clone()));
+                }
+                if !exists {
+                    let (entity_ref, resolver) = EntityRef::new(entity);
+                    versions_emises.insert(uuid.clone());
+                    lignes.push(EntityRecord { entity_name: entity.clone(), data, entity_ref, resolver: Some(resolver), vectors: None });
+                }
 
-                let (entity_ref, resolver) = EntityRef::new(entity);
-                lignes.push(EntityRecord { entity_name: entity.clone(), data, entity_ref, resolver: Some(resolver), vectors: None });
-
-                let rel_name = crate::schema::derived_rel_name(entity);
                 let (relation_ref, rel_resolver) = RelationRef::new(&rel_name);
+                let properties = if content_identity {
+                    BTreeMap::from([(DerivedConfig::RENDER_HASH.into(), CypherValue::String(hash_entrees))])
+                } else { BTreeMap::new() };
                 liens.push(RelationRecord::new(
-                    rel_name,
-                    RefOrUuid::Uuid(uuid),
-                    RefOrUuid::Uuid(racine.clone()),
-                    BTreeMap::new(),
-                    rel_resolver,
-                    relation_ref,
+                    rel_name.clone(), RefOrUuid::Uuid(uuid.clone()), RefOrUuid::Uuid(racine.clone()), properties, rel_resolver, relation_ref,
                 ));
+                if content_identity {
+                    if let Some((old, _)) = references.get(racine).filter(|(old, _)| old != &uuid) {
+                        let (relation_ref, resolver) = RelationRef::new(&rel_name);
+                        let mut unlink = RelationRecord::new(rel_name.clone(), RefOrUuid::Uuid(old.clone()), RefOrUuid::Uuid(racine.clone()), BTreeMap::new(), resolver, relation_ref);
+                        unlink.retirer = true;
+                        liens.push(unlink);
+                    }
+                }
             }
         }
 
@@ -313,6 +388,7 @@ mod tests {
 
     fn derived() -> DerivedConfig {
         DerivedConfig {
+            identity: crate::config::DerivedIdentity::Root,
             from: "Ticket".into(),
             gather: vec![],
             render: [
@@ -322,6 +398,51 @@ mod tests {
             .into_iter()
             .collect(),
         }
+    }
+
+    #[test]
+    fn adresse_de_contenu_preserve_octets_recette_et_cellule() {
+        use crate::config::{FieldType, SimpleFieldDef};
+        let cfg = EntityConfig {
+            fields: HashMap::from([
+                ("content".into(), SimpleFieldDef { field_type: FieldType::Text, is_content: true, ..Default::default() }),
+                ("title".into(), SimpleFieldDef { field_type: FieldType::Text, is_title: true, ..Default::default() }),
+            ]),
+            ..Default::default()
+        };
+        let scope = crate::scope::Scope::default();
+        let fields = BTreeMap::from([("title".into(), "Signature".into()), ("content".into(), "Corps\n".into())]);
+        let key = |entity: &str, format: &str, cfg: &EntityConfig, fields: &BTreeMap<String, String>, scope: &crate::scope::Scope| {
+            derived_content_uuid(entity, format, cfg, fields, scope).unwrap()
+        };
+        let initial = key("Version", "rust-v1", &cfg, &fields, &scope);
+        // Racines et positions distinctes, champs effectivement rendus identiques.
+        let mut a = Ligne::from([("subject".into(), CypherValue::String("Signature".into())), ("body".into(), CypherValue::String("Corps".into()))]);
+        let mut b = a.clone();
+        a.insert("line".into(), CypherValue::Int(1));
+        b.insert("line".into(), CypherValue::Int(20));
+        assert_ne!(render_inputs_hash(&render_context(&a, &BTreeMap::new())), render_inputs_hash(&render_context(&b, &BTreeMap::new())));
+        let render_a = render_fields(&derived(), &render_context(&a, &BTreeMap::new())).unwrap();
+        let render_b = render_fields(&derived(), &render_context(&b, &BTreeMap::new())).unwrap();
+        assert_eq!(key("Version", "rust-v1", &cfg, &render_a, &scope), key("Version", "rust-v1", &cfg, &render_b, &scope));
+        for name in ["title", "content"] {
+            let mut changed = fields.clone();
+            changed.get_mut(name).unwrap().push(' ');
+            assert_ne!(initial, key("Version", "rust-v1", &cfg, &changed, &scope), "octets du champ {name}");
+        }
+        let mut doc = fields.clone();
+        doc.insert("docstring".into(), "Documentation".into());
+        assert_ne!(initial, key("Version", "rust-v1", &cfg, &doc, &scope));
+        let mut recipe = cfg.clone();
+        recipe.chunking.overlap_lines += 1;
+        assert_ne!(initial, key("Version", "rust-v1", &recipe, &fields, &scope));
+        recipe = cfg.clone();
+        recipe.fields.get_mut("title").unwrap().is_title = false;
+        assert_ne!(initial, key("Version", "rust-v1", &recipe, &fields, &scope));
+        assert_ne!(initial, key("AutreVersion", "rust-v1", &cfg, &fields, &scope));
+        assert_ne!(initial, key("Version", "rust-v2", &cfg, &fields, &scope));
+        assert_ne!(initial, key("Version", "rust-v1", &cfg, &fields, &crate::scope::Scope::new("autre", "projet")));
+        assert!(derived_content_uuid("Version", " ", &cfg, &fields, &scope).is_err());
     }
 
     #[test]

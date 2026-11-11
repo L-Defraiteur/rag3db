@@ -699,6 +699,29 @@ pub trait SchemaDialect: Send + Sync {
         )
     }
 
+    /// État propre à chaque origine d'une version immuable, jamais porté par la version.
+    fn derived_references(&self, entity: &str, root: &str, relation: &str) -> String {
+        if !self.capabilities().cypher { return self.untranslated("derived_references"); }
+        format!("UNWIND $uuids AS u MATCH (d:{})-[r:{}]->(s:{} {{_uuid: u}}) RETURN s._uuid, d._uuid, r._render_hash",
+            self.quote(entity), self.quote(relation), self.quote(root))
+    }
+
+    fn mark_derived_references_pending(&self, entity: &str, root: &str, relation: &str) -> String {
+        if !self.capabilities().cypher { return self.untranslated("mark_derived_references_pending"); }
+        format!("UNWIND $uuids AS u MATCH (d:{})-[r:{}]->(s:{} {{_uuid: u}}) SET r._render_hash = ''",
+            self.quote(entity), self.quote(relation), self.quote(root))
+    }
+
+    fn pending_derived_references(&self, entity: &str, root: &str, relation: &str, limit: usize) -> String {
+        if !self.capabilities().cypher { return self.untranslated("pending_derived_references"); }
+        format!("MATCH (d:{})-[r:{}]->(s:{}) WHERE r._render_hash IS NULL OR r._render_hash = '' RETURN s._uuid LIMIT {limit}",
+            self.quote(entity), self.quote(relation), self.quote(root))
+    }
+
+    fn missing_derived_references(&self, entity: &str, root: &str, relation: &str, limit: usize) -> String {
+        self.select_racines_sans_derivee(root, entity, relation, limit)
+    }
+
     /// **Marquer les lignes d'une session de synchronisation** :
     /// `_snapshot = $session` sur les lignes de `$uuids`.
     fn mark_snapshot_session(&self, table: &str) -> String {
@@ -3349,6 +3372,23 @@ impl SchemaDialect for PostgresDialect {
              WHERE {table}._uuid = v.uuid",
             self.quote(field)
         )
+    }
+
+    fn derived_references(&self, _entity: &str, root: &str, relation: &str) -> String {
+        format!("SELECT s._uuid, r.from_uuid, r._render_hash FROM {} r JOIN {} s ON s._uuid = r.to_uuid JOIN jsonb_array_elements_text($uuids::text::jsonb) u(uuid) ON u.uuid = s._uuid",
+            self.quote(relation), self.quote(root))
+    }
+
+    fn mark_derived_references_pending(&self, _entity: &str, _root: &str, relation: &str) -> String {
+        format!("UPDATE {} SET _render_hash = '' WHERE to_uuid IN (SELECT jsonb_array_elements_text($uuids::text::jsonb))", self.quote(relation))
+    }
+
+    fn pending_derived_references(&self, _entity: &str, _root: &str, relation: &str, limit: usize) -> String {
+        format!("SELECT to_uuid FROM {} WHERE _render_hash IS NULL OR _render_hash = '' LIMIT {limit}", self.quote(relation))
+    }
+
+    fn missing_derived_references(&self, _entity: &str, root: &str, relation: &str, limit: usize) -> String {
+        format!("SELECT s._uuid FROM {} s LEFT JOIN {} r ON r.to_uuid = s._uuid WHERE r.from_uuid IS NULL LIMIT {limit}", self.quote(root), self.quote(relation))
     }
 
     fn select_derivees_a_rendre(&self, derived_table: &str, limite: usize) -> String {

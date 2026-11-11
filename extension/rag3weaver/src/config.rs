@@ -727,6 +727,20 @@ pub struct GroupBy {
     pub frame_field: String,
 }
 
+/// Identité d'une dérivée : occurrence par racine, ou version immuable du rendu.
+/// Le format nomme la recette sémantique ; changer ses règles exige un autre format.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(tag = "mode", rename_all = "camelCase", deny_unknown_fields)]
+pub enum DerivedIdentity {
+    #[default]
+    Root,
+    Content { format: String },
+}
+
+impl DerivedIdentity {
+    fn is_root(&self) -> bool { matches!(self, Self::Root) }
+}
+
 /// **Une entité dérivée** : une ligne par ligne de l'entité racine `from`,
 /// rendue depuis les champs de la racine et les voisines rassemblées par
 /// relation. Le gabarit de chaque champ rendu voit `root` (la racine) et une
@@ -737,6 +751,9 @@ pub struct GroupBy {
 pub struct DerivedConfig {
     /// L'entité racine.
     pub from: String,
+    /// Le mode historique reste implicite dans les déclarations existantes.
+    #[serde(default, skip_serializing_if = "DerivedIdentity::is_root")]
+    pub identity: DerivedIdentity,
     /// Les voisines rassemblées, par relation.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub gather: Vec<GatherRule>,
@@ -820,6 +837,9 @@ impl DerivedConfig {
     pub fn validate(&self, fields: &HashMap<String, SimpleFieldDef>) -> Result<(), String> {
         if self.from.is_empty() {
             return Err("derived : `from` est obligatoire — une dérivée a une racine".into());
+        }
+        if matches!(&self.identity, DerivedIdentity::Content { format } if format.trim().is_empty()) {
+            return Err("derived.identity : un format de contenu non vide est obligatoire".into());
         }
         if self.render.is_empty() {
             return Err("derived : `render` est vide — une dérivée rend au moins un champ".into());
@@ -1364,10 +1384,25 @@ mod tests_derived {
 
     fn derivee() -> DerivedConfig {
         DerivedConfig {
+            identity: DerivedIdentity::Root,
             from: "Ticket".into(),
             gather: vec![GatherRule { name: "comments".into(), relation: "HAS_COMMENT".into(), direction: GatherDirection::Out, fields: vec!["body".into()] }],
             render: [("content".to_string(), "{{ root.body }}{% for c in comments %}{{ c.body }}{% endfor %}".to_string())].into_iter().collect(),
         }
+    }
+
+    #[test]
+    fn identite_par_racine_reste_le_format_implicite() {
+        let value = serde_json::to_value(derivee()).unwrap();
+        assert!(value.get("identity").is_none());
+        let d: DerivedConfig = serde_json::from_value(value).unwrap();
+        assert_eq!(d.identity, DerivedIdentity::Root);
+        let mut d = d;
+        d.identity = DerivedIdentity::Content { format: " ".into() };
+        assert!(d.validate(&champs(&["content"])).unwrap_err().contains("format"));
+        d.identity = DerivedIdentity::Content { format: "texte-v1".into() };
+        assert!(d.validate(&champs(&["content"])).is_ok());
+        assert_eq!(serde_json::from_value::<DerivedConfig>(serde_json::to_value(&d).unwrap()).unwrap(), d);
     }
 
     #[test]
