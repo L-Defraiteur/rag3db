@@ -231,3 +231,12 @@ pour index présent, identité content/from correct, absence de récursion, cont
 et champs indexés (titre compris) existant sur l'occurrence. Aucun doublon de validation
 métier, aucune pseudo-config fournie, aucune arête Root→Index dans l'ordre de création.
 La validation de dérivation root/content et le refus des chaînes restent ceux partagés par ED.
+
+Source combinée **eb02a9546**, `cx-manifeste-public-1a-vert.log` sur luciepc : **2/0/0**,
+0,60 s. Vrai manifeste public chargé et ouvert, trois permutations, deux racines/une version,
+lecture des occurrences dans les trois modes ; fermeture de lecture comprenant l'index.
+Les cinq refus d'association passent (inconnu, mode root, mauvaise origine, soi-même,
+chaîne) ainsi que la mutation du préparé avant open avec compteur **zéro appel base**.
+Ce sont les preuves combinées 1a, distinctes des 16 ouvertures ED et du fournisseur c12.
+La vraie passe réglementaire combinée reste à jouer ; ticket conservé ouvert jusqu'à son
+verdict et au commit final, puis git mv vers closed selon la procédure.

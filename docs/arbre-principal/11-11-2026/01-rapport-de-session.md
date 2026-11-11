@@ -39,8 +39,10 @@ sans arête inverse de création ni activation de base utilisateur. Les preuves 
 Dernière source propre de notre branche3 : **b6f78bf878f1ee4f610c5db70b5a6de6a98e4f2d**.
 `cx-cellules-reouverture-v4.log` : **22 dérivées et 3 Scope privé verts**, rc0. Inclut titre
 non projetable refusé, FTS physique, rollback/reprise bêta, réouverture durable et ScopeNONE.
-`cx-contenu-pg-v4.log` : ingestion franchie, lecture publique bloquée ; aucune preuve PG
-verte. Trois sessions privées dont une idle-in-transaction, aucun bloqueur SQL selon
+`cx-contenu-pg-v4.log` : deuxième ingestion bloquée ; aucune preuve PG verte. Le contrôle
+SQL après arrêt ne retrouve que les deux racines alpha et leur version, aucune bêta :
+il corrige notre première hypothèse de phase (lecture publique). Trois sessions privées
+dont une idle-in-transaction, aucun bloqueur SQL selon
 pg_stat_activity. Attachement gdb refusé par Yama, sans contournement ; seul le PID du test
 **1166384**, chemin binaire et filtre exacts relus, a reçu SIGTERM. Zéro session privée
 restante ensuite. Le lanceur a terminé PG en échec puis les deux suites natives ci-dessus.
