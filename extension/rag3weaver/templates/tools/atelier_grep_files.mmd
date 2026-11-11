@@ -9,6 +9,7 @@
 %% param: relation string = "" -- Relation du schéma à suivre depuis les scopes trouvés, pour voir à quoi ils mènent : CONSUMES (ce qu'ils utilisent), CONSUMED_BY (qui les utilise), PARENT_OF / HAS_PARENT, IMPLEMENTS, INHERITS_FROM, USES_LIBRARY. Vide = les lignes seules.
 %% param: relation_limit int = 5 -- Voisins rendus par scope (plafond 20).
 %% param: format string = "markdown" -- markdown (pour le modèle, le défaut) ou json (structuré : chemins, lignes, uuid — pour une interface).
+%% choices: format = markdown | json
 %% result: invoke.results
 
 graph LR
