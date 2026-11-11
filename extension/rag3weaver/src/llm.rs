@@ -2177,3 +2177,20 @@ mod arguments_tests {
         assert!(calls.is_empty() && diags.is_empty());
     }
 }
+
+#[cfg(test)]
+mod invocation_metadata_tests {
+    use super::Turn;
+    use serde_json::json;
+    #[test]
+    fn tool_context_survives_text_truncation_and_history_reload() {
+        let mut turn = Turn { metadata:Some(json!({"invocation":{"target":{"kind":"backend","id":"B"},"run":"child"}})),
+            ..Turn::tool_result("call","chercher","x".repeat(20_000)) };
+        let (_, truncated) = crate::events::result_excerpt(&turn.content);
+        assert!(truncated);
+        turn.content.truncate(64);
+        let restored: Turn = serde_json::from_value(serde_json::to_value(&turn).unwrap()).unwrap();
+        assert_eq!(restored.metadata, turn.metadata);
+        assert_eq!(restored.metadata.unwrap()["invocation"]["target"]["id"], "B");
+    }
+}
