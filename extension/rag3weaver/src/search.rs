@@ -1292,13 +1292,36 @@ pub fn resolve_vector_chunks_with_dialect(
     result_mode: ResultMode,
     dialect: &dyn crate::dialect::SchemaDialect,
 ) -> Result<Vec<SearchResult>, CatalogError> {
+    resolve_vector_chunks_admitted(conn, target, results, return_fields, result_mode, dialect, None)
+}
+
+/// Projette les morceaux vers tous leurs parents admis. `None` est sans restriction ;
+/// un ensemble vide n'admet aucun parent. Le filtre porte sur les occurrences,
+/// même si un morceau a été admis en amont par une autre occurrence.
+pub fn resolve_vector_chunks_admitted(
+    conn: &dyn DbConnection,
+    target: &SearchTarget,
+    results: Vec<SearchResult>,
+    return_fields: &[String],
+    result_mode: ResultMode,
+    dialect: &dyn crate::dialect::SchemaDialect,
+    admitted_parents: Option<&HashSet<String>>,
+) -> Result<Vec<SearchResult>, CatalogError> {
     if results.is_empty() {
         return Ok(vec![]);
     }
 
     // 1. Collect chunk UUIDs
     let chunk_uuids: Vec<&str> = results.iter().map(|r| r.uuid.as_str()).collect();
-    let field_refs: Vec<&str> = return_fields.iter().map(|s| s.as_str()).collect();
+    let mut parent_fields = return_fields.to_vec();
+    if target.has_source_refs {
+        for field in ["_source_entity", "_source_uuid"] {
+            if !parent_fields.iter().any(|f| f == field) {
+                parent_fields.push(field.into());
+            }
+        }
+    }
+    let field_refs: Vec<&str> = parent_fields.iter().map(String::as_str).collect();
 
     // 2. Build query via dialect
     let cypher = dialect.resolve_chunks_with_parent(
@@ -1321,7 +1344,7 @@ pub fn resolve_vector_chunks_with_dialect(
         )
         .map_err(|e| CatalogError::DbError(e.to_string()))?;
 
-    // 3. Build chunk_uuid → (parent_uuid, chunk_meta, parent_data) map
+    // 3. Un morceau peut avoir plusieurs parents ; dédupliquer la paire, pas le morceau.
     struct ResolvedChunk {
         parent_uuid: String,
         text: String,
@@ -1340,10 +1363,13 @@ pub fn resolve_vector_chunks_with_dialect(
     let base_chunk_cols = 8; // chunk_uuid..c_end
     let source_cols = if target.has_source_refs { 3 } else { 0 };
     let parent_field_offset = base_chunk_cols + source_cols;
-    let mut chunk_info_map: HashMap<String, ResolvedChunk> = HashMap::new();
+    let mut chunk_info_map: HashMap<String, BTreeMap<String, ResolvedChunk>> = HashMap::new();
     for row in &result.rows {
         let chunk_uuid = row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string();
         let parent_uuid = row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if admitted_parents.is_some_and(|ids| !ids.contains(&parent_uuid)) {
+            continue;
+        }
         let text = row.get(2).and_then(|v| v.as_str()).unwrap_or("").to_string();
         let index = row.get(3).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
         let start_line = row.get(4).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
@@ -1352,8 +1378,8 @@ pub fn resolve_vector_chunks_with_dialect(
         let end_char = row.get(7).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
         let (source_entity, source_uuid, source_field) = if target.has_source_refs {
             (
-                row.get(8).and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                row.get(9).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                row.get(parent_field_offset + parent_fields.iter().position(|f| f == "_source_entity").unwrap()).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                row.get(parent_field_offset + parent_fields.iter().position(|f| f == "_source_uuid").unwrap()).and_then(|v| v.as_str()).unwrap_or("").to_string(),
                 row.get(10).and_then(|v| v.as_str()).unwrap_or("").to_string(),
             )
         } else {
@@ -1370,7 +1396,7 @@ pub fn resolve_vector_chunks_with_dialect(
         } else {
             None
         };
-        chunk_info_map.insert(chunk_uuid, ResolvedChunk {
+        chunk_info_map.entry(chunk_uuid).or_default().entry(parent_uuid.clone()).or_insert(ResolvedChunk {
             parent_uuid, text, index, start_line, end_line, start_char, end_char,
             source_entity, source_uuid, source_field, parent_data,
         });
@@ -1387,7 +1413,7 @@ pub fn resolve_vector_chunks_with_dialect(
         }
         let mut parent_map: HashMap<String, ParentAcc> = HashMap::new();
         for r in &results {
-            if let Some(meta) = chunk_info_map.get(&r.uuid) {
+            for meta in chunk_info_map.get(&r.uuid).into_iter().flat_map(|parents| parents.values()) {
                 let acc = parent_map.entry(meta.parent_uuid.clone()).or_insert_with(|| ParentAcc {
                     score: r.score,
                     data: meta.parent_data.clone(),
@@ -1396,7 +1422,7 @@ pub fn resolve_vector_chunks_with_dialect(
                 if r.score > acc.score {
                     acc.score = r.score;
                 }
-                acc.chunks.push(AttributedChunk {
+                let chunk = AttributedChunk {
                     uuid: r.uuid.clone(),
                     text: meta.text.clone(),
                     index: meta.index,
@@ -1410,21 +1436,28 @@ pub fn resolve_vector_chunks_with_dialect(
                     source_field: meta.source_field.clone(),
                     highlights: Vec::new(),
                     signal: None,
-                });
+                };
+                match acc.chunks.iter_mut().find(|old| old.uuid == chunk.uuid) {
+                    Some(old) if chunk.score > old.score => *old = chunk,
+                    Some(_) => {},
+                    None => acc.chunks.push(chunk),
+                }
             }
         }
         let mut resolved: Vec<SearchResult> = parent_map
             .into_iter()
-            .map(|(parent_uuid, acc)| SearchResult {
+            .map(|(parent_uuid, mut acc)| {
+                acc.chunks.sort_by(|a, b| b.score.total_cmp(&a.score).then_with(|| a.uuid.cmp(&b.uuid)));
+                SearchResult {
                 uuid: parent_uuid,
                 score: acc.score,
                 entity: Some(parent_entity.to_string()),
                 data: acc.data,
                 chunk: None,
                 chunks: Some(acc.chunks),
-            })
+            }})
             .collect();
-        resolved.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        resolved.sort_by(|a, b| b.score.total_cmp(&a.score).then_with(|| a.uuid.cmp(&b.uuid)));
         return Ok(resolved);
     }
 
@@ -1432,7 +1465,7 @@ pub fn resolve_vector_chunks_with_dialect(
     let mut parent_best: HashMap<String, (f64, String, ChunkInfo, Option<BTreeMap<String, CypherValue>>)> =
         HashMap::new();
     for r in &results {
-        if let Some(meta) = chunk_info_map.get(&r.uuid) {
+        for meta in chunk_info_map.get(&r.uuid).into_iter().flat_map(|parents| parents.values()) {
             let chunk_info = ChunkInfo {
                 uuid: r.uuid.clone(),
                 text: meta.text.clone(),
@@ -1471,7 +1504,7 @@ pub fn resolve_vector_chunks_with_dialect(
             chunks: None,
         })
         .collect();
-    resolved.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    resolved.sort_by(|a, b| b.score.total_cmp(&a.score).then_with(|| a.uuid.cmp(&b.uuid)));
     Ok(resolved)
 }
 
@@ -2738,6 +2771,63 @@ mod tests {
     use crate::embedder::{EmbedError, MockEmbedder};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn shared_chunk_projection_preserves_parents_admission_and_source_attribution() {
+        use crate::connection::{CallbackConnection, QueryResult};
+        let target = SearchTarget {
+            name: "Entry".into(), parent_table: "Entry".into(), chunk_table: "Entry_Chunk".into(),
+            chunk_rel: "Entry_CHUNKED_FROM".into(), chunk_rel_fwd: false,
+            bm25_fields: vec![], enrich_fields: vec![], default_signals: SearchSignals::VECTOR,
+            default_fusion: None, field_weights: vec![], has_source_refs: true,
+            filter_indirection: None, title_field: None, title_boost: 1.0,
+        };
+        let conn = CallbackConnection::new(|_, _| {
+            let row = |id: &str, path: &str, source: &str| vec![
+                CypherValue::String("shared".into()), CypherValue::String(id.into()),
+                CypherValue::String("body".into()), CypherValue::Int(0),
+                CypherValue::Int(0), CypherValue::Int(1), CypherValue::Int(0), CypherValue::Int(4),
+                CypherValue::String("stale-entity".into()), CypherValue::String("stale-source".into()),
+                CypherValue::String("body".into()), CypherValue::String(path.into()),
+                CypherValue::String("Root".into()), CypherValue::String(source.into()),
+            ];
+            // Une jointure dupliquée ne doit pas dupliquer la paire morceau/parent.
+            Ok(QueryResult { columns: vec![], rows: vec![
+                row("parent-b", "b.rs", "source-b"), row("parent-a", "a.rs", "source-a"),
+                row("parent-b", "b.rs", "source-b"),
+            ] })
+        });
+        for mode in [ResultMode::Aggregated, ResultMode::Detailed, ResultMode::SourceResolved] {
+            for admission in [None, Some(HashSet::from(["parent-b".into()])), Some(HashSet::new())] {
+                let hits = [0.25, 0.75].into_iter().map(|score| SearchResult {
+                    uuid: "shared".into(), score, entity: None, data: None, chunk: None, chunks: None,
+                }).collect();
+                let rows = resolve_vector_chunks_admitted(&conn, &target, hits, &["file_path".into()],
+                    mode, &crate::dialect::Rag3dbDialect, admission.as_ref()).unwrap();
+                let expected: Vec<&str> = match &admission {
+                    None => vec!["parent-a", "parent-b"],
+                    Some(ids) if ids.is_empty() => vec![],
+                    Some(_) => vec!["parent-b"],
+                };
+                assert_eq!(rows.iter().map(|r| r.uuid.as_str()).collect::<Vec<_>>(), expected, "{mode:?}");
+                for r in rows {
+                    assert_eq!(r.score, 0.75);
+                    let suffix = if r.uuid == "parent-a" { "a" } else { "b" };
+                    assert_eq!(r.data.as_ref().unwrap()["file_path"].as_str(), Some(format!("{suffix}.rs").as_str()));
+                    if mode == ResultMode::Detailed {
+                        let chunks = r.chunks.as_ref().unwrap();
+                        assert_eq!(chunks.len(), 1);
+                        assert_eq!(chunks[0].score, 0.75);
+                        assert_eq!(chunks[0].source_entity, "Root");
+                        assert_eq!(chunks[0].source_uuid, format!("source-{suffix}"));
+                        assert_eq!(chunks[0].source_field, "body");
+                    } else {
+                        assert_eq!(r.chunk.as_ref().unwrap().score, 0.75);
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn inline_filter_lists_without_replacing_literal_contents() {
