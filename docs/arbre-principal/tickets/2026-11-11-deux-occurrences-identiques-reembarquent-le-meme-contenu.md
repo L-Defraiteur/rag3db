@@ -60,6 +60,34 @@ deux occurrences distinctes pour une seule version et une page offset=1. Pas enc
 sparse ni de saturation par candidats invisibles sur ce diff ; pas de passe globale. Scope et ses
 gabarits restent inchangés. Le texte natif qui ne garantit pas ce masque est refusé explicitement.
 
+## Renforcement en cours après 49caf64c6
+
+- Projection neutralisée : 1 version au lieu de 2 occurrences, rouge produit dans
+  cx-projection-publique-rouge.log. Restauration : les 9 cas dense/texte/creux × 3 modes et
+  pagination passent leurs assertions, mais le lanceur refuse un résidu de cache de la fixture
+  (cx-projection-publique-vert-v2.log, code 101). Ce lancement n'est pas un vert global.
+  Ordre de destruction corrigé : Catalog et ses handles avant le TempDir. Rejeu ensuite accepté
+  par le lanceur, 13/0, cx-projection-masques-vert.log, sans résidu.
+- Le masque suit maintenant la relation DERIVED_FROM canonique pour calculer les UUIDs de versions,
+  puis emploie les filtres d'index existants. Une recherche de relation par seuls noms d'entités
+  serait ambiguë si d'autres liens existent ; un témoin ajoute précisément un AUTRE_LIEN trompeur.
+- Rouge sans masque avant top-k : les trois signaux perdent le résultat visible (0 au lieu de 1),
+  cx-projection-masque-rouge.log. Restauration : 13/0, incluant les 12 orphelins toujours indexés et mieux classés, budget 2, filtres A/B partageant
+  une version, pour dense/creux/texte, ordre de pagination stable et refus d'une transformation d'octets sans remappage déclaré.
+
+## Reprise de l'ingestion directe par lot
+
+Rouge observé : ingest_entities écrit sa source par un graphe direct avant le drain des dérivées.
+Un échec de lien laissait alors A.body=après, version=avant, B inchangée :
+cx-projection-lot-reprise-rouge.log sur luciepc. Envelopper uniquement le second drain était insuffisant.
+Le mécanisme L3 est maintenant composé par ecrire_un_lot_atomique pour les deux chemins,
+drain et ingestion directe, avec mise à part des ressources indépendantes.
+
+Vert ciblé : un_echec_du_rendu_en_lot_preserve_sources_et_references_apres_reouverture, 1/0,
+cx-projection-lot-reprise-vert.log. Base privée sur fichier : échec injecté de lien, source/référence/hash
+antérieurs conservés ; réouverture sans réenregistrer le schéma, mêmes valeurs ; nouvelle tentative
+réussie qui change seulement A. La régression native large est en cours, pas encore un verdict global.
+
 ## Travail restant et responsabilités
 
 La session arbre-principal garde ce même ticket pour la suite du lot, sans duplication :
@@ -81,6 +109,9 @@ Recevoir ce ticket ou relayer une demande n'autorise ni activation en service ni
 Les transferts éventuels déplacent ce fichier et ne ferment pas l'action.
 
 ## Ses filets
+
+- generic_search_nodes.rs, BM25SearchNode : le texte natif qui ne garantit pas le masque
+  d'occurrences refuse cette projection ; à lever uniquement avec sa preuve avant top-k.
 
 - src/read_view.rs, Forme::resolve_search_target : refuse la recherche directe des versions
   internes tant que projection publique et masque ne sont pas déclarés. À réévaluer avec leur
