@@ -131,3 +131,22 @@ compiler Rust, ouvrir un dépôt réel ou toucher l'ancien garde. La relecture
 a rendu explicite le refus en cas d'erreur de parcours de fichiers : aucune
 branche inaccessible n'est silencieusement considérée vide. Journaux et hashes
 des versions testées conservés dans ce dossier, à actualiser si le script change.
+
+### Revue : racines protégées
+
+Le défaut relevé dans la revue 6dac58aea est couvert : avant le premier appel
+Git ou l'ouverture d'un fichier, tous les arguments dépôt/cible/rapport et
+administration/copie sont contrôlés lexicalement, puis canoniquement ; un
+composant .env ou .vault refuse, même suivi de .. ou atteint par un alias.
+Les chemins Git découverts sont contrôlés aussi. Une zone protégée présente
+dans l'arbre refuse avant sa visite et avant status. Les six nouveaux témoins
+ont vu cinq échecs sur l'ancienne version (inspection trop précoce), puis
+passent après correction ; 14 tests au total. Les cas protégés vérifient par
+instrumentation l'absence d'appel Git/lecture d'inventaire, et le cas .env
+interdit aussi scandir de cette zone et status. Aucune donnée réelle de ces
+zones n'est utilisée ; seules des fixtures temporaires sont construites.
+
+Quiescence toujours à la charge du propriétaire ; archives obligatoirement
+hors cible et administration détruite. La garde ne copie ni ne rend atomique
+le retrait ultérieur. L'incertitude historique index/refs/reflogs de l'ancien
+garde demeure ; ce ticket reste ouvert même après livraison de la garde.

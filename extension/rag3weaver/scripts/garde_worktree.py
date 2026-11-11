@@ -18,7 +18,20 @@ def inside(path, root):
     return path == root or root in path.parents
 
 
+def protected(path):
+    if any(part in ('.env', '.vault') for part in Path(path).parts):
+        raise ValueError('chemin protégé : inspection refusée')
+
+
+def safe_path(path, strict=True):
+    protected(path)
+    resolved = Path(path).resolve(strict=strict)
+    protected(resolved)
+    return resolved
+
+
 def git(path, *args, admin=False):
+    safe_path(path)
     env = dict(os.environ, GIT_OPTIONAL_LOCKS='0')
     # Ne pas laisser un dépôt sélectionné dans l'environnement remplacer l'argument.
     for key in ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE'):
@@ -32,7 +45,7 @@ def git(path, *args, admin=False):
 
 def gitpath(path, name, admin=False):
     raw = os.fsdecode(git(path, 'rev-parse', '--path-format=absolute', name, admin=admin)).rstrip('\n')
-    return Path(raw).resolve(strict=True)
+    return safe_path(raw)
 
 
 def worktrees(common):
@@ -41,9 +54,10 @@ def worktrees(common):
     for row in rows:
         if row.startswith(b'worktree '):
             p = Path(os.fsdecode(row[9:]))
+            protected(p)
             if not p.exists():
                 raise Refus(f'autre worktree manquant ou ambigu : {p}')
-            resolved = p.resolve(strict=True)
+            resolved = safe_path(p)
             # Git peut nommer l'administration principale d'un sous-module
             # au lieu du core.worktree ; lire sa racine effective.
             if resolved == common:
@@ -62,6 +76,7 @@ def walk_error(error):
 
 def inventory(root):
     """Empreinte fidèle des entrées, sans contenu dans le rapport ni suivi des liens."""
+    root = safe_path(root)
     result = {}
     for directory, dirs, files in os.walk(root, followlinks=False, onerror=walk_error):
         for name in ['.'] + sorted(dirs + files):
@@ -101,9 +116,8 @@ def inspect(repo, target, archives, report):
     sources = {target}
     for directory, dirs, files in os.walk(target, followlinks=False, onerror=walk_error):
         p = Path(directory)
-        if '.vault' in dirs:
-            refus.append('zone .vault exclue : inspection structurelle incomplète')
-            dirs.remove('.vault')
+        if any(name in dirs or name in files for name in ('.env', '.vault')):
+            raise Refus('zone protégée présente : refus avant parcours ou status')
         for name in list(dirs):
             child = p / name
             if child.is_symlink():
@@ -135,6 +149,8 @@ def inspect(repo, target, archives, report):
                 admins.add(p)
             elif 'commondir' in files or ('config' in files and 'objects' in dirs):
                 refus.append(f'administration résiduelle sans HEAD : {p}')
+            if any(name in dirs or name in files for name in ('.env', '.vault')):
+                raise Refus('administration avec zone protégée : inspection refusée')
             dirs[:] = [n for n in dirs if n not in ('objects', 'logs', 'refs', 'hooks')]
     for source in sorted(sources):
         try:
@@ -200,26 +216,33 @@ def main():
     parser.add_argument('--archive', nargs=2, action='append', default=[], metavar=('ADMINISTRATION', 'COPIE'))
     args = parser.parse_args()
     try:
-        target = args.worktree.resolve(strict=True)
+        # Tous les arguments lexicaux d'abord : ne pas normaliser .vault/../x.
+        paths = [args.depot, args.worktree, args.rapport]
+        paths += [Path(p) for pair in args.archive for p in pair]
+        for path in paths:
+            protected(path)
+        # Puis tous les chemins canoniques, avant le premier appel Git/ouverture.
+        resolved = {path: safe_path(path, strict=path != args.rapport) for path in paths}
+        target = resolved[args.worktree]
+        repo = resolved[args.depot]
+        report = resolved[args.rapport]
         if Path(os.path.abspath(args.worktree)) != target:
             raise ValueError('chemin de cible lié ou ambigu')
-        repo = args.depot.resolve(strict=True)
-        report = args.rapport.absolute()
-        if report.exists() or report.is_symlink():
+        if report.exists() or args.rapport.is_symlink():
             raise ValueError('rapport déjà présent : création exclusive exigée')
-        report = report.parent.resolve(strict=True) / report.name
+        report.parent.resolve(strict=True)
         if inside(report, target):
             raise ValueError('rapport situé dans la cible')
-        if inside(report, gitpath(repo, '--git-common-dir')):
-            raise ValueError('rapport situé dans une administration Git')
         archives = {}
         for source, copy in args.archive:
-            key = Path(source).resolve(strict=True)
+            key = resolved[Path(source)]
             if key in archives:
                 raise ValueError('administration archive dupliquée')
-            archives[key] = Path(copy).resolve(strict=True)
+            archives[key] = resolved[Path(copy)]
             if inside(report, key) or inside(report, archives[key]):
                 raise ValueError('rapport situé dans une administration ou sa copie')
+        if inside(report, gitpath(repo, '--git-common-dir')):
+            raise ValueError('rapport situé dans une administration Git')
         try:
             result = inspect(repo, target, archives, report)
         except Refus as exc:

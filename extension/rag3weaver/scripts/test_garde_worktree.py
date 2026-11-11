@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 """Fixtures locales ; aucun dépôt réel ni accès réseau."""
+import contextlib
+import importlib.util
+import io
+from unittest.mock import patch
 import hashlib
 import json
 import os
@@ -122,6 +126,75 @@ class GardeWorktreeTests(unittest.TestCase):
         report = self.admin / 'rapport.json'
         self.assertEqual(self.check(report=report).returncode, 1)
         self.assertFalse(report.exists())
+
+    def protected_check(self, arguments):
+        spec = importlib.util.spec_from_file_location('garde_fixture', SCRIPT)
+        guard = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guard)
+        argv = [str(SCRIPT), '--depot', str(self.repo), '--worktree', str(self.parent),
+                '--rapport', str(self.report)] + arguments
+        with patch.object(sys, 'argv', argv), patch.object(guard, 'git', side_effect=AssertionError('Git inspecté trop tôt')), \
+                patch.object(guard, 'inventory', side_effect=AssertionError('archive lue')), \
+                contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(guard.main(), 1)
+        self.assertFalse(self.report.exists())
+
+    def test_archive_protegee_refusee_avant_lecture(self):
+        for name in ('.vault', '.env'):
+            copy = self.base / name / 'archive'
+            shutil.copytree(self.admin, copy)
+            self.protected_check(['--archive', str(self.admin), str(copy)])
+
+    def test_archive_alias_canonique_protege_refuse(self):
+        copy = self.base / '.vault' / 'archive'
+        shutil.copytree(self.admin, copy)
+        alias = self.base / 'alias'
+        alias.symlink_to(copy, target_is_directory=True)
+        self.protected_check(['--archive', str(self.admin), str(alias)])
+
+    def test_composant_lexical_protege_meme_suivi_de_parent(self):
+        (self.base / '.vault').mkdir()
+        self.archive()
+        copy = self.base / '.vault' / '..' / 'archive'
+        self.protected_check(['--archive', str(self.admin), str(copy)])
+
+    def test_rapport_protege_refuse_sans_inspection_ni_ecriture(self):
+        for name in ('.vault', '.env'):
+            directory = self.base / name
+            directory.mkdir()
+            self.protected_check(['--rapport', str(directory / 'rapport.json')])
+            self.assertFalse((directory / 'rapport.json').exists())
+
+    def test_depot_cible_et_administration_proteges_refuses(self):
+        protected = self.base / '.vault' / 'inexistant'
+        for option in ('--depot', '--worktree'):
+            self.protected_check([option, str(protected)])
+        self.protected_check(['--archive', str(protected), str(self.base / 'copie')])
+
+    def test_zone_env_du_worktree_refusee_avant_parcours_et_status(self):
+        directory = self.parent / '.env'
+        directory.mkdir()
+        (directory / 'fixture').write_text('contenu de fixture à ne pas lire\n')
+        spec = importlib.util.spec_from_file_location('garde_fixture', SCRIPT)
+        guard = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guard)
+        original_git, original_scan = guard.git, os.scandir
+
+        def checked_git(path, *args, **kwargs):
+            self.assertNotIn('status', args)
+            return original_git(path, *args, **kwargs)
+
+        def checked_scan(path):
+            self.assertNotIn('.env', Path(path).parts)
+            return original_scan(path)
+
+        argv = [str(SCRIPT), '--depot', str(self.repo), '--worktree', str(self.parent),
+                '--rapport', str(self.report)]
+        with patch.object(sys, 'argv', argv), patch.object(guard, 'git', side_effect=checked_git), \
+                patch.object(guard.os, 'scandir', side_effect=checked_scan), \
+                patch.object(guard, 'inventory', side_effect=AssertionError('archive lue')), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(guard.main(), 2)
 
     def test_rapport_dans_cible_refuse_sans_ecriture(self):
         report = self.parent / 'rapport.json'

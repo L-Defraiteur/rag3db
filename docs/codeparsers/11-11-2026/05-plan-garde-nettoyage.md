@@ -137,3 +137,10 @@ refusait aussi le nominal : Git rendait le chemin administratif d'un sous-module
 comme worktree principal ; lecture de sa racine effective ajoutée, puis nominal
 vert. Le ticket reste ouvert pour revue, sans affirmer l'intégrité historique
 qui n'a pas de comparaison initiale.
+
+Revue suivante : refus des composants .env/.vault pour toutes les racines,
+lexicaux puis canoniques avant inspection, et des chemins Git découverts.
+Six témoins supplémentaires portent la suite à 14 ; archive protégée valide,
+alias canonique, composant suivi de .., rapport protégé, racines dépôt/cible/
+administration protégées et absence de parcours/status d'une zone .env de la
+fixture. Cela ne modifie pas la limite de quiescence ni l'archive hors cible.
