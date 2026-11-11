@@ -218,6 +218,10 @@ called. Both land in the memory as fiches, where the trend across runs is what
 decides the next move. The supervisor (a person, or an orchestrating agent) only
 ever writes to a mailbox.
 
+The memory archivist can file document sections under cards with long names,
+including judge reports. It preserves the exact card identity and refuses an
+unknown or ambiguous candidate identifier.
+
 ```mermaid
 flowchart TD
     S["Supervisor<br/>a person, or an orchestrating agent"] -->|"request, answers to blockers"| B[("Mailbox<br/>one file per task + a bus topic")]
