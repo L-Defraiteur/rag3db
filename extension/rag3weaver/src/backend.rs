@@ -5835,7 +5835,9 @@ mod tests {
         let reactif = crate::backend_code::reaction_nodes();
         assert_eq!(
             outil.len(),
-            43,
+            // Le relais est admis sous code sans conférer read_files : une lecture
+            // pure en base reste possible ; les effets de la cible sont revérifiés.
+            43 + usize::from(cfg!(feature = "code")),
             "la liste des nœuds d'outil a changé ({} entrées) : si c'est voulu, corrigez \
              ce compte dans le même commit — et dites pourquoi dans son message",
             outil.len()

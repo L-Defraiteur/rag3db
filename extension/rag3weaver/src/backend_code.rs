@@ -383,6 +383,7 @@ pub const SEARCH_NODES: &[&str] = &["SearchSourceNode"];
 const BASE_NODES: &[&str] = &[
     // Le relais ne confère aucune capacité : la cible contrôle ses effets réels.
     // Une lecture pure en base ne requiert pas de workspace de fichiers.
+    #[cfg(feature = "code")]
     "InvokeToolNode",
     "RhaiNode",
     // **Aiguiller et découper, sans rien toucher** (M4, 7 novembre 2026) : `Route`
