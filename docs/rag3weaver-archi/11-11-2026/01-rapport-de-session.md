@@ -35,8 +35,8 @@ regrouper avec le lot de la session « recherche ».
 
 ## Le lot en branche : l'IDE par le flux (reprise du 11 novembre)
 
-- Branche de référence : `origin/cx-archi-ide-par-le-flux`, code `061b0a483` ;
-  rebasée sur master après le garde-fou `1904e04e4` de l'arbre principal.
+- Branche de référence : `origin/cx-archi-ide-par-le-flux-2`, code `61066a2b3` ;
+  rebasée après le garde-fou `1904e04e4` et le correctif mémoire `41526b29a`.
 - Worktree sur les deux postes : `/home/lucied/.cache/rag3weaver-build/cx-wt-flux`.
   Le target de validation est `~/.cache/rag3weaver-build/flux` sur luciepc.
 - Les anciens worktrees `wt-flux` et branches `ide-par-le-flux` /
@@ -71,14 +71,30 @@ leur transfert concurrent en ordre inverse, les ajouts tardifs, les anciennes tr
 relecture par une nouvelle instance **après écriture** ; elles ne promettent pas la durabilité
 lors d'un arrêt brutal avant l'écriture asynchrone du journal.
 
-`061b0a483` ajoute l'ordre commun avant les bornes. Sa passe complète est en cours,
-**pas encore de verdict global**, sous `poste lourd` sur luciepc :
+`061b0a483` ajoute l'ordre commun avant les bornes. Sa passe complète est **ROUGE lib** :
+2 097 tests réussis, un échec, 59 ignorés, 145,09 s. Le témoin
+`owed_vectors_are_caught_up_on_open_when_the_manifest_declares_it` expire après 120 s avec
+606 morceaux encore dus. Les trois nouvelles preuves du chat passent dans cette lib.
+Les étapes e2e et navigateur suivantes n'ont pas été jouées par ce lanceur.
+ED tient le correctif des réclamations d'index en branche, pas encore sur master :
+`bbba12fb2` sur `cx-ed-reclamations-rendues-5`. Sa piste explique comment des claims non
+rendus peuvent laisser une dette après réouverture ; la cause de notre run n'est pas
+prouvée. Aucun changement au test ni à l'index dans le lot flux. La lecture des piles a été
+refusée par le système ; refus conservé, aucun contournement.
+
+La passe rouge est conservée, sous `poste lourd` sur luciepc :
 
 - lanceur `~/.cache/rag3weaver-build/cx-flux-complete-061b0a483.sh` ;
 - sorties `~/.cache/rag3weaver-build/cx-flux-complete-061b0a483-20261111/` ;
 - lib épinglée `rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF` ;
 - `CARGO_BUILD_JOBS=8`, paquets React exigés ; services luciepc `7878,7879,7880` ;
 - étapes : check_features, script hooks, lib large, e2e hooks, e2e lectures, navigateurs.
+
+Après rebase mémoire, `61066a2b3` est sauvegardé sous le nouveau nom `cx-archi-ide-par-le-flux-2`.
+Un lanceur distinct vérifie les étapes hors lib (sans transformer le rouge en vert global) :
+`~/.cache/rag3weaver-build/cx-flux-61066a2b3-hors-lib.sh`, sorties
+`~/.cache/rag3weaver-build/cx-flux-61066a2b3-hors-lib-20261111/`.
+Rejeu global requis après traitement du blocage ED et incorporation du master du moment.
 
 Les journaux antérieurs restent distincts : `flux-passe-complete-20261111-luciepc-2`,
 `flux-passe-reprise-services-20261111-luciepc`, `flux-barre-seul-20261111-{1..5}`,
@@ -100,7 +116,7 @@ ni aux verdicts courants : préparer et relire un lanceur conforme avant de l'ut
   outils, l'historique, et dans l'historique les résultats d'outils. C'est estimé au prorata des
   caractères, puisque le fournisseur ne rend qu'un total. Il est nommé dans
   `extension/rag3weaver/docs/09-novembre-2026-atelier-lire-ecrire/02-la-jauge-du-contexte.md`.
-  c7 l'a placé après l'IDE par le flux.
+  Ce raffinement passe désormais après le parcours de code complet dans le chat.
 - **Les propositions et le fichier ouvert par le flux.** C'est le même moule que l'IDE par le
   flux, nommé dans sa page.
 
@@ -159,9 +175,10 @@ Ils sont sous `docs/rag3weaver-archi/tickets/`, déplacés de `docs/tickets/` le
 
 ## Les trois prochains pas que je ferais
 
-1. **Finir l'IDE par le flux.** Jouer le témoin sur `a9c5a3108`, puis la passe complète. Si la
-   lib entière revient à environ 33 s et au vert, demander le feu à c7, puis pousser par
-   `wt-flux-push.sh` (voir « Reprendre »).
-2. **Le découpage au survol de la jauge**, avec son propre témoin rouge.
-3. **Les propositions et le fichier ouvert par le flux**, au même moule. Puis prendre les
-   remarques d'ED quand elles viennent.
+1. **Finir l'IDE par le flux.** Conserver le rouge 606 dus, coordonner le blocage avec ED,
+   finir les contrôles hors lib, puis rebase et rejeu requis avant un éventuel tour de push.
+2. **Le parcours réel du chat IDE.** Atelier, dépôt et tâche : outils réellement accessibles,
+   recherche, lecture, édition, commandes/tests, sorties/diff, accords, arrêt et reprise.
+   ED tient outils/gabarits et clôture des tâches ; archi tient navigateur/UI/flux/cartes.
+3. Les raffinements de la jauge et les autres vues par flux viennent après ce parcours,
+   conformément à `docs/orchestration/11-11-2026/05-cap-produit-vues-et-chat.md`.
