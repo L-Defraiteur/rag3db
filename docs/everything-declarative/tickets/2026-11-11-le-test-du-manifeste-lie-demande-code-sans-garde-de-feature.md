@@ -53,3 +53,8 @@ gabarits9/0/0 (0,01s), lib native entière1575/0/15 ignorés (20,44s).
 Avec code, ouverture6/0/0 (0,60s), gabarits9/0/0 (0,01s), aucun ignoré dans
 les ciblés. `cibles-3.log`, `lib-native-3.log`, `verdict-cibles-3`.
 Ce vert ciblé ne remplace pas la passe globale ni la lecture croisée avec 1a.
+
+La passe globale08 est verte (features5, lib2121/0/64, nav39 et sept e2e),
+preuves détaillées dans le rapport. Ticket encore ouvert avant tour/intégration ;
+le point de revue du schéma nommé est porté par l'autre ticket existant et peut
+retarder l'atterrissage du lot. Aucun nouveau défaut de matrice n'y est observé.
