@@ -286,3 +286,12 @@ ni natif de cette série n'est revendiqué. Avant relance, le consommateur de se
 est raccordé à son contrat réel : ID natif table:offset, row_id entier en SQL ; le parseur
 InternalNodeId existant fournit l'offset natif. Une valeur physique illisible devient une
 erreur nommée, pas un index plein texte silencieusement vide. Aucun nouveau format d'ID.
+
+Série réelle v4 source **b6f78bf878f1ee4f610c5db70b5a6de6a98e4f2d** : natif22/0 +
+Scope privé3/0, rc0 (`cx-cellules-reouverture-v4.log`). Titre/remappage, offsets FTS natifs,
+réouverture sans réinscription et ScopeNONE couverts. PG v4 bloque après l'ingestion pendant
+la lecture publique ; trois sessions privées, zéro bloqueur SQL, une idle-in-transaction.
+`cx-pg-v4-piles.log` conserve le refus Yama de gdb ; aucun contournement. Seul le test PID1166384
+(chemin et filtre relus) a été arrêté par SIGTERM ; zéro session privée ensuite. La série PG
+reste en échec, pas de réussite déduite des nouvelles primitives SQL. Reste diagnostic public
+borné, puis preuve combinée après master ED c693 et branche neuve. Aucun Search lourd relancé.
