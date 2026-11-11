@@ -2043,6 +2043,18 @@ fn read_threads() -> u64 {
             if old_config.derived.as_ref().map(|d| &d.identity) != config.derived.as_ref().map(|d| &d.identity) {
                 return Err(CatalogError::SchemaError(format!("{entity_name} : changement d'identité dérivée interdit sans migration déclarée")));
             }
+            if old_config.search_index != config.search_index {
+                // Changer la représentation publique d'une base peuplée exige
+                // une migration explicite, y compris lors d'une réouverture
+                // avec un ancien schéma qui omettrait l'association persistée.
+                let rows = self.conn.execute(&self.dialect.count_rows(entity_name))
+                    .map_err(|e| CatalogError::DbError(e.to_string()))?;
+                let count = rows.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64())
+                    .ok_or_else(|| CatalogError::DbError(format!("{entity_name} : comptage avant changement d'index public illisible")))?;
+                if count > 0 {
+                    return Err(CatalogError::SchemaError(format!("{entity_name} : changement d'index public interdit sur une entité peuplée sans migration déclarée")));
+                }
+            }
             self.migrate_entity(entity_name, old_config.clone(), &config)?;
         } else {
             // ── Fresh registration: create tables + indexes ──
@@ -2085,7 +2097,10 @@ fn read_threads() -> u64 {
                 self.conn.execute_with_params(&query, &[QueryParam::new("uuids", CypherValue::List(batch.iter().cloned().map(CypherValue::String).collect()))])
                     .map_err(|e| CatalogError::DbError(format!("dette de la nouvelle recette : {e}")))?;
             }
-            self.mettre_en_file_les_derivations(roots.into_iter().map(|root_uuid| crate::records::Derivation { entity: entity_name.to_string(), root_uuid }).collect());
+            // La recette concerne toutes les cellules, mais la file n'appartient
+            // qu'à la cellule courante. Le rattrapage relira la dette persistée
+            // de chaque cellule ; aucune racine étrangère n'entre dans ce lot.
+            self.peut_devoir_un_rendu = true;
         }
         if config.derived.is_some() {
             // Une dérivée neuve sur des racines déjà posées : à rendre.
@@ -7110,14 +7125,22 @@ fn read_threads() -> u64 {
         let mut total = 0usize;
         for (entite, racine) in derivees {
             let mut uuids: Vec<String> = Vec::new();
+            let content = self.entity_configs.get(&entite).and_then(|c| c.derived.as_ref()).is_some_and(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. }));
             let lire = |moi: &Self, requete: String| -> Result<Vec<String>, CatalogError> {
-                let res = moi.conn.execute(&requete).map_err(|e| CatalogError::DbError(format!(
+                let result = if content {
+                    moi.conn.execute_with_params(&requete, &[
+                        QueryParam::new("render_org", CypherValue::String(moi.scope.org.clone())),
+                        QueryParam::new("render_project", CypherValue::String(moi.scope.project.clone())),
+                    ])
+                } else {
+                    moi.conn.execute(&requete)
+                };
+                let res = result.map_err(|e| CatalogError::DbError(format!(
                     "lecture de la dette de rendu sur « {entite} » : {e}"
                 )))?;
                 Ok(res.rows.iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::to_string)).collect())
             };
             let rel = crate::schema::derived_rel_name(&entite);
-            let content = self.entity_configs.get(&entite).and_then(|c| c.derived.as_ref()).is_some_and(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. }));
             if content {
                 uuids.extend(lire(self, self.dialect.pending_derived_references(&entite, &racine, &rel, limite))?);
                 uuids.extend(lire(self, self.dialect.missing_derived_references(&entite, &racine, &rel, limite))?);
@@ -7145,7 +7168,7 @@ fn read_threads() -> u64 {
             }
             total += nombre;
         }
-        if total < limite {
+        if total < limite && !self.multi_cell {
             self.peut_devoir_un_rendu = false;
         }
         Ok(total)
