@@ -1267,6 +1267,7 @@ impl DaemonHost {
         // l'attente.
         let mut number = 0usize;
         let mut counted = 0usize;
+        let mut reste_explicite = false;
         while counted < MAX_STEPS {
             let lines = files.mailbox();
             let news: Vec<Value> = lines
@@ -1291,7 +1292,7 @@ impl DaemonHost {
             let waiting = active.is_some_and(|p| !p.waiting().is_empty());
             // Un pas de travail : une nouvelle dans la boîte, un élément faisable,
             // ou un plan actif qui ne fait plus qu'attendre rien (à clore).
-            let work = !news.is_empty() || alone || (active.is_some() && !waiting) || (active.is_none() && !plans.paused().is_empty() && number == 0);
+            let work = reste_explicite || !news.is_empty() || alone || (active.is_some() && !waiting) || (active.is_none() && !plans.paused().is_empty() && number == 0);
             let last = active.is_some() && !alone && !waiting && news.is_empty();
             // **En attente du superviseur** : une question ou une commande
             // demandée, sans réponse ni ligne nouvelle, suspend l'équipier.
@@ -1465,8 +1466,8 @@ impl DaemonHost {
             plan_seen |= !step.closed_plans().is_empty();
             // Un pas réussi peut annoncer du travail restant : sans plan vivant,
             // ce reste doit encore parvenir au pas suivant, jamais clore la tâche.
-            let reste = declared.as_ref().and_then(|d| d["remaining"].as_str()).is_some_and(|r| !r.trim().is_empty());
-            if after.active().is_none() && after.paused().is_empty() && declared.is_some() && !reste && !unread_news(&files) {
+            reste_explicite = declared.as_ref().and_then(|d| d["remaining"].as_str()).is_some_and(|r| !r.trim().is_empty());
+            if after.active().is_none() && after.paused().is_empty() && declared.is_some() && !reste_explicite && !unread_news(&files) {
                 outcome.ended = if plan_seen { "plus rien à faire : compte rendu".into() } else { "fait sans plan".into() };
                 return Ok(outcome);
             }
