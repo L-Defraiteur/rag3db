@@ -167,6 +167,27 @@ mod tests {
         assert!(std::fs::read_to_string(depot.join("src/lib.rs"))
             .unwrap()
             .contains("pub fn un"));
+        let mut manifest: Value =
+            serde_json::from_slice(&std::fs::read(&target.manifest).unwrap()).unwrap();
+        manifest["tools"]["bounce"] = json!({"graph":"bounce.mmd","policy":{"read_files":true}});
+        std::fs::write(target.manifest.parent().unwrap().join("bounce.mmd"),
+            format!("%% tool: bounce\n%% description: Un relais imbriqué refusé.\n%% result: invoke.results\ngraph LR\n invoke[\"InvokeToolNode(operation='schema', context={{\"target\":{{\"kind\":\"backend\",\"id\":\"{}\"}}}}, arguments={{}})\"]\n", a.h.id)).unwrap();
+        std::fs::write(
+            &target.manifest,
+            serde_json::to_vec_pretty(&manifest).unwrap(),
+        )
+        .unwrap();
+        let error = relay
+            .invoke(
+                &authority,
+                &context,
+                "bounce",
+                json!({}),
+                "parent",
+                NodeContext::new().cancellation(),
+            )
+            .unwrap_err();
+        assert!(error.contains("boucles"), "{error}");
         let mut other_scope = authority.clone();
         other_scope.scope.org = "autre".into();
         assert!(relay
