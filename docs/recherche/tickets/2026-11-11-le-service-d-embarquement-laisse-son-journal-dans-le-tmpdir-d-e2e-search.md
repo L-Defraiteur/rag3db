@@ -144,3 +144,13 @@ Pour les petits modèles explicitement locaux des tests, les quatre variables Bu
 **Portées de preuve séparées :** les deux suites réelles prouvent recherche via BGE existant et les autres modèles de leurs parcours ; elles ne prouvent pas le démarrage d'un nouveau démon possédé par la passe. La propriété, le partage entre suites, l'attente, le refus du périmé et la survie entre lancements sont prouvés par les sept cas à faux services privés. La validation réelle n'est pas présentée comme la reproduction du lancement absent qui avait créé le résidu initial.
 
 Plan soumis avant lancement ; ticket ouvert, aucun tour de push ni autorisation de passe lourde déduits de ce document.
+
+## Passe autorisée et lancée le 12 novembre
+
+Après relecture indépendante, orchestration autorise la passe bornée sur la source exacte `43b57eb78c831a3ef6622fb362378bb09770f489`. Seule adaptation du plan : **deux** appels e2e séparés, search40 (900 s) puis search_queue5 (300 s), filets2 dans chacun, sans retry ; même budget e2e1200/global6600. Plan amendé immuable `cx-recherche-journal-plan-43b57eb78-v2.json`, original conservé. Autres étapes et budgets inchangés. Aucun tour master accordé.
+
+Base privée explicitement attribuée par orchestration : `cx_recherche_journal_20261112`, port5433 du conteneur existant rag3weaver-pg. Créée après contrôle d'absence, propriétaire rag3weaver et commentaire d'attribution ; seule base/URI utilisés dans la passe. Preuve `pg-propriete.json`. Jamais rag3weaver_test, aucun nouveau conteneur. Fin de lot : sauvegarder les preuves et cette seule base avant suppression autorisée de celle-ci.
+
+Précontrôle avant lancement : santé des trois services confirmée, BGE existant non factice dense+creux1024 sur7879 ; son réglage gpu:0 et fd renderD129 correspondent à card2/PCI04:00.0, aucun fd renderD130/card0. Sommaire Vulkan et `mapping-avant.json` conservés. Les quatre variables Burn sont fixées à gpu:0 et SANS_DEMON=1 ; services préexistants seulement. Source propre/empreintes conformes, target97k absent au départ ; worktree distant isolé au commit43b avec ses sous-modules propres.
+
+Départ sous poste lourd le 12 novembre00:07Paris. Journaux absolus luciepc `~/.cache/rag3weaver-build/journaux-cx-recherche-journal-12nov/` ; wrapper externe `cx-recherche-journal-passe-12nov.py`, sessions propres par étape, arrêt contrôlé des seuls groupes détenus au premier rouge/échéance. Sept cas légers et19régressions déjà verts sur ce poste ; features en cours lors de cette actualisation. Aucun verdict global encore.
