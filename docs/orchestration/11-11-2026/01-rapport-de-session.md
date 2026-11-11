@@ -318,3 +318,11 @@ aux treize sessions, sans réécriture d’historique publié.
 - Reprise sous cx-coeur-annulation, témoin 65486c02d ; ancien worktree détaché conservé après
   refus de déplacement lié aux sous-modules. Cette conservation est signalée, pas un nettoyage
   revendiqué. Preuves rouges et négatives restent distinctes.
+
+
+### Présentation autonome du framework
+
+À la demande de Lucie, `06-rag3weaver-presentation-du-framework.md` présente la vision et les
+capacités existantes pour une conversation extérieure au dépôt. Elle distingue capacités livrées,
+preuves ciblées, travaux en branche et ambitions ; vues en couches et parcours complet du chat
+restent explicitement en cours. Les chiffres sont datés et leurs protocoles référencés.
