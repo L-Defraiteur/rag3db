@@ -96,6 +96,7 @@ protected:
                         from, from + count - 1, vector))
                     ->isSuccess();
             };
+            int64_t committedB = 0;
             {
                 rag3db::main::Database database(databasePath, *systemConfig);
                 rag3db::main::Connection a(&database);
@@ -123,6 +124,7 @@ protected:
                     }
                 }
                 const auto bRows = at - 10'000'000;
+                committedB = bRows;
                 steps << "B REFUSALS " << refusals << std::endl;
                 steps << "B " << bRows << " rows committed before the buffer was full" << std::endl;
                 const auto first = say(a, "A", "ROLLBACK;");
@@ -141,6 +143,19 @@ protected:
                 say(a, "A", "ROLLBACK;");
             }
             steps << "CLOSED" << std::endl;
+            {
+                rag3db::main::Database reopened(databasePath, *systemConfig);
+                rag3db::main::Connection reader(&reopened);
+                auto countRows = [&](const char* query) -> int64_t {
+                    auto result = reader.query(query);
+                    return result->isSuccess() && result->hasNext() ?
+                               result->getNext()->getValue(0)->getValue<int64_t>() : -1;
+                };
+                const auto aRows = countRows("MATCH (d:Doc) RETURN count(*);");
+                const auto bRows = countRows("MATCH (d:Other) RETURN count(*);");
+                steps << "REOPEN " << (aRows == 0 && bRows == committedB ? "passed" : "refused")
+                      << " A=" << aRows << " B=" << bRows << " expected=" << committedB << std::endl;
+            }
             _exit(0);
         }
         int status = 0;
@@ -172,6 +187,8 @@ TEST_F(CopyRollbackUnderAFullBuffer, RollsBackAndKeepsTheDatabaseOpen) {
            "refused";
     EXPECT_NE(steps.find("COUNT empty"), std::string::npos)
         << "[check: database-stays-open-after-the-copy-rollback] the rolled-back COPY left rows";
+    EXPECT_NE(steps.find("REOPEN passed"), std::string::npos)
+        << "[check: recovery-after-rollback] reopened database lost committed rows or kept COPY rows";
     EXPECT_FALSE(WIFSIGNALED(status))
         << "[check: closing-a-connection-does-not-abort] the child died of signal "
         << WTERMSIG(status);
@@ -192,6 +209,8 @@ TEST_F(CopyRollbackUnderAFullBuffer, StringKeysRemainUsableAfterRollback) {
            "refused";
     EXPECT_NE(steps.find("COUNT empty"), std::string::npos)
         << "[check: database-stays-open-after-the-copy-rollback] the rolled-back COPY left rows";
+    EXPECT_NE(steps.find("REOPEN passed"), std::string::npos)
+        << "[check: recovery-after-rollback] reopened database lost committed rows or kept COPY rows";
     EXPECT_FALSE(WIFSIGNALED(status))
         << "[check: closing-a-connection-does-not-abort] the child died of signal "
         << WTERMSIG(status);

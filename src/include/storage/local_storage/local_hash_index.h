@@ -52,6 +52,11 @@ public:
         return localInsertions.deleteKey(key);
     }
 
+    void discardRange(common::offset_t first, common::offset_t count) {
+        std::unique_lock xLock{mtx};
+        localInsertions.discardRange(first, count);
+    }
+
     bool insert(OwnedType&& key, common::offset_t value, visible_func isVisible) {
         std::unique_lock xLock{mtx};
         auto iter = localDeletions.find(key);
