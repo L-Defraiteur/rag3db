@@ -1,5 +1,21 @@
 # Rapport de session — G, « l'optimiseur » (11 novembre 2026, 16 h 25)
 
+## Mise à jour du 11 novembre, après 22 h 04
+
+Le relevé de 16 h 25 ci-dessous reste historique. Le binaire installé aux deux
+postes est désormais **68b9ede17c182487d3f823c2e5cc5906b62a4a46**, SHA256
+`6af3ec67450863021735359132b8d68e2afb97a8e0c50f2b182fd94a0bc44e2e`, contre la
+lib complète 29a7bc52a inchangée. Pose coordonnée : luciepc 22:03:08–22:03:11,
+portable 22:03:56–22:04:04. Atelier principal : 20 outils effectivement exposés,
+UI servie conforme au commit et rendu navigateur sans erreur ; atelier d’essai
+inchangé à trois outils. Ancien binaire d134 préparé mais jamais posé.
+
+Preuves, sauvegardes, contrôles et limites :
+`docs/tickets/closed/2026-11-11-preparer-et-poser-le-binaire-regroupe-aux-deux-postes.md`.
+La préparation future repart de `~/git_workspaces/cx-optimiseur-controle` à luciepc,
+créé pour respecter la convention cx- ; l’ancien worktree contenant des sous-modules
+reste intact. Aucun nettoyage de base, d’instantané ou d’ancien artefact effectué.
+
 Écrit pour un agent qui reprend sans aucune mémoire de nos échanges. Le savoir-faire (comment bâtir,
 poser, revenir en arrière, lire la carte, les pièges) est dans `02-knowledge-dump.md`, à côté. Ici :
 l'état, relevé le 11 novembre entre 16 h 24 et 16 h 26.

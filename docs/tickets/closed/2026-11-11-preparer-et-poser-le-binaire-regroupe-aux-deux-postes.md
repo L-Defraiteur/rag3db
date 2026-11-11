@@ -1,6 +1,6 @@
 # Préparer et poser le binaire regroupé aux deux postes
 
-- **État** : en cours, artefact exact 68b9ede17 préparé et attesté aux deux postes ; pose non autorisée, revue et créneau attendus
+- **État** : fait, pose vérifiée de 68b9ede17c182487d3f823c2e5cc5906b62a4a46 aux deux postes le 11 novembre 2026 ; preuves et heures ci-dessous, clôture portée par le commit qui déplace ce ticket
 - **Famille** : produit
 - **Gravité** : planification — rendre les lots intégrés accessibles aux deux postes
 - **Atteignable en service** : oui, le binaire installé détermine les fonctions disponibles
@@ -125,3 +125,58 @@ d’essai reste à trois outils ; son ancien refus de réinstallation reste rés
 Ordre proposé : revue des attestations et du retour, coordination et préavis
 d’une minute, luciepc puis portable, contrôle des backends, UI servie et outils
 réels, bilan avec heures et empreintes. La préparation verte ne vaut pas accord de pose.
+
+## Réalisation : pose autorisée et contrôlée
+
+L’orchestration a relu les deux attestations et autorisé la pose de binaire seul
+après 22 h 03 Paris, préavis donné à Lucie à 22 h 01. Pas d’instantané de base neuf
+requis : lib et format inchangés. Les étapes ci-dessous ont été réalisées, distinctes
+du plan historique conservé plus haut.
+
+| Poste | Début arrêt socket/service | Réveil contrôlé | MainPID |
+|---|---|---|---|
+| luciepc | 22:03:08.940 | 22:03:11.708 | 3788236 |
+| portable | 22:03:56.736 | 22:04:04.529 | 4167580 |
+
+Les trois services d’embarquement de chaque poste ont répondu avec leurs dimensions
+avant coupure. Activité 7970 relue juste avant chaque arrêt : aucun chat en cours
+ni run de fond. Au portable, la tâche `8fa380f6a09c` était en attente sans attente de
+réponse ; l’orchestration a confirmé que cet état seul n’interdisait pas la pose.
+Arrêt systemd propre, aucun autre processus tué ni force-kill.
+
+Sauvegardes réalisées hôte arrêté, avant tout rafraîchissement de gabarit : anciens
+exécutables `.avant-68b9ede1`, fichiers JSON/MMD de configuration, notes de livraison
+et copie du filet. Sur chaque poste : `~/.cache/optimiseur-notes/pose-68/config/`,
+`notes-manifestes/` et `retour.json` (chemins et SHA des anciens exécutables).
+Env et filet actifs restent inchangés : aucun besoin de lire/réécrire l’env ni de
+réinstaller l’unité avec la même lib. Aucun fichier de base restauré ou remplacé.
+
+Contrôles après réveil : SHA256 de `/proc/<MainPID>/exe` égal à
+`6af3ec67450863021735359132b8d68e2afb97a8e0c50f2b182fd94a0bc44e2e` aux deux postes,
+PID de `/sante` égal au MainPID, lib complète 29a7 dans les maps et check-lib vert.
+Deux bases de luciepc et cinq backends du portable rouverts avec `ok=true`.
+Les GET authentifiés de l’UI active correspondent aux SHA app.js/css attestés.
+
+L’atelier principal expose exactement les 20 outils du gabarit cible, dont
+`search_code`, `outline`, `usages`, `callees`, `impact`, `grep_files`, `list_files`,
+`schema` et `wait_output`. Cela prouve leur exposition, pas l’exécution de chaque
+outil sur chaque base. L’atelier d’essai n’a pas été réinstallé : trois outils et
+SHA `f563123a5bc5ab47d83ab032d95e95ffd6158d2212e913d7fb298d7e7b7b61f7` inchangés.
+Les sept tâches gardent les mêmes identifiants et états avant/après ; la tâche
+`8fa380f6a09c` reste en attente, sans consommation manuelle de son travail.
+
+Rendu Chrome sans tête au portable : page `/ide/` rendue, 431 éléments sous la
+racine React, aucune erreur ni avertissement de console. Pas de preuve de clics
+ou d’exécution de tous les outils ajoutée à cette vérification de pose.
+
+Preuves conservées :
+
+- luciepc : `~/.cache/rag3weaver-build/cx-pose-68.log` et `cx-controle-pose-68.log` ;
+- portable : `~/.cache/optimiseur-notes/pose-68-portable.log` et `controle-pose-68-portable.log` ;
+- aux deux postes : `~/.cache/optimiseur-notes/pose-68/resultat-reveil.json` et `controle-fonctionnel.json` ;
+- portable : même dossier `etat-avant.json`, `etat-apres.json`, `rendu-ide.log` ;
+- scripts exacts conservés dans les notes : `pose-68.py`, `controler-pose-68.py` au portable,
+  copies `cx-pose-68.py`, `cx-controler-pose-68.py` dans le cache de bâtis de luciepc.
+
+Bilan heures, SHA et 20 outils transmis à l’orchestration avant clôture. Retour
+non nécessaire ; les anciens exécutables, sauvegardes et artefacts restent conservés.
