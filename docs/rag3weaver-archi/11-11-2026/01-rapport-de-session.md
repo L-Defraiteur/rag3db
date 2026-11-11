@@ -137,11 +137,13 @@ bonne cible, rechargement et reclic sans réexécution. Le schéma JSON est conv
 Source du témoin : `src/daemon_host/chat_contextuel.rs`, module isolé coordonné dans
 `daemon_host.rs`. Aucun runtime/gabarit/UI modifié, aucun master push pendant la fenêtre recherche.
 
-Syntaxe et compilation des tests vertes (1 min 31 s), **parcours non joué**, car la primitive
-n'existe pas encore. Preuves : luciepc
+Syntaxe et compilation des tests vertes (1 min 31 s). Baseline exécutée ensuite :
+**ROUGE exposition** (1 échec, 0 ignoré, 3,78 s) exactement sur `search_code` absent des outils
+proposés au modèle, après attachement/index réels des deux dépôts et demande Chrome.
+La primitive n'existe pas encore : **exécution du relais, clic et reprise non atteints**. Preuves : luciepc
 `~/.cache/rag3weaver-build/cx-ui-contextuel-dbf3f7419-check-20261111/`, target neuf unique
 `~/.cache/rag3weaver-build/cx-archi-target`. Dès disponibilité ED, intégrer au point sûr et
-jouer le rouge effectif ; ne pas compter compilation ou ignore comme réussite du parcours.
+jouer l'étape suivante ; ne pas compter compilation ou ignore comme réussite du parcours.
 Détails et limites : `04-preparation-du-parcours-contextuel.md`.
 
 ## Les lots nommés, pas commencés
