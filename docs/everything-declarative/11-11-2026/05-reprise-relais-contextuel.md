@@ -56,3 +56,28 @@ si le texte du reçu est tronqué. Aucun repli vers l'identifiant de conversatio
 
 La fenêtre de push reste tenue par l'orchestration ; aucun push master de ce lot. Les suites
 de lecture et navigateur du changement restent à juger ; un vert ciblé ne les remplace pas.
+
+## Base commune a92 validée, intégration encore à faire
+
+Ticket actif : `docs/everything-declarative/tickets/2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md`,
+porteurs ED (runtime/intégration) et archi (UI). Sur `a92b212334d240fe10bb7a295f12185864e048df`,
+features 5/5, lib 2112 réussis / zéro échec / 64 ignorés (marques existantes, navigateur séparé),
+gardes 9/9, lectures 24/24, PostgreSQL privé 34/34 ; e2e 2/2 suites, aucun SAUTÉ.
+Archi : navigateur 39/39 et ciblés 3/3 sans ignoré (commande réelle accordée puis wait_output,
+nominal deux dépôts et liens après rechargement, résultat réellement tronqué à 32768 avec
+contexte structuré et bons clics B/A). TS, JS, bundle et tickets verts.
+Attestation ELF : 220 chemins et contenus présents, zéro absent ; binaire
+`4ad3a31b5742b01e20bbf14a5e848d8c2006061b6a271090fb6511a6b70b7f3e`.
+
+Preuves ED : `I-luciepc/relais-20261111/*commun-2.log`, `commit-commun-2`,
+`verdict-commun-2` ; archi : `cx-ui-contextuel-a92b21233-navigateur-entier-20261111/`
+aux deux postes, `navigateur.log` et `attestation-elf.json`. Les diagnostics antérieurs,
+dont 3de (overflow du MockLlm interne du témoin, pas de changement de borne de production),
+restent distincts. Le ticket outils reste ouvert jusqu'à intégration et nettoyage.
+
+Recherche/lucivy 433 vient d'atterrir sur `f96acc6cf97692804520e2d672de080bcae730a3`.
+Prochaine étape du même ticket : lire le diff, rebaser sous branche cx neuve, fixer la source
+commune avec archi puis rejouer features/lib/gardes/lectures/PG et les trois parcours ciblés UI.
+Aucun nouveau tour de push n'est acquis. Le ticket d'accord extérieur est transféré à ED,
+reste ouvert et demeure distinct de ce lot. Remaining demeure un lot séparé rouge sur les
+bilans (18/26 dans la borne de 600 s), sans rejeu Gemini automatique.
