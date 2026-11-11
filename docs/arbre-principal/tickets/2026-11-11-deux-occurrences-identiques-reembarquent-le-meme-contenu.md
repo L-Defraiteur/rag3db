@@ -227,3 +227,10 @@ sans réinscription, et Scope privé avec signaux propres NONE (l'index associé
 signaux d'origine, pas de corpus plein texte propre redondant). Ils utilisent les primitives
 existantes, sans changement du gabarit de production. Les preuves v3 ne couvrent pas encore
 ces deux ajustements ni le correctif SQL. Ne pas les étiqueter VERT avant leurs journaux.
+
+Provenance v3 figée : source exacte 965b835b8b58cb3937df26b99ed6a982e01d2f0d,
+origin/cx-arbre-source-cellules-v3 (archive, pas nouveau lot). Les journaux portent HEAD10c
+avec modifications ; ce snapshot les matérialise sans changement. Le checkpoint261ff54fc
+ajoute les témoins de réouverture/ScopeNONE et le fix SQL, non joués par v3.
+Binaire e2e SHA256 97e438e4dae5a42e6baaea3a2077ebb8fb10125231ea2212a9a4cc13bea8d120 ;
+provenance complète et hash du journal v3 dans le ticket recherche de résidu lié ci-dessus.

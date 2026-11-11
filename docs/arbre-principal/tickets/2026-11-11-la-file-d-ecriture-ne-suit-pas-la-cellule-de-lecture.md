@@ -89,3 +89,10 @@ les masques et le refus de recherche directe des versions internes. Le lot code 
 reste dans la branche 1a, pas un nouveau lot parallèle. Verdict attendu dans la passe v3.
 Une fermeture/réouverture multicellule sans réinscription du schéma est également préparée
 pour vérifier la reprise de la dette alpha laissée persistée après le traitement bêta.
+
+Provenance v3 figée : source exacte 965b835b8b58cb3937df26b99ed6a982e01d2f0d,
+origin/cx-arbre-source-cellules-v3 (archive, pas nouveau lot). Les journaux portent HEAD10c
+avec modifications ; ce snapshot les matérialise sans changement. Le checkpoint261ff54fc
+ajoute les témoins de réouverture/ScopeNONE et le fix SQL, non joués par v3.
+Binaire e2e SHA256 97e438e4dae5a42e6baaea3a2077ebb8fb10125231ea2212a9a4cc13bea8d120 ;
+provenance complète et hash du journal v3 dans le ticket recherche de résidu lié ci-dessus.
