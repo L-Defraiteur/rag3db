@@ -69,3 +69,21 @@ les copies du gabarit reçoivent embeddings.address=7882. Aucun usage des servic
 partagés 7878–7880. La séquence complète doit rester sous un seul poste lourd.
 
 Aucun tour de push master accordé. Aucun résultat A/B nouveau annoncé à ce stade.
+
+## Reprise sur master et convention cx-
+
+Après un nouveau fetch, l'ancienne branche a 216 commits de retard : elle ne
+servira pas à une nouvelle passe. Les sept commits ont été repris sans conflit
+sur master 2870f3e81 dans `/home/lucied/git_workspaces/cx-wt-codeparsers-require`,
+branche `cx-codeparsers-require`, tous sauvegardés sur origin.
+Le témoin exact `module.exports = { Alias }` est ajouté en 846fcf778 ; il n'est
+pas encore joué. Le premier témoin dit « réexportation » utilisait un objet
+renvoyé par une fonction : ses verts ne prouvent pas la forme exacte des index.js.
+
+La mesure active reste figée sur e1015a379/e48b414 et ses anciens chemins :
+aucun worktree ni script n'a été déplacé sous sa compilation. Ses résultats
+ne seront pas présentés comme une passe du master repris. Le rejeu des témoins,
+puis la validation requise, restent à faire sur la branche cx-.
+
+Les dix tests `require_js` de codeparsers sont également passés, zéro ignoré,
+sur e48b414 (journal luciepc `require-parser-metadata.log`).
