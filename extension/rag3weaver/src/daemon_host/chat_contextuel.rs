@@ -202,7 +202,7 @@ fn le_relais_du_chat_ouvre_la_cible_effective_et_la_garde_apres_rechargement() {
             assert!(provenance["parent_run"].as_str().is_some_and(|s| !s.is_empty()));
             assert!(provenance["run"].as_str().is_some_and(|s| !s.is_empty()));
         }
-        eprintln!("rendu réel : {}", n.evaluer("[...document.querySelectorAll('.outil')].map(e => e.outerHTML).join('\n')"));
+        eprintln!("rendu réel : {}", n.evaluer("[...document.querySelectorAll('.outil')].map(e => e.outerHTML).join('')"));
         n.attendre(&format!("!!({lien})"), "un lien de fichier issu du résultat réel");
         let attendu = format!("/ide/code/{id}/fichier/src/lib.rs");
         let href = n.evaluer(&format!("({lien}).getAttribute('href')"));
