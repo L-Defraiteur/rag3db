@@ -86,3 +86,85 @@ fn un_hit_partage_se_projette_vers_toutes_ses_occurrences() {
         "la projection a ressuscité une occurrence hors filtre : {:?}", response.results);
 
 }
+
+/// L'appel public choisit alpha alors que le catalogue reste en beta. Un
+/// morceau alpha a deux parents alpha et un parent beta : garder les deux
+/// demandés, exclure beta, sans reconstruire alpha depuis la cellule courante.
+#[test]
+#[ignore]
+fn la_cellule_demandee_reste_celle_des_occurrences_projetees() {
+    use std::collections::{BTreeMap, BTreeSet};
+    use rag3weaver::config::{ChunkingConfig, EntityConfig, FieldType, SimpleFieldDef};
+    use rag3weaver::connection::CypherValue;
+    use rag3weaver::embedder::MockSparseEmbedder;
+    use rag3weaver::scope::{Scope, PROJECT_COLUMN};
+    use rag3weaver::search::{Consistency, ResultMode, SearchOptions, SearchSignals};
+
+    let conn = Rag3dbConnection::in_memory().unwrap();
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension())).unwrap();
+    let mut cat = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(8)), CatalogConfig {
+        allow_mock_embedder: true, embedding_dim: 8, ..Default::default()
+    });
+    cat.set_sparse_embedder(Arc::new(MockSparseEmbedder::new()));
+    cat.initialize().unwrap();
+    let champ = |field_type| SimpleFieldDef { field_type, ..Default::default() };
+    let mut fields = std::collections::HashMap::new();
+    fields.insert("key".into(), champ(FieldType::String));
+    fields.insert("file_path".into(), champ(FieldType::String));
+    fields.insert("start_line".into(), champ(FieldType::Integer));
+    fields.insert("name".into(), SimpleFieldDef { is_title: true, ..champ(FieldType::String) });
+    fields.insert("body".into(), SimpleFieldDef { is_content: true, ..champ(FieldType::Text) });
+    let alpha = Scope::new("acme", "alpha");
+    let beta = Scope::new("acme", "beta");
+    cat.set_scope(alpha.clone()).unwrap();
+    cat.register_entity("Occurrence", EntityConfig {
+        fields, signals: SearchSignals::VECTOR | SearchSignals::SPARSE,
+        hashsafe: Some(vec!["key".into()]),
+        return_fields: Some(vec!["key".into(), "file_path".into(), "start_line".into()]),
+        chunking: ChunkingConfig { title_max_chars: 0, ..Default::default() },
+        ..Default::default()
+    }).unwrap();
+    let ligne = |key: &str, path: &str, start: i64| BTreeMap::from([
+        ("key".into(), CypherValue::String(key.into())),
+        ("name".into(), CypherValue::String(key.into())),
+        ("body".into(), CypherValue::String("shared_marker".into())),
+        ("file_path".into(), CypherValue::String(path.into())),
+        ("start_line".into(), CypherValue::Int(start)),
+    ]);
+    cat.ingest_entities("Occurrence", vec![ligne("a1", "a.rs", 1), ligne("a2", "a2.rs", 3)]).unwrap();
+    cat.set_scope(beta.clone()).unwrap();
+    cat.ingest_entities("Occurrence", vec![ligne("b1", "b.rs", 5)]).unwrap();
+    let ids = |cell: &str| -> BTreeSet<String> {
+        cat.conn().execute(&format!("MATCH (p:Occurrence) WHERE p.{PROJECT_COLUMN} = '{cell}' RETURN p._uuid")).unwrap()
+            .rows.iter().map(|r| r[0].as_str().unwrap().to_string()).collect()
+    };
+    let alpha_ids = ids("alpha");
+    let beta_ids = ids("beta");
+    assert_eq!(alpha_ids.len(), 2);
+    assert_eq!(beta_ids.len(), 1);
+    let chunk = cat.conn().execute("MATCH (c:Occurrence_Chunk)-[:Occurrence_CHUNKED_FROM]->(p:Occurrence) WHERE p.key = 'a1' RETURN c._uuid").unwrap();
+    assert_eq!(chunk.rows.len(), 1);
+    let shared = chunk.rows[0][0].as_str().unwrap().to_string();
+    // a2 ne pourra être trouvée que par le morceau partagé, pas par son
+    // ancien morceau personnel (sa ligne reste présente pour le corpus sparse).
+    cat.conn().execute("MATCH (:Occurrence_Chunk)-[r:Occurrence_CHUNKED_FROM]->(p:Occurrence) WHERE p.key = 'a2' DELETE r").unwrap();
+    cat.conn().execute(&format!("MATCH (c:Occurrence_Chunk), (p:Occurrence) WHERE c._uuid = '{shared}' AND p.key IN ['a2', 'b1'] CREATE (c)-[:Occurrence_CHUNKED_FROM]->(p)")).unwrap();
+    let cat = Arc::new(Mutex::new(cat));
+    for signal in [SearchSignals::VECTOR, SearchSignals::SPARSE] {
+        for mode in [ResultMode::Aggregated, ResultMode::Detailed, ResultMode::SourceResolved] {
+            for (scope, expected) in [(Some(alpha.clone()), &alpha_ids), (None, &beta_ids)] {
+                let response = Catalog::rechercher(&cat, "Occurrence", "shared_marker", SearchOptions {
+                    consistency: Consistency::Immediate, signals: Some(signal), strict_signals: true,
+                    scope: scope.clone(), result_mode: mode, limit: 50, ..Default::default()
+                }).unwrap();
+                let actual: BTreeSet<_> = response.results.iter().map(|r| r.uuid.clone()).collect();
+                assert_eq!(&actual, expected, "cellule {scope:?}, signal {signal:?}, mode {mode:?} : {:?}", response.meta);
+                if scope.is_some() && mode == ResultMode::Detailed {
+                    assert!(response.results.iter().all(|r| r.chunks.as_ref().unwrap().iter().any(|c| c.uuid == shared)),
+                        "les deux parents alpha doivent être atteints par le même morceau");
+                }
+                assert_eq!(cat.lock().unwrap().scope(), &beta, "la cellule du catalogue ne doit pas être déplacée par la requête");
+            }
+        }
+    }
+}
