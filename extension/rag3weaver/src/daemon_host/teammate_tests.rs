@@ -286,19 +286,21 @@ fn a_small_request_needs_no_plan_and_an_active_plan_is_paused_then_recalled() {
 /// le second livre le compte rendu demandé. Déclarer le pas réussi ne signifie
 /// pas que la tâche entière est finie quand `remaining` dit le contraire.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
-#[test]
-fn a_remaining_deliverable_continues_without_a_plan() {
+fn remaining_deliverable_case(reprendre: bool) {
     let d = tempfile::tempdir().unwrap();
     let (_depot, manifeste) = depot_inscrit(d.path(), true);
     let model: ChatModel = Arc::new(move |_b| {
         Ok(Arc::new(CallbackLlm::new("faux-reste-explicite", 16384, move |turns, opts, sink| {
             let resultats = tool_results(turns);
             let outils = match (step_of(turns), resultats.is_empty()) {
-                (1, _) => calls(&[("step_done", json!({
+                (1, _) if !reprendre => calls(&[("step_done", json!({
                     "item": "", "succeeded": true, "done": "analyse terminée",
                     "remaining": "livrer le compte rendu dans la boîte"
                 }))]),
-                (2, true) => calls(&[("report", json!({ "text": "Compte rendu livré : analyse vérifiée." }))]),
+                (_, true) => {
+                    assert!(last_user(turns).contains("livrer le compte rendu dans la boîte"), "le reste est rappelé au pas suivant");
+                    calls(&[("report", json!({ "text": "Compte rendu livré : analyse vérifiée." }))])
+                },
                 _ => calls(&[("step_done", json!({
                     "item": "", "succeeded": true, "done": "compte rendu livré", "remaining": ""
                 }))]),
@@ -312,13 +314,31 @@ fn a_remaining_deliverable_continues_without_a_plan() {
     host.ouvrir_une_tache(&h.id, "reste-explicite").expect("la tâche s'ouvre");
     let files = host.teammate_files(&h.id, "reste-explicite").unwrap();
     files.append("supervisor", "request", None, "Analyse puis livre un compte rendu dans la boîte.").unwrap();
+    if reprendre {
+        files.append_with("teammate", "step_done", None, "fait : analyse terminée", &json!({
+            "succeeded": true, "done": "analyse terminée", "remaining": "livrer le compte rendu dans la boîte"
+        })).unwrap();
+        files.write_cursor(files.mailbox().len());
+    }
     let outcome = host.run_teammate(&h.id, "reste-explicite").unwrap();
-    assert_eq!(outcome.steps.len(), 2, "le reste explicite exige un second pas : {outcome:?}");
+    assert_eq!(outcome.steps.len(), if reprendre { 1 } else { 2 }, "le reste explicite exige le pas de livraison : {outcome:?}");
     assert_eq!(outcome.ended, "fait sans plan", "{outcome:?}");
     assert!(!files.plan_path().exists(), "le témoin doit rester sans plan");
     assert!(files.mailbox().iter().any(|l| l["from"] == "teammate"
         && l["kind"] == "report" && l["text"] == "Compte rendu livré : analyse vérifiée."),
         "le livrable demandé doit être observé dans la boîte : {:?}", files.mailbox());
+}
+
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_remaining_deliverable_continues_without_a_plan() {
+    remaining_deliverable_case(false);
+}
+
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_remaining_deliverable_survives_a_consumed_mailbox_without_a_plan() {
+    remaining_deliverable_case(true);
 }
 
 /// **L'arrêt passe tout de suite** : un `stop` dans la boîte pendant un pas
