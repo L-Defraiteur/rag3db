@@ -132,7 +132,7 @@ pub fn derived_config_for_kb(kb_name: &str, kb_config: &KBConfig, config: &Catal
         signals: kb_config.signals,
         chunking: kb_config.chunking.clone(),
         fusion: Some(kb_config.fusion_config()),
-        derived: Some(DerivedConfig { from: racine, gather, render }),
+        derived: Some(DerivedConfig { from: racine, identity: crate::config::DerivedIdentity::Root, gather, render }),
         ..Default::default()
     })
 }

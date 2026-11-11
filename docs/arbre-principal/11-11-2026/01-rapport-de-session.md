@@ -15,6 +15,45 @@ la session d'orchestration (aujourd'hui `rag3db-5a`), et travaille avec les sess
 **recherche**, **everything declarative** ou « ED » (l'IDE et l'équipier).
 
 
+## Checkpoint d'implémentation 1a — après la projection livrée
+
+Cette section prime sur les états de préparation ci-dessous. Branche active
+`cx-arbre-scope-version-3`, worktree `~/.cache/rag3weaver-build/cx-wt-scope-version`
+aux deux postes ; base du travail `c224979351e735df8766ee20fe592eba444440b8`.
+Runtime maintenant modifié ; lot 1a **incomplet**, aucun tour de push master.
+
+- `DerivedIdentity` déclare `root` (défaut implicite inchangé) ou `content` avec format.
+  L'adresse de contenu couvre octets des champs rendus, rôles titre/contenu, recette de découpage,
+  format et cellule ; modèles/dimensions restent du ressort du magasin vectoriel existant.
+- Le mode contenu réutilise `DERIVED_FROM`, porte `_render_hash` sur chaque lien, ne réinsère
+  pas une version existante et repointe seulement l'origine modifiée. Les versions restent
+  conservées après suppression d'une racine ; aucun GC ajouté. Les écritures directes sur une
+  version sont refusées, ainsi qu'un changement d'identité sans migration déclarée.
+- Premier rouge produit : en remettant temporairement l'identité par racine, le témoin
+  `versions_immuables_partagees_et_references_independantes` voit 2 versions au lieu de 1.
+  Restauration : 1 réussi/0 échec. Il couvre partage version/chunk, états indépendants, mutation
+  d'une seule origine, retour au contenu antérieur et suppression sans perte de l'autre référence.
+  Journaux luciepc hors target : `cx-contenu-reference-rouge-v3.log`,
+  `cx-contenu-reference-vert.log`. Diagnostic `RAG3WEAVER_E2E_FEATURES=rag3db-native`,
+  **pas une passe globale**. Les essais précédents ont échoué à la compilation du montage
+  (variable rendue inutilisée par la mutation, puis `is_some` sur un Result), pas du produit.
+- Depuis ce vert, composition L3 posée autour des drains contenant des références immuables,
+  pour annuler ensemble racine, versions, liens, états et tampon plein texte. La file des ressources
+  indépendantes est gardée à part du rollback. Un nouveau témoin injecte un échec de création de
+  lien et compare les origines, versions et hashes avant/après. **Pas encore exécuté sur ce diff.**
+- Bloquants avant 1a complet : vérifier cette atomicité (dont échec d'insertion et de lien,
+  conservation de la file indépendante et reprise), déclarer la projection publique vers les
+  occurrences et appliquer son masque avant le top-k de chaque signal. Le schéma Scope et ses
+  gabarits ne sont pas basculés ; le compteur Scope partagé reste un rouge du lot à fermer.
+- Nouveau target unique en service sur luciepc :
+  `~/.cache/rag3weaver-build/cx-target-contenu-derive`. Lib épinglée 29a7bc52a, `-j8`,
+  poste lourd. Aucun accès aux bases de service, aucune mesure M3–M5 lancée.
+
+Fichiers tenus : config.rs, derive_nodes.rs, record_nodes.rs, derived_kb.rs, catalog.rs
+(hors réclamations ED), schema.rs, dialect.rs, e2e_entites_derivees.rs. ED a confirmé ne pas
+avoir repéré de primitive de remplacement atomique dans LinkRecordNode ; composer L3 conserve
+les garanties communes. Codeparsers garde ses zones de code.rs ; aucun de ces blocs n'est édité.
+
 ## Reprise du 11 novembre — état vérifié après atterrissage
 
 Cette section prime sur les chemins et prochains pas historiques ci-dessous.
