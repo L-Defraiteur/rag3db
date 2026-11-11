@@ -1,6 +1,6 @@
 # Les noms des fiches du juge font refuser les décisions de l’archiviste
 
-- **État** : corrigé par `9bf3bb33a`, sur la branche du lot ; livraison sur master en attente du rejeu après rebase et du tour de l’orchestration.
+- **État** : corrigé par `c481a66c6` (avant rebase : `9bf3bb33a`), sur la branche du lot ; rejeu après rebase vert, livraison sur master en attente du tour de l’orchestration.
 - **Famille** : produit
 - **Gravité** : blocage partiel de l’archivage : des sections restent sans apport.
 - **Atteignable en service** : oui, si archive rappelle des fiches dont les noms sont des bilans longs.
@@ -33,4 +33,4 @@ Isoler la cause par comparaison, poser un témoin rouge puis vert avec un binair
 
 ## Correctif et preuves du lot
 
-Les alias courts sont résolus vers les noms exacts avec refus explicite des identifiants inconnus ou ambigus. Rouge ciblé (un échec attendu), puis cinq témoins verts ; essai réel sur copie neuve et binaire de provenance vérifiée : sept sections sur sept, zéro erreur, zéro refus. Passe historique sur base 133b9013e : features 5/5, lib 2094/0 (58 ignorés dans cette étape), navigateur 33/0/0, e2e_archiviste 5/0/0 et e2e_postgres 34/0/0. Le Rust arrivé sur master impose encore un rejeu court. La [note du lot](../../memoire/11-11-2026/04-alias-candidats.md) garde les journaux et le point de reprise.
+Les alias courts sont résolus vers les noms exacts avec refus explicite des identifiants inconnus ou ambigus. Rouge ciblé (un échec attendu), puis cinq témoins verts ; essai réel sur copie neuve et binaire de provenance vérifiée : sept sections sur sept, zéro erreur, zéro refus. Passe historique sur base 133b9013e : features 5/5, lib 2094/0 (58 ignorés dans cette étape), navigateur 33/0/0, e2e_archiviste 5/0/0 et e2e_postgres 34/0/0. Le rejeu court sur `6f13217aa` après le Rust arrivé sur master est vert : features 5/5, lib 2095/0 (58 ignorés), archivage 5/0/0, PostgreSQL 34/0/0. La [note du lot](../../memoire/11-11-2026/04-alias-candidats.md) garde les journaux et le point de reprise.

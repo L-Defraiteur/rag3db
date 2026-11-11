@@ -2,7 +2,7 @@
 
 ## Lot et périmètre
 
-Branche de travail publiée : `cx-memoire-alias-candidats` ; témoins `7a6914ade`, correctif `9bf3bb33a`. Base jouée : `133b9013e`. Aucun push de code sur master n’est autorisé à ce stade.
+Branche actuelle publiée : `cx-memoire-alias-candidats-2` (ancien nom conservé sur origin : `cx-memoire-alias-candidats`) ; témoins `7a6914ade`, correctif `9bf3bb33a`. Base jouée : `133b9013e`. Aucun push de code sur master n’est autorisé à ce stade.
 
 Le gabarit `memory` présente chaque candidate au modèle avec un identifiant court `candidate_N`, son nom exact et son `about`. Une liste de correspondances accompagne la section jusqu’à `archive_decided`, qui retrouve le nom exact avant de composer l’apport, sa clé et ses liens. La fiche ne change pas d’identité. `verdict` garde le nom résolu pour une candidate, et les décisions fixes `none` et `create` gardent leur comportement.
 
@@ -27,14 +27,16 @@ Le premier document réel est aussi rejoué sur une copie neuve de l’instantan
 
 Les cinquante documents ne sont pas lancés et la mémoire réelle est inchangée. Le ticket est déplacé dans `docs/tickets/closed/` dans le lot du correctif ; sa livraison sur master reste en attente.
 
-## Rejeu requis après rebase
+## Rejeu après rebase
 
-Master a reçu `1904e04e42cd3666d6b3a64fee5bd51f0629c020`, un garde-fou Rust dans les tests de backend. Après la passe historique, rebaser sous un nom de branche cx- neuf, pousser la branche, relire le diff puis rejouer features, lib entière et suites du changement hors verrou push. Les journaux historiques restent intacts ; le script préparé pour ce rejeu utilise le préfixe `cx-memoire-alias-r2-`. Aucun tour de push n’est accordé à ce stade.
+Master a reçu `1904e04e42cd3666d6b3a64fee5bd51f0629c020`, un garde-fou Rust dans les tests de backend. Après la passe historique, le lot a été rebasé sur `0b488c0fd8deedfe78ac8aa1c0aaca0249055fa7`, sous le nom neuf `cx-memoire-alias-candidats-2`, puis poussé. Le diff du rebase a été relu : seul le témoin de `backend.rs` est du Rust nouveau, le reste est documentaire. Le correctif rebasé est `c481a66c6` ; le commit joué est `6f13217aaa775c16606e79295c5441fd51dd8e22`. Les commits ultérieurs ne changent que la documentation.
+
+Le rejeu court est **VERT** : features **5/5** ; lib **2 095 passés, 0 échoué, 58 ignorés**, 59,31 s ; archivage **5 passés, 0 échoué, 0 ignoré**, 36,61 s ; PostgreSQL **34 passés, 0 échoué, 0 ignoré**, 9,59 s. Chaque suite e2e a aussi joué ses deux gardes préalables, verts. Le contrôle des tickets est vert et annonce la fermeture de ce ticket. La lib et le jeu de features sont ceux nommés plus haut. Les journaux historiques restent intacts ; les journaux de ce rejeu utilisent le préfixe `cx-memoire-alias-r2-`. Aucun tour de push n’est accordé à ce stade.
 
 ## Où reprendre
 
-- Portable : `~/.cache/rag3weaver-build/cx-wt-memoire-alias`, branche `cx-memoire-alias-candidats`.
-- luciepc : `~/git_workspaces/cx-rag3db-memoire-alias`, branche `cx-memoire-alias-passe`, propre sur `9bf3bb33a` au lancement ; script `~/.cache/rag3weaver-build/cx-memoire-alias-passe.sh`.
+- Portable : `~/.cache/rag3weaver-build/cx-wt-memoire-alias`, branche `cx-memoire-alias-candidats-2`.
+- luciepc : `~/git_workspaces/cx-rag3db-memoire-alias`, branche `cx-memoire-alias-passe-2`, propre sur `6f13217aa` au lancement du rejeu ; script `~/.cache/rag3weaver-build/cx-memoire-alias-r2.sh`.
 - Target unique utilisé : `~/.cache/rag3weaver-build/target-96-fiches4` (17 Go à la dernière lecture, plafond 32 Go).
 - L’ancien miroir `~/git_workspaces/rag3db-memoire-alias` a seulement joué le rouge. Son unité est terminée. Git a refusé son déplacement car il contient un sous-module ; le miroir `cx-` a été créé neuf. Une remise de sécurité dans le miroir `cx-` conserve les trois fichiers joués avant passage au commit publié (`cx-memoire-alias-source-jouee`).
 - Les anciennes branches distantes restent ; aucune suppression distante ni réécriture de commit poussé.
