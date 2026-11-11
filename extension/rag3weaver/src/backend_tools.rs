@@ -16,10 +16,11 @@ pub struct BackendTools<'a> {
 impl BackendTools<'_> {
     /// Le texte que lit le modèle, et ce que la page rend sous le tour (`ui`), ôté du
     /// texte : le modèle ne le voit jamais.
-    fn execute(&self, call: &ToolCall) -> Result<(String, Option<Value>), String> {
+    fn execute(&self, call: &ToolCall) -> Result<(String, Option<Value>, Option<Value>), String> {
         let arguments: Value = serde_json::from_str(&call.arguments).map_err(|e| e.to_string())?;
         let mut result = self.backend.call(&call.name, arguments)?;
         let ui = result.as_object_mut().and_then(|o| o.remove("ui")).filter(|u| !u.is_null());
+        let metadata = result.get("metadata").filter(|m| m.as_object().is_some_and(|o| !o.is_empty())).cloned();
         Ok((match result["presentation"].as_str() {
             Some(text) => match result
                 .get("metadata")
@@ -29,7 +30,7 @@ impl BackendTools<'_> {
                 None => text.to_string(),
             },
             None => result.to_string(),
-        }, ui))
+        }, ui, metadata))
     }
 }
 
@@ -54,7 +55,7 @@ impl crate::agent::ToolBox for BackendTools<'_> {
 
     fn call(&self, call: &ToolCall) -> Turn {
         match self.execute(call) {
-            Ok((texte, ui)) => Turn { ui, ..Turn::tool_result(&call.id, &call.name, texte) },
+            Ok((texte, ui, metadata)) => Turn { ui, metadata, ..Turn::tool_result(&call.id, &call.name, texte) },
             Err(e) => Turn::tool_result(&call.id, &call.name, json!({"error": e}).to_string()),
         }
     }
