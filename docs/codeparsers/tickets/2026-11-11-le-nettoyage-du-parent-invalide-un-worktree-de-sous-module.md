@@ -122,3 +122,12 @@ réel ; refus partagé prouvé avec données/index/refs/reflogs inchangés dans 
 fixture. La garde ne copie, ne pousse, ne répare ni n'efface ; aucun nouvel
 accès au garde réel. Voir le plan 05 pour interface et limites. Ticket laissé
 ouvert jusqu'à revue ; aucune nouvelle garantie rétrospective sur l'incident.
+
+### Vérification sur les deux postes
+
+Huit tests passent aussi à luciepc sous poste lourd (0,700 s), depuis deux
+scripts copiés dans ~/.cache/codeparsers-notes/cx-garde-nettoyage/ ; sans
+compiler Rust, ouvrir un dépôt réel ou toucher l'ancien garde. La relecture
+a rendu explicite le refus en cas d'erreur de parcours de fichiers : aucune
+branche inaccessible n'est silencieusement considérée vide. Journaux et hashes
+des versions testées conservés dans ce dossier, à actualiser si le script change.

@@ -56,10 +56,14 @@ def worktrees(common):
     return entries
 
 
+def walk_error(error):
+    raise error
+
+
 def inventory(root):
     """Empreinte fidèle des entrées, sans contenu dans le rapport ni suivi des liens."""
     result = {}
-    for directory, dirs, files in os.walk(root, followlinks=False):
+    for directory, dirs, files in os.walk(root, followlinks=False, onerror=walk_error):
         for name in ['.'] + sorted(dirs + files):
             p = Path(directory) if name == '.' else Path(directory) / name
             rel = str(p.relative_to(root))
@@ -95,7 +99,7 @@ def inspect(repo, target, archives, report):
         raise ValueError('rapport situé dans la zone supprimable')
     admins = {target_admin}
     sources = {target}
-    for directory, dirs, files in os.walk(target, followlinks=False):
+    for directory, dirs, files in os.walk(target, followlinks=False, onerror=walk_error):
         p = Path(directory)
         if '.vault' in dirs:
             refus.append('zone .vault exclue : inspection structurelle incomplète')
@@ -125,7 +129,7 @@ def inspect(repo, target, archives, report):
     for root in list(admins):
         if not any(inside(root, d) for d in destroyed):
             continue
-        for directory, dirs, files in os.walk(root, followlinks=False):
+        for directory, dirs, files in os.walk(root, followlinks=False, onerror=walk_error):
             p = Path(directory)
             if 'HEAD' in files:
                 admins.add(p)
