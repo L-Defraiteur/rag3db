@@ -250,6 +250,16 @@ impl JournalDesRuns {
         lire_le_fichier(&self.fichier(backend, run)?).ok()
     }
 
+    /// Les ajouts connus avant leur écriture. Le verrou d'écriture ferme la
+    /// fenêtre où `ecrire` a retiré un run de `en_cours` sans avoir posé son
+    /// fichier. Le lecteur prend cet instantané AVANT de lister les fichiers,
+    /// puis déduplique par run : un transfert ne peut ni perdre ni doubler un run.
+    pub(super) fn ajouts_en_attente(&self, backend: &str) -> Vec<(String, Map<String, Value>)> {
+        let _ecriture = self.ecritures.lock().unwrap_or_else(|p| p.into_inner());
+        let etat = self.etat.lock().unwrap_or_else(|p| p.into_inner());
+        etat.en_cours.iter().filter(|(_, r)| r.backend == backend).map(|(run, r)| (run.clone(), r.ajouts.clone())).collect()
+    }
+
     /// **Ce que pèse le journal d'un run** : son JSON, son fichier compressé, et
     /// le taux (les mesures de la page 06).
     pub fn mesurer(&self, backend: &str, run: &str) -> Option<String> {
@@ -480,7 +490,7 @@ impl JournalDesRuns {
 
     /// Écrit le journal d'un run racine, borné et compressé, puis fait tomber
     /// les plus vieux au-delà des bornes, en le disant.
-    fn ecrire(&self, run: &str) {
+    pub(super) fn ecrire(&self, run: &str) {
         let _une_a_la_fois = self.ecritures.lock().unwrap_or_else(|p| p.into_inner());
         let mut etat = self.etat.lock().unwrap_or_else(|p| p.into_inner());
         let Some(r) = etat.en_cours.remove(run) else { return };

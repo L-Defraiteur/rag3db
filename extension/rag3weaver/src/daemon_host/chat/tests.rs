@@ -557,6 +557,46 @@ fn l_etat_du_chat_rend_l_usage_du_tour_et_de_la_session_et_les_taches_a_role() {
     assert!(archiviste["at_ms"].as_u64().is_some_and(|t| t > 0), "{archiviste}");
 }
 
+/// Le total scellé remplace les traces, ne s'y ajoute pas. Deux tours dont
+/// l'écriture se chevauche restent deux tours, avant, pendant et après le
+/// transfert vers le fichier ; une nouvelle instance retrouve le même usage.
+#[test]
+fn l_usage_scelle_ne_se_perd_ni_ne_se_double_au_passage_au_journal() {
+    let (d, host, _m, id) = banc(qui_lit_deux_fois());
+    let premier = "agent-100-9";
+    let second = "agent-100-10";
+    let sceller = |run: &str, n: u64| {
+        host.journal.ajouter(&id, run, serde_json::from_value(json!({
+            "chat": id,
+            "usage_du_chat": { "input_tokens": n },
+            // Une trace différente prouve la priorité du total, et non sa somme.
+            "evenements": [{ "kind": "Consumed", "units": [{ "unit": "input_tokens", "amount": 999 }] }],
+        })).unwrap());
+    };
+    sceller(premier, 20);
+    let usage = || host.usage_et_taches_a_role(&id).0;
+    assert_eq!(usage()["session"]["input_tokens"], 20);
+    // Le second peut être fini avant que le premier n'ait son fichier.
+    sceller(second, 30);
+    let attendu = usage();
+    assert_eq!(attendu["tours"], 2);
+    assert_eq!(attendu["tour_run"], second);
+    assert_eq!(attendu["session"]["input_tokens"], 50);
+    std::thread::scope(|s| {
+        s.spawn(|| {
+            // L'ordre d'écriture est l'inverse de l'ordre des tours.
+            host.journal.ecrire(second);
+            host.journal.ecrire(premier);
+        });
+        for _ in 0..100 {
+            assert_eq!(usage(), attendu, "le transfert garde l'identité et la somme des tours");
+        }
+    });
+    assert_eq!(usage(), attendu);
+    let reprise = DaemonHost::new().with_runs_root(d.path().join("runs"));
+    assert_eq!(reprise.usage_et_taches_a_role(&id).0, attendu, "la reprise relit le même total, pas les traces");
+}
+
 /// Le faux modèle de la page du chat : « deux outils » fait « mots, outil, mots,
 /// outil, réponse » ; « long » parle soixante lignes, une toutes les 40 ms (un
 /// flux de soixante événements), puis finit.
