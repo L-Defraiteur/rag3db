@@ -253,3 +253,25 @@ non envoyée, serveur sans réponse, réponse visible hors corpus et verdict de
 cible. Les 415 liaisons historiques n'ont pas déclenché de questions ; aucune
 conclusion de précision n'en découle. Le ticket du contrat mention/cible et
 le lecteur de TSV préservent les preuves sans changer cet oracle.
+
+## Livraison du lot require et exports — état après revue finale
+
+L'état de reprise ci-dessus est historique. Le lot initial et son complément
+exports sont réunis sur cx-codeparsers-require-3 ; code d92c0f4b7, producteur
+a730a9b publié sur origin/cx-codeparsers-default-metadata. Passe intégrée sur
+50ebbb760/base68b9/lib29a7 relue : features5/5, lib2114 réussis/64 ignorés
+non revendiqués (39 repris navigateur), navigateur39, code36, usages19,
+PostgreSQL privé34, sans échec ni ignoré dans ces étapes séparées.
+Le contrat navigation vers le symbole/valeur exportée est accepté ; les cinq
+strict-faux restent dans le bilan, sans score global. Tour de push accordé.
+Ticket corrigé déplacé vers
+`docs/tickets/closed/2026-11-08-un-require-relatif-s-arrete-a-la-liaison.md`.
+Les actions non livrées restent aux tickets codeparsers de provenance oracle,
+homonyme platform, import_binding et receveurs/résolution ; aucune nouvelle
+campagne LSP ni capture n'est lancée par cette livraison.
+
+Les worktrees et branches locales du lot, le target-codeparsers-clic et la base
+PG privée sont à supprimer immédiatement après les trois contrôles du push.
+Les branches distantes et les preuves sous ~/.cache/codeparsers-notes/ restent
+conservées ; ne pas effacer les données des deux A/B avec le target. Le résultat
+effectif du nettoyage est transmis à l'orchestration après exécution.
