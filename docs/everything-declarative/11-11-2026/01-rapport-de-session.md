@@ -293,3 +293,8 @@ Journal : `I-luciepc/reclamations-20261111/postgres-6.log` ; verdict à lire.
 Les erreurs SQL masquées de libération et de lecture de dette sont un défaut connu distinct,
 consigné dans le ticket ED du 11 novembre correspondant. Aucun comportement d'erreur n'est
 présenté comme validé par les témoins nominaux ; le correctif de propagation reste à faire.
+
+Complément PostgreSQL terminé : `e2e_postgres` 34/34, zéro échec, zéro ignoré,
+1/1 suite demandée, aucun SAUTÉ (7,87 s de tests), sous jeu large et base privée.
+Les deux gardes préalables passent aussi. Preuve conservée dans `postgres-6.log`.
+Ce résultat valide la suite existante, pas les injections d'erreurs SQL du ticket ouvert.
