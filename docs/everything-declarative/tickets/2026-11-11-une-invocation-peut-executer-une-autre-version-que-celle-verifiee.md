@@ -45,3 +45,24 @@ en lecture, n’est jamais exécutée après la validation de A. Citer la source
 les contrôles rejoués. Ce suivi complète le
 [ticket des outils contextuels](2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md)
 et reste distinct des problèmes d’accord de commande hors domaine.
+
+## Départage et correction en branche
+
+ED reprend ce suivi. Le témoin déterministe `949dcb556` capture A (`SchemaNode`),
+remplace réellement les déclarations par B (`RhaiNode`) avec `apply_reload`,
+prouve que l'invocation directe de B est refusée, puis observe que l'appel contrôlé
+sur A exécute néanmoins B (`result.version = 2`). Rouge : 0 réussi / 1 échec,
+0,01 s, preuve externe `I-luciepc/relais-20261111/version-rouge-949dcb556.log`.
+Deux essais de montage antérieurs échouaient sur les paramètres du témoin et ne
+constituent pas cette preuve.
+
+`60bffb237` fait circuler la même référence préparée dans `call_in_on`, le montage
+des réactions de cellule, `call_on`, la garde agent et `call_tool_on` ; cellule
+RAII, annulation parent, harnais et présentation restent sur le parcours commun.
+`074b3dced` compare le résultat au rendu réel de A : ciblé vert 1/0/0, 0,01 s.
+Une assertion intermédiaire attendait à tort un objet de SchemaNode, qui rend du
+texte ; son échec reste distinct du rouge de sécurité. Preuve verte externe :
+`I-luciepc/relais-20261111/version-vert.log`.
+
+Reste : passe commune complète (dont rechargements et harnais ordinaires), trois
+parcours UI réels et intégration autorisée. Ticket encore ouvert jusque-là.
