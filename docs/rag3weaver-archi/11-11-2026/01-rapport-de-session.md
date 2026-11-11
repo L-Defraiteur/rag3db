@@ -128,6 +128,22 @@ Le conflit de `docs/nouveautes.md` lors du dernier rebase a été résolu hors v
 les deux annonces. Le code et le bundle livrés ont un diff non Markdown **vide** avec le
 commit exactement joué `bc3a1d779` ; aucun code n'a changé après la passe.
 
+## Lot suivant préparé : parcours contextuel
+
+Branche `cx-archi-ui-contextuel`, worktree `cx-wt-ui-contextuel` sur les deux postes,
+source `dbf3f7419`. Un vrai témoin navigateur prépare deux dépôts aux mêmes chemins et symboles,
+attachement/indexation réels, appels déclarés search/outline puis clic du lien généré vers la
+bonne cible, rechargement et reclic sans réexécution. Le schéma JSON est convenu avec ED.
+Source du témoin : `src/daemon_host/chat_contextuel.rs`, module isolé coordonné dans
+`daemon_host.rs`. Aucun runtime/gabarit/UI modifié, aucun master push pendant la fenêtre recherche.
+
+Syntaxe et compilation des tests vertes (1 min 31 s), **parcours non joué**, car la primitive
+n'existe pas encore. Preuves : luciepc
+`~/.cache/rag3weaver-build/cx-ui-contextuel-dbf3f7419-check-20261111/`, target neuf unique
+`~/.cache/rag3weaver-build/cx-archi-target`. Dès disponibilité ED, intégrer au point sûr et
+jouer le rouge effectif ; ne pas compter compilation ou ignore comme réussite du parcours.
+Détails et limites : `04-preparation-du-parcours-contextuel.md`.
+
 ## Les lots nommés, pas commencés
 
 - **Le découpage au survol de la jauge du contexte.** Au survol, la jauge dirait ce qui pèse
