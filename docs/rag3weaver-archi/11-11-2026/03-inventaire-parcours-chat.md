@@ -51,7 +51,9 @@ et le bundle est rebâti avec les sources.
 - Rouge : luciepc `cx-chat-erreurs-rouge-1c0631b67-20261111/`.
 - Ciblés verts : `cx-chat-erreurs-816fc4824-20261111-{erreur,inventaire}/` ;
   captures exactes des outils dans `inventaire/navigateur.log`.
-- Régression navigateur en cours : `cx-chat-erreurs-816fc4824-20261111-navigateurs/`.
+- Régression navigateur : **36/36, zéro échec, zéro ignoré, 132,73 s** sur `816fc4824` ;
+  `cx-chat-erreurs-816fc4824-20261111-navigateurs/`, verdict `VERT`. Lanceur terminé.
+  Cela valide cette étape, pas la passe globale.
 - Lib complète et gate global non verts : le lot parent garde son rouge 606 vecteurs dus ;
   attendre l'intégration du correctif ED, puis rebaser et rejouer les contrôles requis.
 - Aucun push master, aucun tour accordé. Fenêtre de stabilité recherche respectée.
