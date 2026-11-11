@@ -636,6 +636,53 @@ mod tests {
 mod repro_drop {
     use super::*;
 
+    /// Une erreur de persistance n'autorise plus de travail après close().
+    /// L'enfant éprouve aussi Drop et la sortie réelle du processus.
+    #[test]
+    fn une_fermeture_fts_en_erreur_rend_le_handle_inerte_et_le_processus_sort() {
+        const ENFANT: &str = "RAG3WEAVER_TEST_FTS_CLOSE_ENFANT";
+        const NOM: &str = "fts_handle::repro_drop::une_fermeture_fts_en_erreur_rend_le_handle_inerte_et_le_processus_sort";
+        if let Some(dossier) = std::env::var_os(ENFANT) {
+            use lucivy_core::sharded_handle::ShardedHandle;
+            let chemin = std::path::PathBuf::from(dossier).join("index");
+            let config = build_schema_config(&["content".into()], &[], 2).unwrap();
+            let handle = ShardedHandle::create(chemin.to_str().unwrap(), &config).unwrap();
+            index_document(&handle, &[("content".into(), "fermeture fautive".into())], 1).unwrap();
+            handle.commit().unwrap();
+            std::fs::remove_dir_all(&chemin).unwrap();
+            let fermeture = handle.close().expect_err("la disparition du stockage doit faire échouer close");
+            let apres = index_document(&handle, &[("content".into(), "interdit après fermeture".into())], 2);
+            eprintln!("PREUVE close={fermeture:?} index_apres={apres:?}");
+            let erreur = apres.expect_err("même après un close en erreur, le handle doit être inerte");
+            assert!(erreur.contains("closed"), "{erreur}");
+            drop(handle);
+            eprintln!("PREUVE handle détruit, sortie enfant");
+            return;
+        }
+        let dossier = tempfile::tempdir().unwrap();
+        let mut enfant = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", NOM, "--nocapture"])
+            .env(ENFANT, dossier.path())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn().expect("l'enfant démarre");
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        loop {
+            if enfant.try_wait().unwrap().is_some() { break; }
+            if std::time::Instant::now() >= fin {
+                let _ = enfant.kill();
+                let rendu = enfant.wait_with_output().unwrap();
+                panic!("l'enfant ne sort pas après close en erreur : {}{}",
+                    String::from_utf8_lossy(&rendu.stdout), String::from_utf8_lossy(&rendu.stderr));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let rendu = enfant.wait_with_output().unwrap();
+        eprintln!("{}{}", String::from_utf8_lossy(&rendu.stdout), String::from_utf8_lossy(&rendu.stderr));
+        assert!(rendu.status.success(), "l'enfant échoue : {}", rendu.status);
+        assert!(String::from_utf8_lossy(&rendu.stderr).contains("PREUVE handle détruit, sortie enfant"));
+    }
+
     /// Reproduction minimale d'un SIGSEGV observé en E2E : indexer, commiter,
     /// puis **dropper** le handle sans appeler `close()`, et en rouvrir un.
     ///
