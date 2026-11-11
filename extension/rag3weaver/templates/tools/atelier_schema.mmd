@@ -1,0 +1,7 @@
+%% tool: schema
+%% description: La carte du catalogue : les entités, leurs champs, leurs relations. À prendre pour savoir ce que search_code peut cibler.
+%% param: context json! -- Contexte explicite : target {kind: backend, id: identifiant du dépôt attaché}. Une vue indisponible est refusée.
+%% result: invoke.results
+
+graph LR
+    invoke["InvokeToolNode(operation='schema', context=$context, arguments={})"]

@@ -1,0 +1,10 @@
+%% tool: list_files
+%% description: Lister les chemins du workspace sous un préfixe. À prendre pour s'orienter ; les fichiers écartés (règles d'exclusion, secrets probables) n'y figurent pas.
+%% param: context json! -- Contexte explicite : target {kind: backend, id: identifiant du dépôt attaché}. Une vue indisponible est refusée.
+%% param: path_prefix string = "" -- Ne lister que sous ce préfixe (ex. 'src/').
+%% param: limit int = 200 -- Fichiers rendus (plafond 2000) ; tous sont comptés.
+%% param: format string = "markdown" -- markdown (pour le modèle, le défaut) ou json (structuré : chemins, lignes, uuid — pour une interface).
+%% result: invoke.results
+
+graph LR
+    invoke["InvokeToolNode(operation='list_files', context=$context, arguments={"path_prefix":"$path_prefix","limit":"$limit","format":"$format"})"]

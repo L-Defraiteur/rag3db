@@ -1,0 +1,15 @@
+%% tool: impact
+%% description: Ce que toucher ce nom impacterait : le code qui en dépend par niveau, et les tests qui le traversent — nommés, avec fichier et certitude, prêts à rejouer. À prendre AVANT d'éditer un symbole partagé ; usages dit qui s'en sert, impact dit quoi rejouer.
+%% param: context json! -- Contexte explicite : target {kind: backend, id: identifiant du dépôt attaché}. Une vue indisponible est refusée.
+%% param: name string! -- Le nom de la fonction, du type ou de la méthode qu'on va modifier.
+%% param: path string = "" -- Ne partir que des définitions sous ce chemin (préfixe de fichier).
+%% param: scope string = "" -- Borner la réponse à ces chemins relatifs à la racine, séparés par | (src/|test/) ; vide : tout l'index. Ce qui est hors portée est compté, pas montré.
+%% param: language string = "" -- Borner la réponse à ces langages, séparés par | (cpp|rust) ; vide : tous.
+%% param: depth int = 2 -- Sauts suivis, de 1 à 3.
+%% param: budget int = 200 -- Nœuds rendus au plus ; au-delà, ils sont comptés.
+%% param: include_by_name bool = false -- Montrer aussi les usages trouvés par le nom seul (un nom défini plusieurs fois, usage attribué à aucune définition) ; par défaut ils sont comptés, pas listés.
+%% param: format string = "markdown" -- markdown (pour le modèle, le défaut) ou json (structuré : chemins, lignes, uuid — pour une interface).
+%% result: invoke.results
+
+graph LR
+    invoke["InvokeToolNode(operation='impact', context=$context, arguments={"name":"$name","path":"$path","scope":"$scope","language":"$language","depth":"$depth","budget":"$budget","include_by_name":"$include_by_name","format":"$format"})"]

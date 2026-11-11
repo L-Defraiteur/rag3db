@@ -1,0 +1,15 @@
+%% tool: callees
+%% description: Ce que ce nom appelle, par niveau, et les verrous pris en route (Classe::champ) — l'autre sens d'impact. À prendre pour savoir où se fait réellement un travail, ou où se prend un verrou que l'appelant ne tient pas.
+%% param: context json! -- Contexte explicite : target {kind: backend, id: identifiant du dépôt attaché}. Une vue indisponible est refusée.
+%% param: name string! -- Le nom de la fonction ou de la méthode dont on suit les appels.
+%% param: path string = "" -- Ne partir que des définitions sous ce chemin (préfixe de fichier).
+%% param: scope string = "" -- Borner la réponse à ces chemins relatifs à la racine, séparés par | (src/|test/) ; vide : tout l'index. Ce qui est hors portée est compté, pas montré.
+%% param: language string = "" -- Borner la réponse à ces langages, séparés par | (cpp|rust) ; vide : tous.
+%% param: depth int = 2 -- Sauts suivis, de 1 à 3.
+%% param: budget int = 200 -- Nœuds rendus au plus ; au-delà, ils sont comptés.
+%% param: include_by_name bool = false -- Comme impact : montrer aussi les usages trouvés par le nom seul. En sortant, aucun n'en est rendu aujourd'hui (les arêtes devinées ne sont pas suivies) ; le paramètre garde les deux outils au même schéma.
+%% param: format string = "markdown" -- markdown (pour le modèle, le défaut) ou json (structuré : chemins, lignes, uuid — pour une interface).
+%% result: invoke.results
+
+graph LR
+    invoke["InvokeToolNode(operation='callees', context=$context, arguments={"name":"$name","path":"$path","scope":"$scope","language":"$language","depth":"$depth","budget":"$budget","include_by_name":"$include_by_name","format":"$format"})"]
