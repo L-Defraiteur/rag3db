@@ -88,6 +88,24 @@ cx-projection-lot-reprise-vert.log. Base privée sur fichier : échec injecté d
 antérieurs conservés ; réouverture sans réenregistrer le schéma, mêmes valeurs ; nouvelle tentative
 réussie qui change seulement A. La régression native large est en cours, pas encore un verdict global.
 
+## Scope privé et vérification large partielle
+
+Runtime a1af9b507 + fixture privée Scope, lib29a7, 8 features : 2 099 unitaires réussis,
+0 échec, 58 ignorés ; 3 e2e_scope_versions et 14 e2e_entites_derivees réussis, code de sortie 0.
+Journal cx-contenu-complet-prive.log (luciepc), SHA256
+f570448be0bc00a6872273ae602f382cf0a05e17ab6797645f0511acd2db8263 ; fixture SHA256
+d05eaa6443ba46b3036ccda64d8099049b61ea116e5c9ed9936b2b0ffc451d13.
+Le compteur Scope partagé est vert dans cette déclaration privée : une représentation indexée,
+occurrences/positions/arêtes distinctes, déplacement sans embarquement, docs et recherches Scope
+préservées. Le schéma code par défaut n'est pas basculé ; l'accès depuis le vrai manifeste attend
+la combinaison avec ED. Les colonnes source restent une entrée du rendu ; aucune réduction physique
+globale ni mesure de stockage n'est prouvée par ces comptes. Cette passe n'est pas la passe master complète.
+
+Prochains témoins et garanties à traiter ici : refuser un changement d'association sur des données
+sans migration déclarée ; faire refléter l'index dérivé par l'état de la cible publique et son mode
+automatique ; préserver les cellules lors des lectures et de la reprise du rendu ; valider l'association
+avant écritures en réutilisant les contrats partagés après rebase ED. Aucun nouveau lot ni activation.
+
 ## Travail restant et responsabilités
 
 La session arbre-principal garde ce même ticket pour la suite du lot, sans duplication :

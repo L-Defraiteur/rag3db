@@ -15,6 +15,39 @@ la session d'orchestration (aujourd'hui `rag3db-5a`), et travaille avec les sess
 **recherche**, **everything declarative** ou « ED » (l'IDE et l'équipier).
 
 
+## Checkpoint Scope privé — passe partielle du 11 novembre, 22:14–22:21 Paris
+
+Porteur arbre-principal, [ticket 1a](../tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md).
+Sources runtime figées à a1af9b507f90bfadd0c55d5c2058c15177a2992b, avec le seul diff de
+fixture tests/e2e_scope_versions.rs (SHA256 d05eaa6443ba46b3036ccda64d8099049b61ea116e5c9ed9936b2b0ffc451d13).
+8 features, lib 29a7bc52a épinglée, poste lourd, -j8, target unique cx-target-contenu-derive.
+Résultats : bibliothèque 2 099 réussis/0 échec/58 ignorés ; Scope privé 3/0 ; dérivées 14/0 ;
+processus terminé avec code 0 et sans résidus signalés. Pas un verdict de passe master complète.
+Journal luciepc : ~/.cache/rag3weaver-build/cx-contenu-complet-prive.log ; SHA256
+f570448be0bc00a6872273ae602f382cf0a05e17ab6797645f0511acd2db8263.
+
+La fixture compose scope_config et Catalog::register_entity : ScopeContent rend les champs
+name/signature/content/docstring/scope_type/language, dérive son identité du contenu et reçoit
+le chunking existant ; Scope conserve ses UUIDs, positions et arêtes, pointe son search_index
+sur cette représentation et ne produit plus de Scope_Chunk. Un seul embarquement pour deux
+fichiers identiques ; déplacer l'une des occurrences n'en ajoute aucun. Docstrings distinctes
+préservées ; recherches Scope sur les trois modes ; deux arêtes CONSUMES restent dans leurs
+fichiers respectifs. Schéma code par défaut, code.rs et gabarits inchangés ; aucune base de service.
+Les colonnes source des occurrences sont conservées comme entrée du rendu : ces preuves portent
+sur la représentation indexée partagée et ses chunks/vecteurs, pas une mesure de déduplication
+physique de toutes les colonnes source. Les chiffres M3–M5 restent absents.
+
+Relecture ED sur 3c0363904 (runtime a166, docs seules ensuite) : validate_context reprend le corps
+Catalog sans changement de règle ; config.validate précède le plan, donc identité content,
+format et interdiction hashsafe sont préservés. Compatible avec root/content. search_index reste
+une association de lecture, pas une dépendance de création inverse de from. Aucun import dans
+la passe figée. Combinaison/rebase après atterrissage ED, puis preuve d'ouverture du vrai manifeste.
+
+Suites encore ouvertes dans ce même ticket : garde de changement d'association sans migration,
+état public de la cible indexée et comportement auto, cellules et reprise, validation de l'association
+avant écritures lors de la combinaison, puis passe complète sur base finale. Les deux tickets ED
+restent chez ED ; leur transmission ne vaut pas clôture. Pas de migration, M3–M5 ni activation réelle.
+
 ## Renforcement du masque et de l'ingestion — après 49caf64c6
 
 Action portée par [le ticket du contenu partagé](../tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md).
