@@ -357,7 +357,7 @@ fn opening_public_content_manifest_refuses_invalid_associations_before_database(
             _ => unreachable!(),
         }
         let error = prepare(dir.path(),&m).err().unwrap_or_else(|| panic!("{case}: association invalide acceptée avant ouverture"));
-        assert!(error.contains("Two"),"{case}: {error}");
+        assert!(error.contains("Two") || (case == "chain" && error.contains("One")),"{case}: {error}");
     }
 
     // La configuration préparée peut aussi être modifiée avant open : sa

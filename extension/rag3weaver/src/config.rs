@@ -1082,6 +1082,32 @@ impl SchemaCost {
 }
 
 impl EntityConfig {
+    /// Association de lecture validée sur les faits réels du schéma complet.
+    /// Elle ne donne aucune dépendance supplémentaire au montage des tables.
+    pub(crate) fn validate_search_index_context<'a>(&self, entity_name: &str,
+        entity: impl Fn(&str) -> Option<&'a EntityConfig>) -> Result<(), String> {
+        let Some(index) = self.search_index.as_ref() else { return Ok(()) };
+        if index == entity_name {
+            return Err(format!("{entity_name} : association d'index récursive refusée"));
+        }
+        let config = entity(index).ok_or_else(|| format!("{entity_name} : index dérivé inconnu {index}"))?;
+        if config.search_index.is_some() {
+            return Err(format!("{entity_name} : association d'index récursive refusée ({index})"));
+        }
+        if !config.derived.as_ref().is_some_and(|d| d.from == entity_name && matches!(d.identity, DerivedIdentity::Content { .. })) {
+            return Err(format!("{entity_name} : {index} doit être une dérivée par contenu de cette cible"));
+        }
+        if !config.has_simple_pipeline() {
+            return Err(format!("{entity_name} : l'index {index} ne déclare aucun contenu cherchable"));
+        }
+        for field in config.content_fields().into_iter().chain(config.title_field()) {
+            if !self.fields.contains_key(field) {
+                return Err(format!("{entity_name} : le champ indexé {field} n'existe pas sur l'occurrence ; projection des coordonnées non déclarée"));
+            }
+        }
+        Ok(())
+    }
+
     /// **Le point de départ d'un schéma déclaré par un modèle.**
     ///
     /// [`Self::default`] vaut `HYBRID` — BM25 **et** vecteur — ce qui est un
