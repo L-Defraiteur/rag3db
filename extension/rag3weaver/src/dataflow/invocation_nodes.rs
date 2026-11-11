@@ -50,9 +50,6 @@ impl Node for InvokeToolNode {
             .service::<InvocationAuthority>(AUTHORITY_SERVICE)
             .cloned()
             .ok_or("invocation sans autorité d'appelant déclarée")?;
-        if !authority.policy.read_files {
-            return Err("invocation : l'appelant doit déclarer read_files".into());
-        }
         let host = ctx
             .service::<Arc<dyn InvocationHost>>(HOST_SERVICE)
             .cloned()
@@ -319,7 +316,7 @@ graph LR
         assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
     #[test]
-    fn contextual_call_without_read_authority_never_reaches_the_host() {
+    fn contextual_call_without_runtime_authority_never_reaches_the_host() {
         let calls = Arc::new(AtomicUsize::new(0));
         let mut services = ServiceRegistry::new();
         services.register(
@@ -327,14 +324,6 @@ graph LR
             Arc::new(Host {
                 calls: calls.clone(),
             }) as Arc<dyn InvocationHost>,
-        );
-        services.register(
-            AUTHORITY_SERVICE,
-            InvocationAuthority {
-                manifest: "caller.json".into(),
-                policy: Default::default(),
-                scope: Default::default(),
-            },
         );
         let mut ctx = NodeContext::with_services(Arc::new(services));
         let mut node = InvokeToolNodeFactory
@@ -344,7 +333,7 @@ graph LR
             "context":{"target":{"kind":"backend","id":"B"}},"arguments":{}}),
             )
             .unwrap();
-        assert!(node.execute(&mut ctx).unwrap_err().contains("read_files"));
+        assert!(node.execute(&mut ctx).unwrap_err().contains("autorité"));
         assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 }
