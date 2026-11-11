@@ -137,6 +137,7 @@ thread_local! {
 pub(crate) fn with_parent_cancel<T>(f: impl FnOnce(Option<CancelToken>) -> T) -> T {
     PARENT_CANCEL.with(|c| f(c.borrow().clone()))
 }
+#[cfg(feature = "daemon")]
 pub(crate) fn during_parent_cancel<T>(cancel: CancelToken, f: impl FnOnce() -> T) -> T {
     struct Restore(Option<CancelToken>);
     impl Drop for Restore {
