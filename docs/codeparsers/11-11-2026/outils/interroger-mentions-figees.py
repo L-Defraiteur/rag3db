@@ -11,6 +11,7 @@ import collections
 import hashlib
 import importlib.util
 import json
+import signal
 from pathlib import Path
 import time
 
@@ -69,6 +70,9 @@ def query(server, oracle, source, case):
 
 
 def main():
+    def terminate(signum, _frame):
+        raise SystemExit(128 + signum)
+    signal.signal(signal.SIGTERM, terminate)
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('manifest', 'root', 'measurement', 'oracle', 'output'):
         parser.add_argument(name, type=Path)
