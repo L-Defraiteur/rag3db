@@ -78,3 +78,34 @@ hors tâche sont une politique à préserver.
 Archi et ED coordonnent les fichiers des témoins de parcours. Le ticket atelier reste ouvert tant
 que l'exécution depuis le chat, les gardes et la reprise ne sont pas démontrées ; un inventaire
 seul ne ferme pas ce ticket.
+
+## Frontière JSON minimale convenue avec archi
+
+Premier lot : cible `backend` seulement. Une cible `space` ou une vue non encore disponible
+refuse explicitement. Le contexte sélectionné ne remplace pas celui de la conversation parente.
+Les noms/types/défauts et bindings des paramètres de l'opération cible sont conservés ; pour
+search_code, `target=Scope` reste le binding du manifeste, distinct de `context.target`.
+
+Appel search_code, la requête s'appelle `query` comme dans le graphe livré :
+
+```json
+{"context":{"target":{"kind":"backend","id":"B"}},"query":"symbole_commun","options":{}}
+```
+
+Appel outline :
+
+```json
+{"context":{"target":{"kind":"backend","id":"B"}},"path":"src/lib.rs"}
+```
+
+Le reçu porte le contexte effectivement résolu dans sa métadonnée structurée :
+
+```json
+{"metadata":{"invocation":{"target":{"kind":"backend","id":"B","label":"dépôt B"},"parent_run":"run-parent","run":"run-cible"}}}
+```
+
+`view`, lorsqu'elle sera supportée, est optionnelle dans `context` et dans `metadata.invocation`,
+avec le contrat de vue partagé ; elle est absente du premier cas nominal. Le label vient du
+runtime, sans nom technique de backend à afficher. Le renderer choisit cette cible pour les
+liens et actions du résultat, y compris après rechargement. Le témoin navigateur clique uniquement
+sur le lien produit par le résultat réel, sans href injecté ni route de test de substitution.
