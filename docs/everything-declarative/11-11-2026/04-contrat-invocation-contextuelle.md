@@ -123,3 +123,19 @@ Le témoin de parcours doit inclure un résultat assez long pour déclencher cet
 vérifier encore le clic vers le bon dépôt après rechargement, sans nouvel appel au modèle.
 La préparation navigateur d'archi `dbf3f7419` compile ; son parcours n'est pas encore joué, le relais
 runtime n'étant pas livré. Cette compilation ne prouve pas l'exécution du contrat.
+
+## Références de l'archiviste à préserver
+
+Le futur branchement dans l'atelier doit repartir du traitement déjà conçu, sans inventer
+un orchestrateur ou un agent conversant supplémentaire :
+
+- [Vision des mémoires par gabarit, §9.2](../../../extension/rag3weaver/visions/2026-10-04-00h09-memoires-par-gabarit-et-fiches-qui-pointent-vers-tout.md) :
+  classer à la compression et rappeler par deux décisions fermées, chercher puis injecter,
+  avec registre anti-répétition ; le traitement est un graphe déclaré.
+- [Les fiches dans des fichiers, §3](../../../extension/rag3weaver/docs/18-octobre-2026-memoire-longue/04-les-fiches-dans-des-fichiers.md) :
+  `ranger(source)` commun à l'envoi volontaire et aux crochets, curseur de session pour éviter
+  les doublons et traitement de fond dans l'hôte.
+
+Ces pages sont des conceptions. L'outil archive livré, le juge de fond et le rappel des crochets
+sont des capacités distinctes ; leur existence ne prouve pas l'activation d'un archiviste
+parallèle dans la mémoire réelle. Aucun nouveau code d'archiviste ni d'orchestration dans ce lot.
