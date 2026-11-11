@@ -42,7 +42,7 @@ Ce ticket trace le défaut ; il ne demande pas d'ouvrir un nouveau lot sans orch
 Journal absolu : `/home/lucied/.cache/rag3weaver-build/cx-projection-file-regressions-v3.log`
 SHA256 `065612359f78a6a1320db86649763dcf08e3b5924fe9a2ed676301e52658bac9`.
 Script absolu : `/home/lucied/.cache/rag3weaver-build/cx-projection-file-regressions-v3.sh` ;
-il appelle `cx-projection-file-regressions.sh` et ensuite `cx-contenu-pg.sh` dans ce même dossier.
+il exécute lui-même la lib puis run_e2e (étapes aussi présentes dans `cx-projection-file-regressions.sh`), puis `cx-contenu-pg.sh` dans ce même dossier. Ce n’est pas un appel au premier script.
 Lanceur versionné : `extension/rag3weaver/run_e2e.sh` du snapshot 965b835b8.
 Binaire e2e exact `cx-target-contenu-derive/debug/deps/e2e-edaf884b121d1775`, SHA256
 `97e438e4dae5a42e6baaea3a2077ebb8fb10125231ea2212a9a4cc13bea8d120`.
@@ -63,7 +63,7 @@ Sources relues au snapshot exact `965b835b8b58cb3937df26b99ed6a982e01d2f0d` :
 1. `tests/common/mod.rs::bge_m3_par_le_demon` configure `journal_dans(std::env::temp_dir().join("rag3weaver-demons"))`. Or run_e2e passe à l'enfant `TMPDIR=$E2E_TMP_PARENT/$nom` : le journal devient une occurrence de la suite qui lance le démon.
 2. `src/daemon/embeddings.rs::DaemonEmbedder::serveur` pose `Fin::Laisser` ; le démon doit survivre à cette suite pour servir les suivantes. `src/serveur.rs::lancer_avec` crée le dossier et ouvre stdout/stderr en ajout dans ce journal.
 3. `run_e2e.sh`, ligne 943 de ce snapshot : contrôle des résidus immédiatement après le retour du processus de suite. Le démon est encore de portée passe ; son journal est donc pris pour un résidu de portée suite. C'est un désaccord entre durée de vie et emplacement, pas une assertion de recherche ratée.
-4. L'archivage de la suite regarde le statut brut du processus (`statut != 0`, ligne 951), alors que le garde ne change que le code global. Avec assertions vertes et garde rouge, cette branche d'archivage n'est pas prise ; le nettoyage par défaut du TMPDIR arrive ligne 962 avant l'arrêt final des démons. Le journal de 774 octets n'a pas été préservé comme contenu par ce mécanisme ; sa taille et son chemin restent prouvés par le log.
+4. L'archivage de la suite regarde le statut brut du processus (`statut != 0`, ligne 951), alors que le garde ne change que le code global. Avec assertions vertes et garde rouge, cette branche d'archivage n'est pas prise ; le nettoyage par défaut du TMPDIR arrive ligne 962 avant l'arrêt final des démons. Cet archivage ne préserve donc pas automatiquement le journal de 774 octets ; le log prouve sa taille et son chemin, pas son contenu.
 5. Le trap final sélectionne les démons par `RAG3WEAVER_PASSE_E2E`, envoie SIGTERM puis poursuit le nettoyage, sans attendre explicitement leur disparition. Il ne faut pas transformer cette sélection en arrêt par nom de tous les services.
 
 **Limite de la preuve sur les processus tiers :** le trap final vise ceux marqués de la passe, mais le chemin commun a auparavant demandé le remplacement d'un démon périmé (ligne 2887). Le code appelle alors `quitter()` sur l'attache précédente avant de relancer. Le journal ne donne pas l'identité/propriété de ce premier processus ; on ne peut donc pas déduire de la seule sélection du trap que tout le parcours a laissé les services préexistants intacts. Aucun processus n'a été touché pendant notre diagnostic.
