@@ -275,3 +275,21 @@ M8 (§ 5) et en s'appuyant sur `extension/rag3weaver/src/builtin_templates.rs` (
    et écrit, puis M8.
 3. Les défauts de l'installeur de l'atelier (§ 3), puis le commit des gabarits livrés (§ 6), puis la
    fin sans livrable de l'équipier (§ 4).
+
+## Validation complémentaire avant intégration
+
+Passe 5 verte sur `bbba12fb2` : features 5/5, lib 2096 verts / zéro échec / 58 ignorés
+(marques existantes, dont navigateur joué séparément), navigateur 33/33 sans ignoré,
+lectures 24/24 et transactions vecteurs 3/3, arrêt 18/18, merge 1/1, ligne 3/3, sans ignoré
+ni SAUTÉ. Le rouge sparse de la passe 4 est soldé en déclarant le service creux pour les e2e.
+
+Rebase sur master `bd9fd9852677a0a942ac775215be4dafc57eace6`, docs seules depuis `41526b29a` :
+branche `cx-ed-reclamations-rendues-6`, candidat source identique au commit jugé
+(diff src/templates/tests vide), précédent HEAD `9f7e13298`. Aucun push master.
+Une suite e2e_postgres complémentaire est lancée sous jeu large sur la base privée
+`cx_ed_reclamations_20261111` du conteneur de test, jamais le schéma partagé.
+Journal : `I-luciepc/reclamations-20261111/postgres-6.log` ; verdict à lire.
+
+Les erreurs SQL masquées de libération et de lecture de dette sont un défaut connu distinct,
+consigné dans le ticket ED du 11 novembre correspondant. Aucun comportement d'erreur n'est
+présenté comme validé par les témoins nominaux ; le correctif de propagation reste à faire.
