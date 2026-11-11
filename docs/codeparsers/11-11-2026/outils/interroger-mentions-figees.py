@@ -117,8 +117,21 @@ def main():
         for grouped in edges.values():
             opened.update(str(root / edge['vers']) for values in grouped.values() for edge in values
                           if (root / edge['vers']).is_file())
+        metadata['opened_files_sha256'] = {}
         for file in sorted(opened):
-            server.ouvrir(file, oracle.langue_de(languages, file))
+            path = Path(file).resolve(strict=True)
+            if not path.is_relative_to(root):
+                raise ValueError(f'fichier à ouvrir hors corpus : {path}')
+            metadata['opened_files_sha256'][str(path.relative_to(root))] = sha(path)
+            server.ouvrir(str(path), oracle.langue_de(languages, str(path)))
+        ts_path = options.get('tsserver', {}).get('path')
+        if ts_path:
+            ts_script = Path(ts_path)
+            if ts_script.is_dir():
+                ts_script = ts_script / 'tsserver.js'
+            if ts_script.is_file():
+                metadata['tsserver_script_sha256'] = sha(ts_script)
+        meta_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + '\n')
         metadata['initialization_wait_seconds'] = server.attendre_le_repos(plafond=600, exiger=False)
         with (args.output / 'questions.jsonl').open('w') as questions, \
              (args.output / 'A.jsonl').open('w') as output_a, \
