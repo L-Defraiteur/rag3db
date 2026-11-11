@@ -295,3 +295,8 @@ la lecture publique ; trois sessions privées, zéro bloqueur SQL, une idle-in-t
 (chemin et filtre relus) a été arrêté par SIGTERM ; zéro session privée ensuite. La série PG
 reste en échec, pas de réussite déduite des nouvelles primitives SQL. Reste diagnostic public
 borné, puis preuve combinée après master ED c693 et branche neuve. Aucun Search lourd relancé.
+
+Correction du diagnostic PGv4 : le contrôle SQL après arrêt révèle seulement alpha validée
+(2 racines, 1 version), aucune bêta. Le blocage est dans la deuxième ingestion, pas encore
+la lecture publique. Le ticket commun [appels PostgreSQL/session épinglée](2026-11-11-les-appels-postgres-concurrents-peuvent-bloquer-la-session-epinglee.md)
+porte le témoin direct borné et l'éventuel correctif ; cause et antériorité restent à prouver.
