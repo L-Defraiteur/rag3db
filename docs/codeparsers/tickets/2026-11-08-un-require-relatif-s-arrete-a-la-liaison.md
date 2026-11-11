@@ -94,3 +94,31 @@ CARGO_INCREMENTAL=0, target unique repris par garde, PostgreSQL privé ; aucun
 nouveau GPU/service, LSP ou A/B. Sources figées pendant ces vérifications.
 Les journaux seront sous ~/.cache/codeparsers-notes/cx-passe-require-3/ sur
 luciepc ; seul leur verdict relu permet de demander le tour de push.
+
+### Résultats de la passe intégrée
+
+SHA joué 50ebbb7606c9dd7099c1441b782c29850e3c3c35 (code d92c0f4b7,
+base 68b9ede17), lib 29a7 complète ci-dessus. Du 11 novembre 21:56:06 à
+22:05:25 Paris, sous poste lourd : check_features VERT 5/5 ; lib large
+2114 réussis, 0 échec, 64 ignorés ; navigateur 39/39 sans ignoré ; e2e_code
+36/36, e2e_usages 19/19, e2e_postgres 34/34, tous sans ignoré. Chaque appel
+e2e a aussi joué ses deux témoins préalables. Six étapes finies code=0.
+Le target a culminé vers 26 Go puis est revenu à 25 Go ; sources propres
+et HEAD exact relus après la passe.
+
+Les 64 ignorés de la lib ne sont pas revendiqués comme validations : 39 sont
+les navigateurs repris ensuite ; les 25 autres sont 16 sans motif imprimé,
+un témoin hôte réel, trois llama-server, quatre mesures et un rouge connu
+de checkpoint. Leurs noms et raisons sont conservés dans lib.log. Aucun
+service supplémentaire ou banc à modèle n'a été lancé pour les masquer.
+e2e_code laisse les résidus déjà déclarés pour cette suite dans
+suites_qui_laissent_des_residus.txt ; usages et postgres n'en signalent pas.
+Journaux complets et inventaire des étapes : cx-passe-require-3/{features.log,
+lib.log,navigateur.log,code.log,usages.log,postgres.log,etat.log,provenance.txt}.
+
+Relecture sans nouvelle question LSP de verdicts-B.tsv dans
+require-default-v2-d96ed3264 : les quatre mentions originelles 139/110/236/158
+sont strictement justes, marque import, vers leurs classes PreparedStatement
+et QueryResult attendues. Cette preuve complète les critères de correction,
+mais la décision de navigation et l'intégration restent ouvertes. Aucun push
+master fait ni autorisé par ce constat ; bilan envoyé pour revue.

@@ -128,3 +128,16 @@ séparé de sérialisation et de schéma, à cadrer avant toute implémentation.
 
 Aucun import_binding, règle portant un nom de cas, schéma nouveau ou changement
 de l'oracle général n'a été introduit pour ce bilan.
+
+## Passe sur la base commune, après le bilan figé
+
+Le ticket [require relatif](../tickets/2026-11-08-un-require-relatif-s-arrete-a-la-liaison.md)
+porte les preuves sur 50ebbb7606c9, base commune 68b9ede17 : cinq jeux verts,
+2114 tests lib réussis (64 ignorés explicitement inventoriés), 39 navigateurs,
+36 e2e code, 19 usages et 34 PostgreSQL réussis, aucune suite e2e ignorée.
+Les 39 navigateurs ignorés dans la lib sont tous repris à leur étape.
+Les autres ignorés restent non validés. Les résidus e2e_code sont ceux déjà
+déclarés par le dépôt. Les quatre mentions require à l'origine du ticket sont
+strictement justes dans la mesure figée relue, sans nouveau LSP.
+Cette passe ne change pas les limites du bilan de qualité ni la décision de
+navigation en attente ; elle ne constitue pas un tour de push master.
