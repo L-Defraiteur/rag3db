@@ -342,7 +342,9 @@ search, tasks and their review with the teammate, session verdicts, the tree,
 symbols, the graph, the live DAG of a running tool (with a Stop button),
 reactions and proposals. The chat keeps the order things happened in — words,
 tool calls, the answer — during the turn and after a reload, each tool unfolded
-with its time, duration and full result. The sidebar speaks in repositories
+with its time, duration and full result. If a later model call fails, completed tool calls
+stay visible and a new message can resume the work. Turns started outside the form report
+their actual failure or stop through the same event stream. The sidebar speaks in repositories
 (« Dépôts », « Mémoire », « Projets »), with a context gauge under each
 conversation. Host state and completed chat turns arrive through the shared event stream:
 an idle IDE sends no polling requests, and the sidebar's usage matches the chat state and
