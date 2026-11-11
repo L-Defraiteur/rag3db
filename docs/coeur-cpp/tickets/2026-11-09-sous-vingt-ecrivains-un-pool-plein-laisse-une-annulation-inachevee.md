@@ -6,6 +6,7 @@
 - **Atteignable en service** : à établir. Le banc le reproduit seul, sur master avant et après
   29a7bc52a ; un hôte sous un pool de tampons serré et des DDL concurrents y ressemble.
 - **Touche rag3weaver** : par le moteur (l'hôte devrait fermer et rouvrir la base)
+- **Signalé par** : cœur c++ — banc et reprise décrits dans ce ticket
 - **Pour** : cœur c++
 
 ## Ce que c'est
@@ -116,3 +117,39 @@ ce retrait de clés, pas une preuve que toute annulation du moteur n’alloue ri
 Compilation et tests ciblés en file à luciepc (`annulation/vert.log`) : aucun
 verdict sur ce correctif à ce point. Les suites entières et la mesure de coût
 restent à jouer ; le ticket reste ouvert.
+
+## Vérifications entières du 11 novembre et travail restant
+
+Porteur : cœur C++. Lot `0511dece7`, branche `cx-coeur-annulation`. Les sources et
+tests distants ont été comparés à ce commit : `git diff 0511dece7 -- src test` vide.
+Aucun rebuild supplémentaire avant ces suites ; mêmes binaires que les ciblés.
+
+Preuves à luciepc : `~/.cache/rag3db-moteur-notes/annulation/` :
+`vert.log`, `transaction.log`, `transaction.xml`, `concurrence.log`,
+`concurrence.xml`, `suites.log`, `suites-codes.txt`. Les lanceurs 3809571 puis
+1423326 sont terminés.
+
+- Compilation entière réussie ; stockage 8/8 verts ; ciblés FullBuffer/Copy 6/6
+  trois fois, avec réouverture et compte des lignes validées inchangé.
+- `transaction_test` : code 0, 359 cas joués, 357 verts, 2 outils sautés attendus
+  (`VectorIndexCrashReopenProbe.OpenInAFreshProcess`, `WalReader.PrintAFile`),
+  1 cas désactivé ; 1 336,857 s.
+- `concurrence_test` : code 1, XML 424 cas, 25 rouges ; 3 206,038 s.
+  Comparaison aux listes du lot : 16 dans known_red, 5 dans probabilistic,
+  4 hors listes. Aucun verdict global vert à ce point.
+
+Les quatre hors listes sont précisément ceux déjà décrits dans ce ticket :
+`TwentyWriters.DdlEveryFifteenSeconds`, `TwentyWriters.DdlEveryMinute`,
+`Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64` et
+`Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64WithRelation`.
+Leur présence historique n’est pas une preuve de leur indépendance du correctif
+actuel. Travail restant lié à ce même ticket, sans doublon :
+
+1. Rejouer ces quatre cas isolément sur `0511dece7` ; comparer aux symptômes du banc.
+2. Si un rouge persiste, rejouer sur la base sans correctif, avec mêmes conditions.
+3. Mesurer séparément le coût de plusieurs enregistrements undo, en conservant les
+   conditions et les preuves.
+4. Départager, puis seulement demander un tour de push et coordonner la lib.
+
+Le ticket reste ouvert. La fenêtre de push de l’architecture est respectée :
+aucun tour C++ accordé, aucun code du lot sur master.
