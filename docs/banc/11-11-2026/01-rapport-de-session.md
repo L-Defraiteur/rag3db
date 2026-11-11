@@ -143,7 +143,7 @@ Toujours à luciepc :
   CREATE_VECTOR_INDEX prend tous les fils de travail.
 - `docs/banc/tickets/2026-10-18-sur-une-table-hnsw-les-ecrivains-passent-un-par-un.md` : le verrou exclusif de
   l'index sérialise les écrivains. La forme I2 est choisie.
-- `docs/banc/tickets/2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md` : réduit
+- `docs/coeur-cpp/tickets/2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md` (rendu au cœur C++ le 11 novembre : travail de moteur, V2-2c et V2-3) : réduit
   par V2-1c et V2-2. Restent les écrivains, au format 44.
 - `docs/banc/tickets/2026-10-19-la-memoire-d-un-index-avec-ses-vecteurs-a-mesurer.md` : avec G, la mesure de la
   mémoire en phase vecteurs.
