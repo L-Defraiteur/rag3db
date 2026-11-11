@@ -234,3 +234,24 @@ est active ; aucune suppression des anciennes branches distantes.
   #23, #24 (tickets), #25 (le numéro). Le correctif : un close() en échec arrête quand même ses pools et ses
   acteurs (lié au SIGSEGV de sortie des e2e). **À faire par Codex (session recherche)** : monter
   `lucivy-core` de 4.3.2 à 4.3.3 dans `extension/rag3weaver/Cargo.toml` et Cargo.lock, passe entière, push.
+
+
+### Premier atterrissage de code après reprise : garde-fou des scopes déplacés
+
+- **1904e04e42cd3666d6b3a64fee5bd51f0629c020**, arbre principal : témoin du scope seulement
+  déplacé et aide d’embarqueur injectable, sous `mod tests` de backend.rs uniquement ; aucun
+  comportement produit modifié. Tour donné après lecture du diff et des preuves par orchestration.
+- Preuves luciepc `~/.cache/rag3weaver-build/deplace-codex/` : rouge de sensibilité puis vert
+  après restauration ; features5/5 ; lib2095 réussis/0 échec/58 ignorés ; navigateur33/0/0 ;
+  e2e_code27/0/0 et e2e_code_sync17/0/0, deux suites sur deux, verdicts VERT relus.
+- Push annoncé sous poste push et garde VERT, branche sauvegardée
+  `cx-arbre-deplace-sans-reembarquer-4`. Trois contrôles confirmés : status propre, aucun rebase,
+  origin/master égal à HEAD après fetch. Hash/diff relus et avance rapide locale effectuée.
+- Worktree/branche du garde-fou au portable supprimés par le script ; nettoyage distant et
+  target inactif encore en cours au premier retour. Confirmation finale demandée, preuves1a
+  et worktree `cx-wt-scope-version` à préserver. Ne pas compter le nettoyage comme fini avant retour.
+- Du Rust a donc avancé sur master : ED, recherche, archi et mémoire prévenus de rebaser et rejouer
+  court selon procédure avant leur push. Aucun autre tour simultané n’est accordé.
+- Lot1a : témoins dd5f30465 joués, deux tests dont un rouge pour la bonne raison : même contenu
+  embarqué deux fois au lieu d’une, occurrences et positions distinctes vérifiées ; docstrings
+  différentes : témoin vert. Preuve `~/.cache/rag3weaver-build/cx-scope-version-rouge.log`.
