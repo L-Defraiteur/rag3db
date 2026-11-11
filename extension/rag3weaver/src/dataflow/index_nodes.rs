@@ -1004,7 +1004,13 @@ mod tests {
         spawn_index(catalog.clone(), source, journal.clone(), 0, Default::default()).join().expect("le fil d'indexation");
         let lignes: Vec<String> = std::fs::read_to_string(&journal).unwrap().lines().map(String::from).collect();
         let _ = std::fs::remove_file(&journal);
-        assert_eq!(lignes.last().map(String::as_str), Some(DONE_LINE), "{lignes:?}");
+        let dus = catalog.lock().unwrap().index_progress().unwrap().dense_missing();
+        assert_eq!(dus, 12, "six fichiers et six scopes sans embarqueur");
+        assert_eq!(
+            lignes.last().map(String::as_str),
+            Some(format!("{DONE_LINE} — reste dû : {dus} morceau(x) sans vecteur — sans service d'embarquement, ou réclamés par un autre écrivain ; repris à l'index suivant").as_str()),
+            "{lignes:?}"
+        );
         assert!(
             lignes.iter().any(|l| l.starts_with("plein texte vérifié : autant de documents que de lignes")),
             "la fin d'un index dit les comptes : {lignes:?}"
