@@ -9,6 +9,7 @@
 %% param: budget int = 200 -- Nœuds rendus au plus ; au-delà, ils sont comptés.
 %% param: include_by_name bool = false -- Montrer aussi les usages trouvés par le nom seul (un nom défini plusieurs fois, usage attribué à aucune définition) ; par défaut ils sont comptés, pas listés.
 %% param: format string = "markdown" -- markdown (pour le modèle, le défaut) ou json (structuré : chemins, lignes, uuid — pour une interface).
+%% choices: format = markdown | json
 %% result: invoke.results
 
 graph LR
