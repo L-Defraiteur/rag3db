@@ -393,7 +393,7 @@ impl<'a> FilterParser<'a> {
             FilterValue::List(items) => {
                 let p = self.next_param();
                 params.push(QueryParam::new(&p, CypherValue::List(items.clone())));
-                Some(format!("{prop} IN ${p}"))
+                Some(self.dialect.filter_in(&prop, &p))
             }
             FilterValue::Ops(ops) => {
                 let clauses: Vec<String> = ops
@@ -475,7 +475,7 @@ impl<'a> FilterParser<'a> {
         match op {
             FilterOp::In(items) => {
                 params.push(QueryParam::new(&p, CypherValue::List(items.clone())));
-                Some(format!("{prop} IN ${p}"))
+                Some(self.dialect.filter_in(prop, &p))
             }
             FilterOp::HasAny(items) => {
                 params.push(QueryParam::new(&p, CypherValue::List(items.clone())));
@@ -491,7 +491,7 @@ impl<'a> FilterParser<'a> {
             }
             FilterOp::NotIn(items) => {
                 params.push(QueryParam::new(&p, CypherValue::List(items.clone())));
-                Some(format!("NOT ({prop} IN ${p})"))
+                Some(format!("NOT ({})", self.dialect.filter_in(prop, &p)))
             }
             _ => None,
         }
