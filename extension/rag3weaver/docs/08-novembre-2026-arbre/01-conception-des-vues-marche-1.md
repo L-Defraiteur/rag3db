@@ -15,8 +15,10 @@ d'un scope (d'où vient chaque morceau). Rien n'est copié, rien n'est réindex�
 des outils prend l'une des trois formes (`view: {worktree: <chemin>}`, `view: {branch: <nom>}`,
 `view: {branch: <nom>, provenance: true}`).
 
-Cette page est la conception ; **pas de code avant sa relecture par everything declarative et
-recherche**. Lu sur master 4f54e473a.
+Cette page est la conception historique, lue sur master 4f54e473a. Les relectures ED et recherche
+du 11 novembre ont précisé ses contrats : voir
+[`03-contrats-et-lots-des-vues.md`](../../../../docs/arbre-principal/11-11-2026/03-contrats-et-lots-des-vues.md).
+Ce complément fait foi pour les contradictions relevées ci-dessous.
 
 **L'essentiel, mesuré ce soir.** Sur les 5 776 scopes des fichiers de code que dix branches vivantes
 changent : 5 % sont neufs, 6 % modifiés, **72 % seulement déplacés** (même contenu, d'autres lignes),
@@ -37,7 +39,7 @@ par dépôt, chaque vue posée sur sa parente, un fichier composite par scope (�
 - La réindexation est **par fichier** (`code_sync::reingest_file`). Le court-circuit de l'inchangé
   (`split_unchanged`) compare **tous** les champs déclarés, lignes comprises : un scope dont le texte
   n'a pas bougé mais que l'édition d'au-dessus décale repart au chemin complet — upsert, rechunk,
-  embarquement.
+  contrôle des marqueurs ; les vecteurs inchangés sont réutilisés.
 - Une **tâche** copie la base entière (`CopieDeBase`, reflink) et ouvre une seconde instance du
   backend ; sa montre réindexe les fichiers dont l'empreinte diffère.
 
@@ -55,12 +57,11 @@ du dépôt que code-principal et code-lourd indexent, chacune contre sa base) :
 | inchangés, même position | 949 | 16 % |
 
 Par branche, une vue apporte **12 à 151** versions de scope à embarquer, là où la réindexation par
-fichier en reprend **88 à 1 278**. Les 72 % de déplacés sont aujourd'hui réembarqués en entier.
+fichier en reprend **88 à 1 278**. Les 72 % de déplacés sont aujourd'hui réécrits, sans réembarquement.
 
 ## 1. La version de scope, entité par empreinte de contenu
 
-- **`ScopeVersion`** : une ligne par empreinte de contenu, `blake3(langage, type, signature,
-  contenu normalisé)`. Elle porte ce qui s'embarque (contenu, signature, docstring, titre) et **ses
+- **`ScopeVersion`** : une ligne par empreinte de contenu, `blake3(version de normalisation/chunking, langage, type, entrée effectivement chunkée)`. Elle porte ce qui s'embarque (contenu, signature, docstring, titre) et **ses
   chunks et ses vecteurs** (`ScopeVersion_CHUNKED_FROM`). Deux fonctions identiques, dans deux
   fichiers ou deux branches, partagent une version et un seul embarquement.
 - **La position n'est pas dans la version.** Le `Scope` d'aujourd'hui devient l'**occurrence** : son
@@ -108,7 +109,8 @@ fichier en reprend **88 à 1 278**. Les 72 % de déplacés sont aujourd'hui rée
   declarative) : 0 à 8 chemins contre la base pour dix branches, 5 à 53 contre le master du moment ;
   ce soir 1 à 16 chemins (0 à 13 de code). Une base qui bouge est un rebase explicite de la tâche,
   jamais un grossissement silencieux.
-- **Résoudre un chemin dans une vue** : l'entrée de la vue si elle existe, sinon celle du principal.
+- **Résoudre un chemin dans une vue** : descendre récursivement la pile de parents et générations
+  épinglés ; composer les occurrences visibles, en respectant les tombstones de scope et de fichier.
 - **Témoin rouge** : une tâche qui modifie une fonction ; `search_code` dans la vue rend la version
   de la vue, `search_code` sans vue rend celle du principal, et ni l'une ni l'autre ne voit les deux.
 
@@ -214,8 +216,8 @@ est composite de ça ».
   versions se créent, ses chunks et vecteurs sont **re-rattachés** à la version (pas recalculés) ; les
   occurrences gardent leurs relations telles quelles ; la vue `main` reçoit les versions du principal.
 - **Toujours sur une copie d'abord** : une copie reflink de chaque base, la migration, puis
-  `tools/check_rel_directions` (aucun écart avant ni après), les comptes de Scope, de chunks et de
-  vecteurs égaux, et un jeu fixe de requêtes search_code qui rend les mêmes résultats avant et après.
+  `tools/check_rel_directions` (aucun écart avant ni après), la couverture des occurrences et la conservation de leurs contenus/vecteurs malgré la
+  déduplication (les comptes bruts peuvent diminuer), et un jeu fixe de requêtes search_code qui rend les mêmes résultats avant et après.
 - **Témoin rouge** : une base du format d'avant migrée rend les mêmes résultats sur ses requêtes, sans
   aucun appel à l'embarqueur, et son contrôle des deux sens est sans écart.
 
