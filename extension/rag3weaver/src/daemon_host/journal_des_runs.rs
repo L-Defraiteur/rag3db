@@ -250,14 +250,20 @@ impl JournalDesRuns {
         lire_le_fichier(&self.fichier(backend, run)?).ok()
     }
 
-    /// Les ajouts connus avant leur écriture. Le verrou d'écriture ferme la
+    /// Les ajouts et les bornes d'un run connus avant leur écriture.
+    /// Les traces intermédiaires ne sont pas copiées : le résumé reste petit. Le verrou d'écriture ferme la
     /// fenêtre où `ecrire` a retiré un run de `en_cours` sans avoir posé son
     /// fichier. Le lecteur prend cet instantané AVANT de lister les fichiers,
     /// puis déduplique par run : un transfert ne peut ni perdre ni doubler un run.
-    pub(super) fn ajouts_en_attente(&self, backend: &str) -> Vec<(String, Map<String, Value>)> {
+    pub(super) fn resumes_en_attente(&self, backend: &str) -> Vec<(String, Value)> {
         let _ecriture = self.ecritures.lock().unwrap_or_else(|p| p.into_inner());
         let etat = self.etat.lock().unwrap_or_else(|p| p.into_inner());
-        etat.en_cours.iter().filter(|(_, r)| r.backend == backend).map(|(run, r)| (run.clone(), r.ajouts.clone())).collect()
+        etat.en_cours.iter().filter(|(_, r)| r.backend == backend).map(|(run, r)| {
+            let fin = r.evenements.iter().rev().find(|e| e["kind"] == "RunFinished" && e["run"] == run.as_str());
+            let mut resume = json!({ "debut": r.debut, "fin": fin, "evenements": r.debut.iter().collect::<Vec<_>>() });
+            resume.as_object_mut().expect("objet").extend(r.ajouts.clone());
+            (run.clone(), resume)
+        }).collect()
     }
 
     /// **Ce que pèse le journal d'un run** : son JSON, son fichier compressé, et

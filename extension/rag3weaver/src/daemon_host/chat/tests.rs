@@ -617,6 +617,23 @@ fn l_usage_relit_les_ajouts_tardifs_et_les_anciennes_traces() {
     assert_eq!(usage["tours"], 2);
 }
 
+#[test]
+fn le_role_fini_se_relit_avant_et_apres_son_fichier() {
+    let (d, host, _m, id) = banc(qui_lit_deux_fois());
+    let run = "graph-100-1";
+    host.journal.ajouter(&id, run, serde_json::from_value(json!({
+        "evenements": [{ "kind": "RunStarted", "target": { "role": "archiviste", "tool": "list_files" } }],
+        "fin": { "ok": true },
+    })).unwrap());
+    let roles = host.usage_et_taches_a_role(&id).1;
+    assert_eq!(roles.len(), 1);
+    assert_eq!(roles[0]["state"], "fini");
+    host.journal.ecrire(run);
+    assert_eq!(host.usage_et_taches_a_role(&id).1, roles);
+    let reprise = DaemonHost::new().with_runs_root(d.path().join("runs"));
+    assert_eq!(reprise.usage_et_taches_a_role(&id).1, roles);
+}
+
 /// Le faux modèle de la page du chat : « deux outils » fait « mots, outil, mots,
 /// outil, réponse » ; « long » parle soixante lignes, une toutes les 40 ms (un
 /// flux de soixante événements), puis finit.
