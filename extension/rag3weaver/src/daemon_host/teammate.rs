@@ -1463,7 +1463,10 @@ impl DaemonHost {
             counted += 1;
             let after = files.read_plans();
             plan_seen |= !step.closed_plans().is_empty();
-            if after.active().is_none() && after.paused().is_empty() && declared.is_some() && !unread_news(&files) {
+            // Un pas réussi peut annoncer du travail restant : sans plan vivant,
+            // ce reste doit encore parvenir au pas suivant, jamais clore la tâche.
+            let reste = declared.as_ref().and_then(|d| d["remaining"].as_str()).is_some_and(|r| !r.trim().is_empty());
+            if after.active().is_none() && after.paused().is_empty() && declared.is_some() && !reste && !unread_news(&files) {
                 outcome.ended = if plan_seen { "plus rien à faire : compte rendu".into() } else { "fait sans plan".into() };
                 return Ok(outcome);
             }
