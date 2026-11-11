@@ -147,6 +147,8 @@ export type ChatTurn = {
   tool_calls?: { id: string; name: string; arguments: string; at_ms?: number }[];
   tool_call_id?: string;
   tool_name?: string;
+  /// Provenance autoritaire des actions, indépendante du texte borné.
+  metadata?: unknown;
   at_ms?: number;
   /// Les composants qu'un résultat d'outil porte pour la page, hors du texte du modèle.
   ui?: UiComposant[];
