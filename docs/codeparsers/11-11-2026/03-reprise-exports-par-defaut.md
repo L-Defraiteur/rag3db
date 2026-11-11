@@ -164,3 +164,12 @@ preuves dans `~/.cache/codeparsers-notes/require-default-v2-d96ed3264/` et
 d'identité de l'oracle ont passé. R4 recherche est prioritaire et partage card2 :
 aucune exclusivité ni conclusion de vitesse. Le complément attend la fin du
 banc et la coordination des ressources ; aucun LSP supplémentaire parallèle.
+
+## État après la seconde A/B et le complément
+
+Les deux sont terminés. Le bilan de décision, les six gains attribués, les
+limites de mesure et le contrat de provenance sont dans
+[04-bilan-navigation-et-provenance.md](04-bilan-navigation-et-provenance.md).
+Les passages ci-dessus décrivant le banc démarré ou le complément non joué
+sont l'état antérieur, conservé pour la reprise. La passe complète sur la base
+finale convenue reste à jouer ; aucun push master du lot n'a été effectué.
