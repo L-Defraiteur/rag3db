@@ -23,3 +23,19 @@ Rejouer le témoin inchangé et lire sa preuve complète, sans relâcher l'asser
 Modèle annoncé dans le journal : `google/gemini-3.8-flash`, Vertex, région `global`, projet `lr-hub-472010`, `RAG3WEAVER_EXIGER_GEMINI=1`, jeu large de features avec `openai-llm,anthropic-llm`. Identifiants transmis au crate par le chemin prévu ; aucun contenu de fichier d'identifiants consulté ou copié. La sortie complète est conservée dans le journal rouge, pas remplacée par un rejeu.
 
 La réponse exacte de `lire_le_run` vue par le modèle n'est pas conservée dans ce journal : sa teneur reste inconnue. Le code courant reconstruit les définitions via `BackendTools::tool_defs()` ; la fixture inchangée déclare `required`, mais cette relecture n'est pas une trace de ce que le modèle a reçu. Aucune absence de schéma ni dérive temporelle du backend n'est démontrée. La seule omission directement observée est celle du champ `preuve` dans le bilan final.
+
+## Départage unique inchangé
+
+La suite R4 complète a fini naturellement : quatre réussis, un échoué, zéro ignoré, 999,52 s, code 101. Le garde d'arrêt a trouvé son lanceur déjà absent ; aucun signal n'a été envoyé. Les PID du lanceur et du binaire étaient absents et la recherche de restes par exécutable target et cwd était vide.
+
+Le seul ciblé autorisé ensuite, borné extérieurement à 900 s pour le diagnostic, passe **sans changement** : 1 réussi/0 échec/0 ignoré, 50,72 s, code 0. Le succès des deux filets auxiliaires n'est pas compté pour ce témoin. Source `0a2d2dbd9ce107d8671013a729b8d61fd1167621` ; SHA256 de `tests/e2e_juge.rs` : `0babc0b606e089b49104c7dd5f0348b848fb14f3dc1aeb299d26fc548dfcc093`.
+
+Cette fois la preuve du défaut est `"required":["fichier","ligne"]`, et la forme proposée ne requiert plus que `mot`. Même modèle et configuration, assertion inchangée : la variabilité du résultat est observée, sa cause n'est pas établie. Le ticket reste ouvert ; le ciblé ne transforme pas la R4 en passe globale verte.
+
+Preuves à luciepc, sous `journaux-cx-recherche-arret-11nov-r4/` :
+
+- `e2e_juge.log`, SHA256 `cbfda8a38996b1b76c77e5bb23ae99edaad020e4542acf9d4d504c8cd1a486df` ;
+- `juge-cible-unique.log`, SHA256 `2cb61d15078e4cd95811a098d7fa267bdc7649750a3108d68b7e66e964ce1cd3` ;
+- `juge-cible-unique.meta`, `.verdict`, `.exit` et `etat-rearbitrage.log`.
+
+Aucun autre retry ni nouvelle instrumentation n'est ajouté. La suite du lot attend l'atterrissage ED et la base convenue avec l'orchestration ; quatre suites transactionnelles, features, lib entière et navigateur restent non joués pour R4.
