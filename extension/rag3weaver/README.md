@@ -41,6 +41,16 @@ is clickable. The long version (French):
 | long memory | the `memory` template: cards as Markdown files, rebuilt from their folder if the database is lost; references, states, `cited_by`, `whois` | delivered; an archivist that sorts and merges cards is in progress |
 | context cards, declared backend and views, talking to a page | | visions — nothing coded |
 
+For JavaScript and TypeScript, dependency links follow a resolved relative
+`require` or default import to the module's exported symbol or value, including
+when its local alias has a different name. An exported instance leads to its
+export zone, not to its constructor class. Missing or external modules retain
+a binding marked `resolution = "liaison"`; ambiguous default exports are left
+unresolved. This is dependency navigation: a language server may instead return
+the local alias declaration. The graph's representative line does not identify
+every source occurrence. The strict LSP comparison and its attribution limits
+are recorded in [the validation report](../../docs/codeparsers/11-11-2026/04-bilan-navigation-et-provenance.md).
+
 ## Measured
 
 First index of this repository (about 7 000 files, 80 000 scopes, 1.1 million
