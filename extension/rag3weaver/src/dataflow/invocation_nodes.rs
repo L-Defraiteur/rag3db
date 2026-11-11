@@ -245,6 +245,30 @@ graph LR
         );
     }
     #[test]
+    fn contextual_templates_are_embedded_from_the_current_tree() {
+        eprintln!(
+            "PROVENANCE templates : arbre={} OUT_DIR={}",
+            env!("CARGO_MANIFEST_DIR"),
+            env!("OUT_DIR")
+        );
+        for name in [
+            "backends/atelier/backend.json",
+            "tools/atelier_search_code.mmd",
+            "tools/atelier_outline.mmd",
+            "tools/wait.mmd",
+        ] {
+            let expected = std::fs::read(
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("templates")
+                    .join(name),
+            )
+            .unwrap();
+            let embedded = crate::builtin_templates::get(name)
+                .unwrap_or_else(|| panic!("gabarit non embarqué : {name}"));
+            assert_eq!(embedded, expected.as_slice(), "gabarit obsolète : {name}");
+        }
+    }
+    #[test]
     fn contextual_operation_is_fixed_by_the_declaration() {
         let mut tool = GraphTool::from_mermaid(GRAPH)
             .unwrap()
