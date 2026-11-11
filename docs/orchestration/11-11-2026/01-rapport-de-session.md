@@ -326,3 +326,24 @@ aux treize sessions, sans réécriture d’historique publié.
 capacités existantes pour une conversation extérieure au dépôt. Elle distingue capacités livrées,
 preuves ciblées, travaux en branche et ambitions ; vues en couches et parcours complet du chat
 restent explicitement en cours. Les chiffres sont datés et leurs protocoles référencés.
+
+
+### Archivage : correctif des alias intégré
+
+- **41526b29a79e7137a315ac81bb9c5a5b0a6b83a9**, mémoire : pointe du lot intégré après rebase
+  sur2870f3e81 (seulement docs nouvelles depuis le rejeu). Scripts d’archivage : choix par alias
+  court puis résolution vers identité exacte, y compris noms réservés ; refus des alias inconnus
+  ou ambigus. Témoins, README, nouveautés et ticket fermé dans le même lot.
+- Tour accordé après lecture des scripts/témoins, du diff et des preuves : rouge ciblé puis
+  suite archive5/0/0 ; passe historique features5/5, lib2094/0/58 ignorés, navigateur33/0/0,
+  archive5/0/0 et postgres34/0/0. Rejeu après rebase1904e04e : features5/5, lib2095/0/58,
+  archive5/0/0, postgres34/0/0 ; verdict VERT et comptes réellement joués relus à luciepc.
+- Document réel sur copie et binaire certifié :7/7, zéro refus. Ce diagnostic ne prouve pas
+  de champ ni de seuil Vertex précis. Aucun lancement50documents ni écriture mémoire réelle.
+- Mémoire confirme push sous poste push et garde VERT, nom cx- neuf et sauvegarde, puis status
+  propre, aucun rebase et origin/master égal à HEAD après fetch. Intégration relue ici.
+- Miroir distant et target de session supprimés dans le script ; nettoyage portable et ancien
+  miroir du rouge encore à confirmer au premier retour. Preuves externes et refs distantes
+  conservées. ED/recherche/archi/arbre/codeparsers prévenus du rejeu requis avant leur push.
+- Ce correctif est intégré au dépôt ; sa disponibilité dans les gabarits personnels ou les
+  binaires posés reste distincte. Aucune nouvelle lib C++ n’est requise par ce lot.
