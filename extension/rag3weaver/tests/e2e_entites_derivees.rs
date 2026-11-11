@@ -588,3 +588,76 @@ fn le_contenu_derive_partage_son_embarquement_sans_fusionner_les_occurrences() {
     assert_eq!(compte(&catalog, "MATCH (c:Contenu) RETURN count(c)"), 2, "un nouveau modèle ne crée pas d'autres contenus");
 
 }
+
+fn catalogue_projection_publique() -> Catalog {
+    let conn = Rag3dbConnection::in_memory().unwrap();
+    load_extensions(&conn);
+    let mut catalog = Catalog::new(Box::new(conn), Box::new(rag3weaver::embedder::HashEmbedder::new(8)), CatalogConfig {
+        embedding_dim: 8, allow_mock_embedder: true, ..Default::default()
+    });
+    catalog.initialize().unwrap();
+    catalog.register_entity("Occurrence", EntityConfig {
+        fields: HashMap::from([
+            ("file".into(), champ(FieldType::String, false, false)),
+            ("line".into(), champ(FieldType::Int64, false, false)),
+            ("body".into(), champ(FieldType::Text, false, true)),
+        ]), hashsafe: Some(vec!["file".into()]), signals: SearchSignals::BM25,
+        search_index: Some("IndexOccurrence".into()),
+        return_fields: Some(vec!["file".into(), "line".into()]), ..Default::default()
+    }).unwrap();
+    catalog.register_entity("IndexOccurrence", EntityConfig {
+        fields: HashMap::from([("body".into(), champ(FieldType::Text, false, true))]),
+        signals: SearchSignals::HYBRID,
+        derived: Some(DerivedConfig {
+            from: "Occurrence".into(), identity: rag3weaver::config::DerivedIdentity::Content { format: "projection-v1".into() },
+            gather: vec![], render: BTreeMap::from([("body".into(), "{{ root.body }}".into())]),
+        }), ..Default::default()
+    }).unwrap();
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
+    catalog
+}
+
+#[test]
+#[ignore]
+fn index_derive_rend_les_occurrences_publiques_avant_pagination() {
+    let mut catalog = catalogue_projection_publique();
+    for (file, line) in [("a.rs", 1), ("b.rs", 20)] {
+        catalog.create("Occurrence", BTreeMap::from([
+            ("file".into(), s(file)), ("line".into(), CypherValue::Int(line)), ("body".into(), s("marqueprojection")),
+        ])).unwrap();
+    }
+    let result = catalog.drain();
+    assert_eq!(result.failed, 0, "{:?}", result.warnings);
+    assert_eq!(compte(&catalog, "MATCH (v:IndexOccurrence) RETURN count(v)"), 1);
+    for signal in [SearchSignals::VECTOR, SearchSignals::BM25] {
+        for mode in [ResultMode::Aggregated, ResultMode::Detailed, ResultMode::SourceResolved] {
+            let (c, result) = cherche(catalog, "Occurrence", "marqueprojection", SearchOptions {
+                signals: Some(signal), result_mode: mode, consistency: Consistency::Immediate, strict_signals: true, ..Default::default()
+            });
+            catalog = c;
+            assert_eq!(result.results.len(), 2, "signal={signal:?}, mode={mode:?}, {:?}", result.meta.warnings);
+            let mut positions: Vec<_> = result.results.iter().map(|r| {
+                assert_eq!(r.entity.as_deref(), Some("Occurrence"));
+                let data = r.data.as_ref().unwrap();
+                (data["file"].as_str().unwrap().to_string(), data["line"].as_i64().unwrap())
+            }).collect();
+            positions.sort();
+            assert_eq!(positions, vec![("a.rs".to_string(), 1), ("b.rs".to_string(), 20)]);
+            if mode == ResultMode::Detailed {
+                for r in &result.results {
+                    for chunk in r.chunks.as_ref().unwrap() {
+                        assert_eq!(chunk.source_entity, "Occurrence");
+                        assert_eq!(chunk.source_uuid, r.uuid);
+                        assert_eq!(chunk.source_field, "body");
+                    }
+                }
+            }
+            let (c, page) = cherche(catalog, "Occurrence", "marqueprojection", SearchOptions {
+                signals: Some(signal), result_mode: mode, consistency: Consistency::Immediate,
+                limit: 1, offset: 1, strict_signals: true, ..Default::default()
+            });
+            catalog = c;
+            assert_eq!(page.results.len(), 1, "la page porte sur les occurrences, pas la version unique");
+        }
+    }
+}
