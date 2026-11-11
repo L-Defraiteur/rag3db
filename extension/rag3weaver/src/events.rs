@@ -240,6 +240,8 @@ pub enum Event {
         truncated: bool,
         /// **Ce que la page rend sous le tour** (`Turn::ui`), que le modèle ne voit pas.
         ui: Option<serde_json::Value>,
+        /// Contexte du reçu, indépendant de l'extrait textuel borné.
+        metadata: Option<serde_json::Value>,
     },
     /// Un nœud d'un graphe exécuté par le runtime — ce qui se passe *sous*
     /// un outil.
@@ -713,7 +715,7 @@ impl Event {
             Self::ToolCallStarted { run, agent, call_id, tool, arguments } => json!({
                 "kind": "ToolCallStarted", "run": run, "agent": agent, "call_id": call_id, "tool": tool, "arguments": arguments,
             }),
-            Self::ToolCallFinished { run, agent, call_id, tool, ok, error_kind, ms, bytes, result_excerpt, truncated, ui } => {
+            Self::ToolCallFinished { run, agent, call_id, tool, ok, error_kind, ms, bytes, result_excerpt, truncated, ui, metadata } => {
                 let mut v = json!({
                     "kind": "ToolCallFinished", "run": run, "agent": agent, "call_id": call_id, "tool": tool,
                     "ok": ok, "error_kind": error_kind, "ms": ms, "bytes": bytes,
@@ -726,6 +728,9 @@ impl Event {
                 }
                 if let Some(u) = ui {
                     v["ui"] = u.clone();
+                }
+                if let Some(m) = metadata {
+                    v["metadata"] = m.clone();
                 }
                 v
             }
