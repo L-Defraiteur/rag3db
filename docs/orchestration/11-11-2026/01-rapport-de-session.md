@@ -127,3 +127,8 @@ be319fa75 (archi, commandes en attente sur la carte, famille de commandes corrig
   les six formes de ligne de `--lot`). lucivy : ses cinq tickets à jour sur `tickets-2026-11-07` (6ec2e01),
   fusion au mot de Lucie. Il reste 46 tickets ouverts sans session dans `docs/tickets/`. Le service privé
   7882 d'hotfixs (pid 912225 à luciepc) tourne encore ; son rapport dit comment l'arrêter.
+- **16 h 45, la passation est close.** mémoire a poussé 2d6a08a65 (le client garde la requête fautive d'un
+  4xx du fournisseur ; rejeu court vert) puis d1ef15f9a (deux tickets fermés — le recul borné a6637eeee, le
+  dossier d'état 0b0ff221a —, la fin sans livrable rendue à everything declarative). Index : 341 en-têtes,
+  106 ouverts. Les treize sessions ont leur dossier sous `docs/<session>/`. Master à d1ef15f9a plus ce
+  rapport. La suite est à Codex, en commençant par `docs/README.md`.
