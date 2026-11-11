@@ -146,3 +146,28 @@ l'entrée effectivement chunkée et version de découpage, modèle/dimension dis
 les occurrences, positions, relations et visibilité. Prouver un seul embarquement pour le même
 contenu et des contenus distincts pour docstrings/titres pertinents ; migration explicite1b sur
 copies avant toute base partagée. Contrat : docs/arbre-principal/11-11-2026/03-contrats-et-lots-des-vues.md.
+
+## Gardes d'association, avancement et dette par cellule — suite de 10c0e09ae
+
+Porteur arbre-principal, même lot 1a, sans activation ni migration de base vivante.
+Deux rouges natifs observés dans `cx-projection-gardes-rouge.log` sur luciepc :
+retrait d'association accepté sur une racine peuplée ; avancement public sans vecteurs
+alors que l'index physique en possède. Corrections ciblées vertes :
+`cx-projection-gardes-vert.log`, 3 tests réussis (plus 2 gardes du lanceur), code retour 0.
+Le changement None/Some/autre index est refusé avant migration/persistance dès que la table
+est peuplée ; l'état, ses écritures et ses pannes suivent la résolution publique existante.
+
+Rouge supplémentaire réel `cx-projection-cellules-rouge.log` : après nouvelle recette en
+bêta, deux origines alpha sont reliées à une version estampillée bêta (2 liens au lieu de 0).
+Correction en vérification : dette persistée globale mais sélection des racines par cellule
+avant LIMIT, sans mise en file globale lors du changement de recette. L'indice de dette ne
+s'efface plus après le traitement d'une seule cellule dans un catalogue multicellule.
+Reste : verdict de ce correctif ; lecture explicite alpha avec catalogue bêta et file bêta ;
+garde du repli scan pour les projections ; passe après composition ED et rebase.
+La file actuelle appartient encore au catalogue courant : une bascule temporaire pour la
+cohérence d'une lecture étrangère doit préserver cette file, jamais drainer bêta en alpha.
+
+Verdict ciblé cellules : `cx-projection-cellules-vert.log`, 4 tests réussis, 0 échec,
+code retour 0 (plus 2 gardes du lanceur). Après bêta, les deux racines alpha gardent leur
+cellule ; leur dette est ensuite retrouvée et rendue en alpha. Il ne s'agit pas de la passe
+globale ni encore du témoin lecture étrangère avec écritures bêta en file.

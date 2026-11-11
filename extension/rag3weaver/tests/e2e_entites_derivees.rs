@@ -798,3 +798,76 @@ fn un_echec_du_rendu_en_lot_preserve_sources_et_references_apres_reouverture() {
     assert_eq!(after[0][2].as_str(), Some("après"));
     assert_eq!(after[1], before[1], "l'autre origine ne change pas");
 }
+
+#[test]
+#[ignore]
+fn projection_peuplee_refuse_un_changement_d_index_sans_migration() {
+    for (before, after) in [
+        (Some("IndexOccurrence"), None),
+        (None, Some("IndexOccurrence")),
+        (Some("IndexOccurrence"), Some("AutreIndex")),
+    ] {
+        let (_cache, mut catalog) = catalogue_projection_publique();
+        let mut config = catalog.entity_config("Occurrence").unwrap().clone();
+        config.search_index = before.map(str::to_string);
+        catalog.register_entity("Occurrence", config.clone()).unwrap();
+        catalog.create("Occurrence", BTreeMap::from([
+            ("file".into(), s("a.rs")), ("line".into(), CypherValue::Int(1)), ("body".into(), s("migrationprojection")),
+        ])).unwrap();
+        assert_eq!(catalog.drain().failed, 0);
+        config.search_index = after.map(str::to_string);
+        let error = catalog.register_entity("Occurrence", config).expect_err("la représentation publique d'une entité peuplée ne bascule pas implicitement");
+        assert!(error.to_string().contains("migration"), "{error}");
+        assert_eq!(catalog.entity_config("Occurrence").unwrap().search_index.as_deref(), before);
+    }
+}
+
+#[test]
+#[ignore]
+fn projection_publique_lit_l_etat_de_son_index_physique() {
+    let (_cache, mut catalog) = catalogue_projection_publique();
+    catalog.create("Occurrence", BTreeMap::from([
+        ("file".into(), s("a.rs")), ("line".into(), CypherValue::Int(1)), ("body".into(), s("etatprojection")),
+    ])).unwrap();
+    assert_eq!(catalog.drain().failed, 0);
+    let physical = catalog.index_progress_for("IndexOccurrence").unwrap();
+    assert!(physical.vectors_declared);
+    let public = catalog.index_progress_for("Occurrence").unwrap();
+    assert_eq!(public, physical, "les comptes publics décrivent les index effectivement interrogés");
+    assert_eq!(catalog.index_state_for("Occurrence").unwrap(), catalog.index_state_for("IndexOccurrence").unwrap());
+}
+
+fn projection_dans_deux_cellules() -> (tempfile::TempDir, Catalog) {
+    let (cache, mut catalog) = catalogue_projection_publique();
+    let root = catalog.entity_config("Occurrence").unwrap().clone();
+    let index = catalog.entity_config("IndexOccurrence").unwrap().clone();
+    for (cell, files) in [("alpha", vec!["a.rs", "a2.rs"]), ("beta", vec!["b.rs"])] {
+        catalog.set_scope(rag3weaver::scope::Scope::new("acme", cell)).unwrap();
+        catalog.register_entity("Occurrence", root.clone()).unwrap();
+        catalog.register_entity("IndexOccurrence", index.clone()).unwrap();
+        for file in files {
+            catalog.create("Occurrence", BTreeMap::from([
+                ("file".into(), s(file)), ("line".into(), CypherValue::Int(1)), ("body".into(), s("marquecellule")),
+            ])).unwrap();
+        }
+        let result = catalog.drain();
+        assert_eq!(result.failed, 0, "{:?}", result.warnings);
+    }
+    (cache, catalog)
+}
+
+#[test]
+#[ignore]
+fn projection_recette_nouvelle_ne_transfere_pas_les_origines_entre_cellules() {
+    let (_cache, mut catalog) = projection_dans_deux_cellules();
+    assert_eq!(compte(&catalog, "MATCH (v:IndexOccurrence) RETURN count(v)"), 2);
+    let mut config = catalog.entity_config("IndexOccurrence").unwrap().clone();
+    config.chunking.overlap_lines += 1;
+    catalog.register_entity("IndexOccurrence", config).unwrap();
+    catalog.rendre_le_retard(None, 50, true).unwrap();
+    assert_eq!(compte(&catalog, "MATCH (v:IndexOccurrence)-[:IndexOccurrence_DERIVED_FROM]->(r:Occurrence) WHERE v._project <> r._project RETURN count(r)"), 0,
+        "un rattrapage de beta ne doit jamais estampiller les versions des racines alpha en beta");
+    catalog.set_scope(rag3weaver::scope::Scope::new("acme", "alpha")).unwrap();
+    assert_eq!(catalog.rendre_le_retard(None, 50, true).unwrap(), 2, "la dette alpha reste à rendre après beta");
+    assert_eq!(compte(&catalog, "MATCH (v:IndexOccurrence)-[:IndexOccurrence_DERIVED_FROM]->(r:Occurrence) WHERE v._project <> r._project RETURN count(r)"), 0);
+}
