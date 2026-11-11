@@ -260,3 +260,14 @@ est active ; aucune suppression des anciennes branches distantes.
   locale au portable, wt-deplace-codex détaché à luciepc et target-A-plan inactif supprimés ;
   refs distantes intactes. Worktrees1a conservés aux deux postes, preuves rouges sauvegardées
   hors target supprimé ; prochain target unique1a : cx-target-scope-version.
+
+
+### Reprise1a et précisions du contrat
+
+- **ec75832167f086e3f490423b7bb0d9ea36720c4b**, docs seules, arbre principal : rapport,
+  knowledge dump et contrat actualisés ; trois contrôles confirmés, hash/diff relus ici.
+  Le contrat précise que le masque de visibilité reste obligatoire sans modifier la précédence
+  existante des filtres domaine/utilisateur, et que les octets sources restent conservés avant
+  remappage des surlignages. Worktree documentaire et branche locale retirés, aucun target.
+- Reprise1a : worktrees cx-wt-scope-version et rouge dd5f30465 conservés ; validation à reprendre
+  sur le master portant le garde-fou, target unique neuf cx-target-scope-version.
