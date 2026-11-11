@@ -51,6 +51,59 @@ the local alias declaration. The graph's representative line does not identify
 every source occurrence. The strict LSP comparison and its attribution limits
 are recorded in [the validation report](../../docs/codeparsers/11-11-2026/04-bilan-navigation-et-provenance.md).
 
+## Shared indexed content
+
+A derived entity can opt into immutable content versions with
+`derived.identity = {"mode":"content","format":"plain-v1"}`. Occurrences
+whose rendered fields match share a version, its chunks and its stored vectors
+within that derived entity and `org` × `project` cell. Identity includes the
+format, field roles and chunking recipe; this is not a global text cache.
+The default remains one derived identity per root.
+
+These are two `EntityConfig` fragments, not a complete backend manifest (which
+also declares each entity's JSON schema and the backend settings):
+
+```json
+{
+  "Occurrence": {
+    "fields": {
+      "key": {"type":"string"},
+      "body": {"type":"string","isContent":true}
+    },
+    "hashsafe": ["key"],
+    "signals": [],
+    "chunked": false,
+    "searchIndex": "IndexedText"
+  },
+  "IndexedText": {
+    "fields": {"body":{"type":"string","isContent":true}},
+    "signals": ["bm25","vector"],
+    "derived": {
+      "from": "Occurrence",
+      "identity": {"mode":"content","format":"plain-v1"},
+      "render": {"body":"{{ root.body }}"}
+    }
+  }
+}
+```
+
+`searchIndex` routes public searches on `Occurrence` through `IndexedText`.
+Results keep the root occurrence's UUID and data. The query's cell, view and
+root filter restrict eligible versions before top-k; versions expand back to
+admitted occurrences before fusion and pagination. Indexed content and title
+fields must preserve the root's bytes: a transformation requiring offset
+remapping is refused. Direct public searches on the internal content index
+are refused too.
+
+Updating a root atomically moves its canonical `DERIVED_FROM` reference;
+other occurrences keep their version. Old versions are retained, with no
+orphan garbage collection. Direct edits to content versions and canonical
+references are refused. Input columns remain stored on each occurrence.
+Changing identity mode or format, or changing `searchIndex` on a populated
+entity, requires a migration; no automatic migration is provided. Production
+code templates do not enable this option, and no total database size saving
+has been measured.
+
 ## Measured
 
 First index of this repository (about 7 000 files, 80 000 scopes, 1.1 million

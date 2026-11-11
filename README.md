@@ -36,6 +36,10 @@ plumbing this repository is about:
 The memory archivist files document sections under existing cards while preserving
 their exact names, including long judge reports.
 
+rag3weaver also supports opt-in [shared indexed content](extension/rag3weaver/README.md#shared-indexed-content):
+occurrences keep their identities and relations while sharing derived chunks and
+stored vectors within a cell. Existing code templates retain their current storage.
+
 The long version, in French: [`extension/rag3weaver/visions/00-vision-generale.md`](extension/rag3weaver/visions/00-vision-generale.md).
 
 ## Where the engine stands
