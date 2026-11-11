@@ -453,3 +453,15 @@ restent explicitement en cours. Les chiffres sont datés et leurs protocoles ré
   déjà engagé. Rebase sur6c4b5ad0c avecED et vérification du rouge606dus requis avant tour.
   Recherche attend ensuite base convenue pour validation complète de l’arrêt ; aucun autre
   pushcode ne reçoit de tour en parallèle.
+
+
+### Documentation publique de la projection et préparation1a
+
+- **caffdf2393b4e8438ae5e4a9d9dc4d5f19852461**, docs seules, arbre principal : nouveautés
+  et README décrivent la projection dense/creuse livrée vers les occurrences admises, leurs
+  positions, meilleurs scores, filtres et ordre stable. Le stockage versionné1a reste explicitement
+  non livré. Rapport/dump/contrat et proposition04 sur identité des dérivées actualisés ; hash/diff
+  relus ici, trois contrôles et nettoyage du lot documentaire confirmés par la session.
+- Préparation1a synchronisée aux deux postes, cx-arbre-scope-version-3 c22497935 : runtime
+  identique au master6c4, témoins et propositions seulement ; pas de nouveau target créé.
+  Fenêtre archi inchangée, aucun nouveau push de code.
