@@ -378,6 +378,8 @@ fn catalogue_versions() -> Catalog {
 #[ignore]
 fn versions_immuables_partagees_et_references_independantes() {
     let mut catalog = catalogue_versions();
+    assert!(catalog.resolve_search_target("Version").unwrap_err().to_string().contains("projection"));
+    assert!(catalog.resolve_search_target("Ticket").is_ok());
     let a = catalog.create("Ticket", BTreeMap::from([("subject".into(), s("a")), ("body".into(), s("corps partagé"))])).unwrap();
     let b = catalog.create("Ticket", BTreeMap::from([("subject".into(), s("b")), ("body".into(), s("corps partagé"))])).unwrap();
     let drained = catalog.drain();
@@ -421,7 +423,14 @@ fn versions_immuables_partagees_et_references_independantes() {
 #[test]
 #[ignore]
 fn remplacement_de_reference_annule_sur_echec_et_preserve_les_origines() {
+    verifier_echec_reference(false);
+    verifier_echec_reference(true);
+}
+
+fn verifier_echec_reference(insertion: bool) {
     let mut catalog = catalogue_versions();
+    assert!(catalog.resolve_search_target("Version").unwrap_err().to_string().contains("projection"));
+    assert!(catalog.resolve_search_target("Ticket").is_ok());
     let a = catalog.create("Ticket", BTreeMap::from([("subject".into(), s("a")), ("body".into(), s("corps partagé"))])).unwrap();
     catalog.create("Ticket", BTreeMap::from([("subject".into(), s("b")), ("body".into(), s("corps partagé"))])).unwrap();
     assert_eq!(catalog.drain().failed, 0);
@@ -430,15 +439,152 @@ fn remplacement_de_reference_annule_sur_echec_et_preserve_les_origines() {
     let id = before[0][2].as_str().unwrap();
     assert!(catalog.update("Version", id, BTreeMap::from([("content".into(), s("écrasé"))])).is_err());
     assert!(catalog.delete("Version", id).is_err());
+    assert!(catalog.reindex("Version").is_err());
     assert!(catalog.create("Version", BTreeMap::from([("content".into(), s("injecté"))])).is_err());
     assert!(catalog.ingest_entities("Version", vec![BTreeMap::from([("content".into(), s("injecté"))])]).is_err());
-    catalog.update("Ticket", &a.uuid().unwrap(), BTreeMap::from([("body".into(), s("mutation refusée"))])).unwrap();
-    catalog.injecter_faute_de_lien("Version_DERIVED_FROM", 1);
-    let result = catalog.drain();
+    assert!(catalog.link("Version_DERIVED_FROM", id.to_string(), a.uuid().unwrap(), BTreeMap::new()).is_err());
+    assert!(catalog.unlink("Version_DERIVED_FROM", id, &a.uuid().unwrap()).is_err());
+    assert!(catalog.register_relation("Version_DERIVED_FROM", "Version", "Ticket").is_err());
+    catalog.register_entity("Independante", EntityConfig {
+        fields: HashMap::from([("content".into(), champ(FieldType::Text, false, true))]),
+        signals: SearchSignals::BM25, ..Default::default()
+    }).unwrap();
+    catalog.create("Independante", BTreeMap::from([("content".into(), s("travail conservé"))])).unwrap();
+    if insertion { catalog.injecter_faute_d_insertion("Version", 1); }
+    else { catalog.injecter_faute_de_lien("Version_DERIVED_FROM", 1); }
+    let result = catalog.update_jusqu_a("Ticket", &a.uuid().unwrap(), BTreeMap::from([("body".into(), s("mutationrefuseeunique"))]),
+        rag3weaver::disponibilite::Disponibilites::RECHERCHE_TEXTE).unwrap();
     assert!(result.failed > 0, "la faute doit remonter");
+    assert_eq!(catalog.execute_raw(query).unwrap().rows, before, "racines, version ET état des liens conservés (insertion={insertion})");
     assert_eq!(result.processed, 0, "un lot annulé ne compte aucune écriture validée");
-    assert_eq!(catalog.execute_raw(query).unwrap().rows, before, "racines, version ET état des liens conservés");
     assert_eq!(compte(&catalog, "MATCH (v:Version) RETURN count(v)"), 1);
     assert_eq!(compte(&catalog, "MATCH (c:Version_Chunk) RETURN count(c)"), 1);
-    assert_eq!(catalog.rendre_le_retard(None, 100, false).unwrap(), 0);
+    let versions = std::collections::HashSet::from(["Version".to_string()]);
+    assert_eq!(catalog.rendre_le_retard(Some(&versions), 100, false).unwrap(), 0);
+    assert_eq!(compte(&catalog, "MATCH (i:Independante) RETURN count(i)"), 0);
+    assert!(catalog.has_pending(), "le rollback ne perd pas le travail indépendant");
+    assert_eq!(catalog.drain().failed, 0);
+    assert_eq!(compte(&catalog, "MATCH (i:Independante) RETURN count(i)"), 1);
+    let (_, hits) = cherche(catalog, "Ticket", "mutationrefuseeunique", SearchOptions {
+        consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), ..Default::default()
+    });
+    assert!(hits.results.is_empty(), "le plein texte annulé ne devient pas visible");
+}
+
+
+#[test]
+#[ignore]
+fn recette_nouvelle_recree_les_versions_et_deplacement_reutilise_le_contenu() {
+    let mut catalog = catalogue_versions();
+    let root = catalog.create("Ticket", BTreeMap::from([("subject".into(), s("position initiale")), ("body".into(), s("contenu identique"))])).unwrap();
+    assert_eq!(catalog.drain().failed, 0);
+    let query = "MATCH (v:Version)-[r:Version_DERIVED_FROM]->(t:Ticket) RETURN v._uuid, r._render_hash";
+    let before = catalog.execute_raw(query).unwrap().rows;
+    catalog.update("Ticket", &root.uuid().unwrap(), BTreeMap::from([("subject".into(), s("autre position"))])).unwrap();
+    assert_eq!(catalog.drain().failed, 0);
+    let moved = catalog.execute_raw(query).unwrap().rows;
+    assert_eq!(before[0][0], moved[0][0]);
+    assert_ne!(before[0][1], moved[0][1]);
+    assert_eq!(compte(&catalog, "MATCH (c:Version_Chunk) RETURN count(c)"), 1);
+    let original = catalog.entity_configs().get("Version").unwrap().clone();
+    let mut recipe = original.clone();
+    recipe.chunking.overlap_lines += 1;
+    catalog.register_entity("Version", recipe).unwrap();
+    let tables = std::collections::HashSet::from(["Version".to_string()]);
+    assert_eq!(catalog.rendre_le_retard(Some(&tables), 100, false).unwrap(), 1);
+    let changed = catalog.execute_raw(query).unwrap().rows;
+    assert_ne!(moved[0][0], changed[0][0], "la recette fait partie de l'adresse");
+    assert_eq!(compte(&catalog, "MATCH (v:Version) RETURN count(v)"), 2);
+    catalog.register_entity("Version", original).unwrap();
+    assert_eq!(catalog.rendre_le_retard(Some(&tables), 100, false).unwrap(), 1);
+    assert_eq!(catalog.execute_raw(query).unwrap().rows[0][0], before[0][0]);
+    assert_eq!(compte(&catalog, "MATCH (c:Version_Chunk) RETURN count(c)"), 2, "la recette précédente est réutilisée");
+}
+
+#[test]
+#[ignore]
+fn le_contenu_derive_partage_son_embarquement_sans_fusionner_les_occurrences() {
+    use std::sync::{Arc, Mutex};
+    use rag3weaver::embedder::{Embedder, EmbedError};
+    struct Compteur {
+        textes: Arc<Mutex<Vec<String>>>,
+        inner: MockEmbedder,
+        nom: &'static str,
+    }
+    impl Embedder for Compteur {
+        fn embed(&self, textes: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+            self.textes.lock().unwrap().extend_from_slice(textes);
+            self.inner.embed(textes)
+        }
+        fn dim(&self) -> usize { self.inner.dim() }
+        fn name(&self) -> &str { self.nom }
+        fn is_mock(&self) -> bool { true }
+    }
+    let conn = Rag3dbConnection::in_memory().unwrap();
+    load_extensions(&conn);
+    let textes = Arc::new(Mutex::new(Vec::new()));
+    let mut catalog = Catalog::new(Box::new(conn), Box::new(Compteur { textes: textes.clone(), inner: MockEmbedder::new(4), nom: "compteur-quatre" }), CatalogConfig {
+        embedding_dim: 4, allow_mock_embedder: true, ..Default::default()
+    });
+    catalog.initialize().unwrap();
+    catalog.register_entity("Occurrence", EntityConfig {
+        fields: HashMap::from([
+            ("file".into(), champ(FieldType::String, false, false)),
+            ("line".into(), champ(FieldType::Int64, false, false)),
+            ("body".into(), champ(FieldType::Text, false, true)),
+        ]),
+        hashsafe: Some(vec!["file".into()]), signals: SearchSignals::BM25, ..Default::default()
+    }).unwrap();
+    catalog.register_entity("Contenu", EntityConfig {
+        fields: HashMap::from([("content".into(), champ(FieldType::Text, false, true))]),
+        signals: SearchSignals::VECTOR,
+        derived: Some(DerivedConfig {
+            from: "Occurrence".into(), identity: rag3weaver::config::DerivedIdentity::Content { format: "texte-v1".into() },
+            gather: vec![], render: BTreeMap::from([("content".into(), "{{ root.body }}".into())]),
+        }), ..Default::default()
+    }).unwrap();
+    catalog.regime_d_ecriture(RegimeEcriture::ParLot);
+    let a = catalog.create("Occurrence", BTreeMap::from([
+        ("file".into(), s("a.rs")), ("line".into(), CypherValue::Int(1)), ("body".into(), s("marque_partage_effectif")),
+    ])).unwrap();
+    catalog.create("Occurrence", BTreeMap::from([
+        ("file".into(), s("b.rs")), ("line".into(), CypherValue::Int(10)), ("body".into(), s("marque_partage_effectif")),
+    ])).unwrap();
+    let result = catalog.drain();
+    assert_eq!(result.failed, 0, "{:?}", result.warnings);
+    let embarques = || textes.lock().unwrap().iter().filter(|t| t.contains("marque_partage_effectif")).count();
+    assert_eq!(embarques(), 1, "un texte effectivement embarqué pour deux origines");
+    assert_eq!(compte(&catalog, "MATCH (c:Contenu) RETURN count(c)"), 1);
+    assert_eq!(compte(&catalog, "MATCH (c:Contenu_Chunk) RETURN count(c)"), 1);
+    assert_eq!(compte(&catalog, "MATCH (c:Contenu)-[:Contenu_DERIVED_FROM]->(o:Occurrence) RETURN count(o)"), 2);
+    let positions = catalog.execute_raw("MATCH (o:Occurrence) RETURN o.file, o.line ORDER BY o.file").unwrap().rows;
+    assert_eq!(positions[0][1].as_i64(), Some(1));
+    assert_eq!(positions[1][1].as_i64(), Some(10));
+    catalog.update("Occurrence", &a.uuid().unwrap(), BTreeMap::from([("line".into(), CypherValue::Int(30))])).unwrap();
+    assert_eq!(catalog.drain().failed, 0);
+    assert_eq!(embarques(), 1, "déplacer une occurrence ne réembarque pas son contenu");
+    catalog.update("Occurrence", &a.uuid().unwrap(), BTreeMap::from([("body".into(), s("marque_partage_effectif version changée"))])).unwrap();
+    assert_eq!(catalog.drain().failed, 0);
+    assert_eq!(embarques(), 2);
+    catalog.update("Occurrence", &a.uuid().unwrap(), BTreeMap::from([("body".into(), s("marque_partage_effectif"))])).unwrap();
+    assert_eq!(catalog.drain().failed, 0);
+    assert_eq!(embarques(), 2, "retrouver une version conserve ses vecteurs");
+    // Le contenu est indépendant du modèle ; les colonnes et marqueurs ne le sont pas.
+    let ancien = catalog.vector_storage("Contenu_Chunk").unwrap();
+    catalog.set_embedder(Arc::new(Compteur { textes: textes.clone(), inner: MockEmbedder::new(6), nom: "compteur-six" }));
+    catalog.ensure_embedding_model().unwrap();
+    let nouveau = catalog.vector_storage("Contenu_Chunk").unwrap();
+    assert_ne!(ancien.column, nouveau.column);
+    assert_ne!(ancien.marker, nouveau.marker);
+    let tables = std::collections::HashSet::from(["Contenu".to_string()]);
+    assert_eq!(catalog.embarquer_le_retard(rag3weaver::disponibilite::Disponibilites::DENSE, 100, Some(&tables)).unwrap(), 2);
+    assert_eq!(embarques(), 4, "deux versions à embarquer dans l'espace du second modèle");
+    let dimensions = catalog.execute_raw(&format!("MATCH (c:Contenu_Chunk) RETURN size(c.`{}`), size(c.`{}`)", ancien.column, nouveau.column)).unwrap().rows;
+    assert_eq!(dimensions.len(), 2);
+    for row in dimensions {
+        assert_eq!(row[0].as_i64(), Some(4));
+        assert_eq!(row[1].as_i64(), Some(6));
+    }
+    assert_eq!(compte(&catalog, "MATCH (c:Contenu) RETURN count(c)"), 2, "un nouveau modèle ne crée pas d'autres contenus");
+
 }

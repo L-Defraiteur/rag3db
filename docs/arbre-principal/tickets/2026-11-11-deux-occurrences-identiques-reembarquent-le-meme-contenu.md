@@ -16,6 +16,15 @@ Journal hors target : ~/.cache/rag3weaver-build/cx-scope-version-etat.log ; rés
 la suite : 2 réussis, 1 échoué. La projection générique corrigée ne partage pas à elle seule
 le stockage ; aucun format de base vivante n'a été changé.
 
+## Avancement générique du lot 1a
+
+Checkpoint 7748fa53c puis renforcement sur cx-arbre-scope-version-3 : versions dérivées par
+contenu, références indépendantes, L3 composé et compteur générique sensible 2→1. Les tests
+ciblés prouvent aussi déplacement sans nouvel embarquement, retour à une ancienne version,
+recette et modèles 4/6 distincts, rollback des origines/liens/états/FTS. Le schéma Scope et ses
+gabarits ne sont pas basculés : son témoin initial reste rouge. Projection publique, masque avant
+top-k, passe globale et migration restent ouverts ; ce ticket n'est donc pas fermé.
+
 ## Pour le fermer
 
 Mettre en œuvre le partage de contenu/chunks/vecteurs déclaré du lot1a, avec empreinte sur
