@@ -1897,11 +1897,17 @@ fn require_navigation_rows_where(files: &[(&str, &str)], filter: &str) -> Vec<Ve
 #[ignore]
 fn require_alias_navigates_to_default_export() {
     use rag3weaver::connection::CypherValue::String as S;
-    let rows = require_navigation_rows(&[
-        ("outil.js", "class Outil {\n  agir() {}\n}\nmodule.exports = Outil;\n"),
-        ("app.js", "const Alias = require('./outil.js');\nfunction utiliser() {\n  return new Alias();\n}\n"),
-    ]);
-    assert!(rows.iter().any(|r| matches!((&r[0], &r[1], &r[2]), (S(n), S(f), S(m)) if n == "Outil" && f == "outil.js" && m == "import")), "navigation vers l'export malgré l'alias : {rows:?}");
+    for definition in [
+        "class Outil {\n  agir() {}\n}\nmodule.exports = Outil;\n",
+        "export default class Outil {\n  agir() {}\n}\n",
+        "class Outil {\n  agir() {}\n}\nexport default Outil;\n",
+    ] {
+        let rows = require_navigation_rows(&[
+            ("outil.js", definition),
+            ("app.js", "const Alias = require('./outil.js');\nfunction utiliser() {\n  return new Alias();\n}\n"),
+        ]);
+        assert!(rows.iter().any(|r| matches!((&r[0], &r[1], &r[2]), (S(n), S(f), S(m)) if n == "Outil" && f == "outil.js" && m == "import")), "navigation vers l'export {definition} malgré l'alias : {rows:?}");
+    }
 }
 
 #[test]
