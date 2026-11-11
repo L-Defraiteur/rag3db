@@ -109,3 +109,12 @@ be319fa75 (archi, commandes en attente sur la carte, famille de commandes corrig
   n'a jamais été compilé ni joué** : premier lot pour Codex).
 - Tickets déplacés : archi 7ca48077d (4), optimiseur 50a37c80b (1) ; les autres en cours.
 - En attente : embarquement (rapport), hotfixs (B et C), les déplacements restants.
+- **16 h 34, tickets déplacés** : recherche 37849771f (7), banc a28d8efc8 (9, chemins corrigés 4bc2538f7, le
+  ticket du point de reprise qui fige rendu au cœur 3e795b1f5), tty f446db191 (1), arbre principal
+  8dce5a1bd (6), codeparsers b81fed2d6 (9, plus le ticket import_binding écrit), cœur 33192de03 (4),
+  everything declarative 9e4a3bbcb (8), mémoire 14645b23c (ses tickets, dont les quatre de l'équipier :
+  deux corrigés à fermer — recul borné a6637eeee, dossier d'état 0b0ff221a —, la fin sans livrable à
+  rendre à ED), lucivy 27b6592c1 (la requête floue fermée, corrigée par la 4.3.2). Index : 340 en-têtes,
+  108 ouverts, 231 fermés. Deux cas pour le script (hotfixs) : comparer à la merge-base plutôt qu'à la
+  pointe d'origin/master, et reconnaître un déplacement de session à session. En attente : embarquement
+  (rapport et tickets), hotfixs (rapport, dump, tickets), mémoire (fermetures et lot 42ac0bb9c).
