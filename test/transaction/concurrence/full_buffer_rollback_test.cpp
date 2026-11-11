@@ -28,6 +28,11 @@
 // - FullBufferRollback.RefusedCheckpointLeavesTheDatabaseOpen (premier pas 20 000) : après le
 //   CHECKPOINT refusé par son nom, un BEGIN de A passe
 //   (refused-checkpoint-leaves-the-database-open).
+// - FullBufferRollback.ARollbackUnderAFullBufferLeavesTheDatabaseUsable (premier pas 5 000, ticket
+//   2026-11-09-sous-vingt-ecrivains-un-pool-plein-laisse-une-annulation-inachevee) : après le
+//   ROLLBACK de A, la base n'est pas à rouvrir. Un BEGIN de A passe
+//   (no-half-done-rollback), et les lignes que B a validées se relisent
+//   (committed-rows-read-back).
 
 #ifndef __SINGLE_THREADED__
 
@@ -66,7 +71,8 @@ protected:
 
     // Joue la recette dans un fils ; rend son journal et son statut. withCheckpoint : après le
     // ROLLBACK, B lance CHECKPOINT et A tente un BEGIN.
-    std::pair<std::string, int> play(int64_t bFirstStep, bool withCheckpoint) {
+    std::pair<std::string, int> play(int64_t bFirstStep, bool withCheckpoint,
+        bool beginAfter = false) {
         namespace fs = std::filesystem;
         fs::create_directories(fs::path(databasePath).parent_path());
         const auto stepsPath = databasePath + ".steps";
@@ -124,6 +130,20 @@ protected:
                 const auto first = say(a, "A", "ROLLBACK;");
                 const auto second = first || say(a, "A", "ROLLBACK;");
                 steps << "ROLLBACK " << (second ? "passed" : "refused") << std::endl;
+                if (beginAfter) {
+                    const auto begun = say(a, "A", "BEGIN TRANSACTION;");
+                    steps << "BEGIN AFTER ROLLBACK " << (begun ? "passed" : "refused") << std::endl;
+                    if (begun) {
+                        say(a, "A", "ROLLBACK;");
+                    }
+                    auto count = b.query("MATCH (d:Doc) WHERE d.id >= 10000000 RETURN count(*);");
+                    steps << "B ROWS READ "
+                          << (count->isSuccess() && count->hasNext() ?
+                                     std::to_string(
+                                         count->getNext()->getValue(0)->getValue<int64_t>()) :
+                                     "refused « " + count->getErrorMessage().substr(0, 160) + " »")
+                          << std::endl;
+                }
                 if (withCheckpoint) {
                     // Le résultat d'abord : say écrit sa ligne pendant l'évaluation.
                     const auto checkpointed = say(b, "B", "CHECKPOINT;");
@@ -172,6 +192,25 @@ TEST_F(FullBufferRollback, RefusedCheckpointLeavesTheDatabaseOpen) {
     EXPECT_NE(steps.find("BEGIN passed"), std::string::npos)
         << "[check: refused-checkpoint-leaves-the-database-open] a BEGIN after the refused "
            "CHECKPOINT was refused";
+}
+
+TEST_F(FullBufferRollback, ARollbackUnderAFullBufferLeavesTheDatabaseUsable) {
+    const auto [steps, status] = play(5'000, false /* withCheckpoint */, true /* beginAfter */);
+    ASSERT_EQ(steps.find("PLAN a-refused-at"), std::string::npos)
+        << "[check: plan] A's block did not fit in the buffer: nothing is witnessed";
+    ASSERT_NE(steps.find("BEGIN AFTER ROLLBACK"), std::string::npos)
+        << "[check: plan] the child died before its BEGIN, status " << status;
+    EXPECT_NE(steps.find("BEGIN AFTER ROLLBACK passed"), std::string::npos)
+        << "[check: no-half-done-rollback] the database must be reopened after a ROLLBACK under a "
+           "full buffer";
+    const auto committedAt = steps.find("B ");
+    const auto readAt = steps.find("B ROWS READ ");
+    ASSERT_NE(committedAt, std::string::npos);
+    ASSERT_NE(readAt, std::string::npos);
+    const auto committed = std::stoll(steps.substr(committedAt + 2));
+    const auto readBack = steps.substr(readAt + 12, steps.find('\n', readAt) - readAt - 12);
+    EXPECT_EQ(readBack, std::to_string(committed))
+        << "[check: committed-rows-read-back] B committed " << committed << " rows";
 }
 
 } // namespace
