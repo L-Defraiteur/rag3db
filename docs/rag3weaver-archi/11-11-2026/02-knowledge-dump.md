@@ -3,6 +3,21 @@
 Cette page est écrite pour un agent sans mémoire des échanges. Le rapport de session est à côté
 (`01-rapport-de-session.md`) : il dit l'état du jour, cette page dit comment les choses marchent.
 
+## Reprise du 11 novembre : chemins et projection du chat
+
+La référence est `cx-wt-flux` / `cx-archi-ide-par-le-flux`, validation sur luciepc,
+target `flux`. Les chemins et commandes de l'ancienne session ci-dessous sont historiques ;
+le rapport adjacent donne les lanceurs et dossiers de résultats courants. Sur luciepc,
+les services d'embarquement sont `127.0.0.1:7878,127.0.0.1:7879,127.0.0.1:7880` ;
+`7979,7980,7981` sont les ports du portable, pas des services locaux distants.
+
+La fin du tour scelle `usage_du_chat` dans les ajouts du journal. La projection commune
+lit d'abord les résumés en attente sous `ecritures` puis `etat`, libère les verrous, puis
+liste et lit les fichiers ; elle déduplique par identité de run. Le total scellé remplace
+les traces `Consumed`, qui restent la lecture de compatibilité des anciens journaux.
+Les bornes début/fin suffisent aux rôles : ne pas cloner toutes les traces d'un run pour
+faire une barre latérale. Les résultats absents ne se mettent pas en cache négatif.
+
 ## Le décor
 
 - **rag3db** est le moteur de base de données de Lucie : un fork de Kuzu, en C++. Le dépôt est

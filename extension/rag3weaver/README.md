@@ -344,7 +344,9 @@ reactions and proposals. The chat keeps the order things happened in — words,
 tool calls, the answer — during the turn and after a reload, each tool unfolded
 with its time, duration and full result. The sidebar speaks in repositories
 (« Dépôts », « Mémoire », « Projets »), with a context gauge under each
-conversation. Search can be typed from the home page, across every index, and
+conversation. Host state and completed chat turns arrive through the shared event stream:
+an idle IDE sends no polling requests, and the sidebar's usage matches the chat state and
+recap, including immediately after a turn. Search can be typed from the home page, across every index, and
 the folder open in the tree filters it (the `scope` of `search_code`).
 "My searches" lists the searches made in a repository,
 by you and by agents under their name, with their first results and the ones you
