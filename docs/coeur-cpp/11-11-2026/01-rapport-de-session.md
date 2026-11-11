@@ -259,3 +259,29 @@ La pile d’étude (`annulation/trace.log` à luciepc) confirme l’allocation r
 `InMemOverflowBuffer::allocateNewBlock` → `MemoryManager::allocateBuffer` →
 `BufferManager::pin`. Les traces temporaires restent uniquement dans le worktree
 d’étude distant ; elles ne sont pas dans les commits. Le voisin INT64 reste vert.
+
+### Correctif sauvegardé — essais en attente de place
+
+`0511dece7`, branche publiée `cx-coeur-annulation`, worktree
+`~/git_workspaces/cx-coeur-annulation`. `discardLocalRange` retire les entrées
+de l’index local par plage de décalages de l’undo. Compactage des slots par
+déplacement, sans relire les colonnes ; tous les types suivent la même primitive.
+Les tests ajoutés couvrent chaînes longues en collision sur plusieurs slots,
+répétition, réinsertion, plage vide et fin des décalages sans débordement. Le témoin
+COPY exige aussi une réouverture avec A vide et les comptes validés de B conservés.
+
+Aucun vert annoncé pour le correctif : à ce point, la compilation attend le
+verrou `poste lourd` à luciepc (première en file, quatre places occupées).
+Lanceur actif : `~/.cache/rag3db-moteur-notes/annulation/vert.sh`, processus
+`3809571`, verrou en attente `3809573`. Journal `annulation/vert.log`.
+Il bâtit tout, joue `local_hash_index_test`, puis les six cas FullBufferRollback
+et CopyRollbackUnderAFullBuffer trois fois. Les sources sont copiées dans
+`~/git_workspaces/rag3db-colonnes`, encore détaché sur `6e7f11680`, avec le code du
+correctif ; vérifier leur diff contre `0511dece7` avant d’attribuer les résultats.
+La trace temporaire du pool a été sauvegardée dans `annulation/trace-seule.patch`
+et retirée des sources distantes avant cette compilation.
+
+Après les ciblés : `transaction_test` entier puis `concurrence_test` entier, comparer
+aux rouges connus et probabilistes. Mesurer séparément le coût avec plusieurs
+enregistrements undo. Aucun tour de push de code : fenêtre recherche en cours.
+Aucune lib du magasin n’a été modifiée pour ce lot.
