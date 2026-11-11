@@ -73,10 +73,12 @@ impl Node for InvokeToolNode {
             return Err("invocation annulée".into());
         }
         let result = receipt["result"].clone();
-        let text = receipt
-            .get("presentation")
-            .cloned()
-            .unwrap_or_else(|| json!(result.to_string()));
+        let text = receipt.get("presentation").cloned().unwrap_or_else(|| {
+            json!(result
+                .as_str()
+                .map(str::to_string)
+                .unwrap_or_else(|| result.to_string()))
+        });
         ctx.set_output("results", PortValue::new(result));
         ctx.set_output("text", PortValue::new(text));
         ctx.set_output("metadata", PortValue::new(receipt["metadata"].clone()));

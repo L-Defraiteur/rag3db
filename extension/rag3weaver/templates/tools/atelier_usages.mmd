@@ -8,6 +8,8 @@
 %% param: usage string = "all" -- Ne garder qu'un genre d'usage.
 %% param: limit int = 20 -- Usages rendus par genre (plafond 200) ; tous sont comptés.
 %% param: format string = "markdown" -- markdown (pour le modèle, le défaut) ou json (structuré : chemins, lignes, uuid — pour une interface).
+%% choices: usage = all | call | type | import | inheritance | other
+%% choices: format = markdown | json
 %% result: invoke.results
 
 graph LR

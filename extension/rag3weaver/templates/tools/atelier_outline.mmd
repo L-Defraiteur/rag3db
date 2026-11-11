@@ -5,6 +5,7 @@
 %% param: source string = "" -- La source de l'index, quand le même chemin existe dans deux (vide : toutes).
 %% param: limit int = 500 -- Scopes rendus au plus (plafond 2000) ; le total est compté.
 %% param: format string = "markdown" -- markdown (pour le modèle, le défaut) ou json (structuré, pour une interface : {rows, total, provenance}, une ligne par scope).
+%% choices: format = markdown | json
 %% result: invoke.results
 
 graph LR
