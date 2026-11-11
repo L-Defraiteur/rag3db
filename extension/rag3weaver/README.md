@@ -351,7 +351,10 @@ reactions and proposals. The chat keeps the order things happened in — words,
 tool calls, the answer — during the turn and after a reload, each tool unfolded
 with its time, duration and full result. If a later model call fails, completed tool calls
 stay visible and a new message can resume the work. Turns started outside the form report
-their actual failure or stop through the same event stream. The sidebar speaks in repositories
+their actual failure or stop through the same event stream. A contextual tool result names its
+repository; file and symbol links use the effective repository from its structured execution
+receipt, including after a reload. A missing or unsupported context leaves those links inactive.
+File references with a line range open at the first line. The sidebar speaks in repositories
 (« Dépôts », « Mémoire », « Projets »), with a context gauge under each
 conversation. Host state and completed chat turns arrive through the shared event stream:
 an idle IDE sends no polling requests, and the sidebar's usage matches the chat state and
