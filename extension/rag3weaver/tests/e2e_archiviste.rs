@@ -153,3 +153,81 @@ fn sans_modele_declare_le_document_est_garde_et_chaque_section_est_dite_en_erreu
     let source = dir.path().join("templates/backends/memory/fichiers").join(CHEMIN);
     assert!(source.exists(), "le L0 est gardé : {}", source.display());
 }
+
+
+fn script_archive(script: &str, input: Value) -> Result<Value, String> {
+    let mut scope = rhai::Scope::new();
+    scope.push_dynamic("input", rhai::serde::to_dynamic(input).unwrap());
+    let output = rhai::Engine::new()
+        .eval_with_scope::<rhai::Dynamic>(&mut scope, script)
+        .map_err(|e| e.to_string())?;
+    rhai::serde::from_dynamic(&output).map_err(|e| e.to_string())
+}
+
+fn preparer_alias(noms: &[&str]) -> Value {
+    script_archive(include_str!("../templates/backends/memory/scripts/archive_candidates.rhai"), json!({
+        "section": {"title": "Reprise", "text": "Le journal se rejoue.", "chemin": CHEMIN, "index": 0},
+        "candidates": 5, "allow_create": true,
+        "value": noms.iter().map(|name| json!({"data": {"name": name, "about": "Description conservée"}})).collect::<Vec<_>>()
+    })).unwrap()
+}
+
+fn resoudre_alias(section: Value) -> Result<Value, String> {
+    script_archive(include_str!("../templates/backends/memory/scripts/archive_decided.rhai"),
+        json!({"value": section, "allow_create": true}))
+}
+
+#[test]
+#[ignore]
+fn les_alias_courts_resolvent_le_nom_exact_sans_changer_l_identite() {
+    let long = format!("bilan : {} fin é\"\\", "mémoire ".repeat(320));
+    // Un nom réservé et un nom qui ressemble à un alias restent des identités ordinaires.
+    let noms = [long.as_str(), "none", "create", "candidate_1"];
+    let prepared = preparer_alias(&noms);
+    assert_eq!(prepared["candidates"], json!(["candidate_1", "candidate_2", "candidate_3", "candidate_4"]));
+    for (i, nom) in noms.iter().enumerate() {
+        assert!(prepared["prompt"].as_str().unwrap().contains(nom));
+        let mut section = prepared.clone();
+        section["verdict"] = json!(format!("candidate_{}", i + 1));
+        let out = resoudre_alias(section).unwrap();
+        assert_eq!(out["kind"], "fiche");
+        assert_eq!(out["fiche"], *nom);
+        assert_eq!(out["apport_key"]["fiche"], *nom);
+        assert_eq!(out["apport_record"]["fiche"], *nom);
+        assert_eq!(out["links"][0]["from"]["name"], *nom);
+    }
+    assert!(prepared["prompt"].as_str().unwrap().contains("Description conservée"));
+}
+
+#[test]
+#[ignore]
+fn un_alias_inconnu_ou_ambigu_est_refuse_explicitement() {
+    let prepared = preparer_alias(&["une fiche", "une autre"]);
+    let mut unknown = prepared.clone();
+    unknown["verdict"] = json!("candidate_99");
+    let err = resoudre_alias(unknown).unwrap_err();
+    assert!(err.contains("inconnu") && err.contains("candidate_99"), "{err}");
+    let mut ambiguous = prepared.clone();
+    // La liste de résolution peut être corrompue : aucun choix arbitraire n'est permis.
+    ambiguous["candidate_names"][1]["alias"] = json!("candidate_1");
+    ambiguous["verdict"] = json!("candidate_1");
+    let err = resoudre_alias(ambiguous).unwrap_err();
+    assert!(err.contains("ambigu") && err.contains("candidate_1"), "{err}");
+    let mut missing = prepared;
+    missing["candidate_names"] = json!([]);
+    missing["verdict"] = json!("candidate_1");
+    let err = resoudre_alias(missing).unwrap_err();
+    assert!(err.contains("inconnu"), "{err}");
+}
+
+#[test]
+#[ignore]
+fn les_noms_dupliques_ne_creent_pas_d_alias_ambigus_et_les_decisions_fixes_restent() {
+    let prepared = preparer_alias(&["même nom", "même nom"]);
+    assert_eq!(prepared["candidates"], json!(["candidate_1"]));
+    for decision in ["none", "create"] {
+        let mut section = prepared.clone();
+        section["verdict"] = json!(decision);
+        assert_eq!(resoudre_alias(section).unwrap()["kind"], decision);
+    }
+}
