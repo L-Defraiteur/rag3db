@@ -1,5 +1,15 @@
 # Session « recherche » : rapport de reprise (11 novembre 2026)
 
+## Lot suivant : Lucivy 4.3.3, validation en cours
+
+Branche `cx-recherche-lucivy-4-3-3`, worktree homonyme aux deux postes ; source de la passe `c1463b9ee`. L'arrêt précédent est livré (voir section suivante). Trois minimums passent à 4.3.3 (`lucivy-core`, `ld-lucivy`, `sparse-vector`) ; Cargo.lock ne change que les versions et sommes de ces trois paquets, `luciole` et `lucistore`, tous du registre, sans patch local. Aucun autre paquet mis à jour.
+
+Le nouveau témoin public `fts_handle::repro_drop::une_fermeture_fts_en_erreur_rend_le_handle_inerte_et_le_processus_sort` est commité avant le bump (`820f29840`). Il crée son propre index, indexe/commite, supprime ce stockage, constate l'erreur de close puis exige le rejet d'un nouveau document avec « closed ». Il détruit le handle et le parent exige la sortie normale de l'enfant en 20 s. En 4.3.2 : rouge 0/1/0, 0,05 s ; close échoue sur la sauvegarde shard_0 mais `index_apres=Ok(())`. Journal luciepc `journaux-cx-recherche-lucivy-433-11nov/rouge-432.log`, SHA256 `73d2dd9e011a89b6084f39a7e3a5d124bfa73d2108af353833cefa04e0d8edc1`.
+
+La preuve interne des pools est celle d'amont, déjà exécutée par lucivy sur le tag 663975a ; notre témoin public la complète sans prétendre mesurer ses Arc internes. Aucun test de compatibilité, migration ou banc d'index ajouté : format inchangé. Les contrôles de recherche/réouverture existants restent ceux de la lib FTS et d'e2e_search (notamment sparse mmap persistence).
+
+Passe neuve lancée sous poste lourd, target unique `target-97k` neuf et gardé, lib complète 29a7bc52a sans dérogation, journaux `journaux-cx-recherche-lucivy-433-11nov/vert-433/`. Plan : même témoin puis neuf suites e2e (search, dense après suppressions, cited_by, lectures, code, quatre tx), features 5/5, preuve compilation, lib entière, navigateur séparé, attestation des gabarits. Pas de nouveau juge Gemini inchangé, périmètre confirmé par l'orchestration. Verdict en cours ; aucun tour de push de ce lot demandé.
+
 ## Actualisation de la reprise, 11 novembre en fin de journée
 
 **Atterrissage confirmé :** le lot d'arrêt est poussé sur master `80b467dd303769f81228149a7dfff5381c14db8b`, au tour donné par l'orchestration, après rebase documentaire sans conflit. Sources testées inchangées ; trois contrôles lus aux deux postes : status propre, aucun rebase en cours, origin/master égal à HEAD. Les trois worktrees du lot (reprise, audit, ancien arrêt), leurs branches locales et le target distant `target-97k` sont supprimés ; target local absent. Sauvegardes distantes et journaux hors target conservés. Le ticket de provenance du garde reste ouvert. Le lot suivant Lucivy 4.3.3 est distinct et n'est pas livré par cet atterrissage.
