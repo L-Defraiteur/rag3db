@@ -193,6 +193,30 @@ mod tests {
             )
             .unwrap_err();
         assert!(error.contains("boucles"), "{error}");
+        let mut database_only = authority.clone();
+        database_only.policy = Default::default();
+        let receipt = relay
+            .invoke(
+                &database_only,
+                &context,
+                "schema",
+                json!({}),
+                "parent",
+                NodeContext::new().cancellation(),
+            )
+            .unwrap();
+        assert_eq!(receipt["metadata"]["invocation"]["target"]["id"], target.id);
+        let error = relay
+            .invoke(
+                &database_only,
+                &context,
+                "read_file",
+                json!({"path":"src/lib.rs"}),
+                "parent",
+                NodeContext::new().cancellation(),
+            )
+            .unwrap_err();
+        assert!(error.contains("capacités"), "{error}");
         let mut other_scope = authority.clone();
         other_scope.scope.org = "autre".into();
         assert!(relay

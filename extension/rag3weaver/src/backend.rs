@@ -3793,7 +3793,7 @@ impl Backend {
         let tool = prepared.tools.get(operation).ok_or("opération cible non exposée")?;
         let attachment = &prepared.manifest.tools[operation];
         let policy = attachment.policy;
-        if !authority.policy.read_files || policy.write_files || policy.run_commands || policy.call_models || policy.attach_worktrees {
+        if (policy.read_files && !authority.policy.read_files) || policy.write_files || policy.run_commands || policy.call_models || policy.attach_worktrees {
             return Err("invocation refusée : capacités de lecture de l'appelant et de la cible incompatibles".into());
         }
         if !attachment.harness.before.is_empty() || !attachment.harness.after.is_empty() || !attachment.harness.on_accept.is_empty() {
