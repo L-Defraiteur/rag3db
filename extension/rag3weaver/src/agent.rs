@@ -2036,6 +2036,7 @@ impl<'a> Agent<'a> {
                         result_excerpt,
                         truncated,
                         ui: result.ui.clone(),
+                        metadata: result.metadata.clone(),
                     });
                 }
                 match error_detail(&result.content) {

@@ -379,6 +379,10 @@ pub struct Turn {
     /// appels. Gardé dans la session relue, pour que la carte reparaisse au rechargement.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui: Option<serde_json::Value>,
+    /// Métadonnées structurelles du reçu, conservées même si son texte est tronqué.
+    /// Les fournisseurs de modèle ne les sérialisent pas dans leurs messages.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
 }
 
 impl Turn {
