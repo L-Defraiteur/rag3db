@@ -1,7 +1,7 @@
 # Les témoins écrivent leur état de manifeste dans le dossier d'état réel du poste
 
-- **État** : ouvert, le 9 novembre 2026. Relevé par la session mémoire (96) en écrivant la page de
-  M8 ; le correctif est dans le même lot (le garde des témoins), le ménage est à Lucie.
+- **État** : corrigé le 9 novembre 2026 (0b0ff221a). Relevé par la session mémoire (96) en écrivant
+  la page de M8 ; le ménage des entrées déjà écrites reste à Lucie.
 - **Famille** : produit
 - **Gravité** : une pollution qui grossit au rythme des passes, dans un dossier de l'utilisatrice.
 - **Atteignable en service** : oui, sur tout poste où une session joue les témoins.

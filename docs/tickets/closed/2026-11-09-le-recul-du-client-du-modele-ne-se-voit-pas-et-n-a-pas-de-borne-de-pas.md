@@ -1,7 +1,7 @@
 # Le recul du client du modèle ne se voit pas et n'a pas de borne de pas
 
-- **État** : ouvert, le 9 novembre 2026. Relevé par la session mémoire (96) pendant l'essai de
-  l'équipier sur les README ; pour everything declarative (l'équipier par pas).
+- **État** : corrigé le 9 novembre 2026 (a6637eeee). Relevé par la session mémoire (96) pendant
+  l'essai de l'équipier sur les README. Ce qui reste est dit en fin de ticket.
 - **Famille** : produit
 - **Gravité** : une tâche réelle dort vingt minutes sans un mot ; le superviseur la croit morte.
 - **Atteignable en service** : oui, par toute tâche confiée à l'équipier, et par le chat.
