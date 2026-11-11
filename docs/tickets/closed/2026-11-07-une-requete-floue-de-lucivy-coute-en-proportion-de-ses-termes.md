@@ -1,8 +1,17 @@
 # Une requête floue de lucivy coûte en proportion de ses termes, sans borne
 
-- **État** : ouvert, le 7 novembre 2026, à la demande de c7 ; pour la session lucivy. Le pendant
-  produit est le ticket « Le plein texte explose sur une requête longue » (même jour), qui borne
-  les termes dans `BM25SearchNode` en attendant.
+- **État** : **corrigé** dans lucivy 4.3.2 (publiée le 7 novembre 2026 : crates.io, npm, PyPI, tag
+  `v4.3.2`). La cause n'était pas le nombre de termes mais la longueur de la requête entière cherchée
+  en flou : sur un index à plusieurs shards, le planificateur des briques de lucivy comptait dans le
+  dictionnaire toutes les sous-chaînes de la requête (O(n²)) avant de chercher, alors qu'à distance 1
+  seuls les préfixes et les suffixes servent. Il ne prépare plus que les pièces que la recherche peut
+  tarifer ; à distance 2 et plus, au-delà de 64 octets, les coupes sont cherchées près de la coupe
+  égale. Témoin lucivy `test_fuzzy_many_terms` : 200 mots, 1 356 caractères, à distance 1 sur deux
+  documents et quatre shards, 15 799 ms avant, 96 ms après ; rappel inchangé (une requête de
+  300 caractères avec une faute, et des passages avec deux fautes à distance 2, retrouvés).
+  rag3weaver prend `lucivy-core = "4.3.2"` depuis `0a8ff53d9` et a relevé sa borne L à 900 caractères
+  (`217dd10a1`). Le pendant produit est le ticket « Le plein texte explose sur une requête longue »
+  (même jour, fermé).
 - **Gravité** : blocage. Une requête de 197 mots tient le moteur 33 s, une de 102 mots 13 s, pour
   2 ms à un mot (mesures de rag3weaver archi sur l'hôte en service, deux fiches).
 - **Atteignable en service** : oui, pour tout client de lucivy qui passe une valeur longue à une
