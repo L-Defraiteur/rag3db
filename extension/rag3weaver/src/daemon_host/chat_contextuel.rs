@@ -85,17 +85,10 @@ impl Drop for Serveur {
     }
 }
 
-/// BackendTools conserve les métadonnées soit dans le JSON, soit après la
-/// présentation Markdown. On relit le reçu véritable, sans le reconstruire.
-fn invocation(texte: &str) -> Value {
-    if let Ok(v) = serde_json::from_str::<Value>(texte) {
-        return v["metadata"]["invocation"].clone();
-    }
-    texte
-        .rsplit_once("\nMetadata: ")
-        .and_then(|(_, m)| serde_json::from_str::<Value>(m).ok())
-        .map(|m| m["invocation"].clone())
-        .unwrap_or(Value::Null)
+/// Le contexte autoritaire voyage hors du texte borné du modèle. Aucun
+/// repli sur une présentation, une citation ou la conversation.
+fn invocation(tour: &Turn) -> Value {
+    tour.metadata.as_ref().and_then(|m| m.get("invocation")).cloned().unwrap_or(Value::Null)
 }
 
 fn modele(cibles: Cibles, exposes: Arc<Mutex<Vec<Value>>>, retours: Retours) -> ChatModel {
@@ -123,9 +116,9 @@ fn modele(cibles: Cibles, exposes: Arc<Mutex<Vec<Value>>>, retours: Retours) -> 
             let cible = cibles.lock().unwrap().get(lettre).cloned().expect("id observé après l'attachement");
             let faits: Vec<_> = turns[depuis..].iter().filter(|t| t.role == "tool").collect();
             if let Some(dernier) = faits.last() {
-                let provenance = invocation(&dernier.content);
+                let provenance = invocation(dernier);
                 if provenance.is_null() {
-                    return Err(LlmError::Model(format!("reçu sans invocation : {}", dernier.content)));
+                    return Err(LlmError::Model(format!("reçu sans invocation structurée : {}", dernier.content)));
                 }
                 let nom = dernier.tool_name.clone().expect("nom du véritable outil exécuté");
                 retours.lock().unwrap().insert((lettre.to_string(), nom), provenance);
