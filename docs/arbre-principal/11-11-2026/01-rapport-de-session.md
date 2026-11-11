@@ -20,6 +20,11 @@ la session d'orchestration (aujourd'hui `rag3db-5a`), et travaille avec les sess
 Cette section prime sur les états de préparation ci-dessous. Branche active
 `cx-arbre-scope-version-3`, worktree `~/.cache/rag3weaver-build/cx-wt-scope-version`
 aux deux postes ; base du travail `c224979351e735df8766ee20fe592eba444440b8`.
+Toutes les suites de cette reprise sont rattachées au même
+[ticket des occurrences partagées](../tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md),
+porté par arbre-principal : preuves des checkpoints 7748fa53c/d63157d8c, projection et masque,
+raccordement Scope, validations, migration sur copies et coordination M3–M5. Il reste ouvert.
+
 Runtime maintenant modifié ; lot 1a **incomplet**, aucun tour de push master.
 
 - `DerivedIdentity` déclare `root` (défaut implicite inchangé) ou `content` avec format.
