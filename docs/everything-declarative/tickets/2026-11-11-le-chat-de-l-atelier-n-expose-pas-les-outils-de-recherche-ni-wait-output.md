@@ -64,3 +64,13 @@ Ne pas fermer sur les seuls ciblés ; aucune livraison master n'est encore annon
 L'accord de commande hors domaine qui redemande l'accord est un travail **distinct**, conservé
 ouvert dans `docs/rag3weaver-archi/tickets/2026-11-11-un-accord-de-commande-hors-domaine-redemande-le-meme-accord.md` ;
 il n'est pas masqué par le parcours nominal de commande dans sa racine.
+
+
+### Validation archi terminée sur a92 (intégration encore à faire)
+
+Navigateur complet sous jeu large : **39/0/0 en 137,71 s** ; attestation ELF du binaire testé
+`4ad3a31b…70b7f3e` : table de son `.d`, 220 chemins actuels et 220 contenus présents, aucun absent.
+Preuves sur les deux postes : `cx-ui-contextuel-a92b21233-navigateur-entier-20261111/` dans le
+cache de build. Reste verdict ED sur a92, puis combinaison avec le lot recherche 4.3.3 après
+sa fenêtre, diff et rejeux requis, clôture documentaire et intégration autorisée/nettoyée.
+Le ticket reste ouvert ; aucune preuve de la future combinaison n'est anticipée.
