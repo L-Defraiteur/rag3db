@@ -120,3 +120,27 @@ Après quiescence des démons d'embarquement de la passe, les parents anciens so
 Le témoin final renforce le cas de revue : le premier faux démon ignore TERM ; le deuxième lancement ne rajoute **aucun** signal, ne lui demande pas de quitter, préserve son identité vivante et les octets des deux parents. Après une fin déclenchée par le propriétaire du faux service, un troisième lancement archive séparément parents TMP/disque et conserve leurs preuves. Les autres six cas restent verts. Résultat sur `18ea54b78` : 7/7 en 23,399 s ; 19 contrôles existants du lanceur verts, bash et diff vérifiés. Journaux `cx-recherche-journal-quiescence-vert-2.log` et `cx-recherche-journal-quiescence-regressions-2.log` hors worktree/target.
 
 Essai intermédiaire `813b525ac` conservé dans `cx-recherche-journal-quiescence-vert.log` malgré son nom : 6 verts/1 rouge, car un inventaire de tout /proc rencontrait un processus sans rapport non lisible et conservait les parents même après la fin du faux service. La révision finale borne la vérification au même inventaire d'embarquement que l'arrêt, sans ignorer un candidat illisible. Ce rouge n'est pas promu en vert. Toujours aucun modèle/GPU ni service réel, aucune passe lourde ni push master ; nouvelle revue nécessaire avant la suite.
+
+## Plan fermé proposé à l'orchestration, lancement non autorisé à ce stade
+
+Source figée `43b57eb78` (code relu `18ea54b78`, delta documents seuls). Plan JSON local hors worktree : `~/.cache/rag3weaver-build/cx-recherche-journal-plan-43b57eb78.json`, empreintes des sept fichiers source/manifestes critiques incluses. Pas de rebase, mutation source ou extension de suites pendant cette passe ; si master impose du code, arrêter et soumettre un nouveau plan.
+
+Relecture indépendante de l'orchestration : copie des seuls fichiers versionnés de `18ea54b78`, sept tests verts en **23,400 s**, journal reviewer distinct `~/.cache/orchestration-notes/journal-review/tests-18ea54b78.log`. Cette preuve est distincte des 23,399 s auteur.
+
+Ordre exact et bornes (secondes), sur luciepc sous poste lourd, un seul target97k neuf pour recherche, jobs8, plafond32 Go ; lib native complète 29a7bc52a épinglée sans MOTEUR_ANCIEN :
+
+1. Les sept faux-service (120 s), les 19 régressions légères existantes du lanceur (60 s), garde tickets et syntaxe bash.
+2. check_features.sh (2400 s au total), ses cinq jeux exacts : `rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres` ; le même avec `openai-llm,anthropic-llm` ; `rag3db-native,code,daemon,openai-llm` ; `rag3db-native,code` ; `rag3db-native`.
+3. Preuve cargo check --tests sous jeu large (600 s), sans modification d'octets ; la seule mise à jour mtime de src/lib.rs sert à rendre la compilation visible si elle est autrement fraîche.
+4. Lib entière sous `rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm` (900 s), comptes non nuls et ignorés lus dans ce binaire, pas de nombre repris d'un ancien master.
+5. Navigateur séparé, même jeu + `navigateur` (600 s), **39** témoins attendus et zéro ignoré ; paquets React préparés déjà présents, EXIGER_NAVIGATEUR=1. Chrome est lancé par son helper existant avec --disable-gpu.
+6. UN appel réel `run_e2e.sh --test e2e_search --test e2e_search_queue`, avec RAG3WEAVER_E2E_FEATURES fixé au jeu large (1200 s). Attendus : e2e_search40, search_queue5, zéro ignoré/saut ; filets implicites2 comptés à part. Pas d'autre e2e, juge, banc, compatibilité ou mesure ajouté.
+7. Attestation source/lock (octets identiques), noms/comptes réellement joués, chemins et contenus des gabarits dans les binaires lib/e2e/navigateur (120 s), journaux et SHA hors target. Tout rouge/expiration arrête la séquence ; pas de retry automatique. Borne globale6600 s avec arrêt de l'arbre propre à cette passe avant de rendre le lourd.
+
+Services : RAG3WEAVER_SERVICE_EMBED=`127.0.0.1:7878,127.0.0.1:7879,127.0.0.1:7880`, sans alias ambigu hérité. Santé relue sans inférence : granite-278m768 sur7878, BGE-M3 dense+creux1024/OCR sur7879, granite-107m384 sur7880, tous non factices. RAG3WEAVER_SANS_DEMON=1 bloque le lancement de repli. Aucun service existant remplacé ni arrêté, aucun cinquième service de modèles.
+
+Pour les petits modèles explicitement locaux des tests, les quatre variables Burn (générale, EMBEDDER, RERANKER, OCR) sont fixées à `gpu:0`, soit card2/PCI04:00.0 sur ce poste selon le mapping documenté et le sysfs relu ; card0/PCI07:00.0 reste hors sélection. Ce sont des chargements éphémères du binaire de tests, pas un nouveau service résident. Régime confort conservé.
+
+**Portées de preuve séparées :** les deux suites réelles prouvent recherche via BGE existant et les autres modèles de leurs parcours ; elles ne prouvent pas le démarrage d'un nouveau démon possédé par la passe. La propriété, le partage entre suites, l'attente, le refus du périmé et la survie entre lancements sont prouvés par les sept cas à faux services privés. La validation réelle n'est pas présentée comme la reproduction du lancement absent qui avait créé le résidu initial.
+
+Plan soumis avant lancement ; ticket ouvert, aucun tour de push ni autorisation de passe lourde déduits de ce document.
