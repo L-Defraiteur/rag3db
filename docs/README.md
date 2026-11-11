@@ -39,6 +39,10 @@ knowledge dump et ses tickets ouverts.
 Les dossiers datés (`docs/<date>-…/` et `extension/rag3weaver/docs/<date>-…/`) sont les archives des
 sessions d'avant le 11 novembre : on y lit l'histoire d'un chantier, pas son état.
 
+Pour le futur raccordement automatique de la mémoire au chat, voir la
+[clarification de M9 : l’archiviste aux frontières de tour et à la compression](memoire/11-11-2026/05-archiviste-automatique-du-chat.md).
+Il s’agit d’une conception, distincte de l’outil `archive` déjà livré.
+
 ## Les tickets
 
 - Un ticket ouvert vit dans `docs/<session>/tickets/` (la session qui le tient) ou, s'il n'a pas de
