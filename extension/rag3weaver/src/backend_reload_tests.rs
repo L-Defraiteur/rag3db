@@ -59,6 +59,8 @@ fn toy() -> (tempfile::TempDir, Backend) {
         decider: None,
         #[cfg(feature = "code")]
         worktree_host: std::sync::Mutex::new(None),
+        #[cfg(feature = "code")]
+        invocation_host: std::sync::Mutex::new(None),
         llm: None,
         prepared: std::sync::RwLock::new(Arc::new(prepared)),
         version: std::sync::atomic::AtomicU64::new(0),
