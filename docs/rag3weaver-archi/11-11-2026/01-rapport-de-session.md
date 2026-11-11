@@ -33,77 +33,65 @@ G a posé `d23af9cd2` sur le portable le 9 novembre à 13 h 42. Les lots suivant
 (`be319fa75`, `3e8c87aa5`, `ab8272deb`) ne sont **pas encore posés** chez Lucie. c7 voulait les
 regrouper avec le lot de la session « recherche ».
 
-## Le lot en branche, non poussé sur master : l'IDE par le flux
+## Le lot en branche : l'IDE par le flux (reprise du 11 novembre)
 
-- **La branche** : `origin/ide-par-le-flux`, sur le portable dans le worktree
-  `/home/lucied/.cache/rag3weaver-build/wt-flux`.
-- **La demande** : Lucie, le 8 novembre au soir, « que ces trucs-là fonctionnent par SSE, pas par
-  polling, voire rendre générique quand on a besoin d'un SSE ». SSE (*server-sent events*) est un
-  flux HTTP ouvert, par lequel l'hôte pousse des événements à la page.
-- **La page** : `extension/rag3weaver/docs/09-novembre-2026-ide-par-le-flux/01-inventaire-et-forme.md`.
-  Elle donne l'inventaire de ce que l'IDE demande à l'hôte, et la forme choisie.
-- **Les commits de la branche :**
-  - `5ef9a7fcf` : le témoin rouge et la page ;
-  - `41ad15263` : l'hôte publie l'état sur le sujet `etat` (`Flux::publier_etat`), la page
-    s'abonne par `onEtat` (`ui/ide/lib/host.ts`), et la fin d'un tour ne relit plus rien ;
-  - `a9c5a3108` (« wip ») : l'usage du tour se compte au compteur du chat au lieu d'attendre le
-    journal. **Ce commit n'a pas été joué.**
-- **L'état exact :**
-  - Le témoin de la branche est vert sur `41ad15263`. C'est
-    `daemon_host::ide_par_le_flux::the_ide_asks_the_host_nothing_while_idle_and_only_its_gesture_for_a_turn` :
-    une minute d'inactivité donne zéro requête, un tour donne le seul `POST /ide/chat`.
-  - Mais la lib entière est rouge deux fois sur `41ad15263`, sur
-    `daemon_host::symboles_cites::tests::un_symbole_cite_se_resout_par_l_index_sans_ouvrir_de_depot`.
-    Elle prend 100 à 113 s au lieu d'environ 33 s. Seul, ce test est vert cinq fois sur cinq : c'est
-    la charge.
-  - La cause probable : à chaque fin de tour, `41ad15263` lançait un fil qui relisait le journal
-    des runs toutes les 50 ms pendant 5 s, en attendant l'usage du tour. Dans la lib, des
-    centaines de tours le font.
-  - `a9c5a3108` remplace ce fil par un calcul immédiat, depuis `chat_meter.totals_for_run`. La
-    passe qui devait le vérifier a été tuée (code 137) avant de rendre un verdict.
-- **Le prochain pas** : rejouer le témoin, puis la passe complète. La lib doit revenir vers 33 s.
-  Si elle reste lente, regarder ensuite `publier_l_etat_de_l_hote`, appelé après chaque
-  `RepoIndexed` : il refait tout `GET /etat`.
+- Branche de référence : `origin/cx-archi-ide-par-le-flux`, code `061b0a483` ;
+  rebasée sur master après le garde-fou `1904e04e4` de l'arbre principal.
+- Worktree sur les deux postes : `/home/lucied/.cache/rag3weaver-build/cx-wt-flux`.
+  Le target de validation est `~/.cache/rag3weaver-build/flux` sur luciepc.
+- Les anciens worktrees `wt-flux` et branches `ide-par-le-flux` /
+  `archi-flux-validation-20261111` sont conservés ; aucune branche distante supprimée.
+- La demande reste un IDE inactif sans requêtes, et un geste de chat qui ne produit que son
+  `POST /ide/chat` ; états et fin du tour arrivent par le flux `etat`.
+- La cause historique du code 137 est **inconnue** : pas de preuve OOM/SIGKILL retrouvée
+  dans les journaux noyau consultés (9 novembre, 14 h 50–15 h 30). Aucun processus du target
+  sur le portable ou luciepc n'était actif avant la reprise. L'ancien dossier `flux-passe`
+  ne contient toujours qu'un journal et une compilation interrompue, sans verdict.
 
-## Reprendre
+### Preuves et correction du compteur
 
-Un seul worktree a un travail non fini : celui de l'IDE par le flux. Aucun sur luciepc.
+Sur `a9c5a3108`, témoin flux vert (1/1, 67,85 s), puis à luciepc : features 5/5,
+lib entière 2 094/0 en 56,02 s, hooks 2/2. Le premier e2e lectures a rougi faute de service
+aux ports du portable ; avec les adresses luciepc `7878,7879,7880`, il passe 24/24.
+Le navigateur complet reste rouge : 33/34, puis **5 rouges sur 5** du témoin
+`la_barre_dit_l_usage_le_recapitulatif_et_l_archiviste` : la barre rend 497 jetons,
+GET chat rend 0. Le compteur était ajouté seulement au message du flux ; GET attendait
+encore le fichier asynchrone du journal.
 
-- **Où** : sur le portable, `/home/lucied/.cache/rag3weaver-build/wt-flux`.
-- **Branche** : `ide-par-le-flux`, suivie par `origin/ide-par-le-flux`.
-- **Dernier commit** : `a9c5a3108`, poussé.
-- **Base** : `ab8272deb`. Master a avancé depuis : le script de push rebase lui-même.
-- **Fait** :
-  - le témoin rouge et la page (`5ef9a7fcf`) ;
-  - la publication d'états et `onEtat`, pour lesquels le témoin est vert (`41ad15263`) ;
-  - l'usage du tour compté sans attendre le journal (`a9c5a3108`, **non joué**).
-- **Reste** :
-  - jouer le témoin sur `a9c5a3108` ;
-  - jouer la passe complète, et vérifier que la lib entière revient vers 33 s et au vert ;
-  - pousser au feu de c7.
-- **Le target** : `/home/lucied/.cache/rag3weaver-build/flux`, 11 Gio. Il a été bâti par ce
-  worktree ; la passe le réutilise.
-- **Le dossier de verdict** : `/home/lucied/.cache/rag3weaver-build/flux-passe/`. Il ne
-  contient que le journal et le log de la passe tuée : il n'y a pas de verdict.
-- **Les commandes**, depuis `/home/lucied/.cache/rag3weaver-build` :
-  1. le témoin seul :
-     `rm -rf flux-passe; FILTRE=the_ide_asks_the_host_nothing ETAPE=navseul ./poste lourd bash wt-flux-passe.sh; cat flux-passe/verdict`
-  2. la passe complète :
-     `rm -rf flux-passe; ETAPE=complete ./poste lourd bash wt-flux-passe.sh; cat flux-passe/verdict flux-passe/journal`.
-     Regarder la durée de la lib entière dans `flux-passe/lib.log` : la ligne `test result`,
-     `finished in …`. Vers 33 s, c'est bon ; vers 100 s, chercher la cause (voir plus haut).
-  3. pour un rouge seul, le départager en le jouant seul cinq fois avec `ETAPE=module FILTRE=<nom>`.
-  4. au vert, et au feu de c7 :
-     `./poste push archi -- bash wt-flux-push.sh`. Le script :
-     - refuse si le verdict n'est pas `VERT` ;
-     - rebase sur master ;
-     - s'arrête en exit 3 si du Rust est arrivé. Il faut alors refaire l'étape 2, puis
-       relancer l'étape 4 ;
-     - pousse `HEAD:master`, puis la branche rebasée sous `ide-par-le-flux-2` ;
-     - fait les trois contrôles ;
-     - efface le worktree et le target.
-     
-     Ensuite, donner le hash à c7, G et ED.
+La correction scelle `usage_du_chat` dans les ajouts du même journal à la fin du tour.
+GET, flux et récapitulatif lisent la même projection : instantané des ajouts et bornes
+avant liste des fichiers, déduplication par run, total scellé prioritaire sur `Consumed`.
+Les rôles finis se relisent également avant leur fichier. L'ordre vient de l'identité du
+run, avant les bornes de lecture, pas de l'ordre d'écriture des fichiers. Aucun polling,
+aucun nouveau stockage. Un résumé absent n'est pas gardé en cache négatif.
+
+Sur `a3a00ef75` : 16 tests chat hors navigateur verts (12 ignorés, joués à part),
+puis **5 verts sur 5** du même témoin navigateur. Les preuves ajoutées couvrent deux tours,
+leur transfert concurrent en ordre inverse, les ajouts tardifs, les anciennes traces et la
+relecture par une nouvelle instance **après écriture** ; elles ne promettent pas la durabilité
+lors d'un arrêt brutal avant l'écriture asynchrone du journal.
+
+`061b0a483` ajoute l'ordre commun avant les bornes. Sa passe complète est en cours,
+**pas encore de verdict global**, sous `poste lourd` sur luciepc :
+
+- lanceur `~/.cache/rag3weaver-build/cx-flux-complete-061b0a483.sh` ;
+- sorties `~/.cache/rag3weaver-build/cx-flux-complete-061b0a483-20261111/` ;
+- lib épinglée `rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF` ;
+- `CARGO_BUILD_JOBS=8`, paquets React exigés ; services luciepc `7878,7879,7880` ;
+- étapes : check_features, script hooks, lib large, e2e hooks, e2e lectures, navigateurs.
+
+Les journaux antérieurs restent distincts : `flux-passe-complete-20261111-luciepc-2`,
+`flux-passe-reprise-services-20261111-luciepc`, `flux-barre-seul-20261111-{1..5}`,
+`cx-flux-correction-20261111-*`, `cx-flux-correction-r2-20261111-*`.
+
+### Reprendre
+
+Lire le processus et le journal de la passe active avant toute commande cargo. Un seul cargo
+par target ; ne pas déplacer un worktree actif. Après un résultat global vert, demander le
+tour à l'orchestration. Toute arrivée de code impose rebase sur une nouvelle branche `cx-`
+et rejeu court hors verrou de push ; les docs seules n'imposent pas de rejeu.
+**Aucun tour de push master accordé.** L'ancien `wt-flux-push.sh` ne correspond plus aux chemins
+ni aux verdicts courants : préparer et relire un lanceur conforme avant de l'utiliser.
 
 ## Les lots nommés, pas commencés
 
