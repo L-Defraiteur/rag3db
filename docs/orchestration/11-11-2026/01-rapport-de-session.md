@@ -140,3 +140,46 @@ be319fa75 (archi, commandes en attente sur la carte, famille de commandes corrig
   Lucie (`--minimum 16M`, le dimanche à 4 h) ; pacman n'a rien changé. Le sous-module codeparsers de son
   arbre remis sur c660893. Le service 7882 reste en route pour Codex. Page de reprise pour l'orchestrateur
   Codex : `03-reprise-par-codex.md` (75dd47a34).
+
+
+## Reprise des sessions et premier atterrissage après la passation
+
+- Les treize sessions ont reçu la demande de contact du document `04-contacter-orchestration-codex.md`.
+  Les communications fonctionnent après relance ; SSH vers luciepc est confirmé par plusieurs sessions,
+  sans modification de `/etc`. Les demandes de confirmation techniques ont été désactivées par Lucie ;
+  les décisions qui lui sont réservées restent inchangées.
+- L’orchestration est la session `01a1cb5c-62b9-7ea0-8b7e-cf38398ece09`.
+  Lucie a remplacé l’ancienne session archi par `01a1cb70-7ec9-7d53-a7d1-2a76313d457d` :
+  celle-ci reprend sans attendre l’ancienne, après inspection des processus locaux et distants.
+- **Atterri : e97bae29053d0041d6af948dc9af98675d56aac3**, docs seules, cœur C++ : ticket de l’index complet
+  fermé après relecture des deux traces exactes d’hotfixs sous la lib complète 29a7bc52a. Trace d796 :
+  797 lignes, 31 écritures surveillées ; item2 : 2 lignes, 1 écriture ; zéro erreur et zéro écart.
+  Preuves à luciepc : `~/.cache/rag3db-tickets-notes/reprise-codex-11nov-29a7/{d796,item2}.log`.
+  Le cœur a confirmé status propre, aucun rebase et origin/master égal à HEAD. Hash et diff relus
+  par l’orchestration. Cela ne répare pas les anciens écarts des bases vivantes de Lucie.
+- **Cœur C++** : rouge désormais observé sur COPY de longues clés STRING sous pool plein ; ROLLBACK
+  échoue, puis la base refuse BEGIN et COUNT. Cas INT64 voisin vert. Témoin sauvegardé séparément
+  sur `annulation-sous-pool-plein`, 65486c02d ; diagnostic de l’allocation en cours, aucun correctif livré.
+- **ED** : après trois non-reproductions du témoin intermittent, le témoin des morceaux refusés a rougi
+  sans correctif : dette de 6 au lieu de 0 après réouverture avec service sain.
+  Preuve : `~/.cache/rag3weaver-build/I-luciepc/reclamations-20261111/refus-rouge-1.log`.
+  Correctif et passe à venir ; priorité de file ED, puis recherche, puis archi.
+- **Recherche** : `arret-du-backend-9`, 77f6704e5, rebasé sur d1345a115 ; ticket des CSV de COPY tué
+  sauvegardé. Rejeu neuf sans MOTEUR_ANCIEN : garde passée, deux témoins verts, suites en cours.
+  Le premier rejeu avec dérogation inutile a été interrompu, sans verdict revendiqué.
+- **Optimiseur** : binaire d1345a115a8044c5b5f5947e26d5aaba8d340053 préparé aux deux postes,
+  lib complète 29a7bc52a inchangée. Hôtes d’essai et manifestes contrôlés ; aucune pose ni coupure.
+- **Archi** : anciens processus absents aux deux postes, cause 137 toujours inconnue ; témoin navigateur
+  relancé avec journaux neufs. **Arbre principal** : garde-fou isolé sur branche
+  `arbre-principal/deplace-sans-reembarquer-2`, 30b5b146e ; rouge de sensibilité observé par mutation
+  temporaire restaurée, passe encore à jouer. M3–M5 restent différées.
+- **Codeparsers** : require-js différé, les 415 liaisons ajoutées sont muettes pour l’oracle et ne prouvent
+  aucun gain. Quatre témoins ciblés : trois rouges, un vert ; correctif minimal des exports par défaut
+  autorisé, sans changement de politique externe, d’oracle ou de seuil. A/B strict requis ensuite.
+- **Mémoire** : premier document sur copie neuve et binaire vérifié d1345a115 : 2 sections sur 7 réussies,
+  cinq HTTP400, 46,9 s. La piste des noms d’enum est expérimentale ; alias à rejouer sur binaire vérifié.
+  Aucune validation des 50 pages. **Banc** : protocole k=10 préparé, attend le mot de Lucie pour card0.
+  **Lucivy** : fusions et tags attendent sa décision. **TTY** : disponible, aucun nouveau lot lancé.
+
+Aucun tour de push de code n’a été donné pendant cette reprise. Les résultats ci-dessus sont ceux
+communiqués par les sessions ; seuls le hash et le diff de l’atterrissage docs ont été relus ici.
