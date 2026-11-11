@@ -76,3 +76,21 @@ outil dans tout le lot depuis aece4b9f1. Garder cette distinction en revue.
 Aucun nouveau target créé : réutiliser target-codeparsers-clic avec le garde
 RAG3WEAVER_TARGET_REPRENDRE=1 au point de reprise ; épingler la lib convenue,
 pas courant. Demander le créneau après atterrissage de la base ED commune.
+
+### Passe intégrée autorisée après la base ED/archi
+
+Base commune 68b9ede17c182487d3f823c2e5cc5906b62a4a46 ; rebase sans conflit
+sur branche neuve cx-codeparsers-require-3, code relu à d92c0f4b7.
+Diff produit : code.rs (résolution/export et liaison externe), tests e2e_code,
+pointeur a730a9b ; aucun changement de records.rs ni du contrat IR des scopes.
+Le diff oracle est historique (catégories liaison/réexportation), distinct de
+la provenance de mention et du prédicat strict conservé dans le complément.
+
+Lib convenue confirmée par l'optimiseur :
+rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF.
+Passe prévue : cinq jeux check_features ; lib entière large ; navigateurs ;
+e2e_code, e2e_usages et e2e_postgres séparés, jeu large. Poste lourd, -j8,
+CARGO_INCREMENTAL=0, target unique repris par garde, PostgreSQL privé ; aucun
+nouveau GPU/service, LSP ou A/B. Sources figées pendant ces vérifications.
+Les journaux seront sous ~/.cache/codeparsers-notes/cx-passe-require-3/ sur
+luciepc ; seul leur verdict relu permet de demander le tour de push.
