@@ -6,6 +6,16 @@ dérivé de Kuzu, sous `src/` et `extension/vector/`) ; le produit est le crate 
 servis à des agents par MCP). Deux postes : **le portable** (`lucie-tablette`, 32 cœurs) et
 **luciepc** (24 cœurs, joint par `ssh lucied@luciepc`, shell fish : passer par `bash -c '…'`).
 
+## Actualisation après le garde-fou
+
+Le rapport de reprise et 03-contrats-et-lots-des-vues.md font foi pour l'état courant.
+Le garde-fou est sur master1904e04e4 ; wt-deplace, wt-deplace-codex et target-A-plan ont été
+nettoyés. Le lot1a vit dans cx-wt-scope-version, branche cx-arbre-scope-version ; son rouge a été
+joué (1 passé/1 échoué), sans implémentation produit. Employer ensuite le target unique
+cx-target-scope-version sur luciepc. Tous nouveaux noms de branches/worktrees commencent par cx-.
+Les chemins/commandes historiques plus bas restent l'historique de la passation, pas une invitation
+à recréer les anciens targets. Relectures ED/recherche et cap produit désormais acquis.
+
 ## Les mots de la maison
 
 - **Lot** : un ensemble de commits poussé sur master en une fois, après une passe complète verte.

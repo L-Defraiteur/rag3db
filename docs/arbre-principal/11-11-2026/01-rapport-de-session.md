@@ -14,6 +14,42 @@ la session d'orchestration (aujourd'hui `rag3db-5a`), et travaille avec les sess
 **mémoire** ou « 96 » (la mémoire longue), **rag3weaver archi** (les hooks de Claude Code),
 **recherche**, **everything declarative** ou « ED » (l'IDE et l'équipier).
 
+
+## Reprise du 11 novembre — état vérifié après atterrissage
+
+Cette section prime sur les chemins et prochains pas historiques ci-dessous.
+
+- **Garde-fou livré** : master **1904e04e42cd3666d6b3a64fee5bd51f0629c020**.
+  Témoin du scope déplacé, sans changement de comportement produit. Rouge de sensibilité :
+  réutilisation neutralisée temporairement, un texte réembarqué sur un ; restauration : 1 réussi,
+  0 échec. Features 5/5, lib large 2 095 réussis/0 échec/58 ignorés, navigateur 33/0/0,
+  e2e_code 27/0/0 et e2e_code_sync 17/0/0 (2 suites sur 2). Le premier lancement interrompu
+  pour plafonner les compilations à 8 reste distinct de cette passe terminée.
+- **Intégration vérifiée** : tour orchestration reçu ; poste push ; dernier rebase documentaire
+  seulement ; push dans if grep -qx VERT ; status propre, aucun rebase, origin/master égal à HEAD
+  immédiatement après fetch. Branche sauvegardée : cx-arbre-deplace-sans-reembarquer-4.
+- **Nettoyage terminé** : wt-deplace et sa branche locale retirés au portable ;
+  wt-deplace-codex et target-A-plan retirés à luciepc après arrêt de tous nos travaux dessus.
+  Aucune branche distante supprimée. Journaux conservés sur luciepc dans
+  ~/.cache/rag3weaver-build/deplace-codex/ ; preuve du push au portable dans cx-deplace-push/.
+- **Contrat des vues relu** : ED et recherche, corrigé et livré en docs seules sous 599cf78b2.
+  Voir [03-contrats-et-lots-des-vues.md](03-contrats-et-lots-des-vues.md). Le cap ancre unique et
+  pyramide est confirmé par Lucie ; pas de nouvelle attente d'accord de principe.
+- **Lot 1a en cours, produit non implémenté** : branche cx-arbre-scope-version, témoin
+  dd5f30465 ; worktree cx-wt-scope-version aux deux postes. e2e_scope_versions joué sur luciepc :
+  1 réussi (docstrings distinctes), 1 échoué (deux occurrences correctement positionnées, mais
+  leur même texte embarqué deux fois au lieu d'une). Rouge vérifié, pas de vert revendiqué.
+  Journal hors target : ~/.cache/rag3weaver-build/cx-scope-version-rouge.log ; journal e2e
+  détaillé dans cx-wt-scope-version/extension/rag3weaver/target/e2e-last.log.
+  Rebaser ce lot sur le master comprenant le garde-fou avant validation ; nouveau target unique
+  prévu pour cette session : ~/.cache/rag3weaver-build/cx-target-scope-version (luciepc).
+- **Coordination code** : ED laisse code.rs et templates/backends/code à cette session.
+  Codeparsers demande de conserver default_exports, pending_defaults et la résolution @default
+  inter-lots ; aucune modification du sous-module, de son pointeur ou de stable_scope_keys.
+- **M3–M5 différées** : copies reflink privées possibles des avant-43 format42 sur btrfs ; lib29a7
+  format43, ouverture/migration à vérifier sur copie. Ni copie ni mesure lancée ; attendre file
+  vide et mot orchestration, coordonné optimiseur. 7882 reste réservé au banc A/B codeparsers.
+
 ## Ce qui est sur master (le dépôt `rag3db`, branche `master`)
 
 | lot | commits | ce qu'il fait |
