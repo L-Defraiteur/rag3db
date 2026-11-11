@@ -118,3 +118,12 @@ be319fa75 (archi, commandes en attente sur la carte, famille de commandes corrig
   108 ouverts, 231 fermés. Deux cas pour le script (hotfixs) : comparer à la merge-base plutôt qu'à la
   pointe d'origin/master, et reconnaître un déplacement de session à session. En attente : embarquement
   (rapport et tickets), hotfixs (rapport, dump, tickets), mémoire (fermetures et lot 42ac0bb9c).
+- **16 h 35, la passation est complète, sauf les fermetures de mémoire.** embarquement 542198abe (rapport,
+  dump) et 01cbe59d6 (1 ticket) ; cœur 75fc487e7 (cinq tickets, le point de reprise qui fige revenu du
+  banc) ; hotfixs c0fdba70c (rapport, dump, `outils/` : rejoue.cpp, synth.cpp, push-lot.sh, push-docs.sh ;
+  **le rejeu de la trace sous 29a7bc52a n'a jamais tourné**, bloqué sur une approbation le 9), 57a8a1365
+  (`--lot` comparé à la fourche), 67df4ee67 (déplacement de session à session, déjà juste), 7576ae673
+  (cinq tickets, et la section « Les tickets » de docs/README.md complétée : fermer, déplacer, les refus,
+  les six formes de ligne de `--lot`). lucivy : ses cinq tickets à jour sur `tickets-2026-11-07` (6ec2e01),
+  fusion au mot de Lucie. Il reste 46 tickets ouverts sans session dans `docs/tickets/`. Le service privé
+  7882 d'hotfixs (pid 912225 à luciepc) tourne encore ; son rapport dit comment l'arrêter.
