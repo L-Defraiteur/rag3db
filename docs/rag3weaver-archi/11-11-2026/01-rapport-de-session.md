@@ -94,6 +94,12 @@ Après rebase mémoire, `61066a2b3` est sauvegardé sous le nouveau nom `cx-arch
 Un lanceur distinct vérifie les étapes hors lib (sans transformer le rouge en vert global) :
 `~/.cache/rag3weaver-build/cx-flux-61066a2b3-hors-lib.sh`, sorties
 `~/.cache/rag3weaver-build/cx-flux-61066a2b3-hors-lib-20261111/`.
+Résultat de ces contrôles hors lib sur `61066a2b3` : features 5/5, script hooks vert,
+e2e hooks 2/2 (8,07 s), e2e lectures 24/24 (11,22 s), navigateurs 34/34 (136,22 s),
+zéro ignoré dans ces deux e2e et dans l'étape navigateur. Les deux suites e2e annoncent
+chacune « 1 sur 1 demandées ». Verdict conservé :
+`VERT hors-lib (lib bloquante non rejouée)` — **pas un verdict global vert**.
+Tous les processus de ce lanceur ont fini.
 Rejeu global requis après traitement du blocage ED et incorporation du master du moment.
 
 Les journaux antérieurs restent distincts : `flux-passe-complete-20261111-luciepc-2`,

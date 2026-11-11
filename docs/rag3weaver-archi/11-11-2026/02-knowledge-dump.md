@@ -5,7 +5,7 @@ Cette page est écrite pour un agent sans mémoire des échanges. Le rapport de 
 
 ## Reprise du 11 novembre : chemins et projection du chat
 
-La référence est `cx-wt-flux` / `cx-archi-ide-par-le-flux`, validation sur luciepc,
+La référence est `cx-wt-flux` / `cx-archi-ide-par-le-flux-2`, validation sur luciepc,
 target `flux`. Les chemins et commandes de l'ancienne session ci-dessous sont historiques ;
 le rapport adjacent donne les lanceurs et dossiers de résultats courants. Sur luciepc,
 les services d'embarquement sont `127.0.0.1:7878,127.0.0.1:7879,127.0.0.1:7880` ;
