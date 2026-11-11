@@ -1881,12 +1881,16 @@ fn an_external_module_binding_is_marked_liaison() {
 // Navigation vers une définition et définition LSP de la liaison locale sont deux contrats.
 // Ces témoins ne changent ni l'oracle ni le repli des imports externes.
 fn require_navigation_rows(files: &[(&str, &str)]) -> Vec<Vec<rag3weaver::connection::CypherValue>> {
+    require_navigation_rows_where(files, "a.name = 'utiliser'")
+}
+
+fn require_navigation_rows_where(files: &[(&str, &str)], filter: &str) -> Vec<Vec<rag3weaver::connection::CypherValue>> {
     let catalog = setup();
     let mut cat = catalog.lock().unwrap();
     let sources = files.iter().map(|(p, s)| (p.to_string(), s.to_string())).collect();
     let report = cat.ingest_code(&rag3weaver::code::analyze("/projet", sources)).unwrap();
     assert_eq!(report.failed, 0, "{report:?}");
-    cat.execute_raw("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE a.name = 'utiliser' RETURN b.name, b.file_path, r.resolution").unwrap().rows
+    cat.execute_raw(&format!("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE {filter} RETURN b.name, b.file_path, r.resolution")).unwrap().rows
 }
 
 #[test]
@@ -1957,4 +1961,17 @@ fn require_default_export_links_across_batches_in_both_orders() {
         let rows = cat.execute_raw("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE a.name = 'utiliser' RETURN b.name, b.file_path, r.resolution").unwrap().rows;
         assert!(rows.iter().any(|r| matches!((&r[0], &r[1], &r[2]), (S(n), S(f), S(m)) if n == "Outil" && f == "outil.js" && m == "import")), "order {order:?}: {rows:?}");
     }
+}
+
+/// Exact CommonJS object re-export found in the historical index.js losses.
+/// Navigation follows the export; the strict LSP may still choose the local binding.
+#[test]
+#[ignore]
+fn require_object_reexport_navigates_from_module_exports() {
+    use rag3weaver::connection::CypherValue::String as S;
+    let rows = require_navigation_rows_where(&[
+        ("outil.js", "class Outil {\n  agir() {}\n}\nmodule.exports = Outil;\n"),
+        ("index.js", "const Alias = require('./outil.js');\nmodule.exports = { Alias };\n"),
+    ], "a.file_path = 'index.js' AND a.name STARTS WITH 'file_scope'");
+    assert!(rows.iter().any(|r| matches!((&r[0], &r[1], &r[2]), (S(n), S(f), S(m)) if n == "Outil" && f == "outil.js" && m == "import")), "module.exports object: {rows:?}");
 }
