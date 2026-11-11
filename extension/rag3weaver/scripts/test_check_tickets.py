@@ -2,7 +2,8 @@
 """Le témoin de `check_tickets.py` (ticket 2026-11-07-l-index-des-tickets-epingle-ses-comptes-et-
 fait-un-conflit-a-chaque-lot) : la garde des en-têtes, l'index généré, la relecture d'un lot, et
 deux lots qui ouvrent chacun un ticket et se rebasent l'un sur l'autre sans conflit, ce que
-l'index épinglé refusait.
+l'index épinglé refusait ; puis (11 novembre 2026) les tickets ouverts des dossiers de session,
+`docs/<session>/tickets/`, leur dossier dans l'index, et un ticket déplacé que `--lot` suit.
 
 Usage : python3 extension/rag3weaver/scripts/test_check_tickets.py   (rc 0 : vert)
 """
@@ -133,6 +134,87 @@ class CheckTickets(unittest.TestCase):
         rc, out = jouer(r, "--lot", "HEAD~1")
         self.assertEqual(rc, 0, out)
         self.assertIn("fermé    closed/2026-11-01-un.md", out)
+        self.assertNotIn("retiré", out)
+
+    # Les tickets d'une session (11 novembre 2026) : un ticket ouvert vit dans docs/tickets/ ou dans
+    # docs/<session>/tickets/ ; fermer, c'est git mv vers docs/tickets/closed/.
+    def ecrire_session(self, session, nom, titre, etat="ouvert"):
+        chemin = os.path.join(self.racine, "docs", session, "tickets", nom)
+        os.makedirs(os.path.dirname(chemin), exist_ok=True)
+        with open(chemin, "w", encoding="utf-8") as f:
+            f.write(ENTETE.format(titre=titre, etat=etat))
+
+    def test_un_ticket_de_session_est_un_ticket_ouvert(self):
+        self.ecrire_session("recherche", "2026-11-10-s.md", "S")
+        rc, out = jouer(self.racine)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("3 en-têtes valides (2 ouverts, 1 fermés)", out)
+
+    def test_un_ticket_de_session_clos_hors_de_closed_est_refuse(self):
+        self.ecrire_session("recherche", "2026-11-10-s.md", "S", etat="corrigé `abc`")
+        rc, out = jouer(self.racine)
+        self.assertEqual(rc, 1, out)
+        self.assertIn("recherche/tickets/2026-11-10-s.md : son État dit « corrigé » mais il n'est pas dans closed/", out)
+
+    def test_un_meme_ticket_a_deux_endroits_est_refuse(self):
+        self.ecrire_session("recherche", "2026-11-01-un.md", "Un")
+        rc, out = jouer(self.racine)
+        self.assertEqual(rc, 1, out)
+        self.assertIn("2026-11-01-un.md : un même ticket à 2 endroits", out)
+
+    def test_l_index_porte_le_dossier_de_chaque_ticket(self):
+        self.ecrire_session("recherche", "2026-11-10-s.md", "S")
+        rc, out = jouer(self.racine, "--index")
+        self.assertEqual(rc, 0, out)
+        with open(os.path.join(self.racine, "docs", "tickets", "INDEX.md"), encoding="utf-8") as f:
+            index = f.read()
+        self.assertIn("## Ouverts — moteur (2)", index)
+        self.assertIn("| [S](../recherche/tickets/2026-11-10-s.md) | `docs/recherche/tickets` |", index)
+        self.assertIn("| [Un](2026-11-01-un.md) | `docs/tickets` |", index)
+
+    def test_un_ticket_deplace_vers_une_session_puis_ferme_se_suit(self):
+        r = self.racine
+        git(r, "init", "-q", "-b", "master")
+        git(r, "add", "-A")
+        git(r, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "base")
+        os.makedirs(os.path.join(r, "docs", "recherche", "tickets"))
+        git(r, "mv", "docs/tickets/2026-11-01-un.md", "docs/recherche/tickets/2026-11-01-un.md")
+        git(r, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "déplacer")
+        rc, out = jouer(r, "--lot", "HEAD~1")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("déplacé  recherche/tickets/2026-11-01-un.md (depuis 2026-11-01-un.md)", out)
+        self.assertNotIn("ouvert ", out)
+        self.assertNotIn("fermé    ", out)
+        self.assertIn("2 en-têtes valides (1 ouverts, 1 fermés)", out)
+        # Fermer depuis la session : git mv vers docs/tickets/closed/, l'État réécrit.
+        git(r, "mv", "docs/recherche/tickets/2026-11-01-un.md", "docs/tickets/closed/2026-11-01-un.md")
+        ecrire(r, "closed/2026-11-01-un.md", "Un", etat="corrigé `def`")
+        git(r, "add", "-A")
+        git(r, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "fermer")
+        rc, out = jouer(r, "--lot", "HEAD~1")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("fermé    closed/2026-11-01-un.md", out)
+        self.assertNotIn("retiré", out)
+        # Depuis la base : le lot entier ne compte ni ouvert ni retiré, seulement la fermeture.
+        rc, out = jouer(r, "--lot", "HEAD~2")
+        self.assertIn("(1), à relire", out)
+        self.assertIn("fermé    closed/2026-11-01-un.md", out)
+
+    def test_un_ticket_de_session_reecrit_en_le_deplacant_reste_un_deplacement(self):
+        r = self.racine
+        git(r, "init", "-q", "-b", "master")
+        git(r, "add", "-A")
+        git(r, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "base")
+        os.remove(os.path.join(r, "docs/tickets/2026-11-01-un.md"))
+        self.ecrire_session("banc", "2026-11-01-un.md", "Un")
+        with open(os.path.join(r, "docs/banc/tickets/2026-11-01-un.md"), "a", encoding="utf-8") as f:
+            f.write("\n".join(["Un texte neuf."] * 40))
+        git(r, "add", "-A")
+        git(r, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "déplacer en réécrivant")
+        rc, out = jouer(r, "--lot", "HEAD~1")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("déplacé  banc/tickets/2026-11-01-un.md (depuis 2026-11-01-un.md)", out)
+        self.assertNotIn("ouvert ", out)
         self.assertNotIn("retiré", out)
 
 
