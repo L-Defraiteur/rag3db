@@ -381,6 +381,9 @@ pub const SPARSE_READER_NODES: &[&str] = &["HighlightNode"];
 pub const SEARCH_NODES: &[&str] = &["SearchSourceNode"];
 
 const BASE_NODES: &[&str] = &[
+    // Le relais ne confère aucune capacité : la cible contrôle ses effets réels.
+    // Une lecture pure en base ne requiert pas de workspace de fichiers.
+    "InvokeToolNode",
     "RhaiNode",
     // **Aiguiller et découper, sans rien toucher** (M4, 7 novembre 2026) : `Route`
     // pose un élément sur le port de sa clé, `SplitSections` rend les sections d'un
@@ -458,7 +461,7 @@ const BASE_NODES: &[&str] = &[
 
 // Le balayage lit les fichiers de la source : il demande le même droit que
 // `read` et `grep` — c'est pour lui que `search_code` déclare `read_files`.
-const READ_NODES: &[&str] = &["ReadFileNode", "GrepNode", "ListFilesNode", "ScanFilesNode", "LireFichierNode", "InvokeToolNode"];
+const READ_NODES: &[&str] = &["ReadFileNode", "GrepNode", "ListFilesNode", "ScanFilesNode", "LireFichierNode"];
 const WRITE_NODES: &[&str] = &["EditFileNode", "EcrireFichierNode"];
 const RUN_NODES: &[&str] = &["RunCommandNode"];
 const MODEL_NODES: &[&str] = &["Decide"];
