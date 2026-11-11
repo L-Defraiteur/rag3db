@@ -1,6 +1,6 @@
 # Préparer et poser le binaire regroupé aux deux postes
 
-- **État** : ouvert, en attente de la cible regroupée convenue avec l’orchestration
+- **État** : en cours, artefact exact 68b9ede17 préparé et attesté aux deux postes ; pose non autorisée, revue et créneau attendus
 - **Famille** : produit
 - **Gravité** : planification — rendre les lots intégrés accessibles aux deux postes
 - **Atteignable en service** : oui, le binaire installé détermine les fonctions disponibles
@@ -51,3 +51,77 @@ Ces contrôles restent à réaliser sur la prochaine cible.
 3. Jouer les vérifications prescrites, dont hôte d’essai, manifestes et attestation UI servie/embarquée sur les deux postes.
 4. Après coordination, préavis d’une minute pour binaire seul, poser luciepc puis portable ; contrôler réveil, bases, IDE et outils, avec retour conservé.
 5. Rapporter hash, empreintes, heures et preuves. Fermer et déplacer ce ticket seulement après la pose vérifiée ou un abandon explicite documenté.
+
+## Préparation regroupée du 11 novembre, 21 h 55–21 h 58
+
+Cible convenue : `68b9ede17c182487d3f823c2e5cc5906b62a4a46`, contenant les lots
+arrêt, lucivy 4.3.3, outils d’atelier et UI contextuelle. Bâti release sous poste lourd,
+huit jobs, en 1 min 01 s, worktree détaché `~/git_workspaces/cx-optimiseur-controle`
+à luciepc. L’ancien worktree `rag3db-controle-G` reste intact : git refuse de déplacer
+un worktree contenant des sous-modules. Target incrémental : `target-G/hote-lucie`.
+
+SHA256 identiques aux deux postes :
+
+- hôte : `6af3ec67450863021735359132b8d68e2afb97a8e0c50f2b182fd94a0bc44e2e` ;
+- check-lib : `888679312c87f6d5b78785a7c5de202671df6f68679b121c416dabe5f8f4853d`.
+
+Artefacts : `~/.cache/rag3weaver-build/nuit-68b9ede17c182487d3f823c2e5cc5906b62a4a46/`
+à luciepc ; `~/.local/bin/rag3weaver-backend.nouveau` et `rag3db-check-lib.nouveau`
+au portable. Ils ne sont pas installés dans les chemins actifs.
+
+Contrôles effectivement joués aux deux postes : hôte isolé 7991, `/sante`, check-lib
+à zéro, aucune bibliothèque manquante, lucivy-core 4.3.3, lib complète 29a7 lue
+dans les maps, arrêt du seul PID d’essai. Deux manifestes acceptés à luciepc,
+six au portable, zéro refus. Pas de nouvelle passe e2e globale jouée par cette session.
+
+Attestation UI : octets GET `/ide/app.js` et `/ide/app.css` strictement égaux au
+commit cible ; `bundle.json` de ce commit présent dans l’ELF et ses empreintes
+cohérentes avec les deux ressources servies. `bundle.json` n’a pas été présenté
+comme une route HTTP testée.
+
+- app.js : `fff528ffdcbfb08c022c1249d0ec5ecc82a4caf4a010eaad4447ca7c3081bc00` ;
+- app.css : `f401d17501eb227e317ca8a40e83c0a41ff2eb4516528ae3ce29cec17968be50` ;
+- bundle.json : `6d317a42f06655af8d59d934bd6bb4ac4aba7be82794365e1c6a6e027f3fba43`.
+
+Le nouveau fichier généré `release/build/rag3weaver-6d2079498d1ec81f/out/builtin_templates.rs`
+contient 220 inclusions, toutes issues de `cx-optimiseur-controle`. Les anciens
+fichiers générés restent présents pour les anciens fingerprints ; ils ne constituent
+pas l’attestation du nouveau binaire.
+
+Preuves : `~/.cache/rag3weaver-build/cx-bati-68b9ede17.log` à luciepc ;
+`~/.cache/optimiseur-notes/attestation-68-82ly9ely/resultat.json` à luciepc ;
+`~/.cache/optimiseur-notes/attestation-68-aewd4xt6/resultat.json`,
+`essai-68-portable.log` et `manifestes-68-portable.log` dans le même dossier de notes
+au portable. Script d’attestation conservé `attester-68.py` dans ces notes.
+
+## Plan de pose à relire avant autorisation
+
+Aucune coupure, aucun instantané neuf, aucune réouverture de base réelle et aucune
+modification des manifestes réels effectués pendant cette préparation.
+
+La lib et son format ne changent pas. La procédure existante de binaire seul ne
+demande pas un nouvel instantané de bases ; les instantanés antérieurs restent
+conservés. Avant une pose, confirmer avec l’orchestration si un nouvel instantané
+est requis : dans ce cas, arrêt propre puis reflink de chaque base avec tous ses
+fichiers associés, recette RETOUR.sh, avant tout réveil. Ne pas prendre une copie
+à chaud pour un instantané cohérent et ne pas restaurer une ancienne base sans
+décision explicite : cela peut retirer des écritures récentes.
+
+Retour binaire : conserver les deux exécutables actifs sous `.avant-68b9ede1`,
+ainsi que les réglages et le filet, sans en afficher les secrets. Conserver aussi
+avant réveil les manifestes concernés et leurs notes de livraison : un rafraîchissement
+des gabarits peut survivre à un simple retour du binaire. Si écart, arrêter proprement,
+remettre anciens exécutables/réglages/manifestes et notes sauvegardés, puis réveiller
+et contrôler ; aucune restauration de base automatique.
+
+Atelier principal au portable : note de livraison présente, manifeste actuel avec
+11 outils (SHA256 `b06e821f92c4bf5a5940bde558d58c37f4b7004aefbf6350b87fe92b8adb1a6c`).
+Le gabarit cible en livre 21, dont search_code, outline, usages, callees, impact,
+grep_files, list_files, schema et wait_output. Vérifier après réveil le manifeste
+effectivement rafraîchi ET les outils exposés, puis le parcours IDE. L’atelier
+d’essai reste à trois outils ; son ancien refus de réinstallation reste réservé
+à Lucie et ne sera pas contourné par cette pose.
+
+Ordre proposé : revue des attestations et du retour, coordination et préavis
+d’une minute, luciepc puis portable, contrôle des backends, UI servie et outils
+réels, bilan avec heures et empreintes. La préparation verte ne vaut pas accord de pose.
