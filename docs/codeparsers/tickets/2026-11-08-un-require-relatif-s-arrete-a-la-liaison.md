@@ -1,12 +1,14 @@
 # Un `require` relatif s'arrête à la liaison au lieu de suivre le module
 
-- **État** : ouvert (8 novembre 2026) — relevé par la mesure des locales JavaScript (8 faux sur 324
-  arêtes, 4 mentions) ; la règle est à écrire.
+- **État** : en cours — correctif d96ed3264/a730a9b sur branche cx-codeparsers-require-2 ; décision de navigation et passe finale encore attendues
 - **Gravité** : réponse fausse (un usage relié à la ligne du `require`, pas à la définition).
 - **Atteignable en service** : oui, tout dépôt CommonJS dont un fichier lie une classe d'un autre fichier
   de l'arbre par `const X = require("./x.js")`.
-- **Touche rag3weaver** : non (codeparsers : les imports et la résolution) — sauf le pointeur.
+- **Touche rag3weaver** : oui (résolution entre lots dans src/code.rs et pointeur codeparsers)
 - **Famille** : produit
+
+- **Pour** : session codeparsers
+- **Signalé par** : session codeparsers ; reprise et preuves dans [le bilan du 11 novembre](../11-11-2026/04-bilan-navigation-et-provenance.md)
 
 ## Ce que c'est
 
@@ -37,3 +39,20 @@ Une cinquième de la même forme, `dispatcher` (`tools/wasm/src_js/index.js:25` 
    `X` va à l'export du module quand il est dans l'arbre ; sinon, la liaison reste la cible.
 2. Un témoin à deux fichiers (`connection.js`, `prepared_statement.js`).
 3. L'oracle sur les 4 mentions.
+
+## Suite du lot et intégration — 11 novembre
+
+Porteur : codeparsers. Le lot d96ed3264/a730a9b est conservé sur
+cx-codeparsers-require-2, worktree /home/lucied/git_workspaces/cx-wt-codeparsers-require.
+Preuves : 8 e2e et 286 tests producteur passés ; deux index A/B et complément
+23 questions terminés. Détails et preuves brutes :
+[04-bilan-navigation-et-provenance.md](../11-11-2026/04-bilan-navigation-et-provenance.md).
+
+Reste à faire : décider avec l'orchestration le contrat de navigation
+alias local/export, attribuer les cas encore incertains via le ticket de
+l'oracle, puis reprendre sur la base finale convenue après R5, sous une
+branche neuve. Jouer la passe complète réglementaire, dont PostgreSQL sur
+la base privée cx_codeparsers_20261111_1698_test. Relire les quatre mentions
+originelles dans les preuves avant toute clôture. Publier seulement après
+verdict vert et tour de push explicite ; documenter le résultat utilisateur.
+L'attente de base et la transmission du bilan ne ferment pas ce ticket.
