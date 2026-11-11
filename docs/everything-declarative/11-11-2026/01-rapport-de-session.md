@@ -1,5 +1,28 @@
 # Rapport de session — everything declarative, au 11 novembre 2026
 
+## Dernier état — fournisseur composé, ciblés verts avant passe finale
+
+`11ea6ec87`, branche cx-ed-ouverture-2 : fournisseur pur arbrec12 repris820,
+composition de vrais configs/relations explicites et nommés, validation avantDB.
+Identiques partagés ; entités divergentes refusées ; relations compatibles
+additives, conflits propriété/endpoints nommés. Overlay index_signals conservé.
+Sans code : ouverture6 et gabarits9 verts, lib native1575/0/15 ignorés20,60s.
+Avec code : ouverture16/0/0 (0,70s), gabarits9 et fournisseur1 verts.
+
+Baseline corrigée292b (2e+tests) : cas nommés3 rouges, API Catalog additive et
+refus d'extrémités2 verts. L'ancien HAS_SCOPE était une mauvaise fixture : vrai
+lien DEFINED_IN Scope→File/out/path, corrigé avant vert nommé et rebaseliné.
+Pas de régression du lien custom prouvée ; composition préexistante désormais
+couverte par ciblés. Preuves dans I-luciepc/ouverture-20261111/, la passe08
+entière verte reste distincte de cette source combinée.
+
+Prochain geste : rebase sur master récent incluant garde_worktree.py, branche
+neuve, puis passe globale annoncée sur SHA figé. Les deux tickets ED restent
+ouverts, le ticket ordre garde aussi le critère public search_index/1a non livré.
+Aucun tour ni push master. Ne pas toucher remaining ni les autres worktrees.
+Les sections suivantes sont les états antérieurs.
+
+
 ## Dernier point de reprise — passe08 verte, schéma nommé en revue
 
 Sur `08fedf6ef`, la passe est terminée : features5, gardes20, lib2121/0/64
