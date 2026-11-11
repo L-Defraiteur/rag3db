@@ -33,6 +33,9 @@ plumbing this repository is about:
 | validates and recovers properly | let an agent write into a database in service without losing it |
 | will let several writers in at once | let a team work on the same site, each with their own agent |
 
+The memory archivist files document sections under existing cards while preserving
+their exact names, including long judge reports.
+
 The long version, in French: [`extension/rag3weaver/visions/00-vision-generale.md`](extension/rag3weaver/visions/00-vision-generale.md).
 
 ## Where the engine stands

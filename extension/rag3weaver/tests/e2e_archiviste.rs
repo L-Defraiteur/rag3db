@@ -4,7 +4,7 @@
 //! Sur le vrai gabarit `memory` (ses signaux, donc un service d'embarquement :
 //! `RAG3WEAVER_EMBED_SERVICE`), le modèle déclaré au manifeste étant un faux
 //! serveur SSE local (`tests/common/fake_sse.rs`) qui répond, section après
-//! section, le nom d'une fiche, `none`, puis `create` :
+//! section, l’alias d’une fiche, `none`, puis `create` :
 //!
 //! - le document est gardé tel quel (la Source, à son chemin par défaut) ;
 //! - la section rangée est un apport L1 de la fiche, relié, qui cite sa
@@ -88,7 +88,7 @@ fn apports_de(b: &Backend, fiche: &str) -> Vec<Value> {
 #[test]
 #[ignore]
 fn un_document_entre_et_ses_sections_sont_rangees_une_par_fiche_none_ou_create() {
-    let serveur = FakeServer::start_sequence(vec![etiquette(FICHE), etiquette("none"), etiquette("create")]);
+    let serveur = FakeServer::start_sequence(vec![etiquette("candidate_1"), etiquette("none"), etiquette("create")]);
     let adresse = serveur.url.clone();
     let dir = tempfile::tempdir().expect("dossier");
     let b = ouvrir(dir.path(), |m| {
@@ -102,6 +102,11 @@ fn un_document_entre_et_ses_sections_sont_rangees_une_par_fiche_none_ou_create()
     assert_eq!(r["result"]["errors"], json!([]), "{r}");
     assert_eq!((r["result"]["elements"].as_u64(), r["result"]["ok"].as_u64()), (Some(3), Some(3)), "trois sections décidées : {r}");
     assert_eq!(serveur.connections.load(std::sync::atomic::Ordering::SeqCst), 3, "une décision par section");
+
+    let request: Value = serde_json::from_str(&serveur.request.recv().unwrap()).unwrap();
+    assert_eq!(request["response_format"]["json_schema"]["schema"]["properties"]["label"]["enum"],
+        json!(["candidate_1", "none", "create"]));
+    assert!(request["messages"].to_string().contains(FICHE), "le nom exact reste présenté au modèle");
 
     // Le L0, tel quel, à son chemin par défaut.
     let source = dir.path().join("templates/backends/memory/fichiers").join(CHEMIN);
@@ -192,6 +197,7 @@ fn les_alias_courts_resolvent_le_nom_exact_sans_changer_l_identite() {
         let out = resoudre_alias(section).unwrap();
         assert_eq!(out["kind"], "fiche");
         assert_eq!(out["fiche"], *nom);
+        assert_eq!(out["verdict"], *nom);
         assert_eq!(out["apport_key"]["fiche"], *nom);
         assert_eq!(out["apport_record"]["fiche"], *nom);
         assert_eq!(out["links"][0]["from"]["name"], *nom);

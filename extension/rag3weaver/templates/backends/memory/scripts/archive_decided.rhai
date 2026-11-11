@@ -7,8 +7,28 @@ let verdict = s.verdict;
 let kind = "fiche";
 if verdict == "none" { kind = "none"; }
 else if verdict == "create" { kind = if input.allow_create { "create" } else { "none" }; }
-else if !s.candidates.contains(verdict) { throw `archive : « ${verdict} » n'est ni une candidate ni none ni create`; }
-let fiche = if kind == "create" { s.title } else if kind == "fiche" { verdict } else { "" };
+let resolved_name = "";
+if kind == "fiche" {
+    if type_of(s.candidates) != "array" || !s.candidates.contains(verdict) {
+        throw `archive : alias inconnu « ${verdict} »`;
+    }
+    if type_of(s.candidate_names) != "array" {
+        throw `archive : alias inconnu « ${verdict} » : table de résolution absente`;
+    }
+    let matches = 0;
+    for candidate in s.candidate_names {
+        if candidate.alias == verdict {
+            matches += 1;
+            resolved_name = candidate.name;
+        }
+    }
+    if matches == 0 { throw `archive : alias inconnu « ${verdict} »`; }
+    if matches > 1 { throw `archive : alias ambigu « ${verdict} »`; }
+    if type_of(resolved_name) != "string" || resolved_name == "" {
+        throw `archive : alias « ${verdict} » sans nom de fiche valide`;
+    }
+}
+let fiche = if kind == "create" { s.title } else if kind == "fiche" { resolved_name } else { "" };
 let texte = s.text;
 let about = texte;
 let point = about.index_of(". ");
@@ -18,7 +38,7 @@ let key = #{ fiche: fiche, source: s.chemin, section: s.title };
 #{
     kind: kind,
     fiche: fiche,
-    verdict: verdict,
+    verdict: if kind == "fiche" { fiche } else { verdict },
     title: s.title,
     chemin: s.chemin,
     index: s.index,
