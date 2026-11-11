@@ -301,3 +301,20 @@ Lucie confirme : aucune attribution à un outil d’assistance ou à un modèle 
 poussés, PR et notes ; une mention reste pertinente si elle décrit réellement la fonctionnalité
 concernée. Identité git Lucie gmail et préfixes de branches/worktrees cx- inchangés. Rappel transmis
 aux treize sessions, sans réécriture d’historique publié.
+
+
+### Annulation sous pool plein : cause tracée, correctif non livré
+
+- **f042ec79e7fb3c2f6a01bdcfb9103903893f08e0**, docs seules, cœur : pile exacte et étude du
+  mécanisme d’annulation consignées. check_tickets VERT et les trois contrôles postpush confirmés ;
+  hash/diff relus par orchestration. Aucun correctif ni tour de push de code.
+- Trace observée : rollbackPKIndexInsert → scanIndexColumns → StringVector::reserveString →
+  InMemOverflowBuffer::allocateNewBlock → MemoryManager::allocateBuffer → BufferManager::pin,
+  refusé par le pool plein. L’échec survient pendant la copie des clés longues vers le vecteur
+  de lecture, avant la suppression des clés dans l’index.
+- Piste en examen : parcourir les clés de leur stockage existant, par lots bornés et sous garde
+  de génération/visibilité, sans nouveau tampon de chaînes ; durée de vie des références et des
+  épingles à prouver. Aucune réserve forfaitaire par transaction décidée.
+- Reprise sous cx-coeur-annulation, témoin 65486c02d ; ancien worktree détaché conservé après
+  refus de déplacement lié aux sous-modules. Cette conservation est signalée, pas un nettoyage
+  revendiqué. Preuves rouges et négatives restent distinctes.
