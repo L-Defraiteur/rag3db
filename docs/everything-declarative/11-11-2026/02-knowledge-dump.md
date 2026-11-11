@@ -219,3 +219,16 @@ version préparée parcourt vérification, cellule/réactions, garde agent, harn
 graphe et présentation. call/call_in ordinaires composent les mêmes méthodes
 internes ; ne pas réintroduire une lecture prepared au milieu de ce parcours.
 État, sources, tickets et preuves finales : en tête du rapport de session.
+
+
+## Ouverture déclarative des dérivées (lot en branche, pas encore intégré)
+
+Une dérivée hérite de l'identité de sa racine et n'a donc pas hashsafe ; une racine
+explicite de manifeste conserve l'exigence hashsafe. DerivedConfig.validate_context
+porte la validation inter-déclarations commune : résolveurs de EntityConfig et
+RelationDef, racine existante non dérivée, relation gather du bon sens, voisin et
+champs existants. Catalog vérifie encore ces règles à register_entity ; Prepared
+les compose avant écriture avec un plan entités/relations (from/gather/endpoints).
+Une erreur de plan refuse avant le premier appel DB ; jamais de suppression des
+contraintes pour rendre le graphe acyclique. La correspondance avec les modes
+d'identité de 1a reste à relire avant passe et intégration.

@@ -1,5 +1,40 @@
 # Rapport de session — everything declarative, au 11 novembre 2026
 
+## Reprise actuelle — contrats d'ouverture du backend
+
+Le relais contextuel a atterri en `68b9ede17` et son nettoyage ED/archi est
+terminé aux deux postes (preuves externes conservées). Nouveau lot borné autorisé
+par orchestration : `cx-ed-ouverture-2`, worktree `~/git_workspaces/cx-ed-ouverture`
+aux deux postes, base master `2e910930d`, sous-module codeparsers `a730a9b`.
+Tickets ED existants :
+`2026-11-11-le-test-du-manifeste-lie-demande-code-sans-garde-de-feature.md` et
+`2026-11-11-ordonner-les-entites-derivees-a-l-ouverture-du-backend.md`, dossier
+`docs/everything-declarative/tickets/`. Pas de source 1a importée, pas de changement
+code.rs/gabarit code. remaining conserve sa branche et son rouge propre.
+
+Rouges séparés : baseline1ff test lié au code refusé sans feature ; témoins029
+refus hashsafe de la dérivée, racine non montée, relation gather non montée.
+Correctif : validation contextuelle pure partagée Config/Catalog, plan privé
+stable de dépendances entités/relations validé entier avant toute requête base,
+identité héritée admise pour derived uniquement. Chaînes toujours refusées.
+Le manifeste portable conserve la preuve lien/dérive sans code et le refus de
+workspace y est explicite ; test workspace historique gardé sous feature code.
+
+Source `a166474a0` : ouverture6/0/0 et gabarits9/0/0 sans code ET avec code ;
+lib native entière1575/0/15 ignorés,20,44s. Vrai manifeste chargé puis ouvert,
+création racine, rendu/recherche gather sur trois permutations, refus nommés et
+zéro appel DB sur plan invalide. Les échecs de montage des fixtures sont conservés
+sans les présenter comme rouges produit. Preuves luciepc :
+`~/.cache/rag3weaver-build/I-luciepc/ouverture-20261111/`, cible unique session
+`~/.cache/rag3weaver-build/target-I-apres` (nouvellement recréée pour ce lot).
+
+Prochain pas : lecture croisée identité root/content avec arbre principal avant
+passe globale annoncée à orchestration ; aucune livraison de ce nouveau lot.
+L'association publique search_index est absente de master : sa preuve combinée
+reste à jouer avec 1a ; le ticket ordre reste ouvert jusque-là.
+Les sections suivantes décrivent les lots précédents, pas la prochaine action.
+
+
 ## État courant après la passe du relais — priorité de reprise
 
 Le lot des réclamations a atterri en `91e5f760b` et ses artefacts propres ont été
