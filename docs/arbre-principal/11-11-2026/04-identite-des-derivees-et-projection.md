@@ -1,5 +1,45 @@
 # Identité des contenus dérivés et projection vers les occurrences
 
+
+## Gel et passe combinée préparée — 12 novembre 2026
+
+Runtime gelé sur d84c03432, branche cx-arbre-scope-version-4 ; e4791498f consigne
+les preuves ciblées. Les deux README décrivent désormais l'option et ses limites.
+Cette préparation ne vaut ni passe globale ni annonce de livraison sur master.
+Les paragraphes historiques ci-dessous gardent leur source et leur date.
+
+L'orchestration demande d'attendre le SHA d'atterrissage recherche (journal du
+service d'embarquement), puis de rebaser sous un nom de branche neuf. Le lanceur
+et son code commun changent : aucune ancienne passe ne sera recyclée en verdict
+sur le candidat combiné. Aucun reSearch intermédiaire n'est lancé.
+
+Sur le candidat final figé, un seul cargo à la fois sur luciepc, sous poste lourd,
+-j8 et target unique cx-target-contenu-derive (plafond 32 Go), lib épinglée
+rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF :
+
+1. Relire le diff et les scripts intégrés ; contrôles de branche, tickets et
+   gardes requis par la procédure courante, dont worktree et lanceur.
+2. check_features (cinq jeux), puis lib entière sous les huit features de la
+   procédure. Les tests d'ouverture du manifeste doivent effectivement tourner.
+3. Étape navigateur séparée, navigateur exigé et paquets React épinglés du poste.
+4. Une suite par appel de run_e2e.sh : e2e_entites_derivees, e2e_scope,
+   e2e_scope_versions, e2e_projection_occurrences, e2e_search, e2e_search_queue,
+   e2e_postgres, les quatre e2e_tx_*, e2e_code, e2e_code_sync et e2e_lectures.
+   Catalogue, fermeture des écritures et configuration d'ouverture sont communs :
+   ces régressions couvrent aussi leurs clients existants. PostgreSQL utilise
+   exclusivement notre base privée cx_contenu_2191_20261111.
+5. Lire les compteurs et les résidus de chaque suite ; une suite attendue sautée
+   ou sans test n'est pas verte. Conserver source exacte, journaux et verdicts.
+   Aucune dépendance à un modèle réel n'est ajoutée aux nouvelles fixtures.
+
+Les tickets 1a, ordre d'ouverture, file par cellule, mutex PG et appartenance
+scalaire restent ouverts jusqu'à leurs critères réels et à cette passe. Leur
+clôture, si justifiée, déplacera les fichiers avec état et preuves dans le même
+commit. Le correctif mutex60961bb24 et l'appartenance d84c03432 restent isolables.
+La migration1b, l'activation des gabarits code et les mesures M3–M5 restent hors
+lot. La ligne de nouveautés sera ajoutée après le verdict réel. Le tour master
+reste soumis au « à toi » de l'orchestration ; aucune autorisation reçue ici.
+
 11 novembre 2026. Lot 1a partiellement implémenté en branche ; aucune activation en service.
 Le cap et les contrats relus restent dans 03-contrats-et-lots-des-vues.md.
 
