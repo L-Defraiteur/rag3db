@@ -87,3 +87,14 @@ puis la validation requise, restent à faire sur la branche cx-.
 
 Les dix tests `require_js` de codeparsers sont également passés, zéro ignoré,
 sur e48b414 (journal luciepc `require-parser-metadata.log`).
+
+## Correction de lecture : les 415 muettes n'ont pas interrogé le LSP
+
+Vérification supplémentaire : pour les 415 arêtes liaison historiques, le champ
+nom est absent de chacune des 415 lignes sources (aucune source manquante).
+L'oracle cherche ce nom de cible avant toute question : aucune interrogation
+n'a donc eu lieu pour ces arêtes. « Muet » ne démontre ici aucun silence du
+serveur. Même risque pour Alias vers Outil et FS vers une zone exportée.
+Voir le ticket `2026-11-11-l-oracle-cherche-la-cible-au-lieu-du-nom-mentionne.md`.
+L'oracle et l'A/B active restent inchangés ; ces cas ne seront pas comptés comme
+gains de précision. Le modèle requis sépare mention source et cible proposée.
