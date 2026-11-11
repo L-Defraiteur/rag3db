@@ -120,4 +120,4 @@ CARGO_TARGET_DIR=~/.cache/rag3weaver-build/target-tty cargo run --release -- \
 
 | Ticket | En une ligne |
 |---|---|
-| `docs/tickets/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md` | la lib ne compile pas sans `rag3db-native` (`src/backend.rs` vers la ligne 4411, `src/dataflow/record_nodes.rs` vers la ligne 4567) ; le correctif ou la déclaration « la lib exige le moteur » est à trancher par Lucie |
+| `docs/tty/tickets/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md` | la lib ne compile pas sans `rag3db-native` (`src/backend.rs` vers la ligne 4411, `src/dataflow/record_nodes.rs` vers la ligne 4567) ; le correctif ou la déclaration « la lib exige le moteur » est à trancher par Lucie |
