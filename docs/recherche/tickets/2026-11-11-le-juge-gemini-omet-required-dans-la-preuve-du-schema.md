@@ -17,3 +17,9 @@ Le ticket fermé `2026-11-08-le-temoin-du-juge-des-outils-exige-un-genre-que-gem
 ## Pour départager
 
 Rejouer le témoin inchangé et lire sa preuve complète, sans relâcher l'assertion. Si le contrat doit évoluer, décider explicitement avec ED comment relier la preuve au schéma déclaré et au call_id, et valider la correction proposée sur ses effets. Ne pas confondre une variation de formulation, une preuve manquante et un défaut du runtime. Ne glisser aucune modification du juge dans le lot d'arrêt sans revoir son périmètre et sa validation.
+
+## Provenance et limites
+
+Modèle annoncé dans le journal : `google/gemini-3.8-flash`, Vertex, région `global`, projet `lr-hub-472010`, `RAG3WEAVER_EXIGER_GEMINI=1`, jeu large de features avec `openai-llm,anthropic-llm`. Identifiants transmis au crate par le chemin prévu ; aucun contenu de fichier d'identifiants consulté ou copié. La sortie complète est conservée dans le journal rouge, pas remplacée par un rejeu.
+
+La réponse exacte de `lire_le_run` vue par le modèle n'est pas conservée dans ce journal : sa teneur reste inconnue. Le code courant reconstruit les définitions via `BackendTools::tool_defs()` ; la fixture inchangée déclare `required`, mais cette relecture n'est pas une trace de ce que le modèle a reçu. Aucune absence de schéma ni dérive temporelle du backend n'est démontrée. La seule omission directement observée est celle du champ `preuve` dans le bilan final.
