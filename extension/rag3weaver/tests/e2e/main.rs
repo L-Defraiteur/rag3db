@@ -214,6 +214,8 @@ mod e2e_preuve_d_existence;
 mod e2e_prise_atomique;
 #[path = "../e2e_profile_overhead.rs"]
 mod e2e_profile_overhead;
+#[path = "../e2e_projection_occurrences.rs"]
+mod e2e_projection_occurrences;
 #[path = "../e2e_proto_boutique.rs"]
 mod e2e_proto_boutique;
 #[path = "../e2e_rag3daemon.rs"]
