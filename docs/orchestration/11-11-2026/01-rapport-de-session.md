@@ -290,3 +290,14 @@ est active ; aucune suppression des anciennes branches distantes.
   d’index4.3.2→4.3.3, aucune migration ni banc dédié. Preuve ciblée sur fermeture échouée,
   arrêt effectif des pools/acteurs et terminaison propre ; passe habituelle maintenue. Recherche
   a confirmé qu’aucun code de scénario de compatibilité n’avait été ajouté.
+
+- **21250c51b**, docs seules, lucivy : rapport/dump corrigés pour retirer tout scénario
+  supplémentaire de compatibilité d’index ; preuve limitée à la fermeture en erreur et à la passe
+  habituelle. Diff relu ici ; la session confirme status propre et origin/master égal à HEAD.
+
+### Rappel de publication des textes
+
+Lucie confirme : aucune attribution à un outil d’assistance ou à un modèle dans les messages
+poussés, PR et notes ; une mention reste pertinente si elle décrit réellement la fonctionnalité
+concernée. Identité git Lucie gmail et préfixes de branches/worktrees cx- inchangés. Rappel transmis
+aux treize sessions, sans réécriture d’historique publié.
