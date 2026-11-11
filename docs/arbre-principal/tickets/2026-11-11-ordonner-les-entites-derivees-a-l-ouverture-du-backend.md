@@ -197,3 +197,15 @@ est de lecture et ne crée pas d'arête de création Root→Index (Index.from d�
 Root, l'inverse fabriquerait un faux cycle). Conserver les modes root/content,
 leurs règles d'identité et le refus des chaînes from→dérivée. Relier la preuve
 combinée et le commit1a avant git mv de ce ticket vers closed et État final.
+
+## Reprise arbre après intégration ED
+
+Rebase 1a sur c693496a8, branche neuve cx-arbre-scope-version-4 (premier checkpoint b68cebd46).
+Aucun conflit runtime, aucune preuve 1a attribuée à la passe ED. Les copies historiques
+recréées dans everything-declarative par le rejeu sont retirées au profit de ce ticket
+transféré et du ticket de feature déjà fermé ; leurs preuves initiales sont conservées ici.
+Le WT fournisseur c12 a été retiré au portable sans force après archive administrative
+fidèle et helper65aa exact VERT : cx-provider-nettoyage-c12/{administration,garde.json}
+sous ~/.cache/rag3weaver-build. Aucun target ni sous-module initialisé dans ce WT.
+Restant : validation partagée de l'association, sans nouvelle arête de création,
+vrai chargement/ouverture/écriture/recherche par cible publique dans le manifeste combiné.
