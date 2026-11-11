@@ -123,7 +123,8 @@ corrigé et rouge/vert prouvé : une erreur modèle après lecture ne supprime p
 et l'issue réelle du tour est portée par l'état poussé, y compris hors formulaire.
 L'inventaire effectif atelier/dépôt/tâche est vert depuis le navigateur ; le trou de recherche
 et de suivi de commande de l'atelier est transmis à ED en ticket. Types et bundle vérifiés.
-Régression navigateur en cours ; aucun verdict global, aucun push master.
+Régression navigateur verte : 36/36, zéro échec ni ignoré, 132,73 s sur `816fc4824`.
+Aucun verdict global, aucun push master.
 Détails, preuves, matrice et limites : `03-inventaire-parcours-chat.md`.
 
 ## Les lots nommés, pas commencés
