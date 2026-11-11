@@ -1809,6 +1809,12 @@ fn une_erreur_du_modele_garde_les_actions_du_chat_et_permet_la_reprise() {
     n.evaluer("document.querySelector('#message').value = 'reprends'; document.querySelector('#send').click()");
     n.attendre("document.querySelector('#status')?.textContent === 'fini' && document.body.innerText.includes('Repris après la panne.')", "une demande reprend après l'erreur");
     assert_eq!(n.evaluer(action), json!(true), "la reprise garde l'historique des actions");
+    // Un tour parti hors du formulaire (comme après une carte) ne bénéficie
+    // d'aucun catch local : l'état poussé doit lui aussi rendre l'erreur.
+    let corps = json!({ "backend": id, "message": "nouvelle panne" }).to_string();
+    n.evaluer(&format!("fetch('/ide/chat', {{ method: 'POST', headers: {{'Content-Type':'application/json'}}, body: JSON.stringify({corps}) }}); true"));
+    n.attendre("document.querySelector('#status')?.textContent === 'Erreur' && document.body.innerText.includes('nouvelle panne') && document.body.innerText.includes('panne-apres-lecture')", "un tour extérieur en erreur n'est pas déclaré fini");
+    assert_eq!(n.evaluer("document.querySelectorAll('.outil[data-outil=read_file]').length"), json!(2));
     assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
     drop(n);
     let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
