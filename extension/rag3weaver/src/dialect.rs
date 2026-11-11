@@ -3377,12 +3377,12 @@ impl SchemaDialect for PostgresDialect {
     }
 
     fn derived_references(&self, _entity: &str, root: &str, relation: &str) -> String {
-        format!("SELECT s._uuid, r.from_uuid, r._render_hash FROM {} r JOIN {} s ON s._uuid = r.to_uuid JOIN jsonb_array_elements_text($uuids::text::jsonb) u(uuid) ON u.uuid = s._uuid",
+        format!("SELECT s._uuid, r.from_uuid, r._render_hash FROM {} r JOIN {} s ON s._uuid = r.to_uuid JOIN unnest($uuids::text[]) AS u(uuid) ON u.uuid = s._uuid",
             self.quote(relation), self.quote(root))
     }
 
     fn mark_derived_references_pending(&self, _entity: &str, _root: &str, relation: &str) -> String {
-        format!("UPDATE {} SET _render_hash = '' WHERE to_uuid IN (SELECT jsonb_array_elements_text($uuids::text::jsonb))", self.quote(relation))
+        format!("UPDATE {} SET _render_hash = '' WHERE to_uuid = ANY($uuids::text[])", self.quote(relation))
     }
 
     fn pending_derived_references(&self, _entity: &str, root: &str, relation: &str, limit: usize) -> String {

@@ -15,6 +15,70 @@ la session d'orchestration (aujourd'hui `rag3db-5a`), et travaille avec les sess
 **recherche**, **everything declarative** ou « ED » (l'IDE et l'équipier).
 
 
+## Suite 1a — gardes et cellules, après 06b3ee4cb
+
+**Périmètre courant : toujours hors master, lot 1a ouvert.** Branche
+`cx-arbre-scope-version-3`, worktree `~/.cache/rag3weaver-build/cx-wt-scope-version`
+aux deux postes. Target unique luciepc `cx-target-contenu-derive`, lib29a7bc52a.
+Checkpoint **06b3ee4cb** poussé : refus du changement d'association de recherche sur
+entité peuplée, avancement public résolu vers l'index physique, recette nouvelle
+persistée en dette globale mais racines sélectionnées par cellule avant LIMIT.
+
+Les deux témoins association/avancement rougissent avant correction puis passent
+(`cx-projection-gardes-{rouge,vert}.log`, 3 verts). Le rouge cellule de recette
+repointait deux racines alpha vers une version bêta ; corrigé et vert dans
+`cx-projection-cellules-vert.log` (4 verts). Tous ces journaux sont hors target sur luciepc.
+
+Le candidat suivant ajoute les files par cellule et applique la consigne dans la
+cellule explicite de l'appel. Son ticket commun, owner arbre-principal :
+[la file ne suit pas la cellule](../tickets/2026-11-11-la-file-d-ecriture-ne-suit-pas-la-cellule-de-lecture.md).
+La préexistence est prouvée sur master c04c62021 dans le worktree diagnostic
+`cx-wt-file-cellule-baseline` **sur luciepc seulement**, runtime intact, seul un test
+Product ajouté : le drain bêta consomme aussi alpha. Log `cx-file-cellule-baseline-rouge.log`.
+Aucun nettoyage de ce worktree n'est fait : inventorier les administrations de sous-module
+et leurs dépendances avec la garde commune avant de le retirer.
+
+Sur le candidat : lecture stricte alpha reconstruit ses deux références, conserve
+l'écriture bêta puis la draine en bêta (`cx-projection-lecture-cellule-vert-v2.log`,
+5 verts). Les 18 combinaisons signal/mode/cellule et les suites entières dérivées et
+cellules passent : `cx-projection-cellules-regressions.log`, **19 + 13 verts**, rc0.
+Le candidat ultérieur ajoute les gardes transaction/retour d'erreur/rollback, le bilan
+global des files garées et le refus du scan sans masque pour une projection.
+Le témoin scan rouge réel est `cx-projection-scan-rouge-v2.log` ; le premier essai
+était une erreur de fixture (`chunked=false` avec vector), pas un rouge produit.
+La passe v2 donne bibliothèque 2101/0/58 et scope 13, Scope privé 3, recherche 40,
+projection 2 verts ; dérivées 19/1 car le nouveau témoin laissait sa faute armée en
+reprenant bêta. Désarmée, rollback/reprise passe. Une assertion dédiée révèle ensuite
+le warning d'index propre Occurrence absent : rouge-v4 réel, correction par la résolution
+physique existante dans l'entretien FTS. La nouvelle passe partielle est
+`cx-projection-file-regressions-v3.log` ; lire son verdict avant tout bilan vert.
+Verdict v3 : 2101 bibliothèque et 20+13+3+40+2 e2e sans assertion en échec, mais rc101
+pour un journal du démon d'embarquement laissé dans le TMPDIR d'e2e_search :
+[ticket recherche](../../recherche/tickets/2026-11-11-le-service-d-embarquement-laisse-son-journal-dans-le-tmpdir-d-e2e-search.md),
+pris en suivi par recherche, sans nouveau lot activé. Aucune exemption ou journal effacé.
+Le témoin SQL chaîné n'a donc pas démarré. Lancé séparément, il rougit dans
+`cx-contenu-pg-premier.log` : uuid[] lié comme text[] mais requête JSON. Fix SQL candidat
+unnest/ANY, non encore joué. Les ajustements ultérieurs fermeture/réouverture et ScopeNONE
+sont aussi non encore joués : ce checkpoint n'est pas un verdict global.
+Base privée **cx_contenu_2191_20261111**, créée par nous (preuve `cx-contenu-pg-creation.log`).
+Ne pas toucher rag3weaver_test ; supprimer notre base à la fin du lot après contrôle.
+Ce n'est pas encore la passe globale après ED.
+
+**Sous-travail indépendant demandé par orchestration à la demande d'ED** :
+`code::schema_configs(ChunkingConfig)` expose les vraies configurations et propriétés.
+Commit **c12f840b4**, branche `cx-arbre-schema-code-provider`, base master c04c62021,
+worktree local `cx-wt-schema-code-provider`, code.rs seul. ED a reçu le SHA et compose
+Backend ; aucun import 1a. Le ticket ordre ED porte ce travail (trace ED 4857f58f3).
+Vérification structurelle d'extraction identique et test d'équivalence ajouté. ED a confirmé
+sa compilation et son vert 1/0/0 (`cibles-4.log`, source ED 11ea6ec87) ; les 16 cas d'ouverture
+et 9 gabarits passent avec code, la passe finale composée bffbe5033 reste chez ED.
+Aucun import 1a ni tour master demandé ici.
+
+**Restant** : finir les filets et leur passe, récupérer la composition ED puis rebaser
+sur une branche neuve, recoller la validation statique d'association commune et éprouver
+l'ouverture manifeste ; ensuite seulement passe réglementaire et demande de tour.
+Aucune activation du gabarit code sur base vivante, migration 1b ou mesure M3 autorisée.
+
 ## Checkpoint Scope privé — passe partielle du 11 novembre, 22:14–22:21 Paris
 
 Porteur arbre-principal, [ticket 1a](../tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md).

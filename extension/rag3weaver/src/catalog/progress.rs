@@ -286,7 +286,10 @@ impl Catalog {
     /// Lecture seule.
     pub fn index_progress(&self) -> Result<IndexProgress, CatalogError> {
         self.check_initialized()?;
-        self.progress_of(self.vector_tables())
+        let mut progress = self.progress_of(self.vector_tables())?;
+        // Le bilan global couvre aussi les écritures des cellules garées.
+        progress.writes_pending += self.parked_pending.values().map(crate::records::PendingWork::total_count).sum::<usize>();
+        Ok(progress)
     }
 
     /// Une association de lecture suit la même résolution que la recherche.

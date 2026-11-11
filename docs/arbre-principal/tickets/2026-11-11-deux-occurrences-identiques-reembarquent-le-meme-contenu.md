@@ -171,3 +171,59 @@ Verdict ciblé cellules : `cx-projection-cellules-vert.log`, 4 tests réussis, 0
 code retour 0 (plus 2 gardes du lanceur). Après bêta, les deux racines alpha gardent leur
 cellule ; leur dette est ensuite retrouvée et rendue en alpha. Il ne s'agit pas de la passe
 globale ni encore du témoin lecture étrangère avec écritures bêta en file.
+
+La lecture stricte alpha avec file bêta possède désormais son ticket commun distinct :
+[la file d'écriture ne suit pas la cellule de lecture](2026-11-11-la-file-d-ecriture-ne-suit-pas-la-cellule-de-lecture.md).
+Le témoin v2 prouve un drain bêta lors de la lecture alpha ; l'antériorité hors 1a reste
+à comparer. Les invariants et le coût de la file partitionnée sont consignés dans ce ticket.
+
+## Fin des filets de cellules et préparation SQL
+
+La passe partielle `cx-projection-file-regressions-v2.log` est verte pour la bibliothèque
+**2101/0/58 ignorés**, e2e_scope **13/0**, Scope privé **3/0**, recherche **40/0** et projection
+**2/0**. La suite dérivée fait **19/1** : le nouveau test de rollback avait laissé armée
+sa faute de lien pour le drain bêta ; après désarmement explicite, ce test passe seul
+(`cx-projection-rollback-cellule-rouge-v3.log`, nom historique, **1/0**, rc0).
+Le warning d'index source absent reste soumis à une assertion dédiée avant verdict.
+La première relance bibliothèque avait échoué sur la garde du commentaire L4 (2100/1/58),
+corrigée dans v2 ; ce n'était pas une régression fonctionnelle cachée.
+
+Le témoin scan produit est rouge v2 : auto choisit scan pour une projection vide avec
+FileSource. Son correctif et les unités retour d'erreur/bascule en transaction passent
+dans les 2101 tests de bibliothèque. La sélection public→index rejoint la fermeture de
+lecture, sans devenir une dépendance inverse de création du schéma.
+
+**Ressource SQL privée créée par cette session** : base `cx_contenu_2191_20261111`
+dans le conteneur `rag3weaver-pg` de luciepc. Script a refusé de réutiliser un nom existant
+avant createdb ; propriété consignée dans `cx-contenu-pg-creation.log` hors target.
+Aucun schéma de la base partagée rag3weaver_test n'est touché. Nouveau test SQL préparé
+sur versions/occurrences, 12 lectures dense/BM25×modes×cellules, dette de recette et
+rollback du lot. Il n'est pas encore joué ; aucune preuve PostgreSQL de 1a revendiquée.
+La base privée sera supprimée à la fin du lot après contrôle de son nom/propriété.
+
+L'assertion dédiée FTS est rouge réel : `cx-projection-rollback-cellule-rouge-v4.log`,
+0/1, après désarmement de la faute. Le drain réussit mais signale l'index propre
+Occurrence absent. Correctif candidat : `open_fts_handles_for` résout le stockage physique
+(`Forme::resolve_storage_target`, visibilité crate), tandis que la recherche garde sa
+résolution publique et l'interdiction des versions internes. Il réutilise donc la primitive
+existante plutôt que de reconstruire un second résolveur ou d'ajouter un chemin Scope.
+La passe partielle suivante est `cx-projection-file-regressions-v3.log`, en cours :
+bibliothèque, cinq suites natives, puis le nouveau témoin dans la base SQL privée.
+
+Passe v3 : bibliothèque 2101/0/58 ; dérivées **20/0**, cellules **13/0**, Scope privé
+**3/0**, recherche **40/0**, projection **2/0**. Néanmoins rc101, garde de résidu du
+journal du démon né pendant e2e_search : [ticket recherche dédié](../../recherche/tickets/2026-11-11-le-service-d-embarquement-laisse-son-journal-dans-le-tmpdir-d-e2e-search.md).
+L'étape SQL chaînée n'a donc pas démarré ; elle est lancée séparément dans
+`cx-contenu-pg-premier.log`. Aucun faux vert de passe ni exemption de résidu.
+
+SQL premier rouge réel : `cx-contenu-pg-premier.log`, 0/1, sur les références de ContenuPg,
+`error serializing parameter 0`. La liste d'UUID est sérialisée en tableau text[] par la
+connexion commune ; nos deux requêtes la demandaient comme texte JSON. Correctif candidat
+borné au dialecte : unnest($uuids::text[]) pour lire les références, ANY($uuids::text[])
+pour marquer leur dette. Aucun changement de sérialiseur ni nouveau format de paramètres.
+
+Le checkpoint suivant sauve aussi des témoins **pas encore joués** : réouverture multicellule
+sans réinscription, et Scope privé avec signaux propres NONE (l'index associé garde les
+signaux d'origine, pas de corpus plein texte propre redondant). Ils utilisent les primitives
+existantes, sans changement du gabarit de production. Les preuves v3 ne couvrent pas encore
+ces deux ajustements ni le correctif SQL. Ne pas les étiqueter VERT avant leurs journaux.

@@ -211,7 +211,7 @@ impl Forme<'_> {
         self.resolve_storage_target(name, false)
     }
 
-    fn resolve_storage_target(&self, name: &str, allow_internal: bool) -> Result<search::SearchTarget, CatalogError> {
+    pub(crate) fn resolve_storage_target(&self, name: &str, allow_internal: bool) -> Result<search::SearchTarget, CatalogError> {
         // Try simple entity (must have simple pipeline — KB-only entities are not searchable directly)
         if let Some(ec) = self.entity_configs.get(name) {
             // Filet de recherche avant projection publique :

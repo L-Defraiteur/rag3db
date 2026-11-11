@@ -2090,3 +2090,77 @@ fn un_ordre_par_extreme_des_lignes_liees_se_joue_en_sql() {
     let min = par(json!({"min": max(false)}));
     assert_eq!(jouer(&min, json!({"k": "rule", "limit": 10, "offset": 0})), ["g3", "g1", "g2"], "le NULL en dernier, croissant aussi");
 }
+
+/// Les versions de contenu et la projection publique suivent aussi le dialecte SQL.
+#[test]
+#[ignore]
+fn les_versions_partagees_projettent_les_occurrences_et_rattrapent_par_cellule() {
+    use rag3weaver::config::{DerivedConfig, DerivedIdentity};
+    let cache = tempfile::tempdir().unwrap();
+    let (_garde, mut catalog) = catalogue_avec(8, rag3weaver::search_backend::MoteurTexte::Lucivy);
+    catalog.set_cache_base(cache.path().join("indexes"));
+    let root = EntityConfig {
+        fields: HashMap::from([
+            ("file".into(), SimpleFieldDef { field_type: FieldType::String, ..Default::default() }),
+            ("body".into(), SimpleFieldDef { field_type: FieldType::Text, is_content: true, ..Default::default() }),
+        ]), hashsafe: Some(vec!["file".into()]), signals: SearchSignals::NONE, chunked: Some(false),
+        search_index: Some("ContenuPg".into()), return_fields: Some(vec!["file".into()]), ..Default::default()
+    };
+    let index = EntityConfig {
+        fields: HashMap::from([("body".into(), SimpleFieldDef { field_type: FieldType::Text, is_content: true, ..Default::default() })]),
+        signals: SearchSignals::HYBRID,
+        derived: Some(DerivedConfig {
+            from: "OccurrencePg".into(), identity: DerivedIdentity::Content { format: "pg-v1".into() },
+            gather: vec![], render: BTreeMap::from([("body".into(), "{{ root.body }}".into())]),
+        }), ..Default::default()
+    };
+    for (cell, files) in [("alpha", vec!["a.rs", "a2.rs"]), ("beta", vec!["b.rs"])] {
+        catalog.set_scope(Scope::new("acme", cell)).unwrap();
+        catalog.register_entity("OccurrencePg", root.clone()).unwrap();
+        catalog.register_entity("ContenuPg", index.clone()).unwrap();
+        let records = files.into_iter().map(|file| BTreeMap::from([
+            ("file".into(), CypherValue::String(file.into())), ("body".into(), CypherValue::String("marquepgpartagee".into())),
+        ])).collect();
+        let result = catalog.ingest_entities("OccurrencePg", records).unwrap();
+        assert_eq!(result.failed, 0, "{:?}", result.warnings);
+    }
+    let count = |cat: &Catalog, query: &str| cat.conn().execute(query).unwrap().rows[0][0].as_i64().unwrap();
+    assert_eq!(count(&catalog, "SELECT count(*) FROM contenupg"), 2, "une version par cellule, pas par origine");
+    assert_eq!(count(&catalog, "SELECT count(*) FROM contenupg_chunk"), 2);
+    let shared = Arc::new(std::sync::Mutex::new(catalog));
+    for signal in [SearchSignals::VECTOR, SearchSignals::BM25] {
+        for mode in [ResultMode::Aggregated, ResultMode::Detailed, ResultMode::SourceResolved] {
+            for (scope, expected) in [(Some(Scope::new("acme", "alpha")), vec!["a.rs", "a2.rs"]), (None, vec!["b.rs"])] {
+                let result = Catalog::rechercher(&shared, "OccurrencePg", "marquepgpartagee", SearchOptions {
+                    scope: scope.clone(), signals: Some(signal), result_mode: mode, consistency: Consistency::Immediate,
+                    strict_signals: true, ..Default::default()
+                }).unwrap();
+                let mut files: Vec<_> = result.results.iter().map(|r| {
+                    assert_eq!(r.entity.as_deref(), Some("OccurrencePg"));
+                    r.data.as_ref().unwrap()["file"].as_str().unwrap().to_string()
+                }).collect();
+                files.sort();
+                assert_eq!(files, expected, "{scope:?} {signal:?} {mode:?}: {:?}", result.meta);
+            }
+        }
+    }
+    let mut catalog = Arc::try_unwrap(shared).ok().unwrap().into_inner().unwrap();
+    let mut next = index;
+    next.chunking.overlap_lines += 1;
+    catalog.register_entity("ContenuPg", next).unwrap();
+    assert_eq!(catalog.rendre_le_retard(None, 50, true).unwrap(), 1);
+    let cross = "SELECT count(*) FROM contenupg v JOIN contenupg_derived_from link ON link.from_uuid = v._uuid JOIN occurrencepg r ON r._uuid = link.to_uuid WHERE v._project <> r._project";
+    assert_eq!(count(&catalog, cross), 0);
+    catalog.set_scope(Scope::new("acme", "alpha")).unwrap();
+    assert_eq!(catalog.rendre_le_retard(None, 50, true).unwrap(), 2);
+    assert_eq!(count(&catalog, cross), 0);
+    let snapshot = "SELECT r._uuid, r.body, v._uuid, link._render_hash FROM contenupg v JOIN contenupg_derived_from link ON link.from_uuid = v._uuid JOIN occurrencepg r ON r._uuid = link.to_uuid ORDER BY r._uuid";
+    let before = catalog.conn().execute(snapshot).unwrap().rows;
+    catalog.injecter_faute_de_lien("ContenuPg_DERIVED_FROM", 1);
+    let failed = catalog.ingest_entities("OccurrencePg", vec![BTreeMap::from([
+        ("file".into(), CypherValue::String("a.rs".into())), ("body".into(), CypherValue::String("mutationpgannulee".into())),
+    ])]).unwrap();
+    assert!(failed.failed > 0, "{:?}", failed.warnings);
+    assert_eq!(failed.processed, 0);
+    assert_eq!(catalog.conn().execute(snapshot).unwrap().rows, before, "source/version/référence annulées ensemble en SQL");
+}
