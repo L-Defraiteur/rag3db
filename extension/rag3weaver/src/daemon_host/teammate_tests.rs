@@ -282,6 +282,45 @@ fn a_small_request_needs_no_plan_and_an_active_plan_is_paused_then_recalled() {
     assert!(files.read_plans().plans.is_empty());
 }
 
+/// **Un reste explicite continue même sans plan** : le premier pas analyse,
+/// le second livre le compte rendu demandé. Déclarer le pas réussi ne signifie
+/// pas que la tâche entière est finie quand `remaining` dit le contraire.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_remaining_deliverable_continues_without_a_plan() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let model: ChatModel = Arc::new(move |_b| {
+        Ok(Arc::new(CallbackLlm::new("faux-reste-explicite", 16384, move |turns, opts, sink| {
+            let resultats = tool_results(turns);
+            let outils = match (step_of(turns), resultats.is_empty()) {
+                (1, _) => calls(&[("step_done", json!({
+                    "item": "", "succeeded": true, "done": "analyse terminée",
+                    "remaining": "livrer le compte rendu dans la boîte"
+                }))]),
+                (2, true) => calls(&[("report", json!({ "text": "Compte rendu livré : analyse vérifiée." }))]),
+                _ => calls(&[("step_done", json!({
+                    "item": "", "succeeded": true, "done": "compte rendu livré", "remaining": ""
+                }))]),
+            };
+            answer(turns, opts, sink, "", outils)
+        })))
+    });
+    let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.ouvrir_une_tache(&h.id, "reste-explicite").expect("la tâche s'ouvre");
+    let files = host.teammate_files(&h.id, "reste-explicite").unwrap();
+    files.append("supervisor", "request", None, "Analyse puis livre un compte rendu dans la boîte.").unwrap();
+    let outcome = host.run_teammate(&h.id, "reste-explicite").unwrap();
+    assert_eq!(outcome.steps.len(), 2, "le reste explicite exige un second pas : {outcome:?}");
+    assert_eq!(outcome.ended, "fait sans plan", "{outcome:?}");
+    assert!(!files.plan_path().exists(), "le témoin doit rester sans plan");
+    assert!(files.mailbox().iter().any(|l| l["from"] == "teammate"
+        && l["kind"] == "report" && l["text"] == "Compte rendu livré : analyse vérifiée."),
+        "le livrable demandé doit être observé dans la boîte : {:?}", files.mailbox());
+}
+
 /// **L'arrêt passe tout de suite** : un `stop` dans la boîte pendant un pas
 /// arrête le run en cours ; l'équipier ne fait pas de pas suivant et la boîte
 /// dit la fin.
