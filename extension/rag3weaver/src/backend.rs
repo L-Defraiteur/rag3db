@@ -5351,6 +5351,10 @@ impl Backend {
     ///
     /// Les erreurs des réactions arrêtées sont **dites** ici : leur réacteur
     /// est parti avec elles, et personne d'autre ne les relira.
+    /// Une seule tentative est faite et son résultat conservé. Un succès est
+    /// idempotent ; une erreur reste une erreur aux appels suivants et au Drop,
+    /// sans nouvelle fermeture sous une réaction détachée. Après une erreur,
+    /// le catalogue n'est pas garanti fermé.
     pub fn shutdown(&mut self) -> Result<(), String> {
         // Une seule tentative : les réacteurs figés ont été détachés et ne
         // peuvent plus être attendus par un nouvel appel. Conserver aussi
