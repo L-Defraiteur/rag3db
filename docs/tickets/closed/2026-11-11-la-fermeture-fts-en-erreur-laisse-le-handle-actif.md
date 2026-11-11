@@ -1,6 +1,6 @@
 # La fermeture FTS en erreur laisse le handle actif
 
-- **État** : corrigé `c1463b9eeae78b997af5c86d2f93a7597dc240dc` ; même témoin rouge/vert et passe complète validés, tour de push accordé par orchestration.
+- **État** : corrigé `c1463b9eeae78b997af5c86d2f93a7597dc240dc` ; même témoin rouge/vert et passe complète validés, livré sur master `f96acc6cf97692804520e2d672de080bcae730a3` après accord de l’orchestration.
 - **Famille** : produit
 - **Gravité** : une fermeture en erreur peut laisser les acteurs travailler après la fin supposée du stockage ; une nouvelle écriture reste acceptée.
 - **Atteignable en service** : oui, une erreur de persistance peut faire sortir close avant l'arrêt des pools dans la dépendance 4.3.2.
@@ -31,3 +31,7 @@ Porteur : recherche, lot `cx-recherche-lucivy-4-3-3`. Correctif et validation co
 Source testée `c1463b9eeae78b997af5c86d2f93a7597dc240dc`, base `fcf23114c`. Neuf e2e, 121 tests réussis/0 échec/0 ignoré : search 40 (réouverture sparse existante comprise), dense après suppressions 2, cited_by 3, lectures 24, code 27, arrêt par paquet 18, vecteurs après rollback 3, merge puis COPY 1, ligne à ligne 3. Features 5/5 et preuve de compilation lue ; lib 2105/0/61 ignorés en 57,93 s, témoins FTS de recherche/réouverture existants nommés verts ; navigateur 36/0/0 en 132,34 s. Aucun saut nommé dans les étapes exigées. Pas de scénario de compatibilité ni nouveau banc, pas de juge Gemini inchangé rejoué.
 
 Preuve luciepc : `~/.cache/rag3weaver-build/journaux-cx-recherche-lucivy-433-11nov/vert-433/verdict-final.log`, vérificateur `cx-recherche-lucivy433-verifier.py`. Ce dernier relit les comptes et noms utiles, les trois minimums, les cinq seuls paquets modifiés du lock (registre), les SHA sources et la preuve rouge. Attestation `attestation-artefacts.json` : 212 contenus courants dans les binaires lib/e2e/navigateur, chemins générés et `.d` du bon worktree. Générés copiés hors target. Lib native complète épinglée 29a7bc52a, sans dérogation ; sources inchangées à la fin. Fenêtre code réservée par orchestration jusqu'au verdict, tour reçu après lecture de ces preuves par orchestration.
+
+## Atterrissage et nettoyage
+
+Master `f96acc6cf97692804520e2d672de080bcae730a3`, rebase documentaire sans conflit et SHA sources identiques à la preuve testée. Trois contrôles lus aux deux postes : status propre, aucun rebase, origin/master égal à HEAD. Worktrees/branches locales du lot et target distant supprimés immédiatement, target local absent ; logs/attestations et backups distants conservés. Preuve `vert-433/pousse.log`. Aucun travail d'intégration de ce ticket ne reste à faire.
