@@ -1433,25 +1433,25 @@ pub fn analyze_in_project(
         };
         let reexportes: Vec<(String, String, Option<usize>, Option<usize>)> =
             reexportes.into_iter().map(|(nom, module, ligne)| (nom, module, ligne, porteur_de(ligne))).collect();
-        // Use the same export facts as codeparsers' cross-file resolver. An instance
-        // offers its export zone, never the class used to construct it.
-        if famille_de_langage(&rel) == Some("typescript") || matches!(Path::new(&rel).extension().and_then(|e| e.to_str()), Some("js" | "cjs" | "mjs" | "ts" | "tsx" | "jsx")) {
-            use codeparsers::relationship_resolution::relationship_resolver::{default_export_target, DefaultExportTarget};
-            let targets: Vec<_> = fa.scopes.iter().enumerate().filter_map(|(i, sc)| {
-                match default_export_target(&sc.content, sc.r#type == ScopeInfoType::Module)? {
-                    DefaultExportTarget::Instance => Some(i),
-                    DefaultExportTarget::Name(name) => {
-                        let mut matches = fa.scopes.iter().enumerate().filter(|(_, s)| s.name == name && s.parent.is_none());
-                        let (target, _) = matches.next()?;
-                        matches.next().is_none().then_some(target)
-                    }
-                }
-            }).collect::<std::collections::BTreeSet<_>>().into_iter().collect();
-            if let [i] = targets.as_slice() {
-                if let Some(key) = cle_du_scope.get(&(rel.clone(), *i)) {
-                    analysis.default_exports.push((key.clone(), default_export_symbol(&source, &rel)));
-                }
+        // Consume the file-level fact, independently of the scope's owned text.
+        // An instance identifies its export zone, never the constructor class.
+        use codeparsers::scope_extraction::types::DefaultExportTarget;
+        let target = match fa.default_export.as_ref() {
+            Some(DefaultExportTarget::Name(name)) => {
+                let mut candidates = fa.scopes.iter().enumerate()
+                    .filter(|(_, sc)| sc.name == *name && sc.parent.is_none());
+                candidates.next().and_then(|(i, _)| candidates.next().is_none().then_some(i))
             }
+            Some(DefaultExportTarget::Instance { line }) => fa.scopes.iter().enumerate()
+                .filter(|(i, sc)| sc.r#type == ScopeInfoType::Module
+                    && sc.scope_start_line <= *line && *line <= sc.scope_end_line
+                    && cle_du_scope.contains_key(&(rel.clone(), *i)))
+                .min_by_key(|(_, sc)| sc.scope_end_line - sc.scope_start_line)
+                .map(|(i, _)| i),
+            None => None,
+        };
+        if let Some(key) = target.and_then(|i| cle_du_scope.get(&(rel.clone(), i))) {
+            analysis.default_exports.push((key.clone(), default_export_symbol(&source, &rel)));
         }
         for (i, sc) in fa.scopes.iter().enumerate() {
             let Some(key) = cle_du_scope.get(&(rel.clone(), i)) else {
