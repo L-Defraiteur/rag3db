@@ -141,3 +141,21 @@ du fournisseur. La vraie relation est `DEFINED_IN` (Scope→File, direction out,
 champ path). L'ancien troisième rouge, arrêté avant gather par hashsafe/racine,
 prouvait seulement le verrou amont ; aucune validité de cette ancienne règle
 n'est revendiquée. Le cas corrigé sera rejoué sur baseline et candidat.
+
+Source combinée `11ea6ec87` : sans code ouverture6/0/0 et gabarits9/0/0 ;
+lib native entière1575/0/15 ignorés (20,60s). Avec code ouverture16/0/0 (0,70s),
+gabarits9/0/0 (0,01s) et test fournisseur1/0/0. Les trois cas nommés corrigés
+passent, dont DEFINED_IN/out/path ; propriétés de MENTIONS étendues sans perdre
+kind, conflits de type/endpoints refusés, compteur zéroappelDB. Overlay déclaré
+Scope en BM25 vérifié après ouverture, pas traité comme conflit du fournisseur.
+Preuve `cibles-4.log`, `lib-native-4.log`, `verdict-cibles-4`.
+
+Baseline corrigée `292b61081` (2e+tests seuls) : les trois cas nommés restent
+0/3/0 (0,01s), tandis que deux cas du contrat Catalog existant sont verts2/0/0
+(0,16s) : propriétés ajoutées à MENTIONS en gardant les précédentes ; refus de
+changer ses extrémités. Preuves `baseline-opening_named_schema_.log`,
+`baseline-named_catalog_existing_.log`, `commit-baseline-contrats`.
+Le nouveau refus de conflits de type est prouvé dans la composition Backend,
+pas présenté comme une nouvelle garantie de l'API Catalog individuelle.
+Reste la passe globale de la composition, tour et intégration ; alias1a toujours
+à prouver après raccordement. Ce ticket reste ouvert jusque-là.
