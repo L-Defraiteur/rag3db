@@ -41,7 +41,9 @@ pub struct PostgresConnection {
     /// deux sessions du pool »). `commit`/`rollback` la rendent au pool —
     /// ou la FERMENT si la clôture échoue : on ne rend jamais au pool une
     /// session dont l'état transactionnel est inconnu.
-    epinglee: std::sync::Mutex<Option<deadpool_postgres::Object>>,
+    // L'attente cède le pilote I/O : un callback de stockage peut tenir la
+    // session en attendant une réponse que le fil appelant doit encore lire.
+    epinglee: tokio::sync::Mutex<Option<deadpool_postgres::Object>>,
 }
 
 /// La session d'une instruction : l'épinglée si une transaction est ouverte
@@ -49,7 +51,7 @@ pub struct PostgresConnection {
 /// transaction se suivent, elles ne se doublent pas), une session du pool
 /// sinon.
 enum SessionTenue<'a> {
-    Epinglee(std::sync::MutexGuard<'a, Option<deadpool_postgres::Object>>),
+    Epinglee(tokio::sync::MutexGuard<'a, Option<deadpool_postgres::Object>>),
     DuPool(deadpool_postgres::Object),
 }
 
@@ -130,13 +132,13 @@ impl PostgresConnection {
         })??;
         drop(_conn);
 
-        Ok(Self { pool, rt, epinglee: std::sync::Mutex::new(None) })
+        Ok(Self { pool, rt, epinglee: tokio::sync::Mutex::new(None) })
     }
 
     /// La session de CETTE instruction : l'épinglée d'une transaction
     /// ouverte, ou une session du pool.
     async fn session(&self) -> Result<SessionTenue<'_>, DbError> {
-        let garde = self.epinglee.lock().unwrap_or_else(|e| e.into_inner());
+        let garde = self.epinglee.lock().await;
         if garde.is_some() {
             return Ok(SessionTenue::Epinglee(garde));
         }
@@ -152,7 +154,7 @@ impl PostgresConnection {
     /// Clore la transaction épinglée par `COMMIT` ou `ROLLBACK`.
     fn clore(&self, verbe: &'static str) -> Result<(), DbError> {
         bloquer(&self.rt, "PostgresConnection::clore", async move {
-            let prise = self.epinglee.lock().unwrap_or_else(|e| e.into_inner()).take();
+            let prise = self.epinglee.lock().await.take();
             let Some(session) = prise else {
                 return Err(DbError::QueryError(format!(
                     "{verbe} : aucune transaction ouverte sur cette connexion"
@@ -537,7 +539,7 @@ impl DbConnection for PostgresConnection {
     /// transaction sur la même connexion est refusée en son nom.
     fn begin(&self) -> Result<(), DbError> {
         bloquer(&self.rt, "PostgresConnection::begin", async {
-            let mut garde = self.epinglee.lock().unwrap_or_else(|e| e.into_inner());
+            let mut garde = self.epinglee.lock().await;
             if garde.is_some() {
                 return Err(DbError::QueryError(
                     "begin : une transaction est déjà ouverte sur cette connexion — \
