@@ -401,6 +401,10 @@ pub struct SimpleFieldDef {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct EntityConfig {
+    /// Index dérivé qui sert cette cible publique. Son `from` doit désigner
+    /// cette entité ; la relation de dérivation fournit les trajets aller/retour.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub search_index: Option<String>,
     pub fields: HashMap<String, SimpleFieldDef>,
 
     /// Search signals (default: Hybrid = BM25 + Vector).
@@ -835,6 +839,7 @@ impl Default for EntityConfig {
     fn default() -> Self {
         Self {
             fields: HashMap::new(),
+            search_index: None,
             signals: crate::search::SearchSignals::HYBRID,
             chunking: ChunkingConfig::default(),
             hashsafe: None,

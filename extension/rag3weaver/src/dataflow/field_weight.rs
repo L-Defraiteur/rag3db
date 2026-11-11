@@ -247,6 +247,7 @@ mod tests {
 
     fn target_with(field_weights: Vec<FieldWeight>) -> crate::search::SearchTarget {
         crate::search::SearchTarget {
+            occurrence_projection: None,
             name: "T".into(),
             parent_table: "T".into(),
             chunk_table: "T_Chunk".into(),

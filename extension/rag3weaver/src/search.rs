@@ -766,6 +766,9 @@ pub struct SearchDiagnostics {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchTarget {
+    /// Plan calculé depuis l'association déclarée et le lien de dérivation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub occurrence_projection: Option<OccurrenceProjection>,
     /// Name used to identify this target (KB name or entity name).
     pub name: String,
     /// Parent/index table — BM25 search target.
@@ -806,6 +809,17 @@ pub struct SearchTarget {
     /// 1,0 = neutre.
     #[serde(default = "default_title_boost")]
     pub title_boost: f64,
+}
+
+/// La représentation indexée et l'occurrence publique restent deux identités.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OccurrenceProjection {
+    pub entity: String,
+    pub relation: String,
+    pub fields: Vec<String>,
+    /// Champs dont les octets doivent être conservés pour réutiliser les coordonnées.
+    pub content_fields: Vec<String>,
 }
 
 fn default_title_boost() -> f64 {
@@ -1506,6 +1520,66 @@ pub fn resolve_vector_chunks_admitted(
         .collect();
     resolved.sort_by(|a, b| b.score.total_cmp(&a.score).then_with(|| a.uuid.cmp(&b.uuid)));
     Ok(resolved)
+}
+
+/// Redéploie les versions indexées vers les seules occurrences admises, avant
+/// fusion et pagination. La même connexion sert au masque et à l'enrichissement.
+pub fn project_occurrence_results(
+    conn: &dyn DbConnection,
+    dialect: &dyn crate::dialect::SchemaDialect,
+    target: &SearchTarget,
+    results: Vec<SearchResult>,
+    admitted: &std::collections::HashSet<String>,
+) -> Result<Vec<SearchResult>, CatalogError> {
+    let Some(projection) = &target.occurrence_projection else { return Ok(results) };
+    if results.is_empty() || admitted.is_empty() { return Ok(Vec::new()); }
+    let query = dialect.kb_gather_content(&target.parent_table, &projection.relation, &projection.entity, true,
+        &std::iter::once("_uuid").chain(projection.fields.iter().map(String::as_str)).collect::<Vec<_>>());
+    let mut roots: HashMap<String, BTreeMap<String, BTreeMap<String, CypherValue>>> = HashMap::new();
+    let versions: Vec<_> = results.iter().map(|r| r.uuid.clone()).collect();
+    for batch in versions.chunks(5_000) {
+        let items = CypherValue::List(batch.iter().map(|uuid| CypherValue::Map(BTreeMap::from([("uuid".into(), CypherValue::String(uuid.clone()))]))).collect());
+        let read = conn.execute_with_params(&query, &[QueryParam::new("items", items)])
+            .map_err(|e| CatalogError::DbError(format!("projection des occurrences : {e}")))?;
+        for row in read.rows {
+            let Some(version) = row.first().and_then(|v| v.as_str()) else { continue };
+            let Some(root) = row.get(1).and_then(|v| v.as_str()) else { continue };
+            if !admitted.contains(root) { continue; }
+            let data = projection.fields.iter().enumerate().filter_map(|(i, field)| row.get(i + 2).map(|v| (field.clone(), v.clone()))).collect();
+            roots.entry(version.to_string()).or_default().insert(root.to_string(), data);
+        }
+    }
+    let mut projected: BTreeMap<String, SearchResult> = BTreeMap::new();
+    for result in results {
+        for (root, data) in roots.get(&result.uuid).into_iter().flat_map(|r| r.iter()) {
+            for field in &projection.content_fields {
+                let indexed = result.data.as_ref().and_then(|d| d.get(field)).and_then(|v| v.as_str()).unwrap_or_default();
+                let original = data.get(field).and_then(|v| v.as_str()).unwrap_or_default();
+                if indexed != original {
+                    return Err(CatalogError::SchemaError(format!("projection {} : les octets du champ {field} diffèrent pour {root} ; remappage des coordonnées requis", projection.entity)));
+                }
+            }
+            let mut occurrence = result.clone();
+            occurrence.uuid = root.clone();
+            occurrence.entity = Some(projection.entity.clone());
+            occurrence.data = Some(data.clone());
+            if let Some(chunks) = &mut occurrence.chunks {
+                for chunk in chunks {
+                    chunk.source_entity = projection.entity.clone();
+                    chunk.source_uuid = root.clone();
+                }
+            }
+            match projected.entry(root.clone()) {
+                std::collections::btree_map::Entry::Vacant(entry) => { entry.insert(occurrence); }
+                std::collections::btree_map::Entry::Occupied(mut entry) => {
+                    if occurrence.score > entry.get().score { entry.insert(occurrence); }
+                }
+            }
+        }
+    }
+    let mut result: Vec<_> = projected.into_values().collect();
+    result.sort_by(|a, b| b.score.total_cmp(&a.score).then_with(|| a.uuid.cmp(&b.uuid)));
+    Ok(result)
 }
 
 /// Build the JSON query config for QUERY_LUCIVY_INDEX.
@@ -2776,6 +2850,7 @@ mod tests {
     fn shared_chunk_projection_preserves_parents_admission_and_source_attribution() {
         use crate::connection::{CallbackConnection, QueryResult};
         let target = SearchTarget {
+            occurrence_projection: None,
             name: "Entry".into(), parent_table: "Entry".into(), chunk_table: "Entry_Chunk".into(),
             chunk_rel: "Entry_CHUNKED_FROM".into(), chunk_rel_fwd: false,
             bm25_fields: vec![], enrich_fields: vec![], default_signals: SearchSignals::VECTOR,
