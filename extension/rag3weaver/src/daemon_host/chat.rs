@@ -535,7 +535,7 @@ impl DaemonHost {
             }
         }
         self.write_chat(backend_id)?;
-        self.publier_l_etat_du_chat(backend_id, depuis, &run_id);
+        self.publier_l_etat_du_chat(backend_id, depuis, &run_id, &resultat);
         resultat
     }
 
@@ -543,11 +543,17 @@ impl DaemonHost {
     /// (contexte, usage, modèle, fiches écrites), le run du tour et les tours ajoutés depuis
     /// `depuis`. GET, flux et récapitulatif lisent la même projection du journal,
     /// dont le total est scellé à la fin du tour, avant sa publication.
-    fn publier_l_etat_du_chat(&self, backend_id: &str, depuis: usize, run: &str) {
+    fn publier_l_etat_du_chat(&self, backend_id: &str, depuis: usize, run: &str, resultat: &Result<Value, String>) {
         let Ok(mut v) = self.chat_state(backend_id) else { return };
         let tours = v.as_object_mut().and_then(|o| o.remove("turns")).and_then(|t| t.as_array().cloned()).unwrap_or_default();
         let depuis = depuis.min(tours.len());
         v["tour"] = json!(run);
+        // Une fin est un résultat, pas une promesse de réussite : le même
+        // contrat vaut pour l'envoi de la page et une relance par une carte.
+        v["fin_du_tour"] = match resultat {
+            Ok(r) => json!({ "ok": true, "arrete_par": r["stopped_by"] }),
+            Err(erreur) => json!({ "ok": false, "erreur": erreur }),
+        };
         v["depuis"] = json!(depuis);
         v["nouveaux_tours"] = json!(tours[depuis..]);
         self.ide_flux().publier_etat("chat", backend_id, v);

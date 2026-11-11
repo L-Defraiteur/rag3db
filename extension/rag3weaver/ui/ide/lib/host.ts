@@ -131,7 +131,12 @@ export function onEtat<T>(de: string, cle: string | null, f: (etat: T, cle: stri
 
 /// L'état d'un chat que l'hôte pousse à la fin d'un tour : son état sans les tours, ceux
 /// d'avant `depuis` gardés par la page, et les tours ajoutés.
-export type ChatPousse = Omit<ChatState, "turns"> & { tour: string; depuis: number; nouveaux_tours: ChatTurn[] };
+export type ChatPousse = Omit<ChatState, "turns"> & {
+  tour: string;
+  depuis: number;
+  nouveaux_tours: ChatTurn[];
+  fin_du_tour: { ok: true; arrete_par: string | null } | { ok: false; erreur: string };
+};
 
 // Un tour de la session. `at_ms` : sur un appel, l'heure où il est parti ; sur un
 // tour `tool`, l'heure où le résultat est revenu (la durée est l'écart) ; absent
