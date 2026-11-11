@@ -91,3 +91,37 @@ remplacer son helper temporaire lisant le transport textuel par la lecture du ch
 uniquement ; aucune reconstitution depuis un chemin, un label, la conversation ou un texte
 tronqué. Le rouge de 3,78 s reste conservé sous son SHA d'origine. Aucune compilation n'est
 à relancer sur une source ED encore non validée pour prétendre que le relais fonctionne.
+
+
+## Intégration diagnostique disponible — base ED `14585ca4a`
+
+Le transport annoncé ci-dessus est maintenant intégré et observé. Branche archi
+`cx-archi-ui-contextuel-relais-2`, worktree sur les deux postes :
+`~/.cache/rag3weaver-build/cx-wt-ui-contextuel`, target unique sur luciepc :
+`~/.cache/rag3weaver-build/cx-archi-target`. Cette base diagnostique n'est pas la base finale
+courante : attendre celle d'ED avant la passe commune et un éventuel push master.
+
+- `861e178b7` : outils `search_code` et `outline` effectivement exposés et exécutés depuis Chrome ;
+  reçus structurés complets observés. Rouge ensuite : aucun lien sur le vrai `src/lib.rs:1-3`.
+- `23dde03d5` : reçu réel conservé ; le diagnostic HTML a lui-même une erreur d'échappement,
+  corrigée au commit suivant. Ce passage n'est pas une preuve du rendu.
+- `ef43d6ead` : les plages de lignes sont reconnues ; rouge précis en 3,80 s : le reçu désigne B,
+  mais le href désigne la conversation. Texte et HTML réels conservés.
+- `657f51f12` : **VERT ciblé navigateur 1/0/0 en 65,72 s** : recherche + outline réels, B puis A,
+  mêmes chemin et symbole mais contenus distincts, clic correct puis relecture de session et
+  clic correct sans nouvel appel modèle. Inventaire atelier/dépôt/tâche : **1/0/0 en 2,17 s**,
+  incluant les huit lectures contextuelles et `wait_output` dans l'atelier.
+- `3dd0af8ad` : garde de contexte JS verte : reçu autoritaire, ancien outil local inchangé,
+  absence/inconnu/vue non prise en charge inactifs, aucun repli sur la conversation.
+- `b57313175` : nouveaux témoins de vraie coupure de recherche et commande différée après accord,
+  **en cours de validation, pas encore verts**. Aucun résultat fabriqué ni lien injecté par eux.
+
+Le rendu relit exclusivement `metadata.invocation`, conservé dans les tours et les événements,
+indépendamment du texte borné. Un contexte explicite sans reçu exploitable n'active ni lien ni
+composant d'action. Les outils locaux ordinaires gardent leur contexte local. La plage de ligne
+conserve son texte et ouvre la première ligne dans la vue du fichier.
+
+Preuves séparées sous `~/.cache/rag3weaver-build/cx-ui-contextuel-<SHA>-<étape>-20261111/`
+sur luciepc, avec source-head, navigateur.log et exit-code. Les rouges initiaux ne sont pas écrasés.
+TypeScript vérifié et bundle rebâti. Le succès sur ED145 est diagnostique : aucune passe complète
+commune, aucune livraison master, aucune découverte autonome des cibles par le modèle n'est prouvée.
