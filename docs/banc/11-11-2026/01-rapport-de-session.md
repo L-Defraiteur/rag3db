@@ -128,28 +128,28 @@ Toujours à luciepc :
 - `~/.cache/rag3weaver-build/` porte encore des journaux `build-vingt.*.log` et des scripts du banc
   (`fenetre-jeu.sh`, `vingt-push.sh`…).
 
-## 5. Les tickets ouverts du banc (dans `docs/tickets/`, non déplacés)
+## 5. Les tickets ouverts du banc (dans `docs/banc/tickets/`, déplacés le 11 novembre)
 
-- `2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md` : 1 402 copies d'un même
+- `docs/banc/tickets/2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre.md` : 1 402 copies d'un même
   vecteur ne sont pas toutes joignables dans l'index HNSW. Cinq cas en known_red, trois en
   probabilistic.
-- `2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region.md` : l'élagage peut rendre
+- `docs/banc/tickets/2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region.md` : l'élagage peut rendre
   une région du graphe injoignable. Vu sur une variante d'essai seulement.
-- `2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot.md` : la pente
+- `docs/banc/tickets/2026-10-12-sans-point-de-reprise-l-insertion-sous-hnsw-ralentit-lot-apres-lot.md` : la pente
   de l'insertion, en probabilistic.txt.
-- `2026-10-12-les-retrecissements-de-l-insertion-hnsw-alourdissent-son-cout.md` : les
+- `docs/banc/tickets/2026-10-12-les-retrecissements-de-l-insertion-hnsw-alourdissent-son-cout.md` : les
   rétrécissements de voisinage coûtent ×1,3 à ×1,6.
-- `2026-10-18-un-bati-d-index-prend-tous-les-fils-et-affame-les-autres-connexions.md` : un
+- `docs/banc/tickets/2026-10-18-un-bati-d-index-prend-tous-les-fils-et-affame-les-autres-connexions.md` : un
   CREATE_VECTOR_INDEX prend tous les fils de travail.
-- `2026-10-18-sur-une-table-hnsw-les-ecrivains-passent-un-par-un.md` : le verrou exclusif de
+- `docs/banc/tickets/2026-10-18-sur-une-table-hnsw-les-ecrivains-passent-un-par-un.md` : le verrou exclusif de
   l'index sérialise les écrivains. La forme I2 est choisie.
-- `2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md` : réduit
+- `docs/banc/tickets/2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md` : réduit
   par V2-1c et V2-2. Restent les écrivains, au format 44.
-- `2026-10-19-la-memoire-d-un-index-avec-ses-vecteurs-a-mesurer.md` : avec G, la mesure de la
+- `docs/banc/tickets/2026-10-19-la-memoire-d-un-index-avec-ses-vecteurs-a-mesurer.md` : avec G, la mesure de la
   mémoire en phase vecteurs.
-- `2026-11-08-le-juge-du-rappel-coupe-sa-reponse-sous-400-jetons.md` : pour archi, la réflexion
+- `docs/rag3weaver-archi/tickets/2026-11-08-le-juge-du-rappel-coupe-sa-reponse-sous-400-jetons.md` (chez archi, pour qui il est) : pour archi, la réflexion
   de Gemini prend les 400 jetons du juge des hooks.
-- `2026-11-08-un-temoin-de-temps-du-banc-rougit-sous-charge.md` : un témoin de temps,
+- `docs/banc/tickets/2026-11-08-un-temoin-de-temps-du-banc-rougit-sous-charge.md` : un témoin de temps,
   `LockBench`, est passé en probabilistic.
 
 ## 6. Les trois prochains pas
