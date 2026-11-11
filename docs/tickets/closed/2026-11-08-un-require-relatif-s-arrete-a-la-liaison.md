@@ -1,6 +1,6 @@
 # Un `require` relatif s'arrête à la liaison au lieu de suivre le module
 
-- **État** : en cours — correctif d96ed3264/a730a9b sur branche cx-codeparsers-require-2 ; décision de navigation et passe finale encore attendues
+- **État** : corrigé — code d92c0f4b7/a730a9b ; passe intégrée 50ebbb760 relue ; contrat accepté et tour de push accordé par l’orchestration le 11 novembre 2026
 - **Gravité** : réponse fausse (un usage relié à la ligne du `require`, pas à la définition).
 - **Atteignable en service** : oui, tout dépôt CommonJS dont un fichier lie une classe d'un autre fichier
   de l'arbre par `const X = require("./x.js")`.
@@ -8,7 +8,7 @@
 - **Famille** : produit
 
 - **Pour** : session codeparsers
-- **Signalé par** : session codeparsers ; reprise et preuves dans [le bilan du 11 novembre](../11-11-2026/04-bilan-navigation-et-provenance.md)
+- **Signalé par** : session codeparsers ; reprise et preuves dans [le bilan du 11 novembre](../../codeparsers/11-11-2026/04-bilan-navigation-et-provenance.md)
 
 ## Ce que c'est
 
@@ -46,7 +46,7 @@ Porteur : codeparsers. Le lot d96ed3264/a730a9b est conservé sur
 cx-codeparsers-require-2, worktree /home/lucied/git_workspaces/cx-wt-codeparsers-require.
 Preuves : 8 e2e et 286 tests producteur passés ; deux index A/B et complément
 23 questions terminés. Détails et preuves brutes :
-[04-bilan-navigation-et-provenance.md](../11-11-2026/04-bilan-navigation-et-provenance.md).
+[04-bilan-navigation-et-provenance.md](../../codeparsers/11-11-2026/04-bilan-navigation-et-provenance.md).
 
 Reste à faire : décider avec l'orchestration le contrat de navigation
 alias local/export, attribuer les cas encore incertains via le ticket de
@@ -139,3 +139,13 @@ README et nouveautés explicitent ce contrat, sans nouveau code. La passe
 sur 50ebbb760 est inchangée ; seule la documentation est complétée depuis.
 Reste l'intégration sous tour explicite et la clôture avec ses preuves : le
 présent ticket n'est pas fermé par l'accord de conception.
+
+## Clôture
+
+Les quatre mentions originelles sont strictement justes dans la seconde A/B ;
+les huit témoins et les 286 tests producteur sont passés, ainsi que la passe
+intégrée détaillée ci-dessus. Contrat de navigation accepté, README et nouveautés
+alignés (1d70a8141), cinq strict-faux conservés. L'orchestration a relu les
+journaux et donné le tour de push. Le défaut require est corrigé ; les suites
+provenance et homonyme restent dans leurs deux tickets ouverts, sans transfert
+implicite de leur réalisation dans cette clôture. Aucun filet à retirer.
