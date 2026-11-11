@@ -233,16 +233,28 @@ preparer_journaux_des_demons() {
   export RAG3WEAVER_E2E_JOURNAUX_DEMONS="$E2E_DISQUE_PARENT/demons"
   mkdir -p "$RAG3WEAVER_E2E_JOURNAUX_DEMONS"
 }
+pids_des_demons() {
+  local resultat code
+  if resultat=$(pidof rag3weaver-embeddings); then
+    printf '%s\n' "$resultat"
+  else
+    code=$?
+    [ "$code" = 1 ] || { echo "✗ inventaire des démons indisponible" >&2; return 1; }
+  fi
+}
 arreter_les_demons_de_la_passe() {
-  local pids=()
-  read -r -a pids <<< "$(pidof rag3weaver-embeddings || true)"
+  local pids=() liste
+  liste=$(pids_des_demons) || return 1
+  read -r -a pids <<< "$liste"
   python3 "$WEAVER/scripts/arret_demons_e2e.py" "$RAG3WEAVER_PASSE_E2E" "${pids[@]}"
 }
 parent_de_passe_quiescent() {
-  local pid="${1##*-}"
+  local pid="${1##*-}" pids=() liste
   [[ "$pid" =~ ^[0-9]+$ ]] || return 1
   [ ! -d "/proc/$pid" ] || return 1
-  python3 "$WEAVER/scripts/arret_demons_e2e.py" --quiescence "$pid-"
+  liste=$(pids_des_demons) || return 1
+  read -r -a pids <<< "$liste"
+  python3 "$WEAVER/scripts/arret_demons_e2e.py" --quiescence "$pid-" "${pids[@]}"
 }
 garder_parent_termine() {
   local parent="$1" garde="$E2E_DISQUE_RACINE/e2e-gardes/parent-${1##*/}-$RAG3WEAVER_PASSE_E2E"

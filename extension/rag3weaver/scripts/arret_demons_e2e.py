@@ -41,18 +41,16 @@ def proprietaire(pid):
         return None
 
 
-def quiescent(prefixe):
+def quiescent(prefixe, pids):
     # Le PID de passe figure déjà dans la marque héritée. Un PID recyclé
     # peut conserver trop longtemps, jamais autoriser un effacement précoce.
     if not prefixe.endswith('-') or not prefixe[:-1].isdigit():
         return False
-    for proc in Path('/proc').iterdir():
-        if not proc.name.isdigit():
-            continue
+    for pid in set(pids):
         try:
-            possession = proprietaire(int(proc.name))
+            possession = proprietaire(pid)
             if possession and possession[1].startswith(prefixe.encode()):
-                print(f'▸ ressources conservées : processus de la passe encore vivant (pid {proc.name})')
+                print(f'▸ ressources conservées : processus de la passe encore vivant (pid {pid})')
                 return False
         except OSError as exc:
             print(f'▸ quiescence non vérifiable : {exc} ; ressources conservées', file=sys.stderr)
@@ -112,5 +110,5 @@ def arreter(marque, pids, delai=10):
 
 if __name__ == '__main__':
     if sys.argv[1] == '--quiescence':
-        sys.exit(0 if quiescent(sys.argv[2]) else 1)
+        sys.exit(0 if quiescent(sys.argv[2], map(int, sys.argv[3:])) else 1)
     sys.exit(0 if arreter(sys.argv[1], map(int, sys.argv[2:])) else 1)
