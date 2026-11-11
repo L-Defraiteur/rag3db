@@ -1,5 +1,37 @@
 # Rapport de session — everything declarative, au 11 novembre 2026
 
+## Reprise du 11 novembre après 17 h — état en cours
+
+- Lot repris sur `d1345a115` : branche `cx-ed-reclamations-rendues-3`,
+  worktree luciepc `/home/lucied/git_workspaces/cx-ed-reclamations`.
+  Correctif `1d5eefde2`, témoin de la dette annoncée `51bf676e4`, branche poussée.
+- Lib épinglée : `rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`.
+- Rouge observé sans correctif : `refused_chunks_are_retaken_by_the_next_index_after_a_reopen`,
+  dette 6 au lieu de 0 après refus, fermeture et réouverture avec service sain (2,17 s).
+  Avec correctif : vert (3,95 s). Rattrapage : trois verts sans correctif, donc non-reproduction
+  de l'intermittence ; un vert avec correctif (27,11 s).
+- Première passe : `check_features` VERT 5/5 ; lib 2094 verts, un rouge, 58 ignorés
+  (étape navigateur séparée non jouée). Le rouge attendait la ligne de fin ancienne sans dette ;
+  le témoin vérifie maintenant exactement les 12 morceaux dus sans embarqueur.
+- Deuxième passe complète en cours sous `poste lourd`, unité `cx-ed-reclamations-passe-2` :
+  check_features, lib entière, navigateur, e2e_lectures et quatre suites e2e_tx.
+  Aucun verdict vert global, aucun tour ni push master.
+- Preuves et scripts sur luciepc : `~/.cache/rag3weaver-build/I-luciepc/reclamations-20261111/`
+  (`refus-rouge-1.log`, `rouge-{1,2,3}.log`, `vert-*.log`, `lib.log`,
+  `check-2.log`, `lib-2.log`, `passe-2.log`, `passe.sh`).
+  Target unique inchangé : `~/.cache/rag3weaver-build/target-I-apres`.
+- Ancien worktree distant `rag3db-I-apres` conservé détaché sur `1d5eefde2` ;
+  `extension/rag3weaver/ir/Cargo.lock` non suivi préexistant conservé.
+- Relecture vues marche 1 transmise à arbre principal/recherche : empreinte du contenu réellement
+  chunké, vecteurs par modèle, couverture des occurrences après déduplication, parent/génération
+  épinglés, filtre par occurrence avant top-k, source et cible des arêtes visibles, lecture d'une
+  branche sans worktree. Aucun changement de `code.rs`.
+- Inventaire chat transmis à archi : atelier ne propose pas search_code/grep_files/list_files/
+  outline/usages/impact/callees, présents dans le gabarit code ; accords et reprise doivent garder
+  le dépôt et la vue. ED tient les contrats/gabarits/runtime, archi le parcours et l'UI.
+
+Le rapport historique ci-dessous décrit l'état avant cette reprise.
+
 > **Le premier lot à jouer** : le correctif des réclamations du rattrapage, branche
 > `reclamations-rendues`, commit **9da8e4433**, **jamais compilé ni joué**. Il rend la CI de master
 > verte (le témoin `owed_vectors_are_caught_up_on_open_when_the_manifest_declares_it` y rougit par
