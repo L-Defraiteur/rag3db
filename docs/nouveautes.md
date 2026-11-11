@@ -7,6 +7,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **11 nov. — Le chat suit l'hôte par le flux et garde ses actions après une panne.**
+  Au repos, il n'interroge plus l'hôte ; la fin du tour pousse son état, avec le même usage
+  dans la barre et le récapitulatif. Une erreur conserve les outils déjà exécutés et leurs
+  résultats, permet de reprendre et se dit aussi pour un tour relancé hors du formulaire.
+  (`cx-archi-ide-par-le-flux-chat-4`)
 - **11 nov. — Un morceau partagé rend toutes ses occurrences admises.** En recherche dense et creuse,
   chaque occurrence garde ses champs et ses positions ; ses meilleurs scores sont conservés, les
   égalités ont un ordre stable et les filtres continuent de s'appliquer. (`6c4b5ad0c`)
