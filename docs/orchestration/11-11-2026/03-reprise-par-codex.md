@@ -48,7 +48,7 @@ puis son `02-knowledge-dump.md`, puis ses tickets dans `docs/<nom>/tickets/`.
 | optimiseur | `docs/optimiseur/` | **poser le binaire de la tête de master** aux deux postes (lib 29a7bc52a inchangée), une coupure, préavis d'une minute ; tenir les libs, les services, les tunnels, le disque de luciepc |
 | embarquement | `docs/embarquement/` | rien d'inachevé ; son ticket (granite-278m arrêté huit fois, cause illisible) |
 | codeparsers | `docs/codeparsers/` | le lot require-js (pointeur 78888f5, branche `codeparsers/require-js`) : décider sur la mesure du 9 (lecture dans le rapport), passe, push ; le ticket import_binding |
-| banc | `docs/banc/` | le banc Qwen3-4B en GGUF avec le llama.cpp déjà bâti de Lucie (`~/git_workspaces/llama.cpp/build-hip/bin/`, b9590), card0 seulement ; puis le décideur d'actions quand il y aura des accords journalisés |
+| banc | `docs/banc/` | le banc Qwen3-4B en GGUF est fait (96a98a452 : Q8_0 en cache de préfixe égale bf16, 0,76 / AUC 0,92, 1,3 s pour k = 5 ; Q4_K_M perd en forme courte) ; ensuite le décideur d'actions quand il y aura des accords journalisés, et le classeur dans le rappel au mot de Lucie |
 | arbre principal | `docs/arbre-principal/` | wt-deplace (le garde-fou) et les mesures M3 à M5, décrits dans « Reprendre » |
 | lucivy | `docs/lucivy/` | rien sans le mot de Lucie : PR #22, #23 et la branche des tickets attendent sa décision dans cette session |
 | tty | `docs/tty/` | rien d'inachevé ; les thèmes suivants de l'interface terminal au premier fichier |

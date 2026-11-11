@@ -132,3 +132,11 @@ be319fa75 (archi, commandes en attente sur la carte, famille de commandes corrig
   dossier d'état 0b0ff221a —, la fin sans livrable rendue à everything declarative). Index : 341 en-têtes,
   106 ouverts. Les treize sessions ont leur dossier sous `docs/<session>/`. Master à d1ef15f9a plus ce
   rapport. La suite est à Codex, en commençant par `docs/README.md`.
+- **17 h 14, le banc en GGUF est fait** (banc, 96a98a452, page `docs/banc/11-11-2026/03-le-juge-en-gguf.md`) avec le
+  llama.cpp que Lucie avait déjà bâti à luciepc (`~/git_workspaces/llama.cpp/build-hip`, b9590) : Qwen3-4B
+  Q8_0 en cache de préfixe égale bf16 (0,76, AUC 0,92, même première fiche à 97 %), 1 076 ms par cas de 5
+  (83 ms par fiche en cache), 3 288 ms sans cache ; Q4_K_M 0,76 à 2 k mais 0,72 en forme courte. Forme de
+  production : Q8_0 par llama-server avec cache_prompt, ~1,3 s pour k = 5. Le drop-in fstrim est posé par
+  Lucie (`--minimum 16M`, le dimanche à 4 h) ; pacman n'a rien changé. Le sous-module codeparsers de son
+  arbre remis sur c660893. Le service 7882 reste en route pour Codex. Page de reprise pour l'orchestrateur
+  Codex : `03-reprise-par-codex.md` (75dd47a34).
