@@ -183,3 +183,23 @@ be319fa75 (archi, commandes en attente sur la carte, famille de commandes corrig
 
 Aucun tour de push de code n’a été donné pendant cette reprise. Les résultats ci-dessus sont ceux
 communiqués par les sessions ; seuls le hash et le diff de l’atterrissage docs ont été relus ici.
+
+
+### Atterrissage mémoire : diagnostic des refus Vertex
+
+- **133b9013e7585e90001a97bf70f4b7bbdc80c10e**, docs seules : note de reprise de l’archivage,
+  rapport mémoire et ticket des noms longs. Hash et diff relus par l’orchestration ; mémoire a
+  confirmé status propre, aucun rebase et origin/master égal à HEAD après fetch.
+- Sur binaire vérifié d1345a115 et copies isolées, noms d’origine : 2/7 sections réussies,
+  cinq HTTP400 en 46,9 s ; alias courts : 7/7, zéro refus en 113,5 s. Lib complète confirmée
+  dans maps. Vert de diagnostic uniquement, aucune passe ni modification produit livrée.
+- Ni le champ ni un seuil précis du refus ne sont établis : les alias modifient l’enum et sa
+  présentation. Prochain lot : résolution vérifiée alias vers nom exact, correctif du gabarit
+  et passe ; aucun lancement des 50 documents ni écriture dans la mémoire réelle.
+- ED annonce ses deux témoins ciblés verts après correctif sur `reclamations-rendues-2`,
+  1d5eefde2ab41db4bee577b6ec3607a0535dedcc ; passe complète en cours, aucun verdict global.
+- Archi : navigateur ciblé vert ; passe complète distante relancée explicitement après
+  interruption propre d’un premier lanceur au mauvais mode. Journaux faisant foi :
+  `flux-passe-complete-20261111-luciepc-2` ; aucun verdict global.
+- Le privé 7882 est transmis explicitement par hotfixs à codeparsers pour son A/B, réservation
+  confirmée par optimiseur : même service granite-278m, aucun arrêt ni cinquième service card2.
