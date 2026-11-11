@@ -134,8 +134,9 @@ avec arrêt `80b467dd3`) ; nouvelle branche `cx-archi-ui-contextuel-relais-3`.
 La passe diagnostique `b57313175` fait 1 réussi, 2 échecs, 0 ignoré en 150,28 s :
 le parcours court reste vert ; la commande hors domaine redemande l'accord (ticket archi
 `2026-11-11-un-accord-de-commande-hors-domaine-redemande-le-meme-accord.md`) ; le parcours
-tronqué atteint le reçu coupé et les clics B, puis relit prématurément l'ancien état « fini »
-avant les reçus A. Ces deux rouges ne constituent pas une passe verte.
+tronqué atteint le reçu coupé et les clics B, puis échoue faute de reçu observé au contrôle suivant ; ce diagnostic initial ne distingue
+pas à lui seul l'issue réelle du tour. Le contrôle explicite de l'issue dans la passe `3de12fd0b`
+révèle ensuite un débordement de la fenêtre du MockLlm interne (4790 jetons pour 4096). Ces deux rouges ne constituent pas une passe verte.
 
 Les fixtures suivantes gardent le script sous la racine et attendent l'issue du **nouveau**
 tour. Le faux modèle déclare une fenêtre de 131072 jetons pour permettre les deux tours de
@@ -143,3 +144,37 @@ résultats réellement coupés à la borne de 32768 octets du chat ; cette borne
 Le modèle vérifie la coupure réelle et l'absence de `Metadata:` dans le texte, tout en exigeant
 le reçu structuré. La commande attend un fichier signal, créé seulement après l'annonce du
 vrai appel wait_output dans le flux. Résultats de cette nouvelle combinaison encore attendus.
+
+
+## Preuves finales archi sur la source commune `a92b21233`
+
+- Trois ciblés **3/0/0 en 143,02 s** : nominal B/A, recherche réellement coupée B/A,
+  commande réellement accordée puis suivie par wait_output sur sortie différée.
+- Étape navigateur sous jeu large **39 réussis, 0 échec, 0 ignoré en 137,71 s**.
+  Les trois nouveaux témoins sont bien détectés par le script de l'étape.
+- ELF `rag3weaver-057fdf86676710c7`, SHA256
+  `4ad3a31b5742b01e20bbf14a5e848d8c2006061b6a271090fb6511a6b70b7f3e` :
+  la table référencée par son fichier `.d` pointe vers les 220 gabarits actuels ;
+  leurs 220 contenus sont présents dans l'ELF, aucun absent. app.js SHA256
+  `fff528ffdcbfb08c022c1249d0ec5ecc82a4caf4a010eaad4447ca7c3081bc00`.
+- TypeScript, test JS de la frontière de contexte, bundle identique aux sources et tickets verts.
+
+Preuves sur portable et luciepc :
+`~/.cache/rag3weaver-build/cx-ui-contextuel-a92b21233-navigateur-entier-20261111/`
+(`source-head`, `navigateur.log`, `exit-code`, `attestation-elf.json`, table utilisée).
+Le premier vérificateur ELF a été arrêté et corrigé : il parcourait inefficacement le mmap et
+avait d'abord inclus des tables d'autres jeux de features ; aucun témoin n'a été arrêté.
+Le résultat retenu sélectionne uniquement la table du binaire effectivement testé et utilise
+la recherche de sous-chaîne du mmap. Les anciennes tables non utilisées restent dans le target.
+
+Tout ce travail et la suite de validation/intégration sont reliés au ticket existant
+`docs/everything-declarative/tickets/2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md`
+(porteurs ED intégration et archi UI), complété sans doublon. Le défaut d'accord extérieur est
+distinct, pris en charge par ED, hors de ce lot, ticket archi conservé ouvert jusqu'au transfert.
+
+**Reste** : verdict complet ED sur le même a92, puis attendre l'intégration du lot recherche
+4.3.3 annoncé par orchestration, relire son diff, reposer la combinaison dans une branche neuve
+et rejouer les contrôles requis avant toute demande de tour. Les résultats a92 ne valent pas
+un succès de cette combinaison future. Aucun push master de ce lot n'est encore réalisé.
+Le worktree PC reste exactement sur a92 pendant la passe ED ; les compléments suivants sont
+uniquement documentaires sur la branche archi. Target archi 8,6 Go, conservé pour la suite du lot.

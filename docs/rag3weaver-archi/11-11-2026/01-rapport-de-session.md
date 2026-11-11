@@ -231,3 +231,23 @@ Attendre la base ED finale figée incluant le master courant, reprendre dans une
 puis passe commune. Aucun push master autorisé à ce stade. Le target est propre à archi ;
 ED garde son target et ses validations. Aucun changement au moteur, aux fichiers runtime ED,
 ni implantation des conceptions archiviste/rappel dans ce lot.
+
+
+## Reprise actuelle — validation archi du relais terminée, lot non livré
+
+Source code commune `a92b212334d240fe10bb7a295f12185864e048df`, branche
+`cx-archi-ui-contextuel-relais-3` ; les commits postérieurs archi sont documentaires.
+Worktrees portable et luciepc `~/.cache/rag3weaver-build/cx-wt-ui-contextuel`, target unique
+luciepc `cx-archi-target` (8,6 Go). Navigateur large **39/0/0 en 137,71 s**, ciblés **3/0/0**,
+TS/JS/bundle/tickets verts, 220 gabarits courants attestés dans l'ELF testé. Preuves copiées sur
+les deux postes dans `cx-ui-contextuel-a92b21233-navigateur-entier-20261111/` ; rouges séparés.
+Détails exacts et limites : `04-preparation-du-parcours-contextuel.md`.
+
+Action et reste : ticket existant ED
+`docs/everything-declarative/tickets/2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md`,
+ED porte intégration/runtime et archi UI. Attendre verdict ED sur a92, puis lot recherche 4.3.3,
+rebase dans une branche neuve, diff et rejeux requis avant tour de push et nettoyage. Ne pas
+annoncer livré ni fermer ce ticket sur la seule preuve archi. Défaut extérieur distinct :
+`docs/rag3weaver-archi/tickets/2026-11-11-un-accord-de-commande-hors-domaine-redemande-le-meme-accord.md`,
+pris en charge par ED, transfert documentaire attendu après la passe ; aucun correctif de
+ce défaut dans le relais. Aucun travail dans l'arbre principal de Lucie.
