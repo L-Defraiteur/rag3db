@@ -5,8 +5,8 @@ Cette page est écrite pour un agent sans mémoire des échanges. Le rapport de 
 
 ## Reprise du 11 novembre : chemins et projection du chat
 
-La référence est `cx-wt-flux` / `cx-archi-ide-par-le-flux-2`, validation sur luciepc,
-target `flux`. Les chemins et commandes de l'ancienne session ci-dessous sont historiques ;
+La référence finale est `cx-wt-chat-erreurs` / `cx-archi-ide-par-le-flux-chat-4`, validation
+commune flux/chat sur luciepc, target `flux`. Les chemins et commandes de l'ancienne session ci-dessous sont historiques ;
 le rapport adjacent donne les lanceurs et dossiers de résultats courants. Sur luciepc,
 les services d'embarquement sont `127.0.0.1:7878,127.0.0.1:7879,127.0.0.1:7880` ;
 `7979,7980,7981` sont les ports du portable, pas des services locaux distants.
@@ -20,7 +20,8 @@ faire une barre latérale. Les résultats absents ne se mettent pas en cache né
 
 ## Parcours chat : issue des tours et erreurs (branche suivante)
 
-Le lot `cx-archi-chat-erreurs`, worktree `cx-wt-chat-erreurs`, descend du lot flux.
+Les lots flux et `cx-archi-chat-erreurs` sont réunis sur `cx-archi-ide-par-le-flux-chat-4`,
+worktree `cx-wt-chat-erreurs`, sans ajout de fonctions/outils.
 `ChatPousse.fin_du_tour` distingue succès/arrêt et erreur, lié à `tour` ; les tours relancés
 hors formulaire utilisent ce même contrat. Un échec HTTP conserve les actions et résultats
 déjà reçus, au lieu de supprimer la bulle en cours. L'état poussé tardif doit lui aussi dire
