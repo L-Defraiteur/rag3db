@@ -300,3 +300,10 @@ Correction du diagnostic PGv4 : le contrôle SQL après arrêt révèle seulemen
 (2 racines, 1 version), aucune bêta. Le blocage est dans la deuxième ingestion, pas encore
 la lecture publique. Le ticket commun [appels PostgreSQL/session épinglée](2026-11-11-les-appels-postgres-concurrents-peuvent-bloquer-la-session-epinglee.md)
 porte le témoin direct borné et l'éventuel correctif ; cause et antériorité restent à prouver.
+
+Premier vrai parcours public SQL complet vert, source **d84c03432**, après609 (mutex async)
+et la primitive dialectale d'appartenance : **1/0** (0,71s), puis suite PG entière **36/0**
+(8,56s), rc0 sans résidu dans la base privée. Logs `cx-contenu-pg-v5.log` et
+`cx-pg-complet-v5.log`. Filtres49 et dialectes59 verts dans `cx-filter-membership-vert.log`.
+Cela couvre les douze lectures, la dette de recette par cellule et le rollback ; ne pas
+réattribuer ces résultats aux essais précédents ni annoncer la passe combinée déjà faite.
