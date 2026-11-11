@@ -505,3 +505,28 @@ fn la_cellule_de_la_requete_ecrit_et_cherche_sans_basculer_le_catalogue() {
     }
     assert!(catalog.lock().unwrap().scope().is_default(), "toujours la même cellule au catalogue");
 }
+/// Une bascule n'emporte pas les écritures encore en file de l'autre cellule.
+#[test]
+#[ignore]
+fn les_files_acceptees_restent_attachees_a_leur_cellule() {
+    let mut catalog = catalog_in_memory();
+    catalog.register_entity("Product", make_product_config_with(SearchSignals::VECTOR)).unwrap();
+    catalog.regime_d_ecriture(rag3weaver::disponibilite::RegimeEcriture::ParLot);
+    let alpha = Scope::new("acme", "alpha");
+    let beta = Scope::new("acme", "beta");
+    catalog.set_scope(alpha.clone()).unwrap();
+    catalog.create("Product", make_product("A", "alpha pending")).unwrap();
+    catalog.set_scope(beta.clone()).unwrap();
+    catalog.create("Product", make_product("B", "beta pending")).unwrap();
+    let first = catalog.drain();
+    assert_eq!(first.failed, 0, "{:?}", first.warnings);
+    let names = catalog.conn().execute("MATCH (p:Product) RETURN p.name").unwrap();
+    assert_eq!(names.rows, vec![vec![CypherValue::String("B".into())]], "le drain bêta laisse alpha en file");
+    catalog.set_scope(alpha.clone()).unwrap();
+    let second = catalog.drain();
+    assert_eq!(second.failed, 0, "{:?}", second.warnings);
+    let mut pairs = scope_pairs(&catalog, "Product");
+    pairs.sort();
+    assert_eq!(pairs, vec![("acme".into(), "alpha".into()), ("acme".into(), "beta".into())]);
+    assert_eq!(catalog.scope(), &alpha);
+}

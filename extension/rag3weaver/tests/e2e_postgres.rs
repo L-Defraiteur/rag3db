@@ -2090,3 +2090,28 @@ fn un_ordre_par_extreme_des_lignes_liees_se_joue_en_sql() {
     let min = par(json!({"min": max(false)}));
     assert_eq!(jouer(&min, json!({"k": "rule", "limit": 10, "offset": 0})), ["g3", "g1", "g2"], "le NULL en dernier, croissant aussi");
 }
+
+#[test]
+#[ignore]
+fn les_appels_concurrents_progressent_dans_une_session_epinglee() {
+    let conn = ouvrir();
+    conn.begin().unwrap();
+    eprintln!("PG_PIN_BEGIN");
+    let barrier = Arc::new(std::sync::Barrier::new(2));
+    let workers: Vec<_> = (0..2).map(|worker| {
+        let conn = conn.clone();
+        let barrier = barrier.clone();
+        std::thread::spawn(move || {
+            for round in 0..16 {
+                barrier.wait();
+                eprintln!("PG_PIN_ENTER worker={worker} round={round}");
+                let result = conn.execute("SELECT pg_sleep(0.005), 1::bigint").unwrap();
+                assert_eq!(result.rows[0][1].as_i64(), Some(1));
+                eprintln!("PG_PIN_EXIT worker={worker} round={round}");
+            }
+        })
+    }).collect();
+    for worker in workers { worker.join().unwrap(); }
+    conn.rollback().unwrap();
+    eprintln!("PG_PIN_ROLLBACK");
+}
