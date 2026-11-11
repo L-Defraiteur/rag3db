@@ -76,3 +76,28 @@ signal. Le voisin INT64 reste vert. Preuve : luciepc
 
 Aucun correctif à ce stade. Prochain pas : tracer l’allocation durant le retrait des
 clés longues, puis comparer les stratégies des moteurs avant proposition à l’orchestration.
+
+### Cause tracée et suite
+
+La pile de `annulation/trace.log` confirme : `rollbackPKIndexInsert` →
+`scanIndexColumns` → `StringVector::reserveString` →
+`InMemOverflowBuffer::allocateNewBlock` → `MemoryManager::allocateBuffer` →
+`BufferManager::pin`, qui refuse. La copie des clés longues vers le vecteur de
+lecture demande le nouveau bloc ; ce n’est pas une preuve d’allocation dans le
+retrait de la clé elle-même. La trace reproduit le rouge, voisin INT64 vert.
+
+Proposition transmise à l’orchestration avant tout correctif : lire les clés depuis
+leur stockage existant pour l’annulation, sans recopier les chaînes dans un nouveau
+tampon ; vérifier les verrous et la durée de vie de la vue empruntée.
+
+Lectures de référence : PostgreSQL réserve 8 Kio dans
+[ErrorContext](https://github.com/postgres/postgres/blob/master/src/backend/utils/mmgr/mcxt.c)
+pour traiter les erreurs ; cela ne prouve pas une réserve pour tout rollback.
+[SQLite](https://sqlite.org/lang_transaction.html) peut annuler toute la transaction
+après SQLITE_NOMEM. [DuckDB](https://duckdb.org/docs/2.0/guides/troubleshooting/crashes)
+invalide la base après une erreur interne. Ces politiques ne démontrent pas que
+notre annulation exige une réserve forfaitaire.
+
+Branche de reprise désormais `cx-coeur-annulation`, publiée, worktree
+`~/git_workspaces/cx-coeur-annulation`, même commit `65486c02d`.
+L’ancien worktree `rag3db-csr` reste sur disque, détaché, sans suppression.

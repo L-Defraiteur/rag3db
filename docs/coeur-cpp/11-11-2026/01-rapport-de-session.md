@@ -241,15 +241,21 @@ Au nom du cœur, tenus surtout par hotfixs (la « seconde session cœur C++ ») 
 tickets qui nomment le cœur sont des optimisations ou du confort classés « hors stèle » par
 l'orchestration.
 
-## Actualisation — reprise Codex du 11 novembre
+## Actualisation — reprise du 11 novembre
 
 Le ticket des deux sens est fermé après relecture des deux preuves hotfixs
 `reprise-codex-11nov-29a7/{d796,item2}.log` (0 erreur et aucun écart). Il vit dans
 `docs/tickets/closed/`. La réparation des bases existantes attend toujours Lucie.
 
 Le témoin initial d’annulation passe ; le défaut est désormais reproduit par COPY
-avec des clés STRING longues : `65486c02d`, branche `annulation-sous-pool-plein`,
-worktree portable `~/git_workspaces/rag3db-csr`. Les preuves et les conditions exactes
+avec des clés STRING longues : `65486c02d`, branche `cx-coeur-annulation`,
+worktree portable `~/git_workspaces/cx-coeur-annulation`. Les preuves et les conditions exactes
 sont dans le ticket d’annulation. Aucun correctif, aucune suite entière jouée sur ce lot.
 À luciepc, `rag3db-colonnes` porte encore les variantes exploratoires au-dessus de
 `6e7f11680` ; ne pas écraser ce travail avant sauvegarde/synchronisation.
+
+La pile d’étude (`annulation/trace.log` à luciepc) confirme l’allocation refusée :
+`rollbackPKIndexInsert` → `scanIndexColumns` → `StringVector::reserveString` →
+`InMemOverflowBuffer::allocateNewBlock` → `MemoryManager::allocateBuffer` →
+`BufferManager::pin`. Les traces temporaires restent uniquement dans le worktree
+d’étude distant ; elles ne sont pas dans les commits. Le voisin INT64 reste vert.
