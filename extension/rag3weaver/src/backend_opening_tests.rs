@@ -294,3 +294,89 @@ fn named_catalog_existing_relation_endpoints_cannot_be_replaced() {
     let def = cat.get_relation_def("MENTIONS").unwrap();
     assert_eq!((&def.from,&def.to),(&"Scope".to_string(),&"Symbol".to_string()));
 }
+
+fn public_content_index(m: &mut Value, view: &str, root: &str) {
+    set_derived(m, view, root, json!([]));
+    m["entities"][view]["config"]["derived"]["identity"] = json!({"mode":"content","format":"opening-content-v1"});
+    m["entities"][root]["config"]["searchIndex"] = json!(view);
+    m["entities"][root]["config"]["returnFields"] = json!(["key"]);
+}
+
+#[test]
+fn opening_public_content_manifest_writes_roots_and_searches_occurrences() {
+    use crate::connection::CypherValue;
+    use crate::search::{Consistency,ResultMode,SearchOptions,SearchSignals};
+    for (view,root) in [("One","Two"),("Three","One"),("Two","Three")] {
+        let (dir,mut m) = manifest();
+        public_content_index(&mut m,view,root);
+        let backend = prepare(dir.path(),&m).unwrap()
+            .open(Box::new(crate::Rag3dbConnection::in_memory().unwrap()),None).unwrap();
+        {
+            let mut cat = backend.catalog.lock().unwrap();
+            cat.regime_d_ecriture(crate::disponibilite::RegimeEcriture::ParLot);
+            for key in ["a","b"] {
+                cat.create(root,BTreeMap::from([
+                    ("key".into(),CypherValue::String(key.into())),
+                    ("body".into(),CypherValue::String("marquemanifeste".into())),
+                ])).unwrap();
+            }
+            let result = cat.drain();
+            assert_eq!(result.failed,0,"{:?}",result.warnings);
+            let rows = cat.conn().execute(&format!("MATCH (v:{view}) RETURN count(v)")).unwrap();
+            assert_eq!(rows.rows[0][0].as_i64(),Some(1));
+            assert!(cat.fermeture(root,false).contains(view),"l'index est une dépendance de lecture, pas un faux cycle de création");
+        }
+        for mode in [ResultMode::Aggregated,ResultMode::Detailed,ResultMode::SourceResolved] {
+            let result = Catalog::rechercher(&backend.catalog,root,"marquemanifeste",SearchOptions {
+                signals:Some(SearchSignals::BM25),consistency:Consistency::Strict,
+                result_mode:mode,strict_signals:true,..Default::default()
+            }).unwrap();
+            assert_eq!(result.results.len(),2,"{root} -> {view}, {mode:?}: {:?}",result.meta);
+            let mut keys: Vec<_> = result.results.iter().map(|r| {
+                assert_eq!(r.entity.as_deref(),Some(root));
+                r.data.as_ref().unwrap()["key"].as_str().unwrap().to_string()
+            }).collect();
+            keys.sort();
+            assert_eq!(keys,vec!["a","b"]);
+        }
+    }
+}
+
+#[test]
+fn opening_public_content_manifest_refuses_invalid_associations_before_database() {
+    let (dir,base) = manifest();
+    for case in ["missing","root_identity","wrong_origin","self","chain"] {
+        let mut m = base.clone();
+        public_content_index(&mut m,"One","Two");
+        match case {
+            "missing" => m["entities"]["Two"]["config"]["searchIndex"] = json!("Missing"),
+            "root_identity" => m["entities"]["One"]["config"]["derived"]["identity"] = json!({"mode":"root"}),
+            "wrong_origin" => m["entities"]["One"]["config"]["derived"]["from"] = json!("Three"),
+            "self" => m["entities"]["Two"]["config"]["searchIndex"] = json!("Two"),
+            "chain" => m["entities"]["One"]["config"]["searchIndex"] = json!("Three"),
+            _ => unreachable!(),
+        }
+        let error = prepare(dir.path(),&m).err().unwrap_or_else(|| panic!("{case}: association invalide acceptée avant ouverture"));
+        assert!(error.contains("Two"),"{case}: {error}");
+    }
+
+    // La configuration préparée peut aussi être modifiée avant open : sa
+    // validation ne doit jamais se fier au seul succès antérieur du chargement.
+    use std::sync::atomic::{AtomicUsize,Ordering};
+    struct NoDatabase(Arc<AtomicUsize>);
+    impl crate::connection::DbConnection for NoDatabase {
+        fn execute(&self,_: &str) -> Result<crate::connection::QueryResult,crate::connection::DbError> {
+            self.0.fetch_add(1,Ordering::SeqCst);
+            Err(crate::connection::DbError::QueryError("database must remain untouched".into()))
+        }
+        fn execute_with_params(&self,q: &str,_: &[crate::connection::QueryParam]) -> Result<crate::connection::QueryResult,crate::connection::DbError> { self.execute(q) }
+    }
+    let mut valid = base;
+    public_content_index(&mut valid,"One","Two");
+    let mut prepared = prepare(dir.path(),&valid).unwrap();
+    prepared.entities.get_mut("Two").unwrap().search_index = Some("Missing".into());
+    let calls = Arc::new(AtomicUsize::new(0));
+    let error = prepared.open(Box::new(NoDatabase(calls.clone())),None).err().expect("refus avant le premier appel base");
+    assert!(error.contains("Missing"),"{error}");
+    assert_eq!(calls.load(Ordering::SeqCst),0);
+}
