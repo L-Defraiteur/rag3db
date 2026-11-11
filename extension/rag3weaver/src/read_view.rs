@@ -175,11 +175,48 @@ impl Forme<'_> {
     }
 
     pub fn resolve_search_target(&self, name: &str) -> Result<search::SearchTarget, CatalogError> {
+        if let Some(public) = self.entity_configs.get(name).filter(|c| c.search_index.is_some()) {
+            let index = public.search_index.as_ref().unwrap();
+            let cfg = self.entity_configs.get(index).ok_or_else(|| CatalogError::SchemaError(format!("{name} : index dérivé inconnu {index}")))?;
+            let derived = cfg.derived.as_ref().filter(|d| d.from == name && matches!(d.identity, crate::config::DerivedIdentity::Content { .. }))
+                .ok_or_else(|| CatalogError::SchemaError(format!("{name} : {index} doit être une dérivée par contenu de cette cible")))?;
+            if index == name || cfg.search_index.is_some() {
+                return Err(CatalogError::SchemaError(format!("{name} : association d'index récursive refusée")));
+            }
+            let mut target = self.resolve_storage_target(index, true)?;
+            let mut fields: Vec<String> = public.content_fields().into_iter().map(str::to_string).collect();
+            if let Some(title) = public.title_field() { fields.push(title.to_string()); }
+            fields.extend(public.return_fields.iter().flatten().cloned());
+            fields.push("_content_hash".into());
+            let content_fields: Vec<String> = cfg.content_fields().into_iter().map(str::to_string).collect();
+            for field in &content_fields {
+                if !public.fields.contains_key(field) {
+                    return Err(CatalogError::SchemaError(format!("{name} : le champ indexé {field} n'existe pas sur l'occurrence ; projection des coordonnées non déclarée")));
+                }
+                fields.push(field.clone());
+            }
+            fields.sort(); fields.dedup();
+            target.name = name.to_string();
+            target.default_fusion = public.fusion.clone().or(target.default_fusion);
+            target.field_weights = public.field_weights.clone();
+            // Le filtre relationnel commun connaît le sens déclaré du lien.
+            // L'ancienne indirection suppose une relation racine → index.
+            target.filter_indirection = None;
+            target.occurrence_projection = Some(search::OccurrenceProjection {
+                entity: name.to_string(), relation: crate::schema::derived_rel_name(index), fields, content_fields,
+            });
+            let _ = derived;
+            return Ok(target);
+        }
+        self.resolve_storage_target(name, false)
+    }
+
+    fn resolve_storage_target(&self, name: &str, allow_internal: bool) -> Result<search::SearchTarget, CatalogError> {
         // Try simple entity (must have simple pipeline — KB-only entities are not searchable directly)
         if let Some(ec) = self.entity_configs.get(name) {
             // Filet de recherche avant projection publique :
             // docs/arbre-principal/tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md
-            if ec.derived.as_ref().is_some_and(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. })) {
+            if !allow_internal && ec.derived.as_ref().is_some_and(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. })) {
                 return Err(CatalogError::SchemaError(format!(
                     "{name} : versions partagées internes ; projection vers les occurrences non déclarée"
                 )));
@@ -258,6 +295,7 @@ impl Forme<'_> {
                 }
             }
             return Ok(search::SearchTarget {
+                occurrence_projection: None,
                 name: name.to_string(),
                 parent_table: name.to_string(),
                 chunk_table,

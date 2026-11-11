@@ -45,6 +45,21 @@ Ces journaux sont dans ~/.cache/rag3weaver-build/ sur luciepc. Le témoin Scope 
 rouge et aucun format de base vivante n'a été changé. PostgreSQL et les autres features ne sont
 pas encore rejoués sur cette implémentation.
 
+## Association publique et première projection native
+
+Depuis 5a068a404, une association unique EntityConfig.search_index désigne la dérivée qui sert
+la cible publique. Le plan de projection est calculé depuis son from et DERIVED_FROM ; il ne
+constitue pas une deuxième déclaration. Le masque passe par le filtre relationnel commun avec
+les UUIDs des racines admises. La projection se fait dans finish_signal, avant fusion et pagination.
+Les coordonnées ne sont réutilisées que si les champs de contenu existent sur les occurrences et
+si leurs octets correspondent ; sinon la recherche refuse un remappage non déclaré.
+
+Premier témoin natif index_derive_rend_les_occurrences_publiques_avant_pagination : 1 réussi,
+0 échec, cx-projection-publique-premier.log sur luciepc. Il couvre dense/plein texte × trois modes,
+deux occurrences distinctes pour une seule version et une page offset=1. Pas encore de preuve
+sparse ni de saturation par candidats invisibles sur ce diff ; pas de passe globale. Scope et ses
+gabarits restent inchangés. Le texte natif qui ne garantit pas ce masque est refusé explicitement.
+
 ## Travail restant et responsabilités
 
 La session arbre-principal garde ce même ticket pour la suite du lot, sans duplication :
