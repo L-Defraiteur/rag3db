@@ -507,3 +507,7 @@ restent explicitement en cours. Les chiffres sont datés et leurs protocoles ré
 - Fenêtre code archi libérée ; base convenue8d donnée à recherche pour sa validation finale
   d’arrêt avec résultat conservé. Aucun autre tour simultané, opérations préparatoires des
   autres sessions possibles hors master. Cible de pose regroupée toujours à convenir ensuite.
+
+- **4f21ff4cf**, docs seules archi : inventaire disque historique remplacé après nettoyage,
+  diff relu ici. Son arrivée documentaire concurrente a fait refuser le premier push du suivi
+  d’orchestration en avance rapide ; rebase sans conflit et sauvegarde sous nom neuf, aucun force.
