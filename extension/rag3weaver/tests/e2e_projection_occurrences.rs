@@ -100,11 +100,15 @@ fn la_cellule_demandee_reste_celle_des_occurrences_projetees() {
     use rag3weaver::scope::{Scope, PROJECT_COLUMN};
     use rag3weaver::search::{Consistency, ResultMode, SearchOptions, SearchSignals};
 
+    let cache = tempfile::tempdir().unwrap();
     let conn = Rag3dbConnection::in_memory().unwrap();
+    let sync_conn = conn.create_sync_connection().unwrap();
     conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension())).unwrap();
     let mut cat = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(8)), CatalogConfig {
         allow_mock_embedder: true, embedding_dim: 8, ..Default::default()
     });
+    cat.set_cache_base(cache.path().join("indexes"));
+    cat.set_sync_connection(sync_conn);
     cat.set_sparse_embedder(Arc::new(MockSparseEmbedder::new()));
     cat.initialize().unwrap();
     let champ = |field_type| SimpleFieldDef { field_type, ..Default::default() };
@@ -117,13 +121,14 @@ fn la_cellule_demandee_reste_celle_des_occurrences_projetees() {
     let alpha = Scope::new("acme", "alpha");
     let beta = Scope::new("acme", "beta");
     cat.set_scope(alpha.clone()).unwrap();
-    cat.register_entity("Occurrence", EntityConfig {
+    let schema = EntityConfig {
         fields, signals: SearchSignals::VECTOR | SearchSignals::SPARSE,
         hashsafe: Some(vec!["key".into()]),
         return_fields: Some(vec!["key".into(), "file_path".into(), "start_line".into()]),
         chunking: ChunkingConfig { title_max_chars: 0, ..Default::default() },
         ..Default::default()
-    }).unwrap();
+    };
+    cat.register_entity("Occurrence", schema.clone()).unwrap();
     let ligne = |key: &str, path: &str, start: i64| BTreeMap::from([
         ("key".into(), CypherValue::String(key.into())),
         ("name".into(), CypherValue::String(key.into())),
@@ -133,7 +138,10 @@ fn la_cellule_demandee_reste_celle_des_occurrences_projetees() {
     ]);
     cat.ingest_entities("Occurrence", vec![ligne("a1", "a.rs", 1), ligne("a2", "a2.rs", 3)]).unwrap();
     cat.set_scope(beta.clone()).unwrap();
+    cat.register_entity("Occurrence", schema).unwrap();
     cat.ingest_entities("Occurrence", vec![ligne("b1", "b.rs", 5)]).unwrap();
+    assert!(cat.sparse_handles_in(&alpha).unwrap().contains_key("Occurrence_Chunk"));
+    assert!(cat.sparse_handles_in(&beta).unwrap().contains_key("Occurrence_Chunk"));
     let ids = |cell: &str| -> BTreeSet<String> {
         cat.conn().execute(&format!("MATCH (p:Occurrence) WHERE p.{PROJECT_COLUMN} = '{cell}' RETURN p._uuid")).unwrap()
             .rows.iter().map(|r| r[0].as_str().unwrap().to_string()).collect()
@@ -153,6 +161,7 @@ fn la_cellule_demandee_reste_celle_des_occurrences_projetees() {
     for signal in [SearchSignals::VECTOR, SearchSignals::SPARSE] {
         for mode in [ResultMode::Aggregated, ResultMode::Detailed, ResultMode::SourceResolved] {
             for (scope, expected) in [(Some(alpha.clone()), &alpha_ids), (None, &beta_ids)] {
+                eprintln!("CELLULE requested={scope:?} signal={signal:?} mode={mode:?}");
                 let response = Catalog::rechercher(&cat, "Occurrence", "shared_marker", SearchOptions {
                     consistency: Consistency::Immediate, signals: Some(signal), strict_signals: true,
                     scope: scope.clone(), result_mode: mode, limit: 50, ..Default::default()
