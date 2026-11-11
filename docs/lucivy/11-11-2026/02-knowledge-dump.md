@@ -9,8 +9,9 @@ Source : Lucie, transmise par l’orchestration le 11 novembre. Version 4.3.3
 publiée et vérifiée sur les trois registres ; PR #22 à #25 fusionnées,
 `main` `663975a` avant tag `v4.3.3`, workflow vert, note `CLAUDE.md` `e805235`.
 Démo en 4.3.2, format d’index inchangé. Cette session a relu les objets Git locaux
-(tag/CHANGELOG, note et présence du témoin de fermeture), sans rejouer tests,
-workflow ni contrôles des registres. Le rapport adjacent précise les limites.
+(tag/CHANGELOG, note et présence du témoin de fermeture), puis joué le témoin ciblé `a_failed_close_still_stops_its_pools` sous `poste lourd`
+sur luciepc : 1 passé, 0 échec, 0 ignoré, sortie code 0. Journal dans
+`preuves/close-4.3.3.log`. Workflow et contrôles des registres non rejoués. Le rapport adjacent précise les limites.
 Recherche porte dépendances et lock rag3weaver vers 4.3.3, avec une preuve dédiée de
 fermeture en erreur et la passe habituelle ; aucun nouveau test de compatibilité,
 banc ou migration demandé (format inchangé). Ce lot n’est pas déclaré livré ici.

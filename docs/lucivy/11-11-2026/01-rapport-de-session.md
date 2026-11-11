@@ -22,7 +22,7 @@ Vérifications locales de cette session : lecture du `CHANGELOG.md` au tag
 `v4.3.3` (commit `663975adf11fc4a9d6cadf90e70ee68f6c9db075`),
 du commit `e805235` et de la présence du témoin amont nommé ci-dessous. Le clone
 principal local reste sur une ancienne tête : sa branche courante ne représente
-pas la version publiée. Aucun test exécuté dans cette reprise.
+pas la version publiée. Le témoin ciblé de fermeture a ensuite été exécuté ; preuve ci-dessous.
 
 La 4.3.3 conserve le format d’index. Elle corrige `ShardedHandle::close()` :
 chaque écriture est tentée, la première erreur est conservée, les pools lecteurs,
@@ -52,8 +52,25 @@ La seule preuve dédiée porte sur `close()` en erreur : pools et acteurs arrêt
 processus terminé proprement. Point de départ amont :
 `a_failed_close_still_stops_its_pools` dans
 `lucivy_core/src/sharded_handle.rs` (dossier d’index supprimé avant `close()`,
-erreur rendue et acteurs libérés). Recherche prépare cette preuve ; aucun test
-4.3.3 joué à ce stade, aucune passe verte revendiquée ici.
+erreur rendue et acteurs libérés). Preuve amont exécutée ensuite par cette session sur luciepc :
+
+```bash
+~/.cache/rag3weaver-build/poste lourd timeout --signal=TERM --kill-after=30s 1800 env CARGO_BUILD_JOBS=8 CARGO_TARGET_DIR=/home/lucied/.cache/rag3weaver-build/cx-lucivy-target cargo test -j8 -p lucivy-core --lib a_failed_close_still_stops_its_pools -- --nocapture
+```
+
+Worktree isolé `cx-lucivy-close-433`, tag `v4.3.3` au commit
+`663975adf11fc4a9d6cadf90e70ee68f6c9db075`, sources propres après exécution.
+**1 passé, 0 échec, 0 ignoré, 96 filtrés**, 0,16 s ; processus terminé code 0.
+Compilation en 45,36 s, sept avertissements ; ce n’est pas un passage de clippy.
+Le tag ne suit pas de Cargo.lock : résolution générée localement, sans modifier
+les sources. Le planificateur annonce 24 threads à l’exécution ; la compilation
+est bien limitée à huit jobs.
+
+Journal complet : [preuves/close-4.3.3.log](preuves/close-4.3.3.log), SHA-256
+`3a2208790e67d2216a55d1c2c9d2a30bde79cb56ff0569054838562a29e69274`.
+Copie luciepc : `~/.cache/rag3weaver-build/journaux-lucivy/close-433.log`.
+Cette preuve couvre le témoin amont et sa sortie propre, pas encore l’intégration
+rag3weaver ni une passe complète. Résultat transmis à recherche.
 
 ## 3. La CI publie sur un tag
 
