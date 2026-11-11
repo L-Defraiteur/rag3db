@@ -59,20 +59,20 @@ protected:
     }
 
     // Les lignes du COPY de A, écrites avant le fils.
-    std::string writeCopyFile() const {
+    std::string writeCopyFile(bool stringKey) const {
         const auto path = databasePath + ".a.csv";
         std::ofstream out(path);
         const auto vector = vectorText();
         for (int64_t i = 0; i < A_ROWS; i++) {
-            out << i << ",titre,\"[" << vector << "]\"\n";
+            out << (stringKey ? std::string(128, 'k') : "") << i << ",titre,\"[" << vector << "]\"\n";
         }
         return path;
     }
 
-    std::pair<std::string, int> play(int64_t bFirstStep) {
+    std::pair<std::string, int> play(int64_t bFirstStep, bool stringKey = false) {
         namespace fs = std::filesystem;
         fs::create_directories(fs::path(databasePath).parent_path());
-        const auto copyFile = writeCopyFile();
+        const auto copyFile = writeCopyFile(stringKey);
         const auto stepsPath = databasePath + ".steps";
         fs::remove(stepsPath);
         const auto pid = fork();
@@ -102,7 +102,8 @@ protected:
                 rag3db::main::Connection b(&database);
                 concurrency::applyBenchSettings(a);
                 say(a, "A",
-                    "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, titre STRING, vec FLOAT[64]);");
+                    stringKey ? "CREATE NODE TABLE Doc(id STRING PRIMARY KEY, titre STRING, vec FLOAT[64]);" :
+                                "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, titre STRING, vec FLOAT[64]);");
                 // B écrit dans une autre table : le COPY de A tient Doc jusqu'à sa fin.
                 say(a, "A",
                     "CREATE NODE TABLE Other(id INT64 PRIMARY KEY, titre STRING, vec FLOAT[64]);");
@@ -122,6 +123,7 @@ protected:
                     }
                 }
                 const auto bRows = at - 10'000'000;
+                steps << "B REFUSALS " << refusals << std::endl;
                 steps << "B " << bRows << " rows committed before the buffer was full" << std::endl;
                 const auto first = say(a, "A", "ROLLBACK;");
                 const auto second = first || say(a, "A", "ROLLBACK;");
@@ -157,6 +159,26 @@ protected:
 
 TEST_F(CopyRollbackUnderAFullBuffer, RollsBackAndKeepsTheDatabaseOpen) {
     const auto [steps, status] = play(5'000);
+    ASSERT_EQ(steps.find("PLAN a-copy-refused"), std::string::npos)
+        << "[check: plan] A's COPY did not fit in the buffer: nothing is witnessed";
+    ASSERT_EQ(steps.find("B 0 rows"), std::string::npos)
+        << "[check: plan] B committed nothing: the buffer was never full";
+    ASSERT_NE(steps.find("ROLLBACK "), std::string::npos)
+        << "[check: plan] the child died before its ROLLBACK, status " << status;
+    EXPECT_NE(steps.find("ROLLBACK passed"), std::string::npos)
+        << "[check: rollback-of-a-copy-under-a-full-buffer-succeeds] both ROLLBACKs were refused";
+    EXPECT_NE(steps.find("BEGIN passed"), std::string::npos)
+        << "[check: database-stays-open-after-the-copy-rollback] a BEGIN after the ROLLBACK was "
+           "refused";
+    EXPECT_NE(steps.find("COUNT empty"), std::string::npos)
+        << "[check: database-stays-open-after-the-copy-rollback] the rolled-back COPY left rows";
+    EXPECT_FALSE(WIFSIGNALED(status))
+        << "[check: closing-a-connection-does-not-abort] the child died of signal "
+        << WTERMSIG(status);
+}
+
+TEST_F(CopyRollbackUnderAFullBuffer, StringKeysRemainUsableAfterRollback) {
+    const auto [steps, status] = play(5'000, true /* stringKey */);
     ASSERT_EQ(steps.find("PLAN a-copy-refused"), std::string::npos)
         << "[check: plan] A's COPY did not fit in the buffer: nothing is witnessed";
     ASSERT_EQ(steps.find("B 0 rows"), std::string::npos)

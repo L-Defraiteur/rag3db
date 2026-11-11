@@ -72,7 +72,7 @@ protected:
     // Joue la recette dans un fils ; rend son journal et son statut. withCheckpoint : après le
     // ROLLBACK, B lance CHECKPOINT et A tente un BEGIN.
     std::pair<std::string, int> play(int64_t bFirstStep, bool withCheckpoint,
-        bool beginAfter = false) {
+        bool beginAfter = false, bool stringKey = false) {
         namespace fs = std::filesystem;
         fs::create_directories(fs::path(databasePath).parent_path());
         const auto stepsPath = databasePath + ".steps";
@@ -96,9 +96,9 @@ protected:
             }
             auto insert = [&](rag3db::main::Connection& connection, int64_t from, int64_t count) {
                 return connection
-                    .query(stringFormat("UNWIND range({}, {}) AS i CREATE (:Doc {id: i, titre: "
+                    .query(stringFormat("UNWIND range({}, {}) AS i CREATE (:Doc {id: {}, titre: "
                                         "'titre', vec: [{}]});",
-                        from, from + count - 1, vector))
+                        from, from + count - 1, stringKey ? "cast(i AS STRING)" : "i", vector))
                     ->isSuccess();
             };
             {
@@ -107,7 +107,8 @@ protected:
                 rag3db::main::Connection b(&database);
                 concurrency::applyBenchSettings(a);
                 say(a, "A",
-                    "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, titre STRING, vec FLOAT[64]);");
+                    stringKey ? "CREATE NODE TABLE Doc(id STRING PRIMARY KEY, titre STRING, vec FLOAT[64]);" :
+                                "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, titre STRING, vec FLOAT[64]);");
                 say(a, "A", "BEGIN TRANSACTION;");
                 for (int64_t at = 0; at < A_ROWS; at += 500) {
                     if (!insert(a, at, 500)) {
@@ -136,7 +137,9 @@ protected:
                     if (begun) {
                         say(a, "A", "ROLLBACK;");
                     }
-                    auto count = b.query("MATCH (d:Doc) WHERE d.id >= 10000000 RETURN count(*);");
+                    auto count = b.query(stringKey ?
+                        "MATCH (d:Doc) WHERE cast(d.id AS INT64) >= 10000000 RETURN count(*);" :
+                        "MATCH (d:Doc) WHERE d.id >= 10000000 RETURN count(*);");
                     steps << "B ROWS READ "
                           << (count->isSuccess() && count->hasNext() ?
                                      std::to_string(
@@ -196,6 +199,25 @@ TEST_F(FullBufferRollback, RefusedCheckpointLeavesTheDatabaseOpen) {
 
 TEST_F(FullBufferRollback, ARollbackUnderAFullBufferLeavesTheDatabaseUsable) {
     const auto [steps, status] = play(5'000, false /* withCheckpoint */, true /* beginAfter */);
+    ASSERT_EQ(steps.find("PLAN a-refused-at"), std::string::npos)
+        << "[check: plan] A's block did not fit in the buffer: nothing is witnessed";
+    ASSERT_NE(steps.find("BEGIN AFTER ROLLBACK"), std::string::npos)
+        << "[check: plan] the child died before its BEGIN, status " << status;
+    EXPECT_NE(steps.find("BEGIN AFTER ROLLBACK passed"), std::string::npos)
+        << "[check: no-half-done-rollback] the database must be reopened after a ROLLBACK under a "
+           "full buffer";
+    const auto committedAt = steps.find("B ");
+    const auto readAt = steps.find("B ROWS READ ");
+    ASSERT_NE(committedAt, std::string::npos);
+    ASSERT_NE(readAt, std::string::npos);
+    const auto committed = std::stoll(steps.substr(committedAt + 2));
+    const auto readBack = steps.substr(readAt + 12, steps.find('\n', readAt) - readAt - 12);
+    EXPECT_EQ(readBack, std::to_string(committed))
+        << "[check: committed-rows-read-back] B committed " << committed << " rows";
+}
+TEST_F(FullBufferRollback, StringKeysRemainUsableAfterARollbackUnderAFullBuffer) {
+    const auto [steps, status] = play(5'000, false /* withCheckpoint */, true /* beginAfter */,
+        true /* stringKey */);
     ASSERT_EQ(steps.find("PLAN a-refused-at"), std::string::npos)
         << "[check: plan] A's block did not fit in the buffer: nothing is witnessed";
     ASSERT_NE(steps.find("BEGIN AFTER ROLLBACK"), std::string::npos)
