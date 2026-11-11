@@ -4,15 +4,15 @@
 
 Le lot des réclamations a atterri en `91e5f760b` et ses artefacts propres ont été
 nettoyés ; les sections anciennes ci-dessous restent historiques. Le relais
-contextuel attend uniquement son intégration autorisée et son nettoyage : source
+contextuel est validé, son tour autorisé et ses tickets clos dans ce lot : source
 ED finale `09e86e689`, branche `cx-ed-relais-commun-4`, worktree luciepc
 `~/git_workspaces/cx-ed-relais`. Ne pas relancer une passe ni toucher le lot remaining.
 
 Ticket du parcours commun :
-`docs/everything-declarative/tickets/2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md`
+`docs/tickets/closed/2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md`
 (ED runtime/intégration, archi UI). Ticket de la version contrôlée/exécutée :
-`docs/everything-declarative/tickets/2026-11-11-une-invocation-peut-executer-une-autre-version-que-celle-verifiee.md`
-(ED). Tous deux restent ouverts avant atterrissage.
+`docs/tickets/closed/2026-11-11-une-invocation-peut-executer-une-autre-version-que-celle-verifiee.md`
+(ED). Tous deux sont clos avec les preuves dans le même lot d’intégration.
 
 Verdict agrégé relu : features 5/5, gardes 10/10, lib entière **2114/0/64 ignorés**
 en 42,84 s, lectures **24/0/0** en 10,24 s, PostgreSQL privé **34/0/0** en 7,67 s,

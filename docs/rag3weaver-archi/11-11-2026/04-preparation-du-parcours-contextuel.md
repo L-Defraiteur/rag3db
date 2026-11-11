@@ -168,7 +168,7 @@ Le résultat retenu sélectionne uniquement la table du binaire effectivement te
 la recherche de sous-chaîne du mmap. Les anciennes tables non utilisées restent dans le target.
 
 Tout ce travail et la suite de validation/intégration sont reliés au ticket existant
-`docs/everything-declarative/tickets/2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md`
+`docs/tickets/closed/2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md`
 (porteurs ED intégration et archi UI), complété sans doublon. Le défaut d'accord extérieur est
 distinct, pris en charge par ED, hors de ce lot, ticket archi conservé ouvert jusqu'au transfert.
 
@@ -199,10 +199,10 @@ target archi encore présent après contrôle de `/proc`. Les 39 navigateurs ver
 une preuve distincte, pas présentée comme un nouveau passage 39 sur 458.
 
 Le ticket commun reste ouvert :
-`docs/everything-declarative/tickets/2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md`
+`docs/tickets/closed/2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md`
 (porteurs ED intégration et archi UI). **Avant intégration**, attendre le verdict ED sur 458
 et le départage ED du ticket de revue
-`docs/everything-declarative/tickets/2026-11-11-une-invocation-peut-executer-une-autre-version-que-celle-verifiee.md`.
+`docs/tickets/closed/2026-11-11-une-invocation-peut-executer-une-autre-version-que-celle-verifiee.md`.
 L'enchaînement statique invoke_read → call_in → call → call_tool relit prepared ; cela ne
 constitue pas ici une reproduction concurrente. Aucun correctif archi de ce point, aucune
 modification de source pendant les passes, aucune clôture ni push master anticipé. Le défaut

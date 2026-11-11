@@ -7,6 +7,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **11 nov. — L’atelier cherche dans le dépôt choisi et suit ses commandes.** Huit lectures
+  prennent une référence explicite de backend ; les liens gardent cette cible après troncature
+  et rechargement. `wait_output` suit le journal d’une commande accordée. Une invocation vérifie
+  et exécute la même version des déclarations, y compris pendant un rechargement. (`09e86e689`)
+
 - **11 nov. — Le chat suit l'hôte par le flux et garde ses actions après une panne.**
   Au repos, il n'interroge plus l'hôte ; la fin du tour pousse son état, avec le même usage
   dans la barre et le récapitulatif. Une erreur conserve les outils déjà exécutés et leurs

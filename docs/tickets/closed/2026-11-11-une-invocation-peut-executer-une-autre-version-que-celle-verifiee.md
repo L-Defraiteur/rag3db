@@ -1,6 +1,6 @@
 # Une invocation peut exécuter une autre version que celle vérifiée
 
-- **État** : ouvert (11 novembre 2026), point de revue sur le lot contextuel en branche ; entrelacement à éprouver avant intégration.
+- **État** : corrigé, source ED `09e86e689` et UI `36865616d`, preuves finales ci-dessous ; clôture dans le lot intégré.
 - **Famille** : produit
 - **Gravité** : la vérification de lecture seule pourrait ne pas couvrir le graphe effectivement exécuté après un rechargement concurrent.
 - **Atteignable en service** : potentiellement avec le futur relais et un rechargement concurrent ; non reproduit à ce stade, relais non livré sur master.
@@ -66,3 +66,27 @@ texte ; son échec reste distinct du rouge de sécurité. Preuve verte externe :
 
 Reste : passe commune complète (dont rechargements et harnais ordinaires), trois
 parcours UI réels et intégration autorisée. Ticket encore ouvert jusque-là.
+
+## Clôture du lot commun
+
+ED runtime/intégration et archi UI : verdict agrégé VERT relu et tour « à toi »
+donné par orchestration le 11 novembre. ED sur `09e86e689` : features 5/5,
+gardes 10/10 (dont le rouge949 puis vert074 du remplacement de déclarations),
+lib entière 2114 réussites / zéro échec / 64 ignorés en 42,84 s, lectures24/0/0
+en10,24s, PostgreSQL privé34/0/0 en7,67s ; 2/2 suites, aucun SAUTÉ.
+UI sur `36865616d` : trois parcours réels3/0/0 en132,16s et attestation ELF
+`6782d8a52d41986af857b99ba85d051dd79557dc97f67419b782caba9673a607`,
+220 chemins et contenus courants présents. Entre 368 et09, seul `#[cfg(test)]`
+est ajouté au raccourci privé call_tool : réutilisation UI relue et acceptée,
+sans attribuer ces tests à une autre source. Les39 navigateurs a92 restent distincts.
+
+Preuves sauvegardées aux deux postes : `I-luciepc/relais-20261111/`
+(`verdict-final`, `verdict-final.json`, `*-commun-5.log`,
+`version-rouge-949dcb556.log`, `version-vert.log`) et
+`cx-ui-contextuel-36865616d-cibles-final-20261111/` (log et attestation).
+L'intégration utilise le garde VERT, poste push, la relecture de master puis les
+trois contrôles ; le script supprime les seuls worktrees/branches locales/target
+et base PostgreSQL privée du relais, en préservant les archives et branches distantes.
+
+Restent ouverts et distincts : accord de commande hors domaine, erreurs SQL de
+dette et remaining/juge. Aucun succès sur ces autres tickets n'est annoncé ici.

@@ -244,7 +244,7 @@ les deux postes dans `cx-ui-contextuel-a92b21233-navigateur-entier-20261111/` ; 
 Détails exacts et limites : `04-preparation-du-parcours-contextuel.md`.
 
 Action et reste : ticket existant ED
-`docs/everything-declarative/tickets/2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md`,
+`docs/tickets/closed/2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md`,
 ED porte intégration/runtime et archi UI. Attendre verdict ED sur a92, puis lot recherche 4.3.3,
 rebase dans une branche neuve, diff et rejeux requis avant tour de push et nettoyage. Ne pas
 annoncer livré ni fermer ce ticket sur la seule preuve archi. Défaut extérieur distinct :
@@ -272,10 +272,10 @@ target archi encore présent après contrôle de `/proc`. Les 39 navigateurs ver
 une preuve distincte, pas présentée comme un nouveau passage 39 sur 458.
 
 Le ticket commun reste ouvert :
-`docs/everything-declarative/tickets/2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md`
+`docs/tickets/closed/2026-11-11-le-chat-de-l-atelier-n-expose-pas-les-outils-de-recherche-ni-wait-output.md`
 (porteurs ED intégration et archi UI). **Avant intégration**, attendre le verdict ED sur 458
 et le départage ED du ticket de revue
-`docs/everything-declarative/tickets/2026-11-11-une-invocation-peut-executer-une-autre-version-que-celle-verifiee.md`.
+`docs/tickets/closed/2026-11-11-une-invocation-peut-executer-une-autre-version-que-celle-verifiee.md`.
 L'enchaînement statique invoke_read → call_in → call → call_tool relit prepared ; cela ne
 constitue pas ici une reproduction concurrente. Aucun correctif archi de ce point, aucune
 modification de source pendant les passes, aucune clôture ni push master anticipé. Le défaut
