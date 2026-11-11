@@ -362,3 +362,17 @@ restent explicitement en cours. Les chiffres sont datés et leurs protocoles ré
   de code pendant cette fenêtre. Aucun verrou poste push tenu pendant les passes.
 - La fenêtre ne vaut pas tour de push implicite : preuve finale à relire, notamment deux vrais
   témoins lib d’arrêt identifiés par nom, et juge Gemini réellement joué sans SAUTÉ/ignored.
+
+
+### Correctif moteur sauvegardé, validation encore en file
+
+- **2936ffd9ff8ce7ab918aecd30a91651fa8df4803**, docs seules, cœur : rapport/ticket actualisés,
+  check_tickets VERT342 et trois contrôles confirmés ; hash/diff relus ici.
+- Correctif0511dece7 sauvegardé sur cx-coeur-annulation, worktree propre ; aucune compilation
+  ni validation encore acquise à ce point, lanceur en attente de poste lourd, sans changement
+  de plafond ni intervention sur les processus des autres sessions.
+- Primitive commune à tous types : retrait des entrées locales selon plage d’offsets d’undo,
+  compactage par déplacement et sans matérialisation des chaînes depuis les colonnes. Index
+  persistant/tombstones inchangés. Tests de collisions, bornes, répétitions et réouverture ajoutés.
+  Suites ciblées et complètes ainsi que coût de plusieurs undo restent à vérifier.
+- Aucun code moteur ni nouvelle lib sur master ; fenêtre de stabilité recherche maintenue.
