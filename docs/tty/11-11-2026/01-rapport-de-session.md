@@ -70,6 +70,27 @@ L'IDE n'a aujourd'hui qu'une route fixe pour `daemon.json`. Archi a dit qu'il aj
   - Il n'y a ni worktree ni target.
 - Rien n'a été supprimé pour ce rapport.
 
+## Reprendre
+
+**Aucun worktree n'a de travail inachevé**, ni sur le portable ni à luciepc. Tous les lots de la session sont sur master, et leurs worktrees et targets ont été effacés après chaque push (vérifié le 11 nov. : `git worktree list` ne montre aucun `rag3db-tty`, ni ici ni à luciepc). Le prochain travail repart donc de master.
+
+Pour commencer tty-4 :
+
+```bash
+cd ~/git_workspaces/rag3db && git fetch -q origin master
+git worktree add ../rag3db-tty -b tty-4 origin/master
+cd ../rag3db-tty && git submodule update --init extension/rag3weaver/codeparsers
+cd extension/rag3weaver/tty
+CARGO_TARGET_DIR=~/.cache/rag3weaver-build/target-tty ~/.cache/rag3weaver-build/poste lourd timeout 1800 \
+  bash -c 'cargo test -j 8 && cargo test -j 8 --no-default-features'
+```
+
+Le target `~/.cache/rag3weaver-build/target-tty` n'existe plus : le premier bâti du crate le recrée, en une à deux minutes. La passe et le push suivent le § 5 du knowledge dump (`02-knowledge-dump.md`) :
+- **la passe**, à luciepc ou ici :
+  - `cargo test` avec et sans la vue, puis `RAG3DB_LIB=<lib du moment> [RAG3WEAVER_MOTEUR_ANCIEN=1] ./run_e2e.sh --features openai-llm,anthropic-llm --test e2e_tty e2e_tty` dans `extension/rag3weaver` ;
+  - plus `e2e_catalogue_gabarits` si `templates/` bouge, et la passe entière si l'hôte ou `src/` bougent ;
+- **le push** : sous `~/.cache/rag3weaver-build/poste push <session> -- <script>`, le script lisant le verdict et le refusant s'il n'est pas `VERT`, puis les trois contrôles et le hash à c7.
+
 ## Ce qui est bloqué, et sur quoi
 
 - **Le ticket `docs/tickets/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md`** (ouvert, famille produit) : la lib `rag3weaver` ne compile pas sans la feature `rag3db-native`. Deux sorties possibles : poser deux `#[cfg(feature = "rag3db-native")]` (`src/backend.rs` vers la ligne 4411, `src/dataflow/record_nodes.rs` vers la ligne 4567), ou déclarer que la lib exige le moteur. Le choix revient à Lucie. Le terminal n'en souffre pas : il vit dans son propre crate.
