@@ -100,7 +100,7 @@ pour certaines). Branches locales du portable : `spans-creux`, `ticket-granite-1
 
 ## Tickets
 
-À cette session (ouverts, dans `docs/tickets/`, **non déplacés**) :
+À cette session (ouverts, dans `docs/embarquement/tickets/`) :
 
 - `2026-11-08-granite-278m-a-luciepc-s-est-arrete-huit-fois-cause-illisible.md` — l'unité 7878 est
   sortie en erreur huit fois à 10 h 47 le 8 nov. ; cause illisible (journal tourné). Attend la

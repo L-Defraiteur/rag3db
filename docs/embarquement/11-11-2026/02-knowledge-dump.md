@@ -207,6 +207,6 @@ mesurer d'abord, sur une carte qui a la place (pas card2 en l'état).
 
 ## 11. Tickets
 
-À cette session : `docs/tickets/2026-11-08-granite-278m-a-luciepc-s-est-arrete-huit-fois-cause-illisible.md`
+À cette session : `docs/embarquement/tickets/2026-11-08-granite-278m-a-luciepc-s-est-arrete-huit-fois-cause-illisible.md`
 (l'unité 7878 sortie huit fois le 8 nov. à 10 h 47, cause illisible ; attend la prochaine sortie et
 son journal). Les tickets voisins portés par d'autres sessions sont listés dans le rapport.
