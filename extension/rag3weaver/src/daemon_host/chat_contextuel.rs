@@ -142,7 +142,10 @@ fn modele(cibles: Cibles, exposes: Arc<Mutex<Vec<Value>>>, retours: Retours, tro
             }
             let contexte = json!({ "target": { "kind": "backend", "id": cible } });
             let prochain = if !faits.iter().any(|t| t.tool_name.as_deref() == Some("search_code")) {
-                Some(("search_code", json!({ "context": contexte, "query": "repere", "options": { "limit": if tronque { 200 } else { 10 } } })))
+                Some((
+                    "search_code",
+                    json!({ "context": contexte, "query": "repere", "options": { "limit": if tronque { 200 } else { 10 } } }),
+                ))
             } else if !faits.iter().any(|t| t.tool_name.as_deref() == Some("outline")) {
                 Some(("outline", json!({ "context": contexte, "path": "src/lib.rs" })))
             } else {
@@ -253,6 +256,90 @@ fn parcours(tronque: bool) {
             "le clic reste correct après reprise",
         );
     }
+    assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
+    drop(n);
+    serveur.arreter();
+}
+
+/// Le chat lance une vraie commande de fond, puis attend son journal. Le fichier
+/// signal n'est créé qu'après l'annonce du vrai appel wait_output dans le flux.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : étape séparée")]
+fn le_chat_attend_la_sortie_differee_d_une_commande_apres_accord() {
+    let Some(binaire) = navigateur_ou_saut("le_chat_attend_la_sortie_differee_d_une_commande_apres_accord") else {
+        return;
+    };
+    let d = tempfile::tempdir().unwrap();
+    let signal = d.path().join("signal");
+    let script = d.path().join("attendre.py");
+    std::fs::write(
+        &script,
+        format!(
+            "import pathlib, time\np = pathlib.Path({})\nwhile not p.exists():\n    time.sleep(0.01)\nprint('SORTIE_DIFFEREE_PREUVE', flush=True)\n",
+            json!(signal)
+        ),
+    )
+    .unwrap();
+    let commande = format!("python3 {}", script.display());
+    let vus = Arc::new(Mutex::new(Vec::<(String, String)>::new()));
+    let model: ChatModel = {
+        let (commande, vus) = (commande.clone(), vus.clone());
+        Arc::new(move |_| -> Result<Arc<dyn Llm>, String> {
+            let (commande, vus) = (commande.clone(), vus.clone());
+            Ok(Arc::new(CallbackLlm::new("faux-commande-differee", 8192, move |turns: &[Turn], opts, sink| {
+                assert!(opts.tools.iter().any(|t| t.name == "wait_output"), "wait_output réellement exposé au modèle");
+                let depuis = turns.iter().rposition(|t| t.role == "user").unwrap();
+                let dernier = turns[depuis..].iter().rev().find(|t| t.role == "tool");
+                let appel = match dernier {
+                    None => Some(("run_command", json!({"command":commande,"background":true}))),
+                    Some(t) => {
+                        vus.lock().unwrap().push((t.tool_name.clone().unwrap(), t.content.clone()));
+                        if t.tool_name.as_deref() == Some("run_command") && t.content.contains("**En fond**") {
+                            let v: Value = serde_json::from_str(&t.content).unwrap();
+                            let texte = v["result"].as_str().unwrap();
+                            let journal = texte.split("- sortie : `").nth(1).unwrap().split('`').next().unwrap();
+                            assert!(
+                                !std::fs::read_to_string(journal).unwrap_or_default().contains("SORTIE_DIFFEREE_PREUVE"),
+                                "la sortie n'existe pas encore au lancement de l'attente"
+                            );
+                            Some(("wait_output", json!({"journal":journal,"pattern":"SORTIE_DIFFEREE_PREUVE","timeout_s":30})))
+                        } else {
+                            None
+                        }
+                    }
+                };
+                match appel {
+                    Some((nom, args)) => MockLlm::new("").with_tool_calls(vec![(nom.to_string(), args.to_string())]).generate(turns, opts, sink),
+                    None => MockLlm::new("Issue observable.").generate(turns, opts, sink),
+                }
+            })))
+        })
+    };
+    let a = atelier_avec(d.path(), model);
+    let mut serveur = Serveur::lancer(&a);
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{}/ide/entrer?jeton=j", serveur.racine()), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{}/ide/code/{}/chat", serveur.racine(), a.h.id), PRETE);
+    n.evaluer("document.querySelector('#message').value = 'lance la commande et attends sa sortie'; document.querySelector('#send').click()");
+    let carte = "details.outil[data-outil=run_command] + .ui-du-tour .carte-accord";
+    n.attendre(
+        &format!("!!document.querySelector('{carte} button.accorder') && document.querySelector('#status')?.textContent === 'fini'"),
+        "la commande attend l'accord dans le chat",
+    );
+    assert!(!signal.exists());
+    n.evaluer(&format!("document.querySelector('{carte} button.accorder').click()"));
+    n.attendre(
+        "document.querySelector('#status')?.textContent === 'wait_output'",
+        "le vrai appel wait_output est annoncé par le flux",
+    );
+    std::fs::write(&signal, "libérer la sortie\n").unwrap();
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour finit après la sortie attendue");
+    let vus = vus.lock().unwrap();
+    assert!(
+        vus.iter()
+            .any(|(nom, texte)| nom == "wait_output" && texte.contains("**Trouvé**") && texte.contains("SORTIE_DIFFEREE_PREUVE")),
+        "retour réel de wait_output : {vus:?}"
+    );
     assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
     drop(n);
     serveur.arreter();
