@@ -20,7 +20,10 @@ impl BackendTools<'_> {
         let arguments: Value = serde_json::from_str(&call.arguments).map_err(|e| e.to_string())?;
         let mut result = self.backend.call(&call.name, arguments)?;
         let ui = result.as_object_mut().and_then(|o| o.remove("ui")).filter(|u| !u.is_null());
-        let metadata = result.get("metadata").filter(|m| m.as_object().is_some_and(|o| !o.is_empty())).cloned();
+        // Le contexte d'action ne dépend pas du texte borné. Les métadonnées de
+        // recherche volumineuses restent dans le reçu, sans gonfler chaque événement.
+        let metadata = result.get("metadata").and_then(|m| m.get("invocation"))
+            .map(|invocation| json!({"invocation":invocation}));
         Ok((match result["presentation"].as_str() {
             Some(text) => match result
                 .get("metadata")

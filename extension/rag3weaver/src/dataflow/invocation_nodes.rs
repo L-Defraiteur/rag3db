@@ -202,6 +202,45 @@ graph LR
         let exported = super::super::mermaid::to_mermaid(&definition);
         let reparsed = super::super::mermaid::parse_mermaid(&exported).unwrap();
         assert_eq!(reparsed.nodes[0].config, definition.nodes[0].config);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut services = ServiceRegistry::new();
+        services.register(
+            HOST_SERVICE,
+            Arc::new(Host {
+                calls: calls.clone(),
+            }) as Arc<dyn InvocationHost>,
+        );
+        services.register(
+            AUTHORITY_SERVICE,
+            InvocationAuthority {
+                manifest: "caller.json".into(),
+                policy: crate::backend_code::ToolPolicy {
+                    read_files: true,
+                    ..Default::default()
+                },
+                scope: Default::default(),
+            },
+        );
+        let mut graph = tool.build(&nodes, &args).unwrap();
+        let output = crate::dataflow::DataflowRuntime::with_services(100, services)
+            .execute(&mut graph)
+            .unwrap();
+        let result = output
+            .get("invoke", "results")
+            .unwrap()
+            .downcast::<Value>()
+            .unwrap();
+        assert_eq!(result["query"], hostile);
+        assert_eq!(result["options"], args["options"]);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            output
+                .get("invoke", "metadata")
+                .unwrap()
+                .downcast::<Value>()
+                .unwrap()["invocation"]["target"]["id"],
+            "B"
+        );
     }
     #[test]
     fn contextual_call_without_read_authority_never_reaches_the_host() {
