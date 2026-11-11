@@ -40,9 +40,10 @@ départagés : aucun ne dépend du correctif (le détail est dans le ticket ci-d
 
 **Où on en est.** La lib de `29a7bc52a` est dans le magasin des deux postes
 (`~/.cache/rag3db-libs/rag3db-build-29a7bc52a…-Release-…`), bâtie le 9 novembre à 10 h 31.
-D'après c7, l'hôte rag3weaver sous cette lib ne montre plus d'écart ; ce rapport ne l'a pas
-vérifié lui-même. Le ticket
-`docs/tickets/2026-11-08-un-index-complet-croise-les-deux-sens-des-petites-tables-de-relations.md`
+D'après G, l'hôte rag3weaver sous cette lib ne montre plus d'écart (contrôle du 9 novembre à
+12 h 07, journal `~/.local/share/rag3weaver/instantanes/controle-29a-controle/code-lourd.log` à
+luciepc, chemin donné par c7) ; ce rapport ne l'a pas vérifié lui-même. Le ticket
+`docs/coeur-cpp/tickets/2026-11-08-un-index-complet-croise-les-deux-sens-des-petites-tables-de-relations.md`
 reste ouvert : il attend le rejeu par hotfixs de sa trace exacte de 3 178 instructions sous cette
 lib, et un index complet vert sur une copie. C'est le cœur qui le ferme, dans un commit de docs.
 
@@ -53,7 +54,7 @@ Lucie qui décide quand.
 ## 2. L'annulation inachevée après un pool plein : témoin écrit, pas joué
 
 **Le défaut** (ticket
-`docs/tickets/2026-11-09-sous-vingt-ecrivains-un-pool-plein-laisse-une-annulation-inachevee.md`).
+`docs/coeur-cpp/tickets/2026-11-09-sous-vingt-ecrivains-un-pool-plein-laisse-une-annulation-inachevee.md`).
 Dans le scénario de banc `TwentyWriters.DdlEveryMinute`, une instruction échoue parce que le pool
 de tampons (la mémoire où le moteur garde les pages) est plein. Son annulation demande à son tour de
 la mémoire, échoue à mi-chemin, et le moteur se met d'office en état « à rouvrir » : chaque
@@ -97,7 +98,7 @@ Témoins dans `test/transaction/data_file_extent_test.cpp`. `transaction_test` e
 17a094d12 ou dadbf0041, a posé des pages loin au-delà de la fin du fichier. Décision de c7 : ne plus
 chercher à l'aveugle ; le prochain cas sera refusé et sa pile se lira dans le journal de l'hôte.
 Ticket :
-`docs/tickets/2026-11-08-un-sigsegv-dans-optimisticread-sous-lecture-concurrente-pendant-une-indexation.md`.
+`docs/coeur-cpp/tickets/2026-11-08-un-sigsegv-dans-optimisticread-sous-lecture-concurrente-pendant-une-indexation.md`.
 La base de c7 abîmée est mise de côté dans
 `~/.cache/rag3db-moteur-notes/essais-c7/etat-ferme-17h14/` (poste principal).
 
@@ -203,9 +204,6 @@ de page faux.
 - Fermer le ticket de l'index complet : attend le rejeu d'hotfixs sous la lib `29a7bc52a`.
 - Lever la règle « aucun index complet sur les bases de Lucie » : décision de c7, qui l'attache à
   la pose de la lib `29a7bc52a`.
-- Déplacer les tickets du cœur vers `docs/coeur-cpp/tickets/` : attend que le script
-  `extension/rag3weaver/scripts/check_tickets.py` sache lire `docs/*/tickets/` ; c7 dira
-  « déplace ».
 
 ## 6. Les trois prochains pas
 
@@ -220,17 +218,20 @@ de page faux.
 
 ## 7. Les tickets ouverts du cœur
 
-À cette session (« cœur c++ ») :
-- `2026-11-09-sous-vingt-ecrivains-un-pool-plein-laisse-une-annulation-inachevee.md` — l'annulation
+À cette session (« cœur c++ »), les quatre premiers déplacés le 11 novembre dans
+`docs/coeur-cpp/tickets/` :
+- `docs/coeur-cpp/tickets/2026-11-09-sous-vingt-ecrivains-un-pool-plein-laisse-une-annulation-inachevee.md` — l'annulation
   inachevée après un pool plein ; témoin écrit, non joué.
-- `2026-11-08-un-index-complet-croise-les-deux-sens-des-petites-tables-de-relations.md` — corrigé en
+- `docs/coeur-cpp/tickets/2026-11-08-un-index-complet-croise-les-deux-sens-des-petites-tables-de-relations.md` — corrigé en
   `29a7bc52a`, à fermer après le rejeu d'hotfixs.
-- `2026-11-08-un-sigsegv-dans-optimisticread-sous-lecture-concurrente-pendant-une-indexation.md` —
+- `docs/coeur-cpp/tickets/2026-11-08-un-sigsegv-dans-optimisticread-sous-lecture-concurrente-pendant-une-indexation.md` —
   mécanisme corrigé en `9bae60786`, première cause inconnue.
-- `2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure.md` — reste la synchronisation du
+- `docs/coeur-cpp/tickets/2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure.md` — reste la synchronisation du
   répertoire après création ou suppression du journal et du fichier fantôme, et son témoin.
-- `2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md` — réduit par
+- `docs/banc/tickets/2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md` — réduit par
   V2-1c ; restent V2-2c (un écrivain qui entre pendant l'écriture du point de reprise) et V2-3.
+  Le banc l'a rangé dans son dossier le 11 novembre ; le travail de moteur qui reste est celui du
+  cœur.
 
 Au nom du cœur, tenus surtout par hotfixs (la « seconde session cœur C++ ») : les tickets de
 `docs/tickets/` dont l'en-tête dit « seconde session cœur C++ », par exemple

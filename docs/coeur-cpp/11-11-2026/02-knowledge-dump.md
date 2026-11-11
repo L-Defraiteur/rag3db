@@ -158,22 +158,23 @@
   master égal à HEAD.
 - Les docs seules se poussent directement sur master, depuis un worktree de docs : commit par
   chemins, `git rebase origin/master`, `git push origin HEAD:master`.
-- Les tickets vivent dans `docs/tickets/`, fermés dans `docs/tickets/closed/` par `git mv`. Un
+- Les tickets vivent dans `docs/tickets/` ou dans le dossier de leur session (ceux du cœur dans
+  `docs/coeur-cpp/tickets/`), fermés dans `docs/tickets/closed/` par `git mv`. Un
   en-tête porte État, Famille, Gravité, Atteignable en service, Touche rag3weaver. Le contrôle est
   `python3 -I extension/rag3weaver/scripts/check_tickets.py`, à jouer avant chaque commit de ticket.
 
 ## 8. Les tickets ouverts de cette session
 
-- `docs/tickets/2026-11-09-sous-vingt-ecrivains-un-pool-plein-laisse-une-annulation-inachevee.md` :
+- `docs/coeur-cpp/tickets/2026-11-09-sous-vingt-ecrivains-un-pool-plein-laisse-une-annulation-inachevee.md` :
   après un pool plein, une annulation échoue à mi-chemin et la base refuse tout jusqu'à sa
   réouverture ; témoin écrit, pas joué.
-- `docs/tickets/2026-11-08-un-index-complet-croise-les-deux-sens-des-petites-tables-de-relations.md` :
+- `docs/coeur-cpp/tickets/2026-11-08-un-index-complet-croise-les-deux-sens-des-petites-tables-de-relations.md` :
   corrigé en `29a7bc52a` ; à fermer après le rejeu d'hotfixs sous cette lib.
-- `docs/tickets/2026-11-08-un-sigsegv-dans-optimisticread-sous-lecture-concurrente-pendant-une-indexation.md` :
+- `docs/coeur-cpp/tickets/2026-11-08-un-sigsegv-dans-optimisticread-sous-lecture-concurrente-pendant-une-indexation.md` :
   mécanisme corrigé en `9bae60786` ; la première cause des pages posées loin au-delà du fichier reste
   inconnue.
-- `docs/tickets/2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure.md` : reste la
+- `docs/coeur-cpp/tickets/2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure.md` : reste la
   synchronisation du répertoire après création ou suppression du journal et du fichier fantôme.
-- `docs/tickets/2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md` :
+- `docs/banc/tickets/2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md` :
   réduit par V2-1c ; restent V2-2c (un écrivain qui entre pendant l'écriture du point de reprise)
   et V2-3.
