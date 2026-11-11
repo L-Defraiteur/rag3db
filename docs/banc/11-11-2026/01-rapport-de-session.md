@@ -60,32 +60,22 @@ hasard donne 0,20.
 Environ 1,2 s en tout, contre 4 à 23 s pour Gemini. Qwen3-4B s'emploie **en rangeur** (garder
 les premières), **jamais en seuil** : l'échelle de ses scores varie avec le contexte.
 
-## 2. Le même banc en GGUF par llama-server : bloqué, en attente d'un choix
+## 2. Le même banc en GGUF par llama-server : fait le 11 novembre
 
-Demande du 9 novembre (orchestration, pour la page de la session 96 sur le classeur local,
-`docs/09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md`) : rejouer les
-440 paires avec Qwen3-4B dans la forme de production. La forme de production, c'est llama-server
-avec un fichier GGUF (format de poids de llama.cpp), en quantification Q8_0 puis Q4_K_M, avec le
-cache de préfixe `cache_prompt`. Les chiffres du § 1 étaient en torch bf16.
+Page : `docs/banc/11-11-2026/03-le-juge-en-gguf.md`. Le banc a tourné avec le bâti de llama.cpp de
+Lucie à luciepc (`~/git_workspaces/llama.cpp`, b9590, commit d2462f8, `build-hip/bin/`), en
+lecture et exécution seulement. Qwen3-4B a été converti en GGUF depuis les safetensors officiels,
+en Q8_0 et Q4_K_M.
 
-**L'état** :
-- llama-server n'existe pas à luciepc.
-- Le portable l'a par les paquets CachyOS `llama-cpp` 0.6.0 (build 11429, commit d812350493),
-  `ggml` 0.26.0, `ggml-hip` et `ggml-vulkan`.
-- Les binaires et bibliothèques du portable ont été copiés dans
-  `~/.cache/rag3db-banc-notes/llama/bin/` à luciepc (1,4 Go). Ils y sont **inertes** : ils
-  plantent par « Instruction non permise ». Le portable installe les paquets compilés en
-  x86-64-v4 (AVX-512), que le processeur de luciepc n'a pas (avx2 seulement).
-- Qwen ne publie pas de GGUF officiel de Qwen3-4B-Instruct-2507. L'orchestration a choisi de
-  convertir nous-mêmes depuis les safetensors officiels déjà à luciepc, avec
-  `convert_hf_to_gguf.py` de llama.cpp et le paquet pip `gguf`, en versions épinglées.
+- **Q8_0 avec `cache_prompt`** : 0,76 de bonnes premières à 2 000 jetons, comme bf16, la même
+  première fiche que bf16 dans 97 % des cas, 1,08 s par cas de 5.
+- **Sans cache** : 3,3 s par cas.
+- **Q4_K_M** : pareil à 2 000 jetons, mais 0,72 sur la forme courte.
 
-**Bloqué sur** : le choix entre deux voies, posé à l'orchestration le 9 novembre et sans réponse
-à ce jour.
-- (1) Bâtir llama.cpp à luciepc depuis les sources, au commit d812350493, avec le moteur HIP pour
-  gfx1201, sous `poste lourd`, `-j 8`. Le même clone donne le script de conversion et
-  `llama-quantize`. C'est la voie proposée.
-- (2) Que Lucie installe les paquets à luciepc, ce qui demande sudo.
+Recommandation de production : Q8_0, avec `cache_prompt`.
+
+Les binaires copiés du portable dans `~/.cache/rag3db-banc-notes/llama/bin/` à luciepc sont
+inutiles : ils plantent par manque d'AVX-512. On peut les effacer.
 
 ## 3. Les autres travaux de la session, tous sur master
 
@@ -118,7 +108,8 @@ cache de préfixe `cache_prompt`. Les chiffres du § 1 étaient en torch bf16.
 | `hf/qwen2.5-0.5b-instruct` | 954 Mio | poids, Apache 2.0 |
 | `hf/laya-multilingual` | 647 Mio | poids, Apache 2.0 |
 | `hf/smollm2-360m-instruct` | 694 Mio | poids, Apache 2.0, formats ONNX effacés |
-| `llama/bin/` | 1,4 Go | binaires du portable, inertes |
+| `llama/bin/` | 1,4 Go | binaires du portable, inertes (AVX-512) : à effacer |
+| `hf/qwen3-4b-{bf16,Q8_0,Q4_K_M}.gguf` | 14,8 Go | poids GGUF du banc du 11 novembre |
 | `h_petits.py`, `h_multi.py`, `gpu-*.sh`, `cpu-*.sh` | | scripts du juge local |
 | `paires2*.jsonl`, `cas2*.jsonl`, `petits-*.jsonl`, `multi-*.jsonl` | | jeux et résultats |
 
@@ -154,10 +145,8 @@ Toujours à luciepc :
 
 ## 6. Les trois prochains pas
 
-1. Obtenir le choix de la voie llama.cpp (bâtir à luciepc au commit d812350493, ou paquets par
-   Lucie). Puis convertir Qwen3-4B en GGUF Q8_0 et Q4_K_M depuis les safetensors officiels, et
-   rejouer les 440 paires par llama-server sur card0, avec et sans `cache_prompt`. Les écarts
-   avec torch bf16 vont dans une page du banc et à la session 96.
+1. Le banc GGUF est fait (page 03 de ce dossier). Reste à mesurer k = 10 et à le tenir à jour
+   pour la session mémoire, qui branche le juge.
 2. Agrandir le jeu du juge local au-delà de 88 positifs, avec les sessions de luciepc et
    LR_CodeRag, même graine. C'est le prérequis d'une spécialisation de Laya ou d'un petit Qwen.
 3. Le décideur d'actions (page 03, § 7) : quand la porte de l'atelier aura journalisé quelques
@@ -166,42 +155,26 @@ Toujours à luciepc :
 
 ## 7. Reprendre
 
-Il n'y a **aucun worktree ni clone de travail inachevé** : le banc GGUF n'a pas commencé son clone
-de llama.cpp, faute du choix du § 2. Voici les points de reprise, avec leur chemin exact.
+Il n'y a **aucun worktree ni clone de travail inachevé**. Le banc GGUF a utilisé le clone de
+llama.cpp de Lucie, `~/git_workspaces/llama.cpp` à luciepc, sans le modifier. Voici les points de
+reprise, avec leur chemin exact.
 
-### 7.1 Le banc GGUF de Qwen3-4B, à luciepc
+### 7.1 Le banc GGUF de Qwen3-4B, à luciepc : fait
 
-- **Fait** :
-  - les poids officiels sont dans `luciepc:~/.cache/rag3db-banc-notes/hf/qwen3-4b-instruct-2507/`
-    (safetensors bf16, Apache 2.0) ;
-  - le jeu est dans `luciepc:~/.cache/rag3db-banc-notes/paires2-court-2000.jsonl`,
-    `paires2-fin-6000.jsonl` et `cas2-melange.jsonl` ;
-  - les chiffres torch bf16 de référence sont dans `petits-qwen3-4b-card0.jsonl`,
-    `petits-qwen3-4b-card0-fin.jsonl` et `multi-qwen3-4b-*.jsonl`, même dossier.
-- **Reste** :
-  - bâtir llama.cpp ;
-  - convertir et quantifier ;
-  - écrire le client llama-server qui lit les logits oui/non : `POST /completion` avec
-    `n_probs` et `cache_prompt: true`, le gabarit de conversation appliqué côté client ;
-  - rejouer ;
-  - écrire la page.
-- **Commandes, voie (1)**, après accord de l'orchestration. Sur luciepc, en bash :
+- **Fait** : la conversion, les deux quantifications, les 440 paires sous les deux formes, avec et
+  sans cache, la page 03 du dossier.
+- **Rejouer** :
 
 ```bash
-L=~/.cache/rag3db-banc-notes/llama.cpp
-git clone https://github.com/ggml-org/llama.cpp $L && git -C $L checkout d812350493
-~/.cache/rag3weaver-build/poste lourd bash -c "cmake -S $L -B $L/build -DGGML_HIP=ON -DAMDGPU_TARGETS=gfx1201 -DCMAKE_BUILD_TYPE=Release && cmake --build $L/build -j 8 --target llama-server llama-quantize"
-python3 -m venv ~/.cache/rag3db-banc-notes/gguf-venv && ~/.cache/rag3db-banc-notes/gguf-venv/bin/pip install -r $L/requirements/requirements-convert_hf_to_gguf.txt
-H=~/.cache/rag3db-banc-notes/hf
-~/.cache/rag3db-banc-notes/gguf-venv/bin/python $L/convert_hf_to_gguf.py $H/qwen3-4b-instruct-2507 --outtype bf16 --outfile $H/qwen3-4b-bf16.gguf
-$L/build/bin/llama-quantize $H/qwen3-4b-bf16.gguf $H/qwen3-4b-Q8_0.gguf Q8_0
-$L/build/bin/llama-quantize $H/qwen3-4b-bf16.gguf $H/qwen3-4b-Q4_K_M.gguf Q4_K_M
-ROCR_VISIBLE_DEVICES=1 setsid nohup $L/build/bin/llama-server -m $H/qwen3-4b-Q8_0.gguf -ngl 99 -c 8192 --port 8099 > ~/.cache/rag3db-banc-notes/llama-server.log 2>&1 & disown
+cd ~/.cache/rag3db-banc-notes && rm -f gguf-Q*.jsonl && setsid nohup ~/.cache/rag3weaver-build/poste lourd ./gguf-jeu.sh > gguf-jeu.log 2>&1 & disown
 ```
 
-  Avant le serveur, lire la VRAM de card0 : la moitié de la VRAM libre doit rester à Lucie. Le
-  commit d812350493 est celui du paquet du portable ; le noter dans la page, avec la version du
-  paquet pip `gguf`.
+  Les poids GGUF sont dans `~/.cache/rag3db-banc-notes/hf/qwen3-4b-*.gguf`. Le serveur se lance
+  sur card0 seule (`ROCR_VISIBLE_DEVICES=1`), sur le port 8099, puis il est arrêté à la fin.
+- **Reste** :
+  - mesurer k = 10 ;
+  - rejouer le juge sur un jeu plus grand quand il existera ;
+  - brancher dans le produit, ce qui revient à la session mémoire.
 
 ### 7.2 Le juge local, à refaire ou à étendre
 

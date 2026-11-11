@@ -1,0 +1,96 @@
+# Le juge local en GGUF par llama-server (11 novembre 2026)
+
+La demande de l'orchestration, pour la page de la session mémoire (96) sur le classeur local
+(`docs/09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md`) : rejouer le
+banc du juge local dans la forme de production. Les chiffres de la page
+`extension/rag3weaver/docs/08-novembre-2026-banc/03-le-juge-local.md` étaient en torch bf16.
+Ici, c'est **llama-server** (le serveur HTTP de llama.cpp) avec des poids au format **GGUF** (le
+format de llama.cpp), quantifiés en **Q8_0** (8 bits) et **Q4_K_M** (environ 4,5 bits).
+
+**En une phrase : Q8_0 garde le juge tel quel (76 % de bonnes premières à 2 000 jetons, la même
+première fiche que bf16 dans 97 % des cas), et le cache de préfixe de llama-server divise le coût
+par trois. Q4_K_M ne perd rien à 2 000 jetons, mais perd sur la forme courte.**
+
+## 1. Ce qui a tourné
+
+- **llama.cpp** : le clone et le bâti de Lucie à luciepc, `~/git_workspaces/llama.cpp`, version
+  b9590 (commit d2462f8), bâti HIP pour gfx1201 dans `build-hip/bin/`. On n'y a fait que lire et
+  exécuter : aucun changement de commit, aucun nouveau bâti, `git status` resté propre.
+- **La conversion** :
+  - `convert_hf_to_gguf.py` du même clone, depuis les safetensors officiels de
+    Qwen3-4B-Instruct-2507 (Apache 2.0) déjà à luciepc, vers un GGUF bf16 (8,05 Go) ;
+  - puis `llama-quantize` vers Q8_0 (4,28 Go) et Q4_K_M (2,50 Go) ;
+  - le paquet `gguf` vient du clone (`pip install --no-deps -e …/gguf-py`), dans le venv du banc ;
+    rien d'autre n'a été téléchargé.
+- **Deux ajustements de la conversion**, sans rien changer à llama.cpp :
+  - le `torchvision` du système, qui ne va pas avec torch 2.15, est masqué ;
+  - le convertisseur importe `sentencepiece` avant de constater que Qwen n'a pas de
+    `tokenizer.model`. Un module vide passe l'import, le fichier manque, et le vocabulaire BPE de
+    Qwen est pris comme prévu.
+- **La carte** : card0 de luciepc seule (`ROCR_VISIBLE_DEVICES=1`).
+  - card0 est montée de 10,8 à 17,5 Go avec Q8_0 et de 10,9 à 15,9 Go avec Q4_K_M ;
+  - card2, celle des services, n'a pas bougé (25,2 Go) ;
+  - la charge de luciepc était de 11 à 17.
+- **Le serveur** : `llama-server -ngl 99 -c 16384 -np 1`.
+- **Le client** (`q_llama.py`) :
+  - il applique le gabarit de conversation de Qwen3-4B par son tokeniseur, puis envoie le texte
+    à `/completion`, avec un jeton prédit et `n_probs: 50` ;
+  - le score vaut sigmoïde(log P(oui, Oui) − log P(non, Non)) sur les probabilités du premier
+    jeton ;
+  - même jeu (440 paires), même question que la page 03.
+- **Le cache de préfixe** : les cinq fiches d'un cas se suivent. Avec `cache_prompt: true`,
+  llama-server garde le contexte commun : la première fiche du cas traite tout le contexte (environ
+  2 000 jetons), les suivantes leurs seuls jetons propres (environ 150).
+
+## 2. Les résultats
+
+| poids | forme | premier (test) | AUC dans le cas | p50 par paire | p50 par cas de 5 |
+|---|---|---|---|---|---|
+| bf16 torch (page 03) | début 2 k, préfixe partagé | 0,76 (0,74) | 0,92 | — | 1 017 ms |
+| **Q8_0, avec cache** | début 2 k | **0,76** (0,76) | **0,92** | 83 ms | **1 076 ms** |
+| Q8_0, sans cache | début 2 k | 0,76 (0,76) | 0,92 | 651 ms | 3 288 ms |
+| Q8_0, avec cache | forme courte | 0,77 (0,71) | 0,89 | 86 ms | 445 ms |
+| Q4_K_M, avec cache | début 2 k | 0,76 (0,76) | 0,91 | 90 ms | 1 162 ms |
+| Q4_K_M, sans cache | début 2 k | 0,76 (0,76) | 0,92 | 752 ms | 3 790 ms |
+| Q4_K_M, avec cache | forme courte | 0,72 (0,62) | 0,88 | 89 ms | 471 ms |
+
+Les colonnes « premier » et « AUC dans le cas » suivent les définitions de la page 03 : la bonne
+fiche est-elle première de ses 5 (hasard 0,20), et la part des paires bien ordonnées dans un cas
+(hasard 0,50).
+
+**Les écarts avec bf16 torch**, paire par paire, sur les mêmes 440 paires :
+
+| poids | forme | même première fiche que bf16 | paires qui passent de l'autre côté de 0,5 | écart de score > 0,1 |
+|---|---|---|---|---|
+| Q8_0 | début 2 k | 97 % | 4,3 % | 9,3 % |
+| Q8_0 | forme courte | 94 % | 5,2 % | 12,3 % |
+| Q4_K_M | début 2 k | 92 % | 12,0 % | 17,0 % |
+| Q4_K_M | forme courte | 91 % | 15,5 % | 20,0 % |
+
+L'écart médian est nul : les scores sont presque toujours proches de 0 ou de 1. Les écarts tiennent
+à quelques paires qui basculent. Q8_0 garde le classement ; Q4_K_M en bouge un sur douze sans
+changer la mesure à 2 000 jetons, mais il le paie sur la forme courte.
+
+## 3. Ce que ça change à la recommandation
+
+La chaîne de la page 03, § 4, tient telle quelle dans la forme de production :
+
+> rappel `recall_fiches` (k = 5) → Qwen3-4B-Instruct-2507 **en GGUF Q8_0 par llama-server, avec
+> `cache_prompt`**, contexte de fin de conversation borné à 2 000 jetons, logits oui/non → garder
+> les 1 à 2 premières.
+
+- **Le coût** : environ 1,1 s par cas de 5, plus environ 0,2 s de rappel, soit 1,3 s au
+  préchargement. La première fiche coûte le contexte, environ 0,65 s ; chaque fiche suivante
+  environ 0,09 s.
+- **Sans `cache_prompt`**, le cas coûte trois fois plus (3,3 s).
+- **Q4_K_M** ne fait gagner ni temps ni mémoire utile ici : 1 Go de VRAM de moins, et aucun
+  gain de temps sur card0. Il perd 5 points sur la forme courte. Q8_0 est le choix.
+- **Pour k = 10**, on estime 1,5 s (0,65 s + 10 × 0,09 s), sans l'avoir mesuré.
+
+## 4. Les fichiers
+
+- **À luciepc** :
+  - les poids GGUF dans `~/.cache/rag3db-banc-notes/hf/qwen3-4b-{bf16,Q8_0,Q4_K_M}.gguf` ;
+  - les scripts `gguf-bati.sh`, `gguf-jeu.sh` et `q_llama.py`, les journaux `llama-*.log` et les
+    résultats `gguf-*.jsonl`, dans `~/.cache/rag3db-banc-notes/`.
+- **Sur le portable** : une copie des résultats dans `~/.cache/rag3db-banc-notes/decision/gguf/`.
