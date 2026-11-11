@@ -3,6 +3,23 @@
 Session « orchestration sessions » (c7). Ce rapport dit l'état du projet pour un agent qui reprend
 l'orchestration sans avoir lu nos échanges. Le knowledge dump (`02-knowledge-dump.md`) dit les règles.
 
+## État actualisé après les livraisons du 11 novembre
+
+Les sections de passation ci-dessous sont historiques ; les entrées finales détaillent les preuves.
+
+| périmètre | état actuel |
+|---|---|
+| moteur/lib | lib complète29a7bc52a aux deux postes, inchangée ; correctif C++0511dece7 en branche, ciblés verts, suites entières en cours |
+| mémoire | alias d’archivage intégrés41526b29a ; mémoire réelle inchangée, cinquante documents non lancés |
+| rattrapage | restitution des réclamations intégrée91e5f760b ; chemins d’erreur masqués suivis en ticket distinct |
+| vues | projection générique intégrée6c4b5ad0c ; partage de stockage1a en implémentation, couches et migration non livrées |
+| IDE | flux/usage/reprise après panne intégrés8d5139f9e ; recherche/wait_output de l’atelier encore à compléter chez ED |
+| arrêt des backends | correction du faux succès en branche, ciblés verts ; validation finale à reprendre sur base8d dans fenêtre réservée, juge variable suivi en ticket |
+| équipier | témoin de clôture prématurée en compilation ; relais contextuel au stade contrat, pas runtime livré |
+| codeparsers | seconde comparaison stricte terminée, nombreuses non-interrogations distinguées ; complément23 positions puis rebase/passe finale encore requis |
+| lucivy |4.3.3 publiée et témoin close amont vert ; dépendances rag3weaver encore4.3.2 |
+| pose du binaire | artefactd134 préparé mais non posé ; prochaine cible regroupée à fixer après arrêt, pas de coupure engagée |
+
 ## Ce qui se passe ce 11 novembre
 
 Lucie passe ses sessions sur Codex pour garder du crédit pour son travail. Chaque session écrit son
@@ -465,3 +482,28 @@ restent explicitement en cours. Les chiffres sont datés et leurs protocoles ré
 - Préparation1a synchronisée aux deux postes, cx-arbre-scope-version-3 c22497935 : runtime
   identique au master6c4, témoins et propositions seulement ; pas de nouveau target créé.
   Fenêtre archi inchangée, aucun nouveau push de code.
+
+
+### IDE flux et reprise du chat intégrés
+
+- **8d5139f9e71aa7991cc453be2c7d6710a24a4953**, lot commun archi : états hôte/chat poussés,
+  projection commune de l’usage journal en attente/durable, résultats d’outils conservés après
+  panne, issue du tour rendue aussi pour les relances hors formulaire. Aucun nouvel outil
+  de l’atelier livré ; inventaire navigateur et ticket recherche/wait_output ouverts côté ED.
+- Source jugéebc3a1d779 sur baseED/projection : TypeScript/bundle verts ; features5/5 et script
+  hooks vert ; lib2100/0/61 ignorés en39,07s, rattrapage explicitement OK ; hooks2/0/0,
+  lectures24/0/0, PostgreSQL privé34/0/0, navigateurs36/0/0 en132,10s. Attestation de source,
+  lib complète29a7 et verdict VERT relus par orchestration, diff runtime/UI relu avant tour.
+- Un lancement avec PG partagé a été interrompu avant testsSQL, puis base privée attestée.
+  Autre rouge de plafond target34Go :22Go d’incrémental inactif retirés, target13Go,
+  plafond32 inchangé, relance complète déjà démarrée au moment de demander le seul complément.
+  Ces lancements restent séparés de la complète verte ; aucun ancien rouge repeint.
+- Conflit des nouveautés résolu hors verrou en préservant les deux annonces, code/bundle
+  strictement identiques à la source jugée. Push sous poste push/garde VERT ; trois contrôles
+  lus aux deux postes après fetch, nettoyage automatique terminé worktrees/branches locales,
+  targetflux et basePG après zéro connexion ; preuves copiées et refs distantes conservées.
+- **a5f17368e**, docs seules archi : livraison et nettoyage consignés. Hash/diff relus ici ;
+  aucune nouvelle modification produit. L’intégration au dépôt ne signifie pas pose chez Lucie.
+- Fenêtre code archi libérée ; base convenue8d donnée à recherche pour sa validation finale
+  d’arrêt avec résultat conservé. Aucun autre tour simultané, opérations préparatoires des
+  autres sessions possibles hors master. Cible de pose regroupée toujours à convenir ensuite.

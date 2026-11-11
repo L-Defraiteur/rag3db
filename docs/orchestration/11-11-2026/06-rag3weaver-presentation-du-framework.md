@@ -101,6 +101,11 @@ L’hôte sert un IDE React : chat, fichiers, recherche, arbre, graphes, tâches
 Un client terminal suit l’agent et ses outils, permet de lui parler et de l’arrêter ; il fonctionne
 aussi par SSH.
 
+L’état de l’hôte et la fin des tours du chat sont désormais poussés par le flux d’événements
+(`8d5139f9e`). L’usage du modèle est commun à l’API, à la barre et au récapitulatif ; après une
+panne, les actions et résultats déjà obtenus restent visibles et le chat peut reprendre.
+Cette livraison ne complète pas encore tous les outils accessibles depuis l’atelier.
+
 L’atelier sait notamment attacher un worktree, ouvrir une branche dans un worktree voisin,
 lire un fichier ou un scope, modifier du texte ou des lignes et rendre le diff.
 Les modifications d’un worktree attaché peuvent déclencher sa réindexation.
