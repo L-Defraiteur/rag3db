@@ -1,7 +1,8 @@
 # Parcours de code du chat : inventaire effectif, 11 novembre 2026
 
-État de branche, pas une livraison : `cx-archi-chat-erreurs`, code `816fc4824`,
-descend du lot flux `cx-archi-ide-par-le-flux-2` encore bloqué par la lib.
+État de branche, pas encore une livraison : lot commun `cx-archi-ide-par-le-flux-chat-4`,
+source jouée `bc3a1d779`. Il réunit flux et correctif chat, après ED réclamations et projection.
+Les preuves ciblées historiques ci-dessous restent attachées à `816fc4824`.
 Worktree sur les deux postes : `~/.cache/rag3weaver-build/cx-wt-chat-erreurs`.
 Le target de session `flux` est repris explicitement, sans cargo concurrent.
 
@@ -54,8 +55,10 @@ et le bundle est rebâti avec les sources.
 - Régression navigateur : **36/36, zéro échec, zéro ignoré, 132,73 s** sur `816fc4824` ;
   `cx-chat-erreurs-816fc4824-20261111-navigateurs/`, verdict `VERT`. Lanceur terminé.
   Cela valide cette étape, pas la passe globale.
-- Lib complète et gate global non verts : le lot parent garde son rouge 606 vecteurs dus ;
-  attendre l'intégration du correctif ED, puis rebaser et rejouer les contrôles requis.
+- Passe finale commune **VERT** sur `bc3a1d779` : features 5/5, lib 2 100/0 (61 ignorés),
+  hooks 2/2, lectures 24/24, PostgreSQL privé 34/34, navigateurs 36/36 (132,10 s).
+  Source et journaux : `cx-flux-chat-bc3a1d779-prive-r2-20261111` à luciepc.
+  Le témoin historique des 606 vecteurs dus passe après ED ; son ancien rouge est conservé.
 - Aucun push master, aucun tour accordé. Fenêtre de stabilité recherche respectée.
 
 La chaîne complète explorer → lire → éditer → tester → montrer diff → livrer n'est pas encore

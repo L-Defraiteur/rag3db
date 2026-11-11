@@ -33,99 +33,89 @@ G a posé `d23af9cd2` sur le portable le 9 novembre à 13 h 42. Les lots suivant
 (`be319fa75`, `3e8c87aa5`, `ab8272deb`) ne sont **pas encore posés** chez Lucie. c7 voulait les
 regrouper avec le lot de la session « recherche ».
 
-## Le lot en branche : l'IDE par le flux (reprise du 11 novembre)
+## Lot commun prêt : l'état fidèle du chat par le flux
 
-- Branche de référence : `origin/cx-archi-ide-par-le-flux-2`, code `61066a2b3` ;
-  rebasée après le garde-fou `1904e04e4` et le correctif mémoire `41526b29a`.
-- Worktree sur les deux postes : `/home/lucied/.cache/rag3weaver-build/cx-wt-flux`.
-  Le target de validation est `~/.cache/rag3weaver-build/flux` sur luciepc.
-- Les anciens worktrees `wt-flux` et branches `ide-par-le-flux` /
-  `archi-flux-validation-20261111` sont conservés ; aucune branche distante supprimée.
-- La demande reste un IDE inactif sans requêtes, et un geste de chat qui ne produit que son
-  `POST /ide/chat` ; états et fin du tour arrivent par le flux `etat`.
-- La cause historique du code 137 est **inconnue** : pas de preuve OOM/SIGKILL retrouvée
-  dans les journaux noyau consultés (9 novembre, 14 h 50–15 h 30). Aucun processus du target
-  sur le portable ou luciepc n'était actif avant la reprise. L'ancien dossier `flux-passe`
-  ne contient toujours qu'un journal et une compilation interrompue, sans verdict.
+- Branche de référence : `origin/cx-archi-ide-par-le-flux-chat-4`.
+- Source exactement jouée : `bc3a1d7797856abf89ef838e6720622ea5c393aa`, rebasée sur
+  projection `6c4b5ad0c0f757ee17905c1643dd8b39174ccaa9`, après ED réclamations `91e5f760b`.
+- Worktree sur les deux postes : `~/.cache/rag3weaver-build/cx-wt-chat-erreurs` ;
+  target de validation à luciepc : `~/.cache/rag3weaver-build/flux`.
+- **Passe complète VERT**, terminée à luciepc ; aucun processus restant du lanceur.
+  **Pas encore de push master : tour à obtenir de l'orchestration.**
 
-### Preuves et correction du compteur
+Le lot réunit les états poussés du chat et leur fidélité : aucun polling au repos dans le
+témoin, compteur commun pour flux/GET/récapitulatif, actions conservées après une panne et
+issue réelle du tour publiée, y compris quand il part hors du formulaire. Aucun outil ni
+capacité de recherche ajouté. L'inventaire navigateur atelier/dépôt/tâche est documenté dans
+`03-inventaire-parcours-chat.md` ; le manque de recherche et de suivi de commande de l'atelier
+reste un ticket ED, pas une livraison de ce lot.
 
-Sur `a9c5a3108`, témoin flux vert (1/1, 67,85 s), puis à luciepc : features 5/5,
-lib entière 2 094/0 en 56,02 s, hooks 2/2. Le premier e2e lectures a rougi faute de service
-aux ports du portable ; avec les adresses luciepc `7878,7879,7880`, il passe 24/24.
-Le navigateur complet reste rouge : 33/34, puis **5 rouges sur 5** du témoin
-`la_barre_dit_l_usage_le_recapitulatif_et_l_archiviste` : la barre rend 497 jetons,
-GET chat rend 0. Le compteur était ajouté seulement au message du flux ; GET attendait
-encore le fichier asynchrone du journal.
+### Passe finale et provenance
 
-La correction scelle `usage_du_chat` dans les ajouts du même journal à la fin du tour.
-GET, flux et récapitulatif lisent la même projection : instantané des ajouts et bornes
-avant liste des fichiers, déduplication par run, total scellé prioritaire sur `Consumed`.
-Les rôles finis se relisent également avant leur fichier. L'ordre vient de l'identité du
-run, avant les bornes de lecture, pas de l'ordre d'écriture des fichiers. Aucun polling,
-aucun nouveau stockage. Un résumé absent n'est pas gardé en cache négatif.
+Dossier : `~/.cache/rag3weaver-build/cx-flux-chat-bc3a1d779-prive-r2-20261111/`.
+Lanceurs : `cx-flux-chat-bc3a1d779-prive-r2-{passe,push}.sh`, sous le même dossier de build
+à luciepc. Le push n'a pas été exécuté. `source-head`, `master-au-depart`, `lib-epinglee`
+et `postgres-identite.txt` attestent la source, la base, la lib et l'identité SQL.
+Le master vu au départ est `b798a299e86091033d15fbcb2491088734611806` (docs après projection).
 
-Sur `a3a00ef75` : 16 tests chat hors navigateur verts (12 ignorés, joués à part),
-puis **5 verts sur 5** du même témoin navigateur. Les preuves ajoutées couvrent deux tours,
-leur transfert concurrent en ordre inverse, les ajouts tardifs, les anciennes traces et la
-relecture par une nouvelle instance **après écriture** ; elles ne promettent pas la durabilité
-lors d'un arrêt brutal avant l'écriture asynchrone du journal.
+| étape | résultat réel |
+|---|---|
+| `check_features` | VERT 5/5 |
+| script d'installation des hooks | VERT |
+| lib, jeu large | 2 100 réussis, 0 échec, 61 ignorés, 39,07 s |
+| `e2e_hooks_claude_code` | 2/2, 0 ignoré, 7,59 s, 1 suite sur 1 |
+| `e2e_lectures` | 24/24, 0 ignoré, 9,79 s, 1 suite sur 1 |
+| `e2e_postgres` | 34/34, 0 ignoré, 7,84 s, 1 suite sur 1 |
+| navigateurs | 36/36, 0 ignoré, 132,10 s |
+| TypeScript et bundle `--check` | VERT, vérifiés après installation des dépendances |
 
-`061b0a483` ajoute l'ordre commun avant les bornes. Sa passe complète est **ROUGE lib** :
-2 097 tests réussis, un échec, 59 ignorés, 145,09 s. Le témoin
-`owed_vectors_are_caught_up_on_open_when_the_manifest_declares_it` expire après 120 s avec
-606 morceaux encore dus. Les trois nouvelles preuves du chat passent dans cette lib.
-Les étapes e2e et navigateur suivantes n'ont pas été jouées par ce lanceur.
-ED tient le correctif des réclamations d'index en branche, pas encore sur master :
-`bbba12fb2` sur `cx-ed-reclamations-rendues-5`. Sa piste explique comment des claims non
-rendus peuvent laisser une dette après réouverture ; la cause de notre run n'est pas
-prouvée. Aucun changement au test ni à l'index dans le lot flux. La lecture des piles a été
-refusée par le système ; refus conservé, aucun contournement.
+Les 61 ignorés de la lib sont comptés comme ignorés, pas ajoutés aux tests réussis ;
+l'étape navigateur joue ses témoins séparément. Aucun `SAUTÉ` dans les trois e2e.
+Le jeu large est `rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm`.
+Lib : `rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`.
+`CARGO_BUILD_JOBS=8`, services luciepc `7878,7879,7880`, paquets React exigés.
+PostgreSQL privé : `rw_archi_flux_chat_bc3a_20261111`, compte `rag3weaver` ; contrôle initial
+une connexion, URL et identifiants non affichés. Ne pas jouer `e2e_postgres` sur la base partagée.
 
-La passe rouge est conservée, sous `poste lourd` sur luciepc :
+### Les rouges et leurs preuves restent conservés
 
-- lanceur `~/.cache/rag3weaver-build/cx-flux-complete-061b0a483.sh` ;
-- sorties `~/.cache/rag3weaver-build/cx-flux-complete-061b0a483-20261111/` ;
-- lib épinglée `rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF` ;
-- `CARGO_BUILD_JOBS=8`, paquets React exigés ; services luciepc `7878,7879,7880` ;
-- étapes : check_features, script hooks, lib large, e2e hooks, e2e lectures, navigateurs.
+- Code 137 historique du 9 novembre : **cause inconnue** ; aucune preuve OOM/SIGKILL retrouvée
+  dans la fenêtre consultée. `flux-passe` n'a pas de verdict ; aucun doublon local/distant
+  au début de la reprise. La tentative de piles de la lib du 11 a été refusée ; aucun contournement.
+- `a9c5a3108` : navigateur 33/34, puis compteur rouge **5/5** (barre 497, GET 0).
+  Le total était ajouté seulement à la trame. Correction : `usage_du_chat` scellé dans les
+  ajouts du journal à la fin du tour ; projection commune pending/durable dédupliquée par run,
+  total scellé prioritaire sur `Consumed`, ordre logique avant bornes, pas de cache négatif.
+  Les rôles finis se relisent avant leur fichier. Ciblé passé **5/5**, puis régression globale.
+- `061b0a483` : lib rouge 2 097/1, 145,09 s ; rattrapage expire à 606 vecteurs dus après 120 s.
+  Après intégration ED, **ce témoin précis est OK** dans les deux libs sur `bc3a1d779` :
+  38,89 s puis 39,07 s pour la suite. L'absence du défaut sur la base corrigée ne démontre
+  pas rétroactivement la cause exacte de l'ancien run.
+- Premier lancement commun interrompu à `check_features`, avant tests SQL, pour remplacer
+  la base partagée par une base privée ; répertoire `cx-flux-chat-bc3a1d779-20261111`.
+- Première complète privée : features, lib 2 100/0 (38,89 s) et hooks 2/2 verts, puis refus
+  avant lectures car target 34 Go > 32. Verdict rouge conservé dans
+  `cx-flux-chat-bc3a1d779-prive-20261111`. Mesure : 22 Go de caches incrémentaux.
+  Aucun processus target avant nettoyage des seuls `debug/incremental` ; target ramené à
+  13 Go, puis 14 Go pendant la passe finale. Aucun plafond relevé. Anciennes preuves externes
+  intactes. La complète r2 était déjà lancée lors de la précision permettant une reprise
+  des seules étapes manquantes ; ce rejeu supplémentaire est déclaré, pas caché.
+- La première vérification TypeScript a croisé `npm ci` et échoué sur dépendances absentes.
+  Rejouée séquentiellement après installation : VERT ; aucun défaut source masqué.
 
-Après rebase mémoire, `61066a2b3` est sauvegardé sous le nouveau nom `cx-archi-ide-par-le-flux-2`.
-Un lanceur distinct vérifie les étapes hors lib (sans transformer le rouge en vert global) :
-`~/.cache/rag3weaver-build/cx-flux-61066a2b3-hors-lib.sh`, sorties
-`~/.cache/rag3weaver-build/cx-flux-61066a2b3-hors-lib-20261111/`.
-Résultat de ces contrôles hors lib sur `61066a2b3` : features 5/5, script hooks vert,
-e2e hooks 2/2 (8,07 s), e2e lectures 24/24 (11,22 s), navigateurs 34/34 (136,22 s),
-zéro ignoré dans ces deux e2e et dans l'étape navigateur. Les deux suites e2e annoncent
-chacune « 1 sur 1 demandées ». Verdict conservé :
-`VERT hors-lib (lib bloquante non rejouée)` — **pas un verdict global vert**.
-Tous les processus de ce lanceur ont fini.
-Rejeu global requis après traitement du blocage ED et incorporation du master du moment.
+Anciennes branches et worktrees conservés : `ide-par-le-flux`, `cx-archi-ide-par-le-flux`
+et suffixes `-2`, `-3`, `cx-archi-chat-erreurs`. Aucun force-push ni suppression distante.
+Les anciens journaux détaillés restent sous les noms consignés dans l'historique du rapport.
 
-Les journaux antérieurs restent distincts : `flux-passe-complete-20261111-luciepc-2`,
-`flux-passe-reprise-services-20261111-luciepc`, `flux-barre-seul-20261111-{1..5}`,
-`cx-flux-correction-20261111-*`, `cx-flux-correction-r2-20261111-*`.
+### Reprendre / intégrer
 
-### Reprendre
-
-Lire le processus et le journal de la passe active avant toute commande cargo. Un seul cargo
-par target ; ne pas déplacer un worktree actif. Après un résultat global vert, demander le
-tour à l'orchestration. Toute arrivée de code impose rebase sur une nouvelle branche `cx-`
-et rejeu court hors verrou de push ; les docs seules n'imposent pas de rejeu.
-**Aucun tour de push master accordé.** L'ancien `wt-flux-push.sh` ne correspond plus aux chemins
-ni aux verdicts courants : préparer et relire un lanceur conforme avant de l'utiliser.
-
-## Lot suivant : garder les actions du chat après une panne
-
-Branche `cx-archi-chat-erreurs`, worktree `cx-wt-chat-erreurs` sur les deux postes,
-code `816fc4824`, dépendant du lot flux (pas encore sur master). Le premier blocage UI est
-corrigé et rouge/vert prouvé : une erreur modèle après lecture ne supprime plus les actions,
-et l'issue réelle du tour est portée par l'état poussé, y compris hors formulaire.
-L'inventaire effectif atelier/dépôt/tâche est vert depuis le navigateur ; le trou de recherche
-et de suivi de commande de l'atelier est transmis à ED en ticket. Types et bundle vérifiés.
-Régression navigateur verte : 36/36, zéro échec ni ignoré, 132,73 s sur `816fc4824`.
-Aucun verdict global, aucun push master.
-Détails, preuves, matrice et limites : `03-inventaire-parcours-chat.md`.
+Avant toute nouvelle commande cargo, vérifier les processus et le propriétaire du target.
+La passe finale est terminée ; ne pas la rejouer sans changement ou nouvelle inquiétude.
+Le script de push exige VERT, vérifie les changements depuis la source jouée et les arrivées
+sur master, refuse un rejeu sous le verrou et sauvegarde tout rebase sous un nouveau nom.
+Il ne s'exécute qu'au tour accordé, puis lit les trois contrôles et nettoie son worktree/target,
+en conservant tous les journaux. Les modifications de rapport après la passe sont des docs seules.
+Après push, consigner le hash et la nouveauté réellement livrée ; prévenir orchestration et ED.
 
 ## Les lots nommés, pas commencés
 
@@ -171,12 +161,13 @@ Rien n'a été effacé pour ce passage.
 - **luciepc** (l'autre poste) : aucun worktree ni target de cette session. Celui qui s'y trouve,
   `wt-lib-arbre`, n'est pas à moi.
 
-## Ce qui est bloqué
+## Ce qui reste en attente
 
-- La relecture d'ED attend une approbation de Lucie.
-- Le rouge connu de la CI de master,
-  `daemon_host::worktrees::tests::owed_vectors_are_caught_up_on_open_when_the_manifest_declares_it`,
-  attend aussi Lucie : le correctif est chez ED. Ce n'est pas à moi.
+Le lot commun n'a plus de rouge de validation : le rattrapage historique est vert sur la base
+ED. Il attend uniquement son tour d'intégration. Les anciens signalements du 9 novembre
+(approbation de relecture ED, rouge CI du rattrapage) sont historiques ; ne pas les reprendre
+comme état actuel sans vérification. Les capacités encore absentes de l'atelier ont leur ticket
+et leur futur lot ED, distincts de la livraison du flux et des erreurs.
 
 ## Les tickets ouverts qui me concernent
 
@@ -193,8 +184,8 @@ Ils sont sous `docs/rag3weaver-archi/tickets/`, déplacés de `docs/tickets/` le
 
 ## Les trois prochains pas que je ferais
 
-1. **Finir l'IDE par le flux.** Conserver le rouge 606 dus, coordonner le blocage avec ED,
-   finir les contrôles hors lib, puis rebase et rejeu requis avant un éventuel tour de push.
+1. **Intégrer le lot commun flux/chat**, passe complète verte ci-dessus, au tour de l'orchestration.
+   Le rouge historique 606 dus reste conservé ; le témoin est maintenant vert sur la base ED.
 2. **Le parcours réel du chat IDE.** Atelier, dépôt et tâche : outils réellement accessibles,
    recherche, lecture, édition, commandes/tests, sorties/diff, accords, arrêt et reprise.
    ED tient outils/gabarits et clôture des tâches ; archi tient navigateur/UI/flux/cartes.
