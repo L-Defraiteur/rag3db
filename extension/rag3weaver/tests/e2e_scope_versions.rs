@@ -43,7 +43,9 @@ fn catalogue() -> (Catalog, Arc<Mutex<Vec<String>>>) {
     let mut occurrence = original.clone();
     occurrence.search_index = Some("ScopeContent".into());
     occurrence.chunked = Some(false);
-    occurrence.signals = rag3weaver::search::SearchSignals::BM25;
+    // L'occurrence fournit les données et les positions ; seul ScopeContent
+    // porte ici les index physiques, avec les signaux du schéma d'origine.
+    occurrence.signals = rag3weaver::search::SearchSignals::NONE;
     cat.register_entity("Scope", occurrence).unwrap();
     let names = ["name", "signature", "content", "docstring", "scope_type", "language"];
     let fields = names.iter().map(|name| (name.to_string(), original.fields[*name].clone())).collect();
