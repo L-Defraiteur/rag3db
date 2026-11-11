@@ -240,6 +240,8 @@ mod e2e_result_mode;
 mod e2e_rouvrir;
 #[path = "../e2e_scope.rs"]
 mod e2e_scope;
+#[path = "../e2e_scope_versions.rs"]
+mod e2e_scope_versions;
 #[path = "../e2e_search.rs"]
 mod e2e_search;
 #[path = "../e2e_search_queue.rs"]
