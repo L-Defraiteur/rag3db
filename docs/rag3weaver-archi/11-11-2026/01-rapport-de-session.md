@@ -216,3 +216,18 @@ Ils sont sous `docs/rag3weaver-archi/tickets/`, déplacés de `docs/tickets/` le
    ED tient outils/gabarits et clôture des tâches ; archi tient navigateur/UI/flux/cartes.
 3. Les raffinements de la jauge et les autres vues par flux viennent après ce parcours,
    conformément à `docs/orchestration/11-11-2026/05-cap-produit-vues-et-chat.md`.
+
+
+## Reprendre le lot UI contextuelle (non livré)
+
+Branche `cx-archi-ui-contextuel-relais-2`, worktree portable et luciepc
+`~/.cache/rag3weaver-build/cx-wt-ui-contextuel`, target unique luciepc `cx-archi-target`.
+Base ED diagnostique `14585ca4a`, code courant `b57313175`. Le parcours court réel sur
+`657f51f12` passe 1/0/0 (65,72 s), inventaire 1/0/0 (2,17 s). Deux défauts de rendu corrigés :
+plages `fichier:1-3` ignorées, puis mauvaise cible de conversation. Reçus/HTML rouges conservés.
+Les témoins de coupure réelle et de commande différée après accord sont en validation ; ne pas
+les annoncer verts. Détails et limites dans `04-preparation-du-parcours-contextuel.md`.
+Attendre la base ED finale figée incluant le master courant, reprendre dans une branche neuve,
+puis passe commune. Aucun push master autorisé à ce stade. Le target est propre à archi ;
+ED garde son target et ses validations. Aucun changement au moteur, aux fichiers runtime ED,
+ni implantation des conceptions archiviste/rappel dans ce lot.
