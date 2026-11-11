@@ -116,3 +116,24 @@ Valider d'abord cette interface et la règle de préservation des références
 avant implémentation. Puis jouer les témoins locaux et revoir le branchement
 dans la procédure commune. Le ticket reste ouvert ; la publication des seules
 rectifications 8df1266cd n'a ni livré cette garde ni restauré les preuves perdues.
+
+## Amendement approuvé et implémentation soumise
+
+La sélection sémantique de références « utiles » du plan initial est abandonnée.
+Toute administration détruite doit être copiée fidèlement au préalable par le
+lanceur, hors cible ; la garde inspecte et compare seulement. Un partage avec
+un autre worktree refuse toujours, même avec copie. L'interface ajoute
+`--archive ADMINISTRATION COPIE`, répétable pour les racines détruites. Une
+administration commune extérieure n'est pas copiée inutilement. Le rapport
+est créé exclusivement hors cible, administration et copie. La garde refuse
+également les données locales ou ignorées non préservées, liens et dépendances
+d'objets externes ambigus, locks et administrations résiduelles invalides.
+Aucune intervention sur l'ancien garde réel ; les témoins sont des fixtures.
+
+Fichiers implémentés : garde_worktree.py, test_garde_worktree.py et procédure
+commune. Huit tests locaux passés, dont le refus de partage avec archive et
+l'identité des fichiers/index/refs/reflogs dans la fixture. La première version
+refusait aussi le nominal : Git rendait le chemin administratif d'un sous-module
+comme worktree principal ; lecture de sa racine effective ajoutée, puis nominal
+vert. Le ticket reste ouvert pour revue, sans affirmer l'intégrité historique
+qui n'a pas de comparaison initiale.

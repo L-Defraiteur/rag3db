@@ -169,6 +169,12 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
   ```bash
   depot=$(git rev-parse --path-format=absolute --git-common-dir); depot=${depot%/.git}
   branche=$(git rev-parse --abbrev-ref HEAD)
+  # Preuve hors cible et hors administration : copie fidèle préparée séparément.
+  # Répéter --archive pour chaque racine administrative qui serait détruite.
+  # La garde ne copie rien, ne répare rien et refuse toujours le partage.
+  python3 "$W/extension/rag3weaver/scripts/garde_worktree.py" \
+    --depot "$depot" --worktree "$W" --rapport "$RAPPORT_NEUF_HORS_CIBLE" \
+    --archive "$ADMIN_DETRUITE" "$COPIE_FIDELE_HORS_CIBLE" || exit 1
   cd "$depot" && git worktree remove --force "$W" && git branch -D "$branche"
   rm -rf "$TARGET"
   echo "EFFACÉ : worktree $W, branche $branche, target $TARGET"
@@ -176,6 +182,21 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
 
   La branche distante reste (rien ne s'efface sur origin sans Lucie). Les worktrees de luciepc
   suivent la même règle à la fin de chaque lot, plus seulement à la fin de la session.
+- **Avant tout retrait de parent**, inventorier les administrations Git qui seraient détruites
+  (celle du worktree et les administrations de sous-modules, y compris les résidus). Le lanceur
+  préserve séparément leurs copies fidèles hors cible ; `garde_worktree.py` compare types, modes,
+  propriétaires, dates de modification et empreintes des fichiers, sans afficher leur contenu.
+  `--archive ADMIN COPIE` désigne chaque racine détruite (une copie d'une racine couvre ses
+  administrations imbriquées) ; une administration commune hors zone détruite ne se copie pas.
+  Aucune sélection sémantique des références « utiles » : index, références, reflogs, objets et
+  configuration de chaque administration détruite doivent tous être préservés.
+  Une administration partagée avec un autre worktree est **toujours refusée**, même archivée.
+  Une ambiguïté, une copie différente, un verrou, des données locales/ignorées non préservées
+  ou un rapport déjà présent refusent le retrait. Le rapport JSON est créé exclusivement hors
+  cible, hors administration et hors copie. Garder copies et rapport, ne pas réessayer en force.
+  La quiescence relève du propriétaire ; une réussite est périmée dès qu'un état change avant
+  le retrait. La garde ne supprime ni ne répare et ne garantit pas l'arrêt de writers tiers.
+  Incident : `docs/codeparsers/tickets/2026-11-11-le-nettoyage-du-parent-invalide-un-worktree-de-sous-module.md`.
 - Les rapports de session (`01-rapport`, `02-knowledge-dump` du jour) se tiennent à jour après
   chaque lot et citent les tickets de ses actions et de ses suites. Tout nouveau travail reçoit
   un ticket dans le dossier de son porteur, ou `docs/tickets/` si celui-ci reste à attribuer.

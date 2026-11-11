@@ -110,3 +110,15 @@ Contrat : refuser partage/ambiguïté ; ne pas confondre propreté des sources,
 propriété des administrations et préservation des références. La méthode de
 certification des références utiles reste un point explicite de revue avant
 code. Aucun nouveau mécanisme n'est implémenté par la rédaction de ce plan.
+
+## Garde implémentée, en attente de revue
+
+Amendement de l'orchestration appliqué : pas de certification sémantique de
+références, préservation fidèle de toute administration détruite par le lanceur,
+contrôle en lecture seule via --archive ; partage refusé même avec copie.
+Scripts garde_worktree.py et test_garde_worktree.py ajoutés, procédure commune
+branchée avant le retrait. Huit témoins locaux passent, sans réseau ni dépôt
+réel ; refus partagé prouvé avec données/index/refs/reflogs inchangés dans la
+fixture. La garde ne copie, ne pousse, ne répare ni n'efface ; aucun nouvel
+accès au garde réel. Voir le plan 05 pour interface et limites. Ticket laissé
+ouvert jusqu'à revue ; aucune nouvelle garantie rétrospective sur l'incident.
