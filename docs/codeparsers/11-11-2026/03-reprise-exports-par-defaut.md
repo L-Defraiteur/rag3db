@@ -83,7 +83,8 @@ Sondes : A 128430 CONSUMES, B 128971 ; mentionneurs TS/JS 1381 contre 1922.
 Échantillon commun de 298 mentions : A 324 arêtes (279 justes, 10 fausses,
 17 muettes, 12 liaisons d'import, 6 décl), B 307 (282 justes, 2 fausses,
 17 muettes, 6 décl). Arêtes ajoutées : 464, dont 36 justes, 4 réexportations,
-1 fausse et 423 muettes. Le jugement des arêtes retirées est encore en cours.
+1 fausse et 423 muettes. Retirées : 82, dont 17 justes, 14 fausses et
+51 liaisons d'import. Le script a terminé avec le code 0.
 Aucun de ces nombres ne valide le code courant d96ed3264/a730a9b.
 
 Les 17 arêtes justes retirées dans l'ancienne mesure du 9 novembre visaient
@@ -128,3 +129,38 @@ les 17 positions de liaisons locales, FS et les nouvelles arêtes non interrogé
 avec un alias différent de l'export. Les cibles fichier/plage restent celles
 de chaque base ; la question LSP porte sur la mention, pas sur leur nom.
 Aucune refonte générale de l'oracle n'est incluse implicitement.
+
+## Fin de la première mesure et complément borné autorisé
+
+Le lecteur final a été joué sur les quatre TSV :
+`require-default-exports-e1015a379/interrogations-final.jsonl` à luciepc.
+Sur les ajouts, 422 questions non envoyées (415 liaisons et 7 imports),
+une question LSP sans réponse, 41 questions avec réponse. Les 82 retraits ont
+été réellement interrogés. Le faux platform reste faux, même si sa réponse
+visible est hors corpus. Aucune précision globale n'est déduite des rapports
+279/324 et 282/307 : populations et états d'évaluation diffèrent.
+
+Le complément autorisé fige **23 positions distinctes** : les 17 justes retirées
+et les 7 imports nouveaux non interrogés, avec un chevauchement FS index.js:77.
+Ses questions, tokens et colonnes UTF-16 sont dans
+`outils/cas-lsp-23-d96ed3264.json`, SHA-256
+`0d02f7959f9407c22042914cda6cd6a9708acbf35ab37b2f6a2761118a28ebc4`.
+Les fichiers de la copie LSP et des sources mesurées ont été comparés octet pour
+octet ; les 23 positions ont été validées sans démarrer de LSP.
+
+`outils/interroger-mentions-figees.py` réutilise Serveur et le prédicat strict
+`dans_la_cible` de l'oracle historique dont il vérifie le hash. Il refuse un banc
+inachevé, vérifie hashes et positions, garde les RPC et toutes les positions,
+et produit questions.jsonl, A.jsonl, B.jsonl et provenance.json séparés.
+Les mêmes réponses aux 23 questions source jugent les cibles de chaque état.
+Il conserve toutes les arêtes d'une ligne : plusieurs candidates restent
+explicitement une attribution à examiner, sans sélection ni score global inventé.
+L'oracle historique n'est pas modifié. Le complément n'est pas encore joué.
+
+La seconde A/B est **démarrée** après transmission opérationnelle neuve de 7882
+par l'optimiseur. Référence aece4b9f1/c660893 et lot d96ed3264/a730a9b figés ;
+preuves dans `~/.cache/codeparsers-notes/require-default-v2-d96ed3264/` et
+`cx-require-default-v2-lanceur.log`. Les contrôles de source a72 propre et
+d'identité de l'oracle ont passé. R4 recherche est prioritaire et partage card2 :
+aucune exclusivité ni conclusion de vitesse. Le complément attend la fin du
+banc et la coordination des ressources ; aucun LSP supplémentaire parallèle.

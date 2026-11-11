@@ -1,0 +1,605 @@
+{
+  "schema_version": 1,
+  "reference_revision": "aece4b9f1ba33e14b0d16dcb18cdad504724f829",
+  "candidate_revision": "d96ed32645df12e408fcfc4a6e708d6b741452c1",
+  "source_revision": "a72acfeef03a56dd167e397bacba6371a1c2979a",
+  "historical_oracle_sha256": "17b5f8f4158df4250bf3fe075843f8608a5276157cc09adffb6444a2c8109a0d",
+  "selected_from": {
+    "verdicts-otees.tsv": "e61cbd29f6d471190469b568c43159ffe89fcbd038fc7c065b410094f64ac038",
+    "verdicts-ajoutees.tsv": "bbfd6c40501287d80868b70e4e555424f65c633991b4d14e4547c57c810530cc",
+    "interrogations-final.jsonl": "57217da097916a91b786b7acd7bd09a0954d0c41f86f728af914cd8f18cf8cfe"
+  },
+  "policy": "Fixed source questions for both states; target ranges and strict judgments remain separate; no LSP request performed during preparation.",
+  "cases": [
+    {
+      "id": "case-01",
+      "source_file": "experiments/mtga/scripts/collect.cjs",
+      "line_1based": 12,
+      "column_utf16_0based": 13,
+      "identifier": "reader",
+      "source_sha256": "08455e28422b075bcf5a729f99aa0af65dba579b0f95fe13d437af1ae6eacab1",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "file_scope_02",
+            "fichier:ligne": "experiments/mtga/scripts/collect.cjs:12",
+            "nom": "reader",
+            "notre cible": "experiments/mtga/scripts/collect.cjs:4-4",
+            "serveur": "experiments/mtga/scripts/collect.cjs:4",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-02",
+      "source_file": "experiments/mtga/scripts/collect.cjs",
+      "line_1based": 27,
+      "column_utf16_0based": 39,
+      "identifier": "reader",
+      "source_sha256": "08455e28422b075bcf5a729f99aa0af65dba579b0f95fe13d437af1ae6eacab1",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "file_scope_05",
+            "fichier:ligne": "experiments/mtga/scripts/collect.cjs:27",
+            "nom": "reader",
+            "notre cible": "experiments/mtga/scripts/collect.cjs:4-4",
+            "serveur": "experiments/mtga/scripts/collect.cjs:4",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-03",
+      "source_file": "extension/rag3weaver/codeparsers/vendor/tree-sitter-scss/grammar.js",
+      "line_1based": 12,
+      "column_utf16_0based": 25,
+      "identifier": "CSS",
+      "source_sha256": "f05f385b02fe353818e180ac4620f7a88f382f19ef801ddca29f1759e33680c4",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "file_scope_02",
+            "fichier:ligne": "extension/rag3weaver/codeparsers/vendor/tree-sitter-scss/grammar.js:12",
+            "nom": "CSS",
+            "notre cible": "extension/rag3weaver/codeparsers/vendor/tree-sitter-scss/grammar.js:10-10",
+            "serveur": "extension/rag3weaver/codeparsers/vendor/tree-sitter-scss/grammar.js:10",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-04",
+      "source_file": "tools/nodejs_api/src_js/index.js",
+      "line_1based": 9,
+      "column_utf16_0based": 2,
+      "identifier": "Connection",
+      "source_sha256": "7f01d0781f5bfef08e45d5b05a08deb0cf3b57598fea1123c473a7617f5ed3cb",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "file_scope_02",
+            "fichier:ligne": "tools/nodejs_api/src_js/index.js:9",
+            "nom": "Connection",
+            "notre cible": "tools/nodejs_api/src_js/index.js:3-3",
+            "serveur": "tools/nodejs_api/src_js/index.js:3",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-05",
+      "source_file": "tools/nodejs_api/src_js/index.js",
+      "line_1based": 10,
+      "column_utf16_0based": 2,
+      "identifier": "Database",
+      "source_sha256": "7f01d0781f5bfef08e45d5b05a08deb0cf3b57598fea1123c473a7617f5ed3cb",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "file_scope_02",
+            "fichier:ligne": "tools/nodejs_api/src_js/index.js:10",
+            "nom": "Database",
+            "notre cible": "tools/nodejs_api/src_js/index.js:4-4",
+            "serveur": "tools/nodejs_api/src_js/index.js:4",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-06",
+      "source_file": "tools/nodejs_api/src_js/index.js",
+      "line_1based": 11,
+      "column_utf16_0based": 2,
+      "identifier": "PreparedStatement",
+      "source_sha256": "7f01d0781f5bfef08e45d5b05a08deb0cf3b57598fea1123c473a7617f5ed3cb",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "file_scope_02",
+            "fichier:ligne": "tools/nodejs_api/src_js/index.js:11",
+            "nom": "PreparedStatement",
+            "notre cible": "tools/nodejs_api/src_js/index.js:5-5",
+            "serveur": "tools/nodejs_api/src_js/index.js:5",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-07",
+      "source_file": "tools/nodejs_api/src_js/index.js",
+      "line_1based": 12,
+      "column_utf16_0based": 2,
+      "identifier": "QueryResult",
+      "source_sha256": "7f01d0781f5bfef08e45d5b05a08deb0cf3b57598fea1123c473a7617f5ed3cb",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "file_scope_02",
+            "fichier:ligne": "tools/nodejs_api/src_js/index.js:12",
+            "nom": "QueryResult",
+            "notre cible": "tools/nodejs_api/src_js/index.js:6-6",
+            "serveur": "tools/nodejs_api/src_js/index.js:6",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-08",
+      "source_file": "tools/wasm/src_js/index.js",
+      "line_1based": 12,
+      "column_utf16_0based": 6,
+      "identifier": "FS",
+      "source_sha256": "7c9756d1bb32a1f635c1b576bfdf564dcaf0b6c1ae696ec3f9e973cf4a29de14",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-ajoutees.tsv",
+          "kind": "import_not_queried",
+          "row": {
+            "verdict": "muet",
+            "marque": "import",
+            "appelant": "file_scope_01",
+            "fichier:ligne": "tools/wasm/src_js/index.js:12",
+            "nom": "file_scope_02",
+            "notre cible": "tools/wasm/src_js/fs.js:172-174",
+            "serveur": "",
+            "interrogation": "non_interroge_token_source_absent",
+            "corpus_positions_visibles": "sans_reponse_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-09",
+      "source_file": "tools/wasm/src_js/index.js",
+      "line_1based": 73,
+      "column_utf16_0based": 2,
+      "identifier": "Database",
+      "source_sha256": "7c9756d1bb32a1f635c1b576bfdf564dcaf0b6c1ae696ec3f9e973cf4a29de14",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "file_scope_04",
+            "fichier:ligne": "tools/wasm/src_js/index.js:73",
+            "nom": "Database",
+            "notre cible": "tools/wasm/src_js/index.js:8-8",
+            "serveur": "tools/wasm/src_js/index.js:8",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-10",
+      "source_file": "tools/wasm/src_js/index.js",
+      "line_1based": 74,
+      "column_utf16_0based": 2,
+      "identifier": "Connection",
+      "source_sha256": "7c9756d1bb32a1f635c1b576bfdf564dcaf0b6c1ae696ec3f9e973cf4a29de14",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "file_scope_04",
+            "fichier:ligne": "tools/wasm/src_js/index.js:74",
+            "nom": "Connection",
+            "notre cible": "tools/wasm/src_js/index.js:9-9",
+            "serveur": "tools/wasm/src_js/index.js:9",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-11",
+      "source_file": "tools/wasm/src_js/index.js",
+      "line_1based": 75,
+      "column_utf16_0based": 2,
+      "identifier": "PreparedStatement",
+      "source_sha256": "7c9756d1bb32a1f635c1b576bfdf564dcaf0b6c1ae696ec3f9e973cf4a29de14",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "file_scope_04",
+            "fichier:ligne": "tools/wasm/src_js/index.js:75",
+            "nom": "PreparedStatement",
+            "notre cible": "tools/wasm/src_js/index.js:10-10",
+            "serveur": "tools/wasm/src_js/index.js:10",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-12",
+      "source_file": "tools/wasm/src_js/index.js",
+      "line_1based": 76,
+      "column_utf16_0based": 2,
+      "identifier": "QueryResult",
+      "source_sha256": "7c9756d1bb32a1f635c1b576bfdf564dcaf0b6c1ae696ec3f9e973cf4a29de14",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "file_scope_04",
+            "fichier:ligne": "tools/wasm/src_js/index.js:76",
+            "nom": "QueryResult",
+            "notre cible": "tools/wasm/src_js/index.js:11-11",
+            "serveur": "tools/wasm/src_js/index.js:11",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-13",
+      "source_file": "tools/wasm/src_js/index.js",
+      "line_1based": 77,
+      "column_utf16_0based": 2,
+      "identifier": "FS",
+      "source_sha256": "7c9756d1bb32a1f635c1b576bfdf564dcaf0b6c1ae696ec3f9e973cf4a29de14",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-ajoutees.tsv",
+          "kind": "import_not_queried",
+          "row": {
+            "verdict": "muet",
+            "marque": "import",
+            "appelant": "file_scope_03",
+            "fichier:ligne": "tools/wasm/src_js/index.js:77",
+            "nom": "file_scope_02",
+            "notre cible": "tools/wasm/src_js/fs.js:172-174",
+            "serveur": "",
+            "interrogation": "non_interroge_token_source_absent",
+            "corpus_positions_visibles": "sans_reponse_visible"
+          }
+        },
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "file_scope_04",
+            "fichier:ligne": "tools/wasm/src_js/index.js:77",
+            "nom": "FS",
+            "notre cible": "tools/wasm/src_js/index.js:12-12",
+            "serveur": "tools/wasm/src_js/index.js:12",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-14",
+      "source_file": "tools/wasm/src_js/sync/connection.js",
+      "line_1based": 7,
+      "column_utf16_0based": 6,
+      "identifier": "Rag3dbWasm",
+      "source_sha256": "836e622ab3a9c9e872e1d9add65c455ae2b75533f5a82937058a1a5005e02e9a",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-ajoutees.tsv",
+          "kind": "import_not_queried",
+          "row": {
+            "verdict": "muet",
+            "marque": "import",
+            "appelant": "file_scope_01",
+            "fichier:ligne": "tools/wasm/src_js/sync/connection.js:7",
+            "nom": "rag3dbInstance",
+            "notre cible": "tools/wasm/src_js/sync/rag3db.js:42-42",
+            "serveur": "",
+            "interrogation": "non_interroge_token_source_absent",
+            "corpus_positions_visibles": "sans_reponse_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-15",
+      "source_file": "tools/wasm/src_js/sync/database.js",
+      "line_1based": 7,
+      "column_utf16_0based": 6,
+      "identifier": "Rag3dbWasm",
+      "source_sha256": "0619ac8ddd01d09d391b6b3e29bcfb63e3f1d23478f20b5ecb974f4e8ec7a678",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-ajoutees.tsv",
+          "kind": "import_not_queried",
+          "row": {
+            "verdict": "muet",
+            "marque": "import",
+            "appelant": "file_scope_01",
+            "fichier:ligne": "tools/wasm/src_js/sync/database.js:7",
+            "nom": "rag3dbInstance",
+            "notre cible": "tools/wasm/src_js/sync/rag3db.js:42-42",
+            "serveur": "",
+            "interrogation": "non_interroge_token_source_absent",
+            "corpus_positions_visibles": "sans_reponse_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-16",
+      "source_file": "tools/wasm/src_js/sync/index.js",
+      "line_1based": 7,
+      "column_utf16_0based": 6,
+      "identifier": "Rag3dbWasm",
+      "source_sha256": "960d5e3b2b6ccebfebb2ee38e9b78583b866e178a889dbe1d42586ed221babb1",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-ajoutees.tsv",
+          "kind": "import_not_queried",
+          "row": {
+            "verdict": "muet",
+            "marque": "import",
+            "appelant": "file_scope_01",
+            "fichier:ligne": "tools/wasm/src_js/sync/index.js:7",
+            "nom": "rag3dbInstance",
+            "notre cible": "tools/wasm/src_js/sync/rag3db.js:42-42",
+            "serveur": "",
+            "interrogation": "non_interroge_token_source_absent",
+            "corpus_positions_visibles": "sans_reponse_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-17",
+      "source_file": "tools/wasm/src_js/sync/index.js",
+      "line_1based": 66,
+      "column_utf16_0based": 2,
+      "identifier": "Database",
+      "source_sha256": "960d5e3b2b6ccebfebb2ee38e9b78583b866e178a889dbe1d42586ed221babb1",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "file_scope_02",
+            "fichier:ligne": "tools/wasm/src_js/sync/index.js:66",
+            "nom": "Database",
+            "notre cible": "tools/wasm/src_js/sync/index.js:8-8",
+            "serveur": "tools/wasm/src_js/sync/index.js:8",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-18",
+      "source_file": "tools/wasm/src_js/sync/index.js",
+      "line_1based": 67,
+      "column_utf16_0based": 2,
+      "identifier": "Connection",
+      "source_sha256": "960d5e3b2b6ccebfebb2ee38e9b78583b866e178a889dbe1d42586ed221babb1",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "file_scope_02",
+            "fichier:ligne": "tools/wasm/src_js/sync/index.js:67",
+            "nom": "Connection",
+            "notre cible": "tools/wasm/src_js/sync/index.js:9-9",
+            "serveur": "tools/wasm/src_js/sync/index.js:9",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-19",
+      "source_file": "tools/wasm/src_js/sync/index.js",
+      "line_1based": 68,
+      "column_utf16_0based": 2,
+      "identifier": "PreparedStatement",
+      "source_sha256": "960d5e3b2b6ccebfebb2ee38e9b78583b866e178a889dbe1d42586ed221babb1",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "file_scope_02",
+            "fichier:ligne": "tools/wasm/src_js/sync/index.js:68",
+            "nom": "PreparedStatement",
+            "notre cible": "tools/wasm/src_js/sync/index.js:10-10",
+            "serveur": "tools/wasm/src_js/sync/index.js:10",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-20",
+      "source_file": "tools/wasm/src_js/sync/index.js",
+      "line_1based": 69,
+      "column_utf16_0based": 2,
+      "identifier": "QueryResult",
+      "source_sha256": "960d5e3b2b6ccebfebb2ee38e9b78583b866e178a889dbe1d42586ed221babb1",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "file_scope_02",
+            "fichier:ligne": "tools/wasm/src_js/sync/index.js:69",
+            "nom": "QueryResult",
+            "notre cible": "tools/wasm/src_js/sync/index.js:11-11",
+            "serveur": "tools/wasm/src_js/sync/index.js:11",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-21",
+      "source_file": "tools/wasm/src_js/sync/prepared_statement.js",
+      "line_1based": 8,
+      "column_utf16_0based": 6,
+      "identifier": "Rag3dbWasm",
+      "source_sha256": "4b79abf529565d3271e4c1110b556fd3fda2edb51d0ea31566935a987bcca94d",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-ajoutees.tsv",
+          "kind": "import_not_queried",
+          "row": {
+            "verdict": "muet",
+            "marque": "import",
+            "appelant": "file_scope_01",
+            "fichier:ligne": "tools/wasm/src_js/sync/prepared_statement.js:8",
+            "nom": "rag3dbInstance",
+            "notre cible": "tools/wasm/src_js/sync/rag3db.js:42-42",
+            "serveur": "",
+            "interrogation": "non_interroge_token_source_absent",
+            "corpus_positions_visibles": "sans_reponse_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-22",
+      "source_file": "tools/wasm/src_js/sync/query_result.js",
+      "line_1based": 6,
+      "column_utf16_0based": 6,
+      "identifier": "Rag3dbWasm",
+      "source_sha256": "05750fee4fd48917343bee9c178d857991425535f77c345d400524f248d69480",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-ajoutees.tsv",
+          "kind": "import_not_queried",
+          "row": {
+            "verdict": "muet",
+            "marque": "import",
+            "appelant": "file_scope_01",
+            "fichier:ligne": "tools/wasm/src_js/sync/query_result.js:6",
+            "nom": "rag3dbInstance",
+            "notre cible": "tools/wasm/src_js/sync/rag3db.js:42-42",
+            "serveur": "",
+            "interrogation": "non_interroge_token_source_absent",
+            "corpus_positions_visibles": "sans_reponse_visible"
+          }
+        }
+      ]
+    },
+    {
+      "id": "case-23",
+      "source_file": "tools/wasm/src_js/sync/rag3db.js",
+      "line_1based": 12,
+      "column_utf16_0based": 25,
+      "identifier": "rag3db_wasm",
+      "source_sha256": "38796c2a31efc43b95c88844192fd3a61391f9ee8a7bdf8ddb1bc29904954eaf",
+      "historical_evidence": [
+        {
+          "dataset": "verdicts-otees.tsv",
+          "kind": "historical_correct_removed",
+          "row": {
+            "verdict": "juste",
+            "marque": "fichier",
+            "appelant": "init",
+            "fichier:ligne": "tools/wasm/src_js/sync/rag3db.js:12",
+            "nom": "rag3db_wasm",
+            "notre cible": "tools/wasm/src_js/sync/rag3db.js:4-4",
+            "serveur": "tools/wasm/src_js/sync/rag3db.js:4",
+            "interrogation": "lsp_interroge_avec_reponse",
+            "corpus_positions_visibles": "dans_corpus_visible"
+          }
+        }
+      ]
+    }
+  ]
+}
