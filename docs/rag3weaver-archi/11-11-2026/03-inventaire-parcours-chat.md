@@ -1,10 +1,10 @@
 # Parcours de code du chat : inventaire effectif, 11 novembre 2026
 
-État de branche, pas encore une livraison : lot commun `cx-archi-ide-par-le-flux-chat-4`,
-source jouée `bc3a1d779`. Il réunit flux et correctif chat, après ED réclamations et projection.
+Livré sur master `8d5139f9e` : lot commun `cx-archi-ide-par-le-flux-chat-4`,
+source exactement jouée `bc3a1d779`, code identique après rebase de documents. Il réunit flux et correctif chat, après ED réclamations et projection.
 Les preuves ciblées historiques ci-dessous restent attachées à `816fc4824`.
-Worktree sur les deux postes : `~/.cache/rag3weaver-build/cx-wt-chat-erreurs`.
-Le target de session `flux` est repris explicitement, sans cargo concurrent.
+Anciens chemins nettoyés après push : worktree `cx-wt-chat-erreurs` et target `flux`
+sur les deux postes. Les preuves restent en dehors de ces chemins.
 
 ## Ce qui a été observé
 
@@ -59,7 +59,8 @@ et le bundle est rebâti avec les sources.
   hooks 2/2, lectures 24/24, PostgreSQL privé 34/34, navigateurs 36/36 (132,10 s).
   Source et journaux : `cx-flux-chat-bc3a1d779-prive-r2-20261111` à luciepc.
   Le témoin historique des 606 vecteurs dus passe après ED ; son ancien rouge est conservé.
-- Aucun push master, aucun tour accordé. Fenêtre de stabilité recherche respectée.
+- Push master `8d5139f9e` au tour accordé, trois contrôles lus ; nettoyage deux postes et base
+  privée terminé, preuves et branches distantes conservées. Aucun nouveau binaire posé par archi.
 
 La chaîne complète explorer → lire → éditer → tester → montrer diff → livrer n'est pas encore
 prouvée par ce lot. Les accords, l'arrêt, les longues commandes, la réouverture après panne

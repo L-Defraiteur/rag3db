@@ -5,8 +5,10 @@ Cette page est écrite pour un agent sans mémoire des échanges. Le rapport de 
 
 ## Reprise du 11 novembre : chemins et projection du chat
 
-La référence finale est `cx-wt-chat-erreurs` / `cx-archi-ide-par-le-flux-chat-4`, validation
-commune flux/chat sur luciepc, target `flux`. Les chemins et commandes de l'ancienne session ci-dessous sont historiques ;
+Le lot commun flux/chat est livré sur master `8d5139f9e`. Ses worktrees
+`cx-wt-chat-erreurs`, `cx-wt-flux`, `wt-flux` et son target `flux` sont nettoyés sur les
+deux postes ; la base SQL privée est supprimée. Pour la suite, partir de master dans un
+nouveau worktree `cx-`, pas d'un de ces anciens chemins. Les chemins et commandes de l'ancienne session ci-dessous sont historiques ;
 le rapport adjacent donne les lanceurs et dossiers de résultats courants. Sur luciepc,
 les services d'embarquement sont `127.0.0.1:7878,127.0.0.1:7879,127.0.0.1:7880` ;
 `7979,7980,7981` sont les ports du portable, pas des services locaux distants.

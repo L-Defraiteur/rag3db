@@ -33,15 +33,22 @@ G a posé `d23af9cd2` sur le portable le 9 novembre à 13 h 42. Les lots suivant
 (`be319fa75`, `3e8c87aa5`, `ab8272deb`) ne sont **pas encore posés** chez Lucie. c7 voulait les
 regrouper avec le lot de la session « recherche ».
 
-## Lot commun prêt : l'état fidèle du chat par le flux
+## Lot livré : l'état fidèle du chat par le flux
 
 - Branche de référence : `origin/cx-archi-ide-par-le-flux-chat-4`.
 - Source exactement jouée : `bc3a1d7797856abf89ef838e6720622ea5c393aa`, rebasée sur
   projection `6c4b5ad0c0f757ee17905c1643dd8b39174ccaa9`, après ED réclamations `91e5f760b`.
-- Worktree sur les deux postes : `~/.cache/rag3weaver-build/cx-wt-chat-erreurs` ;
-  target de validation à luciepc : `~/.cache/rag3weaver-build/flux`.
+- Anciens chemins de validation, désormais nettoyés : `~/.cache/rag3weaver-build/cx-wt-chat-erreurs`
+  sur les deux postes, target `~/.cache/rag3weaver-build/flux`.
+- **Livré sur master : `8d5139f9e71aa7991cc453be2c7d6710a24a4953`.** Tour accordé,
+  rebase de docs sous nouveau nom, sauvegarde et push sous `poste push`, trois contrôles lus
+  après fetch (status propre, aucun rebase en cours, origin/master = HEAD).
 - **Passe complète VERT**, terminée à luciepc ; aucun processus restant du lanceur.
-  **Pas encore de push master : tour à obtenir de l'orchestration.**
+- Nettoyage achevé sur les deux postes : worktrees `cx-wt-chat-erreurs`, `cx-wt-flux`,
+  `wt-flux`, leurs branches locales sauvegardées et target `flux` retirés ; base PostgreSQL
+  privée supprimée après contrôle de zéro connexion. Preuves externes conservées et copiées
+  sur le portable ; branches distantes, autres worktrees et futurs lots ED préservés.
+- Aucun nouveau binaire posé par archi ; optimiseur et orchestration prévenus du hash.
 
 Le lot réunit les états poussés du chat et leur fidélité : aucun polling au repos dans le
 témoin, compteur commun pour flux/GET/récapitulatif, actions conservées après une panne et
@@ -54,7 +61,7 @@ reste un ticket ED, pas une livraison de ce lot.
 
 Dossier : `~/.cache/rag3weaver-build/cx-flux-chat-bc3a1d779-prive-r2-20261111/`.
 Lanceurs : `cx-flux-chat-bc3a1d779-prive-r2-{passe,push}.sh`, sous le même dossier de build
-à luciepc. Le push n'a pas été exécuté. `source-head`, `master-au-depart`, `lib-epinglee`
+à luciepc. Le push a été exécuté au tour accordé ; `pousse-head` et `pousse-branche` en gardent le résultat. `source-head`, `master-au-depart`, `lib-epinglee`
 et `postgres-identite.txt` attestent la source, la base, la lib et l'identité SQL.
 Le master vu au départ est `b798a299e86091033d15fbcb2491088734611806` (docs après projection).
 
@@ -103,19 +110,23 @@ une connexion, URL et identifiants non affichés. Ne pas jouer `e2e_postgres` su
 - La première vérification TypeScript a croisé `npm ci` et échoué sur dépendances absentes.
   Rejouée séquentiellement après installation : VERT ; aucun défaut source masqué.
 
-Anciennes branches et worktrees conservés : `ide-par-le-flux`, `cx-archi-ide-par-le-flux`
-et suffixes `-2`, `-3`, `cx-archi-chat-erreurs`. Aucun force-push ni suppression distante.
+Les branches distantes `ide-par-le-flux`, `cx-archi-ide-par-le-flux` et suffixes,
+`cx-archi-chat-erreurs` et la branche finale restent conservées. Les worktrees et copies
+locales de ces branches propres au lot ont été nettoyés après vérification des sauvegardes.
+Aucun force-push ni suppression distante.
 Les anciens journaux détaillés restent sous les noms consignés dans l'historique du rapport.
 
-### Reprendre / intégrer
+### Reprendre
 
-Avant toute nouvelle commande cargo, vérifier les processus et le propriétaire du target.
-La passe finale est terminée ; ne pas la rejouer sans changement ou nouvelle inquiétude.
-Le script de push exige VERT, vérifie les changements depuis la source jouée et les arrivées
-sur master, refuse un rejeu sous le verrou et sauvegarde tout rebase sous un nouveau nom.
-Il ne s'exécute qu'au tour accordé, puis lit les trois contrôles et nettoie son worktree/target,
-en conservant tous les journaux. Les modifications de rapport après la passe sont des docs seules.
-Après push, consigner le hash et la nouveauté réellement livrée ; prévenir orchestration et ED.
+Le lot commun est intégré ; ne pas reprendre un ancien worktree ou repasser ses tests sans
+changement. Partir du master courant dans un nouveau worktree `cx-`, avec une branche neuve.
+Le prochain chantier UI est le parcours dépôt en lecture → tâche/worktree → édition →
+commande de test → sortie/diff, avec preuves navigateur et protections existantes.
+ED tient clôture des tâches et nouveaux outils de l'atelier ; ne pas chevaucher ses fichiers.
+
+Le conflit de `docs/nouveautes.md` lors du dernier rebase a été résolu hors verrou en gardant
+les deux annonces. Le code et le bundle livrés ont un diff non Markdown **vide** avec le
+commit exactement joué `bc3a1d779` ; aucun code n'a changé après la passe.
 
 ## Les lots nommés, pas commencés
 
@@ -163,8 +174,8 @@ Rien n'a été effacé pour ce passage.
 
 ## Ce qui reste en attente
 
-Le lot commun n'a plus de rouge de validation : le rattrapage historique est vert sur la base
-ED. Il attend uniquement son tour d'intégration. Les anciens signalements du 9 novembre
+Le lot commun est intégré et n'a plus de rouge de validation ; le rattrapage historique
+est vert sur la base ED. Sa pose reste à coordonner par orchestration et optimiseur. Les anciens signalements du 9 novembre
 (approbation de relecture ED, rouge CI du rattrapage) sont historiques ; ne pas les reprendre
 comme état actuel sans vérification. Les capacités encore absentes de l'atelier ont leur ticket
 et leur futur lot ED, distincts de la livraison du flux et des erreurs.
@@ -184,8 +195,8 @@ Ils sont sous `docs/rag3weaver-archi/tickets/`, déplacés de `docs/tickets/` le
 
 ## Les trois prochains pas que je ferais
 
-1. **Intégrer le lot commun flux/chat**, passe complète verte ci-dessus, au tour de l'orchestration.
-   Le rouge historique 606 dus reste conservé ; le témoin est maintenant vert sur la base ED.
+1. La livraison flux/chat est intégrée (`8d5139f9e`) ; suivre la pose coordonnée par
+   orchestration/optimiseur. Le rouge historique 606 dus reste conservé ; le témoin est vert.
 2. **Le parcours réel du chat IDE.** Atelier, dépôt et tâche : outils réellement accessibles,
    recherche, lecture, édition, commandes/tests, sorties/diff, accords, arrêt et reprise.
    ED tient outils/gabarits et clôture des tâches ; archi tient navigateur/UI/flux/cartes.
