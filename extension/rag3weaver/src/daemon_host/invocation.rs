@@ -42,20 +42,33 @@ impl InvocationHost for HostedInvocations {
             );
         }
         let host: Arc<super::DaemonHost> = self.host.upgrade().ok_or("l'hôte s'arrête")?;
-        let target = host.hosted_by_id(&context.target.id)?;
+        let targets: Vec<_> = host
+            .backends
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .values()
+            .filter(|h| h.id == context.target.id)
+            .cloned()
+            .collect();
+        let target = match targets.as_slice() {
+            [target] => target.clone(),
+            [] => return Err(format!("contexte cible inconnu : {}", context.target.id)),
+            _ => return Err(format!("contexte cible ambigu : {}", context.target.id)),
+        };
         if target.manifest == authority.manifest {
             return Err("auto-invocation interdite".into());
         }
         if cancel.is_cancelled() {
             return Err("invocation annulée avant résolution".into());
         }
-        let mut receipt = host.with_backend(&target, |b| {
+        let (mut receipt, label) = host.with_backend(&target, |b| {
+            let label = b.prepared().manifest.name.clone();
             b.invoke_read(authority, operation, arguments, cancel.clone())
+                .map(|r| (r, label))
         })??;
         if cancel.is_cancelled() {
             return Err("invocation annulée".into());
         }
-        let label = host.with_backend(&target, |b| b.prepared().manifest.name.clone())?;
         let child_run = receipt["run"].clone();
         receipt["metadata"]["invocation"] = json!({"target":{"kind":"backend","id":target.id,"label":label},"parent_run":parent_run,"run":child_run});
         Ok(receipt)
