@@ -96,3 +96,10 @@ avec modifications ; ce snapshot les matérialise sans changement. Le checkpoint
 ajoute les témoins de réouverture/ScopeNONE et le fix SQL, non joués par v3.
 Binaire e2e SHA256 97e438e4dae5a42e6baaea3a2077ebb8fb10125231ea2212a9a4cc13bea8d120 ;
 provenance complète et hash du journal v3 dans le ticket recherche de résidu lié ci-dessus.
+
+Source288bc80ae : `cx-cellules-reouverture.log`, **21/0 dérivées et 3/0 Scope privé**, rc0,
+sans e2e_search. Le témoin de fermeture/réouverture retrouve les deux racines alpha dues
+après traitement bêta, sans réinscrire les schémas ; lectures alpha et bêta correctes,
+cellule initiale restaurée. La garde FTS de reprise et le rollback multicellule passent.
+Le témoin PG v3 franchit les UUID puis révèle l'UNWIND natif du tampon FTS post-commit ;
+son correctif utilise la primitive dialectale select_node_ids déjà existante, suivi dans 1a.

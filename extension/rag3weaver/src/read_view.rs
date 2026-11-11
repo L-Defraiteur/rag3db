@@ -188,7 +188,11 @@ impl Forme<'_> {
             if let Some(title) = public.title_field() { fields.push(title.to_string()); }
             fields.extend(public.return_fields.iter().flatten().cloned());
             fields.push("_content_hash".into());
-            let content_fields: Vec<String> = cfg.content_fields().into_iter().map(str::to_string).collect();
+            let mut content_fields: Vec<String> = cfg.content_fields().into_iter().map(str::to_string).collect();
+            // Le titre porte aussi des octets indexés : ses highlights et
+            // correspondances ne se projettent pas implicitement sur un autre texte.
+            if let Some(title) = cfg.title_field() { content_fields.push(title.to_string()); }
+            content_fields.sort(); content_fields.dedup();
             for field in &content_fields {
                 if !public.fields.contains_key(field) {
                     return Err(CatalogError::SchemaError(format!("{name} : le champ indexé {field} n'existe pas sur l'occurrence ; projection des coordonnées non déclarée")));
