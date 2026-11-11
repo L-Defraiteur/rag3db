@@ -272,3 +272,20 @@ graph LR
         assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 }
+
+/// Une opération relayée est choisie par l'auteur du graphe, pas par ses arguments.
+pub(crate) fn validate_declared_operations(
+    definition: &super::checkpoint::GraphDefinition,
+) -> Result<(), String> {
+    for node in &definition.nodes {
+        if node.node_type == "InvokeToolNode" {
+            let operation = node.config["operation"].as_str().unwrap_or_default();
+            if operation.trim().is_empty() || operation.contains('$') {
+                return Err(
+                    "invocation : l'opération doit être une constante du graphe déclaré".into(),
+                );
+            }
+        }
+    }
+    Ok(())
+}
