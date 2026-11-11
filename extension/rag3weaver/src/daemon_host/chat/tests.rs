@@ -20,13 +20,17 @@ fn banc_avec(model: ChatModel, retouche: impl Fn(&mut Value)) -> (tempfile::Temp
 
 /// Le banc dans un dépôt nommé : la page nomme un dépôt par son dossier.
 fn banc_dans(nom: &str, model: ChatModel, retouche: impl Fn(&mut Value)) -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
+    banc_gabarit(nom, "code", model, retouche)
+}
+
+fn banc_gabarit(nom: &str, gabarit: &str, model: ChatModel, retouche: impl Fn(&mut Value)) -> (tempfile::TempDir, DaemonHost, PathBuf, String) {
     let d = tempfile::tempdir().unwrap();
     let depot = d.path().join(nom);
     let arbre = d.path().join("code");
     std::fs::create_dir_all(&depot).unwrap();
     std::fs::create_dir_all(&arbre).unwrap();
     std::fs::write(arbre.join("main.rs"), "fn main() {}\n").unwrap();
-    let gabarit = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+    let gabarit = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends").join(gabarit);
     let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &depot).unwrap();
     let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
     m["workspace"]["root"] = json!(arbre.to_string_lossy());
@@ -1810,4 +1814,75 @@ fn une_erreur_du_modele_garde_les_actions_du_chat_et_permet_la_reprise() {
     let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
     assert_eq!(statut, 200);
     fil.join().unwrap();
+}
+
+/// Inventaire à la frontière du modèle, après le filtrage des outils, pour
+/// trois demandes réellement envoyées depuis le navigateur.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn le_navigateur_inventorie_les_outils_effectifs_atelier_depot_et_tache() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    let Some(binaire) = navigateur_ou_saut("le_navigateur_inventorie_les_outils_effectifs_atelier_depot_et_tache") else { return };
+    let vus = Arc::new(Mutex::new(Vec::<Vec<String>>::new()));
+    let model: ChatModel = {
+        let vus = vus.clone();
+        Arc::new(move |_| {
+            let vus = vus.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-inventaire", 8192, move |turns, opts, sink| {
+                let mut outils: Vec<_> = opts.tools.iter().map(|t| t.name.clone()).collect();
+                outils.sort();
+                vus.lock().unwrap().push(outils);
+                MockLlm::new("Capacités relevées.").generate(turns, opts, sink)
+            })))
+        })
+    };
+    let (atelier, h, am, aid) = banc_gabarit("atelier", "atelier", model.clone(), |_| {});
+    drop(h);
+    let (depot, h, dm, did) = banc(model.clone());
+    drop(h);
+    let (chats, taches, runs) = (depot.path().join("chats"), depot.path().join("taches"), depot.path().join("runs"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_chats_root(chats).with_racine_des_taches(taches).with_runs_root(runs).with_chat_model(model)
+    });
+    let racine = format!("http://{adresse}");
+    let ide = |route: &str, corps: Option<Value>| -> Value {
+        let a = crate::daemon::agent_de_temoin();
+        let mut r = match corps {
+            Some(c) => a.post(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j")
+                .header("content-type", "application/json").send(c.to_string()).unwrap(),
+            None => a.get(format!("{racine}{route}")).header("Cookie", "rag3weaver_ide=j").call().unwrap(),
+        };
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    for m in [am, dm] {
+        let v = ide("/ide/describe", Some(json!({ "manifest": m })));
+        assert_eq!(v["ok"], true, "{v}");
+    }
+    let ouverte = ide("/ide/taches", Some(json!({ "backend": did, "nom": "inventaire" })));
+    assert_eq!(ouverte["ok"], true, "{ouverte}");
+    let t = ide(&format!("/ide/taches?backend={did}"), None)["result"]["ouvertes"][0].clone();
+    let tid = t["id"].as_str().unwrap().to_string();
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    for (nom, id, presents, absents) in [
+        ("atelier", aid, vec!["read_file", "read_scope", "replace_text", "run_command", "open_branch", "ask_permission"], vec!["search_code", "grep_files", "wait_output"]),
+        ("depot", did, vec!["read_file", "search_code", "grep_files", "list_files", "outline", "wait_output"], vec!["edit_file", "run_command"]),
+        ("tache", tid, vec!["read_file", "search_code", "edit_file", "run_command", "wait_output"], vec![]),
+    ] {
+        n.aller(&format!("{racine}/ide/code/{id}/chat"),
+            "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'");
+        n.evaluer("document.querySelector('#message').value = 'inventorie'; document.querySelector('#send').click()");
+        n.attendre("document.querySelector('#status')?.textContent === 'fini' && document.body.innerText.includes('Capacités relevées.')", "la demande navigateur atteint le modèle");
+        let outils = vus.lock().unwrap().last().cloned().unwrap();
+        println!("INVENTAIRE navigateur {nom} : {outils:?}");
+        for outil in presents { assert!(outils.iter().any(|n| n == outil), "{nom} doit exposer {outil} : {outils:?}"); }
+        for outil in absents { assert!(!outils.iter().any(|n| n == outil), "{nom} ne doit pas exposer {outil} : {outils:?}"); }
+    }
+    assert_eq!(vus.lock().unwrap().len(), 3, "un appel réel par contexte");
+    assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
+    drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+    drop(atelier);
 }
