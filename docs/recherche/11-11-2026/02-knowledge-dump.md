@@ -301,3 +301,10 @@ avec un `État` qui commence par « corrigé » ou « fermé ».
   ma part faite (`bestSignal`), le seuil est à archi.
 - **À ouvrir** : « un COPY tué laisse son CSV dans le dossier temporaire »
   (`e2e_tx_par_paquet_arret`, `rag3weaver-lignes-*.csv` de `record_nodes.rs`).
+
+## Précisions de reprise du 11 novembre en fin de journée
+
+- La lib 29a7bc52a passe la garde sans `RAG3WEAVER_MOTEUR_ANCIEN` : ne pas poser ce drapeau par précaution.
+- Pour une passe incluant les vrais tests du juge : `GOOGLE_CLOUD_PROJECT=lr-hub-472010`, `GOOGLE_APPLICATION_CREDENTIALS=$HOME/git_workspaces/rag3db/.vault/vertex-sa.json`, `RAG3WEAVER_EXIGER_GEMINI=1`. Le crate lit le fichier ; ne jamais en afficher le contenu. Cargo peut annoncer `passed` alors que le test a écrit `SAUTÉ` et est revenu : lire les journaux.
+- Les suites transactionnelles existantes sont `e2e_tx_par_paquet_arret`, `e2e_tx_vecteurs_apres_rollback`, `e2e_tx_merge_puis_copy`, `e2e_tx_ligne_a_ligne` ; `e2e_tx_par_paquet` n'existe pas.
+- Branches et worktrees de reprise prennent désormais le préfixe `cx-`. Le rapport actualisé donne l'état des passages et la relecture des vues ; les anciens chemins restent historiques.
