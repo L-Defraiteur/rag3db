@@ -270,8 +270,9 @@ impl DaemonHost {
     /// (`tour`, son run dans `tour_run`) et celui de la conversation (`session`, la
     /// somme de ses tours, `tours` leur nombre), par unité du compteur
     /// (`input_tokens`, `cached_input_tokens`, `output_tokens`,
-    /// `reasoning_tokens`), lus dans les `Consumed` des runs du chat (`chat` = ce
-    /// dépôt) ; au journal, il survit à un redémarrage de l'hôte, et la session est
+    /// `reasoning_tokens`), scellés dans les ajouts du run à sa fin ; les anciens
+    /// runs se relisent par leurs `Consumed`. Le journal, en attente ou durable,
+    /// est la source commune ; il survit à un redémarrage de l'hôte, et la session est
     /// celle que le journal garde. Les tâches à rôle : les douze derniers runs de
     /// graphe dont le `RunStarted` porte un `target.role`, finis (le journal ne
     /// garde que les runs finis ; la page ajoute ceux en cours par le flux).
@@ -281,11 +282,34 @@ impl DaemonHost {
         const RUNS_DU_CHAT: usize = 200;
         const GRAPHES_LUS: usize = 40;
         const TACHES: usize = 12;
+        // Instantané avant la liste durable : un transfert en cours termine
+        // sous le verrou du journal ; un transfert ultérieur figure dans les
+        // deux sources, mais un run ne contribue qu'une fois.
+        let en_attente = self.journal.ajouts_en_attente(backend_id);
         let runs = self.journal.runs_de(backend_id);
+        let mut usages = std::collections::HashMap::new();
+        for r in runs.iter().rev().filter(|r| r.starts_with("agent-")).take(RUNS_DU_CHAT) {
+            if let Some(u) = self.resume_du_run(backend_id, r, |v| (v["chat"] == backend_id).then(|| Value::Object(unites_consommees(v)))) {
+                usages.insert(r.clone(), u);
+            }
+        }
+        for (run, ajouts) in en_attente {
+            if run.starts_with("agent-") && ajouts.get("chat") == Some(&json!(backend_id)) {
+                if let Some(u) = ajouts.get("usage_du_chat").filter(|u| u.is_object()) {
+                    usages.insert(run, u.clone());
+                }
+            }
+        }
+        // Le nom porte le départ et un compteur : l'ordre logique des tours ne
+        // dépend pas de l'ordre d'écriture de leurs fichiers par les fils.
+        let mut usages: Vec<_> = usages.into_iter().collect();
+        usages.sort_by_key(|(run, _)| {
+            let mut champs = run.split('-').skip(1);
+            (champs.next().and_then(|h| u64::from_str_radix(h, 16).ok()).unwrap_or(0), champs.next().and_then(|n| n.parse::<u64>().ok()).unwrap_or(0))
+        });
         let mut session = serde_json::Map::new();
         let (mut tour, mut tour_run, mut tours) = (Value::Null, Value::Null, 0u64);
-        for r in runs.iter().rev().filter(|r| r.starts_with("agent-")).take(RUNS_DU_CHAT) {
-            let Some(u) = self.resume_du_run(backend_id, r, |v| (v["chat"] == backend_id).then(|| Value::Object(unites_consommees(v)))) else { continue };
+        for (r, u) in usages.into_iter().rev().take(RUNS_DU_CHAT) {
             if tour.is_null() {
                 tour = u.clone();
                 tour_run = json!(r);
@@ -515,28 +539,10 @@ impl DaemonHost {
 
     /// **La fin d'un tour, poussée** (l'IDE par le flux, 9 novembre 2026) : l'état du chat
     /// (contexte, usage, modèle, fiches écrites), le run du tour et les tours ajoutés depuis
-    /// `depuis`. L'usage du journal ne connaît le tour qu'après son écriture, un peu plus tard :
-    /// celui du tour se compte ici, au compteur du chat, qui le tient déjà. Rien n'attend, ni
-    /// la page ni l'hôte.
+    /// `depuis`. GET, flux et récapitulatif lisent la même projection du journal,
+    /// dont le total est scellé à la fin du tour, avant sa publication.
     fn publier_l_etat_du_chat(&self, backend_id: &str, depuis: usize, run: &str) {
         let Ok(mut v) = self.chat_state(backend_id) else { return };
-        if v["usage"]["tour_run"] != json!(run) {
-            let mut tour = serde_json::Map::new();
-            for ((_, unite), n) in self.chat_meter.totals_for_run(run) {
-                let avant = tour.get(unite.as_str()).and_then(Value::as_u64).unwrap_or(0);
-                tour.insert(unite.as_str().to_string(), json!(avant + n));
-            }
-            if !tour.is_empty() {
-                let u = &mut v["usage"];
-                for (nom, n) in &tour {
-                    let avant = u["session"][nom.as_str()].as_u64().unwrap_or(0);
-                    u["session"][nom.as_str()] = json!(avant + n.as_u64().unwrap_or(0));
-                }
-                u["tours"] = json!(u["tours"].as_u64().unwrap_or(0) + 1);
-                u["tour"] = Value::Object(tour);
-                u["tour_run"] = json!(run);
-            }
-        }
         let tours = v.as_object_mut().and_then(|o| o.remove("turns")).and_then(|t| t.as_array().cloned()).unwrap_or_default();
         let depuis = depuis.min(tours.len());
         v["tour"] = json!(run);
@@ -644,6 +650,15 @@ impl DaemonHost {
         {
             let mut ajouts = serde_json::Map::new();
             ajouts.insert("chat".into(), json!(backend_id));
+            // Frontière de fin : le compteur est complet. Le même total scellé
+            // se lit avant et après l'écriture du journal, sans sommer à nouveau
+            // les événements Consumed (qui peuvent être tronqués).
+            let mut usage = serde_json::Map::new();
+            for ((_, unite), n) in self.chat_meter.totals_for_run(run_id) {
+                let avant = usage.get(unite.as_str()).and_then(Value::as_u64).unwrap_or(0);
+                usage.insert(unite.as_str().to_string(), json!(avant + n));
+            }
+            ajouts.insert("usage_du_chat".into(), Value::Object(usage));
             ajouts.insert("tours".into(), serde_json::to_value(du_tour).unwrap_or(Value::Null));
             ajouts.insert("tache".into(), tache.clone());
             ajouts.insert("fichiers".into(), json!(fichiers));
@@ -962,8 +977,11 @@ fn chat_file(root: &std::path::Path, backend_id: &str) -> PathBuf {
     root.join(format!("{backend_id}.json"))
 }
 
-/// Les jetons d'un run, par unité du compteur, sommés sur ses `Consumed`.
+/// Le total scellé d'un run ; pour les anciens journaux, ses `Consumed`.
 fn unites_consommees(v: &Value) -> serde_json::Map<String, Value> {
+    if let Some(u) = v["usage_du_chat"].as_object() {
+        return u.clone();
+    }
     let mut m = serde_json::Map::new();
     for e in v["evenements"].as_array().into_iter().flatten().filter(|e| e["kind"] == "Consumed") {
         for u in e["units"].as_array().into_iter().flatten() {
