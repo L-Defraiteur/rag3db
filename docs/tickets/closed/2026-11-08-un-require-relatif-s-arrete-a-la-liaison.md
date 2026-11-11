@@ -149,3 +149,29 @@ alignés (1d70a8141), cinq strict-faux conservés. L'orchestration a relu les
 journaux et donné le tour de push. Le défaut require est corrigé ; les suites
 provenance et homonyme restent dans leurs deux tickets ouverts, sans transfert
 implicite de leur réalisation dans cette clôture. Aucun filet à retirer.
+
+## Livraison et nettoyage effectifs
+
+Master reçoit 2e910930dbb9684fdfeb1f387fc2a430c9604880 sous poste push après
+verdict relu. Trois contrôles lus : status propre, aucun rebase en cours,
+origin/master égal à HEAD. Le sous-module a730a9ba89ef233423bb7063f85181de26d98ce0
+est accessible sur origin/cx-codeparsers-default-metadata.
+
+Sur luciepc : worktree de passe cx-wt-codeparsers-require, worktrees des deux
+mesures (cx-wt-codeparsers-mesure-v2, rag3db-require-default-mesure) et ancien
+rag3db-brancher supprimés ; branches locales -2/-3/-4 et require-temoins retirées.
+Target unique target-codeparsers-clic et base PG privée
+cx_codeparsers_20261111_1698_test supprimés. Sur le portable : worktrees require,
+témoins et métadonnées, branches locales require et variantes, ainsi que les
+branches locales du sous-module associées, supprimés. Les branches distantes
+restent intactes. Mesures, bases A/B, binaires figés et journaux sont conservés
+sous ~/.cache/codeparsers-notes/, hors du target supprimé ; derniers journaux
+du wrapper copiés dans cx-passe-require-3/wrapper-final.
+
+Incident de nettoyage : codeparsers-garde distant était un worktree rattaché
+au sous-module de rag3db-brancher. Le retrait du parent invalidait son lien Git.
+Il a été rétabli en clone autonome au commit historique 672a0d5, sans écraser
+ses fichiers ; status propre après rétablissement. Ce clone ancien est conservé,
+ainsi que la trace dans cx-passe-require-3/reparation-ancien-codeparsers-garde.log.
+Aucun travail restant pour cet incident ; les suites ouvertes sont les tickets
+oracle/provenance et homonyme (et les chantiers antérieurs distincts).
