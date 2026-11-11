@@ -271,3 +271,22 @@ est active ; aucune suppression des anciennes branches distantes.
   remappage des surlignages. Worktree documentaire et branche locale retirés, aucun target.
 - Reprise1a : worktrees cx-wt-scope-version et rouge dd5f30465 conservés ; validation à reprendre
   sur le master portant le garde-fou, target unique neuf cx-target-scope-version.
+
+
+### Lucivy4.3.3 publiée, intégration rag3weaver à suivre
+
+- Lucie confirme publication4.3.3 sur crates.io/npm/PyPI, PR22–25 fusionnées et CI verte sur
+  main663975a avant tag v4.3.3, workflow de publication entièrement vert. Correctif : close()
+  arrête pools/acteurs même en erreur ; tests de corpus désormais rouges si corpus absent.
+  Aucun changement de format d’index, démo conservée en4.3.2. Publication non rejouée ici.
+- **bf3a0bfb6**, docs seules, session lucivy : rapport/dump actualisés, attentes des fusions
+  devenues obsolètes retirées. Elle a relu localement tag663975adf11fc4a9d6cadf90e70ee68f6c9db075,
+  CHANGELOG, note e805235 et présence du témoin close ; pas de test ni de registre revérifié.
+  Trois contrôles postpush confirmés ; hash/diff relus par orchestration.
+- Recherche prend un lot distinct cx-recherche-lucivy-4-3-3 après son lot d’arrêt : minimums
+  lucivy-core/ld-lucivy/sparse-vector et lock ciblés, luciole/lucistore alignés, source registre.
+  Lecture locale actuelle : les cinq crates sont encore verrouillées en4.3.2.
+- **Périmètre corrigé par Lucie** : aucun scénario ou fixture supplémentaire de compatibilité
+  d’index4.3.2→4.3.3, aucune migration ni banc dédié. Preuve ciblée sur fermeture échouée,
+  arrêt effectif des pools/acteurs et terminaison propre ; passe habituelle maintenue. Recherche
+  a confirmé qu’aucun code de scénario de compatibilité n’avait été ajouté.
