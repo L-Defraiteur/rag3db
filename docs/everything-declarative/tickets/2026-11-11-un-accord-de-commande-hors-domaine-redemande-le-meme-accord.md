@@ -31,3 +31,9 @@ reprise qui l'honore sans accorder d'autres chemins ni variantes de commande. Le
 rester observable si cette autorisation n'est pas prise en charge. Tester la carte et le tour
 réel, pas seulement l'enregistrement de la décision. Ce correctif est distinct du lot UI
 contextuelle et ne doit pas être annoncé livré par le succès de wait_output dans le domaine.
+
+## Transfert à ED après la passe figée a92
+
+Porteur : everything declarative, confirmé avec archi. Le ticket reste ouvert : le transfert
+ne corrige ni ne ferme le défaut. Preuve b573 conservée ; reste définir et prouver la portée
+de l'accord extérieur et la reprise de la commande. Aucun correctif dans le lot relais/UI.
