@@ -245,6 +245,55 @@ graph LR
         );
     }
     #[test]
+    fn contextual_operation_is_fixed_by_the_declaration() {
+        let mut tool = GraphTool::from_mermaid(GRAPH)
+            .unwrap()
+            .instantiate(&json!({
+                "context":{"target":{"kind":"backend","id":"B"}},"query":"q","options":{}
+            }))
+            .unwrap();
+        validate_declared_operations(&tool).unwrap();
+        tool.nodes[0].config["operation"] = json!("$operation");
+        assert!(validate_declared_operations(&tool)
+            .unwrap_err()
+            .contains("constante"));
+    }
+    #[test]
+    fn a_cancelled_invocation_never_reaches_the_host() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut services = ServiceRegistry::new();
+        services.register(
+            HOST_SERVICE,
+            Arc::new(Host {
+                calls: calls.clone(),
+            }) as Arc<dyn InvocationHost>,
+        );
+        services.register(
+            AUTHORITY_SERVICE,
+            InvocationAuthority {
+                manifest: "caller.json".into(),
+                policy: crate::backend_code::ToolPolicy {
+                    read_files: true,
+                    ..Default::default()
+                },
+                scope: Default::default(),
+            },
+        );
+        let mut ctx = NodeContext::with_services(Arc::new(services));
+        let hub = super::super::stream::StreamHub::new();
+        ctx.set_cancel_hub(hub.clone());
+        hub.cancel(crate::dataflow::node::CancelCause::External);
+        let mut node = InvokeToolNodeFactory
+            .create(
+                "invoke",
+                &json!({"operation":"chercher",
+            "context":{"target":{"kind":"backend","id":"B"}},"arguments":{}}),
+            )
+            .unwrap();
+        assert!(node.execute(&mut ctx).unwrap_err().contains("annulée"));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+    #[test]
     fn contextual_call_without_read_authority_never_reaches_the_host() {
         let calls = Arc::new(AtomicUsize::new(0));
         let mut services = ServiceRegistry::new();
