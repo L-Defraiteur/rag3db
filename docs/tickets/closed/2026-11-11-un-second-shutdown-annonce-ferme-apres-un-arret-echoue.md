@@ -1,6 +1,6 @@
 # Un second shutdown annonce fermé après un arrêt échoué
 
-- **État** : ouvert (11 novembre 2026, relecture avant intégration du lot d'arrêt).
+- **État** : corrigé (`7f2a0f65e`, 11 novembre 2026) : résultat de tentative mémorisé ; passe complète de la tête finale encore requise avant intégration.
 - **Famille** : produit
 - **Gravité** : faux succès de fermeture, alors qu'une réaction détachée peut encore tenir le catalogue.
 - **Atteignable en service** : oui via l'API `Backend::shutdown` appelée deux fois après une erreur ; le chemin `DaemonHost::close_slot` propage la première erreur puis retire le backend.
@@ -23,3 +23,9 @@ Journal `~/.cache/rag3weaver-build/cx-recherche-arret-audit.log` : premier `Err`
 ## Pour fermer
 
 Remplacer l'état ambigu par un résultat d'arrêt mémorisé, ou un état explicite équivalent. Un échec doit rester observable sur les appels suivants et au Drop ; un succès reste idempotent. Jouer le témoin vert, les témoins normaux d'arrêt, puis les contrôles requis sur la nouvelle tête. Ne pas présenter la passe R3 antérieure comme validation de ce correctif.
+
+## Correctif et vérifications
+
+`Option<Result<(), String>>` conserve la tentative unique d'arrêt, succès ou erreur. L'accès est exclusif par `&mut self` ; aucun AtomicBool n'est nécessaire. Un échec reste rendu aux appels suivants et au Drop, sans retenter sous une réaction détachée. Sur `7f2a0f65e`, les deux ciblés sont verts (2 réussis/0 échec/0 ignoré, 1,01 s), journal `cx-recherche-arret-audit-vert.log` à luciepc : première et seconde erreurs identiques, vue encore ouverte ; après succès, deux appels et le Drop n'émettent qu'un ShutdownStarted/ShutdownCompleted.
+
+`545fbfd17` isole le réacteur volontairement figé dans un processus enfant avec délai d'une seconde, afin de ne pas tenir un worker du runtime partagé pendant la lib entière. La passe de la tête intégrant cette isolation reste à lire ; la R3 d'avant le correctif est historique et ne la remplace pas.

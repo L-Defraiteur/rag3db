@@ -90,7 +90,7 @@ résout la cible, puis chaque **signal** cherche de son côté, puis `FuseResult
   - `index_nodes::indexings_running` ne compte que les index : l'hôte s'en sert pour refuser de
     fermer un backend qui indexe (`BUSY_INDEXING`). `stop_indexings_of` arrête et attend tous les
     fils.
-- **`impl Drop for Backend`** (même branche) appelle `shutdown()`, une seule fois (champ `ferme`).
+- **`impl Drop for Backend`** (même branche) appelle `shutdown()`, une seule fois (résultat de tentative mémorisé).
   Sans lui, un backend lâché sans `shutdown()` laissait ses réacteurs (tâches tokio) et ses fils
   tenir le catalogue, qui se fermait plus tard, sur un autre fil, une fois son dossier effacé.
 - **Côté lucivy**, `ShardedHandle::close` sortait sur la première erreur sans arrêter ses pools
@@ -310,3 +310,5 @@ avec un `État` qui commence par « corrigé » ou « fermé ».
 - Branches et worktrees de reprise prennent désormais le préfixe `cx-`. Le rapport actualisé donne l'état des passages et la relecture des vues ; les anciens chemins restent historiques.
 
 - Pour le lot d'arrêt, les témoins `qu_on_laisse_tomber` sont des tests **unitaires** de `daemon_host`, pas des e2e_lectures. Utiliser `scripts/cargo_magasin.sh test --lib --features <jeu-large> qu_on_laisse_tomber -- --nocapture`, lire les deux noms et `2 passed; 0 failed; 0 ignored`. Les deux filets du lanceur e2e ne comptent pas pour ce témoin. Le script de reprise corrigé est `~/.cache/rag3weaver-build/cx-recherche-arret-passe-v2.sh` ; le vérificateur final produit `verdict-final.log` en lisant les résultats de chaque cible séparément.
+
+- `Backend::shutdown(&mut self)` conserve désormais le résultat de sa tentative unique (`Option<Result<(),String>>`), pas un booléen ambigu. Après réaction figée, les handles ont été détachés : un second appel ne retente pas une fermeture et restitue la même erreur ; le catalogue n'est pas garanti fermé. Le Drop signale cette erreur conservée. Après succès, le second appel et le Drop ne refont pas la fermeture. Le test de gel est isolé dans un enfant avec sa propre variable de délai, pour ne pas bloquer le runtime partagé des autres tests.
