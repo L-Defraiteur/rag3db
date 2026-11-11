@@ -160,8 +160,9 @@ Lucie veut un index commun au dépôt et des vues par branche ou worktree, sous 
 
 **État au 11 novembre :** contrat relu, lots définis et premiers témoins rouges observés.
 Le garde-fou qui vérifie qu’un scope seulement déplacé ne se réembarque pas est intégré.
-Le partage d’un même contenu entre plusieurs occurrences et la conservation de leurs résultats
-sont en développement. La pyramide complète sans copie d’index n’est pas encore livrée.
+La projection générique d’un morceau partagé vers toutes ses occurrences admises est intégrée
+(`6c4b5ad0c`), avec conservation des filtres et des positions. Le stockage partagé d’un même contenu
+entre occurrences reste en développement. La pyramide complète sans copie d’index n’est pas encore livrée.
 
 En parallèle, le chat de l’IDE doit permettre un parcours complet : explorer, chercher, lire,
 modifier, exécuter les tests, examiner le diff, reprendre après une erreur ou un accord et livrer.

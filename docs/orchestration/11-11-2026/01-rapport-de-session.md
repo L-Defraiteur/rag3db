@@ -426,3 +426,30 @@ restent explicitement en cours. Les chiffres sont datés et leurs protocoles ré
 - File suivante : pré-lot générique de projection des occurrences, puis flux/chat archi.
   Stabilité de code réservée au rejeu de projection sur ED91e5 ; recherche attend une base
   convenue pour sa future validation complète, son vert ciblé ne vaut pas vert global.
+
+
+### Projection générique des occurrences intégrée
+
+- **6c4b5ad0c0f757ee17905c1643dd8b39174ccaa9**, pointe du pré-lot1a0 arbre principal :
+  un morceau rend tous ses parents admis, déduplication des paires et meilleur score, choix
+  déterministe à score égal, source/positions conservées et réadmission dense/creux filtrée.
+  Aucun changement de stockage ni version de contenu livré ; ticket du double embarquement ouvert.
+- Tour donné après lecture des deux fichiers de runtime et des preuves : passev3 features5/5,
+  lib2096/0/58 ignorés, navigateur33/0/0, quatre suites projection/search/scope/postgres87/0/0.
+  Rejeu surED91e5, commit51a2faa1f : unitésprojection et gardeL4, features5/5, lib2097/0/58,
+  quatre suites87/0/0, aucun saut. Hash joué et verdict VERT relus à luciepc.
+- Point de relecture cellule explicite levé par diagnostic séparé fdd710eb2, runtime identique :
+  douze cas dense/creux × trois modes × cellule alpha demandée ou beta par défaut, parents
+  exacts, morceau partagé intercellules et catalogue courant conservé. Fixture initiale sans
+  BlobStore mal montée, erreur avant réadmission ; comparateur ancien runtime a perdu un parent
+  avant d’atteindre le contrôle nohandle, donc cette comparaison précise n’est pas établie.
+  Ces expériences ne sont pas présentées comme du code livré ni comme nouveaux rouges produit.
+- Master seulement documentaire depuis rejeuED ; rebase et branchecx-neuve sauvegardés.
+  Push sous poste push/garde VERT, trois contrôles confirmés après fetch ; intégration relue ici.
+  Nettoyage terminé aux deux postes : worktrees projection/diagnostic, branches locales, target
+  cx-target-scope-version et base PostgreSQL privée ; preuves externes, worktree1a et refs
+  distantes conservés. Rapport/nouveautés/README de livraison demandés à arbre en docs seules.
+- Fenêtre de stabilité code désormais réservée à archi pour flux puis correctif de reprisechat
+  déjà engagé. Rebase sur6c4b5ad0c avecED et vérification du rouge606dus requis avant tour.
+  Recherche attend ensuite base convenue pour validation complète de l’arrêt ; aucun autre
+  pushcode ne reçoit de tour en parallèle.
