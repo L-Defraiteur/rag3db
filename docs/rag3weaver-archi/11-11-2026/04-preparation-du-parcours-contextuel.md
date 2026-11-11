@@ -125,3 +125,21 @@ Preuves séparées sous `~/.cache/rag3weaver-build/cx-ui-contextuel-<SHA>-<étap
 sur luciepc, avec source-head, navigateur.log et exit-code. Les rouges initiaux ne sont pas écrasés.
 TypeScript vérifié et bundle rebâti. Le succès sur ED145 est diagnostique : aucune passe complète
 commune, aucune livraison master, aucune découverte autonome des cibles par le modèle n'est prouvée.
+
+
+## Base commune et compléments (en validation)
+
+Rebase sans conflit sur la base ED figée `3a0679b7f` (elle-même sur master `418e47a2e`,
+avec arrêt `80b467dd3`) ; nouvelle branche `cx-archi-ui-contextuel-relais-3`.
+La passe diagnostique `b57313175` fait 1 réussi, 2 échecs, 0 ignoré en 150,28 s :
+le parcours court reste vert ; la commande hors domaine redemande l'accord (ticket archi
+`2026-11-11-un-accord-de-commande-hors-domaine-redemande-le-meme-accord.md`) ; le parcours
+tronqué atteint le reçu coupé et les clics B, puis relit prématurément l'ancien état « fini »
+avant les reçus A. Ces deux rouges ne constituent pas une passe verte.
+
+Les fixtures suivantes gardent le script sous la racine et attendent l'issue du **nouveau**
+tour. Le faux modèle déclare une fenêtre de 131072 jetons pour permettre les deux tours de
+résultats réellement coupés à la borne de 32768 octets du chat ; cette borne n'est pas modifiée.
+Le modèle vérifie la coupure réelle et l'absence de `Metadata:` dans le texte, tout en exigeant
+le reçu structuré. La commande attend un fichier signal, créé seulement après l'annonce du
+vrai appel wait_output dans le flux. Résultats de cette nouvelle combinaison encore attendus.
