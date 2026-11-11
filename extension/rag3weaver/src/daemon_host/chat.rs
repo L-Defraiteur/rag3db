@@ -515,25 +515,34 @@ impl DaemonHost {
 
     /// **La fin d'un tour, poussée** (l'IDE par le flux, 9 novembre 2026) : l'état du chat
     /// (contexte, usage, modèle, fiches écrites), le run du tour et les tours ajoutés depuis
-    /// `depuis`. L'usage du tour s'écrit au journal juste après le tour : l'hôte l'attend
-    /// dans un fil, au plus 5 s, sur son journal local, plutôt que la page ne relise l'hôte
-    /// jusqu'à l'y voir ; passé ce délai, l'état part tel quel.
+    /// `depuis`. L'usage du journal ne connaît le tour qu'après son écriture, un peu plus tard :
+    /// celui du tour se compte ici, au compteur du chat, qui le tient déjà. Rien n'attend, ni
+    /// la page ni l'hôte.
     fn publier_l_etat_du_chat(&self, backend_id: &str, depuis: usize, run: &str) {
-        let Some(hote) = self.soi.get().and_then(std::sync::Weak::upgrade) else { return };
-        let (backend_id, run) = (backend_id.to_string(), run.to_string());
-        std::thread::spawn(move || {
-            let debut = std::time::Instant::now();
-            while hote.usage_et_taches_a_role(&backend_id).0["tour_run"] != json!(run) && debut.elapsed() < std::time::Duration::from_secs(5) {
-                std::thread::sleep(std::time::Duration::from_millis(50));
+        let Ok(mut v) = self.chat_state(backend_id) else { return };
+        if v["usage"]["tour_run"] != json!(run) {
+            let mut tour = serde_json::Map::new();
+            for ((_, unite), n) in self.chat_meter.totals_for_run(run) {
+                let avant = tour.get(unite.as_str()).and_then(Value::as_u64).unwrap_or(0);
+                tour.insert(unite.as_str().to_string(), json!(avant + n));
             }
-            let Ok(mut v) = hote.chat_state(&backend_id) else { return };
-            let tours = v.as_object_mut().and_then(|o| o.remove("turns")).and_then(|t| t.as_array().cloned()).unwrap_or_default();
-            let depuis = depuis.min(tours.len());
-            v["tour"] = json!(run);
-            v["depuis"] = json!(depuis);
-            v["nouveaux_tours"] = json!(tours[depuis..]);
-            hote.ide_flux().publier_etat("chat", &backend_id, v);
-        });
+            if !tour.is_empty() {
+                let u = &mut v["usage"];
+                for (nom, n) in &tour {
+                    let avant = u["session"][nom.as_str()].as_u64().unwrap_or(0);
+                    u["session"][nom.as_str()] = json!(avant + n.as_u64().unwrap_or(0));
+                }
+                u["tours"] = json!(u["tours"].as_u64().unwrap_or(0) + 1);
+                u["tour"] = Value::Object(tour);
+                u["tour_run"] = json!(run);
+            }
+        }
+        let tours = v.as_object_mut().and_then(|o| o.remove("turns")).and_then(|t| t.as_array().cloned()).unwrap_or_default();
+        let depuis = depuis.min(tours.len());
+        v["tour"] = json!(run);
+        v["depuis"] = json!(depuis);
+        v["nouveaux_tours"] = json!(tours[depuis..]);
+        self.ide_flux().publier_etat("chat", backend_id, v);
     }
 
     #[allow(clippy::too_many_arguments)]
