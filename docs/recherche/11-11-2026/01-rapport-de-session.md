@@ -1,5 +1,28 @@
 # Session « recherche » : rapport de reprise (11 novembre 2026)
 
+## Actualisation de la reprise, 11 novembre en fin de journée
+
+Cette section remplace les chemins et les états de reprise anciens ci-dessous, conservés comme historique.
+
+- Contact établi avec la session d'orchestration `01a1cb5c-62b9-7ea0-8b7e-cf38398ece09`.
+- Le résidu de COPY est documenté dans `docs/recherche/tickets/2026-11-11-un-copy-tue-laisse-son-csv-dans-le-dossier-temporaire.md` : les trois CSV de 12 Ko sont relus dans `journaux-arret/e2e-entier-1.log:8457–8459` à luciepc. La suite est un résidu intermittent connu, pas une cause corrigée.
+- Première reprise : branche distante `arret-du-backend-9`, `77f6704e5`, base `d1345a115`. Conflit de classement du ticket backend résolu vers `docs/tickets/closed/` ; les deux tickets ouverts sont dans `docs/recherche/tickets/`.
+- Sous la lib complète `rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`, sans `RAG3WEAVER_MOTEUR_ANCIEN`, les journaux `~/.cache/rag3weaver-build/journaux-arret-codex-11nov-sans-derogation/` à luciepc attestent : témoins 2/2, lectures 24/24, code 27/27, cited_by 3/3, arrêt par paquet 18/18, vecteurs après rollback 3/3, merge puis COPY 1/1, ligne à ligne 3/3 ; features 5/5 ; lib entière 2096 réussis, 0 échec, 58 ignorés ; navigateur 33 réussis, 0 ignoré. Le juge annonçait 5 réussis mais deux étaient **SAUTÉS** faute de configuration : résultat incomplet, rejeu Gemini exigé distinct dans `e2e_juge-gemini.log`, verdict `gemini-verdict.log` à relire.
+- Le premier lancement avec le drapeau d'ancienneté, inutile, a été interrompu et conservé dans `journaux-arret-codex-11nov/`. Le lancement sans dérogation a aussi refusé un nom de suite inexistant (`e2e_tx_par_paquet`, zéro test), ensuite remplacé par les trois suites transactionnelles existantes. Le résumé historique conserve ces erreurs ; ne pas prendre son seul dernier mot pour une preuve complète.
+- Master a depuis reçu le garde-fou Rust `1904e04e4`. Nouvelle reprise suivant la convention de Lucie : branche `cx-recherche-arret-du-backend`, worktree `/home/lucied/git_workspaces/cx-rag3db-arret`, même chemin prévu à luciepc ; rebase effectué sans conflit, série sauvegardée sur sa branche. Le rejeu de cette nouvelle tête reste **à faire** après la fin de Gemini sur l'ancien chemin ; target unique `~/.cache/rag3weaver-build/target-97k`, sans cargo concurrent.
+- Aucun push sur master ni tour de push reçu. Après rejeu vert : demander le tour, relire master, rebaser et rejouer si du Rust est arrivé, puis appliquer la procédure de push.
+
+### Relecture des vues, transmise à arbre principal et ED
+
+Accord sur l'ancre unique et la pyramide ; contrat à consolider avant implémentation du modèle. Le filtre par `(fichier, version)` du §3 ne suffit pas au composite par scope du §2 bis : résoudre récursivement la pile et ses générations épinglées en **occurrences visibles** ; un tombstone arrête la recherche dans les ancêtres. La visibilité est un invariant que le filtre utilisateur ne remplace jamais. Un backend incapable d'appliquer le masque doit refuser ; la précédence actuelle domaine/filtre utilisateur est une décision séparée.
+
+Dense, creux et plein texte doivent restreindre leurs candidats avant le top-k. Un contenu/version partagé donne des occurrences distinctes avec leurs chemins, positions et relations ; l'expansion visible précède le classement final, la déduplication et la pagination. Filtrer les deux extrémités des arêtes. Garder une même génération sous L6 pour résolution, enrichissement et provenance. Une branche sans worktree exige une lecture des blobs/composites, le disque seul ne couvre pas ce contrat.
+
+La réutilisation des vecteurs exige les mêmes champs réellement embarqués, modèle et configuration de découpage. Une normalisation des octets impose un remappage des positions de surlignage vers le texte rendu. Les témoins proposés portent sur la pile f/g/h, le tombstone hérité, l'ancre qui avance sans rebase, les occurrences partageant une version, le top-k saturé d'invisibles et le filtre utilisateur visant une occurrence masquée.
+
+M3–M5 **non jouées** : l'optimiseur coordonne une future fenêtre isolée avec arbre principal. Aucun masque en cache ni stratégie HNSW n'est choisi sur des chiffres inexistants.
+
+
 Ce rapport s'adresse à un agent qui reprend le périmètre de la session « recherche » sans aucun
 souvenir de ses échanges. Il dit l'état exact au 11 novembre 2026, 16 h 30 : ce qui est sur
 `master`, ce qui attend, ce qui reste sur disque, et les trois prochains pas.
