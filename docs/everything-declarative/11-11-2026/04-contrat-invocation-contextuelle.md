@@ -36,7 +36,12 @@ Les mêmes accords/refus, erreurs et mécanismes d'annulation restent observable
 du parent atteint l'enfant et n'autorise pas une réponse de succès de substitution.
 
 Le reçu conserve résultat, présentation, métadonnées et UI utiles. Sa provenance relie run et
-appel parents à l'opération, au backend/espace et à la vue effectivement résolus. Les refus
+appel parents à l'opération, au backend/espace et à la vue effectivement résolus. Ce contexte
+est structuré par le runtime, avec un libellé humain pour l'écran : le renderer ne doit pas
+résoudre les liens, cartes et actions depuis l'identifiant de la conversation parente.
+Deux dépôts peuvent partager chemin et symbole sans partager cette cible. Le contexte effectif
+survit à la conservation de l'historique, au rechargement et à la reprise ; une instruction
+textuelle du modèle n'est pas une autorité pour le reconstruire. Les refus
 portent eux aussi ce contexte sans afficher des valeurs de secrets.
 
 L'auto-appel et les cycles ne sont pas permis implicitement. Résoudre et vérifier les références
@@ -59,7 +64,10 @@ hors tâche sont une politique à préserver.
 
 1. Rouge d'exposition du modèle puis vert lorsque les outils déclarés deviennent accessibles.
 2. Exécution réelle de recherche et outline sur deux dépôts de contenus distincts : cible demandée
-   respectée, résultat et provenance corrects, zéro fuite vers l'autre dépôt.
+   respectée, résultat et provenance corrects, zéro fuite vers l'autre dépôt. Avec mêmes chemins
+   et symboles mais contenus distincts, cliquer un lien doit ouvrir la cible demandée, encore
+   après rechargement/reprise. Archi tient Chat.tsx/toolview.tsx et le témoin chat_contextuel.rs ;
+   le branchement du module sera coordonné, aucun de ces fichiers n'est édité par ED.
 3. Référence inconnue/ambiguë, vue non supportée, auto-appel/cycle : refus observable, sans blocage.
 4. Appelant lecture seule ou cible lecture seule face à une écriture : refus dans les deux sens ;
    tâche autorisée conservant ses capacités, aucune conversion en appel humain.
