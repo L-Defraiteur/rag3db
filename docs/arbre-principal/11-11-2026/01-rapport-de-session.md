@@ -15,6 +15,19 @@ la session d'orchestration (aujourd'hui `rag3db-5a`), et travaille avec les sess
 **recherche**, **everything declarative** ou « ED » (l'IDE et l'équipier).
 
 
+## Rebase combiné 1a effectué
+
+Branche neuve **cx-arbre-scope-version-4**, premier checkpoint rebasé **b68cebd46**,
+sur master ED **c693496a8** ; branche3 conservée comme preuve des séries antérieures.
+Aucun conflit de runtime : conflits de documents résolus en gardant la projection déjà
+livrée et les ajouts 1a. Les anciennes copies des deux tickets ED, ressuscitées par le
+rejeu de leur création indépendante, sont retirées : feature reste fermée dans closed,
+ordre reste ouvert dans arbre, preuves ED conservées. Garde tickets 367 valides après
+ce raccord. Diff au master : primitives 1a, projection/masques, files/cellules/L3 et leurs
+témoins ; code.rs, schéma code livré et gabarits de production inchangés par 1a.
+Aucune ancienne passe n'est réattribuée à ce nouveau socle. Raccord statique/manifeste
+et diagnostic PG public restent à jouer, puis vraie passe combinée.
+
 ## Reprise ED et dernière série avant rebase
 
 ED a intégré **c693496a8c2b3b95dd63877d356ed80e62797bd9** avec ses trois contrôles
@@ -167,9 +180,9 @@ Tentative unitaire rag3db-native seule : 1 565 réussis, 1 échoué, 15 ignorés
 builtin_templates charge workspace/code sans feature code : la configuration est refusée comme
 attendu. Le lanceur s'est arrêté avant le rejeu e2e : pas de passe verte revendiquée.
 Suivi distinct, porteur ED :
-[montage du manifeste lié sans code](../../everything-declarative/tickets/2026-11-11-le-test-du-manifeste-lie-demande-code-sans-garde-de-feature.md).
+[montage du manifeste lié sans code](../../tickets/closed/2026-11-11-le-test-du-manifeste-lie-demande-code-sans-garde-de-feature.md).
 Configuration complète prévue ensuite. Accessibilité depuis un manifeste à éprouver aussi,
-porteur ED : [ordre des déclarations dérivées](../../everything-declarative/tickets/2026-11-11-ordonner-les-entites-derivees-a-l-ouverture-du-backend.md).
+porteur ED : [ordre des déclarations dérivées](../tickets/2026-11-11-ordonner-les-entites-derivees-a-l-ouverture-du-backend.md).
 Ce dernier point est issu de la lecture, pas d'un e2e reproduit : HashMap d'entités enregistrées
 avant les relations, alors que from/gather exigent leurs dépendances. Aucune modification de
 backend.rs, builtin_templates.rs, code.rs ou du gabarit code par ce lot à ce stade.
