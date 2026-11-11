@@ -392,6 +392,19 @@ pub fn generate_derived_rel_ddl_with_dialect(
     Ok(dialect.create_rel_table(&derived_rel_name(entity_name), entity_name, from_entity, &[]))
 }
 
+/// Même relation de dérivation, avec l'état du rendu propre à la référence.
+pub fn generate_content_derived_rel_ddl_with_dialect(
+    entity_name: &str,
+    from_entity: &str,
+    dialect: &dyn crate::dialect::SchemaDialect,
+) -> Result<String, SchemaError> {
+    validate_identifier(entity_name, "entity")?;
+    validate_identifier(from_entity, "entity")?;
+    Ok(dialect.create_rel_table(&derived_rel_name(entity_name), entity_name, from_entity, &[
+        crate::dialect::ColumnDef { name: crate::config::DerivedConfig::RENDER_HASH.into(), col_type: crate::dialect::ColumnType::Text }
+    ]))
+}
+
 pub fn generate_rel_table_ddl(
     rel_name: &str,
     rel_def: &RelationDef,

@@ -96,6 +96,7 @@ fn catalogue_sur(conn: Rag3dbConnection) -> Catalog {
                 fields: vue,
                 signals: SearchSignals::HYBRID,
                 derived: Some(DerivedConfig {
+                    identity: rag3weaver::config::DerivedIdentity::Root,
                     from: "Ticket".into(),
                     gather: vec![GatherRule {
                         name: "comments".into(),
@@ -355,4 +356,89 @@ fn une_famille_du_catalogue_pose_sa_derivee() {
     // Et elle se cherche comme n'importe quelle entité.
     let (_catalog, res) = cherche(catalog, "fil", "thermostat", SearchOptions { consistency: Consistency::Immediate, signals: Some(SearchSignals::BM25), ..Default::default() });
     assert_eq!(res.results.len(), 1, "le fil rendu se trouve en plein texte");
+}
+
+fn catalogue_versions() -> Catalog {
+    use rag3weaver::config::DerivedIdentity;
+    let mut catalog = catalogue();
+    catalog.register_entity("Version", EntityConfig {
+        fields: HashMap::from([("content".into(), champ(FieldType::Text, false, true))]),
+        signals: SearchSignals::BM25,
+        derived: Some(DerivedConfig {
+            from: "Ticket".into(), identity: DerivedIdentity::Content { format: "ticket-v1".into() }, gather: vec![],
+            render: BTreeMap::from([("content".into(), "{{ root.body }}".into())]),
+        }),
+        ..Default::default()
+    }).unwrap();
+    catalog
+}
+
+/// Deux origines, une version : l'état et les mutations restent propres aux liens.
+#[test]
+#[ignore]
+fn versions_immuables_partagees_et_references_independantes() {
+    let mut catalog = catalogue_versions();
+    let a = catalog.create("Ticket", BTreeMap::from([("subject".into(), s("a")), ("body".into(), s("corps partagé"))])).unwrap();
+    let b = catalog.create("Ticket", BTreeMap::from([("subject".into(), s("b")), ("body".into(), s("corps partagé"))])).unwrap();
+    let drained = catalog.drain();
+    assert_eq!(drained.failed, 0, "{:?}", drained.warnings);
+    assert_eq!(compte(&catalog, "MATCH (v:Version) RETURN count(v)"), 1);
+    assert_eq!(compte(&catalog, "MATCH (c:Version_Chunk) RETURN count(c)"), 1);
+    let refs = catalog.execute_raw("MATCH (v:Version)-[r:Version_DERIVED_FROM]->(t:Ticket) RETURN t.subject, v._uuid, r._render_hash ORDER BY t.subject").unwrap();
+    assert_eq!(refs.rows.len(), 2);
+    assert_eq!(refs.rows[0][1], refs.rows[1][1]);
+    assert_ne!(refs.rows[0][2], refs.rows[1][2], "l'état dépend de chaque racine");
+    let shared = refs.rows[0][1].as_str().unwrap().to_string();
+    let b_hash = refs.rows[1][2].clone();
+
+    catalog.update("Ticket", &a.uuid().unwrap(), BTreeMap::from([("body".into(), s("autre corps"))])).unwrap();
+    let drained = catalog.drain();
+    assert_eq!(drained.failed, 0, "{:?}", drained.warnings);
+    assert_eq!(compte(&catalog, "MATCH (v:Version) RETURN count(v)"), 2);
+    let refs = catalog.execute_raw("MATCH (v:Version)-[r:Version_DERIVED_FROM]->(t:Ticket) RETURN t.subject, v._uuid, r._render_hash ORDER BY t.subject").unwrap();
+    assert_eq!(refs.rows.len(), 2, "une référence remplacée, pas ajoutée");
+    assert_ne!(refs.rows[0][1], refs.rows[1][1]);
+    assert_eq!(refs.rows[1][1].as_str(), Some(shared.as_str()));
+    assert_eq!(refs.rows[1][2], b_hash);
+    let old = catalog.execute_raw("MATCH (v:Version) WHERE v.content = 'corps partagé' RETURN v._uuid").unwrap();
+    assert_eq!(old.rows[0][0].as_str(), Some(shared.as_str()), "la version n'a pas été réécrite");
+
+    // Revenir au contenu précédent réutilise sa version et ses chunks.
+    catalog.update("Ticket", &a.uuid().unwrap(), BTreeMap::from([("body".into(), s("corps partagé"))])).unwrap();
+    assert_eq!(catalog.drain().failed, 0);
+    assert_eq!(compte(&catalog, "MATCH (v:Version) RETURN count(v)"), 2);
+    assert_eq!(compte(&catalog, "MATCH (c:Version_Chunk) RETURN count(c)"), 2);
+    assert_eq!(compte(&catalog, "MATCH (v:Version {content: 'corps partagé'})-[:Version_DERIVED_FROM]->(t:Ticket) RETURN count(t)"), 2);
+    catalog.delete("Ticket", &a.uuid().unwrap()).unwrap();
+    assert_eq!(catalog.drain().failed, 0);
+    assert_eq!(compte(&catalog, "MATCH (v:Version) RETURN count(v)"), 2, "rétention des versions indépendante des origines");
+    assert_eq!(compte(&catalog, "MATCH (v:Version)-[:Version_DERIVED_FROM]->(t:Ticket) RETURN count(t)"), 1);
+    assert_eq!(catalog.rendre_le_retard(None, 100, false).unwrap(), 0);
+    assert!(b.uuid().is_ok());
+}
+
+
+#[test]
+#[ignore]
+fn remplacement_de_reference_annule_sur_echec_et_preserve_les_origines() {
+    let mut catalog = catalogue_versions();
+    let a = catalog.create("Ticket", BTreeMap::from([("subject".into(), s("a")), ("body".into(), s("corps partagé"))])).unwrap();
+    catalog.create("Ticket", BTreeMap::from([("subject".into(), s("b")), ("body".into(), s("corps partagé"))])).unwrap();
+    assert_eq!(catalog.drain().failed, 0);
+    let query = "MATCH (v:Version)-[r:Version_DERIVED_FROM]->(t:Ticket) RETURN t.subject, t.body, v._uuid, r._render_hash ORDER BY t.subject";
+    let before = catalog.execute_raw(query).unwrap().rows;
+    let id = before[0][2].as_str().unwrap();
+    assert!(catalog.update("Version", id, BTreeMap::from([("content".into(), s("écrasé"))])).is_err());
+    assert!(catalog.delete("Version", id).is_err());
+    assert!(catalog.create("Version", BTreeMap::from([("content".into(), s("injecté"))])).is_err());
+    assert!(catalog.ingest_entities("Version", vec![BTreeMap::from([("content".into(), s("injecté"))])]).is_err());
+    catalog.update("Ticket", &a.uuid().unwrap(), BTreeMap::from([("body".into(), s("mutation refusée"))])).unwrap();
+    catalog.injecter_faute_de_lien("Version_DERIVED_FROM", 1);
+    let result = catalog.drain();
+    assert!(result.failed > 0, "la faute doit remonter");
+    assert_eq!(result.processed, 0, "un lot annulé ne compte aucune écriture validée");
+    assert_eq!(catalog.execute_raw(query).unwrap().rows, before, "racines, version ET état des liens conservés");
+    assert_eq!(compte(&catalog, "MATCH (v:Version) RETURN count(v)"), 1);
+    assert_eq!(compte(&catalog, "MATCH (c:Version_Chunk) RETURN count(c)"), 1);
+    assert_eq!(catalog.rendre_le_retard(None, 100, false).unwrap(), 0);
 }

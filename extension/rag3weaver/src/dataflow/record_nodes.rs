@@ -1373,7 +1373,10 @@ impl Node for LinkRecordNode {
             // arêtes en 47 ms au lieu de 158 s (6 septembre 2026). La
             // sémantique de MERGE est gardée : dédoublonnage dans le lot, et
             // les paires déjà posées écartées quand la table n'est pas vide.
-            if indices.len() >= copy_seuil(ctx) {
+            // L'état d'une référence doit aussi être mis à jour sur les paires
+            // existantes ; le COPY écarte ces paires, le MERGE les met à jour.
+            let reference_state = prop_keys.iter().any(|p| p == crate::config::DerivedConfig::RENDER_HASH);
+            if indices.len() >= copy_seuil(ctx) && !reference_state {
                 if let Some((from, to)) = ends.as_ref() {
                     match copier_les_liens(ctx, conn.as_ref(), dialect.as_ref(), rel_name, (from, to), prop_keys, indices, &resolved, &items, &mut presents_connus) {
                         Ok(Some(ecrites_ici)) => {
