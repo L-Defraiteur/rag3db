@@ -88,3 +88,24 @@ be319fa75 (archi, commandes en attente sur la carte, famille de commandes corrig
 2. Faire poser le binaire de la tête de master (optimiseur), une seule coupure.
 3. Remettre la file à l'agent suivant : d'abord ED (réclamations, CI), puis recherche
    (arret-du-backend), puis archi (ide-par-le-flux).
+
+## 16 h 32 — la passation, ce qui est atterri
+
+- `docs/README.md`, `docs/orchestration/{11-11-2026,visions,news}` : 45c7c9640 (c7).
+- Le script des tickets lit `docs/*/tickets/` : f154356ea (hotfixs) ; « déplace » donné aux treize sessions.
+- Rapports et knowledge dumps poussés : archi 25d0d5b8c + e34e3bbc3 (Reprendre : wt-flux, ide-par-le-flux
+  a9c5a3108, passe tuée code 137) ; banc 1869ac9d7 (llama.cpp : choix (1)/(2) à Lucie) ; mémoire 72c1f2a77
+  (Reprendre : wt-mf-96 lot-96-requete-refusee 42ac0bb9c + stash, rag3db-p1r-96 à luciepc, l'archivage à
+  blanc ; le lot du refus 4xx vert non poussé, « à toi » donné) ; tty f6aa472c6 + c2fd6048e (rien
+  d'inachevé) ; optimiseur 9fe9663af (+ 17 scripts sous docs/optimiseur/scripts/) ; arbre principal
+  6661b9984 (Reprendre : wt-deplace, mesures M3 à M5 ; le sous-module codeparsers de l'arbre de Lucie
+  extrait à 672a0d5 pour un pointeur c660893 : `git submodule update` par elle) ; recherche 3fb0caa46
+  (arret-du-backend-7 a0ea9dc95 : passe ordinaire et second e2e entier verts, un rouge de résidus à
+  trancher — trois CSV de COPY d'un processus tué ; journal des runs et Surveillant non commencés) ;
+  lucivy ccfcd96b1 (la version publiée est la 4.3.2 du 7 novembre ; #22 et #23 au mot de Lucie) ;
+  cœur 5b59d923f (le témoin de l'annulation sous pool plein poussé non joué, annulation-sous-pool-plein
+  6e7f11680) ; codeparsers 1d111891b (un commit de l'oracle retrouvé et poussé, 280b5a3f1) ;
+  everything declarative c5c64edcd (**le correctif des réclamations, reclamations-rendues 9da8e4433,
+  n'a jamais été compilé ni joué** : premier lot pour Codex).
+- Tickets déplacés : archi 7ca48077d (4), optimiseur 50a37c80b (1) ; les autres en cours.
+- En attente : embarquement (rapport), hotfixs (B et C), les déplacements restants.
