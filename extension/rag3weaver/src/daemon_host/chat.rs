@@ -285,7 +285,7 @@ impl DaemonHost {
         // Instantané avant la liste durable : un transfert en cours termine
         // sous le verrou du journal ; un transfert ultérieur figure dans les
         // deux sources, mais un run ne contribue qu'une fois.
-        let en_attente = self.journal.ajouts_en_attente(backend_id);
+        let en_attente = self.journal.resumes_en_attente(backend_id);
         let runs = self.journal.runs_de(backend_id);
         let mut usages = std::collections::HashMap::new();
         for r in runs.iter().rev().filter(|r| r.starts_with("agent-")).take(RUNS_DU_CHAT) {
@@ -293,10 +293,10 @@ impl DaemonHost {
                 usages.insert(r.clone(), u);
             }
         }
-        for (run, ajouts) in en_attente {
-            if run.starts_with("agent-") && ajouts.get("chat") == Some(&json!(backend_id)) {
+        for (run, ajouts) in &en_attente {
+            if run.starts_with("agent-") && ajouts["chat"] == backend_id {
                 if let Some(u) = ajouts.get("usage_du_chat").filter(|u| u.is_object()) {
-                    usages.insert(run, u.clone());
+                    usages.insert(run.clone(), u.clone());
                 }
             }
         }
@@ -320,13 +320,18 @@ impl DaemonHost {
             }
             tours += 1;
         }
-        let mut taches = Vec::new();
+        let mut taches: Vec<_> = en_attente.iter().filter(|(run, v)| run.starts_with("graph-") && !v["fin"].is_null())
+            .filter_map(|(run, v)| tache_a_role(run, v)).collect();
+        taches.sort_by_key(|t| std::cmp::Reverse(t["at_ms"].as_u64().unwrap_or(0)));
+        taches.truncate(TACHES);
         for r in runs.iter().rev().filter(|r| r.starts_with("graph-")).take(GRAPHES_LUS) {
             if taches.len() >= TACHES {
                 break;
             }
-            if let Some(t) = self.resume_du_run(backend_id, r, |v| tache_a_role(r, v)) {
-                taches.push(t);
+            if !taches.iter().any(|t| t["run"] == r.as_str()) {
+                if let Some(t) = self.resume_du_run(backend_id, r, |v| tache_a_role(r, v)) {
+                    taches.push(t);
+                }
             }
         }
         // `lus_max` : la borne des tours lus ; la page dit « récents », la
