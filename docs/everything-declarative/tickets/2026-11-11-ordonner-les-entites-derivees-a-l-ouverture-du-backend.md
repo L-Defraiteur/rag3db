@@ -125,3 +125,19 @@ et propriétés ; ordre de montage existant File/Scope/Library/Symbol puis RELAT
 conservé. Faits Scope (chunking, hashsafe) préservés, aucune pseudo-configuration
 construite dans Backend. SHA de livraison attendu avant compilation combinée.
 Ce sous-travail reprend ce même ticket, sans doublon ni clôture par transfert.
+
+Fournisseur livré par arbre `c12f840b4`, repris en `820bfc0ee` (code.rs seul,
+aucune source1a) ; test propre du fournisseur ajouté mais pas encore compilé.
+Composition Backend : faits réels explicites/fournis, validation commune avantDB,
+définitions identiques coalescées, conflits d'entités nommés. Relations : mêmes
+extrémités et union additive de propriétés compatibles, conflit de même champ
+ou d'extrémités refusé ; None et carte vide équivalents. Choix validé par
+orchestration, overlay workspace.index_signals conservé. Nouveaux témoins de
+coalescence, propriétés/propriétés incompatibles et compteur zéroappelDB prêts.
+Deux cas Catalog additif/conflit d'extrémités compareront la baseline existante.
+
+Correction de fixture avant le vert nommé : `HAS_SCOPE` n'est pas une relation
+du fournisseur. La vraie relation est `DEFINED_IN` (Scope→File, direction out,
+champ path). L'ancien troisième rouge, arrêté avant gather par hashsafe/racine,
+prouvait seulement le verrou amont ; aucune validité de cette ancienne règle
+n'est revendiquée. Le cas corrigé sera rejoué sur baseline et candidat.
