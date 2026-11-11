@@ -1245,6 +1245,12 @@ pub trait SchemaDialect: Send + Sync {
     /// contains filter expression.
     fn filter_contains(&self, prop: &str, param: &str) -> String;
 
+    /// Scalar membership in the parameter array, whose type must match the field.
+    fn filter_in(&self, prop: &str, param: &str) -> String {
+        if !self.capabilities().cypher { return self.untranslated("filter_in"); }
+        format!("{prop} IN ${param}")
+    }
+
     /// Optional scalar membership lowering for engines whose projected graphs cannot bind lambdas.
     fn filter_list_scalar_contains(&self, _prop: &str, _param: &str) -> Option<String> { None }
 
@@ -1371,7 +1377,7 @@ fn postgres_condition_sur(d: &PostgresDialect, p: &rag3weaver_ir::Predicate, a: 
         Predicate::AtLeast { field, param } => format!("{a}.{} >= ${param}", d.quote(field)),
         Predicate::AnyOf(v) => format!("({})", v.iter().map(|q| postgres_condition_sur(d, q, a, n)).collect::<Vec<_>>().join(" OR ")),
         Predicate::AllOf(v) => format!("({})", v.iter().map(|q| postgres_condition_sur(d, q, a, n)).collect::<Vec<_>>().join(" AND ")),
-        Predicate::In { field, param } => format!("{a}.{} = ANY(${param})", d.quote(field)),
+        Predicate::In { field, param } => d.filter_in(&format!("{a}.{}", d.quote(field)), param),
         // Jamais `LIKE` : un `%` ou un `_` d'un chemin y serait un joker.
         Predicate::StartsWith { field, param } => format!("left({a}.{}, length(${param})) = ${param}", d.quote(field)),
         Predicate::Through { relation, direction, end, filter } => {
@@ -1458,7 +1464,7 @@ fn postgres_condition_sur_uuid(p: &rag3weaver_ir::Predicate, colonne: &str) -> O
     };
     match p {
         Predicate::Equals { field, param } if field == "_uuid" => Some(format!("{colonne} = ${param}")),
-        Predicate::In { field, param } if field == "_uuid" => Some(format!("{colonne} = ANY(${param})")),
+        Predicate::In { field, param } if field == "_uuid" => Some(PostgresDialect.filter_in(colonne, param)),
         Predicate::AnyOf(v) => membres(v, " OR "),
         Predicate::AllOf(v) => membres(v, " AND "),
         _ => None,
@@ -1483,7 +1489,7 @@ fn rag3db_condition_sur(p: &rag3weaver_ir::Predicate, a: &str, n: &mut usize) ->
         Predicate::AnyOf(v) => v.iter().map(|q| rag3db_condition_sur(q, a, n)).collect::<Vec<_>>().join(" OR "),
         // Chaque membre entre parenthèses : un `AnyOf` dedans garde son sens.
         Predicate::AllOf(v) => v.iter().map(|q| format!("({})", rag3db_condition_sur(q, a, n))).collect::<Vec<_>>().join(" AND "),
-        Predicate::In { field, param } => format!("{a}.{} IN ${param}", cypher_quote(field)),
+        Predicate::In { field, param } => Rag3dbDialect.filter_in(&format!("{a}.{}", cypher_quote(field)), param),
         Predicate::StartsWith { field, param } => format!("{a}.{} STARTS WITH ${param}", cypher_quote(field)),
         Predicate::Through { relation, direction, end, filter } => {
             *n += 1;
@@ -3902,6 +3908,10 @@ impl SchemaDialect for PostgresDialect {
 
     fn filter_contains(&self, prop: &str, param: &str) -> String {
         format!("{prop} LIKE '%' || ${param} || '%'")
+    }
+
+    fn filter_in(&self, prop: &str, param: &str) -> String {
+        format!("{prop} = ANY(${param})")
     }
 
     fn filter_list_any_match(&self, prop: &str, param: &str) -> String {
