@@ -40,7 +40,8 @@ def main():
     def event(kind, **details):
         with args.journal.open('a') as f:
             f.write(json.dumps(dict(event=kind, monotonic_ns=time.monotonic_ns(), pid=os.getpid(),
-                                    pgrp=os.getpgrp(), session=os.getsid(0), **details)) + '\n')
+                                    pgrp=os.getpgrp(), session=os.getsid(0),
+                                    starttime=int(Path('/proc/self/stat').read_text().rsplit(')', 1)[1].split()[19]), **details)) + '\n')
     try:
         declaration = {key: os.environ.get(key) for key in (
             'RAG3WEAVER_ACTIVATION_PROFIL', 'RAG3WEAVER_ACTIVATION_PERIPHERIQUE', 'RAG3WEAVER_ACTIVATION_IDENTITE')}
