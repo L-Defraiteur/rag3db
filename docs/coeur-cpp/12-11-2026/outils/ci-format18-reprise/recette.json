@@ -1,0 +1,19 @@
+{
+  "status": "PROPOSITION NON EXECUTEE — revue C7 requise",
+  "source_commit": "74ad9c25cd2a63e01abd54f25314992cda6fea60",
+  "consumed_services_s": 893.8,
+  "cumulative_envelope_s": 2400,
+  "remaining_s": 1506.2,
+  "runtime_max_s": 1480,
+  "stop_s": 10,
+  "unit_max_including_stop_s": 1490,
+  "controller_s": 1470,
+  "suite_max_s": 1440,
+  "maximum_cumulative_s": 2383.8,
+  "parallelism": "aucune compilation ; fixture vector4 fils inchangé",
+  "resources": "poste lourd après BancMESURE et GO ; aucune réservation à la préparation",
+  "files": {
+    "controleur.py": "5b1d721a320a5cfbcf1d3774a761825db9e17357d87ca31e6e63e84d3ad53645",
+    "lancer.sh": "6a64a424f99cab2129e8b5c23650042246255a831adeb055e771e7d2ea2d28bb"
+  }
+}
