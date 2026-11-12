@@ -1,6 +1,6 @@
 # Les témoins de lecture imposent le nom du dossier des journaux
 
-- **État** : ouvert le 12 novembre 2026 ; porteur recherche, signalé par ED.
+- **État** : ouvert ; fixture aa58d1697 validée le12novembre2026 : helpers3/0/0 et lectures27/0/0 ; revue des preuves et intégration restantes, porteur recherche.
 - **Pour** : recherche, fixtures e2e_lectures ; aucun correctif de fixture dans le lot des accords.
 - **Famille** : produit
 - **Gravité** : coût ; une isolation valide des journaux fait échouer la passe avant les lectures.
@@ -58,3 +58,17 @@ Compilation rc0 en4min52s ; helpers **3 réussis,0 échec,0 ignoré,857 filtrés
 Preuves brutes deux postes : `~/.cache/rag3weaver-build/journaux-cx-recherche-lectures-12nov/` : source.json, argv.json, compilation.log, helpers.log, resume.log, verdict-prefixe.log (rouge conservé), cgroup-prefixe.json, arret-attestation-autonome.json, attestation-autonome-v2.log, attestation-binaire-corrigee.json, identite-native-corrigee.txt, verdict-attestation-corrigee.log, quiescence-prefixe.json. Les compteurs et verdicts d’outillage restent séparés.
 
 M8 a confirmé ses8suites100/0/0 terminées et la quiescence de son usage7879. Le ciblé **27** (24 existants + 3 helpers) attend la coordination ED/C7, avec contrôle /sante réel, poste lourd effectif, BUILD_MEMORY_HIGH=0 pour éviter un scope frère hors MemoryMax extérieur, et vérification des cgroups enfants. Racine privée avec espace `racine arbitraire`, sans segment commandes. Aucun master avant revue, ED/M8 prioritaires pour l’intégration ; ticket toujours ouvert.
+
+## Ciblé de lecture terminé — verdict soumis à revue
+
+Après confirmation explicite C7 de la fenêtre ED/M8 (M8 terminé, ED libre/non lancé ; ordre recherche27 puis ED2), /sante7879 réellement relue : service rag3weaver-embeddings, modèle bge-m3, dim1024, sparse/dual vrais, factice faux. Le service existant n’a été ni démarré, ni arrêté, ni modifié par recherche.
+
+Source distante toujours figéeaa58d16979f20c00bdcff060f49524697c72a8df et ELF729f0d114c65c867e44089219ab4b48e7e44776b327279d41ed99312ad94da1a inchangé avant/après. Lancement wrapper2687989 sous vrai poste lourd, marker seulement dans cette portée, MemoryMax32G et BUILD_MEMORY_HIGH=0. Les cgroups enfants observés restent dans la portée bornée ; argv/env/ascendance conservés. Compilation/tests du préfixe n’ont pas été rejoués pour corriger l’outillage.
+
+Un appel `run_e2e.sh --test e2e_lectures`, borne120s : **27 réussis,0 échec,0 ignoré en9,46s**, soit24 existants +3 helpers, sans filtre/skip ajouté. Les2filets préalables sont verts. Racine réelle privée `~/.cache/rag3weaver-build/journaux-cx-recherche-lectures-12nov/racine arbitraire`, avec espace et sans segment commandes : les journaux `.out` sous index y sont recensés dans preuves-racine.json. Toutes les attentes de fin/échec d’indexation et assertions de lecture/recherche existantes sont conservées et jouées.
+
+Fin vers15:59:20 CET, avant échéance globale16:18:55, sans extension de budget. Vérification /proc exe target97k ou cwd worktree : **liste vide** dans quiescence-lectures.json ; santé7879après relue OK. Fin et disponibilité du service annoncées directement ED/M8/C7 ; aucun autre usage recherche prévu. Aucun nouveau modèle, GPU ou service déployé, aucun e2e entier, aucune CI relancée.
+
+Preuves ajoutées aux journaux sur les deux postes : sante-7879-avant/apres.json, lancement-lectures.log, argv-env-lectures.json, cgroup-enfants-lectures.json, lectures.log, e2e-complet.log, preuves-racine.json, verdict-lectures.log et quiescence-lectures.json. Le rouge d’attestation initial reste conservé et attribué à l’outil ; compilation, helpers, attestation corrigée et ciblé ont chacun leur résultat distinct.
+
+Diff et preuves transmis à orchestration pour revue avant toute globale/master. ED/M8 gardent priorité à l’intégration ; aucun Rust poussé sur master pendant leurs globales. Ticket ouvert, worktrees et target97k privés conservés avec remotes et journaux, sans nettoyage d’un autre lot.
