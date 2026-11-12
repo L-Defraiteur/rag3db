@@ -257,7 +257,10 @@ impl Serveur {
     /// C'est l'unique verbe : l'appelant n'a pas à savoir qui, du démon
     /// précédent ou de lui-même, a payé le chargement.
     pub fn assurer(&self) -> Result<Attache, ServeurError> {
-        self.assurer_avant(Instant::now() + self.attente)
+        let echeance = Instant::now().checked_add(self.attente).ok_or_else(|| ServeurError::Lancement {
+            nom: self.nom.clone(), cause: "budget d'activation non représentable".into(),
+        })?;
+        self.assurer_avant(echeance)
     }
 
     pub(crate) fn assurer_avant(&self, echeance: Instant) -> Result<Attache, ServeurError> {
