@@ -741,3 +741,9 @@ Include Thrift ancien absent aussi en référence, zéro hit dans4145 dépendanc
 référence existantes ; résolution candidate non testée. build_id.h non généré,
 cible volontairement non exécutée. Cache/compile_commands/3listes Ninja/proofs
 exportés. Build1800 et runtime1200 toujours non autorisés, ticket ouvert.
+
+Avant build : métadonnées numériques précisées (override numérique absent, entrée
+brute OFF conservée, valeurs effectives header12/11/17/18). Archive ignorée dans
+ac5c5bd96 mais explicitement ajoutée/poussée12ec21147 ; copie stable hors worktree
+à luciepc attestée dans doc16. Autorisation distincte du build privé reçue,
+scénario toujours non autorisé.

@@ -126,3 +126,17 @@ Emplacement distant conservé :
 `~/.cache/rag3db-moteur-notes/annulation/cx-config-saturation-12nov-02/` ; première
 tentative voisine `...-01/`. Aucun droit de build ou runtime n'est inféré de ce
 résultat de préflight. Le ticket reste ouvert ; sûreté0511 et coût restent distincts.
+
+## Précisions de métadonnées avant build
+
+Les quatre overrides numériques n'ont pas de valeur numérique active dans le
+cache : la représentation brute OFF n'est ni une taille ni une valeur log2.
+La comparaison normalisée distingue maintenant entrée brute, override numérique
+absent et valeur effective dans system_config.h : 12/11/17/18. Les caches bruts
+dans l'archive restent inchangés.
+
+L'archive .tar.gz était ignorée lors du premier commit ac5c5bd96 ; elle a été
+ajoutée explicitement et poussée dans **12ec21147**. Elle existe aussi hors
+worktree à luciepc :
+`~/.cache/rag3db-moteur-notes/annulation/cx-config-saturation-12nov-preuves.tar.gz`,
+même SHA9d69da01…, stockage stable après fin des namespaces.

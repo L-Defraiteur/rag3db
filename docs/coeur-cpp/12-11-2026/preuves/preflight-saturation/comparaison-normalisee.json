@@ -99,28 +99,48 @@
       "semantic_equal": true
     },
     "RAG3DB_PAGE_SIZE_LOG2": {
-      "reference": "OFF",
-      "candidate": "OFF",
-      "equal": true,
-      "semantic_equal": true
+      "reference_raw_cache_entry": "OFF",
+      "candidate_raw_cache_entry": "OFF",
+      "reference_numeric_override": null,
+      "candidate_numeric_override": null,
+      "numeric_cache_value": "absent/inactive override; OFF is not a numeric page/vector/group/segment size",
+      "reference_effective_header_log2": 12,
+      "candidate_effective_header_log2": 12,
+      "semantic_equal": true,
+      "effective_value_source": "byte-identical generated system_config.h"
     },
     "RAG3DB_VECTOR_CAPACITY_LOG2": {
-      "reference": "OFF",
-      "candidate": "OFF",
-      "equal": true,
-      "semantic_equal": true
+      "reference_raw_cache_entry": "OFF",
+      "candidate_raw_cache_entry": "OFF",
+      "reference_numeric_override": null,
+      "candidate_numeric_override": null,
+      "numeric_cache_value": "absent/inactive override; OFF is not a numeric page/vector/group/segment size",
+      "reference_effective_header_log2": 11,
+      "candidate_effective_header_log2": 11,
+      "semantic_equal": true,
+      "effective_value_source": "byte-identical generated system_config.h"
     },
     "RAG3DB_NODE_GROUP_SIZE_LOG2": {
-      "reference": "OFF",
-      "candidate": "OFF",
-      "equal": true,
-      "semantic_equal": true
+      "reference_raw_cache_entry": "OFF",
+      "candidate_raw_cache_entry": "OFF",
+      "reference_numeric_override": null,
+      "candidate_numeric_override": null,
+      "numeric_cache_value": "absent/inactive override; OFF is not a numeric page/vector/group/segment size",
+      "reference_effective_header_log2": 17,
+      "candidate_effective_header_log2": 17,
+      "semantic_equal": true,
+      "effective_value_source": "byte-identical generated system_config.h"
     },
     "RAG3DB_MAX_SEGMENT_SIZE_LOG2": {
-      "reference": "OFF",
-      "candidate": "OFF",
-      "equal": true,
-      "semantic_equal": true
+      "reference_raw_cache_entry": "OFF",
+      "candidate_raw_cache_entry": "OFF",
+      "reference_numeric_override": null,
+      "candidate_numeric_override": null,
+      "numeric_cache_value": "absent/inactive override; OFF is not a numeric page/vector/group/segment size",
+      "reference_effective_header_log2": 18,
+      "candidate_effective_header_log2": 18,
+      "semantic_equal": true,
+      "effective_value_source": "byte-identical generated system_config.h"
     }
   },
   "effective_system_config_equal": true,
