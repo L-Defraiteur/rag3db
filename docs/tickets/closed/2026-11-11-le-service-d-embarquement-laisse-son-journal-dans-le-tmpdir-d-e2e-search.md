@@ -1,6 +1,6 @@
 # Le service d'embarquement laisse son journal dans le TMPDIR d'e2e_search
 
-- **État** : corrigé `18ea54b78`, validation complète `43b57eb78` verte ; tour de push explicite reçu le 12 novembre après lecture des preuves par orchestration.
+- **État** : corrigé et livré sur master `375ca1b96c9cb4e71df03a30fc3209cf06883652` ; source validée43b57eb78, tour explicite reçu, trois contrôles et nettoyage achevés aux deux postes.
 - **Famille** : produit
 - **Gravité** : la suite réussit ses assertions mais sa garde de résidus refuse la passe.
 - **Atteignable en service** : non établi ; lancement et nettoyage d'une passe de tests.
@@ -184,3 +184,11 @@ Le ticket reste ouvert : recevoir le tour, relire master et décider du rebase/r
 Orchestration a relu les sorties brutes et les220assets, vérifié le delta documents seuls depuis43b et accordé explicitement « à toi ». Clôture et gitmv vers closed dans ce même commit de fin, aucun octet de source testé modifié. Les garanties de propriété/quiescence/conservation restent le mécanisme cible ; aucun filet temporaire ni exemption à retirer. Les commentaires source citent le chemin historique d'ouverture du présent ticket, retrouvable par son nom et git log --follow ; ils restent inchangés pour préserver exactement les octets validés. Le blocage d'envoi intersessions décrit plus haut est historique : réception du tour confirmée malgré l'absence de fonction d'envoi dans cette session.
 
 Push et nettoyage selon procédure, preuves à consigner dans `journaux-cx-recherche-journal-12nov/pousse.log` puis le rapport d'atterrissage. Aucun code nouveau ou refus de garde ne doit être contourné. Les rapports historiques d'attente ci-dessus sont conservés comme historique.
+
+## Atterrissage effectif et nettoyage
+
+Master375ca1b96c9cb4e71df03a30fc3209cf06883652, dernier fetch relu, masterc693 sans code nouveau ; aucun rebase ni source modifiée après passe. Trois contrôles lus surPC et portable : propre, sans rebase, origin/master=HEAD. Le statut de la passe locale reste distinct de la CI : ancien rouge annoncé par poste avant push ; nouveau run rag3weaver43174418798 encore en cours à sa lecture.
+
+Sur chaque poste, archive fidèle des administrations supprimables (racine worktree couvrant le sous-module codeparsers), inventaire des worktrees liés, helper exact65aa01328 et rapport neuf VERT, puis retrait immédiat sous quiescence. Aucun refus forcé. Fichiers ignorés de preuve distants préservés hors cible avant garde. Worktrees/branches locales du lot retirés et target97k distant supprimé (local absent). Remotes et archives conservés. Source des rapports : journaux-cx-recherche-journal-12nov/pousse.log et nettoyage-{remote,local}/garde.json.
+
+PG : seule cx_recherche_journal_20261112 supprimée après dump conservé, SHA vérifié, propriété/commentaire concordants et zéro session ; jamais rag3weaver_test ni autre base. Données et preuves sont conservées hors cible aux deux postes. Aucune réalisation ni validation supplémentaire ne reste dans le périmètre de ce ticket ; les mentions d'attente antérieures sont historiques.
