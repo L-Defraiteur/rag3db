@@ -1,5 +1,15 @@
 # Session « recherche » : rapport de reprise (11 novembre 2026)
 
+## Travail courant (12 novembre) : montage du témoin close FTS
+
+Ticket unique ouvert `docs/recherche/tickets/2026-11-12-le-temoin-de-fermeture-fts-echoue-avant-l-appel-a-close.md`, recherche, créé par orchestration avant transmission. Worktree/branche `cx-recherche-fts-close-deterministe` depuis898c9e0dc ; patch témoin `5a83eee91`. Diagnostic du rouge CI080 confirmé : ENOTEMPTY à la suppression récursive avant close ; aucune nouvelle causalité1a ni régression du close produit établie.
+
+Montage proposé : adaptateur local de ShardStorage public sur RamShardStorage ; préparation normale, puis armement atomique d'un refus de persistance de racine. Close doit atteindre l'erreur distinctive, compteur positif, puis refus « closed », Drop et sortie enfant bornée20s sont conservés. Aucun retrait de dossier concurrent ni patch Lucivy, aucune assertion supprimée. Diff et parsing rustfmt seuls vérifiés ; **compilation et tests natifs non joués**.
+
+Plan fermé détaillé dans le même ticket, à relire avant tout lourd : jeu CI natif/code/daemon/openai-llm, un témoin exact puis module FTS puis lib avec les deux filtres déjà présents en CI, global2400s, j8/mem32/target97k unique32Go/lib29a7, arrêt au premier rouge ; aucun modèle/service/GPU/DB ni CI rerun. Après ce préfixe, nouvelle revue de la passe finale requise, pas de matrice/e2e automatiquement ajoutés.
+
+**Coordination : aucun créneau CPU réservé ni Cargo lancé par recherche à cette étape.** Les demandes arbre1b/coeur C++ reçues ne rencontrent donc aucun build recherche actif ; orchestration arbitre leurs créneaux. L'envoi intersessions reste absent de l'inventaire, aucune réponse envoyée n'est revendiquée. Plan+témoin publiés sur la branche pour revue ; aucun tour master demandé/reçu pour ce nouveau ticket.
+
 ## Lot journal d'embarquement livré le 12 novembre
 
 **Master `375ca1b96c9cb4e71df03a30fc3209cf06883652`**, au tour explicite d'orchestration, sans rebase nécessaire (masterc693 inchangé), source testée43b57eb78, seuls documents ajoutés ensuite. Ticket clôturé par gitmv+État dans le même commit : `docs/tickets/closed/2026-11-11-le-service-d-embarquement-laisse-son-journal-dans-le-tmpdir-d-e2e-search.md`. Aucun autre lot activé.
