@@ -259,3 +259,31 @@ activation (ancien installé inadapté), consommateur compilé sur la même sour
 contrôleur et entrée privée figés, revue du plan et fenêtre comparative.
 Embarquement prépare le binaire et sa passe ; aucune mesure ni charge GPU
 n’a été effectuée par cette préparation.
+
+## Entrée privée et dépendance de bâti, après qualification CPU
+
+Entrée de banc f5ef92d46 : `tests/fixtures/residence/activation_privee.py`
+et ses quatre filets CPU, aucun runtime remplacé. Elle reçoit `--adresse` du
+vrai gestionnaire, vérifie modèle/périphérique et empreintes des artefacts,
+attend un signal JSON délibéré du scénario puis `exec` le nouveau fournisseur.
+Le PID, le groupe et l’attestation d’activation sont conservés ; elle ne crée
+ni verrou de résidence ni politique d’éviction parallèles.
+
+Douze filets Python CPU passent désormais : huit de fournisseur et quatre
+d’entrée privée (barrière avant exec, même PID/groupe après exec, artefact
+modifié refusé, signal invalide et deadline avant exec). Les processus de
+ces tests sont des fixtures explicitement factices, pas des charges de poids.
+
+Source propriétaire annoncée 356d7d927 inclut le consommateur 678c5e678 et le
+filet compact. Embarquement atteste une requalification CPU conforme
+rw5c889b : 16 +5 +1 verts, zéro ignoré. Sa passe commune est bornée à 7 200 s,
+32G/j8/target32Go : cinq jeux de features verts à l’état reçu, lib large en cours.
+Pas de nouveau service ou GPU lancé par Banc dans cette attente.
+
+Embarquement fournira copies immuables et SHA/source/ldd hors target dans
+`~/.cache/embarquement-notes/activation/bin-356d7d927/`, fournisseur et
+consommateur, après bâti et fin de portée. Le chemin debug du target seul
+n’est pas une provenance suffisante pour une mesure qui survivrait à un rebase
+ou rebâti. L’ancienne installation reste exclue de cette qualification.
+Le contrôleur final, les empreintes de ces exécutables et la fenêtre MESURE
+seront figés avant le réel ; le ticket de résidence reste ouvert.
