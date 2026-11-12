@@ -721,3 +721,18 @@ leurs tests ; extraction record_nodes éventuelle à soumettre avant modificatio
 ED garde sa correction d'accord ; orchestration tient la revue commune. Budget
 proposé ciblé600s/j8/Mem32/target32 après revue, aucun lourd réservé ou lancé.
 Ticket reste ouvert ; aucun transfert/apply/publication/migration réelle autorisé.
+
+### Premier diff pur autorisé, avant ciblé
+
+Autorisation C7 après revue21d09 : migrations/transfer.rs, déclaration et tests
+uniquement ; aperçu sansDB/modèle/écriture. Nuance fixée : identité étrangère
+comparée à un attendu explicite, absent du plan actuel ; déclaration d'inventaire
+ne devient pas preuve de stockage. Quatorze tests métier écrits, pas un rouge
+fondé sur l'absence d'API. Aucun test exécuté à cette étape.
+
+Prévision du ciblé : scripts/cargo_magasin.sh test --no-default-features --lib
+-j8 dataflow::migrations::transfer::tests:: -- --test-threads=8. Target de session
+cx-target-contenu-derive (neuf après nettoyage du lot précédent), lib29, j8/Mem32,
+borne600s après lourd ; aucun modèle, GPU, service ou base. Source/argv publiés
+avant lancement ; premier échec diagnostiqué, aucun retry inchangé. Diff partagé
+avant passe complète ou master. Fichiers communs à ED inchangés.

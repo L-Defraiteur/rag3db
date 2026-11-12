@@ -17,6 +17,7 @@
 //! Format: `{version}_{name}.mmd` where version is a zero-padded integer.
 
 pub mod plan;
+pub mod transfer;
 
 use std::collections::HashMap;
 use std::fmt;
