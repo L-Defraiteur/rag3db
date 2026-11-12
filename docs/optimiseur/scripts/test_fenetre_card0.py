@@ -57,6 +57,21 @@ class Fenetre(unittest.TestCase):
             with self.assertRaisesRegex(f.Refus, 'PCI changé'):
                 f.verifier(self.date(13, 1), self.racine)
 
+    def test_preparation_non_qualifiee_refuse(self):
+        with patch.object(f, 'carte'):
+            with self.assertRaisesRegex(f.Refus, 'préparation non qualifiée'):
+                f.verifier(self.date(13, 1), self.racine)
+
+    def test_source_qualifiee_et_version_differente(self):
+        script = Path(__file__).with_name('fenetre_card0.py')
+        pret = self.racine / 'pret.json'
+        pret.write_text(json.dumps({'source_sha256': f.sha_fichier(script)}))
+        with patch.object(f, 'carte'), patch.object(f, 'SCRIPT', script):
+            self.assertGreater(f.verifier(self.date(13, 1), self.racine), 0)
+            pret.write_text(json.dumps({'source_sha256': '0' * 64}))
+            with self.assertRaisesRegex(f.Refus, 'source différente'):
+                f.verifier(self.date(13, 1), self.racine)
+
     def test_unite_groupe_borne_sans_restart(self):
         c = f.commande_unite(self.recette, self.racine / 'fixture.json', 'a' * 64, 120)
         for a in ['--property=Restart=no', '--property=KillMode=control-group',

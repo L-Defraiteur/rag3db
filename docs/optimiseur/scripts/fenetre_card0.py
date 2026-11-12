@@ -60,6 +60,10 @@ def verifier(date, racine=RACINE):
     restant = budget(date)
     exiger(not (racine / 'ferme.json').exists(), 'portée définitivement fermée')
     carte()
+    pret = racine / 'pret.json'
+    exiger(pret.is_file(), 'préparation non qualifiée : entrée fermée')
+    exiger(json.loads(pret.read_text()).get('source_sha256') == sha_fichier(SCRIPT),
+           'source différente de la préparation qualifiée')
     return restant
 
 
@@ -242,10 +246,8 @@ def main():
         env['ROCR_VISIBLE_DEVICES'] = '1'
         rocminfo = subprocess.check_output(['/opt/rocm/bin/rocminfo'], env=env, text=True, timeout=10)
         placement_rocr(rocminfo)
-        restant = verifier(maintenant())
-        # Reborner à l'heure effective, même si la mise en route de l'unité a attendu.
-        subprocess.run(['systemctl', '--user', 'set-property', '--runtime', unite,
-                        'RuntimeMaxSec=' + str(restant)], check=True, timeout=5)
+        # RuntimeMaxSec est fixé à la création ; systemd refuse sa modification
+        # par set-property. Le cutoff absolu ferme aussi les départs différés.
         verifier(maintenant())  # Pas d'exec après échéance ou attente longue.
         pid = os.getpid()
         stat = (Path('/proc') / str(pid) / 'stat').read_text().rsplit(')', 1)[1].split()

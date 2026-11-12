@@ -11,9 +11,9 @@ import time
 from fenetre_card0 import Systemd, SLICE
 
 root = Path.home() / '.cache/optimiseur-notes/card0-20261113/preparation'
-unite = 'cx-card0-20261113-preuve-cpu.service'
-pidfile = root / 'enfant-cpu.pid'
-preuve = root / 'preuve-descendants.json'
+unite = 'cx-card0-20261113-preuve-cpu-v2.service'
+pidfile = root / 'enfant-cpu-v2.pid'
+preuve = root / 'preuve-descendants-v2.json'
 manager = Systemd()
 assert not pidfile.exists() and not preuve.exists(), 'preuves existantes : pas de rejeu inchangé'
 assert manager.info(unite).get('LoadState') == 'not-found', 'nom CPU déjà occupé'
@@ -25,8 +25,6 @@ subprocess.run(['systemd-run', '--user', '--service-type=exec', '--unit=' + unit
                 '--property=RuntimeMaxSec=2', '--property=TimeoutStopSec=1s',
                 '--property=ExecCondition=/usr/bin/true', '/usr/bin/python3', '-c', code],
                check=True, timeout=10)
-subprocess.run(['systemctl', '--user', 'set-property', '--runtime', unite, 'RuntimeMaxSec=2'],
-               check=True, timeout=5)
 avant = manager.info(unite)
 fin = time.monotonic() + 10
 while not pidfile.exists():
