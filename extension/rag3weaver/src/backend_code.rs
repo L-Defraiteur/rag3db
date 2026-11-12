@@ -576,6 +576,7 @@ pub fn avec_lecture_git(
     fn administration(racine: &std::path::Path) -> Option<(PathBuf, PathBuf)> {
         let racine = racine.canonicalize().ok()?;
         let marque = racine.join(".git");
+        if std::fs::symlink_metadata(&marque).ok()?.file_type().is_symlink() { return None; }
         if marque.is_dir() {
             let admin = marque.canonicalize().ok()?;
             return admin.starts_with(&racine).then(|| (admin.clone(), admin));
@@ -989,6 +990,9 @@ mod tests {
         std::fs::copy(lie.join(".git"), faux.join(".git")).unwrap();
         let ferme = crate::commande::BacASable::autour(&faux);
         assert_eq!(avec_lecture_git(ferme.clone(), &faux, &principal).lectures, ferme.lectures);
+        std::fs::remove_file(faux.join(".git")).unwrap();
+        std::os::unix::fs::symlink(lie.join(".git"), faux.join(".git")).unwrap();
+        assert_eq!(avec_lecture_git(ferme.clone(), &faux, &principal).lectures, ferme.lectures, "gitfile symbolique ne vaut pas inscription du worktree");
         let autre = d.path().join("autre");
         std::fs::create_dir(&autre).unwrap();
         git(&autre, &["init", "-q"]);
