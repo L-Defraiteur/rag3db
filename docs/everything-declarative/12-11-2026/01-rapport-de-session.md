@@ -224,3 +224,8 @@ dans le même dossier de preuves. Elle reprend uniquement liblarge900→NAV600�
 sans F5/minimal/compilation déjà verts ; source efdf inchangée et **deadline initiale
 860816.22498967 chargée depuis debut.json**, aucun reset. Tous les autres plafonds,
 arguments, exclusions et surveillances restent identiques. Logs et verdict de reprise distincts.
+
+Complément demandé par C7 : l'observateur de reprise conserve aussi les maps réelles
+des exécutables large/NAV/e2e observés, vérifie leur native29, leur empreinte source efdf
+et les220 gabarits embarqués. RUNPATH sera conservé par readelf avant reprise.
+SHA final de reprise.py, remplaçant le précédent avant toute exécution : `d599a6bee302f92d9e14a9f602f4625acdd31f0b7acff369d10a4be1fa0a4be2`.
