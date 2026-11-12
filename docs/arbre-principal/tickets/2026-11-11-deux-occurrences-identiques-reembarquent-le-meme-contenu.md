@@ -359,3 +359,11 @@ Pas de code produit avant rouge réel, pas de limitation documentaire de contour
 Premier montage P2 source62b22426e : cx-graphe-enrichissement-rouge.log échoue
 sur le handle encore Pending, avant drain/graphe. UUID attendu déplacé après
 drain dans la fixture ; aucun défaut d'enrichissement prouvé par ce premier essai.
+
+Rouge produit P2 source**d44af52c3**, cx-graphe-enrichissement-rouge-v2.log :
+0/1 en0,21s, ResolveParentNode enrich failed/Binder Cannot find property file.
+Le graphe déclaré atteint réellement le nœud avec UUIDOccurrence, qui demande
+file/line sur IndexOccurrence(body seul). Correctif commun : choisir l'entité
+et les champs publics de occurrence_projection pour cet enrichissement ; sinon
+conserver parent_table/enrich_fields historiques. Le témoin couvre aussi les
+champs publics par défaut, pour ne pas perdre les positions lors d'un enrichissement.

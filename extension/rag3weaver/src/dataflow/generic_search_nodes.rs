@@ -2787,10 +2787,16 @@ impl Node for ResolveParentNode {
             .ok_or("ResolveParentNode: 'conn' service not found")?
             .0.clone();
 
+        // Les signaux ont déjà projeté leurs UUID vers les occurrences :
+        // enrichir ces résultats suit leur entité, pas leur table d'index.
+        let (result_entity, default_fields) = match &target.occurrence_projection {
+            Some(p) => (p.entity.as_str(), p.fields.as_slice()),
+            None => (target.parent_table.as_str(), target.enrich_fields.as_slice()),
+        };
         let return_fields = if self.return_fields.is_empty() {
-            &target.enrich_fields
+            default_fields
         } else {
-            &self.return_fields
+            self.return_fields.as_slice()
         };
 
         // Results are already parent-level (resolved by upstream nodes).
@@ -2815,7 +2821,7 @@ impl Node for ResolveParentNode {
         // Cypher direct reste le chemin — c'est le montage minimal des tests.
         let backend = moteur_de_recherche(ctx, &conn);
         crate::search::enrich_results_with_data_via_backend(
-            backend.as_ref(), &target.parent_table, return_fields, &mut search_results,
+            backend.as_ref(), result_entity, return_fields, &mut search_results,
         )
         .map_err(|e| format!("ResolveParentNode: enrich failed: {e}"))?;
 
