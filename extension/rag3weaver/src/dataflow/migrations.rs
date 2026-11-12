@@ -314,6 +314,7 @@ impl MigrationRunner {
 
     /// Public-plan qualification consumes the history captured by the same
     /// metadata snapshot as the source descriptor. It never reloads a catalog.
+    #[cfg(feature = "rag3db-native")]
     pub(crate) fn resolve_inspected_steps(
         &self,
         variables: &std::collections::BTreeMap<String, String>,

@@ -477,3 +477,24 @@ le seul raccord natif). Aucun job supplémentaire pendant les quatre points
 mécanismes C++ suivants. La tranche d'exécution durable est toujours hors garantie :
 identité résolue persistée, génération legacy établie sous exclusivité, running,
 transfert/publication/réconciliation. Le diagnostic ne crée aucun de ces droits.
+
+## Comparaison minimale et correction cfg bornée
+
+Check autorisé `--lib --no-default-features`, même WT/target, sans nouvel outil
+ou cible : source85ef **rouge rc101**, fin12:08:30Paris, exactement deux nouveaux
+dead_code (`resolve_inspected_steps`, champ history),
+`cx-preflight-minimal-v1.log`. Baseline**1cf24f671** propre avec la même commande :
+**verte rc0**, fin12:10:09Paris, compilation5,33s,
+`cx-preflight-minimal-baseline-v1.log`. Cette régression minimale est donc celle
+du préfixe, pas une panne de baseline. Le [ticket tty historique](../../tty/tickets/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md)
+reste ouvert : sa recette daemon et ses tests sans natif n'ont pas été vérifiés,
+et aucune matrice ou décision de default features n'est ajoutée ici.
+
+Correction : seuls la méthode privée de raccord natif, le champ privé de journal
+retenu pour elle et son initialisation sont sous cfg(rag3db-native). Les types du
+plan pur et de déclaration storage restent communs. Pas d'allow(dead_code),
+d'installation de cible, changement de feature par défaut ou correction étrangère.
+SHA neuf à vérifier ; les41verts/8CLI et binaires85ef restent immuables sous
+`cx-preuves-preflight-85ef49211/` (28 fichiers, manifest sha256.json).
+Binaire produit85ef SHA256 :
+`0b59e5f6ef0c5094c9df2716d8a72ad680ef48584e4bc90304c57a370f1643e9`.
