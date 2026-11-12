@@ -55,3 +55,21 @@ Observateur des trois ELF en runtime : PID/starttime/mapsnative29/cgroupMax32/so
 embarquée/220gabarits/SHA ; observateur de la primitive pour tous les descendants.
 Un verdict-driver vert sera composé seulement avec le verdict final vert de la primitive,
 quiescence des PID/profils/bus comprise. Preuves deux postes, puis revue et tourmaster.
+
+## Inventaires publiés avant runtime
+
+Source réellement compilée `6f5276b39bdd1803dbd80d40b5352c68612e3ad3`, F5VERT5/5 et minimalchecklibVERT37,09s.
+Les trois compilations et leurs listes sont vertes, sans aucun test global de lib/NAV/e2e
+exécuté à ce stade. Inventaire complet aux deux postes, SHA256 `acb5e0566601b2940b33dcd3f0b8adc6a1ed70ecfc193b194fb2e01e7b45d76b`.
+Lib :2294 tests dont65 ignorés, **2229 succès attendus** ; NAV40/0ignoré ;
+lectures27/0ignoré ; démonhôte13/0ignoré. Les7 publication_accord_tests sont présents.
+Les noms complets de tous les tests, ignorés et sélection NAV sont dans inventaire.json ;
+aucune exclusion modifiée ou déduite de l'ancien compte.
+
+- large : `rag3weaver-b68c217725032750`, SHA256 `30b2f790bd0905842406d38fef772d3e74598aba55a6700e34ee4b89ff918e71`, source6f527/220gabarits vérifiés.
+- nav : `rag3weaver-0ec6f5856d755044`, SHA256 `02ceeef1440e72427a78d6657481f99925afd07e9f475953de916fbdeed8a1af`, source6f527/220gabarits vérifiés.
+- e2e : `e2e-7cefc6db1fbc2614`, SHA256 `c82048040271b5798081f5b6549d664c911586ebe14a8fdcfe87d7a6ca4d54a9`, source6f527/220gabarits vérifiés.
+
+Le contrôle de reprise est le SHA de cet inventaire, pas une nouvelle autorité ni
+une approbation humaine ; le reçu commun reste seul propriétaire du budget/bus.
+Deadline inchangée 866610.959853126, première publication avant lib/NAV/lectures/démon.
