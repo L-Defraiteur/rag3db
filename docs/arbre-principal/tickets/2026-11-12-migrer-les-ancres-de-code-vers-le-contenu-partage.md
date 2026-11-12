@@ -397,3 +397,10 @@ Relecture pendant compilation ae6 : le DDL de montage doit déclarer `_uuid` ;
 Correction du montage avant le prochain ciblé. La source ae6 en cours reste
 figée ; son résultat ne pourra pas constituer un rouge produit si le montage
 échoue avant appel CLI. Aucun correctif du raccord plan/historique n'est appliqué.
+
+Le ciblé ae6 s'est arrêté **à la compilation**, rc101, fin11:47:26Paris,
+target3,7Go : le regroupement d'ouverture passait `Arc<PreparedBackend>` à la
+fonction de chat qui attend une référence. Emprunt corrigé ; aucun témoin CLI
+n'a été joué dans ce montage, aucune preuve rouge produit revendiquée. La clé
+_uuid du DDL de fixture est aussi corrigée dans la source suivante. Le raccord
+plan/historique reste inchangé avant le rouge à obtenir.
