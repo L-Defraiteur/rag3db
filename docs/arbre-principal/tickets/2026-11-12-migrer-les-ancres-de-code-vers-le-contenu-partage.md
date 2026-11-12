@@ -552,3 +552,30 @@ actualisé ; premier rouge arrête pour diagnostic, sans retry automatique ni
 nouveau service/modèle. Global3600s après acquisition poste lourd, j8/Mem32,
 target32Go/lib29 ; fixture PG neuve sur serveur existant, sparse lectures compris.
 Pas d'activation/apply ni de tour master. Le ticket migration reste ouvert.
+
+## Passe adaptée v1 : premier rouge et correction d'ordre
+
+Source**9fb30e53a34e0f88aadb3d6a67136074f2d25dc1**, portée bornée
+`cx-preflight-final-1b-v1-9fb30e53a.scope`, global3590+stop5<3600, j8/Mem32.
+Features **5/5 vertes**, minimal vert ; bibliothèque **2149 réussis,3 échecs,
+64 ignorés**, rc101. Arrêt immédiat du lanceur à la fin de cette étape, pas de
+navigateur ni e2e lancés, aucun retry automatique. Portée inactive, poste0/4 relu.
+Preuves `cx-passe-preflight-1b-v1/{lib.log,etat.json,source.json,VERDICT}` ; base
+privée `cx_preflight_2191_20261112_v1` gardée pour le diagnostic, serveur préexistant.
+
+Les trois échecs existants de `backend::opening_tests` sont de vrais rouges
+métier : `opening_manifest_validates_the_whole_plan_before_any_database_call`,
+`opening_named_schema_refuses_conflicting_relations_before_any_database_call` et
+`opening_public_content_manifest_refuses_invalid_associations_before_database`.
+Le nouveau BEGIN read-only précédait les validations pures des faits/associations.
+Deux témoins comptent3appels au lieu de0 ; le troisième voit le mauvais refus
+« begin metadata snapshot » au lieu de l'association invalide nommée.
+
+Correction bornée : extraire `opening_schema` depuis la composition/registration
+order existantes et l'appeler avant le snapshot dans l'API bas niveau, ainsi
+qu'avant toute inspection native dans la façade. Le plan préparé est revalidé,
+même si un appelant a modifié ses configs publiques après load. Aucun catalogue,
+modèle ou accès base n'est requis pour ce contrôle ; le refus du journal reste
+après cette validation et avant les effets. Pas de flag de contournement ni
+nouveau validateur de schéma. Ciblé des opening_tests et des gardes du préfixe
+à jouer avant toute nouvelle passe finale, sur SHA neuf.
