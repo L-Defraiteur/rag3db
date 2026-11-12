@@ -1388,3 +1388,32 @@ Preuves durables : [requête et sources](../12-11-2026/preuves-revue-gemini-A/re
 La requête contient tous les octets sources envoyés et leurs références Git ;
 SHA256 requête `cda32c4a9318f4b3787e28519b110761d90c834e46ed214dcdd1ce23a4100864`.
 Copie brute locale : cache mémoire `revue-gemini-A-20261112/`.
+
+### Seconde tentative ciblée après diagnostic — réponse complète
+
+GO C7 après diagnostic de la première réponse tronquée : seconde revue différente,
+paquet réduit à facts, adaptateur compose, runner18lignes, tests pertinents et
+contrat composite777 ; mêmes source D2/voie Vertex/modèle, `max_tokens=16000`.
+**11113tokens d'entrée** (sous12k), HTTP200 en **37,69s** total auth+POST,
+plafond120s, un seul POST sans retry. `finish_reason=stop`, réponse complète :
+**« aucun constat établi »**. Usage déclaré : 4tokens visibles, 6307reasoning.
+
+Il s'agit d'une revue statique complémentaire sans défaut signalé, pas d'une
+preuve d'absence universelle de défauts ni d'une qualification du stockage.
+Aucune nouvelle action corrective, Cargo/GPU/banc ou barrière à A déjà intégré.
+Le premier résultat tronqué reste intact ci-dessus avec ses preuves.
+Les identifiants restent confiés au SDK ADC par chemin normal, aucun secret
+lu par les outils, affiché, envoyé dans le prompt ou enregistré dans les preuves.
+
+Preuves seconde tentative : [requête exacte et sources](../12-11-2026/preuves-revue-gemini-A/seconde/requete-et-sources.md),
+[réponse](../12-11-2026/preuves-revue-gemini-A/seconde/reponse.md),
+[brut](../12-11-2026/preuves-revue-gemini-A/seconde/reponse-brute.md),
+[métadonnées](../12-11-2026/preuves-revue-gemini-A/seconde/metadonnees.md),
+[sélection et empreintes](../12-11-2026/preuves-revue-gemini-A/seconde/sources.md),
+[script](../12-11-2026/preuves-revue-gemini-A/seconde/appel.md).
+SHA256 requête `f183bdcab67e5b5e5332b1dfbd6a3cf48f7c260638e213c87350f7f8a615c6c0`.
+L'en-tête d'un extrait tests annonce1–132 ; seuls1–104 ont été envoyés après
+réduction, sélection effective explicitée dans le manifeste sans modifier
+a posteriori le prompt conservé. Copie locale : cache mémoire
+`revue-gemini-A-20261112/seconde/`. Mission de seconde lecture terminée ;
+le ticket migration demeure ouvert pour ses suites propres.
