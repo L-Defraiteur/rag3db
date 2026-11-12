@@ -1,6 +1,6 @@
 # Mesurer le juge local avec dix fiches
 
-- **État** : ouvert — passage arrêté avant inférence : ROCm ouvre aussi un contexte sur card0 malgré le filtre ; restauration 7882 en cours.
+- **État** : ouvert — passage arrêté avant inférence : ROCm ouvre aussi un contexte sur card0 malgré le filtre ; restauration 7882 vérifiée ; exclusion stricte de seat1 à établir.
 - **Famille** : produit
 - **Gravité** : coût — latence et qualité du classement à dix fiches non mesurées.
 - **Atteignable en service** : non pour cette mesure ; le branchement du juge revient à la session mémoire.
@@ -247,7 +247,75 @@ a été demandée à l’optimiseur ; verrou mesure conservé jusqu’à preuve 
 Les preuves fdinfo, journal serveur et déchargement ont aussi été copiées
 sur le portable dans le même dossier relatif.
 
-Reste : attester la restauration 7882, puis établir un mécanisme qui interdit
+Restauration 7882 attestée dans le bilan opérateur ci-dessous. Reste : établir un mécanisme qui interdit
 l’accès au périphérique seat1 pour ce processus avant tout éventuel nouveau
 passage coordonné. L’autorisation card2 ne vaut pas autorisation card0, même
 pour un contexte minuscule. Le ticket reste ouvert ; aucun résultat k10 inventé.
+
+## Passage du 12 novembre : arrêt et retour 7882 réalisés
+
+Après GO conditionnel de l’orchestration et signal du banc, verrou mesure acquis
+17:54:59 Paris, porteur PID 3268337 / runner 3268353, deadline 18:14:59.
+Relecture indépendante de `poste --qui` avant l’arrêt.
+
+À 17:55:25, identité PID 912225/starttime/SHA/argv/cwd/variables et absence de
+clients revérifiées ; SIGTERM ciblé puis PID terminé et port 7882 absent.
+Arrêt attesté à **17:55:25.745**. Autres services 7878/7879/7880 inchangés,
+PID respectifs **966256 / 3415586 / 1409444**.
+Card2 après libération : total 34 208 743 424 octets, utilisés 21 661 892 608,
+libres 12 546 850 816, soit **11,685 Gio libres**. Remise explicite envoyée au banc.
+
+Le banc a abandonné au premier défaut de sa garde d’identité GPU fdinfo,
+**avant toute paire**, sans retry. Son serveur PID 3271346 a terminé avec code 0,
+port 8099 libre et `modele-decharge.json` à 17:55:50. Aucun résultat k=5/k=10
+ne découle de ce passage ; le ticket reste ouvert chez banc.
+
+Avant restauration, optimiseur a vérifié indépendamment l’absence de
+`/proc/3271346`, le port 8099 libre et la VRAM card2 revenue à
+21 661 892 608 octets, exactement la baseline de sa propre mesure après arrêt.
+
+Restauration lancée **17:56:18.176**, retour VERT **17:56:22.790**, nouveau
+PID **3273544**, starttime **84847328**, SHA inchangé
+`65ec1d1db17d48ee53785cd55e72b9b77ca451d5bc4bb8197a9c1b7d040c595d`.
+Même cwd, argv et quatre variables de la recette. Santé granite-278m, dim 768,
+Flex32, dual/sparse/factice faux, lot 128/512. FD amdgpu PCI 0000:04:00.0/card2
+avec VRAM résidente 3 924 676 KiB ; aucun fd VRAM card0. Les trois autres services
+conservent leurs PID et listeners. Santé relue après fin du lanceur SSH.
+Le fichier historique `embed-7882/pid` a été sauvegardé puis actualisé au nouveau
+PID ; ancien fichier conservé sous `pid-historique` dans les preuves.
+
+Preuves supplémentaires à luciepc :
+
+- `~/.cache/optimiseur-notes/banc-k10-12nov-7882/juste-avant-arret.json` ;
+- même dossier : `arret.json`, `vram-apres-arret.json`, `retour.json`,
+  `restauration-service.log`, `pid-restauration`, `pid-historique` ;
+- `~/.cache/rag3weaver-build/cx-service-7882-arret.log` et `cx-service-7882-retour.log` ;
+- preuve du banc : `~/.cache/rag3db-banc-notes/k10-20261112/modele-decharge.json`.
+
+Retour transmis au banc, à hotfixs et à l’orchestration pour libération du verrou
+après leur contrôle. Aucun autre service modifié, aucun fichier env/vault lu
+ou copié et aucune limite relâchée. Suite de mesure et diagnostic de la garde
+restent à cadrer par banc/orchestration ; aucune relance autorisée par ce bilan.
+
+## Confirmations relayées par l’orchestration le 12 novembre
+
+- Codeparsers : essais A/B terminés, hôtes arrêtés, aucun client, réservation
+  ni travail prévu sur 7882. Preuves annoncées dans son ticket fermé require-relatif ;
+  confirmation relayée, non revérifiée par le banc.
+- Embarquement : aucune charge ni prévision annoncée pendant la fenêtre.
+- Hotfixs : remise temporaire de 7882 à l’optimiseur pour arrêt/restauration.
+- Orchestration : contrôle indépendant de `/sante` sur 7882 avec granite-278m,
+  dimension 768, Flex32 et factice=false ; processus GPU sur PCI 0000:04:00.0,
+  consommation annoncée d’environ 5,7 Gio. Ces constats sont relayés et ne
+  remplacent pas les contrôles de départ du banc.
+
+L’optimiseur prépare encore recette exacte et retour avant tout arrêt : aucun
+GO ni arrêt n’est acquis à cette étape. Il confirme la santé et la disponibilité
+de 7882 après restauration. Le seuil minimum de 9 Gio libres sur card2 reste
+à lire après libération effective ; la consommation actuelle du service n’est
+pas une promesse de capacité. Fenêtre maximale inchangée : 1 200 secondes sous
+`poste mesure`, après acquisition. Aucun modèle du banc chargé.
+
+Diagnostic bancaire complémentaire : ouverture de contexte card0 avec 40 KiB de VRAM et 2 080 KiB de GTT résidents, sans inférence demandée. Cela ne prouve pas un calcul du modèle sur card0 ; la garde reste inchangée et le ticket ouvert pour exclusion stricte de seat1.
+
+Le banc a revérifié indépendamment santé/PID/fdinfo du retour. Son `fin.json` à 17:57:00 Paris indique `restaurationconfirmee=true`, durée 121,13 s ; `poste --qui` est libre.
