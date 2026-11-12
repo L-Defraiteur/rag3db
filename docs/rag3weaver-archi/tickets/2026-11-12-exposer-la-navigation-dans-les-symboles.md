@@ -231,3 +231,15 @@ PID/starttime/cgroup/mapsnative29 enregistrés pendant chaque binaire testé,
 SHA ELF et table des gabarits réelle vérifiés. Résultat driver et superviseur
 VERT, aucune suite sautée, quiescence après, copies de toutes preuves au portable.
 Aucune publication master incluse : revue puis tour explicite restent requis.
+
+
+## Relecture pendant compilation globale — ordre du rendu
+
+Constat statique concret sur2fcc, pas encore exécuté : nodes est construit en
+parcours en largeur, mais Markdown l'affiche avec indentation depth dans cet ordre.
+Avec deux classes A/B et chacune run, la liste file,A,B,A.run,B.run affiche les
+deux méthodes sous B. Les parent_uuid structurés restent corrects ; l'arbre compact
+est trompeur. Ajouter témoin de préordre à deux conteneurs avant correction,
+conserver les preuves2fcc et figer/arrêter la passe avant de changer sa source.
+Correction bornée prévue : visite en profondeur stable ou rendu depuis adjacence,
+sans modifier relation ni profondeur. Aucun vert global revendiqué pour2fcc.
