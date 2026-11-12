@@ -7930,11 +7930,14 @@ mod tests {
         let chemin = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/notebook/backend.json");
         let base: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
 
-        // La section d'avant : un démon, à l'adresse écrite.
-        let avant: BackendManifest = serde_json::from_value(base.clone()).unwrap();
+        // La section d'avant : une adresse explicite reste prioritaire,
+        // indépendamment du routage par environnement du gabarit livré.
+        let mut explicite = base.clone();
+        explicite["embeddings"]["address"] = json!("service-explicite.test:1");
+        let avant: BackendManifest = serde_json::from_value(explicite).unwrap();
         let s = avant.embed_source().unwrap();
         assert_eq!((s.provider, s.model.as_str(), s.dimensions), (Provider::Service, "bge-m3", Some(1024)));
-        assert_eq!(s.address.0, ["127.0.0.1:7878"]);
+        assert_eq!(s.address.0, ["service-explicite.test:1"]);
 
         // La même chose sous `models.embed`, sans adresse : elle viendra de l'environnement.
         let mut neuf = base.clone();

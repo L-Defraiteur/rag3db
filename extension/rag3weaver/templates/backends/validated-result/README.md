@@ -84,8 +84,15 @@ python3 extension/rag3weaver/scripts/test_backend_harness.py
 ```
 
 Le test ouvre une vraie base temporaire et n'appelle ni LLM ni embeddings.
-Le manifest d'exemple utilise par défaut le daemon d'embeddings local ; adapter
-ses paramètres de connexion et le chemin de l'extension vector à l'installation.
+Le manifeste conserve la déclaration de service `bge-m3`/1024, sans port imposé.
+Cette configuration déclare ses signaux de recherche vides : sa validation et sa soumission
+n'exigent pas d'embarquement. Ce n'est pas une preuve de connexion à un service BGE.
+Si tu ajoutes des signaux vectoriels, fournis les adresses de ton poste ou de son tunnel via
+`RAG3WEAVER_SERVICE_EMBED` (liste séparée par virgules, sélection par identité), puis l'alias
+`RAG3WEAVER_EMBED_SERVICE` si la variable commune est vide. Une adresse ajoutée au manifeste
+est prioritaire ; l'environnement ne corrige pas une copie déjà épinglée sur un mauvais service.
+Aucun repli local implicite ni remplacement de modèle/dimension. Adapter aussi le chemin de
+l'extension vector à l'installation.
 
 ## Exemple métier facultatif
 

@@ -3,7 +3,6 @@
   "name": "validated_result",
   "database": "data/results.rag3db",
   "embeddings": {
-    "address": "127.0.0.1:7878",
     "model": "bge-m3",
     "dimensions": 1024
   },
