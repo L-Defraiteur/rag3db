@@ -166,3 +166,30 @@ seulement les quatre refus de journal et le legacy identique : pas encore
 l’identité résolue, les générations, l’admission commune ou l’exclusivité réelle.
 Le ticket d’implémentation reste ouvert. Recherche CI confirme ne tenir aucun
 créneau ; le build C++ privé coordonné ne partage ni target ni lib distribuée.
+
+## Deuxième préfixe : contrat du plan figé, avant compilation
+
+Ajout de `dataflow::migrations::plan` et raccord public
+`MigrationRunner::resolve_plan(inputs)`. Cette méthode scanne les mêmes fichiers
+et réutilise le parseur de templates et le hash de GraphDefinition existants,
+sans catalogue, DDL, réparation ou modèle. Identité déterministe : fichiers,
+graphes résolus, variables ordonnées, faits résolus du fournisseur et descripteurs
+source/cible (formats moteur/interne/applicatif, recette, configs et génération).
+Les entrées et étapes du plan retourné sont immuables par son API.
+
+`StorageGeneration::Unversioned` conserve un plan préliminaire inspectable et
+refuse la readiness ; aucun zéro ni fingerprint de données inventé.
+`qualify_storage` distingue source avant publication et cible publiée pour
+l'identité exacte, sans recalculer la source depuis les métadonnées cibles ;
+un avancement étranger refuse. Cette qualification pure ne certifie ni lecture
+réelle des métadonnées ni exclusivité et ne donne aucun droit d'appliquer.
+Aucune publication/journal applied nouvelle n'est implémentée.
+
+Trois fixtures de contrat ajoutées : qualification source/cible/rejet étranger,
+identité sensible aux variables/configs/faits/recette/génération et hash du graphe
+résolu sensible aux variables, legacy non versionné inspectable mais non prêt.
+**Pas encore compilées ou exécutées** : API/diff partagés avant prochain ciblé.
+Ce sont des vérifications d'un nouveau contrat, pas un rouge produit déjà joué.
+Admission RO réelle, raccord CLI/daemon avant modèle/RW et exclusivité restent
+à construire ; le ticket demeure ouvert. Recherche FTS a terminé sa passe,
+C++ prépare sa configuration privée sans Cargo.
