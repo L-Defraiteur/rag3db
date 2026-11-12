@@ -1810,3 +1810,16 @@ vers un stockage explicitement absent, résultat null/code0 et absence de
 fichier vérifiée, manifeste inchangé. Aucun modèle construit ni catalogue
 créé. Probev8distincte30s publiée avant reprise, puis globalev4 inchangée dans
 ses exigences. GDB--nx sans réglage utilisateur ni téléchargement debuginfod.
+
+C7 autorise explicitement la composition runtimev3+attestationautonomev8,
+sans rejouer les suites vertes, sous identité stricte des4ELF/source/gabarits
+et budgetINITIAL5400 inchangé. v4 déjàlancée a été interrompue immédiatement
+surPIDpropre1507246 pendantlibcompile, avantNAV/PG/tx ; supervision
+`validation-a755jpea` ROUGEinterruption/restes[]/nettoye. PGv4 conservée.
+Probev8 VERT `validation-kj3l5tap`, backend626SHAe372…capturé au main,
+migrationinspect null/code0/manifesteinchangé/stockageabsent. Sources produit
+626→03d strictementidentiques (diffextensionvide), seuls docs/recettes changés.
+Composition publiée avant lecture : conserveROUGEoriginaldistinct, vérifie
+4copiesELF626/source+220gabarits+maps et quiescence, retireseulTMPNAVmarqué,
+produit un verdictcomposé explicite sous anciennedélaisansreset. Aucune suite
+ni nouveau backend ne sera exécuté par cette composition.
