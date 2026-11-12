@@ -166,11 +166,21 @@ pub struct PreviewChunk {
     pub dense: BTreeMap<String, DenseBinding>,
 }
 
+/// The common plan currently has no producer binding the complete supplied
+/// configs/schema facts to its fingerprints. A matching descriptor is only a
+/// matching declaration, never this missing qualification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlanQualification {
+    UnqualifiedConfigAndSchemaFacts,
+}
+
 /// Report only. Private fields, no Deserialize, execute, apply or writer token.
 #[derive(Debug, Clone, Serialize)]
 pub struct KnownTransferPreview {
     identity: String,
-    fixed_plan_identity: String,
+    referenced_plan_identity: String,
+    plan_qualification: PlanQualification,
     inventory_fingerprint: String,
     retained_entities: Vec<InventoryEntity>,
     retained_relations: Vec<InventoryRelation>,
@@ -179,7 +189,8 @@ pub struct KnownTransferPreview {
 }
 impl KnownTransferPreview {
     pub fn identity(&self) -> &str { &self.identity }
-    pub fn fixed_plan_identity(&self) -> &str { &self.fixed_plan_identity }
+    pub fn referenced_plan_identity(&self) -> &str { &self.referenced_plan_identity }
+    pub fn plan_qualification(&self) -> PlanQualification { self.plan_qualification }
     pub fn inventory_fingerprint(&self) -> &str { &self.inventory_fingerprint }
     pub fn retained_entities(&self) -> &[InventoryEntity] { &self.retained_entities }
     pub fn retained_relations(&self) -> &[InventoryRelation] { &self.retained_relations }
@@ -405,9 +416,10 @@ fn preview(
     let chunks: Vec<_> = chunks.into_values().collect();
     let mut normalized_recipe = recipe.clone();
     normalized_recipe.models.sort_by_key(|m| m.name.clone());
-    let identity = content_hash(&encoded(&("known-transfer-preview-v1", plan.identity(), expected,
+    let identity = content_hash(&encoded(&("known-transfer-preview-v2", plan.identity(), expected,
         &inventory_fingerprint, &normalized_recipe, &versions, &chunks))?);
-    Ok(KnownTransferPreview { identity, fixed_plan_identity: plan.identity().into(), inventory_fingerprint,
+    Ok(KnownTransferPreview { identity, referenced_plan_identity: plan.identity().into(),
+        plan_qualification: PlanQualification::UnqualifiedConfigAndSchemaFacts, inventory_fingerprint,
         retained_entities: inventory.entities, retained_relations: inventory.relations, versions, chunks })
 }
 
