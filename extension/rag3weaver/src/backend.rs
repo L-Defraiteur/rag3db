@@ -2143,6 +2143,11 @@ impl PreparedBackend {
         embedder: Option<Box<dyn Embedder>>,
         raison: Option<String>,
     ) -> Result<Backend, String> {
+        // Raw connection API cannot establish pre-open admission retroactively.
+        // It must nevertheless never activate an unvalidated versioned target.
+        if self.manifest.storage.is_some() {
+            return Err("versioned storage publication validation is not available".into());
+        }
         let provided_schema = backend_schema::provided_schema(self.manifest.workspace.as_ref());
         let schema = backend_schema::SchemaFacts::compose(&self.entities, &self.manifest.relations, &provided_schema)?;
         let schema_order = schema.registration_order()?;

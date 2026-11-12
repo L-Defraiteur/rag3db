@@ -90,8 +90,9 @@ impl ResolvedMigrationPlan {
     pub fn steps(&self) -> &[ResolvedMigrationStep] { &self.steps }
 
     /// An inspectable preliminary plan is allowed for legacy storage. Execution
-    /// readiness requires established source AND target generations.
-    pub fn execution_readiness(&self) -> Result<(), String> {
+    /// qualification requires established source AND target generations. This
+    /// checks storage identity only, not node registry, ports, cycles or transport.
+    pub fn validate_generation_preconditions(&self) -> Result<(), String> {
         if matches!(self.inputs.source.generation, StorageGeneration::Unversioned) {
             return Err("source generation not established".into());
         }
@@ -111,7 +112,7 @@ impl ResolvedMigrationPlan {
     pub fn qualify_storage(&self, current: &StorageDescriptor, applied_plan_identity: Option<&str>)
         -> Result<StoragePosition, String>
     {
-        self.execution_readiness()?;
+        self.validate_generation_preconditions()?;
         match applied_plan_identity {
             None if current == &self.inputs.source => Ok(StoragePosition::Source),
             Some(identity) if identity == self.identity && current == &self.inputs.target =>
@@ -162,6 +163,12 @@ mod tests {
         assert_eq!(plan.qualify_storage(&plan.inputs().source, None).unwrap(), StoragePosition::Source);
         assert_eq!(plan.qualify_storage(&plan.inputs().target, Some(&identity)).unwrap(), StoragePosition::PublishedTarget);
         assert_eq!(plan.identity(), identity);
+        // Persist original inputs, then rebuild after publication. The live
+        // target is used only for qualification, never as the new source.
+        let persisted = serde_json::to_string(plan.inputs()).unwrap();
+        let restored = resolve(serde_json::from_str(&persisted).unwrap());
+        assert_eq!(restored.identity(), identity);
+        assert_eq!(restored.qualify_storage(&plan.inputs().target, Some(&identity)).unwrap(), StoragePosition::PublishedTarget);
         let mut foreign = plan.inputs().target.clone();
         foreign.generation = StorageGeneration::Established("foreign-write".into());
         assert!(plan.qualify_storage(&foreign, Some(&identity)).is_err());
@@ -196,7 +203,7 @@ mod tests {
         inputs.source.generation = StorageGeneration::Unversioned;
         let plan = resolve(inputs);
         assert!(!plan.steps().is_empty());
-        assert_eq!(plan.execution_readiness().unwrap_err(), "source generation not established");
+        assert_eq!(plan.validate_generation_preconditions().unwrap_err(), "source generation not established");
         assert!(plan.qualify_storage(&plan.inputs().source, None).is_err());
     }
 }
