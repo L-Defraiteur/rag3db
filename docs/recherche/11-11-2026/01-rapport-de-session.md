@@ -1,14 +1,14 @@
 # Session « recherche » : rapport de reprise (11 novembre 2026)
 
-## Travail courant : journal du démon, validation verte et tour en attente (12 novembre)
+## Travail courant : journal du démon, validation verte et tour reçu (12 novembre)
 
-Ticket unique **ouvert** `docs/recherche/tickets/2026-11-11-le-service-d-embarquement-laisse-son-journal-dans-le-tmpdir-d-e2e-search.md`, recherche. Branche `cx-recherche-journal-embarquement-2`, worktree `cx-recherche-journal-embarquement` aux deux postes. Source réellement testée `43b57eb78c831a3ef6622fb362378bb09770f489`, code revu18ea54b78 ; les commits postérieurs ne changent que les documents.
+Ticket clôturé au commit de fin validé `docs/tickets/closed/2026-11-11-le-service-d-embarquement-laisse-son-journal-dans-le-tmpdir-d-e2e-search.md`, recherche. Branche `cx-recherche-journal-embarquement-2`, worktree `cx-recherche-journal-embarquement` aux deux postes. Source réellement testée `43b57eb78c831a3ef6622fb362378bb09770f489`, code revu18ea54b78 ; les commits postérieurs ne changent que les documents.
 
 Passe autorisée unique **VERTE**, aucun retry : sept faux-service et19contrôles du lanceur, features5/5, preuve compilation, lib2132/0/64 ignorés (41,76s), nav39/0/0 (133,49s), deux appels e2e séparés search40/0/0 puis search_queue5/0/0, deux filets contrôlés dans chaque appel. Attestation220gabarits et chemins ; trois ELF SHA enregistrés et section native29a7 relue. Recherche réelle par BGE existant (PID inchangé), propriété/attente par faux services ; ces preuves restent distinctes. Aucun nouveau service réel, card2 explicitement sélectionnée, aucune sélection card0.
 
 Preuves et dump PostgreSQL privé aux deux postes hors cible dans `~/.cache/rag3weaver-build/journaux-cx-recherche-journal-12nov/` ; copie locale vérifiée SHA. PG attribué `cx_recherche_journal_20261112` sur conteneur existant5433, propriétaire/commentaire et dump conservés ; jamais rag3weaver_test. Worktrees/target97k/base privée restent disponibles tant que le lot n'est pas atterri.
 
-**Transmission bloquée après récupération serveur :** namespace mcp__codex_tui retiré, aucune fonction send_message_to_thread/read_thread exposée. Le message de verdict/demande de tour est préparé dans le ticket, **non envoyé**. Aucun « à toi » reçu pour ce lot, aucun push master. Ne pas confondre ce vert avec les deux lots déjà livrés ci-dessous.
+**Tour reçu après récupération :** orchestration a lu les preuves sur PC et les deltas, puis accordé explicitement « à toi ». La fonction d’envoi intersessions reste absente de notre inventaire, mais l’autorisation entrante est bien reçue. Clôture ticket et atterrissage lancés ; aucun nouveau test requis si master ne contient que des documents. Le résultat effectif sera dans pousse.log et la prochaine actualisation.
 
 Prochaine action : faire parvenir ce verdict à l'orchestration, recevoir le tour, relire master/rebaser selon règles, clôturer le ticket et pousser. Nettoyage ensuite seulement, après trois contrôles et garde commun avec administrations archivées, sans bypass d'un refus ; supprimer uniquement la DB privée attribuée après preuves. Toute arrivée de code qui impose un rejeu exige un nouveau périmètre autorisé, pas une reprise silencieuse de la passe figée.
 

@@ -1,6 +1,6 @@
 # Le service d'embarquement laisse son journal dans le TMPDIR d'e2e_search
 
-- **État** : ouvert ; correctif validé par la passe complète sur `43b57eb78`, tour de push non reçu. Messagerie intersessions indisponible après redémarrage ; demande de tour non envoyée.
+- **État** : corrigé `18ea54b78`, validation complète `43b57eb78` verte ; tour de push explicite reçu le 12 novembre après lecture des preuves par orchestration.
 - **Famille** : produit
 - **Gravité** : la suite réussit ses assertions mais sa garde de résidus refuse la passe.
 - **Atteignable en service** : non établi ; lancement et nettoyage d'une passe de tests.
@@ -178,3 +178,9 @@ La mise à jour des outils après récupération a retiré le namespace `mcp__co
 **Message prêt, non envoyé :** recherche, ticket présent, source43b57eb78 verte ; sept légers/19contrôles, features5, lib2132/0/64, nav39/0/0, search40 puis queue5 sans saut, 220gabarits et libnative attestés. Demande de tour pour le lot journal-embarquement, branche cx-recherche-journal-embarquement-2 ; aucun push master sans « à toi ».
 
 Le ticket reste ouvert : recevoir le tour, relire master et décider du rebase/rejeu selon procédure, clôturer par gitmv+État au commit de fin, pousser sous poste push puis lire les trois contrôles. Ensuite seulement : nettoyer cette seule base privée après preuves, préserver hors cible les fichiers ignorés de preuve et les administrations Git supprimables, appliquer le garde commun et retirer worktrees/branches/target si VERT et quiescence maintenue. Actuellement ces ressources sont conservées pour l'atterrissage ; leur absence de nettoyage n'est pas présentée comme une fin de lot.
+
+## Clôture au tour d'atterrissage
+
+Orchestration a relu les sorties brutes et les220assets, vérifié le delta documents seuls depuis43b et accordé explicitement « à toi ». Clôture et gitmv vers closed dans ce même commit de fin, aucun octet de source testé modifié. Les garanties de propriété/quiescence/conservation restent le mécanisme cible ; aucun filet temporaire ni exemption à retirer. Les commentaires source citent le chemin historique d'ouverture du présent ticket, retrouvable par son nom et git log --follow ; ils restent inchangés pour préserver exactement les octets validés. Le blocage d'envoi intersessions décrit plus haut est historique : réception du tour confirmée malgré l'absence de fonction d'envoi dans cette session.
+
+Push et nettoyage selon procédure, preuves à consigner dans `journaux-cx-recherche-journal-12nov/pousse.log` puis le rapport d'atterrissage. Aucun code nouveau ou refus de garde ne doit être contourné. Les rapports historiques d'attente ci-dessus sont conservés comme historique.
