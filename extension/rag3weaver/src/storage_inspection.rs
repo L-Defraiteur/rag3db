@@ -21,8 +21,9 @@ pub struct StorageInspection {
     pub tables: Vec<String>,
     pub internal_schema: Option<String>,
     pub descriptor: Option<StorageDescriptor>,
-    /// Fingerprint of persisted configs only, never a data generation.
-    pub config_fingerprint: String,
+    /// Fingerprint of persisted entity configs only. Excludes relations and data;
+    /// neither a full schema fingerprint nor a storage generation.
+    pub entity_config_fingerprint: String,
     pub entity_configs: BTreeMap<String, serde_json::Value>,
     pub unresolved_migrations: Vec<u64>,
 }
@@ -105,7 +106,7 @@ pub(crate) fn inspect_on(conn: &dyn DbConnection) -> Result<StorageInspection, S
     let encoded = serde_json::to_string(&entity_configs).map_err(|e| e.to_string())?;
     Ok(StorageInspection {
         internal_schema: metadata.get(crate::scope::SCHEMA_VERSION_KEY).cloned(),
-        descriptor, config_fingerprint: crate::hash::content_hash(&encoded),
+        descriptor, entity_config_fingerprint: crate::hash::content_hash(&encoded),
         tables, entity_configs, unresolved_migrations,
     })
 }
