@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 from zoneinfo import ZoneInfo
 
 PARIS = ZoneInfo('Europe/Paris')
@@ -96,7 +97,14 @@ def sha_fichier(path):
 def verrou(racine):
     racine.mkdir(parents=True, exist_ok=True)
     with (racine / 'registre.lock').open('a') as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
+        fin = time.monotonic() + 20
+        while True:
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                exiger(time.monotonic() < fin, 'registre occupé au-delà de 20 s')
+                time.sleep(.05)
         yield
 
 
@@ -234,6 +242,10 @@ def main():
         env['ROCR_VISIBLE_DEVICES'] = '1'
         rocminfo = subprocess.check_output(['/opt/rocm/bin/rocminfo'], env=env, text=True, timeout=10)
         placement_rocr(rocminfo)
+        restant = verifier(maintenant())
+        # Reborner à l'heure effective, même si la mise en route de l'unité a attendu.
+        subprocess.run(['systemctl', '--user', 'set-property', '--runtime', unite,
+                        'RuntimeMaxSec=' + str(restant)], check=True, timeout=5)
         verifier(maintenant())  # Pas d'exec après échéance ou attente longue.
         pid = os.getpid()
         stat = (Path('/proc') / str(pid) / 'stat').read_text().rsplit(')', 1)[1].split()
