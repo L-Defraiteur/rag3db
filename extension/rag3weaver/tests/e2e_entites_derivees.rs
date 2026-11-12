@@ -1118,24 +1118,45 @@ fn un_graphe_declare_enrichit_les_occurrences_et_non_leurs_versions() {
     })).unwrap();
     let mut registry = NodeRegistry::new();
     rag3weaver::dataflow::node_factories::register_builtins(&mut registry);
-    for explicite in [true, false] {
-    let mut definition = def.clone();
-    if !explicite { definition.nodes[2].config = serde_json::json!({}); }
-    let mut services = ServiceRegistry::new();
-    partage.lock().unwrap().register_search_services(&mut services);
-    services.register("catalog", partage.clone());
-    let mut graph = build_definition(&definition, &registry, &NodeTypePolicy::All).unwrap();
-    let output = DataflowRuntime::with_services(16, services).execute(&mut graph)
-        .expect("le graphe déclaré enrichit les UUID publics depuis Occurrence");
-    let results = output.get("resolve", "results").unwrap().downcast::<Vec<UnifiedResult>>().unwrap();
-    let obtenus: BTreeMap<String, i64> = results.iter().map(|r| {
-        assert_eq!(r.entity.as_deref(), Some("Occurrence"));
-        let data = r.data.as_ref().expect("données publiques");
-        assert!(data.contains_key("file"));
-        if !explicite { assert!(data.contains_key("body"), "champs publics par défaut"); }
-        (r.uuid.clone(), data["line"].as_i64().unwrap())
-    }).collect();
-    assert_eq!(results.len(), 2);
-    assert_eq!(obtenus, attendus, "deux occurrences et leurs positions, une seule version");
+    let executer = |definition: &GraphDefinition, feuille: &str| {
+        let mut services = ServiceRegistry::new();
+        partage.lock().unwrap().register_search_services(&mut services);
+        services.register("catalog", partage.clone());
+        let mut graph = build_definition(definition, &registry, &NodeTypePolicy::All).unwrap();
+        let output = DataflowRuntime::with_services(16, services).execute(&mut graph)
+            .expect("le graphe déclaré enrichit les UUID publics depuis Occurrence");
+        output.get(feuille, "results").unwrap().downcast::<Vec<UnifiedResult>>().unwrap().clone()
+    };
+    for mode in [ResultMode::Aggregated, ResultMode::SourceResolved] {
+        for explicite in [true, false] {
+            let mut definition = def.clone();
+            definition.nodes[0].config["options"] = serde_json::to_value(SearchOptions {
+                result_mode: mode, consistency: Consistency::Immediate, ..Default::default()
+            }).unwrap();
+            if !explicite { definition.nodes[2].config = serde_json::json!({}); }
+            // Même déclaration sans l'enrichissement : la sortie réelle du
+            // signal sert de référence, sans port déjà consommé ni faux score.
+            let mut signal_seul = definition.clone();
+            signal_seul.nodes.retain(|n| n.name != "resolve");
+            signal_seul.edges.retain(|e| e.to_node != "resolve");
+            let avant: BTreeMap<String, UnifiedResult> = executer(&signal_seul, "bm25")
+                .into_iter().map(|r| (r.uuid.clone(), r)).collect();
+            assert_eq!(avant.len(), 2);
+            assert!(avant.values().all(|r| r.signal.is_some()), "provenance du vrai signal");
+            let results = executer(&definition, "resolve");
+            let obtenus: BTreeMap<String, i64> = results.iter().map(|r| {
+                assert_eq!(r.entity.as_deref(), Some("Occurrence"));
+                let data = r.data.as_ref().expect("données publiques");
+                assert!(data.contains_key("file"));
+                if !explicite { assert!(data.contains_key("body"), "champs publics par défaut"); }
+                let original = &avant[&r.uuid];
+                assert_eq!(r.signal, original.signal, "provenance conservée : {mode:?}, explicite={explicite}");
+                assert_eq!(r.signals, original.signals);
+                assert_eq!(r.best_signal, original.best_signal);
+                (r.uuid.clone(), data["line"].as_i64().unwrap())
+            }).collect();
+            assert_eq!(results.len(), 2);
+            assert_eq!(obtenus, attendus, "deux occurrences et leurs positions, une seule version");
+        }
     }
 }
