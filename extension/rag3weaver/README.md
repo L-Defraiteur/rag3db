@@ -109,6 +109,32 @@ only the active cell, which the next drain can write. The catalogue-wide
 `index_progress.writes_pending` includes parked cells; changing cells preserves
 their accepted work. Cumulative drain counters describe the catalogue's history.
 
+## Migration diagnostics
+
+Inspect storage or resolve a preliminary plan from declared Mermaid files:
+
+```bash
+rag3weaver-backend migration inspect --manifest backend.json
+rag3weaver-backend migration plan --manifest backend.json --dir migrations --var name=value
+```
+
+These commands use a read-only metadata snapshot without initializing a
+catalog or connecting models. The plan checks its files against the journal
+through the existing runner: versions, names and checksums must match. A legacy
+`applied` row without a durable resolved-plan identity cannot qualify a resolved
+plan. A missing data generation is reported as `Unversioned`, never as zero or
+as a hash of the schema.
+
+The optional manifest `storage` requirement names an `application_format` and
+`recipe`; declaring it does not upgrade storage. On-disk backend entrypoints
+validate the declarative schema first, then inspect storage before acquiring a
+writer or constructing models. Legacy manifests still open without a data
+generation; an unpublished versioned target is refused.
+
+The result is diagnostic: `migration apply` returns an explicit unavailable
+error. This interface does not transfer chunks or vectors, publish a migrated
+format, activate code templates, or provide migration recovery/rollback.
+
 ## Measured
 
 First index of this repository (about 7 000 files, 80 000 scopes, 1.1 million

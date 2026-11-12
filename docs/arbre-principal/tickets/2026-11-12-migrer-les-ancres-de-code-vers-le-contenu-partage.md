@@ -618,3 +618,69 @@ porte l'attribution baseline et le nettoyage possédé ; pas d'exception ajouté
 reprise automatique. Preuves `cx-passe-preflight-1b-v2/` et dossier e2e-gardes
 nommé dans ce ticket. Les deux PG privées restent gardées, aucune base réelle.
 README/nouveautés restent en copie hors worktree jusqu'à une passe complète verte.
+
+## Passe finale diagnostique v4 — verte, avant tour master
+
+Rebase sur masteraa741a4c3 (MD seules depuisb28), branche neuve
+`cx-arbre-migration-preflight-4`,37/37 commits identiques au range-diff.
+Source figée propre **e4239bddae8dedc1db7543a32ffe802822c0e1d7**.
+Le raccord du témoin état dans check_features est réellement joué dans cette passe.
+
+La tentative **v3 est un refus de montage**, avant tout Cargo et toute création PG :
+clé tuple de run_env introduite par remplacement trop large lors de l'ajout de
+GARDER à la liste des variables à retirer. Arrêt immédiat38ms, scope inactive/poste0/4.
+`cx-passe-preflight-1b-v3/etat.json` conserve ce refus. Driver v4 neuf : correction
+clé tuple→str, contrôle AST des clés et construction de l'environnement avec vrai
+subprocess /usr/bin/true verts, aucun service ni dossier de passe dans ce contrôle.
+C7 a relu ce delta puis autorisé explicitement v4 : aucun retry automatique.
+
+**v4 rc0 en612,81s**, borne globale3600s après lourd, portée3590+5, j8/Mem32,
+target unique11Go (<32Go), lib29 inchangée. Cinq jeux de features et minimum verts ;
+lib**2152/0/64**, navigateur**39/0/0**. Douze suites, chacune1/1 demandée,
+**125/0/0** au total (hors deux filets rejoués en tête de chaque processus) :
+
+| Suite | réussis | échecs | ignorés |
+|---|---:|---:|---:|
+| migration_preflight | 5 | 0 | 0 |
+| demon_hote | 13 | 0 | 0 |
+| mcp_cycle_de_vie | 11 | 0 | 0 |
+| mcp_stdio | 4 | 0 | 0 |
+| fichiers_entite | 3 | 0 | 0 |
+| fichier_compose | 4 | 0 | 0 |
+| lectures | 24 | 0 | 0 |
+| postgres | 36 | 0 | 0 |
+| tx_par_paquet_arret | 18 | 0 | 0 |
+| tx_merge_puis_copy | 1 | 0 | 0 |
+| tx_ligne_a_ligne | 3 | 0 | 0 |
+| tx_vecteurs_apres_rollback | 3 | 0 | 0 |
+
+Seul résidu accepté : deux CSV24Ko de tx_par_paquet_arret, ticket recherche11nov
+déjà déclaré ; aucune exception ajoutée. Les autres suites ne signalent aucun
+résidu. Ce n'est donc pas une affirmation de zéro résidu pour toute la passe.
+Santé du service7879 validée au départ, avant MCPstdio et lectures ; pas de modèle
+ni serveur créé. Base privée `cx_preflight_2191_20261112_v4` conservée pour revue,
+v1/v2 également ; aucune v3 créée. Portée finale inactive, poste libre0/4 relus.
+
+Preuves luciepc `/home/lucied/.cache/rag3weaver-build/cx-passe-preflight-1b-v4/` :
+source.json, source-head, verdict-detaille.json, logs par phase, binaires conservés
+et binaires.sha256.json. ELF identifiés depuis les lignes réelles de Cargo/lanceur
+(les douze chemins e2e concordent), sans heuristique de date :
+
+| Binaire | SHA256 |
+|---|---|
+| lib | 0673d180af2ccfac257ee0e936f4dcd8336edc8f6db862fa875ec20ee5d5c5fd |
+| navigateur | 9c000319ddf3a5200c36d98738493734bd08ca4515f98f9c2cb30dce548203a5 |
+| e2e | ae96a1c56a83bd740ccee8b7881cd9e46bba722f36bfb0910c3926d3037f293b |
+| backend | ccae63f68a55c925190e0457b87c30d10e064c62f8327cc454f764515128771d |
+
+Attestation ELF du navigateur :220assets attendus présents, table issue de son
+.d, app.jsfff528ffdcbfb08c022c1249d0ec5ecc82a4caf4a010eaad4447ca7c3081bc00,
+bundle6d317a42f06655af8d59d934bd6bb4ac4aba7be82794365e1c6a6e027f3fba43.
+Driver SHAaa3ac4de03cf16b1de7bc30ff357c3da4ac497e08edd440e02e718cea1a1bb95 ;
+launcher6c19305532bf52d64a1eb27407a6ea08896991e032cb4d4cafd8448f5ab130c9.
+
+README et nouveautés décrivent le préfixe diagnostic seulement. Ticket migration
+**toujours ouvert** : ni producteur d'identité durable ni génération publiée,
+transfert, activation, exclusion d'exécution ou reprise de migration livrés ici.
+Ticket hygiène : clôture préparée sur branche, intégration master encore à faire.
+Attente lecture C7 du verdict et tour explicite « à toi » ; aucun push master.
