@@ -64,6 +64,14 @@ n'est jamais contourné par une autre session (blanchiment interdit) ; il remont
 
 ## Les mesures et les ressources
 
+- **Bilan banc du 12 novembre** : card2 a servi pour 440 +880 paires Q8_0,
+  médianes 540/787 ms par cas de 5/10. Placement explicite modèle/KV/calcul
+  PCI 04:00.0, contexte seat1 stable 40 KiB VRAM/2 080 KiB GTT ; compteurs
+  moteur HIP inconnus, pas zéro. 7882 restauré, verrou rendu, ticket mesure
+  fermé ; [résultats et limites](../../banc/12-11-2026/01-le-juge-sur-card2.md).
+  Le faux rouge du wrapper d’arrêt est suivi chez optimiseur. La consigne
+  durable de capacité/consommateurs réels ci-dessous reste en vigueur.
+
 - **Autorisation durable de Lucie, précisée le 12 novembre** : card2 est une
   ressource de travail normale. Les sessions utilisent les modèles locaux et
   les services disponibles quand ils sont pertinents pour le travail autorisé,
@@ -75,7 +83,7 @@ n'est jamais contourné par une autre session (blanchiment interdit) ; il remont
   qu'imposer une nouvelle demande à Lucie. Les fenêtres exclusives servent les
   chronométries qui en ont besoin, pas tous les appels à un modèle.
   La disponibilité de seat1 reste à préserver selon la précision ci-dessous.
-  [Consignes et suivi GPU](../../banc/tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
+  [Consignes et suivi GPU](../../tickets/closed/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
 
 - **Précision ultérieure de Lucie, 12 novembre 2026** : préserver le GPU de jeu
   seat1 de toute charge du banc ; les 40 KiB de contexte d’initialisation
@@ -89,7 +97,7 @@ n'est jamais contourné par une autre session (blanchiment interdit) ; il remont
   Zéro requête du banc le 12 novembre ; le warmup interne du serveur a eu lieu,
   sans attribution d’exécution par compteur PCI. Aucun retry autorisé par
   cette clarification ; recette de contrôle à qualifier avant nouvelle fenêtre.
-  Sources et suite : [ticket banc k10](../../banc/tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
+  Sources et suite : [ticket banc k10](../../tickets/closed/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
 
 - **Consigne actuelle de Lucie, 12 novembre 2026** : card0/seat1, PCI
   `0000:07:00.0`, ROCm GPU[1], est interdite aux sessions. Seule card2, PCI
@@ -114,7 +122,7 @@ n'est jamais contourné par une autre session (blanchiment interdit) ; il remont
   pas un calcul du modèle sur card0. 7882 a été restauré et le verrou rendu.
   Garder l’exclusion stricte et qualifier une frontière d’accès aux périphériques
   avant nouveau chargement, sans relâcher la garde ni modifier globalement seat1.
-  Suivi : [ticket banc k10](../../banc/tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
+  Suivi : [ticket banc k10](../../tickets/closed/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
 
 - Un index de mesure (copie d'une base, index complet) tourne sur **son propre service d'embarquement**,
   jamais sur 7878 (les worktrees de Lucie y passent par le tunnel). Copier une base = base, wal,

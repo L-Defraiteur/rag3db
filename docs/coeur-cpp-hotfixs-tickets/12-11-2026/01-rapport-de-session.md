@@ -23,7 +23,7 @@ conservé sans retrait ni rebase ; son plan général n’autorise aucune varian
 
 ## Service privé7882
 
-Coordination liée au [ticket banc dix fiches](../../banc/tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md),
+Coordination liée au [ticket banc dix fiches](../../tickets/closed/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md),
 porteur banc et opérateur optimiseur. Usage transmis à codeparsers le11nov,
 puis codeparsers libéré selon orchestration. Remise temporaire de gestion à
 optimiseur confirmée pour fenêtrebanc20min ; arrêt SIGTERM ciblé PID912225 et

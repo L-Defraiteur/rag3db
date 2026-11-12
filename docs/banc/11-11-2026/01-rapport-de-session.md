@@ -1,12 +1,19 @@
 # Le banc : rapport de session (11 novembre 2026)
 
+> **Résultat final — 12 novembre 2026, après la seconde passe.** Card2 a servi
+> pour les 1 320 paires : médiane 540 ms pour cinq fiches, 787 ms pour dix.
+> Le contexte seat1 est resté à 40 KiB de VRAM et 2 080 KiB de GTT ; les poids,
+> cache et calcul sont placés sur card2. 7882 restauré, verrou rendu ; mesure
+> clôturée. [Résultats, méthode et limites](../12-11-2026/01-le-juge-sur-card2.md).
+> Les notices et commandes précédentes ci-dessous sont historiques.
+
 > **Précision ultérieure de Lucie — 12 novembre 2026.** Le but est de garder
 > le GPU seat1 disponible pour jouer : les poids, le cache et le calcul du banc
 > doivent rester sur card2. Un contexte d’initialisation minuscule et stable
 > sur card0 peut être toléré ; sa seule ouverture ne doit plus faire échouer
 > le banc. Les notices exigeant zéro accès ci-dessous décrivent le contrat
 > précédent. ROCm initialise aussi des ressources des GPU masqués ; le
-> [ticket k10](../tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md)
+> [ticket k10](../../tickets/closed/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md)
 > donne les sources et les contrôles d’attribution restant à qualifier.
 > Zéro **requête du banc** a été joué : le serveur avait effectué son warmup
 > interne, dont l’exécution n’a pas été attribuée par compteur PCI.
@@ -20,7 +27,7 @@
 > Le passage du 12 novembre a été arrêté avant toute inférence : ROCm ouvrait
 > aussi un contexte de 40 KiB sur card0 malgré le filtre. Aucun nouveau
 > chargement avant exclusion stricte de seat1 et nouvelle fenêtre coordonnée.
-> Suivi : [ticket k10](../tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
+> Suivi : [ticket k10](../../tickets/closed/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
 
 Ce rapport s'adresse à un agent qui reprend le travail sans aucune mémoire de nos échanges. Le
 **banc** est la session qui mesure : les témoins de concurrence du moteur rag3db (des tests gtest
@@ -225,7 +232,7 @@ cd ~/.cache/rag3db-banc-notes && setsid nohup ~/.cache/rag3weaver-build/poste lo
 
 ## Mise à jour du 12 novembre — k10 arrêté, service rétabli
 
-Suivi unique : `docs/banc/tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md`,
+Suivi unique : `docs/tickets/closed/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md`,
 porteur banc. Worktree `/home/lucied/git_workspaces/cx-banc-suivi-k10`, branche
 `cx-banc-suivi-k10`. Les preuves de l’optimiseur ont été intégrées à cette branche.
 
@@ -252,3 +259,17 @@ frontière d’accès qui exclut les périphériques seat1, notamment leur expos
 par KFD, avant tout nouveau chargement autorisé. Le ticket porte cette suite
 et reste ouvert. Les anciennes commandes du §7.1 ciblant card0 sont historiques
 et ne doivent plus être exécutées. Aucune nouvelle sonde GPU autorisée à ce stade.
+
+
+## Bilan final k10 — 12 novembre à 18 h 37
+
+Mesure réalisée et [ticket fermé](../../tickets/closed/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
+Voir la [page de résultats](../12-11-2026/01-le-juge-sur-card2.md) : 440/880 paires,
+67/88 et 58/88 bonnes premières, 540/787 ms médians par cas. Les 440 scores
+communs sont identiques ; le groupe k10 comporte plus de distracteurs.
+PCI 04:00.0 pour modèle/KV/calcul ; petit contexte seat1 stable, métriques moteur
+inconnues. 7882 restauré PID 3431955 et santé réelle revérifiée, trois autres
+services inchangés, poste libre ; sources, scores et anciens rouges conservés.
+Le défaut du wrapper d’arrêt reste chez optimiseur avec son propre ticket.
+Aucune activation mémoire réelle. Le worktree de préparation reste conservé ;
+la publication se fait depuis un worktree neuf issu de master.

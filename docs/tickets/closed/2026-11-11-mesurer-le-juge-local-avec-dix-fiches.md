@@ -2,13 +2,28 @@
 
 <!-- Consignes d'usage GPU partagées : voir aussi la clarification durable ci-dessous. -->
 
-- **État** : ouvert — comprendre le contexte ROCm et vérifier l’absence de charge de calcul du banc sur seat1 ; 7882 restauré.
+- **État** : fait — 12 novembre 2026 ; 440 + 880 paires mesurées sur card2, résultats publiés, service 7882 restauré et verrou rendu (fin.json, failed=null).
 - **Famille** : produit
 - **Gravité** : coût — latence et qualité du classement à dix fiches non mesurées.
 - **Atteignable en service** : non pour cette mesure ; le branchement du juge revient à la session mémoire.
 - **Touche rag3weaver** : oui, choix du juge du rappel de mémoire.
 - **Pour** : banc
 - **Ouvert le** : 11 novembre 2026
+
+## Résultat final — 12 novembre, après la seconde passe
+
+Travail réalisé : [résultats et limites](../../banc/12-11-2026/01-le-juge-sur-card2.md).
+K5 : 67/88 bonnes premières, médiane 539,9 ms par cas ; k10 : 58/88,
+médiane 786,6 ms. Les 440 scores communs sont identiques. Poids/cache/calcul
+placés explicitement sur card2, contexte seat1 stable à 40 KiB VRAM et 2 080 KiB GTT
+sur 128 captures ; compteurs d’exécution HIP non exposés, jamais remplacés par zéro.
+Fin à 18:37:45 Paris, 298,274 s après MESURE, `failed=null`, restauration confirmée.
+Les premières sections décrivent les préparations et le rouge antérieur conservé.
+Aucune activation mémoire réelle ni nouvelle exécution autorisée par cette clôture.
+
+Le faux rouge du wrapper d’arrêt de 7882 est un travail distinct, ouvert chez
+[optimiseur](../../optimiseur/tickets/2026-11-12-attendre-la-disparition-du-port-apres-l-arret-du-prive-7882.md),
+qui en accepte le portage. Il ne disparaît pas avec la clôture de cette mesure.
 
 ## Autorisation générale précisée par Lucie le 12 novembre
 
@@ -514,3 +529,306 @@ Le petit script ne lance ni ne tue de processus et ne met pas en œuvre tout
 ce contrôleur : il rend la capture et ses inconnues reviewables. Le rapprochement
 des séries, l’arrêt du groupe et l’intégration au lanceur restent à qualifier.
 Pas de nouveau GPU ni de sonde de calcul exécutés pour cette préparation.
+
+
+## Placement explicite : chemin allocation et calcul relu, sans runtime
+
+Révision locale relue à luciepc : llama.cpp
+`d2462f8f7ac6d80070a587ffebf6cd73730f4280` (le bâti existant).
+La sélection explicite permet une preuve positive du placement plutôt que
+l’exigence injustifiée d’aucun FD sur le GPU masqué :
+
+- [common/arg.cpp, parse_device_list](https://github.com/ggml-org/llama.cpp/blob/d2462f8f7ac6d80070a587ffebf6cd73730f4280/common/arg.cpp#L833) :
+  `--device` sélectionne par nom de backend et renseigne `params.devices` ;
+- [src/llama.cpp, préparation des périphériques](https://github.com/ggml-org/llama.cpp/blob/d2462f8f7ac6d80070a587ffebf6cd73730f4280/src/llama.cpp#L125) :
+  la liste explicite alimente `model.devices` ; `split_mode=none` ne garde
+  que l’entrée `main_gpu`. Le journal imprime nom et `props.device_id` PCI ;
+- [src/llama-model.cpp, chargement](https://github.com/ggml-org/llama.cpp/blob/d2462f8f7ac6d80070a587ffebf6cd73730f4280/src/llama-model.cpp#L1205) :
+  buffers et couches GPU pris dans cette liste ; des couches peuvent rester
+  sur CPU, ce qui n’ouvre pas une autre carte graphique ;
+- [src/llama-kv-cache.cpp](https://github.com/ggml-org/llama.cpp/blob/d2462f8f7ac6d80070a587ffebf6cd73730f4280/src/llama-kv-cache.cpp#L226) :
+  le cache déporté suit le périphérique de la couche ;
+- [src/llama-context.cpp](https://github.com/ggml-org/llama.cpp/blob/d2462f8f7ac6d80070a587ffebf6cd73730f4280/src/llama-context.cpp#L256) :
+  initialisation des backends GPU de `model.devices`, puis backends ACCEL/CPU ;
+- [ggml-cuda.cu, calcul du graphe](https://github.com/ggml-org/llama.cpp/blob/d2462f8f7ac6d80070a587ffebf6cd73730f4280/ggml/src/ggml-cuda/ggml-cuda.cu#L4509) :
+  sélection du périphérique du contexte avant exécution. Le backend HIP
+  utilise les alias HIP correspondants ; son registre expose le PCI lu par
+  `cudaDeviceGetPCIBusId` (vers 5698) via `props.device_id` (vers 5064).
+
+Commande candidate pour la future fenêtre, NON exécutée :
+
+```bash
+ROCR_VISIBLE_DEVICES=0 ~/git_workspaces/llama.cpp/build-hip/bin/llama-server   -m ~/.cache/rag3db-banc-notes/hf/qwen3-4b-Q8_0.gguf   --device ROCm0 --split-mode none --main-gpu 0   -ngl 99 -c 16384 -np 1 --fit off --no-warmup -lv 4   --host 127.0.0.1 --port 8099
+```
+
+Avant toute paire : exiger que le journal associe le périphérique effectivement
+retenu à PCI 0000:04:00.0, backend GPU unique, et que les fdinfo attribuent
+modèle/cache à cette carte. Refuser PCI inconnu, liste supplémentaire ou
+contradiction source/journal/FD. Les traces de placement du graphe, si disponibles,
+complètent cette chaîne ; ce plan n’affirme pas un compteur d’exécution nul.
+Le nom logique ROCm0 seul ne prouve jamais la carte physique.
+
+Une absence de compteurs moteur ne déclenche pas un chargement supplémentaire
+pour redécouvrir l’inconnu : elle est déjà connue. La chaîne source figée +
+sélection explicite + PCI effectivement retenu + allocations sous surveillance
+est une alternative de preuve du placement de la charge du modèle, compatible
+avec le petit contexte d’initialisation toléré par Lucie. Elle ne mesure pas
+chaque éventuelle microactivité du pilote et ne garantit pas des FPS déterminés.
+Les contre-mesures restent la borne de mémoire imputable au banc sur seat1
+et l’arrêt de son seul groupe au premier écart, sans se fonder sur la charge
+globale du jeu. Nouvelle fenêtre et contrôle opérateur encore nécessaires.
+
+## Corrections statiques de la capture
+
+Nouvelle empreinte du script externe `contexte-rocm/garde_charge.py` :
+`0da91960271591c35930898844e05af7defd4d602b63bd6d627b7caf124319a9`.
+
+- `drm-engine-capacity-*` est ignoré pour les durées : ce n’est pas une unité ns.
+- L’ensemble des FD GPU (`/dev/dri/*`, `/dev/kfd`) est relevé avant/après ;
+  sa modification invalide la capture. La disparition d’un FD non GPU,
+  notamment HTTP, est consignée mais ne fait plus échouer un ensemble GPU stable.
+- Les compteurs absents restent inconnus ; le petit outil de capture ne décide
+  toujours pas seul de la validité du placement ni du lancement des requêtes.
+
+Vérifications sur quatre cas synthétiques, sans processus GPU ni lecture GPU :
+capacité sans unité ns ignorée, durée compute 42 ns conservée, disparition HTTP
+avec ensemble GPU stable tolérée, starttime incorrect refusé. Quatre verts lus.
+Harnais externe : `contexte-rocm/verifier_capture.py`. Aucun nouveau chargement,
+sonde GPU ou opération sur 7882 ; le contrôleur final reste à relire/intégrer.
+
+
+## Seconde fenêtre : préparation opérateur 7882, 12 novembre à 18 h 19
+
+Sur demande d’orchestration, optimiseur est disponible pour un futur arrêt/retour
+du privé, selon les mêmes règles : verrou MESURE réel et GO avant SIGTERM ciblé,
+trois autres services inchangés, restauration exacte après fin du banc et preuve
+du retour mémoire. Aucune nouvelle fenêtre n’a été exécutée à ce stade.
+Le rouge précédent et ses preuves restent conservés ; cette préparation ne
+valide ni n’active le nouveau contrôleur du banc.
+
+Préflight lecture seule joué à **18:19:17.675 Paris** : PID **3273544**, starttime
+**84847328**, SHA256 installé/chargé
+`65ec1d1db17d48ee53785cd55e72b9b77ca451d5bc4bb8197a9c1b7d040c595d`, même cwd,
+argv et quatre variables exactes de la recette ci-dessus. Aucun client TCP sur
+7882, port 8099 libre, poste libre lors du relevé. Santé réelle granite-278m,
+768/Flex32, dual/sparse/factice faux, lot 128/512 ; fdinfo amdgpu PCI 04:00.0
+confirme card2 pour le processus actuel. Les PID des trois services restent
+966256 / 3415586 / 1409444.
+
+Script préparé séparément à luciepc :
+`~/.cache/rag3weaver-build/cx-service-7882-banc-2.py`, SHA256
+`d97e71c8e30c776732a6e5dd170af28fa7211aa0fae4c0d1a6ce5506e593fece` ;
+copie portable `~/.cache/optimiseur-notes/service-7882-banc-2.py`.
+Seul le mode `preflight` a été joué. Les modes `stop GO-orchestration` et
+`restore` sont prêts mais non exécutés, avec le PID actuel et un dossier de
+preuves neuf `~/.cache/optimiseur-notes/banc-k10-12nov-7882-2/`.
+Preuve : `preflight.json` dans ce dossier ; journal
+`~/.cache/rag3weaver-build/cx-service-7882-preflight-2.log`.
+
+Avant tout arrêt : contrôleur du banc figé/relu, GO coordonné, signal du verrou
+MESURE acquis et deadline 1 200 s ; relire identité et clients. Avant retour :
+signal de fin ou abandon, PID llama et 8099 absents, VRAM rendue, puis relancer
+7882 avec la recette exacte et prouver santé/PID/SHA/PCI et autres services.
+Pas de nouveau modèle ni autre service/GPU utilisé par cette préparation,
+aucune lecture/copie env/vault, aucune limite relâchée. Le ticket reste ouvert.
+
+## Contrôleur complet v2 figé pour revue, sans activation
+
+Sources copiées à l’identique aux deux postes dans
+`~/.cache/rag3db-banc-notes/k10-controleur-v2/`. Fichiers et SHA256 :
+
+- `controleur.py` : `c37663268bec9030501c553365548197594613ae443de945d77ea5004b58345a` ;
+- `garde_charge.py` : `0da91960271591c35930898844e05af7defd4d602b63bd6d627b7caf124319a9` ;
+- `client.py` : `bd74fbc8a46bba74058d81a1d51b2c83020b5f13d4daa9e2c1a4b31ec2b9bf87` ;
+- `fige.json` (liste des empreintes, argv, budgets, source/binaire) :
+  `ce6b17622ee0931a52fe4616264c5b46afaf098e6123624eb803713c7c2ef7ba`.
+
+Les trois jeux sont ceux déjà figés (440/880 paires et manifeste, mêmes SHA
+que le passage précédent). Le contrôleur vérifie les empreintes du paquet
+avant toute remise et refuse une source modifiée. Il crée un dossier de preuves
+neuf, écrit PID/deadline à acquisition de MESURE et attend une remise explicite
+JSON `{ "ok": true, "source": "preuve ou message opérateur" }` dans
+`liberation-7882.go`. Seul le banc écrit ce témoin après le signal de l’optimiseur.
+Les mêmes conditions de port, PCI et au moins 9 Gio libres sont relues.
+
+Commande serveur figée : la commande de placement explicite de la section
+précédente, avec en plus `--cache-ram 0` et
+`--slot-save-path DOSSIER_PREUVES_NEUF/slots/`. Pas de second serveur ni de
+second chargement pour contrôler le cache. Le journal doit prouver le PCI
+retenu, le backend GPU unique, les buffers modèle/KV sur ROCm0 et la désactivation
+du cache RAM avant toute paire ; les fdinfo prouvent la grosse allocation sur04.
+Les 16 Mio maximum VRAM et GTT du seul processus sur seat1 sont gardés chaque
+seconde ; les compteurs absents restent inconnus et ne bloquent pas artificiellement
+la preuve positive du placement. Des compteurs présents qui évoluent sur seat1
+arrêtent la chaîne et donnent un diagnostic. La capture complète avant première
+requête et pendant les séries garde PID/start/exe SHA/env GPU/FD et contenus bruts.
+
+Chaque processus serveur/client a son propre groupe créé par le contrôleur.
+Au premier défaut, arrêt des seuls groupes créés, attente et vérification de
+leurs descendants ; TERM puis KILL borné uniquement sur ces groupes si nécessaire.
+Un filet CPU a vérifié le retrait d’un parent et de son enfant réels. Aucun
+processus GPU ni d’une autre session n’a été utilisé pour ce test.
+Après arrêt, preuve de 8099 libre et mémoire card2 revenue à baseline +256 Mio
+au maximum, puis signal à l’optimiseur pour retour. Le verrou reste tenu jusqu’au
+JSON `restauration-7882.ok` (même schéma) après santé/PID/PCI attestés ; ports
+relus, ou vrai blocage de restauration nommé à l’échéance. Délai global 1 200 s
+après acquisition, startup 120 s, deux séries 900 s communes, réserve finale
+180 s. L’attente opérateur initiale consomme le budget global ; elle ne le remet
+pas à zéro. Aucun retry automatique ni sortie partielle reprise.
+
+### Frontière de cache et comparabilité
+
+La source d246 confirme `--cache-ram 0`, et l’action POST
+`/slots/0?action=erase` qui efface le cache logique du slot. Cette action exige
+un `--slot-save-path` existant ; le contrôleur crée le dossier vide, sans save
+ni restore de cache sur disque. Avant chaque série, il exige une réponse avec
+id_slot 0 et n_erased entier, puis la première paire doit rapporter
+`timings.cache_n == 0`. La réutilisation par slot reste activée pour les fiches
+suivantes de chaque cas (`cache_prompt: true`). Les réponses enregistrent
+`timings.cache_n`, `prompt_n`, `prompt_ms` et l’ensemble des timings ; le champ
+`tokens_cached` est conservé sous le nom distinct `slot_tokens_cached_after`
+car il décrit l’état final, pas la quantité réutilisée avant calcul.
+
+Le cache RAM global est donc désactivé et le slot est vidé entre k5 et k10 ;
+les états logiques initiaux sont froids. Cela n’égalise pas tous les caches
+matériels ni les effets d’ordre k5 puis k10 sur le même serveur. Avec
+`--no-warmup`, la première paire k5 paie l’échauffement des kernels ; la première
+paire k10 a un prompt froid mais un serveur déjà utilisé. Présenter les latences
+avec cette distinction et identifier le premier cas, sans prétendre des états
+physiques identiques. Les résultats historiques avaient d’autres flags/cache :
+pas de comparaison de latence présentée comme une reproduction à l’identique.
+
+### Vérifications de préparation effectivement jouées
+
+Compilation syntaxique des trois scripts ; quatre cas de capture synthétique
+et douze filets CPU du contrôleur, tous verts. Les filets couvrent PCI erroné,
+backend supplémentaire, absence de KV, dépassement/absence de mémoire seat1,
+activité imputable, compteur absent gardé inconnu, compteur stable,
+filtre contradictoire, cache RAM non prouvé et arrêt du seul groupe parent/enfant.
+Preuves : `preuve-capture-cpu.log`, `preuve-controleur-cpu.log`, harnais
+`verifier_capture.py` et `verifier_cpu.py`, inclus dans le manifeste.
+Ce sont des vérifications CPU, pas une passe GPU ni un résultat k10.
+
+Préparation opérateur 02f969823 intégrée ci-dessus. Le contrôleur attend une
+revue finale et une nouvelle fenêtre coordonnée ; aucun lancement GPU ni
+arrêt 7882 effectué pour cette préparation. Le premier rouge reste conservé.
+
+## Contrôleur v3 : trois ajustements de revue et GO conditionnel
+
+Lucie demande explicitement de réussir à utiliser le GPU. L’orchestration autorise
+une nouvelle passe unique après les trois corrections ci-dessous, dans le cadre
+clarifié de disponibilité seat1 et de coordination des services, sans nouvelle
+demande humaine. Le premier rouge et son budget restent inchangés et conservés.
+
+Version v3 figée aux deux postes : `~/.cache/rag3db-banc-notes/k10-controleur-v3/`.
+
+- `controleur.py` SHA256 `6c797ab3ad674fdb04b3e9928151930a271cdb31b5531bf6b40df38ae005f5fb` ;
+- `garde_charge.py` SHA256 `85a4d58312cd6629bea9725159208b3496c5ea096635202dc7b37675b8ff590f` ;
+- `fige.json` SHA256 `66d9a6b59dcadea022a2b9521d39776bc5c898d86f067cf9ba29e2b16dcbf3f3`.
+
+1. Startup borné à acquisition MESURE +120 s, validation des empreintes et attente
+   de remise comprises : aucun nouveau délai de 120 s après libération.
+2. Poids Q8_0 hachés en lecture seule avant chargement : SHA256
+   `ed119d433ab8076b2c05d9116b2b80b6ddc4115292583cea231024c5628a50bb`.
+   Six fichiers locaux du tokeniseur/configuration hachés et figés dans
+   `identites.json` et le manifeste ; liste et empreintes revérifiées au départ.
+3. Captures du processus et garde mémoire seat1 actives pendant chargement,
+   dès que les FD GPU apparaissent. Captures partielles conservées avec raisons,
+   valeurs absentes inconnues, toute valeur connue au-delà du budget refusée.
+   Avant les requêtes, capture complète et preuve positive de placement requises.
+
+Quinze filets CPU du contrôleur et quatre de capture passent ; les trois nouveaux
+vérifient deadline absolue, capture partielle non transformée en zéro et refus
+d’un dépassement observé même en capture partielle. Pas de GPU pour ces contrôles.
+Les réglages de cache v2 et les garanties d’arrêt/restauration sont conservés.
+La nouvelle passe commence seulement après acquisition du verrou et arrêt/remise
+7882 par l’optimiseur ; résultats et retour seront consignés dans ce même ticket.
+
+
+### Arrêt de la seconde fenêtre : contrôle transitoire à documenter
+
+Banc confirme contrôleur corrigé figé, MESURE acquis 18:32:47 Paris, deadline
+18:52:47 et démarrage borné à 18:34:47, lanceur 3416648/runner 3416663.
+Identité et zéro client relus ; SIGTERM du seul PID 3273544 à 18:33:14.883.
+Le wrapper a ensuite échoué sur son assertion de port absent : le PID venait
+de disparaître mais le premier relevé `ss` montrait encore le listener.
+La chaîne a été arrêtée ; aucun nouveau TERM ni lancement GPU par optimiseur.
+
+Contre-vérification indépendante à **18:33:39.268** : `/proc/3273544` absent,
+7882 absent, les trois autres listeners/PID strictement identiques à la preuve
+avant arrêt. Card2 : utilisés 21 661 892 608 octets, libres 12 546 850 816,
+soit 11,685 Gio. `arret.json` consigne ce contrôle et l’erreur initiale, sans
+effacer le journal rouge. Remise explicite au banc pour sa propre validation.
+
+Preuves : dossier `banc-k10-12nov-7882-2` déjà nommé ci-dessus,
+`juste-avant-arret.json`, `arret.json`, `vram-apres-arret.json` ; journal
+`~/.cache/rag3weaver-build/cx-service-7882-arret-2.log`.
+Suite opérateur à traiter avant réutilisation du wrapper : attendre aussi la
+disparition du listener dans la borne d’arrêt, au lieu d’un unique contrôle
+immédiat après la fin du PID. Ce constat n’autorise aucun nouveau passage du
+banc ; aucun correctif runtime appliqué à ce stade. Restauration attendue
+uniquement après signal de fin et preuves de déchargement du banc.
+
+### Retour 7882 après les deux séries de la seconde fenêtre
+
+Banc signale les deux séries terminées, 440 puis 880 requêtes, à 18:35:53 Paris.
+Le modèle du banc est déchargé à 18:35:54 : `modele-decharge.json` indique PID
+3421649, starttime 85072671, card2 utilisés 21 661 892 608 octets (baseline exacte),
+pic 28 807 573 504 octets. Sources du banc :
+`~/.cache/rag3db-banc-notes/k10-20261112-passe2/`.
+Ces constats ne remplacent pas l’analyse des résultats, portée par banc.
+
+Avant retour, optimiseur revérifie indépendamment PID et groupe 3421649 absents,
+8099 libre et VRAM exactement à sa baseline de 21 661 892 608 octets.
+Restauration lancée **18:36:25.039**, attestée **18:36:29.156**, nouveau PID
+**3431955**, starttime **85088014**. SHA inchangé
+`65ec1d1db17d48ee53785cd55e72b9b77ca451d5bc4bb8197a9c1b7d040c595d`, cwd, argv
+et quatre variables conformes à la recette. Santé granite-278m 768/Flex32,
+dual/sparse/factice faux, lot 128/512. FD amdgpu PCI 0000:04:00.0/card2,
+VRAM résidente 3 924 676 KiB ; aucun fd VRAM card0 dans le service restauré.
+
+Les trois autres services conservent leurs listeners et PID 966256 / 3415586 /
+1409444. Santé relue après fin du lanceur SSH. Le fichier `embed-7882/pid`
+a été actualisé à 3431955 après sauvegarde dans `pid-avant-passe2`.
+
+Preuves opérateur nouvelles :
+`~/.cache/optimiseur-notes/banc-k10-12nov-7882-2/retour.json`,
+`restauration-service.log`, `pid-restauration`, `pid-avant-passe2` ; journal
+`~/.cache/rag3weaver-build/cx-service-7882-retour-2.log`.
+Ancien rouge du premier passage et rouge transitoire du wrapper d’arrêt
+restent conservés ; aucune répétition de série et aucun autre service modifié.
+Retour transmis au banc, à hotfixs et à l’orchestration pour relecture et
+libération du verrou. La clôture et l’analyse restent chez banc ; cet ajout
+opérateur ne ferme pas le ticket et n’autorise aucune nouvelle exécution GPU.
+
+## Preuves finales de la seconde passe
+
+Dossier aux deux postes : `~/.cache/rag3db-banc-notes/k10-20261112-passe2/`.
+Les sources figées restent dans `k10-controleur-v3/` ; les preuves de la première
+passe rouge et les contrôleurs v2/v3 sont conservés, sans réécriture.
+
+- MESURE acquis 18:32:47 Paris, serveur PID 3421649/starttime 85072671 ;
+  placement PCI 04:00.0 prouvé à 18:33:53 avant les paires ;
+- k5 terminé 18:34:43, 440/440 ; k10 terminé 18:35:53, 880/880 ;
+  premier `cache_n=0` dans les deux séries, cache positif sur 352/352 et
+  792/792 paires suivantes ; pas de troncature ni de doublon ;
+- serveur et groupes du banc arrêtés, 8099 absent ; card2 rendue exactement
+  à baseline 21 661 892 608 octets à 18:35:54, pic 28 807 573 504 octets ;
+- retour 7882 18:36:29.156, PID 3431955/starttime 85088014, même SHA/config,
+  santé réelle granite-278m/768/Flex32/factice=false, PCI 04:00.0 ; trois autres
+  services inchangés, relecture indépendante par banc puis orchestration ;
+- `fin.json` à 18:37:45 : `failed=null`, restauration confirmée, 298,274 s ;
+  `poste --qui` libre. Aucun retry des séries.
+
+Empreintes SHA256 :
+
+- k5-scores.jsonl : `250a487e4aee034ebdd9abab68ca9c6b97af2d1ef9979abc4a40080e1a438d8c` ;
+- k10-scores.jsonl : `0676d9963be8f436891e9a5084444f8be907daa6ac54358044834d609ec18f06` ;
+- analyse.json : `a67c1ed0135c726f88bd4622453fd207052c1d42f3f881414a516f47a1dbe223` ;
+- fin.json : `052b2021a8eb8b0fbaef242f5ce8c2143437a50907e139402ac2405cbfb47008`.
+
+Recalcul indépendant de l’orchestration concordant : nombres, rangs, AUC,
+latences, empreintes et retour service. Le corpus construit ne mesure pas le
+rappel réel ; réglages/cache différents de l’historique, pas de garantie FPS.
+Les obligations de cette mesure sont réalisées ; aucune suite d’isolation
+stricte n’est gardée par principe contre la clarification de Lucie.

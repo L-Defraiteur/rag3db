@@ -1,12 +1,19 @@
 # Le banc : knowledge dump (11 novembre 2026)
 
+> **Résultat final — 12 novembre 2026, après la seconde passe.** Card2 a servi
+> pour les 1 320 paires : médiane 540 ms pour cinq fiches, 787 ms pour dix.
+> Le contexte seat1 est resté à 40 KiB de VRAM et 2 080 KiB de GTT ; les poids,
+> cache et calcul sont placés sur card2. 7882 restauré, verrou rendu ; mesure
+> clôturée. [Résultats, méthode et limites](../12-11-2026/01-le-juge-sur-card2.md).
+> Les notices et commandes précédentes ci-dessous sont historiques.
+
 > **Précision ultérieure de Lucie — 12 novembre 2026.** Le but est de garder
 > le GPU seat1 disponible pour jouer : les poids, le cache et le calcul du banc
 > doivent rester sur card2. Un contexte d’initialisation minuscule et stable
 > sur card0 peut être toléré ; sa seule ouverture ne doit plus faire échouer
 > le banc. Les notices exigeant zéro accès ci-dessous décrivent le contrat
 > précédent. ROCm initialise aussi des ressources des GPU masqués ; le
-> [ticket k10](../tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md)
+> [ticket k10](../../tickets/closed/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md)
 > donne les sources et les contrôles d’attribution restant à qualifier.
 > Zéro **requête du banc** a été joué : le serveur avait effectué son warmup
 > interne, dont l’exécution n’a pas été attribuée par compteur PCI.
@@ -20,7 +27,7 @@
 > Le passage du 12 novembre a été arrêté avant toute inférence : ROCm ouvrait
 > aussi un contexte de 40 KiB sur card0 malgré le filtre. Aucun nouveau
 > chargement avant exclusion stricte de seat1 et nouvelle fenêtre coordonnée.
-> Suivi : [ticket k10](../tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
+> Suivi : [ticket k10](../../tickets/closed/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
 
 Ce document dit tout ce qu'il faut pour reprendre les bancs sans l'historique de nos échanges.
 Chaque mot de jargon est défini à son premier usage. Le rapport de session du même dossier

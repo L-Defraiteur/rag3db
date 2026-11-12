@@ -1,12 +1,19 @@
 # Le juge local en GGUF par llama-server (11 novembre 2026)
 
+> **Résultat final — 12 novembre 2026, après la seconde passe.** Card2 a servi
+> pour les 1 320 paires : médiane 540 ms pour cinq fiches, 787 ms pour dix.
+> Le contexte seat1 est resté à 40 KiB de VRAM et 2 080 KiB de GTT ; les poids,
+> cache et calcul sont placés sur card2. 7882 restauré, verrou rendu ; mesure
+> clôturée. [Résultats, méthode et limites](../12-11-2026/01-le-juge-sur-card2.md).
+> Les notices et commandes précédentes ci-dessous sont historiques.
+
 > **Précision ultérieure de Lucie — 12 novembre 2026.** Le but est de garder
 > le GPU seat1 disponible pour jouer : les poids, le cache et le calcul du banc
 > doivent rester sur card2. Un contexte d’initialisation minuscule et stable
 > sur card0 peut être toléré ; sa seule ouverture ne doit plus faire échouer
 > le banc. Les notices exigeant zéro accès ci-dessous décrivent le contrat
 > précédent. ROCm initialise aussi des ressources des GPU masqués ; le
-> [ticket k10](../tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md)
+> [ticket k10](../../tickets/closed/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md)
 > donne les sources et les contrôles d’attribution restant à qualifier.
 > Zéro **requête du banc** a été joué : le serveur avait effectué son warmup
 > interne, dont l’exécution n’a pas été attribuée par compteur PCI.
@@ -20,7 +27,7 @@
 > Le passage du 12 novembre a été arrêté avant toute inférence : ROCm ouvrait
 > aussi un contexte de 40 KiB sur card0 malgré le filtre. Aucun nouveau
 > chargement avant exclusion stricte de seat1 et nouvelle fenêtre coordonnée.
-> Suivi : [ticket k10](../tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
+> Suivi : [ticket k10](../../tickets/closed/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
 
 La demande de l'orchestration, pour la page de la session mémoire (96) sur le classeur local
 (`docs/09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md`) : rejouer le
@@ -120,7 +127,7 @@ La chaîne de la page 03, § 4, tient telle quelle dans la forme de production :
 
 ## 5. Passage du 12 novembre : aucune mesure nouvelle
 
-Suivi et preuves : [ticket k10](../tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md),
+Suivi et preuves : [ticket k10](../../tickets/closed/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md),
 porteur banc. Les 440 paires k5 et 880 paires k10 ont été construites et contrôlées.
 Après GO coordonné, acquisition de `poste mesure` à 17:54:59 Paris et libération
 explicite de 7882 par l’optimiseur, card2 avait 11,685 Gio libres.
@@ -142,3 +149,16 @@ de la baseline. Le serveur a terminé, 8099 a été libéré et la VRAM rendue.
 sont restés inchangés. Verrou mesure rendu à 17:57:00, poste relu libre.
 Le ticket reste ouvert pour établir une exclusion stricte de seat1 avant tout
 nouveau passage coordonné ; aucun nouveau chargement n’est autorisé par ce bilan.
+
+
+## 6. Mesure achevée le 12 novembre sur card2
+
+La [page de résultats](../12-11-2026/01-le-juge-sur-card2.md) remplace désormais
+l’estimation k10 : 786,6 ms médians et 883,4 ms au p95 par cas de dix, contre
+539,9/635,8 ms pour cinq dans la même passe. Première utile : 58/88 et 67/88 ;
+les deux premières contiennent l’utile dans 78/88 et 84/88 cas. Zéro requête
+tronquée, aucun doublon, pas de retry. Les scores communs sont identiques.
+Flags/cache différents de l’historique, première paire sans warmup et ordre
+k5 puis k10 documentés ; corpus construit, pas mesure du rappel réel.
+Retour 7882 et verrou rendu attestés. Cette mesure ne branche aucun juge en
+production ; elle fournit les données à la session mémoire.
