@@ -1,0 +1,9 @@
+{"kind":"range","mode":"key-discard","u":0,"first":61440,"count":512,"ns":41786,"pool_before":7647744,"pool_after":7647744}
+{"kind":"range","mode":"key-discard","u":1,"first":61952,"count":512,"ns":39365,"pool_before":7647744,"pool_after":7647744}
+{"kind":"range","mode":"key-discard","u":2,"first":62464,"count":512,"ns":36558,"pool_before":7647744,"pool_after":7647744}
+{"kind":"range","mode":"key-discard","u":3,"first":62976,"count":512,"ns":36679,"pool_before":7647744,"pool_after":7647744}
+{"kind":"range","mode":"key-discard","u":4,"first":63488,"count":512,"ns":36104,"pool_before":7647744,"pool_after":7647744}
+{"kind":"range","mode":"key-discard","u":5,"first":64000,"count":512,"ns":34933,"pool_before":7647744,"pool_after":7647744}
+{"kind":"range","mode":"key-discard","u":6,"first":64512,"count":512,"ns":34927,"pool_before":7647744,"pool_after":7647744}
+{"kind":"range","mode":"key-discard","u":7,"first":65024,"count":512,"ns":34033,"pool_before":7647744,"pool_after":7647744}
+{"kind":"summary","mechanism_only":true,"mode":"key-discard","entries":65536,"ranges":8,"removed":4096,"input_fnv1a64":4679382657564329759,"survivors_fnv1a64":7999543437703913983,"latency_ns":294385,"cpu_us_with_boundary_sampling":297,"pool_initial":7647744,"pool_peak_at_boundaries":7647744,"rss_peak_kib_before_validation":42508,"validated":true}

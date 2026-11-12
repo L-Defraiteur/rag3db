@@ -398,3 +398,13 @@ pool frontière inchangé7 647 744octets. Pas facteur89du moteur complet ni
 preuve de pressionDDL. Bruts exportés/revue08, poste libéré.
 C7 autorise ensuite exactement4points N/U et24processus max ; arbre finit
 ses8CLI et laisse la porte mesure. Même source/binaire, pas de compilation.
+
+Quatre points supplémentaires finis0/24processus/2 352plages, ressources
+libérées : médianes plages6,920786/105,293110/3,848231/102,217416ms
+(N16k/U64,N256k/U64,N64k/U8,N64k/U256). Données/dispersion revue09,
+coût compatibleN×U pour le mécanisme seulement. STOPmesures après ces4points.
+Proposition minimale lecture seule revue10 : fusion stricte d’undo adjacents
+d’un même tampon/handler/groupe, opt-in après preuve d’équivalence ; limites
+et alternatives explicitement conservées. Itérateur actuel alloue un vector
+système : pas d’affirmation de rollback global sans allocation. Aucun code
+moteur modifié ni nouveau build/mesure, même ticket ouvert pour revue du plan.

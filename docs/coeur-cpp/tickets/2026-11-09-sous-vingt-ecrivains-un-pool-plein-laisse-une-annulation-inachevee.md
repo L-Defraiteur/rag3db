@@ -625,3 +625,42 @@ Une acquisition poste mesure, global900s après acquisition, enfant60s,
 mémoire1G/pool512M ; premier échec stop. Ni matrice complète ni DDL/codeproduit.
 Arbre confirme fin de ses8CLI et aucune réservation. Après ces4points : STOP
 mesures et analyse des latences/dispersion/validations par cellule.
+
+### Quatre points terminés code0 — STOP mesures appliqué
+
+Unité cx-coeur-quatre-points-12nov-01 inactive/MainPID0, code0, poste relu0/4.
+24processus uniques, 4cellules×3paires, aucune relance ; contrôleur2,831s,
+service2,874s/CPU2,395s/pic153,5M/swap0. Source et binaire montés RO,
+empreintes début/fin identiques, premier refus préservé. Limite réelle1G
+vérifiée, borne890s+2 après acquisition poste mesure, enfants57s+2.
+
+Médianes brutes de retrait (pas rollback moteur) :
+- N16384/U64 : clés0.282405ms, plages6.920786ms
+- N262144/U64 : clés0.324703ms, plages105.293110ms
+- N65536/U8 : clés0.294349ms, plages3.848231ms
+- N65536/U256 : clés0.300968ms, plages102.217416ms
+
+Validation par cellule : mêmes entrées/survivants/volumes et réinsertion
+vérifiée dans les6processus ; à N65536 signatures égales à l’ancre U64.
+Preuves `annulation/cx-pilote-retrait-0511dece7/quatre-points-12nov-01/`
+resultats.json et point-*-process-*.stdout ; bruts/dispersion à exporter.
+Mesures arrêtées après ces4points, aucun job/slot réservé ; analyse seulement.
+
+Bruts/dispersion des4points exportés dans
+`12-11-2026/09-resultats-quatre-points-et-analyse.md` et
+`12-11-2026/preuves/quatre-points/` :24sorties,2 352plages, codes/argv/SHA,
+signatures etMAD/min/max. Avec ancre précédente, N×4 donne tempsplages×3,82
+puis×3,98 ; U×8 donne×6,87 puisU×4 donne×3,87, àR4096constant. Compatible
+avec le coût procheN×U du mécanisme, pas rollbackcomplet ni causeDDL.
+
+Revue C7 des24validations reçue, aucune mesure supplémentaire. Proposition
+lecture seule `12-11-2026/10-proposition-regroupement-undo.md` : regrouper
+uniquement des INSERT_INFO adjacents/samehandler/groupe dans un tampon,
+opt-in sémantique seulement après équivalence de tous les effets ; aucun
+registre de plages alloué au rollback et commit inchangé. Limites/barrières,
+réservations partielles, survivants et index secondaires à prouver. Alternative
+ensemble de plages préparé à l’écriture seulement si la fragmentation impose
+un traitement plus large. Note : reverseIterate alloue déjà un vector système,
+donc aucune promesse de zéro-allocation globale aujourd’hui ; le prochain
+regroupement n’ajouterait rien et le retrait reste sans demande au pool.
+Aucun code moteur modifié, build/mesure/test natif nouveau exécuté.
