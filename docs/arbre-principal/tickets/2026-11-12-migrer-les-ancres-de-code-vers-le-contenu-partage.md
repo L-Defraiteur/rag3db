@@ -736,3 +736,16 @@ cx-target-contenu-derive (neuf après nettoyage du lot précédent), lib29, j8/M
 borne600s après lourd ; aucun modèle, GPU, service ou base. Source/argv publiés
 avant lancement ; premier échec diagnostiqué, aucun retry inchangé. Diff partagé
 avant passe complète ou master. Fichiers communs à ED inchangés.
+
+### Revue du lien entre aperçu et faits du plan
+
+C7 pointe que la simple égalité des descripteurs déclarés ne qualifie pas les
+configurations fournies contre config_fingerprint/schema_facts_fingerprint.
+La primitive commune de liaison aux faits complets n'existe pas dans le plan
+actuel. Correction locale pendant l'attente du ciblé0cc (source distante inchangée) :
+report toujours PlanQualification::UnqualifiedConfigAndSchemaFacts, identité du
+plan seulement référencée, aucun succès déclaré cohérent au plan. Quinzième témoin :
+configs/recette changés à descripteurs constants restent explicitement non qualifiés,
+avec empreinte de rapport différente ; pas de nouveau hash annoncé contrat commun.
+Une qualification effective exigera les faits complets et un producteur commun
+revu séparément. Aucun apply ou jeton d'écriture ne découle de cet aperçu.

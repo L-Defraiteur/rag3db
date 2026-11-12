@@ -106,7 +106,8 @@ fn rejects(f: &Fixture, code: RefusalCode) {
 fn canonical_fixture_preserves_occurrences_graph_models_and_local_coordinates() {
     let f=fixture("Scope");
     let result=run(&f).unwrap();
-    assert_eq!(result.fixed_plan_identity(),f.plan.identity());
+    assert_eq!(result.referenced_plan_identity(),f.plan.identity());
+    assert_eq!(result.plan_qualification(),PlanQualification::UnqualifiedConfigAndSchemaFacts);
     assert_eq!(result.versions().len(),6);
     assert_eq!(result.retained_entities().len(),16);
     assert_eq!(result.retained_relations().len(),17);
@@ -273,4 +274,31 @@ fn occurrence_visibility_and_graph_changes_are_retained_and_fingerprinted() {
     assert_eq!(after.versions(),before.versions());
     f.inventory.relations[0].properties.insert("changed".into(),CypherValue::Bool(true));
     assert_ne!(run(&f).unwrap().identity(),after.identity());
+}
+
+#[test]
+fn unchanged_descriptor_never_qualifies_altered_configs_or_recipe_against_the_plan() {
+    let mut f=fixture("Scope");let original=run(&f).unwrap();
+    // The descriptor labels remain unchanged; this module has no common
+    // producer proving they cover these full configs or the provider's facts.
+    f.inventory.source_config.return_fields=Some(vec!["name".into()]);
+    let changed_source=run(&f).unwrap();
+    assert_eq!(changed_source.plan_qualification(),PlanQualification::UnqualifiedConfigAndSchemaFacts);
+    assert_eq!(changed_source.referenced_plan_identity(),original.referenced_plan_identity());
+    assert_ne!(changed_source.identity(),original.identity());
+    assert_ne!(changed_source.inventory_fingerprint(),original.inventory_fingerprint());
+    f.recipe.target_config.return_fields=Some(vec!["content".into()]);
+    let changed_target=run(&f).unwrap();
+    assert_eq!(changed_target.plan_qualification(),PlanQualification::UnqualifiedConfigAndSchemaFacts);
+    assert_ne!(changed_target.identity(),changed_source.identity());
+    f.inventory.source_config.chunking.title_max_chars+=1;
+    f.recipe.target_config.chunking.title_max_chars+=1;
+    let changed_recipe=run(&f).unwrap();
+    assert_eq!(changed_recipe.plan_qualification(),PlanQualification::UnqualifiedConfigAndSchemaFacts);
+    assert_ne!(changed_recipe.identity(),changed_target.identity());
+    assert_eq!(f.inventory.descriptor,f.plan.inputs().source);
+    assert_eq!(f.recipe.target_descriptor,f.plan.inputs().target);
+    let report=serde_json::to_value(&changed_recipe).unwrap();
+    assert_eq!(report["plan_qualification"],"unqualified_config_and_schema_facts");
+    assert!(report.get("fixed_plan_identity").is_none());
 }
