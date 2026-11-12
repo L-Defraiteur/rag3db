@@ -1417,3 +1417,44 @@ réduction, sélection effective explicitée dans le manifeste sans modifier
 a posteriori le prompt conservé. Copie locale : cache mémoire
 `revue-gemini-A-20261112/seconde/`. Mission de seconde lecture terminée ;
 le ticket migration demeure ouvert pour ses suites propres.
+
+### Suite RO — prise en charge après A, source de départ82e812764
+
+GO C7 pour le raccord déjà prévu page02, même ticket, WT neuf local/remote prévu
+cx-wt-observation-faits, branche cx-arbre-observation-faits. Arbre prend
+storage_inspection et extraction des décodeurs Catalog ; mémoire revue seule,
+pas d'édition concurrente backend.rs. Aucun Cargo/target/créneau encore lancé.
+
+Constat relu : inspect_snapshot_on ouvre une transactionRO puis inspect_on lit
+catalogmeta et journal dans cette vue. L'inspection décode les entity_config mais
+**ignore relation:<nom>**, alors que Catalog::persist_relation/load_relations
+utilisent déjà RelationDef. Une relation malformée reste donc omise, inspection
+et admission legacy pouvant réussir. Un témoin de refus sans effet est ajouté
+sur ce comportement existant (pas un faux rouge « API absente ») : metadata
+relation:Broken=not-json, transactionRO doit finir parROLLBACK sansCOMMIT.
+
+Diff prévu : décodeurs partagés stricts des lignes/namespaceconfigs/relations,
+réutilisés par les load_entity_configs/load_relations existants et l'inspection,
+sans autre initialisation/écriture. Restitution typée scellée des namespaces
+persistés et journal dans la même observation ; table absente=information
+indisponible, tableprésentevide=ensemblepersisté observé vide. Ce périmètre ne
+prouve pas un schéma effectif complet, ni fournisseur/politiques/recette/modèles.
+Provenance vueconnexion distinguée de snapshotRO réussi (promotion seulement
+aprèsCOMMIT). Exposer le journal déjà strict par son type existant, sans second
+journal ou qualificationApplied inventée. Empreinteentités existante inchangée.
+
+Raccord à A réutilisant DeclaredSchemaFacts::from_complete_input : vérifier
+explicitement que les ensembles effectifs fournis concordent avec configs ET
+RelationDef observés ; fournisseurs/politiques/signaux/recettes/modèles restent
+**fournis**, jamais requalifiés observés. Pas de hash/compose dupliqué, pas de
+changement de format metadata, identité durable/génération inconnue, preview
+inchangé, aucune migration/apply/bootstrap/publication ou base de Lucie.
+
+Recette à figer/publier avant lourd : confiner_validation.py commun (poste réel,
+Max32, deadline600,CPU), targetunique cx-target-contenu-derive32Go/lib29/j8,
+compilationnatif+code --no-run JSON, inventaireELF avantruntime du seul témoin
+rouge ; erreurattendue nommée et arrêt/diagnostic, sans continuer aux phases
+vertes ou rejouer inchangé. Après correctif/fixtures supplémentaires : nouveauSHA
+et proposition de ciblé du groupe inspection+décodeurs+A. Pas de modèle/service/
+GPU/PG nécessaire au ciblé ; seule DB native synthétique possible pour preuve
+lecture seule/octets inchangés. Global ultérieure choisie après diff/revue.
