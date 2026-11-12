@@ -1026,3 +1026,18 @@ dataflow::migrations:: -- --test-threads=8. Ce filtre couvre les18nouveaux et15
 aperçu, plus les contrats/runner existants ; compte final à lire réellement.
 Budget600 après poste lourd, j8/Max32G/target32Go/lib29. Aucun lourd réservé/lancé,
 aucun GPU/modèle/base réelle/service ; publier diff+témoins à mémoire/C7 avant essai.
+
+### Préflight syntaxique avant le premier ciblé A
+
+Mémoire a repéré sur206e276 une accolade de fermeture omise dans validate_finite,
+confirmée par lecture de la source figée. Aucun Cargo/lourd n'avait démarré sur206.
+Correction minimale publiée séparément ; parse rustfmt édition2021 --emit stdout,
+skip_children, sur tous les Rust modifiés et les deux nouveaux fichiers réussi,
+sans réécriture de fichiers. Ce contrôle de syntaxe n'est pas un test métier ni
+une compilation. Nouveau SHA obligatoire avant ciblé, même recette/budget autorisés.
+
+Le montage compilera une fois --no-run/JSON natif+code, identifiera l'ELF nommé
+par Cargo, puis listera son inventaire avant runtime. Exiger18facts et15aperçu,
+compter le groupe migrations complet et exiger tous les tests sélectionnés passés
+sans ignore ; aucun compte global supposé depuis l'absence d'API. Premier rouge
+stop/diagnostic. Les revues continuent en lecture seule sans toucher source figée.
