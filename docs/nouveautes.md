@@ -9,6 +9,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **12 nov. — Un plan reconnaît les déclarations complètes qui lui ont été fournies.**
+  L'API Rust compose et valide les schémas, configurations, recettes et modèles
+  déclarés, puis compare leurs empreintes versionnées au plan figé. Un manque ou
+  un contrat inconnu refuse ; cette correspondance ne prouve ni le stockage,
+  ni une génération durable, ni le droit d'appliquer une migration. (`d2cb7f063`)
+
 - **12 nov. — Un accord reprend la ligne montrée.** La carte accorde la ligne complète dans
   son domaine ; sa reprise lance réellement la commande, tandis qu'une variante repasse
   par la porte. Les accords à usage unique sont consommés atomiquement. Le droit de lire

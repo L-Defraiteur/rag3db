@@ -1,3 +1,41 @@
+## Reprise prioritaire — A vérifiée, avant tour master
+
+Branche privée cx-arbre-faits-lies-2, WT local/luciepc
+`/home/lucied/.cache/rag3weaver-build/cx-wt-faits-lies`. Source compilée et jouée
+**d2cb7f0636d099823f63de2cef674b630a46bc6f**, base ED6dd116e8f ; la tête privée
+locale ajoute seulement les recettes/preuves et ce bilan. Source distante d2
+propre et figée. API faits complets fournis et comparaison au plan livrables,
+provenance SuppliedDeclarations ; aucune qualification physique, génération
+persistée, exécution ou migration réelle. Aperçu toujours explicitement non qualifié.
+
+**Verdict composé VERT** : F5 5/5 et vrai checklib sans features (v2), lib entière
+2222/0/65 (v4 :18faits+15aperçu+lien80 réellement réussis), NAV40/0/0 (v5),
+CLI5/0/0/1groupe (v6), quatre ELF archivés/source/native29/maps/**220gabarits**
+chacun attestés et rehash indépendant vert. Fenêtre unique3600 depuis20:27:04,
+fin à20:50:10 en1385,89s, aucune remise à zéro. Les rouges de montage/vérificateur/
+hygiène restent conservés : caches/BindsTo v1, envCARGO_MANIFEST_DIR v2,
+cwdclient v3, parser should-panic v4,40bus privés arrêtés après NAVv5.
+Pas de défaut produit inventé ; aucune lib/NAV rejouée pour leurs gardes.
+
+Scope/pilote inactifs, poste0/4 et scan indépendantexeTarget/cwdWT/profil vides,
+TMP navigateur retiré après succès composé ; targetunique8,1Go conservé pour revue.
+PG synthétiquesv1/v2/v4 conservées, v3/v5/v6 n'ont pas créé de PG. Preuvesluciepc
+`cx-passe-faits-lies-v6/{VERDICT_COMPOSE,verdict-compose.json,artefacts.json,
+templates-220.json,quiescence.json,tmp-retire.json}`, chaînesv1–v5 conservées.
+Métadonnées recopiées localement dans `cx-preuves-finales-faits-lies-v6`.
+
+Attendre revue finale et **« à toi » C7** avant master ; rebase MD sur décision
+composite publiée777820ef79d26af91b93687953bb8c06f790fbb8 en préservant page02 et
+le ticket. Publicationdistincte P1/P2/P3, empreintesH-A/H-B/H-A : décision acquise,
+producteur persistant toujours futur. Aucun nouveau Cargo requis pour ces MD.
+Après push/3contrôles : dump/hash/drop des seules PG privées, archives admin
+fidèles+garde fraîche VERT avant retrait WT/target ; ne toucher ni modèles,
+services, DB réelles, ni arbres des autres. Ancien WT documentaire atterri
+cx-wt-qualification-faits encore présent localement, à retirer par même garde.
+Ticket migration ouvert, ticket tty nonnatif tests ouvert. Les états plus bas
+sont historiques. Détails canoniques dans le
+[ticket migration](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md).
+
 # Knowledge dump — le périmètre de l'arbre principal, au 11 novembre 2026
 
 ## État prioritaire au 12 novembre après revue
