@@ -222,3 +222,26 @@ Livraison de ce préfixe : master2b06682a2, avec tour C7. Worktrees et target re
 après archives/gardes vertes ; PG privéesv1/v2/v4 exportées et supprimées. Pour
 reprendre, créer un worktree neuf depuis master ; le ticket migration reste ouvert.
 Les preuves sourcee4239 et les ELF v4 restent hors cible sur luciepc.
+
+## Aperçu de transfert — acquis après le préfixe diagnostique
+
+Source complète verte20e4e2ffc, détail dans le ticket migration ouvert. API pure
+migrations::transfer::preview_known_transfer : rendu/identité1a, Chunker et
+chunk_uuid communs, inventaire conservant occurrences/provenance/positions/masques
+et relations/multiplicités, correspondances denses par modèle avec égalité bit à bit.
+KnownVectors et RecordVectors historiques ne deviennent pas multi-modèles par magie.
+Refus sparse fondé sur données/signaux/dette/contradiction, pas sur lecteur seul.
+
+Le plan n'établit pas l'identité durable d'une instance de stockage ni le lien
+vérifiable entre ses fingerprints et tous les faits/configs fournis. L'aperçu
+prend un attendu explicite pour comparer les identités déclarées et sérialise
+TOUJOURS PlanQualification::UnqualifiedConfigAndSchemaFacts. referenced_plan_identity
+est une référence ; l'empreinte de rapport n'est ni génération ni qualification.
+Aucune sortie exécutable, deserialize, apply, DB ou embedder dans cette tranche.
+
+Nonnatif testlib : import natif isolé corrigé par80faa mémoire, mais2helpers
+cfg(test) encore inutilisés sans natif (read_pool::vieillir, Backend::call_tool),
+TTY ouvert. Ne pas masquer par allow ni appeler checklib vert « tests minimaux verts ».
+Native ciblé15/0/0 puis globale2167/0/64/nav39/CLI5/1suite ; lien80 réellement
+exercé en globale. TMP navigateur mkdtemp court sous /var/tmp btrfs, env limité à
+cette étape, nettoyage du seul root possédé après portée inactive et succès.
