@@ -1,3 +1,28 @@
+
+## Reprise prioritaire — 12 novembre, préfixe migration diagnostique
+
+1a est intégré sur08086ba36. La préparation1b est intégrée sur1cf24f671 ; le
+préfixe diagnostic suivant est prêt sur `cx-arbre-migration-preflight-4`, passe
+verte source **e4239bddae8dedc1db7543a32ffe802822c0e1d7**, avant tour master.
+Les sections anciennes de ce rapport restent l'historique ; reprendre depuis le
+[ticket migration ouvert](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md)
+et son bilan final v4. **Aucune migration d'ancre existante livrée** : inspect/plan
+préliminaire, admission avant effets, apply explicitement indisponible.
+
+v4 : features5+minimal verts, lib2152/0/64, navigateur39/0/0,12e2e125/0/0,
+612,81s. Seuls deux CSV connus de tx_paquet ; aucune exception ajoutée.
+[Hygiène d'état du lanceur](../../tickets/closed/2026-11-12-le-dossier-d-etat-d-e2e-demon-hote-reste-dans-son-tmpdir.md)
+corrigée, clôture préparée dans le lot. Preuves dans le cache luciepc
+`cx-passe-preflight-1b-v4/` avec binaires+SHA et220assets attestés.
+
+Worktree local/remote : `/home/lucied/.cache/rag3weaver-build/cx-wt-migration-preflight`.
+Target distant unique `cx-target-contenu-derive`11Go ; aucune commande active à la
+fin de v4, portée inactive/poste0/4. PG privées v1/v2/v4 conservées pour revue ;
+v3 refus de montage avant Cargo/PG. Pas d'accès aux bases réelles.
+Après accord explicite C7 : procédure push, rebase MD sans rejeu (branche neuve),
+arrêt si nouveau code extension ; trois contrôles, sauvegardes admin fidèles,
+garde fraîche VERT lue puis retrait des worktrees et target ; dump+drop des seules
+PG privées. Ne pas reprendre M3–M5, les modèles ou l'activation sans autre mandat.
 # Rapport de session — l'arbre principal, au 11 novembre 2026
 
 ## Validation finale après revue — 12 novembre 2026
