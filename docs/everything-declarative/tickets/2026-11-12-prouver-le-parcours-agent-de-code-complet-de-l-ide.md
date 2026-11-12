@@ -199,3 +199,16 @@ installés, navigateur requis, chemin fixture source4d explicitement enregistré
 Un seul tour Vertex supplémentaire. Évidence `page-ide` (HTML chat/diff, JSON
 état, logs, SHA ELF et supervision), hors fixture acquise. Aucun déploiement ni
 accès au daemon personnel. Arrêt au premier rouge imprévu.
+
+UI source `ec57ae39b` : compilation34.03s verte, témoin rouge0.36s au démarrage
+CDP (`navigateur.rs:232`, canal fermé), avant tout nouveau tour Vertex. Reprise
+hôte/identité/historique préalables passent ; aucune preuve de page acquise.
+Supervision rouge101/restes[]/nettoyé. Le helper jetait stderr : instrumentation
+annoncée à Archi, frontière libre confirmée, enregistrement stderr sous profil et
+panic avec état du fils + stderr, sans modifier argv/sandbox/bus du navigateur.
+
+Diagnostic distinct sans modèle : nouveau témoin ignoré
+`daemon_host::navigateur::le_demarrage_cdp_du_parcours_est_diagnostique`.
+Même lancement CDP puis `Browser.getVersion`, borne30s, compilation600s,
+portée globale700s, source publiée avant exécution ; preuves `diagnostic-cdp`.
+Aucun autre parcours Vertex/UI lancé avant explication de ce démarrage rouge.
