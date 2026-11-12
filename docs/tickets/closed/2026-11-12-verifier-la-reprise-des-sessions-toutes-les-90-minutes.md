@@ -1,6 +1,6 @@
 # Vérifier la reprise des sessions toutes les 90 minutes
 
-- **État** : en cours ; installation locale demandée, vérification à terminer.
+- **État** : fait ; timer utilisateur installé et activé, validation systemd et mise en file de test vérifiées ; premier passage périodique à observer.
 - **Famille** : produit
 - **Gravité** : planification ; éviter une attente de coordination après une dépendance levée.
 - **Atteignable en service** : oui, rappel de la session d’orchestration sur le poste local.
@@ -29,3 +29,15 @@ La machine et le serveur local doivent rester disponibles ; ce n’est pas un mi
 Fichiers de service/timer installés sans écraser un dispositif existant ; validation systemd,
 activation utilisateur, prochain passage à 90 minutes et preuve d’envoi dans cette session.
 Documenter commande d’arrêt, journaux et limites avant clôture dans docs/tickets/closed/.
+
+## Réalisation
+
+Installation le 12 novembre à 09:05 CET. Unités `rag3db-orchestration-watch.service` et
+`.timer` sous ~/.config/systemd/user, activées sans dispositif antérieur écrasé.
+Validation systemd code0, message de test 01a1ceca-0e7e-7471-94e1-cd7d978e1541 mis en file
+pour la session existante ; premier passage annoncé à 10:35:35 CET. La mise en file est
+vérifiée, pas l’exécution d’un premier tour périodique futur.
+Documentation, contrôle, arrêt et limites dans
+`docs/orchestration/12-11-2026/01-rappel-periodique-des-sessions.md`.
+Ce commit documentaire clôt la demande d’installation ; l’activité des sessions se vérifie
+à chaque rappel, elle ne se déduit pas du succès d’une commande de queue.
