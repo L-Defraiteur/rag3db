@@ -64,6 +64,20 @@ n'est jamais contourné par une autre session (blanchiment interdit) ; il remont
 
 ## Les mesures et les ressources
 
+- **Précision ultérieure de Lucie, 12 novembre 2026** : préserver le GPU de jeu
+  seat1 de toute charge du banc ; les 40 KiB de contexte d’initialisation
+  peuvent être tolérés s’ils restent insignifiants. La seule présence d’un FD
+  card0 ne suffit plus à refuser. Poids, cache et calcul du banc restent sur
+  card2 ; vérifier mémoire et activité attribuables au processus et au PCI,
+  sans confondre charge du jeu et charge du banc. Le filtre ROCm n’évite pas
+  toutes les ouvertures d’initialisation : les sources 7.2.4 expliquent le
+  parcours des périphériques avant sélection des GPU visibles.
+  Cette précision prévaut sur les exigences historiques de zéro accès ci-dessous.
+  Zéro requête du banc le 12 novembre ; le warmup interne du serveur a eu lieu,
+  sans attribution d’exécution par compteur PCI. Aucun retry autorisé par
+  cette clarification ; recette de contrôle à qualifier avant nouvelle fenêtre.
+  Sources et suite : [ticket banc k10](../../banc/tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
+
 - **Consigne actuelle de Lucie, 12 novembre 2026** : card0/seat1, PCI
   `0000:07:00.0`, ROCm GPU[1], est interdite aux sessions. Seule card2, PCI
   `0000:04:00.0`, ROCm GPU[0], peut être utilisée, avec

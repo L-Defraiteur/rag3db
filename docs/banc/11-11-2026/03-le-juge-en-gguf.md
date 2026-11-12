@@ -1,5 +1,17 @@
 # Le juge local en GGUF par llama-server (11 novembre 2026)
 
+> **Précision ultérieure de Lucie — 12 novembre 2026.** Le but est de garder
+> le GPU seat1 disponible pour jouer : les poids, le cache et le calcul du banc
+> doivent rester sur card2. Un contexte d’initialisation minuscule et stable
+> sur card0 peut être toléré ; sa seule ouverture ne doit plus faire échouer
+> le banc. Les notices exigeant zéro accès ci-dessous décrivent le contrat
+> précédent. ROCm initialise aussi des ressources des GPU masqués ; le
+> [ticket k10](../tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md)
+> donne les sources et les contrôles d’attribution restant à qualifier.
+> Zéro **requête du banc** a été joué : le serveur avait effectué son warmup
+> interne, dont l’exécution n’a pas été attribuée par compteur PCI.
+> Aucun nouveau chargement ni retry sans nouvelle fenêtre coordonnée.
+
 > **Consigne actuelle — 12 novembre 2026.** Card0/seat1 (PCI 07:00.0)
 > est interdite aux sessions. Seule card2 (PCI 04:00.0) peut être utilisée,
 > après coordination de charge et lecture de la VRAM, avec
