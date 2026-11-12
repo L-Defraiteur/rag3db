@@ -385,3 +385,9 @@ service lancé ; la fabrique de modèle de l'ouverture produit est comptée par 
 témoin natif unitaire existant. Pas encore compilés/joués pendant le créneau C++.
 L'état inconnu devrait déjà être refusé ; les quatre autres visent le raccord
 manquant, sans revendiquer de rouge avant exécution.
+
+Les nouveaux témoins sont montés dans le **binaire e2e unique** par le générateur
+`tests/e2e/generer.py` (autotests=false), sans second binaire de suite ni modification
+manuelle du fichier généré. Le ciblé sera `--test e2e e2e_migration_preflight::`,
+avec features natif/daemon/code et un seul thread de test pour les petites
+fixtures. Rien n'a été lancé pendant la mesure C++.
