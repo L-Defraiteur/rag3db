@@ -427,3 +427,26 @@ vérifiée en Python pur sur les 739 commandes réelles et 12 contre-exemples, p
 une macro parasite sur commande réelle ; aucun moteur/lanceur/pilote exécuté.
 Préflight prêt à revue, pas de nouvelle configuration/build, même après le retour
 recherche FTS vert ; aucune relance automatique ni lib modifiée.
+
+### Nouveau préflight privé 02 — ATTENTE_REVUE, sans compilation moteur
+
+Autorisation orchestration après revue complète 69ec08161, slot FTS fini/nettoyé.
+Unité neuve `cx-coeur-archive-0511-12nov-02.service`, wrapper PID 927681,
+MainPID 927714 ; résultats neufs à luciepc
+`~/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/`.
+Source complète `0511dece74f94db6937fb03e6ec45f0c58828c5a` propre.
+Revue fraîche `revue.json` et `resume-revue.json` : ATTENTE_REVUE, mêmes 739
+unités, 739 omissions du seul include exact accepté, 0 différence imprévue,
+compilateur égal, 0 entrée interdite dans le plan. Audit référence : 739 objets
+VALID, aucune dépendance/mention spdlog, aucun fichier manquant.
+
+SHA256 plan sec :
+`36fe29eb885914563636036657b91eb8ddafb36c31e9f89343e5268c31afb054`.
+SHA256 lanceur :
+`5a53c32ed5fd24ad3eeae298f54e0c151741a394563cf7f31aabf5ec3c8a5ee6`.
+Limites lues : mémoire 8 Gio/swap 0, scratch tmpfs privé 2 Gio inclus dans ces
+8 Gio, RuntimeMax 29 min + arrêt 5 s. Échéance runtime calculée
+2026-11-12T11:45:19+01:00 ; l’horloge globale inclut l’attente de revue.
+Aucune gate ni build.log lors du partage : C7 doit relire puis écrire/autoriser
+la gate, aucune compilation moteur avant. Configuration privée distincte
+`cx-0511-tests-off-without-unused-spdlog-path-v1`, pas archive historique.

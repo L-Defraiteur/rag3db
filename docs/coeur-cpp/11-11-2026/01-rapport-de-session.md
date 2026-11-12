@@ -362,3 +362,11 @@ Audit de 3 955 fichiers et 21 lignes has_include sans condition spdlog ; contrô
 739 dépendances privées VALID/0SPDLOG ajouté avant futur manifeste. Préflight
 révisé préparé et règle testée sans moteur ; pas de configuration/build relancé.
 Le même ticket porte la revue suivante ; fin FTS reçue sans lancement C++ automatique.
+
+Préflight privé 02 lancé après feu vert C7 : source 0511 propre, unité
+`cx-coeur-archive-0511-12nov-02`, wrapper927681/MainPID927714, résultats
+`annulation/cx-archive-privee-12nov-02/`. Revue fraîche ATTENTE_REVUE, 739
+omissions exactes acceptées et zéro autre différence, audit référence vert.
+Plan et SHA transmis à C7 pour gate ; aucun build moteur au partage.
+Runtime borné jusqu’à 11:45:19 Paris + arrêt5s le 12 novembre, attente incluse.
+Le ticket d’annulation contient les détails ; pas de pilote ou mesure autorisé.
