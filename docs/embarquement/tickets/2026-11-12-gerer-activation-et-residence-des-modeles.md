@@ -182,3 +182,21 @@ arbre, dépendances conservées et nouveau propriétaire vérifié. Rejouer CPU
 depuis cette portée, puis passe large/check_features/lib/binaire/navigateur.
 Budgets : CPU 1200 s, lib 7200 s après acquisition ; arrêt au premier rouge.
 Aucun service existant modifié. La mesure privée du banc attend ce socle.
+
+### CPU qualifié dans la portée commune
+
+Sur 6ddf622ca, luciepc : validation-rw5c889b VERT, quiescence contrôlée.
+16/16 tests standalone, 5/5 connecteur dense, 1/1 vraie chauffe CPU (formes
+refusées et faux succès vide conservés en erreurs), zéro ignoré pour ces groupes.
+La garde a réellement invalidé les empreintes locales de l'ancien arbre et
+marque maintenant le worktree cx-activation-modeles. Log `cpu-f.log`, preuves
+`~/.cache/rag3weaver-build/validations/validation-rw5c889b`.
+Huit filets Python de la fixture verts sur le portable après intégration Banc.
+
+Recette large publiée mode lib : cinq jeux check_features, lib entière sous
+rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm ;
+binaire embeddings neuf pour la mesure privée, puis témoins navigateur avec
+paquets React du magasin. Budget global 7200 s après acquisition, Max32G,
+aucun accès au bus personnel, premier rouge arrêté. Plafond target vérifié
+entre les étapes, aucune suppression automatique pour faire passer une passe.
+Les e2e du changement suivent séparément cette passe (protocole dense/spans).

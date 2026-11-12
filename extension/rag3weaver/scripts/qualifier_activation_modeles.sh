@@ -16,6 +16,15 @@ export CARGO_BUILD_JOBS=8
 exporter_la_lib
 . scripts/garde_target.sh
 garder_le_target "$CARGO_TARGET_DIR" "$PWD"
+verifier_taille() {
+    local octets
+    octets=$(du -sB1 "$CARGO_TARGET_DIR" | cut -f1)
+    if [ "$octets" -gt 34359738368 ]; then
+        echo "ROUGE : target au-delà de 32 Gio ($octets octets), aucune suppression automatique" >&2
+        return 1
+    fi
+}
+verifier_taille
 git rev-parse HEAD
 if [ "$mode" = cpu ]; then
     rustc --edition=2021 --test tests/activation/serveur.rs -o "$CARGO_TARGET_DIR/activation-cpu-temoin"
@@ -25,9 +34,13 @@ if [ "$mode" = cpu ]; then
 else
     export FEATURES=rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm
     scripts/check_features.sh
+    verifier_taille
     # La mesure du modèle privé est jouée séparément par le banc.
     cargo test --lib --features "$FEATURES"
+    verifier_taille
     cargo build --bin rag3weaver-embeddings --features "$FEATURES"
+    verifier_taille
     scripts/temoins_navigateur.sh "$FEATURES"
 fi
 garder_le_target "$CARGO_TARGET_DIR" "$PWD"
+verifier_taille
