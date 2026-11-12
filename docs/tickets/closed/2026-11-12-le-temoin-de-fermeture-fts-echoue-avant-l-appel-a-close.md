@@ -1,6 +1,6 @@
 # Le témoin de fermeture FTS échoue avant l’appel à close
 
-- **État** : ouvert ; montage déterministe validé sur5dddf215c (code5a83eee91), préfixe et configurations5/5 verts ; revue du verdict et intégration restantes.
+- **État** : corrigé ; code5a83eee91 validé sur5dddf215c, verdict cb3bb35cc relu et tour master explicitement accordé le12novembre2026 ; préfixe et configurations5/5 verts.
 - **Famille** : produit
 - **Gravité** : blocage de la validation CI ; le témoin peut échouer avant de juger le contrat de fermeture.
 - **Atteignable en service** : non pour ce panic de préparation du test ; aucune régression produit de close établie.
@@ -99,3 +99,7 @@ Après revue explicite du plan5dddf215c et du code5a83eee91, orchestration a aut
 Preuves brutes conservées sur les deux postes dans `~/.cache/rag3weaver-build/journaux-cx-recherche-fts-close-12nov/` : rouge-ci-080.log, source.json, cible.log, module-fts.log, lib-ci.log, attestation-binaire.json, identite-native.txt, check_features.log, features-detail/, resume.log et verdict-final.log. Le rouge CI ancien reste un échec de préparation ; ce vert prouve le nouveau montage, sans prétendre reproduire son interleaving filesystem ni diagnostiquer une régression produit amont.
 
 Reste à orchestration : revue de ce verdict, tour master explicite puis intégration et lecture de la CI future automatique sur son SHA. Ticket maintenu ouvert jusque-là ; aucun push master ni rerun aveugle autorisé par ce résultat.
+
+## Clôture après revue
+
+Orchestration a relu les logs bruts, les assertions et l’attestation, confirmé que5dddf→cb3 ne change que deux Markdown et que master898 est inchangé, puis donné explicitement le tour master. Correction et validation acceptées ; ticket clôturé avec déplacement dans le même commit. Intégration sous poste push avec dernier fetch, arrêt si nouveau code, garde VERT et trois contrôles. Nettoyage immédiat limité aux ressources propres, avec archives administratives fidèles et garde65 fraîche ; remotes et preuves conservés. CI future automatique, aucun rerun ancien ni binaire de service à poser.
