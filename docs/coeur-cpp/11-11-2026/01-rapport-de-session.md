@@ -331,3 +331,10 @@ aucun compilateur lancé. Première proposition limitée à 64k × 64, trois pai
 archive de base ne prouve pas la conformité avec un en-tête modifié. La piste de
 surcouche sur celle-ci est retirée. Sources prêtes à relire, lien et mesure non
 prêts ; aucun moteur copié reconstruit, aucune lib modifiée.
+
+Inventaire des archives/objets du lot terminé en lecture seule : pas d’archive
+assortie `0511dece7` retrouvée ; sauvegarde limitée aux trois exécutables, produits
+courants remplacés par ceux de la base. Preuves, SHA et proposition minimale de
+build statique privé dans `docs/coeur-cpp/12-11-2026/04-inventaire-et-proposition-archive-privee.md`.
+Aucun nouveau worktree, configuration, compilation ou mesure. Le ticket d’annulation
+porte la suite et les inconnues ; pas de demande de tour de push.

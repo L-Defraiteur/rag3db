@@ -298,3 +298,22 @@ aucun moteur copié, et restent `ready_to_compile=false`. Aucun compilateur ou
 mesure exécuté. Reste : revue source et provenance, disponibilité d’une archive
 assortie à traiter explicitement avec l’orchestration, puis lanceur qui impose
 budget global/RSS/groupe et créneau ; pas de mesure autorisée à ce stade.
+
+### Inventaire en lecture seule achevé — archive du correctif non retrouvée
+
+Voir [inventaire et proposition de build privé](../12-11-2026/04-inventaire-et-proposition-archive-privee.md).
+Aucune archive ni aucun objet sauvegardé dans les notes de ce lot ; trois
+exécutables seulement. Les journaux prouvent la création de l’archive du correctif
+puis son remplacement à 22:04 par la base. Produits courants identifiés par
+SHA256 et diff source de base ; aucune provenance d’archive `0511dece7` à établir
+à partir d’eux. Périmètre de recherche explicite, pas d’absence proclamée sur
+les sauvegardes d’autres sessions.
+
+Proposition avant toute demande de créneau : build statique moteur privé sur
+source propre `0511dece7`, sans tests/extension/install, cible `rag3db`, puis
+manifestes et archive/en-têtes assortis avant pilote. Coût propre non mesuré,
+ordre de grandeur de référence 741 objets moteur + 251 tiers ; limites proposées
+30 min globales, un lourd `-j8`, build 2 Gio/mémoire groupe 8 Gio, à valider par
+plan sec et espace disponible. Ce serait explicitement un build moteur, pas une
+compilation de pilote déguisée. Commandes rédigées, aucun worktree/configuration/
+build créé ou exécuté. Mesure et lien restent non prêts, différentiel ouvert.
