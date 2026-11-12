@@ -23,6 +23,9 @@ pub(super) struct Demande {
     pub mode: String,
     pub raison: String,
     pub decision: Option<bool>,
+    /// La publication d'une même carte se sérialise sans retenir le registre
+    /// pendant l'accès au backend (qui peut lui-même consulter les accords).
+    publication: Arc<std::sync::Mutex<()>>,
     /// La ligne de commande, pour une commande en attente.
     pub commande: Option<String>,
     /// Le backend de la conversation qui l'a posée : sa porte accorde une commande, et la
@@ -58,6 +61,11 @@ fn publier_decision(
     accorder: bool,
     publier: impl FnOnce(&Demande) -> Result<(), String>,
 ) -> Result<Demande, String> {
+    let publication = d.publication.clone();
+    let _publication = publication.lock().unwrap_or_else(|p| p.into_inner());
+    // Le snapshot a pu attendre un autre répondant : il n'autorise jamais
+    // une publication avant cette relecture sous le verrou de la demande.
+    let d = accords.lock().unwrap_or_else(|p| p.into_inner()).demande_a_decider(id)?;
     if accorder && d.commande.is_some() && d.backend.is_some() {
         publier(&d)?;
     }
@@ -199,7 +207,7 @@ impl DaemonHost {
             let mut a = self.accords.lock().unwrap_or_else(|p| p.into_inner());
             a.suivant += 1;
             let id = format!("accord-{}-{}", crate::events::maintenant_ms(), a.suivant);
-            a.demandes.insert(id.clone(), Demande { chemin: chemin.clone(), mode: mode.to_string(), raison: raison.trim().to_string(), decision: None, commande: None, backend: None });
+            a.demandes.insert(id.clone(), Demande { chemin: chemin.clone(), mode: mode.to_string(), raison: raison.trim().to_string(), publication: Arc::default(), decision: None, commande: None, backend: None });
             id
         };
         let mot = if mode == "write" { "écrire" } else { "lire" };
@@ -226,7 +234,7 @@ impl DaemonHost {
             let id = format!("accord-{}-{}", crate::events::maintenant_ms(), a.suivant);
             a.demandes.insert(
                 id.clone(),
-                Demande { chemin: chemin.clone(), mode: "command".into(), raison: String::new(), decision: None, commande: Some(ligne.to_string()), backend: Some(backend.to_string()) },
+                Demande { chemin: chemin.clone(), mode: "command".into(), raison: String::new(), publication: Arc::default(), decision: None, commande: Some(ligne.to_string()), backend: Some(backend.to_string()) },
             );
             id
         };
@@ -1347,7 +1355,7 @@ mod publication_accord_tests {
             let mut a = Accords::default();
             a.demandes.insert(ID.into(), Demande {
                 chemin: domaine.path().to_path_buf(), mode: "command".into(), raison: "fixture".into(),
-                decision: None, commande: Some(LIGNE.into()), backend: Some("backend-synthetique".into()),
+                publication: Arc::default(), decision: None, commande: Some(LIGNE.into()), backend: Some("backend-synthetique".into()),
             });
             Self { domaine, registre: Arc::new(Mutex::new(a)), garde: Arc::new(Garde::new(Mode::Approbation)) }
         }
@@ -1384,6 +1392,46 @@ mod publication_accord_tests {
 
     #[test]
     fn un_refus_gagnant_ne_laisse_pas_le_droit_du_oui_perdant() { deux_reponses(false); }
+
+    #[test]
+    fn la_publication_serait_partagee_mais_pas_le_verrou_du_registre() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let b = Banc::new();
+        let (a, tardive) = (b.snapshot(), b.snapshot());
+        let publication = tardive.publication.clone();
+        let publie = Arc::new(Barrier::new(2));
+        let continuer = Arc::new(Barrier::new(2));
+        let (registre, garde, ctx, fait, suite) = (b.registre.clone(), b.garde.clone(), b.contexte(), publie.clone(), continuer.clone());
+        let premiere = std::thread::spawn(move || publier_decision(&registre, ID, a, true, |_| {
+            garde.accorder_ligne(LIGNE, &ctx)?;
+            // A est retenu après publication, avant commit ; même primitive que l'API.
+            fait.wait();
+            suite.wait();
+            Ok(())
+        }));
+        publie.wait();
+        let demande_verrouillee = publication.try_lock().is_err();
+        let registre_libre = b.registre.try_lock().is_ok();
+        let appels_perdant = Arc::new(AtomicUsize::new(0));
+        let (registre, garde, ctx, appels) = (b.registre.clone(), b.garde.clone(), b.contexte(), appels_perdant.clone());
+        let (annonce, attendu) = std::sync::mpsc::sync_channel(1);
+        let seconde = std::thread::spawn(move || {
+            annonce.send(()).unwrap();
+            publier_decision(&registre, ID, tardive, true, |_| {
+                appels.fetch_add(1, Ordering::SeqCst);
+                garde.accorder_ligne(LIGNE, &ctx).map(|_| ())
+            })
+        });
+        let b_annonce = attendu.recv_timeout(std::time::Duration::from_secs(5)).is_ok();
+        // Toujours libérer et joindre avant les assertions, même si un invariant casse.
+        continuer.wait();
+        let (premier, second) = (premiere.join().unwrap(), seconde.join().unwrap());
+        assert!(demande_verrouillee && registre_libre && b_annonce);
+        assert!(premier.is_ok() && second.is_err());
+        assert_eq!(appels_perdant.load(Ordering::SeqCst), 0);
+        assert!(b.garde.autoriser_ligne(LIGNE, &b.contexte()).is_ok());
+        assert!(b.garde.autoriser_ligne(LIGNE, &b.contexte()).is_err());
+    }
 
     #[test]
     fn une_erreur_de_publication_laisse_la_demande_retentable() {

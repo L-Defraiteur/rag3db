@@ -85,3 +85,21 @@ variables de services et identifiants retirés. L'hôte fixture ne possède aucu
 Premier rouge inattendu : STOP/diagnostic, pas de retry inchangé. Si rouge attendu établi,
 correction minimale publiée puis même module vert dans le reste du même600 ; passe
 adaptée proposée ensuite, intégration seulement aprèsA et tourcoordonné.
+
+## Rouge observé et correction bornée
+
+Source b708f7c34, jeu exact F3 : **4 verts,2 rouges attendus,0 ignoré**. Les deux
+réponses ont franchi None ; la réponse tardive rend une erreur mais sa publication
+a laissé un usage CetteFois effectif dans la vraie Garde (double oui, et refus gagnant).
+Aucune commande exécutée. La route HTTP/relance n'est pas exécutée dans ce préfixe ;
+son exposition et l'arrêt avant journal/relance du perdant sont des lectures de code.
+
+Correction : mutex partagé PAR demande, pris hors verrou du registre ; relecture de la
+décision avant publication, mutex tenu jusqu'au commit. Le registre est relâché pendant
+with_backend, préservant l'ordre des verrous backend→accords existant. Aucun changement
+de portée/politique ni API de révocation ajoutée. Un septième témoin retient A après
+publication avant commit, vérifie verrou par demande tenu/registre libre et B annoncé ;
+le callback perdant n'est pas appelé et un seul usage est disponible. Les deux premiers
+témoins gardent l'entrelacement Acommit+consommation AVANT B.
+Erreur journal après effet qualifiée séparément, sans rollback inventé dans ce lot.
+Source corrigée et recette verte publiées avant exécution dans le reste du même600.
