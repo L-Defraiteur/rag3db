@@ -62,7 +62,7 @@ pub(crate) fn inspect_on(conn: &dyn DbConnection) -> Result<StorageInspection, S
     let result = conn.execute("CALL show_tables() RETURN *").map_err(|e| e.to_string())?;
     let mut tables = Vec::new();
     for row in result.rows {
-        let name = row.get(1).and_then(CypherValue::as_str)
+        let name = row.get(1).and_then(CypherValue::as_str).filter(|name| !name.trim().is_empty())
             .ok_or("malformed table inventory")?;
         if tables.iter().any(|existing| existing == name) { return Err("duplicate table in inventory".into()); }
         tables.push(name.to_owned());
