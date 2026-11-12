@@ -1,13 +1,13 @@
 from pathlib import Path
 import hashlib,json,os,shutil,sys,time
-R=Path('/home/lucied/.cache/rag3weaver-build');P=R/'cx-passe-publication-composite-v2';W=R/'cx-wt-publication-composite';T=R/'cx-target-contenu-derive'
+R=Path('/home/lucied/.cache/rag3weaver-build');P=R/'cx-passe-publication-composite-v3';W=R/'cx-wt-publication-composite';T=R/'cx-target-contenu-derive'
 SOURCE=sys.argv[1];client_rc=int(sys.argv[2]);P.mkdir(exist_ok=True)
 record=dict(source=SOURCE,verdict='ROUGE',client_rc=client_rc);exit_code=1
 try:
     assert client_rc==0,'superviseur non réussi'
     assert (P/'VERDICT').read_text().strip()=='VERT'
     source=json.loads((P/'source.json').read_text());assert source['source']==SOURCE
-    receipt=Path(source['supervision_receipt']);assert receipt.parent.is_relative_to(R/'cx-publication-composite-global-confinement-v2')
+    receipt=Path(source['supervision_receipt']);assert receipt.parent.is_relative_to(R/'cx-publication-composite-global-confinement-v3')
     supervisor=json.loads((receipt.parent/'verdict.json').read_text())
     assert supervisor['verdict']=='VERT' and supervisor['code']==0 and supervisor['restes']==[] and supervisor['nettoye']
     assert not Path(supervisor['prive']).exists(),'bus commun restant'

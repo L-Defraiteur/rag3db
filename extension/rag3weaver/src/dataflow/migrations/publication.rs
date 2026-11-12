@@ -2,6 +2,7 @@
 //! Revisions identify publication events, not content and not an applied index format.
 use super::facts::{self, DeclaredSchemaFacts, DeclaredSchemaInput, FactsError};
 use serde::{Deserialize, Serialize};
+#[cfg(any(feature = "rag3db-native", test))]
 use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg(feature = "rag3db-native")]
@@ -276,6 +277,7 @@ impl PublicationOutcome {
     }
 }
 
+#[cfg(any(feature = "rag3db-native", test))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Registry {
@@ -284,6 +286,7 @@ struct Registry {
     head: String,
     publications: BTreeMap<String, StoredIntent>,
 }
+#[cfg(any(feature = "rag3db-native", test))]
 impl Registry {
     fn genesis(
         origin: NewPublicationOrigin,
