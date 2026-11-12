@@ -625,7 +625,7 @@ mod tests {
             &fixture(),
             |v| {
                 v["workspace"] =
-                    json!({"root":"workspace","commands":"auto","sandbox":{"mode":"landlock"}})
+                    json!({"source":"working_tree","root":"workspace","commands":"auto","sandbox":{"mode":"landlock"}})
             },
         );
         let e = plan(&[b.clone()], &b, &b, "backend.json").unwrap_err();
