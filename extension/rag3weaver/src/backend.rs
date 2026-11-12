@@ -2085,10 +2085,20 @@ impl PreparedBackend {
     const QUOI_FAIRE_SANS_SERVICE: &str = "pour les calculer, donnez models.embed.address (ou \
         embeddings.address), ou RAG3WEAVER_SERVICE_EMBED (alias RAG3WEAVER_EMBED_SERVICE)";
 
+    /// Validate the whole declarative opening plan before touching storage.
+    /// Recheck even a prepared manifest: callers can edit its public configs.
+    fn opening_schema(&self) -> Result<(backend_schema::SchemaFacts, Vec<backend_schema::SchemaStep>), String> {
+        let provided = backend_schema::provided_schema(self.manifest.workspace.as_ref());
+        let facts = backend_schema::SchemaFacts::compose(&self.entities, &self.manifest.relations, &provided)?;
+        let order = facts.registration_order()?;
+        Ok((facts, order))
+    }
+
     /// Inspect existing native storage before creating a writer or an embedder.
     /// An absent path has no metadata and is not created by this method.
     #[cfg(feature = "rag3db-native")]
     pub fn inspect_storage(&self) -> Result<Option<crate::storage_inspection::StorageInspection>, String> {
+        self.opening_schema()?;
         let path = self.path(&self.manifest.database);
         match std::fs::metadata(&path) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -2196,6 +2206,7 @@ impl PreparedBackend {
         embedder: Option<Box<dyn Embedder>>,
         raison: Option<String>,
     ) -> Result<Backend, String> {
+        let (schema, schema_order) = self.opening_schema()?;
         // A supplied connection is already open, but it must not bypass the
         // journal/format gate before Catalog initialization or model setup.
         crate::storage_inspection::inspect_snapshot_on(conn.as_ref())?
@@ -2205,9 +2216,6 @@ impl PreparedBackend {
         if self.manifest.storage.is_some() {
             return Err("versioned storage publication validation is not available".into());
         }
-        let provided_schema = backend_schema::provided_schema(self.manifest.workspace.as_ref());
-        let schema = backend_schema::SchemaFacts::compose(&self.entities, &self.manifest.relations, &provided_schema)?;
-        let schema_order = schema.registration_order()?;
         // Un backend en mots seuls démarre sans service d'embarquement. Un
         // backend qui déclare du vecteur démarre aussi (décision du
         // 10 octobre 2026, pour le paquet npm) : il le dit en le nommant —
