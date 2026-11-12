@@ -120,3 +120,9 @@ puis à luciepc sous poste lourd `cargo test --lib --features daemon
 model_source::activation::tests` et filtre `chauffe_partielle`. Budget annoncé
 20 minutes après acquisition pour cette première compilation ciblée, arrêt au
 premier rouge inattendu. Source et recette sont poussées avant lancement.
+
+Sur 235cde8ec : 15 tests standalone réellement joués, 14 passent, un rouge
+sur le diagnostic de sonde lente. La durée est bornée mais la réponse partielle
+à l'échéance est classée `Occupe` au lieu d'expiration du budget. Aucun Cargo
+lancé après ce rouge. Correction : vérifier l'échéance avant d'interpréter la
+réponse initiale et avant de rendre une attache après démarrage.
