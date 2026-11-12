@@ -1,3 +1,41 @@
+## Reprise prioritaire — raccord RO codé et ciblé vert, globale attend ED
+
+LotRO après A : WT local/luciepc cx-wt-observation-faits souscachebuild,
+branche cx-arbre-observation-faits-2, tête42af900d4 depuismasterCI0bec438da.
+Source ciblée91455ec71 ; rebase4/4identique, aucunRustchangé. Même ticketmigration,
+stockage_inspection/Catalogmetadata+AppliedMigration, mémoire revue seule.
+
+**Rouge posé** sur19030f243 : relation:Broken=not-json ignorée,0/1/0/rc101,
+ELFarchivé/SHA/source/native29. **Correctif ciblé83/0/0**,23,54s :14nouveaux
+(10callbacks,3décodeurs,1natif64MiB→vraieRO/octetstousinchangés),18faitsA+
+15aperçu etancienscontrats. Commonconfiner VERT/restes[]/busnettoyé pour les deux
+exécutions, ce VERT ne transforme pas le rougeinitial en test réussi. Logs/ELF/
+JSONPC cx-observation-ro-{rouge-v1,cible-v1}/ etcopieslocales
+cx-preuves-observation-ro-local/. SourcePC encore914propre, pasdeCargoactifArbre,
+targetunique cx-target-contenu-derive recréé pourceseullot(aprèsnettoyageA).
+
+Code/README/recetteglobale figés etpubliés42af. Observationtypedscellée :
+None(tableabsente)≠Some(vide), config/RelationDef/journal cohérents, provenance
+ConnectionView→ReadOnlySnapshot aprèsCOMMIT seulement. Même décodeur strict
+Catalog/inspection ; comparaisonutiliseA etvérifieSEULsousensemblepersisté,
+rapportobservé/fourni séparé, aucune qualificationstockage/génération/apply.
+
+**Ordre C7 : EDaccordshôte intègre d'abord, puis rebaseRO surbranche NEUVE**.
+ED annonce F5/min/lib2229/NAV40/lectures27verts, dernierhôtecap120arrêté sur
+fixturecheminavec espace en coursdediagnostic ; aucunmasterEDni globalEDvert
+supposé. Attente de ce jalon indispensable pouréviteruneglobaleROàrejouer sur
+Rustentrant. Aucunjob/PG/globaleArbre créé pendantcetteattente ; pasunparking.
+
+GOglobal3600CONDITIONNELmasterED confirmé+rebase+SHA/recettespubliés. Préparées :
+preuves-observation-ro/{globale.py,finaliser.py,lancer-globale.sh} dansdossierdaté.
+F51500/min120/compile1200/lib300/NAV360/CLI180/PG300/attest120 tous∩deadlinecommune ;
+commonconfinerMax32/j8/CPU4/lib29/target32, busuniqueentièreportée(DBUSenvreçupréservé),
+PGneuve cx_ro_2191_20261112_v1 absence/current_database, NAV40/CLI5/PG36 listés
+avanttests,4ELF/source/native/maps/220bytes etfinaliseur rc+quiescence+TMPpossédé.
+PasdebaseLucie/écritureobservateur/modèle/service/GPU/générationpersistante/apply.
+Aprèsglobalerevue+ÀtoiC7 puismaster/3contrôles etnettoyage réglementaire.
+L'ancien état A ci-dessous est historique, pas une consigne d'arrêter la suiteRO.
+
 ## État final — A intégrée et ressources retirées
 
 **Master 6d4d1c882b9fc3f59720e6708bd4b3042be7b6a1**, tour C7 explicite, trois contrôles
