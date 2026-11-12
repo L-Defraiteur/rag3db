@@ -1,3 +1,4 @@
+#include "common/private_saturation_capture.h"
 #include "storage/table/node_table.h"
 
 #include "storage/storage_version_info.h"
@@ -865,6 +866,7 @@ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEnt
     // connected local rels. Directly removing them will cause shift of committed node offset,
     // leading to an inconsistent result with connected rels.
     nodeGroups->append(transaction, columnIDsToCommit, localNodeTable.getNodeGroups());
+    private_saturation::transferred(localNodeTable.getNumTotalRows());
     localNodeTable.rowsAreCommitted();
     const auto logLocalNodes = transaction->shouldLogToWAL() && localTable->logsInsertions();
     if (logLocalNodes) {
@@ -1024,6 +1026,7 @@ bool NodeTable::checkpoint(main::ClientContext* context, TableCatalogEntry* tabl
 
 void NodeTable::rollbackPKIndexInsert(main::ClientContext* /*context*/, row_idx_t startRow,
     row_idx_t numRows_, node_group_idx_t nodeGroupIdx_) {
+    private_saturation::Scope capturePK{private_saturation::Phase::PK};
     const row_idx_t startNodeOffset =
         startRow + StorageUtils::getStartOffsetOfNodeGroup(nodeGroupIdx_);
 

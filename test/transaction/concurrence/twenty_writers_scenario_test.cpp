@@ -1,3 +1,4 @@
+#include "common/private_saturation_capture.h"
 // Vingt clients, un DDL par minute, un point de reprise en route, une migration qui échoue : le
 // scénario des migrations concurrentes (banc, 13 octobre 2026 ; bornes arrêtées avec le cœur C++
 // d'après sa lecture du code à 65cb9a1f3, page 15 de coeur-cpp ; forme finale au §6 de
@@ -292,8 +293,10 @@ public:
 
     // Les acteurs tournent pendant les DDL 1 à lastMinute, puis un quart de période ; onCheckpoint
     // est appelé juste avant le CHECKPOINT de la minute 5.
-    void run(int lastMinute, const std::function<void()>& onCheckpoint = {}) {
+    void run(int lastMinute, const std::function<void()>& onCheckpoint = {},
+        bool captureSaturation = false) {
         start = Clock::now();
+        if (captureSaturation) private_saturation::arm(start);
         std::vector<std::thread> threads;
         journals.resize(NUM_DOC_WRITERS + NUM_NOTE_WRITERS + NUM_READERS);
         for (auto i = 0; i < static_cast<int>(journals.size()); ++i) {
@@ -307,6 +310,7 @@ public:
             auto* bufferManager = database.getMemoryManager()->getBufferManager();
             while (!stop) {
                 bufferSamples.emplace_back(now(), bufferManager->getUsedMemory());
+                private_saturation::sample(bufferSamples.back().second);
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         });
@@ -319,6 +323,7 @@ public:
         }
         for (auto minute = 1; minute <= lastMinute; ++minute) {
             std::this_thread::sleep_until(start + minute * period);
+            private_saturation::ddl(minute);
             switch (minute) {
             case 1:
                 runDdl(ddl, "1 ADD note", "ALTER TABLE Doc ADD note STRING;");
@@ -348,6 +353,7 @@ public:
             default:
                 break;
             }
+            private_saturation::ddl(0);
         }
         std::this_thread::sleep_for(period / 4);
         stop = true;
@@ -356,6 +362,7 @@ public:
         }
         sampler.join();
         end = now();
+        if (captureSaturation) private_saturation::finish(stderr);
     }
 
     double now() const {
@@ -499,6 +506,7 @@ private:
             }
             const auto started = now();
             const auto error = transact(connection, statements, block);
+            private_saturation::actorResult(error.empty(), actor != Actor::Reader);
             const auto ended = now();
             if (error.empty()) {
                 journal.samples.push_back({started, ended, -1});
@@ -765,7 +773,7 @@ protected:
             mustRun(*conn, stringFormat("CALL checkpoint_threshold={};", threshold));
         }
         Scenario scenario(*database, period);
-        scenario.run(6);
+        scenario.run(6, {}, true);
 
         // Le pic du tampon : sur toute la passe, puis entre chaque début de DDL et le suivant.
         const auto peak = [&](double from, double to) {

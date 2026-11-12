@@ -1,3 +1,4 @@
+#include "common/private_saturation_capture.h"
 #include "transaction/transaction_manager.h"
 
 #include <algorithm>
@@ -65,6 +66,7 @@ Transaction* TransactionManager::beginTransaction(main::ClientContext& clientCon
         auto transaction =
             std::make_unique<Transaction>(clientContext, type, ++lastTransactionID, lastTimestamp);
         activeTransactions.push_back(std::move(transaction));
+        publishPrivateCaptureNoLock();
         return activeTransactions.back().get();
     }
     case TransactionType::RECOVERY:
@@ -80,6 +82,7 @@ Transaction* TransactionManager::beginTransaction(main::ClientContext& clientCon
             transaction->getLocalWAL().logBeginTransaction();
         }
         activeTransactions.push_back(std::move(transaction));
+        publishPrivateCaptureNoLock();
         return activeTransactions.back().get();
     }
         // LCOV_EXCL_START
@@ -95,6 +98,7 @@ void TransactionManager::refreshSnapshot(Transaction* transaction) {
     KU_ASSERT(!transaction->hasWritten());
     transaction->startTS = lastTimestamp;
     transaction->snapshotFloorTS = lastTimestamp;
+    publishPrivateCaptureNoLock();
 }
 
 transaction_t TransactionManager::oldestActiveSnapshotNoLock(
@@ -575,6 +579,18 @@ bool TransactionManager::isActive(transaction_t transactionID) {
     });
 }
 
+void TransactionManager::publishPrivateCaptureNoLock() const {
+    if (!private_saturation::armed()) return;
+    uint64_t writers = 0;
+    uint64_t oldest = UINT64_MAX;
+    for (const auto& tx : activeTransactions) {
+        writers += !tx->isReadOnly();
+        oldest = std::min(oldest, tx->getStartTS());
+    }
+    private_saturation::transactions(activeTransactions.size(), writers,
+        activeTransactions.empty() ? 0 : oldest);
+}
+
 void TransactionManager::clearTransactionNoLock(transaction_t transactionID) {
     KU_ASSERT(std::ranges::any_of(activeTransactions.begin(), activeTransactions.end(),
         [transactionID](const auto& activeTransaction) {
@@ -585,6 +601,7 @@ void TransactionManager::clearTransactionNoLock(transaction_t transactionID) {
     });
     // La transaction a fini, validée ou annulée : ses verrous sont rendus, et ceux qui les
     // attendaient passent.
+    publishPrivateCaptureNoLock();
     lockManager.releaseAll(transactionID);
     // Un point de reprise attend peut-être ce départ.
     transactionsChanged.notify_all();

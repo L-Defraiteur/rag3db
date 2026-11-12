@@ -1,3 +1,4 @@
+#include "common/private_saturation_capture.h"
 #include "storage/buffer_manager/memory_manager.h"
 
 #include <mutex>
@@ -52,6 +53,7 @@ MemoryManager::MemoryManager(BufferManager* bm, VirtualFileSystem* vfs) : bm{bm}
 }
 
 std::span<uint8_t> MemoryManager::mallocBuffer(bool initializeToZero, uint64_t size) {
+    private_saturation::AllocationSite captureSite{private_saturation::Site::MALLOC_BUFFER};
     if (!bm->reserve(size)) {
         throw BufferManagerException(
             "Unable to allocate memory! The buffer pool is full and no memory could be freed!");

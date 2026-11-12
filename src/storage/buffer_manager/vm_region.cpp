@@ -1,3 +1,4 @@
+#include "common/private_saturation_capture.h"
 #include "storage/buffer_manager/vm_region.h"
 
 #include <algorithm>
@@ -126,6 +127,7 @@ frame_group_idx_t VMRegion::addNewFrameGroup() {
     std::unique_lock xLck{mtx};
     if (numFrameGroups >= maxNumFrameGroups) {
         // LCOV_EXCL_START
+        private_saturation::refuse(private_saturation::Refusal::FRAME_GROUPS, UINT64_MAX, 0);
         throw BufferManagerException("No more frame groups can be added to the allocator.");
         // LCOV_EXCL_STOP
     }

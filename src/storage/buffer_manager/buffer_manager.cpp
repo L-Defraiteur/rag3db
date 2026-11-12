@@ -1,3 +1,4 @@
+#include "common/private_saturation_capture.h"
 #include "storage/buffer_manager/buffer_manager.h"
 
 #include <atomic>
@@ -343,6 +344,7 @@ void BufferManager::removeEvictedCandidates() {
 // and return false, otherwise, we load the page to its corresponding frame and return true.
 bool BufferManager::claimAFrame(FileHandle& fileHandle, page_idx_t pageIdx,
     PageReadPolicy pageReadPolicy) {
+    private_saturation::AllocationSite captureSite{private_saturation::Site::PAGE};
     page_offset_t pageSizeToClaim = fileHandle.getPageSize();
     if (!reserve(pageSizeToClaim)) {
         return false;
@@ -403,6 +405,8 @@ bool BufferManager::reserve(uint64_t sizeToReserve) {
             } else {
                 // Cannot find more pages to be evicted. Free the memory we reserved and return
                 // false.
+                private_saturation::refuse(private_saturation::Refusal::POOL,
+                    usedMemory.load(), sizeToReserve);
                 freeUsedMemory(sizeToReserve + totalClaimedMemory);
                 nonEvictableMemory -= nonEvictableClaimedMemory;
                 return false;

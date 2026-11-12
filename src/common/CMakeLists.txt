@@ -22,6 +22,7 @@ add_library(rag3db_common
         md5.cpp
         metric.cpp
         null_mask.cpp
+        private_saturation_capture.cpp
         profiler.cpp
         random_engine.cpp
         roaring_mask.cpp
