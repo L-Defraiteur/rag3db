@@ -168,3 +168,59 @@ Premier passage CPU e2bcdd6cd :11/11 verts en1,650s ; ajout897291e78 :2/2 verts 
 P1 ED confirmé par inspection : possedes[777]=ancien ne permet pas d’adopter888 si table777 est désormais un tiers. La filiation exige maintenant que le parent actuel ait encore le même starttime ; test adversarial stable vérifie888 jamais attribué ni signalé. P2 : un reçu cohérent/token choisi nommant un ancêtre poste ne prouve pas une supervision. La vérification exige maintenant aussi l’exécutable Python réel, l’entrée `lancer` et l’identité/hash du script superviseur en cours dans cette ascendance. Test avec ancêtre réellement vivant et poste/plafond simulés valides, fichier0600/token/starttime/cgroup/délai cohérents : refus s’il n’exécute pas le superviseur. Cette garantie porte sur l’absence de bypass par environnement/reçu seuls ; aucune isolation absolue entre programmes hostiles de même UID n’est revendiquée.
 
 Retour Arbre/mémoire intégré : pidfd est ouvert AVANT la dernière relecture du starttime et le signal passe par ce FD ; nouveau test de réutilisation entre open et recheck sans signal. Un échec de nettoyage après commande rc0 capture maintenant l’erreur dans le verdict ROUGE et conserve le temporaire, au lieu de perdre le verdict dans une exception ; témoin négatif préparé. Sources à republier avec ces corrections et CPU à rejouer car les frontières de suivi/autorité/nettoyage changent. Premier rouge inattendu stop/diagnostic ; aucun essai réel avant finNAV Arbre et revue de cette source.
+
+## Recette de l’unique préflight réelle de la primitive (non lancée)
+
+Source scripts publiée62c64b152a8d2e9c0cae6a312f9ffb510ddf4854 après P1/P2. CPU complet17/17 verts en1,791s ; les ROUGE dans le journal sont ceux des cas négatifs attendus (code7, délai, résidu, nettoyage refusé), pas une passe réelle rouge. Le diff reste scripts/procédure, sans Cargo/Rust produit. ED relit ; finNAV Arbre et accord de créneau requis avant l’unique runtime, aucune source A modifiée.
+
+Préflight proposée : utiliser LA primitive publiée, pas recopier sa logique de bus/supervision. Poste réellement acquis par elle, --delai26 (réserve l’arrêt dans le maximum30s autorisé), preuves dans `journaux-cx-recherche-confinement-12nov/reel-unique/`. Commande :
+
+```bash
+python3 "$W/extension/rag3weaver/scripts/confiner_validation.py" lancer --delai 26 --preuves "$J/reel-unique" -- python3 "$B/cx-confinement-sonde-cdp.py" "$W/extension/rag3weaver/scripts/confiner_validation.py" "$J/sonde-unique"
+```
+
+La sonde vérifie d’abord le reçu réel par l’entrée `verifier`, puis demande Browser.getVersion au Chromium natif156.0.8078.79 et Browser.close ; mêmes arguments et flags de sandbox que le témoin existant, profil neuf. Bus/config/limites/descendants/lifecycle sont entièrement possédés par confiner_validation.py. Après retour, vérifier verdict, vrais enfants (Python/DBus/Chrome), cgroups/effectiveMax32, rc et quiescence exe/cwd/profil, puis retirer le seul profil enregistré si aucun détenteur. Aucun service permanent, GPU/modèle ou Cargo/lib/anciens lots ; premier écart stop et soumission sans autre essai.
+
+Chrome natif SHA25639533024d5bd2582b0915ded18cffb3fae01326723562f4988b08947516d624a ; helpers D-Bus déjà présents/version1.16.2, hashes à recontrôler dans la recette générée. Sonde externe publiée ci-dessous SHA256 `56d282a45a5deb6e623e896cc1de83bd84a37a66829b297244d1021af9c697ec` ; aucun runtime joué à cette écriture.
+
+```python
+import fcntl,hashlib,json,os,shutil,signal,subprocess,sys,tempfile,time
+from pathlib import Path
+helper=Path(sys.argv[1]);journal=Path(sys.argv[2]);journal.mkdir(parents=True,exist_ok=True)
+subprocess.run([sys.executable,str(helper),'verifier'],check=True,timeout=2)
+natif=Path('/usr/lib/chromium/chromium')
+assert hashlib.sha256(natif.read_bytes()).hexdigest()=='39533024d5bd2582b0915ded18cffb3fae01326723562f4988b08947516d624a'
+profil=Path(tempfile.mkdtemp(prefix='r3-cdp-',dir='/tmp'))
+argv=[str(natif),'--headless','--remote-debugging-pipe','--no-first-run','--no-default-browser-check','--disable-gpu','--disable-extensions','--disable-background-networking','--disable-sync','--no-sandbox','--user-data-dir='+str(profil),'about:blank']
+a,b=os.pipe();c,d=os.pipe();aa=fcntl.fcntl(a,fcntl.F_DUPFD_CLOEXEC,10);dd=fcntl.fcntl(d,fcntl.F_DUPFD_CLOEXEC,10)
+def fds():os.dup2(aa,3);os.dup2(dd,4)
+p=None;fd=None;version=None;erreur=None
+try:
+ with (journal/'chrome-stderr.log').open('w') as out:p=subprocess.Popen(argv,stdin=subprocess.DEVNULL,stdout=out,stderr=out,preexec_fn=fds,close_fds=False)
+ fd=os.pidfd_open(p.pid)
+ os.set_blocking(c,False);os.write(b,json.dumps(dict(id=1,method='Browser.getVersion')).encode()+b'\0');buf=b'';fin=time.monotonic()+10
+ while time.monotonic()<fin and version is None:
+  try:buf+=os.read(c,65536)
+  except BlockingIOError:pass
+  while b'\0' in buf:
+   raw,buf=buf.split(b'\0',1)
+   if raw:
+    msg=json.loads(raw)
+    if msg.get('id')==1:version=msg.get('result')
+  assert p.poll() is None,'Chrome terminé avant CDP'
+  time.sleep(.05)
+ assert version and version.get('product')=='Chrome/156.0.8078.79','réponse CDP réelle attendue'
+ time.sleep(.5)
+ os.write(b,json.dumps(dict(id=2,method='Browser.close')).encode()+b'\0');p.wait(timeout=3)
+ assert p.returncode==0,'sortie Chrome non verte'
+except BaseException as e:
+ erreur=repr(e)
+ if fd is not None:
+  try:signal.pidfd_send_signal(fd,signal.SIGTERM)
+  except ProcessLookupError:pass
+ raise
+finally:
+ if fd is not None:os.close(fd)
+ (journal/'sonde.json').write_text(json.dumps(dict(argv=argv,pid=p.pid if p else None,version=version,profil=str(profil),erreur=erreur),indent=2))
+ # Le profil sera retiré par le contrôle final après la quiescence de tous les descendants.
+```
