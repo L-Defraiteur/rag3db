@@ -88,3 +88,51 @@ ouvertes, des lecteurs et des checkpoints internes ainsi que la récupération,
 avec des validations autorisées et réellement jouées avant fermeture.
 
 Transmettre ou attendre une décision ne ferme pas ce ticket.
+
+## Lecture complémentaire des préconditions, 12 novembre
+
+Toujours au commit `0511dece74f94db6937fb03e6ec45f0c58828c5a`, sans exécution.
+Le contrôle de flux permet de distinguer les cas suivants :
+
+- **Transaction échouée encore ouverte** : `failAfterStatement` conserve son
+  entrée active et ses verrous (`transaction_manager.cpp:219-242`).
+  `stopNewTransactionsAndWaitForOthersNoLock:362-425` attend le départ des
+  autres écrivains ; un checkpoint peut donc être bloqué, puis expirer.
+  Cette exclusion conditionnelle ne constitue pas une garde de quarantaine.
+- **Transaction échouée fermée** : `rollback:245-280` la retire même après
+  échec ; `clearTransactionNoLock:577-590` libère tous ses verrous et réveille
+  les attentes. Le prédicat d’attente ne demande pas `rollbackFailed` :
+  le départ peut donc satisfaire l’attente d’un checkpoint déjà demandé,
+  sans réévaluation de ce drapeau dans `checkpointNoLock:598-675`.
+- **Écrivain déjà actif sur une table disjointe** : l’entrée de `commit` ne
+  consulte pas le drapeau ; une validation ordinaire sans action préalable
+  n’attend pas les autres transactions (`commit:121-160`). Le checkpoint
+  automatique dépend ensuite du seuil et des écrivains restants. Il reste
+  à établir une opération concrète atteignant ces conditions, pas à supposer
+  que toute validation force un checkpoint.
+- **Validation forcée déjà engagée** : elle attend tous les autres départs
+  (`commit:138-141`, `readersToo=true`) ; si la transaction échouée est
+  effectivement fermée et les autres parties, le prédicat peut devenir vrai.
+  `shouldForceCheckpoint` exclut la base en mémoire
+  (`src/transaction/transaction.cpp:105-107`). Les préconditions d’une écriture
+  forcée réellement concurrente, les verrous de tables et les éventuelles
+  actions antérieures doivent encore être établis.
+- **Lecteurs existants** : le prédicat de checkpoint ordinaire permet les
+  lecteurs (`readersToo=false`), contrairement au forcé. Ils ne sont pas
+  invalidés globalement par le drapeau. Cela ne prouve aucune lecture erronée :
+  les versions peuvent préserver leur visibilité ; cette garantie doit être
+  suivie pour les effets précis restés partiels.
+
+Le mutex public sérialise les entrées de gestionnaire et la publication du
+refus ; il n’annule pas les transactions déjà ouvertes. Les attentes de
+`stopNewTransactionsAndWaitForOthersNoLock` rendent ce mutex pendant leur
+attente et permettent justement aux autres transactions de partir. Il faut
+ainsi vérifier la quarantaine après les attentes, pas seulement avant un BEGIN.
+
+**Conclusion intermédiaire** : les contrôles explicites de BEGIN et du
+CHECKPOINT public empêchent ces nouvelles entrées après quarantaine. Les
+transactions actives et leurs attentes n’ont pas cette exclusion générale
+visible dans le code examiné. Les branches internes sont conditionnellement
+accessibles au niveau des prédicats lus, mais une trace d’échec réellement
+atteignable avec les verrous requis reste à établir. Ni témoin exécuté, ni
+corruption, ni récupération validée. Le ticket reste ouvert.
