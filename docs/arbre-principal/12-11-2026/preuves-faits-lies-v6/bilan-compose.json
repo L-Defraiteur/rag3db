@@ -1,0 +1,59 @@
+{
+  "source": "d2cb7f0636d099823f63de2cef674b630a46bc6f",
+  "base": "6dd116e8f70fd328acf3b45a89401e06f71365cb",
+  "elapsed_s": 1385.891327596968,
+  "global_budget_s": 3600,
+  "verdict": "VERT_COMPOSE",
+  "features": "5/5 v2",
+  "minimal": "check --lib --no-default-features rc0 v2",
+  "lib": [
+    2222,
+    0,
+    65
+  ],
+  "nav": [
+    40,
+    0,
+    0
+  ],
+  "cli": [
+    5,
+    0,
+    0
+  ],
+  "facts": 18,
+  "preview": 15,
+  "templates_per_elf": 220,
+  "client_rc": 0,
+  "quiescence": true,
+  "tmp_removed": true,
+  "elf": {
+    "lib": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-target-contenu-derive/debug/deps/rag3weaver-9bb7a242a57fc19a",
+      "sha256": "a72ee7f051de6f01c8ad8f3a950ec5a0976a67cd4a77873da92f06b96dd85594",
+      "size": 459767584
+    },
+    "navigateur": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-target-contenu-derive/debug/deps/rag3weaver-4142dd513de63a26",
+      "sha256": "44aa11b6a280c9b4a7fc4b73d9f62f473b1b6c0146de371b91a81482efb21fb5",
+      "size": 459854608
+    },
+    "cli": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-target-contenu-derive/debug/deps/e2e-b95258cc43cff951",
+      "sha256": "acc74857d673402e0d405b43cf5b640345a6d3e972f1b047edd29337af0e7440",
+      "size": 458545960
+    },
+    "backend": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-target-contenu-derive/debug/rag3weaver-backend",
+      "sha256": "f23b28644616556aeee1540e13e0cb918b4e996ce8bb6776550cd64dcf880ea3",
+      "size": 419910120
+    }
+  },
+  "historical_red": [
+    "v1 private env/pilot",
+    "v2 CARGO_MANIFEST_DIR",
+    "v3 client cwd",
+    "v4 parser should panic",
+    "v5 private DBus cleanup"
+  ]
+}
