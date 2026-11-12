@@ -33,7 +33,7 @@ bonne fiche première, présence dans les deux premières, AUC intra-cas,
 latences par cas p50/p95, cache effectivement réutilisé et VRAM avant/après.
 Garder les résultats par cas et les commandes dans des fichiers neufs.
 
-Utiliser le llama.cpp b9590 déjà bâti à luciepc, sans le rebâtir, sous `poste lourd`.
+Utiliser le llama.cpp b9590 déjà bâti à luciepc, sans le rebâtir, sous `poste mesure` (fenêtre exclusive coordonnée).
 Vérifier que le port 8099 est libre. Consigne de Lucie du 12 novembre :
 card0/seat1 (PCI 0000:07:00.0, ROCm GPU[1]) est interdite aux sessions.
 Utiliser exclusivement card2 (PCI 0000:04:00.0, ROCm GPU[0]) avec
@@ -95,11 +95,12 @@ Budget proposé, à confirmer avec le porteur avant lancement :
   restante descend sous 1 Gio. Ce contrôle n’empêche pas un pic instantané :
   la disponibilité initiale et la coordination restent nécessaires ;
 - 440 + 880 = 1 320 requêtes séquentielles, cache activé, sans génération
-  au-delà d’un jeton, un seul créneau `poste lourd` ;
+  au-delà d’un jeton, un seul créneau `poste mesure` exclusif ;
 - estimation historique : environ 95 s pour k=5 et 132 s pour k=10,
   hors chargement et variation de charge. Limite totale proposée : 15 minutes
   pour les deux séries, plus 2 minutes de démarrage et 3 minutes de remise
-  en état, soit une fenêtre demandée de 20 minutes ;
+  en état, soit une fenêtre demandée de 20 minutes. Le délai commence après acquisition
+  de `poste mesure` ; l’attente du verrou ne consomme pas ce budget ;
 - pas de reprise partielle pour mesurer les latences : sortie neuve par série,
   cases contiguës et état de cache initial documenté.
 
@@ -109,3 +110,19 @@ ne redémarre ce processus. En fin de banc ou sur échec, arrêter et attendre s
 propre llama-server, vérifier port 8099 libéré et VRAM rendue, prévenir le porteur
 pour remettre 7882 en route puis faire confirmer santé et disponibilité.
 Aucune fermeture du ticket avant mesures et restauration prouvées.
+
+## Ordre et critères d’arrêt
+
+Un unique passage k=5 puis k=10, sans reprise ni retry automatique. Au premier
+défaut (santé, requête, résultats incomplets, identité ou budget mémoire),
+conserver le diagnostic, arrêter le serveur du banc et suivre la restauration.
+Les 20 minutes comprennent 2 minutes maximum de démarrage, 15 minutes communes
+aux deux séries et 3 minutes de remise en état ; si la restauration dépasse
+cette dernière borne, signaler le blocage et conserver le suivi jusqu’à preuve
+de retour en service, sans déclarer la fenêtre rendue.
+
+L’embarquement a annoncé ne pas lancer de nouvelle charge sur ses trois services
+pendant la fenêtre proposée. Cela ne prouve pas l’absence d’autres consommateurs :
+relire l’activité globale au départ. Les connexions côté serveur ne suffisent
+pas à identifier des clients externes. Ne lancer qu’après remise explicite de
+7882 par son porteur, contrôle de VRAM et confirmation d’identité card2.
