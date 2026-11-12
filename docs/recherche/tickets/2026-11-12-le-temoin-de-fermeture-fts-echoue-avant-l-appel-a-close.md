@@ -1,6 +1,6 @@
 # Le témoin de fermeture FTS échoue avant l’appel à close
 
-- **État** : ouvert, échec CI exact08086ba36 inspecté ; diagnostic et correction du montage à confirmer.
+- **État** : ouvert ; point du panic CI confirmé, montage déterministe préparé sur898c9e0dc via API publique ; compilation et exécution natives non jouées, revue du plan avant build lourd.
 - **Famille** : produit
 - **Gravité** : blocage de la validation CI ; le témoin peut échouer avant de juger le contrat de fermeture.
 - **Atteignable en service** : non pour ce panic de préparation du test ; aucune régression produit de close établie.
@@ -52,3 +52,32 @@ sortie bornée, avec rouge/vert attribués aux bonnes sources ; contrôles adapt
 puis passe requise, revue et intégration. Ni ignore/exemption, ni suppression d’assertion,
 ni rerun de CI pour tenter la chance. La CI future se lit sur son SHA exact ou la première
 exécution terminée plus récente selon la procédure.
+
+## Diagnostic borné de recherche
+
+Worktree neuf `cx-recherche-fts-close-deterministe`, branche homonyme, base exacte898c9e0dc. Extrait CI relu sur le portable (pas sur luciepc), SHA256 `408e11c4d50197c700e8ebb7c50112405ad421bc1c5174444b6ab0b79fe3d663`, copie conservée hors worktree dans `~/.cache/rag3weaver-build/journaux-cx-recherche-fts-close-12nov/rouge-ci-080.log`. Le panic à la suppression et le message de fold sont bien ceux consignés ci-dessus ; close n'a pas été atteint dans cet enfant. Aucun rejeu de ce run ni boucle visant à retomber sur ENOTEMPTY n'a été lancé.
+
+Comparaison f96→080 : fts_handle.rs identique ; comparaison080→898 : pas de diff source Rust/workflow. La concurrence du fold est cohérente avec le montage qui détruit le dossier de writers vivants, mais l'interleaving exact n'est pas reproduit localement. Ce constat ne démontre pas un défaut produit de Lucivy ni une causalité1a.
+
+## Témoin proposé, non exécuté
+
+L'API publique du paquet registry lucivy-core4.3.3, relue à luciepc (`sharded_handle.rs`), expose ShardStorage, RamShardStorage et ShardedHandle::create_with_storage. Une fixture locale au test enveloppe RamShardStorage : création/ouverture/lectures déléguées, seules écritures de racine refusées une fois un drapeau atomique explicitement armé. Les shards et leurs folds restent sur un vrai stockage RAM privé ; aucune suppression/permission/renommage du filesystem sous les acteurs, aucun nom interne de fichier à connaître.
+
+Création, indexation et commit doivent réussir avant armement, compteur d'erreurs injectées encore nul. Après armement, close doit retourner l'erreur distinctive de la fixture et le compteur doit être positif : la preuve établit que close a réellement atteint le refus de persistance voulu, au lieu de réussir ou d'échouer dans la préparation. Pas d'hypothèse sur le nombre interne d'écritures. Ensuite les assertions existantes sont conservées : index_document refuse avec « closed », Drop du handle, marque de sortie, enfant terminé avec succès sous la borne existante20s. Le parent n'a plus besoin d'un TempDir de stockage ; protocole enfant et nom du test inchangés.
+
+La fixture compose la frontière publique de stockage ; elle n'ajoute aucun mécanisme runtime, patch de dépendance, format, ignore ou exemption. Le précédent ticket du vrai close4.3.3 reste fermé. Aucun service/modèle/DB/index utilisateur touché.
+
+**Joué à cette étape :** relecture du log et des APIs, git diff --check, parsing Rust avec rustfmt --emit stdout vers une copie hors dépôt (sans reformater le fichier source). **Non joué :** compilation Rust, exécution ciblée/FTS/lib, matrice ou CI. Aucune réussite native du nouveau montage n'est encore revendiquée.
+
+## Plan fermé soumis avant tout build lourd
+
+Aucune réservation CPU pour cette préparation. Arbre1b et coeur C++ ont signalé leur coordination ; l'envoi intersessions reste indisponible dans l'inventaire de recherche, donc aucune réponse envoyée ne leur est revendiquée. L'orchestration arbitre le créneau après revue.
+
+Proposition de premier préfixe, à autoriser : luciepc, poste lourd, -j8, mémoire32G, target unique recherche `~/.cache/rag3weaver-build/target-97k` recréé/guardé et plafonné32Go, lib complète29a7bc52a épinglée, pas de MOTEUR_ANCIEN. Pas de modèle, GPU, service ou DB : jeu exact CI `rag3db-native,code,daemon,openai-llm`, sans burn-embedder/burn-ocr ni postgres.
+
+1. Un appel Cargo --locked --lib sous ce jeu avec le nom exact du témoin et --exact --nocapture, compilation incluse, borne1500s. Attendus : un test parent joué, enfant terminé normalement, préparation avant armement, erreur racine distinctive, inertie et Drop réellement observés. Pas de stress/retry pour tenter la chance.
+2. Si vert seulement, module existant fts_handle:: sous le même jeu, borne120s, avec recherche/indexation/réouverture et Drop privés déjà présents ; les noms et comptes seront lus dans le binaire.
+3. Si vert seulement, lib correspondant exactement à la CI, borne300s, avec les DEUX filtres existants de ce workflow (aucun nouveau) : --skip the_extension_next_to_the_loaded_lib_is_loaded_without_any_variable et --skip the_test_helper_loads_the_extension_of_the_loaded_lib_not_of_the_tree. Comptes réels enregistrés, pas de promotion d'un zéro test ni reprise du compte2089 ancien.
+4. Attester source/manifestes et binaire, lib native, sortie enfant et logs, borne120s ; global2400s, arrêt au premier rouge et conservation des preuves. Une seule compilation cible à la fois. Aucune matrice complète/e2e/banc ni relance GitHub CI dans ce préfixe.
+
+Après ces preuves seulement : retour pour revue et définition de la passe finale requise avant intégration ; aucune autorisation de lancement, tour master ou nettoyage de ressources d'autres lots n'est déduite de ce plan. Ticket toujours ouvert, montages et preuves anciennes conservés.

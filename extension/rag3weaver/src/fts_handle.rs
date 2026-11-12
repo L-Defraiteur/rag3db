@@ -642,15 +642,58 @@ mod repro_drop {
     fn une_fermeture_fts_en_erreur_rend_le_handle_inerte_et_le_processus_sort() {
         const ENFANT: &str = "RAG3WEAVER_TEST_FTS_CLOSE_ENFANT";
         const NOM: &str = "fts_handle::repro_drop::une_fermeture_fts_en_erreur_rend_le_handle_inerte_et_le_processus_sort";
-        if let Some(dossier) = std::env::var_os(ENFANT) {
-            use lucivy_core::sharded_handle::ShardedHandle;
-            let chemin = std::path::PathBuf::from(dossier).join("index");
+        if std::env::var_os(ENFANT).is_some() {
+            use lucivy_core::handle::LucivyHandle;
+            use lucivy_core::query::SchemaConfig;
+            use lucivy_core::sharded_handle::{RamShardStorage, ShardStorage, ShardedHandle};
+            use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+            const ERREUR_INJECTEE: &str = "persistance racine refusée par le témoin de fermeture";
+            // Ticket recherche/tickets/2026-11-12-le-temoin-de-fermeture-fts-echoue-avant-l-appel-a-close.md.
+            // Les écritures de shards restent normales. Seule la persistance
+            // de racine est refusée, après une préparation réussie ; aucun
+            // dossier n'est détruit sous les acteurs/folds encore vivants.
+            struct PanneRacine {
+                stockage: RamShardStorage,
+                armee: Arc<AtomicBool>,
+                refus: Arc<AtomicUsize>,
+            }
+            impl ShardStorage for PanneRacine {
+                fn create_shard_handle(&self, id: usize, config: &SchemaConfig) -> Result<LucivyHandle, String> {
+                    self.stockage.create_shard_handle(id, config)
+                }
+                fn open_shard_handle(&self, id: usize) -> Result<LucivyHandle, String> {
+                    self.stockage.open_shard_handle(id)
+                }
+                fn write_root_file(&self, nom: &str, contenu: &[u8]) -> Result<(), String> {
+                    if self.armee.load(Ordering::SeqCst) {
+                        self.refus.fetch_add(1, Ordering::SeqCst);
+                        return Err(ERREUR_INJECTEE.into());
+                    }
+                    self.stockage.write_root_file(nom, contenu)
+                }
+                fn read_root_file(&self, nom: &str) -> Result<Vec<u8>, String> {
+                    self.stockage.read_root_file(nom)
+                }
+                fn root_file_exists(&self, nom: &str) -> bool {
+                    self.stockage.root_file_exists(nom)
+                }
+            }
+            let armee = Arc::new(AtomicBool::new(false));
+            let refus = Arc::new(AtomicUsize::new(0));
+            let stockage = PanneRacine {
+                stockage: RamShardStorage::default(), armee: armee.clone(), refus: refus.clone(),
+            };
             let config = build_schema_config(&["content".into()], &[], 2).unwrap();
-            let handle = ShardedHandle::create(chemin.to_str().unwrap(), &config).unwrap();
+            let handle = ShardedHandle::create_with_storage(Box::new(stockage), &config).unwrap();
             index_document(&handle, &[("content".into(), "fermeture fautive".into())], 1).unwrap();
             handle.commit().unwrap();
-            std::fs::remove_dir_all(&chemin).unwrap();
-            let fermeture = handle.close().expect_err("la disparition du stockage doit faire échouer close");
+            assert_eq!(refus.load(Ordering::SeqCst), 0, "aucune panne pendant la préparation");
+            eprintln!("PREUVE préparation réussie avant armement de la panne racine");
+            armee.store(true, Ordering::SeqCst);
+            let fermeture = handle.close().expect_err("la persistance de racine doit échouer pendant close");
+            assert!(fermeture.contains(ERREUR_INJECTEE), "erreur de fermeture inattendue : {fermeture}");
+            assert!(refus.load(Ordering::SeqCst) > 0, "close doit atteindre la panne de persistance armée");
             let apres = index_document(&handle, &[("content".into(), "interdit après fermeture".into())], 2);
             eprintln!("PREUVE close={fermeture:?} index_apres={apres:?}");
             let erreur = apres.expect_err("même après un close en erreur, le handle doit être inerte");
@@ -659,10 +702,9 @@ mod repro_drop {
             eprintln!("PREUVE handle détruit, sortie enfant");
             return;
         }
-        let dossier = tempfile::tempdir().unwrap();
         let mut enfant = std::process::Command::new(std::env::current_exe().unwrap())
             .args(["--exact", NOM, "--nocapture"])
-            .env(ENFANT, dossier.path())
+            .env(ENFANT, "1")
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn().expect("l'enfant démarre");
