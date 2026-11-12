@@ -309,7 +309,8 @@ def main():
             raise Refus('validation déjà supervisée : composer la commande dans cette portée')
         if not poste_tenu(table):
             poste = Path(__file__).with_name('poste')
-            env = dict(os.environ, POSTE_MEM_MAX='32G')
+            env = dict(os.environ)
+            env.setdefault('POSTE_MEM_MAX', '32G')
             env.pop('RAG3WEAVER_VERROU_TENU', None)
             os.execve(str(poste), [str(poste), a.mode, sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]], env)
         return superviser(command, a.delai, a.preuves)
