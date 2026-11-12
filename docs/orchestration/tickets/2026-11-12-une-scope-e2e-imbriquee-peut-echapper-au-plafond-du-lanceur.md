@@ -278,3 +278,15 @@ SHA256 logCPU20/20 : `dce2e213501f1b4c23077950f0e1ff6867fcf41155c309e3761f5fd107
   }
 }
 ```
+
+## GO final de préflight et plafond extérieur, publiés avant entrée
+
+GO C7 reçu après revue CPU20/20, recette c5f et source5fab, NAV Arbre indépendante quiescente. Le helper reste --delai26 ; le plafond extérieur est posé **après vraie acquisition** du poste32G : `poste lourd timeout --signal=TERM --kill-after=1s 29 python3 <contrôleur privé>`, soit plafond total30s arrêt compris, sans restart. Le contrôleur appelle exactement argv de recette-proposee.json (primitive publiée, même sondeCDP/hash et même Chrome/hash) ; il ne réimplémente ni le bus ni les signaux de la primitive. Il observe en plus les exe/PID/start/cgroups du cgroup privé, vérifie rc/verdict/nettoyage et CDP réel+close, puis vérifie quiescence et retire le seul profil enregistré. Les processus préexistants de la baseline ne sont jamais attribués.
+
+SHA256 contrôleur `4a185e239e836245729fd3b3a1ec149a784f6f55eb04f749812f93192f78131c`. Commande extérieure (pas encore lancée à cette écriture) :
+
+```bash
+POSTE_MEM_MAX=32G "$W/extension/rag3weaver/scripts/poste" lourd timeout --signal=TERM --kill-after=1s 29 python3 "$B/cx-confinement-preflight-controle.py"
+```
+
+Le budget démarre après le poste ; aucune attente ne le prolonge. Premier écart STOP/diagnostic, aucun second essai réel ni ancien NAV/lib/FTS. Contrôleur exact conservé hors dépôt avec les preuves ; source scripts distante5fab propre figée, les commits ultérieurs de recette sont Markdown seuls.
