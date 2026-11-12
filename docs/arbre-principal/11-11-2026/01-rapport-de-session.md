@@ -1,6 +1,6 @@
 ## Reprise prioritaire — A vérifiée, avant tour master
 
-Branche privée cx-arbre-faits-lies-2, WT local/luciepc
+Branche privée cx-arbre-faits-lies-3 après rebase MD777820ef7, WT local/luciepc
 `/home/lucied/.cache/rag3weaver-build/cx-wt-faits-lies`. Source compilée et jouée
 **d2cb7f0636d099823f63de2cef674b630a46bc6f**, base ED6dd116e8f ; la tête privée
 locale ajoute seulement les recettes/preuves et ce bilan. Source distante d2

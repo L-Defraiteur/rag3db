@@ -1299,3 +1299,14 @@ Lucie sur publicationdistincte/empreintecontenu publiée777820ef doit être cons
 au rebase documentaire final, sans producteur persistant anticipé. Ticket reste
 ouvert ; attente revue C7/mémoire et tour explicite avant master, puis3contrôles,
 archives+gardes fraîches et nettoyage propres.
+
+Rebase final documentaire sur777820ef79d26af91b93687953bb8c06f790fbb8,
+branche neuve **cx-arbre-faits-lies-3** publiée f9b7cd9d6 :13commits,11identiques,
+2seuls contextes documentaires de patch adaptés (décision composite ajoutée par
+C7 dans ticket/page02). Conflit d'append ticket résolu en conservant intégralement
+la décision Lucie ET tout l'historique A ; page02commence par les octetsmaster
+sans perte, puis bilanA. Arbre extension/rag3weaver strictementidentique à la tête
+avantrebase e6a5006a6 ; delta avec sourcejouéeD2 =README seulement sous extension,
+tous autres chemins documentaires complets contrôlés, pas de replayCargo.
+Range-diff et rebase-final.json conservés dans preuves finales locales. Revue
+mémoire des4ELF/220hashes/native/CLI/quiescence favorable, tour C7 encore attendu.
