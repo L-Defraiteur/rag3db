@@ -3619,7 +3619,13 @@ fn read_threads() -> u64 {
         if self.marque_posee && deja.contient(dispo) {
             return;
         }
-        let mut dette = self.dette_publiee.clone();
+        // Après une annulation, le cache n'est plus une base de cumul :
+        // les autres cellules peuvent encore porter du travail accepté.
+        let mut dette = if self.marque_posee {
+            self.dette_publiee.clone()
+        } else {
+            self.ce_que_je_dois()
+        };
         *dette.entry(table.to_string()).or_insert(crate::disponibilite::Disponibilites::AUCUNE) |= dispo;
         self.publier_la_dette(dette, false);
     }
@@ -8237,6 +8243,9 @@ fn read_threads() -> u64 {
         self.pending.updates.append(&mut hors_lot.updates);
         self.pending.deletes.append(&mut hors_lot.deletes);
         self.pending.derivations.append(&mut hors_lot.derivations);
+        // Le lot a pu annuler une marque écrite dans sa transaction. Le
+        // bilan n'est complet qu'après remise des ressources hors lot.
+        self.annoncer_travail_en_attente();
         outcome
     }
 
