@@ -202,7 +202,11 @@ impl EmbedDaemon {
                     let textes: Vec<String> = (0..lot).map(|i| (0..mots)
                         .map(|j| format!("m{}", (i * 7 + j * 13) % 97))
                         .collect::<Vec<_>>().join(" ")).collect();
-                    let erreur = self.embedder.embed(&textes).err().map(|e| e.to_string());
+                    let erreur = match self.embedder.embed(&textes) {
+                        Ok(vecteurs) if vecteurs.len() == textes.len() && vecteurs.iter().all(|v| v.len() == self.embedder.dim() && v.iter().all(|x| x.is_finite())) => None,
+                        Ok(_) => Some("chauffe : résultat vide, dimension ou cardinalité invalide".into()),
+                        Err(e) => Some(e.to_string()),
+                    };
                     faits.push(FormeChauffe { lot, mots, erreur });
                 }
             }
@@ -687,6 +691,11 @@ impl DaemonEmbedder {
         Self::depuis(adresse, None)
     }
 
+    /// Borne la sonde d'identité, sans confondre ce budget avec les futurs appels.
+    pub fn joindre_dans(adresse: &str, delai: std::time::Duration) -> Result<Self, DaemonError> {
+        Self::depuis_dans(adresse, None, delai)
+    }
+
     /// **Le verbe courant** : s'il répond on s'y attache, sinon on le lance.
     pub fn assurer(serveur: &Serveur) -> Result<Self, DaemonError> {
         let attache = serveur.assurer()?;
@@ -695,7 +704,10 @@ impl DaemonEmbedder {
     }
 
     fn depuis(adresse: &str, attache: Option<crate::serveur::Attache>) -> Result<Self, DaemonError> {
-        let delai = default_embed_timeout();
+        Self::depuis_dans(adresse, attache, default_embed_timeout())
+    }
+
+    fn depuis_dans(adresse: &str, attache: Option<crate::serveur::Attache>, delai: std::time::Duration) -> Result<Self, DaemonError> {
         let agent = super::agent_with_timeout(delai);
         let identite: Identite = identite_de(&agent, adresse, SERVICE)?;
         Ok(Self { adresse: adresse.to_string(), base: base_url(adresse), agent, delai, identite, _attache: attache })
