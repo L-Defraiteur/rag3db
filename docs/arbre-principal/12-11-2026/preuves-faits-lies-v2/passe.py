@@ -86,11 +86,25 @@ def observe():
         except (FileNotFoundError,ProcessLookupError):continue
     return live
 
+def scan_context():
+    found=[]
+    for q in Path('/proc').iterdir():
+        if not q.name.isdigit() or int(q.name)==os.getpid():continue
+        try:
+            if q.stat().st_uid!=os.getuid():continue
+            stat=(q/'stat').read_text().rsplit(') ',1)[1].split()
+            if stat[0]=='Z':continue
+            exe=os.readlink(q/'exe');cwd=os.readlink(q/'cwd');args=(q/'cmdline').read_bytes().split(b'\0')
+            if exe.startswith(str(T)+'/') or cwd==str(W) or cwd.startswith(str(W)+'/') or (bus_tmp and any(str(bus_tmp).encode() in a for a in args)):
+                found.append(dict(pid=int(q.name),starttime=stat[19],exe=exe,cwd=cwd))
+        except (OSError,ProcessLookupError):continue
+    return found
+
 def observations():
     save('descendants.json',list(seen.values()));save('devices.json',list(devices.values()));save('maps.json',list(mappings.values()))
 def stop_owned():
     try:observe()
-    except BaseException:pass
+    except BaseException as error:save('erreur-observation-arret.json',dict(error=repr(error)))
     for sig in (signal.SIGTERM,signal.SIGKILL):
         for pid,stamp in list(owned.items()):
             try:
@@ -240,6 +254,10 @@ try:
     save('tmp-navigateur.json',dict(path=str(bus_tmp),source=SOURCE,minted=True,storage='btrfs /var/tmp',cleanup_after_success_and_quiescence=True))
     runtime('navigateur',nav,navnames,navignores,limit,filters,dict(TMPDIR=str(bus_tmp),RAG3WEAVER_NAVIGATEUR=str(wrapper)))
     assert any(r['exe']=='/usr/lib/chromium/chromium' for r in seen.values()),'Chromium réel non observé'
+    navlive=observe();navcontext=scan_context()
+    save('nav-quiescence.json',dict(live=navlive,context=navcontext,checked=now()))
+    assert not navlive and not navcontext,'NAV résidus processus'
+    assert not list(bus.iterdir()),'socket bus restant'
     limit=budget(180);cli=compile_elf('cli',F,['--test','e2e'],limit)
     clinames,cliignores=inventory('cli',cli,limit,['e2e_migration_preflight::'])
     assert len(clinames)==5 and not cliignores,('CLI inventaire',len(clinames),cliignores)
@@ -247,7 +265,7 @@ try:
     attest(budget(120))
     after=events();assert all(after[k]==before[k] for k in ('high','max','oom','oom_kill')),('événements mémoire',before,after)
     save('memoire.json',dict(before=before,after=after))
-    live=observe();save('quiescence.json',dict(live=live,checked=now()));assert not live,('descendants encore vivants',live)
+    live=observe();context=scan_context();save('quiescence.json',dict(live=live,context=context,checked=now()));assert not live and not context,('descendants encore vivants',live,context)
     observations();guard();assert time.monotonic()<DEADLINE-10
     phase='fin';verdict='VERT'
 except BaseException as error:

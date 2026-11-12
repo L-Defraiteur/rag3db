@@ -1183,3 +1183,9 @@ unités et tous les budgets réduits au reste, F5 retirant aussi19,93s déjà d�
 Nouvelle PG synthétiquev2 avec absence/current_database et source vérifiés,
 v1 conservée. Toute autre phase inchangée : lib18+15, NAV40/bus privé, CLI5,
 attestations/maps/220/quiescence. Premier rouge arrêt, aucun rejeu inchangé.
+
+Complément de revue v2 : stop_owned poursuit les pidfd même si observe redéclenche
+un invariant, erreur d'observation consignée séparément ; corrigé déjà dans v1
+publiée puis explicité dans v2. Scan final indépendant exeTarget/cwdWT/profilTMP
+contre les descendants manqués ; jalon nav-quiescence.json avant CLI avec socket
+bus absent, pour rendre le navigateur à recherche dès ce jalon réellement vert.
