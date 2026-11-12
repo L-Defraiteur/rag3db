@@ -251,3 +251,11 @@ choix cpu commun et trois rôles si construction éventuelle. La surveillance co
 provenances natives et descripteurs de périphériques, sans transformer une ouverture de
 périphérique en preuve de calcul. F5/minimal/compilation acquis ; source efdf et deadline
 860816.22498967 inchangées. Aucun usage7879. Cette section ne constitue aucun vert de lib.
+
+GO de C7 reçu pour la recette adaptée, publiée avant exécution : reprise-adaptee.py
+SHA256 `59332ced215e16c0f980ec60fae079826c4fc2c973042ad1acc29e1fe869188a`. Mêmes source efdf, ELF et deadline860816.22498967 ;
+lib2204/65→NAV40→PG36 seulement. CPU posé explicitement sur variable commune et trois rôles ;
+énumération matérielle autorisée, RADV connu conservé sans nouvel arrêt sur ce seul message.
+L'observateur garde PID/starttime/maps et ouvertures /dev/dri ou /dev/kfd ; celles-ci
+ne prouvent pas une charge GPU. Aucun modèle/inférence/service7879 ni charge seat1 prévu.
+Tout signal nouveau arrête pour diagnostic. F5/minimal/compilation ne sont pas rejoués.
