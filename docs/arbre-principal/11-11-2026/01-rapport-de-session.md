@@ -1,3 +1,27 @@
+## Reprise prioritaire — aperçu prêt pour revue finale, 12 novembre
+
+Branche privée `cx-arbre-migration-transfert-3`, worktree local/remote
+`/home/lucied/.cache/rag3weaver-build/cx-wt-migration-transfert`. Source de passe
+complète **20e4e2ffc**, rc0 en687,38s : features5+minimum checklib verts,
+lib2167/0/64 (15aperçu et lien80 réellement passés), navigateur39/0/0,
+migration_preflight5/0/0,1/1,sans résidu. Les ciblés/branches précédents ci-dessous
+sont l'historique, pas une passe supplémentaire à relancer.
+
+[Ticket migration ouvert](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md) :
+API d'aperçu générique sur faits fournis, toujours non qualifiée aux configs/faits
+du plan ; aucun transfert/apply, lecteur de base ou modèle. Identité attendue
+explicite ne vaut pas preuve durable de stockage. [Ticket tty ouvert](../../tty/tickets/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md) :
+les tests sans natif restent rouges sur2helpers, malgré checklib minimal vert.
+
+Cache luciepc `cx-passe-apercu-transfert-v1/` : source, logs,4ELF et SHA,220assets
+attestés ; target unique8,4Go conservé pendant le lot. Scope finie/place arbre
+rendue ; lourd tiers1/4 au contrôle, pas d'affirmation de poste global libre.
+TMP navigateur court privé /var/tmp retiré après scope ; PG privée neuve
+cx_apercu_2191_20261112_v1 gardée pour revue. Attente C7 « à toi » pour master,
+puis3contrôles, dump/hash/drop de cette seule PG, archives admin fidèles et garde
+fraîche VERT avant retrait des worktrees/target. Aucun déploiement ni modèle/base
+réelle/migration réelle. Après intégration, repartir d'un worktree neuf pour la suite.
+
 ## Travail en cours — aperçu pur du transfert, 12 novembre
 
 Après le préfixe intégré ci-dessous : nouveau worktree local/remote
