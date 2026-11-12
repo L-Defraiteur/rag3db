@@ -203,3 +203,24 @@ explicitement épinglée à cette base avant table_rase. Aucune base existante/d
 Lib29 complète, j8, target unique32Go ; variables modèles et identifiants Gemini retirés,
 pas de modèle réel/GPU/7879. Poste lourd respecte la priorité mesure. Après passe :
 quiescence, empreinte ELF/220 gabarits, preuves aux deux postes, revue puis tour master.
+
+## Arrêt d'instrumentation et inventaire exact
+
+Source globale figée `efdf90fb9f94ca580e41b53c912c2c718b13f4ed`, début855116.22498967,
+deadline860816.22498967. F5check VERT5/5 ; minimal sans features VERT36,92s ;
+compilation large VERT3min46. Avant tout test, l'inventaire direct du binaire échoue127 :
+`librag3db.so` absente du chemin de chargement. Le wrapper Cargo exporte ce chemin ;
+la commande directe de l'instrumentation l'avait omis. Aucun test global n'a alors tourné.
+Premier rouge conservé dans erreur/fin.json/verdict de la recette initiale, elapsed409,35s.
+
+Diagnostic : inventaire seul repris avec exporter_la_lib/lib29, sans nouvelle compilation,
+sous poste lourd/unité privée. Binaire exact rag3weaver-4950c451c9e109ca :
+**2269 tests,65 ignorés**, donc **2204 succès attendus**. L'estimation2179 était périmée ;
+aucune exclusion modifiée. Listes lib-large-liste.txt et lib-large-ignores-liste.txt,
+SHA du même ELF dans lib-large-elf.sha256. Aucun test exécuté par cet inventaire.
+
+Recette corrigée publiée avant reprise : reprise.py SHA256 `a7692242775d76d6f6bd822e733dba1d12cb9e448fecae4cc74b55483b873be4`
+dans le même dossier de preuves. Elle reprend uniquement liblarge900→NAV600→PG300,
+sans F5/minimal/compilation déjà verts ; source efdf inchangée et **deadline initiale
+860816.22498967 chargée depuis debut.json**, aucun reset. Tous les autres plafonds,
+arguments, exclusions et surveillances restent identiques. Logs et verdict de reprise distincts.
