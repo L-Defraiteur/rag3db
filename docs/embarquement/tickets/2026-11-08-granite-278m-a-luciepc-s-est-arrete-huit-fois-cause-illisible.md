@@ -45,6 +45,14 @@ prochain redémarrage.
 
 ## Ce qu'il faut pour le fermer
 
+Relevé complémentaire pendant l'audit du 12 novembre : service actuellement
+disponible, `NRestarts=4`, départ indiqué le 11 novembre à 23:20:40 ; journal
+du service désormais présent (3 263 octets, 34 lignes). Filtrage de métadonnées
+par embarquement : quatre mentions de chargement/chauffe/écoute et deux mentions
+Error, sans occurrence panicked/OOM/DeviceLost/timeout. Ces nombres ne prouvent
+ni une nouvelle panne spontanée ni sa cause : opérations et journal restent
+à corréler. Aucun redémarrage de ce service demandé par l'audit ; ticket ouvert.
+
 À la prochaine sortie d'une de ces unités, lire son `journal-<modèle>.log` et nommer la cause
 (une erreur du service, la carte, la mémoire) ; puis la corriger, ou fermer ce ticket comme un
 accident nommé. Sans nouvelle sortie dans le mois, le fermer en le disant.

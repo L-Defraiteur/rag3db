@@ -1,6 +1,6 @@
 # Revoir les services d'embarquement résidents selon les usages
 
-- **État** : ouvert ; audit et ajustements réversibles demandés par Lucie le 12 novembre.
+- **État** : ouvert ; bilan et ajustements réalisés, consolidation documentaire avant clôture.
 - **Famille** : produit
 - **Gravité** : coût ; VRAM occupée par des services dont l'utilité dans le flux courant doit être vérifiée.
 - **Atteignable en service** : oui, processus 7878/7879/7880/7882 résidents sur card2.
