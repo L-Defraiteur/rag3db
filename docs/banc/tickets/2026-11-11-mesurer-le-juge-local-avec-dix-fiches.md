@@ -1,6 +1,6 @@
 # Mesurer le juge local avec dix fiches
 
-- **État** : ouvert — passage arrêté avant inférence : ROCm ouvre aussi un contexte sur card0 malgré le filtre ; 7882 restauré ; exclusion stricte de seat1 à établir.
+- **État** : ouvert — comprendre le contexte ROCm et vérifier l’absence de charge de calcul du banc sur seat1 ; 7882 restauré.
 - **Famille** : produit
 - **Gravité** : coût — latence et qualité du classement à dix fiches non mesurées.
 - **Atteignable en service** : non pour cette mesure ; le branchement du juge revient à la session mémoire.
@@ -364,3 +364,75 @@ Le mécanisme peut aussi empêcher ROCm de démarrer : refuser proprement vaut m
 qu’un accès seat1. Ni cette proposition ni l’installation de bwrap n’autorisent
 une nouvelle sonde GPU. Prochaine activation seulement dans une nouvelle
 fenêtre explicitement coordonnée, avec la garde actuelle conservée.
+
+## Clarification directe de Lucie après publication du 12 novembre
+
+Lucie précise que les 40 Ko ne sont pas en eux-mêmes un problème : elle demande
+pourquoi ce contexte existe, et veut surtout que son GPU de jeu ne soit pas
+chargé au point de l’empêcher de jouer. Cette précision remplace l’interprétation
+précédente qui exigeait zéro ouverture de périphérique seat1. Le travail reste
+porté par ce ticket, sans doublon : comprendre l’initialisation puis vérifier
+que poids, cache et calcul du banc restent sur card2. Un contexte minuscule
+et stable peut être accepté ; il ne suffit pas à prouver l’absence de calcul.
+
+Recherche en cours : sources locales llama.cpp d2462f8 et ROCm 7.2.4,
+documentation primaire AMD, puis proposition de contrôle des compteurs par
+processus/PCI. Ne pas confondre charge globale card0 (le jeu peut tourner) et
+charge imputable au banc. Aucune nouvelle charge GPU à cette étape ; toute
+mesure reste coordonnée avec l’orchestration et les porteurs des services.
+
+Correction de vocabulaire : le journal serveur conservé mentionne un warmup
+interne avant santé 200. Zéro requête du banc et zéro paire mesurée sont établis ;
+« aucune inférence » ne doit pas être interprété comme preuve d’absence de
+calcul interne au démarrage. Le PCI de ce warmup n’a pas été mesuré par des
+compteurs d’exécution dans le passage arrêté.
+
+## Explication sourcée : initialisation avant sélection des GPU visibles
+
+Paquets lus à luciepc : rocm-core, hsa-rocr et hip-runtime-amd 7.2.4-1.1.
+Sources primaires examinées au tag ROCm `rocm-7.2.4`, sans charger de modèle :
+
+- [topology.c, vérification des nœuds](https://github.com/ROCm/ROCR-Runtime/blob/rocm-7.2.4/libhsakmt/src/topology.c#L648) :
+  le runtime ouvre le nœud DRM pour déterminer les GPU disponibles ;
+- [fmm.c, initialisation des espaces mémoire du processus](https://github.com/ROCm/ROCR-Runtime/blob/rocm-7.2.4/libhsakmt/src/fmm.c#L2790) :
+  parcours des nœuds GPU, ouverture de leur render node, puis acquisition
+  de leur espace mémoire auprès de KFD (`acquire_vm`, vers la ligne 3058) ;
+- [amd_topology.cpp, découverte et filtre](https://github.com/ROCm/ROCR-Runtime/blob/rocm-7.2.4/runtime/hsa-runtime/core/runtime/amd_topology.cpp#L330) :
+  récupération des propriétés avant application de `ROCR_VISIBLE_DEVICES`,
+  puis distinction des agents exposés et désactivés. Des objets internes
+  existent aussi pour les GPU masqués ; ils ne sont pas tous exposés à HIP ;
+- [documentation AMD sur la visibilité](https://rocm.docs.amd.com/en/latest/reference/system-optimization/gpu-isolation.html) :
+  les variables de visibilité définissent les GPU présentés à l’application,
+  distinctement d’une isolation des périphériques par le système.
+
+Le chemin d’initialisation explique donc l’ouverture de PCI 07:00.0 malgré
+le filtre, sans nécessiter d’y placer le modèle. Les 40 KiB observés sont
+compatibles avec ce petit état de gestion mémoire ; leur allocation précise
+n’a pas été attribuée individuellement. Les poids/cache étaient établis sur
+PCI 04:00.0 par les fdinfo. Le code local llama.cpp d2462f8 énumère les GPU
+visibles et interroge leurs propriétés et mémoire au démarrage. Aucun nouveau
+runtime ou modèle n’a été lancé pour cette analyse.
+
+## Critère révisé, à qualifier avant la nouvelle fenêtre
+
+Selon la précision de Lucie, ne plus faire rougir sur la seule existence d’un FD
+PCI 07:00.0 ou du contexte stable de 40 KiB. L’objectif est de préserver son jeu :
+modèle, cache et exécution du banc sur card2, aucune charge de calcul du banc
+sur card0, petite mémoire de gestion tolérable. Ce critère remplace les mentions
+précédentes exigeant zéro ouverture de seat1 ; l’historique du passage reste exact.
+
+Conserver une baseline par processus et PCI avant warmup, suivre la mémoire du
+banc sur card0 pendant warmup et requêtes, et vérifier les compteurs d’exécution
+par GPU du processus si le pilote les expose. Dédupliquer les fdinfo par
+`drm-client-id` pour ne pas compter deux fois le même client. Un compteur absent
+ne signifie pas zéro calcul. La charge globale card0 ne permet pas seule
+l’attribution : le jeu et le bureau de Lucie peuvent légitimement l’utiliser.
+Si les compteurs nécessaires ne sont pas disponibles, documenter cette limite
+et choisir un moyen d’attribution avant de promettre l’absence d’impact.
+
+Les plafonds du contexte toléré et la manière de détecter une activité imputable
+au banc restent à qualifier ; ne pas inventer une garantie de fluidité depuis
+un seul instantané de mémoire. Pas de changement global de permission GPU,
+pas de sudo ni de sandbox compliqué uniquement pour supprimer 40 KiB.
+La mesure k10 attend une nouvelle fenêtre coordonnée, avec arrêt/restauration
+7882 préparés comme précédemment. Le ticket reste ouvert jusqu’aux mesures réelles.
