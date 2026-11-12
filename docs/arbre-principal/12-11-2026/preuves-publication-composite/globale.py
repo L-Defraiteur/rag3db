@@ -3,11 +3,11 @@
 from pathlib import Path
 import ast, datetime, hashlib, json, mmap, os, re, shlex, shutil, signal, subprocess, sys, tempfile, time
 R=Path('/home/lucied/.cache/rag3weaver-build'); W=R/'cx-wt-publication-composite'; C=W/'extension/rag3weaver'
-P=R/'cx-passe-publication-composite-v4'; T=R/'cx-target-contenu-derive'
+P=R/'cx-passe-publication-composite-v5'; T=R/'cx-target-contenu-derive'
 SOURCE=sys.argv[1]; RECEIPT=Path(os.environ['RAG3WEAVER_VALIDATION_RECU']); AUTH=json.loads(RECEIPT.read_text()); DEADLINE=AUTH['echeance']; INITIAL=DEADLINE-5400
 F='rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm'
 NATIVE='rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
-PG='cx_pub_2191_20261113_v4'; ROLE='rag3weaver'
+PG='cx_pub_2191_20261113_v5'; ROLE='rag3weaver'
 assert re.fullmatch('[0-9a-f]{40}',SOURCE) and time.monotonic()<DEADLINE-15
 P.mkdir(exist_ok=False)
 CG=Path('/proc/self/cgroup').read_text().strip().split('::',1)[1]; G=Path('/sys/fs/cgroup'+CG)
@@ -184,7 +184,7 @@ def runtime(label,binary,names,ignores,limit,filters=(),extra=None):
 def attest(limit):
     global phase
     phase='attestation';state('EN_COURS');guard()
-    files=sorted(p for p in (C/'templates').rglob('*') if p.is_file());assert len(files)==220
+    files=sorted(p for p in (C/'templates').rglob('*') if p.is_file());assert len(files)==223
     template_records=[dict(path=str(p.relative_to(C)),sha256=digest(p),size=p.stat().st_size) for p in files]
     for label,a in artifacts.items():
         assert time.monotonic()<limit,'budget attestation'
@@ -193,12 +193,12 @@ def attest(limit):
             assert data.find(SOURCE[:9].encode())>=0,('source embarquée',label)
             missing=[str(p.relative_to(C)) for p in files if data.find(p.read_bytes())<0]
             assert not missing,('templates absents',label,missing)
-        a.update(sha256=digest(b),size=b.stat().st_size,templates=220,source=SOURCE)
+        a.update(sha256=digest(b),size=b.stat().st_size,templates=223,source=SOURCE)
         assert any(m['exe']==str(b) for m in mappings.values()),('maps runtime manquantes',label)
         shutil.copy2(b,P/('binaire-'+label))
         assert digest(P/('binaire-'+label))==a['sha256']
         observe()
-    save('artefacts.json',artifacts);save('templates-220.json',template_records)
+    save('artefacts.json',artifacts);save('templates-223.json',template_records)
     native=Path.home()/'.cache/rag3db-libs'/NATIVE/'librag3db.so'
     save('native.json',dict(path=str(native),sha256=digest(native)))
     assert time.monotonic()<limit,'budget attestation'
@@ -231,7 +231,9 @@ try:
     assert list(groups.values())==[10,3,18,15],groups
     publication=[n for n in names if n.startswith('dataflow::migrations::publication::')]
     assert len(publication)==14 and not set(publication)&set(ignores),publication
-    required=publication+[n for n in names if n.startswith(tuple(groups))]+['storage_inspection::native_tests::native_snapshot_restores_configs_relations_and_journal_without_changing_fixture_bytes','dataflow::record_nodes::tests::l_annulation_d_un_lot_de_liens_ne_retire_que_ce_qu_il_a_cree']
+    symbols=[n for n in names if n.startswith('symbol_navigation::')]
+    assert len(symbols)==9 and not set(symbols)&set(ignores),symbols
+    required=publication+symbols+[n for n in names if n.startswith(tuple(groups))]+['storage_inspection::native_tests::native_snapshot_restores_configs_relations_and_journal_without_changing_fixture_bytes','dataflow::record_nodes::tests::l_annulation_d_un_lot_de_liens_ne_retire_que_ce_qu_il_a_cree']
     assert set(required)<=set(names) and not set(required)&set(ignores)
     save('groupes-requis.json',dict(groups=groups,required=required))
     runtime('lib',lib,names,ignores,budget(300))

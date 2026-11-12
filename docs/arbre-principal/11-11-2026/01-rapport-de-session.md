@@ -1,3 +1,17 @@
+## Requalification de l'union sur master symboles — en cours (13 novembre)
+
+Master est désormais `8f604328a` (CI C++ et symboles intégrés). Lot reposé
+sur cette pointe, branche neuve `cx-arbre-publication-composite-r2`, après
+résolution documentaire conservant les deux entrées de nouveautés. Les chemins
+Rust de publication et helper KV sont identiques à626 ; le vrai delta entrant
+est la navigation des symboles et trois graphes (223gabarits au total).
+L'ancienne composition626 reste une preuve de son ancienne source, pas de cette
+union. Nouvelle recette/source publiées avant globale v5 bornée5400s, native29/
+CPU/j8/32G/targetunique. Attend explicitement14témoins publication et9symboles
+nonignorés dans la lib ; F5/min/lib/NAV40/CLI5/PG36/4tx. PGv5neuve, zéroreset.
+Aucun push master avant requalification et tour C7 frais. Les sections suivantes
+conservent la qualification historique626 et ses preuves séparées.
+
 ## Publication composite — qualifiée, avant tour master (13 novembre)
 
 Source **626d050d3dcd9316bb8a1fc923bf71fcd0e36baf**, branche `cx-arbre-publication-composite-r1`, worktree

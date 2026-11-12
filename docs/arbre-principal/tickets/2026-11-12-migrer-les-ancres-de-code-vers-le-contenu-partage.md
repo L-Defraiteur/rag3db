@@ -1825,3 +1825,18 @@ produit un verdictcomposé explicite sous anciennedélaisansreset. Aucune suite
 ni nouveau backend ne sera exécuté par cette composition.
 
 Composition C7 runtimev3+attestationv8 source626d050d3dcd9316bb8a1fc923bf71fcd0e36baf VERT en1440.33s/budgetINITIAL5400, F5 5/5, minimal et lib 2257/0/65, navigateur 40/0/0, cli 5/0/0, postgres 36/0/0, e2e_tx_ligne_a_ligne 3/0/0, e2e_tx_merge_puis_copy 1/0/0, e2e_tx_par_paquet_arret 18/0/0, e2e_tx_vecteurs_apres_rollback 3/0/0. Quatre ELF/maps/native29/220gabarits copiés et rehashés deux postes, supervisionv3ROUGEcartographie/v8VERT, deuxrestes[]/busabsents/TMPNAVretiré. Prêt pour tour C7 ; ticket reste ouvert pour pyramide/application physique.
+
+## Requalification de l'union sur master symboles — en cours (13 novembre)
+
+Master est désormais `8f604328a` (CI C++ et symboles intégrés). Lot reposé
+sur cette pointe, branche neuve `cx-arbre-publication-composite-r2`, après
+résolution documentaire conservant les deux entrées de nouveautés. Les chemins
+Rust de publication et helper KV sont identiques à626 ; le vrai delta entrant
+est la navigation des symboles et trois graphes (223gabarits au total).
+L'ancienne composition626 reste une preuve de son ancienne source, pas de cette
+union. Nouvelle recette/source publiées avant globale v5 bornée5400s, native29/
+CPU/j8/32G/targetunique. Attend explicitement14témoins publication et9symboles
+nonignorés dans la lib ; F5/min/lib/NAV40/CLI5/PG36/4tx. PGv5neuve, zéroreset.
+Aucun push master avant requalification et tour C7 frais. Les sections suivantes
+conservent la qualification historique626 et ses preuves séparées.
+

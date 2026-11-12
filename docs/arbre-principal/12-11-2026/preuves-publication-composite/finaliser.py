@@ -1,13 +1,13 @@
 from pathlib import Path
 import hashlib,json,os,shutil,sys,time
-R=Path('/home/lucied/.cache/rag3weaver-build');P=R/'cx-passe-publication-composite-v4';W=R/'cx-wt-publication-composite';T=R/'cx-target-contenu-derive'
+R=Path('/home/lucied/.cache/rag3weaver-build');P=R/'cx-passe-publication-composite-v5';W=R/'cx-wt-publication-composite';T=R/'cx-target-contenu-derive'
 SOURCE=sys.argv[1];client_rc=int(sys.argv[2]);P.mkdir(exist_ok=True)
 record=dict(source=SOURCE,verdict='ROUGE',client_rc=client_rc);exit_code=1
 try:
     assert client_rc==0,'superviseur non réussi'
     assert (P/'VERDICT').read_text().strip()=='VERT'
     source=json.loads((P/'source.json').read_text());assert source['source']==SOURCE
-    receipt=Path(source['supervision_receipt']);assert receipt.parent.is_relative_to(R/'cx-publication-composite-global-confinement-v4')
+    receipt=Path(source['supervision_receipt']);assert receipt.parent.is_relative_to(R/'cx-publication-composite-global-confinement-v5')
     supervisor=json.loads((receipt.parent/'verdict.json').read_text())
     assert supervisor['verdict']=='VERT' and supervisor['code']==0 and supervisor['restes']==[] and supervisor['nettoye']
     assert not Path(supervisor['prive']).exists(),'bus commun restant'
@@ -31,7 +31,7 @@ try:
     artifacts=json.loads((P/'artefacts.json').read_text());assert set(artifacts)=={'lib','navigateur','cli','backend'}
     for label,item in artifacts.items():
         with (P/('binaire-'+label)).open('rb') as f:sha=hashlib.file_digest(f,'sha256').hexdigest()
-        assert sha==item['sha256'] and item['source']==SOURCE and item['templates']==220
+        assert sha==item['sha256'] and item['source']==SOURCE and item['templates']==223
     shutil.rmtree(tmp);assert not tmp.exists()
     (P/'tmp-retire.json').write_text(json.dumps(dict(path=str(tmp),absent=True,source=SOURCE))+'\n')
     elapsed=time.monotonic()-source['initial_monotonic'];assert elapsed<5400,'échéance initiale dépassée'
