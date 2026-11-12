@@ -8,7 +8,7 @@ Montage proposé : adaptateur local de ShardStorage public sur RamShardStorage ;
 
 Plan fermé détaillé dans le même ticket, à relire avant tout lourd : jeu CI natif/code/daemon/openai-llm, un témoin exact puis module FTS puis lib avec les deux filtres déjà présents en CI, global2400s, j8/mem32/target97k unique32Go/lib29a7, arrêt au premier rouge ; aucun modèle/service/GPU/DB ni CI rerun. Après ce préfixe, nouvelle revue de la passe finale requise, pas de matrice/e2e automatiquement ajoutés.
 
-**Coordination : aucun créneau CPU réservé ni Cargo lancé par recherche à cette étape.** Les demandes arbre1b/coeur C++ reçues ne rencontrent donc aucun build recherche actif ; orchestration arbitre leurs créneaux. L'envoi intersessions reste absent de l'inventaire, aucune réponse envoyée n'est revendiquée. Plan+témoin publiés sur la branche pour revue ; aucun tour master demandé/reçu pour ce nouveau ticket.
+**Coordination : aucun créneau CPU réservé ni Cargo lancé par recherche à cette étape.** Les demandes arbre1b/coeur C++ reçues ne rencontrent donc aucun build recherche actif ; orchestration arbitre leurs créneaux. Le namespace TUI reste absent, mais le transport multi_agent_v1.send_input a accepté l’envoi du plan à C7 (soumission01a1cf2f-10c0-7033-9b71-6b7bbb6d0d94) et les réponses de coordination CPU. Plan+témoin publiés code5a83eee91/doc5dddf215c et effectivement transmis pour revue ; aucune autorisation de build ni tour master déduits de cet envoi.
 
 ## Lot journal d'embarquement livré le 12 novembre
 

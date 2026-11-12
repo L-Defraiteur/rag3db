@@ -81,3 +81,7 @@ Proposition de premier préfixe, à autoriser : luciepc, poste lourd, -j8, mémo
 4. Attester source/manifestes et binaire, lib native, sortie enfant et logs, borne120s ; global2400s, arrêt au premier rouge et conservation des preuves. Une seule compilation cible à la fois. Aucune matrice complète/e2e/banc ni relance GitHub CI dans ce préfixe.
 
 Après ces preuves seulement : retour pour revue et définition de la passe finale requise avant intégration ; aucune autorisation de lancement, tour master ou nettoyage de ressources d'autres lots n'est déduite de ce plan. Ticket toujours ouvert, montages et preuves anciennes conservés.
+
+## Transmission effective du plan
+
+Après vérification du remote (HEAD5dddf215c6625743fb1e6b51b26b9f77d8016787), le transport disponible `multi_agent_v1.send_input` a accepté l'envoi à l'orchestration : soumission01a1cf2f-10c0-7033-9b71-6b7bbb6d0d94. Message : même ticket, code5a83eee91/base898, montage publicRAM, assertions conservées et recette/bornes ci-dessus. L'ancien namespace TUI reste absent, mais le livrable n'est plus seulement publié sans transmission. Aucune lecture/revue ni autorisation de build ne sont déduites de l'accusé technique d'envoi. Les sessions arbre1b et coeur C++ ont reçu confirmation qu'aucun créneau/build recherche n'est actif ; le créneau C++ libéré par C7 n'est pas concurrencé.
