@@ -194,3 +194,26 @@ rebase qui touche `docs/tickets/`.
 - `2026-10-11-un-appel-d-outil-attend-derriere-un-index-sans-le-dire.md` — un appel suspendu derrière une indexation, sans le dire.
 - `2026-10-11-e2e-impact-depend-de-la-forme-du-code-vivant.md` — un témoin fragile au code qu'il indexe.
 - `2026-10-11-une-lib-d-une-autre-abi-se-charge-et-tombe-sur-un-symbole.md` — au nom du cœur C++.
+
+## Acquis du 12 novembre — préfixe diagnostique
+
+Le [ticket migration](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md)
+porte les contrats et preuves actuels. Source vertee4239bdda, pas une migration
+exécutable : l'identité du plan fixe source/cible/variables/faits/étapes ; le journal
+historique ne porte pas encore cette identité durable. Applied historique ne
+qualifie donc pas un plan résolu ; Unversioned n'est ni zéro ni un hash de schéma.
+Lecture des métadonnées/configs/journal dans le même snapshot RO, même lecteur
+strict pour le runner existant. Validation pure de schéma avant stockage, inspection
+avant écrivain/modèles puis relecture sous écrivain. Ne pas inventer un lease ou
+un format de journal décoratif avant la tranche d'exécution.
+
+Le constructeur e2e protège l'état réel, mais ne possède pas la fin de vie : le
+lanceur crée désormais une racine mktemp marquée par suite, env limité au processus,
+nettoyage sur succès ; échec conservé, GARDER conserve les octets sur disque.
+Garde de résidus inchangé et nouveau témoin raccordé à check_features.
+Dans les tests shell, appeler ce garde en contexte conditionnel comme le vrai
+lanceur : son grep sans résultat sur liste vide n'est pas une erreur produit.
+Dans les drivers Python, contrôler les types des clés env après substitution ;
+v3 a refusé avant Cargo sur une clé tuple accidentelle, distinct des rouges métier.
+Conserver la source et les ELF exacts des lignes réellement exécutées, jamais
+choisir le plus récent au mtime. Les preuves v1/v2/baseline/ciblé/v3/v4 sont distinctes.
