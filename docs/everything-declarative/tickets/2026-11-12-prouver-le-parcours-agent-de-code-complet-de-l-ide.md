@@ -52,3 +52,20 @@ lien final, ou refuser explicitement ce gitfile symbolique non qualifié. Prése
 le dépôt ordinaire, le worktree lié réel et ses espaces ; aucune écriture du
 principal/voisin ne devient nécessaire. ED garde le correctif et sa qualification
 kernel puis chat sous source figée ; cette revue ne remplace pas ces résultats.
+## Reprise ED et premier constat
+
+Worktree isolé `cx-ed-parcours-agent-ide`, branche homonyme, base `a783013f1`.
+Aucun appel modèle, build ou service lancé à ce stade. Les fichiers réservés
+navigation et résidence des modèles restent à leurs propriétaires.
+
+Le témoin existant `le_chat_d_une_tache_code_sur_gemini` utilise bien le vrai
+chat et Vertex mais ne qualifie que l’édition. Le gabarit code déclare déjà
+la chaîne Rust en lecture et Cargo hors réseau dans son bac à sable ; les
+méthodes normales relisent tâches et conversations persistées.
+
+Préparation : fixture Git Cargo sans dépendances, test nommé immuable,
+exploration par outils exposés, échec initial attendu du test, correction et
+réussite effective, diff par commande autorisée puis recréation de l’hôte et
+reprise. L’attestation indépendante vérifiera les octets du principal, les
+identités et les appels/résultats liés, sans remplacer les actions de l’agent.
+La source et la recette bornée seront publiées avant compilation/ciblé.
