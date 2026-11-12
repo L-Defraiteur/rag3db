@@ -1,11 +1,11 @@
 # Qualifier la publication concurrente d'un accord
 
-- **État** : ouvert ; hypothèse statique relevée pendant la conception du mode auto, non reproduite.
+- **État** : ouvert ; défaut reproduit sur registre/Garde synthétiques, correction03ee5cdcf verte au ciblé ; globale/intégration à coordonner.
 - **Famille** : produit
-- **Gravité** : portée d'accord potentiellement incorrecte à qualifier ; aucun défaut reproduit ni effet de commande démontré.
-- **Atteignable en service** : potentiellement via deux réponses à la même carte ; scénario concurrent non exécuté.
+- **Gravité** : republication concurrente réarmant un droit CetteFois reproduite ; aucune commande exécutée.
+- **Atteignable en service** : route de carte multiworkers relue ; entrelacement reproduit sur la primitive commune, sans HTTP concurrent.
 - **Touche rag3weaver** : oui, daemon_host/atelier_fichiers.rs::decider_accord et la publication vers la Garde.
-- **Pour** : ED pour la qualification, archi pour le parcours ; aucun correctif engagé par l'étude.
+- **Pour** : ED pour qualification et correction bornée, archi en revue seule du parcours et des preuves.
 - **Signalé par** : revue ED/archi de la conception du mode auto le 12 novembre, relecture statique confirmée par orchestration.
 
 ## Observation et limite
@@ -17,7 +17,7 @@ registre pour vérifier et écrire la décision. Deux réponses pourraient franc
 la première vérification ; une installation tardive pourrait intervenir après
 une consommation CetteFois, avant que la seconde réponse soit refusée.
 
-Ce raisonnement n'est pas une reproduction. Le verrou de consommation de la
+Cette lecture initiale ne constituait pas une reproduction (voir le résultat du préfixe ci-dessous). Le verrou de consommation de la
 Garde ne suffit pas à démontrer l'atomicité de la publication amont. Le correctif
 de reprise d'accord déjà livré n'est pas rouvert par cette hypothèse distincte.
 
@@ -109,3 +109,22 @@ vert.sh SHA256 `e8ec02cd2acfe5a843c9c6dc9845c055fc6608fc4bf5b25487acd1c645983ea1
 Deadline monotonic858523.253385098 issue du début857923.253385098, jamais réinitialisée ;
 la phase ne reçoit que le reste réel après acquisition. Rouge2/4/0 conservé.
 Les services/identifiants restent retirés, aucun modèle ni exécution de commande.
+
+## Préfixe vert observé et relu
+
+Source03ee5cdcf : **7 réussis,0 échec,0 ignoré**, compilation28,56s, runtime0,00s,
+exit0. Rouge b708f7c34 :4réussis/2échecsattendus/0ignoré. Archi a lu directement
+les deux journaux et le correctif, sans objection concrète dans ce périmètre.
+ELF rag3weaver-1570695bdc8a8de7 SHA256
+6bdcc333c02a04e65db701c1eb747edfe2e0d8131075434c1eef76b046a99f1d ;
+source03ee embarquée/220gabarits vérifiés. Quiescence finale[], target1642372104octets.
+Fin de log estimée monotonic858340,707<deadline initiale858523,253 : même600 respecté.
+Preuves aux deux postes I-luciepc/accord-publication-20261112/verdict-prefixe.json.
+
+Limites : les tests stale-snapshot sont déterministes ; le septième prouve mutexdemande
+tenu, registre libre, callback perdant0 et usage unique, pas l'ordonnancement effectif
+de B avant libération de A. Aucun HTTP concurrent ni absence de relance du perdant
+mesurée par ces fixtures ; l'arrêt avant journal/relance découle du retour ? de l'API.
+Pas de nouvelle révocation/annulation ; reload garde la décision, nouveau registre
+ne rejoue pas le journal. L'erreur de reçu après effet a son ticket ED séparé.
+Le ciblé vert n'est pas un verdict de passe globale et ne ferme pas le ticket.

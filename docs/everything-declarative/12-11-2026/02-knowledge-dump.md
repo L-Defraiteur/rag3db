@@ -18,3 +18,19 @@ locales, targetprivé9,13Go et basePGcx_ed_bge_20261112 retirés après dump+SHA
 fidèles et gardes fraîches vertes. TroisELF, logs, rouges, remotes et preuves conservés.
 Arbre Lucie : submodule codeparsersM et docs/lucie-tmp préexistants à préserver.
 Ancien reste-explicite1acc67338 et sa base ne font pas partie du lot.
+
+## Lot actif : publication concurrente d'accord
+
+WT portable/PC cx-ed-accord-publication, branchemême nom, base43db9634a.
+Production03ee5cdcf, dernier docs419bab640 avant bilan. Préfixe rouge4/2/0 puis vert7/0/0
+relus archi ; voir rapport/ticket canonique archi et preuves accord-publication-20261112.
+Mutex PARdemande dans publier_decision, registre libre pendantbackend, revalidation
+avant callback ; ne pas transformer en mutexglobal backend→accords (risque ordreverrous).
+Pas de commande exécutée, pas HTTP concurrent ni relanceperdant mesurés.
+Dettejournalposteffet distincte, pas APIrévocation ajoutée. TargetPCprivé1,64Go conservé,
+aucune DBPG créée pour ce préfixe. Passeadaptée encore proposée/pas lancée, après coordinationA.
+Aucun rebase ni pushmaster de ce lot à ce stade ; C7 garde créneau.
+
+Revue seule scripts de recherche : e2bc puis62c64, P1parentPIDréutilisé etP2reçusignalés
+et corrigés sur branchepropriétairerecherche ; bordidentitéracine signalé ensuite,
+correction annoncée en cours. Aucun script ou testde recherche modifié/exécuté ici.
