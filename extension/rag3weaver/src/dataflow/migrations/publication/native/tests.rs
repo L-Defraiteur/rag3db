@@ -299,3 +299,56 @@ fn native_foreign_column_is_rejected_without_mutation() {
     );
     assert_eq!(files(&root), before, "refusal changed foreign catalog");
 }
+
+#[test]
+fn native_complete_recipe_models_relations_and_configs_are_real_persisted_values() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("owned");
+    let origin = NewPublicationOrigin::fresh();
+    let id = origin.identifier().to_owned();
+    let input = super::super::tests::rich_input();
+    let initial = DeclarationSnapshot::from_complete_input(input.clone()).unwrap();
+    let expected = canonical(&initial).unwrap();
+    let intent = {
+        let mut store =
+            OwnedPublicationCatalog::create_new(&root, origin, "create", initial).unwrap();
+        assert_eq!(
+            canonical(store.observe().unwrap().snapshot()).unwrap(),
+            expected
+        );
+        let mut changed = input;
+        changed
+            .entities
+            .as_mut()
+            .unwrap()
+            .get_mut("Document")
+            .unwrap()
+            .chunking
+            .max_size += 1;
+        let intent = store
+            .prepare(
+                "change-config",
+                DeclarationSnapshot::from_complete_input(changed).unwrap(),
+            )
+            .unwrap();
+        store.publish(&intent).unwrap();
+        intent
+    };
+    let mut reopened = OwnedPublicationCatalog::open_owned(&root, &id).unwrap();
+    assert_eq!(
+        canonical(reopened.observe().unwrap().snapshot()).unwrap(),
+        canonical(intent.target()).unwrap()
+    );
+    let first = transaction(&reopened.conn, &mut false, true, |conn| {
+        read_registry(conn, &id)
+    })
+    .unwrap()
+    .known_operation("create")
+    .unwrap()
+    .unwrap();
+    assert_eq!(canonical(first.target()).unwrap(), expected);
+    assert_eq!(
+        reopened.publish(&intent).unwrap().disposition(),
+        PublicationDisposition::AlreadyCommittedAtHead
+    );
+}

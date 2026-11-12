@@ -1,7 +1,7 @@
 from pathlib import Path
 import hashlib,json,mmap,os,re,shutil,subprocess,sys,time
-R=Path('/home/lucied/.cache/rag3weaver-build');W=R/'cx-wt-publication-composite';C=W/'extension/rag3weaver';T=R/'cx-target-contenu-derive';P=R/'cx-publication-composite-rouge-v3'
-SOURCE=sys.argv[1];FILTERS=['dataflow::migrations::publication::native::tests::native_foreign_column_is_rejected_without_mutation']
+R=Path('/home/lucied/.cache/rag3weaver-build');W=R/'cx-wt-publication-composite';C=W/'extension/rag3weaver';T=R/'cx-target-contenu-derive';P=R/'cx-publication-composite-rouge-v5'
+SOURCE=sys.argv[1];FILTERS=['dataflow::migrations::publication::tests::snapshot_codec_refuses_non_lossless_declarations_before_any_publication']
 P.mkdir(exist_ok=False)
 receipt=json.loads(Path(os.environ['RAG3WEAVER_VALIDATION_RECU']).read_text());END=receipt['echeance']-5
 E=os.environ.copy()
@@ -45,8 +45,8 @@ try:
  linkage=run('liaison-native',EXPORT+['ldd',str(b)]);assert '/'+NATIVE+'/librag3db.so' in linkage
  runtime=run('temoins',EXPORT+[str(b),*FILTERS,'--exact','--test-threads=1'],expected=101)
  assert 'test result: FAILED. 0 passed; 1 failed; 0 ignored;' in runtime
- assert 'foreign column admitted by closed declaration catalog' in runtime
- record.update(verdict='ROUGE_ATTENDU',tests=[0,1,0],cause='foreign column accepted before exact schema gate')
+ assert 'non-lossless declaration admitted by publication snapshot' in runtime
+ record.update(verdict='ROUGE_ATTENDU',tests=[0,1,0],cause='non-lossless model declarations accepted before codec gate')
 
 except BaseException as error:record['error']=repr(error)
 finally:
