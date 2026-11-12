@@ -168,3 +168,34 @@ au côté du gitfile copié. La portée corrective3, noyau1/0/0 vert0.12s, est
 arrêtée volontairement par pidfd du superviseur attribué avant la gate.
 Nouvelle source corrective4 à relire, mêmes bornes1200/600/60/360 et target,
 preuves `correctif-git-4` distinctes ; aucun appel modèle pour les étapes2/3.
+
+## Préfixe réel acquis, accès depuis la page restant à qualifier
+
+Source `4d6045cdb` : compilation9.91s verte, noyau1/0/0, parcours Vertex1/0/0
+vert46.05s ; supervision verte rc0/restes[]/nettoyé. Reçus01/02/04 : 10/20/26
+tours, recherche/lectures, Cargo101 nommé puis Cargo0 nommé, édition/diff0,
+historique et identifiants relus, nouveau Cargo0/diff0. Principal inchangé,
+tests/Cargo immuables. ELF archivé immédiatement hors target, SHA conservé.
+
+Limite observée : le manifeste principal désactive le rattrapage, mais le
+manifeste de tâche le réactive ; la relecture a donc lancé un index plein texte
+local (2 morceaux sans vecteurs), achevé. Les services dense/sparse absents sont
+explicitement signalés ; aucun usage7879/GPU ni modèle substitué. Ne pas dire
+« aucune indexation » ; la preuve reste celle des appels et effets observés.
+
+Étape UI ajoutée, sans changement du runtime corrigé :
+`daemon_host::chat_qui_code::le_parcours_vertex_se_reprend_dans_la_page`.
+Elle exige la fixture explicitement passée et le verdict vert précédent ;
+aucune recréation silencieuse. Nouvel hôte HTTP privé, mêmes tâche et historique,
+vrai Chrome, message envoyé par le bouton de chat, test nommé et diff avec reçus
+liés aux appels réels, relecture du diff dans la page, console sans erreur et
+code/principal inchangés. Les helpers d’attestation de reçus sont factorisés,
+le préfixe réel acquis n’est pas rejoué à l’identique.
+
+Recette UI distincte : global1100s incluant nettoyage, compilation600s sous
+`rag3db-native,code,daemon,openai-llm,navigateur`, même target/lib29/j8/Max32/HIGH0,
+puis unique témoin UI360s maximum (1/0/0 attendu). Paquets React épinglés déjà
+installés, navigateur requis, chemin fixture source4d explicitement enregistré.
+Un seul tour Vertex supplémentaire. Évidence `page-ide` (HTML chat/diff, JSON
+état, logs, SHA ELF et supervision), hors fixture acquise. Aucun déploiement ni
+accès au daemon personnel. Arrêt au premier rouge imprévu.
