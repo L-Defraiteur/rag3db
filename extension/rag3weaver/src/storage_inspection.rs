@@ -330,3 +330,6 @@ mod raw_open_tests {
         assert_eq!(effects.load(Ordering::SeqCst), 0, "raw open must inspect before catalog initialization");
     }
 }
+
+#[cfg(test)]
+mod observation_tests;
