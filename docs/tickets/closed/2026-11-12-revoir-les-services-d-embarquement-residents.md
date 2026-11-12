@@ -1,6 +1,6 @@
 # Revoir les services d'embarquement résidents selon les usages
 
-- **État** : ouvert ; bilan et ajustements réalisés, consolidation documentaire avant clôture.
+- **État** : fait 7caaad4ecc34f4c0aaf6cbad283de15d75d22d6d ; audit, arrêts et recettes de retour attestés, conception et suivis futurs consignés.
 - **Famille** : produit
 - **Gravité** : coût ; VRAM occupée par des services dont l'utilité dans le flux courant doit être vérifiée.
 - **Atteignable en service** : oui, processus 7878/7879/7880/7882 résidents sur card2.
@@ -49,3 +49,18 @@ preuves d'activité et proposition de cycle de vie reliée aux primitives.
 Les travaux futurs auront leur ticket propre ; clore cet audit une fois ce
 bilan et ces actions terminés. Aucun arrêt de seat1 ni suppression de modèles
 ou de données demandé.
+
+## Réalisation du 12 novembre
+
+[Bilan](../../embarquement/12-11-2026/01-audit-residence-et-prechauffage.md) :
+7882 privé arrêté à 18:44:52, 107m arrêté puis instance passée au démarrage
+manuel à 18:54:16. 8,637 Gio libérés, deux services partagés conservés avec
+leurs PID et santés. Les recettes de retour et les preuves aux deux postes
+sont conservées sous `~/.cache/optimiseur-notes/audit-residence-12nov/`.
+Aucun modèle/donnée effacé ni changement d'espace vectoriel.
+
+La [conception](../../orchestration/visions/2026-11-12-residence-des-modeles-et-prechauffage.md)
+compose les primitives existantes. La gestion automatique reste au
+[ticket de capacité ouvert](../../embarquement/tickets/2026-11-12-gerer-activation-et-residence-des-modeles.md) ;
+les déclarations BGE/portgranite ont leur suivi séparé. Ces suites ne sont
+pas déclarées livrées par la clôture de l'audit.

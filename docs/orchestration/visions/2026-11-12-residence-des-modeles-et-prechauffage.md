@@ -3,7 +3,7 @@
 12 novembre 2026. Demande de Lucie : utiliser les modèles utiles sur card2,
 sans conserver indéfiniment tous les services d'essai en VRAM. Cette note
 prévoit le cycle de vie ; elle ne livre pas d'activation ou d'éviction automatique.
-[Audit des services](../../embarquement/tickets/2026-11-12-revoir-les-services-d-embarquement-residents.md),
+[Audit des services](../../tickets/closed/2026-11-12-revoir-les-services-d-embarquement-residents.md),
 [suivi de la capacité](../../embarquement/tickets/2026-11-12-gerer-activation-et-residence-des-modeles.md).
 
 ## Ce que l'on compose déjà

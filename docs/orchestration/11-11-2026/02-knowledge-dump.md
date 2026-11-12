@@ -64,6 +64,16 @@ n'est jamais contourné par une autre session (blanchiment interdit) ; il remont
 
 ## Les mesures et les ressources
 
+- **Résidence après audit du 12 novembre, 18:54** : restent chauds granite278
+  sur7878 et BGE-M3/relecteur/OCR sur7879. Le privé7882 est arrêté sans retour
+  automatique ; granite107/7880 est arrêté et son instance en démarrage manuel
+  (`systemctl --user start rag3weaver-embeddings@granite-107m.service` à luciepc
+  si un travail requiert ce modèle384). 8,637 Gio libérés ; environ16,58 Gio
+  disponibles au relevé final. Les recettes sont conservées ; aucun modèle,
+  index ou paramètre d'embedding supprimé ou substitué. La reprise automatique
+  n'est pas encore raccordée : [bilan et preuves](../../embarquement/12-11-2026/01-audit-residence-et-prechauffage.md),
+  [cycle de vie prévu](../visions/2026-11-12-residence-des-modeles-et-prechauffage.md).
+
 - **Bilan banc du 12 novembre** : card2 a servi pour 440 +880 paires Q8_0,
   médianes 540/787 ms par cas de 5/10. Placement explicite modèle/KV/calcul
   PCI 04:00.0, contexte seat1 stable 40 KiB VRAM/2 080 KiB GTT ; compteurs
@@ -94,18 +104,18 @@ n'est jamais contourné par une autre session (blanchiment interdit) ; il remont
   toutes les ouvertures d’initialisation : les sources 7.2.4 expliquent le
   parcours des périphériques avant sélection des GPU visibles.
   Cette précision prévaut sur les exigences historiques de zéro accès ci-dessous.
-  Zéro requête du banc le 12 novembre ; le warmup interne du serveur a eu lieu,
-  sans attribution d’exécution par compteur PCI. Aucun retry autorisé par
-  cette clarification ; recette de contrôle à qualifier avant nouvelle fenêtre.
+  Lors du premier passage arrêté, zéro requête du banc ; le warmup interne
+  avait eu lieu sans attribution par compteur PCI. La seconde recette avec
+  placement explicite a ensuite été qualifiée et jouée selon le bilan ci-dessus.
   Sources et suite : [ticket banc k10](../../tickets/closed/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
 
 - **Consigne actuelle de Lucie, 12 novembre 2026** : card0/seat1, PCI
-  `0000:07:00.0`, ROCm GPU[1], est interdite aux sessions. Seule card2, PCI
-  `0000:04:00.0`, ROCm GPU[0], peut être utilisée, avec
+  `0000:07:00.0`, ROCm GPU[1], est réservée au jeu. Charger et exécuter les
+  modèles sur card2, PCI `0000:04:00.0`, ROCm GPU[0], avec
   `ROCR_VISIBLE_DEVICES=0` explicite et coordination selon la charge.
   Card1/PCI 00:02.0 est l’iGPU hors ROCm. Ne pas déduire l’identité PCI d’un
   numéro Vulkan : relire sysfs et les preuves du processus.
-- Card2 porte 7878/7879/7880/7882. Avant un banc, lire la VRAM et les consommateurs ;
+- Avant un banc, lire les résidents actuels, la VRAM et les consommateurs ;
   dimensionner toute charge supplémentaire selon la capacité disponible et
   les usages en cours. L'incident historique d'une cinquième charge explique
   cette vérification, pas une interdiction générale d'utiliser les modèles.

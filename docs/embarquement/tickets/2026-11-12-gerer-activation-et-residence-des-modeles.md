@@ -12,7 +12,7 @@
 ## Conception
 
 [Vision](../../orchestration/visions/2026-11-12-residence-des-modeles-et-prechauffage.md)
-et [audit](2026-11-12-revoir-les-services-d-embarquement-residents.md).
+et [audit](../../tickets/closed/2026-11-12-revoir-les-services-d-embarquement-residents.md).
 Composer ModelSource, Serveur/Attache et les unités existantes. Qualifier
 résidence, activation partagée par modèle/profil/périphérique, baux d'usage,
 éviction sans requête en cours, préchauffage anticipé et états observables.

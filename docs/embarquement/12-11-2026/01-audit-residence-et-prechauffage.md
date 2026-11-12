@@ -1,7 +1,7 @@
 # Résidence des modèles : audit et ajustements du 12 novembre
 
 Demande de Lucie : employer card2 et les modèles utiles sans accumuler les
-résidents inutilisés. [Ticket d'audit](../tickets/2026-11-12-revoir-les-services-d-embarquement-residents.md).
+résidents inutilisés. [Ticket d'audit clos](../../tickets/closed/2026-11-12-revoir-les-services-d-embarquement-residents.md).
 Opérations par optimiseur, analyse par embarquement, recoupement avec mémoire,
 arbre et archi ; consolidation par orchestration. Aucun modèle ou index supprimé.
 
@@ -87,12 +87,16 @@ engagée par cette conception.
 
 ## Preuves et suites
 
-Deux postes, `~/.cache/optimiseur-notes/audit-residence-12nov/` : inventaires
+À luciepc, `~/.cache/optimiseur-notes/audit-residence-12nov/` : inventaires
 avant/après, dechargement.json, unites.txt, recette-retour.json,
 backends-7970-metadonnees.json ; sous-dossier107m avec avant.json,
 recette-retour.json et resultat.json. Le helper107 a eu une erreur de syntaxe
 avant toute opération : log conservé, correction et vérification syntaxique
 avant l'opération réussie, sans échec runtime masqué.
+
+Copie fidèle et manifeste SHA256 vérifié sur le portable :
+`~/.cache/orchestration-notes/audit-residence-modeles-12nov/operateur-luciepc/`
+et `preuves-operateur-sha256.json`, sans écrasement d'une preuve antérieure.
 
 Des copies notebook/validated-result déclarent BGE1024 sur7878, actuellement
 granite278 ; activation non vérifiée. [Ticket de configuration](../../everything-declarative/tickets/2026-11-12-des-manifestes-bge-visent-le-port-granite.md).
