@@ -77,7 +77,7 @@ La proposition n’effectue ni adoption persistée ni apply, ne prouve pas la co
 
 ## Prise en charge code du 12 novembre — première tranche autorisée
 
-Autorisation : [répartition des suites](../../orchestration/tickets/2026-11-12-paralleliser-les-suites-autorisees-sans-chevauchement.md), master `6e5f9458c`. Porteur mémoire ; branche `cx-memoire-m8-plan`, worktree `cx-wt-memoire-m8-plan`, depuis ce master. Le lot reste un plan à blanc, sans apply, adoption persistée, changement de politique ou activation réelle.
+Autorisation : [répartition des suites](../../tickets/closed/2026-11-12-paralleliser-les-suites-autorisees-sans-chevauchement.md), master `6e5f9458c`. Porteur mémoire ; branche `cx-memoire-m8-plan`, worktree `cx-wt-memoire-m8-plan`, depuis ce master. Le lot reste un plan à blanc, sans apply, adoption persistée, changement de politique ou activation réelle.
 
 API à borner : instantanés de contenus base/local/cible, provenance et empreintes ; fusion pure JSON et fichiers avec absent distinct de null, conflits structurés ; candidat validé par les validateurs communs à partir des seules sources fournies/embarquées ; diff d’outils déterministe sans identité de renommage déduite ni application autorisée. Une source requise manque : refus nommé. Aucun CLI d’acquisition persistante dans ce lot.
 
@@ -86,3 +86,5 @@ Fichiers proposés possédés : nouveaux `src/fusion.rs` et `src/template_plan.r
 Premières preuves visées : témoin rouge du chargement commun encore dépendant du disque/cache, puis fusion/conflits et lecteur fermé ; cas cache vide ou inaccessible, fichier présent seulement sur disque, sources ambiguës/manquantes, candidat invalide et refus des changements non pris en charge. Aucun de ces nouveaux témoins n’est encore joué à cette prise en charge. Les résultats ciblés et le diff seront relus avant toute passe globale ou demande de tour master.
 
 Builds ciblés à luciepc : target privé `~/.cache/rag3weaver-build/cx-target-memoire-m8-plan`, -j8, plafond32G, poste lourd et lib29 épinglée ; priorité aux mesures convenues. Aucun service/GPU/modèle/base réelle nouveau. Le nettoyage final devra passer la garde commune avec archive administrative externe.
+
+Premier ciblé arrêté avant exécution : la compilation sans natif échoue dans un témoin existant de liens, suivi par [son ticket distinct](2026-11-12-un-temoin-de-liens-empeche-la-lib-sans-natif-de-compiler.md). Ce n’est pas le rouge comportemental M8. Reprise avec rag3db-native, même cible mémoire/cache, sans ouvrir de base ; journaux séparés. ED et orchestration ont confirmé la possession M8 de backend.rs/lecteur.rs/builtin_templates.rs et, si nécessaire, foreach_node.rs ; la correction des accords ED reste dans commande.rs/run_nodes.rs.
