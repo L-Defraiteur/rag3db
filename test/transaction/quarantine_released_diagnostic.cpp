@@ -83,7 +83,7 @@ private:
 void diagnose(const fs::path& root, std::ofstream& log) {
     auto record = [&](const std::string& line) { log << line << std::endl; };
     auto* db = new main::Database((root / "base.rag3db").string(),
-        main::SystemConfig(64ull << 20, 2, true, false, -1ull, false,
+        main::SystemConfig(64ull << 20, 2, true, false, -1u, false,
             16ull << 20, false /* forceCheckpointOnClose */));
     auto* a = new main::Connection(db);
     auto* b = new main::Connection(db);

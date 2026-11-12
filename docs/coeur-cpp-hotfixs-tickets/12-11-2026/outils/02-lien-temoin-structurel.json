@@ -1,7 +1,7 @@
 {
   "ready_to_compile": false,
-  "reason": "Correction de qualification après compile-01 ; relecture du source et nouvelle tentative requises, aucun run autorisé.",
-  "cwd": "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-02",
+  "reason": "Reprise autorisée pour unique correction maxDBSize -1ull vers sentinelle -1u ; staging03, runtime futur limité à un essai après ELF et4SHA.",
+  "cwd": "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-03",
   "source_only_compilation": true,
   "engine_translation_units_compiled": 0,
   "required_headers": {
@@ -20,7 +20,7 @@
   ],
   "compile_argv": [
     "/usr/bin/c++",
-    "-I/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-02/test-headers",
+    "-I/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-03/test-headers",
     "-DANTLR4CPP_STATIC",
     "-DHAS_FDATASYNC",
     "-DRAG3DB_CMAKE_VERSION=\"0.11.2.2\"",
@@ -50,7 +50,7 @@
     "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/roaring_bitmap",
     "-I/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source",
     "-I/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-generes",
-    "-I/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-02/generated-build-src",
+    "-I/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-03/generated-build-src",
     "-isystem",
     "/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/simsimd/include",
     "-O3",
@@ -66,17 +66,17 @@
     "-Wno-unknown-pragmas",
     "-Wno-restrict",
     "-o",
-    "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-02/diagnostic.o",
+    "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-03/diagnostic.o",
     "-c",
-    "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-02/quarantine_released_diagnostic.cpp"
+    "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-03/quarantine_released_diagnostic.cpp"
   ],
   "link_argv": [
     "/usr/bin/c++",
     "-O3",
     "-DNDEBUG",
-    "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-02/diagnostic.o",
+    "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-03/diagnostic.o",
     "-o",
-    "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-02/quarantine_released_diagnostic",
+    "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-03/quarantine_released_diagnostic",
     "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/librag3db.a",
     "-ldl",
     "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/antlr4_cypher/libantlr4_cypher.a",
@@ -107,7 +107,7 @@
     "archive_sha256": "3030fe674e33e2ea0b5b01ed7bdf1a919e538c02e5dfc0b68fff7b50e1d06758"
   },
   "required_staging_not_executed": {
-    "generated_build_src_view": "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-02/generated-build-src/include",
+    "generated_build_src_view": "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-03/generated-build-src/include",
     "operation": "Copier les deux en-têtes générés sous include/ et vérifier leurs SHA du manifeste, pour conserver la sémantique du -I<build>/src ; aucune vue créée à ce stade.",
     "files": {
       "headers-generes/common/build_id.h": {
@@ -222,15 +222,15 @@
   "ready_to_run": false,
   "diagnostic_source": {
     "repository_path": "test/transaction/quarantine_released_diagnostic.cpp",
-    "sha256": "d2db4d049f92dc5d197eb34e4fea758259bf4af7419537e1042b8a3c88a38530",
-    "planned_path": "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-02/quarantine_released_diagnostic.cpp",
+    "sha256": "14d99084010e0b8f5f530f2faa5926ca724382d44ab9deca24a31545baf71afd",
+    "planned_path": "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-03/quarantine_released_diagnostic.cpp",
     "staged": false
   },
   "test_header": {
     "source_commit": "0511dece74f94db6937fb03e6ec45f0c58828c5a",
     "repository_path": "test/transaction/flaky_checkpointer.h",
     "sha256": "839d5559d5f01e84a037da5fa24bb783fb62fabf637e0284ea3d31d56cc095df",
-    "planned_path": "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-02/test-headers/transaction/flaky_checkpointer.h",
+    "planned_path": "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-03/test-headers/transaction/flaky_checkpointer.h",
     "staged": false
   },
   "recipe_origin": {

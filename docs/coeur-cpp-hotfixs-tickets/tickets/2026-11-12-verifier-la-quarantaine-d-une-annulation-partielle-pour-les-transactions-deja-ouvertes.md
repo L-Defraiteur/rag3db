@@ -202,3 +202,13 @@ Cgroup retiré, unité inactive/dead, MainPID0. Artefacts et accord conservés
 dans staging02/runtime-qdbvmbra ; aucune base préexistante touchée.
 Correction de cette seule prémisse à soumettre avant nouvelle compilation et
 accord de run distinct ; aucun retry automatique. Ticket reste ouvert.
+
+## Correction de prémisse autorisée après runtime-01
+
+Orchestration a confirmé par lecture database.cpp:109 et database.h que
+la sentinelle attendue est `-1u`. Correction de cette seule constante autorisée,
+sans modification des flags/pack. Nouveau source SHA
+`14d99084010e0b8f5f530f2faa5926ca724382d44ab9deca24a31545baf71afd`, staging neuf suffixé03 ; nouvelle compilation/lien puis un seul
+runtime structurel autorisés si ELF et quatre SHA conformes, accord et unité
+neufs. Toute autre erreur arrête la suite ; runtime-01 conservé. Aucun
+checkpoint réel, réouverture ou variante supplémentaire autorisés.
