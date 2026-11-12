@@ -131,3 +131,16 @@ inaccessible. Si Git réclame une actualisation d’index facultative, désactiv
 ses verrous facultatifs, jamais ouvrir l’administration du principal en écriture.
 Source corrective figée `b0090e2be` : compilation/kernel lancés, attente d’un
 avis RO sur cette source avant l’étape Vertex, dans le même budget1200s.
+
+Correctif `b0090e2be` : compilation13.94s verte ; témoin noyau rouge0.03s
+sur `git diff` code128, après lecture de l’administration désormais possible :
+Git charge implicitement `~/.gitconfig`, inaccessible, puis rend une erreur
+fatale de configuration. Aucun Vertex correctif appelé. Supervision rouge101,
+restes vides et nettoyage vrai, preuves `correctif-git/kernel.log` conservées.
+
+Delta motivé : par défaut dans le bac, `GIT_CONFIG_GLOBAL=/dev/null` et
+`GIT_OPTIONAL_LOCKS=0`, sauf valeur explicitement déclarée dans `sandbox.env`.
+La configuration du dépôt reste lue ; la configuration personnelle n’est ni
+ouverte ni copiée. Aucun droit ajouté. Nouvelle étape corrective2 distincte,
+même recette1200s/compile600/kernel60/réel360, preuves `correctif-git-2` ;
+Vertex attend toujours la revue de cette nouvelle source.
