@@ -2334,6 +2334,37 @@ mod tests {
         assert_eq!(g.juger(&cmd("mkdir", &["autres"]), &ctx).decision, Decision::Demande, "le oui ne vaut que pour la commande exacte");
     }
 
+    #[test]
+    #[cfg(feature = "code")]
+    fn accord_hors_domaine_reprend_la_ligne_exacte_dans_son_domaine() {
+        let domaine = tempfile::tempdir().unwrap();
+        let autre = tempfile::tempdir().unwrap();
+        let garde = Garde::new(Mode::Approbation);
+        let ctx = ctx_dans(domaine.path());
+        let ligne = "cat ../accord-explicite.txt";
+        assert_eq!(garde.juger_ligne(ligne, &ctx).unwrap().decision, Decision::Demande);
+        garde.accorder_ligne(ligne, &ctx).unwrap();
+        assert_eq!(garde.juger_ligne(ligne, &ctx).unwrap().decision, Decision::Autorise);
+        for variante in ["cat ../autre.txt", "cat ../accord-explicite.txt && cat ../autre.txt", "cat  ../accord-explicite.txt"] {
+            assert_ne!(garde.juger_ligne(variante, &ctx).unwrap().decision, Decision::Autorise, "{variante}");
+        }
+        assert_ne!(garde.juger_ligne(ligne, &ctx_dans(autre.path())).unwrap().decision, Decision::Autorise);
+        assert_ne!(garde.juger(&cmd("cat", &["../accord-explicite.txt"]), &ctx).decision, Decision::Autorise,
+            "une partie isolée ne porte pas le droit de rejouer la ligne");
+    }
+
+    #[test]
+    #[cfg(feature = "code")]
+    fn accord_de_ligne_ne_confond_pas_les_arguments_affiches() {
+        let domaine = tempfile::tempdir().unwrap();
+        let garde = Garde::new(Mode::Approbation);
+        let ctx = ctx_dans(domaine.path());
+        garde.accorder_ligne("mkdir 'un deux'", &ctx).unwrap();
+        assert_eq!(garde.juger_ligne("mkdir 'un deux'", &ctx).unwrap().decision, Decision::Autorise);
+        assert_eq!(garde.juger_ligne("mkdir un deux", &ctx).unwrap().decision, Decision::Demande);
+        assert_eq!(garde.juger_ligne("mkdir 'un deux'", &ctx_dans(tempfile::tempdir().unwrap().path())).unwrap().decision, Decision::Demande);
+    }
+
     /// **La lecture libre ne sort pas du domaine.** Chaque argument doit se
     /// prouver dedans ; ce que la garde ne sait pas prouver demande.
     #[test]
