@@ -144,3 +144,18 @@ La configuration du dépôt reste lue ; la configuration personnelle n’est ni
 ouverte ni copiée. Aucun droit ajouté. Nouvelle étape corrective2 distincte,
 même recette1200s/compile600/kernel60/réel360, preuves `correctif-git-2` ;
 Vertex attend toujours la revue de cette nouvelle source.
+
+Source `b310b5c0c` : compilation puis noyau1/0/0 vert0.10s. Aucun Vertex :
+Archi relève un alias INTERNE encore accepté (`refs` vers
+`common/worktrees/voisin`). La portée en attente a été arrêtée volontairement
+par pidfd du superviseur1164394/start87036829, identité et argv vérifiés dans
+son reçu privé, avant toute ouverture de la gate modèle. Ne pas confondre ce
+vert partiel avec le parcours complet.
+
+Correction de la réserve : chaque chemin commun accordé doit être exactement
+le chemin canonique attendu, pas seulement un descendant du commun ; les alias
+internes et externes n’ajoutent donc aucune racine. Témoin supplémentaire :
+`refs` vers administration voisine et `config` vers son HEAD ; lecture noyau du
+HEAD voisin toujours refusée. La configuration explicitement déclarée conserve
+sa priorité sur le défaut isolé. Étape corrective3 distincte même recette1200s
+et target, preuves `correctif-git-3`, attente de revue avant Vertex.
