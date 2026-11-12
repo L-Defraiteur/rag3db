@@ -1,3 +1,42 @@
+## Publication composite — qualifiée, avant tour master (13 novembre)
+
+Source **626d050d3dcd9316bb8a1fc923bf71fcd0e36baf**, branche `cx-arbre-publication-composite-r1`, worktree
+local/luciepc `/home/lucied/.cache/rag3weaver-build/cx-wt-publication-composite`.
+Même [ticket migration](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md),
+[contrat et périmètre](../12-11-2026/03-publication-composite-sur-catalogue-neuf.md).
+
+La primitive stocke les instantanés déclaratifs complets A dans un catalogue
+natif neuf dédié. Origine/publications événementielles distinctes du contenu H,
+intent figé, commit atomique valeur/tête/reçu, replay exact avant contrôle de
+la tête (historique explicite), requalification par nouvel intent. Schéma et
+registre fermés, validation RO avant writer et recheck ; COMMIT incertain
+interdit toute réutilisation jusqu'à réouverture/résolution. Codec stable avant
+H/effets, sans normalisation silencieuse ; aucune migration physique appliquée.
+
+Deux rouges fonctionnels établis puis corrigés : colonne étrangère admise
+(b59be0fe8), déclarations typées non stables au codec (943bb4a38). Témoins
+négatifs/positifs, véritable interruption native avant/après COMMIT, contenu
+riche (configs, dérivée, relation/politique, gabarit, modèles déclarés) conservé
+après réouverture. Ciblé final5f710dd21 **97/0/0**, revue mémoire favorable.
+
+Composition autorisée **VERT runtime v3 + attestation autonome v8 en1440.33s
+sur budgetINITIAL5400 inchangé**, F5 5/5, minimum sans features,
+lib 2257/0/65, navigateur 40/0/0, cli 5/0/0, postgres 36/0/0, e2e_tx_ligne_a_ligne 3/0/0, e2e_tx_merge_puis_copy 1/0/0, e2e_tx_par_paquet_arret 18/0/0, e2e_tx_vecteurs_apres_rollback 3/0/0. Quatre ELF/source/native29/maps et220gabarits chacun attestés,
+copiés et rehashés aux deux postes. Le superviseur v3 reste ROUGE/code1 pour les seules mapsbackend ratées,
+restes[] ; le superviseur autonome v8 est VERT/code0/restes[]. Composition
+explicitement autorisée par C7, ancien rouge conservé distinct ; deux bus
+physiquement retirés, scans propres vides, TMPNAV marqué retiré. Preuves
+luciepc `cx-publication-composite-compose-v1/` (références originales v3/v8 conservées), copies locales
+`cx-preuves-publication-final/`. Historiques ciblés/rouges/annulations sous
+`cx-preuves-publication-local/` ; aucun ancien rouge transformé en passe verte.
+
+Reprise : demander tour C7 sur résultat concret, dernier fetch/équivalence,
+ifVERT/poste push/3contrôles. Puis dump+SHA+drop des SEULES PG synthétiques
+cx_pub_2191_20261113_v1/v2/v3/v4 (propriété/0sessions), archives administratives
+fidèles et garde JSON fraîche VERT avant retrait WT/branches locales/target.
+La source est figée ; aucune autre base ni service/modèle réel requis.
+Les états et attentes des sections suivantes sont historiques.
+
 ## État final — raccord RO intégré et nettoyé
 
 **Master8e24c0055bd81a58e6204d346f0582fc214af8f1** après « à toi » C7,
