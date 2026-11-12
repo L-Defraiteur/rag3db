@@ -141,3 +141,20 @@ Cette seconde voie exige de préciser les droits et les refus sans ouvrir global
 Aucune de ces options n'est livrée par ce constat. Aucun script déplacé dans le domaine,
 aucune assertion/durée relâchée, aucune désactivation de bac ni nouvelle tentative inchangée.
 La passe globale n'a pas commencé ; ticket ouvert, parcours complet non validé.
+
+### Frontière retenue avant la modification de fixture
+
+Orchestration autorise de composer `workspace.sandbox.extra_read` existant, limité au
+**seul fichier script**, sans son parent. Le script reste extérieur au domaine de Garde :
+la baseline doit toujours demander à nouveau l'accord après clic, même avec ce droit noyau
+préalablement déclaré. Le correctif doit ensuite atteindre sortie réelle et refus de variante.
+L'accord de ligne ne confère aucun droit noyau supplémentaire dans ce lot.
+
+Archi possède cette modification de fixture navigateur et ses nouveaux rouge/vert. ED possède
+un témoin runtime distinct avec le vrai bac : fichier synthétique lisible par l'hôte, lecture
+refusée et erreur rendue sans extra_read, succès avec le seul fichier déclaré, frère extérieur
+encore illisible. Ce diagnostic comparatif doit départager les droits ordinaires et Landlock ;
+le stderr seul n'est pas une preuve causale suffisante. Aucun sandbox off, aucune ouverture du
+parent ou du home, aucun accès extérieur implicite via les laissez-passer. Source à publier
+propre avant les ciblés ; passe globale seulement après ces preuves. Le rouge original sans
+extra_read reste conservé et la précondition devra rester explicite dans README et bilan.
