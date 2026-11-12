@@ -459,3 +459,51 @@ cx_ed_accord_publication_20261112.dump+SHA, fixture-code-tree-227077.tar, nettoy
 L'arbre de Lucie conserve codeparsersM et docs/lucie-tmp préexistants. Ancien
 reste-explicite et ressources B sont hors périmètre, jamais retirés par ce script.
 Pas de nouveau Cargo/NAV/service7879 après cette validation.
+
+### Nuit du 12 au 13 — parcours agent IDE (en cours)
+
+Ticket [parcours réel](../tickets/2026-11-12-prouver-le-parcours-agent-de-code-complet-de-l-ide.md).
+Worktree `cx-ed-parcours-agent-ide` sur les deux postes, branche portable homonyme,
+source publiée `36e284824`, base `a783013f1`. Nouveau témoin ignoré : vrai Vertex
+via chat/outils, exploration, Cargo nommé, édition/diff et relecture tâche/chat.
+Préfixe initial lancé luciepc sous primitive commune, global1900s (compile1500,
+réel360), target privé `target-cx-ed-parcours-agent-ide`, lib29/j8/Max32/HIGH0.
+Preuves `~/.cache/rag3weaver-build/I-luciepc/parcours-agent-ide-20261112`.
+Aucun verdict acquis à cette publication ; pas de preuve UI revendiquée.
+Aucun usage 7879/GPU prévu : fixture non indexée, rattrapage désactivé explicitement.
+
+Revue courte parallèle du ticket Archi « vidange de portée rouge dans la lib » :
+plusieurs assertions possibles ; source/log sans panic ne permettent pas d’établir
+une cause. Proposition transmise : même ELF et concurrence avec `--nocapture`,
+sans augmenter les délais ni changer le runtime. Aucun fichier commandes édité.
+
+Actualisation parcours : rouge réel `36e284824` conservé après test nommé rouge
+attendu puis vert réel ; diff Git bloqué par l’administration externe du worktree,
+reprise non atteinte. Corrections communes publiées jusqu’à `4d6045cdb`, en revue
+RO Archi/C7/Mémoire : lectures Git vérifiées, environnement global isolé, alias
+internes et gitfile symbolique refusés. `b0090e2be` noyau rouge config globale,
+`b310b5c0c` noyau vert partiel puis arrêt RO, `b68569d3a` noyau vert partiel puis
+arrêt RO ; jamais de Vertex dans ces trois correctifs. Arrêts attribués pidfd,
+restes vides et nettoyage vrai. Preuves initiales/correctives distinctes,
+synchronisées sur les deux postes. Nouvelle source4d à qualifier ; aucun master.
+
+Limite de conservation des préfixes : SHA et logs des ELF successifs conservés,
+mais les premiers exécutables36e/b009/b310 ont été remplacés au même chemin par
+les rebâtis Cargo avant copie indépendante. L’ELF b685 est désormais archivé hors
+target ; les suivants doivent l’être immédiatement après compilation. Les relevés
+`ldd` tardifs sont nommés « observés après b685 », sans attribution rétroactive.
+
+### Parcours IDE acquis et globale en file
+
+Préfixe source4d : noyau1/0/0 puis3toursVertex46.05s verts. Reprise sourcefe0,
+sur la MÊME fixture : bouton de chat réel dans Chrome, quatrième tour Vertex,
+Cargo exact1passed/diff0 et relecture visuelle, 1/0/0 vert19.71s, CDP0.23s.
+Deux supervisions vertes/restes[]/nettoyé, code/principal/historique conservés.
+Rouges Git/config/alias et Chrome socket trop long conservés ; aucun retry inchangé.
+
+Branche2 `cx-ed-parcours-agent-ide-2`, rebase65bC7 préservé, source8e366e4aa
+publiée, quatre Rust identiques àfe0. Revues RO Mémoire/C7 favorables Git, puis
+Mémoire favorable delta UI/stderr. Globale6000 en file derrière mesure exclusive,
+F5/min/3ELF/lib/NAV/lectures27/hôte13/PG36+filets ; gate7879 seulement aprèsNAV.
+Base privée `cx_ed_parcours_20261113`, target5.8G initial, TMPDIRcourt obligatoire.
+Le ticket reste ouvert jusqu’à passe, intégration C7 et nettoyage gardé2postes.
