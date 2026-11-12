@@ -1,0 +1,19 @@
+{
+  "ed_exact_code": "143a21706abed7c38b62d036a4a8d4c9af170790",
+  "ed_published_tip": "2a31b271689df34aab77cc6170e623229cb47be7",
+  "ro_before_stack": "58f5a70ba0d9262a94a5aeb541d6db446f33d173",
+  "ro_commits_identical": 6,
+  "ro_changed_paths": [
+    "extension/rag3weaver/src/catalog.rs",
+    "extension/rag3weaver/src/catalog/metadata.rs",
+    "extension/rag3weaver/src/dataflow/migrations.rs",
+    "extension/rag3weaver/src/storage_inspection.rs",
+    "extension/rag3weaver/src/storage_inspection/observation_tests.rs",
+    "extension/rag3weaver/src/storage_inspection/observed_metadata.rs"
+  ],
+  "union_exact": true,
+  "tracked_product_files": 662,
+  "templates": 220,
+  "product_tree_sha256": "6293ac4c17feee44ca3a61c9a7cd598a7e94700341df285a01ce4334707b5485",
+  "critical_common_scripts_equal": true
+}
