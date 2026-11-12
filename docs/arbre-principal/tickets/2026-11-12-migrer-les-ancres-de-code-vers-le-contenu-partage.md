@@ -3,7 +3,7 @@
 - **État** : ouvert, premier patch contrat/admission/plan/préflight autorisé après publication du plan corrigé ; transformation et activation non autorisées.
 - **Famille** : produit
 - **Gravité** : capacité manquante ; le partage déclaratif1a ne transforme pas les index de code existants.
-- **Atteignable en service** : non pour ce chantier préparatoire ; gabarits et index de production inchangés.
+- **Atteignable en service** : parcours CLI/daemon raccordés sur branche privée, non livrés sur master ; gabarits et index de production inchangés.
 - **Touche rag3weaver** : oui, admission de format, migrations déclarées, transfert des valeurs indexées, schéma code et témoins.
 - **Pour** : arbre-principal ; orchestration et ED pour revue/autorisation, recherche pour contrat d’index si besoin.
 - **Signalé par** : préparation autorisée par orchestration après le lot1a08086ba36 ; ticket de préparation distinct ci-dessous.
@@ -302,3 +302,40 @@ Revue portée de l'empreinte : l'inspecteur expose désormais
 ne sert ni de fingerprint du schéma complet ni de génération. Le plan préliminaire
 expose séparément les relations cibles et ne gagne aucune autorisation d'apply.
 Pas d'exclusion applicative globale inventée depuis le verrou du moteur.
+
+## Vérification courante et revue du premier patch
+
+Source de code **d6fc63f8bebd9bd6b2c0a6b81bc5f6c84accb283**, branche
+`cx-arbre-migration-preflight-2`, worktree local/distant
+`/home/lucied/.cache/rag3weaver-build/cx-wt-migration-preflight`.
+Pas de Cargo actif après ces contrôles ; poste0/4 relu. Aucun master demandé.
+
+- `cx-preflight-bornes-vert-v1.log` : **5 tests inspection/admission +31 runner,
+  zéro échec/ignoré**, puis build binaire natif+daemon+code réussi, rc0 global,
+  fin11:33:09Paris. Un seul Cargo à la fois sous poste lourd, j8/Mem32,
+  échéance globale1800s, lib29a7 épinglée, target2,9Go.
+- `cx-preflight-cli-v2/result.json` : **8 appels réels** sur le binaire de cette
+  source : création legacy synthétique, inspect, plan avec variable résolue,
+  quatre refus cible (positionnel, MCP standalone, serve, files verify), apply
+  refusé avant chargement d'un manifeste absent. Fichiers de fixture inchangés
+  entre inspection/plan/refus. Pas de modèle/service démarré ; ce constat ne
+  remplace pas un compteur d'appels réseau sur chaque chemin.
+- Binaire SHA256 : `e8a31d6e92fa431511db8301246f47dd5ecfe6d9dfac5ed2899b44ce64c8a0ab`.
+  Log ciblé SHA256 : `b613b134be26ae4fb6e49e41187f3066a7af267ee8933261207b9835fd1fd57a`.
+  Résultat CLI SHA256 : `472cf5f2cf225e5810f5cd58aae7725e396b7795293277ea9b8037d6d12d613a`.
+- Rouge brut b9d2 puis vert d6fc : journal failed refusé avant effets de catalogue
+  et appels d'embarquement (deux compteurs zéro sur le vert). Le faux montage
+  b76 est conservé distinctement, sans attribution au produit.
+- `git diff --check` propre ; vérificateur tickets :373 en-têtes valides.
+
+Limites à faire relire avant gel/passe : aucun transfert, publication atomique,
+état running écrit ou génération legacy établie. Le plan CLI est préliminaire,
+non exécutable ; le modèle figé source/cible est qualifié dans les fixtures pures,
+pas contre un journal résolu publié réellement. La connexion commune conserve
+l'exclusion writer native pendant la seconde inspection, mais ce n'est pas
+une garde SQL globale et la qualification d'un plan de migration sous cette
+exclusion n'est pas encore raccordée. L'API bas niveau refuse avant initialisation
+mais ne peut pas annuler des capacités déjà créées par son appelant. Les tests
+ne couvrent pas un second processus concurrent pendant la qualification.
+Le ticket reste ouvert ; aucune passe complète ou livraison master autorisée
+par ces ciblés. Les preuves ne valent que pour les sources citées.
