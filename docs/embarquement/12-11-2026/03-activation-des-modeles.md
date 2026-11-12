@@ -91,9 +91,12 @@ L'absence du champ chez un ancien fournisseur est une information inconnue.
 - ef11f0e16 : 15 témoins CPU standalone verts, dont partage, annulation et
   sonde lente à échéance absolue ; zéro ignoré.
 - f3f8dc80f : témoin de deux processus distincts, un seul départ, vert.
-- Les tests du connecteur réel et de la chauffe factice sont publiés dans
-  `model_source/activation.rs` et `daemon/embeddings.rs` ; leur qualification
-  Cargo et la mesure privée du banc ne sont pas encore déclarées vertes.
+- d5133197e : précontrôle Cargo, cinq tests du connecteur et un de chauffe
+  partielle verts ; lancement historique hors nouvelle portée commune et target
+  marqué de l'ancien arbre. Requalification confinée après garde du target requise.
+- `scripts/qualifier_activation_modeles.sh cpu` regroupe les témoins sous la
+  portée commune ; le mode `lib` prépare la passe large et le fournisseur privé.
+  La mesure privée du banc n'est pas encore déclarée verte.
 
 Les recettes, refus de compilation rencontrés et résultats suivants restent
 consignés dans le ticket. La fermeture attend les preuves réellement demandées,
