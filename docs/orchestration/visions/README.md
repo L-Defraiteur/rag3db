@@ -17,6 +17,10 @@ dossiers ne tiennent plus ; l'histoire est là, pas l'état).
 
 ## Les visions de novembre 2026 (pages de conception, laissées dans leurs dossiers de session)
 
+- **Résidence des modèles et préchauffage** — demande de Lucie du 12 novembre :
+  garder chauds les usages courants, charger et libérer les besoins ponctuels,
+  composer ModelSource et Serveur avec une politique de ressources commune :
+  [conception](2026-11-12-residence-des-modeles-et-prechauffage.md).
 - **Un navigateur accessible aux agents par MCP** — piste future de Lucie du
   12 novembre : étudier un pont open source, avec extension Chrome éventuelle,
   réutilisable par différents agents. Recherche différée, aucune intégration livrée :
