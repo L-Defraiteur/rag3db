@@ -379,3 +379,9 @@ Paquet et preuves à luciepc `annulation/cx-archive-privee-12nov-02/` : archive,
 810headerssource,2générés,17dépendances,830fichiers rehashés sans écart.
 Configuration privée distincte, pas archive historique ; pas de pilote/mesure
 ni lib distribuée. C7 doit relire le manifeste avant l’étape suivante du ticket.
+
+Manifeste archive privée accepté/re-hashé par C7. Recette pilote remappée au
+paquet02 depuis les flags effectifs privés, sans flags de tests ni chemins de
+base ; 17 dépendances privées+archive moteur, headers assortis. Revue06 et argv
+préparés seulement, aucun staging/compiler/lien/mesure. Prêt à revue après
+priorité CLI arbre, même ticket ; ready=false jusqu’à autorisation explicite.

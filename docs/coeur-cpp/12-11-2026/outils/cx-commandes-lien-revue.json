@@ -1,16 +1,16 @@
 {
   "ready_to_compile": false,
-  "reason": "Archive correcte 0511dece7 et provenance absentes. Ne pas lier l'archive de base avec une définition de classe modifiée.",
-  "cwd": "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur",
+  "reason": "Archive et manifeste privés acceptés ; argv repris des flags effectifs privés et interface de lien source exacte. Attendre revue de ces argv et fin du créneau CLI arbre. Aucune commande de compilation, lien, staging ou mesure exécutée.",
+  "cwd": "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7",
   "source_only_compilation": true,
   "engine_translation_units_compiled": 0,
-  "existing_base_archive": {
-    "path": "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/src/librag3db.a",
-    "sha256": "40dca10ed39bca8c45769f086e3bfd95fe0f6502876fc12482b33c44ddd662cc",
-    "use_for_this_pilot": false
+  "required_headers": {
+    "source": "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source",
+    "generated": "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-generes",
+    "third_party_checkout": "/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party",
+    "source_commit": "0511dece74f94db6937fb03e6ec45f0c58828c5a"
   },
-  "required_headers": "snapshot src/include exact 0511dece7, sans repli vers headers de base",
-  "required_archive": "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7/archive-assortie-0511dece7/librag3db.a",
+  "required_archive": "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/librag3db.a",
   "required_provenance": [
     "commit source complet",
     "options ABI identiques p12/v11/g17/s18 et contrôle/sanitizers OFF",
@@ -22,52 +22,40 @@
     "/usr/bin/c++",
     "-DANTLR4CPP_STATIC",
     "-DHAS_FDATASYNC",
-    "-DHAVE_STDINT_H",
     "-DRAG3DB_CMAKE_VERSION=\"0.11.2.2\"",
+    "-DRAG3DB_EXPORTS",
     "-DRAG3DB_EXTENSION_VERSION=\"0.11.1\"",
-    "-DRAG3DB_ROOT_DIRECTORY=\"/home/lucied/git_workspaces/rag3db-colonnes\"",
+    "-DRAG3DB_ROOT_DIRECTORY=\"/home/lucied/git_workspaces/cx-coeur-archive-0511\"",
     "-D__64BIT__",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/antlr4_cypher/include",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/antlr4_runtime/src",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/brotli/c/include",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/fast_float/include",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/mbedtls/include",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/parquet",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/snappy",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/thrift",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/miniz",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/nlohmann_json",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/pybind11/include",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/pyparse",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/re2/include",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/alp/include",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/spdlog",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/utf8proc/include",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/zstd/include",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/httplib",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/pcg",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/lz4",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/roaring_bitmap",
-    "-I/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7/headers-0511dece7",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/src/include",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/test/include",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/test/test_helper/../include",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/src",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/src/include/c_api",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/utf8proc/./include",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/re2",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/fastpfor",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/thrift/./include",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/yyjson",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/third_party/simsimd",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/test/test_runner/../include",
-    "-I/home/lucied/git_workspaces/rag3db-colonnes/test/graph_test/../include",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/antlr4_cypher/include",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/antlr4_runtime/src",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/brotli/c/include",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/fast_float/include",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/mbedtls/include",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/parquet",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/snappy",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/thrift",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/miniz",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/nlohmann_json",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/pybind11/include",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/pyparse",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/re2/include",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/alp/include",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/utf8proc/include",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/zstd/include",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/httplib",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/pcg",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/lz4",
+    "-I/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/roaring_bitmap",
+    "-I/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source",
+    "-I/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-generes",
+    "-I/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7/generated-build-src",
     "-isystem",
-    "/home/lucied/git_workspaces/rag3db-colonnes/third_party/simsimd/include",
+    "/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/simsimd/include",
     "-O3",
     "-DNDEBUG",
     "-std=gnu++20",
-    "-fPIE",
+    "-fPIC",
     "-fvisibility=hidden",
     "-fvisibility-inlines-hidden",
     "-include",
@@ -76,7 +64,6 @@
     "-Wextra",
     "-Wno-unknown-pragmas",
     "-Wno-restrict",
-    "-Wno-attributes",
     "-o",
     "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7/pilote.o",
     "-c",
@@ -86,30 +73,155 @@
     "/usr/bin/c++",
     "-O3",
     "-DNDEBUG",
-    "-Wl,--export-dynamic",
-    "-rdynamic",
     "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7/pilote.o",
     "-o",
     "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7/cx-mesure-retrait",
-    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7/archive-assortie-0511dece7/librag3db.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/librag3db.a",
     "-ldl",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/antlr4_cypher/libantlr4_cypher.a",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/antlr4_runtime/libantlr4_runtime.a",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/brotli/libbrotlidec.a",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/brotli/libbrotlicommon.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/antlr4_cypher/libantlr4_cypher.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/antlr4_runtime/libantlr4_runtime.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/brotli/libbrotlidec.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/brotli/libbrotlicommon.a",
     "-lm",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/utf8proc/libutf8proc.a",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/re2/libre2.a",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/fastpfor/libfastpfor.a",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/parquet/libparquet.a",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/snappy/libsnappy.a",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/thrift/libthrift.a",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/yyjson/libyyjson.a",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/zstd/libzstd.a",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/miniz/libminiz.a",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/mbedtls/libmbedtls.a",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/lz4/liblz4.a",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/roaring_bitmap/libroaring_bitmap.a",
-    "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/third_party/simsimd/libsimsimd.a"
-  ]
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/utf8proc/libutf8proc.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/re2/libre2.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/fastpfor/libfastpfor.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/parquet/libparquet.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/snappy/libsnappy.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/thrift/libthrift.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/yyjson/libyyjson.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/zstd/libzstd.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/miniz/libminiz.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/mbedtls/libmbedtls.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/lz4/liblz4.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/roaring_bitmap/libroaring_bitmap.a",
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/simsimd/libsimsimd.a"
+  ],
+  "accepted_manifest": {
+    "path": "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/manifest.json",
+    "sha256": "0049111df769914dbeea66fd0d2d07c6add58a670eb80e797589604d48c80df7",
+    "source_commit": "0511dece74f94db6937fb03e6ec45f0c58828c5a",
+    "configuration_identity": "cx-0511-tests-off-without-unused-spdlog-path-v1",
+    "historical_archive": false,
+    "archive_sha256": "3030fe674e33e2ea0b5b01ed7bdf1a919e538c02e5dfc0b68fff7b50e1d06758"
+  },
+  "pilot_source": {
+    "repository_path": "docs/coeur-cpp/12-11-2026/outils/cx-mesure-retrait.cpp",
+    "planned_path": "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7/cx-mesure-retrait.cpp",
+    "sha256": "fdc3e90feb364178537c11f2a05743fbb965851e898987288d1f69cb6eca1d08",
+    "staged": false
+  },
+  "required_staging_not_executed": {
+    "generated_build_src_view": "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7/generated-build-src/include",
+    "operation": "Copier les deux en-têtes générés sous include/ et vérifier leurs SHA du manifeste, pour conserver la sémantique du -I<build>/src ; aucune vue créée à ce stade.",
+    "files": {
+      "headers-generes/common/build_id.h": {
+        "bytes": 227,
+        "sha256": "becc3ae1ac7a07b2c865d7eb4c0fd05f04e1a6e392534874702b49baea76d5d6"
+      },
+      "headers-generes/common/system_config.h": {
+        "bytes": 2952,
+        "sha256": "08bb40bb489cc0269cef2ce34a3329536a616a4b998a131841ada95afb2f36d8"
+      }
+    }
+  },
+  "dependency_archives": {
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/antlr4_cypher/libantlr4_cypher.a": {
+      "bytes": 1816206,
+      "sha256": "bb9d216eea26b30506b25b43f72b6de48deb3bd9d716bf64cc5902a2e42b71ae"
+    },
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/antlr4_runtime/libantlr4_runtime.a": {
+      "bytes": 3326650,
+      "sha256": "786f6a975c00cf7c8d23c3e54ff2caa042a10e7e803dcfa44ccfbd01a195e742"
+    },
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/brotli/libbrotlidec.a": {
+      "bytes": 66288,
+      "sha256": "218e9c10b1b3e0a8ae8c3a2a009928bb468140bb8426910daa7b3f93060c718f"
+    },
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/brotli/libbrotlicommon.a": {
+      "bytes": 138856,
+      "sha256": "38979fb1e30188a9223c04dbfcc5064a0932319423389a571e2ba19700c03c3e"
+    },
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/utf8proc/libutf8proc.a": {
+      "bytes": 317584,
+      "sha256": "dc70dc925bef7aa48bbdd0e8f2810d1bc60368f450f0c0ea981b50724fb715cd"
+    },
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/re2/libre2.a": {
+      "bytes": 1108152,
+      "sha256": "3506f75895039238aa39692edfd91ad426257c6220ff626fa316cba008de9dab"
+    },
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/fastpfor/libfastpfor.a": {
+      "bytes": 242874,
+      "sha256": "14dc30ac43ac02ce8c0e6f7ba7dd4d1aeb56864f69416b04ced5f532d84a7a72"
+    },
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/parquet/libparquet.a": {
+      "bytes": 739048,
+      "sha256": "66e901007ee7a4abdc593c4dc822d1ca7bad7831cdb18096b077261e2263ba69"
+    },
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/snappy/libsnappy.a": {
+      "bytes": 57760,
+      "sha256": "77522f18bcf14997892a76a790d8b6a731ef585d90e77da7abf4e0dc48012a73"
+    },
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/thrift/libthrift.a": {
+      "bytes": 71482,
+      "sha256": "164514038dcd71bb86b686759cc0f8014bccc6026f3b6115463ca33579009e4d"
+    },
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/yyjson/libyyjson.a": {
+      "bytes": 259136,
+      "sha256": "8e45ca75a5f000e119195e8410a8c0fc8fe92d63c7d3134f85d7118ce9bc418d"
+    },
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/zstd/libzstd.a": {
+      "bytes": 784940,
+      "sha256": "d62377c9fab42a406093f115a667b9e42b2bae38c8c83b93950516693687b0bd"
+    },
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/miniz/libminiz.a": {
+      "bytes": 137088,
+      "sha256": "faec74700ad53e076941d0d4eba12223c5d2310f9c3e750c37ea6f20bf5cf379"
+    },
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/mbedtls/libmbedtls.a": {
+      "bytes": 243038,
+      "sha256": "778dff0c8c65525696fc0a0bf28225fff0cc7b7f2ae39e5ac896c7f1f95c3ecd"
+    },
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/lz4/liblz4.a": {
+      "bytes": 31876,
+      "sha256": "3b2abd8a0047513f46e486cd3323eb8888ba95f6d3211f9b95d8595731ac78be"
+    },
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/roaring_bitmap/libroaring_bitmap.a": {
+      "bytes": 473858,
+      "sha256": "ed86cf07931769083e02d8d95c350798dc2308e58284c4ccb6f17a06d8dd9d78"
+    },
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/third_party/simsimd/libsimsimd.a": {
+      "bytes": 222258,
+      "sha256": "08f48746cd60c0041051ba57d414f0f86f14a2605c9de12b9890c74c9cdea062"
+    }
+  },
+  "flags_reference": {
+    "path": "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/compile_commands.json",
+    "sha256": "9a00bdf2613d09370c5dbf845831e66863c15031c569d01a00fef370e0506e1b",
+    "source_file": "/home/lucied/git_workspaces/cx-coeur-archive-0511/src/storage/index/in_mem_hash_index.cpp",
+    "kind": "commande effective d’une unité moteur privée ; pas de flags de tests",
+    "transformations": [
+      "substitution source TU/output .o vers pilote",
+      "suppression seulement des sorties de dépendances de compilation",
+      "substitution includes source/générés vers paquet attesté et vue générée déclarée"
+    ],
+    "interface_link_source": "0511dece74f94db6937fb03e6ec45f0c58828c5a:src/CMakeLists.txt",
+    "interface_link_source_sha256": "8b587b46298c80affae0f1ce0d68494303a2b973ef2f703b99914b409412bddd",
+    "executable_link": "pilote.o puis archive privée et interface statique ; aucun export-dynamic/rdynamic, gtest, gmock ou objet de test"
+  },
+  "header_only_dependency": {
+    "name": "fast_float",
+    "path": "/home/lucied/git_workspaces/cx-coeur-archive-0511/third_party/fast_float/include",
+    "source_commit": "0511dece74f94db6937fb03e6ec45f0c58828c5a"
+  },
+  "thread_interface": {
+    "name": "Threads::Threads",
+    "compile_flags_from_private": true,
+    "extra_link_flag": "aucun ajouté ; GNU/Linux avec pthread libc selon configuration privée"
+  },
+  "forbidden_base_archive": {
+    "path": "/home/lucied/git_workspaces/rag3db-colonnes/build/moteur/src/librag3db.a",
+    "sha256": "40dca10ed39bca8c45769f086e3bfd95fe0f6502876fc12482b33c44ddd662cc",
+    "use_for_this_pilot": false
+  }
 }

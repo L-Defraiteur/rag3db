@@ -494,3 +494,19 @@ Aucun test, pilote, benchmark, install, extension compilée ou lib partagée
 produite par ce lancement ; aucun magasin/service/lib distribuée modifié.
 Reste : revue par C7 du manifeste et des commandes de lien assorties avant
 toute compilation de pilote/mesure. Le différentiel DdlEveryMinute reste ouvert.
+
+### Recette du pilote remappée au paquet privé accepté, sans exécution
+
+C7 accepte manifeste004911/archive3030 en entrée de préparation, pas de mesure.
+Recette `12-11-2026/outils/cx-commandes-lien-revue.json` actualisée : flags
+effectifs privés (commande index, compile_commands SHA9a00…), plus aucun
+include/flag de tests ou spdlog, aucune archive/header du build de base. Les
+18 archives (moteur+17 dépendances) sont toutes dans le paquet02 avec SHA ;
+headers moteur/générés attestés, tiers sur le worktree privé 0511 exact.
+
+Détail et provenance dans `12-11-2026/06-revue-lien-pilote-paquet-prive.md`.
+Vue include/common des deux générés prévue et empreintée, mais non créée ;
+source pilote inchangé, SHA consigné. Aucun staging, compiler, lien, pilote ou
+mesure exécuté. ready_to_compile et ready_to_run restent false. Priorité ciblé
+CLI arbre ; C7 doit relire ces argv avant d’autoriser une TU puis la première
+cellule de trois paires. Aucun moteur recopié/recompilé ni lib distribuée touchée.
