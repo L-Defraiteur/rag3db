@@ -1780,3 +1780,12 @@ Mémoire revue5f710 favorable, omissioncodec levée danscode etruntime.
 Nouvelle globale v2/source etrecette publiées avant exécution5400s ; nouvelle
 PGsynthétique cx_pub_2191_20261113_v2, aucun reset de v1. Les preuves des deux
 rouges fonctionnels et des interruptions volontaires restent séparées.
+
+Globalev2/source904af7c20 arrêtée premierrouge : F5 VERT5/5 en74,86s,
+check minimal ROUGE (Registry/impl jamaisutilisés quand nativeabsent,
+-Dwarnings/dead_code). Pas de runtimeglobal. `validation-e9fl03fc`
+ROUGE/code1/restes[]/nettoye=true, proofs cx-passe-publication-composite-v2.
+Correction ciblée : cfg(any(rag3db-native,test)) pour registre/impl et ses
+imports de collections ; aucun allow dead_code ni relâchement -Dwarnings.
+Recetteglobalev3 publiée avant reprise5400s, PGv3 neuve sansreset des2PG
+antérieures. Mêmecodefonctionnel97qualifié ; globalecouvre minimum etruntime.
