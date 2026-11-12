@@ -1504,3 +1504,13 @@ entitésstable avecnouvelle relation, politiques/entitéssupplémentairesnonobse
 mutation deschampsdiagnosticpublics sansaltérer la vue scellée, contenus/propriétés/
 extrémités/manquantscontradictoires couverts. Parse6sources rustfmt --emitstdout
 skip_children réussi, aucunefichier réécrit ni compilationlocale.
+
+Proposition ciblé correctif séparé du rouge(initialrouge133,34/600 terminé) :
+recette preuves-observation-ro/cible.py publiée avec SHA avantjob, mêmeprimitive
+commune/délai600/lib29/j8/CPU4/targetunique32 ; aucune globale3600 ouverte.
+CompileunefoisJSONnatif+code, archiveELF/source/SHA/ldd puis liste filtresinspection,
+décodeursmetadata,migrations avantruntime, aucunignoreaccepté. Exige10nouveaux
+callbacksRO+3décodeurs+1natiflectureoctetsinchangés,18faitsA+15aperçu et groupe
+migrations existant ; compteglobal tiré de l'ELF, pas d'assert historiqueinventé.
+PremierrougeSTOP/diagnostic, aucunretryinchangé, aucunmodèle/service/PG/baseréelle.
+La passeglobale se proposera après ce ciblé/diff/revue, horsposte push.
