@@ -34,3 +34,20 @@ sur le script seul avant ouverture atelier (contrat34f avant fixture996), sans d
 issu de l'accord. Les rouges sans déclaration restent conservés. Attestation ELF220,
 preuves complètes recopiées dans leurs dossiers distincts sur le portable. ED conduit la
 globale du candidat groupé ; aucun master archi. Lire la section actualisée du rapport.
+
+## Raccord ED final
+
+Verdict composé sourceb42 confirmé par ED : features5/native1609/large2176/nav40 et
+lectures24+démon13. Les deux e2e ont une preuve réelle de PID/cgroup/Max32/KillMode ;
+les droits noyau restent déclarés séparément. La fermeture fonctionnelle accompagne le
+lot ED ; le nettoyage des ressources archi est consigné par leur propriétaire, pas présumé ici.
+
+## Nettoyage archi attesté
+
+Archi confirme le retrait aux deux postes de son worktree cx-wt-accord-exterieur, de son
+target cx-archi-target, des scratches et de ses trois branches locales, après quiescence,
+archives administratives fidèles (sous-module PC inclus) et garde courante dca13abb… verte.
+Remotes et preuves conservés dans cx-accord-exterieur-nettoyage-garde-20261112 ; copies
+PC et portable distinctes. Une branche PC sans upstream a d'abord refusé -d ; son upstream
+distant exact a été vérifié et renseigné avant le -d normal, sans -D. Cette attestation
+vient d'archi ; aucun nettoyage ED n'y est assimilé.

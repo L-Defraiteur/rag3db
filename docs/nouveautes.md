@@ -7,6 +7,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **12 nov. — Un accord reprend la ligne montrée.** La carte accorde la ligne complète dans
+  son domaine ; sa reprise lance réellement la commande, tandis qu'une variante repasse
+  par la porte. Les accords à usage unique sont consommés atomiquement. Le droit de lire
+  un script extérieur reste déclaré séparément dans le bac à sable. (`b42a4ada9`)
+
 - **12 nov. — Un aperçu décrit les correspondances de chunks et de vecteurs connus.**
   L'API de bibliothèque conserve occurrences, cellules et provenance sur des faits
   fournis ; elle refuse les valeurs manquantes ou incompatibles, sans modèle ni

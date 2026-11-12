@@ -3,7 +3,7 @@
 ## Lot autorisé en cours : accord de commande hors domaine
 
 Ticket canonique :
-`docs/everything-declarative/tickets/2026-11-11-un-accord-de-commande-hors-domaine-redemande-le-meme-accord.md`.
+`docs/tickets/closed/2026-11-11-un-accord-de-commande-hors-domaine-redemande-le-meme-accord.md`.
 Autorisation/répartition désormais dans
 `docs/tickets/closed/2026-11-12-paralleliser-les-suites-autorisees-sans-chevauchement.md` :
 ce ticket clos atteste seulement l'affectation, pas la réalisation fonctionnelle.
@@ -105,3 +105,20 @@ Les passages « à départager » ci-dessus décrivent l'étape antérieure, dé
 par cette précondition déclarée ; le résultat reste limité à cette configuration.
 Le ticket canonique et le runtime restent à ED. Conserver sources et preuves jusqu'au
 verdict groupé ; tout nettoyage ultérieur exige la garde et les archives administratives.
+
+## Raccord ED final
+
+Verdict composé sourceb42 confirmé par ED : features5/native1609/large2176/nav40 et
+lectures24+démon13. Les deux e2e ont une preuve réelle de PID/cgroup/Max32/KillMode ;
+les droits noyau restent déclarés séparément. La fermeture fonctionnelle accompagne le
+lot ED ; le nettoyage des ressources archi est consigné par leur propriétaire, pas présumé ici.
+
+## Nettoyage archi attesté
+
+Archi confirme le retrait aux deux postes de son worktree cx-wt-accord-exterieur, de son
+target cx-archi-target, des scratches et de ses trois branches locales, après quiescence,
+archives administratives fidèles (sous-module PC inclus) et garde courante dca13abb… verte.
+Remotes et preuves conservés dans cx-accord-exterieur-nettoyage-garde-20261112 ; copies
+PC et portable distinctes. Une branche PC sans upstream a d'abord refusé -d ; son upstream
+distant exact a été vérifié et renseigné avant le -d normal, sans -D. Cette attestation
+vient d'archi ; aucun nettoyage ED n'y est assimilé.

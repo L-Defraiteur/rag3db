@@ -1,16 +1,17 @@
 # ED — accords de commande, 12 novembre 2026
 
-## État
+## Résultat du lot
 
-Le [ticket d'accord extérieur](../tickets/2026-11-11-un-accord-de-commande-hors-domaine-redemande-le-meme-accord.md)
-reste ouvert tant que la passe globale et l'intégration ne sont pas attestées. Lot autorisé
-par Lucie via orchestration : ED possède commande.rs et run_nodes.rs ; archi possède le
-témoin navigateur et le petit helper de configuration dans le module de tests atelier.
+Le [ticket d'accord extérieur](../../tickets/closed/2026-11-11-un-accord-de-commande-hors-domaine-redemande-le-meme-accord.md)
+est corrigé et sa fermeture accompagne le lot d'intégration ED/archi. Source code éprouvée :
+`b42a4ada90ab7f2b80f1137e75692b3d00e26fcc`, rebasée sur master3b2eab7ec ; range-diff19/19
+identiques et fichiers Rust possédés byte-identiques au prérebase. Les commits suivants de
+préparation du push ne changent que Markdown. Aucun push master n'est annoncé par cette note.
 
-Candidat regroupé propre publié : `4df34c5b06063afaf33d6157eaaf2c05f89e00d8`, branche
-`cx-ed-accord-hors-domaine-2`, base master `8cc7e023b`. Worktree isolé aux deux postes :
-`~/git_workspaces/cx-ed-accord-hors-domaine`. Target privé luciepc :
-`~/.cache/rag3weaver-build/target-cx-ed-accord`. Aucun build sur le portable.
+Verdict composé vert : features5/5, native1609/0/15, large2176/0/65, navigateur40/0/0 ;
+lectures24/0/0 et démon13/0/0 revalidés sous le confinement enfant attesté. Les sources,
+rouges et preuves partielles restent distingués ci-dessous. Les worktrees ED isolés portent
+le lot jusqu'au push, puis sont retirés par garde et archives administratives fidèles.
 
 ## Ce que le correctif garantit
 
@@ -49,33 +50,57 @@ Preuves luciepc : `~/.cache/rag3weaver-build/I-luciepc/accord-20261112/` pour ED
 `~/.cache/rag3weaver-build/cx-accord-exterieur-<source>-<étape>-20261112/` pour archi.
 Les chemins précis et les préconditions sont consignés dans le ticket canonique.
 
-## Passe et suites
+## Passe finale et confinement attesté
 
-Première passe globale sur 4df interrompue avant la lib large : features cinq jeux, lib native minimale et lib large,
-navigateur complet, lectures et démon hôte. Lib29 épinglée, -j8, plafond mémoire32G,
-target privé de budget32G, délai3600s après acquisition de poste lourd. Une mesure moteur
-prioritaire a été respectée ; un ciblé supersédé en file a été annulé avant Cargo, par son pid
-propre. Pas de concurrence Cargo dans le target ED.
+Sourceb42, lib29 épinglée, -j8, target privé9,0Go (budget32Gio). Globale b42-r2 :
+features5/5, native1609/0/15 en20,79s, large2176/0/65 en41,92s, navigateur40/0/0 en131,60s.
+Le nouvel ignoré est précisément le navigateur d'accord extérieur, effectivement vert parmi40
+à l'étape séparée. Liste exhaustive des ignorés conservée dans les journaux de preuve.
 
-Premier lancement global arrêté avant tests : `createdb` absent de l'hôte. Log et verdict
-conservés ; le lanceur utilise désormais le client du conteneur PostgreSQL existant pour la
-seule base privée `cx_ed_accord_20261112`. Santé réelle du service sparse7879 vérifiée.
-Aucun nouveau service ni GPU. Premier autre rouge : arrêt et diagnostic, pas de rejeu inchangé.
+Le premier montage utilisait un client createdb absent de l'hôte ; ce refus avant tests est
+archivé. Le client du conteneur PostgreSQL existant a créé seulement la base privée du lot.
+Une passe b42 avait ensuite échoué19 fois sur le segment commandes/index attendu par les
+fixtures ; même source/assertions, racine privée corrigée en commandes : lectures24/0/0.
+Le rouge et les logs sont conservés ; la nouvelle globale entière b42-r2 est fonctionnellement
+verte. La [dette de fixture](../../recherche/tickets/2026-11-12-les-temoins-de-lecture-imposent-le-nom-du-dossier-des-journaux.md)
+est séparée et transmise à recherche/mémoire ; aucun correctif de fixture dans les accords.
+
+La revue du driver a identifié une limite de sa preuve mémoire : run_e2e peut créer une scope
+sœur. Ni le cgroup parent ni son pic ne prouvent alors ceux des enfants. Sur autorisation
+orchestration, seules les deux e2e ont été revalidées, sans refaire features/lib/nav : verrou
+réel externe, RAG3WEAVER_VERROU_TENU, BUILD_MEMORY_HIGH=0 pour éviter la scope intérieure,
+Max32 extérieur maintenu, KillModecontrol-group et budget600s après acquisition.
+
+Résultat : lectures24/0/0 en9,49s et démon13/0/0 en12,26s, deux suites sur deux, zéro sauté.
+PID2697195 et2702388 du vrai binaire e2e, cgroup de l'unité privée et memory.max34359738368
+attestés ; unité23,482s, pic11,4Gio, aucun swap. Quiescence exeTarget/cwdWT=[] et santé7879
+après la suite. Le [ticket commun de scopes](../../orchestration/tickets/2026-11-12-une-scope-e2e-imbriquee-peut-echapper-au-plafond-du-lanceur.md)
+reste ouvert à orchestration ; aucun changement de runner produit dans ce lot.
+
+Preuve finale aux deux postes après rapatriement :
+`~/.cache/rag3weaver-build/I-luciepc/accord-20261112/verdict-compose.json`.
+ELF navigateur98bc3103ec21dffeca418a9cb27f2e5f37565fb7369fab2217e379a86f19ed94 ;
+source embarquée b42a4ada9,220 gabarits, aucun absent. Les preuves des enfants sont
+`e2e_lectures-enfant.json` et `e2e_demon_hote-enfant.json`, et le scan de quiescence est conservé.
+Le verdict est composé explicitement ; les anciens passages ne sont pas réattribués.
+
+## Autres suites et limites
 
 Le [lot de coordination clos](../../tickets/closed/2026-11-12-paralleliser-les-suites-autorisees-sans-chevauchement.md)
-a fixé les frontières ; il ne ferme pas le ticket fonctionnel. M8 est porté par mémoire,
-avec sa [revue canonique](../../memoire/12-11-2026/01-relecture-m8-adoption-fusion-et-reprise.md).
-Le lot équipier figé et le rouge Gemini restent inchangés ; aucun nouvel essai Gemini,
-aucune intervention sur la mémoire réelle ni sur un autre lot.
+atteste l'affectation. M8 reste porté par mémoire, avec sa
+[revue canonique](../../memoire/12-11-2026/01-relecture-m8-adoption-fusion-et-reprise.md).
+Le lot équipier figé et son rouge Gemini restent inchangés : aucun nouvel essai Gemini,
+aucune intervention sur la mémoire réelle, aucune activation ni autre lot repris ici.
+Les premiers refus de montage et la régression de compatibilité shell du correctif sont
+consignés dans le ticket clos, avec rouges distincts ; shell littéral explicitement accordé
+reste CetteFois, sans aucun shell exécuté par le nouveau témoin de décision.
 
-## Régression de compatibilité corrigée avant la passe finale
+## Nettoyage archi attesté
 
-La relecture a identifié un refus shell ajouté par le correctif, absent de l'ancien
-`accorder_ligne`. La première passe a été arrêtée : features5 et native1594/0/15 restent des
-preuves partielles sur4df, pas un verdict global. Groupe arrêté et quiescence target relevés.
-Rouge décisionnel `a2db2abc3` : 0/1, aucune commande shell exécutée. Correctif
-`9a1a8539c` : seules les décisions Refuse empêchent l'accord littéral ; la portée shell
-CetteFois est consommée par la primitive atomique existante. Variantes, élévation et
-substitutions non réduites restent refusées. Ciblés : commande51/0/+1helper et run_nodes19/0/0 ;
-plafond cgroup effectif lu34359738368. Rebase final attendu sur master3b2eab7ec avant la
-nouvelle passe ; aucune preuve partielle ne sera réattribuée à cette nouvelle source.
+Archi confirme le retrait aux deux postes de son worktree cx-wt-accord-exterieur, de son
+target cx-archi-target, des scratches et de ses trois branches locales, après quiescence,
+archives administratives fidèles (sous-module PC inclus) et garde courante dca13abb… verte.
+Remotes et preuves conservés dans cx-accord-exterieur-nettoyage-garde-20261112 ; copies
+PC et portable distinctes. Une branche PC sans upstream a d'abord refusé -d ; son upstream
+distant exact a été vérifié et renseigné avant le -d normal, sans -D. Cette attestation
+vient d'archi ; aucun nettoyage ED n'y est assimilé.
