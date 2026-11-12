@@ -1,0 +1,10 @@
+{
+  "archive": "cx-runtime-saturation-12nov-01-preuves.tar.gz",
+  "bytes": 36276,
+  "sha256": "95eaf8e4b3611a4c9f97be52fb59b294842dfc0a46bd55d4a90e7728ffe1d663",
+  "verified_files": 23,
+  "native_attempts": 1,
+  "retry": false,
+  "strict_capture_complete": true,
+  "xml_exactly_one_requested_test": true
+}

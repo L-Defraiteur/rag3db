@@ -784,3 +784,18 @@ Contrôle post-arrêt demandé par la revue : validateur strict préparé dans
 meta/marker/footer,compteurs cumulatifs et XML exactement1test demandé/joué).
 Il ne lance aucun moteur et n'est pas appliqué aux données avant arrêt. Le driver
 runtime et le paquet restent figés ; aucun retry ni nouveau passage.
+
+## Runtime unique terminé : vert sans saturation reproduite
+
+[Résultat et analyse](../12-11-2026/20-runtime-unique-vert-sans-saturation.md) :
+1test demandé/joué vert, natif/driver0,987,526sGTest/988,102sservice,pic4,2G/swap0,
+mesure libérée/MainPID0, aucun retry. Capture stricte984samples16uint64,footer
+complete1/first_state0/overflow0 ; aucun refus aux2sites pendant armement.
+Pic100ms1120Mio, fenêtre avantDDL3=1111Mio contre2051ancienrouge ; pas même pression.
+PKcalls/cumul/actifs0 jusqu'au dernier relevé984,064s, sans relevé terminal : ne pas
+extrapoler au petit intervalle final/horsarmement. Comptes Doc60000/Link1078120/
+Note821445 et défauts concordent après réouverture. Volumes/env non appariés à
+l'historique : cause du rouge indéterminée, ticket ouvert, aucune optimisationA
+ou sûreté globale déduite. Paquet834rehashsansécart,23preuves/logs/XML/CSV exportées.
+Aucun autre runtime/processus/créneau réservé ; la revue décide d'une éventuelle
+condition de reproduction contrôlable avant nouvelle autorisation.

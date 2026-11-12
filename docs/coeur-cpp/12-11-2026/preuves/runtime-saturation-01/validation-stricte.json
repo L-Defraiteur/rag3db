@@ -1,0 +1,47 @@
+{
+  "capture_complete_strict": true,
+  "errors": [],
+  "records": {
+    "schema": 1,
+    "sample": 984,
+    "first_meta": 0,
+    "first": 0,
+    "first_saved": 0,
+    "status": 1
+  },
+  "first_saved_valid_prefix": false,
+  "first_meta": null,
+  "first": null,
+  "footer": {
+    "complete": 1,
+    "first_state": 0,
+    "sample_count": 984,
+    "overflow": 0
+  },
+  "samples": 984,
+  "pk_completed_ns_excludes_active_calls": true,
+  "no_cost_exclusion_if_pk_active_positive": true,
+  "xml_exactly_one_requested_test_run": true,
+  "xml_root": {
+    "tests": "1",
+    "failures": "0",
+    "disabled": "0",
+    "errors": "0",
+    "time": "987.526",
+    "timestamp": "2026-11-12T13:40:25.754",
+    "name": "AllTests"
+  },
+  "xml_cases": [
+    {
+      "name": "DdlEveryMinute",
+      "file": "/home/lucied/.cache/rag3weaver-build/cx-build-saturation-12nov-02/source/test/transaction/concurrence/twenty_writers_scenario_test.cpp",
+      "line": "967",
+      "status": "run",
+      "result": "completed",
+      "time": "987.526",
+      "timestamp": "2026-11-12T13:40:25.754",
+      "classname": "TwentyWriters"
+    }
+  ],
+  "xml_failures": []
+}

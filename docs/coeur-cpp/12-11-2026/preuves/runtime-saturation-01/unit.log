@@ -1,0 +1,6 @@
+Running as unit: cx-coeur-runtime-saturation-12nov-01.service
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 16min 28.102s
+             CPU time consumed: 1h 13min 59.884s
+                   Memory peak: 4.2G (swap: 0B)

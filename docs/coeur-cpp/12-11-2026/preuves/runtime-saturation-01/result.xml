@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="1" failures="0" disabled="0" errors="0" time="987.526" timestamp="2026-11-12T13:40:25.754" name="AllTests">
+  <testsuite name="TwentyWriters" tests="1" failures="0" disabled="0" skipped="0" errors="0" time="987.526" timestamp="2026-11-12T13:40:25.754">
+    <testcase name="DdlEveryMinute" file="/home/lucied/.cache/rag3weaver-build/cx-build-saturation-12nov-02/source/test/transaction/concurrence/twenty_writers_scenario_test.cpp" line="967" status="run" result="completed" time="987.526" timestamp="2026-11-12T13:40:25.754" classname="TwentyWriters" />
+  </testsuite>
+</testsuites>
