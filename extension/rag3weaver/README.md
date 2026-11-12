@@ -448,10 +448,19 @@ root. In the chat, the workshop:
   `list_worktrees` gives each one's path, repository, branch, index and explicit context reference;
   nothing is cloned or pushed;
 - searches and navigates an explicitly selected attached context with `search_code`, `grep_files`,
-  `list_files`, `outline`, `usages`, `impact`, `callees` and `schema`. Pass the context returned by
+  `list_files`, `outline`, `navigate_symbols`, `usages`, `impact`, `callees` and `schema`. Pass the context returned by
   `list_worktrees` as `context: {target: {kind: "backend", id: "..."}}`, alongside the usual tool
   arguments (`query` and `options` for search, `path` for outline). Unknown or ambiguous targets,
   self-calls and unsupported views are refused; the runtime never selects the first repository;
+- explores indexed structure with `navigate_symbols(path, mode, symbol, depth, limit, format)`:
+  `file` shows a file root and indexed scopes, `parents`/`children` follow strict range inclusion,
+  and `members` combines direct enclosed scopes with separately labelled declaration/property facts.
+  `symbol` is a UUID or an exact name within the file/source; ambiguous names return candidates.
+  Depth counts edges from the supplied root (0 keeps the root), with depth16,200 output items,
+  2000 input scopes and96KiB caps. Ranges have line precision, not exact AST containment or inheritance;
+  out-of-class methods and missing/untyped members remain explicit coverage limits. The tool checks
+  the current source hash and withholds neighbors for stale or unverifiable indexed files.
+  Use `format: "json"` for qualified references, provenance and limits; no code bodies are returned;
 - follows a command's returned journal with `wait_output`, using the existing bounded journal reader;
 - reads a file 200 lines at a time (`read_file`), or a scope from the index of an attached worktree
   by its name (`read_scope`);

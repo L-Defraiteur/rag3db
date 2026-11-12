@@ -1,5 +1,38 @@
 # Archi — 12 novembre 2026
 
+## État courant — lot symboles de la nuit
+
+Ticket ouvert : `docs/rag3weaver-archi/tickets/2026-11-12-exposer-la-navigation-dans-les-symboles.md`.
+WT `~/.cache/rag3weaver-build/cx-wt-symboles` aux deux postes, target unique PC
+`~/.cache/rag3weaver-build/cx-archi-target`, lib29 complète ; pas de modèle/GPU.
+Branche1 conserve tous les rouges et le vert ciblé30ab48674 ; branche2 repose sur
+master741 avec sa revue préservée et qualification codeparsers a4bf. Diff de rebase
+src/templates vide ; conflit documentaire fusionné sans perdre les deux sections.
+
+Ciblé initial600 (montage, compilation, omission membres, inscription de capacité,
+initialisation hôte et schéma du cas négatif) conservé intégralement. Étape corrective
+DISTINCTE120 autorisée par orchestration :30ab48674 **8/0/0 en1,14s**, unité37,394s.
+Vrai chat à modèle de fixture → outil déclaré → arbre → membres réels (run/typed),
+pas de corps livré ; vrai relais atelier avec contexte backend et vue{} refusée.
+Lecture sans policy.read_files refusée au chargement. Sept témoins purs : profondeur,
+identités/homonymes/sources, fraîcheur, égalités, membres, budgets et compteur ≤2N².
+ELF41bf0591… :223 gabarits inventoriés/aucun absent ; PID714177/start86738286 charge
+native29 dans la scope privéeMax32 ; quiescence[] après. Preuves copiées au portable
+sous les mêmes dossiers `cx-symboles-…-20261112`, rouge≠montage≠vert distingués.
+
+Code commun : nouveau module+adaptateur dataflow, Plan déclaré borné, gabarits code/
+atelier et inscription dans la capacité read_files ; aucun changement IR/parser.
+Membres déclarés/propriétés restent des faits distincts des scopes de plages.
+Qualification IR : docs/codeparsers/12-11-2026/navigation-ir/qualification.md.
+Le ticket global reste ouvert (grep enrichi/exhaustivité/navigation plus riche non livrés).
+Passe adaptée distincte en préparation : F5/minimal, liblarge, NAV, e2e lectures/hôte/
+Postgres sur base privée ; source/recette publiées avant lourd, primitive commune,
+premier rouge stop. Aucun master avant revue et tour explicite.
+
+Les sections d'accord ci-dessous sont l'historique du lot livré (masteradcf01128527),
+nettoyé aux deux postes avec garde fraîche/archives fidèles, preuves conservées.
+
+
 ## Lot autorisé en cours : accord de commande hors domaine
 
 Ticket canonique :
