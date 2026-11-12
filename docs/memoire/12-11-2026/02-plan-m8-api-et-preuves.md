@@ -45,3 +45,9 @@ Corrections complémentaires à vérifier : absence distincte de null dans la s�
 Le cfg isolé `80faa48385` est intégré sur master `3b2eab7ec` avec la preuve partagée Arbre (lib2167/0/64, témoin natif exact passé) ; le ticket tty global reste ouvert pour ses deux helpers préexistants. Le second target cfg, créé par erreur, reste inactif et inventorié (~1,4Go), sans suppression ; les prochains Cargo utilisent exclusivement le target M8 séquentiellement.
 
 Deuxième ciblé, source `1f389afb528fddfdbddeeb582c8f20bc76b035e9`, preuves luciepc `preuves-m8-cibles-20261112-02` : fusion **5/0/0**, plan **14 réussites/1 échec/0 ignoré**, arrêt. Les huit échecs précédents sont levés. Le nouveau témoin Landlock refuse dès la désérialisation car sa fixture omet `workspace.source` ; correction de la fixture en working_tree, contrôle commun inchangé. Lecteur/régressions toujours non exécutés à ce stade.
+
+## Ciblés verts de la tranche
+
+Source exacte `caef19714b6edcef70961d6332b09528db4f0a91`, luciepc, poste lourd32G, -j8, lib29 complète, features rag3db-native,code, target M8 unique : fusion **5/0/0**, plan **15/0/0**, lecteur **5/0/0**, builtin_templates **9/0/0**, refus du chargeur foreach **1/0/0**. Total **35 passés, zéro échec, zéro ignoré**. Preuves : `~/.cache/rag3weaver-build/preuves-m8-cibles-20261112-03/` (journaux, verdict VERT, ELF et empreinte hors target). Aucun service/modèle/base réelle ouvert par ces ciblés.
+
+Ce vert ciblé ne remplace pas la revue du diff ni une passe globale. Avant globale : rebase sur le master actualisé, branche neuve et comparaison du diff ; attendre la consigne de l’orchestration. Adoption persistée, application et activation réelles restent hors tranche.
