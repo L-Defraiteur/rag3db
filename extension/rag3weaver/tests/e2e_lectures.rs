@@ -8,6 +8,22 @@
 use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
+/// Le reçu de l'outil porte le chemin ; sa racine n'est pas un contrat.
+/// Backend et hôte enveloppent le même résultat dans un ou deux `result`.
+fn journal_de_l_index(recu: &serde_json::Value) -> std::path::PathBuf {
+    let mut resultat = recu;
+    while let Some(interieur) = resultat.get("result") {
+        resultat = interieur;
+    }
+    let chemin = resultat.get("journal").and_then(serde_json::Value::as_str).or_else(|| {
+        resultat.as_str()?.lines().find_map(|ligne| ligne.strip_prefix("journal : "))
+    }).unwrap_or_else(|| panic!("le journal de l'index dans son reçu : {recu}"));
+    let chemin = std::path::PathBuf::from(chemin);
+    assert_eq!(chemin.extension().and_then(|s| s.to_str()), Some("out"), "le journal de l'index : {recu}");
+    assert_eq!(chemin.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()), Some("index"), "le journal de l'index : {recu}");
+    chemin
+}
+
 fn compte(cat: &Catalog, lecture: bool) -> i64 {
     let q = "MATCH (n:Essai) RETURN count(n)";
     let r = if lecture { cat.execute_read_with_params(q, &[]) } else { cat.execute_raw(q) };
@@ -197,12 +213,8 @@ fn les_outils_de_lecture_du_code_n_attendent_pas_l_ecrivain() {
 
     // L'index, jusqu'à sa ligne de fin dans son journal.
     let texte = |r: &Value| r.to_string();
-    let lance = texte(&backend.call("index", json!({"confirm": true})).expect("index lancé"));
-    let journal = lance
-        .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
-        .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
-        .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
-        .to_string();
+    let lance = backend.call("index", json!({"confirm": true})).expect("index lancé");
+    let journal = journal_de_l_index(&lance);
     let debut = Instant::now();
     loop {
         let lu = std::fs::read_to_string(&journal).unwrap_or_default();
@@ -272,12 +284,8 @@ fn outline_rend_le_plan_d_un_fichier_par_un_plan_declare() {
     let prepared = PreparedBackend::load(&chemin).expect("le manifeste charge, son Plan sur Scope compris");
     let base = prepared.path(&prepared.manifest.database);
     let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("la base")), None).expect("l'ouverture");
-    let lance = backend.call("index", json!({"confirm": true})).expect("index lancé").to_string();
-    let journal = lance
-        .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
-        .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
-        .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
-        .to_string();
+    let lance = backend.call("index", json!({"confirm": true})).expect("index lancé");
+    let journal = journal_de_l_index(&lance);
     let debut = Instant::now();
     while !std::fs::read_to_string(&journal).unwrap_or_default().contains("indexation terminée") {
         assert!(debut.elapsed() < Duration::from_secs(120), "l'index n'a pas fini");
@@ -315,12 +323,8 @@ fn outline_en_json_rend_les_lignes_du_plan_son_total_et_sa_provenance() {
     let prepared = PreparedBackend::load(&chemin).expect("le manifeste charge");
     let base = prepared.path(&prepared.manifest.database);
     let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("la base")), None).expect("l'ouverture");
-    let lance = backend.call("index", json!({"confirm": true})).expect("index lancé").to_string();
-    let journal = lance
-        .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
-        .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
-        .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
-        .to_string();
+    let lance = backend.call("index", json!({"confirm": true})).expect("index lancé");
+    let journal = journal_de_l_index(&lance);
     let debut = Instant::now();
     while !std::fs::read_to_string(&journal).unwrap_or_default().contains("indexation terminée") {
         assert!(debut.elapsed() < Duration::from_secs(120), "l'index n'a pas fini");
@@ -414,12 +418,8 @@ fn un_outil_de_lecture_ne_prend_jamais_le_mutex_du_catalogue() {
     ok(host.open(Some(&s), &m));
 
     // L'index, jusqu'à sa ligne de fin dans son journal.
-    let lance = ok(host.call(Some(&s), &m, "index", json!({"confirm": true}))).to_string();
-    let journal = lance
-        .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
-        .find(|x| x.contains("commandes/index/") && x.ends_with(".out"))
-        .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
-        .to_string();
+    let lance = ok(host.call(Some(&s), &m, "index", json!({"confirm": true})));
+    let journal = journal_de_l_index(&lance);
     let debut = Instant::now();
     loop {
         let lu = std::fs::read_to_string(&journal).unwrap_or_default();
@@ -510,12 +510,8 @@ fn mesure_des_instantanes_sur_un_vrai_depot() {
     };
     ok(host.open(Some(&s), &m));
     let t = Instant::now();
-    let lance = ok(host.call(Some(&s), &m, "index", json!({"confirm": true}))).to_string();
-    let journal = lance
-        .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
-        .find(|x| x.contains("commandes/index/") && x.ends_with(".out"))
-        .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
-        .to_string();
+    let lance = ok(host.call(Some(&s), &m, "index", json!({"confirm": true})));
+    let journal = journal_de_l_index(&lance);
     loop {
         let lu = std::fs::read_to_string(&journal).unwrap_or_default();
         if lu.contains("indexation terminée") {
@@ -676,12 +672,8 @@ fn code_indexe_avec_vecteurs_sur(dir: &std::path::Path, nom: &str, depot: Option
     let backend = prepared
         .open(Box::new(Rag3dbConnection::new(&base).expect("la base")), Some(Box::new(GraniteDeHachage(HashEmbedder::new(768)))))
         .expect("l'ouverture");
-    let lance = backend.call("index", json!({"confirm": true})).expect("index lancé").to_string();
-    let journal = lance
-        .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
-        .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
-        .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
-        .to_string();
+    let lance = backend.call("index", json!({"confirm": true})).expect("index lancé");
+    let journal = journal_de_l_index(&lance);
     let debut = Instant::now();
     loop {
         let lu = std::fs::read_to_string(&journal).unwrap_or_default();
@@ -1147,12 +1139,8 @@ fn la_premiere_recherche_apres_l_ouverture_dit_ou_est_le_plein_texte() {
     };
     {
         let mut backend = ouvrir();
-        let lance = backend.call("index", json!({"confirm": true})).expect("index lancé").to_string();
-        let journal = lance
-            .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
-            .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
-            .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
-            .to_string();
+        let lance = backend.call("index", json!({"confirm": true})).expect("index lancé");
+        let journal = journal_de_l_index(&lance);
         let debut = Instant::now();
         loop {
             let lu = std::fs::read_to_string(&journal).unwrap_or_default();
@@ -1453,12 +1441,8 @@ fn le_creux_ne_s_embarque_qu_au_surlignage() {
         .open(Box::new(Rag3dbConnection::new(&base).expect("la base")), Some(Box::new(GraniteDeHachage(HashEmbedder::new(768)))))
         .expect("l'ouverture");
     assert!(backend.avertissements().is_empty(), "le service creux est joint : {:?}", backend.avertissements());
-    let lance = backend.call("index", json!({"confirm": true})).expect("index lancé").to_string();
-    let journal = lance
-        .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
-        .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
-        .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
-        .to_string();
+    let lance = backend.call("index", json!({"confirm": true})).expect("index lancé");
+    let journal = journal_de_l_index(&lance);
     let debut = Instant::now();
     loop {
         let lu = std::fs::read_to_string(&journal).unwrap_or_default();
@@ -1473,12 +1457,8 @@ fn le_creux_ne_s_embarque_qu_au_surlignage() {
     assert_eq!(appels.load(Ordering::SeqCst), 0, "l'indexation n'appelle jamais le creux");
 
     // La réindexation d'un fichier modifié : le même nœud d'embarquement, toujours sans creux.
-    let attendre_l_index = |lance: String| {
-        let journal = lance
-            .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
-            .find(|m| m.contains("commandes/index/") && m.ends_with(".out"))
-            .unwrap_or_else(|| panic!("le journal de l'index : {lance}"))
-            .to_string();
+    let attendre_l_index = |lance: serde_json::Value| {
+        let journal = journal_de_l_index(&lance);
         let debut = Instant::now();
         loop {
             let lu = std::fs::read_to_string(&journal).unwrap_or_default();
@@ -1493,7 +1473,7 @@ fn le_creux_ne_s_embarque_qu_au_surlignage() {
     // Le dépôt indexé est la copie sous la racine du workspace (`manifeste_code_sur`).
     let racine = std::path::PathBuf::from(v["workspace"]["root"].as_str().expect("la racine du workspace"));
     std::fs::write(racine.join("src/fusion.rs"), "/// La fusion des rangs réciproques, k = 60.\npub fn fusion_des_rangs() -> u32 {\n    60\n}\n").unwrap();
-    attendre_l_index(backend.call("index", json!({"confirm": true})).expect("réindex lancé").to_string());
+    attendre_l_index(backend.call("index", json!({"confirm": true})).expect("réindex lancé"));
     eprintln!("[creux à la demande] après une réindexation : {} appel(s)", appels.load(Ordering::SeqCst));
     assert_eq!(appels.load(Ordering::SeqCst), 0, "la réindexation n'appelle jamais le creux");
 
@@ -1685,4 +1665,34 @@ fn une_ligne_collee_de_120_caracteres_retrouve_son_fichier() {
         premier["signals"].as_array().is_some_and(|s| s.iter().any(|x| x["label"] == "bm25_exact")),
         "par le signal exact (la requête entière) : {premier}"
     );
+}
+
+#[cfg(test)]
+mod recu_index {
+    use super::journal_de_l_index;
+    use serde_json::json;
+
+    #[test]
+    fn le_chemin_du_recu_garde_espaces_et_echappements_sans_racine_imposee() {
+        let chemin = "/prive/racine arbitraire-é/index/un \"journal\"\\.out";
+        for resultat in [json!({"journal": chemin}), json!(format!("indexation lancée en fond.\njournal : {chemin}\nSuivre : wait(journal)"))] {
+            for recu in [resultat.clone(), json!({"result": resultat.clone()}), json!({"ok": true, "result": {"result": resultat.clone()}})] {
+                // Aller-retour réel du transport JSON : aucun découpage des échappements.
+                let recu = serde_json::from_str(&recu.to_string()).unwrap();
+                assert_eq!(journal_de_l_index(&recu), std::path::PathBuf::from(chemin));
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "le journal de l'index dans son reçu")]
+    fn une_autre_mention_de_chemin_ne_remplace_pas_le_recu() {
+        journal_de_l_index(&json!({"result": "échec : /prive/index/ancien.out"}));
+    }
+
+    #[test]
+    #[should_panic(expected = "le journal de l'index")]
+    fn le_recu_d_un_autre_journal_ne_passe_pas_pour_l_index() {
+        journal_de_l_index(&json!({"journal": "/prive/autre/tache.out"}));
+    }
 }
