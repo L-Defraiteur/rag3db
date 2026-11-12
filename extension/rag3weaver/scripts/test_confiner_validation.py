@@ -175,6 +175,30 @@ class Montage(unittest.TestCase):
             self.assertEqual(argv[argv.index('--delai') + 1], '29')
             self.assertEqual(argv[-2:], ['bash', str(entry)])
 
+    def test_rebati_exclusif_basse_priorite_et_mesure_normale(self):
+        w = self.p / 'weaver-priorite'
+        scripts = w / 'scripts'
+        scripts.mkdir(parents=True)
+        entry = w / 'run_e2e.sh'
+        entry.write_bytes((ICI.parent/'run_e2e.sh').read_bytes())
+        (scripts/'confiner_validation.py').write_text("import sys,json,os\nif sys.argv[1]=='verifier':sys.exit(1)\nopen(os.environ['TRACE'],'w').write(json.dumps(sys.argv[1:]))\nsys.exit(23)\n")
+        for args, mesure in [(['--build'], False), (['--build-only'], False), ([], True), (['--build'], True)]:
+            with self.subTest(args=args, mesure=mesure):
+                trace = self.p/'trace-priorite'
+                env = dict(os.environ, TRACE=str(trace), RAG3WEAVER_VALIDATION_TIMEOUT='29')
+                env.pop('RAG3WEAVER_MESURE', None)
+                if mesure:
+                    env['RAG3WEAVER_MESURE'] = '1'
+                r = subprocess.run(['bash', str(entry), *args], env=env, capture_output=True)
+                self.assertEqual(r.returncode, 23, r.stderr)
+                argv = json.loads(trace.read_text())
+                self.assertEqual(argv[argv.index('--mode')+1], 'mesure')
+                command = argv[argv.index('--')+1:]
+                attendu = ['bash', str(entry), *args]
+                if not mesure:
+                    attendu = ['nice', '-n', '15', 'ionice', '-c', '3', *attendu]
+                self.assertEqual(command, attendu)
+
     def cas_processus(self, source, delai=5, plafond=None):
         # Faux helper bus : lance de vrais petits processus CPU privés, aucun IPC réseau.
         helper = self.p / 'bus-factice'

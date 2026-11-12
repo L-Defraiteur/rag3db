@@ -72,8 +72,14 @@ if ! python3 "$CONFINEUR" verifier >/dev/null 2>&1; then
     case "$a" in --build|--build-only) mode_validation=mesure ;; esac
   done
   [ "${RAG3WEAVER_MESURE:-}" != 1 ] || mode_validation=mesure
+  commande_validation=(bash "$0" "$@")
+  # Un rebâti ordinaire est exclusif ET discret ; seule une mesure demandée
+  # garde la priorité normale. `poste lourd` pose lui-même la priorité basse.
+  if [ "$mode_validation" = mesure ] && [ "${RAG3WEAVER_MESURE:-}" != 1 ]; then
+    commande_validation=(nice -n 15 ionice -c 3 "${commande_validation[@]}")
+  fi
   exec python3 "$CONFINEUR" lancer --mode "$mode_validation" \
-    --delai "${RAG3WEAVER_VALIDATION_TIMEOUT:-18000}" -- bash "$0" "$@"
+    --delai "${RAG3WEAVER_VALIDATION_TIMEOUT:-18000}" -- "${commande_validation[@]}"
 fi
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
