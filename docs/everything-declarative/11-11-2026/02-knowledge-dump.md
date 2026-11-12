@@ -246,3 +246,18 @@ conflits de même champ ou d’extrémités, identités/configs d’entités div
 refusés par nom avant DB. Les espaces de noms entité/relation restent distincts.
 L’association search_index de1a reste un raccord de lecture, jamais une dépendance
 de création inverse ; sa preuve publique appartient au ticket transféré ouvert.
+
+### Reprise parcours agent IDE, nuit du 12 au 13
+
+Source initiale `36e284824`, branche/worktrees `cx-ed-parcours-agent-ide`, ticket
+`../tickets/2026-11-12-prouver-le-parcours-agent-de-code-complet-de-l-ide.md`.
+Le témoin réel historique ne qualifiait que l’édition. Le nouveau témoin exige
+les résultats d’outils, un test Cargo nommé immuable et la reprise par
+`relire_les_taches` + `reread_chats` après destruction de l’hôte. Le gabarit code
+possède déjà les racines Rust en lecture et Cargo offline ; sa fixture désactive
+`catch_up_on_open` pour ne pas lancer d’index vectoriel. Aucun consentement humain
+synthétique. Le préfixe ne prouve pas encore les bindings HTTP/UI.
+Preuves/logs/supervision/fixture persistante : dossier privé PC
+`I-luciepc/parcours-agent-ide-20261112` sous le cache des builds. Garder les rouges,
+ne pas relancer à l’identique. Compilation et appel cloud initial en cours,
+aucune réussite acquise à cette écriture.
