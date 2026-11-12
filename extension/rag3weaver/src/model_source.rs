@@ -665,6 +665,67 @@ mod tests {
         Builders { local: Some(&local), service: Some(&service), compatible: Some(&compatible) }
     }
 
+    fn source_gabarit_bge(nom: &str) -> ModelSource {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("templates/backends").join(nom).join("backend.json");
+        let manifeste: crate::backend::BackendManifest = serde_json::from_slice(&std::fs::read(p).unwrap()).unwrap();
+        manifeste.embed_source().unwrap()
+    }
+
+    #[test]
+    fn gabarits_bge_choisissent_le_modele_dans_les_adresses_du_poste() {
+        for nom in ["notebook", "validated-result"] {
+            let source = source_gabarit_bge(nom);
+            assert_eq!((source.provider, source.model.as_str(), source.dimensions, source.fallback),
+                (Provider::Service, "bge-m3", Some(1024), Fallback::Refuse));
+            assert!(source.address.is_empty(), "{nom} ne doit pas imposer le port d'un autre poste : {:?}", source.address);
+            let env = |k: &str| (k == "RAG3WEAVER_SERVICE_EMBED").then(|| "a:1,b:1".to_string());
+            let (client, origine) = resolve(Capability::Embed, &source, &all(), &env).unwrap();
+            assert_eq!((client, origine), ("client de b".into(), Origin::Service("b:1".into())));
+            let alias = |k: &str| (k == "RAG3WEAVER_EMBED_SERVICE").then(|| "a:1,b:1".to_string());
+            let (_, origine) = resolve(Capability::Embed, &source, &all(), &alias).unwrap();
+            assert_eq!(origine, Origin::Service("b:1".into()));
+            let commune_et_alias = |k: &str| match k {
+                "RAG3WEAVER_SERVICE_EMBED" => Some("b:1".to_string()),
+                "RAG3WEAVER_EMBED_SERVICE" => Some("a:1".to_string()),
+                _ => None,
+            };
+            assert_eq!(source.addresses(Capability::Embed, &commune_et_alias), ["b:1"]);
+        }
+    }
+
+    #[test]
+    fn gabarits_bge_refusent_sans_fournisseur_compatible_et_sans_repli_implicite() {
+        let appels_locaux = std::cell::Cell::new(0);
+        let local = |_: &ModelSource| { appels_locaux.set(appels_locaux.get() + 1); Ok("local interdit".to_string()) };
+        let builders = Builders { local: Some(&local), service: Some(&service), compatible: None };
+        for nom in ["notebook", "validated-result"] {
+            let source = source_gabarit_bge(nom);
+            let erreur = resolve(Capability::Embed, &source, &builders, &no_env).unwrap_err();
+            assert!(erreur.contains("models.embed (bge-m3)") && erreur.contains("RAG3WEAVER_SERVICE_EMBED"), "{nom}: {erreur}");
+            let mauvais = ModelSource { address: Addresses::parse("a:1"), ..source.clone() };
+            let env_bge = |k: &str| (k == "RAG3WEAVER_SERVICE_EMBED").then(|| "b:1".to_string());
+            let erreur = resolve(Capability::Embed, &mauvais, &builders, &env_bge).unwrap_err();
+            assert!(erreur.contains("bge-m3") && erreur.contains("a:1 sert granite-278m"), "{erreur}");
+            assert_eq!(mauvais.addresses(Capability::Embed, &env_bge), ["a:1"], "l'environnement ne remplace pas une adresse explicitement écrite");
+            assert_eq!(source.dimensions, Some(1024));
+        }
+        assert_eq!(appels_locaux.get(), 0, "aucune construction de modèle local");
+    }
+
+    #[test]
+    fn gabarits_bge_qualifient_les_signaux_sans_ouvrir_la_base() {
+        for (nom, requis) in [("notebook", true), ("validated-result", false)] {
+            let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("templates/backends").join(nom).join("backend.json");
+            let prepared = crate::backend::PreparedBackend::load(&p).unwrap();
+            assert_eq!(prepared.needs_embeddings(), requis, "{nom}");
+            assert_eq!(prepared.embed_source().model, "bge-m3");
+            assert_eq!(prepared.embed_source().dimensions, Some(1024));
+            assert!(!prepared.path(&prepared.manifest.database).exists(), "le chargement déclaratif n'ouvre pas la base");
+        }
+    }
+
     #[test]
     fn la_declaration_se_lit_et_garde_le_nom_d_avant() {
         let s: ModelSource = serde_json::from_str(r#"{"model":"granite-278m"}"#).unwrap();
