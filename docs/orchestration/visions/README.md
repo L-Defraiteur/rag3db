@@ -17,6 +17,10 @@ dossiers ne tiennent plus ; l'histoire est là, pas l'état).
 
 ## Les visions de novembre 2026 (pages de conception, laissées dans leurs dossiers de session)
 
+- **Vitrine produit, référence CocoIndex** — choix de Lucie le 12 novembre pour le design et
+  la présentation du framework : promesse lisible, démonstrations concrètes et accès progressif
+  au modèle. Site à planifier, aucune publication engagée :
+  [direction de présentation](2026-11-12-vitrine-produit-reference-cocoindex.md).
 - **Applications déclaratives et contrats d’effets** — avis d’architecture du 11 novembre :
   distinguer application, déploiement et autorisation ; examiner les effets et la provenance des
   compositions, puis en dériver des preuves techniques. Vision future, aucun nouveau chantier lancé :
