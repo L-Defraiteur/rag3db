@@ -1,12 +1,12 @@
 # Attendre la disparition du port après l’arrêt du privé 7882
 
-- **État** : en cours — correctif isolé dans cx-optimiseur-attente-port ; aucun service réel ni modèle activé.
+- **État** : corrigé 62640bd42 — attente PID/port dans une borne commune, 14 filets CPU verts aux deux postes ; aucun service réel ni modèle activé.
 - **Famille** : produit
 - **Gravité** : coût — faux rouge du wrapper après arrêt effectif, coordination interrompue trop tôt.
 - **Atteignable en service** : non pour le produit ; script opérateur d’arrêt/restauration du banc.
 - **Touche rag3weaver** : oui, exploitation du privé d’embarquement 7882.
 - **Pour** : optimiseur
-- **Signalé par** : banc, [mesure k10](../../tickets/closed/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
+- **Signalé par** : banc, [mesure k10](2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
 - **Ouvert le** : 12 novembre 2026
 
 ## Constat et preuves

@@ -12,7 +12,8 @@ Rouge reproduit sur le vrai bloc historique ; 14 filets CPU verts au portable
 et à luciepc (sous poste lourd), sources figées et preuves dans
 `~/.cache/optimiseur-notes/attente-port-12nov/` aux deux postes.
 Ticket et critères :
-`docs/optimiseur/tickets/2026-11-12-attendre-la-disparition-du-port-apres-l-arret-du-prive-7882.md`.
+`docs/tickets/closed/2026-11-12-attendre-la-disparition-du-port-apres-l-arret-du-prive-7882.md`
+(correctif 62640bd42).
 La revue et l’intégration de ce lot ne valent pas activation d’un service.
 
 ## Mise à jour du 11 novembre, après 22 h 04

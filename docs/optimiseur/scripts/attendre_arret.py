@@ -1,6 +1,6 @@
 """Fin du PID identifié et libération du listener sous une seule deadline.
 
-Ticket : docs/optimiseur/tickets/2026-11-12-attendre-la-disparition-du-port-apres-l-arret-du-prive-7882.md
+Ticket : docs/tickets/closed/2026-11-12-attendre-la-disparition-du-port-apres-l-arret-du-prive-7882.md
 Ce module observe seulement : il n'envoie aucun signal et ne relance rien.
 """
 from pathlib import Path
