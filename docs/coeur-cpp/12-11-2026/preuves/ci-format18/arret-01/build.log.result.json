@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "cmake",
+    "--build",
+    "/home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-01/build",
+    "--target",
+    "transaction_test",
+    "rag3db_shell",
+    "rag3db_vector_extension",
+    "rag3db_geo_extension",
+    "-j",
+    "8"
+  ],
+  "pid": 705084,
+  "returncode": 0,
+  "elapsed_s": 158.26207478402648,
+  "waited": true
+}

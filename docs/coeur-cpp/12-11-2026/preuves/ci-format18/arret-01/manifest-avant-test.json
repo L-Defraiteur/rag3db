@@ -1,0 +1,34 @@
+{
+  "source_commit": "74ad9c25cd2a63e01abd54f25314992cda6fea60",
+  "build_id_header": "// G\u00e9n\u00e9r\u00e9 par cmake/build_id.cmake \u00e0 chaque b\u00e2ti ; ne pas \u00e9diter.\n#pragma once\n\n#define RAG3DB_BUILD_ID \"rag3db-build-74ad9c25cd2a63e01abd54f25314992cda6fea60-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF\"\n",
+  "system_config_header": "/*\n * This is a template header used for generating the header 'system_config.h'\n * Any value in the format  can be substituted with a value passed into CMakeLists.txt\n * See https://cmake.org/cmake/help/latest/command/configure_file.html for more details\n */\n\n#pragma once\n\n#include <algorithm>\n#include <cstdint>\n\n#include \"common/enums/extend_direction.h\"\n\n#define BOTH_REL_STORAGE 0\n#define FWD_REL_STORAGE 1\n#define BWD_REL_STORAGE 2\n\nnamespace rag3db {\nnamespace common {\n\n#define VECTOR_CAPACITY_LOG_2 11\n#if VECTOR_CAPACITY_LOG_2 > 12\n#error \"Vector capacity log2 should be less than or equal to 12\"\n#endif\nconstexpr uint64_t DEFAULT_VECTOR_CAPACITY = static_cast<uint64_t>(1) << VECTOR_CAPACITY_LOG_2;\n\n// Currently the system supports files with 2 different pages size, which we refer to as\n// PAGE_SIZE and TEMP_PAGE_SIZE. PAGE_SIZE is the default size of the page which is the\n// unit of read/write to the database files.\nstatic constexpr uint64_t PAGE_SIZE_LOG2 = 12; // Default to 4KB.\nstatic constexpr uint64_t RAG3DB_PAGE_SIZE = static_cast<uint64_t>(1) << PAGE_SIZE_LOG2;\n// Page size for files with large pages, e.g., temporary files that are used by operators that\n// may require large amounts of memory.\nstatic constexpr uint64_t TEMP_PAGE_SIZE_LOG2 = 18;\nstatic const uint64_t TEMP_PAGE_SIZE = static_cast<uint64_t>(1) << TEMP_PAGE_SIZE_LOG2;\n\n#define DEFAULT_REL_STORAGE_DIRECTION BOTH_REL_STORAGE\n#if DEFAULT_REL_STORAGE_DIRECTION == FWD_REL_STORAGE\nstatic constexpr ExtendDirection DEFAULT_EXTEND_DIRECTION = ExtendDirection::FWD;\n#elif DEFAULT_REL_STORAGE_DIRECTION == BWD_REL_STORAGE\nstatic constexpr ExtendDirection DEFAULT_EXTEND_DIRECTION = ExtendDirection::BWD;\n#else\nstatic constexpr ExtendDirection DEFAULT_EXTEND_DIRECTION = ExtendDirection::BOTH;\n#endif\n\nstruct StorageConfig {\n    static constexpr uint64_t NODE_GROUP_SIZE_LOG2 = 17;\n    static constexpr uint64_t NODE_GROUP_SIZE = static_cast<uint64_t>(1) << NODE_GROUP_SIZE_LOG2;\n    // The number of CSR lists in a leaf region.\n    static constexpr uint64_t CSR_LEAF_REGION_SIZE_LOG2 =\n        std::min(static_cast<uint64_t>(10), NODE_GROUP_SIZE_LOG2 - 1);\n    static constexpr uint64_t CSR_LEAF_REGION_SIZE = static_cast<uint64_t>(1)\n                                                     << CSR_LEAF_REGION_SIZE_LOG2;\n    static constexpr uint64_t CHUNKED_NODE_GROUP_CAPACITY =\n        std::min(static_cast<uint64_t>(2048), NODE_GROUP_SIZE);\n\n    // Maximum size for a segment in bytes\n    static constexpr uint64_t MAX_SEGMENT_SIZE_LOG2 = 18;\n    static constexpr uint64_t MAX_SEGMENT_SIZE = 1 << MAX_SEGMENT_SIZE_LOG2;\n};\n\nstruct OrderByConfig {\n    static constexpr uint64_t MIN_SIZE_TO_REDUCE = common::DEFAULT_VECTOR_CAPACITY * 5;\n};\n\nstruct CopyConfig {\n    static constexpr uint64_t PANDAS_PARTITION_COUNT = 50 * DEFAULT_VECTOR_CAPACITY;\n};\n\n} // namespace common\n} // namespace rag3db\n\n#undef BOTH_REL_STORAGE\n#undef FWD_REL_STORAGE\n#undef BWD_REL_STORAGE\n",
+  "files": {
+    "transaction_test": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-01/build/test/transaction/transaction_test",
+      "bytes": 31679496,
+      "sha256": "a1b54e0c533b755a0d05bbceaf50fd2fd81a65574c657f24222fec24d2a54fa3"
+    },
+    "rag3db_shell": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-01/build/tools/shell/rag3db",
+      "bytes": 26843336,
+      "sha256": "9751d88a42fd299059c0c77ae5d54924b6a3e28e36717535d3f584b74ce5c6c3"
+    },
+    "engine.a": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-01/build/src/librag3db.a",
+      "bytes": 65691594,
+      "sha256": "568193afc1e484448f1c79afa688332d3218316fa65fadcc8b95a1b6027a452e"
+    },
+    "vector": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-01/source/extension/vector/build/libvector.rag3db_extension",
+      "bytes": 958160,
+      "sha256": "4944cb701f974bb91c0809ad614512c7407cf25f703f9d155409d6794e37afa4"
+    },
+    "geo": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-01/source/extension/geo/build/libgeo.rag3db_extension",
+      "bytes": 393872,
+      "sha256": "1d0a8ff5a69503f77bf279639f0435190d5bfa37b1539ba651607e37428e87bd"
+    }
+  },
+  "cache_sha256": "e21a5e9a89f698d88e9ce2d7b8b352b0fb66622e6e0e022961b2fff5b87215f1",
+  "compile_commands_sha256": "657094593daf99210235c42963dbd9b924d349e8066e1693336f466613e4d5aa"
+}

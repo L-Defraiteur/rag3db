@@ -110,3 +110,11 @@ exposées ; --dry-run du script imprime seulement les commandes, règle de passe
 corrigée dans le knowledge dump. Bâti privé/transaction_test à suivre sous recette
 2400s/j8/Max32G/scratch32G, source et lib distribuée séparées, aucun master autorisé
 avant revue/tour explicite. Clôture toujours suspendue à CI future effectivement verte.
+
+Premier bâti privé74ad :1099étapes/4cibles réussies, puis EROFS du runner créant
+ses répertoires après gelRO ; **0test exécuté**, pas un rougeC++/transaction.
+[Arrêt01 et delta de préparation](../../coeur-cpp/12-11-2026/23-ci-format18-arret-preparation-et-delta-runner.md) :
+logs/manifeste conservés, poste rendu. Source/flags inchangés ; créer/binder les
+seules sorties test privées avant gel, conserver artefacts avant tests. Budget
+2400cumulé sansreset :161,855consommées, secondeunité2220+10max. Aucun replay
+inchangé/libposée/tracebloquée. Ticket ouvert, pas de vert des tests avant exécution.
