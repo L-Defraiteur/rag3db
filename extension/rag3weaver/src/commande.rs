@@ -20,6 +20,8 @@
 //! qu'elle fait : elle n'entrera jamais dans une liste blanche.
 
 use std::collections::BTreeSet;
+#[cfg(feature = "code")]
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 // ─── Ce qu'on exécute ────────────────────────────────────────────────────────
@@ -468,7 +470,7 @@ pub struct Garde {
     acquis: Autorisations,
     /// Accords explicites : ligne complète exacte et domaine résolu, jamais une famille.
     #[cfg(feature = "code")]
-    lignes_accordees: Mutex<BTreeSet<(String, Option<std::path::PathBuf>)>>,
+    lignes_accordees: Mutex<BTreeMap<(String, Option<std::path::PathBuf>), Portee>>,
     /// Les sorties du domaine refusées d'affilée — remis à zéro par tout
     /// verdict accordé. Un modèle fort épuise les formulations après un
     /// refus (passe Gemini du 3 octobre : quinze itérations pour y
@@ -483,7 +485,7 @@ impl Garde {
             sentinelle: Box::new(SentinelleDeBase),
             acquis: Autorisations::new(),
             #[cfg(feature = "code")]
-            lignes_accordees: Mutex::new(BTreeSet::new()),
+            lignes_accordees: Mutex::new(BTreeMap::new()),
             hors_domaine_consecutifs: std::sync::atomic::AtomicUsize::new(0),
         }
     }
@@ -516,15 +518,17 @@ impl Garde {
         if invocations.is_empty() { return Err("rien à accorder".into()); }
         let sans_accord = Contexte { accorde_par_l_utilisateur: false, ..ctx.clone() };
         let mut accordees = Vec::new();
+        let mut portee = Portee::CetteCommande;
         for invocation in invocations {
             let commande: Commande = invocation.into();
             let verdict = self.sentinelle.juger(&commande, &sans_accord).borner();
             if verdict.decision == Decision::Refuse || verdict.faits.shell {
                 return Err(format!("`{}` : {}", commande.lisible(), verdict.motif));
             }
+            if verdict.portee == Portee::CetteFois { portee = Portee::CetteFois; }
             accordees.push(commande.lisible());
         }
-        self.lignes_accordees.lock().unwrap().insert(cle);
+        self.lignes_accordees.lock().unwrap().insert(cle, portee);
         Ok(accordees)
     }
 
@@ -539,8 +543,16 @@ impl Garde {
     /// isolé à `autoriser` ne peut pas réutiliser les droits de ses parties.
     #[cfg(feature = "code")]
     pub fn autoriser_ligne(&self, ligne: &str, ctx: &Contexte) -> Result<Vec<Autorisee>, String> {
-        let verdict = self.juger_ligne(ligne, ctx).map_err(|e| e.to_string())?;
+        let cle = Self::cle_ligne(ligne, ctx).ok();
+        // Garder le verrou du choix de portée à la création des laissez-passer :
+        // deux appels concurrents ne consomment pas le même accord CetteFois.
+        let mut accords = self.lignes_accordees.lock().unwrap();
+        let accord = cle.as_ref().and_then(|cle| accords.get(cle).copied());
+        let verdict = self.juger_ligne_avec_accord(ligne, ctx, accord).map_err(|e| e.to_string())?;
         if verdict.decision != Decision::Autorise { return Err(verdict.motif); }
+        if accord.is_some() && verdict.parties.iter().any(|(_, v)| v.portee == Portee::CetteFois) {
+            if let Some(cle) = cle { accords.remove(&cle); }
+        }
         Ok(verdict.parties.into_iter().map(|(commande, _)| Autorisee(commande)).collect())
     }
 
@@ -684,22 +696,26 @@ impl Garde {
     /// `git status && rm -rf ~` n'est pas « une commande qui commence par
     /// git status », ce sont deux commandes, et la seconde décide.
     pub fn juger_ligne(&self, ligne: &str, ctx: &Contexte) -> Result<VerdictLigne, LigneRefusee> {
+        let accord = Self::cle_ligne(ligne, ctx).ok()
+            .and_then(|cle| self.lignes_accordees.lock().unwrap().get(&cle).copied());
+        self.juger_ligne_avec_accord(ligne, ctx, accord)
+    }
+
+    fn juger_ligne_avec_accord(&self, ligne: &str, ctx: &Contexte, accord: Option<Portee>) -> Result<VerdictLigne, LigneRefusee> {
         let invocations = codeparsers::shell::decomposer(ligne)
             .map_err(|r| LigneRefusee::NonReduite(r.to_string()))?;
 
-        let accord = Self::cle_ligne(ligne, ctx).ok()
-            .is_some_and(|cle| self.lignes_accordees.lock().unwrap().contains(&cle));
         let mut parties = Vec::new();
         for inv in invocations {
             let c: Commande = inv.into();
-            let v = if accord {
+            let v = if let Some(portee) = accord {
                 // Réévaluer les refus structurels sans retenir de famille.
                 let sans_accord = Contexte { accorde_par_l_utilisateur: false, ..ctx.clone() };
                 let v = self.sentinelle.juger(&c, &sans_accord).borner();
                 if v.decision == Decision::Refuse || v.faits.shell { v } else {
-                    Verdict { decision: Decision::Autorise, portee: Portee::CetteFois,
+                    Verdict { decision: Decision::Autorise, portee,
                         fondement: Fondement::UtilisateurExplicite,
-                        motif: "ligne exacte déjà accordée dans ce domaine".into(), ..v }
+                        motif: "ligne exacte déjà accordée dans ce domaine".into(), ..v }.borner()
                 }
             } else { self.juger(&c, ctx) };
             parties.push((c, v));
