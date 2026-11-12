@@ -146,3 +146,27 @@ faits omet une capacité déjà disponible. Nouveau témoin exige le scope méth
 direct dans nodes ; correction prévue compose ces enfants de plages (qualifiés
 comme tels) et les faits déclarés séparés, sans les confondre avec appartenance.
 Le ciblé c999 reste figé pendant son exécution ; nouveau rouge attendu après.
+
+
+## Diagnostic et corrections après revue
+
+C999 : refus montage avant compilation (XDG_CACHE_HOME déplaçait le magasin),
+corrigé uniquement par RAG3DB_LIBS_DIR explicite. Compilation ensuite rouge E0283
+sur MockLlm.into et E0521 sur Cow du schéma ; typages corrigés d6bad0abd.
+Sur cette source, témoin membres effectivement rouge0/1/0 : scope méthode direct
+absent malgré sa présence dans les lignes qualifiées. Rouge conservé séparément.
+
+Revue orchestration741d6b8d30 acceptée : plafond commun appliqué à TOUS les statuts
+et au rendu markdown ; candidats ambigus retirés sans tronquer leurs identités.
+Ambiguïtés de plages et faits invalides visibles par défaut en markdown. Calcul
+du parent réduit à deux scans par scope (au plus2N² comparaisons comptées), sans
+triple boucle ; témoin chaîne64 et compteur, pas de grand banc chronométrique.
+Membres compose désormais scopes directs de plages dans nodes et déclarations/
+propriétés dans members, gardant leur sens et leur provenance distincts.
+Deux témoins supplémentaires couvrent budget sur symboles/sources ambigus et
+limites visibles/coût quadratique. Le vrai chat doit aussi recevoir la méthode run.
+Qualification codeparsers a4bf86c865 liée :
+`docs/codeparsers/12-11-2026/navigation-ir/qualification.md` (7 fichiers/50 scopes,
+preuves de parsing, projection relue ; aucune exhaustivité ou UUID inventé).
+Reprise prévue même filtre symbol_navigation (8 témoins), source/recette publiées
+avant exécution ; temps des tentatives déjà dépensé non effacé.

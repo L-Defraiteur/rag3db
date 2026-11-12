@@ -47,9 +47,51 @@ fn contains(parent: &Value, child: &Value) -> bool {
         _ => false,
     }
 }
+/// Tous les statuts passent par le même plafond, y compris les refus et
+/// les candidats ambigus. Les références retirées ne sont pas tronquées.
+fn bounded(mut out: Value) -> Value {
+    for key in ["nodes", "members", "candidates"] {
+        if let Some(a) = out[key].as_array_mut() {
+            if a.len() > MAX_NODES {
+                a.truncate(MAX_NODES);
+                out["truncated"] = json!(true);
+            }
+        }
+    }
+    while out.to_string().len() > MAX_BYTES {
+        let mut removed = false;
+        for key in ["members", "nodes", "candidates"] {
+            if out[key].as_array_mut().is_some_and(|a| a.pop().is_some()) {
+                removed = true;
+                break;
+            }
+        }
+        if !removed {
+            removed = out["coverage"]["ambiguous_ranges"]
+                .as_array_mut()
+                .is_some_and(|a| a.pop().is_some());
+        }
+        if !removed {
+            return json!({"status":"output_budget_exceeded", "status_before_budget":clipped(text(&out,"status"),64),
+                "nodes":[], "members":[], "candidates":[], "truncated":true});
+        }
+        out["truncated"] = json!(true);
+    }
+    out
+}
+
+pub fn navigate(
+    rows: &[Value],
+    total: usize,
+    source: Option<&dyn FileSource>,
+    q: Navigation<'_>,
+) -> Result<Value, String> {
+    navigate_inner(rows, total, source, q).map(bounded)
+}
+
 /// Les lignes/total viennent d'un seul Plan dans la vue de l'appel. Aucun
 /// voisin n'est inventé depuis un nom de parent ; aucun corps n'est rendu.
-pub fn navigate(
+fn navigate_inner(
     rows: &[Value],
     total: usize,
     source: Option<&dyn FileSource>,
@@ -70,7 +112,7 @@ pub fn navigate(
         "freshness":"unverified","not_relations":["declared_membership","inheritance"]},
         "coverage":{"complete":false,"limits":["Scopes indexés seulement ; lambdas repliées et membres non extraits peuvent manquer.",
         "Inclusion de plages à granularité ligne, pas parent AST garanti ; méthodes hors classe non rattachées par ce parcours.",
-        "Membres : déclarations méthode/fonction et propriétés typées uniquement ; aucun inventaire exhaustif."]}});
+        "Membres : scopes directs de plages, déclarations méthode/fonction et propriétés typées ; faits séparés, aucun inventaire exhaustif."]}});
     // Une tranche de scopes ne permet pas de décider les racines/parents.
     if total > MAX_INPUT || rows.len() < total {
         out["status"] = json!("input_truncated");
@@ -155,35 +197,44 @@ pub fn navigate(
     });
     let mut parents = vec![None; selected.len()];
     let mut ambiguous = Vec::new();
+    let mut comparisons = 0usize;
+    // Deux scans par scope, pas une comparaison de chaque paire de parents
+    // pour chaque enfant. Un candidat minimal ne suffit que si tous les
+    // autres le contiennent ; des plages croisées restent ambiguës.
     for (i, child) in selected.iter().enumerate() {
-        let candidates: Vec<usize> = (0..selected.len())
-            .filter(|&j| i != j && contains(selected[j], child))
-            .collect();
-        let nearest: Vec<usize> = candidates
-            .iter()
-            .copied()
-            .filter(|&j| {
-                !candidates
-                    .iter()
-                    .any(|&k| j != k && contains(selected[j], selected[k]))
-            })
-            .collect();
-        if nearest.len() == 1 {
-            parents[i] = Some(nearest[0]);
-        } else if nearest.len() > 1 {
-            ambiguous.push(text(child, "_uuid"));
+        let mut candidates = Vec::new();
+        for (j, parent) in selected.iter().enumerate() {
+            comparisons += 1;
+            if i != j && contains(parent, child) {
+                candidates.push(j);
+            }
+            if i != j && interval(parent) == interval(child) {
+                ambiguous.push(text(child, "_uuid"));
+            }
         }
-        if selected
-            .iter()
-            .enumerate()
-            .any(|(j, r)| i != j && interval(r) == interval(child))
-        {
-            ambiguous.push(text(child, "_uuid"));
+        if let Some(&best) = candidates.iter().min_by_key(|&&j| {
+            let (a, b) = interval(selected[j]).unwrap();
+            b - a
+        }) {
+            let mut unique = true;
+            for &j in &candidates {
+                comparisons += 1;
+                if j != best && !contains(selected[j], selected[best]) {
+                    unique = false;
+                }
+            }
+            if unique {
+                parents[i] = Some(best);
+            } else {
+                ambiguous.push(text(child, "_uuid"));
+            }
         }
     }
     ambiguous.sort_unstable();
     ambiguous.dedup();
+    out["coverage"]["ambiguous_range_count"] = json!(ambiguous.len());
     out["coverage"]["ambiguous_ranges"] = json!(ambiguous);
+    out["coverage"]["parent_comparisons"] = json!(comparisons);
     let root = if q.mode == "file" {
         None
     } else {
@@ -243,7 +294,7 @@ pub fn navigate(
             if let Some(p) = parents[i] {
                 queue.push_back((p, depth + 1));
             }
-        } else if q.mode != "members" {
+        } else if q.mode != "members" || depth == 0 {
             queue.extend(
                 parents
                     .iter()
@@ -284,16 +335,6 @@ pub fn navigate(
     out["members"] = json!(members);
     out["total_selected"] = json!(total_selected);
     out["truncated"] = json!(total_selected > q.limit || omitted_depth);
-    // Budget du résultat structuré, avant le rendu compact ; conserver les bornes.
-    while out.to_string().len() > MAX_BYTES {
-        let m = out["members"].as_array_mut().unwrap();
-        if !m.is_empty() {
-            m.pop();
-        } else if out["nodes"].as_array_mut().unwrap().pop().is_none() {
-            break;
-        }
-        out["truncated"] = json!(true);
-    }
     Ok(out)
 }
 
@@ -304,9 +345,24 @@ pub fn markdown(v: &Value) -> String {
         text(v, "path"),
         text(v, "status")
     );
+    out.push_str(&format!(
+        "Source `{}` · fraîcheur {}.\n",
+        text(v, "source"),
+        text(&v["provenance"], "freshness")
+    ));
+    if v["coverage"]["ambiguous_range_count"].as_u64().unwrap_or(0) > 0 {
+        out.push_str(&format!("Parent non déterminable pour {} plage(s) égale(s) ou croisée(s) ; aucun parent choisi arbitrairement.\n", v["coverage"]["ambiguous_range_count"]));
+    }
+    if v["coverage"]["malformed_member_facts"] == true {
+        out.push_str("Faits de membres invalides : inventaire incomplet.\n");
+    }
     out.push_str("Plages de lignes dérivées, pas parent AST, appartenance ni héritage. Couverture partielle.\n");
     for row in v["nodes"].as_array().into_iter().flatten() {
         let depth = row["depth"].as_u64().unwrap_or(0) as usize;
+        if row["kind"] == "file" {
+            out.push_str(&format!("- fichier `{}`\n", text(row, "path")));
+            continue;
+        }
         out.push_str(&format!(
             "{}- `{}` {} {}:{}-{} · uuid={}\n",
             "  ".repeat(depth),
@@ -332,6 +388,20 @@ pub fn markdown(v: &Value) -> String {
     }
     if v["status"] != "ready" {
         out.push_str(&format!("{}\n", v));
+    }
+    if out.len() > MAX_BYTES {
+        let mut compact = String::new();
+        for line in out.lines() {
+            if compact.len() + line.len() + 100 > MAX_BYTES {
+                break;
+            }
+            compact.push_str(line);
+            compact.push('\n');
+        }
+        compact.push_str(
+            "Sortie tronquée par le budget de rendu ; utiliser format=json et réduire limit.\n",
+        );
+        return compact;
     }
     out
 }
@@ -462,6 +532,54 @@ mod tests {
         let v = call(&src, &rows, "file", "", 2, 2);
         assert_eq!(v["nodes"].as_array().unwrap().len(), 2);
         assert_eq!(v["truncated"], true);
+    }
+    #[test]
+    fn ambiguous_results_and_markdown_share_the_budget() {
+        let (src, rows) = fixture();
+        let mut many = Vec::new();
+        for i in 0..256 {
+            let mut r = rows[0].clone();
+            r["_uuid"] = json!(format!("scope-{i}"));
+            r["name"] = json!("same");
+            r["signature"] = json!("é".repeat(512));
+            many.push(r);
+        }
+        let v = call(&src, &many, "parents", "same", 1, 200);
+        assert_eq!(v["status"], "ambiguous_symbol");
+        assert!(v.to_string().len() <= MAX_BYTES);
+        assert_eq!(v["truncated"], true);
+        assert!(markdown(&v).len() <= MAX_BYTES);
+        for (i, r) in many.iter_mut().enumerate() {
+            r["source"] = json!(format!("{i}{}", "é".repeat(512)));
+        }
+        let v = call(&src, &many, "file", "", 2, 200);
+        assert_eq!(v["status"], "ambiguous_source");
+        assert!(v.to_string().len() <= MAX_BYTES);
+        assert_eq!(v["truncated"], true);
+    }
+    #[test]
+    fn parent_work_is_quadratic_and_default_render_exposes_unknowns() {
+        let (src, rows) = fixture();
+        let content = "x".repeat(256);
+        src.insert("a.py", &content);
+        let mut chain = Vec::new();
+        for i in 0..64 {
+            let mut r = rows[0].clone();
+            r["_uuid"] = json!(format!("scope-{i}"));
+            r["start_byte"] = json!(i);
+            r["end_byte"] = json!(256 - i);
+            r["indexed_file"][0]["content_hash"] = json!(crate::hash::content_hash(&content));
+            chain.push(r);
+        }
+        let v = call(&src, &chain, "children", "scope-0", 16, 200);
+        assert!(v["coverage"]["parent_comparisons"].as_u64().unwrap() <= 2 * 64 * 64);
+        let (src, mut rows) = fixture();
+        rows[1]["start_byte"] = rows[0]["start_byte"].clone();
+        rows[0]["field_types"] = json!("bad-json");
+        let v = call(&src, &rows, "members", "a", 1, 80);
+        let rendered = markdown(&v);
+        assert!(rendered.contains("Parent non déterminable"));
+        assert!(rendered.contains("Faits de membres invalides"));
     }
     #[test]
     fn member_facts_are_partial_without_fabricated_ids_or_positions() {
@@ -634,6 +752,15 @@ mod integration {
         assert_eq!(seen.len(), 2);
         assert_eq!(seen[0]["status"], "ready");
         assert_eq!(seen[1]["status"], "ready");
+        assert!(
+            seen[1]["nodes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|n| n["name"] == "run"),
+            "méthode indexée réellement accessible : {}",
+            seen[1]
+        );
         assert!(seen[1]["members"]
             .as_array()
             .unwrap()
