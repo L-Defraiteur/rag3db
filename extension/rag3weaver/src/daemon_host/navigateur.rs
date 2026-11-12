@@ -130,7 +130,7 @@ impl Navigateur {
             .arg("about:blank")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null());
+            .stderr(Stdio::from(std::fs::File::create(profil.path().join("stderr.log")).expect("journal stderr Chrome")));
         // dup2 rend les fd 3 et 4 au fils sans CLOEXEC. Les tubes passent d'abord
         // au-dessus de 10 : un tube qui serait déjà le fd 3 (ou 4) resterait sinon
         // en CLOEXEC (dup2 sur lui-même ne fait rien), ou serait écrasé par l'autre
@@ -229,7 +229,11 @@ impl Navigateur {
                 Some(v)
             }
             Err(RecvTimeoutError::Timeout) => None,
-            Err(RecvTimeoutError::Disconnected) => panic!("le navigateur s'est fermé"),
+            Err(RecvTimeoutError::Disconnected) => {
+                let etat = self.enfant.try_wait().expect("état du navigateur fermé");
+                let erreur = std::fs::read_to_string(self._profil.path().join("stderr.log")).unwrap_or_default();
+                panic!("le navigateur s'est fermé : {etat:?} ; stderr : {erreur}");
+            }
         }
     }
 
@@ -336,6 +340,16 @@ impl Drop for Navigateur {
         let _ = self.enfant.kill();
         let _ = self.enfant.wait();
     }
+}
+
+/// Diagnostic explicite du démarrage CDP, sans hôte ni modèle.
+#[cfg(feature = "navigateur")]
+#[test]
+#[ignore]
+fn le_demarrage_cdp_du_parcours_est_diagnostique() {
+    let binaire = navigateur_ou_saut("le_demarrage_cdp_du_parcours_est_diagnostique").expect("navigateur requis");
+    let mut n = Navigateur::lancer(&binaire);
+    assert!(n.commande("Browser.getVersion", json!({}))["product"].as_str().is_some_and(|v| v.contains("Chrome")));
 }
 
 /// **Un composant à prévisualiser**, rangé dans le dossier du manifeste : un
