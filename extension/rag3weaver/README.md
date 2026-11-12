@@ -563,6 +563,17 @@ that matter for ingestion are `RAG3WEAVER_EMBED_MODEL`, `RAG3WEAVER_EMBED_SERVIC
 
 ## Tests
 
+On Linux, the e2e and browser launchers share `scripts/confiner_validation.py`:
+they acquire the workstation lock, require an effective memory cap of at most
+32 GiB, and use a private session bus with no service activation. The launcher
+records child identities, checks their cgroups, and stops only its own descendants.
+Set `RAG3WEAVER_VALIDATION_TIMEOUT` to the lot's total budget (including cleanup).
+For a composed pass, run `python3 scripts/confiner_validation.py lancer --delai 2400
+-- bash /path/to/pass.sh`; nested launchers inherit the same supervised lifetime.
+Evidence is kept outside the build target in `~/.cache/rag3weaver-build/validations/`.
+The CPU-only tooling checks are `python3 scripts/test_confiner_validation.py`.
+
+
 ```bash
 cargo test --lib --features "rag3db-native"        # unit tests
 ./run_e2e.sh                                        # end-to-end suites (131 e2e_*.rs files under tests/)

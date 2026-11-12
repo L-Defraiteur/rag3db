@@ -290,3 +290,15 @@ POSTE_MEM_MAX=32G "$W/extension/rag3weaver/scripts/poste" lourd timeout --signal
 ```
 
 Le budget démarre après le poste ; aucune attente ne le prolonge. Premier écart STOP/diagnostic, aucun second essai réel ni ancien NAV/lib/FTS. Contrôleur exact conservé hors dépôt avec les preuves ; source scripts distante5fab propre figée, les commits ultérieurs de recette sont Markdown seuls.
+
+## Primitive commune : unique préflight réelle verte le12novembre20:53:40
+
+Source distante propre figée5fab0e1f9b59bb1b844b334dda4ac3b3d1ef099e, helper production ecd605037 ; commits suivants de recette Markdown seuls. Préflight unique autorisée après CPU20/20 et finNAV/quiescence Arbre, publiée avant entrée (c5f/recette-proposee.json puis4b1c pour plafond extérieur). Commande réelle sous vrai poste32G, timeout extérieur29s+killafter1s (total30 après acquisition), primitive --delai26 ; aucune réinitialisation ni second essai.
+
+**VERTE en1,306s**, rccontrôleur0, rchelper0, verdictVERT, erreurNone, restes=[], bus privé nettoyé. La sonde a validé positivement l’entrée `verifier` du vrai superviseur puis Browser.getVersion réel Chrome/156.0.8078.79, protocol1.3, révisiona21ce95c24ce3964416f09ae1862f53f319eb4d0 et Browser.close/rcChrome0. Seize descendants relevés par la primitive, vingt observations indépendantes dont dbus-daemon PID4186120 et Chrome PID4186123 ; un seul cgroup `run-p4186099-i83843277.scope`, effectif34359738368 pour chaque descendant observé. Pas de wrapper bus par Chrome : un bus unique possédé pour toute la commande.
+
+Quiescence indépendante : known_live=[], profil_holders=[], profil absent, bus/socket privé absent, baseline de9 processus préexistants non attribuée. Nettoyage limité au profil neuf nommé par la sonde et au temporaire du bus créé par la primitive ; aucun Chrome utilisateur, service permanent, modèle/GPU ou bus KDE/utilisateur touché. Aucun Cargo/lib/FTS/ancienNAV/journaux rejoué. Le rouge CPU20(19/1), son diagnostic JSON et quiescence[] sont conservés, ainsi que les preuves d’hygiène Arbre indépendantes.
+
+Preuves deux postes : `~/.cache/rag3weaver-build/journaux-cx-recherche-confinement-12nov/` : recette-proposee.json, baseline-avant-proposee.json, preflight-unique.log, sonde-unique/{sonde.json,chrome-stderr.log}, observations-independantes.json, quiescence-reel.json, verdict-controle.json, reel-unique/validation-zsbgdsf_/{recette.json,bus.xml,autorite.json,enfants.json,verdict.json}, journaux CPU historiques et courants. Reçu final terminé ; aucune autorité active conservée par les fichiers après fin. Les scripts run_e2e et temoins_navigateur adoptent la primitive, leurs entrées sont jugées par les témoins CPU sans Cargo ; cette préflight éprouve le superviseur/bus/navigateur réel sans rejouer les lots clos.
+
+Verdict et diff soumis à C7/ED pour revue avant intégration après A. Ticket toujours ouvert jusqu’à revue/intégration de l’adoption commune ; aucun push code master pendant A sans coordination, aucune nouvelle exécution réelle demandée par ce vert. Worktreescx-recherche-confinement-lanceurs propres aux deux postes et preuves conservés ; aucun target Cargo créé pour ce lot.
