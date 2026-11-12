@@ -62,3 +62,14 @@ sparse prouvé, en fonctionnalités déjà livrées.
 
 Préparation conservée ouverte jusqu’à l’avis de l’orchestration ; aucune clôture
 ni autorisation de code déduite de la seule publication de ce document.
+
+## Première relecture orchestration
+
+Plan52c7ad6ba lu en entier : séparation des formats, reprise/publication et
+limites d’undo acceptées. Profil initial BM25+dense/refus sparse avant effets
+accepté ; pertinence BM25 susceptible de changer, garanties de couverture,
+filtres, positions, provenance et ordre des égalités requises, sans équivalence
+complète bit pour bit. Le préflight futur peut lire les métadonnées nécessaires
+avant initialize, sans DDL/réparation/modèles ; aucune base réelle lue ici.
+ED relit encore le runner/admission/checksum et la frontière du premier patch.
+Préparation toujours ouverte, aucun code autorisé pour l’instant.

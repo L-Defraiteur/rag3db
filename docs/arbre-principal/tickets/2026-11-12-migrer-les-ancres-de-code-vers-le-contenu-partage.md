@@ -45,9 +45,13 @@ produit nouvellement revendiqué.
    master. Activation d’une base réelle et suppression de l’ancien index exigent
    leur périmètre ultérieur explicite ; pas de GC ni mesures M3–M5 dans ce ticket.
 
-Point de revue : le corpus BM25 change avec la déduplication, donc scores/rangs
-arbitraires identiques ne sont pas promis. Préciser l’équivalence acceptée avant
-le code, sans masquer une différence sous « zéro nouvel embarquement ».
+Décision orchestration du12nov : profil initial BM25+dense admis, sparse refusé
+avant effets tant que son transfert n’est pas prouvé. Le corpus BM25 change avec
+la déduplication ; variation de pertinence acceptée avec preuves de couverture,
+filtres, positions, provenance et ordre des égalités, sans équivalence complète
+bit pour bit ni scores/rangs arbitraires identiques. Ce profil initial ne livre
+pas une migration sparse ; aucun manque n’est comblé par un modèle. ED doit
+encore relire la frontière d’API du premier correctif avant toute autorisation.
 
 ## Autorisation actuelle
 

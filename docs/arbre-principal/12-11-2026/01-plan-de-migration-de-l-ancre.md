@@ -95,6 +95,10 @@ pas à supposer présent dans `MigrationState`.
    format moteur séparément. Inconnu, état partiel ambigu, index sans source
    complète, modèle incompatible ou recette différente : refus nommé, aucun
    repli sur un réembarquement. Pas d’`index confirm` comme porte de migration.
+   Ce préflight futur autorise la lecture de métadonnées de la copie : connexion
+   compatible en lecture, sans Catalog.initialize, DDL, réparation ni connexion
+   de modèle. Cela ne permet pas à la présente préparation documentaire de lire
+   ou copier une base réelle.
 2. **Plan stable.** Sortir le descripteur source/cible, empreintes des configs et
    du graphe/fichier, ressources touchées, besoins de rétention et validations.
    Le dry-run public du runner appelle pending et lit son catalogue ; pour le
@@ -216,9 +220,10 @@ zéro appel total pour une recherche dense qui calcule son vecteur de requête.
 ses statistiques : ne pas promettre scores et rangs arbitraires identiques.
 Les témoins imposent couverture des occurrences, filtres/admission, coordonnées,
 provenance et ordre déterministe des égalités, avec résultats attendus sur les
-requêtes de la fixture. L’acceptation d’évolutions de pertinence BM25 doit être
-explicite en revue ; si l’ancien classement exact est exigé, ce plan ne prétend
-pas déjà savoir le préserver. Aucun résultat M3–M5 ne tranche cette question.
+requêtes de la fixture. L’orchestration accepte pour ce profil la variation de pertinence BM25 due au
+corpus dédupliqué (revue du12nov), avec ces garanties à prouver. Ce n’est pas une
+équivalence complète bit pour bit. Un autre besoin de classement exact exigerait
+son contrat distinct ; aucun résultat M3–M5 n’est ici invoqué.
 
 ## Premier correctif reviewable et budget proposés
 
@@ -252,8 +257,12 @@ sources/target, propriété et nettoyage soumis aux gardes du dépôt.
 
 ## Décisions à relire sur ce plan
 
-Valider la séparation format applicatif/interne, le raccord du runner et la
-publication conditionnée ; confirmer le profil initial BM25+dense et le refus
-sparse tant que son transfert n’est pas prouvé ; préciser l’équivalence BM25
-attendue. Ces points sont suivis dans le ticket d’implémentation ouvert. Cette
-revue n’accordera pas à elle seule l’accès à une base réelle ni son activation.
+Revue orchestration du12nov : séparation des trois formats, publication après
+validation, profil initial BM25+dense et refus sparse avant effets acceptés.
+Variation de pertinence BM25 admise avec les garanties nommées, sans égalité
+arbitraire des scores/rangs. Cela ne livre pas un profil sparse migrable.
+
+ED relit encore la frontière d’API runner/admission/checksum et le premier
+correctif. Le ticket de préparation reste ouvert et aucun code n’est encore
+autorisé. L’implémentation future reste suivie par son ticket distinct ; cette
+revue ne permet pas l’accès à une base réelle ni son activation.
