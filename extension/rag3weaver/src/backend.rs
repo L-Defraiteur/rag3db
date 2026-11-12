@@ -464,12 +464,12 @@ impl std::ops::Deref for BackendRelation {
 /// touche ni fichier ni commande.
 /// Ce que le backend offre à l'écran de ses composants : l'écran de chaque
 /// outil et le lieu des cases de portée `hôte`.
-fn ecran_du_backend(manifest: &BackendManifest, manifest_path: &Path) -> crate::components::EcranDuBackend {
+fn ecran_du_backend(manifest: &BackendManifest, manifest_path: &Path, lecteur: &dyn crate::lecteur::Lecteur) -> crate::components::EcranDuBackend {
     crate::components::EcranDuBackend {
         outils: manifest.tools.iter().map(|(nom, t)| (nom.clone(), t.policy.ecran)).collect(),
         etat_hote: manifest.ui_state.as_ref().map(|u| u.entity.clone()),
         // Le chemin canonique, celui que l'hôte connaît (`/ide/etat`) et que `/ide/call` reçoit.
-        manifeste: manifest_path.canonicalize().unwrap_or_else(|_| manifest_path.to_path_buf()).display().to_string(),
+        manifeste: lecteur.identite(manifest_path).unwrap_or_else(|_| manifest_path.to_path_buf()).display().to_string(),
     }
 }
 
@@ -1083,7 +1083,7 @@ impl PreparedBackend {
         // et la colonne de ses erreurs.
         let manifest: BackendManifest = if brut.windows(crate::builtin_templates::PREFIX.len()).any(|w| w == crate::builtin_templates::PREFIX.as_bytes()) {
             let mut v: serde_json::Value = serde_json::from_slice(&brut).map_err(|e| e.to_string())?;
-            crate::builtin_templates::resolve(&mut v)?;
+            crate::builtin_templates::resolve_avec(&mut v, &mut |nom| lecteur.chemin_builtin(nom))?;
             serde_json::from_value(v).map_err(|e| champ_inconnu_dit(e.to_string()))?
         } else {
             serde_json::from_slice(&brut).map_err(|e| champ_inconnu_dit(e.to_string()))?
@@ -1098,7 +1098,7 @@ impl PreparedBackend {
             return Err("backend requires a persistent database path".into());
         }
         let directory = sans_prefixe_verbatim(
-            path.canonicalize()
+            lecteur.identite(path)
                 .map_err(|e| format!("{} : {e}", path.display()))?
                 .parent()
                 .unwrap()
@@ -1173,12 +1173,12 @@ impl PreparedBackend {
                 }
                 #[cfg(target_os = "linux")]
                 if w.sandbox.mode == SandboxMode::Landlock {
-                    if let Err(e) = crate::commande::BacASable::autour("/").ruleset() {
-                        return Err(format!(
-                            "le bac à sable Landlock ne se monte pas sur ce noyau ({e}) — \
-                             déclarez \"sandbox\": {{\"mode\": \"off\"}} en le sachant"
-                        ));
-                    }
+                    lecteur.verifier_environnement("workspace.sandbox.landlock", &mut || {
+                        crate::commande::BacASable::autour("/").ruleset().map(|_| ()).map_err(|e| format!(
+                            "le bac à sable Landlock ne se monte pas sur ce noyau ({e}) — déclarez \
+                             \"sandbox\": {{\"mode\": \"off\"}} en le sachant"
+                        ))
+                    })?;
                 }
                 #[cfg(not(target_os = "linux"))]
                 if w.sandbox.mode == SandboxMode::Landlock && w.commands != CommandGate::Off {
@@ -1210,7 +1210,7 @@ impl PreparedBackend {
             } else {
                 directory.join(&w.root)
             };
-            if !root.is_dir() {
+            if !lecteur.est_dossier(&root) {
                 return Err(format!(
                     "workspace : la racine {} n'existe pas — donnez un dossier existant, relatif au manifeste ou absolu",
                     root.display()
@@ -1254,7 +1254,7 @@ impl PreparedBackend {
         }
         // ── Les composants d'interface et leurs bibliothèques ──────────────
         let components = Arc::new(
-            crate::components::Components::load_in_avec(&directory, &ecran_du_backend(&manifest, path), lecteur)
+            crate::components::Components::load_in_avec(&directory, &ecran_du_backend(&manifest, path, lecteur), lecteur)
                 .map_err(|errors| format!("components/ : {}", errors.join(" ; ")))?,
         );
         let mut schemas = HashMap::new();
@@ -1520,11 +1520,11 @@ impl PreparedBackend {
             // **Les Plans déclarés** (`PlanNode(plan=@plans/…)`) : lus et vérifiés
             // ici, contre leur forme et contre le schéma du manifeste ; un Plan
             // faux refuse le gabarit.
-            crate::dataflow::plan_node::resoudre_les_plans(&mut tool, |chemin| lire_texte(lecteur, &directory.join(chemin)), &schema_des_plans)
+            crate::dataflow::plan_node::resoudre_les_plans(&mut tool, |chemin| lecteur.lire_reference(&directory, chemin), &schema_des_plans)
                 .map_err(|e| format!("{name}: {e}"))?;
             // Les sous-graphes cités : lus, liés et vérifiés comme les Plans ;
             // leurs types de nœuds passent sous la politique de l'outil.
-            let types = crate::dataflow::foreach_node::resoudre_les_sous_graphes(&mut tool, &|chemin| lire_texte(lecteur, &directory.join(chemin)), &nodes)
+            let types = crate::dataflow::foreach_node::resoudre_les_sous_graphes_avec(&mut tool, &|chemin| lecteur.lire_reference(&directory, chemin), &nodes)
                 .map_err(|e| format!("{name}: {e}"))?;
             types_des_sous_graphes.insert(name.clone(), types);
             #[cfg(feature = "code")]
@@ -1841,7 +1841,7 @@ impl PreparedBackend {
             lecteurs_du_creux,
             search_tools,
             template_drift,
-            manifest_path: path.canonicalize().map_err(|e| e.to_string())?,
+            manifest_path: lecteur.identite(path).map_err(|e| e.to_string())?,
             surcharges: Surcharges::default(),
             scripted_types,
             components,
@@ -1903,7 +1903,7 @@ impl PreparedBackend {
 
     /// [`Self::components_on_disk`], par un lecteur (une proposition).
     pub fn components_on_disk_avec(&self, lecteur: &dyn crate::lecteur::Lecteur) -> Result<crate::components::Components, String> {
-        crate::components::Components::load_in_avec(&self.directory, &ecran_du_backend(&self.manifest, &self.manifest_path), lecteur)
+        crate::components::Components::load_in_avec(&self.directory, &ecran_du_backend(&self.manifest, &self.manifest_path, lecteur), lecteur)
             .map_err(|errors| format!("components/ : {}", errors.join(" ; ")))
     }
 
