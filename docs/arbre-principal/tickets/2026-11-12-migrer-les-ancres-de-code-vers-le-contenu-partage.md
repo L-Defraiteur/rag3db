@@ -595,3 +595,14 @@ nouveau rouge métier revendiqué. Le résultat de la primitive conserve mainten
 ensemble le fournisseur original, les faits composés et l'ordre validé ; raw les
 réutilise tous, sans recalculer le fournisseur ni introduire un second algorithme.
 Même ciblé à rejouer sur cette correction explicite, pas de passe finale relancée.
+
+Vert ciblé après correction explicite, source**7a1aed927** propre :
+`cx-preflight-ordre-vert-v2.log`, rc0, fin12:58:38Paris, huit features,
+j8/Mem32, global1800s, target8,7Go. **18 opening_tests +5 inspection/admission
++31 runner =54 réussis, zéro échec/ignoré**. Les trois rouges métier9fb sont
+verts, les contrôles d'ouverture valides aussi. Le témoin de façade modifiée
+après load confirme Missing nommé, fabrique modèle0 et base toujours absente ;
+le journal failed continue de refuser avant effets. Le montage44c non compilé
+reste distinct. Pas de nouvelle passe complète lancée avant revue de ces verts.
+La portée v1 est inactive et le poste rendu ; la PG privée v1 et les preuves
+source9fb sont conservées sans les attribuer au nouveau code.
