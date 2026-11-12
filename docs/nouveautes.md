@@ -17,7 +17,7 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
   par le chargeur déclaratif fermé, sans repli disque ni extraction de cache.
   Les transitions de données ou ressources non qualifiées refusent ; acquisition,
   adoption persistée, application et politique vivant/épinglé restent à livrer.
-  (`946d97ad8`)
+  (`8b3fab422`)
 
 - **12 nov. — Un aperçu décrit les correspondances de chunks et de vecteurs connus.**
   L'API de bibliothèque conserve occurrences, cellules et provenance sur des faits

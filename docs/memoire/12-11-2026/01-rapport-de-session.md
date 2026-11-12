@@ -1,5 +1,15 @@
 # Mémoire — reprise du 12 novembre 2026
 
+## État final de la première tranche M8
+
+**Livrée sur master `8b3fab422c9b481b34b9343ec4dc439846a7cc29`**, après le tour orchestration, sous poste push/ifVERT et trois contrôles lus (status propre, aucun rebase, origin/master=HEAD). Le code et les assets sont identiques à la source testée809e260d4 après intégration ED ; les rebases finaux sont documentaires. API Rust seulement : `template_plan::plan` sur contenus fournis, fusion3voies, candidat/diffs/refus et validation commune fermée. Aucun CLI d’acquisition, adoption persistée, apply, changement de politique, activation M9 ou mémoire réelle modifiée. Le ticketM8 reste ouvert.
+
+Validation relue indépendamment : features5/5, minimumchecklib, lib2201/0/65, navigateur40/0/0,8e2e100/0/0 ; quatreELF gardés,220assets attestés et huitvraisPID sousMax32/control-group. Les rouges bruts du driver sont conservés ; verdicts composés motivés admis après diagnostic d’hygiène et contrôle des archives. [API et preuves](02-plan-m8-api-et-preuves.md).
+
+Nettoyage terminé : les4worktrees mémoire/cfg aux2postes et les2targets PC sont absents, gardeexacte65aa/dca13VERTE et archive administrative fidèle avant chacun des4retraits. Les4PGprivées sont retirées après dump/SHA et absence de sessions ; aucun service existant modifié. Branches distantes, preuves, copiesELF et archivesTMP/admin conservées. Une première gardeROUGE pour target/e2e-last.log a refusé le retrait ; ce journal a été archivé et une nouvelle garde a été obtenue. Le dernier worktree documentaire de bilan se nettoie séparément selon la même règle.
+
+Reprise : [knowledge dump](02-knowledge-dump.md), ticketM8 et noteAPI. Aucune ressource de code/build/service de ce lot à reprendre ; toute suite d’adoption/application reste à cadrer et autoriser dans le ticket existant.
+
 ## Ticket et revue reçue
 
 Le [ticket M8](../tickets/2026-11-07-une-memoire-ne-sait-pas-que-ses-gabarits-sont-en-retard.md) reste ouvert et porté par mémoire. Les sept parties de la revue ED sont intégrées dans [la note canonique](01-relecture-m8-adoption-fusion-et-reprise.md), commit `aa741a4c3bbd48a3194a802cfab1c8612cdd8a57` ; la conception du 9 novembre y est reliée et corrigée. Ne pas créer une seconde synthèse concurrente. Le « précontrôle 1b » cité correspond au commit `85ef4921128b445e74766c1e628809b206957485`.
