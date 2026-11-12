@@ -82,3 +82,101 @@ Nouvelle passe autorisée sous nouveau global2400s, départ après vrai lourd16:
 Démarrage de l’étape navigateur séparée :40 tests détectés, puis **premier rouge du garde de confinement**, PID2997235 déplacé dans une scope Chromium extérieure au Max32 du poste. Arrêt de la session2994167 et des descendants possédés ; aucun résultat fonctionnel NAV40 complet revendiqué. Détail et suite dans [ticket commun des scopes](../../orchestration/tickets/2026-11-12-une-scope-e2e-imbriquee-peut-echapper-au-plafond-du-lanceur.md). Quiescence après arrêt active=[]/chromes=[] ; wrapper et PID fautif absents. **Lectures27 et vrai contrôle minimal non joués sur cette source**, aucun appel7879 ni relance après le rouge. Le vert fonctionnel antérieuraa58 reste historique, sans être présenté comme une passe intégration complète.
 
 Preuves brutes aux deux postes dans `journaux-cx-recherche-lectures-12nov/integration-487c68/` : source.json, argv.json, features.log et features-detail/, minchecklib.log (natif redondant), lib.log, navigateur.log, resume.log, verdict-final.log ROUGE, cgroups-enfants.json, arret-session-2994167.json, quiescence-apres-arret.json et lancement.log. Aucun code runtime modifié, aucun master avant nouvelle revue/àtoi. Worktrees/target privés conservés, aucun retry aveugle ni budget prolongé.
+
+## Recette préflight native unique publiée avant exécution
+
+Autorisation C7 : une seule préflight30s/Max32 dans le global2400 initial (échéance17:27:44), aucun autre essai si échappement. Option existante `RAG3WEAVER_NAVIGATEUR` lue par trouver_navigateur ; candidat direct `/usr/lib/chromium/chromium`, pas une cause affirmée. Paquet installé chromium156.0.8078.79-1.1 ; ELF natif SHA25639533024d5bd2582b0915ded18cffb3fae01326723562f4988b08947516d624a, lanceur /usr/bin SHA256df68ac926f09a1b892b68cd718aea4698a7a4963c172ede0b851e47f1da9871e.
+
+Script externe ci-dessous, publié avant toute exécution, avec profil neuf sous integration-487c68/preflight-native-unique ; arguments identiques au témoin (y compris --no-sandbox déjà existant, aucune option de sécurité ajoutée/retirée). Version réelle par Browser.getVersion sur le même protocole CDP/fd3-fd4 que le témoin ; inventaire PID/starttime/cgroups/max et contrôle d’ascendance au fil de la vie. Browser.close puis TERM/KILL uniquement PID privés attribués via starttime/pidfd si nécessaire. Profil supprimé seulement après quiescence ; aucune mutation système/KDE/DBus/application utilisateur. Accès direct candidat seulement : si ce natif échappe aussi, verdict rouge conservé sans nouvel essai ni reprise NAV. Aucune nouvelle source Rust ni compilation.
+
+SHA256 du script : `e4ec557f287c92118d5dca032ca91ca28f15beef8cd8e98e555c2c1e0528b0e1`.
+
+```python
+import os,signal,subprocess,time,json,hashlib,fcntl,shutil,datetime
+from pathlib import Path
+B=Path.home()/'.cache/rag3weaver-build';J=B/'journaux-cx-recherche-lectures-12nov/integration-487c68';P=J/'preflight-native-unique';N=Path('/usr/lib/chromium/chromium')
+S=json.loads((J/'source.json').read_text());deadline=datetime.datetime.fromisoformat(S['start']).timestamp()+2400
+assert deadline-time.time()>=30,'deadline globale : aucun nouveau runtime'
+assert not P.exists(),'préflight unique déjà consommée'
+P.mkdir();profil=P/'profil';profil.mkdir();debut=time.monotonic()
+cg=Path('/proc/self/cgroup').read_text().split('0::',1)[1].strip();assert Path('/sys/fs/cgroup'+cg+'/memory.max').read_text().strip()=='34359738368'
+assert hashlib.sha256(N.read_bytes()).hexdigest()=='39533024d5bd2582b0915ded18cffb3fae01326723562f4988b08947516d624a'
+argv=[str(N),'--headless','--remote-debugging-pipe','--no-first-run','--no-default-browser-check','--disable-gpu','--disable-extensions','--disable-background-networking','--disable-sync','--no-sandbox','--user-data-dir='+str(profil),'about:blank']
+(P/'recette.json').write_text(json.dumps(dict(argv=argv,cgroup=cg,memory_max='34359738368',source=S['source'],deadline_globale=deadline,limite_s=30),indent=2))
+owned={};observes=[];p=None;version=None;erreur=None
+uid=os.getuid()
+def vivant(pid,start):
+ try:
+  q=Path('/proc')/str(pid);st=(q/'stat').read_text().rsplit(') ',1)[1].split()
+  return q.stat().st_uid==uid and st[19]==start and st[0]!='Z'
+ except OSError:return False
+def inventaire():
+ table={}
+ for q in Path('/proc').iterdir():
+  if not q.name.isdigit():continue
+  try:
+   if q.stat().st_uid!=uid:continue
+   st=(q/'stat').read_text().rsplit(') ',1)[1].split();table[int(q.name)]=(int(st[1]),st[19],st[0])
+  except OSError:continue
+ changed=True
+ while changed:
+  changed=False
+  for pid,(ppid,start,state) in table.items():
+   if pid not in owned and (pid==p.pid or ppid in owned):owned[pid]=start;changed=True
+ for pid,start in list(owned.items()):
+  if not vivant(pid,start):continue
+  q=Path('/proc')/str(pid)
+  try:
+   childcg=(q/'cgroup').read_text().split('0::',1)[1].strip();m=Path('/sys/fs/cgroup'+childcg+'/memory.max').read_text().strip()
+   row=dict(pid=pid,starttime=start,cgroup=childcg,memory_max=m,exe=os.readlink(q/'exe'))
+   if row not in observes:observes.append(row)
+   if childcg!=cg and not childcg.startswith(cg+'/'):raise RuntimeError('enfant hors cgroup : '+json.dumps(row))
+  except FileNotFoundError:pass
+ (P/'pid-cgroups.json').write_text(json.dumps(observes,indent=2))
+def stop():
+ for sig in (signal.SIGTERM,signal.SIGKILL):
+  for pid,start in list(owned.items()):
+   if not vivant(pid,start):continue
+   try:
+    fd=os.pidfd_open(pid)
+    if vivant(pid,start):signal.pidfd_send_signal(fd,sig)
+    os.close(fd)
+   except ProcessLookupError:pass
+  time.sleep(.5)
+# Comme le témoin : pipe de commande vers fd3, réponses sur fd4 ; aucune option ajoutée.
+a,b=os.pipe();c,d=os.pipe();aa=fcntl.fcntl(a,fcntl.F_DUPFD_CLOEXEC,10);dd=fcntl.fcntl(d,fcntl.F_DUPFD_CLOEXEC,10)
+def fds():os.dup2(aa,3);os.dup2(dd,4)
+try:
+ with (P/'stderr.log').open('w') as out:
+  p=subprocess.Popen(argv,stdin=subprocess.DEVNULL,stdout=out,stderr=out,preexec_fn=fds,close_fds=False,start_new_session=True)
+ owned[p.pid]=Path(f'/proc/{p.pid}/stat').read_text().rsplit(') ',1)[1].split()[19]
+ os.set_blocking(c,False);os.write(b,json.dumps(dict(id=1,method='Browser.getVersion')).encode()+b'\0');buf=b'';version_at=None
+ while time.monotonic()-debut<20:
+  inventaire()
+  try:buf+=os.read(c,65536)
+  except BlockingIOError:pass
+  while b'\0' in buf:
+   raw,buf=buf.split(b'\0',1)
+   if raw:
+    msg=json.loads(raw)
+    if msg.get('id')==1:version=msg.get('result');version_at=time.monotonic()
+  if version_at is not None and time.monotonic()-version_at>=3:break
+  assert p.poll() is None,'navigateur terminé avant mesure'
+  time.sleep(.1)
+ assert version and version.get('product'),'version CDP absente'
+ os.write(b,json.dumps(dict(id=2,method='Browser.close')).encode()+b'\0')
+ fin=time.monotonic()+3
+ while p.poll() is None and time.monotonic()<fin:inventaire();time.sleep(.1)
+except BaseException as e:erreur=repr(e)
+finally:
+ stop()
+ if p:
+  try:p.wait(timeout=2)
+  except subprocess.TimeoutExpired:erreur=erreur or 'parent non terminé'
+ restes=[pid for pid,start in owned.items() if vivant(pid,start)]
+ if not restes:shutil.rmtree(profil)
+ (P/'pid-cgroups.json').write_text(json.dumps(observes,indent=2))
+ (P/'verdict.json').write_text(json.dumps(dict(verdict='ROUGE' if erreur or restes else 'VERT',erreur=erreur,version=version,observed_pids=len(owned),restes=restes,profil_supprime=not profil.exists(),elapsed_s=time.monotonic()-debut),indent=2))
+ print((P/'verdict.json').read_text())
+ if erreur or restes:raise SystemExit(1)
+```
