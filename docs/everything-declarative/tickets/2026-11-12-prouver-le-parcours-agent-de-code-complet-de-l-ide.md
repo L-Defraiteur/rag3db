@@ -279,3 +279,26 @@ avec annonce prise/fin et santé avant/après ; pas de réservation durant les
 phases CPU. Base PostgreSQL neuve `cx_ed_parcours_20261113`, aucune donnée réelle.
 Premier rouge inattendu stoppe la portée et garde preuve/diagnostic ; aucun retry
 inchangé. Après passe/revue, tour C7 puis intégration et nettoyage gardé2postes.
+
+## Union après livraison des symboles
+
+Préunion source8e : F5 5/5, minimal0, trois ELF archivés, lib2244/0/66 verte46.70s,
+NAV40/0/0 verte131.91s. Inventaires lectures27/hôte13/PG36 validés, aucune suite
+service encore jouée. Relevés PID/start/mapsnative29/Max32/HIGH0 réels conservés.
+
+Master a reçu la navigation3ed pendant cette passe. Arrêt volontaire au gate
+`ATTENTE_7879`, avant toute utilisation du service, via pidfd du superviseur
+1491979/start87211120 validé. Le verdict de portée rouge pour signal reste
+conservé ; les phases vertes ne constituent pas une globale complète.
+
+Rebase sans conflit, branche NEUVE `cx-ed-parcours-agent-ide-3`, source1eaa6e598,
+base8f604328a incluant symboles3ed et C++ formaté. Revue C7 préservée. Les témoins
+chat/UI et le helper de démarrage sont identiques àfe0 ; le helper Git garde son
+comportement relu, READ_NODES des symboles reste à sa place.
+
+Recette UNION même F5/min/3ELF/lib/NAV/lect27/hôte13/PG36 et paramètres, mêmes
+worktree/target/basePG ; preuves `globale-union`. Budget = RESTE strict de la
+deadline initiale monotone878111.26244974 (pas un nouveau6000). La préparation,
+attente et la préunion sont comprises ; chaque phase conserve ses bornes ou le
+reste inférieur. Source publiée avant compilation. Aucun rejeu Vertex nécessaire
+pour cette union de code déjà attesté ; les suites service ne jouent qu’ici.
