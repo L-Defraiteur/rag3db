@@ -1,0 +1,49 @@
+--- inner-01.py
++++ inner-02.py
+@@ -36,6 +36,7 @@
+ phase='build'
+ try:
+  argv=[x.replace('{build}',str(build)) for x in v['build_argv']];run(argv,'build.log',v['build_timeout_s'])
++ phase='test_preparation'
+  binfile=build/'test/transaction/transaction_test';shell=build/'tools/shell/rag3db'
+  files={'transaction_test':binfile,'rag3db_shell':shell,'engine.a':build/'src/librag3db.a','vector':source/'extension/vector/build/libvector.rag3db_extension','geo':source/'extension/geo/build/libgeo.rag3db_extension'}
+  for p in files.values():assert p.is_file()
+@@ -43,7 +44,19 @@
+  for k in ['transaction_test','rag3db_shell','vector','geo']:assert marker.encode() in files[k].read_bytes()
+  pre={name:{'path':str(p),'bytes':p.stat().st_size,'sha256':sha(p)} for name,p in files.items()}
+  write('manifest-avant-test.json',{'source_commit':commit,'build_id_header':bid,'system_config_header':(build/'src/include/common/system_config.h').read_text(),'files':pre,'cache_sha256':sha(build/'CMakeCache.txt'),'compile_commands_sha256':sha(build/'compile_commands.json')})
+- tmp=build.parent/'test-tmp';work=build.parent/'test-work';tmp.mkdir();work.mkdir()
++ # Export actual artifacts and headers for review, never install them.
++ package=out/'package';package.mkdir();items=[(p,'bin/'+name if name in ['transaction_test','rag3db_shell'] else 'lib/'+name) for name,p in files.items()]
++ for root,label in [(source/'src/include','headers-source'),(build/'src/include','headers-generes')]:
++  for p in root.rglob('*'):
++   if p.is_file():items.append((p,str(Path(label)/p.relative_to(root))))
++ for p in (build/'third_party').rglob('*.a'):items.append((p,str(Path('tiers')/p.relative_to(build/'third_party'))))
++ assert sum(p.stat().st_size for p,_ in items)<512*1024**2
++ package_files=[]
++ for p,name in items:
++  if time.monotonic()>=deadline:raise RuntimeError('budget export atteint')
++  dst=package/name;dst.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(p,dst);h=sha(p);assert sha(dst)==h;package_files.append({'path':name,'bytes':p.stat().st_size,'sha256':h})
++ write('manifest-build.json',{'source_commit':commit,'build_id':marker,'files':package_files,'transaction_test_run':False,'distributed_install':False})
++ tmp=build.parent/'test-tmp';work=build.parent/'test-work';assert tmp.is_dir() and work.is_dir()
+  env={k:s.replace('{scratch}',str(build.parent)) for k,s in v['test_environment'].items()};write('transaction-environment.json',env)
+  argv=[s.replace('{build}',str(build)).replace('{output}',str(out)) for s in v['test_argv']];write('transaction-argv.json',argv)
+  # Nested RO mounts freeze the compiled source/extensions/build for the suite.
+@@ -57,17 +70,6 @@
+  assert selected and int(selected[1])>0 and len(executed)>0 and not failures
+  assert not subprocess.check_output(['git','-C',str(source),'status','--porcelain'])
+  for name,p in files.items():assert sha(p)==pre[name]['sha256']
+- # Export actual artifacts and headers for review, never install them.
+- package=out/'package';package.mkdir();items=[(p,'bin/'+name if name in ['transaction_test','rag3db_shell'] else 'lib/'+name) for name,p in files.items()]
+- for root,label in [(source/'src/include','headers-source'),(build/'src/include','headers-generes')]:
+-  for p in root.rglob('*'):
+-   if p.is_file():items.append((p,str(Path(label)/p.relative_to(root))))
+- for p in (build/'third_party').rglob('*.a'):items.append((p,str(Path('tiers')/p.relative_to(build/'third_party'))))
+- assert sum(p.stat().st_size for p,_ in items)<512*1024**2
+- package_files=[]
+- for p,name in items:
+-  if time.monotonic()>=deadline:raise RuntimeError('budget export atteint')
+-  dst=package/name;dst.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(p,dst);h=sha(p);assert sha(dst)==h;package_files.append({'path':name,'bytes':p.stat().st_size,'sha256':h})
+  write('manifest-final.json',{'source_commit':commit,'build_id':marker,'files':package_files,'native_build':True,'transaction_test_run':True,'distributed_install':False,'master_publication_authorized':False})
+ except BaseException as e:
+  write('premier-echec.json',{'phase':phase,'type':type(e).__name__,'message':str(e),'retry':False,'source_commit':commit});raise

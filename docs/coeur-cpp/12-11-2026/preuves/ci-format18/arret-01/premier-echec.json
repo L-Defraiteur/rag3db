@@ -1,0 +1,7 @@
+{
+  "phase": "build",
+  "type": "OSError",
+  "message": "[Errno 30] Read-only file system: '/home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-01/test-tmp'",
+  "retry": false,
+  "source_commit": "74ad9c25cd2a63e01abd54f25314992cda6fea60"
+}

@@ -1,0 +1,30 @@
+--- outer-01.py
++++ outer-02.py
+@@ -1,7 +1,7 @@
+ import hashlib,json,os,shlex,shutil,subprocess,sys,time
+ from pathlib import Path
+ scratch,output,reference,recipe,pack=map(Path,sys.argv[1:])
+-start=time.monotonic();deadline=start+2370
++start=time.monotonic();deadline=start+2190
+ source=scratch/'source';build=scratch/'build';tmp=scratch/'tmp';expected='74ad9c25c'
+ def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+ def write(name,obj):(output/name).write_text(json.dumps(obj,indent=2)+'\n')
+@@ -21,7 +21,7 @@
+ assert limits['scratch_bytes']==34359738368 and len(limits['routes'].splitlines())==1
+ assert os.statvfs(reference).f_flag & os.ST_RDONLY
+ assert not any(scratch.iterdir())
+-tmp.mkdir();build.mkdir();os.environ['TMPDIR']=str(tmp);os.environ['CCACHE_DISABLE']='1';os.environ['GIT_OPTIONAL_LOCKS']='0';os.environ['GIT_ALLOW_PROTOCOL']='file';os.environ['GIT_TERMINAL_PROMPT']='0'
++tmp.mkdir();build.mkdir();(scratch/'test-tmp').mkdir();(scratch/'test-work').mkdir();os.environ['TMPDIR']=str(tmp);os.environ['CCACHE_DISABLE']='1';os.environ['GIT_OPTIONAL_LOCKS']='0';os.environ['GIT_ALLOW_PROTOCOL']='file';os.environ['GIT_TERMINAL_PROMPT']='0'
+ run(['git','clone','--shared','--no-checkout',str(reference),str(source)],'staging-clone.log')
+ with pack.open('rb') as stream:
+  subprocess.run(['git','-C',str(source),'unpack-objects','-q'],stdin=stream,check=True,timeout=max(1,deadline-time.monotonic()))
+@@ -35,6 +35,9 @@
+ cmd=['bwrap','--unshare-user','--unshare-net','--ro-bind','/','/','--proc','/proc','--dev','/dev','--ro-bind',str(source),str(source),'--bind',str(build),str(build),'--bind',str(tmp),str(tmp),'--bind',str(output),str(output)]
+ for ext in ['vector','geo']:
+  d=str(source/'extension'/ext/'build');cmd+=['--bind',d,d]
++
++for name in ['test-tmp','test-work']:
++ d=str(scratch/name);cmd+=['--bind',d,d]
+ cmd+=['--chdir',str(source),'/usr/bin/python3',str(output/'cx-ci18-inner.py'),str(source),str(build),str(output),str(recipe),str(deadline)]
+ run(cmd,'preflight-inner.log')
+ write('fin.json',{'elapsed_s':time.monotonic()-start,'source_commit':commit,'pack_sha256':sha(pack),'native_build_and_transaction':True,'scratch_used_bytes':(os.statvfs(scratch).f_blocks-os.statvfs(scratch).f_bfree)*os.statvfs(scratch).f_frsize})

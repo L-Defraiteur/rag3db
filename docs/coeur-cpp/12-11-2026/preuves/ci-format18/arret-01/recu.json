@@ -1,0 +1,10 @@
+{
+  "full_archive_preserved_local": "/home/lucied/.cache/rag3db-moteur-notes/ci-format18-a783/ci-format18-74ad-01-arret.tar.gz",
+  "full_archive_sha256": "5289fbeeb15f873a3347711ab5b7419d69be808e9daad6f968427bf4764161cd",
+  "full_archive_remote": "luciepc:~/.cache/rag3db-moteur-notes/ci-format18-74ad-01-arret.tar.gz",
+  "published_proof_archive": "preuves-arret-sans-pack.tar.gz",
+  "published_proof_bytes": 330220,
+  "published_proof_sha256": "a43097e6d8c085125c8581cfe04113cb86c7c2ebba4872c90320359889231815",
+  "source_pack_omitted_from_docs_only": true,
+  "verified_files_full_archive": 29
+}
