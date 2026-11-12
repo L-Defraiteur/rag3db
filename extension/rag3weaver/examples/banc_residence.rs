@@ -34,6 +34,8 @@ mod banc {
         attend_annulation: bool,
         attend_factice: bool,
         textes: Vec<String>,
+        #[serde(default)]
+        gate_usage: Option<PathBuf>,
     }
 
     struct Trace { fichier: Mutex<File>, debut: Instant, id: String }
@@ -84,6 +86,17 @@ mod banc {
                 Ok(bail) => {
                     trace.event("acquis", json!({"adresse":bail.adresse(),"attente_us":attente.elapsed().as_micros()}));
                     if c.attend_annulation { return Err("annulation attendue mais bail obtenu".into()); }
+                    if let Some(gate) = &c.gate_usage {
+                        trace.event("usage_en_attente", json!({"gate":gate}));
+                        while !gate.is_file() {
+                            if annule.load(Ordering::Acquire) { return Err("usage annulé avant mesure".into()); }
+                            if trace.debut.elapsed() >= Duration::from_millis(c.budget_ms) {
+                                return Err("preuve de placement non reçue dans le budget".into());
+                            }
+                            std::thread::sleep(Duration::from_millis(5));
+                        }
+                        trace.event("usage_debloque", json!({"gate":gate}));
+                    }
                     let debut_connecteur = Instant::now();
                     let (client, origine) = model_source::connect_embedder_annulable(&c.source, &annule)?;
                     trace.event("connecteur_pret", json!({"connexion_us":debut_connecteur.elapsed().as_micros(),
