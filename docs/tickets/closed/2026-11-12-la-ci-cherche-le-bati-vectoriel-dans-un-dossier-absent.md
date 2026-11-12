@@ -1,6 +1,6 @@
 # La CI cherche le bâti vectoriel dans un dossier absent
 
-- **État** : en cours ; correctif 567d2de50 et fixture workflow d03ef6fc2 publiés, rouge reproduit puis 20 fixtures CPU vertes aux deux postes ; revue et intégration attendues, CI réelle non rejouée.
+- **État** : corrigé 567d2de50, fixture workflow d03ef6fc2 ; rouge reproduit puis 20 fixtures CPU vertes aux deux postes, revue favorable de l’orchestration ; clôture livrée avec le lot d’intégration coordonné, CI réelle non rejouée.
 - **Famille** : produit
 - **Gravité** : CI rag3weaver bloquée avant l'exécution des tests unitaires.
 - **Atteignable en service** : non, workflow de validation.
@@ -122,3 +122,22 @@ Aucun ancien job relancé, aucun Cargo/CMake complet réel lancé, aucune nouvel
 lib posée et aucun service/GPU sollicité. Les fixtures prouvent la sélection
 et ses refus, **pas une CI verte** : la prochaine CI automatique du commit
 intégré doit encore juger son environnement réel et les tests unitaires.
+
+## Revue et clôture du correctif
+
+L’orchestration a relu le helper, les vingt fixtures et les blocs réels du
+workflow, sans objection concrète : provenance metadata/package_id,
+invocation JSON unique, out_dir et liaison native, cache CMake, archive et
+artefact de test. Cette revue est distincte du verdict du prochain job CI.
+
+Empreintes des trois fichiers éprouvés, concordantes aux deux postes :
+
+- workflow : `b4b452aa3d43f0651846644c20f4e09db1fb792fc1358a8d7661041bb81e4621` ;
+- helper : `4c35df44df54373ee52aef3b05101ec090d7e38feb41209864c878e509e34997` ;
+- fixtures : `2e85b443a3f52ea9dfeba9609cce24fbfd88eabd4522804e31b6783e89fdc662`.
+
+La clôture ne modifie aucun de ces octets. Dernier fetch de préparation :
+master 82e812764, inchangé depuis la base du lot ; rebase sans changement
+sur la branche neuve `cx-optimiseur-ci-vector-2`. Aucun rejeu Cargo/C++ ni
+nouvelle exécution de fixture inchangée nécessaire pour ce pas documentaire.
+Ticket déplacé dans closed avec cet État et les preuves dans le même commit.

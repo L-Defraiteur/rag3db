@@ -10,8 +10,9 @@ choix par glob/mtime. Deux blocs shell réels éprouvés sur producteurs CPU.
 
 Rouge historique reproduit, 20 fixtures vertes au portable et à luciepc sous
 poste lourd, sources figées. Pas de CI réelle rejouée ni de lib/service/GPU
-modifié. Ticket encore en revue/intégration :
-`docs/optimiseur/tickets/2026-11-12-la-ci-cherche-le-bati-vectoriel-dans-un-dossier-absent.md`.
+modifié. Revue de l’orchestration favorable ; clôture prête avec l’intégration
+coordonnée sur `cx-optimiseur-ci-vector-2`, source éprouvée inchangée :
+`docs/tickets/closed/2026-11-12-la-ci-cherche-le-bati-vectoriel-dans-un-dossier-absent.md`.
 Preuves : `~/.cache/optimiseur-notes/ci-vector-12nov/` aux deux postes.
 
 ## Reprise du 12 novembre : attente du port du privé
