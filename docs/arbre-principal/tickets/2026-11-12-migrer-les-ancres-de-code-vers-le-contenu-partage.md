@@ -391,3 +391,9 @@ Les nouveaux témoins sont montés dans le **binaire e2e unique** par le génér
 manuelle du fichier généré. Le ciblé sera `--test e2e e2e_migration_preflight::`,
 avec features natif/daemon/code et un seul thread de test pour les petites
 fixtures. Rien n'a été lancé pendant la mesure C++.
+
+Relecture pendant compilation ae6 : le DDL de montage doit déclarer `_uuid` ;
+`SchemaDialect::create_table` désigne cette clé mais ne l'ajoute pas lui-même.
+Correction du montage avant le prochain ciblé. La source ae6 en cours reste
+figée ; son résultat ne pourra pas constituer un rouge produit si le montage
+échoue avant appel CLI. Aucun correctif du raccord plan/historique n'est appliqué.

@@ -22,7 +22,7 @@ fn check_history(version: i64, status: &str, checksum: &str, refusal: &str) {
     let path = dir.path().join("fixture.rag3db");
     {
         let conn = Rag3dbConnection::with_manifest_buffer_pool(&path, Some(64 * 1024 * 1024)).unwrap();
-        let columns = [("version", ColumnType::Int64), ("name", ColumnType::Text),
+        let columns = [("_uuid", ColumnType::Text), ("version", ColumnType::Int64), ("name", ColumnType::Text),
             ("status", ColumnType::Text), ("checksum", ColumnType::Text),
             ("execution_id", ColumnType::Text), ("applied_at", ColumnType::Int64),
             ("duration_ms", ColumnType::Int64), ("error", ColumnType::Text)]
