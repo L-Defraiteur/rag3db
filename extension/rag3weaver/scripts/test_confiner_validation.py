@@ -187,6 +187,7 @@ class Montage(unittest.TestCase):
             rc = v.superviser([sys.executable, str(command)], delai, str(preuves))
         evidence, = preuves.iterdir()
         verdict = json.loads((evidence / 'verdict.json').read_text())
+        self.enfants_du_cas = json.loads((evidence / 'enfants.json').read_text())
         self.assertEqual(verdict['restes'], [])
         self.assertTrue(verdict['nettoye'])
         self.assertFalse(Path(verdict['prive']).exists())
@@ -203,7 +204,7 @@ class Montage(unittest.TestCase):
             raise v.Refus('scope simulée hors plafond')
         rc, verdict = self.cas_processus('import time\ntime.sleep(60)\n', plafond=limite)
         self.assertEqual(rc, 1)
-        self.assertIn('scope simulée', verdict['erreur'])
+        self.assertTrue(any(row.get('refus') == 'scope simulée hors plafond' for row in self.enfants_du_cas), self.enfants_du_cas)
 
     def test_commande_normale_et_nettoyage_prive(self):
         rc, verdict = self.cas_processus('pass\n')
@@ -266,4 +267,4 @@ class Montage(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main(verbosity=2)
+    unittest.main(verbosity=2, failfast=True)
