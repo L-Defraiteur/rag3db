@@ -474,6 +474,30 @@ fn le_markdown_d_une_reponse_se_rend_et_un_script_s_y_neutralise() {
     fil.join().unwrap();
 }
 
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+fn contenu_du_recu(tour: &Value) -> String {
+    let texte = tour["content"].as_str().unwrap_or_default();
+    serde_json::from_str::<Value>(texte).ok()
+        .and_then(|v| v["result"].as_str().map(str::to_owned))
+        .unwrap_or_else(|| texte.to_owned())
+}
+
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+fn recu_commande(etat: &Value, commande: &str, code: i32) -> String {
+    let tours = etat["turns"].as_array().unwrap();
+    for appel in tours.iter().flat_map(|v| v["tool_calls"].as_array().into_iter().flatten()) {
+        let args: Value = serde_json::from_str(appel["arguments"].as_str().unwrap_or("null")).unwrap();
+        if appel["name"] != "run_command" || args["command"] != commande { continue; }
+        assert!(appel["id"].as_str().is_some_and(|id| !id.is_empty()));
+        let recus: Vec<_> = tours.iter().filter(|v| v["role"] == "tool" && v["tool_call_id"] == appel["id"] && v["tool_name"] == "run_command").collect();
+        assert_eq!(recus.len(), 1, "un reçu pour cet identifiant d'appel");
+        let texte = contenu_du_recu(recus[0]);
+        assert!(texte.starts_with(&format!("### `{commande}`\n\ncode {code} ·")), "commande et code réels : {texte}");
+        return texte;
+    }
+    panic!("appel exact absent : {commande}");
+}
+
 /// Parcours réel : outils du chat, test Cargo nommé, diff et reprise persistée.
 /// Les lectures directes ci-dessous attestent les effets ; elles ne font aucune
 /// des actions demandées à l'agent. Aucun accord humain n'est fabriqué.
@@ -519,29 +543,10 @@ fn le_chat_code_teste_et_reprend_sur_vertex() {
     };
     let r = host.chat_turn(&t.id, "Explore ce petit projet avec search_code puis lis src/lib.rs et tests/salutation.rs. Sans modifier de fichier, exécute exactement cargo test --offline --test salutation salutation_nettoie_le_nom -- --exact --nocapture avec run_command, timeout_s=60, en premier plan. L'échec du test est attendu : rapporte le résultat réel puis arrête ce tour. Ne demande aucun accord supplémentaire et ne contourne aucun refus.").unwrap();
     let initial = sauver("01-exploration-test-initial", &host, &r);
-    let contenu = |tour: &Value| -> String {
-        let texte = tour["content"].as_str().unwrap_or_default();
-        serde_json::from_str::<Value>(texte).ok()
-            .and_then(|v| v["result"].as_str().map(str::to_owned))
-            .unwrap_or_else(|| texte.to_owned())
-    };
     let outils = |etat: &Value, nom: &str| -> Vec<String> {
         etat["turns"].as_array().unwrap().iter()
             .filter(|v| v["role"] == "tool" && v["tool_name"] == nom)
-            .map(&contenu).collect()
-    };
-    let recu_commande = |etat: &Value, commande: &str, code: i32| -> String {
-        let tours = etat["turns"].as_array().unwrap();
-        for appel in tours.iter().flat_map(|v| v["tool_calls"].as_array().into_iter().flatten()) {
-            let args: Value = serde_json::from_str(appel["arguments"].as_str().unwrap_or("null")).unwrap();
-            if appel["name"] != "run_command" || args["command"] != commande { continue; }
-            let recus: Vec<_> = tours.iter().filter(|v| v["role"] == "tool" && v["tool_call_id"] == appel["id"] && v["tool_name"] == "run_command").collect();
-            assert_eq!(recus.len(), 1, "un reçu pour cet identifiant d'appel");
-            let texte = contenu(recus[0]);
-            assert!(texte.starts_with(&format!("### `{commande}`\n\ncode {code} ·")), "commande et code réels : {texte}");
-            return texte;
-        }
-        panic!("appel exact absent : {commande}");
+            .map(contenu_du_recu).collect()
     };
     let commande_test = "cargo test --offline --test salutation salutation_nettoie_le_nom -- --exact --nocapture";
     let commande_diff = "git diff -- src/lib.rs";
@@ -550,7 +555,7 @@ fn le_chat_code_teste_et_reprend_sur_vertex() {
         assert!(initial["turns"].as_array().unwrap().iter().flat_map(|v| v["tool_calls"].as_array().into_iter().flatten()).any(|appel| {
             let args: Value = serde_json::from_str(appel["arguments"].as_str().unwrap_or("null")).unwrap();
             appel["name"] == "read_file" && args["path"] == chemin
-                && initial["turns"].as_array().unwrap().iter().any(|v| v["role"] == "tool" && v["tool_call_id"] == appel["id"] && contenu(v).contains(chemin))
+                && initial["turns"].as_array().unwrap().iter().any(|v| v["role"] == "tool" && v["tool_call_id"] == appel["id"] && contenu_du_recu(v).contains(chemin))
         }), "lecture effective de {chemin}");
     }
     assert_eq!(std::fs::read(racine.join("tests/salutation.rs")).unwrap(), test);
@@ -589,4 +594,70 @@ fn le_chat_code_teste_et_reprend_sur_vertex() {
     assert_eq!(std::fs::read(racine.join("tests/salutation.rs")).unwrap(), test);
     assert_eq!(empreinte(&depot), avant, "principal intact, octets et HEAD");
     std::fs::write(preuves.join("verdict-parcours"), "VERT\n").unwrap();
+}
+
+/// Deuxième étape de la recette réelle : reprendre la fixture verte précédente
+/// depuis la page de l'IDE, avec son hôte HTTP privé et le vrai modèle Vertex.
+/// Pas de recréation silencieuse si la première étape manque ou a rougi.
+#[cfg(all(feature = "code", feature = "rag3db-native", feature = "navigateur"))]
+#[test]
+#[ignore]
+fn le_parcours_vertex_se_reprend_dans_la_page() {
+    use super::navigateur::{navigateur_ou_saut, Navigateur};
+    const NOM: &str = "le_parcours_vertex_se_reprend_dans_la_page";
+    assert!(super::apercu_a_chaud::gemini_ou_saut(NOM, None));
+    let binaire = navigateur_ou_saut(NOM).expect("navigateur réel requis");
+    let d = PathBuf::from(std::env::var_os("RAG3WEAVER_FIXTURE_PARCOURS").expect("fixture verte explicite requise"));
+    let prefixe = d.parent().unwrap();
+    assert_eq!(std::fs::read_to_string(prefixe.join("verdict-parcours")).unwrap(), "VERT\n");
+    let acquis: Value = serde_json::from_slice(&std::fs::read(prefixe.join("04-reprise.json")).unwrap()).unwrap();
+    let preuves = PathBuf::from(std::env::var_os("RAG3WEAVER_PREUVES_PARCOURS").unwrap());
+    std::fs::create_dir_all(&preuves).unwrap();
+    let depot = d.join("petit-depot");
+    let avant = empreinte(&depot);
+    let host = DaemonHost::new()
+        .with_background(Arc::new(crate::dataflow::background::Registry::new()))
+        .with_racine_des_taches(d.join("taches"))
+        .with_chats_root(d.join("chats"))
+        .with_runs_root(d.join("runs"));
+    let manifeste = crate::code_tree::Roots { config: d.join("config"), data: d.join("data") }.manifest("code-petit");
+    let h = host.hosted(&manifeste).unwrap();
+    host.relire_les_taches();
+    host.reread_chats();
+    let t = host.tache(&h.id, "salutation").expect("la tâche acquise existe toujours");
+    let racine = t.workspace.as_ref().unwrap().racine.clone();
+    let code_avant = empreinte(&racine);
+    let etat = host.chat_state(&t.id).unwrap();
+    assert_eq!(etat["turns"], acquis["etat"]["turns"], "mêmes identifiants et historique avant la page");
+    let (adresse, fil) = super::tests::hote_garde_avec("parcours-prive", move |_| host);
+    let url = format!("http://{adresse}");
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{url}/ide/entrer?jeton=parcours-prive"), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{url}/ide/code/{}/chat", t.id), "document.querySelector('#model')?.textContent.includes('gemini') && document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    let anciens = n.evaluer("document.querySelectorAll('article.message.assistant').length").as_u64().unwrap();
+    let message = "Reprise depuis la page IDE après relecture de la tâche : sans modifier aucun fichier, exécute exactement cargo test --offline --test salutation salutation_nettoie_le_nom -- --exact --nocapture avec run_command timeout_s=60 en premier plan, puis git diff -- src/lib.rs. Rapporte le test réellement exécuté et la correction conservée, sans commit ni fusion.";
+    n.evaluer(&format!("document.querySelector('#message').value = {}; document.querySelector('#send').click()", serde_json::to_string(message).unwrap()));
+    n.attendre(&format!("document.querySelector('#status')?.textContent === 'fini' && document.querySelectorAll('article.message.assistant').length > {anciens}"), "le tour lancé depuis le bouton de chat finit");
+    let etat = n.evaluer(&format!("fetch({}).then(r => r.json())", serde_json::to_string(&format!("/ide/chat?backend={}", t.id)).unwrap()));
+    std::fs::write(preuves.join("05-reprise-page.json"), serde_json::to_vec_pretty(&etat).unwrap()).unwrap();
+    std::fs::write(preuves.join("chat.html"), n.evaluer("document.documentElement.outerHTML").as_str().unwrap()).unwrap();
+    assert_eq!(etat["ok"], true);
+    let tours = etat["result"]["turns"].as_array().unwrap();
+    let historique = acquis["etat"]["turns"].as_array().unwrap();
+    assert_eq!(&tours[..historique.len()], historique.as_slice());
+    let nouveaux = json!({"turns": &tours[historique.len()..]});
+    assert!(nouveaux["turns"].as_array().unwrap().iter().any(|v| v["role"] == "user" && v["content"] == message));
+    let test = recu_commande(&nouveaux, "cargo test --offline --test salutation salutation_nettoie_le_nom -- --exact --nocapture", 0);
+    assert!(test.contains("salutation_nettoie_le_nom ... ok") && test.contains("1 passed"));
+    assert!(recu_commande(&nouveaux, "git diff -- src/lib.rs", 0).contains("diff --git a/src/lib.rs"));
+    n.aller(&format!("{url}/ide/code/{}/taches/salutation", h.id), "[...document.querySelectorAll('section.fichier-de-tache[data-genre=\"code\"][data-path=\"src/lib.rs\"] .diff .plus')].some(l => l.textContent.includes('trim'))");
+    std::fs::write(preuves.join("diff.html"), n.evaluer("document.documentElement.outerHTML").as_str().unwrap()).unwrap();
+    assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
+    drop(n);
+    let (statut, _) = super::tests::demander("POST", &format!("{url}/arret"), Some("parcours-prive"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+    assert_eq!(empreinte(&racine), code_avant, "la reprise de page ne réédite ni ne commit");
+    assert_eq!(empreinte(&depot), avant, "principal intact");
+    std::fs::write(preuves.join("verdict-page"), "VERT\n").unwrap();
 }
