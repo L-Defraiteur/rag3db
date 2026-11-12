@@ -19,7 +19,7 @@ fidèles et gardes fraîches vertes. TroisELF, logs, rouges, remotes et preuves 
 Arbre Lucie : submodule codeparsersM et docs/lucie-tmp préexistants à préserver.
 Ancien reste-explicite1acc67338 et sa base ne font pas partie du lot.
 
-## Lot actif : publication concurrente d'accord
+## Lot terminé : publication concurrente d'accord
 
 WT portable/PC cx-ed-accord-publication, branchemême nom, base43db9634a.
 Production03ee5cdcf, dernier docs419bab640 avant bilan. Préfixe rouge4/2/0 puis vert7/0/0
@@ -49,3 +49,10 @@ Tickets clos déplacés : docs/tickets/closed/2026-11-12-qualifier-la-publicatio
 docs/tickets/closed/2026-11-12-le-temoin-code-tree-tronque-le-chemin-du-journal-aux-espaces.md, doublonremplacé.
 Dette accord appliqué malgré erreurjournal RESTEOUVERTE. Préparerpush/proprecleanup
 après3contrôles ; aucune mutationRustaprès143 (Bvalideunion surbase143/2a).
+
+Fin : intégré master0bf06b21a, trois contrôles lus. W/branches/target/PG privés retirés
+aux deux postes, dumps/ELF4/logs/rouges/admins fidèles/pax+SHA conservés. Aucune
+ressource ED de ce lot active ; B a reçu le jalon et conserve son union sur143/2a.
+Bilan documentaire écrit dans un Wdocs neuf, retiré après son push et garde fraîche.
+Tickets concurrence/fixture clos, doublonremplacé ; dette journal après effet ouverte.
+Aucun nouveau travail implicite lancé.

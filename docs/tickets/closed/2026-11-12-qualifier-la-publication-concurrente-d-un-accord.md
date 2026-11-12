@@ -138,3 +138,7 @@ d'outerservice perdant l'ascendance poste. Les inventaires exacts des trois ELF 
 publiés avant runtime, sans nombre ancien imposé. ServiceBGE7879 existant coordonné
 seulement pour les lectures, aucune relance M8 ni nouvelle instance. Pas de master
 avant revue du verdict global et « à toi ».
+
+Intégré sur master `0bf06b21a5fda28520f6ae0b2b2ad07acbeac331` après revue archi/C7
+et verdict composé. Nettoyage privé et preuves deux postes consignés au rapport ED
+du12novembre ; aucun accord/donnée/configuration utilisateur modifié par les témoins.

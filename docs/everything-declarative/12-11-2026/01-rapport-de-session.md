@@ -427,3 +427,35 @@ Markdown uniquement. Arbre B empile sa validation sur cette base, ordre masterED
 Après push : trois contrôles puis retrait immédiat gardé de nos deuxW/target/branches
 locales et PGprivée après dump+SHA, sans toucher ancien reste-explicite, sources de
 Lucie ou ressources B. Les remotes/logs/rouges/ELF/admins restent préservés.
+
+## Intégration accords et fin des ressources privées
+
+Master **0bf06b21a5fda28520f6ae0b2b2ad07acbeac331** poussé sous poste push
+ED-accord-publication, dernier fetch avant if VERT. Trois contrôles lus après push :
+status propre, aucun rebase, origin/master=HEAD. Code/tests/templates/Cargo identiques
+à143a21706 (équivalence JSON vérifiée), préservant la base de validation empilée B.
+Le SHA et la quiescence PC ont été transmis immédiatement à C7 et Arbre ; aucune
+attente ED ne bloque sa suite. Les deux tickets corrigés sont clos, le doublon
+remplacé ; la dette journal après effet reste ouverte.
+
+Dans le même script après les contrôles : archive fidèle de l'administration privée
+PC, module codeparsers inclus, garde fraîche
+SHA dca13abb7a84cf3c1419f728697837a6b1b9b20e34e34c144c9fbf835252f628 VERT,
+retrait W initialisé avec --force seulement après ce garde, trois branches locales
+-d normal et target8623326051octets retirés. PGprivée cx_ed_accord_publication_20261112
+exportée format personnalisé, SHA vérifié aux deux postes, zéro connexion avant
+drop, absence vérifiée après. Aucun service partagé arrêté.
+
+Portable : archive fidèle, garde fraîche VERT puis retrait W/branche3 par -d.
+Quatre ELF, journaux/rouges, source/220gabarits/mapsnative29, reçus et verdicts gardés
+aux deux postes. Archives administratives pax croisées avec SHA ; contexte synthétique
+code-tree rouge sauvegardé avec sa propre administration Git. Rapports e2e ignorés
+déplacés hors source avant le garde. Aucun GC/prune/réparation ou suppression remote.
+
+Preuves : I-luciepc/accord-publication-20261112/globale : master-integre,
+trois-controles, verdict-compose.json, equivalence-code-stable.json, ELF-initial/,
+correctif-journal/ELF/, gardes portable/PC, administrations fidèles et pax+SHA,
+cx_ed_accord_publication_20261112.dump+SHA, fixture-code-tree-227077.tar, nettoyages.
+L'arbre de Lucie conserve codeparsersM et docs/lucie-tmp préexistants. Ancien
+reste-explicite et ressources B sont hors périmètre, jamais retirés par ce script.
+Pas de nouveau Cargo/NAV/service7879 après cette validation.

@@ -78,3 +78,7 @@ compilation e2e JSON, helpers3 et consommateurs modifiés lectures27/hôte13 sur
 la MÊME racine avec espace. Tous dans le reste du6000original deadline866610.959853126,
 120déjàconsommés comptés ; pas de lib/NAV globale rejouée ni reset. Recette à publier
 avant toute commande. L'ancienne proposition sansespace est abandonnée, jamais exécutée.
+
+Intégré sur master `0bf06b21a5fda28520f6ae0b2b2ad07acbeac331` après revue archi/C7
+et verdict composé. Nettoyage privé et preuves deux postes consignés au rapport ED
+du12novembre ; aucun accord/donnée/configuration utilisateur modifié par les témoins.
