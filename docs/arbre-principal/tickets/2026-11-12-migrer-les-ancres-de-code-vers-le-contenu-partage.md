@@ -222,3 +222,17 @@ l'absence de connexion modèle par un appel produit instrumenté, le plan CLI,
 la revalidation sous exclusivité ou la résistance à une course entre inspection
 RO et ouverture RW. Ces points restent ouverts avant tout verdict du patch1b.
 Aucun nouveau Cargo pendant le créneau C++02.
+
+Suite de la frontière commune (non compilée) :
+`PreparedBackend::connect_admitted_storage` effectue admission RO, ouverture du
+writer natif exclusif du moteur, puis nouvelle inspection/admission avant de
+rendre la connexion au client. Daemon et les5portes CLI passent par cette même
+méthode **avant** `embedder_or_absent`. Aucun verrou TTL présenté comme exclusion.
+Cette méthode ne fait aucun apply et n'établit pas à elle seule un protocole de
+migration durable ni la qualification du plan sous cette garde.
+Deux témoins natifs synthétiques ajoutés (non joués) : refus cible sur ancien
+format préservant les octets de chaque fichier de fixture ; cible absente refusée
+sans créer le répertoire de base. Le cas d'une évolution entre les deux
+inspections et le raccord du plan sous garde restent à prouver. Les compteurs
+callback du précédent préfixe ne sont pas des compteurs de connexions modèles
+sur ce parcours produit : ne pas les confondre.
