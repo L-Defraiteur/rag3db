@@ -1,10 +1,9 @@
-#include <gtest/gtest.h>
-
-#include "math/quaternion.h"
-#include "math/matrix3.h"
-#include "math/geometry.h"
-
 #include <cmath>
+
+#include "math/geometry.h"
+#include "math/matrix3.h"
+#include "math/quaternion.h"
+#include <gtest/gtest.h>
 
 using namespace rag3db::geo_extension::math;
 
@@ -97,7 +96,8 @@ TEST(QuatTest, RotateMatchesMatrix) {
     double m[9];
     q.toMatrix3(m);
     Mat3 mat{};
-    for (int i = 0; i < 9; i++) mat.m[i] = m[i];
+    for (int i = 0; i < 9; i++)
+        mat.m[i] = m[i];
 
     double ox1, oy1, oz1, ox2, oy2, oz2;
     q.rotate(3.0, -1.0, 2.0, ox1, oy1, oz1);
@@ -148,7 +148,8 @@ TEST(Mat3Test, TransposeIsInverseForRotation) {
     double m[9];
     q.toMatrix3(m);
     Mat3 mat{};
-    for (int i = 0; i < 9; i++) mat.m[i] = m[i];
+    for (int i = 0; i < 9; i++)
+        mat.m[i] = m[i];
     auto mt = mat.transpose();
     auto id = mat * mt;
     ASSERT_NEAR(id.m[0], 1.0, 1e-10);
@@ -217,12 +218,12 @@ TEST(GeometryTest, InsidePlane) {
 TEST(GeometryTest, InsideConvexCube) {
     // Unit cube [0,1]^3: 6 planes.
     double planes[] = {
-        1, 0, 0, 0,    // x >= 0
-        -1, 0, 0, 1,   // x <= 1
-        0, 1, 0, 0,    // y >= 0
-        0, -1, 0, 1,   // y <= 1
-        0, 0, 1, 0,    // z >= 0
-        0, 0, -1, 1,   // z <= 1
+        1, 0, 0, 0,  // x >= 0
+        -1, 0, 0, 1, // x <= 1
+        0, 1, 0, 0,  // y >= 0
+        0, -1, 0, 1, // y <= 1
+        0, 0, 1, 0,  // z >= 0
+        0, 0, -1, 1, // z <= 1
     };
     ASSERT_TRUE(insideConvex(0.5, 0.5, 0.5, planes, 6));
     ASSERT_FALSE(insideConvex(1.5, 0.5, 0.5, planes, 6));

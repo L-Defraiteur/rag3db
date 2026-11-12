@@ -144,8 +144,8 @@ TEST_F(CheckpointUnderReaders, AReaderOpenedDuringACheckpointReadsTheSameAfterIt
     EXPECT_EQ(commit, "AUCUNE LIGNE") << commit;
     EXPECT_EQ(during, "20000|200009992|-1\n");
     EXPECT_EQ(after, during);
-    EXPECT_LE(beginMs, MAX_READ_MS) << "BEGIN TRANSACTION READ ONLY waited for the checkpoint: "
-                                    << beginMs << " ms";
+    EXPECT_LE(beginMs, MAX_READ_MS)
+        << "BEGIN TRANSACTION READ ONLY waited for the checkpoint: " << beginMs << " ms";
     // Et la base rouverte porte ce que le point de reprise a écrit.
     conn.reset();
     database.reset();

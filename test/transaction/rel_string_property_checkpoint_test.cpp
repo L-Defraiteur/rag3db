@@ -71,13 +71,13 @@ protected:
             numLines++;
             if (!hasA || !hasB || a != b) {
                 if (numDifferent++ < 5) {
-                    firsts += "\n  attendu « " + (hasA ? a : std::string("<rien>")) +
-                              " », lu « " + (hasB ? b : std::string("<rien>")) + " »";
+                    firsts += "\n  attendu « " + (hasA ? a : std::string("<rien>")) + " », lu « " +
+                              (hasB ? b : std::string("<rien>")) + " »";
                 }
             }
         }
-        ADD_FAILURE() << what << " : " << numDifferent << " lignes sur " << numLines
-                      << " diffèrent" << firsts;
+        ADD_FAILURE() << what << " : " << numDifferent << " lignes sur " << numLines << " diffèrent"
+                      << firsts;
     }
 
     // Chaque relation avec sa chaîne, lue dans le sens direct puis dans le sens inverse.

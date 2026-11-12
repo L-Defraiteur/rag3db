@@ -2,13 +2,13 @@
 #include <fstream>
 
 #include "api_test/private_api_test.h"
-#include "test_runner/fsm_leak_checker.h"
 #include "common/exception/runtime.h"
 #include "flaky_checkpointer.h"
 #include "storage/checkpointer.h"
 #include "storage/storage_manager.h"
 #include "storage/wal/wal.h"
 #include "test_helper/flaky_buffer_manager.h"
+#include "test_runner/fsm_leak_checker.h"
 #include "transaction/transaction_manager.h"
 
 using namespace rag3db::common;
@@ -90,8 +90,8 @@ TEST_F(FlakyCheckpointerTest, ARefusedCheckpointThatChangedNothingLeavesTheDatab
     // Les résultats ne survivent pas à la base : leur mémoire est à elle.
     {
         auto begin = conn->query("BEGIN TRANSACTION;");
-        ASSERT_TRUE(begin->isSuccess()) << "[check: refused-checkpoint-leaves-the-database-open] "
-                                        << begin->getErrorMessage();
+        ASSERT_TRUE(begin->isSuccess())
+            << "[check: refused-checkpoint-leaves-the-database-open] " << begin->getErrorMessage();
         ASSERT_TRUE(conn->query("CREATE (a:test {id: 5000, name: 'after'});")->isSuccess());
         ASSERT_TRUE(conn->query("COMMIT;")->isSuccess());
         auto again = conn->query("CHECKPOINT;");
@@ -247,26 +247,25 @@ void FlakyCheckpointerTest::sweepFailuresOverALaterCheckpoint(bool checkpointOnC
         std::filesystem::create_directories(std::filesystem::path(databasePath).parent_path());
         std::atomic<uint64_t> failureFrequency = UINT64_MAX;
         FlakyBufferManager* bufferManager = nullptr;
-        database =
-            constructDB(databasePath, *systemConfig, [&](const main::Database& db) {
-                auto bm = std::make_unique<FlakyBufferManager>(databasePath,
-                    databasePath + ".checkpoint.tmp", systemConfig->bufferPoolSize,
-                    systemConfig->maxDBSize, getFileSystem(db), systemConfig->readOnly,
-                    failureFrequency, false /* canFailDuringExecute */,
+        database = constructDB(databasePath, *systemConfig, [&](const main::Database& db) {
+            auto bm =
+                std::make_unique<FlakyBufferManager>(databasePath, databasePath + ".checkpoint.tmp",
+                    systemConfig->bufferPoolSize, systemConfig->maxDBSize, getFileSystem(db),
+                    systemConfig->readOnly, failureFrequency, false /* canFailDuringExecute */,
                     true /* canFailDuringCheckpoint */, false /* canFailDuringCommit */);
-                bufferManager = bm.get();
-                return bm;
-            });
+            bufferManager = bm.get();
+            return bm;
+        });
         conn = std::make_unique<main::Connection>(database.get());
         bufferManager->setClientContext(getClientContext(*conn));
         conn->query(stringFormat("CALL force_checkpoint_on_close={};",
             checkpointOnClose ? "true" : "false"));
         conn->query("CALL auto_checkpoint=false");
         for (const auto& table : tables) {
-            ASSERT_TRUE(conn->query(stringFormat(
-                                        "CREATE NODE TABLE {}(id INT64 PRIMARY KEY, name STRING);",
-                                        table))
-                            ->isSuccess());
+            ASSERT_TRUE(
+                conn->query(stringFormat("CREATE NODE TABLE {}(id INT64 PRIMARY KEY, name STRING);",
+                                table))
+                    ->isSuccess());
         }
         auto numRows = 0;
         for (auto cycle = 0; cycle < NUM_CYCLES; cycle++) {
@@ -439,9 +438,9 @@ TEST_F(FailedCheckpointTest, EveryStatementIsRefusedUntilTheDatabaseIsReopened) 
     // Rouverte, elle rend le dernier commit acquitté, et elle sert de nouveau.
     createDBAndConn();
     expectExactContent();
-    ASSERT_TRUE(conn->query(stringFormat("CREATE (a:test {id: {}, name: 'name_{}'});", NUM_ROWS,
-                                NUM_ROWS))
-                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query(stringFormat("CREATE (a:test {id: {}, name: 'name_{}'});", NUM_ROWS, NUM_ROWS))
+            ->isSuccess());
     ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
     createDBAndConn();
     EXPECT_EQ(single("MATCH (a:test) RETURN COUNT(a);"), NUM_ROWS + 1);
@@ -701,8 +700,8 @@ TEST_F(FlakyCheckpointerTest, ACopyThatSkipsRowsThenAFailedCheckpointLeavesTheTa
     conn->query("CALL auto_checkpoint=false");
     ASSERT_TRUE(
         conn->query("CREATE NODE TABLE test(id INT64 PRIMARY KEY, name STRING);")->isSuccess());
-    ASSERT_TRUE(conn->query("UNWIND range(0, 99) AS i CREATE (:test {id: i, name: 'old'});")
-                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("UNWIND range(0, 99) AS i CREATE (:test {id: i, name: 'old'});")->isSuccess());
     ASSERT_TRUE(conn->query("CHECKPOINT;")->isSuccess());
     const auto csvPath = databasePath + ".skipped.csv";
     {
@@ -723,8 +722,7 @@ TEST_F(FlakyCheckpointerTest, ACopyThatSkipsRowsThenAFailedCheckpointLeavesTheTa
     // Le COPY a rendu une erreur : rien de lui ne reste, et rien d'ancien n'est parti.
     EXPECT_EQ(count->getNext()->getValue(0)->getValue<int64_t>(), 100);
     for (const auto id : {0, 5, 7, 99}) {
-        auto old =
-            conn->query("MATCH (a:test {id: " + std::to_string(id) + "}) RETURN a.name;");
+        auto old = conn->query("MATCH (a:test {id: " + std::to_string(id) + "}) RETURN a.name;");
         ASSERT_TRUE(old->isSuccess()) << old->getErrorMessage();
         ASSERT_TRUE(old->hasNext()) << "row " << id << " is gone";
         EXPECT_EQ(old->getNext()->getValue(0)->getValue<std::string>(), "old") << id;
@@ -750,8 +748,8 @@ public:
         conn->query("CALL force_checkpoint_on_close=false;");
         conn->query("CALL auto_checkpoint=false");
         ASSERT_TRUE(conn->query(setting)->isSuccess());
-        ASSERT_TRUE(conn->query("CREATE NODE TABLE test(id INT64 PRIMARY KEY, name STRING);")
-                        ->isSuccess());
+        ASSERT_TRUE(
+            conn->query("CREATE NODE TABLE test(id INT64 PRIMARY KEY, name STRING);")->isSuccess());
         ASSERT_TRUE(conn->query("CREATE REL TABLE link(FROM test TO test);")->isSuccess());
         ASSERT_TRUE(conn->query("UNWIND range(0, 99) AS i CREATE (:test {id: i, name: 'old'});")
                         ->isSuccess());

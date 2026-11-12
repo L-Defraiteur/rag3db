@@ -15,8 +15,8 @@ namespace rag3db {
 namespace testing {
 
 // Une extension d'un autre bâti que le moteur ne doit pas se charger sans un mot : ses structures
-// ne sont pas celles du moteur (ticket 2026-10-05-extension-chargee-au-rejeu-sans-controle-de-bati :
-// une ouverture qui ne rendait jamais la main). Le moteur et chaque extension portent un
+// ne sont pas celles du moteur (ticket 2026-10-05-extension-chargee-au-rejeu-sans-controle-de-bati
+// : une ouverture qui ne rendait jamais la main). Le moteur et chaque extension portent un
 // identifiant de bâti, comparé entre le nom et l'initialisation de l'extension.
 class ExtensionBuildIdTest : public EmptyDBTest {
 protected:

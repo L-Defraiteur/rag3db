@@ -1,7 +1,8 @@
 #include "index/rtree.h"
-#include "math/geometry.h"
 
 #include <cstring>
+
+#include "math/geometry.h"
 
 namespace rag3db {
 namespace geo_extension {
@@ -91,8 +92,8 @@ double RTree::haversineDistance(double lat1, double lon1, double lat2, double lo
     double dlat = (lat2 - lat1) * DEG_TO_RAD;
     double dlon = (lon2 - lon1) * DEG_TO_RAD;
     double a = std::sin(dlat / 2) * std::sin(dlat / 2) +
-               std::cos(lat1 * DEG_TO_RAD) * std::cos(lat2 * DEG_TO_RAD) *
-                   std::sin(dlon / 2) * std::sin(dlon / 2);
+               std::cos(lat1 * DEG_TO_RAD) * std::cos(lat2 * DEG_TO_RAD) * std::sin(dlon / 2) *
+                   std::sin(dlon / 2);
     return 2.0 * EARTH_RADIUS_M * std::asin(std::sqrt(a));
 }
 
@@ -187,7 +188,8 @@ void RTree::splitNode(uint32_t nodeIdx) {
 
     // Distribute remaining entries.
     for (size_t i = 0; i < entries.size(); i++) {
-        if (i == seed1 || i == seed2) continue;
+        if (i == seed1 || i == seed2)
+            continue;
 
         // If one group needs all remaining to reach minEntries, assign to it.
         size_t remaining = entries.size() - i;
@@ -236,9 +238,11 @@ void RTree::splitNode(uint32_t nodeIdx) {
         nodes_[newRootIdx].isLeaf = false;
 
         BoundingBox bboxOld(dims_);
-        for (const auto& e : nodes_[nodeIdx].entries) bboxOld.expand(e.bbox);
+        for (const auto& e : nodes_[nodeIdx].entries)
+            bboxOld.expand(e.bbox);
         BoundingBox bboxNew(dims_);
-        for (const auto& e : nodes_[newNodeIdx].entries) bboxNew.expand(e.bbox);
+        for (const auto& e : nodes_[newNodeIdx].entries)
+            bboxNew.expand(e.bbox);
 
         nodes_[newRootIdx].entries.push_back({bboxOld, nodeIdx});
         nodes_[newRootIdx].entries.push_back({bboxNew, newNodeIdx});
@@ -253,14 +257,16 @@ void RTree::splitNode(uint32_t nodeIdx) {
         for (auto& e : nodes_[parentIdx].entries) {
             if (e.data == nodeIdx) {
                 e.bbox = BoundingBox(dims_);
-                for (const auto& ce : nodes_[nodeIdx].entries) e.bbox.expand(ce.bbox);
+                for (const auto& ce : nodes_[nodeIdx].entries)
+                    e.bbox.expand(ce.bbox);
                 break;
             }
         }
 
         // Add new entry for newNodeIdx.
         BoundingBox bboxNew(dims_);
-        for (const auto& e : nodes_[newNodeIdx].entries) bboxNew.expand(e.bbox);
+        for (const auto& e : nodes_[newNodeIdx].entries)
+            bboxNew.expand(e.bbox);
         parentMap_[newNodeIdx] = parentIdx;
         insertEntry(parentIdx, {bboxNew, newNodeIdx}); // May cause recursive split.
     }
@@ -270,7 +276,8 @@ void RTree::splitNode(uint32_t nodeIdx) {
 
 bool RTree::remove(uint64_t nodeOffset) {
     auto it = offsetToLeaf_.find(nodeOffset);
-    if (it == offsetToLeaf_.end()) return false;
+    if (it == offsetToLeaf_.end())
+        return false;
 
     uint32_t leafIdx = it->second;
     auto& entries = nodes_[leafIdx].entries;
@@ -369,7 +376,8 @@ void RTree::update(uint64_t nodeOffset, const std::vector<double>& newCoords) {
 
 std::vector<std::pair<uint64_t, double>> RTree::knn(const std::vector<double>& query,
     uint32_t k) const {
-    if (size_ == 0) return {};
+    if (size_ == 0)
+        return {};
 
     // Max-heap of (distance, nodeOffset) — keeps k nearest.
     using Result = std::pair<double, uint64_t>;
@@ -427,7 +435,8 @@ std::vector<std::pair<uint64_t, double>> RTree::knn(const std::vector<double>& q
 
 std::vector<uint64_t> RTree::searchBBox(const BoundingBox& bbox) const {
     std::vector<uint64_t> results;
-    if (size_ == 0) return results;
+    if (size_ == 0)
+        return results;
 
     std::queue<uint32_t> q;
     q.push(root_);
@@ -436,7 +445,8 @@ std::vector<uint64_t> RTree::searchBBox(const BoundingBox& bbox) const {
         q.pop();
         const auto& node = nodes_[idx];
         for (const auto& entry : node.entries) {
-            if (!entry.bbox.intersects(bbox)) continue;
+            if (!entry.bbox.intersects(bbox))
+                continue;
             if (node.isLeaf) {
                 results.push_back(entry.data);
             } else {
@@ -452,7 +462,8 @@ std::vector<uint64_t> RTree::searchBBox(const BoundingBox& bbox) const {
 std::vector<std::pair<uint64_t, double>> RTree::searchRadius(const std::vector<double>& center,
     double radius) const {
     std::vector<std::pair<uint64_t, double>> results;
-    if (size_ == 0) return results;
+    if (size_ == 0)
+        return results;
 
     std::queue<uint32_t> q;
     q.push(root_);
@@ -462,7 +473,8 @@ std::vector<std::pair<uint64_t, double>> RTree::searchRadius(const std::vector<d
         const auto& node = nodes_[idx];
         for (const auto& entry : node.entries) {
             double minDist = entry.bbox.minDistToPoint(center);
-            if (minDist > radius) continue;
+            if (minDist > radius)
+                continue;
             if (node.isLeaf) {
                 double dist = pointDistance(center, entry.bbox.minCoords);
                 if (dist <= radius) {
@@ -672,7 +684,8 @@ std::vector<std::pair<uint64_t, double>> RTree::searchOBB(const std::vector<doub
     std::vector<std::pair<uint64_t, double>> results;
     for (uint64_t offset : candidates) {
         std::vector<double> coords;
-        if (!getCoords(offset, coords)) continue;
+        if (!getCoords(offset, coords))
+            continue;
 
         double dx = coords[0] - center[0];
         double dy = coords[1] - center[1];
@@ -708,7 +721,8 @@ std::vector<std::pair<uint64_t, double>> RTree::searchFrustum(const double* plan
     // Simple approach: scan all leaves and test each.
     std::vector<std::pair<uint64_t, double>> results;
     for (const auto& node : nodes_) {
-        if (!node.isLeaf) continue;
+        if (!node.isLeaf)
+            continue;
         for (const auto& entry : node.entries) {
             double px = entry.bbox.minCoords[0];
             double py = entry.bbox.minCoords[1];

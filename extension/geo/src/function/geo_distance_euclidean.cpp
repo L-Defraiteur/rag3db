@@ -21,8 +21,8 @@ static void execFunc(const std::vector<std::shared_ptr<ValueVector>>& parameters
         std::vector<double> p1, p2;
         uint32_t s1, s2;
         if (!extractListDoubleVar(*parameters[0], *parameterSelVectors[0], i, p1, s1) ||
-            !extractListDoubleVar(*parameters[1], *parameterSelVectors[1], i, p2, s2) ||
-            s1 != s2 || s1 == 0) {
+            !extractListDoubleVar(*parameters[1], *parameterSelVectors[1], i, p2, s2) || s1 != s2 ||
+            s1 == 0) {
             result.setNull(resPos, true);
             continue;
         }
@@ -38,8 +38,8 @@ static std::unique_ptr<FunctionBindData> bindFunc(const ScalarBindFuncInput& inp
 function_set GeoDistanceEuclideanFunction::getFunctionSet() {
     function_set result;
     auto func = std::make_unique<ScalarFunction>(name,
-        std::vector<LogicalTypeID>{LogicalTypeID::LIST, LogicalTypeID::LIST},
-        LogicalTypeID::DOUBLE, execFunc);
+        std::vector<LogicalTypeID>{LogicalTypeID::LIST, LogicalTypeID::LIST}, LogicalTypeID::DOUBLE,
+        execFunc);
     func->bindFunc = bindFunc;
     result.push_back(std::move(func));
     return result;

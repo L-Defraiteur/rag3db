@@ -560,8 +560,8 @@ void checkLevel2InTransaction(main::Connection& connection, const Schema& schema
             if (!properties.empty()) {
                 const auto forward = scanStoredProperties(transaction, mm, relTable, *source,
                     common::RelDataDirection::FWD, properties);
-                const auto backward = scanStoredProperties(transaction, mm, relTable,
-                    *destination, common::RelDataDirection::BWD, properties);
+                const auto backward = scanStoredProperties(transaction, mm, relTable, *destination,
+                    common::RelDataDirection::BWD, properties);
                 std::string detail;
                 size_t numDiffering = 0;
                 for (const auto& [relOffset, forwardValues] : forward) {

@@ -22,13 +22,12 @@ class IndexScanNodeTable : public ScanTable {
     static constexpr PhysicalOperatorType type_ = PhysicalOperatorType::INDEX_SCAN_NODE_TABLE;
 
 public:
-    IndexScanNodeTable(ScanOpInfo opInfo, ScanNodeTableInfo tableInfo,
-        IndexSearchFunc searchFunc, int64_t limit,
-        std::vector<common::idx_t> virtualVectorIndices,
-        physical_op_id id, std::unique_ptr<OPPrintInfo> printInfo)
+    IndexScanNodeTable(ScanOpInfo opInfo, ScanNodeTableInfo tableInfo, IndexSearchFunc searchFunc,
+        int64_t limit, std::vector<common::idx_t> virtualVectorIndices, physical_op_id id,
+        std::unique_ptr<OPPrintInfo> printInfo)
         : ScanTable{type_, std::move(opInfo), id, std::move(printInfo)},
-          tableInfo{std::move(tableInfo)}, searchFunc{std::move(searchFunc)},
-          limit{limit}, virtualVectorIndices{std::move(virtualVectorIndices)} {}
+          tableInfo{std::move(tableInfo)}, searchFunc{std::move(searchFunc)}, limit{limit},
+          virtualVectorIndices{std::move(virtualVectorIndices)} {}
 
     bool isSource() const override { return true; }
     bool isParallel() const override { return false; }
@@ -37,9 +36,8 @@ public:
     bool getNextTuplesInternal(ExecutionContext* context) override;
 
     std::unique_ptr<PhysicalOperator> copy() override {
-        return std::make_unique<IndexScanNodeTable>(opInfo.copy(), tableInfo.copy(),
-            searchFunc, limit, virtualVectorIndices,
-            id, printInfo->copy());
+        return std::make_unique<IndexScanNodeTable>(opInfo.copy(), tableInfo.copy(), searchFunc,
+            limit, virtualVectorIndices, id, printInfo->copy());
     }
 
 private:

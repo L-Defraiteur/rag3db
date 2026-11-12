@@ -267,8 +267,8 @@ typedef struct {
 } rag3db_interval_t;
 
 /**
- * @brief rag3db_query_summary stores the execution time, plan, compiling time and query options of a
- * query.
+ * @brief rag3db_query_summary stores the execution time, plan, compiling time and query options of
+ * a query.
  */
 typedef struct {
     void* _query_summary;
@@ -370,8 +370,8 @@ RAG3DB_C_API void rag3db_connection_destroy(rag3db_connection* connection);
  * @param num_threads The maximum number of threads to use for executing queries.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_connection_set_max_num_thread_for_exec(rag3db_connection* connection,
-    uint64_t num_threads);
+RAG3DB_C_API rag3db_state rag3db_connection_set_max_num_thread_for_exec(
+    rag3db_connection* connection, uint64_t num_threads);
 
 /**
  * @brief Returns the maximum number of threads of the connection to use for executing queries.
@@ -380,8 +380,8 @@ RAG3DB_C_API rag3db_state rag3db_connection_set_max_num_thread_for_exec(rag3db_c
  * for executing queries.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_connection_get_max_num_thread_for_exec(rag3db_connection* connection,
-    uint64_t* out_result);
+RAG3DB_C_API rag3db_state rag3db_connection_get_max_num_thread_for_exec(
+    rag3db_connection* connection, uint64_t* out_result);
 /**
  * @brief Executes the given query and returns the result.
  * @param connection The connection instance to execute the query.
@@ -398,8 +398,8 @@ RAG3DB_C_API rag3db_state rag3db_connection_query(rag3db_connection* connection,
  * @param[out] out_prepared_statement The output parameter that will hold the prepared statement.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_connection_prepare(rag3db_connection* connection, const char* query,
-    rag3db_prepared_statement* out_prepared_statement);
+RAG3DB_C_API rag3db_state rag3db_connection_prepare(rag3db_connection* connection,
+    const char* query, rag3db_prepared_statement* out_prepared_statement);
 /**
  * @brief Executes the prepared_statement using connection.
  * @param connection The connection instance to execute the prepared_statement.
@@ -432,7 +432,8 @@ RAG3DB_C_API void rag3db_prepared_statement_destroy(rag3db_prepared_statement* p
 /**
  * @return the query is prepared successfully or not.
  */
-RAG3DB_C_API bool rag3db_prepared_statement_is_success(rag3db_prepared_statement* prepared_statement);
+RAG3DB_C_API bool rag3db_prepared_statement_is_success(
+    rag3db_prepared_statement* prepared_statement);
 /**
  * @brief Returns the error message if the prepared statement is not prepared successfully.
  * The caller is responsible for freeing the returned string with `rag3db_destroy_string`.
@@ -449,8 +450,8 @@ RAG3DB_C_API char* rag3db_prepared_statement_get_error_message(
  * @param value The boolean value to bind.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_prepared_statement_bind_bool(rag3db_prepared_statement* prepared_statement,
-    const char* param_name, bool value);
+RAG3DB_C_API rag3db_state rag3db_prepared_statement_bind_bool(
+    rag3db_prepared_statement* prepared_statement, const char* param_name, bool value);
 /**
  * @brief Binds the given int64_t value to the given parameter name in the prepared statement.
  * @param prepared_statement The prepared statement instance to bind the value.
@@ -485,8 +486,8 @@ RAG3DB_C_API rag3db_state rag3db_prepared_statement_bind_int16(
  * @param value The int8_t value to bind.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_prepared_statement_bind_int8(rag3db_prepared_statement* prepared_statement,
-    const char* param_name, int8_t value);
+RAG3DB_C_API rag3db_state rag3db_prepared_statement_bind_int8(
+    rag3db_prepared_statement* prepared_statement, const char* param_name, int8_t value);
 /**
  * @brief Binds the given uint64_t value to the given parameter name in the prepared statement.
  * @param prepared_statement The prepared statement instance to bind the value.
@@ -549,8 +550,8 @@ RAG3DB_C_API rag3db_state rag3db_prepared_statement_bind_float(
  * @param value The date value to bind.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_prepared_statement_bind_date(rag3db_prepared_statement* prepared_statement,
-    const char* param_name, rag3db_date_t value);
+RAG3DB_C_API rag3db_state rag3db_prepared_statement_bind_date(
+    rag3db_prepared_statement* prepared_statement, const char* param_name, rag3db_date_t value);
 /**
  * @brief Binds the given timestamp_ns value to the given parameter name in the prepared statement.
  * @param prepared_statement The prepared statement instance to bind the value.
@@ -559,7 +560,8 @@ RAG3DB_C_API rag3db_state rag3db_prepared_statement_bind_date(rag3db_prepared_st
  * @return The state indicating the success or failure of the operation.
  */
 RAG3DB_C_API rag3db_state rag3db_prepared_statement_bind_timestamp_ns(
-    rag3db_prepared_statement* prepared_statement, const char* param_name, rag3db_timestamp_ns_t value);
+    rag3db_prepared_statement* prepared_statement, const char* param_name,
+    rag3db_timestamp_ns_t value);
 /**
  * @brief Binds the given timestamp_sec value to the given parameter name in the prepared statement.
  * @param prepared_statement The prepared statement instance to bind the value.
@@ -578,7 +580,8 @@ RAG3DB_C_API rag3db_state rag3db_prepared_statement_bind_timestamp_sec(
  * @return The state indicating the success or failure of the operation.
  */
 RAG3DB_C_API rag3db_state rag3db_prepared_statement_bind_timestamp_tz(
-    rag3db_prepared_statement* prepared_statement, const char* param_name, rag3db_timestamp_tz_t value);
+    rag3db_prepared_statement* prepared_statement, const char* param_name,
+    rag3db_timestamp_tz_t value);
 /**
  * @brief Binds the given timestamp_ms value to the given parameter name in the prepared statement.
  * @param prepared_statement The prepared statement instance to bind the value.
@@ -587,7 +590,8 @@ RAG3DB_C_API rag3db_state rag3db_prepared_statement_bind_timestamp_tz(
  * @return The state indicating the success or failure of the operation.
  */
 RAG3DB_C_API rag3db_state rag3db_prepared_statement_bind_timestamp_ms(
-    rag3db_prepared_statement* prepared_statement, const char* param_name, rag3db_timestamp_ms_t value);
+    rag3db_prepared_statement* prepared_statement, const char* param_name,
+    rag3db_timestamp_ms_t value);
 /**
  * @brief Binds the given timestamp value to the given parameter name in the prepared statement.
  * @param prepared_statement The prepared statement instance to bind the value.
@@ -596,7 +600,8 @@ RAG3DB_C_API rag3db_state rag3db_prepared_statement_bind_timestamp_ms(
  * @return The state indicating the success or failure of the operation.
  */
 RAG3DB_C_API rag3db_state rag3db_prepared_statement_bind_timestamp(
-    rag3db_prepared_statement* prepared_statement, const char* param_name, rag3db_timestamp_t value);
+    rag3db_prepared_statement* prepared_statement, const char* param_name,
+    rag3db_timestamp_t value);
 /**
  * @brief Binds the given interval value to the given parameter name in the prepared statement.
  * @param prepared_statement The prepared statement instance to bind the value.
@@ -664,8 +669,8 @@ RAG3DB_C_API rag3db_state rag3db_query_result_get_column_name(rag3db_query_resul
  * @param[out] out_column_data_type The output parameter that will hold the column data type.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_query_result_get_column_data_type(rag3db_query_result* query_result,
-    uint64_t index, rag3db_logical_type* out_column_data_type);
+RAG3DB_C_API rag3db_state rag3db_query_result_get_column_data_type(
+    rag3db_query_result* query_result, uint64_t index, rag3db_logical_type* out_column_data_type);
 /**
  * @brief Returns the number of tuples in the query result.
  * @param query_result The query result instance to return.
@@ -686,9 +691,9 @@ RAG3DB_C_API rag3db_state rag3db_query_result_get_query_summary(rag3db_query_res
 RAG3DB_C_API bool rag3db_query_result_has_next(rag3db_query_result* query_result);
 /**
  * @brief Returns the next tuple in the query result. Throws an exception if there is no more tuple.
- * Note that to reduce resource allocation, all calls to rag3db_query_result_get_next() reuse the same
- * FlatTuple object. Since its contents will be overwritten, please complete processing a FlatTuple
- * or make a copy of its data before calling rag3db_query_result_get_next() again.
+ * Note that to reduce resource allocation, all calls to rag3db_query_result_get_next() reuse the
+ * same FlatTuple object. Since its contents will be overwritten, please complete processing a
+ * FlatTuple or make a copy of its data before calling rag3db_query_result_get_next() again.
  * @param query_result The query result instance to return.
  * @param[out] out_flat_tuple The output parameter that will hold the next tuple.
  * @return The state indicating the success or failure of the operation.
@@ -708,8 +713,8 @@ RAG3DB_C_API bool rag3db_query_result_has_next_query_result(rag3db_query_result*
  * @param[out] out_next_query_result The output parameter that will hold the next query result.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_query_result_get_next_query_result(rag3db_query_result* query_result,
-    rag3db_query_result* out_next_query_result);
+RAG3DB_C_API rag3db_state rag3db_query_result_get_next_query_result(
+    rag3db_query_result* query_result, rag3db_query_result* out_next_query_result);
 
 /**
  * @brief Returns the query result as a string.
@@ -746,8 +751,8 @@ RAG3DB_C_API rag3db_state rag3db_query_result_get_arrow_schema(rag3db_query_resu
  *
  * It is the caller's responsibility to call the release function to release the underlying data
  */
-RAG3DB_C_API rag3db_state rag3db_query_result_get_next_arrow_chunk(rag3db_query_result* query_result,
-    int64_t chunk_size, struct ArrowArray* out_arrow_array);
+RAG3DB_C_API rag3db_state rag3db_query_result_get_next_arrow_chunk(
+    rag3db_query_result* query_result, int64_t chunk_size, struct ArrowArray* out_arrow_array);
 
 // FlatTuple
 /**
@@ -790,7 +795,8 @@ RAG3DB_C_API void rag3db_data_type_create(rag3db_data_type_id id, rag3db_logical
  * @param[out] out_type The output parameter that will hold the cloned data type instance.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API void rag3db_data_type_clone(rag3db_logical_type* data_type, rag3db_logical_type* out_type);
+RAG3DB_C_API void rag3db_data_type_clone(rag3db_logical_type* data_type,
+    rag3db_logical_type* out_type);
 /**
  * @brief Destroys the given data type instance.
  * @param data_type The data type instance to destroy.
@@ -801,7 +807,8 @@ RAG3DB_C_API void rag3db_data_type_destroy(rag3db_logical_type* data_type);
  * @param data_type1 The first data type instance to compare.
  * @param data_type2 The second data type instance to compare.
  */
-RAG3DB_C_API bool rag3db_data_type_equals(rag3db_logical_type* data_type1, rag3db_logical_type* data_type2);
+RAG3DB_C_API bool rag3db_data_type_equals(rag3db_logical_type* data_type1,
+    rag3db_logical_type* data_type2);
 /**
  * @brief Returns the enum type id of the given data type.
  * @param data_type The data type instance to return.
@@ -1051,7 +1058,8 @@ RAG3DB_C_API rag3db_state rag3db_value_get_list_element(rag3db_value* value, uin
  * @param[out] out_result The output parameter that will hold the number of fields.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_value_get_struct_num_fields(rag3db_value* value, uint64_t* out_result);
+RAG3DB_C_API rag3db_state rag3db_value_get_struct_num_fields(rag3db_value* value,
+    uint64_t* out_result);
 /**
  * @brief Returns the field name at index of the given struct value. The value must be of physical
  * type STRUCT (STRUCT, NODE, REL, RECURSIVE_REL, UNION).
@@ -1228,7 +1236,8 @@ RAG3DB_C_API rag3db_state rag3db_value_get_double(rag3db_value* value, double* o
  * @param[out] out_result The output parameter that will hold the internal id value.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_value_get_internal_id(rag3db_value* value, rag3db_internal_id_t* out_result);
+RAG3DB_C_API rag3db_state rag3db_value_get_internal_id(rag3db_value* value,
+    rag3db_internal_id_t* out_result);
 /**
  * @brief Returns the date value of the given value. The value must be of type DATE.
  * @param value The value to return.
@@ -1242,7 +1251,8 @@ RAG3DB_C_API rag3db_state rag3db_value_get_date(rag3db_value* value, rag3db_date
  * @param[out] out_result The output parameter that will hold the timestamp value.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_value_get_timestamp(rag3db_value* value, rag3db_timestamp_t* out_result);
+RAG3DB_C_API rag3db_state rag3db_value_get_timestamp(rag3db_value* value,
+    rag3db_timestamp_t* out_result);
 /**
  * @brief Returns the timestamp_ns value of the given value. The value must be of type TIMESTAMP_NS.
  * @param value The value to return.
@@ -1282,7 +1292,8 @@ RAG3DB_C_API rag3db_state rag3db_value_get_timestamp_tz(rag3db_value* value,
  * @param[out] out_result The output parameter that will hold the interval value.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_value_get_interval(rag3db_value* value, rag3db_interval_t* out_result);
+RAG3DB_C_API rag3db_state rag3db_value_get_interval(rag3db_value* value,
+    rag3db_interval_t* out_result);
 /**
  * @brief Returns the decimal value of the given value as a string. The value must be of type
  * DECIMAL.
@@ -1290,7 +1301,8 @@ RAG3DB_C_API rag3db_state rag3db_value_get_interval(rag3db_value* value, rag3db_
  * @param[out] out_result The output parameter that will hold the decimal value.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_value_get_decimal_as_string(rag3db_value* value, char** out_result);
+RAG3DB_C_API rag3db_state rag3db_value_get_decimal_as_string(rag3db_value* value,
+    char** out_result);
 /**
  * @brief Returns the string value of the given value. The value must be of type STRING.
  * @param value The value to return.
@@ -1326,21 +1338,24 @@ RAG3DB_C_API char* rag3db_value_to_string(rag3db_value* value);
  * @param[out] out_value The output parameter that will hold the internal id value.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_node_val_get_id_val(rag3db_value* node_val, rag3db_value* out_value);
+RAG3DB_C_API rag3db_state rag3db_node_val_get_id_val(rag3db_value* node_val,
+    rag3db_value* out_value);
 /**
  * @brief Returns the label value of the given node value as a label value.
  * @param node_val The node value to return.
  * @param[out] out_value The output parameter that will hold the label value.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_node_val_get_label_val(rag3db_value* node_val, rag3db_value* out_value);
+RAG3DB_C_API rag3db_state rag3db_node_val_get_label_val(rag3db_value* node_val,
+    rag3db_value* out_value);
 /**
  * @brief Returns the number of properties of the given node value.
  * @param node_val The node value to return.
  * @param[out] out_value The output parameter that will hold the number of properties.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_node_val_get_property_size(rag3db_value* node_val, uint64_t* out_value);
+RAG3DB_C_API rag3db_state rag3db_node_val_get_property_size(rag3db_value* node_val,
+    uint64_t* out_value);
 /**
  * @brief Returns the property name of the given node value at the given index.
  * @param node_val The node value to return.
@@ -1348,8 +1363,8 @@ RAG3DB_C_API rag3db_state rag3db_node_val_get_property_size(rag3db_value* node_v
  * @param[out] out_result The output parameter that will hold the property name at index.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_node_val_get_property_name_at(rag3db_value* node_val, uint64_t index,
-    char** out_result);
+RAG3DB_C_API rag3db_state rag3db_node_val_get_property_name_at(rag3db_value* node_val,
+    uint64_t index, char** out_result);
 /**
  * @brief Returns the property value of the given node value at the given index.
  * @param node_val The node value to return.
@@ -1357,8 +1372,8 @@ RAG3DB_C_API rag3db_state rag3db_node_val_get_property_name_at(rag3db_value* nod
  * @param[out] out_value The output parameter that will hold the property value at index.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_node_val_get_property_value_at(rag3db_value* node_val, uint64_t index,
-    rag3db_value* out_value);
+RAG3DB_C_API rag3db_state rag3db_node_val_get_property_value_at(rag3db_value* node_val,
+    uint64_t index, rag3db_value* out_value);
 /**
  * @brief Converts the given node value to string.
  * @param node_val The node value to convert.
@@ -1379,7 +1394,8 @@ RAG3DB_C_API rag3db_state rag3db_rel_val_get_id_val(rag3db_value* rel_val, rag3d
  * @param[out] out_value The output parameter that will hold the internal id value.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_rel_val_get_src_id_val(rag3db_value* rel_val, rag3db_value* out_value);
+RAG3DB_C_API rag3db_state rag3db_rel_val_get_src_id_val(rag3db_value* rel_val,
+    rag3db_value* out_value);
 /**
  * @brief Returns the internal id value of the destination node of the given rel value as a rag3db
  * value.
@@ -1387,21 +1403,24 @@ RAG3DB_C_API rag3db_state rag3db_rel_val_get_src_id_val(rag3db_value* rel_val, r
  * @param[out] out_value The output parameter that will hold the internal id value.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_rel_val_get_dst_id_val(rag3db_value* rel_val, rag3db_value* out_value);
+RAG3DB_C_API rag3db_state rag3db_rel_val_get_dst_id_val(rag3db_value* rel_val,
+    rag3db_value* out_value);
 /**
  * @brief Returns the label value of the given rel value.
  * @param rel_val The rel value to return.
  * @param[out] out_value The output parameter that will hold the label value.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_rel_val_get_label_val(rag3db_value* rel_val, rag3db_value* out_value);
+RAG3DB_C_API rag3db_state rag3db_rel_val_get_label_val(rag3db_value* rel_val,
+    rag3db_value* out_value);
 /**
  * @brief Returns the number of properties of the given rel value.
  * @param rel_val The rel value to return.
  * @param[out] out_value The output parameter that will hold the number of properties.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_rel_val_get_property_size(rag3db_value* rel_val, uint64_t* out_value);
+RAG3DB_C_API rag3db_state rag3db_rel_val_get_property_size(rag3db_value* rel_val,
+    uint64_t* out_value);
 /**
  * @brief Returns the property name of the given rel value at the given index.
  * @param rel_val The rel value to return.
@@ -1418,8 +1437,8 @@ RAG3DB_C_API rag3db_state rag3db_rel_val_get_property_name_at(rag3db_value* rel_
  * @param[out] out_value The output parameter that will hold the property value at index.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_rel_val_get_property_value_at(rag3db_value* rel_val, uint64_t index,
-    rag3db_value* out_value);
+RAG3DB_C_API rag3db_state rag3db_rel_val_get_property_value_at(rag3db_value* rel_val,
+    uint64_t index, rag3db_value* out_value);
 /**
  * @brief Converts the given rel value to string.
  * @param rel_val The rel value to convert.
@@ -1467,14 +1486,16 @@ RAG3DB_C_API double rag3db_query_summary_get_execution_time(rag3db_query_summary
  * @param[out] out_result The output parameter that will hold the tm struct.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_timestamp_ns_to_tm(rag3db_timestamp_ns_t timestamp, struct tm* out_result);
+RAG3DB_C_API rag3db_state rag3db_timestamp_ns_to_tm(rag3db_timestamp_ns_t timestamp,
+    struct tm* out_result);
 /**
  * @brief Convert timestamp_ms to corresponding tm struct.
  * @param timestamp The timestamp_ms value to convert.
  * @param[out] out_result The output parameter that will hold the tm struct.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_timestamp_ms_to_tm(rag3db_timestamp_ms_t timestamp, struct tm* out_result);
+RAG3DB_C_API rag3db_state rag3db_timestamp_ms_to_tm(rag3db_timestamp_ms_t timestamp,
+    struct tm* out_result);
 /**
  * @brief Convert timestamp_sec to corresponding tm struct.
  * @param timestamp The timestamp_sec value to convert.
@@ -1489,42 +1510,48 @@ RAG3DB_C_API rag3db_state rag3db_timestamp_sec_to_tm(rag3db_timestamp_sec_t time
  * @param[out] out_result The output parameter that will hold the tm struct.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_timestamp_tz_to_tm(rag3db_timestamp_tz_t timestamp, struct tm* out_result);
+RAG3DB_C_API rag3db_state rag3db_timestamp_tz_to_tm(rag3db_timestamp_tz_t timestamp,
+    struct tm* out_result);
 /**
  * @brief Convert timestamp to corresponding tm struct.
  * @param timestamp The timestamp value to convert.
  * @param[out] out_result The output parameter that will hold the tm struct.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_timestamp_to_tm(rag3db_timestamp_t timestamp, struct tm* out_result);
+RAG3DB_C_API rag3db_state rag3db_timestamp_to_tm(rag3db_timestamp_t timestamp,
+    struct tm* out_result);
 /**
  * @brief Convert tm struct to timestamp_ns value.
  * @param tm The tm struct to convert.
  * @param[out] out_result The output parameter that will hold the timestamp_ns value.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_timestamp_ns_from_tm(struct tm tm, rag3db_timestamp_ns_t* out_result);
+RAG3DB_C_API rag3db_state rag3db_timestamp_ns_from_tm(struct tm tm,
+    rag3db_timestamp_ns_t* out_result);
 /**
  * @brief Convert tm struct to timestamp_ms value.
  * @param tm The tm struct to convert.
  * @param[out] out_result The output parameter that will hold the timestamp_ms value.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_timestamp_ms_from_tm(struct tm tm, rag3db_timestamp_ms_t* out_result);
+RAG3DB_C_API rag3db_state rag3db_timestamp_ms_from_tm(struct tm tm,
+    rag3db_timestamp_ms_t* out_result);
 /**
  * @brief Convert tm struct to timestamp_sec value.
  * @param tm The tm struct to convert.
  * @param[out] out_result The output parameter that will hold the timestamp_sec value.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_timestamp_sec_from_tm(struct tm tm, rag3db_timestamp_sec_t* out_result);
+RAG3DB_C_API rag3db_state rag3db_timestamp_sec_from_tm(struct tm tm,
+    rag3db_timestamp_sec_t* out_result);
 /**
  * @brief Convert tm struct to timestamp_tz value.
  * @param tm The tm struct to convert.
  * @param[out] out_result The output parameter that will hold the timestamp_tz value.
  * @return The state indicating the success or failure of the operation.
  */
-RAG3DB_C_API rag3db_state rag3db_timestamp_tz_from_tm(struct tm tm, rag3db_timestamp_tz_t* out_result);
+RAG3DB_C_API rag3db_state rag3db_timestamp_tz_from_tm(struct tm tm,
+    rag3db_timestamp_tz_t* out_result);
 /**
  * @brief Convert timestamp_ns to corresponding string.
  * @param timestamp The timestamp_ns value to convert.

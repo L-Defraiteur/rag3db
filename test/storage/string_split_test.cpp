@@ -64,8 +64,8 @@ protected:
                 << "a segment carries string bytes that none of its values uses";
             if (strings.getNumValues() > 1) {
                 EXPECT_LE(stringBytes, StorageConfig::MAX_SEGMENT_SIZE)
-                    << "a segment of " << strings.getNumValues() << " values holds "
-                    << stringBytes << " bytes of strings";
+                    << "a segment of " << strings.getNumValues() << " values holds " << stringBytes
+                    << " bytes of strings";
             }
         }
         EXPECT_EQ(row, values.size());
@@ -88,7 +88,8 @@ TEST_F(StringSplitTest, LargeBlobsGetOneSegmentEach) {
 TEST_F(StringSplitTest, SmallStringsAroundALargeBlobStayBounded) {
     std::vector<std::string> values;
     for (int i = 0; i < 3000; i++) {
-        values.push_back(i == 1500 ? blob(1024 * 1024, 'b') : blob(100 + i % 7, static_cast<char>(i)));
+        values.push_back(
+            i == 1500 ? blob(1024 * 1024, 'b') : blob(100 + i % 7, static_cast<char>(i)));
     }
     expectBoundedSegments(values, false);
     expectBoundedSegments(values, true);

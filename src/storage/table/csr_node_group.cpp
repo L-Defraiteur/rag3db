@@ -460,8 +460,8 @@ bool CSRNodeGroup::compactDeadRowsNoLock(transaction_t oldestActiveStartTS,
             if (row == INVALID_ROW_IDX) {
                 continue;
             }
-            auto [chunkIdx, rowInChunk] = StorageUtils::getQuotientRemainder(row,
-                StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
+            auto [chunkIdx, rowInChunk] =
+                StorageUtils::getQuotientRemainder(row, StorageConfig::CHUNKED_NODE_GROUP_CAPACITY);
             if (chunkIdx >= groups.size()) {
                 // Un bloc ajouté par un autre écrivain après la prise de la liste : la ligne
                 // reste, et la note aussi (la compaction se refera).
@@ -632,8 +632,7 @@ bool CSRNodeGroup::wasWrittenByCommitAfter(transaction_t startTS, transaction_t 
     switch (source) {
     case CSRNodeGroupScanSource::COMMITTED_PERSISTENT: {
         KU_ASSERT(persistentChunkGroup);
-        return persistentChunkGroup->wasWrittenByCommitAfter(startTS, transactionID,
-            rowIdxInGroup);
+        return persistentChunkGroup->wasWrittenByCommitAfter(startTS, transactionID, rowIdxInGroup);
     }
     case CSRNodeGroupScanSource::COMMITTED_IN_MEMORY: {
         KU_ASSERT(csrIndex);
@@ -749,9 +748,9 @@ void CSRNodeGroup::reclaimStorage(PageAllocator& pageAllocator, const UniqLock& 
 // Le bloc persistant neuf : les colonnes vivantes données (ou reprises telles quelles, mêmes
 // pages), l'en-tête donné (ou repris), rien de déplacé hors de l'ancien bloc ; les colonnes
 // supprimées de l'ancien rendent leurs pages à sa mort.
-static std::unique_ptr<ChunkedCSRNodeGroup> rebuildPersistentChunkGroup(
-    ChunkedCSRNodeGroup& old, std::vector<std::unique_ptr<ColumnChunk>> newChunks,
-    std::optional<ChunkedCSRHeader> newHeader, const CSRNodeGroupCheckpointState& csrState) {
+static std::unique_ptr<ChunkedCSRNodeGroup> rebuildPersistentChunkGroup(ChunkedCSRNodeGroup& old,
+    std::vector<std::unique_ptr<ColumnChunk>> newChunks, std::optional<ChunkedCSRHeader> newHeader,
+    const CSRNodeGroupCheckpointState& csrState) {
     for (auto columnID = 0u; columnID < old.getNumColumns(); columnID++) {
         if (!old.hasColumnChunk(columnID)) {
             continue;
@@ -888,7 +887,7 @@ void CSRNodeGroup::redistributeCSRRegions(const CSRNodeGroupCheckpointState& csr
 static bool csrOffsetsMoveInRegion(const CSRNodeGroupCheckpointState& csrState,
     const CSRRegion& region) {
     for (auto nodeOffset = region.leftNodeOffset; nodeOffset <= region.rightNodeOffset;
-        nodeOffset++) {
+         nodeOffset++) {
         if (csrState.oldHeader->getStartCSROffset(nodeOffset) !=
                 csrState.newHeader->getStartCSROffset(nodeOffset) ||
             csrState.oldHeader->getCSRLength(nodeOffset) !=
@@ -1561,9 +1560,10 @@ void CSRNodeGroup::finalizeCheckpoint(std::unique_ptr<ChunkedNodeGroup> newPersi
 void CSRNodeGroup::retireGenerationsBefore(transaction_t oldestReaderTS) {
     NodeGroup::retireGenerationsBefore(oldestReaderTS);
     const auto lock = chunkedGroups.lock();
-    std::erase_if(csrPreviousGenerations, [oldestReaderTS](const CSRPreviousGeneration& generation) {
-        return generation.checkpointTS <= oldestReaderTS;
-    });
+    std::erase_if(csrPreviousGenerations,
+        [oldestReaderTS](const CSRPreviousGeneration& generation) {
+            return generation.checkpointTS <= oldestReaderTS;
+        });
 }
 
 void CSRNodeGroup::takeGenerationFor(const UniqLock& lock, transaction_t startTS,

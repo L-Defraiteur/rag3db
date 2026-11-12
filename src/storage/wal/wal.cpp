@@ -1,7 +1,5 @@
 #include "storage/wal/wal.h"
 
-#include "storage/storage_version_info.h"
-
 #include "common/exception/runtime.h"
 #include "common/file_system/file_info.h"
 #include "common/file_system/virtual_file_system.h"
@@ -13,6 +11,7 @@
 #include "storage/file_db_id_utils.h"
 #include "storage/storage_manager.h"
 #include "storage/storage_utils.h"
+#include "storage/storage_version_info.h"
 #include "storage/wal/checksum_writer.h"
 #include "storage/wal/local_wal.h"
 

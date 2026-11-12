@@ -46,8 +46,8 @@ void HttpfsExtension::load(main::ClientContext* context) {
 
 #if defined(BUILD_DYNAMIC_LOAD)
 extern "C" {
-// Because we link against the static library on windows, we implicitly inherit RAG3DB_STATIC_DEFINE,
-// which cancels out any exporting, so we can't use RAG3DB_API.
+// Because we link against the static library on windows, we implicitly inherit
+// RAG3DB_STATIC_DEFINE, which cancels out any exporting, so we can't use RAG3DB_API.
 #if defined(_WIN32)
 #define INIT_EXPORT __declspec(dllexport)
 #else

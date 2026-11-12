@@ -1,8 +1,7 @@
 #include "processor/processor.h"
 
-#include <cstdlib>
-
 #include <algorithm>
+#include <cstdlib>
 #include <optional>
 
 #include "common/system_config.h"

@@ -55,8 +55,9 @@ void InMemoryVersionRecordHandler::applyFuncToChunkedGroups(version_record_handl
 
 void InMemoryVersionRecordHandler::compactDeadRows(node_group_idx_t nodeGroupIdx,
     const Transaction* transaction) const {
-    relTableData->getNodeGroupNoLock(nodeGroupIdx)->cast<CSRNodeGroup>().compactHintedLists(
-        transaction);
+    relTableData->getNodeGroupNoLock(nodeGroupIdx)
+        ->cast<CSRNodeGroup>()
+        .compactHintedLists(transaction);
 }
 
 void InMemoryVersionRecordHandler::rollbackInsert(main::ClientContext* context,

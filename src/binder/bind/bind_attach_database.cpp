@@ -20,7 +20,8 @@ static AttachInfo bindAttachInfo(const parser::AttachInfo& attachInfo) {
 
     if (common::StringUtils::getUpper(attachInfo.dbType) == common::ATTACHED_RAG3DB_DB_TYPE &&
         attachInfo.dbAlias.empty()) {
-        throw common::BinderException{"Attaching a rag3db database without an alias is not allowed."};
+        throw common::BinderException{
+            "Attaching a rag3db database without an alias is not allowed."};
     }
     return binder::AttachInfo{attachInfo.dbPath, attachInfo.dbAlias, attachInfo.dbType,
         std::move(attachOption)};

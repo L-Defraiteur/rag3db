@@ -144,10 +144,8 @@ std::unordered_map<string_index_t, string_index_t> DictionaryColumn::scanToChunk
     std::sort(indicesToScan.begin(), indicesToScan.end());
     const auto firstIndex = indicesToScan.front();
     if (indicesToScan.back() >= offsetState.metadata.numValues) [[unlikely]] {
-        throw RuntimeException(
-            stringFormat("{}: string index {} in a dictionary of {} strings.",
-                DICTIONARY_INDEX_OUT_OF_RANGE, indicesToScan.back(),
-                offsetState.metadata.numValues));
+        throw RuntimeException(stringFormat("{}: string index {} in a dictionary of {} strings.",
+            DICTIONARY_INDEX_OUT_OF_RANGE, indicesToScan.back(), offsetState.metadata.numValues));
     }
     const auto numOffsetsToScan = indicesToScan.back() - firstIndex + 1;
     // One extra offset to scan for the end offset of the last string

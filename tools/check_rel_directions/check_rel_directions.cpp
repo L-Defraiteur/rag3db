@@ -70,16 +70,17 @@ bool check(Connection& conn, const std::string& name) {
     }
     // Les bouts : chaque source et chaque destination, avec son étiquette.
     std::set<std::pair<std::string, std::string>> sources, destinations;
-    for (auto& row : rows(conn, "MATCH (a)-[r:`" + name + "`]->(b) RETURN label(a), "
-                                "offset(id(a)), label(b), offset(id(b));")) {
+    for (auto& row : rows(conn, "MATCH (a)-[r:`" + name +
+                                    "`]->(b) RETURN label(a), "
+                                    "offset(id(a)), label(b), offset(id(b));")) {
         sources.insert({row[0], row[1]});
         destinations.insert({row[2], row[3]});
     }
     std::multimap<std::string, Reading> forward, backward;
     for (auto& [label, offset] : sources) {
         for (auto& row : rows(conn, "MATCH (a:`" + label + "`)-[r:`" + name +
-                                        "`]->(b) WHERE offset(id(a)) = " + offset + " RETURN id(r), " +
-                                        projection + ";")) {
+                                        "`]->(b) WHERE offset(id(a)) = " + offset +
+                                        " RETURN id(r), " + projection + ";")) {
             forward.emplace(row[0], Reading(row.begin() + 1, row.end()));
         }
     }
@@ -95,7 +96,8 @@ bool check(Connection& conn, const std::string& name) {
     std::vector<std::string> examples;
     auto example = [&](const std::string& what, const std::string& rel, const Reading& reading) {
         if (examples.size() < 10) {
-            examples.push_back(what + " : relation " + rel + ", " + reading[0] + " -> " + reading[1]);
+            examples.push_back(
+                what + " : relation " + rel + ", " + reading[0] + " -> " + reading[1]);
         }
     };
     for (auto& [rel, reading] : forward) {

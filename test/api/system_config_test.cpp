@@ -79,7 +79,8 @@ TEST_F(SystemConfigTest, testMaxDBSize) {
     } catch (const BufferManagerException& e) {
         ASSERT_EQ(std::string(e.what()),
             "Buffer manager exception: The given max db size should be at least " +
-                std::to_string(2 * RAG3DB_PAGE_SIZE * StorageConstants::PAGE_GROUP_SIZE) + " bytes.");
+                std::to_string(2 * RAG3DB_PAGE_SIZE * StorageConstants::PAGE_GROUP_SIZE) +
+                " bytes.");
     }
     systemConfig->maxDBSize = 2 * RAG3DB_PAGE_SIZE * StorageConstants::PAGE_GROUP_SIZE + 1;
     try {

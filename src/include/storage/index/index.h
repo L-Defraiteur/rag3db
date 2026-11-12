@@ -278,9 +278,9 @@ public:
     bool isVisibleTo(common::transaction_t transactionID, common::transaction_t startTS) const {
         const auto created = createdBy == NO_VERSION || createdBy == transactionID ||
                              (createdTS != NO_VERSION && createdTS <= startTS);
-        const auto dropped = droppedBy != NO_VERSION &&
-                             (droppedBy == transactionID ||
-                                 (droppedTS != NO_VERSION && droppedTS <= startTS));
+        const auto dropped =
+            droppedBy != NO_VERSION &&
+            (droppedBy == transactionID || (droppedTS != NO_VERSION && droppedTS <= startTS));
         return created && !dropped;
     }
 

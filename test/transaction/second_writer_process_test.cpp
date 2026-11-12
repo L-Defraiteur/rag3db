@@ -15,7 +15,8 @@
 // - TheSecondWriterProcessGivesUpAfterTheBoundWithANamedError : le premier tient 3 s ; le second,
 //   borne 300 ms, échoue après au moins 300 ms, sur le fragment nommé.
 // - AfterTheFirstDiesTheSecondOpensOnItsReplay : le premier valide une ligne puis meurt base
-//   ouverte (SIGKILL) ; le second, qui attendait, ouvre sur le rejeu et voit la ligne avant d'écrire.
+//   ouverte (SIGKILL) ; le second, qui attendait, ouvre sur le rejeu et voit la ligne avant
+//   d'écrire.
 
 #include <fcntl.h>
 #include <signal.h>
@@ -86,7 +87,9 @@ protected:
         ASSERT_TRUE(result->isSuccess()) << query << " : " << result->getErrorMessage();
     }
 
-    std::string reportPath(const std::string& who) const { return databasePath + "." + who + ".report"; }
+    std::string reportPath(const std::string& who) const {
+        return databasePath + "." + who + ".report";
+    }
 
     // Le premier écrivain : ouvre, valide la ligne 1, le dit par le tuyau, tient la base holdMs,
     // puis valide la ligne 2 et ferme ; ou meurt base ouverte si dieWhileHolding.
@@ -120,7 +123,8 @@ protected:
     }
 
     // Le second écrivain : attend que le premier ait ouvert, puis ouvre avec la borne waitMs. Il
-    // écrit dans son rapport : « opened <ms> <lignes vues à l'ouverture> » ou « failed <ms> <message> ».
+    // écrit dans son rapport : « opened <ms> <lignes vues à l'ouverture> » ou « failed <ms>
+    // <message> ».
     pid_t startSecondWriter(uint64_t waitMs) {
         const auto pid = fork();
         if (pid != 0) {

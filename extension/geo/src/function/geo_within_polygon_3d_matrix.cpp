@@ -1,11 +1,11 @@
 #include "function/geo_within_polygon_3d_matrix.h"
 
+#include <cmath>
+
 #include "common/vector/value_vector.h"
 #include "function/geo_list_helpers.h"
 #include "function/scalar_function.h"
 #include "math/geometry.h"
-
-#include <cmath>
 
 namespace rag3db {
 namespace geo_extension {
@@ -16,9 +16,10 @@ using namespace common;
 static bool withinPolygon3dMatrixCore(const double point[3], const std::vector<double>& polyXs,
     const std::vector<double>& polyYs, const double position[3], const math::Mat3& mat,
     bool hasThickness, double thickness) {
-    uint32_t n = std::min(static_cast<uint32_t>(polyXs.size()),
-        static_cast<uint32_t>(polyYs.size()));
-    if (n < 3) return false;
+    uint32_t n =
+        std::min(static_cast<uint32_t>(polyXs.size()), static_cast<uint32_t>(polyYs.size()));
+    if (n < 3)
+        return false;
 
     double dx = point[0] - position[0];
     double dy = point[1] - position[1];

@@ -33,7 +33,7 @@ struct QuerySpatialBindData final : TableFuncBindData {
     uint32_t k;
 
     // Query mode flags.
-    double radius = -1.0;   // Radius mode if >= 0.
+    double radius = -1.0; // Radius mode if >= 0.
     bool hasBBox = false;
     std::vector<double> bboxMin;
     std::vector<double> bboxMax;
@@ -48,9 +48,9 @@ struct QuerySpatialBindData final : TableFuncBindData {
 
     QuerySpatialBindData(binder::expression_vector columns, std::string tableName,
         table_id_t tableID, std::string indexName, std::vector<double> queryPoint, uint32_t k)
-        : TableFuncBindData{std::move(columns), 1},
-          tableName{std::move(tableName)}, tableID{tableID}, indexName{std::move(indexName)},
-          queryPoint{std::move(queryPoint)}, k{k} {}
+        : TableFuncBindData{std::move(columns), 1}, tableName{std::move(tableName)},
+          tableID{tableID}, indexName{std::move(indexName)}, queryPoint{std::move(queryPoint)},
+          k{k} {}
 
     std::unique_ptr<TableFuncBindData> copy() const override {
         return std::make_unique<QuerySpatialBindData>(*this);
@@ -133,8 +133,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(ClientContext* context,
 
 // ── Table function ───────────────────────────────────────────────────────────
 
-static std::unique_ptr<TableFuncLocalState> initLocalState(
-    const TableFuncInitLocalStateInput&) {
+static std::unique_ptr<TableFuncLocalState> initLocalState(const TableFuncInitLocalStateInput&) {
     return std::make_unique<QuerySpatialLocalState>();
 }
 
@@ -147,8 +146,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
 
         // Get the index from the node table.
         auto* storageManager = storage::StorageManager::Get(*input.context->clientContext);
-        auto* nodeTable =
-            storageManager->getTable(bd.tableID)->ptrCast<storage::NodeTable>();
+        auto* nodeTable = storageManager->getTable(bd.tableID)->ptrCast<storage::NodeTable>();
         auto indexOpt = nodeTable->getIndex(bd.indexName,
             transaction::Transaction::Get(*input.context->clientContext));
         if (!indexOpt.has_value()) {

@@ -75,8 +75,7 @@ TEST_F(DoubleOpenTest, TheSamePathWrittenAnotherWayIsRefusedToo) {
         Database second(otherSpelling, config);
         FAIL() << "the second writing instance was accepted";
     } catch (const std::exception& e) {
-        EXPECT_NE(std::string(e.what()).find(Database::ALREADY_OPEN_FOR_WRITING),
-            std::string::npos)
+        EXPECT_NE(std::string(e.what()).find(Database::ALREADY_OPEN_FOR_WRITING), std::string::npos)
             << e.what();
     }
 }

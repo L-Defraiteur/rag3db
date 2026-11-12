@@ -104,8 +104,8 @@ TEST_F(CheckpointNewSegment, UpdatingOneRowRebuildsItsSegmentOnNewPages) {
     const auto freeAfter = std::stoll(row("CALL fsm_info() RETURN coalesce(sum(num_pages), 0);"));
     const auto segmentPages = (50000 * 16 / 8) / RAG3DB_PAGE_SIZE;
     EXPECT_GE(freeAfter - freeBefore, segmentPages / 2)
-        << "the old segment's pages did not come back: rewritten in place (" << freeBefore
-        << " -> " << freeAfter << " free pages, segment of about " << segmentPages << " pages)";
+        << "the old segment's pages did not come back: rewritten in place (" << freeBefore << " -> "
+        << freeAfter << " free pages, segment of about " << segmentPages << " pages)";
     EXPECT_EQ(row("MATCH (t:T {id: 25000}) RETURN t.n;"), "2\n");
     EXPECT_EQ(row("MATCH (t:T) RETURN sum(t.n);"), "1250000002\n");
 }

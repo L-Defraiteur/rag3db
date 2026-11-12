@@ -21,8 +21,7 @@ struct DropProjectedGraphBindData final : TableFuncBindData {
     bool skipIfNotExists;
 
     DropProjectedGraphBindData(std::string graphName, bool skipIfNotExists)
-        : TableFuncBindData{0}, graphName{std::move(graphName)},
-          skipIfNotExists{skipIfNotExists} {}
+        : TableFuncBindData{0}, graphName{std::move(graphName)}, skipIfNotExists{skipIfNotExists} {}
 
     std::unique_ptr<TableFuncBindData> copy() const override {
         return std::make_unique<DropProjectedGraphBindData>(graphName, skipIfNotExists);

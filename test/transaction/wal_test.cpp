@@ -669,7 +669,8 @@ protected:
         auto create = conn->prepare("CREATE (:t {id: $id, s: $s});");
         for (int64_t id = 1; id <= 3; ++id) {
             auto result = conn->execute(create.get(), std::make_pair(std::string("id"), id),
-                std::make_pair(std::string("s"), longText(static_cast<char>(id), id == 3 ? 9000 : 100)));
+                std::make_pair(std::string("s"),
+                    longText(static_cast<char>(id), id == 3 ? 9000 : 100)));
             ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
             ends.push_back(std::filesystem::file_size(walPath));
         }

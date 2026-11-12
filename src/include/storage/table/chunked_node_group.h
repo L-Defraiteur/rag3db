@@ -1,10 +1,10 @@
 #pragma once
 
-#include <shared_mutex>
 #include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 
 #include "common/enums/rel_multiplicity.h"
 #include "common/types/types.h"
@@ -148,7 +148,8 @@ public:
         return columnID < chunks.size() && chunks[columnID] != nullptr;
     }
     // La première colonne présente : la colonne 0 peut être un trou (la première propriété
-    // déclarée, supprimée, quand la clé n'est pas la première), le nombre de lignes se lit ailleurs.
+    // déclarée, supprimée, quand la clé n'est pas la première), le nombre de lignes se lit
+    // ailleurs.
     const ColumnChunk& firstPresentChunk() const {
         for (auto& chunk : chunks) {
             if (chunk) {
@@ -250,8 +251,8 @@ public:
     // La ligne a été supprimée, ou l'une de ses colonnes mise à jour, par une validation
     // postérieure à l'instantané startTS (marche A4′) ; ce que la transaction a fait elle-même
     // ne compte pas.
-    bool wasWrittenByCommitAfter(common::transaction_t startTS,
-        common::transaction_t transactionID, common::row_idx_t rowInChunk) const;
+    bool wasWrittenByCommitAfter(common::transaction_t startTS, common::transaction_t transactionID,
+        common::row_idx_t rowInChunk) const;
     bool hasAnyUpdates(const transaction::Transaction* transaction, common::column_id_t columnID,
         common::row_idx_t startRow, common::length_t numRowsToCheck) const;
     common::row_idx_t getNumDeletions(const transaction::Transaction* transaction,

@@ -110,9 +110,8 @@ public:
 
     void reclaimStorage(PageAllocator& pageAllocator) const;
     void retireGenerationsBefore(common::transaction_t oldestReaderTS);
-    void checkpoint(const std::vector<common::column_id_t>& columnIDs,
-        PageAllocator& pageAllocator, common::transaction_t checkpointTS,
-        common::transaction_t oldestReaderTS);
+    void checkpoint(const std::vector<common::column_id_t>& columnIDs, PageAllocator& pageAllocator,
+        common::transaction_t checkpointTS, common::transaction_t oldestReaderTS);
 
     void pushInsertInfo(const transaction::Transaction* transaction, const CSRNodeGroup& nodeGroup,
         common::row_idx_t numRows_, CSRNodeGroupScanSource source);

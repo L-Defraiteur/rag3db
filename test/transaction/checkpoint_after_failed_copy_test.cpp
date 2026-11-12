@@ -10,11 +10,11 @@
 // En Release ce cas est un témoin probabiliste du défaut (une corruption de tas ne tue pas à
 // coup sûr) ; sous AddressSanitizer il est déterministe.
 
+#include <unistd.h>
+
 #include <filesystem>
 #include <fstream>
 #include <string>
-
-#include <unistd.h>
 
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
@@ -79,8 +79,7 @@ protected:
         // clé (l'annulation relit des blocs entiers, pas la seule plage annulée).
         EXPECT_EQ(single("MATCH (n:Doc {id: 5}) RETURN count(*);"), 1);
         for (const auto id : {0, 7, 100, 199}) {
-            EXPECT_EQ(single("MATCH (n:Doc {id: " + std::to_string(id) + "}) RETURN count(*);"),
-                1)
+            EXPECT_EQ(single("MATCH (n:Doc {id: " + std::to_string(id) + "}) RETURN count(*);"), 1)
                 << id;
         }
     }

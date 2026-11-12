@@ -1,8 +1,8 @@
 #pragma once
-#include "math/quaternion.h"
-
 #include <cmath>
 #include <cstdint>
+
+#include "math/quaternion.h"
 
 namespace rag3db {
 namespace geo_extension {
@@ -15,8 +15,8 @@ inline double haversine(double lat1, double lon1, double lat2, double lon2) {
     double dlat = (lat2 - lat1) * DEG_TO_RAD;
     double dlon = (lon2 - lon1) * DEG_TO_RAD;
     double a = std::sin(dlat / 2) * std::sin(dlat / 2) +
-               std::cos(lat1 * DEG_TO_RAD) * std::cos(lat2 * DEG_TO_RAD) *
-                   std::sin(dlon / 2) * std::sin(dlon / 2);
+               std::cos(lat1 * DEG_TO_RAD) * std::cos(lat2 * DEG_TO_RAD) * std::sin(dlon / 2) *
+                   std::sin(dlon / 2);
     return 2.0 * EARTH_RADIUS_M * std::asin(std::sqrt(a));
 }
 
@@ -50,8 +50,7 @@ inline bool pointInPolygon(double px, double py, const double* polyX, const doub
     return inside;
 }
 
-inline bool insidePlane(double px, double py, double pz, double a, double b, double c,
-    double d) {
+inline bool insidePlane(double px, double py, double pz, double a, double b, double c, double d) {
     return a * px + b * py + c * pz + d >= 0.0;
 }
 
@@ -89,8 +88,7 @@ inline void frustumFromCamera(double posX, double posY, double posZ, double qx, 
 
     // Near plane: normal = forward, point = pos + forward*near
     // n · (p - point) >= 0  =>  n·p - n·point >= 0  =>  a,b,c = n, d = -n·point
-    auto setPlane = [&](int idx, double nx, double ny, double nz, double px, double py,
-                        double pz) {
+    auto setPlane = [&](int idx, double nx, double ny, double nz, double px, double py, double pz) {
         double len = std::sqrt(nx * nx + ny * ny + nz * nz);
         if (len > 1e-15) {
             nx /= len;

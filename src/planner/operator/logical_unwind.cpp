@@ -4,7 +4,6 @@
 #include "binder/expression/parameter_expression.h"
 #include "binder/expression/scalar_function_expression.h"
 #include "function/list/vector_list_functions.h"
-
 #include "planner/operator/factorization/flatten_resolver.h"
 
 using namespace rag3db::binder;

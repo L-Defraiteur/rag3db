@@ -45,7 +45,8 @@ VMRegion::VMRegion(PageSizeClass pageSizeClass, uint64_t maxRegionSize, uint64_t
     const auto regionBytes = std::max<uint64_t>(maxNumFrameGroups, 1) * numBytesForFrameGroup;
     chunkSize = nextPowerOfTwo(std::max<uint64_t>(chunkSize_, numBytesForFrameGroup));
     chunkSize = std::min(chunkSize, nextPowerOfTwo(regionBytes));
-    chunkSize = std::max(chunkSize, nextPowerOfTwo((regionBytes + MAX_NUM_CHUNKS - 1) / MAX_NUM_CHUNKS));
+    chunkSize =
+        std::max(chunkSize, nextPowerOfTwo((regionBytes + MAX_NUM_CHUNKS - 1) / MAX_NUM_CHUNKS));
     framesPerChunk = chunkSize / frameSize;
     framesPerChunkLog2 = 0;
     while ((static_cast<uint64_t>(1) << framesPerChunkLog2) < framesPerChunk) {

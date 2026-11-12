@@ -103,12 +103,10 @@ TEST_F(LockManagerTest, ASharedLockDoesNotOvertakeAWaitingWriter) {
 
 TEST_F(LockManagerTest, ATransactionTakesAgainWhatItHoldsAndUpgradesWhenAlone) {
     ASSERT_EQ(locks.acquire(1, row("a"), LockMode::SHARED, soon()), LockOutcome::ACQUIRED);
-    EXPECT_EQ(locks.acquire(1, row("a"), LockMode::SHARED, clock_t_::now()),
-        LockOutcome::ACQUIRED);
+    EXPECT_EQ(locks.acquire(1, row("a"), LockMode::SHARED, clock_t_::now()), LockOutcome::ACQUIRED);
     EXPECT_EQ(locks.acquire(1, row("a"), LockMode::EXCLUSIVE, clock_t_::now()),
         LockOutcome::ACQUIRED);
-    EXPECT_EQ(locks.acquire(1, row("a"), LockMode::SHARED, clock_t_::now()),
-        LockOutcome::ACQUIRED);
+    EXPECT_EQ(locks.acquire(1, row("a"), LockMode::SHARED, clock_t_::now()), LockOutcome::ACQUIRED);
     EXPECT_EQ(locks.getNumLocksHeld(1), 1u);
     // Il est bien exclusif maintenant.
     EXPECT_EQ(locks.acquire(2, row("a"), LockMode::SHARED, clock_t_::now() + 30ms),
@@ -245,11 +243,11 @@ TEST_F(LockManagerTest, RowsAndIndexesAreDistinctResources) {
     ASSERT_EQ(locks.acquire(1, row(""), LockMode::EXCLUSIVE, soon()), LockOutcome::ACQUIRED);
     EXPECT_EQ(locks.acquire(2, LockResource::index(TABLE), LockMode::EXCLUSIVE, clock_t_::now()),
         LockOutcome::ACQUIRED);
-    EXPECT_EQ(locks.acquire(3, LockResource::row(TABLE + 1, ""), LockMode::EXCLUSIVE,
-                  clock_t_::now()),
+    EXPECT_EQ(
+        locks.acquire(3, LockResource::row(TABLE + 1, ""), LockMode::EXCLUSIVE, clock_t_::now()),
         LockOutcome::ACQUIRED);
-    EXPECT_EQ(locks.acquire(4, LockResource::index(TABLE + 1), LockMode::EXCLUSIVE,
-                  clock_t_::now()),
+    EXPECT_EQ(
+        locks.acquire(4, LockResource::index(TABLE + 1), LockMode::EXCLUSIVE, clock_t_::now()),
         LockOutcome::ACQUIRED);
 }
 
@@ -269,11 +267,10 @@ TEST_F(LockManagerTest, ACycleThroughAnUpgradeIsDetected) {
 
 TEST_F(LockManagerTest, TheMessagesCarryTheirStableFragments) {
     const auto resource = row("k42");
-    EXPECT_NE(LockManager::describe(LockOutcome::DEADLOCK, resource)
-                  .find(LockManager::DEADLOCK_DETECTED),
-        std::string::npos);
     EXPECT_NE(
-        LockManager::describe(LockOutcome::TIMEOUT, resource).find(LockManager::LOCK_TIMEOUT),
+        LockManager::describe(LockOutcome::DEADLOCK, resource).find(LockManager::DEADLOCK_DETECTED),
+        std::string::npos);
+    EXPECT_NE(LockManager::describe(LockOutcome::TIMEOUT, resource).find(LockManager::LOCK_TIMEOUT),
         std::string::npos);
     EXPECT_NE(LockManager::describe(LockOutcome::DEADLOCK, resource).find("k42"),
         std::string::npos);
@@ -310,9 +307,9 @@ static uint64_t stress(LockManager& locks, bool ascendingOrder) {
                 std::vector<std::pair<int, LockMode>> held;
                 for (const auto& [resource, mode] :
                     {std::pair{first, firstMode}, std::pair{second, LockMode::EXCLUSIVE}}) {
-                    const auto outcome = locks.acquire(transaction,
-                        LockResource::row(7, std::to_string(resource)), mode,
-                        LockManager::clock::now() + 10s);
+                    const auto outcome =
+                        locks.acquire(transaction, LockResource::row(7, std::to_string(resource)),
+                            mode, LockManager::clock::now() + 10s);
                     if (outcome == LockOutcome::DEADLOCK) {
                         deadlocks++;
                         break;

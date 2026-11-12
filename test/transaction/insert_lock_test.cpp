@@ -20,10 +20,10 @@
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
 #include "main/database.h"
+#include "storage/storage_utils.h"
 #include "transaction/lock_manager.h"
 #include "transaction/transaction.h"
 #include "transaction/transaction_context.h"
-#include "storage/storage_utils.h"
 #include "transaction/transaction_manager.h"
 
 using namespace rag3db::common;
@@ -306,11 +306,10 @@ TEST_F(InsertLockTest, DetachDeleteOnTheLatestCommitIsReplayedTheSameWayAfterADe
                     {&first, "CREATE REL TABLE Link(FROM Item TO Item, w INT64);"},
                     {&first, "CHECKPOINT;"},
                     {&first, "CREATE (:Item {id: 1, v: 0}), (:Item {id: 2, v: 0});"},
-                    {&second, "BEGIN TRANSACTION;"},
-                    {&second, "MATCH (n:Item) RETURN count(n);"},
-                    {&first, "MATCH (a:Item {id: 1}), (b:Item {id: 2}) CREATE (a)-[:Link {w: 7}]->(b);"},
-                    {&second, "MATCH (n:Item {id: 1}) DETACH DELETE n;"},
-                    {&second, "COMMIT;"}}) {
+                    {&second, "BEGIN TRANSACTION;"}, {&second, "MATCH (n:Item) RETURN count(n);"},
+                    {&first,
+                        "MATCH (a:Item {id: 1}), (b:Item {id: 2}) CREATE (a)-[:Link {w: 7}]->(b);"},
+                    {&second, "MATCH (n:Item {id: 1}) DETACH DELETE n;"}, {&second, "COMMIT;"}}) {
                 if (!connection->query(query)->isSuccess()) {
                     _exit(2);
                 }
@@ -323,8 +322,10 @@ TEST_F(InsertLockTest, DetachDeleteOnTheLatestCommitIsReplayedTheSameWayAfterADe
     }
     int status = 0;
     waitpid(pid, &status, 0);
-    ASSERT_TRUE(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL) << "the child did not die as planned";
-    ASSERT_GT(std::filesystem::file_size(rag3db::storage::StorageUtils::getWALFilePath(databasePath)), 0u)
+    ASSERT_TRUE(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL)
+        << "the child did not die as planned";
+    ASSERT_GT(
+        std::filesystem::file_size(rag3db::storage::StorageUtils::getWALFilePath(databasePath)), 0u)
         << "the journal must not be empty: nothing would be replayed";
     createDBAndConn();
     auto nodes = conn->query("MATCH (n:Item) RETURN n.id ORDER BY n.id;");
@@ -334,7 +335,8 @@ TEST_F(InsertLockTest, DetachDeleteOnTheLatestCommitIsReplayedTheSameWayAfterADe
     EXPECT_FALSE(nodes->hasNext());
     auto rels = conn->query("MATCH ()-[r:Link]->() RETURN count(r);");
     ASSERT_TRUE(rels->isSuccess());
-    EXPECT_EQ(rels->getNext()->getValue(0)->getValue<int64_t>(), 0) << "a dangling relation survived the replay";
+    EXPECT_EQ(rels->getNext()->getValue(0)->getValue<int64_t>(), 0)
+        << "a dangling relation survived the replay";
     auto backward = conn->query("MATCH (b:Item {id: 2})<-[r:Link]-() RETURN count(r);");
     ASSERT_TRUE(backward->isSuccess());
     EXPECT_EQ(backward->getNext()->getValue(0)->getValue<int64_t>(), 0);
@@ -394,7 +396,8 @@ TEST_F(InsertLockTest, AnUpdateAfterAnotherCommittedWriteOfTheRowIsASerializatio
     std::vector<std::pair<int64_t, int64_t>> rows;
     while (result->hasNext()) {
         auto row = result->getNext();
-        rows.emplace_back(row->getValue(0)->getValue<int64_t>(), row->getValue(1)->getValue<int64_t>());
+        rows.emplace_back(row->getValue(0)->getValue<int64_t>(),
+            row->getValue(1)->getValue<int64_t>());
     }
     EXPECT_EQ(rows, (std::vector<std::pair<int64_t, int64_t>>{{1, 10}, {3, 3}}));
 }
@@ -483,7 +486,8 @@ TEST_F(InsertLockTest, AFailedTransactionKeepsItsLocksUntilItIsClosed) {
         // échoué compris : elle avait pris l'index et sa clé avant le doublon), tout refusé.
         EXPECT_GE(locks().getNumLocksHeld(id), held) << closing << " / locks dropped at failure";
         const auto waited = failureOf(other, "MATCH (n:Item {id: 1}) SET n.v = 2;");
-        EXPECT_NE(waited.find(LockManager::LOCK_TIMEOUT), std::string::npos) << closing << " / " << waited;
+        EXPECT_NE(waited.find(LockManager::LOCK_TIMEOUT), std::string::npos)
+            << closing << " / " << waited;
         const auto refused = failureOf(*conn, "MATCH (n:Item {id: 1}) RETURN n.v;");
         EXPECT_NE(refused.find(TransactionContext::MANUAL_TRANSACTION_FAILED), std::string::npos)
             << refused;
@@ -502,7 +506,8 @@ TEST_F(InsertLockTest, AFailedTransactionKeepsItsLocksUntilItIsClosed) {
         std::vector<std::pair<int64_t, int64_t>> rows;
         while (result->hasNext()) {
             auto row = result->getNext();
-            rows.emplace_back(row->getValue(0)->getValue<int64_t>(), row->getValue(1)->getValue<int64_t>());
+            rows.emplace_back(row->getValue(0)->getValue<int64_t>(),
+                row->getValue(1)->getValue<int64_t>());
         }
         EXPECT_EQ(rows, (std::vector<std::pair<int64_t, int64_t>>{{1, 2}, {2, 0}})) << closing;
         mustRun(*conn, "MATCH (n:Item {id: 1}) SET n.v = 0;");
@@ -594,8 +599,8 @@ protected:
             GTEST_SKIP() << "on-disk database needed";
         }
         createDBAndConn();
-        const auto extension = TestHelper::appendRag3dbRootPath(
-            "extension/vector/build/libvector.rag3db_extension");
+        const auto extension =
+            TestHelper::appendRag3dbRootPath("extension/vector/build/libvector.rag3db_extension");
         mustRun(*conn, "LOAD EXTENSION '" + extension + "';");
         mustRun(*conn, "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, vec FLOAT[4]);");
         mustRun(*conn, "UNWIND range(0, 99) AS i CREATE (:Doc {id: i, vec: [CAST(i % 7 AS FLOAT), "
@@ -605,9 +610,9 @@ protected:
     }
     // Les identifiants que la recherche rend (k au plus), triés.
     std::vector<int64_t> idsByIndex(Connection& connection, int64_t k) {
-        auto result = connection.query(
-            "CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', [1.0, 2.0, 3.0, 4.0], " +
-            std::to_string(k) + ") RETURN node.id ORDER BY node.id;");
+        auto result =
+            connection.query("CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', [1.0, 2.0, 3.0, 4.0], " +
+                             std::to_string(k) + ") RETURN node.id ORDER BY node.id;");
         EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
         std::vector<int64_t> ids;
         while (result->isSuccess() && result->hasNext()) {
@@ -630,12 +635,17 @@ TEST_F(IndexedTableLockTest, EveryWriterOfAnIndexedTableHoldsTheIndexExclusiveUn
         mustRun(*conn, write);
         EXPECT_GE(locks().getNumLocksHeld(transactionIDOf(*conn)), 2u) << write;
         // Une autre clé, une autre ligne : l'index est à un seul écrivain.
-        const auto insert = failureOf(other, "CREATE (:Doc {id: 2000, vec: [5.0, 5.0, 5.0, 5.0]});");
-        EXPECT_NE(insert.find(LockManager::LOCK_TIMEOUT), std::string::npos) << write << " / " << insert;
-        const auto update = failureOf(other, "MATCH (d:Doc {id: 3}) SET d.vec = [8.0, 8.0, 8.0, 8.0];");
-        EXPECT_NE(update.find(LockManager::LOCK_TIMEOUT), std::string::npos) << write << " / " << update;
+        const auto insert =
+            failureOf(other, "CREATE (:Doc {id: 2000, vec: [5.0, 5.0, 5.0, 5.0]});");
+        EXPECT_NE(insert.find(LockManager::LOCK_TIMEOUT), std::string::npos)
+            << write << " / " << insert;
+        const auto update =
+            failureOf(other, "MATCH (d:Doc {id: 3}) SET d.vec = [8.0, 8.0, 8.0, 8.0];");
+        EXPECT_NE(update.find(LockManager::LOCK_TIMEOUT), std::string::npos)
+            << write << " / " << update;
         const auto remove = failureOf(other, "MATCH (d:Doc {id: 4}) DELETE d;");
-        EXPECT_NE(remove.find(LockManager::LOCK_TIMEOUT), std::string::npos) << write << " / " << remove;
+        EXPECT_NE(remove.find(LockManager::LOCK_TIMEOUT), std::string::npos)
+            << write << " / " << remove;
         mustRun(*conn, "ROLLBACK;");
         EXPECT_EQ(locks().getNumResources(), 0u);
         // Rendu : l'autre écrit.

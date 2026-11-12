@@ -64,7 +64,6 @@ public:
     Column* getSizeColumn() const { return sizeColumn.get(); }
     Column* getDataColumn() const { return dataColumn.get(); }
 
-
 protected:
     void scanSegment(const SegmentState& state, common::offset_t startOffsetInChunk,
         common::row_idx_t numValuesToScan, common::ValueVector* resultVector,

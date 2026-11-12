@@ -57,7 +57,8 @@ public:
 
     void deleteEvenAndCreateNew() {
         mustRun("MATCH (a:N {id: 0})-[r:E]->(b:N) WHERE b.id % 2 = 0 DELETE r;");
-        mustRun("MATCH (a:N {id: 0}), (b:N) WHERE b.id >= 100 AND b.id <= 158 CREATE (a)-[:E]->(b);");
+        mustRun(
+            "MATCH (a:N {id: 0}), (b:N) WHERE b.id >= 100 AND b.id <= 158 CREATE (a)-[:E]->(b);");
     }
 
     std::vector<int64_t> hubTargets() {
@@ -207,9 +208,9 @@ public:
         for (auto i = first; i < last; ++i) {
             const auto from = reverse ? i : i + 1;
             const auto to = reverse ? i + 1 : i;
-            items += std::string(items.empty() ? "" : ", ") + "{from_id: " +
-                     std::to_string(from) + ", to_id: " + std::to_string(to) +
-                     ", line: 4, resolution: '" + resolution + "'}";
+            items += std::string(items.empty() ? "" : ", ") + "{from_id: " + std::to_string(from) +
+                     ", to_id: " + std::to_string(to) + ", line: 4, resolution: '" + resolution +
+                     "'}";
         }
         return "UNWIND [" + items +
                "] AS item WITH item, item.from_id AS k0 MATCH (a:Scope {id: k0}) WITH item, a, "
@@ -235,7 +236,8 @@ public:
         }
         mustRun("CREATE NODE TABLE Scope(id INT64 PRIMARY KEY, name STRING);");
         mustRun("CREATE REL TABLE CONSUMES(FROM Scope TO Scope, line INT64, resolution STRING);");
-        mustRun("CREATE REL TABLE CONSUMED_BY(FROM Scope TO Scope, line INT64, resolution STRING);");
+        mustRun(
+            "CREATE REL TABLE CONSUMED_BY(FROM Scope TO Scope, line INT64, resolution STRING);");
         mustRun("UNWIND range(0, 2398) AS i CREATE (:Scope {id: i, name: 'old'});");
         mustRun("MATCH (a:Scope), (b:Scope) WHERE a.id = b.id + 1 CREATE (a)-[:CONSUMES {line: 1, "
                 "resolution: 'fichier'}]->(b), (b)-[:CONSUMED_BY {line: 1, resolution: "

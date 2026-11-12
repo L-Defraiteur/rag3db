@@ -413,7 +413,8 @@ JNIEXPORT void JNICALL Java_com_rag3db_Native_rag3dbDatabaseDestroy(JNIEnv* env,
  * All Connection native functions
  */
 
-JNIEXPORT jlong JNICALL Java_com_rag3db_Native_rag3dbConnectionInit(JNIEnv* env, jclass, jobject db) {
+JNIEXPORT jlong JNICALL Java_com_rag3db_Native_rag3dbConnectionInit(JNIEnv* env, jclass,
+    jobject db) {
 
     try {
         Database* conn_db = getDatabase(env, db);
@@ -633,8 +634,8 @@ JNIEXPORT jboolean JNICALL Java_com_rag3db_Native_rag3dbQueryResultIsSuccess(JNI
     return jboolean();
 }
 
-JNIEXPORT jstring JNICALL Java_com_rag3db_Native_rag3dbQueryResultGetErrorMessage(JNIEnv* env, jclass,
-    jobject thisQR) {
+JNIEXPORT jstring JNICALL Java_com_rag3db_Native_rag3dbQueryResultGetErrorMessage(JNIEnv* env,
+    jclass, jobject thisQR) {
     try {
         QueryResult* qr = getQueryResult(env, thisQR);
         std::string errorMessage = qr->getErrorMessage();
@@ -720,8 +721,8 @@ JNIEXPORT jlong JNICALL Java_com_rag3db_Native_rag3dbQueryResultGetNumTuples(JNI
     return jlong();
 }
 
-JNIEXPORT jobject JNICALL Java_com_rag3db_Native_rag3dbQueryResultGetQuerySummary(JNIEnv* env, jclass,
-    jobject thisQR) {
+JNIEXPORT jobject JNICALL Java_com_rag3db_Native_rag3dbQueryResultGetQuerySummary(JNIEnv* env,
+    jclass, jobject thisQR) {
     try {
         QueryResult* qr = getQueryResult(env, thisQR);
         auto querySummary = qr->getQuerySummary();
@@ -1216,8 +1217,8 @@ JNIEXPORT jobject JNICALL Java_com_rag3db_Native_rag3dbValueClone(JNIEnv* env, j
     return jobject();
 }
 
-JNIEXPORT void JNICALL Java_com_rag3db_Native_rag3dbValueCopy(JNIEnv* env, jclass, jobject thisValue,
-    jobject otherValue) {
+JNIEXPORT void JNICALL Java_com_rag3db_Native_rag3dbValueCopy(JNIEnv* env, jclass,
+    jobject thisValue, jobject otherValue) {
     try {
         Value* thisV = getValue(env, thisValue);
         Value* otherV = getValue(env, otherValue);
@@ -1241,8 +1242,8 @@ JNIEXPORT void JNICALL Java_com_rag3db_Native_rag3dbValueDestroy(JNIEnv* env, jc
     }
 }
 
-JNIEXPORT jobject JNICALL Java_com_rag3db_Native_rag3dbCreateList___3Lcom_rag3db_Value_2(JNIEnv* env,
-    jclass, jobjectArray listValues) {
+JNIEXPORT jobject JNICALL Java_com_rag3db_Native_rag3dbCreateList___3Lcom_rag3db_Value_2(
+    JNIEnv* env, jclass, jobjectArray listValues) {
     try {
         jsize len = env->GetArrayLength(listValues);
         if (len == 0) {
@@ -1581,8 +1582,8 @@ JNIEXPORT jstring JNICALL Java_com_rag3db_Native_rag3dbNodeValGetPropertyNameAt(
     return jstring();
 }
 
-JNIEXPORT jobject JNICALL Java_com_rag3db_Native_rag3dbNodeValGetPropertyValueAt(JNIEnv* env, jclass,
-    jobject thisNV, jlong index) {
+JNIEXPORT jobject JNICALL Java_com_rag3db_Native_rag3dbNodeValGetPropertyValueAt(JNIEnv* env,
+    jclass, jobject thisNV, jlong index) {
     try {
         auto* nv = getValue(env, thisNV);
         auto propertyValue = NodeVal::getPropertyVal(nv, index);

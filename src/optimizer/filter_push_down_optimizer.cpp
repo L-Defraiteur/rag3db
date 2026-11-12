@@ -236,15 +236,14 @@ std::shared_ptr<LogicalOperator> FilterPushDownOptimizer::visitScanNodeTableRepl
             // VECTOR_DISTANCE()) so the ExpressionMapper resolves them as references.
             std::vector<std::shared_ptr<Expression>> virtualExprs;
             for (auto& spec : bindData->virtualExprSpecs) {
-                auto expr = std::make_shared<VariableExpression>(
-                    spec.type.copy(), spec.functionName + "()",
-                    "_idx_" + spec.functionName);
+                auto expr = std::make_shared<VariableExpression>(spec.type.copy(),
+                    spec.functionName + "()", "_idx_" + spec.functionName);
                 scan.addProperty(expr);
                 virtualExprs.push_back(expr);
             }
 
-            auto indexInfo = std::make_unique<IndexScanInfo>(
-                std::move(searchFunc), limit, std::move(virtualExprs));
+            auto indexInfo = std::make_unique<IndexScanInfo>(std::move(searchFunc), limit,
+                std::move(virtualExprs));
             scan.setScanType(LogicalScanNodeTableType::INDEX_SCAN);
             scan.setExtraInfo(std::move(indexInfo));
             scan.computeFlatSchema();
@@ -425,7 +424,8 @@ static bool replaceInExprVector(expression_vector& exprs,
 }
 
 // Walk the plan tree and replace virtual ScalarFunctionExpressions (e.g., SEARCH_SCORE(),
-// VECTOR_DISTANCE(), SPARSE_SCORE()) with the VariableExpressions created by the INDEX_SCAN rewrite.
+// VECTOR_DISTANCE(), SPARSE_SCORE()) with the VariableExpressions created by the INDEX_SCAN
+// rewrite.
 void FilterPushDownOptimizer::resolveSearchExpressions(LogicalOperator* root) {
     auto* indexInfo = findIndexScanInfo(root);
     if (indexInfo == nullptr) {

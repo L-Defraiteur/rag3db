@@ -1,7 +1,5 @@
 #include "storage/wal/wal_replayer.h"
 
-#include "storage/storage_version_info.h"
-
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -34,6 +32,7 @@
 #include "storage/local_storage/local_rel_table.h"
 #include "storage/readers_lock.h"
 #include "storage/storage_manager.h"
+#include "storage/storage_version_info.h"
 #include "storage/table/node_table.h"
 #include "storage/table/rel_table.h"
 #include "storage/wal/checksum_reader.h"

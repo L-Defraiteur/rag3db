@@ -14,14 +14,15 @@ class PreparedSubqueryParameters : public ApiTest {
 protected:
     void SetUp() override {
         ApiTest::SetUp();
-        for (auto q : {"CREATE NODE TABLE Memory(_uuid STRING, kind STRING, PRIMARY KEY(_uuid));",
-                 "CREATE NODE TABLE Ref(_uuid STRING, valeur STRING, PRIMARY KEY(_uuid));",
-                 "CREATE REL TABLE CITE(FROM Memory TO Ref);",
-                 "CREATE (:Memory {_uuid: 'f2', kind: 'rule'});",
-                 "CREATE (:Memory {_uuid: 'f3', kind: 'note'});",
-                 "CREATE (:Ref {_uuid: 'r2', valeur: 'd:src/a.rs#m::f'});",
-                 "MATCH (m:Memory {_uuid: 'f2'}), (r:Ref {_uuid: 'r2'}) CREATE (m)-[:CITE]->(r);",
-                 "MATCH (m:Memory {_uuid: 'f3'}), (r:Ref {_uuid: 'r2'}) CREATE (m)-[:CITE]->(r);"}) {
+        for (auto q :
+            {"CREATE NODE TABLE Memory(_uuid STRING, kind STRING, PRIMARY KEY(_uuid));",
+                "CREATE NODE TABLE Ref(_uuid STRING, valeur STRING, PRIMARY KEY(_uuid));",
+                "CREATE REL TABLE CITE(FROM Memory TO Ref);",
+                "CREATE (:Memory {_uuid: 'f2', kind: 'rule'});",
+                "CREATE (:Memory {_uuid: 'f3', kind: 'note'});",
+                "CREATE (:Ref {_uuid: 'r2', valeur: 'd:src/a.rs#m::f'});",
+                "MATCH (m:Memory {_uuid: 'f2'}), (r:Ref {_uuid: 'r2'}) CREATE (m)-[:CITE]->(r);",
+                "MATCH (m:Memory {_uuid: 'f3'}), (r:Ref {_uuid: 'r2'}) CREATE (m)-[:CITE]->(r);"}) {
             auto result = conn->query(q);
             ASSERT_TRUE(result->isSuccess()) << q << " : " << result->getErrorMessage();
         }
@@ -75,8 +76,8 @@ TEST_F(PreparedSubqueryParameters, ExistsWithAParameterInAPatternAndAnotherOutsi
     auto prepared = conn->prepare("MATCH (m:Memory) WHERE EXISTS { MATCH (m)-[:CITE]->(t:Ref "
                                   "{valeur: $v}) } AND m.kind = $k RETURN m._uuid;");
     ASSERT_TRUE(prepared->isSuccess()) << prepared->getErrorMessage();
-    auto result = conn->execute(prepared.get(),
-        std::make_pair(std::string("v"), "d:src/a.rs#m::f"), std::make_pair(std::string("k"), "rule"));
+    auto result = conn->execute(prepared.get(), std::make_pair(std::string("v"), "d:src/a.rs#m::f"),
+        std::make_pair(std::string("k"), "rule"));
     ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
     EXPECT_EQ(column(*result), std::vector<std::string>{"f2"});
 }
@@ -95,8 +96,9 @@ TEST_F(PreparedSubqueryParameters, CountSubqueryWithAParameterInsideAndAnotherOu
 
 // Les trois cas qui passaient déjà, gardés comme contrôle.
 TEST_F(PreparedSubqueryParameters, TheOtherFormsStillAnswer) {
-    auto inside = conn->prepare("MATCH (m:Memory) WHERE EXISTS { MATCH (m)-[:CITE]->(t:Ref) WHERE "
-                                "t.valeur STARTS WITH $value_dir } RETURN m._uuid ORDER BY m._uuid;");
+    auto inside =
+        conn->prepare("MATCH (m:Memory) WHERE EXISTS { MATCH (m)-[:CITE]->(t:Ref) WHERE "
+                      "t.valeur STARTS WITH $value_dir } RETURN m._uuid ORDER BY m._uuid;");
     auto result = conn->execute(inside.get(), std::make_pair(std::string("value_dir"), "d:src/"));
     ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
     EXPECT_EQ(column(*result), (std::vector<std::string>{"f2", "f3"}));

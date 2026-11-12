@@ -255,14 +255,16 @@ TEST_F(CApiQueryResultTest, MultipleQuery) {
 
     ASSERT_TRUE(rag3db_query_result_has_next_query_result(&result));
     rag3db_query_result next_query_result;
-    ASSERT_EQ(rag3db_query_result_get_next_query_result(&result, &next_query_result), Rag3dbSuccess);
+    ASSERT_EQ(rag3db_query_result_get_next_query_result(&result, &next_query_result),
+        Rag3dbSuccess);
     ASSERT_TRUE(rag3db_query_result_is_success(&next_query_result));
     str = rag3db_query_result_to_string(&next_query_result);
     ASSERT_EQ(std::string(str), "2\n2\n");
     rag3db_destroy_string(str);
     rag3db_query_result_destroy(&next_query_result);
 
-    ASSERT_EQ(rag3db_query_result_get_next_query_result(&result, &next_query_result), Rag3dbSuccess);
+    ASSERT_EQ(rag3db_query_result_get_next_query_result(&result, &next_query_result),
+        Rag3dbSuccess);
     ASSERT_TRUE(rag3db_query_result_is_success(&next_query_result));
     str = rag3db_query_result_to_string(&next_query_result);
     ASSERT_EQ(std::string(str), "3\n3\n");

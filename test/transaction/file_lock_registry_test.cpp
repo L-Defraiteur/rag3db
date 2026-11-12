@@ -15,10 +15,11 @@
 #ifndef _WIN32
 
 #include <sys/wait.h>
+#include <unistd.h>
+
 #include <chrono>
 #include <filesystem>
 #include <thread>
-#include <unistd.h>
 
 #include "common/exception/io.h"
 #include "common/file_system/local_file_system.h"
@@ -35,8 +36,8 @@ protected:
         EmptyDBTest::SetUp();
         path = databasePath + ".lock-test";
         // Le fichier, créé sans verrou.
-        fs.openFile(path,
-            FileOpenFlags(FileFlags::READ_ONLY | FileFlags::WRITE | FileFlags::CREATE_IF_NOT_EXISTS));
+        fs.openFile(path, FileOpenFlags(FileFlags::READ_ONLY | FileFlags::WRITE |
+                                        FileFlags::CREATE_IF_NOT_EXISTS));
     }
 
     void TearDown() override {
@@ -80,13 +81,15 @@ TEST_F(FileLockRegistry, TheLockOutlivesTheOtherHandlesOfTheSameProcess) {
     auto first = open(FileLockType::WRITE_LOCK);
     std::unique_ptr<FileInfo> second;
     ASSERT_NO_THROW(second = open(FileLockType::WRITE_LOCK)) << "[check: second-handle-joins]";
-    EXPECT_FALSE(anotherProcessCanLock(FileLockType::WRITE_LOCK)) << "[check: other-writer-refused]";
+    EXPECT_FALSE(anotherProcessCanLock(FileLockType::WRITE_LOCK))
+        << "[check: other-writer-refused]";
     EXPECT_FALSE(anotherProcessCanLock(FileLockType::READ_LOCK)) << "[check: other-reader-refused]";
     second.reset();
     EXPECT_FALSE(anotherProcessCanLock(FileLockType::WRITE_LOCK))
         << "[check: lock-kept-after-second-close]";
     first.reset();
-    EXPECT_TRUE(anotherProcessCanLock(FileLockType::WRITE_LOCK)) << "[check: lock-released-by-last]";
+    EXPECT_TRUE(anotherProcessCanLock(FileLockType::WRITE_LOCK))
+        << "[check: lock-released-by-last]";
     // L'ordre inverse : la première fermée avant la seconde.
     first = open(FileLockType::WRITE_LOCK);
     second = open(FileLockType::WRITE_LOCK);

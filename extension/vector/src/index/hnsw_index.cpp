@@ -212,8 +212,8 @@ static bool checkEmbeddingValidity(const std::vector<NodeWithDistanceAndEmbeddin
         return true; // pending vector, not in the table yet
     }
     const auto tmpEmbedding = embeddings.getEmbedding(nbrs[nbrIdx].getNodeOffset(), scanState);
-    return std::memcmp(nbrs[nbrIdx].getPtr(), tmpEmbedding.getPtr(),
-               embeddings.getDimension()) == 0;
+    return std::memcmp(nbrs[nbrIdx].getPtr(), tmpEmbedding.getPtr(), embeddings.getDimension()) ==
+           0;
 }
 
 // Les voisins que garde la liste d'un nœud, parmi nbrs triés par distance croissante : l'
@@ -308,13 +308,13 @@ void InMemHNSWLayer::shrinkForNode(const InMemHNSWLayerInfo& info, InMemHNSWGrap
             return l.getDist() < r.getDist();
         });
     const auto nodeVector = info.getEmbedding(nodeOffset, scanState);
-    const auto kept = selectNeighbours(nbrs, nodeOffset, nodeVector.getPtr(),
-        info.embeddings->getNumBytes(), info.alpha, info.maxDegree,
-        [&](common::idx_t a, common::idx_t b) {
-            KU_ASSERT(checkEmbeddingValidity(nbrs, a, info, scanState));
-            KU_ASSERT(checkEmbeddingValidity(nbrs, b, info, scanState));
-            return info.metricFunc(nbrs[a].getPtr(), nbrs[b].getPtr(), info.getDimension());
-        });
+    const auto kept =
+        selectNeighbours(nbrs, nodeOffset, nodeVector.getPtr(), info.embeddings->getNumBytes(),
+            info.alpha, info.maxDegree, [&](common::idx_t a, common::idx_t b) {
+                KU_ASSERT(checkEmbeddingValidity(nbrs, a, info, scanState));
+                KU_ASSERT(checkEmbeddingValidity(nbrs, b, info, scanState));
+                return info.metricFunc(nbrs[a].getPtr(), nbrs[b].getPtr(), info.getDimension());
+            });
     uint16_t newSize = 0;
     const auto startCSROffset = nodeOffset * info.degreeThresholdToShrink;
     for (const auto i : kept) {
@@ -592,8 +592,8 @@ std::unique_ptr<Index> OnDiskHNSWIndex::load(main::ClientContext* context, Stora
 
 std::shared_ptr<OnDiskHNSWIndex> OnDiskHNSWIndex::captureForQuery(
     const storage::NodeTable& nodeTable, const transaction::Transaction* transaction,
-    const std::string& indexName, const std::string& tableName,
-    common::table_id_t upperRelTableID, common::table_id_t lowerRelTableID) {
+    const std::string& indexName, const std::string& tableName, common::table_id_t upperRelTableID,
+    common::table_id_t lowerRelTableID) {
     // Deux exemplaires de ce nom peuvent être visibles jusqu'au point de reprise (l'ancien,
     // retiré après le début de la transaction, et un neuf) : jamais « le premier de ce nom », mais
     // celui dont les tables de relations sont celles de l'instantané.
@@ -645,10 +645,10 @@ void OnDiskHNSWIndex::throwIfCountsMoreRowsThanItsTable(const Transaction* trans
 // l'instantané, qui voit alors les lignes qu'un autre écrivain a validées entre-temps, et leurs
 // arêtes. L'ensemble visité, dimensionné à la création, les refusait (« node offset N is beyond the
 // visited set of N nodes »). L'ensemble prend donc la taille de la table au début de chaque
-// opération ; le contrôle de borne reste, pour un graphe qui désignerait une ligne hors de la table.
-// La recherche s'y plie aussi, par précaution : son état est créé à l'initialisation de l'opérateur.
-// Aucun cas n'y a été reproduit (un SET qui attend en amont d'un QUERY_VECTOR_INDEX, dans la même
-// instruction, laisse la recherche passer sur master).
+// opération ; le contrôle de borne reste, pour un graphe qui désignerait une ligne hors de la
+// table. La recherche s'y plie aussi, par précaution : son état est créé à l'initialisation de
+// l'opérateur. Aucun cas n'y a été reproduit (un SET qui attend en amont d'un QUERY_VECTOR_INDEX,
+// dans la même instruction, laisse la recherche passer sur master).
 void OnDiskHNSWIndex::fitVisitedToTable(const Transaction* transaction,
     HNSWSearchState& searchState) const {
     searchState.visited.ensureSize(nodeTable.getNumTotalRows(transaction));
@@ -959,9 +959,8 @@ std::unique_ptr<Index::DeleteState> OnDiskHNSWIndex::initDeleteState(
     const transaction::Transaction* transaction, storage::MemoryManager* /*mm*/,
     storage::visible_func /*isVisible*/) {
     auto* context = transaction->getClientContext();
-    auto [nodeTableEntry, upperRelTableEntry, lowerRelTableEntry] =
-        getIndexTableCatalogEntries(catalog::Catalog::Get(*context),
-            Transaction::Get(*context), indexInfo);
+    auto [nodeTableEntry, upperRelTableEntry, lowerRelTableEntry] = getIndexTableCatalogEntries(
+        catalog::Catalog::Get(*context), Transaction::Get(*context), indexInfo);
     return std::make_unique<HNSWDeleteState>(context, nodeTableEntry, upperRelTableEntry,
         lowerRelTableEntry, nodeTable, indexInfo.columnIDs[0], config.ml);
 }
@@ -1009,8 +1008,8 @@ void OnDiskHNSWIndex::finalizeDelete(Transaction* transaction, DeleteState& dele
     for (const auto nbrOffset : state.lowerNeighborsToShrink) {
         if (!state.deletedNodes.contains(nbrOffset)) {
             lowerEdgesOf.emplace(nbrOffset,
-                cleanEdgesForNode(transaction, nbrOffset, false /*isUpperLayer*/,
-                    state.insertState, state.deletedNodes, state.lowerNeighborsOfDeleted));
+                cleanEdgesForNode(transaction, nbrOffset, false /*isUpperLayer*/, state.insertState,
+                    state.deletedNodes, state.lowerNeighborsOfDeleted));
         }
     }
     // In the upper layer the edges are rewritten too, but nothing more: a node nothing leads to
@@ -1026,8 +1025,8 @@ void OnDiskHNSWIndex::finalizeDelete(Transaction* transaction, DeleteState& dele
     repairEntryPoint(transaction, true /*isUpperLayer*/, state.insertState,
         state.upperNeighborsToShrink, &state.deletedNodes);
     // No anchor here, and a deleted node proves nothing.
-    keepFormerNeighboursReachable(transaction, lowerEdgesOf, {} /*anchorEdges*/,
-        state.deletedNodes, state.insertState);
+    keepFormerNeighboursReachable(transaction, lowerEdgesOf, {} /*anchorEdges*/, state.deletedNodes,
+        state.insertState);
     state.lowerNeighborsToShrink.clear();
     state.upperNeighborsToShrink.clear();
     state.lowerNeighborsOfDeleted.clear();
@@ -1245,9 +1244,8 @@ std::vector<common::offset_t> OnDiskHNSWIndex::cleanEdgesForNode(Transaction* tr
     return newNeighbors;
 }
 
-std::unique_ptr<Index::UpdateState> OnDiskHNSWIndex::initUpdateState(
-    main::ClientContext* context, common::column_id_t /*columnID*/,
-    storage::visible_func /*isVisible*/) {
+std::unique_ptr<Index::UpdateState> OnDiskHNSWIndex::initUpdateState(main::ClientContext* context,
+    common::column_id_t /*columnID*/, storage::visible_func /*isVisible*/) {
     auto transaction = Transaction::Get(*context);
     auto [nodeTableEntry, upperRelTableEntry, lowerRelTableEntry] =
         getIndexTableCatalogEntries(catalog::Catalog::Get(*context), transaction, indexInfo);

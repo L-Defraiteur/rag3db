@@ -147,8 +147,8 @@ protected:
     double createIndex(const std::string& name) {
         return timed([&] {
             ok(stringFormat(
-                "CALL CREATE_VECTOR_INDEX('{}', '{}_index', 'vec', metric := 'cosine');",
-                name, name));
+                "CALL CREATE_VECTOR_INDEX('{}', '{}_index', 'vec', metric := 'cosine');", name,
+                name));
         });
     }
 
@@ -534,7 +534,7 @@ TEST_F(VectorIndexInsertSlope, CostPerBatchSettles) {
     const auto withCheckpoints = fill("SlopeCheckpointed", CHECKPOINT_EVERY);
     // Le lot juste avant et juste après chaque point de reprise, imprimés.
     for (auto batch = static_cast<size_t>(CHECKPOINT_EVERY); batch < withCheckpoints.size();
-        batch += CHECKPOINT_EVERY) {
+         batch += CHECKPOINT_EVERY) {
         line(stringFormat("pente avec CHECKPOINT tous les {} lots : lot {} avant {} ms, lot {} "
                           "après {} ms",
             CHECKPOINT_EVERY, batch - 1, withCheckpoints[batch - 1], batch,

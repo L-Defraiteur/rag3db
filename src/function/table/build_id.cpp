@@ -1,5 +1,6 @@
-#include "binder/binder.h"
 #include "common/build_id.h"
+
+#include "binder/binder.h"
 #include "function/table/bind_data.h"
 #include "function/table/bind_input.h"
 #include "function/table/simple_table_function.h"
@@ -18,8 +19,9 @@ using namespace rag3db::main;
 #else
 #define RAG3DB_BUILD_ID_RETAIN
 #endif
-__attribute__((used, section(".rag3db_build_id"))) RAG3DB_BUILD_ID_RETAIN static const char
-    buildIdSection[] = RAG3DB_BUILD_ID;
+__attribute__((used,
+    section(".rag3db_build_id"))) RAG3DB_BUILD_ID_RETAIN static const char buildIdSection[] =
+    RAG3DB_BUILD_ID;
 #undef RAG3DB_BUILD_ID_RETAIN
 #endif
 

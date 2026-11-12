@@ -6,12 +6,12 @@
 // à jamais une fois le point de reprise passé. Trouvé par la session de l'arbre principal
 // (4 octobre 2026) sur le chemin d'échec de la transaction par paquet.
 
+#include <unistd.h>
+
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <string>
-
-#include <unistd.h>
 
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
@@ -145,8 +145,8 @@ protected:
         const auto check = [&] {
             EXPECT_EQ(single("MATCH (n:T) RETURN count(*);"), numRows + 2);
             EXPECT_EQ(single("MATCH (n:T {k: 'k0'}) RETURN count(*);"), 1);
-            EXPECT_EQ(single("MATCH (n:T {k: 'k" + std::to_string(numRows - 1) +
-                             "'}) RETURN count(*);"),
+            EXPECT_EQ(
+                single("MATCH (n:T {k: 'k" + std::to_string(numRows - 1) + "'}) RETURN count(*);"),
                 1);
             EXPECT_EQ(single("MATCH (n:T {k: 'extra2'}) RETURN n.v;"), 2);
             EXPECT_EQ(single("MATCH (n:T) RETURN max(offset(id(n)));"), numRows + 1);

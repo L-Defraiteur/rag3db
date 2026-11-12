@@ -2,8 +2,8 @@
 
 #include "common/types/types.h"
 #include "common/vector/value_vector.h"
-#include "math/quaternion.h"
 #include "math/matrix3.h"
+#include "math/quaternion.h"
 
 namespace rag3db {
 namespace geo_extension {
@@ -12,8 +12,8 @@ using namespace common;
 
 // Extract a fixed-size LIST(DOUBLE) from a ValueVector into a double array.
 // Returns false if null or wrong size.
-inline bool extractListDouble(const ValueVector& vec, const SelectionVector& selVec,
-    uint32_t idx, double* out, uint32_t expectedSize) {
+inline bool extractListDouble(const ValueVector& vec, const SelectionVector& selVec, uint32_t idx,
+    double* out, uint32_t expectedSize) {
     auto pos = selVec[vec.state->isFlat() ? 0 : idx];
     if (vec.isNull(pos)) {
         return false;
@@ -112,8 +112,7 @@ inline void writeMat3ToList(ValueVector& result, uint32_t resPos, const math::Ma
 }
 
 // Write a 3D point to a LIST(DOUBLE) result vector.
-inline void writePoint3ToList(ValueVector& result, uint32_t resPos, double x, double y,
-    double z) {
+inline void writePoint3ToList(ValueVector& result, uint32_t resPos, double x, double y, double z) {
     auto entry = ListVector::addList(&result, 3);
     result.setValue(resPos, entry);
     auto* dataVec = ListVector::getDataVector(&result);

@@ -1,11 +1,11 @@
 #pragma once
 
+#include <mutex>
+
 #include "common/serializer/buffer_reader.h"
 #include "common/serializer/buffer_writer.h"
 #include "index/rtree.h"
 #include "storage/index/index.h"
-
-#include <mutex>
 
 namespace rag3db {
 namespace storage {
@@ -50,14 +50,13 @@ public:
 
     std::unique_ptr<DeleteState> initDeleteState(const transaction::Transaction* transaction,
         storage::MemoryManager* mm, storage::visible_func isVisible) override;
-    void delete_(transaction::Transaction* transaction,
-        const common::ValueVector& nodeIDVector, DeleteState& deleteState) override;
+    void delete_(transaction::Transaction* transaction, const common::ValueVector& nodeIDVector,
+        DeleteState& deleteState) override;
 
     std::unique_ptr<UpdateState> initUpdateState(main::ClientContext* context,
         common::column_id_t columnID, storage::visible_func isVisible) override;
-    void update(transaction::Transaction* transaction,
-        const common::ValueVector& nodeIDVector, common::ValueVector& propertyVector,
-        UpdateState& updateState) override;
+    void update(transaction::Transaction* transaction, const common::ValueVector& nodeIDVector,
+        common::ValueVector& propertyVector, UpdateState& updateState) override;
 
     void checkpoint(main::ClientContext* context, storage::PageAllocator& pageAllocator) override;
 
@@ -69,8 +68,8 @@ public:
         double radius) const;
     std::vector<std::pair<uint64_t, double>> searchOBB(const std::vector<double>& center,
         const std::vector<double>& halfExtents, const math::Quat& quat) const;
-    std::vector<std::pair<uint64_t, double>> searchFrustum(const double* planes,
-        uint32_t numPlanes, const std::vector<double>& refPoint) const;
+    std::vector<std::pair<uint64_t, double>> searchFrustum(const double* planes, uint32_t numPlanes,
+        const std::vector<double>& refPoint) const;
 
     const RTree& getRTree() const { return *rtree_; }
     void saveToFile() const;

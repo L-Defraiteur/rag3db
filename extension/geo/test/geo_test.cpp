@@ -1,8 +1,7 @@
-#include <gtest/gtest.h>
+#include <cmath>
 
 #include "index/rtree.h"
-
-#include <cmath>
+#include <gtest/gtest.h>
 
 using namespace rag3db::geo_extension;
 
@@ -58,7 +57,7 @@ TEST(BoundingBoxTest, MinDistToPoint) {
     BoundingBox bb;
     bb.minCoords = {2.0, 2.0};
     bb.maxCoords = {4.0, 4.0};
-    ASSERT_DOUBLE_EQ(bb.minDistToPoint({3.0, 3.0}), 0.0); // Inside
+    ASSERT_DOUBLE_EQ(bb.minDistToPoint({3.0, 3.0}), 0.0);   // Inside
     ASSERT_NEAR(bb.minDistToPoint({0.0, 3.0}), 2.0, 1e-10); // Left
 }
 

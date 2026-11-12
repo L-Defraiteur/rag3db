@@ -3,8 +3,9 @@
 #include <cstdio>
 
 #if defined(__GLIBC__)
-#include <execinfo.h>
 #include <unistd.h>
+
+#include <execinfo.h>
 #endif
 
 namespace rag3db {

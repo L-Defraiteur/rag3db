@@ -275,7 +275,8 @@ public:
     RAG3DB_API LogicalType() : typeID{LogicalTypeID::ANY}, extraTypeInfo{nullptr} {
         physicalType = getPhysicalType(this->typeID);
     };
-    explicit RAG3DB_API LogicalType(LogicalTypeID typeID, TypeCategory info = TypeCategory::INTERNAL);
+    explicit RAG3DB_API LogicalType(LogicalTypeID typeID,
+        TypeCategory info = TypeCategory::INTERNAL);
     EXPLICIT_COPY_DEFAULT_MOVE(LogicalType);
 
     RAG3DB_API bool operator==(const LogicalType& other) const;

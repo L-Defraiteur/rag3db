@@ -107,7 +107,8 @@ TEST_F(VectorIndexWalReplayTest, AReplayedDropSurvivesTheNextCheckpoint) {
     ok("CHECKPOINT;");
     onlyInTheJournalFromHere();
     ok("CALL DROP_VECTOR_INDEX('T', 'T_vec');");
-    ASSERT_NO_FATAL_FAILURE(reopen(true)); // rejoue le retrait ; la fermeture qui suit écrit un point de reprise
+    ASSERT_NO_FATAL_FAILURE(
+        reopen(true)); // rejoue le retrait ; la fermeture qui suit écrit un point de reprise
     ASSERT_NO_FATAL_FAILURE(reopen(false));
     EXPECT_EQ(count("CALL SHOW_INDEXES() RETURN *;"), 0);
     createIndex();

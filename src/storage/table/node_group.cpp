@@ -1,7 +1,6 @@
 #include "storage/table/node_group.h"
 
 #include <algorithm>
-
 #include <mutex>
 #include <shared_mutex>
 
@@ -213,11 +212,13 @@ void NodeGroup::extendFlushedHead(const Transaction* transaction,
     versionInfo->append(transaction->getID(), 0, newHead->getNumRows());
     newHead->setVersionInfo(std::move(versionInfo));
     const auto numAdded = flushed->getNumRows();
-    // L'échange, dans l'ordre de tout le reste : le verrou des blocs, puis inMemAppendMtx. L'ancienne
-    // tête meurt avec son dernier lecteur ; ses segments, partagés avec la neuve, restent.
+    // L'échange, dans l'ordre de tout le reste : le verrou des blocs, puis inMemAppendMtx.
+    // L'ancienne tête meurt avec son dernier lecteur ; ses segments, partagés avec la neuve,
+    // restent.
     const auto lock = chunkedGroups.lock();
     std::unique_lock appendLck{inMemAppendMtx};
-    KU_ASSERT(chunkedGroups.getNumGroups(lock) == 1 && chunkedGroups.getGroup(lock, 0) == head.get());
+    KU_ASSERT(
+        chunkedGroups.getNumGroups(lock) == 1 && chunkedGroups.getGroup(lock, 0) == head.get());
     chunkedGroups.replaceGroup(lock, 0, std::move(newHead));
     numRows += numAdded;
 }
@@ -555,8 +556,8 @@ row_idx_t NodeGroup::getNumLiveRows() const {
     for (auto i = 0u; i < chunkedGroups.getNumGroups(lock); i++) {
         const auto chunkedGroup = chunkedGroups.getGroup(lock, i);
         const auto numRowsInGroup = chunkedGroup->getNumRows();
-        numLiveRows += numRowsInGroup - chunkedGroup->getNumDeletions(
-                                            &DUMMY_CHECKPOINT_TRANSACTION, 0, numRowsInGroup);
+        numLiveRows += numRowsInGroup - chunkedGroup->getNumDeletions(&DUMMY_CHECKPOINT_TRANSACTION,
+                                            0, numRowsInGroup);
     }
     return numLiveRows;
 }

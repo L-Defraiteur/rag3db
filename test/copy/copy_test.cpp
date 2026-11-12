@@ -185,9 +185,9 @@ TEST_F(CopyTest, RowCountIsRightAfterCopiesThatRanOutOfMemory) {
     createDBAndConn();
     conn->query("CREATE NODE TABLE account(ID INT64, PRIMARY KEY(ID))");
     resetDBFlaky(true /* canFailDuringExecute */, false, false);
-    const auto copy = common::stringFormat(
-        "COPY account FROM \"{}/dataset/snap/twitter/csv/twitter-nodes.csv\"",
-        RAG3DB_ROOT_DIRECTORY);
+    const auto copy =
+        common::stringFormat("COPY account FROM \"{}/dataset/snap/twitter/csv/twitter-nodes.csv\"",
+            RAG3DB_ROOT_DIRECTORY);
     auto numFailures = 0;
     for (auto i = 0;; i++) {
         ASSERT_LT(i, 20);
@@ -266,8 +266,7 @@ static std::string copyTwitterFollows() {
 // Les deux chemins d'un COPY, posés explicitement : le journalisé est le défaut depuis
 // ff9bad960, le forcé reste couvert tant que le réglage existe.
 static std::string copyModeSetting(bool journaled) {
-    return journaled ? "CALL force_checkpoint_on_copy=false" :
-                       "CALL force_checkpoint_on_copy=true";
+    return journaled ? "CALL force_checkpoint_on_copy=false" : "CALL force_checkpoint_on_copy=true";
 }
 
 static constexpr int64_t NUM_TWITTER_FOLLOWS = 2420766;
@@ -301,47 +300,45 @@ void CopyTest::relCopyBMExceptionRecovery(bool journaled) {
         .canFailDuringCheckpoint = false,
         .canFailDuringCommit = false,
         .initFunc = createTwitterAccounts,
-        .executeFunc =
-            [&](main::Connection* conn, int i) -> std::unique_ptr<main::QueryResult> {
-                failureFrequency = UINT64_MAX;
-                conn->query(copyModeSetting(journaled));
-                if (i == 0) {
-                    conn->query("BEGIN TRANSACTION");
-                    const auto context = conn->getClientContext();
-                    const auto entry = catalog::Catalog::Get(*context)->getTableCatalogEntry(
-                        transaction::Transaction::Get(*context), "follows");
-                    const auto oid =
-                        entry->ptrCast<catalog::RelGroupCatalogEntry>()->getSingleRelEntryInfo().oid;
-                    follows = &storage::StorageManager::Get(*context)
-                                   ->getTable(oid)
-                                   ->cast<storage::RelTable>();
-                    // Le partitionneur réserve les identités de toutes les relations avant
-                    // l'insertion en masse : un refus qui les trouve toutes réservées tombe
-                    // après le partitionnement. reserveRelOffsets(0) lit le compte sous son
-                    // verrou sans rien réserver.
-                    currentBM->onRefusal = [&]() {
-                        if (follows->reserveRelOffsets(0) - relOffsetAtTryStart ==
-                            static_cast<common::offset_t>(NUM_TWITTER_FOLLOWS)) {
-                            refusalsAfterPartitioning++;
-                        }
-                    };
-                    currentBM->numReservations = 0;
-                    auto calibration = conn->query(copyTwitterFollows());
-                    numReservationsOfACopy = currentBM->numReservations;
-                    conn->query("ROLLBACK");
-                    if (!calibration->isSuccess()) {
-                        return calibration;
+        .executeFunc = [&](main::Connection* conn, int i) -> std::unique_ptr<main::QueryResult> {
+            failureFrequency = UINT64_MAX;
+            conn->query(copyModeSetting(journaled));
+            if (i == 0) {
+                conn->query("BEGIN TRANSACTION");
+                const auto context = conn->getClientContext();
+                const auto entry = catalog::Catalog::Get(*context)->getTableCatalogEntry(
+                    transaction::Transaction::Get(*context), "follows");
+                const auto oid =
+                    entry->ptrCast<catalog::RelGroupCatalogEntry>()->getSingleRelEntryInfo().oid;
+                follows = &storage::StorageManager::Get(*context)
+                               ->getTable(oid)
+                               ->cast<storage::RelTable>();
+                // Le partitionneur réserve les identités de toutes les relations avant
+                // l'insertion en masse : un refus qui les trouve toutes réservées tombe
+                // après le partitionnement. reserveRelOffsets(0) lit le compte sous son
+                // verrou sans rien réserver.
+                currentBM->onRefusal = [&]() {
+                    if (follows->reserveRelOffsets(0) - relOffsetAtTryStart ==
+                        static_cast<common::offset_t>(NUM_TWITTER_FOLLOWS)) {
+                        refusalsAfterPartitioning++;
                     }
+                };
+                currentBM->numReservations = 0;
+                auto calibration = conn->query(copyTwitterFollows());
+                numReservationsOfACopy = currentBM->numReservations;
+                conn->query("ROLLBACK");
+                if (!calibration->isSuccess()) {
+                    return calibration;
                 }
-                failureFrequency =
-                    i < NUM_REFUSED_TRIES ?
-                        numReservationsOfACopy -
-                            RESERVATIONS_BEFORE_THE_END_STEP * (NUM_REFUSED_TRIES - i) :
-                        2 * numReservationsOfACopy;
-                currentBM->reserveCount = 0;
-                relOffsetAtTryStart = follows->reserveRelOffsets(0);
-                return conn->query(copyTwitterFollows());
-            },
+            }
+            failureFrequency = i < NUM_REFUSED_TRIES ?
+                                   numReservationsOfACopy -
+                                       RESERVATIONS_BEFORE_THE_END_STEP * (NUM_REFUSED_TRIES - i) :
+                                   2 * numReservationsOfACopy;
+            currentBM->reserveCount = 0;
+            relOffsetAtTryStart = follows->reserveRelOffsets(0);
+            return conn->query(copyTwitterFollows());
+        },
         .earlyExitOnFailureFunc =
             [this](main::QueryResult*) {
                 // clear the BM so that the failure frequency isn't messed with by cached pages

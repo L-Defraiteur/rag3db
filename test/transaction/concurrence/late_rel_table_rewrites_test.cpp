@@ -12,6 +12,10 @@
 // source pour le sens avant, par destination pour le sens arrière) : les deux ensembles de
 // (relation, source, destination) doivent être égaux, base ouverte puis rouverte.
 
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include <atomic>
 #include <map>
 #include <mutex>
@@ -20,10 +24,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-#include <signal.h>
-#include <sys/wait.h>
-#include <unistd.h>
 
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
@@ -57,10 +57,10 @@ protected:
         Edges edges;
         for (auto node : nodes) {
             const auto query =
-                forward ? "MATCH (a:Scope)-[r:R]->(b:Symbol) WHERE a.id = " +
-                              std::to_string(node) + " RETURN offset(id(r)), a.id, b.id;" :
-                          "MATCH (a:Scope)-[r:R]->(b:Symbol) WHERE b.id = " +
-                              std::to_string(node) + " RETURN offset(id(r)), a.id, b.id;";
+                forward ? "MATCH (a:Scope)-[r:R]->(b:Symbol) WHERE a.id = " + std::to_string(node) +
+                              " RETURN offset(id(r)), a.id, b.id;" :
+                          "MATCH (a:Scope)-[r:R]->(b:Symbol) WHERE b.id = " + std::to_string(node) +
+                              " RETURN offset(id(r)), a.id, b.id;";
             auto result = conn->query(query);
             EXPECT_TRUE(result->isSuccess()) << query << " : " << result->getErrorMessage();
             while (result->isSuccess() && result->hasNext()) {
@@ -140,20 +140,19 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderDrains) {
             sources.insert(s);
             const auto edges = static_cast<int>(random() % 4);
             for (int e = 0; e < edges; e++) {
-                const auto dst = random() % 3 == 0 ?
-                                     static_cast<int64_t>(random() % NUM_SYMBOLS) :
-                                     hot[random() % hot.size()];
+                const auto dst = random() % 3 == 0 ? static_cast<int64_t>(random() % NUM_SYMBOLS) :
+                                                     hot[random() % hot.size()];
                 destinations.insert(dst);
-                pairs += (pairs.empty() ? "" : ",") + std::string("[") + std::to_string(s) +
-                         "," + std::to_string(dst) + "," + std::to_string(round) + "]";
+                pairs += (pairs.empty() ? "" : ",") + std::string("[") + std::to_string(s) + "," +
+                         std::to_string(dst) + "," + std::to_string(round) + "]";
             }
         }
         ok("BEGIN TRANSACTION;");
         ok("MATCH (a:Scope)-[r:R]->() WHERE a.id IN [" + ids + "] DELETE r;");
         if (!pairs.empty()) {
             ok("UNWIND [" + pairs +
-               "] AS p MATCH (a:Scope {id: p[1]}), (b:Symbol {id: p[2]}) MERGE (a)-[r:R]->(b) "
-               "SET r.line = p[3];");
+                "] AS p MATCH (a:Scope {id: p[1]}), (b:Symbol {id: p[2]}) MERGE (a)-[r:R]->(b) "
+                "SET r.line = p[3];");
         }
         ok("COMMIT;");
         if (round == ROUNDS / 2) {
@@ -235,10 +234,11 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderConcurrentAndRolledBack
             auto step = [&](const std::string& query) {
                 return connection.query(query)->isSuccess();
             };
-            const auto written = step("MATCH (a:Scope)-[r:R]->() WHERE a.id IN [" + ids + "] DELETE r;") &&
-                                 step("UNWIND [" + pairs +
-                                      "] AS p MATCH (a:Scope {id: p[1]}), (b:Symbol {id: p[2]}) "
-                                      "MERGE (a)-[r:R]->(b) SET r.line = p[3];");
+            const auto written =
+                step("MATCH (a:Scope)-[r:R]->() WHERE a.id IN [" + ids + "] DELETE r;") &&
+                step("UNWIND [" + pairs +
+                     "] AS p MATCH (a:Scope {id: p[1]}), (b:Symbol {id: p[2]}) "
+                     "MERGE (a)-[r:R]->(b) SET r.line = p[3];");
             if (!written) {
                 // Refusée (un verrou tenu par l'autre écrivain) : la transaction est déjà défaite.
                 refused++;
@@ -316,11 +316,10 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualAcrossKilledProcesses) {
                 for (auto s = first; s < first + count; s++) {
                     ids += (ids.empty() ? "" : ",") + std::to_string(s);
                     for (int e = 0; e < 4; e++) {
-                        const auto dst = random() % 4 == 0 ? targets[5 + random() % 200] :
-                                                             targets[random() % 5];
-                        pairs += (pairs.empty() ? "" : ",") + std::string("[") +
-                                 std::to_string(s) + "," + std::to_string(dst) + "," +
-                                 std::to_string(round) + "]";
+                        const auto dst =
+                            random() % 4 == 0 ? targets[5 + random() % 200] : targets[random() % 5];
+                        pairs += (pairs.empty() ? "" : ",") + std::string("[") + std::to_string(s) +
+                                 "," + std::to_string(dst) + "," + std::to_string(round) + "]";
                     }
                 }
                 connection.query("BEGIN TRANSACTION;");
@@ -421,8 +420,8 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderRolledBackCopyDrains) {
             const auto written =
                 connection.query("MATCH (a:Scope)-[r:R]->() WHERE a.id IN [" + ids + "] DELETE r;")
                     ->isSuccess() &&
-                connection.query("COPY R FROM (UNWIND [" + pairs +
-                                 "] AS p RETURN p[1], p[2], p[3]);")
+                connection
+                    .query("COPY R FROM (UNWIND [" + pairs + "] AS p RETURN p[1], p[2], p[3]);")
                     ->isSuccess();
             if (!written) {
                 copyRefused++;
@@ -453,9 +452,10 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualUnderRolledBackCopyDrains) {
             const auto written =
                 connection.query("MATCH (a:Scope)-[r:R]->() WHERE a.id IN [" + ids + "] DELETE r;")
                     ->isSuccess() &&
-                connection.query("UNWIND [" + pairs +
-                                 "] AS p MATCH (a:Scope {id: p[1]}), (b:Symbol {id: p[2]}) "
-                                 "MERGE (a)-[r:R]->(b) SET r.line = p[3];")
+                connection
+                    .query("UNWIND [" + pairs +
+                           "] AS p MATCH (a:Scope {id: p[1]}), (b:Symbol {id: p[2]}) "
+                           "MERGE (a)-[r:R]->(b) SET r.line = p[3];")
                     ->isSuccess();
             if (written && connection.query("COMMIT;")->isSuccess()) {
                 merged++;
@@ -531,8 +531,9 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualAfterACopyRefusedForMemory) 
         }
         ok("BEGIN TRANSACTION;");
         ok("MATCH (a:Scope)-[r:R]->() WHERE a.id IN [" + ids + "] DELETE r;");
-        auto copy = conn->query("COPY R FROM (UNWIND [" + pairs + "] AS p RETURN p[1], p[2], p[3], '" +
-                                padding + "' + string(p[3]), 'appel');");
+        auto copy =
+            conn->query("COPY R FROM (UNWIND [" + pairs + "] AS p RETURN p[1], p[2], p[3], '" +
+                        padding + "' + string(p[3]), 'appel');");
         // Le refus peut venir du COPY, ou du point de reprise qui porte sa durabilité, au COMMIT :
         // la base est alors à rouvrir, et rien du COPY ne reste.
         std::string refusal;
@@ -575,21 +576,23 @@ TEST_F(LateRelTableRewrites, BothDirectionsStayEqualAfterACopyRefusedForMemory) 
     EXPECT_EQ(gaps(sources, destinations), 0u) << "base rouverte, tampon large";
 }
 
-// Le défaut du ticket 2026-11-08-un-index-complet-croise-les-deux-sens-des-petites-tables-de-relations,
-// réduit depuis la trace exacte d'un `index confirm` (9 novembre 2026, sous 9bae60786) : le rejeu de
-// la trace sur la copie saine rougit après le point de reprise qui suit un MERGE trouvant une relation
-// existante d'INHERITS_FROM (Scope→Scope) et réécrivant sa propriété ; puis, par ddmin, trois relations
-// versées d'un COPY dans une table de 82 890 nœuds suffisent. Le MERGE seul laisse les deux sens égaux ;
-// c'est le point de reprise de la mise à jour qui écrit la liste avant fausse : une rangée vide lue
-// comme une relation 0 vers le nœud 0, une relation vue deux fois, une autre au seul sens arrière —
-// la signature de la base de Lucie. Les décalages sont ceux de la fixture (37654 → 23480, 5358 → 5354,
-// 6316 → 640) ; les mêmes paires versées par petits lots restent vertes.
+// Le défaut du ticket
+// 2026-11-08-un-index-complet-croise-les-deux-sens-des-petites-tables-de-relations, réduit depuis
+// la trace exacte d'un `index confirm` (9 novembre 2026, sous 9bae60786) : le rejeu de la trace sur
+// la copie saine rougit après le point de reprise qui suit un MERGE trouvant une relation existante
+// d'INHERITS_FROM (Scope→Scope) et réécrivant sa propriété ; puis, par ddmin, trois relations
+// versées d'un COPY dans une table de 82 890 nœuds suffisent. Le MERGE seul laisse les deux sens
+// égaux ; c'est le point de reprise de la mise à jour qui écrit la liste avant fausse : une rangée
+// vide lue comme une relation 0 vers le nœud 0, une relation vue deux fois, une autre au seul sens
+// arrière — la signature de la base de Lucie. Les décalages sont ceux de la fixture (37654 → 23480,
+// 5358 → 5354, 6316 → 640) ; les mêmes paires versées par petits lots restent vertes.
 TEST_F(LateRelTableRewrites, UpdatingACopiedRelKeepsBothDirectionsThroughACheckpoint) {
     ok("CREATE NODE TABLE Scope(id INT64, PRIMARY KEY(id));");
     ok("CREATE REL TABLE INHERITS_FROM(FROM Scope TO Scope, line INT64);");
     ok("UNWIND range(0, 82889) AS i CREATE (:Scope {id: i});");
     ok("CHECKPOINT;");
-    const std::vector<std::pair<int64_t, int64_t>> rels = {{37654, 23480}, {5358, 5354}, {6316, 640}};
+    const std::vector<std::pair<int64_t, int64_t>> rels = {{37654, 23480}, {5358, 5354},
+        {6316, 640}};
     ok("COPY INHERITS_FROM FROM (UNWIND [[37654, 23480], [5358, 5354], [6316, 640]] AS p "
        "RETURN p[1] AS f, p[2] AS t, 1 AS line);");
     ok("CHECKPOINT;");
@@ -602,9 +605,10 @@ TEST_F(LateRelTableRewrites, UpdatingACopiedRelKeepsBothDirectionsThroughACheckp
     auto readDirection = [&](bool forward, const std::set<int64_t>& nodes) {
         std::multimap<int64_t, std::pair<int64_t, int64_t>> edges;
         for (auto node : nodes) {
-            auto result = conn->query(std::string("MATCH (a:Scope)-[r:INHERITS_FROM]->(b:Scope) WHERE ") +
-                                      (forward ? "a" : "b") + ".id = " + std::to_string(node) +
-                                      " RETURN offset(id(r)), a.id, b.id;");
+            auto result =
+                conn->query(std::string("MATCH (a:Scope)-[r:INHERITS_FROM]->(b:Scope) WHERE ") +
+                            (forward ? "a" : "b") + ".id = " + std::to_string(node) +
+                            " RETURN offset(id(r)), a.id, b.id;");
             EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
             while (result->isSuccess() && result->hasNext()) {
                 auto row = result->getNext();
@@ -618,12 +622,14 @@ TEST_F(LateRelTableRewrites, UpdatingACopiedRelKeepsBothDirectionsThroughACheckp
     const auto expected = readDirection(true, sources);
     ASSERT_EQ(expected.size(), 3u);
     ASSERT_EQ(readDirection(false, destinations), expected) << "avant la mise à jour";
-    ok("MATCH (a:Scope {id: 37654}), (b:Scope {id: 23480}) MERGE (a)-[r:INHERITS_FROM]->(b) SET r.line = 131;");
+    ok("MATCH (a:Scope {id: 37654}), (b:Scope {id: 23480}) MERGE (a)-[r:INHERITS_FROM]->(b) SET "
+       "r.line = 131;");
     EXPECT_EQ(readDirection(true, sources), expected) << "sens avant, mise à jour validée";
     EXPECT_EQ(readDirection(false, destinations), expected) << "sens arrière, mise à jour validée";
     ok("CHECKPOINT;");
     EXPECT_EQ(readDirection(true, sources), expected) << "sens avant, après le point de reprise";
-    EXPECT_EQ(readDirection(false, destinations), expected) << "sens arrière, après le point de reprise";
+    EXPECT_EQ(readDirection(false, destinations), expected)
+        << "sens arrière, après le point de reprise";
     conn.reset();
     database.reset();
     createDBAndConn();

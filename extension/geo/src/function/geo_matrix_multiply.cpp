@@ -36,8 +36,8 @@ static std::unique_ptr<FunctionBindData> bindFunc(const ScalarBindFuncInput& inp
 function_set GeoMatrixMultiplyFunction::getFunctionSet() {
     function_set result;
     auto func = std::make_unique<ScalarFunction>(name,
-        std::vector<LogicalTypeID>{LogicalTypeID::LIST, LogicalTypeID::LIST},
-        LogicalTypeID::LIST, execFunc);
+        std::vector<LogicalTypeID>{LogicalTypeID::LIST, LogicalTypeID::LIST}, LogicalTypeID::LIST,
+        execFunc);
     func->bindFunc = bindFunc;
     result.push_back(std::move(func));
     return result;

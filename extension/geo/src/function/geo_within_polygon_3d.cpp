@@ -1,11 +1,11 @@
 #include "function/geo_within_polygon_3d.h"
 
+#include <cmath>
+
 #include "common/vector/value_vector.h"
 #include "function/geo_list_helpers.h"
 #include "function/scalar_function.h"
 #include "math/geometry.h"
-
-#include <cmath>
 
 namespace rag3db {
 namespace geo_extension {
@@ -17,9 +17,10 @@ using namespace common;
 static bool withinPolygon3dCore(const double point[3], const std::vector<double>& polyXs,
     const std::vector<double>& polyYs, const double position[3], const math::Quat& q,
     bool hasThickness, double thickness) {
-    uint32_t n = std::min(static_cast<uint32_t>(polyXs.size()),
-        static_cast<uint32_t>(polyYs.size()));
-    if (n < 3) return false;
+    uint32_t n =
+        std::min(static_cast<uint32_t>(polyXs.size()), static_cast<uint32_t>(polyYs.size()));
+    if (n < 3)
+        return false;
 
     // Transform point to polygon's local frame.
     double dx = point[0] - position[0];
@@ -38,7 +39,8 @@ static bool withinPolygon3dCore(const double point[3], const std::vector<double>
 }
 
 // 5-param: no thickness check (projection only)
-// GEO_WITHIN_POLYGON_3D(point [x,y,z], polygon_xs LIST, polygon_ys LIST, position [x,y,z], quat [x,y,z,w])
+// GEO_WITHIN_POLYGON_3D(point [x,y,z], polygon_xs LIST, polygon_ys LIST, position [x,y,z], quat
+// [x,y,z,w])
 static void execFunc5(const std::vector<std::shared_ptr<ValueVector>>& parameters,
     const std::vector<SelectionVector*>& parameterSelVectors, ValueVector& result,
     SelectionVector* resultSelVector, void*) {

@@ -76,7 +76,8 @@ void ScanNodeTableSharedState::nextMorsel(NodeTableScanState& scanState,
                 maskExhausted = true;
             }
             const auto maxOffset = semiMask->getMaxOffset();
-            while (!scanState.maskedOffsets.empty() && scanState.maskedOffsets.back() >= maxOffset) {
+            while (
+                !scanState.maskedOffsets.empty() && scanState.maskedOffsets.back() >= maxOffset) {
                 scanState.maskedOffsets.pop_back();
                 maskExhausted = true;
             }

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <unordered_map>
 #include <queue>
+#include <unordered_map>
 
 #include "common/random_engine.h"
 #include "graph/on_disk_graph.h"
@@ -313,11 +313,12 @@ public:
     // de la recherche, même si un DROP concurrent le retire de la table. C'est celui que son
     // instantané du catalogue désigne, reconnu à ses tables de relations (upperRelTableID et
     // lowerRelTableID : l'oid de la relation unique de chaque groupe, getSingleRelEntryInfo, vu à
-    // cet instantané) : un index recréé entre la liaison et la lecture a d'autres tables. Absent, ou d'une autre génération : refus nommé (« does not exist »).
+    // cet instantané) : un index recréé entre la liaison et la lecture a d'autres tables. Absent,
+    // ou d'une autre génération : refus nommé (« does not exist »).
     static std::shared_ptr<OnDiskHNSWIndex> captureForQuery(const storage::NodeTable& nodeTable,
         const transaction::Transaction* transaction, const std::string& indexName,
-        const std::string& tableName,
-        common::table_id_t upperRelTableID, common::table_id_t lowerRelTableID);
+        const std::string& tableName, common::table_id_t upperRelTableID,
+        common::table_id_t lowerRelTableID);
     struct HNSWInsertState final : InsertState {
         // State for searching neighbors and reading vectors in the HNSW graph.
         HNSWSearchState searchState;
@@ -403,8 +404,7 @@ public:
         storage::MemoryManager* mm, storage::visible_func isVisible) override;
     void delete_(transaction::Transaction* transaction, const common::ValueVector& nodeIDVector,
         DeleteState& deleteState) override;
-    void finalizeDelete(transaction::Transaction* transaction,
-        DeleteState& deleteState) override;
+    void finalizeDelete(transaction::Transaction* transaction, DeleteState& deleteState) override;
 
     std::unique_ptr<UpdateState> initUpdateState(main::ClientContext* context,
         common::column_id_t columnID, storage::visible_func isVisible) override;
@@ -527,8 +527,7 @@ private:
     // as it takes. Merely dropping those edges cut the graph into pieces after a large delete.
     // Returns the edges the node has in the end.
     std::vector<common::offset_t> cleanEdgesForNode(transaction::Transaction* transaction,
-        common::offset_t offset,
-        bool isUpperLayer, HNSWInsertState& insertState,
+        common::offset_t offset, bool isUpperLayer, HNSWInsertState& insertState,
         const std::unordered_set<common::offset_t>& deletedNodes,
         const std::unordered_map<common::offset_t, std::vector<common::offset_t>>&
             neighborsOfDeleted);

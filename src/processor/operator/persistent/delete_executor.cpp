@@ -69,8 +69,7 @@ void NodeDeleteExecutor::init(ResultSet* resultSet, ExecutionContext*) {
 void SingleLabelNodeDeleteExecutor::init(ResultSet* resultSet, ExecutionContext* context) {
     NodeDeleteExecutor::init(resultSet, context);
     tableInfo.init(*resultSet);
-    deleteState_ =
-        std::make_unique<NodeTableDeleteState>(*info.nodeIDVector, *tableInfo.pkVector);
+    deleteState_ = std::make_unique<NodeTableDeleteState>(*info.nodeIDVector, *tableInfo.pkVector);
 }
 
 void SingleLabelNodeDeleteExecutor::delete_(ExecutionContext* context) {

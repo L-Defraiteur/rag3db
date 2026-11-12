@@ -338,11 +338,9 @@ TEST_F(MinimalReproduction, FailedTransactionRefusesFurtherStatements) {
     auto rows = conn->query("MATCH (n:Item) RETURN n.id, n.v ORDER BY n.id;");
     std::cerr << "  rows after: " << rows->toString();
     EXPECT_EQ(queryInt("MATCH (n:Item) RETURN count(n);"), 1)
-        << "[check: nothing-after-error] "
-        << "nothing after the error may be committed";
+        << "[check: nothing-after-error] " << "nothing after the error may be committed";
     EXPECT_EQ(queryInt("MATCH (n:Item {id: 1}) RETURN n.v;"), 0)
-        << "[check: nothing-after-error] "
-        << "nothing after the error may be committed";
+        << "[check: nothing-after-error] " << "nothing after the error may be committed";
 }
 
 // Deux mises à jour de la même ligne, sur deux colonnes différentes (relecture du cœur

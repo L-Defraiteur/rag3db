@@ -185,8 +185,9 @@ rag3db_state rag3db_prepared_statement_bind_date(rag3db_prepared_statement* prep
     }
 }
 
-rag3db_state rag3db_prepared_statement_bind_timestamp_ns(rag3db_prepared_statement* prepared_statement,
-    const char* param_name, rag3db_timestamp_ns_t value) {
+rag3db_state rag3db_prepared_statement_bind_timestamp_ns(
+    rag3db_prepared_statement* prepared_statement, const char* param_name,
+    rag3db_timestamp_ns_t value) {
     try {
         auto value_ptr = std::make_unique<Value>(timestamp_ns_t(value.value));
         rag3db_prepared_statement_bind_cpp_value(prepared_statement, param_name,
@@ -197,8 +198,9 @@ rag3db_state rag3db_prepared_statement_bind_timestamp_ns(rag3db_prepared_stateme
     }
 }
 
-rag3db_state rag3db_prepared_statement_bind_timestamp_ms(rag3db_prepared_statement* prepared_statement,
-    const char* param_name, rag3db_timestamp_ms_t value) {
+rag3db_state rag3db_prepared_statement_bind_timestamp_ms(
+    rag3db_prepared_statement* prepared_statement, const char* param_name,
+    rag3db_timestamp_ms_t value) {
     try {
         auto value_ptr = std::make_unique<Value>(timestamp_ms_t(value.value));
         rag3db_prepared_statement_bind_cpp_value(prepared_statement, param_name,
@@ -209,8 +211,9 @@ rag3db_state rag3db_prepared_statement_bind_timestamp_ms(rag3db_prepared_stateme
     }
 }
 
-rag3db_state rag3db_prepared_statement_bind_timestamp_sec(rag3db_prepared_statement* prepared_statement,
-    const char* param_name, rag3db_timestamp_sec_t value) {
+rag3db_state rag3db_prepared_statement_bind_timestamp_sec(
+    rag3db_prepared_statement* prepared_statement, const char* param_name,
+    rag3db_timestamp_sec_t value) {
     try {
         auto value_ptr = std::make_unique<Value>(timestamp_sec_t(value.value));
         rag3db_prepared_statement_bind_cpp_value(prepared_statement, param_name,
@@ -221,8 +224,9 @@ rag3db_state rag3db_prepared_statement_bind_timestamp_sec(rag3db_prepared_statem
     }
 }
 
-rag3db_state rag3db_prepared_statement_bind_timestamp_tz(rag3db_prepared_statement* prepared_statement,
-    const char* param_name, rag3db_timestamp_tz_t value) {
+rag3db_state rag3db_prepared_statement_bind_timestamp_tz(
+    rag3db_prepared_statement* prepared_statement, const char* param_name,
+    rag3db_timestamp_tz_t value) {
     try {
         auto value_ptr = std::make_unique<Value>(timestamp_tz_t(value.value));
         rag3db_prepared_statement_bind_cpp_value(prepared_statement, param_name,

@@ -146,11 +146,13 @@ TEST_F(CopyAfterDropVectorIndex, AReaderFromBeforeTheDropStillSearchesTheOldInde
     ok("CHECKPOINT;");
     auto reader = std::make_unique<Connection>(database.get());
     ASSERT_TRUE(reader->query("BEGIN TRANSACTION READ ONLY;")->isSuccess());
-    auto before = reader->query("CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', CAST([42.0,1.0,2.0,0.0] AS FLOAT[4]), 1) RETURN node.id;");
+    auto before = reader->query("CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', "
+                                "CAST([42.0,1.0,2.0,0.0] AS FLOAT[4]), 1) RETURN node.id;");
     ASSERT_TRUE(before->isSuccess()) << before->getErrorMessage();
     dropIndex();
     ok("COPY Doc FROM '" + docsCsv("docs2", 500, 500) + "' (header=false);");
-    auto during = reader->query("CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', CAST([42.0,1.0,2.0,0.0] AS FLOAT[4]), 1) RETURN node.id;");
+    auto during = reader->query("CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', "
+                                "CAST([42.0,1.0,2.0,0.0] AS FLOAT[4]), 1) RETURN node.id;");
     EXPECT_TRUE(during->isSuccess()) << during->getErrorMessage();
     if (during->isSuccess() && during->hasNext()) {
         EXPECT_EQ(during->getNext()->getValue(0)->getValue<int64_t>(), 42);

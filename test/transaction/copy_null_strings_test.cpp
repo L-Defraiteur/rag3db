@@ -1,11 +1,12 @@
 // Le mot NULL convenu d'un COPY (null_strings) vaut pour toutes les colonnes, quel que soit
-// leur type (header=false : une ligne seule serait prise pour un en-tête). Avant le correctif, il n'était consulté que pour une colonne texte : dans une
-// colonne INT64, le moteur tentait la conversion et refusait le fichier entier (« Could not
-// convert "__nul__" to INT64 »).
+// leur type (header=false : une ligne seule serait prise pour un en-tête). Avant le correctif, il
+// n'était consulté que pour une colonne texte : dans une colonne INT64, le moteur tentait la
+// conversion et refusait le fichier entier (« Could not convert "__nul__" to INT64 »).
+#include <unistd.h>
+
 #include <filesystem>
 #include <fstream>
 #include <string>
-#include <unistd.h>
 
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
@@ -59,7 +60,8 @@ TEST_F(CopyNullStrings, TheNullWordIsReadInAnIntegerColumnOfARelation) {
     run("CREATE REL TABLE R(FROM A TO B, raison STRING, poids INT64);");
     run("CREATE (:A {_uuid: 'a'}); CREATE (:B {_uuid: 'b'});");
     writeCsv("a,b,__nul__\n");
-    run("COPY R (poids) FROM '" + csvPath + "' (from='A', to='B', header=false, null_strings=['__nul__']);");
+    run("COPY R (poids) FROM '" + csvPath +
+        "' (from='A', to='B', header=false, null_strings=['__nul__']);");
     EXPECT_EQ(row("MATCH (:A)-[r:R]->(:B) RETURN count(*), r.poids IS NULL, r.raison IS NULL;"),
         "1|True|True\n");
 }
@@ -78,7 +80,8 @@ TEST_F(CopyNullStrings, TheNullWordIsReadInEveryColumnOfANode) {
 TEST_F(CopyNullStrings, TheQuotedWordStaysAValue) {
     run("CREATE NODE TABLE N(id INT64, n INT64, PRIMARY KEY(id));");
     writeCsv("1,\"__nul__\"\n");
-    auto result = conn->query("COPY N FROM '" + csvPath + "' (header=false, null_strings=['__nul__']);");
+    auto result =
+        conn->query("COPY N FROM '" + csvPath + "' (header=false, null_strings=['__nul__']);");
     ASSERT_FALSE(result->isSuccess());
     EXPECT_NE(result->getErrorMessage().find("__nul__"), std::string::npos)
         << result->getErrorMessage();
@@ -91,8 +94,7 @@ TEST_F(CopyNullStrings, WithoutTheOptionTheEmptyCellAndTheWordNullStillRead) {
     run("COPY N FROM '" + csvPath + "' (header=false);");
     EXPECT_EQ(row("MATCH (x:N {id: 1}) RETURN x.n IS NULL, x.d IS NULL, x.s IS NULL;"),
         "True|True|True\n");
-    EXPECT_EQ(row("MATCH (x:N {id: 2}) RETURN x.n IS NULL, x.d IS NULL, x.s;"),
-        "True|True|NULL\n");
+    EXPECT_EQ(row("MATCH (x:N {id: 2}) RETURN x.n IS NULL, x.d IS NULL, x.s;"), "True|True|NULL\n");
 }
 
 } // namespace

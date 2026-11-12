@@ -7,8 +7,8 @@
 #include "storage/buffer_manager/buffer_manager.h"
 #include "storage/buffer_manager/memory_manager.h"
 #include "storage/storage_manager.h"
-#include "storage/wal/wal.h"
 #include "storage/storage_utils.h"
+#include "storage/wal/wal.h"
 
 namespace rag3db {
 namespace main {

@@ -3,9 +3,6 @@
 #include <algorithm>
 #include <cstdio>
 #include <optional>
-
-#include "storage/checkpoint_profile.h"
-
 #include <thread>
 
 #include "common/exception/checkpoint.h"
@@ -18,6 +15,7 @@
 #include "main/client_context.h"
 #include "main/database.h"
 #include "main/db_config.h"
+#include "storage/checkpoint_profile.h"
 #include "storage/checkpointer.h"
 #include "storage/storage_manager.h"
 #include "storage/wal/local_wal.h"
@@ -97,8 +95,7 @@ void TransactionManager::refreshSnapshot(Transaction* transaction) {
     transaction->snapshotFloorTS = lastTimestamp;
 }
 
-transaction_t TransactionManager::oldestActiveSnapshotNoLock(
-    const Transaction* committing) const {
+transaction_t TransactionManager::oldestActiveSnapshotNoLock(const Transaction* committing) const {
     auto oldest = committing->commitTS;
     for (const auto& active : activeTransactions) {
         if (active.get() != committing && active->snapshotFloorTS < oldest) {
@@ -179,10 +176,9 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
                 // Des lecteurs seuls : ils ne sont plus attendus (V2-2), ils gardent l'ancienne
                 // génération des blocs.
                 checkpointNoLock(clientContext, lck);
-            } else if (std::ranges::any_of(activeTransactions,
-                           [this](const auto& active) {
-                               return active->getID() <= lastBlockingTransactionID;
-                           })) {
+            } else if (std::ranges::any_of(activeTransactions, [this](const auto& active) {
+                           return active->getID() <= lastBlockingTransactionID;
+                       })) {
                 // Une transaction qui a déjà fait abandonner une demande est encore ouverte (un
                 // lecteur long) : reporté, sans retenir de nouveau les écrivains.
                 postponeCheckpointNoLock();
@@ -203,7 +199,9 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
             fprintf(stderr,
                 "[commit-profile] total=%.1f ms : validation=%.1f point-de-reprise=%.1f (%s)\n",
                 profile.total(), commitMs, checkpointMs,
-                !shouldCheckpoint ? "aucun" : forced ? "forcé" : "au seuil");
+                !shouldCheckpoint ? "aucun" :
+                forced            ? "forcé" :
+                                    "au seuil");
         }
     } break;
         // LCOV_EXCL_START
@@ -235,8 +233,7 @@ void TransactionManager::failAfterStatement(main::ClientContext& clientContext,
             throw TransactionManagerException(common::stringFormat(
                 "The rollback of the failed statement could not complete ({}). Send ROLLBACK to "
                 "close the transaction{}",
-                e.what(),
-                halfDone ? std::string{". "} + REOPEN_AFTER_FAILED_ROLLBACK + "." : "."));
+                e.what(), halfDone ? std::string{". "} + REOPEN_AFTER_FAILED_ROLLBACK + "." : "."));
         }
     }
     // Pas de clearTransactionNoLock : la transaction reste active et garde ses verrous.
@@ -275,8 +272,7 @@ void TransactionManager::rollback(main::ClientContext& clientContext, Transactio
             throw TransactionManagerException(common::stringFormat(
                 "The rollback could not complete ({}). The transaction is closed and its locks "
                 "are released{}",
-                *failure,
-                halfDone ? std::string{". "} + REOPEN_AFTER_FAILED_ROLLBACK + "." : "."));
+                *failure, halfDone ? std::string{". "} + REOPEN_AFTER_FAILED_ROLLBACK + "." : "."));
         }
     } break;
     default: {
@@ -339,8 +335,8 @@ void TransactionManager::waitForWriteTransactionsStartedBefore(
     }
     // Par tranches : une interruption de la requête (Connection::interrupt, qui ne réveille
     // personne) arrête l'attente au plus une tranche plus tard.
-    const auto deadline = std::chrono::steady_clock::now() +
-                          std::chrono::microseconds(checkpointWaitTimeoutInMicros);
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::microseconds(checkpointWaitTimeoutInMicros);
     while (!olderWritersLeft()) {
         if (clientContext.interrupted()) {
             throw common::InterruptException{};
@@ -376,8 +372,7 @@ void TransactionManager::stopNewTransactionsAndWaitForOthersNoLock(
     const auto othersLeftOrQueued = [this, staying, readersToo] {
         return std::ranges::all_of(activeTransactions,
             [this, staying, readersToo](const auto& transaction) {
-                return transaction.get() == staying ||
-                       (!readersToo && transaction->isReadOnly()) ||
+                return transaction.get() == staying || (!readersToo && transaction->isReadOnly()) ||
                        std::ranges::find(queuedCheckpointCommits, transaction.get()) !=
                            queuedCheckpointCommits.end();
             });
@@ -400,11 +395,10 @@ void TransactionManager::stopNewTransactionsAndWaitForOthersNoLock(
         // à moitié appliquée, jusqu'à son annulation, et le point de reprise ne doit pas
         // l'écrire. L'attente est bornée comme la première.
         const auto othersLeft = [this, staying, readersToo] {
-            return std::ranges::all_of(activeTransactions,
-                [staying, readersToo](const auto& transaction) {
-                    return transaction.get() == staying ||
-                           (!readersToo && transaction->isReadOnly());
-                });
+            return std::ranges::all_of(activeTransactions, [staying, readersToo](
+                                                               const auto& transaction) {
+                return transaction.get() == staying || (!readersToo && transaction->isReadOnly());
+            });
         };
         commitQueuedNow = true;
         transactionsChanged.notify_all();
@@ -470,7 +464,8 @@ bool TransactionManager::commitInCheckpointQueueNoLock(main::ClientContext& clie
     throwIfCheckpointFailedNoLock();
     if (lastCompletedCheckpoint <= ticket) {
         // Le point de reprise qui devait la contenir n'a pas eu lieu (la validation qui le
-        // portait a échoué après l'attente) : cette validation, faite en mémoire, l'écrit elle-même.
+        // portait a échoué après l'attente) : cette validation, faite en mémoire, l'écrit
+        // elle-même.
         try {
             checkpointNoLock(clientContext, publicLock);
         } catch (const CheckpointException& e) {
@@ -570,9 +565,8 @@ bool TransactionManager::hasActiveWriteTransactionNoLock() const {
 
 bool TransactionManager::isActive(transaction_t transactionID) {
     std::unique_lock lck{mtxForSerializingPublicFunctionCalls};
-    return std::ranges::any_of(activeTransactions, [transactionID](const auto& transaction) {
-        return transaction->getID() == transactionID;
-    });
+    return std::ranges::any_of(activeTransactions,
+        [transactionID](const auto& transaction) { return transaction->getID() == transactionID; });
 }
 
 void TransactionManager::clearTransactionNoLock(transaction_t transactionID) {

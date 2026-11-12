@@ -3,11 +3,10 @@
 // logicalPlan, colonnes) dans un magasin de la connexion, indexé par un compteur, que rien ne
 // vidait : un hôte qui prépare à chaque appel grossissait sans borne (23,7 Go vivants avec quatre
 // lecteurs). La préparation porte désormais sa requête et la rend en mourant.
-#include <malloc.h>
-
 #include <filesystem>
 
 #include "api_test/api_test.h"
+#include <malloc.h>
 
 using namespace rag3db::common;
 using namespace rag3db::main;
@@ -37,8 +36,8 @@ protected:
     int64_t growthOver(Connection& connection, int64_t count, bool distinct) {
         const auto before = liveHeapBytes();
         for (int64_t i = 0; i < count; i++) {
-            auto prepared = connection.prepare(distinct ? distinctQuery(i) :
-                                                          "MATCH (n) RETURN count(n);");
+            auto prepared =
+                connection.prepare(distinct ? distinctQuery(i) : "MATCH (n) RETURN count(n);");
             EXPECT_TRUE(prepared->isSuccess()) << prepared->getErrorMessage();
             auto result = connection.execute(prepared.get());
             EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
@@ -63,8 +62,8 @@ TEST_F(PreparedStatementLifetime, DistinctPreparationsDoNotGrowTheConnection) {
 TEST_F(PreparedStatementLifetime, TheSameQueryPreparedManyTimesDoesNotGrowTheConnection) {
     growthOver(*conn, 300, false /*distinct*/);
     const auto growth = growthOver(*conn, 3000, false /*distinct*/);
-    std::cerr << "  the same query prepared 3000 times: live heap grew by " << growth
-              << " bytes (" << growth / 3000 << " per preparation)\n";
+    std::cerr << "  the same query prepared 3000 times: live heap grew by " << growth << " bytes ("
+              << growth / 3000 << " per preparation)\n";
     EXPECT_LT(growth, PREPARED_GROWTH_BOUND)
         << "[check: prepared-statements-released] " << growth << " bytes";
 }

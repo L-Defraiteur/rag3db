@@ -395,8 +395,9 @@ std::string migrateQuery(ClientContext& /*context*/, const TableFuncBindData& bi
             outputQuery.append(",");
         }
     }
-    outputQuery.append("] as row RETURN row[1] as rag3db_table, row[2] as rag3db_property, row[3] as "
-                       "rag3db_type, row[4] as neo4j_types;");
+    outputQuery.append(
+        "] as row RETURN row[1] as rag3db_table, row[2] as rag3db_property, row[3] as "
+        "rag3db_type, row[4] as neo4j_types;");
     result += outputQuery;
     return result;
 }

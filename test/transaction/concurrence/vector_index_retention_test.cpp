@@ -5,8 +5,8 @@
 // avant sa validation, et une annulation ne l'en retire pas. Témoins écrits avant le correctif :
 // - VectorIndexRetention.ReaderBeforeDropSeesTheOldIndex : une transaction en lecture seule
 //   commence (et lit) avant qu'un DROP ne valide en face, puis cherche de nouveau : elle doit
-//   rendre les mêmes résultats que sa recherche d'avant. (Un CREATE validé en face d'un lecteur ouvert
-//   n'existe pas : CREATE_VECTOR_INDEX force un point de reprise, qui attend le départ des
+//   rendre les mêmes résultats que sa recherche d'avant. (Un CREATE validé en face d'un lecteur
+//   ouvert n'existe pas : CREATE_VECTOR_INDEX force un point de reprise, qui attend le départ des
 //   lecteurs, et c'est voulu.)
 // - VectorIndexRetention.RolledBackCreateCanBeRedone : un lecteur ouvert ; en face, un CREATE dont
 //   le point de reprise forcé attend les lecteurs jusqu'au délai, puis échoue et s'annule ; le
@@ -96,8 +96,8 @@ TEST_F(VectorIndexRetention, RolledBackCreateCanBeRedone) {
         rag3db::main::Connection reader(database.get());
         ok(reader, "BEGIN TRANSACTION READ ONLY;");
         ok(reader, "MATCH (n:Doc) RETURN count(*);");
-        auto failed = conn->query(
-            "CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
+        auto failed =
+            conn->query("CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
         std::cerr << "  [rétention] CREATE face au lecteur : "
                   << (failed->isSuccess() ? std::string("réussi") :
                                             failed->getErrorMessage().substr(0, 160))
@@ -117,8 +117,8 @@ TEST_F(VectorIndexRetention, RolledBackCreateCanBeRedone) {
     shown.reset();
     std::cerr << "  [rétention] état après le CREATE annulé : " << state << "\n";
     EXPECT_EQ(state, "INCOMPLETE") << "[check: rolled-back-create-can-be-redone]";
-    auto refused = conn->query(
-        "CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
+    auto refused =
+        conn->query("CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
     const auto refusal = refused->isSuccess() ? std::string("réussi") : refused->getErrorMessage();
     std::cerr << "  [rétention] CREATE par-dessus l'index incomplet : " << refusal.substr(0, 200)
               << "\n";
@@ -126,8 +126,8 @@ TEST_F(VectorIndexRetention, RolledBackCreateCanBeRedone) {
         << "[check: rolled-back-create-can-be-redone] " << refusal;
     refused.reset();
     ok(*conn, "CALL DROP_VECTOR_INDEX('Doc', 'doc_index');");
-    auto result = conn->query(
-        "CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
+    auto result =
+        conn->query("CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
     const auto message = result->isSuccess() ? std::string() : result->getErrorMessage();
     std::cerr << "  [rétention] CREATE après DROP : "
               << (result->isSuccess() ? std::string("réussi") : message.substr(0, 200)) << "\n";

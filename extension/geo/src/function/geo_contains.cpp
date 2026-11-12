@@ -12,8 +12,7 @@ using namespace function;
 using namespace common;
 
 // geo_contains(lat DOUBLE, lon DOUBLE, ring_lats LIST(DOUBLE), ring_lons LIST(DOUBLE)) -> BOOL
-static void geoContainsExecFunc(
-    const std::vector<std::shared_ptr<ValueVector>>& parameters,
+static void geoContainsExecFunc(const std::vector<std::shared_ptr<ValueVector>>& parameters,
     const std::vector<SelectionVector*>& parameterSelVectors, ValueVector& result,
     SelectionVector* resultSelVector, void* /*dataPtr*/) {
     for (auto i = 0u; i < resultSelVector->getSelSize(); ++i) {
@@ -27,7 +26,8 @@ static void geoContainsExecFunc(
         bool isNull = parameters[0]->isNull(p0) || parameters[1]->isNull(p1) ||
                       parameters[2]->isNull(p2) || parameters[3]->isNull(p3);
         result.setNull(resultPos, isNull);
-        if (isNull) continue;
+        if (isNull)
+            continue;
 
         double lat = parameters[0]->getValue<double>(p0);
         double lon = parameters[1]->getValue<double>(p1);

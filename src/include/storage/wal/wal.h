@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+
 #include "storage/wal/wal_record.h"
 
 namespace rag3db {

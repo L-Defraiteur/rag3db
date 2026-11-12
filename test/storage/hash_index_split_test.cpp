@@ -13,11 +13,11 @@
 // l'événement est rare par case, d'où des tailles en dizaines de milliers de lignes. Les clés
 // sont des chaînes longues — neuf entrées par case, contre quatorze pour un entier.
 
+#include <unistd.h>
+
 #include <filesystem>
 #include <fstream>
 #include <string>
-
-#include <unistd.h>
 
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
@@ -56,8 +56,7 @@ protected:
 
     static std::string key(int64_t i) {
         auto digits = std::to_string(i);
-        return "une-cle-assez-longue-pour-deborder-" + std::string(9 - digits.size(), '0') +
-               digits;
+        return "une-cle-assez-longue-pour-deborder-" + std::string(9 - digits.size(), '0') + digits;
     }
 
     void copyKeys(int64_t first, int64_t count) {
@@ -85,8 +84,8 @@ protected:
                 }
             }
         }
-        EXPECT_EQ(numMissing, 0) << when << " : keys the index does not find (first ones):"
-                                 << firstMissing;
+        EXPECT_EQ(numMissing, 0) << when
+                                 << " : keys the index does not find (first ones):" << firstMissing;
     }
 
     // Un petit COPY, puis un grand qui fait plus que doubler l'index ; chacun validé, avec son

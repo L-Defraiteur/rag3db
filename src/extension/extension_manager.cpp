@@ -171,8 +171,8 @@ void ExtensionManager::loadExtensionsNotedBesideTheDatabase(main::ClientContext*
     auto trxContext = transaction::TransactionContext::Get(*context);
     trxContext->beginRecoveryTransaction();
     for (const auto& extension : noted) {
-        const auto alreadyLoaded = std::ranges::any_of(loadedExtensions,
-            [&](const LoadedExtension& loaded) {
+        const auto alreadyLoaded =
+            std::ranges::any_of(loadedExtensions, [&](const LoadedExtension& loaded) {
                 return loaded.getExtensionName() == extension.name;
             });
         if (!alreadyLoaded) {

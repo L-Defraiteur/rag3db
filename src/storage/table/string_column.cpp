@@ -1,9 +1,8 @@
 #include "storage/table/string_column.h"
 
-#include <unordered_set>
-
 #include <algorithm>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "common/assert.h"
 #include "common/cast.h"
@@ -176,9 +175,10 @@ void StringColumn::scanSegment(const SegmentState& state, ColumnChunkData* resul
             // All scanned values are null
             return;
         }
-        const auto newIndices = dictionary.scanToChunk(getChildState(state, ChildStateIndex::OFFSET),
-            getChildState(state, ChildStateIndex::DATA), std::move(indicesToScan),
-            stringResultChunk->getDictionaryChunk());
+        const auto newIndices =
+            dictionary.scanToChunk(getChildState(state, ChildStateIndex::OFFSET),
+                getChildState(state, ChildStateIndex::DATA), std::move(indicesToScan),
+                stringResultChunk->getDictionaryChunk());
         for (auto i = 0u; i < numValuesToScan; i++) {
             if (!resultChunk->isNull(startOffsetInResult + i)) {
                 auto index = indexChunk->getValue<string_index_t>(startOffsetInResult + i);
@@ -229,10 +229,10 @@ void StringColumn::scanUnfiltered(const SegmentState& state, offset_t startOffse
 
 // Les positions sélectionnées de la fenêtre qui tombent dans ce segment : celles de
 // [offsetInResult, offsetInResult + numValuesToScan). La borne d'avant (l'amont, « Segmentation »)
-// était `startOffsetInChunk + pos < numValues` : juste pour le premier segment d'une fenêtre, fausse
-// pour un second segment plus court que la position — la fin de la fenêtre n'était alors pas écrite
-// et le vecteur gardait la chaîne de la fenêtre d'avant, ou rien (ticket des morceaux sans texte, et
-// le SIGSEGV d'un agrégat de textes longs, 12 octobre 2026).
+// était `startOffsetInChunk + pos < numValues` : juste pour le premier segment d'une fenêtre,
+// fausse pour un second segment plus court que la position — la fin de la fenêtre n'était alors pas
+// écrite et le vecteur gardait la chaîne de la fenêtre d'avant, ou rien (ticket des morceaux sans
+// texte, et le SIGSEGV d'un agrégat de textes longs, 12 octobre 2026).
 void StringColumn::scanFiltered(const SegmentState& state, offset_t startOffsetInChunk,
     row_idx_t numValuesToScan, ValueVector* resultVector, offset_t offsetInResult) const {
     std::vector<std::pair<string_index_t, uint64_t>> offsetsToScan;

@@ -52,8 +52,8 @@ public:
         std::vector<common::column_id_t> columnIDs;
         TableStats stats;
     };
-    void addPendingNodeStats(common::table_id_t tableID,
-        std::vector<common::column_id_t> columnIDs, TableStats stats);
+    void addPendingNodeStats(common::table_id_t tableID, std::vector<common::column_id_t> columnIDs,
+        TableStats stats);
     const std::vector<PendingNodeStats>* getPendingNodeStats(common::table_id_t tableID) const;
 
 private:

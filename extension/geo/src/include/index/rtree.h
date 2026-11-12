@@ -1,7 +1,5 @@
 #pragma once
 
-#include "math/quaternion.h"
-
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -12,6 +10,8 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#include "math/quaternion.h"
 
 namespace rag3db {
 namespace geo_extension {
@@ -77,8 +77,8 @@ public:
 
     // Frustum/convex query: returns (nodeOffset, distance) for points inside the convex hull.
     // planes is flat N*4 array, refPoint used for distance computation.
-    std::vector<std::pair<uint64_t, double>> searchFrustum(const double* planes,
-        uint32_t numPlanes, const std::vector<double>& refPoint) const;
+    std::vector<std::pair<uint64_t, double>> searchFrustum(const double* planes, uint32_t numPlanes,
+        const std::vector<double>& refPoint) const;
 
     // Get stored coordinates for a nodeOffset (for post-filter queries).
     bool getCoords(uint64_t nodeOffset, std::vector<double>& coords) const;

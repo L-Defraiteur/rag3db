@@ -14,8 +14,8 @@ TestDiePoint TestHooks::readFromEnvironment() {
         return TestDiePoint::NONE;
     }
     if (armed == nullptr || std::strcmp(armed, "1") != 0) {
-        fprintf(stderr, "TEST HOOK: RAG3DB_TEST_DIE_AT=%s ignored: RAG3DB_TEST_HOOKS=1 is not set\n",
-            at);
+        fprintf(stderr,
+            "TEST HOOK: RAG3DB_TEST_DIE_AT=%s ignored: RAG3DB_TEST_HOOKS=1 is not set\n", at);
         return TestDiePoint::NONE;
     }
     if (std::strcmp(at, "checkpoint-logged") == 0) {
@@ -23,8 +23,9 @@ TestDiePoint TestHooks::readFromEnvironment() {
             DIE_EXIT_CODE);
         return TestDiePoint::CHECKPOINT_LOGGED;
     }
-    fprintf(stderr, "TEST HOOK: unknown point RAG3DB_TEST_DIE_AT=%s ignored (known: "
-                    "checkpoint-logged)\n",
+    fprintf(stderr,
+        "TEST HOOK: unknown point RAG3DB_TEST_DIE_AT=%s ignored (known: "
+        "checkpoint-logged)\n",
         at);
     return TestDiePoint::NONE;
 }

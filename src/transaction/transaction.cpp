@@ -45,16 +45,16 @@ Transaction::Transaction(main::ClientContext& clientContext, TransactionType tra
 Transaction::Transaction(TransactionType transactionType) noexcept
     : type{transactionType}, ID{DUMMY_TRANSACTION_ID}, startTS{DUMMY_START_TIMESTAMP},
       commitTS{common::INVALID_TRANSACTION}, snapshotFloorTS{DUMMY_START_TIMESTAMP},
-      oldestActiveStartTS{0}, clientContext{nullptr}, undoBuffer{nullptr},
-      forceCheckpoint{false}, hasCatalogChanges{false} {
+      oldestActiveStartTS{0}, clientContext{nullptr}, undoBuffer{nullptr}, forceCheckpoint{false},
+      hasCatalogChanges{false} {
     currentTS = common::Timestamp::getCurrentTimestamp().value;
 }
 
 Transaction::Transaction(TransactionType transactionType, common::transaction_t ID,
     common::transaction_t startTS) noexcept
     : type{transactionType}, ID{ID}, startTS{startTS}, commitTS{common::INVALID_TRANSACTION},
-      snapshotFloorTS{startTS}, oldestActiveStartTS{0}, clientContext{nullptr},
-      undoBuffer{nullptr}, forceCheckpoint{false}, hasCatalogChanges{false} {
+      snapshotFloorTS{startTS}, oldestActiveStartTS{0}, clientContext{nullptr}, undoBuffer{nullptr},
+      forceCheckpoint{false}, hasCatalogChanges{false} {
     currentTS = common::Timestamp::getCurrentTimestamp().value;
 }
 
@@ -79,9 +79,9 @@ void Transaction::acquireLocks(std::span<const LockRequest> requests) const {
         // la transaction qui doit valider pour les libérer n'en trouve plus.
         const common::TaskScheduler::BlockingWait blocking{
             common::TaskScheduler::Get(*clientContext)};
-        const auto deadline = LockManager::clock::now() + std::chrono::milliseconds{
-                                                              clientContext->getClientConfig()
-                                                                  ->lockTimeoutInMS};
+        const auto deadline =
+            LockManager::clock::now() +
+            std::chrono::milliseconds{clientContext->getClientConfig()->lockTimeoutInMS};
         outcome = lockManager.acquire(ID, requests, deadline, interrupted, &failedOn);
     }
     if (outcome != LockOutcome::ACQUIRED) {

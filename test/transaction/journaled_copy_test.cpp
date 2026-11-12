@@ -1,4 +1,5 @@
-// Le chargement en masse journalisé, les nœuds puis les relations (étapes 2 et 3 ; page de conception
+// Le chargement en masse journalisé, les nœuds puis les relations (étapes 2 et 3 ; page de
+// conception
 // extension/rag3weaver/docs/3-octobre-2026-23h31/coeur-cpp/04-le-chargement-en-masse-journalise.md).
 //
 // Avec CALL force_checkpoint_on_copy=false, un COPY écrit ses lignes au journal de sa
@@ -16,17 +17,17 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <functional>
+#include <iostream>
 #include <string>
 
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
 #include "main/database.h"
-#include "storage/table/node_table.h"
-#include "test_runner/fsm_leak_checker.h"
 #include "storage/storage_utils.h"
+#include "storage/table/node_table.h"
 #include "storage/wal/local_wal.h"
+#include "test_runner/fsm_leak_checker.h"
 #include "transaction/transaction.h"
 
 using namespace rag3db::main;
@@ -193,8 +194,8 @@ TEST_F(JournaledCopyTest, ACommittedCopySurvivesADeathWithoutAnyCheckpoint) {
     EXPECT_EQ(single("MATCH (n:Doc) RETURN count(*);"), 5000);
     expectRows(0, 5000);
     // La table reste utilisable, et une réouverture de plus rend la même chose.
-    ASSERT_TRUE(conn->query("CREATE (:Doc {id: 5000, name: 'name 5000', score: 5000.5});")
-                    ->isSuccess());
+    ASSERT_TRUE(
+        conn->query("CREATE (:Doc {id: 5000, name: 'name 5000', score: 5000.5});")->isSuccess());
     createDBAndConn();
     expectRows(0, 5001);
 }
@@ -254,7 +255,8 @@ TEST_F(JournaledCopyTest, OrdinaryWritesReferringToCopiedRowsAreReplayedOnTheSam
         must(child, "COMMIT;");
         must(child, "MATCH (n:Doc {id: 4000}) SET n.name = 'changed afterwards';");
         must(child, "MATCH (n:Doc {id: 11}) DELETE n;");
-        must(child, "MATCH (a:Doc {id: 20}), (b:Doc {id: 5999}) CREATE (a)-[:Link {weight: 1}]->(b);");
+        must(child,
+            "MATCH (a:Doc {id: 20}), (b:Doc {id: 5999}) CREATE (a)-[:Link {weight: 1}]->(b);");
         must(child, "MATCH (a:Doc {id: 100000}), (b:Doc {id: 3000}) CREATE "
                     "(a)-[:Link {weight: 2}]->(b);");
         must(child, "MATCH (a:Doc {id: 2999}), (b:Doc {id: 100001}) CREATE "
@@ -367,8 +369,7 @@ TEST_F(JournaledCopyTest, OrdinaryWritesReferringToCopiedRelationsAreReplayedOnT
             "MATCH (a:Doc {id: 40000})-[l:Link {weight: 400003}]->(:Doc) SET l.weight = 888;");
         must(child, "MATCH (a:Doc {id: 11})-[l:Link {weight: 114}]->(:Doc) DELETE l;");
         must(child, "MATCH (a:Doc {id: 58999})-[l:Link {weight: 589991}]->(:Doc) DELETE l;");
-        must(child,
-            "MATCH (a:Doc {id: 5}), (b:Doc {id: 50}) CREATE (a)-[:Link {weight: 9}]->(b);");
+        must(child, "MATCH (a:Doc {id: 5}), (b:Doc {id: 50}) CREATE (a)-[:Link {weight: 9}]->(b);");
     });
     ASSERT_GT(journalSize(), 0u);
     createDBAndConn();
@@ -376,8 +377,8 @@ TEST_F(JournaledCopyTest, OrdinaryWritesReferringToCopiedRelationsAreReplayedOnT
     EXPECT_EQ(single("MATCH (:Doc)-[l:Link]->(:Doc) RETURN count(l);"), total);
     EXPECT_EQ(single("MATCH (:Doc)<-[l:Link]-(:Doc) RETURN count(l);"), total);
     EXPECT_EQ(single("MATCH (a:Doc {id: 10})-[l:Link {weight: 777}]->(b:Doc) RETURN b.id;"), 12);
-    EXPECT_EQ(
-        single("MATCH (a:Doc {id: 40000})-[l:Link {weight: 888}]->(b:Doc) RETURN b.id;"), 40003);
+    EXPECT_EQ(single("MATCH (a:Doc {id: 40000})-[l:Link {weight: 888}]->(b:Doc) RETURN b.id;"),
+        40003);
     EXPECT_EQ(single("MATCH (a:Doc {id: 11})-[l:Link]->(b:Doc) RETURN sum(b.id);"), 12 + 13 + 14);
     EXPECT_EQ(single("MATCH (a:Doc {id: 58999})-[l:Link]->(:Doc) RETURN count(l);"), 3);
     EXPECT_EQ(single("MATCH (a:Doc {id: 5})-[l:Link {weight: 9}]->(b:Doc) RETURN b.id;"), 50);
@@ -608,8 +609,8 @@ TEST_F(JournaledCopyAfterAlterTest, OrdinaryInsertsAfterADroppedAndAnAddedColumn
 TEST_F(JournaledCopyAfterAlterTest, CopiesAfterADroppedAndAnAddedColumnInOneSession) {
     writeItems(500);
     writeTies(499);
-    for (const auto* setting : {"CALL force_checkpoint_on_copy=true;",
-             "CALL force_checkpoint_on_copy=false;"}) {
+    for (const auto* setting :
+        {"CALL force_checkpoint_on_copy=true;", "CALL force_checkpoint_on_copy=false;"}) {
         SCOPED_TRACE(setting);
         conn.reset();
         database.reset();
@@ -653,8 +654,8 @@ protected:
 
     // Sous chaque réglage, sur une base neuve.
     void underBothSettings(const std::function<void()>& body) {
-        for (const auto* setting : {"CALL force_checkpoint_on_copy=true;",
-                 "CALL force_checkpoint_on_copy=false;"}) {
+        for (const auto* setting :
+            {"CALL force_checkpoint_on_copy=true;", "CALL force_checkpoint_on_copy=false;"}) {
             SCOPED_TRACE(setting);
             conn.reset();
             database.reset();
@@ -972,9 +973,7 @@ TEST_F(CopyAfterInsertsTest, SurvivesADeathWithoutAnyCheckpoint) {
 class CopyStatisticsTest : public CopyAfterInsertsTest {
 protected:
     int64_t cardinality() { return single("CALL STATS_INFO('Doc') RETURN cardinality;"); }
-    int64_t distinctNames() {
-        return single("CALL STATS_INFO('Doc') RETURN name_distinct_count;");
-    }
+    int64_t distinctNames() { return single("CALL STATS_INFO('Doc') RETURN name_distinct_count;"); }
 };
 
 TEST_F(CopyStatisticsTest, ARolledBackCopyLeavesThemAsTheyWere) {
@@ -1117,8 +1116,8 @@ protected:
         run("MATCH (d:Doc {id: 102}) SET d.w = [-0.0, CAST('NaN' AS DOUBLE), 0.0];");
         run("COPY Doc FROM '" + csvPath + "' (header=false);");
         run("MATCH (d:Doc {id: 3}) SET d.v = " + list(9003, DIMENSION) + ";");
-        run("MATCH (d:Doc {id: 1007}) SET d.v = " + list(9007, DIMENSION) + ", d.n = " +
-            intList(77, 5) + ";");
+        run("MATCH (d:Doc {id: 1007}) SET d.v = " + list(9007, DIMENSION) +
+            ", d.n = " + intList(77, 5) + ";");
         run("MATCH (d:Doc {id: 1010}) SET d.w = " + list(9010, 3, 1) + ";");
         run("MATCH (d:Doc {id: 4}) SET d.v = NULL;");
         run("MATCH (d:Doc {id: 100}) SET d.w = " + list(9100, 3) + ";");
@@ -1131,7 +1130,8 @@ protected:
 
     static constexpr const char* SCHEMA_DOC =
         "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, v FLOAT[768], w DOUBLE[3], n INT32[5]);";
-    static constexpr const char* SCHEMA_LINK = "CREATE REL TABLE Link(FROM Doc TO Doc, p FLOAT[4]);";
+    static constexpr const char* SCHEMA_LINK =
+        "CREATE REL TABLE Link(FROM Doc TO Doc, p FLOAT[4]);";
 
     // Chaque tableau de chaque ligne, élément par élément : nul des deux côtés ou les mêmes
     // octets. Rend le nombre d'éléments comparés ; les écarts sont comptés, pas listés.
@@ -1165,8 +1165,8 @@ protected:
                 }
                 const auto size = rag3db::common::NestedVal::getChildrenSize(a);
                 numDifferent += size != rag3db::common::NestedVal::getChildrenSize(b);
-                for (uint32_t i = 0;
-                     i < size && i < rag3db::common::NestedVal::getChildrenSize(b); i++) {
+                for (uint32_t i = 0; i < size && i < rag3db::common::NestedVal::getChildrenSize(b);
+                     i++) {
                     auto* x = rag3db::common::NestedVal::getChildVal(a, i);
                     auto* y = rag3db::common::NestedVal::getChildVal(b, i);
                     numCompared++;
@@ -1218,8 +1218,8 @@ TEST_F(JournalRawArraysTest, ArraysAreReplayedBitForBitAndWeighWhatTheyHold) {
     auto reference = std::make_unique<Connection>(referenceDatabase.get());
     const auto runReference = [&](const std::string& query) {
         auto result = reference->query(query);
-        ASSERT_TRUE(result->isSuccess()) << query.substr(0, 120) << " : "
-                                         << result->getErrorMessage();
+        ASSERT_TRUE(result->isSuccess())
+            << query.substr(0, 120) << " : " << result->getErrorMessage();
     };
     runReference(SCHEMA_DOC);
     runReference(SCHEMA_LINK);
@@ -1268,8 +1268,8 @@ TEST_F(JournalRawArraysTest, ArraysAreReplayedBitForBitAndWeighWhatTheyHold) {
 // dix insertions, un tableau nul, un élément nul, un COPY journalisé de cinquante lignes, trois
 // mises à jour ; le processus est mort base ouverte.
 TEST_F(JournalRawArraysTest, AJournalWrittenBeforeTheRawFormIsStillReplayed) {
-    const auto fixture = TestHelper::appendRag3dbRootPath(
-        "test/transaction/journal_before_raw_arrays/base.rag3db");
+    const auto fixture =
+        TestHelper::appendRag3dbRootPath("test/transaction/journal_before_raw_arrays/base.rag3db");
     const auto walPath = rag3db::storage::StorageUtils::getWALFilePath(databasePath);
     std::filesystem::remove(databasePath);
     std::filesystem::remove(walPath);
@@ -1338,9 +1338,7 @@ protected:
         }
     }
 
-    static std::string copyFrom(const std::string& path) {
-        return "COPY Doc FROM '" + path + "';";
-    }
+    static std::string copyFrom(const std::string& path) { return "COPY Doc FROM '" + path + "';"; }
 
     int64_t fallbacks() {
         auto result = conn->query("CALL current_setting('copy_journal_fallbacks') RETURN *;");
@@ -1795,8 +1793,8 @@ protected:
     void writeRowsWithVectors() const {
         std::ofstream csv(csvPath);
         for (int64_t id = 0; id < NUM_ROWS; id++) {
-            csv << id << ",name " << id << "," << id << ".5,\"[" << id % 97 << "." << id % 7
-                << "," << id % 89 << ".25," << -(id % 11) << ".0," << id % 13 << ".5]\"\n";
+            csv << id << ",name " << id << "," << id << ".5,\"[" << id % 97 << "." << id % 7 << ","
+                << id % 89 << ".25," << -(id % 11) << ".0," << id % 13 << ".5]\"\n";
         }
     }
 
@@ -1855,7 +1853,8 @@ TEST_F(JournaledCopyReadBackTest, TwoThreadsAndAnArrayColumnReadEveryScoreBack) 
 class PendingRelAfterReplayTest : public JournaledCopyTest {
 protected:
     void prepare(Connection& child, bool multiWrites) {
-        must(child, "CALL enable_multi_writes=" + std::string(multiWrites ? "true" : "false") + ";");
+        must(child,
+            "CALL enable_multi_writes=" + std::string(multiWrites ? "true" : "false") + ";");
         must(child, "CREATE NODE TABLE Item(id INT64 PRIMARY KEY, writer INT64);");
         must(child, "CREATE REL TABLE Link(FROM Item TO Item, src_id INT64, dst_id INT64);");
         for (auto id = 0; id < 12; id++) {
@@ -2021,8 +2020,8 @@ TEST_F(OwnerlessPagesTest, TheReplayReadsNothingBeyondTheExtent) {
     {
         std::ofstream csv(rowsCsv);
         for (int64_t id = 0; id < NUM_ROWS; id++) {
-            csv << id << ",name " << id << "," << id << ".5,\"[" << id % 97 << "." << id % 7
-                << "," << id % 89 << ".25," << -(id % 11) << ".0," << id % 13 << ".5]\"\n";
+            csv << id << ",name " << id << "," << id << ".5,\"[" << id % 97 << "." << id % 7 << ","
+                << id % 89 << ".25," << -(id % 11) << ".0," << id % 13 << ".5]\"\n";
         }
     }
     const auto schema = "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, name STRING, score DOUBLE, "
@@ -2036,8 +2035,8 @@ TEST_F(OwnerlessPagesTest, TheReplayReadsNothingBeyondTheExtent) {
         return result->isSuccess() ? result->getNext()->toString() : std::string("<error>");
     };
     const auto sample = [](Connection& connection, int64_t id) {
-        auto result = connection.query("MATCH (d:Doc {id: " + std::to_string(id) +
-                                       "}) RETURN d.name, d.score, d.vec;");
+        auto result = connection.query(
+            "MATCH (d:Doc {id: " + std::to_string(id) + "}) RETURN d.name, d.score, d.vec;");
         EXPECT_TRUE(result->isSuccess()) << result->getErrorMessage();
         return result->isSuccess() && result->hasNext() ? result->getNext()->toString() :
                                                           std::string("<none>");
@@ -2079,8 +2078,8 @@ TEST_F(OwnerlessPagesTest, TheReplayReadsNothingBeyondTheExtent) {
 // autres. Fabriquée par un moteur d'avant (test/transaction/database_before_extent/fabrique.cpp).
 TEST_F(OwnerlessPagesTest, ADatabaseFromBeforeTheExtentOpensAndAcquiresIt) {
     // Gardée compressée (2,9 Mo de pages presque vides, 25 Ko compressés) ; gzip et un shell.
-    const auto fixture = TestHelper::appendRag3dbRootPath(
-        "test/transaction/database_before_extent/base.rag3db.gz");
+    const auto fixture =
+        TestHelper::appendRag3dbRootPath("test/transaction/database_before_extent/base.rag3db.gz");
     std::filesystem::remove(databasePath);
     std::filesystem::remove(rag3db::storage::StorageUtils::getWALFilePath(databasePath));
     ASSERT_EQ(std::system(("gzip -dc '" + fixture + "' > '" + databasePath + "'").c_str()), 0);
@@ -2143,8 +2142,8 @@ TEST_F(OwnerlessPagesTest, TheReplayReadsNothingBeyondTheExtentWithAVectorIndex)
     constexpr int64_t numTagged = 2000;
     const auto vectorOf = [](int64_t id) {
         return "[" + std::to_string(id % 97) + "." + std::to_string(id % 7) + "," +
-               std::to_string((id * 31) % 89) + ".25," + std::to_string((id * 7) % 13) +
-               ".0," + std::to_string(id % 5) + ".5]";
+               std::to_string((id * 31) % 89) + ".25," + std::to_string((id * 7) % 13) + ".0," +
+               std::to_string(id % 5) + ".5]";
     };
     writeDocs(csvPath, 0, NUM_ROWS);
     {

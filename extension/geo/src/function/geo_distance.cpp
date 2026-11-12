@@ -12,8 +12,7 @@ using namespace function;
 using namespace common;
 
 // geo_distance(lat1 DOUBLE, lon1 DOUBLE, lat2 DOUBLE, lon2 DOUBLE) -> DOUBLE (meters)
-static void geoDistanceExecFunc(
-    const std::vector<std::shared_ptr<ValueVector>>& parameters,
+static void geoDistanceExecFunc(const std::vector<std::shared_ptr<ValueVector>>& parameters,
     const std::vector<SelectionVector*>& parameterSelVectors, ValueVector& result,
     SelectionVector* resultSelVector, void* /*dataPtr*/) {
     for (auto i = 0u; i < resultSelVector->getSelSize(); ++i) {

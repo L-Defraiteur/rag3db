@@ -48,7 +48,8 @@ protected:
 // du lecteur ; le point de reprise ne l'attend pas ; il relit son instantané pendant et après.
 TEST_F(CheckpointOpenReader, OpenReaderOnNodesIsNotWaitedForAndKeepsItsSnapshot) {
     run(*conn, "CREATE NODE TABLE T(id INT64 PRIMARY KEY, n INT64, s STRING);");
-    run(*conn, "UNWIND range(1, 20000) AS i CREATE (:T {id: i, n: i, s: 'v' + CAST(i AS STRING)});");
+    run(*conn,
+        "UNWIND range(1, 20000) AS i CREATE (:T {id: i, n: i, s: 'v' + CAST(i AS STRING)});");
     run(*conn, "CHECKPOINT;");
     Connection reader(database.get());
     run(reader, "BEGIN TRANSACTION READ ONLY;");

@@ -1,7 +1,5 @@
 #include "storage/table/node_table.h"
 
-#include "storage/storage_version_info.h"
-
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -23,6 +21,7 @@
 #include "storage/local_storage/local_table.h"
 #include "storage/page_manager.h"
 #include "storage/storage_manager.h"
+#include "storage/storage_version_info.h"
 #include "storage/wal/local_wal.h"
 #include "transaction/lock_manager.h"
 #include "transaction/transaction.h"
@@ -252,8 +251,7 @@ bool RollbackPKDeleter::processScanOutput(main::ClientContext* context,
             if (offset_t lookupOffset = 0;
                 pkIndex.lookup(transaction::Transaction::Get(*context), key, lookupOffset,
                     isVisible) &&
-                !table->isVisibleNoLock(&transaction::DUMMY_CHECKPOINT_TRANSACTION,
-                    lookupOffset)) {
+                !table->isVisibleNoLock(&transaction::DUMMY_CHECKPOINT_TRANSACTION, lookupOffset)) {
                 // If we delete the key then it will not be visible to future transactions within
                 // this process
                 pkIndex.discardLocal(key);
@@ -345,8 +343,8 @@ NodeTable::NodeTable(const StorageManager* storageManager,
     // Chaque holder a son identifiant, unique dans la table : la validation et l'annulation d'un
     // CREATE ou d'un DROP le retrouvent par lui (un identifiant partagé retirait la clé primaire).
     indexes.back().setHolderID(nextHolderID++);
-    nodeGroups = std::make_unique<NodeGroupCollection>(*mm,
-        getColumnTypesBySlot(*nodeTableEntry), enableCompression,
+    nodeGroups = std::make_unique<NodeGroupCollection>(*mm, getColumnTypesBySlot(*nodeTableEntry),
+        enableCompression,
         storageManager->getDataFH() ? ResidencyState::ON_DISK : ResidencyState::IN_MEMORY,
         &versionRecordHandler);
 }
@@ -366,7 +364,8 @@ void NodeTable::initScanState(Transaction* transaction, TableScanState& scanStat
     NodeGroup* nodeGroup = nullptr;
     switch (nodeScanState.source) {
     case TableScanSource::COMMITTED: {
-        nodeScanState.nodeGroupKeepAlive = nodeGroups->getNodeGroupShared(nodeScanState.nodeGroupIdx);
+        nodeScanState.nodeGroupKeepAlive =
+            nodeGroups->getNodeGroupShared(nodeScanState.nodeGroupIdx);
         nodeGroup = nodeScanState.nodeGroupKeepAlive.get();
         if (!nodeScanState.committedColumnIDs.empty()) {
             nodeScanState.columnIDs = nodeScanState.committedColumnIDs;
@@ -660,15 +659,13 @@ void NodeTable::insert(Transaction* transaction, TableInsertState& insertState) 
         // partagé ; la clé en exclusif dans les deux cas.
         const auto indexed = hasLoadedSecondaryIndex(transaction);
         const auto pkPos = nodeInsertState.pkVector.state->getSelVector()[0];
-        const std::array requests{
-            LockRequest{LockResource::index(tableID),
-                indexed ? LockMode::EXCLUSIVE : LockMode::SHARED},
+        const std::array requests{LockRequest{LockResource::index(tableID),
+                                      indexed ? LockMode::EXCLUSIVE : LockMode::SHARED},
             LockRequest{LockResource::row(tableID, lockKeyOf(nodeInsertState.pkVector, pkPos)),
                 LockMode::EXCLUSIVE}};
         transaction->acquireLocks(requests);
         if (indexed && !transaction->hasWritten()) {
-            TransactionManager::Get(*transaction->getClientContext())
-                ->refreshSnapshot(transaction);
+            TransactionManager::Get(*transaction->getClientContext())->refreshSnapshot(transaction);
         }
     }
     // Au rejeu du journal, l'unicité a été contrôlée quand le journal a été écrit ; un journal
@@ -813,7 +810,8 @@ void NodeTable::initDeleteStates(const Transaction* transaction, TableDeleteStat
     }
     nodeDeleteState.indexDeleteStates.clear();
     for (auto& [holderID, index] : writable) {
-        auto state = index->initDeleteState(transaction, memoryManager, getVisibleFunc(transaction));
+        auto state =
+            index->initDeleteState(transaction, memoryManager, getVisibleFunc(transaction));
         nodeDeleteState.indexDeleteStates.push_back({holderID, std::move(index), std::move(state)});
     }
     nodeDeleteState.indexDeleteStatesInitialized = true;
@@ -843,8 +841,7 @@ bool NodeTable::delete_(Transaction* transaction, TableDeleteState& deleteState)
     if (transaction->usesLocks() && !transaction->isUnCommitted(tableID, nodeOffset)) {
         lockIndexForWrite(transaction);
         lockRowForWrite(transaction, nodeOffset,
-            lockKeyOf(nodeDeleteState.pkVector,
-                nodeDeleteState.pkVector.state->getSelVector()[0]));
+            lockKeyOf(nodeDeleteState.pkVector, nodeDeleteState.pkVector.state->getSelVector()[0]));
     }
     // Use pre-created index delete states (initialized once, reused across calls).
     initDeleteStates(transaction, deleteState);
@@ -1043,9 +1040,8 @@ visible_func NodeTable::getUniquenessVisibleFunc(const Transaction* transaction)
     if (!transaction->usesLocks()) {
         return getVisibleFunc(transaction);
     }
-    return [this, transaction](offset_t offset_) -> bool {
-        return isVisibleToLatestCommit(transaction, offset_);
-    };
+    return [this, transaction](
+               offset_t offset_) -> bool { return isVisibleToLatestCommit(transaction, offset_); };
 }
 
 bool NodeTable::checkpoint(main::ClientContext* context, TableCatalogEntry* tableEntry,
@@ -1197,21 +1193,20 @@ std::string NodeTable::lockKeyOfRow(Transaction* transaction, offset_t nodeOffse
         // validée depuis n'est plus visible. C'est l'erreur de sérialisation nommée (A4′), à
         // rejouer — pas une erreur d'exécution (H4 du banc, 10 fois sur 10 sous le défaut).
         if (!isVisibleToLatestCommit(transaction, nodeOffset)) {
-            throw TransactionManagerException(stringFormat(
-                "Transaction aborted: {} — row {} of table {} was deleted by another "
-                "transaction after this one started. Roll it back and run it again.",
-                LockManager::COULD_NOT_SERIALIZE, nodeOffset, tableName));
+            throw TransactionManagerException(
+                stringFormat("Transaction aborted: {} — row {} of table {} was deleted by another "
+                             "transaction after this one started. Roll it back and run it again.",
+                    LockManager::COULD_NOT_SERIALIZE, nodeOffset, tableName));
         }
-        throw RuntimeException(stringFormat(
-            "Row {} of table {} has no primary key to lock: it is not visible to this "
-            "transaction.",
-            nodeOffset, tableName));
+        throw RuntimeException(
+            stringFormat("Row {} of table {} has no primary key to lock: it is not visible to this "
+                         "transaction.",
+                nodeOffset, tableName));
     }
     return lockKeyOf(pkVector, 0);
 }
 
-static void throwCouldNotSerialize(table_id_t tableID, const std::string& key,
-    const char* what) {
+static void throwCouldNotSerialize(table_id_t tableID, const std::string& key, const char* what) {
     throw TransactionManagerException(stringFormat(
         "Transaction aborted: {} — {} was {} by another transaction after this one started. "
         "Roll it back and run it again.",
@@ -1422,8 +1417,10 @@ void NodeTable::logInsertedRowsToWAL(main::ClientContext* context, offset_t star
                     transaction->fallBackToForcedCheckpoint();
                     return;
                 }
-                const auto bytesPerRow = std::max<uint64_t>((wal.getSize() - sizeBefore) / slice, 1);
-                sliceRows = std::clamp<size_t>(sliceBudget / bytesPerRow, 1, DEFAULT_VECTOR_CAPACITY);
+                const auto bytesPerRow =
+                    std::max<uint64_t>((wal.getSize() - sizeBefore) / slice, 1);
+                sliceRows =
+                    std::clamp<size_t>(sliceBudget / bytesPerRow, 1, DEFAULT_VECTOR_CAPACITY);
             }
         }
     }
@@ -1469,8 +1466,7 @@ void NodeTable::logIndexBuildState(Transaction* transaction, const std::string& 
     // Une transaction forcée (T_B) a jeté son journal : son état est durable par le point de
     // reprise qui la suit.
     if (transaction != nullptr && transaction->shouldLogToWAL()) {
-        transaction->getLocalWAL().logIndexStateRecord(tableID, name,
-            static_cast<uint8_t>(state));
+        transaction->getLocalWAL().logIndexStateRecord(tableID, name, static_cast<uint8_t>(state));
     }
 }
 
@@ -1583,8 +1579,7 @@ void NodeTable::dropIndex(const std::string& name, Transaction* transaction) {
     }
 }
 
-void NodeTable::commitIndexChange(uint64_t holderID, IndexChangeKind kind,
-    transaction_t commitTS) {
+void NodeTable::commitIndexChange(uint64_t holderID, IndexChangeKind kind, transaction_t commitTS) {
     std::unique_lock lck{indexesMtx};
     for (auto& holder : indexes) {
         if (holder.getHolderID() == holderID) {
@@ -1783,8 +1778,10 @@ void NodeTable::renumberColumns(const catalog::Catalog& catalog,
         if (index.getIndexInfo().isPrimary) {
             columnIDs = {pkColumnID};
         } else {
-            const auto found = std::find_if(indexEntries.begin(), indexEntries.end(),
-                [&](const auto* indexEntry) { return indexEntry->getIndexName() == index.getName(); });
+            const auto found =
+                std::find_if(indexEntries.begin(), indexEntries.end(), [&](const auto* indexEntry) {
+                    return indexEntry->getIndexName() == index.getName();
+                });
             if (found == indexEntries.end()) {
                 // Aucun cas connu (DROP_VECTOR_INDEX retire l'index de la table et du catalogue
                 // ensemble) ; on ne fait pas échouer l'ouverture pour lui, mais l'écart se voit.

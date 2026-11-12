@@ -162,9 +162,9 @@ TEST_F(StorageFormatVersion, ANewerDatabaseIsRefusedWithBothVersionsAndBothBuild
     forgeHeader(current + 1, "rag3db-build-demain-Release");
     EXPECT_EQ(readHeader().writer, "rag3db-build-demain-Release");
     const auto writing = openError(false);
-    expectNames(writing, {"rag3db-build-demain-Release", "format " + std::to_string(current + 1),
-                             "rag3db-build-", "format " + std::to_string(current),
-                             "at least as recent"});
+    expectNames(writing,
+        {"rag3db-build-demain-Release", "format " + std::to_string(current + 1), "rag3db-build-",
+            "format " + std::to_string(current), "at least as recent"});
     const auto reading = openError(true);
     EXPECT_EQ(reading, writing) << "a read-only open must be refused by the same words";
 }
@@ -174,16 +174,16 @@ TEST_F(StorageFormatVersion, ATooOldDatabaseIsRefusedByName) {
     forgeHeader(TOO_OLD, "");
     EXPECT_EQ(readHeader().version, TOO_OLD);
     const auto error = openError(false);
-    expectNames(error,
-        {"format " + std::to_string(TOO_OLD), "older than the oldest", "rag3db-build-", "export it"});
+    expectNames(error, {"format " + std::to_string(TOO_OLD), "older than the oldest",
+                           "rag3db-build-", "export it"});
 }
 
 // La vraie base d'un moteur d'avant (format 39, test/transaction/database_before_extent, fabriquée
 // par un moteur d'avant) : elle s'ouvre, se lit, et son premier point de reprise l'estampille à la
 // version et au bâti de ce moteur.
 TEST_F(StorageFormatVersion, AnOlderDatabaseOpensAndItsFirstCheckpointStampsIt) {
-    const auto fixture = TestHelper::appendRag3dbRootPath(
-        "test/transaction/database_before_extent/base.rag3db.gz");
+    const auto fixture =
+        TestHelper::appendRag3dbRootPath("test/transaction/database_before_extent/base.rag3db.gz");
     std::filesystem::remove(databasePath);
     std::filesystem::remove(databasePath + ".wal");
     ASSERT_EQ(std::system(("gzip -dc '" + fixture + "' > '" + databasePath + "'").c_str()), 0);

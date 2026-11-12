@@ -61,8 +61,8 @@ TEST_F(ProjectedGraphReadOnly, ProjectingAndQueryingAGraphIsAllowedInAReadOnlyTr
         << "[check: drop-is-read-only]";
     // Une vraie écriture reste une écriture.
     const auto refused = row("CREATE (:T {id: 1000, v: [0.0, 0.0, 0.0, 0.0]});");
-    EXPECT_TRUE(refused.starts_with("REFUS") &&
-                refused.find("read-only transaction") != std::string::npos)
+    EXPECT_TRUE(
+        refused.starts_with("REFUS") && refused.find("read-only transaction") != std::string::npos)
         << "[check: a-write-is-still-refused] " << refused;
     run("ROLLBACK;");
     EXPECT_EQ(row("MATCH (t:T) RETURN count(*);"), "50\n");

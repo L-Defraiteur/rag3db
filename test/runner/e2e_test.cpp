@@ -376,7 +376,8 @@ void checkGtestParams(int argc, char** argv) {
         if (argument.starts_with("--gtest_filter=")) {
             std::string testCaseFile = findTestFile(argument.substr(15));
             if (testCaseFile.empty()) {
-                scanTestFiles(TestHelper::appendRag3dbRootPath(TestHelper::E2E_TEST_FILES_DIRECTORY));
+                scanTestFiles(
+                    TestHelper::appendRag3dbRootPath(TestHelper::E2E_TEST_FILES_DIRECTORY));
             } else {
                 parseAndRegisterTestGroup(testCaseFile);
             }
@@ -400,8 +401,8 @@ int main(int argc, char** argv) {
         }
 
         if (env_import_data_dir != nullptr) {
-            auto path =
-                TestHelper::appendRag3dbRootPath(std::filesystem::path(env_import_data_dir).string());
+            auto path = TestHelper::appendRag3dbRootPath(
+                std::filesystem::path(env_import_data_dir).string());
             if (!std::filesystem::exists(path)) {
                 throw TestException("IMPORT DATABASE path does not exist: " + path);
             }

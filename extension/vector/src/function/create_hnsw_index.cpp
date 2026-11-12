@@ -391,10 +391,9 @@ static void finalizeHNSWTableFinalizeFunc(const ExecutionContext* context,
     const auto buildStartTS = transaction->getStartTS();
     // READY vu de T_B seule jusqu'à sa validation ; son annulation rend le holder NOTED (et,
     // le jeton de la requête mort, INCOMPLETE).
-    auto* catchingUp = &nodeTable
-                            ->completeNotedIndex(bindData->indexName, std::move(onDiskIndex),
-                                transaction)
-                            ->cast<OnDiskHNSWIndex>();
+    auto* catchingUp =
+        &nodeTable->completeNotedIndex(bindData->indexName, std::move(onDiskIndex), transaction)
+             ->cast<OnDiskHNSWIndex>();
     index->moveToPartitionState(*hnswSharedState->partitionerSharedState);
     transaction->setForceCheckpoint();
     transaction->addPreCommitAction([clientContext, catchingUp, buildStartTS] {

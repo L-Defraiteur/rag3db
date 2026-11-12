@@ -7,9 +7,9 @@
 #include "common/system_config.h"
 #include "common/types/types.h"
 #include "graph_test/private_graph_test.h"
+#include "gtest/gtest.h"
 #include "main/connection.h"
 #include "main/database.h"
-#include "gtest/gtest.h"
 #include "spdlog/spdlog.h"
 #include "storage/buffer_manager/buffer_manager.h"
 #include "storage/buffer_manager/memory_manager.h"
@@ -181,8 +181,8 @@ TEST_F(VMRegionTest, ThirtyTwoDatabasesOpenInOneProcess) {
     std::string refused;
     for (auto i = 0; i < 32 && refused.empty(); ++i) {
         try {
-            databases.push_back(std::make_unique<main::Database>(
-                databasePath + "-" + std::to_string(i), config));
+            databases.push_back(
+                std::make_unique<main::Database>(databasePath + "-" + std::to_string(i), config));
             main::Connection connection(databases.back().get());
             auto created = connection.query("CREATE NODE TABLE T(id INT64 PRIMARY KEY);");
             if (!created->isSuccess()) {
@@ -217,7 +217,8 @@ TEST(VMRegionChunks, FramesBeyondSeveralChunksAreWritable) {
         }
     }
     for (auto i = 0u; i < frames.size(); ++i) {
-        EXPECT_EQ(frames[i][0], static_cast<uint8_t>(i / 2 + 1)) << "[check: frames-keep-their-bytes]";
+        EXPECT_EQ(frames[i][0], static_cast<uint8_t>(i / 2 + 1))
+            << "[check: frames-keep-their-bytes]";
     }
     uint8_t outside = 0;
     EXPECT_FALSE(region.contains(&outside)) << "[check: contains]";

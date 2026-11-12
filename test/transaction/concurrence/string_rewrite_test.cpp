@@ -1,11 +1,12 @@
 // La réécriture d'une colonne de chaînes sur des lignes existantes (le P1 du produit, 12 octobre
 // 2026 : le texte des morceaux de code semblait perdu après une réingestion). La version courte du
-// banc, quelques secondes : les variantes longues (trente combinaisons, vertes sur master de la nuit
-// du 12 octobre, lues sans filtre) sont dans les notes du banc. Le texte perdu venait en fait de la
-// lecture filtrée (StringColumn::scanFiltered, son témoin à part) ; ce témoin garde l'écriture.
+// banc, quelques secondes : les variantes longues (trente combinaisons, vertes sur master de la
+// nuit du 12 octobre, lues sans filtre) sont dans les notes du banc. Le texte perdu venait en fait
+// de la lecture filtrée (StringColumn::scanFiltered, son témoin à part) ; ce témoin garde
+// l'écriture.
 //
-// Deux groupes et plus de lignes par COPY, des chaînes courtes, longues et répétées ; MERGE … SET de
-// la chaîne et d'une autre colonne sur chaque ligne, par lots ; un point de reprise ; une
+// Deux groupes et plus de lignes par COPY, des chaînes courtes, longues et répétées ; MERGE … SET
+// de la chaîne et d'une autre colonne sur chaque ligne, par lots ; un point de reprise ; une
 // réouverture ; la relecture par clé et le balayage non filtré, identiques à l'attendu.
 
 #include <algorithm>
@@ -81,7 +82,8 @@ protected:
             wrong++;
         }
         for (int64_t id = 0; id < NUM_ROWS; id += 7) {
-            auto row = conn->query(stringFormat("MATCH (n:Chunk {_uuid: 'c-{}'}) RETURN n._text;", id));
+            auto row =
+                conn->query(stringFormat("MATCH (n:Chunk {_uuid: 'c-{}'}) RETURN n._text;", id));
             if (!row->isSuccess() || !row->hasNext() ||
                 row->getNext()->getValue(0)->getValue<std::string>() != textOf(id, 1)) {
                 if (wrong++ < 10) {
@@ -109,7 +111,8 @@ TEST_F(StringRewrite, MergeSetSurvivesCheckpointAndReopen) {
             rows += (rows.empty() ? "" : ", ") +
                     stringFormat("{u: 'c-{}', t: '{}', m: 'm-{}'}", id, textOf(id, 1), id);
         }
-        ok("UNWIND [" + rows + "] AS r MERGE (n:Chunk {_uuid: r.u}) SET n._text = r.t, n.marker = r.m;");
+        ok("UNWIND [" + rows +
+            "] AS r MERGE (n:Chunk {_uuid: r.u}) SET n._text = r.t, n.marker = r.m;");
     }
     std::string summary;
     EXPECT_EQ(wrongRows(summary), 0) << "[check: rewritten-strings] " << summary;

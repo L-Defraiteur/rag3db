@@ -43,7 +43,7 @@ protected:
         createDBAndConn();
         ok("CREATE NODE TABLE Doc(id " + keyType + " PRIMARY KEY, name STRING);");
         ok("UNWIND range(0, 199) AS i CREATE (:Doc {id: CAST(i AS " + keyType +
-           "), name: 'old ' + CAST(i AS STRING)});");
+            "), name: 'old ' + CAST(i AS STRING)});");
         if (keysOnDisk) {
             ok("CHECKPOINT;");
         }
@@ -73,9 +73,8 @@ protected:
         EXPECT_EQ(single("MATCH (d:Doc) WHERE d.name = 'dup' RETURN count(*);"), 0);
         int64_t notFoundByKey = 0;
         for (int64_t id = 1000; id < 3000; id++) {
-            const auto found =
-                single("MATCH (d:Doc {id: " + key(id) + "}) WHERE d.name = 'name " +
-                       std::to_string(id) + "' RETURN count(*);");
+            const auto found = single("MATCH (d:Doc {id: " + key(id) + "}) WHERE d.name = 'name " +
+                                      std::to_string(id) + "' RETURN count(*);");
             notFoundByKey += found == 1 ? 0 : 1;
         }
         EXPECT_EQ(notFoundByKey, 0) << "lignes du COPY introuvables par leur clé";

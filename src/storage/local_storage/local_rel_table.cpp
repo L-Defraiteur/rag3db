@@ -219,8 +219,7 @@ static bool remapNodeIDColumn(NodeGroup& nodeGroup, column_id_t columnID, table_
     return remapped;
 }
 
-void LocalRelTable::remapNodeOffsets(const local_node_offset_map_t& offsetMap,
-    row_idx_t numRows) {
+void LocalRelTable::remapNodeOffsets(const local_node_offset_map_t& offsetMap, row_idx_t numRows) {
     if (offsetMap.empty() || isEmpty() || numRows == 0) {
         return;
     }

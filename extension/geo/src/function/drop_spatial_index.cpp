@@ -1,5 +1,7 @@
 #include "function/drop_spatial_index.h"
 
+#include <filesystem>
+
 #include "catalog/spatial_index_catalog_entry.h"
 #include "common/exception/binder.h"
 #include "common/string_format.h"
@@ -11,8 +13,6 @@
 #include "processor/execution_context.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
-
-#include <filesystem>
 
 namespace rag3db {
 namespace geo_extension {
@@ -27,8 +27,8 @@ struct DropSpatialBindData final : TableFuncBindData {
     std::string indexName;
 
     DropSpatialBindData(std::string tableName, table_id_t tableID, std::string indexName)
-        : TableFuncBindData{binder::expression_vector{}, 0},
-          tableName{std::move(tableName)}, tableID{tableID}, indexName{std::move(indexName)} {}
+        : TableFuncBindData{binder::expression_vector{}, 0}, tableName{std::move(tableName)},
+          tableID{tableID}, indexName{std::move(indexName)} {}
 
     std::unique_ptr<TableFuncBindData> copy() const override {
         return std::make_unique<DropSpatialBindData>(*this);
@@ -91,8 +91,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
 static std::string rewriteFunc(ClientContext& context, const TableFuncBindData& bindData) {
     context.setUseInternalCatalogEntry(true);
     auto& bd = *bindData.constPtrCast<DropSpatialBindData>();
-    auto query = stringFormat(
-        "CALL _DROP_SPATIAL_INDEX('{}', '{}');", bd.tableName, bd.indexName);
+    auto query = stringFormat("CALL _DROP_SPATIAL_INDEX('{}', '{}');", bd.tableName, bd.indexName);
     query += stringFormat("RETURN 'Spatial index {} dropped from table {}.' AS result;",
         bd.indexName, bd.tableName);
     return query;

@@ -1,10 +1,10 @@
 #include "function/geo_within_obb.h"
 
+#include <cmath>
+
 #include "common/vector/value_vector.h"
 #include "function/geo_list_helpers.h"
 #include "function/scalar_function.h"
-
-#include <cmath>
 
 namespace rag3db {
 namespace geo_extension {

@@ -314,9 +314,9 @@ bool RelTable::delete_(Transaction* transaction, TableDeleteState& deleteState) 
                     // Supprimée dans un sens, introuvable dans l'autre : s'arrêter là laissait
                     // la relation vivante d'un seul côté, en silence. Refus nommé, comme pour
                     // la mise à jour (RelTableData::update) ; il annule l'instruction.
-                    const auto boundPos = relDeleteState
-                                              .getBoundNodeIDVector(relData->getDirection())
-                                              .state->getSelVector()[0];
+                    const auto boundPos =
+                        relDeleteState.getBoundNodeIDVector(relData->getDirection())
+                            .state->getSelVector()[0];
                     throw RuntimeException(stringFormat(
                         "Relationship {} of table {} {} {} direction, among the relationships "
                         "of node {}. Its deletion is refused: it would have reached one "

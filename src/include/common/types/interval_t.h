@@ -102,9 +102,10 @@ public:
     RAG3DB_API static interval_t fromCString(const char* str, uint64_t len);
     RAG3DB_API static std::string toString(interval_t interval);
     RAG3DB_API static bool greaterThan(const interval_t& left, const interval_t& right);
-    RAG3DB_API static void normalizeIntervalEntries(interval_t input, int64_t& months, int64_t& days,
-        int64_t& micros);
-    RAG3DB_API static void tryGetDatePartSpecifier(std::string specifier, DatePartSpecifier& result);
+    RAG3DB_API static void normalizeIntervalEntries(interval_t input, int64_t& months,
+        int64_t& days, int64_t& micros);
+    RAG3DB_API static void tryGetDatePartSpecifier(std::string specifier,
+        DatePartSpecifier& result);
     RAG3DB_API static int32_t getIntervalPart(DatePartSpecifier specifier, interval_t timestamp);
     RAG3DB_API static int64_t getMicro(const interval_t& val);
     RAG3DB_API static int64_t getNanoseconds(const interval_t& val);

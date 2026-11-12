@@ -347,8 +347,7 @@ private:
             EXPECT_TRUE(launch(launcher,
                 Opener{nullptr, databasePath, *systemConfig, benchCase.vectorExtension}, area,
                 benchCase.scenario, benchCase.guard))
-                << "[check: process-exit] "
-                << "a writer process did not exit normally";
+                << "[check: process-exit] " << "a writer process did not exit normally";
             if (!reopen()) {
                 return;
             }
@@ -429,8 +428,7 @@ private:
         int status = 0;
         waitpid(pid, &status, 0);
         EXPECT_TRUE(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL)
-            << "[check: killed] "
-            << "the writer process was expected to die by SIGKILL" << " — "
+            << "[check: killed] " << "the writer process was expected to die by SIGKILL" << " — "
             << (WIFSIGNALED(status)  ? "signal " + std::to_string(WTERMSIG(status)) :
                    WIFEXITED(status) ? "exit code " + std::to_string(WEXITSTATUS(status)) :
                                        std::string("unknown status"));
@@ -1001,8 +999,8 @@ TEST_P(ConcurrencyBench, C8_CheckpointUnderWriters) {
             [iterations](Worker& worker) {
                 if (worker.index() == numWriters) {
                     for (auto attempt = 0u;
-                        attempt < maxCheckpoints && worker.shared().flag.load() < numWriters;
-                        ++attempt) {
+                         attempt < maxCheckpoints && worker.shared().flag.load() < numWriters;
+                         ++attempt) {
                         worker.run("CHECKPOINT;");
                         std::this_thread::sleep_for(std::chrono::milliseconds(2));
                     }
@@ -1192,9 +1190,9 @@ static BenchCase indexedInsertsSharingANeighbour(bool secondRangeFirst) {
                 auto near = docVector("50");
                 near.insert(near.find(','), " + CAST(i AS FLOAT) / 100000");
                 worker.begin();
-                worker.writeInTurn(stringFormat(
-                    "UNWIND range({}, {}) AS i CREATE (:Doc {id: i, vec: {}});", first, first + 4,
-                    near));
+                worker.writeInTurn(
+                    stringFormat("UNWIND range({}, {}) AS i CREATE (:Doc {id: i, vec: {}});", first,
+                        first + 4, near));
                 worker.commitInOrderByEvents({0, 1});
             },
         .expect =

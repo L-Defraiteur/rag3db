@@ -26,7 +26,8 @@ static void execFunc(const std::vector<std::shared_ptr<ValueVector>>& parameters
                       parameters[2]->isNull(p2) || parameters[3]->isNull(p3) ||
                       parameters[4]->isNull(p4);
         result.setNull(resPos, isNull);
-        if (isNull) continue;
+        if (isNull)
+            continue;
 
         double lat = parameters[0]->getValue<double>(p0);
         double lon = parameters[1]->getValue<double>(p1);

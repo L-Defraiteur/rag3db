@@ -164,8 +164,8 @@ std::map<std::string, int> readWhileCheckpointing(const std::string& path,
     report->stopRequested = 1;
     int status = 0;
     waitpid(pid, &status, 0);
-    std::cerr << "  read " << read << ", refused " << refused << ", writes " << rowsDuring
-              << " in " << elapsedMs << " ms (" << rowsDuring / 5 << " checkpoints)\n";
+    std::cerr << "  read " << read << ", refused " << refused << ", writes " << rowsDuring << " in "
+              << elapsedMs << " ms (" << rowsDuring / 5 << " checkpoints)\n";
     return reasons;
 }
 
@@ -193,7 +193,8 @@ TEST_F(ReadOnlyReader, InsistingReaderIsNotStarvedByCheckpoints) {
     const auto path = databasePath;
     const auto baseConfig = *systemConfig;
     int refused = 0;
-    const auto reasons = readWhileCheckpointing(path, baseConfig, writePauseUs(),
+    const auto reasons = readWhileCheckpointing(
+        path, baseConfig, writePauseUs(),
         [&]() {
             const auto open = openPatiently(path, baseConfig);
             if (!open.error.empty()) {
@@ -204,8 +205,8 @@ TEST_F(ReadOnlyReader, InsistingReaderIsNotStarvedByCheckpoints) {
         refused);
     createDBAndConn();
     EXPECT_EQ(refused, 0) << "[check: reader-not-starved] " << refused << " of " << CYCLES
-                          << " read-only opens refused beyond " << PATIENCE_MS << " ms:"
-                          << summarize(reasons);
+                          << " read-only opens refused beyond " << PATIENCE_MS
+                          << " ms:" << summarize(reasons);
 }
 
 // Le moteur nu, sans la patience de l'appelant : un écrivain qui enchaîne les points de reprise
@@ -218,8 +219,8 @@ TEST_F(ReadOnlyReader, SingleOpenIsNotRefusedByBackToBackCheckpoints) {
     const auto path = databasePath;
     const auto baseConfig = *systemConfig;
     int refused = 0;
-    const auto reasons = readWhileCheckpointing(path, baseConfig, 0 /* pause */,
-        [&]() { return openAndCount(path, baseConfig); }, refused);
+    const auto reasons = readWhileCheckpointing(
+        path, baseConfig, 0 /* pause */, [&]() { return openAndCount(path, baseConfig); }, refused);
     createDBAndConn();
     EXPECT_EQ(refused, 0) << "[check: single-open-not-refused] " << refused << " of " << CYCLES
                           << " single read-only opens refused:" << summarize(reasons);

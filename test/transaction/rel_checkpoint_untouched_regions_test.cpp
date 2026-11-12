@@ -48,19 +48,19 @@ protected:
     }
 
     void link(int64_t from, int64_t to) {
-        ok("MATCH (a:person {id: " + std::to_string(from) + "}), (b:person {id: " +
-            std::to_string(to) + "}) CREATE (a)-[:knows]->(b);");
+        ok("MATCH (a:person {id: " + std::to_string(from) +
+            "}), (b:person {id: " + std::to_string(to) + "}) CREATE (a)-[:knows]->(b);");
     }
 
     // Les relations sortantes d'un nœud, puis ses relations entrantes : les deux sens de la
     // table.
     int64_t outgoing(int64_t id) {
-        return single("MATCH (a:person {id: " + std::to_string(id) +
-                      "})-[r:knows]->() RETURN count(r);");
+        return single(
+            "MATCH (a:person {id: " + std::to_string(id) + "})-[r:knows]->() RETURN count(r);");
     }
     int64_t incoming(int64_t id) {
-        return single("MATCH (a:person {id: " + std::to_string(id) +
-                      "})<-[r:knows]-() RETURN count(r);");
+        return single(
+            "MATCH (a:person {id: " + std::to_string(id) + "})<-[r:knows]-() RETURN count(r);");
     }
 
     void expectTheOtherRegionsKeptTheirRelations() {

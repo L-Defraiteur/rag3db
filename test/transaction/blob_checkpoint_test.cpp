@@ -203,7 +203,8 @@ TEST_F(BlobCopyCheckpointTest, OneCopyBeyondAQuarterOfTheBufferPoolUnderAReaderI
     std::thread reader([&] {
         rag3db::main::Connection connection(database.get());
         while (!stop.load()) {
-            auto result = connection.query("MATCH (b:Blobs) RETURN count(*), sum(octet_length(b._data));");
+            auto result =
+                connection.query("MATCH (b:Blobs) RETURN count(*), sum(octet_length(b._data));");
             (result->isSuccess() ? scans : failedScans)++;
         }
     });
@@ -255,8 +256,8 @@ TEST_F(BlobCopyCheckpointTest, ARolledBackCopyBeyondAQuarterOfTheBufferPoolLeave
     // Les pages des segments vidés par le COPY annulé sont reprises : le second COPY les réemploie.
     // Si elles fuyaient, le fichier porterait deux fois les 112 Mio.
     const auto sizeAfter = std::filesystem::file_size(databasePath);
-    std::cout << "fichier de données : " << (sizeBefore >> 20) << " Mio avant, " << (sizeAfter >> 20)
-              << " Mio après le COPY annulé puis le COPY validé\n";
+    std::cout << "fichier de données : " << (sizeBefore >> 20) << " Mio avant, "
+              << (sizeAfter >> 20) << " Mio après le COPY annulé puis le COPY validé\n";
     EXPECT_LT(sizeAfter - sizeBefore, numRows * blobSize * 3 / 2)
         << "les pages du COPY annulé n'ont pas été reprises";
     expectBlobs(numRows, blobSize);
@@ -264,14 +265,15 @@ TEST_F(BlobCopyCheckpointTest, ARolledBackCopyBeyondAQuarterOfTheBufferPoolLeave
 
 // Un COPY de vecteurs dans une table à index HNSW (ticket
 // docs/tickets/2026-11-08-un-sigsegv-dans-optimisticread-sous-lecture-concurrente-pendant-une-indexation.md),
-// témoin écrit par hotfixs. À la finalisation de l'index par le COPY, OnDiskHNSWIndex::shrinkForNode
-// prenait le vecteur du nœud par pointeur dans le vecteur de données de l'état de lecture, puis lisait
-// les voisins sur le même état (getEmbeddings → ListAuxiliaryBuffer::resize) : le vecteur de données
-// réalloué, le pointeur désignait un tampon libéré (heap-use-after-free sous ASAN, une lecture de
-// 3 072 octets). ≈ 3 Ko par ligne (FLOAT[768]), comme la réindexation de la montre ; sous un petit
-// tampon et à plusieurs fils, le COPY se vide aussi par son budget en octets (la copie-échange de
-// G2b, hors de cause). Le défaut ne se voit que sous ASAN ; en Release le témoin juge que l'index
-// atteint chaque vecteur et survit à un point de reprise. Environ 7 à 8 minutes en Release.
+// témoin écrit par hotfixs. À la finalisation de l'index par le COPY,
+// OnDiskHNSWIndex::shrinkForNode prenait le vecteur du nœud par pointeur dans le vecteur de données
+// de l'état de lecture, puis lisait les voisins sur le même état (getEmbeddings →
+// ListAuxiliaryBuffer::resize) : le vecteur de données réalloué, le pointeur désignait un tampon
+// libéré (heap-use-after-free sous ASAN, une lecture de 3 072 octets). ≈ 3 Ko par ligne
+// (FLOAT[768]), comme la réindexation de la montre ; sous un petit tampon et à plusieurs fils, le
+// COPY se vide aussi par son budget en octets (la copie-échange de G2b, hors de cause). Le défaut
+// ne se voit que sous ASAN ; en Release le témoin juge que l'index atteint chaque vecteur et survit
+// à un point de reprise. Environ 7 à 8 minutes en Release.
 class VectorCopyUnderASmallPoolTest : public EmptyDBTest {
 protected:
     static constexpr uint64_t NUM_ROWS = 30000;
@@ -309,14 +311,14 @@ protected:
 
     void must(const std::string& query) {
         auto result = conn->query(query);
-        ASSERT_TRUE(result->isSuccess()) << "[check: query] " << query << " : "
-                                         << result->getErrorMessage();
+        ASSERT_TRUE(result->isSuccess())
+            << "[check: query] " << query << " : " << result->getErrorMessage();
     }
 
     int64_t single(const std::string& query) {
         auto result = conn->query(query);
-        EXPECT_TRUE(result->isSuccess()) << "[check: query] " << query << " : "
-                                         << result->getErrorMessage();
+        EXPECT_TRUE(result->isSuccess())
+            << "[check: query] " << query << " : " << result->getErrorMessage();
         return result->isSuccess() && result->hasNext() ?
                    result->getNext()->getValue(0)->getValue<int64_t>() :
                    -1;

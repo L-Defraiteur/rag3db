@@ -95,10 +95,11 @@ protected:
             Transaction::START_TRANSACTION_ID + 1000, Transaction::LATEST_COMMITTED_TS);
         auto* entry =
             rag3db::catalog::Catalog::Get(*context)->getTableCatalogEntry(&latest, "Item");
-        auto& table = getStorageManager(*database)->getTable(entry->getTableID())->cast<NodeTable>();
+        auto& table =
+            getStorageManager(*database)->getTable(entry->getTableID())->cast<NodeTable>();
         table.addIndex(std::make_unique<ThrowingIndex>(IndexInfo{"throwing_index", "THROWING",
-            entry->getTableID(), {0} /* la clé, que rien ne met à jour */, {PhysicalTypeID::INT64}, false /* primary */,
-            false /* builtin */}));
+            entry->getTableID(), {0} /* la clé, que rien ne met à jour */, {PhysicalTypeID::INT64},
+            false /* primary */, false /* builtin */}));
     }
 };
 
@@ -170,8 +171,7 @@ TEST_F(HalfAppliedCommit, AFailureAfterDeletesAndUpdatesLeavesTheTableAsItWasAcr
     dropThrowingIndex();
     ok("CHECKPOINT;");
     createDBAndConn();
-    EXPECT_EQ(row("MATCH (i:Item) RETURN count(*);"), "10\n")
-        << "[check: reopened-count]";
+    EXPECT_EQ(row("MATCH (i:Item) RETURN count(*);"), "10\n") << "[check: reopened-count]";
     EXPECT_EQ(row("MATCH (i:Item) RETURN sum(i.id);"), std::to_string(45 - 6 + 50) + "\n")
         << "[check: reopened-rows-and-offsets-agree]";
     EXPECT_EQ(row("MATCH (i:Item {id: 4}) RETURN i.v;"), "4\n") << "[check: reopened-update]";

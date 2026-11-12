@@ -122,7 +122,8 @@ TEST_F(EmptyDBTransactionTest, DatabaseFilesAfterCheckpoint) {
     ASSERT_FALSE(
         std::filesystem::exists(rag3db::storage::StorageUtils::getWALFilePath(databasePath)));
     conn->query("CREATE NODE TABLE test(id INT64 PRIMARY KEY, name STRING);");
-    ASSERT_TRUE(std::filesystem::exists(rag3db::storage::StorageUtils::getWALFilePath(databasePath)));
+    ASSERT_TRUE(
+        std::filesystem::exists(rag3db::storage::StorageUtils::getWALFilePath(databasePath)));
     conn->query("CHECKPOINT;");
     ASSERT_FALSE(
         std::filesystem::exists(rag3db::storage::StorageUtils::getTmpFilePath(databasePath)));

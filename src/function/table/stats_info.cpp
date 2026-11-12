@@ -44,8 +44,8 @@ static offset_t internalTableFunc(const TableFuncMorsel& /*morsel*/, const Table
         auto position = 1u;
         for (auto& property : bindData->tableEntry->getProperties()) {
             const auto columnID = bindData->tableEntry->getColumnID(property.getName());
-            output.getValueVectorMutable(position++).setValue(0,
-                stats.getNumDistinctValues(columnID));
+            output.getValueVectorMutable(position++)
+                .setValue(0, stats.getNumDistinctValues(columnID));
         }
     } break;
     default: {

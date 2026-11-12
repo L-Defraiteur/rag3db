@@ -599,8 +599,7 @@ std::shared_ptr<NodeExpression> Binder::bindQueryNode(const NodePattern& nodePat
 
 std::shared_ptr<NodeExpression> Binder::createQueryNode(const NodePattern& nodePattern) {
     auto parsedName = nodePattern.getVariableName();
-    auto queryNode =
-        createQueryNode(parsedName, bindNodeTableEntries(nodePattern.getTableNames()));
+    auto queryNode = createQueryNode(parsedName, bindNodeTableEntries(nodePattern.getTableNames()));
     queryNode->setBoundWithoutLabel(nodePattern.getTableNames().empty());
     return queryNode;
 }
