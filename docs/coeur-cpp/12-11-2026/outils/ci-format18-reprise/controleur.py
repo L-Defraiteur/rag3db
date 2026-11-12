@@ -79,7 +79,10 @@ try:
     assert manifest['build_id'].encode() in binary.read_bytes()
     argv = [str(binary), '--gtest_color=no', '--gtest_fail_fast', '--gtest_output=xml:' + str(out/'transaction.xml')]
     cmd = ['bwrap', '--unshare-user', '--unshare-net', '--ro-bind', '/', '/', '--proc', '/proc', '--dev', '/dev',
-           '--ro-bind', str(source), str(original_source), '--ro-bind', str(source), str(source),
+           # Private parent shadows the absent original source path; never mkdir on the host02.
+           '--tmpfs', str(original_source.parent), '--dir', str(original_source),
+           '--ro-bind', str(source), str(original_source),
+           '--remount-ro', str(original_source.parent), '--ro-bind', str(source), str(source),
            '--bind', str(tmp), str(tmp), '--bind', str(work), str(work), '--bind', str(out), str(out),
            '--chdir', str(work), '/usr/bin/env', '-i', *[k+'='+v for k,v in env.items()], *argv]
     write('transaction-environment.json', env)
@@ -116,6 +119,13 @@ try:
     assert selected and int(selected[1]) == 359
     assert len(cases) == 360 and len(disabled) == 1 and not failures
     assert root.get('failures') == '0' and root.get('errors') == '0'
+    interrupted = [c for c in cases if c.get('classname') == 'VectorCopyUnderASmallPoolTest'
+                   and c.get('name') == 'TheIndexReadsItsVectorsWhileTheHeadIsExchanged']
+    assert len(interrupted) == 1
+    witness = interrupted[0]
+    assert witness.get('status') == 'run' and witness.get('result') == 'completed'
+    assert witness.find('failure') is None and witness.find('skipped') is None
+    assert witness.find('error') is None
     assert sorted(skips) == ['VectorIndexCrashReopenProbe.OpenInAFreshProcess', 'WalReader.PrintAFile']
     for item in manifest['files']:
         assert digest(package/item['path']) == item['sha256']

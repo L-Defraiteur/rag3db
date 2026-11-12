@@ -13,7 +13,8 @@
   "parallelism": "aucune compilation ; fixture vector4 fils inchangé",
   "resources": "poste lourd après BancMESURE et GO ; aucune réservation à la préparation",
   "files": {
-    "controleur.py": "5958ec6557550fcae2d28922caa175e79687c1dac28ecc98dc1e543ca2ade255",
+    "controleur.py": "e18cfcde8962fdf3b4b1f2465ef4f034050a5729394665623688b8555115e677",
     "lancer.sh": "6a64a424f99cab2129e8b5c23650042246255a831adeb055e771e7d2ea2d28bb"
-  }
+  },
+  "time_contract": "Étape corrective DISTINCTE proposée1490s ; ne revendique pas ancienne deadline absolue2400 respectée si échue ; total unités maximal2383,800s explicite, GO C7 requis."
 }
