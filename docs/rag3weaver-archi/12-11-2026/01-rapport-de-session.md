@@ -1,3 +1,26 @@
+## Livraison et nettoyage — 13 novembre2026
+
+Première tranche intégrée sur master3edbb8475ace557b87316da6a269938055d23f9d,
+après revue favorable C7, tour explicite et rebase sur le formatage C++ f903fedba.
+Diff source testée d006 → candidat publié : src/templates/Cargo/scripts inchangés.
+Les trois contrôles après push sont verts (propre, aucun rebase, origin/master=HEAD).
+Le ticket global navigation reste ouvert : grep enrichi et couverture étendue à faire.
+Aucune vue supplémentaire ni complétude de membres/héritage n'est annoncée.
+
+Nettoyage immédiat attesté aux deux postes : garde courante dca13abb… verte,
+archives administratives fidèles dont sous-module privé PC, quiescence indépendante.
+W cx-wt-symboles, target cx-archi-target, scratch actif cx-sn et branches locales
+cx-archi-symboles-1..4 retirés ; branches distantes et preuves conservées.
+Le scratch PC contenait62 dépôts de fixtures : inventaire des administrations et
+worktrees sans dépendance extérieure, ensemble intégral archivé hors zone active.
+Archives/preuves : cx-symboles-nettoyage-{pc,portable}-20261113 dans le cache de build.
+
+Base privée cx_archi_symboles_20261112, OID1883108, propriétaire rag3weaver :
+dumpSHA256 be6872187a1fa0d73cdafdf6e5a5d7f5c3b1845b186eaacc0b75dde472ce8114
+vérifié aux deux postes, zéro session active, suppression et absence vérifiées.
+Preuves finales : cx-symboles-d00661e96-reprise-20261112 ; aucun appel7879 à venir.
+Ne pas recréer ce worktree/target/base : pour la suite, repartir du master courant.
+
 ## Actualisation prioritaire — 13 novembre2026
 
 Première tranche symboles : source d00661e969eb7d77aa7d2f25c6cb5fa4f93f3308

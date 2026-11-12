@@ -1,9 +1,9 @@
 # Exposer la navigation dans les symboles
 
-- **État** : ouvert ; première tranche codée et passe complète d00661e96 verte, revue/intégration à terminer ; grep et couverture étendue restent à livrer.
+- **État** : ouvert ; première tranche intégrée par 3edbb8475 et passe complète d00661e96 verte ; grep et couverture étendue restent à livrer.
 - **Famille** : produit
 - **Gravité** : capacité manquante ; l'agent doit pouvoir explorer des arbres de code sans lire tous les corps.
-- **Atteignable en service** : oui dans la branche candidate via outil code et relais atelier, pas encore intégré à master ; outline reste disponible.
+- **Atteignable en service** : oui sur master depuis 3edbb8475 via outil code et relais atelier ; outline reste disponible.
 - **Touche rag3weaver** : oui, outils déclaratifs du code et de l'atelier, références de symboles, rendu et enrichissement du grep.
 - **Pour** : ED et archi pour les contrats/outils ; codeparsers pour la couverture des membres et relations.
 - **Signalé par** : Lucie, demandes list_methods puis list_members, parents/enfants bornés, list_symbols(file) en arbre et option symbol_hierarchy_depth du grep.
@@ -309,3 +309,27 @@ trois ELF réellement observés/native29/223 gabarits chacun ; primitive VERT0,
 restes[], nettoyé=true, quiescence target[]. Durée cumulée4253,885/6000s
 initiales ; aucune remise à zéro. Aucun master avant tour explicite et revue du
 diff entrant. Ce ticket reste ouvert : grep enrichi et couverture étendue non livrés.
+
+## Livraison et nettoyage — 13 novembre2026
+
+Première tranche intégrée sur master3edbb8475ace557b87316da6a269938055d23f9d,
+après revue favorable C7, tour explicite et rebase sur le formatage C++ f903fedba.
+Diff source testée d006 → candidat publié : src/templates/Cargo/scripts inchangés.
+Les trois contrôles après push sont verts (propre, aucun rebase, origin/master=HEAD).
+Le ticket global navigation reste ouvert : grep enrichi et couverture étendue à faire.
+Aucune vue supplémentaire ni complétude de membres/héritage n'est annoncée.
+
+Nettoyage immédiat attesté aux deux postes : garde courante dca13abb… verte,
+archives administratives fidèles dont sous-module privé PC, quiescence indépendante.
+W cx-wt-symboles, target cx-archi-target, scratch actif cx-sn et branches locales
+cx-archi-symboles-1..4 retirés ; branches distantes et preuves conservées.
+Le scratch PC contenait62 dépôts de fixtures : inventaire des administrations et
+worktrees sans dépendance extérieure, ensemble intégral archivé hors zone active.
+Archives/preuves : cx-symboles-nettoyage-{pc,portable}-20261113 dans le cache de build.
+
+Base privée cx_archi_symboles_20261112, OID1883108, propriétaire rag3weaver :
+dumpSHA256 be6872187a1fa0d73cdafdf6e5a5d7f5c3b1845b186eaacc0b75dde472ce8114
+vérifié aux deux postes, zéro session active, suppression et absence vérifiées.
+Preuves finales : cx-symboles-d00661e96-reprise-20261112 ; aucun appel7879 à venir.
+Ne pas recréer ce worktree/target/base : pour la suite, repartir du master courant.
+
