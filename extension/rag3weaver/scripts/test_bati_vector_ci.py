@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -175,6 +176,55 @@ class Provenance(unittest.TestCase):
         self.lignes.insert(2, copy.deepcopy(self.lignes[0]))
         with self.assertRaisesRegex(module.Refus, 'invocations Cargo mélangées'):
             self.choisir()
+
+    def test_vrais_blocs_workflow_avec_producteurs_cpu(self):
+        # Exécute les deux blocs shell du workflow et le vrai CLI Python.
+        # Cargo/CMake sont des producteurs factices : zéro compilation.
+        workflow = Path(__file__).resolve().parents[3] / '.github/workflows/rag3weaver-workflow.yml'
+        lignes = workflow.read_text().splitlines()
+
+        def bloc(nom):
+            debut = next(i for i, x in enumerate(lignes) if x.strip() == '- name: ' + nom)
+            debut = next(i for i in range(debut + 1, len(lignes)) if lignes[i].strip() == 'run: |')
+            resultat = []
+            for ligne in lignes[debut + 1:]:
+                if ligne and not ligne.startswith('          '):
+                    break
+                resultat.append(ligne[10:] if ligne else '')
+            return '\n'.join(resultat).replace('${{ runner.temp }}', str(self.repo / 'runner-temp'))
+
+        self.creer('runner-temp/.fixture', '')
+        scripts = self.repo / 'extension/rag3weaver/scripts'
+        scripts.mkdir(parents=True)
+        shutil.copy2(Path(__file__).with_name('bati_vector_ci.py'), scripts / 'bati_vector_ci.py')
+        self.creer('emission-cargo.jsonl', ''.join(json.dumps(x) + '\n' for x in self.lignes[1:]))
+        binaires = self.repo / 'bin'
+        git = self.creer('bin/git', '#!/usr/bin/env python3\nprint("' + 'a' * 40 + '")\n')
+        cargo = self.creer('bin/cargo', '''#!/usr/bin/env python3
+import os,pathlib,sys
+r=pathlib.Path(os.environ['FIXTURE_ROOT'])
+assert sys.argv[1] in ['metadata','test']
+print((r/('metadata.json' if sys.argv[1]=='metadata' else 'emission-cargo.jsonl')).read_text(),end='')
+''')
+        cmake = self.creer('bin/cmake', '''#!/usr/bin/env python3
+import json,os,pathlib,sys
+r=pathlib.Path(os.environ['FIXTURE_ROOT'])
+with (r/'cmake-appels.jsonl').open('a') as f: f.write(json.dumps(sys.argv[1:])+'\\n')
+p=r/'extension/vector/build/libvector.rag3db_extension';p.parent.mkdir(parents=True,exist_ok=True);p.write_text('fixture')
+''')
+        for p in [git, cargo, cmake]:
+            p.chmod(0o755)
+        env = dict(os.environ, PATH=str(binaires) + os.pathsep + os.environ['PATH'],
+                   FIXTURE_ROOT=str(self.repo), PYTHONDONTWRITEBYTECODE='1')
+        subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', bloc('Bâti des tests unitaires')],
+                       cwd=self.repo / 'extension/rag3weaver', env=env, capture_output=True, text=True, check=True)
+        subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', bloc("L'extension vector, du même bâti")],
+                       cwd=self.repo, env=env, capture_output=True, text=True, check=True)
+        rapport = json.loads((self.repo / 'runner-temp/provenance-vector.json').read_text())
+        self.assertEqual(rapport['cmake_build_dir'], str(self.bdir))
+        appels = [json.loads(x) for x in (self.repo / 'cmake-appels.jsonl').read_text().splitlines()]
+        self.assertEqual(appels[0][appels[0].index('-B') + 1], str(self.bdir))
+        self.assertEqual(appels[1][:2], ['--build', str(self.bdir)])
 
 
 if __name__ == '__main__':
