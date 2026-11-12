@@ -128,3 +128,13 @@ mesurée par ces fixtures ; l'arrêt avant journal/relance découle du retour ? 
 Pas de nouvelle révocation/annulation ; reload garde la décision, nouveau registre
 ne rejoue pas le journal. L'erreur de reçu après effet a son ticket ED séparé.
 Le ciblé vert n'est pas un verdict de passe globale et ne ferme pas le ticket.
+
+## Jalon de globale après A et scripts communs
+
+A et confinementcdd sont intégrés ; rebase documentaire/codeA puis branche neuve
+cx-ed-accord-publication-2, source fix03 conservée. GO globale6000 de C7 reçu, recette
+ED12nov/03 publiée avant lancement ; un seul budget/bus/reçu via LA primitive, pas
+d'outerservice perdant l'ascendance poste. Les inventaires exacts des trois ELF seront
+publiés avant runtime, sans nombre ancien imposé. ServiceBGE7879 existant coordonné
+seulement pour les lectures, aucune relance M8 ni nouvelle instance. Pas de master
+avant revue du verdict global et « à toi ».
