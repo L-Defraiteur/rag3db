@@ -768,3 +768,13 @@ extensions4système. Dépendances directes présentes, chargeur non exécuté. L
 limites, manifests et35preuves exportés ; paquet binaire stable horsWT à luciepc.
 Échec01 conservé. Aucun scénario/test/découverte/ldd ni troisième build ; runtime
 reste soumis à revue/autorisation distincte. Aucun verdict causal sur saturation.
+
+## Driver runtime et préflight sans test publiés
+
+[Driver/préflight](../12-11-2026/19-driver-runtime-et-preflight-sans-test.md) :
+834hashes/BuildID/dépendances/chemin extension privée revérifiés, montage RO/réseau
+isolé/8Gswap0/scratch2G conformes, préflight89ms sans aucun Popen natif. Driver/env/
+argv/limites publiés avant le passage unique autorisé sur35ea ; poste mesure1200+10,
+logs16Mio,capture persistante,aucun héritage env caché,retryinterdit. Aucun scénario
+encore lancé dans ce reçu ; exécution ensuite sans nouvelle boucle administrative
+si empreintes/montage restent conformes. Ticket ouvert, verdict runtime distinct.

@@ -1,0 +1,30 @@
+{
+  "mode": "preflight",
+  "source_commit": "35ea70d3a4a5cc4917586de02f6bfc862c76a02c",
+  "manifest_sha256": "b439d5dbe2fd39a75c838c5c966860ce542d23b9ed21d37c0ab4e672af43d358",
+  "review_sha256": "e95d9f6702301b9967c4b42e87724cba39b10225f021a04785eafb4d1aa40eb0",
+  "driver_sha256": "3445e990e2e4ee2752f89eef6900f67d3ce99207da51e68392ee0c99ec4ee175",
+  "argv": [
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-build-saturation-12nov-02/package/bin/concurrence_test",
+    "--gtest_filter=TwentyWriters.DdlEveryMinute",
+    "--gtest_color=no",
+    "--gtest_output=xml:/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-runtime-saturation-12nov-01/xml.pipe"
+  ],
+  "environment": {
+    "PATH": "/usr/bin:/bin",
+    "LANG": "C",
+    "LC_ALL": "C",
+    "TZ": "UTC",
+    "TMPDIR": "/home/lucied/.cache/rag3weaver-build/cx-build-saturation-12nov-02/runtime/tmp",
+    "RUNNER_TEMP": "/home/lucied/.cache/rag3weaver-build/cx-build-saturation-12nov-02/runtime/tmp",
+    "CX_SATURATION_OUTPUT": "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-runtime-saturation-12nov-01/capture.csv"
+  },
+  "cwd": "/home/lucied/.cache/rag3weaver-build/cx-build-saturation-12nov-02/runtime/work",
+  "package_files_verified": 834,
+  "build_id": "rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
+  "native_spawned": 0,
+  "xml_transport": "private FIFO -> controller -> persistent result.xml",
+  "runtime_budget_s": 1200,
+  "stop_budget_s": 10,
+  "automatic_retry": false
+}
