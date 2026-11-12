@@ -4,9 +4,9 @@
 
 Ticket ouvert `docs/optimiseur/tickets/2026-11-12-borner-la-fenetre-nocturne-de-card0.md`,
 branche/worktree `cx-optimiseur-card0-nuit`. À luciepc : entrée liée au SHA
-49f6399d…, refus hors nuit avant commande GPU, unités privées sans restart,
+7d159bb4…, refus hors nuit avant commande GPU, unités privées sans restart,
 RuntimeMaxSec + cutoff.timer réel le13novembre **07:54 Paris**, Persistent=yes,
-active/waiting. 18 fixtures CPU vertes aux deux postes et vrai probe systemd
+active/waiting. 19 fixtures CPU vertes aux deux postes et vrai probe systemd
 de descendant setsid terminé sans résidu. Aucun modèle demandé/enregistré,
 pas d’utilisation card0 ; Banc/Embarquement n’en ont pas besoin actuellement.
 

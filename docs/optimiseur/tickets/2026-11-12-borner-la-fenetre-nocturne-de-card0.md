@@ -1,6 +1,6 @@
 # Borner la fenêtre nocturne de card0
 
-- **État** : en cours ; entrée qualifiée et timer réel actif à luciepc pour le 13 novembre 07:54 Paris, 18 fixtures CPU et preuve réelle de descendants vertes ; aucun modèle enregistré, restitution réelle encore attendue.
+- **État** : en cours ; entrée finale qualifiée et timer réel actif à luciepc pour le 13 novembre 07:54 Paris, 19 fixtures CPU et preuve réelle de descendants vertes ; aucun modèle enregistré, restitution réelle encore attendue.
 - **Famille** : produit
 - **Gravité** : disponibilité ; les modèles temporaires doivent rendre le GPU du jeu à l'heure convenue.
 - **Atteignable en service** : oui pour les processus privés nocturnes, aucune modification des services courants requise.
@@ -185,3 +185,20 @@ fin ne peut ainsi dépasser07:54, avec15s maximum d’arrêt et marge avant07:55
 même si le cutoff global rencontrait un problème. Aucun renouvellement de
 budget. La préparation initiale est déqualifiée pendant cette révision (reçu
 préservé sous preparation/pret-version-initiale.json), timer toujours armé.
+
+Révision publiée en 986914692 avant essais, **19 fixtures CPU vertes** aux deux
+postes (luciepc sous poste lourd), incluant le départ différé qui ne peut plus
+tenir sa durée. Aucune nouvelle sonde GPU ni nouveau probe systemd nécessaire :
+la borne initiale et la propriété de groupe sont celles du probe CPU v2 déjà vert.
+
+**État final relu à 23:16:52 Paris** : source installée SHA256
+`7d159bb45581a975cfdd08fee2180ea3e049f5eb14ca23faed134f307f182578`,
+reçu `pret.json` requalifié sur ce SHA après les tests, timer toujours active /
+waiting / Persistent avec NextElapse13nov07:54CET ; zéro modèle enregistré.
+Entrée CLI réelle hors créneau de nouveau refusée avant lecture de recette.
+L’ancienne source qualifiée18tests et son reçu restent conservés pour expliquer
+la révision, sans les confondre avec la source finale.
+
+Preuves finales : `preparation/fixtures-finales.log`, `sources-finales.sha256`,
+`etat-effectif-final.json`, `refus-hors-fenetre-final.log`, `pret.json` ; mêmes
+preuves de portée CPU v2. Le ticket reste ouvert jusqu’à l’échéance réelle.
