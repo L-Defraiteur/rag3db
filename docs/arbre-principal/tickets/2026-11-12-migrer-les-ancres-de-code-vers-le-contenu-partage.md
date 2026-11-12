@@ -1214,3 +1214,29 @@ réutilise libv4verte/mapsréelles, F5/min/compilev2 ; source d2 et SHAELF immua
 initiale20:27:04+3600. PGv4 déjà créée identifiée explicitement, sans reset ni
 nouvelle PG inutile. Nouveau répertoirepreuves/pilote/scopev5 ; sourceRemote
 inchangée. Le rapport final sera composé et ne décrira pas une passe sans incident.
+
+### A — NAV40 verte, bus privés survivants arrêtés et quiescence indépendante
+
+Source/ELF d2 ; NAVcompile43,26s, inventaire40sansignore puis **40/0/0** en137,88s
+(phase137,99). Le garde de sortie a relevé **40 dbus-daemon privés** encore
+vivants après les wrappers dbus-run-session ; aucun Chrome restant. Le Drop du
+navigateur peut tuer le wrapper avant la fin de son bus : pas de cause produit
+A attribuée et pas de relance NAV. Le garde a interrompu la passe avant CLI et
+arrêté ses seuls descendants attribués par pidfd ouvert/starttime, puis scope.
+
+Contrôle indépendant `cx-passe-faits-lies-v5/nav-quiescence-apres-arret.json`
+à20:48:00 Paris : scopeinactive, known_live=[], scan exeTarget/cwdWT/profil=[],
+socketnodes=[] ;528recordsdescendants conservés, tous memory.max32 dansscope5,
+Chromium natif observé. TMP privé /var/tmp/cx-fa.142trqgk conservé au rouge.
+FIN/quiescenceNAV signalées à recherche/C7 pour son unique préflight coordonné,
+pas une autorisation master ni une dissimulation du défaut d'hygiène.
+Ce fait est transmis au porteur du ticket commun des scopes pour l'adoption
+transversale d'un arrêt explicite des bus attribués, hors produit A.
+
+V6 ne rejoue **ni NAV ni lib ni F5/min/compilelib** : réutilisation des logs,
+inventaires exacts, ELFhachés, maps et quiescence après arrêtbus ; seules CLI5 et
+attestation220 restent. Sourcecompilée d2 inchangée ; recette externe publiée,
+unités6 liées, initial20:27:04+3600 toujours inchangé. TMP5 reste conservé jusqu'à
+succès composé complet+quiescence, puis retrait du seul root marquépossédé.
+PGv4 identifiée, pas de nouvelle base/reset. Verdict composé distinguera chaque
+vert réel des incidents de vérification/montage et de nettoyage conservés.
