@@ -161,3 +161,47 @@ La revue en lecture seule de 0511dece7 identifie des obstacles supplémentaires 
 Aucun opt-in n'est recommandé à ce stade. Cette revue, ajoutée à l'absence de
 série Doc/Note à fusionner dans TwentyWriters, retire la justification d'un
 passage immédiat à l'implémentation A. Aucun nouveau run ni changement moteur.
+
+## Quel contrat pour les échecs partiels ?
+
+Lecture complémentaire de 0511dece7, sans exécution : un préfixe d'effets
+strictement identique n'est pas une exigence établie par le manager. Son contrat
+explicite est une annulation réussie cohérente, ou une annulation commencée qui
+échoue, signalée comme telle, avec refus de reprise normale et réouverture.
+Une différence de préfixe n'est donc pas, seule, une réfutation de toute fusion.
+Elle oblige à prouver la sûreté de chaque état partiel nouvellement atteignable.
+
+Preuves et limites du mécanisme existant :
+
+- `transaction.cpp:225–239` capture undoStarted comme halfDoneRollback ;
+  `transaction_manager.cpp:220–285` pose rollbackFailed avant de retirer la
+  transaction et libérer ses verrous (ou garde la transaction échouée après
+  failAfterStatement). Le même protocole doit couvrir tout premier effet fusionné.
+- `transaction_manager.cpp:53–62` refuse les nouveaux BEGIN ; `:293–315` refuse
+  les checkpoints sur disque et explique la récupération par rejeu du journal.
+  `checkpoint()` retourne toutefois immédiatement pour une base en mémoire.
+  La note `transaction_manager.h:205–222` décrit la quarantaine, pas une preuve
+  de l'inaccessibilité de tout état partiel aux transactions déjà actives.
+- Un lecteur déjà en exécution n'est pas interrompu par rollbackFailed dans ce
+  chemin. `ChunkedNodeGroup::rollbackInsert` (:594–619) conserve expressément
+  les versions des lignes annulées pour les lecteurs tenant déjà un bloc :
+  cette garantie demeure nécessaire, indépendamment de la quarantaine future.
+- Pour une transaction manuelle déjà ouverte, `ClientContext::validateTransaction`
+  (:456–463) vérifie son état local. `executeNoLock` (:550–552) appelle
+  throwIfManualTransactionFailed, qui concerne cette transaction ; ce n'est pas
+  un test du drapeau global rollbackFailed. Le commit ordinaire du manager
+  (:111–160) n'a pas de garde globale à son entrée. Les seuls usages du drapeau
+  sont dans le manager. Il serait donc infondé de déduire du refus des nouveaux
+  BEGIN que tout lecteur/écrivain déjà actif devient incapable d'observer ou
+  d'agir sur les états partiels. Aucun incident nouveau n'est affirmé ici.
+
+Contrat suffisant proposé pour une future revue : préserver les écritures déjà
+validées et les versions des lecteurs existants ; ne pas publier de lignes non
+validées ; garantir la sécurité mémoire de tous les états intermédiaires ;
+marquer l'échec commencé avant libération des verrous ; empêcher leur checkpoint ;
+assurer une réouverture qui ne rejoue que les transactions durables. Un préfixe
+différent pourrait être acceptable si ces propriétés étaient prouvées pour les
+lecteurs et écrivains déjà présents aussi. Elles ne le sont pas pour A à ce stade.
+Ne pas exiger l'identité de préfixe par principe ; ne pas invoquer la quarantaine
+comme preuve suffisante. La non-applicabilité démontrée aux séries Doc/Note reste
+la raison prioritaire de ne pas choisir A pour TwentyWriters.

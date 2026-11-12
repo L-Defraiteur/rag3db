@@ -677,3 +677,9 @@ aucun code moteur, build ou nouveau run. Ticket toujours ouvert.
 Revue croisée intégrée au plan 10 : opt-in NodeTable non démontré (contrat des
 index secondaires, ordre des blocs et préfixe des effets en cas d'exception,
 réservations partielles et bornes). Aucun opt-in recommandé ni implémenté.
+
+Complément au plan 10 : l'identité du préfixe d'effets après exception n'est pas
+un contrat démontré. Une quarantaine avec récupération sûre pourrait suffire,
+mais le refus des nouveaux BEGIN/checkpoints ne démontre pas la sûreté pour les
+transactions déjà ouvertes ; les garanties de versions des lecteurs restent
+nécessaires. Lecture seule, sans nouveau défaut observé ni changement moteur.
