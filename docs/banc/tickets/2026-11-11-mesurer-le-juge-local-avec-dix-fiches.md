@@ -1,6 +1,6 @@
 # Mesurer le juge local avec dix fiches
 
-- **État** : ouvert — protocole préparé, accord card0 attendu.
+- **État** : ouvert — protocole préparé ; coordination card2 en cours.
 - **Famille** : produit
 - **Gravité** : coût — latence et qualité du classement à dix fiches non mesurées.
 - **Atteignable en service** : non pour cette mesure ; le branchement du juge revient à la session mémoire.
@@ -34,18 +34,26 @@ latences par cas p50/p95, cache effectivement réutilisé et VRAM avant/après.
 Garder les résultats par cas et les commandes dans des fichiers neufs.
 
 Utiliser le llama.cpp b9590 déjà bâti à luciepc, sans le rebâtir, sous `poste lourd`.
-Vérifier que le port 8099 est libre. Card0 seule avec `ROCR_VISIBLE_DEVICES=1`,
-en laissant au moins la moitié de sa VRAM libre ; arrêter les seuls processus
-lancés par ce banc. Aucun calcul GPU n’a été lancé lors de cette reprise.
+Vérifier que le port 8099 est libre. Consigne de Lucie du 12 novembre :
+card0/seat1 (PCI 0000:07:00.0, ROCm GPU[1]) est interdite aux sessions.
+Utiliser exclusivement card2 (PCI 0000:04:00.0, ROCm GPU[0]) avec
+`ROCR_VISIBLE_DEVICES=0` explicite. Lire sa VRAM avant le banc et coordonner
+la charge avec les autres sessions. Les quatre services 7878/7879/7880/7882
+occupent environ 25,9 Go selon le relevé transmis par Lucie. Un cinquième
+processus GPU a provoqué un reset de ring le 9 novembre : ne pas ajouter
+le banc aux quatre services. Coordonner avec le porteur du service privé 7882
+son arrêt temporaire et sa remise en route, puis relire la VRAM avant chargement.
+Ne jamais utiliser card0 comme débordement. Arrêter les seuls processus lancés
+par ce banc. Aucun calcul GPU n’a été lancé lors de cette reprise.
 
 ## Attente et reste à faire
 
-L’accord de Lucie pour card0 est attendu, conformément au knowledge dump du banc,
-section 1. La suppression des confirmations techniques ne remplace pas cet accord.
-L’orchestration a demandé de préparer seulement le protocole dans cette attente.
-Le ticket ne donne aucune autorisation d’activation ni de push de code.
+Lucie autorise le banc sur card2 le 12 novembre sous réserve de coordination
+avec les autres sessions et de capacité disponible. Cette consigne remplace
+l’ancienne attente d’accord card0. La disponibilité de 7882 et la fenêtre de
+charge restent à convenir avec l’orchestration ; aucun tour de push de code accordé.
 
-Après accord : construire et contrôler les 880 paires, jouer les mesures,
+Construire et contrôler les 880 paires, puis, dans la fenêtre convenue, jouer les mesures,
 analyser les résultats et compléter la page GGUF pour la session mémoire.
 
 ## Pour fermer
