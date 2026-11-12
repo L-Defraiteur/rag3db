@@ -429,3 +429,18 @@ conserver l'échéance de s69dn7tx (budget initial1800), pas nouvelle1800 ni7200
 Le driver calcule le restant après la vraie acquisition mesure ; précontrôle
 à1108 s restantes, refus si expiré. Source publiée/syntaxe Python et shell
 vérifiées avant entrée. Artefacts du banc345 et anciens journaux restent intacts.
+
+Revue mémoire20a8 : la première version d'observateur cessait de lire un PID
+après sa première capture qualifiée ; une activité ultérieure aurait été
+manquée. Elle vérifiait aussi le starttime avant pidfd_open au lieu d'après.
+Le job20a attendait encore le poste, aucun superviseur commun actif ni modèle
+chargé : arrêt des trois seuls PID de l'unité possédée1263275/1263277/1263295
+par pidfd avec identité vérifiée, unité ensuite inactive/MainPID0.
+
+Correction avant nouvelle charge : capture/garde continuent jusqu'au signal
+de fin, preuve initiale conservée, clé PID+starttime et dernière preuve mises
+à jour ; identité du superviseur recontrôlée APRÈS ouverture du pidfd.
+Aucun Rust/Cargo changé depuis fb8fc788a ; les F5 réellement verts de s69
+restent valides, pas de nouveau rejeuF5 pour cette seule instrumentationPython.
+Reste de la même échéance s69 calculé après acquisition, aucun renouvellement
+silencieux si le poste tarde ou si l'échéance est expirée.
