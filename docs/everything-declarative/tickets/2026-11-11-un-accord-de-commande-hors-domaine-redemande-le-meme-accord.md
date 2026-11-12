@@ -108,3 +108,36 @@ en `b95732394`. Sa preuve et la passe globale restent à consigner avant fermetu
 Journaux luciepc : `~/.cache/rag3weaver-build/I-luciepc/accord-20261112/`
 (`rouge.log`, `verts.log`, `commit-verts`, `verdict-cibles`). Jeux ciblés
 `rag3db-native,code`, lib29, target privé, poste lourd -j8/32G. Aucun essai Gemini.
+
+## Portée à usage unique et parcours noyau — 12 novembre
+
+Archi a relevé une antériorité dans l'accord exact : une commande bornée `CetteFois`
+restait acquise. Rouge `b4c1d13ef` : 0/2 ; second jeu de laissez-passer délivré à tort,
+et deux autorisations concurrentes réussies au lieu d'une. Aucun jeton destructeur exécuté.
+Correctif `aed5ef115` : portée conservée dans l'accord de ligne, jugement non consommateur,
+consommation atomique à `autoriser_ligne` ; 50 tests commande verts / zéro échec / un helper
+ignoré exercé par son parent, et 18 run_nodes verts / zéro échec ou ignoré. Le mode standard
+reste sans accord différé. Revue du delta par archi sans objection concrète.
+
+Le témoin navigateur a d'abord refusé le montage Chromium (`Socket path too long`) ; seule
+la racine TMPDIR sur disque a été raccourcie. Rouge produit sur `5611fc98e` : 0/1/0 en 1,13 s,
+après clic réel et deux lignes identiques ; état fini plutôt que wait_output. Sur `aed5ef115`,
+le même témoin atteint effectivement wait_output, mais reste rouge (0/1/0 en 30,73 s) :
+`python3: can't open file .../attendre-exterieur.py: [Errno 13] Permission denied`, stdout vide.
+Le bac à sable par défaut ne permet pas de lire ce script extérieur. Le ciblé run_nodes sans
+bac ne constitue donc pas une preuve de réussite du parcours atelier complet.
+
+Preuves luciepc :
+`~/.cache/rag3weaver-build/cx-accord-exterieur-5611fc98e-rouge-produit-20261112/navigateur.log`,
+`~/.cache/rag3weaver-build/cx-accord-exterieur-aed5ef115-vert-20261112/`
+(`navigateur.log`, `commande-reelle.stderr`, `commande-reelle.stdout`) et dossier ED
+`I-luciepc/accord-20261112/` (`rouge-portee.log`, `verts-aed5.log`). Le nom du dossier
+« vert » décrit l'intention du lancement, pas son verdict : il est rouge.
+
+Choix soumis à orchestration avant toute suite : isoler la reprise de garde avec une lecture
+préalablement déclarée et limitée au seul fichier script (script toujours extérieur, baseline
+à reprouver), ou définir une capacité extérieure portée par l'accord et le laissez-passer.
+Cette seconde voie exige de préciser les droits et les refus sans ouvrir globalement le bac.
+Aucune de ces options n'est livrée par ce constat. Aucun script déplacé dans le domaine,
+aucune assertion/durée relâchée, aucune désactivation de bac ni nouvelle tentative inchangée.
+La passe globale n'a pas commencé ; ticket ouvert, parcours complet non validé.
