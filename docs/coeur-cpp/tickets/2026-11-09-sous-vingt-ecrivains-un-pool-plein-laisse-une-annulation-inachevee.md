@@ -697,3 +697,14 @@ pression déjà à 2051 Mio avant le troisième DDL, donc antérieure au CREATE_
 Le microbanc ne départage pas temps PK, débit/allocations antérieurs et autre
 échec d'annulation. Proposition de chronologie documentaire puis capture privée
 bornée à relire ; aucun nouveau run, build ou instrument moteur effectué.
+
+## Phases documentaires 1–4 réalisées
+
+[Chronologies conservées et compteur exact](../12-11-2026/13-chronologies-ddl-minute-conservees.md),
+logs/XML/scripts intégraux exportés avec empreintes. Pics échantillonnés toutes
+les 100 ms sur fenêtres semi-ouvertes ; zéro peut signifier aucun échantillon.
+2051 Mio appartient à [120009,180000) sur l'isolé, pas à un instant précis avant
+DDL3. Aucun message d'annulation inachevée dans les deux logs ; 17 refus de groupes
+de frames restent sans pile. Discriminant proposé : première saturation avec
+phase, temps PK cumulé, transactions retenues et volumes dans la même fenêtre.
+Aucune capture, instrumentation, compilation ou réservation effectuée.
