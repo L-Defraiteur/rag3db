@@ -131,3 +131,11 @@ autre instance du fichier (instantané ancien, sans la marque même avant Note).
 Le montage suivant utilise read_connection native indépendante sur la même
 instance vivante, via CallbackConnection qui ne fait que transmettre les requêtes.
 Pas de modification de code produit ; la passe6fb conserve sa source et son verdict.
+
+Rouge complet source78408a4a9, cx-marque-rollback-rouge-v4.log, 0/1 en0,55s :
+marque Occurrence+Index identique avant/après rollback, puis Note seule ;
+lecteur indépendant sur la base vivante StrictOccurrence partiel avant Note,
+mais complet sans avertissement après Note. La disparition de dette et la fausse
+fraîcheur sont maintenant toutes deux prouvées. Correctif borné autorisé :
+recalculer la dette depuis les files survivantes quand le cache est invalidé,
+puis republier après restauration hors_lot ; conserver l'incrémental ordinaire.
