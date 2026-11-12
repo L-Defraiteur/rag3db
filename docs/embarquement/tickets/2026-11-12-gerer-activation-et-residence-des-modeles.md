@@ -1,6 +1,6 @@
 # Gérer l'activation et la résidence des modèles selon les usages
 
-- **État** : ouvert ; conception issue de l'audit du 12 novembre, mise en œuvre à planifier.
+- **État** : ouvert ; première tranche en cours sur cx-activation-modeles, base a783013f1.
 - **Famille** : produit
 - **Gravité** : coût et disponibilité ; éviter l'accumulation de modèles résidents et permettre leur reprise à la demande.
 - **Atteignable en service** : non pour cette gestion automatique ; lancement sondé et chauffe initiale existent séparément.
@@ -47,3 +47,27 @@ seulement dans la fenêtre explicitée dans
 et après entrée vérifiée d'Optimiseur. Ne pas répéter le banc Qwen clos ni
 charger un modèle sans question de qualification. Le ticket reste ouvert si
 seul un prototype ou une chauffe partielle est prouvé.
+
+## Tranche de nuit : recette et limites
+
+Worktree `cx-activation-modeles`, porteur embarquement. ED conserve hôte/agent,
+banc prépare la mesure et mémoire relit le contrat. Aucun service installé
+n'est modifié. Premier témoin CPU publié dans
+`extension/rag3weaver/tests/activation/serveur.rs` : deux demandeurs concurrents
+partent du même fournisseur froid ; une seule création de processus est attendue.
+Le processus Python est factice, borné par le lanceur et arrêté par son PID propre.
+
+Recette légère avant lourd : `rustc --edition=2021 --test
+extension/rag3weaver/tests/activation/serveur.rs -o /tmp/cx-activation-serveur`,
+puis `timeout 20s /tmp/cx-activation-serveur
+--exact deux_demandeurs_ne_lancent_qu_un_processus --nocapture`.
+Le premier rouge est attendu sur le nombre de lancements, pas un défaut GPU.
+
+Contrat prévu : acquisition locale partagée au-dessus de Serveur/Attache,
+verrou interprocessus sur l'adresse, budget de chargement distinct du délai
+d'attente d'un demandeur. Annuler une attente ne tue pas une activation
+partagée. ModelSource déclare explicitement l'activation, sans changer les
+fournisseurs existants. Première capacité dense accessible par connect_embedder.
+Identité modèle/dimension vérifiée avant remise du client ; chauffe fournisseur
+observée, inconnue si non publiée. La politique initiale conserve le service,
+sans TTL, éviction ou activation distante implicites. Les manques restent ouverts.
