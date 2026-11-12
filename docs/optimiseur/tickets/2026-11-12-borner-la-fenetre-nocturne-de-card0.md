@@ -25,3 +25,26 @@ Modèles existants, caches et données ne sont pas supprimés ou substitués.
 Fin : entrée testée sans lancer de modèle hors créneau, vraie échéance/arrêt
 des unités privées enregistrés, carte rendue avec preuve et consommateurs
 informés. La simple consigne écrite ne clôture pas la restitution nocturne.
+
+## Revue du garde975062659 avant premier usage
+
+Orchestration a relu le script49f6399d et les unités, puis interrogé luciepc :
+timer enabled/active/waiting, Persistent=yes, prochaine échéance réelle
+13novembre07:54CET ; SHA installé égal au SHA déclaré par pret.json,18CPU
+rapportés et aucun modèle enregistré. La restitution future reste à constater.
+
+Une frontière interne reste à qualifier avant avis favorable : le mode CLI
+`executer` (lignes239–258 de cette source) vérifie recette enregistrée, empreinte,
+heure et exécutable, mais pas son appartenance à l'unité privée. Appelé directement
+avec une recette déjà enregistrée et son empreinte, il peut atteindre execvpe
+hors de l'unité dont le cutoff arrête les descendants. Il ne s'agit pas de
+promettre une défense contre un utilisateur hostile du même UID : le garde doit
+simplement refuser une invocation accidentelle de son entrée interne hors portée.
+
+Réutiliser le contrôle de propriété d'unité et vérifier le PID principal réel et
+le cgroup attendu avant toute commande ROCr/exec. Des variables d'environnement
+ou le seul chemin de recette ne prouvent pas cette appartenance. Témoins CPU :
+entrée interne hors unité/avec unité étrangère refusée avant commande GPU, entrée
+attendue admise et descendants toujours arrêtés. Aucune charge modèle n'est
+nécessaire pour qualifier ce delta. Garder le timer stable, publier la source et
+réactualiser son reçu qualifié après preuve ; aucun usage card0 dans l'intervalle.
