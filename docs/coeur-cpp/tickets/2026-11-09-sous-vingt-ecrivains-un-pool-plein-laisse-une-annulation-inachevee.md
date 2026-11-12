@@ -728,3 +728,16 @@ vidage first_saved/samples depuis sampler horsrollback, bilan final séparé. Ti
 conserve une preuve partielle, jamais capture globale réussie sans status valide.
 pk_completed_ns exclut les appels encore actifs ; pk_active>0 interdit d'écarter
 le coût PK sur ce cumul seul. Recette/diff actualisés ; aucun CMake/build/run/poste.
+
+## Configuration/préflight autorisés et terminés
+
+[Préflight privé](../12-11-2026/16-preflight-prive-saturation.md), source6bfba5b4c :
+deux configurations courtes, aucune compilation moteur/test ni scénario. Seconde
+rc0/3,563s/543Mio/swap0, cgroup8G/swap0/scratch2G/sourceRO/réseau isolé attestés,
+poste rendu0/4. 1180→1181 commandes,739→740core, seul TU diagnostic ajouté ; toutes
+commandes communes et system_config généré identiques après normalisation des racines.
+TRUE/ON et classement du loader généré corrigés par relecture, bruts conservés.
+Include Thrift ancien absent aussi en référence, zéro hit dans4145 dépendances
+référence existantes ; résolution candidate non testée. build_id.h non généré,
+cible volontairement non exécutée. Cache/compile_commands/3listes Ninja/proofs
+exportés. Build1800 et runtime1200 toujours non autorisés, ticket ouvert.

@@ -1,0 +1,138 @@
+{
+  "scope": "metadata reanalysis after unit inactive, no configure/build/run",
+  "reference_compile_commands_sha256": "da799ae74915f0a92643f689e5fa13016d63bf6a59bed7526908a10bf2d78651",
+  "candidate_compile_commands_sha256": "072eb55c4fd3556add05b51b7fa46f7f7e77a96a88c9a016842a2e3d332e9b9c",
+  "added_TUs": [
+    "src/common/private_saturation_capture.cpp"
+  ],
+  "removed_TUs": [],
+  "changed_common_commands": {},
+  "semantic_cache": {
+    "CMAKE_BUILD_TYPE": {
+      "reference": "Release",
+      "candidate": "Release",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "CMAKE_CXX_COMPILER": {
+      "reference": "/usr/bin/c++",
+      "candidate": "/usr/bin/c++",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "BUILD_TESTS": {
+      "reference": "TRUE",
+      "candidate": "ON",
+      "equal": false,
+      "semantic_equal": true
+    },
+    "BUILD_EXTENSION_TESTS": {
+      "reference": "OFF",
+      "candidate": "OFF",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "BUILD_SHARED_LIBS": {
+      "reference": "OFF",
+      "candidate": "OFF",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "BUILD_EXTENSIONS": {
+      "reference": "vector;geo",
+      "candidate": "vector;geo",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "ENABLE_RUNTIME_CHECKS": {
+      "reference": "OFF",
+      "candidate": "OFF",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "SINGLE_THREADED": {
+      "reference": "OFF",
+      "candidate": "OFF",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "ENABLE_ADDRESS_SANITIZER": {
+      "reference": "OFF",
+      "candidate": "OFF",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "ENABLE_THREAD_SANITIZER": {
+      "reference": "OFF",
+      "candidate": "OFF",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "ENABLE_UBSAN": {
+      "reference": "OFF",
+      "candidate": "OFF",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "ENABLE_MALLOC_BUFFER_MANAGER": {
+      "reference": "OFF",
+      "candidate": "OFF",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "ENABLE_LTO": {
+      "reference": "OFF",
+      "candidate": "OFF",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "ENABLE_BACKTRACES": {
+      "reference": "OFF",
+      "candidate": "OFF",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "USE_STD_FORMAT": {
+      "reference": "OFF",
+      "candidate": "OFF",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "RAG3DB_PAGE_SIZE_LOG2": {
+      "reference": "OFF",
+      "candidate": "OFF",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "RAG3DB_VECTOR_CAPACITY_LOG2": {
+      "reference": "OFF",
+      "candidate": "OFF",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "RAG3DB_NODE_GROUP_SIZE_LOG2": {
+      "reference": "OFF",
+      "candidate": "OFF",
+      "equal": true,
+      "semantic_equal": true
+    },
+    "RAG3DB_MAX_SEGMENT_SIZE_LOG2": {
+      "reference": "OFF",
+      "candidate": "OFF",
+      "equal": true,
+      "semantic_equal": true
+    }
+  },
+  "effective_system_config_equal": true,
+  "generated_build_id": "not produced by configure; build target NOT run",
+  "reference_thrift_include_exists": false,
+  "reference_deps": {
+    "sha256": "5db89ab016567b0eed1d0630ed5946154f76b38e92048f1ca45b9f68c280b893",
+    "object_entries": 1210,
+    "valid_entries": 1210,
+    "unique_paths": 4145,
+    "missing_paths": [],
+    "thrift_missing_include_dependency_hits": [],
+    "limit": "reference depfiles only; not fresh candidate dependency resolution"
+  }
+}

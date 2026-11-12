@@ -1,0 +1,7 @@
+{
+  "elapsed_s": 3.5089768279576674,
+  "source_commit": "6bfba5b4cd081c0bbe10bda045fdcccfb6290594",
+  "pack_sha256": "5a1e0ef373897b5c34dfde234b9c2da1bac759fc1c7520aa2b6143621e12d9de",
+  "no_native_build": true,
+  "scratch_used_bytes": 472207360
+}
