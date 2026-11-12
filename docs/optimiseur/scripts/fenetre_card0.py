@@ -74,6 +74,8 @@ def valider_spec(spec):
     exiger(spec.get('dimensions') is None or isinstance(spec['dimensions'], int) and spec['dimensions'] > 0,
            'dimensions invalides')
     exiger(spec.get('profil') == 'rocm', 'profil non qualifié : seul ROCm explicite est préparé')
+    exiger(type(spec.get('duree_max_sec')) is int and spec['duree_max_sec'] > 0,
+           'durée maximale explicite positive requise')
     argv = spec.get('argv', [])
     exiger(isinstance(argv, list) and len(argv) >= 4 and all(isinstance(x, str) for x in argv), 'argv invalide')
     exiger(Path(argv[0]).is_absolute(), 'exécutable non absolu')
@@ -114,10 +116,11 @@ def verrou(racine):
 
 def commande_unite(spec, fichier, empreinte, restant):
     unite = valider_spec(spec)
+    exiger(spec['duree_max_sec'] <= restant, 'durée demandée au-delà du restant : acquisition refusée')
     return ['systemd-run', '--user', '--collect', '--service-type=exec', '--unit=' + unite,
             '--slice=' + SLICE, '--description=' + MARQUE + empreinte,
             '--property=Restart=no', '--property=KillMode=control-group',
-            '--property=TimeoutStopSec=15s', '--property=RuntimeMaxSec=' + str(restant),
+            '--property=TimeoutStopSec=15s', '--property=RuntimeMaxSec=' + str(spec['duree_max_sec']),
             '--property=MemoryMax=32G',
             '--property=ExecCondition=/usr/bin/python3 ' + str(SCRIPT) + ' condition',
             '/usr/bin/python3', str(SCRIPT), 'executer', str(fichier), empreinte]
@@ -248,7 +251,8 @@ def main():
         placement_rocr(rocminfo)
         # RuntimeMaxSec est fixé à la création ; systemd refuse sa modification
         # par set-property. Le cutoff absolu ferme aussi les départs différés.
-        verifier(maintenant())  # Pas d'exec après échéance ou attente longue.
+        restant = verifier(maintenant())
+        exiger(spec['duree_max_sec'] <= restant, 'durée après attente trop longue : aucun modèle lancé')
         pid = os.getpid()
         stat = (Path('/proc') / str(pid) / 'stat').read_text().rsplit(')', 1)[1].split()
         with (RACINE / (spec['nom'] + '-entree.json')).open('x') as f:
