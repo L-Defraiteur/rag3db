@@ -61,3 +61,51 @@ analyser les résultats et compléter la page GGUF pour la session mémoire.
 Résultats k = 5 et k = 10 réellement joués, commandes et preuves conservées,
 page GGUF actualisée avec les limites du jeu. Déplacer ce ticket vers
 `docs/tickets/closed/` et inscrire son état de clôture avec la preuve dans le même commit.
+
+## Consigne directe de Lucie et budget du 12 novembre
+
+Consigne reçue directement dans la session banc, le 12 novembre :
+
+> tu peux utiliser mais donc pas celui de seat1 qui me sers aux jeux videos,
+> et en accord avec les autres sessions codex quand elles ont elles aussi besoin
+> (selon charge biensur j'ai des gros gpus on peut quand meme y aller)
+
+Le tableau fourni avec cette consigne réserve card0/PCI 0000:07:00.0 à seat1
+et désigne card2/PCI 0000:04:00.0 pour les sessions ; il demande de lire la VRAM
+et de libérer le privé 7882 si nécessaire plutôt que déborder.
+
+Identité relue par SSH, sans chargement de modèle :
+`ROCR_VISIBLE_DEVICES=0 rocminfo` ne montre qu’un agent GPU, gfx1201,
+UUID `GPU-e168137a071d0e36`, BDFID 1024 (bus 04, device 00, fonction 0).
+Cet UUID correspond à card2 selon le relevé de l’orchestration ; le lien sysfs
+card2 mène à PCI 0000:04:00.0. Card0 reste exclue même si elle est libre.
+Le service 7882 est PID 912225, démarré le 8 novembre, et n’a pas été arrêté.
+`poste --qui` était libre lors du contrôle ; ce constat doit être relu au lancement.
+
+Budget proposé, à confirmer avec le porteur avant lancement :
+
+- un unique llama-server Q8_0, `-ngl 99 -c 16384 -np 1`, port 8099 ;
+- poids 4,28 Go ; précédent banc : environ 6,7 Go de VRAM supplémentaire
+  serveur et cache compris (page GGUF, 10,8 vers 17,5 Go) ;
+- plafond opérationnel proposé : 8 Gio supplémentaires ; exiger au moins
+  9 Gio libres sur card2 après libération coordonnée de 7882, soit 1 Gio
+  de marge au-delà du plafond, et relire la charge des autres consommateurs ;
+- relever la VRAM avant/après chargement et pendant les deux séries ;
+  arrêter le serveur du banc si sa hausse dépasse 8 Gio ou si la marge
+  restante descend sous 1 Gio. Ce contrôle n’empêche pas un pic instantané :
+  la disponibilité initiale et la coordination restent nécessaires ;
+- 440 + 880 = 1 320 requêtes séquentielles, cache activé, sans génération
+  au-delà d’un jeton, un seul créneau `poste lourd` ;
+- estimation historique : environ 95 s pour k=5 et 132 s pour k=10,
+  hors chargement et variation de charge. Limite totale proposée : 15 minutes
+  pour les deux séries, plus 2 minutes de démarrage et 3 minutes de remise
+  en état, soit une fenêtre demandée de 20 minutes ;
+- pas de reprise partielle pour mesurer les latences : sortie neuve par série,
+  cases contiguës et état de cache initial documenté.
+
+Restauration attendue : hotfixs, porteur présumé de 7882, confirme ses consommateurs,
+sa commande de redémarrage et sa disponibilité avant arrêt. Le banc ne tue ni
+ne redémarre ce processus. En fin de banc ou sur échec, arrêter et attendre son
+propre llama-server, vérifier port 8099 libéré et VRAM rendue, prévenir le porteur
+pour remettre 7882 en route puis faire confirmer santé et disponibilité.
+Aucune fermeture du ticket avant mesures et restauration prouvées.
