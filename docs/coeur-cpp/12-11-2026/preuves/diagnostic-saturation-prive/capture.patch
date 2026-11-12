@@ -1,0 +1,469 @@
+diff --git a/src/common/CMakeLists.txt b/src/common/CMakeLists.txt
+index 8996efc8e..aff087a1b 100644
+--- a/src/common/CMakeLists.txt
++++ b/src/common/CMakeLists.txt
+@@ -22,6 +22,7 @@ add_library(rag3db_common
+         md5.cpp
+         metric.cpp
+         null_mask.cpp
++        private_saturation_capture.cpp
+         profiler.cpp
+         random_engine.cpp
+         roaring_mask.cpp
+diff --git a/src/common/private_saturation_capture.cpp b/src/common/private_saturation_capture.cpp
+new file mode 100644
+index 000000000..8e2da1b14
+--- /dev/null
++++ b/src/common/private_saturation_capture.cpp
+@@ -0,0 +1,151 @@
++#include "common/private_saturation_capture.h"
++
++#include <array>
++#include <atomic>
++#include <chrono>
++
++namespace rag3db::common::private_saturation {
++namespace {
++using Clock = std::chrono::steady_clock;
++static_assert(std::atomic<uint64_t>::is_always_lock_free);
++std::atomic<bool> enabled{false};
++std::atomic<uint64_t> firstState{0}, stage{0}, calls{0}, completedNs{0}, activePK{0};
++std::atomic<uint64_t> activeTx{0}, writersTx{0}, oldestSnapshot{0};
++std::atomic<uint64_t> rowsTransferred{0}, commitsPublished{0}, actorOK{0}, actorError{0}, writerOK{0}, writerError{0};
++Clock::time_point origin;
++thread_local Phase phase = Phase::NONE;
++thread_local Site site = Site::UNKNOWN;
++thread_local uint64_t transaction = 0;
++struct Record {
++    uint64_t at, readEnd, used, ddl, pkCalls, pkNs, pkActive, active, writers, oldest;
++    uint64_t rows, commits, ok, errors, writerOK, writerError;
++};
++struct First {
++    uint64_t reason = 0, phase = 0, site = 0, tx = 0, requested = 0;
++    Record record{};
++} first;
++std::array<Record, 1280> samples{};
++uint64_t sampleCount = 0, sampleOverflow = 0, lastSample = 0;
++uint64_t now() noexcept {
++    return std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - origin).count();
++}
++Record read(uint64_t used) noexcept {
++    Record r{};
++    r.at = now();
++    r.used = used;
++    r.ddl = stage.load(std::memory_order_relaxed);
++    r.pkCalls = calls.load(std::memory_order_relaxed);
++    r.pkNs = completedNs.load(std::memory_order_relaxed);
++    r.pkActive = activePK.load(std::memory_order_relaxed);
++    r.active = activeTx.load(std::memory_order_relaxed);
++    r.writers = writersTx.load(std::memory_order_relaxed);
++    r.oldest = oldestSnapshot.load(std::memory_order_relaxed);
++    r.rows = rowsTransferred.load(std::memory_order_relaxed);
++    r.commits = commitsPublished.load(std::memory_order_relaxed);
++    r.ok = actorOK.load(std::memory_order_relaxed);
++    r.errors = actorError.load(std::memory_order_relaxed);
++    r.writerOK = writerOK.load(std::memory_order_relaxed);
++    r.writerError = writerError.load(std::memory_order_relaxed);
++    r.readEnd = now();
++    return r;
++}
++void print(FILE* out, const char* kind, const Record& r) noexcept {
++    // 16 champs scalaires, aucun texte de requete ou de cle.
++    std::fprintf(out, "cx-saturation,%s,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu\n",
++        kind, (unsigned long long)r.at, (unsigned long long)r.readEnd,
++        (unsigned long long)r.used, (unsigned long long)r.ddl,
++        (unsigned long long)r.pkCalls, (unsigned long long)r.pkNs,
++        (unsigned long long)r.pkActive, (unsigned long long)r.active,
++        (unsigned long long)r.writers, (unsigned long long)r.oldest,
++        (unsigned long long)r.rows, (unsigned long long)r.commits,
++        (unsigned long long)r.ok, (unsigned long long)r.errors,
++        (unsigned long long)r.writerOK, (unsigned long long)r.writerError);
++}
++} // namespace
++bool armed() noexcept { return enabled.load(std::memory_order_relaxed); }
++void arm(std::chrono::steady_clock::time_point scenarioStart) noexcept {
++    // Une seule utilisation dans un processus neuf ; aucun reset pendant les acteurs.
++    samples.fill(Record{});
++    first = First{};
++    origin = scenarioStart;
++    enabled.store(true, std::memory_order_release);
++}
++void ddl(uint64_t value) noexcept { if (armed()) stage.store(value); }
++void transactions(uint64_t active, uint64_t writers, uint64_t oldestTS) noexcept {
++    if (!armed()) return;
++    activeTx.store(active, std::memory_order_relaxed);
++    writersTx.store(writers, std::memory_order_relaxed);
++    oldestSnapshot.store(oldestTS, std::memory_order_relaxed);
++}
++void transferred(uint64_t rows) noexcept {
++    if (armed()) rowsTransferred.fetch_add(rows, std::memory_order_relaxed);
++}
++void published() noexcept {
++    if (armed()) commitsPublished.fetch_add(1, std::memory_order_relaxed);
++}
++void actorResult(bool success, bool writer) noexcept {
++    if (!armed()) return;
++    (success ? actorOK : actorError).fetch_add(1, std::memory_order_relaxed);
++    if (writer) (success ? writerOK : writerError).fetch_add(1, std::memory_order_relaxed);
++}
++void refuse(Refusal reason, uint64_t used, uint64_t requested) noexcept {
++    if (!armed()) return;
++    uint64_t expected = 0;
++    if (!firstState.compare_exchange_strong(expected, 1, std::memory_order_acq_rel)) return;
++    first.reason = static_cast<uint64_t>(reason);
++    first.phase = static_cast<uint64_t>(phase);
++    first.site = static_cast<uint64_t>(site);
++    first.tx = transaction;
++    first.requested = requested;
++    first.record = read(used);
++    firstState.store(2, std::memory_order_release);
++}
++void sample(uint64_t used) noexcept {
++    if (!armed()) return;
++    const auto tick = now();
++    if (sampleCount && tick - lastSample < 1000000000ULL) return;
++    lastSample = tick;
++    if (sampleCount == samples.size()) { ++sampleOverflow; return; }
++    samples[sampleCount++] = read(used);
++}
++Scope::Scope(Phase value, uint64_t tx) noexcept
++    : enabled{armed()}, previous{private_saturation::phase}, previousTx{transaction},
++      phase{value}, start{0} {
++    if (!enabled) return;
++    private_saturation::phase = value;
++    if (tx) transaction = tx;
++    if (value == Phase::PK) {
++        calls.fetch_add(1, std::memory_order_relaxed);
++        activePK.fetch_add(1, std::memory_order_relaxed);
++        start = now();
++    }
++}
++Scope::~Scope() noexcept {
++    if (!enabled) return;
++    if (phase == Phase::PK) {
++        completedNs.fetch_add(now() - start, std::memory_order_relaxed);
++        activePK.fetch_sub(1, std::memory_order_relaxed);
++    }
++    private_saturation::phase = previous;
++    transaction = previousTx;
++}
++AllocationSite::AllocationSite(Site value) noexcept : previous{site} { site = value; }
++AllocationSite::~AllocationSite() noexcept { site = previous; }
++void finish(FILE* output) noexcept {
++    // Appele par le thread du test apres join des acteurs ET de l'echantillonneur.
++    enabled.store(false, std::memory_order_release);
++    std::fprintf(output, "cx-saturation,schema,at_ns,read_end_ns,used_bytes,ddl,pk_calls,pk_completed_ns,pk_active,active_tx,writers_tx,oldest_snapshot_ts,transferred_rows,published_commits,actor_ok,actor_error,writer_ok,writer_error\n");
++    for (uint64_t i = 0; i < sampleCount; ++i) print(output, "sample", samples[i]);
++    const auto state = firstState.load(std::memory_order_acquire);
++    std::fprintf(output, "cx-saturation,status,first_state=%llu,sample_count=%llu,overflow=%llu\n",
++        (unsigned long long)state, (unsigned long long)sampleCount,
++        (unsigned long long)sampleOverflow);
++    if (state == 2) {
++        std::fprintf(output, "cx-saturation,first_meta,reason=%llu,phase=%llu,site=%llu,tx=%llu,requested_bytes=%llu\n",
++            (unsigned long long)first.reason, (unsigned long long)first.phase,
++            (unsigned long long)first.site, (unsigned long long)first.tx,
++            (unsigned long long)first.requested);
++        print(output, "first", first.record);
++    }
++}
++} // namespace rag3db::common::private_saturation
+diff --git a/src/include/common/private_saturation_capture.h b/src/include/common/private_saturation_capture.h
+new file mode 100644
+index 000000000..5fb8fc86e
+--- /dev/null
++++ b/src/include/common/private_saturation_capture.h
+@@ -0,0 +1,42 @@
++#pragma once
++
++// DIAGNOSTIC PRIVE, jamais destine a une lib distribuee. Un processus, une base,
++// armement avant les acteurs, lecture seulement apres leur join. Pas d'allocation.
++#include <chrono>
++#include <cstdint>
++#include <cstdio>
++#include "common/api.h"
++
++namespace rag3db::common::private_saturation {
++enum class Phase : uint64_t { NONE = 0, ROLLBACK = 1, PK = 2 };
++enum class Site : uint64_t { UNKNOWN = 0, PAGE = 1, MALLOC_BUFFER = 2 };
++enum class Refusal : uint64_t { POOL = 1, FRAME_GROUPS = 2 };
++RAG3DB_API bool armed() noexcept;
++RAG3DB_API void arm(std::chrono::steady_clock::time_point scenarioStart) noexcept;
++RAG3DB_API void finish(FILE* output) noexcept;
++RAG3DB_API void sample(uint64_t used) noexcept;
++RAG3DB_API void ddl(uint64_t value) noexcept;
++RAG3DB_API void refuse(Refusal reason, uint64_t used, uint64_t requested) noexcept;
++RAG3DB_API void transactions(uint64_t active, uint64_t writers, uint64_t oldestTS) noexcept;
++RAG3DB_API void transferred(uint64_t rows) noexcept;
++RAG3DB_API void published() noexcept;
++RAG3DB_API void actorResult(bool success, bool writer) noexcept;
++struct RAG3DB_API Scope {
++    explicit Scope(Phase phase, uint64_t tx = 0) noexcept;
++    ~Scope() noexcept;
++    Scope(const Scope&) = delete;
++    Scope& operator=(const Scope&) = delete;
++private:
++    bool enabled;
++    Phase previous;
++    uint64_t previousTx;
++    Phase phase;
++    uint64_t start;
++};
++struct RAG3DB_API AllocationSite {
++    explicit AllocationSite(Site value) noexcept;
++    ~AllocationSite() noexcept;
++private:
++    Site previous;
++};
++} // namespace rag3db::common::private_saturation
+diff --git a/src/include/transaction/transaction_manager.h b/src/include/transaction/transaction_manager.h
+index 71918c849..8d62824a3 100644
+--- a/src/include/transaction/transaction_manager.h
++++ b/src/include/transaction/transaction_manager.h
+@@ -223,6 +223,7 @@ private:
+     // mtxForSerializingPublicFunctionCalls.
+     bool checkpointCarriesForcedCommit = false;
+     void throwIfCheckpointFailedNoLock() const;
++    void publishPrivateCaptureNoLock() const;
+ };
+ } // namespace transaction
+ } // namespace rag3db
+diff --git a/src/storage/buffer_manager/buffer_manager.cpp b/src/storage/buffer_manager/buffer_manager.cpp
+index c3dd12abb..34ecafbda 100644
+--- a/src/storage/buffer_manager/buffer_manager.cpp
++++ b/src/storage/buffer_manager/buffer_manager.cpp
+@@ -1,3 +1,4 @@
++#include "common/private_saturation_capture.h"
+ #include "storage/buffer_manager/buffer_manager.h"
+ 
+ #include <atomic>
+@@ -343,6 +344,7 @@ void BufferManager::removeEvictedCandidates() {
+ // and return false, otherwise, we load the page to its corresponding frame and return true.
+ bool BufferManager::claimAFrame(FileHandle& fileHandle, page_idx_t pageIdx,
+     PageReadPolicy pageReadPolicy) {
++    private_saturation::AllocationSite captureSite{private_saturation::Site::PAGE};
+     page_offset_t pageSizeToClaim = fileHandle.getPageSize();
+     if (!reserve(pageSizeToClaim)) {
+         return false;
+@@ -403,6 +405,8 @@ bool BufferManager::reserve(uint64_t sizeToReserve) {
+             } else {
+                 // Cannot find more pages to be evicted. Free the memory we reserved and return
+                 // false.
++                private_saturation::refuse(private_saturation::Refusal::POOL,
++                    usedMemory.load(), sizeToReserve);
+                 freeUsedMemory(sizeToReserve + totalClaimedMemory);
+                 nonEvictableMemory -= nonEvictableClaimedMemory;
+                 return false;
+diff --git a/src/storage/buffer_manager/memory_manager.cpp b/src/storage/buffer_manager/memory_manager.cpp
+index 0a2be8438..1ed0b54c9 100644
+--- a/src/storage/buffer_manager/memory_manager.cpp
++++ b/src/storage/buffer_manager/memory_manager.cpp
+@@ -1,3 +1,4 @@
++#include "common/private_saturation_capture.h"
+ #include "storage/buffer_manager/memory_manager.h"
+ 
+ #include <mutex>
+@@ -52,6 +53,7 @@ MemoryManager::MemoryManager(BufferManager* bm, VirtualFileSystem* vfs) : bm{bm}
+ }
+ 
+ std::span<uint8_t> MemoryManager::mallocBuffer(bool initializeToZero, uint64_t size) {
++    private_saturation::AllocationSite captureSite{private_saturation::Site::MALLOC_BUFFER};
+     if (!bm->reserve(size)) {
+         throw BufferManagerException(
+             "Unable to allocate memory! The buffer pool is full and no memory could be freed!");
+diff --git a/src/storage/buffer_manager/vm_region.cpp b/src/storage/buffer_manager/vm_region.cpp
+index e2ff21869..4b7ae2917 100644
+--- a/src/storage/buffer_manager/vm_region.cpp
++++ b/src/storage/buffer_manager/vm_region.cpp
+@@ -1,3 +1,4 @@
++#include "common/private_saturation_capture.h"
+ #include "storage/buffer_manager/vm_region.h"
+ 
+ #include <algorithm>
+@@ -126,6 +127,7 @@ frame_group_idx_t VMRegion::addNewFrameGroup() {
+     std::unique_lock xLck{mtx};
+     if (numFrameGroups >= maxNumFrameGroups) {
+         // LCOV_EXCL_START
++        private_saturation::refuse(private_saturation::Refusal::FRAME_GROUPS, UINT64_MAX, 0);
+         throw BufferManagerException("No more frame groups can be added to the allocator.");
+         // LCOV_EXCL_STOP
+     }
+diff --git a/src/storage/table/node_table.cpp b/src/storage/table/node_table.cpp
+index b0cfbf11b..decefdbb8 100644
+--- a/src/storage/table/node_table.cpp
++++ b/src/storage/table/node_table.cpp
+@@ -1,3 +1,4 @@
++#include "common/private_saturation_capture.h"
+ #include "storage/table/node_table.h"
+ 
+ #include "storage/storage_version_info.h"
+@@ -865,6 +866,7 @@ void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEnt
+     // connected local rels. Directly removing them will cause shift of committed node offset,
+     // leading to an inconsistent result with connected rels.
+     nodeGroups->append(transaction, columnIDsToCommit, localNodeTable.getNodeGroups());
++    private_saturation::transferred(localNodeTable.getNumTotalRows());
+     localNodeTable.rowsAreCommitted();
+     const auto logLocalNodes = transaction->shouldLogToWAL() && localTable->logsInsertions();
+     if (logLocalNodes) {
+@@ -1024,6 +1026,7 @@ bool NodeTable::checkpoint(main::ClientContext* context, TableCatalogEntry* tabl
+ 
+ void NodeTable::rollbackPKIndexInsert(main::ClientContext* /*context*/, row_idx_t startRow,
+     row_idx_t numRows_, node_group_idx_t nodeGroupIdx_) {
++    private_saturation::Scope capturePK{private_saturation::Phase::PK};
+     const row_idx_t startNodeOffset =
+         startRow + StorageUtils::getStartOffsetOfNodeGroup(nodeGroupIdx_);
+ 
+diff --git a/src/transaction/transaction.cpp b/src/transaction/transaction.cpp
+index 35bf92c29..bef80042b 100644
+--- a/src/transaction/transaction.cpp
++++ b/src/transaction/transaction.cpp
+@@ -1,3 +1,4 @@
++#include "common/private_saturation_capture.h"
+ #include "transaction/transaction.h"
+ 
+ #include "common/exception/runtime.h"
+@@ -212,6 +213,7 @@ void Transaction::commit(storage::WAL* wal) {
+         localWAL->clear();
+     }
+     undoBuffer->commit(commitTS);
++    private_saturation::published();
+     // Les suppressions que cette validation vient de dater, et celles d'avant qu'un lecteur
+     // retenait : les listes CSR des nœuds touchés les oublient si plus aucun instantané ouvert
+     // ne les voit vivantes.
+@@ -223,6 +225,7 @@ void Transaction::commit(storage::WAL* wal) {
+ }
+ 
+ void Transaction::rollback(storage::WAL*) {
++    private_saturation::Scope captureRollback{private_saturation::Phase::ROLLBACK, getID()};
+     // Rolling back the local storage will free + evict all optimistically-allocated pages
+     // Since the undo buffer may do some scanning (e.g. to delete inserted keys from the hash index)
+     // this must be rolled back first
+diff --git a/src/transaction/transaction_manager.cpp b/src/transaction/transaction_manager.cpp
+index 047303fa0..93701d4ea 100644
+--- a/src/transaction/transaction_manager.cpp
++++ b/src/transaction/transaction_manager.cpp
+@@ -1,3 +1,4 @@
++#include "common/private_saturation_capture.h"
+ #include "transaction/transaction_manager.h"
+ 
+ #include <algorithm>
+@@ -65,6 +66,7 @@ Transaction* TransactionManager::beginTransaction(main::ClientContext& clientCon
+         auto transaction =
+             std::make_unique<Transaction>(clientContext, type, ++lastTransactionID, lastTimestamp);
+         activeTransactions.push_back(std::move(transaction));
++        publishPrivateCaptureNoLock();
+         return activeTransactions.back().get();
+     }
+     case TransactionType::RECOVERY:
+@@ -80,6 +82,7 @@ Transaction* TransactionManager::beginTransaction(main::ClientContext& clientCon
+             transaction->getLocalWAL().logBeginTransaction();
+         }
+         activeTransactions.push_back(std::move(transaction));
++        publishPrivateCaptureNoLock();
+         return activeTransactions.back().get();
+     }
+         // LCOV_EXCL_START
+@@ -95,6 +98,7 @@ void TransactionManager::refreshSnapshot(Transaction* transaction) {
+     KU_ASSERT(!transaction->hasWritten());
+     transaction->startTS = lastTimestamp;
+     transaction->snapshotFloorTS = lastTimestamp;
++    publishPrivateCaptureNoLock();
+ }
+ 
+ transaction_t TransactionManager::oldestActiveSnapshotNoLock(
+@@ -575,6 +579,18 @@ bool TransactionManager::isActive(transaction_t transactionID) {
+     });
+ }
+ 
++void TransactionManager::publishPrivateCaptureNoLock() const {
++    if (!private_saturation::armed()) return;
++    uint64_t writers = 0;
++    uint64_t oldest = UINT64_MAX;
++    for (const auto& tx : activeTransactions) {
++        writers += !tx->isReadOnly();
++        oldest = std::min(oldest, tx->getStartTS());
++    }
++    private_saturation::transactions(activeTransactions.size(), writers,
++        activeTransactions.empty() ? 0 : oldest);
++}
++
+ void TransactionManager::clearTransactionNoLock(transaction_t transactionID) {
+     KU_ASSERT(std::ranges::any_of(activeTransactions.begin(), activeTransactions.end(),
+         [transactionID](const auto& activeTransaction) {
+@@ -585,6 +601,7 @@ void TransactionManager::clearTransactionNoLock(transaction_t transactionID) {
+     });
+     // La transaction a fini, validée ou annulée : ses verrous sont rendus, et ceux qui les
+     // attendaient passent.
++    publishPrivateCaptureNoLock();
+     lockManager.releaseAll(transactionID);
+     // Un point de reprise attend peut-être ce départ.
+     transactionsChanged.notify_all();
+diff --git a/test/transaction/concurrence/twenty_writers_scenario_test.cpp b/test/transaction/concurrence/twenty_writers_scenario_test.cpp
+index 65495db2d..d5352522e 100644
+--- a/test/transaction/concurrence/twenty_writers_scenario_test.cpp
++++ b/test/transaction/concurrence/twenty_writers_scenario_test.cpp
+@@ -1,3 +1,4 @@
++#include "common/private_saturation_capture.h"
+ // Vingt clients, un DDL par minute, un point de reprise en route, une migration qui échoue : le
+ // scénario des migrations concurrentes (banc, 13 octobre 2026 ; bornes arrêtées avec le cœur C++
+ // d'après sa lecture du code à 65cb9a1f3, page 15 de coeur-cpp ; forme finale au §6 de
+@@ -292,8 +293,10 @@ public:
+ 
+     // Les acteurs tournent pendant les DDL 1 à lastMinute, puis un quart de période ; onCheckpoint
+     // est appelé juste avant le CHECKPOINT de la minute 5.
+-    void run(int lastMinute, const std::function<void()>& onCheckpoint = {}) {
++    void run(int lastMinute, const std::function<void()>& onCheckpoint = {},
++        bool captureSaturation = false) {
+         start = Clock::now();
++        if (captureSaturation) private_saturation::arm(start);
+         std::vector<std::thread> threads;
+         journals.resize(NUM_DOC_WRITERS + NUM_NOTE_WRITERS + NUM_READERS);
+         for (auto i = 0; i < static_cast<int>(journals.size()); ++i) {
+@@ -307,6 +310,7 @@ public:
+             auto* bufferManager = database.getMemoryManager()->getBufferManager();
+             while (!stop) {
+                 bufferSamples.emplace_back(now(), bufferManager->getUsedMemory());
++                private_saturation::sample(bufferSamples.back().second);
+                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
+             }
+         });
+@@ -319,6 +323,7 @@ public:
+         }
+         for (auto minute = 1; minute <= lastMinute; ++minute) {
+             std::this_thread::sleep_until(start + minute * period);
++            private_saturation::ddl(minute);
+             switch (minute) {
+             case 1:
+                 runDdl(ddl, "1 ADD note", "ALTER TABLE Doc ADD note STRING;");
+@@ -348,6 +353,7 @@ public:
+             default:
+                 break;
+             }
++            private_saturation::ddl(0);
+         }
+         std::this_thread::sleep_for(period / 4);
+         stop = true;
+@@ -356,6 +362,7 @@ public:
+         }
+         sampler.join();
+         end = now();
++        if (captureSaturation) private_saturation::finish(stderr);
+     }
+ 
+     double now() const {
+@@ -499,6 +506,7 @@ private:
+             }
+             const auto started = now();
+             const auto error = transact(connection, statements, block);
++            private_saturation::actorResult(error.empty(), actor != Actor::Reader);
+             const auto ended = now();
+             if (error.empty()) {
+                 journal.samples.push_back({started, ended, -1});
+@@ -765,7 +773,7 @@ protected:
+             mustRun(*conn, stringFormat("CALL checkpoint_threshold={};", threshold));
+         }
+         Scenario scenario(*database, period);
+-        scenario.run(6);
++        scenario.run(6, {}, true);
+ 
+         // Le pic du tampon : sur toute la passe, puis entre chaque début de DDL et le suivant.
+         const auto peak = [&](double from, double to) {

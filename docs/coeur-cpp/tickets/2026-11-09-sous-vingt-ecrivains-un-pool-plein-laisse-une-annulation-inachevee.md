@@ -708,3 +708,14 @@ DDL3. Aucun message d'annulation inachevée dans les deux logs ; 17 refus de gro
 de frames restent sans pile. Discriminant proposé : première saturation avec
 phase, temps PK cumulé, transactions retenues et volumes dans la même fenêtre.
 Aucune capture, instrumentation, compilation ou réservation effectuée.
+
+## Diff privé de diagnostic préparé, sans exécution
+
+[Capture bornée proposée](../12-11-2026/14-diff-prive-capture-premiere-saturation.md) :
+source 01185695f sur cx-coeur-diagnostic-saturation, worktree distinct depuis0511,
+diff exact et recette build/runtime assortie publiés pour revue. Première capture
+pool/groupes de frames, phase scalaire rollback/PK/site d'allocation, compteurs PK,
+transactions publiées et volumes transférés/itérations. Absences explicites : âge
+mural, propriétaire mémoire, volumes durables. Aucun build/run/réservation et aucune
+lib distribuée modifiée. Sortie seulement après joins : timeout sans capture finale
+reste inconclusif, sans relance. Correction de sûreté et coût toujours distincts.
