@@ -1,10 +1,24 @@
 # Le banc : knowledge dump (11 novembre 2026)
 
+> **Consigne actuelle — 12 novembre 2026.** Card0/seat1 (PCI 07:00.0)
+> est interdite aux sessions. Seule card2 (PCI 04:00.0) peut être utilisée,
+> après coordination de charge et lecture de la VRAM, avec
+> `ROCR_VISIBLE_DEVICES=0` explicite et identité PCI vérifiée. Les anciennes
+> commandes card0 ci-dessous sont historiques et ne doivent pas être rejouées.
+> Le passage du 12 novembre a été arrêté avant toute inférence : ROCm ouvrait
+> aussi un contexte de 40 KiB sur card0 malgré le filtre. Aucun nouveau
+> chargement avant exclusion stricte de seat1 et nouvelle fenêtre coordonnée.
+> Suivi : [ticket k10](../tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
+
 Ce document dit tout ce qu'il faut pour reprendre les bancs sans l'historique de nos échanges.
 Chaque mot de jargon est défini à son premier usage. Le rapport de session du même dossier
 (`01-rapport-de-session.md`) dit l'état ; ce document dit comment faire.
 
-## 1. Les postes, les cartes et les règles d'usage
+## 1. Les postes, les cartes et les règles d’usage
+
+La description et les lanceurs ci-dessous sont ceux du 11 novembre. La notice
+du 12 novembre en tête prévaut sur toute autorisation historique de card0.
+Le filtre ROCm ne garantit pas à lui seul l’absence de contexte sur seat1.
 
 - **Le portable** : la session tourne ici. Il porte un llama-server personnel de Lucie (port 8080),
   qui tient environ 77 Gio de mémoire GPU partagée : rien de lourd ici, on joue à luciepc.
@@ -196,3 +210,23 @@ Règle : la licence et la taille sont dites à l'orchestration avant chaque tél
   Lucie).
 - **L'arbre de Lucie**, `~/git_workspaces/rag3db`, ne reçoit ni commit, ni changement de branche,
   ni fichier.
+
+
+## Reprise du 12 novembre : règles de charge actuelles
+
+Card2 porte les services 7878, 7879, 7880 et le privé 7882. Ne pas ajouter
+un cinquième processus GPU aux quatre services : pour le banc Q8_0, libérer
+7882 avec son porteur et l’optimiseur, prévoir son retour avant arrêt, relire
+la VRAM réellement disponible et les consommateurs globaux. Un service libre
+côté banc ne prouve pas l’absence de clients tiers. Aucun arrêt d’un processus
+d’autrui sans remise explicite.
+
+Pour le passage k10 du 12 novembre, le budget convenu était 9 Gio libres minimum,
+hausse maximale de 8 Gio et marge d’au moins 1 Gio, `poste mesure` exclusif,
+20 minutes après acquisition ; premier défaut : arrêt et diagnostic, aucun retry.
+Ce budget n’est pas une autorisation permanente ni une preuve d’isolation.
+Le service a été restauré et le verrou rendu ; le ticket garde la suite.
+
+Les résultats Q8_0 à cinq fiches du 11 novembre restent des résultats historiques
+obtenus sur card0 avec l’autorisation d’alors ; ils n’ont pas été rejoués sur card2.
+Aucun résultat k10 disponible. Lire le ticket avant toute nouvelle activation.

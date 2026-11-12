@@ -1,5 +1,15 @@
 # Le juge local en GGUF par llama-server (11 novembre 2026)
 
+> **Consigne actuelle — 12 novembre 2026.** Card0/seat1 (PCI 07:00.0)
+> est interdite aux sessions. Seule card2 (PCI 04:00.0) peut être utilisée,
+> après coordination de charge et lecture de la VRAM, avec
+> `ROCR_VISIBLE_DEVICES=0` explicite et identité PCI vérifiée. Les anciennes
+> commandes card0 ci-dessous sont historiques et ne doivent pas être rejouées.
+> Le passage du 12 novembre a été arrêté avant toute inférence : ROCm ouvrait
+> aussi un contexte de 40 KiB sur card0 malgré le filtre. Aucun nouveau
+> chargement avant exclusion stricte de seat1 et nouvelle fenêtre coordonnée.
+> Suivi : [ticket k10](../tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
+
 La demande de l'orchestration, pour la page de la session mémoire (96) sur le classeur local
 (`docs/09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md`) : rejouer le
 banc du juge local dans la forme de production. Les chiffres de la page
@@ -94,3 +104,29 @@ La chaîne de la page 03, § 4, tient telle quelle dans la forme de production :
   - les scripts `gguf-bati.sh`, `gguf-jeu.sh` et `q_llama.py`, les journaux `llama-*.log` et les
     résultats `gguf-*.jsonl`, dans `~/.cache/rag3db-banc-notes/`.
 - **Sur le portable** : une copie des résultats dans `~/.cache/rag3db-banc-notes/decision/gguf/`.
+
+
+## 5. Passage du 12 novembre : aucune mesure nouvelle
+
+Suivi et preuves : [ticket k10](../tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md),
+porteur banc. Les 440 paires k5 et 880 paires k10 ont été construites et contrôlées.
+Après GO coordonné, acquisition de `poste mesure` à 17:54:59 Paris et libération
+explicite de 7882 par l’optimiseur, card2 avait 11,685 Gio libres.
+
+Le serveur Q8_0, `ROCR_VISIBLE_DEVICES=0`, a chargé poids/cache sur card2
+(PCI 04:00.0, 6 783 872 KiB de VRAM dans ses fdinfo). Sa garde a aussi trouvé
+un contexte sur card0/seat1 (PCI 07:00.0, 40 KiB de VRAM et 2 080 KiB de GTT),
+et l’a arrêté à 17:55:50 avant toute requête d’inférence. Une ouverture de contexte
+n’établit pas un calcul du modèle sur card0. Elle empêche cependant d’affirmer
+que le périphérique seat1 est exclu par le filtre ROCm seul.
+
+Zéro paire mesurée, aucun retry : les chiffres Q8_0 du 11 novembre n’ont pas été
+rejoués et l’estimation k10 n’est toujours pas une mesure. Le pic card2 pendant
+ce chargement était de 28 731 637 760 octets, soit environ 6,58 Gio au-dessus
+de la baseline. Le serveur a terminé, 8099 a été libéré et la VRAM rendue.
+
+7882 a été restauré par l’optimiseur à 17:56:22.790, puis revérifié par le banc
+(santé granite-278m/768/Flex32 réelle, PID, fdinfo card2). Les trois autres services
+sont restés inchangés. Verrou mesure rendu à 17:57:00, poste relu libre.
+Le ticket reste ouvert pour établir une exclusion stricte de seat1 avant tout
+nouveau passage coordonné ; aucun nouveau chargement n’est autorisé par ce bilan.

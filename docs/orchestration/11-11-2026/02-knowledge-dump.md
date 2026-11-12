@@ -64,6 +64,28 @@ n'est jamais contourné par une autre session (blanchiment interdit) ; il remont
 
 ## Les mesures et les ressources
 
+- **Consigne actuelle de Lucie, 12 novembre 2026** : card0/seat1, PCI
+  `0000:07:00.0`, ROCm GPU[1], est interdite aux sessions. Seule card2, PCI
+  `0000:04:00.0`, ROCm GPU[0], peut être utilisée, avec
+  `ROCR_VISIBLE_DEVICES=0` explicite et coordination selon la charge.
+  Card1/PCI 00:02.0 est l’iGPU hors ROCm. Ne pas déduire l’identité PCI d’un
+  numéro Vulkan : relire sysfs et les preuves du processus.
+- Card2 porte 7878/7879/7880/7882. Avant un banc, lire la VRAM et les consommateurs ;
+  ne pas ajouter une cinquième charge aux quatre services. Si nécessaire,
+  coordonner la libération temporaire du privé 7882 avec son porteur et
+  l’optimiseur, recette de retour prête avant arrêt ; aucune coupure d’autrui
+  sans remise explicite. Un budget mémoire ou une confirmation antérieure
+  ne remplace pas le relevé réel après libération. Les chronométries comparatives
+  prennent `poste mesure` dans une fenêtre coordonnée, délai après acquisition.
+- **Filtre ROCm insuffisant pour garantir l’exclusion de seat1** : le passage
+  banc du 12 novembre a trouvé un contexte de 40 KiB sur PCI 07:00.0 malgré
+  `ROCR_VISIBLE_DEVICES=0`, alors que poids/cache étaient sur PCI 04:00.0.
+  Garde arrêtée avant inférence, zéro paire, aucun retry ; cela ne prouve
+  pas un calcul du modèle sur card0. 7882 a été restauré et le verrou rendu.
+  Garder l’exclusion stricte et qualifier une frontière d’accès aux périphériques
+  avant nouveau chargement, sans relâcher la garde ni modifier globalement seat1.
+  Suivi : [ticket banc k10](../../banc/tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
+
 - Un index de mesure (copie d'une base, index complet) tourne sur **son propre service d'embarquement**,
   jamais sur 7878 (les worktrees de Lucie y passent par le tunnel). Copier une base = base, wal,
   extensions, .fts et dossier ensemble, hôte fermé (ou l'instantané de G).
