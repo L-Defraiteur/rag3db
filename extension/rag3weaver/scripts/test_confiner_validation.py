@@ -175,7 +175,7 @@ class Montage(unittest.TestCase):
             self.assertEqual(argv[argv.index('--delai') + 1], '29')
             self.assertEqual(argv[-2:], ['bash', str(entry)])
 
-    def cas_processus(self, source, delai=5):
+    def cas_processus(self, source, delai=5, plafond=None):
         # Faux helper bus : lance de vrais petits processus CPU privés, aucun IPC réseau.
         helper = self.p / 'bus-factice'
         helper.write_text('#!' + sys.executable + '\nimport sys,subprocess\ni=sys.argv.index("--")\nsys.exit(subprocess.call(sys.argv[i+1:]))\n')
@@ -183,7 +183,7 @@ class Montage(unittest.TestCase):
         command = self.p / 'command.py'
         command.write_text(source)
         preuves = self.p / 'preuves'
-        with patch.object(v, 'poste_tenu', return_value=1), patch.object(v, 'plafond', return_value=dict(direct='max', effectif=v.MAX_MEMOIRE)), patch.object(v.shutil, 'which', return_value=str(helper)):
+        with patch.object(v, 'poste_tenu', return_value=1), patch.object(v, 'plafond', side_effect=plafond or (lambda *a: dict(direct='max', effectif=v.MAX_MEMOIRE))), patch.object(v.shutil, 'which', return_value=str(helper)):
             rc = v.superviser([sys.executable, str(command)], delai, str(preuves))
         evidence, = preuves.iterdir()
         verdict = json.loads((evidence / 'verdict.json').read_text())
@@ -192,6 +192,18 @@ class Montage(unittest.TestCase):
         self.assertFalse(Path(verdict['prive']).exists())
         self.assertEqual(json.loads((evidence / 'autorite.json').read_text())['etat'], 'termine')
         return rc, verdict
+
+    def test_ecart_de_confinement_arrete_aussi_les_descendants(self):
+        appels = 0
+        def limite(*args):
+            nonlocal appels
+            appels += 1
+            if appels == 1:
+                return dict(direct='max', effectif=v.MAX_MEMOIRE)
+            raise v.Refus('scope simulée hors plafond')
+        rc, verdict = self.cas_processus('import time\ntime.sleep(60)\n', plafond=limite)
+        self.assertEqual(rc, 1)
+        self.assertIn('scope simulée', verdict['erreur'])
 
     def test_commande_normale_et_nettoyage_prive(self):
         rc, verdict = self.cas_processus('pass\n')
