@@ -79,3 +79,37 @@ nommer cette limite précise ; ne pas annoncer une absence de méthode comme un
 inventaire complet. Qualification IR livrée dans
 [navigation-ir/qualification.md](../../codeparsers/12-11-2026/navigation-ir/qualification.md),
 master a4bf86c865. Le ticket reste ouvert pour la façade et ses autres critères.
+
+## Prise en charge archi — première tranche
+
+WT isolé `~/.cache/rag3weaver-build/cx-wt-symboles`, branche `cx-archi-symboles-1`,
+base a783013f1. Qualification statique : outline est plat, limité/totalisé, sans
+comparaison du contenu ; HAS_PARENT comporte des appartenances hors fichier et
+filtre les parents fonctions. Aucun changement de cet outil existant.
+
+Façade commune proposée `navigate_symbols(path, mode, symbol, depth, limit, format)` :
+file, parents, children et members. Un Plan déclaré lit les scopes d'un fichier
+avec leur source/UUID/positions octets, déclarations et champs typés ; DEFINED_IN
+porte la provenance/hash du fichier dans le même Plan. Limite d'entrée2000 et
+compte total, sortie bornée ; un jeu d'entrée tronqué refuse d'inventer un arbre.
+La contenance est nommée `range_containment` (plages octets strictes, même fichier
+et source) : elle n'est ni appartenance à un type ni héritage ; les plages égales
+ou ambiguës ne choisissent pas un parent arbitrairement. Les noms homonymes
+rendent des candidats au lieu de choisir ; la référence UUID est qualifiée par
+source/path et contexte backend existant. Profondeur : arêtes depuis racine,
+0=racine,1=voisins. Les membres déclarés et champs typés disponibles sont rendus
+avec leur provenance et sans identité de graphe inventée ; couverture partielle
+nommée, champs non typés/constructeurs/getters potentiellement absents.
+
+Un nœud de transformation commun manque : il unifie sélection, construction de
+l'arbre borné et résultat structuré/compact. Il consomme les lignes/total du Plan,
+compare le hash aux octets du FileSource correspondant sans livrer les corps ;
+index périmé ou provenance non vérifiable restent explicites et empêchent
+l'affirmation d'une contenance actuelle. Aucun accès hors FileSource, nouvel index
+ou modèle. Codeparsers qualifie les fixtures/IR en parallèle, sans édition navigation.
+
+Ajouts communs annoncés à ED avant code : lib.rs, dataflow/mod.rs,
+node_factories.rs, manifestes code/atelier ; nouveaux modules/Plan/gabarits propres.
+Source et recette publiées avant lourd, ciblés bornés puis passe/revue adaptées.
+Cette tranche ne livre pas l'enrichissement grep ni la complétude des membres ;
+le ticket reste ouvert tant que ces critères et le vrai parcours ne sont pas acquis.
