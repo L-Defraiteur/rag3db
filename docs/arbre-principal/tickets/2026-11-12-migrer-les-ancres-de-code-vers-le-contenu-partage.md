@@ -367,3 +367,21 @@ dans le test. `serve` résout aussi son modèle de chat après ouverture admise.
 Ce changement unifie l'ordre d'acquisition et rend sa frontière testable ; il
 n'ajoute aucun fournisseur ni moteur de modèles. Source d6 et ses preuves sont
 conservées ; aucun Cargo pendant la mesure C++.
+
+## Raccord plan/historique demandé en revue, témoins avant correction
+
+C7 demande le même snapshot pour diagnostic/plan et la qualification commune
+fichiers/versions/noms/checksums. Un applied legacy sans identité résolue durable
+ne peut pas devenir « identique » sur sa seule checksum. L'exclusivité d'exécution,
+running durable et publication restent des prérequis de la future tranche
+exécutable, **hors garantie du diagnostic courant** ; aucun verrou décoratif ajouté.
+
+`tests/e2e_migration_preflight.rs` pose cinq témoins du vrai binaire, avant le
+raccord : fichier appliqué modifié, orphelin, failed, état inconnu et applied legacy
+identique mais sans identité résolue. Chaque témoin construit sa propre base
+native synthétique (DDL/DML de montage uniquement), invoque le CLI plan et exige
+refus nommé + octets de tous les fichiers inchangés. Modèle déclaré inerte, aucun
+service lancé ; la fabrique de modèle de l'ouverture produit est comptée par le
+témoin natif unitaire existant. Pas encore compilés/joués pendant le créneau C++.
+L'état inconnu devrait déjà être refusé ; les quatre autres visent le raccord
+manquant, sans revendiquer de rouge avant exécution.
