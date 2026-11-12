@@ -1,0 +1,18 @@
+{
+  "source_commit": "74ad9c25cd2a63e01abd54f25314992cda6fea60",
+  "source_and_compiler_flags_unchanged": true,
+  "first_attempt_elapsed_s": 161.855,
+  "total_envelope_s": 2400,
+  "second_unit_runtime_max_s": 2220,
+  "second_unit_stop_s": 10,
+  "second_controller_deadline_s": 2190,
+  "maximum_combined_services_with_second_stop_s": 2391.855,
+  "build_timeout_s": 1800,
+  "test_timeout_s": 540,
+  "staging": "fresh, no reuse of ephemeral native objects",
+  "correction": "create test-tmp/work before nested RO mount; bind only these already-declared private outputs RW; save binaries before test prep",
+  "native_test_not_started_in_first_attempt": true,
+  "outer_sha256": "122a7c3974017ed9d079bfcbbe178eef04a41586634ffb6346d5792f3a023964",
+  "inner_sha256": "6b71eb706afeae15d3af91c188559ccc2413b739c9983e1a574bfd5b73125f37",
+  "no_source_or_build_or_extension_write_permission_added_at_runtime": true
+}

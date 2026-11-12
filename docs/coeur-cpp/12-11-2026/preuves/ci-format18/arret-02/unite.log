@@ -1,0 +1,14 @@
+Running as unit: cx-coeur-ci-format18-74ad-02.service
+Traceback (most recent call last):
+  File "/home/lucied/.cache/rag3db-moteur-notes/ci-format18-74ad-02/cx-ci18-outer.py", line 42, in <module>
+    run(cmd,'preflight-inner.log')
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lucied/.cache/rag3db-moteur-notes/ci-format18-74ad-02/cx-ci18-outer.py", line 14, in run
+    if proc.returncode:raise RuntimeError(f'{name}: code {proc.returncode}')
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: preflight-inner.log: code 1
+          Finished with result: exit-code
+Main processes terminated with: code=exited, status=1/FAILURE
+               Service runtime: 12min 11.945s
+             CPU time consumed: 36min 40.911s
+                   Memory peak: 5.3G (swap: 0B)
