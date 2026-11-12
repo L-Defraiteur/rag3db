@@ -1,5 +1,21 @@
 # Rapport de session — G, « l'optimiseur » (11 novembre 2026, 16 h 25)
 
+## Nuit du 12 au 13 novembre : portée card0 à restituer
+
+Ticket ouvert `docs/optimiseur/tickets/2026-11-12-borner-la-fenetre-nocturne-de-card0.md`,
+branche/worktree `cx-optimiseur-card0-nuit`. À luciepc : entrée liée au SHA
+49f6399d…, refus hors nuit avant commande GPU, unités privées sans restart,
+RuntimeMaxSec + cutoff.timer réel le13novembre **07:54 Paris**, Persistent=yes,
+active/waiting. 18 fixtures CPU vertes aux deux postes et vrai probe systemd
+de descendant setsid terminé sans résidu. Aucun modèle demandé/enregistré,
+pas d’utilisation card0 ; Banc/Embarquement n’en ont pas besoin actuellement.
+
+Sources/configs/preuves stables hors worktree dans
+`~/.cache/optimiseur-notes/card0-20261113/` à luciepc. Lire `restitution.json`
+après 07:54 et vérifier les seules unités/cgroups privés avant de dire card0
+rendue et de fermer le ticket. Ne pas confondre timer armé avec restitution.
+Les services chauds 7878/7879 et les modèles froids 7880/7882 restent inchangés.
+
 ## Reprise du 12 novembre : provenance du bâti vectoriel de CI
 
 Lot `cx-optimiseur-ci-vector`, base 82e812764, correctif 567d2de50 et fixture

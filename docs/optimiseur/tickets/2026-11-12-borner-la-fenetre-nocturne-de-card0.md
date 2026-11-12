@@ -1,6 +1,6 @@
 # Borner la fenêtre nocturne de card0
 
-- **État** : en cours ; source et unités préparées sur cx-optimiseur-card0-nuit avant essais/installation ; aucun modèle card0 demandé par banc/embarquement.
+- **État** : en cours ; entrée qualifiée et timer réel actif à luciepc pour le 13 novembre 07:54 Paris, 18 fixtures CPU et preuve réelle de descendants vertes ; aucun modèle enregistré, restitution réelle encore attendue.
 - **Famille** : produit
 - **Gravité** : disponibilité ; les modèles temporaires doivent rendre le GPU du jeu à l'heure convenue.
 - **Atteignable en service** : oui pour les processus privés nocturnes, aucune modification des services courants requise.
@@ -65,3 +65,88 @@ python3 docs/optimiseur/scripts/test_fenetre_card0.py -v
 Prévoir aussi preuve CPU systemd privée de terminaison d’un descendant, sans
 GPU. Garder configs/empreintes/état effectif du timer. Ticket ouvert jusqu’au
 constat réel de restitution : cas CPU ou timer actif ne suffisent pas.
+
+## Mise en place et preuves du 12 novembre, 23 h 10 Paris
+
+Sources/configuration publiées avant essais en 9040104bd, puis corrections
+et probe CPU en 7a73a3327 / 55065defc / e1a58e97e. La première vérification
+systemd via SSH a refusé un XDG_RUNTIME_DIR absent ; journal conservé puis
+vérification passée avec `/run/user/1000` dont l’existence/propriété ont été
+contrôlées. Aucun modèle n’était engagé.
+
+Le premier probe CPU réel a montré que RuntimeMaxSec est accepté à la création
+mais non modifiable par `systemctl set-property` sur ce poste. Chaîne arrêtée,
+aucun modèle chargé, unité CPU et descendant disparus ; rouge conservé dans
+`preparation/probe-systemd-cpu-v1-rouge.log`. La tentative de modification a
+été retirée. Borne relative à la création ET cutoff absolu sont conservés ;
+l’heure est relue avant exec et après l’énumération ROCr. Pas de replay inchangé.
+
+Source corrigée `fenetre_card0.py` SHA256
+`49f6399d09191b59083a1d31d7d9e1b8da710ece6fcec1a1aa106692e79b2d32`.
+**18 fixtures CPU vertes** au portable et à luciepc (sous poste lourd) :
+heures exactes, nuit suivante refusée, timer manqué/reconnexion, marqueur de
+fermeture, source non qualifiée/modifiée, PCI changé, politique de groupe et
+absence de restart, autre unité jamais arrêtée, descendant survivant rouge,
+agent ROCr unique et cas sans demandeur. Les horloges fictives ne sont pas
+exposées dans le CLI. Un reçu `pret.json` lié au SHA ferme l’entrée tant que
+la préparation n’est pas qualifiée ou si sa source change.
+
+Probe CPU réel v2 à luciepc, 23:09:37 : unité temporaire
+`cx-card0-20261113-preuve-cpu-v2.service`, Restart=no, RuntimeMaxSec=2,
+KillMode=control-group, ExecCondition de fixture `/usr/bin/true`.
+Parent Python terminé, enfant `/usr/bin/sleep` démarré avec setsid (PID703538)
+également terminé, cgroup vide. Aucune utilisation GPU. L’ExecCondition du
+probe n’est pas une exception utilisable pour lancer un modèle : c’est un
+nom distinct de la portée des modèles, aucun modèle ni recette enregistrée.
+
+Seuls trois fichiers nouveaux installés sous `~/.config/systemd/user/` :
+slice datée, cutoff.service et cutoff.timer, inchangés par rapport aux sources.
+Timer **enabled / active / waiting**, **Persistent=yes**, NextElapse réel
+**Fri 2026-11-13 07:54:00 CET**. Linger utilisateur actif. ExecStart du cutoff
+pointe vers la copie stable hors worktree
+`~/.cache/optimiseur-notes/card0-20261113/fenetre_card0.py`.
+Aucun autre timer, service ou configuration GPU utilisateur modifié.
+
+Entrée réelle `lancer /recette-inexistante` jouée hors fenêtre : refus horaire
+attendu avant ouverture du fichier et avant toute commande GPU. Zéro unité
+`cx-card0-20261113-modele-*`, zéro recette enregistrée. Ni rocminfo ciblé sur
+card0 ni modèle exécuté pour cette preuve. La cartographie passive card0/PCI07,
+card2/PCI04 et ROCm GPU[1]/GPU[0] a été relue, sans calcul.
+
+Preuves à luciepc sous `~/.cache/optimiseur-notes/card0-20261113/` :
+
+- `pret.json`, `preparation/etat-effectif.json`, `preparation/etat-timer.txt` ;
+- `preparation/fixtures.log`, `sources.sha256` et `unites/` ;
+- `preparation/verification-unites.log` et ancien `verification-unites-sans-runtime.log` ;
+- `preparation/refus-hors-fenetre-qualifie.log` ;
+- `preparation/preuve-descendants-v2.json`, `probe-systemd-cpu-v2.log` et rouge v1.
+
+## Entrée pour un besoin ultérieur et suivi jusqu’au matin
+
+Avant tout usage nouveau, déclarer le vrai modèle/consommateurs et la recette
+figée, vérifier capacité/placement avec Banc/Embarquement. Aucun besoin déclaré
+à ce stade ; cela n’appelle aucun chargement. Le profil initial est ROCm ; un
+autre profil nécessite qualification, pas un numéro Vulkan deviné.
+
+Une recette JSON contient nom privé, modèle, dimensions (null pour LLM),
+consommateurs, profil `rocm`, argv absolu avec --device ROCm0 et --no-warmup,
+SHA256 de l’exécutable. Lancer uniquement par :
+
+```bash
+python3 ~/.cache/optimiseur-notes/card0-20261113/fenetre_card0.py lancer /chemin/recette-privee.json
+```
+
+Un résultat « démarrage demandé » ne prouve pas la disponibilité ou le placement
+des poids et du calcul ; le consommateur doit lire le vrai processus/logs avant
+ses requêtes, comme pour le banc précédent. Les PID/starttime et recette sont
+consignés dans `<nom>-entree.json`, le cgroup appartient à l’unité retournée.
+Le consommateur peut arrêter cette seule unité quand son travail finit.
+
+À 07:54, le timer crée `ferme.json` et `restitution.json` après vérification
+des seules unités enregistrées et de leurs descendants. Le registre est borné
+à 20 s, l’arrêt systemd groupé à 30 s avec TimeoutStopSec=15 ; minute de marge
+avant07:55. Si échec, le journal/refus reste rouge, pas de carte rendue affirmée.
+Lire `restitution.json`, état cutoff.service et absence de cgroups/PID privés
+après l’échéance, informer les consommateurs puis seulement clore ce ticket.
+Le cas sans consommateur est explicite : aucune unité à arrêter et aucune
+activité créée pour occuper la nuit. Aucun redémarrage ni nouvelle nuit implicite.
