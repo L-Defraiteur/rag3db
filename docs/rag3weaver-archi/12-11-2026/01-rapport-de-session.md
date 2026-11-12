@@ -19,39 +19,55 @@ sur sortie encore absente, signal libéré après annonce de l'attente, sortie e
 vérifiés. Ensuite même script avec un argument ajouté : nouvel accord requis, jamais donné,
 aucun effet du mode variante. Ni décision ni résultat de commande simulés.
 
-## État des preuves
+## État actuel — UI encore rouge après reprise de l'accord
 
-- Rouge historique produit `b57313175` conservé sur les deux postes dans
-  `cx-ui-contextuel-b57313175-coupure-attente-20261111/navigateur.log` du cache de build.
-- Préparation/ticket avant code `59a55ced3`, témoin `5611fc98e`, base master `6e5f9458c`.
-- Premier lancement navigateur `5611fc98e` compile, puis Chromium ferme le transport dès
-  l'ouverture : **0 réussi, 1 échec, 0 ignoré, 0,49 s**. Aucun accord ni appel d'outil atteint ;
-  ne pas compter ce défaut de montage comme nouveau rouge fonctionnel de l'accord.
-  Preuves PC : `cx-accord-exterieur-5611fc98e-baseline-20261112/`.
-- Diagnostic instrumenté (stderr Chrome auparavant jeté) : premier lancement retiré de la
-  file avant entrée du script, mesure exclusive prioritaire ; **NON JOUÉ**, pas un échec produit.
-  Dossier `cx-accord-exterieur-5611fc98e-chrome-diagnostic-20261112/`.
-- Diagnostic suivant en attente sous poste lourd, dossier
-  `cx-accord-exterieur-5611fc98e-chrome-diagnostic-2-20261112/`. Son unité de test bornée sera
-  créée **après acquisition** du poste ; aucune compilation ou exécution hors mesure.
+- Rouge historique produit `b57313175` conservé aux deux postes dans
+  `cx-ui-contextuel-b57313175-coupure-attente-20261111/` du cache de build.
+- Nouveau témoin `5611fc98e`, après ticket `59a55ced3`, sur base master `6e5f9458c`.
+  Premier montage : Chrome ferme CDP (0/1/0, 0,49 s), sans atteindre le clic.
+- Le diagnostic instrumenté prouve le montage : stderr Chromium dit **Socket path too long**
+  pour TMPDIR `cx-accord-exterieur-scratch`. Le premier diagnostic avait été retiré de la
+  file avant lancement (NON JOUÉ), la mesure exclusive restant prioritaire.
+- TMPDIR seul raccourci vers `~/.cache/rag3weaver-build/cx-ae` (disque). Même test et mêmes
+  assertions, aucun déplacement du script. **Rouge produit 561 : 0/1/0 en 1,13 s** : vrai
+  clic, deux lignes identiques, deuxième accord demandé au lieu de wait_output.
+- Combinaison exacte ED `aed5ef1158093d1652531aa992878a1ad8612e29`, test vérifié identique :
+  le clic relance la commande et atteint le vrai wait_output. Mais stdout reste vide ;
+  **rouge 0/1/0 en 30,73 s**, attente de fin jamais satisfaite. Journal réel de commande :
+  `python3: can't open file .../attendre-exterieur.py: [Errno 13] Permission denied`.
+  La variante n'est pas encore atteinte. Aucun vert navigateur revendiqué.
 
-ED annonce son correctif et ses ciblés : 47 commande réussis (helper enfant
-`role_hote_qui_sort` ignoré explicitement), 18 run_nodes réussis. Source ED actuelle annoncée
-`2e459d9d4`, dont garde Standard ; test navigateur 561 repris inchangé chez ED. Aucun résultat
-UI corrigé ni vert global revendiqué ici.
+ED a confirmé des rouges de portée et leur antériorité : l'ancien accord permanent ignorait
+CetteFois. Sur aed, ED rapporte commande50/0 (helper enfant role_hote_qui_sort ignoré mais
+joué par son parent), run_nodes18/0, incluant consommation unique/concurrence sans exécution
+ destructrice. Relecture statique archi b4→aed sans objection concrète : jugement non consommateur,
+verrou du choix de l'accord au mint, retrait avant retour si portée bornée CetteFois ; synchrone
+et fond utilisent la même autorisation de ligne entière. Ce n'est pas une preuve du bac atelier.
+
+La reprise logique fonctionne ; l'accès effectif au script extérieur reste à départager avec
+ED/orchestration dans le même ticket et le contrat de capacités. **Ne pas déplacer le script,
+élargir le bac, modifier les assertions/délais ou compter le ciblé backend sans sandbox comme
+preuve du parcours navigateur.** Aucune passe globale ni master avant cette revue.
+
+Preuves PC, copiées vers le portable :
+`cx-accord-exterieur-5611fc98e-{baseline,chrome-diagnostic,chrome-diagnostic-2,rouge-produit}-20261112/`,
+`cx-accord-exterieur-aed5ef115-vert-20261112/` (nom historique de tentative, résultat ROUGE).
+Ce dernier conserve navigateur.log, source-head, exit-code, commande-reelle.stderr/stdout.
+Les journaux de commande provenaient du run privé identifié par le chemin unique de fixture ;
+seuls ces deux fichiers ont été copiés, aucun journal tiers modifié.
 
 ## Reprendre
 
 Worktree isolé sur les deux postes : `~/.cache/rag3weaver-build/cx-wt-accord-exterieur` ;
-branche archi `cx-archi-accord-exterieur-1`. Code navigateur figé `5611fc98e` sur PC ; les
+branche actuelle `cx-archi-accord-exterieur-2`, base exacte aed sur PC ; branche1 garde la baseline561. Les
 compléments locaux suivants sont documentaires. Target unique PC `cx-archi-target`, scratch
-`cx-accord-exterieur-scratch`, lib épinglée complète 29a7bc52a. Pas de base réelle ni service GPU.
+`cx-ae` (ancien scratch long conservé pour preuve), lib épinglée complète 29a7bc52a. Pas de base réelle ni service GPU.
 
-Lire d'abord le diagnostic Chrome et son stderr, corriger seulement le montage prouvé, puis
-obtenir le rouge produit sur la base non corrigée. Combiner ensuite source ED figée et même
-fixture, annoncer SHA, jouer un seul ciblé corrigé borné. Aucun replay inchangé aveugle,
-aucune passe globale ni push master avant revue. Le ticket fonctionnel reste ouvert.
-
+Lire le refus d'accès réel avec ED/orchestration avant tout nouveau code ou replay. La source
+ED f51c7f1f4 annoncée ne diffère de aed que par des docs ; elle ne répare pas ce dernier refus.
+Le montage Chrome est départagé, aucun replay identique aveugle. ED possède le ticket canonique
+et ses mises à jour ; archi n'y écrit pas concurremment. Nouveau ciblé seulement après source/
+contrat annoncés et diagnostic précis. Le ticket reste ouvert.
 Aucun nettoyage avant fin du lot. Le sous-module privé a été initialisé : son administration
 est relevée dans le dossier baseline. Pour tout retrait utiliser garde_worktree.py courant,
 archives administratives fidèles hors cible, rapport neuf et quiescence ; refuser en cas de
