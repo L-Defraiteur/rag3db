@@ -16,6 +16,8 @@
 //!
 //! Format: `{version}_{name}.mmd` where version is a zero-padded integer.
 
+pub mod plan;
+
 use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -212,6 +214,7 @@ pub enum MigrationError {
     NotReversible { version: u64, name: String, nodes: Vec<String> },
     DbError(String),
     InvalidHistory { version: Option<u64>, detail: String },
+    InvalidPlan(String),
 }
 
 impl fmt::Display for MigrationError {
@@ -252,6 +255,7 @@ impl fmt::Display for MigrationError {
                 )
             }
             Self::DbError(e) => write!(f, "database error: {e}"),
+            Self::InvalidPlan(detail) => write!(f, "invalid migration plan: {detail}"),
             Self::InvalidHistory { version, detail } => match version {
                 Some(v) => write!(f, "invalid migration history at version {v}: {detail}"),
                 None => write!(f, "invalid migration history: {detail}"),
@@ -287,6 +291,28 @@ impl MigrationRunner {
     /// Add a directory to scan for migration files.
     pub fn add_dir(&mut self, dir: PathBuf) {
         self.migration_dirs.push(dir);
+    }
+
+    /// Resolve declared files and template variables without a catalog, DDL or
+    /// model access. This is a preliminary plan, never an apply authorization.
+    pub fn resolve_plan(
+        &self,
+        inputs: plan::MigrationPlanInputs,
+    ) -> Result<plan::ResolvedMigrationPlan, MigrationError> {
+        let vars = inputs.variables.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let mut steps = Vec::new();
+        for file in self.scan_all()? {
+            let definition = parse_mermaid_template(&file.content, &vars)
+                .map_err(|error| MigrationError::ParseError {
+                    version: file.version, name: file.name.clone(), detail: error.to_string(),
+                })?;
+            steps.push(plan::ResolvedMigrationStep {
+                version: file.version, name: file.name, checksum: file.checksum,
+                graph_hash: definition.hash(),
+            });
+        }
+        plan::ResolvedMigrationPlan::new(inputs, steps)
+            .map_err(MigrationError::InvalidPlan)
     }
 
     // ─── Schema initialization ──────────────────────────────────────────
