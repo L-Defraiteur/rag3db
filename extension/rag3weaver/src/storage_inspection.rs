@@ -32,14 +32,19 @@ pub struct StorageInspection {
 }
 
 impl StorageInspection {
-    /// Legacy without a declared target is allowed to keep opening. Requesting a
-    /// versioned target never upgrades storage as a side effect of opening it.
-    pub fn admit(&self, requirement: Option<&StorageRequirement>) -> Result<(), String> {
+    pub(crate) fn validate_internal_schema(&self) -> Result<(), String> {
         if let Some(version) = self.internal_schema.as_deref() {
             if !matches!(version, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8") {
                 return Err(format!("unknown internal storage schema: {version}"));
             }
         }
+        Ok(())
+    }
+
+    /// Legacy without a declared target is allowed to keep opening. Requesting a
+    /// versioned target never upgrades storage as a side effect of opening it.
+    pub fn admit(&self, requirement: Option<&StorageRequirement>) -> Result<(), String> {
+        self.validate_internal_schema()?;
         if !self.unresolved_migrations.is_empty() {
             return Err(format!("migration reconciliation required: {:?}", self.unresolved_migrations));
         }
@@ -135,17 +140,18 @@ mod tests {
     use crate::connection::{CallbackConnection, QueryResult, DbError};
     use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
 
-    fn fixture(status: Option<&str>) -> (Result<StorageInspection, String>, usize) {
+    fn fixture(status: Option<&str>, internal_schema: &str) -> (Result<StorageInspection, String>, usize) {
         let unexpected = Arc::new(AtomicUsize::new(0));
         let counter = unexpected.clone();
         let status = status.map(str::to_owned);
+        let internal_schema = internal_schema.to_owned();
         let conn = CallbackConnection::new(move |query, _| {
             let rows = if query == "CALL show_tables() RETURN *" {
                 let mut rows = vec![vec![CypherValue::Int(1), CypherValue::String("_catalog_meta".into())]];
                 if status.is_some() { rows.push(vec![CypherValue::Int(2), CypherValue::String("_DataflowMigration".into())]); }
                 rows
             } else if query.starts_with("MATCH") && query.contains("_catalog_meta") {
-                vec![vec![CypherValue::String(crate::scope::SCHEMA_VERSION_KEY.into()), CypherValue::String("8".into())]]
+                vec![vec![CypherValue::String(crate::scope::SCHEMA_VERSION_KEY.into()), CypherValue::String(internal_schema.clone())]]
             } else if query.starts_with("MATCH") && query.contains("_DataflowMigration") {
                 vec![vec![CypherValue::Int(1), CypherValue::String("fixture".into()),
                     CypherValue::String(status.clone().unwrap()), CypherValue::String("checksum".into()),
@@ -162,11 +168,16 @@ mod tests {
 
     #[test]
     fn legacy_missing_generation_keeps_normal_admission() {
-        let (inspection, effects) = fixture(None);
+        let (inspection, effects) = fixture(None, "8");
         assert_eq!(effects, 0);
         let inspection = inspection.unwrap();
         assert!(inspection.descriptor.is_none());
         assert!(inspection.admit(None).is_ok());
+        let (unknown, effects) = fixture(None, "99");
+        assert_eq!(effects, 0);
+        let unknown = unknown.unwrap();
+        assert!(unknown.validate_internal_schema().unwrap_err().contains("unknown internal storage schema"));
+        assert!(unknown.admit(None).is_err());
         assert!(inspection.admit(Some(&StorageRequirement {
             application_format: "shared".into(), recipe: "recipe".into(),
         })).is_err());
@@ -175,12 +186,12 @@ mod tests {
     #[test]
     fn unresolved_or_unknown_history_refuses_normal_admission_without_effects() {
         for status in ["pending", "failed", "running", "invented"] {
-            let (inspection, effects) = fixture(Some(status));
+            let (inspection, effects) = fixture(Some(status), "8");
             assert_eq!(effects, 0);
             assert!(inspection.and_then(|inspection| inspection.admit(None)).is_err(), "{status}");
         }
         for status in ["applied", "rolled_back"] {
-            let (inspection, effects) = fixture(Some(status));
+            let (inspection, effects) = fixture(Some(status), "8");
             assert_eq!(effects, 0);
             assert!(inspection.unwrap().admit(None).is_ok(), "{status}");
         }

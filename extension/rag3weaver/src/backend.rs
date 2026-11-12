@@ -2118,20 +2118,15 @@ impl PreparedBackend {
         variables: BTreeMap<String, String>,
     ) -> Result<crate::storage_inspection::PreliminaryMigrationPlan, String> {
         let source = self.inspect_storage()?;
+        if let Some(inspection) = &source { inspection.validate_internal_schema()?; }
         let provided = backend_schema::provided_schema(self.manifest.workspace.as_ref());
         let mut facts = backend_schema::SchemaFacts::compose(&self.entities, &self.manifest.relations, &provided)?;
         if let Some(workspace) = &self.manifest.workspace {
             for (name, signals) in &workspace.index_signals {
                 let config = facts.entities.get_mut(name)
                     .ok_or_else(|| format!("workspace.index_signals: unknown entity {name}"))?;
-                config.signals = signals.iter().fold(crate::search::SearchSignals::NONE, |all, signal| {
-                    all | match signal.as_str() {
-                        "bm25" => crate::search::SearchSignals::BM25,
-                        "vector" => crate::search::SearchSignals::VECTOR,
-                        "sparse" => crate::search::SearchSignals::SPARSE,
-                        _ => unreachable!("validated when loading manifest"),
-                    }
-                });
+                config.signals = serde_json::from_value(serde_json::json!(signals))
+                    .map_err(|e| format!("workspace.index_signals.{name}: {e}"))?;
                 config.validate().map_err(|e| format!("{name}: {e}"))?;
             }
         }
@@ -2412,16 +2407,8 @@ impl PreparedBackend {
                         ));
                     };
                     let mut config = config;
-                    let mut s = crate::search::SearchSignals::NONE;
-                    for signal in signaux {
-                        s = s | match signal.as_str() {
-                            "bm25" => crate::search::SearchSignals::BM25,
-                            "vector" => crate::search::SearchSignals::VECTOR,
-                            "sparse" => crate::search::SearchSignals::SPARSE,
-                            _ => unreachable!("validé au chargement"),
-                        };
-                    }
-                    config.signals = s;
+                    config.signals = serde_json::from_value(serde_json::json!(signaux))
+                        .map_err(|e| format!("workspace.index_signals.{entite}: {e}"))?;
                     cat.register_entity(entite, config).map_err(|e| e.to_string())?;
                 }
             }
