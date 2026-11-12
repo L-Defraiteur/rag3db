@@ -281,3 +281,10 @@ il vise l'accès direct qui reçoit déjà une connexion et ne peut pas promettr
 une admission rétroactive pré-RW, mais doit refuser avant Catalog.initialize.
 Le montage de compilation produit07293 reste figé pendant sa fin ; aucun second
 Cargo en parallèle.
+
+Premier ciblé brut b76 :1vert, mais **montage insuffisant**, pas preuve de refus
+d'admission. Analyse : CallbackEmbedder se nomme `callback` et manifeste disait
+`fixture`, donc l'identité de modèle refusait avant le catalogue. Correction du
+témoin : nom attendu callback et exigence d'un refus nommé « migration
+reconciliation required ». Rejouer cette source avant tout correctif produit ;
+le vert b76 ne sera pas réattribué à la frontière d'admission.
