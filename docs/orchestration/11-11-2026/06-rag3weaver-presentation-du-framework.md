@@ -169,12 +169,18 @@ Lucie veut un index commun au dépôt et des vues par branche ou worktree, sous 
 - Un contenu identique peut partager ses morceaux et ses vecteurs, tout en gardant des occurrences,
   des positions et des relations distinctes.
 
-**État au 11 novembre :** contrat relu, lots définis et premiers témoins rouges observés.
-Le garde-fou qui vérifie qu’un scope seulement déplacé ne se réembarque pas est intégré.
-La projection générique d’un morceau partagé vers toutes ses occurrences admises est intégrée
-(`6c4b5ad0c`), avec conservation des filtres et des positions. Le stockage partagé d’un même contenu
-entre occurrences reste en développement. La pyramide complète sans copie d’index n’est pas encore livrée.
+**État au 12 novembre :** le socle du partage est intégré (`08086ba36`). Dans une cellule,
+plusieurs occurrences peuvent réutiliser une version de contenu, ses morceaux et ses vecteurs.
+La recherche publique restitue leurs identités, données et positions distinctes ; les masques
+s’appliquent avant la sélection des meilleurs résultats. La déclaration est accessible depuis
+un vrai manifeste et les parcours natif/PostgreSQL sont éprouvés : 225 tests dans quatorze suites,
+avec 2 139 tests de bibliothèque et 39 tests navigateur réussis.
 
+Cette capacité prépare les vues ; elle n’active pas encore le partage dans le gabarit code de
+production. La migration déclarée sur copies est la suite prévue, puis le raccord aux branches
+et worktrees. La pyramide complète sans copie d’index reste à livrer. Les transformations de
+texte sans remappage de coordonnées sont refusées, et la rétention des versions orphelines
+reste séparée du partage.
 En parallèle, le chat de l’IDE doit permettre un parcours complet : explorer, chercher, lire,
 modifier, exécuter les tests, examiner le diff, reprendre après une erreur ou un accord et livrer.
 Ces deux chantiers se rejoignent : **un agent doit disposer des bons outils dans la bonne version

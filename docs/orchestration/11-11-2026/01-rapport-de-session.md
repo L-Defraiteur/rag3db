@@ -3,7 +3,7 @@
 Session « orchestration sessions » (c7). Ce rapport dit l'état du projet pour un agent qui reprend
 l'orchestration sans avoir lu nos échanges. Le knowledge dump (`02-knowledge-dump.md`) dit les règles.
 
-## État actualisé après les livraisons du 11 novembre
+## État actualisé après les livraisons des 11 et 12 novembre
 
 Les sections de passation ci-dessous sont historiques ; les entrées finales détaillent les preuves.
 
@@ -12,8 +12,10 @@ Les sections de passation ci-dessous sont historiques ; les entrées finales dé
 | moteur/lib | lib complète29a7bc52a aux deux postes, inchangée ; correctif C++0511dece7 en branche, ciblés verts, transaction357 verts/2 outils sautés ; concurrence25 rouges dont4 hors listes en départage, pas de code intégré |
 | mémoire | alias d’archivage intégrés41526b29a ; archiviste automatique conçu et ticket M9 ouvert, pas de branchement actif ; mémoire réelle inchangée, cinquante documents non lancés |
 | rattrapage | restitution des réclamations intégrée91e5f760b ; chemins d’erreur masqués suivis en ticket distinct |
-| vues | projection générique intégrée6c4b5ad0c ; 1a en branche49caf64c6 avec premier témoin dense/texte public vert ; sparse, masques avant top-k et passe restent à prouver ; couches et migration non livrées |
+| vues | socle1a intégré08086ba36 : versions de contenu partagées dans une cellule, occurrences/positions/relations distinctes, index public et masques avant top-k ; features5, lib2139, navigateur39 et14e2e/225 verts ; cinq tickets clos ; gabarits code, migration1b et pyramide de couches restent à raccorder |
 | IDE | flux/usage/reprise8d5139f9e et outils contextuels/wait_output68b9ede17 intégrés ; deux dépôts homonymes, troncature, clics, rechargement et commande différée éprouvés |
+| ouverture déclarative | intégré c693496a8 : schéma nommé et entités explicites composés selon leurs dépendances avant tout appel DB ; raccord du manifeste public1a validé dans08086ba36 |
+| lanceur e2e | correctif375ca1b96 intégré : journaux de portée passe, preuves des rouges archivées, quiescence contrôlée et services préexistants conservés ; features5, lib2132, navigateur39 et recherche45 verts |
 | arrêt des backends | intégré80b467dd3, erreur de fermeture conservée et arrêt idempotent ; défaut de provenance des gabarits suivi séparément, récupération attestée |
 | équipier | correction du reste explicite en branche, ciblés verts ; passe globale rouge sur18/26 bilans à600s, cause non établie ; ne pas confondre avec le relais livré |
 | codeparsers | require/defaults intégrés2e910930d, passe intégrée relue ; contrat de navigation vers symbole/valeur exportée explicite ; six gains stricts attribués, aucun score global ; tickets oracle/provenance et homonyme ouverts |
@@ -566,3 +568,35 @@ restent explicitement en cours. Les chiffres sont datés et leurs protocoles ré
   d’orchestration multiagents ni branchement mémoire automatique livré dans ce lot.
 - Base68 donnée à codeparsers pour la passe intégrée suivante et à optimiseur pour préparer
   un artefact attesté. Cette préparation ne vaut pas pose chez Lucie.
+
+## Socle des versions de contenu intégré — 12 novembre
+
+Master **08086ba3600a73f4828e541b093cb8751a1984fb**, source de passe
+**831d08a35564982af1d0a3cb64707847e0614f3b** ; écart final limité à neuf Markdown.
+Garde/features5, lib2139/0/64 ignorés, navigateur39/0/0, 14 suites e2e/225 réussis
+sans SAUTÉ. Les 220 assets réels des binaires navigateur/e2e sont attestés.
+Les trois CSV connus de tx arrêt restent suivis en ticket ; aucun verdict sans résidu.
+La passe précédente6fb et ses reprises restent historiques, sans résultat réattribué.
+
+Revues croisées du manifeste, du partage et du catalogue. Défauts reproduits puis corrigés :
+file attachée à la mauvaise cellule ; blocage du pilote PG par un mutex synchrone ; filtre
+scalaire PG mal compilé ; perte de dette après rollback ; mauvais enrichissement et perte
+de provenance après projection publique. Les cinq tickets du lot sont dans docs/tickets/closed/.
+Le témoin BM25 de provenance ne revendique pas une nouvelle preuve de fusion multisignal.
+
+Retraits contrôlés : un worktree local et deux distants, target14Go et seule base PG privée
+supprimés après copies administratives fidèles, sauvegarde SQL et gardes65 fraîches VERTES.
+Archives et preuves v6 conservées aux deux postes ; arbre principal de Lucie, branche de
+sous-module locales-js et lucie-tmp préservés. Aucune bascule des bases ou du binaire de service.
+CI exacte080 observée en cours au moment du contrôle : run rag3weaver43187074046 et
+CI Workflow43187074106 ; le rouge précédent du bandeau n’est pas attribué à ce commit.
+
+Suite cohérente confiée à arbre-principal, préparation documentaire uniquement :
+`docs/arbre-principal/tickets/2026-11-12-preparer-la-migration-de-l-ancre-sur-copies-privees.md`.
+Le contrat1b prévoit migration sur copies et refus de l’ancien format non migré, avant toute
+activation du code en service. Mesures M3–M5 et couches suivantes ne sont pas lancées ici.
+
+Le rappel local de coordination est actif toutes les90minutes dans la session existante :
+voir `docs/orchestration/12-11-2026/01-rappel-periodique-des-sessions.md`. Son premier envoi
+de test a bien été reçu. Les suites logiques des chantiers peuvent être préparées dans le
+périmètre autorisé ; le rappel n’impose pas d’occuper artificiellement toutes les sessions.
