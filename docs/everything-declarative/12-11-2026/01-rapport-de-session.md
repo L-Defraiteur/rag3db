@@ -6,12 +6,11 @@ Le [ticket d'accord extérieur](../../tickets/closed/2026-11-11-un-accord-de-com
 est corrigé et sa fermeture accompagne le lot d'intégration ED/archi. Source code éprouvée :
 `b42a4ada90ab7f2b80f1137e75692b3d00e26fcc`, rebasée sur master3b2eab7ec ; range-diff19/19
 identiques et fichiers Rust possédés byte-identiques au prérebase. Les commits suivants de
-préparation du push ne changent que Markdown. Aucun push master n'est annoncé par cette note.
+préparation du push ne changent que Markdown. Le lot a été intégré sur master `adcf01128527f4cb24027364489bd44e322ca089`, puis ses seules ressources ont été retirées.
 
 Verdict composé vert : features5/5, native1609/0/15, large2176/0/65, navigateur40/0/0 ;
 lectures24/0/0 et démon13/0/0 revalidés sous le confinement enfant attesté. Les sources,
-rouges et preuves partielles restent distingués ci-dessous. Les worktrees ED isolés portent
-le lot jusqu'au push, puis sont retirés par garde et archives administratives fidèles.
+rouges et preuves partielles restent distingués ci-dessous. Les worktrees ED ont été retirés après le push, par garde et archives administratives fidèles.
 
 ## Ce que le correctif garantit
 
@@ -104,3 +103,32 @@ Remotes et preuves conservés dans cx-accord-exterieur-nettoyage-garde-20261112 
 PC et portable distinctes. Une branche PC sans upstream a d'abord refusé -d ; son upstream
 distant exact a été vérifié et renseigné avant le -d normal, sans -D. Cette attestation
 vient d'archi ; aucun nettoyage ED n'y est assimilé.
+
+## Intégration et fin des ressources ED
+
+Master `adcf01128527f4cb24027364489bd44e322ca089` poussé sous poste push et if VERT.
+Status propre, aucun rebase et origin/master égal HEAD ont été lus après fetch. Dernier
+rebase documentaire sur af2, nouvelle branche4 : écart depuis la source éprouvée b42
+uniquement Markdown,220 gabarits comparés par SHA256 inchangés. SHA transmis à C7 et
+mémoire immédiatement après les contrôles ; la reprise M8 n'attend aucun travail ED.
+
+Dans le même script : garde courante SHA256
+`dca13abb7a84cf3c1419f728697837a6b1b9b20e34e34c144c9fbf835252f628`,
+rapports neufs VERT aux deux postes, archives fidèles des administrations privées
+(le sous-module codeparsers PC est inclus dans l'archive de son parent), puis retrait
+des deux worktrees accord, des branches locales concernées et du target privé PC.
+La base privée cx_ed_accord_20261112 a été exportée en format personnalisé, SHA256
+vérifié aux deux postes, puis supprimée ; zéro connexion avant dump et absence vérifiée après.
+Les rapports e2e ignorés ont été préservés hors source avant le garde. Scratch privé final
+conservé hors cible. Aucun GC, prune, réparation d'administration ou effacement distant.
+
+Preuves aux deux postes dans `I-luciepc/accord-20261112/` du cache de build :
+`master-integre`, `equivalence-code-assets-finale.json`, `verdict-compose.json`,
+`garde-portable-finale.json`, `garde-luciepc-finale.json`, archives
+`administration-portable-finale` (portable) et `administration-luciepc-finale`,
+`cx_ed_accord_20261112.dump` avec son SHA, `nettoyage-final` et journaux de retrait.
+Les remotes et preuves rouges restent conservés. Vérification finale de présence, sans
+lire les données : ancien worktree reste-explicite toujours sur
+`1acc6733823a8ac5883df525a4d08e142c2b5d10`, base cx_ed_reste_20261111 toujours présente.
+L'arbre de Lucie garde uniquement son untracked lucie-tmp préexistant ; aucun checkout ni
+commit n'y a été fait. Les deux tickets de dette restent ouverts à leurs porteurs.

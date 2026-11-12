@@ -204,3 +204,8 @@ Les rouges initiaux restent conservés. La dette des fixtures de journaux est s�
 `docs/recherche/tickets/2026-11-12-les-temoins-de-lecture-imposent-le-nom-du-dossier-des-journaux.md` ;
 le suivi commun des scopes imbriquées reste ouvert à orchestration. Ce lot ne corrige ni
 ces fixtures ni le runner produit. Aucun nouvel essai Gemini, activation ou base réelle.
+
+Intégration effective : master `adcf01128527f4cb24027364489bd44e322ca089`. Les contrôles
+post-push et le retrait gardé des seules ressources du lot sont consignés dans le
+[rapport ED final](../../everything-declarative/12-11-2026/01-rapport-de-session.md).
+Les nouveaux tickets de dette restent ouverts ; leur travail n'est pas déclaré livré ici.
