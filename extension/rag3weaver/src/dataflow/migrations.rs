@@ -691,7 +691,7 @@ pub(crate) struct AppliedMigration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const PREFLIGHT_MIGRATION_SOURCE: &str = "graph TD\ncheck[\"ValidateNode(query='RETURN 1', assertion='count == 1')\"]\n";
+    const PREFLIGHT_MIGRATION_SOURCE: &str = "graph TD\ncheck[\"ValidateNode(query='RETURN 1', assert='count == 1')\"]\n";
 
     // T12 : exercer le lecteur et le runner existants avant de corriger
     // la qualification, sans initialiser le catalogue ni créer son schéma.
