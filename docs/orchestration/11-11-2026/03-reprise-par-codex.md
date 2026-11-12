@@ -61,6 +61,35 @@ conception dans sa page, avec les questions et les réponses ; un défaut connu 
 ticket ; ce qui est atteint dans `docs/nouveautes.md`. Quand c'est posé et que ça vaut son regard,
 on le dit à Lucie en une ligne (« dire à Lucie quand regarder ») ; on ne la dérange pas pour le reste.
 
+## 2 ter. Le modèle de décision local (où on en est, et comment on a travaillé)
+
+Lucie veut un **modèle local qui décide** à deux endroits : dans la mémoire longue (garder ou non une
+fiche rappelée) et dans l'atelier (accorder ou non une action : un chemin hors de la racine, une
+commande). Le travail s'est fait par **bancs**, jamais par intuition, dans la session banc :
+
+- **Le juge local du rappel** (8 et 11 novembre) : un jeu de 440 paires (contexte d'agent, bout de
+  mémoire) dont 88 positives vérifiées à la main ; chaque modèle répond « oui / non » à « ce bout de
+  mémoire est-il pertinent avec le contexte de l'agent ? » et on lit **P(oui) / P(non) dans les logits**,
+  pas le texte ; on mesure exactitude et AUC, et le temps par cas. Résultats : Gemini 0,81–0,84 à 4,4 s ;
+  le dense seul 0,41 ; Qwen2.5-1.5B 0,65 ; **Qwen3-4B 0,76 / AUC 0,92**, 504 ms en bf16, et en GGUF Q8_0
+  avec cache de préfixe la même chose à 83 ms par fiche une fois le contexte en cache (1,3 s pour k = 5) ;
+  Q4_K_M perd en forme courte. Les petits modèles sans exemples sont au hasard. Leçons : **un classeur,
+  pas un seuil** (on garde les 1 ou 2 meilleures sur 5) ; le contexte utile est les deux derniers tours
+  et leurs résultats d'outils, borné à 2 k jetons ; la liste A–E ne marche pas (biais de position) ; les
+  licences se lisent (Qwen3 Apache 2.0 ; Qwen2.5-3B refusé, licence non commerciale).
+  Pages : `extension/rag3weaver/docs/08-novembre-2026-banc/` (01 à 03), `docs/banc/11-11-2026/03-le-juge-en-gguf.md`,
+  et la conception du branchement `extension/rag3weaver/docs/09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md`
+  (en attente du mot de Lucie ; la mesure dit qu'aujourd'hui le contenu manque plus que le juge).
+- **Le décideur d'actions de l'atelier** : pas encore de modèle. La matière s'accumule d'abord :
+  chaque accord ou refus de Lucie sur une carte (chemin, commande) va dans `<runs>/decisions.jsonl`
+  avec la demande, la raison du modèle et la décision (lot d'archi du 9 novembre). Règle fixée : **le
+  décideur local escalade, il n'accorde jamais à la place de l'utilisatrice** ; il sert à refuser vite
+  l'évident et à ne déranger que pour le reste. Quand il y aura quelques centaines de décisions, le banc
+  les rejoue avec Qwen3-4B (même forme oui/non) et mesure avant tout branchement. Graine de Lucie du
+  7 novembre : un classifieur ModernBERT (« Laya ») si un modèle plus petit suffit.
+- **La carte** : le banc tourne sur la carte des sessions (`card2`, `ROCR_VISIBLE_DEVICES=0`), jamais
+  sur celle de seat1 ; llama.cpp de Lucie déjà bâti en HIP à luciepc (`~/git_workspaces/llama.cpp/build-hip`).
+
 ## 3. Les sessions qu'il orchestre
 
 Chaque session porte le nom de sa barre chez Lucie, et son dossier `docs/<nom-en-kebab-case>/`. Elle
