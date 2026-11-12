@@ -983,3 +983,20 @@ La [page de conception existante](../12-11-2026/02-preparer-le-transfert-des-val
 porte la décision et ses limites. Cette question n'est plus en attente. Le ticket
 reste ouvert pour l'implémentation et l'adoption effectives ; le choix ne transforme
 pas A, son aperçu ou ses empreintes déclarées en stockage durable déjà livré.
+
+## Seconde lecture des contrats par Gemini — 12 novembre
+
+À la précision de Lucie sur l'usage normal de Gemini, mémoire prend une revue
+complémentaire bornée du producteur/comparateur de faits A et de sa frontière
+avec la décision composite. Fournir uniquement les sources identifiées,
+contrats et synthèses des preuves ; aucune base ou conversation réelle.
+Question : omissions concrètes dans la complétude/canonicalisation des faits,
+leur liaison au plan, leur provenance et l'immuabilité des générations/plans.
+Demander des références de code et distinguer hypothèses et défauts établis.
+
+Cette seconde lecture avance en parallèle du lot déjà qualifié par ciblé,
+relectures et passe composée ; elle ne crée pas une attente administrative
+avant son intégration. Conserver requête, source, résultat/erreur et borne dans
+les preuves du même ticket. Tout défaut concret relance un travail explicite,
+sans transformer l'avis du modèle en résultat de test ou en pouvoir d'appliquer
+une migration persistante. Le ticket global migration reste ouvert.

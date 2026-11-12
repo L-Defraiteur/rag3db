@@ -150,3 +150,26 @@ Remplacer `<nom>` par le dossier de la session. Le texte tient en quelques ligne
 Pour la session optimiseur, ajouter : « tu poses les libs et les binaires aux deux postes (luciepc puis
 le portable), avec instantané et retour, annonce une minute avant ; tu nommes la lib à l'orchestration ».
 Pour lucivy, ajouter : « aucune fusion dans main ni aucun tag sans le mot de Lucie dans cette session ».
+
+## 7. Gemini comme ressource normale du projet — précision de Lucie, 12 novembre
+
+Lucie confirme que les ressources cloud du projet doivent servir à le faire
+avancer : utiliser Gemini quand son apport est pertinent, sans hésitation de
+principe ni nouvelle demande d'autorisation pour chaque appel dans le travail
+confié. Cela vaut pour une seconde lecture de contrats, une analyse difficile,
+la comparaison de raisonnements et les qualifications qui nécessitent un vrai
+modèle. Les modèles locaux restent également des ressources normales selon leur
+pertinence ; il ne s'agit pas de choisir un fournisseur pour toute tâche.
+
+L'appel répond à une question précise, avec contexte utile, source identifiée,
+borne de durée et résultat conservé dans le ticket du travail. Une seconde
+opinion distingue défaut concret, hypothèse et limite de preuve ; elle complète
+les relectures et tests. Elle n'est pas une nouvelle formalité obligatoire avant
+chaque intégration. Une revue parallèle d'un lot déjà qualifié ne suspend pas
+son atterrissage par défaut ; un défaut concret est ensuite traité et ticketé.
+
+Utiliser les voies déjà configurées du projet, identifiants par leur chemin,
+sans lire, afficher ni copier .env ou .vault. Une revue de code prend les sources
+et contrats concernés ; elle n'implique pas d'ouvrir les bases ou d'envoyer les
+conversations et données réelles de Lucie. Éviter les appels sans question utile
+et les répétitions inchangées ; conserver les erreurs et leur diagnostic.
