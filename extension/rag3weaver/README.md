@@ -148,6 +148,17 @@ validate the declarative schema first, then inspect storage before acquiring a
 writer or constructing models. Legacy manifests still open without a data
 generation; an unpublished versioned target is refused.
 
+The inspection also retains typed persisted entity configurations, relation
+definitions and journal entries from the same read-only snapshot. Its sealed
+`observed_metadata()` distinguishes an absent metadata/journal table (`None`)
+from a present empty namespace (`Some(empty)`). Snapshot provenance is granted
+only after successful commit. This observes persisted namespaces, not the full
+physical schema, providers, relation policies, templates or model declarations.
+`compare_with_supplied_schema` reuses the facts producer to check every persisted
+entity/relation against a complete supplied schema; its report keeps observed
+metadata and supplied facts separate. Additional declarations remain supplied,
+and the existing entity-config fingerprint still covers entities only.
+
 The result is diagnostic: `migration apply` returns an explicit unavailable
 error. This interface does not transfer chunks or vectors, publish a migrated
 format, activate code templates, or provide migration recovery/rollback.
