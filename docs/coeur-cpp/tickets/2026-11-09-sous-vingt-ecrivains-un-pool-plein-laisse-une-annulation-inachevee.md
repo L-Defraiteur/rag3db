@@ -689,3 +689,11 @@ pas rappelée dans checkpointNoLock, que commit peut joindre directement ou par
 writeRequestedCheckpointIfLastNoLock pour une transaction déjà ouverte. Graphe
 de contrôle relu, aucun incident reproduit ; ne pas présenter la quarantaine
 comme globale ou comme preuve suffisante des nouveaux préfixes d'effets.
+
+## Recette de diagnostic du rouge restant, sans exécution
+
+[Recette DdlEveryMinute](../12-11-2026/12-recette-diagnostic-ddl-minute.md) :
+pression déjà à 2051 Mio avant le troisième DDL, donc antérieure au CREATE_VECTOR_INDEX.
+Le microbanc ne départage pas temps PK, débit/allocations antérieurs et autre
+échec d'annulation. Proposition de chronologie documentaire puis capture privée
+bornée à relire ; aucun nouveau run, build ou instrument moteur effectué.
