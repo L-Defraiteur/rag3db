@@ -271,3 +271,13 @@ avant chargement/ouverture. Aucune activation/transformation/publication ajouté
 Les effets de `workspace.index_signals` sont reflétés dans les faits exposés ;
 leur validation s'appuie sur les types/signaux existants. Ce raccord reste
 **non compilé/non joué** au moment de publication pour revue avant ciblé produit.
+
+Nouveau témoin avant correction du chemin bas niveau :
+`raw_open_refuses_failed_journal_before_catalog_effects` passe par
+`PreparedBackend::open(conn, embedder)`, journal failed, callback autorisant
+uniquement inventaire/lecture du journal et comptant toute autre requête ainsi
+que les appels d'embarquement. Il exige refus et compteurs zéro. Pas encore joué ;
+il vise l'accès direct qui reçoit déjà une connexion et ne peut pas promettre
+une admission rétroactive pré-RW, mais doit refuser avant Catalog.initialize.
+Le montage de compilation produit07293 reste figé pendant sa fin ; aucun second
+Cargo en parallèle.

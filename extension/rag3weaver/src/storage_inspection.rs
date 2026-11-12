@@ -243,3 +243,47 @@ pub struct PreliminaryMigrationPlan {
     pub generation: crate::dataflow::migrations::plan::StorageGeneration,
     pub refusal: String,
 }
+
+#[cfg(test)]
+mod raw_open_tests {
+    use super::*;
+    use crate::connection::{CallbackConnection, QueryResult, DbError};
+    use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+
+    #[test]
+    fn raw_open_refuses_failed_journal_before_catalog_effects() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("backend.json");
+        std::fs::write(&path, serde_json::to_vec(&serde_json::json!({
+            "version": 1, "name": "fixture", "database": "fixture.rag3db", "entities": {}, "tools": {},
+            "embeddings": {"model": "fixture", "dimensions": 4}
+        })).unwrap()).unwrap();
+        let prepared = crate::backend::PreparedBackend::load(&path).unwrap();
+        let effects = Arc::new(AtomicUsize::new(0));
+        let counter = effects.clone();
+        let conn = CallbackConnection::new(move |query, _| {
+            let rows = if query == "CALL show_tables() RETURN *" {
+                vec![vec![CypherValue::Int(1), CypherValue::String("_DataflowMigration".into())]]
+            } else if query.starts_with("MATCH") && query.contains("_DataflowMigration") {
+                vec![vec![CypherValue::Int(1), CypherValue::String("fixture".into()),
+                    CypherValue::String("failed".into()), CypherValue::String("checksum".into()),
+                    CypherValue::String("execution".into()), CypherValue::Int(1),
+                    CypherValue::Int(0), CypherValue::String("failed fixture".into())]]
+            } else {
+                counter.fetch_add(1, Ordering::SeqCst);
+                return Err(DbError::QueryError("catalog effect before admission".into()));
+            };
+            Ok(QueryResult { columns: vec![], rows })
+        });
+        let model_calls = Arc::new(AtomicUsize::new(0));
+        let counter = model_calls.clone();
+        let embedder = crate::embedder::CallbackEmbedder::new(4, move |texts| {
+            counter.fetch_add(texts.len(), Ordering::SeqCst);
+            Ok(texts.iter().map(|_| vec![0.; 4]).collect())
+        });
+        let result = prepared.open(Box::new(conn), Some(Box::new(embedder)));
+        assert!(result.is_err());
+        assert_eq!(model_calls.load(Ordering::SeqCst), 0);
+        assert_eq!(effects.load(Ordering::SeqCst), 0, "raw open must inspect before catalog initialization");
+    }
+}
