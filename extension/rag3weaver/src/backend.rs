@@ -2095,7 +2095,7 @@ impl PreparedBackend {
             Err(error) => Err(error.to_string()),
             Ok(_) => {
                 let conn = crate::Rag3dbConnection::read_only(&path).map_err(|e| e.to_string())?;
-                crate::storage_inspection::inspect_on(&conn).map(Some)
+                crate::storage_inspection::inspect_snapshot_on(&conn).map(Some)
             }
         }
     }
@@ -2135,7 +2135,10 @@ impl PreparedBackend {
                 config.validate().map_err(|e| format!("{name}: {e}"))?;
             }
         }
-        let steps = runner.resolve_steps(&variables).map_err(|e| e.to_string())?;
+        let steps = match source.as_ref() {
+            Some(inspection) => runner.resolve_inspected_steps(&variables, &inspection.history),
+            None => runner.resolve_steps(&variables),
+        }.map_err(|e| e.to_string())?;
         let generation = source.as_ref().and_then(|inspection| inspection.descriptor.as_ref())
             .map(|descriptor| descriptor.generation.clone())
             .unwrap_or(crate::dataflow::migrations::plan::StorageGeneration::Unversioned);
@@ -2164,7 +2167,7 @@ impl PreparedBackend {
             .map_err(|e| e.to_string())?;
         // A writer may have changed the storage after the read-only inspection.
         // No catalog or model is constructed before this second qualification.
-        crate::storage_inspection::inspect_on(&conn)?.admit(self.manifest.storage.as_ref())?;
+        crate::storage_inspection::inspect_snapshot_on(&conn)?.admit(self.manifest.storage.as_ref())?;
         Ok(conn)
     }
 
@@ -2200,7 +2203,7 @@ impl PreparedBackend {
     ) -> Result<Backend, String> {
         // A supplied connection is already open, but it must not bypass the
         // journal/format gate before Catalog initialization or model setup.
-        crate::storage_inspection::inspect_on(conn.as_ref())?
+        crate::storage_inspection::inspect_snapshot_on(conn.as_ref())?
             .admit(self.manifest.storage.as_ref())?;
         // Raw connection API cannot establish pre-open admission retroactively.
         // It must nevertheless never activate an unvalidated versioned target.
