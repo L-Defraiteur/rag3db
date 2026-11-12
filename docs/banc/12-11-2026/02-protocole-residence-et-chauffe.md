@@ -332,3 +332,48 @@ Le hachage préalable des poids réchauffe potentiellement le cache de fichiers 
 « froid » signifie ici nouveau processus et modèle non résident, pas cache disque
 ou pilote vierge. Les deux générations de chauffe ne doivent pas être présentées
 comme un essai matériel à caches identiques. Aucune sonde de charge sur card0.
+
+## Paquet final et entrée commune, avant premier GPU
+
+Nouveaux artefacts immuables livrés hors target à luciepc :
+`~/.cache/embarquement-notes/activation/bin-345a402d0/`.
+Source 345a402d099ae2c345e4b37a96159df970a7ee83, SHA fournisseur
+`10f44d35479f2a6462a6db5f2dfbad2714f524eff66a27589940e4e5ad44345a`,
+consommateur avec gate d’usage
+`c171231c0d158fef5bd06755ca7ee22c1cb00a386d1266461ce7883ef2a6fb73`.
+SOURCE/ldd/SHA256SUMS conservés ; aucune dépendance librag3db.so observée dans
+ces deux ELF, pas d’attestation native inventée.
+
+Le premier paquet cecf2247 et son contrôleur sans portée commune restent
+préservés comme préparation non exécutée. Le paquet d’entrée retenu est
+`~/.cache/rag3db-banc-notes/residence-nuit-12nov/gpu-01-sources-v2/`, aux deux postes.
+SHA256 du plan : `a580c1711039436520dee35f3318fa605f10518189da4f3c4f731a76d401ace0`.
+Contrôleur : `a29173c8ad1696e1e1c70460356c29049249ee9861ec7a688f296769693125ef`.
+Entrée commune copiée de master24f3603cf, sans modification :
+`confiner_validation.py` SHA `4f57d0e589f54d1e5733bcd01d793ce12b10e64ddd05220d22a9719084641c94`,
+poste SHA `3bc31281db505837af7c6f7fa0ce208264bc63ca4e31dc5a8e026c9512de9dd6`.
+
+Commande prévue, sans poste extérieur :
+
+```text
+python3 <paquet>/confiner_validation.py lancer --mode mesure --delai 1200
+  --preuves <parent de preuves neuf>
+  -- python3 <paquet>/mesurer_prive.py --plan <paquet>/plan.json --preuves <dossier neuf>
+```
+
+Le contrôleur vérifie le reçu vivant via la primitive commune, l’ascendance
+poste réellement en mesure et le plafond hérité. Il reprend l’échéance du
+superviseur (réserve de cinq secondes pour sa fin), sans recréer bus ni scope
+sœur et sans relancer un budget de vingt minutes chez l’enfant. Les dix filets
+CPU du contrôleur ont été rejoués après cette adaptation ; syntaxe verte.
+Scripts, fournisseur, consommateur, BPK et tokeniseur sont listés et hachés
+dans le plan. Variables du seul privé : GPU embedder gpu:0/Vulkan, ROCR0,
+chauffe activée, relecteur/OCR vides, chemins 107m explicites et rayon8.
+
+L’orchestration a relu protocole, groupes et empreintes, puis accordé l’entrée
+après libération des builds. Relecture poste libre avant entrée ; Embarquement
+confirme ne pas lancer de modèle privé pendant ce créneau et reporte ses e2e.
+La source requalifiée4866 a une passe complète verte annoncée ; les copies345
+restent immuables et RUST identiques pour le runtime concerné. Le plan et les
+anciens rouges sont conservés. Aucun service partagé à arrêter ni modèle réel
+chargé avant l’acquisition supervisée ci-dessus.
