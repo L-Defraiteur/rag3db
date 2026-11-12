@@ -938,3 +938,27 @@ Témoin synthétique exécuté pour les deux barrières :70000 chemins docsCPP a
 Contrôle réel20e4→3b2 :168 chemins lus, aucun refus, aucun delta produit.
 Preuve locale cx-preuves-finales-apercu-transfert-v1/preuve-garde-delta-complet.json.
 Aucun nouveau protocole partagé ou correctif source ajouté pour cet incident privé.
+
+## Reprise de préparation après l'aperçu intégré — qualification des faits
+
+Demande orchestration : déterminer le plus petit prochain pas sans apply,
+stockage ou bases de Lucie, et séparer implémentation autonome/arbitrage produit.
+Source de lecture41497ba4e, nouveau WT local cx-wt-qualification-faits, branche
+cx-arbre-qualification-faits. [Page existante mise à jour, section Prochain pas](../12-11-2026/02-preparer-le-transfert-des-valeurs-connues.md).
+
+Tranche A proposée : producteur commun de faits déclarés complets et vérification
+des empreintes du plan figé, consommés par sa construction dans le runner existant.
+Compositions/dépendances SchemaFacts réutilisées, entités/relations/recettes
+résolues/modèles distingués ; source partielle ou producteur inconnu refusés.
+Clés relation:<nom> déjà persistées par Catalog identifiées statiquement ; ne pas
+réinventer de magasin ni considérer l'inspection entités seule comme graphe observé.
+Aucun fichier Rust modifié/réservé ; coordination future backend_schema avec mémoire.
+
+Liaison de faits possible en restant Unversioned : aucun identifiant/génération
+fabriqué, aucune qualification de stockage ou évolution de l'aperçu actuel supposée.
+Pas de nouvel arbitrage Lucie pour A. Une vraie question numérotée dans la même
+page porte la sémantique future de génération durable (révision de publication
+ou état adressé par contenu), à lire avant son producteur persistant ; elle ne
+bloque pas A. Aucune nouvelle vision, aucun Cargo/GPU/target/service ou base.
+Ticket reste ouvert, prochaine revue du plan puis diff borné, pas attente technique
+artificielle sur des garanties déjà fixées.
