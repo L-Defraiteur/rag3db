@@ -328,7 +328,7 @@ proposition d'un ciblé600s/j8/Mem32 sur luciepc, target de session32Go/lib épi
 poste lourd et mesure prioritaire ; aucune réservation ni commande de test faite
 pour la présente préparation. La passe d'intégration se choisit après le diff.
 
-### Décisions autonomes et point de conception à relire par Lucie
+### Décisions autonomes et génération composite retenue par Lucie
 
 Sont autonomes, car déjà couverts par les contrats : découpage A puis raccord RO,
 noms/types, canonicalisation et version du contrat de faits en mémoire, extraction
@@ -337,22 +337,44 @@ de nouvel outil visible ni de changement de politique de stockage dans A.
 La répartition d'un fichier partagé et la recette de passe sont du ressort de
 l'orchestration. **A n'attend pas une décision de conception nouvelle.**
 
-La sémantique du futur producteur durable de générations n'est en revanche pas
-fixée par StorageGeneration::Established(String). Ce vrai choix concerne la
-suite persistante, pas le constructeur pur. À lire par Lucie avant ce producteur :
+1. **Question tranchée le 12 novembre : génération de publication et empreinte
+   d'état ont des rôles distincts.** Après l'explication A→B→A puis la proposition
+   composite, Lucie valide la dernière recommandation : « oki pour ta
+   recommandation alors ». La génération désigne une identité durable de
+   publication ; l'empreinte de l'état logique permet le partage et la
+   réutilisation du travail après requalification. Ce n'est pas le choix d'une
+   génération définie uniquement par le contenu.
 
-1. **Une génération désigne-t-elle une révision durable de publication ou
-   l'adresse d'un état par son contenu complet ?** Proposition : révision de
-   publication distincte de l'empreinte d'inventaire. Deux publications qui font
-   A→B→A auraient des révisions distinctes même si le contenu final égale A ;
-   rejouer une publication déjà applied conserverait sa révision. Cela distingue
-   retour au même contenu et reprise de la même opération. L'alternative
-   content-addressed ferait retrouver l'identité de génération d'A et devrait
-   distinguer autrement les événements de publication. Coût du choix proposé :
-   producteur et progression durables à définir avec le journal, sans les coder
-   ici. Ni un hash de schéma ni le chemin de copie ne conviennent dans les deux cas.
+| État logique | Identité de publication | Empreinte d'état |
+|---|---|---|
+| A initial | P1 | H-A |
+| B après nouvelle publication | P2 | H-B |
+| Retour au même A | P3 | H-A |
 
-Cette question ne suspend ni A ni sa revue ; aucune option n'est mise en œuvre
-par avance. Toute opération d'établissement initial ou d'avancement durable,
+Une publication nouvelle a une identité distincte, même si son état retrouve une
+empreinte antérieure. Le rejeu de la **même** opération déjà applied conserve son
+identité ; il ne crée ni nouvelle publication ni droit de répéter ses effets.
+Le format de l'identifiant et son producteur durable restent à implémenter avec
+le journal : aucun compteur global ou horodatage n'est choisi par cet exemple.
+
+L'empreinte ne se réduit pas aux octets de texte : elle doit couvrir les faits
+effectifs dont dépend l'opération, notamment occurrences, positions, relations,
+visibilité, configurations, recettes, modèles/dimensions et références aux
+couches parentes pertinentes. La portée et la complétude des dépendances doivent
+être établies ; une empreinte partielle ou de provenance inconnue ne justifie
+aucune réutilisation. On vise les vues/couches concernées, sans invalider toutes
+les branches pour une publication étrangère au plan.
+
+Si P1 est devenu P3 mais que les dépendances requises sont requalifiées
+identiques, les calculs et étapes préparées peuvent être réutilisés. On résout
+un **nouveau plan figé pour P3**, avec son identité propre ; le plan et l'identité
+de P1 restent immuables. L'empreinte ne contourne ni la vérification de génération
+à l'admission/application ni le journal, les annulations, les effets déjà appliqués
+ou la publication atomique. Le partage des contenus/vecteurs demeure indépendant
+des occurrences et des publications.
+
+La décision retire cette question de conception des attentes ; elle n'ajoute
+aucun code durable dans A et ne qualifie pas une empreinte d'inventaire existante
+comme génération ou état complet. Toute opération d'établissement initial ou d'avancement durable,
 transfert, apply, activation, publication, copie/lecture d'une base de Lucie ou
 politique de rétention reste hors de la tranche préparée.

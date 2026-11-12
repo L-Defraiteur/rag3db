@@ -962,3 +962,24 @@ ou état adressé par contenu), à lire avant son producteur persistant ; elle n
 bloque pas A. Aucune nouvelle vision, aucun Cargo/GPU/target/service ou base.
 Ticket reste ouvert, prochaine revue du plan puis diff borné, pas attente technique
 artificielle sur des garanties déjà fixées.
+
+## Décision de Lucie — génération composite, 12 novembre
+
+Lucie tranche après la proposition composite A→B→A : génération comme identité
+durable de publication, empreinte d'état logique distincte pour partager et
+réutiliser le travail après requalification. P1/P2/P3 restent distincts ; H-A
+peut être retrouvé après H-B. Le rejeu de la même publication already applied
+conserve son identité et ne répète pas ses effets.
+
+Le travail de préparation peut être réutilisé si les dépendances pertinentes
+complètes sont requalifiées identiques, mais un nouveau plan est figé pour la
+publication courante. Ancien plan, identité et journal ne sont pas réécrits ;
+empreinte partielle ou inconnue, annulation et contrôle d'admission restent des
+refus ou vérifications distincts. Partage des contenus/vecteurs et identités
+d'occurrences restent séparés ; aucune invalidation globale des autres branches
+n'est imposée par le contrat.
+
+La [page de conception existante](../12-11-2026/02-preparer-le-transfert-des-valeurs-connues.md)
+porte la décision et ses limites. Cette question n'est plus en attente. Le ticket
+reste ouvert pour l'implémentation et l'adoption effectives ; le choix ne transforme
+pas A, son aperçu ou ses empreintes déclarées en stockage durable déjà livré.
