@@ -54,6 +54,40 @@ class Montage(unittest.TestCase):
             with self.assertRaises(v.Refus):
                 v.autorite(v.processus())
 
+    def test_recu_vivant_puis_expire_ou_superviseur_deplace(self):
+        import time
+        pid = os.getpid()
+        table = {pid: dict(parent=777, debut='enfant', cgroup='/job'),
+                 777: dict(parent=0, debut='superviseur', cgroup='/job')}
+        r = self.p / 'recu-vivant'
+        r.touch(mode=0o600)
+        recu = dict(pid=777, debut='superviseur', cgroup='/job', etat='actif', jeton='x', echeance=time.monotonic()+60)
+        r.write_text(json.dumps(recu))
+        with patch.dict(os.environ, {v.RECU: str(r), v.JETON: 'x'}), patch.object(v, 'poste_tenu', return_value=1), patch.object(v, 'plafond', return_value={}):
+            self.assertEqual(v.autorite(table)['pid'], 777)
+            table[777]['cgroup'] = '/soeur'
+            with self.assertRaises(v.Refus):
+                v.autorite(table)
+            table[777]['cgroup'] = '/job'
+            recu['echeance'] = 0
+            r.write_text(json.dumps(recu))
+            with self.assertRaises(v.Refus):
+                v.autorite(table)
+
+    def test_cli_transmet_commande_et_conserve_plafond_plus_bas(self):
+        argv = ['confiner_validation.py', 'lancer', '--delai', '29', '--mode', 'mesure', '--', 'une commande', 'a b']
+        class ExecControle(Exception):
+            pass
+        with patch.object(sys, 'argv', argv), patch.object(v, 'poste_tenu', return_value=None), patch.dict(os.environ, {'POSTE_MEM_MAX': '8G', 'RAG3WEAVER_VERROU_TENU': 'prétendu'}, clear=True), patch.object(os, 'execve', side_effect=ExecControle) as executer:
+            with self.assertRaises(ExecControle):
+                v.main()
+        path, command, env = executer.call_args.args
+        self.assertEqual(Path(path).name, 'poste')
+        self.assertEqual(command[1], 'mesure')
+        self.assertEqual(command[-2:], ['une commande', 'a b'])
+        self.assertEqual(env['POSTE_MEM_MAX'], '8G')
+        self.assertNotIn('RAG3WEAVER_VERROU_TENU', env)
+
     def test_scope_soeur_refusee_avec_preuve(self):
         d = v.Descendants(777, '/job')
         row = dict(parent=0, session=777, debut='10', cgroup='/autre')
