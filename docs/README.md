@@ -43,6 +43,10 @@ Pour le futur raccordement automatique de la mémoire au chat, voir la
 [clarification de M9 : l’archiviste aux frontières de tour et à la compression](memoire/11-11-2026/05-archiviste-automatique-du-chat.md).
 Il s’agit d’une conception, distincte de l’outil `archive` déjà livré.
 
+Le [parcours agent de code réel dans l’IDE](everything-declarative/12-11-2026/04-parcours-agent-ide-vertex.md)
+réunit les preuves Vertex, test nommé, diff et reprise de tâche depuis la page,
+ainsi que la frontière de lecture Git des worktrees et sa recette isolée.
+
 ## Les tickets
 
 - **Tout nouveau travail identifié a un ticket** : défaut, capacité manquante, suite de lot,
