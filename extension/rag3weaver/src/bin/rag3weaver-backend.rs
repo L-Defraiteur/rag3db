@@ -634,7 +634,7 @@ fn servir_http(args: &[String]) -> Result<(), String> {
     let prepared = PreparedBackend::load(Path::new(&manifeste))?;
     let nom = prepared.manifest.name.clone();
     let backend = std::sync::Arc::new(prepared.open_on_disk()?);
-    let modele = modele_du_chat(backend.prepared());
+    let modele = modele_du_chat(&backend.prepared());
     let atelier = if atelier {
         let page = rag3weaver::atelier::Atelier::new(backend.clone(), modele)?;
         let montre = page.watch(std::time::Duration::from_millis(500));
