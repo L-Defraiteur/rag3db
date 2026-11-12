@@ -228,3 +228,21 @@ L’arc précis est confirmé pour la fixture contrôlée ; conséquences et pro
 des autres chemins restent ouvertes. Artefacts/base privée conservés sur luciepc.
 Aucun nouveau runtime après cette tentative. Aucun correctif produit autorisé
 ou appliqué. Ticket maintenu ouvert pour la suite à décider avec cœur C++.
+
+## Relecture cœur et suite sur papier — 12 novembre
+
+[Relecture du résultat et contrat proposé](../../coeur-cpp/12-11-2026/21-relecture-quarantaine-et-suite-sur-papier.md)
+(lecture de e289163bf et moteur0511, sans nouveau runtime/build/code produit).
+Conclusion et limites confirmées : internal-path-reached sous fixtureIndex et TB
+forcée, aucun checkpoint réel/réouverture/corruption démontré. Code0 du témoin
+n'est pas l'oracle d'une quarantaine correcte : lire la classification effective.
+
+Point à ajouter au contrat : le chemin forcé traverse Transaction::commit et le
+retrait de TB AVANT la fabrique sentinelle ; le refus d'un checkpoint seul ne prouve
+pas l'absence de publication de TB. Contrôles proposés avant publication et avant
+checkpoint, recontrôle après attentes, prédicats/réveils de quarantaine et départs
+sans checkpoint à définir ensemble. Matrice future structurelle avec contrôle sain,
+commit ordinaire/forcé, différé/lecteur et attente synchronisée ; aucune cellule
+exécutée ou autorisée par cette note. Durabilité et index persistant de fixture
+restent une tranche distincte. Ticket ouvert, porteur hotfixs/cœur ; pas master,
+pas patchlib, pas de reprise d'action arrêtée/rejetée.
