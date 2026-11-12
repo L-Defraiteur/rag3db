@@ -1458,3 +1458,14 @@ vertes ou rejouer inchangé. Après correctif/fixtures supplémentaires : nouvea
 et proposition de ciblé du groupe inspection+décodeurs+A. Pas de modèle/service/
 GPU/PG nécessaire au ciblé ; seule DB native synthétique possible pour preuve
 lecture seule/octets inchangés. Global ultérieure choisie après diff/revue.
+
+Recette rouge versionnée preuves-observation-ro/rouge.py : SOURCE SHA après
+commit en argument ; lancement sur luciepc depuiscrate par
+`POSTE_MEM_MAX=32G python3 scripts/confiner_validation.py lancer --delai 600 --preuves <cache/cx-observation-ro-confinement> -- python3 <recette> <SHA>`.
+Primitive commune prend poste et fixe deadline ; driver lit reçu/échéance réelle,
+réserve5s pourfin. Compile natif+code JSON et archive ELF/hash/source embarquée,
+listage exact1test avant runtime, ldd vérifie native29 ; runtimeattendu101/0passé/
+1échec/0ignoré surmessage d'omission malformée. **TEMOIN_ROUGE_POSE** est le
+résultat métier attendu, un éventuel VERT du superviseur veut seulement dire
+exécution/arrêt/nettoyage conformes, pas « test passé ». Pas d'ELF choisi au mtime,
+sourcefigée/propre avant/après chaque phase, aucun modèle/service/PG ou DB réelle.
