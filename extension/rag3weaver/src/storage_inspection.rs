@@ -256,7 +256,7 @@ mod raw_open_tests {
         let path = dir.path().join("backend.json");
         std::fs::write(&path, serde_json::to_vec(&serde_json::json!({
             "version": 1, "name": "fixture", "database": "fixture.rag3db", "entities": {}, "tools": {},
-            "embeddings": {"model": "fixture", "dimensions": 4}
+            "embeddings": {"model": "callback", "dimensions": 4}
         })).unwrap()).unwrap();
         let prepared = crate::backend::PreparedBackend::load(&path).unwrap();
         let effects = Arc::new(AtomicUsize::new(0));
@@ -282,7 +282,8 @@ mod raw_open_tests {
             Ok(texts.iter().map(|_| vec![0.; 4]).collect())
         });
         let result = prepared.open(Box::new(conn), Some(Box::new(embedder)));
-        assert!(result.is_err());
+        let error = result.err().expect("failed migration must refuse opening");
+        assert!(error.contains("migration reconciliation required"), "wrong refusal: {error}");
         assert_eq!(model_calls.load(Ordering::SeqCst), 0);
         assert_eq!(effects.load(Ordering::SeqCst), 0, "raw open must inspect before catalog initialization");
     }
