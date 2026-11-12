@@ -196,3 +196,38 @@ au schéma, refus attendu « vue contextuelle non disponible ». Aucun code prod
 modifié depuis389. Budget initial600 arrivé à terme ; aucune relance ni remise à
 zéro implicite. Étape corrective distincte120s proposée à orchestration, même
 filtre8, source neuve et recette publiées avant exécution. Tous rouges conservés.
+
+
+## Recette globale distincte, publiée avant entrée
+
+Ciblé30ab48674 acquis8/0/0, ELF41bf0591…/223 gabarits/mapsnative29/quiescence[] ;
+600initial et corrective120 terminés séparément, aucun budget réinitialisé.
+Branche neuve cx-archi-symboles-2 après rebase master741d6b8d30 (docs/fixtures IR
+uniquement) ; revue741 préservée, diff src/templates avant/après rebase vide.
+
+Globale CPU6000s après acquisition poste lourd, sous scripts/confiner_validation.py
+(mode lourd, preuves externes), j8, Max32G/Swap4G/Highmax, target archi unique32Go.
+Source HEAD figée/poussée, pilote externe cx-symboles-passe.py publié aux deux postes
+et empreinte transmise avant lancement ; arrêt au premier rouge inattendu.
+Phases plafonnées dans le même6000, sans réserver leur durée ni remettre l'échéance :
+
+- Base PostgreSQL privée cx_archi_symboles_20261112 créée et SELECT current_database
+  vérifié (45s) ; aucun schéma/base partagé utilisé. Le plan/gabarit modifié justifie
+  la suite postgres de la validation commune ; dump et empreinte avant nettoyage.
+- F5 par check_features (2100s), puis vrai minimal --no-default-features (120s).
+- Compilation des trois binaires large, navigateur, e2e : plafond partagé1500s,
+  listes réelles/inventaire gelé et publié avant exécution ; compter les huit témoins
+  symbol_navigation dans la lib, compter les gabarits réels (ne pas forcer220).
+- Lib entière large (900s), étape navigateur (600s, paquets React existants).
+- E2e lectures27, hôte13 et postgres (effectif gelé depuis inventaire),120s par suite,
+  une suite par appel run_e2e. Environnement journaux à espaces conservé.
+
+Jeu large : rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,
+anthropic-llm ; aucun service dense ni modèle d'inférence. Burn forcé CPU.
+Lectures seules demandent sparse BGE7879 existant : créneau coordonné après les
+compilations, santé avant/après et restitution explicite ; pas de réservation
+pendant F5. L'attente du créneau compte dans6000. Identifiants/modèles retirés.
+PID/starttime/cgroup/mapsnative29 enregistrés pendant chaque binaire testé,
+SHA ELF et table des gabarits réelle vérifiés. Résultat driver et superviseur
+VERT, aucune suite sautée, quiescence après, copies de toutes preuves au portable.
+Aucune publication master incluse : revue puis tour explicite restent requis.
