@@ -1,6 +1,6 @@
 # Le témoin code-tree du démon tronque le journal au premier espace
 
-- **État** : fermé ; doublon du ticket canonique6bf5bd4ea, preuves fusionnées sans abandon du défaut.
+- **État** : remplacé ; doublon du ticket canonique6bf5bd4ea, preuves fusionnées sans abandon du défaut.
 - **Famille** : produit
 - **Gravité** : témoin bloqué sur un chemin de journal inexistant, masque la fin d'indexation réelle.
 - **Atteignable en service** : test e2e_demon_hote avec RAG3WEAVER_JOURNAUX_DIR contenant un espace ; pas de blocage produit démontré.

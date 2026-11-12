@@ -73,3 +73,45 @@ aucune exclusion modifiée ou déduite de l'ancien compte.
 Le contrôle de reprise est le SHA de cet inventaire, pas une nouvelle autorité ni
 une approbation humaine ; le reçu commun reste seul propriétaire du budget/bus.
 Deadline inchangée 866610.959853126, première publication avant lib/NAV/lectures/démon.
+
+## Recette corrective commune, revue143a21706 favorable
+
+Archi relit source143 : helper lectures déplacé sans changement de comportement vers
+common,3témoins inchangés ; index hôte conserve ValueHTTP brut, autres outils texte
+inchangés, assertions index/usages/clone/retrait intactes. Diff src/templates vide
+depuis6f527. Le doublon b229 est remplacé par le ticket canonique6bf ; proposition
+sansespace abandonnée sans exécution.
+
+Correction exécutée sur le commit qui publie cette recette, figé/propre avant entrée.
+Noms/modules : F5check5montages, compilatione2eFJSON, trois helpers
+`e2e_lectures::recu_index::`, consommateurslectures27 et e2e_demon_hote13, aucun
+ignoré dans helpers/suites. Comparaison des noms complets du nouvel e2e avec l'inventaire
+initial860 : aucune suppression/skip ; son SHA/source/220gabarits sera publié après
+compilation AVANT les helpers/consommateurs, dans le même reste de budget.
+
+Seules commandes justifiées par le helper devenu commun : F5≤2400, compilee2e≤1500,
+helpers≤30, lectures et hôte≤120chacune (118runtime+2cleanup réservées). Toutes bornes
+intersectent le reste GLOBAL initial, deadline866610.959853126 inchangée ; le timeout
+120déjàconsommé et tout temps de préparation/attente comptent. Aucun nouveau6000.
+Lib/NAV inchangés ne sont pas rejoués ; source des preuves conservée6f527.
+
+Entrée : POSTE_MEM_MAX32G et vrai poste lourd autour de entrer.sh, qui calcule le reste
+APRÈS acquisition et exec LA primitive commune sans service intermédiaire ni marqueur.
+L'ascendance poste est conservée et vérifiée, une portée/bus/reçu pour la corrective.
+Le nouveau reçu doit avoir une échéance≤deadlineinitiale ; toute erreur STOP.
+Pas d'upgrade exclusif, pas de --build. Les quatre variables CPU, CARGO_MANIFEST_DIR,
+LD_LIBRARY_PATH29 et chemins privés sont complets. Journaux EXACTEMENT sous
+`globale/racine de journaux`, espace/Unicode/JSON préservés ; source/e2e JSON/hash
+figés. Pas de nouveau modèle/service ni de changement produit. 7879existant seulement
+pourlectures, prise/fin coordonnée et santé BGE1024/sparse avant/après. Hôte sans
+SERVICE_SPARSE : le journal initial était déjà fini, pas de modèle pour masquer ce bug.
+
+Scripts externes correctif-journal, conservés aux deux postes avant entrée :
+- passe.py SHA256 `cbbc511c027ff58ae5a3e8bfe9f4d2cd8945ad65217f4b49231ff748f4158f35`.
+- driver.sh SHA256 `0bd0d4c100dd74793fc6940d1a935582e13bf3a648a2d09281343d0ec847cd1b`.
+- entrer.sh SHA256 `088e3b69afeda047d9bb9a25e7de28c0c240d7297ab89bcf9b9c01d3797ac1ba`.
+
+Les trois ELF initiaux ont été archivés avant recompilation car le chemin du binaire
+e2e peut être réutilisé par Cargo ; les rouges et la fixture initiale restent conservés.
+Validation finale composée seulement après verdict corrective/primitive verts et
+quiescence vérifiée ; pas de clairon dense prêt pour les3vecteurs explicitement dus.
