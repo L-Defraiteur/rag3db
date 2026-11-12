@@ -71,6 +71,10 @@ let current = store.observe()?;
   dédié sous ce répertoire. Toute cible déjà existante est refusée avant ouverture
   en écriture. Aucun chemin ne fournit une identité et aucun répertoire étranger
   n'est effacé sur un échec. L'origine attendue est générée/conservée par l'appelant.
+- Avant toute identité H de publication et tout effet, refuser une entrée qui
+  change au roundtrip du codec : comparaison canonique complète et égalité
+  typée des déclarations ModelSource (incluant AddressesVec). Le constructeur
+  ne normalise pas silencieusement une entrée déjà fournie.
 - Réutiliser `_catalog_meta`, le dialecte et les décodeurs stricts communs. Une clé
   versionnée distincte contient le registre de déclarations. Extraire seulement
   l'écriture KV commune actuellement dans Catalog::persist_meta_key si nécessaire.
@@ -78,7 +82,7 @@ let current = store.observe()?;
 - `open_owned` n'initialise rien : présence du catalogue et protocole existant
   exigées, validation RO de l'origine attendue et du registre avant l'écrivain,
   puis revalidation sous sa vraie exclusivité. Catalogue vide/legacy/protocole
-  absent, table ou clé étrangère, contrat inconnu, record incomplet/corrompu : refus.
+  absent, table, colonne ou clé étrangère, type/défaut/clé primaire hors contrat, contrat inconnu, record incomplet/corrompu : refus.
 - Le catalogue dédié ne contient que le registre et sa table de métadonnées ;
   l'ajout d'une donnée hors contrat refuse au lieu d'être couvert par une empreinte
   déclarative. Un futur élargissement à un catalogue d'index sera un autre contrat.

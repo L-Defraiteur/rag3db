@@ -1772,3 +1772,11 @@ puis calcul H. Pas de normalisation silencieuse. Matrice comma avec/sans
 espaces et éléments fusionnés/vides, plus contrôle natif root absent/octets
 inchangés avant tout catalogue ; entrée normale et valeur riche persistée
 qualifiées par le nouveau ciblé v6 prévu14nouveaux+83régressions.
+
+Ciblé v6 VERT sur5f710dd21 : **97/0/0** (14publication +83régressions),
+compilation23,27s, phasecomplète23,89s. Composé VERT, supervision
+`validation-zxa2aw0p` code0/restes[]/busabsent/scanpropre[]/ELFrehash.
+Mémoire revue5f710 favorable, omissioncodec levée danscode etruntime.
+Nouvelle globale v2/source etrecette publiées avant exécution5400s ; nouvelle
+PGsynthétique cx_pub_2191_20261113_v2, aucun reset de v1. Les preuves des deux
+rouges fonctionnels et des interruptions volontaires restent séparées.
