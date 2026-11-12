@@ -1203,3 +1203,16 @@ relecture starttime puis signal sur ce FD ; cleanupnonzero capturé et VERDICT
 réécrit ROUGE. v2 n'a pas été éditée pendant ses jobs ni réécrite après coup.
 Verdict final composé exigera aussi rc réel pilote, scope inactive, quiescence
 et TMPabsent ; jamais le seul fichier VERDICT. Ticket reste ouvert.
+
+V3 : arrêt **avant PG/Cargo/runtime**, garde quiescence-avant rouge en761ms.
+Les deux processus relevés sont le bash client SSH4091595 et son systemd-run
+4091616 dont le cwd était resté dans WT après vérification de HEAD : le garde
+les a correctement signalés comme occupants, pas comme anciens tests. Scopev3
+inactive/poste0/4. Aucun test ni nouvelle PGv3 créé, aucun occupant tiers tué.
+
+V4 publie aussi **demarrer.sh** : après les vérifications source, client SSH
+**cd /var/tmp** et pilote **WorkingDirectory=/var/tmp** avant lancement. Le scan
+reste strict, sans exemption par nom ou relaxation de son invariant. Recette/
+source/ELF/budgetsidentiques à v3, preuve et unitésv4 neuves, PGv4 synthétique
+seulement si préflight vert ; INITIAL/DEADLINE v1 toujours conservés. Pas de
+rejeu Cargo, aucun résultat v3 inventé. Sourcecompilée d2 inchangée sur luciepc.
