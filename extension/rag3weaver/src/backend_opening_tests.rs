@@ -379,4 +379,20 @@ fn opening_public_content_manifest_refuses_invalid_associations_before_database(
     let error = prepared.open(Box::new(NoDatabase(calls.clone())),None).err().expect("refus avant le premier appel base");
     assert!(error.contains("Missing"),"{error}");
     assert_eq!(calls.load(Ordering::SeqCst),0);
+
+    // La façade produit doit refuser la même mutation avant d'ouvrir sa
+    // connexion native ou de construire un embarqueur.
+    let mut prepared = prepare(dir.path(),&valid).unwrap();
+    prepared.entities.get_mut("Two").unwrap().search_index = Some("Missing".into());
+    let database = prepared.path(&prepared.manifest.database);
+    assert!(!database.exists());
+    let constructions = Arc::new(AtomicUsize::new(0));
+    let observed = constructions.clone();
+    let error = prepared.open_on_disk_with_embedder(move |_| {
+        observed.fetch_add(1,Ordering::SeqCst);
+        (None,None)
+    }).err().expect("refus pur avant connexion native et fabrique modèle");
+    assert!(error.contains("Missing"),"{error}");
+    assert_eq!(constructions.load(Ordering::SeqCst),0);
+    assert!(!database.exists(),"la façade ne crée pas une base pour un plan invalide");
 }
