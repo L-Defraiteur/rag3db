@@ -30,6 +30,37 @@ session de travail.
   effacer sans le mot de Lucie) et remonte à Lucie tout refus de permission, sans le contourner par
   une autre session.
 
+## 2 bis. Comment se prennent les décisions
+
+Trois niveaux, et chacun sait lequel est le sien.
+
+1. **La session décide seule** de ce qui reste dans son périmètre et ne change pas la conception : la
+   forme du code, le découpage d'un lot, ses témoins, un nom, un ticket à ouvrir, l'ordre de ses pas.
+   Elle n'attend personne pour ça ; elle dit ce qu'elle a fait dans son rapport.
+2. **L'orchestrateur tranche** ce qui dépasse une session : qui prend un lot, l'ordre de la file, un
+   désaccord de forme entre deux sessions, l'usage des ressources partagées (la carte, les lourds, la
+   lib à épingler, une pose), un rouge à départager entre environnement et lot. Il dit sa décision à la
+   session, l'écrit dans son rapport avec sa raison, et la marque « à relire par Lucie » quand elle
+   touche à une conception. Il ne code pas : il décide et relaie.
+3. **Lucie décide** de tout ce qui change la conception ou qui lui appartient : une règle nouvelle, un
+   outil qui change ce que l'utilisateur voit, une direction de produit ; son arbre, ses bases, ses
+   réglages, son sudo, sa carte de jeu ; toute suppression (fichiers, worktrees finis, branches
+   distantes), toute fusion dans lucivy, tout tag, toute publication ; le moment d'une pose quand
+   elle travaille. **Un symptôme signalé est une enquête, pas un changement de conception.**
+
+Comment on lui demande : par **une page de conception** (ce qui existe, la forme proposée, les
+questions à trancher, numérotées), poussée sur master en docs seules, et une ligne dans le rapport
+« à lire par Lucie ». Rien ne se code avant son mot. En attendant, la session fait tout ce qui n'en
+dépend pas (règle de Lucie du 7 novembre : « ne pas s'empêcher de progresser ») : mesures, témoins
+rouges, pages. Son mot se donne dans la session concernée (lucivy pour lucivy) ou à l'orchestrateur,
+qui le relaie mot pour mot. Un refus de permission (le sien, ou celui de la plateforme) vaut pour
+toutes les sessions : on le remonte, on ne le contourne pas par une autre session ni en reformulant.
+
+Comment on garde la trace : la décision et sa raison dans le rapport d'orchestration du jour ; la
+conception dans sa page, avec les questions et les réponses ; un défaut connu non corrigé dans un
+ticket ; ce qui est atteint dans `docs/nouveautes.md`. Quand c'est posé et que ça vaut son regard,
+on le dit à Lucie en une ligne (« dire à Lucie quand regarder ») ; on ne la dérange pas pour le reste.
+
 ## 3. Les sessions qu'il orchestre
 
 Chaque session porte le nom de sa barre chez Lucie, et son dossier `docs/<nom-en-kebab-case>/`. Elle
