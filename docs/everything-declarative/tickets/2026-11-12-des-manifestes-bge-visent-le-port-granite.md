@@ -1,6 +1,6 @@
 # Des manifestes BGE visent le port actuellement servi par granite
 
-- **État** : ouvert ; contradiction de déclaration relue, activation des copies concernées non vérifiée.
+- **État** : ouvert ; correction des gabarits validée sur branche, activation des copies utilisateur non vérifiée.
 - **Famille** : produit
 - **Gravité** : configuration ; un fournisseur déclaré peut ne pas servir le modèle requis.
 - **Atteignable en service** : à qualifier ; aucune panne de ces backends observée dans cet audit.
@@ -64,3 +64,13 @@ existant embeddings/models.embed un succès ; aucun ignoré. Hash ELF et limites
 dans le rapport ED du 12 novembre, section Gabarits BGE. Aucun service réel appelé.
 Ce préfixe ne remplace pas la passe globale, encore à coordonner. Les copies utilisateur
 restent à qualifier ; ne pas fermer le ticket au seul atterrissage des gabarits.
+
+## Passe globale de la correction des gabarits
+
+Source efdf90fb9 (production691ba0391), verdict composé VERT : F5check5/5,
+check --lib --no-default-features rc0, lib2204/0/65, navigateur40/0/0,
+PostgreSQL36/0/0 plus deux filets. Trois ELF/source/native29/220gabarits attestés ;
+quiescence[], deadline initiale respectée. Rapport ED du12nov et preuves
+I-luciepc/bge-routage-20261112/globale/verdict-compose.json aux deux postes.
+Les gabarits livrés pourront être intégrés ; aucune activation des copies existantes
+ni migration de configuration utilisateur n'est attestée. Ce reste conserve le ticket ouvert.

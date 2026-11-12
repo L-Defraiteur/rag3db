@@ -259,3 +259,34 @@ lib2204/65→NAV40→PG36 seulement. CPU posé explicitement sur variable commun
 L'observateur garde PID/starttime/maps et ouvertures /dev/dri ou /dev/kfd ; celles-ci
 ne prouvent pas une charge GPU. Aucun modèle/inférence/service7879 ni charge seat1 prévu.
 Tout signal nouveau arrête pour diagnostic. F5/minimal/compilation ne sont pas rejoués.
+
+## Verdict composé BGE — prêt à intégrer
+
+**VERT**, source exécutée `efdf90fb9f94ca580e41b53c912c2c718b13f4ed`,
+production `691ba039140f20b6460623fe9f931f04e2d5fbed`. Les commits suivants sont uniquement
+Markdown ; aucun runtime ou gabarit modifié depuis cette source. F5check5/5 ; vrai minimal
+check --lib --no-default-features rc0 ; liblarge **2204/0/65** (36,74s), NAV **40/0/0**
+(133,53s), e2e_postgres **36/0/0** (7,88s) plus ses deux filets préalables verts.
+Les65 ignorés sont listés par le binaire exact ; NAV réellement jouée séparément.
+Pas de saut ajouté ni de compte ancien imposé.
+
+Trois ELF, source efdf/220 gabarits chacun, maps réelles chargeant exclusivement native29 :
+
+- large rag3weaver-4950c451c9e109ca : f0b7f59dd411d9ed954fc3e24eba4d4676fd996fe7bb2065b5ba72e0be0775dc ;
+- NAV rag3weaver-32ae91ef3133ff98 : 04d2d7e975ca7d34205c8e33e060b2b628e3fa3745c8be13c6d74929a47cd95f ;
+- PG e2e-b3458ee334fbabdd : 18efabce7b1150d767c740db1157f644945958a0d0b24cd9a44783fdf320f242.
+
+Les fichiers dynamic-*.txt gardent les métadonnées ELF, provenances/*.json et *.maps le
+chargement réel et le cgroupMax32. Chromium natif et helpers D-Bus observés dans la portée
+privée ; aucun signal de sortie de cgroup. Ouvertures de périphériques conservées séparément,
+sans les confondre avec une inférence. Pas de modèle réel/service7879 lancé ou appelé.
+
+Quiescence finale **[]**. Target9134875147 octets. Global1025,232s/5700 depuis le début
+initial, fin856141.457<deadline860816.225 : interruptions et adaptations comprises.
+F5/minimal/compilation n'ont pas été rejoués. Rouge rc127 et lib interrompue RADV conservés ;
+le verdict composé distingue leurs diagnostics des étapes finalement vertes. Preuves copiées
+aux deux postes dans I-luciepc/bge-routage-20261112/globale, verdict-compose.json.
+
+Intégration demandée à C7 après ces preuves. Pas de master avant son « à toi ».
+Le ticket BGE reste ouvert pour activation/correction des copies utilisateur non inspectées ;
+ce lot ne les migre pas. La dette de features native+daemon reste séparée et ouverte.
