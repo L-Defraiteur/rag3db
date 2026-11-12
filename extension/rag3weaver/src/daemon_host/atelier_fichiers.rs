@@ -593,6 +593,11 @@ pub(super) mod tests {
     }
 
     pub(crate) fn atelier_avec(d: &Path, model: ChatModel) -> Atelier {
+        atelier_avec_configuration(d, model, |_| {})
+    }
+
+    /// La déclaration du témoin est complète avant l'ouverture du backend.
+    pub(crate) fn atelier_avec_configuration(d: &Path, model: ChatModel, configurer: impl FnOnce(&mut Value)) -> Atelier {
         let racine = d.join("rw");
         std::fs::create_dir_all(&racine).unwrap();
         let gabarits = d.join("atelier/templates");
@@ -601,6 +606,7 @@ pub(super) mod tests {
         let manifeste = gabarits.join("backends/atelier/backend.json");
         let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
         m["workspace"]["root"] = json!(racine.to_string_lossy());
+        configurer(&mut m);
         std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
         let racines = crate::code_tree::Roots { config: d.join("config"), data: d.join("data") };
         let host = Arc::new(hote(d, model).with_racines_de_code(racines).with_runs_root(d.join("runs")));
