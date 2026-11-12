@@ -1,3 +1,23 @@
+## Actualisation prioritaire — 13 novembre2026
+
+Première tranche symboles : source d00661e969eb7d77aa7d2f25c6cb5fa4f93f3308
+qualifiée par passe complète : F5 5/5, minimal, lib2252/0/65 dont9navigation,
+NAV40/0/0, lectures27/0/0, hôte13/0/0, PG privé36/0/0.
+Les anciennes sections « passe en préparation » ci-dessous sont historiques.
+Correctifs après le premier ciblé8/0/0 : DFS de rendu, compteur code20,
+registre background privé de fixture ; RunScope/runtime et ses assertions inchangés.
+Ticket de qualification vidange déplacé vers docs/tickets/closed ; ticket global
+navigation ouvert pour intégration de la tranche puis grep/couverture étendue.
+
+Preuves aux deux postes : ~/.cache/rag3weaver-build/
+cx-symboles-d00661e96-reprise-20261112/ ; inventaire b43e9a0892602d5415f335016092fa75a9b5743b74a8492da0a8694a72a5716a.
+3ELF observés/native29/223gabarits, Max32G, target8,63Go ; primitive
+validation-yxtqqkgt VERT0/restes[]/nettoyé=true ; quiescence target[].
+Budget INITIAL6000s conservé, durée cumulée4253,885s. 7879 rendu après santé
+avant/après ; aucune pose du daemon personnel. Worktrees et base privée
+cx_archi_symboles_20261112 conservés jusqu'à livraison/revue, dump puis nettoyage
+avec garde courante et archives administratives fidèles. Pas encore de master.
+
 # Reprise archi — 12 novembre
 
 Lire le rapport voisin et le ticket canonique ED d'accord extérieur. ED possède le runtime,

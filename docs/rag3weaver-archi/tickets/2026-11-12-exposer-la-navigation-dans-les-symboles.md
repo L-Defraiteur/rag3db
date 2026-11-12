@@ -1,6 +1,6 @@
 # Exposer la navigation dans les symboles
 
-- **État** : ouvert ; première tranche codée et ciblé8/0/0 prouvé, passe globale/revue/intégration à terminer ; grep et couverture étendue restent à livrer.
+- **État** : ouvert ; première tranche codée et passe complète d00661e96 verte, revue/intégration à terminer ; grep et couverture étendue restent à livrer.
 - **Famille** : produit
 - **Gravité** : capacité manquante ; l'agent doit pouvoir explorer des arbres de code sans lire tous les corps.
 - **Atteignable en service** : oui dans la branche candidate via outil code et relais atelier, pas encore intégré à master ; outline reste disponible.
@@ -291,3 +291,21 @@ au helper hote_isole ; shutdown pouvait tuer la commande du test voisin via le
 singleton. Correction uniquement dans cette fixture, with_background Registry neuf.
 Production et assertions/délais RunScope inchangés ; reprise entière du même reste
 6000 pour confirmer l'interaction, pas de nouveau budget ni modèle/service.
+
+## Passe complète qualifiée — 13 novembre2026
+
+Source d00661e969eb7d77aa7d2f25c6cb5fa4f93f3308 : F5 5/5, minimal réel
+--no-default-features, lib2252/0/65 (neuf témoins navigation), NAV40/0/0,
+lectures27/0/0, hôte13/0/0 et Postgres privé36/0/0. Les rouges intermédiaires
+restent conservés : parcours compact corrigé en DFS stable, compteur des nœuds
+code20, puis registre background privé de fixture. Ce dernier corrige
+l'interférence de shutdown avec le témoin RunScope voisin, sans modifier son runtime.
+Le ticket de qualification est clos dans docs/tickets/closed/
+2026-11-12-la-vidange-de-portee-rougit-dans-la-lib-entiere.md.
+
+Preuves aux deux postes : cx-symboles-d00661e96-reprise-20261112, hors target.
+Inventaire b43e9a0892602d5415f335016092fa75a9b5743b74a8492da0a8694a72a5716a,
+trois ELF réellement observés/native29/223 gabarits chacun ; primitive VERT0,
+restes[], nettoyé=true, quiescence target[]. Durée cumulée4253,885/6000s
+initiales ; aucune remise à zéro. Aucun master avant tour explicite et revue du
+diff entrant. Ce ticket reste ouvert : grep enrichi et couverture étendue non livrés.
