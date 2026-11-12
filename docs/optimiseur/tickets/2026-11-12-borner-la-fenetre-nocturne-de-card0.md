@@ -1,6 +1,6 @@
 # Borner la fenêtre nocturne de card0
 
-- **État** : en cours ; réserve d’exécutant corrigée, 22 fixtures CPU et entrées réelles CPU vertes ; timer réel actif13nov07:54Paris, entrée déqualifiée jusqu’à avis final, aucun modèle enregistré, restitution réelle encore attendue.
+- **État** : en cours ; revue finale favorable et entrée requalifiée sur SHA0e11e0a3, 22 fixtures CPU et entrées réelles CPU vertes ; timer réel actif13nov07:54Paris, aucun modèle enregistré, restitution réelle encore attendue.
 - **Famille** : produit
 - **Gravité** : disponibilité ; les modèles temporaires doivent rendre le GPU du jeu à l'heure convenue.
 - **Atteignable en service** : oui pour les processus privés nocturnes, aucune modification des services courants requise.
@@ -243,3 +243,20 @@ qualifié précédent a été préservé sous
 `preparation/pret-duree-avant-garde-unite.json` ; **pret.json effectif absent**
 jusqu’à la revue finale. Le cutoff n’en dépend pas et reste armé. Aucun usage
 card0 avant cette requalification ; aucun besoin déclaré actuellement.
+
+### Requalification après revue finale
+
+L’orchestration a relu indépendamment le delta d’exécutant, la durée fixe,
+le SHA0e11 installé, les trois cas CPU réels et le timer, puis donné avis
+favorable sur 01a03458430f80c04b1953c5de4b9a35f27b323e. `pret.json` effectif
+a été recréé pour ce SHA après contrôle frais des preuves, du timer
+active/waiting/Persistent et de l’absence de modèles/registre fermé.
+Entrée réelle hors créneau refusée de nouveau, sans modèle ni commande GPU.
+Preuves `preparation/etat-effectif-portee-final.json` et
+`refus-horaire-apres-revue.log` ; la copie de code et les unités n’ont pas changé.
+
+Cette qualification autorise le mécanisme d’entrée dans la fenêtre prévue,
+pas un chargement cérémoniel ni un profil de modèle non prouvé. Toujours zéro
+modèle demandé ; tout premier besoin doit qualifier son placement réel.
+Le timer et les preuves stables restent hors worktree après nettoyage.
+Ticket ouvert jusqu’au constat effectif de restitution au matin.

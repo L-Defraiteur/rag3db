@@ -4,7 +4,7 @@
 
 Ticket ouvert `docs/optimiseur/tickets/2026-11-12-borner-la-fenetre-nocturne-de-card0.md`,
 branche `cx-optimiseur-card0-nuit-2`, worktree `cx-optimiseur-card0-nuit`. À luciepc : source SHA
-0e11e0a3…, entrée en revue (reçu absent), refus hors nuit avant commande GPU, unités privées sans restart,
+0e11e0a3…, entrée requalifiée après revue finale, refus hors nuit avant commande GPU, unités privées sans restart,
 RuntimeMaxSec + cutoff.timer réel le13novembre **07:54 Paris**, Persistent=yes,
 active/waiting. 22 fixtures CPU vertes aux deux postes, vraie entrée CPU dans
 sa portée (hors unité/étrangère refusés avant GPU) et vrai probe systemd
