@@ -32,7 +32,7 @@ shutil.rmtree(tmp)
 PY
     if [ "$rc" != 0 ]; then
       printf 'ROUGE\n' > "$preuve/VERDICT"
-      printf 'ROUGE : nettoyage TMP privé échoué\n' > "$preuve/erreur-nettoyage.txt"
+      printf '{"verdict":"ROUGE","phase":"nettoyage-tmp","rc":%s}\n' "$rc" > "$preuve/erreur-nettoyage.json"
     fi
   fi
   exit "$rc"
