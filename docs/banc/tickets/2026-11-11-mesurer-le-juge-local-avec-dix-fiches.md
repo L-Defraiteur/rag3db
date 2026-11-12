@@ -678,3 +678,34 @@ Ce sont des vérifications CPU, pas une passe GPU ni un résultat k10.
 Préparation opérateur 02f969823 intégrée ci-dessus. Le contrôleur attend une
 revue finale et une nouvelle fenêtre coordonnée ; aucun lancement GPU ni
 arrêt 7882 effectué pour cette préparation. Le premier rouge reste conservé.
+
+## Contrôleur v3 : trois ajustements de revue et GO conditionnel
+
+Lucie demande explicitement de réussir à utiliser le GPU. L’orchestration autorise
+une nouvelle passe unique après les trois corrections ci-dessous, dans le cadre
+clarifié de disponibilité seat1 et de coordination des services, sans nouvelle
+demande humaine. Le premier rouge et son budget restent inchangés et conservés.
+
+Version v3 figée aux deux postes : `~/.cache/rag3db-banc-notes/k10-controleur-v3/`.
+
+- `controleur.py` SHA256 `6c797ab3ad674fdb04b3e9928151930a271cdb31b5531bf6b40df38ae005f5fb` ;
+- `garde_charge.py` SHA256 `85a4d58312cd6629bea9725159208b3496c5ea096635202dc7b37675b8ff590f` ;
+- `fige.json` SHA256 `66d9a6b59dcadea022a2b9521d39776bc5c898d86f067cf9ba29e2b16dcbf3f3`.
+
+1. Startup borné à acquisition MESURE +120 s, validation des empreintes et attente
+   de remise comprises : aucun nouveau délai de 120 s après libération.
+2. Poids Q8_0 hachés en lecture seule avant chargement : SHA256
+   `ed119d433ab8076b2c05d9116b2b80b6ddc4115292583cea231024c5628a50bb`.
+   Six fichiers locaux du tokeniseur/configuration hachés et figés dans
+   `identites.json` et le manifeste ; liste et empreintes revérifiées au départ.
+3. Captures du processus et garde mémoire seat1 actives pendant chargement,
+   dès que les FD GPU apparaissent. Captures partielles conservées avec raisons,
+   valeurs absentes inconnues, toute valeur connue au-delà du budget refusée.
+   Avant les requêtes, capture complète et preuve positive de placement requises.
+
+Quinze filets CPU du contrôleur et quatre de capture passent ; les trois nouveaux
+vérifient deadline absolue, capture partielle non transformée en zéro et refus
+d’un dépassement observé même en capture partielle. Pas de GPU pour ces contrôles.
+Les réglages de cache v2 et les garanties d’arrêt/restauration sont conservés.
+La nouvelle passe commence seulement après acquisition du verrou et arrêt/remise
+7882 par l’optimiseur ; résultats et retour seront consignés dans ce même ticket.
