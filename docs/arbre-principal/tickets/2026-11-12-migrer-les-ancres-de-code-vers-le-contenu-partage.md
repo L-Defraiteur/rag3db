@@ -236,3 +236,16 @@ sans créer le répertoire de base. Le cas d'une évolution entre les deux
 inspections et le raccord du plan sous garde restent à prouver. Les compteurs
 callback du précédent préfixe ne sont pas des compteurs de connexions modèles
 sur ce parcours produit : ne pas les confondre.
+
+Revue ED/C7 du modèle pur prise en compte : renommer le contrôle en
+`validate_generation_preconditions` (il ne valide pas registre/ports/cycles ou
+transport). Témoin complété : sérialiser les inputs source/cible figés, reconstruire
+le plan depuis ces inputs et fichiers après publication simulée, retrouver même
+identité et PublishedTarget sans rerésoudre la source depuis le stockage cible.
+Les fixtures natives déclarent désormais le modèle jouet obligatoire du manifeste
+(sans création/connexion à celui-ci). Admission déplacée avant tout mkdir des
+callers ; schéma interne inconnu refusé et configs persistées validées par
+`EntityConfig::validate`. `open_with_reason(conn, embedder)` refuse aussi toute
+cible versionnée avant création du catalogue ; cette API reçoit des capacités
+déjà créées et ne promet pas leur admission rétroactive. Le contrat pré-RW et
+pré-modèles appartient à la façade produit commune. Revue/témoins restent requis.

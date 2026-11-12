@@ -249,10 +249,6 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
         return suite.map(|_| ());
     }
     let prepared = PreparedBackend::load(Path::new(&manifeste))?;
-    let database = prepared.path(&prepared.manifest.database);
-    if let Some(parent) = database.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
     let conn = prepared.connect_admitted_storage()?;
     let (embedder, raison) = prepared.embedder_or_absent();
     // **Les clés présentées sont dites, pas supposées.** L'exposition par clés
@@ -638,10 +634,6 @@ fn servir_http(args: &[String]) -> Result<(), String> {
     }
     let manifeste = manifeste.ok_or_else(|| format!("--manifest est obligatoire\n{USAGE}"))?;
     let prepared = PreparedBackend::load(Path::new(&manifeste))?;
-    let database = prepared.path(&prepared.manifest.database);
-    if let Some(parent) = database.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
     let conn = prepared.connect_admitted_storage()?;
     let (embedder, raison) = prepared.embedder_or_absent();
     let nom = prepared.manifest.name.clone();
@@ -862,10 +854,6 @@ fn fichiers_cli(args: &[String]) -> Result<(), String> {
                          rag3weaver-backend files rebuild <backend.json>";
     let [action, chemin] = args else { return Err(USAGE.into()) };
     let prepared = PreparedBackend::load(Path::new(chemin))?;
-    let database = prepared.path(&prepared.manifest.database);
-    if let Some(parent) = database.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
     let conn = prepared.connect_admitted_storage()?;
     let (embedder, raison) = prepared.embedder_or_absent();
     let mut backend = prepared.open_with_reason(Box::new(conn), embedder, raison)?;
@@ -982,10 +970,6 @@ fn run() -> Result<(), String> {
     if option.as_deref() == Some("--describe") {
         println!("{}", prepared.describe());
         return Ok(());
-    }
-    let database = prepared.path(&prepared.manifest.database);
-    if let Some(parent) = database.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     // Un backend en mots seuls n'exige pas de service d'embarquement ; un
     // backend qui déclare du vecteur démarre sans lui en le disant (plein
