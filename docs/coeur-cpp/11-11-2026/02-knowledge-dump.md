@@ -178,3 +178,13 @@
 - `docs/coeur-cpp/tickets/2026-10-18-un-point-de-reprise-fige-toutes-les-transactions-le-temps-de-s-ecrire.md` :
   réduit par V2-1c ; restent V2-2c (un écrivain qui entre pendant l'écriture du point de reprise)
   et V2-3.
+
+## Format C++ — précision du lot de nuit du12novembre
+
+La CI utilise clang-format18 ; le dernier job terminé lu confirme18.1.3-1ubuntu1,
+image et empreintes du lot dans `../12-11-2026/22-ci-format18-inventaire-source-et-recette.md`.
+Les annexes et sous-modules sont exclus par .clang-format-ignore. Pour juger le
+format avant push, appeler le script avec --clang-format-executable pointant sur
+la18 vérifiée, sans --in-place **et sans --dry-run** : ce dernier ne fait qu'imprimer
+les commandes et ne compare rien. Vérifier un inventaire non vide et lire le code/
+diff du vrai contrôle ; ne pas assimiler sa sortie à une CI future réellement verte.

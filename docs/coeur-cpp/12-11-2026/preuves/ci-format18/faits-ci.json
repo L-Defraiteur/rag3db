@@ -1,0 +1,54 @@
+{
+  "read_date": "2026-11-12",
+  "historical_failed_run": 40246212509,
+  "run_url": "https://github.com/L-Defraiteur/rag3db/actions/runs/40246212509",
+  "jobs": [
+    {
+      "id": 121572154648,
+      "name": "code format",
+      "conclusion": "failure",
+      "failed_steps": [
+        "Fail if any change is detected on the master branch"
+      ]
+    },
+    {
+      "id": 121572154967,
+      "name": "sanity checks",
+      "conclusion": "success",
+      "failed_steps": []
+    },
+    {
+      "id": 121572276466,
+      "name": "shell test",
+      "conclusion": "failure",
+      "failed_steps": [
+        "Build"
+      ]
+    }
+  ],
+  "format_log_excerpt": [
+    "2026-10-26T12:29:37.2063246Z \u001b[36;1msudo apt-get install -y clang-format-18\u001b[0m",
+    "2026-10-26T12:29:44.4565010Z clang-format-18 is already the newest version (1:18.1.3-1ubuntu1).",
+    "2026-10-26T12:29:44.4621650Z ##[group]Run python3 scripts/run-clang-format.py --in-place --clang-format-executable /usr/bin/clang-format-18 -r src/",
+    "2026-10-26T12:29:44.4622390Z \u001b[36;1mpython3 scripts/run-clang-format.py --in-place --clang-format-executable /usr/bin/clang-format-18 -r src/\u001b[0m",
+    "2026-10-26T12:29:55.3604481Z ##[group]Run python3 scripts/run-clang-format.py --in-place --clang-format-executable /usr/bin/clang-format-18 -r test/",
+    "2026-10-26T12:29:55.3605202Z \u001b[36;1mpython3 scripts/run-clang-format.py --in-place --clang-format-executable /usr/bin/clang-format-18 -r test/\u001b[0m",
+    "2026-10-26T12:29:56.4074244Z ##[group]Run python3 scripts/run-clang-format.py --in-place --clang-format-executable /usr/bin/clang-format-18 -r tools/",
+    "2026-10-26T12:29:56.4074894Z \u001b[36;1mpython3 scripts/run-clang-format.py --in-place --clang-format-executable /usr/bin/clang-format-18 -r tools/\u001b[0m",
+    "2026-10-26T12:29:56.9541065Z ##[group]Run python3 scripts/run-clang-format.py --in-place --clang-format-executable /usr/bin/clang-format-18 -r extension/",
+    "2026-10-26T12:29:56.9541774Z \u001b[36;1mpython3 scripts/run-clang-format.py --in-place --clang-format-executable /usr/bin/clang-format-18 -r extension/\u001b[0m",
+    "2026-10-26T12:30:54.2130683Z ##[error]Process completed with exit code 1."
+  ],
+  "latest_run": {
+    "id": 43313396407,
+    "sha": "a783013f148fcb52beb6302d92c0e755c5ab013a",
+    "status": "pending",
+    "observation": "latest observed; no new CI triggered"
+  },
+  "recent_observation": "recent CI Workflow runs cancelled; no successful CI claim",
+  "local_image": {
+    "id": "sha256:d58d28d7a16180e13240382444b550ef1a0d186731665d6abccdad641343af45",
+    "package": "1:18.1.3-1ubuntu1",
+    "binary_sha256": "55cc4a84a64347d12bbcc3fbe9c16599c57a75fda70703d1b91fc95ce1958d84"
+  }
+}
