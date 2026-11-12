@@ -349,3 +349,43 @@ du build conditionnel déjà autorisé. Wrapper préparé sous
 1740 s + 5 s d’arrêt, mémoire 8 Gio/swap 0, tmpfs privé 2 Gio, réseau isolé,
 source/référence en lecture seule, attente d’une gate explicite après plan sec.
 Aucun pilote, mesure, lib partagée ou magasin dans ce lancement.
+
+### Préflight privé exécuté et refusé — créneau libéré
+
+Unité `cx-coeur-archive-0511-12nov-01.service`, lanceur PID 801185 : terminée
+code 2/Result exit-code, MainPID 0, aucun lourd propre encore tenu. Contrôle
+poste libre 0/4 après arrêt. Le créneau suivant recherche FTS peut commencer
+selon son autorisation C7 ; aucune relance C++ de ce côté.
+
+Source worktree neuf `~/git_workspaces/cx-coeur-archive-0511` sur
+`0511dece74f94db6937fb03e6ec45f0c58828c5a`, propre avant/après.
+Preuves à luciepc : `annulation/cx-archive-privee-12nov-01/` contient
+`unite.log`, `configure.log`, `plan-sec.log`, `revue.json`,
+`resume-refus.json`, `limites-resultat.txt`, compile_commands et CMakeCache.
+Runtime 1,826 s, CPU 1,766 s, mémoire pic 85 774 336 octets ; limites
+cgroup mémoire 8 Gio/swap 0, runtime 29 min + arrêt 5 s, tmpfs privé 2 Gio.
+Aucune gate écrite, aucun `build.log` ni manifeste d’archive. Pas de compilation
+d’objet moteur (configuration seulement, dont détection CMake du compilateur),
+pas de pilote, test, mesure, lib partagée ou magasin. Le tmpfs de build a disparu
+avec le namespace ; worktree et preuves conservés, sans retrait de parent.
+
+Diagnostic réduit : 739 unités source identiques dans les deux configurations,
+GNU 16.2.1/64bit/ELF identiques. Les 741 désignaient les objets physiques anciens,
+pas une différence de deux unités entre ces plans. Le seul écart sur les 739
+commandes est `-I<SOURCE>/third_party/spdlog`, présent dans la référence et absent
+du privé. CMakeLists.txt:409–413 ajoute ce chemin si BUILD_TESTS,
+BUILD_EXTENSION_TESTS ou BUILD_BENCHMARK sont actifs ; la proposition privée
+désactive les tests. Le comparateur strict refuse donc ce plan, sans normaliser
+ou ignorer automatiquement l’écart.
+
+`BUILD_EXTENSIONS` vide reprend vector;geo à la configuration selon le projet ;
+le plan sec de la cible statique ne contient aucune compilation d’extension ni
+lib partagée. FETCHCONTENT_FULLY_DISCONNECTED est annoncé inutilisé (chemin
+backtraces désactivé), mais le namespace réseau était fermé. Aucun téléchargement.
+SHA256 plan sec :
+`e9ede0e30f2a9dbc7103e76e059c906771a87a5cdf55652563619961580ea7b4`.
+
+Reste : faire relire l’écart de configuration/inclusion et proposer une nouvelle
+configuration assortie sans élargir la garde. Aucun rebuild/second préflight
+automatique : priorité au préfixe recherche désormais autorisé. Archive
+assortie toujours absente, pilote/mesure toujours non prêts, ticket ouvert.

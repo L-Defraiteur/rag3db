@@ -338,3 +338,12 @@ courants remplacés par ceux de la base. Preuves, SHA et proposition minimale de
 build statique privé dans `docs/coeur-cpp/12-11-2026/04-inventaire-et-proposition-archive-privee.md`.
 Aucun nouveau worktree, configuration, compilation ou mesure. Le ticket d’annulation
 porte la suite et les inconnues ; pas de demande de tour de push.
+
+Préflight privé du 12 novembre exécuté, puis STOP avant moteur :
+`cx-coeur-archive-0511-12nov-01.service`, PID 801185, code 2, lourd libéré.
+Les 739 unités et compilateurs sont identiques ; seul l’include spdlog ajouté
+par la configuration des tests manque dans le privé. La garde refuse cet écart.
+Source `cx-coeur-archive-0511` propre sur commit complet 0511dece7, preuves
+dans `annulation/cx-archive-privee-12nov-01/`, aucune archive produite ni
+lib modifiée. Pas de relance, créneau libéré pour recherche FTS via C7.
+Le ticket d’annulation porte la relecture de cet écart et la suite.
