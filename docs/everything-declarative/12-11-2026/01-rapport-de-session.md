@@ -290,3 +290,31 @@ aux deux postes dans I-luciepc/bge-routage-20261112/globale, verdict-compose.jso
 Intégration demandée à C7 après ces preuves. Pas de master avant son « à toi ».
 Le ticket BGE reste ouvert pour activation/correction des copies utilisateur non inspectées ;
 ce lot ne les migre pas. La dette de features native+daemon reste séparée et ouverte.
+
+## Intégration BGE et retrait des ressources
+
+Master **6dd116e8f70fd328acf3b45a89401e06f71365cb**, sous poste push ED-BGE après
+« à toi » C7. Dernier fetch avant if VERT, trois contrôles lus après push : status propre,
+aucun rebase, origin/master=HEAD. Rebase documentaire sur87799f681, branche neuve
+cx-ed-bge-routage-2 publiée ; diff depuis efdf limité aux Markdown, production/gabarits
+éprouvés inchangés. Un premier appel poste push mal formé a refusé avant toute commande ;
+appel corrigé avec nom de session et séparateur, aucun push sans verrou.
+
+Les deux worktrees et branches locales du lot sont retirés ; targetPC9134875147 octets
+supprimé. Base privée cx_ed_bge_20261112 exportée en dump personnalisé, SHA vérifié aux
+deux postes, aucune connexion avant drop, absence vérifiée après. Pas d'autre base touchée.
+Trois ELF, journaux, rouges et inventaires conservés aux deux postes. Archives fidèles
+des administrations privées (module codeparsers inclus à luciepc) avant gardes fraîches
+SHA dca13abb7a84cf3c1419f728697837a6b1b9b20e34e34c144c9fbf835252f628 VERT.
+Le premier git worktree remove PC sans --force a refusé la présence du sous-module après
+un garde vert ; rapport neuf vert puis --force selon la procédure, aucune garde contournée.
+Branches supprimées par -d normal, remotes gardés ; aucun GC/prune/réparation.
+
+Preuves : I-luciepc/bge-routage-20261112/globale : master-integre, trois-controles,
+equivalence-finale.json, verdict-compose.json, ELF/, provenances/, dumps+SHA, gardes
+portable/PC, administrations fidèles et copies d'archives pax entre postes, nettoyages.
+L'arbre Lucie conserve submodule codeparsersM et docs/lucie-tmp préexistants.
+Le vieux lot reste-explicite et sa base sont hors périmètre du retrait.
+
+Le ticket BGE reste ouvert : gabarits corrigés/intégrés, copies utilisateur et activation
+toujours non qualifiées. La dette native+daemon reste également ouverte, sans fix parasite.

@@ -13,8 +13,8 @@ rc127 d'inventaire corrigé par environnement du magasin ; RADV correspond à un
 énumération possible, pas à une preuve d'inférence. Recette adaptée CPU commune+3rôles,
 énumération autorisée par C7, pas de zéroVulkan promis. Pas de modèle réel/service7879.
 
-En attente du tour master de C7 après revue du verdict. Ensuite intégration selon procédure
-et retrait gardé des seules ressources privées : deuxWT, targetprivé9,13Go, basePG
-cx_ed_bge_20261112 (dump+SHA avant suppression). Garder remotes et preuves.
+Intégré sur master6dd116e8f après à toi de C7 et trois contrôles. DeuxWT, branches
+locales, targetprivé9,13Go et basePGcx_ed_bge_20261112 retirés après dump+SHA, archives
+fidèles et gardes fraîches vertes. TroisELF, logs, rouges, remotes et preuves conservés.
 Arbre Lucie : submodule codeparsersM et docs/lucie-tmp préexistants à préserver.
 Ancien reste-explicite1acc67338 et sa base ne font pas partie du lot.

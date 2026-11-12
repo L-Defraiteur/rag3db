@@ -1,6 +1,6 @@
 # Des manifestes BGE visent le port actuellement servi par granite
 
-- **État** : ouvert ; correction des gabarits validée sur branche, activation des copies utilisateur non vérifiée.
+- **État** : ouvert ; gabarits corrigés et intégrés sur master6dd116e8f, activation des copies utilisateur non vérifiée.
 - **Famille** : produit
 - **Gravité** : configuration ; un fournisseur déclaré peut ne pas servir le modèle requis.
 - **Atteignable en service** : à qualifier ; aucune panne de ces backends observée dans cet audit.
@@ -74,3 +74,7 @@ quiescence[], deadline initiale respectée. Rapport ED du12nov et preuves
 I-luciepc/bge-routage-20261112/globale/verdict-compose.json aux deux postes.
 Les gabarits livrés pourront être intégrés ; aucune activation des copies existantes
 ni migration de configuration utilisateur n'est attestée. Ce reste conserve le ticket ouvert.
+
+Correction des gabarits intégrée sur master `6dd116e8f70fd328acf3b45a89401e06f71365cb`.
+Passe composée et nettoyage privés consignés au rapport ED ; aucune copie utilisateur
+modifiée ou activée par ce lot. Le reste annoncé ci-dessus conserve ce ticket ouvert.
