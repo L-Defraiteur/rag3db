@@ -1,6 +1,6 @@
 # Le témoin code-tree du démon tronque le journal au premier espace
 
-- **État** : ouvert ; diagnostic de fixture établi pendant la globale ED, correction distincte du lot accords.
+- **État** : fermé ; doublon du ticket canonique6bf5bd4ea, preuves fusionnées sans abandon du défaut.
 - **Famille** : produit
 - **Gravité** : témoin bloqué sur un chemin de journal inexistant, masque la fin d'indexation réelle.
 - **Atteignable en service** : test e2e_demon_hote avec RAG3WEAVER_JOURNAUX_DIR contenant un espace ; pas de blocage produit démontré.
@@ -35,3 +35,6 @@ témoin de non-régression et e2e_demon_hote dans une racine privée arbitraire 
 Ne pas allonger simplement la borne ni imposer un nom de dossier. Si reprise du lot
 accords avec chemin sans espace, elle doit être annoncée comme adaptation de recette
 avec cette dette ouverte, pas comme correction de portabilité de la fixture.
+
+Ticket canonique conservé : docs/everything-declarative/tickets/2026-11-12-le-temoin-code-tree-tronque-le-chemin-du-journal-aux-espaces.md.
+Ce déplacement ferme seulement le doublon documentaire, pas la correction ni la validation.

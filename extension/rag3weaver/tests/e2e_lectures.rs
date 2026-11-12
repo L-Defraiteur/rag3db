@@ -8,21 +8,7 @@
 use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
-/// Le reçu de l'outil porte le chemin ; sa racine n'est pas un contrat.
-/// Backend et hôte enveloppent le même résultat dans un ou deux `result`.
-fn journal_de_l_index(recu: &serde_json::Value) -> std::path::PathBuf {
-    let mut resultat = recu;
-    while let Some(interieur) = resultat.get("result") {
-        resultat = interieur;
-    }
-    let chemin = resultat.get("journal").and_then(serde_json::Value::as_str).or_else(|| {
-        resultat.as_str()?.lines().find_map(|ligne| ligne.strip_prefix("journal : "))
-    }).unwrap_or_else(|| panic!("le journal de l'index dans son reçu : {recu}"));
-    let chemin = std::path::PathBuf::from(chemin);
-    assert_eq!(chemin.extension().and_then(|s| s.to_str()), Some("out"), "le journal de l'index : {recu}");
-    assert_eq!(chemin.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()), Some("index"), "le journal de l'index : {recu}");
-    chemin
-}
+use crate::common::journal_de_l_index;
 
 fn compte(cat: &Catalog, lecture: bool) -> i64 {
     let q = "MATCH (n:Essai) RETURN count(n)";

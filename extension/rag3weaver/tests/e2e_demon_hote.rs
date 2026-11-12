@@ -588,9 +588,13 @@ fn code_tree_pose_enregistre_clone_et_retire_un_arbre() {
         serde_json::from_str(&req.header("Content-Type", "application/json").send(corps.to_string()).unwrap().body_mut().read_to_string().unwrap()).unwrap()
     };
     let s = post("/session", None, json!({"client": "témoin code-tree", "keys": ["dev"]}))["session"].as_str().unwrap().to_string();
-    let appeler = |manifest: &Path, outil: &str, arguments: Value| -> String {
+    let appeler_recu = |manifest: &Path, outil: &str, arguments: Value| -> Value {
         let r = post("/call", Some(&s), json!({"manifest": manifest, "name": outil, "arguments": arguments}));
         assert_eq!(r["ok"], json!(true), "{outil} : {r}");
+        r
+    };
+    let appeler = |manifest: &Path, outil: &str, arguments: Value| -> String {
+        let r = appeler_recu(manifest, outil, arguments);
         r["result"].as_str().map(String::from).unwrap_or_else(|| r["result"].to_string())
     };
 
@@ -599,19 +603,11 @@ fn code_tree_pose_enregistre_clone_et_retire_un_arbre() {
     assert_eq!(a.name, "code-coeur");
     assert!(a.copied.is_empty(), "{:?}", a.copied);
     register(&adresse, &a.manifest).unwrap();
-    let lance = appeler(&a.manifest, "index", json!({"confirm": true}));
-    // La réponse peut être un JSON sérialisé (des `\n` échappés) : le chemin
-    // s'arrête au premier blanc, à la barre oblique inverse ou au guillemet.
-    let journal: String = lance
-        .split("journal : ")
-        .nth(1)
-        .unwrap_or_else(|| panic!("pas de journal : {lance}"))
-        .chars()
-        .take_while(|c| !c.is_whitespace() && *c != '\\' && *c != '"')
-        .collect();
+    let lance = appeler_recu(&a.manifest, "index", json!({"confirm": true}));
+    let journal = crate::common::journal_de_l_index(&lance);
     let fin = std::time::Instant::now() + Duration::from_secs(300);
     while !std::fs::read_to_string(&journal).unwrap_or_default().contains("indexation terminée") {
-        assert!(std::time::Instant::now() < fin, "index trop long ({journal}) : {}", std::fs::read_to_string(&journal).unwrap_or_default());
+        assert!(std::time::Instant::now() < fin, "index trop long ({}) : {}", journal.display(), std::fs::read_to_string(&journal).unwrap_or_default());
         std::thread::sleep(Duration::from_millis(200));
     }
     let u = appeler(&a.manifest, "usages", json!({"name": "prendre_le_verrou"}));

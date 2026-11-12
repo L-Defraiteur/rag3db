@@ -53,3 +53,28 @@ Fin : chemin réel correctement extrait, tests de formats et consommateurs
 modifiés verts, suite hôte13/0/0 sans ignorer code-tree, provenance et quiescence
 vérifiées, correction relue puis intégrée. Fermer ce ticket dans le même lot ;
 le ticket publication d'accord reste distinct et porte son propre verdict.
+
+## Reprise ED — preuve et correction bornée
+
+Preuves du doublon fermé fusionnées : I-luciepc/accord-publication-20261112/globale,
+e2e_demon_hote.log (12/13finsok), journal réel
+`racine de journaux/index/1794515589662-227077.out` déjà terminé, chemin tronqué
+« racine » inexistant. Aucun decider_accord dans ce parcours, pas de deadlock établi.
+PrimitiveROUGE/restes[]/nettoyétrue et quiescence indépendante[] ; propriétairePID227077
+/start/cgroup/maps capturé avant arrêt. Lecture indépendante archi concordante.
+ReçuHTTP précis/pile non capturés ; code+vrai journal sont la preuve du diagnostic.
+
+GO C7 : préserver espace/Unicode/JSONescaped, aucune baisse de signaux/skip/borne.
+La fonction journal_de_l_index existante de lectures est déplacée SANS changer son
+comportement dans tests/common/mod.rs. Lectures importe cette primitive ; ses trois
+témoins de reçu restent aux mêmes noms et la suite reste27tests. Hôte conserve le
+Value brut de /call pour index puis le passe au helper commun ; les autres outils
+gardent leur conversion texte. Assertions index/usages/clone/retrait et300interne
+restent identiques ; la suite est toujours bornée120 par la recette. Pas de
+modification Rust produit, ni modèle ajouté pour masquer une erreur de test.
+
+Avant reprise : source publiée, archi revue seule, F5montages au jeu exact puis
+compilation e2e JSON, helpers3 et consommateurs modifiés lectures27/hôte13 sur
+la MÊME racine avec espace. Tous dans le reste du6000original deadline866610.959853126,
+120déjàconsommés comptés ; pas de lib/NAV globale rejouée ni reset. Recette à publier
+avant toute commande. L'ancienne proposition sansespace est abandonnée, jamais exécutée.
