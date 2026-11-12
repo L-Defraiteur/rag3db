@@ -54,6 +54,12 @@ if ! python3 "$ICI/scripts/test_check_tickets.py" > /dev/null 2>&1; then
   echec=1
   rouges+=("test_check_tickets")
 fi
+# Le lanceur possède et libère son état de fixture ; le garde doit rester
+# rouge pour les résidus étrangers et les défauts de nettoyage.
+if ! timeout 60 bash "$ICI/scripts/test_etat_suite_e2e.sh"; then
+  echec=1
+  rouges+=("test_etat_suite_e2e")
+fi
 for jeu in "${JEUX[@]}"; do
   sortie=/dev/null
   [ -n "${CHECK_FEATURES_LOGS:-}" ] && sortie="$CHECK_FEATURES_LOGS/${jeu//,/+}.log"
