@@ -10864,14 +10864,34 @@ impl Catalog {
 
         let mut applied = HashMap::new();
         for row in &result.rows {
-            let version = row[0].as_i64().unwrap_or(0) as u64;
-            let name = row[1].as_str().unwrap_or("").to_string();
-            let status = row[2].as_str().unwrap_or("applied").to_string();
-            let checksum = row[3].as_str().unwrap_or("").to_string();
-            let execution_id = row[4].as_str().unwrap_or("").to_string();
-            let applied_at = row[5].as_i64().unwrap_or(0) as u64;
-            let duration_ms = row[6].as_i64().unwrap_or(0) as u64;
-            let error = row[7].as_str().unwrap_or("").to_string();
+            let invalid = |detail: String| MigrationError::InvalidHistory { version: None, detail };
+            if row.len() != 8 {
+                return Err(invalid(format!("expected 8 columns, got {}", row.len())));
+            }
+            let version = row[0].as_i64().filter(|v| *v >= 0)
+                .ok_or_else(|| invalid("version must be a nonnegative integer".into()))? as u64;
+            let invalid = |detail: String| MigrationError::InvalidHistory { version: Some(version), detail };
+            let required_text = |index: usize, field: &str| -> Result<String, MigrationError> {
+                row[index].as_str().filter(|s| !s.trim().is_empty()).map(str::to_string)
+                    .ok_or_else(|| invalid(format!("{field} must be nonempty text")))
+            };
+            let name = required_text(1, "name")?;
+            let status = required_text(2, "status")?;
+            if !matches!(status.as_str(), "pending" | "applied" | "failed" | "rolled_back") {
+                return Err(invalid(format!("unknown status {status}")));
+            }
+            let checksum = required_text(3, "checksum")?;
+            let execution_id = required_text(4, "execution_id")?;
+            let nonnegative = |index: usize, field: &str| -> Result<u64, MigrationError> {
+                row[index].as_i64().filter(|v| *v >= 0).map(|v| v as u64)
+                    .ok_or_else(|| invalid(format!("{field} must be a nonnegative integer")))
+            };
+            let applied_at = nonnegative(5, "applied_at")?;
+            let duration_ms = nonnegative(6, "duration_ms")?;
+            let error = row[7].as_str().ok_or_else(|| invalid("error must be text".into()))?.to_string();
+            if applied.contains_key(&version) {
+                return Err(invalid("duplicate history version".into()));
+            }
 
             applied.insert(
                 version,
