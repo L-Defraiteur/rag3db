@@ -168,3 +168,14 @@ accordée ensuite, sa lecture du frère reste refusée. Aucune règle sur le dos
 Ce comparatif étaye la cause noyau plutôt que de l'inférer du seul stderr navigateur.
 Preuve : `I-luciepc/accord-20261112/bac-reel.log` et `commit-bac-reel`.
 Les README explicitent désormais la lecture déclarée préalable et la consommation CetteFois.
+
+### Compatibilité des lignes shell littérales
+
+Revue ED : le premier correctif ajoutait à tort un refus de tout faits.shell, alors que
+l'ancien accorder_ligne excluait seulement les décisions Refuse. Rouge a2db2abc3 : 0/1,
+sans exécuter de shell. Correctif9a1a8539c : les deux conditions ajoutées sont retirées ;
+la ligne littérale explicitement accordée reste à usage unique, variantes/élévation et
+formes non réduites refusées. Ciblés : commande51/0/+1helper, run_nodes19/0/0.
+Première globale4df arrêtée avant la lib large, puis quiescence vérifiée ; ses cinq jeux
+de features et1594 tests natifs restent des preuves partielles de cette seule source.
+La nouvelle passe inclura le master3b2eab7ec intégré entre-temps et le correctif final.
