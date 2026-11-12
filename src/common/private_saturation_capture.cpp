@@ -65,6 +65,8 @@ void print(FILE* out, const char* kind, const Record& r) noexcept {
 bool armed() noexcept { return enabled.load(std::memory_order_relaxed); }
 void arm(std::chrono::steady_clock::time_point scenarioStart) noexcept {
     // Une seule utilisation dans un processus neuf ; aucun reset pendant les acteurs.
+    samples.fill(Record{});
+    first = First{};
     origin = scenarioStart;
     enabled.store(true, std::memory_order_release);
 }
