@@ -271,7 +271,11 @@ impl Serveur {
             return self.lancer_sur_port_nul();
         }
 
-        match sonder_avant(addr, &self.sonde, echeance) {
+        let etat_initial = sonder_avant(addr, &self.sonde, echeance);
+        if Instant::now() >= echeance {
+            return Err(ServeurError::Lancement { nom: self.nom.clone(), cause: "budget d'activation dépassé pendant la sonde initiale".into() });
+        }
+        match etat_initial {
             Etat::Repond => {
                 return Ok(Attache {
                     adresse: self.adresse.clone(),
@@ -305,7 +309,8 @@ impl Serveur {
                     journal,
                 });
             }
-            if sonder_avant(addr, &self.sonde, echeance) == Etat::Repond {
+            let etat = sonder_avant(addr, &self.sonde, echeance);
+            if Instant::now() < echeance && etat == Etat::Repond {
                 return Ok(Attache {
                     adresse: self.adresse.clone(),
                     nom: self.nom.clone(),
