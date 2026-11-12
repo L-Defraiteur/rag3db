@@ -1,5 +1,31 @@
 # Rapport de session — l'arbre principal, au 11 novembre 2026
 
+## État après les correctifs de revue finale — 12 novembre
+
+La validation6fb reste attribuée à6fb (13 suites vertes et lectures corrigé).
+La revue a reproduit puis corrigé deux frontières du même lot :
+
+- Dette publiée après rollback : rouge78408a4a9, fixff5fa48d3, vert renforcé8fd
+  (Strict honnête, drain Alpha sans Beta, puis Beta et Strict complet).
+- Graphe déclaré enrichi sur les occurrences : rouged44af52c3, fix8fd0307fc ;
+  provenance SourceResolved rougee1c6d05dd, fixb9bf6b6d1, même graphe1/0 vert
+  avec champs explicites/défaut et référence à la vraie sortie BM25.
+
+Journaux hors target à luciepc : cx-marque-rollback-rouge-v4.log,
+cx-marque-rollback-vert-v2.log, cx-graphe-enrichissement-rouge-v2.log,
+cx-graphe-enrichissement-vert.log, cx-graphe-provenance-{rouge,vert}.log.
+Les erreurs de montage antérieures restent distinctes des rouges produit.
+Cinq tickets restent ouverts, aucun tour master. Les drafts de clôture sont
+archivés au portable dans /tmp/cx-docs-fin-1a-avant-revues.patch, pas appliqués.
+
+Après vert ciblé et avis archi final sans blocage, c7 autorise le gel propre puis
+une nouvelle passe features5/lib/nav et14suites (225 e2e attendus, dérivées24).
+Un appel par suite, même base PG privée/lib29a7/-j8/target32Go, adresse sparse7879
+explicitement posée pour lectures. Premier rouge : arrêt et diagnostic, pas retry.
+Aucun ancien verdict n'est réattribué au catalogue et au nœud modifiés.
+
+
+
 ## Passe combinée 6fb6d8756 : arrêt au premier rouge, 12 novembre
 
 Branche5 rebasée sans conflit sur master8c208542f, range-diff30/30 identiques.

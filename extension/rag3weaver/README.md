@@ -104,6 +104,11 @@ entity, requires a migration; no automatic migration is provided. Production
 code templates do not enable this option, and no total database size saving
 has been measured.
 
+Queue inspection (`has_pending`, `pending_work`, `drain_stats.pending`) describes
+only the active cell, which the next drain can write. The catalogue-wide
+`index_progress.writes_pending` includes parked cells; changing cells preserves
+their accepted work. Cumulative drain counters describe the catalogue's history.
+
 ## Measured
 
 First index of this repository (about 7 000 files, 80 000 scopes, 1.1 million
