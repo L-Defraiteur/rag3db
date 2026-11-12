@@ -38,3 +38,13 @@ sur l'index et les lectures. Le ciblé et la passe restent requis selon le péri
 
 Avant toute globale mémoire contenant lectures24, un montage privé `.../commandes` évite ce
 rouge identifié. ED transmet ce ticket et cette précondition à mémoire et orchestration.
+
+## Reprise recherche et montage préparé
+
+Reprise explicitement autorisée par orchestration, worktree/branche neuf `cx-recherche-lectures-journaux`, base master `af2ef6846`. Ticket repris depuis le blob35c23c2a6 sans embarquer le lot ED. Périmètre limité à `tests/e2e_lectures.rs` : aucun runtime, manifeste, ED/M8 ou service modifié.
+
+La relecture des contrats existants trouve le reçu dans IndexNode : chaîne Markdown avec ligne `journal : …`, ou objet JSON à champ `journal`. Le backend enveloppe dans `result`, l’hôte ajoute une enveloppe `result` ; aucun helper de reçu/journal commun aux témoins consultés ne fait cette extraction. Neuf parseurs locaux découpaient la sérialisation JSON par guillemets, antislashs et espaces puis exigeaient `commandes/index/`.
+
+Un helper local unique lit maintenant la Value réelle, descend les enveloppes `result`, puis extrait le champ/ligne désigné. Il préserve les espaces et échappements ; il exige toujours un journal `.out` sous `index`. Les neuf usages le composent, sans changer leurs boucles bornées de fin/échec ni les assertions index/recherche. Trois tests de helper couvrent les deux formats, zéro/une/deux enveloppes et l’aller-retour JSON avec chemin arbitraire/espaces/accents/guillemets/antislash ; les refus d’une simple mention de chemin et d’un autre journal restent explicites. Ces tests non ignorés se jouent séparément ; la suite ignorée existante conserve ses24 témoins.
+
+Joué à cette étape : diff --check et parsing rustfmt vers copie externe, pas de compilation ni exécution native. Source à publier/figer avant test. Plan ciblé : après coordination ED/M8 et service7879, poste lourd lib29 complète/-j8/Mem32/target97k privé plafonné32Go ; compilation bornée1500s puis tests du helper60s et lectures24 borné120s sous racine privée arbitraire ne contenant pas le segment `commandes`, global1800s. Logs hors target, source/ELF/native/gabarits attestés. Aucun service/GPU/modèle nouveau ni e2e entier ; service existant uniquement après accord de créneau, premier autre rouge stop sans retry. Diff et preuves à revoir avant globale/master, aucun Rust poussé pendant les globales ED/M8.
