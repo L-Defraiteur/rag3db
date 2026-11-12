@@ -1,6 +1,6 @@
 # Borner la fenêtre nocturne de card0
 
-- **État** : en cours ; entrée finale qualifiée et timer réel actif à luciepc pour le 13 novembre 07:54 Paris, 19 fixtures CPU et preuve réelle de descendants vertes ; aucun modèle enregistré, restitution réelle encore attendue.
+- **État** : en cours ; réserve d’exécutant corrigée, 22 fixtures CPU et entrées réelles CPU vertes ; timer réel actif13nov07:54Paris, entrée déqualifiée jusqu’à avis final, aucun modèle enregistré, restitution réelle encore attendue.
 - **Famille** : produit
 - **Gravité** : disponibilité ; les modèles temporaires doivent rendre le GPU du jeu à l'heure convenue.
 - **Atteignable en service** : oui pour les processus privés nocturnes, aucune modification des services courants requise.
@@ -202,3 +202,44 @@ la révision, sans les confondre avec la source finale.
 Preuves finales : `preparation/fixtures-finales.log`, `sources-finales.sha256`,
 `etat-effectif-final.json`, `refus-hors-fenetre-final.log`, `pret.json` ; mêmes
 preuves de portée CPU v2. Le ticket reste ouvert jusqu’à l’échéance réelle.
+
+## Réserve9915 traitée : exécutant réellement dans la portée
+
+Source initiale du delta publiée en b0cb4bef1 avant essais, puis rebasée sur
+9915fe6f4 en branche neuve `cx-optimiseur-card0-nuit-2`. Conflit documentaire
+résolu en conservant intégralement la section de revue de l’orchestration et
+les faits opérateur ; aucun octet des scripts/configs éprouvés changé au rebase.
+
+`verifier_executant` contrôle l’unité chargée, description/hash, slice,
+Restart=no, KillMode=control-group, **MainPID égal au PID courant** et
+**/proc/self/cgroup égal au ControlGroup réel de l’unité**. Appelé avant
+rocminfo, puis juste avant exec. Ni variable d’environnement ni chemin de
+recette ne suffit désormais à contourner la portée par erreur d’invocation.
+
+Source installée SHA256
+`0e11e0a3e6d0d47bee04b9cda3ce1b97db4c722f96e1852ac97d1b5d6ef67739`.
+**22 fixtures CPU vertes aux deux postes**, dont unité absente/étrangère,
+MainPID différent et cgroup différent. Aucun nouveau modèle ni commande GPU.
+
+Preuve réelle à luciepc `test_entree_systemd_cpu.py` : route `main/executer`
+avec vraie lecture systemd et vraie appartenance au cgroup ; horloge, réponse
+ROCr et exec remplacés uniquement dans le filet CPU, pas dans le CLI opérateur.
+Racine de recettes isolée sous `preparation/entree-systemd-v3`, jamais dans
+le registre effectif des modèles.
+
+- Hors unité : PIDCPU807564, unité absente, code1, zéro appel ROCr/exec factice.
+- Unité CPU volontairement étrangère : MainPID807576, refus code1, zéro appel
+  ROCr/exec factice malgré appartenance à une unité réelle.
+- Unité CPU privée : MainPID807608 égal à getpid, vrai cgroup privé, code0,
+  un appel de chaque stub ROCr/exec. Aucun vrai rocminfo ni programme modèle.
+
+Les deux unités CPU sont terminées/collectées, aucun descendant ni unité
+modèle effective restante. Le probe de descendant setsid v2 reste vert.
+Preuves `preparation/fixtures-portee.log`, `sources-portee.sha256`,
+`entree-systemd-v3.log` et les trois `entree-systemd-v3/<cas>/preuve.json`.
+
+Timer toujours active/waiting/Persistent, NextElapse13nov07:54CET. Le reçu
+qualifié précédent a été préservé sous
+`preparation/pret-duree-avant-garde-unite.json` ; **pret.json effectif absent**
+jusqu’à la revue finale. Le cutoff n’en dépend pas et reste armé. Aucun usage
+card0 avant cette requalification ; aucun besoin déclaré actuellement.
