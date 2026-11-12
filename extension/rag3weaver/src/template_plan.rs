@@ -610,6 +610,48 @@ mod tests {
             .any(|r| r.kind == RefusalKind::Compatibility && r.path == "note.json"));
     }
     #[test]
+    fn unqualified_storage_resource_and_seed_transitions_refuse() {
+        let plain = fixture();
+        let storage = json!({"application_format":"memory-v1","recipe":"recipe-v1"});
+        let pinned = edit(&plain, |v| v["storage"] = storage.clone());
+        let cases = vec![
+            (plain.clone(), pinned.clone(), "storage"),
+            (pinned.clone(), plain.clone(), "storage"),
+            (
+                pinned.clone(),
+                edit(&pinned, |v| {
+                    v["storage"]["application_format"] = json!("memory-v2")
+                }),
+                "storage",
+            ),
+            (
+                pinned.clone(),
+                edit(&pinned, |v| v["storage"]["recipe"] = json!("recipe-v2")),
+                "storage",
+            ),
+            (
+                plain.clone(),
+                edit(&plain, |v| {
+                    v["vector_extension"] = json!("private/vector.so")
+                }),
+                "vector_extension",
+            ),
+            (
+                plain.clone(),
+                edit(&plain, |v| v["seed"] = json!({"Note":[{"name":"new"}]})),
+                "seed",
+            ),
+        ];
+        for (local, target, key) in cases {
+            let errors = plan(&[local.clone()], &local, &target, "backend.json").expect_err(key);
+            assert!(
+                errors.iter().any(|r| r.kind == RefusalKind::Compatibility
+                    && r.path == format!("backend.json#/{key}")),
+                "{key}: {errors:?}"
+            );
+        }
+    }
+    #[test]
     fn file_format_changes_are_never_silently_qualified() {
         let b = fixture();
         let t = edit(&b, |v| v["files_format"] = json!({"version":2}));
@@ -623,10 +665,7 @@ mod tests {
     fn a_physical_sandbox_check_is_not_executed_by_the_plan() {
         let b = edit(
             &fixture(),
-            |v| {
-                v["workspace"] =
-                    json!({"source":"working_tree","root":"workspace","commands":"auto","sandbox":{"mode":"landlock"}})
-            },
+            |v| v["workspace"] = json!({"source":"working_tree","root":"workspace","commands":"auto","sandbox":{"mode":"landlock"}}),
         );
         let e = plan(&[b.clone()], &b, &b, "backend.json").unwrap_err();
         assert!(
