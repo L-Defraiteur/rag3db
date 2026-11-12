@@ -104,8 +104,9 @@ Budget proposé, à confirmer avec le porteur avant lancement :
 - pas de reprise partielle pour mesurer les latences : sortie neuve par série,
   cases contiguës et état de cache initial documenté.
 
-Restauration attendue : hotfixs, porteur présumé de 7882, confirme ses consommateurs,
-sa commande de redémarrage et sa disponibilité avant arrêt. Le banc ne tue ni
+Restauration attendue : hotfixs a confirmé à l’orchestration la remise temporaire
+de la gestion de 7882 à l’optimiseur pour arrêt et restauration. L’optimiseur
+prépare et vérifie la recette exacte de retour avant arrêt. Le banc ne tue ni
 ne redémarre ce processus. En fin de banc ou sur échec, arrêter et attendre son
 propre llama-server, vérifier port 8099 libéré et VRAM rendue, prévenir le porteur
 pour remettre 7882 en route puis faire confirmer santé et disponibilité.
@@ -126,3 +127,22 @@ pendant la fenêtre proposée. Cela ne prouve pas l’absence d’autres consomm
 relire l’activité globale au départ. Les connexions côté serveur ne suffisent
 pas à identifier des clients externes. Ne lancer qu’après remise explicite de
 7882 par son porteur, contrôle de VRAM et confirmation d’identité card2.
+
+## Confirmations relayées par l’orchestration le 12 novembre
+
+- Codeparsers : essais A/B terminés, hôtes arrêtés, aucun client, réservation
+  ni travail prévu sur 7882. Preuves annoncées dans son ticket fermé require-relatif ;
+  confirmation relayée, non revérifiée par le banc.
+- Embarquement : aucune charge ni prévision annoncée pendant la fenêtre.
+- Hotfixs : remise temporaire de 7882 à l’optimiseur pour arrêt/restauration.
+- Orchestration : contrôle indépendant de `/sante` sur 7882 avec granite-278m,
+  dimension 768, Flex32 et factice=false ; processus GPU sur PCI 0000:04:00.0,
+  consommation annoncée d’environ 5,7 Gio. Ces constats sont relayés et ne
+  remplacent pas les contrôles de départ du banc.
+
+L’optimiseur prépare encore recette exacte et retour avant tout arrêt : aucun
+GO ni arrêt n’est acquis à cette étape. Il confirme la santé et la disponibilité
+de 7882 après restauration. Le seuil minimum de 9 Gio libres sur card2 reste
+à lire après libération effective ; la consommation actuelle du service n’est
+pas une promesse de capacité. Fenêtre maximale inchangée : 1 200 secondes sous
+`poste mesure`, après acquisition. Aucun modèle du banc chargé.
