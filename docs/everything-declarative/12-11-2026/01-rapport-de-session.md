@@ -229,3 +229,25 @@ Complément demandé par C7 : l'observateur de reprise conserve aussi les maps r
 des exécutables large/NAV/e2e observés, vérifie leur native29, leur empreinte source efdf
 et les220 gabarits embarqués. RUNPATH sera conservé par readelf avant reprise.
 SHA final de reprise.py, remplaçant le précédent avant toute exécution : `d599a6bee302f92d9e14a9f602f4625acdd31f0b7acff369d10a4be1fa0a4be2`.
+
+## Interruption prudente de la lib large : avertissements RADV
+
+La reprise a été arrêtée volontairement après31,467s (SIGTERM à sa seule unité privée),
+sans verdict final de lib. Des avertissements RADV/Vulkan sont apparus ; ils ne prouvent
+ni chargement d'un modèle ni calcul GPU. Journal partiel conservé séparément sous
+lib-large-interrompue-radv.log, descendants-interrompus-radv.json ; quiescence-arret-radv.json=[].
+Le premier ELF large a bien fourni ses maps native29/source efdf/220 gabarits.
+
+Lecture : regime.rs376→driver_card_types388 crée une Instance puis enumerate_adapters(VULKAN)
+et lit get_info, sans request_device ni tenseur. estimate.rs445 l'appelle dans estimate_here,
+atteint par les parcours worktree de l'hôte. C'est un chemin compatible avec les avertissements,
+pas une attribution dynamique exhaustive. BurnDevice::Cpu passe aussi par wgpu/Vulkan ;
+la variable cpu ne signifie donc pas zéro initialisation de pilote. Les variables de rôle
+priment sur la variable commune. Aucun correctif produit, aucune exclusion nouvelle.
+
+Diagnostic et proposition de recette bornée soumis à C7 avant reprise : admettre explicitement
+l'énumération matérielle de la lib large, maintenir aucun modèle/inférence réel, poser les
+choix cpu commun et trois rôles si construction éventuelle. La surveillance conserverait les
+provenances natives et descripteurs de périphériques, sans transformer une ouverture de
+périphérique en preuve de calcul. F5/minimal/compilation acquis ; source efdf et deadline
+860816.22498967 inchangées. Aucun usage7879. Cette section ne constitue aucun vert de lib.
