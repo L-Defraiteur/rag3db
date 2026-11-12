@@ -1060,3 +1060,37 @@ Aucune relance inchangée. Correction limitée au témoin : comparer l'ensemble
 exact des RelationDef du vrai fournisseur avant/après composition, extrémités
 ET propriétés, plutôt qu'une extrémité présumée erronée. Nouveau SHA publié et
 parse de syntaxe effectué avant proposition de ciblé v2 au même budget.
+
+### Ciblé A v2 vert dans la fenêtre globale INITIALE
+
+Source propre **59eb3d9df59e14c1f8aa5c02cf00b250bd7f82e9** ; seul Rust changé
+depuis d953 : témoin comparant la map complète des RelationDef réelles. Revue mémoire
+du delta conforme, producteur/adaptateur/runner inchangés. **64/0/0**, dont18faits,
+15aperçu et31contrats/runner existants ; inventaire exact64 identique à v1 vérifié
+avant runtime, natif+code attestés dans l'artefact JSON Cargo.
+
+C7 a exigé de conserver la fenêtre600 INITIALE : début conservateur
+20:00:17.214+01, échéance20:10:17.214+01. V2 acquise avec291,07srestants,
+RuntimeMax281s, timeout au reste ; driver limite end-15s. V2 **23,13s**, fin à
+**332,06s depuis le début initial**, sans remise à zéro. HIGH/MAX/OOM/OOMkill0,
+source propre, scope inactive et poste libre0/4 relus ; target unique1,6Go.
+
+Preuves luciepc cx-faits-lies-cible-v2/{source.json,compile.log,inventaire.log,
+inventaire.json,tests.log,resultat.json,VERDICT,binaire.json,binaire-tests}.
+ELF rag3weaver-88737abc986584d2 réellement produit/nommé Cargo : SHA256
+**0bde14c21adae5ae67efe4a99a45e2535c8a3e92fd42ba46cc7f2cd8ede9c84c**.
+206 sans Cargo, d953 compilation/inventaire verts puis63/1/0 erreur de témoin,
+et59eb64/0/0 restent distincts. Aucun rouge de produit inventé, aucun retry inchangé.
+
+Producteur/comparateur purs des faits fournis ; runner consommateur lit ses
+fichiers MMD existants, pas de promesse IOzéro pour le runner entier. Faits scellés
+SuppliedDeclarations, Unversioned non fabriqué, aperçu toujours non qualifié au
+stockage. Aucun modèle/service/base réelle/apply/bootstrap. Ticket migration ouvert.
+
+Prochaine étape préparée hors push : revue du bilan et passe adaptée sur master
+incluant d'abord le lot ED prioritaire (rebase avant source de passe). Proposition
+features5+minimum checklib, lib entière8features, navigateur selon inventaire réel
+du nouveau master, CLI migration5/1suite ;18faits+15aperçu réellement exigés enlib,
+contrats source/génération conservés. Global3600/j8/Max32/target32/lib29 sous poste,
+PG privée neuve si requise par lib, TMP navigateur court privé disque ; aucun
+service/modèle/GPU nouveau nécessaire. Aucun lourd ou master de cette étape lancé.

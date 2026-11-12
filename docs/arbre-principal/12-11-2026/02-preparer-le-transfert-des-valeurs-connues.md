@@ -378,3 +378,22 @@ aucun code durable dans A et ne qualifie pas une empreinte d'inventaire existant
 comme génération ou état complet. Toute opération d'établissement initial ou d'avancement durable,
 transfert, apply, activation, publication, copie/lecture d'une base de Lucie ou
 politique de rétention reste hors de la tranche préparée.
+
+## État de la tranche A codée — avant passe adaptée
+
+GO Lucie relayé par C7 ; source privée59eb3d9df, producteur/comparateur implémentés
+et consommés par MigrationRunner::resolve_plan_from_facts. Déclarations complètes
+explicites (None distinct de vide), compose et validation finale communs via petit
+adaptateur backend_schema ; backend.rs non modifié. Contrats versionnés séparés
+entités/faits complets, mécanisme canonique et validation des nombres finis
+partagés avec l'aperçu. Faits/modèles/recettes fournis, aucun builder ou observation
+stockage ; report scellé SuppliedDeclarations, pas un jeton d'exécution.
+
+Ciblé natif+code :64/0/0,18nouveaux+15aperçu+31existants, inventaire avant exécution,
+fenêtre initiale600 respectée sans reset (fin332,06s). Source206 non compilée après
+syntaxe repérée ; d95363/1/0 dû à mon mauvais attendu DEFINES→Scope alors que le
+fournisseur donne Scope→Symbol ; test corrigé vers égalité de toutes les relations
+réelles, pas de modification du producteur. Preuves et SHA dans le ticket.
+Revue seule mémoire effectuée. Passe adaptée et intégration encore à faire après
+le master ED prioritaire ; aucun changement de la génération durable ou de l'aperçu
+non qualifié n'est déclaré livré. La question de conception1 reste non bloquante A.
