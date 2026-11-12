@@ -565,6 +565,52 @@ pub fn build_bac_a_sable(
     Some(bac)
 }
 
+/// Lecture Git d'un worktree lié : administration propre et contenu commun,
+/// jamais les écritures du principal ni les administrations de ses voisins.
+/// Le principal est celui porté par l'hôte, pas un chemin fourni à l'outil.
+pub fn avec_lecture_git(
+    mut bac: crate::commande::BacASable,
+    racine: &std::path::Path,
+    principale: &std::path::Path,
+) -> crate::commande::BacASable {
+    fn administration(racine: &std::path::Path) -> Option<(PathBuf, PathBuf)> {
+        let racine = racine.canonicalize().ok()?;
+        let marque = racine.join(".git");
+        if marque.is_dir() {
+            let admin = marque.canonicalize().ok()?;
+            return admin.starts_with(&racine).then(|| (admin.clone(), admin));
+        }
+        let texte = std::fs::read_to_string(&marque).ok()?;
+        let cible = PathBuf::from(texte.trim().strip_prefix("gitdir:")?.trim());
+        let admin = racine.join(cible).canonicalize().ok()?;
+        let retour = std::fs::read_to_string(admin.join("gitdir")).ok()?;
+        if admin.join(retour.trim()).canonicalize().ok()? != marque.canonicalize().ok()? {
+            return None;
+        }
+        let commun = std::fs::read_to_string(admin.join("commondir")).ok()?;
+        let commun = admin.join(commun.trim()).canonicalize().ok()?;
+        if admin.parent()? != commun.join("worktrees") || !commun.join("objects").is_dir() || !commun.join("HEAD").is_file() {
+            return None;
+        }
+        Some((admin, commun))
+    }
+    let Some((admin, commun)) = administration(racine) else { return bac };
+    let Some((_, principal_commun)) = administration(principale) else { return bac };
+    if commun != principal_commun { return bac; }
+    if admin != commun {
+        bac = bac.lire_en_plus(admin);
+    }
+    // Ne pas accorder le dossier commun entier : il contient les autres
+    // worktrees. Un lien symbolique sortant n'ouvre aucune racine nouvelle.
+    for nom in ["objects", "refs", "HEAD", "config", "packed-refs", "shallow"] {
+        let chemin = commun.join(nom);
+        if let Ok(reel) = chemin.canonicalize() {
+            if reel.starts_with(&commun) { bac = bac.lire_en_plus(reel); }
+        }
+    }
+    bac
+}
+
 /// Les types de nœuds qu'un crochet peut traverser, selon sa politique.
 pub fn hook_nodes(policy: &ToolPolicy) -> Vec<&'static str> {
     allowed_nodes(policy)
@@ -874,6 +920,81 @@ mod tests {
         };
         assert!(erreur.contains("n'existe pas"), "{erreur}");
         assert!(erreur.contains("relatif au manifeste"), "le refus dit quoi faire : {erreur}");
+    }
+
+    /// Git voit son worktree et les objets communs, pas les autres domaines.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn le_bac_git_lit_le_diff_sans_ouvrir_les_voisins() {
+        use crate::commande::{Atelier, Commande, Contexte, Garde, Mode};
+        let d = tempfile::tempdir().unwrap();
+        let principal = d.path().join("principal");
+        let lie = d.path().join("lie avec espace");
+        let voisin = d.path().join("voisin");
+        std::fs::create_dir(&principal).unwrap();
+        let git = |racine: &std::path::Path, args: &[&str]| {
+            let o = std::process::Command::new("git").arg("-C").arg(racine).args(args).output().unwrap();
+            assert!(o.status.success(), "git {args:?} : {}", String::from_utf8_lossy(&o.stderr));
+        };
+        git(&principal, &["init", "-q"]);
+        std::fs::write(principal.join("fichier"), "avant\n").unwrap();
+        git(&principal, &["add", "fichier"]);
+        git(&principal, &["-c", "user.name=Fixture", "-c", "user.email=fixture@example.org", "commit", "-qm", "fixture"]);
+        git(&principal, &["worktree", "add", "-qb", "lie", lie.to_str().unwrap()]);
+        git(&principal, &["worktree", "add", "-qb", "voisin", voisin.to_str().unwrap()]);
+        std::fs::write(lie.join("fichier"), "apres\n").unwrap();
+        let bac = avec_lecture_git(crate::commande::BacASable::autour(&lie), &lie, &principal);
+        // Ce témoin exige Landlock : un noyau qui ne peut confiner est rouge.
+        bac.ruleset().expect("Landlock effectif");
+        let atelier = Atelier::dans(&lie).avec_bac_a_sable(bac.clone());
+        let garde = Garde::new(Mode::Approbation);
+        let contexte = Contexte::default();
+        let commande = Commande::new("git", ["diff", "--", "fichier"]);
+        let sortie = crate::commande::executer(garde.autoriser(&commande, &contexte).unwrap(), &atelier).unwrap();
+        assert!(sortie.a_reussi() && sortie.stdout.contains("-avant") && sortie.stdout.contains("+apres"), "{sortie:?}");
+        let secret = principal.join("prive");
+        std::fs::write(&secret, "hors domaine").unwrap();
+        let voisin_admin = principal.join(".git/worktrees/voisin/HEAD");
+        for chemin in [&secret, &voisin_admin] {
+            let commande = Commande::new("cat", [chemin.to_str().unwrap()]);
+            let sortie = crate::commande::executer(garde.autoriser(&commande, &contexte).unwrap(), &atelier).unwrap();
+            assert!(!sortie.a_reussi(), "lecture interdite : {chemin:?}");
+        }
+        assert_eq!(bac.ecritures, crate::commande::BacASable::autour(&lie).ecritures);
+        // Test du noyau seul : aucun accord de l'agent n'est simulé.
+        use std::os::unix::process::CommandExt;
+        for (destination, permis) in [(lie.join("copie"), true), (secret.clone(), false), (principal.join(".git/config"), false), (voisin_admin.clone(), false)] {
+            let mut regle = Some(bac.ruleset().unwrap());
+            let mut commande = std::process::Command::new("/bin/cp");
+            commande.arg(lie.join("fichier")).arg(&destination);
+            unsafe {
+                commande.pre_exec(move || {
+                    regle.take().ok_or_else(|| std::io::Error::other("ruleset déjà posé"))?
+                        .restrict_self().map_err(|e| std::io::Error::other(e.to_string()))?;
+                    Ok(())
+                });
+            }
+            assert_eq!(commande.output().unwrap().status.success(), permis, "écriture {destination:?}");
+        }
+        // Une autre racine ne devient pas ce worktree par un simple gitfile.
+        let faux = d.path().join("faux");
+        std::fs::create_dir(&faux).unwrap();
+        std::fs::copy(lie.join(".git"), faux.join(".git")).unwrap();
+        let ferme = crate::commande::BacASable::autour(&faux);
+        assert_eq!(avec_lecture_git(ferme.clone(), &faux, &principal).lectures, ferme.lectures);
+        let autre = d.path().join("autre");
+        std::fs::create_dir(&autre).unwrap();
+        git(&autre, &["init", "-q"]);
+        assert_eq!(avec_lecture_git(ferme.clone(), &lie, &autre).lectures, ferme.lectures, "administration étrangère refusée");
+        let ordinaire = avec_lecture_git(crate::commande::BacASable::autour(&principal), &principal, &principal);
+        let atelier = Atelier::dans(&principal).avec_bac_a_sable(ordinaire);
+        let commande = Commande::new("git", ["diff", "--", "fichier"]);
+        assert!(crate::commande::executer(garde.autoriser(&commande, &contexte).unwrap(), &atelier).unwrap().a_reussi());
+        let refs = principal.join(".git/refs");
+        std::fs::rename(&refs, principal.join(".git/refs-gardees")).unwrap();
+        std::os::unix::fs::symlink(&autre, &refs).unwrap();
+        let ferme = avec_lecture_git(crate::commande::BacASable::autour(&lie), &lie, &principal);
+        assert!(!ferme.lectures.contains(&autre.canonicalize().unwrap()), "symlink sortant non accordé");
     }
 
     /// La porte : `off` ne monte rien, les trois modes montent la Garde.
