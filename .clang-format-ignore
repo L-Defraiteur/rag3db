@@ -1,0 +1,6 @@
+# Annexes et preuves : ne pas réécrire l'histoire des diagnostics.
+docs/*
+*/docs/*
+# Sous-module : sa politique de formatage appartient à son propre dépôt.
+extension/rag3weaver/codeparsers
+extension/rag3weaver/codeparsers/*
