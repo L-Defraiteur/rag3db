@@ -594,6 +594,13 @@ pub fn avec_lecture_git(
         }
         Some((admin, commun))
     }
+    // Git ne doit pas charger implicitement les réglages personnels hors
+    // domaine. Une configuration explicitement déclarée reste explicite.
+    for (cle, valeur) in [("GIT_CONFIG_GLOBAL", "/dev/null"), ("GIT_OPTIONAL_LOCKS", "0")] {
+        if !bac.env.iter().any(|(k, _)| k == cle) {
+            bac = bac.avec_env(cle, valeur);
+        }
+    }
     let Some((admin, commun)) = administration(racine) else { return bac };
     let Some((_, principal_commun)) = administration(principale) else { return bac };
     if commun != principal_commun { return bac; }
