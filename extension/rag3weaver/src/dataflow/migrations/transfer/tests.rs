@@ -254,14 +254,18 @@ fn relation_endpoints_system_columns_and_unfingerprintable_values_refuse() {
 }
 #[test]
 fn recipe_changes_and_named_templates_refuse_without_reading_a_template() {
-    for case in 0..6 {
+    for case in 0..8 {
         let mut f=fixture("Scope");match case {
             0=>f.recipe.target_config.chunking.overlap+=1,
             1=>f.recipe.target_config.fields.get_mut("name").unwrap().is_title=false,
             2=>{f.recipe.target_config.derived.as_mut().unwrap().render.insert("content".into(),"{{ root.content }}changed".into());},
             3=>{f.recipe.target_config.derived.as_mut().unwrap().render.insert("content".into(),"unresolved-user-template".into());},
             4=>f.recipe.target_config.chunked=Some(false),
-            _=>f.recipe.target_config.fields.get_mut("name").unwrap().boost=Some(f64::NAN),
+            5=>f.recipe.target_config.fields.get_mut("name").unwrap().boost=Some(f64::NAN),
+            6=>f.recipe.target_config.fusion=Some(crate::search::FusionConfig {rrf_k:f64::NAN,..Default::default()}),
+            _=>f.recipe.target_config.field_weights.push(crate::search::FieldWeight {
+                field:"kind".into(),weights:BTreeMap::new(),default:f64::INFINITY,
+            }),
         }rejects(&f,RefusalCode::UnsupportedRecipe);
     }
 }
