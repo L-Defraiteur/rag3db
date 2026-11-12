@@ -73,3 +73,16 @@ complète bit pour bit. Le préflight futur peut lire les métadonnées nécessa
 avant initialize, sans DDL/réparation/modèles ; aucune base réelle lue ici.
 ED relit encore le runner/admission/checksum et la frontière du premier patch.
 Préparation toujours ouverte, aucun code autorisé pour l’instant.
+
+## Révision après les trois avis ED
+
+Le plan propose maintenant les API communes d’inspection/admission, de résolution
+et qualification du plan, la façade d’ouverture sur disque et le point d’entrée
+explicite migration plan ; noms proposés, aucune API livrée. Les chemins hôte/CLI
+avant RW/modèles sont cités, l’identité résolue et les refus d’historique sont
+explicites, ainsi que l’exclusivité réelle et running durable avant effets.
+Publication configs/format/génération/journal appliqué atomique sans DDL proposée,
+clôture avant ouverture normale et reprise explicite des états ambigus.
+Le profil sparse dépend des données/signaux à transférer, pas du seul lecteur
+models.sparse. Même ticket d’implémentation, pas de nouveau Rust ni de test joué.
+Préparation ouverte jusqu’à validation de cette révision par orchestration.

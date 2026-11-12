@@ -1,6 +1,6 @@
 # Migrer les ancres de code vers le contenu partagé
 
-- **État** : ouvert, implémentation à autoriser après revue du plan1b ; aucun code ni accès aux bases réelles autorisé par cette fiche.
+- **État** : ouvert, premier patch contrat/admission/plan/préflight autorisé après publication du plan corrigé ; transformation et activation non autorisées.
 - **Famille** : produit
 - **Gravité** : capacité manquante ; le partage déclaratif1a ne transforme pas les index de code existants.
 - **Atteignable en service** : non pour ce chantier préparatoire ; gabarits et index de production inchangés.
@@ -55,6 +55,41 @@ encore relire la frontière d’API du premier correctif avant toute autorisatio
 
 ## Autorisation actuelle
 
-**Lecture et documents uniquement.** Aucun Rust modifié, test/build lourd lancé,
+Préparation documentaire : aucun Rust modifié, test/build lourd lancé,
 target/service créé, base réelle lue ou copiée, migration/activation exécutée.
-L’ordre ci-dessus propose le premier correctif ; il n’en autorise pas l’exécution.
+L’autorisation bornée suivante prend effet après publication du plan corrigé.
+
+## Trois avis ED intégrés au plan, avant Rust
+
+Admission commune avant RW et embedder_or_absent sur les chemins hôte/CLI,
+inspection des métadonnées RO sans initialize/DDL/réparation/modèle ; façade
+PreparedBackend proposée plutôt qu’une règle copiée par client.
+
+Qualification T12 : checksum ET plan résolu (variables/configs/recette/formats/
+génération), historique inconnu/orphelin/malformé refusé, revalidation sous
+exclusivité réelle ; running durable avant effets métier. Le verrou TTL actuel
+ne vaut pas preuve d’acquisition exclusive. Bootstrap éventuel du journal à
+traiter explicitement, sans effet caché du préflight.
+
+Publication proposée atomique des configs/format/génération/journal appliqué,
+sans DDL, après validations ; pas d’ouverture normale running/failed non
+réconcilié ni de succès déduit d’un checkpoint Completed. Clôture avant ouverture.
+
+Sparse se décide d’après les données/signaux/marqueurs à transférer ; models.sparse
+seul peut n’être qu’un lecteur de surlignage. API/point d’entrée proposés dans le
+plan, pas livrés. Autorisation du premier patch encore attendue séparément.
+
+## Autorisation bornée suivante, distincte du livrable documentaire
+
+Orchestration autorise le premier patch sur un WT cx neuf : contrat typé commun
+format/plan résolu, inspection/admission sans mutation, raccord appelable du
+plan/préflight et qualification stricte journal/checksum sous exclusivité réelle
+de copie. T1/T2/T12 sur fixtures synthétiques seulement, rouges avant correction,
+compteurs zéro DDL/réparation/raccord modèle lors des refus. Réutiliser les
+primitives existantes ; partager API/diff+témoin avant passe lourde.
+
+Une cible dépourvue de transfert/publication validés refuse apply, jamais de
+journal applied fictif. Aucun transfert chunks/vecteurs, activation Scope, base
+réelle, service nouveau, M3–M5 ou moteur parallèle. Aucun master avant revue.
+La suite complète du ticket reste à autoriser séparément ; cette autorisation
+limitée ne vaut pas livraison de1b.

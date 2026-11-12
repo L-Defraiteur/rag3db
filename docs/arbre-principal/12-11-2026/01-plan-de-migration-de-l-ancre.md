@@ -103,7 +103,9 @@ pas à supposer présent dans `MigrationState`.
    du graphe/fichier, ressources touchées, besoins de rétention et validations.
    Le dry-run public du runner appelle pending et lit son catalogue ; pour le
    plan purement statique, réutiliser parse/build de graphe sans prétendre zéro
-   I/O au runner public. Une migration applied au checksum différent est refusée.
+   I/O au runner public. Comparer checksum ET identité du plan résolu avant de
+   sauter un applied ; historique inconnu, orphelin ou malformé refusé. Voir le
+   contrat de qualification ci-dessous.
 3. **Préparer et journaler.** Verrou/identité d’exécution, état en cours et
    empreintes durables avant premiers effets. Préparer les tables/index cibles
    via SchemaFacts et les contrats du catalogue, hors lots de données. Conserver
@@ -119,17 +121,21 @@ pas à supposer présent dans `MigrationState`.
    les deux sens. Construire/synchroniser les index cibles depuis les valeurs
    déjà stockées : pas d’appel aux modèles. Toute faute laisse la cible non
    publiée et la source ancienne intacte, avec rapport explicite.
-6. **Publier.** Contrôler à nouveau les empreintes source, tous les lots et la
-   génération du plan ; publier ensemble la transition de config Scope et le
-   format applicatif actif, sans DDL ni calcul à ce point. Réutiliser validation
-   et ordre communs ; une capacité de transition de schéma validée par migration
-   est à fournir si elle manque. Aucun flag « ignore guards » ou faux comptage
-   de table vide. Une mort autour de ce point donne ancien actif OU nouveau
-   validé, jamais une configuration cherchant un corpus partiellement migré.
-7. **Rouvrir et conclure.** Une nouvelle ouverture normale charge le nouveau
-   format sans rattrapage documentaire caché ; exécuter les lectures prévues et
-   fermer le journal appliqué. L’ouverture demandant le nouveau format sur
-   l’ancienne base non migrée reste refusée. Aucun hôte de Lucie n’est basculé.
+6. **Publier et clore durablement.** Sous exclusivité réelle, contrôler à
+   nouveau les empreintes source, tous les lots et la génération du plan. Une
+   transaction de métadonnées publie ensemble configs validées, format cible,
+   génération et journal applied avec son identité résolue. Aucun DDL ni calcul
+   à ce point. Réutiliser validation et ordre communs ; la transition validée
+   par migration est une capacité à fournir, pas un flag « ignore guards » ou
+   un faux comptage de table vide. Le commit est la frontière de publication.
+   Une mort donne ancien actif avec opération à reprendre OU nouveau actif avec
+   clôture cohérente, jamais nouveau format et journal running à servir.
+7. **Rouvrir après clôture.** Une ouverture normale n’est admise qu’après lecture
+   d’un ensemble configs/format/génération/journal cohérent et appliqué. Les
+   lectures de validation après réouverture vérifient notamment l’absence de
+   rattrapage documentaire caché ; elles ne remplacent pas la clôture préalable.
+   L’ancienne base non migrée demandant le nouveau format reste refusée. Aucun
+   hôte de Lucie n’est basculé.
 
 La transformation n’autorise pas la publication anticipée de la dérivée dans un
 catalogue servi : un drain ordinaire pourrait alors créer ou embarquer les
@@ -158,8 +164,12 @@ schéma interne8, ancien Scope BM25+dense, recette identique,
 modèles denses complets, aucune dette sparse/dual. Cela couvre le défaut du
 gabarit code par défaut sans prétendre couvrir tous les schémas personnalisés.
 Une conversion de format moteur est un prérequis distinct ; ce plan ne
-l’effectue pas silencieusement. Si sparse/dual est présent, **refus avant effets tant que le transfert sans
-calcul n’est pas prouvé**. Le modèle existant ne sera pas invoqué pour masquer
+l’effectue pas silencieusement. Si des données ou signaux sparse/dual sont à transférer, **refus avant effets
+ tant que le transfert sans calcul n’est pas prouvé**. La présence de `models.sparse` seule ne classe pas une base comme profil sparse
+à migrer : le gabarit code peut déclarer ce lecteur pour le surlignage sans
+stocker d’index sparse. L’inspection croise les signaux persistés, tables,
+marqueurs, handles/magasins et dettes de données ; une contradiction reste un
+refus nommé. Le modèle existant ne sera pas invoqué pour masquer
 l’absence d’export. Le test de ce refus appartient au premier parcours ; un
 profil sparse migrable demande sa preuve avant d’être accepté, sur le même ticket.
 
@@ -225,9 +235,96 @@ corpus dédupliqué (revue du12nov), avec ces garanties à prouver. Ce n’est p
 équivalence complète bit pour bit. Un autre besoin de classement exact exigerait
 son contrat distinct ; aucun résultat M3–M5 n’est ici invoqué.
 
+## API commune proposée après les trois avis ED
+
+Les noms ci-dessous rendent la frontière reviewable ; ce sont des propositions,
+**aucune de ces nouvelles entrées n’est livrée**. Elles prolongent les modules
+existants, sans moteur de migration parallèle et sans option de contournement.
+
+- `PreparedBackend::inspect_storage(...)` : lire les métadonnées via une
+  connexion RO compatible, avant création de répertoire/base, ouverture RW,
+  `Catalog::initialize` ou raccord d’un modèle. Produire un constat immuable
+  `StorageInspection` avec profil, formats, génération et historique pertinent,
+  puis une décision créer/ouvrir/migrer/réconcilier/refuser. Un constat RO
+  n’accorde aucune autorisation d’écriture et peut devenir périmé.
+- `PreparedBackend::open_on_disk(...)` : façade normale commune proposée dans
+  `src/backend.rs`, déléguée par `daemon_host.rs::open_on_disk` et tous les chemins
+  locaux de `src/bin/rag3weaver-backend.rs`. Ordre : load/validation déclarative,
+  inspection et admission, ouverture RW autorisée, revalidation de l’identité
+  sous la protection effective du stockage, puis `embedder_or_absent` et
+  initialisation/raccord des autres modèles. Aucun contrat métier recopié dans
+  le démon et la CLI. Les entrées bas niveau recevant une connexion déjà ouverte
+  gardent le même contrôle avant initialize/services ; elles ne permettent pas
+  à un appelant produit de contourner la façade d’ouverture sur disque.
+- `MigrationRunner::resolve_plan(...)` et `qualify_history(...)` : réutiliser
+  lecture des fichiers, variables résolues, GraphDefinition/hash et journal
+  existants. Retourner un `ResolvedMigrationPlan` et une qualification
+  pending/applied-identique/reprise-identique/refus, sans exécuter de nœud,
+  ouvrir RW, initialiser un catalogue ou joindre un modèle.
+- Une entrée explicite d’inspection, par exemple la sous-commande proposée
+  `rag3weaver-backend migration plan --manifest ...`, appelle cette même API et
+  rend le rapport sérialisé. Ce n’est pas une commande à lancer aujourd’hui.
+  Les opérations futures apply/resume/rollback utiliseront ce même runner sous
+  exclusivité ; l’ouverture ordinaire ne les exécute jamais automatiquement.
+- `Catalog::publish_migrated_schema(plan, validations, exclusivity)` : capacité
+  future de publication de métadonnées, après tous les lots validés, avec
+  contrôle des empreintes et de la génération attendue. Elle compose les règles
+  SchemaFacts/EntityConfig existantes et le stockage du journal, n’effectue
+  aucun DDL/drain/calcul, et ne s’exprime pas par un booléen ignore-validation.
+
+**Chemins d’admission à couvrir.** Sur la source relue, l’hôte appelle
+`embedder_or_absent` avant l’ouverture RW dans daemon_host.rs autour de1464 ;
+la CLI fait de même autour de256,648,874,996 et lors de la réouverture vers1017.
+La façade commune doit couvrir MCP local, serve/atelier, appels locaux et
+reprise/réouverture ; les clients minces qui demandent l’ouverture à l’hôte
+bénéficient du même contrôle côté hôte. Un garde dans open_with_reason seul
+serait trop tardif. T1 mesure zéro ouverture RW et zéro appel au raccord modèle
+sur refus pour chaque chemin produit pertinent, avec inspection RO permise.
+
+### Qualification de l’historique et identité résolue
+
+L’identité à comparer comporte version/nom, checksum du fichier, variables
+substituées canoniques, graphe résolu, configs et rôles des champs, recette,
+formats moteur/interne/applicatif et génération/empreinte de la source. Les
+chemins temporaires d’une copie ne sont pas son identité logique. Les champs
+supplémentaires nécessaires complètent le journal existant ; checksum brute et
+hash de graphe ne sont pas surchargés pour désigner autre chose.
+
+Applied identique est le seul cas déjà appliqué qui se saute. Une même version
+avec d’autres paramètres, une autre génération ou un autre fichier est refusée.
+Une entrée inconnue/orpheline du périmètre déclaré, mal typée, sans identité
+résolue requise ou au statut illisible ne devient ni pending par défaut, ni une
+réussite vide. T12 couvre ces cas, y compris fichier identique mais variables
+ou configs différentes. Le comportement actuel de pending n’est pas une preuve
+que cette qualification existe déjà.
+
+Le résultat du préflight est revalidé **sous exclusivité réelle de la copie**
+avant les effets. Une identité d’exécutant et l’état running doivent être
+journalés durablement avant DDL cible, transfert ou modification de config.
+Un éventuel bootstrap des tables de journal manquantes est une précondition
+administrative explicite à définir et tester, jamais un effet caché du préflight
+RO ou une permission de commencer le transfert sans journal durable.
+Le TTL lecture/upsert actuel n’est pas présenté comme une acquisition atomique
+ou une preuve d’exclusion. T12 éprouve le refus d’un second exécutant et la
+revalidation d’un plan devenu périmé ; la durée d’un lot ne doit pas faire
+expirer implicitement la propriété de l’opération.
+
+### Clôture et ouverture normale
+
+Le point de publication transactionnel lie configs, format, génération et
+journal appliqué. Les checkpoints des lots restent les preuves de reprise ;
+ils ne suffisent pas à rendre la base servable. Une exécution Completed dans
+un checkpoint ne transforme pas un journal incohérent en succès sans effet.
+Running/failed non réconcilié, publication incomplète ou états contradictoires :
+refus de l’ouverture normale et reprise/réconciliation **explicite** uniquement,
+sans connexion de modèle pour « réparer ». T10 injecte une mort autour de la
+publication et de l’écriture du journal ; T8 vérifie la réouverture après
+clôture cohérente. La clôture précède donc toute ouverture normale.
+
 ## Premier correctif reviewable et budget proposés
 
-Premier patch **après autorisation nouvelle** : admission du format applicatif
+Premier patch **autorisé après publication de cette révision documentaire** :
+admission du format applicatif
 et plan de migration explicite via le mécanisme existant, avec reconnaissance
 old/cible/en-cours et rapport de préflight. Témoins rouges T1/T2/T12 adaptés au
 point d’entrée réel, refus avant effets et checksum ; aucune copie de vecteur,
@@ -262,7 +359,26 @@ validation, profil initial BM25+dense et refus sparse avant effets acceptés.
 Variation de pertinence BM25 admise avec les garanties nommées, sans égalité
 arbitraire des scores/rangs. Cela ne livre pas un profil sparse migrable.
 
-ED relit encore la frontière d’API runner/admission/checksum et le premier
-correctif. Le ticket de préparation reste ouvert et aucun code n’est encore
-autorisé. L’implémentation future reste suivie par son ticket distinct ; cette
+Les trois avis ED sur admission commune, qualification du plan résolu et
+publication/clôture cohérentes sont intégrés ci-dessus. Le ticket de préparation
+reste ouvert jusqu’à validation de cette révision. L’orchestration autorise
+après sa publication le premier patch borné décrit ci-dessous, pas la migration
+complète. L’implémentation future reste suivie par son ticket distinct ; cette
 revue ne permet pas l’accès à une base réelle ni son activation.
+
+## Autorisation du premier patch borné — 12 novembre
+
+Après publication du plan corrigé, l’orchestration autorise sur un nouveau WT cx :
+contrat typé commun format/plan résolu, inspection/admission sans mutation, point
+d’entrée réellement appelable du plan/préflight, validation stricte du journal
+et checksum sous exclusivité réelle d’une copie. T1/T2/T12 sur fixtures
+synthétiques seulement ; rouges réels avant correctifs, compteurs zéro DDL,
+réparation et raccord modèle lors d’un refus. API/diff et témoin doivent être
+partagés avant une passe lourde ; aucun master avant revue.
+
+La cible1b sans transfert/publication validés refuse apply explicitement ; aucun
+applied fictif. Aucun transfert de chunks/vecteurs, activation Scope, accès à une
+base réelle, nouveau service, M3–M5 ou moteur parallèle dans ce premier patch.
+Réutiliser runner/checkpoints et fournisseurs existants ; un target unique sur
+luciepc, -j8/32Go/lib29a7 et poste lourd pour un éventuel build autorisé ensuite.
+Le présent commit reste exclusivement documentaire, aucun témoin exécuté.
