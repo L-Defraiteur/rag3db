@@ -368,18 +368,20 @@ fn preview(
                 if destination.shape != shape { return Err(refusal(ChunkCoverage, &source_uuid, "destination shape collision")); }
                 let mut seen_models = BTreeSet::new();
                 for known in &source.dense {
-                    let entry = source_models.get(&known.model).ok_or_else(|| refusal(ModelMismatch, &source_uuid, "unknown vector model"))?;
-                    if !seen_models.insert(known.model.clone()) { return Err(refusal(DenseCoverage, &source_uuid, "duplicate model value")); }
+                    let location = format!("{}/{}/{}/{}/{}", occurrence.key.scope.org,
+                        occurrence.key.scope.project, occurrence.key.entity, source_uuid, known.model);
+                    let entry = source_models.get(&known.model).ok_or_else(|| refusal(ModelMismatch, &location, "unknown vector model"))?;
+                    if !seen_models.insert(known.model.clone()) { return Err(refusal(DenseCoverage, &location, "duplicate model value")); }
                     if known.input.as_deref() != Some(shape.chunk.text.as_str()) {
-                        return Err(refusal(InputProvenanceUnavailable, &source_uuid, "known `_text` model input required"));
+                        return Err(refusal(InputProvenanceUnavailable, &location, "known `_text` model input required"));
                     }
-                    if known.marker != content_hash(&shape.chunk.text) { return Err(refusal(StaleMarker, &source_uuid, "model marker does not match chunk text")); }
+                    if known.marker != content_hash(&shape.chunk.text) { return Err(refusal(StaleMarker, &location, "model marker does not match chunk text")); }
                     if known.values.len() != entry.dim || known.values.iter().any(|v| !v.is_finite()) {
-                        return Err(refusal(InvalidVector, &source_uuid, "dimension mismatch or non-finite values"));
+                        return Err(refusal(InvalidVector, &location, "dimension mismatch or non-finite values"));
                     }
                     let bits: Vec<_> = known.values.iter().map(|v| v.to_bits()).collect();
                     if let Some(binding) = destination.dense.get_mut(&known.model) {
-                        if binding.value_bits != bits { return Err(refusal(ConflictingVectors, &source_uuid, format!("conflicting values for {}", known.model))); }
+                        if binding.value_bits != bits { return Err(refusal(ConflictingVectors, &location, format!("conflicting values for {}", known.model))); }
                         binding.sources.insert(source_uuid.clone());
                     } else {
                         destination.dense.insert(known.model.clone(), DenseBinding {
