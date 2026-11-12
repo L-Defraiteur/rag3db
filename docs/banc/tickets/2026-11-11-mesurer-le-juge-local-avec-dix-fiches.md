@@ -189,6 +189,51 @@ relue. Reste après arrêt : capacité card2 suffisante et passage unique du ban
 après sa fin/son échec, preuve de fin du serveur, VRAM rendue puis restauration
 attestée avant restitution du créneau. Le préflight prêt n’est pas un GO.
 
+## Passage du 12 novembre : arrêt et retour 7882 réalisés
+
+Après GO conditionnel de l’orchestration et signal du banc, verrou mesure acquis
+17:54:59 Paris, porteur PID 3268337 / runner 3268353, deadline 18:14:59.
+Relecture indépendante de `poste --qui` avant l’arrêt.
+
+À 17:55:25, identité PID 912225/starttime/SHA/argv/cwd/variables et absence de
+clients revérifiées ; SIGTERM ciblé puis PID terminé et port 7882 absent.
+Arrêt attesté à **17:55:25.745**. Autres services 7878/7879/7880 inchangés,
+PID respectifs **966256 / 3415586 / 1409444**.
+Card2 après libération : total 34 208 743 424 octets, utilisés 21 661 892 608,
+libres 12 546 850 816, soit **11,685 Gio libres**. Remise explicite envoyée au banc.
+
+Le banc a abandonné au premier défaut de sa garde d’identité GPU fdinfo,
+**avant toute paire**, sans retry. Son serveur PID 3271346 a terminé avec code 0,
+port 8099 libre et `modele-decharge.json` à 17:55:50. Aucun résultat k=5/k=10
+ne découle de ce passage ; le ticket reste ouvert chez banc.
+
+Avant restauration, optimiseur a vérifié indépendamment l’absence de
+`/proc/3271346`, le port 8099 libre et la VRAM card2 revenue à
+21 661 892 608 octets, exactement la baseline de sa propre mesure après arrêt.
+
+Restauration lancée **17:56:18.176**, retour VERT **17:56:22.790**, nouveau
+PID **3273544**, starttime **84847328**, SHA inchangé
+`65ec1d1db17d48ee53785cd55e72b9b77ca451d5bc4bb8197a9c1b7d040c595d`.
+Même cwd, argv et quatre variables de la recette. Santé granite-278m, dim 768,
+Flex32, dual/sparse/factice faux, lot 128/512. FD amdgpu PCI 0000:04:00.0/card2
+avec VRAM résidente 3 924 676 KiB ; aucun fd VRAM card0. Les trois autres services
+conservent leurs PID et listeners. Santé relue après fin du lanceur SSH.
+Le fichier historique `embed-7882/pid` a été sauvegardé puis actualisé au nouveau
+PID ; ancien fichier conservé sous `pid-historique` dans les preuves.
+
+Preuves supplémentaires à luciepc :
+
+- `~/.cache/optimiseur-notes/banc-k10-12nov-7882/juste-avant-arret.json` ;
+- même dossier : `arret.json`, `vram-apres-arret.json`, `retour.json`,
+  `restauration-service.log`, `pid-restauration`, `pid-historique` ;
+- `~/.cache/rag3weaver-build/cx-service-7882-arret.log` et `cx-service-7882-retour.log` ;
+- preuve du banc : `~/.cache/rag3db-banc-notes/k10-20261112/modele-decharge.json`.
+
+Retour transmis au banc, à hotfixs et à l’orchestration pour libération du verrou
+après leur contrôle. Aucun autre service modifié, aucun fichier env/vault lu
+ou copié et aucune limite relâchée. Suite de mesure et diagnostic de la garde
+restent à cadrer par banc/orchestration ; aucune relance autorisée par ce bilan.
+
 ## Confirmations relayées par l’orchestration le 12 novembre
 
 - Codeparsers : essais A/B terminés, hôtes arrêtés, aucun client, réservation
