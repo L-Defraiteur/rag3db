@@ -1,12 +1,12 @@
 from pathlib import Path
 import hashlib,json,os,sys
-R=Path('/home/lucied/.cache/rag3weaver-build');P=R/'cx-publication-composite-cible-v1';W=R/'cx-wt-publication-composite';T=R/'cx-target-contenu-derive'
+R=Path('/home/lucied/.cache/rag3weaver-build');P=R/'cx-publication-composite-cible-v4';W=R/'cx-wt-publication-composite';T=R/'cx-target-contenu-derive'
 source=sys.argv[1];rc=int(sys.argv[2]);record=dict(source=source,client_rc=rc,verdict='ROUGE')
 try:
  assert rc==0,'superviseur non réussi'
  result=json.loads((P/'resultat.json').read_text());assert result['verdict']=='VERT' and result['source']==source
  info=json.loads((P/'source.json').read_text());receipt=Path(info['supervision_receipt'])
- assert receipt.parent.is_relative_to(R/'cx-publication-composite-confinement-v1')
+ assert receipt.parent.is_relative_to(R/'cx-publication-composite-confinement-v4')
  supervisor=json.loads((receipt.parent/'verdict.json').read_text())
  assert supervisor['verdict']=='VERT' and supervisor['code']==0 and supervisor['restes']==[] and supervisor['nettoye']
  assert not Path(supervisor['prive']).exists(),'bus commun restant'
