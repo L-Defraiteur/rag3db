@@ -55,3 +55,12 @@ GPU, service réel, fichier .env/.vault, base ou configuration de Lucie lu ou mo
 Les copies sous configuration utilisateur et la mémoire réelle BGE sans adresse restent
 non qualifiées : leur activation n'est pas déduite de l'existence des gabarits. Ce lot ne
 les modifie pas et ne fermera pas ce reste sans preuve et autorisation appropriées.
+
+## Résultat du préfixe
+
+Correction gabarits publiée `691ba0391` ; rouge source `5eef3fe01` : deux échecs
+attendus et un succès. Vert sur le jeu exact matrice3 : trois succès, puis le témoin
+existant embeddings/models.embed un succès ; aucun ignoré. Hash ELF et limites
+dans le rapport ED du 12 novembre, section Gabarits BGE. Aucun service réel appelé.
+Ce préfixe ne remplace pas la passe globale, encore à coordonner. Les copies utilisateur
+restent à qualifier ; ne pas fermer le ticket au seul atterrissage des gabarits.

@@ -588,3 +588,8 @@ visions/                        where this is going (French)
 ## License
 
 [Luciform Research Source License (LRSL) v1.2](LICENSE)
+
+The notebook and validated-result backend templates declare BGE-M3 (1024 dimensions)
+without a fixed service address. Set `RAG3WEAVER_SERVICE_EMBED` for the host or tunnel
+(the legacy `RAG3WEAVER_EMBED_SERVICE` is the fallback variable). An address explicitly
+written in a manifest takes priority. Existing user copies are not migrated automatically.

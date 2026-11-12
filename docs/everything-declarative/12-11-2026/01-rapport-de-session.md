@@ -132,3 +132,44 @@ lire les données : ancien worktree reste-explicite toujours sur
 `1acc6733823a8ac5883df525a4d08e142c2b5d10`, base cx_ed_reste_20261111 toujours présente.
 L'arbre de Lucie garde uniquement son untracked lucie-tmp préexistant ; aucun checkout ni
 commit n'y a été fait. Les deux tickets de dette restent ouverts à leurs porteurs.
+
+
+## Gabarits BGE — préfixe isolé du 12 novembre
+
+Ticket : `docs/everything-declarative/tickets/2026-11-12-des-manifestes-bge-visent-le-port-granite.md`.
+Correction publiée `691ba039140f20b6460623fe9f931f04e2d5fbed`, base41497 : suppression des deux
+adresses imposées, BGE/1024 et fournisseur service conservés. Aucun résolveur ajouté ;
+adresse explicite > variable commune > alias, sélection par identité et refus sans repli
+local implicite restent le contrat existant. Notebook requiert du vectoriel ; validated-result
+(signaux vides) n'en requiert pas. Une ouverture en mots seuls n'atteste pas de dense prêt.
+Les copies de configuration utilisateur restent non qualifiées et le ticket reste ouvert.
+
+Préfixe à luciepc sous poste lourd, j8, lib29 complète épinglée, target privé unique (moins
+32 Go), cgroup MemoryMax34359738368, Swap4G, KillModecontrol-group et TimeoutStop15.
+Budget global900s : début monotonic854078.887042, échéance854978.887042, preuve finale854648.385073.
+La borne n'a pas été réinitialisée entre les adaptations.
+
+- Première recette native+daemon : compilation101 avant tout test, erreurs préexistantes
+  chat.rs835/836 (fichier_nodes gardé par code) et import Boite inutilisé livraison_codex.rs92.
+  Dette séparée publiée f3b7fba71, ticket `2026-11-12-la-lib-native-daemon-ne-compile-pas-hors-matrice.md`.
+- Native seule, source5eef3fe01 : deux rouges attendus et un vert, aucun ignoré.
+  Vert natif interrompu lors de la coordination de recette, aucun verdict vert revendiqué.
+- Jeu exact matrice3 `rag3db-native,code,daemon,openai-llm`, source5eef3fe01 : deux rouges
+  attendus et un vert, aucun ignoré. Correction691ba0391 : trois verts, zéro échec/ignoré ;
+  témoin existant de déclaration embeddings/models.embed : un vert, zéro échec/ignoré.
+
+ELF final `rag3weaver-58d880667e640359`, SHA256
+`b0eebd6f7144748c32d1d9f04cc7b9f48f5773700a447f1d714bf2742cdd2df1`.
+Preuves PC : `~/.cache/rag3weaver-build/I-luciepc/bge-routage-20261112/`, notamment
+rouge.log, rouge-natif.log, rouge-matrice.log, vert-matrice.log, scripts exacts,
+verdict-prefixe.json et quiescence-finale.json (`[]`). Aucun modèle, GPU, socket,
+service réel, configuration ou base de Lucie utilisé. Arbre utilisateur inchangé.
+
+Préfixe vert, pas verdict de passe globale. Plan soumis à C7 avant tout lourd supplémentaire :
+check_features cinq jeux (2400s global), compilation large (1500s), lib large (900s),
+navigateur isolé (600s) et e2e_postgres (300s, gabarits touchés). Borne globale proposée5700s
+après acquisition, non réinitialisée ; même lib29/j8/Max32/target32Go. Préparation des noms,
+comptes attendus et dépendances privées avant exécution ; pas de service modèle réel,
+variables d'embarquement absentes, pas de nouveau juge/équipier/Gemini. Tout besoin d'un
+modèle réel ou dépassement du target arrête ce plan pour diagnostic. Revue puis créneau
+master « à toi » restent nécessaires. Aucun push master réalisé pour ce lot.
