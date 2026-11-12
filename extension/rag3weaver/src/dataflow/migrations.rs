@@ -777,16 +777,26 @@ impl MigrationRunner {
 
 // ─── Internal types ─────────────────────────────────────────────────────────
 
-#[derive(Debug)]
-pub(crate) struct AppliedMigration {
+/// A decoded journal row, including pending/failed/rolled-back states.
+/// Its presence or status is not a durable resolved-plan qualification.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AppliedMigration {
     pub(crate) name: String,
     pub(crate) status: String,
     pub(crate) checksum: String,
     pub(crate) execution_id: String,
     pub(crate) applied_at: u64,
     pub(crate) duration_ms: u64,
-    #[allow(dead_code)]
     pub(crate) error: String,
+}
+impl AppliedMigration {
+    pub fn name(&self) -> &str { &self.name }
+    pub fn status(&self) -> &str { &self.status }
+    pub fn checksum(&self) -> &str { &self.checksum }
+    pub fn execution_id(&self) -> &str { &self.execution_id }
+    pub fn applied_at(&self) -> u64 { self.applied_at }
+    pub fn duration_ms(&self) -> u64 { self.duration_ms }
+    pub fn error(&self) -> &str { &self.error }
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
