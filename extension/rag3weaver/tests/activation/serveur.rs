@@ -64,6 +64,18 @@ fn deux_demandeurs_ne_lancent_qu_un_processus() { exercer(false); }
 fn annuler_un_demandeur_ne_tue_pas_l_autre() { exercer(true); }
 
 #[test]
+fn budget_non_representable_est_refuse_avant_le_worker() {
+    let dossier = std::env::temp_dir().join(format!("activation-budget-{}", std::process::id()));
+    let s = Serveur::new("budget", "127.0.0.1:1", "/programme/non/lancable")
+        .sante("/sante", "budget").attente(Duration::MAX);
+    let resultat = serveur::activation::acquerir(&s, &dossier);
+    // Aucun programme ne doit être lancé pour une déclaration invalide.
+    let refuse = resultat.is_err();
+    if dossier.exists() { let _ = std::fs::remove_dir_all(dossier); }
+    assert!(refuse, "un budget non représentable doit être refusé avant le worker");
+}
+
+#[test]
 fn une_sonde_qui_distille_des_octets_ne_reinitialise_pas_le_budget() {
     use std::io::{Read, Write};
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
