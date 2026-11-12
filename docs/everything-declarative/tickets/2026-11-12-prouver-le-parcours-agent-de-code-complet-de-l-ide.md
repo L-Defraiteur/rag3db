@@ -212,3 +212,17 @@ Diagnostic distinct sans modèle : nouveau témoin ignoré
 Même lancement CDP puis `Browser.getVersion`, borne30s, compilation600s,
 portée globale700s, source publiée avant exécution ; preuves `diagnostic-cdp`.
 Aucun autre parcours Vertex/UI lancé avant explication de ce démarrage rouge.
+
+Diagnostic `fe0a5be4e` : compilation14.97s verte puis rouge0.24s, Chrome abort134
+avec stderr fatal `Socket path too long` : le TMPDIR de preuves long dépasse la
+limite du socket Unix `SingletonSocket`. Ce n’est pas un refus D-Bus ou sandbox,
+ni une indisponibilité du modèle. Aucun appel Vertex dans ce diagnostic.
+
+Correction de recette uniquement, source/ELF `fe0a5be4e` inchangés : TMPDIR privé
+court créé par `mktemp -d "$HOME/.cache/r3v-ed-XXXXXXXX"`, chemin enregistré.
+Ni flag Chrome, ni portée/bus, ni racine de la fixture Git avec espace ne change.
+Pas de nouveau Cargo nécessaire : ELF archivé du diagnostic, même lib29.
+Étape `page-ide-2`, budget global450s incluant nettoyage : CDP30s doit rendre
+1/0/0 vert avant le témoin UI360s, puis unique tour Vertex supplémentaire.
+Premier rouge conserve les preuves et stoppe, sans retry. Le TMPDIR n’est rendu
+qu’après quiescence de la portée propriétaire.
