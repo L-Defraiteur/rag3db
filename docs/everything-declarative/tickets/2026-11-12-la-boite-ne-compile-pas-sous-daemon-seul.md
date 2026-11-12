@@ -31,3 +31,13 @@ le jeu natif/daemon supporté, avec lib épinglée.
 
 Correction et compilation du jeu minimal retenu, puis preuve du comportement
 de découverte de la boîte sous ses features réellement nécessaires.
+
+## Deuxième combinaison relevée, même frontière de features
+
+Sur 3520ec019, `rag3db-native,daemon` échoue dans
+`daemon_host/chat.rs:835-836` (fichier_nodes exclu sans code) et import Boite
+inutilisé sous -Dwarnings dans `daemon_host/livraison_codex.rs:92`.
+Log luciepc `~/.cache/embarquement-notes/activation/cpu-c.log`.
+Ces fichiers ne sont pas modifiés par la tranche d'embarquement.
+La prochaine qualification utilise `rag3db-native,code,daemon`, jeu supporté
+par les passes usuelles, avec la lib épinglée et aucun GPU requis.
