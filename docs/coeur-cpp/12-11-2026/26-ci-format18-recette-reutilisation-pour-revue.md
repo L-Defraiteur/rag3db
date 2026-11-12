@@ -25,3 +25,7 @@ Après terminaison, lecture d’état systemd/MainPID/cgroup/processus et libér
 Validation de préparation : parsing Python par ast.parse et bash -n réussis ; revue statique des chemins/montages/bornes. Aucun essai d’exécution, même de préflight natif. La recette reste une proposition et ne prouve pas la réussite future.
 
 Révision montage : le tmpfs parent02 est créé uniquement dans le namespace interne après la vérification du paquet ; les chemins de preuve et de paquet sont ailleurs sous rag3db-moteur-notes et restent visiblesRO. Aucun test de montage exécuté pendant la préparation : revue statique, pas de GO implicite.
+
+## GO reçu avant entrée
+
+C7 autorise explicitement le13nov l’étape corrective DISTINCTE1490 sur recette0aa3f02729b0fb47d98773f24acbbd963514e8cc relue : sourcepublique74ad, paquet834SHA, sans rebuild, anciens893,800s conservés et totalunitésplafonné2383,800s ; aucune revendication sur ancienne horloge absolue2400 échue. BancMESURE déclaré terminé vert23:54:37 par C7. Entrée par poste lourd réel,1480+10stop/1470contrôleur/1440suite, Max32G/swap0/scratch32G, mêmes env/flags/args ; premier nouveau rouge STOP/diagnostic, aucun rejeu suivant ni hausse implicite. Aucun code privé0511 exécuté, aucune lib posée, aucun GO master. Les empreintes des scripts relus restent celles de recette.json. Cette publication précède l’entrée.

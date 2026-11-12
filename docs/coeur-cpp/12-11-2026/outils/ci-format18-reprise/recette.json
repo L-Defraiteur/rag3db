@@ -1,5 +1,5 @@
 {
-  "status": "PROPOSITION NON EXECUTEE — revue C7 requise",
+  "status": "GO C7 reçu le13nov2026 : étape corrective distincte1490s, recette0aa3f02729b0fb47d98773f24acbbd963514e8cc relue ; aucun GO master",
   "source_commit": "74ad9c25cd2a63e01abd54f25314992cda6fea60",
   "consumed_services_s": 893.8,
   "cumulative_envelope_s": 2400,
