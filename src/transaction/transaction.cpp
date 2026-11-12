@@ -213,7 +213,7 @@ void Transaction::commit(storage::WAL* wal) {
         localWAL->clear();
     }
     undoBuffer->commit(commitTS);
-    private_saturation::published();
+    common::private_saturation::published();
     // Les suppressions que cette validation vient de dater, et celles d'avant qu'un lecteur
     // retenait : les listes CSR des nœuds touchés les oublient si plus aucun instantané ouvert
     // ne les voit vivantes.
@@ -225,7 +225,8 @@ void Transaction::commit(storage::WAL* wal) {
 }
 
 void Transaction::rollback(storage::WAL*) {
-    private_saturation::Scope captureRollback{private_saturation::Phase::ROLLBACK, getID()};
+    common::private_saturation::Scope captureRollback{
+        common::private_saturation::Phase::ROLLBACK, getID()};
     // Rolling back the local storage will free + evict all optimistically-allocated pages
     // Since the undo buffer may do some scanning (e.g. to delete inserted keys from the hash index)
     // this must be rolled back first
