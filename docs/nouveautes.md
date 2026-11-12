@@ -7,6 +7,13 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **12 nov. — Un plan compare les gabarits depuis leurs contenus fournis.**
+  L’API Rust fusionne base/local/cible, nomme les conflits et valide le candidat
+  par le chargeur déclaratif fermé, sans repli disque ni extraction de cache.
+  Les transitions de données ou ressources non qualifiées refusent ; acquisition,
+  adoption persistée, application et politique vivant/épinglé restent à livrer.
+  (`946d97ad8`)
+
 - **12 nov. — Un aperçu décrit les correspondances de chunks et de vecteurs connus.**
   L'API de bibliothèque conserve occurrences, cellules et provenance sur des faits
   fournis ; elle refuse les valeurs manquantes ou incompatibles, sans modèle ni

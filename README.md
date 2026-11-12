@@ -40,6 +40,10 @@ rag3weaver also supports opt-in [shared indexed content](extension/rag3weaver/RE
 occurrences keep their identities and relations while sharing derived chunks and
 stored vectors within a cell. Existing code templates retain their current storage.
 
+rag3weaver's Rust library can also [plan template changes from supplied contents](extension/rag3weaver/README.md#template-planning-from-supplied-contents):
+it reports a validated candidate or named conflicts, without acquiring sources
+or applying changes to an existing backend.
+
 The long version, in French: [`extension/rag3weaver/visions/00-vision-generale.md`](extension/rag3weaver/visions/00-vision-generale.md).
 
 ## Where the engine stands

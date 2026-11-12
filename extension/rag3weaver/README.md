@@ -109,6 +109,23 @@ only the active cell, which the next drain can write. The catalogue-wide
 `index_progress.writes_pending` includes parked cells; changing cells preserves
 their accepted work. Cumulative drain counters describe the catalogue's history.
 
+## Template planning from supplied contents
+
+The Rust library exposes `template_plan::plan(bases, local, target, manifest_name)`.
+Each `Package` supplies its files, builtin-reference contents and checked content
+fingerprint; provenance is declared metadata, not a certified Git revision.
+Exactly one base is required. The plan performs a three-way JSON merge, treats
+files and arrays atomically, and returns a candidate, tool-attachment/file diffs
+or structured refusals. Missing values and explicit JSON null remain distinct.
+
+Validation uses the common declarative loader with a closed reader: required
+sources must be supplied, including nested builtin graphs. It neither falls
+back to disk nor extracts a builtin cache. Missing physical environment proofs
+and unqualified schema, format, storage, vector-extension or seed transitions
+are refused. Success validates declarations, not existing data or a future
+backend opening. This is a library API only; source acquisition, persisted
+adoption, application and live/pinned template policy remain future work.
+
 ## Migration diagnostics
 
 Inspect storage or resolve a preliminary plan from declared Mermaid files:
