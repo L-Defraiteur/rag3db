@@ -63,7 +63,11 @@ pub(super) fn connecter(source: &super::ModelSource, annule: &std::sync::atomic:
     let demande = demander(source)?;
     let a = source.activation.as_ref().unwrap();
     let bail = demande.attendre(annule, std::time::Duration::from_secs(a.budget_attente_secs))?;
-    let client = crate::daemon::DaemonEmbedder::joindre(bail.adresse()).map_err(|e| e.to_string())?;
+    let mut client = crate::daemon::DaemonEmbedder::joindre(bail.adresse()).map_err(|e| e.to_string())?;
+    if let Some(secondes) = source.timeout_secs.filter(|s| *s > 0) {
+        client = client.with_timeout(std::time::Duration::from_secs(secondes));
+    }
+    if annule.load(std::sync::atomic::Ordering::Acquire) { return Err("connexion annulée".into()); }
     if client.name() != source.model || Some(client.dim()) != source.dimensions {
         return Err(format!("identité d'activation refusée : attendu {}/{:?}, reçu {}/{}", source.model, source.dimensions, client.name(), client.dim()));
     }
@@ -85,4 +89,77 @@ impl crate::embedder::Embedder for Gere {
     fn budget_conseille(&self) -> Option<(usize, usize)> { self.client.budget_conseille() }
     fn troncatures(&self) -> Option<(usize, usize)> { self.client.troncatures() }
     fn timeout(&self) -> Option<std::time::Duration> { self.client.timeout() }
+}
+
+#[cfg(all(test, feature = "daemon", unix))]
+mod tests {
+    use super::*;
+    use crate::model_source::{connect_embedder, connect_embedder_annulable, Addresses, ModelSource};
+    use std::sync::atomic::AtomicBool;
+
+    struct Fixture { dossier: tempfile::TempDir, source: ModelSource }
+    impl Fixture {
+        fn nouvelle() -> Self {
+            let dossier = tempfile::tempdir().unwrap();
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let adresse = listener.local_addr().unwrap().to_string();
+            let mut source = ModelSource::service("fixture-residence-384");
+            source.address = Addresses::parse(&adresse);
+            source.dimensions = Some(384);
+            source.timeout_secs = Some(1);
+            source.activation = Some(Activation {
+                programme: concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/residence/fournisseur.py").into(),
+                args: vec!["--journal".into(), dossier.path().join("events.jsonl").display().to_string(),
+                    "--generation".into(), "appelant-reel".into()],
+                env: Default::default(), profil: "fixture-cpu".into(), peripherique: "cpu".into(),
+                coordination: dossier.path().join("coordination"), journal: dossier.path().join("journaux"),
+                budget_activation_secs: 5, budget_attente_secs: 5, residence: Residence::Maintenir,
+            });
+            drop(listener);
+            // Même chemin que le manifeste : la déclaration traverse serde.
+            let source = serde_json::from_str(&serde_json::to_string(&source).unwrap()).unwrap();
+            Self { dossier, source }
+        }
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let journal = self.dossier.path().join("events.jsonl");
+            if let Ok(texte) = std::fs::read_to_string(journal) {
+                if let Some(pid) = texte.lines().filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+                    .find_map(|v| v.get("pid").and_then(|n| n.as_i64())) {
+                    // PID produit par notre fixture privée, jamais pgrep global.
+                    unsafe { libc::kill(pid as i32, libc::SIGTERM); libc::waitpid(pid as i32, std::ptr::null_mut(), 0); }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn activation_dense_depuis_declaration_preserve_identite_et_delai() {
+        let f = Fixture::nouvelle();
+        let (client, origine) = connect_embedder(&f.source).unwrap();
+        assert_eq!(client.name(), "fixture-residence-384");
+        assert_eq!(client.dim(), 384);
+        assert!(client.is_mock());
+        assert_eq!(client.timeout(), Some(std::time::Duration::from_secs(1)));
+        assert!(origine.remote());
+        let vecteurs = client.embed(&["texte synthétique".into()]).unwrap();
+        assert_eq!(vecteurs.len(), 1); assert_eq!(vecteurs[0].len(), 384);
+        let d = crate::daemon::DaemonEmbedder::joindre(&f.source.address.0[0]).unwrap();
+        assert!(d.identite().chauffe.is_none(), "legacy = chauffe inconnue");
+    }
+
+    #[test]
+    fn activation_dense_refuse_dimension_etrangere() {
+        let mut f = Fixture::nouvelle(); f.source.dimensions = Some(768);
+        let erreur = connect_embedder(&f.source).err().unwrap();
+        assert!(erreur.contains("identité"), "{erreur}");
+    }
+
+    #[test]
+    fn demande_deja_annulee_ne_demarre_rien() {
+        let f = Fixture::nouvelle();
+        assert!(connect_embedder_annulable(&f.source, &AtomicBool::new(true)).err().unwrap().contains("annulée"));
+        assert!(!f.dossier.path().join("events.jsonl").exists());
+    }
 }
