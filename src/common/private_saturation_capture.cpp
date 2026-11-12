@@ -26,6 +26,13 @@ struct First {
 } first;
 std::array<Record, 1280> samples{};
 uint64_t sampleCount = 0, sampleOverflow = 0, lastSample = 0;
+FILE* captureOutput = nullptr;
+bool ioFailed = false, firstSaved = false;
+void flushCapture() noexcept {
+    if (!ioFailed && (std::fflush(captureOutput) != 0 || std::ferror(captureOutput))) {
+        ioFailed = true;
+    }
+}
 uint64_t now() noexcept {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - origin).count();
 }
@@ -35,6 +42,8 @@ Record read(uint64_t used) noexcept {
     r.used = used;
     r.ddl = stage.load(std::memory_order_relaxed);
     r.pkCalls = calls.load(std::memory_order_relaxed);
+    // Exclut integralement la duree des appels encore actifs. pkActive > 0
+    // interdit d'ecarter le cout PK sur le seul cumul des appels termines.
     r.pkNs = completedNs.load(std::memory_order_relaxed);
     r.pkActive = activePK.load(std::memory_order_relaxed);
     r.active = activeTx.load(std::memory_order_relaxed);
@@ -62,13 +71,18 @@ void print(FILE* out, const char* kind, const Record& r) noexcept {
         (unsigned long long)r.writerOK, (unsigned long long)r.writerError);
 }
 } // namespace
-bool armed() noexcept { return enabled.load(std::memory_order_relaxed); }
-void arm(std::chrono::steady_clock::time_point scenarioStart) noexcept {
+bool armed() noexcept { return enabled.load(std::memory_order_acquire); }
+bool arm(std::chrono::steady_clock::time_point scenarioStart, FILE* output) noexcept {
     // Une seule utilisation dans un processus neuf ; aucun reset pendant les acteurs.
     samples.fill(Record{});
     first = First{};
     origin = scenarioStart;
+    captureOutput = output;
+    std::fprintf(captureOutput, "cx-saturation,schema,at_ns,read_end_ns,used_bytes,ddl,pk_calls,pk_completed_ns,pk_active,active_tx,writers_tx,oldest_snapshot_ts,transferred_rows,published_commits,actor_ok,actor_error,writer_ok,writer_error\n");
+    flushCapture();
+    if (ioFailed) return false;
     enabled.store(true, std::memory_order_release);
+    return true;
 }
 void ddl(uint64_t value) noexcept { if (armed()) stage.store(value); }
 void transactions(uint64_t active, uint64_t writers, uint64_t oldestTS) noexcept {
@@ -100,13 +114,35 @@ void refuse(Refusal reason, uint64_t used, uint64_t requested) noexcept {
     first.record = read(used);
     firstState.store(2, std::memory_order_release);
 }
+namespace {
+void saveFirst() noexcept {
+    if (ioFailed || firstSaved || firstState.load(std::memory_order_acquire) != 2) return;
+    std::fprintf(captureOutput, "cx-saturation,first_meta,reason=%llu,phase=%llu,site=%llu,tx=%llu,requested_bytes=%llu\n",
+        (unsigned long long)first.reason, (unsigned long long)first.phase,
+        (unsigned long long)first.site, (unsigned long long)first.tx,
+        (unsigned long long)first.requested);
+    print(captureOutput, "first", first.record);
+    std::fprintf(captureOutput, "cx-saturation,first_saved\n");
+    flushCapture();
+    firstSaved = !ioFailed;
+}
+} // namespace
 void sample(uint64_t used) noexcept {
     if (!armed()) return;
+    // Unique ecrivain sampler ; aucun I/O dans refuse ou dans les scopes rollback.
+    // La premiere capture est vidangee au prochain passage (cadence visee 100 ms),
+    // meme si le prochain echantillon d'une seconde n'est pas encore du.
+    saveFirst();
     const auto tick = now();
     if (sampleCount && tick - lastSample < 1000000000ULL) return;
     lastSample = tick;
     if (sampleCount == samples.size()) { ++sampleOverflow; return; }
-    samples[sampleCount++] = read(used);
+    auto& r = samples[sampleCount++];
+    r = read(used);
+    if (!ioFailed) {
+        print(captureOutput, "sample", r);
+        flushCapture();
+    }
 }
 Scope::Scope(Phase value, uint64_t tx) noexcept
     : enabled{armed()}, previous{private_saturation::phase}, previousTx{transaction},
@@ -131,21 +167,17 @@ Scope::~Scope() noexcept {
 }
 AllocationSite::AllocationSite(Site value) noexcept : previous{site} { site = value; }
 AllocationSite::~AllocationSite() noexcept { site = previous; }
-void finish(FILE* output) noexcept {
-    // Appele par le thread du test apres join des acteurs ET de l'echantillonneur.
+bool finish() noexcept {
+    // Apres joins seulement. Reprend l'unique role d'ecrivain du sampler arrete.
     enabled.store(false, std::memory_order_release);
-    std::fprintf(output, "cx-saturation,schema,at_ns,read_end_ns,used_bytes,ddl,pk_calls,pk_completed_ns,pk_active,active_tx,writers_tx,oldest_snapshot_ts,transferred_rows,published_commits,actor_ok,actor_error,writer_ok,writer_error\n");
-    for (uint64_t i = 0; i < sampleCount; ++i) print(output, "sample", samples[i]);
+    saveFirst();
     const auto state = firstState.load(std::memory_order_acquire);
-    std::fprintf(output, "cx-saturation,status,first_state=%llu,sample_count=%llu,overflow=%llu\n",
-        (unsigned long long)state, (unsigned long long)sampleCount,
+    if (ioFailed) return false;
+    const auto complete = state != 1 && sampleOverflow == 0 && (state != 2 || firstSaved);
+    std::fprintf(captureOutput, "cx-saturation,status,complete=%u,first_state=%llu,sample_count=%llu,overflow=%llu\n",
+        complete ? 1u : 0u, (unsigned long long)state, (unsigned long long)sampleCount,
         (unsigned long long)sampleOverflow);
-    if (state == 2) {
-        std::fprintf(output, "cx-saturation,first_meta,reason=%llu,phase=%llu,site=%llu,tx=%llu,requested_bytes=%llu\n",
-            (unsigned long long)first.reason, (unsigned long long)first.phase,
-            (unsigned long long)first.site, (unsigned long long)first.tx,
-            (unsigned long long)first.requested);
-        print(output, "first", first.record);
-    }
+    flushCapture();
+    return complete && !ioFailed;
 }
 } // namespace rag3db::common::private_saturation

@@ -295,8 +295,20 @@ public:
     // est appelé juste avant le CHECKPOINT de la minute 5.
     void run(int lastMinute, const std::function<void()>& onCheckpoint = {},
         bool captureSaturation = false) {
+        // Fichier prive neuf, ouvert avant acteurs. Pas de fallback stderr ou chemin partage.
+        std::unique_ptr<FILE, decltype(&std::fclose)> captureOutput{nullptr, &std::fclose};
+        if (captureSaturation) {
+            const auto* path = std::getenv("CX_SATURATION_OUTPUT");
+            if (!path || path[0] != '/') {
+                throw std::runtime_error("CX_SATURATION_OUTPUT missing/not absolute");
+            }
+            captureOutput.reset(std::fopen(path, "wx"));
+            if (!captureOutput) throw std::runtime_error("private saturation output not new/openable");
+        }
         start = Clock::now();
-        if (captureSaturation) private_saturation::arm(start);
+        if (captureSaturation && !private_saturation::arm(start, captureOutput.get())) {
+            throw std::runtime_error("private saturation schema write failed before actors");
+        }
         std::vector<std::thread> threads;
         journals.resize(NUM_DOC_WRITERS + NUM_NOTE_WRITERS + NUM_READERS);
         for (auto i = 0; i < static_cast<int>(journals.size()); ++i) {
@@ -362,7 +374,15 @@ public:
         }
         sampler.join();
         end = now();
-        if (captureSaturation) private_saturation::finish(stderr);
+        if (captureSaturation && !private_saturation::finish()) {
+            throw std::runtime_error("private saturation capture incomplete (I/O/overflow/state)");
+        }
+        if (captureSaturation) {
+            auto* output = captureOutput.release();
+            if (std::fclose(output) != 0) {
+                throw std::runtime_error("private saturation capture close failed");
+            }
+        }
     }
 
     double now() const {

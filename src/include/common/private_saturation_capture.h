@@ -1,7 +1,7 @@
 #pragma once
 
 // DIAGNOSTIC PRIVE, jamais destine a une lib distribuee. Un processus, une base,
-// armement avant les acteurs, lecture seulement apres leur join. Pas d'allocation.
+// armement avant acteurs ; I/O seulement sampler et thread du test apres joins.
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -12,8 +12,8 @@ enum class Phase : uint64_t { NONE = 0, ROLLBACK = 1, PK = 2 };
 enum class Site : uint64_t { UNKNOWN = 0, PAGE = 1, MALLOC_BUFFER = 2 };
 enum class Refusal : uint64_t { POOL = 1, FRAME_GROUPS = 2 };
 RAG3DB_API bool armed() noexcept;
-RAG3DB_API void arm(std::chrono::steady_clock::time_point scenarioStart) noexcept;
-RAG3DB_API void finish(FILE* output) noexcept;
+RAG3DB_API bool arm(std::chrono::steady_clock::time_point scenarioStart, FILE* output) noexcept;
+RAG3DB_API bool finish() noexcept;
 RAG3DB_API void sample(uint64_t used) noexcept;
 RAG3DB_API void ddl(uint64_t value) noexcept;
 RAG3DB_API void refuse(Refusal reason, uint64_t used, uint64_t requested) noexcept;
