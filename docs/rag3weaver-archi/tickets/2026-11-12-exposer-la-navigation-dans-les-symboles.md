@@ -113,3 +113,28 @@ node_factories.rs, manifestes code/atelier ; nouveaux modules/Plan/gabarits prop
 Source et recette publiées avant lourd, ciblés bornés puis passe/revue adaptées.
 Cette tranche ne livre pas l'enrichissement grep ni la complétude des membres ;
 le ticket reste ouvert tant que ces critères et le vrai parcours ne sont pas acquis.
+
+
+## Source initiale et recette de qualification
+
+Qualification codeparsers a42b41c73 relue : les offsets sont des plages de lignes,
+non des bornes AST. Égalités signalées, lambdas repliées absentes, fonctions imbriquées
+variables selon langage. Python peut donner la ligne du conteneur pour un champ ;
+la propriété typée projetée n'a plus de position. Go/hors-classe C++ ne sont pas
+reliés par inclusion ; Rust possède plusieurs Box (struct/impl), donc ambiguïté.
+Les membres restent des faits séparés de la contenance dérivée, sans UUID inventé.
+
+Source initiale : module commun et adaptateur SymbolNavigationNode, Plan borné2000,
+façade navigate_symbols sur code et relais contextuel atelier. Cinq témoins purs
+(profondeurs, UUID/homonymes/sources, plages égales, fraîcheur, limites, membres)
+et un témoin réel hôte/chat à modèle de fixture (outil déclaré→arbre→membres,
+retours réels sans corps), puis relais atelier avec contexte et refus de vue.
+Aucune réussite de ce ciblé n'est encore acquise.
+
+Premier ciblé CPU sous poste lourd, unité privée RuntimeMax600/Max32G/Swap4G,
+KillModecontrol-group, j8 et target archi unique32Go, lib29 complète épinglée.
+`cargo test -j8 --lib --features rag3db-native,code,daemon,openai-llm -- symbol_navigation --nocapture`.
+Variables de services/modèles/identifiants retirées, roots/cache/runs privés,
+pas de GPU ni donnée de Lucie. Source et lanceur externe annoncés avant lancement.
+Premier rouge inattendu : arrêt, diagnostic publié avant correction/reprise ;
+pas de replay inchangé. Passe adaptée proposée après résultat, aucun master sans revue/tour.

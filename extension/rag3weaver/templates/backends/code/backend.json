@@ -80,6 +80,14 @@
       },
       "freshness": true
     },
+    "navigate_symbols": {
+      "graph": "../../tools/navigate_symbols.mmd",
+      "description": "Explorer un fichier en arbre, ses parents/enfants de plages ou les membres partiels déclarés ; UUID qualifiés, homonymes et index périmé explicites. Pas héritage ni complétude AST.",
+      "policy": {
+        "read_files": true
+      },
+      "freshness": true
+    },
     "outline": {
       "graph": "../../tools/outline.mmd",
       "description": "Le plan d'un fichier : ses scopes dans l'ordre (genre, nom qualifié, lignes, signature), lus dans l'index. À prendre pour s'orienter dans un fichier avant de le lire.",
