@@ -101,35 +101,34 @@ pub fn root() -> Result<PathBuf, String> {
 /// par [`PREFIX`] devient le chemin absolu du gabarit extrait. Un nom inconnu
 /// est un refus qui le nomme. Rend le nombre de valeurs résolues.
 pub fn resolve(manifest: &mut Value) -> Result<usize, String> {
-    fn parcourir(v: &mut Value, n: &mut usize, racine: &mut Option<PathBuf>) -> Result<(), String> {
+    let mut racine = None;
+    resolve_avec(manifest, &mut |nom| {
+        if get(nom).is_none() {
+            return Err(format!("« {PREFIX}{nom} » : aucun gabarit livré de ce nom (les noms sont relatifs à templates/, par exemple builtin:tools/list.mmd)"));
+        }
+        if racine.is_none() { racine = Some(root()?); }
+        Ok(racine.as_ref().unwrap().join(nom))
+    })
+}
+
+/// Résout par l'univers fourni. Cette fonction ne sonde ni n'extrait de cache ;
+/// l'effet éventuel de la résolution appartient explicitement à son appelant.
+pub fn resolve_avec(manifest: &mut Value, resoudre: &mut dyn FnMut(&str) -> Result<PathBuf, String>) -> Result<usize, String> {
+    fn parcourir(v: &mut Value, n: &mut usize, resoudre: &mut dyn FnMut(&str) -> Result<PathBuf, String>) -> Result<(), String> {
         match v {
             Value::String(s) if s.starts_with(PREFIX) => {
-                let nom = &s[PREFIX.len()..];
-                if get(nom).is_none() {
-                    return Err(format!("« {s} » : aucun gabarit livré de ce nom (les noms sont relatifs à templates/, par exemple builtin:tools/list.mmd)"));
-                }
-                if racine.is_none() {
-                    *racine = Some(root()?);
-                }
-                *s = racine.as_ref().unwrap().join(nom).to_string_lossy().into_owned();
+                let path = resoudre(&s[PREFIX.len()..])?;
+                *s = path.to_string_lossy().into_owned();
                 *n += 1;
             }
-            Value::Array(a) => {
-                for x in a {
-                    parcourir(x, n, racine)?;
-                }
-            }
-            Value::Object(o) => {
-                for (_, x) in o.iter_mut() {
-                    parcourir(x, n, racine)?;
-                }
-            }
+            Value::Array(a) => for x in a { parcourir(x, n, resoudre)?; },
+            Value::Object(o) => for x in o.values_mut() { parcourir(x, n, resoudre)?; },
             _ => {}
         }
         Ok(())
     }
-    let (mut n, mut racine) = (0, None);
-    parcourir(manifest, &mut n, &mut racine)?;
+    let mut n = 0;
+    parcourir(manifest, &mut n, resoudre)?;
     Ok(n)
 }
 
@@ -172,7 +171,7 @@ pub fn local_copies_avec(directory: &Path, manifest: &Value, lecteur: &dyn crate
                 if !lecteur.est_fichier(&p) {
                     return;
                 }
-                let canon = p.canonicalize().unwrap_or(p.clone());
+                let canon = lecteur.identite(&p).unwrap_or(p.clone());
                 if let Some(nom) = builtin_name_of(&canon) {
                     let pareil = lecteur.lire(&p).ok().as_deref() == get(nom);
                     if !out.iter().any(|(v, ..)| v == s) {
