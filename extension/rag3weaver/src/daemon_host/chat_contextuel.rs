@@ -356,3 +356,168 @@ fn le_chat_attend_la_sortie_differee_d_une_commande_apres_accord() {
     drop(n);
     serveur.arreter();
 }
+
+/// L'accord est un clic réel pour une ligne extérieure précise. La variante
+/// conserve le même exécutable et le même script, mais ajoute un argument :
+/// accorder une famille ou seulement le chemin du script serait trop large.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : étape séparée")]
+fn un_accord_exterieur_reprend_la_ligne_exacte_et_n_accorde_pas_sa_variante() {
+    let Some(binaire) = navigateur_ou_saut("un_accord_exterieur_reprend_la_ligne_exacte_et_n_accorde_pas_sa_variante") else {
+        return;
+    };
+    let d = tempfile::tempdir().unwrap();
+    let racine = d.path().join("rw");
+    std::fs::create_dir_all(&racine).unwrap();
+    let signal = racine.join("signal-exterieur");
+    let effet_variante = racine.join("variante-executee");
+    // Ce script reste hors domaine, comme dans le rouge historique b57313175.
+    let script = d.path().join("attendre-exterieur.py");
+    std::fs::write(&script, format!(
+        "import pathlib, sys, time\nif len(sys.argv) > 1:\n    pathlib.Path({}).write_text('variante executee')\n    print('VARIANTE_NON_ACCORDEE_EXECUTEE', flush=True)\nelse:\n    p = pathlib.Path({})\n    while not p.exists():\n        time.sleep(0.01)\n    print('SORTIE_EXTERIEURE_PREUVE ' + str(pathlib.Path.cwd().resolve()), flush=True)\n",
+        json!(effet_variante), json!(signal),
+    )).unwrap();
+    let commande = format!("python3 {}", script.display());
+    let variante = format!("{commande} variante");
+    let appels = Arc::new(Mutex::new(Vec::<(String, Value)>::new()));
+    let retours = Arc::new(Mutex::new(Vec::<(String, String)>::new()));
+    let model: ChatModel = {
+        let (commande, variante, appels, retours) = (commande.clone(), variante.clone(), appels.clone(), retours.clone());
+        Arc::new(move |_| -> Result<Arc<dyn Llm>, String> {
+            let (commande, variante, appels, retours) = (commande.clone(), variante.clone(), appels.clone(), retours.clone());
+            Ok(Arc::new(CallbackLlm::new("faux-accord-exterieur", 131072, move |turns: &[Turn], opts, sink| {
+                for nom in ["run_command", "wait_output"] {
+                    assert!(opts.tools.iter().any(|t| t.name == nom), "outil réellement exposé : {nom}");
+                }
+                let depuis = turns.iter().rposition(|t| t.role == "user").unwrap();
+                let variante_demandee = turns[depuis].content == "essaie la variante sans accord";
+                let dernier = turns[depuis..].iter().rev().find(|t| t.role == "tool");
+                let appel = match dernier {
+                    None => Some(("run_command", json!({"command":if variante_demandee { &variante } else { &commande },"background":true}))),
+                    Some(t) => {
+                        retours.lock().unwrap().push((t.tool_name.clone().unwrap(), t.content.clone()));
+                        if !variante_demandee && t.tool_name.as_deref() == Some("run_command") && t.content.contains("**En fond**") {
+                            let contenu: Value = serde_json::from_str(&t.content).unwrap();
+                            let texte = contenu["result"].as_str().expect("vrai résultat de commande");
+                            let journal = texte.split("- sortie : `").nth(1).unwrap().split('`').next().unwrap();
+                            assert!(
+                                !std::fs::read_to_string(journal).unwrap_or_default().contains("SORTIE_EXTERIEURE_PREUVE"),
+                                "la sortie est encore différée"
+                            );
+                            Some(("wait_output", json!({"journal":journal,"pattern":"SORTIE_EXTERIEURE_PREUVE","timeout_s":30})))
+                        } else {
+                            None
+                        }
+                    }
+                };
+                match appel {
+                    Some((nom, args)) => {
+                        appels.lock().unwrap().push((nom.to_string(), args.clone()));
+                        MockLlm::new("")
+                            .with_context_len(131072)
+                            .with_tool_calls(vec![(nom.to_string(), args.to_string())])
+                            .generate(turns, opts, sink)
+                    }
+                    None => MockLlm::new("Issue extérieure observable.").with_context_len(131072).generate(turns, opts, sink),
+                }
+            })))
+        })
+    };
+    let a = atelier_avec(d.path(), model);
+    assert!(
+        !script.canonicalize().unwrap().starts_with(a.racine.canonicalize().unwrap()),
+        "ne pas déplacer le script dans le domaine pour masquer le défaut"
+    );
+    let mut serveur = Serveur::lancer(&a);
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{}/ide/entrer?jeton=j", serveur.racine()), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{}/ide/code/{}/chat", serveur.racine(), a.h.id), PRETE);
+    n.evaluer("document.querySelector('#message').value = 'lance la commande extérieure et attends sa sortie'; document.querySelector('#send').click()");
+    let carte = "details.outil[data-outil=run_command] + .ui-du-tour .carte-accord";
+    n.attendre(
+        &format!("!!document.querySelector('{carte} button.accorder') && document.querySelector('#status')?.textContent === 'fini'"),
+        "la commande extérieure attend le vrai accord",
+    );
+    assert!(!signal.exists() && !effet_variante.exists());
+    let carte_initiale = n.evaluer(&format!("document.querySelector('{carte}').textContent"));
+    assert!(carte_initiale.as_str().unwrap().contains(&commande), "ligne extérieure présentée : {carte_initiale}");
+    n.evaluer(&format!("document.querySelector('{carte} button.accorder').click()"));
+    n.attendre(
+        "document.querySelector('#status')?.textContent === 'wait_output' || (document.querySelector('#status')?.textContent === 'fini' && document.querySelectorAll('details.outil[data-outil=run_command]').length >= 2) || document.querySelector('#status')?.textContent === 'Erreur'",
+        "la reprise de cette même commande atteint une issue observable",
+    );
+    let lignes: Vec<_> = appels
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(nom, _)| nom == "run_command")
+        .map(|(_, args)| args["command"].clone())
+        .collect();
+    assert_eq!(lignes, vec![json!(commande), json!(commande)], "la carte relance exactement la même ligne");
+    assert_eq!(
+        n.evaluer("document.querySelector('#status')?.textContent"),
+        json!("wait_output"),
+        "rouge accord extérieur : le clic doit permettre la reprise, pas une nouvelle demande ; page : {} ; retours : {:?}",
+        n.evaluer("document.body.innerText"),
+        retours.lock().unwrap()
+    );
+    std::fs::write(&signal, "libérer la sortie extérieure\n").unwrap();
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour se termine après la vraie sortie");
+    {
+        let retours = retours.lock().unwrap();
+        let attendu = a.racine.canonicalize().unwrap().to_string_lossy().into_owned();
+        assert!(
+            retours
+                .iter()
+                .any(|(nom, texte)| nom == "wait_output" && texte.contains("**Trouvé**") && texte.contains("SORTIE_EXTERIEURE_PREUVE") && texte.contains(&attendu)),
+            "wait_output rend la sortie et le vrai domaine de travail : {retours:?}"
+        );
+    }
+    n.attendre(
+        "[...document.querySelectorAll('.outil[data-outil=wait_output]')].some(e => e.textContent.includes('SORTIE_EXTERIEURE_PREUVE'))",
+        "la sortie différée reste visible dans la page",
+    );
+    n.evaluer("document.querySelector('#message').value = 'essaie la variante sans accord'; document.querySelector('#send').click()");
+    n.attendre(
+        "document.querySelector('#status')?.textContent === 'fini' && document.querySelectorAll('details.outil[data-outil=run_command]').length === 3",
+        "le nouveau tour de variante reçoit son verdict",
+    );
+    n.attendre(
+        &format!("!![...document.querySelectorAll('{carte}')].at(-1)?.querySelector('button.accorder')"),
+        "la variante attend un nouvel accord, jamais donné par le témoin",
+    );
+    let texte_variante = n.evaluer(&format!("[...document.querySelectorAll('{carte}')].at(-1).textContent"));
+    assert!(
+        texte_variante.as_str().unwrap().contains(&variante),
+        "la nouvelle carte porte la ligne modifiée : {texte_variante}"
+    );
+    assert!(!effet_variante.exists(), "la variante non accordée ne doit pas s'exécuter");
+    let lignes: Vec<_> = appels
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(nom, _)| nom == "run_command")
+        .map(|(_, args)| args["command"].clone())
+        .collect();
+    assert_eq!(lignes, vec![json!(commande), json!(commande), json!(variante)]);
+    assert!(
+        retours
+            .lock()
+            .unwrap()
+            .iter()
+            .rev()
+            .find(|(nom, _)| nom == "run_command")
+            .unwrap()
+            .1
+            .contains(crate::dataflow::run_nodes::EN_ATTENTE),
+        "vrai refus d'exécuter sans accord, pas une sortie simulée"
+    );
+    assert_eq!(
+        appels.lock().unwrap().iter().filter(|(nom, _)| nom == "wait_output").count(),
+        1,
+        "seule la commande accordée est suivie"
+    );
+    assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
+    drop(n);
+    serveur.arreter();
+}
