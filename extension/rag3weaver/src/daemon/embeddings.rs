@@ -1031,6 +1031,16 @@ mod tests {
         assert_eq!(identite.modele, "chauffe-fixture");
         let sans = EmbedDaemon::new(Arc::new(FormeRefusee)).chauffer(false);
         assert_eq!(sans.identite().chauffe.unwrap()["embed"].etat, EtatChauffe::Desactivee);
+        struct SuccesVide;
+        impl Embedder for SuccesVide {
+            fn embed(&self, _: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> { Ok(Vec::new()) }
+            fn dim(&self) -> usize { 1 }
+            fn name(&self) -> &str { "faux-succes" }
+        }
+        let vide = EmbedDaemon::new(Arc::new(SuccesVide)).chauffer(true);
+        let bilan = vide.identite().chauffe.unwrap().remove("embed").unwrap();
+        assert_eq!(bilan.etat, EtatChauffe::Partielle);
+        assert!(bilan.formes.iter().all(|f| f.erreur.is_some()), "un résultat vide n'est pas une chauffe réussie");
     }
     use super::*;
     use crate::embedder::MockEmbedder;
