@@ -261,3 +261,16 @@ Source corrigée publiée avant reprise ; inventaire comporte désormais9 témoi
 Reprise complète F5/minimal/3compiles/lib/NAV/lectures-hôte-PG dans le RESTE de
 l'échéance6000 d'origine, aucunreset. PG privée réemployée seulement après preuve
 création/identité/propriété de la première portée, jamais de createdb/drop aveugle.
+
+
+## Arrêt de la lib complète — compteur de types
+
+ab85 : F5/minimal/compilations/inventaire nouveaux acquis, lib arrêtée au premier
+échec the_model_sees_tools_not_the_29_raw_nodes. Lecture : il compare la taille du
+registre à BUILTIN_NODE_COUNT+SearchTool. Le nouveau SymbolNavigationNode est
+enregistré, mais BUILTIN_NODE_COUNT garde19 types sous code au lieu de20.
+Le test de comptage du registre lit la même constante ; ne pas affaiblir ces tests.
+Diagnostic borné prévu sur l'ELF exact et ce seul test avec nocapture pour voir
+les tailles, puis mise à jour de l'inventaire déclaré correspondant au type ajouté.
+Nouvelle source/driver avant reprise entière dans le même reste6000, aucunreset,
+aucun service modèle employé dans ce diagnostic. Les preuves ab85 restent rouges.
