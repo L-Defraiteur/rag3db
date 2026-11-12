@@ -5,6 +5,9 @@ use crate::connection::{CypherValue, DbConnection, QueryParam};
 use crate::dialect::{Rag3dbDialect, SchemaDialect};
 use crate::dataflow::migrations::{plan::StorageDescriptor, read_history_on};
 
+mod observed_metadata;
+pub use observed_metadata::{ObservedCatalogMetadata, MetadataReadProvenance, PersistedSchemaComparison};
+
 /// Published together with configs and the journal by a future validated migration.
 /// This module only reads this key; it cannot publish a format.
 pub const STORAGE_DESCRIPTOR_KEY: &str = "storage_descriptor:v1";
@@ -25,6 +28,8 @@ pub struct StorageInspection {
     /// neither a full schema fingerprint nor a storage generation.
     pub entity_config_fingerprint: String,
     pub entity_configs: BTreeMap<String, serde_json::Value>,
+    /// Sealed typed metadata; public diagnostic fields cannot rewrite its provenance.
+    observed_metadata: ObservedCatalogMetadata,
     pub unresolved_migrations: Vec<u64>,
     /// Kept in the same inspected snapshot, not reconstructed from the catalog.
     #[serde(skip)]
@@ -33,6 +38,8 @@ pub struct StorageInspection {
 }
 
 impl StorageInspection {
+    pub fn observed_metadata(&self) -> &ObservedCatalogMetadata { &self.observed_metadata }
+
     pub(crate) fn validate_internal_schema(&self) -> Result<(), String> {
         if let Some(version) = self.internal_schema.as_deref() {
             if !matches!(version, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8") {
@@ -69,17 +76,17 @@ impl StorageInspection {
 /// execution lease is claimed by a read-only diagnostic.
 pub(crate) fn inspect_snapshot_on(conn: &dyn DbConnection) -> Result<StorageInspection, String> {
     conn.begin_read_only().map_err(|e| format!("begin metadata snapshot: {e}"))?;
+    let rollback = |error: String| match conn.rollback() {
+        Ok(()) => error,
+        Err(rollback) => format!("{error}; metadata snapshot rollback failed: {rollback}"),
+    };
     match inspect_on(conn) {
-        Ok(inspection) => {
-            conn.commit().map_err(|e| format!("commit metadata snapshot: {e}"))?;
+        Ok(mut inspection) => {
+            conn.commit().map_err(|e| rollback(format!("commit metadata snapshot: {e}")))?;
+            inspection.observed_metadata.provenance = MetadataReadProvenance::ReadOnlySnapshot;
             Ok(inspection)
         }
-        Err(error) => {
-            match conn.rollback() {
-                Ok(()) => Err(error),
-                Err(rollback) => Err(format!("{error}; metadata snapshot rollback failed: {rollback}")),
-            }
-        }
+        Err(error) => Err(rollback(error)),
     }
 }
 
@@ -95,33 +102,25 @@ pub(crate) fn inspect_on(conn: &dyn DbConnection) -> Result<StorageInspection, S
         tables.push(name.to_owned());
     }
     tables.sort();
-    let mut metadata = BTreeMap::new();
-    if tables.iter().any(|name| name == "_catalog_meta") {
+    let has_metadata = tables.iter().any(|name| name == "_catalog_meta");
+    let metadata = if has_metadata {
         let rows = conn.execute_with_params(&Rag3dbDialect.load_meta_by_prefix("prefix"),
             &[QueryParam::new("prefix", CypherValue::String(String::new()))])
             .map_err(|e| e.to_string())?;
-        for row in rows.rows {
-            if row.len() != 2 { return Err("malformed catalog metadata row".into()); }
-            let key = row[0].as_str().ok_or("metadata key is not text")?;
-            let value = row[1].as_str().ok_or("metadata value is not text")?;
-            if metadata.insert(key.to_owned(), value.to_owned()).is_some() {
-                return Err(format!("duplicate catalog metadata key: {key}"));
-            }
-        }
-    }
+        crate::catalog::metadata::decode_rows(rows)?
+    } else { BTreeMap::new() };
+    let persisted_configs = crate::catalog::metadata::entity_configs(&metadata)?;
+    let persisted_relations = crate::catalog::metadata::relations(&metadata)?;
     let mut entity_configs = BTreeMap::new();
-    for (key, value) in &metadata {
-        if let Some(name) = key.strip_prefix("entity_config:") {
-            let config: crate::config::EntityConfig = serde_json::from_str(value)
-                .map_err(|e| format!("invalid persisted config {name}: {e}"))?;
-            config.validate().map_err(|e| format!("invalid persisted config {name}: {e}"))?;
-            entity_configs.insert(name.to_owned(), serde_json::to_value(config).map_err(|e| e.to_string())?);
-        }
+    for (name, config) in &persisted_configs {
+        config.validate().map_err(|e| format!("invalid persisted config {name}: {e}"))?;
+        entity_configs.insert(name.clone(), serde_json::to_value(config).map_err(|e| e.to_string())?);
     }
     let descriptor = metadata.get(STORAGE_DESCRIPTOR_KEY)
         .map(|value| serde_json::from_str(value).map_err(|e| format!("invalid storage descriptor: {e}")))
         .transpose()?;
-    let history: BTreeMap<_, _> = if tables.iter().any(|name| name == "_DataflowMigration") {
+    let has_journal = tables.iter().any(|name| name == "_DataflowMigration");
+    let history: BTreeMap<_, _> = if has_journal {
         read_history_on(conn, &Rag3dbDialect).map_err(|e| e.to_string())?.into_iter().collect()
     } else { BTreeMap::new() };
     let unresolved_migrations = history.iter()
@@ -132,6 +131,12 @@ pub(crate) fn inspect_on(conn: &dyn DbConnection) -> Result<StorageInspection, S
         internal_schema: metadata.get(crate::scope::SCHEMA_VERSION_KEY).cloned(),
         descriptor, entity_config_fingerprint: crate::hash::content_hash(&encoded),
         tables, entity_configs, unresolved_migrations,
+        observed_metadata: ObservedCatalogMetadata {
+            entity_configs: has_metadata.then_some(persisted_configs),
+            relations: has_metadata.then_some(persisted_relations),
+            journal: has_journal.then(|| history.clone()),
+            provenance: MetadataReadProvenance::ConnectionView,
+        },
         #[cfg(feature = "rag3db-native")]
         history,
     })
@@ -252,6 +257,40 @@ mod native_tests {
         assert_eq!(constructions.load(std::sync::atomic::Ordering::SeqCst), 0);
         assert!(refusal.contains("explicit migration required"), "{refusal}");
         assert_eq!(before, files(dir.path()), "read-only target refusal changed fixture files");
+    }
+
+    #[test]
+    fn native_snapshot_restores_configs_relations_and_journal_without_changing_fixture_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let database = dir.path().join("observed.rag3db");
+        {
+            let conn = Rag3dbConnection::with_manifest_buffer_pool(&database, Some(64 * 1024 * 1024)).unwrap();
+            conn.execute(&Rag3dbDialect.create_meta_table()).unwrap();
+            for (key,value) in super::observation_tests::metadata_rows() {
+                conn.execute_with_params(&Rag3dbDialect.upsert_meta("key", "value"), &[
+                    QueryParam::new("key", CypherValue::String(key)),
+                    QueryParam::new("value", CypherValue::String(value)),
+                ]).unwrap();
+            }
+            conn.execute("CREATE NODE TABLE _DataflowMigration(_uuid STRING, version INT64, name STRING, status STRING, checksum STRING, execution_id STRING, applied_at INT64, duration_ms INT64, error STRING, PRIMARY KEY(_uuid))").unwrap();
+            conn.execute("CREATE (m:_DataflowMigration {_uuid:'fixture', version:1, name:'fixture', status:'applied', checksum:'checksum', execution_id:'fixture', applied_at:1, duration_ms:0, error:''})").unwrap();
+        }
+        let before = files(dir.path());
+        {
+            let conn = Rag3dbConnection::with_config(&database, rag3db::SystemConfig::default()
+                .buffer_pool_size(64 * 1024 * 1024).read_only(true)).unwrap();
+            let inspection = inspect_snapshot_on(&conn).unwrap();
+            let observed = inspection.observed_metadata();
+            assert_eq!(observed.provenance(), MetadataReadProvenance::ReadOnlySnapshot);
+            assert_eq!(observed.entity_configs().unwrap().len(), 1);
+            assert_eq!(observed.relations().unwrap()["CONTAINS"].to, "Document");
+            assert_eq!(observed.journal().unwrap()[&1].status(), "applied");
+            assert!(inspection.descriptor.is_none(), "journal row does not establish a durable generation");
+            assert!(!inspection.tables.iter().any(|n| n=="Document"), "these are persisted metadata, not a physical-schema proof");
+            let comparison = observed.compare_with_supplied_schema(super::observation_tests::schema_input()).unwrap();
+            assert_eq!(comparison.supplied_schema().entities().len(), 2);
+        }
+        assert_eq!(before, files(dir.path()), "RO inspection or comparison changed fixture bytes");
     }
 
     #[test]

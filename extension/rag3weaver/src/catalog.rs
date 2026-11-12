@@ -17,6 +17,7 @@ use crate::events::{CatalogEvent, EventBus};
 use crate::filter::FilterCondition;
 use crate::search;
 
+pub(crate) mod metadata;
 mod aside;
 mod progress;
 /// Le retard de l'index sur le disque, par cellule (la montre de fichiers).
@@ -5442,25 +5443,11 @@ fn read_threads() -> u64 {
             &[QueryParam::new("prefix", CypherValue::String("entity_config:".into()))],
         ).map_err(|e| CatalogError::DbError(e.to_string()))?;
 
-        for row in &result.rows {
-            let key = match row.get(0) {
-                Some(CypherValue::String(s)) => s.clone(),
-                _ => continue,
-            };
-            let value = match row.get(1) {
-                Some(CypherValue::String(s)) => s.clone(),
-                _ => continue,
-            };
-            let entity_name = key.strip_prefix("entity_config:").unwrap_or(&key);
-            let config: crate::config::EntityConfig = serde_json::from_str(&value)
-                .map_err(|e| CatalogError::SchemaError(
-                    format!("deserialize entity config for '{entity_name}': {e}")
-                ))?;
-
-            // Restore EntityDef in config.entities
+        let metadata = metadata::decode_rows(result).map_err(CatalogError::SchemaError)?;
+        for (entity_name, config) in metadata::entity_configs(&metadata).map_err(CatalogError::SchemaError)? {
             let entity_def = Self::entity_config_to_entity_def(&config);
-            self.config.entities.insert(entity_name.to_string(), entity_def);
-            self.entity_configs.insert(entity_name.to_string(), config);
+            self.config.entities.insert(entity_name.clone(), entity_def);
+            self.entity_configs.insert(entity_name, config);
             self.publish_read_view();
         }
 
@@ -5533,21 +5520,9 @@ fn read_threads() -> u64 {
             &[QueryParam::new("prefix", CypherValue::String("relation:".into()))],
         ).map_err(|e| CatalogError::DbError(e.to_string()))?;
 
-        for row in &result.rows {
-            let key = match row.get(0) {
-                Some(CypherValue::String(s)) => s.clone(),
-                _ => continue,
-            };
-            let value = match row.get(1) {
-                Some(CypherValue::String(s)) => s.clone(),
-                _ => continue,
-            };
-            let rel_name = key.strip_prefix("relation:").unwrap_or(&key);
-            let rel_def: RelationDef = serde_json::from_str(&value)
-                .map_err(|e| CatalogError::SchemaError(
-                    format!("deserialize relation '{rel_name}': {e}")
-                ))?;
-            self.config.relations.insert(rel_name.to_string(), rel_def);
+        let metadata = metadata::decode_rows(result).map_err(CatalogError::SchemaError)?;
+        for (rel_name, rel_def) in metadata::relations(&metadata).map_err(CatalogError::SchemaError)? {
+            self.config.relations.insert(rel_name, rel_def);
             self.publish_read_view();
         }
 
