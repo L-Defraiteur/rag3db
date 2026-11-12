@@ -51,3 +51,12 @@ Remotes et preuves conservés dans cx-accord-exterieur-nettoyage-garde-20261112 
 PC et portable distinctes. Une branche PC sans upstream a d'abord refusé -d ; son upstream
 distant exact a été vérifié et renseigné avant le -d normal, sans -D. Cette attestation
 vient d'archi ; aucun nettoyage ED n'y est assimilé.
+
+
+Reprise nuit symboles : lire en PREMIER section État courant du rapport voisin.
+Lot accord terminé/nettoyé, ne pas recréer ses worktrees. Symbole : branche2/docs741
+préservées, source ciblée30ab sur branche1 =8/0/0, ELF223. Primitive commune requise
+pour globale ; pas de réinitialisation silencieuse du600 épuisé. Scope corrective120
+était séparée/autorisée, terminée verte. Ticket navigation reste ouvert, README/news
+préparent uniquement première tranche. Prochain pas = recette globale publiée puis
+coordination7879/PG privée, provenance de chaque binaire et garde au nettoyage.
