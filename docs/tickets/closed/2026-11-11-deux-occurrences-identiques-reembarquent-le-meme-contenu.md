@@ -1,13 +1,13 @@
 # Deux occurrences identiques réembarquent le même contenu
 
-- **État** : ouvert (11 novembre 2026), lot des versions de contenu 1a.
+- **État** : corrigé sur 831d08a35 ; critères éprouvés par validation combinée et reprise ciblée autorisée, voir clôture.
 - **Famille** : produit
 - **Gravité** : coût inutile, un contenu identique est embarqué une fois par occurrence.
 - **Atteignable en service** : oui (deux fichiers ou branches portent le même scope).
 - **Touche rag3weaver** : oui (déclaration du gabarit code, identité de contenu, ingestion/recherche).
 
 - **Pour** : session arbre-principal, porteuse du lot 1a ; coordination recherche/ED pour les contrats communs, orchestration pour les créneaux et le tour de push.
-- **Signalé par** : reprise arbre-principal demandée par Lucie via [la prise de contact orchestration](../../orchestration/11-11-2026/04-contacter-orchestration-codex.md) ; [contrats et lots](../11-11-2026/03-contrats-et-lots-des-vues.md).
+- **Signalé par** : reprise arbre-principal demandée par Lucie via [la prise de contact orchestration](../../orchestration/11-11-2026/04-contacter-orchestration-codex.md) ; [contrats et lots](../../arbre-principal/11-11-2026/03-contrats-et-lots-des-vues.md).
 
 ## Preuve
 
@@ -212,7 +212,7 @@ bibliothèque, cinq suites natives, puis le nouveau témoin dans la base SQL pri
 
 Passe v3 : bibliothèque 2101/0/58 ; dérivées **20/0**, cellules **13/0**, Scope privé
 **3/0**, recherche **40/0**, projection **2/0**. Néanmoins rc101, garde de résidu du
-journal du démon né pendant e2e_search : [ticket recherche dédié](../../tickets/closed/2026-11-11-le-service-d-embarquement-laisse-son-journal-dans-le-tmpdir-d-e2e-search.md).
+journal du démon né pendant e2e_search : [ticket recherche dédié](2026-11-11-le-service-d-embarquement-laisse-son-journal-dans-le-tmpdir-d-e2e-search.md).
 L'étape SQL chaînée n'a donc pas démarré ; elle est lancée séparément dans
 `cx-contenu-pg-premier.log`. Aucun faux vert de passe ni exemption de résidu.
 
@@ -397,3 +397,22 @@ champs explicites/défaut, deux UUID publics avec leurs positions ; aucun faux
 score. Revue c7 non bloquante du garde ; avis archi final attendu avant le gel.
 Les cas SourceResolved legacy existent déjà dans la suite dérivées (TicketView,
 témoins autour des lignes150/268), à rejouer dans la passe adaptée complète.
+
+## Clôture sur le candidat final 831d08a35 — 12 novembre
+
+Critères satisfaits sur source propre **831d08a35564982af1d0a3cb64707847e0614f3b** :
+gardes vertes, features5/5, lib2139/0/64 ignorés, navigateur39/0/0,
+**14/14 suites e2e, 225 tests réussis, aucun échec ni ignoré**, rc0.
+Une nouvelle passe entière suit les correctifs de revue ; aucun vert6fb recyclé.
+
+Preuves luciepc : `~/.cache/rag3weaver-build/cx-passe-combinee-1a-v6/`
+(passe.log, verdict-detaille.json, VERDICT, preuves.sha256, binaire-final.sha256).
+Binaire e2e SHA256 **0ffa3e43258b628890ea09aac590827bbd12687af443685f153a0f686bdf76ed**.
+Résidu connu tx arrêt : trois CSV, ticket recherche conservé ; pas de promesse
+sans résidu. Les premiers rouges et montages antérieurs gardent leurs sources.
+
+Revues finales sur les mêmes tickets : ED pour le manifeste/SchemaFacts, c7
+pour Scope/PG/dialecte, archi pour projection/enrichissement/provenance ; aucun
+bloqueur restant. Le graphe BM25 compare un label réel non vide ; signals et
+best_signal peuvent être vides, ce n'est pas une preuve nouvelle de fusion.
+Migration1b, activation des gabarits code et mesures M3–M5 restent distinctes.

@@ -7,6 +7,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **12 nov. — Des occurrences distinctes partagent leur index.** Une déclaration de dérivée
+  par contenu réutilise versions, morceaux et vecteurs dans une cellule ; la recherche publique
+  conserve les occurrences, leurs données et leurs positions. L'option est éprouvée par
+  manifeste, sans activer les gabarits code ni migrer les bases existantes. (`831d08a35`)
+
 - **11 nov. — Les manifestes dérivés s’ouvrent selon leurs dépendances.** Racines, relations et
   schémas nommés composent leurs vrais faits ; une dérivée garde l’identité définie par sa
   dérivation, et les manques, cycles ou définitions incompatibles sont nommés avant tout appel

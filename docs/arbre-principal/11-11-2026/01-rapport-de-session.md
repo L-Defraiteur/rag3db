@@ -1,5 +1,56 @@
 # Rapport de session — l'arbre principal, au 11 novembre 2026
 
+## Validation finale après revue — 12 novembre 2026
+
+Source propre **831d08a35564982af1d0a3cb64707847e0614f3b**, arbre
+8cd2aa865fd80cec31bd1d8a6d0f6ca526b3a987, branche cx-arbre-scope-version-6,
+rebasée sur mastere4ecbeb13 (deux MD), range-diff45/45 identiques.
+**Features5/5 ; lib2139/0/64 ignorés ; navigateur39/0/0 ; 14/14 e2e, 225/0/0.**
+La passe fraîche entière finit rc0 le12nov à09:47:00, début09:35:14 Paris.
+
+Compteurs réellement lus : dérivées24, scope13, Scope privé3, projection2,
+search40, queue5, PG36, tx arrêt18/merge1/ligne3/vecteurs3, code36,
+code_sync17, lectures24. Aucun e2e ignoré ni SAUTÉ. Service creux7879 explicite
+pour lectures dès son démarrage, santé capturée ; ailleurs environnement service
+absent comme lors des anciennes suites. Base PG privée cx_contenu_2191_20261111,
+lib29a7 épinglée, huit features, -j8, un target14Go sur32, sous poste lourd.
+Le surveillant ajouté en cours fixe la borne globale à3600s depuis09:35:14,
+termine lui aussi avant l'échéance ; aucune source mutée pendant les jobs.
+
+Preuves hors target à luciepc : `cx-passe-combinee-1a-v6/` sous
+`~/.cache/rag3weaver-build/` : passe.log, verdict-detaille.json, VERDICT,
+preuves.sha256, binaire-final.sha256, borne-globale.json. Binaire e2e SHA256
+**0ffa3e43258b628890ea09aac590827bbd12687af443685f153a0f686bdf76ed**.
+Résidu connu de tx arrêt : trois CSV avec ticket recherche nommé. Search refuse
+le remplacement du service préexistant périmé ; ce service n'a été ni remplacé
+ni arrêté. Gardes de journaux sur leurs propres faux services : sept verts.
+
+Les deux défauts de revue ont leurs rouges puis verts : dette survivante après
+rollback, et enrichissement/provenance SourceResolved du graphe public. Le
+protocole conserve aussi les anciens montages incomplets, sans les transformer
+en preuves produit. La passe6fb et sa reprise lectures demeurent historiques.
+Revues ED/c7/archi terminées sans bloqueur : mêmes tickets, sans doublons.
+Le témoin de provenance exige le label BM25 non vide et compare les autres
+champs, qui peuvent être vides ; aucune nouvelle preuve de fusion multisignal.
+
+Les cinq tickets passent dans closed avec états et preuves dans le même commit.
+La clôture et les liens sont documentaires, aucun Rust changé depuis831d.
+Déclaration accessible depuis un vrai manifeste, gabarits code de production
+inchangés ; migration1b et mesures M3–M5 restent distinctes. Tour master et
+nettoyage réglementaire des ressources propres restent à exécuter.
+
+
+
+
+Attestation assets après la passe, sans rebâti ni rejeu : outil de lecture archi
+`cx-archi-attester-gabarits.py`, 220 chemins/contenus actuels via la table du .d
+du binaire navigateur, zéro absent ; ELF navigateur SHA256
+f89f0bb6520ab130978b7ea25534a828b6329938efc0f5894284efd142408279.
+Les 220 contenus exacts sont aussi présents dans le binaire e2e final0ffa3e43
+par lecture mmap ; diff templates/master vide. Preuves attestation-elf.json,
+builtin_templates-teste.rs et attestation-e2e-assets.json dans le dossier v6.
+Aucune nouvelle preuve de fusion multisignal n'est déduite du graphe BM25 seul.
+
 ## État après les correctifs de revue finale — 12 novembre
 
 La validation6fb reste attribuée à6fb (13 suites vertes et lectures corrigé).
@@ -142,7 +193,7 @@ repointait deux racines alpha vers une version bêta ; corrigé et vert dans
 
 Le candidat suivant ajoute les files par cellule et applique la consigne dans la
 cellule explicite de l'appel. Son ticket commun, owner arbre-principal :
-[la file ne suit pas la cellule](../tickets/2026-11-11-la-file-d-ecriture-ne-suit-pas-la-cellule-de-lecture.md).
+[la file ne suit pas la cellule](../../tickets/closed/2026-11-11-la-file-d-ecriture-ne-suit-pas-la-cellule-de-lecture.md).
 La préexistence est prouvée sur master c04c62021 dans le worktree diagnostic
 `cx-wt-file-cellule-baseline` **sur luciepc seulement**, runtime intact, seul un test
 Product ajouté : le drain bêta consomme aussi alpha. Log `cx-file-cellule-baseline-rouge.log`.
@@ -192,7 +243,7 @@ Aucune activation du gabarit code sur base vivante, migration 1b ou mesure M3 au
 
 ## Checkpoint Scope privé — passe partielle du 11 novembre, 22:14–22:21 Paris
 
-Porteur arbre-principal, [ticket 1a](../tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md).
+Porteur arbre-principal, [ticket 1a](../../tickets/closed/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md).
 Sources runtime figées à a1af9b507f90bfadd0c55d5c2058c15177a2992b, avec le seul diff de
 fixture tests/e2e_scope_versions.rs (SHA256 d05eaa6443ba46b3036ccda64d8099049b61ea116e5c9ed9936b2b0ffc451d13).
 8 features, lib 29a7bc52a épinglée, poste lourd, -j8, target unique cx-target-contenu-derive.
@@ -225,7 +276,7 @@ restent chez ED ; leur transmission ne vaut pas clôture. Pas de migration, M3�
 
 ## Renforcement du masque et de l'ingestion — après 49caf64c6
 
-Action portée par [le ticket du contenu partagé](../tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md).
+Action portée par [le ticket du contenu partagé](../../tickets/closed/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md).
 Projection neutralisée : 1 version au lieu de 2 occurrences (cx-projection-publique-rouge.log).
 Sans préfiltre, dense/creux/texte perdent tous le résultat visible derrière 12 orphelins mieux
 classés (cx-projection-masque-rouge.log). Restauration : 13 e2e dérivées réussis/0 échec,
@@ -249,14 +300,14 @@ attendu. Le lanceur s'est arrêté avant le rejeu e2e : pas de passe verte reven
 Suivi distinct, porteur ED :
 [montage du manifeste lié sans code](../../tickets/closed/2026-11-11-le-test-du-manifeste-lie-demande-code-sans-garde-de-feature.md).
 Configuration complète prévue ensuite. Accessibilité depuis un manifeste à éprouver aussi,
-porteur ED : [ordre des déclarations dérivées](../tickets/2026-11-11-ordonner-les-entites-derivees-a-l-ouverture-du-backend.md).
+porteur ED : [ordre des déclarations dérivées](../../tickets/closed/2026-11-11-ordonner-les-entites-derivees-a-l-ouverture-du-backend.md).
 Ce dernier point est issu de la lecture, pas d'un e2e reproduit : HashMap d'entités enregistrées
 avant les relations, alors que from/gather exigent leurs dépendances. Aucune modification de
 backend.rs, builtin_templates.rs, code.rs ou du gabarit code par ce lot à ce stade.
 
 ## Reprise suivante — association et projection publiques en branche
 
-Porteur et action : [ticket des occurrences partagées](../tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md).
+Porteur et action : [ticket des occurrences partagées](../../tickets/closed/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md).
 Association canonique search_index sur l'entité publique ; plan dérivé de from/DERIVED_FROM,
 filtre relationnel commun pour le masque, projection dans les signaux avant fusion/pagination.
 Aucun chemin spécial Scope. Les champs indexés doivent préserver les octets des champs publics
@@ -276,7 +327,7 @@ Cette section prime sur les états de préparation ci-dessous. Branche active
 `cx-arbre-scope-version-3`, worktree `~/.cache/rag3weaver-build/cx-wt-scope-version`
 aux deux postes ; base du travail `c224979351e735df8766ee20fe592eba444440b8`.
 Toutes les suites de cette reprise sont rattachées au même
-[ticket des occurrences partagées](../tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md),
+[ticket des occurrences partagées](../../tickets/closed/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md),
 porté par arbre-principal : preuves des checkpoints 7748fa53c/d63157d8c, projection et masque,
 raccordement Scope, validations, migration sur copies et coordination M3–M5. Il reste ouvert.
 

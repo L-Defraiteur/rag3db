@@ -1,12 +1,12 @@
 # Ordonner les entités dérivées à l'ouverture du backend
 
-- **État** : ouvert, initialisation corrigée sur `bffbe5033` ; reste le raccord public search_index/manifeste du lot 1a.
+- **État** : corrigé sur 831d08a35 ; critères éprouvés par validation combinée et reprise ciblée autorisée, voir clôture.
 - **Famille** : produit
 - **Gravité** : refus de chargement et d’ouverture reproduits puis corrigés ; preuve du raccord public 1a encore manquante.
 - **Atteignable en service** : oui sur les baselines décrites ; correctif d’ouverture éprouvé, association publique 1a non livrée.
 - **Touche rag3weaver** : oui, src/backend.rs, enregistrement du schéma ; DerivedConfig et Catalog::verifier_la_derivation.
 - **Pour** : arbre-principal (raccord public/manifeste 1a) ; ED conserve les preuves du correctif d’initialisation.
-- **Signalé par** : arbre-principal, [ticket du contenu partagé](../../arbre-principal/tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md).
+- **Signalé par** : arbre-principal, [ticket du contenu partagé](2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md).
 
 ## Éléments relus
 
@@ -240,3 +240,22 @@ chaîne) ainsi que la mutation du préparé avant open avec compteur **zéro app
 Ce sont les preuves combinées 1a, distinctes des 16 ouvertures ED et du fournisseur c12.
 La vraie passe réglementaire combinée reste à jouer ; ticket conservé ouvert jusqu'à son
 verdict et au commit final, puis git mv vers closed selon la procédure.
+
+## Clôture sur le candidat final 831d08a35 — 12 novembre
+
+Critères satisfaits sur source propre **831d08a35564982af1d0a3cb64707847e0614f3b** :
+gardes vertes, features5/5, lib2139/0/64 ignorés, navigateur39/0/0,
+**14/14 suites e2e, 225 tests réussis, aucun échec ni ignoré**, rc0.
+Une nouvelle passe entière suit les correctifs de revue ; aucun vert6fb recyclé.
+
+Preuves luciepc : `~/.cache/rag3weaver-build/cx-passe-combinee-1a-v6/`
+(passe.log, verdict-detaille.json, VERDICT, preuves.sha256, binaire-final.sha256).
+Binaire e2e SHA256 **0ffa3e43258b628890ea09aac590827bbd12687af443685f153a0f686bdf76ed**.
+Résidu connu tx arrêt : trois CSV, ticket recherche conservé ; pas de promesse
+sans résidu. Les premiers rouges et montages antérieurs gardent leurs sources.
+
+Revues finales sur les mêmes tickets : ED pour le manifeste/SchemaFacts, c7
+pour Scope/PG/dialecte, archi pour projection/enrichissement/provenance ; aucun
+bloqueur restant. Le graphe BM25 compare un label réel non vide ; signals et
+best_signal peuvent être vides, ce n'est pas une preuve nouvelle de fusion.
+Migration1b, activation des gabarits code et mesures M3–M5 restent distinctes.

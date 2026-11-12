@@ -1,5 +1,56 @@
 # Identité des contenus dérivés et projection vers les occurrences
 
+## Validation finale après revue — 12 novembre 2026
+
+Source propre **831d08a35564982af1d0a3cb64707847e0614f3b**, arbre
+8cd2aa865fd80cec31bd1d8a6d0f6ca526b3a987, branche cx-arbre-scope-version-6,
+rebasée sur mastere4ecbeb13 (deux MD), range-diff45/45 identiques.
+**Features5/5 ; lib2139/0/64 ignorés ; navigateur39/0/0 ; 14/14 e2e, 225/0/0.**
+La passe fraîche entière finit rc0 le12nov à09:47:00, début09:35:14 Paris.
+
+Compteurs réellement lus : dérivées24, scope13, Scope privé3, projection2,
+search40, queue5, PG36, tx arrêt18/merge1/ligne3/vecteurs3, code36,
+code_sync17, lectures24. Aucun e2e ignoré ni SAUTÉ. Service creux7879 explicite
+pour lectures dès son démarrage, santé capturée ; ailleurs environnement service
+absent comme lors des anciennes suites. Base PG privée cx_contenu_2191_20261111,
+lib29a7 épinglée, huit features, -j8, un target14Go sur32, sous poste lourd.
+Le surveillant ajouté en cours fixe la borne globale à3600s depuis09:35:14,
+termine lui aussi avant l'échéance ; aucune source mutée pendant les jobs.
+
+Preuves hors target à luciepc : `cx-passe-combinee-1a-v6/` sous
+`~/.cache/rag3weaver-build/` : passe.log, verdict-detaille.json, VERDICT,
+preuves.sha256, binaire-final.sha256, borne-globale.json. Binaire e2e SHA256
+**0ffa3e43258b628890ea09aac590827bbd12687af443685f153a0f686bdf76ed**.
+Résidu connu de tx arrêt : trois CSV avec ticket recherche nommé. Search refuse
+le remplacement du service préexistant périmé ; ce service n'a été ni remplacé
+ni arrêté. Gardes de journaux sur leurs propres faux services : sept verts.
+
+Les deux défauts de revue ont leurs rouges puis verts : dette survivante après
+rollback, et enrichissement/provenance SourceResolved du graphe public. Le
+protocole conserve aussi les anciens montages incomplets, sans les transformer
+en preuves produit. La passe6fb et sa reprise lectures demeurent historiques.
+Revues ED/c7/archi terminées sans bloqueur : mêmes tickets, sans doublons.
+Le témoin de provenance exige le label BM25 non vide et compare les autres
+champs, qui peuvent être vides ; aucune nouvelle preuve de fusion multisignal.
+
+Les cinq tickets passent dans closed avec états et preuves dans le même commit.
+La clôture et les liens sont documentaires, aucun Rust changé depuis831d.
+Déclaration accessible depuis un vrai manifeste, gabarits code de production
+inchangés ; migration1b et mesures M3–M5 restent distinctes. Tour master et
+nettoyage réglementaire des ressources propres restent à exécuter.
+
+
+
+
+Attestation assets après la passe, sans rebâti ni rejeu : outil de lecture archi
+`cx-archi-attester-gabarits.py`, 220 chemins/contenus actuels via la table du .d
+du binaire navigateur, zéro absent ; ELF navigateur SHA256
+f89f0bb6520ab130978b7ea25534a828b6329938efc0f5894284efd142408279.
+Les 220 contenus exacts sont aussi présents dans le binaire e2e final0ffa3e43
+par lecture mmap ; diff templates/master vide. Preuves attestation-elf.json,
+builtin_templates-teste.rs et attestation-e2e-assets.json dans le dossier v6.
+Aucune nouvelle preuve de fusion multisignal n'est déduite du graphe BM25 seul.
+
 ## État après les correctifs de revue finale — 12 novembre
 
 La validation6fb reste attribuée à6fb (13 suites vertes et lectures corrigé).

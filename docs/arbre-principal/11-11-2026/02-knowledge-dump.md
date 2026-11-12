@@ -1,5 +1,15 @@
 # Knowledge dump — le périmètre de l'arbre principal, au 11 novembre 2026
 
+## État prioritaire au 12 novembre après revue
+
+Lot1a validé sur831d08a35, branche6 : lire la validation finale en tête du
+rapport. Features5/lib2139/nav39 et14suites225e2e sont tous rejoués après
+les correctifs de dette et d'enrichissement/provenance. Target14Go, PG privée.
+Cinq tickets fermés avec preuves, clôture documentaire ; tour master et nettoyage
+réglementaire restent à exécuter. Migration1b/M3–M5/gabarits restent distincts.
+Les états plus bas sont historiques.
+
+
 Pour un agent qui reprend sans mémoire. Le dépôt est `rag3db` (un moteur de base de graphe en C++,
 dérivé de Kuzu, sous `src/` et `extension/vector/`) ; le produit est le crate Rust
 `extension/rag3weaver/` (des « backends » déclarés par un manifeste JSON et des graphes Mermaid,
