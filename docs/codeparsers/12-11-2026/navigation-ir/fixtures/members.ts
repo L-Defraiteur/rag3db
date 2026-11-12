@@ -15,3 +15,6 @@ namespace Billing {
     }
   }
 }
+
+// élan : bornes en octets, imbrication sur une seule ligne.
+function sameLine() { function child() { return "é"; } return child(); }
