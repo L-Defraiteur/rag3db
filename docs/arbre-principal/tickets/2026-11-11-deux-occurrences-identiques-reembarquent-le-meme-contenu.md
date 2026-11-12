@@ -307,3 +307,40 @@ et la primitive dialectale d'appartenance : **1/0** (0,71s), puis suite PG enti�
 `cx-pg-complet-v5.log`. Filtres49 et dialectes59 verts dans `cx-filter-membership-vert.log`.
 Cela couvre les douze lectures, la dette de recette par cellule et le rollback ; ne pas
 réattribuer ces résultats aux essais précédents ni annoncer la passe combinée déjà faite.
+
+## Passe combinée 6fb6d8756 : arrêt au premier rouge, 12 novembre
+
+Branche5 rebasée sans conflit sur master8c208542f, range-diff30/30 identiques.
+Source exacte propre aux deux postes : **6fb6d87562924f8a322cbed0d8d215314cb02a7b**.
+Journaux luciepc : `~/.cache/rag3weaver-build/cx-passe-combinee-1a-v5b/`.
+Lib29a7 épinglée, huit features, target unique, -j8, poste lourd, PG privée
+cx_contenu_2191_20261111. Premier montage v5 arrêté avant tout test : chemin
+sha256 erroné tests/common/serveur.rs ; corrigé en src/serveur.rs dans le seul
+script hors dépôt, journal v5 conservé. Ce n'est pas un rouge produit.
+
+Vrais verts v5b : gardes tickets14/worktree19/journaux/lanceur/target/magasin/lib,
+features5/5, lib2139/0/64 ignorés, navigateur39/0/0. Les deux tests combinés du
+manifeste public ont effectivement tourné dans la lib. Les 14 suites prévues ont
+été jouées en appels séparés, sans test e2e ignoré : dérivées22, scope13,
+Scope privé3, projection2, search40, queue5, PG36, tx arrêt18/merge1/ligne3/vecteurs3,
+code36, code_sync17 verts. **lectures23/1**, donc **passe ROUGE, rc101**, aucun
+vert global. Aucun test raté relancé. Les tickets1a/ordre/cellule/PG/appartenance
+restent ouverts.
+
+Le rouge est `le_creux_se_surligne_par_le_chemin_de_l_hote`,
+e2e_lectures.rs:1350. Le backend dit exactement qu'il ne trouve ni adresse dans
+models.sparse, ni RAG3WEAVER_SERVICE_SPARSE / RAG3WEAVER_SERVICE_EMBED /
+RAG3WEAVER_EMBED_SERVICE ; le surlignage se replie sur query_words. Le commentaire
+du témoin exige déjà un service bge-m3 de passe joignable avec spans. Le script de
+passe n'a posé aucune de ces adresses : **montage incomplet**, aucune régression
+runtime attribuée à1a. Les dossiers sont gardés dans
+`e2e-gardes/e2e_lectures-20261112-090624-187111`. Reste : coordonner l'adresse d'un
+service compatible et son créneau, vérifier les prérequis puis convenir de la
+reprise avec l'orchestration ; aucune modification de fixture ni repli accepté.
+
+Deux précisions conservées : search40 termine rc0 sans résidu, mais le journal
+refuse de remplacer un démon préexistant périmé ; on ne prétend pas avoir lancé
+puis archivé ce service. Les gardes dédiés testent leurs propres faux services.
+Tx arrêt laisse deux CSV déclarés comme résidu connu par le ticket recherche
+2026-11-11-un-copy-tue-laisse-son-csv-dans-le-dossier-temporaire ; ne pas annoncer
+une passe entièrement sans résidu. Aucun nettoyage des preuves rouges.
