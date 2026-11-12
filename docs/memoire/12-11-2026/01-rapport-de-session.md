@@ -23,3 +23,13 @@ Aucun code, build, test, modèle, service ou base réelle n’a été lancé ni 
 La note canonique sépare désormais le cœur de plan sur contenus fournis/embarqués et l’éventuel adaptateur CLI de préparation des sources. Le cœur proposé n’a aucun effet de lecture implicite, d’extraction ou d’écriture ; une source requise manque, il refuse. Les sorties sont un candidat et des différences/refus, sans droit d’application. Le cas de cache vide et l’absence de repli sur le disque font partie des preuves à construire.
 
 Le contrat est proposé, non implémenté. Les choix vivant/épinglé et les garanties de maintenance/récupération restent à traiter dans le même ticket M8. Aucun code, build, test ou base réelle n’a été engagé pour ce cadrage.
+
+## Lot de code : situation après globale
+
+La première tranche M8 a ensuite été autorisée et implémentée : API Rust de plan fermé sur contenus, fusion3voies, lecteur fermé raccordé au validateur commun ; aucun CLI/apply/persistant. Branche publiée cx-memoire-m8-plan-3, worktree portable /home/lucied/.cache/rag3weaver-build/cx-wt-memoire-m8-plan ; worktree luciepc /home/lucied/git_workspaces/cx-memoire-m8-plan, source globale97f8f7ad9, branche locale cx-memoire-m8-plan-globale-3. Targetofficiel unique luciepc cx-target-memoire-m8-plan.
+
+[API, rouges/verts et preuves de globale](02-plan-m8-api-et-preuves.md) : ciblés36/0/0, globale features5/5 +minimalchecklib +lib2192/0/64 +nav39/0/0 +8e2e100/0/0. Driver brutROUGE de nettoyageTMPglobal, résultats testsVERT distincts ;43résidus possédés inventoriés puis archivés,4ELF/220assets attestés, processus quiescents et7879 libéré. Diagnostic soumis à orchestration, aucun tourmaster à ce point. TicketM8 reste ouvert et source97 reste la seule source de globale ; docs suivantes ne changent pas le code.
+
+Le petit lot cfg80 est déjà intégré avec Arbre sur master3b2eab7ec. Worktrees cfg portable cx-wt-memoire-cfg-temoin-natif et luciepc cx-memoire-cfg-temoin-natif restent à nettoyer sous garde exacte65aa avec archives administratives externes. Targetcfg secondaire1,4Go créé par erreur, inactif/inventorié ; aucun Cargo nouveau dedans et aucun effacement aveugle. Le ticket ttyglobal reste ouvert pour ses2helpers minimaux préexistants.
+
+Reprise : faire relire le diagnostic de nettoyage et les attestations ; avant master fetch/rebase sous branche neuve, examiner le Rust reçu et rejouer court hors verrou si nécessaire. Les worktrees/targets inachevés ne se retirent qu’après preuves gardées, quiescence et garde commune VERT ; aucune force. Aucune activation M9, aucun lancement des50documents, aucune montée de la mémoire réelle autorisés.
