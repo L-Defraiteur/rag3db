@@ -1,0 +1,25 @@
+# Réutilisation du paquet74ad — recette concrète pour revue, sans exécution
+
+Le [lanceur](outils/ci-format18-reprise/lancer.sh), le [contrôleur](outils/ci-format18-reprise/controleur.py) et la [recette avec leurs SHA256](outils/ci-format18-reprise/recette.json) sont publiés pour revue C7. Aucun staging distant, réservation, test ou build lancé durant cette préparation. Exécution seulement après GO sur ces montages/lanceur, BancMESURE prioritaire terminé et ressources libres.
+
+## Temps et portée de l’autorisation
+
+La recette initiale indique `unit_budget_s=2400`, `controller_deadline_s=2370`, « budget after acquisition » ; son premier contrôleur établit une échéance monotone propre à l’unité. Elle ne précise pas explicitement le droit de suspendre cette échéance entre unités. Le delta publié avant02 dans6628fc388 indique explicitement `total_envelope_s=2400`, `maximum_combined_services_with_second_stop_s=2391.855` et réserve le coût du premier essai. L’interprétation cumulative a donc été annoncée avant02, mais elle ne constitue pas un GO03 ni une clarification rétroactive de l’échéance initiale. Si C7 retient une deadline absolue depuis la première acquisition, la reprise est inadmissible dans cette enveloppe déjà échue. Aucun lancement avant résolution de ce point en revue.
+
+Sous l’interprétation cumulée :893,800s consommées,1506,200s restantes. RuntimeMax1480s + TimeoutStop10s =1490s maximum ; contrôleur1470s, suite1440s plafonnée aussi par le solde du contrôleur moins6s pour tuer/récolter. Cumul maximal2383,800s ; réserve16,200s. Pas de compilation ni de remise à zéro silencieuse. Timeout ou premier rouge arrêtent la tentative ; pas de répétition. Le journal horodaté mesure la réception de blocs stdout, pas l’instant exact interne des événements.
+
+## Montages et données
+
+Hôte luciepc. Sources conservées02 et paquet834fichiers en lecture seule via racineRO. Paquet vérifié intégralement contre manifest-build.json, source74ad exacte, packSHA4b229156… vérifié. Clone local en scratch et dépaquetage Git seulement ; aucun cmake/ninja/Cargo. Les deux sources privées diagnostiques sont explicitement refusées. Les extensions vector/geo vérifiées sont copiées seulement dans les sorties privées source/extension/*/build, sous leurs noms attendus ; aucun fichier distribué modifié.
+
+Scratch03 tmpfs32G, cgroup32G/swap0, réseau namespace sans route. Source préparée montéeRO à son chemin scratch03 et à l’ancien chemin absolu scratch02/source encodé dans le binaire. Cette seconde liaison restaure l’accès aux jeux de données et aux extensions attendus, sans réutiliser les données test02 disparues. La racine, le paquet et les bibliothèques restentRO ; seules test-tmp, test-work et preuves03 sontRW dans le namespace du test. Le contrôleur seul prépare le scratch tmpfs. Les artefacts du paquet sont rehashés après succès. Aucun GPU/modèle/service/PG, installation ou charge privée0511.
+
+Environnement du test vidé puis PATH/LANG/LC_ALL/TZ/TMPDIR/RUNNER_TEMP/MAX_NUM_THREADS=2 explicités. Le fixture public conserve son override512Mio/4fils. Même binaire Release/BuildID, aucun changement flags/pool/source. Suite unique sans filtre, fail-fast, XML. Attendus :360 entrées XML dont359 sélectionnées, les deux outils sautés nommément et un cas désactivé ; anomalie, sortie nonzero ou échec empêchent un verdict vert. La clôture du ticket exige toujours la CI future effectivement verte.
+
+## Staging prévu après revue seulement
+
+Sur luciepc, créer les répertoires neufs `~/.cache/rag3db-moteur-notes/ci-format18-74ad-03` et `~/.cache/rag3weaver-build/cx-ci-format18-74ad-03` ; copier les deux scripts relus et recette.json, vérifier leurs SHA256 publiés. Le répertoire de preuves doit être inédit et le point de montage vide. Invoquer ensuite `bash lancer.sh /home/lucied/.cache/rag3db-moteur-notes/ci-format18-74ad-03` en conservant stdout/stderr du systemd-run dans unite.log. Ce dernier attend le poste ; le budget d’unité commence après acquisition. Aucun de ces gestes n’a été exécuté pour préparer ce document.
+
+Après terminaison, lecture d’état systemd/MainPID/cgroup/processus et libération du poste ; joindre les limites, argv/env, manifeste, journaux brut/horodaté, XML si disponible et premier-echec ou verdict. Le contrôleur TERM puis KILL/récolte en3+3s sur expiration ; systemd KillModecontrol-group constitue la borne extérieure. Aucune conclusion de quiescence avant cette lecture finale.
+
+Validation de préparation : parsing Python par ast.parse et bash -n réussis ; revue statique des chemins/montages/bornes. Aucun essai d’exécution, même de préflight natif. La recette reste une proposition et ne prouve pas la réussite future.

@@ -122,3 +122,5 @@ inchangé/libposée/tracebloquée. Ticket ouvert, pas de vert des tests avant ex
 Second staging : quatre cibles bâties, mais transaction_test incomplet à sa borne540s ; aucun XML final ni vert revendiqué. [Verdict et preuves](../../coeur-cpp/12-11-2026/24-ci-format18-suite-incomplete-a-la-borne.md). Paquet834fichiers rehashé sans écart, unité arrêtée/MainPID0, cumul893,800s/2400. Aucun replay, lib posée ou publication master. Ticket reste ouvert, revue C7 attendue.
 
 [Diagnostic lecture seule de la borne et proposition non exécutée](../../coeur-cpp/12-11-2026/25-ci-format18-diagnostic-borne-et-proposition.md) : historique même cas569,076s/suite1336,857s, borne540mal dimensionnée ; aucun deadlock démontré. Solde cumulé1506,200s, recette proposée1490s sans rebuild à revue C7, aucune relance.
+
+[Recette concrète de réutilisation pour revue](../../coeur-cpp/12-11-2026/26-ci-format18-recette-reutilisation-pour-revue.md) : scripts/SHA publiés, sans rebuild ;1480+10stop/1470contrôleur/1440suite. Ambiguïté échéance initiale vs cumul explicite delta02 exposée, pas de GO03 déduit. Après BancMESURE et revue seulement ; aucun staging/runtime/réservation effectué.
