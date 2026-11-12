@@ -4531,6 +4531,8 @@ impl Backend {
                     };
                     let jetons = jetons_du_bac(prepared, &racine);
                     if let Some(bac) = crate::backend_code::build_bac_a_sable(&w.sandbox, &racine, &jetons) {
+                        let principale = prepared.surcharges.racine_principale.as_deref().unwrap_or(&racine);
+                        let bac = crate::backend_code::avec_lecture_git(bac, &racine, principale);
                         services.register(
                             crate::dataflow::run_nodes::BAC_A_SABLE_SERVICE,
                             std::sync::Arc::new(bac),

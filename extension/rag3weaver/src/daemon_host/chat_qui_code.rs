@@ -519,20 +519,50 @@ fn le_chat_code_teste_et_reprend_sur_vertex() {
     };
     let r = host.chat_turn(&t.id, "Explore ce petit projet avec search_code puis lis src/lib.rs et tests/salutation.rs. Sans modifier de fichier, exécute exactement cargo test --offline --test salutation salutation_nettoie_le_nom -- --exact --nocapture avec run_command, timeout_s=60, en premier plan. L'échec du test est attendu : rapporte le résultat réel puis arrête ce tour. Ne demande aucun accord supplémentaire et ne contourne aucun refus.").unwrap();
     let initial = sauver("01-exploration-test-initial", &host, &r);
+    let contenu = |tour: &Value| -> String {
+        let texte = tour["content"].as_str().unwrap_or_default();
+        serde_json::from_str::<Value>(texte).ok()
+            .and_then(|v| v["result"].as_str().map(str::to_owned))
+            .unwrap_or_else(|| texte.to_owned())
+    };
     let outils = |etat: &Value, nom: &str| -> Vec<String> {
         etat["turns"].as_array().unwrap().iter()
             .filter(|v| v["role"] == "tool" && v["tool_name"] == nom)
-            .map(|v| v["content"].as_str().unwrap_or_default().to_string()).collect()
+            .map(&contenu).collect()
     };
+    let recu_commande = |etat: &Value, commande: &str, code: i32| -> String {
+        let tours = etat["turns"].as_array().unwrap();
+        for appel in tours.iter().flat_map(|v| v["tool_calls"].as_array().into_iter().flatten()) {
+            let args: Value = serde_json::from_str(appel["arguments"].as_str().unwrap_or("null")).unwrap();
+            if appel["name"] != "run_command" || args["command"] != commande { continue; }
+            let recus: Vec<_> = tours.iter().filter(|v| v["role"] == "tool" && v["tool_call_id"] == appel["id"] && v["tool_name"] == "run_command").collect();
+            assert_eq!(recus.len(), 1, "un reçu pour cet identifiant d'appel");
+            let texte = contenu(recus[0]);
+            assert!(texte.starts_with(&format!("### `{commande}`\n\ncode {code} ·")), "commande et code réels : {texte}");
+            return texte;
+        }
+        panic!("appel exact absent : {commande}");
+    };
+    let commande_test = "cargo test --offline --test salutation salutation_nettoie_le_nom -- --exact --nocapture";
+    let commande_diff = "git diff -- src/lib.rs";
     assert!(!outils(&initial, "search_code").is_empty(), "exploration absente");
-    assert!(!outils(&initial, "read_file").is_empty(), "lecture absente");
-    assert!(outils(&initial, "run_command").iter().any(|s| s.contains("salutation_nettoie_le_nom") && s.contains("FAILED") && s.contains("1 failed")), "échec réel nommé absent : {initial}");
+    for chemin in ["src/lib.rs", "tests/salutation.rs"] {
+        assert!(initial["turns"].as_array().unwrap().iter().flat_map(|v| v["tool_calls"].as_array().into_iter().flatten()).any(|appel| {
+            let args: Value = serde_json::from_str(appel["arguments"].as_str().unwrap_or("null")).unwrap();
+            appel["name"] == "read_file" && args["path"] == chemin
+                && initial["turns"].as_array().unwrap().iter().any(|v| v["role"] == "tool" && v["tool_call_id"] == appel["id"] && contenu(v).contains(chemin))
+        }), "lecture effective de {chemin}");
+    }
+    assert_eq!(std::fs::read(racine.join("tests/salutation.rs")).unwrap(), test);
+    assert_eq!(std::fs::read(racine.join("Cargo.toml")).unwrap(), avant.0[Path::new("Cargo.toml")]);
+    assert!(recu_commande(&initial, commande_test, 101).contains("test result: FAILED. 0 passed; 1 failed"), "échec réel nommé absent");
     assert_eq!(std::fs::read(racine.join("src/lib.rs")).unwrap(), avant.0[Path::new("src/lib.rs")], "pas d'édition au premier tour");
     let r = host.chat_turn(&t.id, "Corrige maintenant saluer dans src/lib.rs pour nettoyer les espaces autour du nom. Ne modifie ni les tests ni Cargo.toml. Utilise edit_file après lecture et son content_hash. Rejoue exactement cargo test --offline --test salutation salutation_nettoie_le_nom -- --exact --nocapture avec run_command timeout_s=60 en premier plan. Exige un test réellement exécuté et réussi. Puis lis le diff avec run_command : git diff -- src/lib.rs. Rapporte les reçus, sans commit ni fusion.").unwrap();
     let corrige = sauver("02-correction-test-diff", &host, &r);
+    let delta = json!({"turns": &corrige["turns"].as_array().unwrap()[initial["turns"].as_array().unwrap().len()..]});
     assert!(!outils(&corrige, "edit_file").is_empty(), "édition par outil absente");
-    assert!(outils(&corrige, "run_command").iter().any(|s| s.contains("salutation_nettoie_le_nom ... ok") && s.contains("1 passed")), "test vert nommé absent : {corrige}");
-    assert!(outils(&corrige, "run_command").iter().any(|s| s.contains("diff --git a/src/lib.rs") && s.contains("trim")), "diff réel absent");
+    assert!(recu_commande(&delta, commande_test, 0).contains("salutation_nettoie_le_nom ... ok"), "test vert nommé absent");
+    assert!(recu_commande(&delta, commande_diff, 0).contains("diff --git a/src/lib.rs"), "diff réel absent");
     assert_eq!(std::fs::read(racine.join("tests/salutation.rs")).unwrap(), test);
     assert_eq!(std::fs::read(racine.join("Cargo.toml")).unwrap(), avant.0[Path::new("Cargo.toml")]);
     assert_eq!(git(racine, &["diff", "--name-only"]), "src/lib.rs");
@@ -553,8 +583,8 @@ fn le_chat_code_teste_et_reprend_sur_vertex() {
     let anciens = historique.as_array().unwrap();
     assert_eq!(&tours[..anciens.len()], anciens.as_slice(), "préfixe de conversation conservé");
     let nouveaux = json!({"turns": &tours[anciens.len()..]});
-    assert!(outils(&nouveaux, "run_command").iter().any(|s| s.contains("salutation_nettoie_le_nom ... ok") && s.contains("1 passed")), "test réellement rejoué après reprise absent");
-    assert!(outils(&nouveaux, "run_command").iter().any(|s| s.contains("diff --git a/src/lib.rs")), "diff après reprise absent");
+    assert!(recu_commande(&nouveaux, commande_test, 0).contains("salutation_nettoie_le_nom ... ok"), "test réellement rejoué après reprise absent");
+    assert!(recu_commande(&nouveaux, commande_diff, 0).contains("diff --git a/src/lib.rs"), "diff après reprise absent");
     assert!(outils(&nouveaux, "edit_file").is_empty());
     assert_eq!(std::fs::read(racine.join("tests/salutation.rs")).unwrap(), test);
     assert_eq!(empreinte(&depot), avant, "principal intact, octets et HEAD");
