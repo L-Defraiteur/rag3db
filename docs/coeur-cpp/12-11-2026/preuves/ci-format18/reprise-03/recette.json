@@ -1,0 +1,20 @@
+{
+  "status": "GO C7 reçu le13nov2026 : étape corrective distincte1490s, recette0aa3f02729b0fb47d98773f24acbbd963514e8cc relue ; aucun GO master",
+  "source_commit": "74ad9c25cd2a63e01abd54f25314992cda6fea60",
+  "consumed_services_s": 893.8,
+  "cumulative_envelope_s": 2400,
+  "remaining_s": 1506.2,
+  "runtime_max_s": 1480,
+  "stop_s": 10,
+  "unit_max_including_stop_s": 1490,
+  "controller_s": 1470,
+  "suite_max_s": 1440,
+  "maximum_cumulative_s": 2383.8,
+  "parallelism": "aucune compilation ; fixture vector4 fils inchangé",
+  "resources": "poste lourd après BancMESURE et GO ; aucune réservation à la préparation",
+  "files": {
+    "controleur.py": "e18cfcde8962fdf3b4b1f2465ef4f034050a5729394665623688b8555115e677",
+    "lancer.sh": "6a64a424f99cab2129e8b5c23650042246255a831adeb055e771e7d2ea2d28bb"
+  },
+  "time_contract": "Étape corrective DISTINCTE proposée1490s ; ne revendique pas ancienne deadline absolue2400 respectée si échue ; total unités maximal2383,800s explicite, GO C7 requis."
+}
