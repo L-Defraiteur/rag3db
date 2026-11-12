@@ -139,3 +139,9 @@ mais complet sans avertissement après Note. La disparition de dette et la fauss
 fraîcheur sont maintenant toutes deux prouvées. Correctif borné autorisé :
 recalculer la dette depuis les files survivantes quand le cache est invalidé,
 puis republier après restauration hors_lot ; conserver l'incrémental ordinaire.
+
+Vert ciblé ff5fa48d3 : cx-marque-rollback-vert.log, 1/0 en0,54s, rc0 ;
+Occurrence+Index survivent à rollback puis Note s'ajoute ; Strict demeure partiel
+et nomme le travail externe avant comme après Note. Le témoin est renforcé par
+un drain Alpha n'écrivant pas Beta, puis drain Beta et Strict complet en fin.
+La passe6fb n'est pas réattribuée à ce code de catalogue modifié.

@@ -1073,4 +1073,62 @@ fn rollback_puis_nouvelle_table_garde_la_marque_des_cellules_en_attente() {
     assert!(apres_note.contains("|Occurrence:") && apres_note.contains("|Note:") && partiel_apres,
         "la republication doit conserver Occurrence beta ET Note alpha ; marque={apres_note:?}, Strict partiel={partiel_apres}, warnings={warnings_apres:?}");
     assert_eq!(compte(&catalog, "MATCH (r:Occurrence) WHERE r.file = 'beta-marque.rs' RETURN count(r)"), 0);
+    assert_eq!(catalog.drain().failed, 0, "le drain alpha ne pose que Note");
+    assert_eq!(compte(&catalog, "MATCH (r:Occurrence) WHERE r.file = 'beta-marque.rs' RETURN count(r)"), 0);
+    catalog.set_scope(rag3weaver::scope::Scope::new("acme", "beta")).unwrap();
+    assert_eq!(catalog.drain().failed, 0);
+    let mut warnings_fin = Vec::new();
+    let (_, partiel_fin) = reader.appliquer_la_consigne_pour("Occurrence", D::DONNEE, true, 20, &mut warnings_fin);
+    assert!(!partiel_fin && warnings_fin.is_empty(), "tout est posé : {warnings_fin:?}");
+}
+
+#[test]
+#[ignore]
+fn un_graphe_declare_enrichit_les_occurrences_et_non_leurs_versions() {
+    use rag3weaver::dataflow::{DataflowRuntime, GraphDefinition, NodeRegistry, ServiceRegistry};
+    use rag3weaver::dataflow::graph_tool::{build_definition, NodeTypePolicy};
+    use rag3weaver::search_strategy::UnifiedResult;
+    use std::sync::{Arc, Mutex};
+    let (_cache, mut catalog) = catalogue_projection_publique();
+    let mut attendus = BTreeMap::new();
+    for (file, line) in [("a.rs", 1), ("b.rs", 20)] {
+        let r = catalog.create("Occurrence", BTreeMap::from([
+            ("file".into(), s(file)), ("line".into(), CypherValue::Int(line)),
+            ("body".into(), s("marquegraphepublic")),
+        ])).unwrap();
+        attendus.insert(r.uuid().unwrap(), line);
+    }
+    assert_eq!(catalog.drain().failed, 0);
+    assert_eq!(compte(&catalog, "MATCH (v:IndexOccurrence) RETURN count(v)"), 1);
+    assert!(!catalog.entity_config("IndexOccurrence").unwrap().fields.contains_key("line"));
+    let mut services = ServiceRegistry::new();
+    catalog.register_search_services(&mut services);
+    services.register("catalog", Arc::new(Mutex::new(catalog)));
+    let def: GraphDefinition = serde_json::from_value(serde_json::json!({
+        "nodes":[
+            {"name":"source","node_type":"SearchSourceNode","config":{
+                "target_name":"Occurrence","query":"marquegraphepublic","consistency":"immediate"}},
+            {"name":"bm25","node_type":"BM25SearchNode","config":{"limit":10}},
+            {"name":"resolve","node_type":"ResolveParentNode","config":{"return_fields":["file","line"]}}
+        ],
+        "edges":[
+            {"from_node":"source","from_port":"query","to_node":"bm25","to_port":"query"},
+            {"from_node":"source","from_port":"query","to_node":"resolve","to_port":"query"},
+            {"from_node":"bm25","from_port":"results","to_node":"resolve","to_port":"results"}
+        ]
+    })).unwrap();
+    let mut registry = NodeRegistry::new();
+    rag3weaver::dataflow::node_factories::register_builtins(&mut registry);
+    let mut graph = build_definition(&def, &registry, &NodeTypePolicy::All).unwrap();
+    let output = DataflowRuntime::with_services(16, services).execute(&mut graph)
+        .expect("le graphe déclaré enrichit les UUID publics depuis Occurrence");
+    let results = output.get("resolve", "results").unwrap().downcast::<Vec<UnifiedResult>>().unwrap();
+    let obtenus: BTreeMap<String, i64> = results.iter().map(|r| {
+        assert_eq!(r.entity.as_deref(), Some("Occurrence"));
+        let data = r.data.as_ref().expect("données publiques");
+        assert!(data.contains_key("file"));
+        (r.uuid.clone(), data["line"].as_i64().unwrap())
+    }).collect();
+    assert_eq!(results.len(), 2);
+    assert_eq!(obtenus, attendus, "deux occurrences et leurs positions, une seule version");
 }
