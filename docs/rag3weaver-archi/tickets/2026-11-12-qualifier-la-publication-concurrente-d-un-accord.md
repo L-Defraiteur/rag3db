@@ -69,3 +69,19 @@ Aucune commande, donnée, accord ou configuration de Lucie ; pas de modèle/GPU/
 Source et recette seront publiées avant le cibléCPU600 après poste, lib29/j8/Max32/target32.
 Le mutex éventuel devra être par demande, hors verrou de registre pendant le backend.
 Aucun correctif engagé avant la reproduction.
+
+## Recette du premier ciblé figée avant lancement
+
+Source rouge `b708f7c34`, module exact
+`daemon_host::atelier_fichiers::publication_accord_tests::` : six témoins, deux rouges
+attendus (double oui, refus gagnant/oui perdant), quatre verts ; aucun ignoré.
+`bash scripts/cargo_magasin.sh test -j8 --lib --features rag3db-native,code,daemon,openai-llm -- daemon_host::atelier_fichiers::publication_accord_tests:: --nocapture`.
+Recette externe rouge.sh conservée deux postes dans I-luciepc/accord-publication-20261112,
+SHA256 `57ff26cdf489deee5c5d39a14b2f977a4ef7feb4ebd21e5c02e4e3dbc657e1c6`. Ciblé CPU600s global après acquisition poste lourd,
+non réinitialisé si correction après diagnostic : lib29 complète, Max32/Swap4/Highmax,
+RuntimeMax600/KillModecontrol-group/TimeoutStop15, targetunique32Go.
+Aucun modèle/GPU/service ni exécution d'Autorisee ; XDG/state/runs/chats/taches privés,
+variables de services et identifiants retirés. L'hôte fixture ne possède aucun backend.
+Premier rouge inattendu : STOP/diagnostic, pas de retry inchangé. Si rouge attendu établi,
+correction minimale publiée puis même module vert dans le reste du même600 ; passe
+adaptée proposée ensuite, intégration seulement aprèsA et tourcoordonné.
