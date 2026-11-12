@@ -131,3 +131,13 @@ Qualification codeparsers a4bf86c865 liée :
 preuves de parsing, projection relue ; aucune exhaustivité ou UUID inventé).
 Reprise prévue même filtre symbol_navigation (8 témoins), source/recette publiées
 avant exécution ; temps des tentatives déjà dépensé non effacé.
+
+
+Ciblé879 observé :7 témoins purs verts/1 intégration rouge, avant l'ouverture du
+backend : SymbolNavigationNode n'était pas qualifié nœud d'outil de backend.
+Diagnostic backend_code::READ_NODES, ajout du seul type annoncé à ED avant code.
+Le nœud lit FileSource pour le hash : policy.read_files existante est requise,
+pas un nœud de base/reaction permissif. Témoin d'intégration exige maintenant le
+refus au chargement si cette politique est retirée, puis rétablit sa fixture.
+Pas de modification hôte/agent ni d'élargissement général. Source/recette de la
+correction publiées avant nouveau ciblé ; rouge879 conservé.

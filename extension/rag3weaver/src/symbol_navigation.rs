@@ -661,6 +661,18 @@ mod integration {
         )
         .unwrap();
         let code = manifest(d.path(), "code");
+        // La transformation lit FileSource pour qualifier le hash : l'accès
+        // est une capacité existante, pas une autorisation de base implicite.
+        let saved = std::fs::read(&code).unwrap();
+        let mut denied: Value = serde_json::from_slice(&saved).unwrap();
+        denied["tools"]["navigate_symbols"]["policy"]["read_files"] = json!(false);
+        std::fs::write(&code, serde_json::to_vec(&denied).unwrap()).unwrap();
+        let refusal = crate::backend::PreparedBackend::load(&code)
+            .err()
+            .expect("la lecture doit être déclarée");
+        assert!(refusal.to_string().contains("read_files"), "{refusal}");
+        std::fs::write(&code, saved).unwrap();
+
         let atelier = manifest(d.path(), "atelier");
         let observed = Arc::new(Mutex::new(Vec::<Value>::new()));
         let seen = observed.clone();
