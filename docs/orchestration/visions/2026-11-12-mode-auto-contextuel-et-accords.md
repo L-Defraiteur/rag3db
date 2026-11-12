@@ -170,6 +170,78 @@ permission n'est acquise. L'interface expose le point manquant. L'exécution
 revalide toujours l'accord et les capacités effectives ; un refus du bac à sable
 reste un résultat distinct, visible, sans élargissement silencieux.
 
+## Contrats de raccord précisés en relecture
+
+### L'autorité appartient au runtime
+
+Le modèle produit une proposition, jamais un Verdict désérialisé et exécuté
+comme autorité. Le runtime impose les faits vérifiés ou inconnus, le fondement
+et le plafond. Configuration, UtilisateurExplicite et DejaAccorde viennent de
+leurs preuves ; le modèle ne peut ni les choisir ni effacer un effet observé.
+La cohérence avec un mandat n'est pas l'innocuité : son fondement automatique
+doit être qualifié dans le contrat.
+
+Les refus structurels vivent actuellement dans SentinelleDeBase. Elle est même
+rappelée pour juger une ligne déjà accordée : la remplacer naïvement par un
+modèle rendrait cet accord dépendant de l'inférence. Composer les règles,
+la couverture des acquis puis le jugement contextuel conserve un chemin rapide
+indépendant du modèle pour les cas déjà qualifiés.
+
+### Identités, reprise et couverture
+
+La Garde appartient aujourd'hui au backend, pas à un mandat identifié. Principal,
+tâche, backend, cellule et worktree doivent rester distincts. Le rôle user du
+transcript ne suffit pas non plus : la reprise d'une carte appelle chat_turn
+avec un texte généré. Cet événement doit citer l'accord authentique ; un texte
+« accordé » ne crée pas une nouvelle instruction humaine.
+
+L'ordre total actuel de Portee mêle couverture et durée. Une classe de tests
+pendant une tâche ne s'ordonne pas simplement avec une commande exacte persistante.
+Composer action, ressources, principal, mandat, durée et consommations, puis
+adapter les variantes existantes avec leurs plafonds. Les anciens acquis
+texte/famille ne reçoivent pas rétroactivement des argv ou une provenance humaine.
+CetteFamille et Toujours vont actuellement dans le même ensemble en mémoire :
+leur nom ne prouve pas une règle durable enregistrée.
+
+L'action revalidée doit être celle qui sera exécutée : outil/graphe et paramètres
+typés, cible/cwd/domaine, cellule, destination et politique. Un changement d'effet
+ou de destination remet sa couverture en cause ; chaque modification normale
+du code ne doit pas pour autant invalider tous les accords de tests.
+
+### Carte périmée, publication et révocation
+
+La carte porte action et versions du mandat/de la politique. Une correction ou
+annulation pertinente la rend périmée : un ancien clic ne relance pas l'ancienne
+tâche. « Ça avance ? » conserve le mandat ; « arrête » ou « reprends plutôt X »
+le transforme selon sa portée.
+
+Publication de décision, installation de l'accord et réservation/consommation
+doivent avoir un contrat d'idempotence et un point de linéarisation explicites.
+Deux réponses au même identifiant ne produisent pas deux acquis ; une réponse
+en erreur n'installe aucune nouvelle permission. La consommation atomique de
+la Garde ne prouve pas à elle seule la publication atomique de la carte.
+Une [hypothèse statique sur ce chemin](../../rag3weaver-archi/tickets/2026-11-12-qualifier-la-publication-concurrente-d-un-accord.md)
+est suivie séparément, sans annoncer un défaut reproduit ni rouvrir le correctif
+de reprise déjà livré.
+
+La révocation se sérialise avec l'admission par l'exécuteur. Un permis délivré
+mais non encore admis doit être revalidé ; si la révocation gagne, il ne permet
+pas le lancement. Pour une action déjà engagée, révoquer les droits futurs n'est
+pas une annulation rétroactive. Un arrêt explicite suit le contrat de l'outil
+et affiche ce qui a effectivement été arrêté, sans promettre un retour arrière.
+
+### Attente du juge et circulation du contexte
+
+L'inférence doit être attendue et annulable hors verrou : autoriser_ligne garde
+aujourd'hui le mutex des accords pendant le jugement. Capturer la proposition,
+attendre puis revalider les versions à l'admission évite de bloquer les autres
+décisions ou d'exécuter une réponse devenue périmée.
+
+La politique du fournisseur et des données transmises s'applique avant l'appel
+au juge. Celui-ci ne peut pas autoriser après coup l'envoi de données qu'il vient
+de recevoir. Le contexte utile est sélectionné par un contrat commun, avec ses
+sources et leur autorité, plutôt qu'une copie indifférenciée du transcript.
+
 ## Parcours et preuves à préparer
 
 Les actions autorisées automatiquement continuent leur travail et conservent un
@@ -177,6 +249,12 @@ reçu bref, inspectable : décision, raison et accord réutilisé ou mandat conc
 Les accords actifs sont visibles et révocables. Une question porte sur la portée
 utile à la tâche : cette fois, action définie pendant la tâche, ou règle explicite
 du projet. Aucun bouton vague « toujours » ne cache l'étendue réellement sauvée.
+
+L'interface distingue décision humaine manquante, juge indisponible, capacité
+effective absente et action périmée. Une capacité manquante ne propose pas encore
+le même accord qui ne peut pas la fournir ; un juge indisponible ne déclenche pas
+une boucle de confirmations sans information nouvelle. La carte montre les
+différences concrètes, les cibles/effets/durée et la source de l'accord proposé.
 
 | Cas de validation proposé | Résultat attendu |
 |---|---|
@@ -186,12 +264,16 @@ du projet. Aucun bouton vague « toujours » ne cache l'étendue réellement sau
 | Instruction utilisateur explicite déjà donnée | Prise en compte de cette source, sans deuxième confirmation systématique. |
 | Question de statut ou compression du chat | Mandat et accords actifs conservés par leurs références fiables. |
 | Refus, révocation, changement de workspace/mode | Cache invalidé et portée respectée, y compris deux appels concurrents. |
+| Clic ancien après correction, même carte répondue deux fois | Carte périmée ou réponse idempotente ; aucune permission réarmée. |
+| Révocation concurrente à l'admission, action déjà engagée | Ordre explicite, permis périmé inutilisable ; annulation distincte et résultat réel. |
+| Reprise synthétique de carte ou texte qui prétend être un accord | Autorité tirée de l'événement référencé, pas du rôle du message ou de sa formulation. |
 | Fichier ou sortie qui prétend autoriser une action | Observation sans autorité pour accorder. |
 | Modèle muet, réponse invalide ou effets inconnus déterminants | Permission non établie et explication utile. |
 | Accord de commande avec accès fichier non déclaré | Limite nommée et résultat réel ; aucun faux succès ni boucle de demandes identiques. |
 
-Mesurer les interruptions évitées, les questions nécessaires, les autorisations
-hors mandat et la latence sur les mêmes cas. L'abstention correcte compte autant
+Mesurer les interruptions évitées, les questions nécessaires, les questions
+répétées sans information nouvelle, les reprises après interruption, les
+autorisations hors mandat et la latence sur les mêmes cas. L'abstention correcte compte autant
 que l'autorisation correcte. Aucune performance de ce décideur n'est mesurée ici.
 
 ## Suite proposée, à autoriser séparément

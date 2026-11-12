@@ -40,3 +40,11 @@ fourni par le modèle. Révisions exactes, limites de la comparaison, contrat
 proposé, cas contrastifs et décisions restantes sont conservés dans la note.
 Aucun code ou réglage de production modifié. Reste le raccord futur, après revue
 et autorisation séparée ; la conception seule ne ferme pas ce ticket de capacité.
+
+Relectures ED et archi intégrées : autorité des faits/fondements imposée par le
+runtime, portée composée, identité du mandat et des reprises de carte, décision
+idempotente, cartes périmées, révocation distincte de l'annulation, inférence hors
+verrou et contrôle des données avant fournisseur. Les cas contrastifs et le
+parcours distinguent manque d'accord, indisponibilité du juge et capacité absente.
+L'hypothèse statique de publication concurrente a son ticket de qualification
+séparé, sans test exécuté ni défaut déjà annoncé.
