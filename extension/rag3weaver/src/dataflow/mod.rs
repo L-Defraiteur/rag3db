@@ -87,6 +87,8 @@ pub mod ocr_nodes;
 #[cfg(feature = "code")]
 pub mod code_nodes;
 #[cfg(feature = "code")]
+pub mod symbol_navigation_node;
+#[cfg(feature = "code")]
 pub mod index_nodes;
 pub mod catalog_read;
 pub(crate) mod rt;
