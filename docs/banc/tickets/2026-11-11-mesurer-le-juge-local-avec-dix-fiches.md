@@ -1,6 +1,6 @@
 # Mesurer le juge local avec dix fiches
 
-- **État** : ouvert — protocole préparé ; coordination card2 en cours.
+- **État** : ouvert — passage arrêté avant inférence : ROCm ouvre aussi un contexte sur card0 malgré le filtre ; restauration 7882 en cours.
 - **Famille** : produit
 - **Gravité** : coût — latence et qualité du classement à dix fiches non mesurées.
 - **Atteignable en service** : non pour cette mesure ; le branchement du juge revient à la session mémoire.
@@ -207,3 +207,47 @@ de 7882 après restauration. Le seuil minimum de 9 Gio libres sur card2 reste
 à lire après libération effective ; la consommation actuelle du service n’est
 pas une promesse de capacité. Fenêtre maximale inchangée : 1 200 secondes sous
 `poste mesure`, après acquisition. Aucun modèle du banc chargé.
+
+## Passage unique du 12 novembre : arrêt avant inférence
+
+GO coordonné reçu ; `poste mesure` acquis à 17:54:59 Paris, deadline 18:14:59,
+lanceur PID 3268337, runner PID 3268353. L’optimiseur a remis 7882 arrêté
+à 17:55:25.745 : PID 912225 terminé, port absent, autres trois PID conservés,
+11,685 Gio libres sur card2. Sources locales et distantes :
+`~/.cache/rag3db-banc-notes/k10-20261112/`.
+
+SHA256 des entrées figées :
+
+- k5 : `eada4788c74f0665208d693b1216d98474d7aed323412dd8d5ca8d5d58013ed0` ;
+- k10 : `14e5edb5ae32937a5efcf7cd22bf425796a42cc9cdac095d5ce5194f8cda92eb` ;
+- manifeste : `c81463e7fba674878c810d7491813008b17cc26cf30ba3f55fd100bb23570912` ;
+- runner : `72b57e0ae242df5ae49d119322315bf2036b6381a92d8a28cb3d0614651ceaf3`.
+
+Identité sysfs et ROCm revérifiée, baseline card2 21 661 941 760 octets.
+Serveur PID 3271346 lancé à 17:55:47 avec `ROCR_VISIBLE_DEVICES=0`, puis
+arrêté à 17:55:50 par la garde `fdinfo GPU incorrect`, avant lancement du client.
+Aucune des 1 320 requêtes n’a été jouée ; aucune mesure de classement ni latence
+n’est disponible. Aucun retry n’a été lancé.
+
+`serveur-fdinfo.txt` établit deux ouvertures amdgpu :
+
+- PCI 0000:04:00.0/card2 : 6 783 872 KiB de VRAM résidente (modèle/cache) ;
+- PCI 0000:07:00.0/card0 : 40 KiB de VRAM et 2 080 KiB de GTT résidents.
+
+Le filtre ROCm réduit les agents visibles mais n’empêche donc pas cette
+ouverture de contexte sur seat1 dans ce bâti. La garde a refusé cette ouverture.
+Ce constat ne prouve pas un calcul du modèle sur card0 ; aucune inférence
+n’a été demandée. Il interdit néanmoins de déclarer card0 totalement exclue
+avec la configuration actuelle. Ne pas relâcher la garde pour faire passer le banc.
+
+`modele-decharge.json` : serveur terminé avec code 0, port 8099 absent,
+card2 revenue à 21 665 333 248 octets (environ 3,2 Mio au-dessus de la baseline),
+pic 28 731 637 760 octets (hausse environ 6,58 Gio). La restauration de 7882
+a été demandée à l’optimiseur ; verrou mesure conservé jusqu’à preuve de retour.
+Les preuves fdinfo, journal serveur et déchargement ont aussi été copiées
+sur le portable dans le même dossier relatif.
+
+Reste : attester la restauration 7882, puis établir un mécanisme qui interdit
+l’accès au périphérique seat1 pour ce processus avant tout éventuel nouveau
+passage coordonné. L’autorisation card2 ne vaut pas autorisation card0, même
+pour un contexte minuscule. Le ticket reste ouvert ; aucun résultat k10 inventé.
