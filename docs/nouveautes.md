@@ -7,6 +7,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **12 nov. — Un aperçu décrit les correspondances de chunks et de vecteurs connus.**
+  L'API de bibliothèque conserve occurrences, cellules et provenance sur des faits
+  fournis ; elle refuse les valeurs manquantes ou incompatibles, sans modèle ni
+  écriture. Son rapport reste explicitement non qualifié vis-à-vis des faits du
+  plan : aucun transfert ni `apply` n'est livré. (`20e4e2ffc`)
+
 - **12 nov. — Le plan de migration contrôle son historique.** `migration inspect`
   et `migration plan` exposent les métadonnées et un plan préliminaire en lecture
   seule ; fichiers modifiés, versions orphelines et états incohérents sont refusés.

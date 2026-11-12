@@ -135,6 +135,15 @@ The result is diagnostic: `migration apply` returns an explicit unavailable
 error. This interface does not transfer chunks or vectors, publish a migrated
 format, activate code templates, or provide migration recovery/rollback.
 
+The library's `dataflow::migrations::transfer::preview_known_transfer` builds a
+deterministic report of chunk and known dense-vector bindings from supplied
+facts. It checks coverage and exact vector compatibility without reading storage
+or calling models. Its serialized `plan_qualification` is always
+`unqualified_config_and_schema_facts`: the referenced plan identity does not
+qualify the supplied configurations. This report cannot execute or apply a
+transfer; durable storage identity, generation and complete schema binding
+remain prerequisites for that work.
+
 ## Measured
 
 First index of this repository (about 7 000 files, 80 000 scopes, 1.1 million
