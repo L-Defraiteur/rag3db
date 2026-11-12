@@ -209,7 +209,9 @@ try:
     assert C.resolve()==C and (C/'Cargo.toml').is_file()
     assert any(l.startswith('+ ') for l in git('cherry','origin/master','HEAD').splitlines()),'lot déjà intégré'
     assert int(git('rev-list','--count','HEAD..origin/master'))<=200
-    save('source.json',dict(source=SOURCE,tree=git('rev-parse','HEAD^{tree}'),base=git('rev-parse','origin/master'),started=now(),initial_monotonic=INITIAL,deadline_monotonic=DEADLINE,global_budget_s=3600,cgroup=CG,supervision_receipt=str(RECEIPT),driver_sha256=digest(Path(__file__)),native=NATIVE,features=F,private_pg=PG,cpu_roles=['common','embedder','reranker','ocr'],services='absent',phase_caps=dict(features=1500,minimal=120,compile_large=1200,lib=300,nav=360,cli=180,pg=300,attestation=120)))
+    union=json.loads((W/'docs/arbre-principal/12-11-2026/preuves-observation-ro/union-ed-ro.json').read_text())
+    assert union['union_exact'] and union['templates']==220
+    save('source.json',dict(source=SOURCE,tree=git('rev-parse','HEAD^{tree}'),stacked_base=union['ed_published_tip'],union=union,origin_master_observed_ref=git('rev-parse','origin/master'),started=now(),initial_monotonic=INITIAL,deadline_monotonic=DEADLINE,global_budget_s=3600,cgroup=CG,supervision_receipt=str(RECEIPT),driver_sha256=digest(Path(__file__)),native=NATIVE,features=F,private_pg=PG,cpu_roles=['common','embedder','reranker','ocr'],services='absent',phase_caps=dict(features=1500,minimal=120,compile_large=1200,lib=300,nav=360,cli=180,pg=300,attestation=120)))
     state('EN_COURS');limit=budget(120)
     run('supervision',['python3','scripts/confiner_validation.py','verifier'],limit)
     assert Path(E['RAG3WEAVER_PAQUETS_REACT']).is_dir()
