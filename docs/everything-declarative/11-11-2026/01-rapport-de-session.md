@@ -453,3 +453,20 @@ Complément PostgreSQL terminé : `e2e_postgres` 34/34, zéro échec, zéro igno
 1/1 suite demandée, aucun SAUTÉ (7,87 s de tests), sous jeu large et base privée.
 Les deux gardes préalables passent aussi. Preuve conservée dans `postgres-6.log`.
 Ce résultat valide la suite existante, pas les injections d'erreurs SQL du ticket ouvert.
+
+### Nuit du 12 au 13 — parcours agent IDE (en cours)
+
+Ticket [parcours réel](../tickets/2026-11-12-prouver-le-parcours-agent-de-code-complet-de-l-ide.md).
+Worktree `cx-ed-parcours-agent-ide` sur les deux postes, branche portable homonyme,
+source publiée `36e284824`, base `a783013f1`. Nouveau témoin ignoré : vrai Vertex
+via chat/outils, exploration, Cargo nommé, édition/diff et relecture tâche/chat.
+Préfixe initial lancé luciepc sous primitive commune, global1900s (compile1500,
+réel360), target privé `target-cx-ed-parcours-agent-ide`, lib29/j8/Max32/HIGH0.
+Preuves `~/.cache/rag3weaver-build/I-luciepc/parcours-agent-ide-20261112`.
+Aucun verdict acquis à cette publication ; pas de preuve UI revendiquée.
+Aucun usage 7879/GPU prévu : fixture non indexée, rattrapage désactivé explicitement.
+
+Revue courte parallèle du ticket Archi « vidange de portée rouge dans la lib » :
+plusieurs assertions possibles ; source/log sans panic ne permettent pas d’établir
+une cause. Proposition transmise : même ELF et concurrence avec `--nocapture`,
+sans augmenter les délais ni changer le runtime. Aucun fichier commandes édité.
