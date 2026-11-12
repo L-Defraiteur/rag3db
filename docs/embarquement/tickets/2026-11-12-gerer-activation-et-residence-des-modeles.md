@@ -1,6 +1,6 @@
 # Gérer l'activation et la résidence des modèles selon les usages
 
-- **État** : ouvert ; première tranche en cours sur cx-activation-modeles, base a783013f1.
+- **État** : ouvert ; première tranche locale/dense qualifiée, combinaison avec master en cours sur cx-activation-modeles-3 ; suite distante/éviction ouverte.
 - **Famille** : produit
 - **Gravité** : coût et disponibilité ; éviter l'accumulation de modèles résidents et permettre leur reprise à la demande.
 - **Atteignable en service** : non pour cette gestion automatique ; lancement sondé et chauffe initiale existent séparément.
@@ -444,3 +444,33 @@ Aucun Rust/Cargo changé depuis fb8fc788a ; les F5 réellement verts de s69
 restent valides, pas de nouveau rejeuF5 pour cette seule instrumentationPython.
 Reste de la même échéance s69 calculé après acquisition, aucun renouvellement
 silencieux si le poste tarde ou si l'échéance est expirée.
+
+### Derniers résultats puis actualisation master
+
+E2E instrumenté9c8173275 : validation-tbwulyl4 VERT/code0/restes[]/nettoyé,
+budget331 s restant de s69, échéance872389,768482234 conservée. Deux tests
+fournisseur passés/0 ignoré ; 80 captures complètes, aucun client PCI07
+observé. PID1490216/start87209641 et1491015/start87210172 : résidence et
+gfx PCI04 positifs, premières ET dernières captures gardées. Une course
+de lecture /proc/1489937/exe disparu est nommée inconnue, pas publiée zéro.
+
+Spans : validation-igji2soq VERT/code0/restes[]/nettoyé, budget600 s, un test
+joué/0 ignoré et une suite sur une. Santé7879 avant/après identique ; PID
+partagés966256/3415586 inchangés et VRAM card2 revenue à17212403712 octets.
+Pas de place/service conservé. Target25818341376 octets sous32 Gio.
+
+Rebase sur8f604328a : format C++ pur et Rust de navigation arrivés entretemps.
+Tous ajouts amont conservés, diff amont12fichiers rag3weaver relu ; nouvelle
+branche cx-activation-modeles-3, source456797a07, anciennes remotes préservées.
+Rejeu requis pour nouveau Rust : phases distinctes1200(lib complète/F5/bin/NAV),
+900(provider instrumenté) et300(spans) après vraie acquisition, chacune
+limitée AUSSI au restant de la première échéance4qfyognx (2464 s au relevé).
+Aucun nouveau7200. ACTIVATION_PHASE_PLAFOND ne peut que réduire le plafond
+de phase, jamais augmenter ni renouveler son échéance.
+
+Avant nouvelle compilation, risque d'accumulation du target connu : figer et
+rehacher provider/consumer actuels hors cible, scanner exe/cwd/FD/cgroups
+AVANT mutation, confirmer garde propriétaire/quiescence, dry-run puis seul
+cargo clean -p rag3weaver avec manifest et target ABSOLUS, mesurer et
+conserver les preuves. Rien du magasin29, des modèles/services ou d'autrui
+n'est visé. Les anciens rouges et binaires345 restent conservés.
