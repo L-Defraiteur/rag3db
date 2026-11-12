@@ -691,6 +691,8 @@ pub(crate) struct AppliedMigration {
 #[cfg(test)]
 mod tests {
     use super::*;
+    const PREFLIGHT_MIGRATION_SOURCE: &str = "graph TD\ncheck[\"ValidateNode(query='RETURN 1', assertion='count == 1')\"]\n";
+
     // T12 : exercer le lecteur et le runner existants avant de corriger
     // la qualification, sans initialiser le catalogue ni créer son schéma.
     fn pending_history_fixture(row: Vec<crate::connection::CypherValue>)
@@ -699,7 +701,7 @@ mod tests {
         use crate::connection::{CallbackConnection, QueryResult};
         use std::sync::atomic::{AtomicUsize, Ordering};
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("001_application.mmd"), "graph TD\ncheck[\"ValidateNode(query='RETURN 1', assertion='count == 1')\"]\n").unwrap();
+        std::fs::write(dir.path().join("001_application.mmd"), PREFLIGHT_MIGRATION_SOURCE).unwrap();
         let effects = Arc::new(AtomicUsize::new(0));
         let model_calls = Arc::new(AtomicUsize::new(0));
         let e = effects.clone();
@@ -725,15 +727,24 @@ mod tests {
     fn history_row(version: crate::connection::CypherValue, status: &str) -> Vec<crate::connection::CypherValue> {
         use crate::connection::CypherValue as V;
         vec![version, V::String("application".into()), V::String(status.into()),
-             V::String("checksum_autre_fichier".into()), V::String("migration-001_application".into()),
+             V::String(content_hash(PREFLIGHT_MIGRATION_SOURCE)), V::String("migration-001_application".into()),
              V::Int(1), V::Int(1), V::String(String::new())]
     }
 
     #[test]
     fn preflight_refuses_applied_checksum_drift_without_effects() {
-        let (result, effects, models) = pending_history_fixture(history_row(crate::connection::CypherValue::Int(1), "applied"));
+        let mut row = history_row(crate::connection::CypherValue::Int(1), "applied");
+        row[3] = crate::connection::CypherValue::String(content_hash("ancienne migration"));
+        let (result, effects, models) = pending_history_fixture(row);
         assert_eq!((effects, models), (0, 0));
         assert!(result.is_err(), "une migration appliquée modifiée ne se saute pas : {result:?}");
+    }
+
+    #[test]
+    fn preflight_accepts_identical_legacy_applied_history_without_effects() {
+        let (result, effects, models) = pending_history_fixture(history_row(crate::connection::CypherValue::Int(1), "applied"));
+        assert_eq!((effects, models), (0, 0));
+        assert!(result.unwrap().is_empty(), "une application identique ne se rejoue pas");
     }
 
     #[test]
