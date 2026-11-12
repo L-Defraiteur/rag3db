@@ -367,3 +367,9 @@ file/line sur IndexOccurrence(body seul). Correctif commun : choisir l'entité
 et les champs publics de occurrence_projection pour cet enrichissement ; sinon
 conserver parent_table/enrich_fields historiques. Le témoin couvre aussi les
 champs publics par défaut, pour ne pas perdre les positions lors d'un enrichissement.
+
+Source8fd0307fc : cx-graphe-enrichissement-vert.log, **1/0**, rc0, graphe
+déclaré avec champs explicites puis champs par défaut ; deux UUIDOccurrence
+et leurs lignes distinctes, body conservé par défaut. Le P2 est corrigé dans le
+nœud commun, ni bypass ni activation d'un gabarit. Les preuves6fb demeurent6fb ;
+la nouvelle régression adaptée au catalogue/nœud modifiés reste à jouer.

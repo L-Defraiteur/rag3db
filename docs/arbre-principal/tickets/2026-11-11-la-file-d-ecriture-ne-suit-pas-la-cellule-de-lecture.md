@@ -145,3 +145,9 @@ Occurrence+Index survivent à rollback puis Note s'ajoute ; Strict demeure parti
 et nomme le travail externe avant comme après Note. Le témoin est renforcé par
 un drain Alpha n'écrivant pas Beta, puis drain Beta et Strict complet en fin.
 La passe6fb n'est pas réattribuée à ce code de catalogue modifié.
+
+Source8fd0307fc : cx-marque-rollback-vert-v2.log, **1/0** en0,62s, rc0.
+Témoin renforcé entier : marque conservée après Note, Strict partiel ; le drain
+Alpha n'écrit pas Beta, le drain Beta termine, puis Strict complet sans warning.
+Même mécanisme de dette, sans agréger les primitives de drain actives. Nouvelle
+régression adaptée à la source finale requise, pas de clôture anticipée.
