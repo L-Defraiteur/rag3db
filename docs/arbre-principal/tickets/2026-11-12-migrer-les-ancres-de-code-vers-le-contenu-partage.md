@@ -797,3 +797,36 @@ lib29/targetprivé32. Aucun allow ni correctif étranger : les deux helpers rest
 la dette du ticket tty ouvert. Propriété backend.rs : mémoire ; ED possède les
 commandes/run_nodes, pas ce fichier. Ce ciblé ne prouvera pas le minimal ni le
 témoin natif liens filtré hors de l'aperçu. Pas de globale/master avant revue.
+
+### Ciblé natif v3 vert — aperçu pur uniquement
+
+Source propre **390b70185d3c466b3d1c5379c2d14b5f36ee71b6** figée, même code
+que v2 ; ajout explicite --features rag3db-native, autorisé après diagnostic.
+**15 réussis,0 échec,0 ignoré**,1609 filtrés ; rc0 en90,91s compilation comprise,
+tests0,02s. Budget600 après lourd, j8/Mem32/lib29, target unique2Go. Portée inactive
+et poste libre0/4 relus. Aucun modèle, base, transfert ou état persistant créé
+par les quinze témoins ; uniquement des faits synthétiques et vecteurs littéraux.
+
+Preuves luciepc `cx-transfert-apercu-cible-v3/` : source.json, cargo.log,
+resultat.json, VERDICT, binaire.json et binaire-tests. ELF réellement nommé par
+Cargo : rag3weaver-bcb55d57389f25b4 ; SHA256
+**24e675e5c2998d7b913fe4027ee378f29e93299e78dd6ba88803b2f27dc5cfbd**.
+V1 jamais jouée, v2 minimal compilation rc101 et v3 natif vert restent distincts.
+Le ticket tty est ouvert ; le témoin natif liens n'a pas été joué par ce filtre.
+
+Témoins : huit occurrences/six versions, autre entité que Scope, cellules séparées,
+conservation positions/provenance/masques et relations/multiplicités, deux modèles4/6,
+legacy/suffixed, permutations, collisions, trous et doublons de couverture,
+marqueurs périmés, entrée modèle inconnue, NaN/infini/dimension et conflits bit à bit
+(y compris signe de zéro), sparse/dette/contradiction vs lecteur seul, recettes et
+gabarits non inline refusés. Mutation configs/recette à descripteurs constants :
+rapport différent et toujours non qualifié, jamais cohérence au plan inventée.
+
+Le module a une API de **rapport** publique, sans désérialisation de sortie ni
+execute/apply/connexion/écrivain : referenced_plan_identity n'est qu'une référence,
+PlanQualification::UnqualifiedConfigAndSchemaFacts est toujours sérialisé.
+Binding des faits complets, identité/génération durables, lecteur RO sous
+exclusivité, adaptateur multi-modèle, écritures/reconstruction/checkpoints et
+publication/reprise restent des prérequis de la suite. Ticket migration ouvert.
+Diff et preuves transmis à C7 avant toute passe complète ou push master ; aucune
+globale, publication ou migration réelle autorisée à ce stade.
