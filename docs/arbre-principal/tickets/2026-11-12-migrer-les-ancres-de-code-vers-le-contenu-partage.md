@@ -522,13 +522,14 @@ aucun retry aveugle ; journaux/compteurs/SHA conservés hors cible.
    dans son environnement. Fixture PostgreSQL neuve privée par l'infrastructure
    existante ; aucun serveur ni modèle nouveau, aucune donnée de base réelle.
 3. Étape navigateur exigée, huit features, paquets React existants du poste.
-4. Onze suites du changement, une suite par processus via le runner existant,
+4. Douze suites du changement, une suite par processus via le runner existant,
    sous les huit features : `e2e_migration_preflight`, `e2e_demon_hote`,
    `e2e_mcp_cycle_de_vie`, `e2e_mcp_stdio`, `e2e_fichiers_entite`,
-   `e2e_fichier_compose`, `e2e_lectures`, `e2e_tx_par_paquet_arret`,
+   `e2e_fichier_compose`, `e2e_lectures`, `e2e_postgres`, `e2e_tx_par_paquet_arret`,
    `e2e_tx_merge_puis_copy`, `e2e_tx_ligne_a_ligne`,
    `e2e_tx_vecteurs_apres_rollback`. Lectures est requise par l'hôte, transactions
-   par le catalogue ; pas de suite code/IR/gabarit ou banc ajouté. Les services
+   par le catalogue ; PostgreSQL est requis car le lecteur de journal commun
+   change également sur son dialecte. Pas de suite code/IR/gabarit ou banc ajouté. Les services
    d'embarquement préexistants ne sont consultés explicitement que pour lectures
    et MCP stdio (qui exige la connexion, sans calculer de vecteur). Santé/profil
    à vérifier avant usage : pas de nouveau service, remplacement ou lancement
@@ -543,3 +544,11 @@ Cette proposition attend la décision C7 sur la passe adaptée ; rien n'est
 annoncé vert à l'avance. Le ticket migration reste ouvert : publication, transfert,
 génération établie, running durable, reprise/annulation et activation ne sont pas
 livrés par ce préfixe diagnostique.
+
+
+Autorisation C7 après revue ED : passe adaptée ci-dessus **autorisée avec
+l'ajout e2e_postgres**, soit12suites. Figer ce MD puis exécuter sur le SHA
+actualisé ; premier rouge arrête pour diagnostic, sans retry automatique ni
+nouveau service/modèle. Global3600s après acquisition poste lourd, j8/Mem32,
+target32Go/lib29 ; fixture PG neuve sur serveur existant, sparse lectures compris.
+Pas d'activation/apply ni de tour master. Le ticket migration reste ouvert.
