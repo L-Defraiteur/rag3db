@@ -58,7 +58,7 @@ lourd avec target privé, lib29, -j8 et plafond 32 Gio. Ticket toujours ouvert.
 ## Reprise autorisée le 12 novembre — contrat partagé ED/archi
 
 Même ticket, sans nouveau lot fonctionnel. Autorisation Lucie et répartition :
-`docs/orchestration/tickets/2026-11-12-paralleliser-les-suites-autorisees-sans-chevauchement.md`.
+`docs/tickets/closed/2026-11-12-paralleliser-les-suites-autorisees-sans-chevauchement.md`.
 Base de départ archi : `6e5f9458cab5140ff2652bab9481be34500628ec`.
 
 - ED possède `commande.rs`, les tests backend et le raccord de décision nécessaire : accord
@@ -87,3 +87,24 @@ Préparation et code autorisés ; premier ciblé borné sous poste lourd quand l
 le permet. Aucun rejeu identique sans diagnostic, aucune passe globale ni push master avant
 revue coordonnée. Ce ticket reste ouvert jusqu'aux critères réels ; le succès du témoin dans
 le domaine ou un simple enregistrement d'accord ne ferme pas ce défaut extérieur.
+
+## Preuves backend du 12 novembre
+
+Rouge déterministe `6cbbb22a9` : les deux témoins de reprise extérieure et de collision
+entre argv partageant un affichage échouent (0/2). Un premier lancement avait refusé le
+montage sans sous-module avant compilation ; ce défaut de montage a été corrigé avant
+le rouge fonctionnel. Correctif `7e95d5b7a` : 47 tests commande verts, zéro échec, un helper
+existant ignoré (`role_hote_qui_sort`) ; 18 tests run_nodes verts, zéro échec/ignoré.
+Les nouveaux témoins couvrent la ligne complète, les arguments, les blancs, le domaine,
+les sous-commandes isolées, les enchaînements modifiés et le refus structurel sans
+accord partiel ; un vrai `cat` extérieur est exécuté après accord.
+
+La garde produit désormais les laissez-passer par `autoriser_ligne`, puis run_nodes
+compose cette primitive en exécution synchrone et en fond. Aucun changement du protocole
+de carte, aucun élargissement du bac à sable ; un refus du bac à sable reste distinct
+de l'accord de la porte. Le témoin navigateur archi `5611fc98e` est repris sans changement
+en `b95732394`. Sa preuve et la passe globale restent à consigner avant fermeture.
+
+Journaux luciepc : `~/.cache/rag3weaver-build/I-luciepc/accord-20261112/`
+(`rouge.log`, `verts.log`, `commit-verts`, `verdict-cibles`). Jeux ciblés
+`rag3db-native,code`, lib29, target privé, poste lourd -j8/32G. Aucun essai Gemini.
