@@ -38,7 +38,7 @@ else
     # La mesure du modèle privé est jouée séparément par le banc.
     timeout -k 10s 1800 cargo test --lib --features "$FEATURES"
     verifier_taille
-    timeout -k 10s 1200 cargo build --bin rag3weaver-embeddings --features "$FEATURES"
+    timeout -k 10s 1200 cargo build --bin rag3weaver-embeddings --example banc_residence --features "$FEATURES"
     verifier_taille
     timeout -k 10s 900 bash scripts/temoins_navigateur.sh "$FEATURES"
 fi
