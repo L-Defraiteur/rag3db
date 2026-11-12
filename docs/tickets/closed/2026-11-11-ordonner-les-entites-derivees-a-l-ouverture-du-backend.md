@@ -1,6 +1,6 @@
 # Ordonner les entités dérivées à l'ouverture du backend
 
-- **État** : corrigé sur 831d08a35 ; critères éprouvés par validation combinée et reprise ciblée autorisée, voir clôture.
+- **État** : corrigé sur 831d08a35 ; critères éprouvés par la passe finale complète, voir clôture.
 - **Famille** : produit
 - **Gravité** : refus de chargement et d’ouverture reproduits puis corrigés ; preuve du raccord public 1a encore manquante.
 - **Atteignable en service** : oui sur les baselines décrites ; correctif d’ouverture éprouvé, association publique 1a non livrée.

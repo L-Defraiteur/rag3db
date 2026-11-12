@@ -1,6 +1,6 @@
 # La file d'écriture ne suit pas la cellule de lecture
 
-- **État** : corrigé sur 831d08a35 ; critères éprouvés par validation combinée et reprise ciblée autorisée, voir clôture.
+- **État** : corrigé sur 831d08a35 ; critères éprouvés par la passe finale complète, voir clôture.
 - **Famille** : produit
 - **Gravité** : une recherche stricte d'une cellule peut drainer les écritures d'une autre.
 - **Atteignable en service** : oui, recherche avec scope explicite différent du catalogue.

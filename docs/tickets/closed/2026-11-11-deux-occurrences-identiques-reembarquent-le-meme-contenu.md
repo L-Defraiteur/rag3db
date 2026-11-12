@@ -1,6 +1,6 @@
 # Deux occurrences identiques réembarquent le même contenu
 
-- **État** : corrigé sur 831d08a35 ; critères éprouvés par validation combinée et reprise ciblée autorisée, voir clôture.
+- **État** : corrigé sur 831d08a35 ; critères éprouvés par la passe finale complète, voir clôture.
 - **Famille** : produit
 - **Gravité** : coût inutile, un contenu identique est embarqué une fois par occurrence.
 - **Atteignable en service** : oui (deux fichiers ou branches portent le même scope).

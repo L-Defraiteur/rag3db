@@ -1,6 +1,6 @@
 # Les listes scalaires de filtre produisent du Cypher sur PostgreSQL
 
-- **État** : corrigé sur 831d08a35 ; critères éprouvés par validation combinée et reprise ciblée autorisée, voir clôture.
+- **État** : corrigé sur 831d08a35 ; critères éprouvés par la passe finale complète, voir clôture.
 - **Famille** : produit
 - **Gravité** : recherche dense refusée par erreur de syntaxe dans le masque d'admission.
 - **Atteignable en service** : oui, Catalog::rechercher avec liste d'UUID sur PostgreSQL.

@@ -1,6 +1,6 @@
 # Les appels PostgreSQL concurrents peuvent bloquer la session épinglée
 
-- **État** : corrigé sur 831d08a35 ; critères éprouvés par validation combinée et reprise ciblée autorisée, voir clôture.
+- **État** : corrigé sur 831d08a35 ; critères éprouvés par la passe finale complète, voir clôture.
 - **Famille** : produit
 - **Gravité** : ingestion bloquée dans une transaction, sans attente de verrou SQL.
 - **Atteignable en service** : oui via ingest_entities du lot 1a ; antériorité hors 1a non établie.
