@@ -31,6 +31,7 @@ def main():
     args = p.parse_args()
     source, build, output, reference = (getattr(args, n).resolve()
                                          for n in ("source", "build", "output", "reference"))
+    os.environ["GIT_OPTIONAL_LOCKS"] = "0"
     started = time.monotonic()
     deadline = started + 1680  # Le RuntimeMaxSec externe (1740 s) reste le filet dur.
     expected = "0511dece74f94db6937fb03e6ec45f0c58828c5a"
@@ -126,18 +127,23 @@ def main():
     # Les versions consignées par CMake doivent aussi coïncider.
     def compiler_info(directory):
         files = sorted((directory / "CMakeFiles").glob("*/CMakeCXXCompiler.cmake"))
-        if len(files) != 1:
-            raise RuntimeError("provenance compilateur CMake ambiguë")
-        text = files[0].read_text()
+        if not files:
+            raise RuntimeError("provenance compilateur CMake absente")
         fields = ("CMAKE_CXX_COMPILER", "CMAKE_CXX_COMPILER_ID", "CMAKE_CXX_COMPILER_VERSION",
                   "CMAKE_CXX_SIZEOF_DATA_PTR", "CMAKE_CXX_COMPILER_ABI")
-        result = {}
-        for field in fields:
-            match = re.search(r"set\(" + field + r'\s+"?([^"\)\n]+)', text)
-            if not match:
-                raise RuntimeError("champ compilateur absent : " + field)
-            result[field] = match.group(1)
-        return result
+        records = []
+        for file in files:
+            text = file.read_text()
+            result = {}
+            for field in fields:
+                match = re.search(r"set\(" + field + r'\s+"?([^"\)\n]+)', text)
+                if not match:
+                    raise RuntimeError("champ compilateur absent : " + field)
+                result[field] = match.group(1)
+            records.append(result)
+        if any(record != records[0] for record in records[1:]):
+            raise RuntimeError("descripteurs compilateur divergents ; arrêt")
+        return records[0]
 
     compilers = {"reference": compiler_info(reference), "private": compiler_info(build)}
     run(["ninja", "-C", str(build), "-n", "rag3db"], "plan-sec.log")
@@ -150,6 +156,7 @@ def main():
         "runner_sha256": digest(Path(__file__)), "configure_argv": command,
         "memory_max": memory, "swap_max": swap, "scratch_bytes": fs.f_blocks * fs.f_frsize,
         "compiler": compilers, "engine_commands": len(new), "differences": differences,
+        "reference_compile_commands_sha256": digest(reference / "compile_commands.json"),
         "forbidden_plan_entries": incompatible, "plan_sha256": digest(output / "plan-sec.log"),
         "compile_commands_sha256": digest(build / "compile_commands.json"),
         "configuration_elapsed_s": time.monotonic() - started,

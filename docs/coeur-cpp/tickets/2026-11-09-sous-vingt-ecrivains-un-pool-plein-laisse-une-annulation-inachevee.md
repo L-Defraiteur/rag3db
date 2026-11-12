@@ -341,3 +341,11 @@ gate après comparaison source/commandes/compilateur et plan sec, unité avec
 1740 s + arrêt 5 s pour rester sous 30 min. Aucun moteur compilé à ce point.
 Coordination arbre : ciblé terminé, pas de réservation, accepte partage ;
 coordination recherche CI encore attendue avant lancement moteur.
+
+Coordination levée par orchestration après confirmation recherche sans build ni
+réservation et poste libre. Arbre informé ; lancement permis du préflight puis
+du build conditionnel déjà autorisé. Wrapper préparé sous
+`12-11-2026/outils/cx-lancer-archive-privee.sh` : poste lourd avant l’unité,
+1740 s + 5 s d’arrêt, mémoire 8 Gio/swap 0, tmpfs privé 2 Gio, réseau isolé,
+source/référence en lecture seule, attente d’une gate explicite après plan sec.
+Aucun pilote, mesure, lib partagée ou magasin dans ce lancement.
