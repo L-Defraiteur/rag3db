@@ -35,3 +35,11 @@ Nouveaux `src/fusion.rs`, `src/template_plan.rs` et déclarations dans `src/lib.
 Fusion : éditions disjointes/identiques, absent/null, suppression/modification, formes et tableaux. Lecteur : identité logique, fermeture au disque, ambiguïtés et refus d’un contrôle physique sans l’exécuter. Plan : candidat complet, empreintes/bases, ressources manquantes, builtin fourni différent du binaire, sous-graphe transitif, schéma modifié/refus de référence externe, conservation d’un no-op et diff déterministe. Processus neufs pour refus à cache froid et candidat valide malgré un cache physiquement inutilisable.
 
 Exécuter les ciblés sous poste lourd, lib complète29, -j8, target privé/plafond32G ; mesures prioritaires. Jeux natif puis code si nécessaire pour le raccord Landlock, sans services/GPU/modèles ni base réelle. La compilation minimale reste rouge sur des helpers préexistants distincts ; ne pas la rejouer inchangée pour annoncer un progrès. Relecture du diff et des preuves avant toute passe globale ou demande de tour master.
+
+## Premier ciblé du nouveau code et corrections
+
+Source `95dc16908`, natif+code, même target M8, lib29, poste lourd : compilation réussie ; fusion **4/0/0**, puis plan **5 réussites/8 échecs/0 ignoré**, arrêt immédiat. Preuves luciepc : `~/.cache/rag3weaver-build/preuves-m8-cibles-20261112-01/`. Lecteur et régressions ordinaires non exécutés dans cette tentative. Les fixtures positives omettaient les déclarations obligatoires entities/embeddings ; elles sont corrigées sans abaisser le validateur. La fixture d’entité fournit aussi contenu et identité stable.
+
+Corrections complémentaires à vérifier : absence distincte de null dans la sérialisation des conflits ; refus de chemins simultanément fichiers et dossiers et des caractères de contrôle ; garde files_format/fts_positions et références JSON Schema dynamiques/récursives externes. Les nouveaux témoins restent non joués avant le prochain ciblé.
+
+Le cfg isolé `80faa48385` est intégré sur master `3b2eab7ec` avec la preuve partagée Arbre (lib2167/0/64, témoin natif exact passé) ; le ticket tty global reste ouvert pour ses deux helpers préexistants. Le second target cfg, créé par erreur, reste inactif et inventorié (~1,4Go), sans suppression ; les prochains Cargo utilisent exclusivement le target M8 séquentiellement.
