@@ -165,6 +165,21 @@ def propriete_privee(info, empreinte):
            'politique privée de groupe/redémarrage modifiée')
 
 
+def verifier_executant(unite, empreinte, manager=None, pid=None, cgroup=None):
+    manager = manager or Systemd()
+    pid = os.getpid() if pid is None else pid
+    info = manager.info(unite)
+    exiger(info.get('LoadState') == 'loaded', 'exécutant hors unité privée chargée')
+    propriete_privee(info, empreinte)
+    exiger(info.get('MainPID') == str(pid), 'exécutant différent du MainPID privé')
+    if cgroup is None:
+        groupes = [x[3:] for x in Path('/proc/self/cgroup').read_text().splitlines() if x.startswith('0::')]
+        exiger(len(groupes) == 1, 'cgroup courant inconnu ou ambigu')
+        cgroup = groupes[0]
+    exiger(bool(info.get('ControlGroup')) and cgroup == info['ControlGroup'], 'exécutant hors cgroup privé')
+    return info
+
+
 def couper(date, racine=RACINE, manager=None):
     exiger(date >= COUPURE, 'coupure anticipée refusée')
     manager = manager or Systemd()
@@ -242,6 +257,7 @@ def main():
         exiger(a.fichier.resolve().parent == RACINE / 'specs' and empreinte == a.empreinte,
                'recette non enregistrée ou modifiée')
         exiger(sha_fichier(spec['argv'][0]) == spec['executable_sha256'], 'exécutable modifié')
+        verifier_executant(unite, empreinte)  # Avant toute énumération GPU.
         env = dict(os.environ)
         for cle in ['ROCR_VISIBLE_DEVICES', 'HIP_VISIBLE_DEVICES', 'CUDA_VISIBLE_DEVICES',
                     'GPU_DEVICE_ORDINAL', 'GGML_VK_VISIBLE_DEVICES']:
@@ -259,6 +275,7 @@ def main():
             json.dump({'date': maintenant().isoformat(), 'pid': pid, 'starttime': stat[19],
                        'unite': unite, 'spec': spec, 'spec_sha256': empreinte, 'pci_rocr': '0000:07:00.0',
                        'poids_et_calcul': 'à qualifier sur le modèle par le consommateur avant mesure'}, f, indent=2)
+        verifier_executant(unite, empreinte)  # Une invocation directe n'atteint jamais exec.
         os.execvpe(spec['argv'][0], spec['argv'], env)
     except (Refus, OSError, ValueError, KeyError, subprocess.SubprocessError) as e:
         print('ROUGE fenêtre card0 : ' + str(e), file=sys.stderr)
