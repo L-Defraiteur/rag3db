@@ -1,6 +1,6 @@
 # Mesurer le juge local avec dix fiches
 
-- **État** : ouvert — passage arrêté avant inférence : ROCm ouvre aussi un contexte sur card0 malgré le filtre ; restauration 7882 en cours.
+- **État** : ouvert — passage arrêté avant inférence : ROCm ouvre aussi un contexte sur card0 malgré le filtre ; 7882 restauré ; exclusion stricte de seat1 à établir.
 - **Famille** : produit
 - **Gravité** : coût — latence et qualité du classement à dix fiches non mesurées.
 - **Atteignable en service** : non pour cette mesure ; le branchement du juge revient à la session mémoire.
@@ -251,3 +251,35 @@ Reste : attester la restauration 7882, puis établir un mécanisme qui interdit
 l’accès au périphérique seat1 pour ce processus avant tout éventuel nouveau
 passage coordonné. L’autorisation card2 ne vaut pas autorisation card0, même
 pour un contexte minuscule. Le ticket reste ouvert ; aucun résultat k10 inventé.
+
+## Restauration attestée et diagnostic statique final
+
+L’optimiseur confirme le retour de 7882 à 17:56:22.790 Paris, PID 3273544,
+starttime 84847328, même SHA256/configuration et trois autres PID inchangés.
+Preuve opérateur : `~/.cache/optimiseur-notes/banc-k10-12nov-7882/retour.json`
+à luciepc. Le banc a revérifié `/sante` (granite-278m, 768, Flex32, factice=false),
+PID vivant et fdinfo PCI 04:00.0 ; ancien llama PID absent et 8099 libre.
+Preuve : `retour-verifie.json` dans le dossier k10. Marqueur de retour écrit
+après ces contrôles ; `fin.json` atteste restauration confirmée, échec du banc
+conservé, fin à 17:57:00 Paris, soit 121,13 secondes après acquisition.
+`poste --qui` relu libre : aucune mesure, aucun lourd. Créneau rendu.
+
+Condition exacte ayant arrêté le runner :
+
+```python
+if '0000:04:00.0' not in gpuinfo or '0000:07:00.0' in gpuinfo:
+    raise RuntimeError('fdinfo GPU incorrect')
+```
+
+C’est le second terme qui est vrai : PCI 07:00.0 existe dans les fdinfo bruts.
+Ce n’est ni une absence de clé ni un format PCI mal interprété. Le serveur
+venait de répondre santé 200, mais aucune requête d’inférence n’avait été envoyée.
+Les journaux conservent PID, argv et horodatages ; `/proc/PID/exe`, starttime et
+numéros exacts des FD n’ont pas été capturés pendant sa vie : ne pas les inventer
+après arrêt. Les contenus fdinfo bruts sont conservés. SHA256 relu du binaire
+installé après arrêt (ne remplace pas une empreinte du processus vivant) :
+`0f4196a018f8aeeb87dc8162f315b8466aefc5815197183429d324fd15ec83c7`.
+
+Aucun nouveau chargement ni nouveau passage n’est autorisé par cette analyse.
+La suite reste portée par ce ticket : établir un ciblage qui exclut réellement
+l’accès seat1, puis convenir d’une nouvelle fenêtre avant toute mesure k10.
