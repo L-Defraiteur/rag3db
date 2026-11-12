@@ -193,3 +193,32 @@ Ce sont des vérifications d'un nouveau contrat, pas un rouge produit déjà jou
 Admission RO réelle, raccord CLI/daemon avant modèle/RW et exclusivité restent
 à construire ; le ticket demeure ouvert. Recherche FTS a terminé sa passe,
 C++ prépare sa configuration privée sans Cargo.
+
+Le ciblé source41cc287ef est passé : **31 réussis, 0 échec, 0 ignoré**, rc0,
+natif seul, compilation24,47s, fin11:18:54Paris, target1,3Go.
+Preuve luciepc `cx-preflight-plan-v1.log`. Les3fixtures de contrat sont vertes ;
+les5témoins du journal restent verts. Aucun verdict RO/exclusivité déduit.
+
+## Troisième préfixe : inspection et admission, à relire avant compilation
+
+Extraction sans duplication du lecteur strict du journal en `read_history_on`,
+appelé par le catalogue existant et le nouvel inspecteur. Inspection native par
+`Rag3dbConnection::read_only`, inventaire des tables et lecture des métadonnées
+sans Catalog ni modèle. Configs persistées désérialisées puis empreinte dédiée,
+explicitement distincte d'une génération de données. Pas d'inventaire du corpus.
+`PreparedBackend::{inspect_storage,admit_storage}` est partagé par daemon et
+les5ouvertures CLI avant embedder/RW ; commande réelle
+`migration inspect --manifest <backend.json>`. Aucune méthode ne publie le
+nouveau descripteur. Un manifeste peut demander `storage` (format applicatif et
+recette) : cible non publiée ou publication non validable refusée ; les gabarits
+livrés n'activent rien. Le legacy sans génération reste admis ; journal pending,
+failed, inconnu ou malformé refuse. Running reste actuellement refusé strictement
+comme état non pris en charge, pas interprété comme succès.
+
+Deux fixtures callback couvrent admission legacy/cible et états du journal avec
+zéro requête autre que l'inventaire et les lectures prévues. **Non compilées,
+non exécutées**. Ce préfixe ne prouve pas encore le parcours natif sur fixture,
+l'absence de connexion modèle par un appel produit instrumenté, le plan CLI,
+la revalidation sous exclusivité ou la résistance à une course entre inspection
+RO et ouverture RW. Ces points restent ouverts avant tout verdict du patch1b.
+Aucun nouveau Cargo pendant le créneau C++02.
