@@ -252,7 +252,10 @@ fn compatibility(
     let mut errors = Vec::new();
     for key in [
         "version",
+        "storage",
         "database",
+        "vector_extension",
+        "seed",
         "files_root",
         "files_format",
         "fts_positions",
