@@ -39,3 +39,26 @@ Plan et protocole concrets publiés sur branche cx et relus par orchestration ; 
 contrats et preuves attendues nommés. Ce ticket de préparation peut alors être clos avec son
 livrable, tandis que le ticket d’implémentation restant reste ouvert. Le document seul ne
 constitue ni une migration livrée, ni une autorisation d’activer une base de Lucie.
+
+## Prise en charge et plan publié pour revue
+
+Arbre-principal reprend sur worktree documentaire neuf
+`/home/lucied/.cache/rag3weaver-build/cx-wt-migration-ancre-plan`, branche
+`cx-arbre-migration-ancre-plan`, base **bc34624dc**. Aucun WT distant, target,
+service ou accès à une base réelle pour cette étape.
+
+Livrable : [plan et protocole1b](../12-11-2026/01-plan-de-migration-de-l-ancre.md).
+Primitives relues : MigrationRunner/journal/checkpoints, SchemaFacts/fournisseur
+code, identité dérivée et chunks, KnownVectors/VectorStorage, gardes de config.
+Douze témoins proposés, jeu synthétique borné, premier patch d’admission/préflight
+séparé de la transformation et de l’activation. Aucun nouveau test joué.
+
+L’[implémentation future](2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md)
+a son ticket ouvert avant transmission. Points à relire : format applicatif et
+raccord effectif du runner, publication conditionnée, profil dense+BM25 initial
+avec refus du sparse non transférable, notion d’équivalence BM25. Le plan ne
+transforme ni les garanties actuelles de checksum/undo, ni l’absence d’export
+sparse prouvé, en fonctionnalités déjà livrées.
+
+Préparation conservée ouverte jusqu’à l’avis de l’orchestration ; aucune clôture
+ni autorisation de code déduite de la seule publication de ce document.
