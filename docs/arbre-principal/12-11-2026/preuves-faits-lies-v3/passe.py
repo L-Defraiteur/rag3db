@@ -210,6 +210,10 @@ before=events();verdict='ROUGE'
 assert SOURCE=='d2cb7f0636d099823f63de2cef674b630a46bc6f','source ELF figée d2 requise'
 try:
     guard();state('EN_COURS')
+    assert C.resolve()==C and (C/'Cargo.toml').is_file() and (C/'src').is_dir(),'crate runtime incorrect'
+    assert E['CARGO_MANIFEST_DIR']==str(C)
+    context=scan_context();save('quiescence-avant.json',dict(context=context,checked=now()));assert not context,'résidus avant reprise'
+    save('environnement-runtime.json',{k:E[k] for k in ('CARGO_MANIFEST_DIR','CARGO_TARGET_DIR','RAG3WEAVER_JOURNAUX_DIR','RAG3WEAVER_BUILTIN_TEMPLATES_DIR','RAG3WEAVER_BURN_DEVICE','RAG3WEAVER_BURN_DEVICE_EMBEDDER','RAG3WEAVER_BURN_DEVICE_RERANKER','RAG3WEAVER_BURN_DEVICE_OCR')})
     assert any(line.startswith('+ ') for line in git('cherry','origin/master','HEAD').splitlines()),'lot déjà intégré'
     assert int(git('rev-list','--count','HEAD..origin/master'))<=200,'retard source'
     save('source.json',dict(source=SOURCE,tree=git('rev-parse','HEAD^{tree}'),base=git('rev-parse','origin/master'),started=now(),initial_monotonic=INITIAL,deadline_monotonic=DEADLINE,global_budget_s=3600,cgroup=CG,memory_before=before,driver_sha256=digest(Path(__file__)),features=F,private_pg=PG,service_env='absent',cpu_roles=['common','embedder','reranker','ocr'],native=NATIVE,phase_caps=dict(features=1500,minimal=120,compile_large=1200,lib_runtime=300,navigateur=360,cli=180,attestation=120)))
