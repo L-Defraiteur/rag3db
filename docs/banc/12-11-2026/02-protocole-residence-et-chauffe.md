@@ -377,3 +377,15 @@ La source requalifiée4866 a une passe complète verte annoncée ; les copies345
 restent immuables et RUST identiques pour le runtime concerné. Le plan et les
 anciens rouges sont conservés. Aucun service partagé à arrêter ni modèle réel
 chargé avant l’acquisition supervisée ci-dessus.
+
+## Mesure exécutée : verte
+
+Le créneau commun a été acquis le 12 novembre à 23:54:31 Europe/Paris.
+La mesure réelle termine en 5,866447 secondes, verdict VERT sans résidu ;
+les services partagés restent identiques et la VRAM revient au niveau initial.
+Les [résultats et limites](03-resultats-residence-privee.md) rassemblent les
+observations des deux activations, l’annulation, le maintien, la reprise et
+la preuve de calcul sur PCI04. Aucun nouvel essai GPU n’est nécessaire pour
+consolider cette observation. Le ticket commun reste ouvert pour son périmètre
+plus large ; la branche Banc ne doit pas être fusionnée entière avec son ancien
+runtime de préparation.
