@@ -272,3 +272,23 @@ assurer ; même refus explicite pour la primitive Serveur brute. Rejouer la
 recette CPU complète sous portée commune, sans augmenter son budget 1200 s.
 Les artefacts Banc source356d restent figés ; ce delta ne change que le refus
 des budgets invalides, pas les recettes valides de mesure.
+
+### Reprise sur master et qualification finale
+
+Rebase sur 9915fe6f4, huit commits amont : docs et fixtures sous docs seulement,
+aucun Rust ajouté sous extension/rag3weaver. Diff après rebase relu ; nouvelle
+branche cx-activation-modeles-2, worktree inchangé. Aucune branche distante
+antérieure supprimée ou réécrite. Runtime 799c6b8b2 : validation-jqwupheq VERT,
+17/17 standalone (budget non représentable maintenant refusé), 5/5 connecteur,
+1/1 chauffe, zéro ignoré, quiescence contrôlée. Revue mémoire ciblée favorable
+sur checked_add et absence de régression de la deadline.
+
+Consumer Banc enrichi depuis 26522eb8c (77ca19867) : gate_usage facultative
+pour attendre la preuve de placement avant le vrai appel embed ; aucun runtime
+changé par cette addition. Reconstruction dans la même phase 1200 s, copies
+neuves hors du répertoire immutable source356d.
+
+Passe large finale rejouée avec les mêmes plafonds 2400/1800/1200/900 et
+global7200, après la correction propre du budget et du consumer. La rebase docs
+ne l'exigeait pas à elle seule. Aucune reprise d'une tentative expirée, et
+aucune activation de service installé ni charge privée dans ce lancement.
