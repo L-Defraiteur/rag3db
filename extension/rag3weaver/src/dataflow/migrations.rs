@@ -211,6 +211,7 @@ pub enum MigrationError {
     NotApplied { version: u64 },
     NotReversible { version: u64, name: String, nodes: Vec<String> },
     DbError(String),
+    InvalidHistory { version: Option<u64>, detail: String },
 }
 
 impl fmt::Display for MigrationError {
@@ -251,6 +252,10 @@ impl fmt::Display for MigrationError {
                 )
             }
             Self::DbError(e) => write!(f, "database error: {e}"),
+            Self::InvalidHistory { version, detail } => match version {
+                Some(v) => write!(f, "invalid migration history at version {v}: {detail}"),
+                None => write!(f, "invalid migration history: {detail}"),
+            },
         }
     }
 }
@@ -318,10 +323,32 @@ impl MigrationRunner {
 
     // ─── Status ─────────────────────────────────────────────────────────
 
+    /// Le journal est une entrée du plan, pas une liste de versions à sauter.
+    /// Même une application passée doit encore désigner le fichier déclaré.
+    fn checked_history(
+        &self,
+        catalog: &Catalog,
+        files: &[MigrationFile],
+    ) -> Result<HashMap<u64, AppliedMigration>, MigrationError> {
+        let history = catalog.migration_load_applied()?;
+        for (&version, entry) in &history {
+            let invalid = |detail: String| MigrationError::InvalidHistory { version: Some(version), detail };
+            let file = files.iter().find(|f| f.version == version)
+                .ok_or_else(|| invalid("orphan entry: no declared migration file".into()))?;
+            if entry.name != file.name {
+                return Err(invalid(format!("name mismatch: stored={}, declared={}", entry.name, file.name)));
+            }
+            if entry.checksum != file.checksum {
+                return Err(invalid("checksum mismatch: the recorded migration file has changed".into()));
+            }
+        }
+        Ok(history)
+    }
+
     /// List all migrations with their current status.
     pub fn status(&self, catalog: &Catalog) -> Result<Vec<MigrationStatus>, MigrationError> {
         let files = self.scan_all()?;
-        let applied = catalog.migration_load_applied()?;
+        let applied = self.checked_history(catalog, &files)?;
 
         let mut statuses = Vec::new();
         for file in &files {
@@ -362,7 +389,7 @@ impl MigrationRunner {
     /// List pending migrations (not yet applied), sorted by version.
     pub fn pending(&self, catalog: &Catalog) -> Result<Vec<MigrationFile>, MigrationError> {
         let files = self.scan_all()?;
-        let applied = catalog.migration_load_applied()?;
+        let applied = self.checked_history(catalog, &files)?;
 
         Ok(files
             .into_iter()
