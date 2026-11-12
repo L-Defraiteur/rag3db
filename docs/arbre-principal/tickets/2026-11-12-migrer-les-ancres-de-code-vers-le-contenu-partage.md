@@ -157,3 +157,12 @@ source non établie. Pas d’inventaire de données ajouté dans ce premier patc
 baseline de génération/fingerprint sous exclusivité à formaliser ici avant le
 transfert futur. Fixtures versionnées pour T12 après applied cible/avancement
 étranger ; aucune cible1b déclarée prête/applied par cette étape.
+
+Vert du préfixe source**7fbd14434** : `cx-preflight-t12-vert-v1.log` à luciepc,
+**5 réussis, 0 échec, 0 ignoré**, rc0, compilation18,48s, natif seul, target1,3Go.
+Binaire attesté dans `cx-preflight-t12-vert-v1-binaire.sha256` hors target.
+Aucun retry inchangé, aucune passe globale ni modèle/DB. Ces cinq verts couvrent
+seulement les quatre refus de journal et le legacy identique : pas encore
+l’identité résolue, les générations, l’admission commune ou l’exclusivité réelle.
+Le ticket d’implémentation reste ouvert. Recherche CI confirme ne tenir aucun
+créneau ; le build C++ privé coordonné ne partage ni target ni lib distribuée.
