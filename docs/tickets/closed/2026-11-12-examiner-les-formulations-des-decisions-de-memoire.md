@@ -1,6 +1,6 @@
 # Examiner les formulations des décisions de mémoire
 
-- **État** : en cours, prolongement documentaire demandé par Lucie le 12 novembre 2026.
+- **État** : fait, lecture des prompts et appelants, critères et formulations consignés dans52783aa29 le12novembre2026 ; aucun prompt livré modifié, aucun modèle exécuté.
 - **Famille** : produit
 - **Gravité** : planification ; préciser les instructions et entrées utiles aux décisions de rappel et de rangement.
 - **Atteignable en service** : non, lecture et propositions sans activation.
