@@ -54,3 +54,18 @@ Propriété ED : atelier_fichiers et témoins de publication d'accord. Archi rel
 sans édition parallèle ; Arbre garde backend_schema et migrations. Les worktrees,
 targets et fixtures sont distincts. Le créneau de push sera coordonné après la
 passe des couches ; aucune réservation de master pendant le développement.
+
+## Prise en charge ED
+
+WT/branche cx-ed-accord-publication neuf, base43db9634a. Propriété atelier_fichiers/tests
+d'accords, archi en revue seule. Extraction des deux phases existantes dans des helpers
+privés réellement utilisés par decider_accord : snapshot None puis publication/commit,
+sans changer leur ordre. Les fixtures utilisent cette même primitive et la vraie Garde,
+jamais Autorisee::executer. Deux snapshots None figés avant une barrière ; A finit et
+son usage CetteFois est consommé avant la réponse B tardive. Variante refus gagnant.
+Deux rouges attendus, quatre verts de qualification : erreur de publication retentable,
+refus après décision sans API de révocation, reload/restart, erreur journal après commit.
+Aucune commande, donnée, accord ou configuration de Lucie ; pas de modèle/GPU/service.
+Source et recette seront publiées avant le cibléCPU600 après poste, lib29/j8/Max32/target32.
+Le mutex éventuel devra être par demande, hors verrou de registre pendant le backend.
+Aucun correctif engagé avant la reproduction.
