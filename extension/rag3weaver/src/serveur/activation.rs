@@ -71,7 +71,7 @@ impl Demande {
 /// au compte du fournisseur, hors worktree ; les fichiers verrou ne sont jamais
 /// supprimés pendant les usages (sinon deux inodes permettraient deux verrous).
 pub fn acquerir(serveur: &Serveur, coordination: &Path) -> Result<Demande, String> {
-    let adresse = super::resoudre(serveur.adresse()).ok_or("adresse d'activation illisible")?;
+    let adresse = serveur.adresse().parse::<std::net::SocketAddr>().map_err(|_| "adresse numérique d'activation requise")?;
     if !adresse.ip().is_loopback() || adresse.port() == 0 {
         return Err("activation gérée : adresse locale fixe requise".into());
     }
@@ -130,5 +130,5 @@ fn activer(partage: &Partage, cle: &Path) -> Result<Attache, String> {
     serveur.attente = serveur.attente.saturating_sub(debut.elapsed());
     // Assurer re-sonde sous le verrou, puis démarre uniquement si absent.
     // La durée inclut l'attente de coordination. Le fichier libère son verrou.
-    serveur.assurer().map_err(|e| e.to_string())
+    serveur.assurer_avant(debut + partage.serveur.attente).map_err(|e| e.to_string())
 }
