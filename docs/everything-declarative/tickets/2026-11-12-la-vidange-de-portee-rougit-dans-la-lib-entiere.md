@@ -38,3 +38,29 @@ Si défaut distinct établi, correction et preuve avant fermeture ; un ciblé is
 vert seul ne ferme pas une panne observée sous concurrence dans la lib entière.
 
 Lot appelant : docs/rag3weaver-archi/tickets/2026-11-12-exposer-la-navigation-dans-les-symboles.md.
+
+
+## Diagnostic concurrent instrumenté
+
+Même ELF c0ba45b0… de source aee, aucun filtre, mêmes racines/environnement,
+concurrence entière, seule variation --nocapture. Premier FAILED reproduit à
+run_nodes.rs1281 : « elle tourne : rien dans la boîte », AVANT portee.vider.
+Ni délai de vidange, ni message final, ni kill-0/idempotence ne sont donc la
+première assertion en cause. Journaux privés essai-portee-1 : stdout=l1, stderr
+vide. Aucun signalement d'échec du lancement ; message prématuré à qualifier.
+Preuves : cx-symboles-aee6cdec6-diag-lib-20261112 (driver final f455cc6b…).
+
+Relecture cohérente avec ces faits : la nouvelle fixture de navigation construit
+DaemonHost::new sans registre privé puis appelle shutdown. DaemonHost défaut
+utilise background::registry global (daemon_host308), RunCommandNode y enregistre
+sa commande (run_nodes414), shutdown appelle self.background.cancel_all (1300).
+Cela peut tuer la commande du témoin voisin avant sa propre vidange ; le journal
+instrumenté dit aussi arrêt d'un run en fond. Le helper hote_isole du dépôt pose
+explicitement with_background(Arc::new(Registry::new())).
+
+Correction bornée dans la fixture navigation seulement : même registre privé.
+Aucune édition de run_nodes/commande/RunScope, aucun délai/assertion desserré.
+Cette lecture identifie un mécanisme concret ; le ticket reste ouvert jusqu'à
+la lib complète concurrente verte incluant les neuf témoins navigation ET le
+même témoin de portée, suivie de la passe requise. Ne pas appeler cette correction
+une preuve d'absence de toute course runtime ou une révocation ajoutée.

@@ -282,3 +282,12 @@ sans changer les assertions ni les outils modèle. La lib complète ab85 n'est p
 verte ; le ciblé de diagnostic est volontairement rouge et conservé séparément.
 Reprise intégrale source corrigée avec9 témoins navigation, même échéance globale,
 ouvelle portée et dossier pour ne pas écraser les preuves précédentes.
+
+
+Le diagnostic lib concurrente --nocapture a reproduit la première assertion de
+la vidange (message prématuré avant vider). Ticket qualification ED lié ci-dessus :
+la nouvelle fixture navigation n'isolait pas son registre background, contrairement
+au helper hote_isole ; shutdown pouvait tuer la commande du test voisin via le
+singleton. Correction uniquement dans cette fixture, with_background Registry neuf.
+Production et assertions/délais RunScope inchangés ; reprise entière du même reste
+6000 pour confirmer l'interaction, pas de nouveau budget ni modèle/service.
