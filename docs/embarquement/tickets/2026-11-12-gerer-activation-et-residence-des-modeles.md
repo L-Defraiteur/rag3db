@@ -335,3 +335,38 @@ borne de7200. Refus si échéance expirée. Puis même recette phases
 2400/1800/1200/900, chacune limitée aussi par le restant global, Max32G/j8 et
 plafond target32. Pas de recyclage du navigateur non joué. Les modèles/services
 restent inchangés et la recette ne lance aucun modèle privé de mesure.
+
+### Requalification après cache et recette e2e
+
+Validation-e21lc7w8 VERT : F5/5, lib2249 réussis/65 ignorés structurels,
+40/40 navigateur sans ignoré, restes=[], unité inactive/Result=success.
+6649 s accordées après acquisition ; échéance875850,661490103 inférieure à
+l'originale875850,721087351. Target20941500416 octets, donc sous32 Gio.
+
+E2E après la fenêtre privée du banc, pas de réservation GPU pendant compilation.
+Recette versionnée `scripts/qualifier_activation_e2e.sh demon` : portée commune
+mode mesure1800 s (construction du binaire e2e comprise, graphe large déjà
+compilé), deux témoins fournisseur privé BGE1024 puis granite278/768 exécutés
+SÉRIELLEMENT via RUST_TEST_THREADS=1. Les services 7878/7879 restent installés
+et inchangés ; aucune instance107/7880 ni7882 n'est réveillée. GPU embedder
+explicitement gpu:0/card2, chauffe activée, relecteur/OCR privés désactivés,
+budget caractères4096/duty70, filtre ROCm éventuel limité aux privés.
+Lire la capacité/VRAM fraîche avant entrée, attribuer les PID privés par la
+portée et observer fdinfo PCI/mémoire/moteurs ; arrêter seulement ses propres
+processus si le placement ne respecte pas le profil.
+
+Puis `... spans` : portée commune lourd600 s, un témoin de protocole par le
+BGE7879 existant (deux textes, deux appels), santé avant/après et coordination
+avec les consommateurs réels. Aucun nouveau modèle dans cette seconde suite.
+Lib épinglée29a, j8, target possédé/max32 ; arrêt au premier rouge, aucun
+réessai inchangé ni remise à zéro de budget. Ces nouvelles phases n'étaient
+pas jouées dans la passe lib et ne prolongent pas son échéance.
+
+Préparation fixture du témoin fournisseur : source ancienne conservait deux
+journaux sous des noms fixes dans TMPDIR. Journaux désormais uniques et
+nettoyés seulement après l'arrêt explicite des enfants possédés et succès ;
+sur panique ils restent pour l'archive rouge du lanceur. Aucun seuil/contrôle
+fonctionnel n'est abaissé. La santé du nouveau BGE privé doit rapporter une
+chauffe complète non vide et sans erreur, en plus des vecteurs réellement
+calculés déjà contrôlés. Pas de témoin supplémentaire artificiel pour ce
+nettoyage de fixture ; garde des résidus et e2e réel jugeront son résultat.
