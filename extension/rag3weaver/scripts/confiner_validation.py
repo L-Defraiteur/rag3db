@@ -294,6 +294,10 @@ def superviser(command, delai, preuves):
         erreur = str(e)
     finally:
         try:
+            if groupe:
+                groupe.relever(processus())
+                if code == 0 and groupe.vivants() and not erreur:
+                    erreur = 'descendants laissés découverts au nettoyage'
             restes = groupe.arreter() if groupe else []
         except (OSError, Refus) as e:
             erreur = (erreur + '; ' if erreur else '') + 'arrêt incomplet : ' + str(e)

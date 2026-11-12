@@ -229,6 +229,24 @@ class Montage(unittest.TestCase):
         self.assertEqual(verdict['restes'], [])
         original(verdict['prive'])  # Seul temporaire CPU attribué à ce témoin.
 
+    def test_residu_decouvert_au_dernier_inventaire_ne_devient_pas_vert(self):
+        class InventaireTardif:
+            def __init__(self, *args):
+                self.observes = {}
+                self.possedes = {}
+                self.appels = 0
+            def relever(self, table):
+                pass
+            def vivants(self):
+                self.appels += 1
+                return [] if self.appels == 1 else [99999999]
+            def arreter(self):
+                return []  # Résidu simulé nettoyé, aucun vrai signal.
+        with patch.object(v, 'Descendants', InventaireTardif):
+            rc, verdict = self.cas_processus('pass\n')
+        self.assertEqual(rc, 1)
+        self.assertIn('découverts au nettoyage', verdict['erreur'])
+
     def test_enfant_detache_residuel_arrete_et_reste_rouge(self):
         rc, verdict = self.cas_processus('import subprocess,sys\nsubprocess.Popen([sys.executable,"-c","import time;time.sleep(60)"],start_new_session=True)\n')
         self.assertEqual(rc, 1)
