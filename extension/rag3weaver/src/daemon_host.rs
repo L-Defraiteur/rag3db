@@ -1457,13 +1457,8 @@ fn op_response(result: Result<Value, String>) -> Value {
 
 /// Ouvrir un backend sur disque, comme `rag3weaver-backend serve`.
 fn open_on_disk(prepared: PreparedBackend) -> Result<Backend, String> {
-    let database = prepared.path(&prepared.manifest.database);
-    if let Some(parent) = database.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    prepared.admit_storage()?;
+    let conn = prepared.connect_admitted_storage()?;
     let (embedder, raison) = prepared.embedder_or_absent();
-    let conn = crate::Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool).map_err(|e| e.to_string())?;
     prepared.open_with_reason(Box::new(conn), embedder, raison)
 }
 

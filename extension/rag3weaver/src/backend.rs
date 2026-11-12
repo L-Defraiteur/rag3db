@@ -2109,6 +2109,24 @@ impl PreparedBackend {
         }
     }
 
+    /// Common native opening boundary: metadata-only refusal first, then the
+    /// engine's exclusive writer, then revalidation while that writer is held.
+    /// The caller may construct models only after this returns successfully.
+    #[cfg(feature = "rag3db-native")]
+    pub fn connect_admitted_storage(&self) -> Result<crate::Rag3dbConnection, String> {
+        self.admit_storage()?;
+        let path = self.path(&self.manifest.database);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let conn = crate::Rag3dbConnection::with_manifest_buffer_pool(&path, self.manifest.buffer_pool)
+            .map_err(|e| e.to_string())?;
+        // A writer may have changed the storage after the read-only inspection.
+        // No catalog or model is constructed before this second qualification.
+        crate::storage_inspection::inspect_on(&conn)?.admit(self.manifest.storage.as_ref())?;
+        Ok(conn)
+    }
+
     pub fn open(
         self,
         conn: Box<dyn DbConnection>,
