@@ -158,22 +158,39 @@ fn servir() -> Result<(), String> {
     // longueurs 64, 128, 256, 512 jetons, lots 1, 8, 32 et le conseil du
     // modèle — avant d'annoncer l'adresse. `RAG3WEAVER_DEMON_CHAUFFE=0` pour
     // s'en passer.
+    use rag3weaver::daemon::embeddings::{Chauffe, EtatChauffe, FormeChauffe};
+    let mut bilan = std::collections::BTreeMap::new();
+    // L'annonce des capacités OCR/relecteur n'est pas une chauffe de celles-ci.
+    for capacite in ["embed", "rerank", "ocr"] {
+        let presente = match capacite { "embed" => true, "rerank" => demon.identite().reranker.is_some(), _ => demon.identite().ocr.is_some() };
+        if presente { bilan.insert(capacite.to_string(), Chauffe { etat: EtatChauffe::NonExecutee, duree_ms: 0, formes: Vec::new() }); }
+    }
     if std::env::var("RAG3WEAVER_DEMON_CHAUFFE").map(|v| v != "0").unwrap_or(true) {
         let t = std::time::Instant::now();
         let (lot_max, _) = demon.identite().lot_conseille.unwrap_or((32, 512));
         let mut formes = 0;
+        let mut faits = Vec::new();
         for mots in [40usize, 90, 190, 380] {
             for lot in [1usize, 8, 32, lot_max] {
                 let textes: Vec<String> = (0..lot)
                     .map(|i| (0..mots).map(|j| format!("m{}", (i * 7 + j * 13) % 97)).collect::<Vec<_>>().join(" "))
                     .collect();
-                if demon.embedder().embed(&textes).is_ok() {
-                    formes += 1;
-                }
+                let erreur = match demon.embedder().embed(&textes) {
+                    Ok(_) => { formes += 1; None },
+                    Err(e) => Some(e.to_string()),
+                };
+                faits.push(FormeChauffe { lot, mots, erreur });
             }
         }
         eprintln!("  chauffe : {formes} classes de forme en {:?}", t.elapsed());
+        bilan.insert("embed".into(), Chauffe {
+            etat: if faits.iter().all(|f| f.erreur.is_none()) { EtatChauffe::Complete } else { EtatChauffe::Partielle },
+            duree_ms: t.elapsed().as_millis().min(u64::MAX as u128) as u64, formes: faits,
+        });
+    } else {
+        bilan.get_mut("embed").unwrap().etat = EtatChauffe::Desactivee;
     }
+    let demon = demon.avec_chauffe(bilan);
     eprintln!("▸ à l'écoute sur {adresse} — {:?}", demon.identite());
     // Un port nul : se lier ici et dire l'adresse prise (pour le lanceur).
     match rag3weaver::daemon::ecouter_si_port_nul(&adresse).map_err(|e| e.to_string())? {
