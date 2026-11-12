@@ -46,11 +46,32 @@ use crate::sparse_index::{SparseSpan, SparseVector};
 /// Le nom que ce démon se donne.
 pub const SERVICE: &str = "rag3weaver-embeddings";
 
+/// Faits de chauffe, indépendants de l'identité et de la disponibilité HTTP.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Chauffe {
+    pub etat: EtatChauffe,
+    pub duree_ms: u64,
+    pub formes: Vec<FormeChauffe>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum EtatChauffe { NonExecutee, Desactivee, Complete, Partielle }
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FormeChauffe {
+    pub lot: usize,
+    pub mots: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub erreur: Option<String>,
+}
+
 /// Ce que `GET /sante` rend. **Tout ce qu'un client a besoin de savoir avant
 /// d'envoyer quoi que ce soit** : la dimension pour se câbler, le caractère
 /// factice pour ne pas mentir au catalogue.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Identite {
+    /// Absent : fournisseur ancien ou sans instrumentation, jamais « chaud ».
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chauffe: Option<std::collections::BTreeMap<String, Chauffe>>,
     /// Toujours [`SERVICE`].
     pub service: String,
     /// Le nom du modèle servi, tel que l'embedder le donne.
@@ -91,6 +112,7 @@ pub struct Identite {
 
 /// **Le démon** : il tient le modèle et répond aux embarquements.
 pub struct EmbedDaemon {
+    chauffe: Option<std::collections::BTreeMap<String, Chauffe>>,
     embedder: Arc<dyn Embedder>,
     dual: Option<Arc<dyn DualEmbedder>>,
     sparse: Option<Arc<dyn SparseEmbedder>>,
@@ -122,6 +144,7 @@ impl EmbedDaemon {
 
     pub fn new(embedder: Arc<dyn Embedder>) -> Self {
         Self {
+            chauffe: None,
             embedder,
             dual: None,
             sparse: None,
@@ -133,6 +156,11 @@ impl EmbedDaemon {
             passe: Mutex::new(()),
             gate: None,
         }
+    }
+
+    pub fn avec_chauffe(mut self, chauffe: std::collections::BTreeMap<String, Chauffe>) -> Self {
+        self.chauffe = Some(chauffe);
+        self
     }
 
     /// **Ménager l'écran** : des rafales d'une durée visée, un trou entre
@@ -272,6 +300,7 @@ impl EmbedDaemon {
     /// L'identité qu'il déclare.
     pub fn identite(&self) -> Identite {
         Identite {
+            chauffe: self.chauffe.clone(),
             service: SERVICE.to_string(),
             modele: self.embedder.name().to_string(),
             dim: self.embedder.dim(),
