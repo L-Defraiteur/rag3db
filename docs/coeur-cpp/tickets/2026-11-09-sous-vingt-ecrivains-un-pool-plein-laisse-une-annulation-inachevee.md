@@ -747,3 +747,12 @@ brute OFF conservée, valeurs effectives header12/11/17/18). Archive ignorée da
 ac5c5bd96 mais explicitement ajoutée/poussée12ec21147 ; copie stable hors worktree
 à luciepc attestée dans doc16. Autorisation distincte du build privé reçue,
 scénario toujours non autorisé.
+
+## Premier arrêt de build et correction précise
+
+[Arrêt01 et qualification](../12-11-2026/17-premier-arret-build-prive-et-qualification.md) :
+échec transaction.cpp/private_saturation non qualifié, service131,098s/pic3,9G/swap0,
+poste rendu, aucun paquet final/scénario. Échec/logs/27fichiers conservés et rehashés.
+Delta limité aux qualifications common:: autorisé et poussé35ea70d3a ; vérification
+textuelle exacte et source/hash publiés. Un seul build02 neuf explicitement autorisé
+aux mêmes3cibles/limites, en cours ; aucun scénario et aucun succès présumé.

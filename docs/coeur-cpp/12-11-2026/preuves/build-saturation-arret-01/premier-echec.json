@@ -1,0 +1,8 @@
+{
+  "phase": "build",
+  "type": "RuntimeError",
+  "error": "build.log: code 1, premier echec stop",
+  "source_commit": "6bfba5b4cd081c0bbe10bda045fdcccfb6290594",
+  "elapsed_build_s": 127.05130832397845,
+  "automatic_retry": false
+}
