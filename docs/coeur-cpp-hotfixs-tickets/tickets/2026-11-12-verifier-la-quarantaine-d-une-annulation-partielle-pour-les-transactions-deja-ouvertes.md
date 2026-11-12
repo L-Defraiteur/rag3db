@@ -136,3 +136,17 @@ visible dans le code examiné. Les branches internes sont conditionnellement
 accessibles au niveau des prédicats lus, mais une trace d’échec réellement
 atteignable avec les verrous requis reste à établir. Ni témoin exécuté, ni
 corruption, ni récupération validée. Le ticket reste ouvert.
+
+## Première tranche de code de test préparée, non compilée
+
+[Source, périmètre et recette de compilation/liens](../12-11-2026/02-temoin-structurel-verrous-liberes.md) :
+programme autonome `test/transaction/quarantine_released_diagnostic.cpp`, sans
+inscription aux suites. Seulement verrous libérés, contrôles publics et commit
+forcé déjà ouvert ; one-shot, identité TA, compteurs, vérification des verrous,
+fabrique sentinelle avant toute requête, enfant borné avec sortie sans destructeur.
+Les deux classifications structurelles sont acceptées : chemin interne atteint
+ou refus nommé avant fabrique. Pas de checkpoint réel par le témoin, pas de
+réouverture, lecture post-faute, automatique ni verdict de corruption.
+Source/argv/artefacts assortis et limites documentés pour revue ; aucun staging
+moteur, compilation, édition de liens ou run effectué. Autorisation limitée à
+la préparation de ce code de test, sans changement produit. Ticket ouvert.
