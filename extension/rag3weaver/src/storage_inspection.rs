@@ -28,6 +28,7 @@ pub struct StorageInspection {
     pub unresolved_migrations: Vec<u64>,
     /// Kept in the same inspected snapshot, not reconstructed from the catalog.
     #[serde(skip)]
+    #[cfg(feature = "rag3db-native")]
     pub(crate) history: BTreeMap<u64, crate::dataflow::migrations::AppliedMigration>,
 }
 
@@ -130,7 +131,9 @@ pub(crate) fn inspect_on(conn: &dyn DbConnection) -> Result<StorageInspection, S
     Ok(StorageInspection {
         internal_schema: metadata.get(crate::scope::SCHEMA_VERSION_KEY).cloned(),
         descriptor, entity_config_fingerprint: crate::hash::content_hash(&encoded),
-        tables, entity_configs, unresolved_migrations, history,
+        tables, entity_configs, unresolved_migrations,
+        #[cfg(feature = "rag3db-native")]
+        history,
     })
 }
 
