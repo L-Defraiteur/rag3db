@@ -47,6 +47,39 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
 
 ## La passe (à luciepc, sous `poste lourd`)
 
+### Portée commune des validations Linux
+
+`run_e2e.sh` et `scripts/temoins_navigateur.sh` entrent désormais par
+`scripts/confiner_validation.py`. La primitive prend le vrai `poste` avant de poser
+un marqueur, exige un plafond mémoire effectif d’au plus32Gio, pose HIGH=0 et crée
+un bus de session privé sans répertoire d’activation. Elle contrôle les cgroups
+des descendants et leur arrêt ; elle n’ouvre pas le bus de Lucie et ne change
+aucun argument du navigateur ou de sa sandbox. Un marqueur seul, un reçu périmé,
+un outil manquant ou une limite absente provoquent un refus explicite.
+
+Pour une passe composée, posséder une seule portée et un seul budget :
+
+```bash
+python3 scripts/confiner_validation.py lancer --delai 2400 -- bash /chemin/passe-privee.sh
+```
+
+Les entrées e2e/navigateur appelées à l’intérieur vérifient le reçu du superviseur
+vivant et héritent de son budget/bus/plafond ; elles ne reprennent pas de verrou ni
+ne créent de scope sœur. Avec un poste extérieur, poser POSTE_MEM_MAX=32G **avant**
+son acquisition ; un parent à40Gio n’est pas une preuve de32Gio et est refusé.
+Hors portée composée, `RAG3WEAVER_VALIDATION_TIMEOUT` fixe le délai global de l’entrée
+(18000s e2e,600s navigateur par défaut). Réduire ces valeurs aux bornes du lot.
+Le délai commence après acquisition et inclut l’arrêt/nettoyage ; aucun réessai.
+
+Les preuves sont hors target sous `~/.cache/rag3weaver-build/validations/validation-*`
+(recette/config, PID/starttime/cgroups/plafonds, code/verdict/quiescence). L’option
+`--preuves <parent privé>` choisit un autre parent pour une passe composée. Les
+seuls processus attribués sont arrêtés par pidfd ; un résidu après succès rend la
+validation rouge. Le temporaire du bus n’est supprimé qu’après quiescence ; en cas
+de détenteur subsistant il reste conservé et rouge. Les témoins CPU de la primitive
+se jouent par `python3 scripts/test_confiner_validation.py`, sans Cargo/bus réel.
+
+
 - **`RAG3DB_LIB` épinglée** par son identifiant complet au début de la passe
   (`rag3db-build-<hash>-Release-…`), jamais `courant` : une bascule le repointe pendant la passe.
   Quand la lib est plus vieille que le C++ de master, les e2e portent `RAG3WEAVER_MOTEUR_ANCIEN=1`.

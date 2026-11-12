@@ -12,6 +12,10 @@
 #   (défaut : $FEATURES, sinon rag3db-native,code,daemon ; `navigateur` s'ajoute)
 # La lib du moteur se choisit comme pour la lib (RAG3DB_LIB, scripts/cargo_magasin.sh).
 set -u
+CONFINEUR="$(cd "$(dirname "$0")" && pwd)/confiner_validation.py"
+if ! python3 "$CONFINEUR" verifier >/dev/null 2>&1; then
+  exec python3 "$CONFINEUR" lancer --delai "${RAG3WEAVER_VALIDATION_TIMEOUT:-600}" -- bash "$0" "$@"
+fi
 ICI="$(cd "$(dirname "$0")/.." && pwd)"
 F="${1:-${FEATURES:-rag3db-native,code,daemon}}"
 noms=$(grep -rh -A4 'feature = "navigateur"), ignore' "$ICI/src" | grep -oE 'fn [a-z0-9_]+\(' | sed 's/^fn //; s/($//' | sort -u)

@@ -1,6 +1,6 @@
 # Une scope e2e imbriquée peut échapper au plafond du lanceur
 
-- **État** : ouvert le 12 novembre 2026 ; porteur orchestration, faits ED et mémoire.
+- **État** : ouvert le 12 novembre 2026 ; porteur recherche pour la primitive scripts/procédure, relecture ED ; faits ED et mémoire.
 - **Pour** : recherche pour la recette commune des lanceurs ; orchestration coordonne les créneaux et ED relit son adoption. Aucun changement du runner produit dans le lot des accords.
 - **Famille** : produit
 - **Gravité** : risque de dépassement du budget mémoire et d'arrêt incomplet des enfants.
@@ -150,3 +150,13 @@ lots verts. ED relit la réutilisation ; Recherche garde l'édition des scripts.
 Le ticket restera ouvert tant que la garantie transversale n'est pas réellement
 adoptée et éprouvée. Les sources des passes Arbre figées restent inchangées ;
 aucun push de ces scripts pendant sa passe sans coordination de l'intégration.
+
+## Diff de primitive commune préparé sur43db9634a
+
+Worktree/branche neuf cx-recherche-confinement-lanceurs, aucun ancien lot rouvert ni source Arbre modifiée. Propriété scripts recherche, ED relecture. Proposition : `scripts/confiner_validation.py`, primitive unique de portée de validation Linux, adoptée réellement aux entrées run_e2e.sh et temoins_navigateur.sh. La procédure donne aussi l’entrée composée pour posséder un budget/bus/plafond uniques pour toute une passe.
+
+Contrats : vraie ascendance poste/fiche active avant marqueur ; plafond effectif hérité <=32Gio ; reçu privé valide seulement dans l’ascendance du superviseur vivant (PID/starttime/cgroup/token), sans bypass par variable ; HIGH0 et suppression de la création de scopes sœurs dans confined ; bus éphémère privé EXTERNAL/UID courant sans aucun répertoire d’activation ; suivi des descendants/subreaper et cgroups, arrêt pidfd des seuls attribués, code/rouge conservé sans retry, résidu rouge et nettoyage des seuls chemins privés après quiescence. Aucune option de test permettant de désactiver le confinement en production ; dépendances/limites manquantes refusées. Aucun Rust produit, réglage système/KDE, modèle/service permanent ou option de sandbox modifié.
+
+Témoins CPU préparés : XML sans activation/échappement, plafond hérité et refus sans limite, marqueur seul/reçu périmé refusés, scope sœur rouge avec preuve, PID réutilisé jamais signalé, dépendance absente avant lancement, adoption des DEUX vraies entrées avec frontière factice et sans Cargo, commande normale/nettoyage, code rouge sans retry, deadline avec enfant et enfant détaché résiduel rouge/nettoyé. Les simulations n’écrivent ni dans les verrous réels ni dans les cgroups système, ne lancent aucun bus/service/navigateur ; seuls petits processus CPU privés.
+
+Contrôles statiques préparatoires : parsing Python, bash -n des deux entrées et diff --check verts. Source et recette à publier avant exécution réelle ; CPU à jouer en premier, premier rouge inattendu stop/diagnostic. Unique essai réel <=30s à coordonner après NAV Arbre, preuve CDP vraie + helper/PID/cgroups/Max32/lifecycle via la primitive publiée, sans Cargo/lib/FTS/journaux à rejouer. Aucun push code master pendant A sans coordination ; ticket reste ouvert jusqu’à adoption prouvée et revue/intégration.
