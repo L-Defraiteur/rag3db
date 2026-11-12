@@ -115,3 +115,14 @@ Les trois ELF initiaux ont été archivés avant recompilation car le chemin du 
 e2e peut être réutilisé par Cargo ; les rouges et la fixture initiale restent conservés.
 Validation finale composée seulement après verdict corrective/primitive verts et
 quiescence vérifiée ; pas de clairon dense prêt pour les3vecteurs explicitement dus.
+
+## Inventaire corrective publié avant helpers/suites
+
+Source `2a31b271689df34aab77cc6170e623229cb47be7`, F5montagesVERT5/5 et compilatione2eJSONverts.
+Nouvel e2e `e2e-7cefc6db1fbc2614`, SHA256 `921167177138e8b2d721190fbd72db47db02d2c090e298822b9bad8c1d3556de`,
+source2a31/220gabarits vérifiés. Liste intégrale identique aux860 noms initiaux,
+helpers3 inchangés, lectures27/hôte13 ; pas de suppression ou saut.
+Inventaire aux deux postes SHA256 `655e2372dd630e510683827e6c57087c31328a55369053d4e1318988e4af9004` ; publication
+avant runtime des helpers puis suites. Reçu correctif deadline866608.908275966
+≤initiale866610.959853126, pas de reset. Lib/NAV initiaux6f527 conservés,
+nouvel e2e à source testonly2a31 identifié distinctement.
