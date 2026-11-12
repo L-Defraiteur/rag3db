@@ -390,3 +390,10 @@ Resolve devient None après, UUIDpublics/positions et cas Agrégé déjà franch
 Le correctif borne la seconde résolution legacy aux cibles sans projection
 publique, déjà résolue en occurrences par finish_signal ; le chemin KB historique
 et ses références singulières restent actifs. Même témoin, aucun faux score ajouté.
+
+Source**b9bf6b6d1**, cx-graphe-provenance-vert.log : **1/0** en0,24s, rc0.
+Le même graphe conserve la provenance réelle BM25 en Agrégé et SourceResolved,
+champs explicites/défaut, deux UUID publics avec leurs positions ; aucun faux
+score. Revue c7 non bloquante du garde ; avis archi final attendu avant le gel.
+Les cas SourceResolved legacy existent déjà dans la suite dérivées (TicketView,
+témoins autour des lignes150/268), à rejouer dans la passe adaptée complète.
