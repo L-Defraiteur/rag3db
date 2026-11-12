@@ -415,7 +415,7 @@ est acquise, producteur persistant non implémenté. Aperçu toujours non qualif
 au stockage ; ticket migration reste ouvert.
 
 
-## Raccord RO — implémenté et vérifié, avant intégration
+## Raccord RO — intégré et nettoyé
 
 Source de globale f19e3cbb0, union ED143+RO, puis rebase strictement équivalent
 sur le master ED0bf06b21a. Le même snapshot RO restitue les EntityConfig, les
@@ -439,5 +439,7 @@ L'empreinte entity_config_fingerprint garde exactement son périmètre entités.
 
 Rouge d'omission puis83/0/0 ciblé, dont14nouveaux témoins ; globale2243/0/65,
 NAV40,CLI5,PG36, F5/minimum et4ELF/220 attestés,685,11s dans3600 sans incident.
-Les preuves et le bilan versionné sont liés depuis le ticket. Tour master et
-nettoyage restent à faire ; aucune suite de migration persistante anticipée.
+Les preuves et le bilan versionné sont liés depuis le ticket. Intégration
+master8e24c0055 après tour C7 et trois contrôles lus verts ; WT/target/PG privée
+retirés après dump, archives fidèles et gardes fraîches. ELF et preuves conservés
+aux deux postes. Aucune suite de migration persistante anticipée, ticket ouvert.

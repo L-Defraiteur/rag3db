@@ -1619,3 +1619,39 @@ provenances observée/fournie distinctes, aperçu toujours non qualifié au stoc
 génération/bootstrap/apply/publication toujours non livrés. Après tour/push et
 3contrôles : retrait réglementaire des seules ressources B, remotes et preuves
 conservés. Aucun autre ticket ou lot clos par ce raccord.
+
+### Suite RO — intégrée sur master, ressources propres retirées
+
+**Master8e24c0055bd81a58e6204d346f0582fc214af8f1**, « à toi » C7 puis poste
+push/dernierfetch a0674bde4 documentaire, branche neuve5, **9/9range-diff identiques**.
+Contrôles LUS : statuspropre, aucunrebase, origin/master=HEAD. Source qualifiée
+f19 conservée, unionED143+RO exactement préservée sur src/tests/Cargo/codeparsers/
+220assets. Pas de replay pourMD/IDs. CI vue parposte push verte le12nov ; aucun
+rerunCI. Ticket migration reste OUVERT : aucune origine/génération durable,
+transfert réel, bootstrap/apply/publication ou qualification physique de l'aperçu.
+
+Nettoyage immédiat terminé : WTcode LOCAL+luciepc retirés, targetPC retiré,
+brancheslocales propres comparées aux remotes puis branch-d ; remotes conservés,
+aucun GC/prune. Chaque administrationGit(sous-module/symlinks inclus) copiée
+fidèlement, helperSHAdca13abb7a84cf3c1419f728697837a6b1b9b20e34e34c144c9fbf835252f628
+vérifié et gardeJSONfraîche VERT LUE avant retrait. Quatre ELF et preuvesbrutes
+copiés/rehashés aux deux postes avantcleanup, aucun fichier d'autre session édité.
+PGseule cx_ro_2191_20261112_v1 : propriété/0sessions contrôlées, pg_dump puisSHA
+**10334f9cd35bab37c18c6da1ed67061985e36bf1f066dbcca0ca6854c82f8957**, DROP/absence
+vérifiée ; dump et rapports distants copiés/rehashés sur portable.
+
+Précontrôle distantv1 a refusé3PIDstransitoires [476177,476178,476181] avant PG/
+admin/garde/retrait. Tous physiquement absents au contrôle suivant ; aucun arrêt
+forcé ni exception aux occupants. V2 conserve l'arrêt initial, attend au plus10s
+une quiescence réellement vide avec échantillons puis applique le même invariant
+et la garde fraîche. Ce n'est pas un contournement de garde ni un rouge produit.
+Rapports : cache cx-nettoyage-observation-ro-v1-local-8e24c0055/ et
+cx-nettoyage-observation-ro-v2-remote-8e24c0055/ (fin.json,garde.json,administration,
+quiescence-avant.json), arrêtv1 distant dans arret-precheck.json. Copieslocales
+cx-preuves-observation-ro-final/nettoyage-remote/. Preuves, ELF, rouges et remotes
+gardés ; zéro Cargo/place/service/client/modèle Arbre actif, aucune DB réelle.
+
+Un dernier worktree documentaire neuf ne sert qu'à publier ce bilan, sans Cargo,
+puis sera retiré par archive/garde fraîche. Les instructions d'attente masterED,
+de tour B et de conservation des ressources des paragraphes antérieurs sont
+historiques ; reprendre une suite sur WT neuf et contrat relu, pas sur un vieux job.

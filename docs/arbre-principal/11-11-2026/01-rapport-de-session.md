@@ -1,3 +1,43 @@
+## État final — raccord RO intégré et nettoyé
+
+**Master8e24c0055bd81a58e6204d346f0582fc214af8f1** après « à toi » C7,
+poste push/dernierfetch a0674bde4 documentaire, branche neuve5 et9/9commits
+identiques. Trois contrôles lus verts : arbre propre, aucun rebase,
+origin/master=HEAD. Source jouée f19e3cbb0, union ED143+RO ; sources, tests,
+Cargo, sous-module et220gabarits strictement équivalents après intégration.
+
+Globale **verte sans incident en685,11s/3600** : F5 5/5, vrai minimum checklib,
+lib2243/0/65, NAV40/0/0, CLI5/0/0 etPG36/0/0. Quatre ELF/source/native29/maps et
+220gabarits chacun attestés, copiés et rehachés aux DEUX postes. Superviseur
+commun VERT/code0/restes[]/busphysiquementabsent ; quiescence indépendante vide,
+TMPNAV marqué retiré. Le rouge initial de relation malformée et le ciblé83/0/0
+restent conservés séparément. CI vue par poste push verte le12nov, sans rerun.
+
+WTcode local+luciepc **retirés**, targetdistant **retiré**, branches locales du
+lot supprimées par branch-d après vérification HEAD=refsremotes. Administrations
+Git copiées fidèlement avec sous-module et symlinks ; helper SHA dca13abb… et
+gardeJSON fraîche VERT lus avant chaque retrait. PG privée unique
+cx_ro_2191_20261112_v1 : propriété/0sessions, export puis SHA
+10334f9cd35bab37c18c6da1ed67061985e36bf1f066dbcca0ca6854c82f8957,
+DROP et absence vérifiée ; dumpcopié/rehashé localement. Aucune base réelle,
+modèle, service ou GPU nouveau, aucun Cargo/place Arbre restant.
+
+Nettoyage distantv1 arrêté au précontrôle sur3PIDstransitoires, avantPG/admin/
+retrait ; tous absents au relevé suivant, aucun processus tiers arrêté/ignoré.
+V2 a revalidé la quiescence puis la garde fraîche, sans contourner son invariant.
+Rapports/archives : cache cx-nettoyage-observation-ro-v1-local-8e24c0055/ et
+cx-nettoyage-observation-ro-v2-remote-8e24c0055/. Preuves/4ELF/logs/remotes gardés,
+copies locales cx-preuves-observation-ro-final/ (dont dump et rapports distants).
+
+Configurations, RelationDef et journal sont observés dans le même snapshotRO.
+Absent≠vide ; comparaison par A sur le seul sous-ensemble persisté. Fournisseurs,
+politiques, recettes et modèles supplémentaires restent fournis. Aucun schéma
+physique complet, origine/génération durable, bootstrap/apply/publication ou
+qualification de l'aperçu livré. Ticket migration et tty toujours ouverts.
+Pour une suite, nouveau worktree depuis master et même ticket, pas de reprise
+d'anciens jobs ou targets. Les attentes et ressources décrites ensuite sont
+historiques ; le travail de RO est terminé.
+
 ## Reprise prioritaire — raccord RO vérifié, avant tour master
 
 Le lot RO est prêt pour la revue finale : branche privée
