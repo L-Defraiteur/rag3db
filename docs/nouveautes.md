@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 12 novembre2026 — Deux réponses à la même carte d'accord ne republient plus un droit ; un usage CetteFois consommé reste consommé et un refus gagnant n'est pas annulé par un oui concurrent.
+
 - 12 novembre2026 — Les gabarits notebook et validated-result conservent BGE-M3/1024 mais laissent chaque poste fournir ses adresses de service ; une adresse explicite dans une copie reste prioritaire. Les configurations utilisateur existantes ne sont pas migrées.
 
 L'inverse d'une feuille de route : ce qui est **atteint**, en une ligne par grande

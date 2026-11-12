@@ -1,6 +1,6 @@
 # Le témoin code-tree tronque le chemin du journal aux espaces
 
-- **État** : ouvert ; diagnostic de fixture concordant ED/archi, correction et reprise bornée à réaliser.
+- **État** : corrigé ; helper commun143a21706, helpers3/lectures27/hôte13 verts avec espace conservé, revue archi/C7 favorable.
 - **Famille** : produit
 - **Gravité** : validation du parcours hôte bloquée par son témoin.
 - **Atteignable en service** : non pour ce parseur de test ; aucune panne d'indexation établie par ce délai.

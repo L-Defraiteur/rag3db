@@ -3,7 +3,7 @@
 GO C7 après A et confinementcdd354e7 ; base rebasée surA+a25, branche neuve
 cx-ed-accord-publication-2 publiée. La source exécutée sera le commit qui publie
 cette recette, annoncé avant lancement ; production03ee5cdcf réappliquée sans conflit.
-Ticket : docs/rag3weaver-archi/tickets/2026-11-12-qualifier-la-publication-concurrente-d-un-accord.md.
+Ticket : docs/tickets/closed/2026-11-12-qualifier-la-publication-concurrente-d-un-accord.md.
 
 Recette externe aux deux postes I-luciepc/accord-publication-20261112/globale :
 

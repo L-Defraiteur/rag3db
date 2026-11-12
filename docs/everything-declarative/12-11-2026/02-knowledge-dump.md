@@ -41,3 +41,11 @@ Voir nouvelle dette recherche dédiée et rapport. PrimitiveROUGEmaisrestes[]/ne
 quiescence[]. Attendre recette/C7 avant SEULE repriseDémon13 àcheminsansespace,
 mêmeELFsource6f/deadline866610.959853126, aucunrepeatdesverts. 7879déjàrendu,
 basePGcx_ed_accord_publication_20261112 ettargetprivé encore conservés pour ce lot.
+
+Verdict final composéVERT relu archi/C7, tourmasteraccordé. CodeSTABLE143a21706,
+corrective2a :F5/helpers3/lect27/hôte13Verts(espacepréservé), lib2229/NAV40init6f
+conservés ; durée2385,76≤6000/quiescence[]. Voir verdict-compose.json2postes.
+Tickets clos déplacés : docs/tickets/closed/2026-11-12-qualifier-la-publication-concurrente-d-un-accord.md,
+docs/tickets/closed/2026-11-12-le-temoin-code-tree-tronque-le-chemin-du-journal-aux-espaces.md, doublonremplacé.
+Dette accord appliqué malgré erreurjournal RESTEOUVERTE. Préparerpush/proprecleanup
+après3contrôles ; aucune mutationRustaprès143 (Bvalideunion surbase143/2a).

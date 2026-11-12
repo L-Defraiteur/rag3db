@@ -392,3 +392,38 @@ rejoués. Nouvelle supervision commune valide sous poste réellement tenu ; pas
 d'outerservice/marker. Pas de service7879 ni modèle/GPU réel, CPU4 et ENV Cargo
 complet inchangés. Ce changement d'environnement contourne une dette de fixture
 explicitée, pas une preuve de portabilité corrigée. Aucune reprise lancée à ce stade.
+
+## Verdict composé et préparation d'intégration accords
+
+Verdict **VERT**, preuves deux postes I-luciepc/accord-publication-20261112/globale/verdict-compose.json.
+Initiale6f527 : F5check5/5, minimalchecklib0, lib2229/0/65(36,11s), NAV40/0/0(131,29s).
+Corrective2a31 : F5montages5/5, helpers3/0/0, lectures27/0/0(9,20s), hôte13/0/0(12,30s),
+filets2/0/0 dans chaque suite. Racine EXACTE « racine de journaux » conservée ;
+index/usages/clone/retrait tous exercés. Les3vecteurs encore dus restent explicitement
+une dette, pas du dense prêt. Aucun nouveau modèle/service pour masquer le défaut.
+
+Le rouge initialhôte120 et la primitiveROUGE restent conservés séparément ; la nouvelle
+fixture commune a justifié F5+consommateurs, sans rejouer lib/NAV produit inchangés.
+PrimitivecorrectiveVERT/code0/restes[]/nettoyétrue, quiescence indépendante[].
+Budget total2385,7608/6000 (temps de préparation/reprise et premier120 compris),
+fin862996,72065<deadlineinitiale866610,959853126. Target8623326051octets.
+
+Trois ELF initiauxsource6f/220gabarits préservés avant recompilation (ELF-initial/) ;
+nouvel e2esource2a/220 (correctif-journal/ELF/) SHA921167177138e8b2d721190fbd72db47db02d2c090e298822b9bad8c1d3556de.
+Provenances runtime PID/start/mapsnative29/cgroupMax32 et reçus de supervision archivés.
+Quatre ELF/logs/rouges/proofs aux deux postes ; 7879 rendu avec santé BGE1024/sparse
+avant/après les deux passages lectures. Aucun usage ED restant.
+
+Archi a relu directement les logs helpers/lectures/hôte et le verdict de supervision ;
+C7 a relu verdict-compose et donné « à toi » après bilan/README/clôtures/copies.
+Tickets clos : docs/tickets/closed/2026-11-12-qualifier-la-publication-concurrente-d-un-accord.md ;
+docs/tickets/closed/2026-11-12-le-temoin-code-tree-tronque-le-chemin-du-journal-aux-espaces.md.
+Doublon fermé comme remplacé, preuves fusionnées au canonique. Dette journal après
+effet reste ouverte, sans rollback ni révocation inventée. Limites du ciblé sur HTTP
+concurrent/relance du perdant et absence d'API révocation restent documentées.
+
+Code Rust/tests/templates/Cargo inchangé depuis143a21706 ; les commits suivants sont
+Markdown uniquement. Arbre B empile sa validation sur cette base, ordre masterED→B.
+Après push : trois contrôles puis retrait immédiat gardé de nos deuxW/target/branches
+locales et PGprivée après dump+SHA, sans toucher ancien reste-explicite, sources de
+Lucie ou ressources B. Les remotes/logs/rouges/ELF/admins restent préservés.

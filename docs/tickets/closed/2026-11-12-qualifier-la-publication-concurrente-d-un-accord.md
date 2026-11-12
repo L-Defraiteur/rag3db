@@ -1,6 +1,6 @@
 # Qualifier la publication concurrente d'un accord
 
-- **État** : ouvert ; défaut reproduit sur registre/Garde synthétiques, correction03ee5cdcf verte au ciblé ; globale/intégration à coordonner.
+- **État** : corrigé ; publication sérialisée par demande, code054e1f1da repris dans143a21706, verdict composé vert relu.
 - **Famille** : produit
 - **Gravité** : republication concurrente réarmant un droit CetteFois reproduite ; aucune commande exécutée.
 - **Atteignable en service** : route de carte multiworkers relue ; entrelacement reproduit sur la primitive commune, sans HTTP concurrent.

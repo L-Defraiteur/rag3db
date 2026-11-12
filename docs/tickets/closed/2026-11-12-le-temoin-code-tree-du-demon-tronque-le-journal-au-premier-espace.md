@@ -36,5 +36,5 @@ Ne pas allonger simplement la borne ni imposer un nom de dossier. Si reprise du 
 accords avec chemin sans espace, elle doit être annoncée comme adaptation de recette
 avec cette dette ouverte, pas comme correction de portabilité de la fixture.
 
-Ticket canonique conservé : docs/everything-declarative/tickets/2026-11-12-le-temoin-code-tree-tronque-le-chemin-du-journal-aux-espaces.md.
+Ticket canonique conservé : docs/tickets/closed/2026-11-12-le-temoin-code-tree-tronque-le-chemin-du-journal-aux-espaces.md.
 Ce déplacement ferme seulement le doublon documentaire, pas la correction ni la validation.

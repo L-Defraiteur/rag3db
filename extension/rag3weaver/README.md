@@ -453,7 +453,8 @@ root. In the chat, the workshop:
 - runs commands through its gate (`run_command`); a command the gate puts on hold shows the same
   card under the call, with the command line. A grant covers the complete exact line in the
   same working domain, including an explicitly approved outside path. Changed arguments,
-  command chains or working domains need their own grant. An outside script also needs
+  command chains or working domains need their own grant. Answering the same card twice
+  does not publish an extra grant; a winning refusal stays refused. An outside script also needs
   read access declared in `workspace.sandbox.extra_read`, limited to that file;
   the command grant adds no sandbox rights. Without the declaration, the kernel can refuse
   the command and its error is returned. Grants bounded to one attempt are consumed when
