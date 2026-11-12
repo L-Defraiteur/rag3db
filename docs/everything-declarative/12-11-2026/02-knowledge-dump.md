@@ -34,3 +34,10 @@ Aucun rebase ni pushmaster de ce lot à ce stade ; C7 garde créneau.
 Revue seule scripts de recherche : e2bc puis62c64, P1parentPIDréutilisé etP2reçusignalés
 et corrigés sur branchepropriétairerecherche ; bordidentitéracine signalé ensuite,
 correction annoncée en cours. Aucun script ou testde recherche modifié/exécuté ici.
+
+GlobaleaprèsA source6f527 surbranche2 : F5/min/listes/3ELF+lib2229/65+NAV40+lectures27
+verts ; démon120STOP,12/13ok, fixturecode_tree découpe le journal à l'espace.
+Voir nouvelle dette recherche dédiée et rapport. PrimitiveROUGEmaisrestes[]/nettoyétrue,
+quiescence[]. Attendre recette/C7 avant SEULE repriseDémon13 àcheminsansespace,
+mêmeELFsource6f/deadline866610.959853126, aucunrepeatdesverts. 7879déjàrendu,
+basePGcx_ed_accord_publication_20261112 ettargetprivé encore conservés pour ce lot.

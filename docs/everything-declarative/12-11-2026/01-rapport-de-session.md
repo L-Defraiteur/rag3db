@@ -362,3 +362,33 @@ son besoin du service7879 existant doit être coordonné explicitement, santé a
 ne pas la présenter comme CPU/factice. Pas de nouveau service ni modèle à lancer.
 Premier rouge STOP/diagnostic. Aucun lourd supplémentaire avant revue du plan ;
 intégration seulement APRÈSA et tourmaster C7, sans réservation pendant développement.
+
+## Globale accords6f527 — rouge hôte arrêté et diagnostic
+
+F5VERT5/5, minimalVERT37,09s, compilations/listes3ELFvertes publiéesfa01dfb8f avant
+runtime ; lib2229/0/65 en36,11s, NAV40/0/0 en131,29s et lectures27/0/0 en9,29s
+(+deux filets) verts. NAV terminée : aucun Chrome privé vivant, un seul DBus commun.
+7879 BGE-M3/dim1024/facticefalse/sparsetrue validé avant/après, rendu immédiatement.
+
+Premier rouge inattendu : e2e_demon_hote dépasse120s,12finsok/13, dernier test
+code_tree_pose_enregistre_clone_et_retire_un_arbre ; aucun verdict suite13. Driver
+arrêté, primitive finaleROUGE/code1/descendantslaissés aprèscommandes, restes[],
+nettoyétrue, quiescence indépendante[]. Pas de skip, timeout étendu ou retry inchangé.
+Aucun verdict global vert. Deadline originale866610,959853126 conservée.
+
+Diagnostic concret : ce témoin coupe journal au premier espace (lignes605-611) ;
+root « racine de journaux » devient chemin inexistant « racine ». Le journal réel
+PID227077/1794515589662-227077.out contient déjà « indexation terminée » avec scopes
+et relations posés. Le délai ne démontre pas un blocage de publication d'accord.
+Dette distincte créée AVANT transmission : docs/recherche/tickets/2026-11-12-le-temoin-code-tree-du-demon-tronque-le-journal-au-premier-espace.md.
+Aucune fixture du lot accords modifiée. ReçuHTTP exact et pile non capturés ;
+lecture statique + vrai journal terminé documentés, propriétairesPID/start/cg/maps
+déjà capturés avant arrêt dans les preuves de supervision et provenances.
+
+Proposition soumise à C7 : reprise de la SEULE suite démon13, même source/ELF gelés,
+avec RAG3WEAVER_JOURNAUX_DIR privé sans espace, borne120 incluantcleanup, deadline
+globale initiale conservée (aucun nouveau6000). F5/min/lib/NAV/lectures ne sont pas
+rejoués. Nouvelle supervision commune valide sous poste réellement tenu ; pas
+d'outerservice/marker. Pas de service7879 ni modèle/GPU réel, CPU4 et ENV Cargo
+complet inchangés. Ce changement d'environnement contourne une dette de fixture
+explicitée, pas une preuve de portabilité corrigée. Aucune reprise lancée à ce stade.
