@@ -123,6 +123,14 @@ class FournisseurCPU(unittest.TestCase):
         e.exception.close()
         self.assertFalse(any(e['event'] == 'embed_commence' for e in self.events()))
 
+    def test_marqueur_compact_attendu_par_la_sonde_reelle(self):
+        self.spawn()
+        address = self.wait('pret')['adresse']
+        with urllib.request.urlopen('http://' + address + '/sante', timeout=2) as response:
+            raw = response.read()
+        self.assertIn(b'"service":"rag3weaver-embeddings"', raw)
+        self.assertTrue(json.loads(raw)['factice'])
+
     def test_identite_activation_exacte_et_chauffe_inconnue(self):
         self.spawn(env={'RAG3WEAVER_ACTIVATION_PROFIL': 'profil-cpu',
                         'RAG3WEAVER_ACTIVATION_PERIPHERIQUE': 'cpu-fixture',
