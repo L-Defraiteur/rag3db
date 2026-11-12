@@ -11,6 +11,14 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **13 nov. — Les déclarations complètes ont leurs publications durables.**
+  L'API Rust crée un catalogue dédié neuf, y conserve les valeurs et leurs
+  reçus atomiquement et distingue l'événement de publication de l'empreinte
+  du contenu. A→B→A garde trois publications ; un replay exact rend le reçu,
+  historique si la tête a avancé. Identité étrangère, schéma hors contrat et
+  entrée non stable refusent ; la migration physique reste une suite distincte.
+  (`626d050d3`)
+
 - **12 nov. — Le diagnostic observe aussi les relations persistées.** Les
   configurations, définitions de relations et le journal sont lus dans le même
   snapshot RO ; une table absente reste distincte d'un ensemble vide. Le lecteur

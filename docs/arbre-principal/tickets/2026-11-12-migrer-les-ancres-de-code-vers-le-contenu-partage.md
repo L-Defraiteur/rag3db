@@ -1823,3 +1823,5 @@ Composition publiée avant lecture : conserveROUGEoriginaldistinct, vérifie
 4copiesELF626/source+220gabarits+maps et quiescence, retireseulTMPNAVmarqué,
 produit un verdictcomposé explicite sous anciennedélaisansreset. Aucune suite
 ni nouveau backend ne sera exécuté par cette composition.
+
+Composition C7 runtimev3+attestationv8 source626d050d3dcd9316bb8a1fc923bf71fcd0e36baf VERT en1440.33s/budgetINITIAL5400, F5 5/5, minimal et lib 2257/0/65, navigateur 40/0/0, cli 5/0/0, postgres 36/0/0, e2e_tx_ligne_a_ligne 3/0/0, e2e_tx_merge_puis_copy 1/0/0, e2e_tx_par_paquet_arret 18/0/0, e2e_tx_vecteurs_apres_rollback 3/0/0. Quatre ELF/maps/native29/220gabarits copiés et rehashés deux postes, supervisionv3ROUGEcartographie/v8VERT, deuxrestes[]/busabsents/TMPNAVretiré. Prêt pour tour C7 ; ticket reste ouvert pour pyramide/application physique.
