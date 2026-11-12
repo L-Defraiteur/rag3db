@@ -1,10 +1,11 @@
 // Embind wrapper for rag3weaver Rust static library.
 // Exposes a `Weaver` class to JavaScript via emscripten embind.
 
-#include <string>
-#include <vector>
 #include <atomic>
 #include <cstdint>
+#include <string>
+#include <vector>
+
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
 using namespace emscripten;
@@ -13,40 +14,34 @@ using namespace emscripten;
 typedef void (*async_callback_t)(const char* result_json, uintptr_t user_data);
 
 extern "C" {
-    const char* rag3weaver_version();
-    void* rag3weaver_catalog_new(const char* config_json, const char* db_path);
-    void rag3weaver_catalog_destroy(void* ctx);
-    int64_t rag3weaver_create(void* ctx, const char* entity_type, const char* fields_json);
-    const char* rag3weaver_get_uuid(const void* ctx, int64_t handle);
-    int64_t rag3weaver_link(void* ctx, int64_t from, int64_t to,
-                            const char* rel_type, const char* props_json);
-    const char* rag3weaver_drain(void* ctx);
-    const char* rag3weaver_count(void* ctx, const char* entity_type);
-    const char* rag3weaver_catalog_set_scope(void* ctx, const char* org, const char* project);
-    const char* rag3weaver_catalog_get_scope(void* ctx);
-    // Async drain: spawns on rayon pool, calls callback when done
-    void rag3weaver_drain_async(const void* ctx, async_callback_t callback, uintptr_t user_data);
-    // Async search: spawns on rayon pool, calls callback when done
-    void rag3weaver_search_async(const void* ctx, const char* kb_name,
-        const char* query, const char* options_json,
-        async_callback_t callback, uintptr_t user_data);
-    // Threading validation tests
-    const char* rag3weaver_test_threads();
-    const char* rag3weaver_test_async_pool();
-    const char* rag3weaver_test_rayon();
-    const char* rag3weaver_test_tokio_mt();
-    // Candle embedding test (receives model bytes, returns embedding JSON)
-    const char* rag3weaver_candle_embed(
-        const uint8_t* config, size_t config_len,
-        const uint8_t* tokenizer, size_t tokenizer_len,
-        const uint8_t* weights, size_t weights_len,
-        const char* text);
-    // Set real embedder from model bytes (replaces MockEmbedder)
-    const char* rag3weaver_catalog_set_embedder(
-        void* ctx,
-        const uint8_t* config, size_t config_len,
-        const uint8_t* tokenizer, size_t tokenizer_len,
-        const uint8_t* weights, size_t weights_len);
+const char* rag3weaver_version();
+void* rag3weaver_catalog_new(const char* config_json, const char* db_path);
+void rag3weaver_catalog_destroy(void* ctx);
+int64_t rag3weaver_create(void* ctx, const char* entity_type, const char* fields_json);
+const char* rag3weaver_get_uuid(const void* ctx, int64_t handle);
+int64_t rag3weaver_link(void* ctx, int64_t from, int64_t to, const char* rel_type,
+    const char* props_json);
+const char* rag3weaver_drain(void* ctx);
+const char* rag3weaver_count(void* ctx, const char* entity_type);
+const char* rag3weaver_catalog_set_scope(void* ctx, const char* org, const char* project);
+const char* rag3weaver_catalog_get_scope(void* ctx);
+// Async drain: spawns on rayon pool, calls callback when done
+void rag3weaver_drain_async(const void* ctx, async_callback_t callback, uintptr_t user_data);
+// Async search: spawns on rayon pool, calls callback when done
+void rag3weaver_search_async(const void* ctx, const char* kb_name, const char* query,
+    const char* options_json, async_callback_t callback, uintptr_t user_data);
+// Threading validation tests
+const char* rag3weaver_test_threads();
+const char* rag3weaver_test_async_pool();
+const char* rag3weaver_test_rayon();
+const char* rag3weaver_test_tokio_mt();
+// Candle embedding test (receives model bytes, returns embedding JSON)
+const char* rag3weaver_candle_embed(const uint8_t* config, size_t config_len,
+    const uint8_t* tokenizer, size_t tokenizer_len, const uint8_t* weights, size_t weights_len,
+    const char* text);
+// Set real embedder from model bytes (replaces MockEmbedder)
+const char* rag3weaver_catalog_set_embedder(void* ctx, const uint8_t* config, size_t config_len,
+    const uint8_t* tokenizer, size_t tokenizer_len, const uint8_t* weights, size_t weights_len);
 }
 
 // ── Async support (generic for drain, search, etc.) ─────────────────────
@@ -70,6 +65,7 @@ static void async_callback(const char* result_json, uintptr_t user_data) {
 
 class Weaver {
     void* ctx_;
+
 public:
     Weaver(std::string config, std::string path) {
         ctx_ = rag3weaver_catalog_new(config.c_str(), path.c_str());
@@ -95,8 +91,8 @@ public:
     }
 
     int link(int from, int to, std::string relType, std::string propsJson) {
-        return (int)rag3weaver_link(ctx_, (int64_t)from, (int64_t)to,
-                                    relType.c_str(), propsJson.c_str());
+        return (int)rag3weaver_link(ctx_, (int64_t)from, (int64_t)to, relType.c_str(),
+            propsJson.c_str());
     }
 
     /// Synchronous drain (blocks until complete).
@@ -182,29 +178,22 @@ public:
         auto tokenizerVec = convertJSArrayToNumberVector<uint8_t>(tokenizerArr);
         auto weightsVec = convertJSArrayToNumberVector<uint8_t>(weightsArr);
 
-        const char* r = rag3weaver_catalog_set_embedder(
-            ctx_,
-            configVec.data(), configVec.size(),
-            tokenizerVec.data(), tokenizerVec.size(),
-            weightsVec.data(), weightsVec.size()
-        );
+        const char* r = rag3weaver_catalog_set_embedder(ctx_, configVec.data(), configVec.size(),
+            tokenizerVec.data(), tokenizerVec.size(), weightsVec.data(), weightsVec.size());
         return r ? std::string(r) : R"({"error":"null result"})";
     }
 
     /// Test candle embedding: receives model files as JS Uint8Arrays + text,
     /// creates CandleEmbedder in WASM, embeds text, returns JSON result.
-    static std::string testCandleEmbed(val configArr, val tokenizerArr,
-                                        val weightsArr, std::string text) {
+    static std::string testCandleEmbed(val configArr, val tokenizerArr, val weightsArr,
+        std::string text) {
         auto configVec = convertJSArrayToNumberVector<uint8_t>(configArr);
         auto tokenizerVec = convertJSArrayToNumberVector<uint8_t>(tokenizerArr);
         auto weightsVec = convertJSArrayToNumberVector<uint8_t>(weightsArr);
 
-        const char* r = rag3weaver_candle_embed(
-            configVec.data(), configVec.size(),
-            tokenizerVec.data(), tokenizerVec.size(),
-            weightsVec.data(), weightsVec.size(),
-            text.c_str()
-        );
+        const char* r =
+            rag3weaver_candle_embed(configVec.data(), configVec.size(), tokenizerVec.data(),
+                tokenizerVec.size(), weightsVec.data(), weightsVec.size(), text.c_str());
         return r ? std::string(r) : R"({"error":"null result"})";
     }
 };

@@ -2,8 +2,6 @@
 
 #include <cstdio>
 
-#include "storage/checkpoint_profile.h"
-
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "common/file_system/file_info.h"
@@ -16,6 +14,7 @@
 #include "main/db_config.h"
 #include "storage/buffer_manager/buffer_manager.h"
 #include "storage/buffer_manager/memory_manager.h"
+#include "storage/checkpoint_profile.h"
 #include "storage/checkpointer.h"
 #include "storage/table/node_table.h"
 #include "storage/table/rel_table.h"
@@ -226,13 +225,15 @@ bool StorageManager::checkpoint(main::ClientContext* context, PageAllocator& pag
                 "Checkpoint failed: table {} not found in storage manager.", entry->getName()));
         }
         const auto bytesBefore = common::FileInfo::bytesWritten();
-        const auto changed = tables.at(entry->getTableID())->checkpoint(context, entry, pageAllocator);
+        const auto changed =
+            tables.at(entry->getTableID())->checkpoint(context, entry, pageAllocator);
         hasChanges = changed || hasChanges;
         if (CheckpointProfile::enabled()) {
             const auto ms = profile.lap();
             nodeMs += ms;
             if (ms >= 1.0) {
-                fprintf(stderr, "[checkpoint-profile]     table %s : %.1f ms, %lu octets ecrits%s\n",
+                fprintf(stderr,
+                    "[checkpoint-profile]     table %s : %.1f ms, %lu octets ecrits%s\n",
                     entry->getName().c_str(), ms,
                     static_cast<unsigned long>(common::FileInfo::bytesWritten() - bytesBefore),
                     changed ? "" : " (inchangée)");

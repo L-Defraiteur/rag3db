@@ -1,9 +1,5 @@
 #include "storage/table/chunked_node_group.h"
 
-#include "storage/storage_version_info.h"
-
-#include "transaction/transaction.h"
-
 #include <exception>
 
 #include "common/assert.h"
@@ -13,11 +9,13 @@
 #include "storage/buffer_manager/spiller.h"
 #include "storage/enums/residency_state.h"
 #include "storage/page_allocator.h"
+#include "storage/storage_version_info.h"
 #include "storage/table/column.h"
 #include "storage/table/column_chunk.h"
 #include "storage/table/column_chunk_data.h"
 #include "storage/table/column_chunk_scanner.h"
 #include "storage/table/node_table.h"
+#include "transaction/transaction.h"
 
 using namespace rag3db::common;
 using namespace rag3db::transaction;
@@ -172,7 +170,8 @@ uint64_t ChunkedNodeGroup::append(const Transaction* transaction,
     }
     if (transaction->shouldAppendToUndoBuffer()) {
         std::unique_lock lck{versionInfoMtx};
-        getOrCreateVersionInfoNoLock().append(transaction->getID(), numRows, numRowsToAppendInChunk);
+        getOrCreateVersionInfoNoLock().append(transaction->getID(), numRows,
+            numRowsToAppendInChunk);
     }
     numRows += numRowsToAppendInChunk;
     return numRowsToAppendInChunk;
@@ -219,7 +218,8 @@ offset_t ChunkedNodeGroup::append(const Transaction* transaction,
     }
     if (transaction->getID() != Transaction::DUMMY_TRANSACTION_ID) {
         std::unique_lock lck{versionInfoMtx};
-        getOrCreateVersionInfoNoLock().append(transaction->getID(), numRows, numToAppendInChunkedGroup);
+        getOrCreateVersionInfoNoLock().append(transaction->getID(), numRows,
+            numToAppendInChunkedGroup);
     }
     numRows += numToAppendInChunkedGroup;
     return numToAppendInChunkedGroup;
@@ -242,7 +242,8 @@ offset_t ChunkedNodeGroup::append(const Transaction* transaction,
     }
     if (transaction->shouldAppendToUndoBuffer()) {
         std::unique_lock lck{versionInfoMtx};
-        getOrCreateVersionInfoNoLock().append(transaction->getID(), numRows, numToAppendInChunkedGroup);
+        getOrCreateVersionInfoNoLock().append(transaction->getID(), numRows,
+            numToAppendInChunkedGroup);
     }
     numRows += numToAppendInChunkedGroup;
     return numToAppendInChunkedGroup;

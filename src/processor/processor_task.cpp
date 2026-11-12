@@ -69,14 +69,13 @@ void ProcessorTask::finalize() {
                 break;
             }
         }
-        fprintf(stderr,
-            "[tache] source=%s card=%s puits=%s fils=%llu/%llu duree=%.2f ms%s%s\n",
+        fprintf(stderr, "[tache] source=%s card=%s puits=%s fils=%llu/%llu duree=%.2f ms%s%s\n",
             PhysicalOperatorUtils::operatorTypeToString(source->getOperatorType()).c_str(),
             card.has_value() ? std::to_string(*card).c_str() : "?",
             PhysicalOperatorUtils::operatorTypeToString(sink->getOperatorType()).c_str(),
             static_cast<unsigned long long>(numThreadsRegistered),
-            static_cast<unsigned long long>(maxNumThreads), ms, unknown.empty() ? "" : " sans=",
-            unknown.c_str());
+            static_cast<unsigned long long>(maxNumThreads), ms,
+            unknown.empty() ? "" : " sans=", unknown.c_str());
     }
 }
 

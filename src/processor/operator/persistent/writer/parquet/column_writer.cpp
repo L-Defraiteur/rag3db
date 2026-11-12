@@ -335,7 +335,8 @@ void ColumnWriter::compressPage(common::BufferWriter& bufferedSerializer, size_t
             bufferedSerializer.getSize(), reinterpret_cast<char*>(compressedBuf.get()),
             &compressedSize);
         compressedData = compressedBuf.get();
-        KU_ASSERT(compressedSize <= rag3db_snappy::MaxCompressedLength(bufferedSerializer.getSize()));
+        KU_ASSERT(
+            compressedSize <= rag3db_snappy::MaxCompressedLength(bufferedSerializer.getSize()));
     } break;
     case CompressionCodec::ZSTD: {
         compressedSize = rag3db_zstd::ZSTD_compressBound(bufferedSerializer.getSize());

@@ -16,19 +16,19 @@
 #include <windows.h>
 #else
 #include "sys/stat.h"
-#include <sys/file.h>
 #include <unistd.h>
+
+#include <sys/file.h>
 #endif
 
 #include <fcntl.h>
 
 #include <cerrno>
 #include <chrono>
+#include <cstring>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
-
-#include <cstring>
 
 #include "storage/storage_utils.h"
 
@@ -113,8 +113,7 @@ bool tryLockFile(HANDLE handle, FileLockType type, uint64_t lockWaitMs) {
     const DWORD dwFlags = type == FileLockType::READ_LOCK ?
                               LOCKFILE_FAIL_IMMEDIATELY :
                               LOCKFILE_FAIL_IMMEDIATELY | LOCKFILE_EXCLUSIVE_LOCK;
-    const auto deadline =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(lockWaitMs);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(lockWaitMs);
     while (true) {
         auto overlapped = lockByte();
         if (LockFileEx(handle, dwFlags, 0 /*reserved*/, 1 /*numBytesLow*/, 0 /*numBytesHigh*/,
@@ -139,8 +138,7 @@ HANDLE openLockHandle(const std::string& fullPath) {
 // de connexion à interrompre à ce moment : la borne est la seule sortie.
 bool tryLockFile(int fd, FileLockType type, uint64_t lockWaitMs) {
     const int operation = (type == FileLockType::READ_LOCK ? LOCK_SH : LOCK_EX) | LOCK_NB;
-    const auto deadline =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(lockWaitMs);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(lockWaitMs);
     while (true) {
         if (flock(fd, operation) == 0) {
             return true;

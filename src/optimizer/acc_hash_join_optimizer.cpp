@@ -1,7 +1,6 @@
 #include "optimizer/acc_hash_join_optimizer.h"
 
 #include "binder/expression/property_expression.h"
-
 #include "catalog/catalog_entry/table_catalog_entry.h"
 #include "optimizer/logical_operator_collector.h"
 #include "planner/operator/extend/logical_recursive_extend.h"
@@ -336,7 +335,8 @@ static std::vector<LogicalOperator*> getScanNodeCandidatesByVariable(
     collector.collect(root);
     for (auto& op : collector.getOperators()) {
         auto& scan = op->constCast<LogicalScanNodeTable>();
-        if (scan.getScanType() != LogicalScanNodeTableType::SCAN || scan.getTableIDs().size() != 1) {
+        if (scan.getScanType() != LogicalScanNodeTableType::SCAN ||
+            scan.getTableIDs().size() != 1) {
             continue;
         }
         if (scan.getNodeID()->constCast<PropertyExpression>().getVariableName() == variableName) {
@@ -370,7 +370,8 @@ bool HashJoinSIPOptimizer::tryKeyMaskHJSIP(LogicalOperator* op) {
         if (!property.isPrimaryKey() || probeKey->getDataType() != buildKey->getDataType()) {
             continue;
         }
-        auto candidates = getScanNodeCandidatesByVariable(property.getVariableName(), buildRoot.get());
+        auto candidates =
+            getScanNodeCandidatesByVariable(property.getVariableName(), buildRoot.get());
         if (candidates.empty()) {
             continue;
         }

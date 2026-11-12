@@ -1,17 +1,17 @@
 #include "processor/operator/partitioner.h"
 
 #include "binder/expression/expression_util.h"
-#include "common/exception/runtime.h"
-#include "catalog/catalog_entry/table_catalog_entry.h"
 #include "catalog/catalog.h"
+#include "catalog/catalog_entry/table_catalog_entry.h"
+#include "common/exception/runtime.h"
 #include "main/client_context.h"
 #include "processor/execution_context.h"
 #include "processor/warning_context.h"
 #include "storage/buffer_manager/memory_manager.h"
-#include "storage/wal/local_wal.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
 #include "storage/table/rel_table.h"
+#include "storage/wal/local_wal.h"
 #include "transaction/transaction.h"
 
 using namespace rag3db::common;

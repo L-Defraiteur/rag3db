@@ -13,11 +13,11 @@
 #include <memory>
 #include <string>
 
+#include "common/exception/runtime.h"
+#include "flaky_checkpointer.h"
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
 #include "main/database.h"
-#include "common/exception/runtime.h"
-#include "flaky_checkpointer.h"
 #include "storage/checkpointer.h"
 #include "storage/storage_manager.h"
 #include "transaction/transaction_context.h"
@@ -136,13 +136,13 @@ TEST_F(RefusedBegin, ABeginRefusedAfterAFailedCheckpointLeavesTheConnectionUsabl
     // Tout est refusé jusqu'à la réouverture, par le nom du point de reprise ou, pour un ROLLBACK
     // sans transaction, par le sien : un refus, pas un plantage.
     const auto rollback = error(*other, "ROLLBACK;");
-    EXPECT_TRUE(rollback.find("No active transaction") != std::string::npos ||
-                rollback.find(
-                    rag3db::transaction::TransactionManager::REOPEN_AFTER_FAILED_CHECKPOINT) !=
-                    std::string::npos)
+    EXPECT_TRUE(
+        rollback.find("No active transaction") != std::string::npos ||
+        rollback.find(rag3db::transaction::TransactionManager::REOPEN_AFTER_FAILED_CHECKPOINT) !=
+            std::string::npos)
         << rollback;
-    EXPECT_NE(error(*other, "RETURN 1;").find(
-                  rag3db::transaction::TransactionManager::REOPEN_AFTER_FAILED_CHECKPOINT),
+    EXPECT_NE(error(*other, "RETURN 1;")
+                  .find(rag3db::transaction::TransactionManager::REOPEN_AFTER_FAILED_CHECKPOINT),
         std::string::npos);
     other.reset();
     createDBAndConn();

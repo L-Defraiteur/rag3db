@@ -23,8 +23,8 @@ static void execFunc(const std::vector<std::shared_ptr<ValueVector>>& parameters
         double radius;
         if (!extractListDoubleVar(*parameters[0], *parameterSelVectors[0], i, point, sp) ||
             !extractListDoubleVar(*parameters[1], *parameterSelVectors[1], i, center, sc) ||
-            !extractDouble(*parameters[2], *parameterSelVectors[2], i, radius) ||
-            sp != sc || sp == 0) {
+            !extractDouble(*parameters[2], *parameterSelVectors[2], i, radius) || sp != sc ||
+            sp == 0) {
             result.setNull(resPos, true);
             continue;
         }

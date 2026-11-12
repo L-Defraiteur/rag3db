@@ -122,8 +122,9 @@ TEST_F(CardinalityTest, TestOperators) {
 
     // Load From Parquet
     {
-        auto plan = getRoot(common::stringFormat(
-            "LOAD FROM \"{}/dataset/demo-db/parquet/user.parquet\" RETURN *", RAG3DB_ROOT_DIRECTORY));
+        auto plan = getRoot(
+            common::stringFormat("LOAD FROM \"{}/dataset/demo-db/parquet/user.parquet\" RETURN *",
+                RAG3DB_ROOT_DIRECTORY));
         EXPECT_EQ(4, plan->getCardinality());
     }
 

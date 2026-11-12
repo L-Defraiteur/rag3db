@@ -22,7 +22,6 @@ public:
         common::offset_t dstOffsetInSegment, const ColumnChunkData& data,
         common::offset_t srcOffset, common::length_t numValues) const override;
 
-
     const DictionaryColumn& getDictionary() const { return dictionary; }
     const Column* getIndexColumn() const { return indexColumn.get(); }
 
@@ -48,8 +47,6 @@ protected:
         common::ValueVector* resultVector, uint32_t posInVector) const override;
 
 private:
-
-
 private:
     // Main column stores indices of values in the dictionary
     DictionaryColumn dictionary;

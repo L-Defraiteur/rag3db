@@ -10,8 +10,8 @@
 
 #include "common/api.h"
 #include "common/database_lifecycle_manager.h"
-#include "rag3db_fwd.h"
 #include "main/db_config.h"
+#include "rag3db_fwd.h"
 
 namespace rag3db {
 namespace common {
@@ -61,8 +61,8 @@ struct RAG3DB_API SystemConfig {
      * WAL file exceeds this threshold, the database will checkpoint if autoCheckpoint is true.
      * @param forceCheckpointOnClose If true, the database will force checkpoint when closing.
      * @param throwOnWalReplayFailure If true, any WAL replaying failure when loading the database
-     * will throw an error. Otherwise, Rag3db will silently ignore the failure and replay up to where
-     * the error occured.
+     * will throw an error. Otherwise, Rag3db will silently ignore the failure and replay up to
+     * where the error occured.
      * @param enableChecksums If true, the database will use checksums to detect corruption in the
      * WAL file.
      * @param fileLockWaitMs Combien de temps une ouverture en écriture attend que le verrou du

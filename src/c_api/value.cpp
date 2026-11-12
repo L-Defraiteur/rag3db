@@ -224,8 +224,8 @@ rag3db_state rag3db_value_create_struct(uint64_t num_fields, const char** field_
     return Rag3dbSuccess;
 }
 
-rag3db_state rag3db_value_create_map(uint64_t num_fields, rag3db_value** keys, rag3db_value** values,
-    rag3db_value** out_value) {
+rag3db_state rag3db_value_create_map(uint64_t num_fields, rag3db_value** keys,
+    rag3db_value** values, rag3db_value** out_value) {
     if (num_fields == 0) {
         return Rag3dbError;
     }
@@ -292,7 +292,8 @@ rag3db_state rag3db_value_get_list_size(rag3db_value* value, uint64_t* out_resul
     return Rag3dbSuccess;
 }
 
-rag3db_state rag3db_value_get_list_element(rag3db_value* value, uint64_t index, rag3db_value* out_value) {
+rag3db_state rag3db_value_get_list_element(rag3db_value* value, uint64_t index,
+    rag3db_value* out_value) {
     auto physical_type_id = static_cast<Value*>(value->_value)->getDataType().getPhysicalType();
     if (physical_type_id != PhysicalTypeID::ARRAY && physical_type_id != PhysicalTypeID::STRUCT &&
         physical_type_id != PhysicalTypeID::LIST) {
@@ -327,7 +328,8 @@ rag3db_state rag3db_value_get_struct_num_fields(rag3db_value* value, uint64_t* o
     }
 }
 
-rag3db_state rag3db_value_get_struct_field_name(rag3db_value* value, uint64_t index, char** out_result) {
+rag3db_state rag3db_value_get_struct_field_name(rag3db_value* value, uint64_t index,
+    char** out_result) {
     auto physical_type_id = static_cast<Value*>(value->_value)->getDataType().getPhysicalType();
     if (physical_type_id != PhysicalTypeID::STRUCT) {
         return Rag3dbError;
@@ -368,7 +370,8 @@ rag3db_state rag3db_value_get_map_key(rag3db_value* value, uint64_t index, rag3d
     return rag3db_value_get_struct_field_value(&map_entry, 0, out_key);
 }
 
-rag3db_state rag3db_value_get_map_value(rag3db_value* value, uint64_t index, rag3db_value* out_value) {
+rag3db_state rag3db_value_get_map_value(rag3db_value* value, uint64_t index,
+    rag3db_value* out_value) {
     rag3db_value map_entry;
     if (rag3db_value_get_list_element(value, index, &map_entry) == Rag3dbError) {
         return Rag3dbError;
@@ -376,7 +379,8 @@ rag3db_state rag3db_value_get_map_value(rag3db_value* value, uint64_t index, rag
     return rag3db_value_get_struct_field_value(&map_entry, 1, out_value);
 }
 
-rag3db_state rag3db_value_get_recursive_rel_node_list(rag3db_value* value, rag3db_value* out_value) {
+rag3db_state rag3db_value_get_recursive_rel_node_list(rag3db_value* value,
+    rag3db_value* out_value) {
     auto logical_type_id = static_cast<Value*>(value->_value)->getDataType().getLogicalTypeID();
     if (logical_type_id != LogicalTypeID::RECURSIVE_REL) {
         return Rag3dbError;
@@ -663,7 +667,8 @@ rag3db_state rag3db_value_get_timestamp_ms(rag3db_value* value, rag3db_timestamp
     return Rag3dbSuccess;
 }
 
-rag3db_state rag3db_value_get_timestamp_sec(rag3db_value* value, rag3db_timestamp_sec_t* out_result) {
+rag3db_state rag3db_value_get_timestamp_sec(rag3db_value* value,
+    rag3db_timestamp_sec_t* out_result) {
     auto logical_type_id = static_cast<Value*>(value->_value)->getDataType().getLogicalTypeID();
     if (logical_type_id != LogicalTypeID::TIMESTAMP_SEC) {
         return Rag3dbError;

@@ -1,5 +1,7 @@
 #include "function/create_spatial_index.h"
 
+#include <filesystem>
+
 #include "binder/expression/literal_expression.h"
 #include "catalog/spatial_index_catalog_entry.h"
 #include "common/exception/binder.h"
@@ -14,8 +16,6 @@
 #include "processor/execution_context.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
-
-#include <filesystem>
 
 namespace rag3db {
 namespace geo_extension {
@@ -35,10 +35,9 @@ struct CreateSpatialBindData final : TableFuncBindData {
     CreateSpatialBindData(std::string tableName, table_id_t tableID, std::string indexName,
         std::vector<std::string> columnNames, std::vector<property_id_t> propertyIDs,
         std::string metric)
-        : TableFuncBindData{binder::expression_vector{}, 0},
-          tableName{std::move(tableName)}, tableID{tableID}, indexName{std::move(indexName)},
-          columnNames{std::move(columnNames)}, propertyIDs{std::move(propertyIDs)},
-          metric{std::move(metric)} {}
+        : TableFuncBindData{binder::expression_vector{}, 0}, tableName{std::move(tableName)},
+          tableID{tableID}, indexName{std::move(indexName)}, columnNames{std::move(columnNames)},
+          propertyIDs{std::move(propertyIDs)}, metric{std::move(metric)} {}
 
     std::unique_ptr<TableFuncBindData> copy() const override {
         return std::make_unique<CreateSpatialBindData>(*this);
@@ -51,8 +50,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(ClientContext* context,
     const TableFuncBindInput* input) {
     auto tableName = input->getLiteralVal<std::string>(0);
     auto indexName = input->getLiteralVal<std::string>(1);
-    auto columnsValue =
-        input->getParam(2)->constPtrCast<binder::LiteralExpression>()->getValue();
+    auto columnsValue = input->getParam(2)->constPtrCast<binder::LiteralExpression>()->getValue();
 
     auto metric = std::string("euclidean");
     for (auto& [name, val] : input->optionalParams) {
@@ -80,9 +78,9 @@ static std::unique_ptr<TableFuncBindData> bindFunc(ClientContext* context,
         auto& propType = tableEntry->getProperty(propID).getType();
         if (propType.getLogicalTypeID() != LogicalTypeID::DOUBLE &&
             propType.getLogicalTypeID() != LogicalTypeID::FLOAT) {
-            throw BinderException{stringFormat(
-                "Spatial index column '{}' must be DOUBLE or FLOAT, got {}.",
-                colName, propType.toString())};
+            throw BinderException{
+                stringFormat("Spatial index column '{}' must be DOUBLE or FLOAT, got {}.", colName,
+                    propType.toString())};
         }
         columnNames.push_back(colName);
         propertyIDs.push_back(propID);
@@ -92,8 +90,8 @@ static std::unique_ptr<TableFuncBindData> bindFunc(ClientContext* context,
         throw BinderException{"Spatial index requires at least 2 coordinate columns."};
     }
 
-    return std::make_unique<CreateSpatialBindData>(tableName, tableEntry->getTableID(),
-        indexName, std::move(columnNames), std::move(propertyIDs), metric);
+    return std::make_unique<CreateSpatialBindData>(tableName, tableEntry->getTableID(), indexName,
+        std::move(columnNames), std::move(propertyIDs), metric);
 }
 
 // ── Table function (internal _CREATE_SPATIAL_INDEX) ──────────────────────────
@@ -104,8 +102,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     auto transaction = transaction::Transaction::Get(*context.clientContext);
     auto catalog = catalog::Catalog::Get(*context.clientContext);
     auto* storageManager = storage::StorageManager::Get(*context.clientContext);
-    auto& nodeTable =
-        storageManager->getTable(bd.tableID)->cast<storage::NodeTable>();
+    auto& nodeTable = storageManager->getTable(bd.tableID)->cast<storage::NodeTable>();
 
     uint32_t dims = static_cast<uint32_t>(bd.columnNames.size());
     auto metric = bd.metric == "haversine" ? DistanceMetric::HAVERSINE : DistanceMetric::EUCLIDEAN;
@@ -161,15 +158,15 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     // Build index file path.
     std::string basePath;
     if (context.clientContext->isInMemory()) {
-        auto dbId = std::to_string(
-            reinterpret_cast<uintptr_t>(context.clientContext->getDatabase()));
+        auto dbId =
+            std::to_string(reinterpret_cast<uintptr_t>(context.clientContext->getDatabase()));
         basePath = std::filesystem::temp_directory_path().string() + "/rag3db_spatial/" + dbId;
     } else {
-        basePath = std::filesystem::path(
-            context.clientContext->getDatabasePath()).parent_path().string();
+        basePath =
+            std::filesystem::path(context.clientContext->getDatabasePath()).parent_path().string();
     }
-    auto indexFilePath = stringFormat("{}/spatial_indexes/{}/{}.rtree",
-        basePath, bd.tableName, bd.indexName);
+    auto indexFilePath =
+        stringFormat("{}/spatial_indexes/{}/{}.rtree", basePath, bd.tableName, bd.indexName);
 
     // Register in catalog.
     std::vector<column_id_t> columnIDs;
@@ -180,9 +177,9 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
         columnTypes.push_back(PhysicalTypeID::DOUBLE);
     }
     auto auxInfo = std::make_unique<SpatialIndexAuxInfo>(dims, bd.columnNames, bd.metric);
-    auto indexEntry = std::make_unique<catalog::IndexCatalogEntry>(
-        SpatialIndexCatalogEntry::TYPE_NAME, bd.tableID, bd.indexName,
-        bd.propertyIDs, std::move(auxInfo));
+    auto indexEntry =
+        std::make_unique<catalog::IndexCatalogEntry>(SpatialIndexCatalogEntry::TYPE_NAME,
+            bd.tableID, bd.indexName, bd.propertyIDs, std::move(auxInfo));
     catalog->createIndex(transaction, std::move(indexEntry));
 
     // Create storage info and RTreeIndex.
@@ -192,8 +189,8 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
         std::move(columnIDs), std::move(columnTypes),
         indexType.constraintType == storage::IndexConstraintType::PRIMARY,
         indexType.definitionType == storage::IndexDefinitionType::BUILTIN};
-    auto index = std::make_unique<RTreeIndex>(
-        std::move(indexInfo), std::move(si), std::move(rtree));
+    auto index =
+        std::make_unique<RTreeIndex>(std::move(indexInfo), std::move(si), std::move(rtree));
 
     // Save to disk and add to node table.
     index->saveToFile();
@@ -209,12 +206,12 @@ static std::unique_ptr<TableFuncBindData> publicBindFunc(ClientContext* context,
     const TableFuncBindInput* input) {
     auto tableName = input->getLiteralVal<std::string>(0);
     auto indexName = input->getLiteralVal<std::string>(1);
-    auto columnsValue =
-        input->getParam(2)->constPtrCast<binder::LiteralExpression>()->getValue();
+    auto columnsValue = input->getParam(2)->constPtrCast<binder::LiteralExpression>()->getValue();
 
     auto metric = std::string("euclidean");
     for (auto& [name, val] : input->optionalParams) {
-        if (name == "metric") metric = val.toString();
+        if (name == "metric")
+            metric = val.toString();
     }
 
     auto catalog = catalog::Catalog::Get(*context);
@@ -236,8 +233,8 @@ static std::unique_ptr<TableFuncBindData> publicBindFunc(ClientContext* context,
         propertyIDs.push_back(tableEntry->getPropertyID(colName));
     }
 
-    return std::make_unique<CreateSpatialBindData>(tableName, tableEntry->getTableID(),
-        indexName, std::move(columnNames), std::move(propertyIDs), metric);
+    return std::make_unique<CreateSpatialBindData>(tableName, tableEntry->getTableID(), indexName,
+        std::move(columnNames), std::move(propertyIDs), metric);
 }
 
 static std::string rewriteFunc(ClientContext& context, const TableFuncBindData& bindData) {
@@ -245,15 +242,15 @@ static std::string rewriteFunc(ClientContext& context, const TableFuncBindData& 
     auto& bd = *bindData.constPtrCast<CreateSpatialBindData>();
     std::string cols = "[";
     for (size_t i = 0; i < bd.columnNames.size(); i++) {
-        if (i > 0) cols += ", ";
+        if (i > 0)
+            cols += ", ";
         cols += stringFormat("'{}'", bd.columnNames[i]);
     }
     cols += "]";
-    auto query = stringFormat(
-        "CALL _CREATE_SPATIAL_INDEX('{}', '{}', {}, metric := '{}');",
+    auto query = stringFormat("CALL _CREATE_SPATIAL_INDEX('{}', '{}', {}, metric := '{}');",
         bd.tableName, bd.indexName, cols, bd.metric);
-    query += stringFormat("RETURN 'Spatial index {} created on table {}.' AS result;",
-        bd.indexName, bd.tableName);
+    query += stringFormat("RETURN 'Spatial index {} created on table {}.' AS result;", bd.indexName,
+        bd.tableName);
     return query;
 }
 
@@ -261,9 +258,9 @@ static std::string rewriteFunc(ClientContext& context, const TableFuncBindData& 
 
 function_set InternalCreateSpatialIndexFunction::getFunctionSet() {
     function_set result;
-    auto func = std::make_unique<TableFunction>(name,
-        std::vector<LogicalTypeID>{LogicalTypeID::STRING, LogicalTypeID::STRING,
-            LogicalTypeID::LIST});
+    auto func =
+        std::make_unique<TableFunction>(name, std::vector<LogicalTypeID>{LogicalTypeID::STRING,
+                                                  LogicalTypeID::STRING, LogicalTypeID::LIST});
     func->tableFunc = tableFunc;
     func->bindFunc = bindFunc;
     result.push_back(std::move(func));
@@ -272,9 +269,9 @@ function_set InternalCreateSpatialIndexFunction::getFunctionSet() {
 
 function_set CreateSpatialIndexFunction::getFunctionSet() {
     function_set result;
-    auto func = std::make_unique<TableFunction>(name,
-        std::vector<LogicalTypeID>{LogicalTypeID::STRING, LogicalTypeID::STRING,
-            LogicalTypeID::LIST});
+    auto func =
+        std::make_unique<TableFunction>(name, std::vector<LogicalTypeID>{LogicalTypeID::STRING,
+                                                  LogicalTypeID::STRING, LogicalTypeID::LIST});
     func->tableFunc = tableFunc;
     func->bindFunc = publicBindFunc;
     func->rewriteFunc = rewriteFunc;

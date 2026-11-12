@@ -91,8 +91,8 @@ TEST_F(WalReader, KnownScenario) {
         begins += name == "BEGIN";
         // Le FORMAT, en tête du journal, est hors de toute transaction.
         if (name != "BEGIN" && name != "COMMIT" && name != "FORMAT") {
-            EXPECT_GE(e.transaction, 0) << "[check: wal-in-a-transaction] #" << e.index << " "
-                                        << name;
+            EXPECT_GE(e.transaction, 0)
+                << "[check: wal-in-a-transaction] #" << e.index << " " << name;
         }
     }
     EXPECT_EQ(begins, 8) << "[check: wal-one-transaction-per-statement] ";

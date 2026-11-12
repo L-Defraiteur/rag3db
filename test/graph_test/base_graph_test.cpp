@@ -52,8 +52,8 @@ void BaseGraphTest::initGraph(const std::string& datasetDir) const {
         return;
     }
 
-    // Run tests on datasets exported from a previous Rag3db version. Used to verify that exports and
-    // imports across versions work correctly. This skips importing the `empty` dataset.
+    // Run tests on datasets exported from a previous Rag3db version. Used to verify that exports
+    // and imports across versions work correctly. This skips importing the `empty` dataset.
     auto dirs = StringUtils::split(StringUtils::getLower(datasetDir), "/");
     if (std::find(dirs.begin(), dirs.end(), "empty") != dirs.end()) {
         std::cout << stringFormat("Skipping Empty Dataset {}", datasetDir) << std::endl;

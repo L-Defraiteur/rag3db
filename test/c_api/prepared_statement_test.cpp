@@ -339,7 +339,8 @@ TEST_F(CApiPreparedStatementTest, BindString) {
     state = rag3db_connection_prepare(connection, query, &preparedStatement);
     ASSERT_EQ(state, Rag3dbSuccess);
     ASSERT_TRUE(rag3db_prepared_statement_is_success(&preparedStatement));
-    ASSERT_EQ(rag3db_prepared_statement_bind_string(&preparedStatement, "1", "Alice"), Rag3dbSuccess);
+    ASSERT_EQ(rag3db_prepared_statement_bind_string(&preparedStatement, "1", "Alice"),
+        Rag3dbSuccess);
     state = rag3db_connection_execute(connection, &preparedStatement, &result);
     ASSERT_EQ(state, Rag3dbSuccess);
     ASSERT_NE(result._query_result, nullptr);

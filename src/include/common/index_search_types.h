@@ -46,8 +46,8 @@ struct IndexSearchBindData : function::FunctionBindData {
         for (auto& spec : virtualExprSpecs) {
             specsCopy.push_back(spec.copy());
         }
-        return std::make_unique<IndexSearchBindData>(
-            resultType.copy(), searchFunc, std::move(specsCopy));
+        return std::make_unique<IndexSearchBindData>(resultType.copy(), searchFunc,
+            std::move(specsCopy));
     }
 };
 

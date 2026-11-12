@@ -1,6 +1,5 @@
 #include "main/client_context.h"
 
-
 #include <cstdio>
 
 #include "binder/binder.h"
@@ -22,7 +21,6 @@
 #include "optimizer/optimizer.h"
 #include "parser/parser.h"
 #include "parser/transaction_statement.h"
-#include "transaction/transaction_manager.h"
 #include "parser/visitor/standalone_call_rewriter.h"
 #include "parser/visitor/statement_read_write_analyzer.h"
 #include "planner/planner.h"
@@ -32,6 +30,7 @@
 #include "storage/buffer_manager/spiller.h"
 #include "storage/storage_manager.h"
 #include "transaction/transaction_context.h"
+#include "transaction/transaction_manager.h"
 #include <processor/warning_context.h>
 
 #if defined(_WIN32)
@@ -535,9 +534,9 @@ std::unique_ptr<QueryResult> ClientContext::executeNoLock(PreparedStatement* pre
         bool isTransactionStatement =
             preparedStatement->getStatementType() == StatementType::TRANSACTION;
         if (isTransactionStatement) {
-            const auto action = cachedStatement->parsedStatement
-                                    ->constCast<parser::TransactionStatement>()
-                                    .getTransactionAction();
+            const auto action =
+                cachedStatement->parsedStatement->constCast<parser::TransactionStatement>()
+                    .getTransactionAction();
             if (action == transaction::TransactionAction::BEGIN_READ ||
                 action == transaction::TransactionAction::BEGIN_WRITE) {
                 // Le BEGIN s'exécute sur un fil du planificateur ; s'il y attendait la fin d'un

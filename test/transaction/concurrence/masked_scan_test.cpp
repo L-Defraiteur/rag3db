@@ -37,7 +37,8 @@ constexpr int64_t NUM_SCOPES = 72000;
 constexpr int64_t NUM_MASKED = 117;
 constexpr int64_t NUM_SYMBOLS = 10000;
 constexpr int64_t READ_FACTOR = 10;
-constexpr auto HOP = "MATCH (d:Symbol {_uuid: 's'})<-[r:MENTIONS]-(m:Scope) RETURN m._uuid, m.name;";
+constexpr auto HOP =
+    "MATCH (d:Symbol {_uuid: 's'})<-[r:MENTIONS]-(m:Scope) RETURN m._uuid, m.name;";
 
 class MaskedScan : public EmptyDBTest {
 protected:
@@ -172,7 +173,7 @@ protected:
         const std::string title = "SCAN_NODE_TABLE[";
         for (auto i = 0u; i < lines.size(); ++i) {
             for (auto at = lines[i].find(title); at != std::string::npos;
-                at = lines[i].find(title, at + 1)) {
+                 at = lines[i].find(title, at + 1)) {
                 // Un titre de boîte : rien que des espaces entre le bord « │ » et le nom.
                 const auto border = lines[i].rfind("│", at);
                 if (border == std::string::npos ||
@@ -221,7 +222,7 @@ protected:
         };
         for (auto i = 0u; i < lines.size(); ++i) {
             for (auto at = lines[i].find(marker); at != std::string::npos;
-                at = lines[i].find(marker, at + 1)) {
+                 at = lines[i].find(marker, at + 1)) {
                 bool titled = title.empty();
                 for (auto j = i; j > 0 && j + 6 > i && !titled; --j) {
                     titled = near(lines[j - 1], title, at) != std::string::npos;
@@ -285,9 +286,9 @@ TEST_F(MaskedScan, MeasureAtOneAndThirtyTwoThreads) {
             while (result->hasNext()) {
                 result->getNext();
             }
-            durations.push_back(std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - start)
-                                    .count());
+            durations.push_back(
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
+                    .count());
         }
         std::sort(durations.begin(), durations.end());
         std::cerr << "  [masque mesure] threads=" << threads << " lignes sorties du balayage="
@@ -331,8 +332,8 @@ TEST_F(MaskedNeighbour, ReadsAboutTheMaskNotTheTable) {
     const auto read = scanOutputOf(plan, "Scope");
     ASSERT_TRUE(read.has_value()) << "[check: plan] no SCAN_NODE_TABLE of Scope in the plan";
     std::cerr << "  [voisin] k = " << NUM_MASKED << ", N = " << NEIGHBOUR_SCOPES
-              << ", SEMI_MASKER = " << maskers << ", lignes sorties du balayage de Scope = "
-              << *read << "\n";
+              << ", SEMI_MASKER = " << maskers
+              << ", lignes sorties du balayage de Scope = " << *read << "\n";
     EXPECT_LE(*read, READ_FACTOR * NUM_MASKED)
         << "[check: neighbour-scan-reads-the-mask] the scan of Scope put out " << *read
         << " rows for " << NUM_MASKED << " neighbours";
@@ -353,9 +354,9 @@ TEST_F(MaskedNeighbour, MeasureAtOneAndThirtyTwoThreads) {
             while (result->hasNext()) {
                 result->getNext();
             }
-            durations.push_back(std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - start)
-                                    .count());
+            durations.push_back(
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
+                    .count());
         }
         std::sort(durations.begin(), durations.end());
         std::cerr << "  [voisin mesure] threads=" << threads << " lignes sorties du balayage de "
@@ -444,9 +445,9 @@ TEST_F(MaskedSelfHop, MeasureAtOneAndThirtyTwoThreads) {
             while (result->hasNext()) {
                 result->getNext();
             }
-            durations.push_back(std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - start)
-                                    .count());
+            durations.push_back(
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
+                    .count());
         }
         std::sort(durations.begin(), durations.end());
         std::cerr << "  [saut mesure] threads=" << threads << " Scope sous m="

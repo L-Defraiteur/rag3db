@@ -11,8 +11,7 @@ using namespace function;
 using namespace common;
 
 // geo_within_bbox(lat, lon, min_lat, min_lon, max_lat, max_lon) -> BOOL
-static void geoWithinBboxExecFunc(
-    const std::vector<std::shared_ptr<ValueVector>>& parameters,
+static void geoWithinBboxExecFunc(const std::vector<std::shared_ptr<ValueVector>>& parameters,
     const std::vector<SelectionVector*>& parameterSelVectors, ValueVector& result,
     SelectionVector* resultSelVector, void* /*dataPtr*/) {
     for (auto i = 0u; i < resultSelVector->getSelSize(); ++i) {

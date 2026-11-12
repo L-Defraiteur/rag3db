@@ -46,8 +46,7 @@ bool CatalogSet::containsEntryNoLock(const Transaction* transaction,
     return !entry->isDeleted();
 }
 
-bool CatalogSet::hasChangeAfterSnapshotOf(const Transaction* transaction,
-    const std::string& name) {
+bool CatalogSet::hasChangeAfterSnapshotOf(const Transaction* transaction, const std::string& name) {
     std::shared_lock lck{mtx};
     if (!entries.contains(name)) {
         return false;
@@ -193,9 +192,8 @@ void CatalogSet::alterTableEntry(Transaction* transaction,
     // validée après notre départ, est un conflit écrivain-écrivain.
     if (!transaction->isRecovery() &&
         checkWWConflict(transaction, entries.at(alterInfo.tableName).get())) {
-        throw CatalogException(
-            stringFormat("Write-write conflict on altering catalog entry with name {}.",
-                alterInfo.tableName));
+        throw CatalogException(stringFormat(
+            "Write-write conflict on altering catalog entry with name {}.", alterInfo.tableName));
     }
     KU_ASSERT(entry->getType() == CatalogEntryType::NODE_TABLE_ENTRY ||
               entry->getType() == CatalogEntryType::REL_GROUP_ENTRY);

@@ -75,7 +75,8 @@ protected:
     }
 
     // Les fils donnés (« fils=<venus>/<donnés> ») de la première tâche dont la source est `source`.
-    static int64_t threadsGivenTo(const std::vector<std::string>& lines, const std::string& source) {
+    static int64_t threadsGivenTo(const std::vector<std::string>& lines,
+        const std::string& source) {
         const std::regex rx("source=" + source + " .*fils=([0-9]+)/([0-9]+)");
         for (const auto& line : lines) {
             std::smatch m;
@@ -163,7 +164,8 @@ TEST_F(ThreadsByCardinality, AVectorSearchDeclaresKRows) {
     ok("LOAD EXTENSION '" + extension + "';");
     ok("CALL threads=8;");
     ok("CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, vec FLOAT[4]);");
-    ok("UNWIND range(0, 2999) AS i CREATE (:Doc {id: i, vec: [i % 7, i % 11, i % 13, i / 100.0]});");
+    ok("UNWIND range(0, 2999) AS i CREATE (:Doc {id: i, vec: [i % 7, i % 11, i % 13, i / "
+       "100.0]});");
     ok("CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
     const std::string search =
         "CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', [1, 2, 3, 4.0], 10) RETURN node.id, distance;";

@@ -38,7 +38,8 @@ protected:
     }
 
     // Les lignes sorties d'un opérateur, lues dans le plan dessiné (forme du banc,
-    // masked_scan_test.cpp) : la boîte nommée exactement, puis le premier NumOutputTuples sous elle.
+    // masked_scan_test.cpp) : la boîte nommée exactement, puis le premier NumOutputTuples sous
+    // elle.
     static std::optional<int64_t> outputTuplesOf(const std::string& plan, const std::string& name) {
         std::vector<std::string> lines;
         std::istringstream in(plan);
@@ -51,7 +52,8 @@ protected:
                 continue;
             }
             const auto before = column == 0 ? ' ' : lines[i][column - 1];
-            const auto after = column + name.size() < lines[i].size() ? lines[i][column + name.size()] : ' ';
+            const auto after =
+                column + name.size() < lines[i].size() ? lines[i][column + name.size()] : ' ';
             if (std::isalnum(static_cast<unsigned char>(before)) || before == '_' ||
                 std::isalnum(static_cast<unsigned char>(after)) || after == '_') {
                 continue;
@@ -99,11 +101,13 @@ TEST_F(KeyMaskJoin, AnUnwindOfKeysReadsTheKeysNotTheTable) {
         << "[check: last-row] ";
     const auto plan = profile(query);
     ASSERT_NE(plan.find("SEMI_MASKER"), std::string::npos)
-        << "[check: plan] no semi-masker for the key join\n" << plan;
+        << "[check: plan] no semi-masker for the key join\n"
+        << plan;
     const auto read = outputTuplesOf(plan, "SCAN_NODE_TABLE");
     ASSERT_TRUE(read.has_value()) << "[check: plan] no SCAN_NODE_TABLE in the plan\n" << plan;
-    EXPECT_LE(*read, 10 * 117) << "[check: scan-reads-the-keys] the scan under the key mask put out "
-                               << *read << " rows of 72 000";
+    EXPECT_LE(*read, 10 * 117)
+        << "[check: scan-reads-the-keys] the scan under the key mask put out " << *read
+        << " rows of 72 000";
     // Doublons et absents.
     const auto dup = rows("UNWIND [615, 615, 123456789] AS u MATCH (d:T {id: u}) RETURN u, d.v;");
     ASSERT_EQ(dup.size(), 2u) << "[check: duplicates-kept-absent-dropped] ";
@@ -119,18 +123,23 @@ TEST_F(KeyMaskJoin, AParameterListOfStringKeysWithAHop) {
     ok("CREATE NODE TABLE D(uuid STRING PRIMARY KEY, name STRING);");
     ok("CREATE NODE TABLE M(id INT64 PRIMARY KEY, name STRING, path STRING, line INT64);");
     ok("CREATE REL TABLE R(FROM M TO D);");
-    ok("UNWIND range(0, 19999) AS i CREATE (:D {uuid: 'd-' + CAST(i, 'STRING'), name: 'n' + CAST(i, 'STRING')});");
-    ok("UNWIND range(0, 59999) AS i CREATE (:M {id: i, name: 'm' + CAST(i, 'STRING'), path: 'p/' + CAST(i % 97, 'STRING'), line: i % 1000});");
+    ok("UNWIND range(0, 19999) AS i CREATE (:D {uuid: 'd-' + CAST(i, 'STRING'), name: 'n' + "
+       "CAST(i, 'STRING')});");
+    ok("UNWIND range(0, 59999) AS i CREATE (:M {id: i, name: 'm' + CAST(i, 'STRING'), path: 'p/' + "
+       "CAST(i % 97, 'STRING'), line: i % 1000});");
     // Un nœud par MATCH : deux nœuds liés par leur clé dans un même motif se croisent (le produit
     // des deux ensembles masqués) avant la jointure avec la liste — un travers du planificateur,
     // hors de ce lot ; et une clé calculée dans le motif ne devient pas une condition de jointure.
     for (auto low = 0; low < 60000; low += 10000) {
         ok("UNWIND range(" + std::to_string(low) + ", " + std::to_string(low + 9999) +
-           ") AS i MATCH (m:M {id: i}) WITH m, 'd-' + CAST(m.id % 20000, 'STRING') AS kd MATCH (d:D {uuid: kd}) CREATE (m)-[:R]->(d);");
+            ") AS i MATCH (m:M {id: i}) WITH m, 'd-' + CAST(m.id % 20000, 'STRING') AS kd MATCH "
+            "(d:D {uuid: kd}) CREATE (m)-[:R]->(d);");
     }
     ok("CHECKPOINT;");
-    ASSERT_EQ(rows("MATCH ()-[r:R]->() RETURN count(r);")[0], "60000\n") << "[check: edges-created] ";
-    auto prepared = conn->prepare("UNWIND $uuids AS u MATCH (d:D {uuid: u})<-[:R]-(m:M) RETURN u, d.name, m.id, m.name, m.path, m.line;");
+    ASSERT_EQ(rows("MATCH ()-[r:R]->() RETURN count(r);")[0], "60000\n")
+        << "[check: edges-created] ";
+    auto prepared = conn->prepare("UNWIND $uuids AS u MATCH (d:D {uuid: u})<-[:R]-(m:M) RETURN u, "
+                                  "d.name, m.id, m.name, m.path, m.line;");
     ASSERT_TRUE(prepared->isSuccess()) << prepared->getErrorMessage();
     std::vector<std::unique_ptr<rag3db::common::Value>> keys;
     for (auto k = 0; k < 50; ++k) {
@@ -153,7 +162,8 @@ TEST_F(KeyMaskJoin, AParameterListOfStringKeysWithAHop) {
     }
     EXPECT_EQ(n, 150u) << "[check: hop-rows] ";
     EXPECT_EQ(seen.size(), 150u) << "[check: hop-rows-distinct] ";
-    const auto plan = profile("UNWIND ['d-0', 'd-400', 'd-800'] AS u MATCH (d:D {uuid: u})<-[:R]-(m:M) RETURN u, d.name, m.id, m.name, m.path, m.line;");
+    const auto plan = profile("UNWIND ['d-0', 'd-400', 'd-800'] AS u MATCH (d:D {uuid: "
+                              "u})<-[:R]-(m:M) RETURN u, d.name, m.id, m.name, m.path, m.line;");
     ASSERT_NE(plan.find("SEMI_MASKER"), std::string::npos) << "[check: plan] " << plan;
     const auto read = outputTuplesOf(plan, "SCAN_NODE_TABLE");
     ASSERT_TRUE(read.has_value()) << plan;
@@ -165,7 +175,8 @@ TEST_F(KeyMaskJoin, AParameterListOfStringKeysWithAHop) {
          at = plan.find("SEMI_MASKER", at + 11)) {
         ++maskers;
     }
-    EXPECT_GE(maskers, 2u) << "[check: second-level-masked] " << maskers << " semi-masker(s)\n" << plan;
+    EXPECT_GE(maskers, 2u) << "[check: second-level-masked] " << maskers << " semi-masker(s)\n"
+                           << plan;
 }
 
 // Le saut d'une table vers elle-même : `(d:S {clé: u})-[:P]->(m:S)`. À cardinalités égales,
@@ -175,14 +186,19 @@ TEST_F(KeyMaskJoin, AParameterListOfStringKeysWithAHop) {
 TEST_F(KeyMaskJoin, AHopWithinTheSameTableStartsFromTheKeyedNode) {
     ok("CREATE NODE TABLE S(uuid STRING PRIMARY KEY, name STRING, path STRING, line INT64);");
     ok("CREATE REL TABLE P(FROM S TO S);");
-    ok("UNWIND range(0, 59999) AS i CREATE (:S {uuid: 's-' + CAST(i, 'STRING'), name: 'n' + CAST(i, 'STRING'), path: 'p/' + CAST(i % 97, 'STRING'), line: i % 1000});");
+    ok("UNWIND range(0, 59999) AS i CREATE (:S {uuid: 's-' + CAST(i, 'STRING'), name: 'n' + "
+       "CAST(i, 'STRING'), path: 'p/' + CAST(i % 97, 'STRING'), line: i % 1000});");
     for (auto low = 0; low < 60000; low += 10000) {
         ok("UNWIND range(" + std::to_string(low) + ", " + std::to_string(low + 9999) +
-           ") AS i WITH 's-' + CAST(i, 'STRING') AS ka, 's-' + CAST((i * 7 + 1) % 60000, 'STRING') AS kb MATCH (a:S {uuid: ka}) WITH a, kb MATCH (b:S {uuid: kb}) CREATE (a)-[:P]->(b);");
+            ") AS i WITH 's-' + CAST(i, 'STRING') AS ka, 's-' + CAST((i * 7 + 1) % 60000, "
+            "'STRING') AS kb MATCH (a:S {uuid: ka}) WITH a, kb MATCH (b:S {uuid: kb}) CREATE "
+            "(a)-[:P]->(b);");
     }
-    ASSERT_EQ(rows("MATCH ()-[p:P]->() RETURN count(p);")[0], "60000\n") << "[check: edges-created] ";
+    ASSERT_EQ(rows("MATCH ()-[p:P]->() RETURN count(p);")[0], "60000\n")
+        << "[check: edges-created] ";
     ok("CHECKPOINT;");
-    const std::string query = "UNWIND ['s-0', 's-400', 's-800'] AS u MATCH (d:S {uuid: u})-[:P]->(m:S) RETURN u, m.uuid, m.name, m.path, m.line;";
+    const std::string query = "UNWIND ['s-0', 's-400', 's-800'] AS u MATCH (d:S {uuid: "
+                              "u})-[:P]->(m:S) RETURN u, m.uuid, m.name, m.path, m.line;";
     const auto got = rows(query);
     ASSERT_EQ(got.size(), 3u) << "[check: hop-rows] ";
     EXPECT_EQ(got[0], "s-0|s-1|n1|p/1|1\n") << "[check: first-row] ";
@@ -207,7 +223,7 @@ TEST_F(KeyMaskJoin, AHopWithinTheSameTableStartsFromTheKeyedNode) {
             }
         }
     }
-    EXPECT_LE(worst, 30) << "[check: extend-starts-from-the-keyed-node] a scan of S put out " << worst
-                         << " rows for 3 keys\n" << plan;
+    EXPECT_LE(worst, 30) << "[check: extend-starts-from-the-keyed-node] a scan of S put out "
+                         << worst << " rows for 3 keys\n"
+                         << plan;
 }
-

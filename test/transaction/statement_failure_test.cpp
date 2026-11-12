@@ -7,8 +7,8 @@
 //   l'instantané (« nothing can run in it »). Une transaction qui écrit reste condamnée.
 // - Une interruption vaut pour la requête, pas pour l'instruction : posée pendant qu'un
 //   CREATE_VECTOR_INDEX attend les écrivains plus anciens que lui (une instruction de sa
-//   réécriture, sans opérateur), elle l'arrête. Avant, chaque instruction de la réécriture remettait
-//   le drapeau à zéro, et le CREATE finissait « ok ».
+//   réécriture, sans opérateur), elle l'arrête. Avant, chaque instruction de la réécriture
+//   remettait le drapeau à zéro, et le CREATE finissait « ok ».
 #include <atomic>
 #include <chrono>
 #include <future>
@@ -104,8 +104,7 @@ TEST_F(StatementFailure, OneInterruptStopsACreateWaitingForOlderWriters) {
     std::atomic<bool> done{false};
     const auto started = std::chrono::steady_clock::now();
     auto creating = std::async(std::launch::async, [&] {
-        auto result =
-            creator.query("CALL CREATE_VECTOR_INDEX('T', 'idx', 'v', metric := 'l2');");
+        auto result = creator.query("CALL CREATE_VECTOR_INDEX('T', 'idx', 'v', metric := 'l2');");
         done = true;
         return result->isSuccess() ? std::string("ok") : result->getErrorMessage();
     });

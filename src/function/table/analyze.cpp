@@ -71,8 +71,8 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
         const auto& dataType = table.getColumn(columnID).getDataType();
         columnIDs.push_back(columnID);
         columnTypes.push_back(dataType.copy());
-        dataChunk.insert(columnID + 1, std::make_shared<ValueVector>(dataType.copy(),
-                                           memoryManager));
+        dataChunk.insert(columnID + 1,
+            std::make_shared<ValueVector>(dataType.copy(), memoryManager));
         outputVectors.push_back(&dataChunk.getValueVectorMutable(columnID + 1));
     }
 

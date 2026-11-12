@@ -23,7 +23,6 @@ public:
         common::offset_t offsetInSegment, const ColumnChunkData& data, common::offset_t dataOffset,
         common::length_t numValues) const override;
 
-
 protected:
     void scanSegment(const SegmentState& state, ColumnChunkData* resultChunk,
         common::offset_t startOffsetInSegment, common::row_idx_t numValuesToScan) const override;
@@ -33,7 +32,6 @@ protected:
 
     void lookupInternal(const SegmentState& state, common::offset_t offsetInSegment,
         common::ValueVector* resultVector, uint32_t posInVector) const override;
-
 
 private:
     std::vector<std::unique_ptr<Column>> childColumns;

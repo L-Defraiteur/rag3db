@@ -190,7 +190,8 @@ public:
     void insert(transaction::Transaction* transaction, TableInsertState& insertState) override;
     void initUpdateState(main::ClientContext* context, TableUpdateState& updateState) const;
     void update(transaction::Transaction* transaction, TableUpdateState& updateState) override;
-    void initDeleteStates(const transaction::Transaction* transaction, TableDeleteState& deleteState);
+    void initDeleteStates(const transaction::Transaction* transaction,
+        TableDeleteState& deleteState);
     bool delete_(transaction::Transaction* transaction, TableDeleteState& deleteState) override;
     void finalizeDelete(transaction::Transaction* transaction, TableDeleteState& deleteState);
 
@@ -277,8 +278,7 @@ public:
     static constexpr const char* INDEX_UNDER_CONSTRUCTION = "is under construction";
     static constexpr const char* INDEX_INCOMPLETE = "is incomplete";
     void dropIndex(const std::string& name, transaction::Transaction* transaction = nullptr);
-    void commitIndexChange(uint64_t holderID, IndexChangeKind kind,
-        common::transaction_t commitTS);
+    void commitIndexChange(uint64_t holderID, IndexChangeKind kind, common::transaction_t commitTS);
     void rollbackIndexChange(uint64_t holderID, IndexChangeKind kind);
     // Au point de reprise (aucun écrivain ouvert ; un lecteur entré pendant l'écriture voit le
     // dernier état validé, sans l'index retiré) : efface les index retirés et validés.

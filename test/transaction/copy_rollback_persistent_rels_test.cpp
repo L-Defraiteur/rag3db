@@ -46,8 +46,10 @@ protected:
         ok(withProperty ? "CREATE REL TABLE R(FROM A TO A, k INT64);" :
                           "CREATE REL TABLE R(FROM A TO A);");
         ok("UNWIND range(0, 3) AS i CREATE (:A {id: i});");
-        ok(withProperty ? "MATCH (a:A {id: 0}), (b:A {id: 1}) UNWIND range(1, 10) AS i CREATE (a)-[:R {k: i}]->(b);" :
-                          "MATCH (a:A {id: 0}), (b:A {id: 1}) UNWIND range(1, 10) AS i CREATE (a)-[:R]->(b);");
+        ok(withProperty ? "MATCH (a:A {id: 0}), (b:A {id: 1}) UNWIND range(1, 10) AS i CREATE "
+                          "(a)-[:R {k: i}]->(b);" :
+                          "MATCH (a:A {id: 0}), (b:A {id: 1}) UNWIND range(1, 10) AS i CREATE "
+                          "(a)-[:R]->(b);");
         ok("CHECKPOINT;");
     }
     // Un fichier de `count` relations 0 → 2, k = firstK …
@@ -119,7 +121,8 @@ TEST_F(CopyRollbackPersistentRels, ARolledBackCopyWithoutPropertyKeepsThePersist
 TEST_F(CopyRollbackPersistentRels, ACreateAfterARolledBackCopyAddsToThePersistentRels) {
     persistentRels(true);
     rolledBackCopy(relsCsv("annulees", 1001, 1500, true));
-    ok("MATCH (a:A {id: 0}), (c:A {id: 2}) UNWIND range(1, 5) AS i CREATE (a)-[:R {k: 7000 + i}]->(c);");
+    ok("MATCH (a:A {id: 0}), (c:A {id: 2}) UNWIND range(1, 5) AS i CREATE (a)-[:R {k: 7000 + "
+       "i}]->(c);");
     expectRels(15, 10);
 }
 

@@ -4,13 +4,13 @@
 #include "catalog/catalog_entry/function_catalog_entry.h"
 #include "function/table/table_function.h"
 #include "main/client_context.h"
-#include "parser/expression/parsed_function_expression.h"
-#include "parser/standalone_call_function.h"
-#include "transaction/transaction.h"
 #include "main/db_config.h"
 #include "parser/expression/parsed_expression_visitor.h"
+#include "parser/expression/parsed_function_expression.h"
 #include "parser/query/reading_clause/reading_clause.h"
 #include "parser/query/return_with_clause/with_clause.h"
+#include "parser/standalone_call_function.h"
+#include "transaction/transaction.h"
 
 namespace rag3db {
 namespace parser {

@@ -254,8 +254,8 @@ void Checkpointer::logCheckpointAndApplyShadowPages() {
         fprintf(stderr,
             "[checkpoint-profile]   journal+pages-ombres=%.1f ms : ecriture-ombres=%.1f (%lu "
             "pages) synchro-donnees=%.1f marque-au-journal=%.1f application=%.1f vidage=%.1f\n",
-            profile.total(), flushMs, static_cast<unsigned long>(numShadowPages), syncDataMs,
-            walMs, applyMs, clearMs);
+            profile.total(), flushMs, static_cast<unsigned long>(numShadowPages), syncDataMs, walMs,
+            applyMs, clearMs);
     }
 }
 

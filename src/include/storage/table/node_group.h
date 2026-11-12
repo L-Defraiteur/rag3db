@@ -198,8 +198,8 @@ public:
     // La lecture d'une ligne sans le verrou du groupe, pour qui lit beaucoup et en parallèle
     // (la recherche HNSW lit un vecteur par nœud visité) : elle ne tient que la garde
     // partagée contre l'ajout en mémoire.
-    bool lookupSharedLock(const transaction::Transaction* transaction,
-        const TableScanState& state, common::sel_t posInSel = 0) const;
+    bool lookupSharedLock(const transaction::Transaction* transaction, const TableScanState& state,
+        common::sel_t posInSel = 0) const;
     // TODO(Guodong): These should be merged together with `lookup`.
     bool lookupMultiple(const common::UniqLock& lock, const transaction::Transaction* transaction,
         const TableScanState& state) const;
@@ -254,12 +254,12 @@ public:
         common::row_idx_t rowIdxInGroup) const;
     bool isVisible(common::transaction_t startTS, common::transaction_t transactionID,
         common::row_idx_t rowIdxInGroup) const;
-    bool wasWrittenByCommitAfter(common::transaction_t startTS,
-        common::transaction_t transactionID, common::row_idx_t rowIdxInGroup) const;
+    bool wasWrittenByCommitAfter(common::transaction_t startTS, common::transaction_t transactionID,
+        common::row_idx_t rowIdxInGroup) const;
     // Une mise à jour validée après startTS de cette colonne, à cette ligne (la chaîne des
     // versions de mise à jour, en mémoire jusqu'au point de reprise).
-    bool wasColumnUpdatedByCommitAfter(common::column_id_t columnID,
-        common::transaction_t startTS, common::row_idx_t rowIdxInGroup) const;
+    bool wasColumnUpdatedByCommitAfter(common::column_id_t columnID, common::transaction_t startTS,
+        common::row_idx_t rowIdxInGroup) const;
     bool isVisibleNoLock(const transaction::Transaction* transaction,
         common::row_idx_t rowIdxInGroup) const;
     bool isDeleted(const transaction::Transaction* transaction,

@@ -25,8 +25,8 @@
 
 #include <algorithm>
 #include <atomic>
-#include <functional>
 #include <cstring>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -65,8 +65,8 @@ public:
     explicit CutFileSystem(const std::string& homeDir)
         : FileSystem{homeDir}, local{std::make_unique<common::LocalFileSystem>(homeDir)} {}
 
-    std::unique_ptr<common::FileInfo> openFile(const std::string& path,
-        common::FileOpenFlags flags, main::ClientContext* context = nullptr) override {
+    std::unique_ptr<common::FileInfo> openFile(const std::string& path, common::FileOpenFlags flags,
+        main::ClientContext* context = nullptr) override {
         auto inner = local->openFile(path, flags, context);
         const auto key = inner->path;
         return std::make_unique<CutFileInfo>(key, std::move(inner), this);
@@ -90,7 +90,8 @@ public:
         }
         local->removeFileIfExists(path, context);
     }
-    bool fileOrPathExists(const std::string& path, main::ClientContext* context = nullptr) override {
+    bool fileOrPathExists(const std::string& path,
+        main::ClientContext* context = nullptr) override {
         return local->fileOrPathExists(path, context);
     }
     std::string expandPath(main::ClientContext* context, const std::string& path) const override {
@@ -107,8 +108,8 @@ public:
     void syncFile(const common::FileInfo& fileInfo) const override {
         auto& info = const_cast<common::FileInfo&>(fileInfo).cast<CutFileInfo>();
         if (const auto& fail = failSyncOf(); fail && fail(info.path)) {
-            throw common::IOException("injected: no space left on device while syncing " +
-                                      info.path);
+            throw common::IOException(
+                "injected: no space left on device while syncing " + info.path);
         }
         auto& layer = layerOf(info.path);
         std::lock_guard lck{layer.mtx};
@@ -203,7 +204,8 @@ protected:
         std::lock_guard lck{layer.mtx};
         uint64_t size = info.inner->getFileSize();
         for (const auto& op : layer.ops) {
-            size = op.isTruncate ? op.offset : std::max<uint64_t>(size, op.offset + op.bytes.size());
+            size =
+                op.isTruncate ? op.offset : std::max<uint64_t>(size, op.offset + op.bytes.size());
         }
         return size;
     }

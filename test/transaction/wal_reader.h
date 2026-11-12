@@ -124,7 +124,8 @@ inline const char* walEndName(WalEnd end) {
 // Les identifiants internes d'un vecteur (au plus maxValues), « table:décalage » ; un vecteur d'un
 // autre type ne dit rien.
 inline std::string walInternalIDs(const common::ValueVector* vector, size_t maxValues = 4) {
-    if (vector == nullptr || vector->dataType.getLogicalTypeID() != common::LogicalTypeID::INTERNAL_ID) {
+    if (vector == nullptr ||
+        vector->dataType.getLogicalTypeID() != common::LogicalTypeID::INTERNAL_ID) {
         return "";
     }
     std::ostringstream out;

@@ -28,19 +28,19 @@ static void createTableAndIndex(main::Connection& c) {
                         "emb FLOAT[3], PRIMARY KEY (ID))")
                     ->isSuccess());
     // Insert 5 docs with 3-dim embeddings.
-    ASSERT_TRUE(c.query("CREATE (:vec_doc {ID: 0, title: 'alpha', emb: [1.0, 0.0, 0.0]})")
-                    ->isSuccess());
-    ASSERT_TRUE(c.query("CREATE (:vec_doc {ID: 1, title: 'beta', emb: [0.0, 1.0, 0.0]})")
-                    ->isSuccess());
-    ASSERT_TRUE(c.query("CREATE (:vec_doc {ID: 2, title: 'gamma', emb: [0.0, 0.0, 1.0]})")
-                    ->isSuccess());
-    ASSERT_TRUE(c.query("CREATE (:vec_doc {ID: 3, title: 'delta', emb: [0.9, 0.1, 0.0]})")
-                    ->isSuccess());
-    ASSERT_TRUE(c.query("CREATE (:vec_doc {ID: 4, title: 'epsilon', emb: [0.1, 0.9, 0.0]})")
-                    ->isSuccess());
+    ASSERT_TRUE(
+        c.query("CREATE (:vec_doc {ID: 0, title: 'alpha', emb: [1.0, 0.0, 0.0]})")->isSuccess());
+    ASSERT_TRUE(
+        c.query("CREATE (:vec_doc {ID: 1, title: 'beta', emb: [0.0, 1.0, 0.0]})")->isSuccess());
+    ASSERT_TRUE(
+        c.query("CREATE (:vec_doc {ID: 2, title: 'gamma', emb: [0.0, 0.0, 1.0]})")->isSuccess());
+    ASSERT_TRUE(
+        c.query("CREATE (:vec_doc {ID: 3, title: 'delta', emb: [0.9, 0.1, 0.0]})")->isSuccess());
+    ASSERT_TRUE(
+        c.query("CREATE (:vec_doc {ID: 4, title: 'epsilon', emb: [0.1, 0.9, 0.0]})")->isSuccess());
 
-    auto result = c.query(
-        "CALL CREATE_VECTOR_INDEX('vec_doc', 'vec_idx', 'emb', metric := 'cosine')");
+    auto result =
+        c.query("CALL CREATE_VECTOR_INDEX('vec_doc', 'vec_idx', 'emb', metric := 'cosine')");
     ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
 }
 
@@ -51,10 +51,9 @@ TEST_F(ApiTest, VectorSearchInWhere_Basic) {
     createTableAndIndex(*conn);
 
     // Search for vectors close to [1, 0, 0], k=3.
-    auto result = conn->query(
-        "MATCH (d:vec_doc) "
-        "WHERE VECTOR_SEARCH(d.emb, [1.0, 0.0, 0.0], 3) "
-        "RETURN d.title");
+    auto result = conn->query("MATCH (d:vec_doc) "
+                              "WHERE VECTOR_SEARCH(d.emb, [1.0, 0.0, 0.0], 3) "
+                              "RETURN d.title");
     ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
     ASSERT_EQ(countResults(*result), 3u);
 }
@@ -65,11 +64,10 @@ TEST_F(ApiTest, VectorSearchInWhere_Distance) {
     loadVectorExtension(*conn);
     createTableAndIndex(*conn);
 
-    auto result = conn->query(
-        "MATCH (d:vec_doc) "
-        "WHERE VECTOR_SEARCH(d.emb, [1.0, 0.0, 0.0], 5) "
-        "RETURN d.title, VECTOR_DISTANCE() AS dist "
-        "ORDER BY dist ASC");
+    auto result = conn->query("MATCH (d:vec_doc) "
+                              "WHERE VECTOR_SEARCH(d.emb, [1.0, 0.0, 0.0], 5) "
+                              "RETURN d.title, VECTOR_DISTANCE() AS dist "
+                              "ORDER BY dist ASC");
     ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
 
     auto tuple = result->getNext();
@@ -91,11 +89,10 @@ TEST_F(ApiTest, VectorSearchInWhere_OrderByLimit) {
     loadVectorExtension(*conn);
     createTableAndIndex(*conn);
 
-    auto result = conn->query(
-        "MATCH (d:vec_doc) "
-        "WHERE VECTOR_SEARCH(d.emb, [0.0, 1.0, 0.0], 5) "
-        "RETURN d.title, VECTOR_DISTANCE() AS dist "
-        "ORDER BY dist ASC LIMIT 2");
+    auto result = conn->query("MATCH (d:vec_doc) "
+                              "WHERE VECTOR_SEARCH(d.emb, [0.0, 1.0, 0.0], 5) "
+                              "RETURN d.title, VECTOR_DISTANCE() AS dist "
+                              "ORDER BY dist ASC LIMIT 2");
     ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
     ASSERT_EQ(countResults(*result), 2u);
 }
@@ -108,13 +105,11 @@ TEST_F(ApiTest, VectorSearchInWhere_NoIndex) {
     ASSERT_TRUE(conn->query("CREATE NODE TABLE vec_noindex (ID UINT64, "
                             "emb FLOAT[3], PRIMARY KEY (ID))")
                     ->isSuccess());
-    ASSERT_TRUE(conn->query("CREATE (:vec_noindex {ID: 0, emb: [1.0, 0.0, 0.0]})")
-                    ->isSuccess());
+    ASSERT_TRUE(conn->query("CREATE (:vec_noindex {ID: 0, emb: [1.0, 0.0, 0.0]})")->isSuccess());
 
-    auto result = conn->query(
-        "MATCH (d:vec_noindex) "
-        "WHERE VECTOR_SEARCH(d.emb, [1.0, 0.0, 0.0], 3) "
-        "RETURN d.ID");
+    auto result = conn->query("MATCH (d:vec_noindex) "
+                              "WHERE VECTOR_SEARCH(d.emb, [1.0, 0.0, 0.0], 3) "
+                              "RETURN d.ID");
     ASSERT_FALSE(result->isSuccess());
 }
 

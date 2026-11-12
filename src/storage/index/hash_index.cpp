@@ -227,7 +227,8 @@ void HashIndex<T>::reserve(PageAllocator& pageAllocator, const Transaction* tran
     // Always start with at least one page worth of slots.
     // This guarantees that when splitting the source and destination slot are never on the same
     // page, which allows safe use of multiple disk array iterators.
-    numRequiredSlots = std::max(numRequiredSlots, RAG3DB_PAGE_SIZE / pSlots->getAlignedElementSize());
+    numRequiredSlots =
+        std::max(numRequiredSlots, RAG3DB_PAGE_SIZE / pSlots->getAlignedElementSize());
     // If there are no entries, we can just re-size the number of primary slots and re-calculate the
     // levels
     if (this->indexHeaderForWriteTrx.numEntries == 0) {

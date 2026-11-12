@@ -1,8 +1,8 @@
 #include "binder/expression/expression_util.h"
+#include "binder/expression/property_expression.h"
 #include "binder/expression/subquery_expression.h"
 #include "binder/expression_visitor.h"
 #include "planner/operator/factorization/flatten_resolver.h"
-#include "binder/expression/property_expression.h"
 #include "planner/planner.h"
 
 using namespace rag3db::binder;

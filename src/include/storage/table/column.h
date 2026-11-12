@@ -130,9 +130,6 @@ protected:
         const std::optional<StorageValue>& min, const std::optional<StorageValue>& max) const;
 
 protected:
-
-
-
     // check if val is in range [start, end)
     static bool isInRange(uint64_t val, uint64_t start, uint64_t end) {
         return val >= start && val < end;

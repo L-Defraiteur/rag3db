@@ -15,14 +15,14 @@
 //     processus qui a déjà chargé l'extension ne voit pas le défaut.
 // Ils se sautent si l'extension vector n'est pas bâtie.
 
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include <csignal>
 #include <cstdlib>
 #include <filesystem>
 #include <string>
 #include <vector>
-
-#include <sys/wait.h>
-#include <unistd.h>
 
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
@@ -49,7 +49,7 @@ constexpr const char* PROBE_WRITE_WITHOUT_EXTENSION = "RAG3DB_CRASH_REOPEN_PROBE
 constexpr const char* PROBE_EXTENSION_LOADED = "RAG3DB_CRASH_REOPEN_PROBE_EXTENSION_LOADED";
 
 // Les codes de sortie du processus neuf.
-constexpr int INDEX_INTACT = 0;   // l'index répond, et juste
+constexpr int INDEX_INTACT = 0; // l'index répond, et juste
 constexpr int INDEX_REBUILT = 20; // l'index était « en retard » ; retiré, rebâti, il répond juste
 constexpr int OPENED = 30;        // mode « ouvrir seulement »
 constexpr int WRITE_REFUSED = 40; // mode « écrire sans l'extension » : refus nommé, rien d'écrit
@@ -142,8 +142,8 @@ int probe(const std::string& path, const std::string& extension) {
         fprintf(stderr, "[probe] load: %s\n", loaded->getErrorMessage().c_str());
         return 11;
     }
-    const auto search = "CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', " + vector +
-                        ", 1) RETURN node.id;";
+    const auto search =
+        "CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', " + vector + ", 1) RETURN node.id;";
     const std::string create =
         "CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2', skip_if_exists := "
         "true);";

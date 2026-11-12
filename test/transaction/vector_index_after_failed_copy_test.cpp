@@ -9,12 +9,12 @@
 // un décalage qui dépasserait quand même est refusé par son nom (« is beyond the in-memory
 // graph »). Se saute si l'extension vector n'est pas bâtie.
 
+#include <unistd.h>
+
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
-
-#include <unistd.h>
 
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"

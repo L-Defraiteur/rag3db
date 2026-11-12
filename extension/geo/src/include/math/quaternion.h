@@ -24,15 +24,12 @@ struct Quat {
     Quat inverse() const { return {w, -x, -y, -z}; }
 
     Quat operator*(const Quat& o) const {
-        return {w * o.w - x * o.x - y * o.y - z * o.z,
-            w * o.x + x * o.w + y * o.z - z * o.y,
-            w * o.y - x * o.z + y * o.w + z * o.x,
-            w * o.z + x * o.y - y * o.x + z * o.w};
+        return {w * o.w - x * o.x - y * o.y - z * o.z, w * o.x + x * o.w + y * o.z - z * o.y,
+            w * o.y - x * o.z + y * o.w + z * o.x, w * o.z + x * o.y - y * o.x + z * o.w};
     }
 
     // Optimized rotation: p' = p + 2w*(q.xyz x p) + 2*(q.xyz x (q.xyz x p))
-    void rotate(double px, double py, double pz, double& ox, double& oy,
-        double& oz) const {
+    void rotate(double px, double py, double pz, double& ox, double& oy, double& oz) const {
         double tx = 2.0 * (y * pz - z * py);
         double ty = 2.0 * (z * px - x * pz);
         double tz = 2.0 * (x * py - y * px);

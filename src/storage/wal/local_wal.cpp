@@ -130,8 +130,7 @@ uint64_t LocalWAL::getSize() {
 }
 
 // NOLINTNEXTLINE(readability-make-member-function-const): semantically non-const function.
-void LocalWAL::addNewWALRecord(const WALRecord& walRecord, table_id_t tableID,
-    uint64_t numRows) {
+void LocalWAL::addNewWALRecord(const WALRecord& walRecord, table_id_t tableID, uint64_t numRows) {
     std::unique_lock lck{mtx};
     KU_ASSERT(walRecord.type != WALRecordType::INVALID_RECORD);
     if (discarded) {

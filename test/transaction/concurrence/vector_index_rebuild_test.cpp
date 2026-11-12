@@ -1,6 +1,6 @@
 // L'index vectoriel retiré puis recréé pendant que des recherches tournent en face (exploration du
-// banc, 12 octobre 2026). C'est le chemin de rag3weaver `ajuster_l_index_pour_le_retard` : pendant un
-// long rattrapage d'embarquement, l'index tombe (DROP_VECTOR_INDEX), les vecteurs se posent sans
+// banc, 12 octobre 2026). C'est le chemin de rag3weaver `ajuster_l_index_pour_le_retard` : pendant
+// un long rattrapage d'embarquement, l'index tombe (DROP_VECTOR_INDEX), les vecteurs se posent sans
 // lui, puis `rebuild_vector_index` le recrée (CREATE_VECTOR_INDEX). L'hypothèse à éprouver venait
 // du gel de l'hôte de luciepc : un DROP/CREATE contre une recherche ouverte en face, sous le mode
 // multi-écrivains par défaut.
@@ -18,10 +18,10 @@
 #include <string>
 #include <thread>
 
+#include "bench_harness.h"
 #include "common/string_format.h"
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
-#include "bench_harness.h"
 
 using namespace rag3db::common;
 using namespace rag3db::testing;
@@ -42,9 +42,10 @@ protected:
         createDBAndConn();
         concurrency::loadVectorExtension(*conn);
         ok(*conn, "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, vec FLOAT[4]);");
-        ok(*conn, stringFormat("UNWIND range(0, {}) AS i CREATE (:Doc {id: i, vec: [i % 17, i % 23, "
-                               "i % 29, i]});",
-                      NUM_ROWS - 1));
+        ok(*conn,
+            stringFormat("UNWIND range(0, {}) AS i CREATE (:Doc {id: i, vec: [i % 17, i % 23, "
+                         "i % 29, i]});",
+                NUM_ROWS - 1));
         ok(*conn, "CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
     }
 
@@ -85,15 +86,15 @@ TEST_F(VectorIndexRebuild, SearchesAcrossDropAndCreateAreConsistentOrNamed) {
             auto result = searcher.query(
                 "CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', [7, 7, 7, 1000], 5) RETURN node.id, "
                 "distance;");
-            const auto ms = std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - start)
-                                .count();
+            const auto ms =
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
+                    .count();
             slowestMs = std::max(slowestMs, ms);
             if (!result->isSuccess()) {
                 const auto message = result->getErrorMessage();
-                // Depuis le CREATE concurrent ((A)), l'index existe dès T_A et la recherche le refuse par
-                // le nom de son état, en construction, jusqu'à la fin du bâti.
-                outcomes[namedAbsence(message)       ? "named absence" :
+                // Depuis le CREATE concurrent ((A)), l'index existe dès T_A et la recherche le
+                // refuse par le nom de son état, en construction, jusqu'à la fin du bâti.
+                outcomes[namedAbsence(message)      ? "named absence" :
                          namedConstruction(message) ? "named construction" :
                                                       "OTHER: " + message.substr(0, 160)]++;
                 continue;
@@ -124,11 +125,10 @@ TEST_F(VectorIndexRebuild, SearchesAcrossDropAndCreateAreConsistentOrNamed) {
     std::map<std::string, int64_t> rebuilderErrors;
     const auto deadline = std::chrono::steady_clock::now() + RUN_FOR;
     while (std::chrono::steady_clock::now() < deadline) {
-        for (const auto* step :
-            {"CALL DROP_VECTOR_INDEX('Doc', 'doc_index');",
-                "MATCH (n:Doc) WHERE n.id % 50 = 0 SET n.vec = [n.id % 17, n.id % 23, n.id % 29, "
-                "n.id];",
-                "CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');"}) {
+        for (const auto* step : {"CALL DROP_VECTOR_INDEX('Doc', 'doc_index');",
+                 "MATCH (n:Doc) WHERE n.id % 50 = 0 SET n.vec = [n.id % 17, n.id % 23, n.id % 29, "
+                 "n.id];",
+                 "CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');"}) {
             auto result = rebuilder.query(step);
             if (!result->isSuccess()) {
                 rebuilderErrors[std::string(step).substr(0, 30) + " : " +

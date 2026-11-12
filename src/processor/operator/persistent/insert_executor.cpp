@@ -2,7 +2,6 @@
 
 #include "catalog/catalog.h"
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
-
 #include "transaction/transaction.h"
 
 using namespace rag3db::common;

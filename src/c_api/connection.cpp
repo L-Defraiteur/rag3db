@@ -144,7 +144,8 @@ void rag3db_connection_interrupt(rag3db_connection* connection) {
     static_cast<Connection*>(connection->_connection)->interrupt();
 }
 
-rag3db_state rag3db_connection_set_query_timeout(rag3db_connection* connection, uint64_t timeout_in_ms) {
+rag3db_state rag3db_connection_set_query_timeout(rag3db_connection* connection,
+    uint64_t timeout_in_ms) {
     if (connection == nullptr || connection->_connection == nullptr) {
         return Rag3dbError;
     }

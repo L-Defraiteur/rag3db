@@ -136,11 +136,12 @@ std::pair<offset_t, offset_t> NodeGroupCollection::appendToLastNodeGroupAndFlush
         directFlushWhenAppend =
             numToAppend == numRowsLeftInLastNodeGroup && lastNodeGroup->getNumRows() == 0;
         // Le vidage partiel d'un COPY borné en octets (ticket 2026-10-11-copy-de-blobs-en-point-de-
-        // reprise-force-sous-un-petit-tampon) : des lignes qui ne remplissent pas le groupe de nœuds
-        // vont au disque tout de suite, au lieu d'attendre en mémoire le point de reprise. Deux cas
-        // seulement, qui gardent « tous les groupes pleins sauf le dernier » et un seul bloc
-        // persistant par groupe : le groupe de nœuds est vide (la tête), ou sa tête ON_DISK est née
-        // de ce COPY (copie-échange). Le lot entier, et toutes les colonnes. Sinon, en mémoire.
+        // reprise-force-sous-un-petit-tampon) : des lignes qui ne remplissent pas le groupe de
+        // nœuds vont au disque tout de suite, au lieu d'attendre en mémoire le point de reprise.
+        // Deux cas seulement, qui gardent « tous les groupes pleins sauf le dernier » et un seul
+        // bloc persistant par groupe : le groupe de nœuds est vide (la tête), ou sa tête ON_DISK
+        // est née de ce COPY (copie-échange). Le lot entier, et toutes les colonnes. Sinon, en
+        // mémoire.
         enum class PartialFlush { NONE, INTO_EMPTY, ONTO_HEAD };
         auto partialFlush = PartialFlush::NONE;
         if (!directFlushWhenAppend && partialFlushFrom.has_value() &&

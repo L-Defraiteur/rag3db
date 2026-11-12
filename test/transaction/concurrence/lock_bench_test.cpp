@@ -23,19 +23,19 @@
 
 #include <atomic>
 #include <cstdlib>
-#include <mutex>
 #include <filesystem>
 #include <fstream>
 #include <future>
 #include <iostream>
+#include <mutex>
 #include <thread>
 
 #include "bench_harness.h"
 #include "common/string_format.h"
 #include "graph_test/private_graph_test.h"
-#include "storage/storage_utils.h"
 #include "integrity/integrity_checker.h"
 #include "processor/result/flat_tuple.h"
+#include "storage/storage_utils.h"
 
 using namespace rag3db::common;
 using namespace rag3db::testing;
@@ -591,8 +591,7 @@ TEST_F(IndexReopen, AQueryDuringTheLoadIsNotToldTheIndexIsGone) {
                     if (gone.empty()) {
                         gone = message;
                     }
-                } else if (message.find("is not defined") == std::string::npos &&
-                           other.empty()) {
+                } else if (message.find("is not defined") == std::string::npos && other.empty()) {
                     other = message;
                 }
             }
@@ -603,18 +602,19 @@ TEST_F(IndexReopen, AQueryDuringTheLoadIsNotToldTheIndexIsGone) {
     loaded.store(true);
     reader.join();
     unsetenv("RAG3DB_TEST_PAUSE_AFTER_VECTOR_FUNCTIONS_MS");
-    std::cerr << "  succeeded during the load: " << succeeded << (gone.empty() ? "" : ", gone: " + gone)
+    std::cerr << "  succeeded during the load: " << succeeded
+              << (gone.empty() ? "" : ", gone: " + gone)
               << (other.empty() ? "" : ", other: " + other) << "\n";
     EXPECT_TRUE(gone.empty()) << "[check: no-index-gone-during-load] " << gone;
     EXPECT_TRUE(other.empty()) << "[check: no-unexpected-error] " << other;
     auto after = conn->query(QUERY);
-    EXPECT_TRUE(after->isSuccess()) << "[check: everything-passes-once-loaded] "
-                                    << after->getErrorMessage();
+    EXPECT_TRUE(after->isSuccess())
+        << "[check: everything-passes-once-loaded] " << after->getErrorMessage();
 }
 
 // Le chargement de l'extension sous des requêtes ET des écrivains en boucle (ticket
-// 2026-10-19-un-chargement-d-extension-a-la-reouverture-se-fait-passer-pour-un-retrait-de-l-index) :
-// une requête qui se lie avant la fin du chargement ne voit pas encore la fonction (« is not
+// 2026-10-19-un-chargement-d-extension-a-la-reouverture-se-fait-passer-pour-un-retrait-de-l-index)
+// : une requête qui se lie avant la fin du chargement ne voit pas encore la fonction (« is not
 // defined »), un écrivain qui croise un index pas encore chargé est refusé par un nom (« is not
 // loaded ») ; ni l'un ni l'autre ne s'entend dire que l'index a été retiré, et tous passent une
 // fois le chargement fini.
@@ -754,8 +754,8 @@ TEST_F(IndexReopen, DropAfterCheckpointThenCrashLeavesAnUnloadedIndex) {
 // la transaction fautive en nommant la clé (la forme du nom reste à décider), et ouvrir la
 // base avec une seule ligne de clé 7.
 TEST_F(LockBench, RecoveryOfAJournalWithADuplicateKeyKeepsTheDatabaseOpen) {
-    const auto fixture = TestHelper::appendRag3dbRootPath(
-        "test/transaction/journal_with_duplicate_key/base.rag3db");
+    const auto fixture =
+        TestHelper::appendRag3dbRootPath("test/transaction/journal_with_duplicate_key/base.rag3db");
     conn.reset();
     database.reset();
     const auto walPath = rag3db::storage::StorageUtils::getWALFilePath(databasePath);
@@ -815,15 +815,15 @@ TEST_P(RollbackOfACopy, RemovesOnlyItsOwnKeys) {
     SharedMapping mapping(2);
     auto& area = mapping.get();
     if (rolledBackFirst) {
-        launchCase(area, holderAndWaiter({.holderWrite = rolledBackCopy,
-                             .waiterWrite = keptCopy,
-                             .holderRollsBack = true}));
+        launchCase(area,
+            holderAndWaiter(
+                {.holderWrite = rolledBackCopy, .waiterWrite = keptCopy, .holderRollsBack = true}));
         expectWaited(area);
         expectWaiterSucceeds(area);
     } else {
-        launchCase(area, holderAndWaiter({.holderWrite = keptCopy,
-                             .waiterWrite = rolledBackCopy,
-                             .waiterRollsBack = true}));
+        launchCase(area,
+            holderAndWaiter(
+                {.holderWrite = keptCopy, .waiterWrite = rolledBackCopy, .waiterRollsBack = true}));
         expectWaited(area);
         EXPECT_GE(eventIndex(area, 1, "rollback:done"), 0) << "[check: waiter-rolls-back] ";
     }
@@ -869,14 +869,12 @@ TEST_F(LockBench, LocalRelationsFollowTheirNodesWhenACopyFlushesThemAfterAnother
     for (const auto& [connection, query] :
         std::vector<std::pair<rag3db::main::Connection*, std::string>>{
             {conn.get(), "CALL force_checkpoint_on_copy=false;"},
-            {&other, "CALL force_checkpoint_on_copy=false;"},
-            {conn.get(), "BEGIN TRANSACTION;"},
+            {&other, "CALL force_checkpoint_on_copy=false;"}, {conn.get(), "BEGIN TRANSACTION;"},
             {conn.get(), "UNWIND range(1000, 1019) AS i CREATE (:Item {id: i, v: i});"},
             {conn.get(), "MATCH (a:Item), (b:Item) WHERE a.id >= 1000 AND a.id < 1019 AND b.id "
                          "= a.id + 1 CREATE (a)-[:Next {step: a.id}]->(b);"},
             {&other, "BEGIN TRANSACTION;"},
-            {&other, "UNWIND range(0, 99) AS i CREATE (:Item {id: i, v: i});"},
-            {&other, "COMMIT;"},
+            {&other, "UNWIND range(0, 99) AS i CREATE (:Item {id: i, v: i});"}, {&other, "COMMIT;"},
             {conn.get(), ownCopy},
             {conn.get(), "MATCH (a:Item {id: 2000}), (b:Item {id: 1000}) CREATE (a)-[:Next "
                          "{step: -1}]->(b);"},
@@ -902,7 +900,8 @@ TEST_F(LockBench, LocalRelationsFollowTheirNodesWhenACopyFlushesThemAfterAnother
                        "count(r);"),
         1)
         << "[check: relation-after-the-flush] ";
-    EXPECT_EQ(queryInt("MATCH ()-[r:Next]->() RETURN count(r);"), 20) << "[check: no-stray-relation] ";
+    EXPECT_EQ(queryInt("MATCH ()-[r:Next]->() RETURN count(r);"), 20)
+        << "[check: no-stray-relation] ";
     expectIntegrity();
     std::filesystem::remove(databasePath + ".own.csv");
 }
@@ -970,9 +969,7 @@ TEST_P(TwoCommitsThatWantACheckpoint, DoNotWaitForTheTimeout) {
 }
 
 INSTANTIATE_TEST_SUITE_P(Copies, TwoCommitsThatWantACheckpoint, ::testing::Bool(),
-    [](const ::testing::TestParamInfo<bool>& info) {
-        return info.param ? "Forced" : "Journaled";
-    });
+    [](const ::testing::TestParamInfo<bool>& info) { return info.param ? "Forced" : "Journaled"; });
 
 // Le CHECKPOINT explicite attend le départ des autres transactions sur un fil du planificateur
 // (page coeur-cpp-tickets/06, « ce qui reste ») ; le second attend que le premier ait fini, sur un
@@ -1059,8 +1056,8 @@ TEST_F(LockBench, AutoCheckpointIsNotPostponedForeverUnderWritersWithoutAGap) {
     });
     stop.store(true);
     watcher.join();
-    std::cerr << "  largest journal: " << largestJournal.load() << " bytes (threshold "
-              << threshold << ")\n";
+    std::cerr << "  largest journal: " << largestJournal.load() << " bytes (threshold " << threshold
+              << ")\n";
     for (uint32_t worker = 0; worker < numWriters; worker++) {
         EXPECT_EQ(refusals(area, worker, Refusal::CheckpointTimeout), 0u)
             << "[check: no-checkpoint-timeout] writer " << worker;
@@ -1097,8 +1094,9 @@ TEST_F(LockBench, AnInserterWaitsForACopyOfTheSameTable) {
     mustRun("CREATE NODE TABLE Item(id INT64 PRIMARY KEY, v INT64);");
     SharedMapping mapping(2);
     auto& area = mapping.get();
-    launchCase(area, holderAndWaiter({.holderWrite = writeKeysCsv(databasePath + ".copy.csv", 100, 100),
-                         .waiterWrite = "CREATE (:Item {id: 7, v: 0});"}));
+    launchCase(area,
+        holderAndWaiter({.holderWrite = writeKeysCsv(databasePath + ".copy.csv", 100, 100),
+            .waiterWrite = "CREATE (:Item {id: 7, v: 0});"}));
     expectWaited(area);
     expectWaiterSucceeds(area);
     EXPECT_EQ(queryInt("MATCH (n:Item) RETURN count(n);"), 101) << "[check: committed-rows] ";

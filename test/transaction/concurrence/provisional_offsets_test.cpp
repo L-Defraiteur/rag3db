@@ -67,8 +67,8 @@ static void expectRelsBetweenTheirOwnNodes(Connection& conn) {
     }
     EXPECT_EQ(rows, 9);
     for (int64_t k = 1000; k < 1009; k++) {
-        auto back = conn.query("MATCH (a:N)-[r:R]->(b:N {id: " + std::to_string(k + 1) +
-                               "}) RETURN a.id;");
+        auto back =
+            conn.query("MATCH (a:N)-[r:R]->(b:N {id: " + std::to_string(k + 1) + "}) RETURN a.id;");
         ASSERT_TRUE(back->isSuccess()) << back->getErrorMessage();
         ASSERT_TRUE(back->hasNext()) << "le nœud " << k + 1 << " n'a pas sa relation entrante";
         EXPECT_EQ(back->getNext()->getValue(0)->getValue<int64_t>(), k);
@@ -95,7 +95,8 @@ TEST_F(ProvisionalOffsets, ACopyOfRelsToLocalNodesKeepsItsEndpointsAfterAnotherW
 }
 
 // Le même défaut dans l'autre ordre : B valide après le COPY de A, avant la validation de A.
-TEST_F(ProvisionalOffsets, ACopyOfRelsToLocalNodesKeepsItsEndpointsWhenAnotherWriterCommitsAfterIt) {
+TEST_F(ProvisionalOffsets,
+    ACopyOfRelsToLocalNodesKeepsItsEndpointsWhenAnotherWriterCommitsAfterIt) {
     ok("CREATE NODE TABLE N(id INT64, PRIMARY KEY(id));");
     ok("CREATE REL TABLE R(FROM N TO N, k INT64);");
     ok("UNWIND range(0, 9) AS i CREATE (:N {id: i});");

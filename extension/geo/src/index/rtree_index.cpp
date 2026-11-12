@@ -1,5 +1,8 @@
 #include "index/rtree_index.h"
 
+#include <filesystem>
+#include <fstream>
+
 #include "catalog/spatial_index_catalog_entry.h"
 #include "common/serializer/buffer_writer.h"
 #include "common/serializer/deserializer.h"
@@ -7,9 +10,6 @@
 #include "main/client_context.h"
 #include "main/database.h"
 #include "storage/storage_manager.h"
-
-#include <filesystem>
-#include <fstream>
 
 namespace rag3db {
 namespace geo_extension {
@@ -50,15 +50,15 @@ struct RTreeUpdateState final : storage::Index::UpdateState {
 
 // ─── RTreeIndex ────────────────────────────────────────────────────────────────
 
-RTreeIndex::RTreeIndex(storage::IndexInfo indexInfo,
-    std::unique_ptr<storage::IndexStorageInfo> si, std::unique_ptr<RTree> rtree)
+RTreeIndex::RTreeIndex(storage::IndexInfo indexInfo, std::unique_ptr<storage::IndexStorageInfo> si,
+    std::unique_ptr<RTree> rtree)
     : Index(std::move(indexInfo), std::move(si)), rtree_(std::move(rtree)) {}
 
 std::unique_ptr<storage::Index> RTreeIndex::load(main::ClientContext* /*context*/,
     storage::StorageManager* /*storageManager*/, storage::IndexInfo indexInfo,
     std::span<uint8_t> storageInfoBuffer) {
-    auto reader = std::make_unique<common::BufferReader>(storageInfoBuffer.data(),
-        storageInfoBuffer.size());
+    auto reader =
+        std::make_unique<common::BufferReader>(storageInfoBuffer.data(), storageInfoBuffer.size());
     auto si = SpatialStorageInfo::deserialize(std::move(reader));
     auto& spatialInfo = si->cast<SpatialStorageInfo>();
     auto rtree = loadFromFile(spatialInfo.indexFilePath);
@@ -88,7 +88,8 @@ void RTreeIndex::insert(transaction::Transaction*, const common::ValueVector& no
                 break;
             }
         }
-        if (isNull) continue;
+        if (isNull)
+            continue;
 
         std::vector<double> coords(dims);
         for (uint32_t d = 0; d < dims; d++) {
@@ -103,8 +104,8 @@ std::unique_ptr<storage::Index::DeleteState> RTreeIndex::initDeleteState(
     return std::make_unique<RTreeDeleteState>();
 }
 
-void RTreeIndex::delete_(transaction::Transaction*,
-    const common::ValueVector& nodeIDVector, DeleteState&) {
+void RTreeIndex::delete_(transaction::Transaction*, const common::ValueVector& nodeIDVector,
+    DeleteState&) {
     std::lock_guard<std::mutex> lock(mutex_);
     for (auto i = 0u; i < nodeIDVector.state->getSelSize(); i++) {
         auto pos = nodeIDVector.state->getSelVector()[i];
@@ -118,9 +119,8 @@ std::unique_ptr<storage::Index::UpdateState> RTreeIndex::initUpdateState(main::C
     return std::make_unique<RTreeUpdateState>();
 }
 
-void RTreeIndex::update(transaction::Transaction*,
-    const common::ValueVector& nodeIDVector, common::ValueVector& propertyVector,
-    UpdateState&) {
+void RTreeIndex::update(transaction::Transaction*, const common::ValueVector& nodeIDVector,
+    common::ValueVector& propertyVector, UpdateState&) {
     std::lock_guard<std::mutex> lock(mutex_);
     for (auto i = 0u; i < nodeIDVector.state->getSelSize(); i++) {
         auto pos = nodeIDVector.state->getSelVector()[i];
@@ -183,8 +183,8 @@ std::vector<uint64_t> RTreeIndex::searchBBox(const BoundingBox& bbox) const {
     return rtree_->searchBBox(bbox);
 }
 
-std::vector<std::pair<uint64_t, double>> RTreeIndex::searchRadius(
-    const std::vector<double>& center, double radius) const {
+std::vector<std::pair<uint64_t, double>> RTreeIndex::searchRadius(const std::vector<double>& center,
+    double radius) const {
     std::lock_guard<std::mutex> lock(mutex_);
     return rtree_->searchRadius(center, radius);
 }

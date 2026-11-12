@@ -26,7 +26,8 @@ static void execFunc(const std::vector<std::shared_ptr<ValueVector>>& parameters
         double m[9];
         q.toMatrix3(m);
         math::Mat3 mat{};
-        for (int k = 0; k < 9; k++) mat.m[k] = m[k];
+        for (int k = 0; k < 9; k++)
+            mat.m[k] = m[k];
         writeMat3ToList(result, resPos, mat);
     }
 }

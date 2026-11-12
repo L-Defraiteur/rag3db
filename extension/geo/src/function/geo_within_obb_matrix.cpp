@@ -1,10 +1,10 @@
 #include "function/geo_within_obb_matrix.h"
 
+#include <cmath>
+
 #include "common/vector/value_vector.h"
 #include "function/geo_list_helpers.h"
 #include "function/scalar_function.h"
-
-#include <cmath>
 
 namespace rag3db {
 namespace geo_extension {
@@ -12,7 +12,8 @@ namespace geo_extension {
 using namespace function;
 using namespace common;
 
-// GEO_WITHIN_OBB_MATRIX(point [x,y,z], center [x,y,z], half_extents [x,y,z], matrix 9 col-major) → BOOL
+// GEO_WITHIN_OBB_MATRIX(point [x,y,z], center [x,y,z], half_extents [x,y,z], matrix 9 col-major) →
+// BOOL
 static void execFunc(const std::vector<std::shared_ptr<ValueVector>>& parameters,
     const std::vector<SelectionVector*>& parameterSelVectors, ValueVector& result,
     SelectionVector* resultSelVector, void*) {

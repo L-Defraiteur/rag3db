@@ -5,16 +5,16 @@
 // La lecture du code : au point de reprise, LazySegmentScanner::applyCommittedUpdates applique les
 // mises à jour validées ligne à ligne (segmentData->write(..., 1)) ; pour une colonne de listes ou
 // de tableaux, ListChunkData::write agrandit alors la donnée au plus juste
-// (dataColumnChunk->resize(numValues + taille)), et ColumnChunkData::resize réalloue et recopie tout
-// le tampon. Le coût serait quadratique en nombre de lignes mises à jour.
+// (dataColumnChunk->resize(numValues + taille)), et ColumnChunkData::resize réalloue et recopie
+// tout le tampon. Le coût serait quadratique en nombre de lignes mises à jour.
 //
 // - Columns/CheckpointAfterUpdates.ScalesWithTheUpdatedRows : le témoin, une colonne par cas
 //   (FLOAT[768], STRING, INT64). Deux tables de 1 500 et 15 000 lignes chargées par COPY, la
 //   colonne NULL, puis SET de chaque ligne par lots de 64, sans point de reprise ; puis un
 //   CHECKPOINT chronométré par table. Pour dix fois plus de lignes, un coût proportionnel au
 //   volume écrit fait environ dix fois plus, un coût quadratique cent fois : la grande table doit
-//   rester sous vingt fois la petite (plus 50 ms de marge contre le bruit). La référence, imprimée :
-//   le même volume écrit par COPY puis CHECKPOINT.
+//   rester sous vingt fois la petite (plus 50 ms de marge contre le bruit). La référence, imprimée
+//   : le même volume écrit par COPY puis CHECKPOINT.
 
 #include <algorithm>
 #include <chrono>

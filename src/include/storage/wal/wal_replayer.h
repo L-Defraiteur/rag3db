@@ -130,7 +130,8 @@ private:
     // CHECKPOINT record. A journal that merely grew by new commits is not a change.
     //
     // What this does NOT cover, on purpose: it needs an epoch written in the file, which is
-    // step 5 ("marche 5") of docs/2-octobre-2026-00h17/01-ecritures-paralleles-vela-et-le-chemin.md:
+    // step 5 ("marche 5") of
+    // docs/2-octobre-2026-00h17/01-ecritures-paralleles-vela-et-le-chemin.md:
     //  - a reader that STAYS open while a checkpoint passes: it reads pages on demand with the
     //    metadata it loaded at open, and nothing tells it they were rewritten;
     //  - two complete checkpoints within a single open that leave a byte-identical header page

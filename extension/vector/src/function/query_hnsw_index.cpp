@@ -1,3 +1,6 @@
+#include <cstdio>
+#include <cstdlib>
+
 #include "binder/binder.h"
 #include "binder/expression/expression_util.h"
 #include "binder/expression/literal_expression.h"
@@ -5,9 +8,6 @@
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "catalog/hnsw_index_catalog_entry.h"
 #include "common/exception/binder.h"
-#include <cstdio>
-#include <cstdlib>
-
 #include "common/mask.h"
 #include "common/types/value/nested.h"
 #include "expression_evaluator/expression_evaluator_utils.h"
@@ -341,8 +341,8 @@ std::unique_ptr<TableFuncLocalState> initQueryHNSWLocalState(
             ->getTableCatalogEntry(transaction::Transaction::Get(*context), lowerRelTableName, true)
             ->ptrCast<RelGroupCatalogEntry>();
     auto index = OnDiskHNSWIndex::captureForQuery(*hnswSharedState->nodeTable,
-        transaction::Transaction::Get(*context), hnswBindData->indexEntry->getIndexName(), hnswBindData->nodeTableEntry->getName(),
-        upperRelTableEntry->getSingleRelEntryInfo().oid,
+        transaction::Transaction::Get(*context), hnswBindData->indexEntry->getIndexName(),
+        hnswBindData->nodeTableEntry->getName(), upperRelTableEntry->getSingleRelEntryInfo().oid,
         lowerRelTableEntry->getSingleRelEntryInfo().oid);
     HNSWSearchState searchState{context, hnswBindData->nodeTableEntry, upperRelTableEntry,
         lowerRelTableEntry, *hnswSharedState->nodeTable, hnswBindData->indexColumnID,
@@ -357,9 +357,9 @@ std::unique_ptr<TableFuncLocalState> initQueryHNSWLocalState(
     if (vectorTraceEnabled()) {
         fprintf(stderr, "[vector-trace] exécution : masque pour la table=%s, nœuds masqués=%lld\n",
             hasMaskForTable ? "oui" : "NON",
-            searchState.semiMask != nullptr
-                ? static_cast<long long>(searchState.semiMask->getNumMaskedNodes())
-                : -1);
+            searchState.semiMask != nullptr ?
+                static_cast<long long>(searchState.semiMask->getNumMaskedNodes()) :
+                -1);
     }
     return std::make_unique<QueryHNSWLocalState>(std::move(index), std::move(searchState));
 }

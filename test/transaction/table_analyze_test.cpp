@@ -73,8 +73,8 @@ protected:
         const auto names = single("MATCH (d:Doc) RETURN count(DISTINCT d.name);");
         const auto cardinality = single("CALL STATS_INFO('Doc') RETURN cardinality;");
         const auto estimatedNames = single("CALL STATS_INFO('Doc') RETURN name_distinct_count;");
-        EXPECT_EQ(cardinality, rows) << "cardinalité " << cardinality << " pour " << rows
-                                     << " lignes";
+        EXPECT_EQ(cardinality, rows)
+            << "cardinalité " << cardinality << " pour " << rows << " lignes";
         EXPECT_LT(std::abs(static_cast<double>(estimatedNames - names)), 0.4 * names)
             << "noms distincts estimés " << estimatedNames << " pour " << names;
     }
@@ -96,8 +96,8 @@ protected:
 // comptées avant le contrôle de la clé.
 TEST_F(TableAnalyzeTest, AfterACopyThatIgnoresDuplicateKeys) {
     copyRows(0, 1000, [](int64_t id) { return "name " + std::to_string(id); });
-    copyRows(0, 1000, [](int64_t id) { return "other " + std::to_string(id); },
-        " (IGNORE_ERRORS=true)");
+    copyRows(
+        0, 1000, [](int64_t id) { return "other " + std::to_string(id); }, " (IGNORE_ERRORS=true)");
     analyzeAndReopen();
 }
 

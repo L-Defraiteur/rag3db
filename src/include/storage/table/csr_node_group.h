@@ -1,9 +1,9 @@
 #pragma once
 
-#include <mutex>
-#include <shared_mutex>
 #include <array>
 #include <bitset>
+#include <mutex>
+#include <shared_mutex>
 
 #include "common/constants.h"
 #include "common/system_config.h"
@@ -213,9 +213,8 @@ public:
     void update(const transaction::Transaction* transaction, CSRNodeGroupScanSource source,
         common::row_idx_t rowIdxInGroup, common::column_id_t columnID,
         const common::ValueVector& propertyVector);
-    bool delete_(const transaction::Transaction* transaction,
-        common::offset_t boundOffsetInGroup, CSRNodeGroupScanSource source,
-        common::row_idx_t rowIdxInGroup);
+    bool delete_(const transaction::Transaction* transaction, common::offset_t boundOffsetInGroup,
+        CSRNodeGroupScanSource source, common::row_idx_t rowIdxInGroup);
     // Après une validation qui a supprimé dans ce groupe : les listes des nœuds notés par
     // delete_ oublient leurs lignes mortes que plus aucun instantané ouvert ne voit vivantes
     // (transaction->getOldestActiveStartTS()). Les blocs gardent les lignes : un balayage en
@@ -232,9 +231,8 @@ public:
     // l'une de ses colonnes mise à jour, par une validation postérieure à l'instantané startTS
     // (marche A4′, sur le modèle de ChunkedNodeGroup) ; ce que la transaction a fait elle-même
     // ne compte pas.
-    bool wasWrittenByCommitAfter(common::transaction_t startTS,
-        common::transaction_t transactionID, CSRNodeGroupScanSource source,
-        common::row_idx_t rowIdxInGroup) const;
+    bool wasWrittenByCommitAfter(common::transaction_t startTS, common::transaction_t transactionID,
+        CSRNodeGroupScanSource source, common::row_idx_t rowIdxInGroup) const;
 
     void addColumn(TableAddColumnState& addColumnState, PageAllocator* pageAllocator,
         ColumnStats* newColumnStats) override;
@@ -395,8 +393,7 @@ private:
     bool compactDeadRowsNoLock(common::transaction_t oldestActiveStartTS,
         common::offset_t boundOffsetInGroup, const ChunkedGroups& groups);
     void compactDeadRows(const transaction::Transaction* transaction,
-        common::offset_t boundOffsetInGroup,
-        const ChunkedGroups& groups);
+        common::offset_t boundOffsetInGroup, const ChunkedGroups& groups);
     std::mutex deadHintsMtx;
     std::vector<uint8_t> deadHints; // un octet par nœud du groupe, alloué à la première note
     std::vector<common::offset_t> deadHintList;

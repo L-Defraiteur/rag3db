@@ -24,8 +24,8 @@ void execQuantifierFunc(quantifier_handler handler,
         for (sel_t i = 0; i < slice->getSliceSize(); ++i) {
             const auto [listPos, dataPos] = slice->getPos(i);
             (void)dataPos;
-            const auto filterPos = filterVector.state->getSelVector()[
-                filterVector.state->isFlat() ? 0 : i];
+            const auto filterPos =
+                filterVector.state->getSelVector()[filterVector.state->isFlat() ? 0 : i];
             if (!filterVector.isNull(filterPos) && filterVector.getValue<bool>(filterPos)) {
                 ++data->quantifierCounts[listPos];
             }

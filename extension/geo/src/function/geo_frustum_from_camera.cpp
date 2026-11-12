@@ -32,8 +32,8 @@ static void execFunc(const std::vector<std::shared_ptr<ValueVector>>& parameters
         }
         result.setNull(resPos, false);
         double planes[24];
-        math::frustumFromCamera(pos[0], pos[1], pos[2], q.x, q.y, q.z, q.w, fovH, fovV,
-            nearDist, farDist, planes);
+        math::frustumFromCamera(pos[0], pos[1], pos[2], q.x, q.y, q.z, q.w, fovH, fovV, nearDist,
+            farDist, planes);
         writeDoubleListToResult(result, resPos, planes, 24);
     }
 }

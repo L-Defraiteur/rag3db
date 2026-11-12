@@ -30,8 +30,8 @@ using namespace catalog;
 struct VectorSearchBindData final : IndexSearchBindData {
     table_id_t tableID;
 
-    VectorSearchBindData(LogicalType resultType, table_id_t tableID,
-        IndexSearchFunc searchFunc, std::vector<VirtualExprSpec> virtualExprSpecs)
+    VectorSearchBindData(LogicalType resultType, table_id_t tableID, IndexSearchFunc searchFunc,
+        std::vector<VirtualExprSpec> virtualExprSpecs)
         : IndexSearchBindData{std::move(resultType), std::move(searchFunc),
               std::move(virtualExprSpecs)},
           tableID{tableID} {}
@@ -42,8 +42,8 @@ struct VectorSearchBindData final : IndexSearchBindData {
         for (auto& spec : virtualExprSpecs) {
             specsCopy.push_back(spec.copy());
         }
-        return std::make_unique<VectorSearchBindData>(
-            resultType.copy(), tableID, searchFunc, std::move(specsCopy));
+        return std::make_unique<VectorSearchBindData>(resultType.copy(), tableID, searchFunc,
+            std::move(specsCopy));
     }
 };
 
@@ -65,8 +65,7 @@ struct BindTimeQueryVector : GetEmbeddingsScanState {
 // ── Find HNSW index for a property ──────────────────────────────────────────
 
 static IndexCatalogEntry* findHNSWIndexForProperty(Catalog* catalog,
-    const transaction::Transaction* transaction, table_id_t tableID,
-    property_id_t propertyID) {
+    const transaction::Transaction* transaction, table_id_t tableID, property_id_t propertyID) {
     auto indexEntries = catalog->getIndexEntries(transaction, tableID);
     for (auto* entry : indexEntries) {
         if (entry->getIndexType() == "HNSW") {
@@ -93,8 +92,7 @@ static std::vector<T> extractQueryVector(const Value& val) {
 
 // ── VECTOR_SEARCH bind ──────────────────────────────────────────────────────
 
-static std::unique_ptr<FunctionBindData> vectorSearchBindFunc(
-    const ScalarBindFuncInput& input) {
+static std::unique_ptr<FunctionBindData> vectorSearchBindFunc(const ScalarBindFuncInput& input) {
     auto& arguments = input.arguments;
     auto* context = input.context;
 
@@ -105,8 +103,7 @@ static std::unique_ptr<FunctionBindData> vectorSearchBindFunc(
     }
     auto& propExpr = arguments[0]->constCast<binder::PropertyExpression>();
     if (!propExpr.isSingleLabel()) {
-        throw BinderException(
-            "VECTOR_SEARCH() requires a single-label property (one table only).");
+        throw BinderException("VECTOR_SEARCH() requires a single-label property (one table only).");
     }
     auto tableID = propExpr.getSingleTableID();
     auto propertyName = propExpr.getPropertyName();
@@ -136,9 +133,8 @@ static std::unique_ptr<FunctionBindData> vectorSearchBindFunc(
 
     auto* indexEntry = findHNSWIndexForProperty(catalog, transaction, tableID, propertyID);
     if (!indexEntry) {
-        throw BinderException(stringFormat(
-            "No HNSW vector index on property '{}.{}'. "
-            "Create one with CREATE_VECTOR_INDEX first.",
+        throw BinderException(stringFormat("No HNSW vector index on property '{}.{}'. "
+                                           "Create one with CREATE_VECTOR_INDEX first.",
             tableName, propertyName));
     }
 
@@ -153,12 +149,10 @@ static std::unique_ptr<FunctionBindData> vectorSearchBindFunc(
     // Build HNSWSearchState (same logic as initQueryHNSWLocalState).
     auto upperRelTableName = HNSWIndexUtils::getUpperGraphTableName(tableID, indexName);
     auto lowerRelTableName = HNSWIndexUtils::getLowerGraphTableName(tableID, indexName);
-    auto* upperRelTableEntry =
-        catalog->getTableCatalogEntry(transaction, upperRelTableName, true)
-            ->ptrCast<RelGroupCatalogEntry>();
-    auto* lowerRelTableEntry =
-        catalog->getTableCatalogEntry(transaction, lowerRelTableName, true)
-            ->ptrCast<RelGroupCatalogEntry>();
+    auto* upperRelTableEntry = catalog->getTableCatalogEntry(transaction, upperRelTableName, true)
+                                   ->ptrCast<RelGroupCatalogEntry>();
+    auto* lowerRelTableEntry = catalog->getTableCatalogEntry(transaction, lowerRelTableName, true)
+                                   ->ptrCast<RelGroupCatalogEntry>();
     // L'index capturé, celui de cet instantané (voir OnDiskHNSWIndex::captureForQuery).
     const auto capturedIndex = OnDiskHNSWIndex::captureForQuery(*nodeTable, transaction, indexName,
         tableEntry->getName(), upperRelTableEntry->getSingleRelEntryInfo().oid,
@@ -182,26 +176,24 @@ static std::unique_ptr<FunctionBindData> vectorSearchBindFunc(
         [&]<VectorElementType T>(T) {
             auto queryVector = extractQueryVector<T>(queryVal);
             if (queryVector.size() != dimension) {
-                throw BinderException(stringFormat(
-                    "VECTOR_SEARCH() query vector dimension ({}) does not match "
-                    "index dimension ({}).",
-                    queryVector.size(), dimension));
+                throw BinderException(
+                    stringFormat("VECTOR_SEARCH() query vector dimension ({}) does not match "
+                                 "index dimension ({}).",
+                        queryVector.size(), dimension));
             }
             auto queryState = BindTimeQueryVector<T>(std::move(queryVector));
             auto queryHandle = EmbeddingHandle{0, &queryState};
             auto hnswResults = hnswIndex.search(transaction, queryHandle, searchState);
             precomputed.reserve(hnswResults.size());
             for (const auto& r : hnswResults) {
-                precomputed.push_back(
-                    IndexSearchResult{r.nodeOffset, r.distance, ""});
+                precomputed.push_back(IndexSearchResult{r.nodeOffset, r.distance, ""});
             }
         },
         [&](auto) { KU_UNREACHABLE; });
 
     // Lambda returns pre-computed results.
-    IndexSearchFunc searchFunc =
-        [precomputed = std::move(precomputed)](int64_t limit)
-            -> std::vector<IndexSearchResult> {
+    IndexSearchFunc searchFunc = [precomputed = std::move(precomputed)](
+                                     int64_t limit) -> std::vector<IndexSearchResult> {
         auto end = std::min(static_cast<int64_t>(precomputed.size()), limit);
         return std::vector<IndexSearchResult>(precomputed.begin(), precomputed.begin() + end);
     };
@@ -209,16 +201,15 @@ static std::unique_ptr<FunctionBindData> vectorSearchBindFunc(
     std::vector<VirtualExprSpec> virtualSpecs;
     virtualSpecs.emplace_back("VECTOR_DISTANCE", LogicalType::DOUBLE());
 
-    return std::make_unique<VectorSearchBindData>(
-        LogicalType::BOOL(), tableID, std::move(searchFunc), std::move(virtualSpecs));
+    return std::make_unique<VectorSearchBindData>(LogicalType::BOOL(), tableID,
+        std::move(searchFunc), std::move(virtualSpecs));
 }
 
 // ── VECTOR_SEARCH exec (fallback) ───────────────────────────────────────────
 
-static void vectorSearchExecFunc(
-    const std::vector<std::shared_ptr<ValueVector>>& /*params*/,
-    const std::vector<SelectionVector*>& /*paramSelVectors*/,
-    ValueVector& result, SelectionVector* resultSelVector, void* /*dataPtr*/) {
+static void vectorSearchExecFunc(const std::vector<std::shared_ptr<ValueVector>>& /*params*/,
+    const std::vector<SelectionVector*>& /*paramSelVectors*/, ValueVector& result,
+    SelectionVector* resultSelVector, void* /*dataPtr*/) {
     for (auto i = 0u; i < resultSelVector->getSelSize(); i++) {
         result.setValue(resultSelVector->operator[](i), false);
     }
@@ -226,10 +217,9 @@ static void vectorSearchExecFunc(
 
 // ── VECTOR_DISTANCE exec (returns NULL when no INDEX_SCAN) ──────────────────
 
-static void vectorDistanceExecFunc(
-    const std::vector<std::shared_ptr<ValueVector>>& /*params*/,
-    const std::vector<SelectionVector*>& /*paramSelVectors*/,
-    ValueVector& result, SelectionVector* resultSelVector, void* /*dataPtr*/) {
+static void vectorDistanceExecFunc(const std::vector<std::shared_ptr<ValueVector>>& /*params*/,
+    const std::vector<SelectionVector*>& /*paramSelVectors*/, ValueVector& result,
+    SelectionVector* resultSelVector, void* /*dataPtr*/) {
     for (auto i = 0u; i < resultSelVector->getSelSize(); i++) {
         result.setNull(resultSelVector->operator[](i), true);
     }
@@ -252,8 +242,7 @@ function_set VectorSearchFunction::getFunctionSet() {
 
 function_set VectorDistanceFunction::getFunctionSet() {
     function_set functionSet;
-    auto func = std::make_unique<ScalarFunction>(name,
-        std::vector<LogicalTypeID>{},
+    auto func = std::make_unique<ScalarFunction>(name, std::vector<LogicalTypeID>{},
         LogicalTypeID::DOUBLE, vectorDistanceExecFunc);
     func->isNonFoldable = true;
     functionSet.push_back(std::move(func));

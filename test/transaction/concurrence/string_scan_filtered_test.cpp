@@ -5,15 +5,16 @@
 // segment : le reste de la fenêtre restait vide, ou gardait les chaînes de la fenêtre d'avant.
 //
 // Ce qui fait les segments : leur TAILLE, pas le nombre de COPY. Au point de reprise,
-// ColumnChunkData::split découpe chaque colonne en segments d'au plus min(taille/2, 256 Kio). Il faut
-// donc assez d'octets : 6 000 lignes de chaînes d'environ 200 octets donnent 5 segments (recette du
-// cœur C++, prouvée rouge sans son correctif et verte avec). Le témoin vérifie d'abord cette forme
-// par storage_info (au moins deux segments pour `s`) : sans elle, il ne prouverait rien.
+// ColumnChunkData::split découpe chaque colonne en segments d'au plus min(taille/2, 256 Kio). Il
+// faut donc assez d'octets : 6 000 lignes de chaînes d'environ 200 octets donnent 5 segments
+// (recette du cœur C++, prouvée rouge sans son correctif et verte avec). Le témoin vérifie d'abord
+// cette forme par storage_info (au moins deux segments pour `s`) : sans elle, il ne prouverait
+// rien.
 //
 // Ce qui fait la sélection filtrée : les versions du groupe dans la FENÊTRE lue, pas un WHERE. Une
 // ligne supprimée (id 10 pour la fenêtre 0, id 2 100 pour la fenêtre 1). Puis le balayage, comparé
-// à l'attendu et à la relecture par clé. Une variante meurt (SIGKILL) après le COPY, avant tout point
-// de reprise, et relit après le rejeu.
+// à l'attendu et à la relecture par clé. Une variante meurt (SIGKILL) après le COPY, avant tout
+// point de reprise, et relit après le rejeu.
 //
 // Prouvé le 12 octobre 2026 sur le poste principal : sans le correctif (master 79431d9c4),
 // DeletedRowInWindow0 rend 801 lignes fausses, DeletedRowInWindow1 886, AfterADeath 800 (la chaîne
@@ -42,7 +43,12 @@ namespace {
 
 constexpr int64_t NUM_ROWS = 6000;
 
-enum class Kind { DELETED_ROW_IN_WINDOW_0, DELETED_ROW_IN_WINDOW_1, OWN_WRITE_IN_WINDOW_0, AFTER_A_DEATH };
+enum class Kind {
+    DELETED_ROW_IN_WINDOW_0,
+    DELETED_ROW_IN_WINDOW_1,
+    OWN_WRITE_IN_WINDOW_0,
+    AFTER_A_DEATH
+};
 
 std::string textOf(int64_t id) {
     return std::string(200, 'x') + std::to_string(id);
@@ -245,13 +251,13 @@ INSTANTIATE_TEST_SUITE_P(Windows, StringScanFiltered,
         return std::string("?");
     });
 
-
 // Une garde pour ListColumn::scanFiltered, pas un témoin de défaut. Sa borne
 // (`startOffsetInSegment + pos - offsetInResult < numValues`) était déjà juste pour un segment ; le
 // cœur C++ l'a bornée aussi par numValuesToScan, par forme, sans cas atteignable (12 octobre 2026).
 // Ce cas est vert sans ce changement comme avec : des listes assez grosses pour que leur colonne se
-// découpe (64 éléments sur 6 000 lignes, 4 segments), une ligne supprimée dans la fenêtre lue, et le
-// balayage des listes contre l'attendu. Le contrôle `plan` exige au moins deux segments pour `l`.
+// découpe (64 éléments sur 6 000 lignes, 4 segments), une ligne supprimée dans la fenêtre lue, et
+// le balayage des listes contre l'attendu. Le contrôle `plan` exige au moins deux segments pour
+// `l`.
 std::string bigListOf(int64_t id) {
     std::string out = "[";
     for (int64_t i = 0; i < 64; ++i) {

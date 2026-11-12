@@ -38,10 +38,12 @@ std::unique_ptr<rag3db::common::LogicalType> create_logical_type_map(
 }
 
 std::unique_ptr<LogicalType> logical_type_get_list_child_type(const LogicalType& logicalType) {
-    return std::make_unique<LogicalType>(rag3db::common::ListType::getChildType(logicalType).copy());
+    return std::make_unique<LogicalType>(
+        rag3db::common::ListType::getChildType(logicalType).copy());
 }
 std::unique_ptr<LogicalType> logical_type_get_array_child_type(const LogicalType& logicalType) {
-    return std::make_unique<LogicalType>(rag3db::common::ArrayType::getChildType(logicalType).copy());
+    return std::make_unique<LogicalType>(
+        rag3db::common::ArrayType::getChildType(logicalType).copy());
 }
 uint64_t logical_type_get_array_num_elements(const LogicalType& logicalType) {
     return rag3db::common::ArrayType::getNumElements(logicalType);
@@ -265,9 +267,10 @@ std::unique_ptr<rag3db::common::Value> create_value_timestamp_ms(const int64_t t
 std::unique_ptr<rag3db::common::Value> create_value_timestamp_sec(const int64_t timestamp) {
     return std::make_unique<rag3db::common::Value>(rag3db::common::timestamp_sec_t(timestamp));
 }
-std::unique_ptr<rag3db::common::Value> create_value_interval(const int32_t months, const int32_t days,
-    const int64_t micros) {
-    return std::make_unique<rag3db::common::Value>(rag3db::common::interval_t(months, days, micros));
+std::unique_ptr<rag3db::common::Value> create_value_interval(const int32_t months,
+    const int32_t days, const int64_t micros) {
+    return std::make_unique<rag3db::common::Value>(
+        rag3db::common::interval_t(months, days, micros));
 }
 std::unique_ptr<rag3db::common::Value> create_value_null(
     std::unique_ptr<rag3db::common::LogicalType> typ) {
@@ -281,8 +284,8 @@ std::unique_ptr<rag3db::common::Value> create_value_int128_t(int64_t high, uint6
     return std::make_unique<rag3db::common::Value>(rag3db::common::int128_t(low, high));
 }
 
-std::unique_ptr<rag3db::common::Value> get_list_value(std::unique_ptr<rag3db::common::LogicalType> typ,
-    std::unique_ptr<ValueListBuilder> value) {
+std::unique_ptr<rag3db::common::Value> get_list_value(
+    std::unique_ptr<rag3db::common::LogicalType> typ, std::unique_ptr<ValueListBuilder> value) {
     return std::make_unique<rag3db::common::Value>(std::move(*typ), std::move(value->values));
 }
 

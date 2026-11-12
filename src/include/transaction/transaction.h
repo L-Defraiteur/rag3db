@@ -3,10 +3,10 @@
 #include <atomic>
 #include <functional>
 #include <mutex>
-#include <span>
 #include <vector>
 
 #include "common/types/types.h"
+#include <span>
 
 namespace rag3db {
 namespace binder {

@@ -560,8 +560,7 @@ inline void loadVectorExtension(main::Connection& connection) {
 // Les réglages du banc sur une Database qu'on vient d'ouvrir (voir l'en-tête du banc).
 // Le premier n'est pas persistant : il se repose à chaque ouverture.
 inline void applyBenchSettings(main::Connection& connection) {
-    for (const auto* query :
-        {"CALL enable_multi_writes=true;", "CALL auto_checkpoint=false;"}) {
+    for (const auto* query : {"CALL enable_multi_writes=true;", "CALL auto_checkpoint=false;"}) {
         auto result = connection.query(query);
         if (!result->isSuccess()) {
             throw std::runtime_error(std::string(query) + ": " + result->getErrorMessage());

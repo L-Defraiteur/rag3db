@@ -50,7 +50,8 @@ std::unique_ptr<TestGroup> TestParser::parseTestFile() {
 
 void TestParser::genGroupName() const {
     const std::size_t subStart =
-        TestHelper::appendRag3dbRootPath(std::string(TestHelper::E2E_TEST_FILES_DIRECTORY)).length() +
+        TestHelper::appendRag3dbRootPath(std::string(TestHelper::E2E_TEST_FILES_DIRECTORY))
+            .length() +
         1;
     const std::size_t subEnd = path.find_last_of('.') - 1;
     std::string relPath = path.substr(subStart, subEnd - subStart + 1);

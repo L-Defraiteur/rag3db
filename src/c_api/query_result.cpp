@@ -44,8 +44,8 @@ rag3db_state rag3db_query_result_get_column_name(rag3db_query_result* query_resu
     return Rag3dbSuccess;
 }
 
-rag3db_state rag3db_query_result_get_column_data_type(rag3db_query_result* query_result, uint64_t index,
-    rag3db_logical_type* out_column_data_type) {
+rag3db_state rag3db_query_result_get_column_data_type(rag3db_query_result* query_result,
+    uint64_t index, rag3db_logical_type* out_column_data_type) {
     auto column_data_types =
         static_cast<QueryResult*>(query_result->_query_result)->getColumnDataTypes();
     if (index >= column_data_types.size()) {

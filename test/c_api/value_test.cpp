@@ -610,7 +610,7 @@ TEST_F(CApiValueTest, CreateStruct) {
 
 TEST(CApiValueTestEmptyDB, CreateStructEmpty) {
     const char* fieldNames[] = {(char*)"name"}; // Must be non-empty
-    rag3db_value* values[] = {nullptr};           // Must be non-empty
+    rag3db_value* values[] = {nullptr};         // Must be non-empty
     rag3db_value* value = nullptr;
     rag3db_state state = rag3db_value_create_struct(0, fieldNames, values, &value);
     ASSERT_EQ(state, Rag3dbError);
@@ -1565,7 +1565,8 @@ TEST_F(CApiValueTest, GetInternalID) {
     ASSERT_EQ(rag3db_flat_tuple_get_value(&flatTuple, 0, &value), Rag3dbSuccess);
     ASSERT_TRUE(value._is_owned_by_cpp);
     rag3db_value nodeIDVal;
-    ASSERT_EQ(rag3db_value_get_struct_field_value(&value, 0 /* internal ID field idx */, &nodeIDVal),
+    ASSERT_EQ(
+        rag3db_value_get_struct_field_value(&value, 0 /* internal ID field idx */, &nodeIDVal),
         Rag3dbSuccess);
     rag3db_internal_id_t internalID;
     ASSERT_EQ(rag3db_value_get_internal_id(&nodeIDVal, &internalID), Rag3dbSuccess);

@@ -113,7 +113,7 @@ TEST_F(CSRDeadRows, AnOldReaderKeepsItsRelsAndTheListShrinksAfterItLeaves) {
         const auto hi = std::to_string(200 * (i + 1));
         ok("MATCH (:A)-[r:R]->(b:B) WHERE b.id >= " + lo + " AND b.id < " + hi + " DELETE r;");
         ok("MATCH (a:A), (b:B) WHERE b.id >= " + lo + " AND b.id < " + hi +
-           " CREATE (a)-[:R {k: b.id + 1000}]->(b);");
+            " CREATE (a)-[:R {k: b.id + 1000}]->(b);");
     };
     for (int64_t i = 0; i < 3; i++) {
         round(i);
@@ -179,8 +179,7 @@ TEST_F(CSRDeadRows, DeleteAndRecreateInOneTransactionLikeAShrink) {
     ok(*reader, "COMMIT;");
     for (int64_t round = 20; round < 30; round++) {
         shrink(round);
-        EXPECT_EQ(inMemRows(), 64u) << "[check: list-back-to-64-after-reader-left] round "
-                                    << round;
+        EXPECT_EQ(inMemRows(), 64u) << "[check: list-back-to-64-after-reader-left] round " << round;
         EXPECT_EQ(count(*conn), 64) << "round " << round;
     }
     const int64_t finalSum = 63 * 64 / 2 + 29 * 64;

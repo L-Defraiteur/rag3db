@@ -42,8 +42,7 @@ struct IndexScanInfo final : ExtraScanNodeTableInfo {
 
     IndexScanInfo(IndexSearchFunc searchFunc, int64_t limit,
         std::vector<std::shared_ptr<binder::Expression>> virtualExprs)
-        : searchFunc{std::move(searchFunc)}, limit{limit},
-          virtualExprs{std::move(virtualExprs)} {}
+        : searchFunc{std::move(searchFunc)}, limit{limit}, virtualExprs{std::move(virtualExprs)} {}
 
     std::unique_ptr<ExtraScanNodeTableInfo> copy() const override {
         return std::make_unique<IndexScanInfo>(searchFunc, limit, virtualExprs);

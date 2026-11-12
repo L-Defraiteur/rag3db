@@ -56,9 +56,10 @@ protected:
     }
 
     static void link(rag3db::main::Connection& connection, int64_t src, int64_t dst) {
-        ok(connection, "MATCH (a:Item {id: " + std::to_string(src) + "}), (b:Item {id: " +
-                           std::to_string(dst) + "}) CREATE (a)-[:Link {src: " +
-                           std::to_string(src) + ", dst: " + std::to_string(dst) + ", w: 0}]->(b);");
+        ok(connection, "MATCH (a:Item {id: " + std::to_string(src) +
+                           "}), (b:Item {id: " + std::to_string(dst) +
+                           "}) CREATE (a)-[:Link {src: " + std::to_string(src) +
+                           ", dst: " + std::to_string(dst) + ", w: 0}]->(b);");
     }
 
     // Le scénario : deux transactions ouvertes ensemble, validées l'une après l'autre.
@@ -102,10 +103,10 @@ protected:
     }
 
     void expectTheRightContent(const std::string& moment) {
-        std::vector<std::string> expected = {"node|1|0", "node|100|0", "node|101|0",
-            "node|102|0", "node|103|3", "node|200|0", "node|201|7", "node|202|0",
-            "rel|100|101|100|101|0", "rel|101|102|101|102|0", "rel|102|1|102|1|0",
-            "rel|200|201|200|201|9", "rel|201|202|201|202|0"};
+        std::vector<std::string> expected = {"node|1|0", "node|100|0", "node|101|0", "node|102|0",
+            "node|103|3", "node|200|0", "node|201|7", "node|202|0", "rel|100|101|100|101|0",
+            "rel|101|102|101|102|0", "rel|102|1|102|1|0", "rel|200|201|200|201|9",
+            "rel|201|202|201|202|0"};
         std::sort(expected.begin(), expected.end());
         EXPECT_EQ(dump(), expected) << moment;
     }

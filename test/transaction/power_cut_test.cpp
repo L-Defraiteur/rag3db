@@ -80,8 +80,7 @@ protected:
             return false;
         }
         for (auto from = 0; from < 2000; from += 500) {
-            if (!run(c, "UNWIND range(" + std::to_string(from) + ", " +
-                            std::to_string(from + 499) +
+            if (!run(c, "UNWIND range(" + std::to_string(from) + ", " + std::to_string(from + 499) +
                             ") AS i CREATE (:T {id: i, s: 'ligne ' + CAST(i AS STRING)});")) {
                 return false;
             }
@@ -104,8 +103,8 @@ TEST_F(PowerCut, TheDoubleLosesWhatIsNotSynced) {
     const auto synced = databasePath + ".synced";
     const auto status = inAChild(false, [&] {
         CutFileSystem fs{""};
-        const auto flags = FileOpenFlags(FileFlags::WRITE | FileFlags::READ_ONLY |
-                                         FileFlags::CREATE_IF_NOT_EXISTS);
+        const auto flags = FileOpenFlags(
+            FileFlags::WRITE | FileFlags::READ_ONLY | FileFlags::CREATE_IF_NOT_EXISTS);
         const uint8_t bytes[4] = {'a', 'b', 'c', 'd'};
         auto a = fs.openFile(unsynced, flags);
         a->writeFile(bytes, 4, 0);
@@ -192,7 +191,10 @@ TEST_F(PowerCut, AJournalThatCannotBeSyncedPublishesNothing) {
               << (again->isSuccess() ? "" : again->getErrorMessage().substr(0, 200)) << " »"
               << std::endl;
         auto read = connection.query("MATCH (t:T) RETURN count(*);");
-        steps << "READ " << (read->isSuccess() ? "accepted" : "refused « " + read->getErrorMessage().substr(0, 200) + " »") << std::endl;
+        steps << "READ "
+              << (read->isSuccess() ? "accepted" :
+                                      "refused « " + read->getErrorMessage().substr(0, 200) + " »")
+              << std::endl;
         steps.flush();
         _exit(CUT);
     });
@@ -203,13 +205,17 @@ TEST_F(PowerCut, AJournalThatCannotBeSyncedPublishesNothing) {
     }
     ASSERT_EQ(status, CUT) << "[check: setup] the child did not reach the cut\n" << steps;
     ASSERT_NE(steps.find("COMMIT refused"), std::string::npos)
-        << "[check: setup] the failed sync did not fail the commit\n" << steps;
+        << "[check: setup] the failed sync did not fail the commit\n"
+        << steps;
     EXPECT_NE(steps.find("AFTER 2000\n"), std::string::npos)
-        << "[check: a-commit-whose-journal-failed-is-not-visible]\n" << steps;
+        << "[check: a-commit-whose-journal-failed-is-not-visible]\n"
+        << steps;
     EXPECT_NE(steps.find("LOST 0\n"), std::string::npos)
-        << "[check: a-commit-whose-journal-failed-is-not-visible]\n" << steps;
+        << "[check: a-commit-whose-journal-failed-is-not-visible]\n"
+        << steps;
     EXPECT_NE(steps.find("AGAIN accepted"), std::string::npos)
-        << "[check: the-key-of-the-failed-commit-is-free]\n" << steps;
+        << "[check: the-key-of-the-failed-commit-is-free]\n"
+        << steps;
     EXPECT_EQ(judge("MATCH (t:T) RETURN count(*), sum(t.id);"), "2001|2004000\n")
         << "[check: after-the-cut-only-the-synced-commit-is-there]";
     EXPECT_EQ(judge("MATCH (t:T {id: 5000}) RETURN t.s;"), "gardée\n")

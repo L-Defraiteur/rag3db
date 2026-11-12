@@ -51,10 +51,9 @@ LockOutcome LockManager::acquire(transaction_t transactionID, std::span<const Lo
         }
         return a.mode > b.mode;
     });
-    ordered.erase(std::unique(ordered.begin(), ordered.end(),
-                      [](const LockRequest& a, const LockRequest& b) {
-                          return a.resource == b.resource;
-                      }),
+    ordered.erase(
+        std::unique(ordered.begin(), ordered.end(),
+            [](const LockRequest& a, const LockRequest& b) { return a.resource == b.resource; }),
         ordered.end());
 
     std::unique_lock lck{mtx};

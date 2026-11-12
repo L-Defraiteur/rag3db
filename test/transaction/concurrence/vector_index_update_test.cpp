@@ -36,22 +36,22 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <atomic>
-#include <mutex>
-#include <thread>
 #include <future>
 #include <iostream>
-#include <chrono>
 #include <map>
-#include <unordered_map>
+#include <mutex>
 #include <optional>
 #include <random>
-#include <algorithm>
 #include <set>
+#include <thread>
+#include <unordered_map>
 
 #include "bench_harness.h"
 #include "catalog/catalog.h"
@@ -126,11 +126,12 @@ public:
         const std::string& index = "doc_index", const std::string& column = "vec") {
         std::set<std::string> failed;
         std::vector<std::pair<int64_t, std::string>> rows;
-        auto scan = conn->query(stringFormat("MATCH (n:{}) WHERE n.{} IS NOT NULL RETURN n.id, n.{};",
-            table, column, column));
+        auto scan = conn->query(stringFormat(
+            "MATCH (n:{}) WHERE n.{} IS NOT NULL RETURN n.id, n.{};", table, column, column));
         while (scan->hasNext()) {
             auto tuple = scan->getNext();
-            rows.emplace_back(tuple->getValue(0)->getValue<int64_t>(), tuple->getValue(1)->toString());
+            rows.emplace_back(tuple->getValue(0)->getValue<int64_t>(),
+                tuple->getValue(1)->toString());
         }
         if (rows.empty()) {
             return failed;
@@ -142,12 +143,12 @@ public:
         const auto numRows = rows.size();
         std::set<int64_t> reached;
         int64_t dead = 0;
-        auto exhaustive = conn->query(stringFormat(
-            "CALL QUERY_VECTOR_INDEX('{}', '{}', {}, {}, efs := {}) RETURN node.id;", table, index,
-            rows.front().second, numRows, numRows));
+        auto exhaustive = conn->query(
+            stringFormat("CALL QUERY_VECTOR_INDEX('{}', '{}', {}, {}, efs := {}) RETURN node.id;",
+                table, index, rows.front().second, numRows, numRows));
         if (!exhaustive->isSuccess()) {
-            lastCheckSummary = label + " : the exhaustive search failed: " +
-                               exhaustive->getErrorMessage();
+            lastCheckSummary =
+                label + " : the exhaustive search failed: " + exhaustive->getErrorMessage();
             std::cerr << lastCheckSummary << "\n";
             failed.insert("query");
             return failed;
@@ -318,12 +319,13 @@ public:
     WritesDuringCreate createIndexUnderWritesOnce(int64_t numRows, bool withChanges,
         std::string& outcome) {
         WritesDuringCreate writes;
-        const std::string vec = "[i % 17, i % 23, i % 29, i % 31, i % 37, i % 41, i % 43, i % 47, "
-                                "i % 53, i % 59, i % 61, i % 67, i % 71, i % 73, i % 79, i / 1000.0]";
+        const std::string vec =
+            "[i % 17, i % 23, i % 29, i % 31, i % 37, i % 41, i % 43, i % 47, "
+            "i % 53, i % 59, i % 61, i % 67, i % 71, i % 73, i % 79, i / 1000.0]";
         table = "C";
         mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY, vec FLOAT[16]);");
-        mustRun(stringFormat("UNWIND range(0, {}) AS i CREATE (:C {id: i, vec: {}});",
-            numRows - 1, vec));
+        mustRun(stringFormat("UNWIND range(0, {}) AS i CREATE (:C {id: i, vec: {}});", numRows - 1,
+            vec));
         rag3db::main::Connection creator(database.get());
         rag3db::main::Connection writer(database.get());
         std::atomic<bool> created{false};
@@ -335,8 +337,8 @@ public:
         });
         for (int64_t j = 0; !created.load() && j < 100000; j++) {
             const auto i = 100000 + j;
-            auto inserted = writer.query(
-                stringFormat("CREATE (:C {id: {}, vec: {}});", i, createRowVector(i)));
+            auto inserted =
+                writer.query(stringFormat("CREATE (:C {id: {}, vec: {}});", i, createRowVector(i)));
             if (inserted->isSuccess() && !created.load()) {
                 writes.inserted++;
             }
@@ -354,8 +356,7 @@ public:
                 continue;
             }
             if (j % 5 == 4) {
-                auto gone =
-                    writer.query(stringFormat("MATCH (n:C {id: {}}) DELETE n;", 2 * j + 1));
+                auto gone = writer.query(stringFormat("MATCH (n:C {id: {}}) DELETE n;", 2 * j + 1));
                 // Supprimée, la ligne n'est plus à chercher, même si sa suppression a validé
                 // après la fin du CREATE : elle restait attendue à son nouveau vecteur, et la
                 // recherche courte « ne la trouvait pas » (139, 149, 169, 179, toutes d'indice
@@ -435,11 +436,11 @@ public:
                                                                  std::string("nothing"))
                       << "\n";
         }
-        std::cerr << "  create under writes: " << writes.inserted << " inserted, "
-                  << writes.deleted << " deleted, " << writes.updated.size() << " moved, "
-                  << writes.movedThenDeleted << " moved then deleted during the build; "
-                  << reached.size() << "/" << numLive << " reached, " << dead
-                  << " dead returned, " << duplicates << " returned twice, " << movedFound << "/" << writes.updated.size()
+        std::cerr << "  create under writes: " << writes.inserted << " inserted, " << writes.deleted
+                  << " deleted, " << writes.updated.size() << " moved, " << writes.movedThenDeleted
+                  << " moved then deleted during the build; " << reached.size() << "/" << numLive
+                  << " reached, " << dead << " dead returned, " << duplicates << " returned twice, "
+                  << movedFound << "/" << writes.updated.size()
                   << " moved rows found at their new vector\n";
         if (static_cast<int64_t>(reached.size()) != numLive) {
             failed.insert("rows-committed-during-create-indexed");
@@ -474,10 +475,12 @@ public:
 // Garde-fou vert : le chemin principal de rag3weaver, une ligne créée sans vecteur puis
 // remplie.
 TEST_F(VectorIndexUpdate, SetFromNullLineByLine) {
-    runRepeatedly([&](int run) {
-        createDocs(run, 1000, true /* nullVectors */);
-        setInSlices(0, 1000, 1, OTHER_VECTOR);
-    }, 1 /* ownStep */, 3 /* runs */);
+    runRepeatedly(
+        [&](int run) {
+            createDocs(run, 1000, true /* nullVectors */);
+            setInSlices(0, 1000, 1, OTHER_VECTOR);
+        },
+        1 /* ownStep */, 3 /* runs */);
 }
 
 TEST_F(VectorIndexUpdate, SetToAnotherVectorLineByLine) {
@@ -488,10 +491,12 @@ TEST_F(VectorIndexUpdate, SetToAnotherVectorLineByLine) {
 }
 
 TEST_F(VectorIndexUpdate, SetToAnotherVectorInBatchesOf512) {
-    runRepeatedly([&](int run) {
-        createDocs(run, 1000);
-        setInSlices(0, 1000, 512, OTHER_VECTOR);
-    }, 1 /* ownStep */, 10 /* runs */);
+    runRepeatedly(
+        [&](int run) {
+            createDocs(run, 1000);
+            setInSlices(0, 1000, 512, OTHER_VECTOR);
+        },
+        1 /* ownStep */, 10 /* runs */);
 }
 
 // Vingt lignes vers le même vecteur, en une instruction (998 dans la passe du cœur C++).
@@ -504,10 +509,12 @@ TEST_F(VectorIndexUpdate, TwentyRowsToTheSameVectorInOneStatement) {
 
 // Garde-fous verts du cœur C++ : vingt SET distincts, ou vers le vecteur d'une autre ligne.
 TEST_F(VectorIndexUpdate, TwentyRowsToDistinctVectorsLineByLine) {
-    runRepeatedly([&](int run) {
-        createDocs(run, 1000);
-        setInSlices(100, 120, 1, OTHER_VECTOR);
-    }, 1 /* ownStep */, 20 /* runs */);
+    runRepeatedly(
+        [&](int run) {
+            createDocs(run, 1000);
+            setInSlices(100, 120, 1, OTHER_VECTOR);
+        },
+        1 /* ownStep */, 20 /* runs */);
 }
 
 TEST_F(VectorIndexUpdate, TwentyRowsToAnotherRowsVector) {
@@ -533,23 +540,28 @@ TEST_F(VectorIndexUpdate, RealDimension768InBatchesOf100) {
         for (auto low = 0; low < 1000; low += 100) {
             std::string list = "[";
             for (auto id = low; id < low + 100; ++id) {
-                list += (id > low ? "," : "") + stringFormat("{id: {}, vec: {}}", id, vector(id, shift));
+                list += (id > low ? "," : "") +
+                        stringFormat("{id: {}, vec: {}}", id, vector(id, shift));
             }
             list += "]";
             mustRun(create ?
-                        stringFormat("UNWIND {} AS x CREATE (:{} {id: x.id, vec: x.vec});", list, table) :
-                        stringFormat("UNWIND {} AS x MATCH (n:{} {id: x.id}) SET n.vec = x.vec;", list,
-                            table));
+                        stringFormat("UNWIND {} AS x CREATE (:{} {id: x.id, vec: x.vec});", list,
+                            table) :
+                        stringFormat("UNWIND {} AS x MATCH (n:{} {id: x.id}) SET n.vec = x.vec;",
+                            list, table));
         }
     };
-    runRepeatedly([&](int run) {
-        table = stringFormat("Doc{}", run);
-        mustRun(stringFormat("CREATE NODE TABLE {}(id INT64 PRIMARY KEY, vec FLOAT[768]);", table));
-        fill(0, true);
-        createIndex();
-        // Par UNWIND de cent lignes, comme rag3weaver écrit ses plongements.
-        fill(1, false);
-    }, 1 /* ownStep */, 1 /* runs */);
+    runRepeatedly(
+        [&](int run) {
+            table = stringFormat("Doc{}", run);
+            mustRun(
+                stringFormat("CREATE NODE TABLE {}(id INT64 PRIMARY KEY, vec FLOAT[768]);", table));
+            fill(0, true);
+            createIndex();
+            // Par UNWIND de cent lignes, comme rag3weaver écrit ses plongements.
+            fill(1, false);
+        },
+        1 /* ownStep */, 1 /* runs */);
 }
 
 // Lourd : 25 s avant c8fdaf196, 12 à 27 min après (la mise à jour s'est beaucoup ralentie,
@@ -566,23 +578,27 @@ TEST_F(VectorIndexUpdate, TenThousandRowsInBatchesOf512) {
 
 // Une même ligne mise à jour cinquante fois, chaque fois vers un autre vecteur.
 TEST_F(VectorIndexUpdate, OneRowUpdatedManyTimes) {
-    runRepeatedly([&](int run) {
-        createDocs(run, 1000);
-        for (auto k = 1; k <= 50; ++k) {
-            mustRun(stringFormat("MATCH (n:{}) WHERE n.id = 500 SET n.vec = [{}, {}, {}, {}];",
-                table, 500 % 13 + 0.5 * k, k % 19, k % 31, 500 + 0.25 * k));
-        }
-    }, 1 /* ownStep */, 20 /* runs */);
+    runRepeatedly(
+        [&](int run) {
+            createDocs(run, 1000);
+            for (auto k = 1; k <= 50; ++k) {
+                mustRun(stringFormat("MATCH (n:{}) WHERE n.id = 500 SET n.vec = [{}, {}, {}, {}];",
+                    table, 500 % 13 + 0.5 * k, k % 19, k % 31, 500 + 0.25 * k));
+            }
+        },
+        1 /* ownStep */, 20 /* runs */);
 }
 
 // Mise à jour puis suppression d'une ligne sur trois : les restantes joignables, aucune
 // supprimée rendue.
 TEST_F(VectorIndexUpdate, UpdateThenDelete) {
-    runRepeatedly([&](int run) {
-        createDocs(run, 1000);
-        setInSlices(0, 1000, 512, OTHER_VECTOR);
-        mustRun(stringFormat("MATCH (n:{}) WHERE n.id % 3 = 0 DELETE n;", table));
-    }, 1 /* ownStep */, 10 /* runs */);
+    runRepeatedly(
+        [&](int run) {
+            createDocs(run, 1000);
+            setInSlices(0, 1000, 512, OTHER_VECTOR);
+            mustRun(stringFormat("MATCH (n:{}) WHERE n.id % 3 = 0 DELETE n;", table));
+        },
+        1 /* ownStep */, 10 /* runs */);
 }
 
 // Une mise à jour annulée : l'index doit revenir à ce qu'il était, chaque ligne joignable
@@ -593,14 +609,14 @@ TEST_F(VectorIndexUpdate, UpdateInARolledBackTransaction) {
         mustRun("BEGIN TRANSACTION;");
         setInSlices(0, 300, 100, OTHER_VECTOR);
         // Le cas n'éprouve rien si la mise à jour n'a pas eu lieu avant l'annulation.
-        auto updated = conn->query(stringFormat(
-            "MATCH (n:{}) WHERE n.vec <> {} RETURN count(*);", table, ORIGIN_VECTOR));
+        auto updated = conn->query(
+            stringFormat("MATCH (n:{}) WHERE n.vec <> {} RETURN count(*);", table, ORIGIN_VECTOR));
         ASSERT_TRUE(updated->isSuccess()) << "[check: query] " << updated->getErrorMessage();
         ASSERT_EQ(updated->getNext()->getValue(0)->getValue<int64_t>(), 300)
             << "[check: update-before-rollback] ";
         mustRun("ROLLBACK;");
-        auto changed = conn->query(stringFormat(
-            "MATCH (n:{}) WHERE n.vec <> {} RETURN count(*);", table, ORIGIN_VECTOR));
+        auto changed = conn->query(
+            stringFormat("MATCH (n:{}) WHERE n.vec <> {} RETURN count(*);", table, ORIGIN_VECTOR));
         ASSERT_TRUE(changed->isSuccess()) << "[check: query] " << changed->getErrorMessage();
         ASSERT_EQ(changed->getNext()->getValue(0)->getValue<int64_t>(), 0)
             << "[check: rollback-restores-table] ";
@@ -714,7 +730,8 @@ TEST_P(RowsCreatedInATransaction, AreIndexedOnce) {
                     "node.id;",
                     table, id));
                 ASSERT_TRUE(own->isSuccess()) << "[check: query] " << own->getErrorMessage();
-                ownFound += own->hasNext() && own->getNext()->getValue(0)->getValue<int64_t>() == id;
+                ownFound +=
+                    own->hasNext() && own->getNext()->getValue(0)->getValue<int64_t>() == id;
             }
             // Le graphe lui-même (sa couche basse, une table de relations cachée) : une ligne
             // insérée deux fois y laisse des arêtes en double, que la recherche ne montre pas
@@ -742,9 +759,9 @@ TEST_P(RowsCreatedInATransaction, AreIndexedOnce) {
                 "MATCH (a:{})-[r:{}]->(b:{}) WITH a.id AS s, b.id AS d, count(*) AS c WHERE c > 1 "
                 "RETURN count(*);",
                 table, lower, table));
-            const auto toItself = graphCount(stringFormat(
-                "MATCH (a:{})-[r:{}]->(b:{}) WHERE a.id = b.id RETURN count(*);", table, lower,
-                table));
+            const auto toItself = graphCount(
+                stringFormat("MATCH (a:{})-[r:{}]->(b:{}) WHERE a.id = b.id RETURN count(*);",
+                    table, lower, table));
             mustRun("CALL ENABLE_INTERNAL_CATALOG=false;");
             const auto summary = stringFormat(
                 "run {} {} : {} rows returned by the exhaustive search, {} returned twice, {}/10 "
@@ -800,9 +817,8 @@ TEST_F(VectorIndexUpdate, RowsFlushedByACopyThenUpdatedFollowTheirVector) {
             ASSERT_TRUE(own->isSuccess()) << "[check: query] " << own->getErrorMessage();
             ownFound += own->hasNext() && own->getNext()->getValue(0)->getValue<int64_t>() == id;
         }
-        const auto summary =
-            stringFormat("run {} : {}/10 flushed then updated rows found by their final vector",
-                run, ownFound);
+        const auto summary = stringFormat(
+            "run {} : {}/10 flushed then updated rows found by their final vector", run, ownFound);
         std::cerr << "  " << summary << "\n";
         if (ownFound != 10) {
             failures += "\n  " + summary;
@@ -825,8 +841,9 @@ TEST_F(VectorIndexUpdate, SetFromNullInBatchesOf32WithAMarker) {
     runRepeatedly([&](int run) {
         createDocs(run, 1000, true /* nullVectors */);
         for (auto low = 0; low < 1000; low += 32) {
-            mustRun(stringFormat("UNWIND range({}, {}) AS i MATCH (n:{} {id: i}) SET n.vec = [i % 13 "
-                                 "+ 0.5, i % 19, i % 31, i + 0.25], n.marker = concat('h', CAST(i AS STRING));",
+            mustRun(stringFormat(
+                "UNWIND range({}, {}) AS i MATCH (n:{} {id: i}) SET n.vec = [i % 13 "
+                "+ 0.5, i % 19, i % 31, i + 0.25], n.marker = concat('h', CAST(i AS STRING));",
                 low, std::min(999, low + 31), table));
         }
     });
@@ -842,30 +859,36 @@ void replaceThroughNull(VectorIndexUpdate& test, int64_t id, const std::string& 
 }
 
 TEST_F(VectorIndexUpdate, ReplaceThroughNullEveryRow) {
-    runRepeatedly([&](int run) {
-        createDocs(run, 1000);
-        for (auto id = 0; id < 1000; ++id) {
-            replaceThroughNull(*this, id, OTHER_VECTOR);
-        }
-    }, 1 /* ownStep */, 1 /* runs */);
+    runRepeatedly(
+        [&](int run) {
+            createDocs(run, 1000);
+            for (auto id = 0; id < 1000; ++id) {
+                replaceThroughNull(*this, id, OTHER_VECTOR);
+            }
+        },
+        1 /* ownStep */, 1 /* runs */);
 }
 
 TEST_F(VectorIndexUpdate, ReplaceThroughNullEveryOtherRow) {
-    runRepeatedly([&](int run) {
-        createDocs(run, 1000);
-        for (auto id = 0; id < 1000; id += 2) {
-            replaceThroughNull(*this, id, OTHER_VECTOR);
-        }
-    }, 1 /* ownStep */, 1 /* runs */);
+    runRepeatedly(
+        [&](int run) {
+            createDocs(run, 1000);
+            for (auto id = 0; id < 1000; id += 2) {
+                replaceThroughNull(*this, id, OTHER_VECTOR);
+            }
+        },
+        1 /* ownStep */, 1 /* runs */);
 }
 
 TEST_F(VectorIndexUpdate, ReplaceThroughNullEveryThirdRow) {
-    runRepeatedly([&](int run) {
-        createDocs(run, 1000);
-        for (auto id = 0; id < 1000; id += 3) {
-            replaceThroughNull(*this, id, OTHER_VECTOR);
-        }
-    }, 1 /* ownStep */, 2 /* runs */);
+    runRepeatedly(
+        [&](int run) {
+            createDocs(run, 1000);
+            for (auto id = 0; id < 1000; id += 3) {
+                replaceThroughNull(*this, id, OTHER_VECTOR);
+            }
+        },
+        1 /* ownStep */, 2 /* runs */);
 }
 
 TEST_F(VectorIndexUpdate, ReplaceThroughNullTheSameRowManyTimes) {
@@ -873,7 +896,8 @@ TEST_F(VectorIndexUpdate, ReplaceThroughNullTheSameRowManyTimes) {
         createDocs(run, 1000);
         for (auto k = 1; k <= 50; ++k) {
             replaceThroughNull(*this, 500,
-                stringFormat("[{}, {}, {}, {}]", 500 % 13 + 0.5 * k, k % 19, k % 31, 500 + 0.25 * k));
+                stringFormat("[{}, {}, {}, {}]", 500 % 13 + 0.5 * k, k % 19, k % 31,
+                    500 + 0.25 * k));
         }
     });
 }
@@ -886,9 +910,10 @@ TEST_F(VectorIndexUpdate, SecondIndexOnASecondColumnFilledFromNull) {
         createDocs(run, 1000);
         createIndex("doc_index2", "vec2");
         for (auto low = 0; low < 1000; low += 32) {
-            mustRun(stringFormat("UNWIND range({}, {}) AS i MATCH (n:{} {id: i}) SET n.vec2 = [i % 7, "
-                                 "i % 11 + 0.5, i % 37, i * 2];",
-                low, std::min(999, low + 31), table));
+            mustRun(
+                stringFormat("UNWIND range({}, {}) AS i MATCH (n:{} {id: i}) SET n.vec2 = [i % 7, "
+                             "i % 11 + 0.5, i % 37, i * 2];",
+                    low, std::min(999, low + 31), table));
         }
     });
 }
@@ -896,12 +921,14 @@ TEST_F(VectorIndexUpdate, SecondIndexOnASecondColumnFilledFromNull) {
 // Le gros rattrapage : l'index retiré puis recréé sur une table pleine, après des mises à
 // jour.
 TEST_F(VectorIndexUpdate, DropThenCreateTheIndexOnAFullTable) {
-    runRepeatedly([&](int run) {
-        createDocs(run, 1000);
-        setInSlices(0, 1000, 512, OTHER_VECTOR);
-        mustRun(stringFormat("CALL DROP_VECTOR_INDEX('{}', 'doc_index');", table));
-        createIndex();
-    }, 1 /* ownStep */, 2 /* runs */);
+    runRepeatedly(
+        [&](int run) {
+            createDocs(run, 1000);
+            setInSlices(0, 1000, 512, OTHER_VECTOR);
+            mustRun(stringFormat("CALL DROP_VECTOR_INDEX('{}', 'doc_index');", table));
+            createIndex();
+        },
+        1 /* ownStep */, 2 /* runs */);
 }
 
 // Une ligne très éloignée des autres dans un index bâti d'un coup, sans aucune mise à
@@ -924,9 +951,11 @@ TEST_F(VectorIndexUpdate, FarRowInAnIndexBuiltAtOnce) {
 }
 
 TEST_F(VectorIndexUpdate, FarRowFromATightCloudInAnIndexBuiltAtOnce) {
-    runRepeatedly([&](int run) {
-        farRowScenario(*this, run, "[n.id % 17, n.id % 23, n.id % 29, n.id % 31]");
-    }, 1 /* ownStep */, 30 /* runs */);
+    runRepeatedly(
+        [&](int run) {
+            farRowScenario(*this, run, "[n.id % 17, n.id % 23, n.id % 29, n.id % 31]");
+        },
+        1 /* ownStep */, 30 /* runs */);
 }
 
 // Un COPY refusé (une clé en double) laisse la cardinalité de la table gonflée des lignes
@@ -1121,11 +1150,11 @@ TEST_F(VectorIndexUpdate, FabricateADatabaseWithAnInflatedCardinality) {
             out << i << ",n" << i << "\n";
         }
     }
-    for (const auto& query : std::vector<std::string>{
-             "CREATE NODE TABLE T(id INT64 PRIMARY KEY, s STRING);",
-             "UNWIND range(0, 199) AS i CREATE (:T {id: i, s: 'r'});", "CHECKPOINT;",
-             "BEGIN TRANSACTION;", "COPY T FROM '" + csv + "' (header=false);", "ROLLBACK;",
-             "CHECKPOINT;"}) {
+    for (const auto& query :
+        std::vector<std::string>{"CREATE NODE TABLE T(id INT64 PRIMARY KEY, s STRING);",
+            "UNWIND range(0, 199) AS i CREATE (:T {id: i, s: 'r'});", "CHECKPOINT;",
+            "BEGIN TRANSACTION;", "COPY T FROM '" + csv + "' (header=false);", "ROLLBACK;",
+            "CHECKPOINT;"}) {
         mustRun(query);
     }
     auto card = conn->query("CALL STATS_INFO('T') RETURN cardinality;");
@@ -1267,8 +1296,8 @@ TEST_F(VectorIndexUpdate, IndexCountingMoreRowsThanItsTableIsRefusedByName) {
     indexedRowCount(*conn, table, "doc_index", 210);
     const auto refusedByName = [&](const std::string& query, const char* check) {
         auto result = conn->query(query);
-        const auto message = result->isSuccess() ? std::string("<success>") :
-                                                   result->getErrorMessage();
+        const auto message =
+            result->isSuccess() ? std::string("<success>") : result->getErrorMessage();
         std::cerr << "  " << check << ": " << message.substr(0, 300) << "\n";
         EXPECT_NE(message.find("is behind its table"), std::string::npos)
             << "[check: " << check << "] " << message.substr(0, 300);
@@ -1383,8 +1412,8 @@ TEST_F(VectorIndexUpdate, NearCopiesAndExactCopiesAreAllFound) {
     const auto checkCopies = [&]() -> std::string {
         std::set<int64_t> reached;
         auto exhaustive = conn->query(stringFormat(
-            "CALL QUERY_VECTOR_INDEX('{}', 'doc_index', {}, {}, efs := {}) RETURN node.id;",
-            table, texts[0], numRows, numRows));
+            "CALL QUERY_VECTOR_INDEX('{}', 'doc_index', {}, {}, efs := {}) RETURN node.id;", table,
+            texts[0], numRows, numRows));
         if (!exhaustive->isSuccess()) {
             return exhaustive->getErrorMessage();
         }
@@ -1411,8 +1440,8 @@ TEST_F(VectorIndexUpdate, NearCopiesAndExactCopiesAreAllFound) {
         if (reached.size() == static_cast<size_t>(numRows) && notFound == 0) {
             return "";
         }
-        return stringFormat("{}/{} reachable, {} not found by their own vector;{}",
-            reached.size(), numRows, notFound, firstMisses);
+        return stringFormat("{}/{} reachable, {} not found by their own vector;{}", reached.size(),
+            numRows, notFound, firstMisses);
     };
     std::string failures;
     const auto runs = forcedRuns > 0 ? forcedRuns : 3;
@@ -1434,8 +1463,7 @@ TEST_F(VectorIndexUpdate, NearCopiesAndExactCopiesAreAllFound) {
         for (auto first = half; first < numRows; first += 64) {
             std::string items;
             for (auto i = first; i < std::min(numRows, first + 64); i++) {
-                items +=
-                    (items.empty() ? "" : ", ") + stringFormat("{id: {}, v: {}}", i, texts[i]);
+                items += (items.empty() ? "" : ", ") + stringFormat("{id: {}, v: {}}", i, texts[i]);
             }
             mustRun(stringFormat("UNWIND [{}] AS item CREATE (:{} {id: item.id, vec: item.v});",
                 items, table));
@@ -1454,11 +1482,11 @@ TEST_F(VectorIndexUpdate, NearCopiesAndExactCopiesAreAllFound) {
 
 // La recette de l'arbre principal (10 octobre) : une note d'embedder.rs, vue une fois le 25 août
 // 2026, disait que l'index HNSW plantait (shrinkForNode → computeDistance) sur quelques centaines
-// de vecteurs identiques — 1 402 vecteurs NULS du MockEmbedder. Rejouée sur le moteur d'aujourd'hui,
-// dans un fils (un plantage n'emporte pas la passe) : le même vecteur pour toutes les lignes, nul
-// (une norme nulle : le cosinus divise par zéro) ou non nul (des doublons seuls) ; l'index créé
-// avant ou après les lignes ; les lignes une à une ou par COPY. L'attendu : ni plantage ni erreur,
-// la recherche rend, et chaque ligne est joignable par la recherche exhaustive.
+// de vecteurs identiques — 1 402 vecteurs NULS du MockEmbedder. Rejouée sur le moteur
+// d'aujourd'hui, dans un fils (un plantage n'emporte pas la passe) : le même vecteur pour toutes
+// les lignes, nul (une norme nulle : le cosinus divise par zéro) ou non nul (des doublons seuls) ;
+// l'index créé avant ou après les lignes ; les lignes une à une ou par COPY. L'attendu : ni
+// plantage ni erreur, la recherche rend, et chaque ligne est joignable par la recherche exhaustive.
 struct SameVectorCase {
     bool zero;
     bool indexFirst;
@@ -1505,8 +1533,8 @@ TEST_P(SameVectorForEveryRow, NeitherCrashesNorLosesRows) {
                 }
                 return result;
             };
-            run(stringFormat(
-                "CREATE NODE TABLE T(id INT64, v FLOAT[{}], PRIMARY KEY(id));", DIMENSION));
+            run(stringFormat("CREATE NODE TABLE T(id INT64, v FLOAT[{}], PRIMARY KEY(id));",
+                DIMENSION));
             const auto createIndex = [&] {
                 run("CALL CREATE_VECTOR_INDEX('T', 'idx', 'v', metric := 'cosine');");
             };
@@ -1523,8 +1551,8 @@ TEST_P(SameVectorForEveryRow, NeitherCrashesNorLosesRows) {
             if (!indexFirst) {
                 createIndex();
             }
-            auto top = run("CALL QUERY_VECTOR_INDEX('T', 'idx', " + vector +
-                           ", 10) RETURN node.id;");
+            auto top =
+                run("CALL QUERY_VECTOR_INDEX('T', 'idx', " + vector + ", 10) RETURN node.id;");
             const auto numTop = top->getNumTuples();
             auto all = run(stringFormat(
                 "CALL QUERY_VECTOR_INDEX('T', 'idx', {}, {}, efs := {}) RETURN node.id;", vector,
@@ -1658,8 +1686,8 @@ TEST_P(RealVectorsReachability, RowsNotFoundByTheirOwnVector) {
     }
     std::cerr << "  " << GetParam() << ": " << missed << " of " << uuids.size()
               << " not found by their own vector (loaded and indexed in "
-              << std::chrono::duration_cast<std::chrono::seconds>(built - start).count()
-              << " s);" << firstMisses << "\n";
+              << std::chrono::duration_cast<std::chrono::seconds>(built - start).count() << " s);"
+              << firstMisses << "\n";
     {
         // Le rappel@10 moyen sur 300 requêtes tirées d'une graine fixe, contre la force brute
         // (cosinus en double) : un rendu compte s'il est à une distance au plus égale à la
@@ -1708,8 +1736,8 @@ TEST_P(RealVectorsReachability, RowsNotFoundByTheirOwnVector) {
             std::nth_element(sorted.begin(), sorted.begin() + 9, sorted.end());
             const auto tenth = sorted[9];
             const auto queryStart = std::chrono::steady_clock::now();
-            auto result = conn->query("CALL QUERY_VECTOR_INDEX('T', 'idx', " +
-                                      vectors[uuids[row]] + ", 10) RETURN node.uuid;");
+            auto result = conn->query("CALL QUERY_VECTOR_INDEX('T', 'idx', " + vectors[uuids[row]] +
+                                      ", 10) RETURN node.uuid;");
             latencies.push_back(std::chrono::duration_cast<std::chrono::microseconds>(
                 std::chrono::steady_clock::now() - queryStart)
                                     .count());
@@ -1729,8 +1757,8 @@ TEST_P(RealVectorsReachability, RowsNotFoundByTheirOwnVector) {
                   << latencies[latencies.size() / 2] << " us, p90 "
                   << latencies[latencies.size() * 9 / 10] << " us; database file "
                   << std::filesystem::file_size(databasePath) / 1024 << " KiB after a checkpoint\n";
-        std::cerr << "  " << GetParam() << ": recall@10 " << recallSum / QUERIES
-                  << " over " << QUERIES << " queries; lower degree "
+        std::cerr << "  " << GetParam() << ": recall@10 " << recallSum / QUERIES << " over "
+                  << QUERIES << " queries; lower degree "
                   << (numEdges < 0 ? -1.0 : double(numEdges) / uuids.size()) << "\n";
     }
     if (std::getenv("BANC_EXHAUSTIF") && !missedUuids.empty()) {
@@ -1738,8 +1766,8 @@ TEST_P(RealVectorsReachability, RowsNotFoundByTheirOwnVector) {
         // de la recherche ? Une recherche exhaustive depuis le premier vecteur le dit.
         std::set<std::string> reached;
         auto all = conn->query("CALL QUERY_VECTOR_INDEX('T', 'idx', " + vectors[uuids.front()] +
-                               ", " + std::to_string(uuids.size()) + ", efs := " +
-                               std::to_string(uuids.size()) + ") RETURN node.uuid;");
+                               ", " + std::to_string(uuids.size()) +
+                               ", efs := " + std::to_string(uuids.size()) + ") RETURN node.uuid;");
         while (all->isSuccess() && all->hasNext()) {
             reached.insert(all->getNext()->getValue(0)->toString());
         }
@@ -1765,8 +1793,8 @@ TEST_P(RealVectorsReachability, RowsNotFoundByTheirOwnVector) {
     }
     if (const char* dir = std::getenv("BANC_MANQUES")) {
         static int pass = 0;
-        std::ofstream out(std::string(dir) + "/" + GetParam() + "-" + std::to_string(++pass) +
-                          ".txt");
+        std::ofstream out(
+            std::string(dir) + "/" + GetParam() + "-" + std::to_string(++pass) + ".txt");
         for (const auto& uuid : missedUuids) {
             out << uuid << "\n";
         }
@@ -1777,7 +1805,6 @@ TEST_P(RealVectorsReachability, RowsNotFoundByTheirOwnVector) {
 
 INSTANTIATE_TEST_SUITE_P(Paths, RealVectorsReachability, ::testing::Values("Masse", "Fond"),
     [](const ::testing::TestParamInfo<std::string>& info) { return info.param; });
-
 
 // Sous le mode multi-écrivains : un SET de vecteur qui attend l'index derrière une insertion non
 // validée, puis reprend après sa validation (ticket
@@ -1799,8 +1826,8 @@ TEST_F(VectorIndexUpdate, AnUpdateWaitingBehindAnInsertSeesItsNewRows) {
         table));
     ASSERT_TRUE(insert->isSuccess()) << insert->getErrorMessage();
     auto waiting = std::async(std::launch::async, [&] {
-        auto result = waiter.query(stringFormat(
-            "MATCH (n:{}) WHERE n.id = 5 SET n.vec = [5, 5, 5, 305];", table));
+        auto result = waiter.query(
+            stringFormat("MATCH (n:{}) WHERE n.id = 5 SET n.vec = [5, 5, 5, 305];", table));
         return result->isSuccess() ? std::string("ok") : result->getErrorMessage();
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -1840,7 +1867,8 @@ struct RegionDeleteCase {
     bool keepOnlyAHandful;
 };
 
-class RegionDelete : public VectorIndexUpdate, public ::testing::WithParamInterface<RegionDeleteCase> {};
+class RegionDelete : public VectorIndexUpdate,
+                     public ::testing::WithParamInterface<RegionDeleteCase> {};
 
 TEST_P(RegionDelete, SurvivorsStayReachableAndTheNearestAreRight) {
     constexpr int NUM_ROWS = 3000;
@@ -1882,7 +1910,8 @@ TEST_P(RegionDelete, SurvivorsStayReachableAndTheNearestAreRight) {
     for (auto first = 0; first < NUM_ROWS; first += 100) {
         std::string items;
         for (auto i = first; i < std::min(NUM_ROWS, first + 100); i++) {
-            items += (items.empty() ? "" : ", ") + stringFormat("{i: {}, v: {}}", i, literal(vecs[i]));
+            items +=
+                (items.empty() ? "" : ", ") + stringFormat("{i: {}, v: {}}", i, literal(vecs[i]));
         }
         mustRun("UNWIND [" + items + "] AS x CREATE (:R {id: x.i, vec: x.v});");
     }
@@ -1916,9 +1945,9 @@ TEST_P(RegionDelete, SurvivorsStayReachableAndTheNearestAreRight) {
     }
     const auto numSurvivors = static_cast<int64_t>(survivors.size());
     // Toutes les vivantes, atteintes depuis la requête d'un survivant.
-    auto all = conn->query(stringFormat(
-        "CALL QUERY_VECTOR_INDEX('R', 'r_index', {}, {}, efs := {}) RETURN node.id;",
-        literal(vecs[survivors[0]]), numSurvivors, numSurvivors));
+    auto all = conn->query(
+        stringFormat("CALL QUERY_VECTOR_INDEX('R', 'r_index', {}, {}, efs := {}) RETURN node.id;",
+            literal(vecs[survivors[0]]), numSurvivors, numSurvivors));
     ASSERT_TRUE(all->isSuccess()) << all->getErrorMessage();
     std::set<int64_t> reached;
     while (all->hasNext()) {
@@ -1946,9 +1975,8 @@ TEST_P(RegionDelete, SurvivorsStayReachableAndTheNearestAreRight) {
         hits += found.contains(id) ? 1 : 0;
     }
     std::cerr << "  region delete (" << (GetParam().setNullFirst ? "set null first" : "direct")
-              << ", " << (GetParam().keepOnlyAHandful ? "all but five" : "10 %")
-              << "): reached " << reached.size() << "/" << numSurvivors << ", nearest " << hits << "/"
-              << k << "\n";
+              << ", " << (GetParam().keepOnlyAHandful ? "all but five" : "10 %") << "): reached "
+              << reached.size() << "/" << numSurvivors << ", nearest " << hits << "/" << k << "\n";
     EXPECT_GE(hits * 10, k * 9) << "[check: nearest-right] " << hits << " of " << k;
 }
 
@@ -1971,13 +1999,14 @@ TEST_F(VectorIndexUpdate, RowsCommittedDuringACreateAreIndexed) {
                             "i % 53, i % 59, i % 61, i % 67, i % 71, i % 73, i % 79, i / 1000.0]";
     table = "C";
     mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY, vec FLOAT[16]);");
-    mustRun(stringFormat("UNWIND range(0, {}) AS i CREATE (:C {id: i, vec: {}});", NUM_ROWS - 1,
-        vec));
+    mustRun(
+        stringFormat("UNWIND range(0, {}) AS i CREATE (:C {id: i, vec: {}});", NUM_ROWS - 1, vec));
     rag3db::main::Connection creator(database.get());
     rag3db::main::Connection writer(database.get());
     std::atomic<bool> created{false};
     auto creating = std::async(std::launch::async, [&] {
-        auto result = creator.query("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
+        auto result =
+            creator.query("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
         created = true;
         return result->isSuccess() ? std::string("ok") : result->getErrorMessage();
     });
@@ -2107,9 +2136,9 @@ TEST_F(VectorIndexCreateUnderManyWriters, NoWriterWaitsLongDuringTheCreate) {
     rag3db::main::Connection creator(database.get());
     const auto createStart = std::chrono::steady_clock::now();
     auto result = creator.query("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
-    const auto createMs = std::chrono::duration<double, std::milli>(
-        std::chrono::steady_clock::now() - createStart)
-                              .count();
+    const auto createMs =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - createStart)
+            .count();
     created = true;
     for (auto& writer : writers) {
         writer.join();
@@ -2172,9 +2201,10 @@ TEST_F(VectorIndexUpdate, AWriterOpenAcrossTheCreateIsCaughtUp) {
 TEST_F(VectorIndexUpdate, AForcedCopyCommittedRightAfterACreateIsReached) {
     table = "C";
     mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY, vec FLOAT[16]);");
-    mustRun("UNWIND range(0, 19999) AS i CREATE (:C {id: i, vec: [i % 17, i % 23, i % 29, i % 31, "
-            "i % 37, i % 41, i % 43, i % 47, i % 53, i % 59, i % 61, i % 67, i % 71, i % 73, i % 79, "
-            "i / 1000.0]});");
+    mustRun(
+        "UNWIND range(0, 19999) AS i CREATE (:C {id: i, vec: [i % 17, i % 23, i % 29, i % 31, "
+        "i % 37, i % 41, i % 43, i % 47, i % 53, i % 59, i % 61, i % 67, i % 71, i % 73, i % 79, "
+        "i / 1000.0]});");
     rag3db::main::Connection creator(database.get());
     rag3db::main::Connection copier(database.get());
     ASSERT_TRUE(copier.query("CALL copy_journal_threshold=1;")->isSuccess());
@@ -2285,7 +2315,8 @@ TEST_F(VectorIndexUpdate, AnInvalidUpperEntryPointIsTakenFromTheUpperLayer) {
             i, i, i, i / 1000.0));
         entryPoint = upperEntryPointOf(*conn, "C", "c_index");
     }
-    ASSERT_NE(entryPoint, INVALID_OFFSET) << "[check: setup] no inserted row entered the upper layer";
+    ASSERT_NE(entryPoint, INVALID_OFFSET)
+        << "[check: setup] no inserted row entered the upper layer";
     EXPECT_LT(entryPoint, static_cast<offset_t>(NUM_ROWS))
         << "[check: upper-entry-point-from-the-upper-layer] the entry point is the new row "
         << entryPoint;
@@ -2324,8 +2355,8 @@ public:
     }
 
     static std::string searchFor(const std::string& vector, int64_t k = 1) {
-        return stringFormat(
-            "CALL QUERY_VECTOR_INDEX('C', 'c_index', {}, {}) RETURN node.id;", vector, k);
+        return stringFormat("CALL QUERY_VECTOR_INDEX('C', 'c_index', {}, {}) RETURN node.id;",
+            vector, k);
     }
 
     // Lance une recherche en boucle depuis `connection` tant que `done` est faux, et range chaque
@@ -2367,9 +2398,7 @@ TEST_F(VectorIndexCreateStates, ASearchDuringTheBuildIsRefusedByItsState) {
     rag3db::main::Connection searcher(database.get());
     std::vector<std::string> seen;
     std::vector<std::string> states;
-    std::thread searching([&] {
-        seen = searchWhile(searcher, created);
-    });
+    std::thread searching([&] { seen = searchWhile(searcher, created); });
     std::thread showing([&] {
         rag3db::main::Connection shower(database.get());
         while (!created.load()) {
@@ -2389,21 +2418,21 @@ TEST_F(VectorIndexCreateStates, ASearchDuringTheBuildIsRefusedByItsState) {
     searching.join();
     showing.join();
     ASSERT_TRUE(result->isSuccess()) << "[check: setup] " << result->getErrorMessage();
-    std::cerr << "  messages seen during the CREATE:" << joined(seen) << "\n  states shown:"
-              << joined(states) << "\n";
+    std::cerr << "  messages seen during the CREATE:" << joined(seen)
+              << "\n  states shown:" << joined(states) << "\n";
     EXPECT_TRUE(anyContains(seen, "is under construction"))
         << "[check: search-during-build-refused-by-state]" << joined(seen);
-    EXPECT_TRUE(anyContains(states, "NOTED")) << "[check: show-indexes-says-the-state]"
-                                              << joined(states);
+    EXPECT_TRUE(anyContains(states, "NOTED"))
+        << "[check: show-indexes-says-the-state]" << joined(states);
     auto shown = conn->query("CALL SHOW_INDEXES() RETURN state;");
-    ASSERT_TRUE(shown->isSuccess()) << "[check: show-indexes-says-the-state] "
-                                    << shown->getErrorMessage();
+    ASSERT_TRUE(shown->isSuccess())
+        << "[check: show-indexes-says-the-state] " << shown->getErrorMessage();
     ASSERT_TRUE(shown->hasNext());
     EXPECT_EQ(shown->getNext()->getValue(0)->toString(), "READY")
         << "[check: show-indexes-says-the-state]";
     auto served = conn->query(searchFor(movedRowVector(0)));
-    EXPECT_TRUE(served->isSuccess()) << "[check: search-served-when-ready] "
-                                     << served->getErrorMessage();
+    EXPECT_TRUE(served->isSuccess())
+        << "[check: search-served-when-ready] " << served->getErrorMessage();
 }
 
 // Une lecture sur un instantané d'avant le CREATE ne voit pas l'index : interrogée après la
@@ -2485,8 +2514,8 @@ TEST_F(VectorIndexCreateStates, AWriterStartedWhileNotedIsWaitedForAndFound) {
     const auto moved = "[901, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1]";
     const auto gone = "[5 % 17, 5 % 23, 5 % 29, 5 % 31, 5 % 37, 5 % 41, 5 % 43, 5 % 47, 5 % 53, "
                       "5 % 59, 5 % 61, 5 % 67, 5 % 71, 5 % 73, 5 % 79, 5 / 1000.0]";
-    ASSERT_TRUE(writer.query(stringFormat("CREATE (:C {id: 900000, vec: {}});", inserted))
-                    ->isSuccess());
+    ASSERT_TRUE(
+        writer.query(stringFormat("CREATE (:C {id: 900000, vec: {}});", inserted))->isSuccess());
     ASSERT_TRUE(
         writer.query(stringFormat("MATCH (n:C {id: 7}) SET n.vec = {};", moved))->isSuccess());
     ASSERT_TRUE(writer.query("MATCH (n:C {id: 5}) DELETE n;")->isSuccess());
@@ -2502,8 +2531,8 @@ TEST_F(VectorIndexCreateStates, AWriterStartedWhileNotedIsWaitedForAndFound) {
     const auto waitedMs =
         std::chrono::duration<double, std::milli>(createEnd - writerCommit).count();
     std::cerr << "  the CREATE ended " << waitedMs << " ms after the writer committed\n";
-    EXPECT_GE(waitedMs, 0.0) << "[check: tb-waited-for-the-writer] the CREATE ended "
-                             << -waitedMs << " ms before the writer committed";
+    EXPECT_GE(waitedMs, 0.0) << "[check: tb-waited-for-the-writer] the CREATE ended " << -waitedMs
+                             << " ms before the writer committed";
     const auto firstOf = [&](const std::string& vector) {
         auto result = conn->query(searchFor(vector));
         return result->isSuccess() && result->hasNext() ?
@@ -2575,18 +2604,19 @@ TEST_F(VectorIndexCreateStates, AnInterruptedCreateLeavesAnIndexToRebuild) {
         << "[check: incomplete-index-not-skipped-by-create] " << skipMessage;
     skipped.reset();
     auto dropped = conn->query("CALL DROP_VECTOR_INDEX('C', 'c_index');");
-    EXPECT_TRUE(dropped->isSuccess()) << "[check: incomplete-index-dropped] "
-                                      << dropped->getErrorMessage();
+    EXPECT_TRUE(dropped->isSuccess())
+        << "[check: incomplete-index-dropped] " << dropped->getErrorMessage();
     auto again = conn->query("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
-    ASSERT_TRUE(again->isSuccess()) << "[check: incomplete-index-rebuilt] "
-                                    << again->getErrorMessage();
+    ASSERT_TRUE(again->isSuccess())
+        << "[check: incomplete-index-rebuilt] " << again->getErrorMessage();
     auto served = conn->query(searchFor(movedRowVector(0)));
-    EXPECT_TRUE(served->isSuccess()) << "[check: incomplete-index-rebuilt] "
-                                     << served->getErrorMessage();
+    EXPECT_TRUE(served->isSuccess())
+        << "[check: incomplete-index-rebuilt] " << served->getErrorMessage();
 }
 
-// Les 120 000 vecteurs de dimension 768 de la mesure qui suit ne tiennent pas dans le tampon d'1 Gio
-// de VectorIndexUpdate : le COPY le remplissait et condamnait la base (fenêtre du 25 octobre 2026).
+// Les 120 000 vecteurs de dimension 768 de la mesure qui suit ne tiennent pas dans le tampon d'1
+// Gio de VectorIndexUpdate : le COPY le remplissait et condamnait la base (fenêtre du 25 octobre
+// 2026).
 class VectorIndexMeasure : public VectorIndexUpdate {
 public:
     void SetUp() override {
@@ -2598,13 +2628,13 @@ public:
     }
 };
 
-// La mesure du ticket des lignes hors du graphe (hotfixs, 25 octobre) : une recherche lit une à une les
-// lignes au-delà du compte des lignes reliées (numCheckpointedNodes), par searchFromUnCheckpointed
-// (un getEmbedding et une distance par ligne). Une table de TOTAL vecteurs de dimension 768, indexée
-// une fois ; pour chaque N, le compte est posé à TOTAL - N par le miroir, ce qui laisse N lignes à
-// balayer, à N exact et sans dépendre de la course d'un CREATE ; 50 recherches à k = 10, médiane
-// et p95 ; le compte est rendu après. Une mesure : sautée sans CONCURRENCE_MEASURE=1, à jouer sous
-// `poste mesure`, dans une fenêtre calme, la charge relevée.
+// La mesure du ticket des lignes hors du graphe (hotfixs, 25 octobre) : une recherche lit une à une
+// les lignes au-delà du compte des lignes reliées (numCheckpointedNodes), par
+// searchFromUnCheckpointed (un getEmbedding et une distance par ligne). Une table de TOTAL vecteurs
+// de dimension 768, indexée une fois ; pour chaque N, le compte est posé à TOTAL - N par le miroir,
+// ce qui laisse N lignes à balayer, à N exact et sans dépendre de la course d'un CREATE ; 50
+// recherches à k = 10, médiane et p95 ; le compte est rendu après. Une mesure : sautée sans
+// CONCURRENCE_MEASURE=1, à jouer sous `poste mesure`, dans une fenêtre calme, la charge relevée.
 TEST_F(VectorIndexMeasure, MeasureSearchOverRowsOutsideTheGraph) {
     if (std::getenv("CONCURRENCE_MEASURE") == nullptr) {
         GTEST_SKIP() << "a measure: CONCURRENCE_MEASURE=1, under `poste mesure`";
@@ -2643,9 +2673,9 @@ TEST_F(VectorIndexMeasure, MeasureSearchOverRowsOutsideTheGraph) {
     }
     const auto createStart = std::chrono::steady_clock::now();
     createIndex();
-    const auto createMs = std::chrono::duration<double, std::milli>(
-        std::chrono::steady_clock::now() - createStart)
-                              .count();
+    const auto createMs =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - createStart)
+            .count();
     mustRun("CHECKPOINT;");
     if (HasFatalFailure()) {
         return;
@@ -2676,9 +2706,9 @@ TEST_F(VectorIndexMeasure, MeasureSearchOverRowsOutsideTheGraph) {
                 result->getNext();
                 rows++;
             }
-            durations.push_back(std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() - start)
-                                    .count());
+            durations.push_back(
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
+                    .count());
             ASSERT_EQ(rows, 10) << "[check: query] a search returned " << rows << " rows";
         }
         std::sort(durations.begin(), durations.end());

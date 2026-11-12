@@ -42,8 +42,8 @@ protected:
         }
         return out;
     }
-    // Le numéro de colonne d'une propriété, lu au catalogue (dernier état validé, comme le point de reprise le lit : hors requête, la
-    // connexion n'a pas de transaction).
+    // Le numéro de colonne d'une propriété, lu au catalogue (dernier état validé, comme le point de
+    // reprise le lit : hors requête, la connexion n'a pas de transaction).
     column_id_t columnID(const std::string& table, const std::string& property) const {
         auto* context = conn->getClientContext();
         auto* entry = rag3db::catalog::Catalog::Get(*context)->getTableCatalogEntry(

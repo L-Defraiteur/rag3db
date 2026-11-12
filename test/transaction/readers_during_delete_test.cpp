@@ -30,8 +30,8 @@ protected:
         systemConfig->maxDBSize = 1024ull * 1024 * 1024 * 1024;
         createDBAndConn();
         ok(*conn, "CREATE NODE TABLE Item(id INT64 PRIMARY KEY, v INT64);");
-        ok(*conn, "UNWIND range(1, " + std::to_string(NUM_ROWS) +
-                      ") AS k CREATE (:Item {id: k, v: 1});");
+        ok(*conn,
+            "UNWIND range(1, " + std::to_string(NUM_ROWS) + ") AS k CREATE (:Item {id: k, v: 1});");
         // Les lignes viennent du disque : leurs blocs n'ont pas encore d'informations de
         // version, la première suppression de chaque bloc les crée sous les lecteurs.
         ok(*conn, "CHECKPOINT;");
@@ -73,8 +73,8 @@ TEST_F(ReadersDuringDeleteTest, ScansAndLookupsWhileOneWriterDeletes) {
         int64_t turn = 0;
         while (!writerDone.load()) {
             auto slot = 1 + (turn++ % NUM_DELETES);
-            auto result = reader.query("MATCH (i:Item {id: " +
-                                       std::to_string(slot * DELETE_STRIDE) + "}) RETURN i.v;");
+            auto result = reader.query(
+                "MATCH (i:Item {id: " + std::to_string(slot * DELETE_STRIDE) + "}) RETURN i.v;");
             if (!result->isSuccess()) {
                 numFailures++;
                 continue;

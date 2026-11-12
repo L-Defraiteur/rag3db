@@ -31,8 +31,8 @@ protected:
     }
 
     void useFixture(const std::string& name) {
-        const auto fixture = TestHelper::appendRag3dbRootPath(
-            "test/transaction/journal_with_duplicate_key/" + name);
+        const auto fixture =
+            TestHelper::appendRag3dbRootPath("test/transaction/journal_with_duplicate_key/" + name);
         std::filesystem::remove(databasePath);
         std::filesystem::remove(walPath);
         std::filesystem::copy_file(fixture, databasePath);

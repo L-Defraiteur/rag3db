@@ -19,8 +19,8 @@ bool ParsingDriver::done(uint64_t rowNum) {
     return rowNum >= DEFAULT_VECTOR_CAPACITY || doneEarly();
 }
 
-bool ParsingDriver::addValue(uint64_t rowNum, common::column_id_t columnIdx,
-    std::string_view value, bool valueWasQuoted) {
+bool ParsingDriver::addValue(uint64_t rowNum, common::column_id_t columnIdx, std::string_view value,
+    bool valueWasQuoted) {
     uint64_t length = value.length();
     if (length == 0 && columnIdx == 0) {
         rowEmpty = true;

@@ -11,12 +11,12 @@
 // la rendre en tête. C'est ce qui dit qu'une ligne est dans l'index, et qu'aucune arête ne
 // mène plus à une ligne annulée. Se saute si l'extension vector n'est pas bâtie.
 
+#include <unistd.h>
+
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <string>
-
-#include <unistd.h>
 
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
@@ -112,8 +112,7 @@ protected:
             }
         }
         EXPECT_EQ(numMissed, 0) << when << " : " << numMissed << " of " << count
-                                << " rows are not found by their own vector; first, "
-                                << firstMiss;
+                                << " rows are not found by their own vector; first, " << firstMiss;
     }
 
     // Aucune recherche ne rend une ligne copiée, et aucune n'échoue.
@@ -124,8 +123,8 @@ protected:
             std::string error;
             const auto found = nearest(copiedVector(id), &error);
             if ((found >= FIRST_COPIED || found == -2) && numWrong++ == 0) {
-                firstWrong = "near row " + std::to_string(id) + " gives " +
-                             std::to_string(found) + (error.empty() ? "" : " (" + error + ")");
+                firstWrong = "near row " + std::to_string(id) + " gives " + std::to_string(found) +
+                             (error.empty() ? "" : " (" + error + ")");
             }
         }
         EXPECT_EQ(numWrong, 0) << when << " : " << firstWrong;

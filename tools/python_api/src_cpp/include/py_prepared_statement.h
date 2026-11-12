@@ -1,7 +1,7 @@
 #pragma once
 
-#include "main/rag3db.h"
 #include "main/prepared_statement.h"
+#include "main/rag3db.h"
 #include "pybind_include.h"
 
 using namespace rag3db::main;

@@ -411,9 +411,9 @@ std::vector<std::unique_ptr<ColumnChunkData>> Column::checkpointSegment(
     // Une copie en mémoire du segment persistant (ses pages relues), les écritures fusionnées
     // dedans, puis le tout écrit sur des pages neuves : l'objet persistant n'est jamais touché.
     const auto numRows = std::max(checkpointState.endRowIdxToWrite, chunkState.metadata.numValues);
-    auto fresh = ColumnChunkFactory::createColumnChunkData(persistent.getMemoryManager(),
-        dataType.copy(), enableCompression, numRows, ResidencyState::IN_MEMORY,
-        persistent.hasNullData());
+    auto fresh =
+        ColumnChunkFactory::createColumnChunkData(persistent.getMemoryManager(), dataType.copy(),
+            enableCompression, numRows, ResidencyState::IN_MEMORY, persistent.hasNullData());
     scanSegment(chunkState, fresh.get(), 0, chunkState.metadata.numValues);
     for (auto& segmentCheckpointState : checkpointState.segmentCheckpointStates) {
         fresh->write(&segmentCheckpointState.chunkData, segmentCheckpointState.startRowInData,

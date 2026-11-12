@@ -64,12 +64,14 @@ protected:
         auto catalog = rag3db::catalog::Catalog::Get(*context);
         auto nodeEntry = catalog->getTableCatalogEntry(transaction, "N");
         auto relEntry = catalog->getTableCatalogEntry(transaction, "E");
-        const auto relTableID =
-            relEntry->constCast<rag3db::catalog::RelGroupCatalogEntry>().getSingleRelEntryInfo().oid;
+        const auto relTableID = relEntry->constCast<rag3db::catalog::RelGroupCatalogEntry>()
+                                    .getSingleRelEntryInfo()
+                                    .oid;
         rag3db::graph::NativeGraphEntry graphEntry{{nodeEntry}, {relEntry}};
         rag3db::graph::OnDiskGraph graph{context, std::move(graphEntry)};
         // Le décalage du nœud 0 : c'est la première ligne de la table.
-        const auto scanState = graph.prepareRelScan(*relEntry, relTableID, nodeEntry->getTableID(), {});
+        const auto scanState =
+            graph.prepareRelScan(*relEntry, relTableID, nodeEntry->getTableID(), {});
         std::multiset<int64_t> found;
         for (const auto& chunk :
             graph.scanFwd(rag3db::common::nodeID_t{0, nodeEntry->getTableID()}, *scanState)) {

@@ -102,8 +102,9 @@ std::unique_ptr<WALRecord> WALRecord::deserialize(Deserializer& deserializer,
     default: {
         // A type outside the enumeration is a corrupted journal, not an
         // impossible state: say so instead of asserting.
-        throw RuntimeException(common::stringFormat(
-            "Corrupted wal file. Read out unknown WAL record type {}.", static_cast<unsigned>(type)));
+        throw RuntimeException(
+            common::stringFormat("Corrupted wal file. Read out unknown WAL record type {}.",
+                static_cast<unsigned>(type)));
     }
     }
     walRecord->type = type;

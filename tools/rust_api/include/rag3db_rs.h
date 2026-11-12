@@ -81,7 +81,8 @@ std::unique_ptr<rag3db::common::LogicalType> logical_type_get_array_child_type(
     const rag3db::common::LogicalType& logicalType);
 uint64_t logical_type_get_array_num_elements(const rag3db::common::LogicalType& logicalType);
 
-rust::Vec<rust::String> logical_type_get_struct_field_names(const rag3db::common::LogicalType& value);
+rust::Vec<rust::String> logical_type_get_struct_field_names(
+    const rag3db::common::LogicalType& value);
 std::unique_ptr<std::vector<rag3db::common::LogicalType>> logical_type_get_struct_field_types(
     const rag3db::common::LogicalType& value);
 
@@ -104,8 +105,8 @@ void database_set_logging_level(rag3db::main::Database& database, const std::str
 std::unique_ptr<rag3db::main::Connection> database_connect(rag3db::main::Database& database);
 std::unique_ptr<rag3db::main::QueryResult> connection_execute(rag3db::main::Connection& connection,
     rag3db::main::PreparedStatement& query, std::unique_ptr<QueryParams> params);
-inline std::unique_ptr<rag3db::main::QueryResult> connection_query(rag3db::main::Connection& connection,
-    std::string_view query) {
+inline std::unique_ptr<rag3db::main::QueryResult> connection_query(
+    rag3db::main::Connection& connection, std::string_view query) {
     return connection.query(query);
 }
 
@@ -190,8 +191,8 @@ std::unique_ptr<rag3db::common::Value> create_value_timestamp_sec(const int64_t 
 inline std::unique_ptr<rag3db::common::Value> create_value_date(const int32_t date) {
     return std::make_unique<rag3db::common::Value>(rag3db::common::date_t(date));
 }
-std::unique_ptr<rag3db::common::Value> create_value_interval(const int32_t months, const int32_t days,
-    const int64_t micros);
+std::unique_ptr<rag3db::common::Value> create_value_interval(const int32_t months,
+    const int32_t days, const int64_t micros);
 std::unique_ptr<rag3db::common::Value> create_value_null(
     std::unique_ptr<rag3db::common::LogicalType> typ);
 std::unique_ptr<rag3db::common::Value> create_value_int128_t(int64_t high, uint64_t low);
@@ -208,9 +209,9 @@ std::unique_ptr<rag3db::common::Value> create_value(const T value) {
 }
 inline std::unique_ptr<rag3db::common::Value> create_value_decimal(int64_t high, uint64_t low,
     uint32_t scale, uint32_t precision) {
-    auto value =
-        std::make_unique<rag3db::common::Value>(rag3db::common::LogicalType::DECIMAL(precision, scale),
-            std::vector<std::unique_ptr<rag3db::common::Value>>{});
+    auto value = std::make_unique<rag3db::common::Value>(
+        rag3db::common::LogicalType::DECIMAL(precision, scale),
+        std::vector<std::unique_ptr<rag3db::common::Value>>{});
     auto i128 = rag3db::common::int128_t(low, high);
     rag3db::common::TypeUtils::visit(
         value->getDataType().getPhysicalType(),
@@ -225,11 +226,13 @@ inline std::unique_ptr<rag3db::common::Value> create_value_decimal(int64_t high,
 struct ValueListBuilder {
     std::vector<std::unique_ptr<rag3db::common::Value>> values;
 
-    void insert(std::unique_ptr<rag3db::common::Value> value) { values.push_back(std::move(value)); }
+    void insert(std::unique_ptr<rag3db::common::Value> value) {
+        values.push_back(std::move(value));
+    }
 };
 
-std::unique_ptr<rag3db::common::Value> get_list_value(std::unique_ptr<rag3db::common::LogicalType> typ,
-    std::unique_ptr<ValueListBuilder> value);
+std::unique_ptr<rag3db::common::Value> get_list_value(
+    std::unique_ptr<rag3db::common::LogicalType> typ, std::unique_ptr<ValueListBuilder> value);
 std::unique_ptr<ValueListBuilder> create_list();
 
 inline std::string_view string_view_from_str(rust::Str s) {

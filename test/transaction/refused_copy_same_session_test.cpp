@@ -48,7 +48,8 @@ TEST_F(RefusedCopySameSession, TheTableIsWholeAfterACopyRefusedForMemory) {
     // Un COPY de 300 000 lignes de 1 Kio : 300 Mo pour un tampon de 64 Mio.
     auto copy = conn->query(
         "COPY T FROM (UNWIND range(100000, 399999) AS i RETURN i, repeat('x', 1000) + string(i));");
-    ASSERT_FALSE(copy->isSuccess()) << "le COPY devait être refusé : le tampon n'est pas assez serré";
+    ASSERT_FALSE(copy->isSuccess())
+        << "le COPY devait être refusé : le tampon n'est pas assez serré";
     ASSERT_NE(copy->getErrorMessage().find("buffer pool is full"), std::string::npos)
         << copy->getErrorMessage();
     std::cout << "refus du COPY : " << copy->getErrorMessage().substr(0, 200) << "\n";
@@ -59,7 +60,8 @@ TEST_F(RefusedCopySameSession, TheTableIsWholeAfterACopyRefusedForMemory) {
         << "des lignes du COPY refusé sont visibles";
     // Une ligne créée ensuite se trouve par sa clé, et sa clé n'est prise qu'une fois.
     ok("CREATE (:T {id: -1, s: 'après'});");
-    EXPECT_EQ(scalar("MATCH (t:T {id: -1}) RETURN count(*);"), 1) << "la ligne créée n'est pas trouvée par sa clé";
+    EXPECT_EQ(scalar("MATCH (t:T {id: -1}) RETURN count(*);"), 1)
+        << "la ligne créée n'est pas trouvée par sa clé";
     auto twice = conn->query("CREATE (:T {id: -1, s: 'doublon'});");
     EXPECT_FALSE(twice->isSuccess()) << "la clé -1 a été acceptée deux fois";
     // Une clé du COPY refusé est libre.
@@ -81,12 +83,15 @@ TEST_F(RefusedCopySameSession, TheRelTableIsWholeAfterARelCopyRefusedForMemory) 
     ok("UNWIND range(0, 1999) AS i CREATE (:N {id: i});");
     ok("COPY R FROM (UNWIND range(0, 99) AS i RETURN i, i + 1, 'avant');");
     ok("CHECKPOINT;");
-    auto copy = conn->query("COPY R FROM (UNWIND range(0, 299999) AS i RETURN i % 2000, (i * 7) % 2000, "
-                            "repeat('r', 1000) + string(i));");
-    ASSERT_FALSE(copy->isSuccess()) << "le COPY devait être refusé : le tampon n'est pas assez serré";
+    auto copy =
+        conn->query("COPY R FROM (UNWIND range(0, 299999) AS i RETURN i % 2000, (i * 7) % 2000, "
+                    "repeat('r', 1000) + string(i));");
+    ASSERT_FALSE(copy->isSuccess())
+        << "le COPY devait être refusé : le tampon n'est pas assez serré";
     ASSERT_NE(copy->getErrorMessage().find("buffer pool is full"), std::string::npos)
         << copy->getErrorMessage();
-    EXPECT_EQ(scalar("MATCH ()-[r:R]->() RETURN count(*);"), 100) << "le compte des relations a bougé";
+    EXPECT_EQ(scalar("MATCH ()-[r:R]->() RETURN count(*);"), 100)
+        << "le compte des relations a bougé";
     EXPECT_EQ(scalar("MATCH (b:N)<-[r:R]-(a:N) RETURN count(*);"), 100);
     ok("COPY R FROM (UNWIND range(100, 149) AS i RETURN i, i + 1, 'petit');");
     ok("CHECKPOINT;");
@@ -108,7 +113,8 @@ TEST_F(RefusedCopySameSession, AnExplicitTransactionRollsBackACopyRefusedForMemo
         << copy->getErrorMessage();
     ok("ROLLBACK;");
     EXPECT_EQ(scalar("MATCH (t:T) RETURN count(*);"), 1000);
-    EXPECT_EQ(scalar("MATCH (t:T {id: -5}) RETURN count(*);"), 0) << "la ligne de la transaction annulée reste";
+    EXPECT_EQ(scalar("MATCH (t:T {id: -5}) RETURN count(*);"), 0)
+        << "la ligne de la transaction annulée reste";
     ok("CREATE (:T {id: -5, s: 'après'});");
     EXPECT_EQ(scalar("MATCH (t:T {id: -5}) RETURN count(*);"), 1);
     ok("CHECKPOINT;");

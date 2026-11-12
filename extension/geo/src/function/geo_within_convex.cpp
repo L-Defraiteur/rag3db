@@ -22,8 +22,7 @@ static void execFunc(const std::vector<std::shared_ptr<ValueVector>>& parameters
         std::vector<double> planes;
         uint32_t planesSize;
         if (!extractListDouble(*parameters[0], *parameterSelVectors[0], i, point, 3) ||
-            !extractListDoubleVar(*parameters[1], *parameterSelVectors[1], i, planes,
-                planesSize) ||
+            !extractListDoubleVar(*parameters[1], *parameterSelVectors[1], i, planes, planesSize) ||
             planesSize % 4 != 0 || planesSize == 0) {
             result.setNull(resPos, true);
             continue;
@@ -42,8 +41,8 @@ static std::unique_ptr<FunctionBindData> bindFunc(const ScalarBindFuncInput& inp
 function_set GeoWithinConvexFunction::getFunctionSet() {
     function_set result;
     auto func = std::make_unique<ScalarFunction>(name,
-        std::vector<LogicalTypeID>{LogicalTypeID::LIST, LogicalTypeID::LIST},
-        LogicalTypeID::BOOL, execFunc);
+        std::vector<LogicalTypeID>{LogicalTypeID::LIST, LogicalTypeID::LIST}, LogicalTypeID::BOOL,
+        execFunc);
     func->bindFunc = bindFunc;
     result.push_back(std::move(func));
     return result;

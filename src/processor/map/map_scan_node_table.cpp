@@ -108,8 +108,8 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapScanNodeTable(
         KU_ASSERT(virtualVectorIndices.size() == indexInfo.virtualExprs.size());
         auto printInfo = std::make_unique<IndexScanPrintInfo>(tableNames[0]);
         return std::make_unique<IndexScanNodeTable>(std::move(scanInfo), std::move(tableInfos[0]),
-            indexInfo.searchFunc, indexInfo.limit, std::move(virtualVectorIndices),
-            getOperatorID(), std::move(printInfo));
+            indexInfo.searchFunc, indexInfo.limit, std::move(virtualVectorIndices), getOperatorID(),
+            std::move(printInfo));
     }
     default:
         KU_UNREACHABLE;

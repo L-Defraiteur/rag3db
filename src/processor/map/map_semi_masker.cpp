@@ -2,11 +2,11 @@
 #include "planner/operator/sip/logical_semi_masker.h"
 #include "processor/operator/recursive_extend.h"
 #include "processor/operator/scan/scan_node_table.h"
-#include "storage/storage_manager.h"
-#include "storage/table/node_table.h"
 #include "processor/operator/semi_masker.h"
 #include "processor/operator/table_function_call.h"
 #include "processor/plan_mapper.h"
+#include "storage/storage_manager.h"
+#include "storage/table/node_table.h"
 
 using namespace rag3db::common;
 using namespace rag3db::planner;

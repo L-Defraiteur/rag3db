@@ -1,20 +1,20 @@
 #pragma once
 
 #include <chrono>
-#include <compare>
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
 #include <functional>
 #include <map>
 #include <mutex>
-#include <span>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "common/api.h"
 #include "common/types/types.h"
+#include <compare>
+#include <span>
 
 namespace rag3db {
 namespace transaction {
@@ -113,7 +113,8 @@ public:
         LockResource* failedOn = nullptr);
 
     LockOutcome acquire(common::transaction_t transactionID, const LockResource& resource,
-        LockMode mode, clock::time_point deadline, const interrupted_func_t& interrupted = nullptr) {
+        LockMode mode, clock::time_point deadline,
+        const interrupted_func_t& interrupted = nullptr) {
         const LockRequest request{resource, mode};
         return acquire(transactionID, std::span<const LockRequest>{&request, 1}, deadline,
             interrupted);

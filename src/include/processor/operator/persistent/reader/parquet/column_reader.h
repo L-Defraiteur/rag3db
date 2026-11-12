@@ -57,8 +57,8 @@ public:
     void prepareRead(parquet_filter_t& filter);
     void allocateBlock(uint64_t size);
     void allocateCompressed(uint64_t size);
-    void decompressInternal(rag3db_parquet::format::CompressionCodec::type codec, const uint8_t* src,
-        uint64_t srcSize, uint8_t* dst, uint64_t dstSize);
+    void decompressInternal(rag3db_parquet::format::CompressionCodec::type codec,
+        const uint8_t* src, uint64_t srcSize, uint8_t* dst, uint64_t dstSize);
     void preparePageV2(rag3db_parquet::format::PageHeader& pageHdr);
     void preparePage(rag3db_parquet::format::PageHeader& pageHdr);
     void prepareDataPage(rag3db_parquet::format::PageHeader& pageHdr);

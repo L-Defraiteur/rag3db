@@ -69,7 +69,8 @@ private:
         KU_ASSERT(state.groupIdxList[state.currentGroup] < metadata->row_groups.size());
         return metadata->row_groups[state.groupIdxList[state.currentGroup]];
     }
-    static common::LogicalType deriveLogicalType(const rag3db_parquet::format::SchemaElement& s_ele);
+    static common::LogicalType deriveLogicalType(
+        const rag3db_parquet::format::SchemaElement& s_ele);
     void initMetadata();
     std::unique_ptr<ColumnReader> createReader();
     std::unique_ptr<ColumnReader> createReaderRecursive(uint64_t depth, uint64_t maxDefine,

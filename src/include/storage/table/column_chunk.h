@@ -219,8 +219,10 @@ public:
         return state;
     }
     bool hasUpdates() const { return updateInfo.isSet(); }
-    bool hasCommittedUpdateAfter(common::transaction_t startTS, common::row_idx_t rowInChunk) const {
-        return updateInfo.hasCommittedUpdateAfter(startTS, rowInChunk / common::DEFAULT_VECTOR_CAPACITY,
+    bool hasCommittedUpdateAfter(common::transaction_t startTS,
+        common::row_idx_t rowInChunk) const {
+        return updateInfo.hasCommittedUpdateAfter(startTS,
+            rowInChunk / common::DEFAULT_VECTOR_CAPACITY,
             rowInChunk % common::DEFAULT_VECTOR_CAPACITY);
     }
     bool hasUpdates(const transaction::Transaction* transaction, common::row_idx_t startRow,

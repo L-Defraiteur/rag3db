@@ -436,11 +436,12 @@ TEST_P(CheckpointDeath, CommittedDataSurvivesADeathDuringCheckpoint) {
     // journal peut déjà être vide : légitime à cet instant-là seulement.
     if (point == DeathPoint::AfterJournalCleared) {
         const auto shadowPath = rag3db::storage::StorageUtils::getShadowFilePath(databasePath);
-        EXPECT_TRUE(std::filesystem::exists(
-                        rag3db::storage::StorageUtils::getWALFilePath(databasePath)) &&
-                    walSize() == 0)
+        EXPECT_TRUE(
+            std::filesystem::exists(rag3db::storage::StorageUtils::getWALFilePath(databasePath)) &&
+            walSize() == 0)
             << "[check: journal-cleared] the journal is not there and empty";
-        EXPECT_TRUE(std::filesystem::exists(shadowPath) && std::filesystem::file_size(shadowPath) > 0)
+        EXPECT_TRUE(
+            std::filesystem::exists(shadowPath) && std::filesystem::file_size(shadowPath) > 0)
             << "[check: shadow-file-left] no shadow file next to the empty journal";
     } else if (point != DeathPoint::AfterApplyingShadowPages) {
         expectJournalToReplay();
@@ -549,12 +550,13 @@ public:
             if (mixed) {
                 mustQuery(connection, "UNWIND range(1000, 1019) AS i CREATE (:Doc {id: i, name: "
                                       "'local ' + CAST(i AS STRING)});");
-                mustQuery(connection, "MATCH (n:Doc) WHERE n.id >= 1000 AND n.id % 4 = 0 DELETE n;");
+                mustQuery(connection,
+                    "MATCH (n:Doc) WHERE n.id >= 1000 AND n.id % 4 = 0 DELETE n;");
                 mustQuery(connection, "MATCH (n:Doc) WHERE n.id < 100 AND n.id % 10 = 0 DELETE n;");
             }
-            auto copy = connection.query(
-                (rels ? "COPY Link FROM '" : "COPY Doc(id, name) FROM '") + csv +
-                "' (header=false" + (ignored ? ", ignore_errors=true" : "") + ");");
+            auto copy = connection.query((rels ? "COPY Link FROM '" : "COPY Doc(id, name) FROM '") +
+                                         csv + "' (header=false" +
+                                         (ignored ? ", ignore_errors=true" : "") + ");");
             if (!copy->isSuccess()) {
                 // Refusé : la transaction est défaite ; mourir quand même, base ouverte.
                 std::ofstream(refusedFile) << copy->getErrorMessage();
@@ -589,8 +591,8 @@ public:
         const int64_t whole = (mixed ? 105 : 100) + (rels ? 0 : 1000);
         const auto numRels = queryInt("MATCH ()-[r:Link]->() RETURN count(r);");
         if (rels) {
-            EXPECT_TRUE((count == whole && numRels == NUM_COPIED_RELS) ||
-                        (count == 100 && numRels == 0))
+            EXPECT_TRUE(
+                (count == whole && numRels == NUM_COPIED_RELS) || (count == 100 && numRels == 0))
                 << "[check: relations-with-their-transaction] " << count << " rows, " << numRels
                 << " relations";
         }
@@ -649,7 +651,6 @@ TEST_P(ForcedCopyCheckpointDeath, AMixedTransactionWithAnOrdinaryForcedCopySurvi
 TEST_P(ForcedCopyCheckpointDeath, AMixedTransactionWithARelationCopyThatSkipsSurvivesWhole) {
     run(Form::RelIgnoredMixed);
 }
-
 
 INSTANTIATE_TEST_SUITE_P(Points, ForcedCopyCheckpointDeath,
     ::testing::Values(DeathPoint::BeforeStorage, DeathPoint::AfterStorage,
@@ -1197,8 +1198,8 @@ TEST_F(SingleWriterCrash, AutoCheckpointPostponedWhileATransactionStaysOpen) {
         << "[check: open-writer-writes] " << openWrite->getErrorMessage();
     openWrite.reset();
     auto write = conn->query("CREATE (:P {id: 999999});");
-    EXPECT_TRUE(write->isSuccess()) << "[check: committed-write-succeeds] "
-                                    << write->getErrorMessage();
+    EXPECT_TRUE(write->isSuccess())
+        << "[check: committed-write-succeeds] " << write->getErrorMessage();
     write.reset();
     // Le journal tel que la transaction ouverte l'a laissé grossir. Depuis A8 (11 octobre 2026),
     // c'est son départ (le dernier à partir) qui écrit le point de reprise demandé ; avant, c'était
@@ -1233,11 +1234,11 @@ TEST_F(SingleWriterCrash, AutoCheckpointIsNotPostponedByAnOpenReader) {
     const auto countBefore = before->getNext()->getValue(0)->getValue<int64_t>();
     before.reset();
     auto write = conn->query("CREATE (:P {id: 999999});");
-    EXPECT_TRUE(write->isSuccess()) << "[check: committed-write-succeeds] "
-                                    << write->getErrorMessage();
+    EXPECT_TRUE(write->isSuccess())
+        << "[check: committed-write-succeeds] " << write->getErrorMessage();
     write.reset();
     EXPECT_LE(walSize(), walFolded) << "[check: checkpoint-not-postponed-by-a-reader] the "
-                                      "journal should have been folded right away";
+                                       "journal should have been folded right away";
     auto during = other.query("MATCH (p:P) RETURN count(*);");
     ASSERT_TRUE(during->isSuccess());
     EXPECT_EQ(during->getNext()->getValue(0)->getValue<int64_t>(), countBefore)
@@ -1263,8 +1264,8 @@ TEST_F(SingleWriterCrash, BurstOfWritesUnderAnOpenReaderDoesNotWait) {
     const auto start = std::chrono::steady_clock::now();
     for (auto i = 0; i < 10; ++i) {
         auto write = conn->query(stringFormat("CREATE (:P {id: {}});", i));
-        EXPECT_TRUE(write->isSuccess()) << "[check: committed-write-succeeds] "
-                                        << write->getErrorMessage();
+        EXPECT_TRUE(write->isSuccess())
+            << "[check: committed-write-succeeds] " << write->getErrorMessage();
     }
     const auto elapsed = std::chrono::steady_clock::now() - start;
     other.query("COMMIT;");
@@ -1367,8 +1368,7 @@ TEST_F(SingleWriterCrash, SecondDatabaseOnTheSamePathInOneProcessIsRefused) {
         try {
             auto first = std::make_unique<rag3db::main::Database>(databasePath, *systemConfig);
             try {
-                auto second =
-                    std::make_unique<rag3db::main::Database>(databasePath, *systemConfig);
+                auto second = std::make_unique<rag3db::main::Database>(databasePath, *systemConfig);
                 // Ni l'une ni l'autre ne se ferme : sortir sans destructeur.
                 second.release();
                 first.release();
@@ -1378,7 +1378,7 @@ TEST_F(SingleWriterCrash, SecondDatabaseOnTheSamePathInOneProcessIsRefused) {
                 first.release();
                 // Le refus attendu est l'erreur nommée, levée avant tout rejeu.
                 _exit(std::string(e.what()).find("is already open for writing in this "
-                                                  "process") != std::string::npos ?
+                                                 "process") != std::string::npos ?
                           0 :
                           4);
             }
@@ -1392,10 +1392,10 @@ TEST_F(SingleWriterCrash, SecondDatabaseOnTheSamePathInOneProcessIsRefused) {
     createDBAndConn();
     EXPECT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0)
         << "[check: second-open-refused] "
-        << (WIFSIGNALED(status) ? "killed by signal " + std::to_string(WTERMSIG(status)) :
-            WEXITSTATUS(status) == 5 ? std::string("the second Database opened") :
-            WEXITSTATUS(status) == 4 ? std::string("refused, but not by the named error") :
-                                       "exit code " + std::to_string(WEXITSTATUS(status)));
+        << (WIFSIGNALED(status)         ? "killed by signal " + std::to_string(WTERMSIG(status)) :
+               WEXITSTATUS(status) == 5 ? std::string("the second Database opened") :
+               WEXITSTATUS(status) == 4 ? std::string("refused, but not by the named error") :
+                                          "exit code " + std::to_string(WEXITSTATUS(status)));
 }
 
 // Condition élargie par la session cœur C++ (3 octobre au soir) : le plantage à
@@ -1581,8 +1581,8 @@ TEST_P(ExtensionIndexRecovery, IndexExactWithoutRebuild) {
     // Le vert doit dire « la liste des extensions a servi » : le journal ne porte plus le
     // LOAD EXTENSION (un point de reprise l'a suivi), et c'est la liste notée à côté de la
     // base qui le rend à la reprise. Sans elle, le cas éprouverait autre chose.
-    ASSERT_TRUE(std::filesystem::exists(
-        rag3db::storage::StorageUtils::getExtensionsFilePath(databasePath)))
+    ASSERT_TRUE(
+        std::filesystem::exists(rag3db::storage::StorageUtils::getExtensionsFilePath(databasePath)))
         << "[check: extensions-list-written] no list of extensions next to the database";
     if (!reopenAfterDeath()) {
         return;
@@ -1762,9 +1762,8 @@ public:
 
     // Dans le fils de la reprise : chaque ligne doit sortir en tête pour le vecteur que
     // generationOf lui donne ; rend le nombre de lignes manquées.
-    static int64_t missedRows(rag3db::main::Connection& connection,
-        const std::vector<int64_t>& ids, const std::function<int(int64_t)>& generationOf,
-        const char* when) {
+    static int64_t missedRows(rag3db::main::Connection& connection, const std::vector<int64_t>& ids,
+        const std::function<int(int64_t)>& generationOf, const char* when) {
         const auto numRows = static_cast<int64_t>(ids.size());
         int64_t missed = 0;
         for (const auto id : ids) {
@@ -1829,11 +1828,12 @@ public:
                     std::string rows;
                     for (auto i = first; i < std::min(numRows, first + BATCH); i++) {
                         const auto id = ids[i];
-                        rows += (rows.empty() ? "" : ", ") + stringFormat("{id: {}, v: {}}", id,
-                                                                  vectorOf(id, 1));
+                        rows += (rows.empty() ? "" : ", ") +
+                                stringFormat("{id: {}, v: {}}", id, vectorOf(id, 1));
                     }
-                    if (!ok("UNWIND [" + rows + "] AS r MERGE (n:Chunk {id: r.id}) SET n.emb = "
-                                                "r.v;")) {
+                    if (!ok("UNWIND [" + rows +
+                            "] AS r MERGE (n:Chunk {id: r.id}) SET n.emb = "
+                            "r.v;")) {
                         return 4;
                     }
                 }
@@ -1902,8 +1902,8 @@ TEST_P(ProductReloadRecovery, VectorsSetAfterRecoveryAreFound) {
     ASSERT_TRUE(probe.empty()) << "[check: database-opens-without-crash] " << probe;
     const auto code = recoverInAChild(expectedIds(end));
     std::cerr << "  recovery child: " << code << "\n";
-    EXPECT_LT(code, 128) << "[check: recovery-survives] the recovery died by signal "
-                         << code - 128 << " (11 = SIGSEGV)";
+    EXPECT_LT(code, 128) << "[check: recovery-survives] the recovery died by signal " << code - 128
+                         << " (11 = SIGSEGV)";
     EXPECT_NE(code, 8) << "[check: row-count] ";
     EXPECT_NE(code, 4) << "[check: recovery-queries] ";
     EXPECT_NE(code, 3) << "[check: recovery-runs] ";
@@ -2008,8 +2008,8 @@ TEST_F(JournaledCopyDeath, DeathInTheMiddleOfACopyLeavesNothingOfIt) {
                 journaledSession(childConnection);
                 // Une ligne validée par ce fils : le journal n'est pas vide à sa mort, même
                 // si le COPY n'a rien validé (la fermeture du père a fait un point de reprise).
-                mustQuery(childConnection, "CREATE (:Doc {id: " + std::to_string(2000000 + round) +
-                                               ", name: 'round'});");
+                mustQuery(childConnection,
+                    "CREATE (:Doc {id: " + std::to_string(2000000 + round) + ", name: 'round'});");
                 std::ofstream(marker) << "1";
                 childConnection.query("COPY Doc FROM '" + csvPath() + "' (header=false);");
                 // Le COPY a fini avant le délai : attendre la mort, base ouverte.

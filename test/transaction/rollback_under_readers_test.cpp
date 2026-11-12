@@ -115,7 +115,8 @@ TEST_F(RollbackUnderReaders, ARolledBackRelInsertLeavesNoRowInTheNodesList) {
     ok("ROLLBACK;");
     EXPECT_EQ(scalar("MATCH (a:A {id: 0})-[r:R]->() RETURN count(r);"), 0);
     // L'insertion suivante réutilise les emplacements annulés : le nœud 0 ne doit rien y lire.
-    ok("MATCH (c:A {id: 2}), (d:A {id: 3}) UNWIND range(1, 30) AS i CREATE (c)-[:R {k: 100 + i}]->(d);");
+    ok("MATCH (c:A {id: 2}), (d:A {id: 3}) UNWIND range(1, 30) AS i CREATE (c)-[:R {k: 100 + "
+       "i}]->(d);");
     EXPECT_EQ(scalar("MATCH (c:A {id: 2})-[r:R]->() RETURN count(r);"), 30);
     expectThroughCheckpointAndReopen("MATCH (a:A {id: 0})-[r:R]->() RETURN count(r);", 0);
     EXPECT_EQ(scalar("MATCH ()-[r:R]->() RETURN count(r);"), 30);
@@ -131,7 +132,8 @@ TEST_F(RollbackUnderReaders, ARolledBackFirstRelInsertIsStillInvisibleToACopiedL
     ok("BEGIN TRANSACTION;");
     ok("COPY R FROM '" + annulees + "' (header=false);");
     ok("ROLLBACK;");
-    ok("MATCH (a:A {id: 0}), (b:A {id: 1}) UNWIND range(1, 5) AS i CREATE (a)-[:R {k: 200 + i}]->(b);");
+    ok("MATCH (a:A {id: 0}), (b:A {id: 1}) UNWIND range(1, 5) AS i CREATE (a)-[:R {k: 200 + "
+       "i}]->(b);");
     expectThroughCheckpointAndReopen("MATCH (a:A {id: 0})-[r:R]->() RETURN count(r);", 5);
     EXPECT_EQ(scalar("MATCH (a:A {id: 0})-[r:R]->() RETURN min(r.k);"), 201);
 }
@@ -217,8 +219,7 @@ TEST_F(RollbackUnderReaders, AReaderSurvivesTheRollbackOfAnotherWriter) {
         auto say = [&](Connection& connection, const std::string& query) {
             auto result = connection.query(query);
             if (!result->isSuccess()) {
-                steps << "refus « " << result->getErrorMessage() << " » sur " << query
-                      << std::endl;
+                steps << "refus « " << result->getErrorMessage() << " » sur " << query << std::endl;
             }
             return std::move(result);
         };
@@ -229,7 +230,8 @@ TEST_F(RollbackUnderReaders, AReaderSurvivesTheRollbackOfAnotherWriter) {
         // nœud qui a des relations persistantes les fait disparaître, défaut à part (ticket du 18
         // octobre, « un COPY de relations vers un nœud déjà relié perd ses relations
         // persistantes »), qui n'est pas celui que ce témoin juge.
-        say(setup, "MATCH (a:A {id: 0}), (b:A {id: 1}) UNWIND range(1, 10) AS i CREATE (a)-[:R {k: i}]->(b);");
+        say(setup, "MATCH (a:A {id: 0}), (b:A {id: 1}) UNWIND range(1, 10) AS i CREATE (a)-[:R {k: "
+                   "i}]->(b);");
         std::atomic<bool> stop{false};
         std::atomic<int64_t> wrongCounts{0};
         std::atomic<int64_t> reads{0};
@@ -237,8 +239,7 @@ TEST_F(RollbackUnderReaders, AReaderSurvivesTheRollbackOfAnotherWriter) {
         std::thread reader([&] {
             Connection connection(&database);
             while (!stop.load()) {
-                auto result =
-                    connection.query("MATCH (a:A {id: 0})-[r:R]->() RETURN count(r);");
+                auto result = connection.query("MATCH (a:A {id: 0})-[r:R]->() RETURN count(r);");
                 if (result->isSuccess() && result->hasNext()) {
                     const auto count = result->getNext()->getValue(0)->getValue<int64_t>();
                     if (count != 10) {
@@ -296,8 +297,9 @@ TEST_F(RollbackUnderReaders, AReaderSurvivesTheRollbackOfAnotherWriter) {
 // chaque COPY annulé.
 TEST_F(RollbackUnderReaders, AFullyRolledBackBlockShowsNoRowToAnyReader) {
 #if defined(RAG3DB_RUNTIME_CHECKS) || !defined(NDEBUG)
-    GTEST_SKIP() << "le compte d'avant l'annulation déclenche l'assertion de scan sous les "
-                    "contrôles d'exécution ; ce témoin rejoue la course telle qu'elle est en Release";
+    GTEST_SKIP()
+        << "le compte d'avant l'annulation déclenche l'assertion de scan sous les "
+           "contrôles d'exécution ; ce témoin rejoue la course telle qu'elle est en Release";
 #endif
     auto* memoryManager = getMemoryManager(*database);
     std::vector<LogicalType> types;

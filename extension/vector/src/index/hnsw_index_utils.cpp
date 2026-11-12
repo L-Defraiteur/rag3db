@@ -9,8 +9,8 @@
 #include "extension/extension_manager.h"
 #include "simsimd.h"
 #include "storage/storage_manager.h"
-#include "transaction/transaction.h"
 #include "storage/table/node_table.h"
+#include "transaction/transaction.h"
 #include "transaction/transaction_context.h"
 
 namespace rag3db {
@@ -46,9 +46,10 @@ static void throwIfBehindItsTable(const main::ClientContext& context,
         std::string why;
         for (const auto& failure :
             extension::ExtensionManager::Get(context)->getRecoveryLoadFailures()) {
-            why += common::stringFormat(" At recovery, extension {}could not be loaded from {}: {}.",
-                failure.name.empty() ? std::string() : failure.name + " ", failure.path,
-                failure.error);
+            why +=
+                common::stringFormat(" At recovery, extension {}could not be loaded from {}: {}.",
+                    failure.name.empty() ? std::string() : failure.name + " ", failure.path,
+                    failure.error);
         }
         throw common::RuntimeException{common::stringFormat(
             "Index {} {} {}: rows were recovered from the journal while its extension was not "

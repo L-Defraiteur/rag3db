@@ -52,8 +52,7 @@ public:
         systemConfig->bufferPoolSize = 1024 * 1024 * 1024;
         createDBAndConn();
         mustRun("CALL auto_checkpoint=false;");
-        mustRun(GetParam() ? "CALL enable_multi_writes=true;" :
-                             "CALL enable_multi_writes=false;");
+        mustRun(GetParam() ? "CALL enable_multi_writes=true;" : "CALL enable_multi_writes=false;");
     }
 
     void mustRun(const std::string& query) {
@@ -94,8 +93,8 @@ TEST_P(LockCost, SetToAnotherVectorLineByLine) {
     mustRun("CALL CREATE_VECTOR_INDEX('Doc', 'doc_index', 'vec', metric := 'l2');");
     measure("set-vecteur-1000-ligne-a-ligne", [&] {
         for (auto id = 0; id < 1000; ++id) {
-            mustRun(stringFormat("MATCH (n:Doc) WHERE n.id = {} SET n.vec = {};", id,
-                OTHER_VECTOR));
+            mustRun(
+                stringFormat("MATCH (n:Doc) WHERE n.id = {} SET n.vec = {};", id, OTHER_VECTOR));
         }
     });
     EXPECT_EQ(queryInt("MATCH (n:Doc) WHERE n.vec[1] = CAST(n.id % 13 + 0.5, 'FLOAT') "
@@ -134,8 +133,7 @@ TEST_P(LockCost, Insert100000RowsOneByOne) {
                                              << result->getErrorMessage();
         }
     });
-    EXPECT_EQ(queryInt("MATCH (n:Item) RETURN count(n);"), NUM_ROWS)
-        << "[check: rows-inserted] ";
+    EXPECT_EQ(queryInt("MATCH (n:Item) RETURN count(n);"), NUM_ROWS) << "[check: rows-inserted] ";
 }
 
 INSTANTIATE_TEST_SUITE_P(Mode, LockCost, ::testing::Bool(),

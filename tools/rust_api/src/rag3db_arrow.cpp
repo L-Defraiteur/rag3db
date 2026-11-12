@@ -8,7 +8,8 @@ ArrowSchema query_result_get_arrow_schema(const rag3db::main::QueryResult& resul
     return *result.getArrowSchema();
 }
 
-ArrowArray query_result_get_next_arrow_chunk(rag3db::main::QueryResult& result, uint64_t chunkSize) {
+ArrowArray query_result_get_next_arrow_chunk(rag3db::main::QueryResult& result,
+    uint64_t chunkSize) {
     return *result.getNextArrowChunk(chunkSize);
 }
 
