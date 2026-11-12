@@ -1,0 +1,18 @@
+{
+  "qualified_targeted_source": "386861a5d65c8786c7f58f08d69cae5079f44ac2",
+  "rebased_source": "c73114731",
+  "new_base": "24f3603cf",
+  "extension_diff_empty": true,
+  "tests": [
+    95,
+    0,
+    0
+  ],
+  "composed_verdict": "VERT",
+  "native": "29a7bc52a",
+  "proof": "cx-publication-composite-cible-v4",
+  "supervisor": "validation-alg4bj_0",
+  "reviewer": "memoire",
+  "global_budget_s": 5400,
+  "global_status": "non jouee"
+}
