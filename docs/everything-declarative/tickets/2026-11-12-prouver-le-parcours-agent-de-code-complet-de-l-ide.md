@@ -144,3 +144,11 @@ témoin kernel60s, témoin réel360s. Les preuves correctives vont sous
 `parcours-agent-ide-20261112/correctif-git` ; aucun nouvel appel Vertex avant
 publication de cette source et relecture du delta de permissions. Attendu
 kernel1/0/0 puis réel1/0/0 ; arrêt au premier rouge inattendu.
+
+La lecture des objets et références expose l’histoire du dépôt, pas seulement
+les lignes du diff courant ; cette capacité reste en lecture et porte sur le
+même dépôt connu de l’hôte. Le fichier de configuration global privé demeure
+inaccessible. Si Git réclame une actualisation d’index facultative, désactiver
+ses verrous facultatifs, jamais ouvrir l’administration du principal en écriture.
+Source corrective figée `b0090e2be` : compilation/kernel lancés, attente d’un
+avis RO sur cette source avant l’étape Vertex, dans le même budget1200s.
