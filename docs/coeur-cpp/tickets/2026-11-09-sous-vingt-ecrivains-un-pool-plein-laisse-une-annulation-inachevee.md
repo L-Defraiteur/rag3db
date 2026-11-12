@@ -171,3 +171,66 @@ ticket : comparer les trois cas persistants au parent sans correctif `65486c02d`
 du correctif avant rebâti. Mesurer les cas de plusieurs COPY annulés des deux
 côtés à partir des temps gtest, en distinguant mesure et garantie fonctionnelle.
 Aucun nouveau défaut attribué à ce stade, pas de changement des listes de rouges.
+
+## Reprise du 12 novembre — comparaison terminée, verdict encore partiel
+
+Porteur : cœur C++. Le lanceur `3805918` est terminé ; aucun processus à attendre
+et aucun rebuild ni rejeu lancé lors de cette reprise. Preuves à luciepc sous
+`~/.cache/rag3db-moteur-notes/annulation/` : `base.log`,
+`base-TwentyWriters.DdlEveryMinute.{log,xml}`, `base-SetInBatchesOf64.{log,xml}`,
+`base-SetInBatchesOf64WithRelation.{log,xml}`, `base-plusieurs-undo.{log,xml}`.
+
+Source contrôlée : HEAD distant `6e7f116806034c7ac6eb3bf2f6309d1c8aaf1b93`,
+fichiers du parent sans correctif `65486c02d` ; diff vide pour `src`, `test`,
+`extension/vector`, `extension/geo`. Le bâti entier de la base finit en 141 étapes.
+Ne pas attribuer les binaires courants au correctif : ce sont désormais ceux de
+la base. Les binaires sauvegardés du correctif sont dans `binaires-0511dece7/`
+avec SHA256 ; une extension chargée dynamiquement exige aussi son bâti assorti.
+
+### Deux rouges de coût présents des deux côtés
+
+| Cas | Correctif : 15 000 / 1 500 lignes (ms/ligne) | Base (ms/ligne) | Verdict |
+|---|---:|---:|---|
+| SetInBatchesOf64 | 8,330 / 2,137 | 10,469 / 2,378 | même contrôle rouge des deux côtés |
+| SetInBatchesOf64WithRelation | 8,509 / 2,421 | 11,185 / 3,059 | même contrôle rouge des deux côtés |
+
+Ces observations établissent que le correctif n’est pas nécessaire pour reproduire
+ces deux rouges. Elles ne mesurent pas une accélération : exécutions uniques et
+charge non appariée, pas de borne assouplie ni de liste modifiée.
+
+### DdlEveryMinute : verdict différentiel inconnu
+
+La base est rouge (1 009,647 s), sur l’attente de deux écrivains pendant
+`3 CREATE REL TABLE` (785/769 ms, bornes d’environ 177/168 ms). Elle n’a ni refus
+« buffer pool is full », ni exception « Cannot find property b », ni annulation
+inachevée dans ce journal.
+
+Le correctif est rouge seul (376,830 s) : le CREATE_VECTOR_INDEX et le ADD b sont
+refusés faute de pool ; le test continue malgré ce dernier refus et son SET b lève
+l’exception de liaison. Le journal contient 1 137 occurrences textuelles de
+« buffer pool is full » (ce n’est pas un compte de transactions distinctes),
+et aucune de la garde d’annulation inachevée.
+
+Ces symptômes différents interdisent de conclure « rouge identique donc indépendant ».
+La pression dépend du scénario chronométré et des écritures effectivement réalisées.
+Reste à comparer ces conditions et isoler le déclencheur sur une charge bornée avant
+tout rejeu supplémentaire. Cette analyse reste portée par ce ticket ; aucun
+nouveau lot ou correctif de DDL autorisé par ce seul constat.
+
+### Plusieurs enregistrements undo
+
+Huit cas `RolledBackCopiesTest.*` et `RolledBackBigCopyTest.*` verts sur la base
+(1,438 s) comme dans la suite entière du correctif. Trois COPY annulés puis point
+de reprise : base 0,409 s, correctif 0,470 s ; un COPY de 100 000 lignes : base
+0,305 s, correctif 0,298 s. Temps gtest incluant création/reprise de base et toute
+la recette, pas le coût isolé du retrait de clés ; charge et ordre non contrôlés.
+Les garanties fonctionnelles sont couvertes, la mesure du coût isolé reste ouverte.
+
+### Prochain pas et limite du verdict
+
+- Examiner les volumes, durées et états du pool déjà journalisés aux fenêtres DDL
+  des deux exécutions ; poser une comparaison bornée seulement après ce diagnostic.
+- Définir la mesure isolée du retrait par plage si le risque de coût reste matériel.
+- Conserver le témoin long STRING rouge sans correctif et vert avec, les ciblés
+  et la suite de transactions verts, mais aucun verdict global ni tour de push
+  tant que DdlEveryMinute n’est pas départagé. Ticket ouvert, pas de lib publiée.

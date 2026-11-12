@@ -285,3 +285,29 @@ Après les ciblés : `transaction_test` entier puis `concurrence_test` entier, c
 aux rouges connus et probabilistes. Mesurer séparément le coût avec plusieurs
 enregistrements undo. Aucun tour de push de code : fenêtre recherche en cours.
 Aucune lib du magasin n’a été modifiée pour ce lot.
+
+## Actualisation du 12 novembre — comparaison de base lue
+
+Toutes les actions restent portées par
+`docs/coeur-cpp/tickets/2026-11-09-sous-vingt-ecrivains-un-pool-plein-laisse-une-annulation-inachevee.md`
+(cœur C++). Les lanceurs des ciblés, suites entières, isolés et base sont terminés.
+Aucune compilation ni aucun test relancé à cette reprise.
+
+`0511dece7` : ciblés verts trois fois, stockage 8/8, transaction entière 357 verts
+et 2 outils sautés attendus ; concurrence 25 rouges, dont quatre hors listes.
+DdlEveryFifteenSeconds est vert seul. Les deux rouges de coût SetInBatchesOf64
+reproduisent le même contrôle sur la base sans correctif. Les huit recettes de
+COPY annulés passent aussi des deux côtés.
+
+DdlEveryMinute reste indépartagé : base rouge sur attentes DDL, correctif rouge
+sous pool plein puis ADD b refusé et SET d’une propriété absente. Les symptômes
+ne sont pas équivalents. Les preuves détaillées et les limites de mesure sont
+dans le ticket ; aucun vert global ni demande de tour de push.
+
+À luciepc, `rag3db-colonnes` porte maintenant les sources de `65486c02d` au-dessus
+de HEAD `6e7f11680`, diff vide contre la base pour src/test/vector/geo ; ses binaires
+courants sont ceux de la base. Le correctif reste sauvegardé sur
+`cx-coeur-annulation`, `0511dece7`, worktree local `~/git_workspaces/cx-coeur-annulation`.
+Les binaires précédents sont dans `annulation/binaires-0511dece7/` ; ne pas les
+rejouer avec des extensions incompatibles. Prochain travail : diagnostic des
+volumes et fenêtres DDL déjà journalisés, puis comparaison bornée si nécessaire.
