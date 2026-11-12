@@ -488,6 +488,11 @@ fn le_chat_code_teste_et_reprend_sur_vertex() {
     // Conserver aussi les états et refus si une assertion échoue.
     let d = tempfile::Builder::new().prefix("parcours ide ").tempdir_in(&preuves).unwrap().keep();
     let (depot, manifeste) = depot_inscrit(&d, true);
+    // Le parcours porte sur une fixture non indexée : recherche par balayage,
+    // sans lancer de rattrapage vectoriel ni solliciter un service local.
+    let mut declaration: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+    declaration["embeddings"]["catch_up_on_open"] = json!(false);
+    std::fs::write(&manifeste, serde_json::to_vec_pretty(&declaration).unwrap()).unwrap();
     std::fs::create_dir_all(depot.join("tests")).unwrap();
     std::fs::write(depot.join("Cargo.toml"), "[package]\nname = \"salutation_fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
     std::fs::write(depot.join(".gitignore"), "/target/\n/Cargo.lock\n").unwrap();
