@@ -12,6 +12,11 @@ case "$mode" in
     spans) plafond=600; verrou=lourd ;;
     *) echo 'phase inconnue' >&2; exit 2 ;;
 esac
+if [ -n "${ACTIVATION_PHASE_PLAFOND:-}" ]; then
+    [[ "$ACTIVATION_PHASE_PLAFOND" =~ ^[0-9]+$ ]] || exit 2
+    [ "$ACTIVATION_PHASE_PLAFOND" -ge 3 ] && [ "$ACTIVATION_PHASE_PLAFOND" -le "$plafond" ] || exit 2
+    plafond="$ACTIVATION_PHASE_PLAFOND"
+fi
 restant=$(python3 - "$ICI/scripts/confiner_validation.py" "$ACTIVATION_PREUVE_ORIGINALE" "$plafond" "$verrou" <<'PY'
 import importlib.util,json,os,pathlib,sys,time
 spec=importlib.util.spec_from_file_location('confinement',sys.argv[1])
