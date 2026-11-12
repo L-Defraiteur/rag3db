@@ -17,6 +17,7 @@
 //! Format: `{version}_{name}.mmd` where version is a zero-padded integer.
 
 pub mod plan;
+pub mod facts;
 pub mod transfer;
 
 use std::collections::HashMap;
@@ -303,6 +304,23 @@ impl MigrationRunner {
         let steps = self.resolve_steps(&inputs.variables)?;
         plan::ResolvedMigrationPlan::new(inputs, steps)
             .map_err(MigrationError::InvalidPlan)
+    }
+
+    /// Build fixed inputs from complete supplied facts, then consume the same
+    /// producer for correspondence checking. This never qualifies storage.
+    pub fn resolve_plan_from_facts(
+        &self,
+        facts: &facts::DeclaredMigrationFacts,
+        source: facts::StorageFormatFacts,
+        target: facts::StorageFormatFacts,
+        variables: std::collections::BTreeMap<String, String>,
+    ) -> Result<(plan::ResolvedMigrationPlan, facts::DeclaredFactsMatch), MigrationError> {
+        let inputs = facts.bind_inputs(source, target, variables)
+            .map_err(|e| MigrationError::InvalidPlan(e.to_string()))?;
+        let plan = self.resolve_plan(inputs)?;
+        let matched = facts.compare_with_fixed_plan(&plan)
+            .map_err(|e| MigrationError::InvalidPlan(e.to_string()))?;
+        Ok((plan, matched))
     }
 
     /// Resolve graphs for inspection without claiming known storage generations.

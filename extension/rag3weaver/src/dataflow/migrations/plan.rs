@@ -25,7 +25,7 @@ pub struct StorageDescriptor {
 }
 
 impl StorageDescriptor {
-    fn validate(&self) -> Result<(), String> {
+    pub(super) fn validate(&self) -> Result<(), String> {
         for (name, value) in [
             ("engine_format", &self.engine_format),
             ("internal_schema", &self.internal_schema),
