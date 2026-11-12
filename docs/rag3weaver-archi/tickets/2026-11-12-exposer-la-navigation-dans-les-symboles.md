@@ -243,3 +243,21 @@ est trompeur. Ajouter témoin de préordre à deux conteneurs avant correction,
 conserver les preuves2fcc et figer/arrêter la passe avant de changer sa source.
 Correction bornée prévue : visite en profondeur stable ou rendu depuis adjacence,
 sans modifier relation ni profondeur. Aucun vert global revendiqué pour2fcc.
+
+
+Rouge23d272201 effectivement observé0/1/0 : ids [a,b,ar,br] au lieu de
+[a,ar,b,br]. Aucun corps, modèle ou donnée réelle ; première entrée de montage
+40G refusée avant test (poste préfixé à tort), preuve séparée, entrée directe
+confiner32 corrigée. La globale2fcc a été arrêtée en compile-large après F5/minimal
+verts ; superviseur vérifié PID/starttime/cgroup avant signal, verdict interruption
+ROUGE/restes[]/nettoyétrues, quiescence[] ; deadline6000 originale conservée.
+
+Correction : parcours préordre stable, enfants insérés en tête en ordre inversé.
+JSON/indentation conservent le même arbre ; le troncage garde ses ancêtres déjà
+rendus. Markdown affiche aussi parent_range_uuid et le chemin de chaque symbole ;
+parents affiche explicitement ↑ parent plutôt qu'une fausse descendance indentée.
+Le compteur quadratique, les bornes et la sémantique range_containment restent.
+Source corrigée publiée avant reprise ; inventaire comporte désormais9 témoins.
+Reprise complète F5/minimal/3compiles/lib/NAV/lectures-hôte-PG dans le RESTE de
+l'échéance6000 d'origine, aucunreset. PG privée réemployée seulement après preuve
+création/identité/propriété de la première portée, jamais de createdb/drop aveugle.

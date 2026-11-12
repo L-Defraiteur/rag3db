@@ -295,13 +295,17 @@ fn navigate_inner(
                 queue.push_back((p, depth + 1));
             }
         } else if q.mode != "members" || depth == 0 {
-            queue.extend(
-                parents
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, p)| **p == Some(i))
-                    .map(|(j, _)| (j, depth + 1)),
-            );
+            let children: Vec<_> = parents
+                .iter()
+                .enumerate()
+                .filter(|(_, p)| **p == Some(i))
+                .map(|(j, _)| (j, depth + 1))
+                .collect();
+            // Préordre stable : une indentation représente le même arbre
+            // que parent_uuid, même après une coupure de volume.
+            for child in children.into_iter().rev() {
+                queue.push_front(child);
+            }
         }
     }
     let mut members = Vec::new();
@@ -364,13 +368,18 @@ pub fn markdown(v: &Value) -> String {
             continue;
         }
         out.push_str(&format!(
-            "{}- `{}` {} {}:{}-{} · uuid={}\n",
-            "  ".repeat(depth),
+            "{}- `{}` {} {}:{}-{} · parent_range_uuid={} · uuid={}\n",
+            if text(v, "mode") == "parents" && depth > 0 {
+                format!("↑ parent {depth} ")
+            } else {
+                "  ".repeat(depth)
+            },
             text(row, "name"),
             text(row, "kind"),
             text(&row["ref"], "path"),
             row["start_line"],
             row["end_line"],
+            text(row, "parent_uuid"),
             text(&row["ref"], "uuid")
         ));
     }
@@ -468,6 +477,10 @@ mod tests {
         let parent = call(&src, &rows, "parents", "ar", 1, 80);
         assert_eq!(parent["nodes"][1]["ref"]["uuid"], "a");
         assert_eq!(parent["provenance"]["relation"], "range_containment");
+        let rendered = markdown(&parent);
+        assert!(rendered.contains("↑ parent 1"));
+        assert!(rendered.contains("a.py:"));
+        assert!(rendered.contains("parent_range_uuid=a"));
     }
     #[test]
     fn compact_tree_keeps_each_method_under_its_actual_container() {
