@@ -249,8 +249,6 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
         return suite.map(|_| ());
     }
     let prepared = PreparedBackend::load(Path::new(&manifeste))?;
-    let conn = prepared.connect_admitted_storage()?;
-    let (embedder, raison) = prepared.embedder_or_absent();
     // **Les clés présentées sont dites, pas supposées.** L'exposition par clés
     // (vision §7) écartera au chargement ce que les clés ne rendent pas vrai ;
     // aucun gabarit livré n'en porte encore, donc rien n'est écarté
@@ -262,7 +260,7 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
         prepared.manifest.name,
         if cles.is_empty() { "aucune".to_string() } else { cles.join(",") }
     );
-    let mut backend = prepared.open_with_reason(Box::new(conn), embedder, raison)?;
+    let mut backend = prepared.open_on_disk()?;
     // **Les réactions montées sont dites, elles aussi.** `Backend::open` les
     // monte depuis le manifeste ; sans cette ligne, rien en service ne dit
     // qu'un graphe tourne derrière les outils, et un opérateur ne peut pas
@@ -634,11 +632,9 @@ fn servir_http(args: &[String]) -> Result<(), String> {
     }
     let manifeste = manifeste.ok_or_else(|| format!("--manifest est obligatoire\n{USAGE}"))?;
     let prepared = PreparedBackend::load(Path::new(&manifeste))?;
-    let conn = prepared.connect_admitted_storage()?;
-    let (embedder, raison) = prepared.embedder_or_absent();
     let nom = prepared.manifest.name.clone();
-    let modele = modele_du_chat(&prepared);
-    let backend = std::sync::Arc::new(prepared.open_with_reason(Box::new(conn), embedder, raison)?);
+    let backend = std::sync::Arc::new(prepared.open_on_disk()?);
+    let modele = modele_du_chat(backend.prepared());
     let atelier = if atelier {
         let page = rag3weaver::atelier::Atelier::new(backend.clone(), modele)?;
         let montre = page.watch(std::time::Duration::from_millis(500));
@@ -854,9 +850,7 @@ fn fichiers_cli(args: &[String]) -> Result<(), String> {
                          rag3weaver-backend files rebuild <backend.json>";
     let [action, chemin] = args else { return Err(USAGE.into()) };
     let prepared = PreparedBackend::load(Path::new(chemin))?;
-    let conn = prepared.connect_admitted_storage()?;
-    let (embedder, raison) = prepared.embedder_or_absent();
-    let mut backend = prepared.open_with_reason(Box::new(conn), embedder, raison)?;
+    let mut backend = prepared.open_on_disk()?;
     let rendu = match action.as_str() {
         "verify" => backend.verify_files(),
         "rebuild" => backend.rebuild_from_files(),

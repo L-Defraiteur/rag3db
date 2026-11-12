@@ -211,7 +211,13 @@ mod native_tests {
         let inspection = prepared.inspect_storage().unwrap().unwrap();
         assert_eq!(inspection.internal_schema.as_deref(), Some("8"));
         assert!(inspection.descriptor.is_none());
-        let refusal = prepared.connect_admitted_storage().err().expect("target must refuse before native writer");
+        let constructions = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = constructions.clone();
+        let refusal = prepared.open_on_disk_with_embedder(move |_| {
+            counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            (None, None)
+        }).err().expect("target must refuse before native writer and model factory");
+        assert_eq!(constructions.load(std::sync::atomic::Ordering::SeqCst), 0);
         assert!(refusal.contains("explicit migration required"), "{refusal}");
         assert_eq!(before, files(dir.path()), "read-only target refusal changed fixture files");
     }
