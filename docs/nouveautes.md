@@ -7,6 +7,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **12 nov. — Le plan de migration contrôle son historique.** `migration inspect`
+  et `migration plan` exposent les métadonnées et un plan préliminaire en lecture
+  seule ; fichiers modifiés, versions orphelines et états incohérents sont refusés.
+  L'admission précède les effets d'ouverture et les modèles ; `apply` reste
+  indisponible et aucune ancre existante n'est transformée. (`e4239bdda`)
+
 - **12 nov. — Des occurrences distinctes partagent leur index.** Une déclaration de dérivée
   par contenu réutilise versions, morceaux et vecteurs dans une cellule ; la recherche publique
   conserve les occurrences, leurs données et leurs positions. L'option est éprouvée par
