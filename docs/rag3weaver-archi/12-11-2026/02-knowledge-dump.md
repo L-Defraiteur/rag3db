@@ -17,3 +17,12 @@ La mesure a priorité. Poste peut lancer la commande dans sa propre scope system
 l'unité bornée **dans la commande après acquisition**, avec KillMode=control-group, afin que
 son échéance couvre les vrais descendants et ne se consomme pas dans la file de mesure.
 Pas de nouveau lot ou correctif hors du ticket d'accord sans signalement/autorisation.
+
+
+Diagnostic Chrome confirmé : le socket SingletonSocket dépassait sa longueur permise avec
+le scratch long. La seule correction a été TMPDIR=cx-ae ; aucun changement de fixture.
+Cela a permis le rouge produit561. Après intégration aed, l'accord/reprise et wait_output sont
+atteints, mais Python reçoit Permission denied sur le script extérieur : refus physique non
+couvert par le ciblé backend sans sandbox. Garder ce rouge et ses stdout/stderr, ne pas masquer
+le défaut en déplaçant le script ni en accordant implicitement des accès supplémentaires.
+Source ED/raccord sous revue. La variante non accordée n'a pas encore été éprouvée dans Chrome.
