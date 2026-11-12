@@ -200,3 +200,36 @@ paquets React du magasin. Budget global 7200 s après acquisition, Max32G,
 aucun accès au bus personnel, premier rouge arrêté. Plafond target vérifié
 entre les étapes, aucune suppression automatique pour faire passer une passe.
 Les e2e du changement suivent séparément cette passe (protocole dense/spans).
+
+### Propriété du cache et borne de la passe large
+
+Le rapport de cette session du 11 novembre identifie target-spans (13 Go) et
+rag3db-spans comme ses biens, tous lots atterris et aucun travail inachevé.
+Avant invalidation, .arbre-du-target a été lu : rag3db-spans/extension/rag3weaver.
+L'unité privée cpu-e était inactive/Result=success, relevé conservé dans le
+compte rendu d'outillage. La garde a effacé seulement les empreintes locales
+(codeparsers, rag3db, rag3weaver, rag3weaver-ir, rag3weaver-tty, tree-sitter-scss),
+pas les dépendances ni les fichiers d'un autre lot ; cpu-f.log garde ce relevé.
+La validation commune rw5c889b atteste la quiescence finale du nouveau lot.
+Aucun inventaire exhaustif historique des PID n'a été conservé avant invalidation :
+ne pas transformer cette propriété documentée du cache en preuve plus large.
+
+Plafonds de phases après acquisition du poste : check_features 2400 s, lib
+1800 s, fournisseur 1200 s, navigateur 900 s ; somme 6300 s, global 7200 s
+avec 900 s réservées aux contrôles et à l'arrêt. Un seul superviseur et aucun
+reset de budget. Les plafonds internes provoquent l'arrêt du script au premier
+rouge ; le superviseur conserve le budget global et contrôle les descendants.
+
+Justification de la borne, pas une mesure de cette passe : les logs historiques
+de la session spans montrent des libs entières à 30,55/39,64/56,64 s et un groupe
+navigateur à 129,19 s ; compilation ciblée historique 35-53 s sur cache chaud.
+Le précontrôle actuel a reconstruit le graphe CPU/code sur plusieurs minutes ;
+le jeu large Burn/OCR et les cinq configurations doivent encore recompiler
+des dépendances et relier de gros binaires. Les plafonds sont des maxima
+conservateurs, jamais une autorisation de relancer après expiration.
+
+Pas de nouveau service ou modèle pendant cette passe lib. Variables d'adresses
+d'embarquement retirées de son environnement pour conserver les unitaires
+isolés ; paquets React explicitement épinglés au dossier de la passe. Les e2e
+par services (7878/7879) et le privé 107m du banc seront coordonnés séparément,
+avec leurs recettes et leur propre borne annoncées avant acquisition.
