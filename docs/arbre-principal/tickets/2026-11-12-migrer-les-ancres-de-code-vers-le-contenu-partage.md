@@ -1732,3 +1732,15 @@ Supervision `validation-jsakyq9f` : exécution du témoin rouge attendue achevé
 aucun résultat applicatif vert déduit. Correction : `table_info` natif dans la
 même transaction, colonnes/types/défauts/clé primaire exactement fermés.
 Ciblé complet v4/source et recette publiés avant nouvelle exécution600s.
+
+Ciblé complet v4 VERT sur386861a5d : **95/0/0**,12 témoins publication
+(incluant aide enfant),83 régressions A/RO. Finaliseur composé VERT,
+`validation-alg4bj_0` code0/restes[]/nettoye=true, bus absent, scan propre[],
+ELF rehashé. Revue mémoire du correctif favorable. Rebase sur24f3603cf,
+nouveau nom `cx-arbre-publication-composite-r1` ; diff `extension/rag3weaver`
+entre source qualifiée et pointe rebasée vide, même code testé.
+Recette globale publiée avant exécution :5400s communs, F5/min/lib/NAV40/CLI5,
+PG36 sur nouvelle base synthétique `cx_pub_2191_20261113_v1` et quatre suites
+`e2e_tx_*` exigées pour le helperKV partagé. Aucun modèle/service réel requis.
+Pas encore de passe globale ni d'intégration ; le ticket reste ouvert pour
+la migration physique et la pyramide.
