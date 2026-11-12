@@ -158,8 +158,37 @@ impl EmbedDaemon {
         }
     }
 
-    pub fn avec_chauffe(mut self, chauffe: std::collections::BTreeMap<String, Chauffe>) -> Self {
-        self.chauffe = Some(chauffe);
+    /// Chauffe les formes denses habituelles et garde les erreurs par forme.
+    /// Les capacités annexes ne sont pas chauffées par cette passe.
+    pub fn chauffer(mut self, active: bool) -> Self {
+        let mut bilan = std::collections::BTreeMap::new();
+        for (capacite, presente) in [("embed", true), ("rerank", self.reranker.is_some()), ("ocr", self.ocr.is_some())] {
+            if presente {
+                bilan.insert(capacite.to_string(), Chauffe { etat: EtatChauffe::NonExecutee, duree_ms: 0, formes: Vec::new() });
+            }
+        }
+        if active {
+            let debut = std::time::Instant::now();
+            let (lot_max, _) = self.embedder.budget_conseille().unwrap_or((32, 512));
+            let mut faits = Vec::new();
+            for mots in [40usize, 90, 190, 380] {
+                for lot in [1usize, 8, 32, lot_max] {
+                    let textes: Vec<String> = (0..lot).map(|i| (0..mots)
+                        .map(|j| format!("m{}", (i * 7 + j * 13) % 97))
+                        .collect::<Vec<_>>().join(" ")).collect();
+                    let erreur = self.embedder.embed(&textes).err().map(|e| e.to_string());
+                    faits.push(FormeChauffe { lot, mots, erreur });
+                }
+            }
+            let succes = faits.iter().filter(|f| f.erreur.is_none()).count();
+            eprintln!("  chauffe : {succes}/{} classes de forme en {:?}", faits.len(), debut.elapsed());
+            bilan.insert("embed".into(), Chauffe {
+                etat: if succes == faits.len() { EtatChauffe::Complete } else { EtatChauffe::Partielle },
+                duree_ms: debut.elapsed().as_millis().min(u64::MAX as u128) as u64,
+                formes: faits,
+            });
+        } else { bilan.get_mut("embed").unwrap().etat = EtatChauffe::Desactivee; }
+        self.chauffe = Some(bilan);
         self
     }
 
@@ -941,6 +970,29 @@ impl DualEmbedder for DaemonEmbedder {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn chauffe_partielle_garde_erreurs_et_formes() {
+        use super::*;
+        struct FormeRefusee;
+        impl Embedder for FormeRefusee {
+            fn embed(&self, textes: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+                if textes.len() == 8 { return Err(EmbedError::ProviderError("forme refusée".into())); }
+                Ok(vec![vec![0.0]; textes.len()])
+            }
+            fn dim(&self) -> usize { 1 }
+            fn name(&self) -> &str { "chauffe-fixture" }
+        }
+        let demon = EmbedDaemon::new(Arc::new(FormeRefusee)).chauffer(true);
+        let identite = demon.identite();
+        let bilan = &identite.chauffe.as_ref().unwrap()["embed"];
+        assert_eq!(bilan.etat, EtatChauffe::Partielle);
+        assert_eq!(bilan.formes.len(), 16);
+        assert_eq!(bilan.formes.iter().filter(|f| f.erreur.is_some()).count(), 4);
+        assert!(bilan.formes.iter().filter_map(|f| f.erreur.as_ref()).all(|e| e.contains("forme refusée")));
+        assert_eq!(identite.modele, "chauffe-fixture");
+        let sans = EmbedDaemon::new(Arc::new(FormeRefusee)).chauffer(false);
+        assert_eq!(sans.identite().chauffe.unwrap()["embed"].etat, EtatChauffe::Desactivee);
+    }
     use super::*;
     use crate::embedder::MockEmbedder;
     use std::net::TcpListener;
