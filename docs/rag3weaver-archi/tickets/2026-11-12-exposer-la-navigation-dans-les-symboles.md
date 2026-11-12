@@ -148,3 +148,12 @@ Ciblé389 :7purs verts et vrai chat arbre/membres vérifié ; rouge au relais at
 DaemonHost seul sans son initialisation publique se_connaitre (appelée normalement
 au démarrage). Correction test uniquement : Arc puis se_connaitre avant ouverture,
 aucun runtime/hôte/permission modifié ; nouveau replay dans le reste600initial.
+
+
+Ciblé0e310 :7purs verts, vrai chat et relais effectif prêts. Dernière assertion rouge
+sur cas négatif : view="unavailable" est invalide au schéma (type object requis),
+donc ne peut tester le refus de vue de l'hôte. Correction fixture : view={} valide
+au schéma, refus attendu « vue contextuelle non disponible ». Aucun code produit
+modifié depuis389. Budget initial600 arrivé à terme ; aucune relance ni remise à
+zéro implicite. Étape corrective distincte120s proposée à orchestration, même
+filtre8, source neuve et recette publiées avant exécution. Tous rouges conservés.
