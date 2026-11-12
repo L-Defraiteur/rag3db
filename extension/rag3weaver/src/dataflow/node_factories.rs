@@ -1570,6 +1570,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
         registry.register(Box::new(super::code_nodes::ReadFileNodeFactory));
         registry.register(Box::new(super::code_nodes::GrepNodeFactory));
         registry.register(Box::new(super::code_nodes::ListFilesNodeFactory));
+        registry.register(Box::new(super::symbol_navigation_node::SymbolNavigationNodeFactory));
         registry.register(Box::new(super::code_nodes::EditFileNodeFactory));
         // Réservé aux réactions : la montre de fichiers (W2).
         registry.register(Box::new(super::reindex_nodes::ReindexFileNodeFactory));

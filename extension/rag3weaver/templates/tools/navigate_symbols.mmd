@@ -1,0 +1,18 @@
+%% tool: navigate_symbols
+%% description: Explorer sans recevoir les corps : arbre de fichier, parents/enfants par inclusion de plages à granularité ligne ou membres déclarés partiels. Pas parent AST garanti, appartenance hors classe ni héritage. Un index périmé ou une source ambiguë est signalé, sans réindexation implicite.
+%% param: path string! -- Chemin relatif exact du fichier indexé.
+%% param: source string = "" -- Source de l'index ; vide refuse les sources ambiguës.
+%% param: mode string = "file" -- file : racine fichier ; parents/children : plages depuis symbole ; members : faits partiels déclarés, pas héritage.
+%% choices: mode = file | parents | children | members
+%% param: symbol string = "" -- UUID ou nom exact dans path/source ; requis hors mode file. Homonymes rendus sans choix arbitraire.
+%% param: depth int = 2 -- Nombre d'arêtes depuis la racine (0=racine,1=voisins), plafond16 ; pour members,0=racine,positif=faits directs.
+%% param: limit int = 80 -- Nœuds et faits rendus (1..200), budget96Kio ; entrée plafonnée2000 scopes sinon navigation indisponible.
+%% param: format string = "markdown" -- markdown compact ou json structuré avec références/provenance/limites/fraîcheur.
+%% choices: format = markdown | json
+%% result: navigate.result
+
+graph LR
+    plan["PlanNode(plan='@builtin:backends/code/plans/symbol_navigation.json', path=$path, source=$source)"]
+    navigate["SymbolNavigationNode(path=$path, source=$source, mode=$mode, symbol=$symbol, depth=$depth, limit=$limit, format=$format)"]
+    plan -->|rows| navigate
+    plan -->|total| navigate
