@@ -146,3 +146,13 @@ Durcissement supplémentaire : santé du fournisseur courant atteste la recette
 ne certifierait pas l'instance après reprise du port par autrui. Refuser un
 fournisseur non attesté/différent, même si modèle et dimension sont identiques.
 La chauffe absente reste inconnue ; ceci ne prouve toujours pas le placement GPU.
+
+Troisième tentative Cargo arrêtée avant tests : guards des modules chat et
+livraison exigent code en plus de natif/daemon. Même ticket de features ED
+complété, sans retoucher ses fichiers. Jeu suivant : `rag3db-native,code,daemon`.
+
+La sonde finale d'identité dense reçoit le restant du budget du demandeur ;
+le délai des appels suivants est restauré depuis timeout_secs ou son défaut,
+pas hérité de ce restant. Tests ajoutés sur délai par défaut et adoption d'un
+profil étranger depuis un processus distinct (modèle/dimension identiques,
+refus attendu sans tuer le fournisseur initial ni relancer un constructeur).

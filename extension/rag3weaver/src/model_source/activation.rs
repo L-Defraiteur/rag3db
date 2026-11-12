@@ -74,14 +74,17 @@ pub fn demander(source: &super::ModelSource) -> Result<crate::serveur::activatio
 pub(super) fn connecter(source: &super::ModelSource, annule: &std::sync::atomic::AtomicBool)
     -> Result<(Box<dyn crate::embedder::Embedder>, super::Origin), String> {
     use crate::embedder::Embedder;
+    let debut = std::time::Instant::now();
     if annule.load(std::sync::atomic::Ordering::Acquire) { return Err("connexion annulée".into()); }
     let demande = demander(source)?;
     let a = source.activation.as_ref().unwrap();
     let bail = demande.attendre(annule, std::time::Duration::from_secs(a.budget_attente_secs))?;
-    let mut client = crate::daemon::DaemonEmbedder::joindre(bail.adresse()).map_err(|e| e.to_string())?;
-    if let Some(secondes) = source.timeout_secs.filter(|s| *s > 0) {
-        client = client.with_timeout(std::time::Duration::from_secs(secondes));
-    }
+    let restant = std::time::Duration::from_secs(a.budget_attente_secs).saturating_sub(debut.elapsed());
+    if restant.is_zero() { return Err("budget de connexion à l'activation dépassé".into()); }
+    let mut client = crate::daemon::DaemonEmbedder::joindre_dans(bail.adresse(), restant).map_err(|e| e.to_string())?;
+    let delai_appel = source.timeout_secs.filter(|s| *s > 0).map(std::time::Duration::from_secs)
+        .unwrap_or_else(crate::daemon::embeddings::default_embed_timeout);
+    client = client.with_timeout(delai_appel);
     if annule.load(std::sync::atomic::Ordering::Acquire) { return Err("connexion annulée".into()); }
     if client.name() != source.model || Some(client.dim()) != source.dimensions {
         return Err(format!("identité d'activation refusée : attendu {}/{:?}, reçu {}/{}", source.model, source.dimensions, client.name(), client.dim()));
@@ -179,5 +182,35 @@ mod tests {
         let f = Fixture::nouvelle();
         assert!(connect_embedder_annulable(&f.source, &AtomicBool::new(true)).err().unwrap().contains("annulée"));
         assert!(!f.dossier.path().join("events.jsonl").exists());
+    }
+
+    #[test]
+    fn profil_etranger_entre_processus_est_refuse() {
+        if let Ok(chemin) = std::env::var("CX_ACTIVATION_SOURCE_TEST") {
+            let source: ModelSource = serde_json::from_slice(&std::fs::read(chemin).unwrap()).unwrap();
+            let erreur = connect_embedder(&source).err().expect("profil étranger refusé");
+            assert!(erreur.contains("recette/profil"), "{erreur}");
+            return;
+        }
+        let f = Fixture::nouvelle();
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        let mut etrangere = f.source.clone();
+        etrangere.activation.as_mut().unwrap().profil = "autre-profil".into();
+        let chemin = f.dossier.path().join("source-etrangere.json");
+        std::fs::write(&chemin, serde_json::to_vec(&etrangere).unwrap()).unwrap();
+        let sortie = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "model_source::activation::tests::profil_etranger_entre_processus_est_refuse", "--nocapture"])
+            .env("CX_ACTIVATION_SOURCE_TEST", chemin).output().unwrap();
+        assert!(sortie.status.success(), "{} {}", String::from_utf8_lossy(&sortie.stdout), String::from_utf8_lossy(&sortie.stderr));
+        assert_eq!(client.embed(&["toujours disponible".into()]).unwrap()[0].len(), 384);
+        let texte = std::fs::read_to_string(f.dossier.path().join("events.jsonl")).unwrap();
+        assert_eq!(texte.lines().filter(|l| l.contains("constructeur_demarre")).count(), 1);
+    }
+
+    #[test]
+    fn budget_de_sonde_ne_remplace_pas_delai_appel_par_defaut() {
+        let mut f = Fixture::nouvelle(); f.source.timeout_secs = None;
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        assert_eq!(client.timeout(), Some(crate::daemon::embeddings::default_embed_timeout()));
     }
 }
