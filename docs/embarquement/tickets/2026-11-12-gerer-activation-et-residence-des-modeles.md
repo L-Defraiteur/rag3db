@@ -166,3 +166,19 @@ Correction de la fixture : JSON compact via separators, pas d'augmentation
 de budget ni de relâchement de sonde. Processus factices arrêtés après erreurs ;
 log conservé à luciepc `~/.cache/embarquement-notes/activation/cpu-d.log`.
 Banc informé avant modification du bloc partagé. Rejouer après ce correctif.
+
+Sur d5133197e : cinq tests du vrai connecteur verts, zéro ignoré ; un témoin
+de chauffe partielle vert (12/16 formes réussies, quatre erreurs conservées).
+Log `cpu-e.log`, unité finie inactive/Result=success. Ces preuves sont un
+précontrôle : lancement par ancien poste lourd direct et target-spans encore
+marqué de son ancien worktree. Elles ne constituent pas la passe conforme.
+
+Correction opérationnelle avant qualification : recette suivie
+`scripts/qualifier_activation_modeles.sh` (modes cpu/lib), entrée commune
+confiner_validation, plafond effectif <=32 Gio/bus privé/arrêt des descendants.
+Reprise explicite du target de session via garde_target avec
+RAG3WEAVER_TARGET_REPRENDRE=1 : invalidation des empreintes locales de l'ancien
+arbre, dépendances conservées et nouveau propriétaire vérifié. Rejouer CPU
+depuis cette portée, puis passe large/check_features/lib/binaire/navigateur.
+Budgets : CPU 1200 s, lib 7200 s après acquisition ; arrêt au premier rouge.
+Aucun service existant modifié. La mesure privée du banc attend ce socle.
