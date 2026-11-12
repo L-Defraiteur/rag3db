@@ -245,6 +245,7 @@ fn validate_finite(entities: &BTreeMap<String, EntityConfig>, relations: &BTreeM
         return Err(FactsError::Invalid("non-finite schema value cannot be fingerprinted faithfully".into()));
     }
     Ok(())
+}
 
 #[cfg(test)]
 mod tests;
