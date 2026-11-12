@@ -117,6 +117,9 @@ impl BilansDeclares {
 #[serde(deny_unknown_fields)]
 pub struct BackendManifest {
     pub version: u32,
+    /// Storage admission only; never performs an implicit migration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage: Option<crate::storage_inspection::StorageRequirement>,
     /// **La nature du backend**, déclarée par le gabarit qu'il instancie (c7,
     /// 7 novembre 2026) : `code` (un dépôt : worktree, branche), `memory` (la
     /// mémoire), `project` (un projet rag3weaver déclaratif). C'est ainsi que
@@ -2081,6 +2084,30 @@ impl PreparedBackend {
         ou un workspace indexé)";
     const QUOI_FAIRE_SANS_SERVICE: &str = "pour les calculer, donnez models.embed.address (ou \
         embeddings.address), ou RAG3WEAVER_SERVICE_EMBED (alias RAG3WEAVER_EMBED_SERVICE)";
+
+    /// Inspect existing native storage before creating a writer or an embedder.
+    /// An absent path has no metadata and is not created by this method.
+    #[cfg(feature = "rag3db-native")]
+    pub fn inspect_storage(&self) -> Result<Option<crate::storage_inspection::StorageInspection>, String> {
+        let path = self.path(&self.manifest.database);
+        match std::fs::metadata(&path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error.to_string()),
+            Ok(_) => {
+                let conn = crate::Rag3dbConnection::read_only(&path).map_err(|e| e.to_string())?;
+                crate::storage_inspection::inspect_on(&conn).map(Some)
+            }
+        }
+    }
+
+    #[cfg(feature = "rag3db-native")]
+    pub fn admit_storage(&self) -> Result<(), String> {
+        match self.inspect_storage()? {
+            Some(inspection) => inspection.admit(self.manifest.storage.as_ref()),
+            None if self.manifest.storage.is_some() => Err("versioned storage creation is not available".into()),
+            None => Ok(()),
+        }
+    }
 
     pub fn open(
         self,

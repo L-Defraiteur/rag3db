@@ -253,6 +253,7 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
     if let Some(parent) = database.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
+    prepared.admit_storage()?;
     let (embedder, raison) = prepared.embedder_or_absent();
     // **Les clés présentées sont dites, pas supposées.** L'exposition par clés
     // (vision §7) écartera au chargement ce que les clés ne rendent pas vrai ;
@@ -645,6 +646,7 @@ fn servir_http(args: &[String]) -> Result<(), String> {
     if let Some(parent) = database.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
+    prepared.admit_storage()?;
     let (embedder, raison) = prepared.embedder_or_absent();
     let conn =
         Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool)
@@ -871,6 +873,7 @@ fn fichiers_cli(args: &[String]) -> Result<(), String> {
     if let Some(parent) = database.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
+    prepared.admit_storage()?;
     let (embedder, raison) = prepared.embedder_or_absent();
     let conn = Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool).map_err(|e| e.to_string())?;
     let mut backend = prepared.open_with_reason(Box::new(conn), embedder, raison)?;
@@ -893,6 +896,9 @@ fn run() -> Result<(), String> {
     // La sous-commande se reconnaît au premier mot ; la forme positionnelle
     // d'avant (`rag3weaver-backend backend.json [--describe]`) reste intacte.
     let tous: Vec<String> = std::env::args().skip(1).collect();
+    if tous.first().map(String::as_str) == Some("migration") {
+        return inspecter_migration(&tous[1..]);
+    }
     if tous.first().map(String::as_str) == Some("mcp") {
         return servir_mcp(&tous[1..]);
     }
@@ -993,6 +999,7 @@ fn run() -> Result<(), String> {
     // backend qui déclare du vecteur démarre sans lui en le disant (plein
     // texte seul, vecteurs en dette — `PreparedBackend::open` redit la phrase
     // dans le reçu). Une identité de modèle différente reste un refus.
+    prepared.admit_storage()?;
     let (embedder, raison) = prepared.embedder_or_absent();
     let tampon = rag3weaver::rag3db_connection::buffer_pool_choice(prepared.manifest.buffer_pool);
     eprintln!("[rag3weaver] tampon du moteur : {}", rag3weaver::rag3db_connection::describe_buffer_pool(tampon));
@@ -1014,6 +1021,7 @@ fn run() -> Result<(), String> {
             backend.shutdown()?;
             drop(backend);
             let prepared = PreparedBackend::load(Path::new(&path))?;
+            prepared.admit_storage()?;
             let (embedder, raison) = prepared.embedder_or_absent();
             let conn = Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool).map_err(|e| e.to_string())?;
             backend = prepared.open_with_reason(Box::new(conn), embedder, raison)?;
@@ -1085,4 +1093,18 @@ fn main() {
         rag3weaver::host_log::stop_timestamps();
         std::process::exit(1);
     }
+}
+
+/// Explicit metadata-only entry point. No write connection or model is created.
+fn inspecter_migration(args: &[String]) -> Result<(), String> {
+    let [action, flag, manifest] = args else {
+        return Err("usage: rag3weaver-backend migration inspect --manifest <backend.json>".into());
+    };
+    if action != "inspect" || flag != "--manifest" {
+        return Err("only metadata inspection is available; migration apply is unavailable".into());
+    }
+    let prepared = PreparedBackend::load(Path::new(manifest))?;
+    let inspection = prepared.inspect_storage()?;
+    println!("{}", serde_json::to_string_pretty(&inspection).map_err(|e| e.to_string())?);
+    Ok(())
 }

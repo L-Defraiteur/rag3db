@@ -1079,3 +1079,64 @@ mod tests {
         assert!(!files[0].checksum.is_empty());
     }
 }
+
+/// Strict journal reader shared by catalog execution and metadata-only inspection.
+pub(crate) fn read_history_on(
+    conn: &dyn crate::connection::DbConnection,
+    dialect: &dyn crate::dialect::SchemaDialect,
+) -> Result<HashMap<u64, AppliedMigration>, MigrationError> {
+        let query = dialect.select_all(
+            "_DataflowMigration",
+            &["version", "name", "status", "checksum", "execution_id", "applied_at", "duration_ms", "error"],
+            Some("version"),
+        );
+        let result = conn.execute(&query)
+            .map_err(|e| MigrationError::DbError(e.to_string()))?;
+
+        let mut applied = HashMap::new();
+        for row in &result.rows {
+            let invalid = |detail: String| MigrationError::InvalidHistory { version: None, detail };
+            if row.len() != 8 {
+                return Err(invalid(format!("expected 8 columns, got {}", row.len())));
+            }
+            let version = row[0].as_i64().filter(|v| *v >= 0)
+                .ok_or_else(|| invalid("version must be a nonnegative integer".into()))? as u64;
+            let invalid = |detail: String| MigrationError::InvalidHistory { version: Some(version), detail };
+            let required_text = |index: usize, field: &str| -> Result<String, MigrationError> {
+                row[index].as_str().filter(|s| !s.trim().is_empty()).map(str::to_string)
+                    .ok_or_else(|| invalid(format!("{field} must be nonempty text")))
+            };
+            let name = required_text(1, "name")?;
+            let status = required_text(2, "status")?;
+            if !matches!(status.as_str(), "pending" | "applied" | "failed" | "rolled_back") {
+                return Err(invalid(format!("unknown status {status}")));
+            }
+            let checksum = required_text(3, "checksum")?;
+            let execution_id = required_text(4, "execution_id")?;
+            let nonnegative = |index: usize, field: &str| -> Result<u64, MigrationError> {
+                row[index].as_i64().filter(|v| *v >= 0).map(|v| v as u64)
+                    .ok_or_else(|| invalid(format!("{field} must be a nonnegative integer")))
+            };
+            let applied_at = nonnegative(5, "applied_at")?;
+            let duration_ms = nonnegative(6, "duration_ms")?;
+            let error = row[7].as_str().ok_or_else(|| invalid("error must be text".into()))?.to_string();
+            if applied.contains_key(&version) {
+                return Err(invalid("duplicate history version".into()));
+            }
+
+            applied.insert(
+                version,
+                AppliedMigration {
+                    name,
+                    status,
+                    checksum,
+                    execution_id,
+                    applied_at,
+                    duration_ms,
+                    error,
+                },
+            );
+        }
+
+        Ok(applied)
+}
