@@ -304,10 +304,9 @@ impl Node for RunCommandNode {
         }
 
         let mut rapport = String::new();
-        for (c, _) in &verdict.parties {
-            let laissez = garde
-                .autoriser(c, &contexte)
-                .map_err(|v| format!("run: {} : {}", c.lisible(), v.motif))?;
+        let autorisees = garde.autoriser_ligne(&self.ligne, &contexte)
+            .map_err(|e| format!("run: {e}"))?;
+        for (laissez, (c, _)) in autorisees.into_iter().zip(&verdict.parties) {
             let s = executer(laissez, &atelier).map_err(|e| format!("run: {e}"))?;
 
             rapport.push_str(&format!(
@@ -367,7 +366,9 @@ impl RunCommandNode {
             );
         }
         let (c, _) = &parties[0];
-        let laissez = garde.autoriser(c, contexte).map_err(|v| format!("run: {} : {}", c.lisible(), v.motif))?;
+        let laissez = garde.autoriser_ligne(&self.ligne, contexte)
+            .map_err(|e| format!("run: {e}"))?.into_iter().next()
+            .ok_or("run: aucune commande autorisée")?;
         let poignee = poignee(ctx);
         let mut atelier = Atelier::dans(racine)
             .avec_max_sortie(self.max_sortie)
@@ -966,6 +967,32 @@ mod tests {
         assert!(t.contains("`pwd`"), "{t}");
         // Le journal est nommé, pour qu'on puisse y revenir sans relancer.
         assert!(t.contains("Sortie entière"), "{t}");
+    }
+
+    #[test]
+    fn une_ligne_exterieure_accordee_reprend_sans_accorder_sa_variante() {
+        let domaine = tempfile::tempdir().unwrap();
+        let dehors = tempfile::tempdir().unwrap();
+        let cible = dehors.path().join("accord.txt");
+        std::fs::write(&cible, "sortie-explicite").unwrap();
+        let ligne = format!("cat {}", cible.display());
+        let garde = Arc::new(Garde::new(Mode::Approbation));
+        let mut services = ServiceRegistry::new();
+        services.register(GARDE_SERVICE, garde.clone());
+        let source: Arc<dyn FileSource> = Arc::new(WorkingTree::new(domaine.path()));
+        services.register(FILE_SOURCE_SERVICE, source);
+        let mut ctx = NodeContext::with_services(Arc::new(services));
+        RunCommandNode::new("run", &ligne).execute(&mut ctx).unwrap();
+        assert!(texte(&mut ctx).contains(EN_ATTENTE));
+        garde.accorder_ligne(&ligne, &Contexte {
+            accorde_par_l_utilisateur: true, domaine: Some(domaine.path().to_owned()),
+        }).unwrap();
+        RunCommandNode::new("run", &ligne).execute(&mut ctx).unwrap();
+        let sortie = texte(&mut ctx);
+        assert!(sortie.contains("code 0") && sortie.contains("sortie-explicite"), "{sortie}");
+        RunCommandNode::new("run", format!("{ligne} {}", cible.display())).execute(&mut ctx).unwrap();
+        let sortie = texte(&mut ctx);
+        assert!(sortie.contains(EN_ATTENTE) && !sortie.contains("code 0"), "{sortie}");
     }
 
     /// **Un refus est un résultat, pas une erreur.** Le graphe ne s'arrête pas,
