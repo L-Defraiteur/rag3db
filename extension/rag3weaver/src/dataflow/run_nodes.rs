@@ -995,6 +995,56 @@ mod tests {
         assert!(sortie.contains(EN_ATTENTE) && !sortie.contains("code 0"), "{sortie}");
     }
 
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn un_accord_de_ligne_ne_donne_pas_de_droit_noyau_hors_domaine() {
+        use crate::backend_code::{build_bac_a_sable, JetonsDuBac, SandboxConfig};
+        let domaine = tempfile::tempdir().unwrap();
+        let dehors = tempfile::tempdir().unwrap();
+        let script = dehors.path().join("lecture.py");
+        let frere = dehors.path().join("frere.txt");
+        let contenu = "import pathlib, sys\nif len(sys.argv) > 1:\n    print(pathlib.Path(sys.argv[1]).read_text())\nelse:\n    print('SCRIPT_EXTERIEUR_LU')\n";
+        std::fs::write(&script, contenu).unwrap();
+        std::fs::write(&frere, "CONTENU_FRERE_NON_ACCORDE").unwrap();
+        assert_eq!(std::fs::read_to_string(&script).unwrap(), contenu, "l'hôte peut lire le même inode");
+        assert_eq!(std::fs::read_to_string(&frere).unwrap(), "CONTENU_FRERE_NON_ACCORDE");
+        let ligne = format!("python3 {}", script.display());
+        let contexte_accord = Contexte { accorde_par_l_utilisateur: true, domaine: Some(domaine.path().to_owned()) };
+        for lecture_declaree in [false, true] {
+            let config = SandboxConfig {
+                extra_read: if lecture_declaree { vec![script.to_string_lossy().into_owned()] } else { vec![] },
+                ..Default::default()
+            };
+            let jetons = JetonsDuBac { task_dir: domaine.path().join("tache"), repo_target: domaine.path().join("target") };
+            let bac = build_bac_a_sable(&config, domaine.path(), &jetons).unwrap();
+            bac.ruleset().expect("preuve Linux exige Landlock actif, aucun saut silencieux");
+            assert!(!bac.lectures.contains(&dehors.path().to_owned()), "le parent n'est jamais ouvert");
+            let garde = Arc::new(Garde::new(Mode::Approbation));
+            garde.accorder_ligne(&ligne, &contexte_accord).unwrap();
+            let mut services = ServiceRegistry::new();
+            services.register(GARDE_SERVICE, garde.clone());
+            services.register(BAC_A_SABLE_SERVICE, Arc::new(bac));
+            let source: Arc<dyn FileSource> = Arc::new(WorkingTree::new(domaine.path()));
+            services.register(FILE_SOURCE_SERVICE, source);
+            let mut ctx = NodeContext::with_services(Arc::new(services));
+            RunCommandNode::new("run", &ligne).execute(&mut ctx).unwrap();
+            let sortie = texte(&mut ctx);
+            if !lecture_declaree {
+                assert!(sortie.contains("Permission denied") && !sortie.contains("SCRIPT_EXTERIEUR_LU"), "refus réel observable : {sortie}");
+                assert!(!sortie.contains(EN_ATTENTE) && !sortie.contains("code 0"), "la garde a accordé, le noyau refuse : {sortie}");
+            } else {
+                assert!(sortie.contains("code 0") && sortie.contains("SCRIPT_EXTERIEUR_LU"), "seule différence : extra_read du fichier : {sortie}");
+                let variante = format!("{ligne} {}", frere.display());
+                RunCommandNode::new("run", &variante).execute(&mut ctx).unwrap();
+                assert!(texte(&mut ctx).contains(EN_ATTENTE), "pas d'accord implicite de variante");
+                garde.accorder_ligne(&variante, &contexte_accord).unwrap();
+                RunCommandNode::new("run", &variante).execute(&mut ctx).unwrap();
+                let sortie = texte(&mut ctx);
+                assert!(sortie.contains("Permission denied") && !sortie.contains("CONTENU_FRERE_NON_ACCORDE"), "extra_read ne donne pas le parent : {sortie}");
+            }
+        }
+    }
+
     /// **Un refus est un résultat, pas une erreur.** Le graphe ne s'arrête pas,
     /// et l'agent apprend *ce qui* a bloqué — sans quoi il relancerait.
     #[test]
