@@ -2087,11 +2087,11 @@ impl PreparedBackend {
 
     /// Validate the whole declarative opening plan before touching storage.
     /// Recheck even a prepared manifest: callers can edit its public configs.
-    fn opening_schema(&self) -> Result<(backend_schema::SchemaFacts, Vec<backend_schema::SchemaStep>), String> {
+    fn opening_schema(&self) -> Result<(backend_schema::ProvidedSchema, backend_schema::SchemaFacts, Vec<backend_schema::SchemaStep>), String> {
         let provided = backend_schema::provided_schema(self.manifest.workspace.as_ref());
         let facts = backend_schema::SchemaFacts::compose(&self.entities, &self.manifest.relations, &provided)?;
         let order = facts.registration_order()?;
-        Ok((facts, order))
+        Ok((provided, facts, order))
     }
 
     /// Inspect existing native storage before creating a writer or an embedder.
@@ -2206,7 +2206,7 @@ impl PreparedBackend {
         embedder: Option<Box<dyn Embedder>>,
         raison: Option<String>,
     ) -> Result<Backend, String> {
-        let (schema, schema_order) = self.opening_schema()?;
+        let (provided_schema, schema, schema_order) = self.opening_schema()?;
         // A supplied connection is already open, but it must not bypass the
         // journal/format gate before Catalog initialization or model setup.
         crate::storage_inspection::inspect_snapshot_on(conn.as_ref())?
