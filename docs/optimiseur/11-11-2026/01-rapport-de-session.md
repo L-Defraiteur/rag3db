@@ -1,5 +1,19 @@
 # Rapport de session — G, « l'optimiseur » (11 novembre 2026, 16 h 25)
 
+## Reprise du 12 novembre : provenance du bâti vectoriel de CI
+
+Lot `cx-optimiseur-ci-vector`, base 82e812764, correctif 567d2de50 et fixture
+du workflow d03ef6fc2 : sélection de OUT_DIR depuis les messages JSON du cargo
+test courant, liés à metadata/source/commit et au CMake dont le moteur statique
+provient. Refus nommé si absence, ambiguïté ou cache périmé/étranger ; aucun
+choix par glob/mtime. Deux blocs shell réels éprouvés sur producteurs CPU.
+
+Rouge historique reproduit, 20 fixtures vertes au portable et à luciepc sous
+poste lourd, sources figées. Pas de CI réelle rejouée ni de lib/service/GPU
+modifié. Ticket encore en revue/intégration :
+`docs/optimiseur/tickets/2026-11-12-la-ci-cherche-le-bati-vectoriel-dans-un-dossier-absent.md`.
+Preuves : `~/.cache/optimiseur-notes/ci-vector-12nov/` aux deux postes.
+
 ## Reprise du 12 novembre : attente du port du privé
 
 Correctif isolé dans branche/worktree `cx-optimiseur-attente-port`, base

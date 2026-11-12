@@ -1,6 +1,6 @@
 # La CI cherche le bâti vectoriel dans un dossier absent
 
-- **État** : en cours ; producteur relu, source et recette CPU publiées avant essais sur cx-optimiseur-ci-vector.
+- **État** : en cours ; correctif 567d2de50 et fixture workflow d03ef6fc2 publiés, rouge reproduit puis 20 fixtures CPU vertes aux deux postes ; revue et intégration attendues, CI réelle non rejouée.
 - **Famille** : produit
 - **Gravité** : CI rag3weaver bloquée avant l'exécution des tests unitaires.
 - **Atteignable en service** : non, workflow de validation.
@@ -91,3 +91,34 @@ Fixtures : disposition OUT_DIR imbriquée et disposition historique, cache
 leurre plus récent, mêmes package_id de metadata, chemin natif et cache du
 producteur, artefacts de l’unique invocation. Refus absents/ambigus/périmés et
 échec Cargo ; aucun C++, Cargo complet, GPU ou service lancé localement.
+
+## Vérifications réellement jouées
+
+Sources/recette publiées en 567d2de50 avant les premiers essais ; fixture des
+deux vrais blocs shell publiée en d03ef6fc2 avant son exécution. Empreintes
+des trois fichiers figées avant les tests et relues après. Seuls workflow et
+scripts de validation changent ; aucune source Rust hôte ni C++ modifiée.
+
+Rouge reproduit au portable et à luciepc : le vrai ancien sélecteur ls,
+extrait du workflow conservé, rend code 2 sur une fixture OUT_DIR imbriquée ;
+le test échoue sur `No such file or directory` / sa traduction française.
+Aucune ligne CMake du workflow ancien n’est exécutée. Sur luciepc, le contrôle
+initial du journal attendait le texte anglais : il a été arrêté et diagnostiqué
+(journal français), puis la preuve déjà produite a été vérifiée par code 2,
+chemin littéral et assertion, sans relancer le rouge inchangé.
+
+**20 fixtures CPU vertes aux deux postes**, aucune sautée ; luciepc sous
+`poste lourd`. La fixture d’intégration exécute les blocs shell réels du
+workflow et le vrai CLI du sélecteur ; seuls les producteurs Cargo/CMake sont
+factices, avec leurs messages et cache de fixture. Elle vérifie le même -B
+et le même --build, sans compilation ni chargement d’extension.
+
+Preuves aux deux postes : `~/.cache/optimiseur-notes/ci-vector-12nov/`
+(`workflow-ancien.yml`, `rouge.log`, `fixtures.log`, `sources-avant-tests.sha256`).
+Sources exactes conservées à luciepc sous le sous-dossier `source/`.
+Contrôles de tickets et diff --check également verts.
+
+Aucun ancien job relancé, aucun Cargo/CMake complet réel lancé, aucune nouvelle
+lib posée et aucun service/GPU sollicité. Les fixtures prouvent la sélection
+et ses refus, **pas une CI verte** : la prochaine CI automatique du commit
+intégré doit encore juger son environnement réel et les tests unitaires.
