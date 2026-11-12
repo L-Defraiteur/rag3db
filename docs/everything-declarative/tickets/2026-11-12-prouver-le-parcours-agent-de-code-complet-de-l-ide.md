@@ -30,3 +30,25 @@ builtin, ni de déploiement/restart personnel dans ce lot initial.
 Fin : parcours réel reproductible avec outils accessibles, tests/diff/reprise
 observés, corrections éventuelles relues et intégrées, limites restantes dites.
 Le ticket reste ouvert si seule une partie du parcours est démontrée.
+
+## Revue du correctif de lecture Git b0090e2be
+
+Les preuves36e restent partielles : vrai chat Vertex, exploration, test nommé
+rouge puis édition et test vert ; diff refusé128, reprise pas encore atteinte.
+Le helper proposé réduit les chemins communs et conserve les écritures.
+
+Contre-exemple concret à qualifier avant nouvel avis favorable : créer une
+racine faux avec son entrée `.git` **lien symbolique vers le gitfile d'un vrai
+worktree**, puis appeler avec_lecture_git sur faux et le principal du dépôt.
+La comparaison actuelle canonicalise les deux gitfiles : retour enregistré et
+gitfile faux deviennent le même chemin réel. Le contrôle de retour passe alors
+pour une racine qui n'est pas le worktree enregistré ; son administration
+(éventuellement celle d'un voisin) est ajoutée aux lectures.
+
+Revue statique, aucun scénario de ce type exécuté par orchestration. Ajouter le
+témoin négatif avec la même exigence que le gitfile copié déjà refusé ; valider
+la racine de worktree enregistrée, pas seulement l'égalité après résolution du
+lien final, ou refuser explicitement ce gitfile symbolique non qualifié. Préserver
+le dépôt ordinaire, le worktree lié réel et ses espaces ; aucune écriture du
+principal/voisin ne devient nécessaire. ED garde le correctif et sa qualification
+kernel puis chat sous source figée ; cette revue ne remplace pas ces résultats.
