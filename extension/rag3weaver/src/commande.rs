@@ -466,6 +466,9 @@ pub struct Garde {
     mode: Mode,
     sentinelle: Box<dyn Sentinelle>,
     acquis: Autorisations,
+    /// Accords explicites : ligne complète exacte et domaine résolu, jamais une famille.
+    #[cfg(feature = "code")]
+    lignes_accordees: Mutex<BTreeSet<(String, Option<std::path::PathBuf>)>>,
     /// Les sorties du domaine refusées d'affilée — remis à zéro par tout
     /// verdict accordé. Un modèle fort épuise les formulations après un
     /// refus (passe Gemini du 3 octobre : quinze itérations pour y
@@ -479,6 +482,8 @@ impl Garde {
             mode,
             sentinelle: Box::new(SentinelleDeBase),
             acquis: Autorisations::new(),
+            #[cfg(feature = "code")]
+            lignes_accordees: Mutex::new(BTreeSet::new()),
             hors_domaine_consecutifs: std::sync::atomic::AtomicUsize::new(0),
         }
     }
@@ -497,29 +502,42 @@ impl Garde {
         &self.acquis
     }
 
-    /// **Accorder une ligne** : chacune de ses commandes, telle quelle, est
-    /// retenue (`CetteCommande`) ; la ligne se découpe comme `juger_ligne` la
-    /// découpe. Rend les commandes accordées, ou le refus de la ligne (un
-    /// shell, une forme qui ne se lit pas : rien n'est accordé). Sous `code`,
-    /// comme `juger_ligne` (le découpage est celui de codeparsers).
+    /// Retient un accord sur la ligne complète et le domaine canonique. Les argv
+    /// affichés ne sont jamais une identité : `mkdir 'a b'` et `mkdir a b` diffèrent.
+    /// Les refus structurels restent prioritaires ; aucun acquis de famille n'est posé.
     #[cfg(feature = "code")]
-    ///
-    /// La ligne se juge **sans** l'accord de l'utilisateur : jugée « accordée par
-    /// l'utilisateur », la sentinelle autorise la famille entière, et la porte la
-    /// retenait au passage (un oui sur la carte d'accord pour `mkdir faits` laissait
-    /// passer tout `mkdir` ; trouvé par le lot 7 de l'atelier, 9 novembre 2026). Une
-    /// partie refusée (élevée…) refuse la ligne : rien n'est accordé.
     pub fn accorder_ligne(&self, ligne: &str, ctx: &Contexte) -> Result<Vec<String>, String> {
+        let cle = Self::cle_ligne(ligne, ctx)?;
+        let invocations = codeparsers::shell::decomposer(ligne).map_err(|r| r.to_string())?;
+        if invocations.is_empty() { return Err("rien à accorder".into()); }
         let sans_accord = Contexte { accorde_par_l_utilisateur: false, ..ctx.clone() };
-        let v = self.juger_ligne(ligne, &sans_accord).map_err(|r| r.to_string())?;
-        if let Some((c, refus)) = v.parties.iter().find(|(_, x)| x.decision == Decision::Refuse) {
-            return Err(format!("`{}` : {}", c.lisible(), refus.motif));
+        let mut accordees = Vec::new();
+        for invocation in invocations {
+            let commande: Commande = invocation.into();
+            let verdict = self.sentinelle.juger(&commande, &sans_accord).borner();
+            if verdict.decision == Decision::Refuse || verdict.faits.shell {
+                return Err(format!("`{}` : {}", commande.lisible(), verdict.motif));
+            }
+            accordees.push(commande.lisible());
         }
-        let accordees: Vec<String> = v.parties.iter().map(|(c, _)| c.lisible()).collect();
-        for c in &accordees {
-            self.acquis.accorder_commande(c.clone());
-        }
+        self.lignes_accordees.lock().unwrap().insert(cle);
         Ok(accordees)
+    }
+
+    #[cfg(feature = "code")]
+    fn cle_ligne(ligne: &str, ctx: &Contexte) -> Result<(String, Option<std::path::PathBuf>), String> {
+        let domaine = ctx.domaine.as_ref().map(|p| p.canonicalize()
+            .map_err(|e| format!("domaine de l'accord {} : {e}", p.display()))).transpose()?;
+        Ok((ligne.to_owned(), domaine))
+    }
+
+    /// Le laissez-passer reste issu du jugement de la ligne entière. Un appel
+    /// isolé à `autoriser` ne peut pas réutiliser les droits de ses parties.
+    #[cfg(feature = "code")]
+    pub fn autoriser_ligne(&self, ligne: &str, ctx: &Contexte) -> Result<Vec<Autorisee>, String> {
+        let verdict = self.juger_ligne(ligne, ctx).map_err(|e| e.to_string())?;
+        if verdict.decision != Decision::Autorise { return Err(verdict.motif); }
+        Ok(verdict.parties.into_iter().map(|(commande, _)| Autorisee(commande)).collect())
     }
 
     /// **Le verdict, et lui seul.** Rien ne s'exécute ici : décider et faire
@@ -665,10 +683,21 @@ impl Garde {
         let invocations = codeparsers::shell::decomposer(ligne)
             .map_err(|r| LigneRefusee::NonReduite(r.to_string()))?;
 
+        let accord = Self::cle_ligne(ligne, ctx).ok()
+            .is_some_and(|cle| self.lignes_accordees.lock().unwrap().contains(&cle));
         let mut parties = Vec::new();
         for inv in invocations {
             let c: Commande = inv.into();
-            let v = self.juger(&c, ctx);
+            let v = if accord {
+                // Réévaluer les refus structurels sans retenir de famille.
+                let sans_accord = Contexte { accorde_par_l_utilisateur: false, ..ctx.clone() };
+                let v = self.sentinelle.juger(&c, &sans_accord).borner();
+                if v.decision == Decision::Refuse || v.faits.shell { v } else {
+                    Verdict { decision: Decision::Autorise, portee: Portee::CetteFois,
+                        fondement: Fondement::UtilisateurExplicite,
+                        motif: "ligne exacte déjà accordée dans ce domaine".into(), ..v }
+                }
+            } else { self.juger(&c, ctx) };
             parties.push((c, v));
         }
 
@@ -2330,7 +2359,7 @@ mod tests {
         let ctx = ctx_dans(dossier.path());
         let accorde = Contexte { accorde_par_l_utilisateur: true, ..ctx.clone() };
         assert_eq!(g.accorder_ligne("mkdir faits", &accorde).unwrap(), vec!["mkdir faits".to_string()]);
-        assert_eq!(g.juger(&cmd("mkdir", &["faits"]), &ctx).decision, Decision::Autorise);
+        assert_eq!(g.juger_ligne("mkdir faits", &ctx).unwrap().decision, Decision::Autorise);
         assert_eq!(g.juger(&cmd("mkdir", &["autres"]), &ctx).decision, Decision::Demande, "le oui ne vaut que pour la commande exacte");
     }
 
@@ -2363,6 +2392,26 @@ mod tests {
         assert_eq!(garde.juger_ligne("mkdir 'un deux'", &ctx).unwrap().decision, Decision::Autorise);
         assert_eq!(garde.juger_ligne("mkdir un deux", &ctx).unwrap().decision, Decision::Demande);
         assert_eq!(garde.juger_ligne("mkdir 'un deux'", &ctx_dans(tempfile::tempdir().unwrap().path())).unwrap().decision, Decision::Demande);
+    }
+
+    #[test]
+    #[cfg(feature = "code")]
+    fn un_accord_de_ligne_ne_decompose_pas_un_enchainement() {
+        let domaine = tempfile::tempdir().unwrap();
+        let garde = Garde::new(Mode::Approbation);
+        let ctx = ctx_dans(domaine.path());
+        let ligne = "cat ../premier.txt && cat ../second.txt";
+        garde.accorder_ligne(ligne, &ctx).unwrap();
+        assert_eq!(garde.autoriser_ligne(ligne, &ctx).unwrap().len(), 2);
+        for variante in ["cat ../premier.txt", "cat ../second.txt", "cat ../second.txt && cat ../premier.txt"] {
+            assert!(garde.autoriser_ligne(variante, &ctx).is_err(), "{variante}");
+        }
+        assert!(garde.accorder_ligne("cat ../autre.txt && sudo ls", &ctx).is_err());
+        assert!(garde.autoriser_ligne("cat ../autre.txt", &ctx).is_err());
+        let sans_domaine = Contexte::default();
+        assert_eq!(garde.juger_ligne("mkdir faits", &ctx).unwrap().decision, Decision::Demande);
+        garde.accorder_ligne("mkdir faits", &ctx).unwrap();
+        assert_eq!(garde.juger_ligne("mkdir faits", &sans_domaine).unwrap().decision, Decision::Demande);
     }
 
     /// **La lecture libre ne sort pas du domaine.** Chaque argument doit se
