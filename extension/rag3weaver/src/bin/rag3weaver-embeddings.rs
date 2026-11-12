@@ -45,6 +45,7 @@ pub const MODELE_PAR_DEFAUT: &str = "granite-278m";
 
 fn servir() -> Result<(), String> {
     let (adresse, expose) = adresse()?;
+    let activation = rag3weaver::daemon::embeddings::IdentiteActivation::depuis_environnement()?;
     // **Le modèle servi se choisit par `RAG3WEAVER_EMBED_MODEL`** (6 septembre
     // 2026) : `granite-278m` (768 d, **le défaut** depuis le 7 septembre :
     // devant BGE-M3 sur nos requêtes de code, MRR 0,844 contre 0,793, à 2,5
@@ -108,7 +109,7 @@ fn servir() -> Result<(), String> {
             EmbedDaemon::new(modele)
         }
     }
-    .expose(expose);
+    .expose(expose).avec_activation(activation);
     // La seule carte du poste porte l'affichage : des rafales courtes, un
     // trou entre deux (`rag3weaver::burst`). Dit au journal, parce qu'un
     // débit plus bas sans explication se prend pour une panne.
