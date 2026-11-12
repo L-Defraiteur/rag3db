@@ -1,0 +1,7 @@
+Running as unit: cx-hotfixs-quarantaine-runtime-8cc47439f-02.service; invocation ID: 9222114345854a35a08518880d897c05
+runtime artefacts: /home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-03/runtime-aymvkbea
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 84ms
+             CPU time consumed: 67ms
+                   Memory peak: 43M (swap: 0B)

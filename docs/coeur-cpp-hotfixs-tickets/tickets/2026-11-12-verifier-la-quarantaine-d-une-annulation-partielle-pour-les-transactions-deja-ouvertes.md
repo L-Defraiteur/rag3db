@@ -212,3 +212,19 @@ sans modification des flags/pack. Nouveau source SHA
 runtime structurel autorisés si ELF et quatre SHA conformes, accord et unité
 neufs. Toute autre erreur arrête la suite ; runtime-01 conservé. Aucun
 checkpoint réel, réouverture ou variante supplémentaire autorisés.
+
+## Runtime structurel 2 : chemin interne atteint
+
+Après correction exclusive maxDBSize publiée8cc47439f, nouvelle compilation/lien
+et ELF conformes, puis un seul nouveau lancement autorisé sous poste lourd.
+[Résultat sourcé et empreintes](../12-11-2026/04-resultat-structurel-quarantaine.md) :
+TA annule partiellement par le vrai gestionnaire, callback one-shot confirmé,
+TA inactive et verrous0 ; BEGIN/CHECKPOINT publics refusent nommément, mais
+COMMIT forcé de TB déjà ouverte atteint une fois la fabrique interne.
+La sentinelle lève avant toute construction de Checkpointer. Classification
+`internal-path-reached`, enfant/parent/wrapper0, groupe terminé et cgroup disparu.
+Aucun checkpoint réel, réouverture, lecteur testé ni corruption démontrée.
+L’arc précis est confirmé pour la fixture contrôlée ; conséquences et protection
+des autres chemins restent ouvertes. Artefacts/base privée conservés sur luciepc.
+Aucun nouveau runtime après cette tentative. Aucun correctif produit autorisé
+ou appliqué. Ticket maintenu ouvert pour la suite à décider avec cœur C++.

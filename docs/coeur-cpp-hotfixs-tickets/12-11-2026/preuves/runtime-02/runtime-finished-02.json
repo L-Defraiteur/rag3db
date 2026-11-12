@@ -1,0 +1,12 @@
+{
+  "unit": "cx-hotfixs-quarantaine-runtime-8cc47439f-02.service",
+  "cgroup": "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/cx-hotfixs-quarantaine-runtime-8cc47439f-02.service",
+  "cgroup_exists_after": false,
+  "runtime_exit_code": 0,
+  "input_sha_after": {
+    "quarantine_released_diagnostic.cpp": "14d99084010e0b8f5f530f2faa5926ca724382d44ab9deca24a31545baf71afd",
+    "quarantine_released_diagnostic": "37ccee63d54555552a4541bf6f2aa8f55c1b97210e0b1d43f1332a1c28dcddd7",
+    "build-report.json": "9f780e3f07427d65bb6eb1acc21a0b583b2e6785b1c40b05e9ef70faf28a4432",
+    "runtime.py": "a110d161f027b67f2464112058fde9250c1ebf801bbe0b2b557d888c21fb1e6f"
+  }
+}

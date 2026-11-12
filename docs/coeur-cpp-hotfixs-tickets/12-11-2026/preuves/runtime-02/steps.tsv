@@ -1,0 +1,21 @@
+setup	ok
+setup	ok
+setup	ok
+setup	ok
+setup	ok
+setup	ok
+setup	ok
+setup	ok
+setup	ok
+setup	ok
+setup	ok
+setup	ok
+transactions	9223372036854775827	9223372036854775829
+rollback-A	The rollback could not complete (Runtime exception: diagnostic: one-shot rollback index fault). The transaction is closed and its locks are released. A rollback of this database could not complete, so it must be closed and reopened before it is used again.
+rollback-A-confirmed	one-shot	owner-matched	inactive	locks=0
+public-control	A rollback of this database could not complete, so it must be closed and reopened before it is used again: what it holds in memory no longer matches anything committed or rolled back. No committed transaction is lost: the journal is replayed when the database is reopened.
+public-control	A rollback of this database could not complete, so it must be closed and reopened before it is used again: what it holds in memory no longer matches anything committed or rolled back. No committed transaction is lost: the journal is replayed when the database is reopened.
+checkpoint-factory	1
+commit-B-forced	Runtime exception: diagnostic: factory reached before checkpoint construction
+diagnostic	internal-path-reached	no-checkpointer-constructed
+scope	structural-only	no-real-checkpoint-after-fault	no-reopen	no-corruption-verdict
