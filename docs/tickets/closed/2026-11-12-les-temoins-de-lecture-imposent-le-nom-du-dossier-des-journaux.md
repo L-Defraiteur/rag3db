@@ -1,6 +1,6 @@
 # Les témoins de lecture imposent le nom du dossier des journaux
 
-- **État** : ouvert ; fixture aa58d1697 validée le12novembre2026 : helpers3/0/0 et lectures27/0/0 ; revue des preuves et intégration restantes, porteur recherche.
+- **État** : corrigé ; source487c68af3, verdict composé c94515115 relu VERT par orchestration le12novembre2026, tour master explicitement accordé.
 - **Pour** : recherche, fixtures e2e_lectures ; aucun correctif de fixture dans le lot des accords.
 - **Famille** : produit
 - **Gravité** : coût ; une isolation valide des journaux fait échouer la passe avant les lectures.
@@ -328,3 +328,7 @@ Les532 PID observés durant les phases finales, dont bus éphémère et vrais pr
 **Verdict composé VERT**, sans transformer les anciennes tentatives en une passe sans incident : features5/5 et lib2201/0/65/0filtré proviennent du premier passage487 ; vrai minimal, NAV40, lectures27 et attestations des phases finales ci-dessus. Les rouges du garde et de la préflight native restent conservés, diagnostiqués séparément. Le checklib natif redondant est étiqueté comme tel ; il ne remplace pas le minimal. Le global2400 initial est respecté, aucune réinitialisation de budget ni prolongation, fin avant17:27:44. Aucun test/runtime/feature produit modifié pour le confinement ; aucun e2e entier, service/GPU/modèle nouveau ou rerunCI.
 
 Preuves brutes deux postes : integration-487c68/{verdict-compose.json,verdict-compose.log,preflight-dbus-config.xml} et finalisation-dbus/{source.json,argv.json,cgroups-enfants.json,vrai-minchecklib.log,navigateur.log,lectures.log,e2e-complet.log,sante-7879-avant/apres.json,attestations.json,quiescence-finale.json,verdict-final.log,provenances.d}. Ticket commun des scopes reste ouvert pour la procédure transversale. Correction de fixture et preuves soumises à revue ; ticket journaux ouvert et aucun master avant àtoi. Ressources propres conservées, aucun lourd ou utilisateur7879 recherche restant.
+
+## Clôture après revue du verdict composé
+
+Revue explicite des logs bruts, 532 cgroups Max32, sonde/quiescence, trois ELF rehashés et identité native29 acquise. Diff487→c945 exclusivement Markdown ; clôture et déplacement dans ce même commit. Ticket commun scopes toujours ouvert ; aucun runtime ou rerunCI pour cette intégration. Push sous poste push/dernierfetch/rebase documentaire seulement/gardeVERT et trois contrôles aux deux postes, puis archives fidèles/gardes fraîches avant retrait des seules ressources privées.
