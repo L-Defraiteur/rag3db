@@ -522,7 +522,7 @@ impl Garde {
         for invocation in invocations {
             let commande: Commande = invocation.into();
             let verdict = self.sentinelle.juger(&commande, &sans_accord).borner();
-            if verdict.decision == Decision::Refuse || verdict.faits.shell {
+            if verdict.decision == Decision::Refuse {
                 return Err(format!("`{}` : {}", commande.lisible(), verdict.motif));
             }
             if verdict.portee == Portee::CetteFois { portee = Portee::CetteFois; }
@@ -712,7 +712,7 @@ impl Garde {
                 // Réévaluer les refus structurels sans retenir de famille.
                 let sans_accord = Contexte { accorde_par_l_utilisateur: false, ..ctx.clone() };
                 let v = self.sentinelle.juger(&c, &sans_accord).borner();
-                if v.decision == Decision::Refuse || v.faits.shell { v } else {
+                if v.decision == Decision::Refuse { v } else {
                     Verdict { decision: Decision::Autorise, portee,
                         fondement: Fondement::UtilisateurExplicite,
                         motif: "ligne exacte déjà accordée dans ce domaine".into(), ..v }.borner()
