@@ -1,14 +1,14 @@
 # Session « recherche » : rapport de reprise (11 novembre 2026)
 
-## Travail courant (12 novembre) : montage du témoin close FTS
+## Travail courant : primitive commune des lanceurs (12 novembre)
 
-Ticket unique ouvert `docs/recherche/tickets/2026-11-12-le-temoin-de-fermeture-fts-echoue-avant-l-appel-a-close.md`, recherche, créé par orchestration avant transmission. Worktree/branche `cx-recherche-fts-close-deterministe` depuis898c9e0dc ; patch témoin `5a83eee91`. Diagnostic du rouge CI080 confirmé : ENOTEMPTY à la suppression récursive avant close ; aucune nouvelle causalité1a ni régression du close produit établie.
+Ticket [scopes des validations](../../orchestration/tickets/2026-11-12-une-scope-e2e-imbriquee-peut-echapper-au-plafond-du-lanceur.md), propriété scripts recherche et relecture ED. Branche/worktrees `cx-recherche-confinement-lanceurs` aux deux postes, base43db9634a ; source réelle figée5fab0e1f9, helper productionecd605037, docs de recette ensuite. Primitive `scripts/confiner_validation.py` adoptée par run_e2e et temoins_navigateur ; aucun Rust produit ni source Arbre modifié, aucun ancien lot rejoué.
 
-Montage proposé : adaptateur local de ShardStorage public sur RamShardStorage ; préparation normale, puis armement atomique d'un refus de persistance de racine. Close doit atteindre l'erreur distinctive, compteur positif, puis refus « closed », Drop et sortie enfant bornée20s sont conservés. Aucun retrait de dossier concurrent ni patch Lucivy, aucune assertion supprimée. Diff et parsing rustfmt seuls vérifiés ; **compilation et tests natifs non joués**.
+CPU20/20 verts2,059s, après rouge d’assertion JSON20(19/1) diagnostiqué et gardé (pas d’adaptation du helper à une phrase). P1 parent/racine PID+start, P2 reçu/superviseur réel et borneENV seule, nettoyage/refus/arrêt testés. Unique préflight réelle verte1,306s sous vrai posteMax32,26s internes/30s totalextérieur après acquisition : CDPChrome156+close,16descendants/unCGMax32,20observationsindépendantes,quiescencebus/profil=[],baseline9préexistantsnonattribuée. Preuves2postes horscible dans journaux-cx-recherche-confinement-12nov/. Aucun Cargo/target créé ; aucune exécution réelle restante. Revue/intégration après A encore attendue, aucun master sans tour explicite. Reprendre depuis le ticket et sa recette figée, ne pas relancer la préflight unique.
 
-Plan fermé détaillé dans le même ticket, à relire avant tout lourd : jeu CI natif/code/daemon/openai-llm, un témoin exact puis module FTS puis lib avec les deux filtres déjà présents en CI, global2400s, j8/mem32/target97k unique32Go/lib29a7, arrêt au premier rouge ; aucun modèle/service/GPU/DB ni CI rerun. Après ce préfixe, nouvelle revue de la passe finale requise, pas de matrice/e2e automatiquement ajoutés.
+## Historique FTS déterministe livré
 
-**Coordination : aucun créneau CPU réservé ni Cargo lancé par recherche à cette étape.** Les demandes arbre1b/coeur C++ reçues ne rencontrent donc aucun build recherche actif ; orchestration arbitre leurs créneaux. Le namespace TUI reste absent, mais le transport multi_agent_v1.send_input a accepté l’envoi du plan à C7 (soumission01a1cf2f-10c0-7033-9b71-6b7bbb6d0d94) et les réponses de coordination CPU. Plan+témoin publiés code5a83eee91/doc5dddf215c et effectivement transmis pour revue ; aucune autorisation de build ni tour master déduits de cet envoi.
+Correctif du témoin close livré sur masterb28b55db6 après revue ; ticket fermé dans docs/tickets/closed/2026-11-12-le-temoin-de-fermeture-fts-echoue-avant-l-appel-a-close.md. Ciblé1/1, moduleFTS10/10, libCI2090/0/64/2exclusions et features5/5, attestationnative29/220 ; ressources des deux postes nettoyées après gardes vertes, remotes/logs conservés. Ce lot est clos et n’est pas à rejouer.
 
 ## Lot journal d'embarquement livré le 12 novembre
 
