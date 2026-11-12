@@ -51,3 +51,9 @@ Deuxième ciblé, source `1f389afb528fddfdbddeeb582c8f20bc76b035e9`, preuves luc
 Source exacte `caef19714b6edcef70961d6332b09528db4f0a91`, luciepc, poste lourd32G, -j8, lib29 complète, features rag3db-native,code, target M8 unique : fusion **5/0/0**, plan **15/0/0**, lecteur **5/0/0**, builtin_templates **9/0/0**, refus du chargeur foreach **1/0/0**. Total **35 passés, zéro échec, zéro ignoré**. Preuves : `~/.cache/rag3weaver-build/preuves-m8-cibles-20261112-03/` (journaux, verdict VERT, ELF et empreinte hors target). Aucun service/modèle/base réelle ouvert par ces ciblés.
 
 Ce vert ciblé ne remplace pas la revue du diff ni une passe globale. Avant globale : rebase sur le master actualisé, branche neuve et comparaison du diff ; attendre la consigne de l’orchestration. Adoption persistée, application et activation réelles restent hors tranche.
+
+## Complément de revue : stockage, ressource et semis
+
+La garde conservatrice omettait storage, vector_extension et seed. Le chargeur valide les déclarations ; l’admission du stockage et le semis se font à l’ouverture, qui n’appartient pas au plan. Une extension nommée/chemin ne prouve pas la disponibilité ni la compatibilité de sa ressource physique. Toute différence de ces trois champs, y compris ajout/retrait, refuse désormais Compatibility ; les valeurs inchangées ne certifient ni les données ni les ressources réelles. Aucun nouveau moteur de migration/admission ni DB ouverte.
+
+Témoin source103fded7e réellement rouge :0/1/0, ajout storage accepté à tort ; preuves luciepc `preuves-m8-stockage-rouge-20261112-01`. Le témoin couvre aussi retrait storage, format/recette modifiés, changement d’extension et ajout de semis. Correction par la garde existante, sans affaiblir le validateur commun ; ciblés après correction à jouer.
