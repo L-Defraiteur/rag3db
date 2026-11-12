@@ -759,6 +759,7 @@ mod integration {
         );
         let host = Arc::new(
             DaemonHost::new()
+                .with_background(Arc::new(crate::dataflow::background::Registry::new()))
                 .with_runs_root(d.path().join("runs"))
                 .with_chats_root(d.path().join("chats"))
                 .with_racines_de_code(crate::code_tree::Roots {
