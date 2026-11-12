@@ -17,6 +17,10 @@ dossiers ne tiennent plus ; l'histoire est là, pas l'état).
 
 ## Les visions de novembre 2026 (pages de conception, laissées dans leurs dossiers de session)
 
+- **Un navigateur accessible aux agents par MCP** — piste future de Lucie du
+  12 novembre : étudier un pont open source, avec extension Chrome éventuelle,
+  réutilisable par différents agents. Recherche différée, aucune intégration livrée :
+  [intention et critères](2026-11-12-un-pont-navigateur-generaliste-par-mcp.md).
 - **Explorer les arbres de symboles** — demandes de Lucie du 12 novembre : vue
   par fichier, membres, parents/enfants bornés et hiérarchie optionnelle du grep ;
   composer outline et les relations existantes, qualifier couverture et provenance :
