@@ -25,9 +25,23 @@ pub struct Activation {
 pub enum Residence { Maintenir }
 
 #[cfg(feature = "daemon")]
+fn identite(source: &super::ModelSource) -> Result<crate::daemon::embeddings::IdentiteActivation, String> {
+    let a = source.activation.as_ref().ok_or("activation absente")?;
+    // Les budgets d'attente et chemins de coordination ne changent pas le
+    // fournisseur. L'empreinte décrit la recette, elle ne divulgue pas son env.
+    let recette = serde_json::to_vec(&(&source.model, source.dimensions, &a.programme, &a.args, &a.env, &a.profil, &a.peripherique))
+        .map_err(|e| e.to_string())?;
+    Ok(crate::daemon::embeddings::IdentiteActivation {
+        profil: a.profil.clone(), peripherique: a.peripherique.clone(),
+        recette: blake3::hash(&recette).to_hex().to_string(),
+    })
+}
+
+#[cfg(feature = "daemon")]
 pub fn demander(source: &super::ModelSource) -> Result<crate::serveur::activation::Demande, String> {
     use super::{Capability, Fallback, Provider};
     let a = source.activation.as_ref().ok_or("activation absente")?;
+    let attendue = identite(source)?;
     if source.provider != Provider::Service || source.fallback != Fallback::Refuse {
         return Err("activation gérée : service sans repli requis".into());
     }
@@ -44,10 +58,11 @@ pub fn demander(source: &super::ModelSource) -> Result<crate::serveur::activatio
         .env("RAG3WEAVER_EMBED_MODEL", &source.model)
         .env("RAG3WEAVER_ACTIVATION_PROFIL", &a.profil)
         .env("RAG3WEAVER_ACTIVATION_PERIPHERIQUE", &a.peripherique)
+        .env("RAG3WEAVER_ACTIVATION_IDENTITE", &attendue.recette)
         .journal_dans(&a.journal)
         .attente(std::time::Duration::from_secs(a.budget_activation_secs));
     for (cle, valeur) in &a.env {
-        if matches!(cle.as_str(), "RAG3WEAVER_EMBED_MODEL" | "RAG3WEAVER_ACTIVATION_PROFIL" | "RAG3WEAVER_ACTIVATION_PERIPHERIQUE") {
+        if matches!(cle.as_str(), "RAG3WEAVER_EMBED_MODEL" | "RAG3WEAVER_ACTIVATION_PROFIL" | "RAG3WEAVER_ACTIVATION_PERIPHERIQUE" | "RAG3WEAVER_ACTIVATION_IDENTITE") {
             return Err(format!("activation : {cle} est déterminé par l'identité déclarée"));
         }
         serveur = serveur.env(cle, valeur);
@@ -70,6 +85,9 @@ pub(super) fn connecter(source: &super::ModelSource, annule: &std::sync::atomic:
     if annule.load(std::sync::atomic::Ordering::Acquire) { return Err("connexion annulée".into()); }
     if client.name() != source.model || Some(client.dim()) != source.dimensions {
         return Err(format!("identité d'activation refusée : attendu {}/{:?}, reçu {}/{}", source.model, source.dimensions, client.name(), client.dim()));
+    }
+    if client.identite().activation.as_ref() != Some(&identite(source)?) {
+        return Err("identité d'activation refusée : recette/profil du fournisseur différent ou non attesté".into());
     }
     let origine = super::Origin::Service(bail.adresse().to_string());
     Ok((Box::new(Gere { client, _bail: bail }), origine))

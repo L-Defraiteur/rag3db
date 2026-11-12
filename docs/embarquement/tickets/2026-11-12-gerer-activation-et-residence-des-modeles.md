@@ -134,3 +134,15 @@ rouge runtime caché. Prochain lancement après `git submodule update --init
 extension/rag3weaver/codeparsers` ; même budget privé, pas de rejeu inchangé.
 Témoin autonome ajouté pour deux processus séparés synchronisés par une gate,
 chacun appelle réellement l'acquisition commune ; un seul départ attendu.
+
+Cargo après initialisation codeparsers : arrêté sur E0433 mail.rs:120, accès
+à daemon_lifecycle exclu sans rag3db-native. Aucun témoin joué. Défaut séparé
+consigné chez ED : `2026-11-12-la-boite-ne-compile-pas-sous-daemon-seul.md`.
+Prochaine recette : features `rag3db-native,daemon`, export de la lib épinglée
+par `scripts/lib_du_magasin.sh` puis mêmes filtres CPU, sans accès GPU.
+
+Durcissement supplémentaire : santé du fournisseur courant atteste la recette
+(profil, périphérique déclaré, empreinte). Un fichier administratif persistant
+ne certifierait pas l'instance après reprise du port par autrui. Refuser un
+fournisseur non attesté/différent, même si modèle et dimension sont identiques.
+La chauffe absente reste inconnue ; ceci ne prouve toujours pas le placement GPU.
