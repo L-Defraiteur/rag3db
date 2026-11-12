@@ -39,3 +39,30 @@ Un résidu arbitraire non possédé doit continuer de faire rougir le garde.
 Fin : témoin de nettoyage et de garde, puis suite hôte entière réellement jouée
 et TMPDIR vide. Documenter source/compteurs/propreté ; revue avant reprise de la
 passe migration complète. Aucun transfert, modèle, serveur ou base réelle ajouté.
+
+## Attribution baseline
+
+Contrôle autorisé sur master**b28b55db6a8e79e149e2c3943b05b0cf258d1dec**,
+mêmes huit features/lib29/runner et environnement sans services, sous lourd32Go,
+j8, borne900s : **13/0/0**, puis **même résidu24Ko** du dossier d'état
+`rag3weaver-etat-des-e2e-1530516/manifestes/` et rc101 du garde.
+`cx-diagnostic-residu-hote-baseline-b28-v1/{suite.log,resultat.json,source.json}`.
+GARDER=1 conserve les dossiers propres à ce diagnostic (pas d'effacement de preuves
+antérieures) : `/tmp/rag3weaver-e2e-1527916` et
+`/home/lucied/.cache/rag3weaver-build/e2e-1527916`. Aucun retry de passe complète.
+Ce défaut de fin de vie préexiste au préfixe de migration ; les deux écritures
+dans l'état privé des fixtures sont légitimes, leur propriétaire ne les nettoie pas.
+
+## Correction proposée, sans modification produit
+
+Le lanceur peut créer par mktemp un espace d'état privé à la suite, sous le
+TMPDIR qu'il possède, le passer explicitement par RAG3WEAVER_STATE_DIR, puis le
+retirer après succès avant de vérifier les résidus non possédés. En cas d'échec,
+le garder avec les dossiers diagnostiques. Ne jamais déduire un chemin à effacer
+de l'environnement d'état réel ; ne supprimer que le chemin créé par le lanceur.
+Le test d'isolation sous TMPDIR reste vrai et les livres du produit persistent.
+
+Témoins d'outillage requis avant feu vert : état possédé seul nettoyé ; fichier
+arbitraire hors de cet espace toujours rouge ; état conservé sur échec. Puis le
+vrai e2e_demon_hote13/0/0 avec TMPDIR vide. Source/validation à relire avant une
+nouvelle passe migration, aucun ajout à la liste d'exceptions de résidus.
