@@ -510,3 +510,21 @@ source pilote inchangé, SHA consigné. Aucun staging, compiler, lien, pilote ou
 mesure exécuté. ready_to_compile et ready_to_run restent false. Priorité ciblé
 CLI arbre ; C7 doit relire ces argv avant d’autoriser une TU puis la première
 cellule de trois paires. Aucun moteur recopié/recompilé ni lib distribuée touchée.
+
+### Autorisation conditionnelle pilote et première cellule — 12 novembre
+
+C7 a relu e78/recetteb4d424 et autorise staging vérifié puis une TU/lien sous
+poste lourd, 180 s globales/mémoire8Gio, contrôle ELF/provenance sans reconstruire
+de moteur. Si ces contrôles passent seulement : première cellule64k×64/R4096,
+3paires alternées sous poste mesure exclusif, 900s globales/60s enfant/mémoire1Gio
+pool512Mio. Premier échec stop sans retry ; pas de matrice/DDL/attribution moteur.
+Arbre finit ses ciblés, poste lu libre avant préparation, coordination prévue.
+
+Contrôleur préparé `12-11-2026/outils/cx-controler-pilote.py` et wrapper borné :
+unités distinctes MemoryMax8G/1G, swap0, RuntimeMax170/890s+arrêt2s (sous plafonds),
+limites cgroup réelles vérifiées avant action, namespace réseau fermé et entrées
+en lecture seule. Stage 830fichiers vérifiés, copie des2générés, compile/lien
+uniques puis readelf sans exécuter le pilote. Mesure ultérieure : timeout enfant
+conservateur57s+2s, groupe propre tué au timeout et arrêt sans retry. Validation
+identité des entrées/survivants, des64plages et des6volumes avant résultat final.
+Aucun lancement encore à ce point de préparation.
