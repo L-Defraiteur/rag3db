@@ -54,8 +54,9 @@ def main():
                     continue
                 proc = Path('/proc') / str(pid)
                 try:
-                    if os.readlink(proc / 'exe') != a.exe or str(pid) in qualifies:
+                    if os.readlink(proc / 'exe') != a.exe:
                         continue
+                    cle = f"{pid}:{info['debut']}"
                     c = capture.capture(pid, int(info['debut']), allow_partial=True)
                     c['argv'] = [v.decode(errors='replace') for v in c['argv']]
                     c['cgroup'] = info['cgroup']
@@ -70,21 +71,27 @@ def main():
                     actif = any(v['vram_bytes'] is not None and v['vram_bytes'] > 0
                         and v['engine_ns'].get('drm-engine-gfx', 0) > 0 for v in primaire)
                     if c['complete'] and connus and actif:
-                        qualifies[str(pid)] = dict(starttime=info['debut'], clients=c['clients'],
-                            exe_sha256=c['exe_sha256'], preuve=f'capture-{pid}-{n-1}.json')
+                        premiere = qualifies.get(cle, {}).get('premiere_preuve', f'capture-{pid}-{n-1}.json')
+                        qualifies[cle] = dict(pid=pid, starttime=info['debut'], clients=c['clients'],
+                            exe_sha256=c['exe_sha256'], premiere_preuve=premiere,
+                            derniere_preuve=f'capture-{pid}-{n-1}.json')
                 except OSError as e:
                     erreurs.append(dict(pid=pid, erreur=str(e), statut='inconnu'))
             time.sleep(.1)
     except Exception as e:
         (a.sortie / 'erreur.json').write_text(json.dumps({'erreur': str(e)}))
         # Demander l'arrêt du seul superviseur dont nous sommes descendants.
-        table = confinement.processus()
-        if table.get(autorite['pid'], {}).get('debut') == autorite['debut']:
+        try:
             fd = os.pidfd_open(autorite['pid'])
             try:
-                signal.pidfd_send_signal(fd, signal.SIGTERM)
+                # Le contrôle d'identité se fait APRÈS ouverture du pidfd.
+                actuel = confinement.processus().get(autorite['pid'], {})
+                if actuel.get('debut') == autorite['debut'] and actuel.get('cgroup') == autorite['cgroup']:
+                    signal.pidfd_send_signal(fd, signal.SIGTERM)
             finally:
                 os.close(fd)
+        except OSError:
+            pass
         raise
     finally:
         (a.sortie / 'resume.json').write_text(json.dumps(dict(
