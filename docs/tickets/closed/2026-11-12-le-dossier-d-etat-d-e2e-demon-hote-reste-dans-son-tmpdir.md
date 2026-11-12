@@ -1,12 +1,12 @@
 # Le dossier d'état d'e2e_demon_hote reste dans son TMPDIR
 
-- **État** : ouvert, découvert pendant la passe diagnostique migration v2 ; défaut préexistant confirmé sur baseline ; correction du lanceur en validation.
+- **État** : corrigé par144c1d6b0 etce96678fa ; témoins et suite hôte verts surce96678fadac6c58f3db7872d4200972b54f2552.
 - **Famille** : produit
 - **Gravité** : passe refusée par le garde de résidus, malgré les assertions fonctionnelles vertes.
 - **Atteignable en service** : non, hygiène du lanceur et des fixtures e2e.
 - **Touche rag3weaver** : oui, état temporaire des témoins et nettoyage de suite.
 - **Pour** : arbre-principal pour diagnostic dans le lot courant ; revue orchestration/recherche pour le propriétaire du nettoyage.
-- **Signalé par** : passe sur3377cdd84890770702fe9201c26cf457b54f24ce, liée au [ticket migration](2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md).
+- **Signalé par** : passe sur3377cdd84890770702fe9201c26cf457b54f24ce, liée au [ticket migration](../../arbre-principal/tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md).
 
 ## Constat et preuves
 
@@ -21,7 +21,7 @@ La passe s'est arrêtée à cette étape : features5+minimal verts, lib2152/0/64
 navigateur39/0/0 et migration_preflight5/0/0 verts ; dix autres suites non jouées.
 Portée terminée et poste0/4 relu. Ces résultats ne constituent pas une passe verte.
 
-Le [ticket fermé du9nov](../../tickets/closed/2026-11-09-les-temoins-ecrivent-leur-etat-de-manifeste-dans-le-dossier-d-etat-reel.md)
+Le [ticket fermé du9nov](2026-11-09-les-temoins-ecrivent-leur-etat-de-manifeste-dans-le-dossier-d-etat-reel.md)
 a corrigé l'écriture dans l'état réel : le constructeur de binaire e2e place
 RAG3WEAVER_STATE_DIR sous son TMPDIR. Il ne traite pas la fin de vie de ce dossier.
 Ce ticket ne rouvre pas cette correction ; il suit le résidu du dossier désormais
@@ -76,3 +76,23 @@ le dossier disque possédé par la suite. Le garde des résidus reste inchangé.
 Le témoin scripts/test_etat_suite_e2e.sh appelle les vraies fonctions du lanceur :
 état seul, résidu arbitraire, échec/expiration, conservation explicite, nettoyage
 refusé et chemin non possédé. Résultats et suite réelle restent à mesurer.
+
+## Validation réelle du correctif
+
+Source **ce96678fadac6c58f3db7872d4200972b54f2552**, luciepc, même lib29,
+huit features, cible unique11Go (<32Go), j8/Mem32, borne900s, sans variables
+service ni GARDER. `cx-etat-suite-hote-ce96678fa/suite.log` : **13/0/0**,
+**1/1 suite**, **rc0**, aucun résidu ; portée inactive et poste libre0/4 relus.
+Le binaire conservé provient de la ligne réelle du lanceur, e2e-ebaaf29e53c2989e ;
+SHA256 **3b756ed62c8f183baba370dcccbcd03fe4e43c978e7a431fac3d90fde67ec1a4**.
+Preuves : resultat.json, source.json, binaire.json et binaire-e2e dans ce dossier.
+
+`cx-etat-suite-outillage-ce96678fa.log` : six groupes de témoins verts (dont
+les deux statuts101/124), puis19 vérifications de test_run_e2e vertes. Le premier
+montage144c1d6b0 s'était arrêté avant assertions : set-e du témoin traitait le grep
+sans résultat de la liste vide comme fatal. Appel conditionnel corrigé surce96678fa,
+sans modification du garde. Aucun rouge produit inventé pour ce défaut de montage.
+
+La passe complète migration v2 reste rouge historiquement ; aucune fullv3 lancée.
+Sa reprise attend la revue du delta et de ces résultats par C7. Le ticket migration
+reste ouvert : ce correctif ne livre ni exécution ni publication de migration.
