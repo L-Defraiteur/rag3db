@@ -3453,15 +3453,8 @@ fn read_threads() -> u64 {
 
     /// Persist a key-value pair to `_catalog_meta`.
     pub(crate) fn persist_meta_key(&self, key: &str, value: &str) -> Result<(), CatalogError> {
-        let stmt = self.dialect.upsert_meta("key", "value");
-        self.conn.execute_with_params(
-            &stmt,
-            &[
-                QueryParam::new("key", CypherValue::String(key.to_string())),
-                QueryParam::new("value", CypherValue::String(value.to_string())),
-            ],
-        ).map_err(|e| CatalogError::DbError(e.to_string()))?;
-        Ok(())
+        metadata::write_value(self.conn.as_ref(), self.dialect.as_ref(), key, value)
+            .map_err(|e| CatalogError::DbError(e.to_string()))
     }
 
     // ── La marque de travail en attente ────────────────────────────────

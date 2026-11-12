@@ -58,9 +58,10 @@ Entrée native publique, gardant sa connexion d'écrivain privée :
 
 ```rust
 // Surface de la primitive proposée, noms ajustables avant le diff.
-let origin = PublicationOrigin::fresh();
+let origin = NewPublicationOrigin::fresh();
+let expected_origin = origin.identifier().to_owned();
 let initial = DeclarationSnapshot::from_complete_input(input_a)?;
-let mut store = OwnedPublicationCatalog::create_new(path, origin.clone(), operation_1, initial)?;
+let mut store = OwnedPublicationCatalog::create_new(path, origin, operation_1, initial)?;
 let plan = store.prepare(operation_2, snapshot_b)?;
 let receipt = store.publish(&plan)?;
 let current = store.observe()?;

@@ -3,7 +3,7 @@
 //! This module does not observe storage, establish an origin/generation, connect
 //! a model or grant execution. Missing declarations are not empty declarations.
 use std::collections::{BTreeMap, BTreeSet};
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use crate::{backend::BackendRelation, config::{EntityConfig, RelationDef},
     embedding_storage::{EmbeddingModelEntry, StorageKind, validate_slug}, hash::content_hash,
     model_source::{Capability, ModelSource}, search::SearchSignals};
@@ -24,14 +24,16 @@ impl std::error::Error for FactsError {}
 
 /// Explicit provider knowledge: absent, complete definitions, or unavailable.
 /// `Absent` is an assertion about the supplied declaration, not discovery.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub enum ProviderFacts {
     Absent,
     Complete { name: String, entities: BTreeMap<String, EntityConfig>, relations: BTreeMap<String, RelationDef> },
     Unavailable { name: String },
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RecipeFactsInput {
     pub id: String,
     /// Source bytes for non-inline derived templates, indexed by their spec.
@@ -43,7 +45,8 @@ pub struct RecipeFactsInput {
     pub dense_models: Option<BTreeMap<String, EmbeddingModelEntry>>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DeclaredSchemaInput {
     /// Effective EntityConfig values, including schema fields already merged.
     pub entities: Option<BTreeMap<String, EntityConfig>>,
@@ -215,7 +218,7 @@ fn check_contract(value: &str, domain: &str, label: &str) -> Result<(), FactsErr
         _ => Err(FactsError::UnknownContract(label.into())),
     }
 }
-fn digest<T: Serialize>(domain: &str, value: &T) -> Result<String, FactsError> {
+pub(super) fn digest<T: Serialize>(domain: &str, value: &T) -> Result<String, FactsError> {
     Ok(format!("{domain}{}", content_hash(&canonical_json(value).map_err(FactsError::Invalid)?)))
 }
 
