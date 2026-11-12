@@ -104,3 +104,27 @@ un faux « autre plan » depuis les métadonnées cibles. T12 exige aussi le ref
 d’un avancement étranger. La revalidation sous exclusivité porte ce couple.
 La préparation relue est close ; cette fiche garde le premier patch autorisé et
 le reste non livré, sans réintroduire le ticket de préparation ouvert.
+
+## Démarrage du premier patch après livraison documentaire
+
+Master documentaire1cf24f671, préparation close. Nouveau WT local
+`cx-wt-migration-preflight`, branche `cx-arbre-migration-preflight-2`, depuis ce
+master, sans cherrypick. Aucun WT distant ni target créé à ce stade.
+
+Préfixe test-only T12 : quatre témoins sur l’API actuelle MigrationRunner.pending
+et son vrai lecteur d’historique dans Catalog, avec CallbackConnection qui sert
+les lignes de journal synthétiques et compte tout effet inattendu ; modèle à
+compteur. Cas checksum applied modifiée, version orpheline, statut inconnu et
+version mal typée : refus attendu avec zéro effet/modèle, sans initialize. Rouge
+pas encore joué ; aucune correction de production ni réussite revendiquée.
+
+Frontière API à matérialiser et partager avant passe : descripteur typé de format
+et générations attendues ; ResolvedMigrationPlan immuable construit avec les
+variables et faits de schéma réels, son identité distincte du StorageInspection
+courant ; qualification source avant opération/applied cible attendu après
+publication ; inspection RO et façade d’ouverture commune hôte/CLI avant RW et
+modèles. Le point d’entrée plan/préflight sera réellement appelable ; apply sur
+la cible1b sans transfert/publication restera indisponible avec refus nommé.
+Réutiliser les fichiers/graphes, le lecteur et le runner existants, pas un
+second journal. Le premier préfixe ne suffit pas à prouver tout T12 résolu :
+variables/configs/générations et revalidation sous exclusivité restent à couvrir.
