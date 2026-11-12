@@ -39,7 +39,9 @@ fn cosinus(a: &[f32], b: &[f32]) -> f32 {
 #[test]
 #[ignore = "charge 2,2 Go de poids et lance un processus"]
 fn un_modele_charge_une_fois_sert_plusieurs_clients() {
-    let journal = std::env::temp_dir().join("rag3weaver-e2e-demon");
+    // Gardé sur rouge pour le diagnostic ; supprimé après arrêt du seul enfant
+    // possédé sur vert. Un nom fixe laissait les journaux dans le TMPDIR.
+    let journal = tempfile::tempdir().expect("journal privé du démon").keep();
 
     // Le binaire tel que cargo vient de le construire — pas un `which`, pas un
     // chemin en dur : le test sert ce qu'il a compilé.
@@ -68,6 +70,9 @@ fn un_modele_charge_une_fois_sert_plusieurs_clients() {
     assert_eq!(id.dim, 1024, "BGE-M3 rend du 1024");
     assert!(id.dual, "BGE-M3 sait rendre dense et creux en une passe");
     assert!(!id.factice, "un démon ne doit jamais blanchir un factice");
+    let chauffe = &id.chauffe.as_ref().expect("le nouveau fournisseur décrit sa chauffe")["embed"];
+    assert_eq!(chauffe.etat, rag3weaver::daemon::embeddings::EtatChauffe::Complete);
+    assert!(!chauffe.formes.is_empty() && chauffe.formes.iter().all(|f| f.erreur.is_none()));
 
     // ── Le second ne paie pas ─────────────────────────────────────────────
     // La description à l'adresse que le démon a prise : il doit s'y reconnaître.
@@ -128,6 +133,9 @@ fn un_modele_charge_une_fois_sert_plusieurs_clients() {
         "\n  Économie sur cette passe : {:.1?} — et c'est par processus de test qui aurait rechargé.",
         chargement.saturating_sub(attache)
     );
+    drop(second);
+    drop(premier);
+    std::fs::remove_dir_all(&journal).expect("nettoyer le journal après arrêt du démon privé");
 }
 
 /// **Sans `RAG3WEAVER_EMBED_MODEL`, le démon sert granite-278m** (décision de
@@ -136,7 +144,7 @@ fn un_modele_charge_une_fois_sert_plusieurs_clients() {
 #[test]
 #[ignore = "charge un modèle et lance un processus"]
 fn sans_variable_le_demon_sert_granite_278m() {
-    let journal = std::env::temp_dir().join("rag3weaver-e2e-demon-defaut");
+    let journal = tempfile::tempdir().expect("journal privé du démon par défaut").keep();
     let programme = env!("CARGO_BIN_EXE_rag3weaver-embeddings");
     // Rien n'est posé : c'est le défaut du binaire qu'on lit. Si le processus
     // parent porte la variable, on la retire du démon pour lire le vrai défaut.
@@ -157,4 +165,6 @@ fn sans_variable_le_demon_sert_granite_278m() {
     assert_eq!(v[0].len(), 768);
     let n: f32 = v[0].iter().map(|a| a * a).sum::<f32>().sqrt();
     assert!((n - 1.0).abs() < 1e-3, "granite rend des vecteurs unitaires : norme {n}");
+    drop(client);
+    std::fs::remove_dir_all(&journal).expect("nettoyer le journal après arrêt du démon privé");
 }
