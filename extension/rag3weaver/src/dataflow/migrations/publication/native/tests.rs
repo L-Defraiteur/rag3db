@@ -304,6 +304,35 @@ fn native_foreign_column_is_rejected_without_mutation() {
 fn native_complete_recipe_models_relations_and_configs_are_real_persisted_values() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("owned");
+    for (index, address) in ["a,b", " a,b ", ""].into_iter().enumerate() {
+        let mut malformed = super::super::tests::rich_input();
+        malformed
+            .recipe
+            .model_sources
+            .as_mut()
+            .unwrap()
+            .get_mut(&crate::model_source::Capability::Embed)
+            .unwrap()
+            .address = crate::model_source::Addresses(vec![address.into()]);
+        let refused_root = dir.path().join(format!("refused-{index}"));
+        let result = DeclarationSnapshot::from_complete_input(malformed).and_then(|snapshot| {
+            OwnedPublicationCatalog::create_new(
+                &refused_root,
+                NewPublicationOrigin::fresh(),
+                "refused",
+                snapshot,
+            )
+        });
+        assert!(result.is_err());
+        assert!(
+            !refused_root.exists(),
+            "codec refusal created a native catalog"
+        );
+    }
+    assert!(
+        files(dir.path()).is_empty(),
+        "codec refusal wrote fixture bytes"
+    );
     let origin = NewPublicationOrigin::fresh();
     let id = origin.identifier().to_owned();
     let input = super::super::tests::rich_input();

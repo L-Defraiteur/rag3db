@@ -290,16 +290,31 @@ fn snapshot_codec_refuses_non_lossless_declarations_before_any_publication() {
         canonical(&Registry::decode(&encoded).unwrap()).unwrap(),
         encoded
     );
-    input
-        .recipe
-        .model_sources
-        .as_mut()
-        .unwrap()
-        .get_mut(&Capability::Embed)
-        .unwrap()
-        .address = Addresses(vec![" http://127.0.0.1:9, http://127.0.0.1:10 ".into()]);
-    assert!(
-        DeclarationSnapshot::from_complete_input(input).is_err(),
-        "non-lossless declaration admitted by publication snapshot"
-    );
+    for addresses in [
+        vec!["a,b"],
+        vec![" a,b "],
+        vec![" a "],
+        vec!["a,b", "c"],
+        vec![""],
+    ] {
+        let mut malformed = input.clone();
+        malformed
+            .recipe
+            .model_sources
+            .as_mut()
+            .unwrap()
+            .get_mut(&Capability::Embed)
+            .unwrap()
+            .address = Addresses(addresses.into_iter().map(str::to_owned).collect());
+        let decoded: DeclaredSchemaInput =
+            serde_json::from_str(&canonical(&malformed).unwrap()).unwrap();
+        assert_ne!(
+            malformed.recipe.model_sources, decoded.recipe.model_sources,
+            "typed alias fixture did not change"
+        );
+        assert!(
+            DeclarationSnapshot::from_complete_input(malformed).is_err(),
+            "non-lossless declaration admitted by publication snapshot"
+        );
+    }
 }
