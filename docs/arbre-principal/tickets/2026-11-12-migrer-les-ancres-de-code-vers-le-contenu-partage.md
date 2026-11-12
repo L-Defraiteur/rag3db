@@ -830,3 +830,33 @@ exclusivité, adaptateur multi-modèle, écritures/reconstruction/checkpoints et
 publication/reprise restent des prérequis de la suite. Ticket migration ouvert.
 Diff et preuves transmis à C7 avant toute passe complète ou push master ; aucune
 globale, publication ou migration réelle autorisée à ce stade.
+
+### Passe complète de l'aperçu autorisée, préparation du montage
+
+Après revue du ciblé natif15/0/0, C7 autorise features5 + minimum en **cargo check
+--lib --no-default-features** (pas les tests minimaux connus rouges), lib entière
+sous huit features, navigateur attendu39 et migration_preflight attendu5.
+Le témoin natif liens qualifié par80faa doit apparaître réellement dans la lib.
+Global3600 après acquisition lourd, portée3590+5, j8/Mem32/target32/lib29 ; premier
+rouge stop/diagnostic, aucune répétition inchangée. Aucun master sans revue/àtoi.
+
+Rebase final sur master8cc7e023b : seul document de répartition déplacé/clos depuis
+base6e5 ;10/10 commits identiques au range-diff, branche neuve
+cx-arbre-migration-transfert-3. Source définitive à publier après cette MD ; pas
+de nouveau Rust après le ciblé natif. Modèles/services/GPU supplémentaires interdits.
+
+Montage proposé : Docker PostgreSQL existant rag3weaver-pg, nouvelle base synthétique
+cx_apercu_2191_20261112_v1 (absence vérifiée, aucune base réinitialisée). Connexion
+fixture fournie aux seuls processus de passe, sans affichage des identifiants.
+Aucune variable de service d'embarquement ; React déjà présent au cache I-paquets-react.
+TMPDIR navigateur créé par mkdtemp sous **/var/tmp/cx-pv.XXXXXX**, court/privé sur
+disque (findmnt : btrfs), limité au processus navigateur ; conserver si rouge,
+retirer seulement la racine possédée après succès. Éviter la limite des sockets
+UNIX de Chrome, sans modifier tests, délais ou options de sécurité du navigateur.
+
+Driver/launcher neufs cx-passe-apercu-transfert-v1, source propre/hash/argv/env
+et contrôle AST/environnement à publier avant lancement. Artifacts lib/nav/e2e
+pris depuis les lignes réellement exécutées ; attestation des220assets et SHA,
+modèles4/6 de l'aperçu littéraux. La passe n'ajoute aucun transport/apply ni
+qualification des configs/faits : aperçu toujours explicitement non qualifié.
+Tickets migration et tty restent ouverts.
