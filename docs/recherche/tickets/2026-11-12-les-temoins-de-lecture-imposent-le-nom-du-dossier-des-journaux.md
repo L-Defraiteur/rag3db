@@ -89,7 +89,7 @@ Autorisation C7 : une seule préflight30s/Max32 dans le global2400 initial (éch
 
 Script externe ci-dessous, publié avant toute exécution, avec profil neuf sous integration-487c68/preflight-native-unique ; arguments identiques au témoin (y compris --no-sandbox déjà existant, aucune option de sécurité ajoutée/retirée). Version réelle par Browser.getVersion sur le même protocole CDP/fd3-fd4 que le témoin ; inventaire PID/starttime/cgroups/max et contrôle d’ascendance au fil de la vie. Browser.close puis TERM/KILL uniquement PID privés attribués via starttime/pidfd si nécessaire. Profil supprimé seulement après quiescence ; aucune mutation système/KDE/DBus/application utilisateur. Accès direct candidat seulement : si ce natif échappe aussi, verdict rouge conservé sans nouvel essai ni reprise NAV. Aucune nouvelle source Rust ni compilation.
 
-SHA256 du script : `e4ec557f287c92118d5dca032ca91ca28f15beef8cd8e98e555c2c1e0528b0e1`.
+SHA256 du script : `bd1f270e6b819a280e9b5360b3bcfbbbdaa3885be19d0eba4172278d086e2eb8`.
 
 ```python
 import os,signal,subprocess,time,json,hashlib,fcntl,shutil,datetime
@@ -143,6 +143,8 @@ def stop():
     os.close(fd)
    except ProcessLookupError:pass
   time.sleep(.5)
+def echeance(sig,frame):raise TimeoutError('préflight : échéance/signal')
+signal.signal(signal.SIGTERM,echeance)
 # Comme le témoin : pipe de commande vers fd3, réponses sur fd4 ; aucune option ajoutée.
 a,b=os.pipe();c,d=os.pipe();aa=fcntl.fcntl(a,fcntl.F_DUPFD_CLOEXEC,10);dd=fcntl.fcntl(d,fcntl.F_DUPFD_CLOEXEC,10)
 def fds():os.dup2(aa,3);os.dup2(dd,4)
