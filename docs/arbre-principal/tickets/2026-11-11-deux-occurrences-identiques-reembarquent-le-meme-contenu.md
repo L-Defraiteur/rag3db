@@ -383,3 +383,10 @@ Témoin autorisé sur le même GraphDefinition : Agrégé et SourceResolved, cha
 explicites puis défaut ; comparer la vraie sortie BM25 (même déclaration privée
 du nœud Resolve) à la sortie enrichie, UUID/positions toujours exacts. Source
 produit8fd inchangée avant rouge ; legacy KB doit garder sa résolution.
+
+Rouge réel SourceResolved source**e1c6d05dd** (runtime8fd),
+cx-graphe-provenance-rouge.log, 0/1 en0,25s : label Some(bm25) avant
+Resolve devient None après, UUIDpublics/positions et cas Agrégé déjà franchis.
+Le correctif borne la seconde résolution legacy aux cibles sans projection
+publique, déjà résolue en occurrences par finish_signal ; le chemin KB historique
+et ses références singulières restent actifs. Même témoin, aucun faux score ajouté.

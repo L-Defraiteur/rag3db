@@ -2829,8 +2829,11 @@ impl Node for ResolveParentNode {
         // déduplication du monolithe : deux lignes d'index du même document
         // ne rendent qu'un document. La provenance suit par la source : c'est
         // le signal du meilleur original qui reste.
+        // Une projection publique a déjà atteint l'identité de sortie :
+        // elle ne porte pas les références singulières des anciennes KB.
         let signals: Vec<crate::dataflow::resultat::Provenance> = if qp.options.result_mode == ResultMode::SourceResolved
             && target.has_source_refs
+            && target.occurrence_projection.is_none()
         {
             let mut par_source: HashMap<String, crate::dataflow::resultat::Provenance> = HashMap::new();
             for (r, sig) in search_results.iter().zip(signals.iter()) {
