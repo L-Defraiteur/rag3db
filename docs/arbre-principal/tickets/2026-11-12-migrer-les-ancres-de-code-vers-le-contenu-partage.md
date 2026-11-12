@@ -1469,3 +1469,38 @@ listage exact1test avant runtime, ldd vérifie native29 ; runtimeattendu101/0pas
 résultat métier attendu, un éventuel VERT du superviseur veut seulement dire
 exécution/arrêt/nettoyage conformes, pas « test passé ». Pas d'ELF choisi au mtime,
 sourcefigée/propre avant/après chaque phase, aucun modèle/service/PG ou DB réelle.
+
+### Suite RO — rouge observé puis correctif et témoins publiés
+
+Source rouge19030f243b29e534c31804ebfe7daecc1fa8afd8, compile132s, ELF réel
+rag3weaver-b51f42378bbb8e05 SHA45623a3364aa9e987ce1de1d9b4e130f6187e2b38c6b8b20513de46187be0507,
+JSONnatif+code/listageexact1 avantruntime. **0passé/1échec/0ignoré,rc101** :
+relation:Broken=not-json omise, inspection rendueOk (doncCOMMIT) au lieu de refus.
+Fin133,34s dans fenêtre600 ; preuve cx-observation-ro-rouge-v1/ et confinement
+cx-observation-ro-confinement/validation-duzfhijx/ : VERTdu superviseur=arrêt/nettoyage
+conformes, pas testvert ; restes=[],tmpbusretiré, placeArbrerendue(EDreste1/4).
+
+Correctif : catalog::metadata partagé pourlignesstrictes et décodageEntityConfig/
+RelationDef, consommé par les DEUXloadersCatalog et inspect_on. Pas d'initialisation
+ou écriture ajoutée, ni format changé. ObservedCatalogMetadata scellé(aucunbuilder/
+Deserialize/champmutablepublic), namespaces Optiontypés et journal existant ;
+ConnectionView avanttransaction, ReadOnlySnapshot seulementaprèsCOMMIT réussi.
+COMMITdéfaillant tenteROLLBACK et conserveégalementsonerreur éventuelle, sans
+rendre d'observation. AppliedMigration devient typepubliclisible/Serialize/Clone,
+champs inchangés nonpublics et getters ; aucun statutApplied ou droit inventé.
+
+compare_with_supplied_schema appelle le SEUL producteurA puis vérifie chaque
+config/RelationDef **persisté** contre les faits effectifsfournis. Définitions
+supplémentaires/fournisseur/politiques/recettes/modèles restentfournis : le rapport
+sépare observed_metadata et supplied_schema, sans transformer le sous-ensemble
+persisté en schéma completobservé. Pas de compose/hashdupliqué, empreinteentités
+historique inchangée, admission/preview/génération/apply non requalifiés.
+
+14nouveaux témoins au total :10callbacks inspection(dontrougeinitial),3décodeurs,
+1natifDBsynthétique64MiB encréation puisvraieRO64MiB, snapshotconfigs+relations+
+journal et comparaison A sans changementdesoctets des fichiers. Absent≠vide,
+transactions/échecsbegincommitrollback, invalide/dupes/journalinconnu, empreinte
+entitésstable avecnouvelle relation, politiques/entitéssupplémentairesnonobservées,
+mutation deschampsdiagnosticpublics sansaltérer la vue scellée, contenus/propriétés/
+extrémités/manquantscontradictoires couverts. Parse6sources rustfmt --emitstdout
+skip_children réussi, aucunefichier réécrit ni compilationlocale.
