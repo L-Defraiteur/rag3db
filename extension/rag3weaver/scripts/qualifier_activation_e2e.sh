@@ -30,7 +30,14 @@ else
     export RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7879
 fi
 git rev-parse HEAD
+if [ "$mode" = demon ]; then
+    # La fixture e2e a changé : vérifier ses gardes de features avant GPU.
+    timeout -k 10s 300 bash scripts/check_features.sh
+else
+    curl -fsS --max-time 5 http://127.0.0.1:7879/sante
+fi
 bash ./run_e2e.sh --test "$suite"
+if [ "$mode" = spans ]; then curl -fsS --max-time 5 http://127.0.0.1:7879/sante; fi
 octets=$(du -sB1 "$CARGO_TARGET_DIR" | cut -f1)
 if [ "$octets" -gt 34359738368 ]; then
     echo "ROUGE : target au-delà de 32 Gio après la suite ($octets octets)" >&2
