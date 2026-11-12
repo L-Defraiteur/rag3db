@@ -496,3 +496,38 @@ Le petit script ne lance ni ne tue de processus et ne met pas en œuvre tout
 ce contrôleur : il rend la capture et ses inconnues reviewables. Le rapprochement
 des séries, l’arrêt du groupe et l’intégration au lanceur restent à qualifier.
 Pas de nouveau GPU ni de sonde de calcul exécutés pour cette préparation.
+
+## Seconde fenêtre : préparation opérateur 7882, 12 novembre à 18 h 19
+
+Sur demande d’orchestration, optimiseur est disponible pour un futur arrêt/retour
+du privé, selon les mêmes règles : verrou MESURE réel et GO avant SIGTERM ciblé,
+trois autres services inchangés, restauration exacte après fin du banc et preuve
+du retour mémoire. Aucune nouvelle fenêtre n’a été exécutée à ce stade.
+Le rouge précédent et ses preuves restent conservés ; cette préparation ne
+valide ni n’active le nouveau contrôleur du banc.
+
+Préflight lecture seule joué à **18:19:17.675 Paris** : PID **3273544**, starttime
+**84847328**, SHA256 installé/chargé
+`65ec1d1db17d48ee53785cd55e72b9b77ca451d5bc4bb8197a9c1b7d040c595d`, même cwd,
+argv et quatre variables exactes de la recette ci-dessus. Aucun client TCP sur
+7882, port 8099 libre, poste libre lors du relevé. Santé réelle granite-278m,
+768/Flex32, dual/sparse/factice faux, lot 128/512 ; fdinfo amdgpu PCI 04:00.0
+confirme card2 pour le processus actuel. Les PID des trois services restent
+966256 / 3415586 / 1409444.
+
+Script préparé séparément à luciepc :
+`~/.cache/rag3weaver-build/cx-service-7882-banc-2.py`, SHA256
+`d97e71c8e30c776732a6e5dd170af28fa7211aa0fae4c0d1a6ce5506e593fece` ;
+copie portable `~/.cache/optimiseur-notes/service-7882-banc-2.py`.
+Seul le mode `preflight` a été joué. Les modes `stop GO-orchestration` et
+`restore` sont prêts mais non exécutés, avec le PID actuel et un dossier de
+preuves neuf `~/.cache/optimiseur-notes/banc-k10-12nov-7882-2/`.
+Preuve : `preflight.json` dans ce dossier ; journal
+`~/.cache/rag3weaver-build/cx-service-7882-preflight-2.log`.
+
+Avant tout arrêt : contrôleur du banc figé/relu, GO coordonné, signal du verrou
+MESURE acquis et deadline 1 200 s ; relire identité et clients. Avant retour :
+signal de fin ou abandon, PID llama et 8099 absents, VRAM rendue, puis relancer
+7882 avec la recette exacte et prouver santé/PID/SHA/PCI et autres services.
+Pas de nouveau modèle ni autre service/GPU utilisé par cette préparation,
+aucune lecture/copie env/vault, aucune limite relâchée. Le ticket reste ouvert.
