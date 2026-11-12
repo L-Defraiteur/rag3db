@@ -752,8 +752,8 @@ impl Garde {
 ///
 /// C'est la garantie *structurelle* que rien ne s'exécute sans verdict. Elle
 /// remplace une discipline — « penser à appeler `juger` avant » — par une
-/// impossibilité : [`executer`] ne prend que ça, et seul [`Garde::autoriser`]
-/// en produit.
+/// impossibilité : [`executer`] ne prend que ça ; les méthodes d'autorisation
+/// de [`Garde`] sont seules à en produire.
 ///
 /// Conséquence voulue pour les tests : on peut juger `rm -rf /` autant qu'on
 /// veut, le verdict est un refus, donc il n'existe aucun chemin qui l'exécute.
