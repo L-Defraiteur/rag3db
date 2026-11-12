@@ -103,3 +103,21 @@ après traitement bêta, sans réinscrire les schémas ; lectures alpha et bêta
 cellule initiale restaurée. La garde FTS de reprise et le rollback multicellule passent.
 Le témoin PG v3 franchit les UUID puis révèle l'UNWIND natif du tampon FTS post-commit ;
 son correctif utilise la primitive dialectale select_node_ids déjà existante, suivi dans 1a.
+
+## Question de revue finale : marque après rollback
+
+Revue c7 du candidat6fb, PG/dialecte sans blocage à ce stade. Le témoin
+projection_rollback_alpha_preserve_la_file_beta prouve les écritures conservées,
+pas la marque publiée ni Strict d'un autre lecteur. rollback rétablit a priori
+la marque DB antérieure, mais vide marque_posee/dette_publiee en mémoire. Une
+nouvelle mise en file sur une autre entité pourrait alors reconstruire une dette
+partielle depuis ce cache vide. Hypothèse bornée à vérifier, pas défaut affirmé :
+lire la marque avant/après rollback et après création Note, Occurrence beta
+restant en file ; contrôler le lecteur externe ensuite. Porteur arbre, même
+ticket, aucune relance massive ni changement de runtime autorisé par hypothèse.
+
+Frontière relue : has_pending, pending_work et drain_stats.pending décrivent la
+file active que les appels consigne/undo/code_sync/backend batch peuvent drainer.
+Les compteurs cumulés de drain et index_progress global ont une autre portée ;
+agréger has_pending sans changer le drain ferait travailler la mauvaise cellule.
+La préparation de clôture est archivée hors dépôt en attente des avis.
