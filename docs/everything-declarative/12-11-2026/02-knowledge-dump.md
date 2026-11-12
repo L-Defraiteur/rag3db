@@ -56,3 +56,33 @@ ressource ED de ce lot active ; B a reçu le jalon et conserve son union sur143/
 Bilan documentaire écrit dans un Wdocs neuf, retiré après son push et garde fraîche.
 Tickets concurrence/fixture clos, doublonremplacé ; dette journal après effet ouverte.
 Aucun nouveau travail implicite lancé.
+
+### Reprise parcours agent IDE, nuit du 12 au 13
+
+Source initiale `36e284824`, branche/worktrees `cx-ed-parcours-agent-ide`, ticket
+`../tickets/2026-11-12-prouver-le-parcours-agent-de-code-complet-de-l-ide.md`.
+Le témoin réel historique ne qualifiait que l’édition. Le nouveau témoin exige
+les résultats d’outils, un test Cargo nommé immuable et la reprise par
+`relire_les_taches` + `reread_chats` après destruction de l’hôte. Le gabarit code
+possède déjà les racines Rust en lecture et Cargo offline ; sa fixture désactive
+`catch_up_on_open` pour ne pas lancer d’index vectoriel. Aucun consentement humain
+synthétique. Le préfixe ne prouve pas encore les bindings HTTP/UI.
+Preuves/logs/supervision/fixture persistante : dossier privé PC
+`I-luciepc/parcours-agent-ide-20261112` sous le cache des builds. Garder les rouges,
+ne pas relancer à l’identique. Compilation et appel cloud initial en cours,
+aucune réussite acquise à cette écriture.
+
+Parcours IDE réel acquis : source4d hôte/chat3tours, sourcefe0 mêmefixture UI1tour,
+preuves I-luciepc/parcours-agent-ide-20261112/{correctif-git-4,page-ide-2}.
+Voir recette04 et ticketparcours pour les rouges, identités et commandes exactes.
+Le TMPDIR Chrome doit être privé et COURT : le chemin long des preuves excédait
+la limite Unix SingletonSocket (abort134, stderr désormais capturé). Aucun flag
+Chrome/bus/GPU changé. RuntimeGit grants uniquement métadonnées du dépôt connu,
+backlink vérifié, gitfile final symbolique refusé, alias communs internes/externes
+refusés, aucune écriture ajoutée, globalGit=/dev/null et optionalLocks0 par défaut.
+
+Reprise actuelle : Wdeuxpostes cx-ed-parcours-agent-ide, brancheportable2,
+source8e366e4aa(4Rustidentiquesfe0), globale6000 en file sous canonicalconfiner,
+sourcefigéePC8e, targetprivate même5.8G, basePGcx_ed_parcours_20261113 créée.
+PasdeVertexàrejouer sansnouveaudéfaut ; reviewersMémoire/C7 favorables. Aprèspasse
+etàtoiC7 : clôtureticket/déplacement, pushmasteretcleanupgarde/admins+PGdumpSHA.
