@@ -169,3 +169,15 @@ conservés à luciepc sous `~/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-st
 [journal compilateur](../12-11-2026/preuves/compile-01/compile.log) copiés pour revue.
 Aucun retry, fallback moteur, build gtest ou run. Correction de qualification
 à préparer puis soumettre avant nouvelle tentative sur source différent.
+
+## Compilation/lien 2 attestés, runtime non lancé
+
+Correction de qualification seule autorisée, publiée9aa2ecdc9, puis staging
+neuf suffixé02. [Rapport, empreintes et lanceur à relire](../12-11-2026/03-compilation-lien-et-runtime-a-relire.md) :
+compilation/lien/readelf passent, pack830fichiers et17archives rehashés,
+cgroup1Gio/swap0 vérifié. Binaire SHA
+`d3b6bb5dbe520e2209c607e34c18bf62fe689c5c0943d5fac30b0e34a3c8530b`,
+aucun RPATH/RUNPATH/libprojet, cinq dépendances système attendues.
+Lanceur runtime20s/groupe/1Gio préparé, accord-modèle reste désactivé.
+Aucun lancement, checkpoint réel ou réouverture ; aucune assertion de corruption.
+Revue du lanceur/ELF puis autorisation de run distincte restent requises.

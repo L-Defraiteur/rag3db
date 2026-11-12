@@ -1,0 +1,31 @@
+{
+  "ready_to_run": false,
+  "requires_distinct_runtime_approval": true,
+  "launcher_sha256": "a110d161f027b67f2464112058fde9250c1ebf801bbe0b2b557d888c21fb1e6f",
+  "binary_sha256": "d3b6bb5dbe520e2209c607e34c18bf62fe689c5c0943d5fac30b0e34a3c8530b",
+  "source_sha256": "d2db4d049f92dc5d197eb34e4fea758259bf4af7419537e1042b8a3c88a38530",
+  "build_report_sha256": "cef19a0f4731a81ee1d4a52b21501c9ab3fbd03e6e31fb46d33584e213f45427",
+  "argv": [
+    "/usr/bin/python3",
+    "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-02/runtime.py",
+    "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-02",
+    "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-02/runtime-approval.json"
+  ],
+  "systemd_properties": {
+    "MemoryMax": "1G",
+    "MemorySwapMax": 0,
+    "RuntimeMaxSec": 20,
+    "TimeoutStopSec": 1,
+    "KillMode": "control-group",
+    "TasksMax": 64,
+    "Restart": "no",
+    "LimitCORE": 0
+  },
+  "inner_process_group_timeout_seconds": 15,
+  "child_alarm_seconds": 12,
+  "output_cap_bytes": 1048576,
+  "attempts": 1,
+  "checkpoint_real": false,
+  "reopen": false,
+  "artifacts_retained": true
+}

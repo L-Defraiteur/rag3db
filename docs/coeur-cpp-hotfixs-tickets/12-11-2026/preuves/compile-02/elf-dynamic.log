@@ -1,0 +1,33 @@
+
+La section dynamique à l'offset 0x1466b18 contient 30 entrées :
+  Étiquettes Type                         Nom/Valeur
+ 0x0000000000000001 (NEEDED)             Bibliothèque partagée : [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Bibliothèque partagée : [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Bibliothèque partagée : [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Bibliothèque partagée : [libc.so.6]
+ 0x0000000000000001 (NEEDED)             Bibliothèque partagée : [ld-linux-x86-64.so.2]
+ 0x000000000000000c (INIT)               0x8f000
+ 0x000000000000000d (FINI)               0x1146f54
+ 0x0000000000000019 (INIT_ARRAY)         0x1434f10
+ 0x000000000000001b (INIT_ARRAYSZ)       136 (octets)
+ 0x000000000000001a (FINI_ARRAY)         0x1434f98
+ 0x000000000000001c (FINI_ARRAYSZ)       8 (octets)
+ 0x000000006ffffef5 (GNU_HASH)           0x400
+ 0x0000000000000005 (STRTAB)             0x2690
+ 0x0000000000000006 (SYMTAB)             0x428
+ 0x000000000000000a (STRSZ)              11250 (octets)
+ 0x000000000000000b (SYMENT)             24 (octets)
+ 0x0000000000000015 (DEBUG)              0x0
+ 0x0000000000000003 (PLTGOT)             0x1467fe8
+ 0x0000000000000002 (PLTRELSZ)           6888 (octets)
+ 0x0000000000000014 (PLTREL)             RELA
+ 0x0000000000000017 (JMPREL)             0x8d3c8
+ 0x0000000000000007 (RELA)               0x5840
+ 0x0000000000000008 (RELASZ)             555912 (octets)
+ 0x0000000000000009 (RELAENT)            24 (octets)
+ 0x000000006ffffffb (FLAGS_1)            Fanions: PIE
+ 0x000000006ffffffe (VERNEED)            0x5560
+ 0x000000006fffffff (VERNEEDNUM)         5
+ 0x000000006ffffff0 (VERSYM)             0x5282
+ 0x000000006ffffff9 (RELACOUNT)          20854
+ 0x0000000000000000 (NULL)               0x0

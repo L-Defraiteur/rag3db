@@ -1,0 +1,20 @@
+En-tête ELF:
+  Magique:   7f 45 4c 46 02 01 01 03 00 00 00 00 00 00 00 00 
+  Classe:                            ELF64
+  Données:                          complément à 2, système à octets de poids faible d'abord (little endian)
+  Version:                           1 (actuelle)
+  OS/ABI:                            UNIX - GNU
+  Version ABI:                       0
+  Type:                              DYN (fichier exécutable indépendant de la position)
+  Machine:                           Advanced Micro Devices X86-64
+  Version:                           0x1
+  Adresse du point d'entrée:         0x19ebc0
+  Début des en-têtes de programme :  64 (octets dans le fichier)
+  Début des en-têtes de section :    25628008 (octets dans le fichier)
+  Fanions:                           0x0
+  Taille de cet en-tête:             64 (octets)
+  Taille de l'en-tête du programme:  56 (octets)
+  Nombre d'en-tête du programme:     16
+  Taille des en-têtes de section:    64 (octets)
+  Nombre d'en-têtes de section:      36
+  Table d'index des chaînes d'en-tête de section: 35

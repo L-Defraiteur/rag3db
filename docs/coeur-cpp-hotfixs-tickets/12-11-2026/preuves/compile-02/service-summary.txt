@@ -1,0 +1,6 @@
+Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+Service runtime: 3.820s
+CPU time consumed: 3.707s
+Memory peak: 540.8M (swap: 0B)
+Source : sortie systemd-run de la tentative du 12 novembre, transcrite depuis le contrôleur de session.
