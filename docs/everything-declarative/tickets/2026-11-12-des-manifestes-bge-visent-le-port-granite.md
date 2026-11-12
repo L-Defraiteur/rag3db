@@ -25,3 +25,33 @@ puis rendre les gabarits et copies utiles cohérents avec leur fournisseur,
 en préservant modèle, dimension et configuration par poste. Aucun index n'a
 été ouvert ou réindexé pour ce constat ; aucune configuration utilisateur
 modifiée. Une absence d'usage confirmé ne constitue pas une preuve de panne.
+
+## Prise en charge ED — 12 novembre
+
+Lot `cx-ed-bge-routage`, worktree neuf du même nom, base `41497ba4e`.
+Périmètre annoncé : les deux manifestes et leurs README, tests dans `model_source.rs`
+et `backend.rs`, rapport ED ; aucun changement du résolveur de production prévu.
+
+Lecture du contrat : l'adresse explicite gagne sur l'environnement. Sans adresse, la
+variable commune RAG3WEAVER_SERVICE_EMBED gagne sur l'alias RAG3WEAVER_EMBED_SERVICE ;
+une liste est parcourue par identité servie. Refus par défaut, repli local seulement déclaré.
+La correction envisagée compose ce contrat : retirer le port imposé des deux gabarits,
+conserver BGE/1024 et le fournisseur service, laisser chaque poste fournir ses adresses.
+Aucune substitution globale de port ni migration de déclaration n'est nécessaire.
+
+Activation à distinguer : notebook déclare du vectoriel, validated-result déclare ses
+signaux vides ; le second n'a pas besoin d'embarquement à son ouverture normale. Le raccord
+exact est à prouver par chargement isolé. Une erreur de connect_embedder est un refus nommé ;
+embedder_or_absent peut néanmoins ouvrir en mots seuls avec raison, selon le contrat existant.
+Cela ne doit pas être annoncé comme une ouverture entièrement refusée ou comme du dense prêt.
+
+Préfixe avant lourd : tests de résolution à constructeurs simulés et environnement injecté,
+sans toucher l'environnement du processus ; chargement PreparedBackend des deux gabarits
+sans base ni service. Vérifier sélection BGE dans un pool mixte, variable commune/alias,
+adresse explicite prioritaire et erreur nommée sur granite, absence d'adresse sans repli local,
+identité/dimension préservées et besoins vectoriels effectivement déclarés. Aucun modèle,
+GPU, service réel, fichier .env/.vault, base ou configuration de Lucie lu ou modifié.
+
+Les copies sous configuration utilisateur et la mémoire réelle BGE sans adresse restent
+non qualifiées : leur activation n'est pas déduite de l'existence des gabarits. Ce lot ne
+les modifie pas et ne fermera pas ce reste sans preuve et autorisation appropriées.
