@@ -1,3 +1,26 @@
+## État final — aperçu intégré, ressources du lot retirées
+
+**Master3b2eab7ec76b2f1a8b56de0dedd99c80184de0e1**, tour C7 après revue
+indépendante des logs, rehash des quatre ELF et attestation220assets. Rebase sur
+8839 documentaire C++, branche neuve4,13/13 commits identiques au range-diff ;
+status propre, aucun rebase, origin/master=HEAD lus. Le code reste identique à
+source jouée20e4e2ffc. Les chemins/attentes des sections suivantes sont historiques.
+
+Worktrees local/remote du lot **retirés**, target8,4Go retiré après archives
+fidèles administrations Git (sous-module inclus) et gardes fraîches VERT lues.
+PG privée cx_apercu_2191_20261112_v1 exportée puis supprimée sans sessions ;
+SHA dump364d0a9dfc90e887375a3c1342c34af3a69ac897248a69eb34c0de44d1add918,
+absence vérifiée. Archives/rapports/fin.json : cache de chaque poste,
+`cx-nettoyage-apercu-transfert-v2-{local,remote}-3b2eab7ec/`.
+Preuves/ELF/logs/remotes conservés ; aucun modèle, service, déploiement ou base réelle.
+
+Aperçu toujours non qualifié aux configs/faits, transfert/apply/publication non
+livrés. Tickets migration et tty ouverts. Repartir d'un worktree neuf depuis
+master pour la suite ; **aucun Cargo ni créneau arbre actif** à la fin du lot.
+Le contrôle initial du nettoyage, trop strict sur l'extension .md, s'est arrêté
+avant effets ; reprise bornée acceptant les seules preuves/outils docsCPP revus,
+sans aucun delta Rust. Détails dans le ticket, pas de garde de retrait contournée.
+
 ## Reprise prioritaire — aperçu prêt pour revue finale, 12 novembre
 
 Branche privée `cx-arbre-migration-transfert-3`, worktree local/remote

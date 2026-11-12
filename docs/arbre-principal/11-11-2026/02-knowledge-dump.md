@@ -245,3 +245,12 @@ TTY ouvert. Ne pas masquer par allow ni appeler checklib vert « tests minimaux 
 Native ciblé15/0/0 puis globale2167/0/64/nav39/CLI5/1suite ; lien80 réellement
 exercé en globale. TMP navigateur mkdtemp court sous /var/tmp btrfs, env limité à
 cette étape, nettoyage du seul root possédé après portée inactive et succès.
+
+Livraison de l'aperçu : master3b2eab7ec, revue C7/3contrôles/range-diff13identique.
+WTs et target retirés après copies/gardes fraîches ; PG privée exportée et supprimée.
+Tous les prérequis du transfert effectif restent ouverts. Repartir de master dans
+un worktree neuf. Un delta documentaire peut contenir preuves JSON/scripts/archives,
+pas seulement .md : vérifier le périmètre revu et l'absence de code d'extension.
+Éviter grep-q en fin de pipeline pipefail pour une barrière : fermeture anticipée
+et SIGPIPE peuvent transformer un delta présent en condition fausse. Juger la
+liste complète des chemins avec un contrôle structuré, sans masquer le code retour.

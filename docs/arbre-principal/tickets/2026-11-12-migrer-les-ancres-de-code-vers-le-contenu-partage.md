@@ -900,3 +900,32 @@ README/nouveautés décrivent l'API de rapport, toujours
 UnqualifiedConfigAndSchemaFacts, aucune capacité de transfert/apply. Tickets
 migration et tty ouverts. Attente revue C7 puis tour explicite ; aucun push
 master, déploiement, publication de stockage ou migration réelle à cette étape.
+
+### Intégration et fin des ressources de l'aperçu
+
+Master **3b2eab7ec76b2f1a8b56de0dedd99c80184de0e1**, tour explicite C7 après
+revue indépendante. Rebase branche4 sur8839,13/13 commits identiques au range-diff,
+aucun Rust différent de source20e4. Trois contrôles lus : status propre, aucun
+rebase, origin/master=HEAD. L'aperçu non qualifié est intégré ; migration et tty
+restent ouverts, aucun transfert/apply/publication ou déploiement exécuté.
+
+Le premier nettoyage a refusé son préflight avant toute opération PG/admin/retrait :
+son assertion « tous .md » était plus stricte que le périmètre docsCPP revu par C7.
+168 chemins après source jouée,143 non-MD tous sous docs/coeur-cpp (preuves JSON,
+scripts, archives), aucun code extension modifié. Contrôle Python exact enregistré
+dans cx-preuves-finales-apercu-transfert-v1/delta-apres-passe.json, puis nouveau
+montage/outputv2 ; aucune garde_worktree n'avait encore été invoquée ou refusée.
+Piège du script de push également identifié : git diff | grep -v | grep -q sous
+pipefail peut masquer un grand delta par SIGPIPE. Ne pas employer ce pipeline
+pour une barrière ; collecter les chemins et juger la liste complète. La revue
+indépendante et la vérification Python confirment ici l'identité du Rust livré.
+
+Cleanupv2 achevé : PG privée unique cx_apercu_2191_20261112_v1 exportée, SHA256
+364d0a9dfc90e887375a3c1342c34af3a69ac897248a69eb34c0de44d1add918, zéro session,
+drop et absence vérifiés. Worktrees local/remote et target8,4Go retirés après
+archives cp-a fidèles administrations (sous-module inclus remote), helperdca13
+et rapports frais VERT lus avant chaque retrait. Cache de chaque poste :
+cx-nettoyage-apercu-transfert-v2-{local,remote}-3b2eab7ec contient copies,
+garde.json, fin.json et dump sur remote. Preuves, ELF, logs et branches privées
+distantes conservés. Aucun Cargo/créneau arbre actif ; reprendre la suite dans
+un worktree neuf. Les autres lots et l'arbre de Lucie n'ont pas été nettoyés.
