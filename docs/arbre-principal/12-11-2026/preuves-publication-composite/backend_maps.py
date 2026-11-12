@@ -1,6 +1,6 @@
 """Capture /proc maps of the actual backend at main, after dynamic loading.
 
-Only --help runs. The debugger supplies a deterministic observation point; no
+Only a metadata inspection of explicitly absent synthetic storage runs. The debugger supplies a deterministic observation point; no
 backend service or model is started and no artifact is rebuilt or replaced.
 """
 from pathlib import Path
@@ -10,6 +10,10 @@ assert binary.is_absolute() and binary.is_file()
 receipt=json.loads(Path(os.environ['RAG3WEAVER_VALIDATION_RECU']).read_text())
 assert receipt['etat']=='actif' and time.monotonic()<receipt['echeance']-5
 native=os.environ['RAG3DB_LIB'];assert native.startswith('rag3db-build-29a7bc52a')
+manifest=proof/'backend-maps-manifest.json';database=proof/'backend-maps-absent.rag3db'
+assert not manifest.exists() and not database.exists()
+manifest.write_text(json.dumps(dict(version=1,name='maps-only',database=str(database),entities={},tools={},buffer_pool=67108864,embeddings=dict(model='callback',dimensions=4))))
+manifest_before=manifest.read_bytes()
 command=proof/'backend-main.gdb';assert not command.exists()
 command.write_text('''set confirm off
 set pagination off
@@ -30,12 +34,14 @@ continue
 ''')
 env=dict(os.environ,CX_BACKEND_MAPS_PROOF=str(proof),DEBUGINFOD_URLS='')
 with (proof/'backend-main.log').open('w') as output:
- result=subprocess.run(['gdb','--nx','--batch','--return-child-result','-x',str(command),'--args',str(binary),'--help'],env=env,stdout=output,stderr=subprocess.STDOUT,timeout=min(20,max(.1,receipt['echeance']-time.monotonic()-5)))
+ result=subprocess.run(['gdb','--nx','--batch','--return-child-result','-x',str(command),'--args',str(binary),'migration','inspect','--manifest',str(manifest)],env=env,stdout=output,stderr=subprocess.STDOUT,timeout=min(20,max(.1,receipt['echeance']-time.monotonic()-5)))
 assert result.returncode==0,('gdb/backend failed',result.returncode)
 meta=json.loads((proof/'backend-main.json').read_text());assert meta['exe']==str(binary)
 maps=(proof/meta['maps']).read_text();rows=[line for line in maps.splitlines() if 'librag3db.so' in line]
 assert rows and all('/'+native+'/librag3db.so' in line for line in rows),rows
 assert 'exited normally' in (proof/'backend-main.log').read_text()
+assert not database.exists() and manifest.read_bytes()==manifest_before
+assert '\nnull\n' in (proof/'backend-main.log').read_text()
 with binary.open('rb') as f:digest=hashlib.file_digest(f,'sha256').hexdigest()
 meta.update(native=rows,sha256=digest)
 (proof/'backend-main.json').write_text(json.dumps(meta,indent=2)+'\n')

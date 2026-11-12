@@ -1801,3 +1801,12 @@ Maps/PID/starttime/exe/cgroup/native/SHA conservés ; pas de service/modèle
 ni de nouveau binaire. Probe30s publiée avant usage sur ELF626déjàconservé ;
 puis globalev4 unique5400s avec PGv4neuve et même capture exigée en plus des
 observationsruntime. Aucun seuil d'hygiène ou preuve source n'est supprimé.
+
+ProbeGDBv7 : maps bien capturées au main, mais ROUGE car le backend n'offre
+pas de `--help` racine (interprété en chemin de manifeste, rc1). Erreur de
+recette, pas défaut produit ; `validation-24tj01jo` ROUGE/code1/restes[]/nettoye.
+Recette corrigée après lecture CLI : `migration inspect --manifest` synthétique
+vers un stockage explicitement absent, résultat null/code0 et absence de
+fichier vérifiée, manifeste inchangé. Aucun modèle construit ni catalogue
+créé. Probev8distincte30s publiée avant reprise, puis globalev4 inchangée dans
+ses exigences. GDB--nx sans réglage utilisateur ni téléchargement debuginfod.
