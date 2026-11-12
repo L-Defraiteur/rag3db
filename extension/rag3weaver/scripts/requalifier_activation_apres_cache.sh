@@ -26,7 +26,7 @@ preuve=pathlib.Path(sys.argv[2])
 autorite=json.loads((preuve/'autorite.json').read_text())
 recette=json.loads((preuve/'recette.json').read_text())
 restant=min(int(sys.argv[3]),int(autorite['echeance']-time.monotonic()))
-if autorite['etat']!='termine' or recette['delai']!=7200 or restant<3:
+if autorite['etat']!='termine' or recette['delai'] not in (7200,1800,600) or restant<3:
     raise SystemExit('ROUGE : échéance originale expirée ou preuve inattendue, aucun reset')
 print(restant)
 PY

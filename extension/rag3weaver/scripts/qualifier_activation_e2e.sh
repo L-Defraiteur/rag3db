@@ -42,7 +42,28 @@ if [ "$mode" = demon ]; then
 else
     curl -fsS --max-time 5 http://127.0.0.1:7879/sante
 fi
+if [ "$mode" = demon ]; then
+    : "${ACTIVATION_CAPTURE_BANC:?capture du banc figée requise}"
+    : "${ACTIVATION_PREUVES_GPU:?dossier de captures neuf requis}"
+    fin="$ACTIVATION_PREUVES_GPU.fin"
+    python3 tests/activation/observer_e2e_gpu.py --banc "$ACTIVATION_CAPTURE_BANC" \
+        --sortie "$ACTIVATION_PREUVES_GPU" --fin "$fin" \
+        --exe "$CARGO_TARGET_DIR/debug/rag3weaver-embeddings" &
+    observateur=$!
+    trap 'touch "$fin"; wait "$observateur" || true' EXIT
+    for _ in {1..100}; do
+        [ ! -f "$ACTIVATION_PREUVES_GPU/pret" ] || break
+        kill -0 "$observateur" 2>/dev/null || { wait "$observateur"; exit 1; }
+        sleep .05
+    done
+    test -f "$ACTIVATION_PREUVES_GPU/pret"
+fi
 bash ./run_e2e.sh --test "$suite"
+if [ "$mode" = demon ]; then
+    touch "$fin"
+    wait "$observateur"
+    trap - EXIT
+fi
 if [ "$mode" = spans ]; then curl -fsS --max-time 5 http://127.0.0.1:7879/sante; fi
 octets=$(du -sB1 "$CARGO_TARGET_DIR" | cut -f1)
 if [ "$octets" -gt 34359738368 ]; then
