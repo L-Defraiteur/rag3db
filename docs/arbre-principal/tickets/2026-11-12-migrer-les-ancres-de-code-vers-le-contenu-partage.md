@@ -438,3 +438,12 @@ Le modèle pur avec états typés reste distinct de ce format legacy. Unversione
 reste inspectable/non prêt quand aucun historique ne rend le diagnostic invalide.
 Aucun transfert, modèle, service ou verrou décoratif ajouté ; pas de passe
 complète. Nouveau ciblé seulement après libération de la mesure C++.
+
+Relecture sans build pendant mesure : le plan et l'ouverture partagent aussi
+`validate_internal_schema`, avec refus du schéma99 dans le témoin callback
+existant (pas de suite ni matrice supplémentaire). La conversion des signaux
+workspace en faits de plan/enregistrement réutilise maintenant le contrat Serde
+existant de SearchSignals, au lieu de deux match manuels. La politique du manifeste
+reste celle du chargement existant ; aucun signal/profil/gabarit ajouté.
+Ces dernières éditions restent **non compilées** ; le prochain ciblé portera
+leur SHA figé, pas celui des preuves d6.
