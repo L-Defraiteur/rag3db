@@ -1,5 +1,11 @@
 # Transfert générique de valeurs connues — tranche à relire
 
+**État courant, relu sur master41497ba4e :** aperçu intégré sur3b2eab7ec,
+passe verte et ressources retirées. La préparation initiale ci-dessous est
+historique ; la section « Prochain pas » en fin de cette même page fixe la suite.
+Ce chantier avance la migration1b ; les couches2a, leur résolution et leurs
+écritures ne sont pas livrées par l'aperçu. Pas de nouvelle vision parallèle.
+
 Préparation sur master **6e5f9458c**, 12 novembre 2026. Porteur : arbre-principal ;
 revue commune : orchestration. [Ticket canonique](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md),
 [répartition parallèle](../../tickets/closed/2026-11-12-paralleliser-les-suites-autorisees-sans-chevauchement.md).
@@ -179,3 +185,174 @@ avec types d'entrée explicites et sortie à champs privés ; aucun point CLI aj
 Rendus inline seulement : render_fields peut sinon relire un gabarit utilisateur,
 ce qui casserait la pureté promise. Chunker/UUID/rendus communs réutilisés ; aucun
 changement de record_nodes, catalog, backend ou RecordVectors multi-modèle.
+
+## Prochain pas — lier les faits déclarés au plan sans qualifier le stockage
+
+Préparation demandée par orchestration après livraison de l'aperçu. Source de
+lecture41497ba4e ; worktree neuf cx-wt-qualification-faits, aucune modification
+Rust, aucun Cargo/GPU, accès base ou nouveau service. Même ticket migration.
+
+### Le défaut précis et ce qui est déjà décidé
+
+ResolvedMigrationPlan reçoit aujourd'hui config_fingerprint et
+schema_facts_fingerprint comme des chaînes. Il fixe ces entrées, mais ne produit
+pas leurs valeurs depuis les configurations examinées par l'aperçu. Modifier
+une config tout en conservant les étiquettes reste donc possible ; le rapport
+intégré annonce honnêtement UnqualifiedConfigAndSchemaFacts. Le prochain pas
+corrige cette liaison **entre faits fournis et plan**, sans prétendre observer
+l'identité ou la génération d'une base.
+
+Restent acquis : contenu distinct d'occurrence ; génération distincte d'un hash
+de schéma ; identité logique distincte d'un chemin de copie ; inputs du plan
+figés, comparaison source avant opération et cible attendue après publication ;
+rejeu applied identique seulement ; exclusivité réelle, running durable avant
+effets et publication atomique ; sparse refusé hors transfert prouvé. Ces règles
+ne sont pas des questions à reposer à Lucie. Rien ne change dans les masques,
+positions, relations, modèles, découpe, rétention ou admission déjà convenus.
+
+### Faits existants à composer, pas à reconstruire à côté
+
+| Existant relu | Usage et limite du prochain pas |
+|---|---|
+| backend_schema::SchemaFacts::{compose,registration_order} | Faits complets manifeste+fournisseur et validation des dépendances. Réutiliser cette composition/validation ; pas de second fournisseur ni de copie des règles. |
+| PreparedBackend::migration_plan | Produit target_entities/target_relations après surcharges index_signals ; prendre ces faits effectifs, pas uniquement le nom du fournisseur ou les champs avant surcharge. |
+| StorageInspection::entity_configs / entity_config_fingerprint | Entités persistées seulement ; ni relations, ni données, ni génération. Le périmètre de cette empreinte existante reste inchangé. |
+| Catalog::{persist_relation,load_relations} | Les RelationDef existent déjà sous les clés metadata relation:<nom>. Leur format est disponible : ne pas inventer un magasin de relations. Le lecteur d'inspection actuel ne les restitue pas ; ne pas traiter cette absence comme un graphe vide observé. |
+| plan::{MigrationPlanInputs,ResolvedMigrationPlan}, MigrationRunner | Un constructeur commun des entrées et un vérificateur utilisant le même producteur ; conserver le runner et l'identité figée, pas un deuxième journal/exécuteur. |
+| transfer::encoded, hash::content_hash, EntityConfig/RelationDef | Mécanisme de canonicalisation/hachage déjà présent ; définir une seule projection sémantique de faits pour la construction et la comparaison. Ne pas rebaptiser l'empreinte privée de rapport « contrat commun ». |
+
+### Tranche A proposée : constructeur et vérificateur purs des faits
+
+Entrée : ensembles **complets explicitement fournis** source et cible, chacun
+avec toutes les EntityConfig et RelationDef, faits effectifs du fournisseur,
+recette déclarée et définitions effectivement résolues nécessaires à cette
+recette, registres des modèles/dimensions/stockages ; variables et étapes déjà
+résolues du runner. Les données d'occurrences/vecteurs restent l'inventaire de
+l'aperçu, pas une génération déduite de ces faits.
+
+Un ensemble d'entités sans les relations requises, un fournisseur nommé sans ses
+faits ou une recette référencée sans ses octets résolus est **incomplet**.
+L'appelant doit distinguer « ensemble déclaré complet et réellement vide » de
+« information absente ». Aucun remplissage par les defaults du manifeste courant
+pour réparer une observation source manquante. Aucun accès fichier ou résolution
+de template externe depuis la fonction pure ; les octets résolus sont fournis,
+ou le contrôle refuse UnresolvedRecipe.
+
+Surface indicative, noms et emplacement sont des choix d'implémentation :
+
+```rust
+// Proposition pour un prochain diff, pas API déjà disponible.
+let facts = DeclaredMigrationFacts::from_complete_inputs(source, target)?;
+let inputs = facts.bind_inputs(formats, generations, variables)?;
+let plan = existing_runner.resolve_plan(inputs)?;
+let check = facts.compare_with_fixed_plan(&plan)?;
+```
+
+Le constructeur et la comparaison partagent **le même producteur**. Ce qui entre
+respectivement dans l'empreinte des configs d'entités, celle des faits complets
+(entités/relations/fournisseur/recettes effectives) et l'identité globale est
+nommé et versionné explicitement. L'empreinte entités seule ne devient pas
+silencieusement une empreinte de graphe. Types/définitions normalisés par les
+contrats existants, défauts effectifs inclus, clés de maps ordonnées ; l'ordre
+des listes sémantiques est préservé. Valeurs non finies ou non représentables
+refusées avant sérialisation, sans conversion en null.
+
+Un ancien champ opaque dont le producteur/version/périmètre n'est pas connu ne
+se requalifie pas par supposition : refus FactsContractUnknown ou état non
+qualifié explicite. Le nouveau chemin construit ses empreintes depuis les faits,
+pas depuis une étiquette passée à la main. Il ne réécrit aucun descripteur
+stocké ni l'identité d'un plan déjà figé ; la voie préliminaire actuelle et
+l'ouverture legacy restent disponibles avec leurs limites présentes.
+
+Le résultat du contrôle veut dire **faits déclarés concordants avec les entrées
+du plan**, jamais « faits lus d'une base », « plan appliqué » ou « transfert
+exécutable ». Pas de conversion vers PlanJournalState::Applied ni vers une
+capacité d'écriture. Première tranche : introduire et éprouver ce producteur et
+sa comparaison ; ne pas ajouter prématurément un état de stockage qualifié à
+KnownTransferPreview. Son statut intégré reste inchangé tant que les prérequis
+d'observation/liaison ne sont pas réalisés et revus ensemble.
+
+### Source et génération : preuves séparées, absence visible
+
+La liaison de configs est possible même si les générations source/cible sont
+Unversioned. Elle ne doit pas appeler validate_generation_preconditions pour
+forcer une génération inventée : ce contrôle d'exécution reste distinct et
+continue de refuser. De même, la comparaison d'une identité déclarée exige
+l'attendu explicite déjà demandé par l'API ; l'égalité de deux déclarations
+n'établit pas leur provenance. Absence d'attendu, origine inconnue, génération
+absente ou étrangère gardent des motifs séparés.
+
+Fixtures du prochain diff : attendu et origine synthétiques fournis explicitement,
+ainsi que cas absents/étrangers ; jamais d'UUID tiré du chemin, d'un hash de configs
+ou du rapport. Le contrôle ne crée aucun identifiant de stockage. Une empreinte
+d'inventaire ne devient ni génération durable ni preuve que des écritures ont
+cessé. Un plan figé reste le même lorsque sa cible attendue est examinée après
+une publication simulée ; un avancement étranger est refusé.
+
+### Frontière de fichiers et suite qui n'entre pas dans A
+
+Premier diff proposé : migrations/facts.rs (contrat/producteur purs et tests),
+plan.rs et point de construction dans MigrationRunner. Petit adaptateur
+backend_schema.rs à convenir avec sa propriétaire mémoire et orchestration,
+s'il est nécessaire pour exporter ses faits validés sans dupliquer compose.
+La session choisit la forme du code et des types ; l'orchestration coordonne
+la propriété de ce fichier partagé avant modification. Aucun fichier partagé
+n'est encore réservé ou modifié par cette préparation.
+
+Ne pas élargir A à backend.rs, au CLI, à Catalog::initialize, à un changement
+d'ouverture legacy, à la lecture d'une base ou à une nouvelle clé metadata.
+Le raccord ultérieur de l'inspection RO pourra restituer relation:<nom> dans le
+même snapshot que les configs/journal, avec décodage commun et refus des lignes
+ambiguës ; ses tests se feront sur données synthétiques. Ce raccord et le bootstrap
+persistant ne sont pas supposés livrés par le producteur pur.
+
+### Témoins et critère de fin de A
+
+| Cas à écrire | Preuve attendue |
+|---|---|
+| Faits complets identiques, maps permutées | Même empreinte et même identité du plan, validation des dépendances existante réutilisée. |
+| Config/rôle/découpe/signal/modèle ou recette modifiés, anciennes étiquettes conservées | Refus nommé de liaison ; pas un simple rapport différent annoncé cohérent au plan. |
+| Relation inversée, propriété changée, relation manquante | Détection par l'empreinte complète ; empreinte entités seule incapable de qualifier ce cas. |
+| Fournisseur code réel et fournisseur d'une autre entité | Faits effectifs réellement fournis, pas de raccourci Scope ou fournisseur=None de fixture. |
+| Source limitée aux entités, recette non résolue, version d'empreinte inconnue | Incomplet/non qualifié ou refus explicite, jamais graphe vide/defaults réputés observés. |
+| Source/génération absentes mais configs complètes | Liaison déclarée vérifiable ; readiness d'exécution toujours refusée, aucune création implicite. |
+| Identité attendue absente/étrangère, génération étrangère | Motifs distincts ; aucune identité ou génération déduite des empreintes. |
+| Cible attendue après publication simulée, puis avancement étranger | Plan original immuable, même identité pour le passage attendu ; refus de l'avancement étranger. |
+| Valeurs non finies, listes dont l'ordre est sémantique | Refus avant perte de valeur ; ordre conservé et changement détecté. |
+
+Fin de tranche : constructeur réellement consommé par le chemin de résolution
+concerné du runner, comparaison utilisant exactement le même producteur, tests
+synthétiques ci-dessus et diff relu. Pas seulement une utilité hash sans appelant.
+L'aperçu intégré n'est pas rebaptisé « migration livrée ». Après revue de code,
+proposition d'un ciblé600s/j8/Mem32 sur luciepc, target de session32Go/lib épinglée,
+poste lourd et mesure prioritaire ; aucune réservation ni commande de test faite
+pour la présente préparation. La passe d'intégration se choisit après le diff.
+
+### Décisions autonomes et point de conception à relire par Lucie
+
+Sont autonomes, car déjà couverts par les contrats : découpage A puis raccord RO,
+noms/types, canonicalisation et version du contrat de faits en mémoire, extraction
+d'une primitive commune, placement des tests et refus d'entrées incomplètes. Pas
+de nouvel outil visible ni de changement de politique de stockage dans A.
+La répartition d'un fichier partagé et la recette de passe sont du ressort de
+l'orchestration. **A n'attend pas une décision de conception nouvelle.**
+
+La sémantique du futur producteur durable de générations n'est en revanche pas
+fixée par StorageGeneration::Established(String). Ce vrai choix concerne la
+suite persistante, pas le constructeur pur. À lire par Lucie avant ce producteur :
+
+1. **Une génération désigne-t-elle une révision durable de publication ou
+   l'adresse d'un état par son contenu complet ?** Proposition : révision de
+   publication distincte de l'empreinte d'inventaire. Deux publications qui font
+   A→B→A auraient des révisions distinctes même si le contenu final égale A ;
+   rejouer une publication déjà applied conserverait sa révision. Cela distingue
+   retour au même contenu et reprise de la même opération. L'alternative
+   content-addressed ferait retrouver l'identité de génération d'A et devrait
+   distinguer autrement les événements de publication. Coût du choix proposé :
+   producteur et progression durables à définir avec le journal, sans les coder
+   ici. Ni un hash de schéma ni le chemin de copie ne conviennent dans les deux cas.
+
+Cette question ne suspend ni A ni sa revue ; aucune option n'est mise en œuvre
+par avance. Toute opération d'établissement initial ou d'avancement durable,
+transfert, apply, activation, publication, copie/lecture d'une base de Lucie ou
+politique de rétention reste hors de la tranche préparée.

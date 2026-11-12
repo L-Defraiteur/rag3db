@@ -1,3 +1,19 @@
+## Reprise en préparation — qualification pure des faits
+
+Après l'aperçu intégré3b2 et nettoyé : nouveau worktree local
+`/home/lucied/.cache/rag3weaver-build/cx-wt-qualification-faits`, branche
+`cx-arbre-qualification-faits`, depuis41497ba4e. Aucun distant/target/Cargo/GPU.
+La [page existante](../12-11-2026/02-preparer-le-transfert-des-valeurs-connues.md)
+contient la tranche A : produire les empreintes depuis les faits déclarés complets
+et vérifier le plan figé avec la même primitive. L'aperçu et les couches ne sont
+pas présentés comme un transfert/migration déjà exécuté.
+
+Pas d'arbitrage nouveau pour préparer ce constructeur pur. **À lire par Lucie :**
+question1 de la page, sémantique du futur producteur durable de générations ; elle
+ne bloque pas A. Le [ticket migration](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md)
+reste ouvert. Aucun Rust commencé ni base réelle consultée ; répartition future
+de backend_schema à coordonner avec mémoire, pas de réservation actuelle.
+
 ## État final — aperçu intégré, ressources du lot retirées
 
 **Master3b2eab7ec76b2f1a8b56de0dedd99c80184de0e1**, tour C7 après revue
