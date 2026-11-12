@@ -4,18 +4,26 @@
 existe un équivalent open source de l'expérience d'une extension d'assistant
 dans Chrome, utilisable par différents agents via MCP.
 [Ticket de recherche](../../rag3weaver-archi/tickets/2026-11-12-etudier-un-pont-navigateur-ouvert-par-mcp.md).
-Lucie a ensuite retenu la direction d'un **futur fork d'un projet existant**,
-avec trois candidats ci-dessous. Aucun dépôt retenu définitivement, fork créé,
+Lucie a ensuite retenu la direction d'un **futur fork d'un projet existant**.
+Les trois premiers candidats Rust sont conservés ci-dessous, puis complétés
+par des ponts avec extension répondant mieux au besoin précisé. Aucun dépôt retenu définitivement, fork créé,
 logiciel installé ou raccordement intégré à ce stade.
 
 ## L'expérience recherchée
 
 Depuis le chat de l'atelier, l'agent pourrait observer une page, comprendre son
 état, naviguer et interagir avec elle, avec un retour lisible de ses actions.
-Le besoin mérite d'abord d'examiner les projets existants : une extension de
-navigateur pourrait servir de pont vers les onglets d'une session humaine ;
-un navigateur piloté séparément pourrait couvrir d'autres usages. Ces deux
-parcours doivent être distingués dans la comparaison.
+Précision de Lucie : **le parcours principal doit permettre de travailler dans
+un Chrome visible, avec une extension ou un pont équivalent et un passage de
+main humain**. Les connexions, doubles facteurs et pages de clés API ne doivent
+pas finir en impasse faute d'accès de Lucie à la page. L'agent doit pouvoir lui
+demander d'intervenir puis reprendre dans le même onglet et la même session.
+Les onglets déjà authentifiés sont donc un critère central du choix.
+
+Un navigateur lancé séparément peut aussi être visible ; le headless n'est pas
+une obligation de WebDriver ou de CDP. Ce parcours reste utile, mais il ne prouve
+pas le raccordement au Chrome déjà utilisé par Lucie. Le headless peut rester
+une option pour les tâches qui s'y prêtent.
 
 Le contrat doit être généraliste : un serveur MCP réutilisable par plusieurs
 clients agents, sans imposer un fournisseur de modèle. Si un projet convient,
@@ -42,6 +50,49 @@ La première sortie attendue est une comparaison sourcée et une recommandation
 du socle à forker, avec le périmètre de nos adaptations et le suivi de l'amont.
 L'étude et un éventuel prototype seront planifiés ensuite ; cette note garde
 l'idée, elle ne lance pas de nouveau service.
+
+## Ponts avec extension à comparer en priorité
+
+Relecture documentaire du 12 novembre 2026, sans installation ni essai réel.
+Les sources identifient bien une extension à installer, au-delà d'un pilote de
+navigateur. La fidélité du passage de main reste à qualifier en pratique.
+
+| Projet | Correspondance avec le besoin | Sources figées |
+|---|---|---|
+| **Playwright MCP et Playwright Extension** | Extension Chrome/Edge/Chromium, serveur en mode `--extension`, choix de l'onglet et réutilisation de l'état du profil existant. Sources de l'extension dans Playwright ; le manifeste relu indique la version0.5.0. Ce candidat ne dépend pas d'une réécriture en Rust. | [Guide de l'extension](https://github.com/microsoft/playwright/blob/bac1f9f67e9cff2a8e7ecbac25d56ec3bb1d15c6/packages/extension/README.md), [manifeste](https://github.com/microsoft/playwright/blob/bac1f9f67e9cff2a8e7ecbac25d56ec3bb1d15c6/packages/extension/manifest.json) |
+| **BrowserMCP/mcp** | Serveur local et extension dans le même dépôt, Chrome déjà connecté et onglets par client. La source actuelle décrit la construction du serveur et de l'extension ; ne pas reprendre sans vérification l'ancien constat d'un dépôt incomplet. Licence Apache-2.0 indiquée. | [README](https://github.com/BrowserMCP/mcp/blob/33da4f6a3582139a377725e6932aeeb3daaedbda/README.md), [licence](https://github.com/BrowserMCP/mcp/blob/33da4f6a3582139a377725e6932aeeb3daaedbda/LICENSE) |
+| **jackwener/browsermcp** | Projet distinct malgré le nom proche : extension BrowserMCP Connector, hôte local, session Chrome existante et outils MCP dont un espace JavaScript persistant. Licence Apache-2.0 indiquée. Intéressant pour l'emprunt puis la restitution d'un onglet humain. | [README](https://github.com/jackwener/browsermcp/blob/d6597aacbac2f8cb1094b523852b8f53cd15b0a7/README.md), [licence](https://github.com/jackwener/browsermcp/blob/d6597aacbac2f8cb1094b523852b8f53cd15b0a7/LICENSE) |
+
+Les liens d'installation sont dans ces guides ; aucune extension n'est installée
+par cette étude. La langue Rust des premiers candidats reste un intérêt technique,
+pas un motif pour perdre le parcours humain demandé. Un pont existant ou une
+adaptation ciblée peut être préférable à reconstruire le navigateur.
+
+## Passer la main, puis reprendre
+
+Parcours à concevoir sur les contrats communs de l'atelier :
+
+1. L'agent identifie une étape nécessitant Lucie et désigne l'onglet ainsi que
+   l'action attendue : connexion, validation, choix de compte ou intervention
+   sur une page de configuration.
+2. Il suspend ses actions sur cet onglet pendant l'intervention. Lucie peut voir
+   et manipuler la page ; la demande doit permettre de rejoindre ce navigateur.
+3. Après sa réponse, l'agent observe à nouveau la page et confirme l'état avant
+   de reprendre. Une notification « terminé » ne remplace pas cette observation.
+4. Une annulation ou déconnexion garde un état explicite et récupérable. Les
+   journaux distinguent actions de l'agent et intervention humaine ; une étape
+   inconnue ne devient pas une réussite implicite.
+
+Le but est de pouvoir saisir une authentification dans le navigateur sans devoir
+la dicter au chat. Si la tâche porte sur une clé API à créer ou configurer,
+préciser la destination attendue de cette clé plutôt que rendre obligatoire sa
+copie dans la conversation. Aucun accès à un profil ou à ses secrets n'est
+effectué par cette note.
+
+La topologie compte : si l'agent s'exécute sur luciepc et Chrome sur le portable,
+le pont doit atteindre le navigateur que Lucie voit. Un serveur déclaré local
+ne résout pas à lui seul ce cas ; transport, sélection du profil et arrêt de
+session seront à qualifier sans supposer les deux programmes sur le même poste.
 
 ## Trois candidats au futur fork
 

@@ -1,6 +1,6 @@
 # Étudier un pont navigateur ouvert par MCP
 
-- **État** : ouvert ; futur fork souhaité par Lucie, trois candidats repérés, étude comparative différée et aucun prototype lancé.
+- **État** : ouvert ; futur fork souhaité par Lucie, priorité au Chrome visible avec extension et passage de main humain ; candidats documentés, aucun prototype lancé.
 - **Famille** : produit
 - **Gravité** : planification ; permettre aux agents d'utiliser le navigateur depuis l'atelier.
 - **Atteignable en service** : non pour ce raccordement ; aucune capacité livrée par cette note.
@@ -38,3 +38,21 @@ Critère ajouté par Lucie : exécution JavaScript à la demande dans la page.
 schéma, gestionnaire et limite de qualification de l'asynchrone documentés dans
 la vision. Vérifier le comportement réel, les délais et le retour des valeurs
 avant d'intégrer cette capacité.
+
+## Précision : extension et intervention humaine
+
+Lucie ne cherche pas seulement un navigateur automatisé séparé : elle doit
+pouvoir intervenir pour une connexion, un double facteur ou une page de clé
+API, puis laisser l'agent reprendre dans le même onglet/session. Headless reste
+optionnel. Le choix du socle doit privilégier ce parcours avant la langue Rust.
+
+Playwright MCP/Playwright Extension, BrowserMCP/mcp et jackwener/browsermcp
+ajoutés avec sources figées dans la vision ; les deux BrowserMCP sont distincts.
+Comparer les sources complètes de l'extension et du serveur, le rattachement à
+un onglet existant, l'exécution JavaScript, la pause/reprise après observation,
+l'annulation et la topologie agent sur luciepc/navigateur sur portable.
+
+Pour qualifier le futur prototype : Lucie peut rejoindre une page de connexion,
+agir pendant que l'agent attend, puis la même session reprend après observation
+de l'état réel. Vérifier aussi intervention annulée, onglet fermé ou navigation
+humaine inattendue. Aucun test sur compte réel ni installation engagé ici.
