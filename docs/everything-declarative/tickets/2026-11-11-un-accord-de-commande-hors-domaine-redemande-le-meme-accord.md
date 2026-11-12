@@ -54,3 +54,36 @@ Prévoir rouge de reprise hors domaine, refus des variantes/domaines et ambiguï
 puis vert au niveau de la porte et du nœud d'exécution ; archi prouve clic réel et
 `wait_output`. Aucun Gemini, service ou base réelle supplémentaire ; ciblés sous poste
 lourd avec target privé, lib29, -j8 et plafond 32 Gio. Ticket toujours ouvert.
+
+## Reprise autorisée le 12 novembre — contrat partagé ED/archi
+
+Même ticket, sans nouveau lot fonctionnel. Autorisation Lucie et répartition :
+`docs/orchestration/tickets/2026-11-12-paralleliser-les-suites-autorisees-sans-chevauchement.md`.
+Base de départ archi : `6e5f9458cab5140ff2652bab9481be34500628ec`.
+
+- ED possède `commande.rs`, les tests backend et le raccord de décision nécessaire : accord
+  associé à la **ligne exacte et au domaine exact**, sans accorder les variantes ni d'autres domaines.
+- Archi possède uniquement le témoin navigateur dans
+  `extension/rag3weaver/src/daemon_host/chat_contextuel.rs` : nouveau cas extérieur ; le témoin
+  nominal intérieur déjà livré reste inchangé. Aucun fichier runtime/React d'ED modifié.
+- Worktree archi isolé `~/.cache/rag3weaver-build/cx-wt-accord-exterieur`, branche
+  `cx-archi-accord-exterieur-1`. Target unique de session sur luciepc `cx-archi-target`, après
+  suppression du target du lot précédent ; aucun cargo concurrent sur ce target.
+
+Le script synthétique restera **hors de la racine atelier**, comme dans le rouge historique
+b573 conservé aux deux postes ; aucune adaptation dans le domaine pour faire passer le témoin.
+Le navigateur envoie la demande, clique réellement sur la carte d'accord, observe le tour
+relancé et le même `run_command` extérieur, puis le vrai `wait_output` sur un journal sans
+sortie. Un signal de fixture est libéré seulement après l'annonce du vrai appel d'attente.
+La sortie attendue et le résultat de wait_output doivent être vus par le modèle et la page.
+La même commande avec un argument supplémentaire, non accordée doit rester en attente d'accord et ne produire
+aucun effet ; ni les args du modèle ni le témoin ne donnent de droit en dehors du clic initial.
+
+Les identifiants, résultats et journaux viennent des outils réels. La commande, son domaine
+et ses arguments sont enregistrés pour vérifier l'identité de reprise. Modèle simulé pour
+la décision d'outil uniquement ; aucune sortie de commande ni décision d'accord simulée.
+
+Préparation et code autorisés ; premier ciblé borné sous poste lourd quand la mesure prioritaire
+le permet. Aucun rejeu identique sans diagnostic, aucune passe globale ni push master avant
+revue coordonnée. Ce ticket reste ouvert jusqu'aux critères réels ; le succès du témoin dans
+le domaine ou un simple enregistrement d'accord ne ferme pas ce défaut extérieur.
