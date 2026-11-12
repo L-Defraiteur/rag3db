@@ -229,3 +229,17 @@ mod native_tests {
         assert!(!dir.path().join("absent").exists());
     }
 }
+
+/// Read-only proposal. It is deliberately not an executable resolved plan:
+/// legacy generations and the transfer/publication capability are not established.
+#[derive(Debug, Serialize)]
+pub struct PreliminaryMigrationPlan {
+    pub source: Option<StorageInspection>,
+    pub target: Option<StorageRequirement>,
+    pub target_entities: BTreeMap<String, crate::config::EntityConfig>,
+    pub target_relations: BTreeMap<String, crate::config::RelationDef>,
+    pub variables: BTreeMap<String, String>,
+    pub steps: Vec<crate::dataflow::migrations::plan::ResolvedMigrationStep>,
+    pub generation: crate::dataflow::migrations::plan::StorageGeneration,
+    pub refusal: String,
+}
