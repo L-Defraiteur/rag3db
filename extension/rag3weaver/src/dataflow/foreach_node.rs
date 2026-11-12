@@ -76,6 +76,23 @@ pub fn resoudre_les_sous_graphes(
     lire: &dyn Fn(&str) -> Result<String, String>,
     nodes: &NodeRegistry,
 ) -> Result<Vec<String>, String> {
+    resoudre_les_sous_graphes_avec(outil, &|chemin| {
+        match chemin.strip_prefix(crate::builtin_templates::PREFIX) {
+            Some(nom) => crate::builtin_templates::get(nom)
+                .map(|b| String::from_utf8_lossy(b).into_owned())
+                .ok_or_else(|| format!("aucun graphe livré « {nom} »")),
+            None => lire(chemin),
+        }
+    }, nodes)
+}
+
+/// Le résolveur fourni possède toutes les références, y compris les builtin.
+/// Aucun repli sur le contenu du binaire n'est ajouté ici.
+pub fn resoudre_les_sous_graphes_avec(
+    outil: &mut GraphTool,
+    lire: &dyn Fn(&str) -> Result<String, String>,
+    nodes: &NodeRegistry,
+) -> Result<Vec<String>, String> {
     let mut types = Vec::new();
     let cites: Vec<(String, String, Value)> = outil
         .template()
@@ -107,12 +124,7 @@ fn lire_un_sous_graphe(
     let Some(chemin) = cite.strip_prefix('@') else {
         return Err(format!("`graph` se cite par @graphs/<fichier>.mmd ou @builtin:<chemin>, pas « {cite} »"));
     };
-    let texte = match chemin.strip_prefix(crate::builtin_templates::PREFIX) {
-        Some(livre) => crate::builtin_templates::get(livre)
-            .map(|o| String::from_utf8_lossy(o).into_owned())
-            .ok_or_else(|| format!("aucun graphe livré « {livre} »"))?,
-        None => lire(chemin).map_err(|e| format!("{chemin} : {e}"))?,
-    };
+    let texte = lire(chemin).map_err(|e| format!("{chemin} : {e}"))?;
     let outil = GraphTool::from_mermaid(&texte).and_then(|t| t.bind(nodes)).map_err(|e| format!("{chemin} : {e}"))?;
     let element = parametre_de_l_element(config);
     if par_element && !outil.params().iter().any(|p| p.name == element) {

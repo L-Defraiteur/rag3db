@@ -19,6 +19,7 @@ pub mod allocateur;
 pub mod arbre;
 pub mod builtin_templates;
 pub mod template_plan;
+pub mod fusion;
 pub mod en_tete;
 pub mod fichiers_entite;
 pub mod fautes_de_test;
