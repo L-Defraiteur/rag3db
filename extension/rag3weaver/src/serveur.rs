@@ -42,6 +42,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+#[path = "serveur/activation.rs"]
+pub mod activation;
+
 /// Comment on demande au service s'il est là.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Sonde {
@@ -138,7 +141,7 @@ pub const LIGNE_ADRESSE: &str = "adresse liée : ";
 
 /// **La description d'un serveur** : comment le joindre, comment le
 /// reconnaître, comment le lancer s'il n'est pas là.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Serveur {
     nom: String,
     adresse: String,
