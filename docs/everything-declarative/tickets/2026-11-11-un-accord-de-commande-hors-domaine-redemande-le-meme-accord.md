@@ -37,3 +37,20 @@ contextuelle et ne doit pas être annoncé livré par le succès de wait_output 
 Porteur : everything declarative, confirmé avec archi. Le ticket reste ouvert : le transfert
 ne corrige ni ne ferme le défaut. Preuve b573 conservée ; reste définir et prouver la portée
 de l'accord extérieur et la reprise de la commande. Aucun correctif dans le lot relais/UI.
+
+## Reprise du 12 novembre 2026
+
+ED reprend sur `cx-ed-accord-hors-domaine`, depuis master `6e5f9458c`, avec
+`src/commande.rs`, `src/dataflow/run_nodes.rs` et leurs tests Rust comme périmètre.
+Archi possède le témoin navigateur et ne modifie pas ces fichiers Rust.
+
+Contrat visé : une décision explicite retient la ligne complète exacte et le domaine
+canonique, sans en faire un acquis de famille ni une autorisation de chaque sous-commande
+isolée. La même ligne dans le même domaine reprend ; changement de ligne, d'arguments,
+d'enchaînement ou de domaine ne bénéficie pas de cet accord. Les refus structurels
+restent prioritaires et le bac à sable conserve ses propres garanties.
+
+Prévoir rouge de reprise hors domaine, refus des variantes/domaines et ambiguïtés argv,
+puis vert au niveau de la porte et du nœud d'exécution ; archi prouve clic réel et
+`wait_output`. Aucun Gemini, service ou base réelle supplémentaire ; ciblés sous poste
+lourd avec target privé, lib29, -j8 et plafond 32 Gio. Ticket toujours ouvert.
