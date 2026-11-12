@@ -62,46 +62,19 @@ if [ ${#POSITIONNELS[@]} -gt 1 ]; then
   exit 2
 fi
 
-# On se relance sous `flock`, avant tout effet de bord (journal de charge,
-# compilation), pour que le verrou couvre la passe entière.
-if [ -z "${RAG3WEAVER_VERROU_TENU:-}" ] && command -v flock >/dev/null; then
-  VERROU="${HOME}/.cache/rag3weaver-build/poste.lock"
-  PORTE="${HOME}/.cache/rag3weaver-build/porte.lock"
-  mkdir -p "$(dirname "$VERROU")"
-  MODE_VERROU="-s"; NOM_VERROU="partagé, priorité basse"
+# La primitive commune prend réellement le poste avant le marqueur, atteste
+# Max32 et garde ses descendants/bus privé jusqu'au nettoyage. Aucun drapeau
+# d'environnement seul ne permet de sauter cette vérification.
+CONFINEUR="$(cd "$(dirname "$0")" && pwd)/scripts/confiner_validation.py"
+if ! python3 "$CONFINEUR" verifier >/dev/null 2>&1; then
+  mode_validation=lourd
   for a in "$@"; do
-    case "$a" in --build|--build-only) MODE_VERROU="-x"; NOM_VERROU="exclusif (rebâti du moteur), priorité basse" ;; esac
+    case "$a" in --build|--build-only) mode_validation=mesure ;; esac
   done
-  if [ "${RAG3WEAVER_MESURE:-}" = 1 ]; then MODE_VERROU="-x"; NOM_VERROU="exclusif (mesure)"; fi
-  BASSE=""
-  [ "${RAG3WEAVER_MESURE:-}" = 1 ] || BASSE="nice -n 15 ionice -c 3"
-  if ! flock -n "$MODE_VERROU" "$VERROU" true || ! flock -n -x "$PORTE" true; then
-    echo "▸ verrou du poste $NOM_VERROU : attente d'une passe en cours ($VERROU)"
-  fi
-  export RAG3WEAVER_VERROU_TENU="$NOM_VERROU"
-  # **Par le script du poste quand il est là** (5 octobre 2026, après la
-  # panne de mémoire du 4 à 22 h 51) : il prend la même porte et le même
-  # verrou, et lance la passe dans sa propre portée systemd plafonnée
-  # (POSTE_MEM_MAX, 40 Go par défaut ; POSTE_SWAP_MAX, 4 Go). Une passe qui
-  # déborde est tuée seule (code 137) au lieu d'emporter les sessions. Sans
-  # le script, le verrou d'avant, sans plafond.
-  POSTE="${HOME}/.cache/rag3weaver-build/poste"
-  if [ -x "$POSTE" ]; then
-    if [ "$MODE_VERROU" = "-x" ] && [ "${RAG3WEAVER_MESURE:-}" = 1 ]; then
-      exec "$POSTE" mesure "$0" "$@"
-    elif [ "$MODE_VERROU" = "-x" ]; then
-      # Un rebâti du moteur : exclusif, en priorité basse.
-      exec "$POSTE" mesure nice -n 15 ionice -c 3 "$0" "$@"
-    fi
-    exec "$POSTE" lourd "$0" "$@"
-  fi
-  if [ "$MODE_VERROU" = "-x" ]; then
-    exec flock -x "$PORTE" flock -x "$VERROU" $BASSE "$0" "$@"
-  fi
-  flock -x "$PORTE" true
-  exec flock -s "$VERROU" $BASSE "$0" "$@"
+  [ "${RAG3WEAVER_MESURE:-}" != 1 ] || mode_validation=mesure
+  exec python3 "$CONFINEUR" lancer --mode "$mode_validation" \
+    --delai "${RAG3WEAVER_VALIDATION_TIMEOUT:-18000}" -- bash "$0" "$@"
 fi
-[ -n "${RAG3WEAVER_VERROU_TENU:-}" ] && echo "▸ verrou du poste : $RAG3WEAVER_VERROU_TENU"
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # **La bibliothèque contre laquelle tout est éprouvé.**
@@ -165,29 +138,9 @@ if [ "$MAGASIN" = false ] && [ -z "${RAG3DB_BUILD:-}" ] && [ "${RAG3WEAVER_MOTEU
   fi
 fi
 
-# ── Confiner la pression mémoire ────────────────────────────────────────────
-#
-# Le 27 août 2026 : le poste ramait, et ce n'était pas le CPU. Un gros build
-# fait défiler des gigaoctets à travers le cache de fichiers ; ça déclenche de
-# la récupération mémoire en continu, et avec `vm.swappiness=150` (défaut
-# CachyOS, pensé pour zram) ce qui part en zram, c'est **le bureau** — Chrome,
-# l'éditeur. On revient dessus, il faut décompresser : « ça galère », CPU à 3 %.
-#
-# La cure serait un `swapoff/swapon` après coup, qui demande root. La
-# prévention ne le demande pas : on met le build dans son propre cgroup, avec
-# une limite haute. Sous la limite, rien ne change ; au-dessus, c'est **son**
-# cache à lui qui est récupéré, pas les pages des applications ouvertes.
-#
-# `RAG3WEAVER_BUILD_MEMORY_HIGH=0` désactive, une taille (`24G`) la change.
-confined() {
-  local high="${RAG3WEAVER_BUILD_MEMORY_HIGH:-16G}"
-  if [ "$high" = "0" ] || ! command -v systemd-run >/dev/null 2>&1 \
-     || [ ! -e /sys/fs/cgroup/user.slice/user-"$(id -u)".slice/cgroup.controllers ]; then
-    "$@"
-    return $?
-  fi
-  systemd-run --user --scope --quiet --collect -p MemoryHigh="$high" -- "$@"
-}
+# La portée commune possède déjà MemoryMax et le budget. Une nouvelle scope
+# systemd --user ici serait une sœur, pas une limite héritée du superviseur.
+confined() { "$@"; }
 
 # ── Tracer la charge, pendant la compilation comme pendant les tests ───────
 #
