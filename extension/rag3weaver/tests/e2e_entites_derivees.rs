@@ -1032,7 +1032,7 @@ fn rollback_puis_nouvelle_table_garde_la_marque_des_cellules_en_attente() {
     catalog.register_entity("Note", EntityConfig {
         fields: HashMap::from([("key".into(), champ(FieldType::String, false, false))]),
         hashsafe: Some(vec!["key".into()]), signals: SearchSignals::NONE,
-        chunked: false, ..Default::default()
+        chunked: Some(false), ..Default::default()
     }).unwrap();
     let reader_cache = tempfile::tempdir().unwrap();
     let mut reader = Catalog::ouvrir_en_lecture(
