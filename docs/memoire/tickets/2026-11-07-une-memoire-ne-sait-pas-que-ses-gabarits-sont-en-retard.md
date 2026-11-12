@@ -98,3 +98,5 @@ Premier ciblé source95dc16908 : fusion4/0/0 ; plan5 réussites/8échecs/0ignor�
 Ciblés verts de la tranche sur caef19714b6edcef70961d6332b09528db4f0a91 :35/0/0 (fusion5, plan15, lecteur5, builtin9, foreach1), natif+code/lib29/poste32G/j8. Preuves03 et limites dans le suivi de tranche. M8 reste ouvert ; revue avant globale, aucune application réelle autorisée.
 
 Revue orchestration après ciblés : la garde omet storage (admission réelle exécutée à l’ouverture seulement), vector_extension (ressource physique), seed (semis de données à l’ouverture). Porteur mémoire, même tranche : témoin de refus des ajouts/retraits et changements format/recette storage, changement d’extension et semis ; puis garde conservatrice sans admission DB ni moteur de compatibilité nouveau. Le vert ciblé précédent ne couvre pas ces transitions.
+
+Complément storage/vector_extension/seed corrigé757e3b1a9 après rouge103fded7e : ciblés36/0/0, dont les6transitions non qualifiées refusées. Détail et preuves04 dans la note02 ; aucune globale ni application réelle, ticket toujours ouvert.
