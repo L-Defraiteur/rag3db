@@ -77,8 +77,16 @@ class Actor:
         env.pop('HIP_VISIBLE_DEVICES',None);env.pop('CUDA_VISIBLE_DEVICES',None)
         self.proc=subprocess.Popen([exe,str(config)],stdout=self.files[0],stderr=self.files[1],env=env,start_new_session=True)
         self.pid=self.proc.pid;self.birth=start(Path('/proc')/str(self.pid))
-    def stop(self,deadline):
-        if members(self.pid,self.birth):
+    def stop(self,deadline,anchors=()):
+        alive=members(self.pid,self.birth)
+        if alive:
+            owned=False
+            for pid,birth in [(self.pid,self.birth),*anchors]:
+                try:
+                    if start(Path('/proc')/str(pid))==birth and os.getpgid(pid)==self.pid:owned=True
+                except (FileNotFoundError,ProcessLookupError):pass
+            if not owned:raise RuntimeError('groupe sans identité de naissance encore prouvée')
+        if alive:
             try:os.killpg(self.pid,signal.SIGTERM)
             except ProcessLookupError:pass
         until=min(time.monotonic()+20,deadline)
@@ -196,7 +204,8 @@ class Run:
             except BaseException as error:errors.append('maintien après fin des clients : '+repr(error))
         for id in ids:
             if id in self.actors:
-                try:self.actors[id].stop(until)
+                anchors=[(e['pid'],e['starttime']) for e in rows(self.exec_log) if e['event']=='barriere_avant_exec' and e['pgrp']==self.actors[id].pid]
+                try:self.actors[id].stop(until,anchors)
                 except BaseException as error:errors.append('arrêt groupe '+id+' : '+repr(error))
         for pid,birth in list(self.active):
             p=Path('/proc')/str(pid)
