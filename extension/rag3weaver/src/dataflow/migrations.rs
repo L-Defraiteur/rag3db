@@ -299,7 +299,17 @@ impl MigrationRunner {
         &self,
         inputs: plan::MigrationPlanInputs,
     ) -> Result<plan::ResolvedMigrationPlan, MigrationError> {
-        let vars = inputs.variables.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let steps = self.resolve_steps(&inputs.variables)?;
+        plan::ResolvedMigrationPlan::new(inputs, steps)
+            .map_err(MigrationError::InvalidPlan)
+    }
+
+    /// Resolve graphs for inspection without claiming known storage generations.
+    pub fn resolve_steps(
+        &self,
+        variables: &std::collections::BTreeMap<String, String>,
+    ) -> Result<Vec<plan::ResolvedMigrationStep>, MigrationError> {
+        let vars = variables.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         let mut steps = Vec::new();
         for file in self.scan_all()? {
             let definition = parse_mermaid_template(&file.content, &vars)
@@ -311,8 +321,8 @@ impl MigrationRunner {
                 graph_hash: definition.hash(),
             });
         }
-        plan::ResolvedMigrationPlan::new(inputs, steps)
-            .map_err(MigrationError::InvalidPlan)
+        if steps.is_empty() { return Err(MigrationError::InvalidPlan("no declared migration steps".into())); }
+        Ok(steps)
     }
 
     // ─── Schema initialization ──────────────────────────────────────────

@@ -31,6 +31,11 @@ impl StorageInspection {
     /// Legacy without a declared target is allowed to keep opening. Requesting a
     /// versioned target never upgrades storage as a side effect of opening it.
     pub fn admit(&self, requirement: Option<&StorageRequirement>) -> Result<(), String> {
+        if let Some(version) = self.internal_schema.as_deref() {
+            if !matches!(version, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8") {
+                return Err(format!("unknown internal storage schema: {version}"));
+            }
+        }
         if !self.unresolved_migrations.is_empty() {
             return Err(format!("migration reconciliation required: {:?}", self.unresolved_migrations));
         }
@@ -81,6 +86,7 @@ pub(crate) fn inspect_on(conn: &dyn DbConnection) -> Result<StorageInspection, S
         if let Some(name) = key.strip_prefix("entity_config:") {
             let config: crate::config::EntityConfig = serde_json::from_str(value)
                 .map_err(|e| format!("invalid persisted config {name}: {e}"))?;
+            config.validate().map_err(|e| format!("invalid persisted config {name}: {e}"))?;
             entity_configs.insert(name.to_owned(), serde_json::to_value(config).map_err(|e| e.to_string())?);
         }
     }
@@ -195,6 +201,7 @@ mod native_tests {
         let manifest = serde_json::json!({
             "version": 1, "name": "fixture", "database": "fixture.rag3db",
             "entities": {}, "tools": {}, "buffer_pool": 67108864,
+            "embeddings": {"model": "fixture", "dimensions": 4},
             "storage": {"application_format": "shared", "recipe": "fixture-recipe"}
         });
         std::fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
@@ -214,6 +221,7 @@ mod native_tests {
         let path = dir.path().join("backend.json");
         std::fs::write(&path, serde_json::to_vec(&serde_json::json!({
             "version": 1, "name": "fixture", "database": "absent/fixture.rag3db", "entities": {}, "tools": {},
+            "embeddings": {"model": "fixture", "dimensions": 4},
             "storage": {"application_format": "shared", "recipe": "fixture-recipe"}
         })).unwrap()).unwrap();
         let prepared = PreparedBackend::load(&path).unwrap();
