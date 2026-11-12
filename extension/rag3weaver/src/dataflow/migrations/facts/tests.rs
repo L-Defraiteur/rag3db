@@ -133,6 +133,7 @@ fn provider_definitions_are_composed_and_conflicts_are_not_hidden() {
 fn actual_code_provider_and_effective_signal_overrides_are_in_the_facts() {
     let (entities,relations)=crate::code::schema_configs(crate::code::default_scope_chunking());
     let expected_entities=entities.len();let expected_relations=relations.len();
+    let expected_relation_definitions=canonical_json(&relations).unwrap();
     let mut i=input();i.entities=Some(BTreeMap::new());i.relations=Some(BTreeMap::new());
     i.provider=ProviderFacts::Complete{name:"code".into(),entities,relations};
     let initial=DeclaredSchemaFacts::from_complete_input(i.clone()).unwrap();
@@ -141,7 +142,8 @@ fn actual_code_provider_and_effective_signal_overrides_are_in_the_facts() {
     assert_eq!(effective.entities().len(),expected_entities);assert_eq!(effective.relations().len(),expected_relations);
     assert_eq!(effective.entities()["Scope"].signals,SearchSignals::BM25);
     assert_ne!(effective.config_fingerprint(),initial.config_fingerprint());
-    assert_eq!(effective.relations()["DEFINES"].to,"Scope");
+    assert_eq!(canonical_json(effective.relations()).unwrap(),expected_relation_definitions,
+        "all provider relation endpoints and properties must survive composition");
 }
 
 #[test]
