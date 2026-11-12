@@ -531,3 +531,27 @@ signal de fin ou abandon, PID llama et 8099 absents, VRAM rendue, puis relancer
 7882 avec la recette exacte et prouver santé/PID/SHA/PCI et autres services.
 Pas de nouveau modèle ni autre service/GPU utilisé par cette préparation,
 aucune lecture/copie env/vault, aucune limite relâchée. Le ticket reste ouvert.
+
+### Arrêt de la seconde fenêtre : contrôle transitoire à documenter
+
+Banc confirme contrôleur corrigé figé, MESURE acquis 18:32:47 Paris, deadline
+18:52:47 et démarrage borné à 18:34:47, lanceur 3416648/runner 3416663.
+Identité et zéro client relus ; SIGTERM du seul PID 3273544 à 18:33:14.883.
+Le wrapper a ensuite échoué sur son assertion de port absent : le PID venait
+de disparaître mais le premier relevé `ss` montrait encore le listener.
+La chaîne a été arrêtée ; aucun nouveau TERM ni lancement GPU par optimiseur.
+
+Contre-vérification indépendante à **18:33:39.268** : `/proc/3273544` absent,
+7882 absent, les trois autres listeners/PID strictement identiques à la preuve
+avant arrêt. Card2 : utilisés 21 661 892 608 octets, libres 12 546 850 816,
+soit 11,685 Gio. `arret.json` consigne ce contrôle et l’erreur initiale, sans
+effacer le journal rouge. Remise explicite au banc pour sa propre validation.
+
+Preuves : dossier `banc-k10-12nov-7882-2` déjà nommé ci-dessus,
+`juste-avant-arret.json`, `arret.json`, `vram-apres-arret.json` ; journal
+`~/.cache/rag3weaver-build/cx-service-7882-arret-2.log`.
+Suite opérateur à traiter avant réutilisation du wrapper : attendre aussi la
+disparition du listener dans la borne d’arrêt, au lieu d’un unique contrôle
+immédiat après la fin du PID. Ce constat n’autorise aucun nouveau passage du
+banc ; aucun correctif runtime appliqué à ce stade. Restauration attendue
+uniquement après signal de fin et preuves de déchargement du banc.
