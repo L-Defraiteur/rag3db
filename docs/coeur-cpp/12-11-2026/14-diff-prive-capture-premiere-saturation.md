@@ -4,7 +4,7 @@
 porteur cœur c++. **Préparation autorisée seulement ; aucune compilation,
 configuration CMake, exécution ou réservation.**
 
-Source : branche `cx-coeur-diagnostic-saturation`, commit `01185695f`, parent
+Source : branche `cx-coeur-diagnostic-saturation`, commit `6bfba5b4c`, parent
 fonctionnel 0511dece74f94db6937fb03e6ec45f0c58828c5a ; worktree neuf
 `/home/lucied/git_workspaces/cx-coeur-diagnostic-saturation`.
 Le worktree 0511 et ses artefacts restent séparés.
@@ -51,8 +51,9 @@ Stockage fixe de 1280 enregistrements + une première capture ; tableaux touché
 avant armement et avant acteurs. Pas de vector, string, allocation de pool ou
 formatage dans les callbacks de rollback. Compteurs uint64 atomiques dont le
 caractère lock-free est exigé par static_assert ; horloge monotone et TLS scalaires.
-La construction du format et l'écriture stderr sont faites seulement après join
-des acteurs **et** du sampler, puis désarmement.
+La sortie utilise désormais un fichier privé ouvert avant les acteurs ; le sampler
+écrit et vide hors rollback, puis le thread du test finalise après joins.
+Voir le [delta de publication et de vidage](15-delta-publication-et-vidage-capture.md).
 
 La première capture signifie **premier gagnant du compare_exchange** au site
 instrumenté, pas minimum absolu des instants de refus physiques de tous les fils.
@@ -62,7 +63,8 @@ lus indépendamment : ils ne forment pas un snapshot transactionnel. Les différ
 entre échantillons donnent un contexte de fenêtre, pas une identité causale.
 
 Le sampler est l'unique écrivain du tableau ; les données de première capture
-sont publiées par état release/acquire et lues après joins. État 0 = aucun refus
+sont publiées par état release/acquire, lues par le sampler puis après joins.
+État 0 = aucun refus
 capturé, 1 = capture non achevée donc résultat invalide, 2 = capture publiée.
 Overflow est compté, jamais masqué. Un seul test dans un processus neuf : pas de
 reset concurrent ni de réarmement prévus. Les compteurs ne bouclent pas dans les
@@ -137,10 +139,11 @@ La recette n'autorise pas de rendre les deux passages historiques comparables
 par déclaration. Un passage diagnostic localise un événement ; toute comparaison
 base/correction à volumes fixés demanderait une décision ultérieure.
 
-La sortie n'est vidée qu'après joins : arrêt forcé/crash peut perdre la capture
-entière. Un résultat sans schéma final/status complet est **inconclusif**, sans
-relance automatique. Si cette limite est inacceptable, une autre stratégie de
-vidage doit être revue avant build ; pas d'écriture synchrone ajoutée au rollback.
+Le vidage après joins seulement est remplacé par le delta 15 : le sampler
+vide périodiquement les échantillons et la première capture hors rollback, dans
+un fichier privé créé avant les acteurs. Un timeout laisse des preuves partielles,
+jamais un résultat global complet sans footer valide. L'état PK des appels encore
+actifs doit être pris en compte : leur durée n'entre pas dans pk_completed_ns.
 
 À produire ensuite seulement si autorisé : attestation source/diff et compile
 commands, empreintes engine/binaire/extensions et BuildIDs, limites effectives,

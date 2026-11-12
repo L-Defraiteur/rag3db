@@ -1,10 +1,10 @@
 {
   "status": "REVIEW_ONLY_NOT_AUTHORIZED_TO_CONFIGURE_BUILD_OR_RUN",
-  "source_commit": "01185695f39e83b5df8bb3b9cf73ccdb38ede2d0",
+  "source_commit": "6bfba5b4cd081c0bbe10bda045fdcccfb6290594",
   "base_commit": "0511dece74f94db6937fb03e6ec45f0c58828c5a",
   "source_branch": "cx-coeur-diagnostic-saturation",
   "source_worktree": "/home/lucied/git_workspaces/cx-coeur-diagnostic-saturation",
-  "source_patch_sha256": "1bc6fd25f98581a216071921ab5e7ef353f6e194949feccbb5da3d6bc3512849",
+  "source_patch_sha256": "a9d7dea8ba5d2bb835bedc32061c2e63a6e6eb57de5103f65051beea05105186",
   "build": {
     "gate": "separate orchestration approval after review",
     "fresh_build": true,
@@ -70,7 +70,21 @@
     "environment": "reviewed allowlist; inherited SCENARIO_*, BUFFER_POOL_SIZE, MAX_NUM_THREADS and GTEST_* must be explicitly recorded; no implicit override",
     "tmpdir": "{private_runtime}/tmp",
     "working_directory": "{private_runtime}",
-    "gate_lock": "poste mesure, budgets start after acquisition, no reservation made"
+    "gate_lock": "poste mesure, budgets start after acquisition, no reservation made",
+    "required_environment": {
+      "CX_SATURATION_OUTPUT": "{private_output}/capture.csv (absolute, new file, exclusive create, private writable mount only)"
+    },
+    "capture_stream": {
+      "writer": "sampler outside rollback, then test thread after joins",
+      "schema_before_actors": true,
+      "samples_max": 1280,
+      "sample_interval_ns_min": 1000000000,
+      "first_poll_target_ms": 100,
+      "flush": "fflush after every sample and first_saved; no rollback IO",
+      "on_timeout": "preserve file on outer private output mount, parse as partial unless valid final complete status",
+      "on_io_failure": "sticky, no retry; initialization aborts before actors; later failure invalidates completion",
+      "interpretation": "pk_completed_ns excludes in-flight calls; pk_active>0 forbids excluding PK cost from completed sum alone"
+    }
   },
   "metrics_unavailable": [
     "memory owner",
@@ -92,5 +106,6 @@
     "argv+environment allowlist",
     "raw log+xml+capture schema/status",
     "exit code+unit inactive+no private processes"
-  ]
+  ],
+  "delta_from_01185695f_sha256": "20d77e60d9681ed71157161cd76432043e11d491c8cef03661869ec2ec0825c5"
 }

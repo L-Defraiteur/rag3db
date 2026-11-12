@@ -719,3 +719,12 @@ transactions publiées et volumes transférés/itérations. Absences explicites 
 mural, propriétaire mémoire, volumes durables. Aucun build/run/réservation et aucune
 lib distribuée modifiée. Sortie seulement après joins : timeout sans capture finale
 reste inconclusif, sans relance. Correction de sûreté et coût toujours distincts.
+
+### Delta avant revue du build
+
+[Publication et vidage](../12-11-2026/15-delta-publication-et-vidage-capture.md),
+source6bfba5b4c poussée : armed lit acquire ; fichier privé neuf ouvert avant acteurs,
+vidage first_saved/samples depuis sampler horsrollback, bilan final séparé. Timeout
+conserve une preuve partielle, jamais capture globale réussie sans status valide.
+pk_completed_ns exclut les appels encore actifs ; pk_active>0 interdit d'écarter
+le coût PK sur ce cumul seul. Recette/diff actualisés ; aucun CMake/build/run/poste.
