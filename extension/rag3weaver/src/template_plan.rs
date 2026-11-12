@@ -219,7 +219,10 @@ fn schema_content(reader: &Contenus, manifest_name: &str, path: &str) -> Result<
 fn refuse_external_schema_refs(value: &Value, path: &str, errors: &mut Vec<Refusal>) {
     match value {
         Value::Object(map) => {
-            if let Some(reference) = map.get("$ref").and_then(Value::as_str) {
+            for reference in ["$ref", "$dynamicRef", "$recursiveRef"]
+                .iter()
+                .filter_map(|key| map.get(*key).and_then(Value::as_str))
+            {
                 if !reference.starts_with('#') {
                     errors.push(refusal(RefusalKind::Source, path, format!("référence de schéma externe non prise en charge par la validation fermée : {reference}")));
                 }
@@ -251,6 +254,8 @@ fn compatibility(
         "version",
         "database",
         "files_root",
+        "files_format",
+        "fts_positions",
         "entities",
         "relations",
         "embeddings",
@@ -453,7 +458,7 @@ mod tests {
     const GRAPH: &str = "%% tool: echo\n%% description: fourni\n%% result: calc.result\n\ngraph LR\n    calc[\"RhaiNode(script='input')\"]\n";
     fn fixture() -> Package {
         Package::new(BTreeMap::from([
-            ("backend.json".into(), serde_json::to_vec(&json!({"version":1,"name":"m8","database":"memory.rag3db","tools":{"echo":{"graph":"echo.mmd"}}})).unwrap()),
+            ("backend.json".into(), serde_json::to_vec(&json!({"version":1,"name":"m8","database":"memory.rag3db","entities":{},"embeddings":{"model":"fixture","dimensions":4,"address":"127.0.0.1:1"},"tools":{"echo":{"graph":"echo.mmd"}}})).unwrap()),
             ("echo.mmd".into(), GRAPH.as_bytes().to_vec()),
         ]), BTreeMap::new())
     }
@@ -529,7 +534,7 @@ mod tests {
             .builtin
             .insert("tools/list.mmd".into(), GRAPH.as_bytes().to_vec());
         rehash(&mut supplied);
-        assert!(plan(&[supplied.clone()], &supplied, &supplied, "backend.json").is_ok());
+        plan(&[supplied.clone()], &supplied, &supplied, "backend.json").unwrap();
         let mut missing = supplied.clone();
         missing.builtin.clear();
         rehash(&mut missing);
@@ -577,16 +582,17 @@ mod tests {
         b.files.insert("echo.mmd".into(), b"%% tool: echo\n%% description: parent\n%% result: each.report\n\ngraph LR\n    each[\"ForEachNode(graph='@builtin:tools/list.mmd')\"]\n".to_vec());
         b.builtin.insert("tools/list.mmd".into(), b"%% tool: child\n%% description: fourni\n%% param: element json! -- valeur\n%% result: r.result\n\ngraph LR\n    r[\"RhaiNode(script='input', value=$element)\"]\n".to_vec());
         rehash(&mut b);
-        assert!(plan(&[b.clone()], &b, &b, "backend.json").is_ok());
+        plan(&[b.clone()], &b, &b, "backend.json").unwrap();
         b.builtin.clear();
         rehash(&mut b);
         let e = plan(&[b.clone()], &b, &b, "backend.json").unwrap_err();
         assert!(e[0].reason.contains("builtin:tools/list.mmd") && e[0].reason.contains("absente"));
     }
     fn with_schema() -> Package {
-        let mut b = edit(&fixture(), |v| {
-            v["entities"]["Note"] = json!({"schema":"note.json","config":{}})
-        });
+        let mut b = edit(
+            &fixture(),
+            |v| v["entities"]["Note"] = json!({"schema":"note.json","config":{"fields":{"name":{"type":"string","isTitle":true,"isContent":true}},"signals":["bm25"],"hashsafe":["name"]}}),
+        );
         b.files.insert("note.json".into(), serde_json::to_vec(&json!({"type":"object","properties":{"name":{"type":"string"}},"required":["name"]})).unwrap());
         rehash(&mut b);
         b
@@ -594,7 +600,7 @@ mod tests {
     #[test]
     fn changing_a_schema_file_is_not_an_implicitly_safe_optional_addition() {
         let b = with_schema();
-        assert!(plan(&[b.clone()], &b, &b, "backend.json").is_ok());
+        plan(&[b.clone()], &b, &b, "backend.json").unwrap();
         let mut t = b.clone();
         t.files.insert("note.json".into(), serde_json::to_vec(&json!({"type":"object","properties":{"name":{"type":"string"},"optional":{"type":"string"}},"required":["name"]})).unwrap());
         rehash(&mut t);
@@ -602,6 +608,33 @@ mod tests {
         assert!(e
             .iter()
             .any(|r| r.kind == RefusalKind::Compatibility && r.path == "note.json"));
+    }
+    #[test]
+    fn file_format_changes_are_never_silently_qualified() {
+        let b = fixture();
+        let t = edit(&b, |v| v["files_format"] = json!({"version":2}));
+        let e = plan(&[b.clone()], &b, &t, "backend.json").unwrap_err();
+        assert!(e
+            .iter()
+            .any(|r| r.kind == RefusalKind::Compatibility && r.path.ends_with("/files_format")));
+    }
+    #[cfg(all(feature = "code", target_os = "linux"))]
+    #[test]
+    fn a_physical_sandbox_check_is_not_executed_by_the_plan() {
+        let b = edit(
+            &fixture(),
+            |v| {
+                v["workspace"] =
+                    json!({"root":"workspace","commands":"auto","sandbox":{"mode":"landlock"}})
+            },
+        );
+        let e = plan(&[b.clone()], &b, &b, "backend.json").unwrap_err();
+        assert!(
+            e.iter()
+                .any(|r| r.reason.contains("preuve d'environnement")
+                    && r.reason.contains("landlock")),
+            "{e:?}"
+        );
     }
     #[test]
     fn external_schema_resolution_is_refused_before_the_common_compiler() {
@@ -650,7 +683,7 @@ mod tests {
             b.builtin
                 .insert("tools/list.mmd".into(), GRAPH.as_bytes().to_vec());
             rehash(&mut b);
-            assert!(plan(&[b.clone()], &b, &b, "backend.json").is_ok());
+            plan(&[b.clone()], &b, &b, "backend.json").unwrap();
             assert_eq!(std::fs::read(&cache).unwrap(), b"cache-interdit");
             return;
         }

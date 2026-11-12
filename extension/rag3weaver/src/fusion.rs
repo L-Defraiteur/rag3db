@@ -25,9 +25,29 @@ pub fn atomic<T: Eq + Clone>(
 pub struct Conflict {
     /// Composants du chemin, sans ambiguïté sur les clés contenant '/' ou '~'.
     pub path: Vec<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
     pub base: Option<Value>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
     pub local: Option<Value>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "present"
+    )]
     pub target: Option<Value>,
+}
+
+// Un champ présent valant null ne doit pas être décodé comme un champ absent.
+fn present<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<Value>, D::Error> {
+    Value::deserialize(deserializer).map(Some)
 }
 
 impl Conflict {
@@ -114,6 +134,20 @@ mod tests {
         assert_eq!(errors[0].local, Some(Value::Null));
         assert_eq!(errors[0].pointer(), "/a");
         assert_eq!(super::json(Some(&b), Some(&b), Some(&l)).unwrap(), Some(l));
+    }
+
+    #[test]
+    fn wire_conflicts_preserve_absence_and_explicit_null() {
+        let c = Conflict {
+            path: vec!["x".into()],
+            base: None,
+            local: Some(Value::Null),
+            target: Some(Value::Bool(true)),
+        };
+        let wire = serde_json::to_value(&c).unwrap();
+        assert!(wire.get("base").is_none());
+        assert_eq!(wire.get("local"), Some(&Value::Null));
+        assert_eq!(serde_json::from_value::<Conflict>(wire).unwrap(), c);
     }
 
     #[test]
