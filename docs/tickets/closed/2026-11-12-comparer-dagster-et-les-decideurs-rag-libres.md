@@ -1,6 +1,6 @@
 # Comparer Dagster et les décideurs RAG libres
 
-- **État** : en cours, revue documentaire demandée par Lucie le 12 novembre 2026.
+- **État** : fait, revue sourcée et vision de vitrine consignées dans e978b86f2 le 12 novembre 2026 ; aucune expérimentation ni réalisation web engagée.
 - **Famille** : produit
 - **Gravité** : planification ; repérer les modèles réutilisables et les différences de périmètre.
 - **Atteignable en service** : non, étude sans modification ni lancement de modèle.
@@ -87,7 +87,7 @@ coût d’un faux rappel et latence. Les scores de publications ne se comparent 
 ## Décision de présentation de Lucie
 
 Lucie retient l’accueil CocoIndex comme référence de design pour vendre le framework.
-Direction consignée dans [la vision de vitrine](../visions/2026-11-12-vitrine-produit-reference-cocoindex.md)
+Direction consignée dans [la vision de vitrine](../../orchestration/visions/2026-11-12-vitrine-produit-reference-cocoindex.md)
 et indexée. Pas de chantier web, de déploiement ou d’expérimentation modèle lancé.
 API et extraits de sources primaires conservés hors dépôt sous
 `~/.cache/orchestration-notes/tour-horizon-12nov/sources.json`.
