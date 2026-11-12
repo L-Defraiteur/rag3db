@@ -1,6 +1,6 @@
 # Un accord de commande hors domaine redemande le même accord
 
-- **État** : ouvert (11 novembre 2026), relevé par archi, transmis à ED.
+- **État** : corrigé le 12 novembre 2026, source éprouvée `b42a4ada90ab7f2b80f1137e75692b3d00e26fcc`, verdict composé vert ; fermeture portée par le lot d’intégration ED/archi.
 - **Pour** : ED (décision et reprise de commande), prise en charge confirmée ; transfert de dossier effectué après la passe figée a92.
 - **Signalé par** : archi, navigateur `b57313175` et journal ci-dessous.
 - **Famille** : produit
@@ -179,3 +179,28 @@ formes non réduites refusées. Ciblés : commande51/0/+1helper, run_nodes19/0/0
 Première globale4df arrêtée avant la lib large, puis quiescence vérifiée ; ses cinq jeux
 de features et1594 tests natifs restent des preuves partielles de cette seule source.
 La nouvelle passe inclura le master3b2eab7ec intégré entre-temps et le correctif final.
+
+## Verdict de fermeture du lot
+
+Source de code figée b42, lib29 : features **5/5**, native **1609/0/15**, lib large
+**2176/0/65**, navigateur **40/0/0**. Le 65e ignoré ajouté est exactement
+`daemon_host::chat_contextuel::un_accord_exterieur_reprend_la_ligne_exacte_et_n_accorde_pas_sa_variante`,
+marqué « témoin navigateur : étape séparée » sans la feature navigateur ; il est réellement
+joué et vert dans les40. L'unique helper ignoré de commande est exercé par son test parent.
+
+Verdict composé explicite : les étapes features/lib/nav de la globale b42-r2 sont conservées ;
+les seules e2e ont été revalidées pour prouver le confinement des vrais enfants, après
+autorisation orchestration : **lectures24/0/0 en9,49s**, **démon13/0/0 en12,26s**,
+**2 suites sur2, zéro sauté**. PIDs2697195 et2702388 réellement relevés dans
+`cx-ed-accord-e2e-confines-20261112.service`, memory.max34359738368 et KillModecontrol-group.
+Budget600s après acquisition réelle de poste lourd ; durée23,482s, pic11,4Gio ; quiescence
+exeTarget/cwdWT vide. Aucun droit noyau implicite, aucune variante exécutée sans accord.
+
+ELF navigateur SHA256 `98bc3103ec21dffeca418a9cb27f2e5f37565fb7369fab2217e379a86f19ed94`,
+empreinte source b42a4ada9 et220 gabarits présents, aucun absent. Preuve finale composée :
+`~/.cache/rag3weaver-build/I-luciepc/accord-20261112/verdict-compose.json`.
+
+Les rouges initiaux restent conservés. La dette des fixtures de journaux est séparée sous
+`docs/recherche/tickets/2026-11-12-les-temoins-de-lecture-imposent-le-nom-du-dossier-des-journaux.md` ;
+le suivi commun des scopes imbriquées reste ouvert à orchestration. Ce lot ne corrige ni
+ces fixtures ni le runner produit. Aucun nouvel essai Gemini, activation ou base réelle.

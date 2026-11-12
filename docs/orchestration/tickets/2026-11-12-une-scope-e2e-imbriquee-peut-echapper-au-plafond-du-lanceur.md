@@ -49,3 +49,14 @@ Consigner les preuves enfants ED/M8, prévenir les autres drivers et intégrer l
 la procédure commune de passe. Vérifier que budget, arrêt et comptage des lourds couvrent les
 vrais descendants. Toute évolution du runner lui-même est un lot séparé, relisible et testé ;
 ce ticket n'en annonce aucune comme livrée.
+
+## Preuve enfant ED acquise
+
+Sur b42 inchangé, après autorisation et créneau7879 : lectures24/0/0 et démon13/0/0,
+deux suites sur deux sans saut, unité600s après acquisition. PID2697195 et2702388
+réellement observés dans cx-ed-accord-e2e-confines-20261112.service, avec
+memory.max34359738368, RuntimeMaxUSec10min et KillModecontrol-group.
+`I-luciepc/accord-20261112/{e2e_lectures,e2e_demon_hote}-enfant.json`,
+`verdict-compose.json` et `quiescence-e2e-confines.json` ([]). Le verdict composé garde
+features/lib/nav précédents et remplace seulement la preuve de confinement des e2e.
+M8, prévention des autres drivers et procédure commune restent à orchestration : ticket ouvert.
