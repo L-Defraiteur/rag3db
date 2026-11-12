@@ -318,3 +318,47 @@ Le vieux lot reste-explicite et sa base sont hors périmètre du retrait.
 
 Le ticket BGE reste ouvert : gabarits corrigés/intégrés, copies utilisateur et activation
 toujours non qualifiées. La dette native+daemon reste également ouverte, sans fix parasite.
+
+## Publication concurrente d'un accord — préfixe déterministe
+
+Reprise parallèle autorisée par C7 sur base43db9634a, WT/branchecx-ed-accord-publication,
+propriété atelier_fichiers/testsaccords, archi en revue seule ; aucun backend_schema/migration.
+Ticket canonique : docs/rag3weaver-archi/tickets/2026-11-12-qualifier-la-publication-concurrente-d-un-accord.md.
+
+Source b708f7c34 extrait sans changer l'ordre les phases réellement utilisées par
+decider_accord (snapshotNone→publication→commit). Deux snapshots de la même demande,
+A finit puis son usage est consommé, B tardif republie avant son erreur : rouge attendu
+**4réussis/2échecs/0ignoré**. Même défaut quand A refuse et B accorde. Les permis de
+la vraie Garde sont créés/consommés puis détruits, jamais exécutés.
+
+Correction03ee5cdcf : mutexArc par demande, attente hors registre, relecture avant
+publication et verrou tenu jusqu'au commit ; registre libre pendant with_backend
+(préserve ordre backend→accords). Aucun changement de politique/portée ni révocation.
+Septième témoin : A retenu après publication avant commit, mutexdemande tenu/registredisponible,
+B annoncé puis callbackperdant0 et uniqueusage. Ne prouve pas quel thread l'ordonnanceur
+a bloqué à cet instant ; les deux témoins stale-snapshot restent déterministes.
+
+Préfixe vert source03ee : **7/0/0**, compile28,56s, runtime0,00s. Source/recettes publiées
+avant les étapes, lib29 complète/j8/Max32/Highmax/Swap4/targetunique32. Même budget600
+après acquisition réelle : début857923,253385098, deadline858523,253385098 ; fin du
+log estimée858340,7068, pas de reset. ELF SHA256
+6bdcc333c02a04e65db701c1eb747edfe2e0d8131075434c1eef76b046a99f1d, source03ee et220gabarits
+embarqués vérifiés. Quiescence[], target1642372104 octets. Pas de modèle/GPU/service,
+commande/accord réel ni configuration/base utilisateur ; hôtes fixtures sans backend
+et journaux/XDG strictement privés. Preuves2postes I-luciepc/accord-publication-20261112.
+Archi a relu sources et logs rouge/vert directement, avis favorable borné au ciblé.
+
+Reçu en erreur : fixture journal impossible après commit laisse l'accord appliqué,
+retry déjàdécidé. Ticket séparé ouvert : docs/everything-declarative/tickets/2026-11-12-un-accord-peut-etre-applique-malgre-une-erreur-de-journal.md.
+Pas de rollback ajouté. Absence d'API révocation/annulation documentée, pas inventée.
+Reload garde l'état vivant ; nouveau registre/hôte ne rejoue pas les accords du journal.
+
+Plan proposé à C7, **pas lancé** : F5check≤2400→minimalchecklib≤120→compilationlarge≤1500
+→liblarge≤900→NAV≤600→lectures≤120→demonhôte≤120 dans global6000 après acquisition,
+nonreset, lib29/j8/Max32/HIGH0/target32 unique. Inventaire exact des futurs binaires et
+ignorés avant runtime, aucune estimation ancienne imposée. NAV busprivé sans activation
+et surveillance descendantsréels. Lectures contient une preuve sparse BGE réelle :
+son besoin du service7879 existant doit être coordonné explicitement, santé avant/après ;
+ne pas la présenter comme CPU/factice. Pas de nouveau service ni modèle à lancer.
+Premier rouge STOP/diagnostic. Aucun lourd supplémentaire avant revue du plan ;
+intégration seulement APRÈSA et tourmaster C7, sans réservation pendant développement.
