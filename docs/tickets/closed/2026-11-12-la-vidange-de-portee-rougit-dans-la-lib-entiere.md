@@ -1,6 +1,6 @@
 # La vidange de portée rougit dans la lib entière
 
-- **État** : ouvert ; échec de témoin observé dans la passe symboles, assertion et cause à qualifier.
+- **État** : corrigé par d00661e969eb7d77aa7d2f25c6cb5fa4f93f3308 ; registre privé de fixture, lib entière concurrente et passe complète vertes.
 - **Famille** : produit
 - **Gravité** : validation globale bloquée ; aucun défaut de commande en service établi.
 - **Atteignable en service** : non établi, témoin de fixture dans la lib complète.
@@ -64,3 +64,22 @@ Cette lecture identifie un mécanisme concret ; le ticket reste ouvert jusqu'à
 la lib complète concurrente verte incluant les neuf témoins navigation ET le
 même témoin de portée, suivie de la passe requise. Ne pas appeler cette correction
 une preuve d'absence de toute course runtime ou une révocation ajoutée.
+
+## Qualification finale — 13 novembre2026
+
+Source d00661e969eb7d77aa7d2f25c6cb5fa4f93f3308 : lib entière sans filtre
+2252/0/65 en45,20s, dont les neuf témoins navigation et le témoin de portée
+strictement inchangé. F5 5/5, minimal, trois compilations, NAV40/0/0,
+e2e lectures27/0/0, hôte13/0/0 et Postgres36/0/0 également verts.
+La correction se limite au registre background privé de la nouvelle fixture ;
+aucun changement runtime de commande/RunScope, de délai ou d'assertion.
+Cela qualifie l'interférence de fixture observée, sans prétendre exclure toute
+course possible du runtime ni ajouter une sémantique de révocation.
+
+Preuves aux deux postes : ~/.cache/rag3weaver-build/
+cx-symboles-d00661e96-reprise-20261112/ ; inventaire b43e9a0892602d5415f335016092fa75a9b5743b74a8492da0a8694a72a5716a,
+lib-large.log, verdict-driver.json et supervision/validation-yxtqqkgt/verdict.json.
+Primitive VERT/code0/restes[]/nettoyé=true, quiescence indépendante target[].
+Trois ELF réellement observés avec native29 et223 gabarits chacun ; Max32G.
+Durée cumulée4253,885s dans les6000s INITIAUX, sans renouvellement ; target8,63Go.
+Service7879 contrôlé avant/après puis rendu immédiatement.
