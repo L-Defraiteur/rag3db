@@ -95,7 +95,7 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def answer(self, status, value):
-        data = json.dumps(value).encode()
+        data = json.dumps(value, separators=(',', ':')).encode()
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(data)))

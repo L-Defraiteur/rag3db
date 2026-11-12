@@ -156,3 +156,13 @@ le délai des appels suivants est restauré depuis timeout_secs ou son défaut,
 pas hérité de ce restant. Tests ajoutés sur délai par défaut et adoption d'un
 profil étranger depuis un processus distinct (modèle/dimension identiques,
 refus attendu sans tuer le fournisseur initial ni relancer un constructeur).
+
+Sur 8a0b29180, Cargo compile le jeu natif/code/daemon. Cinq tests du
+connecteur réellement joués : un vert (annulation initiale), quatre rouges
+(timeout 5 s). Cause isolée : fournisseur factice sérialise le JSON avec
+espaces (`service: ...`) ; sonde existante `daemon::sonde` cherche le marqueur
+compact `"service":"rag3weaver-embeddings"`, émis par le vrai fournisseur.
+Correction de la fixture : JSON compact via separators, pas d'augmentation
+de budget ni de relâchement de sonde. Processus factices arrêtés après erreurs ;
+log conservé à luciepc `~/.cache/embarquement-notes/activation/cpu-d.log`.
+Banc informé avant modification du bloc partagé. Rejouer après ce correctif.
