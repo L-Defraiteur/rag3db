@@ -240,3 +240,41 @@ ED a relu ecd statiquement : refus final enregistré sans court-circuiter groupe
 ## Reprise CPU autorisée après diagnostic du JSON
 
 GO C7 pour correction TEST seulement et nouvelle CPU<=60s : lire enfants.json/refus exact attribué aux PID/start attendus, garder toutes les assertions d’arrêt/nettoyage/rouge, rouge20(19/1) et quiescence conservés. Le test relève maintenant le PID/start racine du vrai Popen CPU avant toute récolte puis les compare à la ligne de refus structurée. Le helper produit reste strictement ecd605037 ; aucune adaptation de son erreur à une phrase de test. Rejeu sur source publiée modifiée, pas de retry inchangé. Préflight réelle toujours interdite avant finNAV Arbre et revue du plan corrigé.
+
+## Preuve CPU exacte et fenêtre réelle encore non consommée
+
+Après GO C7 et publication du delta TEST seulement5fab0e1f9, passage CPU complet **20/20 verts en2,059s**, borné60s, journal `temoins-cpu-pid-attribue.log`. Le helper produit est strictement celui d’ecd605037 ; le test vérifie maintenant le refus structuré exact sur le PID/start du Popen attendu et garde toutes les assertions de rouge/arrêt/nettoyage. Rouge20(19/1) et quiescence-rouge-cpu.json=[] conservés à côté, aucun retry inchangé. La passe intermédiaire e3fe20/20 en2,135s est également gardée ; elle précède l’assertion renforcée PID/start.
+
+NAV Arbre libérée :40/0/0 en137,88s,528 records Max32, puis garde rouge pour40 dbus-daemon privés résiduels (aucun Chrome). Arrêt attribué pidfd/starttime+scope et preuve indépendante `cx-passe-faits-lies-v5/nav-quiescence-apres-arret.json` : scope inactive, known_live=[], context exeTarget/cwdWT/profil=[], socketnodes=[],20:48:00 Paris. Ce fait reste un vert fonctionnel plus un rouge d’hygiène de la passe A ; aucun rejeu NAV ni modification de ses sources. Une adoption de UN bus pour toute commande par le helper évite de dépendre d’un wrapper bus par Chrome tué lors de Drop ; la nouvelle préflight doit encore éprouver sa propre vie réelle.
+
+Worktree distant propre figé5fab0e1f9, sans Cargo/sous-module initialisé. Baseline privée des processus Chrome/DBus préexistants et recette argv/hashes écrites avant lancement : baseline-avant-proposee.json et recette-proposee.json, copies aux deux postes. Source/helper/probe/Chrome/DBus hashés ; aucun service ni navigateur lancé. Revue du plan par C7 encore attendue avant l’unique préflight26s<=30s via la primitive, profil/bus privés seulement.
+
+SHA256 logCPU20/20 : `dce2e213501f1b4c23077950f0e1ff6867fcf41155c309e3761f5fd107f7d9e1`. Recette exacte :
+
+```json
+{
+  "source": "5fab0e1f9b59bb1b844b334dda4ac3b3d1ef099e",
+  "argv": [
+    "python3",
+    "/home/lucied/git_workspaces/cx-recherche-confinement-lanceurs/extension/rag3weaver/scripts/confiner_validation.py",
+    "lancer",
+    "--delai",
+    "26",
+    "--preuves",
+    "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-confinement-12nov/reel-unique",
+    "--",
+    "python3",
+    "/home/lucied/.cache/rag3weaver-build/cx-confinement-sonde-cdp.py",
+    "/home/lucied/git_workspaces/cx-recherche-confinement-lanceurs/extension/rag3weaver/scripts/confiner_validation.py",
+    "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-confinement-12nov/sonde-unique"
+  ],
+  "max_s": 30,
+  "hashes": {
+    "/home/lucied/git_workspaces/cx-recherche-confinement-lanceurs/extension/rag3weaver/scripts/confiner_validation.py": "4f57d0e589f54d1e5733bcd01d793ce12b10e64ddd05220d22a9719084641c94",
+    "/home/lucied/.cache/rag3weaver-build/cx-confinement-sonde-cdp.py": "56d282a45a5deb6e623e896cc1de83bd84a37a66829b297244d1021af9c697ec",
+    "/usr/lib/chromium/chromium": "39533024d5bd2582b0915ded18cffb3fae01326723562f4988b08947516d624a",
+    "/usr/bin/dbus-run-session": "d310854dcd72b103aa95a7f6a54eae2cb1579d6c71af40243f840e37fa64d4c5",
+    "/usr/bin/dbus-daemon": "b5d6c0469c7dc4050733f2a90fe64e9f55a3377521dbb295f03ee2cd9807acc4"
+  }
+}
+```
