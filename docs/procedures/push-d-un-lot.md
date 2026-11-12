@@ -67,6 +67,12 @@ Les entrées e2e/navigateur appelées à l’intérieur vérifient le reçu du s
 vivant et héritent de son budget/bus/plafond ; elles ne reprennent pas de verrou ni
 ne créent de scope sœur. Avec un poste extérieur, poser POSTE_MEM_MAX=32G **avant**
 son acquisition ; un parent à40Gio n’est pas une preuve de32Gio et est refusé.
+Le mode est acquis pour toute la portée : une commande imbriquée ne peut pas
+transformer un verrou partagé en exclusif. Si la passe composée contient un
+`run_e2e.sh --build` ou `--build-only`, choisir `lancer --mode mesure` dès l’extérieur
+(et appliquer nice/ionice aux rebâtis ordinaires, sans déclarer une mesure de coût).
+Les témoins argv des rebâtis couvrent l’entrée autonome ; ils ne prouvent pas un
+upgrade de mode dans une portée déjà active. Une passe e2e sans rebâti utilise lourd.
 Hors portée composée, `RAG3WEAVER_VALIDATION_TIMEOUT` fixe le délai global de l’entrée
 (18000s e2e,600s navigateur par défaut). Réduire ces valeurs aux bornes du lot.
 Le délai commence après acquisition et inclut l’arrêt/nettoyage ; aucun réessai.
