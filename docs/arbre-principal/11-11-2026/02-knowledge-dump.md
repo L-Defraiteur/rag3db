@@ -1,7 +1,7 @@
-## Reprise prioritaire — raccord RO codé et ciblé vert, globale attend ED
+## Reprise prioritaire — raccord RO codé et ciblé vert, globale empilée sur ED autorisée
 
 LotRO après A : WT local/luciepc cx-wt-observation-faits souscachebuild,
-branche cx-arbre-observation-faits-2, tête42af900d4 depuismasterCI0bec438da.
+branche cx-arbre-observation-faits-3, empilée sur ED2a31b2716/code143exact.
 Source ciblée91455ec71 ; rebase4/4identique, aucunRustchangé. Même ticketmigration,
 stockage_inspection/Catalogmetadata+AppliedMigration, mémoire revue seule.
 
@@ -20,13 +20,17 @@ ConnectionView→ReadOnlySnapshot aprèsCOMMIT seulement. Même décodeur strict
 Catalog/inspection ; comparaisonutiliseA etvérifieSEULsousensemblepersisté,
 rapportobservé/fourni séparé, aucune qualificationstockage/génération/apply.
 
-**Ordre C7 : EDaccordshôte intègre d'abord, puis rebaseRO surbranche NEUVE**.
-ED annonce F5/min/lib2229/NAV40/lectures27verts, dernierhôtecap120arrêté sur
-fixturecheminavec espace en coursdediagnostic ; aucunmasterEDni globalEDvert
-supposé. Attente de ce jalon indispensable pouréviteruneglobaleROàrejouer sur
-Rustentrant. Aucunjob/PG/globaleArbre créé pendantcetteattente ; pasunparking.
+**GO C7 actualisé : validation empilée sur ED143 sans attendre son master**.
+Base publiée origin/cx-ed-accord-publication-3=2a31b2716 ; diff code/tests/Cargo/
+assets143→2a31 vide, six seulscommitsRO rejoués surbrancheNEUVE3,6/6identiques.
+Union complète source/tests/Cargo/codeparsers/220assets vérifiée(ED+RO), scripts
+critiquescommonconfiner/lib/cargo identiques. EDcorrigehelperfixtureespaces ;
+son dernierhôte13resteàqualifier. La validationB peutpartir maintenant après
+SHA/recettepubliés ; **son intégration attend toujours EDmaster/verdict13**.
+Tout changementRustED ultérieur imposecomparaison/requalification, pasd'IDs/MD
+pris pour unchangementproduit. Aucunemiseàdispositionréelledegénération/apply.
 
-GOglobal3600CONDITIONNELmasterED confirmé+rebase+SHA/recettespubliés. Préparées :
+GOglobal3600empilé aprèsSHA/recettespubliés ; nouveaubudgetglobal pasencoreouvert. Préparées :
 preuves-observation-ro/{globale.py,finaliser.py,lancer-globale.sh} dansdossierdaté.
 F51500/min120/compile1200/lib300/NAV360/CLI180/PG300/attest120 tous∩deadlinecommune ;
 commonconfinerMax32/j8/CPU4/lib29/target32, busuniqueentièreportée(DBUSenvreçupréservé),
