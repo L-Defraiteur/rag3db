@@ -44,7 +44,7 @@ void require(bool condition, const std::string& message) {
 
 struct Fault {
     main::ClientContext* owner = nullptr;
-    common::transaction_t transactionID = 0;
+    rag3db::common::transaction_t transactionID = 0;
     unsigned calls = 0;
     bool armed = false;
     bool ownerMatched = false;
@@ -56,22 +56,22 @@ class RollbackFaultIndex final : public storage::Index {
 public:
     RollbackFaultIndex(storage::IndexInfo info, Fault& fault)
         : Index{std::move(info), nullptr}, fault{fault} {}
-    std::unique_ptr<InsertState> initInsertState(main::ClientContext*, visible_func) override {
+    std::unique_ptr<InsertState> initInsertState(main::ClientContext*, storage::visible_func) override {
         return std::make_unique<InsertState>();
     }
     std::unique_ptr<DeleteState> initDeleteState(const transaction::Transaction*,
-        storage::MemoryManager*, visible_func) override {
+        storage::MemoryManager*, storage::visible_func) override {
         return std::make_unique<DeleteState>();
     }
-    void delete_(transaction::Transaction*, const common::ValueVector&, DeleteState&) override {}
-    void rollbackInsert(common::offset_t firstOffset) override {
+    void delete_(transaction::Transaction*, const rag3db::common::ValueVector&, DeleteState&) override {}
+    void rollbackInsert(rag3db::common::offset_t firstOffset) override {
         ++fault.calls;
         auto* active = transaction::TransactionContext::Get(*fault.owner)->getActiveTransaction();
         fault.ownerMatched = active && active->getID() == fault.transactionID;
         require(fault.armed && fault.calls == 1 && fault.ownerMatched && firstOffset == 2,
             "callback inattendu ou mauvaise transaction");
         fault.armed = false;
-        throw common::RuntimeException(UNDO_FAULT);
+        throw rag3db::common::RuntimeException(UNDO_FAULT);
     }
 
 private:
@@ -99,7 +99,7 @@ void diagnose(const fs::path& root, std::ofstream& log) {
         [&](main::ClientContext&) -> std::unique_ptr<storage::Checkpointer> {
             ++factoryCalls;
             record("checkpoint-factory\t" + std::to_string(factoryCalls));
-            throw common::RuntimeException(CHECKPOINT_STOP);
+            throw rag3db::common::RuntimeException(CHECKPOINT_STOP);
         }};
     intercept.setCheckpointer(*a->getClientContext());
     auto query = [&](main::Connection& connection, const std::string& label,
@@ -131,7 +131,7 @@ void diagnose(const fs::path& root, std::ofstream& log) {
     Fault fault;
     table.addIndex(std::make_unique<RollbackFaultIndex>(
         storage::IndexInfo{"diagnostic_rollback", "DIAGNOSTIC", entry->getTableID(), {0},
-            {common::PhysicalTypeID::INT64}, false, false}, fault));
+            {rag3db::common::PhysicalTypeID::INT64}, false, false}, fault));
 
     const auto csv = root / "a.csv";
     { std::ofstream data(csv); data << "100,100\n101,101\n";

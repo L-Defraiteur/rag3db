@@ -129,3 +129,24 @@ les argv et l’interface statique pour ce source qui appelle plus d’API que l
 pilote de retrait. Une compilation réussie, si autorisée plus tard, ne donne
 aucun accord de lancement. Ticket ouvert ; aucune conclusion de corruption,
 d’isolation ou de récupération à tirer de ce seul témoin.
+
+## Correction de qualification après compile-01
+
+La tentative initiale a échoué sur `common::` ambigu et l’alias `visible_func`
+non qualifié. Source corrigé exclusivement en `rag3db::common::` et
+`storage::visible_func` ; aucune logique de fixture changée. SHA courant :
+`d2db4d049f92dc5d197eb34e4fea758259bf4af7419537e1042b8a3c88a38530`. Les argv de la seconde
+tentative ne changent que les chemins du staging neuf suffixé `-02`, le SHA
+source et l’explication de statut. Première tentative conservée intégralement.
+La reprise compilation/lien pour cette correction précise est autorisée sous
+les mêmes bornes, après relecture du diff ; aucun run du témoin autorisé.
+
+[Contrôleur de compilation](outils/03-compiler-temoin.py) conservé avec ses
+contrôles de SHA et limites ; [lanceur runtime](outils/04-lancer-temoin.py) préparé
+mais jamais invoqué. Celui-ci exige un accord JSON distinct lié aux SHA du
+source, du binaire, de son rapport de build et du lanceur ; le modèle d’accord
+ci-joint garde `approved_to_run=false`. Aucun binaire ne peut être lancé en
+utilisant ce modèle inchangé. Cgroup runtime20s/1Gio/swap0, groupe complet,
+timeout interne15s et sortie limitée1Mio ; ni checkpoint réel ni réouverture
+ajoutés au témoin. Entrée runtime prévue : python3 <staging>/runtime.py
+<staging> <accord-absolu.json>, puis argv systemd déclarés par le lanceur.

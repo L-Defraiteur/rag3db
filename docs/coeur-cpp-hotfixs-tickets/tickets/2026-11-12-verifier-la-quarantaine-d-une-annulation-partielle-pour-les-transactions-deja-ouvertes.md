@@ -150,3 +150,22 @@ réouverture, lecture post-faute, automatique ni verdict de corruption.
 Source/argv/artefacts assortis et limites documentés pour revue ; aucun staging
 moteur, compilation, édition de liens ou run effectué. Autorisation limitée à
 la préparation de ce code de test, sans changement produit. Ticket ouvert.
+
+## Compilation 1 arrêtée avant lien, 12 novembre
+
+Autorisation de compilation/lien uniquement reçue après revue du source
+`2b6b61983` ; aucun lancement témoin autorisé. Tentative unique sous poste lourd,
+cgroup memory.max=1073741824 et memory.swap.max=0 vérifiés, RuntimeMaxSec=240.
+Rehash préalable : 830 fichiers du paquet, 17 archives tierces, manifeste,
+archive moteur, en-têtes et référence de flags conformes.
+
+**Diagnostic nommé : qualification de namespaces du témoin.** Compilation code1
+en 1,95s de contrôleur ; `common::` ambigu entre namespace global existant et
+`rag3db::common`, et `visible_func` non qualifié (alias de `rag3db::storage`).
+Les autres erreurs observées découlent de ces qualifications invalides.
+Aucun objet valide, lien ou ELF attesté. Source initial, staging, logs et rapport
+conservés à luciepc sous `~/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/`.
+[Rapport](../12-11-2026/preuves/compile-01/build-report.json) et
+[journal compilateur](../12-11-2026/preuves/compile-01/compile.log) copiés pour revue.
+Aucun retry, fallback moteur, build gtest ou run. Correction de qualification
+à préparer puis soumettre avant nouvelle tentative sur source différent.

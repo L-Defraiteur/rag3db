@@ -1,0 +1,182 @@
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:47:5: error: la référence à « common » est ambiguë
+   47 |     common::transaction_t transactionID = 0;
+      |     ^~~~~~
+  • il y a 2 candidats
+In file included from /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/common/exception/internal.h:4,
+                 from /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/common/assert.h:3,
+                 from /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/catalog/catalog_entry/catalog_entry.h:6,
+                 from /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/catalog/catalog_entry/function_catalog_entry.h:3,
+                 from /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/catalog/catalog.h:3,
+                 from /home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:19:
+    • le candidat 1 : « namespace rag3db::common { } »
+      /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/common/exception/exception.h:9:11:
+          9 | namespace common {
+            |           ^~~~~~
+In file included from /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/table/column_chunk_data.h:18,
+                 from /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/table/column_chunk.h:10,
+                 from /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/table/chunked_node_group.h:14,
+                 from /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/table/node_group.h:9,
+                 from /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/table/node_group_collection.h:7,
+                 from /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/table/node_table.h:8,
+                 from /home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:26:
+    • le candidat 2 : « namespace common { } »
+      /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/table/column_chunk_stats.h:4:11:
+          4 | namespace common {
+            |           ^~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:59:72: error: « visible_func » n'a pas été déclaré
+   59 |     std::unique_ptr<InsertState> initInsertState(main::ClientContext*, visible_func) override {
+      |                                                                        ^~~~~~~~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:63:34: error: « visible_func » n'a pas été déclaré
+   63 |         storage::MemoryManager*, visible_func) override {
+      |                                  ^~~~~~~~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:66:51: error: la référence à « common » est ambiguë
+   66 |     void delete_(transaction::Transaction*, const common::ValueVector&, DeleteState&) override {}
+      |                                                   ^~~~~~
+  • il y a 2 candidats
+    • le candidat 1 : « namespace rag3db::common { } »
+      /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/common/exception/exception.h:9:11:
+          9 | namespace common {
+            |           ^~~~~~
+    • le candidat 2 : « namespace common { } »
+      /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/table/column_chunk_stats.h:4:11:
+          4 | namespace common {
+            |           ^~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:66:70: error: expected unqualified-id before « & » token
+   66 |     void delete_(transaction::Transaction*, const common::ValueVector&, DeleteState&) override {}
+      |                                                                      ^
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:66:70: error: expected « ) » before « & » token
+   66 |     void delete_(transaction::Transaction*, const common::ValueVector&, DeleteState&) override {}
+      |                 ~                                                    ^
+      |                                                                      )
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:66:73: error: variable ou champ « DeleteState » déclaré « void »
+   66 |     void delete_(transaction::Transaction*, const common::ValueVector&, DeleteState&) override {}
+      |                                                                         ^~~~~~~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:66:73: error: « ; » attendu à la fin de la déclaration du membre
+   66 |     void delete_(transaction::Transaction*, const common::ValueVector&, DeleteState&) override {}
+      |                                                                         ^~~~~~~~~~~
+      |                                                                                    ;
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:66:85: error: expected unqualified-id before « ) » token
+   66 |     void delete_(transaction::Transaction*, const common::ValueVector&, DeleteState&) override {}
+      |                                                                                     ^
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:67:25: error: la référence à « common » est ambiguë
+   67 |     void rollbackInsert(common::offset_t firstOffset) override {
+      |                         ^~~~~~
+  • il y a 2 candidats
+    • le candidat 1 : « namespace rag3db::common { } »
+      /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/common/exception/exception.h:9:11:
+          9 | namespace common {
+            |           ^~~~~~
+    • le candidat 2 : « namespace common { } »
+      /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/table/column_chunk_stats.h:4:11:
+          4 | namespace common {
+            |           ^~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:67:42: error: expected « , » or « ... » before « firstOffset »
+   67 |     void rollbackInsert(common::offset_t firstOffset) override {
+      |                                          ^~~~~~~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:59:34: error: « std::unique_ptr<rag3db::storage::Index::InsertState> {anonyme}::RollbackFaultIndex::initInsertState(rag3db::main::ClientContext*, int) » est marqué « override » mais il ne redéfini rien
+   59 |     std::unique_ptr<InsertState> initInsertState(main::ClientContext*, visible_func) override {
+      |                                  ^~~~~~~~~~~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:62:34: error: « std::unique_ptr<rag3db::storage::Index::DeleteState> {anonyme}::RollbackFaultIndex::initDeleteState(const rag3db::transaction::Transaction*, rag3db::storage::MemoryManager*, int) » est marqué « override » mais il ne redéfini rien
+   62 |     std::unique_ptr<DeleteState> initDeleteState(const transaction::Transaction*,
+      |                                  ^~~~~~~~~~~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:67:10: error: « void {anonyme}::RollbackFaultIndex::rollbackInsert(int) » est marqué « override » mais il ne redéfini rien
+   67 |     void rollbackInsert(common::offset_t firstOffset) override {
+      |          ^~~~~~~~~~~~~~
+In file included from /home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:24:
+/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/index/index.h:191:18: warning: « virtual void rag3db::storage::Index::rollbackInsert(rag3db::common::offset_t) » était caché [-Woverloaded-virtual=]
+  191 |     virtual void rollbackInsert(common::offset_t /*firstRolledBackOffset*/) {
+      |                  ^~~~~~~~~~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:67:10: note:   par « void {anonyme}::RollbackFaultIndex::rollbackInsert(int) »
+   67 |     void rollbackInsert(common::offset_t firstOffset) override {
+      |          ^~~~~~~~~~~~~~
+/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/index/index.h:175:18: warning: « virtual void rag3db::storage::Index::delete_(rag3db::transaction::Transaction*, const rag3db::common::ValueVector&, DeleteState&) » était caché [-Woverloaded-virtual=]
+  175 |     virtual void delete_(transaction::Transaction* transaction,
+      |                  ^~~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:66:10: note:   par « void {anonyme}::RollbackFaultIndex::delete_(...) & »
+   66 |     void delete_(transaction::Transaction*, const common::ValueVector&, DeleteState&) override {}
+      |          ^~~~~~~
+/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/index/index.h:173:42: warning: « virtual std::unique_ptr<rag3db::storage::Index::DeleteState> rag3db::storage::Index::initDeleteState(const rag3db::transaction::Transaction*, rag3db::storage::MemoryManager*, rag3db::storage::visible_func) » était caché [-Woverloaded-virtual=]
+  173 |     virtual std::unique_ptr<DeleteState> initDeleteState(
+      |                                          ^~~~~~~~~~~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:62:34: note:   par « std::unique_ptr<rag3db::storage::Index::DeleteState> {anonyme}::RollbackFaultIndex::initDeleteState(const rag3db::transaction::Transaction*, rag3db::storage::MemoryManager*, int) »
+   62 |     std::unique_ptr<DeleteState> initDeleteState(const transaction::Transaction*,
+      |                                  ^~~~~~~~~~~~~~~
+/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/index/index.h:158:42: warning: « virtual std::unique_ptr<rag3db::storage::Index::InsertState> rag3db::storage::Index::initInsertState(rag3db::main::ClientContext*, rag3db::storage::visible_func) » était caché [-Woverloaded-virtual=]
+  158 |     virtual std::unique_ptr<InsertState> initInsertState(main::ClientContext* context,
+      |                                          ^~~~~~~~~~~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:59:34: note:   par « std::unique_ptr<rag3db::storage::Index::InsertState> {anonyme}::RollbackFaultIndex::initInsertState(rag3db::main::ClientContext*, int) »
+   59 |     std::unique_ptr<InsertState> initInsertState(main::ClientContext*, visible_func) override {
+      |                                  ^~~~~~~~~~~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp: In member function « void {anonyme}::RollbackFaultIndex::rollbackInsert(int) »:
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:70:65: error: « struct {anonyme}::Fault » n'a pas de membre nommé « transactionID »
+   70 |         fault.ownerMatched = active && active->getID() == fault.transactionID;
+      |                                                                 ^~~~~~~~~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:71:74: error: « firstOffset » n'a pas été déclaré dans cette portée
+   71 |         require(fault.armed && fault.calls == 1 && fault.ownerMatched && firstOffset == 2,
+      |                                                                          ^~~~~~~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:74:15: error: la référence à « common » est ambiguë
+   74 |         throw common::RuntimeException(UNDO_FAULT);
+      |               ^~~~~~
+  • il y a 2 candidats
+    • le candidat 1 : « namespace rag3db::common { } »
+      /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/common/exception/exception.h:9:11:
+          9 | namespace common {
+            |           ^~~~~~
+    • le candidat 2 : « namespace common { } »
+      /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/table/column_chunk_stats.h:4:11:
+          4 | namespace common {
+            |           ^~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:67:33: warning: paramètre « offset_t » inutilisé [-Wunused-parameter]
+   67 |     void rollbackInsert(common::offset_t firstOffset) override {
+      |                         ~~~~~~~~^~~~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp: In lambda function:
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:102:19: error: la référence à « common » est ambiguë
+  102 |             throw common::RuntimeException(CHECKPOINT_STOP);
+      |                   ^~~~~~
+  • il y a 2 candidats
+    • le candidat 1 : « namespace rag3db::common { } »
+      /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/common/exception/exception.h:9:11:
+          9 | namespace common {
+            |           ^~~~~~
+    • le candidat 2 : « namespace common { } »
+      /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/table/column_chunk_stats.h:4:11:
+          4 | namespace common {
+            |           ^~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:103:9: warning: « return » manquant dans une fonction devant retourner une valeur [-Wreturn-type]
+  103 |         }};
+      |         ^
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp: In function « void {anonyme}::diagnose(const std::filesystem::__cxx11::path&, std::ofstream&) »:
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:134:14: error: la référence à « common » est ambiguë
+  134 |             {common::PhysicalTypeID::INT64}, false, false}, fault));
+      |              ^~~~~~
+  • il y a 2 candidats
+    • le candidat 1 : « namespace rag3db::common { } »
+      /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/common/exception/exception.h:9:11:
+          9 | namespace common {
+            |           ^~~~~~
+    • le candidat 2 : « namespace common { } »
+      /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/table/column_chunk_stats.h:4:11:
+          4 | namespace common {
+            |           ^~~~~~
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:134:58: error: pas de fonction concordante pour l'appel à « rag3db::storage::IndexInfo::IndexInfo(<initialisation de liste entre accolades>) »
+  134 |             {common::PhysicalTypeID::INT64}, false, false}, fault));
+      |                                                          ^
+  • il y a 3 candidats
+    • candidat 1 : « rag3db::storage::IndexInfo::IndexInfo(std::string, std::string, rag3db::common::table_id_t, std::vector<unsigned int>, std::vector<rag3db::common::PhysicalTypeID>, bool, bool) »
+      /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/index/index.h:81:5:
+         81 |     IndexInfo(std::string name, std::string indexType, common::table_id_t tableID,
+            |     ^~~~~~~~~
+      • pas de conversion connue pour convertir l'argument 5 depuis « <initialisation de liste entre accolades> » vers « std::vector<rag3db::common::PhysicalTypeID> »
+        /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/index/index.h:83:45:
+           83 |         std::vector<common::PhysicalTypeID> keyDataTypes, bool isPrimary, bool isBuiltin)
+              |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~
+    • candidat 2 : « constexpr rag3db::storage::IndexInfo::IndexInfo(const rag3db::storage::IndexInfo&) »
+      /home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/headers-source/storage/index/index.h:72:19:
+         72 | struct RAG3DB_API IndexInfo {
+            |                   ^~~~~~~~~
+      • le candidat attend 1 argument, 7 fourni(s)
+    • candidate 3: « constexpr rag3db::storage::IndexInfo::IndexInfo(rag3db::storage::IndexInfo&&) »
+      • le candidat attend 1 argument, 7 fourni(s)
+/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel/quarantine_released_diagnostic.cpp:156:11: error: « struct {anonyme}::Fault » n'a pas de membre nommé « transactionID »
+  156 |     fault.transactionID = idA;
+      |           ^~~~~~~~~~~~~

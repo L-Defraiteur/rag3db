@@ -1,0 +1,10 @@
+{
+  "approved_to_run": false,
+  "scope": "released-structural-only",
+  "unit": "cx-hotfixs-quarantaine-runtime-REVIEW-REQUIRED",
+  "staging": "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-02",
+  "source_sha256": "d2db4d049f92dc5d197eb34e4fea758259bf4af7419537e1042b8a3c88a38530",
+  "binary_sha256": null,
+  "build_report_sha256": null,
+  "launcher_sha256": "a110d161f027b67f2464112058fde9250c1ebf801bbe0b2b557d888c21fb1e6f"
+}
