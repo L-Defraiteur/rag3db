@@ -413,3 +413,6 @@ Lot isolé `cx-recherche-lectures-journaux`, worktree homonyme aux deux postes ;
 
 
 **Mise à jour après ciblé :** sur source figéeaa58d1697 et même ELF729f0d…, e2e_lectures **27/0/0 en9,46s** (24 existants +3 helpers) et2filets verts sous racine privée `racine arbitraire`, sans segment commandes. Vrai poste lourd/Max32/HIGH0 et cgroups enfants attestés, santé7879 avant/après et quiescence exe/cwd vérifiées. Service rendu directement ED/M8/C7, aucun usage recherche restant, budgetglobal1800 respecté. Revue du diff/des preuves avant globale/master toujours requise ; ticket ouvert et ressources privées conservées en attendant le tour, aucun Rust poussé sur master.
+
+
+**Intégration après ED/M8 :** nouvelle branchecx-recherche-lectures-journaux-integration, source487c68af3 surmasterb726d907b, Rust du correctif inchangé au range-diff. Nouveauglobal2400, features5/5 etliblarge2201/0/65 verts. NAV40 séparée arrêtée dès qu’un Chromium PID2997235 sort du scopeMax32 ; pas de résultat NAV complet, lectures27 et vrai checklib minimal non joués. Confinement remonté au ticket commun orchestration des scopes, quiescenceexe/cwd/profil privée prouvée après arrêt. Preuves2postes sousjournaux-cx-recherche-lectures-12nov/integration-487c68/. Aucunservice utilisé, aucunretry/master ; ressources propres conservées pour diagnostic/revue.
