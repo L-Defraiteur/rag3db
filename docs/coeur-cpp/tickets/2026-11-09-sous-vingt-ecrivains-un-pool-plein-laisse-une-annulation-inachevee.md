@@ -450,3 +450,47 @@ Limites lues : mémoire 8 Gio/swap 0, scratch tmpfs privé 2 Gio inclus dans ces
 Aucune gate ni build.log lors du partage : C7 doit relire puis écrire/autoriser
 la gate, aucune compilation moteur avant. Configuration privée distincte
 `cx-0511-tests-off-without-unused-spdlog-path-v1`, pas archive historique.
+
+Gate fraîche C7 observée le 12 novembre à 11:17:56, SHA du plan et commit
+identiques au préflight. Aucun contournement ni gate ancienne ; le build
+statique privé a démarré sous l’unité 02 existante. Premier point lu 371/989,
+pic mémoire 3 233 591 296 octets, deadline runtime inchangée. Le verdict final
+reste conditionné à fin du build, audit des dépendances privées et manifeste.
+
+### Build privé 02 terminé — archive prête à revue, aucune mesure
+
+Unité terminée naturellement, code 0, MainPID 0, wrapper927681/PID927714 absents ;
+poste relu libre 0/4. Runtime service 226,518 s ; temps configuration/build/
+sauvegarde du manifeste 226,467 s, CPU service 986,670 s cumulées, pic mémoire
+arrondi du journal 3,5 Gio, swap 0. Aucun dépassement/élargissement des limites.
+Les propriétés d’une unité transitoire collectée après arrêt peuvent afficher
+les défauts : les limites effectives pendant l’exécution sont celles lues au
+préflight, dans revue.json/cgroup et vérifiées par C7 avant la gate.
+
+Archive : luciepc
+`~/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/archive-assortie-0511dece7/librag3db.a`
+65 588 302 octets, SHA256
+`3030fe674e33e2ea0b5b01ed7bdf1a919e538c02e5dfc0b68fff7b50e1d06758`.
+Manifeste : `cx-archive-privee-12nov-02/manifest.json`, SHA256
+`0049111df769914dbeea66fd0d2d07c6add58a670eb80e797589604d48c80df7`.
+
+Build statique 989 étapes, source privée toujours propre sur
+`0511dece74f94db6937fb03e6ec45f0c58828c5a`. Identifiant embarqué :
+`rag3db-build-0511dece74f94db6937fb03e6ec45f0c58828c5a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`.
+La configuration reste nommée séparément
+`cx-0511-tests-off-without-unused-spdlog-path-v1`, historical_archive=false,
+literal_commands_equal=false ; seule omission d’include revue, aucune autre
+différence. Ce n’est pas l’archive historique retrouvée.
+
+Audit **privé avant manifeste** : 739 objets VALID, aucun fichier manquant,
+aucune dépendance ni mention spdlog. Le paquet sauvé contient 810 en-têtes
+source, 2 générés, 17 archives de dépendances et l’archive moteur : 830 fichiers,
+77 984 861 octets. Toutes les tailles et SHA256 ont été recalculées ensuite,
+aucun écart ; preuve `verification-empreintes.json`. Les sources du worktree,
+logs, compile_commands, CMakeCache, gate et audits restent conservés hors du
+tmpfs de build qui a disparu avec le namespace. Pas de nettoyage du parent.
+
+Aucun test, pilote, benchmark, install, extension compilée ou lib partagée
+produite par ce lancement ; aucun magasin/service/lib distribuée modifié.
+Reste : revue par C7 du manifeste et des commandes de lien assorties avant
+toute compilation de pilote/mesure. Le différentiel DdlEveryMinute reste ouvert.

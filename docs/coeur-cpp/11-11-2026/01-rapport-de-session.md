@@ -370,3 +370,12 @@ omissions exactes acceptées et zéro autre différence, audit référence vert.
 Plan et SHA transmis à C7 pour gate ; aucun build moteur au partage.
 Runtime borné jusqu’à 11:45:19 Paris + arrêt5s le 12 novembre, attente incluse.
 Le ticket d’annulation contient les détails ; pas de pilote ou mesure autorisé.
+
+Archive privée 02 terminée code0 en 226,5 s, sous limites, lourd rendu (0/4 lu).
+989 étapes statiques ; audit privé739VALID/0SPDLOG avant manifeste, source0511
+toujours propre. ArchiveSHA3030fe674e33e2ea0b5b01ed7bdf1a919e538c02e5dfc0b68fff7b50e1d06758 ;
+manifesteSHA0049111df769914dbeea66fd0d2d07c6add58a670eb80e797589604d48c80df7.
+Paquet et preuves à luciepc `annulation/cx-archive-privee-12nov-02/` : archive,
+810headerssource,2générés,17dépendances,830fichiers rehashés sans écart.
+Configuration privée distincte, pas archive historique ; pas de pilote/mesure
+ni lib distribuée. C7 doit relire le manifeste avant l’étape suivante du ticket.
