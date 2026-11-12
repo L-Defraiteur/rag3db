@@ -1,6 +1,6 @@
 # Attendre la disparition du port après l’arrêt du privé 7882
 
-- **État** : ouvert — porteur optimiseur confirmé ; aucun nouveau lot ni runtime activé.
+- **État** : en cours — correctif isolé dans cx-optimiseur-attente-port ; aucun service réel ni modèle activé.
 - **Famille** : produit
 - **Gravité** : coût — faux rouge du wrapper après arrêt effectif, coordination interrompue trop tôt.
 - **Atteignable en service** : non pour le produit ; script opérateur d’arrêt/restauration du banc.
@@ -41,3 +41,60 @@ Fermer avec preuve CPU d’un listener qui disparaît avec retard et d’un port
 qui reste occupé (expiration), sans arrêter de service réel pour le test.
 Optimiseur accepte le portage ; ce ticket n’autorise aucune nouvelle coupure,
 charge GPU ni nouveau passage du banc.
+
+## Reprise du correctif
+
+Lecture des règles de décision de `03-reprise-par-codex.md`, sections 2 bis et
+2 ter. Nouveau worktree/branche `cx-optimiseur-attente-port`, base 41497ba4e.
+Source historique figée : copie opérateur SHA d97e71c8 ci-dessus, conservée
+inchangée dans les notes ; version du dépôt `docs/optimiseur/scripts/service-prive-7882.py`.
+Le wrapper conserve sa recette, ses gardes et ses constantes historiques : il
+ne s’agit pas d’une nouvelle activation prête à exécuter sur un autre PID.
+
+Rouge CPU posé : le témoin exécute par AST les vrais deux blocs historiques
+de fin PID puis assertion listener, avec horloge et observations contrôlées.
+PID absent et listener du même PID visible une seconde : assertion rouge,
+ligne historique 68, sans import/exécution du mode opérateur ni signal.
+Preuve portable : `~/.cache/optimiseur-notes/attente-port-12nov/rouge.log`.
+
+Correctif : `attendre_arret.py` observe identité/starttime et propriétaires du
+port sous une seule deadline fixée avant SIGTERM. Il n’envoie aucun signal.
+PID remplacé, autre propriétaire ou propriétaire inconnu refusent ; une
+expiration et une erreur de sonde ne deviennent jamais une absence.
+La recette, la santé, zéro client, les trois autres services et le retour
+restent contrôlés par le wrapper ; aucun ancien journal n’est réécrit.
+
+## Vérifications du correctif
+
+Sources et recette figées par SHA256 avant les tests, puis empreintes relues
+après tests. Portable et luciepc : rouge historique reproduit par le vrai
+bloc AST, puis **14 tests CPU verts**, aucun sauté. À luciepc, la passe CPU
+a été jouée sous `poste lourd`. Aucun ss de service, SIGTERM réel, mode stop
+ou restore, modèle, base ou charge GPU n’a été utilisé pour ces tests.
+
+Couverture : listener retardé après fin du PID ; budget commun processus/port ;
+timeout processus ou listener ; port repris immédiatement ou pendant l’attente ;
+PID réutilisé ; propriétaire inconnu ; zombie avec port libre ; erreur de
+lecture ; observation qui finit hors deadline ; identité du processus CPU du
+test ; parsing des propriétaires ss et propagation de ses erreurs.
+
+Commandes :
+
+```bash
+WRAPPER_ANCIEN=<copie historique d97e71c8> python3 docs/optimiseur/scripts/test_attendre_arret.py AttenteArret.test_port_retarde_apres_fin_pid
+# Ce premier appel doit échouer sur l’assertion historique ligne 68.
+python3 docs/optimiseur/scripts/test_attendre_arret.py -v
+```
+
+Preuves aux deux postes : `~/.cache/optimiseur-notes/attente-port-12nov/`
+avec `rouge.log`, `vert.log` et `sources-avant-tests.sha256`. À luciepc, les
+trois sources exactes sont aussi conservées dans ce dossier ; l’ancienne
+copie `~/.cache/rag3weaver-build/cx-service-7882-banc-2.py` reste inchangée.
+Les journaux de l’incident, des retours et de l’audit des résidents restent
+également intacts. Le correctif ne réactive pas 7882 ni 107m, désormais arrêtés.
+
+Périmètre de validation : script opérateur Python seulement ; aucune source
+Rust, moteur, UI ou gabarit produit changée. Pas de passe cargo ni de test
+sur un service GPU revendiqué. La version de recette est historique et ses
+PID/dossier de preuves ne doivent pas être réutilisés pour une nouvelle
+opération sans préflight et coordination propres.

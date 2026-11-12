@@ -1,5 +1,20 @@
 # Rapport de session — G, « l'optimiseur » (11 novembre 2026, 16 h 25)
 
+## Reprise du 12 novembre : attente du port du privé
+
+Correctif isolé dans branche/worktree `cx-optimiseur-attente-port`, base
+41497ba4e : `docs/optimiseur/scripts/service-prive-7882.py` versionne la
+recette historique et appelle `attendre_arret.py` sous une seule deadline
+PID/port, fixée avant SIGTERM. Autre PID, identité remplacée ou propriétaire
+inconnu refusés sans signal supplémentaire. Aucun service réel actionné.
+
+Rouge reproduit sur le vrai bloc historique ; 14 filets CPU verts au portable
+et à luciepc (sous poste lourd), sources figées et preuves dans
+`~/.cache/optimiseur-notes/attente-port-12nov/` aux deux postes.
+Ticket et critères :
+`docs/optimiseur/tickets/2026-11-12-attendre-la-disparition-du-port-apres-l-arret-du-prive-7882.md`.
+La revue et l’intégration de ce lot ne valent pas activation d’un service.
+
 ## Mise à jour du 11 novembre, après 22 h 04
 
 Le relevé de 16 h 25 ci-dessous reste historique. Le binaire installé aux deux
