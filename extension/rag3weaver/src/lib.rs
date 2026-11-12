@@ -121,6 +121,8 @@ pub mod queries_via;
 /// `read` et `grep` sur une `FileSource`, annotés par le graphe.
 #[cfg(feature = "code")]
 pub mod code_tools;
+#[cfg(feature = "code")]
+pub mod symbol_navigation;
 /// Le code sur la synchronisation déclarée : une édition, une source entière.
 #[cfg(feature = "code")]
 pub mod code_sync;

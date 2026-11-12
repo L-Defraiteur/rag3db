@@ -1,0 +1,89 @@
+{
+  "let": {
+    "du_fichier": {
+      "all_of": [
+        {
+          "equals": {
+            "field": "file_path",
+            "param": "path"
+          }
+        },
+        {
+          "optional": {
+            "equals": {
+              "field": "source",
+              "param": "source"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "forms": {
+    "scopes": {
+      "select": {
+        "table": "Scope",
+        "filter": {
+          "let": "du_fichier"
+        },
+        "returns": [
+          "_uuid",
+          "name",
+          "source",
+          "scope_type",
+          "start_line",
+          "end_line",
+          "start_byte",
+          "end_byte",
+          "parent_name",
+          "signature",
+          "file_path",
+          "language",
+          "declarations",
+          "field_types",
+          {
+            "collect": {
+              "as": "indexed_file",
+              "relation": "DEFINED_IN",
+              "direction": "outgoing",
+              "end": "File",
+              "fields": [
+                "source",
+                "path",
+                "content_hash",
+                "cursor"
+              ]
+            }
+          }
+        ],
+        "order_by": [
+          {
+            "field": "start_byte"
+          },
+          {
+            "field": "end_byte",
+            "desc": true
+          },
+          {
+            "field": "_uuid"
+          }
+        ],
+        "limit": 2000
+      }
+    },
+    "total": {
+      "count": {
+        "matching": {
+          "table": "Scope",
+          "filter": {
+            "let": "du_fichier"
+          }
+        }
+      }
+    }
+  },
+  "outputs": {
+    "rows": "scopes",
+    "total": "total"
+  }
+}
