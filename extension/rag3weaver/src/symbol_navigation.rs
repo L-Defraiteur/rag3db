@@ -470,6 +470,25 @@ mod tests {
         assert_eq!(parent["provenance"]["relation"], "range_containment");
     }
     #[test]
+    fn compact_tree_keeps_each_method_under_its_actual_container() {
+        let (src, rows) = fixture();
+        let tree = call(&src, &rows, "file", "", 2, 80);
+        let ids: Vec<_> = tree["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|n| n["ref"]["uuid"].as_str())
+            .collect();
+        assert_eq!(
+            ids,
+            vec!["a", "ar", "b", "br"],
+            "le rendu indenté doit visiter chaque sous-arbre avant le suivant"
+        );
+        let rendered = markdown(&tree);
+        assert!(rendered.find("uuid=a\n").unwrap() < rendered.find("uuid=ar\n").unwrap());
+        assert!(rendered.find("uuid=ar\n").unwrap() < rendered.find("uuid=b\n").unwrap());
+    }
+    #[test]
     fn names_sources_and_equal_ranges_never_choose_arbitrarily() {
         let (src, mut rows) = fixture();
         assert_eq!(
