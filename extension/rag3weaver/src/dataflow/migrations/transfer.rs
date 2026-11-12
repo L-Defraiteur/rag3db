@@ -201,17 +201,10 @@ impl KnownTransferPreview {
 // Canonicalize object keys as well as collection ordering. This is a report
 // fingerprint, never a storage generation or a durable execution identity.
 fn encoded<T: Serialize>(value: &T) -> Result<String, TransferRefusal> {
-    fn canonical(v: serde_json::Value) -> serde_json::Value {
-        match v {
-            serde_json::Value::Object(m) => serde_json::Value::Object(
-                m.into_iter().collect::<BTreeMap<_, _>>().into_iter().map(|(k,v)| (k,canonical(v))).collect()),
-            serde_json::Value::Array(a) => serde_json::Value::Array(a.into_iter().map(canonical).collect()),
-            v => v,
-        }
-    }
-    serde_json::to_value(value).map(canonical).and_then(|v| serde_json::to_string(&v))
-        .map_err(|e| refusal(RefusalCode::InvalidInventory, "serialization", e.to_string()))
+    super::facts::canonical_json(value)
+        .map_err(|e| refusal(RefusalCode::InvalidInventory, "serialization", e))
 }
+
 fn valid_values(values: &BTreeMap<String, CypherValue>) -> bool {
     fn valid(v: &CypherValue) -> bool {
         match v {
@@ -271,8 +264,7 @@ fn preview(
     }
     if input.dense_debt { return Err(refusal(DenseDebt, "dense", "source declares unavailable dense values")); }
     cfg.validate().and_then(|_| target.validate()).map_err(|e| refusal(UnsupportedRecipe, "config", e))?;
-    if cfg.fields.values().chain(target.fields.values()).any(|f| f.boost.is_some_and(|v| !v.is_finite()))
-        || [cfg, target].iter().any(|c| c.snapshot.as_ref().is_some_and(|s| !s.max_missing_ratio.is_finite())) {
+    if !super::facts::entity_config_is_finite(cfg) || !super::facts::entity_config_is_finite(target) {
         return Err(refusal(UnsupportedRecipe, "config", "non-finite config cannot be fingerprinted faithfully"));
     }
     let derived = target.derived.as_ref().ok_or_else(|| refusal(UnsupportedRecipe, "target", "content derivation required"))?;

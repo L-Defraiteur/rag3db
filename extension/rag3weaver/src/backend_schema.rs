@@ -152,3 +152,33 @@ impl SchemaFacts {
         Ok(order)
     }
 }
+
+// The sole bridge from migration facts to the existing schema composition and
+// dependency validator. An inherent method avoids exposing this private backend
+// module or broadening backend.rs just to reuse its implementation.
+impl crate::dataflow::migrations::facts::DeclaredSchemaFacts {
+    pub(crate) fn compose_effective(
+        input: &crate::dataflow::migrations::facts::DeclaredSchemaInput,
+    ) -> Result<(BTreeMap<String, EntityConfig>, BTreeMap<String, RelationDef>), String> {
+        use crate::dataflow::migrations::facts::ProviderFacts;
+        let provided = match &input.provider {
+            ProviderFacts::Absent => (BTreeMap::new(), BTreeMap::new()),
+            ProviderFacts::Complete { entities, relations, .. } => (entities.clone(), relations.clone()),
+            ProviderFacts::Unavailable { name } => return Err(format!("provider facts unavailable: {name}")),
+        };
+        let entities = input.entities.as_ref().ok_or("entity facts unavailable")?
+            .iter().map(|(n,c)| (n.clone(),c.clone())).collect();
+        let relations = input.relations.as_ref().ok_or("relation facts unavailable")?
+            .iter().map(|(n,r)| (n.clone(),r.clone())).collect();
+        let mut facts = SchemaFacts::compose(&entities, &relations, &provided)?;
+        for (name, signals) in &input.index_signals {
+            let config = facts.entities.get_mut(name).ok_or_else(|| format!("unknown index_signals entity: {name}"))?;
+            config.signals = *signals;
+        }
+        for (name, config) in &facts.entities { config.validate().map_err(|e| format!("{name}: {e}"))?; }
+        // compose checks the provider before additions. The complete result and
+        // effective overrides must be checked too, as in normal opening.
+        facts.registration_order()?;
+        Ok((facts.entities.into_iter().collect(), facts.relations.into_iter().collect()))
+    }
+}
