@@ -106,11 +106,24 @@ impl Contenus {
             }
             out.builtin.insert(nom.clone(), path);
         }
+        for path in out.fichiers.keys() {
+            if path
+                .ancestors()
+                .skip(1)
+                .any(|parent| out.fichiers.contains_key(parent))
+            {
+                return Err(format!(
+                    "source ambiguë, fichier et dossier superposés : {}",
+                    path.display()
+                ));
+            }
+        }
         Ok(out)
     }
 
     fn relatif(nom: &str) -> Result<(), String> {
         if nom.is_empty()
+            || nom.chars().any(char::is_control)
             || nom.contains(':')
             || nom.contains('\\')
             || normaliser(Path::new(nom)).to_str() != Some(nom)
@@ -418,6 +431,22 @@ mod contenus_tests {
             Path::new("virtuel"),
             &BTreeMap::from([(".builtin/a".into(), vec![])]),
             &BTreeMap::from([("a".into(), vec![])])
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn a_file_cannot_also_be_a_directory_in_the_source_inventory() {
+        assert!(Contenus::nouveau(
+            Path::new("virtuel"),
+            &BTreeMap::from([("a".into(), vec![]), ("a/b".into(), vec![])]),
+            &BTreeMap::new()
+        )
+        .is_err());
+        assert!(Contenus::nouveau(
+            Path::new("virtuel"),
+            &BTreeMap::from([(".builtin".into(), vec![])]),
+            &BTreeMap::from([("x".into(), vec![])])
         )
         .is_err());
     }
