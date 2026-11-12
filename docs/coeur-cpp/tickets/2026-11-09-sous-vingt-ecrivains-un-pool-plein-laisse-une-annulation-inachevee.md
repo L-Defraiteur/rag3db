@@ -317,3 +317,27 @@ ordre de grandeur de référence 741 objets moteur + 251 tiers ; limites propos�
 plan sec et espace disponible. Ce serait explicitement un build moteur, pas une
 compilation de pilote déguisée. Commandes rédigées, aucun worktree/configuration/
 build créé ou exécuté. Mesure et lien restent non prêts, différentiel ouvert.
+
+### Build statique privé autorisé sous conditions — 12 novembre
+
+Orchestration autorise préparation et build privé `0511dece7` seulement après
+coordination arbre 1b/recherche CI, worktree/build neufs et propres, comparaison
+compilateur/définitions, plan sec compatible, sans téléchargement. Un seul lourd,
+cible rag3db/-j8, 30 min globales configuration+build, scratch build 2 Gio et
+mémoire groupe 8 Gio ; lanceur borné actif avant build. Aucun test, pilote, mesure,
+magasin, extension ou lib distribuée. Si les limites ne sont pas fiables :
+configuration/plan sec seulement, sans élargissement.
+
+Préflight en lecture seule : luciepc libre (0/4 lourds), cache sur btrfs ;
+systemd-run, bwrap et unshare présents, pas de quota/fuse2fs trouvés par command -v.
+La disponibilité des outils ne prouve pas leur capacité à imposer les limites.
+À vérifier avant le build, et à coordonner dans ce même ticket.
+
+Limites vérifiées par sondes légères : cgroup mémoire 8 Gio/swap 0 ; tmpfs bwrap
+8 Mio effectivement borné (ENOSPC au dépassement), namespaces réseau/mount/user
+disponibles. Build proposé sur tmpfs privé de cache 2 Gio inclus dans les 8 Gio,
+pas dans /tmp. Lanceur préparé sous `12-11-2026/outils/cx-build-archive-privee.py`,
+gate après comparaison source/commandes/compilateur et plan sec, unité avec
+1740 s + arrêt 5 s pour rester sous 30 min. Aucun moteur compilé à ce point.
+Coordination arbre : ciblé terminé, pas de réservation, accepte partage ;
+coordination recherche CI encore attendue avant lancement moteur.

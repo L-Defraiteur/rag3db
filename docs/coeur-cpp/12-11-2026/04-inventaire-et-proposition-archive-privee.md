@@ -134,3 +134,36 @@ Aucune compilation autorisée à ce point. La mesure reste `ready=false` ; les
 15 minutes de son propre plan sont un plafond GLOBAL distinct du futur budget
 éventuel du build privé. Pas de benchmark sans lien assorti présenté comme
 explication de la régression. Le différentiel DdlEveryMinute reste ouvert.
+
+## Préflight des limites — préparation autorisée ensuite par orchestration
+
+Sondes légères, sans moteur/pilote/configuration : namespaces user/mount/net
+disponibles ; unité utilisateur systemd avec `MemoryMax=8589934592`,
+`MemorySwapMax=0` vérifiés dans les fichiers cgroup du processus. Un tmpfs privé
+bwrap de 8 Mio a refusé le neuvième Mio par ENOSPC. La présence de bwrap seule
+n’était pas la preuve ; cette sonde vérifie l’application réelle de la limite.
+
+Le build prévu utilise donc un **tmpfs privé borné à 2 Gio sous un chemin de
+cache**, compté dans les 8 Gio du groupe cgroup, jamais `/tmp`. Racine, sources
+et build de référence montés en lecture seule ; seul le dossier de résultats
+privés est lié en écriture. Namespace réseau fermé et FetchContent disconnected.
+Le tmpfs est libéré par la fin du namespace ; aucun nettoyage du worktree parent.
+Les artefacts requis sont copiés et empreintés dans les résultats avant cette fin.
+
+Lanceur préparé : [cx-build-archive-privee.py](outils/cx-build-archive-privee.py).
+Il vérifie cgroup/scratch/source exacte propre, configure, compare les commandes
+de tous les objets src/ et les versions compilateur, produit le plan sec, puis
+**attend une gate de revue liée au SHA du plan et au commit**. Toute différence
+ou absence de gate arrête avant build. Aucun test, pilote, mesure ou install.
+Le wrapper systemd doit imposer `RuntimeMaxSec=1740`, `TimeoutStopSec=5`,
+`KillMode=control-group` : marge conservatrice sous le plafond global de 30 min.
+La gate n’autorise que `cmake --build … --target rag3db -j 8`.
+
+Coordination : arbre confirme son ciblé terminé et ne réserve pas de créneau ;
+il accepte deux places partagées sous poste lourd, sans mesure et sans source
+commune. Recherche CI sollicitée, réponse attendue avant lancement moteur.
+Poste lu à 0/4. Aucun nouveau build moteur commencé à ce point.
+
+Source complète envisagée : 7 310 blobs suivis, 444 673 124 octets (lecture git).
+Place libre distante lue : 1 386 872 340 480 octets. La création du worktree et
+l’unité de configuration n’ont pas encore été lancées à ce point du suivi.
