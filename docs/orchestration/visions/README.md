@@ -17,6 +17,10 @@ dossiers ne tiennent plus ; l'histoire est là, pas l'état).
 
 ## Les visions de novembre 2026 (pages de conception, laissées dans leurs dossiers de session)
 
+- **Explorer les arbres de symboles** — demandes de Lucie du 12 novembre : vue
+  par fichier, membres, parents/enfants bornés et hiérarchie optionnelle du grep ;
+  composer outline et les relations existantes, qualifier couverture et provenance :
+  [conception](2026-11-12-explorer-les-symboles-et-leur-hierarchie.md).
 - **Mode auto contextuel et accords** — demande de Lucie du 12 novembre : relier
   les décisions à la tâche, reconnaître les accords pertinents et réduire les
   interruptions. Comparaison sourcée OpenCode/Gemini CLI/Cline et proposition sur
