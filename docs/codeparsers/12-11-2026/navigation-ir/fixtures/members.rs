@@ -17,3 +17,5 @@ mod billing {
         }
     }
 }
+
+mod compact { pub struct Item {} }
