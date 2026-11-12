@@ -103,3 +103,9 @@ le callback perdant n'est pas appelé et un seul usage est disponible. Les deux 
 témoins gardent l'entrelacement Acommit+consommation AVANT B.
 Erreur journal après effet qualifiée séparément, sans rollback inventé dans ce lot.
 Source corrigée et recette verte publiées avant exécution dans le reste du même600.
+
+Recette verte figée : source03ee5cdcf, même module désormais7/0/0 attendus ;
+vert.sh SHA256 `e8ec02cd2acfe5a843c9c6dc9845c055fc6608fc4bf5b25487acd1c645983ea1`, deux postes, même dossier de preuves.
+Deadline monotonic858523.253385098 issue du début857923.253385098, jamais réinitialisée ;
+la phase ne reçoit que le reste réel après acquisition. Rouge2/4/0 conservé.
+Les services/identifiants restent retirés, aucun modèle ni exécution de commande.
