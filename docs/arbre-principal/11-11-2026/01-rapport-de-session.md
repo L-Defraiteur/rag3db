@@ -1,3 +1,23 @@
+## Travail en cours — aperçu pur du transfert, 12 novembre
+
+Après le préfixe intégré ci-dessous : nouveau worktree local/remote
+`/home/lucied/.cache/rag3weaver-build/cx-wt-migration-transfert`, branche privée
+`cx-arbre-migration-transfert-2`. Source jouée **390b70185**, ciblé natif15/0/0,
+rc0 en90,91s ; preuves/ELF dans cache luciepc `cx-transfert-apercu-cible-v3/`.
+Reprendre le [ticket migration](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md)
+et le [plan de cette tranche](../12-11-2026/02-preparer-le-transfert-des-valeurs-connues.md).
+La tête privée peut comporter des MD de suivi après cette source ; pas de nouveau
+code à attribuer au vert sans relire le diff.
+
+Aperçu sans DB/modèle/écriture, faits fournis et toujours non qualifiés aux
+configs/faits du plan. Transfert réel/apply/publication non livrés. V1 attente
+annulée avant Cargo ; v2 minimal rc101 sur2helpers baseline, aucun test joué,
+ticket tty ouvert ; v3 natif vert ne prouve pas le minimal ni le témoin natif liens.
+Target distant unique2Go conservé pour le lot, pas de Cargo actif à la fin du
+ciblé, poste0/4 relu. Pas de base ni service créé. Attente revue C7 du diff+preuves
+avant globale/master ; ne pas rejouer la source inchangée. Worktrees à garder
+pendant le lot, puis archives admin fidèles et garde fraîche avant retrait.
+
 ## État final du 12 novembre — préfixe intégré et lot nettoyé
 
 **Master2b06682a2e28e7ef92641de5dc80c91cf986d799**, tour C7 et trois contrôles
