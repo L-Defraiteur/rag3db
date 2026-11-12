@@ -8,7 +8,7 @@ Exemple générique de persistance rag3db, recherche lucivy + dense par service 
 - `graphs/` : opérations Mermaid réutilisables, avec entité liée par le manifeste.
 - `tools` : seule surface exposée. Les bindings ne peuvent pas être remplacés par un appelant. `input_payloads` dérive une vue d'identité ou de champs éditables du schéma.
 
-Le gabarit conserve le modèle `bge-m3` et1024 dimensions, sans imposer de port.
+Le gabarit conserve le modèle `bge-m3` et 1024 dimensions, sans imposer de port.
 Définis `RAG3WEAVER_SERVICE_EMBED` avec l'adresse du service BGE de ton poste ou de son
 tunnel ; plusieurs adresses séparées par des virgules sont possibles, sélectionnées par
 identité annoncée. L'alias `RAG3WEAVER_EMBED_SERVICE` est lu si la variable commune est vide.
