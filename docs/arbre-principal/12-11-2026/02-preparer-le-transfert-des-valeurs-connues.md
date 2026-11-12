@@ -2,7 +2,7 @@
 
 Préparation sur master **6e5f9458c**, 12 novembre 2026. Porteur : arbre-principal ;
 revue commune : orchestration. [Ticket canonique](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md),
-[répartition parallèle](../../orchestration/tickets/2026-11-12-paralleliser-les-suites-autorisees-sans-chevauchement.md).
+[répartition parallèle](../../tickets/closed/2026-11-12-paralleliser-les-suites-autorisees-sans-chevauchement.md).
 Aucun Rust modifié, Cargo lancé, transfert exécuté, target, base ou service créé.
 Les signatures ci-dessous sont proposées, pas disponibles dans le produit.
 
@@ -164,3 +164,18 @@ La tranche suivante devra fournir inventaire RO lié au stockage sous exclusivit
 identité/génération durables, journal running réel, adaptateur multi-modèle,
 écritures/reconstruction/checkpoints/validation et publication atomique avant
 apply. L'aperçu pur ne permet de sauter aucun de ces prérequis.
+
+## Diff pur autorisé et nuance d'identité — 12 novembre
+
+C7 autorise module/déclaration/tests, puis ciblé600s/j8/Mem32 sous lourd après
+publication de la source et argv. L'API prend explicitement expected_source_identity ;
+absence d'attendu et absence de déclaré sont deux refus distincts. Le plan actuel
+ne produit pas cet attendu ; égalité de deux déclarations n'est jamais une preuve
+issue du stockage. KnownTransferPreview porte une empreinte de rapport distincte
+de la génération et de l'identité du plan, sans exécution ni désérialisation.
+
+Module public de rapport pour éviter une API interne inutilisée en production,
+avec types d'entrée explicites et sortie à champs privés ; aucun point CLI ajouté.
+Rendus inline seulement : render_fields peut sinon relire un gabarit utilisateur,
+ce qui casserait la pureté promise. Chunker/UUID/rendus communs réutilisés ; aucun
+changement de record_nodes, catalog, backend ou RecordVectors multi-modèle.
