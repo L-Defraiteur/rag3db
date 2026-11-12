@@ -274,3 +274,25 @@ fn native_interruption_before_commit_and_lost_ack_after_commit_resolve_from_disk
         }
     }
 }
+
+#[test]
+fn native_foreign_column_is_rejected_without_mutation() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("owned");
+    let origin = NewPublicationOrigin::fresh();
+    let id = origin.identifier().to_owned();
+    drop(OwnedPublicationCatalog::create_new(&root, origin, "create", snapshot("A")).unwrap());
+    {
+        let conn = connection(&root, false).unwrap();
+        conn.execute("ALTER TABLE _catalog_meta ADD foreign STRING")
+            .unwrap();
+        conn.execute("MATCH (m:_catalog_meta) SET m.foreign = 'outside-closed-contract'")
+            .unwrap();
+    }
+    let before = files(&root);
+    assert!(
+        OwnedPublicationCatalog::open_owned(&root, &id).is_err(),
+        "foreign column admitted by closed declaration catalog"
+    );
+    assert_eq!(files(&root), before, "refusal changed foreign catalog");
+}
