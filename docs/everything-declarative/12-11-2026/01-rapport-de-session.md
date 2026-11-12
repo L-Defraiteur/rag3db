@@ -173,3 +173,33 @@ comptes attendus et dépendances privées avant exécution ; pas de service mod�
 variables d'embarquement absentes, pas de nouveau juge/équipier/Gemini. Tout besoin d'un
 modèle réel ou dépassement du target arrête ce plan pour diagnostic. Revue puis créneau
 master « à toi » restent nécessaires. Aucun push master réalisé pour ce lot.
+
+## Recette globale autorisée et figée avant lancement
+
+C7 autorise la passe après revue90a/préfixe691, en ajoutant un vrai
+`cargo check --locked --lib --no-default-features` (120s) dans la même borne globale5700s.
+Source de production inchangée691 ; la source exacte de passe sera le commit de cette recette,
+publié avant toute acquisition. Script externe conservé aux deux postes :
+`I-luciepc/bge-routage-20261112/globale/passe.py`, SHA256 `fd234e22b77c18ab1e9fed591b295bc9798f85ab01ce3ae7876640dfe11360b0`.
+
+Ordre : F5check2400 → minimal120 → compilationlarge1500 → liblarge900 → NAV600 → PG300.
+Chaque phase est plafonnée par le minimum de sa borne et du reste global ; aucun reset.
+La première erreur arrête et conserve son journal ; aucun warning masqué. Le surveillant
+interrompt également check_features dès son premier ROUGE, sans attendre les autres jeux.
+
+Comptes attendus : features5/5 ; minimal=code0 ; liblarge2244 témoins dont2179 succès
+et65 ignorés déclarés (base du lot accord + trois nouveaux témoins BGE, aucune suppression) ;
+NAV40 succès/0ignoré ; PG36 succès/0ignoré. La liste native du binaire large et les raisons
+d'ignore seront conservées pour confronter ces comptes, pas corrigés arbitrairement après coup.
+Les témoins navigateur ignorés sous liblarge sont réellement joués à l'étape séparée.
+Aucun nouveau cargo test natif entier : le contrôle minimal est bien check --lib sans feature.
+
+Tous les descendants attribués par PID/starttime sont surveillés : cgroup privé Max32,
+MemoryHigh=max, pas de scope e2e sœur (BUILD_MEMORY_HIGH=0, verrou déjà réellement acquis).
+NAV reprend le bus sans activation de268460373 : socket privé0700, XML sans include/servicedir,
+dbus-run-session devant Chromium natif, aucun changement de ses options de sandbox.
+PG : createdb refuse si `cx_ed_bge_20261112` existe ; current_database est vérifié puis URL
+explicitement épinglée à cette base avant table_rase. Aucune base existante/default n'est ciblée.
+Lib29 complète, j8, target unique32Go ; variables modèles et identifiants Gemini retirés,
+pas de modèle réel/GPU/7879. Poste lourd respecte la priorité mesure. Après passe :
+quiescence, empreinte ELF/220 gabarits, preuves aux deux postes, revue puis tour master.
