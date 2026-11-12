@@ -60,3 +60,36 @@ memory.max34359738368, RuntimeMaxUSec10min et KillModecontrol-group.
 `verdict-compose.json` et `quiescence-e2e-confines.json` ([]). Le verdict composé garde
 features/lib/nav précédents et remplace seulement la preuve de confinement des e2e.
 M8, prévention des autres drivers et procédure commune restent à orchestration : ticket ouvert.
+
+## Extension du diagnostic : Chromium et le bus de session
+
+Recherche487 a arrêté NAV40 après déplacement d'un PID Chromium dans une scope
+app-org.chromium sœur. Le préflight natif distinct a observé le même PID/exe
+d'abord sous Max32 puis dans cette scope avec memory.max=max ; arrêt des seuls
+processus privés, aucun reste. Ni NAV40 complète ni lectures27 de cette source
+ne sont validées par ces essais. Les anciens contrôles des PID e2e ne prouvent
+pas rétroactivement le confinement de tous leurs descendants Chromium.
+
+Source primaire relue à la version du paquet :
+[Chromium156 systemd.cc](https://github.com/chromium/chromium/blob/156.0.8078.79/components/dbus/xdg/systemd.cc)
+et [son contrat](https://github.com/chromium/chromium/blob/156.0.8078.79/components/dbus/xdg/systemd.h).
+L'initialisation du portail peut demander au gestionnaire systemd du bus de
+session une scope app avec le PID courant. Le chemin observé est cohérent avec
+ce mécanisme ; la lecture ne remplace pas une trace locale de l'appel D-Bus.
+Changer seulement le lanceur /usr/bin en binaire /usr/lib n'isole pas ce bus.
+
+Recette candidate à préparer avant un nouveau préflight borné : bus de session
+strictement privé au job via dbus-run-session, configuration explicite sans
+répertoires d'activation de services, puis Chrome réel avec les mêmes arguments
+et un profil neuf. Les outils et leur manuel1.16.2 existent déjà sur luciepc.
+Le helper IPC doit rester dans le même Max32 et terminer avec le programme ;
+aucune modification du bus utilisateur, de KDE, du système ou du bac à sable.
+Ne pas simuler un environnement Flatpak/Snap pour éviter une branche de code.
+
+Critères du seul préflight candidat : configuration/source/version/hash publiés,
+30s et budget global initial inchangés, CDP réel disponible, tous les processus
+privés observés dans le groupe borné, aucun détenteur restant après arrêt.
+Au premier écart, arrêter les seuls processus attribués et soumettre le résultat.
+Une conformité prouvée permettrait ensuite les seules phases manquantes, sans
+rejouer compilation/lib/features déjà valides ni annoncer un navigateur simulé.
+La recette n'est pas déclarée validée à l'écriture de cette note.
