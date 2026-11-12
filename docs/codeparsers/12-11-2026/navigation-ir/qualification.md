@@ -43,7 +43,7 @@ finalize ; ce lot ne contient pas de fixture CRLF et ne prétend pas la qualifie
 code.rs copie ces bornes dans ScopeRecord, puis ses propriétés persistables.
 
 Dans members.rs, `mod compact { pub struct Item {} }` produit deux scopes,
-compact Namespace et Item Class, **même plage [429,463)** et même ligne22.
+compact Namespace et Item Class, **même plage [429,463)** et même ligne21.
 Item.parent vaut compact. Une inclusion stricte ne retrouve pas cette arête ;
 une inclusion non stricte fabrique un cycle/ordre arbitraire si l'égalité n'est
 pas traitée. Garder égalité et parentage non déterminable explicites. Ne pas

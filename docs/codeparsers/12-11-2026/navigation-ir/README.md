@@ -26,3 +26,17 @@ répétition du corpus inchangé. Les sept premiers JSON sont sous
 Rust complémentaire est sous navigation-ir-3a10a493b/. Les anciens JSON restent
 intacts. `qualifier.py` choisit ce complément, contrôle les offsets contre les
 fixtures octet par octet et résume l'IR brut, sans simuler une base persistée.
+
+Résultat : [qualification.md](qualification.md), 50 scopes/7 fichiers, couverture
+partielle et distinction extraction/projection index explicites. Relecture :
+
+```sh
+python3 docs/codeparsers/12-11-2026/navigation-ir/qualifier.py \
+  --fixtures docs/codeparsers/12-11-2026/navigation-ir/fixtures \
+  --preuves "$HOME/.cache/codeparsers-notes/navigation-ir-7a0e98b49" \
+  --complement-rust "$HOME/.cache/codeparsers-notes/navigation-ir-3a10a493b/members.rs.json" \
+  --sortie "$HOME/.cache/codeparsers-notes/qualification-navigation-neuve.json"
+```
+
+La sortie doit être neuve (création exclusive). Cette commande ne reparse pas
+les fichiers et ne construit rien ; elle relit les preuves existantes.
