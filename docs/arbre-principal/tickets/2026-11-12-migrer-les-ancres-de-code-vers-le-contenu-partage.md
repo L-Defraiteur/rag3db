@@ -1514,3 +1514,47 @@ callbacksRO+3décodeurs+1natiflectureoctetsinchangés,18faitsA+15aperçu et grou
 migrations existant ; compteglobal tiré de l'ELF, pas d'assert historiqueinventé.
 PremierrougeSTOP/diagnostic, aucunretryinchangé, aucunmodèle/service/PG/baseréelle.
 La passeglobale se proposera après ce ciblé/diff/revue, horsposte push.
+
+### Suite RO — ciblé83vert, préparation globale conditionnée au master ED
+
+Source91455ec71b9297c4258d258e4b014b409a861736 **83/0/0**,23,54s dans600 ;
+inventaire exact83/aucunignore avant runtime,14nouveaux (10callbacks+3décodeurs+
+1natif64MiB/octetsinchangés),18faitsA+15aperçu etancienscontrats. ELF réel JSON,
+sourceembarquée etlddnative29 attestés/archivés, sourcepropre ; commonconfiner
+validation-19kvifpk VERT/restes[]/tempbusnettoyé. Preuves cachePC
+cx-observation-ro-cible-v1/ ; revue statique mémoire et C7 favorables.
+
+Rebase documentaire/outillage CI0bec438da sur branche NEUVE
+cx-arbre-observation-faits-2 :4/4range-diff identiques, Rustinchangé. Le ciblé ne
+se rejoue pas pour workflow/helperCPU. C7 fixe ordre **EDaccordshôte d'abord,
+RO ensuite** : seule la base de la future globale attend le masterEDconfirmé ;
+pas de Cargo Arbre actif ou fenêtre3600 ouverte pendant cette préparation.
+
+Recetteglobale préparée horslourd dans preuves-observation-ro/{globale.py,
+finaliser.py,lancer-globale.sh}, àgeler/publier avecsource aprèsrebaseED surbranche
+NEUVE. **GO C7 conditionnel EDintégré** : commonconfiner3600depuisacquisitionposte,
+unseulbusprivé sansactivationpourTOUTEleportée, Max32/HIGH0,j8/INCREMENTAL0/LUCIVY8,
+CPU4/cachesjournauxbuiltinprivés/CARGO_MANIFEST_DIR exact, targetunique32/lib29.
+Client/superviseur cwd/var/tmp(éviterfauxoccupants), navigateur natifsanswrapper
+busparChrome/TMPprivédisque /var/tmp/cx-ro.*, aucun changementdeflags oubusLucie.
+Préserver DBUS_SESSION_BUS_ADDRESS et reçu/jeton issus duvraisuperviseur commun.
+
+Capsintersectés avec MÊMEdeadline3600 : F51500, vrai minimumchecklib sansfeatures120,
+compileliblarge/listes1200, libruntime300, NAVcompile/listes/runtime360,
+CLIcompile/listes/runtime180, PG300, attest120. Pas de délai remisàzéro ni replay
+inchangé. Huitfeatures commeA ; CargoJSONparcheminsworktreesources, ELF --list et
+--ignored --list AVANTruntime, noms de succès (suffixeshouldpanicreconnu), compte
+libdérivéELF. Requis10callbacks+3décodeurs+1natifRO+18facts+15aperçu+lien80,0ignore
+danscesgroupes. NAV40, CLI5/1groupe ciblee2eexistante, PG36/1suitevia run_e2e,
+aucunsaut ; PGinventaireavantCLI/PG, ELFPGdoitêtreexactementceluiidentifiéJSON.
+
+PG **neuve cx_ro_2191_20261112_v1**, absence obligatoire/owner/current_database
+vérifiés avantlib puisavant PG ; connexionexplicite5433/DBnomméegardéehorslog,
+jamaisbaseimplicite/métadonnéesréelles. Source/template220/4ELFhashés etarchivés,
+maps réelles dechaque ELF/native29 ; propreobservateurPID/starttime/cgroupsMax32,
+devicedri/kfd FDrelevés sansdéduireinférence, quiescenceNAVetfinalescanexe/cwd/profil.
+Finaliseur aprèsreelrcsuperviseur : exigeverdictcommun/restes[]/busnettoyé,
+rehash4ELF,scanindépendant puisseulTMPpossédéretiré, VERDICT_COMPOSE rougepar défaut
+siéchec. Aucun fichierjoué éditépendantjobs. Premierrouge STOP/diagnostic, pasapply,
+générationpersistante, GPU/modèle/service/DBLucie. READMEpréparé, nouveautés/bilan
+sepublierontsurpreuvesfinales ; ticketresteouvert.
