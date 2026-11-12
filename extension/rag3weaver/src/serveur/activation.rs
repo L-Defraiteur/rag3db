@@ -71,6 +71,9 @@ impl Demande {
 /// au compte du fournisseur, hors worktree ; les fichiers verrou ne sont jamais
 /// supprimés pendant les usages (sinon deux inodes permettraient deux verrous).
 pub fn acquerir(serveur: &Serveur, coordination: &Path) -> Result<Demande, String> {
+    if serveur.attente.is_zero() || Instant::now().checked_add(serveur.attente).is_none() {
+        return Err("budget d'activation nul ou non représentable".into());
+    }
     let adresse = serveur.adresse().parse::<std::net::SocketAddr>().map_err(|_| "adresse numérique d'activation requise")?;
     if !adresse.ip().is_loopback() || adresse.port() == 0 {
         return Err("activation gérée : adresse locale fixe requise".into());
@@ -114,6 +117,7 @@ pub fn acquerir(serveur: &Serveur, coordination: &Path) -> Result<Demande, Strin
 
 fn activer(partage: &Partage, cle: &Path) -> Result<Attache, String> {
     let debut = Instant::now();
+    let echeance = debut.checked_add(partage.serveur.attente).ok_or("budget d'activation non représentable")?;
     let fichier: File = OpenOptions::new().create(true).truncate(false).read(true).write(true)
         .open(cle).map_err(|e| format!("verrou d'activation : {e}"))?;
     loop {
@@ -130,5 +134,5 @@ fn activer(partage: &Partage, cle: &Path) -> Result<Attache, String> {
     serveur.attente = serveur.attente.saturating_sub(debut.elapsed());
     // Assurer re-sonde sous le verrou, puis démarre uniquement si absent.
     // La durée inclut l'attente de coordination. Le fichier libère son verrou.
-    serveur.assurer_avant(debut + partage.serveur.attente).map_err(|e| e.to_string())
+    serveur.assurer_avant(echeance).map_err(|e| e.to_string())
 }
