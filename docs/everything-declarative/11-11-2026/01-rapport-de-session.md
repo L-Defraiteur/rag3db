@@ -470,3 +470,19 @@ Revue courte parallèle du ticket Archi « vidange de portée rouge dans la lib 
 plusieurs assertions possibles ; source/log sans panic ne permettent pas d’établir
 une cause. Proposition transmise : même ELF et concurrence avec `--nocapture`,
 sans augmenter les délais ni changer le runtime. Aucun fichier commandes édité.
+
+Actualisation parcours : rouge réel `36e284824` conservé après test nommé rouge
+attendu puis vert réel ; diff Git bloqué par l’administration externe du worktree,
+reprise non atteinte. Corrections communes publiées jusqu’à `4d6045cdb`, en revue
+RO Archi/C7/Mémoire : lectures Git vérifiées, environnement global isolé, alias
+internes et gitfile symbolique refusés. `b0090e2be` noyau rouge config globale,
+`b310b5c0c` noyau vert partiel puis arrêt RO, `b68569d3a` noyau vert partiel puis
+arrêt RO ; jamais de Vertex dans ces trois correctifs. Arrêts attribués pidfd,
+restes vides et nettoyage vrai. Preuves initiales/correctives distinctes,
+synchronisées sur les deux postes. Nouvelle source4d à qualifier ; aucun master.
+
+Limite de conservation des préfixes : SHA et logs des ELF successifs conservés,
+mais les premiers exécutables36e/b009/b310 ont été remplacés au même chemin par
+les rebâtis Cargo avant copie indépendante. L’ELF b685 est désormais archivé hors
+target ; les suivants doivent l’être immédiatement après compilation. Les relevés
+`ldd` tardifs sont nommés « observés après b685 », sans attribution rétroactive.
