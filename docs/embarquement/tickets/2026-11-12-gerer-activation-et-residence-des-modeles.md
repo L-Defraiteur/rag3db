@@ -400,3 +400,32 @@ poste (mesure/lourd respectivement), calcule après acquisition le minimum
 de nouveau7200. Même source e2e publiée avant entrée ; observation de placement
 par capture du banc et données propres des PID, pas une variable GPU seule.
 La demande d'usage bref7879 est coordonnée directement avec Archi avant spans.
+
+### E2E fonctionnel et correction de capture
+
+Sur fb8fc788a : validation-s69dn7tx VERT, check_features5/5 puis deux tests
+fournisseur réel réussis/0 ignoré, une suite jouée sur une, TMPDIR propre ;
+13,99 s pour les deux modèles privés sériels.
+Capture opérateur incomplète : un premier observateur ad hoc a échoué sur
+PermissionError `/proc/1247/exe` (processus étranger), puis l'observation
+corrigée tardive n'a vu aucun PID privé. Les chiffres card0 globaux du journal
+de charge ne sont PAS attribués à ces modèles ; aucun placement par PID
+n'est inventé pour cette première exécution. Le rouge d'observabilité reste
+conservé avec le vert fonctionnel.
+
+Cause corrigée dans le driver avant nouveau test : observer_e2e_gpu.py est
+préattaché et sa readiness attendue avant lancement, filtre le cgroup vérifié
+AVANT lire exe/FD, traite OSError comme inconnu. Il réutilise capture du banc
+SHA85a4d58312cd6629bea9725159208b3496c5ea096635202dc7b37675b8ff590f
+et sa garde mémoire SHAa29173c8ad1696e1e1c70460356c29049249ee9861ec7a688f296769693125ef.
+Seulement notre exécutable fournisseur dans notre portée, deux PID attendus ;
+VRAM et gfx PCI04 doivent être observés, champs inconnus jamais publiés zéro,
+activité PCI07 ou violation de garde arrête notre seul superviseur vérifié.
+Les captures sont hors target dans un dossier neuf ; leur lecture/hash peut
+perturber les temps, aucun chiffre de performance absolue n'est revendiqué.
+
+Rejeu INSTRUMENTÉ après cette correction, pas une répétition inchangée :
+conserver l'échéance de s69dn7tx (budget initial1800), pas nouvelle1800 ni7200.
+Le driver calcule le restant après la vraie acquisition mesure ; précontrôle
+à1108 s restantes, refus si expiré. Source publiée/syntaxe Python et shell
+vérifiées avant entrée. Artefacts du banc345 et anciens journaux restent intacts.
