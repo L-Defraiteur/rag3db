@@ -288,3 +288,17 @@ d'admission. Analyse : CallbackEmbedder se nomme `callback` et manifeste disait
 témoin : nom attendu callback et exigence d'un refus nommé « migration
 reconciliation required ». Rejouer cette source avant tout correctif produit ;
 le vert b76 ne sera pas réattribué à la frontière d'admission.
+
+Rouge réel bas niveau source**b9d2e273b** : **0 réussi, 1 échec, 0 ignoré**,
+rc101, `cx-preflight-raw-rouge-v2.log`, fin11:31:15Paris, compilation18,41s.
+Refus observé : « catalog effect before admission » au lieu du refus de
+réconciliation ; le callback a reçu une requête non autorisée avant lecture du
+journal. Correction : `open_with_reason` inspecte/admet la connexion fournie
+avant toute construction de catalogue, résolution de modèle ou initialisation.
+L'API ne prétend pas annuler l'ouverture RW/connexion modèle faite par son appelant.
+
+Revue portée de l'empreinte : l'inspecteur expose désormais
+`entity_config_fingerprint`, explicitement sans relations ni données ; ce champ
+ne sert ni de fingerprint du schéma complet ni de génération. Le plan préliminaire
+expose séparément les relations cibles et ne gagne aucune autorisation d'apply.
+Pas d'exclusion applicative globale inventée depuis le verrou du moteur.

@@ -2184,6 +2184,10 @@ impl PreparedBackend {
         embedder: Option<Box<dyn Embedder>>,
         raison: Option<String>,
     ) -> Result<Backend, String> {
+        // A supplied connection is already open, but it must not bypass the
+        // journal/format gate before Catalog initialization or model setup.
+        crate::storage_inspection::inspect_on(conn.as_ref())?
+            .admit(self.manifest.storage.as_ref())?;
         // Raw connection API cannot establish pre-open admission retroactively.
         // It must nevertheless never activate an unvalidated versioned target.
         if self.manifest.storage.is_some() {
