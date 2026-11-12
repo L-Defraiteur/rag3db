@@ -635,3 +635,11 @@ The notebook and validated-result backend templates declare BGE-M3 (1024 dimensi
 without a fixed service address. Set `RAG3WEAVER_SERVICE_EMBED` for the host or tunnel
 (the legacy `RAG3WEAVER_EMBED_SERVICE` is the fallback variable). An address explicitly
 written in a manifest takes priority. Existing user copies are not migrated automatically.
+
+`models.embed.activation` can explicitly start a local dense provider through
+the shared `Serveur` acquisition. The first slice keeps the service running,
+checks its model, dimensions and recipe, and isolates each caller's cancellation.
+Warm-up facts are reported separately from availability. Remote activation and
+idle eviction remain outside this slice; existing sources without `activation`
+keep connecting to their configured provider. See the
+[contract and qualification](../../docs/embarquement/12-11-2026/03-activation-des-modeles.md).

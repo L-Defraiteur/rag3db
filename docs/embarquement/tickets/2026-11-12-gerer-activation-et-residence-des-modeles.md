@@ -263,3 +263,12 @@ sur la source actuelle : `budget_non_representable_est_refuse_avant_le_worker`.
 Recette : rustc standalone puis ce filtre exact dans une portée commune 30 s,
 aucun programme réel/GPU. Après rouge, refuser ce budget avant démarrage du fil.
 La preuve normale de la passe précédente n'est pas étendue à ce cas limite.
+
+Sur 2721123c5, témoin de budget non représentable : un test réellement
+joué, zéro ignoré, ROUGE (l'API accepte la déclaration au lieu de la refuser).
+Validation-w1ppfj1m et budget-rouge.log conservés, aucun fournisseur lancé.
+Correctif : checked_add avant création du worker et échéance vérifiée avant
+assurer ; même refus explicite pour la primitive Serveur brute. Rejouer la
+recette CPU complète sous portée commune, sans augmenter son budget 1200 s.
+Les artefacts Banc source356d restent figés ; ce delta ne change que le refus
+des budgets invalides, pas les recettes valides de mesure.
