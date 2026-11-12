@@ -1019,3 +1019,55 @@ fn projection_refuse_aussi_un_titre_indexe_sans_remappage() {
     }).expect_err("le titre indexé et rendu sur l'occurrence doit aussi porter des coordonnées valides");
     assert!(error.to_string().contains("remappage"), "{error}");
 }
+
+/// La dette des cellules garées reste visible après rollback et nouvelle mise
+/// en file : un autre catalogue Strict ne doit pas annoncer Occurrence prête.
+#[test]
+#[ignore]
+fn rollback_puis_nouvelle_table_garde_la_marque_des_cellules_en_attente() {
+    use rag3weaver::disponibilite::Disponibilites as D;
+    let database = tempfile::tempdir().unwrap();
+    let path = database.path().join("marque.db");
+    let (_cache, mut catalog) = projection_deux_cellules_sur(Rag3dbConnection::new(&path).unwrap());
+    catalog.register_entity("Note", EntityConfig {
+        fields: HashMap::from([("key".into(), champ(FieldType::String, false, false))]),
+        hashsafe: Some(vec!["key".into()]), signals: SearchSignals::NONE,
+        chunked: false, ..Default::default()
+    }).unwrap();
+    let reader_cache = tempfile::tempdir().unwrap();
+    let mut reader = Catalog::ouvrir_en_lecture(
+        Box::new(Rag3dbConnection::read_only(&path).unwrap()),
+        Box::new(rag3weaver::embedder::HashEmbedder::new(8)),
+        CatalogConfig { embedding_dim: 8, allow_mock_embedder: true, ..Default::default() },
+    );
+    reader.set_cache_base(reader_cache.path().join("indexes"));
+    reader.initialize().unwrap();
+    let marque = |c: &Catalog| {
+        c.execute_raw("MATCH (m:_catalog_meta) WHERE m._key STARTS WITH '_ingestion/pending/' AND m._value <> '0' RETURN m._value")
+            .unwrap().rows.iter().filter_map(|r| r[0].as_str().map(str::to_string)).collect::<Vec<_>>().join(";")
+    };
+    catalog.create("Occurrence", BTreeMap::from([
+        ("file".into(), s("beta-marque.rs")), ("line".into(), CypherValue::Int(9)), ("body".into(), s("betapreserve")),
+    ])).unwrap();
+    let avant = marque(&catalog);
+    assert!(avant.contains("|Occurrence:"), "avant rollback : {avant}");
+    catalog.set_scope(rag3weaver::scope::Scope::new("acme", "alpha")).unwrap();
+    catalog.injecter_faute_de_lien("IndexOccurrence_DERIVED_FROM", 1);
+    let failed = catalog.ingest_entities("Occurrence", vec![BTreeMap::from([
+        ("file".into(), s("a.rs")), ("line".into(), CypherValue::Int(1)), ("body".into(), s("alphaannule")),
+    ])]).unwrap();
+    assert!(failed.failed > 0 && failed.processed == 0, "{failed:?}");
+    let apres_rollback = marque(&catalog);
+    let mut warnings_avant = Vec::new();
+    let (_, partiel_avant) = reader.appliquer_la_consigne_pour("Occurrence", D::DONNEE, true, 20, &mut warnings_avant);
+    catalog.retirer_les_fautes_de_test();
+    catalog.create("Note", BTreeMap::from([("key".into(), s("note-apres-rollback"))])).unwrap();
+    let apres_note = marque(&catalog);
+    let mut warnings_apres = Vec::new();
+    let (_, partiel_apres) = reader.appliquer_la_consigne_pour("Occurrence", D::DONNEE, true, 20, &mut warnings_apres);
+    println!("MARQUES avant={avant:?} rollback={apres_rollback:?} note={apres_note:?} ; Strict avant={partiel_avant}/{warnings_avant:?} après={partiel_apres}/{warnings_apres:?}");
+    assert!(apres_rollback.contains("|Occurrence:") && partiel_avant, "le rollback garde la marque DB et Strict partiel : {apres_rollback}, {warnings_avant:?}");
+    assert!(apres_note.contains("|Occurrence:") && apres_note.contains("|Note:") && partiel_apres,
+        "la republication doit conserver Occurrence beta ET Note alpha ; marque={apres_note:?}, Strict partiel={partiel_apres}, warnings={warnings_apres:?}");
+    assert_eq!(compte(&catalog, "MATCH (r:Occurrence) WHERE r.file = 'beta-marque.rs' RETURN count(r)"), 0);
+}
