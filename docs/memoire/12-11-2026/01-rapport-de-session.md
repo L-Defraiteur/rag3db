@@ -17,3 +17,9 @@ Le ticket M8 et la note canonique portent ce complément. Avant toute promesse d
 Reprendre depuis le ticket et la note canonique : coexistence vivant/épinglé, inventaire et bases récupérables, fusion pure, validation avec frontière d’effets explicite. La première tranche proposée reste un plan à blanc sur bases fournies. L’adoption persistée puis l’application attendent les contrats communs de maintenance, instantané et récupération, avec preuve sur copie privée. Les appelants des outils restent des observations partielles, pas un inventaire exhaustif.
 
 Aucun code, build, test, modèle, service ou base réelle n’a été lancé ni modifié par cette reprise documentaire. Les suites [archivage sur copie](../tickets/2026-11-11-terminer-l-archivage-a-blanc-des-documents-sur-copie.md), [M9](../tickets/2026-11-11-raccorder-l-archiviste-automatique-au-chat.md) et [classeur local](../tickets/2026-11-11-trancher-et-verifier-le-classeur-local-du-rappel.md) conservent leurs tickets et leurs conditions propres.
+
+## Cadrage documentaire de la première tranche
+
+La note canonique sépare désormais le cœur de plan sur contenus fournis/embarqués et l’éventuel adaptateur CLI de préparation des sources. Le cœur proposé n’a aucun effet de lecture implicite, d’extraction ou d’écriture ; une source requise manque, il refuse. Les sorties sont un candidat et des différences/refus, sans droit d’application. Le cas de cache vide et l’absence de repli sur le disque font partie des preuves à construire.
+
+Le contrat est proposé, non implémenté. Les choix vivant/épinglé et les garanties de maintenance/récupération restent à traiter dans le même ticket M8. Aucun code, build, test ou base réelle n’a été engagé pour ce cadrage.

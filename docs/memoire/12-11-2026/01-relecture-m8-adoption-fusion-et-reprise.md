@@ -132,6 +132,49 @@ suppression contre modification, conflit de forme, fichier manquant, local égal
 ordre déterministe, absence d'écriture, changement de schéma non pris en charge et historique
 ancien non qualifiable. Ils ne sont pas exécutés par cette relecture.
 
+### Contrat proposé pour la première tranche, à prouver
+
+Cette tranche produit un **plan déclaratif sur des contenus**, jamais un droit d’application.
+Les formes ci-dessous décrivent le contrat attendu ; aucune API ou commande nouvelle n’est livrée.
+
+| Frontière | Proposition bornée |
+|---|---|
+| Entrées du cœur | Trois instantanés explicites base/local/cible : manifeste, inventaire des fichiers possédés et dépendances requises, contenus disponibles, identités et empreintes vérifiables ; provenance séparée de l’identité du paquet. Les éventuelles observations d’appelants portent leur origine et leur couverture limitée. |
+| Calcul | Vérifier les sources et leur cohérence, calculer la fusion pure, construire le candidat et valider ses déclarations depuis les contenus fournis ou embarqués. Résolution logique des chemins et des dépendances, sans accès implicite à des fichiers manquants. |
+| Sortie | Proposition en mémoire : empreintes des entrées, manifeste/fichiers candidats, différences déterministes, outils ajoutés/retirés, observations d’appelants et refus structurés. Le même graphe sous un autre nom reste un rapprochement hypothétique. |
+| Refus | Source requise absente, ambiguë ou non vérifiable ; propriété/dépendance non établie ; conflit de valeur/forme/suppression ; déclaration invalide ; changement de schéma, format ou génération sans chemin pris en charge ou qualification suffisante. Le refus ne lance ni ouverture de base ni recherche d’une migration après coup. |
+| Effets du cœur | Aucun fichier lu implicitement, écrit ou extrait ; aucun manifeste, livre, objet persistant, cache ou journal modifié ; aucun accès de modèle, réseau, hôte ou base. Aucun appel à refresh, record, root ou apply. |
+
+La validation réutilise les contrats communs, pas un second validateur M8 divergent.
+`Recouvrement` seul ne suffit pas : il peut retomber sur le disque, et `load_avec` appelle
+actuellement le résolveur susceptible d’extraire les builtin. Le raccord proposé devra valider
+par les contenus fournis/embarqués, sans ce repli ni cette extraction. **Une source requise
+manquante est un refus nommé.** Ce raccord est à concevoir et à prouver ; il n’est pas acquis.
+
+**Adaptateur CLI distinct.** Lire des déclarations et acquérir une base Git exacte peuvent servir
+à préparer les entrées avant l’appel du cœur. Cet adaptateur explicite ses lectures et tout effet
+d’acquisition éventuel ; une acquisition qui écrit ne devient pas pure parce qu’elle précède le
+plan. Aucun fetch, extraction ou enregistrement ne doit se cacher dans le calcul. La première
+tranche ne présume aucune acquisition persistante autorisée. On ne préchauffe pas le cache pour
+rendre invisible le comportement à froid.
+
+Un candidat validé n’est pas une preuve de compatibilité des données réelles ni de stabilité des
+ressources après la capture. Les empreintes décrivent les entrées examinées ; une application
+ultérieure devra les revalider sous l’exclusion appropriée. Aucun verrou de maintenance,
+instantané réel, nouveau livre, modification de déclaration ou migration n’est inclus ici.
+
+**Preuves attendues, non jouées.** Tester la fusion et ses refus sur entrées fournies, les
+absences/null et suppressions, le déterminisme, la validation des dépendances complètes et les
+changements non pris en charge. Couvrir un cache builtin vide ou inaccessible et un fichier
+requis disponible seulement sur disque : le premier ne doit pas être créé et le second ne doit
+pas être lu implicitement. Les mêmes données doivent produire le même plan indépendamment de
+l’état du cache ou de fichiers étrangers. Vérifier l’absence d’écriture du manifeste/livre/base,
+d’objets, de cache et de journal dans la frontière du cœur, y compris lors d’un refus.
+
+**Choix restant distincts.** La politique vivante/épinglée, la forme persistée des bases,
+l’identité durable des outils et le contrat de maintenance/récupération ne sont pas tranchés
+par ce plan. Aucun statut de plan ne doit les transformer en garantie implicite de montée.
+
 Une tranche d'adoption persistée pourra suivre ; l'application attend le contrat commun de
 maintenance/instantané/reprise et ses preuves sur copie privée. Toute montée de la mémoire réelle
 reste une décision explicite distincte. Une conception ne ferme pas M8.
