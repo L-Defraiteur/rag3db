@@ -1707,3 +1707,13 @@ natives en enfant (avant COMMIT et réponse perdue après COMMIT), complétés p
 les témoins A/RO existants. Source et recette `preuves-publication-composite/`
 publiées avant ciblé luciepc unique600s sous superviseur commun/lib29/CPU/j8.
 Pas encore compilé ni exécuté ; aucune capacité annoncée livrée à ce stade.
+
+### Revue mémoire : colonne étrangère (avant ciblé)
+
+Sur f6d7feeec, le registre ferme les tables/clés mais pas les colonnes de
+`_catalog_meta`. Une colonne `foreign STRING` avec une donnée conserve la même
+clé/valeur du registre et peut être admise. Critère du contrat fermé déjà fixé,
+pas nouvelle décision produit. Le témoin natif dédié est publié avant exécution
+pour poser ce rouge ; correction par introspection native `table_info` ensuite.
+L'attente poste v1 a été annulée avant créneau/Cargo par TERM de notre PID1085759 ;
+son finaliseur ROUGE rc143 est conservé hors worktree (annulation de revue).
