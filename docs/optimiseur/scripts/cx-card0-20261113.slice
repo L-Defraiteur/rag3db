@@ -1,0 +1,5 @@
+[Unit]
+Description=Portee privee card0 du 13 novembre 2026 uniquement
+StopWhenUnneeded=yes
+
+[Slice]

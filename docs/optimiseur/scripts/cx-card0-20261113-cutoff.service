@@ -1,0 +1,8 @@
+[Unit]
+Description=Restitution des seuls modeles prives card0 du 13 novembre 2026
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 %h/.cache/optimiseur-notes/card0-20261113/fenetre_card0.py couper
+TimeoutStartSec=55s
+Restart=no

@@ -1,0 +1,12 @@
+[Unit]
+Description=Coupure unique des modeles prives card0 avant 07h55 Paris
+
+[Timer]
+OnCalendar=2026-11-13 07:54:00 Europe/Paris
+AccuracySec=1s
+RandomizedDelaySec=0
+Persistent=yes
+Unit=cx-card0-20261113-cutoff.service
+
+[Install]
+WantedBy=timers.target
