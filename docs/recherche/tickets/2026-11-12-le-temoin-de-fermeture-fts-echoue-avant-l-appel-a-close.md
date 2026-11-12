@@ -1,6 +1,6 @@
 # Le témoin de fermeture FTS échoue avant l’appel à close
 
-- **État** : ouvert ; point du panic CI confirmé, montage déterministe préparé sur898c9e0dc via API publique ; compilation et exécution natives non jouées, revue du plan avant build lourd.
+- **État** : ouvert ; montage déterministe validé sur5dddf215c (code5a83eee91), préfixe et configurations5/5 verts ; revue du verdict et intégration restantes.
 - **Famille** : produit
 - **Gravité** : blocage de la validation CI ; le témoin peut échouer avant de juger le contrat de fermeture.
 - **Atteignable en service** : non pour ce panic de préparation du test ; aucune régression produit de close établie.
@@ -59,7 +59,7 @@ Worktree neuf `cx-recherche-fts-close-deterministe`, branche homonyme, base exac
 
 Comparaison f96→080 : fts_handle.rs identique ; comparaison080→898 : pas de diff source Rust/workflow. La concurrence du fold est cohérente avec le montage qui détruit le dossier de writers vivants, mais l'interleaving exact n'est pas reproduit localement. Ce constat ne démontre pas un défaut produit de Lucivy ni une causalité1a.
 
-## Témoin proposé, non exécuté
+## Témoin proposé avant exécution
 
 L'API publique du paquet registry lucivy-core4.3.3, relue à luciepc (`sharded_handle.rs`), expose ShardStorage, RamShardStorage et ShardedHandle::create_with_storage. Une fixture locale au test enveloppe RamShardStorage : création/ouverture/lectures déléguées, seules écritures de racine refusées une fois un drapeau atomique explicitement armé. Les shards et leurs folds restent sur un vrai stockage RAM privé ; aucune suppression/permission/renommage du filesystem sous les acteurs, aucun nom interne de fichier à connaître.
 
@@ -85,3 +85,17 @@ Après ces preuves seulement : retour pour revue et définition de la passe fina
 ## Transmission effective du plan
 
 Après vérification du remote (HEAD5dddf215c6625743fb1e6b51b26b9f77d8016787), le transport disponible `multi_agent_v1.send_input` a accepté l'envoi à l'orchestration : soumission01a1cf2f-10c0-7033-9b71-6b7bbb6d0d94. Message : même ticket, code5a83eee91/base898, montage publicRAM, assertions conservées et recette/bornes ci-dessus. L'ancien namespace TUI reste absent, mais le livrable n'est plus seulement publié sans transmission. Aucune lecture/revue ni autorisation de build ne sont déduites de l'accusé technique d'envoi. Les sessions arbre1b et coeur C++ ont reçu confirmation qu'aucun créneau/build recherche n'est actif ; le créneau C++ libéré par C7 n'est pas concurrencé.
+
+## Verdict du préfixe autorisé le12novembre
+
+Après revue explicite du plan5dddf215c et du code5a83eee91, orchestration a autorisé le préfixe et ajouté check_features5 ; coeur C++ a confirmé son créneau terminé avant le lancement. Source propre figée5dddf215c6625743fb1e6b51b26b9f77d8016787, luciepc sous poste lourd, -j8/32G, target97k privé plafonné32Go, lib29 complète ci-dessus. Départ11:04:38 CET, ciblé terminé11:06:45 ; module terminé11:06:46 ; lib terminée11:07:22 ; matrice terminée avant11:11. Global2400s respecté, aucun rouge, aucun retry.
+
+- Ciblé exact CI : **1 réussi,0 échec,0 ignoré**. Sortie enfant : préparation réussie avant armement ; `close="persistance racine refusée par le témoin de fermeture" index_apres=Err("handle is closed")` ; handle détruit et sortie enfant. Assertions du compteur exécutées, borne parent20s conservée.
+- Module fts_handle : **10 réussis,0 échec,0 ignoré**, avec recherche, résolution des positions et réouverture/Drop existants.
+- Lib sous rag3db-native,code,daemon,openai-llm : **2090 réussis,0 échec,64 ignorés,2 filtrés**, exclusivement les deux exclusions workflow documentées. Les comptes proviennent de cette exécution.
+- Attestation : source/manifestes propres, identité native29 exacte, **220 gabarits présents**, SHA256 du binaire `76a78be049c85c1f07fd26d6c46c4a348812d037933ef9b3ca0d8c9788efc9b1`, inchangé après la matrice.
+- `check_features.sh` : **CHECK_FEATURES VERT5/5**, y compris configurations Burn/OCR/Postgres en compilation seulement ; aucun service, GPU, modèle ni PG utilisé. Aucun navigateur/e2e supplémentaire ni relance CI.
+
+Preuves brutes conservées sur les deux postes dans `~/.cache/rag3weaver-build/journaux-cx-recherche-fts-close-12nov/` : rouge-ci-080.log, source.json, cible.log, module-fts.log, lib-ci.log, attestation-binaire.json, identite-native.txt, check_features.log, features-detail/, resume.log et verdict-final.log. Le rouge CI ancien reste un échec de préparation ; ce vert prouve le nouveau montage, sans prétendre reproduire son interleaving filesystem ni diagnostiquer une régression produit amont.
+
+Reste à orchestration : revue de ce verdict, tour master explicite puis intégration et lecture de la CI future automatique sur son SHA. Ticket maintenu ouvert jusque-là ; aucun push master ni rerun aveugle autorisé par ce résultat.
