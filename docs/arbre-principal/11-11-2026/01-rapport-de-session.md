@@ -1,3 +1,21 @@
+## Tranche A en code — faits liés au plan, ciblé vert avant globale
+
+WT local/remote `/home/lucied/.cache/rag3weaver-build/cx-wt-faits-lies`, branche
+`cx-arbre-faits-lies`, source jouée59eb3d9df :64/0/0 (18faits+15aperçu+31existants),
+fenêtre initiale600 respectée (fin332,06s), source propre et scope inactive/poste0/4.
+Preuves cache luciepc cx-faits-lies-cible-v2, ELF0bde14c21adae5ae67efe4a99a45e2535c8a3e92fd42ba46cc7f2cd8ede9c84c.
+Le ticket migration et la page02 portent interfaces, revue mémoire et attribution
+séparée du63/1/0 de témoin erroné. Producteur/comparateur purs ; runner lit MMD.
+Aucun stockage observé, génération créée, modèle, apply ou bootstrap.
+
+Target distant unique1,6Go conservé pour passe ; pas de lourd arbre actif.
+Priorité C7 : laisser ED intégrer son lot puis rebaser A AVANT passe adaptée,
+proposer/figer recette et source. Pas de tour master arbre reçu. Les anciennes
+sections de préparation sont l'historique ; ne pas rebâtir une branche atterrie.
+Question future de génération1 ne bloque pas A. Ancien WT doc
+cx-wt-qualification-faits est propre sur sa livraison, sans target, à distinguer
+du WT de code ; sources/paquets privés de preuve conservés.
+
 ## Reprise en préparation — qualification pure des faits
 
 Après l'aperçu intégré3b2 et nettoyé : nouveau worktree local
