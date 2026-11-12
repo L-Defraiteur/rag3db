@@ -423,7 +423,26 @@ fn un_accord_exterieur_reprend_la_ligne_exacte_et_n_accorde_pas_sa_variante() {
             })))
         })
     };
-    let a = atelier_avec(d.path(), model);
+    // Précondition explicite du ticket : droit de lire ce fichier uniquement,
+    // sans ouvrir son parent. L'accord de ligne ne donne pas de droit noyau.
+    let lecture_script = script.canonicalize().unwrap();
+    let a = super::atelier_fichiers::tests::atelier_avec_configuration(d.path(), model, |m| {
+        m["workspace"]["sandbox"]["extra_read"] = json!([lecture_script]);
+    });
+    let (lectures, ecritures) = a
+        .host
+        .with_backend(&a.h, |b| {
+            let p = b.prepared();
+            let sandbox = &p.manifest.workspace.as_ref().unwrap().sandbox;
+            (sandbox.extra_read.clone(), sandbox.extra_write.clone())
+        })
+        .unwrap();
+    assert_eq!(
+        lectures,
+        vec![lecture_script.to_string_lossy().into_owned()],
+        "un seul fichier extérieur déclaré, pas son parent"
+    );
+    assert!(ecritures.is_empty(), "aucune écriture extérieure ajoutée par la fixture");
     assert!(
         !script.canonicalize().unwrap().starts_with(a.racine.canonicalize().unwrap()),
         "ne pas déplacer le script dans le domaine pour masquer le défaut"
