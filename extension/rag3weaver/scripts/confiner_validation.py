@@ -152,9 +152,9 @@ def repertoire_preuves(valeur):
 
 
 class Descendants:
-    def __init__(self, racine, cgroup):
+    def __init__(self, racine, cgroup, debut):
         self.racine, self.cgroup = racine, cgroup
-        self.possedes = {}
+        self.possedes = {racine: debut}
         self.observes = {}
 
     def relever(self, table):
@@ -165,7 +165,7 @@ class Descendants:
             for pid, r in table.items():
                 parent = table.get(r['parent'])
                 parent_possede = parent and self.possedes.get(r['parent']) == parent['debut']
-                if pid not in self.possedes and (pid == self.racine or parent_possede or r['parent'] == os.getpid()):
+                if self.possedes.get(pid) != r['debut'] and (parent_possede or r['parent'] == os.getpid()):
                     self.possedes[pid] = r['debut']
                     change = True
         erreurs = []
@@ -275,7 +275,10 @@ def superviser(command, delai, preuves):
         if time.monotonic() >= echeance - 2:
             raise Refus('budget épuisé pendant le montage, commande non lancée')
         enfant = subprocess.Popen(argv, env=env, start_new_session=True)
-        groupe = Descendants(enfant.pid, cg)
+        # Avant tout poll/wait (qui pourrait récolter l'enfant), figer même un
+        # Zombie : tant qu'il n'est pas récolté son PID ne peut pas être réutilisé.
+        debut_enfant = (Path('/proc') / str(enfant.pid) / 'stat').read_text().rsplit(') ', 1)[1].split()[19]
+        groupe = Descendants(enfant.pid, cg, debut_enfant)
         while True:
             groupe.relever(processus())
             if enfant.poll() is not None:

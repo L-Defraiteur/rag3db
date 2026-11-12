@@ -89,7 +89,7 @@ class Montage(unittest.TestCase):
         self.assertNotIn('RAG3WEAVER_VERROU_TENU', env)
 
     def test_scope_soeur_refusee_avec_preuve(self):
-        d = v.Descendants(777, '/job')
+        d = v.Descendants(777, '/job', '10')
         row = dict(parent=0, session=777, debut='10', cgroup='/autre')
         with patch.object(v, 'plafond', return_value=dict(direct='max', effectif=v.MAX_MEMOIRE)):
             with self.assertRaises(v.Refus):
@@ -97,14 +97,25 @@ class Montage(unittest.TestCase):
         self.assertIn('hors du cgroup', next(iter(d.observes.values()))['refus'])
 
     def test_pid_reutilise_n_est_jamais_signale(self):
-        d = v.Descendants(777, '/job')
+        d = v.Descendants(777, '/job', 'ancien')
         d.possedes[777] = 'ancien'
         with patch.object(v, 'processus', return_value={777: dict(debut='nouveau')}), patch.object(os, 'pidfd_open') as ouvrir:
             d.signaler(signal.SIGTERM)
         ouvrir.assert_not_called()
 
+    def test_racine_absente_puis_pid_reutilise_jamais_adopte(self):
+        d = v.Descendants(777, '/job', 'zombie-original')
+        d.relever({})  # Le premier inventaire ignore la racine déjà Zombie.
+        table = {777: dict(parent=0, session=777, debut='nouveau-tiers', cgroup='/autre')}
+        d.relever(table)
+        self.assertEqual(d.possedes[777], 'zombie-original')
+        self.assertEqual(d.observes, {})
+        with patch.object(v, 'processus', return_value=table), patch.object(os, 'pidfd_open') as ouvrir:
+            d.signaler(signal.SIGTERM)
+        ouvrir.assert_not_called()
+
     def test_enfant_du_parent_reutilise_jamais_adopte_ni_signale(self):
-        d = v.Descendants(777, '/job')
+        d = v.Descendants(777, '/job', 'ancien')
         d.possedes[777] = 'ancien'
         table = {777: dict(parent=0, session=777, debut='nouveau-tiers', cgroup='/autre'),
                  888: dict(parent=777, session=777, debut='enfant-tiers', cgroup='/autre')}
@@ -116,7 +127,7 @@ class Montage(unittest.TestCase):
         ouvrir.assert_not_called()
 
     def test_reutilisation_entre_open_pidfd_et_recheck_ne_signale_pas(self):
-        d = v.Descendants(777, '/job')
+        d = v.Descendants(777, '/job', 'ancien')
         d.possedes[777] = 'ancien'
         etats = [{777: dict(debut='ancien')}, {777: dict(debut='nouveau')}]
         with patch.object(v, 'processus', side_effect=etats), patch.object(os, 'pidfd_open', return_value=42) as ouvrir, patch.object(os, 'close') as fermer, patch.object(signal, 'pidfd_send_signal') as envoyer:
