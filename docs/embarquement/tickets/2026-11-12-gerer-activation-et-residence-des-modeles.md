@@ -98,3 +98,25 @@ Recette suivante CPU : même compilation rustc puis filtre `demandeur` (deux
 témoins : partage et annulation). Ensuite vérification crate avec feature daemon
 et test du vrai connecteur via fournisseur factice, sous poste lourd à luciepc
 pour toute compilation Cargo. Aucun service installé ni modèle GPU modifié.
+
+### Revue et corrections avant qualification
+
+Revue mémoire sur 67f3a3db0 : le chemin géré omettait `timeout_secs` du
+client dense ; corrigé avec témoin `client.timeout() == 1s`. Les sondes
+héritées réinitialisaient leur timeout à chaque lecture : une réponse lente
+pouvait dépasser le budget du worker. Échéance absolue propagée aux sondes
+connexion/écriture/lecture et au premier lancement ; témoin TCP CPU distillant
+des octets, budget 150 ms et résultat attendu sous une seconde.
+
+Fixture bancaire CPU intégrée depuis 3963f6829 (dffb2724b). Témoins du
+connecteur réel dans `src/model_source/activation.rs` : déclaration serde,
+activation dense, identité/dimension, appel /embed, délai préservé, santé legacy
+chauffe inconnue, annulation avant départ et dimension étrangère refusée.
+`daemon::embeddings::tests::chauffe_partielle_garde_erreurs_et_formes` exerce
+le vrai préchauffage avec une forme refusée, sans modèle GPU.
+
+Qualification suivante : rustc standalone (partage, annulation, sonde lente),
+puis à luciepc sous poste lourd `cargo test --lib --features daemon
+model_source::activation::tests` et filtre `chauffe_partielle`. Budget annoncé
+20 minutes après acquisition pour cette première compilation ciblée, arrêt au
+premier rouge inattendu. Source et recette sont poussées avant lancement.

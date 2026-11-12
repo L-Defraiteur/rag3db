@@ -257,6 +257,10 @@ impl Serveur {
     /// C'est l'unique verbe : l'appelant n'a pas à savoir qui, du démon
     /// précédent ou de lui-même, a payé le chargement.
     pub fn assurer(&self) -> Result<Attache, ServeurError> {
+        self.assurer_avant(Instant::now() + self.attente)
+    }
+
+    pub(crate) fn assurer_avant(&self, echeance: Instant) -> Result<Attache, ServeurError> {
         let addr = resoudre(&self.adresse)
             .ok_or_else(|| ServeurError::Adresse(self.adresse.clone()))?;
         // Un port nul : personne n'y répond jamais, donc **on lance toujours
@@ -267,7 +271,7 @@ impl Serveur {
             return self.lancer_sur_port_nul();
         }
 
-        match sonder(addr, &self.sonde) {
+        match sonder_avant(addr, &self.sonde, echeance) {
             Etat::Repond => {
                 return Ok(Attache {
                     adresse: self.adresse.clone(),
@@ -289,9 +293,10 @@ impl Serveur {
         }
 
         let journal = self.journal();
+        if Instant::now() >= echeance {
+            return Err(ServeurError::Lancement { nom: self.nom.clone(), cause: "budget d'activation dépassé avant lancement".into() });
+        }
         let mut enfant = self.lancer(&journal)?;
-
-        let debut = Instant::now();
         loop {
             if let Ok(Some(statut)) = enfant.try_wait() {
                 return Err(ServeurError::Mort {
@@ -300,7 +305,7 @@ impl Serveur {
                     journal,
                 });
             }
-            if sonder(addr, &self.sonde) == Etat::Repond {
+            if sonder_avant(addr, &self.sonde, echeance) == Etat::Repond {
                 return Ok(Attache {
                     adresse: self.adresse.clone(),
                     nom: self.nom.clone(),
@@ -310,7 +315,7 @@ impl Serveur {
                     fin: self.fin,
                 });
             }
-            if debut.elapsed() >= self.attente {
+            if Instant::now() >= echeance {
                 let _ = enfant.kill();
                 let _ = enfant.wait();
                 return Err(ServeurError::Muet {
@@ -319,7 +324,7 @@ impl Serveur {
                     journal,
                 });
             }
-            std::thread::sleep(Duration::from_millis(50));
+            std::thread::sleep(echeance.saturating_duration_since(Instant::now()).min(Duration::from_millis(50)));
         }
     }
 
@@ -468,15 +473,22 @@ fn resoudre(adresse: &str) -> Option<SocketAddr> {
 
 /// La sonde, en `std` pur. Voir l'en-tête du module pour le pourquoi.
 fn sonder(addr: SocketAddr, sonde: &Sonde) -> Etat {
-    let Ok(mut flux) = TcpStream::connect_timeout(&addr, Duration::from_millis(300)) else {
+    sonder_avant(addr, sonde, Instant::now() + Duration::from_secs(2))
+}
+
+fn sonder_avant(addr: SocketAddr, sonde: &Sonde, echeance: Instant) -> Etat {
+    let restant = echeance.saturating_duration_since(Instant::now());
+    if restant.is_zero() { return Etat::Absent; }
+    let Ok(mut flux) = TcpStream::connect_timeout(&addr, restant.min(Duration::from_millis(300))) else {
         return Etat::Absent;
     };
     let Sonde::Http { chemin, contient } = sonde else {
         return Etat::Repond;
     };
 
-    let _ = flux.set_read_timeout(Some(Duration::from_millis(1500)));
-    let _ = flux.set_write_timeout(Some(Duration::from_millis(500)));
+    let restant = echeance.saturating_duration_since(Instant::now());
+    if restant.is_zero() { return Etat::Absent; }
+    let _ = flux.set_write_timeout(Some(restant.min(Duration::from_millis(500))));
     let requete = format!(
         "GET {chemin} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\nUser-Agent: rag3weaver\r\n\r\n"
     );
@@ -489,6 +501,9 @@ fn sonder(addr: SocketAddr, sonde: &Sonde) -> Etat {
     let mut reponse = Vec::new();
     let mut tampon = [0u8; 4096];
     loop {
+        let restant = echeance.saturating_duration_since(Instant::now());
+        if restant.is_zero() { break; }
+        let _ = flux.set_read_timeout(Some(restant.min(Duration::from_millis(1500))));
         match flux.read(&mut tampon) {
             Ok(0) => break,
             Ok(n) => {

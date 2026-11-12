@@ -61,3 +61,31 @@ fn deux_demandeurs_ne_lancent_qu_un_processus() { exercer(false); }
 
 #[test]
 fn annuler_un_demandeur_ne_tue_pas_l_autre() { exercer(true); }
+
+#[test]
+fn une_sonde_qui_distille_des_octets_ne_reinitialise_pas_le_budget() {
+    use std::io::{Read, Write};
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let adresse = listener.local_addr().unwrap().to_string();
+    let fil = std::thread::spawn(move || {
+        let (mut flux, _) = listener.accept().unwrap();
+        flux.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        let mut tampon = [0; 1024]; let _ = flux.read(&mut tampon);
+        for _ in 0..100 {
+            if flux.write_all(b"x").is_err() { break; }
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    });
+    let dossier = std::env::temp_dir().join(format!("activation-lente-{}", std::process::id()));
+    let s = Serveur::new("lent", adresse, "/programme/non/lancable")
+        .sante("/sante", "identite-absente").journal_dans(&dossier)
+        .attente(Duration::from_millis(150));
+    let debut = std::time::Instant::now();
+    let d = serveur::activation::acquerir(&s, &dossier).unwrap();
+    let erreur = d.attendre(&std::sync::atomic::AtomicBool::new(false), Duration::from_secs(2)).err().unwrap();
+    let duree = debut.elapsed();
+    fil.join().unwrap();
+    std::fs::remove_dir_all(dossier).unwrap();
+    assert!(duree < Duration::from_secs(1), "{duree:?} : {erreur}");
+    assert!(erreur.contains("budget"), "{erreur}");
+}
