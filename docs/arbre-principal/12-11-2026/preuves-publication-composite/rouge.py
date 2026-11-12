@@ -1,6 +1,6 @@
 from pathlib import Path
 import hashlib,json,mmap,os,re,shutil,subprocess,sys,time
-R=Path('/home/lucied/.cache/rag3weaver-build');W=R/'cx-wt-publication-composite';C=W/'extension/rag3weaver';T=R/'cx-target-contenu-derive';P=R/'cx-publication-composite-rouge-v2'
+R=Path('/home/lucied/.cache/rag3weaver-build');W=R/'cx-wt-publication-composite';C=W/'extension/rag3weaver';T=R/'cx-target-contenu-derive';P=R/'cx-publication-composite-rouge-v3'
 SOURCE=sys.argv[1];FILTERS=['dataflow::migrations::publication::native::tests::native_foreign_column_is_rejected_without_mutation']
 P.mkdir(exist_ok=False)
 receipt=json.loads(Path(os.environ['RAG3WEAVER_VALIDATION_RECU']).read_text());END=receipt['echeance']-5
