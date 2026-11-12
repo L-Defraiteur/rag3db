@@ -138,3 +138,11 @@ Variables de services/modèles/identifiants retirées, roots/cache/runs privés,
 pas de GPU ni donnée de Lucie. Source et lanceur externe annoncés avant lancement.
 Premier rouge inattendu : arrêt, diagnostic publié avant correction/reprise ;
 pas de replay inchangé. Passe adaptée proposée après résultat, aucun master sans revue/tour.
+
+
+Revue codeparsers a4bf86c865 : réserve concrète sur members de c999. Python/Rust
+peuvent avoir des méthodes indexées sans entrées declarations ; ne rendre que ces
+faits omet une capacité déjà disponible. Nouveau témoin exige le scope méthode
+direct dans nodes ; correction prévue compose ces enfants de plages (qualifiés
+comme tels) et les faits déclarés séparés, sans les confondre avec appartenance.
+Le ciblé c999 reste figé pendant son exécution ; nouveau rouge attendu après.
