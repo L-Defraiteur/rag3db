@@ -260,3 +260,19 @@ mesure bornée nombre d’entrées × nombre d’enregistrements, distincte des 
 gtest de COPY complets. C’est une hypothèse de coût à tester, pas la cause prouvée
 de la divergence de pression. Aucune nouvelle compilation ni exécution de rouge
 pour cette lecture ; la comparaison contrôlée reste à préparer dans ce ticket.
+
+### Protocole borné préparé, aucune mesure déclenchée
+
+Voir [le protocole index × plages](../12-11-2026/03-protocole-borne-index-et-annulations.md).
+Porteur cœur C++, même lot. Première cellule prévue N=65 536/U=64, R=4 096
+constant ; matrice plafonnée à 12 cellules, 72 processus, 15 minutes, un seul
+`poste mesure`, pool 512 Mio/RSS 1 Gio. Les modes comparent des entrées identiques,
+le retrait par clé étant explicitement une référence basse sans lecture de colonnes.
+
+Les binaires existants ne paramètrent pas N × U : aucune nouvelle mesure présentée
+comme réemploi fictif. Prochaine action avant créneau : préparer et relire le
+pilote externe minimal, confirmer ses dépendances identiques et la possibilité
+de lier l’archive de base sans rebuild moteur. Le protocole distingue plages et
+INSERT_INFO ; une mesure d’annulation complète exigerait un second pilote et
+un moteur du correctif assorti, à proposer seulement après la première preuve.
+Sources/logs terminés conservés ; aucune lib distribuée modifiée.

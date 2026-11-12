@@ -318,3 +318,9 @@ ensuite refusé en 172 ms au lieu de réussir en 752 s. Les volumes et erreurs h
 DDL divergent aussi ; on ne peut pas attribuer cet écart au coût du nouveau scan
 par plage à partir de ces seules exécutions. Préparer la mesure bornée index local
 × nombre d’enregistrements undo ; ne pas rejouer aveuglément le scénario minute.
+
+Protocole de mesure préparé, sans exécution :
+`docs/coeur-cpp/12-11-2026/03-protocole-borne-index-et-annulations.md`, lié au
+ticket d’annulation. Il borne N × plages, fixe les entrées/R, distingue retrait
+d’index et rollback complet, précise les plafonds et les limites du réemploi
+des binaires. Prochain pas : pilote externe à relire avant demande de créneau.
