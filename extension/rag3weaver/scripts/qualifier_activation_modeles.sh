@@ -33,14 +33,14 @@ if [ "$mode" = cpu ]; then
     cargo test --lib --features rag3db-native,code,daemon chauffe_partielle_garde_erreurs_et_formes -- --nocapture
 else
     export FEATURES=rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm
-    scripts/check_features.sh
+    timeout -k 10s 2400 bash scripts/check_features.sh
     verifier_taille
     # La mesure du modèle privé est jouée séparément par le banc.
-    cargo test --lib --features "$FEATURES"
+    timeout -k 10s 1800 cargo test --lib --features "$FEATURES"
     verifier_taille
-    cargo build --bin rag3weaver-embeddings --features "$FEATURES"
+    timeout -k 10s 1200 cargo build --bin rag3weaver-embeddings --features "$FEATURES"
     verifier_taille
-    scripts/temoins_navigateur.sh "$FEATURES"
+    timeout -k 10s 900 bash scripts/temoins_navigateur.sh "$FEATURES"
 fi
 garder_le_target "$CARGO_TARGET_DIR" "$PWD"
 verifier_taille
