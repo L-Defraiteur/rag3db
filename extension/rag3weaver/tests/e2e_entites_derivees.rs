@@ -1090,15 +1090,16 @@ fn un_graphe_declare_enrichit_les_occurrences_et_non_leurs_versions() {
     use rag3weaver::search_strategy::UnifiedResult;
     use std::sync::{Arc, Mutex};
     let (_cache, mut catalog) = catalogue_projection_publique();
-    let mut attendus = BTreeMap::new();
+    let mut handles = Vec::new();
     for (file, line) in [("a.rs", 1), ("b.rs", 20)] {
         let r = catalog.create("Occurrence", BTreeMap::from([
             ("file".into(), s(file)), ("line".into(), CypherValue::Int(line)),
             ("body".into(), s("marquegraphepublic")),
         ])).unwrap();
-        attendus.insert(r.uuid().unwrap(), line);
+        handles.push((r, line));
     }
     assert_eq!(catalog.drain().failed, 0);
+    let attendus: BTreeMap<String, i64> = handles.into_iter().map(|(r, line)| (r.uuid().unwrap(), line)).collect();
     assert_eq!(compte(&catalog, "MATCH (v:IndexOccurrence) RETURN count(v)"), 1);
     assert!(!catalog.entity_config("IndexOccurrence").unwrap().fields.contains_key("line"));
     let mut services = ServiceRegistry::new();

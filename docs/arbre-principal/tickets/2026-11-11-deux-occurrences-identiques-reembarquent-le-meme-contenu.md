@@ -355,3 +355,7 @@ Même ticket1a, porteur arbre, témoin ciblé autorisé après le témoin de mar
 GraphDefinition JSON→factories communes, SearchSource→BM25→ResolveParent avec
 la query aussi au dernier nœud ; deux UUID publics et positions distinctes attendus.
 Pas de code produit avant rouge réel, pas de limitation documentaire de contournement.
+
+Premier montage P2 source62b22426e : cx-graphe-enrichissement-rouge.log échoue
+sur le handle encore Pending, avant drain/graphe. UUID attendu déplacé après
+drain dans la fixture ; aucun défaut d'enrichissement prouvé par ce premier essai.
