@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import selectors
 import signal
@@ -110,7 +111,11 @@ try:
     cases = list(root.iter('testcase'))
     skips = [c.get('classname')+'.'+c.get('name') for c in cases if c.find('skipped') is not None]
     failures = [c.attrib for c in cases if c.find('failure') is not None]
-    assert len(cases) == 360 and not failures
+    selected = re.search(r'\[==========\] Running (\d+) tests', (out/'transaction.log').read_text(errors='replace'))
+    disabled = [c for c in cases if c.get('status') == 'notrun']
+    assert selected and int(selected[1]) == 359
+    assert len(cases) == 360 and len(disabled) == 1 and not failures
+    assert root.get('failures') == '0' and root.get('errors') == '0'
     assert sorted(skips) == ['VectorIndexCrashReopenProbe.OpenInAFreshProcess', 'WalReader.PrintAFile']
     for item in manifest['files']:
         assert digest(package/item['path']) == item['sha256']
