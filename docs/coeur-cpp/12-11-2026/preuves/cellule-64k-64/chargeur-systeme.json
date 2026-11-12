@@ -1,0 +1,23 @@
+{
+  "interpreter": "/lib64/ld-linux-x86-64.so.2",
+  "canonical_loader": "/usr/lib/ld-linux-x86-64.so.2",
+  "loader_sha256": "2a950d46575efa0210d22440988f5a6b4507ebddc6c86d9a42e6e7ef6f01463e",
+  "package_owner": {
+    "code": 0,
+    "text": "/usr/lib/ld-linux-x86-64.so.2 is owned by glibc 2.44+r50+g1848099f063e-3"
+  },
+  "reference_binary": "/home/lucied/.cache/rag3db-moteur-notes/annulation/binaires-0511dece7/transaction_test",
+  "reference_needed": [
+    "libgtest_main.so.1.18.0",
+    "libgmock_main.so.1.18.0",
+    "libgmock.so.1.18.0",
+    "libgtest.so.1.18.0",
+    "libstdc++.so.6",
+    "libm.so.6",
+    "libgcc_s.so.1",
+    "libc.so.6",
+    "ld-linux-x86-64.so.2"
+  ],
+  "metadata_only": true,
+  "pilot_executed": false
+}

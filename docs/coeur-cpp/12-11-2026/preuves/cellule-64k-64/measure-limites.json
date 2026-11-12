@@ -1,0 +1,6 @@
+{
+  "memory_max": "1073741824",
+  "swap_max": "0",
+  "unit": "cx-coeur-pilote-mesure-12nov-01",
+  "deadline_soft_s": 880.0
+}

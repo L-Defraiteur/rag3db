@@ -565,3 +565,63 @@ Compilation/lien effectifs en 1TU passent, mais attestation finale ELF refusée
 à ce point ; pas de résultat de cellule ni d’égalité entrées/survivants à annoncer.
 Reste revue C7 du chargeur et d’une reprise explicite sur le binaire existant,
 sans nouvelle compilation ni relink automatique. Aucun lourd réservé.
+
+### Reprise autorisée après revue du chargeur, sans recompilation
+
+C7 a relu la provenance et accepte exactement le cinquième NEEDED système
+ld-linux-x86-64.so.2, sans lib projet/RPATH ni exception générale. Requalifier
+en lecture le même binaire0c868053, garder premier refus/préparation ; aucune
+recompilation ou relink. Première cellule de3paires réautorisée seulement après
+fin du ciblé CLI arbre, sous poste mesure exclusif/global900s/60s enfant/1Gio/
+pool512Mio. Vérifier binaire/source/limites, premier échec mesure stop.
+Poste lu libre0/4 au démarrage de la relecture ; confirmation de fin arbre
+demandée avant mesure, aucun lancement de mesure sur ce seul constat.
+
+Requalification metadata terminée : même binaire0c868053/sourcefdc3e90f, cinq
+NEEDED exacts, interpréteur/chargeur SHA accepté, aucun RPATH ; ELF jamais
+exécuté lors de cette étape. `elf-requalification.json` et reçu
+`compile-manifest.json` explicitent reprise en lecture, sans rebuild ; premier
+refus et contrôleur initial SHA119db4c8… conservés inchangés.
+Arbre confirme FIN2684/11:49:12 et aucun Cargo/lourd réservé ; C7 demande
+l’acquisition immédiate de la porte existante poste mesure, sans autre attente.
+Début de la première tentative de mesure annoncée : unité neuve bornée1G/
+890s+arrêt2s après acquisition, contrôleur initial forcé sur phase measure
+uniquement, exact5 vérifié par enveloppe, premier échec mesure distinct pour
+ne pas écraser le refus de préparation. Pas de compilation, matrice ni DDL.
+
+### Première cellule terminée code0 — poste rendu, pas de matrice
+
+Unité cx-coeur-pilote-mesure-12nov-01 terminée code0, MainPID0, poste relu0/4.
+Runtime service0,652s, CPU0,412s, pic49,6M/swap0 ; contrôleur global0,558s.
+Limite mémoire réelle1 073 741 824 octets/swap0 lue, unité890s+2 après
+acquisition poste mesure exclusive, enfants57s+2 sous60s. Six processus
+uniques, aucun retry, 384plages brutes, bin/source inchangés.
+
+Toutes les entrées et tous les survivants ont les mêmes empreintes dans les
+3paires, validés/réinsérés par le pilote. Médianes retrait : clés préconnues
+0.296892ms, plages 26.442622ms, ratio 89.06. Ce sont les mécanismes dans
+UNE cellule N65 536/U64/R4096, pas les moteurs complets baseline/fix ni une
+preuve de croissance selon N/U ou de cause de la pression DDL.
+Les mêmes 7 647 744 octets de pool sont observés aux frontières de tous les
+appels ; pas une preuve d’absence d’allocation transitoire.
+
+Preuves distantes `annulation/cx-pilote-retrait-0511dece7/` :
+`cellule-resultats.json`, `cellule-1..6.stdout`, `cellule-1..6-result.json`,
+`measure-limites.json`, `unite-mesure.log`. Export et analyse à compléter ;
+source/binaire/provenance et refus initial conservés. Aucun nouveau slot réservé.
+
+Résultats et bruts de la première cellule exportés dans
+`12-11-2026/08-resultat-premiere-cellule-retrait.md` et
+`12-11-2026/preuves/cellule-64k-64/` : 6sorties natives, argv/codes/empreintes,
+bornes, unité et premier refus conservé. Médianes0,296892/26,442622ms ;
+interprétation limitée aux mécanismes et à cette cellule, pas au moteur global.
+
+### Quatre points supplémentaires autorisés, périmètre fermé
+
+Après revue indépendante de la première cellule, C7 autorise seulement :
+(16384,64), (262144,64), (65536,8), (65536,256), R4096 fixe,
+3paires alternées chacun, même source/binaire/limites, maximum24processus.
+Une acquisition poste mesure, global900s après acquisition, enfant60s,
+mémoire1G/pool512M ; premier échec stop. Ni matrice complète ni DDL/codeproduit.
+Arbre confirme fin de ses8CLI et aucune réservation. Après ces4points : STOP
+mesures et analyse des latences/dispersion/validations par cellule.

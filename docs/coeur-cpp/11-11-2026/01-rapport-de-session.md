@@ -391,3 +391,10 @@ ELF code2 : liste du contrôleur trop étroite, chargeur système glibc ld-linux
 absent de la liste prévue. BinaireSHA0c868053afea43df3cb2eb5fe8e77f597701b8ab4eb2a0c403ca854ef64cf704
 conservé non exécuté. Preuves/diagnostic dans revue07 et même ticket ; unité
 terminée, poste0/4 relu, C7/arbre informés. Aucun retry, aucune paire mesurée.
+
+Première cellule autorisée réussie : six processus/384plages, signatures
+entrées/survivants identiques, médianes clés0,296892ms/plages26,442622ms,
+pool frontière inchangé7 647 744octets. Pas facteur89du moteur complet ni
+preuve de pressionDDL. Bruts exportés/revue08, poste libéré.
+C7 autorise ensuite exactement4points N/U et24processus max ; arbre finit
+ses8CLI et laisse la porte mesure. Même source/binaire, pas de compilation.
