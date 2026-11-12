@@ -182,6 +182,22 @@ qualify the supplied configurations. This report cannot execute or apply a
 transfer; durable storage identity, generation and storage-backed schema
 qualification remain prerequisites for that work.
 
+The native library's `dataflow::migrations::publication` persists complete
+validated declaration snapshots in a dedicated catalog created under an absent
+directory. `NewPublicationOrigin`, immutable `PublicationIntent` and operation
+receipts distinguish an origin, each publication event and its content
+fingerprint. A→B→A restores the content fingerprint while keeping three distinct
+publication identities. Replaying an exact committed operation returns its
+receipt and the current head, including an explicit historical disposition.
+
+Opening an owned catalog validates its identity, closed schema and complete
+registry read-only before acquiring a writer and checking again. Publication
+commits the value, head and receipt atomically; an uncertain commit requires
+reopening to resolve the operation. Inputs that change through the wire codec
+are refused before storage creation. This library API stores declarations;
+index data transfer, physical-format publication and `migration apply` remain
+future work.
+
 ## Measured
 
 First index of this repository (about 7 000 files, 80 000 scopes, 1.1 million

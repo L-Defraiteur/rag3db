@@ -3,11 +3,11 @@
 from pathlib import Path
 import ast, datetime, hashlib, json, mmap, os, re, shlex, shutil, signal, subprocess, sys, tempfile, time
 R=Path('/home/lucied/.cache/rag3weaver-build'); W=R/'cx-wt-publication-composite'; C=W/'extension/rag3weaver'
-P=R/'cx-passe-publication-composite-v1'; T=R/'cx-target-contenu-derive'
+P=R/'cx-passe-publication-composite-v2'; T=R/'cx-target-contenu-derive'
 SOURCE=sys.argv[1]; RECEIPT=Path(os.environ['RAG3WEAVER_VALIDATION_RECU']); AUTH=json.loads(RECEIPT.read_text()); DEADLINE=AUTH['echeance']; INITIAL=DEADLINE-5400
 F='rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm'
 NATIVE='rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
-PG='cx_pub_2191_20261113_v1'; ROLE='rag3weaver'
+PG='cx_pub_2191_20261113_v2'; ROLE='rag3weaver'
 assert re.fullmatch('[0-9a-f]{40}',SOURCE) and time.monotonic()<DEADLINE-15
 P.mkdir(exist_ok=False)
 CG=Path('/proc/self/cgroup').read_text().strip().split('::',1)[1]; G=Path('/sys/fs/cgroup'+CG)
@@ -230,7 +230,7 @@ try:
     groups={prefix:len([n for n in names if n.startswith(prefix)]) for prefix in ['storage_inspection::observation_tests::','catalog::metadata::tests::','dataflow::migrations::facts::tests::','dataflow::migrations::transfer::tests::']}
     assert list(groups.values())==[10,3,18,15],groups
     publication=[n for n in names if n.startswith('dataflow::migrations::publication::')]
-    assert len(publication)==12 and not set(publication)&set(ignores),publication
+    assert len(publication)==14 and not set(publication)&set(ignores),publication
     required=publication+[n for n in names if n.startswith(tuple(groups))]+['storage_inspection::native_tests::native_snapshot_restores_configs_relations_and_journal_without_changing_fixture_bytes','dataflow::record_nodes::tests::l_annulation_d_un_lot_de_liens_ne_retire_que_ce_qu_il_a_cree']
     assert set(required)<=set(names) and not set(required)&set(ignores)
     save('groupes-requis.json',dict(groups=groups,required=required))
