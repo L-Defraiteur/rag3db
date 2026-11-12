@@ -1358,3 +1358,33 @@ Aucune base réelle, modèle/service/GPU nouveau ou migration/apply ; ticket res
 ouvert pour ces suites distinctes. Poste a signalé CI déjàrouge depuis18:33UTC,
 pas de rerunCI ni de succès CI attribué au lot. Les attentes de tour/ressources
 des paragraphes antérieurs sont historiques, pas des instructions de reprise.
+
+### Seconde lecture Gemini exécutée — résultat incomplet, aucun défaut établi
+
+Un seul appel Vertex global `google/gemini-3.8-flash`, voie OpenAI configurée,
+HTTP200 en **41,24s**, borne globale120s incluant ADC, zéro retry. Identifiants
+transmis au client ADC uniquement par chemin usuel ; aucun contenu de secret,
+base ou conversation réelle envoyé ou conservé. Sources Rust figées D2, six
+fichiers complets avec lignes, contrat composite777 et synthèse des preuves.
+A était déjà intégré6d4d1c882 ; cette lecture parallèle ne modifie pas sa qualification.
+
+Résultat **incomplet** : `finish_reason=length`, 278tokens visibles et6718tokens
+de raisonnement déclarés, 49854tokens d'entrée ; ce n'est pas une revue favorable
+complète. Le seul début de constat prétend que les sous-objets dynamiques
+seraient omis par `canonical_json`. Relecture directe : facts.rs225–229 traite
+chaque `Object`, trie les clés et applique `canonical(v)` à chaque valeur ;
+la branche `Array` recurse également. L'affirmation reçue contredit donc
+l'implémentation fournie et ne démontre aucun défaut. Texte tronqué conservé
+intégralement ; aucune extrapolation sur des constats non rendus, aucun nouvel
+appel ni Cargo/GPU/banc. Le ticket reste ouvert pour les suites de migration
+déjà identifiées, sans action corrective issue de cette réponse.
+
+Preuves durables : [requête et sources](../12-11-2026/preuves-revue-gemini-A/requete-et-sources.md),
+[réponse](../12-11-2026/preuves-revue-gemini-A/reponse.md),
+[réponse brute](../12-11-2026/preuves-revue-gemini-A/reponse-brute.md),
+[métadonnées](../12-11-2026/preuves-revue-gemini-A/metadonnees.md),
+[empreintes sources](../12-11-2026/preuves-revue-gemini-A/sources.md),
+[script exact](../12-11-2026/preuves-revue-gemini-A/appel.md).
+La requête contient tous les octets sources envoyés et leurs références Git ;
+SHA256 requête `cda32c4a9318f4b3787e28519b110761d90c834e46ed214dcdd1ce23a4100864`.
+Copie brute locale : cache mémoire `revue-gemini-A-20261112/`.
