@@ -1,6 +1,6 @@
 # Backend déclaratif : carnet
 
-Exemple générique de persistance rag3db, recherche lucivy + dense local et outils MCP. Les états et dates sont déclarés dans `backend.json` ; aucun vocabulaire métier n'est intégré au runtime.
+Exemple générique de persistance rag3db, recherche lucivy + dense par service et outils MCP. Les états et dates sont déclarés dans `backend.json` ; aucun vocabulaire métier n'est intégré au runtime.
 
 - `schemas/` : contrats des données stockées (JSON Schema).
 - `config.fields` : annotations de rôles ; les autres types viennent du schéma.
@@ -8,7 +8,17 @@ Exemple générique de persistance rag3db, recherche lucivy + dense local et out
 - `graphs/` : opérations Mermaid réutilisables, avec entité liée par le manifeste.
 - `tools` : seule surface exposée. Les bindings ne peuvent pas être remplacés par un appelant. `input_payloads` dérive une vue d'identité ou de champs éditables du schéma.
 
-Le service d'embeddings déclaré doit être démarré et annoncer le modèle/dimension attendus. Le chemin de la bibliothèque vectorielle et celui de la base sont relatifs au manifeste. `data/` est ignoré par git.
+Le gabarit conserve le modèle `bge-m3` et1024 dimensions, sans imposer de port.
+Définis `RAG3WEAVER_SERVICE_EMBED` avec l'adresse du service BGE de ton poste ou de son
+tunnel ; plusieurs adresses séparées par des virgules sont possibles, sélectionnées par
+identité annoncée. L'alias `RAG3WEAVER_EMBED_SERVICE` est lu si la variable commune est vide.
+Une adresse explicitement ajoutée au manifeste reste prioritaire sur ces variables.
+Le service doit annoncer le modèle attendu ; un service granite n'est pas un BGE de remplacement.
+La résolution nomme l'absence ou l'incompatibilité du fournisseur et ne déclenche aucun repli
+local implicite. L'ouverture peut rester en plein texte avec vecteurs indisponibles et raison
+visible, selon le contrat du backend ; cela ne signifie pas que le dense est prêt.
+
+Le service d'embeddings choisi doit être démarré et annoncer le modèle/dimension attendus. Le chemin de la bibliothèque vectorielle et celui de la base sont relatifs au manifeste. `data/` est ignoré par git.
 
 Depuis la racine du dépôt, compilation adaptée à l'environnement de validation :
 
