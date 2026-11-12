@@ -1073,3 +1073,56 @@ du nouveau master, CLI migration5/1suite ;18faits+15aperçu réellement exigés 
 contrats source/génération conservés. Global3600/j8/Max32/target32/lib29 sous poste,
 PG privée neuve si requise par lib, TMP navigateur court privé disque ; aucun
 service/modèle/GPU nouveau nécessaire. Aucun lourd ou master de cette étape lancé.
+
+### A — passe globale figée après intégration ED, autorisée C7
+
+Rebase sur **6dd116e8f70fd328acf3b45a89401e06f71365cb**, branche neuve
+cx-arbre-faits-lies-2, range-diff4/4 identique, code A inchangé depuis le ciblé
+vert59eb. Master860f51706 ajoute seulement le bilan/nettoyage ED documentaire.
+Recette reviewable versionnée dans
+`docs/arbre-principal/12-11-2026/preuves-faits-lies-v1/{passe.py,lancer.sh}` ;
+SHA source passé en argument après commit/push. Ces scripts sont la preuve de
+montage du lot, sans nouvelle primitive produit. Syntaxes Python/bash contrôlées.
+
+Lancement luciepc via scripts/poste lourd, POSTE_MEM_MAX=32G, scope propre
+cx-passe-faits-lies-v1.scope, un seul target cx-target-contenu-derive32Go,
+lib29a7 épinglée, j8/INCREMENTAL0/LUCIVY8. **Échéance unique3600s** prise juste
+après acquisition, jamais réinitialisée ; driver fin-15s, runtime scope3590s.
+Bornes intersectées avec cette échéance : features5≤1500, véritable
+`cargo check --lib --no-default-features -j8`≤120 (aucun test minimal revendiqué),
+compilation large+listes≤1200, runtime lib≤300, NAV compilation/listes/runtime≤360,
+CLI compilation/listes/runtime≤180, attestation≤120. Premier rouge stop/diagnostic,
+pas de rejeu inchangé ni de tour master acquis par ce GO.
+
+Huit features explicites : rag3db-native,burn-embedder,burn-ocr,code,daemon,
+postgres,openai-llm,anthropic-llm. Compilation test --no-run --message-format=json,
+chemins ELF issus des artefacts Cargo, puis --list ET --ignored --list avant
+runtime direct via export lib du magasin. Lib entière : compte dérivé de l'ELF,
+18faits+15aperçu et témoin lien80 requis réussis, ignorés historiques inventoriés.
+NAV : mêmes marques source que temoins_navigateur.sh, feature navigateur,
+**40** attendus sans ignore. CLI : cible existante `--test e2e`, puis filtre
+`e2e_migration_preflight::` **5 tests/1 groupe**, sans ignore/saut ; autotests=false,
+aucune cible autonome inventée ou ajoutée. Backend CLI identifié par JSON Cargo.
+
+CPU explicite commun+EMBEDDER+RERANKER+OCR, BUILD_MEMORY_HIGH0 ; aucun service
+embed/sparse/rerank/OCR hérité. Énumération matérielle/RADV peut ouvrir dri/kfd,
+FD observés sans en déduire une inférence ; aucun modèle/service/GPU nouveau.
+PG synthétique neuve **cx_faits_2191_20261112_v1** sur conteneur existant5433,
+absence obligatoire avant création, rôle et current_database vérifiés avant
+lib ; connexion explicite jamais base implicite5433. Pas de .env/vault ni DB réelle.
+
+NAV sous TMPDIR court mkdtemp propre **/var/tmp/cx-fa.*** sur btrfs, wrapper natif
+Chromium avec bus D-Bus privé **sans aucun répertoire d'activation**, aucun ajout
+aux flags navigateur/système. Observateur PID/starttime sur descendants réels,
+cgroups et memory.max32 de chacun, cartes/maps réelles de librag3db29, ouvertures
+devices ; arrêt de nos seuls PID par pidfd si rouge. ELF exacts archivés avec SHA,
+source embarquée et **220 fichiers templates** vérifiés en octets pour lib/NAV/CLI/
+backend ; maps de chacun exigées. Quiescence propre puis scope inactive avant
+retrait du seul TMP possédé si vert ; rouge conserve TMP/proofs/PG. Preuves hors
+target sous cache luciepc **cx-passe-faits-lies-v1/**, PG conservée pour revue.
+
+Coordination FTS : l'ancien message5a83eee91/5dddf215c reçu pendant ce montage
+est **historique** selon C7 ; déjà intégréb28b55db6, ticket fermé et ressources
+retirées. Recherche en veille, aucune nouvelle revue/créneau/reprise FTS à attendre.
+Le lot A reste prioritaire ; son producteur de déclarations ne qualifie toujours
+pas un stockage et ne livre aucun apply/bootstrap/publication. Ticket reste ouvert.
