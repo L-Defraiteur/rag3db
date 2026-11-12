@@ -23,6 +23,9 @@
 
 use serde::{Deserialize, Serialize};
 
+#[path = "model_source/activation.rs"]
+pub mod activation;
+
 /// Ce qu'un modèle sait faire. Le nom est celui de la clé du manifeste
 /// (`models.<nom>`) et de la variable d'environnement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -141,6 +144,9 @@ impl Addresses {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ModelSource {
+    /// Activation locale explicite ; absente, le service est seulement joint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activation: Option<activation::Activation>,
     #[serde(default)]
     pub provider: Provider,
     /// Le modèle attendu. Un service à nous dit ce qu'il sert ; s'il sert
@@ -187,6 +193,7 @@ pub struct ModelSource {
 impl ModelSource {
     pub fn local(model: impl Into<String>) -> Self {
         Self {
+            activation: None,
             provider: Provider::Local,
             model: model.into(),
             address: Addresses::default(),
@@ -267,6 +274,9 @@ pub fn resolve<T>(
     builders: &Builders<T>,
     env: &dyn Fn(&str) -> Option<String>,
 ) -> Result<(T, Origin), String> {
+    if source.activation.is_some() {
+        return Err("activation déclarée : utiliser le connecteur dense géré ; autre capacité non encore prise en charge".into());
+    }
     let what = format!("models.{} ({})", capability.name(), source.model);
     let local = |why: &str| -> Result<(T, Origin), String> {
         match builders.local {
@@ -327,6 +337,18 @@ pub fn resolve<T>(
 ///   attache, on ne le lance ni ne l'arrête.
 /// - `compatible` : le contrat OpenAI `/embeddings` (`HttpEmbedder`).
 pub fn connect_embedder(source: &ModelSource) -> Result<(Box<dyn crate::embedder::Embedder>, Origin), String> {
+    connect_embedder_annulable(source, &std::sync::atomic::AtomicBool::new(false))
+}
+
+/// L'annulation ne concerne que ce demandeur ; le chargement partagé continue.
+pub fn connect_embedder_annulable(source: &ModelSource, annule: &std::sync::atomic::AtomicBool) -> Result<(Box<dyn crate::embedder::Embedder>, Origin), String> {
+    if source.activation.is_some() {
+        #[cfg(feature = "daemon")]
+        return activation::connecter(source, annule);
+        #[cfg(not(feature = "daemon"))]
+        return Err("activation d'embarquement : feature daemon requise".into());
+    }
+    if annule.load(std::sync::atomic::Ordering::Acquire) { return Err("connexion annulée".into()); }
     type Client = Box<dyn crate::embedder::Embedder>;
     #[cfg(feature = "burn-embedder")]
     let local = |s: &ModelSource| -> Result<Client, String> { local_embedder(&s.model) };

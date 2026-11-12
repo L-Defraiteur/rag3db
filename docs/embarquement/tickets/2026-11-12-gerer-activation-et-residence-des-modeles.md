@@ -71,3 +71,30 @@ fournisseurs existants. Première capacité dense accessible par connect_embedde
 Identité modèle/dimension vérifiée avant remise du client ; chauffe fournisseur
 observée, inconnue si non publiée. La politique initiale conserve le service,
 sans TTL, éviction ou activation distante implicites. Les manques restent ouverts.
+
+### Rouge réellement observé
+
+Sur 5754a75ef, le 12 novembre : compilation rustc du témoin puis un test
+joué, zéro ignoré. Deux créations au lieu d'une ; un demandeur reçoit
+`Mort(code 1)` et l'autre réussit. La fixture a été arrêtée et nettoyée.
+
+### Première source à relire
+
+`serveur/activation.rs` rassemble les demandes du processus et sérialise
+entre processus via un verrou fichier système sur l'adresse locale fixe.
+Les participants doivent partager le répertoire de coordination. Le worker
+possède l'activation bornée, pas un demandeur. Phase disponible ne prétend pas
+que les capacités sont chauffées : la santé porte séparément le bilan de chauffe.
+
+`ModelSource.activation` déclare programme, arguments, environnement, profil,
+périphérique, répertoires coordination/journal, budgets activation/attente et
+résidence `maintenir`. Profil/périphérique déclarés ne constituent pas une preuve
+de placement physique. Le connecteur dense existant passe par cette acquisition ;
+sa variante annulable isole l'attente et son client conserve un bail. Les autres
+capacités refusent explicitement une activation non encore supportée. Activation
+distante, éviction et comptage global des usages restent hors de cette tranche.
+
+Recette suivante CPU : même compilation rustc puis filtre `demandeur` (deux
+témoins : partage et annulation). Ensuite vérification crate avec feature daemon
+et test du vrai connecteur via fournisseur factice, sous poste lourd à luciepc
+pour toute compilation Cargo. Aucun service installé ni modèle GPU modifié.
