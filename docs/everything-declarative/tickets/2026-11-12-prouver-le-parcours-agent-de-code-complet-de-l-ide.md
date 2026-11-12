@@ -180,3 +180,12 @@ internes et externes n’ajoutent donc aucune racine. Témoin supplémentaire :
 HEAD voisin toujours refusée. La configuration explicitement déclarée conserve
 sa priorité sur le défaut isolé. Étape corrective3 distincte même recette1200s
 et target, preuves `correctif-git-3`, attente de revue avant Vertex.
+
+Revue C7 `65b57052f` : autre contre-exemple statique, faux `.git` symbolique
+vers le gitfile réel, dont la canonicalisation confondait les occurrences.
+Réserve retenue avant tout Vertex correctif. Le gitfile final symbolique est
+maintenant refusé avant découverte des métadonnées ; témoin négatif ajouté
+au côté du gitfile copié. La portée corrective3, noyau1/0/0 vert0.12s, est
+arrêtée volontairement par pidfd du superviseur attribué avant la gate.
+Nouvelle source corrective4 à relire, mêmes bornes1200/600/60/360 et target,
+preuves `correctif-git-4` distinctes ; aucun appel modèle pour les étapes2/3.
