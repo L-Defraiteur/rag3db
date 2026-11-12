@@ -19,6 +19,7 @@
 pub mod plan;
 pub mod facts;
 pub mod transfer;
+pub mod publication;
 
 use std::collections::HashMap;
 use std::fmt;

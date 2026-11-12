@@ -36,6 +36,17 @@ pub(crate) fn relations(metadata: &BTreeMap<String, String>) -> Result<BTreeMap<
     namespace(metadata, "relation:", "relation")
 }
 
+/// The single metadata write mechanism, also used by isolated publication catalogs.
+pub(crate) fn write_value(conn: &dyn crate::connection::DbConnection,
+    dialect: &dyn crate::dialect::SchemaDialect, key: &str, value: &str)
+    -> Result<(), crate::connection::DbError>
+{
+    conn.execute_with_params(&dialect.upsert_meta("key", "value"), &[
+        crate::connection::QueryParam::new("key", crate::connection::CypherValue::String(key.into())),
+        crate::connection::QueryParam::new("value", crate::connection::CypherValue::String(value.into())),
+    ]).map(|_| ())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

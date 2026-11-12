@@ -1697,3 +1697,13 @@ Catalogue dédié fermé (aucune donnée externe/parents) pour établir la compl
 du contenu couvert ; coût O(historique) explicité, pas d'annonce scalable.
 Aucun Cargo, target, PG, modèle, GPU ou service lancé. Diff et recette/témoins à
 publier avant lourd ; reste à implémenter/revoir/qualifier, ticket toujours ouvert.
+
+## Suite publication composite — diff préparé
+
+Contrat d0f251633 relu favorablement par orchestration et mémoire. Protocole
+fermé et adaptateur natif privés dans `migrations/publication`, écriture KV
+partagée avec Catalog. Onze nouveaux témoins prévus, dont deux interruptions
+natives en enfant (avant COMMIT et réponse perdue après COMMIT), complétés par
+les témoins A/RO existants. Source et recette `preuves-publication-composite/`
+publiées avant ciblé luciepc unique600s sous superviseur commun/lib29/CPU/j8.
+Pas encore compilé ni exécuté ; aucune capacité annoncée livrée à ce stade.
