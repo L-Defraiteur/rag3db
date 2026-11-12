@@ -324,3 +324,10 @@ Protocole de mesure préparé, sans exécution :
 ticket d’annulation. Il borne N × plages, fixe les entrées/R, distingue retrait
 d’index et rollback complet, précise les plafonds et les limites du réemploi
 des binaires. Prochain pas : pilote externe à relire avant demande de créneau.
+
+Pilote externe et commandes de revue préparés sous `docs/coeur-cpp/12-11-2026/outils/`,
+aucun compilateur lancé. Première proposition limitée à 64k × 64, trois paires ;
+15 minutes globales. Attention : archive assortie au correctif absente ; la seule
+archive de base ne prouve pas la conformité avec un en-tête modifié. La piste de
+surcouche sur celle-ci est retirée. Sources prêtes à relire, lien et mesure non
+prêts ; aucun moteur copié reconstruit, aucune lib modifiée.

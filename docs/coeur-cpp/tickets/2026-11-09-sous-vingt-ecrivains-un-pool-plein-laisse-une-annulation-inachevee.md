@@ -276,3 +276,25 @@ de lier l’archive de base sans rebuild moteur. Le protocole distingue plages e
 INSERT_INFO ; une mesure d’annulation complète exigerait un second pilote et
 un moteur du correctif assorti, à proposer seulement après la première preuve.
 Sources/logs terminés conservés ; aucune lib distribuée modifiée.
+
+### Pilote et commandes à relire préparés, sans charge lancée
+
+Voir les trois fichiers `../12-11-2026/outils/cx-mesure-retrait.cpp`,
+`cx-commandes-lien-revue.json`, `cx-premiere-cellule-revue.json`.
+Première cellule **seulement** : N=65 536, U=64, R=4 096, trois paires alternées.
+Les 15 minutes sont un plafond **global**, pas par cellule ; la matrice complète
+reste conditionnée à l’utilité du pilote. Le pilote compare des mécanismes sur
+index existant, pas les moteurs baseline/fix exacts ni leurs rollbacks.
+
+Relecture de provenance : seule archive disponible = base, SHA256
+`40dca10ed39bca8c45769f086e3bfd95fe0f6502876fc12482b33c44ddd662cc`.
+La disposition identique d’une classe ne démontre pas la conformité ODR avec son
+en-tête modifié. La surcouche sur archive de base proposée précédemment est
+retirée : **ne pas compiler/lier** le pilote ainsi. Archive et en-têtes assortis
+à `0511dece7` requis, provenance non disponible à ce point.
+
+Les commandes préparées ne compilent que le pilote ; elles ne reconstruisent
+aucun moteur copié, et restent `ready_to_compile=false`. Aucun compilateur ou
+mesure exécuté. Reste : revue source et provenance, disponibilité d’une archive
+assortie à traiter explicitement avec l’orchestration, puis lanceur qui impose
+budget global/RSS/groupe et créneau ; pas de mesure autorisée à ce stade.

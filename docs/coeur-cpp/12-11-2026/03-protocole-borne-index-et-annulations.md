@@ -57,14 +57,39 @@ Le premier mode est une référence basse du retrait de la base, **pas** son rol
 complet. L’intitulé des résultats doit le dire. Aucune inférence directe sur les
 2 048 Mio du scénario DDL à partir de cette seule micro-mesure.
 
-L’archive statique de base est disponible : 63 Mio. Les méthodes sous-jacentes
-utilisées par `InMemHashIndex` et sa disposition sont identiques sur les deux
-sources ; seul le retrait par plage est ajouté en ligne dans son en-tête.
-Avant le moindre lien, confirmer le diff de cet en-tête et de ses dépendances.
-Si cette identité n’est pas établie, arrêter : pas de bricolage d’ABI.
-Sinon, compiler uniquement le pilote avec cet en-tête exact en surcouche, puis
-lier aux archives déjà bâties de la base (reprendre les options du lien du test
-stockage via `ninja -t commands`, lecture seule). Pas de rebuild entier du moteur.
+L’archive statique de base est disponible : 65 685 818 octets, SHA256
+`40dca10ed39bca8c45769f086e3bfd95fe0f6502876fc12482b33c44ddd662cc`,
+source contrôlée `65486c02d` (HEAD distant `6e7f11680`), bâtie le 11 novembre
+à 22:04:37. Elle n’est **pas** approuvée pour lier ce pilote avec la définition
+de classe du correctif. L’ajout en ligne ne change pas ses données ni son vtable,
+mais la disposition identique ne prouve pas la conformité des définitions C++
+entre unités de traduction (ODR). La proposition de surcouche avec archive de
+base est donc retirée après relecture.
+
+Il faut des en-têtes et une archive **assortis à `0511dece7`**, plus leur provenance
+(source, options ABI, compilateur, SHA256, dépendances). Cette archive n’a pas été
+sauvegardée ; la compatibilité nécessaire au lien reste non établie. Ne pas
+l’affirmer à partir du nom de fichier ou du seul identifiant de la lib distribuée.
+Les commandes préparées compilent **une seule unité : le pilote externe**, puis
+lient les archives existantes. Elles ne compilent aucun fichier du moteur et
+ne savent pas rebâtir une archive manquante. Si l’archive assortie doit être
+produite, demander un créneau distinct et explicite ; aucune telle opération ici.
+
+### Livrables de préparation, non exécutés
+
+- [Pilote C++](outils/cx-mesure-retrait.cpp) : 256 partitions, mêmes clés/offsets,
+  deux modes, validations exhaustives des survivants et réinsertion hors mesure.
+- [Commandes de compilation et lien à relire](outils/cx-commandes-lien-revue.json) :
+  arguments dérivés par lecture `ninja -t commands` du test stockage, aucun
+  compilateur exécuté ; chemins externes et archive assortie encore absente.
+- [Seule première cellule, trois paires](outils/cx-premiere-cellule-revue.json) :
+  six processus prévus, ordre alterné, `ready_to_run=false`.
+
+Le pilote est du source préparé, pas un exécutable validé : aucune compilation,
+exécution ou mesure. Les commandes portent `ready_to_compile=false`. Le lanceur
+qui appliquera le budget global, le RSS et les groupes de processus reste à
+préparer/revoir avant mesure. Les commandes du pilote ne suffisent pas à appliquer
+ces plafonds. Aucune archive moteur, extension ou lib distribuée n’est modifiée.
 
 ### Matrice et entrée constante
 
@@ -78,7 +103,7 @@ stockage via `ninja -t commands`, lecture seule). Pas de rebuild entier du moteu
 
 Cela fait 12 cellules et 72 processus au maximum. Aucun échauffement chronométré
 partagé entre modes ; construction, réserve et génération sont hors chronométrage.
-Faire d’abord la seule cellule N=65 536, U=64 : si l’hypothèse ne se mesure pas ou
+La première proposition se limite à la seule cellule N=65 536, U=64 et trois paires : si l’hypothèse ne se mesure pas ou
 si le pilote ne vérifie pas ses invariants, arrêter avant la matrice complète.
 
 ### Mesures et contrôles
@@ -103,7 +128,9 @@ moteur. Ne pas confondre les deux dans les tableaux.
 Après relecture du pilote, pour le créneau : une seule mesure à la fois sous
 `poste mesure`, pool 512 Mio, scratch sous `~/.cache/rag3db-moteur-notes/annulation/`,
 aucun `/tmp` volumineux, aucun service GPU/7970, aucun changement des plafonds du poste.
-Budget RSS 1 Gio observé et arrêt du seul groupe de la mesure si dépassé ; maximum
+Les **15 minutes sont le plafond GLOBAL**, de la première préparation de processus
+à la dernière validation après acquisition du verrou : jamais 15 minutes par
+cellule. Budget RSS 1 Gio observé et arrêt du seul groupe de la mesure si dépassé ; maximum
 60 s par processus, 15 min pour le plan complet. Un dépassement est une donnée
 censurée, pas un zéro ni une borne assouplie. Si le pilote n’a pas encore la gestion
 de son groupe, ne pas le lancer par un simple `timeout` qui laisserait des enfants.
