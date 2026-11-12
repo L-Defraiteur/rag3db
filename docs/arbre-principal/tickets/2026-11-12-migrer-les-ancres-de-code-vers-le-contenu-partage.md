@@ -128,3 +128,9 @@ la cible1b sans transfert/publication restera indisponible avec refus nommé.
 Réutiliser les fichiers/graphes, le lecteur et le runner existants, pas un
 second journal. Le premier préfixe ne suffit pas à prouver tout T12 résolu :
 variables/configs/générations et revalidation sous exclusivité restent à couvrir.
+
+Affinage du préfixe T12 avant exécution : checksum valide et identique dans les
+cas orphelin/statut/version, seule la checksum change dans son cas dédié. Un
+témoin positif de l’historique legacy appliqué identique doit déjà passer :
+on ne « corrige » pas les quatre refus en refusant tous les historiques. Ce
+positif ne prétend pas couvrir la qualification résolue du nouveau format.
