@@ -26,3 +26,11 @@ atteints, mais Python reçoit Permission denied sur le script extérieur : refus
 couvert par le ciblé backend sans sandbox. Garder ce rouge et ses stdout/stderr, ne pas masquer
 le défaut en déplaçant le script ni en accordant implicitement des accès supplémentaires.
 Source ED/raccord sous revue. La variante non accordée n'a pas encore été éprouvée dans Chrome.
+
+
+Actualisation : la variante est désormais éprouvée dans Chrome, vert996 1/0/0 1,32s,
+contre rouge8b 0/1/0 0,90s avec fixture/helper identiques. Précondition explicite : extra_read
+sur le script seul avant ouverture atelier (contrat34f avant fixture996), sans droit implicite
+issu de l'accord. Les rouges sans déclaration restent conservés. Attestation ELF220,
+preuves complètes recopiées dans leurs dossiers distincts sur le portable. ED conduit la
+globale du candidat groupé ; aucun master archi. Lire la section actualisée du rapport.
