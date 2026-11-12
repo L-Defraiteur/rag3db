@@ -606,3 +606,15 @@ le journal failed continue de refuser avant effets. Le montage44c non compilé
 reste distinct. Pas de nouvelle passe complète lancée avant revue de ces verts.
 La portée v1 est inactive et le poste rendu ; la PG privée v1 et les preuves
 source9fb sont conservées sans les attribuer au nouveau code.
+
+## Passe v2 : arrêt sur résidu de la suite hôte
+
+Source**3377cdd84890770702fe9201c26cf457b54f24ce** : features5+minimal verts,
+lib**2152/0/64**, navigateur**39/0/0**, migration_preflight**5/0/0**. Hôte :
+**13/0/0** puis garde de TMPDIR rouge,24Ko de livres de manifestes privés.
+Arrêt rc1 du lanceur à13:10:52Paris, aucune autre suite jouée, portée finie/poste0/4.
+Le [ticket de résidu dédié](2026-11-12-le-dossier-d-etat-d-e2e-demon-hote-reste-dans-son-tmpdir.md)
+porte l'attribution baseline et le nettoyage possédé ; pas d'exception ajoutée ni
+reprise automatique. Preuves `cx-passe-preflight-1b-v2/` et dossier e2e-gardes
+nommé dans ce ticket. Les deux PG privées restent gardées, aucune base réelle.
+README/nouveautés restent en copie hors worktree jusqu'à une passe complète verte.
