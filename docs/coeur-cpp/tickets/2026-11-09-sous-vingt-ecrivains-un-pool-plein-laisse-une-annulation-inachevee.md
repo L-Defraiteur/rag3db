@@ -528,3 +528,40 @@ uniques puis readelf sans exécuter le pilote. Mesure ultérieure : timeout enfa
 conservateur57s+2s, groupe propre tué au timeout et arrêt sans retry. Validation
 identité des entrées/survivants, des64plages et des6volumes avant résultat final.
 Aucun lancement encore à ce point de préparation.
+
+### Premier arrêt pilote : compilation/lien passent, contrôle ELF refusé
+
+Unité `cx-coeur-pilote-compile-12nov-01`, wrapper1043954, terminée code2,
+MainPID0 et PID absent ; poste relu0/4, aucun lourd propre conservé.
+Staging : 830fichiers du paquet vérifiés, 2générés copiés et vérifiés ;
+source pilote SHAfdc3e90f… et recetteb4d424… inchangés. UNE TU compilée
+code0 puis lien code0 ; aucun moteur reconstruit.
+
+Premier refus dans le contrôleur ELF : DT_NEEDED contient les quatre librairies
+prévues et `ld-linux-x86-64.so.2`, absent de sa liste. ELF sans RPATH/RUNPATH.
+Le contrôleur s’est arrêté comme demandé, sans retry : aucune exécution du
+pilote, aucun poste mesure ni paire lancée, aucun résultat de mesure inventé.
+Preuves luciepc `annulation/cx-pilote-retrait-0511dece7/` :
+`unite-compile.log`, `compile/link-result.json`, `compile/link.stdout/stderr`,
+`elf-header.stdout`, `elf-dynamic.stdout`, `premier-echec.json`,
+`refus-elf-provenance.json`, `staging-verifie.json`.
+
+Binaire produit mais NON EXÉCUTÉ : 25 610 008 octets, SHA256
+`0c868053afea43df3cb2eb5fe8e77f597701b8ab4eb2a0c403ca854ef64cf704`.
+Objet pilote SHA256
+`f964fbacbe8c16f3a72c7325d18eb318041613cde73587101a9c90fb703dd0ef`.
+Le manifeste de compilation finale n’a pas été émis car le contrôle ELF a
+refusé ; ne pas le remplacer par une attestation réussie. Relecture de la
+provenance du chargeur à faire avant toute nouvelle autorisation.
+
+Diagnostic lecture seule complété dans
+[07-premier-arret-controle-elf](../12-11-2026/07-premier-arret-controle-elf.md).
+Le chargeur `/lib64/ld-linux-x86-64.so.2` se résout en `/usr/lib/ld-linux-x86-64.so.2`,
+appartient à glibc2.44+r50+g1848099f063e-3 (base pacman), SHA256
+`2a950d46575efa0210d22440988f5a6b4507ebddc6c86d9a42e6e7ef6f01463e`.
+Le binaire de tests de référence a le même NEEDED. La liste du contrôleur
+omettait donc un composant système ; elle n’a pas été modifiée/rejouée.
+Compilation/lien effectifs en 1TU passent, mais attestation finale ELF refusée
+à ce point ; pas de résultat de cellule ni d’égalité entrées/survivants à annoncer.
+Reste revue C7 du chargeur et d’une reprise explicite sur le binaire existant,
+sans nouvelle compilation ni relink automatique. Aucun lourd réservé.

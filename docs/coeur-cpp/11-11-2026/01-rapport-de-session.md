@@ -385,3 +385,9 @@ paquet02 depuis les flags effectifs privés, sans flags de tests ni chemins de
 base ; 17 dépendances privées+archive moteur, headers assortis. Revue06 et argv
 préparés seulement, aucun staging/compiler/lien/mesure. Prêt à revue après
 priorité CLI arbre, même ticket ; ready=false jusqu’à autorisation explicite.
+
+Pilote : staging830+2générés et compilation1TU/lien codes0, puis premier arrêt
+ELF code2 : liste du contrôleur trop étroite, chargeur système glibc ld-linux
+absent de la liste prévue. BinaireSHA0c868053afea43df3cb2eb5fe8e77f597701b8ab4eb2a0c403ca854ef64cf704
+conservé non exécuté. Preuves/diagnostic dans revue07 et même ticket ; unité
+terminée, poste0/4 relu, C7/arbre informés. Aucun retry, aucune paire mesurée.
