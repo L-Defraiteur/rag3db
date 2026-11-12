@@ -64,11 +64,30 @@ pub struct FormeChauffe {
     pub erreur: Option<String>,
 }
 
+/// Attestation de recette du fournisseur courant, pas de placement physique.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct IdentiteActivation {
+    pub profil: String,
+    pub peripherique: String,
+    pub recette: String,
+}
+impl IdentiteActivation {
+    pub fn depuis_environnement() -> Result<Option<Self>, String> {
+        let noms = ["RAG3WEAVER_ACTIVATION_PROFIL", "RAG3WEAVER_ACTIVATION_PERIPHERIQUE", "RAG3WEAVER_ACTIVATION_IDENTITE"];
+        let valeurs: Vec<_> = noms.iter().map(|n| std::env::var(n).ok().filter(|s| !s.trim().is_empty())).collect();
+        if valeurs.iter().all(Option::is_none) { return Ok(None); }
+        if valeurs.iter().any(Option::is_none) { return Err("identité d'activation incomplète".into()); }
+        Ok(Some(Self { profil: valeurs[0].clone().unwrap(), peripherique: valeurs[1].clone().unwrap(), recette: valeurs[2].clone().unwrap() }))
+    }
+}
+
 /// Ce que `GET /sante` rend. **Tout ce qu'un client a besoin de savoir avant
 /// d'envoyer quoi que ce soit** : la dimension pour se câbler, le caractère
 /// factice pour ne pas mentir au catalogue.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Identite {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activation: Option<IdentiteActivation>,
     /// Absent : fournisseur ancien ou sans instrumentation, jamais « chaud ».
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chauffe: Option<std::collections::BTreeMap<String, Chauffe>>,
@@ -112,6 +131,7 @@ pub struct Identite {
 
 /// **Le démon** : il tient le modèle et répond aux embarquements.
 pub struct EmbedDaemon {
+    activation: Option<IdentiteActivation>,
     chauffe: Option<std::collections::BTreeMap<String, Chauffe>>,
     embedder: Arc<dyn Embedder>,
     dual: Option<Arc<dyn DualEmbedder>>,
@@ -144,6 +164,7 @@ impl EmbedDaemon {
 
     pub fn new(embedder: Arc<dyn Embedder>) -> Self {
         Self {
+            activation: None,
             chauffe: None,
             embedder,
             dual: None,
@@ -156,6 +177,11 @@ impl EmbedDaemon {
             passe: Mutex::new(()),
             gate: None,
         }
+    }
+
+    pub fn avec_activation(mut self, activation: Option<IdentiteActivation>) -> Self {
+        self.activation = activation;
+        self
     }
 
     /// Chauffe les formes denses habituelles et garde les erreurs par forme.
@@ -329,6 +355,7 @@ impl EmbedDaemon {
     /// L'identité qu'il déclare.
     pub fn identite(&self) -> Identite {
         Identite {
+            activation: self.activation.clone(),
             chauffe: self.chauffe.clone(),
             service: SERVICE.to_string(),
             modele: self.embedder.name().to_string(),
