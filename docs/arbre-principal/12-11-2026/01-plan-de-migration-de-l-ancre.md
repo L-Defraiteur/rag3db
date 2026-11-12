@@ -7,7 +7,8 @@ copié, service, modèle ou gabarit de production modifié pour cette préparati
 Porteur : arbre-principal ; revue orchestration et ED. Le [ticket de préparation](../../tickets/closed/2026-11-12-preparer-la-migration-de-l-ancre-sur-copies-privees.md)
 est clos après relecture orchestration/ED et validation de la présente préparation.
 Le [ticket d’implémentation](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md)
-porte les travaux suivants, **à autoriser**, pas une activation acquise.
+porte le premier patch borné autorisé et la suite à autoriser séparément ;
+aucune activation n’est acquise.
 
 ## Résultat et frontière
 
