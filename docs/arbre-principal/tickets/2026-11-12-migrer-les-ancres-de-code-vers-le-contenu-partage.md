@@ -1670,3 +1670,30 @@ transfert ou format appliqué ne découle de la seule mécanique de journal.
 
 Mémoire relit sans édition ; source/targets distincts de l'agent IDE, de la
 navigation et des modèles. Le ticket reste ouvert pour la pyramide effective.
+
+### Nuit — contrat de la première publication persistée, avant code
+
+WT neuf cx-wt-publication-composite/branche cx-arbre-publication-composite depuis
+a783013f1. Lecture effectuée des plans figés/PlanJournalState, journal historique,
+transactions DbConnection, KV Catalog, décodeurs RO et producteur/canonique A.
+Contrat concret publié dans
+[03-publication-composite-sur-catalogue-neuf.md](../12-11-2026/03-publication-composite-sur-catalogue-neuf.md).
+
+Périmètre proposé : catalogue natif neuf dédié aux instantanés déclaratifs complets
+A, origine explicite préallouée, valeur/tête/publications/reçus atomiques sous vraie
+transaction. Empreinte versionnée de la déclaration complète, pas des données d'un
+index ; P distinct de H. Intent figé attenduO/P/H et cible préallouée, rejeu exact
+sans effet, reçu historique distinct de tête courante, nouvel intent après
+requalification sans muter l'ancien. ReopenOwned refuse legacy/contrat incomplet
+et contrôle RO avant écrivain puis sous exclusivité. Ni storage_descriptor ni
+PlanJournalState::Applied ni format/transfert appliqué. Cette frontière évite un
+journal seul annoncé comme migration ; le contenu déclaré est réellement persisté.
+
+Réutilisation A/canonique/KV/transactions/générateur d'identifiants d'événements ;
+pas de Cargo/lib.rs/modèles. Extraction étroite de l'écriture KV de Catalog prévue,
+petit export migrations.rs et Deserialize sur entrées A seulement, pas sur faits
+scellés. Aucun fichier de l'agent IDE/navigation/modèles édité. Mémoire revue seule.
+Catalogue dédié fermé (aucune donnée externe/parents) pour établir la complétude
+du contenu couvert ; coût O(historique) explicité, pas d'annonce scalable.
+Aucun Cargo, target, PG, modèle, GPU ou service lancé. Diff et recette/témoins à
+publier avant lourd ; reste à implémenter/revoir/qualifier, ticket toujours ouvert.
