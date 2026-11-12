@@ -23,6 +23,20 @@ def digest(path):
     return h.hexdigest()
 
 
+# Exception exacte relue par orchestration, pas une suppression générique de -I.
+REVIEWED_OMISSION = "-I<SOURCE>/third_party/spdlog"
+PRIVATE_CONFIGURATION = "cx-0511-tests-off-without-unused-spdlog-path-v1"
+
+
+def is_reviewed_omission(reference, private):
+    if not isinstance(reference, list) or not isinstance(private, list):
+        return False
+    if reference.count(REVIEWED_OMISSION) != 1 or REVIEWED_OMISSION in private:
+        return False
+    pos = reference.index(REVIEWED_OMISSION)
+    return private == reference[:pos] + reference[pos + 1:]
+
+
 def main():
     p = argparse.ArgumentParser()
     for flag in ("source", "build", "output", "reference"):
@@ -124,6 +138,71 @@ def main():
     new = dict(v for item in new_commands if (v := normalize(item, source, build)))
     differences = {name: {"reference": old.get(name), "private": new.get(name)}
                    for name in sorted(old.keys() | new.keys()) if old.get(name) != new.get(name)}
+    accepted_omissions = [name for name, value in differences.items()
+                          if is_reviewed_omission(value["reference"], value["private"])]
+    unexpected = {name: value for name, value in differences.items()
+                  if name not in accepted_omissions}
+    units_match = old.keys() == new.keys() and len(old) == len(new) == 739
+
+    def dependency_audit(directory, commands, root, label, audit_source=False):
+        targets = []
+        for item in commands:
+            if Path(item["file"]).is_relative_to(root / "src"):
+                argv = item.get("arguments") or shlex.split(item["command"])
+                targets.append(argv[argv.index("-o") + 1])
+        targets = sorted(set(targets))
+        target_set = set(targets)
+        if len(targets) != 739:
+            raise RuntimeError("audit : pas exactement 739 objets")
+        run(["ninja", "-C", str(directory), "-t", "deps", *targets], label + "-deps.log")
+        seen = set()
+        valid = 0
+        deps = set()
+        with (output / (label + "-deps.log")).open() as stream:
+            for line in stream:
+                if not line.startswith(" ") and line.split(": ", 1)[0] in target_set:
+                    seen.add(line.split(": ", 1)[0])
+                    valid += "(VALID)" in line
+                elif line.startswith("    "):
+                    path = Path(line.strip())
+                    deps.add(path if path.is_absolute() else directory / path)
+        if seen != set(targets) or valid != 739:
+            raise RuntimeError("audit : dépendances absentes/périmées")
+        hits = [str(path) for path in deps if "/third_party/spdlog/" in str(path)]
+        files = set(deps)
+        if audit_source:
+            files.update(path for path in (source / "src").rglob("*")
+                         if path.is_file() and path.suffix in (".h", ".hpp", ".cpp", ".c", ".inc"))
+        missing, mentions, conditions = [], [], []
+        files_hash = hashlib.sha256()
+        for path in sorted(files):
+            try:
+                data = path.read_bytes()
+            except OSError:
+                missing.append(str(path))
+                continue
+            files_hash.update(str(path).encode() + b"\0" + hashlib.sha256(data).digest())
+            lines = data.decode("utf-8", errors="replace").splitlines()
+            for i, line in enumerate(lines):
+                if "spdlog" in line.lower():
+                    mentions.append({"file": str(path), "line": i + 1, "text": line[:240]})
+                if re.search(r"__has_include(?:_next)?\s*\(", line):
+                    conditions.append({"file": str(path), "line": i + 1,
+                                       "context": lines[max(0, i - 1):i + 4]})
+        audit = {"objects": len(seen), "valid": valid, "dependency_files": len(deps),
+                 "scanned_files": len(files), "missing": missing, "spdlog_paths": hits,
+                 "spdlog_mentions": mentions, "has_include_contexts": conditions,
+                 "files_digest": files_hash.hexdigest()}
+        write(label + "-audit.json", audit)
+        if hits or missing or mentions:
+            raise RuntimeError("audit : absence de dépendance/condition spdlog non établie")
+        return audit
+
+    spdlog_entries = {path.name for path in (source / "third_party/spdlog").iterdir()}
+    if spdlog_entries != {"LICENSE", "spdlog"}:
+        raise RuntimeError("surface de résolution du chemin spdlog modifiée")
+    reference_audit = dependency_audit(reference, old_commands, old_source,
+                                       "reference", audit_source=True)
     # Les versions consignées par CMake doivent aussi coïncider.
     def compiler_info(directory):
         files = sorted((directory / "CMakeFiles").glob("*/CMakeCXXCompiler.cmake"))
@@ -155,12 +234,18 @@ def main():
         "source_commit": commit, "source_clean": True, "options": options,
         "runner_sha256": digest(Path(__file__)), "configure_argv": command,
         "memory_max": memory, "swap_max": swap, "scratch_bytes": fs.f_blocks * fs.f_frsize,
-        "compiler": compilers, "engine_commands": len(new), "differences": differences,
+        "compiler": compilers, "engine_commands": len(new), "units_match": units_match,
+        "configuration_identity": PRIVATE_CONFIGURATION, "historical_archive": False,
+        "literal_commands_equal": not differences, "raw_different_commands": len(differences),
+        "reviewed_exception": {"omitted_token": REVIEWED_OMISSION,
+                               "accepted_units": accepted_omissions,
+                               "reason": "include inutilisé ; revue explicite d’orchestration"},
+        "unexpected_differences": unexpected, "reference_dependency_audit": reference_audit,
         "reference_compile_commands_sha256": digest(reference / "compile_commands.json"),
         "forbidden_plan_entries": incompatible, "plan_sha256": digest(output / "plan-sec.log"),
         "compile_commands_sha256": digest(build / "compile_commands.json"),
         "configuration_elapsed_s": time.monotonic() - started,
-        "gate": "ATTENTE_REVUE" if not differences and not incompatible and
+        "gate": "ATTENTE_REVUE" if units_match and not unexpected and not incompatible and
                 compilers["reference"] == compilers["private"] else "STOP",
     }
     write("revue.json", review)
@@ -180,6 +265,7 @@ def main():
     run(["cmake", "--build", str(build), "--target", "rag3db", "-j", "8"], "build.log")
     if git("status", "--porcelain"):
         raise RuntimeError("source non propre après build")
+    private_audit = dependency_audit(build, new_commands, source, "private", audit_source=True)
     archive = build / "src/librag3db.a"
     if not archive.is_file():
         raise RuntimeError("archive statique absente")
@@ -202,6 +288,8 @@ def main():
         raise RuntimeError("budget global atteint pendant la sauvegarde")
     write("manifest.json", {"status": "ARCHIVE_PRIVEE_PRETE_A_REVOIR", "source_commit": commit,
                             "source_clean": True, "review": review, "files": files,
+                            "configuration_identity": PRIVATE_CONFIGURATION,
+                            "historical_archive": False, "private_dependency_audit": private_audit,
                             "elapsed_config_build_s": time.monotonic() - started,
                             "no_tests_pilot_measure_install": True})
     print("ARCHIVE_PRIVEE_PRETE_A_REVOIR", flush=True)

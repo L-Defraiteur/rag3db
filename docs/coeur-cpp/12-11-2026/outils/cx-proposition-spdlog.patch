@@ -1,4 +1,5 @@
-# Proposition de configuration uniquement ; non appliquée, identité source à arbitrer.
+# PROPOSITION REJETÉE PAR LA REVUE — NE PAS APPLIQUER.
+# Conservée pour la trace ; source 0511 reste propre, seule exception d’include acceptée.
 # Ticket : docs/coeur-cpp/tickets/2026-11-09-sous-vingt-ecrivains-un-pool-plein-laisse-une-annulation-inachevee.md
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt

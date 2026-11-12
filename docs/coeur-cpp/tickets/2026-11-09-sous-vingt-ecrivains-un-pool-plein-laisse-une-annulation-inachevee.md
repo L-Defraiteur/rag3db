@@ -406,3 +406,24 @@ et demanderait donc une identité de source/autorisation explicitement revue,
 incompatible avec l’affirmation « 0511 clean inchangé ». Cette contrainte est
 signalée, pas contournée. Aucun mélange d’objets ni nouvelle configuration/build
 pendant recherche FTS ; pas de relance automatique, revue attendue.
+
+### Décision de revue de l’écart — préflight révisé préparé
+
+Option CMake dédiée refusée, patch documentaire marqué rejeté/non appliqué.
+Source 0511 propre maintenue. Revue autorise seulement l’absence unique de
+`-I<SOURCE>/third_party/spdlog`, sans prétendre des commandes identiques ou une
+archive historique retrouvée. Identité privée explicite :
+`cx-0511-tests-off-without-unused-spdlog-path-v1`. Toute autre différence reste
+refusée, mêmes 739 unités/compilateur/ABI requis, gate après plan sec maintenue.
+
+Audit sources privées + dépendances de référence : 3 955 fichiers, aucun absent,
+aucune mention spdlog ; 21 lignes has_include relues avec contexte, aucune ne
+cherche spdlog. Preuve distante `audit-conditionnels-spdlog.json`, détail dans
+`05-relecture-ecart-inclusion-spdlog.md`.
+
+Lanceur révisé pour vérifier aussi les dépendances privées après build : 739
+objets VALID et aucun chemin/mention spdlog avant manifeste. Règle de l’exception
+vérifiée en Python pur sur les 739 commandes réelles et 12 contre-exemples, plus
+une macro parasite sur commande réelle ; aucun moteur/lanceur/pilote exécuté.
+Préflight prêt à revue, pas de nouvelle configuration/build, même après le retour
+recherche FTS vert ; aucune relance automatique ni lib modifiée.

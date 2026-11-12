@@ -354,3 +354,11 @@ de référence VALID. Proposition d’option explicite d’inclusion, diff seule
 dans les docs ; nécessite arbitrage d’identité de source avant application.
 Garde stricte conservée, aucune nouvelle configuration ou compilation ; recherche
 FTS utilise le créneau libéré. Suite portée par le même ticket d’annulation.
+
+Décision C7 sur spdlog : option dédiée rejetée, source 0511 propre ; seule
+absence du chemin exact revue et acceptée. Configuration privée distincte nommée
+dans le préflight révisé, sans affirmation d’identité littérale/historique.
+Audit de 3 955 fichiers et 21 lignes has_include sans condition spdlog ; contrôle
+739 dépendances privées VALID/0SPDLOG ajouté avant futur manifeste. Préflight
+révisé préparé et règle testée sans moteur ; pas de configuration/build relancé.
+Le même ticket porte la revue suivante ; fin FTS reçue sans lancement C++ automatique.
