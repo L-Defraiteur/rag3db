@@ -234,3 +234,29 @@ Les garanties fonctionnelles sont couvertes, la mesure du coût isolé reste ouv
 - Conserver le témoin long STRING rouge sans correctif et vert avec, les ciblés
   et la suite de transactions verts, mais aucun verdict global ni tour de push
   tant que DdlEveryMinute n’est pas départagé. Ticket ouvert, pas de lib publiée.
+
+### Lecture des fenêtres existantes (12 novembre)
+
+Les journaux établissent une divergence de pression avant le CREATE_VECTOR_INDEX,
+pas uniquement une différence de résultat final : pool configuré 2 048 Mio des
+deux côtés ; pic base 1 341 Mio, pic correctif 2 052 Mio (les réservations en cours
+peuvent dépasser momentanément la limite). Avant `3 CREATE REL TABLE`, le pic de
+la fenêtre précédente est 1 176 Mio sur la base contre 2 051 sur le correctif.
+Avant `4 CREATE_VECTOR_INDEX` : 1 177 contre 2 052 Mio.
+
+Le CREATE_VECTOR_INDEX de la base réussit en 752 409 ms ; celui du correctif est
+refusé après 172 ms. La base atteint les comptes après réouverture Doc 59 927,
+Link 447 312, Note 59 683, tous égaux aux comptes attendus. Le correctif s’arrête
+sur le SET b avant ce contrôle : aucun compte final comparable à inventer.
+Les fenêtres hors DDL comptent 295 723 transactions doc sur la base contre
+245 379 sur le correctif, avec 46 contre 57 319 erreurs : ces exécutions ne
+portent pas la même charge réalisée. Leurs totaux ne constituent pas une
+comparaison appariée du coût du retrait par plage.
+
+Le nouveau retrait parcourt toutes les partitions locales pour chaque
+enregistrement d’insertion annulé ; l’ancien relisait les groupes sélectionnés
+et cherchait les clés. Le risque de coût sous grand index local mérite donc une
+mesure bornée nombre d’entrées × nombre d’enregistrements, distincte des temps
+gtest de COPY complets. C’est une hypothèse de coût à tester, pas la cause prouvée
+de la divergence de pression. Aucune nouvelle compilation ni exécution de rouge
+pour cette lecture ; la comparaison contrôlée reste à préparer dans ce ticket.

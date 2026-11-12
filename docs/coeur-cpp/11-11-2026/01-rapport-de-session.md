@@ -311,3 +311,10 @@ courants sont ceux de la base. Le correctif reste sauvegardé sur
 Les binaires précédents sont dans `annulation/binaires-0511dece7/` ; ne pas les
 rejouer avec des extensions incompatibles. Prochain travail : diagnostic des
 volumes et fenêtres DDL déjà journalisés, puis comparaison bornée si nécessaire.
+
+Lecture des fenêtres existantes : le correctif atteint déjà le plein du pool avant
+le troisième DDL (2 051 Mio), contre 1 176 Mio sur la base. L’index vectoriel est
+ensuite refusé en 172 ms au lieu de réussir en 752 s. Les volumes et erreurs hors
+DDL divergent aussi ; on ne peut pas attribuer cet écart au coût du nouveau scan
+par plage à partir de ces seules exécutions. Préparer la mesure bornée index local
+× nombre d’enregistrements undo ; ne pas rejouer aveuglément le scénario minute.
