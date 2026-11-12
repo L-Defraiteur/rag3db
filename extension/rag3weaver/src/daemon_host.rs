@@ -1457,9 +1457,7 @@ fn op_response(result: Result<Value, String>) -> Value {
 
 /// Ouvrir un backend sur disque, comme `rag3weaver-backend serve`.
 fn open_on_disk(prepared: PreparedBackend) -> Result<Backend, String> {
-    let conn = prepared.connect_admitted_storage()?;
-    let (embedder, raison) = prepared.embedder_or_absent();
-    prepared.open_with_reason(Box::new(conn), embedder, raison)
+    prepared.open_on_disk()
 }
 
 /// **Servir l'hôte** sur un écouteur déjà ouvert, jusqu'à `POST /arret`,
