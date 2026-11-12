@@ -608,11 +608,11 @@ pub fn avec_lecture_git(
         bac = bac.lire_en_plus(admin);
     }
     // Ne pas accorder le dossier commun entier : il contient les autres
-    // worktrees. Un lien symbolique sortant n'ouvre aucune racine nouvelle.
+    // worktrees. Aucun alias, même interne, ne nomme une racine nouvelle.
     for nom in ["objects", "refs", "HEAD", "config", "packed-refs", "shallow"] {
         let chemin = commun.join(nom);
         if let Ok(reel) = chemin.canonicalize() {
-            if reel.starts_with(&commun) { bac = bac.lire_en_plus(reel); }
+            if reel == chemin { bac = bac.lire_en_plus(reel); }
         }
     }
     bac
@@ -999,9 +999,25 @@ mod tests {
         assert!(crate::commande::executer(garde.autoriser(&commande, &contexte).unwrap(), &atelier).unwrap().a_reussi());
         let refs = principal.join(".git/refs");
         std::fs::rename(&refs, principal.join(".git/refs-gardees")).unwrap();
+        let admin_voisin = principal.join(".git/worktrees/voisin");
+        std::os::unix::fs::symlink(&admin_voisin, &refs).unwrap();
+        let ferme = avec_lecture_git(crate::commande::BacASable::autour(&lie), &lie, &principal);
+        assert!(!ferme.lectures.contains(&admin_voisin.canonicalize().unwrap()), "alias interne vers administration voisine refusé");
+        let atelier = Atelier::dans(&lie).avec_bac_a_sable(ferme);
+        let commande = Commande::new("cat", [voisin_admin.to_str().unwrap()]);
+        assert!(!crate::commande::executer(garde.autoriser(&commande, &contexte).unwrap(), &atelier).unwrap().a_reussi(), "le noyau ferme aussi l'alias interne");
+        std::fs::remove_file(&refs).unwrap();
         std::os::unix::fs::symlink(&autre, &refs).unwrap();
         let ferme = avec_lecture_git(crate::commande::BacASable::autour(&lie), &lie, &principal);
         assert!(!ferme.lectures.contains(&autre.canonicalize().unwrap()), "symlink sortant non accordé");
+        let config = principal.join(".git/config");
+        std::fs::rename(&config, principal.join(".git/config-gardee")).unwrap();
+        std::os::unix::fs::symlink(&voisin_admin, &config).unwrap();
+        let ferme = avec_lecture_git(crate::commande::BacASable::autour(&lie), &lie, &principal);
+        assert!(!ferme.lectures.contains(&voisin_admin.canonicalize().unwrap()), "alias de fichier interne refusé");
+        let explicite = crate::commande::BacASable::autour(&lie).avec_env("GIT_CONFIG_GLOBAL", "/configuration-declaree");
+        let explicite = avec_lecture_git(explicite, &lie, &principal);
+        assert_eq!(explicite.env.iter().find(|(k, _)| k == "GIT_CONFIG_GLOBAL").unwrap().1, "/configuration-declaree");
     }
 
     /// La porte : `off` ne monte rien, les trois modes montent la Garde.
