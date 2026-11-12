@@ -19,6 +19,14 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
   entrée non stable refusent ; la migration physique reste une suite distincte.
   (`626d050d3`)
 
+- **13 nov. — Le chat explore, code, teste et reprend sa tâche dans l’IDE.**
+  Sur un projet Git isolé, Gemini via Vertex exécute un vrai test nommé, relit
+  le diff et reprend la même conversation depuis la page. Le bac à sable lit
+  les métadonnées vérifiées du worktree et l’histoire de son dépôt, sans ouvrir
+  les administrations voisines ni ajouter d’écriture au principal.
+  [Preuves et recette](everything-declarative/12-11-2026/04-parcours-agent-ide-vertex.md).
+
+
 - **12 nov. — Explorer les symboles sans leurs corps.** `navigate_symbols` expose dans le
   dépôt et le relais contextuel de l'atelier l'arbre d'un fichier, les parents/enfants
   par plages et les membres partiels réellement indexés. Homonymes, limites, plages

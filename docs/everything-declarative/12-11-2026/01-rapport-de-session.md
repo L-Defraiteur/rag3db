@@ -462,7 +462,7 @@ Pas de nouveau Cargo/NAV/service7879 après cette validation.
 
 ### Nuit du 12 au 13 — parcours agent IDE (en cours)
 
-Ticket [parcours réel](../tickets/2026-11-12-prouver-le-parcours-agent-de-code-complet-de-l-ide.md).
+Ticket [parcours réel](../../tickets/closed/2026-11-12-prouver-le-parcours-agent-de-code-complet-de-l-ide.md).
 Worktree `cx-ed-parcours-agent-ide` sur les deux postes, branche portable homonyme,
 source publiée `36e284824`, base `a783013f1`. Nouveau témoin ignoré : vrai Vertex
 via chat/outils, exploration, Cargo nommé, édition/diff et relecture tâche/chat.
@@ -507,3 +507,21 @@ Mémoire favorable delta UI/stderr. Globale6000 en file derrière mesure exclusi
 F5/min/3ELF/lib/NAV/lectures27/hôte13/PG36+filets ; gate7879 seulement aprèsNAV.
 Base privée `cx_ed_parcours_20261113`, target5.8G initial, TMPDIRcourt obligatoire.
 Le ticket reste ouvert jusqu’à passe, intégration C7 et nettoyage gardé2postes.
+
+### Union validée et livraison prête
+
+Sourcee4eaf4ef2 surmaster8f604328a, branche3 neuve. Préunion8e F5/lib2244/NAV40
+verte puis arrêt volontaire au gate avant7879 ; verdict de portée rouge15 gardé,
+restes[]/nettoyé. Union : F5 5/5, minimal0, lib2253/0/66(46.86s), NAV40(131.07s),
+lectures27(9.54s), hôte13(12.32s), PostgreSQL36(7.48s), filets2 chaque entrée.
+Supervision unionVERTE0/restes[]/nettoyé, quiescence indépendante[]. Borne de
+contrôle1446.97≤6000, même deadline878111.26244974, aucune remise à zéro.
+7879 rendu santéBGE1024/sparse/facticefalse avant/après, aucun usage ED restant.
+
+Preuves `globale-union/verdict-compose.json`, équivalence SHA du helper Git4d et
+des témoins fe0 ; 223gabarits, mapsnative29/CG32/HIGH0, target29704553416octets.
+Les e2e canoniques ont rebâti sous CARGO_INCREMENTAL0 : quatrièmeELF archivé,
+les trois suites réellement jouées dessus, distinct du préparé. Tous logs/rouges
+conservés. Ticket déplacé fermé avec source/proofs, README et nouveauté/recette
+actualisés. Revues C7/Mémoire Git et Mémoire UI favorables ; tour master à demander
+après copie finale2postes, puis contrôles et cleanup gardé W/target/PG après dump.
