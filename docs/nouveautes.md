@@ -11,6 +11,13 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **12 nov. — Le diagnostic observe aussi les relations persistées.** Les
+  configurations, définitions de relations et le journal sont lus dans le même
+  snapshot RO ; une table absente reste distincte d'un ensemble vide. Le lecteur
+  partage les décodeurs du catalogue et refuse les métadonnées malformées. Le
+  rapprochement avec les déclarations garde séparés faits observés et fournis ;
+  aucune génération durable ni migration appliquée n'en découle. (`f19e3cbb0`)
+
 - **12 nov. — Un plan reconnaît les déclarations complètes qui lui ont été fournies.**
   L'API Rust compose et valide les schémas et configurations, lie les recettes
   et modèles fournis, puis compare leurs empreintes versionnées au plan figé. Un manque ou

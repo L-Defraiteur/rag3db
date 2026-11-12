@@ -1,3 +1,40 @@
+## Reprise prioritaire — raccord RO vérifié, avant tour master
+
+Le lot RO est prêt pour la revue finale : branche privée
+`cx-arbre-observation-faits-4`, worktree local/luciepc
+`/home/lucied/.cache/rag3weaver-build/cx-wt-observation-faits`.
+Source jouée **f19e3cbb034d7bfac09a5314c2abbd422d76461e**, union du code ED143
+et des seuls changements RO. ED est désormais intégré sur **0bf06b21a** ;
+rebase sur branche neuve4, **8/8 commits identiques**, arbres src/tests/Cargo/
+codeparsers/220gabarits strictement identiques à la source jouée. Aucun rejeu
+pour les seuls identifiants et documents. Tête avant ce bilan7145fa36f.
+
+**Globale verte sans incident en685,11s sur3600** : F5 5/5, vrai checklib sans
+features, lib2243/0/65, NAV40/0/0, CLI5/0/0 et PG36/0/0 (1suite,2filets verts).
+Les14nouveaux témoins RO/décodage,18faitsA,15aperçu et lien80 sont réellement
+passés. Quatre ELF archivés/source/native29/maps/220gabarits attestés et rehash
+final indépendant ; commonconfiner VERT/code0/restes[]/bus nettoyé, scan final
+indépendant vide et TMPNAV possédé retiré. Même source figée, aucun incident,
+réessai ou délai réinitialisé. Rouge initial19030f243 d'omission de relation et
+ciblé91455ec71 83/0/0 restent distincts, avec leurs ELF/logs conservés2postes.
+
+Le lecteur restitue les namespaces persistés et le journal dans le snapshot RO
+réussi. Absent≠vide ; rapprochement avec A sur les seules définitions persistées.
+Politiques, fournisseurs, recettes et modèles supplémentaires restent fournis,
+pas observés. Empreinte entités inchangée ; aucun format durable, génération,
+bootstrap/apply/publication ou qualification physique de l'aperçu ajouté.
+
+Preuves luciepc `cx-passe-observation-ro-v1/`, copies locales
+`cx-preuves-observation-ro-final/` : VERDICT_COMPOSE,verdict-compose.json,
+artefacts.json,templates-220.json,quiescence.json,équivalence-rebase/range-diff.
+Target unique1lot conservé pour revue, PG synthétique neuve
+`cx_ro_2191_20261112_v1` conservée ; pas d'autre base, modèle, service ou GPU.
+Aucun Cargo Arbre actif après la passe. Attendre revue finale/« à toi » C7,
+puis dernier fetch/équivalence/ifVERT/3contrôles. Après intégration : dump/hash/drop
+seule PG privée, copies/rehash4ELF2postes, archives admin fidèles et garde fraîche
+avant retrait des WT/branches locales/target. Ticket migration et tty restent
+ouverts ; repartir de source/master neuf pour la suite. États suivants historiques.
+
 ## Reprise prioritaire — raccord RO codé et ciblé vert, globale empilée sur ED autorisée
 
 LotRO après A : WT local/luciepc cx-wt-observation-faits souscachebuild,
