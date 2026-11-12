@@ -447,3 +447,33 @@ existant de SearchSignals, au lieu de deux match manuels. La politique du manife
 reste celle du chargement existant ; aucun signal/profil/gabarit ajouté.
 Ces dernières éditions restent **non compilées** ; le prochain ciblé portera
 leur SHA figé, pas celui des preuves d6.
+
+## Vert du raccord public, source figée85ef
+
+Source**85ef4921128b445e74766c1e628809b206957485**, propre :
+`cx-preflight-raccord-vert-v1.log` termine rc0 le12nov à11:57:50Paris.
+**5 inspection/admission +31 runner +5 CLI =41 réussis, zéro échec/ignoré**,
+features rag3db-native/daemon/code, un Cargo à la fois, même target4,2Go,
+j8/Mem32/lib29a7, délai global1800s. Les cinq témoins CLI atteignent maintenant
+les refus nommés attendus ; chaque fixture conserve tous ses octets. La fabrique
+d'embarqueur reste à zéro construction lors du refus natif ; le bas niveau garde
+ses compteurs d'effets et d'embarquement zéro. Les états typés et la reconstruction
+source/cible figée sont vérifiés par les tests du runner existants complétés.
+
+`cx-preflight-cli-v3/result.json` ajoute les **8 appels normaux réels sur85ef**,
+rc0 du contrôle : création legacy, inspect/plan préliminaire avec variable,
+quatre refus cible et apply indisponible. Octets inchangés entre diagnostic et
+refus. Exécutés sous poste lourd/timeout300, sans Cargo, après les ciblés et avant
+le nouveau créneau de mesure C++. Aucun modèle/service/transfert démarré.
+
+Le rouge2684 (1vert/4échecs) et ses binaires sont préservés séparément sous
+`cx-preuves-cli-rouge-2684f2415/` (manifest sha256.json) ; l'ancien montage AE6
+non compilé y reste explicitement distinct. Les preuves d6 antérieures restent
+sous leur propre identité. Aucun master/fullpass ni1b complet annoncé.
+
+Reste avant passe adaptée : revue de ce préfixe et compatibilité de compilation
+minimale sans natif (méthode privée de qualification et champ historique lus par
+le seul raccord natif). Aucun job supplémentaire pendant les quatre points
+mécanismes C++ suivants. La tranche d'exécution durable est toujours hors garantie :
+identité résolue persistée, génération legacy établie sous exclusivité, running,
+transfert/publication/réconciliation. Le diagnostic ne crée aucun de ces droits.
