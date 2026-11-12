@@ -1,5 +1,7 @@
 # Mesurer le juge local avec dix fiches
 
+<!-- Consignes d'usage GPU partagées : voir aussi la clarification durable ci-dessous. -->
+
 - **État** : ouvert — comprendre le contexte ROCm et vérifier l’absence de charge de calcul du banc sur seat1 ; 7882 restauré.
 - **Famille** : produit
 - **Gravité** : coût — latence et qualité du classement à dix fiches non mesurées.
@@ -7,6 +9,22 @@
 - **Touche rag3weaver** : oui, choix du juge du rappel de mémoire.
 - **Pour** : banc
 - **Ouvert le** : 11 novembre 2026
+
+## Autorisation générale précisée par Lucie le 12 novembre
+
+Lucie confirme que card2 est librement utilisable pour les travaux pertinents
+et que les sessions doivent se servir des modèles quand ils apportent quelque
+chose. Cette autorisation est durable, au-delà du seul banc k10. La coordination
+porte sur la charge et les ressources disponibles ; elle ne doit pas devenir
+une demande répétée d'autorisation GPU à Lucie. Le nombre de modèles ou de
+processus ne constitue pas à lui seul un quota ; dimensionner les usages réels.
+
+La [consigne partagée](../../orchestration/11-11-2026/02-knowledge-dump.md#les-mesures-et-les-ressources)
+garde cette distinction entre usage courant et fenêtre exclusive de mesure.
+Le banc k10 conserve son protocole comparatif, la disponibilité de seat1 et
+la remise des services : cette précision n'en change ni les données ni le
+contrôleur figé. Aucun appel de modèle ajouté pour la seule transmission de
+la consigne.
 
 ## État actuel au 12 novembre, après passage
 

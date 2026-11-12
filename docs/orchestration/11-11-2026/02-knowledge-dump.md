@@ -64,6 +64,19 @@ n'est jamais contourné par une autre session (blanchiment interdit) ; il remont
 
 ## Les mesures et les ressources
 
+- **Autorisation durable de Lucie, précisée le 12 novembre** : card2 est une
+  ressource de travail normale. Les sessions utilisent les modèles locaux et
+  les services disponibles quand ils sont pertinents pour le travail autorisé,
+  sans redemander un accord GPU à chaque usage. En faire un usage utile pour
+  l'analyse, les essais et les tâches confiées ; ne pas s'en priver par principe.
+  La coordination porte sur la capacité et les consommateurs réels, la mémoire
+  disponible et les mesures comparatives en cours. Le nombre de processus
+  n'est pas un quota d'autorisation ; dimensionner la charge observée plutôt
+  qu'imposer une nouvelle demande à Lucie. Les fenêtres exclusives servent les
+  chronométries qui en ont besoin, pas tous les appels à un modèle.
+  La disponibilité de seat1 reste à préserver selon la précision ci-dessous.
+  [Consignes et suivi GPU](../../banc/tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md).
+
 - **Précision ultérieure de Lucie, 12 novembre 2026** : préserver le GPU de jeu
   seat1 de toute charge du banc ; les 40 KiB de contexte d’initialisation
   peuvent être tolérés s’ils restent insignifiants. La seule présence d’un FD
@@ -85,7 +98,10 @@ n'est jamais contourné par une autre session (blanchiment interdit) ; il remont
   Card1/PCI 00:02.0 est l’iGPU hors ROCm. Ne pas déduire l’identité PCI d’un
   numéro Vulkan : relire sysfs et les preuves du processus.
 - Card2 porte 7878/7879/7880/7882. Avant un banc, lire la VRAM et les consommateurs ;
-  ne pas ajouter une cinquième charge aux quatre services. Si nécessaire,
+  dimensionner toute charge supplémentaire selon la capacité disponible et
+  les usages en cours. L'incident historique d'une cinquième charge explique
+  cette vérification, pas une interdiction générale d'utiliser les modèles.
+  Si nécessaire,
   coordonner la libération temporaire du privé 7882 avec son porteur et
   l’optimiseur, recette de retour prête avant arrêt ; aucune coupure d’autrui
   sans remise explicite. Un budget mémoire ou une confirmation antérieure
