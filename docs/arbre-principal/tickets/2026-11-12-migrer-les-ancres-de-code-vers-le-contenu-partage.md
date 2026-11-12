@@ -586,3 +586,12 @@ Le témoin existant d'association publique invalide est complété pour la faça
 config préparée puis modifiée après load, refus Missing nommé, fabrique modèle
 non appelée et fichier/répertoire de base toujours absent. Le chemin bas niveau
 conserve son compteur de zéro appel DB ; aucune nouvelle suite/matrice ajoutée.
+
+Le ciblé44c s'arrête à la compilation (rc101,12:55:28Paris,
+`cx-preflight-ordre-vert-v1.log`) : l'extraction avait perdu la valeur
+`provided_schema`, encore utilisée pour éviter de réenregistrer les entités du
+fournisseur et pour la libérer après enregistrement. Aucun test joué, aucun
+nouveau rouge métier revendiqué. Le résultat de la primitive conserve maintenant
+ensemble le fournisseur original, les faits composés et l'ordre validé ; raw les
+réutilise tous, sans recalculer le fournisseur ni introduire un second algorithme.
+Même ciblé à rejouer sur cette correction explicite, pas de passe finale relancée.
