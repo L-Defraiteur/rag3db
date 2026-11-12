@@ -555,3 +555,35 @@ disparition du listener dans la borne d’arrêt, au lieu d’un unique contrôl
 immédiat après la fin du PID. Ce constat n’autorise aucun nouveau passage du
 banc ; aucun correctif runtime appliqué à ce stade. Restauration attendue
 uniquement après signal de fin et preuves de déchargement du banc.
+
+### Retour 7882 après les deux séries de la seconde fenêtre
+
+Banc signale les deux séries terminées, 440 puis 880 requêtes, à 18:35:53 Paris.
+Le modèle du banc est déchargé à 18:35:54 : `modele-decharge.json` indique PID
+3421649, starttime 85072671, card2 utilisés 21 661 892 608 octets (baseline exacte),
+pic 28 807 573 504 octets. Sources du banc :
+`~/.cache/rag3db-banc-notes/k10-20261112-passe2/`.
+Ces constats ne remplacent pas l’analyse des résultats, portée par banc.
+
+Avant retour, optimiseur revérifie indépendamment PID et groupe 3421649 absents,
+8099 libre et VRAM exactement à sa baseline de 21 661 892 608 octets.
+Restauration lancée **18:36:25.039**, attestée **18:36:29.156**, nouveau PID
+**3431955**, starttime **85088014**. SHA inchangé
+`65ec1d1db17d48ee53785cd55e72b9b77ca451d5bc4bb8197a9c1b7d040c595d`, cwd, argv
+et quatre variables conformes à la recette. Santé granite-278m 768/Flex32,
+dual/sparse/factice faux, lot 128/512. FD amdgpu PCI 0000:04:00.0/card2,
+VRAM résidente 3 924 676 KiB ; aucun fd VRAM card0 dans le service restauré.
+
+Les trois autres services conservent leurs listeners et PID 966256 / 3415586 /
+1409444. Santé relue après fin du lanceur SSH. Le fichier `embed-7882/pid`
+a été actualisé à 3431955 après sauvegarde dans `pid-avant-passe2`.
+
+Preuves opérateur nouvelles :
+`~/.cache/optimiseur-notes/banc-k10-12nov-7882-2/retour.json`,
+`restauration-service.log`, `pid-restauration`, `pid-avant-passe2` ; journal
+`~/.cache/rag3weaver-build/cx-service-7882-retour-2.log`.
+Ancien rouge du premier passage et rouge transitoire du wrapper d’arrêt
+restent conservés ; aucune répétition de série et aucun autre service modifié.
+Retour transmis au banc, à hotfixs et à l’orchestration pour relecture et
+libération du verrou. La clôture et l’analyse restent chez banc ; cet ajout
+opérateur ne ferme pas le ticket et n’autorise aucune nouvelle exécution GPU.
