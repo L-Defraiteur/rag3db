@@ -1,6 +1,6 @@
 from pathlib import Path
 import hashlib,json,mmap,os,re,shutil,subprocess,sys,time
-R=Path('/home/lucied/.cache/rag3weaver-build');W=R/'cx-wt-publication-composite';C=W/'extension/rag3weaver';T=R/'cx-target-contenu-derive';P=R/'cx-publication-composite-cible-v4'
+R=Path('/home/lucied/.cache/rag3weaver-build');W=R/'cx-wt-publication-composite';C=W/'extension/rag3weaver';T=R/'cx-target-contenu-derive';P=R/'cx-publication-composite-cible-v6'
 SOURCE=sys.argv[1];FILTERS=['storage_inspection::','catalog::metadata::tests::','dataflow::migrations::']
 P.mkdir(exist_ok=False)
 receipt=json.loads(Path(os.environ['RAG3WEAVER_VALIDATION_RECU']).read_text());END=receipt['echeance']-5
@@ -43,7 +43,7 @@ try:
  counts={prefix:len([n for n in names if n.startswith(prefix)]) for prefix in ['storage_inspection::observation_tests::','catalog::metadata::tests::','dataflow::migrations::facts::tests::','dataflow::migrations::transfer::tests::']}
  assert list(counts.values())==[10,3,18,15],counts
  publication=[n for n in names if n.startswith('dataflow::migrations::publication::')]
- assert len(publication)==12,(len(publication),publication)
+ assert len(publication)==14,(len(publication),publication)
  save('publication-attendue.json',publication)
  assert 'storage_inspection::native_tests::native_snapshot_restores_configs_relations_and_journal_without_changing_fixture_bytes' in names
  save('inventaire.json',dict(names=names,count=len(names),groups=counts,ignored=[],read_before_runtime=True))

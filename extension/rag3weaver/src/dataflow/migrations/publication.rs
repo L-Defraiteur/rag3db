@@ -97,6 +97,18 @@ pub struct DeclarationSnapshot {
 impl DeclarationSnapshot {
     pub fn from_complete_input(input: DeclaredSchemaInput) -> Result<Self> {
         let facts = DeclaredSchemaFacts::from_complete_input(input.clone())?;
+        let encoded = canonical(&input)?;
+        let decoded: DeclaredSchemaInput = serde_json::from_str(&encoded)
+            .map_err(|e| PublicationError::Invalid(format!("declaration codec: {e}")))?;
+        // ModelSource has typed Eq, including the exact Addresses vector. A
+        // codec normalization must not be hidden by a representation alias.
+        if input.recipe.model_sources != decoded.recipe.model_sources
+            || encoded != canonical(&decoded)?
+        {
+            return Err(PublicationError::Invalid(
+                "declarations do not round-trip through the v1 codec".into(),
+            ));
+        }
         let fingerprint = facts::digest(STATE_DOMAIN, &facts)?;
         Ok(Self {
             input,

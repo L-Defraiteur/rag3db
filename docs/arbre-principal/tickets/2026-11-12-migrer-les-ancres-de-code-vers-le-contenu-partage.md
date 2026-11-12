@@ -1760,3 +1760,15 @@ avant qualification (superviseur proprePID1164753/starttime vérifié, TERM).
 Preuves `cx-passe-publication-composite-v1`, supervision `validation-62gukwsz`,
 verdict global ROUGE rc1 ; aucune passe verte annoncée. La PG synthétique
 cx_pub_2191_20261113_v1 reste possédée, à conserver/dumper avant retrait.
+
+Rouge codec v5/source943bb4a38 lu :0/1/0 message exact
+« non-lossless declaration admitted by publication snapshot ». Entrée normale
+issue du parseur acceptée et registre complet roundtrip exact avant assertion
+rouge. Preuves/ELF `cx-publication-composite-rouge-v5/`, supervision
+`validation-x094ljo8` code0/restes[]/nettoye=true (exécution du rouge attendu).
+Correctif au constructeur avant Hpublication/effets : validation A, roundtrip
+canonique complet ET égalité typée des mapsModelSource (Eq inclut AddressesVec),
+puis calcul H. Pas de normalisation silencieuse. Matrice comma avec/sans
+espaces et éléments fusionnés/vides, plus contrôle natif root absent/octets
+inchangés avant tout catalogue ; entrée normale et valeur riche persistée
+qualifiées par le nouveau ciblé v6 prévu14nouveaux+83régressions.
