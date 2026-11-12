@@ -93,3 +93,13 @@ Au premier écart, arrêter les seuls processus attribués et soumettre le résu
 Une conformité prouvée permettrait ensuite les seules phases manquantes, sans
 rejouer compilation/lib/features déjà valides ni annoncer un navigateur simulé.
 La recette n'est pas déclarée validée à l'écriture de cette note.
+
+## Extension observée : navigateur sortant du scope de validation
+
+Recherche, intégration des fixtures journaux, source figée `487c68af39575582784cc26fc67dddad9bbc4c3a` après rebase surmasterb726d907b. Vrai poste lourd/MemoryMax32G, BUILD_MEMORY_HIGH=0, contrôle des descendants activé. Features5/5 et liblarge2201/0/65 verts ; au démarrage séparé des40 témoins navigateur, le garde observe PID2997235 dans `/user.slice/user-1000.slice/user@1000.service/app.slice/app-org.chromium.Chromium-2997235.scope`, extérieur à la portée du poste. Le pilote arrête immédiatement la session2994167 et ses descendants possédés ; aucune poursuite vers lectures ni retry.
+
+Il ne s’agit pas de la scope créée par `run_e2e.sh` : l’étape en cours est `scripts/temoins_navigateur.sh`. Le code de test lance le navigateur par Command::new, le candidat disponible est /usr/bin/chromium, petit lanceur ELF vers /usr/lib/chromium/chromium. Le composant exact qui demande le déplacement et le plafond effectif de la scope sœur n’ont pas été mesurés avant l’arrêt : aucune attribution rétrospective de limite ni cause interne affirmée. Une recette qui ne vérifie que le cgroup du binaire de tests ne prouve donc pas celui de Chromium.
+
+Preuves deux postes : `~/.cache/rag3weaver-build/journaux-cx-recherche-lectures-12nov/integration-487c68/` (source.json, argv.json, cgroups-enfants.json, navigateur.log, lancement.log, verdict-final.log, arret-session-2994167.json). Le PID2997235 et le wrapper2947827 sont ensuite absents ; quiescence-apres-arret.json porte active=[] et chromes=[] par exe/cwd/profil privé. Aucun service7879 utilisé, aucun navigateur utilisateur arrêté par nom.
+
+Suite à orchestration/propriétaires des drivers : établir une recette navigateur restant sous le plafond et l’arrêt de la passe, l’attester sur vrais PID enfants avant de reprendre l’étape. Aucun changement produit ni désactivation de limite livré par ce constat ; pas de relance inchangée. Le ticket des fixtures reste distinct et ouvert.
