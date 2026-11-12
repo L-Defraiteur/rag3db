@@ -314,3 +314,24 @@ dans nettoyage-prevision.log, puis nettoyer ce seul paquet et mesurer le target.
 Pas de suppression de modèle, de données, de worktree, de lib du magasin ni
 d'artefact immutable du banc. Requalification seulement après correction de
 cette cause, sans remise à zéro de la tentative précédente.
+
+Nettoyage réalisé du seul paquet : 9162 artefacts/26,6 Gio apparents retirés ;
+target mesuré 35163144192 → 10602258432 octets. Contrôle postérieur ciblé
+exe/cwd/FD/cgroups : zéro référence au target, target-apres-nettoyage.json.
+Copies provider/consumer345 rehashées conformes après action.
+
+Limite de preuve conservée : instruction détaillée d'orchestration reçue après
+le début de l'action. Avant mutation : propriété par garde, unité inactive et
+validation avec restes=[] ; pas de scan FD exhaustif. La commande exécutée
+avait le --target-dir absolu et le cwd du manifeste possédé ; --manifest-path
+n'était pas explicite. Ne pas prétendre avoir effectué ces deux contrôles
+supplémentaires avant l'action. Les prochains nettoyages les intégreront.
+
+Requalification après correction de capacité, source runtime345 inchangée :
+driver versionné scripts/requalifier_activation_apres_cache.sh, lancé sous
+POSTE_MEM_MAX=32G et le vrai poste lourd. Il calcule le temps restant depuis
+l'échéance monotone de validation-4qfyognx APRÈS acquisition ; aucune nouvelle
+borne de7200. Refus si échéance expirée. Puis même recette phases
+2400/1800/1200/900, chacune limitée aussi par le restant global, Max32G/j8 et
+plafond target32. Pas de recyclage du navigateur non joué. Les modèles/services
+restent inchangés et la recette ne lance aucun modèle privé de mesure.
