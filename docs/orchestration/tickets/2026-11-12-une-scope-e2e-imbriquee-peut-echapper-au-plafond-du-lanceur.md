@@ -224,3 +224,7 @@ finally:
  (journal/'sonde.json').write_text(json.dumps(dict(argv=argv,pid=p.pid if p else None,version=version,profil=str(profil),erreur=erreur),indent=2))
  # Le profil sera retiré par le contrôle final après la quiescence de tous les descendants.
 ```
+
+## Bord racine relevé par ED, avant tout essai réel
+
+ED a identifié une seconde occurrence de P1 : une racine déjà Zombie peut être absente du premier inventaire ; après poll qui la récolte, son PID réutilisé ne doit jamais devenir propriété du groupe. Le starttime racine est désormais lu directement dans /proc immédiatement après Popen, AVANT tout poll/wait et même pour Zombie, puis figé dans Descendants ; la règle spéciale « pid == racine » disparaît. Test CPU ajouté : racine absente au premier inventaire puis PID777 tiers réutilisé, aucune adoption/observation/signal. La source de la recette réelle sera cette révision publiée, pas62c64 ; aucun runtime réel ni second essai consommé. Relecture et finNAV Arbre restent préalables.
