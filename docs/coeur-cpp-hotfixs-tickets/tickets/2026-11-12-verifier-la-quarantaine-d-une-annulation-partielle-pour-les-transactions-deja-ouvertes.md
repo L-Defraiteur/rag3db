@@ -136,3 +136,15 @@ visible dans le code examiné. Les branches internes sont conditionnellement
 accessibles au niveau des prédicats lus, mais une trace d’échec réellement
 atteignable avec les verrous requis reste à établir. Ni témoin exécuté, ni
 corruption, ni récupération validée. Le ticket reste ouvert.
+
+## Recette proposée, non exécutée
+
+[Recette documentaire de témoin minimal](../12-11-2026/01-recette-diagnostic-quarantaine.md) :
+injection par index strictement de fixture sur rollbackInsert et fabrique de
+checkpointer déjà disponibles ; deux transactions ouvertes avant faute, cas
+verrous gardés/libérés, lecture, commit forcé et automatique. Aucun changement
+produit identifié pour le témoin structurel. Phase durable suspendue à la
+preuve de durée de vie de l’index sans stockage et du statut durable de TB ;
+variante d’attente concurrente suspendue à un signal déterministe d’entrée.
+Oracle de chemin distingué d’isolation/récupération ; bornage proposé seulement.
+Aucun code/build/run, ticket maintenu ouvert. Livrable à relire.
