@@ -292,3 +292,25 @@ Passe large finale rejouée avec les mêmes plafonds 2400/1800/1200/900 et
 global7200, après la correction propre du budget et du consumer. La rebase docs
 ne l'exigeait pas à elle seule. Aucune reprise d'une tentative expirée, et
 aucune activation de service installé ni charge privée dans ce lancement.
+
+### Plafond du target atteint sur la passe finale
+
+Sur 345a402d0 : F5/5 et lib2249 passés/65 ignorés, fournisseur/consumer
+construits, puis arrêt avant navigateur : 35163144192 octets >32 Gio.
+Validation-4qfyognx ROUGE code1, restes=[], nettoye=true ; unité inactive.
+Aucune suppression automatique ni augmentation du plafond.
+
+Copies immutables conservées dans bin-345a402d0 hors target (même parent de
+preuves que bin-356d7d927, qui reste intact) : fournisseur SHA256
+10f44d35479f2a6462a6db5f2dfbad2714f524eff66a27589940e4e5ad44345a ;
+consumer avec gate_usage c171231c0d158fef5bd06755ca7ee22c1cb00a386d1266461ce7883ef2a6fb73.
+SOURCE/ldd/SHA256SUMS conservés ; aucune dépendance not found.
+
+Remède borné au cache possédé : garde_target confirme l'arbre actuel, validation
+atteste l'arrêt de ses descendants ; `cargo clean -p rag3weaver --target-dir
+/home/lucied/.cache/rag3weaver-build/target-spans --dry-run --verbose` inventorie
+9176 artefacts/28,0 Gio apparents, tous sous ce target. Conserver cette prévision
+dans nettoyage-prevision.log, puis nettoyer ce seul paquet et mesurer le target.
+Pas de suppression de modèle, de données, de worktree, de lib du magasin ni
+d'artefact immutable du banc. Requalification seulement après correction de
+cette cause, sans remise à zéro de la tentative précédente.
