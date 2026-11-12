@@ -496,3 +496,68 @@ Le petit script ne lance ni ne tue de processus et ne met pas en œuvre tout
 ce contrôleur : il rend la capture et ses inconnues reviewables. Le rapprochement
 des séries, l’arrêt du groupe et l’intégration au lanceur restent à qualifier.
 Pas de nouveau GPU ni de sonde de calcul exécutés pour cette préparation.
+
+## Placement explicite : chemin allocation et calcul relu, sans runtime
+
+Révision locale relue à luciepc : llama.cpp
+`d2462f8f7ac6d80070a587ffebf6cd73730f4280` (le bâti existant).
+La sélection explicite permet une preuve positive du placement plutôt que
+l’exigence injustifiée d’aucun FD sur le GPU masqué :
+
+- [common/arg.cpp, parse_device_list](https://github.com/ggml-org/llama.cpp/blob/d2462f8f7ac6d80070a587ffebf6cd73730f4280/common/arg.cpp#L833) :
+  `--device` sélectionne par nom de backend et renseigne `params.devices` ;
+- [src/llama.cpp, préparation des périphériques](https://github.com/ggml-org/llama.cpp/blob/d2462f8f7ac6d80070a587ffebf6cd73730f4280/src/llama.cpp#L125) :
+  la liste explicite alimente `model.devices` ; `split_mode=none` ne garde
+  que l’entrée `main_gpu`. Le journal imprime nom et `props.device_id` PCI ;
+- [src/llama-model.cpp, chargement](https://github.com/ggml-org/llama.cpp/blob/d2462f8f7ac6d80070a587ffebf6cd73730f4280/src/llama-model.cpp#L1205) :
+  buffers et couches GPU pris dans cette liste ; des couches peuvent rester
+  sur CPU, ce qui n’ouvre pas une autre carte graphique ;
+- [src/llama-kv-cache.cpp](https://github.com/ggml-org/llama.cpp/blob/d2462f8f7ac6d80070a587ffebf6cd73730f4280/src/llama-kv-cache.cpp#L226) :
+  le cache déporté suit le périphérique de la couche ;
+- [src/llama-context.cpp](https://github.com/ggml-org/llama.cpp/blob/d2462f8f7ac6d80070a587ffebf6cd73730f4280/src/llama-context.cpp#L256) :
+  initialisation des backends GPU de `model.devices`, puis backends ACCEL/CPU ;
+- [ggml-cuda.cu, calcul du graphe](https://github.com/ggml-org/llama.cpp/blob/d2462f8f7ac6d80070a587ffebf6cd73730f4280/ggml/src/ggml-cuda/ggml-cuda.cu#L4509) :
+  sélection du périphérique du contexte avant exécution. Le backend HIP
+  utilise les alias HIP correspondants ; son registre expose le PCI lu par
+  `cudaDeviceGetPCIBusId` (vers 5698) via `props.device_id` (vers 5064).
+
+Commande candidate pour la future fenêtre, NON exécutée :
+
+```bash
+ROCR_VISIBLE_DEVICES=0 ~/git_workspaces/llama.cpp/build-hip/bin/llama-server   -m ~/.cache/rag3db-banc-notes/hf/qwen3-4b-Q8_0.gguf   --device ROCm0 --split-mode none --main-gpu 0   -ngl 99 -c 16384 -np 1 --fit off --no-warmup -lv 4   --host 127.0.0.1 --port 8099
+```
+
+Avant toute paire : exiger que le journal associe le périphérique effectivement
+retenu à PCI 0000:04:00.0, backend GPU unique, et que les fdinfo attribuent
+modèle/cache à cette carte. Refuser PCI inconnu, liste supplémentaire ou
+contradiction source/journal/FD. Les traces de placement du graphe, si disponibles,
+complètent cette chaîne ; ce plan n’affirme pas un compteur d’exécution nul.
+Le nom logique ROCm0 seul ne prouve jamais la carte physique.
+
+Une absence de compteurs moteur ne déclenche pas un chargement supplémentaire
+pour redécouvrir l’inconnu : elle est déjà connue. La chaîne source figée +
+sélection explicite + PCI effectivement retenu + allocations sous surveillance
+est une alternative de preuve du placement de la charge du modèle, compatible
+avec le petit contexte d’initialisation toléré par Lucie. Elle ne mesure pas
+chaque éventuelle microactivité du pilote et ne garantit pas des FPS déterminés.
+Les contre-mesures restent la borne de mémoire imputable au banc sur seat1
+et l’arrêt de son seul groupe au premier écart, sans se fonder sur la charge
+globale du jeu. Nouvelle fenêtre et contrôle opérateur encore nécessaires.
+
+## Corrections statiques de la capture
+
+Nouvelle empreinte du script externe `contexte-rocm/garde_charge.py` :
+`0da91960271591c35930898844e05af7defd4d602b63bd6d627b7caf124319a9`.
+
+- `drm-engine-capacity-*` est ignoré pour les durées : ce n’est pas une unité ns.
+- L’ensemble des FD GPU (`/dev/dri/*`, `/dev/kfd`) est relevé avant/après ;
+  sa modification invalide la capture. La disparition d’un FD non GPU,
+  notamment HTTP, est consignée mais ne fait plus échouer un ensemble GPU stable.
+- Les compteurs absents restent inconnus ; le petit outil de capture ne décide
+  toujours pas seul de la validité du placement ni du lancement des requêtes.
+
+Vérifications sur quatre cas synthétiques, sans processus GPU ni lecture GPU :
+capacité sans unité ns ignorée, durée compute 42 ns conservée, disparition HTTP
+avec ensemble GPU stable tolérée, starttime incorrect refusé. Quatre verts lus.
+Harnais externe : `contexte-rocm/verifier_capture.py`. Aucun nouveau chargement,
+sonde GPU ou opération sur 7882 ; le contrôleur final reste à relire/intégrer.
