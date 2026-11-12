@@ -309,9 +309,38 @@ impl MigrationRunner {
         &self,
         variables: &std::collections::BTreeMap<String, String>,
     ) -> Result<Vec<plan::ResolvedMigrationStep>, MigrationError> {
+        Self::resolve_files_steps(self.scan_all()?, variables)
+    }
+
+    /// Public-plan qualification consumes the history captured by the same
+    /// metadata snapshot as the source descriptor. It never reloads a catalog.
+    pub(crate) fn resolve_inspected_steps(
+        &self,
+        variables: &std::collections::BTreeMap<String, String>,
+        history: &std::collections::BTreeMap<u64, AppliedMigration>,
+    ) -> Result<Vec<plan::ResolvedMigrationStep>, MigrationError> {
+        let files = self.scan_all()?;
+        validate_declared_history(&files, history.iter())?;
+        if let Some((&version, entry)) = history.iter().next() {
+            // The existing journal has eight columns and records no resolved
+            // plan identity. A matching checksum cannot supply the missing proof.
+            let detail = if entry.status == "applied" {
+                "resolved identity unavailable in legacy eight-column journal".to_owned()
+            } else {
+                format!("migration reconciliation required: {}", entry.status)
+            };
+            return Err(MigrationError::InvalidHistory { version: Some(version), detail });
+        }
+        Self::resolve_files_steps(files, variables)
+    }
+
+    fn resolve_files_steps(
+        files: Vec<MigrationFile>,
+        variables: &std::collections::BTreeMap<String, String>,
+    ) -> Result<Vec<plan::ResolvedMigrationStep>, MigrationError> {
         let vars = variables.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         let mut steps = Vec::new();
-        for file in self.scan_all()? {
+        for file in files {
             let definition = parse_mermaid_template(&file.content, &vars)
                 .map_err(|error| MigrationError::ParseError {
                     version: file.version, name: file.name.clone(), detail: error.to_string(),
@@ -367,17 +396,7 @@ impl MigrationRunner {
         files: &[MigrationFile],
     ) -> Result<HashMap<u64, AppliedMigration>, MigrationError> {
         let history = catalog.migration_load_applied()?;
-        for (&version, entry) in &history {
-            let invalid = |detail: String| MigrationError::InvalidHistory { version: Some(version), detail };
-            let file = files.iter().find(|f| f.version == version)
-                .ok_or_else(|| invalid("orphan entry: no declared migration file".into()))?;
-            if entry.name != file.name {
-                return Err(invalid(format!("name mismatch: stored={}, declared={}", entry.name, file.name)));
-            }
-            if entry.checksum != file.checksum {
-                return Err(invalid("checksum mismatch: the recorded migration file has changed".into()));
-            }
-        }
+        validate_declared_history(files, history.iter())?;
         Ok(history)
     }
 
@@ -738,6 +757,7 @@ impl MigrationRunner {
 
 // ─── Internal types ─────────────────────────────────────────────────────────
 
+#[derive(Debug)]
 pub(crate) struct AppliedMigration {
     pub(crate) name: String,
     pub(crate) status: String,
@@ -1149,4 +1169,24 @@ pub(crate) fn read_history_on(
         }
 
         Ok(applied)
+}
+
+/// Shared file/history identity checks. Execution policy is separate: legacy
+/// pending may skip an applied row, a resolved public plan cannot qualify it.
+fn validate_declared_history<'a>(
+    files: &[MigrationFile],
+    history: impl IntoIterator<Item = (&'a u64, &'a AppliedMigration)>,
+) -> Result<(), MigrationError> {
+        for (&version, entry) in history {
+            let invalid = |detail: String| MigrationError::InvalidHistory { version: Some(version), detail };
+            let file = files.iter().find(|f| f.version == version)
+                .ok_or_else(|| invalid("orphan entry: no declared migration file".into()))?;
+            if entry.name != file.name {
+                return Err(invalid(format!("name mismatch: stored={}, declared={}", entry.name, file.name)));
+            }
+            if entry.checksum != file.checksum {
+                return Err(invalid("checksum mismatch: the recorded migration file has changed".into()));
+            }
+        }
+    Ok(())
 }
