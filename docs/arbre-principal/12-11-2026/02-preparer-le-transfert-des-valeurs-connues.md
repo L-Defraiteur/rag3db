@@ -413,3 +413,31 @@ WTs/target et seules PG privées retirés après dumps, archives et gardes fraî
 Preuves et ELF rehachés aux deux postes conservés. La décision composite ci-dessus
 est acquise, producteur persistant non implémenté. Aperçu toujours non qualifié
 au stockage ; ticket migration reste ouvert.
+
+
+## Raccord RO — implémenté et vérifié, avant intégration
+
+Source de globale f19e3cbb0, union ED143+RO, puis rebase strictement équivalent
+sur le master ED0bf06b21a. Le même snapshot RO restitue les EntityConfig, les
+RelationDef persistées et le journal strict existant. Les décodeurs de lignes et
+de namespaces sont partagés avec Catalog ; aucune initialisation n'est ajoutée.
+
+ObservedCatalogMetadata est scellé, sans Deserialize ni builder public :
+None signifie table absente/information indisponible, Some(empty) une table
+présente dont le namespace est observé vide. ConnectionView reste distinct de
+ReadOnlySnapshot, accordé seulement après COMMIT réussi ; un échec de COMMIT
+entraîne tentative de ROLLBACK et conservation de toute erreur de nettoyage.
+Le type AppliedMigration existant devient lisible avec getters, pas un statut
+appliqué déduit ni un nouveau journal.
+
+compare_with_supplied_schema réutilise le seul producteur A et vérifie chaque
+définition persistée contre le schéma effectif fourni. Le résultat garde
+observed_metadata et supplied_schema séparés : les définitions supplémentaires,
+fournisseurs, politiques, recettes et modèles restent fournis. Il ne qualifie
+ni le schéma physique complet, ni une origine/génération, ni une application.
+L'empreinte entity_config_fingerprint garde exactement son périmètre entités.
+
+Rouge d'omission puis83/0/0 ciblé, dont14nouveaux témoins ; globale2243/0/65,
+NAV40,CLI5,PG36, F5/minimum et4ELF/220 attestés,685,11s dans3600 sans incident.
+Les preuves et le bilan versionné sont liés depuis le ticket. Tour master et
+nettoyage restent à faire ; aucune suite de migration persistante anticipée.

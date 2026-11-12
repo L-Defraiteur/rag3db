@@ -1,0 +1,63 @@
+{
+  "source": "f19e3cbb034d7bfac09a5314c2abbd422d76461e",
+  "ed_master": "0bf06b21a5fda28520f6ae0b2b2ad07acbeac331",
+  "ed_code": "143a21706abed7c38b62d036a4a8d4c9af170790",
+  "verdict": "VERT",
+  "elapsed_s": 685.1102670680266,
+  "features": "5/5",
+  "minimal": "check --lib --no-default-features rc0",
+  "lib": [
+    2243,
+    0,
+    65
+  ],
+  "nav": [
+    40,
+    0,
+    0
+  ],
+  "cli": [
+    5,
+    0,
+    0
+  ],
+  "postgres": [
+    36,
+    0,
+    0
+  ],
+  "new_witnesses": 14,
+  "templates_per_elf": 220,
+  "elf": {
+    "lib": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-target-contenu-derive/debug/deps/rag3weaver-d6a7f6082361125f",
+      "sha256": "c5263dae1e7ee7bf5ad05df23fb9e9b9aa1401db0c903237ac11c3501790b1ca",
+      "size": 460438736
+    },
+    "navigateur": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-target-contenu-derive/debug/deps/rag3weaver-d80220cd26ba45a9",
+      "sha256": "1a80a8f2cbdfb72bf970e929199c49e0bd6a679b1d0d80355256594033208bf6",
+      "size": 460514472
+    },
+    "cli": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-target-contenu-derive/debug/deps/e2e-5afea0c0ff06d5be",
+      "sha256": "7c10cc3265d31ed27e837d03de0f23d9a314863fec74a45cd27fc3b8656a51d9",
+      "size": 458743608
+    },
+    "backend": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-target-contenu-derive/debug/rag3weaver-backend",
+      "sha256": "6789ea3e23612b7dfffe585be50c25840bc44128dc67af74cce38fbb759da53a",
+      "size": 420162704
+    }
+  },
+  "supervisor": {
+    "verdict": "VERT",
+    "code": 0,
+    "erreur": null,
+    "restes": [],
+    "prive": "/tmp/r3v-s6j77g6d",
+    "nettoye": true
+  },
+  "quiescence": [],
+  "tmp_removed": true
+}

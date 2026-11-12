@@ -1582,3 +1582,40 @@ PGneuveexplicitcurrent_database, busuniqueentièreportée, inventaires réelsELF
 l'union n'est pas un masterED inventé. Si EDchangeRust aprèsbase ou diff produits/
 tests/Cargo/assets final nonvide : STOP/requalification. Si arbresED+ROidentiques,
 conservercettepasse sansrejeu pourIDs decommits/MD seuls. Aucun apply ou baseLucie.
+
+### Suite RO — globale de l'union verte et rebase sur master ED équivalent
+
+Source figée **f19e3cbb034d7bfac09a5314c2abbd422d76461e**, début21:59:29,
+fin22:10:53, **685,11s dans3600** après acquisition du poste, aucun incident ni
+réessai. F5 **5/5**149,65s ; vrai minimum checklib37,04s ; compile lib227,68s puis
+**lib2243/0/65**46,69s ; NAVcompile36,70s/**40/0/0**137,75s ; CLIcompile35,23s/
+**5/0/0**, PG **36/0/0,1suite et2filets verts** en8,29s runner inclus. Tous les
+inventaires réels ELF ont précédé leurs runtimes ; les14nouveaux RO/décodage,
+18factsA+15aperçu+lien80 sont passés sans ignore. Même ELF e2e pour CLI et PG,
+confirmé dans la sortie du runner ; PG nom/rôle revérifiés avant sa suite.
+
+Quatre ELF/source/native29/maps/220gabarits chacun attestés, copiés et rehachés
+par le finaliseur indépendant. Superviseur commun validation-lmo8tclm VERT,
+code0/restes[]/busphysiquementabsent ; finaliseur VERDICT_COMPOSE VERT,
+quiescence indépendanteexeTarget/cwdWT/profil=[],TMPNAV marquépossédé retiré.
+HIGH/MAX/OOM/OOMkill0, aucun Cargo Arbre actif, aucun service/modèle/GPU nouveau
+ou DB réelle. PG synthétique cx_ro_2191_20261112_v1 et target conservés pour revue.
+Preuves PC cx-passe-observation-ro-v1/ ; copieslocales cx-preuves-observation-ro-final/,
+résumé versionné preuves-observation-ro/bilan-global.json. Les rouges19030 et
+ciblé91455 83verts sont conservés séparément avec leurs ELF2postes.
+
+ED a depuis intégré son code et ses témoins13verts sur
+**0bf06b21a5fda28520f6ae0b2b2ad07acbeac331**. Comparaison exhaustive src/tests/
+Cargo/codeparsers/templates : EDmaster=ED143 ; rebase B sur branche NEUVE
+**cx-arbre-observation-faits-4**, **8/8 commits identiques**, tête7145fa36f avantceMD.
+Arbres produits/tests/220assets/Cargo STRICTEMENT identiques à la source jouée
+f19 ; aucun faux masterED, aucun replay pourIDs ouMD. Range-diff et équivalence
+conservés dans preuves locales finales. README/nouveautés/page02/reprises mis
+àjour ; revue indépendante mémoire des4ELF/220hashes/native/CLI/PG/quiescence
+favorable, pas une autorisation master de sa part.
+
+Attente revue finale et tour C7 explicite avantpushB ; ticket demeure ouvert,
+provenances observée/fournie distinctes, aperçu toujours non qualifié au stockage,
+génération/bootstrap/apply/publication toujours non livrés. Après tour/push et
+3contrôles : retrait réglementaire des seules ressources B, remotes et preuves
+conservés. Aucun autre ticket ou lot clos par ce raccord.
