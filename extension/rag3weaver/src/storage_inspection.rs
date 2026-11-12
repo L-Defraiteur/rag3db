@@ -161,3 +161,63 @@ mod tests {
         }
     }
 }
+
+#[cfg(all(test, feature = "rag3db-native"))]
+mod native_tests {
+    use super::*;
+    use crate::{backend::PreparedBackend, Rag3dbConnection};
+    use std::path::Path;
+
+    fn files(root: &Path) -> BTreeMap<String, Vec<u8>> {
+        fn visit(root: &Path, path: &Path, out: &mut BTreeMap<String, Vec<u8>>) {
+            for entry in std::fs::read_dir(path).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() { visit(root, &path, out); }
+                else { out.insert(path.strip_prefix(root).unwrap().to_string_lossy().into_owned(), std::fs::read(path).unwrap()); }
+            }
+        }
+        let mut out = BTreeMap::new(); visit(root, root, &mut out); out
+    }
+
+    #[test]
+    fn native_target_refusal_preserves_every_fixture_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let database = dir.path().join("fixture.rag3db");
+        {
+            let conn = Rag3dbConnection::with_manifest_buffer_pool(&database, Some(64 * 1024 * 1024)).unwrap();
+            conn.execute(&Rag3dbDialect.create_meta_table()).unwrap();
+            conn.execute_with_params(&Rag3dbDialect.upsert_meta("key", "value"), &[
+                QueryParam::new("key", CypherValue::String(crate::scope::SCHEMA_VERSION_KEY.into())),
+                QueryParam::new("value", CypherValue::String("8".into())),
+            ]).unwrap();
+        }
+        let manifest_path = dir.path().join("backend.json");
+        let manifest = serde_json::json!({
+            "version": 1, "name": "fixture", "database": "fixture.rag3db",
+            "entities": {}, "tools": {}, "buffer_pool": 67108864,
+            "storage": {"application_format": "shared", "recipe": "fixture-recipe"}
+        });
+        std::fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+        let prepared = PreparedBackend::load(&manifest_path).unwrap();
+        let before = files(dir.path());
+        let inspection = prepared.inspect_storage().unwrap().unwrap();
+        assert_eq!(inspection.internal_schema.as_deref(), Some("8"));
+        assert!(inspection.descriptor.is_none());
+        let refusal = prepared.connect_admitted_storage().err().expect("target must refuse before native writer");
+        assert!(refusal.contains("explicit migration required"), "{refusal}");
+        assert_eq!(before, files(dir.path()), "read-only target refusal changed fixture files");
+    }
+
+    #[test]
+    fn missing_versioned_target_does_not_create_its_database() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("backend.json");
+        std::fs::write(&path, serde_json::to_vec(&serde_json::json!({
+            "version": 1, "name": "fixture", "database": "absent/fixture.rag3db", "entities": {}, "tools": {},
+            "storage": {"application_format": "shared", "recipe": "fixture-recipe"}
+        })).unwrap()).unwrap();
+        let prepared = PreparedBackend::load(&path).unwrap();
+        assert!(prepared.connect_admitted_storage().is_err());
+        assert!(!dir.path().join("absent").exists());
+    }
+}

@@ -1,5 +1,5 @@
 //! Persistent backend host. Transport adapters use the same manifest-generated tools.
-use rag3weaver::{backend::PreparedBackend, Rag3dbConnection};
+use rag3weaver::backend::PreparedBackend;
 use serde_json::{json, Value};
 use std::{
     io::{self, BufRead, Write},
@@ -253,7 +253,7 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
     if let Some(parent) = database.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    prepared.admit_storage()?;
+    let conn = prepared.connect_admitted_storage()?;
     let (embedder, raison) = prepared.embedder_or_absent();
     // **Les clés présentées sont dites, pas supposées.** L'exposition par clés
     // (vision §7) écartera au chargement ce que les clés ne rendent pas vrai ;
@@ -266,11 +266,7 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
         prepared.manifest.name,
         if cles.is_empty() { "aucune".to_string() } else { cles.join(",") }
     );
-    let conn: Box<dyn rag3weaver::connection::DbConnection> = Box::new(
-        Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool)
-            .map_err(|e| e.to_string())?,
-    );
-    let mut backend = prepared.open_with_reason(conn, embedder, raison)?;
+    let mut backend = prepared.open_with_reason(Box::new(conn), embedder, raison)?;
     // **Les réactions montées sont dites, elles aussi.** `Backend::open` les
     // monte depuis le manifeste ; sans cette ligne, rien en service ne dit
     // qu'un graphe tourne derrière les outils, et un opérateur ne peut pas
@@ -646,11 +642,8 @@ fn servir_http(args: &[String]) -> Result<(), String> {
     if let Some(parent) = database.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    prepared.admit_storage()?;
+    let conn = prepared.connect_admitted_storage()?;
     let (embedder, raison) = prepared.embedder_or_absent();
-    let conn =
-        Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool)
-            .map_err(|e| e.to_string())?;
     let nom = prepared.manifest.name.clone();
     let modele = modele_du_chat(&prepared);
     let backend = std::sync::Arc::new(prepared.open_with_reason(Box::new(conn), embedder, raison)?);
@@ -873,9 +866,8 @@ fn fichiers_cli(args: &[String]) -> Result<(), String> {
     if let Some(parent) = database.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    prepared.admit_storage()?;
+    let conn = prepared.connect_admitted_storage()?;
     let (embedder, raison) = prepared.embedder_or_absent();
-    let conn = Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool).map_err(|e| e.to_string())?;
     let mut backend = prepared.open_with_reason(Box::new(conn), embedder, raison)?;
     let rendu = match action.as_str() {
         "verify" => backend.verify_files(),
@@ -999,11 +991,10 @@ fn run() -> Result<(), String> {
     // backend qui déclare du vecteur démarre sans lui en le disant (plein
     // texte seul, vecteurs en dette — `PreparedBackend::open` redit la phrase
     // dans le reçu). Une identité de modèle différente reste un refus.
-    prepared.admit_storage()?;
+    let conn = prepared.connect_admitted_storage()?;
     let (embedder, raison) = prepared.embedder_or_absent();
     let tampon = rag3weaver::rag3db_connection::buffer_pool_choice(prepared.manifest.buffer_pool);
     eprintln!("[rag3weaver] tampon du moteur : {}", rag3weaver::rag3db_connection::describe_buffer_pool(tampon));
-    let conn = Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool).map_err(|e| e.to_string())?;
     // Crochet de test (`scripts/test_backend_must_reopen.py`) : le k-ième
     // appel d'outil rencontre la base comme après un point de reprise échoué.
     let hook = conn.failed_checkpoint_hook();
@@ -1021,9 +1012,8 @@ fn run() -> Result<(), String> {
             backend.shutdown()?;
             drop(backend);
             let prepared = PreparedBackend::load(Path::new(&path))?;
-            prepared.admit_storage()?;
+            let conn = prepared.connect_admitted_storage()?;
             let (embedder, raison) = prepared.embedder_or_absent();
-            let conn = Rag3dbConnection::with_manifest_buffer_pool(&database, prepared.manifest.buffer_pool).map_err(|e| e.to_string())?;
             backend = prepared.open_with_reason(Box::new(conn), embedder, raison)?;
         }
         let request: Result<Value, String> = line.map_err(|e| e.to_string())
