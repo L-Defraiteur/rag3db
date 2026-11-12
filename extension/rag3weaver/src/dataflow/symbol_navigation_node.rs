@@ -43,7 +43,7 @@ impl NodeFactory for SymbolNavigationNodeFactory {
     }
     fn schema(&self) -> NodeSchema {
         let string = |name: &str, default: &str, description: &str| ConfigParam {
-            name: name.into(),
+            name: name.to_owned().into(),
             param_type: ConfigParamType::String,
             required: name == "path",
             default: if name == "path" {
@@ -51,11 +51,11 @@ impl NodeFactory for SymbolNavigationNodeFactory {
             } else {
                 Some(json!(default))
             },
-            description: description.into(),
+            description: description.to_owned().into(),
             choices: None,
             json_schema: None,
         };
-        NodeSchema{node_type:self.node_type().into(),description:"Naviguer dans les plages et membres partiels d'un index, avec contrôle de provenance/fraîcheur".into(),
+        NodeSchema{node_type:"SymbolNavigationNode".into(),description:"Naviguer dans les plages et membres partiels d'un index, avec contrôle de provenance/fraîcheur".into(),
             inputs:vec![PortDef::value("rows",PortType::Map,true),PortDef::value("total",PortType::Map,true)],
             outputs:vec![PortDef::value("result",PortType::Map,false)],config_params:vec![
                 string("path","","Chemin relatif exact du fichier indexé"),string("source","","Source indexée, vide : refuser les sources ambiguës"),
