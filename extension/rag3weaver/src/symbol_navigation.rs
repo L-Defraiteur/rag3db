@@ -725,14 +725,17 @@ mod integration {
                 )))
             },
         );
-        let host = DaemonHost::new()
-            .with_runs_root(d.path().join("runs"))
-            .with_chats_root(d.path().join("chats"))
-            .with_racines_de_code(crate::code_tree::Roots {
-                config: d.path().join("config"),
-                data: d.path().join("data"),
-            })
-            .with_chat_model(model);
+        let host = Arc::new(
+            DaemonHost::new()
+                .with_runs_root(d.path().join("runs"))
+                .with_chats_root(d.path().join("chats"))
+                .with_racines_de_code(crate::code_tree::Roots {
+                    config: d.path().join("config"),
+                    data: d.path().join("data"),
+                })
+                .with_chat_model(model),
+        );
+        host.se_connaitre();
         let session = host.open_session("fixture-navigation", None, vec!["dev".into()], None);
         let opened = host.open(Some(&session), &code);
         assert_eq!(opened["ok"], true, "{opened}");

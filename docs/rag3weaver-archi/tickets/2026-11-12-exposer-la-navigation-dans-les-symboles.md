@@ -141,3 +141,10 @@ pas un nœud de base/reaction permissif. Témoin d'intégration exige maintenant
 refus au chargement si cette politique est retirée, puis rétablit sa fixture.
 Pas de modification hôte/agent ni d'élargissement général. Source/recette de la
 correction publiées avant nouveau ciblé ; rouge879 conservé.
+
+
+Ciblé389 :7purs verts et vrai chat arbre/membres vérifié ; rouge au relais atelier
+« invocation contextuelle indisponible hors d'un hôte ». Fixture construisait
+DaemonHost seul sans son initialisation publique se_connaitre (appelée normalement
+au démarrage). Correction test uniquement : Arc puis se_connaitre avant ouverture,
+aucun runtime/hôte/permission modifié ; nouveau replay dans le reste600initial.
