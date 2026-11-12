@@ -40,6 +40,10 @@ rag3weaver also supports opt-in [shared indexed content](extension/rag3weaver/RE
 occurrences keep their identities and relations while sharing derived chunks and
 stored vectors within a cell. Existing code templates retain their current storage.
 
+In the rag3weaver workshop, command approvals cover the complete exact line in
+its working domain. The approved outside command can resume; changing arguments
+or domain requires its own approval. Sandbox rules continue to apply.
+
 The long version, in French: [`extension/rag3weaver/visions/00-vision-generale.md`](extension/rag3weaver/visions/00-vision-generale.md).
 
 ## Where the engine stands
