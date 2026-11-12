@@ -233,3 +233,10 @@ d'embarquement retirées de son environnement pour conserver les unitaires
 isolés ; paquets React explicitement épinglés au dossier de la passe. Les e2e
 par services (7878/7879) et le privé 107m du banc seront coordonnés séparément,
 avec leurs recettes et leur propre borne annoncées avant acquisition.
+
+Consommateur de qualification Banc intégré depuis 678c5e678 :
+`examples/banc_residence.rs`, sans modification de Cargo.toml. Même phase de
+bâti 1200 s que le fournisseur, mêmes features/target, aucune exécution GPU
+automatique. Il observe d'abord demander/attendre puis raccorde le connecteur
+public à chaud : distinguer ce coût de raccordement du coût de reprise à froid.
+Le banc garde ses contrôleurs/recettes/placements et arrêts de groupes privés.
