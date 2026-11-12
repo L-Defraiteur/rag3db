@@ -419,3 +419,6 @@ Lot isolé `cx-recherche-lectures-journaux`, worktree homonyme aux deux postes ;
 
 
 **Préflight native unique :** recette publiée4ff5d71b9, un seul lancement direct /usr/lib/chromium/chromium, mêmes flags/profil neuf/30s/Max32. Rouge1,246s : PID3028835 passe du scope32GiB au scopeChromiumfrère memory.max=max. Onze PID privés attribués arrêtés, restes=[], profil supprimé ; aucune nouvelle tentative et aucune phase restante rejouée. Blocage de confinement soumis à C7 dans les deux tickets ; preuves sous integration-487c68/preflight-native-unique/. Version paquet identifiée, versionCDP non obtenue, pas de mesure complète de chaque enfant revendiquée après l’arrêt.
+
+
+**Verdict composé final487 vert :** recette busprivé sansactivation publiée268460373 puis préflightunique verteCDPChrome156/13PID/quiescence4,533s. Seulesphasesmanquantes reprises sousbudget2400initial : vraiminimal sansfeature rc0, NAV40/0/0 en131,52s, lectures27/0/0 en9,65s+2filets. Features5 etlib2201/0/65 premierspassagesconservés ; anciensrougesgardésdistincts.532PIDobservés cgroupuniqueMax32,3ELFnative29/220gabarits/provenanceW attestés,quiescencefinaleetservice7879rendu. Verdict-compose.json/log2postes sousintegration-487c68/, deadline17:27:44respectée ; aucunmasteravantrevue+àtoi. Même ticketjournauxresteouvert ; ticketcommunscopeouvertpourprocéduretransversale.
