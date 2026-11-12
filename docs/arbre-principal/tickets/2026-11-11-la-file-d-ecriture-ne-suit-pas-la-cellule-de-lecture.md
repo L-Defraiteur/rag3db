@@ -121,3 +121,13 @@ file active que les appels consigne/undo/code_sync/backend batch peuvent drainer
 Les compteurs cumulés de drain et index_progress global ont une autre portée ;
 agréger has_pending sans changer le drain ferait travailler la mauvaise cellule.
 La préparation de clôture est archivée hors dépôt en attente des avis.
+
+Témoin marque : v1 sourcea7 compilation refusée (chunked attend Option<bool>),
+v2 sourcee5 fixture Note sans contenu refusée ; aucun des deux ne prouve un défaut.
+V3 source108fe0152, cx-marque-rollback-rouge-v3.log : la marque DB conserve bien
+Occurrence après rollback, puis devient Note seule après createNote. Perte de
+dette visible prouvée ; Strict pas encore validé, car le lecteur ouvrait une
+autre instance du fichier (instantané ancien, sans la marque même avant Note).
+Le montage suivant utilise read_connection native indépendante sur la même
+instance vivante, via CallbackConnection qui ne fait que transmettre les requêtes.
+Pas de modification de code produit ; la passe6fb conserve sa source et son verdict.

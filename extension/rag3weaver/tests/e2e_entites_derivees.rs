@@ -1035,8 +1035,11 @@ fn rollback_puis_nouvelle_table_garde_la_marque_des_cellules_en_attente() {
         chunked: Some(false), ..Default::default()
     }).unwrap();
     let reader_cache = tempfile::tempdir().unwrap();
+    // Une connexion indépendante sur la même instance vivante : une seconde
+    // ouverture du fichier relirait son ancien instantané de disque.
+    let lecture = catalog.conn().read_connection(1).expect("connexion de lecture native");
     let mut reader = Catalog::ouvrir_en_lecture(
-        Box::new(Rag3dbConnection::read_only(&path).unwrap()),
+        Box::new(rag3weaver::connection::CallbackConnection::new(move |q, p| lecture.execute_with_params(q, p))),
         Box::new(rag3weaver::embedder::HashEmbedder::new(8)),
         CatalogConfig { embedding_dim: 8, allow_mock_embedder: true, ..Default::default() },
     );
