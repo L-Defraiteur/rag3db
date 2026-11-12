@@ -176,3 +176,86 @@ ne prouve aucun placement physique et ne charge aucun poids.
 Ces sources sont transmises à Embarquement pour ses cas managed d’identité et
 ses appelants. Son durcissement du contrat d’identité est en préparation ;
 CPU-01 ne le qualifie pas et la mesure GPU attend son parcours connecteur vert.
+
+## Connecteur réellement qualifié par Embarquement après le rouge de fixture
+
+Le premier passage des vrais tests de connecteur a donné un vert et quatre
+échéances de 5 s : la fixture rendait du JSON avec espaces, alors que la sonde
+du démon exige le marqueur compact `"service":"rag3weaver-embeddings"`.
+Le fournisseur réel tiny_http rend déjà ce format. Correction de la fixture
+uniquement, sans allonger le budget ni assouplir le runtime.
+
+Embarquement atteste d5133197e (runtime 8a0 et correctif compact) : cinq tests
+CPU de connecteur verts, zéro ignoré ; vrai /embed, dimension 384, timeout
+préservé et profil étranger d’un autre processus refusé sans second constructeur.
+Une vérification CPU de chauffe partielle est verte : 12/16 formes réussies,
+quatre erreurs conservées. Preuve propriétaire :
+`luciepc:~/.cache/embarquement-notes/activation/cpu-e.log`, unité terminée success.
+Ces résultats n’attestent pas encore un chargement du nouveau fournisseur GPU.
+
+Banc a ajouté un filet des octets bruts dans 86c5fc249 : la santé doit porter
+exactement le marqueur compact, rester JSON parsable et factice. Huit tests
+CPU de fixture verts, ResourceWarning traité en erreur. Les verts de primitive
+CPU-01 ne sont toujours pas présentés comme la preuve de ce connecteur.
+
+## Recette prévue pour le privé réel 107m/384, pas encore exécutée
+
+Consommateur proposé : `examples/banc_residence.rs`, commit Banc 678c5e678,
+compilable avec daemon, sans modification de Cargo.toml/lib/runtime. Il prend
+une déclaration `ModelSource`, observe une demande publique d’activation puis
+raccorde le vrai `connect_embedder_annulable` et valide les vecteurs de `embed`.
+L’acquisition initiale et le raccordement du connecteur déjà prêt sont mesurés
+séparément. On ne les présentera pas comme une seule connexion froide directe.
+
+Poids déjà présents à luciepc, lus et hachés sans GPU :
+
+| artefact | octets | SHA256 |
+|---|---:|---|
+| ~/.cache/rag3weaver/granite-107m/model.bpk | 428007424 | 7a7c9c559236bec6f5b903f0f2573221d1a9252f5d37f50d63dbd2b347038ca1 |
+| ~/.cache/rag3weaver/granite-107m/tokenizer.json | 9081382 | 7fc9e475f2ac473f070052d92b0c46ec2b91d9cd672935feb6fd837a65d33f78 |
+
+Lecture card2 : PCI 0000:04:00.0, 17 212 403 712 octets utilisés sur
+34 208 743 424, environ 15,83 Gio libres. Ce relevé n’est pas une réservation ;
+il sera refait au départ avec les consommateurs. Aucun service courant arrêté.
+
+Profil prévu : privé granite-107m/384, maintien explicite, card2.
+`RAG3WEAVER_BURN_DEVICE_EMBEDDER=gpu:0` correspond au choix Vulkan précédemment
+qualifié pour card2, mais le prochain processus doit à nouveau le prouver par
+son log et ses fdinfo/allocations. Les variables de sélection sont locales à
+sa déclaration ; aucun choix GPU global ni usage card0 prévu.
+Les octets de santé activation attestent la déclaration, pas le PCI physique.
+
+Séquence à figer avec le contrôleur avant départ :
+
+1. Fenêtre exclusive MESURE, empreintes du fournisseur nouveau et du consommateur,
+   sources/profil/poids/tokeniseur publiés, nouveau dossier et deadline absolue.
+2. Deux demandeurs A/B de la même déclaration. Une entrée privée de fixture
+   bloque l’exec du fournisseur avant chargement pour observer A en Activation,
+   B en Coordination et annuler A précisément ; elle ne remplace pas le runtime.
+3. Libérer le lancement réel pour B, garder A vivant jusqu’à fin de B ; prouver
+   une seule instance réelle, identité/384/non-factice et rapport de chauffe,
+   placement card2, puis vrai embed par le connecteur public.
+4. Un client C acquiert à chaud la même déclaration et utilise la même instance,
+   sans chargement supplémentaire. Capturer la durée et les PID, pas inventer
+   un seuil de vitesse depuis le fait qu’il est à chaud.
+5. Après usages, arrêter uniquement le privé possédé, attendre PID/groupe/port
+   et mémoire rendus. Une demande D de la même déclaration qualifie la reprise
+   en nouvelle instance, sans changer de modèle/dimension ni d’espace utilisateur.
+6. Arrêt du second privé, preuves de fin et état inchangé des services courants,
+   puis restitution MESURE. Aucun service partagé à restaurer : aucun n’a été arrêté.
+
+La reprise est la seconde activation explicitement prévue, pas une relance
+après erreur. Premier rouge inattendu : arrêt du scénario et diagnostic, pas
+rejeu inchangé. Proposition de borne globale 1 200 s après acquisition,
+activation/attente 300 s par épisode dans la borne commune, réserve de fin 180 s ;
+la recette finale doit donner les deadlines de phases sans les additionner
+au-delà de cette borne. Budget mémoire proposé : hausse card2 au plus 8 Gio,
+marge libre au moins 2 Gio, mémoire imputable au privé sur seat1 sous 16 Mio
+VRAM et 16 Mio GTT ; chiffres à relire avec le constructeur. Ce sont des filets
+opérationnels, pas une promesse de FPS ni un quota de processus.
+
+Dépendances encore réelles : nouveau fournisseur compilé portant l’attestation
+activation (ancien installé inadapté), consommateur compilé sur la même source,
+contrôleur et entrée privée figés, revue du plan et fenêtre comparative.
+Embarquement prépare le binaire et sa passe ; aucune mesure ni charge GPU
+n’a été effectuée par cette préparation.
