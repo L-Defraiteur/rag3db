@@ -404,3 +404,37 @@ fonction de chat qui attend une référence. Emprunt corrigé ; aucun témoin CL
 n'a été joué dans ce montage, aucune preuve rouge produit revendiquée. La clé
 _uuid du DDL de fixture est aussi corrigée dans la source suivante. Le raccord
 plan/historique reste inchangé avant le rouge à obtenir.
+
+## Rouge CLI réel puis raccord commun
+
+Source**2684f2415** propre, `cx-preflight-cli-histoire-rouge-v2.log` :
+**1 réussi, 4 échecs, 0 ignoré**, rc101, fin11:49:12Paris, target3,9Go.
+L'état inconnu est refusé ; les quatre autres cas renvoient0 avec un plan
+préliminaire malgré l'historique incompatible. Toutes les comparaisons d'octets
+précèdent ces échecs et passent. AE6 reste un montage non compilé, distinct.
+Job terminé avant la consigne de priorité mesure reçue ; aucun Cargo relancé.
+
+Correction publiée après ce rouge, pas encore compilée :
+
+- L'inspection produit ouvre une transaction **read-only** pour garder tables,
+  métadonnées/configs et journal dans le même snapshot ; commit/rollback explicite.
+  Ce snapshot ne revendique aucune exclusivité d'exécution.
+- Le journal strict est conservé dans `StorageInspection` pour le raccord interne,
+  sans relecture de catalogue ni second parseur. Le CLI plan donne ce même journal
+  à `MigrationRunner::resolve_inspected_steps`.
+- `validate_declared_history` est extrait du runner existant : mêmes vérifications
+  version/fichier/nom/checksum pour status/pending et le plan public. Les fichiers
+  scannés une fois sont ceux dont le contenu sert ensuite à résoudre les graphes.
+- Après cette vérification commune, un journal legacy applied identique est
+  **non qualifiable** : le format existant à huit colonnes ne porte pas d'identité
+  résolue durable. Aucune checksum n'est promue en identité et aucune clé méta
+  parallèle n'est inventée. Les autres états exigent réconciliation. Le diagnostic
+  historique legacy de pending garde son comportement compatible ; il ne qualifie
+  pas un plan résolu.
+
+L'identité résolue durable, son lecteur versionné, running avant effets et sa
+publication atomique restent des prérequis de la future tranche exécutable.
+Le modèle pur avec états typés reste distinct de ce format legacy. Unversioned
+reste inspectable/non prêt quand aucun historique ne rend le diagnostic invalide.
+Aucun transfert, modèle, service ou verrou décoratif ajouté ; pas de passe
+complète. Nouveau ciblé seulement après libération de la mesure C++.

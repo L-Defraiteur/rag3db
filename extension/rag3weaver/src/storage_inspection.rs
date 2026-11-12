@@ -26,6 +26,9 @@ pub struct StorageInspection {
     pub entity_config_fingerprint: String,
     pub entity_configs: BTreeMap<String, serde_json::Value>,
     pub unresolved_migrations: Vec<u64>,
+    /// Kept in the same inspected snapshot, not reconstructed from the catalog.
+    #[serde(skip)]
+    pub(crate) history: BTreeMap<u64, crate::dataflow::migrations::AppliedMigration>,
 }
 
 impl StorageInspection {
@@ -51,6 +54,24 @@ impl StorageInspection {
                 // Publication and transfer are not implemented in this first patch.
                 // Reading a descriptor alone must never certify a migrated target.
                 Err("versioned storage publication validation is not available".into())
+            }
+        }
+    }
+}
+
+/// Pin metadata, configs and journal to one database snapshot. No exclusive
+/// execution lease is claimed by a read-only diagnostic.
+pub(crate) fn inspect_snapshot_on(conn: &dyn DbConnection) -> Result<StorageInspection, String> {
+    conn.begin_read_only().map_err(|e| format!("begin metadata snapshot: {e}"))?;
+    match inspect_on(conn) {
+        Ok(inspection) => {
+            conn.commit().map_err(|e| format!("commit metadata snapshot: {e}"))?;
+            Ok(inspection)
+        }
+        Err(error) => {
+            match conn.rollback() {
+                Ok(()) => Err(error),
+                Err(rollback) => Err(format!("{error}; metadata snapshot rollback failed: {rollback}")),
             }
         }
     }
@@ -94,20 +115,17 @@ pub(crate) fn inspect_on(conn: &dyn DbConnection) -> Result<StorageInspection, S
     let descriptor = metadata.get(STORAGE_DESCRIPTOR_KEY)
         .map(|value| serde_json::from_str(value).map_err(|e| format!("invalid storage descriptor: {e}")))
         .transpose()?;
-    let mut unresolved_migrations = Vec::new();
-    if tables.iter().any(|name| name == "_DataflowMigration") {
-        for (version, migration) in read_history_on(conn, &Rag3dbDialect).map_err(|e| e.to_string())? {
-            if !matches!(migration.status.as_str(), "applied" | "rolled_back") {
-                unresolved_migrations.push(version);
-            }
-        }
-    }
-    unresolved_migrations.sort();
+    let history: BTreeMap<_, _> = if tables.iter().any(|name| name == "_DataflowMigration") {
+        read_history_on(conn, &Rag3dbDialect).map_err(|e| e.to_string())?.into_iter().collect()
+    } else { BTreeMap::new() };
+    let unresolved_migrations = history.iter()
+        .filter(|(_, entry)| !matches!(entry.status.as_str(), "applied" | "rolled_back"))
+        .map(|(version, _)| *version).collect();
     let encoded = serde_json::to_string(&entity_configs).map_err(|e| e.to_string())?;
     Ok(StorageInspection {
         internal_schema: metadata.get(crate::scope::SCHEMA_VERSION_KEY).cloned(),
         descriptor, entity_config_fingerprint: crate::hash::content_hash(&encoded),
-        tables, entity_configs, unresolved_migrations,
+        tables, entity_configs, unresolved_migrations, history,
     })
 }
 
@@ -269,6 +287,9 @@ mod raw_open_tests {
         let effects = Arc::new(AtomicUsize::new(0));
         let counter = effects.clone();
         let conn = CallbackConnection::new(move |query, _| {
+            if matches!(query, "BEGIN TRANSACTION READ ONLY" | "COMMIT" | "ROLLBACK") {
+                return Ok(QueryResult::default());
+            }
             let rows = if query == "CALL show_tables() RETURN *" {
                 vec![vec![CypherValue::Int(1), CypherValue::String("_DataflowMigration".into())]]
             } else if query.starts_with("MATCH") && query.contains("_DataflowMigration") {
