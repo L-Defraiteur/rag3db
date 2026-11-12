@@ -192,3 +192,127 @@ Recette publiée avant exécution dans5e4d91596 puis4ff5d71b9 (ajout du traiteme
 Onze PID privés attribués par filiation ; le garde a arrêté l’inventaire à la première sortie, donc le relevé cgroup publié porte ce parent aux deux états, pas une mesure complète rétrospective de tous les enfants. Version CDP non obtenue avant arrêt (null) : seule la version de paquet est revendiquée, aucun succès de protocole inventé. Tous les PID privés attribués sont arrêtés via pidfd/starttime, restes=[], profil supprimé après vérification. Preuves deux postes : integration-487c68/preflight-native-unique/{recette.json,pid-cgroups.json,verdict.json,stderr.log} et lancement-preflight-native.log.
 
 Conformément à l’autorisation, aucun autre essai ni reprise de NAV40/lectures27/vrai checklib minimal. Les verts features5 et liblarge2201/0/65 restent distincts ; aucun verdict composé complet n’est affirmé. Blocage soumis à orchestration : il faut une recette de confinement du vrai navigateur avant de compléter la validation ; le lanceur /usr/bin n’est pas une explication suffisante. Ticket commun des scopes et ticket journaux restent ouverts, ressources de build et preuves conservées, aucun master.
+
+## Seconde préflight explicitement autorisée : bus éphémère privé sans activation
+
+C7 fournit le diagnostic sourcé e1b892d9c, ticket commun relu : Chromium156 components/dbus/xdg/systemd.cc et son contrat peuvent créer une scope app via le bus de session lors de l’initialisation du portail. Ce mécanisme est cohérent avec l’observation, sans trace locale de l’appel D-Bus. Nouvelle autorisation distincte : une seule préflight30s dans le budget2400 initial inchangé (17:27:44), dbus-run-session1.16.2 existant, aucun service permanent ni changement du bus utilisateur/KDE/système. SourceRust487 inchangée et tous rouges précédents gardés.
+
+Configuration privée XML ci-dessous : aucun include, standard_session_servicedirs, servicedir ou répertoire d’activation. Socket dans un dossier privé neuf mode0700 ; authentification EXTERNAL et seul UID1000. Le bus ne peut activer aucun service déclaré, aucune fausse identité Flatpak/Snap. L’argv ajoute seulement le helper `dbus-run-session --config-file=<config privée> --` devant le même Chrome natif et les mêmes arguments/profil neuf ; rien ne change aux options de sandbox. La version effective doit être obtenue par CDP Browser.getVersion. Cgroups/PID/starttime/exe/max observés pour le helper éphémère et Chrome, vérification de tous les PID attribués, arrêt et nettoyage des seuls privés, pas de reprise si écart.
+
+SHA256 dbus-run-session d310854dcd72b103aa95a7f6a54eae2cb1579d6c71af40243f840e37fa64d4c5 ; dbus-daemon b5d6c0469c7dc4050733f2a90fe64e9f55a3377521dbb295f03ee2cd9807acc4. SHA256 configuration `46950973c22dc27a8bf9be82bd489a10b760e89db110025c8a0f2b72d35f10a6` ; script `9536855300b18f41a90c92f85a03554e0153f9575d2cfb8e1028c9c3b7ae29a3`. Contrôle statique du script : compile Python sans exécution ; contrôles XML et hashes avant spawn.
+
+```xml
+<busconfig>
+  <type>session</type>
+  <listen>unix:dir=/home/lucied/.cache/cx-rj-bus</listen>
+  <auth>EXTERNAL</auth>
+  <policy context="default">
+    <allow user="1000"/>
+    <allow own="*"/>
+    <allow send_destination="*"/>
+    <allow receive_sender="*"/>
+  </policy>
+</busconfig>
+```
+
+```python
+import os,signal,subprocess,time,json,hashlib,fcntl,shutil,datetime
+from pathlib import Path
+B=Path.home()/'.cache/rag3weaver-build';J=B/'journaux-cx-recherche-lectures-12nov/integration-487c68';P=J/'preflight-dbus-unique';N=Path('/usr/lib/chromium/chromium')
+S=json.loads((J/'source.json').read_text());deadline=datetime.datetime.fromisoformat(S['start']).timestamp()+2400
+assert deadline-time.time()>=30,'deadline globale : aucun nouveau runtime'
+assert not P.exists(),'préflight unique déjà consommée'
+P.mkdir();profil=P/'profil';profil.mkdir();debut=time.monotonic()
+config=J/'preflight-dbus-config.xml';socketdir=Path.home()/'.cache/cx-rj-bus'
+assert not socketdir.exists();socketdir.mkdir(mode=0o700)
+text=config.read_text();assert '<servicedir' not in text and '<include' not in text and '<standard_' not in text
+for path,h in [('/usr/bin/dbus-run-session','d310854dcd72b103aa95a7f6a54eae2cb1579d6c71af40243f840e37fa64d4c5'),('/usr/bin/dbus-daemon','b5d6c0469c7dc4050733f2a90fe64e9f55a3377521dbb295f03ee2cd9807acc4')]:assert hashlib.sha256(Path(path).read_bytes()).hexdigest()==h
+
+cg=Path('/proc/self/cgroup').read_text().split('0::',1)[1].strip();assert Path('/sys/fs/cgroup'+cg+'/memory.max').read_text().strip()=='34359738368'
+assert hashlib.sha256(N.read_bytes()).hexdigest()=='39533024d5bd2582b0915ded18cffb3fae01326723562f4988b08947516d624a'
+argv=['/usr/bin/dbus-run-session','--config-file='+str(config),'--',str(N),'--headless','--remote-debugging-pipe','--no-first-run','--no-default-browser-check','--disable-gpu','--disable-extensions','--disable-background-networking','--disable-sync','--no-sandbox','--user-data-dir='+str(profil),'about:blank']
+(P/'recette.json').write_text(json.dumps(dict(argv=argv,cgroup=cg,memory_max='34359738368',source=S['source'],deadline_globale=deadline,limite_s=30,config_sha256=hashlib.sha256(config.read_bytes()).hexdigest()),indent=2))
+owned={};observes=[];p=None;version=None;erreur=None
+uid=os.getuid()
+def vivant(pid,start):
+ try:
+  q=Path('/proc')/str(pid);st=(q/'stat').read_text().rsplit(') ',1)[1].split()
+  return q.stat().st_uid==uid and st[19]==start and st[0]!='Z'
+ except OSError:return False
+def inventaire():
+ table={}
+ for q in Path('/proc').iterdir():
+  if not q.name.isdigit():continue
+  try:
+   if q.stat().st_uid!=uid:continue
+   st=(q/'stat').read_text().rsplit(') ',1)[1].split();table[int(q.name)]=(int(st[1]),st[19],st[0])
+  except OSError:continue
+ changed=True
+ while changed:
+  changed=False
+  for pid,(ppid,start,state) in table.items():
+   if pid not in owned and (pid==p.pid or ppid in owned):owned[pid]=start;changed=True
+ ecarts=[]
+ for pid,start in list(owned.items()):
+  if not vivant(pid,start):continue
+  q=Path('/proc')/str(pid)
+  try:
+   childcg=(q/'cgroup').read_text().split('0::',1)[1].strip();m=Path('/sys/fs/cgroup'+childcg+'/memory.max').read_text().strip()
+   row=dict(pid=pid,starttime=start,cgroup=childcg,memory_max=m,exe=os.readlink(q/'exe'))
+   if row not in observes:observes.append(row)
+   if childcg!=cg and not childcg.startswith(cg+'/'):ecarts.append(row)
+  except FileNotFoundError:pass
+ (P/'pid-cgroups.json').write_text(json.dumps(observes,indent=2))
+ if ecarts:raise RuntimeError('enfants hors cgroup : '+json.dumps(ecarts))
+def stop():
+ for sig in (signal.SIGTERM,signal.SIGKILL):
+  for pid,start in list(owned.items()):
+   if not vivant(pid,start):continue
+   try:
+    fd=os.pidfd_open(pid)
+    if vivant(pid,start):signal.pidfd_send_signal(fd,sig)
+    os.close(fd)
+   except ProcessLookupError:pass
+  time.sleep(.5)
+def echeance(sig,frame):raise TimeoutError('préflight : échéance/signal')
+signal.signal(signal.SIGTERM,echeance)
+# Comme le témoin : pipe de commande vers fd3, réponses sur fd4 ; aucune option ajoutée.
+a,b=os.pipe();c,d=os.pipe();aa=fcntl.fcntl(a,fcntl.F_DUPFD_CLOEXEC,10);dd=fcntl.fcntl(d,fcntl.F_DUPFD_CLOEXEC,10)
+def fds():os.dup2(aa,3);os.dup2(dd,4)
+try:
+ with (P/'stderr.log').open('w') as out:
+  p=subprocess.Popen(argv,stdin=subprocess.DEVNULL,stdout=out,stderr=out,preexec_fn=fds,close_fds=False,start_new_session=True)
+ owned[p.pid]=Path(f'/proc/{p.pid}/stat').read_text().rsplit(') ',1)[1].split()[19]
+ os.set_blocking(c,False);os.write(b,json.dumps(dict(id=1,method='Browser.getVersion')).encode()+b'\0');buf=b'';version_at=None
+ while time.monotonic()-debut<20:
+  inventaire()
+  try:buf+=os.read(c,65536)
+  except BlockingIOError:pass
+  while b'\0' in buf:
+   raw,buf=buf.split(b'\0',1)
+   if raw:
+    msg=json.loads(raw)
+    if msg.get('id')==1:version=msg.get('result');version_at=time.monotonic()
+  if version_at is not None and time.monotonic()-version_at>=3:break
+  assert p.poll() is None,'navigateur terminé avant mesure'
+  time.sleep(.1)
+ assert version and '156.0.8078.79' in version.get('product',''),'version CDP réelle absente'
+ assert any('/dbus-daemon' in r['exe'] for r in observes),'helper bus non observé'
+ os.write(b,json.dumps(dict(id=2,method='Browser.close')).encode()+b'\0')
+ fin=time.monotonic()+3
+ while p.poll() is None and time.monotonic()<fin:inventaire();time.sleep(.1)
+except BaseException as e:erreur=repr(e)
+finally:
+ stop()
+ if p:
+  try:p.wait(timeout=2)
+  except subprocess.TimeoutExpired:erreur=erreur or 'parent non terminé'
+ restes=[pid for pid,start in owned.items() if vivant(pid,start)]
+ if not restes:
+  shutil.rmtree(profil)
+  shutil.rmtree(socketdir)
+ (P/'pid-cgroups.json').write_text(json.dumps(observes,indent=2))
+ (P/'verdict.json').write_text(json.dumps(dict(verdict='ROUGE' if erreur or restes else 'VERT',erreur=erreur,version=version,observed_pids=len(owned),restes=restes,profil_supprime=not profil.exists(),bus_prive_supprime=not socketdir.exists(),elapsed_s=time.monotonic()-debut),indent=2))
+ print((P/'verdict.json').read_text())
+ if erreur or restes:raise SystemExit(1)
+```
