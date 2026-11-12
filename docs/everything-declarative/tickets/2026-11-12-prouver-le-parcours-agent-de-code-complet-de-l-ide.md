@@ -100,3 +100,9 @@ projet configuré `lr-hub-472010`. États, journaux, targets de fixture et preuv
 sont isolés sous le dossier privé du lot. Le target Cargo de la fixture est
 celui du contrat sandbox normal, sous `RAG3WEAVER_TARGETS_DIR` privé. Aucune
 politique permissive ou réponse à un accord humain n’est injectée.
+
+Préflight statique avant tout lourd : le gabarit livré active le rattrapage
+vectoriel à l’ouverture. La déclaration de cette fixture non indexée le désactive
+explicitement ; `search_code` garde son balayage déclaré. Aucun modèle substitué,
+ni charge d’indexation nécessaire au parcours. Cette source complète remplace la
+première pour le ciblé, encore non lancé.
