@@ -58,3 +58,11 @@ fusion pure et validation en recouvrement ; aucun apply ni livre écrit. Le diag
 pas une application de migration livrée. Les critères de fermeture restent ceux du ticket :
 implémentation et témoins livrés, puis montée réelle distinctement autorisée et prouvée.
 Aucune base réelle modifiée, aucun test relancé ; Gemini rouge inchangé.
+
+## Complément mémoire du 12 novembre — effets de la validation à cadrer
+
+La revue ED est maintenant intégrée sous `aa741a4c3bbd48a3194a802cfab1c8612cdd8a57` dans [la note canonique](../12-11-2026/01-relecture-m8-adoption-fusion-et-reprise.md). Mémoire en reprend le suivi ; aucun lot de code n’est ouvert. La référence « précontrôle 1b » est `85ef4921128b445e74766c1e628809b206957485`, pas un hash préfixé par le nom du lot.
+
+**Constat par lecture, sans exécution** : à `da69b842c3` et `7004350fb`, `PreparedBackend::load_avec` appelle `builtin_templates::resolve` si un manifeste contient `builtin:` ; `resolve` appelle `root`, qui peut créer et extraire les gabarits en cache lorsqu’ils manquent. `Recouvrement` évite de réécrire les déclarations candidates mais ne prouve pas, à lui seul, une validation sans aucune écriture. Les fonctions source et la limite sont reliées dans [le rapport de reprise](../12-11-2026/01-rapport-de-session.md).
+
+**Reste à faire dans M8**, avant de promettre le premier plan pur : préciser la frontière des effets et le mode de résolution des gabarits, puis prévoir un témoin avec cache builtin vide, en plus de la non-mutation du manifeste/livre/base. Ne pas dépendre d’un cache déjà chaud pour conclure à l’absence d’effets ; ne pas élargir implicitement le contrat pour obtenir un vert. Ce point complète la revue existante, sans nouveau ticket de migration ni nouveau moteur M8. La maintenance, la reprise et toute adoption/application réelle gardent leurs contrats communs et leurs preuves distincts.

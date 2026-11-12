@@ -82,6 +82,13 @@ Les tableaux restent atomiques sans contrat de fusion supplémentaire. Pour les 
 est une possibilité ; conflit et erreur doivent être distingués et tous deux interdire la montée.
 Valider le candidat complet en recouvrement, sans marqueurs de conflit servis comme déclarations.
 
+Complément mémoire, constaté par lecture à `da69b842c3` et `7004350fb` :
+`load_avec` peut encore appeler `builtin_templates::resolve`, puis `root`, pour un `builtin:`.
+Si le cache manque, cette résolution peut matérialiser les gabarits sur disque. Le recouvrement
+ne rend donc pas à lui seul toute la validation sans effet ; il faut préciser la frontière
+du plan et prévoir le cas de cache vide, sans confondre absence d’écriture des déclarations
+et absence de toute écriture. Aucun essai de ce chemin ni correction n’est livré ici.
+
 ### Identités et compatibilité
 
 Distinguer identité du paquet de gabarits (inventaire canonique des chemins et contenus), provenance
