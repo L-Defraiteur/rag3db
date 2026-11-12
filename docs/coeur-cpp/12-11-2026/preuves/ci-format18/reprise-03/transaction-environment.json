@@ -1,0 +1,9 @@
+{
+  "PATH": "/usr/bin:/bin",
+  "LANG": "C",
+  "LC_ALL": "C",
+  "TZ": "UTC",
+  "TMPDIR": "/home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-03/test-tmp",
+  "RUNNER_TEMP": "/home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-03/test-tmp",
+  "MAX_NUM_THREADS": "2"
+}

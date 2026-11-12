@@ -1,0 +1,13 @@
+{
+  "pid": 1197629,
+  "mountinfo": [
+    "1126 1125 0:87 / /home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-03 ro,nosuid,nodev,relatime - tmpfs tmpfs rw,size=33554432k,mode=755,uid=1000,gid=1000,inode64,huge=advise",
+    "1127 1125 0:38 /@home/lucied/.cache/rag3db-moteur-notes/ci-format18-74ad-03 /home/lucied/.cache/rag3db-moteur-notes/ci-format18-74ad-03 ro,nosuid,nodev,noatime master:153 - btrfs /dev/nvme0n1p2 rw,compress=zstd:1,ssd,space_cache=v2,subvolid=257,subvol=/@home",
+    "1148 1125 0:170 / /home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-02 ro,nosuid,nodev,relatime - tmpfs tmpfs rw,mode=755,uid=1000,gid=1000,inode64,huge=advise",
+    "1149 1148 0:87 /source /home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-02/source ro,nosuid,nodev,relatime - tmpfs tmpfs rw,size=33554432k,mode=755,uid=1000,gid=1000,inode64,huge=advise",
+    "1150 1126 0:87 /source /home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-03/source ro,nosuid,nodev,relatime - tmpfs tmpfs rw,size=33554432k,mode=755,uid=1000,gid=1000,inode64,huge=advise",
+    "1151 1126 0:87 /test-tmp /home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-03/test-tmp rw,nosuid,nodev,relatime - tmpfs tmpfs rw,size=33554432k,mode=755,uid=1000,gid=1000,inode64,huge=advise",
+    "1152 1126 0:87 /test-work /home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-03/test-work rw,nosuid,nodev,relatime - tmpfs tmpfs rw,size=33554432k,mode=755,uid=1000,gid=1000,inode64,huge=advise",
+    "1153 1127 0:38 /@home/lucied/.cache/rag3db-moteur-notes/ci-format18-74ad-03 /home/lucied/.cache/rag3db-moteur-notes/ci-format18-74ad-03 rw,nosuid,nodev,noatime master:153 - btrfs /dev/nvme0n1p2 rw,compress=zstd:1,ssd,space_cache=v2,subvolid=257,subvol=/@home"
+  ]
+}

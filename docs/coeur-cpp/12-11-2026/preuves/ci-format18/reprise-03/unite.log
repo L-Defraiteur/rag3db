@@ -1,0 +1,6 @@
+Running as unit: cx-coeur-ci-format18-74ad-03.service
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 17min 51.981s
+             CPU time consumed: 20min 52.743s
+                   Memory peak: 2G (swap: 0B)
