@@ -68,9 +68,17 @@ class Fixture(ThreadingHTTPServer):
 
     def identity(self):
         # Contrat santé existant, sans inventer le schéma futur de chauffe.
-        return dict(service='rag3weaver-embeddings', modele=self.args.modele, dim=self.args.dim,
+        identity = dict(service='rag3weaver-embeddings', modele=self.args.modele, dim=self.args.dim,
                     dual=False, sparse=False, factice=True, precision='f32-fixture',
                     executable=str(Path(__file__).resolve()), lot_conseille=[8, 64])
+        # Déclaration reçue du gestionnaire, pas preuve de placement physique.
+        keys = {'profil': 'RAG3WEAVER_ACTIVATION_PROFIL',
+                'peripherique': 'RAG3WEAVER_ACTIVATION_PERIPHERIQUE',
+                'recette': 'RAG3WEAVER_ACTIVATION_IDENTITE'}
+        declared = {field: os.environ.get(key) for field, key in keys.items()}
+        if all(value is not None for value in declared.values()):
+            identity['activation'] = declared
+        return identity
 
     def close(self):
         if not self.stopped:

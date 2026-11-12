@@ -35,13 +35,17 @@ class FournisseurCPU(unittest.TestCase):
             f.close()
         self.tmp.cleanup()
 
-    def spawn(self, *extra):
+    def spawn(self, *extra, env=None):
         self.stdout = (self.root / 'stdout').open('x')
         self.stderr = (self.root / 'stderr').open('x')
         self.streams = [self.stdout, self.stderr]
+        environment = dict(os.environ)
+        for key in ('RAG3WEAVER_ACTIVATION_PROFIL', 'RAG3WEAVER_ACTIVATION_PERIPHERIQUE', 'RAG3WEAVER_ACTIVATION_IDENTITE'):
+            environment.pop(key, None)
+        environment.update(env or {})
         self.process = subprocess.Popen([sys.executable, str(SCRIPT), '--journal', str(self.root / 'events.jsonl'),
                                          '--generation', 'generation-cpu-1', *extra],
-                                        stdout=self.stdout, stderr=self.stderr, start_new_session=True)
+                                        stdout=self.stdout, stderr=self.stderr, start_new_session=True, env=environment)
 
     def events(self):
         p = self.root / 'events.jsonl'
@@ -81,6 +85,7 @@ class FournisseurCPU(unittest.TestCase):
         self.assertTrue(identity['factice'])
         self.assertEqual(identity['modele'], 'fixture-residence-384')
         self.assertEqual(identity['dim'], 384)
+        self.assertNotIn('activation', identity)
         self.assertEqual(ready['pid'], self.process.pid)
         self.assertEqual(sum(e['event'] == 'constructeur_demarre' for e in self.events()), 1)
         self.assertTrue((self.root / 'stdout').read_text().startswith('adresse liée : 127.0.0.1:'))
@@ -117,6 +122,21 @@ class FournisseurCPU(unittest.TestCase):
         self.assertEqual(e.exception.code, 404)
         e.exception.close()
         self.assertFalse(any(e['event'] == 'embed_commence' for e in self.events()))
+
+    def test_identite_activation_exacte_et_chauffe_inconnue(self):
+        self.spawn(env={'RAG3WEAVER_ACTIVATION_PROFIL': 'profil-cpu',
+                        'RAG3WEAVER_ACTIVATION_PERIPHERIQUE': 'cpu-fixture',
+                        'RAG3WEAVER_ACTIVATION_IDENTITE': 'empreinte-declaree'})
+        identity = self.request('/sante')
+        self.assertEqual(identity['activation'], {'profil': 'profil-cpu', 'peripherique': 'cpu-fixture',
+                                                 'recette': 'empreinte-declaree'})
+        self.assertNotIn('chauffe', identity)
+        self.assertTrue(identity['factice'])
+
+    def test_identite_partielle_non_inventee(self):
+        self.spawn(env={'RAG3WEAVER_ACTIVATION_PROFIL': 'profil-cpu',
+                        'RAG3WEAVER_ACTIVATION_IDENTITE': 'empreinte-declaree'})
+        self.assertNotIn('activation', self.request('/sante'))
 
     def test_gate_non_liberee_expire(self):
         self.spawn('--liberer-chauffe', str(self.root / 'absente.go'), '--budget-pret-ms', '200')
