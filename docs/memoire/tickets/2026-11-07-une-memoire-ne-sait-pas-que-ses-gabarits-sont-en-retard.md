@@ -44,3 +44,17 @@ mot de l'orchestration, quand `archive` est sur master.
 Porteur : session mémoire. La [page de conception M8](../../../extension/rag3weaver/docs/09-novembre-2026-memoire-longue/02-m8-la-montee-des-gabarits.md) attend la relecture d’everything declarative ; aucun lot de code n’est ouvert par cette régularisation. Le rapport du 11 novembre décrit aussi une remise documentaire de l’ancien worktree `wt-mf-96` à relire avant de la reprendre : ne pas l’appliquer aveuglément ni confondre cet état historique avec un travail déjà livré.
 
 Le correctif archive `41526b29a` ne monte pas la configuration réelle de Lucie. [L’archivage à blanc restant](2026-11-11-terminer-l-archivage-a-blanc-des-documents-sur-copie.md) est séparé ; [le raccord automatique M9](2026-11-11-raccorder-l-archiviste-automatique-au-chat.md) ne l’active pas non plus. Après relecture, préciser adoption/fusion/migration et leurs refus, poser les témoins puis la passe avant de demander un tour de code. La montée réelle garde sa décision explicite et son instantané.
+
+## Relecture du 12 novembre 2026
+
+**État : ouvert ; porteur mémoire.** La [revue ED sourcée](../12-11-2026/01-relecture-m8-adoption-fusion-et-reprise.md)
+distingue constats, recommandations et choix non tranchés. Aucun lot de code M8 n'est ouvert.
+La conception courante est révisée : identité Gmail, distinction du suivi vivant et de l'épingle,
+base historique vérifiée, fusion avec conflits et maintenance/reprise par contrats communs.
+
+À trancher avant un lot : politique vivant/épinglé, conservation des bases, qualification des
+transitions et exclusion/reprise multi-ressources. Première tranche proposée : plan à blanc,
+fusion pure et validation en recouvrement ; aucun apply ni livre écrit. Le diagnostic 1b n'est
+pas une application de migration livrée. Les critères de fermeture restent ceux du ticket :
+implémentation et témoins livrés, puis montée réelle distinctement autorisée et prouvée.
+Aucune base réelle modifiée, aucun test relancé ; Gemini rouge inchangé.

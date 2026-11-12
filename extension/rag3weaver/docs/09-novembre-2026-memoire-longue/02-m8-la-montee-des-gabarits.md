@@ -2,7 +2,14 @@
 
 *Page de conception, 9 novembre 2026, session mémoire (96). Pour everything declarative (ED), qui
 a posé le gabarit vivant, et pour l'orchestration. Rien ne se code avant la relecture d'ED. Ticket
-d'origine : `docs/tickets/2026-11-07-une-memoire-ne-sait-pas-que-ses-gabarits-sont-en-retard.md`.*
+d'origine : `docs/memoire/tickets/2026-11-07-une-memoire-ne-sait-pas-que-ses-gabarits-sont-en-retard.md`.*
+
+
+**Révision du 12 novembre 2026, après relecture ED.** Voir la
+[note sourcée](../../../../docs/memoire/12-11-2026/01-relecture-m8-adoption-fusion-et-reprise.md).
+Le document décrit une conception, pas une commande livrée. Les garanties d'adoption, de fusion
+avec conflits et de maintenance/reprise restent à spécifier et prouver. Le précontrôle 1b est
+diagnostique et ne fournit pas un apply. Le ticket reste ouvert ; aucun lot de code M8 n'est ouvert.
 
 ## 1. Ce qui existe déjà (ED, pile de l'atelier, f16628f8b)
 
@@ -20,8 +27,8 @@ Lu dans `src/builtin_templates.rs` :
     d'alors ; il rend les outils venus et partis (`TemplateRefreshed` sur le flux) ;
   - modifié à la main : gardé, `EditedByHand` ;
   - suivi par git (le dépôt des déclarations d'un arbre inscrit) : gardé, `TrackedByGit`.
-- **Tranché** (rapport de l'orchestration du 7 novembre) : un arbre dont les déclarations sont
-  suivies par git se remet au gabarit livré **par un commit à l'identité neutre**, fichiers propres
+- **Politique de revue** (rapport du 7 novembre ; identité corrigée le 12 novembre) : un arbre dont les déclarations sont
+  suivies par git se remet au gabarit livré **par un commit à l'identité Gmail de Lucie**, fichiers propres
   seulement, sinon refus dit ; lot à part chez ED.
 - **Deux défauts relevés ce matin** par ED : à l'installeur, « déjà posé » ne note ni ne
   rafraîchit, et une pose neuve n'écrit pas `livre.json`.
@@ -46,8 +53,10 @@ Trois limites du gabarit vivant, pour ce cas :
 ## 3. Ce que M8 ajoute
 
 **Une commande, explicite, une mémoire à la fois** : `rag3weaver-backend templates upgrade
-<manifeste> [--dry-run]`. Jamais à l'ouverture, jamais en douce : l'ouverture continue de
-seulement dire (`refresh` et `template_drift` tels qu'ED les a faits).
+<manifeste> [--dry-run]`. La montée M8 envisagée est explicite. Le suivi vivant actuel reste distinct : `refresh` peut
+réécrire un manifeste éligible à l'ouverture et `builtin:` suit le binaire. La coexistence avec une
+épingle réellement stable reste à trancher ; l'ouverture n'est donc pas décrite comme purement
+diagnostique. Cette page n'autorise pas à désactiver implicitement le suivi vivant.
 
 1. **L'adoption d'une copie d'avant le gabarit vivant** : `templates adopt <manifeste> --from
    <commit>` écrit le `livre.json` qui manque, la base étant `templates/` au commit donné, lu dans
@@ -83,11 +92,13 @@ seulement dire (`refresh` et `template_drift` tels qu'ED les a faits).
 
 - `livre.json` et son dossier d'état, `record`, la fusion des feuilles de `refresh`, `link` et
   `builtin:` : M8 les étend, il ne les double pas.
-- **Les déclarations suivies par git** : la montée est **le commit à l'identité neutre** qu'ED a
+- **Les déclarations suivies par git** : la montée est **un commit à l'identité Gmail de Lucie** qu'ED a
   tranché, sur une branche `gabarits/<version>` du dépôt des déclarations, fusionnée par git
   (git fait la fusion à trois et nomme les conflits) ; refus si l'arbre n'est pas propre.
-- **La version épinglée** est le contenu de base de `livre.json` ; M8 y ajoute le commit de rag3db
-  dont il vient, pour dire « en retard de N commits de gabarits » dans `daemon_status`.
+- **L'épingle envisagée** doit identifier le paquet de contenus, avec le commit Git en provenance.
+  Le contenu de base de `livre.json` et les liens `builtin:` actuels ne suffisent pas à figer les
+  dépendances. La forme de l'épingle et son diagnostic de retard restent à trancher ; un nombre
+  de commits n'est pas une mesure universelle entre branches ou binaires distribués sans Git.
 - La fermeture et la réouverture par l'hôte, l'instantané et la migration de la page 05.
 
 ## 5. Le témoin
@@ -111,9 +122,29 @@ dont le rapport lui est montré ; la montée à son mot, sur une copie d'abord.
 
 1. Le contenu d'alors des fichiers copiés : dans l'historique git de rag3db (léger, mais exige le
    dépôt sur le poste) ou dans `livre.json` (autonome, plus lourd) ?
-2. Le commit neutre des déclarations suivies : la même branche pour le rafraîchissement de
+2. Le commit des déclarations suivies, à l'identité Gmail de Lucie : la même branche pour le rafraîchissement de
    `refresh` et pour M8, ou M8 seul ?
 3. Vu à côté : `~/.local/state/rag3weaver/manifestes/` porte 428 `livre.json`, dont 400 de
    `backends/code` écrits depuis le 8 novembre à 21 h 43. Ils viennent sans doute des tests, qui
    écriraient dans le dossier d'état réel faute de `RAG3WEAVER_STATE_DIR`. À vérifier avant
-   qu'il grossisse.
+   qu'il grossisse. **Actualisation du 12 novembre** : le code possède désormais une isolation
+   des témoins (`state_root`, fixtures e2e) ; aucun nouvel inventaire du dossier réel n'a été fait
+   dans cette relecture.
+
+## 8. Limites précisées par la relecture du 12 novembre
+
+Les étapes ci-dessus sont des objectifs. `--from` doit identifier une base exacte et récupérable ;
+une date supposée ou une copie ressemblante ne suffisent pas. La fusion actuelle de `refresh` ne
+détecte pas les conflits M8. La proposition minimale est un plan à blanc avec fusion pure,
+validation en recouvrement et refus structurés, sans écrire de livre.
+
+La version du paquet de gabarits ne se confond pas avec le schéma, les formats ou la génération
+de données. `builtin:` ne suffit pas à épingler le contenu. Le stockage des bases et la politique
+vivant/épinglé restent des choix ouverts.
+
+`POST /backend/close` n'empêche pas un autre appel de rouvrir le backend. Le geste entier attend
+une exclusion, un instantané vérifié et une reprise durable relevant des contrats communs du
+système, sans moteur de migration M8 parallèle. La recette historique de la page 05 ne prouve
+pas ces garanties. Un ajout facultatif ou un undo ne prouvent pas à eux seuls la compatibilité
+ou la restauration multi-ressources. Le détail des preuves et des témoins proposés figure dans
+la note datée. L'identité Git applicable est `Lucie Defraiteur <luciedefraiteur@gmail.com>`.
