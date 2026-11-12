@@ -86,6 +86,32 @@ def poste_tenu(table):
     return None
 
 
+def signature_superviseur(pid, recu):
+    """Prouver l'entrée exécutée, pas seulement l'identité d'un ancêtre poste.
+
+    Ce contrôle empêche un bypass par environnement/reçu seuls ; il ne prétend
+    pas isoler des programmes hostiles ayant les mêmes droits Unix.
+    """
+    try:
+        proc = Path('/proc') / str(pid)
+        args = [os.fsdecode(x) for x in (proc / 'cmdline').read_bytes().split(b'\0') if x]
+        if len(args) < 3 or args[2] != 'lancer':
+            return False
+        script = Path(args[1])
+        if not script.is_absolute():
+            script = Path(os.readlink(proc / 'cwd')) / script
+        script = script.resolve()
+        if script.name != 'confiner_validation.py' or any(x in ('.env', '.vault') for x in script.parts):
+            return False
+        attendu = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+        return (Path(os.readlink(proc / 'exe')).resolve() == Path(sys.executable).resolve()
+                and str(script) == recu['script']
+                and recu['script_sha256'] == attendu
+                and hashlib.sha256(script.read_bytes()).hexdigest() == attendu)
+    except (OSError, KeyError, ValueError):
+        return False
+
+
 def autorite(table):
     """Un reçu n'est valable que chez un descendant de son superviseur vivant."""
     try:
@@ -96,6 +122,7 @@ def autorite(table):
         pid = r['pid']
         if (r['jeton'] != os.environ[JETON] or r['etat'] != 'actif'
                 or pid not in set(ancetres(os.getpid(), table))
+                or not signature_superviseur(pid, r)
                 or table[pid]['debut'] != r['debut'] or table[pid]['cgroup'] != r['cgroup'] or not poste_tenu(table)
                 or not sous(table[os.getpid()]['cgroup'], r['cgroup'])):
             raise Refus('reçu sans superviseur/poste réel dans notre ascendance')
@@ -136,7 +163,9 @@ class Descendants:
         while change:
             change = False
             for pid, r in table.items():
-                if pid not in self.possedes and (pid == self.racine or r['parent'] in self.possedes or r['parent'] == os.getpid()):
+                parent = table.get(r['parent'])
+                parent_possede = parent and self.possedes.get(r['parent']) == parent['debut']
+                if pid not in self.possedes and (pid == self.racine or parent_possede or r['parent'] == os.getpid()):
                     self.possedes[pid] = r['debut']
                     change = True
         erreurs = []
@@ -219,7 +248,9 @@ def superviser(command, delai, preuves):
         shutil.copy2(config, evidence / 'bus.xml')
         echeance = commence + delai
         recu = dict(pid=os.getpid(), debut=table[os.getpid()]['debut'], cgroup=cg,
-                    jeton=secrets.token_hex(24), etat='actif', echeance=echeance)
+                    jeton=secrets.token_hex(24), etat='actif', echeance=echeance,
+                    script=str(Path(__file__).resolve()),
+                    script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
         recu_path = evidence / 'autorite.json'
         recu_path.touch(mode=0o600)
         recu_path.write_text(json.dumps(recu))
@@ -259,7 +290,11 @@ def superviser(command, delai, preuves):
     except (Refus, OSError) as e:
         erreur = str(e)
     finally:
-        restes = groupe.arreter() if groupe else []
+        try:
+            restes = groupe.arreter() if groupe else []
+        except (OSError, Refus) as e:
+            erreur = (erreur + '; ' if erreur else '') + 'arrêt incomplet : ' + str(e)
+            restes = list(groupe.possedes) if groupe else ['inconnus']
         if enfant is not None:
             try:
                 enfant.wait(timeout=.2)
@@ -276,7 +311,10 @@ def superviser(command, delai, preuves):
         (evidence / 'enfants.json').write_text(json.dumps(list(groupe.observes.values()) if groupe else [], indent=2))
         # Une zone temporaire attribuée reste préservée si son détenteur subsiste.
         if not restes:
-            shutil.rmtree(prive)
+            try:
+                shutil.rmtree(prive)
+            except OSError as e:
+                erreur = (erreur + '; ' if erreur else '') + 'nettoyage refusé : ' + str(e)
         verdict = dict(verdict='VERT' if code == 0 and not erreur and not restes else 'ROUGE',
                        code=code, erreur=erreur, restes=restes, prive=str(prive), nettoye=not prive.exists())
         (evidence / 'verdict.json').write_text(json.dumps(verdict, indent=2))
