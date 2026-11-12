@@ -129,7 +129,8 @@ figée, vérifier capacité/placement avec Banc/Embarquement. Aucun besoin décl
 autre profil nécessite qualification, pas un numéro Vulkan deviné.
 
 Une recette JSON contient nom privé, modèle, dimensions (null pour LLM),
-consommateurs, profil `rocm`, argv absolu avec --device ROCm0 et --no-warmup,
+consommateurs, profil `rocm`, durée maximale explicite `duree_max_sec`,
+argv absolu avec --device ROCm0 et --no-warmup,
 SHA256 de l’exécutable. Lancer uniquement par :
 
 ```bash
@@ -150,3 +151,15 @@ Lire `restitution.json`, état cutoff.service et absence de cgroups/PID privés
 après l’échéance, informer les consommateurs puis seulement clore ce ticket.
 Le cas sans consommateur est explicite : aucune unité à arrêter et aucune
 activité créée pour occuper la nuit. Aucun redémarrage ni nouvelle nuit implicite.
+
+### Renforcement de la borne en cas de départ différé
+
+La recette déclare une durée fixe positive ; RuntimeMaxSec reçoit cette durée,
+pas un TTL qui pourrait se décaler après une longue attente du gestionnaire.
+La durée doit tenir dans le restant tant à l’acquisition qu’à l’exec effectif
+après sélection ROCr. Un départ retardé qui ne tient plus est refusé avant le
+modèle. La durée systemd court déjà pendant la préparation de l’unité : sa
+fin ne peut ainsi dépasser07:54, avec15s maximum d’arrêt et marge avant07:55,
+même si le cutoff global rencontrait un problème. Aucun renouvellement de
+budget. La préparation initiale est déqualifiée pendant cette révision (reçu
+préservé sous preparation/pret-version-initiale.json), timer toujours armé.

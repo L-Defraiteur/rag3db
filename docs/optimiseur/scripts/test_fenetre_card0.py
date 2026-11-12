@@ -16,7 +16,7 @@ class Fenetre(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.racine = Path(self.tmp.name)
         self.recette = {'nom': 'fixture', 'modele': 'modele-non-charge', 'dimensions': None,
-                        'consommateurs': ['fixture-cpu'], 'profil': 'rocm',
+                        'consommateurs': ['fixture-cpu'], 'profil': 'rocm', 'duree_max_sec': 120,
                         'argv': ['/usr/bin/true', '--device', 'ROCm0', '--no-warmup'],
                         'executable_sha256': 'a' * 64}
 
@@ -83,6 +83,11 @@ class Fenetre(unittest.TestCase):
         self.recette['nom'] = '../steam.service'
         with self.assertRaisesRegex(f.Refus, 'nom privé invalide'):
             f.valider_spec(self.recette)
+
+    def test_depart_differe_ne_renouvelle_pas_le_budget(self):
+        f.commande_unite(self.recette, self.racine / 'fixture.json', 'a' * 64, 200)
+        with self.assertRaisesRegex(f.Refus, 'durée demandée au-delà'):
+            f.commande_unite(self.recette, self.racine / 'fixture.json', 'a' * 64, 119)
 
     def test_rocm_explicite_et_pas_echauffement_avant_qualification(self):
         self.recette['argv'] = ['/usr/bin/true', '--device', 'ROCm1', '--no-warmup']
