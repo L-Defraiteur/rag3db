@@ -373,3 +373,13 @@ déclaré avec champs explicites puis champs par défaut ; deux UUIDOccurrence
 et leurs lignes distinctes, body conservé par défaut. Le P2 est corrigé dans le
 nœud commun, ni bypass ni activation d'un gabarit. Les preuves6fb demeurent6fb ;
 la nouvelle régression adaptée au catalogue/nœud modifiés reste à jouer.
+
+## Revue de provenance SourceResolved sur le même graphe
+
+Avis archi8fd relu/c7 : après projection publique déjà faite, la branche héritée
+has_source_refs du ResolveParent remappe la provenance par data._source_uuid,
+absent des données publiques. par_source vide peut effacer signal/signals/best_signal.
+Témoin autorisé sur le même GraphDefinition : Agrégé et SourceResolved, champs
+explicites puis défaut ; comparer la vraie sortie BM25 (même déclaration privée
+du nœud Resolve) à la sortie enrichie, UUID/positions toujours exacts. Source
+produit8fd inchangée avant rouge ; legacy KB doit garder sa résolution.
