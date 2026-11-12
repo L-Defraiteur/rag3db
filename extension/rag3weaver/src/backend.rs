@@ -275,6 +275,7 @@ impl EmbeddingService {
     pub fn source(&self) -> crate::model_source::ModelSource {
         use crate::model_source::{Addresses, Fallback, ModelSource, Provider};
         ModelSource {
+            activation: None,
             provider: match self.provider {
                 EmbeddingProvider::Daemon => Provider::Service,
                 EmbeddingProvider::Compatible => Provider::Compatible,
