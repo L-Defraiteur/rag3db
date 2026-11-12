@@ -344,3 +344,14 @@ puis archivé ce service. Les gardes dédiés testent leurs propres faux service
 Tx arrêt laisse deux CSV déclarés comme résidu connu par le ticket recherche
 2026-11-11-un-copy-tue-laisse-son-csv-dans-le-dossier-temporaire ; ne pas annoncer
 une passe entièrement sans résidu. Aucun nettoyage des preuves rouges.
+
+## Revue archi : enrichissement public dans un graphe déclaré
+
+Avis6fb d'archi (01a1cb70), relu par c7 : candidat P2 dans ResolveParentNode.
+finish_signal projette déjà les UUID vers Occurrence ; le nœud enrichit encore
+sur target.parent_table (Version). Une déclaration return_fields=[line], champ
+présent sur Occurrence mais absent de Version, pourrait produire une erreur.
+Même ticket1a, porteur arbre, témoin ciblé autorisé après le témoin de marque :
+GraphDefinition JSON→factories communes, SearchSource→BM25→ResolveParent avec
+la query aussi au dernier nœud ; deux UUID publics et positions distinctes attendus.
+Pas de code produit avant rouge réel, pas de limitation documentaire de contournement.
