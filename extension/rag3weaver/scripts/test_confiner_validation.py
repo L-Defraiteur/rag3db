@@ -63,7 +63,7 @@ class Montage(unittest.TestCase):
         r.touch(mode=0o600)
         recu = dict(pid=777, debut='superviseur', cgroup='/job', etat='actif', jeton='x', echeance=time.monotonic()+60)
         r.write_text(json.dumps(recu))
-        with patch.dict(os.environ, {v.RECU: str(r), v.JETON: 'x'}), patch.object(v, 'poste_tenu', return_value=1), patch.object(v, 'plafond', return_value={}):
+        with patch.dict(os.environ, {v.RECU: str(r), v.JETON: 'x'}), patch.object(v, 'poste_tenu', return_value=1), patch.object(v, 'signature_superviseur', return_value=True), patch.object(v, 'plafond', return_value={}):
             self.assertEqual(v.autorite(table)['pid'], 777)
             table[777]['cgroup'] = '/soeur'
             with self.assertRaises(v.Refus):
@@ -102,6 +102,43 @@ class Montage(unittest.TestCase):
         with patch.object(v, 'processus', return_value={777: dict(debut='nouveau')}), patch.object(os, 'pidfd_open') as ouvrir:
             d.signaler(signal.SIGTERM)
         ouvrir.assert_not_called()
+
+    def test_enfant_du_parent_reutilise_jamais_adopte_ni_signale(self):
+        d = v.Descendants(777, '/job')
+        d.possedes[777] = 'ancien'
+        table = {777: dict(parent=0, session=777, debut='nouveau-tiers', cgroup='/autre'),
+                 888: dict(parent=777, session=777, debut='enfant-tiers', cgroup='/autre')}
+        with patch.object(v, 'plafond', return_value={}):
+            d.relever(table)
+        self.assertNotIn(888, d.possedes)
+        with patch.object(v, 'processus', return_value=table), patch.object(os, 'pidfd_open') as ouvrir:
+            d.signaler(signal.SIGTERM)
+        ouvrir.assert_not_called()
+
+    def test_reutilisation_entre_open_pidfd_et_recheck_ne_signale_pas(self):
+        d = v.Descendants(777, '/job')
+        d.possedes[777] = 'ancien'
+        etats = [{777: dict(debut='ancien')}, {777: dict(debut='nouveau')}]
+        with patch.object(v, 'processus', side_effect=etats), patch.object(os, 'pidfd_open', return_value=42) as ouvrir, patch.object(os, 'close') as fermer, patch.object(signal, 'pidfd_send_signal') as envoyer:
+            d.signaler(signal.SIGTERM)
+        ouvrir.assert_called_once_with(777)
+        fermer.assert_called_once_with(42)
+        envoyer.assert_not_called()
+
+    def test_recu_forge_coherent_ancetre_reel_sans_superviseur_refuse(self):
+        import time
+        table = v.processus()
+        pid = table[os.getpid()]['parent']
+        self.assertIn(pid, table)  # Ancêtre réellement vivant, pas un PID inventé.
+        r = self.p / 'forge'
+        r.touch(mode=0o600)
+        r.write_text(json.dumps(dict(pid=pid, debut=table[pid]['debut'], cgroup=table[pid]['cgroup'],
+            etat='actif', jeton='choisi', echeance=time.monotonic()+60,
+            script=str(ICI/'confiner_validation.py'), script_sha256='choisi')))
+        # Le poste/plafond sont simulés valides ; le processus ancêtre, lui, est réel.
+        with patch.dict(os.environ, {v.RECU: str(r), v.JETON: 'choisi'}), patch.object(v, 'poste_tenu', return_value=pid), patch.object(v, 'plafond', return_value={}):
+            with self.assertRaises(v.Refus):
+                v.autorite(table)
 
     def test_dependance_absente_refuse_avant_commande(self):
         with patch.object(v, 'poste_tenu', return_value=1), patch.object(v, 'plafond', return_value={}), patch.object(v.shutil, 'which', return_value=None), patch.object(v.subprocess, 'Popen') as lancer:
@@ -160,6 +197,26 @@ class Montage(unittest.TestCase):
         rc, verdict = self.cas_processus('import subprocess,sys,time\nsubprocess.Popen([sys.executable,"-c","import time;time.sleep(60)"])\ntime.sleep(60)\n', 3)
         self.assertEqual(rc, 1)
         self.assertIn('échéance', verdict['erreur'])
+
+    def test_echec_nettoyage_apres_commande_verte_reste_rouge(self):
+        original = v.shutil.rmtree
+        def refuser_prive(path, *args, **kwargs):
+            if Path(path).name.startswith('r3v-'):
+                raise PermissionError('refus simulé du nettoyage privé')
+            return original(path, *args, **kwargs)
+        helper = self.p / 'bus-factice'
+        helper.write_text('#!'+sys.executable+'\nimport sys,subprocess\ni=sys.argv.index("--")\nsys.exit(subprocess.call(sys.argv[i+1:]))\n')
+        helper.chmod(0o700)
+        preuves = self.p / 'preuves-nettoyage'
+        with patch.object(v, 'poste_tenu', return_value=1), patch.object(v, 'plafond', return_value={}), patch.object(v.shutil, 'which', return_value=str(helper)), patch.object(v.shutil, 'rmtree', side_effect=refuser_prive):
+            rc = v.superviser([sys.executable, '-c', 'pass'], 5, str(preuves))
+        dossier, = preuves.iterdir()
+        verdict = json.loads((dossier/'verdict.json').read_text())
+        self.assertEqual((rc, verdict['verdict'], verdict['code']), (1, 'ROUGE', 0))
+        self.assertIn('nettoyage refusé', verdict['erreur'])
+        self.assertFalse(verdict['nettoye'])
+        self.assertEqual(verdict['restes'], [])
+        original(verdict['prive'])  # Seul temporaire CPU attribué à ce témoin.
 
     def test_enfant_detache_residuel_arrete_et_reste_rouge(self):
         rc, verdict = self.cas_processus('import subprocess,sys\nsubprocess.Popen([sys.executable,"-c","import time;time.sleep(60)"],start_new_session=True)\n')
