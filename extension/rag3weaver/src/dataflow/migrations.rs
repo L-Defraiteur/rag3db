@@ -691,6 +691,72 @@ pub(crate) struct AppliedMigration {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // T12 : exercer le lecteur et le runner existants avant de corriger
+    // la qualification, sans initialiser le catalogue ni créer son schéma.
+    fn pending_history_fixture(row: Vec<crate::connection::CypherValue>)
+        -> (Result<Vec<MigrationFile>, MigrationError>, usize, usize)
+    {
+        use crate::connection::{CallbackConnection, QueryResult};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("001_application.mmd"), "graph TD\ncheck[\"ValidateNode(query='RETURN 1', assertion='count == 1')\"]\n").unwrap();
+        let effects = Arc::new(AtomicUsize::new(0));
+        let model_calls = Arc::new(AtomicUsize::new(0));
+        let e = effects.clone();
+        let conn = CallbackConnection::new(move |query, _| {
+            if !query.trim_start().starts_with("MATCH") || !query.contains("_DataflowMigration") {
+                e.fetch_add(1, Ordering::SeqCst);
+                return Err(crate::connection::DbError::QueryError("inspection : effet interdit".into()));
+            }
+            Ok(QueryResult { columns: vec![], rows: vec![row.clone()] })
+        });
+        let m = model_calls.clone();
+        let embedder = crate::embedder::CallbackEmbedder::new(4, move |texts| {
+            m.fetch_add(texts.len(), Ordering::SeqCst);
+            Ok(texts.iter().map(|_| vec![0.0; 4]).collect())
+        });
+        let catalog = Catalog::new(Box::new(conn), Box::new(embedder), crate::CatalogConfig::default());
+        let mut runner = MigrationRunner::new(Arc::new(NodeRegistry::new()));
+        runner.add_dir(dir.path().to_path_buf());
+        let result = runner.pending(&catalog);
+        (result, effects.load(Ordering::SeqCst), model_calls.load(Ordering::SeqCst))
+    }
+
+    fn history_row(version: crate::connection::CypherValue, status: &str) -> Vec<crate::connection::CypherValue> {
+        use crate::connection::CypherValue as V;
+        vec![version, V::String("application".into()), V::String(status.into()),
+             V::String("checksum_autre_fichier".into()), V::String("migration-001_application".into()),
+             V::Int(1), V::Int(1), V::String(String::new())]
+    }
+
+    #[test]
+    fn preflight_refuses_applied_checksum_drift_without_effects() {
+        let (result, effects, models) = pending_history_fixture(history_row(crate::connection::CypherValue::Int(1), "applied"));
+        assert_eq!((effects, models), (0, 0));
+        assert!(result.is_err(), "une migration appliquée modifiée ne se saute pas : {result:?}");
+    }
+
+    #[test]
+    fn preflight_refuses_orphan_history_without_effects() {
+        let (result, effects, models) = pending_history_fixture(history_row(crate::connection::CypherValue::Int(99), "applied"));
+        assert_eq!((effects, models), (0, 0));
+        assert!(result.is_err(), "une version sans fichier déclaré doit être nommée : {result:?}");
+    }
+
+    #[test]
+    fn preflight_refuses_unknown_history_state_without_effects() {
+        let (result, effects, models) = pending_history_fixture(history_row(crate::connection::CypherValue::Int(1), "unknown_future_state"));
+        assert_eq!((effects, models), (0, 0));
+        assert!(result.is_err(), "un statut inconnu ne devient pas pending : {result:?}");
+    }
+
+    #[test]
+    fn preflight_refuses_malformed_history_version_without_effects() {
+        let (result, effects, models) = pending_history_fixture(history_row(crate::connection::CypherValue::String("not-a-version".into()), "applied"));
+        assert_eq!((effects, models), (0, 0));
+        assert!(result.is_err(), "une version mal typée ne devient pas zéro : {result:?}");
+    }
+
     // ── Filename parsing ────────────────────────────────────────────────
 
     #[test]
