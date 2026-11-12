@@ -1558,3 +1558,27 @@ rehash4ELF,scanindépendant puisseulTMPpossédéretiré, VERDICT_COMPOSE rougepa
 siéchec. Aucun fichierjoué éditépendantjobs. Premierrouge STOP/diagnostic, pasapply,
 générationpersistante, GPU/modèle/service/DBLucie. READMEpréparé, nouveautés/bilan
 sepublierontsurpreuvesfinales ; ticketresteouvert.
+
+### Suite RO — GO actualisé pour valider l'union empilée, sans attendre master ED
+
+C7 lève l'attente de master pour la VALIDATION : base EDexacte
+**143a21706abed7c38b62d036a4a8d4c9af170790**, publiée sur
+origin/cx-ed-accord-publication-3 ; tip **2a31b271689df34aab77cc6170e623229cb47be7**
+contient143 etson delta src/tests/Cargo/templates estVIDE. AncienED-2b229
+explicitementrefusé commebase(codeobsolète) ; jamaisutilisé.
+
+Branche NEUVE **cx-arbre-observation-faits-3**, six SEULScommitsRO rebasés depuis
+baseCI0bec surED2a31 ; **6/6range-diff identiques**, têteempilée e32e482c6 publiée.
+Preuve **union-ed-ro.json** : tous les blobs src/tests/Cargo/codeparsers/templates
+égalent EXACTEMENT ED +les6cheminsRustRO,220templates ; scriptscritiques
+commonconfiner/lib/cargo identiques à ceux revus. Aucun fichierED édité parArbre.
+Reprise/README/recettes àjour ; sourceglobal SHAfinal aprèsceMD etfreeze avantjob.
+
+GO3600 inchangé, mêmescaps/procédure/scripts décritsci-dessus. Commonconfiner
+prendposteAVANTéchéance, CPU4/Max32/j8/lib29/target32/dirsprivés/CARGO_MANIFEST_DIR,
+PGneuveexplicitcurrent_database, busuniqueentièreportée, inventaires réelsELF,
+4ELF/source220/maps etquiescence+rcsuperviseur requis. EDpeutqualifierhôte enparallèle,
+4lourds max. **IntégrationB reste APRÈS EDmaster ETsonverdict13** ; validation de
+l'union n'est pas un masterED inventé. Si EDchangeRust aprèsbase ou diff produits/
+tests/Cargo/assets final nonvide : STOP/requalification. Si arbresED+ROidentiques,
+conservercettepasse sansrejeu pourIDs decommits/MD seuls. Aucun apply ou baseLucie.
