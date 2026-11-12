@@ -1172,3 +1172,34 @@ un invariant, erreur d'observation consignée séparément ; corrigé déjà dan
 publiée puis explicité dans v2. Scan final indépendant exeTarget/cwdWT/profilTMP
 contre les descendants manqués ; jalon nav-quiescence.json avant CLI avec socket
 bus absent, pour rendre le navigateur à recherche dès ce jalon réellement vert.
+
+### A — lib v2 rouge de montage runtime, reprise v3 sans rebâtir les verts
+
+Source **d2cb7f0636d099823f63de2cef674b630a46bc6f** reste figée sur luciepc.
+F5 **5/5 rc0,133,03s**, vrai checklib sans features **rc0,37,05s** ; compilation
+large **rc0,239,01s**, ELF exact rag3weaver-9bb7a242a57fc19a identifié par JSON.
+Inventaire2287 tests,65 ignorés avant runtime ;18faits+15aperçu non ignorés.
+Runtime **2218 réussis/4 échecs/65 ignorés,46,85s**, scope arrêtée/inactive et
+poste0/4. Aucun NAV ni CLI joué. Les4erreurs sont exclusivement NotPresent :
+code_tools::cwd_tests::cd_ne_ment_pas_sur_ou_on_est (code_tools.rs2062),
+origin::{the_same_file_reached_from_two_depths_has_one_origin_and_one_name,
+git_coordinates_name_a_file_by_its_repo_not_by_the_disk} (origin.rs438/491),
+work_domain::the_default_domain_is_the_repo_of_the_file_being_worked_on (323).
+Ces lignes lisent **std::env::var("CARGO_MANIFEST_DIR").unwrap()** ; le driver
+ELF direct avait omis l'environnement runtime que cargo test aurait fixé.
+Aucun défaut produit attribué. Les18faits+15aperçu sont réussis dans ce passage,
+mais cela ne rend pas la lib entière verte. ELF rouge archivé avec SHA avant
+nouvelle compilation ; logs/maps/PGv2 conservés.
+
+Recette v3 publiée séparément, **exécutée hors WT** pour préserver source et ELF
+d2 : RAG3WEAVER caches/journaux/CPU/bus identiques, **CARGO_MANIFEST_DIR=crate**
+explicite. Pilote/scopev3 propres liés, PG synthétique neuvev3, pas de resetv2.
+Réutilise F5/min/compile lib d2 déjà verts ; hash ELF égal archive rouge et
+inventaires exacts identiques avant runtime lib entière. Ne rejoue aucun Cargo
+F5/min/lib. Budget libruntime≤**300-46,85s**, borne compile/listes restante,
+**INITIAL/DEADLINE3600 toujours ceux de20:27:04**. NAV/CLI/attest restent à jouer.
+Les deux finitions de revue wrapper sont incluses dans v3 : pidfd ouvert AVANT
+relecture starttime puis signal sur ce FD ; cleanupnonzero capturé et VERDICT
+réécrit ROUGE. v2 n'a pas été éditée pendant ses jobs ni réécrite après coup.
+Verdict final composé exigera aussi rc réel pilote, scope inactive, quiescence
+et TMPabsent ; jamais le seul fichier VERDICT. Ticket reste ouvert.
