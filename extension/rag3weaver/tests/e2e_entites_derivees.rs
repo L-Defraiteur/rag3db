@@ -1030,7 +1030,7 @@ fn rollback_puis_nouvelle_table_garde_la_marque_des_cellules_en_attente() {
     let path = database.path().join("marque.db");
     let (_cache, mut catalog) = projection_deux_cellules_sur(Rag3dbConnection::new(&path).unwrap());
     catalog.register_entity("Note", EntityConfig {
-        fields: HashMap::from([("key".into(), champ(FieldType::String, false, false))]),
+        fields: HashMap::from([("key".into(), champ(FieldType::String, false, true))]),
         hashsafe: Some(vec!["key".into()]), signals: SearchSignals::NONE,
         chunked: Some(false), ..Default::default()
     }).unwrap();
