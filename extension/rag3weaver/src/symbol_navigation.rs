@@ -586,7 +586,10 @@ mod integration {
                             json!({"path":"a.py","depth":2,"format":"json"})
                         };
                         MockLlm::new("")
-                            .with_tool_calls(vec![("navigate_symbols".into(), args.to_string())])
+                            .with_tool_calls(vec![(
+                                "navigate_symbols".to_string(),
+                                args.to_string(),
+                            )])
                             .generate(turns, opts, sink)
                     },
                 )))
