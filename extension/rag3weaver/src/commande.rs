@@ -2430,6 +2430,44 @@ mod tests {
         assert_eq!(garde.juger_ligne("mkdir faits", &ctx).unwrap().decision, Decision::Refuse);
     }
 
+    #[test]
+    #[cfg(feature = "code")]
+    fn un_accord_cette_fois_se_consomme_a_l_autorisation_pas_au_jugement() {
+        let domaine = tempfile::tempdir().unwrap();
+        let garde = Garde::new(Mode::Approbation);
+        let ctx = ctx_dans(domaine.path());
+        let ligne = "rm ../accord-non-execute.txt";
+        garde.accorder_ligne(ligne, &ctx).unwrap();
+        for _ in 0..2 {
+            assert_eq!(garde.juger_ligne(ligne, &ctx).unwrap().decision, Decision::Autorise);
+        }
+        assert_eq!(garde.autoriser_ligne(ligne, &ctx).unwrap().len(), 1);
+        assert!(garde.autoriser_ligne(ligne, &ctx).is_err(), "CetteFois ne devient pas un accord permanent");
+        assert_eq!(garde.juger_ligne(ligne, &ctx).unwrap().decision, Decision::Demande);
+        garde.accorder_ligne(ligne, &ctx).unwrap();
+        assert!(garde.autoriser_ligne(ligne, &ctx).is_ok());
+        // Aucun laissez-passer de ce témoin n'est exécuté.
+    }
+
+    #[test]
+    #[cfg(feature = "code")]
+    fn un_accord_cette_fois_ne_produit_qu_un_jeu_de_laissez_passer_concurrent() {
+        let domaine = tempfile::tempdir().unwrap();
+        let garde = std::sync::Arc::new(Garde::new(Mode::Approbation));
+        let ctx = ctx_dans(domaine.path());
+        let ligne = "rm ../accord-concurrent-non-execute.txt";
+        garde.accorder_ligne(ligne, &ctx).unwrap();
+        let depart = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let threads: Vec<_> = (0..2).map(|_| {
+            let (garde, ctx, depart) = (garde.clone(), ctx.clone(), depart.clone());
+            std::thread::spawn(move || {
+                depart.wait();
+                garde.autoriser_ligne(ligne, &ctx).is_ok()
+            })
+        }).collect();
+        assert_eq!(threads.into_iter().map(|t| t.join().unwrap()).filter(|ok| *ok).count(), 1);
+    }
+
     /// **La lecture libre ne sort pas du domaine.** Chaque argument doit se
     /// prouver dedans ; ce que la garde ne sait pas prouver demande.
     #[test]
