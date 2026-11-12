@@ -1,6 +1,6 @@
 # Une scope e2e imbriquée peut échapper au plafond du lanceur
 
-- **État** : ouvert le 12 novembre 2026 ; porteur recherche pour la primitive scripts/procédure, relecture ED ; faits ED et mémoire.
+- **État** : corrigé ; primitive et adoption run_e2e/navigateur, helper ecd605037 validé CPU20 et préflight réelle5fab, delta prioritéff3cf7c35 validé par deux tests ciblés et revue C7/ED ; tour master explicite après A.
 - **Pour** : recherche pour la recette commune des lanceurs ; orchestration coordonne les créneaux et ED relit son adoption. Aucun changement du runner produit dans le lot des accords.
 - **Famille** : produit
 - **Gravité** : risque de dépassement du budget mémoire et d'arrêt incomplet des enfants.
@@ -320,3 +320,7 @@ C7 a donné le tour après A master6d4d1c882b9fc3f59720e6708bd4b3042be7b6a1 avec
 ED confirme ff3 : exclusif+nice15/ionice3 restauré pour build ordinaire ; mesure explicite normale ; quatre sous-cas CPU à la bonne frontière. Helper Python et entrée navigateur diff5fab vide ; aucune objection au delta ni CDP à rejouer. Les deux tests CPU ciblés passent en0,159s.
 
 Limite de composition documentée sans nouvelle prétention de test : un reçu valide saute le choix du mode dans l’entrée imbriquée ; run_e2e --build dans un superviseur déjà lourd ne peut pas acquérir une exclusivité rétroactive. Une passe composée contenant un rebâti doit donc choisir --mode mesure dès l’extérieur et la priorité adaptée ; les quatre tests argv autonomes ne prouvent aucun upgrade imbriqué. La globale ED annoncée ne contient pas de --build. Aucun changement de code ni runtime supplémentaire pour cette précision de précondition.
+
+## Clôture de l’adoption commune après revue
+
+C7 lève explicitement le STOP du delta priorité et confirme le tour master après A6d4 et bilans documentairesd6f. Garanties adoptées par les deux entrées, CPU20 base + deux tests ciblés dont quatre variantes priorité (pas de revendication21 tous rejoués), préflight réelle unique source5fab/prodhelperECD, preuves et limites relues. Rebase documentaire/incomingRustA sans import ni usage par ces scripts/tests ; hashes du helper et entrée navigateur identiques5fab, autres scripts/tests identiquesff3 revu. Aucune ancienne preuve appliquée à un delta inconnu ; pas de nouveau Cargo/NAV/CDP. Précondition mode extérieur mesure pour rebâti composé conservée, cas non testé comme upgrade. Ticket clos et déplacé dans ce même commit ; preuves, rouges historiques et remotes restent hors cible, nettoyage gardé après push. La globale ED future appartient à son propre lot, elle n’est pas revendiquée jouée ici.
