@@ -1,0 +1,11 @@
+{
+  "preflight_raw_count": 1181,
+  "candidate_raw_count": 1181,
+  "normalized_multiset_equal": true,
+  "removed_count": 0,
+  "added_count": 0,
+  "repeated_file_names": {
+    "/home/lucied/.cache/rag3weaver-build/cx-build-saturation-12nov-01/source/test/graph_test/base_graph_test.cpp": 2,
+    "/home/lucied/.cache/rag3weaver-build/cx-build-saturation-12nov-01/source/test/test_helper/test_helper.cpp": 2
+  }
+}

@@ -1,0 +1,14 @@
+# PROPOSITION REJETÉE PAR LA REVUE — NE PAS APPLIQUER.
+# Conservée pour la trace ; source 0511 reste propre, seule exception d’include acceptée.
+# Ticket : docs/coeur-cpp/tickets/2026-11-09-sous-vingt-ecrivains-un-pool-plein-laisse-une-annulation-inachevee.md
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -307,1 +307,3 @@
+ option(BUILD_BENCHMARK "Build benchmarks." FALSE)
++option(RAG3DB_INCLUDE_SPDLOG_HEADERS
++    "Expose bundled spdlog headers without enabling tests or benchmarks." OFF)
+@@ -409,3 +411,3 @@
+-if (${BUILD_TESTS} OR ${BUILD_EXTENSION_TESTS})
++if (${BUILD_TESTS} OR ${BUILD_EXTENSION_TESTS} OR RAG3DB_INCLUDE_SPDLOG_HEADERS)
+     include_directories(third_party/spdlog)
+ elseif (${BUILD_BENCHMARK})

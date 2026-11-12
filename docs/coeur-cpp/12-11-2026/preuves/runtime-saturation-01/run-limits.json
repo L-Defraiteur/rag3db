@@ -1,0 +1,13 @@
+{
+  "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/cx-coeur-runtime-saturation-12nov-01.service",
+  "memory.max": "8589934592",
+  "memory.swap.max": "0",
+  "scratch_bytes": 2147483648,
+  "network_routes": "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT                                                       \n",
+  "source_readonly": true,
+  "package_readonly": true,
+  "output_persistent_outside_scratch": true,
+  "logs_limit_bytes": 16777216,
+  "stream_limit_bytes": 15728640,
+  "capture_structural_reserve_bytes": 1048576
+}

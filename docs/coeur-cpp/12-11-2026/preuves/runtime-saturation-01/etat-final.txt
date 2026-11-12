@@ -1,0 +1,5 @@
+ActiveState=inactive
+MainPID=0
+Result=success
+tient lourd depuis 15:01:06 (pid 2119733) — bash /home/lucied/.cache/rag3weaver-build/cx-lancer-transfert-apercu-cible-v3.sh 
+lourds : 1/4 places tenues

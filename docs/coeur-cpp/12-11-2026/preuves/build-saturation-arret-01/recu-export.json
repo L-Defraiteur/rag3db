@@ -1,0 +1,9 @@
+{
+  "archive": "cx-build-saturation-12nov-01-arret.tar.gz",
+  "bytes": 421962,
+  "sha256": "46a3df31f9e5d6929341a64ed61683bbe9d0cb82332d3db749d15d082b1b54cf",
+  "verified_files": 27,
+  "native_build_failed": true,
+  "scenario_run": false,
+  "retry": false
+}

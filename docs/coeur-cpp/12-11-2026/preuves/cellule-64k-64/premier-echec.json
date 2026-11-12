@@ -1,0 +1,4 @@
+{
+  "error": "RuntimeError",
+  "detail": "dépendance ELF non système autorisée"
+}

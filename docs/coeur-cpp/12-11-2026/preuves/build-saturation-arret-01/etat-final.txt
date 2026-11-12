@@ -1,0 +1,5 @@
+ActiveState=failed
+MainPID=0
+Result=exit-code
+poste : libre (aucune mesure, aucun lourd)
+lourds : 0/4 places tenues

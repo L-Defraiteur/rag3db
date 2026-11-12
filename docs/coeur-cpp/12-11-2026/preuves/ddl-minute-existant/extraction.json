@@ -1,0 +1,300 @@
+{
+  "base": {
+    "file": "base-TwentyWriters.DdlEveryMinute.log",
+    "events": [
+      {
+        "line": 9,
+        "kind": "début",
+        "ddl": "1 ADD note",
+        "ms_printed": 60000
+      },
+      {
+        "line": 10,
+        "kind": "fin",
+        "ddl": "1 ADD note",
+        "ms_printed": 60012
+      },
+      {
+        "line": 14,
+        "kind": "début",
+        "ddl": "2 ADD rang DEFAULT 0",
+        "ms_printed": 120000
+      },
+      {
+        "line": 15,
+        "kind": "fin",
+        "ddl": "2 ADD rang DEFAULT 0",
+        "ms_printed": 121912
+      },
+      {
+        "line": 19,
+        "kind": "début",
+        "ddl": "3 CREATE REL TABLE",
+        "ms_printed": 180000
+      },
+      {
+        "line": 20,
+        "kind": "fin",
+        "ddl": "3 CREATE REL TABLE",
+        "ms_printed": 180089
+      },
+      {
+        "line": 23,
+        "kind": "début",
+        "ddl": "4 CREATE_VECTOR_INDEX",
+        "ms_printed": 240000
+      },
+      {
+        "line": 24,
+        "kind": "fin",
+        "ddl": "4 CREATE_VECTOR_INDEX",
+        "ms_printed": 992409
+      },
+      {
+        "line": 25,
+        "kind": "début",
+        "ddl": "5 CHECKPOINT",
+        "ms_printed": 992410
+      },
+      {
+        "line": 26,
+        "kind": "fin",
+        "ddl": "5 CHECKPOINT",
+        "ms_printed": 992898
+      },
+      {
+        "line": 28,
+        "kind": "début",
+        "ddl": "6 ADD b DEFAULT",
+        "ms_printed": 992907
+      },
+      {
+        "line": 29,
+        "kind": "fin",
+        "ddl": "6 ADD b DEFAULT",
+        "ms_printed": 992911
+      }
+    ],
+    "peaks": [
+      {
+        "line": 31,
+        "ddl": "1 ADD note",
+        "before_window_peak_MiB": 1071,
+        "during_window_peak_MiB": 0
+      },
+      {
+        "line": 32,
+        "ddl": "2 ADD rang DEFAULT 0",
+        "before_window_peak_MiB": 1152,
+        "during_window_peak_MiB": 398
+      },
+      {
+        "line": 33,
+        "ddl": "3 CREATE REL TABLE",
+        "before_window_peak_MiB": 1176,
+        "during_window_peak_MiB": 1122
+      },
+      {
+        "line": 34,
+        "ddl": "4 CREATE_VECTOR_INDEX",
+        "before_window_peak_MiB": 1177,
+        "during_window_peak_MiB": 1341
+      },
+      {
+        "line": 35,
+        "ddl": "5 CHECKPOINT",
+        "before_window_peak_MiB": 0,
+        "during_window_peak_MiB": 108
+      },
+      {
+        "line": 36,
+        "ddl": "6 migration annulée",
+        "before_window_peak_MiB": 0,
+        "during_window_peak_MiB": 0
+      },
+      {
+        "line": 37,
+        "ddl": "6 ADD b DEFAULT",
+        "before_window_peak_MiB": 0,
+        "during_window_peak_MiB": 0
+      }
+    ],
+    "aggregated_errors_not_chronological": [
+      {
+        "line": 71,
+        "text": "[scénario] erreur hors DDL n=1 « Runtime exception: Found duplicated primary key value #, which violates the uniqueness constraint of the primary key column. »"
+      },
+      {
+        "line": 72,
+        "text": "[scénario] erreur hors DDL n=45 « Transaction aborted: could not serialize access due to concurrent update — row '#' of table # was written by another transaction after this one started. Roll it back and run it again. »"
+      },
+      {
+        "line": 73,
+        "text": "[scénario] erreur pendant « 4 CREATE_VECTOR_INDEX » n=1 « Transaction aborted: could not serialize access due to concurrent update — row '#' of table # was written by another transaction after this one started. Roll it back and run it again. »"
+      }
+    ],
+    "begin_refused_printed_count": 0,
+    "incomplete_rollback_message_count": 0
+  },
+  "isole": {
+    "file": "isole-TwentyWriters.DdlEveryMinute.log",
+    "events": [
+      {
+        "line": 9,
+        "kind": "début",
+        "ddl": "1 ADD note",
+        "ms_printed": 60000
+      },
+      {
+        "line": 10,
+        "kind": "fin",
+        "ddl": "1 ADD note",
+        "ms_printed": 60061
+      },
+      {
+        "line": 13,
+        "kind": "début",
+        "ddl": "2 ADD rang DEFAULT 0",
+        "ms_printed": 120000
+      },
+      {
+        "line": 14,
+        "kind": "fin",
+        "ddl": "2 ADD rang DEFAULT 0",
+        "ms_printed": 120009
+      },
+      {
+        "line": 95,
+        "kind": "début",
+        "ddl": "3 CREATE REL TABLE",
+        "ms_printed": 180000
+      },
+      {
+        "line": 96,
+        "kind": "fin",
+        "ddl": "3 CREATE REL TABLE",
+        "ms_printed": 180017
+      },
+      {
+        "line": 427,
+        "kind": "début",
+        "ddl": "4 CREATE_VECTOR_INDEX",
+        "ms_printed": 240000
+      },
+      {
+        "line": 429,
+        "kind": "fin",
+        "ddl": "4 CREATE_VECTOR_INDEX",
+        "ms_printed": 240172
+      },
+      {
+        "line": 764,
+        "kind": "début",
+        "ddl": "5 CHECKPOINT",
+        "ms_printed": 300000
+      },
+      {
+        "line": 765,
+        "kind": "fin",
+        "ddl": "5 CHECKPOINT",
+        "ms_printed": 300000
+      },
+      {
+        "line": 1070,
+        "kind": "début",
+        "ddl": "6 ADD b DEFAULT",
+        "ms_printed": 360067
+      },
+      {
+        "line": 1071,
+        "kind": "fin",
+        "ddl": "6 ADD b DEFAULT",
+        "ms_printed": 360117
+      }
+    ],
+    "peaks": [
+      {
+        "line": 1152,
+        "ddl": "1 ADD note",
+        "before_window_peak_MiB": 1068,
+        "during_window_peak_MiB": 275
+      },
+      {
+        "line": 1153,
+        "ddl": "2 ADD rang DEFAULT 0",
+        "before_window_peak_MiB": 1145,
+        "during_window_peak_MiB": 0
+      },
+      {
+        "line": 1154,
+        "ddl": "3 CREATE REL TABLE",
+        "before_window_peak_MiB": 2051,
+        "during_window_peak_MiB": 2049
+      },
+      {
+        "line": 1155,
+        "ddl": "4 CREATE_VECTOR_INDEX",
+        "before_window_peak_MiB": 2052,
+        "during_window_peak_MiB": 2048
+      },
+      {
+        "line": 1156,
+        "ddl": "5 CHECKPOINT",
+        "before_window_peak_MiB": 2052,
+        "during_window_peak_MiB": 0
+      },
+      {
+        "line": 1157,
+        "ddl": "6 migration annulée",
+        "before_window_peak_MiB": 2052,
+        "during_window_peak_MiB": 2049
+      },
+      {
+        "line": 1158,
+        "ddl": "6 ADD b DEFAULT",
+        "before_window_peak_MiB": 0,
+        "during_window_peak_MiB": 0
+      }
+    ],
+    "aggregated_errors_not_chronological": [
+      {
+        "line": 1184,
+        "text": "[scénario] erreur hors DDL n=23 « Transaction aborted: could not serialize access due to concurrent update — row '#' of table # was written by another transaction after this one started. Roll it back and run it again. »"
+      },
+      {
+        "line": 1185,
+        "text": "[scénario] erreur hors DDL n=4 « Runtime exception: Found duplicated primary key value #, which violates the uniqueness constraint of the primary key column. »"
+      },
+      {
+        "line": 1186,
+        "text": "[scénario] erreur hors DDL n=79436 « Buffer manager exception: Unable to allocate memory! The buffer pool is full and no memory could be freed! »"
+      },
+      {
+        "line": 1187,
+        "text": "[scénario] erreur hors DDL n=17 « Buffer manager exception: No more frame groups can be added to the allocator. »"
+      },
+      {
+        "line": 1188,
+        "text": "[scénario] erreur pendant « 3 CREATE REL TABLE » n=42 « Buffer manager exception: Unable to allocate memory! The buffer pool is full and no memory could be freed! »"
+      },
+      {
+        "line": 1189,
+        "text": "[scénario] erreur pendant « 4 CREATE_VECTOR_INDEX » n=87 « Buffer manager exception: Unable to allocate memory! The buffer pool is full and no memory could be freed! »"
+      },
+      {
+        "line": 1190,
+        "text": "[scénario] erreur pendant « 5 CHECKPOINT » n=25 « Buffer manager exception: Unable to allocate memory! The buffer pool is full and no memory could be freed! »"
+      },
+      {
+        "line": 1191,
+        "text": "[scénario] erreur pendant « 6 migration annulée » n=52 « Buffer manager exception: Unable to allocate memory! The buffer pool is full and no memory could be freed! »"
+      },
+      {
+        "line": 1192,
+        "text": "[scénario] erreur pendant « 6 ADD b DEFAULT » n=46 « Buffer manager exception: Unable to allocate memory! The buffer pool is full and no memory could be freed! »"
+      }
+    ],
+    "begin_refused_printed_count": 1125,
+    "incomplete_rollback_message_count": 0
+  }
+}

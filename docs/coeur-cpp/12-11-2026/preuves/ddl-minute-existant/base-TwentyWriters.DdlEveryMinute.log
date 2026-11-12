@@ -1,0 +1,96 @@
+Running main() from /usr/src/debug/gtest/googletest-1.18.0/googletest/src/gtest_main.cc
+Note: Google Test filter = TwentyWriters.DdlEveryMinute
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from TwentyWriters
+[ RUN      ] TwentyWriters.DdlEveryMinute
+[Checkpoint postponed: other transactions are open] the journal holds 16777968 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778080 bytes
+  [scénario] début de « 1 ADD note » à 60000 ms
+  [scénario] fin de « 1 ADD note » à 60012 ms
+[Checkpoint postponed: other transactions are open] the journal holds 16777388 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777956 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777867 bytes
+  [scénario] début de « 2 ADD rang DEFAULT 0 » à 120000 ms
+  [scénario] fin de « 2 ADD rang DEFAULT 0 » à 121912 ms
+[Checkpoint postponed: other transactions are open] the journal holds 16777887 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778192 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778097 bytes
+  [scénario] début de « 3 CREATE REL TABLE » à 180000 ms
+  [scénario] fin de « 3 CREATE REL TABLE » à 180089 ms
+[Checkpoint postponed: other transactions are open] the journal holds 16778249 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777919 bytes
+  [scénario] début de « 4 CREATE_VECTOR_INDEX » à 240000 ms
+  [scénario] fin de « 4 CREATE_VECTOR_INDEX » à 992409 ms
+  [scénario] début de « 5 CHECKPOINT » à 992410 ms
+  [scénario] fin de « 5 CHECKPOINT » à 992898 ms
+  [scénario] migration annulée : second ADD « Runtime exception: Doc table already has property a. » ; COMMIT « The transaction was rolled back because a statement in it failed: nothing was committed. The transaction is now closed. » ; ROLLBACK « No active transaction for ROLLBACK. »
+  [scénario] début de « 6 ADD b DEFAULT » à 992907 ms
+  [scénario] fin de « 6 ADD b DEFAULT » à 992911 ms
+  [scénario] tampon : 2048 Mio, point de reprise automatique en marche, seuil par défaut, pic 1341 Mio
+  [scénario] tampon avant « 1 ADD note » : pic 1071 Mio ; pendant : pic 0 Mio
+  [scénario] tampon avant « 2 ADD rang DEFAULT 0 » : pic 1152 Mio ; pendant : pic 398 Mio
+  [scénario] tampon avant « 3 CREATE REL TABLE » : pic 1176 Mio ; pendant : pic 1122 Mio
+  [scénario] tampon avant « 4 CREATE_VECTOR_INDEX » : pic 1177 Mio ; pendant : pic 1341 Mio
+  [scénario] tampon avant « 5 CHECKPOINT » : pic 0 Mio ; pendant : pic 108 Mio
+  [scénario] tampon avant « 6 migration annulée » : pic 0 Mio ; pendant : pic 0 Mio
+  [scénario] tampon avant « 6 ADD b DEFAULT » : pic 0 Mio ; pendant : pic 0 Mio
+  [scénario] tampon après le dernier DDL : pic 127 Mio
+  [scénario] attentes de plus d'1 s pendant « 2 ADD rang DEFAULT 0 » (durée 1911.66 ms) acteur=doc n=20 : commencées de -453.851 à -390.815 ms, finies de 1894.62 à 1919.73 ms après le début du DDL
+  [scénario] attentes de plus d'1 s pendant « 2 ADD rang DEFAULT 0 » (durée 1911.66 ms) acteur=note n=2 : commencées de -423.689 à -412.403 ms, finies de 1903.85 à 1905.69 ms après le début du DDL
+  [scénario] attentes de plus d'1 s pendant « 2 ADD rang DEFAULT 0 » (durée 1911.66 ms) acteur=lecteur n=4 : commencées de -403.699 à -397.65 ms, finies de 1905.02 à 1912.77 ms après le début du DDL
+  [scénario] attentes de plus d'1 s pendant « 4 CREATE_VECTOR_INDEX » (durée 752409 ms) acteur=doc n=40 : commencées de 79.1904 à 8441.15 ms, finies de 3935.65 à 752566 ms après le début du DDL
+  [scénario] attentes de plus d'1 s pendant « 4 CREATE_VECTOR_INDEX » (durée 752409 ms) acteur=note n=4 : commencées de 166.818 à 8410.2 ms, finies de 3933.75 à 752412 ms après le début du DDL
+  [scénario] attentes de plus d'1 s pendant « 4 CREATE_VECTOR_INDEX » (durée 752409 ms) acteur=lecteur n=8 : commencées de 165.341 à 8410.89 ms, finies de 3934.72 à 751010 ms après le début du DDL
+  [scénario] attentes de plus d'1 s pendant « 5 CHECKPOINT » (durée 488.29 ms) acteur=doc n=20 : commencées de -744001 à -743969 ms, finies de 16.6602 à 156.171 ms après le début du DDL
+  [scénario] attentes de plus d'1 s pendant « 5 CHECKPOINT » (durée 488.29 ms) acteur=note n=2 : commencées de -744000 à -743999 ms, finies de 1.41934 à 2.28615 ms après le début du DDL
+  [scénario] fenêtre=« hors DDL » acteur=doc n=295723 médiane=14.3095 p99=37.869 max=1195.58 ms erreurs=46 bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 1 ADD note » acteur=doc n=35 médiane=16.2057 p99=40.5782 max=40.5782 ms erreurs=0 durée_ddl=12.2802 ms ddl=ok première_validation_après=0.292008 ms bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 2 ADD rang DEFAULT 0 » acteur=doc n=35 médiane=2308.83 p99=2357.18 max=2357.18 ms erreurs=0 durée_ddl=1911.66 ms ddl=ok première_validation_après=1894.62 ms bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 3 CREATE REL TABLE » acteur=doc n=21 médiane=767.189 p99=785.282 max=785.282 ms erreurs=0 durée_ddl=89.4199 ms ddl=ok première_validation_après=87.1959 ms bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 4 CREATE_VECTOR_INDEX » acteur=doc n=1525 médiane=61.6621 p99=744035 max=744138 ms erreurs=1 durée_ddl=752409 ms ddl=ok première_validation_après=0.239003 ms bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 5 CHECKPOINT » acteur=doc n=40 médiane=743993 p99=744138 max=744138 ms erreurs=0 durée_ddl=488.29 ms ddl=ok première_validation_après=16.6602 ms bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 6 migration annulée » acteur=doc n=20 médiane=514.289 p99=652.337 max=652.337 ms erreurs=0 durée_ddl=5.10672 ms ddl=ok première_validation_après=11.4901 ms bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 6 ADD b DEFAULT » acteur=doc n=20 médiane=514.289 p99=652.337 max=652.337 ms erreurs=0 durée_ddl=4.09194 ms ddl=ok première_validation_après=6.34015 ms bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« hors DDL » acteur=note n=55152 médiane=9.25225 p99=28.5263 max=1171.62 ms erreurs=0 bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 1 ADD note » acteur=note n=4 médiane=11.7581 p99=12.0934 max=12.0934 ms erreurs=0 durée_ddl=12.2802 ms ddl=ok première_validation_après=9.56668 ms bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 2 ADD rang DEFAULT 0 » acteur=note n=5 médiane=12.84 p99=2327.54 max=2327.54 ms erreurs=0 durée_ddl=1911.66 ms ddl=ok première_validation_après=1903.85 ms bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 3 CREATE REL TABLE » acteur=note n=3 médiane=761.849 p99=769.264 max=769.264 ms erreurs=0 durée_ddl=89.4199 ms ddl=ok première_validation_après=88.5861 ms bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 4 CREATE_VECTOR_INDEX » acteur=note n=4504 médiane=1.99517 p99=4.63591 max=744002 ms erreurs=0 durée_ddl=752409 ms ddl=ok première_validation_après=5.06685 ms bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 5 CHECKPOINT » acteur=note n=5 médiane=488.599 p99=744002 max=744002 ms erreurs=0 durée_ddl=488.29 ms ddl=ok première_validation_après=1.41934 ms bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 6 migration annulée » acteur=note n=8 médiane=1.55748 p99=2.74171 max=2.74171 ms erreurs=0 durée_ddl=5.10672 ms ddl=ok première_validation_après=0.709703 ms bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 6 ADD b DEFAULT » acteur=note n=6 médiane=2.55897 p99=4.14513 max=4.14513 ms erreurs=0 durée_ddl=4.09194 ms ddl=ok première_validation_après=0.529229 ms bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« hors DDL » acteur=lecteur n=128973 médiane=6.35784 p99=27.4979 max=742.837 ms erreurs=0 bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 1 ADD note » acteur=lecteur n=8 médiane=13.4611 p99=15.1695 max=15.1695 ms erreurs=0 durée_ddl=12.2802 ms ddl=ok bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 2 ADD rang DEFAULT 0 » acteur=lecteur n=7 médiane=2305.39 p99=2313.72 max=2313.72 ms erreurs=0 durée_ddl=1911.66 ms ddl=ok bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 3 CREATE REL TABLE » acteur=lecteur n=195 médiane=1.32562 p99=11.2905 max=744.044 ms erreurs=0 durée_ddl=89.4199 ms ddl=ok bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 4 CREATE_VECTOR_INDEX » acteur=lecteur n=11781 médiane=1.76463 p99=5.56234 max=742600 ms erreurs=0 durée_ddl=752409 ms ddl=ok bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 5 CHECKPOINT » acteur=lecteur n=1927 médiane=0.632766 p99=1.65265 max=155.951 ms erreurs=0 durée_ddl=488.29 ms ddl=ok bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 6 migration annulée » acteur=lecteur n=13 médiane=3.03148 p99=6.4411 max=6.4411 ms erreurs=0 durée_ddl=5.10672 ms ddl=ok bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 6 ADD b DEFAULT » acteur=lecteur n=4 médiane=6.43457 p99=6.4411 max=6.4411 ms erreurs=0 durée_ddl=4.09194 ms ddl=ok bati=rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] erreur hors DDL n=1 « Runtime exception: Found duplicated primary key value #, which violates the uniqueness constraint of the primary key column. »
+  [scénario] erreur hors DDL n=45 « Transaction aborted: could not serialize access due to concurrent update — row '#' of table # was written by another transaction after this one started. Roll it back and run it again. »
+  [scénario] erreur pendant « 4 CREATE_VECTOR_INDEX » n=1 « Transaction aborted: could not serialize access due to concurrent update — row '#' of table # was written by another transaction after this one started. Roll it back and run it again. »
+/home/lucied/git_workspaces/rag3db-colonnes/test/transaction/concurrence/twenty_writers_scenario_test.cpp:678: Failure
+Expected: (worst - usual) <= (ddl->end - ddl->start + SLACK_MS + convoy), actual: 747.41324900000473 vs 139.41990499998792
+[check: create-rel-table-holds-writers-at-most-its-duration] doc writer waited 785.28228200000012 ms during « 3 CREATE REL TABLE » (89.419904999987921 ms), against a p99 of 37.869032999995397 ms outside the DDL and an index convoy of 0 ms
+
+/home/lucied/git_workspaces/rag3db-colonnes/test/transaction/concurrence/twenty_writers_scenario_test.cpp:678: Failure
+Expected: (worst - usual) <= (ddl->end - ddl->start + SLACK_MS + convoy), actual: 740.73787199999788 vs 139.41990499998792
+[check: create-rel-table-holds-writers-at-most-its-duration] note writer waited 769.26413100000354 ms during « 3 CREATE REL TABLE » (89.419904999987921 ms), against a p99 of 28.526259000005666 ms outside the DDL and an index convoy of 0 ms
+
+  [scénario] défauts avant le point de reprise : rang hors défaut 0, b hors défaut 0 (sur 49990)
+  [scénario] comptes avant le point de reprise : Doc 59927/59927, Link 447312/447312, Note 59683/59683
+  [scénario] défauts après le point de reprise : rang hors défaut 0, b hors défaut 0 (sur 49990)
+  [scénario] comptes après la réouverture : Doc 59927/59927, Link 447312/447312, Note 59683/59683
+  [scénario] défauts après la réouverture : rang hors défaut 0, b hors défaut 0 (sur 49990)
+[  FAILED  ] TwentyWriters.DdlEveryMinute (1009646 ms)
+[----------] 1 test from TwentyWriters (1009646 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (1009647 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] TwentyWriters.DdlEveryMinute
+
+ 1 FAILED TEST

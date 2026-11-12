@@ -285,3 +285,161 @@ Après les ciblés : `transaction_test` entier puis `concurrence_test` entier, c
 aux rouges connus et probabilistes. Mesurer séparément le coût avec plusieurs
 enregistrements undo. Aucun tour de push de code : fenêtre recherche en cours.
 Aucune lib du magasin n’a été modifiée pour ce lot.
+
+## Actualisation du 12 novembre — comparaison de base lue
+
+Toutes les actions restent portées par
+`docs/coeur-cpp/tickets/2026-11-09-sous-vingt-ecrivains-un-pool-plein-laisse-une-annulation-inachevee.md`
+(cœur C++). Les lanceurs des ciblés, suites entières, isolés et base sont terminés.
+Aucune compilation ni aucun test relancé à cette reprise.
+
+`0511dece7` : ciblés verts trois fois, stockage 8/8, transaction entière 357 verts
+et 2 outils sautés attendus ; concurrence 25 rouges, dont quatre hors listes.
+DdlEveryFifteenSeconds est vert seul. Les deux rouges de coût SetInBatchesOf64
+reproduisent le même contrôle sur la base sans correctif. Les huit recettes de
+COPY annulés passent aussi des deux côtés.
+
+DdlEveryMinute reste indépartagé : base rouge sur attentes DDL, correctif rouge
+sous pool plein puis ADD b refusé et SET d’une propriété absente. Les symptômes
+ne sont pas équivalents. Les preuves détaillées et les limites de mesure sont
+dans le ticket ; aucun vert global ni demande de tour de push.
+
+À luciepc, `rag3db-colonnes` porte maintenant les sources de `65486c02d` au-dessus
+de HEAD `6e7f11680`, diff vide contre la base pour src/test/vector/geo ; ses binaires
+courants sont ceux de la base. Le correctif reste sauvegardé sur
+`cx-coeur-annulation`, `0511dece7`, worktree local `~/git_workspaces/cx-coeur-annulation`.
+Les binaires précédents sont dans `annulation/binaires-0511dece7/` ; ne pas les
+rejouer avec des extensions incompatibles. Prochain travail : diagnostic des
+volumes et fenêtres DDL déjà journalisés, puis comparaison bornée si nécessaire.
+
+Lecture des fenêtres existantes : le correctif atteint déjà le plein du pool avant
+le troisième DDL (2 051 Mio), contre 1 176 Mio sur la base. L’index vectoriel est
+ensuite refusé en 172 ms au lieu de réussir en 752 s. Les volumes et erreurs hors
+DDL divergent aussi ; on ne peut pas attribuer cet écart au coût du nouveau scan
+par plage à partir de ces seules exécutions. Préparer la mesure bornée index local
+× nombre d’enregistrements undo ; ne pas rejouer aveuglément le scénario minute.
+
+Protocole de mesure préparé, sans exécution :
+`docs/coeur-cpp/12-11-2026/03-protocole-borne-index-et-annulations.md`, lié au
+ticket d’annulation. Il borne N × plages, fixe les entrées/R, distingue retrait
+d’index et rollback complet, précise les plafonds et les limites du réemploi
+des binaires. Prochain pas : pilote externe à relire avant demande de créneau.
+
+Pilote externe et commandes de revue préparés sous `docs/coeur-cpp/12-11-2026/outils/`,
+aucun compilateur lancé. Première proposition limitée à 64k × 64, trois paires ;
+15 minutes globales. Attention : archive assortie au correctif absente ; la seule
+archive de base ne prouve pas la conformité avec un en-tête modifié. La piste de
+surcouche sur celle-ci est retirée. Sources prêtes à relire, lien et mesure non
+prêts ; aucun moteur copié reconstruit, aucune lib modifiée.
+
+Inventaire des archives/objets du lot terminé en lecture seule : pas d’archive
+assortie `0511dece7` retrouvée ; sauvegarde limitée aux trois exécutables, produits
+courants remplacés par ceux de la base. Preuves, SHA et proposition minimale de
+build statique privé dans `docs/coeur-cpp/12-11-2026/04-inventaire-et-proposition-archive-privee.md`.
+Aucun nouveau worktree, configuration, compilation ou mesure. Le ticket d’annulation
+porte la suite et les inconnues ; pas de demande de tour de push.
+
+Préflight privé du 12 novembre exécuté, puis STOP avant moteur :
+`cx-coeur-archive-0511-12nov-01.service`, PID 801185, code 2, lourd libéré.
+Les 739 unités et compilateurs sont identiques ; seul l’include spdlog ajouté
+par la configuration des tests manque dans le privé. La garde refuse cet écart.
+Source `cx-coeur-archive-0511` propre sur commit complet 0511dece7, preuves
+dans `annulation/cx-archive-privee-12nov-01/`, aucune archive produite ni
+lib modifiée. Pas de relance, créneau libéré pour recherche FTS via C7.
+Le ticket d’annulation porte la relecture de cet écart et la suite.
+
+Relecture spdlog préparée dans `12-11-2026/05-relecture-ecart-inclusion-spdlog.md` :
+0 macro différente et aucun en-tête spdlog dans les dépendances des 739 objets
+de référence VALID. Proposition d’option explicite d’inclusion, diff seulement
+dans les docs ; nécessite arbitrage d’identité de source avant application.
+Garde stricte conservée, aucune nouvelle configuration ou compilation ; recherche
+FTS utilise le créneau libéré. Suite portée par le même ticket d’annulation.
+
+Décision C7 sur spdlog : option dédiée rejetée, source 0511 propre ; seule
+absence du chemin exact revue et acceptée. Configuration privée distincte nommée
+dans le préflight révisé, sans affirmation d’identité littérale/historique.
+Audit de 3 955 fichiers et 21 lignes has_include sans condition spdlog ; contrôle
+739 dépendances privées VALID/0SPDLOG ajouté avant futur manifeste. Préflight
+révisé préparé et règle testée sans moteur ; pas de configuration/build relancé.
+Le même ticket porte la revue suivante ; fin FTS reçue sans lancement C++ automatique.
+
+Préflight privé 02 lancé après feu vert C7 : source 0511 propre, unité
+`cx-coeur-archive-0511-12nov-02`, wrapper927681/MainPID927714, résultats
+`annulation/cx-archive-privee-12nov-02/`. Revue fraîche ATTENTE_REVUE, 739
+omissions exactes acceptées et zéro autre différence, audit référence vert.
+Plan et SHA transmis à C7 pour gate ; aucun build moteur au partage.
+Runtime borné jusqu’à 11:45:19 Paris + arrêt5s le 12 novembre, attente incluse.
+Le ticket d’annulation contient les détails ; pas de pilote ou mesure autorisé.
+
+Archive privée 02 terminée code0 en 226,5 s, sous limites, lourd rendu (0/4 lu).
+989 étapes statiques ; audit privé739VALID/0SPDLOG avant manifeste, source0511
+toujours propre. ArchiveSHA3030fe674e33e2ea0b5b01ed7bdf1a919e538c02e5dfc0b68fff7b50e1d06758 ;
+manifesteSHA0049111df769914dbeea66fd0d2d07c6add58a670eb80e797589604d48c80df7.
+Paquet et preuves à luciepc `annulation/cx-archive-privee-12nov-02/` : archive,
+810headerssource,2générés,17dépendances,830fichiers rehashés sans écart.
+Configuration privée distincte, pas archive historique ; pas de pilote/mesure
+ni lib distribuée. C7 doit relire le manifeste avant l’étape suivante du ticket.
+
+Manifeste archive privée accepté/re-hashé par C7. Recette pilote remappée au
+paquet02 depuis les flags effectifs privés, sans flags de tests ni chemins de
+base ; 17 dépendances privées+archive moteur, headers assortis. Revue06 et argv
+préparés seulement, aucun staging/compiler/lien/mesure. Prêt à revue après
+priorité CLI arbre, même ticket ; ready=false jusqu’à autorisation explicite.
+
+Pilote : staging830+2générés et compilation1TU/lien codes0, puis premier arrêt
+ELF code2 : liste du contrôleur trop étroite, chargeur système glibc ld-linux
+absent de la liste prévue. BinaireSHA0c868053afea43df3cb2eb5fe8e77f597701b8ab4eb2a0c403ca854ef64cf704
+conservé non exécuté. Preuves/diagnostic dans revue07 et même ticket ; unité
+terminée, poste0/4 relu, C7/arbre informés. Aucun retry, aucune paire mesurée.
+
+Première cellule autorisée réussie : six processus/384plages, signatures
+entrées/survivants identiques, médianes clés0,296892ms/plages26,442622ms,
+pool frontière inchangé7 647 744octets. Pas facteur89du moteur complet ni
+preuve de pressionDDL. Bruts exportés/revue08, poste libéré.
+C7 autorise ensuite exactement4points N/U et24processus max ; arbre finit
+ses8CLI et laisse la porte mesure. Même source/binaire, pas de compilation.
+
+Quatre points supplémentaires finis0/24processus/2 352plages, ressources
+libérées : médianes plages6,920786/105,293110/3,848231/102,217416ms
+(N16k/U64,N256k/U64,N64k/U8,N64k/U256). Données/dispersion revue09,
+coût compatibleN×U pour le mécanisme seulement. STOPmesures après ces4points.
+Proposition minimale lecture seule revue10 : fusion stricte d’undo adjacents
+d’un même tampon/handler/groupe, opt-in après preuve d’équivalence ; limites
+et alternatives explicitement conservées. Itérateur actuel alloue un vector
+système : pas d’affirmation de rollback global sans allocation. Aucun code
+moteur modifié ni nouveau build/mesure, même ticket ouvert pour revue du plan.
+
+
+## Reprendre après le lot documentaire du 12 novembre
+
+Tout reste relié au [ticket d'annulation ouvert](../tickets/2026-11-09-sous-vingt-ecrivains-un-pool-plein-laisse-une-annulation-inachevee.md),
+porteur cœur C++. État actuel : [runtime unique vert sans saturation reproduite](../12-11-2026/20-runtime-unique-vert-sans-saturation.md),
+1/1test joué,984échantillons stricts complets ; aucune causalité établie pour le
+rouge historique, pas de vert global ou de conclusion générale sur la quarantaine.
+Le coût micro N×U ne justifie pas de fusion A pour TwentyWriters ; voir revues10–11.
+
+La publication sur master porte uniquement les documents possédés et leurs preuves.
+Aucun code de0511/35ea, aucune bibliothèque distribuée ni rapport d'autre session
+n'est intégré. Aucun nouveau lourd, build ou runtime pour cette publication.
+
+Sources privées à préserver :
+
+- `/home/lucied/git_workspaces/cx-coeur-annulation`, branche cx-coeur-annulation,
+  `0511dece74f94db6937fb03e6ec45f0c58828c5a`, correction de sûreté non intégrée.
+- `/home/lucied/git_workspaces/cx-coeur-diagnostic-saturation`, branche du même nom,
+  `35ea70d3a4a5cc4917586de02f6bfc862c76a02c`, diagnostic privé, aucun produit publié.
+- `/home/lucied/git_workspaces/cx-coeur-suivi-11nov`, branche cx-coeur-suivi-11nov-5,
+  `34f8e9203`, historique des documents/protocoles/preuves désormais repris ici.
+
+Paquets/logs stables à luciepc sous `~/.cache/rag3db-moteur-notes/annulation/` :
+`cx-archive-privee-12nov-02/`, `cx-pilote-retrait-0511dece7/`,
+`cx-build-saturation-12nov-{01,02}/`, `cx-runtime-saturation-12nov-01/` et archives
+voisines. Manifeste et empreintes dans documents18–20. Les preuves d'échec sont
+conservées au même titre que les réussites ; ne pas mélanger les configurations.
+
+Ressources rendues : aucun processus ni créneau propre conservé, aucun nouveau
+runtime autorisé. Le ticket de quarantaine distinct reste à la session hotfixs ;
+ne pas prendre son constat statique pour une corruption reproduite ici.
+Aucun retrait/nettoyage de worktree dans ce lot. Tout retrait ultérieur exige
+garde conforme et archive fidèle de l'administration hors cible ; ne pas nettoyer
+les sources/paquets ou un lot d'une autre session.

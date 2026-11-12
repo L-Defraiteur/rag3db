@@ -1,0 +1,121 @@
+{
+  "ready_to_run": false,
+  "reason": "Archive privée acceptée en préparation, mais pilote non compilé/non exécuté : revue du lien, lanceur borné et autorisation de mesure encore requis.",
+  "mechanism_only": true,
+  "exact_engine_base_vs_fix": false,
+  "global_timeout_s": 900,
+  "per_process_timeout_s": 60,
+  "rss_limit_mib": 1024,
+  "pool_mib": 512,
+  "lock": "poste mesure",
+  "entries": 65536,
+  "ranges": 64,
+  "removed": 4096,
+  "processes": [
+    {
+      "pair": 1,
+      "argv": [
+        "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7/cx-mesure-retrait",
+        "--entries",
+        "65536",
+        "--ranges",
+        "64",
+        "--remove",
+        "4096",
+        "--pool-mib",
+        "512",
+        "--mode",
+        "key-discard"
+      ]
+    },
+    {
+      "pair": 1,
+      "argv": [
+        "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7/cx-mesure-retrait",
+        "--entries",
+        "65536",
+        "--ranges",
+        "64",
+        "--remove",
+        "4096",
+        "--pool-mib",
+        "512",
+        "--mode",
+        "range-discard"
+      ]
+    },
+    {
+      "pair": 2,
+      "argv": [
+        "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7/cx-mesure-retrait",
+        "--entries",
+        "65536",
+        "--ranges",
+        "64",
+        "--remove",
+        "4096",
+        "--pool-mib",
+        "512",
+        "--mode",
+        "range-discard"
+      ]
+    },
+    {
+      "pair": 2,
+      "argv": [
+        "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7/cx-mesure-retrait",
+        "--entries",
+        "65536",
+        "--ranges",
+        "64",
+        "--remove",
+        "4096",
+        "--pool-mib",
+        "512",
+        "--mode",
+        "key-discard"
+      ]
+    },
+    {
+      "pair": 3,
+      "argv": [
+        "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7/cx-mesure-retrait",
+        "--entries",
+        "65536",
+        "--ranges",
+        "64",
+        "--remove",
+        "4096",
+        "--pool-mib",
+        "512",
+        "--mode",
+        "key-discard"
+      ]
+    },
+    {
+      "pair": 3,
+      "argv": [
+        "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7/cx-mesure-retrait",
+        "--entries",
+        "65536",
+        "--ranges",
+        "64",
+        "--remove",
+        "4096",
+        "--pool-mib",
+        "512",
+        "--mode",
+        "range-discard"
+      ]
+    }
+  ],
+  "full_matrix_automatic": false,
+  "accepted_manifest": {
+    "path": "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-archive-privee-12nov-02/manifest.json",
+    "sha256": "0049111df769914dbeea66fd0d2d07c6add58a670eb80e797589604d48c80df7",
+    "source_commit": "0511dece74f94db6937fb03e6ec45f0c58828c5a",
+    "configuration_identity": "cx-0511-tests-off-without-unused-spdlog-path-v1",
+    "historical_archive": false,
+    "archive_sha256": "3030fe674e33e2ea0b5b01ed7bdf1a919e538c02e5dfc0b68fff7b50e1d06758"
+  }
+}

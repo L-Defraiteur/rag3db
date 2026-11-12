@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-pilote-retrait-0511dece7/cx-mesure-retrait",
+    "--entries",
+    "65536",
+    "--ranges",
+    "8",
+    "--remove",
+    "4096",
+    "--pool-mib",
+    "512",
+    "--mode",
+    "range-discard"
+  ],
+  "pid": 1130813,
+  "code": 0,
+  "elapsed_s": 0.06397366500459611
+}

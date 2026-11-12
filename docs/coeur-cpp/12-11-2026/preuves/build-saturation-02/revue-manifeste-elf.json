@@ -1,0 +1,97 @@
+{
+  "package_files_verified": 834,
+  "package_bytes": 110723932,
+  "source_commit": "35ea70d3a4a5cc4917586de02f6bfc862c76a02c",
+  "build_id": "rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
+  "elf": {
+    "concurrence_test": {
+      "needed": [
+        "libgtest_main.so.1.18.0",
+        "libgmock_main.so.1.18.0",
+        "libgmock.so.1.18.0",
+        "libgtest.so.1.18.0",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ],
+      "rpath": false,
+      "runpath": false,
+      "rag3db_build_id_present": true
+    },
+    "libvector.rag3db_extension": {
+      "needed": [
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "rpath": false,
+      "runpath": false,
+      "rag3db_build_id_present": true
+    },
+    "libgeo.rag3db_extension": {
+      "needed": [
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "rpath": false,
+      "runpath": false,
+      "rag3db_build_id_present": true
+    }
+  },
+  "host_direct_dependencies": {
+    "libgtest_main.so.1.18.0": {
+      "resolved": "/usr/lib/libgtest_main.so.1.18.0",
+      "bytes": 14208,
+      "sha256": "dbc0b850b2b0042425fcc55b728b41928cd9615156e4957d2698aaf52144c8cd"
+    },
+    "libgmock_main.so.1.18.0": {
+      "resolved": "/usr/lib/libgmock_main.so.1.18.0",
+      "bytes": 14208,
+      "sha256": "e12ff6ab7a73cd890b9146bb1c8c530e629453354fa648e62e092f45214d2570"
+    },
+    "libgmock.so.1.18.0": {
+      "resolved": "/usr/lib/libgmock.so.1.18.0",
+      "bytes": 133224,
+      "sha256": "79328ad1e4f51429092ceb77efe05a88d842136efd04c3ebdd8a075593e723ef"
+    },
+    "libgtest.so.1.18.0": {
+      "resolved": "/usr/lib/libgtest.so.1.18.0",
+      "bytes": 567456,
+      "sha256": "285d1c69e2c73ee2972916786537a773dd9af43fb049f9bd56d7e5208d25483c"
+    },
+    "libstdc++.so.6": {
+      "resolved": "/usr/lib/libstdc++.so.6.0.36",
+      "bytes": 3312664,
+      "sha256": "8fa09826e4c4d357a956eb7268e5af77750280f777d57eeea6789e87ec4b8842"
+    },
+    "libm.so.6": {
+      "resolved": "/usr/lib/libm.so.6",
+      "bytes": 1075616,
+      "sha256": "58b6b82e39d59d7810d402ba4ec34359fde058204fdb7cd5a269fda256a35421"
+    },
+    "libgcc_s.so.1": {
+      "resolved": "/usr/lib/libgcc_s.so.1",
+      "bytes": 219376,
+      "sha256": "f0cb09ad25ba16848370f16086d1b5671962431ae2ea878e8eeb4c7bb35a56ed"
+    },
+    "libc.so.6": {
+      "resolved": "/usr/lib/libc.so.6",
+      "bytes": 2440544,
+      "sha256": "071e34179e645b25f8a8c2e7108894dc665caa9f5f8c939cd579a75b6638bc3f"
+    },
+    "ld-linux-x86-64.so.2": {
+      "resolved": "/usr/lib/ld-linux-x86-64.so.2",
+      "bytes": 283632,
+      "sha256": "2a950d46575efa0210d22440988f5a6b4507ebddc6c86d9a42e6e7ef6f01463e"
+    }
+  },
+  "binary_executed": false,
+  "ldd_not_used": true,
+  "recursive_dynamic_resolution_tested": false,
+  "scenario_authorized": false
+}

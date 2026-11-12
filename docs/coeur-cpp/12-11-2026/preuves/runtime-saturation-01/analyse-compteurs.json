@@ -1,0 +1,406 @@
+{
+  "sample_count": 984,
+  "first_sample": {
+    "at_ns": 542907,
+    "read_end_ns": 542930,
+    "used_bytes": 10461696,
+    "ddl": 0,
+    "pk_calls": 0,
+    "pk_completed_ns": 0,
+    "pk_active": 0,
+    "active_tx": 0,
+    "writers_tx": 0,
+    "oldest_snapshot_ts": 0,
+    "transferred_rows": 0,
+    "published_commits": 0,
+    "actor_ok": 0,
+    "actor_error": 0,
+    "writer_ok": 0,
+    "writer_error": 0
+  },
+  "last_sample": {
+    "at_ns": 984063677238,
+    "read_end_ns": 984063677252,
+    "used_bytes": 172816540,
+    "ddl": 0,
+    "pk_calls": 0,
+    "pk_completed_ns": 0,
+    "pk_active": 0,
+    "active_tx": 26,
+    "writers_tx": 22,
+    "oldest_snapshot_ts": 1740615,
+    "transferred_rows": 825144,
+    "published_commits": 1743208,
+    "actor_ok": 2642367,
+    "actor_error": 144,
+    "writer_ok": 1743201,
+    "writer_error": 144
+  },
+  "max_used_bytes_1s": 1170551093,
+  "all_pk_calls_zero": true,
+  "all_pk_completed_ns_zero": true,
+  "all_pk_active_zero": true,
+  "events_printed_ms": [
+    {
+      "line": 16,
+      "kind": "d\u00e9but",
+      "ddl": "1 ADD note",
+      "ms_printed": 60000
+    },
+    {
+      "line": 17,
+      "kind": "fin",
+      "ddl": "1 ADD note",
+      "ms_printed": 60002
+    },
+    {
+      "line": 28,
+      "kind": "d\u00e9but",
+      "ddl": "2 ADD rang DEFAULT 0",
+      "ms_printed": 120000
+    },
+    {
+      "line": 29,
+      "kind": "fin",
+      "ddl": "2 ADD rang DEFAULT 0",
+      "ms_printed": 120001
+    },
+    {
+      "line": 39,
+      "kind": "d\u00e9but",
+      "ddl": "3 CREATE REL TABLE",
+      "ms_printed": 180000
+    },
+    {
+      "line": 40,
+      "kind": "fin",
+      "ddl": "3 CREATE REL TABLE",
+      "ms_printed": 180000
+    },
+    {
+      "line": 50,
+      "kind": "d\u00e9but",
+      "ddl": "4 CREATE_VECTOR_INDEX",
+      "ms_printed": 240000
+    },
+    {
+      "line": 51,
+      "kind": "fin",
+      "ddl": "4 CREATE_VECTOR_INDEX",
+      "ms_printed": 969144
+    },
+    {
+      "line": 52,
+      "kind": "d\u00e9but",
+      "ddl": "5 CHECKPOINT",
+      "ms_printed": 969144
+    },
+    {
+      "line": 53,
+      "kind": "fin",
+      "ddl": "5 CHECKPOINT",
+      "ms_printed": 969620
+    },
+    {
+      "line": 55,
+      "kind": "d\u00e9but",
+      "ddl": "6 ADD b DEFAULT",
+      "ms_printed": 969625
+    },
+    {
+      "line": 56,
+      "kind": "fin",
+      "ddl": "6 ADD b DEFAULT",
+      "ms_printed": 969627
+    }
+  ],
+  "pool_window_peaks_100ms": [
+    {
+      "line": 58,
+      "ddl": "1 ADD note",
+      "before_window_peak_MiB_100ms": 1079,
+      "during_window_peak_MiB_100ms": 0
+    },
+    {
+      "line": 59,
+      "ddl": "2 ADD rang DEFAULT 0",
+      "before_window_peak_MiB_100ms": 1100,
+      "during_window_peak_MiB_100ms": 0
+    },
+    {
+      "line": 60,
+      "ddl": "3 CREATE REL TABLE",
+      "before_window_peak_MiB_100ms": 1111,
+      "during_window_peak_MiB_100ms": 0
+    },
+    {
+      "line": 61,
+      "ddl": "4 CREATE_VECTOR_INDEX",
+      "before_window_peak_MiB_100ms": 1120,
+      "during_window_peak_MiB_100ms": 1045
+    },
+    {
+      "line": 62,
+      "ddl": "5 CHECKPOINT",
+      "before_window_peak_MiB_100ms": 0,
+      "during_window_peak_MiB_100ms": 126
+    },
+    {
+      "line": 63,
+      "ddl": "6 migration annul\u00e9e",
+      "before_window_peak_MiB_100ms": 0,
+      "during_window_peak_MiB_100ms": 0
+    },
+    {
+      "line": 64,
+      "ddl": "6 ADD b DEFAULT",
+      "before_window_peak_MiB_100ms": 0,
+      "during_window_peak_MiB_100ms": 0
+    }
+  ],
+  "sample_windows": [
+    {
+      "label": "avant DDL2",
+      "selection_s_rounded_events": [
+        0,
+        120
+      ],
+      "samples": 120,
+      "first": {
+        "at_ns": 542907,
+        "read_end_ns": 542930,
+        "used_bytes": 10461696,
+        "ddl": 0,
+        "pk_calls": 0,
+        "pk_completed_ns": 0,
+        "pk_active": 0,
+        "active_tx": 0,
+        "writers_tx": 0,
+        "oldest_snapshot_ts": 0,
+        "transferred_rows": 0,
+        "published_commits": 0,
+        "actor_ok": 0,
+        "actor_error": 0,
+        "writer_ok": 0,
+        "writer_error": 0
+      },
+      "last": {
+        "at_ns": 119113776770,
+        "read_end_ns": 119113776785,
+        "used_bytes": 416899534,
+        "ddl": 0,
+        "pk_calls": 0,
+        "pk_completed_ns": 0,
+        "pk_active": 0,
+        "active_tx": 18,
+        "writers_tx": 15,
+        "oldest_snapshot_ts": 799828,
+        "transferred_rows": 332150,
+        "published_commits": 799837,
+        "actor_ok": 1166572,
+        "actor_error": 82,
+        "writer_ok": 799835,
+        "writer_error": 82
+      },
+      "max_used_bytes": 1153435599,
+      "max_pk_active": 0
+    },
+    {
+      "label": "apres DDL2 avant DDL3",
+      "selection_s_rounded_events": [
+        120.001,
+        180
+      ],
+      "samples": 60,
+      "first": {
+        "at_ns": 120114738934,
+        "read_end_ns": 120114738948,
+        "used_bytes": 608653622,
+        "ddl": 0,
+        "pk_calls": 0,
+        "pk_completed_ns": 0,
+        "pk_active": 0,
+        "active_tx": 19,
+        "writers_tx": 15,
+        "oldest_snapshot_ts": 807520,
+        "transferred_rows": 335243,
+        "published_commits": 807540,
+        "actor_ok": 1176763,
+        "actor_error": 82,
+        "writer_ok": 807538,
+        "writer_error": 82
+      },
+      "last": {
+        "at_ns": 179168269695,
+        "read_end_ns": 179168269709,
+        "used_bytes": 428075103,
+        "ddl": 0,
+        "pk_calls": 0,
+        "pk_completed_ns": 0,
+        "pk_active": 0,
+        "active_tx": 8,
+        "writers_tx": 6,
+        "oldest_snapshot_ts": 1172540,
+        "transferred_rows": 483062,
+        "published_commits": 1172544,
+        "actor_ok": 1734343,
+        "actor_error": 113,
+        "writer_ok": 1172542,
+        "writer_error": 113
+      },
+      "max_used_bytes": 1160536494,
+      "max_pk_active": 0
+    },
+    {
+      "label": "apres DDL3 avant DDL4",
+      "selection_s_rounded_events": [
+        180,
+        240
+      ],
+      "samples": 60,
+      "first": {
+        "at_ns": 180169987810,
+        "read_end_ns": 180169987824,
+        "used_bytes": 625370425,
+        "ddl": 0,
+        "pk_calls": 0,
+        "pk_completed_ns": 0,
+        "pk_active": 0,
+        "active_tx": 17,
+        "writers_tx": 14,
+        "oldest_snapshot_ts": 1180438,
+        "transferred_rows": 486295,
+        "published_commits": 1180458,
+        "actor_ok": 1744857,
+        "actor_error": 114,
+        "writer_ok": 1180455,
+        "writer_error": 114
+      },
+      "last": {
+        "at_ns": 239226207235,
+        "read_end_ns": 239226207249,
+        "used_bytes": 342754942,
+        "ddl": 0,
+        "pk_calls": 0,
+        "pk_completed_ns": 0,
+        "pk_active": 0,
+        "active_tx": 11,
+        "writers_tx": 8,
+        "oldest_snapshot_ts": 1541392,
+        "transferred_rows": 632538,
+        "published_commits": 1541421,
+        "actor_ok": 2301065,
+        "actor_error": 141,
+        "writer_ok": 1541417,
+        "writer_error": 141
+      },
+      "max_used_bytes": 1170551093,
+      "max_pk_active": 0
+    },
+    {
+      "label": "pendant DDL4",
+      "selection_s_rounded_events": [
+        240,
+        969.144
+      ],
+      "samples": 729,
+      "first": {
+        "at_ns": 240226911585,
+        "read_end_ns": 240226911599,
+        "used_bytes": 542164509,
+        "ddl": 4,
+        "pk_calls": 0,
+        "pk_completed_ns": 0,
+        "pk_active": 0,
+        "active_tx": 27,
+        "writers_tx": 23,
+        "oldest_snapshot_ts": 1547635,
+        "transferred_rows": 635623,
+        "published_commits": 1548296,
+        "actor_ok": 2310167,
+        "actor_error": 144,
+        "writer_ok": 1548291,
+        "writer_error": 144
+      },
+      "last": {
+        "at_ns": 969055485910,
+        "read_end_ns": 969055485925,
+        "used_bytes": 176756182,
+        "ddl": 4,
+        "pk_calls": 0,
+        "pk_completed_ns": 0,
+        "pk_active": 0,
+        "active_tx": 4,
+        "writers_tx": 0,
+        "oldest_snapshot_ts": 1585022,
+        "transferred_rows": 668466,
+        "published_commits": 1585014,
+        "actor_ok": 2378101,
+        "actor_error": 144,
+        "writer_ok": 1585008,
+        "writer_error": 144
+      },
+      "max_used_bytes": 1089670224,
+      "max_pk_active": 0
+    },
+    {
+      "label": "apres DDL4",
+      "selection_s_rounded_events": [
+        969.144,
+        2000
+      ],
+      "samples": 15,
+      "first": {
+        "at_ns": 970056003089,
+        "read_end_ns": 970056003135,
+        "used_bytes": 92542512,
+        "ddl": 0,
+        "pk_calls": 0,
+        "pk_completed_ns": 0,
+        "pk_active": 0,
+        "active_tx": 26,
+        "writers_tx": 22,
+        "oldest_snapshot_ts": 1588095,
+        "transferred_rows": 672877,
+        "published_commits": 1589507,
+        "actor_ok": 2388356,
+        "actor_error": 144,
+        "writer_ok": 1589500,
+        "writer_error": 144
+      },
+      "last": {
+        "at_ns": 984063677238,
+        "read_end_ns": 984063677252,
+        "used_bytes": 172816540,
+        "ddl": 0,
+        "pk_calls": 0,
+        "pk_completed_ns": 0,
+        "pk_active": 0,
+        "active_tx": 26,
+        "writers_tx": 22,
+        "oldest_snapshot_ts": 1740615,
+        "transferred_rows": 825144,
+        "published_commits": 1743208,
+        "actor_ok": 2642367,
+        "actor_error": 144,
+        "writer_ok": 1743201,
+        "writer_error": 144
+      },
+      "max_used_bytes": 172816540,
+      "max_pk_active": 0
+    }
+  ],
+  "tail_limit": "last cumulative PK reading at984.063677s; no terminal metric record in footer, so no assertion about unsampled tail or operations outside armed window",
+  "failure_messages": {
+    "buffer pool is full": 0,
+    "No more frame groups": 0,
+    "rollback could not complete": 0,
+    "closed and reopened": 0
+  },
+  "hypotheses": {
+    "PK_cost": "No entry into measured PK deletion through last cumulative sample on this passage; does not measure historical failed passage",
+    "pressure_before_DDL": "100ms window after DDL2 before DDL3 peak1111MiB, vs2051 historical isolated; failure not reproduced",
+    "other_rollback_fault": "none observed in instrumented sites/messages; no claim of global quarantine safety"
+  },
+  "global_causal_verdict": "undetermined; one instrumented passage with explicit environment, no matched workload control"
+}

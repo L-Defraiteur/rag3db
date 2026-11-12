@@ -1,0 +1,111 @@
+{
+  "status": "REVIEW_ONLY_NOT_AUTHORIZED_TO_CONFIGURE_BUILD_OR_RUN",
+  "source_commit": "6bfba5b4cd081c0bbe10bda045fdcccfb6290594",
+  "base_commit": "0511dece74f94db6937fb03e6ec45f0c58828c5a",
+  "source_branch": "cx-coeur-diagnostic-saturation",
+  "source_worktree": "/home/lucied/git_workspaces/cx-coeur-diagnostic-saturation",
+  "source_patch_sha256": "a9d7dea8ba5d2bb835bedc32061c2e63a6e6eb57de5103f65051beea05105186",
+  "build": {
+    "gate": "separate orchestration approval after review",
+    "fresh_build": true,
+    "reuse_0511_artifacts": false,
+    "configure_argv": [
+      "cmake",
+      "-S",
+      "{private_source}",
+      "-B",
+      "{private_build}",
+      "-G",
+      "Ninja",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+      "-DBUILD_TESTS=ON",
+      "-DBUILD_SHARED_LIBS=OFF",
+      "-DBUILD_EXTENSIONS=vector;geo",
+      "-DBUILD_SHELL=ON",
+      "-DBUILD_SINGLE_FILE_HEADER=ON",
+      "-DENABLE_BACKTRACES=OFF",
+      "-DENABLE_RUNTIME_CHECKS=OFF",
+      "-DENABLE_ADDRESS_SANITIZER=OFF",
+      "-DENABLE_THREAD_SANITIZER=OFF",
+      "-DENABLE_UBSAN=OFF",
+      "-DENABLE_LTO=OFF",
+      "-DENABLE_WERROR=OFF"
+    ],
+    "build_argv": [
+      "cmake",
+      "--build",
+      "{private_build}",
+      "--target",
+      "concurrence_test",
+      "rag3db_vector_extension",
+      "rag3db_geo_extension",
+      "-j",
+      "8"
+    ],
+    "time_limit_s_proposed": 1800,
+    "memory_max_bytes_proposed": 8589934592,
+    "swap_max_bytes": 0,
+    "private_storage_max_bytes_proposed": 2147483648,
+    "network": false
+  },
+  "runtime": {
+    "gate": "distinct approval after build manifest review",
+    "argv": [
+      "{private_build}/test/transaction/concurrence/concurrence_test",
+      "--gtest_filter=TwentyWriters.DdlEveryMinute",
+      "--gtest_output=xml:{private_output}/result.xml"
+    ],
+    "processes": 1,
+    "retries": 0,
+    "time_limit_s_proposed": 1200,
+    "stop_budget_s": 10,
+    "memory_max_bytes_proposed": 8589934592,
+    "swap_max_bytes": 0,
+    "private_storage_max_bytes_proposed": 2147483648,
+    "output_limit_bytes_proposed": 16777216,
+    "gpu": false,
+    "network": false,
+    "services": false,
+    "environment": "reviewed allowlist; inherited SCENARIO_*, BUFFER_POOL_SIZE, MAX_NUM_THREADS and GTEST_* must be explicitly recorded; no implicit override",
+    "tmpdir": "{private_runtime}/tmp",
+    "working_directory": "{private_runtime}",
+    "gate_lock": "poste mesure, budgets start after acquisition, no reservation made",
+    "required_environment": {
+      "CX_SATURATION_OUTPUT": "{private_output}/capture.csv (absolute, new file, exclusive create, private writable mount only)"
+    },
+    "capture_stream": {
+      "writer": "sampler outside rollback, then test thread after joins",
+      "schema_before_actors": true,
+      "samples_max": 1280,
+      "sample_interval_ns_min": 1000000000,
+      "first_poll_target_ms": 100,
+      "flush": "fflush after every sample and first_saved; no rollback IO",
+      "on_timeout": "preserve file on outer private output mount, parse as partial unless valid final complete status",
+      "on_io_failure": "sticky, no retry; initialization aborts before actors; later failure invalidates completion",
+      "interpretation": "pk_completed_ns excludes in-flight calls; pk_active>0 forbids excluding PK cost from completed sum alone"
+    }
+  },
+  "metrics_unavailable": [
+    "memory owner",
+    "evictable/non-evictable breakdown at refusal",
+    "transaction wall age",
+    "per-query ownership outside rollback",
+    "PK index entries/slots scanned",
+    "durably committed rows per table",
+    "whole vector of undo prefixes"
+  ],
+  "manifest_required": [
+    "git source clean commit+diff",
+    "compile_commands SHA256",
+    "CMakeCache SHA256",
+    "engine archive SHA256",
+    "concurrence_test SHA256",
+    "private vector and geo extension SHA256+BuildIDs",
+    "actual cgroup limits and bounded storage proof",
+    "argv+environment allowlist",
+    "raw log+xml+capture schema/status",
+    "exit code+unit inactive+no private processes"
+  ],
+  "delta_from_01185695f_sha256": "20d77e60d9681ed71157161cd76432043e11d491c8cef03661869ec2ec0825c5"
+}

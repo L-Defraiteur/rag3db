@@ -1,0 +1,14 @@
+Running as unit: cx-coeur-build-saturation-12nov-01.service
+Traceback (most recent call last):
+  File "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-build-saturation-12nov-01/cx-build-saturation.py", line 39, in <module>
+    run(cmd,'preflight-inner.log')
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lucied/.cache/rag3db-moteur-notes/annulation/cx-build-saturation-12nov-01/cx-build-saturation.py", line 14, in run
+    if proc.returncode:raise RuntimeError(f'{name}: code {proc.returncode}')
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: preflight-inner.log: code 1
+          Finished with result: exit-code
+Main processes terminated with: code=exited, status=1/FAILURE
+               Service runtime: 2min 11.098s
+             CPU time consumed: 16min 21.212s
+                   Memory peak: 3.9G (swap: 0B)

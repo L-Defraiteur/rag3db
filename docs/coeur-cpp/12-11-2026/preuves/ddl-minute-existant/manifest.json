@@ -1,0 +1,46 @@
+{
+  "source": "luciepc:~/.cache/rag3db-moteur-notes/annulation/",
+  "mode": "copie de preuves existantes sans execution moteur",
+  "files": [
+    {
+      "file": "base-TwentyWriters.DdlEveryMinute.log",
+      "bytes": 13858,
+      "sha256": "3b5b30461687d8941ae18c82b695def2cf96e696513797fdcbb7674929a83bb2"
+    },
+    {
+      "file": "base-TwentyWriters.DdlEveryMinute.xml",
+      "bytes": 2689,
+      "sha256": "a53d6fbc1bbf63747dbe705be2582320dce00cafb3c927fe3caf23417532089a"
+    },
+    {
+      "file": "isole-TwentyWriters.DdlEveryMinute.log",
+      "bytes": 167852,
+      "sha256": "2133fdc67f619ecfdb901d3ecea37a5b7c8dbb9a087299dd9ce82fa8641b5f5d"
+    },
+    {
+      "file": "isole-TwentyWriters.DdlEveryMinute.xml",
+      "bytes": 1642,
+      "sha256": "e5ccf28b6857313c2ddd04be4288e27c50b18aa4d72f0e42f05e98807bd68217"
+    },
+    {
+      "file": "base.sh",
+      "bytes": 1493,
+      "sha256": "4b1bb52d9b2f70666fa579539a1346233a4f02637b988e95e6f946712258226c"
+    },
+    {
+      "file": "departage.sh",
+      "bytes": 710,
+      "sha256": "f58cccc9ac8c3bc12d9d36352a9ea51222085067444a152e36d077969809fd6a"
+    },
+    {
+      "file": "suites-codes.txt",
+      "bytes": 28,
+      "sha256": "7466dcfa35afb31cc44bc361ae792673e19f8a46b5c0a3d491967cf5e19ae01a"
+    },
+    {
+      "file": "extraction.json",
+      "bytes": 8432,
+      "sha256": "d91bda44fd89265db7288065b3dc71f1611471fec0a7bdb0a72ac08ef2bd2293"
+    }
+  ]
+}

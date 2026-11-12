@@ -1,0 +1,107 @@
+Running main() from /usr/src/debug/gtest/googletest-1.18.0/googletest/src/gtest_main.cc
+Note: Google Test filter = TwentyWriters.DdlEveryMinute
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from TwentyWriters
+[ RUN      ] TwentyWriters.DdlEveryMinute
+[Checkpoint postponed: other transactions are open] the journal holds 16777883 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777434 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778243 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777992 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777559 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777829 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777503 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778122 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777496 bytes
+  [scénario] début de « 1 ADD note » à 60000 ms
+  [scénario] fin de « 1 ADD note » à 60002 ms
+[Checkpoint postponed: other transactions are open] the journal holds 16777660 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777535 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777924 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778207 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777931 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777758 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777618 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777737 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777771 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778065 bytes
+  [scénario] début de « 2 ADD rang DEFAULT 0 » à 120000 ms
+  [scénario] fin de « 2 ADD rang DEFAULT 0 » à 120001 ms
+[Checkpoint postponed: other transactions are open] the journal holds 16777378 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777516 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778338 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777879 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778369 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777619 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778108 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777387 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778220 bytes
+  [scénario] début de « 3 CREATE REL TABLE » à 180000 ms
+  [scénario] fin de « 3 CREATE REL TABLE » à 180000 ms
+[Checkpoint postponed: other transactions are open] the journal holds 16778407 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778337 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777924 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778083 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778051 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778232 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16777480 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778084 bytes
+[Checkpoint postponed: other transactions are open] the journal holds 16778157 bytes
+  [scénario] début de « 4 CREATE_VECTOR_INDEX » à 240000 ms
+  [scénario] fin de « 4 CREATE_VECTOR_INDEX » à 969144 ms
+  [scénario] début de « 5 CHECKPOINT » à 969144 ms
+  [scénario] fin de « 5 CHECKPOINT » à 969620 ms
+  [scénario] migration annulée : second ADD « Runtime exception: Doc table already has property a. » ; COMMIT « The transaction was rolled back because a statement in it failed: nothing was committed. The transaction is now closed. » ; ROLLBACK « No active transaction for ROLLBACK. »
+  [scénario] début de « 6 ADD b DEFAULT » à 969625 ms
+  [scénario] fin de « 6 ADD b DEFAULT » à 969627 ms
+  [scénario] tampon : 2048 Mio, point de reprise automatique en marche, seuil par défaut, pic 1120 Mio
+  [scénario] tampon avant « 1 ADD note » : pic 1079 Mio ; pendant : pic 0 Mio
+  [scénario] tampon avant « 2 ADD rang DEFAULT 0 » : pic 1100 Mio ; pendant : pic 0 Mio
+  [scénario] tampon avant « 3 CREATE REL TABLE » : pic 1111 Mio ; pendant : pic 0 Mio
+  [scénario] tampon avant « 4 CREATE_VECTOR_INDEX » : pic 1120 Mio ; pendant : pic 1045 Mio
+  [scénario] tampon avant « 5 CHECKPOINT » : pic 0 Mio ; pendant : pic 126 Mio
+  [scénario] tampon avant « 6 migration annulée » : pic 0 Mio ; pendant : pic 0 Mio
+  [scénario] tampon avant « 6 ADD b DEFAULT » : pic 0 Mio ; pendant : pic 0 Mio
+  [scénario] tampon après le dernier DDL : pic 170 Mio
+  [scénario] attentes de plus d'1 s pendant « 4 CREATE_VECTOR_INDEX » (durée 729144 ms) acteur=doc n=40 : commencées de 56.942 à 7566.02 ms, finies de 3719.23 à 729266 ms après le début du DDL
+  [scénario] attentes de plus d'1 s pendant « 4 CREATE_VECTOR_INDEX » (durée 729144 ms) acteur=note n=4 : commencées de 81.7898 à 7553.4 ms, finies de 3717.94 à 729147 ms après le début du DDL
+  [scénario] attentes de plus d'1 s pendant « 4 CREATE_VECTOR_INDEX » (durée 729144 ms) acteur=lecteur n=8 : commencées de 81.4165 à 7553.96 ms, finies de 3718.03 à 727356 ms après le début du DDL
+  [scénario] attentes de plus d'1 s pendant « 5 CHECKPOINT » (durée 475.801 ms) acteur=doc n=20 : commencées de -721591 à -721578 ms, finies de 17.4497 à 122.221 ms après le début du DDL
+  [scénario] attentes de plus d'1 s pendant « 5 CHECKPOINT » (durée 475.801 ms) acteur=note n=2 : commencées de -721591 à -721591 ms, finies de 2.12719 à 2.32378 ms après le début du DDL
+  [scénario] fenêtre=« hors DDL » acteur=doc n=924136 médiane=4.09644 p99=8.44052 max=1533.61 ms erreurs=144 bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 1 ADD note » acteur=doc n=22 médiane=6.09366 p99=7.40411 max=7.40411 ms erreurs=0 durée_ddl=1.61167 ms ddl=ok première_validation_après=0.526083 ms bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 2 ADD rang DEFAULT 0 » acteur=doc n=22 médiane=4.82579 p99=8.39572 max=8.39572 ms erreurs=0 durée_ddl=1.32237 ms ddl=ok première_validation_après=0.048379 ms bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 3 CREATE REL TABLE » acteur=doc n=21 médiane=5.27663 p99=8.11771 max=8.11771 ms erreurs=0 durée_ddl=0.362881 ms ddl=ok première_validation_après=0.219995 ms bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 4 CREATE_VECTOR_INDEX » acteur=doc n=4043 médiane=18.7864 p99=49.0067 max=721708 ms erreurs=0 durée_ddl=729144 ms ddl=ok première_validation_après=0.069583 ms bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 5 CHECKPOINT » acteur=doc n=40 médiane=721607 p99=721708 max=721708 ms erreurs=0 durée_ddl=475.801 ms ddl=ok première_validation_après=17.4497 ms bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 6 migration annulée » acteur=doc n=20 médiane=471.274 p99=587.756 max=587.756 ms erreurs=0 durée_ddl=1.65032 ms ddl=ok première_validation_après=12.7287 ms bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 6 ADD b DEFAULT » acteur=doc n=20 médiane=471.274 p99=587.756 max=587.756 ms erreurs=0 durée_ddl=2.28632 ms ddl=ok première_validation_après=11.0573 ms bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« hors DDL » acteur=note n=787849 médiane=0.427392 p99=2.08839 max=1529.08 ms erreurs=0 bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 1 ADD note » acteur=note n=5 médiane=0.541233 p99=2.4031 max=2.4031 ms erreurs=0 durée_ddl=1.61167 ms ddl=ok première_validation_après=0.124241 ms bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 2 ADD rang DEFAULT 0 » acteur=note n=6 médiane=0.754915 p99=0.86204 max=0.86204 ms erreurs=0 durée_ddl=1.32237 ms ddl=ok première_validation_après=0.095214 ms bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 3 CREATE REL TABLE » acteur=note n=3 médiane=0.353424 p99=0.727461 max=0.727461 ms erreurs=0 durée_ddl=0.362881 ms ddl=ok première_validation_après=0.092157 ms bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 4 CREATE_VECTOR_INDEX » acteur=note n=33538 médiane=0.195077 p99=0.947601 max=721593 ms erreurs=0 durée_ddl=729144 ms ddl=ok première_validation_après=0.166754 ms bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 5 CHECKPOINT » acteur=note n=4 médiane=721593 p99=721593 max=721593 ms erreurs=0 durée_ddl=475.801 ms ddl=ok première_validation_après=2.12719 ms bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 6 migration annulée » acteur=note n=11 médiane=0.240972 p99=2.25505 max=2.25505 ms erreurs=0 durée_ddl=1.65032 ms ddl=ok première_validation_après=0.165087 ms bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 6 ADD b DEFAULT » acteur=note n=33 médiane=0.140979 p99=0.827313 max=0.827313 ms erreurs=0 durée_ddl=2.28632 ms ddl=ok première_validation_après=0.001325 ms bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« hors DDL » acteur=lecteur n=868824 médiane=1.01461 p99=3.1748 max=1135.42 ms erreurs=0 bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 1 ADD note » acteur=lecteur n=6 médiane=2.45302 p99=3.16624 max=3.16624 ms erreurs=0 durée_ddl=1.61167 ms ddl=ok bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 2 ADD rang DEFAULT 0 » acteur=lecteur n=7 médiane=1.97104 p99=2.76705 max=2.76705 ms erreurs=0 durée_ddl=1.32237 ms ddl=ok bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 3 CREATE REL TABLE » acteur=lecteur n=4 médiane=2.43502 p99=2.47331 max=2.47331 ms erreurs=0 durée_ddl=0.362881 ms ddl=ok bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 4 CREATE_VECTOR_INDEX » acteur=lecteur n=32102 médiane=0.643749 p99=2.09883 max=719802 ms erreurs=0 durée_ddl=729144 ms ddl=ok bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 5 CHECKPOINT » acteur=lecteur n=2326 médiane=0.535575 p99=1.80737 max=121.064 ms erreurs=0 durée_ddl=475.801 ms ddl=ok bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 6 migration annulée » acteur=lecteur n=10 médiane=2.83238 p99=3.41465 max=3.41465 ms erreurs=0 durée_ddl=1.65032 ms ddl=ok bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] fenêtre=« 6 ADD b DEFAULT » acteur=lecteur n=4 médiane=2.87127 p99=2.9392 max=2.9392 ms erreurs=0 durée_ddl=2.28632 ms ddl=ok bati=rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+  [scénario] erreur hors DDL n=1 « Runtime exception: Found duplicated primary key value #, which violates the uniqueness constraint of the primary key column. »
+  [scénario] erreur hors DDL n=143 « Transaction aborted: could not serialize access due to concurrent update — row '#' of table # was written by another transaction after this one started. Roll it back and run it again. »
+  [scénario] défauts avant le point de reprise : rang hors défaut 0, b hors défaut 0 (sur 49990)
+  [scénario] comptes avant le point de reprise : Doc 60000/60000, Link 1078120/1078120, Note 821445/821445
+  [scénario] défauts après le point de reprise : rang hors défaut 0, b hors défaut 0 (sur 49990)
+  [scénario] comptes après la réouverture : Doc 60000/60000, Link 1078120/1078120, Note 821445/821445
+  [scénario] défauts après la réouverture : rang hors défaut 0, b hors défaut 0 (sur 49990)
+[       OK ] TwentyWriters.DdlEveryMinute (987526 ms)
+[----------] 1 test from TwentyWriters (987526 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (987526 ms total)
+[  PASSED  ] 1 test.
