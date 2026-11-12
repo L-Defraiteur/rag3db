@@ -11,7 +11,7 @@
 ## Livrable de préparation et périmètre
 
 [Plan1b sur sourcebc34624dc](../12-11-2026/01-plan-de-migration-de-l-ancre.md),
-lié au [ticket de préparation](2026-11-12-preparer-la-migration-de-l-ancre-sur-copies-privees.md).
+lié au [ticket de préparation](../../tickets/closed/2026-11-12-preparer-la-migration-de-l-ancre-sur-copies-privees.md).
 Ce ticket garde l’implémentation future ouverte lorsque la préparation sera relue ;
 il ne rouvre aucun des cinq tickets1a fermés.
 
@@ -93,3 +93,14 @@ journal applied fictif. Aucun transfert chunks/vecteurs, activation Scope, base
 réelle, service nouveau, M3–M5 ou moteur parallèle. Aucun master avant revue.
 La suite complète du ticket reste à autoriser séparément ; cette autorisation
 limitée ne vaut pas livraison de1b.
+
+## Identité figée et qualification du stockage, précision de clôture documentaire
+
+Le plan résolu garde les inputs source initiaux et les états/générations
+source-cible attendus. La qualification compare séparément le stockage courant
+à l’état source avant apply et à l’état cible attendu après publication. Applied
+identique reste idempotent après cet avancement attendu ; on ne reconstruit pas
+un faux « autre plan » depuis les métadonnées cibles. T12 exige aussi le refus
+d’un avancement étranger. La revalidation sous exclusivité porte ce couple.
+La préparation relue est close ; cette fiche garde le premier patch autorisé et
+le reste non livré, sans réintroduire le ticket de préparation ouvert.

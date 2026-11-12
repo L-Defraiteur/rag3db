@@ -4,8 +4,9 @@ Préparation documentaire du 12 novembre 2026, source relue **bc34624dc** ; socl
 livré **08086ba36**. Aucun code, test exécuté, contenu de base réelle consulté ou
 copié, service, modèle ou gabarit de production modifié pour cette préparation.
 
-Porteur : arbre-principal ; revue orchestration et ED. Le [ticket de préparation](../tickets/2026-11-12-preparer-la-migration-de-l-ancre-sur-copies-privees.md)
-reste ouvert jusqu’à relecture. Le [ticket d’implémentation](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md)
+Porteur : arbre-principal ; revue orchestration et ED. Le [ticket de préparation](../../tickets/closed/2026-11-12-preparer-la-migration-de-l-ancre-sur-copies-privees.md)
+est clos après relecture orchestration/ED et validation de la présente préparation.
+Le [ticket d’implémentation](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md)
 porte les travaux suivants, **à autoriser**, pas une activation acquise.
 
 ## Résultat et frontière
@@ -291,12 +292,30 @@ supplémentaires nécessaires complètent le journal existant ; checksum brute e
 hash de graphe ne sont pas surchargés pour désigner autre chose.
 
 Applied identique est le seul cas déjà appliqué qui se saute. Une même version
-avec d’autres paramètres, une autre génération ou un autre fichier est refusée.
+avec d’autres paramètres, d’autres générations attendues dans le plan figé ou
+un autre fichier est refusée.
 Une entrée inconnue/orpheline du périmètre déclaré, mal typée, sans identité
 résolue requise ou au statut illisible ne devient ni pending par défaut, ni une
 réussite vide. T12 couvre ces cas, y compris fichier identique mais variables
 ou configs différentes. Le comportement actuel de pending n’est pas une preuve
 que cette qualification existe déjà.
+
+**Plan figé et stockage courant sont deux objets différents.** Le plan conserve
+ses inputs source originaux, configs/recette/formats et générations source/cible
+attendues. Une fois identifié, il n’est pas « résolu à nouveau » en remplaçant
+ses inputs par les métadonnées cibles après publication. Le journal conserve
+cette identité résolue originale ; le fichier, ses paramètres et les exigences
+déclarées sont comparés à cette identité.
+
+La qualification séparée regarde ensuite le stockage observé : avant apply,
+il doit correspondre à l’état source attendu ; après applied cohérent, il doit
+correspondre à l’état cible et à la génération publiés attendus. Ce passage
+source→cible normal ne rend pas le plan différent. T12 vérifie le rejeu idempotent
+après cet avancement attendu, puis le refus d’un avancement étranger de format,
+config ou génération. Un état intermédiaire appartient au parcours explicite
+de reprise, jamais à une ouverture normale admise par simple correspondance
+partielle. L’exclusivité revalide le couple plan figé/stockage courant, pas une
+nouvelle empreinte qui oublierait l’origine de l’opération.
 
 Le résultat du préflight est revalidé **sous exclusivité réelle de la copie**
 avant les effets. Une identité d’exécutant et l’état running doivent être
@@ -361,7 +380,7 @@ arbitraire des scores/rangs. Cela ne livre pas un profil sparse migrable.
 
 Les trois avis ED sur admission commune, qualification du plan résolu et
 publication/clôture cohérentes sont intégrés ci-dessus. Le ticket de préparation
-reste ouvert jusqu’à validation de cette révision. L’orchestration autorise
+est clos après validation de cette révision par l’orchestration. L’orchestration autorise
 après sa publication le premier patch borné décrit ci-dessous, pas la migration
 complète. L’implémentation future reste suivie par son ticket distinct ; cette
 revue ne permet pas l’accès à une base réelle ni son activation.
@@ -381,4 +400,6 @@ applied fictif. Aucun transfert de chunks/vecteurs, activation Scope, accès à 
 base réelle, nouveau service, M3–M5 ou moteur parallèle dans ce premier patch.
 Réutiliser runner/checkpoints et fournisseurs existants ; un target unique sur
 luciepc, -j8/32Go/lib29a7 et poste lourd pour un éventuel build autorisé ensuite.
-Le présent commit reste exclusivement documentaire, aucun témoin exécuté.
+La préparation est exclusivement documentaire, aucun témoin exécuté. Revue
+orchestration/ED terminée : le ticket de préparation est clos ; l’implémentation
+bornée garde son ticket ouvert et démarre depuis le master documentaire livré.

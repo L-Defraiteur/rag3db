@@ -1,6 +1,6 @@
 # Préparer la migration de l’ancre sur copies privées
 
-- **État** : ouvert, préparation documentaire après intégration du socle 1a ; aucune migration ni activation autorisée par ce ticket.
+- **État** : fait, préparation relue et acceptée sur 044d403e7, complétée par le contrat plan figé/stockage courant ; aucune migration ni activation livrée.
 - **Famille** : produit
 - **Gravité** : planification ; rendre le partage de contenu utilisable dans les vues de code sans transformer silencieusement les index existants.
 - **Atteignable en service** : non pour cette préparation ; les gabarits et bases de service gardent leur comportement actuel.
@@ -47,13 +47,13 @@ Arbre-principal reprend sur worktree documentaire neuf
 `cx-arbre-migration-ancre-plan`, base **bc34624dc**. Aucun WT distant, target,
 service ou accès à une base réelle pour cette étape.
 
-Livrable : [plan et protocole1b](../12-11-2026/01-plan-de-migration-de-l-ancre.md).
+Livrable : [plan et protocole1b](../../arbre-principal/12-11-2026/01-plan-de-migration-de-l-ancre.md).
 Primitives relues : MigrationRunner/journal/checkpoints, SchemaFacts/fournisseur
 code, identité dérivée et chunks, KnownVectors/VectorStorage, gardes de config.
 Douze témoins proposés, jeu synthétique borné, premier patch d’admission/préflight
 séparé de la transformation et de l’activation. Aucun nouveau test joué.
 
-L’[implémentation future](2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md)
+L’[implémentation future](../../arbre-principal/tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md)
 a son ticket ouvert avant transmission. Points à relire : format applicatif et
 raccord effectif du runner, publication conditionnée, profil dense+BM25 initial
 avec refus du sparse non transférable, notion d’équivalence BM25. Le plan ne
@@ -86,3 +86,14 @@ clôture avant ouverture normale et reprise explicite des états ambigus.
 Le profil sparse dépend des données/signaux à transférer, pas du seul lecteur
 models.sparse. Même ticket d’implémentation, pas de nouveau Rust ni de test joué.
 Préparation ouverte jusqu’à validation de cette révision par orchestration.
+
+## Clôture de la préparation documentaire
+
+Orchestration a relu le plan et ses trois avis ED intégrés ; préparation acceptée.
+Livrable lié ci-dessus, avec douze témoins proposés, APIs communes non livrées et
+frontière du premier patch autorisé. La précision finale distingue le plan figé
+du stockage courant : rejeu applied identique après avancement cible attendu,
+refus après avancement étranger. Aucun Rust, build, base ou service touché ici.
+Contrôle des tickets et liens documentaires, diff limité aux MD. Le ticket
+d’implémentation reste ouvert ; cette clôture n’autorise pas le transfert, la
+publication de données ou l’activation d’une base réelle.
