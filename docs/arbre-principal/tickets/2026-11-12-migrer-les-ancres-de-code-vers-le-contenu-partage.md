@@ -1789,3 +1789,15 @@ Correction ciblée : cfg(any(rag3db-native,test)) pour registre/impl et ses
 imports de collections ; aucun allow dead_code ni relâchement -Dwarnings.
 Recetteglobalev3 publiée avant reprise5400s, PGv3 neuve sansreset des2PG
 antérieures. Mêmecodefonctionnel97qualifié ; globalecouvre minimum etruntime.
+
+Globalev3/source626d050d3 : toutes phases runtime VERT (F5/min/lib2257,
+NAV40/CLI5/PG36 et4e2e_tx), puis ROUGEattestation `maps runtime manquantes,
+backend`. BackendCLI trèscourt (CLI5en0,12s) échappe à l'échantillonnage25ms ;
+aucun défaut fonctionnel observé, mais aucun verdict composévert déduit.
+`validation-fhuit77b` ROUGE/code1/restes[]/nettoye=true.
+Correction recette : capture déterministe /proc du VRAI backend arrêté au
+main par GDB après chargement dynamique, puis --help termine normalement.
+Maps/PID/starttime/exe/cgroup/native/SHA conservés ; pas de service/modèle
+ni de nouveau binaire. Probe30s publiée avant usage sur ELF626déjàconservé ;
+puis globalev4 unique5400s avec PGv4neuve et même capture exigée en plus des
+observationsruntime. Aucun seuil d'hygiène ou preuve source n'est supprimé.

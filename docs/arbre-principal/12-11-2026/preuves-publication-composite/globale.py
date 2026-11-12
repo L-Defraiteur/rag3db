@@ -3,11 +3,11 @@
 from pathlib import Path
 import ast, datetime, hashlib, json, mmap, os, re, shlex, shutil, signal, subprocess, sys, tempfile, time
 R=Path('/home/lucied/.cache/rag3weaver-build'); W=R/'cx-wt-publication-composite'; C=W/'extension/rag3weaver'
-P=R/'cx-passe-publication-composite-v3'; T=R/'cx-target-contenu-derive'
+P=R/'cx-passe-publication-composite-v4'; T=R/'cx-target-contenu-derive'
 SOURCE=sys.argv[1]; RECEIPT=Path(os.environ['RAG3WEAVER_VALIDATION_RECU']); AUTH=json.loads(RECEIPT.read_text()); DEADLINE=AUTH['echeance']; INITIAL=DEADLINE-5400
 F='rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm'
 NATIVE='rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
-PG='cx_pub_2191_20261113_v3'; ROLE='rag3weaver'
+PG='cx_pub_2191_20261113_v4'; ROLE='rag3weaver'
 assert re.fullmatch('[0-9a-f]{40}',SOURCE) and time.monotonic()<DEADLINE-15
 P.mkdir(exist_ok=False)
 CG=Path('/proc/self/cgroup').read_text().strip().split('::',1)[1]; G=Path('/sys/fs/cgroup'+CG)
@@ -265,6 +265,11 @@ try:
         assert re.findall(r'test result: ok\. (\d+) passed; (\d+) failed; (\d+) ignored;',txlog)[-1]==(str(len(txnames)),'0','0')
         assert 'Suites jouées : 1 sur 1 demandées.' in txlog and not re.search(r'\b(?:SAUTÉ|SKIPPED)\b',txlog)
         assert re.findall(r'▸ binaire e2e : (.+?) \(',txlog)==[str(cli)]
+    backend=Path(artifacts['backend']['actual_path'])
+    run('backend-maps',EXPORT+['python3',str(Path(__file__).with_name('backend_maps.py')),str(backend),str(P)],budget(30))
+    meta=json.loads((P/'backend-main.json').read_text())
+    assert meta['exe']==str(backend) and meta['cgroup']==CG
+    mappings[(meta['pid'],meta['starttime'])]=meta
     attest(budget(120));after=events();save('memoire.json',dict(before=before,after=after))
     assert all(after[k]==before[k] for k in ('high','max','oom','oom_kill'))
     live=observe();context=scan_context();save('quiescence.json',dict(live=live,context=context,checked=now()));assert not live and not context
