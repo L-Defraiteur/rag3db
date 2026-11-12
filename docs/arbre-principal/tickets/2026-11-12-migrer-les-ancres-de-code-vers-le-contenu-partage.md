@@ -498,3 +498,48 @@ SHA neuf à vérifier ; les41verts/8CLI et binaires85ef restent immuables sous
 `cx-preuves-preflight-85ef49211/` (28 fichiers, manifest sha256.json).
 Binaire produit85ef SHA256 :
 `0b59e5f6ef0c5094c9df2716d8a72ad680ef48584e4bc90304c57a370f1643e9`.
+
+Le check minimal corrigé **8ff52782bf881964ef7ed2de304b8f5a6a1f20f4** est
+**vert rc0**, compilation5,38s, fin12:11:57Paris,
+`cx-preflight-minimal-vert-v1.log`. Défaut attribué puis corrigé, sans élargir le
+ticket tty ni prétendre avoir joué sa recette daemon. ED/C7 ont relu85ef sans
+bloqueur et le delta cfg8ff est relu sans bloqueur ; revue supplémentaire ED non
+requise pour ces seuls cfg. Aucun autre Rust modifié après ce contrôle.
+
+## Proposition de passe finale du préfixe diagnostique — non lancée
+
+Rebaser la branche privée sur masterb28b55db6 avec nom neuf avant la passe :
+les six commits reçus depuis1cf ne changent que le témoin FTS cfg(test) et deux
+MD ; conserver range-diff et preuves antérieures sous leurs SHA. Pas de tour
+master implicite. Sous poste lourd à luciepc : un target32Go (actuellement4,5Go),
+un Cargo à la fois, j8/Mem32, lib29a7 épinglée, borne **globale3600s** couvrant
+la construction et tous les tests. Arrêt de tout le groupe propre à l'échéance,
+aucun retry aveugle ; journaux/compteurs/SHA conservés hors cible.
+
+1. Cinq jeux réglementaires `scripts/check_features.sh`, plus contrôle ciblé
+   `--lib --no-default-features` sur la source finale.
+2. Lib entière sous les huit features réglementaires, sans service d'embarquement
+   dans son environnement. Fixture PostgreSQL neuve privée par l'infrastructure
+   existante ; aucun serveur ni modèle nouveau, aucune donnée de base réelle.
+3. Étape navigateur exigée, huit features, paquets React existants du poste.
+4. Onze suites du changement, une suite par processus via le runner existant,
+   sous les huit features : `e2e_migration_preflight`, `e2e_demon_hote`,
+   `e2e_mcp_cycle_de_vie`, `e2e_mcp_stdio`, `e2e_fichiers_entite`,
+   `e2e_fichier_compose`, `e2e_lectures`, `e2e_tx_par_paquet_arret`,
+   `e2e_tx_merge_puis_copy`, `e2e_tx_ligne_a_ligne`,
+   `e2e_tx_vecteurs_apres_rollback`. Lectures est requise par l'hôte, transactions
+   par le catalogue ; pas de suite code/IR/gabarit ou banc ajouté. Les services
+   d'embarquement préexistants ne sont consultés explicitement que pour lectures
+   et MCP stdio (qui exige la connexion, sans calculer de vecteur). Santé/profil
+   à vérifier avant usage : pas de nouveau service, remplacement ou lancement
+   de modèle pour faire passer un manque. Cette non-régression est distincte des
+   témoins de migration qui restent sans modèle ni effets.
+5. Lire N/N, les tests réellement joués et résidus par suite, attester les assets
+   du dépôt dans les binaires réels, SHA des binaires/source/journaux, revue finale.
+   Nettoyage de la fixture PG privée et des ressources propres ensuite selon
+   la procédure ; les preuves restent hors target.
+
+Cette proposition attend la décision C7 sur la passe adaptée ; rien n'est
+annoncé vert à l'avance. Le ticket migration reste ouvert : publication, transfert,
+génération établie, running durable, reprise/annulation et activation ne sont pas
+livrés par ce préfixe diagnostique.
