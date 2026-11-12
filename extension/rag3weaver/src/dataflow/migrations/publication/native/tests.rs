@@ -247,8 +247,11 @@ fn native_interruption_before_commit_and_lost_ack_after_commit_resolve_from_disk
             output.status.code(),
             Some(code),
             "{}",
-            String::from_utf8_lossy(&output.stdout).to_string()
-                + &String::from_utf8_lossy(&output.stderr)
+            format!(
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            )
         );
         let mut reopened = OwnedPublicationCatalog::open_owned(&root, &id).unwrap();
         let observed = reopened.observe().unwrap();

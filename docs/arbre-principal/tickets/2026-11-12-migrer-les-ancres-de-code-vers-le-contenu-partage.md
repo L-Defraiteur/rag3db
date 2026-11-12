@@ -1717,3 +1717,10 @@ pas nouvelle décision produit. Le témoin natif dédié est publié avant exéc
 pour poser ce rouge ; correction par introspection native `table_info` ensuite.
 L'attente poste v1 a été annulée avant créneau/Cargo par TERM de notre PID1085759 ;
 son finaliseur ROUGE rc143 est conservé hors worktree (annulation de revue).
+
+Premier ciblé rouge v2 arrêté avant runtime : E0277 dans le diagnostic du
+témoin enfant (`String + &Cow<str>`), source4b592eca8. Preuves luciepc
+`cx-publication-composite-rouge-v2/compile.log`, confinement
+`cx-publication-composite-confinement-rouge-v2/validation-tmk95sii/verdict.json`
+ROUGE/code1/restes[]/nettoye=true. Correction de formatage du diagnostic ;
+recette rouge v3 distincte publiée avant reprise, gate schéma pas encore corrigé.
