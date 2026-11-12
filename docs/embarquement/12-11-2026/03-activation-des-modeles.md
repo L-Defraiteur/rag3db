@@ -96,6 +96,8 @@ L'absence du champ chez un ancien fournisseur est une information inconnue.
   marqué de l'ancien arbre. Requalification confinée après garde du target requise.
 - `scripts/qualifier_activation_modeles.sh cpu` regroupe les témoins sous la
   portée commune ; le mode `lib` prépare la passe large et le fournisseur privé.
+  Sur 6ddf622ca, validation-rw5c889b verte : 16/16 standalone, 5/5 connecteur,
+  1/1 chauffe, zéro ignoré ; target repris et quiescence contrôlée.
   La mesure privée du banc n'est pas encore déclarée verte.
 
 Les recettes, refus de compilation rencontrés et résultats suivants restent
