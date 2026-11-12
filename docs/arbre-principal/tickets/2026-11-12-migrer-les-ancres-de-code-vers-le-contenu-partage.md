@@ -1164,3 +1164,22 @@ est **historique** selon C7 ; déjà intégréb28b55db6, ticket fermé et ressou
 retirées. Recherche en veille, aucune nouvelle revue/créneau/reprise FTS à attendre.
 Le lot A reste prioritaire ; son producteur de déclarations ne qualifie toujours
 pas un stockage et ne livre aucun apply/bootstrap/publication. Ticket reste ouvert.
+
+### A — arrêt préventif v1 et correction de montage v2
+
+v1 source79f7c6d13 lancée20:27:04 Paris, arrêtée pendant F5 à19,93s par revue
+mémoire : RAG3WEAVER_JOURNAUX_DIR et RAG3WEAVER_BUILTIN_TEMPLATES_DIR privés
+manquants ; scope non liée à un pilote. Scope inactive, verdictROUGE conservé,
+poste0/4 relu. Aucun runtime lib/NAV/CLI ; ce n'est pas un défaut produit ni un
+vert F5. PG synthétiquev1 conservée, pas de reset ni suppression en cachette.
+
+Recette v2 distincte versionnée dans preuves-faits-lies-v2 : les deux caches sont
+explicitement privés (journaux sous commandes, pas dans TMPDIR). Pilote service
+cx-passe-faits-lies-v2.service Max32/KillModecontrol-group ; acquiert poste réel
+puis scopev2 BindsTo/After **cette unité exacte**, Max32/HIGHmax, propriétés lues
+avant Cargo. À l'arrêt du pilote, sa scope liée doit donc s'arrêter aussi.
+**Début monotonic et échéance lus de v1/source.json**, jamais recréés ; durée des
+unités et tous les budgets réduits au reste, F5 retirant aussi19,93s déjà dépensés.
+Nouvelle PG synthétiquev2 avec absence/current_database et source vérifiés,
+v1 conservée. Toute autre phase inchangée : lib18+15, NAV40/bus privé, CLI5,
+attestations/maps/220/quiescence. Premier rouge arrêt, aucun rejeu inchangé.
