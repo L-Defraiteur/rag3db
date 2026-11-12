@@ -28,9 +28,9 @@ meta=dict(pid=inferior.pid,starttime=(proc/'stat').read_text().rsplit(') ',1)[1]
 end
 continue
 ''')
-env=dict(os.environ,CX_BACKEND_MAPS_PROOF=str(proof))
+env=dict(os.environ,CX_BACKEND_MAPS_PROOF=str(proof),DEBUGINFOD_URLS='')
 with (proof/'backend-main.log').open('w') as output:
- result=subprocess.run(['gdb','--batch','--return-child-result','-x',str(command),'--args',str(binary),'--help'],env=env,stdout=output,stderr=subprocess.STDOUT,timeout=min(20,max(.1,receipt['echeance']-time.monotonic()-5)))
+ result=subprocess.run(['gdb','--nx','--batch','--return-child-result','-x',str(command),'--args',str(binary),'--help'],env=env,stdout=output,stderr=subprocess.STDOUT,timeout=min(20,max(.1,receipt['echeance']-time.monotonic()-5)))
 assert result.returncode==0,('gdb/backend failed',result.returncode)
 meta=json.loads((proof/'backend-main.json').read_text());assert meta['exe']==str(binary)
 maps=(proof/meta['maps']).read_text();rows=[line for line in maps.splitlines() if 'librag3db.so' in line]
