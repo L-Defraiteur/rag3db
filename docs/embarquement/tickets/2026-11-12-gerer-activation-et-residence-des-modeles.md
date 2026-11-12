@@ -386,3 +386,17 @@ santé7879 avant/après incluse au mode spans. Observation GPU des seuls privés
 dans la portée, données manquantes inconnues ; réutiliser capture du banc au
 lieu d'inventer une logique de placement dans le produit. MainPID des services
 peut être relu hors portée privée, sans ouvrir le bus utilisateur dans la suite.
+
+Avant e2e, capacité fraîche : card2 utilisé17212403712/34208743424 octets,
+soit16996339712 octets libres. Un seul privé BGE ou278 à la fois, profil
+Burn/WGPU gpu:0/Flex32, ROCR0, HIP/CUDA non posés. Les poids/tokeniseurs
+BGE2,2Go/17Mo et2781,1Go/8,7Mo sont présents aux chemins de cache explicites ;
+leurs empreintes seront conservées avant charge (cache de fichiers ainsi
+réchauffé, pas une prétention de froid disque). Pas de téléchargement.
+
+Driver d'échéance réutilisé aussi pour demon/spans : exige le mode réel du
+poste (mesure/lourd respectivement), calcule après acquisition le minimum
+1800/600 s et restant de l'échéance originale4qfyognx. Refus si expirée, pas
+de nouveau7200. Même source e2e publiée avant entrée ; observation de placement
+par capture du banc et données propres des PID, pas une variable GPU seule.
+La demande d'usage bref7879 est coordonnée directement avec Archi avant spans.
