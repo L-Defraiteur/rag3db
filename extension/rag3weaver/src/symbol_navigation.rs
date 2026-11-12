@@ -470,6 +470,14 @@ mod tests {
             json!(r#"[{"name":"run","line":2,"signature":"run(self)","kind":"method"}]"#);
         rows[0]["field_types"] = json!(r#"[{"name":"typed","type":"int"}]"#);
         let v = call(&src, &rows, "members", "a", 1, 80);
+        assert!(
+            v["nodes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|n| n["ref"]["uuid"] == "ar"),
+            "une méthode indexée sans déclaration doit rester explorable : {v}"
+        );
         assert_eq!(v["members"].as_array().unwrap().len(), 2);
         assert_eq!(v["coverage"]["complete"], false);
         assert!(v["members"][1]["line"].is_null());
