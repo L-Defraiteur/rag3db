@@ -1744,3 +1744,19 @@ PG36 sur nouvelle base synthétique `cx_pub_2191_20261113_v1` et quatre suites
 `e2e_tx_*` exigées pour le helperKV partagé. Aucun modèle/service réel requis.
 Pas encore de passe globale ni d'intégration ; le ticket reste ouvert pour
 la migration physique et la pyramide.
+
+### Représentabilité des entrées typées — arrêt volontaire globale v1
+
+Inspection de ModelSource/Addresses : le tuple public `Addresses(vec![" a, b "])`
+se sérialise en une chaîne, mais sa désérialisation commune parse/trim/sépare les
+adresses. A valide ces déclarations sans tester ce roundtrip. Le registre strict
+peut donc écrire une valeur qu'il refusera à la prochaine lecture. Nouveau témoin
+à poser sans modèle réel ; porteur arbre, même ticket/contrat.
+Critère : les instantanés acceptés doivent être représentables sans changement
+par le codec v1 ; une entrée typée non stable est refusée avant tout effet, pas
+normalisée en silence sous une identité déjà calculée.
+La globale v1/sourcea754d66af a été interrompue volontairement pendant F5,
+avant qualification (superviseur proprePID1164753/starttime vérifié, TERM).
+Preuves `cx-passe-publication-composite-v1`, supervision `validation-62gukwsz`,
+verdict global ROUGE rc1 ; aucune passe verte annoncée. La PG synthétique
+cx_pub_2191_20261113_v1 reste possédée, à conserver/dumper avant retrait.

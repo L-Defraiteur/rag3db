@@ -204,3 +204,102 @@ fn persisted_chain_rejects_missing_ancestors_forks_cycles_and_corrupt_fingerprin
         .insert(genesis, PublicationIntent::build(body).unwrap().stored);
     assert!(Registry::decode(&canonical(&cycle).unwrap()).is_err());
 }
+
+pub(super) fn rich_input() -> DeclaredSchemaInput {
+    use crate::{
+        backend::BackendRelation,
+        config::{DerivedConfig, DerivedIdentity, FieldType, RelationDef, SimpleFieldDef},
+        embedding_storage::{EmbeddingModelEntry, StorageKind},
+        model_source::{Capability, ModelSource},
+    };
+    let mut i = input("rich-synthetic");
+    let config = i.entities.as_mut().unwrap().get_mut("Document").unwrap();
+    config.fields.insert(
+        "body".into(),
+        SimpleFieldDef {
+            field_type: FieldType::Text,
+            is_content: true,
+            ..Default::default()
+        },
+    );
+    let mut derived = config.clone();
+    derived.derived = Some(DerivedConfig {
+        from: "Document".into(),
+        identity: DerivedIdentity::Content {
+            format: "document-content-v1".into(),
+        },
+        gather: vec![],
+        render: BTreeMap::from([("body".into(), "body-template".into())]),
+    });
+    i.entities
+        .as_mut()
+        .unwrap()
+        .insert("DocumentContent".into(), derived);
+    i.relations.as_mut().unwrap().insert(
+        "DERIVED_FROM".into(),
+        BackendRelation {
+            def: RelationDef {
+                from: "DocumentContent".into(),
+                to: "Document".into(),
+                properties: None,
+            },
+            from_states: Some(vec!["open".into()]),
+            to_states: None,
+            description: Some("synthetic policy".into()),
+        },
+    );
+    i.recipe
+        .resolved_templates
+        .as_mut()
+        .unwrap()
+        .insert("body-template".into(), "{{ root.body }}".into());
+    let mut model = ModelSource::local("synthetic-4");
+    model.dimensions = Some(4);
+    i.recipe
+        .model_sources
+        .as_mut()
+        .unwrap()
+        .insert(Capability::Embed, model);
+    i.recipe.dense_models.as_mut().unwrap().insert(
+        "synthetic-4".into(),
+        EmbeddingModelEntry {
+            name: "synthetic-4".into(),
+            dim: 4,
+            storage: StorageKind::Legacy,
+        },
+    );
+    i
+}
+
+#[test]
+fn snapshot_codec_refuses_non_lossless_declarations_before_any_publication() {
+    use crate::model_source::{Addresses, Capability};
+    let mut input = rich_input();
+    input
+        .recipe
+        .model_sources
+        .as_mut()
+        .unwrap()
+        .get_mut(&Capability::Embed)
+        .unwrap()
+        .address = Addresses::parse(" http://127.0.0.1:9, http://127.0.0.1:10 ");
+    let normal = DeclarationSnapshot::from_complete_input(input.clone()).unwrap();
+    let r = Registry::genesis(NewPublicationOrigin::fresh(), "create", normal).unwrap();
+    let encoded = canonical(&r).unwrap();
+    assert_eq!(
+        canonical(&Registry::decode(&encoded).unwrap()).unwrap(),
+        encoded
+    );
+    input
+        .recipe
+        .model_sources
+        .as_mut()
+        .unwrap()
+        .get_mut(&Capability::Embed)
+        .unwrap()
+        .address = Addresses(vec![" http://127.0.0.1:9, http://127.0.0.1:10 ".into()]);
+    assert!(
+        DeclarationSnapshot::from_complete_input(input).is_err(),
+        "non-lossless declaration admitted by publication snapshot"
+    );
+}
