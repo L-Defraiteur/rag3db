@@ -217,3 +217,8 @@ Dans les drivers Python, contrôler les types des clés env après substitution 
 v3 a refusé avant Cargo sur une clé tuple accidentelle, distinct des rouges métier.
 Conserver la source et les ELF exacts des lignes réellement exécutées, jamais
 choisir le plus récent au mtime. Les preuves v1/v2/baseline/ciblé/v3/v4 sont distinctes.
+
+Livraison de ce préfixe : master2b06682a2, avec tour C7. Worktrees et target retirés
+après archives/gardes vertes ; PG privéesv1/v2/v4 exportées et supprimées. Pour
+reprendre, créer un worktree neuf depuis master ; le ticket migration reste ouvert.
+Les preuves sourcee4239 et les ELF v4 restent hors cible sur luciepc.

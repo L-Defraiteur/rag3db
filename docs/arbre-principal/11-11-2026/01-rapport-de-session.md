@@ -1,3 +1,21 @@
+## État final du 12 novembre — préfixe intégré et lot nettoyé
+
+**Master2b06682a2e28e7ef92641de5dc80c91cf986d799**, tour C7 et trois contrôles
+verts lus. Diagnostic inspect/plan et hygiène e2e intégrés ; migration réelle
+indisponible, [ticket migration ouvert](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md).
+Les chemins de worktree et les attentes de tour dans les sections suivantes sont
+historiques : **worktrees local et luciepc retirés**, target11Go retiré après
+archives fidèles des administrations Git (sous-module compris) et gardes fraîches
+VERT lues. PG privéesv1/v2/v4 exportées+SHA puis supprimées, absence vérifiée ;
+v3 n'avait pas été créée. Preuves/ELF/logs et branches distantes conservés.
+
+Rapports+archives de nettoyage : cache de chaque poste,
+`cx-nettoyage-preflight-1b-{local,remote}-2b06682a2/`, fin.json et garde.json.
+Preuves finales v4 sur luciepc, attestations copiées localement dans
+`cx-preuves-finales-1b-v4/`. Aucun déploiement, modèle, migration réelle ni relance CI.
+Pour poursuivre la migration, repartir d'un worktree neuf depuis master et relire
+le ticket ; ne pas relancer les anciennes passes. L'arbre de Lucie n'a pas été modifié.
+
 
 ## Reprise prioritaire — 12 novembre, préfixe migration diagnostique
 

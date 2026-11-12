@@ -684,3 +684,18 @@ README et nouveautés décrivent le préfixe diagnostic seulement. Ticket migrat
 transfert, activation, exclusion d'exécution ou reprise de migration livrés ici.
 Ticket hygiène : clôture préparée sur branche, intégration master encore à faire.
 Attente lecture C7 du verdict et tour explicite « à toi » ; aucun push master.
+
+## Intégration du préfixe et nettoyage
+
+Tour C7 reçu après revue indépendante des logs et rehash des quatre binaires.
+Master **2b06682a2e28e7ef92641de5dc80c91cf986d799**, rebase MD seules sur4c4a5b691,
+branche neuve5, code identique à sourcee4239. Trois contrôles lus : status propre,
+aucun rebase, origin/master=HEAD. Ticket hygiène désormais intégré fermé.
+
+Script terminé rc0 : worktrees local/remote retirés après copies cp-a fidèles
+administrations (sous-module inclus remote), helperdca13 et rapports frais VERT lus ;
+target11Go retiré. PG privéesv1/v2/v4 exportées+SHA puis drop, absence vérifiée ;
+v3 absente. Cache `cx-nettoyage-preflight-1b-{local,remote}-2b06682a2/` contient
+copies, garde.json, fin.json et dumps sur remote. Preuves/ELF/logs et branches
+privées distantes conservés. Aucun déploiement ou rerun CI. **Migration ouverte** :
+ce lot ne transforme aucune ancre existante ; repartir d'un worktree neuf pour la suite.
