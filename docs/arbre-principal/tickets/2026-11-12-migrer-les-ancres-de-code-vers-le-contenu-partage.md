@@ -579,3 +579,10 @@ modèle ou accès base n'est requis pour ce contrôle ; le refus du journal rest
 après cette validation et avant les effets. Pas de flag de contournement ni
 nouveau validateur de schéma. Ciblé des opening_tests et des gardes du préfixe
 à jouer avant toute nouvelle passe finale, sur SHA neuf.
+
+La revue C7 confirme la correction et autorise le ciblé opening_tests +
+storage_inspection + migrations sur SHA neuf avant toute reprise finale.
+Le témoin existant d'association publique invalide est complété pour la façade :
+config préparée puis modifiée après load, refus Missing nommé, fabrique modèle
+non appelée et fichier/répertoire de base toujours absent. Le chemin bas niveau
+conserve son compteur de zéro appel DB ; aucune nouvelle suite/matrice ajoutée.
