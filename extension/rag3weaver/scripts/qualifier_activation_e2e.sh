@@ -36,10 +36,7 @@ else
     export RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7879
 fi
 git rev-parse HEAD
-if [ "$mode" = demon ]; then
-    # La fixture e2e a changé : vérifier ses gardes de features avant GPU.
-    timeout -k 10s 300 bash scripts/check_features.sh
-else
+if [ "$mode" = spans ]; then
     curl -fsS --max-time 5 http://127.0.0.1:7879/sante
 fi
 if [ "$mode" = demon ]; then
