@@ -181,3 +181,24 @@ aucun RPATH/RUNPATH/libprojet, cinq dépendances système attendues.
 Lanceur runtime20s/groupe/1Gio préparé, accord-modèle reste désactivé.
 Aucun lancement, checkpoint réel ou réouverture ; aucune assertion de corruption.
 Revue du lanceur/ELF puis autorisation de run distincte restent requises.
+
+## Runtime structurel 1 : arrêt sur prémisse avant toute requête
+
+Une seule exécution autorisée avec accord exclusif lié aux quatre SHA, unité
+`cx-hotfixs-quarantaine-runtime-d3b6bb5d-01`, MemoryMax1Gio/swap0 vérifiés
+par le lanceur ; aucune autre tentative.
+[Preuves runtime-01](../12-11-2026/preuves/runtime-01/runtime-controller-01.log) et
+[fin du groupe](../12-11-2026/preuves/runtime-01/group-finished.txt).
+
+Diagnostic nommé **maxDBSize mal passé par la fixture** : source donne `-1ull`,
+mais SystemConfig reconnaît `-1u` comme sentinelle par défaut
+(`src/include/main/database.h:77`, `src/main/database.cpp:109-112`).
+`BufferManager::verifySizeParams` refuse cette valeur non puissance de deux
+(`src/storage/buffer_manager/buffer_manager.cpp:101-102`).
+Erreur exacte : `Buffer manager exception: The given max db size should be a power of 2.`
+L’enfant sort3, parent/wrapper1 ; résultat inconclusif. Pas de requête setup,
+callback undo ou fabrique atteints ; ni checkpoint réel ni réouverture.
+Cgroup retiré, unité inactive/dead, MainPID0. Artefacts et accord conservés
+dans staging02/runtime-qdbvmbra ; aucune base préexistante touchée.
+Correction de cette seule prémisse à soumettre avant nouvelle compilation et
+accord de run distinct ; aucun retry automatique. Ticket reste ouvert.

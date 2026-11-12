@@ -1,0 +1,7 @@
+Unité cx-hotfixs-quarantaine-runtime-d3b6bb5d-01.service : contrôleur systemd exit1/FAILURE.
+Service runtime51ms ; CPU41ms ; pic32,7M ; swap0, selon runtime-controller-01.log.
+Après sortie, systemctl show : ActiveState=inactive, SubState=dead, MainPID=0, ControlGroup vide.
+Le cgroup enregistré dans runtime-start.json n’existe plus à la lecture suivante.
+Attention : Result=success affiché après collecte de l’unité ne représente pas le résultat du run ; consulter le journal conservé exit1.
+Le parent a attendu son enfant1854965 : waitpid=1854965, statut768 = exit3 ; programme et wrapper sortent1.
+Les requêtes setup et callbacks n’ont pas commencé ; seuls steps.tsv et parent.tsv existent dans artifacts/released-UeWVyk.
