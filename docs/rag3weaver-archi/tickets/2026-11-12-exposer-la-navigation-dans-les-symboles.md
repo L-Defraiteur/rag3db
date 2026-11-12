@@ -1,9 +1,9 @@
 # Exposer la navigation dans les symboles
 
-- **État** : ouvert ; conception autorisée par Lucie le 12 novembre, interfaces proposées et couverture actuelle à qualifier avant code.
+- **État** : ouvert ; première tranche codée et ciblé8/0/0 prouvé, passe globale/revue/intégration à terminer ; grep et couverture étendue restent à livrer.
 - **Famille** : produit
 - **Gravité** : capacité manquante ; l'agent doit pouvoir explorer des arbres de code sans lire tous les corps.
-- **Atteignable en service** : non pour les nouvelles façades ; outline et les relations de parents existent déjà.
+- **Atteignable en service** : oui dans la branche candidate via outil code et relais atelier, pas encore intégré à master ; outline reste disponible.
 - **Touche rag3weaver** : oui, outils déclaratifs du code et de l'atelier, références de symboles, rendu et enrichissement du grep.
 - **Pour** : ED et archi pour les contrats/outils ; codeparsers pour la couverture des membres et relations.
 - **Signalé par** : Lucie, demandes list_methods puis list_members, parents/enfants bornés, list_symbols(file) en arbre et option symbol_hierarchy_depth du grep.
