@@ -1,6 +1,6 @@
 # Le dossier d'état d'e2e_demon_hote reste dans son TMPDIR
 
-- **État** : ouvert, découvert pendant la passe diagnostique migration v2 ; attribution baseline à vérifier avant correction.
+- **État** : ouvert, découvert pendant la passe diagnostique migration v2 ; défaut préexistant confirmé sur baseline ; correction du lanceur en validation.
 - **Famille** : produit
 - **Gravité** : passe refusée par le garde de résidus, malgré les assertions fonctionnelles vertes.
 - **Atteignable en service** : non, hygiène du lanceur et des fixtures e2e.
@@ -66,3 +66,13 @@ Témoins d'outillage requis avant feu vert : état possédé seul nettoyé ; fic
 arbitraire hors de cet espace toujours rouge ; état conservé sur échec. Puis le
 vrai e2e_demon_hote13/0/0 avec TMPDIR vide. Source/validation à relire avant une
 nouvelle passe migration, aucun ajout à la liste d'exceptions de résidus.
+
+## Implémentation du lanceur en validation
+
+Racine mktemp marquée et injectée uniquement dans le processus de suite. Après
+succès, suppression limitée à cette racine ; défaut de nettoyage rouge. Sur
+échec ou expiration, aucun nettoyage. Avec GARDER=1, conservation des octets dans
+le dossier disque possédé par la suite. Le garde des résidus reste inchangé.
+Le témoin scripts/test_etat_suite_e2e.sh appelle les vraies fonctions du lanceur :
+état seul, résidu arbitraire, échec/expiration, conservation explicite, nettoyage
+refusé et chemin non possédé. Résultats et suite réelle restent à mesurer.
