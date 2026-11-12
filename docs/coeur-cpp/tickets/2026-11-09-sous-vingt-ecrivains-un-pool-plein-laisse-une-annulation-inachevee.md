@@ -683,3 +683,9 @@ un contrat démontré. Une quarantaine avec récupération sûre pourrait suffir
 mais le refus des nouveaux BEGIN/checkpoints ne démontre pas la sûreté pour les
 transactions déjà ouvertes ; les garanties de versions des lecteurs restent
 nécessaires. Lecture seule, sans nouveau défaut observé ni changement moteur.
+
+Limite précisée après revue : la garde rollbackFailed du checkpoint public n'est
+pas rappelée dans checkpointNoLock, que commit peut joindre directement ou par
+writeRequestedCheckpointIfLastNoLock pour une transaction déjà ouverte. Graphe
+de contrôle relu, aucun incident reproduit ; ne pas présenter la quarantaine
+comme globale ou comme preuve suffisante des nouveaux préfixes d'effets.

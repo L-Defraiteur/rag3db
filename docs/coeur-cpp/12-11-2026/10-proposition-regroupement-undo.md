@@ -205,3 +205,23 @@ lecteurs et écrivains déjà présents aussi. Elles ne le sont pas pour A à ce
 Ne pas exiger l'identité de préfixe par principe ; ne pas invoquer la quarantaine
 comme preuve suffisante. La non-applicabilité démontrée aux séries Doc/Note reste
 la raison prioritaire de ne pas choisir A pour TwentyWriters.
+
+### Limite supplémentaire : checkpoints internes après un commit déjà ouvert
+
+La revue croisée complémentaire et la lecture directe confirment une distinction
+qui interdit d'affirmer « tous les checkpoints sont bloqués » :
+
+- Le checkpoint **public** appelle la garde (:299).
+- `TransactionManager::commit` (:165–200) peut appeler checkpointNoLock directement
+  (forced ou automatique), puis writeRequestedCheckpointIfLastNoLock.
+- `writeRequestedCheckpointIfLastNoLock` (:518–527) peut aussi entrer dans
+  checkpointNoLock ; celui-ci (:598 et suivantes) ne rappelle pas
+  throwIfCheckpointFailedNoLock avant la construction du Checkpointer.
+
+Un écrivain déjà ouvert dispose donc, dans le graphe de contrôle lu, d'un chemin
+vers un checkpoint interne qui ne passe pas par la garde publique. Ceci est une
+analyse de contrôle, sans incident reproduit ; les conditions de déclenchement
+et la sûreté effective restent à départager. Le contrat suffisant décrit plus
+haut est un objectif de preuve, **pas une propriété déjà démontrée du manager**.
+La quarantaine ne peut donc justifier à elle seule un nouvel ordre d'effets.
+Aucun correctif ni témoin exécuté ; le même ticket porte cette incertitude.
