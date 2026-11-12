@@ -128,3 +128,36 @@ ne trouve qu'au plus une plage Doc ou Note par transaction ordinaire. Le choix A
 n'est donc pas retenu comme prochain correctif de ce scénario sur la seule preuve
 micro N×U. Les éventuelles séries de relations du DDL ont d'autres handlers et
 leur adjacence réelle n'est pas consignée dans les traces conservées.
+
+## Revue croisée des invariants — opt-in non démontré
+
+La revue en lecture seule de 0511dece7 identifie des obstacles supplémentaires :
+
+- `node_table.cpp:97–115` entrelace PK, index secondaires, versions/troncature et
+  compte par record. Fusionner le handler entier change cet entrelacement.
+  L'union des plages PK conserve survivants et compte, sans garantir la même
+  représentation physique des slots.
+- `node_table.cpp:1037–1049` reprend indexesMtx et filtre les index chargés,
+  détachés et visibles par appel. `Index::rollbackInsert` (index.h:191) n'a pas
+  de contrat de composition ni noexcept. HNSW actuel compose un seuil minimal
+  (hnsw_index.cpp:798–810), mais cela ne certifie pas tous les index : une
+  implémentation comptant les appels ou levant au second seuil est permise.
+  L'opt-in du seul type NodeTable ne suffit donc pas.
+- `node_group.cpp:1065–1090` visite les blocs dans l'ordre croissant. Deux undo
+  adjacents sont annulés haut puis bas ; leur union visite bas puis haut.
+  `ChunkedNodeGroup::rollbackInsert` (:594–619) traite versions puis troncature ;
+  `VersionInfo::rollbackInsert` (:621–635) peut passer par getOrCreateVersionInfo
+  (:412–419, resize/make_unique). En cas d'exception dans le bloc bas, le préfixe
+  des effets peut différer. C'est un contre-exemple conditionnel, pas un incident
+  observé. L'équivalence exacte des échecs n'est pas établie.
+- Conserver started avant le premier effet, les frontières de tampon et les
+  barrières : UndoBuffer construit déjà un vector par tampon avant callbacks.
+  Transaction::rollback transforme started en halfDoneRollback ; le manager
+  interdit alors checkpoint et impose une réouverture.
+- La soustraction des réservations se compose seulement avec bornes sans overflow
+  et total initial au moins égal à la somme. Les réservations partiellement
+  écrites, groupes absents et versions retenues par lecteurs restent à prouver.
+
+Aucun opt-in n'est recommandé à ce stade. Cette revue, ajoutée à l'absence de
+série Doc/Note à fusionner dans TwentyWriters, retire la justification d'un
+passage immédiat à l'implémentation A. Aucun nouveau run ni changement moteur.

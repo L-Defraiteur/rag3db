@@ -673,3 +673,7 @@ plages de cette table à fusionner. Les relations ont d'autres handlers et les
 journaux conservés ne donnent pas leur séquence typée par tampon. A non retenu
 comme prochain correctif du scénario sur le seul gain micro N×U. Lecture seule,
 aucun code moteur, build ou nouveau run. Ticket toujours ouvert.
+
+Revue croisée intégrée au plan 10 : opt-in NodeTable non démontré (contrat des
+index secondaires, ordre des blocs et préfixe des effets en cas d'exception,
+réservations partielles et bornes). Aucun opt-in recommandé ni implémenté.
