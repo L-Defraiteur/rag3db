@@ -134,3 +134,26 @@ cas orphelin/statut/version, seule la checksum change dans son cas dédié. Un
 témoin positif de l’historique legacy appliqué identique doit déjà passer :
 on ne « corrige » pas les quatre refus en refusant tous les historiques. Ce
 positif ne prétend pas couvrir la qualification résolue du nouveau format.
+
+## Rouge réel du préfixe journal T12 et correction bornée
+
+Source50febdbea4aa6d61b96956b751304a6b631b34e4 propre sur luciepc,
+`cx-preflight-t12-rouge-v1.log`, natif seul, un Cargo sous poste lourd
+-j8/Mem32/lib29a7/échéance1800s : **1 réussi, 4 échecs, 0 ignoré**, rc101.
+Le positif legacy identique passe ; checksum modifiée est sautée, orphelin,
+statut inconnu et version mal typée retournent un pending apparemment valide.
+Compteurs d’effets inattendus et de modèles zéro avant chacune des assertions.
+Pas de relance aveugle. Target unique recréé1,3Go ; aucune DB créée/lue.
+
+Correctif limité au lecteur existant et au runner : InvalidHistory nommé,
+champs/types/statuts du journal validés sans défaut silencieux ni écrasement de
+doublon, comparaison version/nom/checksum avec tous les fichiers déclarés avant
+status/pending. Aucune génération fictive ni qualification résolue déjà annoncée.
+
+Décision orchestration : legacy Unversioned explicite, profil reconnu distinct
+de sa génération ; ouverture ordinaire de l’ancien manifeste conservée. Plan
+préliminaire réellement inspectable, readiness de migration refusée si génération
+source non établie. Pas d’inventaire de données ajouté dans ce premier patch ;
+baseline de génération/fingerprint sous exclusivité à formaliser ici avant le
+transfert futur. Fixtures versionnées pour T12 après applied cible/avancement
+étranger ; aucune cible1b déclarée prête/applied par cette étape.
