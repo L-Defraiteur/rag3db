@@ -60,7 +60,7 @@ Aucun nouveau travail implicite lancé.
 ### Reprise parcours agent IDE, nuit du 12 au 13
 
 Source initiale `36e284824`, branche/worktrees `cx-ed-parcours-agent-ide`, ticket
-`../tickets/2026-11-12-prouver-le-parcours-agent-de-code-complet-de-l-ide.md`.
+`../../tickets/closed/2026-11-12-prouver-le-parcours-agent-de-code-complet-de-l-ide.md`.
 Le témoin réel historique ne qualifiait que l’édition. Le nouveau témoin exige
 les résultats d’outils, un test Cargo nommé immuable et la reprise par
 `relire_les_taches` + `reread_chats` après destruction de l’hôte. Le gabarit code
@@ -86,3 +86,14 @@ source8e366e4aa(4Rustidentiquesfe0), globale6000 en file sous canonicalconfiner,
 sourcefigéePC8e, targetprivate même5.8G, basePGcx_ed_parcours_20261113 créée.
 PasdeVertexàrejouer sansnouveaudéfaut ; reviewersMémoire/C7 favorables. Aprèspasse
 etàtoiC7 : clôtureticket/déplacement, pushmasteretcleanupgarde/admins+PGdumpSHA.
+
+Fin qualification : sourcee4eaf4ef2 branche3 surmaster8f(inclut3ed+Cpp), F5/min/lib2253
+/NAV40/lect27/hôte13/PG36 tousverts, portéeunionVERTE/restes[]/quiescence[].
+Borne1446.97/6000inclutpréunion etpréparation, deadline878111.26244974 inchangée.
+Source223gabarits ; target29.7Go, quatreELFglobaux (e2e canoniqueINCREMENTAL0 distinct),
+realité4d/fe0équivalenteSHA enregistrée. Preuves I-luciepc/parcours-agent-ide-20261112.
+Ticket clos déplacé docs/tickets/closed/2026-11-12-prouver-le-parcours-agent-de-code-complet-de-l-ide.md.
+Reste livraison : tourC7/postepush/dernierfetch/ifVERT/3contrôles puisquiescence,
+PGdump+SHA/drop0connexions, archiveadmcp-a/gardefraîchedca13/retraitW2postes,
+brancheslocales-d/targetretiré ; remotes/logs/rouges/ELF/admins2postes restent.
+Ancien reste-explicite et arbre personnel Lucie restent hors périmètre.

@@ -73,7 +73,13 @@ les résultats sont liés aux identifiants d’outils et commandes exactes.
 
 ## Intégration
 
-Ticket : [parcours IDE](../tickets/2026-11-12-prouver-le-parcours-agent-de-code-complet-de-l-ide.md).
+Ticket : [parcours IDE](../../tickets/closed/2026-11-12-prouver-le-parcours-agent-de-code-complet-de-l-ide.md).
 Branche2 sur master65b, source8e366e4aa publiée et code du lot identique àfe0.
-La passe globale d’intégration est en file ; aucun verdict global ou master
-n’est revendiqué dans ce document avant sa mise à jour finale.
+L’union après symboles3ed/C++ est validée sous sourcee4eaf4ef2, branche3 :
+F5 5/5, minimal0, lib2253/0/66, NAV40, lectures27, hôte13 et PostgreSQL36, tous
+sans échec ; filets2 à chaque e2e. Supervision verte, restes[] et quiescence[].
+Le contrôle1446.97s reste dans la deadline6000 initiale, sans reset. Le runtime
+Git et les témoins réels sont byte-identiques aux sources4d/fe0 acquises.
+Le lanceur e2e canonique désactive l’incrémental Cargo : son ELF réellement
+exécuté est archivé séparément des trois préparés. Target29.7Go<32Gio.
+Le tour master C7 puis le nettoyage gardé2postes restent la fin de livraison.
