@@ -158,3 +158,13 @@ le stderr seul n'est pas une preuve causale suffisante. Aucun sandbox off, aucun
 parent ou du home, aucun accès extérieur implicite via les laissez-passer. Source à publier
 propre avant les ciblés ; passe globale seulement après ces preuves. Le rouge original sans
 extra_read reste conservé et la précondition devra rester explicite dans README et bilan.
+
+Diagnostic causal `157a2f272`, ciblé réel Linux : **1 réussi, 0 échec, 0 ignoré en 0,08 s**.
+Le même script et son frère sont lisibles par l'hôte ; le témoin exige un ruleset Landlock
+actif (aucun saut), puis fait varier seulement la déclaration extra_read du script. Sans
+elle, le processus réellement lancé après accord rend Permission denied et aucune sortie ;
+avec elle, le script rend sa sortie. La variante attend son accord ; même explicitement
+accordée ensuite, sa lecture du frère reste refusée. Aucune règle sur le dossier parent.
+Ce comparatif étaye la cause noyau plutôt que de l'inférer du seul stderr navigateur.
+Preuve : `I-luciepc/accord-20261112/bac-reel.log` et `commit-bac-reel`.
+Les README explicitent désormais la lecture déclarée préalable et la consommation CetteFois.
