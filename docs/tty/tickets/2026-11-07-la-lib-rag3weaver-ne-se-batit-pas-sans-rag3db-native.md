@@ -29,3 +29,20 @@ Aucun pour l'instant. Il faudrait une ligne `--no-default-features` et une ligne
 2. Ajouter les deux lignes au témoin de `check_features.sh`.
 
 Une alternative : déclarer que la lib exige le moteur, en mettant `rag3db-native` dans `default` ou en écrivant un `compile_error!` explicite. Ce choix revient à Lucie.
+
+## Observation arbre-principal du 12 novembre, ciblé minimal après cfg isolé
+
+Source privée **390b70185d3c466b3d1c5379c2d14b5f36ee71b6**, cfg mémoire80faa
+intégré séparément. Cargo test --no-default-features --lib, filtre aperçu transfert,
+j8/Mem32/lib29 : **rc101 en112,69s, aucun test joué**. L'import natif manquant
+n'est plus signalé ; deux helpers cfg(test) deviennent du dead_code fatal :
+read_pool.rs:196 Instantane::vieillir et backend.rs:4005 Backend::call_tool.
+Leurs appels sont dans les témoins natifs ; aucun de ces deux fichiers n'est
+modifié par ce lot. Attribution statique à cette surface de montage préexistante,
+pas de rouge métier du transfert, pas de preuve de correction globale du ticket.
+
+Preuves luciepc : cx-transfert-apercu-cible-v2/{cargo.log,source.json,resultat.json,VERDICT}.
+Source propre inchangée, portée inactive et place arbre rendue. Pas de retry
+inchangé ni de allow(dead_code) ajouté. Coordination demandée à C7 : qualification
+sélective des helpers par leurs propriétaires, ou ciblé natif du même aperçu
+sans prétendre prouver le minimal ; aucun backend partagé modifié par arbre.
