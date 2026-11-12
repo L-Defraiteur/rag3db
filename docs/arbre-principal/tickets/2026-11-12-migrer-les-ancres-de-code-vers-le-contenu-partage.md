@@ -1041,3 +1041,22 @@ par Cargo, puis listera son inventaire avant runtime. Exiger18facts et15aperçu,
 compter le groupe migrations complet et exiger tous les tests sélectionnés passés
 sans ignore ; aucun compte global supposé depuis l'absence d'API. Premier rouge
 stop/diagnostic. Les revues continuent en lecture seule sans toucher source figée.
+
+### Premier ciblé A : rouge du témoin fournisseur, diagnostic arrêté
+
+Source **d953f27813567810d797b2f3225d19f03ee457c3**, compilation --no-run réussie,
+ELF identifié par JSON Cargo avec natif+code ; inventaire AVANT runtime :64 tests,
+dont18facts et15aperçu. Exécution **63 réussis,1 échec,0 ignoré**, rc101,
+126,94s compilation comprise. Unique échec actual_code_provider : le témoin
+attendait à tort DEFINES.to=Scope ; la définition réelle est
+code.rs RELATIONS (DEFINES,SCOPE,SYMBOL), rendue par schema_configs, donc Symbol.
+Les17autres nouveaux,15aperçu et31existants ont réussi. Ce rouge n'est pas attribué
+à un défaut du producteur. Source propre, scope inactive et place arbre rendue.
+
+Preuves cache luciepc cx-faits-lies-cible-v1/{compile.log,inventaire.json,tests.log,
+source.json,resultat.json,binaire.json,binaire-tests}. SHA ELF réel
+6e5b075c45cd4efe37b464bab209bc630c18af3703847f1a8fc5eb89a8684820.
+Aucune relance inchangée. Correction limitée au témoin : comparer l'ensemble
+exact des RelationDef du vrai fournisseur avant/après composition, extrémités
+ET propriétés, plutôt qu'une extrémité présumée erronée. Nouveau SHA publié et
+parse de syntaxe effectué avant proposition de ciblé v2 au même budget.
