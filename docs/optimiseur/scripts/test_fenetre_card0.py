@@ -110,7 +110,7 @@ class Fenetre(unittest.TestCase):
             def info(self, unite):
                 return {'LoadState': 'loaded', 'ActiveState': 'inactive' if self.stop else 'active',
                         'MainPID': '0' if self.stop else '123', 'Description': 'Lucie' if etranger else f.MARQUE + empreinte,
-                        'Slice': f.SLICE, 'Restart': 'no', 'KillMode': 'control-group'}
+                        'Slice': f.SLICE, 'Restart': 'no', 'KillMode': 'control-group', 'ControlGroup': '/private/fixture'}
             def arreter(self, unites): self.stop.extend(unites)
             def pids(self, info): return [123, 456] if not self.stop else [456] if survivant else []
         return Manager()
@@ -141,6 +141,26 @@ class Fenetre(unittest.TestCase):
         v = f.couper(self.date(13, 7, 54), self.racine, m)
         self.assertEqual(m.stop, [])
         self.assertEqual(v['unites_privees_arretees'], [])
+
+    def test_executant_hors_unite_refuse(self):
+        m = self.manager()
+        with patch.object(m, 'info', return_value={'LoadState': 'not-found'}):
+            with self.assertRaisesRegex(f.Refus, 'hors unité'):
+                f.verifier_executant('absente', 'a' * 64, m, pid=123, cgroup='/private/fixture')
+
+    def test_executant_unite_etrangere_refuse(self):
+        m = self.manager(etranger=True)
+        with self.assertRaisesRegex(f.Refus, 'étrangère'):
+            f.verifier_executant('etrangere', 'a' * 64, m, pid=123, cgroup='/private/fixture')
+
+    def test_executant_mainpid_et_cgroup_prives_requis(self):
+        m = self.manager()
+        empreinte = f.digest((self.racine / 'specs/fixture.json').read_bytes())
+        with self.assertRaisesRegex(f.Refus, 'MainPID'):
+            f.verifier_executant('fixture', empreinte, m, pid=456, cgroup='/private/fixture')
+        with self.assertRaisesRegex(f.Refus, 'hors cgroup'):
+            f.verifier_executant('fixture', empreinte, m, pid=123, cgroup='/ailleurs')
+        f.verifier_executant('fixture', empreinte, m, pid=123, cgroup='/private/fixture')
 
 
 if __name__ == '__main__':
