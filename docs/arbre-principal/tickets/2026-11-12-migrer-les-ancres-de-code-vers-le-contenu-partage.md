@@ -1724,3 +1724,11 @@ témoin enfant (`String + &Cow<str>`), source4b592eca8. Preuves luciepc
 `cx-publication-composite-confinement-rouge-v2/validation-tmk95sii/verdict.json`
 ROUGE/code1/restes[]/nettoye=true. Correction de formatage du diagnostic ;
 recette rouge v3 distincte publiée avant reprise, gate schéma pas encore corrigé.
+
+Rouge fonctionnel établi v3/sourceb59be0fe8 : 0/1/0, message exact
+« foreign column admitted by closed declaration catalog ». Binaire inventorié
+avant runtime, lib29 liée, `cx-publication-composite-rouge-v3/` conserve logs/ELF.
+Supervision `validation-jsakyq9f` : exécution du témoin rouge attendue achevée,
+aucun résultat applicatif vert déduit. Correction : `table_info` natif dans la
+même transaction, colonnes/types/défauts/clé primaire exactement fermés.
+Ciblé complet v4/source et recette publiés avant nouvelle exécution600s.

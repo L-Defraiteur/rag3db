@@ -41,6 +41,54 @@ fn read_registry(conn: &dyn DbConnection, origin: &str) -> Result<Registry> {
     if inspection.tables != ["_catalog_meta"] {
         return Err(PublicationError::UnknownContract);
     }
+    // A closed registry also fixes the table's columns, types, defaults and
+    // key. Foreign values in an added column must not disappear behind H.
+    let schema = conn
+        .execute("CALL table_info('_catalog_meta') RETURN *")
+        .map_err(storage)?;
+    if schema.columns
+        != [
+            "property id",
+            "name",
+            "type",
+            "default expression",
+            "primary key",
+        ]
+    {
+        return Err(PublicationError::UnknownContract);
+    }
+    let mut columns = BTreeMap::new();
+    for row in schema.rows {
+        if row.len() != 5 {
+            return Err(PublicationError::UnknownContract);
+        }
+        let name = row[1].as_str().ok_or(PublicationError::UnknownContract)?;
+        let kind = row[2].as_str().ok_or(PublicationError::UnknownContract)?;
+        let default = row[3].as_str().ok_or(PublicationError::UnknownContract)?;
+        let primary = row[4].as_bool().ok_or(PublicationError::UnknownContract)?;
+        if columns
+            .insert(
+                name.to_owned(),
+                (kind.to_owned(), default.to_owned(), primary),
+            )
+            .is_some()
+        {
+            return Err(PublicationError::UnknownContract);
+        }
+    }
+    let expected = BTreeMap::from([
+        (
+            "_key".to_owned(),
+            ("STRING".to_owned(), "NULL".to_owned(), true),
+        ),
+        (
+            "_value".to_owned(),
+            ("STRING".to_owned(), "NULL".to_owned(), false),
+        ),
+    ]);
+    if columns != expected {
+        return Err(PublicationError::UnknownContract);
+    }
     let rows = conn
         .execute_with_params(
             &Rag3dbDialect.load_meta_by_prefix("prefix"),
