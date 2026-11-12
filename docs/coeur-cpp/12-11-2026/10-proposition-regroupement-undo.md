@@ -120,3 +120,11 @@ structurel rouge avant/vert après, puis les validations de sûreté pertinentes
 La mesure de performance ultérieure doit être proposée séparément après revue ;
 les quatre points actuels ne donnent aucune autorisation supplémentaire.
 Même ticket ouvert, aucun tour de push/lib/mesure demandé ici.
+
+## Restriction après lecture du scénario vingt écrivains
+
+La [lecture sourcée du scénario](11-adjacence-undo-du-scenario-vingt-ecrivains.md)
+ne trouve qu'au plus une plage Doc ou Note par transaction ordinaire. Le choix A
+n'est donc pas retenu comme prochain correctif de ce scénario sur la seule preuve
+micro N×U. Les éventuelles séries de relations du DDL ont d'autres handlers et
+leur adjacence réelle n'est pas consignée dans les traces conservées.

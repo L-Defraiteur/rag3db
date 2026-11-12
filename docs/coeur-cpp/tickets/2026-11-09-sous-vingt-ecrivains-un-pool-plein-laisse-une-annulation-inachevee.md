@@ -664,3 +664,12 @@ un traitement plus large. Note : reverseIterate alloue déjà un vector système
 donc aucune promesse de zéro-allocation globale aujourd’hui ; le prochain
 regroupement n’ajouterait rien et le retrait reste sans demande au pool.
 Aucun code moteur modifié, build/mesure/test natif nouveau exécuté.
+
+## Lecture du scénario après revue du plan 10
+
+[Adjacence des undo du scénario vingt écrivains](../12-11-2026/11-adjacence-undo-du-scenario-vingt-ecrivains.md) :
+chaque transaction ordinaire crée au plus un Doc ou une Note ; aucune série de
+plages de cette table à fusionner. Les relations ont d'autres handlers et les
+journaux conservés ne donnent pas leur séquence typée par tampon. A non retenu
+comme prochain correctif du scénario sur le seul gain micro N×U. Lecture seule,
+aucun code moteur, build ou nouveau run. Ticket toujours ouvert.
