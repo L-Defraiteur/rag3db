@@ -929,3 +929,12 @@ cx-nettoyage-apercu-transfert-v2-{local,remote}-3b2eab7ec contient copies,
 garde.json, fin.json et dump sur remote. Preuves, ELF, logs et branches privées
 distantes conservés. Aucun Cargo/créneau arbre actif ; reprendre la suite dans
 un worktree neuf. Les autres lots et l'arbre de Lucie n'ont pas été nettoyés.
+
+Correction du script privé de push effectuée, sans rejeu du push ni de CI :
+/tmp/cx-push-apercu-transfert.sh collecte désormais chaque delta dans un fichier
+(échec Git fatal), puis /tmp/cx-verifier-delta-push-apercu.py lit toute la liste.
+Témoin synthétique exécuté pour les deux barrières :70000 chemins docsCPP admis,
+70000docs +1Rust en fin de liste refusés, tous les chemins effectivement lus.
+Contrôle réel20e4→3b2 :168 chemins lus, aucun refus, aucun delta produit.
+Preuve locale cx-preuves-finales-apercu-transfert-v1/preuve-garde-delta-complet.json.
+Aucun nouveau protocole partagé ou correctif source ajouté pour cet incident privé.

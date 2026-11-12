@@ -254,3 +254,8 @@ pas seulement .md : vérifier le périmètre revu et l'absence de code d'extensi
 Éviter grep-q en fin de pipeline pipefail pour une barrière : fermeture anticipée
 et SIGPIPE peuvent transformer un delta présent en condition fausse. Juger la
 liste complète des chemins avec un contrôle structuré, sans masquer le code retour.
+
+La correction du script privé a été éprouvée : listes70000docs et70000docs+1Rust,
+deux barrières, lecture complète et acceptation/refus attendus ; contrôle réel168
+chemins sans delta produit. Preuve-garde-delta-complet.json dans les preuves locales
+finales ; aucun push ou run CI rejoué pour ce témoin d'outillage.
