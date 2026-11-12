@@ -106,3 +106,41 @@ vectoriel à l’ouverture. La déclaration de cette fixture non indexée le dé
 explicitement ; `search_code` garde son balayage déclaré. Aucun modèle substitué,
 ni charge d’indexation nécessaire au parcours. Cette source complète remplace la
 première pour le ciblé, encore non lancé.
+
+## Rouge réel initial conservé et correction préparée
+
+Source `36e284824` : compilation verte134s, unique témoin rouge56.77s.
+Exploration par balayage, lectures, test nommé1 failed attendu, édition et test
+nommé1 passed effectifs. `git diff -- src/lib.rs` rend code128 : Landlock refuse
+l’administration externe indiquée par le gitfile du worktree. La reprise n’a
+pas été atteinte. Preuves PC : `parcours.log`, JSON01/02 et supervision
+`validation-3_5jj1d5` : rouge101, `restes=[]`, `nettoye=true`. Aucun rejouage.
+
+Correction commune proposée : `backend_code::avec_lecture_git`, raccordée au
+montage du bac dans `backend.rs` (hors initialisation modèles réservée). Elle
+compare le répertoire commun canonique avec celui du principal porté par l’hôte ;
+un worktree doit être enfant direct de `common/worktrees`, avec retour `gitdir`
+vers son propre gitfile. Lectures : son administration seule, puis les chemins
+communs nécessaires `objects`, `refs`, `HEAD`, `config`, `packed-refs`, `shallow`.
+Pas de dossier commun entier, pas de racine issue d’un lien symbolique sortant,
+pas de configuration utilisateur ouverte et aucune nouvelle écriture accordée.
+Les objets alternatifs extérieurs restent soumis au refus du noyau.
+
+Témoin kernel nommé
+`backend_code::tests::le_bac_git_lit_le_diff_sans_ouvrir_les_voisins` : dépôt
+ordinaire et worktree lié avec espace ; diff réel ; lecture du principal privé
+et HEAD du worktree voisin refusées ; copie dans le domaine permise, vers
+principal/config Git/HEAD voisin refusée ; gitfile forgé, dépôt étranger et
+symlink sortant ne créent aucune autorisation. Ce test de la primitive noyau
+ne fabrique aucun accord dans le parcours agent.
+
+Relecture Archi retenue : résultats JSON décodés et liés au `tool_call_id`, à
+`arguments.command` exact et au code réel ; phases séparées pour ne pas relire
+le test initial ; lectures des deux chemins et immutabilité tests/Cargo dès01.
+
+Recette corrective DISTINCTE, pas remplacement du rouge initial : même target,
+lib29 et conditions ; global1200s incluant nettoyage, compilation600s,
+témoin kernel60s, témoin réel360s. Les preuves correctives vont sous
+`parcours-agent-ide-20261112/correctif-git` ; aucun nouvel appel Vertex avant
+publication de cette source et relecture du delta de permissions. Attendu
+kernel1/0/0 puis réel1/0/0 ; arrêt au premier rouge inattendu.
