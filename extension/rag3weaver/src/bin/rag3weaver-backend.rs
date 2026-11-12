@@ -1071,14 +1071,39 @@ fn main() {
 
 /// Explicit metadata-only entry point. No write connection or model is created.
 fn inspecter_migration(args: &[String]) -> Result<(), String> {
-    let [action, flag, manifest] = args else {
-        return Err("usage: rag3weaver-backend migration inspect --manifest <backend.json>".into());
-    };
-    if action != "inspect" || flag != "--manifest" {
-        return Err("only metadata inspection is available; migration apply is unavailable".into());
+    const USAGE: &str = "usage: rag3weaver-backend migration inspect --manifest <backend.json>\n       rag3weaver-backend migration plan --manifest <backend.json> --dir <migrations> [--var key=value]";
+    let Some(action) = args.first() else { return Err(USAGE.into()) };
+    if action == "apply" { return Err("migration transfer and publication are not available".into()); }
+    if action != "inspect" && action != "plan" { return Err(USAGE.into()); }
+    let mut manifest = None;
+    let mut directory = None;
+    let mut variables = std::collections::BTreeMap::new();
+    let mut options = args[1..].chunks_exact(2);
+    for pair in &mut options {
+        match pair[0].as_str() {
+            "--manifest" if manifest.is_none() => manifest = Some(pair[1].clone()),
+            "--dir" if directory.is_none() && action == "plan" => directory = Some(pair[1].clone()),
+            "--var" if action == "plan" => {
+                let (name, value) = pair[1].split_once('=').ok_or(USAGE)?;
+                if name.is_empty() || variables.insert(name.to_owned(), value.to_owned()).is_some() {
+                    return Err("empty or duplicate migration variable".into());
+                }
+            }
+            _ => return Err(USAGE.into()),
+        }
     }
-    let prepared = PreparedBackend::load(Path::new(manifest))?;
-    let inspection = prepared.inspect_storage()?;
-    println!("{}", serde_json::to_string_pretty(&inspection).map_err(|e| e.to_string())?);
+    if !options.remainder().is_empty() { return Err(USAGE.into()); }
+    let manifest = manifest.ok_or(USAGE)?;
+    let prepared = PreparedBackend::load(Path::new(&manifest))?;
+    let output = if action == "inspect" {
+        serde_json::to_value(prepared.inspect_storage()?).map_err(|e| e.to_string())?
+    } else {
+        let directory = directory.ok_or(USAGE)?;
+        let mut runner = rag3weaver::dataflow::migrations::MigrationRunner::new(std::sync::Arc::new(
+            rag3weaver::dataflow::node_registry::NodeRegistry::new()));
+        runner.add_dir(prepared.path(Path::new(&directory)));
+        serde_json::to_value(prepared.migration_plan(&runner, variables)?).map_err(|e| e.to_string())?
+    };
+    println!("{}", serde_json::to_string_pretty(&output).map_err(|e| e.to_string())?);
     Ok(())
 }
