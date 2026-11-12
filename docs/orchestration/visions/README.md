@@ -17,6 +17,11 @@ dossiers ne tiennent plus ; l'histoire est là, pas l'état).
 
 ## Les visions de novembre 2026 (pages de conception, laissées dans leurs dossiers de session)
 
+- **Mode auto contextuel et accords** — demande de Lucie du 12 novembre : relier
+  les décisions à la tâche, reconnaître les accords pertinents et réduire les
+  interruptions. Comparaison sourcée OpenCode/Gemini CLI/Cline et proposition sur
+  les primitives existantes, sans raccord livré :
+  [conception](2026-11-12-mode-auto-contextuel-et-accords.md).
 - **Vitrine produit, référence CocoIndex** — choix de Lucie le 12 novembre pour le design et
   la présentation du framework : promesse lisible, démonstrations concrètes et accès progressif
   au modèle. Site à planifier, aucune publication engagée :
