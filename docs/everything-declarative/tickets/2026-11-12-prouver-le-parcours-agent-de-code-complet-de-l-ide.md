@@ -247,3 +247,35 @@ Pas de nouveau Cargo nécessaire : ELF archivé du diagnostic, même lib29.
 1/0/0 vert avant le témoin UI360s, puis unique tour Vertex supplémentaire.
 Premier rouge conserve les preuves et stoppe, sans retry. Le TMPDIR n’est rendu
 qu’après quiescence de la portée propriétaire.
+
+## Parcours complet composé vert et passe d’intégration annoncée
+
+`page-ide-2`, même ELF/source `fe0a5be4e` : diagnosticCDP1/0/0 vert0.23s,
+puis reprise UI1/0/0 verte19.71s. Message envoyé par le bouton réel, test nommé
+1 passed et diff0 liés à leurs appels, diff rendu dans la page de relecture,
+historique conservé, code de tâche et principal inchangés, aucune erreur console.
+Supervision verte0/restes[]/nettoyé. Cette étape compose le préfixe réel source4d
+avec une reprise de la même fixture ; elle ne prétend pas refaire trois tours.
+
+Rebase sur `origin/master=65b57052f`, branche neuve
+`cx-ed-parcours-agent-ide-2`, source `39e6f0346` publiée. Seul conflit documentaire,
+revue C7 intégralement conservée ; quatre fichiers Rust du lot identiques octet
+pour octet à la source UI `fe0a5be4e`. Aucun nouvel appel Vertex requis au rebase.
+
+Passe globale à publier sous cette branche avant lancement, globale6000s via
+primitive canonique, lib29/j8/Max32/HIGH0 et unique target déjà utilisé (5.8G à
+l’entrée). TMPDIR privé COURT (limite socket mesurée), journaux de tests sous
+racine privée avec espace. Burn CPU ; pas de service d’embarquement dans la lib.
+Étapes : F5 (900s par jeu, arrêt immédiat au premier rouge), check minimal lib
+300s, compilation ELF lib large/NAV/e2e (1500s au total), lib entière900s,
+NAV600s, puis e2e lectures27/120s, hôte13/120s, PostgreSQL sur base privée/300s.
+Inventaires et décomptes exacts lus avant exécution ; filets2 à chaque entrée
+e2e, zéro test ou saut non déclaré rouge. Les deux témoins cloud et le diagnostic
+ignorés restent des étapes acquises distinctes, pas des sauts cachés de la lib.
+
+Les entrées communes NAV/e2e héritent du reçu vivant, sans scope sœur ni verrou
+supplémentaire. 7879 n’est demandé qu’au moment des lectures27 après compilation,
+avec annonce prise/fin et santé avant/après ; pas de réservation durant les
+phases CPU. Base PostgreSQL neuve `cx_ed_parcours_20261113`, aucune donnée réelle.
+Premier rouge inattendu stoppe la portée et garde preuve/diagnostic ; aucun retry
+inchangé. Après passe/revue, tour C7 puis intégration et nettoyage gardé2postes.
