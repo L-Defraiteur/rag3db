@@ -788,3 +788,12 @@ Source propre inchangée, portée inactive et place arbre rendue. Pas de retry
 inchangé ni de allow(dead_code) ajouté. Coordination demandée à C7 : qualification
 sélective des helpers par leurs propriétaires, ou ciblé natif du même aperçu
 sans prétendre prouver le minimal ; aucun backend partagé modifié par arbre.
+
+### Ciblé natif du même aperçu, autorisation séparée après diagnostic
+
+C7 autorise une tentative sur source390 propre inchangée, même filtre15témoins,
+ajout --features rag3db-native, nouvelles preuves v3,600 après lourd/j8/Mem32/
+lib29/targetprivé32. Aucun allow ni correctif étranger : les deux helpers restent
+la dette du ticket tty ouvert. Propriété backend.rs : mémoire ; ED possède les
+commandes/run_nodes, pas ce fichier. Ce ciblé ne prouvera pas le minimal ni le
+témoin natif liens filtré hors de l'aperçu. Pas de globale/master avant revue.
