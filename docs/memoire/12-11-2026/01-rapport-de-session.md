@@ -43,3 +43,11 @@ La première tranche M8 a ensuite été autorisée et implémentée : API Rust d
 Le petit lot cfg80 est déjà intégré avec Arbre sur master3b2eab7ec. Worktrees cfg portable cx-wt-memoire-cfg-temoin-natif et luciepc cx-memoire-cfg-temoin-natif restent à nettoyer sous garde exacte65aa avec archives administratives externes. Targetcfg secondaire1,4Go créé par erreur, inactif/inventorié ; aucun Cargo nouveau dedans et aucun effacement aveugle. Le ticket ttyglobal reste ouvert pour ses2helpers minimaux préexistants.
 
 Reprise : faire relire le diagnostic de nettoyage et les attestations ; avant master fetch/rebase sous branche neuve, examiner le Rust reçu et rejouer court hors verrou si nécessaire. Les worktrees/targets inachevés ne se retirent qu’après preuves gardées, quiescence et garde commune VERT ; aucune force. Aucune activation M9, aucun lancement des50documents, aucune montée de la mémoire réelle autorisés.
+
+## Préparation du classeur local — à lire par Lucie
+
+La [page existante du classeur, questions §8](../../../extension/rag3weaver/docs/09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md#8-questions-pour-lucie) est actualisée avec le banc Q8/card2 du 12 novembre et les consignes durables de ressources. Le [ticket existant](../tickets/2026-11-11-trancher-et-verifier-le-classeur-local-du-rappel.md) garde le suivi ; aucune page concurrente ni nouveau ticket. La carte n'est plus une décision bloquante : card2 autorisée, préfixe Q8 qualifié, k5/k10 mesurés. Ces faits ne démontrent ni le gain du rappel réel ni un budget synchrone bout en bout.
+
+Recommandation proposée, à confirmer : Q8/k5, différé, deux fiches au maximum avec abstention à qualifier, Qwen à la place du juge pour un passage réussi et Gemini en comparaison hors ligne/repli explicite ; Lucie comme référence sur 50 tours. Les quatre choix restent sa place pour Gemini, le plafond d'une/deux fiches, différé/synchrone, et la référence. API M8 livrée, archiviste M9 et sélection Qwen sont distingués ; aucun prérequis fictif de montée M8 ou d'activation M9 n'est ajouté pour décider.
+
+Préparation documentaire seulement selon §2 bis : aucun code, build, test, calcul GPU, service, réglage utilisateur ou mémoire réelle modifié. Rien à activer avant le mot de Lucie et le lot autorisé ; l'activation réelle reste distincte.
