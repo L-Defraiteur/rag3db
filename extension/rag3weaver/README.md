@@ -415,8 +415,10 @@ root. In the chat, the workshop:
   the user holds, goes through `ask_permission`: a card under the call, granted or refused by the
   user, and recorded one line per decision in `decisions.jsonl` next to the run journal;
 - runs commands through its gate (`run_command`); a command the gate puts on hold shows the same
-  card under the call, with the command line. A grant allows that exact command, not its family,
-  and the decision starts the next turn by itself: the model reads "granted: run it again" or
+  card under the call, with the command line. A grant covers the complete exact line in the
+  same working domain, including an explicitly approved outside path. Changed arguments,
+  command chains or working domains need their own grant; sandbox rules still apply.
+  The decision starts the next turn by itself: the model reads "granted: run it again" or
   "refused", and the user types nothing. A decision on a path card starts the turn again the
   same way.
 
