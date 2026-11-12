@@ -297,25 +297,6 @@ après leur contrôle. Aucun autre service modifié, aucun fichier env/vault lu
 ou copié et aucune limite relâchée. Suite de mesure et diagnostic de la garde
 restent à cadrer par banc/orchestration ; aucune relance autorisée par ce bilan.
 
-## Confirmations relayées par l’orchestration le 12 novembre
-
-- Codeparsers : essais A/B terminés, hôtes arrêtés, aucun client, réservation
-  ni travail prévu sur 7882. Preuves annoncées dans son ticket fermé require-relatif ;
-  confirmation relayée, non revérifiée par le banc.
-- Embarquement : aucune charge ni prévision annoncée pendant la fenêtre.
-- Hotfixs : remise temporaire de 7882 à l’optimiseur pour arrêt/restauration.
-- Orchestration : contrôle indépendant de `/sante` sur 7882 avec granite-278m,
-  dimension 768, Flex32 et factice=false ; processus GPU sur PCI 0000:04:00.0,
-  consommation annoncée d’environ 5,7 Gio. Ces constats sont relayés et ne
-  remplacent pas les contrôles de départ du banc.
-
-L’optimiseur prépare encore recette exacte et retour avant tout arrêt : aucun
-GO ni arrêt n’est acquis à cette étape. Il confirme la santé et la disponibilité
-de 7882 après restauration. Le seuil minimum de 9 Gio libres sur card2 reste
-à lire après libération effective ; la consommation actuelle du service n’est
-pas une promesse de capacité. Fenêtre maximale inchangée : 1 200 secondes sous
-`poste mesure`, après acquisition. Aucun modèle du banc chargé.
-
 Diagnostic bancaire complémentaire : ouverture de contexte card0 avec 40 KiB de VRAM et 2 080 KiB de GTT résidents, sans inférence demandée. Cela ne prouve pas un calcul du modèle sur card0 ; la garde reste inchangée et le ticket ouvert pour exclusion stricte de seat1.
 
 Le banc a revérifié indépendamment santé/PID/fdinfo du retour. Son `fin.json` à 17:57:00 Paris indique `restaurationconfirmee=true`, durée 121,13 s ; `poste --qui` est libre.
