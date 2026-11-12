@@ -39,6 +39,42 @@ pub(super) struct Accords {
     suivant: u64,
 }
 
+impl Accords {
+    fn demande_a_decider(&self, id: &str) -> Result<Demande, String> {
+        let d = self.demandes.get(id).ok_or_else(|| format!("aucune demande {id}"))?;
+        if let Some(deja) = d.decision {
+            return Err(format!("la demande {id} est déjà {}", if deja { "accordée" } else { "refusée" }));
+        }
+        Ok(d.clone())
+    }
+}
+
+/// La publication vers la porte et l'enregistrement de la décision : la même
+/// frontière pour l'hôte et les témoins à registre/Garde synthétiques.
+fn publier_decision(
+    accords: &std::sync::Mutex<Accords>,
+    id: &str,
+    d: Demande,
+    accorder: bool,
+    publier: impl FnOnce(&Demande) -> Result<(), String>,
+) -> Result<Demande, String> {
+    if accorder && d.commande.is_some() && d.backend.is_some() {
+        publier(&d)?;
+    }
+    {
+        let mut a = accords.lock().unwrap_or_else(|p| p.into_inner());
+        let Some(e) = a.demandes.get_mut(id) else { return Err(format!("aucune demande {id}")) };
+        if e.decision.is_some() {
+            return Err(format!("la demande {id} a été décidée entre-temps"));
+        }
+        e.decision = Some(accorder);
+        if accorder && d.commande.is_none() {
+            a.ouverts.push((d.chemin.clone(), d.mode.clone()));
+        }
+    }
+    Ok(d)
+}
+
 /// **Ce que le modèle lit après une décision sur la carte** : la commande ou le chemin entre
 /// accents graves, et quoi faire.
 fn message_de_la_carte(d: &Demande, accorde: bool) -> String {
@@ -207,36 +243,18 @@ impl DaemonHost {
     /// décision va au journal des décisions (`<racine des runs>/decisions.jsonl`, une ligne)
     /// et au flux (`accords`).
     pub fn decider_accord(&self, id: &str, accorder: bool, qui: &str) -> Result<Value, String> {
-        let d = {
-            let a = self.accords.lock().unwrap_or_else(|p| p.into_inner());
-            let d = a.demandes.get(id).ok_or_else(|| format!("aucune demande {id}"))?;
-            if let Some(deja) = d.decision {
-                return Err(format!("la demande {id} est déjà {}", if deja { "accordée" } else { "refusée" }));
-            }
-            d.clone()
-        };
-        // Une commande s'accorde à la porte avant que le oui ne s'écrive : un accord qui ne
-        // se pose pas laisse la demande ouverte, et le dit.
-        if let (true, Some(commande), Some(backend)) = (accorder, &d.commande, &d.backend) {
+        let d = self.accords.lock().unwrap_or_else(|p| p.into_inner()).demande_a_decider(id)?;
+        let d = publier_decision(&self.accords, id, d, accorder, |d| {
+            let (Some(commande), Some(backend)) = (&d.commande, &d.backend) else { return Ok(()) };
             let domaine = Some(d.chemin.clone()).filter(|c| !c.as_os_str().is_empty());
             self.with_backend_id(backend, |b| match b.garde() {
                 Some(g) => g.accorder_ligne(commande, &crate::commande::Contexte { accorde_par_l_utilisateur: true, domaine }),
                 None => Err("ce backend n'a pas de porte des commandes (workspace.commands)".into()),
             })
             .and_then(|r| r)
-            .map_err(|e| format!("l'accord de « {commande} » n'a pas pu se poser : {e}"))?;
-        }
-        {
-            let mut a = self.accords.lock().unwrap_or_else(|p| p.into_inner());
-            let Some(e) = a.demandes.get_mut(id) else { return Err(format!("aucune demande {id}")) };
-            if e.decision.is_some() {
-                return Err(format!("la demande {id} a été décidée entre-temps"));
-            }
-            e.decision = Some(accorder);
-            if accorder && d.commande.is_none() {
-                a.ouverts.push((d.chemin.clone(), d.mode.clone()));
-            }
-        }
+            .map(|_| ())
+            .map_err(|e| format!("l'accord de « {commande} » n'a pas pu se poser : {e}"))
+        })?;
         let mut ligne = json!({
             "id": id,
             "genre": if d.commande.is_some() { "commande" } else { "chemin" },
@@ -1304,5 +1322,121 @@ pub(super) mod tests {
         let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine_url}/arret"), Some("j"));
         assert_eq!(statut, 200);
         fil.join().unwrap();
+    }
+}
+
+
+#[cfg(test)]
+mod publication_accord_tests {
+    use super::*;
+    use std::sync::{Barrier, Mutex};
+    use crate::commande::{Contexte, Garde, Mode};
+
+    const ID: &str = "accord-synthetique";
+    // Une chaîne jugée et des laissez-passer détruits : jamais exécutés.
+    const LIGNE: &str = "rm ../accord-fixture-jamais-execute";
+
+    struct Banc {
+        domaine: tempfile::TempDir,
+        registre: Arc<Mutex<Accords>>,
+        garde: Arc<Garde>,
+    }
+    impl Banc {
+        fn new() -> Self {
+            let domaine = tempfile::tempdir().unwrap();
+            let mut a = Accords::default();
+            a.demandes.insert(ID.into(), Demande {
+                chemin: domaine.path().to_path_buf(), mode: "command".into(), raison: "fixture".into(),
+                decision: None, commande: Some(LIGNE.into()), backend: Some("backend-synthetique".into()),
+            });
+            Self { domaine, registre: Arc::new(Mutex::new(a)), garde: Arc::new(Garde::new(Mode::Approbation)) }
+        }
+        fn snapshot(&self) -> Demande { self.registre.lock().unwrap().demande_a_decider(ID).unwrap() }
+        fn contexte(&self) -> Contexte { Contexte { accorde_par_l_utilisateur: false, domaine: Some(self.domaine.path().to_path_buf()) } }
+        fn decider(&self, d: Demande, oui: bool) -> Result<Demande, String> {
+            publier_decision(&self.registre, ID, d, oui, |_| self.garde.accorder_ligne(LIGNE, &self.contexte()).map(|_| ()))
+        }
+    }
+
+    fn deux_reponses(oui_gagnant: bool) {
+        let b = Banc::new();
+        // Les deux réponses ont réellement franchi la lecture None, avant A.
+        let (a, tardive) = (b.snapshot(), b.snapshot());
+        let depart_tardif = Arc::new(Barrier::new(2));
+        let (registre, garde, ctx, depart) = (b.registre.clone(), b.garde.clone(), b.contexte(), depart_tardif.clone());
+        let seconde = std::thread::spawn(move || {
+            depart.wait();
+            publier_decision(&registre, ID, tardive, true, |_| garde.accorder_ligne(LIGNE, &ctx).map(|_| ()))
+        });
+        b.decider(a, oui_gagnant).unwrap();
+        if oui_gagnant {
+            assert!(b.garde.autoriser_ligne(LIGNE, &b.contexte()).is_ok(), "premier usage disponible");
+            assert!(b.garde.autoriser_ligne(LIGNE, &b.contexte()).is_err(), "premier usage consommé");
+        }
+        depart_tardif.wait();
+        assert!(seconde.join().unwrap().is_err(), "la réponse tardive n'est pas un second reçu");
+        assert_eq!(b.registre.lock().unwrap().demandes[ID].decision, Some(oui_gagnant));
+        assert!(b.garde.autoriser_ligne(LIGNE, &b.contexte()).is_err(), "une réponse perdante ne crée ni ne réarme un usage CetteFois");
+    }
+
+    #[test]
+    fn deux_oui_ne_rearment_pas_un_usage_deja_consomme() { deux_reponses(true); }
+
+    #[test]
+    fn un_refus_gagnant_ne_laisse_pas_le_droit_du_oui_perdant() { deux_reponses(false); }
+
+    #[test]
+    fn une_erreur_de_publication_laisse_la_demande_retentable() {
+        let b = Banc::new();
+        let e = publier_decision(&b.registre, ID, b.snapshot(), true, |_| Err("porte synthétique indisponible".into())).unwrap_err();
+        assert!(e.contains("indisponible"));
+        assert_eq!(b.registre.lock().unwrap().demandes[ID].decision, None);
+        assert!(b.garde.autoriser_ligne(LIGNE, &b.contexte()).is_err());
+        b.decider(b.snapshot(), true).unwrap();
+        assert!(b.garde.autoriser_ligne(LIGNE, &b.contexte()).is_ok());
+        assert!(b.garde.autoriser_ligne(LIGNE, &b.contexte()).is_err());
+    }
+
+    #[test]
+    fn refuser_une_carte_deja_accordee_n_est_pas_une_api_de_revocation() {
+        let b = Banc::new();
+        b.decider(b.snapshot(), true).unwrap();
+        assert!(b.registre.lock().unwrap().demande_a_decider(ID).unwrap_err().contains("déjà accordée"));
+        // Le contrat actuel n'expose aucune révocation : le premier usage demeure.
+        assert!(b.garde.autoriser_ligne(LIGNE, &b.contexte()).is_ok());
+        assert!(b.garde.autoriser_ligne(LIGNE, &b.contexte()).is_err());
+    }
+
+    #[test]
+    fn recharger_la_carte_conserve_la_decision_redemarrer_ne_la_rejoue_pas() {
+        let d = tempfile::tempdir().unwrap();
+        let host = DaemonHost::new().with_runs_root(d.path().join("runs"));
+        let p = d.path().join("fixture");
+        let answer = host.atelier_demander(None, p.to_str().unwrap(), "read", "fixture").unwrap();
+        let id = answer.ui[0]["id"].as_str().unwrap();
+        let recu = host.decider_accord(id, true, "fixture").unwrap();
+        assert_eq!(recu["relance"], false);
+        assert_eq!(host.etat_accord(id).unwrap()["decision"], "accordé");
+        assert!(host.decider_accord(id, false, "fixture").is_err());
+        let journal = std::fs::read_to_string(d.path().join("runs/decisions.jsonl")).unwrap();
+        assert_eq!(journal.lines().count(), 1, "un perdant ne publie pas un second reçu");
+        let nouveau = DaemonHost::new().with_runs_root(d.path().join("runs"));
+        assert!(nouveau.etat_accord(id).is_none());
+        assert!(!nouveau.accorde(&p, "read"));
+        assert!(host.accorde(&p, "read"));
+    }
+
+    #[test]
+    fn erreur_du_journal_apres_commit_ne_signifie_pas_absence_d_effet() {
+        let d = tempfile::tempdir().unwrap();
+        let host = DaemonHost::new().with_runs_root(d.path().join("runs"));
+        std::fs::create_dir_all(d.path().join("runs/decisions.jsonl")).unwrap();
+        let p = d.path().join("fixture");
+        let answer = host.atelier_demander(None, p.to_str().unwrap(), "read", "fixture").unwrap();
+        let id = answer.ui[0]["id"].as_str().unwrap();
+        assert!(host.decider_accord(id, true, "fixture").is_err());
+        assert_eq!(host.etat_accord(id).unwrap()["decision"], "accordé");
+        assert!(host.accorde(&p, "read"), "qualification du contrat actuel, pas correction du journal");
+        assert!(host.decider_accord(id, true, "fixture").unwrap_err().contains("déjà"));
     }
 }
