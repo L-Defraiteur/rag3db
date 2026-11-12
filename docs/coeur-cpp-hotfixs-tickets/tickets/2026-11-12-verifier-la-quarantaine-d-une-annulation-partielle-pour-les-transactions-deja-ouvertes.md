@@ -136,3 +136,37 @@ visible dans le code examiné. Les branches internes sont conditionnellement
 accessibles au niveau des prédicats lus, mais une trace d’échec réellement
 atteignable avec les verrous requis reste à établir. Ni témoin exécuté, ni
 corruption, ni récupération validée. Le ticket reste ouvert.
+
+## Runtime structurel 2 : chemin interne atteint
+
+Après correction exclusive maxDBSize publiée8cc47439f, nouvelle compilation/lien
+et ELF conformes, puis un seul nouveau lancement autorisé sous poste lourd.
+[Résultat sourcé et empreintes](../12-11-2026/04-resultat-structurel-quarantaine.md) :
+TA annule partiellement par le vrai gestionnaire, callback one-shot confirmé,
+TA inactive et verrous0 ; BEGIN/CHECKPOINT publics refusent nommément, mais
+COMMIT forcé de TB déjà ouverte atteint une fois la fabrique interne.
+La sentinelle lève avant toute construction de Checkpointer. Classification
+`internal-path-reached`, enfant/parent/wrapper0, groupe terminé et cgroup disparu.
+Aucun checkpoint réel, réouverture, lecteur testé ni corruption démontrée.
+L’arc précis est confirmé pour la fixture contrôlée ; conséquences et protection
+des autres chemins restent ouvertes. Artefacts/base privée conservés sur luciepc.
+Aucun nouveau runtime après cette tentative. Aucun correctif produit autorisé
+ou appliqué. Ticket maintenu ouvert pour la suite à décider avec cœur C++.
+
+## Relecture cœur et suite sur papier — 12 novembre
+
+[Relecture du résultat et contrat proposé](../../coeur-cpp/12-11-2026/21-relecture-quarantaine-et-suite-sur-papier.md)
+(lecture de e289163bf et moteur0511, sans nouveau runtime/build/code produit).
+Conclusion et limites confirmées : internal-path-reached sous fixtureIndex et TB
+forcée, aucun checkpoint réel/réouverture/corruption démontré. Code0 du témoin
+n'est pas l'oracle d'une quarantaine correcte : lire la classification effective.
+
+Point à ajouter au contrat : le chemin forcé traverse Transaction::commit et le
+retrait de TB AVANT la fabrique sentinelle ; le refus d'un checkpoint seul ne prouve
+pas l'absence de publication de TB. Contrôles proposés avant publication et avant
+checkpoint, recontrôle après attentes, prédicats/réveils de quarantaine et départs
+sans checkpoint à définir ensemble. Matrice future structurelle avec contrôle sain,
+commit ordinaire/forcé, différé/lecteur et attente synchronisée ; aucune cellule
+exécutée ou autorisée par cette note. Durabilité et index persistant de fixture
+restent une tranche distincte. Ticket ouvert, porteur hotfixs/cœur ; pas master,
+pas patchlib, pas de reprise d'action arrêtée/rejetée.

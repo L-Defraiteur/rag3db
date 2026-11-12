@@ -1,0 +1,10 @@
+{
+  "argv": [
+    "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-03/quarantine_released_diagnostic",
+    "/home/lucied/.cache/rag3db-hotfixs-notes/cx-quarantaine-0511-structurel-03/runtime-aymvkbea/artifacts"
+  ],
+  "cgroup": "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/cx-hotfixs-quarantaine-runtime-8cc47439f-02.service",
+  "approval_sha256": "1605a365a865ccaf6be4dfbda0e2db8d8f64b59d337fbebcf274f082317b9797",
+  "scope": "structural-only",
+  "ready_for_durable_claim": false
+}
