@@ -19,7 +19,7 @@ sur sortie encore absente, signal libéré après annonce de l'attente, sortie e
 vérifiés. Ensuite même script avec un argument ajouté : nouvel accord requis, jamais donné,
 aucun effet du mode variante. Ni décision ni résultat de commande simulés.
 
-## État actuel — UI encore rouge après reprise de l'accord
+## Étape initiale — UI rouge après reprise de l'accord
 
 - Rouge historique produit `b57313175` conservé aux deux postes dans
   `cx-ui-contextuel-b57313175-coupure-attente-20261111/` du cache de build.
@@ -72,3 +72,36 @@ Aucun nettoyage avant fin du lot. Le sous-module privé a été initialisé : so
 est relevée dans le dossier baseline. Pour tout retrait utiliser garde_worktree.py courant,
 archives administratives fidèles hors cible, rapport neuf et quiescence ; refuser en cas de
 worktree dépendant ou doute. L'ancien script de nettoyage du lot UI du 11 ne convient pas.
+
+## Résultat actualisé — paire déclarative rouge/verte prouvée
+
+Orchestration a fixé explicitement la précondition avant modification : déclaration
+`workspace.sandbox.extra_read` du seul fichier script extérieur, sans ouvrir son parent.
+Le ticket/contrat ED 34f1ea8fb précède la fixture 996af8ee4. Cette dernière ajoute uniquement
+un helper de configuration dans les tests atelier_fichiers et adapte le nouveau témoin ;
+le nominal reste inchangé. Les droits chargés sont vérifiés : singleton exact en lecture,
+aucun extra_write. Un accord de ligne ne crée aucun droit noyau implicite.
+
+Avec exactement les mêmes fichiers de test/helper :
+
+- Ancien runtime, source 8b94990067e5923dac287a4332e5ce0c0eca150f : rouge 0/1/0 en 0,90 s,
+  après clic réel, deuxième accord demandé pour la même ligne.
+- Runtime corrigé aed, source 996af8ee48148eda0e2b053686b0a3676554bfbb : vert 1/0/0 en
+  1,32 s. Reprise exacte, vrai wait_output, sortie/cwd/page vérifiés ; variante du même
+  script avec argument supplémentaire soumise à un nouvel accord, sans effet.
+
+Attestation du binaire réellement testé : 220 gabarits, aucun absent ; SHA256 ELF
+`0ec7bf3d32e3f92c82b756e44903451e4cddd3313b0b45bc6b9eaef31b910c50`.
+Preuves complètes aux deux postes, hors target :
+`~/.cache/rag3weaver-build/cx-accord-exterieur-8b9499006-rouge-declare-20261112/` et
+`~/.cache/rag3weaver-build/cx-accord-exterieur-996af8ee4-vert-declare-20261112/`.
+Les échecs initiaux sans extra_read sont conservés et ne sont pas requalifiés en verts.
+Le diagnostic causal ED 157a2f272 est distinct : bac actif, refus sans déclaration,
+succès avec le fichier seul, frère encore refusé (ED rapporte 1/0/0).
+
+ED a repris 996 à l'identique dans son candidat groupé et a lancé sa globale après revue
+et autorisation parent. Archi ne lance pas de globale et ne publie pas sur master.
+Les passages « à départager » ci-dessus décrivent l'étape antérieure, désormais résolue
+par cette précondition déclarée ; le résultat reste limité à cette configuration.
+Le ticket canonique et le runtime restent à ED. Conserver sources et preuves jusqu'au
+verdict groupé ; tout nettoyage ultérieur exige la garde et les archives administratives.
