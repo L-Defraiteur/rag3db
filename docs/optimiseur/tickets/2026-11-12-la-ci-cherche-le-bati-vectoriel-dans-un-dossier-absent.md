@@ -1,6 +1,6 @@
 # La CI cherche le bâti vectoriel dans un dossier absent
 
-- **État** : ouvert ; échec du job relu, sélection du dossier de bâti à diagnostiquer.
+- **État** : en cours ; producteur relu, source et recette CPU publiées avant essais sur cx-optimiseur-ci-vector.
 - **Famille** : produit
 - **Gravité** : CI rag3weaver bloquée avant l'exécution des tests unitaires.
 - **Atteignable en service** : non, workflow de validation.
@@ -55,3 +55,39 @@ anciens jobs ni publication de paquet ou modification d'identifiants.
 Fin : dossier sélectionné avec provenance explicite du même bâti, refus des
 cas absents/ambigus/périmés, diff et preuves relus puis intégrés. Le ticket se
 clôture avec ce verdict, sans présenter une validation CPU comme une CI verte.
+
+## Diagnostic du producteur et recette figée
+
+`tools/rust_api/build.rs::build_bundled_cmake` utilise `cmake::Config` sans
+remplacer son out_dir. La dépendance verrouillée cmake 0.1.57 (source locale
+du registre relue) prend `OUT_DIR` et configure `OUT_DIR/build` ; le producteur
+annonce `cargo:rustc-link-search=native=<OUT_DIR>/build/src` et une liaison
+statique rag3db. Ce contrat, et non la forme des dossiers de Cargo, identifie
+le bâti. Le journal CI original a aussi été relu dans le cache annoncé.
+
+Format Cargo de référence :
+https://doc.rust-lang.org/cargo/reference/external-tools.html#json-messages
+(`build-script-executed` fournit out_dir et linked_paths même sur cache valide ;
+`compiler-artifact` décrit le profil test et l’exécutable ; build-finished clôt
+l’invocation). Le package_id est repris exactement depuis cargo metadata.
+
+Diff borné publié avant essais : workflow et deux scripts Python, aucune
+source moteur/Rust hôte. La commande no-run conserve les mêmes features,
+capture metadata et messages JSON, précédés du contexte source/commit/recette.
+Le sélecteur refuse contexte périmé, invocation incomplète ou concaténée,
+OUT_DIR absent/ambigu, lien natif incohérent, cache CMake déplacé ou étranger,
+archive ou artefacts absents. Aucun glob et aucune comparaison de mtime.
+Une preuve des chemins et empreintes est émise dans le journal CI futur.
+
+Recette de validation CPU prévue après publication de cette source :
+
+```bash
+WORKFLOW_ANCIEN=<copie workflow avant correctif> python3 extension/rag3weaver/scripts/test_bati_vector_ci.py Provenance.test_out_dir_nouveaux_dossiers_et_artefact_cache_valide
+# Rouge attendu du vrai ancien sélecteur ls, sans exécuter CMake.
+python3 extension/rag3weaver/scripts/test_bati_vector_ci.py -v
+```
+
+Fixtures : disposition OUT_DIR imbriquée et disposition historique, cache
+leurre plus récent, mêmes package_id de metadata, chemin natif et cache du
+producteur, artefacts de l’unique invocation. Refus absents/ambigus/périmés et
+échec Cargo ; aucun C++, Cargo complet, GPU ou service lancé localement.
