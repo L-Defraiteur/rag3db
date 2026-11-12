@@ -436,3 +436,63 @@ un seul instantané de mémoire. Pas de changement global de permission GPU,
 pas de sudo ni de sandbox compliqué uniquement pour supprimer 40 KiB.
 La mesure k10 attend une nouvelle fenêtre coordonnée, avec arrêt/restauration
 7882 préparés comme précédemment. Le ticket reste ouvert jusqu’aux mesures réelles.
+
+## Recette de garde proposée, statique et à relire
+
+Code de capture préparé sur le portable, sans exécution contre un processus GPU :
+`~/.cache/rag3db-banc-notes/contexte-rocm/garde_charge.py`.
+Seule vérification réalisée : compilation syntaxique Python ; ce n’est pas
+une validation runtime ni une preuve d’innocuité du banc.
+
+La capture prend explicitement PID et starttime attendu ; elle revérifie le
+champ 22 de `/proc/PID/stat` avant/après, conserve chemin et SHA256 de
+`/proc/PID/exe`, argv, les seules variables de visibilité GPU, tous les numéros
+et cibles `/proc/PID/fd/N` et contenus `/proc/PID/fdinfo/N`. Un PID réutilisé,
+FD disparu ou unité inconnue refuse la capture. Les clients amdgpu sont dédupliqués
+par `(drm-pdev, drm-client-id)` ; deux vues divergentes rendent la capture invalide.
+
+Champs et unités : `drm-resident-vram` et `drm-resident-gtt` en KiB, convertis en
+octets ; repli sur `drm-memory-vram/gtt` si disponibles ; absence conservée comme
+inconnue. Les champs `drm-engine-*` en nanosecondes sont conservés sans inventer
+ceux que le pilote ne fournit pas. Les instantanés du passage arrêté ne contiennent
+pas ces compteurs d’exécution : on ne peut pas en déduire un zéro de calcul.
+
+Plan d’intégration à la prochaine fenêtre, non activé :
+
+1. Acquérir `poste mesure`, remise et arrêt 7882 par optimiseur, mêmes contrôles
+   de capacité card2 et restauration que le passage précédent.
+2. Démarrer le serveur avec `ROCR_VISIBLE_DEVICES=0` explicite et `--no-warmup`,
+   pour pouvoir capturer après chargement/santé mais avant toute requête calculée.
+   Vérifier PCI, GPU visible unique et poids/cache sur card2. Conserver le SHA
+   et la commande exacte ; ne pas modifier le clone llama.cpp de Lucie.
+3. Capturer une baseline complète puis à chaque seconde pendant la première
+   requête (qui provoque alors l’échauffement) et pendant k5 puis k10. Sorties
+   neuves ; pas de reprise partielle et aucune relance automatique.
+4. Budget proposé pour le seul processus du banc sur seat1 : au plus 16 Mio
+   de VRAM et 16 Mio de GTT (les observations étaient 40 KiB et 2 080 KiB).
+   C’est une borne opérationnelle conservatrice proposée, pas un seuil de
+   fluidité mesuré. Toute croissance au-delà arrête le serveur du banc.
+5. Pour chaque client seat1, différence de compteurs `drm-engine-*` entre
+   baseline et captures : toute hausse positive indique une activité imputable
+   au processus et arrête le banc. Une baisse, un nouveau client, une disparition
+   de champ ou une capture incomplète impose un diagnostic ; ne pas soustraire
+   des compteurs provenant de clients différents. Vérifier également une activité
+   d’exécution sur card2 quand ces compteurs sont disponibles.
+6. Compteur absent : état INDETERMINE, jamais « aucun calcul ». Sans nouvelle
+   exécution, aucune preuve rétrospective alternative ne permet d’attribuer le
+   warmup passé. Les sources du filtre et les allocations établissent le choix
+   du modèle et l’initialisation, pas une mesure d’activité de chaque moteur.
+   Pour une prochaine qualification, prévoir une trace HIP/HSA ou un profilage
+   AMD reliant les dispatchs à l’agent PCI/UUID ; présence, format et coût de
+   l’outil restent à vérifier avant de proposer sa commande. Ne pas promettre
+   l’absence de charge à partir du FD seul ou du pourcentage global card0.
+7. Limites totales à reconfirmer dans le GO : 1 200 s après acquisition,
+   démarrage 120 s, deux séries 900 s communes, arrêt/restauration 180 s.
+   Contrôleur arrête uniquement le groupe du serveur et des clients qu’il a
+   lancés, attend leur fin, prouve 8099 libre et mémoire rendue, puis demande
+   le retour 7882 à l’optimiseur. Retour santé/PID/PCI avant rendu du verrou.
+
+Le petit script ne lance ni ne tue de processus et ne met pas en œuvre tout
+ce contrôleur : il rend la capture et ses inconnues reviewables. Le rapprochement
+des séries, l’arrêt du groupe et l’intégration au lanceur restent à qualifier.
+Pas de nouveau GPU ni de sonde de calcul exécutés pour cette préparation.
