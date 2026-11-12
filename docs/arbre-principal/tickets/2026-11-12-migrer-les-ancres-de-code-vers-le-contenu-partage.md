@@ -339,3 +339,18 @@ mais ne peut pas annuler des capacités déjà créées par son appelant. Les te
 ne couvrent pas un second processus concurrent pendant la qualification.
 Le ticket reste ouvert ; aucune passe complète ou livraison master autorisée
 par ces ciblés. Les preuves ne valent que pour les sources citées.
+
+## Dernière édition de contrat, après les preuves d6, non compilée
+
+`PlanJournalState` remplace le paramètre Option d'identité applied de la
+qualification pure : Unapplied, Running, Failed, Applied et RolledBack sont
+explicites. Running/Failed/RolledBack refusent la qualification normale et exigent
+réconciliation ; ils ne peuvent plus être effacés en `None` dans ce contrat.
+Le témoin existant source/cible vérifie ces refus sans nouvelle matrice de suites.
+Ce type ne migre, n'écrit et ne qualifie pas le journal legacy : son raccord à un
+journal résolu durable reste requis. L'inventaire refuse aussi un nom de table
+vide. **Aucun Cargo lancé pour cette édition**, poste réservé à la mesure C++.
+Les36verts, le binaire et les8appels CLI restent attribués uniquement à d6.
+Preuves d6 préservées hors cible sous
+`/home/lucied/.cache/rag3weaver-build/cx-preuves-preflight-d6fc63f8b/` :55fichiers,
+manifest `sha256.json`, binaire SHA identique à celui publié ci-dessus.

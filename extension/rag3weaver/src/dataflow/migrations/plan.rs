@@ -72,6 +72,19 @@ pub struct ResolvedMigrationPlan {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StoragePosition { Source, PublishedTarget }
 
+/// State of this fixed plan, read from a qualified durable journal. In-flight
+/// and failed operations cannot be represented as the absence of an applied ID.
+/// This type does not write or upgrade the existing legacy journal.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
+pub enum PlanJournalState {
+    Unapplied,
+    Running { identity: String },
+    Failed { identity: String },
+    Applied { identity: String },
+    RolledBack { identity: String },
+}
+
 impl ResolvedMigrationPlan {
     pub(super) fn new(inputs: MigrationPlanInputs, steps: Vec<ResolvedMigrationStep>) -> Result<Self, String> {
         inputs.source.validate()?;
@@ -107,17 +120,20 @@ impl ResolvedMigrationPlan {
 
     /// Qualification is pure. The caller must obtain the durable journal state
     /// and storage descriptor under actual exclusivity before any effects.
-    /// `applied_plan_identity` is the identity recorded by publication, not a
-    /// checkpoint's Completed flag. This method does not create that record.
-    pub fn qualify_storage(&self, current: &StorageDescriptor, applied_plan_identity: Option<&str>)
+    /// The journal state refers to durable publication, never a checkpoint's
+    /// Completed flag. This method neither reads nor creates that record.
+    pub fn qualify_storage(&self, current: &StorageDescriptor, journal: &PlanJournalState)
         -> Result<StoragePosition, String>
     {
         self.validate_generation_preconditions()?;
-        match applied_plan_identity {
-            None if current == &self.inputs.source => Ok(StoragePosition::Source),
-            Some(identity) if identity == self.identity && current == &self.inputs.target =>
+        match journal {
+            PlanJournalState::Unapplied if current == &self.inputs.source => Ok(StoragePosition::Source),
+            PlanJournalState::Applied { identity } if identity == &self.identity && current == &self.inputs.target =>
                 Ok(StoragePosition::PublishedTarget),
-            Some(identity) if identity != self.identity => Err("resolved migration plan changed".into()),
+            PlanJournalState::Running { .. } | PlanJournalState::Failed { .. } | PlanJournalState::RolledBack { .. } =>
+                Err("migration reconciliation required".into()),
+            PlanJournalState::Applied { identity } if identity != &self.identity =>
+                Err("resolved migration plan changed".into()),
             _ => Err("storage does not match the generation expected by the fixed plan".into()),
         }
     }
@@ -160,20 +176,26 @@ mod tests {
     fn fixed_plan_qualifies_source_then_published_target_without_reresolving() {
         let plan = resolve(inputs());
         let identity = plan.identity().to_owned();
-        assert_eq!(plan.qualify_storage(&plan.inputs().source, None).unwrap(), StoragePosition::Source);
-        assert_eq!(plan.qualify_storage(&plan.inputs().target, Some(&identity)).unwrap(), StoragePosition::PublishedTarget);
+        assert_eq!(plan.qualify_storage(&plan.inputs().source, &PlanJournalState::Unapplied).unwrap(), StoragePosition::Source);
+        assert_eq!(plan.qualify_storage(&plan.inputs().target, &PlanJournalState::Applied { identity: identity.clone() }).unwrap(), StoragePosition::PublishedTarget);
         assert_eq!(plan.identity(), identity);
+        for journal in [PlanJournalState::Running { identity: identity.clone() },
+                        PlanJournalState::Failed { identity: identity.clone() },
+                        PlanJournalState::RolledBack { identity: identity.clone() }] {
+            assert!(plan.qualify_storage(&plan.inputs().source, &journal).is_err());
+            assert!(plan.qualify_storage(&plan.inputs().target, &journal).is_err());
+        }
         // Persist original inputs, then rebuild after publication. The live
         // target is used only for qualification, never as the new source.
         let persisted = serde_json::to_string(plan.inputs()).unwrap();
         let restored = resolve(serde_json::from_str(&persisted).unwrap());
         assert_eq!(restored.identity(), identity);
-        assert_eq!(restored.qualify_storage(&plan.inputs().target, Some(&identity)).unwrap(), StoragePosition::PublishedTarget);
+        assert_eq!(restored.qualify_storage(&plan.inputs().target, &PlanJournalState::Applied { identity: identity.clone() }).unwrap(), StoragePosition::PublishedTarget);
         let mut foreign = plan.inputs().target.clone();
         foreign.generation = StorageGeneration::Established("foreign-write".into());
-        assert!(plan.qualify_storage(&foreign, Some(&identity)).is_err());
-        assert!(plan.qualify_storage(&plan.inputs().target, None).is_err());
-        assert!(plan.qualify_storage(&plan.inputs().source, Some(&identity)).is_err());
+        assert!(plan.qualify_storage(&foreign, &PlanJournalState::Applied { identity: identity.clone() }).is_err());
+        assert!(plan.qualify_storage(&plan.inputs().target, &PlanJournalState::Unapplied).is_err());
+        assert!(plan.qualify_storage(&plan.inputs().source, &PlanJournalState::Applied { identity: identity.clone() }).is_err());
     }
 
     #[test]
@@ -189,7 +211,7 @@ mod tests {
         for changed in variants {
             let other = resolve(changed);
             assert_ne!(plan.identity(), other.identity());
-            assert!(other.qualify_storage(&other.inputs().target, Some(plan.identity())).is_err());
+            assert!(other.qualify_storage(&other.inputs().target, &PlanJournalState::Applied { identity: plan.identity().to_owned() }).is_err());
         }
         let mut changed_variables = original.clone();
         changed_variables.variables.insert("query".into(), "RETURN 2".into());
@@ -204,6 +226,6 @@ mod tests {
         let plan = resolve(inputs);
         assert!(!plan.steps().is_empty());
         assert_eq!(plan.validate_generation_preconditions().unwrap_err(), "source generation not established");
-        assert!(plan.qualify_storage(&plan.inputs().source, None).is_err());
+        assert!(plan.qualify_storage(&plan.inputs().source, &PlanJournalState::Unapplied).is_err());
     }
 }
