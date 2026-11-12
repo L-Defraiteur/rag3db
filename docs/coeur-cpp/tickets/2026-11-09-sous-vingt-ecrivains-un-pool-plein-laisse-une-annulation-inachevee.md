@@ -778,3 +778,9 @@ argv/limites publiés avant le passage unique autorisé sur35ea ; poste mesure12
 logs16Mio,capture persistante,aucun héritage env caché,retryinterdit. Aucun scénario
 encore lancé dans ce reçu ; exécution ensuite sans nouvelle boucle administrative
 si empreintes/montage restent conformes. Ticket ouvert, verdict runtime distinct.
+
+Contrôle post-arrêt demandé par la revue : validateur strict préparé dans
+12-11-2026/outils/cx-valider-capture-conservee.py (schéma exact,16uint64/domaines,
+meta/marker/footer,compteurs cumulatifs et XML exactement1test demandé/joué).
+Il ne lance aucun moteur et n'est pas appliqué aux données avant arrêt. Le driver
+runtime et le paquet restent figés ; aucun retry ni nouveau passage.
