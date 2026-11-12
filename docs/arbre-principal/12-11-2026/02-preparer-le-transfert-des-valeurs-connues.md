@@ -379,7 +379,7 @@ comme génération ou état complet. Toute opération d'établissement initial o
 transfert, apply, activation, publication, copie/lecture d'une base de Lucie ou
 politique de rétention reste hors de la tranche préparée.
 
-## État de la tranche A codée — avant passe adaptée
+## Historique — tranche A avant passe adaptée
 
 GO Lucie relayé par C7 ; source privée59eb3d9df, producteur/comparateur implémentés
 et consommés par MigrationRunner::resolve_plan_from_facts. Déclarations complètes
@@ -396,4 +396,18 @@ fournisseur donne Scope→Symbol ; test corrigé vers égalité de toutes les re
 réelles, pas de modification du producteur. Preuves et SHA dans le ticket.
 Revue seule mémoire effectuée. Passe adaptée et intégration encore à faire après
 le master ED prioritaire ; aucun changement de la génération durable ou de l'aperçu
-non qualifié n'est déclaré livré. La question de conception1 reste non bloquante A.
+non qualifié n'est déclaré livré. La question1 a depuis été tranchée par Lucie ;
+la décision composite de la section précédente fait foi.
+
+
+## État actuel — A vérifiée, avant intégration
+
+Source compilée d2cb7f063 ; branche privée cx-arbre-faits-lies-3 rebasée sur
+777820ef7 documentaire, code produit strictement identique à la source jouée.
+F5 5/5, vrai checklib sans features, lib2222/0/65 (18faits+15aperçu+lien80),
+NAV40/0/0, CLI5/0/0 et quatre ELF/source/native29/220gabarits attestés. Verdict
+composé en1385,89s dans fenêtre initiale3600, incidents de montage/parser et
+bus privés conservés dans le ticket ; quiescence finale et TMP retiré prouvés.
+Aucun nouveau Cargo pour le rebase documentaire. Revue finale/tour master et
+nettoyage restent à faire ; la décision composite ci-dessus est acquise,
+producteur persistant non implémenté. Aperçu toujours non qualifié au stockage.
