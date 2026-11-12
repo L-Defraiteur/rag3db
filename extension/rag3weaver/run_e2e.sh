@@ -895,8 +895,41 @@ suites_vides() {
 # le parent à la fin de la passe ; `RAG3WEAVER_GARDER=1` garde tout pour
 # l'examen. Avant : 11 Go de restes d'e2e dans /tmp du poste principal —
 # de la RAM — et 10,9 Go sur luciepc, mesurés et effacés le 11 octobre.
+# L'état durable du produit a une durée de vie de fixture ici. Seul le chemin
+# créé par mktemp appartient au lanceur ; ne jamais effacer un chemin reçu de
+# RAG3WEAVER_STATE_DIR. Le marqueur vérifie cette propriété avant nettoyage.
+creer_etat_suite_e2e() {
+  local etat
+  etat=$(mktemp -d "${1:?}/etat-temoins.XXXXXX") || return 1
+  printf '%s\n' "$etat" > "$etat/.possede-par-le-lanceur-e2e" || return 1
+  printf '%s\n' "$etat"
+}
+
+terminer_etat_suite_e2e() {
+  local etat="${1:?}" statut="${2:?}" garder="${3:-}" archive="${4:?}"
+  # Échec/expiration : l'état original reste avec les preuves de la suite.
+  [ "$statut" -eq 0 ] || return 0
+  if [ ! -d "$etat" ] || [ -L "$etat" ] \
+     || [ "$(cat "$etat/.possede-par-le-lanceur-e2e" 2>/dev/null)" != "$etat" ]; then
+    echo "✗ état de suite non possédé : nettoyage refusé ($etat)" >&2
+    return 1
+  fi
+  if [ "$garder" = 1 ]; then
+    # Conserver les octets demandés sur le disque propre à la suite, sans
+    # les compter comme un résidu TMPDIR arbitraire ni changer le garde.
+    if [ -e "$archive" ] || [ -L "$archive" ] || ! mv -T -- "$etat" "$archive"; then
+      echo "✗ conservation de l'état de suite impossible : $etat" >&2
+      return 1
+    fi
+    echo "▸ état possédé de la suite conservé : $archive"
+  elif ! rm -rf -- "$etat"; then
+    echo "✗ nettoyage de l'état possédé impossible : $etat" >&2
+    return 1
+  fi
+}
+
 jouer_les_suites() {
-  local e2e=() autres=() i nom code=0 bin statut
+  local e2e=() autres=() i nom code=0 bin statut etat_suite
   for ((i = 0; i < ${#CARGO_ARGS[@]}; i++)); do
     [ "${CARGO_ARGS[$i]}" = "--test" ] || continue
     nom="${CARGO_ARGS[$((i + 1))]}"
@@ -966,6 +999,7 @@ for ligne in open(sys.argv[1]):
     # (échange, carte) s'attribue à la suite qui tournait.
     echo "     [départ $(date +%H:%M:%S)] $nom"
     echo "     Running tests/$nom.rs (binaire e2e unique, filtre $nom::)"
+    etat_suite=$(creer_etat_suite_e2e "$E2E_TMP_PARENT/$nom") || return 101
     if [ -n "$TEST_FILTER" ]; then
       local noms=()
       mapfile -t noms < <("$bin" --list --format terse 2>/dev/null \
@@ -976,13 +1010,15 @@ for ligne in open(sys.argv[1]):
         rm -rf -- "${E2E_TMP_PARENT:?}/$nom" "${E2E_DISQUE_PARENT:?}/$nom"
         continue
       fi
-      TMPDIR="$E2E_TMP_PARENT/$nom" CARGO_MANIFEST_DIR="$WEAVER" \
+      TMPDIR="$E2E_TMP_PARENT/$nom" RAG3WEAVER_STATE_DIR="$etat_suite" CARGO_MANIFEST_DIR="$WEAVER" \
         confined "$bin" --exact "${noms[@]}" --include-ignored --nocapture "${EXTRA_ARGS[@]}"
     else
-      TMPDIR="$E2E_TMP_PARENT/$nom" CARGO_MANIFEST_DIR="$WEAVER" \
+      TMPDIR="$E2E_TMP_PARENT/$nom" RAG3WEAVER_STATE_DIR="$etat_suite" CARGO_MANIFEST_DIR="$WEAVER" \
         confined "$bin" "$nom::" --include-ignored --nocapture "${EXTRA_ARGS[@]}"
     fi
     statut=$?
+    terminer_etat_suite_e2e "$etat_suite" "$statut" "${RAG3WEAVER_GARDER:-}" \
+      "$E2E_DISQUE_PARENT/$nom/etat-temoins" || statut=101
     [ "$statut" -ne 0 ] && code=101
     # **Une suite rend son TMPDIR vide** (ticket « les tests ne nettoient pas leurs
     # dossiers temporaires », 8 novembre 2026) : /tmp est de la mémoire vive, et ce
