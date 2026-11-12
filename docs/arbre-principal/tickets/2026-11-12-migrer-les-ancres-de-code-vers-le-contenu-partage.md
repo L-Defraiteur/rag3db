@@ -699,3 +699,25 @@ v3 absente. Cache `cx-nettoyage-preflight-1b-{local,remote}-2b06682a2/` contient
 copies, garde.json, fin.json et dumps sur remote. Preuves/ELF/logs et branches
 privées distantes conservés. Aucun déploiement ou rerun CI. **Migration ouverte** :
 ce lot ne transforme aucune ancre existante ; repartir d'un worktree neuf pour la suite.
+
+## Reprise parallèle autorisée — préparation du transfert générique
+
+Orchestration, après accord Lucie sur la parallélisation : préparer la prochaine
+tranche BM25+dense sur fixtures synthétiques ; revue du périmètre avant Rust.
+Master6e5f9458c, nouveau worktree local `cx-wt-migration-transfert`, branche
+`cx-arbre-migration-transfert`. Aucun distant, target, Cargo, transfert ou base créé.
+[Proposition API/inventaire/invariants/témoins/budget](../12-11-2026/02-preparer-le-transfert-des-valeurs-connues.md).
+
+Premier diff proposé : aperçu pur non exécutable dans migrations/transfer.rs et
+mod/tests voisins, sans conn/embedder ni modification backend/CLI/stockage.
+Compose les identités/rendus/découpe1a et préflight ; KnownVectors et RecordVectors
+actuels ne prouvent pas un transfert multi-modèle. Identité d'instance source et
+génération durable absentes restent des refus, pas des hashes inventés. Sparse
+se décide sur faits à transférer, pas sur models.sparse seul ; refus avant effets.
+
+Possession actuelle : ce ticket et le nouveau document. Fichiers Rust proposés
+mais **pas encore modifiés/réservés** : migrations/transfer.rs, migrations.rs et
+leurs tests ; extraction record_nodes éventuelle à soumettre avant modification.
+ED garde sa correction d'accord ; orchestration tient la revue commune. Budget
+proposé ciblé600s/j8/Mem32/target32 après revue, aucun lourd réservé ou lancé.
+Ticket reste ouvert ; aucun transfert/apply/publication/migration réelle autorisé.
