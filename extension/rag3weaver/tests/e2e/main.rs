@@ -190,6 +190,8 @@ mod e2e_mesure_ingestion_code;
 mod e2e_mesure_joignabilite;
 #[path = "../e2e_mesure_sync_source.rs"]
 mod e2e_mesure_sync_source;
+#[path = "../e2e_migration_preflight.rs"]
+mod e2e_migration_preflight;
 #[path = "../e2e_native.rs"]
 mod e2e_native;
 #[path = "../e2e_nom_reserve.rs"]
