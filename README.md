@@ -45,6 +45,10 @@ its working domain. An outside script can resume when sandbox read access to tha
 file is already declared. Changing arguments or domain requires its own approval;
 the command approval adds no sandbox file rights.
 
+rag3weaver's Rust library can also [plan template changes from supplied contents](extension/rag3weaver/README.md#template-planning-from-supplied-contents):
+it reports a validated candidate or named conflicts, without acquiring sources
+or applying changes to an existing backend.
+
 The long version, in French: [`extension/rag3weaver/visions/00-vision-generale.md`](extension/rag3weaver/visions/00-vision-generale.md).
 
 ## Where the engine stands
