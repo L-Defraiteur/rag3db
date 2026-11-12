@@ -792,7 +792,7 @@ mod integration {
         );
         assert_eq!(relay["ok"], true, "{relay}");
         assert_eq!(payload(relay)["status"], "ready");
-        let refused=host.call(Some(&session),&atelier,"navigate_symbols",json!({"context":{"target":{"kind":"backend","id":id},"view":"unavailable"},"path":"a.py","format":"json"}));
+        let refused=host.call(Some(&session),&atelier,"navigate_symbols",json!({"context":{"target":{"kind":"backend","id":id},"view":{}},"path":"a.py","format":"json"}));
         assert!(
             refused.to_string().contains("view") || refused.to_string().contains("vue"),
             "{refused}"
