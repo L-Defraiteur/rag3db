@@ -1102,9 +1102,7 @@ fn un_graphe_declare_enrichit_les_occurrences_et_non_leurs_versions() {
     let attendus: BTreeMap<String, i64> = handles.into_iter().map(|(r, line)| (r.uuid().unwrap(), line)).collect();
     assert_eq!(compte(&catalog, "MATCH (v:IndexOccurrence) RETURN count(v)"), 1);
     assert!(!catalog.entity_config("IndexOccurrence").unwrap().fields.contains_key("line"));
-    let mut services = ServiceRegistry::new();
-    catalog.register_search_services(&mut services);
-    services.register("catalog", Arc::new(Mutex::new(catalog)));
+    let partage = Arc::new(Mutex::new(catalog));
     let def: GraphDefinition = serde_json::from_value(serde_json::json!({
         "nodes":[
             {"name":"source","node_type":"SearchSourceNode","config":{
@@ -1120,7 +1118,13 @@ fn un_graphe_declare_enrichit_les_occurrences_et_non_leurs_versions() {
     })).unwrap();
     let mut registry = NodeRegistry::new();
     rag3weaver::dataflow::node_factories::register_builtins(&mut registry);
-    let mut graph = build_definition(&def, &registry, &NodeTypePolicy::All).unwrap();
+    for explicite in [true, false] {
+    let mut definition = def.clone();
+    if !explicite { definition.nodes[2].config = serde_json::json!({}); }
+    let mut services = ServiceRegistry::new();
+    partage.lock().unwrap().register_search_services(&mut services);
+    services.register("catalog", partage.clone());
+    let mut graph = build_definition(&definition, &registry, &NodeTypePolicy::All).unwrap();
     let output = DataflowRuntime::with_services(16, services).execute(&mut graph)
         .expect("le graphe déclaré enrichit les UUID publics depuis Occurrence");
     let results = output.get("resolve", "results").unwrap().downcast::<Vec<UnifiedResult>>().unwrap();
@@ -1128,8 +1132,10 @@ fn un_graphe_declare_enrichit_les_occurrences_et_non_leurs_versions() {
         assert_eq!(r.entity.as_deref(), Some("Occurrence"));
         let data = r.data.as_ref().expect("données publiques");
         assert!(data.contains_key("file"));
+        if !explicite { assert!(data.contains_key("body"), "champs publics par défaut"); }
         (r.uuid.clone(), data["line"].as_i64().unwrap())
     }).collect();
     assert_eq!(results.len(), 2);
     assert_eq!(obtenus, attendus, "deux occurrences et leurs positions, une seule version");
+    }
 }
