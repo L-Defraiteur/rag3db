@@ -152,14 +152,24 @@ The result is diagnostic: `migration apply` returns an explicit unavailable
 error. This interface does not transfer chunks or vectors, publish a migrated
 format, activate code templates, or provide migration recovery/rollback.
 
+The library's `dataflow::migrations::facts` constructs immutable facts from
+complete supplied declarations: effective entity configurations, provider and
+relation definitions, recipe template bytes and model declarations. It reuses
+the common schema composition and validation, generates versioned configuration
+and complete-facts fingerprints, and compares them with a fixed migration plan.
+Missing declarations and unknown fingerprint contracts are refused. The sealed
+result has `SuppliedDeclarations` provenance: it does not observe storage,
+establish a durable generation, or grant execution. `resolve_plan_from_facts`
+uses these facts with the existing runner, which still reads its Mermaid files.
+
 The library's `dataflow::migrations::transfer::preview_known_transfer` builds a
 deterministic report of chunk and known dense-vector bindings from supplied
 facts. It checks coverage and exact vector compatibility without reading storage
 or calling models. Its serialized `plan_qualification` is always
 `unqualified_config_and_schema_facts`: the referenced plan identity does not
 qualify the supplied configurations. This report cannot execute or apply a
-transfer; durable storage identity, generation and complete schema binding
-remain prerequisites for that work.
+transfer; durable storage identity, generation and storage-backed schema
+qualification remain prerequisites for that work.
 
 ## Measured
 

@@ -1278,3 +1278,41 @@ unités6 liées, initial20:27:04+3600 toujours inchangé. TMP5 reste conservé j
 succès composé complet+quiescence, puis retrait du seul root marquépossédé.
 PGv4 identifiée, pas de nouvelle base/reset. Verdict composé distinguera chaque
 vert réel des incidents de vérification/montage et de nettoyage conservés.
+
+### A — bilan composé final et attestation indépendante verts
+
+Source jouée **d2cb7f0636d099823f63de2cef674b630a46bc6f**, Rust inchangé depuis
+le ciblé vert59eb après rebaseED. **F5 5/5 ; vrai minimum checklib rc0 ; lib2222/0/65
+(18faits+15aperçu+lien80) ; NAV40/0/0 ; CLI5/0/0,1groupe**. CLI compile34,94s,
+runtime0,21s ; artefactJSONe2e-b95258cc43cff951, cinq noms listés avant runtime,
+backendCLI réellement observé/mapsnatifs29. Attestation220fichiers/sourceD2 et
+quatre ELF archivés+SHA, rehash indépendant vert :
+
+- lib a72ee7f051de6f01c8ad8f3a950ec5a0976a67cd4a77873da92f06b96dd85594 ;
+- NAV 44aa11b6a280c9b4a7fc4b73d9f62f473b1b6c0146de371b91a81482efb21fb5 ;
+- CLI acc74857d673402e0d405b43cf5b640345a6d3e972f1b047edd29337af0e7440 ;
+- backend f23b28644616556aeee1540e13e0cb918b4e996ce8bb6776550cd64dcf880ea3.
+
+**1385,89s depuis INITIAL20:27:04**, fin20:50:10, deadline3600respectée sans reset.
+Client systemd rc0/SUCCESS, pilotes/scopes inactifs, HIGH/MAX/OOM/OOMkill0,
+scan final indépendantexeTarget/cwdWT/profil=[],TMP5possédé retiré et absence
+vérifiée, poste0/4 relu. Preuves PC cache cx-passe-faits-lies-v6 : VERDICT_COMPOSE,
+verdict-compose.json, artefacts.json,templates-220.json,maps.json etmapsréutilisées
+v4/v5,quiescence.json,tmp-retire.json,controle-final-independant.py. Résumécompact
+versionné bilan-compose.json ; métadonnéescopiéeslocalement hors WT. Target8,1Go
+et PG synthétiquesv1/v2/v4 conservés pour revue, aucune base réelle ou migration.
+
+Le VERT est **composé**, pas une passe sans incident : F5/min/compilev2,
+libv4, NAVv5+arrêtbus/quiescence, CLI/attestv6 ; tous les rouges et leurs causes
+restent dans les preuves. Sources/fichiers joués non modifiés pendant jobs,
+aucun redo F5/min/compilelib/lib/NAV pour réparer un vérificateur. La primitive
+commune Recherche5fab0e1f9 prévoit désormais un seul bus pour toute la portée,
+avec résiduaprèsrc0→ROUGE même nettoyé ; elle ne réécrit pas l'histoire d'A.
+
+README/nouveautés/rapports mis à jour ; API publique correspondance pure de
+faits **fournis**, comparaison des mêmes contrats versionnés, aucune provenance
+physique ou capacité d'écriture. Aperçu toujours non qualifié. Décision composite
+Lucie sur publicationdistincte/empreintecontenu publiée777820ef doit être conservée
+au rebase documentaire final, sans producteur persistant anticipé. Ticket reste
+ouvert ; attente revue C7/mémoire et tour explicite avant master, puis3contrôles,
+archives+gardes fraîches et nettoyage propres.
