@@ -2109,6 +2109,47 @@ impl PreparedBackend {
         }
     }
 
+    /// Build an inspectable proposal from actual persisted metadata and provider
+    /// facts. No established data generation or executable target is invented.
+    #[cfg(feature = "rag3db-native")]
+    pub fn migration_plan(
+        &self,
+        runner: &crate::dataflow::migrations::MigrationRunner,
+        variables: BTreeMap<String, String>,
+    ) -> Result<crate::storage_inspection::PreliminaryMigrationPlan, String> {
+        let source = self.inspect_storage()?;
+        let provided = backend_schema::provided_schema(self.manifest.workspace.as_ref());
+        let mut facts = backend_schema::SchemaFacts::compose(&self.entities, &self.manifest.relations, &provided)?;
+        if let Some(workspace) = &self.manifest.workspace {
+            for (name, signals) in &workspace.index_signals {
+                let config = facts.entities.get_mut(name)
+                    .ok_or_else(|| format!("workspace.index_signals: unknown entity {name}"))?;
+                config.signals = signals.iter().fold(crate::search::SearchSignals::NONE, |all, signal| {
+                    all | match signal.as_str() {
+                        "bm25" => crate::search::SearchSignals::BM25,
+                        "vector" => crate::search::SearchSignals::VECTOR,
+                        "sparse" => crate::search::SearchSignals::SPARSE,
+                        _ => unreachable!("validated when loading manifest"),
+                    }
+                });
+                config.validate().map_err(|e| format!("{name}: {e}"))?;
+            }
+        }
+        let steps = runner.resolve_steps(&variables).map_err(|e| e.to_string())?;
+        let generation = source.as_ref().and_then(|inspection| inspection.descriptor.as_ref())
+            .map(|descriptor| descriptor.generation.clone())
+            .unwrap_or(crate::dataflow::migrations::plan::StorageGeneration::Unversioned);
+        let refusal = match generation {
+            crate::dataflow::migrations::plan::StorageGeneration::Unversioned => "source generation not established",
+            _ => "transfer and atomic publication are not available",
+        }.to_owned();
+        Ok(crate::storage_inspection::PreliminaryMigrationPlan {
+            source, target: self.manifest.storage.clone(),
+            target_entities: facts.entities.into_iter().collect(),
+            target_relations: facts.relations.into_iter().collect(), variables, steps, generation, refusal,
+        })
+    }
+
     /// Common native opening boundary: metadata-only refusal first, then the
     /// engine's exclusive writer, then revalidation while that writer is held.
     /// The caller may construct models only after this returns successfully.

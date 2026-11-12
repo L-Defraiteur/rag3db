@@ -249,3 +249,25 @@ callers ; schéma interne inconnu refusé et configs persistées validées par
 cible versionnée avant création du catalogue ; cette API reçoit des capacités
 déjà créées et ne promet pas leur admission rétroactive. Le contrat pré-RW et
 pré-modèles appartient à la façade produit commune. Revue/témoins restent requis.
+
+Ciblé admission source**6f59d7093** propre natif seul : **4 réussis, 0 échec,
+0 ignoré**, rc0 ; compilation18,45s, fin11:25:48Paris, target1,4Go.
+Preuve luciepc `cx-preflight-admission-v1.log`. Les deux fixtures natives ont
+bien leur déclaration inerte d'embarquement avant ce run ; aucun rouge produit
+n'est revendiqué pour cette correction de montage. Le refus cible sur ancien
+stockage a préservé exactement les fichiers de fixture ; la cible absente n'a
+créé aucun répertoire. Pas encore de preuve d'appel binaire ni d'exclusion.
+
+## Raccord du plan préliminaire, à vérifier
+
+Commande `migration plan --manifest <backend.json> --dir <migrations>
+[--var key=value]` : inspection RO réelle et faits de schéma composés par le
+fournisseur commun, variables explicites, étapes via scan/parse/hash du runner
+existant. `PreliminaryMigrationPlan` se distingue du plan résolu figé d'exécution :
+il expose source inspectée, cible déclarée, configs/relations cibles, graphes et
+variables, génération Unversioned si absente et raison de refus. Aucun fingerprint
+de configs n'est une génération. Le CLI `migration apply` refuse explicitement
+avant chargement/ouverture. Aucune activation/transformation/publication ajoutée.
+Les effets de `workspace.index_signals` sont reflétés dans les faits exposés ;
+leur validation s'appuie sur les types/signaux existants. Ce raccord reste
+**non compilé/non joué** au moment de publication pour revue avant ciblé produit.
