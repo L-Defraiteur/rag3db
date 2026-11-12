@@ -2484,6 +2484,24 @@ mod tests {
         assert_eq!(threads.into_iter().map(|t| t.join().unwrap()).filter(|ok| *ok).count(), 1);
     }
 
+    #[test]
+    #[cfg(feature = "code")]
+    fn une_ligne_shell_litterale_peut_etre_accordee_une_seule_fois() {
+        let domaine = tempfile::tempdir().unwrap();
+        let garde = Garde::new(Mode::Approbation);
+        let ctx = ctx_dans(domaine.path());
+        let ligne = "sh -c 'printf accorde'";
+        assert_eq!(garde.juger_ligne(ligne, &ctx).unwrap().decision, Decision::Demande);
+        garde.accorder_ligne(ligne, &ctx).expect("la ligne littérale était accordable avant ce lot");
+        assert_eq!(garde.juger_ligne(ligne, &ctx).unwrap().decision, Decision::Autorise);
+        assert!(garde.autoriser_ligne("sh -c 'printf autre'", &ctx).is_err());
+        assert_eq!(garde.autoriser_ligne(ligne, &ctx).unwrap().len(), 1);
+        assert!(garde.autoriser_ligne(ligne, &ctx).is_err(), "le shell reste CetteFois");
+        assert!(garde.accorder_ligne("sudo sh -c 'printf accorde'", &ctx).is_err());
+        assert!(garde.accorder_ligne("cat $(printf cible)", &ctx).is_err());
+        // Les laissez-passer de ce témoin de décision ne sont jamais exécutés.
+    }
+
     /// **La lecture libre ne sort pas du domaine.** Chaque argument doit se
     /// prouver dedans ; ce que la garde ne sait pas prouver demande.
     #[test]
