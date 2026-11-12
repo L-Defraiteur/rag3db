@@ -32,3 +32,25 @@ sans annoncer de course établie sur la seule lecture. Aucun test ou appel de
 commande exécuté pour cette note.
 
 [Conception liée](../../orchestration/visions/2026-11-12-mode-auto-contextuel-et-accords.md).
+
+## Reprise parallèle autorisée le 12 novembre
+
+Lucie demande que les sessions libres prennent des chantiers utiles en parallèle
+des couches. Orchestration confie à ED la qualification bornée de cette hypothèse,
+avec archi en revue seule du parcours. Cette reprise couvre le témoin déterministe
+sur registre et Garde synthétiques, sans exécuter de commande réelle ni ouvrir
+les données ou accords de Lucie. Aucun modèle de décision nouveau n'est activé.
+
+Premier résultat attendu : établir par barrières contrôlées si deux réponses
+peuvent produire plus d'un usage CetteFois, puis qualifier erreur, révocation,
+annulation et reprise. Conserver aussi le résultat négatif si le contrat tient.
+Si le défaut est reproduit, une correction bornée doit préserver l'unicité de
+publication et de consommation déjà attendue, sans changer la politique d'accord.
+Publier source, diagnostic et recette avant le ciblé ; arrêt au premier rouge
+inattendu, aucun rejeu inchangé. Le ticket reste ouvert jusqu'au verdict relu et,
+si nécessaire, à l'intégration du correctif.
+
+Propriété ED : atelier_fichiers et témoins de publication d'accord. Archi relit,
+sans édition parallèle ; Arbre garde backend_schema et migrations. Les worktrees,
+targets et fixtures sont distincts. Le créneau de push sera coordonné après la
+passe des couches ; aucune réservation de master pendant le développement.

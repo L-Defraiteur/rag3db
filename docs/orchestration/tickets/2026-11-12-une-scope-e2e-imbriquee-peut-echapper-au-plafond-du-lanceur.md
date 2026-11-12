@@ -1,7 +1,7 @@
 # Une scope e2e imbriquée peut échapper au plafond du lanceur
 
 - **État** : ouvert le 12 novembre 2026 ; porteur orchestration, faits ED et mémoire.
-- **Pour** : orchestration et propriétaires des drivers de passe ; aucun changement du runner produit dans le lot des accords.
+- **Pour** : recherche pour la recette commune des lanceurs ; orchestration coordonne les créneaux et ED relit son adoption. Aucun changement du runner produit dans le lot des accords.
 - **Famille** : produit
 - **Gravité** : risque de dépassement du budget mémoire et d'arrêt incomplet des enfants.
 - **Atteignable en service** : non, lanceurs de validation.
@@ -125,3 +125,28 @@ Les532 PID observés durant les phases finales, dont bus éphémère et vrais pr
 **Verdict composé VERT**, sans transformer les anciennes tentatives en une passe sans incident : features5/5 et lib2201/0/65/0filtré proviennent du premier passage487 ; vrai minimal, NAV40, lectures27 et attestations des phases finales ci-dessus. Les rouges du garde et de la préflight native restent conservés, diagnostiqués séparément. Le checklib natif redondant est étiqueté comme tel ; il ne remplace pas le minimal. Le global2400 initial est respecté, aucune réinitialisation de budget ni prolongation, fin avant17:27:44. Aucun test/runtime/feature produit modifié pour le confinement ; aucun e2e entier, service/GPU/modèle nouveau ou rerunCI.
 
 Preuves brutes deux postes : integration-487c68/{verdict-compose.json,verdict-compose.log,preflight-dbus-config.xml} et finalisation-dbus/{source.json,argv.json,cgroups-enfants.json,vrai-minchecklib.log,navigateur.log,lectures.log,e2e-complet.log,sante-7879-avant/apres.json,attestations.json,quiescence-finale.json,verdict-final.log,provenances.d}. Ticket commun des scopes reste ouvert pour la procédure transversale. Correction de fixture et preuves soumises à revue ; ticket journaux ouvert et aucun master avant àtoi. Ressources propres conservées, aucun lourd ou utilisateur7879 recherche restant.
+
+## Reprise parallèle autorisée le 12 novembre : rendre la recette commune
+
+Lucie demande de reprendre des chantiers utiles en parallèle des couches.
+Recherche prend la suite d'outillage de ce ticket : intégrer la recette prouvée
+dans une primitive de lanceur partagée et sa procédure, au lieu de recopier les
+scripts privés à chaque passe. Le lot journaux et le lot BGE sont déjà intégrés
+(0d7bf10eb et 6dd116e8f) ; aucun rejeu de leurs tests ou ancien plan FTS n'est demandé.
+
+Composer les scripts existants : bus de session privé sans activation pour les
+témoins navigateur sous Linux, acquisition réelle du poste avant marqueur de
+verrou, absence de scope sœur échappant au plafond extérieur, arrêt et nettoyage
+des seuls processus et chemins attribués au lot. Pas de modification du bus de
+Lucie, de KDE, des services permanents, de Chromium ni de ses options de sandbox.
+Conserver les limites Max32, les délais et les refus explicites ; une dépendance
+manquante ne devient pas un succès ou un saut silencieux.
+
+Proposer un diff borné des lanceurs et témoins d'outillage, publié avant essais,
+avec adoption explicite par les chemins existants concernés. Première validation
+CPU des contrats de montage et de nettoyage ; une préflight réelle bornée ne
+sera lancée qu'après recette et coordination, sans reconstruire ou rejouer les
+lots verts. ED relit la réutilisation ; Recherche garde l'édition des scripts.
+Le ticket restera ouvert tant que la garantie transversale n'est pas réellement
+adoptée et éprouvée. Les sources des passes Arbre figées restent inchangées ;
+aucun push de ces scripts pendant sa passe sans coordination de l'intégration.
