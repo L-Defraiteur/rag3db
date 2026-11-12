@@ -416,3 +416,6 @@ Lot isolé `cx-recherche-lectures-journaux`, worktree homonyme aux deux postes ;
 
 
 **Intégration après ED/M8 :** nouvelle branchecx-recherche-lectures-journaux-integration, source487c68af3 surmasterb726d907b, Rust du correctif inchangé au range-diff. Nouveauglobal2400, features5/5 etliblarge2201/0/65 verts. NAV40 séparée arrêtée dès qu’un Chromium PID2997235 sort du scopeMax32 ; pas de résultat NAV complet, lectures27 et vrai checklib minimal non joués. Confinement remonté au ticket commun orchestration des scopes, quiescenceexe/cwd/profil privée prouvée après arrêt. Preuves2postes sousjournaux-cx-recherche-lectures-12nov/integration-487c68/. Aucunservice utilisé, aucunretry/master ; ressources propres conservées pour diagnostic/revue.
+
+
+**Préflight native unique :** recette publiée4ff5d71b9, un seul lancement direct /usr/lib/chromium/chromium, mêmes flags/profil neuf/30s/Max32. Rouge1,246s : PID3028835 passe du scope32GiB au scopeChromiumfrère memory.max=max. Onze PID privés attribués arrêtés, restes=[], profil supprimé ; aucune nouvelle tentative et aucune phase restante rejouée. Blocage de confinement soumis à C7 dans les deux tickets ; preuves sous integration-487c68/preflight-native-unique/. Version paquet identifiée, versionCDP non obtenue, pas de mesure complète de chaque enfant revendiquée après l’arrêt.
