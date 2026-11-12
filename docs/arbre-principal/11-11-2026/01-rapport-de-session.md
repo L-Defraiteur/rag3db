@@ -1,3 +1,36 @@
+## État final — A intégrée et ressources retirées
+
+**Master 6d4d1c882b9fc3f59720e6708bd4b3042be7b6a1**, tour C7 explicite, trois contrôles
+lus verts : status propre, aucun rebase, origin/master=HEAD. Dernier rebase
+sur417ca1f26 documentaire, branche neuve4 ; décision composite777 et revue
+parallèle417 intégralement conservées. Code produit identique à source jouéeD2.
+Verdict composé : F5 5/5, vrai minimum checklib, lib2222/0/65 (18faits+15aperçu+
+lien80), NAV40/0/0, CLI5/0/0, quatre ELF/source/native29/220gabarits attestés et
+rehashés **aux deux postes**. 1385,89s dans initial3600, sans reset.
+
+WT faits-lies local/luciepc **retirés**, target8,1Go distant **retiré**, ancien
+WT documentaire qualification-faits local **retiré**. Administrations Git
+(sous-modules inclus) copiées fidèlement, helper SHA dca13abb… vérifié et garde
+JSON fraîche VERT lue avant chaque retrait ; branches locales propres vérifiées
+égales aux remotes puis supprimées par branch -d. Aucun GC/prune ni remote retiré.
+PG privées v1/v2/v4 : propriétaire et0sessions vérifiés, dump+SHA puis DROP et
+absence vérifiée. Dumps/rapports copiés localement. Pas de PGv3/v5/v6 créée.
+
+Archives/fin.json : cache cx-nettoyage-faits-lies-v1-{local,remote}-6d4d1c882/
+et cx-nettoyage-ancien-wt-faits-6d4d1c882/. Preuves/ELF/logs/rouges/remotes
+conservés ; copies finales locales cx-preuves-finales-faits-lies-v6/.
+Aucun Cargo, service, modèle/GPU nouveau, base réelle ou migration réelle.
+Le poste push a signalé une CI déjà rouge depuis12nov18:33UTC ; aucun rerunCI.
+
+API de correspondance sur déclarations fournies, **SuppliedDeclarations** ;
+aucune preuve physique, génération persistée, apply/bootstrap/publication.
+Aperçu toujours non qualifié au stockage ; ticket migration et ticket tty ouverts.
+Génération composite tranchée par Lucie, implémentation persistante future.
+La seconde lecture Gemini avance séparément via mémoire, sans nouvelle barrière
+ni réécriture des résultats. Pour une suite : WT neuf depuis master et même
+[ticket migration](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md),
+pas de relance des anciennes recettes. Les états suivants sont historiques.
+
 ## Reprise prioritaire — A vérifiée, avant tour master
 
 Branche privée cx-arbre-faits-lies-3 après rebase MD777820ef7, WT local/luciepc

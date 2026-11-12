@@ -400,14 +400,16 @@ non qualifié n'est déclaré livré. La question1 a depuis été tranchée par 
 la décision composite de la section précédente fait foi.
 
 
-## État actuel — A vérifiée, avant intégration
+## État actuel — A intégrée et nettoyée
 
-Source compilée d2cb7f063 ; branche privée cx-arbre-faits-lies-3 rebasée sur
-777820ef7 documentaire, code produit strictement identique à la source jouée.
+Source compilée d2cb7f063 ; intégration master6d4d1c882 après rebase documentaire
+417ca1f26, code produit strictement identique à la source jouée.
 F5 5/5, vrai checklib sans features, lib2222/0/65 (18faits+15aperçu+lien80),
 NAV40/0/0, CLI5/0/0 et quatre ELF/source/native29/220gabarits attestés. Verdict
 composé en1385,89s dans fenêtre initiale3600, incidents de montage/parser et
 bus privés conservés dans le ticket ; quiescence finale et TMP retiré prouvés.
-Aucun nouveau Cargo pour le rebase documentaire. Revue finale/tour master et
-nettoyage restent à faire ; la décision composite ci-dessus est acquise,
-producteur persistant non implémenté. Aperçu toujours non qualifié au stockage.
+Aucun nouveau Cargo pour le rebase documentaire. Tour C7/3contrôles verts lus ;
+WTs/target et seules PG privées retirés après dumps, archives et gardes fraîches.
+Preuves et ELF rehachés aux deux postes conservés. La décision composite ci-dessus
+est acquise, producteur persistant non implémenté. Aperçu toujours non qualifié
+au stockage ; ticket migration reste ouvert.

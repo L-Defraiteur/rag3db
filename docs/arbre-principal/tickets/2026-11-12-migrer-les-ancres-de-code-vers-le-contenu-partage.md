@@ -1327,3 +1327,34 @@ avantrebase e6a5006a6 ; delta avec sourcejouéeD2 =README seulement sous extensi
 tous autres chemins documentaires complets contrôlés, pas de replayCargo.
 Range-diff et rebase-final.json conservés dans preuves finales locales. Revue
 mémoire des4ELF/220hashes/native/CLI/quiescence favorable, tour C7 encore attendu.
+
+### A — intégration master et nettoyage final terminés
+
+**Master6d4d1c882b9fc3f59720e6708bd4b3042be7b6a1**, « à toi » C7 explicite,
+poste push et dernierfetch417ca1f26 ; troiscontrôles LUS statuspropre/aucunrebase/
+originmaster=HEAD. Rebase branche neuve4,14/15commitsidentiques,1contextedocGemini
+seul adapté ; décisions777composite et417revueparallèle conservées intégralement.
+Rust/assets identiques à sourceD2jouée, deltaREADME seulement sous extension.
+Quatre ELF copiés et **rehachés aux DEUX postes**, SHAidentiques aux attestations.
+Preuvesbrutes/logs/bilans2postes conservés, pas d'attente Gemini/recherche pour A.
+
+Nettoyage immédiat terminé : WTfaits-lies LOCAL+luciepc retirés, target8,1GoPC
+retiré, ancienWTdocqualification-faits LOCAL retiré. Avant chaque retrait :
+cp-a des administrationsGit fidèles(sous-module inclus), helperSHAdca13abb7a84cf3c1419f728697837a6b1b9b20e34e34c144c9fbf835252f628,
+rapportgardeJSONfrais **VERT lu**. Brancheslocales propres liées au lot vérifiées
+égales aux refsremotes puis branch-d ; remotes inchangés, aucun GC/prune.
+PGv1/v2/v4 seules : propriété/0sessions, pg_dump+SHA puis DROP/absencevérifiée :
+
+- v1 fdcae0cb32bf3a7ed85f57a98d53a40478c65a3c7f5d473f2340f6cbfdd5eea6 ;
+- v2 db112a27c41405d7813ec970c32167075944bbdd989bf1f7322543032aec5458 ;
+- v4 f3f299b9c4089149563bd72cecabeae9e86cd51a4758d6242016a9e80c1f93db.
+
+Rapports+archives : cache cx-nettoyage-faits-lies-v1-{local,remote}-6d4d1c882/
+(fin.json,garde.json,administration/) et cx-nettoyage-ancien-wt-faits-6d4d1c882/.
+Dumps et rapportsremotes recopiés localement dans cx-preuves-finales-faits-lies-v6/
+nettoyage-remote ; ELF, logs et rouges historiques conservés. Nouveau WTbilan
+MDuniquement pour ce constat, pas de recréation du WTcode ni de target.
+Aucune base réelle, modèle/service/GPU nouveau ou migration/apply ; ticket reste
+ouvert pour ces suites distinctes. Poste a signalé CI déjàrouge depuis18:33UTC,
+pas de rerunCI ni de succès CI attribué au lot. Les attentes de tour/ressources
+des paragraphes antérieurs sont historiques, pas des instructions de reprise.
