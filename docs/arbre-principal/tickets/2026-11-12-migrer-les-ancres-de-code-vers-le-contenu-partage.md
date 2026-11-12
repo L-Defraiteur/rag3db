@@ -983,3 +983,46 @@ La [page de conception existante](../12-11-2026/02-preparer-le-transfert-des-val
 porte la décision et ses limites. Cette question n'est plus en attente. Le ticket
 reste ouvert pour l'implémentation et l'adoption effectives ; le choix ne transforme
 pas A, son aperçu ou ses empreintes déclarées en stockage durable déjà livré.
+
+## Tranche A — Rust commencé après GO Lucie relayé par C7
+
+Source87799f681, nouveau WT cx-wt-faits-lies/branche cx-arbre-faits-lies.
+Implémentation : facts::{DeclaredSchemaInput,ProviderFacts,RecipeFactsInput,
+DeclaredSchemaFacts,DeclaredMigrationFacts}. None signifie incomplet, Some(empty)
+un ensemble déclaré complet et vide ; faits fournis, jamais observation stockage.
+Entrées effectives EntityConfig (champs JSON Schema déjà fusionnés), relations
+BackendRelation/RelationDef, fournisseur complet/absent/inconnu, surcharges de
+signaux explicites, recettes nommées aux octets fournis, ModelSource et registre
+EmbeddingModelEntry existants. Aucun I/O ou appel modèle dans le producteur.
+
+Adaptateur unique backend_schema.rs : compose_effective réutilise SchemaFacts::compose,
+applique les surcharges puis valide toutes les configs et registration_order sur
+l'ensemble FINAL. Mémoire en revue seule ; backend.rs inchangé. Le runner expose
+resolve_plan_from_facts, produit ses inputs puis compare avec le même producteur
+avant de rendre plan+DeclaredFactsMatch scellé, provenance SuppliedDeclarations.
+Générations Unversioned admises pour cette liaison, pas pour l'exécution ; aucun
+identifiant de stockage créé, bootstrap/apply/journal/CLI inchangés.
+
+Contrats d'empreintes en mémoire séparés et versionnés : declared-entity-configs:v1
+pour les configs effectives seules ; declared-migration-facts:v1 pour l'ensemble
+source/cible (déclarations, fournisseurs, relations/politiques, recettes/modèles).
+Les anciennes étiquettes/producteurs inconnus refusent la comparaison ; aucune
+réécriture de metadata ni renommage de StorageInspection.entity_config_fingerprint.
+Le mécanisme de JSON canonique est partagé avec l'aperçu, pas sa sémantique.
+L'aperçu garde son statut UnqualifiedConfigAndSchemaFacts et aucune capacité write.
+
+18 témoins écrits, pas encore exécutés : runner réel/parsing MMD synthétique,
+variables/immutabilité, permutations de maps vs ordre des listes, champs fusionnés,
+dépendances finales, fournisseur code réel (feature code), configs/relations/
+recettes/modèles altérés, incomplets, empreintes opaques, génération absente et
+cible attendue/étrangère, non-finis. Revue provisoire mémoire a signalé fusion et
+field_weights : validation des f64 complétée avant JSON dans manifest/provider/
+effectif, puis partagée avec l'aperçu ; cas NaN/Inf ajoutés aux témoins concernés.
+Aucun faux rouge fondé sur l'absence d'API n'est revendiqué.
+
+Recette ciblée proposée à publier avec SHA avant lourd : cargo_magasin.sh test
+--no-default-features --features rag3db-native,code --lib -j8
+dataflow::migrations:: -- --test-threads=8. Ce filtre couvre les18nouveaux et15
+aperçu, plus les contrats/runner existants ; compte final à lire réellement.
+Budget600 après poste lourd, j8/Max32G/target32Go/lib29. Aucun lourd réservé/lancé,
+aucun GPU/modèle/base réelle/service ; publier diff+témoins à mémoire/C7 avant essai.
