@@ -84,3 +84,43 @@ politique du scénario, événements de chauffe disponibles, mode d’appel publ
 et propriété de l’activation/arrêt. La préparation du harnais peut avancer
 sur fixtures CPU après accord de ce contrat ; la mesure réelle attend ces faits.
 Gemini Decision1 reste hors de ce protocole : attente Vertex, aucune autre voie.
+
+## Contrat confirmé par Embarquement, préparation du banc
+
+Branche propriétaire annoncée : `cx-activation-modeles`, base a783013f1,
+révision runtime pas encore reçue. `ModelSource.activation` déclare programme,
+args/env, profil, périphérique, coordination/journal, budgets activation/attente
+et résidence `maintenir`. Le programme reçoit `--adresse H:P` avant ses args.
+Premier appelant : `connect_embedder` et sa variante annulable ; capacité dense
+seule, autres capacités refusées dans cette tranche. `activation::demander`
+rend une demande dont l’état passe par Coordination/Activation/Disponible/Echec ;
+l’attente prend le signal d’annulation et rend le bail. Ces formes sont le
+contrat annoncé, pas encore une compilation ni un accès runtime qualifiés ici.
+
+La santé exposera un rapport de chauffe optionnel par capacité/forme/erreurs ;
+absence de rapport chez l’ancien serveur = inconnue. Le fournisseur factice
+ci-dessous garde volontairement la santé historique pour qualifier ce cas,
+sans inventer des champs du nouveau contrat avant le code.
+
+Fichiers préparés dans la branche Banc :
+
+- `extension/rag3weaver/tests/fixtures/residence/fournisseur.py` : exécutable
+  Python standard, aucun import ML/GPU ; adresse locale privée, génération et
+  journal obligatoires, barrières fichiers de chargement et de chauffe ;
+- `extension/rag3weaver/tests/fixtures/residence/test_fournisseur.py` : cinq filets
+  CPU joués, gates avant écoute, identité explicitement factice, déterminisme,
+  erreur de chauffe avant prêt, timeout et refus des entrées invalides.
+
+Commit 3963f6829, contrôle Python avec ResourceWarning en erreur : cinq verts,
+aucun processus fixture laissé en vie. Le premier essai avait relevé des réponses
+HTTPError non fermées dans le test ; elles sont maintenant explicitement fermées.
+Aucun faux résultat runtime n’est déduit de ces tests de fixture. Une paire de
+requêtes HTTP ne prouve pas à elle seule une activation partagée.
+
+Modèle réel proposé avec Embarquement : privé granite-107m/384 déjà disponible,
+card2, sans arrêter les services courants. Aucun besoin card0 identifié ;
+Optimiseur informé. La mesure de reprise devra utiliser une désactivation
+explicite du seul privé possédé, si le contrat le permet, car `maintenir` ne
+promet ni libération au dernier bail ni éviction. Elle ne dira pas qu’un TTL
+ou une activation distante sont livrés. Attente de la révision propriétaire
+avant branchement des vrais appels et de leurs témoins.
