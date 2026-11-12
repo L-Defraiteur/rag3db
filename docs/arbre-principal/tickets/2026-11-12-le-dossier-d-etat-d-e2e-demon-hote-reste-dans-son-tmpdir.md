@@ -1,12 +1,12 @@
 # Le dossier d'état d'e2e_demon_hote reste dans son TMPDIR
 
-- **État** : corrigé par144c1d6b0 etce96678fa ; témoins et suite hôte verts surce96678fadac6c58f3db7872d4200972b54f2552.
+- **État** : ouvert ; correctif144c1d6b0/ce96678fa validé, raccord à la garde automatique demandé par C7 avant clôture.
 - **Famille** : produit
 - **Gravité** : passe refusée par le garde de résidus, malgré les assertions fonctionnelles vertes.
 - **Atteignable en service** : non, hygiène du lanceur et des fixtures e2e.
 - **Touche rag3weaver** : oui, état temporaire des témoins et nettoyage de suite.
 - **Pour** : arbre-principal pour diagnostic dans le lot courant ; revue orchestration/recherche pour le propriétaire du nettoyage.
-- **Signalé par** : passe sur3377cdd84890770702fe9201c26cf457b54f24ce, liée au [ticket migration](../../arbre-principal/tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md).
+- **Signalé par** : passe sur3377cdd84890770702fe9201c26cf457b54f24ce, liée au [ticket migration](2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md).
 
 ## Constat et preuves
 
@@ -21,7 +21,7 @@ La passe s'est arrêtée à cette étape : features5+minimal verts, lib2152/0/64
 navigateur39/0/0 et migration_preflight5/0/0 verts ; dix autres suites non jouées.
 Portée terminée et poste0/4 relu. Ces résultats ne constituent pas une passe verte.
 
-Le [ticket fermé du9nov](2026-11-09-les-temoins-ecrivent-leur-etat-de-manifeste-dans-le-dossier-d-etat-reel.md)
+Le [ticket fermé du9nov](../../tickets/closed/2026-11-09-les-temoins-ecrivent-leur-etat-de-manifeste-dans-le-dossier-d-etat-reel.md)
 a corrigé l'écriture dans l'état réel : le constructeur de binaire e2e place
 RAG3WEAVER_STATE_DIR sous son TMPDIR. Il ne traite pas la fin de vie de ce dossier.
 Ce ticket ne rouvre pas cette correction ; il suit le résidu du dossier désormais
@@ -96,3 +96,10 @@ sans modification du garde. Aucun rouge produit inventé pour ce défaut de mont
 La passe complète migration v2 reste rouge historiquement ; aucune fullv3 lancée.
 Sa reprise attend la revue du delta et de ces résultats par C7. Le ticket migration
 reste ouvert : ce correctif ne livre ni exécution ni publication de migration.
+
+## Raccord automatique demandé en revue
+
+C7 a relu3377→ce966 sans bloqueur. Clôture précédente prématurée : réouverture
+jusqu'au raccord du témoin à check_features.sh. Celui-ci appelle désormais le
+vrai test_etat_suite_e2e.sh, borné60s ; tout défaut ajoute test_etat_suite_e2e
+au verdict global rouge. Aucun nouveau Cargo ni rejeu hôte pour ce raccord shell.
