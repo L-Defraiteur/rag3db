@@ -473,3 +473,85 @@ fn le_markdown_d_une_reponse_se_rend_et_un_script_s_y_neutralise() {
     assert_eq!(statut, 200);
     fil.join().unwrap();
 }
+
+/// Parcours réel : outils du chat, test Cargo nommé, diff et reprise persistée.
+/// Les lectures directes ci-dessous attestent les effets ; elles ne font aucune
+/// des actions demandées à l'agent. Aucun accord humain n'est fabriqué.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+#[ignore]
+fn le_chat_code_teste_et_reprend_sur_vertex() {
+    const NOM: &str = "le_chat_code_teste_et_reprend_sur_vertex";
+    assert!(super::apercu_a_chaud::gemini_ou_saut(NOM, None), "Vertex est requis");
+    let preuves = PathBuf::from(std::env::var_os("RAG3WEAVER_PREUVES_PARCOURS").expect("dossier privé de preuves requis"));
+    std::fs::create_dir_all(&preuves).unwrap();
+    // Conserver aussi les états et refus si une assertion échoue.
+    let d = tempfile::Builder::new().prefix("parcours ide ").tempdir_in(&preuves).unwrap().keep();
+    let (depot, manifeste) = depot_inscrit(&d, true);
+    std::fs::create_dir_all(depot.join("tests")).unwrap();
+    std::fs::write(depot.join("Cargo.toml"), "[package]\nname = \"salutation_fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(depot.join(".gitignore"), "/target/\n/Cargo.lock\n").unwrap();
+    std::fs::write(depot.join("src/lib.rs"), "pub fn saluer(nom: &str) -> String {\n    format!(\"Salut, {} !\", nom)\n}\n").unwrap();
+    let test = b"#[test]\nfn salutation_nettoie_le_nom() {\n    assert_eq!(salutation_fixture::saluer(\"  Ada  \"), \"Salut, Ada !\");\n}\n";
+    std::fs::write(depot.join("tests/salutation.rs"), test).unwrap();
+    git(&depot, &["add", "-A"]);
+    git(&depot, &["commit", "-qm", "fixture du parcours agent"]);
+    let avant = empreinte(&depot);
+    let hote = || DaemonHost::new()
+        .with_background(Arc::new(crate::dataflow::background::Registry::new()))
+        .with_racine_des_taches(d.join("taches"))
+        .with_chats_root(d.join("chats"))
+        .with_runs_root(d.join("runs"));
+    let host = hote();
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("ouverture du principal isolé");
+    let t = host.ouvrir_une_tache(&h.id, "salutation").unwrap();
+    let racine = &t.workspace.as_ref().unwrap().racine;
+    let sauver = |phase: &str, host: &DaemonHost, reponse: &Value| {
+        let etat = host.chat_state(&t.id).unwrap();
+        std::fs::write(preuves.join(format!("{phase}.json")), serde_json::to_vec_pretty(&json!({"reponse": reponse, "etat": etat})).unwrap()).unwrap();
+        etat
+    };
+    let r = host.chat_turn(&t.id, "Explore ce petit projet avec search_code puis lis src/lib.rs et tests/salutation.rs. Sans modifier de fichier, exécute exactement cargo test --offline --test salutation salutation_nettoie_le_nom -- --exact --nocapture avec run_command, timeout_s=60, en premier plan. L'échec du test est attendu : rapporte le résultat réel puis arrête ce tour. Ne demande aucun accord supplémentaire et ne contourne aucun refus.").unwrap();
+    let initial = sauver("01-exploration-test-initial", &host, &r);
+    let outils = |etat: &Value, nom: &str| -> Vec<String> {
+        etat["turns"].as_array().unwrap().iter()
+            .filter(|v| v["role"] == "tool" && v["tool_name"] == nom)
+            .map(|v| v["content"].as_str().unwrap_or_default().to_string()).collect()
+    };
+    assert!(!outils(&initial, "search_code").is_empty(), "exploration absente");
+    assert!(!outils(&initial, "read_file").is_empty(), "lecture absente");
+    assert!(outils(&initial, "run_command").iter().any(|s| s.contains("salutation_nettoie_le_nom") && s.contains("FAILED") && s.contains("1 failed")), "échec réel nommé absent : {initial}");
+    assert_eq!(std::fs::read(racine.join("src/lib.rs")).unwrap(), avant.0[Path::new("src/lib.rs")], "pas d'édition au premier tour");
+    let r = host.chat_turn(&t.id, "Corrige maintenant saluer dans src/lib.rs pour nettoyer les espaces autour du nom. Ne modifie ni les tests ni Cargo.toml. Utilise edit_file après lecture et son content_hash. Rejoue exactement cargo test --offline --test salutation salutation_nettoie_le_nom -- --exact --nocapture avec run_command timeout_s=60 en premier plan. Exige un test réellement exécuté et réussi. Puis lis le diff avec run_command : git diff -- src/lib.rs. Rapporte les reçus, sans commit ni fusion.").unwrap();
+    let corrige = sauver("02-correction-test-diff", &host, &r);
+    assert!(!outils(&corrige, "edit_file").is_empty(), "édition par outil absente");
+    assert!(outils(&corrige, "run_command").iter().any(|s| s.contains("salutation_nettoie_le_nom ... ok") && s.contains("1 passed")), "test vert nommé absent : {corrige}");
+    assert!(outils(&corrige, "run_command").iter().any(|s| s.contains("diff --git a/src/lib.rs") && s.contains("trim")), "diff réel absent");
+    assert_eq!(std::fs::read(racine.join("tests/salutation.rs")).unwrap(), test);
+    assert_eq!(std::fs::read(racine.join("Cargo.toml")).unwrap(), avant.0[Path::new("Cargo.toml")]);
+    assert_eq!(git(racine, &["diff", "--name-only"]), "src/lib.rs");
+    assert!(r["consumed"].to_string().contains("gemini"), "consommation Vertex/Gemini absente");
+    let historique = corrige["turns"].clone();
+    drop(host);
+    let host = hote();
+    let taches = host.relire_les_taches();
+    let chats = host.reread_chats();
+    std::fs::write(preuves.join("03-relecture.json"), serde_json::to_vec_pretty(&json!({"taches":taches,"chats":chats})).unwrap()).unwrap();
+    let relue = host.tache(&h.id, "salutation").expect("identité tâche relue");
+    assert_eq!(relue.id, t.id);
+    assert_eq!(relue.branche, t.branche);
+    assert_eq!(host.chat_state(&t.id).unwrap()["turns"], historique, "historique et identifiants outils conservés");
+    let r = host.chat_turn(&t.id, "Nous reprenons après redémarrage de l'hôte. Sans modifier de fichier, vérifie la correction précédente : rejoue cargo test --offline --test salutation salutation_nettoie_le_nom -- --exact --nocapture avec run_command timeout_s=60 en premier plan, puis git diff -- src/lib.rs. Rappelle le résultat réel et la correction conservée.").unwrap();
+    let reprise = sauver("04-reprise", &host, &r);
+    let tours = reprise["turns"].as_array().unwrap();
+    let anciens = historique.as_array().unwrap();
+    assert_eq!(&tours[..anciens.len()], anciens.as_slice(), "préfixe de conversation conservé");
+    let nouveaux = json!({"turns": &tours[anciens.len()..]});
+    assert!(outils(&nouveaux, "run_command").iter().any(|s| s.contains("salutation_nettoie_le_nom ... ok") && s.contains("1 passed")), "test réellement rejoué après reprise absent");
+    assert!(outils(&nouveaux, "run_command").iter().any(|s| s.contains("diff --git a/src/lib.rs")), "diff après reprise absent");
+    assert!(outils(&nouveaux, "edit_file").is_empty());
+    assert_eq!(std::fs::read(racine.join("tests/salutation.rs")).unwrap(), test);
+    assert_eq!(empreinte(&depot), avant, "principal intact, octets et HEAD");
+    std::fs::write(preuves.join("verdict-parcours"), "VERT\n").unwrap();
+}
