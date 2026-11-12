@@ -4560,6 +4560,7 @@ mod tests {
     /// L'annulation doit garder `a → b1`, retirer `a → b2`, et reposer `a → b3`
     /// avec sa raison. Avant : elle retirait `a → b1`, et reposait `a → b3`
     /// sans propriété.
+    #[cfg(feature = "rag3db-native")]
     #[test]
     fn l_annulation_d_un_lot_de_liens_ne_retire_que_ce_qu_il_a_cree() {
         use crate::config::{FieldDef, RelationDef};
