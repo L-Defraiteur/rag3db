@@ -100,7 +100,7 @@ physique existante dans l'entretien FTS. La nouvelle passe partielle est
 `cx-projection-file-regressions-v3.log` ; lire son verdict avant tout bilan vert.
 Verdict v3 : 2101 bibliothèque et 20+13+3+40+2 e2e sans assertion en échec, mais rc101
 pour un journal du démon d'embarquement laissé dans le TMPDIR d'e2e_search :
-[ticket recherche](../../recherche/tickets/2026-11-11-le-service-d-embarquement-laisse-son-journal-dans-le-tmpdir-d-e2e-search.md),
+[ticket recherche](../../tickets/closed/2026-11-11-le-service-d-embarquement-laisse-son-journal-dans-le-tmpdir-d-e2e-search.md),
 pris en suivi par recherche, sans nouveau lot activé. Aucune exemption ou journal effacé.
 Le témoin SQL chaîné n'a donc pas démarré. Lancé séparément, il rougit dans
 `cx-contenu-pg-premier.log` : uuid[] lié comme text[] mais requête JSON. Fix SQL candidat

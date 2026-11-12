@@ -212,7 +212,7 @@ bibliothèque, cinq suites natives, puis le nouveau témoin dans la base SQL pri
 
 Passe v3 : bibliothèque 2101/0/58 ; dérivées **20/0**, cellules **13/0**, Scope privé
 **3/0**, recherche **40/0**, projection **2/0**. Néanmoins rc101, garde de résidu du
-journal du démon né pendant e2e_search : [ticket recherche dédié](../../recherche/tickets/2026-11-11-le-service-d-embarquement-laisse-son-journal-dans-le-tmpdir-d-e2e-search.md).
+journal du démon né pendant e2e_search : [ticket recherche dédié](../../tickets/closed/2026-11-11-le-service-d-embarquement-laisse-son-journal-dans-le-tmpdir-d-e2e-search.md).
 L'étape SQL chaînée n'a donc pas démarré ; elle est lancée séparément dans
 `cx-contenu-pg-premier.log`. Aucun faux vert de passe ni exemption de résidu.
 

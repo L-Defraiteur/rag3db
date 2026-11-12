@@ -3,6 +3,12 @@
 
 ## Gel et passe combinée préparée — 12 novembre 2026
 
+Dépendance levée : recherche375ca1b96 et clôture8c208542f livrés. Rebase sans
+conflit sur8c208542f, branche cx-arbre-scope-version-5, range-diff30/30 identiques.
+La copie ouverte du ticket recherche rejouée par l’historique est retirée ; les
+liens pointent vers le ticket fermé canonique. Le plan ci-dessous est lancé sur
+la source propre après ce raccord documentaire, sans recycler les anciens verts.
+
 Runtime gelé sur d84c03432, branche cx-arbre-scope-version-4 ; e4791498f consigne
 les preuves ciblées. Les deux README décrivent désormais l'option et ses limites.
 Cette préparation ne vaut ni passe globale ni annonce de livraison sur master.
