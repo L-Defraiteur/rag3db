@@ -561,3 +561,120 @@ capacité sans unité ns ignorée, durée compute 42 ns conservée, disparition 
 avec ensemble GPU stable tolérée, starttime incorrect refusé. Quatre verts lus.
 Harnais externe : `contexte-rocm/verifier_capture.py`. Aucun nouveau chargement,
 sonde GPU ou opération sur 7882 ; le contrôleur final reste à relire/intégrer.
+
+
+## Seconde fenêtre : préparation opérateur 7882, 12 novembre à 18 h 19
+
+Sur demande d’orchestration, optimiseur est disponible pour un futur arrêt/retour
+du privé, selon les mêmes règles : verrou MESURE réel et GO avant SIGTERM ciblé,
+trois autres services inchangés, restauration exacte après fin du banc et preuve
+du retour mémoire. Aucune nouvelle fenêtre n’a été exécutée à ce stade.
+Le rouge précédent et ses preuves restent conservés ; cette préparation ne
+valide ni n’active le nouveau contrôleur du banc.
+
+Préflight lecture seule joué à **18:19:17.675 Paris** : PID **3273544**, starttime
+**84847328**, SHA256 installé/chargé
+`65ec1d1db17d48ee53785cd55e72b9b77ca451d5bc4bb8197a9c1b7d040c595d`, même cwd,
+argv et quatre variables exactes de la recette ci-dessus. Aucun client TCP sur
+7882, port 8099 libre, poste libre lors du relevé. Santé réelle granite-278m,
+768/Flex32, dual/sparse/factice faux, lot 128/512 ; fdinfo amdgpu PCI 04:00.0
+confirme card2 pour le processus actuel. Les PID des trois services restent
+966256 / 3415586 / 1409444.
+
+Script préparé séparément à luciepc :
+`~/.cache/rag3weaver-build/cx-service-7882-banc-2.py`, SHA256
+`d97e71c8e30c776732a6e5dd170af28fa7211aa0fae4c0d1a6ce5506e593fece` ;
+copie portable `~/.cache/optimiseur-notes/service-7882-banc-2.py`.
+Seul le mode `preflight` a été joué. Les modes `stop GO-orchestration` et
+`restore` sont prêts mais non exécutés, avec le PID actuel et un dossier de
+preuves neuf `~/.cache/optimiseur-notes/banc-k10-12nov-7882-2/`.
+Preuve : `preflight.json` dans ce dossier ; journal
+`~/.cache/rag3weaver-build/cx-service-7882-preflight-2.log`.
+
+Avant tout arrêt : contrôleur du banc figé/relu, GO coordonné, signal du verrou
+MESURE acquis et deadline 1 200 s ; relire identité et clients. Avant retour :
+signal de fin ou abandon, PID llama et 8099 absents, VRAM rendue, puis relancer
+7882 avec la recette exacte et prouver santé/PID/SHA/PCI et autres services.
+Pas de nouveau modèle ni autre service/GPU utilisé par cette préparation,
+aucune lecture/copie env/vault, aucune limite relâchée. Le ticket reste ouvert.
+
+## Contrôleur complet v2 figé pour revue, sans activation
+
+Sources copiées à l’identique aux deux postes dans
+`~/.cache/rag3db-banc-notes/k10-controleur-v2/`. Fichiers et SHA256 :
+
+- `controleur.py` : `c37663268bec9030501c553365548197594613ae443de945d77ea5004b58345a` ;
+- `garde_charge.py` : `0da91960271591c35930898844e05af7defd4d602b63bd6d627b7caf124319a9` ;
+- `client.py` : `bd74fbc8a46bba74058d81a1d51b2c83020b5f13d4daa9e2c1a4b31ec2b9bf87` ;
+- `fige.json` (liste des empreintes, argv, budgets, source/binaire) :
+  `ce6b17622ee0931a52fe4616264c5b46afaf098e6123624eb803713c7c2ef7ba`.
+
+Les trois jeux sont ceux déjà figés (440/880 paires et manifeste, mêmes SHA
+que le passage précédent). Le contrôleur vérifie les empreintes du paquet
+avant toute remise et refuse une source modifiée. Il crée un dossier de preuves
+neuf, écrit PID/deadline à acquisition de MESURE et attend une remise explicite
+JSON `{ "ok": true, "source": "preuve ou message opérateur" }` dans
+`liberation-7882.go`. Seul le banc écrit ce témoin après le signal de l’optimiseur.
+Les mêmes conditions de port, PCI et au moins 9 Gio libres sont relues.
+
+Commande serveur figée : la commande de placement explicite de la section
+précédente, avec en plus `--cache-ram 0` et
+`--slot-save-path DOSSIER_PREUVES_NEUF/slots/`. Pas de second serveur ni de
+second chargement pour contrôler le cache. Le journal doit prouver le PCI
+retenu, le backend GPU unique, les buffers modèle/KV sur ROCm0 et la désactivation
+du cache RAM avant toute paire ; les fdinfo prouvent la grosse allocation sur04.
+Les 16 Mio maximum VRAM et GTT du seul processus sur seat1 sont gardés chaque
+seconde ; les compteurs absents restent inconnus et ne bloquent pas artificiellement
+la preuve positive du placement. Des compteurs présents qui évoluent sur seat1
+arrêtent la chaîne et donnent un diagnostic. La capture complète avant première
+requête et pendant les séries garde PID/start/exe SHA/env GPU/FD et contenus bruts.
+
+Chaque processus serveur/client a son propre groupe créé par le contrôleur.
+Au premier défaut, arrêt des seuls groupes créés, attente et vérification de
+leurs descendants ; TERM puis KILL borné uniquement sur ces groupes si nécessaire.
+Un filet CPU a vérifié le retrait d’un parent et de son enfant réels. Aucun
+processus GPU ni d’une autre session n’a été utilisé pour ce test.
+Après arrêt, preuve de 8099 libre et mémoire card2 revenue à baseline +256 Mio
+au maximum, puis signal à l’optimiseur pour retour. Le verrou reste tenu jusqu’au
+JSON `restauration-7882.ok` (même schéma) après santé/PID/PCI attestés ; ports
+relus, ou vrai blocage de restauration nommé à l’échéance. Délai global 1 200 s
+après acquisition, startup 120 s, deux séries 900 s communes, réserve finale
+180 s. L’attente opérateur initiale consomme le budget global ; elle ne le remet
+pas à zéro. Aucun retry automatique ni sortie partielle reprise.
+
+### Frontière de cache et comparabilité
+
+La source d246 confirme `--cache-ram 0`, et l’action POST
+`/slots/0?action=erase` qui efface le cache logique du slot. Cette action exige
+un `--slot-save-path` existant ; le contrôleur crée le dossier vide, sans save
+ni restore de cache sur disque. Avant chaque série, il exige une réponse avec
+id_slot 0 et n_erased entier, puis la première paire doit rapporter
+`timings.cache_n == 0`. La réutilisation par slot reste activée pour les fiches
+suivantes de chaque cas (`cache_prompt: true`). Les réponses enregistrent
+`timings.cache_n`, `prompt_n`, `prompt_ms` et l’ensemble des timings ; le champ
+`tokens_cached` est conservé sous le nom distinct `slot_tokens_cached_after`
+car il décrit l’état final, pas la quantité réutilisée avant calcul.
+
+Le cache RAM global est donc désactivé et le slot est vidé entre k5 et k10 ;
+les états logiques initiaux sont froids. Cela n’égalise pas tous les caches
+matériels ni les effets d’ordre k5 puis k10 sur le même serveur. Avec
+`--no-warmup`, la première paire k5 paie l’échauffement des kernels ; la première
+paire k10 a un prompt froid mais un serveur déjà utilisé. Présenter les latences
+avec cette distinction et identifier le premier cas, sans prétendre des états
+physiques identiques. Les résultats historiques avaient d’autres flags/cache :
+pas de comparaison de latence présentée comme une reproduction à l’identique.
+
+### Vérifications de préparation effectivement jouées
+
+Compilation syntaxique des trois scripts ; quatre cas de capture synthétique
+et douze filets CPU du contrôleur, tous verts. Les filets couvrent PCI erroné,
+backend supplémentaire, absence de KV, dépassement/absence de mémoire seat1,
+activité imputable, compteur absent gardé inconnu, compteur stable,
+filtre contradictoire, cache RAM non prouvé et arrêt du seul groupe parent/enfant.
+Preuves : `preuve-capture-cpu.log`, `preuve-controleur-cpu.log`, harnais
+`verifier_capture.py` et `verifier_cpu.py`, inclus dans le manifeste.
+Ce sont des vérifications CPU, pas une passe GPU ni un résultat k10.
+
+Préparation opérateur 02f969823 intégrée ci-dessus. Le contrôleur attend une
+revue finale et une nouvelle fenêtre coordonnée ; aucun lancement GPU ni
+arrêt 7882 effectué pour cette préparation. Le premier rouge reste conservé.
