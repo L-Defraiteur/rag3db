@@ -274,3 +274,11 @@ Diagnostic borné prévu sur l'ELF exact et ce seul test avec nocapture pour voi
 les tailles, puis mise à jour de l'inventaire déclaré correspondant au type ajouté.
 Nouvelle source/driver avant reprise entière dans le même reste6000, aucunreset,
 aucun service modèle employé dans ce diagnostic. Les preuves ab85 restent rouges.
+
+
+Diagnostic ELF exact ab85 observé0/1/0 : nœuds+SearchTool réel77, attendu76.
+Correction : BUILTIN_NODE_COUNT code19→20 pour le type nouvellement enregistré,
+sans changer les assertions ni les outils modèle. La lib complète ab85 n'est pas
+verte ; le ciblé de diagnostic est volontairement rouge et conservé séparément.
+Reprise intégrale source corrigée avec9 témoins navigation, même échéance globale,
+ouvelle portée et dossier pour ne pas écraser les preuves précédentes.
