@@ -84,3 +84,29 @@ transaction_test selon bornes avant tour d'intégration. Aucun moteur posé,
 ancien runtime bloqué ou job CI relancé. Les sources/private traces C++ de
 quarantaine restent séparées ; un refus antérieur ne se contourne pas par ce lot.
 La CI automatique devra encore confirmer les jobs avant clôture complète.
+
+## Reprise de nuit du12au13novembre2026 — inventaire avant formatage
+
+Porteur cœur C++, worktree neuf cx-coeur-ci-format18 depuisa783013f1, fenêtre
+C++ pure exclusive ouverte par orchestration. cassert reste déjà corrigé ;
+check-no-std-assert extension vient de passer sans modification de geo.
+Les runs récents observés sont annulés, dernier43313396407 en attente ; dernier
+CI Workflow échoué lu40246212509 : sanity checks vert, format rouge sur diff,
+shell build rouge séparé. Aucun job relancé et aucun vert global revendiqué.
+
+Image locale pinée d58d28d7…, clang-format18 version18.1.3-1ubuntu1 (paquet
+1:18.1.3-1ubuntu1), binaireSHA55cc4a84… ; pas la version23 locale. Inventaire
+exact du scriptCI :2094candidats, dont29annexes docs ;2065sources après exclusion
+docs et sous-module. Sources privées0511/35ea et preuves forensiques hors lot.
+.clang-format-ignore préparé ; seul le formatage des fichiers possédés est lancé
+ensuite. Inventaire et faits dans docs/coeur-cpp/12-11-2026/preuves/ci-format18/.
+Source/recette et revue avant lourd ; aucun build/runtime ancien contourné,
+aucune bibliothèque distribuée modifiée et aucune clôture avant CI future verte.
+
+Source publiée : exclusions25e5d653d, formatage pur253fichiers74ad9c25c.
+[Inventaire, faits CI, revue et recette native](../../coeur-cpp/12-11-2026/22-ci-format18-inventaire-source-et-recette.md).
+Contrôle réel idempotent/sortie vide et revue lexicale253sansécart sous les limites
+exposées ; --dry-run du script imprime seulement les commandes, règle de passe
+corrigée dans le knowledge dump. Bâti privé/transaction_test à suivre sous recette
+2400s/j8/Max32G/scratch32G, source et lib distribuée séparées, aucun master autorisé
+avant revue/tour explicite. Clôture toujours suspendue à CI future effectivement verte.

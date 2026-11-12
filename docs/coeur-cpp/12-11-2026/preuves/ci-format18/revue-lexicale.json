@@ -1,0 +1,1779 @@
+{
+  "base": "a783013f148fcb52beb6302d92c0e755c5ab013a",
+  "changed_files": 253,
+  "method": "Pygments CppLexer; ignore whitespace/comments; include multiset within preprocessor regions; adjacent literal spelling atoms; consecutive using sort",
+  "limit": "not a compiler/AST proof; include-order changes still require private build and transaction tests",
+  "files": [
+    {
+      "path": "extension/algo/src/main/algo_extension.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "9cfd158be543b739eb192659184ff015ead9830d1b8d554fc4532963b9934e64",
+      "after_sha256": "fd7f81e7aeb6d8acb84db1b2c423b7085fab344d5c73d5194f926141f3dafbb8"
+    },
+    {
+      "path": "extension/azure/src/installer/azure_install_func.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "fa16dbdc29523e3d49792344d1c2e78c4b956915b0b2826ce015f98a5af2bb3e",
+      "after_sha256": "d5415559048c63d57870feaee6a703d5f05ae516a5bcc64cf53c2fd068b2d8bd"
+    },
+    {
+      "path": "extension/azure/src/main/azure_extension.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "e1a05e251474b7d28b2f3decf0194f7a7a7c41c30152b9a60fe6f847dc3d26da",
+      "after_sha256": "714cef87f0469041eaae06975802412a5186d30607b6283eb5aa7df9d5a93762"
+    },
+    {
+      "path": "extension/delta/src/installer/delta_install_func.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "947f208874b5754a6292adb48600f1de8faea84d13f16c7c55d76b3b26d5479c",
+      "after_sha256": "4c5d4fe22bae2c4ba9ef27a44df1eb86aea6ce4fa856d3b05db9a4ad89976968"
+    },
+    {
+      "path": "extension/delta/src/main/delta_extension.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "c49f067850742567a7aae39e3eba7bcc0cf6b57bbe30335cb77d36cc804b6510",
+      "after_sha256": "8b830a2c03d76e6ff7cae0c51b41021481bfb89be235a42ad8622c6591cabdbb"
+    },
+    {
+      "path": "extension/duckdb/src/installer/duckdb_install_func.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "c5ea1533315678855570a4bdc9cf37bb3c98b3eed3d2d1d3fe2ffe5244806d93",
+      "after_sha256": "206440709022c7a6a0507dacc63364405120953d8f007392ab822fefffc10722"
+    },
+    {
+      "path": "extension/duckdb/src/loader/duckdb_loader.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "4aacd2d8af5181da894c227fd37589869e4857074994bad60b3b8c75956fd75d",
+      "after_sha256": "5c75df2819121400c9d59f035adad8c13180017f7b54d82a6c1d06cabf0ae32e"
+    },
+    {
+      "path": "extension/duckdb/src/main/duckdb_extension.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "e3ff06cc02d49b6a930e957e99adf953f35ccfe4990a86544339d85822684aa4",
+      "after_sha256": "fedde361f4c83e3caead41aaf614ef6bd397ea628de9e359335fd29543926264"
+    },
+    {
+      "path": "extension/geo/src/function/create_spatial_index.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "26e0a3ce1a1f2a954999198b0ee3822e4e58e41c34f89b42aa61bad34f7dce29",
+      "after_sha256": "8096a278e2d06ee7c06bcd0cc6aba28dd4574454f1b4c1531532606122c7807a"
+    },
+    {
+      "path": "extension/geo/src/function/drop_spatial_index.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "efadbe0c71dbb85550db965890d1f5dc512973ec6200904eb7fc09d4c131cfaa",
+      "after_sha256": "2dfbdbd1c036b76506534098fbafabe77bf9e64e9acb3404aa3176d1a2d73415"
+    },
+    {
+      "path": "extension/geo/src/function/geo_contains.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "d3676f4e2a9786602843af4c2e52fa9a7fd4bf689cec7a22ea1ab35ea24ec4e5",
+      "after_sha256": "de81fbadc51c10d28bcd11d27f1df47dc18ce14a9b567d2a55710d885ddb864c"
+    },
+    {
+      "path": "extension/geo/src/function/geo_distance.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "2ff00adfc7f077b947692b61a1a0a49e6414a9e5fbaf9381bf50e869869fe8a4",
+      "after_sha256": "e4e0d989cb429bc15a065e8deeeedc8bf669234fb029674c2183bfdda91d75a0"
+    },
+    {
+      "path": "extension/geo/src/function/geo_distance_euclidean.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "0dd50ef68856c341ef7e5e810a2ea5c733b7abe1d3c17a518c022fd7b560def0",
+      "after_sha256": "2e1588354a7b5a150885326f3a6b9fbdfaa81297b567db3db511f92141f15807"
+    },
+    {
+      "path": "extension/geo/src/function/geo_frustum_from_camera.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "170b421518505468c6becc3873fbdf9db159525938febfbca5da4d0919272d50",
+      "after_sha256": "d00203c078af3d1f5fe374f8c835ed87ff0380a2fcb038a1ea88522ae132a198"
+    },
+    {
+      "path": "extension/geo/src/function/geo_matrix_multiply.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "929ffdd570147fe66ac124f7b490054eba6276c5f235cbfc7a169b74e963b27b",
+      "after_sha256": "ea30355828b3204100734159cfaebb7cbced6dc68d06120f31e11efa6ef7fc38"
+    },
+    {
+      "path": "extension/geo/src/function/geo_matrix_rotate.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "4fe55c191dca4118c6ba48ccf9a4653096ac9e5a92673b876dbf55714b7ec673",
+      "after_sha256": "e07b80d64f17dd4de7c85aa5d1c2e4c52932fb817ba71bb83159b3ef9ac87613"
+    },
+    {
+      "path": "extension/geo/src/function/geo_quat_from_axis_angle.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "23ae561341134414aed1ffcd24e6d004a82eca5e678d168bf36cc3e202cb496c",
+      "after_sha256": "1ba55a14cc92c3bb6025a9e2aa34ea5f3313d2b5bb62bc75ab719c2852d11d87"
+    },
+    {
+      "path": "extension/geo/src/function/geo_quat_multiply.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "006896abeb15a2067f85ddd7d25e0d3b67d6f1fb4af0122b2947f73f325b749e",
+      "after_sha256": "b5aa8c3ca1a04be181757c9656f46da1f0da6a6a47141d6f69775534b59b28d6"
+    },
+    {
+      "path": "extension/geo/src/function/geo_quat_rotate.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "e476488e7cfd417ae9c9fc14c1149ba9e9ad186bc2bcd30947789036dabb4094",
+      "after_sha256": "ba8284d07c897bf37c3f81d69cb587d9b392f7e47fc390035b80d8ca1516c1ee"
+    },
+    {
+      "path": "extension/geo/src/function/geo_quat_to_matrix.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "07f248d4b5440ab776809590f8af3ce3ace5f44187a706b2c4329d44984b7f29",
+      "after_sha256": "4d6a5a50f0ec5b223b48d113bcc37fac56c5b63846a1258adde093f8db9a387d"
+    },
+    {
+      "path": "extension/geo/src/function/geo_within_bbox.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "2bb25e9de28b42e028478e128f9260c336c3e6a25e7ff16cdd992e5e416440a8",
+      "after_sha256": "1dd6133458c2e629d47fadce2cd47f2e2e9dea69e53433809444e0e74e4e1691"
+    },
+    {
+      "path": "extension/geo/src/function/geo_within_circle.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "6129edca1bd19f39175370a67ab7527f8cb0bf5c0de2519746981876429507cc",
+      "after_sha256": "91ff95b77127bffae3202aa83c79dc55e2c9f431d0aeb14f0364d4edb58c159a"
+    },
+    {
+      "path": "extension/geo/src/function/geo_within_convex.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "ee788d95fa49efebeecd905d2c238a6e69ce6c7b2d1ec0461872971c82d71288",
+      "after_sha256": "99b0f6a7c9c03aa7ff50bf2b47ec2ac6b8fd85d8feef757b94477e513b116142"
+    },
+    {
+      "path": "extension/geo/src/function/geo_within_frustum.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "84585622e6cf04fe4e7b06933e64035332b2dba10aeb8238fe3e6e101af2f0b9",
+      "after_sha256": "449e0b5d683811ceb2f9965118d1a2360d8b43f60f348389d99a6c5455bd0576"
+    },
+    {
+      "path": "extension/geo/src/function/geo_within_obb.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "fe075ac56d34e0c548b2abb04c1e2eda71081875e047c92db555b7ece1c9ddcd",
+      "after_sha256": "ef437043693ca969ed0b6bbbd4f6f23924238efd399895a71a258a5258bb600b"
+    },
+    {
+      "path": "extension/geo/src/function/geo_within_obb_matrix.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "27416c6743a6abba7b78137d7cca519edebc2c35a1bd791cf9022f11682a3a8e",
+      "after_sha256": "3c033cb86d22115e52c52aa13ec11367c596103a018f09d829693468121259fb"
+    },
+    {
+      "path": "extension/geo/src/function/geo_within_polygon_3d.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "a6b07f10f1851d5fcac94dd2c9676b2978aa3d048f5989d8bf186be4e23cc6be",
+      "after_sha256": "bcbe0daa1aab301f4a01df88256fb20fa15552749db0c634809f7b2f7819ce30"
+    },
+    {
+      "path": "extension/geo/src/function/geo_within_polygon_3d_matrix.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "2b8eb4502a969117103d3400f9e851dd96929d7147f14ff6cae905b02b27eed5",
+      "after_sha256": "f09fdfac86497bc40c57483c3d33b4023196eb8d34a6667a8efaa603c67b7fa8"
+    },
+    {
+      "path": "extension/geo/src/function/geo_within_sphere.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "579de14b91f64b0e19809c50b4decff82474493a8abec5b21a15ff7938fdd11f",
+      "after_sha256": "e031480f1beac85c31babe6448ee48f12b5b7151ad13cfd8e03c60a319014fb8"
+    },
+    {
+      "path": "extension/geo/src/function/query_spatial_index.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "897df1d27edb07471f5ac612b5d583dfef3ee99dfe27aeb72b4acc7753942485",
+      "after_sha256": "1a2ffcdc9a43be956cc77aa5f9232343de68f25b0284338b78b92394dd65f5ad"
+    },
+    {
+      "path": "extension/geo/src/include/function/geo_list_helpers.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "042066db52604710f0daecec2983c399212746e50289807f7bb1f438b37bbb98",
+      "after_sha256": "1c0c5f8ec6ca40e79eca7854d66c6206ed142e5683618894b2a98de11aa3e714"
+    },
+    {
+      "path": "extension/geo/src/include/index/rtree.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "dd4722241d1d703d4879277b70a09d7b6360a856685ef3876cb63762e810e123",
+      "after_sha256": "fbfab121ff75d70ae0f775ae676e10b7f438a6e05748bab246181bdf6672340d"
+    },
+    {
+      "path": "extension/geo/src/include/index/rtree_index.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "e526bfd400322da05b2924b4fe2ee4dc1f75aa69b31b27b6aef2f7d4673faa08",
+      "after_sha256": "3f326bef37d071e9cd856be39f2d1f6ad059b6977c9d6e321156c5dac0e43e37"
+    },
+    {
+      "path": "extension/geo/src/include/math/geometry.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "55aa3eece6309a2a969f378622094e648ab0a5167dcaed4123cf48d1f7685f5d",
+      "after_sha256": "d6fdf913d271276f0b35863e9494425289077fa427bf8de50a63c73414550253"
+    },
+    {
+      "path": "extension/geo/src/include/math/matrix3.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "a09488e41847a327e492a91b2af00a301d111b6e8a0fec018dc0f127a5229f6b",
+      "after_sha256": "8b2ae00e2c0e9863e97fc98f4e9b862258e74b0e30b284e8337fbf272d580321"
+    },
+    {
+      "path": "extension/geo/src/include/math/quaternion.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "7c92de10c249cc70cf690fa71d5a4481ed2a615b23baf768415f27a580ff91c0",
+      "after_sha256": "4ceac75d938dec649a3831616c710fd5ff92c0bbbbba8d7acade9d53d259a97c"
+    },
+    {
+      "path": "extension/geo/src/index/rtree.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "b735286b226cb263f876e3930afe2b7746811212eb672ccab29fa88b68b3f079",
+      "after_sha256": "518f4f3075f60392da678c7242486c673e3aa88905b0ccc7484889e976d50c35"
+    },
+    {
+      "path": "extension/geo/src/index/rtree_index.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "adf0eb3a9a0de4d79fb3028c6ce263e55ee64acdc26410a621a44cfbe9fb5081",
+      "after_sha256": "fe69a2d9303ae0f9acf36fbe3377a5945b29535ea385ec68d26dfff15ff0795c"
+    },
+    {
+      "path": "extension/geo/test/geo_math_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "db416e9b95e46351470f35fbaff0b92ba154c7f13b31ab2728f87f299cdbae81",
+      "after_sha256": "c9e227e607e4ddbd534be92ab25849d10b185ab3d44f84b3d15ccc0898de3f63"
+    },
+    {
+      "path": "extension/geo/test/geo_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "74570e29566ac940b97be2e4874b2365c8d82f9de2c67cdce9bff0546f3564c3",
+      "after_sha256": "30e035830aafe80a23f8a335b37321d9aad63f50f8560237f5188afea6f42c03"
+    },
+    {
+      "path": "extension/httpfs/src/httpfs_extension.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "72d18731ab376444a644b7a68f4bab342ac7e2486da32d4aff02f6f86631e893",
+      "after_sha256": "47eefdf1c74bb007e7b295e5d0d4e136a1ba1e1a4c7840d838515b1e87ba769e"
+    },
+    {
+      "path": "extension/iceberg/src/installer/iceberg_install_func.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "22e6aa8fc01d2a6babb2725de550fdbdf2afd2b9a8b13fe56e91d165931f86d8",
+      "after_sha256": "7055c43d83778cb98f5c68c46c67be6c1b0a944f4fad8a909209e5286449c70d"
+    },
+    {
+      "path": "extension/iceberg/src/main/iceberg_extension.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "0b34bcbe64e2349c984bf2c0c1e84eba2b92e2e61c56e6796688c125b836c891",
+      "after_sha256": "b240433ed95346cd7b77fb49066042e36f76920ac014dbcef8e642f4367f38be"
+    },
+    {
+      "path": "extension/json/src/main/json_extension.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "76832064179fe83ac4e45e693e2c68c95cb56b86af848bd8ad4fea7949cc8876",
+      "after_sha256": "0ff149c397ea840e7505d912e3fefc51632335684f14657ca00dde4efe66df5b"
+    },
+    {
+      "path": "extension/llm/src/main/llm_extension.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "8f41aed605bf0a34e49fcf57760ebd71136207fc27fdb0fd03aad415ab99b812",
+      "after_sha256": "715964511d85e24884bb7eef7383566648a77c03bdb92400d6c3c945c209abbd"
+    },
+    {
+      "path": "extension/neo4j/src/function/neo4j_migrate.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "c611e99dec8941417ed95e75c475b4657804f841c2662654431adb82a5421e9b",
+      "after_sha256": "aac54f8ac0cb89bd5d5c9ac54a587de44d64fe6479f4ee37d02b3160cd595fdd"
+    },
+    {
+      "path": "extension/neo4j/src/main/neo4j_extension.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "983737f4ae86fc7393ef8a88f6b778a39f10c4ee627b993aa2b657c08a069c08",
+      "after_sha256": "019d1f6f58e8bd356e1a156f8ccd620c309e96dcff72c6c1046f5d599290aa24"
+    },
+    {
+      "path": "extension/postgres/src/installer/postgres_install_func.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "be59a4ed6ab46fa63b71ae2fa2aa57dc400e0a16ca747acd9e0e29a87d323597",
+      "after_sha256": "7268cb4e482e84824a7aca62e43b651131157294b603a06ccfc48914e77f6f7c"
+    },
+    {
+      "path": "extension/postgres/src/main/postgres_extension.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "6c448fccf6c92401c85c77944b05c0ded41b7f16198a5304c5298dcf2c0f016c",
+      "after_sha256": "8bbb73598795b4f422ebb6788996681fa3bff49539561cd68f6bc4f6bb70b30b"
+    },
+    {
+      "path": "extension/sqlite/src/installer/sqlite_install_func.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "daae93244964fa889bdf4e12a659917539a35d480bebe4f61b321d01cb9e3180",
+      "after_sha256": "4b784d7cd037855a13058b0565704d521a1d4fc65fc9a58ce0e356546d397248"
+    },
+    {
+      "path": "extension/sqlite/src/main/sqlite_extension.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "688f69b292c005e86ce583c0bbae541354dbf6399fc8abf00b567a60957671a6",
+      "after_sha256": "37e35796bfed1b15afd96d6306270cad505025a3001e8fca4c9b382a49b1cc52"
+    },
+    {
+      "path": "extension/unity_catalog/src/installer/unity_catalog_install_func.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "68e2c20300470c89bd5cafb0fdcc1892b616b714ff5ff19e46ddfe444d13709f",
+      "after_sha256": "037337828f346c9cb740da0e978ade4f4e708f31bc1bc2c67dce6ebac3036c69"
+    },
+    {
+      "path": "extension/unity_catalog/src/main/unity_catalog_extension.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "1a254b92700cffdf09ff0a1f9381995d774bb771b8132217613d931c86dec51d",
+      "after_sha256": "9bcc53ad0718f9e95b7c80a8d473210292c61b858d369484d8e333d16d691d63"
+    },
+    {
+      "path": "extension/vector/src/function/create_hnsw_index.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "a15e8b772faed576343e7e11d76e072ba646358153568953dce3eac17ac77b45",
+      "after_sha256": "d22e08bd10730e88713bdfb7671fa1c9ebd39ea9495d117871bdbd5c4081393b"
+    },
+    {
+      "path": "extension/vector/src/function/query_hnsw_index.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "3af406996f5d8199773e351f3b491134d278c6fc7d9c55aff237bdd1e649e017",
+      "after_sha256": "a049a8a0309285300580bb12588ab18aad6f35cfd65ee4a3a700d4d8eb4cfb6b"
+    },
+    {
+      "path": "extension/vector/src/function/vector_search_function.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "e74fdfe21fd4b2a5bf415f0e403658493eb0299f873b580a288a3ca3186df5e3",
+      "after_sha256": "5fd2b6519801feeb91a36075f08d41bcb5b6569fe0e53d862c8dfeba81665b3f"
+    },
+    {
+      "path": "extension/vector/src/include/index/hnsw_index.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "f631fca231e2f480f63ef767abd77e78f556b923e88d5c69ec772e2659ae6a5e",
+      "after_sha256": "4a7dba288da413eadb91bb97ba90309892d0b08e38065239b684bd35de2146a7"
+    },
+    {
+      "path": "extension/vector/src/index/hnsw_index.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "1a01af0bc1ed61e94108d4b4bd325aeef0dce97e27eb6e463912a0f6a507aacc",
+      "after_sha256": "fec7c8f4903a6f7a46e93e5110273de69c27baddce50313a14fc75af4a2ce065"
+    },
+    {
+      "path": "extension/vector/src/index/hnsw_index_utils.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "223e584659d547f10882eaf773ab9f4d139a569ab92c4d65939683376ef155e8",
+      "after_sha256": "18266d1730c9f80d406aff22a43f216b868d30220d983efbf0bf26ef42ee9708"
+    },
+    {
+      "path": "extension/vector/src/main/vector_extension.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "a54e60090377c1156165694825ded7fa2371a63303250ef8bd34f3b940cfb62a",
+      "after_sha256": "8b95ed9ea5dc196f1776cc30198978ed547418bee9946fa8126b5b6dead0163c"
+    },
+    {
+      "path": "extension/vector/test/vector_search_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "b2d5f521055102dbf27b82efb2ab762cc4c2adf8934efe79003c778681022569",
+      "after_sha256": "4d5f125f5d265251470651cc1f6b13022e1d31c708638cb06c85daefbb84bb81"
+    },
+    {
+      "path": "src/binder/bind/bind_attach_database.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "4bd0547404af6064a281fadd900eacdc89b51246f3c904375ae171f49d45fd29",
+      "after_sha256": "239d1a9e9a72a4107d14b6ee4b07d16a9c1d71bd2e2e1bb04378b02070a7fec9"
+    },
+    {
+      "path": "src/binder/bind/bind_graph_pattern.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "e3e2f1cb4690c7140bcc88b6b531e0205dd101adc11ca6863732dc9c7f3a53ca",
+      "after_sha256": "fa6482ec5fc132e1cc7d6dce8c6f67d37df6b1d3b5e47f080557a6d3e617a0c9"
+    },
+    {
+      "path": "src/c_api/connection.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "02eef39dac7d442ed11ac586eac227c9156f9f06cef26e545329acd9d9527f6d",
+      "after_sha256": "ea93dc220a208dea563fd470bff3f8b5569bddb132771db7d06bc29c4592851b"
+    },
+    {
+      "path": "src/c_api/prepared_statement.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "d58c51a19c9bcc39ddb01a891a6dcb442765eeeb793a2a75b79fcc0f75bfeb9e",
+      "after_sha256": "d3a006f0e17a10a02abf582fd19ece49d8c2d6a58dcf1454d27e27dde311b242"
+    },
+    {
+      "path": "src/c_api/query_result.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "dfc854b69b960a13a836132d2325627b23c6e9254ea2b5994244919247219b5b",
+      "after_sha256": "aac238f53ef7372f3d89ce456186bdcc9dd8a2c27d509f05051288afc7b98785"
+    },
+    {
+      "path": "src/c_api/value.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "74b26302e65962ae27f07fbd6480ad2dd5a9c772e24e88e9aabefb0c457d3648",
+      "after_sha256": "b465470e25e9d6a3bb82a276bc7564b91c9bf9e0373dfe77fa557816ee63ff71"
+    },
+    {
+      "path": "src/catalog/catalog_set.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "1a403205fb970f107692a77870742afb9eff162d3b96c191b3aa28b48290786a",
+      "after_sha256": "f2fdf4041fda97ceffd5cc409fc0c51b5d87b2525d9b0052f101eae735584586"
+    },
+    {
+      "path": "src/common/file_system/local_file_system.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "5b6d62da69b040e94c76b50f7ddf7fb9ae3d15e10c31901dfc3685a0aaf98ed0",
+      "after_sha256": "3938b22b3c0b6c5ee910c7dbf94e6b308863639733bfc0d423925cbe69394224"
+    },
+    {
+      "path": "src/common/test_hooks.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "bf0ee2cf7635ef56f6c71beb81a5677c9e403859656852de467337ec98a16bde",
+      "after_sha256": "c4f17d147d10cf849f20a54431d23277f3cb2c295c243d4fec5da44fe6a26bf0"
+    },
+    {
+      "path": "src/extension/extension_manager.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "6a4ac7e2276fa5d2121209023f9b701725c68061d0309b188316cdfae77262c1",
+      "after_sha256": "b07f0bbe09be6ecae1d97dc751e292f5dce809be863bbc1eee792966bd4ad740"
+    },
+    {
+      "path": "src/function/function_collection.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "6fcf28f5de5be523377949dec509d7e3f77f87615ea38febc6f2b6a9efb15358",
+      "after_sha256": "52a6615e56c222853cb6203756603b33265f93244a3c04fa88937556b56bf51f"
+    },
+    {
+      "path": "src/function/list/quantifier_functions.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "6fc37fd69409dd391f6cc84cbed8db549e0d6fbf7af6b98ce2391b5f7d5c401e",
+      "after_sha256": "b9de70d7c6242b5c7dfb6fa928ca7d954b2cf004efd454e078ee0890ed4b71b9"
+    },
+    {
+      "path": "src/function/table/analyze.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "8c3fa337b4876c47d83764f27b66a4d8d9d2573629e1ce7ea9090788db2f924c",
+      "after_sha256": "c49c716139ed9802864e50065b5eaf05a07a3f699251989e68e32ec4c09facfd"
+    },
+    {
+      "path": "src/function/table/build_id.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "dc9eb460062792a674ad521573d00ea4722a948440dafdfd263f487f5a7e4d8d",
+      "after_sha256": "a2614942e81aa45ce6dab57a53cbb9b50ff190433a8eac246ea6a4c2e5acea44"
+    },
+    {
+      "path": "src/function/table/drop_project_graph.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "149767285127d19a92b5f06ea222314cb9dedb495dd8b36f1949694f716365c6",
+      "after_sha256": "9bb5a14fb3712c144b8db07091380fe492f62ed97336099b99d1121443a70d26"
+    },
+    {
+      "path": "src/function/table/stats_info.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "8b18c59e130265473ea90bf50a8f7907445b824bcebcd3fed2953dbdbcd035b3",
+      "after_sha256": "63f2c7ae80755eb485b87ca63bb172b374b837ce7bde8cbd0290527f028d1a37"
+    },
+    {
+      "path": "src/include/c_api/rag3db.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "fbca0847f7b3957958dc2111e2651f6231d540f836b7933d2187c2b5efffa45b",
+      "after_sha256": "99dc1882a2267342ae3504ecf5b61f4c1af6f038405fe0e4ae14d6aa1451bfc0"
+    },
+    {
+      "path": "src/include/common/assert.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "f9117bf535ae2fe2f7f6bcad841902bcd8edc671bbf351c7f344d5dc8680d49b",
+      "after_sha256": "1349d1b9272bf1f04cb90c6e707762912d7b03fa3f95a95b087774255ba8eae0"
+    },
+    {
+      "path": "src/include/common/file_system/virtual_file_system.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "b802d3a8e06fb1a108a957f1f3a73a42c5df174af28460974517f2a52c7336ed",
+      "after_sha256": "14977453547bf7841d676b5a3a4a47c2d53a9d9af4b956759058a104773268ad"
+    },
+    {
+      "path": "src/include/common/index_search_types.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "1c2c3f34c334e719e137019fdbe913008ed611ca0f2e0424079f367aae3fb0ad",
+      "after_sha256": "f6a08fbb7825c83da0272b76a57ec5c3d96f7043e14ba0a0ae33fe30294f07bd"
+    },
+    {
+      "path": "src/include/common/stack_to_stderr.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "2b3ea3a94e98a4bcfaf7b1eb36f9a4db9b0bbd75e83d106efc29fc5363f6a0cf",
+      "after_sha256": "80a69acb38a21590f572dc87c4a2b1673f65832772f30cfc3fd0bf787d787ac7"
+    },
+    {
+      "path": "src/include/common/types/interval_t.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "66eaa5137d7a5f39a58ca62ac561c878e05eb7d1837efd625796dbf6efa62558",
+      "after_sha256": "d936bc07a7529e6e6b5016c230fcca6299cff90a218e2735a9a297972b798297"
+    },
+    {
+      "path": "src/include/common/types/types.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "dd088f256ea02ba1246d2f7283a94d8718315086943d0ff078769159101cb350",
+      "after_sha256": "6bbf8c5e1161def8f89b6b44b2dd87272febf2931a978127f17b3d7e1e540ec9"
+    },
+    {
+      "path": "src/include/function/hash/hash_functions.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "1f2b756fb3da17755a6c49e082b00d07313ed609fec1fcf64ced54c7ba636f0d",
+      "after_sha256": "4fc93b6c87d2a187759b03c1f96cd91009c88bbf3ba194c3285964a97ca7f832"
+    },
+    {
+      "path": "src/include/main/database.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "7ade7005c215e3ab6c4a2d0daff50a266461e4a0cddec0b7ebbbb451e65c01de",
+      "after_sha256": "37e0ade7d44d40102c929b72a486ebeaab44940766613d178ee4015a433aee03"
+    },
+    {
+      "path": "src/include/parser/expression/parsed_function_expression.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "9709a8f0e1f4e6cd1b25c6a83a7ca8aab8155884bf990c139cc45f822c6fad8b",
+      "after_sha256": "1604abcdcab19fcd62c55ed5d95c605a74d44e855c1458daf465ef36d54cf60f"
+    },
+    {
+      "path": "src/include/planner/operator/scan/logical_scan_node_table.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "4c7f7d393ef66bad63cc6ef4d6974cc63ba9877ac4c7f45bda6961b889202955",
+      "after_sha256": "c8dd654a8ba085dabe409e2668c2d458fe486ceeec25c000635a51e4a115cc89"
+    },
+    {
+      "path": "src/include/processor/operator/persistent/reader/parquet/column_reader.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "ed3077cf5d317766355538ddc608b2be57e4b7a8bbf5cc553b6475025bdda229",
+      "after_sha256": "8df012e73d29702cc498fa0371dc43b31381597d4927bddcfccc141501d3a99c"
+    },
+    {
+      "path": "src/include/processor/operator/persistent/reader/parquet/parquet_reader.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "6025d59e4522379eb5234cd5813eca0691432519451c3f442bca8bb3a9152b6b",
+      "after_sha256": "24999f04ab06c1a5581e2ff0a81fea6a780f188d53cfaa0c243d79000c1c4cb4"
+    },
+    {
+      "path": "src/include/processor/operator/scan/index_scan_node_table.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "a8bbf2d5d14aafbf53259e418afc54eea2aab76fc621d21470af1bb5384196b6",
+      "after_sha256": "8b1600c9b1d1b644ac181718e67d9df6f8c86768d67f32c2e3538c325c424fe5"
+    },
+    {
+      "path": "src/include/storage/index/index.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "315f67992c2181c943624a65639106852bbbea1d8b166c02f21c9b1f8bfaba79",
+      "after_sha256": "331819f99f2a105be9a42cf56817388b800e5a538abac26be68d8bebe1bdafe7"
+    },
+    {
+      "path": "src/include/storage/local_storage/local_storage.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "26b757bca46e5d786355eefdf4a8bcff6122a0040f2a50e9e4aa7676c032a6aa",
+      "after_sha256": "02f360775fc3517543d205d7258687a6c15e1f965b71758d0c91a6512809b5c1"
+    },
+    {
+      "path": "src/include/storage/storage_version_info.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "c7a4aa405be3a677d61cb1bb7a8d476c6f2e3d24bf682cac14ef19c1df41c8f4",
+      "after_sha256": "91fbdb3c099e6b8c592286cc98e7ed6d4c4bffac9a801946b32f1ed109e6c8f7"
+    },
+    {
+      "path": "src/include/storage/table/chunked_node_group.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "0a66adcd65b35d82a37c0789a2e39d788b52124a7138d08a4a07dce6b9e8e2c0",
+      "after_sha256": "1f0ab5bba84c4d108b8126313c7cd79b1d566c1898a005c443fc72cb16248a7c"
+    },
+    {
+      "path": "src/include/storage/table/column.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "3f4a88e018edd32df29cbd385f52d359235593bb55ddf3d9d2e32cd74720cb0c",
+      "after_sha256": "1ff6665a4aa76b4a76ef7921cabd293efa38e042064b22605f38ea569e72de39"
+    },
+    {
+      "path": "src/include/storage/table/column_chunk.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "7f38ee922e279fd7f9b0f89dc6c6bc63b4962002c9077f70957df88084750742",
+      "after_sha256": "c6bd40a275905c2ffd5423dc39f89a3512000f44066581bfa6253c1836a16327"
+    },
+    {
+      "path": "src/include/storage/table/csr_node_group.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "5173a166831fe981cbd974749da9428659dd9476617ce38ee90b02857544edce",
+      "after_sha256": "5031efd13d8d680fa5222821372850fa4e36010acc0c4a739e7e31d665ca34e9"
+    },
+    {
+      "path": "src/include/storage/table/list_column.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "08181c5b952f968613e67b4f86c508a23da731d9e5e0c0086e49b0ded4a0e3c1",
+      "after_sha256": "a337248637398d1340c177044373986967c69474a54a114521b514ca3ab7907c"
+    },
+    {
+      "path": "src/include/storage/table/node_group.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "55fc2d478722da61dc0310e68e3456f828682bf616ba8001b1b83f009e735aaa",
+      "after_sha256": "7699d136890e82e0bc10549e6027d6660f3b1bf1fa709ccef8f9c10397b0eded"
+    },
+    {
+      "path": "src/include/storage/table/node_table.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "e9aa702a9e8c3327a1ab5085a4f5b26377e5c13caad8b21c85292a3bbfe6dd32",
+      "after_sha256": "f14b3882c3b55eb087a52e3482e79005aa4e82c6d43bab430ee576aa67cffaec"
+    },
+    {
+      "path": "src/include/storage/table/rel_table_data.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "5e13a5d7bd1e7097414608d29eab229210f91a5c001c028d809b87d730bd8fdf",
+      "after_sha256": "33acbee53e2c63f151c5972d96b367aa90741344acfbd8e43223a43c3d151cf9"
+    },
+    {
+      "path": "src/include/storage/table/string_column.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "678c084e9e9a7674e7b8d8a82568e2bc9df4d3531f676b7577ed11b50eb69e1c",
+      "after_sha256": "aef38c7bd1e4f7cf15d154c16aa0b63258e974e349a01f740b8f235b147a28f7"
+    },
+    {
+      "path": "src/include/storage/table/struct_column.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "0f6bcbe1ae61cf1881e16021548c9e92e62244e62e868dcdae117c82c5952e3e",
+      "after_sha256": "ea702e335227e01b53679eb8a692161b19d74ebe0aae555ab6c54f8f9c266bef"
+    },
+    {
+      "path": "src/include/storage/table/version_record_handler.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "5c8930ef80255a686ef672036ace131ccdac8ce068749df57094e252ff6b0af0",
+      "after_sha256": "47f30b5b0c48f009e65b473d90d551e2213ea6fb67a6c62893958c1ff67aa08c"
+    },
+    {
+      "path": "src/include/storage/wal/wal.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "f2ae892b75b25ced7021ed515545e97d9475cd74964988e62ed625f7466d2cfa",
+      "after_sha256": "67266e739c110945dde52a3e8f523d253b4b6541e55663aaaf88cbb863150818"
+    },
+    {
+      "path": "src/include/storage/wal/wal_record.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "000fe83d7b9066f929824156a593d4579ee26a185de25a9e537c60fe66856153",
+      "after_sha256": "725275f4f9e264f20998e94e0fe8472dd7e15c34301d554010da96fd1ff750e6"
+    },
+    {
+      "path": "src/include/storage/wal/wal_replayer.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "2317a9ea5ec8ed6d3a5ba241e9371efc4fe0982497a294a9850aa85ae0b26e21",
+      "after_sha256": "2714ca59c698043a3d0aeb48e95e775a85c83febd3fa0119f95c0040bd5ae10d"
+    },
+    {
+      "path": "src/include/transaction/lock_manager.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "06d706dbb07ece8f33364c7507b92c53863e714b7595932deb0e34c1bb44d1e5",
+      "after_sha256": "0674f5fe0866c746b75b8db0bd40212c32c8a04bc5307a52b46aa1134ddd1c03"
+    },
+    {
+      "path": "src/include/transaction/transaction.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "fb67c32e164fa11d38442a8376619a05a871c634ae946fe0f67364b9baabbfc6",
+      "after_sha256": "ed599980f75c8d8f4ff9168a3cedb9c0bb84ec97fac92b44538baca3e641435f"
+    },
+    {
+      "path": "src/main/client_context.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "20a55fc4eacc472950768317b2800d4ac3bd6ed7ce45cc23226e13186dc7daaa",
+      "after_sha256": "a506d0e2bfad5a79b187903a5c335901dd35857662602d8c889621f2724018eb"
+    },
+    {
+      "path": "src/main/database.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "b3dd3672865fc46b7af7f44d09a8a01e38ff5857ae61154eceb620026c983b47",
+      "after_sha256": "0dde6a82def6e711c88daf701940c95d3cd86ac6d25e38c66613150d023858a3"
+    },
+    {
+      "path": "src/main/db_config.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "8c0df6cb89950f7e84709d3e4e8abaa1da91b1bcc2a2f6669659474e60f27109",
+      "after_sha256": "c16a6770b4cbb1ea2f443620512ca0b475d17d1847ce7a1f55d070f4223ff47c"
+    },
+    {
+      "path": "src/main/settings.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "011f1d54ecfe9c9a878ea90b48df9d52b2659cae0be031df1756ad36f8ddc9d7",
+      "after_sha256": "78d00a56278414aa9035467daef8432f57a0acfaad0b3715e710882b80f8dc9f"
+    },
+    {
+      "path": "src/optimizer/acc_hash_join_optimizer.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "7142b5031993a38926ddb6dc4870201543dff03fd999b4fef6f7a1511632d800",
+      "after_sha256": "2fdac30b93efcd0d5d1dc9489048151d62f57e4b1936735ed9d4856d0bec9408"
+    },
+    {
+      "path": "src/optimizer/filter_push_down_optimizer.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "a2dc089f01ee793ce8d9894c9b88e643b39c5b93731bfc3a2c4cf0c8900d4e13",
+      "after_sha256": "43c77e86dcb116b2909f15976d9ce35b960c7db5de12ef94d5f8283325faab4d"
+    },
+    {
+      "path": "src/parser/parser.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "1e9f369897ed04c9a772c6a05240d796f0f1333995c53b8855afef6fef0f0936",
+      "after_sha256": "37750b5b2bc437ded743fa09366df7b7f48144b4cb79189eabb8708105f7d4b8"
+    },
+    {
+      "path": "src/parser/visitor/statement_read_write_analyzer.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "5294d284b8a77d5d282514efb0dc82e9d14c8faa820923edb0a099962179fe47",
+      "after_sha256": "c58516d32478f51cdbc204304c0e806eb031712015aba030bb4531347c776d8d"
+    },
+    {
+      "path": "src/planner/operator/logical_unwind.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "9f10ee14dc9f2dd88beeff23468ef78cfb349dab0bb9cc4ffae7f30f8b67a4b6",
+      "after_sha256": "1acca07b49ab5dbc9d4fd2dcd775446b7f7a27075ff498cbcac94784a86663b1"
+    },
+    {
+      "path": "src/planner/plan/append_unwind.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "4ad77be49eabb8f65f7e0d327083cee848286157600af89de39e3984199d67a4",
+      "after_sha256": "61d75e4a8cd3c168d02da11573c896b57d88ac80c8c9f941ef0f8f7354d57a53"
+    },
+    {
+      "path": "src/planner/plan/plan_subquery.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "85068009c8049d950010499af90d5ba455a293c3c2abdc614b6d8ddfe3092c68",
+      "after_sha256": "dc156a220cba85065c7a5aaefe083657dfb7650af0a29a5a8aac2edfd5ba749e"
+    },
+    {
+      "path": "src/processor/map/map_scan_node_table.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "ef0f4168f20ed6c1b7d8a0cde9c8e4d2683615977bedcd6b6625458976af89fb",
+      "after_sha256": "867043045bedd5ba170d423ef8e6374236beb88a0bd4d01b592013a682b36cee"
+    },
+    {
+      "path": "src/processor/map/map_semi_masker.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "459934439f7b54e13d4a76faf97f93a8f224ef638e79e986ef3aa6cc0ce6f337",
+      "after_sha256": "5dae516e5614b73989109b083b357f3b6a9b3c747b6ab2cd8634c91702d89d09"
+    },
+    {
+      "path": "src/processor/operator/partitioner.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "c95a79bcccf29d044a3ab567eff79ab3cce48bc6333f4a8d440ad052fdf17799",
+      "after_sha256": "4e7edf8b114e48117b1cdc7ae36608f536f903f13688a2796ca0e83c2328a818"
+    },
+    {
+      "path": "src/processor/operator/persistent/delete_executor.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "f9ca66090f3ee5a1cdda1ac01c8d4f662d242e3d4e424297f85fca11923b0b25",
+      "after_sha256": "1fadfeae2d0e4733c7227fe68a6abd9fc9b16b351f07b6e17890f221c95f6a4c"
+    },
+    {
+      "path": "src/processor/operator/persistent/insert_executor.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "a9222e51427880699ac06de8fbf5ec8a296875f22d2422568e4ceecd5e6935f7",
+      "after_sha256": "1ff621546bcda037ad696b32667d9284f513f7a673b0df0ac48b690976a73f25"
+    },
+    {
+      "path": "src/processor/operator/persistent/reader/csv/driver.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "0c8ff26cfc0f8dd05950a6ea8ff6ae65235d1d093189cbed44f7b09dc01fe708",
+      "after_sha256": "6e0c635aa88e3e7e38aac19814b6ed7016f07febfd9e52dbdf04416ce66fecbf"
+    },
+    {
+      "path": "src/processor/operator/persistent/writer/parquet/column_writer.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "ecc0822e86dced028b3cdb543aaf9ed6122389b552a4e20cf8efb3ae2b1a3bbf",
+      "after_sha256": "c9139449d1e1886071f4727341190351fb8e40e51f9befb5f3860c7572aa30eb"
+    },
+    {
+      "path": "src/processor/operator/scan/scan_node_table.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "7ed170eb25f523189462d26a46c4ce68979004b764b471dad31188fb579cbadc",
+      "after_sha256": "c6e04a8cc7bf16a19c5bc0b390c6701d7008f1aba303cc01db0b325914b32baf"
+    },
+    {
+      "path": "src/processor/operator/semi_masker.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "5e8b42b4191ca4a21c6b6aab72c27ba2b9cca90ab6dc07ce8ab74532d77c5982",
+      "after_sha256": "790c78e7d4fda79afa1f4319b8c644c11d775f13e0b9590b64e81a1f7122b213"
+    },
+    {
+      "path": "src/processor/processor.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "c6a44b199f08641fbf9b9d212a233e6106ee3897e313132fef21671fee2c2b91",
+      "after_sha256": "29f234200e96f5bb47351f67b91080ec8bde76d0e5245cbb31a826805462413f"
+    },
+    {
+      "path": "src/processor/processor_task.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "0fa5ba77fb06245f03829d380c87c073ec0395107aab4aaf13a3b7f24eca8e90",
+      "after_sha256": "b1550a0312c61149ac9ced07b4572c7c972b5648ba723b3a97bc06557e5b396a"
+    },
+    {
+      "path": "src/storage/buffer_manager/vm_region.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "bd0ee1151d817c4e79e3401b48e855695cbcb68c2eb0dbf57faa6298ce4c88e3",
+      "after_sha256": "323fecc1108211156d704d246d7aea550f9b53bb68c89558d4a3140bb82b562c"
+    },
+    {
+      "path": "src/storage/checkpointer.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "277b4c793a05ded733d916a8ca4c32ef8c4d4ec54a676f3eebe8348f9ae2151a",
+      "after_sha256": "d974acbd99d332ff71c683bfd4b595313070a87654baca402c5a6c36c9f17fc1"
+    },
+    {
+      "path": "src/storage/index/hash_index.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "6559945bc904d1aad5b63a20d1f5e846cd2f976fc75e5afdc861a7102a497afb",
+      "after_sha256": "b4d6a3fa14c2afb8814fd5ddc0ceb777f3d113246a042fc61c2d886fdfe1a8e5"
+    },
+    {
+      "path": "src/storage/local_storage/local_node_table.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "575ca7db4f572b12304e04a0381a72ee250cf1c99143e9d0490f05428866b017",
+      "after_sha256": "01f60f9470f5885dd7b30177ecc2cb807cd747352248b72b2dfcf11c6ead110a"
+    },
+    {
+      "path": "src/storage/local_storage/local_rel_table.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "edf850e777d21a4f6e065c2743297c14cac528637b90481c4c9b6a62081fbb96",
+      "after_sha256": "9ce3c87f73248c01a4312c0dd83b127b353eee2c55a2ffa391a28f6c08c317f2"
+    },
+    {
+      "path": "src/storage/readers_lock.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "a87f7e0bcc22d15c423e97fb8455563f742f4e4506b78265da598e17a6eaf653",
+      "after_sha256": "abcc3a885b573808bf13d91132dc7f853301c27bd00bab04e09605d9616f9f43"
+    },
+    {
+      "path": "src/storage/storage_manager.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "11ddc805f3a1e9b5e8c36dbb4529521850c82bc16be50a025b3353ce3eee0dee",
+      "after_sha256": "331c94b480e4369d3e682b853294447f0a76dafddfa406e9b872566b0a3d4640"
+    },
+    {
+      "path": "src/storage/table/chunked_node_group.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "bfa1bc4a59967734579b5cf89164b9b9943227d658dbd1e4f16c66e272acfdc3",
+      "after_sha256": "d20851b25bff47f96a9a03d1c025e6bc96dcef08cf0d7898cd2ba6ad7484c6a9"
+    },
+    {
+      "path": "src/storage/table/column.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "68ed2c7bfff583d677df936e2eb69c879c95234a54cd96d824f35831a001726f",
+      "after_sha256": "edcc1c990cda9699c746370f6f8f2757b60e2f4e85348bc390705dcd5a20a9e4"
+    },
+    {
+      "path": "src/storage/table/column_chunk_data.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "434a68500eabbabdec5c50cb8f2a444f8bc81100257845d221009ad7750462ad",
+      "after_sha256": "f2812d0066af72a212c330f2d650b33fa629a4c46ca5f7cb69b3356249825e5a"
+    },
+    {
+      "path": "src/storage/table/csr_node_group.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "87fd7b4527e5c302c4ba9375a6986c6739733e9898f20a9c7c5ab9706e043ee9",
+      "after_sha256": "137379e607d8781385a1e247e00636f54d593a3f3a7f244746fb4f3d41a0defb"
+    },
+    {
+      "path": "src/storage/table/dictionary_column.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "6da3139a1a8625f567409908005f9e626ac55f7889cc9c6efc791debadb441e8",
+      "after_sha256": "4d4d12aa5622fc26d763753f124cc4b52391022ce73b52ab1295539e1c3168a3"
+    },
+    {
+      "path": "src/storage/table/node_group.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "4a87f332c99dc7bb9641a67e311531ac14fa69d3f82373acd815d8b2e7ad565b",
+      "after_sha256": "0a322eaa4d982b869967ba52f2d204e89c2ac428099427ffd85965bec295f6f7"
+    },
+    {
+      "path": "src/storage/table/node_group_collection.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "054f4a5f6509d89fc9a9ffc4a381d6d48089cd07cd1ac7e28f329d62fa4951b0",
+      "after_sha256": "2547ccc8e94b7837ada4e4115a4a9f44398b38b25a9a14f5e5f2dedbc421d20f"
+    },
+    {
+      "path": "src/storage/table/node_table.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "e3aba9fb22f2a2c81db4a5efb9710da1dd8b12f7acb6760e0961fc3ac6c8d3ba",
+      "after_sha256": "2ebcc5c45cb9c8dc93542eea81a571cc474f23472753976b42a6deafec9237b3"
+    },
+    {
+      "path": "src/storage/table/rel_table.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "ac53b3ea795ceef5f7a5c95c5e4bf782047c04e4bec927203a08e89b42984856",
+      "after_sha256": "f4f736b27d5cc20c16afe9902246079d8a0f8bdaeeae86f3fee46bc0e0a351e1"
+    },
+    {
+      "path": "src/storage/table/rel_table_data.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "bc1124a794f0b7ab27ed6a2c0563d237ae2ae59742c48c746c5fd81cc03de96b",
+      "after_sha256": "21c03041df0434dfc53de1ce13073f46a8c153403901a92f16bfabd8d714ca80"
+    },
+    {
+      "path": "src/storage/table/string_column.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "f39b88d5d3f9ca6871d35067931ced8f479ef62943f300ef21e552aa8229faa4",
+      "after_sha256": "d02de928861f54f538e2549bbe542323ab3df58158633c65cde720784c743607"
+    },
+    {
+      "path": "src/storage/undo_buffer.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "2fd065994f5f7b01d697b3f95aba558a687b17327dd4e9bff5a38baf976e433d",
+      "after_sha256": "ca528083eda645bab3eec86c16906fdb7f81fa204cb035701492b6deefaef83e"
+    },
+    {
+      "path": "src/storage/wal/local_wal.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "3bee76cdf60b0d7967ea9d970e58e2bbf2db88091d22388a9f49bd4558680858",
+      "after_sha256": "3acb05e3558b7cccc039329d93cbcd1a1cb48f0add8c44e6fe94f1e3bb980082"
+    },
+    {
+      "path": "src/storage/wal/wal.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "d42b597163ccdd003614fdf71f0ff135157c753f7f046001eb630520288064a2",
+      "after_sha256": "16eae1e85fee0a118cf4b33100b5f90350614258e10703c3f099ec786d84f559"
+    },
+    {
+      "path": "src/storage/wal/wal_record.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "b9d45efee2c806eeeecf6e17198961c5479ca29584488058b5091ff09c305abb",
+      "after_sha256": "9a9adfa2334769c80db523c33e0f9245eb479e40a4d855f28ae09d188a64f5b8"
+    },
+    {
+      "path": "src/storage/wal/wal_replayer.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "ef06715fc79b5a0ff8cbc95e246f587ef8f80c0333d12a68edf2a660c1b168d2",
+      "after_sha256": "17ff121a0975f5af7dd0032aaaff1e60a71b138e46ba2e7a3e8446fa66747594"
+    },
+    {
+      "path": "src/transaction/lock_manager.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "f624cd8c6da75a9e86742dbd7c1f196175ed1ebb56d4878ece215edd55f98539",
+      "after_sha256": "65b5c39a06b91706862cbbd2bbf52f043652e7ec21b159d31970cc24b466a92f"
+    },
+    {
+      "path": "src/transaction/transaction.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "42aac738eef74f4337b91f4bbb40b79c867e4c681a137c87a133025c8014bd28",
+      "after_sha256": "2d338c0f82f70db0242690080a0f2937fa05d50ede7e0d25395b2fda44bd23e7"
+    },
+    {
+      "path": "src/transaction/transaction_manager.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "584070f5e469b137eeac254bbb59f7645de381b6ccc116fa2711facf54be5194",
+      "after_sha256": "1ba9037b893a463c96dd48e7604e56ddd0b173557b65889eaad80f28b3cb2707"
+    },
+    {
+      "path": "test/api/prepare_subquery_parameters_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "fd7c5292cfda1df83b2458b1ab6980ceb7d6b474450313f0645b3e2f92588b0f",
+      "after_sha256": "a19085481d664fec88c5c6bd2e9efec828aec4fa5eea6ea2ba8fbcd46579676f"
+    },
+    {
+      "path": "test/api/prepare_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "06874d26d582cedc695a62f35df42fe768375222e90f32cfe2e7fa4546f5c763",
+      "after_sha256": "f4634151060114d8c2e4a8c1fb1bf3ee2fc14da7095b9a553697e29a5a7370c8"
+    },
+    {
+      "path": "test/api/prepared_statement_lifetime_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "ef9775216a0c5bd095e1defdcc0c22b00628657d93985a503ba0ff2e77ed26d3",
+      "after_sha256": "73a9eda8847b40bd5446fecf15ce7a83b2cf6d7d11324888f8c9f15dd2dc79e5"
+    },
+    {
+      "path": "test/api/system_config_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "ca87489d0a6b7fb2803d9d6c6796b2732944cb146d1a3f4a157c9f499639eb16",
+      "after_sha256": "6887a517563ac44a67954efadcaf74ae8b18dcc6ff711177b5d57daac69e167c"
+    },
+    {
+      "path": "test/c_api/prepared_statement_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "95b9873c06f7c390659f79371d94c75c5c2bbab9bb6e04a87c768412124f172e",
+      "after_sha256": "758b4b07c9f0ff31ed11f8a1fe12979e0f5914f92e0d50d6d07441cddbef8b97"
+    },
+    {
+      "path": "test/c_api/query_result_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "e2d11d83dfa2e15b7f7503c61e14f1da4cf38a98a17cfa0b394244a6986ff945",
+      "after_sha256": "7b5887cc552dd95648a07f90d7ffbd39fe0ce6543e056820e4124f0154e7968f"
+    },
+    {
+      "path": "test/c_api/value_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "54028fef59ca2a07743ebdeb0c9e575a11f9e85610ab5626285281eb1adc700a",
+      "after_sha256": "f0926cba6f0bad3074923665dac57c47dfc77dd5587c64d2726a138fbfe7fdb1"
+    },
+    {
+      "path": "test/copy/copy_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "9bc28cac50cd7e54477fd00d62aed9fddf3c00f7a46c5346a6e950e82b6d068f",
+      "after_sha256": "95429d3d1a5ec8ab6bcfd5d24c5950e9df6c9dd0b43affc2ca02e2d2657ecf2b"
+    },
+    {
+      "path": "test/graph_test/base_graph_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "700ba2d74e7736f049a08cab1097f44107d5a54a181d69be37f39cd974d7a0b7",
+      "after_sha256": "0f48ae2188d1c351f55acf2442063e804eb88a297dc2c35ed80da8d1fcb0f823"
+    },
+    {
+      "path": "test/include/test_helper/cut_file_system.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "0622a2b6c7a5e31d9c3a415cd0f45d8bed70ed7b9920ae0c563608cf19dc74da",
+      "after_sha256": "3a30fb1200290c814f7372d6daa32f8d4ec4cf4353313e713f12cf7b369bf300"
+    },
+    {
+      "path": "test/planner/cardinality_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "356e6499c5a62bb9ebd9b06b045270fc3c5b31b9fabc276f51e02df094cf4561",
+      "after_sha256": "5aff6327eebc22cb63074315785fcc36e9eedd884f7127c49ae434687f6ec83e"
+    },
+    {
+      "path": "test/runner/e2e_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "d9fd6a199b588db7a203b548a8d6237aae3de10fdd675861017af66ec0b7f651",
+      "after_sha256": "4b449fbbb4d395ab222150f91ffc7465d94b92289aea1cacc979598cb45ab2b1"
+    },
+    {
+      "path": "test/storage/buffer_manager_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "68a9340fc5158625c58a98a263afd6138b24e0d2d18067b802e1ab614f12b225",
+      "after_sha256": "9731b270e9bcacf28485681d0d8e42ba86938494e6dee8954e99b0c077c9ea61"
+    },
+    {
+      "path": "test/storage/hash_index_split_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "14864ee919291a08d452b9ebfadd502c41b6c7d08abbe89083bb286a4254097f",
+      "after_sha256": "cf55e39cd428167654733f0e8848e36d326eac3b8258f11eb850d90a23902834"
+    },
+    {
+      "path": "test/storage/string_split_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "706749aebe867ed470067537de315668c2a0cb4ba39d8d177d6b970ccf49c360",
+      "after_sha256": "cd3fe4bf3150e26f9f37fe648bf166230c254667a9afe2b67e625abdeefc6a31"
+    },
+    {
+      "path": "test/test_runner/test_parser.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "c19f4cda6302bca406cb6fded5cce00b6941eb665dbe1c187d91d71e3b2628ea",
+      "after_sha256": "1f218a580a3b30071ba6c52aaf30b7067a8fbd6595138b2bc22b0f4868c39f1a"
+    },
+    {
+      "path": "test/transaction/blob_checkpoint_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "c807bbce0d30197f5eb3bee53e020b5cec9d78013fa67c6b8f2ba734e9c8800d",
+      "after_sha256": "21b554799010bc382cd11093f9c1ef65e3dbf0279caa863c59bd002c9a5bd0bf"
+    },
+    {
+      "path": "test/transaction/checkpoint_after_failed_copy_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "cc93ccd17d589f6a398a7fe89286230fe8b497d9c84aac97416e766f06da4be4",
+      "after_sha256": "5346ff452a82c4b2e37a341eb76d0d6bcfda67677494bc3332d4b80b48a18a1e"
+    },
+    {
+      "path": "test/transaction/checkpoint_new_segment_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "e730c2a873d06c6a5ec7c88c0e05eeb96d20d2b1cbabdb6b2cd254f14f344902",
+      "after_sha256": "40a29f84bd512960c15a009d577dd8381a19c555ea26ff292d87b75b1b866bd0"
+    },
+    {
+      "path": "test/transaction/checkpoint_open_reader_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "b16ed0a3d6c11e0f8337ce4b02102333288f5462ded570a3faedc39a102b3583",
+      "after_sha256": "1a671c4ec7b38a7fb692fea8e506714bf5f6a734357ad97638ed5a9b0a22c7d0"
+    },
+    {
+      "path": "test/transaction/checkpoint_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "ecda57e999301bd1cbca4bacb374ef00eaa5a2fe52644a233dfb181bc880753f",
+      "after_sha256": "b2390432a0046d53b82858f2ba75f0d5c4c0aecb5b73b4d8889bca013371aa18"
+    },
+    {
+      "path": "test/transaction/checkpoint_under_readers_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "4a981ad85ad07e9f961c34e10c64328b236c4627bdc025aeade0e810f1e15eec",
+      "after_sha256": "39f8c2bc98324fcc8e0ac3979cc7f225189226b4ddabbc064c44cbb882374151"
+    },
+    {
+      "path": "test/transaction/concurrence/bench_harness.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "28b4b6ac4b69479245948925b910c954ae5aafc1519c442e31dce8a07e3608fd",
+      "after_sha256": "cdf01474b5b8106bcd6734b24686b5e480d7f27e2c92245580c97ebfbb3372da"
+    },
+    {
+      "path": "test/transaction/concurrence/checkpoint_after_updates_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "b8e5f0ce67fb0d60843aaf09c6adb52a1bb49960d4bb29f0db119855f116ac5d",
+      "after_sha256": "770f759484d8f64b557fbf9fb0e4c5fb707dc122fb76c7e3ef2245a0f82aaab6"
+    },
+    {
+      "path": "test/transaction/concurrence/concurrency_bench_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "c8200cc750adf385f3896bd3d128b5ccb6c272aabf42d6d9769a7dfb7dae412d",
+      "after_sha256": "9f6d7fe4161a72bd6c823988f7f2fc5ff15e1d7aed104103c59363e31125c83f"
+    },
+    {
+      "path": "test/transaction/concurrence/integrity_checker.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "e1d390a80fe71298f47c06e2f6648c3442003db8dd6c787835a1d7404856d197",
+      "after_sha256": "4859fbf319ec80db2dc961e3740146faf6686f789da2e5052a64b166163432a3"
+    },
+    {
+      "path": "test/transaction/concurrence/late_rel_table_rewrites_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "d65aaf9698eb787a582a532f3bee5b146216aadca6a6a5407ef50c6819082dc1",
+      "after_sha256": "e91a9de6ff482de509791c7c93f160d616fff38881b60dad8178046833209ed1"
+    },
+    {
+      "path": "test/transaction/concurrence/lock_bench_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "ae9169636fe073051a068692ccca573a63b0ca63905d45c247321c390c11d3bc",
+      "after_sha256": "38800d3f1c7435f72b891bfd01920ef3dd3b34c8f82600660ca2a9f729871eeb"
+    },
+    {
+      "path": "test/transaction/concurrence/lock_cost_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "b6debb971856614ab2ca36c86a18cc73e09e086bb744326977166b6b12c1c335",
+      "after_sha256": "ffc060b9df3cbb0883275e1344a852d8bc0ea75fe2ff11c41dbe2ddf11a1c00a"
+    },
+    {
+      "path": "test/transaction/concurrence/masked_scan_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "6991ddad6242a027350345c9216f0f2fe4096a614bb31a2a22ef09e86824000e",
+      "after_sha256": "839c63086a3ebefcf17eaa499ea19c6a8ea29a6a7ff7ee8960dd34b6c6cebb4e"
+    },
+    {
+      "path": "test/transaction/concurrence/minimal_reproduction_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "79ab760a7685f9d8e8f122142fde969e0368d8b4768884ef0fe47de9caddeaab",
+      "after_sha256": "7d4382220954e0c5587f4010def6e219adca31ea91dc1833a396c3853e70023c"
+    },
+    {
+      "path": "test/transaction/concurrence/provisional_offsets_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "363efe47bfde0bf6cf269735926b293597dbd2189c831e06ce810fcabefabe88",
+      "after_sha256": "3539eb7f76b6cba82d2777de597da9130c4b2a4329b6c4fbfcd09b4b18af5628"
+    },
+    {
+      "path": "test/transaction/concurrence/read_only_reader_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "b67c14a9437355cba0b2b8451a9cd03ef37a9a9ac5c2ed83d4e1ffec30155dfd",
+      "after_sha256": "762053ac68a812f0b152f8da915ff11c9bc20d6c5fbd22b09e4b2db247aeb43e"
+    },
+    {
+      "path": "test/transaction/concurrence/single_writer_crash_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "3c7af1a09a7e197338662ffab375e74521e146acebeba47434eda26a96c86e04",
+      "after_sha256": "d5fa71e32f6a43536105724643d54b825b52f3b402d7d5e7d7007572ab0da351"
+    },
+    {
+      "path": "test/transaction/concurrence/string_rewrite_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "881d0b8cb33e8a755ff5966d9b2018f8cb5332782f476c61cca5b52245531359",
+      "after_sha256": "ae360e9c974dcbf12383253d389cbeaf9840ca316e249622e66682060bbad4d6"
+    },
+    {
+      "path": "test/transaction/concurrence/string_scan_filtered_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "872eda0298bf68afdef0588abf0fad02a18b6a6f7a6c0c1e3b2b794ab04af3f2",
+      "after_sha256": "742c271b424227ed2010e57fddeec4119a8dfd08cc4d290122f52b8b3d82ab9f"
+    },
+    {
+      "path": "test/transaction/concurrence/uncommitted_relations_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "d757f1f5eca183f4bab9196bd56662d633b3b0685247bb82f276c4a0fd706df5",
+      "after_sha256": "26b58ac0aff96437abbe25841a178e19955f4ad529c78f45bba42e0b54f237a1"
+    },
+    {
+      "path": "test/transaction/concurrence/upstream_fixes_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "7fc19728cab67eb5f7821afa68f309d9070e1e48ab0e759a051810c7de0100b0",
+      "after_sha256": "f72453c7be6d1de0f38c68141a640031eaa5ccb55481db05863b54dec739a462"
+    },
+    {
+      "path": "test/transaction/concurrence/vector_index_cost_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "de2103517951cc3a265106ee9f5d62599a9866587d526afe3bf4831ff80ba454",
+      "after_sha256": "95bbd38098fba90e8dfc8c3cb9b4c8e3609bd7fc081a285303582f44e6f6a4bb"
+    },
+    {
+      "path": "test/transaction/concurrence/vector_index_rebuild_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "dfecc3d463f0bff8622d8ce487cb2241169661a1bf0557387b71e1b1035d7767",
+      "after_sha256": "8210ddaead53c45d7ea773eb82daab3ad359b683193c6a2d4ff9e0b4d5e89d64"
+    },
+    {
+      "path": "test/transaction/concurrence/vector_index_retention_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "f0b5b6da2b7a1a3d5a13e9ef591fda68b8d41b0fcf893f2daa275e785c015549",
+      "after_sha256": "f6c1b4e685ec0fdba8ac5cab7692e4b0556cdd34e3f7e18a97827952d505d821"
+    },
+    {
+      "path": "test/transaction/concurrence/vector_index_update_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "f8b4567f6fcc8b81423fb11eeb5090ac67187ef8e67142576e5381740dd8970e",
+      "after_sha256": "50284b53bc51100b976f881d20380d23a770b9745d56e41de91e9dd1559592bb"
+    },
+    {
+      "path": "test/transaction/copy_after_drop_vector_index_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "b74da68817ee19ccb758030e3bc4c6913a6a34ce08aa5a5c5601b3de9e35acd5",
+      "after_sha256": "5066c7329c08e7ee41c193dcca8fddab5499a0a1465c43b728fea2e44e074889"
+    },
+    {
+      "path": "test/transaction/copy_null_strings_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "60beb2608b64a3c9a47536a450522109f34ac803bd94d0f110ffc434abb59ed5",
+      "after_sha256": "fd45c4a9a5ba51d38015d0a04be019a314aeeb4280b53611507b556f16e24d9a"
+    },
+    {
+      "path": "test/transaction/copy_rollback_persistent_rels_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "a0eb8747492036bd305623e2e7914c9f2ee6b5e791fcdb797554d015e27d8560",
+      "after_sha256": "e2fba79aacea2aa15521e6592d1ac9928a5b08cfdd7b1ff7822122d55632b398"
+    },
+    {
+      "path": "test/transaction/csr_dead_rows_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "49c710f22fe094ec72d1ad8eabe297f11516e5781819dbe67631af192b1a2448",
+      "after_sha256": "9510eca3bcbbd590e2b62eca5ab970cd52aaec8687f866fa15af4f67cd859eac"
+    },
+    {
+      "path": "test/transaction/database_before_extent/fabrique.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "b353ec6f9ca5669258625feb4023d2b386274c18e4bcf370236cce187bbd66ba",
+      "after_sha256": "a83c85325f5db747f6e82fe6d87934cf2ae87ea8d782bc91e11bd1c6b141c687"
+    },
+    {
+      "path": "test/transaction/double_open_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "261a35245d3d6b6dea086e8d06bee27381fdba00960b3eccc57adf4e61eb1b48",
+      "after_sha256": "fceca396c40e24fd92523a79b388cd58d0eed356181ce897cbb3caea486bb341"
+    },
+    {
+      "path": "test/transaction/duplicate_key_journal_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "ea77b41cf5130db8a5c349eb52b7ad37bb7383e9e600640fcf854f29fffaad45",
+      "after_sha256": "e7e7b95aff77445c977deb5f6271d751a9e6735aaa3ccd9117bd908e21069888"
+    },
+    {
+      "path": "test/transaction/extension_build_id_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "f11c81df6ae87512f23e41f71e477c7b67bbc858d1379cd5932969c5b18ade19",
+      "after_sha256": "2e885f2df496e6926ebd8bb3d4b2d9490bc1f2bac368f5d086b79489a3929e7d"
+    },
+    {
+      "path": "test/transaction/file_lock_registry_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "217e1a4e162cfa9bb5bef6ded53bd19c97ea46d0b328ea3cd3aa27d7a996b344",
+      "after_sha256": "246ef60e37087746636a4696b58a1a7fa221e2c12b07d36bf243603062347609"
+    },
+    {
+      "path": "test/transaction/half_applied_commit_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "7679bde5acff5ba4ce231914921f4845738d4d7c7a0ff7b6be1af5ba80800752",
+      "after_sha256": "c1acaef14c9be933cd71edeb7af23c634be817cea9bf0ecf23774b43d7decd17"
+    },
+    {
+      "path": "test/transaction/ignore_errors_duplicate_key_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "38ab0cf354a39e151e41cb04ccd0bbf02919d09f84e5ba8965c57d67919622d7",
+      "after_sha256": "21f4514860d5ed2c49e74b414e23fb682203c02fe0deebe1ea7599a2b352621d"
+    },
+    {
+      "path": "test/transaction/insert_lock_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "d92902548ada0f987b2174319ab183efb706688043d230327d97d01b9fd400e3",
+      "after_sha256": "c875c2e63fa54e712b6f06b8789ab20388853d9484baa4eccdd1381a0d6ac9f1"
+    },
+    {
+      "path": "test/transaction/journal_before_raw_arrays/fabrique.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "34089767d7ceeea7bab8588604d9ddc692c49d4a3f4c8cf7d1f8401710fd853c",
+      "after_sha256": "c8ac7fa570886dd5e9a3be8e4575252174d68cbe93b282d05d6768b7db1eeaab"
+    },
+    {
+      "path": "test/transaction/journal_with_duplicate_key/fabrique.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "1ed9080ccc6777fb392d9d46920dbfa62e5522060b2f192a2b4356c533989ce2",
+      "after_sha256": "2d7647d582cdeb0a59bd38f34b33519b364f4dc4f54a9ff2476ae9802156e3b3"
+    },
+    {
+      "path": "test/transaction/journal_with_duplicate_key/fabrique2.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "5b795ff950ffdc5a3e0fd9e90844797580dcc51a6937942639d353eb7de2c94d",
+      "after_sha256": "f24cdf3190f29ffaf5a428463b70b7fbc4f131821ec971171c96ef759f4a5c2b"
+    },
+    {
+      "path": "test/transaction/journal_with_duplicate_key/fabrique3.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "46cf00d419c79f7ec68d1e2633c9ef6d6ee74955f7d4d6be962d65b373d406f6",
+      "after_sha256": "ffd1ca0744d6343b5830eae7d8cdafa151a09cccec69d33727645ae40907a95a"
+    },
+    {
+      "path": "test/transaction/journal_with_duplicate_key/fabrique4.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "3ce156d86180ffb384eb6e2e77933d2b0c3f9016cf626415f8e28d14aceaa7c3",
+      "after_sha256": "45d2e6b526401c4cd96f9bc9854c3e3763ed2cfc2a666ec86e6564236ecb483a"
+    },
+    {
+      "path": "test/transaction/journaled_copy_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "3d9db1b0cf5e62ed4ec4373ed66fc6c9c672a23b3bf05f786422d581e61ebe88",
+      "after_sha256": "42712689dc9d84a4fa4b12d7441f2f50420b0f8dc2b1488a301829892dfc5f43"
+    },
+    {
+      "path": "test/transaction/key_mask_join_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "e048cb071d01f2603262effa0f9857ed6ff19d10383d88b72210577851d9519d",
+      "after_sha256": "7600611bdc956e7a4f08dd6e89e07430f1405d35b8ec526c0084b34f8cf9bdc2"
+    },
+    {
+      "path": "test/transaction/local_offset_remap_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "bfbfeb42595da4b860ff420c3065621f74126b9e3f46d8d59a720b543cba2412",
+      "after_sha256": "a95411b35b83be474aca1bdbacfc924cd8a4a757c0b892d1c09a7e0faafc1987"
+    },
+    {
+      "path": "test/transaction/lock_manager_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "e0633b9ef0c8421d8009f4f59782914047e3f1ced144275b2956912c3e366373",
+      "after_sha256": "96ebf492aa867cdcbc529d29248211ab0f1be62761975a7b0a64816564fc3d6f"
+    },
+    {
+      "path": "test/transaction/power_cut_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "d06eae3ae7a26219b24e1d66d917849ba24cca66bd3c31ba39b1acf543b26a3d",
+      "after_sha256": "c201c6b6db3dbc938d7de84833f643292cc3e2d331c96163972fe3b5beec943d"
+    },
+    {
+      "path": "test/transaction/projected_graph_read_only_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "b15954ecdab8f5d3f6f2624171fec6ba989679e4fd819253ada56778d47fd068",
+      "after_sha256": "84a9c4a55c21d7a0fa28d7644c1083a658ca94ac51652147460b84e235a38b9c"
+    },
+    {
+      "path": "test/transaction/read_only_open_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "70c37d6283f11122bea04c5fc56c0b470985037ce959afc20f663275d31d3a9b",
+      "after_sha256": "63dcd0bbeb0fdb5d802d3d036ecf3d1492d5ca74c9957a3d79c2776adb98a52b"
+    },
+    {
+      "path": "test/transaction/readers_during_delete_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "6182468ae984a7fd0aa08a070a0211d6dc5cd75679281b2b7cd8660c3cbeaaab",
+      "after_sha256": "d2ec2fe48b2c1ee3fbcd91b7a59757b0c17369c8aef6787ef4212f6c294d35b0"
+    },
+    {
+      "path": "test/transaction/refused_begin_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "8cc9c328e4f572dd6d79b04df50874bf14b590688e8cd32065224eca983e8b04",
+      "after_sha256": "3c106a9bac27391bb43292f8110bc03989ebd94b90cc555326fb3a3742b18d94"
+    },
+    {
+      "path": "test/transaction/refused_copy_same_session_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "3c0db52f22ff73a38f3fc44723ce963538c1b274847ecb0bb5c407b6bd6a8da0",
+      "after_sha256": "56830a9ecf3c801beb92acb387bf02b4116d386cb250fb9ea4439c866b7676e9"
+    },
+    {
+      "path": "test/transaction/rel_checkpoint_untouched_regions_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "9f22ce016e50fe3b07f02bdae992d535dfc2d5d2991a55d6b64c8da33dcec4e4",
+      "after_sha256": "4ecaff1f46bf86be931c9c3840bec088269e2f4a3b638ef7a701aec99a69985c"
+    },
+    {
+      "path": "test/transaction/rel_string_property_checkpoint_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "60589dca342e8c0c8925523a6bc890ae0c6ab0e0b4e9864d8c8c6765c847a681",
+      "after_sha256": "ca2aa001c92078b9044d0b3790659a4272d55b5d216659fecd03f6fa68f7d9b4"
+    },
+    {
+      "path": "test/transaction/rollback_under_readers_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "01dd6b24d06bc310c1d913c6ef3de71258ed81f7e07594b9119354d4f9a492e4",
+      "after_sha256": "8edd1e885f0be04477c2fa9389a3d5fd028baf98d42e01eaaba51168790ddf6e"
+    },
+    {
+      "path": "test/transaction/rolled_back_copies_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "63d49e529ce9efe6795cf849f918575bb6d2a43a0f5764a3901e2371685ddc70",
+      "after_sha256": "62fa5f4f2bfb722e485c09ec121cefa35e4fd61715cb0e4fb5de2fddde80a5f7"
+    },
+    {
+      "path": "test/transaction/second_writer_process_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "af09aaf8f539c329ed0d7f52081c627ea7322dccce8d625bbf26ede53ed3cc47",
+      "after_sha256": "98b04fcb2b9eaf2fc1565a8b97d373f96f7694c9e8407f98dfa5179bb29b044c"
+    },
+    {
+      "path": "test/transaction/stable_column_ids_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "bddd42d5bcb0acf9f8093c6e85681f1494c06826bd3ab79ae21497bec4286330",
+      "after_sha256": "51324b25c1695bddb7434c8c892aa8dfcc1c809c9e7f1461aa992ec3cbd8492f"
+    },
+    {
+      "path": "test/transaction/statement_failure_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "877b1f7d7e9413e7bc42bba81bfaf9577666df8dff32f08bc05637583aa32131",
+      "after_sha256": "4d9ee0068fe7391f5c578efdc60728a97467b0e5b76434caeda40547cb746495"
+    },
+    {
+      "path": "test/transaction/storage_format_version_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "198197bbac3ee40a9905bd32df279211d999c685d4e983c25deca9e4a7bb2cdb",
+      "after_sha256": "95d4b19cbc0d6500d59272b00482b0e3b40c7eacf50b202fb7ebcbdf21bddde9"
+    },
+    {
+      "path": "test/transaction/table_analyze_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "3cfa9361ce3c038662131e7280e83178093226f8499b63a51cc2dbe57c16264d",
+      "after_sha256": "8c79b9499b904a3069fcf4e085ae347d7cc310980267adbe9970972874522d2c"
+    },
+    {
+      "path": "test/transaction/threads_by_cardinality_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "6316a3e63a135405fdc8aa22380a32c3d4892bd066fd2d3ff7480c793c3218d1",
+      "after_sha256": "460fbbf4818f38ed471ac2b9eb3546f55822708a83dd84b8a692cb09b68c2a00"
+    },
+    {
+      "path": "test/transaction/transaction_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "d93b7d5514bd6f0c814b23bd8823f5afd095746655fe99151298423302360e1e",
+      "after_sha256": "a4dfedb7d7b6a11038489b9b3cadede5c37a14bf1491bd7c838bd8605b3a4ff8"
+    },
+    {
+      "path": "test/transaction/uncommitted_rels_scan_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "f6f5c146fafb614060ab77e5f09aa1bf9dd5185d2c77fb2dc596dd7eacaca60e",
+      "after_sha256": "772739a5acdb919ec137c8977ca9f3caf1d13cc42a1ee7212f4ff21d388f464d"
+    },
+    {
+      "path": "test/transaction/vector_index_after_failed_copy_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "c831bfaddd9c08f4b9c40ae6c665dc5860bc1d0ba2506be97973038d5ed63f66",
+      "after_sha256": "3881bd5c2290f40791955a28926320b3be61d352df79e58a8ede7431ef5416ff"
+    },
+    {
+      "path": "test/transaction/vector_index_crash_reopen_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "1b97ed0b500c6d4c839bc6e8a41abee60f7bc199e723cb0757d14940d52a2cd5",
+      "after_sha256": "85791f8a41a4c2ea520aabe7e9f7f7f9946030820b3e8afe993522b23e27b8c2"
+    },
+    {
+      "path": "test/transaction/vector_index_rollback_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "3909e75bdad93ff9eb1843ba5e1d3891d1cca0d19effbf5778b712985067983c",
+      "after_sha256": "5bd3290f610cabdf032ac325671b36a3cd67aeb840867c36ba0e5e174bdb0355"
+    },
+    {
+      "path": "test/transaction/vector_index_wal_replay_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "730be46940e5516efedc64e73803c844d3c62dc9a3f03c83c29c19da76e9665e",
+      "after_sha256": "18695f37db8a4af4cea1ed8624ddccce67f1407b71abf43f1983c3ab334f0159"
+    },
+    {
+      "path": "test/transaction/wal_reader.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "dd4ab4814241668ced6e5a118e259baedd89ed08d7848a8f0912b81809029959",
+      "after_sha256": "78a47721cbe4fc3cff72f92fe980a866b9d169578ada5eb7eb9c426c931b2aa7"
+    },
+    {
+      "path": "test/transaction/wal_reader_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "c350aaab34fbdece141f6a9f4dc53ae52e81c28e261514edb73b59f9ca68bea7",
+      "after_sha256": "e5d365375a75fe94a4bbee1a77c7f0b6cdfa0d7550956dd17e66bba09a07d1ad"
+    },
+    {
+      "path": "test/transaction/wal_test.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "453ffdcf51c7c687011ab351bd77df8c9c9f7b81130621c453edbb861e9b5b2d",
+      "after_sha256": "44ac247a2534330dd1f22c2862fa847b86b56305fc234652a35aa25b66706611"
+    },
+    {
+      "path": "tools/check_rel_directions/check_rel_directions.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "a89695bce8e85685de38c6149d2e32de6464b262cd2e0c3a33ee5c752d27a468",
+      "after_sha256": "e6b5ccc310e9e04783a2d1fc6a1e6292cfc3603c38686fd4d49726c520e77535"
+    },
+    {
+      "path": "tools/java_api/src/jni/rag3db_java.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "6c1338ada844c789e747bd052ba7b1ecc0edd31c0c702e61da93802a9bd79d3e",
+      "after_sha256": "1f77c036fb2e38bc8ec7d0ae1847e288a1fdc8dd7911964fc283fc00db30a884"
+    },
+    {
+      "path": "tools/python_api/src_cpp/include/py_prepared_statement.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "c9fb00c78e7c1d710405c558032ba3d99c495bcdded5e8692597dadc30d152e0",
+      "after_sha256": "ce9709edce9c4dbcf54e3236a8318f54a4de0045448ee21d7de4d7d534fa7b84"
+    },
+    {
+      "path": "tools/rust_api/include/rag3db_rs.h",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "b821e99727efac5fe69e60e204be9bf67f0f4a75abf38bfede79b455ace6dd6a",
+      "after_sha256": "bea25474f8dd9ba4fde02dd5a5399e18ccde4f4bbde25a717dc820df2566c7bb"
+    },
+    {
+      "path": "tools/rust_api/src/rag3db_arrow.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "464617f6d6a7edf0ce9017fdd90e1144672f85dde3ff4762f378ed6e6c829c71",
+      "after_sha256": "ae145873235a128a238943a0499c98a7c65c103dfba234980c1d2502061824f8"
+    },
+    {
+      "path": "tools/rust_api/src/rag3db_rs.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "a3c13e528239c7824138c3cbdec3da680196808c4d1b63241bf14ffe8110c50f",
+      "after_sha256": "ab181609a7896cb59637b96190fe4c7987ddb84aef3fb67f1864ae38ae90524a"
+    },
+    {
+      "path": "tools/wasm/src_cpp/weaver_bindings.cpp",
+      "include_multiset_by_preprocessor_region_equal": true,
+      "other_tokens_equal": true,
+      "before_sha256": "26df842fdd5b39cedba390b18cd3c8f63b3246bc2ee27b037b1c3fda337f4bef",
+      "after_sha256": "42cf0d6f779a8df3c2bc1299b3a358348ed59679263f879befc664b7f642d543"
+    }
+  ]
+}
