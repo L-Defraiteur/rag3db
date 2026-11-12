@@ -1,0 +1,6 @@
+[
+  "/home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-02/build/test/transaction/transaction_test",
+  "--gtest_color=no",
+  "--gtest_fail_fast",
+  "--gtest_output=xml:/home/lucied/.cache/rag3db-moteur-notes/ci-format18-74ad-02/transaction.xml"
+]

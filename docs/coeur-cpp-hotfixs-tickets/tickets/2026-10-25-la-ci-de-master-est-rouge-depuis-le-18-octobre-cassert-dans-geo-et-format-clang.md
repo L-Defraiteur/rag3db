@@ -118,3 +118,5 @@ logs/manifeste conservés, poste rendu. Source/flags inchangés ; créer/binder 
 seules sorties test privées avant gel, conserver artefacts avant tests. Budget
 2400cumulé sansreset :161,855consommées, secondeunité2220+10max. Aucun replay
 inchangé/libposée/tracebloquée. Ticket ouvert, pas de vert des tests avant exécution.
+
+Second staging : quatre cibles bâties, mais transaction_test incomplet à sa borne540s ; aucun XML final ni vert revendiqué. [Verdict et preuves](../../coeur-cpp/12-11-2026/24-ci-format18-suite-incomplete-a-la-borne.md). Paquet834fichiers rehashé sans écart, unité arrêtée/MainPID0, cumul893,800s/2400. Aucun replay, lib posée ou publication master. Ticket reste ouvert, revue C7 attendue.
