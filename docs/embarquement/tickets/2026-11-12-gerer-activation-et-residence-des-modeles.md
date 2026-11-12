@@ -126,3 +126,11 @@ sur le diagnostic de sonde lente. La durée est bornée mais la réponse partiel
 à l'échéance est classée `Occupe` au lieu d'expiration du budget. Aucun Cargo
 lancé après ce rouge. Correction : vérifier l'échéance avant d'interpréter la
 réponse initiale et avant de rendre une attache après démarrage.
+
+Sur ef11f0e16 : 15/15 tests standalone verts, zéro ignoré (0,40 s).
+Premier Cargo à luciepc arrêté avant compilation : dépendance chemin codeparsers
+sans Cargo.toml, sous-module du worktree neuf pas encore initialisé. Aucun
+rouge runtime caché. Prochain lancement après `git submodule update --init
+extension/rag3weaver/codeparsers` ; même budget privé, pas de rejeu inchangé.
+Témoin autonome ajouté pour deux processus séparés synchronisés par une gate,
+chacun appelle réellement l'acquisition commune ; un seul départ attendu.

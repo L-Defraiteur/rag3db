@@ -13,7 +13,8 @@ fn exercer(annuler: bool) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let adresse = listener.local_addr().unwrap().to_string();
     let script = r#"
-import http.server,os,sys,time
+import http.server,os,sys,time,threading
+threading.Timer(8, lambda: os._exit(0)).start()
 with open(sys.argv[2],'a') as f: f.write('depart\n')
 time.sleep(.3)
 class H(http.server.BaseHTTPRequestHandler):
@@ -88,4 +89,67 @@ fn une_sonde_qui_distille_des_octets_ne_reinitialise_pas_le_budget() {
     std::fs::remove_dir_all(dossier).unwrap();
     assert!(duree < Duration::from_secs(1), "{duree:?} : {erreur}");
     assert!(erreur.contains("budget"), "{erreur}");
+}
+
+#[test]
+fn un_lancement_entre_processus() {
+    if let Ok(dossier) = std::env::var("CX_ACTIVATION_FIXTURE") {
+        let dossier = std::path::PathBuf::from(dossier);
+        let adresse = std::env::var("CX_ACTIVATION_ADRESSE").unwrap();
+        let nom = std::env::var("CX_ACTIVATION_DEMANDEUR").unwrap();
+        std::fs::write(dossier.join(nom), b"pret").unwrap();
+        let limite = std::time::Instant::now() + Duration::from_secs(3);
+        while !dossier.join("depart").exists() {
+            assert!(std::time::Instant::now() < limite, "gate parent absente");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let s = Serveur::new("interprocessus", &adresse, "python3")
+            .args([dossier.join("fixture.py").display().to_string(), adresse,
+                dossier.display().to_string()])
+            .sante("/sante", "interprocessus").journal_dans(&dossier)
+            .attente(Duration::from_secs(5));
+        let d = serveur::activation::acquerir(&s, &dossier).unwrap();
+        d.attendre(&std::sync::atomic::AtomicBool::new(false), Duration::from_secs(6)).unwrap();
+        return;
+    }
+    let dossier = std::env::temp_dir().join(format!("activation-processus-{}", std::process::id()));
+    std::fs::create_dir_all(&dossier).unwrap();
+    std::fs::write(dossier.join("fixture.py"), r#"
+import http.server,os,sys,time,threading
+from pathlib import Path
+threading.Timer(8, lambda: os._exit(0)).start()
+p=Path(sys.argv[2])
+with (p/'compte').open('a') as f:f.write('depart\n')
+time.sleep(.3)
+class H(http.server.BaseHTTPRequestHandler):
+ def do_GET(self):
+  self.send_response(200);self.end_headers();self.wfile.write(b'interprocessus')
+ def log_message(self,*args):pass
+s=http.server.HTTPServer(('127.0.0.1',int(sys.argv[1].split(':')[1])),H)
+(p/'pid').write_text(str(os.getpid()))
+s.serve_forever()
+"#).unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let adresse = listener.local_addr().unwrap().to_string();
+    drop(listener);
+    let mut fils: Vec<_> = ["a", "b"].iter().map(|nom| {
+        std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "un_lancement_entre_processus", "--nocapture"])
+            .env("CX_ACTIVATION_FIXTURE", &dossier).env("CX_ACTIVATION_ADRESSE", &adresse)
+            .env("CX_ACTIVATION_DEMANDEUR", nom).spawn().unwrap()
+    }).collect();
+    let limite = std::time::Instant::now() + Duration::from_secs(3);
+    while !(dossier.join("a").exists() && dossier.join("b").exists()) {
+        if std::time::Instant::now() >= limite { break; }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    std::fs::write(dossier.join("depart"), b"go").unwrap();
+    let resultats: Vec<_> = fils.iter_mut().map(|f| f.wait().unwrap()).collect();
+    if let Ok(pid) = std::fs::read_to_string(dossier.join("pid")) {
+        let _ = std::process::Command::new("kill").args(["-TERM", pid.trim()]).status();
+    }
+    let departs = std::fs::read_to_string(dossier.join("compte")).unwrap().lines().count();
+    std::fs::remove_dir_all(dossier).unwrap();
+    assert_eq!(departs, 1, "une seule création entre processus");
+    assert!(resultats.iter().all(|s| s.success()), "{resultats:?}");
 }
