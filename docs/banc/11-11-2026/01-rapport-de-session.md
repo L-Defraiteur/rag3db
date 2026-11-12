@@ -199,3 +199,34 @@ cd ~/.cache/rag3db-banc-notes && setsid nohup ~/.cache/rag3weaver-build/poste lo
 - Son contenu est atterri sur master (072c467d7). Rien à reprendre : il peut être effacé
   (`git worktree remove --force`, ou effacer le dossier puis `git worktree prune`, parce qu'il
   porte des sous-modules).
+
+
+## Mise à jour du 12 novembre — k10 arrêté, service rétabli
+
+Suivi unique : `docs/banc/tickets/2026-11-11-mesurer-le-juge-local-avec-dix-fiches.md`,
+porteur banc. Worktree `/home/lucied/git_workspaces/cx-banc-suivi-k10`, branche
+`cx-banc-suivi-k10`. Les preuves de l’optimiseur ont été intégrées à cette branche.
+
+Lucie interdit désormais card0/seat1 ; seule card2 est utilisable, avec coordination.
+Les 440 paires k5 et 880 paires k10 ont été préparées et contrôlées. Une fenêtre
+exclusive a été acquise le 12 novembre à 17:54:59 Paris ; l’optimiseur a arrêté
+7882 après remise explicite par hotfixs et libération des autres consommateurs.
+
+Le serveur Q8_0 a chargé ses poids/cache sur card2, mais ses fdinfo ont révélé
+également un contexte card0 de 40 KiB malgré `ROCR_VISIBLE_DEVICES=0`. La garde
+a arrêté le serveur à 17:55:50, avant toute inférence. Zéro paire jouée,
+aucun résultat k10 ni nouvelle latence, aucun retry. La carte du modèle et
+l’ouverture de contexte seat1 sont deux faits distincts.
+
+7882 a été restauré par l’optimiseur à 17:56:22.790 (PID 3273544, même binaire,
+configuration et santé réelle granite-278m/768/Flex32, card2). Le banc a revérifié
+santé/PID/fdinfo, absence de son serveur et port 8099 libre. Le verrou mesure
+a été rendu à 17:57:00, poste relu libre. Les trois autres services sont restés
+inchangés selon les contrôles opérateur.
+
+Reprise : lire le ticket et ses preuves `~/.cache/rag3db-banc-notes/k10-20261112/`
+aux deux postes ; ne pas rejouer le lanceur existant. Établir statiquement une
+frontière d’accès qui exclut les périphériques seat1, notamment leur exposition
+par KFD, avant tout nouveau chargement autorisé. Le ticket porte cette suite
+et reste ouvert. Les anciennes commandes du §7.1 ciblant card0 sont historiques
+et ne doivent plus être exécutées. Aucune nouvelle sonde GPU autorisée à ce stade.

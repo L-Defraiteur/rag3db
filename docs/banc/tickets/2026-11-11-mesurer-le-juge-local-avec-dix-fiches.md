@@ -328,3 +328,29 @@ installé après arrêt (ne remplace pas une empreinte du processus vivant) :
 Aucun nouveau chargement ni nouveau passage n’est autorisé par cette analyse.
 La suite reste portée par ce ticket : établir un ciblage qui exclut réellement
 l’accès seat1, puis convenir d’une nouvelle fenêtre avant toute mesure k10.
+
+## Proposition statique d’isolation, non exécutée
+
+Lecture seule à luciepc après restauration : les liens `/dev/dri/by-path` et
+sysfs associent seat1/PCI 07:00.0 à `card0`, `controlD64`, `renderD130` ;
+card2/PCI 04:00.0 à `card2`, `controlD66`, `renderD129`. `bwrap` est installé.
+La présence de ce binaire ne prouve ni permission d’espace de noms utilisateur,
+ni compatibilité ROCm, ni exclusion par `/dev/kfd`.
+
+Proposition à qualifier : une frontière d’accès aux périphériques, propre au
+processus du banc, qui n’expose que les nœuds de card2 nécessaires au backend,
+et masque/refuse tous ceux de PCI 07:00.0. Conserver le filtre ROCm explicite
+et la garde fdinfo comme contrôles supplémentaires. Un espace de montage privé
+avec liste positive de périphériques est un candidat ; une politique de
+périphériques du système en est un autre, sous réserve des droits disponibles.
+Aucune modification globale de permissions, aucun arrêt de seat1, aucun sudo
+ni modification de configuration système n’est proposé sans décision de Lucie.
+
+Avant nouveau passage : qualifier, sur plan et contrôles sans chargement GPU,
+les alias, les descripteurs hérités et la portée de `/dev/kfd` ; établir comment
+prouver qu’aucun contexte du PCI 07:00.0 n’est ouvert. Une simple liste de nœuds
+DRM visibles n’est pas encore une preuve que KFD n’expose pas l’autre carte.
+Le mécanisme peut aussi empêcher ROCm de démarrer : refuser proprement vaut mieux
+qu’un accès seat1. Ni cette proposition ni l’installation de bwrap n’autorisent
+une nouvelle sonde GPU. Prochaine activation seulement dans une nouvelle
+fenêtre explicitement coordonnée, avec la garde actuelle conservée.
