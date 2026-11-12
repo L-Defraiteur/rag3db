@@ -128,6 +128,67 @@ relire l’activité globale au départ. Les connexions côté serveur ne suffis
 pas à identifier des clients externes. Ne lancer qu’après remise explicite de
 7882 par son porteur, contrôle de VRAM et confirmation d’identité card2.
 
+## Opération 7882 préparée par optimiseur, 12 novembre
+
+Porteur du banc inchangé ; optimiseur tient seulement l’arrêt temporaire et la
+restauration du service privé. Hotfixs a donné son accord explicite pour SIGTERM
+ciblé après GO de l’orchestration, puis retour du même exécutable et de la même
+configuration après fin du llama-server. Codeparsers a libéré son usage ; aucun
+autre service ne doit être modifié. Aucun arrêt ni chargement effectué au stade
+de ce préflight.
+
+Lecture à luciepc à 17:52:36 Paris : PID 912225, starttime `/proc` 49715552,
+SHA256 exécutable chargé et installé
+`65ec1d1db17d48ee53785cd55e72b9b77ca451d5bc4bb8197a9c1b7d040c595d`.
+Aucune connexion TCP établie sur 7882. Santé granite-278m, 768 dimensions,
+Flex32, dual/sparse/factice faux, lot conseillé 128/512.
+
+Correspondance GPU prouvée pour ce processus : variable de ciblage `gpu:0`,
+journal `Vulkan(DiscreteGpu(0))`, fdinfo amdgpu PCI `0000:04:00.0` avec VRAM
+résidente 5 985 464 KiB ; sysfs card2 mène au même PCI. L’autre fd est i915
+PCI 00:02.0, sans activité de calcul. Aucune utilisation de card0 autorisée.
+
+Recette de restauration, sans lecture ni copie de fichier env/vault :
+
+```bash
+cd ~/.cache/rag3db-mesure-g5/embed-7882
+RAG3WEAVER_BURN_DEVICE_EMBEDDER=gpu:0 \
+RAG3WEAVER_EMBED_MODEL=granite-278m \
+RAG3WEAVER_EMBEDDINGS_ADDR=127.0.0.1:7882 \
+RAG3WEAVER_REGIME=plein \
+~/.local/bin/rag3weaver-embeddings --adresse 127.0.0.1:7882
+```
+
+Script opérateur préparé hors dépôt à luciepc :
+`~/.cache/rag3weaver-build/cx-service-7882-banc.py`, copie locale
+`~/.cache/optimiseur-notes/service-7882-banc.py`. Le mode `preflight` a été
+joué et contrôle identité PID/starttime, argv/cwd, quatre variables utiles,
+SHA, santé, GPU et clients. Preuve JSON :
+`~/.cache/optimiseur-notes/banc-k10-12nov-7882/preflight.json` ; journal :
+`~/.cache/rag3weaver-build/cx-service-7882-preflight.log`.
+
+Modes non encore joués, réservés au GO et à la fin du banc :
+
+```bash
+python3 ~/.cache/rag3weaver-build/cx-service-7882-banc.py stop GO-orchestration
+# Seulement après arrêt/attente du llama-server, port 8099 libre et VRAM rendue :
+python3 ~/.cache/rag3weaver-build/cx-service-7882-banc.py restore
+```
+
+L’arrêt revérifie l’identité et les clients juste avant SIGTERM du seul PID
+remis, attend au plus 60 s sans force-kill et vérifie le port libéré. Le retour
+refuse un port 8099 encore occupé ou un autre occupant de 7882, revérifie le SHA,
+relance détaché avec un journal neuf, puis contrôle PID/exécutable/cwd/variables,
+santé réelle et fdinfo card2. Les trois services 7878/7879/7880 sont comparés
+avant/après, sans arrêt ni changement de configuration. Les JSON d’arrêt/retour
+et le journal neuf restent dans le dossier de preuves ; un échec arrête la
+chaîne et se signale, sans déclarer la fenêtre rendue.
+
+Reste avant arrêt : GO coordonné, verrou mesure acquis par le banc et activité
+relue. Reste après arrêt : capacité card2 suffisante et passage unique du banc ;
+après sa fin/son échec, preuve de fin du serveur, VRAM rendue puis restauration
+attestée avant restitution du créneau. Le préflight prêt n’est pas un GO.
+
 ## Confirmations relayées par l’orchestration le 12 novembre
 
 - Codeparsers : essais A/B terminés, hôtes arrêtés, aucun client, réservation
