@@ -240,3 +240,26 @@ bâti 1200 s que le fournisseur, mêmes features/target, aucune exécution GPU
 automatique. Il observe d'abord demander/attendre puis raccorde le connecteur
 public à chaud : distinguer ce coût de raccordement du coût de reprise à froid.
 Le banc garde ses contrôleurs/recettes/placements et arrêts de groupes privés.
+
+### Passe large sur 356d7d927 et artefacts privés
+
+Validation-sal6yn1v VERT, unité inactive/Result=success, quiescence finale.
+CHECK_FEATURES 5/5, lib entière 2249 passés/0 échec/65 ignorés structurels
+(non qualifiés par cette exécution), 40/40 navigateur sans ignoré. Target 28 Gio.
+Fournisseur et consommateur copiés en lecture seule hors target dans
+`~/.cache/embarquement-notes/activation/bin-356d7d927/` (SOURCE, SHA256SUMS,
+dependances-fournisseur.txt, dependances-consommateur.txt). Aucun not found
+dans ldd ; pas de dépendance dynamique librag3db observée pour ces exécutables.
+Fournisseur SHA256 1c41f167fc016ff4ddc33b667f3045388003969510f836512749c10e87a217f5 ;
+consommateur c0ae3020530dfd717579fb15f01f302bacaf08da3202299cd58eabf672d1b2c9.
+Banc prépare sa recette privée107m/card2, sans service installé modifié.
+
+### Cas limite de durée avant intégration
+
+La déclaration peut contenir un budget supérieur à la représentation Instant.
+Le worker additionne cette durée sans checked_add : risque de panique du fil
+au lieu d'une erreur de déclaration. Témoin CPU autonome ajouté, attendu rouge
+sur la source actuelle : `budget_non_representable_est_refuse_avant_le_worker`.
+Recette : rustc standalone puis ce filtre exact dans une portée commune 30 s,
+aucun programme réel/GPU. Après rouge, refuser ce budget avant démarrage du fil.
+La preuve normale de la passe précédente n'est pas étendue à ce cas limite.
