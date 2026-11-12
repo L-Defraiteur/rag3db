@@ -2168,6 +2168,20 @@ impl PreparedBackend {
         Ok(conn)
     }
 
+    /// Product opening with admission before constructing any model.
+    #[cfg(feature = "rag3db-native")]
+    pub fn open_on_disk(self) -> Result<Backend, String> {
+        self.open_on_disk_with_embedder(Self::embedder_or_absent)
+    }
+
+    #[cfg(feature = "rag3db-native")]
+    pub(crate) fn open_on_disk_with_embedder<F>(self, embedder_factory: F) -> Result<Backend, String>
+    where F: FnOnce(&Self) -> (Option<Box<dyn Embedder>>, Option<String>) {
+        let conn = self.connect_admitted_storage()?;
+        let (embedder, reason) = embedder_factory(&self);
+        self.open_with_reason(Box::new(conn), embedder, reason)
+    }
+
     pub fn open(
         self,
         conn: Box<dyn DbConnection>,

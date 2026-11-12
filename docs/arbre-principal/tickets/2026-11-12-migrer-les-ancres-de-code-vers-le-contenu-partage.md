@@ -354,3 +354,16 @@ Les36verts, le binaire et les8appels CLI restent attribués uniquement à d6.
 Preuves d6 préservées hors cible sous
 `/home/lucied/.cache/rag3weaver-build/cx-preuves-preflight-d6fc63f8b/` :55fichiers,
 manifest `sha256.json`, binaire SHA identique à celui publié ci-dessus.
+
+Dernière consolidation statique de la frontière modèles, non compilée :
+`PreparedBackend::open_on_disk` compose la connexion admise, la création de
+l'embarqueur, puis l'ouverture bas niveau. Daemon/MCP/serve/files partagent ce
+parcours ; positionnel/réouverture gardent l'accès à la connexion pour leur
+crochet existant, toujours après connect_admitted_storage. La fabrique interne
+d'embarqueur peut être fournie au témoin natif existant : son compteur exige
+zéro construction avant le refus cible, en plus des octets de fixture préservés.
+Il s'agit du même chemin que le produit, pas d'un compteur de modèle reconstitué
+dans le test. `serve` résout aussi son modèle de chat après ouverture admise.
+Ce changement unifie l'ordre d'acquisition et rend sa frontière testable ; il
+n'ajoute aucun fournisseur ni moteur de modèles. Source d6 et ses preuves sont
+conservées ; aucun Cargo pendant la mesure C++.
