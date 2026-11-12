@@ -756,3 +756,15 @@ poste rendu, aucun paquet final/scénario. Échec/logs/27fichiers conservés et 
 Delta limité aux qualifications common:: autorisé et poussé35ea70d3a ; vérification
 textuelle exacte et source/hash publiés. Un seul build02 neuf explicitement autorisé
 aux mêmes3cibles/limites, en cours ; aucun scénario et aucun succès présumé.
+
+## Build privé corrigé terminé, scénario non lancé
+
+[Manifeste et résultat02](../12-11-2026/18-build-prive-corrige-et-manifeste.md) :
+source35ea70d3a, trois cibles compilées/liées rc0, service154,588s/pic5,1G/swap0,
+8G/scratchdur2G/sourceRO/réseauisolé, poste rendu0/4. 834fichiers/110723932octets
+privés assortis rehashés sans écart, BuildID35ea/p12v11g17s18 dans binaire+extensions.
+Aucun RPATH/libprojet dynamique ; binaire test9NEEDED dont4GTest/GMock système1.18,
+extensions4système. Dépendances directes présentes, chargeur non exécuté. Logs,
+limites, manifests et35preuves exportés ; paquet binaire stable horsWT à luciepc.
+Échec01 conservé. Aucun scénario/test/découverte/ldd ni troisième build ; runtime
+reste soumis à revue/autorisation distincte. Aucun verdict causal sur saturation.

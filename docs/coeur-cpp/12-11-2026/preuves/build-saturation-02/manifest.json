@@ -1,0 +1,4184 @@
+{
+  "source_commit": "35ea70d3a4a5cc4917586de02f6bfc862c76a02c",
+  "source_root_at_build": "/home/lucied/.cache/rag3weaver-build/cx-build-saturation-12nov-02/source",
+  "build_root": "/home/lucied/.cache/rag3weaver-build/cx-build-saturation-12nov-02/build",
+  "compile_commands_sha256": "0eef99acc6b76102d7c0010713fcdc36934af06346ec3bf3c53b9f7c67dfd127",
+  "cache_sha256": "6f99d5517c87280f5d2a297ae57679182cade29d2a69d53b5ec7688f385a1c82",
+  "build_id_header": "// G\u00e9n\u00e9r\u00e9 par cmake/build_id.cmake \u00e0 chaque b\u00e2ti ; ne pas \u00e9diter.\n#pragma once\n\n#define RAG3DB_BUILD_ID \"rag3db-build-35ea70d3a4a5cc4917586de02f6bfc862c76a02c-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF\"\n",
+  "system_config_header": "/*\n * This is a template header used for generating the header 'system_config.h'\n * Any value in the format  can be substituted with a value passed into CMakeLists.txt\n * See https://cmake.org/cmake/help/latest/command/configure_file.html for more details\n */\n\n#pragma once\n\n#include <algorithm>\n#include <cstdint>\n\n#include \"common/enums/extend_direction.h\"\n\n#define BOTH_REL_STORAGE 0\n#define FWD_REL_STORAGE 1\n#define BWD_REL_STORAGE 2\n\nnamespace rag3db {\nnamespace common {\n\n#define VECTOR_CAPACITY_LOG_2 11\n#if VECTOR_CAPACITY_LOG_2 > 12\n#error \"Vector capacity log2 should be less than or equal to 12\"\n#endif\nconstexpr uint64_t DEFAULT_VECTOR_CAPACITY = static_cast<uint64_t>(1) << VECTOR_CAPACITY_LOG_2;\n\n// Currently the system supports files with 2 different pages size, which we refer to as\n// PAGE_SIZE and TEMP_PAGE_SIZE. PAGE_SIZE is the default size of the page which is the\n// unit of read/write to the database files.\nstatic constexpr uint64_t PAGE_SIZE_LOG2 = 12; // Default to 4KB.\nstatic constexpr uint64_t RAG3DB_PAGE_SIZE = static_cast<uint64_t>(1) << PAGE_SIZE_LOG2;\n// Page size for files with large pages, e.g., temporary files that are used by operators that\n// may require large amounts of memory.\nstatic constexpr uint64_t TEMP_PAGE_SIZE_LOG2 = 18;\nstatic const uint64_t TEMP_PAGE_SIZE = static_cast<uint64_t>(1) << TEMP_PAGE_SIZE_LOG2;\n\n#define DEFAULT_REL_STORAGE_DIRECTION BOTH_REL_STORAGE\n#if DEFAULT_REL_STORAGE_DIRECTION == FWD_REL_STORAGE\nstatic constexpr ExtendDirection DEFAULT_EXTEND_DIRECTION = ExtendDirection::FWD;\n#elif DEFAULT_REL_STORAGE_DIRECTION == BWD_REL_STORAGE\nstatic constexpr ExtendDirection DEFAULT_EXTEND_DIRECTION = ExtendDirection::BWD;\n#else\nstatic constexpr ExtendDirection DEFAULT_EXTEND_DIRECTION = ExtendDirection::BOTH;\n#endif\n\nstruct StorageConfig {\n    static constexpr uint64_t NODE_GROUP_SIZE_LOG2 = 17;\n    static constexpr uint64_t NODE_GROUP_SIZE = static_cast<uint64_t>(1) << NODE_GROUP_SIZE_LOG2;\n    // The number of CSR lists in a leaf region.\n    static constexpr uint64_t CSR_LEAF_REGION_SIZE_LOG2 =\n        std::min(static_cast<uint64_t>(10), NODE_GROUP_SIZE_LOG2 - 1);\n    static constexpr uint64_t CSR_LEAF_REGION_SIZE = static_cast<uint64_t>(1)\n                                                     << CSR_LEAF_REGION_SIZE_LOG2;\n    static constexpr uint64_t CHUNKED_NODE_GROUP_CAPACITY =\n        std::min(static_cast<uint64_t>(2048), NODE_GROUP_SIZE);\n\n    // Maximum size for a segment in bytes\n    static constexpr uint64_t MAX_SEGMENT_SIZE_LOG2 = 18;\n    static constexpr uint64_t MAX_SEGMENT_SIZE = 1 << MAX_SEGMENT_SIZE_LOG2;\n};\n\nstruct OrderByConfig {\n    static constexpr uint64_t MIN_SIZE_TO_REDUCE = common::DEFAULT_VECTOR_CAPACITY * 5;\n};\n\nstruct CopyConfig {\n    static constexpr uint64_t PANDAS_PARTITION_COUNT = 50 * DEFAULT_VECTOR_CAPACITY;\n};\n\n} // namespace common\n} // namespace rag3db\n\n#undef BOTH_REL_STORAGE\n#undef FWD_REL_STORAGE\n#undef BWD_REL_STORAGE\n",
+  "files": [
+    {
+      "path": "lib/librag3db.a",
+      "bytes": 65614590,
+      "sha256": "2ae0c5d32bb605e60b04813ba570571be13721ea2564e8cba3ac98a796759837"
+    },
+    {
+      "path": "bin/concurrence_test",
+      "bytes": 31358560,
+      "sha256": "6e31ea0322988e12079a38b996d65c3732aaec3734f2112b3c883bce96dbba35"
+    },
+    {
+      "path": "extension/vector/build/libvector.rag3db_extension",
+      "bytes": 958160,
+      "sha256": "8371a69015feaec963ad075cf30436bd51cfd41674d7d32f820c23de06cce371"
+    },
+    {
+      "path": "extension/geo/build/libgeo.rag3db_extension",
+      "bytes": 393872,
+      "sha256": "9126962bc8ac9c0abf2214ef9038dae8269d196d40f482ff7f1b7863ce8178d4"
+    },
+    {
+      "path": "headers-source/transaction/transaction_manager.h",
+      "bytes": 14062,
+      "sha256": "d971f44102ed3145e219c842b3e7d941c10e6c61e9002c0a59383dcb3b8a1ea5"
+    },
+    {
+      "path": "headers-source/transaction/transaction_context.h",
+      "bytes": 3516,
+      "sha256": "b1c35eeccaa0a7e5feaa814ac4121f845f6bd32bc8e4ca0492fa4f225fb60cf7"
+    },
+    {
+      "path": "headers-source/transaction/transaction_action.h",
+      "bytes": 390,
+      "sha256": "2945e12a83f92f74725874b6052e5950b3d69cffa4946010ac915cd17b079989"
+    },
+    {
+      "path": "headers-source/transaction/transaction.h",
+      "bytes": 12373,
+      "sha256": "fb67c32e164fa11d38442a8376619a05a871c634ae946fe0f67364b9baabbfc6"
+    },
+    {
+      "path": "headers-source/transaction/lock_manager.h",
+      "bytes": 8275,
+      "sha256": "06d706dbb07ece8f33364c7507b92c53863e714b7595932deb0e34c1bb44d1e5"
+    },
+    {
+      "path": "headers-source/storage/undo_buffer.h",
+      "bytes": 5993,
+      "sha256": "2e39c40d317e8ac2faf6e9c472022a7b7eb4a57205b3b40aac2bef533aa53412"
+    },
+    {
+      "path": "headers-source/storage/storage_version_info.h",
+      "bytes": 3306,
+      "sha256": "c7a4aa405be3a677d61cb1bb7a8d476c6f2e3d24bf682cac14ef19c1df41c8f4"
+    },
+    {
+      "path": "headers-source/storage/storage_utils.h",
+      "bytes": 3637,
+      "sha256": "c2464cd2b8c5bb8277cacadc485780478031ba50e7b6de1f822c8117892e2dc0"
+    },
+    {
+      "path": "headers-source/storage/storage_manager.h",
+      "bytes": 5420,
+      "sha256": "14633e01bc388683a8b1b4edfbfe43ea4f9bbc41569565c5e1f198749c2a3069"
+    },
+    {
+      "path": "headers-source/storage/storage_extension.h",
+      "bytes": 973,
+      "sha256": "05c2f2714119835d8fee2afad668e74b8f123fe8f97407784e9346f7df6104b0"
+    },
+    {
+      "path": "headers-source/storage/shadow_utils.h",
+      "bytes": 1988,
+      "sha256": "e1bbb13aadc5e499f1838749f48e0b10bcc517fa0ff3d89d6c7a6c400e1a596d"
+    },
+    {
+      "path": "headers-source/storage/shadow_file.h",
+      "bytes": 2715,
+      "sha256": "0eeb18ca0833a86f7bb13d46943ebac334e9f898e6068ce414f5becfc24da76d"
+    },
+    {
+      "path": "headers-source/storage/readers_lock.h",
+      "bytes": 3885,
+      "sha256": "58f19e87676b68ab944704d40b515b7867309276b728423cbbbbe4f521d058f9"
+    },
+    {
+      "path": "headers-source/storage/page_range.h",
+      "bytes": 596,
+      "sha256": "bfa7fbc61ec69d4c56beff5acd7d98cba1eabbd5a2a2c05321972aea920a1420"
+    },
+    {
+      "path": "headers-source/storage/page_manager.h",
+      "bytes": 2173,
+      "sha256": "7a766a0c075e94722187118c0684b4953e47afbe86b513810db895a05e9cd2b5"
+    },
+    {
+      "path": "headers-source/storage/page_allocator.h",
+      "bytes": 723,
+      "sha256": "befaab2f5262f16589032845e5cbc9417c17653229d0b1ff3c30b8e7d0a8f067"
+    },
+    {
+      "path": "headers-source/storage/overflow_file.h",
+      "bytes": 5378,
+      "sha256": "869a9cced35478e5367b4a270576eb066c1fcbe279840d374f666bf421d84e18"
+    },
+    {
+      "path": "headers-source/storage/optimistic_allocator.h",
+      "bytes": 758,
+      "sha256": "bd9eb1c649a644ef30b4c7ca1aea3cf10eb8e29f542c02b116b467da6ea31b1c"
+    },
+    {
+      "path": "headers-source/storage/local_cached_column.h",
+      "bytes": 696,
+      "sha256": "a275f4036d5044e4ee3475803b965812a2673b8dd30657507aaaadec2a205f12"
+    },
+    {
+      "path": "headers-source/storage/free_space_manager.h",
+      "bytes": 3562,
+      "sha256": "c612168de463e949fa102529222afac04083833c5d95277d4380014d1446ec08"
+    },
+    {
+      "path": "headers-source/storage/file_handle.h",
+      "bytes": 7509,
+      "sha256": "382d2ea9e13ffd570e0ec907165dabb3fa8e7dab116d78dbcd357d9d57766128"
+    },
+    {
+      "path": "headers-source/storage/file_db_id_utils.h",
+      "bytes": 767,
+      "sha256": "16ab2dc00fb30220c2601335a154f1de9a784f52e3c54aff39badcd5f0e9bd90"
+    },
+    {
+      "path": "headers-source/storage/disk_array_collection.h",
+      "bytes": 2712,
+      "sha256": "1bc27d782c7b4c8e2b9f729781deab1c1612d8fc5fe3dc4bc5463499fc69ea55"
+    },
+    {
+      "path": "headers-source/storage/disk_array.h",
+      "bytes": 17511,
+      "sha256": "ebf3a9a1be692d81a65b1a7803acd3051eb05415a02f7c446e9618e2ea0a3319"
+    },
+    {
+      "path": "headers-source/storage/database_header.h",
+      "bytes": 2236,
+      "sha256": "24584b9492e32ddc7f6c8ef0bf02da1eb3004a9ee582701f598214a1ad2e30a6"
+    },
+    {
+      "path": "headers-source/storage/checkpointer.h",
+      "bytes": 2022,
+      "sha256": "83197f13d6566dfe593204d03c56aa09601c25fef8d4a1420bde8996419ad94d"
+    },
+    {
+      "path": "headers-source/storage/checkpoint_profile.h",
+      "bytes": 1178,
+      "sha256": "9df5dfee258603d645dcef474e280f3ba3908bbc332e5527ef12ed796245d8af"
+    },
+    {
+      "path": "headers-source/processor/warning_context.h",
+      "bytes": 1933,
+      "sha256": "dcac37da36ea35e2039af0654ff882327b73590386c6c6326bf35a1f0c4424e7"
+    },
+    {
+      "path": "headers-source/processor/processor_task.h",
+      "bytes": 729,
+      "sha256": "c632ff12eca8e71562f4641c19dd18b7a661bee3ef7443cf5e79675f8d9c81bb"
+    },
+    {
+      "path": "headers-source/processor/processor.h",
+      "bytes": 1133,
+      "sha256": "f7a681a97f9b1c96837370df6368e6f80ea760b7efb6be183da72e43ba26912a"
+    },
+    {
+      "path": "headers-source/processor/plan_mapper.h",
+      "bytes": 13559,
+      "sha256": "622c443f70cd728896af62136b7f71268dac0b06493ae612dd528b061734f698"
+    },
+    {
+      "path": "headers-source/processor/physical_plan.h",
+      "bytes": 392,
+      "sha256": "8876374c9ab060fc2624ca7007507d2223ccb8eada07257ecc7597aa46c8d170"
+    },
+    {
+      "path": "headers-source/processor/expression_mapper.h",
+      "bytes": 2291,
+      "sha256": "8bdac91797d90a2be59b3373d3abb03a857be837583bc0a090970367fc2460f2"
+    },
+    {
+      "path": "headers-source/processor/execution_context.h",
+      "bytes": 500,
+      "sha256": "97f1ba4a76f18c8b42cd904789f2b887f398e691dc2fc66bc86da68ea425941e"
+    },
+    {
+      "path": "headers-source/processor/data_pos.h",
+      "bytes": 1228,
+      "sha256": "9b95f9ebc0dcda70d059cdbec97b0dd4a5e15cb3f8696b4d6b6871f3d76ad5c0"
+    },
+    {
+      "path": "headers-source/planner/subplans_table.h",
+      "bytes": 3430,
+      "sha256": "2df01d4fef7d6930cfba587978f07753e41ed1554a888ee942b4898796122ef0"
+    },
+    {
+      "path": "headers-source/planner/planner.h",
+      "bytes": 18629,
+      "sha256": "1092af8afebf1d52e7c60f962ae4cfac6fd0ca9c8e82edb12791db24106eba30"
+    },
+    {
+      "path": "headers-source/planner/join_order_enumerator_context.h",
+      "bytes": 1609,
+      "sha256": "c129ec36879610765cf948bb247f2845bdb56db70cd4776ae2dcc48dad21f842"
+    },
+    {
+      "path": "headers-source/parser/use_database.h",
+      "bytes": 334,
+      "sha256": "ea18594f9090d129053aefffcc61ffa083434c1abe10be52e75d9f1844a8663d"
+    },
+    {
+      "path": "headers-source/parser/transformer.h",
+      "bytes": 14989,
+      "sha256": "6b035a870d0c004a1920ffe8cc199777749d08a9e1f052cc167d6c8f969b6958"
+    },
+    {
+      "path": "headers-source/parser/transaction_statement.h",
+      "bytes": 642,
+      "sha256": "b7bde8166273baeed36c5dd171402f9538948f9da1a30ba46f3992cde1a2814d"
+    },
+    {
+      "path": "headers-source/parser/statement.h",
+      "bytes": 1647,
+      "sha256": "697ce00aa33cbe391554b7c2c2ce6e4c698fc288b09afbfd34ac09c737bb492f"
+    },
+    {
+      "path": "headers-source/parser/standalone_call_function.h",
+      "bytes": 626,
+      "sha256": "e156246de163841366c661a03f5b17d3e44a22f1bbc37150336dced544e68522"
+    },
+    {
+      "path": "headers-source/parser/standalone_call.h",
+      "bytes": 702,
+      "sha256": "9fa4f702f7356ab8d2bd00989b65dda5c71cd141fd31ac2f7fda4a3d38c76282"
+    },
+    {
+      "path": "headers-source/parser/scan_source.h",
+      "bytes": 2327,
+      "sha256": "75e23a1b0ae40f564a20317c9085261244f708a0a6820ae1215e588a20906c6a"
+    },
+    {
+      "path": "headers-source/parser/port_db.h",
+      "bytes": 958,
+      "sha256": "3a9284dd1ee97dcd82a6db339e2761f6440a26ffe85ca962208f660c619e6bc0"
+    },
+    {
+      "path": "headers-source/parser/parser.h",
+      "bytes": 474,
+      "sha256": "c3112bfcbe3c78954c983070e4e7d030dfdc992139dfbbb2ea0c6b4b8dc62e05"
+    },
+    {
+      "path": "headers-source/parser/parsed_statement_visitor.h",
+      "bytes": 2878,
+      "sha256": "67bafe7e16bed981701075589d89e4b69629a9091a85e50c38f302d7d2515019"
+    },
+    {
+      "path": "headers-source/parser/extension_statement.h",
+      "bytes": 550,
+      "sha256": "70cfa541c7e465f1e506afc15de90049e4c313d050c7dcac4e2980630e1996ba"
+    },
+    {
+      "path": "headers-source/parser/explain_statement.h",
+      "bytes": 752,
+      "sha256": "7034721d5c612d63186f7aec82e8a448ff5cffc4ee6bb15afc6aab66ef3f5167"
+    },
+    {
+      "path": "headers-source/parser/detach_database.h",
+      "bytes": 413,
+      "sha256": "dc3bc5d878f51a351c4c682cdf03389d369dc2404cb89413cc0caf9bda0db634"
+    },
+    {
+      "path": "headers-source/parser/database_statement.h",
+      "bytes": 427,
+      "sha256": "5fd2e24533956aa55701c29d7a9d7d8ddb54edd57165c525ae5753df83b9e978"
+    },
+    {
+      "path": "headers-source/parser/create_macro.h",
+      "bytes": 1285,
+      "sha256": "86c45f00e9bb365c9056751e210677ede66a94e7e1848de1dac94a9ce1bf7a67"
+    },
+    {
+      "path": "headers-source/parser/copy.h",
+      "bytes": 2081,
+      "sha256": "cb1bf77afbb1203e8118871dc183a2b57b04f3771bec4ca76dc14ec5476b64f0"
+    },
+    {
+      "path": "headers-source/parser/attach_database.h",
+      "bytes": 479,
+      "sha256": "9ca133f706cd8fd3c85586116572110733dc6d6d3434221b6b13bd136a1e72c0"
+    },
+    {
+      "path": "headers-source/optimizer/top_k_optimizer.h",
+      "bytes": 560,
+      "sha256": "cc35a02c25b5d9ed80150db3a314212ecfea07a47b954cb19ddad7bc81417bb1"
+    },
+    {
+      "path": "headers-source/optimizer/schema_populator.h",
+      "bytes": 306,
+      "sha256": "a6ea162c80a729455d82293f2fa2e3c1efc7cc86407a9824e18dd0e5ab6f795c"
+    },
+    {
+      "path": "headers-source/optimizer/remove_unnecessary_join_optimizer.h",
+      "bytes": 944,
+      "sha256": "84d78809450307b24431ec5731ecb4363be4a6e413e4d42f0437088c7cde35f7"
+    },
+    {
+      "path": "headers-source/optimizer/remove_factorization_rewriter.h",
+      "bytes": 576,
+      "sha256": "0f0f5a5d1765396e444dfc2dc18088cde6300acf3ce2f0eaf9045661926c4822"
+    },
+    {
+      "path": "headers-source/optimizer/projection_push_down_optimizer.h",
+      "bytes": 2799,
+      "sha256": "8e1b0b8f026a5a0294c868901069df0a29c1ab9cb3ac0fe4fbfe7e343e95998d"
+    },
+    {
+      "path": "headers-source/optimizer/optimizer.h",
+      "bytes": 420,
+      "sha256": "8472d61c90257eab3050731d57e264f5176aa729a432c7038d3137ee9760f77e"
+    },
+    {
+      "path": "headers-source/optimizer/logical_operator_visitor.h",
+      "bytes": 6632,
+      "sha256": "a38f5c69214031b068b6fe6d15a5e5dddedadb7dd0aee0c64f90c6889036e02f"
+    },
+    {
+      "path": "headers-source/optimizer/logical_operator_collector.h",
+      "bytes": 1422,
+      "sha256": "7d438604920cfaded4a312a00df24ab820f963311301ae487406b1ddf9a7cf08"
+    },
+    {
+      "path": "headers-source/optimizer/limit_push_down_optimizer.h",
+      "bytes": 462,
+      "sha256": "f4faf1010e4bf01d58075a3791c13a02895a87a53015c09ddbaceacc2f6bc2bd"
+    },
+    {
+      "path": "headers-source/optimizer/filter_push_down_optimizer.h",
+      "bytes": 4093,
+      "sha256": "93d92bd4ee129944dc6803c061059812657b5b733006c2f76e06faddb699c34b"
+    },
+    {
+      "path": "headers-source/optimizer/factorization_rewriter.h",
+      "bytes": 1716,
+      "sha256": "a63442c8a5b5e3f995ba7471ca9b10380e121b8ebd9a887cca17d914b950eaab"
+    },
+    {
+      "path": "headers-source/optimizer/correlated_subquery_unnest_solver.h",
+      "bytes": 647,
+      "sha256": "8ef1dcc914ab0c6b36b9edb2a0830ea95055d9b65fd4a61bd151b3d462be0d23"
+    },
+    {
+      "path": "headers-source/optimizer/cardinality_updater.h",
+      "bytes": 1719,
+      "sha256": "5f0277fd1e7473870456d9ed87268ada716783c0d686f4e8c062d07f4d9a68db"
+    },
+    {
+      "path": "headers-source/optimizer/agg_key_dependency_optimizer.h",
+      "bytes": 825,
+      "sha256": "596c5ca82e963db285b85c96866ff42c59150dd590c488a67df8966121b9af01"
+    },
+    {
+      "path": "headers-source/optimizer/acc_hash_join_optimizer.h",
+      "bytes": 769,
+      "sha256": "cfd9dcd9ca94cf30289d9f34e2525735918c1efdd4acf29c44cf6f94e2010dd4"
+    },
+    {
+      "path": "headers-source/main/version.h",
+      "bytes": 540,
+      "sha256": "9ff6a55541af718a14e6a0e3d9848cb6640ce7a470eaa6ee19449d03d165b9fa"
+    },
+    {
+      "path": "headers-source/main/storage_driver.h",
+      "bytes": 868,
+      "sha256": "56968567bc660c0b23868863435887910e84022ab05ff41562ca8aff9f1696eb"
+    },
+    {
+      "path": "headers-source/main/settings.h",
+      "bytes": 9053,
+      "sha256": "e3232c939c04a1e2c183b11d860b0664eb1d93c446059290e1606bc81bb71c5c"
+    },
+    {
+      "path": "headers-source/main/rag3db_fwd.h",
+      "bytes": 1098,
+      "sha256": "50b081c34e786bf99061c32fa94f2a30d9569476657deeef6eef2112dd03d0c1"
+    },
+    {
+      "path": "headers-source/main/rag3db.h",
+      "bytes": 1394,
+      "sha256": "7c6a36e162eeddf0955aeefb8f41731d0cf6ae8b71ab45a570bfdea504bf7ce0"
+    },
+    {
+      "path": "headers-source/main/query_summary.h",
+      "bytes": 1382,
+      "sha256": "2450a57e39ae95b9fc568d7811ca2c2371739fc12945acefc76c8e0546ddb204"
+    },
+    {
+      "path": "headers-source/main/query_result.h",
+      "bytes": 6107,
+      "sha256": "3fffd956ff15e32ed14f259595062e42d96d40c97a569205734af0a16730ba24"
+    },
+    {
+      "path": "headers-source/main/prepared_statement.h",
+      "bytes": 3132,
+      "sha256": "33692f3d6b194b333e5b0131c236facaacb65446f8c078f2e8ce69a78fec0e1f"
+    },
+    {
+      "path": "headers-source/main/plan_printer.h",
+      "bytes": 4332,
+      "sha256": "e55acc36b54b1d5f72e3ab044b3e4c6ad71f6deb52c5b382281c868d3c821b78"
+    },
+    {
+      "path": "headers-source/main/db_config.h",
+      "bytes": 2695,
+      "sha256": "534c0004f46837f004327c3377677b42ec10c6ada103f126dd716f3a5ed1d958"
+    },
+    {
+      "path": "headers-source/main/database_manager.h",
+      "bytes": 959,
+      "sha256": "228ae9d4a9e30b2a9872d3b93894ac21562f7aff9a47cfff2f9ebe972975cd59"
+    },
+    {
+      "path": "headers-source/main/database.h",
+      "bytes": 10760,
+      "sha256": "7ade7005c215e3ab6c4a2d0daff50a266461e4a0cddec0b7ebbbb451e65c01de"
+    },
+    {
+      "path": "headers-source/main/connection.h",
+      "bytes": 6996,
+      "sha256": "0ebc0bdd80bc8848fd718886c78f2fc92d979bd3ef6060257ef4178a26818a2b"
+    },
+    {
+      "path": "headers-source/main/client_context.h",
+      "bytes": 9375,
+      "sha256": "18b930e653dde8f364c1e9c54cb0f4c093ced51d05a289c9bf40b25f5fdd5980"
+    },
+    {
+      "path": "headers-source/main/client_config.h",
+      "bytes": 3835,
+      "sha256": "9959a1d5974b17e5727a61c1ab99cebffb2bfca8d94ebae4b6c780015936065f"
+    },
+    {
+      "path": "headers-source/main/attached_database.h",
+      "bytes": 1696,
+      "sha256": "737a9e765c5589c645100ec0870b99d032155375619c77d473e4fc60d0aa3a5d"
+    },
+    {
+      "path": "headers-source/graph/parsed_graph_entry.h",
+      "bytes": 1564,
+      "sha256": "3fdb56933afb87bb2cf7d104527523b865ae62cbd828578002116b375c3ec50c"
+    },
+    {
+      "path": "headers-source/graph/on_disk_graph.h",
+      "bytes": 6004,
+      "sha256": "2eb89a7875e3c54577aebf3698f58ad91c6018459a5301dbd21ee53f88af9eae"
+    },
+    {
+      "path": "headers-source/graph/graph_entry_set.h",
+      "bytes": 1170,
+      "sha256": "b9212bc68954fc3e826733c889008f67eadb000cd3f815c135fffc916d647125"
+    },
+    {
+      "path": "headers-source/graph/graph_entry.h",
+      "bytes": 1868,
+      "sha256": "527535d46968854e4b1c32fa5b292e1e5930aba8f1a64fb2efc84d97f790f3fb"
+    },
+    {
+      "path": "headers-source/graph/graph.h",
+      "bytes": 9460,
+      "sha256": "17f4a1187b3d6f3ca01e28ce4c388035c7986657ad2c8e6d1cc74e22cf0e1fdd"
+    },
+    {
+      "path": "headers-source/function/unary_function_executor.h",
+      "bytes": 9443,
+      "sha256": "b88b63e43dd1816e7775ee17988168f81c8f93ef5f8b04f29be298db5e6e3d2b"
+    },
+    {
+      "path": "headers-source/function/udf_function.h",
+      "bytes": 12839,
+      "sha256": "292969a932ccd9ac8cbfed3a9b2f8d8f85b9de17f137964baef2959691c60418"
+    },
+    {
+      "path": "headers-source/function/ternary_function_executor.h",
+      "bytes": 23750,
+      "sha256": "acd751a4a94db940f9e999835cfcc29b87728177b06b1cdba73332fb884de736"
+    },
+    {
+      "path": "headers-source/function/scalar_macro_function.h",
+      "bytes": 1381,
+      "sha256": "faf025a3005b052b45edb89c89b1e2364985e1c607ae98b20dab6b30d1644ed5"
+    },
+    {
+      "path": "headers-source/function/scalar_function.h",
+      "bytes": 14176,
+      "sha256": "eabc1401efd1b84825153ffbf46a490fa1449f0bcb1bf1e4685d00a989b94c5a"
+    },
+    {
+      "path": "headers-source/function/rewrite_function.h",
+      "bytes": 1331,
+      "sha256": "3d745a52213950995b4611a0b901d5e4bc7bba769f4b570d2d737aeb8a6d1487"
+    },
+    {
+      "path": "headers-source/function/pointer_function_executor.h",
+      "bytes": 723,
+      "sha256": "25822c4ae0d8af58e348a85003c97115797c7751ca54a460a06aea62fcb13bac"
+    },
+    {
+      "path": "headers-source/function/function_collection.h",
+      "bytes": 461,
+      "sha256": "a7df9b83d709681eececc67bbb88e2dbc14456d38aa3a12d954119051aa19f00"
+    },
+    {
+      "path": "headers-source/function/function.h",
+      "bytes": 3841,
+      "sha256": "39d391cf88931d59357eb894110e0721e56aa28b49ae50553dc99ee5cc9dd152"
+    },
+    {
+      "path": "headers-source/function/const_function_executor.h",
+      "bytes": 518,
+      "sha256": "da8c73c261bbd5588d3ca51212fc46067fa86e1e977b0d97106c006874683676"
+    },
+    {
+      "path": "headers-source/function/built_in_function_utils.h",
+      "bytes": 3780,
+      "sha256": "19a9ce02a0b7bedc24ecfea905431824437bad2b76eecdc9d45ffa2a5af4be24"
+    },
+    {
+      "path": "headers-source/function/binary_function_executor.h",
+      "bytes": 16557,
+      "sha256": "c0812cca30b5b75fea9955118b04dc06adc036783020e2e84a3fc41426888188"
+    },
+    {
+      "path": "headers-source/function/aggregate_function.h",
+      "bytes": 5669,
+      "sha256": "e99518220129371c349dd13792a20474135dbebe75c803ca87e0367ecc957db9"
+    },
+    {
+      "path": "headers-source/extension/transformer_extension.h",
+      "bytes": 429,
+      "sha256": "8f01846f594b0516eb2a713e0a43406d26d0010ea5eee7a9bc9b8c1847491db7"
+    },
+    {
+      "path": "headers-source/extension/planner_extension.h",
+      "bytes": 397,
+      "sha256": "68bbfdf30ada79b36d3d120ef6d33947b94bf4ddb00eddecb0d260fca0100a62"
+    },
+    {
+      "path": "headers-source/extension/mapper_extension.h",
+      "bytes": 500,
+      "sha256": "f69daa8f2d000f1a7a9173a8ac1d3f6b667c0f823bbe2fd9ee2e58ce5d187281"
+    },
+    {
+      "path": "headers-source/extension/logical_extension_clause.h",
+      "bytes": 726,
+      "sha256": "903d7210ae1190946d8ba6e495debc07a991ecb0e619ebe5f97087159469634a"
+    },
+    {
+      "path": "headers-source/extension/loaded_extension.h",
+      "bytes": 684,
+      "sha256": "2a5363d9405d2f286852c8905836e27bd7eb3d0b58333b94c5ed8f03920098f4"
+    },
+    {
+      "path": "headers-source/extension/extension_statement.h",
+      "bytes": 540,
+      "sha256": "c19796c84d0ccbfcca7f06653ebd136053003e8d8708d9a9df004e26fd779228"
+    },
+    {
+      "path": "headers-source/extension/extension_manager.h",
+      "bytes": 4274,
+      "sha256": "a6cf34fa8f0b71fa911528e590aec3eab822a0d071102d441320f9b7430cd7a7"
+    },
+    {
+      "path": "headers-source/extension/extension_loader.h",
+      "bytes": 489,
+      "sha256": "7300968bac6b44bc5c19cfddc524aea5dd71fd83571cf6de253365e64ab93ca2"
+    },
+    {
+      "path": "headers-source/extension/extension_installer.h",
+      "bytes": 999,
+      "sha256": "783e34371b1a7d175379a53a8054466348f8c836d4512f686c81e6e72165bd0c"
+    },
+    {
+      "path": "headers-source/extension/extension_action.h",
+      "bytes": 1217,
+      "sha256": "07dd935d3df57fbd7621f05b018f870ff70646255f5c1af44dc3246e6452d720"
+    },
+    {
+      "path": "headers-source/extension/extension.h",
+      "bytes": 7225,
+      "sha256": "5b88fd8e320202c7a75cd7dc0f6c31e3d4315a1b90ce5e2209a47febaeebac8a"
+    },
+    {
+      "path": "headers-source/extension/catalog_extension.h",
+      "bytes": 304,
+      "sha256": "86dab86c7ec4479e72f2181437303077d5de6d484b1e4cbde5e56e163ee0bbab"
+    },
+    {
+      "path": "headers-source/extension/bound_extension_clause.h",
+      "bytes": 688,
+      "sha256": "a3a734f00bdf6ffb8b19526a444afc1f0628b08f53acc795f5c248f1c803ee16"
+    },
+    {
+      "path": "headers-source/extension/binder_extension.h",
+      "bytes": 384,
+      "sha256": "64902cefb1d3714b095fc16ccd5fada3f3c08e49fd493344446cf300056b919c"
+    },
+    {
+      "path": "headers-source/expression_evaluator/reference_evaluator.h",
+      "bytes": 1064,
+      "sha256": "5b648f1b6c9676191177d3c8b62fc30df1e731d061884116137011fcc9b654cf"
+    },
+    {
+      "path": "headers-source/expression_evaluator/pattern_evaluator.h",
+      "bytes": 2121,
+      "sha256": "0394d4ec20948607d8d82e4fbca3414f3e715aa42b6c0a574f77ca3d758fdc19"
+    },
+    {
+      "path": "headers-source/expression_evaluator/path_evaluator.h",
+      "bytes": 2594,
+      "sha256": "1e5338882737d02b44eebee9df75d889a9147ef34510f4dd54b1e94b65ada8fd"
+    },
+    {
+      "path": "headers-source/expression_evaluator/literal_evaluator.h",
+      "bytes": 1125,
+      "sha256": "3d1a3b1153baa607ce064a35e82193e5e5633eafc2f79def3d62c942ea223650"
+    },
+    {
+      "path": "headers-source/expression_evaluator/list_slice_info.h",
+      "bytes": 4196,
+      "sha256": "a194a527632d6c4405cf4d6e41e896ac625764781d1ea4cdc375ffdc9c7741fc"
+    },
+    {
+      "path": "headers-source/expression_evaluator/lambda_evaluator.h",
+      "bytes": 3460,
+      "sha256": "1b3b747b24edada2e10d4d631769c2309ca274b88457367273f75c1b82fb5df7"
+    },
+    {
+      "path": "headers-source/expression_evaluator/function_evaluator.h",
+      "bytes": 1159,
+      "sha256": "57a50382cf440332088ab7f53f728c05feb957c60ea309dcd1ff57db858f194b"
+    },
+    {
+      "path": "headers-source/expression_evaluator/expression_evaluator_visitor.h",
+      "bytes": 1303,
+      "sha256": "2e32e79f6e3f35a567d11b34d25cac061684ee2d7fa422a3d3c2d9cfe8a8b927"
+    },
+    {
+      "path": "headers-source/expression_evaluator/expression_evaluator_utils.h",
+      "bytes": 379,
+      "sha256": "fc411aa46b55819a786ad8c89c9801c0a2474c8c73c4d7f44e5aa83aae72ee34"
+    },
+    {
+      "path": "headers-source/expression_evaluator/expression_evaluator.h",
+      "bytes": 4530,
+      "sha256": "eaa5245818e96dbedeacb5ad2ef2d3567deb8052368f9c3016c44b2ea762af5d"
+    },
+    {
+      "path": "headers-source/expression_evaluator/case_evaluator.h",
+      "bytes": 2761,
+      "sha256": "0c03b639f9bb6ae16f5e35264d98781c431dfb08ae182721f14b1d606ccdfe07"
+    },
+    {
+      "path": "headers-source/common/windows_utils.h",
+      "bytes": 302,
+      "sha256": "7dea5128bf97ae7c30f418f18c9498534018c3edae60602917f4c804588bb7a6"
+    },
+    {
+      "path": "headers-source/common/utils.h",
+      "bytes": 2924,
+      "sha256": "9f89f391869e9273f207ca1477bbd6721515bd5309bd4b8ee64035eac64f7218"
+    },
+    {
+      "path": "headers-source/common/uniq_lock.h",
+      "bytes": 590,
+      "sha256": "77a9bcdd13d3faeb052796a11836c7a258018563f6ce0973c0c1978485c94981"
+    },
+    {
+      "path": "headers-source/common/type_utils.h",
+      "bytes": 12943,
+      "sha256": "026c18830a028eaddfee84ff4d0ad0ef1e0d6440541f9f4dbbee9d6f0bdb6217"
+    },
+    {
+      "path": "headers-source/common/timer.h",
+      "bytes": 1209,
+      "sha256": "57e56cb710da1b06f3b2acef0de44bfae771124011ee9f363bcccc09be587992"
+    },
+    {
+      "path": "headers-source/common/test_hooks.h",
+      "bytes": 1780,
+      "sha256": "8685879c5cf89f1be9fbcdc42ca22bca97cf8ae7ef6470847cfefbd413711127"
+    },
+    {
+      "path": "headers-source/common/system_message.h",
+      "bytes": 636,
+      "sha256": "7f4b455aee4fd5a396fbe1e80f3bcf8f9120c353bec5e433ebd87bbce280103d"
+    },
+    {
+      "path": "headers-source/common/string_utils.h",
+      "bytes": 5622,
+      "sha256": "8caee1375fd056e31a4368192e38f03ec142a6f30ef64b7cbb5d0dc0c59fb4d5"
+    },
+    {
+      "path": "headers-source/common/string_format.h",
+      "bytes": 4099,
+      "sha256": "eb106194b8f9c534a45424cdff6a2b9b7559b581baeef41f297d4f8f0d1d571b"
+    },
+    {
+      "path": "headers-source/common/static_vector.h",
+      "bytes": 2232,
+      "sha256": "78e6579df6b33d338423f0592291cfb3f6c78c95341f460ac90ba1bcd6e183cc"
+    },
+    {
+      "path": "headers-source/common/stack_to_stderr.h",
+      "bytes": 740,
+      "sha256": "2b3ea3a94e98a4bcfaf7b1eb36f9a4db9b0bbd75e83d106efc29fc5363f6a0cf"
+    },
+    {
+      "path": "headers-source/common/sha256.h",
+      "bytes": 561,
+      "sha256": "9c3bf19e5baf63863b995223366c66d9f6166466723b26963384f8bdfec065fd"
+    },
+    {
+      "path": "headers-source/common/roaring_mask.h",
+      "bytes": 1963,
+      "sha256": "73d90519591d40e611a429a2d82d5ecefb116c121d215c982a196a027caaede7"
+    },
+    {
+      "path": "headers-source/common/random_engine.h",
+      "bytes": 627,
+      "sha256": "00356c76e1e914e2d0ec98e3d5c11faaf679a40f75f4d2c65b031354cc11155b"
+    },
+    {
+      "path": "headers-source/common/profiler.h",
+      "bytes": 714,
+      "sha256": "540efb212b107da88508ec68917ffda0f9c1d08058edc282377fde7be751baa7"
+    },
+    {
+      "path": "headers-source/common/private_saturation_capture.h",
+      "bytes": 1593,
+      "sha256": "0b8273069e1450a83ae15d46598377d529d1ed59cbf42741424f5e83c583c957"
+    },
+    {
+      "path": "headers-source/common/numeric_utils.h",
+      "bytes": 1688,
+      "sha256": "5e226526f4cf4c5b8ecd1b741a4f0808535903a3e0482dbd6cf1d95b76b17137"
+    },
+    {
+      "path": "headers-source/common/null_mask.h",
+      "bytes": 9805,
+      "sha256": "25139b5bc490721a3cca448bf0a31fa949eabba59d2d9651cbe422399ffeaa6d"
+    },
+    {
+      "path": "headers-source/common/null_buffer.h",
+      "bytes": 1159,
+      "sha256": "05afb7cc34af850b454f40a2e1cdc7f7283ce7b120a551d3be5c1043d1ebc132"
+    },
+    {
+      "path": "headers-source/common/mutex.h",
+      "bytes": 1350,
+      "sha256": "74cae35274c4a112db6113f74caf01d5afa5a364ea8e46115a5fcc88b34b360a"
+    },
+    {
+      "path": "headers-source/common/mpsc_queue.h",
+      "bytes": 3925,
+      "sha256": "8cda2a689664d64129cbda5d344240111c140eba5d1f338795e7f47d1feef1c8"
+    },
+    {
+      "path": "headers-source/common/metric.h",
+      "bytes": 749,
+      "sha256": "4ccf21174b07fbad9bd70d53aec7b48084ce96f627cfede80c8c8acc854e8ea2"
+    },
+    {
+      "path": "headers-source/common/md5.h",
+      "bytes": 3277,
+      "sha256": "4f8c48b735017996c9899e1377e8aac520df62f46b9c682464070362914120af"
+    },
+    {
+      "path": "headers-source/common/mask.h",
+      "bytes": 2801,
+      "sha256": "6e87be973d96856c125b463f83f4fc1ab8c91da3c466022a46203b71569cc400"
+    },
+    {
+      "path": "headers-source/common/index_search_types.h",
+      "bytes": 2132,
+      "sha256": "1c2c3f34c334e719e137019fdbe913008ed611ca0f2e0424079f367aae3fb0ad"
+    },
+    {
+      "path": "headers-source/common/in_mem_overflow_buffer.h",
+      "bytes": 2183,
+      "sha256": "1fb422a4579f0d774669267ce457d3482447071bb7e7e735873448343aec5db6"
+    },
+    {
+      "path": "headers-source/common/finally_wrapper.h",
+      "bytes": 423,
+      "sha256": "57ddc24c15cc49a0cd26c75f020d10d93834a5a53051dc3e66e1873e1daf1a27"
+    },
+    {
+      "path": "headers-source/common/database_lifecycle_manager.h",
+      "bytes": 213,
+      "sha256": "ae5cdf4cf1239d7e1b03f204beebbb50fdc99dbc42ecc088a80a45f6b0426015"
+    },
+    {
+      "path": "headers-source/common/counter.h",
+      "bytes": 526,
+      "sha256": "9c0067b54283c240048a07475277a5e05b71be5d3e3c4decffcce61078e9ee0a"
+    },
+    {
+      "path": "headers-source/common/copy_constructors.h",
+      "bytes": 4844,
+      "sha256": "57742d84324ed6f6ab6a416beecdf3698b1cba13e6bd8d114302972423e1b8eb"
+    },
+    {
+      "path": "headers-source/common/constants.h",
+      "bytes": 10488,
+      "sha256": "9f6e91125c618c86b7f49d39ecc0b1efc4c6ef889fc1ae445a28ca3415bab331"
+    },
+    {
+      "path": "headers-source/common/concurrent_vector.h",
+      "bytes": 4191,
+      "sha256": "b11a5d7cadc681e3aa7581e85d226fcc507e090826ea82044ece1f39a124dae2"
+    },
+    {
+      "path": "headers-source/common/checksum.h",
+      "bytes": 210,
+      "sha256": "fa6bc710d3c9858fd46995ef93d4fbcb4137449bb5255d7014f06b4484c1a79b"
+    },
+    {
+      "path": "headers-source/common/cast.h",
+      "bytes": 821,
+      "sha256": "ae54ad8975590e7b7ab5edf7380a9d1d2023ec77bf63e160e58f56843158ad57"
+    },
+    {
+      "path": "headers-source/common/case_insensitive_map.h",
+      "bytes": 745,
+      "sha256": "153166ad34d256cd45a505e3179b3eb02a7a4261eb35cd805235b2eb5428fe05"
+    },
+    {
+      "path": "headers-source/common/assert.h",
+      "bytes": 1377,
+      "sha256": "f9117bf535ae2fe2f7f6bcad841902bcd8edc671bbf351c7f344d5dc8680d49b"
+    },
+    {
+      "path": "headers-source/common/array_utils.h",
+      "bytes": 467,
+      "sha256": "0a6e38c3fdaddfcd08872f223f753af89f638e242412c5a99df0889d7e7735b2"
+    },
+    {
+      "path": "headers-source/common/api.h",
+      "bytes": 1021,
+      "sha256": "944c4daf47bca179a37f87792418cc4fad357fded475efe1a578793fc4669907"
+    },
+    {
+      "path": "headers-source/catalog/property_definition_collection.h",
+      "bytes": 2447,
+      "sha256": "a98194e59ed74b585d3485bb3272a870922c84075c8ba109ab4eecd1945e7274"
+    },
+    {
+      "path": "headers-source/catalog/catalog_set.h",
+      "bytes": 3679,
+      "sha256": "7b0b9b87895c9a271972cda10a5585b2435648d3674486c2a73ef2308a65b17f"
+    },
+    {
+      "path": "headers-source/catalog/catalog.h",
+      "bytes": 10953,
+      "sha256": "125d4235b13859811a456c475bdd4ae6b03b6971169d0e2d2256eb58be926d87"
+    },
+    {
+      "path": "headers-source/c_api/rag3db.h",
+      "bytes": 73021,
+      "sha256": "fbca0847f7b3957958dc2111e2651f6231d540f836b7933d2187c2b5efffa45b"
+    },
+    {
+      "path": "headers-source/c_api/helpers.h",
+      "bytes": 244,
+      "sha256": "801b3d7dcfe2e75cbc9ee4b52cd43bb6041fce38a44eab5a5b366e9dc95ebe03"
+    },
+    {
+      "path": "headers-source/binder/expression_visitor.h",
+      "bytes": 3445,
+      "sha256": "c9fe8c7b23a8b13b96bbea504e3a989750285a6cf57f51ec6515cdfc9ecc5ce9"
+    },
+    {
+      "path": "headers-source/binder/expression_binder.h",
+      "bytes": 7671,
+      "sha256": "f1c3f52f70adc691f4e1975d68bf76f5012d01fddc629ac789eac68ef1cbca08"
+    },
+    {
+      "path": "headers-source/binder/bound_use_database.h",
+      "bytes": 419,
+      "sha256": "22e7328f206db8eb8b7b6f55633acf7dc52153d231308b19114d9083393ae516"
+    },
+    {
+      "path": "headers-source/binder/bound_transaction_statement.h",
+      "bytes": 727,
+      "sha256": "e93376f3d9e857faa5459c6151bfc177a7c89da64c8bbd9775bfc7266734cdfc"
+    },
+    {
+      "path": "headers-source/binder/bound_table_scan_info.h",
+      "bytes": 669,
+      "sha256": "9ba3a65268e42b1243831270a17072a917ebf480a06b511b461e089e0bdee7f9"
+    },
+    {
+      "path": "headers-source/binder/bound_statement_visitor.h",
+      "bytes": 3218,
+      "sha256": "d3f4346bde0fd52efb7efb7ff65ca2d062a818bda1363d27b06469ebd3f593e5"
+    },
+    {
+      "path": "headers-source/binder/bound_statement_rewriter.h",
+      "bytes": 313,
+      "sha256": "9dc6b0ca52aae052d89a69f7f8034ff0d75d0fbb06e860cfd26d52fa6fac8f90"
+    },
+    {
+      "path": "headers-source/binder/bound_statement_result.h",
+      "bytes": 1890,
+      "sha256": "4aa88c441bea181d444409f11761cf44c032f899419e6ceaf6ea831a2a893f84"
+    },
+    {
+      "path": "headers-source/binder/bound_statement.h",
+      "bytes": 1226,
+      "sha256": "b8338e6f830028f1eaf3bb7f253ac2aa120ba3e4eaf520928b2610f9cd5a753b"
+    },
+    {
+      "path": "headers-source/binder/bound_standalone_call_function.h",
+      "bytes": 763,
+      "sha256": "0b22f97648bf33a9c935d6a2fc0674eaf75c5260f49eb152919d63d818b3ef77"
+    },
+    {
+      "path": "headers-source/binder/bound_standalone_call.h",
+      "bytes": 835,
+      "sha256": "5c923834a15de24fab737c081d0f379dde4ffbe429ebfcda84621fe8c4578797"
+    },
+    {
+      "path": "headers-source/binder/bound_scan_source.h",
+      "bytes": 2980,
+      "sha256": "6c6ea9cd9cd9822597463e590f42e876efb9d62884b47a68fa43b632c2713490"
+    },
+    {
+      "path": "headers-source/binder/bound_import_database.h",
+      "bytes": 1036,
+      "sha256": "7a2959ace4bf707e6b77d12733c540ef70e63595d17c0acdc6a5dd165315dff7"
+    },
+    {
+      "path": "headers-source/binder/bound_extension_statement.h",
+      "bytes": 701,
+      "sha256": "83b759fbe9042f591e342cb4e6256a6e6608ee64fc6e87384c388e8ef4f78cdf"
+    },
+    {
+      "path": "headers-source/binder/bound_export_database.h",
+      "bytes": 1985,
+      "sha256": "c7f147f25b40e1ee2bcb9bb843d1c4d3ff7c60aba8b45d75489854ee99fc9542"
+    },
+    {
+      "path": "headers-source/binder/bound_explain.h",
+      "bytes": 950,
+      "sha256": "4e4929c988cebebd7418b695964ea437172650a29eae3292ddd976e4d5922c4f"
+    },
+    {
+      "path": "headers-source/binder/bound_detach_database.h",
+      "bytes": 369,
+      "sha256": "49b8bbdcffc12c49c7a13a63a0e39b53ae4a61058a3d3e22413bd8ed22bbb3e8"
+    },
+    {
+      "path": "headers-source/binder/bound_database_statement.h",
+      "bytes": 518,
+      "sha256": "b482cc1af2401a227df51a3e78275f8cf57967b94b36b7e126eef98dd0a260c3"
+    },
+    {
+      "path": "headers-source/binder/bound_create_macro.h",
+      "bytes": 897,
+      "sha256": "9a7a3b7717de4e099b420003f344827b612d9efca6786602f457ce228b2e881f"
+    },
+    {
+      "path": "headers-source/binder/bound_attach_info.h",
+      "bytes": 608,
+      "sha256": "8347e7b9a0bd52b7849ae466feff92b76eb4d4e9ab1f88f25ec02171e94c989b"
+    },
+    {
+      "path": "headers-source/binder/bound_attach_database.h",
+      "bytes": 580,
+      "sha256": "dcef8bed8fd2f5e410753e3c131646861094366d80683ae30828974a5ed162aa"
+    },
+    {
+      "path": "headers-source/binder/binder_scope.h",
+      "bytes": 2972,
+      "sha256": "93913ebfa1462c8fcc9dc77658ed5c402720dcd31be80cb8134406676c80bd20"
+    },
+    {
+      "path": "headers-source/binder/binder.h",
+      "bytes": 16762,
+      "sha256": "202e3c99b4b191ba55adce6272aea7fe766a224a16c88880ab36689721b4f67e"
+    },
+    {
+      "path": "headers-source/binder/visitor/property_collector.h",
+      "bytes": 1682,
+      "sha256": "23c26e5281cdb265288f050b8021277bd8f5d8d0add4f3e5dd6039b334d39b17"
+    },
+    {
+      "path": "headers-source/binder/visitor/default_type_solver.h",
+      "bytes": 785,
+      "sha256": "2e45ebadd23173c6f7f033eb325e0790539c2b969713f29a5d4f7ac4a1a9bcbb"
+    },
+    {
+      "path": "headers-source/binder/visitor/confidential_statement_analyzer.h",
+      "bytes": 432,
+      "sha256": "69b2fdc271bf58aafc06e86791d6e4f11eb9b5b26d111ff8a4fe66c5d3dc834a"
+    },
+    {
+      "path": "headers-source/binder/rewriter/with_clause_projection_rewriter.h",
+      "bytes": 651,
+      "sha256": "dbf2568e9fbdcd7292d0d37c20a1a8c144eab2289322ece5280bc2d28f6ed527"
+    },
+    {
+      "path": "headers-source/binder/rewriter/normalized_query_part_match_rewriter.h",
+      "bytes": 803,
+      "sha256": "620f7cfaa28e86d98c0faa244f852b03613b830be5f6f17c99602f5c6080109e"
+    },
+    {
+      "path": "headers-source/binder/rewriter/match_clause_pattern_label_rewriter.h",
+      "bytes": 556,
+      "sha256": "c85ee902e7abd0641ceaef3911fa7746118158f99c5b6085ac9162967f769b3f"
+    },
+    {
+      "path": "headers-source/binder/query/query_graph_label_analyzer.h",
+      "bytes": 597,
+      "sha256": "31910141e1cd18f9e519b838e58fd4096ce48e553eae230468ef639ed6f9a820"
+    },
+    {
+      "path": "headers-source/binder/query/query_graph.h",
+      "bytes": 6844,
+      "sha256": "54fa6c6752555db9599ca328c84df1d635a2c274e9dffa55a20dfae36f9f4bcd"
+    },
+    {
+      "path": "headers-source/binder/query/normalized_single_query.h",
+      "bytes": 978,
+      "sha256": "be0559d7321a544887abe221894a82029dfc50abf0db3b125c7b9ff604ed9419"
+    },
+    {
+      "path": "headers-source/binder/query/normalized_query_part.h",
+      "bytes": 2426,
+      "sha256": "e67f2e2424e295cb7d32ae3df4323a96a8cf6057893e69a9b445a17efe3bfdb7"
+    },
+    {
+      "path": "headers-source/binder/query/bound_regular_query.h",
+      "bytes": 1113,
+      "sha256": "5f1bf1baba3abfe4c519f9ad2686be817da0be7c4bdbd5f8a22369155e1a2e51"
+    },
+    {
+      "path": "headers-source/binder/expression/variable_expression.h",
+      "bytes": 769,
+      "sha256": "55c88dc5b0c80e57d3dbd9345592d07ca82045d932c57b96cf983667ad2a612c"
+    },
+    {
+      "path": "headers-source/binder/expression/subquery_expression.h",
+      "bytes": 2352,
+      "sha256": "cdc392264f006eddd7ee31d317088a8b52eb80461e6cb114bf836cf747a146e8"
+    },
+    {
+      "path": "headers-source/binder/expression/scalar_function_expression.h",
+      "bytes": 1129,
+      "sha256": "d54d89b686e53813645ed13132a527c114c30980802119a2181396576ddab954"
+    },
+    {
+      "path": "headers-source/binder/expression/rel_expression.h",
+      "bytes": 4976,
+      "sha256": "dde1f4b8df4ca1713efc3f0ea8fb274191f8f2a65135e3d1e069e8c19cd4049f"
+    },
+    {
+      "path": "headers-source/binder/expression/property_expression.h",
+      "bytes": 2957,
+      "sha256": "6461e084bb565de9b941ed1be30a069edb223da489b6ca27c3deee9dd4269f64"
+    },
+    {
+      "path": "headers-source/binder/expression/path_expression.h",
+      "bytes": 1038,
+      "sha256": "1b8b3def6d159c04d2881313f1805cfc3414803d734d243c1707a5d055afe78b"
+    },
+    {
+      "path": "headers-source/binder/expression/parameter_expression.h",
+      "bytes": 948,
+      "sha256": "2caaf2ee9521bee121ec564ff6556b7addb06d142b5bd3beca4265c0f245e89b"
+    },
+    {
+      "path": "headers-source/binder/expression/node_rel_expression.h",
+      "bytes": 3876,
+      "sha256": "d8797c352781d2349a0197fe3f91fc7757ee7ab8b4f63e98835159ee5ea0f30d"
+    },
+    {
+      "path": "headers-source/binder/expression/node_expression.h",
+      "bytes": 1474,
+      "sha256": "ee3a727a83b3e2275c11ee585af407ee9ffed7fabbcb57de37ed4ce6ae36a927"
+    },
+    {
+      "path": "headers-source/binder/expression/literal_expression.h",
+      "bytes": 769,
+      "sha256": "8f849d05a6c023983125167cb9b0cbd41249769ab82df0dbbf42692c4ec7430e"
+    },
+    {
+      "path": "headers-source/binder/expression/lambda_expression.h",
+      "bytes": 1231,
+      "sha256": "22267e24571f904538e45e8ab2d839d9c42c3024a15a588066712524f8ebdc97"
+    },
+    {
+      "path": "headers-source/binder/expression/expression_util.h",
+      "bytes": 3929,
+      "sha256": "ee7a6d90f6bf7c37f5a6def00a51b5a4cc88edc039b24f8d5b1bbec20f42e2e2"
+    },
+    {
+      "path": "headers-source/binder/expression/expression.h",
+      "bytes": 4650,
+      "sha256": "c93d6b9884b9c6a801d452d455aa940c9ec2cc65ac2bc4f81cf8839846de2167"
+    },
+    {
+      "path": "headers-source/binder/expression/case_expression.h",
+      "bytes": 1539,
+      "sha256": "9a88c456e043e615b5a80926d7fb15508bbbb8d5f5a14bbd0528393027db9db8"
+    },
+    {
+      "path": "headers-source/binder/expression/aggregate_function_expression.h",
+      "bytes": 1258,
+      "sha256": "f64e2ce978d314c82cb86297e2264214d10f0107423198cd4c64d3b023f55969"
+    },
+    {
+      "path": "headers-source/binder/ddl/property_definition.h",
+      "bytes": 1725,
+      "sha256": "84140493796f5f5ec10e6ff92875d08cd210be782f182ea02c5101cfa09c074a"
+    },
+    {
+      "path": "headers-source/binder/ddl/bound_drop.h",
+      "bytes": 603,
+      "sha256": "c6efcdcf0a27a01e9de4b8936f2219d5783c217513ee7b60a7d4bfbd81c4aea0"
+    },
+    {
+      "path": "headers-source/binder/ddl/bound_create_type.h",
+      "bytes": 686,
+      "sha256": "6b3299192b8b6db7867fdad7c1bb48200b5d4a88c44fff017d58e5b6f0f4a5fa"
+    },
+    {
+      "path": "headers-source/binder/ddl/bound_create_table_info.h",
+      "bytes": 4665,
+      "sha256": "6cae0e692990ac69cb32306e17b113560f951003eefe2d791bcf305a5234be64"
+    },
+    {
+      "path": "headers-source/binder/ddl/bound_create_table.h",
+      "bytes": 966,
+      "sha256": "46768cf8d91e4f40efc4e791a7b5bb777de07d81ef4e7516f69995e4857194df"
+    },
+    {
+      "path": "headers-source/binder/ddl/bound_create_sequence_info.h",
+      "bytes": 1299,
+      "sha256": "62598a9810db6868aa4bdca28ccc72bc6b6ba996c7a7b1f6db00d5cae1eea81e"
+    },
+    {
+      "path": "headers-source/binder/ddl/bound_create_sequence.h",
+      "bytes": 635,
+      "sha256": "f12c1f05a94d21772abdedd995c6893d3891f081039f8ab5c443d59c339ce709"
+    },
+    {
+      "path": "headers-source/binder/ddl/bound_alter_info.h",
+      "bytes": 4563,
+      "sha256": "f6e22ff63ba52aedef359ac0b3f7cf378e19612074fd1b49fdf794c78d41e9e2"
+    },
+    {
+      "path": "headers-source/binder/ddl/bound_alter.h",
+      "bytes": 571,
+      "sha256": "4e1e45bfbb171233eb6e445243fc33a99ee64f328dfbd508e5fa2bfab37c65b5"
+    },
+    {
+      "path": "headers-source/binder/copy/index_look_up_info.h",
+      "bytes": 703,
+      "sha256": "42e880e9d32329e0b24b91d5441fbc2450cb644ac8bae5129c52bbbd66b17fef"
+    },
+    {
+      "path": "headers-source/binder/copy/bound_query_scan_info.h",
+      "bytes": 408,
+      "sha256": "f2828457281cdb66d0f29684f4f2c5216e8628900560950cebfe4fb5e8682c85"
+    },
+    {
+      "path": "headers-source/binder/copy/bound_copy_to.h",
+      "bytes": 1074,
+      "sha256": "af26baf84594ae0302ff672001e90c72cb783c91c8d8697e066734afaf03709e"
+    },
+    {
+      "path": "headers-source/binder/copy/bound_copy_from.h",
+      "bytes": 3988,
+      "sha256": "cc9ed3c11130580b0e628d1f0532c5f2375ea192060b3f869ac0329b631bafe3"
+    },
+    {
+      "path": "headers-source/binder/query/updating_clause/bound_updating_clause.h",
+      "bytes": 703,
+      "sha256": "ec2283f1e90df5a83abe2ec085b9cc38de993d8a26b598b9451a5ae6bba5f4a2"
+    },
+    {
+      "path": "headers-source/binder/query/updating_clause/bound_set_info.h",
+      "bytes": 930,
+      "sha256": "dee7ee84cce641349c47ea9e17049f8e4a056a5d2954b1371b7192ea457be30f"
+    },
+    {
+      "path": "headers-source/binder/query/updating_clause/bound_set_clause.h",
+      "bytes": 1504,
+      "sha256": "724a56d1581abfc9475ca911b98e55035eb48e91879c976c1493cb1e7a8f2fca"
+    },
+    {
+      "path": "headers-source/binder/query/updating_clause/bound_merge_clause.h",
+      "bytes": 5983,
+      "sha256": "da55acef6933a7a8a40cc573dd4730ef9a1cb9790c7b51bea9cbfa2ecfc347e4"
+    },
+    {
+      "path": "headers-source/binder/query/updating_clause/bound_insert_info.h",
+      "bytes": 951,
+      "sha256": "4797188cf1b15741271b6c7dd3963f01b904e97bb1ebbdc24b2066f58c0d6420"
+    },
+    {
+      "path": "headers-source/binder/query/updating_clause/bound_insert_clause.h",
+      "bytes": 1448,
+      "sha256": "9453a32e9192e065569d2bcef2ea8a321735774a99cbe047b5200c5ca2b76716"
+    },
+    {
+      "path": "headers-source/binder/query/updating_clause/bound_delete_info.h",
+      "bytes": 855,
+      "sha256": "b52f68827ca9d1cf554cb8c48c243ccc1118e87b549f2c29d69f2e37beb186d0"
+    },
+    {
+      "path": "headers-source/binder/query/updating_clause/bound_delete_clause.h",
+      "bytes": 1355,
+      "sha256": "c130e4ea0b220221fa1c2e95edcf597d5dff0c05b30535c8f644bb60a5fb35cb"
+    },
+    {
+      "path": "headers-source/binder/query/return_with_clause/bound_with_clause.h",
+      "bytes": 670,
+      "sha256": "59113e8cbe48a8e92ba786e97200e652d0e9d424be4f69140c1dc2f5f24b55e4"
+    },
+    {
+      "path": "headers-source/binder/query/return_with_clause/bound_return_clause.h",
+      "bytes": 908,
+      "sha256": "1620dd34ebb45963349c2ad21f9750bef19241d6971b7364cb0af40640175355"
+    },
+    {
+      "path": "headers-source/binder/query/return_with_clause/bound_projection_body.h",
+      "bytes": 2935,
+      "sha256": "4c55a92adc8b70bc9500fc7cb20d30e8694b57ad2d4b96806d8aa723b3c6e702"
+    },
+    {
+      "path": "headers-source/binder/query/reading_clause/bound_unwind_clause.h",
+      "bytes": 879,
+      "sha256": "09dbacb2b2dca69fb53eb1808687f08668f3eb304d5f584957e1572d5a10d98e"
+    },
+    {
+      "path": "headers-source/binder/query/reading_clause/bound_table_function_call.h",
+      "bytes": 761,
+      "sha256": "24625954deeeb0d7d52dd3dc42cadb1345db6d54871d90ea9b1c2e6161c7e983"
+    },
+    {
+      "path": "headers-source/binder/query/reading_clause/bound_reading_clause.h",
+      "bytes": 1483,
+      "sha256": "9fdf52d397362014d507aefa3c2153dfc59ac015ab4125db2a4fe4a1dc1ed8f3"
+    },
+    {
+      "path": "headers-source/binder/query/reading_clause/bound_match_clause.h",
+      "bytes": 1202,
+      "sha256": "fdacb3ae6fa897ca2a3fda115b738e191639e4381414c9cc3fbd3538b28aeabd"
+    },
+    {
+      "path": "headers-source/binder/query/reading_clause/bound_load_from.h",
+      "bytes": 552,
+      "sha256": "ed99b9995cd636a2ca6c72932b765f3f4302e397b98eb839fa353bcd6b3a8012"
+    },
+    {
+      "path": "headers-source/binder/query/reading_clause/bound_join_hint.h",
+      "bytes": 715,
+      "sha256": "73b052226c4f323294d03cda8a67fccd6ad4c05c95f5bb543cd70619805f443c"
+    },
+    {
+      "path": "headers-source/catalog/catalog_entry/type_catalog_entry.h",
+      "bytes": 1235,
+      "sha256": "ea336a756ed0b6651967d7c94de54a8b51b7c0e847767ff42fc4bae39c0597e2"
+    },
+    {
+      "path": "headers-source/catalog/catalog_entry/table_catalog_entry.h",
+      "bytes": 4471,
+      "sha256": "c2bddf3a447f7fa1c0a5035b5cd0c63c8dc7462395307f6d1ad11e329778ba1b"
+    },
+    {
+      "path": "headers-source/catalog/catalog_entry/sequence_catalog_entry.h",
+      "bytes": 3131,
+      "sha256": "1395c5cf5c11bd5756c6da9e9c62a86df1aa7ff744505315547de4cdb4e5f626"
+    },
+    {
+      "path": "headers-source/catalog/catalog_entry/scalar_macro_catalog_entry.h",
+      "bytes": 1386,
+      "sha256": "216ec881171c003c211a87dc090f151e6269bbe6fff2da743b0081c59030e6d5"
+    },
+    {
+      "path": "headers-source/catalog/catalog_entry/rel_group_catalog_entry.h",
+      "bytes": 4604,
+      "sha256": "7789c4a5393ed731cbf7f83c0de03dd23727b5580feca9f899ca5866e4529c5c"
+    },
+    {
+      "path": "headers-source/catalog/catalog_entry/node_table_id_pair.h",
+      "bytes": 1194,
+      "sha256": "9dd8c2a3ff7b56e2488737cff851f22a7d10e486db3a76736c6f35c6caa6ee3f"
+    },
+    {
+      "path": "headers-source/catalog/catalog_entry/node_table_catalog_entry.h",
+      "bytes": 1980,
+      "sha256": "a3421e6ffe37850e2b349e32459ec56ba0752b53ad4cf81546a923092f38cb4d"
+    },
+    {
+      "path": "headers-source/catalog/catalog_entry/index_catalog_entry.h",
+      "bytes": 4261,
+      "sha256": "d516f7ac3cef10bfd2207a35a88ed45b32b9a5c288b8f9df812e791cca3228d1"
+    },
+    {
+      "path": "headers-source/catalog/catalog_entry/function_catalog_entry.h",
+      "bytes": 1309,
+      "sha256": "e8c1d820b052da4c63ce5801de2bb86236584463dfd7e543d5f3f0bcc50b94f8"
+    },
+    {
+      "path": "headers-source/catalog/catalog_entry/dummy_catalog_entry.h",
+      "bytes": 615,
+      "sha256": "1d9d3506e74b9d562316f17d73f785cde55890f883588215cd59ce0cd16c2f2b"
+    },
+    {
+      "path": "headers-source/catalog/catalog_entry/catalog_entry_type.h",
+      "bytes": 916,
+      "sha256": "cb0b8c1e2bf92d6175b342b5c49d31f180a0c4dd20740e8462a85d68420ae900"
+    },
+    {
+      "path": "headers-source/catalog/catalog_entry/catalog_entry.h",
+      "bytes": 3843,
+      "sha256": "4259c657832a01df9f952b3dca57e0584ab6931628eb304e8a3ab07aa976ac25"
+    },
+    {
+      "path": "headers-source/common/vector/value_vector.h",
+      "bytes": 14927,
+      "sha256": "c745dcc217427aec411f95ae15049f76bc1301e0e3513215f46c58f28399a732"
+    },
+    {
+      "path": "headers-source/common/vector/auxiliary_buffer.h",
+      "bytes": 3474,
+      "sha256": "39e416837b537cf9ee67c71be64dc58c8ca2d545f6a9d90261b9eb7a6ed21278"
+    },
+    {
+      "path": "headers-source/common/types/uuid.h",
+      "bytes": 1023,
+      "sha256": "4e92970de152400c8cb360a523af368aa0e56dc5eb1c70da0ee273a1643fe1ae"
+    },
+    {
+      "path": "headers-source/common/types/uint128_t.h",
+      "bytes": 8317,
+      "sha256": "358add41e74abed99ae045b8539a1afa767d92196e220ae88ad76a5c5959ed0d"
+    },
+    {
+      "path": "headers-source/common/types/types.h",
+      "bytes": 23809,
+      "sha256": "dd088f256ea02ba1246d2f7283a94d8718315086943d0ff078769159101cb350"
+    },
+    {
+      "path": "headers-source/common/types/timestamp_t.h",
+      "bytes": 4974,
+      "sha256": "d0f3e9e826b43d9d447da64c82fef865b91f20e25ee35b5baac4980e4ecbfc61"
+    },
+    {
+      "path": "headers-source/common/types/ku_string.h",
+      "bytes": 2903,
+      "sha256": "9986fc6b4600475aea2c072b934749d6054ad17dace40eb6b82add431551f714"
+    },
+    {
+      "path": "headers-source/common/types/ku_list.h",
+      "bytes": 497,
+      "sha256": "8abc2922324b2393b2329299c6a849fd551c2a158816b3d4408382f970786e3a"
+    },
+    {
+      "path": "headers-source/common/types/interval_t.h",
+      "bytes": 4830,
+      "sha256": "66eaa5137d7a5f39a58ca62ac561c878e05eb7d1837efd625796dbf6efa62558"
+    },
+    {
+      "path": "headers-source/common/types/internal_id_util.h",
+      "bytes": 519,
+      "sha256": "a78f1346c98aa09349db76a9c5d426f306bd12b7e09b06df20559abb72c92f90"
+    },
+    {
+      "path": "headers-source/common/types/int128_t.h",
+      "bytes": 8449,
+      "sha256": "9925ca6ebcb2ec5f76a87e1a0b6ce1b60dda7fca7ebab7c53eb105bf8b559a96"
+    },
+    {
+      "path": "headers-source/common/types/dtime_t.h",
+      "bytes": 2466,
+      "sha256": "8a444d482287a987a049e67d7e4c481e06abc99942e1b781cee974cbeb886afc"
+    },
+    {
+      "path": "headers-source/common/types/date_t.h",
+      "bytes": 4736,
+      "sha256": "38b03087a2177b8649b5f1d014f7d89e5b657b6030989815be376242fe8d98d0"
+    },
+    {
+      "path": "headers-source/common/types/cast_helpers.h",
+      "bytes": 10935,
+      "sha256": "a657ec2a76ea9f77aa054e6eddc91444e6f96169290f52e303040d6011f86fe9"
+    },
+    {
+      "path": "headers-source/common/types/blob.h",
+      "bytes": 1670,
+      "sha256": "a75b3ee0320d36671b44f40d088951a3756026f383f8a3f468eef0d3fde3ffc2"
+    },
+    {
+      "path": "headers-source/common/task_system/terminal_progress_bar_display.h",
+      "bytes": 729,
+      "sha256": "7f67f4d4073e19f635bf82ffab0e9cdcd570e4f6e93211cbd6d8fa38debe33de"
+    },
+    {
+      "path": "headers-source/common/task_system/task_scheduler.h",
+      "bytes": 5841,
+      "sha256": "d20c8768e62cf76d5662c52a8db902ea82d4c0169dc124d48de54193fdce091b"
+    },
+    {
+      "path": "headers-source/common/task_system/task.h",
+      "bytes": 3952,
+      "sha256": "ec445c45c6c1bb4a188a10d33bcd4ffbcbc9becbf53741e7ee11c0462039f00e"
+    },
+    {
+      "path": "headers-source/common/task_system/progress_bar_display.h",
+      "bytes": 1198,
+      "sha256": "406ab70fc973a7380cffa964e2556fa920ce372c3de4103e397bbfb44bc6a617"
+    },
+    {
+      "path": "headers-source/common/task_system/progress_bar.h",
+      "bytes": 1506,
+      "sha256": "d21cc2c9915bf424e2c1e05570e40b8017e21e6feae57bf5de6370d945b8d0da"
+    },
+    {
+      "path": "headers-source/common/serializer/writer.h",
+      "bytes": 663,
+      "sha256": "e11f75e4ab1c7563a950479789b7999b6bf4b462c7470677257ea7754a7f3990"
+    },
+    {
+      "path": "headers-source/common/serializer/serializer.h",
+      "bytes": 3637,
+      "sha256": "bcdb1e63950b7d6ba822dadb31d70aa761b1d52eb87a6ba6234f7a584de3452a"
+    },
+    {
+      "path": "headers-source/common/serializer/reader.h",
+      "bytes": 479,
+      "sha256": "0fade7d41481660d81224be6640f32556ff676ebefdcc2a12211a19cefd5ed66"
+    },
+    {
+      "path": "headers-source/common/serializer/in_mem_file_writer.h",
+      "bytes": 1689,
+      "sha256": "ef5e9c4f9e0c0f64e7d901fe8af7241aa9267d7fddf7b1857461f78d72e7b0c1"
+    },
+    {
+      "path": "headers-source/common/serializer/deserializer.h",
+      "bytes": 4839,
+      "sha256": "b4aa09d4f820c27d8e719a0d2d84935f8e739b9d166a3401d797ad199121c536"
+    },
+    {
+      "path": "headers-source/common/serializer/buffered_file.h",
+      "bytes": 1725,
+      "sha256": "42fc4565cfc79848514a78f360979cfe9a7c15ca7a536e87a0383a2f816c0e51"
+    },
+    {
+      "path": "headers-source/common/serializer/buffer_writer.h",
+      "bytes": 1705,
+      "sha256": "84b1b9401cb1a4e7ce0d80125c033bc9b4dfa9d10d7bcf5f0ca429bc2f8ab01e"
+    },
+    {
+      "path": "headers-source/common/serializer/buffer_reader.h",
+      "bytes": 565,
+      "sha256": "7308a829d5d74031ee7dec5118728fc6c8dd7c53912b11adc0c8ce64e9ee238c"
+    },
+    {
+      "path": "headers-source/common/file_system/virtual_file_system.h",
+      "bytes": 3334,
+      "sha256": "b802d3a8e06fb1a108a957f1f3a73a42c5df174af28460974517f2a52c7336ed"
+    },
+    {
+      "path": "headers-source/common/file_system/local_file_system.h",
+      "bytes": 3040,
+      "sha256": "73a487fbb6ba88319adffe791de5d625946124546e15df814c3cca4e1fdefa54"
+    },
+    {
+      "path": "headers-source/common/file_system/gzip_file_system.h",
+      "bytes": 1560,
+      "sha256": "f59ae25548e0e174dcf3002a928fefb77c74d18b8ca96ada8303483f2e08b2ac"
+    },
+    {
+      "path": "headers-source/common/file_system/file_system.h",
+      "bytes": 4467,
+      "sha256": "d1c09e01a2df79dce1dbddd52c483ab1256d29e58037911a6d85933ac88ffed7"
+    },
+    {
+      "path": "headers-source/common/file_system/file_info.h",
+      "bytes": 1965,
+      "sha256": "5fdd5b2394769cab2a8d7684fdd3129db1b0513c8f46793e48b790cfef1c8025"
+    },
+    {
+      "path": "headers-source/common/file_system/compressed_file_system.h",
+      "bytes": 2607,
+      "sha256": "3ea9806a79523c9a60159a9b4e3e1aa8628151d56e10c8b2d6550a322f5619d7"
+    },
+    {
+      "path": "headers-source/common/exception/transaction_manager.h",
+      "bytes": 308,
+      "sha256": "6455ae940c02808f5c9829376aa0dcef30b5589fc618a2694a80f04c623dd8c7"
+    },
+    {
+      "path": "headers-source/common/exception/test.h",
+      "bytes": 266,
+      "sha256": "e72b06bc483c1f944eb4be491f055276e121760ffd11c49fc9fbfd231a2e9236"
+    },
+    {
+      "path": "headers-source/common/exception/storage_version.h",
+      "bytes": 539,
+      "sha256": "647b70ff591f6cc507d7f2ef1f343f6a1ee0907cdae9a9c6c7483204478b7ed7"
+    },
+    {
+      "path": "headers-source/common/exception/storage.h",
+      "bytes": 310,
+      "sha256": "3fb3043bb808c81dd6ba2889e5478cdc8f412b8a635ba682c82f78bba0bf0e19"
+    },
+    {
+      "path": "headers-source/common/exception/runtime.h",
+      "bytes": 310,
+      "sha256": "cb735af17b73c3cde0f65cc6945e0a943557c437058c89db5f628408c3a47d01"
+    },
+    {
+      "path": "headers-source/common/exception/parser.h",
+      "bytes": 370,
+      "sha256": "e22e333cc413a076c0bae07ced0788b08b1df429ac31853390843abc75529d40"
+    },
+    {
+      "path": "headers-source/common/exception/overflow.h",
+      "bytes": 313,
+      "sha256": "52d4c438f01fa5d14bcdc066c4c2ba3616589436d285f63daeea41f310801fb6"
+    },
+    {
+      "path": "headers-source/common/exception/not_implemented.h",
+      "bytes": 300,
+      "sha256": "a72d833f37afad6127f661c90e5d95b7e18a2c7e20c5509476950a129ced621e"
+    },
+    {
+      "path": "headers-source/common/exception/message.h",
+      "bytes": 1407,
+      "sha256": "a059713892e0478536faf692e4375c5824b976924cc7fe29ae139e889c3cdff7"
+    },
+    {
+      "path": "headers-source/common/exception/io.h",
+      "bytes": 271,
+      "sha256": "a39edbe45a322f9cd17bb2ee70f00dc981fb363215d5ec6279a7234c320a0a33"
+    },
+    {
+      "path": "headers-source/common/exception/interrupt.h",
+      "bytes": 279,
+      "sha256": "4b1b7590f810706d0a35eaa0049a6163ec2629e6966c745a7f75ce2bc93cb5e0"
+    },
+    {
+      "path": "headers-source/common/exception/internal.h",
+      "bytes": 288,
+      "sha256": "b45de9b03f76a7641324a0bcd98df0df4187f147f1e22ee6415d1a478ba78c89"
+    },
+    {
+      "path": "headers-source/common/exception/extension.h",
+      "bytes": 300,
+      "sha256": "9212f99823cc1646ebe8a4073eb7929059fff38e543fd8a9ba6ea1d91f8e4f1f"
+    },
+    {
+      "path": "headers-source/common/exception/exception.h",
+      "bytes": 409,
+      "sha256": "bf0b35d4d535bc92a10e74a953312d50c066c1f6af1c0b2487e1d687fa4ca254"
+    },
+    {
+      "path": "headers-source/common/exception/end_of_file.h",
+      "bytes": 532,
+      "sha256": "c175e4f2fc388b520e114fba248f5828da7402616939027db7697e5cbbb327d8"
+    },
+    {
+      "path": "headers-source/common/exception/duplicated_primary_key.h",
+      "bytes": 797,
+      "sha256": "74656efe11dc59024ac290ddb52fb1920ab4b3ef29f4a35ce5ca57ad759c220c"
+    },
+    {
+      "path": "headers-source/common/exception/copy.h",
+      "bytes": 301,
+      "sha256": "12e248bdd771e0364e48a9612a77a210ee806786444056d53fa5e7b159f191db"
+    },
+    {
+      "path": "headers-source/common/exception/conversion.h",
+      "bytes": 327,
+      "sha256": "0a4cfe612555e1c90020398830ebbe40a4e356881e3bdbb9a6f45bcd712a9fb4"
+    },
+    {
+      "path": "headers-source/common/exception/connection.h",
+      "bytes": 327,
+      "sha256": "1b3870850bcc1ccd4c8915b510ae62725e416671f97c9c96e5789608ef5f3e5e"
+    },
+    {
+      "path": "headers-source/common/exception/checkpoint.h",
+      "bytes": 298,
+      "sha256": "b6b627081d45d4ed1bb6486130068521e298fde695993a685146c04993d09ef9"
+    },
+    {
+      "path": "headers-source/common/exception/catalog.h",
+      "bytes": 310,
+      "sha256": "8c1c11e089f8f4a27bd3faa1372e10617fcdf2d17f050ee429b1861d14d8bdc5"
+    },
+    {
+      "path": "headers-source/common/exception/buffer_manager.h",
+      "bytes": 337,
+      "sha256": "0661e5cbaea32c6f4d413a1d2cae4e2cd6f18c01090558000cbce3f18fdf136f"
+    },
+    {
+      "path": "headers-source/common/exception/binder.h",
+      "bytes": 307,
+      "sha256": "3b48de32405ea253313fc5fd8f0745a413f89a74f1c0934f6cb7a5e5d1bd9b7a"
+    },
+    {
+      "path": "headers-source/common/enums/zone_map_check_result.h",
+      "bytes": 203,
+      "sha256": "f9a6e6a76e4d0bbf553ebc42603dd09da2707870e02aaf441a7a3d16f192eaea"
+    },
+    {
+      "path": "headers-source/common/enums/table_type.h",
+      "bytes": 351,
+      "sha256": "4225174a29df392fa6824d4af0e1498f07f756652590195b75728aae4b49b3dd"
+    },
+    {
+      "path": "headers-source/common/enums/subquery_type.h",
+      "bytes": 168,
+      "sha256": "a48c9328dd648970e1ae95eac9049cc6fff608fd5e1252b478cd696802ebcc7c"
+    },
+    {
+      "path": "headers-source/common/enums/statement_type.h",
+      "bytes": 608,
+      "sha256": "46a6e8c57a8238502619ed051f3abeab696e45479394de1f733b69513a9791c0"
+    },
+    {
+      "path": "headers-source/common/enums/scan_source_type.h",
+      "bytes": 366,
+      "sha256": "677683d9ca175c69de15b8b71a3adddd63afce8c4f03c0d27a6819dcb10b4719"
+    },
+    {
+      "path": "headers-source/common/enums/rel_multiplicity.h",
+      "bytes": 403,
+      "sha256": "4054df309d7fdfe9d49bcbfc33e3ad1cf92aef4024633a8ca4c32f0df982c91c"
+    },
+    {
+      "path": "headers-source/common/enums/rel_direction.h",
+      "bytes": 660,
+      "sha256": "abe76e9603013878139327fcb4bd4efcfa4fbb009e7f09be016a694a02dd602a"
+    },
+    {
+      "path": "headers-source/common/enums/query_rel_type.h",
+      "bytes": 912,
+      "sha256": "a7f109ee148ee226bdef6bf6d4e4c9634b6a0c91f4f5f10a8dce06515f87e2fb"
+    },
+    {
+      "path": "headers-source/common/enums/path_semantic.h",
+      "bytes": 368,
+      "sha256": "5c1945ff51055ead172e7c95f581a06915aabd5a0913cf968ed1c0c4ff023ae4"
+    },
+    {
+      "path": "headers-source/common/enums/join_type.h",
+      "bytes": 211,
+      "sha256": "7b304f89cc22412d5ef3fee04ca36b0821f102d4c8dac10379f1457c8a046b0a"
+    },
+    {
+      "path": "headers-source/common/enums/extend_direction_util.h",
+      "bytes": 608,
+      "sha256": "82e1425418a06f6e5b98363652320a2554a15711883418a055b5377fc05c316a"
+    },
+    {
+      "path": "headers-source/common/enums/extend_direction.h",
+      "bytes": 187,
+      "sha256": "e3d52d0b9e029b99f8fc5216303156e3d52e7ec199ed1a1f8b7bef87f651cb86"
+    },
+    {
+      "path": "headers-source/common/enums/expression_type.h",
+      "bytes": 1529,
+      "sha256": "660e6cb03cf9d2de96a9ee489e9e29971365737aee939ea677939e3d461449c7"
+    },
+    {
+      "path": "headers-source/common/enums/explain_type.h",
+      "bytes": 218,
+      "sha256": "9202bec8c7239cec7304684a325202bd47e41cbd8372ce01d51f89dbd28823cf"
+    },
+    {
+      "path": "headers-source/common/enums/drop_type.h",
+      "bytes": 294,
+      "sha256": "dac0ca532c5e90d904ffe7b0618e96ed15dd44e1ce223fc415e077e4270c83e2"
+    },
+    {
+      "path": "headers-source/common/enums/delete_type.h",
+      "bytes": 198,
+      "sha256": "a7bedb6d0690fa4d63813dd90c6d7850c4db5d021f5a7d0821561cec6d514211"
+    },
+    {
+      "path": "headers-source/common/enums/conflict_action.h",
+      "bytes": 351,
+      "sha256": "d180e0a1fcb3544823603784c5f61d56333a4b2e77800564017170403af90ffe"
+    },
+    {
+      "path": "headers-source/common/enums/column_evaluate_type.h",
+      "bytes": 193,
+      "sha256": "3d8da0fb0d3f52178756ffbedcd93391507f7a02bd8b1e2ffb9fcdb62a7735c0"
+    },
+    {
+      "path": "headers-source/common/enums/clause_type.h",
+      "bytes": 545,
+      "sha256": "49f5d29340a38d1477fbb8b705933a63dc3fe615c09c3a43919b28217783c566"
+    },
+    {
+      "path": "headers-source/common/enums/alter_type.h",
+      "bytes": 349,
+      "sha256": "9a61cde6e981963fcbf9917b8c47e782b533b4bd68be01fa42f34435a8a5b2a9"
+    },
+    {
+      "path": "headers-source/common/enums/accumulate_type.h",
+      "bytes": 299,
+      "sha256": "f5563a8fda97f42e48cef8a2c4b37fd00477ffe5fc060bfe547c4cd7b9aa8bc6"
+    },
+    {
+      "path": "headers-source/common/data_chunk/sel_vector.h",
+      "bytes": 5523,
+      "sha256": "5d88dea36b95a9b3332ac7196c38b76eac7d20ff5f60b2dc014949bf54cbd337"
+    },
+    {
+      "path": "headers-source/common/data_chunk/data_chunk_state.h",
+      "bytes": 1454,
+      "sha256": "1b56eb557e417c7ecbe93275a69da40cc81d375f8a6880663d8170c8fb9e4616"
+    },
+    {
+      "path": "headers-source/common/data_chunk/data_chunk_collection.h",
+      "bytes": 1044,
+      "sha256": "6689f55b2c7681a5bd8a952ce585bba7ee4061c85f0ee74c15d6cb0034990473"
+    },
+    {
+      "path": "headers-source/common/data_chunk/data_chunk.h",
+      "bytes": 1697,
+      "sha256": "ae45164812c50977430dfab0aae3a42ad6fdcdaa9c29c32a3ede6f68be07aa50"
+    },
+    {
+      "path": "headers-source/common/copier_config/file_scan_info.h",
+      "bytes": 1794,
+      "sha256": "63abfa8f75f59981c279c91f26760edfba005c35ddbc7328585aa66593fb7a24"
+    },
+    {
+      "path": "headers-source/common/copier_config/csv_reader_config.h",
+      "bytes": 4459,
+      "sha256": "3a64be8317a5d3577ffffa9c1f42ece83c06e72acb42257fa9d8c31f7ea24bb0"
+    },
+    {
+      "path": "headers-source/common/arrow/arrow_row_batch.h",
+      "bytes": 3081,
+      "sha256": "18b04acb0996248c69d364661f0abc3ce85977d471a8b0d63e4b5186c19fa003"
+    },
+    {
+      "path": "headers-source/common/arrow/arrow_result_config.h",
+      "bytes": 373,
+      "sha256": "8f28ee7dbde5915b5cbf1090027fbf934d504fa51847c1b57e441e4c224a3236"
+    },
+    {
+      "path": "headers-source/common/arrow/arrow_nullmask_tree.h",
+      "bytes": 1453,
+      "sha256": "9f4727b8ffb0ea639c24bca488d597a187e198ee0af27a2be884d935cbb0fbc5"
+    },
+    {
+      "path": "headers-source/common/arrow/arrow_converter.h",
+      "bytes": 1911,
+      "sha256": "0e6fab476e9acc441506c8b0c24a50156779ce819f25a0027568d03a2e826d53"
+    },
+    {
+      "path": "headers-source/common/arrow/arrow_buffer.h",
+      "bytes": 1947,
+      "sha256": "ed5600a45dac26b6a56b2ee96fc90c0f8867d650068482c45e0d405d23796e3c"
+    },
+    {
+      "path": "headers-source/common/arrow/arrow.h",
+      "bytes": 1573,
+      "sha256": "8652e94775df0627f443d09d5608a3262d5ef00bf96261f04b2188429a070975"
+    },
+    {
+      "path": "headers-source/common/types/value/value.h",
+      "bytes": 22666,
+      "sha256": "be0bfb7c2b7d8f8e335273aad5682f89ed717bf20ecc5fe3873f72ce8823c0b1"
+    },
+    {
+      "path": "headers-source/common/types/value/rel.h",
+      "bytes": 1990,
+      "sha256": "0e1ff550a0c686cb2d0a0ef37742f19abb1ee21c8ed8b4562ac402c29bf29d9b"
+    },
+    {
+      "path": "headers-source/common/types/value/recursive_rel.h",
+      "bytes": 643,
+      "sha256": "fc5bb8881529b069295cc6354b83ac138303bf5df8b234596ef49d8b34da5ec1"
+    },
+    {
+      "path": "headers-source/common/types/value/node.h",
+      "bytes": 1688,
+      "sha256": "c206c5de91bafaeb5b13c9595a0be5ae8e5888c215ad6a5b5ad4f3a7c6789203"
+    },
+    {
+      "path": "headers-source/common/types/value/nested.h",
+      "bytes": 327,
+      "sha256": "19bf783aeec8572e87775bf48328c32f1601c526e4f4d0a34732443e38a7f730"
+    },
+    {
+      "path": "headers-source/function/uuid/vector_uuid_functions.h",
+      "bytes": 270,
+      "sha256": "3b7c7fe6cea323a7e3c64084be98b2e213b6c52f6ccf649115701b46a46f2a44"
+    },
+    {
+      "path": "headers-source/function/utility/vector_utility_functions.h",
+      "bytes": 1003,
+      "sha256": "a77a394c328f312c7e180a945b3e595685ed13e9e24be0694fd62b2c3ce87a59"
+    },
+    {
+      "path": "headers-source/function/utility/function_string_bind_data.h",
+      "bytes": 490,
+      "sha256": "58322778782cd05a5bdfc01271ea2db4203d6d54e96e46656c5fb354f1eafe6c"
+    },
+    {
+      "path": "headers-source/function/union/vector_union_functions.h",
+      "bytes": 523,
+      "sha256": "b0d912683a7f512380baed435485700a08e036a86441180fa59512d20c7a1ca7"
+    },
+    {
+      "path": "headers-source/function/timestamp/vector_timestamp_functions.h",
+      "bytes": 641,
+      "sha256": "0e0fba30f8f0619802b26a7e9e64d78065e2e01d5c37e36ff0478d73f9223a71"
+    },
+    {
+      "path": "headers-source/function/timestamp/timestamp_function.h",
+      "bytes": 1011,
+      "sha256": "a9bc5ec5586756785b5f21f0b45d636f5bd1bc0b091e900f8a2b16e69fcc39ed"
+    },
+    {
+      "path": "headers-source/function/table/table_function.h",
+      "bytes": 8303,
+      "sha256": "098a626c95f90c684a0c8d03101989ec544d569fa4710c9e7c1ac09c8274c46d"
+    },
+    {
+      "path": "headers-source/function/table/standalone_call_function.h",
+      "bytes": 1136,
+      "sha256": "789ba1f53984817a4a6a70986538f7ad20bdb21e6821911b5a620da1a9abd6e7"
+    },
+    {
+      "path": "headers-source/function/table/simple_table_function.h",
+      "bytes": 5582,
+      "sha256": "4ba9f28d7266ac5f5da0d889c2d65a9cb39a61cf35320fd7e31c3a70a0e7e813"
+    },
+    {
+      "path": "headers-source/function/table/scan_replacement.h",
+      "bytes": 818,
+      "sha256": "6e2e3f708b95404d51d4bb19f25c2ce21f69be2390194b72c052c4050bf0e7ea"
+    },
+    {
+      "path": "headers-source/function/table/scan_file_function.h",
+      "bytes": 2992,
+      "sha256": "477327b3d463e1ec4629b15dd283a0ede7ffb4362de820caed05436e5567d697"
+    },
+    {
+      "path": "headers-source/function/table/optional_params.h",
+      "bytes": 2026,
+      "sha256": "63901da6b3145554875c82195093632fa4b49762bb574ccd29f0b5ebe8797f33"
+    },
+    {
+      "path": "headers-source/function/table/bind_input.h",
+      "bytes": 1731,
+      "sha256": "7df9fa38071fa3ad5af45d69eda0c28f87e9daac19466f88493108169de016d6"
+    },
+    {
+      "path": "headers-source/function/table/bind_data.h",
+      "bytes": 2344,
+      "sha256": "e925eb4618275cd066e93aecd408b5d0f5efbc8c5497552bd9c4c673c2456414"
+    },
+    {
+      "path": "headers-source/function/struct/vector_struct_functions.h",
+      "bytes": 2095,
+      "sha256": "7fd7f0502bf6c3865e8173124d42987d0b7748094c172362a5a234f588ec14ac"
+    },
+    {
+      "path": "headers-source/function/string/vector_string_functions.h",
+      "bytes": 6990,
+      "sha256": "285ebf13a04c00409316af4c91d6d9ab6618f3a9cdcb19c7c72ee320e5bc12b8"
+    },
+    {
+      "path": "headers-source/function/sequence/sequence_functions.h",
+      "bytes": 379,
+      "sha256": "fe2b956c6c37b33958d59b03ee52f17e1f8002b834a54b94062b022fd8755b8a"
+    },
+    {
+      "path": "headers-source/function/schema/vector_node_rel_functions.h",
+      "bytes": 1100,
+      "sha256": "329ced3eda085be67d863003246cafb7cc81e297de5a6723293f6a77f8f74c31"
+    },
+    {
+      "path": "headers-source/function/schema/offset_functions.h",
+      "bytes": 254,
+      "sha256": "8d0d36f9adad81e174ea873bd69a531ae7fdaeed32496e8cd971ad08a8694616"
+    },
+    {
+      "path": "headers-source/function/path/vector_path_functions.h",
+      "bytes": 1389,
+      "sha256": "2289cd2a2cf390d375a173342a945531651b867334d907d95fcc4b94cf116ed6"
+    },
+    {
+      "path": "headers-source/function/path/path_function_executor.h",
+      "bytes": 6352,
+      "sha256": "c2035e031644cc6e73f234934bdd63822786449c0bffde91f4b50f5791f62701"
+    },
+    {
+      "path": "headers-source/function/null/vector_null_functions.h",
+      "bytes": 1299,
+      "sha256": "848fe8f5925cb12d1570c38e3ade06c211c6b0da54255666ac8b125df228365f"
+    },
+    {
+      "path": "headers-source/function/null/null_functions.h",
+      "bytes": 427,
+      "sha256": "76e456477abd07489447afdec5d68a62304f354f54af5ef00f11e47b8b99662b"
+    },
+    {
+      "path": "headers-source/function/null/null_function_executor.h",
+      "bytes": 2766,
+      "sha256": "fb956a7aaa99e0ff4f838463c0e6a7ba71e98fc9ee59dda8fcb977ab3a9be9c4"
+    },
+    {
+      "path": "headers-source/function/map/vector_map_functions.h",
+      "bytes": 768,
+      "sha256": "44cc54cfa738c8e6e0abf68c3a5e128ebb7c6473a33896dc94d33897b7b11afd"
+    },
+    {
+      "path": "headers-source/function/list/vector_list_functions.h",
+      "bytes": 5131,
+      "sha256": "7974c9c77149a4ee42b2445fb056f0924cc90597cf169a2c550e4bb81a685c22"
+    },
+    {
+      "path": "headers-source/function/interval/vector_interval_functions.h",
+      "bytes": 2345,
+      "sha256": "7f95e8049c8c24728ec63de336c60d30605e97e68458c2873ec2b987354be42c"
+    },
+    {
+      "path": "headers-source/function/interval/interval_functions.h",
+      "bytes": 1762,
+      "sha256": "3c7a3579b2e7d1ea1a737f22d5eb4bc0d7a140188ee0189496493d86294b600b"
+    },
+    {
+      "path": "headers-source/function/internal_id/vector_internal_id_functions.h",
+      "bytes": 271,
+      "sha256": "478424b0bd8dc08ee239333ecaa2cdf22edaca4503befd8c923fa41f88ed2df0"
+    },
+    {
+      "path": "headers-source/function/hash/vector_hash_functions.h",
+      "bytes": 1727,
+      "sha256": "edf2f545baaccb294cedaf42223aadd4c1e65685c10af0e1ec37cdbfe8257da4"
+    },
+    {
+      "path": "headers-source/function/hash/hash_functions.h",
+      "bytes": 5366,
+      "sha256": "1f2b756fb3da17755a6c49e082b00d07313ed609fec1fcf64ced54c7ba636f0d"
+    },
+    {
+      "path": "headers-source/function/gds/weight_utils.h",
+      "bytes": 3321,
+      "sha256": "26cf66a85b6b11363b15997a5964b1eae33a0ab91b049c46c5e29803a4dbea5d"
+    },
+    {
+      "path": "headers-source/function/gds/rj_output_writer.h",
+      "bytes": 5359,
+      "sha256": "6a25402de32d039dad3b0cbb8428d51d502704a99c85b53e91118fa563c0dd40"
+    },
+    {
+      "path": "headers-source/function/gds/rec_joins.h",
+      "bytes": 2364,
+      "sha256": "796a2d365793298a0bbfdf0d3d88a65fa1b2706dab39e1ccf5ea00442c239c8b"
+    },
+    {
+      "path": "headers-source/function/gds/gds_vertex_compute.h",
+      "bytes": 1808,
+      "sha256": "9f8e6bc6cd35547b31a38ad2b4f8bd56fce3523dca8bd1265d36da9d90664db2"
+    },
+    {
+      "path": "headers-source/function/gds/gds_utils.h",
+      "bytes": 1897,
+      "sha256": "c573c58a7f3e5548b14668088cd8581ca6d2c9fb8d40c5d37d78a683fcec4010"
+    },
+    {
+      "path": "headers-source/function/gds/gds_task.h",
+      "bytes": 3716,
+      "sha256": "f46437e5b3e392f1a927c46c94920e95854254d508cc06a87748f441c74891fb"
+    },
+    {
+      "path": "headers-source/function/gds/gds_state.h",
+      "bytes": 1921,
+      "sha256": "4e90414c9299c3aaaf73236e435695ec1bac403c010f7df5634675aca171f822"
+    },
+    {
+      "path": "headers-source/function/gds/gds_object_manager.h",
+      "bytes": 7843,
+      "sha256": "d5edff8a84009a2b43629ef3d46ebc7554819055d9bade8dee3f74bb3b000b86"
+    },
+    {
+      "path": "headers-source/function/gds/gds_function_collection.h",
+      "bytes": 1391,
+      "sha256": "c60020a5cac67595571e8279bf4d864eaaca61099e596cce42d79799df5499ad"
+    },
+    {
+      "path": "headers-source/function/gds/gds_frontier.h",
+      "bytes": 12547,
+      "sha256": "61e98070f4658713c5e9d49060c75a2b3d1e59fa0cb0e7563eb668e7cea0d280"
+    },
+    {
+      "path": "headers-source/function/gds/gds.h",
+      "bytes": 4017,
+      "sha256": "8c13930aa304f815eea67caaccc20ceb736500e7dd94286e8e0ffc4ca95d02a2"
+    },
+    {
+      "path": "headers-source/function/gds/frontier_morsel.h",
+      "bytes": 1357,
+      "sha256": "1456894df93fb2514e738113ca444c41484bab7e97520542bd59212f6170153c"
+    },
+    {
+      "path": "headers-source/function/gds/density_state.h",
+      "bytes": 173,
+      "sha256": "ef1fb9c284c37ca633cf7c1eada1337a997318e7235764dc2eaa7df1e87d3294"
+    },
+    {
+      "path": "headers-source/function/gds/compute.h",
+      "bytes": 2818,
+      "sha256": "1f215ec319add0d66ab492601ae642473279a404c6f031c118c4a4c122dfe492"
+    },
+    {
+      "path": "headers-source/function/gds/bfs_graph.h",
+      "bytes": 7022,
+      "sha256": "3650f82c9eedc8885405e2813fdd833228851447418dcb04459883a096c02f37"
+    },
+    {
+      "path": "headers-source/function/export/export_function.h",
+      "bytes": 3680,
+      "sha256": "7b38c26d663cd2ec0fbf7c0b8fbe833a37fafc6d2afcf3fe7027716099f9b35a"
+    },
+    {
+      "path": "headers-source/function/date/vector_date_functions.h",
+      "bytes": 1656,
+      "sha256": "3734a51e6c8c5553bea458daaeb624a7bb994ff4655d71fa46f110b499c6c9b9"
+    },
+    {
+      "path": "headers-source/function/date/date_functions.h",
+      "bytes": 4834,
+      "sha256": "95ca4ffa202898c1d1b8fab28a74ec3c965f2f378487242d2e0611d8d8ea4836"
+    },
+    {
+      "path": "headers-source/function/comparison/vector_comparison_functions.h",
+      "bytes": 11738,
+      "sha256": "e2ed2f6db35791c25c3ec83f40c29ebcf3c089be5760ca1ed65fbf3d0e485d68"
+    },
+    {
+      "path": "headers-source/function/comparison/comparison_functions.h",
+      "bytes": 4140,
+      "sha256": "c6066998ec397262ceab1898fd3d8df5c602a8417946d3d446b8ca657318c355"
+    },
+    {
+      "path": "headers-source/function/cast/vector_cast_functions.h",
+      "bytes": 4471,
+      "sha256": "c9c2177f9503d28b2c6078f0629357501168a0d64a18a4cece33b42b26518f88"
+    },
+    {
+      "path": "headers-source/function/cast/cast_union_bind_data.h",
+      "bytes": 903,
+      "sha256": "da29e9d9ce53a0a41e38bdcd11c7fb0098892c6833875a4f4c1cea71de3f0548"
+    },
+    {
+      "path": "headers-source/function/cast/cast_function_bind_data.h",
+      "bytes": 943,
+      "sha256": "942c8167927f554cc5a31936d189725d689c73551b51f7fc7cb7c8e32b93349c"
+    },
+    {
+      "path": "headers-source/function/boolean/vector_boolean_functions.h",
+      "bytes": 2877,
+      "sha256": "c7783dcc677a4b1eedf91c09857ee3750c60a3535948b79c0e00395b48bacddf"
+    },
+    {
+      "path": "headers-source/function/boolean/boolean_functions.h",
+      "bytes": 4682,
+      "sha256": "8a0e8b76c1e81b6de8511017857ad05b9c2893f78cb1730d160a0294555048d0"
+    },
+    {
+      "path": "headers-source/function/boolean/boolean_function_executor.h",
+      "bytes": 15809,
+      "sha256": "43129682e9d8408f91b0770d6b5a6a83cf948428dc89d1241a1962236a287799"
+    },
+    {
+      "path": "headers-source/function/blob/vector_blob_functions.h",
+      "bytes": 510,
+      "sha256": "6df4478389afdf14267210e2de4eb7578e850fd88520199b2b348837e5b6d398"
+    },
+    {
+      "path": "headers-source/function/array/vector_array_functions.h",
+      "bytes": 2549,
+      "sha256": "e84e04c658ce343ec9bbf64b9c48c7ec6935eaef478a0012aed15370262fb88b"
+    },
+    {
+      "path": "headers-source/function/arithmetic/vector_arithmetic_functions.h",
+      "bytes": 5167,
+      "sha256": "d2b810c9f924a90dab9fbdee3aa3379e5999a432651c536fb25ede94e42e21fd"
+    },
+    {
+      "path": "headers-source/function/arithmetic/subtract.h",
+      "bytes": 979,
+      "sha256": "52f8123318322e704a6ff383e5dd089f316c56c704c01683e32301f1e246ecea"
+    },
+    {
+      "path": "headers-source/function/arithmetic/negate.h",
+      "bytes": 524,
+      "sha256": "8207c09ab32c8d328e9d6242901a5ae0262824ef9e027e8d3b369e0adfdc8830"
+    },
+    {
+      "path": "headers-source/function/arithmetic/multiply.h",
+      "bytes": 979,
+      "sha256": "0a308de0ebe68076554f811072ade6af278c7cade14a4eec84aec26f40301776"
+    },
+    {
+      "path": "headers-source/function/arithmetic/modulo.h",
+      "bytes": 1267,
+      "sha256": "374ab09d9fb82fd27e09973cff10513a6c8d9bd8cd24fd54f403cb142749ba6d"
+    },
+    {
+      "path": "headers-source/function/arithmetic/divide.h",
+      "bytes": 961,
+      "sha256": "a89021818c85926dc1b7c9ef241f8403d1d7d7eb3f4844a201b4003f487d4f8e"
+    },
+    {
+      "path": "headers-source/function/arithmetic/arithmetic_functions.h",
+      "bytes": 5412,
+      "sha256": "9aad94c5a52b33f3123fa1d020a6c5da60c9307a3154334be79043e09c154c21"
+    },
+    {
+      "path": "headers-source/function/arithmetic/add.h",
+      "bytes": 934,
+      "sha256": "7535eb6e3beea33d22793678f8431ff30686ab90548fb23ba5728a6a288b66ff"
+    },
+    {
+      "path": "headers-source/function/arithmetic/abs.h",
+      "bytes": 822,
+      "sha256": "137c454773a89bbc05e0742d1f8ef892598d51426dfc6ab15446c0877eb1264c"
+    },
+    {
+      "path": "headers-source/function/aggregate/sum.h",
+      "bytes": 2452,
+      "sha256": "f35479c3f2ac1c579c691ab264781931a8a5307420668827011f655d22d26c60"
+    },
+    {
+      "path": "headers-source/function/aggregate/min_max.h",
+      "bytes": 3422,
+      "sha256": "fb0b2b181081736ca93e0ab6e368a1d2b17e0f489535d1c4e200f083cc7e98cc"
+    },
+    {
+      "path": "headers-source/function/aggregate/count_star.h",
+      "bytes": 605,
+      "sha256": "214407541a284454c4b65b504ef52f345cca2e581ca8dfc9ef16de1f71eefb3b"
+    },
+    {
+      "path": "headers-source/function/aggregate/count.h",
+      "bytes": 837,
+      "sha256": "f8c6d0f7b61f17d11b76644e72b4c8179fd76b3727744b76503992de31939ded"
+    },
+    {
+      "path": "headers-source/function/aggregate/base_count.h",
+      "bytes": 1113,
+      "sha256": "a568f794ca4e5fb882d76266d030a530d4176efe9df864d0b12440687b50cc00"
+    },
+    {
+      "path": "headers-source/function/aggregate/avg.h",
+      "bytes": 3293,
+      "sha256": "a880e193206da8daee480b617fb5a1a14bfc959c63f9ade95b913f60649ef81b"
+    },
+    {
+      "path": "headers-source/function/array/functions/array_squared_distance.h",
+      "bytes": 1074,
+      "sha256": "96f048006ad965b8225deae48e3f1ff223d78d19e7c83c1fc3b2eab9f08e9bbf"
+    },
+    {
+      "path": "headers-source/function/array/functions/array_inner_product.h",
+      "bytes": 1069,
+      "sha256": "0e5e211fdbc522f390a9cd1fd3f0bafafdc2cedb8cc110f1a685b38df68c0e5e"
+    },
+    {
+      "path": "headers-source/function/array/functions/array_distance.h",
+      "bytes": 691,
+      "sha256": "cf53ad125cfa7f052f258bab1cc75030833f6e135ebae6dfb7856c4c717c9e22"
+    },
+    {
+      "path": "headers-source/function/array/functions/array_cross_product.h",
+      "bytes": 1082,
+      "sha256": "2111cb0d22a958c7f048a73b4062f3b85edffff4972e109b42d5d4fcbc7a3a20"
+    },
+    {
+      "path": "headers-source/function/array/functions/array_cosine_similarity.h",
+      "bytes": 1098,
+      "sha256": "8ece1f2e310d689e8e9e3cdbf3f996970634d0ddd1fc4a23fdac0adc87e0038c"
+    },
+    {
+      "path": "headers-source/function/blob/functions/octet_length_function.h",
+      "bytes": 273,
+      "sha256": "10f181d8d9d354c08d1488a4724e2945733b3bff6d81b6134d906545d0394b93"
+    },
+    {
+      "path": "headers-source/function/blob/functions/encode_function.h",
+      "bytes": 406,
+      "sha256": "3e16ceec6de710469167ff18d812c5c291d3d1edeaf97b793bc308bb5109e934"
+    },
+    {
+      "path": "headers-source/function/blob/functions/decode_function.h",
+      "bytes": 832,
+      "sha256": "f3ecbfbb1f166bf2c30c784fd3a7838dcdba26e70eb849bac01c01bef46ba488"
+    },
+    {
+      "path": "headers-source/function/cast/functions/numeric_limits.h",
+      "bytes": 7512,
+      "sha256": "b7175401cc568ba7b2550363900d910ce334f4eae8c3153a6f1302ef83bcc47b"
+    },
+    {
+      "path": "headers-source/function/cast/functions/numeric_cast.h",
+      "bytes": 5189,
+      "sha256": "81a3c0e8b39e32969ea2f853b89491794b11ea65598f2364066d08d24038abe0"
+    },
+    {
+      "path": "headers-source/function/cast/functions/cast_string_non_nested_functions.h",
+      "bytes": 11914,
+      "sha256": "aed093c3dfb1e5610413258655f684b46f06571de91c0472cfca10afa7b4d227"
+    },
+    {
+      "path": "headers-source/function/cast/functions/cast_functions.h",
+      "bytes": 14919,
+      "sha256": "6cdf190a2645e2142339583f4f12750843e45a00c9961dc3cceceaf9b89df770"
+    },
+    {
+      "path": "headers-source/function/cast/functions/cast_from_string_functions.h",
+      "bytes": 8188,
+      "sha256": "576b3e7c5ad05b3100a50fa7585ec446d9e477a6d1a304ad45d17ccebe58df93"
+    },
+    {
+      "path": "headers-source/function/cast/functions/cast_decimal.h",
+      "bytes": 6512,
+      "sha256": "5b76bc677d8b38b0c8f605796c172b50478b4e60bcb035c7a6bcfadcab9148fc"
+    },
+    {
+      "path": "headers-source/function/cast/functions/cast_array.h",
+      "bytes": 638,
+      "sha256": "7709a1e21dfcc96819271902030b979a86c9cf804f70cc7c771d6d2d01b3a92d"
+    },
+    {
+      "path": "headers-source/function/gds/auxiliary_state/path_auxiliary_state.h",
+      "bytes": 1816,
+      "sha256": "20205819786732124f94081b41c4df37a9f8f512d41facd060684e193ae167f1"
+    },
+    {
+      "path": "headers-source/function/gds/auxiliary_state/gds_auxilary_state.h",
+      "bytes": 1230,
+      "sha256": "1b3aa66e47886eb3fb49c6bd9e1c9db77f96a51390cf3fdb34ed8a40466dfc2b"
+    },
+    {
+      "path": "headers-source/function/list/functions/list_unique_function.h",
+      "bytes": 1235,
+      "sha256": "3ba01c826963829a5391374f2665ce73c0ca0044cd07a71df3e78feafa81be31"
+    },
+    {
+      "path": "headers-source/function/list/functions/list_sort_function.h",
+      "bytes": 1316,
+      "sha256": "8cfe2cf0b072300750b74899c7b9159cdb7d647f9d9f575fd2b0511590fbbaa4"
+    },
+    {
+      "path": "headers-source/function/list/functions/list_reverse_sort_function.h",
+      "bytes": 1313,
+      "sha256": "0d0cd24285c415b1eae0f294c2e8fca1bc880a2299fe23b92e2e77f127e67275"
+    },
+    {
+      "path": "headers-source/function/list/functions/list_position_function.h",
+      "bytes": 1214,
+      "sha256": "05e851fed34a5794d9c49f638d78b78ecc3ef16c86a08fc8b2b138a8aba627b3"
+    },
+    {
+      "path": "headers-source/function/list/functions/list_len_function.h",
+      "bytes": 1055,
+      "sha256": "b80872c56668b49b8e58fb5998bc4457b6f21206f77ac956dc1b49910ad63640"
+    },
+    {
+      "path": "headers-source/function/list/functions/list_function_utils.h",
+      "bytes": 2455,
+      "sha256": "121599021616ddb798ee6238687735731cbb4aa905bce0d2a89ffab57a8867bf"
+    },
+    {
+      "path": "headers-source/function/list/functions/list_extract_function.h",
+      "bytes": 1964,
+      "sha256": "febccdde2e6a5b64b1c34bc55979584577158722905f284bf1047731c40a17f3"
+    },
+    {
+      "path": "headers-source/function/list/functions/list_concat_function.h",
+      "bytes": 438,
+      "sha256": "f95c77e2dd53a149dfa15de973bbc3909dee7087a1bcc6fbc3b8b9842aeb4108"
+    },
+    {
+      "path": "headers-source/function/list/functions/base_list_sort_function.h",
+      "bytes": 3527,
+      "sha256": "3ab5318f11dd07dc8bd576392b0def6719e2064bfc6c0587b616b636b97b80ac"
+    },
+    {
+      "path": "headers-source/function/map/functions/map_values_function.h",
+      "bytes": 716,
+      "sha256": "28e435a09015472e7f33fb72e8db177ce779f8b972a4cdf7d7a4199646f2f7cf"
+    },
+    {
+      "path": "headers-source/function/map/functions/map_keys_function.h",
+      "bytes": 662,
+      "sha256": "482f8ab6df7a405d145142cd40b36917fdddc479dc7dd0f85dba8e2bab120540"
+    },
+    {
+      "path": "headers-source/function/map/functions/map_extract_function.h",
+      "bytes": 1537,
+      "sha256": "7d1d6457a19e3e955257ceb50c941e4d2af62630ccc72f9afe8f70d44d72601b"
+    },
+    {
+      "path": "headers-source/function/map/functions/map_creation_function.h",
+      "bytes": 2416,
+      "sha256": "66f37c468136dc33b8b26ce27a5d022654f7daf7824dd558c6bf9cd6ead1a96c"
+    },
+    {
+      "path": "headers-source/function/map/functions/base_map_extract_function.h",
+      "bytes": 876,
+      "sha256": "1f08ea3128299796ee56fac8d39e73d0a2b8d6e70b5877f2c060ce175b1c05cf"
+    },
+    {
+      "path": "headers-source/function/string/functions/upper_function.h",
+      "bytes": 513,
+      "sha256": "0d94973fd50b796d403b46210710e89601a1d5dda94b90538d90c188bf4b59f5"
+    },
+    {
+      "path": "headers-source/function/string/functions/trim_function.h",
+      "bytes": 591,
+      "sha256": "1ec1d10fea30ca39f7317b9beb76f39198c9049643d68bde06e50fff1753226f"
+    },
+    {
+      "path": "headers-source/function/string/functions/substr_function.h",
+      "bytes": 2965,
+      "sha256": "edd7c07cbaf5dcfc978f414190d01aceb9c5a5fffbddc34e3db581f3e0fef518"
+    },
+    {
+      "path": "headers-source/function/string/functions/starts_with_function.h",
+      "bytes": 405,
+      "sha256": "01c912fb5c1240398530bd50b048567953ba8662bcfb9265d34081201069b846"
+    },
+    {
+      "path": "headers-source/function/string/functions/rtrim_function.h",
+      "bytes": 668,
+      "sha256": "e74f2e8f5742a3446c3cac1403195b1da3b3e6ba5003ee523662cbccdbc03e38"
+    },
+    {
+      "path": "headers-source/function/string/functions/rpad_function.h",
+      "bytes": 1039,
+      "sha256": "d8560a5a4cbefbf4043e36e96febf61b1307efeff22dc25c91832eac4cde0046"
+    },
+    {
+      "path": "headers-source/function/string/functions/right_function.h",
+      "bytes": 681,
+      "sha256": "a20c46d6aabce3a0083cdbdba1ad8508dccfea8eaa6d0f904ed756f32c7facdd"
+    },
+    {
+      "path": "headers-source/function/string/functions/reverse_function.h",
+      "bytes": 576,
+      "sha256": "e66cdd1e1f2737e1ce0652c878599ac197768d687c877a2b689f6d220ee8bf2c"
+    },
+    {
+      "path": "headers-source/function/string/functions/repeat_function.h",
+      "bytes": 646,
+      "sha256": "0482c08ed1a945c711a51591ca92594aac4d09599e03d9a5cdd5206179d932ca"
+    },
+    {
+      "path": "headers-source/function/string/functions/regexp_split_to_array_function.h",
+      "bytes": 2374,
+      "sha256": "2db9f45df5fde5f6366536d2cee53cb83a34f134e8ab7194e998e10f0ff5fac0"
+    },
+    {
+      "path": "headers-source/function/string/functions/regexp_matches_function.h",
+      "bytes": 482,
+      "sha256": "be212d342e86616742143901312459428b449c98e256a4b2a77d8988968c0641"
+    },
+    {
+      "path": "headers-source/function/string/functions/regexp_extract_function.h",
+      "bytes": 1785,
+      "sha256": "8a20802acdc8d39ab6233660a24777d5d51e586b9a1922ecd16cfa095702d948"
+    },
+    {
+      "path": "headers-source/function/string/functions/regexp_extract_all_function.h",
+      "bytes": 3074,
+      "sha256": "809c2a4a82d2b855e0748ba47c6356c1fa83975a9b4932257d81403682206089"
+    },
+    {
+      "path": "headers-source/function/string/functions/pad_function.h",
+      "bytes": 878,
+      "sha256": "0b3f72e7e58cae90bdde9d779c5409368220105aed27c7f4f63d892267a92360"
+    },
+    {
+      "path": "headers-source/function/string/functions/ltrim_function.h",
+      "bytes": 769,
+      "sha256": "4424203ca47defb2ed307434b2bf78331d54c69ca650fd590eb5ac1f683274bd"
+    },
+    {
+      "path": "headers-source/function/string/functions/lpad_function.h",
+      "bytes": 1039,
+      "sha256": "7fdb9cb284ffe4273c9d667b8d8f0e8f58c30c5db43ae452f43bf1032423ea9b"
+    },
+    {
+      "path": "headers-source/function/string/functions/lower_function.h",
+      "bytes": 448,
+      "sha256": "69f66733e14777c3c09de017d0b7884c803c5641bfad7cfbc2765fbd82081aa3"
+    },
+    {
+      "path": "headers-source/function/string/functions/left_operation.h",
+      "bytes": 664,
+      "sha256": "890fa77c16b459033cb3f573fbf02a79b55e2b2f3bc465e59a8734379fe8f06a"
+    },
+    {
+      "path": "headers-source/function/string/functions/find_function.h",
+      "bytes": 1463,
+      "sha256": "e9fed2360043ca64fb5c9317803623d1ba79db780a5f97d2585fc09dc524059b"
+    },
+    {
+      "path": "headers-source/function/string/functions/ends_with_function.h",
+      "bytes": 685,
+      "sha256": "55b4e3eeeb6be3987792a05d86ce50e5842cf0e1a9a5eccee588a638b917fa8d"
+    },
+    {
+      "path": "headers-source/function/string/functions/contains_function.h",
+      "bytes": 431,
+      "sha256": "7c64166020191160799d548227e4012092b322c5f0405bfa74915971ae5f86cd"
+    },
+    {
+      "path": "headers-source/function/string/functions/base_str_function.h",
+      "bytes": 435,
+      "sha256": "dc85249459d717835d6f4796cc8e00adda1891d0a9c57a53f2ee42232eb79a5a"
+    },
+    {
+      "path": "headers-source/function/string/functions/base_regexp_function.h",
+      "bytes": 816,
+      "sha256": "25ebd7048ec08fcf8f19a48597ab0282fcdc8af96c032a3e0cbe055dd4d3aa1f"
+    },
+    {
+      "path": "headers-source/function/string/functions/base_pad_function.h",
+      "bytes": 2315,
+      "sha256": "305d4755a249a780184c58e2b93350f9e68ab2638e990c882031e502271fadc0"
+    },
+    {
+      "path": "headers-source/function/string/functions/base_lower_upper_function.h",
+      "bytes": 702,
+      "sha256": "25eb9abfda1fc0af32de1eba0d553bbc7c71260d2655f2a7a4ef1c1500714dd6"
+    },
+    {
+      "path": "headers-source/function/string/functions/array_extract_function.h",
+      "bytes": 2252,
+      "sha256": "3a9100851e0f3fc33b4046472c1065c63ff1c20e2edefb182bebfd183ee86245"
+    },
+    {
+      "path": "headers-source/function/union/functions/union_tag.h",
+      "bytes": 1188,
+      "sha256": "b6a065a130db3692ca3c2c24f1870b2da02bb4069c71c34146ac8ff5d9bf01f1"
+    },
+    {
+      "path": "headers-source/function/uuid/functions/gen_random_uuid.h",
+      "bytes": 228,
+      "sha256": "0a43f8b72cf6f70e3b8241d6e782b7ea9ff3f2f670758d7c88238500f2a7f04d"
+    },
+    {
+      "path": "headers-source/main/query_result/materialized_query_result.h",
+      "bytes": 1275,
+      "sha256": "c9af356078db6d898328e1c45603ddcbbaedf3eb528b1d5f0c317287ab1d6d48"
+    },
+    {
+      "path": "headers-source/main/query_result/arrow_query_result.h",
+      "bytes": 1108,
+      "sha256": "f28e491c3b5da8fb2e00744ce38593c1ded4f3abfde06d917d912f6631934ddf"
+    },
+    {
+      "path": "headers-source/parser/visitor/statement_read_write_analyzer.h",
+      "bytes": 2007,
+      "sha256": "56119dd291df2fad466a114034bd135eef4568b582a3c29abc053e8322af2776"
+    },
+    {
+      "path": "headers-source/parser/visitor/standalone_call_rewriter.h",
+      "bytes": 647,
+      "sha256": "7e7f930a1d73ef22063dd754aa8e867e77ab01a60196f689245128c277bd872b"
+    },
+    {
+      "path": "headers-source/parser/query/single_query.h",
+      "bytes": 1802,
+      "sha256": "691d95f9ec452d1facaf0173c852c3c5adae4f852db4f004164c83cd08208946"
+    },
+    {
+      "path": "headers-source/parser/query/regular_query.h",
+      "bytes": 1005,
+      "sha256": "96d1a1d27113442da9334fdc2a37935ce0322e7653bf63e5382a2d4e3b0f9a01"
+    },
+    {
+      "path": "headers-source/parser/query/query_part.h",
+      "bytes": 1313,
+      "sha256": "4c3e43956a8e3cc783ea8cf3ac8c15181165534db8fe70c8fe62974dd667f1b5"
+    },
+    {
+      "path": "headers-source/parser/parsed_data/attach_info.h",
+      "bytes": 484,
+      "sha256": "496354f0610b423aae93aed0b1bc8f6a60dd5fb0e589401d37176f1a0256981b"
+    },
+    {
+      "path": "headers-source/parser/expression/parsed_variable_expression.h",
+      "bytes": 1556,
+      "sha256": "3ba1feb657dbb36b5eb67afcdca6736d4920bf832846e1dc7a818d6d22c77e2f"
+    },
+    {
+      "path": "headers-source/parser/expression/parsed_subquery_expression.h",
+      "bytes": 2020,
+      "sha256": "7e9c87bae0d8381e773693c6d4b88db9a2d810decda6bf740c225741bb72fdc6"
+    },
+    {
+      "path": "headers-source/parser/expression/parsed_property_expression.h",
+      "bytes": 1706,
+      "sha256": "20443c7ec143f5d9c7b41e12af9b08bea4928c181c043eb46c16bb8b262942d6"
+    },
+    {
+      "path": "headers-source/parser/expression/parsed_parameter_expression.h",
+      "bytes": 997,
+      "sha256": "8141b8e709bbb229df775525663f8600f304544591f7489eacfccb3811505f96"
+    },
+    {
+      "path": "headers-source/parser/expression/parsed_literal_expression.h",
+      "bytes": 1517,
+      "sha256": "584dd8e739acb080af094100e64bfc64e994257125d0d44172c9487f9701d710"
+    },
+    {
+      "path": "headers-source/parser/expression/parsed_lambda_expression.h",
+      "bytes": 997,
+      "sha256": "e0ac5af80875fc7f5e076d4c633739e761ae73d2edb5ce04f44fbecd12a4cbec"
+    },
+    {
+      "path": "headers-source/parser/expression/parsed_function_expression.h",
+      "bytes": 3359,
+      "sha256": "9709a8f0e1f4e6cd1b25c6a83a7ca8aab8155884bf990c139cc45f822c6fad8b"
+    },
+    {
+      "path": "headers-source/parser/expression/parsed_expression_visitor.h",
+      "bytes": 3011,
+      "sha256": "09fe86f096bc6feb35f0af0528a342b5b32a3259d8818a77bd75aeecc09e7fb0"
+    },
+    {
+      "path": "headers-source/parser/expression/parsed_expression.h",
+      "bytes": 3337,
+      "sha256": "ab9db4b124c2e55f94f2f05375b02c61e95698be2a74e027680db2d4c09da1b0"
+    },
+    {
+      "path": "headers-source/parser/expression/parsed_case_expression.h",
+      "bytes": 3937,
+      "sha256": "48bbc8d16ea5b3f4d9a3f45c2e8b784f9554e90029370b10d3d50786b77deca5"
+    },
+    {
+      "path": "headers-source/parser/ddl/parsed_property_definition.h",
+      "bytes": 1314,
+      "sha256": "75ca59ca9d10d6f10c5e5d38208dc7ec636c74c96d7be701369f0cd64f3431ea"
+    },
+    {
+      "path": "headers-source/parser/ddl/drop_info.h",
+      "bytes": 312,
+      "sha256": "147c2e052c72165d7e6857604c8510f95dfce6f45d35f3c71782ab0577a16bac"
+    },
+    {
+      "path": "headers-source/parser/ddl/drop.h",
+      "bytes": 461,
+      "sha256": "2281f49b3fe1d5728d149dc1a336e6f02cdbcbb921ee10188847a1f92d7d47f2"
+    },
+    {
+      "path": "headers-source/parser/ddl/create_type.h",
+      "bytes": 577,
+      "sha256": "afae600623ab71c7e148ef731a92b099ada5c6347b22c0c901d1be2d1310b56c"
+    },
+    {
+      "path": "headers-source/parser/ddl/create_table_info.h",
+      "bytes": 1683,
+      "sha256": "df5f4aef5b787c9f328f19686599094f4825db9c4978d706ee45097d33277b40"
+    },
+    {
+      "path": "headers-source/parser/ddl/create_table.h",
+      "bytes": 804,
+      "sha256": "4ab317fd92b51e9fd54cc56c8eed1e12724ee4d13443e18d21e89c88f84c4a97"
+    },
+    {
+      "path": "headers-source/parser/ddl/create_sequence_info.h",
+      "bytes": 1072,
+      "sha256": "076d538ea9a0a9d7364d5f9d30a63f5cfbaf0fd26f8525c5af4eb10822754f5d"
+    },
+    {
+      "path": "headers-source/parser/ddl/create_sequence.h",
+      "bytes": 515,
+      "sha256": "be1078a556a63184990573b31f5ce2eb9dd96796d48a507a88a71585a6708181"
+    },
+    {
+      "path": "headers-source/parser/ddl/alter_info.h",
+      "bytes": 2669,
+      "sha256": "bfa685b1140fbdfd8af07a9531a23f96a96d3febea937e0eeb3e98921c87a9a6"
+    },
+    {
+      "path": "headers-source/parser/ddl/alter.h",
+      "bytes": 445,
+      "sha256": "569c8c634bdfcb9a2baac3a2cef5d90b1e117c0c0721e9e95f9cedaf293efafe"
+    },
+    {
+      "path": "headers-source/parser/antlr_parser/rag3db_cypher_parser.h",
+      "bytes": 903,
+      "sha256": "c71a905065e4cbdf2e2192640636138718936039c8e9ed2f2a67f28ebc61083d"
+    },
+    {
+      "path": "headers-source/parser/antlr_parser/parser_error_strategy.h",
+      "bytes": 377,
+      "sha256": "5bf63bb9e70e6a2670ac26819131f44d911a70cdd0fe8f76d00166fa770e5965"
+    },
+    {
+      "path": "headers-source/parser/antlr_parser/parser_error_listener.h",
+      "bytes": 624,
+      "sha256": "4c36abef498724a10a798be550ed9fb4992d3e96cf0156beed47eeaa741e4970"
+    },
+    {
+      "path": "headers-source/parser/query/updating_clause/updating_clause.h",
+      "bytes": 573,
+      "sha256": "c65b5eeb73f49667e5776e1dd4f739b6819048a6a0309656abe51761ce152842"
+    },
+    {
+      "path": "headers-source/parser/query/updating_clause/set_clause.h",
+      "bytes": 542,
+      "sha256": "4fb9a05480594fcd9df8062810678b067e2ea2d159c6f4888ff81f68b335135b"
+    },
+    {
+      "path": "headers-source/parser/query/updating_clause/merge_clause.h",
+      "bytes": 1345,
+      "sha256": "0dcaa0a0d02f9eceab7a0c12afcffd83e6e0257a675a0d12fa71437f42b10325"
+    },
+    {
+      "path": "headers-source/parser/query/updating_clause/insert_clause.h",
+      "bytes": 605,
+      "sha256": "693e04d57f9caa15900b939dc16013de08a3e15ac9557bde8e228a523b3d61d7"
+    },
+    {
+      "path": "headers-source/parser/query/updating_clause/delete_clause.h",
+      "bytes": 876,
+      "sha256": "eb03c80f2f6dfec5aa8b5882ea3262724d8b753725c91641d1c3cafe00852ad9"
+    },
+    {
+      "path": "headers-source/parser/query/return_with_clause/with_clause.h",
+      "bytes": 698,
+      "sha256": "595cbc911162ffdb6da7d58a2952536cabc5d56695e443fe788082e539a883e6"
+    },
+    {
+      "path": "headers-source/parser/query/return_with_clause/return_clause.h",
+      "bytes": 489,
+      "sha256": "2f34c6e5579457840c852adb570ebd72096542800838c66f1a361db1312f8fb9"
+    },
+    {
+      "path": "headers-source/parser/query/return_with_clause/projection_body.h",
+      "bytes": 2159,
+      "sha256": "d50af74c18d543985a5229e5e8d8c95fd3eb39e5db653909ecaac91f03c13db6"
+    },
+    {
+      "path": "headers-source/parser/query/reading_clause/yield_variable.h",
+      "bytes": 353,
+      "sha256": "1c6a369d9d3836c3eed16ba1387aec4654129c0dfedc539d12ce3d9edb573e53"
+    },
+    {
+      "path": "headers-source/parser/query/reading_clause/unwind_clause.h",
+      "bytes": 729,
+      "sha256": "85f91328c76a91d25063987080fbf272028a25380fdec234c6d86b89dc863419"
+    },
+    {
+      "path": "headers-source/parser/query/reading_clause/reading_clause.h",
+      "bytes": 962,
+      "sha256": "6251903505b8ffac0ed9f99de970673d39bf7d6590a6a70dfcb94c52221710b8"
+    },
+    {
+      "path": "headers-source/parser/query/reading_clause/match_clause.h",
+      "bytes": 1135,
+      "sha256": "e0e75e1158df54a80ff34dfeac27179cfeacf059a1955307e654fe39eff05e93"
+    },
+    {
+      "path": "headers-source/parser/query/reading_clause/load_from.h",
+      "bytes": 1153,
+      "sha256": "1df8d8ba3da023196cd1ebf4340614b96e4d39d39a520bbc0321e5038a9fd8fa"
+    },
+    {
+      "path": "headers-source/parser/query/reading_clause/join_hint.h",
+      "bytes": 507,
+      "sha256": "2fc4636ce921f94d8cb162ba3f0c56b5bfa23cbcb1d75c94cb8736c7623dacc2"
+    },
+    {
+      "path": "headers-source/parser/query/reading_clause/in_query_call_clause.h",
+      "bytes": 907,
+      "sha256": "ba9c45557c5b2962b580274df30471237fed128483f99144eaa92f2fc444478d"
+    },
+    {
+      "path": "headers-source/parser/query/graph_pattern/rel_pattern.h",
+      "bytes": 1618,
+      "sha256": "06a167e3c9d71ced03b5ac1b40aba823cce526260ae72eec81d874cd90c23ac2"
+    },
+    {
+      "path": "headers-source/parser/query/graph_pattern/pattern_element_chain.h",
+      "bytes": 591,
+      "sha256": "11c60a727066a1ab175f764d2c5af3c25dc56845a080e9d6182c132f19902f44"
+    },
+    {
+      "path": "headers-source/parser/query/graph_pattern/pattern_element.h",
+      "bytes": 1104,
+      "sha256": "13cfb5ddefc80f12e866a5da2748a704bdc23b8b5d172a9266177a439ee0c5cd"
+    },
+    {
+      "path": "headers-source/parser/query/graph_pattern/node_pattern.h",
+      "bytes": 950,
+      "sha256": "1264e77703c413a510653df0428b3e67139fbd076322de7578b64259cea3e230"
+    },
+    {
+      "path": "headers-source/planner/operator/schema.h",
+      "bytes": 5521,
+      "sha256": "4f986b47c9fd9b5fa44a25ebb3be6c4a0e2cf3b74b2e21f26554bcc4bc2fba7b"
+    },
+    {
+      "path": "headers-source/planner/operator/operator_print_info.h",
+      "bytes": 441,
+      "sha256": "21af69510e35071090cb93189a8893c540d577fe1035704144fd9c745128a683"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_unwind.h",
+      "bytes": 1682,
+      "sha256": "9d70eefc820e46784108a463343e049f2586a9e8210e8a01b5f614ed52145c95"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_union.h",
+      "bytes": 1767,
+      "sha256": "4a16d9e285c6a7bab634aca1685fcdb59e1b9f03f78aaa8be7702dcebc4d3709"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_transaction.h",
+      "bytes": 995,
+      "sha256": "75aba9a03e3ce9bf66ffa1bd52b02ae98ccfb11db5147853ede26c2f3c56cea6"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_table_function_call.h",
+      "bytes": 1878,
+      "sha256": "9190876931a9b6cc4f7e5843ebbc5af582e366aeba64e9ef54b15dd128ce681b"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_standalone_call.h",
+      "bytes": 1117,
+      "sha256": "eeaa1580989606ca278c44afb8d7081d6dd37fc8f83a8bf608b98af34f169a48"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_projection.h",
+      "bytes": 1276,
+      "sha256": "17e0f2672c6b75da866d70e7df8b1aa41618f2dafd04812f3ce6453f600a0a93"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_plan_util.h",
+      "bytes": 1015,
+      "sha256": "9cd5805ae6ba6f69e1a4927a4f21d938bc6eeb00bdb6d20086e158d3022ea79d"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_plan.h",
+      "bytes": 1317,
+      "sha256": "18fd13c3d96580625ec3fd8bae156aa64f913317acc3eb8a16aa23cc237b5c1b"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_path_property_probe.h",
+      "bytes": 2224,
+      "sha256": "228f00e16b04a929bc193793dfea59b53f9ac8decaede986486f30eae7251db7"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_partitioner.h",
+      "bytes": 2394,
+      "sha256": "ca73d513f2d57292b043db14878fb2309006aee93d3e7e142f4d44144992b10e"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_order_by.h",
+      "bytes": 1922,
+      "sha256": "87a6f95095e291d6eb33ca4639f2d04a312111990450e459dfe55d94e8a1f6b5"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_operator.h",
+      "bytes": 4923,
+      "sha256": "4d9beb21df6dd45cafbda15ef9f13cbdabb0200e85efc9cf41d72ce7ab2caec2"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_noop.h",
+      "bytes": 1216,
+      "sha256": "48bc46479816a7afb9b507e2e7f2e2c91b6dad035a1f54d3207181028b5f2108"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_node_label_filter.h",
+      "bytes": 1246,
+      "sha256": "7dcdd4f61d666294a8962c19ed3927aa872a8c30a08d42cf09678de5cb122f1e"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_multiplcity_reducer.h",
+      "bytes": 779,
+      "sha256": "6b32a090aa50055d986adf2a6dca12a6fa4eefdfd2a2afbb82183a01e5c04374"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_limit.h",
+      "bytes": 1507,
+      "sha256": "3cfa7849f61161078731433dfe491ba470ef50de2e997731cefcff58d7c3f2ff"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_intersect.h",
+      "bytes": 1873,
+      "sha256": "6ab45fbe3b5d53ae182bf6202e84e7854cc08a744426dcd30635d47f258cea1b"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_hash_join.h",
+      "bytes": 2928,
+      "sha256": "50c5981151fba34844f2c6eab59836495e4f93a4eabd96f22d58184955017f28"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_flatten.h",
+      "bytes": 893,
+      "sha256": "1110f19cb50da20723792e2cd31ddee230a37a8c20b69ae0c975729d7db3882d"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_filter.h",
+      "bytes": 1649,
+      "sha256": "b55446bcd2cabd7740b2290d492f28dc0fabac179b76f365d46908933f5e635a"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_explain.h",
+      "bytes": 1243,
+      "sha256": "02d9617a90480291951f41e218c990dcf47e633a3b590fb64bdbfef8dfbf5487"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_empty_result.h",
+      "bytes": 1045,
+      "sha256": "fb2a65acf6aee00a7b711a9147e52e62c9c9c7f745e10ec59d94db632ebcd342"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_dummy_sink.h",
+      "bytes": 717,
+      "sha256": "a6f1e4c8c9a1d4a5a18ac840b3282cbf9f133ea4b1902fd83d1ff6470bc19881"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_distinct.h",
+      "bytes": 2151,
+      "sha256": "539769df6519a6006007a4465ab13e31e0ed4a5b535f7fe466359b63260c21b6"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_cross_product.h",
+      "bytes": 1696,
+      "sha256": "f98f2d0ba63377e69b17fe60538163e563bf9039a6b0ab1338f564514ca13b73"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_create_macro.h",
+      "bytes": 1641,
+      "sha256": "87b1c604cede8826ad0af62e3db4ca57ff8e56c21f530dbacd3fc93149c0984f"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_aggregate.h",
+      "bytes": 3150,
+      "sha256": "988dd0f4fde5675956670b403687e8a0e644bbf369f106d55283244cd970d4a3"
+    },
+    {
+      "path": "headers-source/planner/operator/logical_accumulate.h",
+      "bytes": 1685,
+      "sha256": "3f9d20fe8297914d1599bacfcdfc1f0858009385b917f201dd09ad3ee97e8f9e"
+    },
+    {
+      "path": "headers-source/planner/join_order/join_tree_constructor.h",
+      "bytes": 1545,
+      "sha256": "fe41ef44a14693a4722e10f9442cc5f2c3f6cf219752f52f8372730f14213915"
+    },
+    {
+      "path": "headers-source/planner/join_order/join_tree.h",
+      "bytes": 3066,
+      "sha256": "bea94d68328a526a9cfc1cb9e7b21d0c7e28a0233db6d45a9c15811032a410ea"
+    },
+    {
+      "path": "headers-source/planner/join_order/join_plan_solver.h",
+      "bytes": 745,
+      "sha256": "33d9f618d1ba263c6fdf75edbe1af62e628ce58d39d89fb0c670e80aac533e4b"
+    },
+    {
+      "path": "headers-source/planner/join_order/join_order_util.h",
+      "bytes": 479,
+      "sha256": "85d2d77b7cf35410909e0586c169fa1d155fd0d10291d8216920ad89cdd35cff"
+    },
+    {
+      "path": "headers-source/planner/join_order/cost_model.h",
+      "bytes": 982,
+      "sha256": "e1fd15e2b5b5585463375d4e211844065e0cdbca45944592e1ea931c010b5716"
+    },
+    {
+      "path": "headers-source/planner/join_order/cardinality_estimator.h",
+      "bytes": 2761,
+      "sha256": "63e2d927410a054bc62328d5c99ec1ed7f3c1ad47e39d1b73ebdb018d461e954"
+    },
+    {
+      "path": "headers-source/planner/operator/sip/side_way_info_passing.h",
+      "bytes": 2693,
+      "sha256": "6fdcf8e821199c3326f1908f906dff3f6217281f310b23eae1b2138ba091e823"
+    },
+    {
+      "path": "headers-source/planner/operator/sip/semi_mask_target_type.h",
+      "bytes": 298,
+      "sha256": "a44bc82d4918e0170b5400b72a178f0b0109ff26d1ef16819c4303df69cbc10a"
+    },
+    {
+      "path": "headers-source/planner/operator/sip/logical_semi_masker.h",
+      "bytes": 4426,
+      "sha256": "6402f57a41292b7fd4bbbe402f58185375b02e7ccf6b679a27b088334da0aa63"
+    },
+    {
+      "path": "headers-source/planner/operator/simple/logical_use_database.h",
+      "bytes": 684,
+      "sha256": "9fbc25f1b38b84ec42b5bcec17aa0b590f6dca0b6495b2bc34ec0976e83ead99"
+    },
+    {
+      "path": "headers-source/planner/operator/simple/logical_simple.h",
+      "bytes": 558,
+      "sha256": "1f2f4f0111a3a14172a51a7a9b7a0c04d9f4ac66cd5baadefd235c7413d9954f"
+    },
+    {
+      "path": "headers-source/planner/operator/simple/logical_import_db.h",
+      "bytes": 879,
+      "sha256": "60d543db160866f261cbcd85f21857b113a8488166510122c176041c43675052"
+    },
+    {
+      "path": "headers-source/planner/operator/simple/logical_extension.h",
+      "bytes": 840,
+      "sha256": "615d220c587c8aea9ac99a896d8059156986f31d26542cecb4d9abe82daf95f2"
+    },
+    {
+      "path": "headers-source/planner/operator/simple/logical_export_db.h",
+      "bytes": 1479,
+      "sha256": "7ae8887836a0988af30e5027a34a0a66a3e1c3c3b4c81f1f2d26a495d103ea20"
+    },
+    {
+      "path": "headers-source/planner/operator/simple/logical_detach_database.h",
+      "bytes": 696,
+      "sha256": "47757f12799105330bd49521c7a73f058edf3eaa589c2ddd21c763d9c00c360a"
+    },
+    {
+      "path": "headers-source/planner/operator/simple/logical_attach_database.h",
+      "bytes": 1384,
+      "sha256": "6922871fbe10e4ebee684cdeacaaf636ab658680ef05239dad7a58a53d7d2642"
+    },
+    {
+      "path": "headers-source/planner/operator/scan/logical_scan_node_table.h",
+      "bytes": 5136,
+      "sha256": "4c7f7d393ef66bad63cc6ef4d6974cc63ba9877ac4c7f45bda6961b889202955"
+    },
+    {
+      "path": "headers-source/planner/operator/scan/logical_index_look_up.h",
+      "bytes": 1262,
+      "sha256": "9454e1a0432060c4f4004d03eb01a663a84637246e42ca3de54a8010143aef46"
+    },
+    {
+      "path": "headers-source/planner/operator/scan/logical_expressions_scan.h",
+      "bytes": 1338,
+      "sha256": "bd979e22da4fed97d32341c3138f9cbea9146f5954f260b0f1027daae772bcaf"
+    },
+    {
+      "path": "headers-source/planner/operator/scan/logical_dummy_scan.h",
+      "bytes": 950,
+      "sha256": "006d75ae58f31e6bc865c12937ef3ebbdd827124e5aba70dbd43f69ccc416363"
+    },
+    {
+      "path": "headers-source/planner/operator/persistent/logical_set.h",
+      "bytes": 1210,
+      "sha256": "220a23b4b081cbb9327ec122f8014eb801d60f611b44487197838f91da795582"
+    },
+    {
+      "path": "headers-source/planner/operator/persistent/logical_merge.h",
+      "bytes": 3393,
+      "sha256": "5ba0d4bfc589dc531919fdf01aaf4eb483e2c6514eb4c813effb9e0985e7f903"
+    },
+    {
+      "path": "headers-source/planner/operator/persistent/logical_insert.h",
+      "bytes": 2081,
+      "sha256": "3351a06e0122e95a8e7eff74caad12b358899e16bf1345fef6365fb70d39c5bb"
+    },
+    {
+      "path": "headers-source/planner/operator/persistent/logical_delete.h",
+      "bytes": 1758,
+      "sha256": "fdeb1cf3270d14c6b737a0ab4b4ff16828867f6013d5e3e16687149c128f1bdc"
+    },
+    {
+      "path": "headers-source/planner/operator/persistent/logical_copy_to.h",
+      "bytes": 2110,
+      "sha256": "bb45dfc476054869ad2dff85b7af5a912455cf4b065ba32b1b2184214142b356"
+    },
+    {
+      "path": "headers-source/planner/operator/persistent/logical_copy_from.h",
+      "bytes": 1869,
+      "sha256": "09c1eb42c850b77c507870924ae1cd2f78d67e4f89bb8b039c012aed42389eb3"
+    },
+    {
+      "path": "headers-source/planner/operator/factorization/sink_util.h",
+      "bytes": 954,
+      "sha256": "f23bcb2895f4560f296af17c86159f857bda033263793de35b80a0f52132ae65"
+    },
+    {
+      "path": "headers-source/planner/operator/factorization/flatten_resolver.h",
+      "bytes": 2128,
+      "sha256": "ab7f59962f79159c79af0aa5a20c26ac514a3c7758fc4469e93e3c2e7b80e985"
+    },
+    {
+      "path": "headers-source/planner/operator/extend/recursive_join_type.h",
+      "bytes": 204,
+      "sha256": "e4f819266b99bb7ca085f9e84220d74fb5258b9bb6d68afd97fa6d98a56c9c9b"
+    },
+    {
+      "path": "headers-source/planner/operator/extend/logical_recursive_extend.h",
+      "bytes": 2475,
+      "sha256": "9e7b533abffeb20eec04043898e9f72b78f45c16b0a2e09cba0cb9e59a0e158e"
+    },
+    {
+      "path": "headers-source/planner/operator/extend/logical_extend.h",
+      "bytes": 1812,
+      "sha256": "bfb9e68394386e8c6dc657753cae9d5882f6974bb4871e5276219d20c6cd1c19"
+    },
+    {
+      "path": "headers-source/planner/operator/extend/base_logical_extend.h",
+      "bytes": 3413,
+      "sha256": "f8130629d161a74f679dd49968dc2e73689ec32fb18e17542f38175fc9fad66d"
+    },
+    {
+      "path": "headers-source/planner/operator/ddl/logical_drop.h",
+      "bytes": 1102,
+      "sha256": "84d11d737da042c0b6d8616c9a14cc56393cb6cc6a358b0b10fc009c0ec415bf"
+    },
+    {
+      "path": "headers-source/planner/operator/ddl/logical_create_type.h",
+      "bytes": 1609,
+      "sha256": "2033ff07de27ce0e47c7f6679f4205111d491f5da43ac2c9fc5622b8df10009c"
+    },
+    {
+      "path": "headers-source/planner/operator/ddl/logical_create_table.h",
+      "bytes": 1491,
+      "sha256": "31a289f531d982687531103d9f5bdc18ae0148b11e9f2d6a2b3ab2bbf2041824"
+    },
+    {
+      "path": "headers-source/planner/operator/ddl/logical_create_sequence.h",
+      "bytes": 1629,
+      "sha256": "e3df8c005e443fc3b63ba4b370a95557cd38da3319cd41db0dc651087a0051a3"
+    },
+    {
+      "path": "headers-source/planner/operator/ddl/logical_alter.h",
+      "bytes": 1403,
+      "sha256": "e3dd33e1b510bb12e1b80eef22bbf26781dcdca9ea4159ff10a93ef06f6281d8"
+    },
+    {
+      "path": "headers-source/processor/result/result_set_descriptor.h",
+      "bytes": 1326,
+      "sha256": "4da04e28f65983856f5cd43bc1bcd46295d3d899a10a269cda2dc3544259e611"
+    },
+    {
+      "path": "headers-source/processor/result/result_set.h",
+      "bytes": 1567,
+      "sha256": "9b5df58e8a1c510fe7de58d1d164a61bf87ed9dfbab4b399462cb44f095080c6"
+    },
+    {
+      "path": "headers-source/processor/result/pattern_creation_info_table.h",
+      "bytes": 1122,
+      "sha256": "19e1b64f98709c174d24e19152900669b306cee62ac61387454b2676d588c101"
+    },
+    {
+      "path": "headers-source/processor/result/flat_tuple.h",
+      "bytes": 2027,
+      "sha256": "96863a892ed27d15347c483c1940678be389b6fb554e29fbd3b18cb7e8ee75ca"
+    },
+    {
+      "path": "headers-source/processor/result/factorized_table_util.h",
+      "bytes": 1235,
+      "sha256": "a4d9a28863537b1938e6d6b473c1880ad05e8fdd06c4c890f8a7ccd926600526"
+    },
+    {
+      "path": "headers-source/processor/result/factorized_table_schema.h",
+      "bytes": 3045,
+      "sha256": "26fa7aed3b411710e14472b4d70a25c9a42e88c8ff8612afe630d085350705ed"
+    },
+    {
+      "path": "headers-source/processor/result/factorized_table_pool.h",
+      "bytes": 1123,
+      "sha256": "9e72e10ce6d2cb126ba93083ac6ba95815e1929f21c94dd9c40abcaf9aa65189"
+    },
+    {
+      "path": "headers-source/processor/result/factorized_table.h",
+      "bytes": 13903,
+      "sha256": "1436542b02fcc51635fb1fc03463ab4af9a09f5fe15a448cd44d1de5e42e163c"
+    },
+    {
+      "path": "headers-source/processor/result/base_hash_table.h",
+      "bytes": 2854,
+      "sha256": "49508b0ec633208783c585ce2b0c00b6fc45c6a230e8d74a018e8f10120190c9"
+    },
+    {
+      "path": "headers-source/processor/operator/unwind.h",
+      "bytes": 2318,
+      "sha256": "2b176045eed1b067bef84db8bef9df86a2a13d43fd4dcc6821511f36b488f7dd"
+    },
+    {
+      "path": "headers-source/processor/operator/transaction.h",
+      "bytes": 1833,
+      "sha256": "ca7eb42b67d53a008896ef88dea0b3e114d7e855a19bd85681578baaf4352ce9"
+    },
+    {
+      "path": "headers-source/processor/operator/table_function_call.h",
+      "bytes": 2904,
+      "sha256": "ab1a7a849da02123e0d81c80c9f5eeb62e143927ce137f27834f33ef6ead4a20"
+    },
+    {
+      "path": "headers-source/processor/operator/standalone_call.h",
+      "bytes": 2006,
+      "sha256": "ccd5a196ec4f4f7c596e6f051cfe285fe0b2883828a1325e7402588c53bde5e9"
+    },
+    {
+      "path": "headers-source/processor/operator/skip.h",
+      "bytes": 1960,
+      "sha256": "399a09e2b45c60c67f9fac98eb77c92f8de71bc17a052ddcb8f50353b6d16276"
+    },
+    {
+      "path": "headers-source/processor/operator/sink.h",
+      "bytes": 4430,
+      "sha256": "8553e40934441b4871ff2ef3a1b93cfe523d9981f057cbba3a939c7c7009d2e6"
+    },
+    {
+      "path": "headers-source/processor/operator/semi_masker.h",
+      "bytes": 9327,
+      "sha256": "007daaf983fa03cbd992bce2dc94a1745896b7e22575e71d691d780dc2e21745"
+    },
+    {
+      "path": "headers-source/processor/operator/result_collector.h",
+      "bytes": 3646,
+      "sha256": "d01424b3c6036c81dced52b1f07b5dad0c7416605059a278b4453da8aa22ebdc"
+    },
+    {
+      "path": "headers-source/processor/operator/recursive_extend_shared_state.h",
+      "bytes": 1779,
+      "sha256": "a78ecff26ae8a6ff079404e9cb66598d00b87ce6eef856d52df569fc02600a87"
+    },
+    {
+      "path": "headers-source/processor/operator/recursive_extend.h",
+      "bytes": 1848,
+      "sha256": "c03365c6773eaffe73f806c9f936017604ccef19af61b72b9d2624cd3507e487"
+    },
+    {
+      "path": "headers-source/processor/operator/projection.h",
+      "bytes": 2685,
+      "sha256": "f89f1ce409affac721e774ac77b5c018d2b09cc94d769b64dbec0e159a14fa42"
+    },
+    {
+      "path": "headers-source/processor/operator/profile.h",
+      "bytes": 937,
+      "sha256": "906ed3d3c2ebc537d8b11b20c603bce2c9e9fdd71791de35471d699a6f8c3f41"
+    },
+    {
+      "path": "headers-source/processor/operator/physical_operator.h",
+      "bytes": 6518,
+      "sha256": "a406568fde380a038bc5bc27a85e0b479dcb7521560ac1a8e57e417ca6eab9a1"
+    },
+    {
+      "path": "headers-source/processor/operator/path_property_probe.h",
+      "bytes": 4848,
+      "sha256": "c52c59825edc157ab0ae6f6665b00ffbbba90cf194059af8b330ae728f208e42"
+    },
+    {
+      "path": "headers-source/processor/operator/partitioner.h",
+      "bytes": 8605,
+      "sha256": "8e9d055ab46f1655cafaffbac034561834f4f6170f30501d07a1bddc08e79061"
+    },
+    {
+      "path": "headers-source/processor/operator/multiplicity_reducer.h",
+      "bytes": 1029,
+      "sha256": "0bc6c543da5c72c5740057e073981f6e16fe42639cf8a6e0655e2292099c128f"
+    },
+    {
+      "path": "headers-source/processor/operator/limit.h",
+      "bytes": 1755,
+      "sha256": "23bcb408e7d7ad8f18a9f85f53f5230aa6ef1690592dcbe6832c35cfeddabdb4"
+    },
+    {
+      "path": "headers-source/processor/operator/index_lookup.h",
+      "bytes": 3202,
+      "sha256": "785d132c6fe81e4fa1097cfa2da52cfdf2a5d2bc6ec0a0908ff64549193cdd28"
+    },
+    {
+      "path": "headers-source/processor/operator/flatten.h",
+      "bytes": 1358,
+      "sha256": "64a845ff77c9a41565e14cf17f37cf43dec5a6fba6388d0044bcabbf7a6f6b26"
+    },
+    {
+      "path": "headers-source/processor/operator/filtering_operator.h",
+      "bytes": 699,
+      "sha256": "57a28e6d2cb9d8a133c86163bc081e927a04604ba6151a11eca6ec61ab3d94d2"
+    },
+    {
+      "path": "headers-source/processor/operator/filter.h",
+      "bytes": 3416,
+      "sha256": "fe5a54f886962fa97448fa41116e8da38ff115270748a9340a8f9140561e0c6c"
+    },
+    {
+      "path": "headers-source/processor/operator/empty_result.h",
+      "bytes": 670,
+      "sha256": "77098c38510c4bcc19bc3148e57ce8af18d07118a84a89e10861b687e94ba53a"
+    },
+    {
+      "path": "headers-source/processor/operator/cross_product.h",
+      "bytes": 2267,
+      "sha256": "25cb517a6684ff09b8f93ad5243708b8b420a836951dfe761d3788531b6ef9a9"
+    },
+    {
+      "path": "headers-source/processor/operator/base_partitioner_shared_state.h",
+      "bytes": 1852,
+      "sha256": "c42ef74679fcedcfa655049bc6bede4bcb766a2e81730f9a774d73157b772168"
+    },
+    {
+      "path": "headers-source/processor/operator/arrow_result_collector.h",
+      "bytes": 2805,
+      "sha256": "7ada758141e92ffbf1a97b8bc27af17d8153a5a8457a2cd8fcbf45c4c34bbec0"
+    },
+    {
+      "path": "headers-source/processor/operator/table_scan/union_all_scan.h",
+      "bytes": 3153,
+      "sha256": "06cf488c551a970a5e4e61eb4c5d55448b4cdb599f2e35f83ab4ee5a505f2602"
+    },
+    {
+      "path": "headers-source/processor/operator/table_scan/ftable_scan_function.h",
+      "bytes": 1133,
+      "sha256": "64290efbae699352ec175318cc5e9151d04e3101e76ff5707dd6b7ed700a55f9"
+    },
+    {
+      "path": "headers-source/processor/operator/simple/use_database.h",
+      "bytes": 1289,
+      "sha256": "1ddc8a1f132beb5f60a63127a66ae7ea4f9788ef652fad1c53fe8108ee4c375b"
+    },
+    {
+      "path": "headers-source/processor/operator/simple/uninstall_extension.h",
+      "bytes": 1276,
+      "sha256": "9dba42864513c37b63a4b376311b8324ae8888b19a10adbace12f980f65f4dd7"
+    },
+    {
+      "path": "headers-source/processor/operator/simple/load_extension.h",
+      "bytes": 1349,
+      "sha256": "709d44afd5f59b7f23a000c77c819a5d44fd9d03e86969d989167ca7b9a334b9"
+    },
+    {
+      "path": "headers-source/processor/operator/simple/install_extension.h",
+      "bytes": 1443,
+      "sha256": "ed9dc14fc55a7196f49049b5a7719170e3532d1c032ba66045ad0c27dfbd5588"
+    },
+    {
+      "path": "headers-source/processor/operator/simple/import_db.h",
+      "bytes": 902,
+      "sha256": "772fdab9c997185d7903c8cf425e6d533bcdea33daa73bc032dffc3d4b203c3e"
+    },
+    {
+      "path": "headers-source/processor/operator/simple/extension_print_info.h",
+      "bytes": 344,
+      "sha256": "398f53f6f00f1f10c12024a4f9fbcc3b7b256f687cbf06f143449c52b1ff153a"
+    },
+    {
+      "path": "headers-source/processor/operator/simple/export_db.h",
+      "bytes": 2170,
+      "sha256": "9f78408a1eed09c986ca9b661a8624c2c041ba1be06c7efbd9c619a7d3952698"
+    },
+    {
+      "path": "headers-source/processor/operator/simple/detach_database.h",
+      "bytes": 1313,
+      "sha256": "8c3d0cb2097fe9e35eef9c9aa2e28ed8f4a987a966f26f40cfa64eb6fdb2d447"
+    },
+    {
+      "path": "headers-source/processor/operator/simple/attach_database.h",
+      "bytes": 1483,
+      "sha256": "0ff6176fad788d6cdc82ec4cf1de793751d708a67a239c7961decd6d221a13b4"
+    },
+    {
+      "path": "headers-source/processor/operator/scan/scan_table.h",
+      "bytes": 4282,
+      "sha256": "a08f7a7cfd433139d6a6b22c175d89ac4d14d9f5d8adaa24f7fe65771ec77f87"
+    },
+    {
+      "path": "headers-source/processor/operator/scan/scan_rel_table.h",
+      "bytes": 3362,
+      "sha256": "d975b235fa3d3aac650f9523c3f3ba1f4451deb82183b9b035f018d8f0f23fe5"
+    },
+    {
+      "path": "headers-source/processor/operator/scan/scan_node_table.h",
+      "bytes": 5487,
+      "sha256": "5e475cc76540ab59fc7329feecbad9195d40eff97af5609991dab8c60f1fbf4c"
+    },
+    {
+      "path": "headers-source/processor/operator/scan/scan_multi_rel_tables.h",
+      "bytes": 3077,
+      "sha256": "54c57250746d9d3c17e1da15a9ced4326ff3f7147bbc9c3e17da3c448a7e07e6"
+    },
+    {
+      "path": "headers-source/processor/operator/scan/primary_key_scan_node_table.h",
+      "bytes": 2592,
+      "sha256": "155715b857651e356307d4cc314b4f65e97f12b93d54194b0a912262e9573d44"
+    },
+    {
+      "path": "headers-source/processor/operator/scan/index_scan_node_table.h",
+      "bytes": 2098,
+      "sha256": "a8bbf2d5d14aafbf53259e418afc54eea2aab76fc621d21470af1bb5384196b6"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/set_executor.h",
+      "bytes": 6568,
+      "sha256": "9bffa111ba0737bc7da6dd902374ba467bda12b75a1737af83239c1e13dfd7cf"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/set.h",
+      "bytes": 2638,
+      "sha256": "715d2efd4fb4d4f0f62c3f41173bbb771c1cdf08e7f5b57ceda38071ca8721e1"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/rel_batch_insert.h",
+      "bytes": 7769,
+      "sha256": "60690fb4348633e7d7e05c7ce508b442fe6975974d27a792bfdd147ab68192a1"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/node_batch_insert_error_handler.h",
+      "bytes": 1679,
+      "sha256": "e3840422b05cbbbb343e1ca57796e2b537fd00a1ed9cf2655be599d43a6a3f03"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/node_batch_insert.h",
+      "bytes": 7443,
+      "sha256": "5010d16722b6eb03f71b773f91a0afdf071c48c7574d2f0ab7c9750eb5df349b"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/merge.h",
+      "bytes": 5598,
+      "sha256": "665cbfb362f247c055d7ab4c962d9d89f14a1c8ce8c555ec484602867f11f14d"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/insert_executor.h",
+      "bytes": 5746,
+      "sha256": "a8cdadbc226c8a79c304eb8c838db049ddc6376baa201c47f93d68422ea9557d"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/insert.h",
+      "bytes": 1860,
+      "sha256": "cbea373017cdf4424413e9f9f4b446cb7b6a36797cb44a18a6f970a732fbb8d0"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/index_builder.h",
+      "bytes": 7270,
+      "sha256": "755570ac2ed4d0d03703ba67620742651be5175c7fe10f141b0f1ab13543c561"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/delete_executor.h",
+      "bytes": 8169,
+      "sha256": "63416829f5d69e6f6bb487a5ad0e8f90497795ff8040f877a27a989afa747efd"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/delete.h",
+      "bytes": 3654,
+      "sha256": "bb6b26f8b00c596231b225c2d65cae302d895e7bb1f248ca4102008063305036"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/copy_to.h",
+      "bytes": 2984,
+      "sha256": "3bd5bd7c6d671887d9f59bcdb67c96dd666c618a273f03fc99ca4512f397ef1b"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/copy_rel_batch_insert.h",
+      "bytes": 1854,
+      "sha256": "a49ccd460fb8cbeb43c6dc0c6cef97939fa1bf8aec26c29cbb4b1369a0e6bacf"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/batch_insert_error_handler.h",
+      "bytes": 1465,
+      "sha256": "9d145d9acf0902e9322ad062d978dee027c6d49760967cd5f6022c5b475d82bd"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/batch_insert.h",
+      "bytes": 4210,
+      "sha256": "7e2e87fdc5d49cc154ff65581c9229522fb508ad0b146742d16ec2e02f46fd98"
+    },
+    {
+      "path": "headers-source/processor/operator/order_by/top_k_scanner.h",
+      "bytes": 1681,
+      "sha256": "c248e65edfea40299ebb65b0cedc7ce73f388b6099d6c9d077d4e902f9a45553"
+    },
+    {
+      "path": "headers-source/processor/operator/order_by/top_k.h",
+      "bytes": 6870,
+      "sha256": "842a96a968142ac35106cefd15bb508ce002d21536c691d95c9fd1319d248721"
+    },
+    {
+      "path": "headers-source/processor/operator/order_by/sort_state.h",
+      "bytes": 2969,
+      "sha256": "9aec185c31b12091c2a10e3c649d5ee887364e71cd22e42ad031ba3f3a43a109"
+    },
+    {
+      "path": "headers-source/processor/operator/order_by/radix_sort.h",
+      "bytes": 3316,
+      "sha256": "72c43c8e36976e47e0c8f5f4842248c5d2b415e82c6326742cd41c7c253138bf"
+    },
+    {
+      "path": "headers-source/processor/operator/order_by/order_by_scan.h",
+      "bytes": 2111,
+      "sha256": "ca0a20ef806e35cdcd42d405208e55e75de2504636def7b2e6e63fb2678f09be"
+    },
+    {
+      "path": "headers-source/processor/operator/order_by/order_by_merge.h",
+      "bytes": 1391,
+      "sha256": "6e7a452224234ab0b863fd5fb5062ff40828d37b411cca1042812b06c2fdcac9"
+    },
+    {
+      "path": "headers-source/processor/operator/order_by/order_by_key_encoder.h",
+      "bytes": 6258,
+      "sha256": "87db958af1e6de76386c4785ae369e7511ab3f47ffbf7ad3990d8c3fb0be0d26"
+    },
+    {
+      "path": "headers-source/processor/operator/order_by/order_by_data_info.h",
+      "bytes": 1585,
+      "sha256": "83e9fc0433f5583178e74342b7c2b756cc223bd722dd9745ecaef758e1a288f7"
+    },
+    {
+      "path": "headers-source/processor/operator/order_by/order_by.h",
+      "bytes": 2421,
+      "sha256": "d42f4f5b318c60a38069e8f63755444275bf8ac656726f44564b650a7a091a64"
+    },
+    {
+      "path": "headers-source/processor/operator/order_by/key_block_merger.h",
+      "bytes": 7919,
+      "sha256": "52827b523b83111923b04ce7f6ed586384a23928559a2af36f51c17c3dd531d5"
+    },
+    {
+      "path": "headers-source/processor/operator/macro/create_macro.h",
+      "bytes": 1844,
+      "sha256": "82ba2101b3d5048d1a1786bd4c923aaa8d1ec76b399e5846c9e445bc5b2b69af"
+    },
+    {
+      "path": "headers-source/processor/operator/intersect/intersect_build.h",
+      "bytes": 1980,
+      "sha256": "042e9a1811573751ba0274006a3574ad3a6f2e3546af6b952a7d71f6b7686b44"
+    },
+    {
+      "path": "headers-source/processor/operator/intersect/intersect.h",
+      "bytes": 3621,
+      "sha256": "b71886f00fef7fc329e295e7160896da16bcccea8c3419b21483d575eab5cc15"
+    },
+    {
+      "path": "headers-source/processor/operator/hash_join/join_hash_table.h",
+      "bytes": 3112,
+      "sha256": "f1938b3f6844c6c3cc4e3cc62794b2077389251fe55953e4ae6ebe7f6ede2622"
+    },
+    {
+      "path": "headers-source/processor/operator/hash_join/hash_join_probe.h",
+      "bytes": 4676,
+      "sha256": "50729ba23686a040228321b2cd1f48e2f24d89a3fd0bf73461e2587e3249e54a"
+    },
+    {
+      "path": "headers-source/processor/operator/hash_join/hash_join_build.h",
+      "bytes": 4291,
+      "sha256": "7aee213e3dbf38f6289e6cc63d4b49ed23208a76e9a0c512bd9df8c985ffea56"
+    },
+    {
+      "path": "headers-source/processor/operator/ddl/drop.h",
+      "bytes": 1570,
+      "sha256": "afe7c44abf46f24d37f624e5e1c0f9d20f5337395261aa0ee05897af39d908c2"
+    },
+    {
+      "path": "headers-source/processor/operator/ddl/create_type.h",
+      "bytes": 1461,
+      "sha256": "4c43d427af6cf4c64f6edffc3d727375109a0b76e8e8477f7270b7d009cc25ad"
+    },
+    {
+      "path": "headers-source/processor/operator/ddl/create_table.h",
+      "bytes": 1348,
+      "sha256": "3e0cf4c4a215d01328a12c6aadb06151e37e348a7a086cc3a3292df503f1c1b9"
+    },
+    {
+      "path": "headers-source/processor/operator/ddl/create_sequence.h",
+      "bytes": 1421,
+      "sha256": "5f15f76776fb0f5425749bda896abc44dcec5e31cd270565a4c27d5640df5c22"
+    },
+    {
+      "path": "headers-source/processor/operator/ddl/alter.h",
+      "bytes": 2275,
+      "sha256": "96842ac0f29a43e11d9a14fc0a9d49a67792a1b2ee295f8bf0eb3f944c5b8660"
+    },
+    {
+      "path": "headers-source/processor/operator/aggregate/simple_aggregate_scan.h",
+      "bytes": 1043,
+      "sha256": "a18cd59a3f12eb8443c3f19cad06577c60356c4ddb7e86ab46532c4a4d26bb2c"
+    },
+    {
+      "path": "headers-source/processor/operator/aggregate/simple_aggregate.h",
+      "bytes": 5984,
+      "sha256": "b7e7860a8a1c4a16a5eaa97a0e79eb8b8822f2ad81ed40abe6026c2c77e5f71b"
+    },
+    {
+      "path": "headers-source/processor/operator/aggregate/hash_aggregate_scan.h",
+      "bytes": 1479,
+      "sha256": "f9fde727d5b11d24394926c07b28776ec5511f75ac421211f863b2245ae03bf4"
+    },
+    {
+      "path": "headers-source/processor/operator/aggregate/hash_aggregate.h",
+      "bytes": 7983,
+      "sha256": "cfb9b2f714c8b208402f6ccc0d3731f864ebf398378637bba60960dd08903e3a"
+    },
+    {
+      "path": "headers-source/processor/operator/aggregate/base_aggregate_scan.h",
+      "bytes": 1525,
+      "sha256": "208c163dd60849867f1fa3562ee84381d0974ef37dfd6cd2b2fc4cfd950d4fb1"
+    },
+    {
+      "path": "headers-source/processor/operator/aggregate/base_aggregate.h",
+      "bytes": 5806,
+      "sha256": "2d79461505a7556d6c0744cf1f78aabe2719f402acf9c56f3f6eed139b76e15a"
+    },
+    {
+      "path": "headers-source/processor/operator/aggregate/aggregate_input.h",
+      "bytes": 1285,
+      "sha256": "241a6206f03d1616cda2aadd89c2a565e0ed86f980658338bea9ab8806152ff5"
+    },
+    {
+      "path": "headers-source/processor/operator/aggregate/aggregate_hash_table.h",
+      "bytes": 15233,
+      "sha256": "76e2a7075c5981de503fb0da44deb052b345e0501588b76e6fe951d1d0b2918c"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/reader_bind_utils.h",
+      "bytes": 869,
+      "sha256": "3c60e2210b0c5fe8b5b441194918ff5d624dcdb65b33f007fe444edfc0865b9f"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/file_error_handler.h",
+      "bytes": 2739,
+      "sha256": "9f6f163d3c354efed7ecf68a5b6fbb7f5b11ad1e33e914786f1915c341b88342"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/copy_from_error.h",
+      "bytes": 3749,
+      "sha256": "715a31193d7362048db0739e5063479eadd02698e15854865a6b9ed36eaebd27"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/parquet/uuid_column_reader.h",
+      "bytes": 1367,
+      "sha256": "51390b5bc95da7f0a69e0f4f55f3a625de03c507b5f6d5f3ff7c60b683b4b78d"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/parquet/thrift_tools.h",
+      "bytes": 6780,
+      "sha256": "7b22111203f20e21db7843ea64af155fd749c648c275f0b32e3735dd648b5f3d"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/parquet/templated_column_reader.h",
+      "bytes": 3415,
+      "sha256": "1190f8862c3cfe8de5d825acdb7ec8819b82dfc79e91b87de1fbab487f5e9bcf"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/parquet/struct_column_reader.h",
+      "bytes": 1255,
+      "sha256": "ee2ab7348fef2797cd7f51b5f4053c33fb5a163075574fdd86bff109cee60645"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/parquet/string_column_reader.h",
+      "bytes": 1316,
+      "sha256": "8d6fe1f6174b0eac6e54879f6073ec3bd29f824ce9cea4a89264e2326f424aed"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/parquet/resizable_buffer.h",
+      "bytes": 1887,
+      "sha256": "276e0688f34886dc2ef1870f4c7ae28eb5e05f5612ec85e24bb82f72f4a0733b"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/parquet/parquet_timestamp.h",
+      "bytes": 980,
+      "sha256": "d77261125d3c358258aacf2165b9166435d5d7fbf87478c77b3ec20ee0422210"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/parquet/parquet_rle_bp_decoder.h",
+      "bytes": 4242,
+      "sha256": "e02a782bcda106f36da15e1b9c5da2b4a5a931e3267deae4322a4e3e7b09dd5c"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/parquet/parquet_reader.h",
+      "bytes": 4749,
+      "sha256": "6025d59e4522379eb5234cd5813eca0691432519451c3f442bca8bb3a9152b6b"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/parquet/parquet_dbp_decoder.h",
+      "bytes": 4109,
+      "sha256": "077abbcdfcf9e006841ccda2e5ce19b1fc141bed2f1d305c7f4c996bd9864c10"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/parquet/list_column_reader.h",
+      "bytes": 1835,
+      "sha256": "caf0940172ace069bc5328d6c91d88b812b98d18e8af9262a7207462d98e0df2"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/parquet/interval_column_reader.h",
+      "bytes": 1375,
+      "sha256": "61edae08ad1705c740400492b176f94edd958c9d368a49a5220009ea71017be5"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/parquet/decode_utils.h",
+      "bytes": 1966,
+      "sha256": "7e6230ad2e69cba1f00013877f856a838d683cd0eeb475772939293de0731f7d"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/parquet/column_reader.h",
+      "bytes": 5096,
+      "sha256": "ed3077cf5d317766355538ddc608b2be57e4b7a8bbf5cc553b6475025bdda229"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/parquet/callback_column_reader.h",
+      "bytes": 1605,
+      "sha256": "ce8e5ae98088deb868187973582678b59decbd60bef612458805316f677bbf19"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/parquet/boolean_column_reader.h",
+      "bytes": 1473,
+      "sha256": "dc32882489f8930d7f6510e80a5477ee66e52ac63fb45df31aedecbfe1244345"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/npy/npy_reader.h",
+      "bytes": 1766,
+      "sha256": "2142ba7adbdf2069e0549af452da45b95572ff5a239728748e9b4daff3370424"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/csv/serial_csv_reader.h",
+      "bytes": 2690,
+      "sha256": "b328ba30a2f0a0ffc7bd61abd29d1dd2ab3fdadb4d317cf25c11a006c6a80420"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/csv/parallel_csv_reader.h",
+      "bytes": 2096,
+      "sha256": "9cd21ba2365f6bca274d0d0ac0182fb90e92518e77604f090b5e52428b1e74cf"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/csv/driver.h",
+      "bytes": 4556,
+      "sha256": "5c42ddfd1d5d9817ba97d4c9d827994c85242ea1a5b27ccb0397f9a4f6c4eb21"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/csv/dialect_detection.h",
+      "bytes": 691,
+      "sha256": "8475fe10f72a41b74c6370b489728728817f02189aa3cb69822cd9fe7d498c80"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/reader/csv/base_csv_reader.h",
+      "bytes": 5126,
+      "sha256": "c6c487956c9ee0c57160745f1730e71cace4556986553025d0b55e3724361930"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/writer/parquet/uuid_column_writer.h",
+      "bytes": 950,
+      "sha256": "21142325cfb79993c30f378a773c5758e793dd589b7ec3be684f1391f3e42e43"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/writer/parquet/struct_column_writer.h",
+      "bytes": 1721,
+      "sha256": "a1847d434e28285c66de5ae099dd0ee0bcea6c6066186ea5ba057bccb7b6ccce"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/writer/parquet/string_column_writer.h",
+      "bytes": 5356,
+      "sha256": "4dbe0e1e60f93ecee31d5bb085ce229cf39e70e3f94828e4a93467a42eb4c5e4"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/writer/parquet/standard_column_writer.h",
+      "bytes": 3885,
+      "sha256": "2bec102b160e6d43471f87c98cf031ffce4d239d0721fc9feb273f848a8a12d3"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/writer/parquet/parquet_writer.h",
+      "bytes": 3224,
+      "sha256": "73fa0c63ff3e2e625ca12ff6bf6b7c036ef5e58dd3974f950f87f76e357b699b"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/writer/parquet/parquet_rle_bp_encoder.h",
+      "bytes": 1091,
+      "sha256": "d1966cd1bf5369354ae635f0d2d6e6a3285fab02bba80b07619910cea596a989"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/writer/parquet/list_column_writer.h",
+      "bytes": 1739,
+      "sha256": "fa14c4dc7891c16b5730373bafc40b0a4faebb9e7ded872bda55258a71a55d3c"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/writer/parquet/interval_column_writer.h",
+      "bytes": 1090,
+      "sha256": "0b2f1e04ba4c8065b7b1dc1ca59d062110bd667ed0f6b0507840017c933713ed"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/writer/parquet/column_writer.h",
+      "bytes": 4079,
+      "sha256": "66dd231ddb4b061bc9e08b9f415b52a6c6ea9f552d67eb7c2efbfd59d7d38445"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/writer/parquet/boolean_column_writer.h",
+      "bytes": 2252,
+      "sha256": "6ca3436bf9decdb657c17116d71689b735333722f759904c1b099232ef18f843"
+    },
+    {
+      "path": "headers-source/processor/operator/persistent/writer/parquet/basic_column_writer.h",
+      "bytes": 3918,
+      "sha256": "c17555a6dd5cb2b317b4ef39001d0477218480476d67b30c8c93fd43a1651f62"
+    },
+    {
+      "path": "headers-source/storage/wal/wal_replayer.h",
+      "bytes": 8137,
+      "sha256": "2317a9ea5ec8ed6d3a5ba241e9371efc4fe0982497a294a9850aa85ae0b26e21"
+    },
+    {
+      "path": "headers-source/storage/wal/wal_record.h",
+      "bytes": 17959,
+      "sha256": "000fe83d7b9066f929824156a593d4579ee26a185de25a9e537c60fe66856153"
+    },
+    {
+      "path": "headers-source/storage/wal/wal.h",
+      "bytes": 2975,
+      "sha256": "f2ae892b75b25ced7021ed515545e97d9475cd74964988e62ed625f7466d2cfa"
+    },
+    {
+      "path": "headers-source/storage/wal/local_wal.h",
+      "bytes": 3025,
+      "sha256": "c226eba684470799018bb4c2b5b45cd555cba7287ba341f9f27a0fc753f9d8f0"
+    },
+    {
+      "path": "headers-source/storage/wal/checksum_writer.h",
+      "bytes": 1120,
+      "sha256": "c7c0aa315e4a355ea2604303bbba42cdd645eb852a661a016c3bc432d5493155"
+    },
+    {
+      "path": "headers-source/storage/wal/checksum_reader.h",
+      "bytes": 995,
+      "sha256": "9c3fcf8e28ca0077270fd1fa74c2c343e05b8d329ac5ee55a2c72e11c5c4c7e1"
+    },
+    {
+      "path": "headers-source/storage/table/version_record_handler.h",
+      "bytes": 1296,
+      "sha256": "5c8930ef80255a686ef672036ace131ccdac8ce068749df57094e252ff6b0af0"
+    },
+    {
+      "path": "headers-source/storage/table/version_info.h",
+      "bytes": 2863,
+      "sha256": "4be4bbee2a4c0cf5ee192b086bb0ffc098a4ac0e97b2d506c00d196592f44465"
+    },
+    {
+      "path": "headers-source/storage/table/update_info.h",
+      "bytes": 5193,
+      "sha256": "754d38e561757803f0ee16750d46fc36d24843d6bed7a4587a8ad2ca10bed52f"
+    },
+    {
+      "path": "headers-source/storage/table/table.h",
+      "bytes": 9405,
+      "sha256": "fa89b27136dbb8283d6cd634d5ee53609a1553d0e9b3e7fb4c321aca40f5a0d0"
+    },
+    {
+      "path": "headers-source/storage/table/struct_column.h",
+      "bytes": 1561,
+      "sha256": "0f6bcbe1ae61cf1881e16021548c9e92e62244e62e868dcdae117c82c5952e3e"
+    },
+    {
+      "path": "headers-source/storage/table/struct_chunk_data.h",
+      "bytes": 3769,
+      "sha256": "b41777e8d9f699f208171b5a3bf598b2a3dd8857f3c8f3b77fb30bd5bfaa68f2"
+    },
+    {
+      "path": "headers-source/storage/table/string_column.h",
+      "bytes": 2430,
+      "sha256": "678c084e9e9a7674e7b8d8a82568e2bc9df4d3531f676b7577ed11b50eb69e1c"
+    },
+    {
+      "path": "headers-source/storage/table/string_chunk_data.h",
+      "bytes": 4470,
+      "sha256": "2f9f44cdba660971b0fbc60c7e4e14dcac331c3a31361de9ced741c45dacc18d"
+    },
+    {
+      "path": "headers-source/storage/table/rel_table_data.h",
+      "bytes": 7726,
+      "sha256": "5e13a5d7bd1e7097414608d29eab229210f91a5c001c028d809b87d730bd8fdf"
+    },
+    {
+      "path": "headers-source/storage/table/rel_table.h",
+      "bytes": 12642,
+      "sha256": "907bbc47fc9bb86861084812ba28569baf58da0042473e540584517c6d66ea0a"
+    },
+    {
+      "path": "headers-source/storage/table/null_column.h",
+      "bytes": 585,
+      "sha256": "d015fb3f33571466ec56cd8e266fe95160f7b9567cae7eff43e208f21ce91ebe"
+    },
+    {
+      "path": "headers-source/storage/table/node_table.h",
+      "bytes": 25779,
+      "sha256": "e9aa702a9e8c3327a1ab5085a4f5b26377e5c13caad8b21c85292a3bbfe6dd32"
+    },
+    {
+      "path": "headers-source/storage/table/node_group_collection.h",
+      "bytes": 7224,
+      "sha256": "5f3fb6c9598969086184eea3be1b0ecf450baa85ad549f26def3285fde95dee3"
+    },
+    {
+      "path": "headers-source/storage/table/node_group.h",
+      "bytes": 19833,
+      "sha256": "55fc2d478722da61dc0310e68e3456f828682bf616ba8001b1b83f009e735aaa"
+    },
+    {
+      "path": "headers-source/storage/table/list_column.h",
+      "bytes": 4608,
+      "sha256": "08181c5b952f968613e67b4f86c508a23da731d9e5e0c0086e49b0ded4a0e3c1"
+    },
+    {
+      "path": "headers-source/storage/table/list_chunk_data.h",
+      "bytes": 5638,
+      "sha256": "c85a882396fd1041e9fa6305ecff7f5a35bfe7aa1f1a90730017e8fc0350a70a"
+    },
+    {
+      "path": "headers-source/storage/table/lazy_segment_scanner.h",
+      "bytes": 3203,
+      "sha256": "ad2c64300805e523b13b6282a023f447d9820c07e9278d19181eac68573043b6"
+    },
+    {
+      "path": "headers-source/storage/table/in_memory_exception_chunk.h",
+      "bytes": 2030,
+      "sha256": "ef6c17fbc1dc128c5bedb42a43f2b6672da5661010b67dcaf8409039c6465055"
+    },
+    {
+      "path": "headers-source/storage/table/in_mem_chunked_node_group_collection.h",
+      "bytes": 1872,
+      "sha256": "980a832b37456c46ab4a64fe1515a11f7c66cd745d7abe575b2b54c3a108098a"
+    },
+    {
+      "path": "headers-source/storage/table/group_collection.h",
+      "bytes": 5906,
+      "sha256": "22cde412c46bc1130497117bcc8584300dbd02262602442208c23c895eb04268"
+    },
+    {
+      "path": "headers-source/storage/table/dictionary_column.h",
+      "bytes": 3448,
+      "sha256": "455e9b925be0dae9e64001e38ff39011f4f18f33f8a09e2a3ffa9460221ceec6"
+    },
+    {
+      "path": "headers-source/storage/table/dictionary_chunk.h",
+      "bytes": 3319,
+      "sha256": "1915269b8ea51029a14a676c3408435bca370d79c3ca5d0f27d6e85c5a711d4b"
+    },
+    {
+      "path": "headers-source/storage/table/csr_node_group.h",
+      "bytes": 21707,
+      "sha256": "5173a166831fe981cbd974749da9428659dd9476617ce38ee90b02857544edce"
+    },
+    {
+      "path": "headers-source/storage/table/csr_chunked_node_group.h",
+      "bytes": 9740,
+      "sha256": "e230e7c53595a61bf6a4ea72c336887164f8a147284340c586cbf5fcb111be4e"
+    },
+    {
+      "path": "headers-source/storage/table/compression_flush_buffer.h",
+      "bytes": 1670,
+      "sha256": "9bcd3fd94d86b724bb1fe5093f81636b9885f9ef3a8c36e45e52ed9d0dd67c6c"
+    },
+    {
+      "path": "headers-source/storage/table/combined_chunk_scanner.h",
+      "bytes": 1086,
+      "sha256": "1394108b9dee444e70a53fa2a7b01e57e58025faa0ad7814630e19ba50467b92"
+    },
+    {
+      "path": "headers-source/storage/table/column_reader_writer.h",
+      "bytes": 3753,
+      "sha256": "2f273a9830565549168014d47df0f02d9c8cbcf3606f191d67295ac3f38cf6b8"
+    },
+    {
+      "path": "headers-source/storage/table/column_chunk_stats.h",
+      "bytes": 1194,
+      "sha256": "0356f25f0b0cbad630fb9be36e4d60643bad777ff157f3544bcf08ada0de6b29"
+    },
+    {
+      "path": "headers-source/storage/table/column_chunk_scanner.h",
+      "bytes": 822,
+      "sha256": "af25021ff432ae505af363c8dc00f32836ad3e6301cf2632a1d6dbdc97a3e4d7"
+    },
+    {
+      "path": "headers-source/storage/table/column_chunk_metadata.h",
+      "bytes": 3058,
+      "sha256": "1d688a3ee54c6e5d783bc6102ab93eba22f72a5ac6263db40cd959c5328b3d5a"
+    },
+    {
+      "path": "headers-source/storage/table/column_chunk_data.h",
+      "bytes": 22351,
+      "sha256": "4339ddc0cd05cf7abbcdd502c9ba9a4a1062c479be873b1e71cb3752bbdb946a"
+    },
+    {
+      "path": "headers-source/storage/table/column_chunk.h",
+      "bytes": 15500,
+      "sha256": "7f38ee922e279fd7f9b0f89dc6c6bc63b4962002c9077f70957df88084750742"
+    },
+    {
+      "path": "headers-source/storage/table/column.h",
+      "bytes": 8722,
+      "sha256": "3f4a88e018edd32df29cbd385f52d359235593bb55ddf3d9d2e32cd74720cb0c"
+    },
+    {
+      "path": "headers-source/storage/table/chunked_node_group.h",
+      "bytes": 15388,
+      "sha256": "0a66adcd65b35d82a37c0789a2e39d788b52124a7138d08a4a07dce6b9e8e2c0"
+    },
+    {
+      "path": "headers-source/storage/stats/table_stats.h",
+      "bytes": 2702,
+      "sha256": "d2ba57a0ec0144a1af6c6508f14f9e3e92fc23678f36715d9bf057053268a3db"
+    },
+    {
+      "path": "headers-source/storage/stats/hyperloglog.h",
+      "bytes": 1545,
+      "sha256": "338724dc4136f53ec5724abf6e165e1decc297bd507432687c402924912b7203"
+    },
+    {
+      "path": "headers-source/storage/stats/column_stats.h",
+      "bytes": 1731,
+      "sha256": "0548800c3c7f1b34b04518b7a73e8775e47b005f1cd5882c9fcf763ab1153110"
+    },
+    {
+      "path": "headers-source/storage/predicate/null_predicate.h",
+      "bytes": 754,
+      "sha256": "2d6c3535f604b6734121bee58e424b153ebf4f8936e0eca587ff290e1d155755"
+    },
+    {
+      "path": "headers-source/storage/predicate/constant_predicate.h",
+      "bytes": 824,
+      "sha256": "a1aa61cee1792de3ed4201babd96294b31c2c7568d91b9adbfd92da890a160d3"
+    },
+    {
+      "path": "headers-source/storage/predicate/column_predicate.h",
+      "bytes": 1854,
+      "sha256": "f57fe2c41cf52588ea19de3f01bb0abf4544784df450b14b302fc20e17f0dfa4"
+    },
+    {
+      "path": "headers-source/storage/local_storage/local_table.h",
+      "bytes": 2129,
+      "sha256": "583fc6f3cf8c9198a833128b82e8b98875ec8972fdde21d7f92a3dd48c9ef871"
+    },
+    {
+      "path": "headers-source/storage/local_storage/local_storage.h",
+      "bytes": 3158,
+      "sha256": "26b757bca46e5d786355eefdf4a8bcff6122a0040f2a50e9e4aa7676c032a6aa"
+    },
+    {
+      "path": "headers-source/storage/local_storage/local_rel_table.h",
+      "bytes": 6016,
+      "sha256": "e4141876d6f54a436fb80d7f1b11c1314b8b7611b2579e3bfc2816ffcc6acf7f"
+    },
+    {
+      "path": "headers-source/storage/local_storage/local_node_table.h",
+      "bytes": 4651,
+      "sha256": "cb6fcd3fe9aa3853423267e38e8df790d881dbed8c9f9ce3a0fa141d396fb4ab"
+    },
+    {
+      "path": "headers-source/storage/local_storage/local_hash_index.h",
+      "bytes": 9185,
+      "sha256": "473c575714a7fdc8a716e5447c58ea2f7d78e5d9f7c354af79004904a77e5e49"
+    },
+    {
+      "path": "headers-source/storage/index/index.h",
+      "bytes": 16940,
+      "sha256": "315f67992c2181c943624a65639106852bbbea1d8b166c02f21c9b1f8bfaba79"
+    },
+    {
+      "path": "headers-source/storage/index/in_mem_hash_index.h",
+      "bytes": 16404,
+      "sha256": "f2a25a4f5ed1cc63446e32ef83723092703983b676b77cf5d5bef3657e0539b5"
+    },
+    {
+      "path": "headers-source/storage/index/hash_index_utils.h",
+      "bytes": 3042,
+      "sha256": "877fa51e0c3426092443fa72ebc96fa665ac0ac851edd702588f73dad4a089e6"
+    },
+    {
+      "path": "headers-source/storage/index/hash_index_slot.h",
+      "bytes": 2783,
+      "sha256": "aceafe544a7093ab3164145b529f4aedd3f2d18f4ac74712403ec7ea9d9476cf"
+    },
+    {
+      "path": "headers-source/storage/index/hash_index_header.h",
+      "bytes": 2523,
+      "sha256": "d1c4b5972fdef46f79a35ddf0092b97b26ae6dca835ff0c99af876ddb3fd965e"
+    },
+    {
+      "path": "headers-source/storage/index/hash_index.h",
+      "bytes": 24721,
+      "sha256": "1eb95477ff28fe35db4974a968bad055a75eab9b343512dd895364a81d1742b1"
+    },
+    {
+      "path": "headers-source/storage/enums/residency_state.h",
+      "bytes": 603,
+      "sha256": "e4083e7e5176e03b2e734b8f03b45aee7c18949bcca14c75d983a71e2f8ea1b6"
+    },
+    {
+      "path": "headers-source/storage/enums/page_read_policy.h",
+      "bytes": 195,
+      "sha256": "1eece908a1b4363f57988ca7919a24447d552e71a2c0ece64a066f29d60286bf"
+    },
+    {
+      "path": "headers-source/storage/enums/csr_node_group_scan_source.h",
+      "bytes": 236,
+      "sha256": "7e9ff6eaf6f2651a89c735600bdac1764b18d48c4e3d462ea1af9f88d1f86e83"
+    },
+    {
+      "path": "headers-source/storage/compression/sign_extend.h",
+      "bytes": 1826,
+      "sha256": "a1f2efcc443e9ebe65bf9116471b0507613d784167cccdff7b95ce04ad99441e"
+    },
+    {
+      "path": "headers-source/storage/compression/float_compression.h",
+      "bytes": 3560,
+      "sha256": "5806c47d0d633af4d477975b82608a5fb3f2101666d60bc13621184be7ae4fd8"
+    },
+    {
+      "path": "headers-source/storage/compression/compression.h",
+      "bytes": 20844,
+      "sha256": "f2ecdfdab3155747f853ad89e83b51677b49b86c637c2f9723755bb8e40a1b97"
+    },
+    {
+      "path": "headers-source/storage/compression/bitpacking_utils.h",
+      "bytes": 779,
+      "sha256": "005fff1e50af06ac251ab8deafa1e8dc297c7cf1748b3e7d44ec8d60ea34dd87"
+    },
+    {
+      "path": "headers-source/storage/compression/bitpacking_int128.h",
+      "bytes": 462,
+      "sha256": "cf7c2b4f3c010e0cd38f09480eea4e580cf9798852716525e98f46304aca031f"
+    },
+    {
+      "path": "headers-source/storage/buffer_manager/vm_region.h",
+      "bytes": 2997,
+      "sha256": "9c4729fc24ca6bb03b4059dc0d54a4857ad15abcc9021bc7c5ebe70e616c2d4b"
+    },
+    {
+      "path": "headers-source/storage/buffer_manager/spiller.h",
+      "bytes": 1402,
+      "sha256": "126f916b0183371b7af1c55a96d5440df7e2fa5360d9150a70853f46f71dcf0b"
+    },
+    {
+      "path": "headers-source/storage/buffer_manager/spill_result.h",
+      "bytes": 394,
+      "sha256": "1d64a946ccc8d56de48b84d7f224d43abb32b52838fd597cc3e039e58231529a"
+    },
+    {
+      "path": "headers-source/storage/buffer_manager/page_state.h",
+      "bytes": 4530,
+      "sha256": "51fe635d1fa0e5c9565b7b20268153d30fed32b58a13cdb3df145d7b7c46148f"
+    },
+    {
+      "path": "headers-source/storage/buffer_manager/mm_allocator.h",
+      "bytes": 1494,
+      "sha256": "c8e7a8a0cd2f10d634b78c7dba0a359dec78f7c5cec4ae99b6cbccdf9230d7ee"
+    },
+    {
+      "path": "headers-source/storage/buffer_manager/memory_manager.h",
+      "bytes": 3313,
+      "sha256": "d6a816f09dd21b5f0383d1cab89a4e41977057e72ab0b91677c3e3fa26e66e74"
+    },
+    {
+      "path": "headers-source/storage/buffer_manager/buffer_manager.h",
+      "bytes": 15065,
+      "sha256": "3252dc17faf6138adf142ff9961ba2507a1972000c709e526d6cf7ad3cd77861"
+    },
+    {
+      "path": "headers-generes/common/build_id.h",
+      "bytes": 227,
+      "sha256": "b97155212b1cd3292ff3d1df6794b34ff305719728ee6fc87d354eb7444f194a"
+    },
+    {
+      "path": "headers-generes/common/system_config.h",
+      "bytes": 2952,
+      "sha256": "08bb40bb489cc0269cef2ce34a3329536a616a4b998a131841ada95afb2f36d8"
+    },
+    {
+      "path": "tiers/zstd/libzstd.a",
+      "bytes": 784940,
+      "sha256": "d62377c9fab42a406093f115a667b9e42b2bae38c8c83b93950516693687b0bd"
+    },
+    {
+      "path": "tiers/yyjson/libyyjson.a",
+      "bytes": 259136,
+      "sha256": "8e45ca75a5f000e119195e8410a8c0fc8fe92d63c7d3134f85d7118ce9bc418d"
+    },
+    {
+      "path": "tiers/utf8proc/libutf8proc.a",
+      "bytes": 317584,
+      "sha256": "dc70dc925bef7aa48bbdd0e8f2810d1bc60368f450f0c0ea981b50724fb715cd"
+    },
+    {
+      "path": "tiers/thrift/libthrift.a",
+      "bytes": 71482,
+      "sha256": "164514038dcd71bb86b686759cc0f8014bccc6026f3b6115463ca33579009e4d"
+    },
+    {
+      "path": "tiers/snappy/libsnappy.a",
+      "bytes": 57760,
+      "sha256": "77522f18bcf14997892a76a790d8b6a731ef585d90e77da7abf4e0dc48012a73"
+    },
+    {
+      "path": "tiers/simsimd/libsimsimd.a",
+      "bytes": 222258,
+      "sha256": "08f48746cd60c0041051ba57d414f0f86f14a2605c9de12b9890c74c9cdea062"
+    },
+    {
+      "path": "tiers/roaring_bitmap/libroaring_bitmap.a",
+      "bytes": 473858,
+      "sha256": "ed86cf07931769083e02d8d95c350798dc2308e58284c4ccb6f17a06d8dd9d78"
+    },
+    {
+      "path": "tiers/re2/libre2.a",
+      "bytes": 1108704,
+      "sha256": "6cae41c979722228b917056c738046926d700ad934b040ad97af883e9c2eb00d"
+    },
+    {
+      "path": "tiers/parquet/libparquet.a",
+      "bytes": 739048,
+      "sha256": "66e901007ee7a4abdc593c4dc822d1ca7bad7831cdb18096b077261e2263ba69"
+    },
+    {
+      "path": "tiers/miniz/libminiz.a",
+      "bytes": 137088,
+      "sha256": "faec74700ad53e076941d0d4eba12223c5d2310f9c3e750c37ea6f20bf5cf379"
+    },
+    {
+      "path": "tiers/mbedtls/libmbedtls.a",
+      "bytes": 243038,
+      "sha256": "778dff0c8c65525696fc0a0bf28225fff0cc7b7f2ae39e5ac896c7f1f95c3ecd"
+    },
+    {
+      "path": "tiers/lz4/liblz4.a",
+      "bytes": 31876,
+      "sha256": "3b2abd8a0047513f46e486cd3323eb8888ba95f6d3211f9b95d8595731ac78be"
+    },
+    {
+      "path": "tiers/fastpfor/libfastpfor.a",
+      "bytes": 242874,
+      "sha256": "14dc30ac43ac02ce8c0e6f7ba7dd4d1aeb56864f69416b04ced5f532d84a7a72"
+    },
+    {
+      "path": "tiers/brotli/libbrotlidec.a",
+      "bytes": 66288,
+      "sha256": "218e9c10b1b3e0a8ae8c3a2a009928bb468140bb8426910daa7b3f93060c718f"
+    },
+    {
+      "path": "tiers/brotli/libbrotlicommon.a",
+      "bytes": 138856,
+      "sha256": "38979fb1e30188a9223c04dbfcc5064a0932319423389a571e2ba19700c03c3e"
+    },
+    {
+      "path": "tiers/antlr4_runtime/libantlr4_runtime.a",
+      "bytes": 3326650,
+      "sha256": "786f6a975c00cf7c8d23c3e54ff2caa042a10e7e803dcfa44ccfbd01a195e742"
+    },
+    {
+      "path": "tiers/antlr4_cypher/libantlr4_cypher.a",
+      "bytes": 1816206,
+      "sha256": "bb9d216eea26b30506b25b43f72b6de48deb3bd9d716bf64cc5902a2e42b71ae"
+    }
+  ],
+  "package_bytes": 110723932,
+  "scenario_run": false,
+  "runtime_authorized": false
+}

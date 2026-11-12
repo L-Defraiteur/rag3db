@@ -1,0 +1,12 @@
+{
+  "old_source": "6bfba5b4cd081c0bbe10bda045fdcccfb6290594",
+  "new_source": "35ea70d3a4a5cc4917586de02f6bfc862c76a02c",
+  "changed_files": [
+    "src/transaction/transaction.cpp"
+  ],
+  "exact_qualification_delta_verified": true,
+  "transaction_cpp_sha256": "bd5ee195d32a36812688911dc8dc9f45ca603f8e5ec5f918b31d19472bce23f8",
+  "pack_bytes": 78914,
+  "pack_sha256": "0a564f5614b37b7dfcf6c6c7c156012f5a76c38914699c40abe7d473dbaecef3",
+  "other_source_changes": false
+}

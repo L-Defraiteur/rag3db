@@ -1,0 +1,8 @@
+{
+  "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/cx-coeur-build-saturation-12nov-02.service",
+  "memory.max": "8589934592",
+  "memory.swap.max": "0",
+  "scratch_bytes": 2147483648,
+  "routes": "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT                                                       \n",
+  "started_monotonic": 835641.337788542
+}
