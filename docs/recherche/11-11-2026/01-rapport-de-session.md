@@ -2,7 +2,7 @@
 
 ## Travail courant : primitive commune des lanceurs (12 novembre)
 
-Ticket [scopes des validations](../../orchestration/tickets/2026-11-12-une-scope-e2e-imbriquee-peut-echapper-au-plafond-du-lanceur.md), propriété scripts recherche et relecture ED. Branche/worktrees `cx-recherche-confinement-lanceurs` aux deux postes, base43db9634a ; source réelle figée5fab0e1f9, helper productionecd605037, docs de recette ensuite. Primitive `scripts/confiner_validation.py` adoptée par run_e2e et temoins_navigateur ; aucun Rust produit ni source Arbre modifié, aucun ancien lot rejoué.
+Ticket [scopes des validations](../../tickets/closed/2026-11-12-une-scope-e2e-imbriquee-peut-echapper-au-plafond-du-lanceur.md), propriété scripts recherche et relecture ED. Branche/worktrees `cx-recherche-confinement-lanceurs` aux deux postes, base43db9634a ; source réelle figée5fab0e1f9, helper productionecd605037, docs de recette ensuite. Primitive `scripts/confiner_validation.py` adoptée par run_e2e et temoins_navigateur ; aucun Rust produit ni source Arbre modifié, aucun ancien lot rejoué.
 
 CPU20/20 verts2,059s, après rouge d’assertion JSON20(19/1) diagnostiqué et gardé (pas d’adaptation du helper à une phrase). P1 parent/racine PID+start, P2 reçu/superviseur réel et borneENV seule, nettoyage/refus/arrêt testés. Unique préflight réelle verte1,306s sous vrai posteMax32,26s internes/30s totalextérieur après acquisition : CDPChrome156+close,16descendants/unCGMax32,20observationsindépendantes,quiescencebus/profil=[],baseline9préexistantsnonattribuée. Preuves2postes horscible dans journaux-cx-recherche-confinement-12nov/. Aucun Cargo/target créé ; aucune exécution réelle restante. Revue/intégration après A encore attendue, aucun master sans tour explicite. Reprendre depuis le ticket et sa recette figée, ne pas relancer la préflight unique.
 
@@ -425,3 +425,6 @@ Lot isolé `cx-recherche-lectures-journaux`, worktree homonyme aux deux postes ;
 
 
 **Tour master acquis après revue C7 :** ticket journaux clos et déplacé, verdict composé relu ; rebase documentaire sur e1b892d9c sous branche neuve cx-recherche-lectures-journaux-integration-2. Unique conflit au ticket scopes résolu en conservant intégralement les ajouts e1 et les observations recherche. Diff depuis source jugée487 limité aux Markdown. Trois ELF de preuve copiés et rehashés hors target avant nettoyage ; remotes et journaux conservés. Le ticket commun scopes reste ouvert.
+
+
+**Revue finale/tour acquis :** C7/ED acceptent le delta CLIff3 (rebâtis exclusifs basse priorité, mesures explicites normales), CPU2ciblés/4variantes0,159s en complément des20helper base. Helper Python et entrée navigateur identiques5fab, préflight réelle unique non rejouée. Intégration autorisée après A/d6f, sous branche neuve cx-recherche-confinement-lanceurs-integration ; ticket commun clos avec preuves et limites dans le même commit. Archives/gardes avant retrait des seuls W du lot, aucune cible Cargo créée ni service permanent à poser.
