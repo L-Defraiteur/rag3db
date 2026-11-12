@@ -749,3 +749,25 @@ configs/recette changés à descripteurs constants restent explicitement non qua
 avec empreinte de rapport différente ; pas de nouveau hash annoncé contrat commun.
 Une qualification effective exigera les faits complets et un producteur commun
 revu séparément. Aucun apply ou jeton d'écriture ne découle de cet aperçu.
+
+### Ciblé minimal v1 annulé avant Cargo, cfg isolé intégré
+
+C7 signale le défaut minimal déjà connu du ticket tty7nov : un témoin natif de
+record_nodes importe Rag3dbConnection sans cfg. Sur instruction explicite, seule
+l'attente poste de cette session (pid2034961, UID/cmdline vérifiés) a reçu TERM,
+alors que la mesure C++ tenait toujours le poste. Scope inactive, dossier de
+preuve et target absents avant/après : **source0cc jamais jouée**, budget non
+démarré, pas de rouge produit. Preuve cache luciepc
+cx-transfert-apercu-v1-annule-avant-cargo.json ; commande d'attente finie143.
+
+Correctif mémoire **80faa48385ad4600122c545b876255a7c53050eb** relu : un seul
+cfg(feature=rag3db-native) sur le témoin natif, rien d'autre. Commit privé publié
+sur origin/cx-memoire-cfg-temoin-natif, intégré séparément sur branche neuve
+cx-arbre-migration-transfert-2. Le ticket tty n'est pas fermé : son périmètre
+build/daemon et gardes complètes n'est pas validé par cet unique cfg.
+
+Deltafb0 nonqualification et218 refus des configs non finies également inclus ;
+quinze témoins métier. C7 autorise le nouveau ciblé600 après ce raccord, même
+argv --no-default-features --lib -j8 et filtre transfer::tests, j8/Mem32, target
+unique32Go et lib29, mesure prioritaire. Source propre/hash/argv publiés avant
+lancement ; aucun transfert, service, base ou globale/master autorisé.
