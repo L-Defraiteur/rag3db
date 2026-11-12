@@ -4,6 +4,7 @@ Lancer sous poste mesure après publication du plan figé. Aucun modèle à l'im
 """
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -228,11 +229,26 @@ class Run:
         self.event(label,used=used,baseline=self.baseline,peak=self.peak,erreurs=errors)
         if errors:raise RuntimeError('; '.join(errors))
     def run(self):
+        # Composer la primitive commune : pas de poste, bus ou scope sœur.
+        helper=Path(__file__).with_name('confiner_validation.py')
+        spec=importlib.util.spec_from_file_location('validation_privee',helper)
+        validation=importlib.util.module_from_spec(spec);spec.loader.exec_module(validation)
+        table=validation.processus();recu=validation.autorite(table)
+        poste_pid=validation.poste_tenu(table)
+        locks=Path(os.environ.get('POSTE_LOCK_DIR',str(Path.home()/'.cache/rag3weaver-build')))
+        if not (locks/'fiches'/str(poste_pid)).read_text().startswith('tient mesure '):
+            raise RuntimeError('la portée commune doit détenir mesure')
+        if recu['echeance']-time.monotonic()>1200:raise RuntimeError('budget commun supérieur au plan')
+        self.begin=min(self.begin,recu['echeance']-1200)
+        self.end=min(self.end,recu['echeance']-5)
+        if self.end<=time.monotonic():raise RuntimeError('budget commun expiré')
+        self.event('portee-commune',superviseur=recu['pid'],poste=poste_pid,cgroup=recu['cgroup'],
+                   mode='mesure',echeance_monotone=recu['echeance'],reserve_commune_s=5)
         failed=None
         def interrupt(sig,frame):raise RuntimeError('signal '+str(sig))
         for sig in (signal.SIGALRM,signal.SIGTERM,signal.SIGINT):signal.signal(sig,interrupt)
-        signal.setitimer(signal.ITIMER_REAL,1200)
-        self.event('mesure-acquise',pid=os.getpid(),budget_s=1200,deadline_unix=time.time()+1200)
+        signal.setitimer(signal.ITIMER_REAL,max(.001,self.end-time.monotonic()))
+        self.event('mesure-acquise',pid=os.getpid(),budget_s=1200,deadline_unix=time.time()+max(0,self.end-time.monotonic()))
         try:
             for name,a in self.plan['artifacts'].items():
                 if sha(a['path'])!=a['sha256']:raise RuntimeError('artefact modifié '+name)
