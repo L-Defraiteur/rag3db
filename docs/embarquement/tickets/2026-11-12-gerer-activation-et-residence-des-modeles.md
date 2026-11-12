@@ -28,3 +28,22 @@ annulation isolée, budget et reprise à froid qualifiés aux deux postes.
 Décrire chauffe partielle et erreurs par capacité sans les transformer en
 réussite vide. Aucune nouvelle boucle d'agent nécessaire pour ce contrat de
 ressources. La note seule et les arrêts manuels de l'audit ne ferment pas ce ticket.
+
+## Première tranche nocturne autorisée — 12 novembre
+
+Embarquement prend la première capacité commune réellement appelée : identité
+modèle/profil, acquisition unique sous concurrence, état de chauffe/erreur et
+annulation isolée. Composer ModelSource/Serveur/Attache avant un autre mécanisme ;
+les politiques TTL/maintien/éviction sont des entrées déclarées, pas de nouveaux
+défauts imposés aux backends. Aucun changement des services ou paramètres
+d'embedding existants dans cette tranche.
+
+Banc prépare indépendamment la recette puis les mesures de chauffe/reprise,
+concurrence et annulation pertinentes sur modèle privé déjà disponible ; il
+n'édite pas le runtime d'Embarquement. Fixtures CPU d'abord, source/recette et
+placement avant toute mesure réelle. Card2 est autorisée normalement ; card0
+seulement dans la fenêtre explicitée dans
+[la répartition](../../orchestration/12-11-2026/02-lots-independants-pour-la-nuit.md)
+et après entrée vérifiée d'Optimiseur. Ne pas répéter le banc Qwen clos ni
+charger un modèle sans question de qualification. Le ticket reste ouvert si
+seul un prototype ou une chauffe partielle est prouvé.

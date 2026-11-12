@@ -1655,3 +1655,18 @@ Un dernier worktree documentaire neuf ne sert qu'à publier ce bilan, sans Cargo
 puis sera retiré par archive/garde fraîche. Les instructions d'attente masterED,
 de tour B et de conservation des ressources des paragraphes antérieurs sont
 historiques ; reprendre une suite sur WT neuf et contrat relu, pas sur un vieux job.
+
+## Suite nocturne autorisée après A et RO — 12 novembre
+
+Lucie demande de découper les suites utiles cette nuit. Arbre reprend le protocole
+de publication/génération composite choisi, sur le même ticket ;
+[répartition et frontières](../../orchestration/12-11-2026/02-lots-independants-pour-la-nuit.md).
+Composer plan/journal et observation existants, puis publier contrat/diff/témoins
+avant lourd. Identité logique neuve explicitement établie seulement sur un
+catalogue neuf possédé ; pas de bootstrap automatique de legacy. Publication
+P1→P2 et retour A→B→A, même opération rejouée, identité/génération étrangères
+et interruption à éprouver sur fixtures. Un état incomplet refuse ; aucun
+transfert ou format appliqué ne découle de la seule mécanique de journal.
+
+Mémoire relit sans édition ; source/targets distincts de l'agent IDE, de la
+navigation et des modèles. Le ticket reste ouvert pour la pyramide effective.

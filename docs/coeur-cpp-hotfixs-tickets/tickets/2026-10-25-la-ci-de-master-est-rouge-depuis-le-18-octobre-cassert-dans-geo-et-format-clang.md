@@ -67,3 +67,20 @@ page du cœur sur les passes.
 - **Le point 2 se prépare** : clang-format **18.1.3**, celle de la CI, dans une image docker locale
   (`rag3db-clang-format-18`, Ubuntu 24.04) au portable. En attendant la fenêtre, chaque lot de la
   session hotfixs est passé à la 18 sur ses seules lignes, et n'ajoute aucun écart.
+
+## Fenêtre de nuit du12au13novembre2026
+
+Lucie autorise les correctifs utiles du cœur et le découpage des lots nocturnes.
+Orchestration ouvre la préparation puis le formatage pur de ce ticket, à Cœur
+C++ seul, après inventaire du périmètre et confirmation des sources réellement
+concernées par la CI. Les autres lots de nuit sont Rust/Plans/fixtures ou revue ;
+aucun autre porteur ne modifie en parallèle le C++ de master.
+
+Utiliser clang-format18 exact (image existante si disponible), protéger annexes,
+sous-modules et preuves forensiques ; pas de reformatage à la version23.
+La cause cassert est déjà corrigée et ne doit pas être présentée comme nouvelle.
+Source et recette publiées, formatage sans logique relu, puis bâti privé et
+transaction_test selon bornes avant tour d'intégration. Aucun moteur posé,
+ancien runtime bloqué ou job CI relancé. Les sources/private traces C++ de
+quarantaine restent séparées ; un refus antérieur ne se contourne pas par ce lot.
+La CI automatique devra encore confirmer les jobs avant clôture complète.

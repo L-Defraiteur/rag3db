@@ -24,3 +24,19 @@ du vrai parcours agent : lister l'arbre d'un fichier, choisir un membre, parcour
 ses parents/enfants et lire seulement ce qui est utile. Témoins de profondeur,
 ambiguïté, membres partiels, fichier modifié/index périmé et troncature. La note
 de conception ne ferme pas ce ticket et ne déclare aucune nouvelle API livrée.
+
+## Première tranche autorisée pour la nuit du12au13novembre
+
+Lucie demande des lots parallèles utiles depuis les visions. Archi prend la
+première tranche de navigation réellement accessible, après qualification de
+la couverture ; codeparsers prend l'inventaire IR/fixtures en soutien, sans
+pointeur parent ni ancienne administration à modifier.
+[Répartition](../../orchestration/12-11-2026/02-lots-independants-pour-la-nuit.md).
+
+Réutiliser outline/Plans/parcours ; ne pas ajouter un alias sans capacité utile.
+Arbre de fichier puis membres/parents/enfants qualifiés, profondeur et couverture
+explicites, sans confondre héritage et contenance. Noms et découpage sont des
+choix d'implémentation ; les vrais changements de conception sont numérotés sur
+la page existante. Archi garde la navigation/gabarits ; ED garde le parcours
+agent et annonce toute édition nécessaire d'un fichier partagé. Publier diff
+et témoins avant lourd, puis validation du vrai accès commun aux agents.

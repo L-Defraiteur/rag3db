@@ -173,3 +173,19 @@ sans lire, afficher ni copier .env ou .vault. Une revue de code prend les source
 et contrats concernés ; elle n'implique pas d'ouvrir les bases ou d'envoyer les
 conversations et données réelles de Lucie. Éviter les appels sans question utile
 et les répétitions inchangées ; conserver les erreurs et leur diagnostic.
+
+## 8. Nuit du12au13novembre : lots et second GPU
+
+Lucie autorise les suites utiles parallèles, notamment visions et correctifs
+du cœur, en demandant de découper les lots.
+[Répartition effective](../12-11-2026/02-lots-independants-pour-la-nuit.md).
+Card0 est disponible **cette nuit le13novembre00:00–08:00 Europe/Paris**,
+en plus de card2. L'entrée vérifie l'heure/placement/consommateurs, les seuls
+modèles privés ont une échéance effective avant08:00 et aucune acquisition
+tardive ne les réactive. Optimiseur tient ce créneau ; aucune nouvelle demande
+GPU à Lucie pour un besoin pertinent autorisé. Les modèles existants ne sont
+pas déchargés sans attribution et les autres nuits ne sont pas présumées.
+
+Pour Gemini Decision1, Lucie confirme au contraire d'attendre **Vertex/Google
+Cloud** avec ses crédits : aucune voie AI Studio ou facturation alternative
+n'est créée. La disponibilité Cloud annoncée ultérieurement reste à vérifier.
