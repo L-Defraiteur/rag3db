@@ -1195,3 +1195,22 @@ reste strict, sans exemption par nom ou relaxation de son invariant. Recette/
 source/ELF/budgetsidentiques à v3, preuve et unitésv4 neuves, PGv4 synthétique
 seulement si préflight vert ; INITIAL/DEADLINE v1 toujours conservés. Pas de
 rejeu Cargo, aucun résultat v3 inventé. Sourcecompilée d2 inchangée sur luciepc.
+
+### A — lib entière réellement verte v4, lecteur de verdict corrigé v5
+
+V4 source/ELF d2 identiques : **2222 réussis/0 échec/65 ignorés**, runtime46,58s,
+phase46,70s. Le vérificateur de noms a ensuite déclaré ROUGE : il comparait le
+nom de `sparse_index::tests::sparse_vector_mismatched_lengths - should panic`
+au nom inventorié sans ce suffixe. Unique omission du lecteur démontrée par
+comparaison complète des2287noms : ancien parser manque1, nouveau parser
+`(?: - should panic)?` reconnaît **exactement2222noms réussis**,65ignorés
+inventoriés. Preuve CPU sur logarchivé/SHA dans preuves-faits-lies-v5/preuve-parser.json.
+Les18faits,15aperçu et lien80 figurent réellement dans les succès. Aucun produit
+modifié, aucune lib rejouée pour corriger le lecteur.
+
+V4scopeinactive/poste0/4 ; aucun NAV/CLI. V5 conserve ce ROUGE de vérificateur,
+réutilise libv4verte/mapsréelles, F5/min/compilev2 ; source d2 et SHAELF immuables.
+**Seuls NAV40, CLI5, attestation/quiescence restent à exécuter**, dans deadline
+initiale20:27:04+3600. PGv4 déjà créée identifiée explicitement, sans reset ni
+nouvelle PG inutile. Nouveau répertoirepreuves/pilote/scopev5 ; sourceRemote
+inchangée. Le rapport final sera composé et ne décrira pas une passe sans incident.

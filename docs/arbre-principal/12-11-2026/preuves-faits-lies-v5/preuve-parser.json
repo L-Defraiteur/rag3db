@@ -1,0 +1,10 @@
+{
+  "log_sha256": "d71906fb27ceea953777fe44cfa4238383b38d1932bfd1fbd3cd476a8dd817ef",
+  "inventory_tests": 2287,
+  "ignored": 65,
+  "old_parser_missing": [
+    "sparse_index::tests::sparse_vector_mismatched_lengths"
+  ],
+  "new_parser_passed": 2222,
+  "exact_names_equal": true
+}
