@@ -771,3 +771,20 @@ quinze témoins métier. C7 autorise le nouveau ciblé600 après ce raccord, mê
 argv --no-default-features --lib -j8 et filtre transfer::tests, j8/Mem32, target
 unique32Go et lib29, mesure prioritaire. Source propre/hash/argv publiés avant
 lancement ; aucun transfert, service, base ou globale/master autorisé.
+
+### Ciblé v2 : compilation arrêtée sur deux helpers de témoins natifs
+
+Source privée **390b70185d3c466b3d1c5379c2d14b5f36ee71b6**, cfg mémoire80faa
+intégré séparément. Cargo test --no-default-features --lib, filtre aperçu transfert,
+j8/Mem32/lib29 : **rc101 en112,69s, aucun test joué**. L'import natif manquant
+n'est plus signalé ; deux helpers cfg(test) deviennent du dead_code fatal :
+read_pool.rs:196 Instantane::vieillir et backend.rs:4005 Backend::call_tool.
+Leurs appels sont dans les témoins natifs ; aucun de ces deux fichiers n'est
+modifié par ce lot. Attribution statique à cette surface de montage préexistante,
+pas de rouge métier du transfert, pas de preuve de correction globale du ticket.
+
+Preuves luciepc : cx-transfert-apercu-cible-v2/{cargo.log,source.json,resultat.json,VERDICT}.
+Source propre inchangée, portée inactive et place arbre rendue. Pas de retry
+inchangé ni de allow(dead_code) ajouté. Coordination demandée à C7 : qualification
+sélective des helpers par leurs propriétaires, ou ciblé natif du même aperçu
+sans prétendre prouver le minimal ; aucun backend partagé modifié par arbre.
