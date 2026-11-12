@@ -507,6 +507,10 @@ impl Garde {
     /// Les refus structurels restent prioritaires ; aucun acquis de famille n'est posé.
     #[cfg(feature = "code")]
     pub fn accorder_ligne(&self, ligne: &str, ctx: &Contexte) -> Result<Vec<String>, String> {
+        // Le mode standard n'expose pas de décision humaine différée.
+        if self.mode == Mode::Standard {
+            return Err("mode standard : aucun accord de ligne différé".into());
+        }
         let cle = Self::cle_ligne(ligne, ctx)?;
         let invocations = codeparsers::shell::decomposer(ligne).map_err(|r| r.to_string())?;
         if invocations.is_empty() { return Err("rien à accorder".into()); }
@@ -2412,6 +2416,18 @@ mod tests {
         assert_eq!(garde.juger_ligne("mkdir faits", &ctx).unwrap().decision, Decision::Demande);
         garde.accorder_ligne("mkdir faits", &ctx).unwrap();
         assert_eq!(garde.juger_ligne("mkdir faits", &sans_domaine).unwrap().decision, Decision::Demande);
+    }
+
+    #[test]
+    #[cfg(feature = "code")]
+    fn un_accord_differe_ne_change_pas_le_mode_standard() {
+        let domaine = tempfile::tempdir().unwrap();
+        let garde = Garde::new(Mode::Standard);
+        let ctx = ctx_dans(domaine.path());
+        assert!(garde.accorder_ligne("cat ../dehors.txt", &ctx).is_err());
+        assert_eq!(garde.juger_ligne("cat ../dehors.txt", &ctx).unwrap().decision, Decision::Refuse);
+        assert!(garde.accorder_ligne("mkdir faits", &ctx).is_err());
+        assert_eq!(garde.juger_ligne("mkdir faits", &ctx).unwrap().decision, Decision::Refuse);
     }
 
     /// **La lecture libre ne sort pas du domaine.** Chaque argument doit se
