@@ -1,6 +1,6 @@
 # Prouver le parcours agent de code complet de l'IDE
 
-- **État** : ouvert ; lot isolé autorisé pour la nuit après les correctifs des accords.
+- **État** : corrigé — source union `e4eaf4ef2` ; parcours réel hôte/IDE et globale verts, intégration préparée.
 - **Famille** : produit
 - **Gravité** : capacité principale ; l'atelier doit réellement explorer, modifier, tester et reprendre.
 - **Atteignable en service** : les outils existent ; leur parcours complet dans une session réelle reste à qualifier.
@@ -302,3 +302,30 @@ deadline initiale monotone878111.26244974 (pas un nouveau6000). La préparation,
 attente et la préunion sont comprises ; chaque phase conserve ses bornes ou le
 reste inférieur. Source publiée avant compilation. Aucun rejeu Vertex nécessaire
 pour cette union de code déjà attesté ; les suites service ne jouent qu’ici.
+
+## Verdict final composé et livraison préparée
+
+Union sourcee4 : F5 5/5, minimal0, lib2253/0/66 en46.86s, NAV40/0/0 en131.07s,
+lectures27/0/0 en9.54s, hôte13/0/0 en12.32s, PostgreSQL36/0/0 en7.48s ; filets
+2/0/0 à chaque entrée. Services BGE-M3 réel1024/sparse vérifiés avant/après,
+7879 rendu. Supervision union verte0/restes[]/nettoyé et quiescence indépendante[].
+Contrôle global borne supérieure1446.97s/6000, préunion/préparation comprises,
+deadline monotone878111.26244974 préservée, sans nouveau6000.
+
+Le helper Git est identique octet par octet à4d ; les témoins chat/UI et le helper
+navigateur sont identiques àfe0. Équivalences SHA persistées avec le verdict.
+Douze appels ont chacun un reçu unique, historique26→32 avec préfixe identique.
+La preuve réelle est composée des sources4d/fe0 et de cette union validée,
+aucun nouvel appel modèle simplement pour le rebase.
+
+Le lanceur e2e canonique pose `CARGO_INCREMENTAL=0` : il a produit un quatrième
+ELF e2e, également archivé/SHA, et les trois suites ont réellement joué sur lui.
+Les trois ELF préparés et celui effectivement exécuté restent distingués.
+Target29704553416octets<32Gio, source223gabarits, lib29 et cgroups32/HIGH0 relevés.
+Dossier privé2postes : `I-luciepc/parcours-agent-ide-20261112/globale-union/`,
+`verdict-compose.json`, équivalence-code, SHA/ELF, inventaires, JSON/HTML, logs,
+rouges et arrêts historiques. Aucun vert n’efface ces limites de provenance.
+
+Revues RO Git C7/Mémoire favorables, revue Mémoire deltaUI/stderr favorable ;
+préparation du push selon tour C7 puis contrôles et retrait gardé2postes.
+Cette livraison ne déploie ni ne redémarre le daemon personnel.
