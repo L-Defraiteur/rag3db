@@ -347,3 +347,10 @@ Source `cx-coeur-archive-0511` propre sur commit complet 0511dece7, preuves
 dans `annulation/cx-archive-privee-12nov-01/`, aucune archive produite ni
 lib modifiée. Pas de relance, créneau libéré pour recherche FTS via C7.
 Le ticket d’annulation porte la relecture de cet écart et la suite.
+
+Relecture spdlog préparée dans `12-11-2026/05-relecture-ecart-inclusion-spdlog.md` :
+0 macro différente et aucun en-tête spdlog dans les dépendances des 739 objets
+de référence VALID. Proposition d’option explicite d’inclusion, diff seulement
+dans les docs ; nécessite arbitrage d’identité de source avant application.
+Garde stricte conservée, aucune nouvelle configuration ou compilation ; recherche
+FTS utilise le créneau libéré. Suite portée par le même ticket d’annulation.

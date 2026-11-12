@@ -389,3 +389,20 @@ Reste : faire relire l’écart de configuration/inclusion et proposer une nouve
 configuration assortie sans élargir la garde. Aucun rebuild/second préflight
 automatique : priorité au préfixe recherche désormais autorisé. Archive
 assortie toujours absente, pilote/mesure toujours non prêts, ticket ouvert.
+
+### Relecture de configuration préparée pendant le slot recherche, sans relance
+
+Voir [comparaison spdlog et option d’alignement](../12-11-2026/05-relecture-ecart-inclusion-spdlog.md).
+0 différence de macros sur les mêmes 739 unités ; GNU16.2.1/64bit/ELF identiques.
+Lecture `ninja -t deps` de référence : 739 objets VALID, 267 507 lignes de
+dépendances, 0 en-tête sous spdlog. Aucun compilateur appelé pour cette lecture.
+Le chemin est ajouté par la configuration des tests ou du benchmark ; cela
+explique un refus de configuration, pas une régression démontrée du correctif.
+
+Proposition de revue : option dédiée RAG3DB_INCLUDE_SPDLOG_HEADERS ajoutant le
+chemin au même endroit, tests/benchmarks OFF, comparateur toujours strict. Le
+diff de proposition reste dans les docs, non appliqué ; il modifierait CMake
+et demanderait donc une identité de source/autorisation explicitement revue,
+incompatible avec l’affirmation « 0511 clean inchangé ». Cette contrainte est
+signalée, pas contournée. Aucun mélange d’objets ni nouvelle configuration/build
+pendant recherche FTS ; pas de relance automatique, revue attendue.
