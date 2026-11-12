@@ -271,6 +271,10 @@ fn preview(
     }
     if input.dense_debt { return Err(refusal(DenseDebt, "dense", "source declares unavailable dense values")); }
     cfg.validate().and_then(|_| target.validate()).map_err(|e| refusal(UnsupportedRecipe, "config", e))?;
+    if cfg.fields.values().chain(target.fields.values()).any(|f| f.boost.is_some_and(|v| !v.is_finite()))
+        || [cfg, target].iter().any(|c| c.snapshot.as_ref().is_some_and(|s| !s.max_missing_ratio.is_finite())) {
+        return Err(refusal(UnsupportedRecipe, "config", "non-finite config cannot be fingerprinted faithfully"));
+    }
     let derived = target.derived.as_ref().ok_or_else(|| refusal(UnsupportedRecipe, "target", "content derivation required"))?;
     let DerivedIdentity::Content { format } = &derived.identity else {
         return Err(refusal(UnsupportedRecipe, "target", "content identity required"));
