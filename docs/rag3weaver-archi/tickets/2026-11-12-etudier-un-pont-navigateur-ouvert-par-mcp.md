@@ -1,6 +1,6 @@
 # Étudier un pont navigateur ouvert par MCP
 
-- **État** : ouvert ; futur fork souhaité par Lucie, priorité au Chrome visible avec extension et passage de main humain ; candidats documentés, aucun prototype lancé.
+- **État** : ouvert ; Chrome visible avec extension et passage de main humain, cœur composable en Rust ; transcription ciblée du pont à étudier avant un portage complet, aucun prototype lancé.
 - **Famille** : produit
 - **Gravité** : planification ; permettre aux agents d'utiliser le navigateur depuis l'atelier.
 - **Atteignable en service** : non pour ce raccordement ; aucune capacité livrée par cette note.
@@ -56,3 +56,21 @@ Pour qualifier le futur prototype : Lucie peut rejoindre une page de connexion,
 agir pendant que l'agent attend, puis la même session reprend après observation
 de l'état réel. Vérifier aussi intervention annulée, onglet fermé ou navigation
 humaine inattendue. Aucun test sur compte réel ni installation engagé ici.
+
+## Précision : composabilité Rust et transcription ciblée
+
+Lucie demande de pouvoir réutiliser les capacités dans notre code Rust, au-delà
+d'un serveur MCP externe. Elle propose explicitement de transcrire seulement
+la partie qui parle à l'extension si son volume le permet, en gardant l'extension
+existante. Cette piste est prioritaire dans l'étude du futur fork.
+
+Identifier messages/transport/appairage et frontière extension/hôte ; mesurer
+code propre et dépendances avant d'estimer le portage. Proposer un cœur Rust
+appelable comme bibliothèque par rag3weaver, et une façade MCP sur les mêmes
+capacités pour les agents externes. Pas de logique métier dupliquée dans la
+façade ni d'orchestrateur d'agents importé par défaut.
+
+La comparaison attendue doit dire si ce petit pont suffit pour observation,
+actions, JavaScript, sessions et passage de main, ou quelles fonctions de l'hôte
+amont imposeraient un portage plus large. Contrat et schéma dans la vision ;
+aucune implémentation ni installation déclenchée par cette précision.

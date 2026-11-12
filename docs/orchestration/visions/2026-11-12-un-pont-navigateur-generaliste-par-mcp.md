@@ -64,9 +64,53 @@ navigateur. La fidélité du passage de main reste à qualifier en pratique.
 | **jackwener/browsermcp** | Projet distinct malgré le nom proche : extension BrowserMCP Connector, hôte local, session Chrome existante et outils MCP dont un espace JavaScript persistant. Licence Apache-2.0 indiquée. Intéressant pour l'emprunt puis la restitution d'un onglet humain. | [README](https://github.com/jackwener/browsermcp/blob/d6597aacbac2f8cb1094b523852b8f53cd15b0a7/README.md), [licence](https://github.com/jackwener/browsermcp/blob/d6597aacbac2f8cb1094b523852b8f53cd15b0a7/LICENSE) |
 
 Les liens d'installation sont dans ces guides ; aucune extension n'est installée
-par cette étude. La langue Rust des premiers candidats reste un intérêt technique,
-pas un motif pour perdre le parcours humain demandé. Un pont existant ou une
-adaptation ciblée peut être préférable à reconstruire le navigateur.
+par cette étude. Le parcours humain et la composabilité avec notre code Rust
+sont deux critères à satisfaire ensemble. Un pont existant ou une adaptation
+ciblée peut être préférable à reconstruire le navigateur.
+
+## Intégration Rust : d'abord le pont vers l'extension
+
+Lucie précise le but : conserver les synergies avec notre code, et pouvoir
+composer les capacités du navigateur dans rag3weaver. La seule disponibilité
+d'un serveur MCP externe ne remplit pas ce besoin de réutilisation interne.
+
+**Piste privilégiée à étudier : garder l'extension existante et transcrire en
+Rust seulement la partie qui lui parle.** Si cette partie est petite et son
+protocole clair, une transcription ciblée peut suffire. Le portage de tout le
+serveur Node/TypeScript, de Playwright ou de sa boucle d'agent n'est pas le but.
+L'extension peut conserver son implémentation JavaScript/TypeScript.
+
+Frontière proposée, pas encore implémentée :
+
+```text
+outils et traitements rag3weaver ──┐
+                                 ├── bibliothèque Rust de pont navigateur
+façade MCP pour les autres agents ┘               ⇅ protocole de l'extension
+                                         extension Chrome existante
+                                                 ⇅
+                                         onglets visibles de Lucie
+```
+
+Le cœur Rust doit être appelable comme bibliothèque : sessions et références
+d'onglets, observation, actions, exécution JavaScript, événements et erreurs
+utilisables sans faire passer nos appels internes par MCP. La façade MCP expose
+ces mêmes capacités ; elle ne doit pas contenir une seconde logique métier.
+Les outils déclaratifs de l'atelier composent ce cœur, tandis que leurs accords
+et leur orchestration restent portés par les contrats communs.
+
+L'étude de chaque candidat doit donc isoler le protocole réel entre extension
+et hôte : messages, transport, appairage, versions, sélection des onglets,
+déconnexion et cycle de vie. Mesurer le volume de code à transcrire et ce qu'il
+délègue à ses dépendances : un relais très court peut dépendre d'un moteur
+d'automatisation beaucoup plus vaste. Les fonctions fournies directement par
+l'extension et celles calculées par l'hôte doivent être distinguées.
+
+Si un petit pont suffit, proposer cette tranche avec des échanges de référence
+et des preuves de compatibilité avec la même extension : observation/action,
+JavaScript et résultats, passage de main humain, reprise et déconnexion. Si des
+comportements indispensables résident dans le serveur amont, nommer lesquels
+avant de choisir un portage plus large. Préserver licences et suivi de versions
+du protocole. Aucune transcription ni création de fork engagée par cette note.
 
 ## Passer la main, puis reprendre
 
