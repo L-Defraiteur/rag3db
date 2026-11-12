@@ -22,7 +22,8 @@ root="$E2E_TMP_PARENT/e2e_demon_hote"
 etat=$(creer_etat_suite_e2e "$root")
 printf 'livre-a-preserver\n' > "$etat/livre.json"
 terminer_etat_suite_e2e "$etat" 0 '' "$T/disque/non-utilise"
-[ ! -e "$etat" ] && residus_de_la_suite e2e_demon_hote
+[ ! -e "$etat" ]
+if ! residus_de_la_suite e2e_demon_hote; then echo 'ROUGE : état nettoyé refusé'; exit 1; fi
 printf 'OK état possédé seul : nettoyage et garde vert\n'
 
 etat=$(creer_etat_suite_e2e "$root")
@@ -47,7 +48,7 @@ etat=$(creer_etat_suite_e2e "$root")
 printf 'octets-demandes\n' > "$etat/livre.json"
 terminer_etat_suite_e2e "$etat" 0 1 "$T/disque/etat-garde"
 [ ! -e "$etat" ] && grep -qx 'octets-demandes' "$T/disque/etat-garde/livre.json"
-residus_de_la_suite e2e_demon_hote
+if ! residus_de_la_suite e2e_demon_hote; then echo 'ROUGE : état gardé refusé'; exit 1; fi
 printf 'OK GARDER=1 : octets conservés, TMPDIR propre\n'
 
 etat=$(creer_etat_suite_e2e "$root")
