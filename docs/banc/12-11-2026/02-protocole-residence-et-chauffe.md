@@ -287,3 +287,48 @@ n’est pas une provenance suffisante pour une mesure qui survivrait à un rebas
 ou rebâti. L’ancienne installation reste exclue de cette qualification.
 Le contrôleur final, les empreintes de ces exécutables et la fenêtre MESURE
 seront figés avant le réel ; le ticket de résidence reste ouvert.
+
+## Contrôleur préparé avant la mesure réelle
+
+Sources de harnais 51a782793 puis 52202603d :
+`tests/fixtures/residence/mesurer_prive.py`, `observation_gpu.py`,
+`activation_privee.py`. Vingt-deux filets Python CPU verts ; les dix concernant
+identité/chauffe/mémoire/nettoyage ont été rejoués après durcissement des groupes.
+Aucun acteur GPU n’a été lancé par ces vérifications.
+
+Le contrôle d’appartenance garde PID/starttime et groupes privés. Une fois
+le client terminé, l’arrêt de la ressource maintenue doit encore être rattaché
+à un PID/starttime de fournisseur observé ; sans identité prouvée, refus de tuer
+le groupe et blocage nommé. Les clients rendent leur usage avant l’arrêt forcé
+du privé, santé de maintien conservée ; groupe, port et mémoire sont ensuite
+attendus dans la même borne. Un port encore visible après exit n’est pas
+considéré immédiatement comme libéré.
+
+Deadline globale 1 200 s après acquisition de MESURE. Délais cumulés absolus
+pour les barrières initiales : 60/90/100 s pour A présent, B coordonné, A annulé ;
+B disponible avant t0+360 ; usages B et C au plus 60 s chacun, également bornés
+par t0+420/t0+480 ; arrêt du premier privé dans 60 s. D disponible dans 360 s
+et avant fin globale moins 180 s, son usage avant fin moins 120 s ; arrêt final
+dans la borne restante. Les budgets source d’activation restent 300 s et
+attente 360 s. Aucun de ces délais ne remet le budget global à zéro.
+
+Les captures /proc gardent executable SHA, argv, PID/start, FD et contenus,
+PCI/allocation et valeurs manquantes explicites. La première identité est
+prouvée avant usage ; un nouveau gate pour D impose de requalifier la nouvelle
+instance. Les compteurs absents restent inconnus, pas zéro ; dépassement de
+mémoire seat1 ou modification observée de ses compteurs arrête la chaîne.
+Modèle/dimension/factice, attestation profil/périphérique/recette et rapport
+chauffe embed sont contrôlés. Une chauffe partielle conserve ses erreurs ;
+une chauffe annoncée complète avec erreurs est refusée.
+
+Le consommateur 26522eb8c ajoute `gate_usage` optionnel après le bail :
+B/D attendent la preuve physique/santé avant leur raccordement et embed mesurés.
+Ce delta de harnais ne change pas le runtime. Une nouvelle copie immuable du
+consommateur est demandée à Embarquement ; l’ancienne copie reste préservée.
+Les binaires fournisseur/consommateur initiaux sont disponibles hors target,
+mais le plan final attend le hash de cette nouvelle copie et la revue des bornes.
+
+Le hachage préalable des poids réchauffe potentiellement le cache de fichiers :
+« froid » signifie ici nouveau processus et modèle non résident, pas cache disque
+ou pilote vierge. Les deux générations de chauffe ne doivent pas être présentées
+comme un essai matériel à caches identiques. Aucune sonde de charge sur card0.
