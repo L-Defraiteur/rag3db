@@ -860,3 +860,43 @@ pris depuis les lignes réellement exécutées ; attestation des220assets et SHA
 modèles4/6 de l'aperçu littéraux. La passe n'ajoute aucun transport/apply ni
 qualification des configs/faits : aperçu toujours explicitement non qualifié.
 Tickets migration et tty restent ouverts.
+
+### Passe complète autorisée de l'aperçu — verte, avant tour
+
+Source propre figée **20e4e2ffce839910fc3586b305ab0791e49c90ab**, branche3,
+code identique au ciblé390 après rebase MD seules. **rc0 en687,38s**, budget3600
+après lourd, portée3590+5, j8/Mem32/target32/lib29. Features**5/5** + minimum
+**cargo check --lib --no-default-features** verts ; bibliothèque**2167/0/64**,
+navigateur**39/0/0**, migration_preflight**5/0/0**,**1/1 suite**, sans résidu.
+Les quinze témoins de l'aperçu et le témoin natif liens80faa sont explicitement
+exigés et lus réussis dans lib.log. Les tests sans natif restent distincts et rouges
+sur les deux helpers de la dette tty ; la passe ne les rebaptise pas verts.
+
+Preuves luciepc `/home/lucied/.cache/rag3weaver-build/cx-passe-apercu-transfert-v1/` :
+logs, source.json/source-head, verdict-detaille.json, VERDICT, binaires conservés
+et binaires.sha256.json. SHA depuis chemins réellement exécutés :
+
+| Binaire | SHA256 |
+|---|---|
+| lib | eed8b033b76f196f1363ccf02042cfd734124f3ddc7d9a2fe39b7d70e306d8f9 |
+| navigateur | 0e75e80608e124cfb6f33a4066ca2634ab28f2b4c64c43dfc48298f511eb765e |
+| e2e | 3d6bc6923b16c9d3143f3059705722c37870711d553aa71e3833053438c7cd2b |
+| backend | c5517dc467e261baa0fe3a6cb4d445ec269f604d228d5e559bdd5488b9c1cc0f |
+
+Attestation ELF du navigateur :220assets présents,0manquant, table issue du .d,
+app.jsfff528ffdcbfb08c022c1249d0ec5ecc82a4caf4a010eaad4447ca7c3081bc00 et
+bundle6d317a42f06655af8d59d934bd6bb4ac4aba7be82794365e1c6a6e027f3fba43.
+Driver SHAd2194665910777dd205d9d10c897187c5c8643ede84b4f64c480a7b4fc944f17,
+launcher e8bfb4ddeef3d70ef998b94199975488bee78f6756ef076cdebeb3687e0ed8b3.
+
+Portée inactive/place arbre rendue, target8,4Go ; un lourd tiers tient encore
+1/4 place, donc aucune affirmation de poste global libre. TMPDIR navigateur
+/var/tmp/cx-pv.r3jqx4s9, sur btrfs, retiré uniquement après portée éteinte et
+succès ; preuve nettoyage-tmp-navigateur.json. PG privée fraîche
+cx_apercu_2191_20261112_v1 conservée pour revue puis dump/hash/drop autorisés après
+intégration. Aucun modèle/service/GPU nouveau ni base réelle consultée.
+
+README/nouveautés décrivent l'API de rapport, toujours
+UnqualifiedConfigAndSchemaFacts, aucune capacité de transfert/apply. Tickets
+migration et tty ouverts. Attente revue C7 puis tour explicite ; aucun push
+master, déploiement, publication de stockage ou migration réelle à cette étape.
