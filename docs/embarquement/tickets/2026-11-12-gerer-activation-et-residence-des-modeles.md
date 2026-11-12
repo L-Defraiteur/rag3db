@@ -370,3 +370,19 @@ fonctionnel n'est abaissé. La santé du nouveau BGE privé doit rapporter une
 chauffe complète non vide et sans erreur, en plus des vecteurs réellement
 calculés déjà contrôlés. Pas de témoin supplémentaire artificiel pour ce
 nettoyage de fixture ; garde des résidus et e2e réel jugeront son résultat.
+
+Banc signale sa mesure réelle verte (analyse à consolider par son porteur) :
+validation-bvdguacm VERT/restes=[], 23:54:31→23:54:37, durée5,866447 s.
+A annulé, B/C même PID1097632, reprise D PID1098406 ; chauffe complète16/16
+(1226/1170 ms), vrais vecteurs384 non factices, PCI04 et activité gfx. Deux
+privés arrêtés, port48329 absent et card2 revenue exactement à17212403712 octets.
+La fenêtre est rendue ; aucun nouveau modèle partagé à arrêter. Les mesures
+du banc viennent d'une vraie acquisition avant raccordement à chaud, pas d'un
+chronométrage froid direct de connect_embedder.
+
+Recette e2e complétée avant entrée : check_features des fixtures modifiées
+plafonné300 s dans les1800 s existants du mode demon, pas de budget ajouté ;
+santé7879 avant/après incluse au mode spans. Observation GPU des seuls privés
+dans la portée, données manquantes inconnues ; réutiliser capture du banc au
+lieu d'inventer une logique de placement dans le produit. MainPID des services
+peut être relu hors portée privée, sans ouvrir le bus utilisateur dans la suite.
