@@ -57,6 +57,22 @@ Remèdes possibles pour la course, **à choisir (ils touchent la conception de l
 3. la fixture réessaie quand l'identité trouvée n'est pas la sienne : simple, mais cache la course
    au lieu de l'ôter.
 
+## Remède retenu (c7, 13 novembre) : le port 0 annoncé par le fournisseur
+
+`serveur::activation::acquerir` accepte une adresse locale de port 0. Le fournisseur se lie
+lui-même et annonce l'adresse prise (`LIGNE_ADRESSE`, comme le démon d'embarquement) ; elle est
+retenue à côté du verrou, au dossier de coordination (`<adresse>.adresse`, écrit puis renommé), et
+une activation suivante la sonde sous le verrou avant de lancer : elle ne s'y attache que si le
+fournisseur y répond, sinon elle relance. `adresse_retenue(coordination, adresse)` la lit. La
+fixture du test déclare le port 0 et ne réserve plus de port. Une adresse fixe reste possible.
+
+Témoin, rouge sur l'ancien code (qui refusait le port 0) :
+`model_source::activation::tests::une_activation_sur_port_nul_annonce_son_adresse_et_la_retrouve`
+(deux demandes, un seul démarrage du fournisseur, la seconde retrouve l'adresse prise).
+
+Si le rouge de la lib entière revient avec le port 0, la seconde piste (le python lent sous charge,
+5 s de budget) reste ouverte, et ce ticket aussi.
+
 ## Ce qu'il faut pour le fermer
 
 Retrouver le message, en rejouant la lib entière avec la sortie complète gardée. Puis départager
