@@ -10,6 +10,7 @@
 //! récente. Elle n'est admise que si elle est unique ; sinon, la branche est ambiguë, et sa parente
 //! se demande à l'ouverture, jamais choisie en silence.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 /// Comment une parente est connue.
@@ -45,8 +46,100 @@ pub enum EtatDeBranche {
 /// autres, connues. `suivies` est la déclaration (l'ancre y est toujours, même absente de la
 /// liste) ; une branche suivie qui n'existe pas dans le dépôt est une erreur nommée.
 pub fn etat_des_branches(depot: &Path, ancre: &str, suivies: &[String]) -> Result<Vec<EtatDeBranche>, String> {
-    let _ = (depot, ancre, suivies);
-    Ok(Vec::new())
+    let pointes = pointes_des_branches(depot)?;
+    let pointe = |nom: &str| -> Result<String, String> {
+        pointes.get(nom).cloned().ok_or_else(|| format!("branche suivie « {nom} » absente du dépôt {}", depot.display()))
+    };
+    let mut declarees: BTreeSet<String> = suivies.iter().cloned().collect();
+    declarees.insert(ancre.to_string());
+    for nom in &declarees {
+        pointe(nom)?;
+    }
+    let mut etats = vec![EtatDeBranche::Ancre { branche: ancre.to_string(), pointe: pointe(ancre)? }];
+    for branche in declarees.iter().filter(|b| b.as_str() != ancre) {
+        let ici = pointe(branche)?;
+        // Les candidates : les autres branches suivies, sauf celles qui contiennent déjà toute
+        // celle-ci (ses filles, ou une branche à la même pointe) — une parente est derrière.
+        let mut fourches: Vec<(String, String, String)> = Vec::new(); // (candidate, pointe, fourche)
+        for candidate in declarees.iter().filter(|c| *c != branche) {
+            let la = pointe(candidate)?;
+            if est_ancetre(depot, &ici, &la)? {
+                continue;
+            }
+            fourches.push((candidate.clone(), la.clone(), git(depot, &["merge-base", &ici, &la])?));
+        }
+        // Les plus récentes : une fourche qui n'est l'ancêtre strict d'aucune autre.
+        let mut recentes: Vec<&(String, String, String)> = Vec::new();
+        for f in &fourches {
+            let mut depassee = false;
+            for g in &fourches {
+                if g.2 != f.2 && est_ancetre(depot, &f.2, &g.2)? {
+                    depassee = true;
+                    break;
+                }
+            }
+            if !depassee {
+                recentes.push(f);
+            }
+        }
+        let parente = |c: &(String, String, String)| Parente { branche: c.0.clone(), genre: GenreDeParente::Inferee, base: c.2.clone() };
+        let etat = match recentes.as_slice() {
+            // Une seule : certaine si c'est l'ancre, ou si la branche part de sa pointe (sa pointe
+            // est derrière la fourche). Sinon les deux histoires divergent après un point commun,
+            // et git ne dit pas laquelle est partie de l'autre.
+            [c] if c.0 == ancre || c.1 == c.2 => EtatDeBranche::Suivie { branche: branche.clone(), pointe: ici, parente: parente(c) },
+            [c] => EtatDeBranche::Ambigue { branche: branche.clone(), pointe: ici, candidates: vec![c.0.clone()] },
+            // Plusieurs à la même fourche : si l'ancre en est, la fourche est sur l'ancre, et les
+            // autres n'ont rien de propre en commun avec la branche.
+            plusieurs => match plusieurs.iter().find(|c| c.0 == ancre) {
+                Some(c) => EtatDeBranche::Suivie { branche: branche.clone(), pointe: ici, parente: parente(c) },
+                None => EtatDeBranche::Ambigue {
+                    branche: branche.clone(),
+                    pointe: ici,
+                    candidates: plusieurs.iter().map(|c| c.0.clone()).collect(),
+                },
+            },
+        };
+        etats.push(etat);
+    }
+    for (branche, la) in &pointes {
+        if !declarees.contains(branche) {
+            etats.push(EtatDeBranche::Connue { branche: branche.clone(), pointe: la.clone() });
+        }
+    }
+    Ok(etats)
+}
+
+/// Les branches locales du dépôt et leur pointe.
+fn pointes_des_branches(depot: &Path) -> Result<BTreeMap<String, String>, String> {
+    let sortie = git(depot, &["for-each-ref", "--format=%(refname:short) %(objectname)", "refs/heads"])?;
+    Ok(sortie
+        .lines()
+        .filter_map(|l| l.split_once(' ').map(|(n, h)| (n.to_string(), h.to_string())))
+        .collect())
+}
+
+/// `a` est-il l'ancêtre de `b` (ou `b` lui-même) ?
+fn est_ancetre(depot: &Path, a: &str, b: &str) -> Result<bool, String> {
+    let o = std::process::Command::new("git")
+        .arg("-C").arg(depot)
+        .args(["merge-base", "--is-ancestor", a, b])
+        .output()
+        .map_err(|e| format!("git : {e}"))?;
+    match o.status.code() {
+        Some(0) => Ok(true),
+        Some(1) => Ok(false),
+        _ => Err(format!("git merge-base --is-ancestor {a} {b} : {}", String::from_utf8_lossy(&o.stderr).trim())),
+    }
+}
+
+fn git(depot: &Path, args: &[&str]) -> Result<String, String> {
+    let o = std::process::Command::new("git").arg("-C").arg(depot).args(args).output().map_err(|e| format!("git : {e}"))?;
+    if o.status.success() {
+        Ok(String::from_utf8_lossy(&o.stdout).trim().to_string())
+    } else {
+        Err(format!("git {} : {}", args.join(" "), String::from_utf8_lossy(&o.stderr).trim()))
+    }
 }
 
 #[cfg(test)]
