@@ -36,6 +36,7 @@ fn declarations() -> DeclarationSnapshot {
             ("name".into(), field(FieldType::String, false)),
             ("docstring".into(), field(FieldType::Text, false)),
             ("body".into(), field(FieldType::Text, true)),
+            ("content".into(), field(FieldType::Text, true)),
             ("file".into(), field(FieldType::String, false)),
             ("start_line".into(), field(FieldType::Int64, false)),
             ("end_line".into(), field(FieldType::Int64, false)),
@@ -103,6 +104,11 @@ fn records() -> Vec<BTreeMap<String, CypherValue>> {
                     "body".into(),
                     text(o["render_input"]["body"].as_str().unwrap()),
                 ),
+                // Explicit rendered-text coordinate domain, separate from raw body/file lines.
+                ("content".into(), text(&format!("{}\n{}\n{}",
+                    o["render_input"]["name"].as_str().unwrap(),
+                    o["render_input"]["docstring"].as_str().unwrap(),
+                    o["render_input"]["body"].as_str().unwrap()))),
                 ("file".into(), text(o["position"]["file"].as_str().unwrap())),
                 (
                     "start_line".into(),
@@ -187,7 +193,7 @@ fn runner(dir: &Path) -> (MigrationRunner, BTreeMap<String, String>, Vec<Lexical
 fn verify_exact_fixture(owned: &OwnedPhysicalIndex) {
     let catalog = owned.catalog().unwrap();
     let cat = catalog.lock().unwrap();
-    let rows=cat.execute_raw("MATCH (s:Snippet) RETURN s._uuid,s.occurrence_id,s.name,s.docstring,s.body,s.file,s.start_line,s.end_line,s._org,s._project ORDER BY s.occurrence_id").unwrap().rows;
+    let rows=cat.execute_raw("MATCH (s:Snippet) RETURN s._uuid,s.occurrence_id,s.name,s.docstring,s.body,s.content,s.file,s.start_line,s.end_line,s._org,s._project ORDER BY s.occurrence_id").unwrap().rows;
     let expected = records()
         .iter()
         .map(|record| {
@@ -197,6 +203,7 @@ fn verify_exact_fixture(owned: &OwnedPhysicalIndex) {
                 record["name"].clone(),
                 record["docstring"].clone(),
                 record["body"].clone(),
+                record["content"].clone(),
                 record["file"].clone(),
                 record["start_line"].clone(),
                 record["end_line"].clone(),
@@ -220,6 +227,7 @@ fn verify_exact_fixture(owned: &OwnedPhysicalIndex) {
         record.insert("_uuid".into(), text(&uuid));
         let context = render_context(&record, &BTreeMap::new());
         let rendered = render_fields(derived, &context).unwrap();
+        assert_eq!(record["content"], text(&rendered["content"]), "source coordinate text must exactly equal the indexed rendering");
         let version = derived_content_uuid(
             "SnippetContent",
             "synthetic-snippet-content:v1",

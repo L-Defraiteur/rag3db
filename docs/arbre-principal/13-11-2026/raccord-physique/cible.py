@@ -5,7 +5,7 @@ import hashlib, json, mmap, os, re, shutil, subprocess, sys, time
 W=Path('/home/lucied/.cache/rag3weaver-build/cx-wt-raccord-physique')
 C=W/'extension/rag3weaver'
 T=Path('/home/lucied/.cache/rag3weaver-build/cx-target-contenu-derive')
-P=Path('/home/lucied/.cache/rag3weaver-build/cx-raccord-physique-cible-v4')
+P=Path('/home/lucied/.cache/rag3weaver-build/cx-raccord-physique-cible-v5')
 NATIVE='rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
 SOURCE=sys.argv[1]
 CONTINUE='--existing-v3' in sys.argv[2:]
@@ -142,10 +142,13 @@ try:
         assert exact+': test' in listing
         result=run(name,wrapper+[exact,'--exact','--nocapture','--test-threads=1'],cwd=Path('/var/tmp'))
         assert re.search(r'test result: ok\. 1 passed; 0 failed; 0 ignored;',result)
-    result=run('physical',wrapper+['dataflow::migrations::physical_index::tests::','--show-output','--test-threads=1'],cwd=Path('/var/tmp'))
-    passed=set(re.findall(r'^test (.*?)(?: - should panic)? \.\.\. ok$',result,re.M))
-    assert expected<=passed,(expected-passed)
-    assert re.search(r'test result: ok\. 10 passed; 0 failed; 0 ignored;',result)
+    native_results=[]
+    for index,exact in enumerate(sorted(expected)):
+        result=run(f'physical-{index:02}',wrapper+[exact,'--exact','--show-output','--test-threads=1'],cwd=Path('/var/tmp'))
+        assert re.search(r'test result: ok\. 1 passed; 0 failed; 0 ignored;',result),exact
+        assert exact in set(re.findall(r'^test (.*?)(?: - should panic)? \.\.\. ok$',result,re.M)),exact
+        native_results.append(result)
+    result='\n'.join(native_results)
     witnesses=[json.loads(line.split('PHYSICAL_WITNESS ',1)[1]) for line in result.splitlines() if 'PHYSICAL_WITNESS ' in line]
     assert {w['stage'] for w in witnesses}=={'normal-reopen','before-logical-commit','after-logical-commit','before-logical-commit:2','after-logical-commit:2','after-lexical-durability','after-publication'}
     assert all(w['occurrences']==8 and w['content_versions']==6 and w['dense_models']==0 for w in witnesses)
