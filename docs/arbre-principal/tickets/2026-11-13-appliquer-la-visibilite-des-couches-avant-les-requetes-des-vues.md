@@ -43,3 +43,7 @@ Preuves e6e6b8677 publiées avant édition ; rapport37 corrige uniquement les hu
 ## Blocage de préparation pilote9625 — aucun reçu consommé
 
 RO indépendante et contrôle final owner : driver L7 gardait assertAPP193 alors que le lanceur transmet APPd9aa via provenance. Échec déterministe avant P.mkdir/try ;9625 retiré sans exécution. Correctif requis : seule assertion APPcourante vers d9aa, conserver193 dans chaîne de cache, ajouter témoin AST des identités top-level lanceur→provenance→driver. Aucune modification sourceRust ni budget, revue du nouveau pilote avant GOdistinct.
+
+## Rouge correctivev2 — observation Cargo non attribuée
+
+Rapport39 : d9aa/d7, reprise193→cfgVERTE, troisjeuxF8VERT puis tentativeCargojeu4 septchampsNone. Premierrougeimmuable/préservation59fichiers/manifestev2 ; aucunrcjeu4/ELF/runtimequalifié. Pas de diagnostic causal par polling perdu ni retryidentique ; observation cohérente à préparer sous GOdistinct/ENDoriginal. Target désormaisWTcfgd9aa, preuvesv1/CPUhistoriques préservées ; ticket ouvert.
