@@ -30,6 +30,11 @@ pub fn get(name: &str) -> Option<&'static [u8]> {
     BUILTIN.binary_search_by(|(n, _)| (*n).cmp(name)).ok().map(|i| BUILTIN[i].1)
 }
 
+/// Les noms des gabarits livrés sous `prefixe` (`themes/`), dans l'ordre des noms.
+pub fn names_under(prefixe: &str) -> impl Iterator<Item = &'static str> + '_ {
+    BUILTIN.iter().map(|(n, _)| *n).filter(move |n| n.starts_with(prefixe))
+}
+
 /// L'empreinte du contenu embarqué : le nom du dossier où il est extrait.
 fn fingerprint() -> &'static str {
     static F: OnceLock<String> = OnceLock::new();
