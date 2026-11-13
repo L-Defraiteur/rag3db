@@ -41,3 +41,60 @@ Log luciepc `~/.cache/embarquement-notes/activation/cpu-c.log`.
 Ces fichiers ne sont pas modifiés par la tranche d'embarquement.
 La prochaine qualification utilise `rag3db-native,code,daemon`, jeu supporté
 par les passes usuelles, avec la lib épinglée et aucun GPU requis.
+
+## Reprise autorisée après la livraison du parcours IDE — 13 novembre
+
+Les preuves initiales viennent de l'ancienne source ; vérifier d'abord les
+frontières de features sur le master qui intègre ED43e4f185b et Embar23ceed87b.
+ED reprend ce défaut existant après son nettoyage terminé, dans un worktree
+neuf. Le périmètre est boîte, lifecycle et usages d'outils sous leurs features
+réellement nécessaires ; ni nouveau comportement d'agent ni feature native
+ajoutée par défaut pour cacher la dépendance.
+
+Publier le diagnostic actuel, le contrat de features retenu et la recette CPU
+bornée avant compilation. Corriger les gardes/imports si les combinaisons sont
+bien supportées, puis prouver le jeu minimal sans natif, daemon seul et
+daemon+natif sans code, ainsi que le parcours de découverte concerné. Un refus
+volontaire doit être explicite et cohérent avec le contrat publié, pas un E0433
+accidentel ni une exclusion silencieuse des témoins. Pas de modèle/service/PG
+pour ce ciblé ; source figée, poste et plafond mémoire réels, lib épinglée pour
+la combinaison native. Premier rouge inattendu arrêté et diagnostiqué.
+
+Coordonner les rares fichiers partagés avec Archi ; son lot grep garde ses
+outils/Plans. Aucun ancien worktree nettoyé n'est rouvert, aucune pose du daemon
+personnel. Revue et passe adaptée avant tour master ; clôture seulement après
+correction et preuves des combinaisons réellement annoncées.
+
+## Diagnostic ED sur master7308544ce et contrat retenu
+
+Worktree neuf `cx-ed-frontieres-boite`, branche homonyme ; aucun Cargo lancé
+à ce constat. Cargo conserve `default=[]`, `daemon` ne demande ni `code` ni
+`rag3db-native`. La boîte HTTP et la découverte d’une fiche existante sont donc
+supportées avec daemon seul ; l’hôte natif reste sous daemon+natif.
+
+Couplages encore présents : mail120 appelle lifecycle exclu sous daemon seul ;
+lifecycle utilise le moteur uniquement pour engine_build_id et l’identité du
+protocole via daemon_host::SERVICE. L’identité doit être commune client/serveur,
+sans importer le serveur. Chat835/836 traite read_file via une constante du
+module exclusivement code ; l’import du trait Boite des tests livraison n’est
+utilisé que par leurs cas code. Pas de dépendance native ajoutée par défaut.
+Archi réserve code_tools/grep et symbol_navigation, pas ces fichiers ; frontière
+communiquée avant édition. Aucun plan global partagé édité.
+
+Recette initiale CPU AVANT correction : source publiée, luciepc seulement,
+poste réel/Max32G/HIGH0/j8/target privé neuf. Portée900s inclut cleanup ;
+`cargo check --lib --no-default-features` <=300s doit être vert, puis même
+commande avec `--features daemon` <=300s reproduit le E0433 connu et STOPPE.
+Aucun troisième jeu après ce rouge ; logs et quiescence conservés. Aucune
+variable native pour ces deux commandes, aucun modèle/service/PG/navigateur,
+aucune lecture de configuration personnelle ; bus privé du lanceur commun seul.
+
+Après diagnostic du rouge : source corrective et recette publiées avant ciblé.
+Frontières attendues : minimum réellement sans features, daemon seul, puis
+rag3db-native+daemon SANS code. Lib29 épinglée uniquement pour la dernière.
+Tests de découverte sur fiches synthétiques (valide/absente/corrompue) sans
+modifier ENV global, sans HTTP écoutant, sans appeler ensure/answers ni lancer
+un hôte. Compiler l’API publique depuis_daemon_json sous daemon seul et préserver
+les règles du jeton et l’identité du service. Gardes/imports de code ajustés
+sans élargir les outils accessibles. Arrêt au premier rouge inattendu ; revue
+et passe adaptée avant tour C7, pas de clôture sur un simple check natif/code.
