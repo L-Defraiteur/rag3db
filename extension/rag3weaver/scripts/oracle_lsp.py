@@ -10,7 +10,9 @@ d'usage (définition, puis déclaration), et le verdict tombe :
 - faux : le serveur désigne autre chose ;
 - décl : il désigne la mention même — c'est une déclaration (un en-tête qui déclare ce que la
   cible définit), pas un usage ;
-- muet : il ne rend rien (macro, code non compilé, nom absent de la ligne) ;
+- muet : interrogé, il ne rend rien (macro, code non compilé) ;
+- non interrogé : rien sur la ligne ne nomme la cible (ni son nom, ni un nom qu'un import lie vers
+  elle) : aucune question n'est partie (voir `mentions_a_interroger`) ;
 - liaison d'import (juge strict) : notre cible lie le nom à un module hors de l'arbre, et le serveur
   ne rend que ce module (voir `liaison_d_import`) ;
 - réexportation (juge strict) : le serveur rend la ligne qui lie le nom dans le fichier de la mention,
@@ -135,6 +137,74 @@ def reexportation(rendu, a, racine):
         return False
     texte = lignes(de)
     return bool(rendu) and all(f == de and 1 <= l <= len(texte) and lie_le_nom(texte[l - 1], a["nom"]) for f, l in rendu)
+
+
+def noms_lies(texte):
+    """Les noms qu'une ligne d'import lie dans son fichier : `import X from`, `import { a, b as c } from`,
+    `import * as ns from`, `const X = require(…)`, `const { a, b: c } = require(…)`."""
+    m = re.match(r"\s*import\s+(.+?)\s+from\s+['\"]", texte)
+    if not m:
+        m = re.match(r"\s*(?:const|let|var)\s+(\{[^}]*\}|[A-Za-z_$][\w$]*)\s*=\s*require\s*\(", texte)
+    if not m:
+        return []
+    noms = []
+    for part in re.split(r",(?![^{]*\})", m.group(1)):
+        part = part.strip()
+        if part.startswith("{"):
+            for e in part.strip("{}").split(","):
+                e = e.strip()
+                if e:
+                    noms.append(re.split(r"\s+as\s+|\s*:\s*", e)[-1].strip())
+        elif part.startswith("*"):
+            noms.append(part.split()[-1])
+        elif part:
+            noms.append(part.split()[-1])
+    return [n for n in noms if re.fullmatch(r"[A-Za-z_$][\w$]*", n)]
+
+
+def source_d_import(texte):
+    m = re.search(r"(?:from|require\s*\()\s*['\"]([^'\"]+)['\"]", texte)
+    return m.group(1) if m else ""
+
+
+def designe(source, de, vers):
+    """Un import relatif de `de` désigne-t-il le fichier `vers` (chemins relatifs à la racine) ?"""
+    if not source.startswith("."):
+        return False
+    base = os.path.normpath(os.path.join(os.path.dirname(de), source))
+    sans = os.path.splitext(vers)[0]
+    return base in (vers, sans) or os.path.splitext(base)[0] == sans or os.path.join(base, "index") == sans
+
+
+def mentions_a_interroger(a, ligne, racine):
+    """**Le nom réellement mentionné** (ticket « l'oracle cherche la cible au lieu du nom mentionné »,
+    13 novembre 2026) : le nom de la cible s'il est sur la ligne ; sinon les noms qu'une ligne d'import
+    lie dans la cible (une zone de liaison, la ligne d'un import) ; sinon les noms qu'un import du
+    fichier de la mention lie depuis le fichier de la cible (un alias). Rend [(nom, colonne)], vide si
+    rien sur la ligne ne nomme la cible — alors aucune question ne part, et le verdict le dit."""
+    vus, out = set(), []
+
+    def ajouter(nom):
+        m = re.search(rf"(?<![\w$.]){re.escape(nom)}\b", ligne)
+        if m and nom not in vus:
+            vus.add(nom)
+            out.append((nom, m.start()))
+
+    ajouter(a["nom"])
+    if not out:
+        for t in lignes(os.path.join(racine, a["vers"]))[a["debut"] - 1:a["fin"]]:
+            for n in noms_lies(t):
+                ajouter(n)
+    if not out:
+        for t in lignes(os.path.join(racine, a["de"])):
+            if designe(source_d_import(t), a["de"], a["vers"]):
+                for n in noms_lies(t):
+                    ajouter(n)
+    return out
+
+
+# L'ordre des verdicts quand plusieurs noms sont interrogés : le meilleur l'emporte.
+RANG = {"juste": 0, "liaison d'import": 1, "réexportation": 2, "décl": 3, "en-tête seul": 4, "faux": 5, "muet": 6, "non interrogé": 7}
 
 
 class Serveur:
@@ -358,7 +428,7 @@ def main():
     t0 = time.time()
     pret = not indexe
     with open(sortie, "w") as out:
-        out.write("verdict\tmarque\tappelant\tfichier:ligne\tnom\tnotre cible\tserveur\n")
+        out.write("verdict\tmarque\tappelant\tfichier:ligne\tnom\tnotre cible\tserveur\tnom interrogé\n")
         for fichier, liste in par_fichier.items():
             chemin = os.path.join(racine, fichier)
             if not os.path.exists(chemin):
@@ -378,26 +448,27 @@ def main():
                         s.ouvrir(c, langue_de(langues, c))
                         cibles.append(c)
             for a in liste:
-                verdict, rendu = "muet", []
-                if 1 <= a["ligne"] <= len(lignes):
-                    m = re.search(rf"\b{re.escape(a['nom'])}\b", lignes[a["ligne"] - 1])
-                    if m:
+                verdict, rendu, interroge = "non interrogé", [], ""
+                candidats = mentions_a_interroger(a, lignes[a["ligne"] - 1], racine) if 1 <= a["ligne"] <= len(lignes) else []
+                for nom_m, colonne in candidats:
+                    v_m, rendu_m = "muet", []
+                    if True:
                         # Un serveur qui indexe le projet ne répond qu'une fois prêt : la première
                         # question se repose jusqu'à une réponse, dix minutes au plus pour toute la
                         # passe ; ensuite, une réponse vide se repose deux fois, à dix secondes,
                         # puisqu'un serveur qui a répondu une fois peut indexer encore.
                         essais = 0
                         while True:
-                            rendu = []
+                            rendu_m = []
                             for methode in ("textDocument/definition", "textDocument/declaration"):
-                                rendu += s.positions(methode, chemin, a["ligne"] - 1, m.start())
+                                rendu_m += s.positions(methode, chemin, a["ligne"] - 1, colonne)
                             # Strict : une cible ouverte à l'instant peut n'être pas encore indexée ;
                             # sans position en elle, la question se repose trois fois, à deux secondes.
-                            if STRICT and rendu and not dans_la_cible(rendu, a, racine) and essais < 3 and os.path.join(racine, a["vers"]) in s.ouverts:
+                            if STRICT and rendu_m and not dans_la_cible(rendu_m, a, racine) and essais < 3 and os.path.join(racine, a["vers"]) in s.ouverts:
                                 essais += 1
                                 time.sleep(2)
                                 continue
-                            if rendu or not indexe:
+                            if rendu_m or not indexe:
                                 break
                             if not pret and time.time() < t0 + 600:
                                 time.sleep(5)
@@ -407,32 +478,36 @@ def main():
                                 break
                             time.sleep(10)
                         pret = True
-                        if rendu and STRICT:
-                            if dans_la_cible(rendu, a, racine):
-                                verdict = "juste"
-                            elif all(f == chemin and l == a["ligne"] for f, l in rendu):
-                                verdict = "décl"
-                            elif all(os.path.splitext(f)[1] in EN_TETES for f, _ in rendu):
+                        if rendu_m and STRICT:
+                            if dans_la_cible(rendu_m, a, racine):
+                                v_m = "juste"
+                            elif all(f == chemin and l == a["ligne"] for f, l in rendu_m):
+                                v_m = "décl"
+                            elif all(os.path.splitext(f)[1] in EN_TETES for f, _ in rendu_m):
                                 # Le serveur ne rend qu'une déclaration d'en-tête, même la cible
                                 # ouverte : ni juste ni faux, compté à part.
-                                verdict = "en-tête seul"
-                            elif liaison_d_import(rendu, a, racine):
-                                verdict = "liaison d'import"
-                            elif reexportation(rendu, a, racine):
-                                verdict = "réexportation"
+                                v_m = "en-tête seul"
+                            elif liaison_d_import(rendu_m, dict(a, nom=nom_m), racine):
+                                v_m = "liaison d'import"
+                            elif reexportation(rendu_m, dict(a, nom=nom_m), racine):
+                                v_m = "réexportation"
                             else:
-                                verdict = "faux"
-                        elif rendu:
-                            if any(meme_entite(f, l, a, racine, scopes) for f, l in rendu):
-                                verdict = "juste"
-                            elif all(f == chemin and l == a["ligne"] for f, l in rendu):
-                                verdict = "décl"
+                                v_m = "faux"
+                        elif rendu_m:
+                            if any(meme_entite(f, l, a, racine, scopes) for f, l in rendu_m):
+                                v_m = "juste"
+                            elif all(f == chemin and l == a["ligne"] for f, l in rendu_m):
+                                v_m = "décl"
                             else:
-                                verdict = "faux"
+                                v_m = "faux"
+                    if RANG[v_m] < RANG[verdict]:
+                        verdict, rendu, interroge = v_m, rendu_m, nom_m
+                    if verdict == "juste":
+                        break
                 verdicts[verdict] += 1
                 par_marque[a["marque"]][verdict] += 1
                 rendus = ";".join(f"{os.path.relpath(f, racine)}:{l}" for f, l in rendu[:2])
-                out.write(f"{verdict}\t{a['marque']}\t{a['appelant']}\t{a['de']}:{a['ligne']}\t{a['nom']}\t{a['vers']}:{a['debut']}-{a['fin']}\t{rendus}\n")
+                out.write(f"{verdict}\t{a['marque']}\t{a['appelant']}\t{a['de']}:{a['ligne']}\t{a['nom']}\t{a['vers']}:{a['debut']}-{a['fin']}\t{rendus}\t{interroge}\n")
             s.fermer(chemin)
             for c in cibles:
                 s.fermer(c)
