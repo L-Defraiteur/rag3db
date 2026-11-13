@@ -224,3 +224,13 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   arbre principal a trié ses douze rouges de 1a (neuf lectures en dur → une aide commune des tests ; la
   relation interne ScopeContent_DERIVED_FROM masquée des outils de graphe ; un vrai rouge à comprendre :
   deux fichiers qui partagent une version, l'un retiré, l'appel d'un tiers ne gagne pas son arête).
+- **18 h 26, la CI est verte et son ticket fermé** (arbre principal, f61156910, run 43466739505 sur 327c3bba4 qui
+  contient le correctif). **Le vrai rouge de 1a est compris, pas un trou de conception** : une garde du
+  mécanisme générique de Codex (`check_fts_counts`, `comptes_du_plein_texte`) comparait les documents du
+  plein texte porté par ScopeContent (par version) aux lignes de Scope (par occurrence), concluait à une
+  écriture perdue et rebâtissait l'index à chaque ouverture, ressuscitant l'occurrence du fichier retiré ;
+  correctif : compter les lignes de la table qui porte l'index ; témoin direct en rouge. recherche : le lot
+  du journal des runs vert sous 835d5298f à un rouge connu près (le raccord, dont le correctif est sur master
+  depuis sa base) ; « à toi » après embarquement, rejeu court qui doit le voir vert. archi : « dire vrai »
+  en passe (réindexation en échec dite en échec ; une décision prise pendant le tour relance après ; le
+  journal des décisions avant l'accord ; un test de Codex qui qualifiait l'ancien contrat passé au nouveau).
