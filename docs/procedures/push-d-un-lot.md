@@ -173,6 +173,13 @@ se jouent par `python3 scripts/test_confiner_validation.py`, sans Cargo/bus rée
   si du code est arrivé sous `extension/rag3weaver` (hors `.md`, hors `src/` et `test/` du moteur,
   qui ne sont pas liés par la lib épinglée), **la passe se rejoue** sur le nouveau master ; des docs
   ou du C++ du moteur seuls : rebase sans rejeu.
+  **Ce qui compte comme du code** (13 novembre 2026, `tools/poste/push_garde.sh --code-apporte`) : le
+  Rust, le Cargo, `src/`, `ir/`, `ui/`, les gabarits, les tests, `tools/rust_api`, `extension/vector`, le
+  sous-module, les scripts de passe, et tout fichier dont le nom apparaît dans ce code ou dans un script
+  qu'il appelle ; un outil de mesure que rien de joué n'appelle (`scripts/oracle_lsp.py`) compte comme de
+  la doc. La garde vit dans le dépôt (`tools/poste/`, son témoin `test_push_garde.sh`) ; la copie qu'exécute
+  `poste push` est `~/.cache/rag3weaver-build/push_garde.sh` aux deux postes, recopiée après chaque
+  changement.
 - **Le garde du rebase en conflit**, juste après le rebase et avant toute lecture de HEAD :
 
   ```bash
