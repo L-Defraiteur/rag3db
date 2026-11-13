@@ -2195,3 +2195,9 @@ ColumnType::Text et défaut NULL, sans changement de sens du journal. Lien causa
 au rejeu reste hypothèse à qualifier, pas un défaut SDK démontré ; C++ sollicité
 RO uniquement, aucun rebuild ni SDK nouveau autorisé. Base du témoin supprimée
 par TempDir à unwind, limite de preuve explicitée ; logs/ELF conservés.
+
+Pour ne plus perdre la base synthétique au prochain premier rouge, les TempDir
+des seuls juges physiques deviennent gardés : nettoyage habituel au succès,
+keep explicite lors d'une panique avec chemin PHYSICAL_FAILED_FIXTURE imprimé.
+Le dossier privé sous TMPDIR du reçu garde alors DB/WAL/plan pour diagnostic RO
+et copie des preuves. Aucune base réelle concernée, aucun changement production.
