@@ -1,4 +1,4 @@
-# Garde target intégrée, fin des ressources du lot
+# Garde target intégrée, périmètre retiré et reliquat conservé
 
 Master intégré exact `9feb7cdbadef6a60568dd4fc447bafddf7986942`, après ÀTOI C7
 exact sur candidat, quatre RO et dernier fetch attenduD7. Vrai poste push,
@@ -58,3 +58,25 @@ Autoritéterminée, busabsent/quiescence[], aucun travail de qualification à ma
 Le présent bilan est DOCSSEULES sur Wneuf ; son administration et son retrait
 final suivent une archive distincte et la même garde, sans toucher au prototype
 sale conservé. Aucun nouveau runtime ni effet produit par ce bilan.
+
+## Suite du reliquat, après le premier bilan
+
+Le [ticket distinct de reliquat](../tickets/2026-11-13-conserver-et-resorber-le-reliquat-de-preparation-garde-target.md)
+a été publié AVANT la résorption, sans rouvrir le défaut garde corrigé.
+Inventaire : exactement cinq scripts docs non suivis de Recherche, aucun
+fichier ignoré/suivi modifié, UID1000 régulier ; sauvegarde fidèle deuxpostes
+sous cx-archive-prototype-garde-13nov. Prototype conservé INCHANGÉ sur branche
+d'archive isolée NON FUSIONNÉE cx-recherche-garde-target-prototype-archive-r1,
+SHA ccb3d90c416bbde37ee8f65176c017207de5f265, jamais exécuté ni destiné master.
+Après ce commit d'archive, nouvelle administration fidèle deuxpostes et garde
+6f3fraîcheVERTLUE : Wprototype retirée sans reset/clean/force. L'ancienne W
+bilan97 a aussi été archivée/retirée sous nouvellegardeVERT. Archives/traces
+complémentaires cx-archives-garde-target-reliquat-13nov sur deuxpostes.
+
+Trois branches refusées-d restent CONSERVÉES avec motif précis au ticket :
+références d'histoires avant rebase non complètement fusionnées pour Git,
+plus de W/target associé. Aucun-D/force suppression de référence.
+Le périmètre initial propre est retiré et la Wsale a été résorbée par archive ;
+les trois références conservées restent un reliquat suivi, pas une déclaration
+absolue « toutes ressources supprimées ». Le contrôleur DOCSSEULES de cette
+mise à jour sera lui aussi retiré par archive/garde, résultat journalisé horsW.

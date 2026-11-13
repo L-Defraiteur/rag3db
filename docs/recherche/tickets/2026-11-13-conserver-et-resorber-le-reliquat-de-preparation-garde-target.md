@@ -1,6 +1,6 @@
 # Conserver et résorber le reliquat de préparation garde target
 
-- **État** : ouvert (13 novembre 2026), reliquat de nettoyage suivi séparément du défaut produit corrigé.
+- **État** : ouvert (13 novembre 2026), prototype archivé et W retirée ; trois références refusées-d conservées avec leur motif, sans suppression forcée.
 - **Famille** : produit
 - **Gravité** : conservation de travail local et de références après retrait des ressources qualifiées ; aucun défaut runtime nouveau établi.
 - **Atteignable en service** : non, préparation documentaire hors source de service.
@@ -40,3 +40,22 @@ Les trois refus-d n'autorisent aucune suppression forcée de branche ; conserver
 leurs références avec motif tant qu'un arbitrage distinct ne les retire pas.
 Le ticket garde déjà corrigé reste clos. Aucun Cargo/rustc/service/runtime,
 aucune autre ressource Recherche ou autre lot à rejouer/nettoyer par ce suivi.
+
+## Résultat de l'archivage et du retrait du prototype
+
+Sauvegarde5fichiers identiques modes/UID/GID/mtime/size/SHA sur deuxpostes,
+`cx-archive-prototype-garde-13nov`. Commit d'archive :
+SHA complet ccb3d90c416bbde37ee8f65176c017207de5f265, branche
+cx-recherche-garde-target-prototype-archive-r1 publiée NONMERGÉE, aucun changement
+des cinq fichiers et aucun runtime. Nouveau commit rend la W propre sans
+reset/clean. Nouvelle archive administrative fidèle deuxpostes après cecommit,
+quiescence[] et rapport6f3fraîcheVERTLU : Wprototype retirée normalement.
+L'ancienne Wbilan97 retirée de même. Traces/archives complémentaires
+`cx-archives-garde-target-reliquat-13nov` sur deuxpostes.
+
+Les trois références historiques restent : refus-d « non complètement
+fusionnée » (698/bdff/a5e non ancêtres du master rebasé), sans W ni target.
+Archivesfidèles et branchesdistantes les rendent retrouvables. Aucun usage
+mémoire/disque de build associé, aucun-D/contournement proposé. Ticket garde
+reste clos ; le présent suivi reste ouvert tant que ces références sont
+conservées ou qu'un arbitrage les classe sans suppression.
