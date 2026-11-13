@@ -123,3 +123,16 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   avant le top-k, paramètre `view` dans les outils), plus 1a/1b et la liaison branche/worktree → couche.
   **Question pour Lucie** : l'index de code réel adopte-t-il le raccord physique (aujourd'hui interdit), ou
   le 2b reste-t-il sur un index neuf ? Sans l'un ou l'autre, aucune de ses bases n'aura de vue.
+- **16 h 49, la file et les causes.** File de push : recherche (la garde des targets reconnaît le cache de la CI
+  et les deux dispositions de Cargo 1.98/1.100 ; run de preuve en cours, les deux étapes qui bloquaient
+  passées), puis ED (l'installeur de l'atelier dit « suit le livré » ou « copie non suivie, voir M8 », refresh
+  sous --sans-hote ; lib entière 2310/0), puis archi (le chemin hors racine refusé : résolution composant
+  par composant, lib entière 2307 avec les deux rouges connus du raccord, e2e_hooks 2/2, navigateur
+  40/40), puis 96 (les quatre défauts de M8, rejeu sur target neuf). **arbre principal** a la cause
+  affinée du rouge du raccord physique : reproductible sous l'env d'archi (services d'embarquement et
+  LUCIVY_SCHEDULER_THREADS=8), une instance précédente qui meurt tard et fait son point de reprise après
+  la photo du test ; premier correctif insuffisant (le compte fort de l'Arc tombe à zéro avant le
+  destructeur) ; correctif en cours par un Weak<ReopenState> relâché après le destructeur, témoin
+  déterministe rouge. **Cœur** : rouge de l'annulation sous pool plein posé, correctif de Codex repris,
+  suites en cours. La garde des targets a fait prendre un target neuf à trois sessions (targets d'avant
+  sans provenance) : attendu, dit dans la procédure par recherche.
