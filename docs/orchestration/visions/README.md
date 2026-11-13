@@ -75,3 +75,22 @@ dossiers ne tiennent plus ; l'histoire est là, pas l'état).
 utilisable ». D'ici là, tout ce qui s'écrit pour rag3weaver (README, `AGENTS.md`, procédures, docs) doit
 tenir seul : pas de chemin vers le moteur autrement que comme dépendance, pas de `../..`. Le README de
 rag3weaver se refait sur le modèle de CocoIndex (`concurrents-cocoindex.md`) : lot d'archi du 13.
+
+## Graines de produits (Lucie, 13 novembre 2026)
+
+Dites à l'oral, à garder telles quelles ; aucune n'est ouverte. Toutes s'appuient sur ce qui existe : un
+index par dépôt et des vues par worktree, le graphe de code (scopes, usages, appels), la mémoire longue,
+le juge.
+
+1. **Chercher les fuites de variables d'environnement et de secrets** : où une variable est lue, où sa
+   valeur peut sortir (journal, réponse, fichier, commit), au fil des usages du graphe plutôt que par
+   motif seul.
+2. **L'analyse de code à la Sonar, mais plus poussée et avec le modèle** : les mauvaises pratiques
+   déduites par heuristiques, plus celles que le modèle voit en contexte (le scope, ses usages, son
+   histoire), avec une raison et un lien vers le code, jamais un score sans explication.
+3. **Des revues automatiques en CI/CD avec un contexte persistant** : la revue d'une PR lit l'index du
+   dépôt, les vues de la branche, la mémoire des revues passées (ce qui a été dit, accepté, refusé), et
+   n'oublie pas d'un run à l'autre.
+
+Le code est le premier produit du framework ; ces trois-là sont des vues et des agents de plus sur le
+même index.
