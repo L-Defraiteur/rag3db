@@ -178,8 +178,10 @@ se jouent par `python3 scripts/test_confiner_validation.py`, sans Cargo/bus rée
   sous-module, les scripts de passe, et tout fichier dont le nom apparaît dans ce code ou dans un script
   qu'il appelle ; un outil de mesure que rien de joué n'appelle (`scripts/oracle_lsp.py`) compte comme de
   la doc. La garde vit dans le dépôt (`tools/poste/`, son témoin `test_push_garde.sh`) ; la copie qu'exécute
-  `poste push` est `~/.cache/rag3weaver-build/push_garde.sh` aux deux postes, recopiée après chaque
-  changement.
+  `poste push` est `~/.cache/rag3weaver-build/push_garde.sh` aux deux postes, et **c'est elle qui fait
+  autorité** : un lot ne peut pas affaiblir la garde qui le juge. Elle dit à chaque push son hash et celui
+  du dépôt, et « garde en retard sur le dépôt » quand ils diffèrent, sans refuser. **La recopie au cache des
+  deux postes se fait après la relecture du changement et sur le mot de l'orchestration, jamais au push.**
 - **Le garde du rebase en conflit**, juste après le rebase et avant toute lecture de HEAD :
 
   ```bash
