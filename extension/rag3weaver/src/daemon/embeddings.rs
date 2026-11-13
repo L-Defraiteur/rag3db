@@ -1239,6 +1239,75 @@ mod tests {
         assert!(format!("{e}").contains("poids des positions"), "erreur : {e}");
     }
 
+    /// L'usage que le fournisseur déclare dans son identité, lu brut : un
+    /// fournisseur d'avant les baux n'a pas de champ `usage`.
+    fn usage_de(c: &DaemonEmbedder) -> serde_json::Value {
+        super::super::identite_de::<serde_json::Value>(&c.agent, &c.adresse, SERVICE).expect("identité")["usage"].clone()
+    }
+
+    /// **Les baux d'usage se comptent chez le fournisseur** (ticket de la
+    /// résidence des modèles, première étape : rien n'est déchargé). Prendre
+    /// un bail le compte, le rendre le décompte, un bail non renouvelé expire
+    /// ; l'identité dit le compte à tout client.
+    #[test]
+    fn les_baux_d_usage_se_comptent_dans_l_identite() {
+        let adresse = demon(EmbedDaemon::new(Arc::new(Regle(3))));
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+        let a = c.envoyer_corps("/bail", serde_json::json!({ "porteur": "a", "duree_s": 60 })).expect("bail a");
+        let b = c.envoyer_corps("/bail", serde_json::json!({ "porteur": "b", "duree_s": 60 })).expect("bail b");
+        assert_ne!(a["bail"], b["bail"], "deux baux, deux numéros");
+        assert_eq!(usage_de(&c)["baux"], 2);
+        c.envoyer_corps("/bail/rendre", serde_json::json!({ "bail": a["bail"] })).expect("rendre a");
+        assert_eq!(usage_de(&c)["baux"], 1);
+        assert!(c.envoyer_corps("/bail/renouveler", serde_json::json!({ "bail": a["bail"] })).is_err(), "un bail rendu ne se renouvelle pas");
+        c.envoyer_corps("/bail/renouveler", serde_json::json!({ "bail": b["bail"] })).expect("renouveler b");
+        // Un bail d'une seconde, jamais renouvelé, ne compte plus après.
+        c.envoyer_corps("/bail", serde_json::json!({ "porteur": "court", "duree_s": 1 })).expect("bail court");
+        assert_eq!(usage_de(&c)["baux"], 2);
+        std::thread::sleep(std::time::Duration::from_millis(1300));
+        assert_eq!(usage_de(&c)["baux"], 1, "le bail expiré ne compte plus");
+    }
+
+    /// Un embarqueur qui attend le test avant de rendre : de quoi voir une
+    /// requête en cours.
+    struct Retenu(std::sync::Mutex<std::sync::mpsc::Receiver<()>>);
+    impl Embedder for Retenu {
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+            let _ = self.0.lock().unwrap().recv();
+            Ok(texts.iter().map(|_| vec![0.0; 2]).collect())
+        }
+        fn dim(&self) -> usize {
+            2
+        }
+        fn name(&self) -> &str {
+            "retenu"
+        }
+    }
+
+    /// **Les requêtes en cours se comptent aussi** : ce qu'une éviction future
+    /// doit attendre, en plus des baux.
+    #[test]
+    fn les_requetes_en_cours_se_comptent_dans_l_identite() {
+        let (liberer, attente) = std::sync::mpsc::channel();
+        let adresse = demon(EmbedDaemon::new(Arc::new(Retenu(std::sync::Mutex::new(attente)))).fils(4));
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+        assert_eq!(usage_de(&c)["en_cours"], 0);
+        let a2 = adresse.clone();
+        let appel = std::thread::spawn(move || DaemonEmbedder::joindre(&a2).unwrap().embed(&["x".to_string()]));
+        let mut vu = serde_json::Value::Null;
+        for _ in 0..200 {
+            vu = usage_de(&c)["en_cours"].clone();
+            if vu == 1 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(vu, 1, "la requête retenue se compte");
+        liberer.send(()).unwrap();
+        appel.join().unwrap().expect("embed");
+        assert_eq!(usage_de(&c)["en_cours"], 0);
+    }
+
     #[test]
     fn demander_le_creux_a_qui_ne_le_sert_pas_se_dit() {
         let adresse = demon(EmbedDaemon::new(Arc::new(Regle(3))));
