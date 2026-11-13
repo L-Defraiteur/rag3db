@@ -1,8 +1,8 @@
 # Une mention d'un import ES externe n'a pas de cible à elle (la sorte `import_binding`)
 
-- **État** : ouvert (11 novembre 2026) — à mesurer avant de décider : **le compte n'est pas fait**.
-  Décision de c7 du 8 novembre : compter d'abord, puis trancher, avec Lucie si l'index grossit de plus de
-  quelques pour cent.
+- **État** : ouvert (11 novembre 2026) — **compté le 13 novembre** (+9,2 % de scopes, +6,5 % si on ne
+  le fait que pour les modules externes) : au-delà de « quelques pour cent », la décision revient à Lucie
+  (règle de c7 du 8 novembre).
 - **Gravité** : réponse incomplète (une mention sans cible, ou une cible moins précise que son nom).
 - **Atteignable en service** : oui, tout fichier JavaScript ou TypeScript qui importe d'un module hors de
   l'arbre (`import path from "path"`), et sans doute les autres langages pour leurs imports externes.
@@ -40,3 +40,35 @@ nombre de scopes qu'`import_binding` créerait (un scope par nom importé, pas p
 2. **La décision**, avec ce chiffre : la sorte `import_binding`, la zone (forme du lot `require`), ou rien.
 3. Si `import_binding` : un témoin par langage, la sorte dans les gabarits et `code.rs`, une mesure A/B
    avec l'oracle.
+
+## Le compte (13 novembre 2026)
+
+Une sonde de codeparsers (master a730a9b), jouée à luciepc sous `poste lourd`, **sans indexer** et sans
+toucher aucune base : elle analyse les 3 461 fichiers de code de code-lourd (l'arbre rag3db a72acfeef,
+`git ls-files` filtré par extension) et compte, par langage, les noms que lient les imports (alias, sinon
+le nom importé ; les imports sans nom, `SideEffect`, exclus). Sonde et résultat :
+`~/.cache/codeparsers-notes/import-binding/` à luciepc (`sonde_import_binding.rs`, `sonde.log`) ;
+3,6 s d'analyse ; 1 erreur d'analyse.
+
+| langage | fichiers | scopes | noms liés par un import | dont modules externes | noms distincts par fichier | poids (distincts / scopes) |
+|---|---|---|---|---|---|---|
+| Rust | 356 | 21 504 | 5 774 | 3 490 | 5 370 | 25,0 % |
+| Python | 174 | 2 842 | 1 083 | 1 054 | 1 083 | 38,1 % |
+| TypeScript/JavaScript | 68 | 948 | 123 | 88 | 123 | 13,0 % |
+| C | 1 538 | 22 767 | 0 | 0 | 0 | — |
+| C++ | 1 324 | 23 172 | 0 | 0 | 0 | — |
+
+En C et C++, un import est un `#include` : il ne lie aucun nom.
+
+**Ce que pèserait `import_binding`** sur code-lourd :
+
+- un scope par nom distinct importé dans chaque fichier : **6 576 scopes de plus sur 71 233, +9,2 %** ;
+- pour les seuls modules externes (le cas où la mention n'a aucune autre cible) : environ **4 632, +6,5 %** ;
+- autant de vecteurs d'embarquement si ces scopes sont embarqués comme les autres ; sans embarquement,
+  seulement des nœuds et une arête `DEFINED_IN` chacun.
+- Rust porte l'essentiel (5 370) ; c'est aussi le langage où la règle n'a pas encore été demandée (le
+  ticket est né de JS/TS, 123 noms).
+
+**À décider** (avec Lucie, puisque c'est au-delà de quelques pour cent) : `import_binding` pour tous les
+langages, pour JS/TS seulement (123 scopes, +0,2 %), pour les seuls externes, ou garder la zone de
+liaison du lot `require` (déjà sur master), dont 98 % des arêtes sont saines au juge (ticket de l'oracle).
