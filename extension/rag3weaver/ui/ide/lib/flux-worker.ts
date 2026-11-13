@@ -12,10 +12,15 @@
 ///   neuve le reçoit en entier à son branchement. C'est la forme qui laissera des fenêtres
 ///   détachées de l'IDE (le chat dans l'une, le graphe dans l'autre) se suivre sans rien refaire.
 /// - Une page bat toutes les 15 s (`battement`) et prévient en partant (`partir`) ; le worker
-///   oublie un port muet depuis 45 s, et ferme le flux quand plus aucune page n'écoute.
+///   oublie un port muet depuis 45 s, et ferme le flux quand plus aucune page n'écoute depuis
+///   `GRACE_MS`. Le délai garde le même flux à travers une navigation dans un onglet (la page
+///   quittée part, la neuve arrive) : fermé puis rouvert, l'ancien restait tenu par le
+///   navigateur, et l'hôte comptait deux flux (mesuré le 13 novembre 2026). Le dernier onglet
+///   fermé, le navigateur arrête le worker, et sa connexion avec lui.
 
 const ADRESSE = "/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens,repos,accords,etat";
 const MUET_MS = 45_000;
+const GRACE_MS = 10_000;
 
 type Statut = "ouvert" | "coupé, reprise…" | "fermé";
 type Page = { port: MessagePort; sujets: Set<string> | null; vu: number };
@@ -54,12 +59,17 @@ function brancher() {
   source = s;
 }
 
+let fermeture: ReturnType<typeof setTimeout> | null = null;
 function debrancherSiPersonne() {
-  if (pages.size === 0 && source) {
-    source.close();
-    source = null;
-    statut = "fermé";
-  }
+  if (pages.size > 0 || !source || fermeture) return;
+  fermeture = setTimeout(() => {
+    fermeture = null;
+    if (pages.size === 0 && source) {
+      source.close();
+      source = null;
+      statut = "fermé";
+    }
+  }, GRACE_MS);
 }
 
 function oublier(p: Page) {
