@@ -116,6 +116,14 @@ try:
         assert exact+': test' in listing
         result=run(name,wrapper+[exact,'--exact','--nocapture','--test-threads=1'],cwd=Path('/var/tmp'))
         assert re.search(r'test result: ok\. 1 passed; 0 failed; 0 ignored;',result),name
+    exact='buffered_blob_store::tests::invalidated_buffer_never_retries_persistence_in_drop'
+    assert exact+': test' in listing
+    result=run('invalidated-buffer-drop',wrapper+[exact,'--exact','--nocapture','--test-threads=1'],cwd=Path('/var/tmp'))
+    assert re.search(r'test result: ok\. 1 passed; 0 failed; 0 ignored;',result)
+    exact='connection::lifecycle::tests::revocation_preserves_backend_transactions_and_reaches_existing_readers'
+    assert exact+': test' in listing
+    result=run('connection-family-revocation',wrapper+[exact,'--exact','--nocapture','--test-threads=1'],cwd=Path('/var/tmp'))
+    assert re.search(r'test result: ok\. 1 passed; 0 failed; 0 ignored;',result)
     result=run('physical',wrapper+['dataflow::migrations::physical_index::tests::','--show-output','--test-threads=1'],cwd=Path('/var/tmp'))
     passed=set(re.findall(r'^test (.*?)(?: - should panic)? \.\.\. ok$',result,re.M))
     assert expected<=passed,(expected-passed)
@@ -126,7 +134,7 @@ try:
     assert mappings,'no native library mapping actually observed'
     assert size()<=32*1024**3
     save('witnesses.json',witnesses)
-    save('result.json',dict(verdict='VERT',source=SOURCE,elapsed_s=time.monotonic()-START,deadline=DEADLINE,passed=13,ignored=0,target_bytes=size(),native=NATIVE))
+    save('result.json',dict(verdict='VERT',source=SOURCE,elapsed_s=time.monotonic()-START,deadline=DEADLINE,passed=15,ignored=0,target_bytes=size(),native=NATIVE))
 except BaseException as error:
     save('result.json',dict(verdict='ROUGE',source=SOURCE,error=repr(error),elapsed_s=time.monotonic()-START,deadline=DEADLINE))
     raise

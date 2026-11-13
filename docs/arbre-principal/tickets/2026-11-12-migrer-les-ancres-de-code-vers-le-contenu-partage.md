@@ -1938,3 +1938,23 @@ ouvertures normales, fermeture/reprise FTS depuis valeurs exactes, reçu/tête/
 journal publié atomiquement. Huit témoins natifs et cinq CPU préparés ; recette
 600s/source/API/diff dans le rapport13-11-2026/01 et raccord-physique. Aucun
 Cargo, index réel de fixture ni target nouveau encore lancé ; revue avant lourd.
+
+
+Lecture statique après publication be9699e73 : BufferedBlobStore::Drop pousse
+encore les écritures retenues, et delete touche directement son backend. Un
+Catalog invalidé après issue de COMMIT inconnue ne doit pas retenter ces effets
+via sa destruction, même si DbConnection::poison est sans effet. Même porteur,
+même ticket : ajouter une invalidation de persistance partagée par le buffer,
+qui refuse save/delete/flush et le flush de Drop sans jeter les octets retenus
+avant destruction. Témoin CPU avec backend compté ; aucune exécution revendiquée.
+
+
+Réserve complémentaire Mémoire consignée avant action : set_scope pouvait encore
+écrire après erreur de COMMIT avec poison backend sans effet. La correction en
+revue porte la révocation sur la famille de connexions du Catalog (writer,
+read_pool/read_conn/sync et clones), avec délégation des transactions/settings
+au backend et rollback réservé au nettoyage. Barrière de persistance partagée
+du buffer avant fermeture/Drop, y compris derniers clones. Témoins CPU renforcés
+COMMIT+ROLLBACK perdus, set_scope/Arc exporté refusés sans requêtes, première
+poussée échouée qui réussirait à la suivante mais aucun retry après invalidation.
+Recette adaptée à7 CPU+8 natifs, toujours aucun Cargo/test natif exécuté.

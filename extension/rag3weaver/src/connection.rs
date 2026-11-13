@@ -6,6 +6,9 @@
 
 use thiserror::Error;
 
+mod lifecycle;
+pub(crate) use lifecycle::{ConnectionLifecycle, RevocableConnection};
+
 /// Errors that can occur during database operations.
 #[derive(Debug, Error)]
 pub enum DbError {

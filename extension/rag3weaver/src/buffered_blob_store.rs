@@ -71,18 +71,36 @@ struct Pending {
 pub struct BufferedBlobStore<S: BatchSave> {
     inner: S,
     pending: Mutex<Pending>,
+    persistence_failure: Mutex<Option<String>>,
 }
 
 impl<S: BatchSave> BufferedBlobStore<S> {
     pub fn new(inner: S) -> Self {
         Self {
             inner,
+            persistence_failure: Mutex::new(None),
             pending: Mutex::new(Pending {
                 writes: BTreeMap::new(),
                 saves_received: 0,
                 bytes_received: 0,
             }),
         }
+    }
+
+    /// Freeze persistence after an unknown database/publication outcome. The
+    /// same gate covers explicit writes and the final Drop flush, even when the
+    /// wrapped backend has no poison primitive. Pending bytes remain readable.
+    pub fn invalidate_persistence(&self, reason: &str) {
+        let mut failure = self.persistence_failure.lock().unwrap_or_else(|e| e.into_inner());
+        if failure.is_none() { *failure = Some(reason.into()); }
+    }
+
+    fn persistence_guard(&self) -> io::Result<std::sync::MutexGuard<'_, Option<String>>> {
+        let guard = self.persistence_failure.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(reason) = &*guard {
+            return Err(io::Error::new(io::ErrorKind::Other, format!("blob persistence invalidated: {reason}")));
+        }
+        Ok(guard)
     }
 
     /// The wrapped backend, for callers that need it directly.
@@ -106,6 +124,7 @@ impl<S: BatchSave> BufferedBlobStore<S> {
     /// On failure the unpushed entries are put back, so the next flush (or the
     /// drop-time flush) retries rather than losing them.
     pub fn flush(&self) -> io::Result<FlushStats> {
+        let _persistence = self.persistence_guard()?;
         let (items, mut stats) = {
             let mut p = self.lock();
             let stats = FlushStats {
@@ -152,6 +171,7 @@ impl<S: BatchSave> BufferedBlobStore<S> {
 
 impl<S: BatchSave> BlobStore for BufferedBlobStore<S> {
     fn save(&self, index_name: &str, file_name: &str, data: &[u8]) -> io::Result<()> {
+        let _persistence = self.persistence_guard()?;
         let mut p = self.lock();
         p.saves_received += 1;
         p.bytes_received += data.len();
@@ -172,6 +192,7 @@ impl<S: BatchSave> BlobStore for BufferedBlobStore<S> {
     }
 
     fn delete(&self, index_name: &str, file_name: &str) -> io::Result<()> {
+        let _persistence = self.persistence_guard()?;
         // Drop the pending write first: if the backend delete then fails, the
         // buffer still can't resurrect the file on the next flush.
         self.lock()
@@ -242,6 +263,10 @@ impl<S: BatchSave> Drop for BufferedBlobStore<S> {
         if self.pending_len() == 0 {
             return;
         }
+        if self.persistence_failure.lock().unwrap_or_else(|e| e.into_inner()).is_some() {
+            eprintln!("[rag3weaver] invalidated blob buffer dropped with {} pending blob(s); persistence not retried", self.pending_len());
+            return;
+        }
         if let Err(e) = self.flush() {
             eprintln!(
                 "[rag3weaver] BufferedBlobStore dropped with {} unflushed blob(s), flush failed: {e}",
@@ -285,6 +310,37 @@ mod tests {
         let saves = Arc::new(AtomicUsize::new(0));
         let store = Counting { inner: MemBlobStore::new(), saves: saves.clone() };
         (BufferedBlobStore::new(store), saves)
+    }
+
+    #[test]
+    fn invalidated_buffer_never_retries_persistence_in_drop() {
+        struct FailsOnce { saves: Arc<AtomicUsize>, inner: MemBlobStore }
+        impl BlobStore for FailsOnce {
+            fn load(&self,i:&str,f:&str)->io::Result<Vec<u8>> {self.inner.load(i,f)}
+            fn save(&self,i:&str,f:&str,d:&[u8])->io::Result<()> {
+                if self.saves.fetch_add(1,Ordering::SeqCst)==0 {return Err(io::Error::new(io::ErrorKind::Other,"first save failed"))}
+                self.inner.save(i,f,d)
+            }
+            fn delete(&self,i:&str,f:&str)->io::Result<()> {self.inner.delete(i,f)}
+            fn exists(&self,i:&str,f:&str)->io::Result<bool> {self.inner.exists(i,f)}
+            fn list(&self,i:&str)->io::Result<Vec<String>> {self.inner.list(i)}
+        }
+        impl BatchSave for FailsOnce {}
+        let saves=Arc::new(AtomicUsize::new(0));
+        let buffer=Arc::new(BufferedBlobStore::new(FailsOnce {saves:saves.clone(),inner:MemBlobStore::new()}));
+        buffer.inner().inner.save("idx", "old", b"original").unwrap();
+        buffer.save("idx", "pending", b"retained").unwrap();
+        assert!(buffer.flush().is_err());assert_eq!(saves.load(Ordering::SeqCst),1);
+        let other=buffer.clone();
+        buffer.invalidate_persistence("commit acknowledgement lost");
+        assert!(other.flush().is_err());
+        assert!(other.save("idx", "new", b"refused").is_err());
+        assert!(other.delete("idx", "old").is_err());
+        assert_eq!(other.pending_len(), 1);
+        assert_eq!(other.load("idx", "pending").unwrap(), b"retained");
+        assert_eq!(other.inner().load("idx", "old").unwrap(), b"original");
+        drop(buffer);drop(other);
+        assert_eq!(saves.load(Ordering::SeqCst), 1, "Drop must not retry a save which would now succeed");
     }
 
     #[test]

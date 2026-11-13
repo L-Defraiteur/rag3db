@@ -1021,7 +1021,7 @@ impl OwnedPhysicalIndex {
             self.poisoned = true;
             if let Some(catalog) = &self.catalog {
                 if let Ok(mut cat) = catalog.lock() {
-                    cat.invalidate_physical_publication(
+                    cat.invalidate_publication(
                         "physical operation failed; explicit reopen/recovery required",
                     );
                 }
