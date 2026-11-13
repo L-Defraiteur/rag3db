@@ -534,7 +534,7 @@ large7b69f7248e84cabec612b069baf0831a0e52b2d4a7758cc0b181ad9a6d94bb16,
 NAV11da42817566be123f413ac4936d0baaed718548f266cf05f0b0fcff39a9ec22,
 e2e0d53aeb70a8bfa32324aeaeac90a05ac0cf79d9e98f45741bea4f3df4f07ccac.
 223gabarits chacun et native29/Max32 prouvés par PID/starttime/maps
-(deux exécutables en première portée, e2e en complément). Aucun rebuild ni API.
+(deux exécutables en première portée, e2e en complément). Aucun rebâti pour la reprise ; aucune API de modèle externe.
 Santé BGE avant/après conservée, 7879 rendu.
 
 Base privée cx_archi_grep_symboles_20261113, OID1972072, propriétaire rag3weaver :
@@ -543,4 +543,3 @@ vérifié aux deux postes, zéro session relevé ; conserver jusqu'au tour de pu
 puis recontrôler identité/zéro session avant drop. Rapport de garde frais6f3dfceb…
 et archives fidèles requis au retrait, sous-module privé PC inclus.
 Revue finale/tour C7 encore requis : aucun master de la suite grep publié.
-
