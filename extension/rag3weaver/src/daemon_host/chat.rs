@@ -810,12 +810,20 @@ impl<'a> OutilsDuChat<'a> {
             _ => return None,
         };
         let path = args["path"].as_str().unwrap_or_default();
-        let chemin = super::empreintes::cle(racine.as_deref(), path);
-        if e.lock().unwrap_or_else(|p| p.into_inner()).couvre(&chemin, de, a, *tour) {
+        let chemin = super::empreintes::cle_vraie(racine.as_deref(), path);
+        // Le fichier tel qu'il est maintenant : une lecture d'un autre contenu ne compte pas.
+        let maintenant = super::empreintes::empreinte_du_fichier(&chemin).map(|(h, _)| h).unwrap_or_default();
+        let empreintes = e.lock().unwrap_or_else(|p| p.into_inner());
+        if empreintes.couvre(&chemin, de, a, *tour, &maintenant) {
             return None;
         }
+        if let Some((d, f, t)) = empreintes.lecture_perimee(&chemin, de, a, *tour, &maintenant) {
+            let pourquoi = format!("le fichier a changé depuis ta lecture (lignes {d}-{f} de {path} lues au tour {t}) : relis-le avant d'écrire ; rien n'est écrit");
+            return Some(crate::llm::Turn::tool_result(&call.id, &call.name, json!({ "ok": false, "error": pourquoi }).to_string()));
+        }
+        drop(empreintes);
         let pourquoi = format!(
-            "relis d'abord : aucune lecture récente des lignes {de}-{a} de {path} (read_file dans ce tour ou le précédent ; une écriture du fichier oublie ses lectures, et un redémarrage de l'hôte aussi)"
+            "relis d'abord : aucune lecture récente des lignes {de}-{a} de {path} telles qu'elles sont maintenant (read_file dans ce tour ou le précédent ; une écriture du fichier, un changement fait ailleurs ou un redémarrage de l'hôte oublient les lectures)"
         );
         Some(crate::llm::Turn::tool_result(&call.id, &call.name, json!({ "ok": false, "error": pourquoi }).to_string()))
     }
@@ -840,7 +848,11 @@ impl<'a> OutilsDuChat<'a> {
                 let de = args["offset"].as_u64().unwrap_or(1).max(1) as usize;
                 let longueur = args["length"].as_u64().map(|l| l as usize).unwrap_or(crate::dataflow::fichier_nodes::LIGNES_MAX);
                 let longueur = longueur.clamp(1, crate::dataflow::fichier_nodes::LIGNES_MAX);
-                e.noter(super::empreintes::cle(racine.as_deref(), path), de, de + longueur - 1, *tour);
+                let chemin = super::empreintes::cle_vraie(racine.as_deref(), path);
+                // Les lignes rendues, bornées à la fin du fichier, et le fichier tel que lu.
+                if let Some((h, total)) = super::empreintes::empreinte_du_fichier(&chemin) {
+                    e.noter(chemin, de, (de + longueur - 1).min(total), *tour, h);
+                }
             }
             // read_scope dit son fichier et ses bornes : « — <chemin> lignes D-F, ».
             "read_scope" => {
@@ -849,12 +861,17 @@ impl<'a> OutilsDuChat<'a> {
                     if let Some((chemin, reste)) = apres.split_once(" lignes ") {
                         let bornes: Vec<usize> = reste.split(|c: char| !c.is_ascii_digit()).filter(|x| !x.is_empty()).take(2).filter_map(|x| x.parse().ok()).collect();
                         if let [de, a] = bornes[..] {
-                            e.noter(super::empreintes::cle(racine.as_deref(), chemin), de, a, *tour);
+                            // read_scope ne montre que ses 200 premières lignes.
+                            let a = a.min(de + crate::dataflow::fichier_nodes::LIGNES_MAX - 1);
+                            let chemin = super::empreintes::cle_vraie(racine.as_deref(), chemin);
+                            if let Some((h, total)) = super::empreintes::empreinte_du_fichier(&chemin) {
+                                e.noter(chemin, de, a.min(total), *tour, h);
+                            }
                         }
                     }
                 }
             }
-            nom if self.ecrivent.contains(nom) => e.oublier(&super::empreintes::cle(racine.as_deref(), path)),
+            nom if self.ecrivent.contains(nom) => e.oublier(&super::empreintes::cle_vraie(racine.as_deref(), path)),
             _ => {}
         }
     }
