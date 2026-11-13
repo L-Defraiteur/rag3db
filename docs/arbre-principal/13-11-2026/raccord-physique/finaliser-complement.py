@@ -1,13 +1,14 @@
 from pathlib import Path
 import hashlib,json,os,shutil,sys,time
-R=Path('/home/lucied/.cache/rag3weaver-build');P=R/'cx-passe-raccord-physique-union-complement-v1';W=R/'cx-wt-raccord-physique-union';T=R/'cx-target-contenu-derive'
+R=Path('/home/lucied/.cache/rag3weaver-build');P=R/'cx-passe-raccord-physique-union-complement-v2';W=R/'cx-wt-raccord-physique-union';T=R/'cx-target-contenu-derive'
 SOURCE=sys.argv[1];client_rc=int(sys.argv[2]);P.mkdir(exist_ok=True)
 record=dict(source=SOURCE,verdict='ROUGE',client_rc=client_rc);exit_code=1
 try:
     assert client_rc==0,'superviseur non réussi'
     assert (P/'VERDICT').read_text().strip()=='VERT'
     source=json.loads((P/'source.json').read_text());assert source['source']==SOURCE
-    receipt=Path(source['supervision_receipt']);assert receipt.parent.is_relative_to(R/'cx-raccord-physique-global-complement-confinement-v1')
+    assert source['corrective_absolute_deadline']==901710.830219227 and source['deadline_monotonic']<=901710.830219227
+    receipt=Path(source['supervision_receipt']);assert receipt.parent.is_relative_to(R/'cx-raccord-physique-global-complement-confinement-v2')
     supervisor=json.loads((receipt.parent/'verdict.json').read_text())
     assert supervisor['verdict']=='VERT' and supervisor['code']==0 and supervisor['restes']==[] and supervisor['nettoye']
     assert not Path(supervisor['prive']).exists(),'bus commun restant'

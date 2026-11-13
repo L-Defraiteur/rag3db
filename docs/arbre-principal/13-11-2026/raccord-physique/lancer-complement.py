@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start a DISTINCT corrective 3600-second scope after actual poste admission."""
+"""Use only time remaining in the existing corrective scope, after actual poste admission."""
 from pathlib import Path
 import importlib.util,json,math,os,sys,time
 sys.dont_write_bytecode=True
@@ -12,6 +12,10 @@ assert c.poste_tenu(c.processus()),'actual poste required before computing the r
 initial=json.loads((root/'cx-passe-raccord-physique-union-v1/source.json').read_text())
 assert initial['deadline_monotonic']==896572.526453239
 assert time.monotonic()>initial['deadline_monotonic'],'previous scope must be expired'
+corrective=json.loads((root/'cx-passe-raccord-physique-union-complement-v1/source.json').read_text())
+assert corrective['deadline_monotonic']==901710.830219227
+remaining=math.floor(corrective['deadline_monotonic']-time.monotonic())-3
+assert remaining>60,('corrective deadline exhausted',remaining)
 os.environ['POSTE_MEM_MAX']='32G';os.environ['RAG3WEAVER_BUILD_MEMORY_HIGH']='0'
-args=['python3',str(source/'extension/rag3weaver/scripts/confiner_validation.py'),'lancer','--delai','3600','--preuves',str(root/'cx-raccord-physique-global-complement-confinement-v1'),'--','python3',str(controller),sys.argv[1]]
+args=['python3',str(source/'extension/rag3weaver/scripts/confiner_validation.py'),'lancer','--delai',str(remaining),'--preuves',str(root/'cx-raccord-physique-global-complement-confinement-v2'),'--','python3',str(controller),sys.argv[1]]
 os.execvpe(args[0],args,os.environ.copy())

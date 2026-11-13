@@ -2,8 +2,8 @@
 set -euo pipefail
 source_ro="$1"
 source_wt=/home/lucied/.cache/rag3weaver-build/cx-wt-raccord-physique-union
-controle=/home/lucied/.cache/rag3weaver-build/cx-wt-qualification-physique/docs/arbre-principal/13-11-2026/raccord-physique
-preuve=/home/lucied/.cache/rag3weaver-build/cx-passe-raccord-physique-union-complement-v1
+controle=/home/lucied/.cache/rag3weaver-build/cx-wt-qualification-physique-r2/docs/arbre-principal/13-11-2026/raccord-physique
+preuve=/home/lucied/.cache/rag3weaver-build/cx-passe-raccord-physique-union-complement-v2
 [ ! -e "$preuve" ] || { echo 'ARRET : preuves existantes'; exit 2; }
 cd /var/tmp
 rc=0
