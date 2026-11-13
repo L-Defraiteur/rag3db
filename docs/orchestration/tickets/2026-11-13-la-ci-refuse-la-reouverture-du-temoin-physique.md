@@ -324,3 +324,37 @@ témoin pinned-selfjoin ; emballer actor+mailbox AVANT on_start pour que la
 panique de ce callback conserve le même ordre de destruction.07086b6 reste
 NON qualifié. Nouveau SHA, témoins et recette doivent être publiés et relus
 avant tout GO CPU distinct. Aucun nouveau runtime lancé.
+
+### Delta de préparation4c41543, aucune qualification nouvelle
+
+Source publiée dépôt lucivy `cx-lucivy-shutdown-destruction` tête `4c41543`.
+Résout les deux réserves de préparation, sous réserve de relecture/qualification :
+- Admission send/try_send protégée, compteur des envois engagés avec garde RAII.
+  Mailbox::drop ferme admission, draine pour débloquer les envois bornés déjà
+  engagés, attend leur fin par Condvar et vide la queue finale. Aucun polling,
+  aucune destruction de message sous mutex. Completion seulement ensuite.
+  Coût nouveau : mutex+compteur par send/try_send ; impact performance non mesuré.
+- HandlerGuard RAII restaure IN_ACTOR_HANDLER même en unwind, commun aux chemins
+  worker/coopératif/pinned et on_start. Wrapper construit AVANT on_start.
+  Refus self-join depuis handler désormais applicable au pinned.
+
+Témoins nouveaux publiés NON exécutés :
+`mailbox::destruction_tests::completion_drains_admitted_send_and_rejects_new_sends`
+(garde d’envoi engagé avant flume.send sur canal plein),
+`mailbox::destruction_tests::pending_destructor_can_reenter_closed_mailbox`,
+`scheduler::tests::pinned_handler_rejects_self_join`,
+`scheduler::tests::on_start_panic_preserves_destruction_order_and_handler_flag`.
+Les trois témoins précédents worker/coopératif/retourshutdown restent.
+Un send refusé conserve son message chez l’appelant : ce message n’appartient
+plus à la queue et ne fait pas partie de la promesse de destruction du receiver.
+
+Recette CPU candidate, après RO ED et GO C7 exact distinct : même target privé
+quiescent uniquement, max8G/HIGHmax/j4, helper commun, une seule fenêtre globale
+600s après poste (pas de reset entre commandes), journaux séparés horsW.
+Jouer les sept nouveaux témoins par nom exact (1 attendu par appel), puis
+`pool::tests::drain_and_shutdown_after_workers_left_do_not_panic` et
+`pool::tests::request_dropped_reply_is_an_error` (1 chacun), tous via
+`cargo test -j4 -p luciole --lib <nom> -- --exact --nocapture`.
+Arrêt au premier rouge/compilation/refus ; compte attendu9/9, aucun ignoré.
+Cela ne qualifie pas encore lucivy-core ni la réouverture physique CI : étape
+ultérieure distincte, pas de patch du registre/SDK/DB, aucune release.
