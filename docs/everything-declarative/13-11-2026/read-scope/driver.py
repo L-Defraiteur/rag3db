@@ -30,7 +30,9 @@ def main():
     receipt = pathlib.Path(os.environ['RAG3WEAVER_VALIDATION_RECU'])
     authority = json.loads(receipt.read_text())
     deadline = authority['echeance']
-    rows, maps = [], {}
+    rows, maps, disk_samples, unknown_maps = [], {}, [], []
+    elf = None
+    runtime_elf_sha = None
     def git(*args):
         return subprocess.check_output(['git', '-C', str(w), *args], text=True).strip()
     def propre():
@@ -72,6 +74,44 @@ def main():
     sdk_so = pathlib.Path(env['RAG3DB_LIBRARY_DIR']) / 'librag3db.so'
     assert sdk_so.parent.name == SDK
     write(p / 'sdk.json', dict(path=str(sdk_so), sha256=sha(sdk_so)))
+    def target_size(label):
+        if not t.exists():
+            return
+        size = int(subprocess.check_output(['du', '-sb', '--', str(t)], cwd='/var/tmp', env=env, text=True, timeout=10).split()[0])
+        disk_samples.append(dict(phase=label, bytes=size, monotonic=time.monotonic()))
+        write(p / 'target-size.json', disk_samples)
+        assert size <= 32 * 1024**3, 'target dépasse 32GiB ; aucun effacement correctif'
+    def runtime_maps(label, proc):
+        if not (label.startswith('cible-') or label == 'module') or label in maps:
+            return
+        q = pathlib.Path(f'/proc/{proc.pid}')
+        try:
+            st = (q / 'stat').read_text().rsplit(') ', 1)[1].split()
+            exe = pathlib.Path(os.readlink(q / 'exe'))
+            group = (q / 'cgroup').read_text().split('0::', 1)[1].strip()
+            content = (q / 'maps').read_text()
+            if exe != elf or not any(line.split()[-1:] == [str(sdk_so)] for line in content.splitlines()):
+                return
+            native_paths = {line.split()[-1] for line in content.splitlines() if '/librag3db' in line}
+            assert native_paths == {str(sdk_so)}, ('SDK natif inattendu', native_paths)
+            digest = sha(q / 'exe')
+            again = (q / 'stat').read_text().rsplit(') ', 1)[1].split()
+            if st[19] != again[19] or again[0] == 'Z':
+                return
+            assert group == authority['cgroup'] or group.startswith(authority['cgroup'] + '/')
+            assert digest == runtime_elf_sha
+            filename = f'maps-{label}-{proc.pid}-{st[19]}.txt'
+            (p / filename).write_text(content)
+            maps[label] = dict(phase=label, pid=proc.pid, starttime=st[19], exe=str(exe), cgroup=group,
+                               elf_sha256=digest, sdk=str(sdk_so), sdk_sha256=sha(sdk_so), maps=filename,
+                               observed=time.monotonic())
+            write(p / 'maps-runtime.json', list(maps.values()))
+        except (FileNotFoundError, ProcessLookupError):
+            return
+        except PermissionError as error:
+            unknown_maps.append(dict(phase=label, pid=proc.pid, UNKNOWN=str(error), observed=time.monotonic()))
+            write(p / 'maps-unknown.json', unknown_maps)
+            raise RuntimeError('maps du juge attribué illisibles : preuve refusée') from error
     def red_signal(label):
         files = [p / (label + '.log')]
         if label == 'features':
@@ -91,21 +131,22 @@ def main():
         rows.append(record)
         write(p / 'phases.json', rows)
         started = time.monotonic()
+        target_size(label)
+        last_disk = time.monotonic()
         with (p / (label + '.log')).open('w') as log:
             proc = subprocess.Popen(argv, cwd=crate, env=env if runenv is None else runenv, stdout=log, stderr=subprocess.STDOUT)
             while proc.poll() is None:
                 assert time.monotonic() - started < seconds, 'timeout phase ; arrêt attribué par superviseur'
-                try:
-                    content = pathlib.Path(f'/proc/{proc.pid}/maps').read_text()
-                    if str(sdk_so) in content:
-                        maps[str(proc.pid)] = content
-                except (FileNotFoundError, ProcessLookupError):
-                    pass
+                runtime_maps(label, proc)
+                if time.monotonic() - last_disk >= 10:
+                    target_size(label)
+                    last_disk = time.monotonic()
                 red_signal(label)
                 time.sleep(.05)
             record.update(rc=proc.returncode, elapsed_s=time.monotonic() - started)
         write(p / 'phases.json', rows)
         red_signal(label)
+        target_size(label)
         assert record['rc'] == 0, label + ' rouge'
         return (p / (label + '.log')).read_text()
     run('compilation', ['ionice', '-c', '3', 'nice', '-n', '15', 'cargo', 'test', '--locked', '--lib', '--no-default-features', '--features', FEATURES,
@@ -125,7 +166,8 @@ def main():
     assert sorted(item['features']) == sorted(FEATURES.split(',')), item['features']
     archived = p / 'binaire-lib'
     shutil.copy2(elf, archived)
-    assert sha(archived) == sha(elf)
+    runtime_elf_sha = sha(archived)
+    assert runtime_elf_sha == sha(elf)
     with archived.open('rb') as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as data:
         source_offset = data.find(source[:9].encode())
     assert source_offset >= 0, 'source embarquée absente du véritable ELF'
@@ -154,9 +196,7 @@ def main():
     results(output, len(names) - len(ignores), len(ignores))
     # --nocapture peut entrelacer les lignes par nom ; l'inventaire exact et
     # les comptes libtest font foi, sans reconstruire des statuts par ligne.
-    assert maps, 'aucune observation SDK29 runtime'
-    for pid, content in maps.items():
-        (p / f'maps-{pid}.txt').write_text(content)
+    assert maps, 'aucune observation SDK29 pendant un juge/module ; inventaires exclus'
     # Canonique : il exporte lui-même le SDK ; partir du LD avant notre export.
     checkenv = dict(env, CHECK_FEATURES_LOGS=str(p / 'features'), CHECK_FEATURES_TIMEOUT='1800')
     if old_ld is None:

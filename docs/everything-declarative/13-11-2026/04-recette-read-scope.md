@@ -120,3 +120,19 @@ driver et arrêt des descendants par le confineur. --nocapture conserve les
 messages précédant FAILED ; un arrêt peut néanmoins empêcher une stack complète,
 ce qui doit rester explicite. Pas de retry. Les lignes par nom peuvent être
 entrelacées sous huit threads ; inventaire et comptes libtest sont comparés.
+
+
+### Réserves complémentaires Archi sur6a2
+
+Annexe RO f66105e8e reprise section seule dans le ticket, sans ses documents
+stales. Maps exigées pendant cible-* ou module uniquement, jamais --list :
+PID/starttime recontrôlé après lecture, exe réel et SHA identiques à l’ELF
+archivé, cgroup sous reçu et seul chemin librag3db du SDK29 admis. Chaque
+observation est immédiatement écrite avec phase et fichier maps ; PermissionError
+donne une preuve UNKNOWN et arrête, jamais une observation négative.
+
+Mesure du target par du -sb avant/après chaque phase et toutes les dix secondes
+dans les phases actives, taille <=32GiB exigée et journalisée ; contrôle final
+indépendant. C’est un contrôle observé périodiquement, pas un quota filesystem
+ni une preuve que le pic entre deux relevés est resté sous le plafond. Tout
+dépassement observé arrête sans vider le target pour rendre le verdict vert.

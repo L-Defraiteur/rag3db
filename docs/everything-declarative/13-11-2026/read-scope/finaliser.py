@@ -83,6 +83,20 @@ def main():
                 assert hashlib.file_digest(f, 'sha256').hexdigest() == ledger['sha256']
         else:
             assert after_elf['pruned'], 'original absent sans preuve après features'
+        observations = json.loads((p / 'maps-runtime.json').read_text())
+        assert observations
+        for r in observations:
+            assert r['phase'].startswith('cible-') or r['phase'] == 'module'
+            assert r['starttime'] and r['elf_sha256'] == ledger['sha256']
+            assert r['sdk_sha256'] == ledger['sdk_sha256']
+            assert r['cgroup'] == authority['cgroup'] or r['cgroup'].startswith(authority['cgroup'] + '/')
+            assert pathlib.Path(r['exe']) == original
+            assert (p / r['maps']).is_file()
+        size = int(subprocess.check_output(['du', '-sb', '--', str(t)], cwd='/var/tmp', text=True, timeout=10).split()[0])
+        assert size <= 32 * 1024**3
+        samples = json.loads((p / 'target-size.json').read_text())
+        assert samples and all(r['bytes'] <= 32 * 1024**3 for r in samples)
+        result['target_final_bytes'] = size
         assert time.monotonic() < src['deadline'], 'budget global dépassé'
         before = dict(l.split() for l in (p / 'memory-before').read_text().splitlines())
         after = dict(l.split() for l in (p / 'memory-after').read_text().splitlines())
