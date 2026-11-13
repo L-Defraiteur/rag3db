@@ -1,0 +1,49 @@
+ 1:  c86b31569 !  1:  98d5c5bb3 Préparer les témoins CPU de provenance des targets
+    @@ docs/recherche/13-11-2026/03-plan-garde-target.md (new)
+     +Ticket ouvert jusqu'à revues et qualification suffisante, aucun master/retrait.
+     
+      ## docs/recherche/tickets/2026-11-11-un-target-repris-embarque-les-gabarits-d-un-autre-worktree.md ##
+    -@@ docs/recherche/tickets/2026-11-11-un-target-repris-embarque-les-gabarits-d-un-autre-worktree.md: Pour fermer : rendre la frontière de propriété effective sur tous les points
+    - Une seule modification de date de `build.rs`, SHA source inchangé et aucun diff git, a reconstruit le navigateur en 48,19 s. Attestation : 212 chemins du bon worktree, 212 contenus courants présents, chemins UI `.d` conformes, ELF SHA256 `3e3770df4000178626a8c07631ab124ab6673c67b643b7ad2cae6f6e7cfc7063`. Archi a vérifié cette attestation indépendamment.
+    - 
+    - Les deux tests auparavant rouges passent inchangés séparément (1/0/0 chacun, 1,25 s et 67,85 s), puis le navigateur complet passe 36/0/0 en 132,35 s, ELF inchangé. Journaux nouveaux `nav-cible-erreur.log`, `nav-cible-flux.log`, `navigateur-reconstruit.log`, `attestation-nav-reconstruit.json` ; ancien rouge et ELF intacts. Le verdict agrégé R5 conserve les autres étapes vertes et remplace explicitement la seule étape navigateur. Aucune capture supplémentaire de la réponse HTTP n'a été ajoutée. Cette récupération confirme l'effet des gabarits périmés ; elle ne ferme pas le défaut de garde.
+    -+
+    +@@ docs/recherche/tickets/2026-11-11-un-target-repris-embarque-les-gabarits-d-un-autre-worktree.md: distinction du rouge CI sont consignés dans le
+    + [ticketCI](../../orchestration/tickets/2026-11-13-la-ci-refuse-la-reouverture-du-temoin-physique.md#arbitrage-de-la-qualification-garde-sdk29-après-préfixe65ad).
+    + Le message GO exact reste nécessaire avant le marker ; aucune exclusion ajoutée.
+    + Ce paragraphe ne vaut ni verdict global ni intégration.
+     +
+     +## Reprise coordonnée — 13 novembre, contrôle périodique
+     +
+ 2:  1c8eebc0a =  2:  288234345 Refuser les targets sans provenance et garder le lanceur Cargo commun
+ 3:  c407022c9 =  3:  2f6e07ad8 Raccorder les compilations des passes à la garde de destination Cargo
+ 4:  ef5c4f8ba =  4:  0f19627e3 Consigner les preuves CPU et adapter la fixture du lanceur e2e
+ 5:  bacc49f7f =  5:  78df385ba Conserver les restrictions de résolution dans les métadonnées Cargo
+ 6:  7901bdd3d =  6:  89146884b Publier le verdict CPU du garde de provenance des targets
+ 7:  a1c4db720 =  7:  c9a40f89c Eprouver les restrictions Cargo pendant une reprise connue
+ 8:  ee404f927 =  8:  40ab7d480 Preserver les restrictions de resolution dans la garde de reprise
+ 9:  5221359fb =  9:  60b065993 Preparer la qualification isolee du garde et des gabarits reels
+10:  b9283667b = 10:  f1a949f2d Conserver le rouge de profil du pilote et les preuves de provenance
+11:  3784ae36b = 11:  8aceae5f6 Preparer le runtime manquant avec des racines etat distinctes
+12:  b5c340015 = 12:  da53673a3 Publier la qualification ciblee composite du garde target
+13:  41341401f = 13:  face833ad Corriger la taille mesuree de l ELF du garde
+14:  e9f81dfb4 = 14:  b4f416fda Auditer l union du garde et ajouter le temoin des assets HTTP servis
+15:  9ec421069 = 15:  4e05bd020 Figer l union du garde apres les entrants Markdown de master
+16:  438660076 = 16:  2559f0b99 Preparer la qualification large gardee sur la source union figee
+17:  07d0999e8 = 17:  3c170c8ff Consigner la reserve de quiescence du cache apres attente du poste
+18:  76c3e751d = 18:  225f1d77b Consigner les reserves de preuve initiale et de frontiere metadata
+19:  03896d62f = 19:  9379f63a4 Fermer ensemble les reserves de cache frais et de premiere preuve
+20:  935c61d27 = 20:  d46be004a Consigner le rouge de contexte du temoin de preparation
+21:  acb9f16d3 = 21:  560054ee1 Completer le contexte de fixture sans relancer la qualification
+22:  41024566e = 22:  10648b65e Publier les quatre temoins CPU du pilote corrige
+23:  d37019e41 = 23:  46d69c159 Consigner le faux positif des controleurs dans le scan frais
+24:  d2d47cd6b = 24:  27381d808 Identifier etroitement les deux controleurs sans exempter le cache
+25:  b8844fe28 = 25:  31542d4fb Consigner les cinq temoins CPU des roles de controle
+26:  abe2e805d = 26:  8d2e5944a Consigner le scope absent de la politique avant correction
+27:  c8ca5d53b = 27:  6d05facb0 Construire la politique poste avec scope defini et interpreteur shebang
+28:  4d38e1140 = 28:  6152ab64a Consigner les six temoins incluant la politique effective
+29:  8d4735fd0 = 29:  978b1e790 Conserver le refus du prefixe et diagnostiquer l option de lancement
+30:  c32ef7895 = 30:  54e98f07e Preparer une entree exacte avec recu du reste sans reset du prefixe
+31:  65ad0810c = 31:  6f7352271 Consigner les sept temoins de la reprise a echeance originale
+32:  845186104 = 32:  405841f01 Publier les preuves du prefixe avant toute levee de pause runtime
+33:  cdcc032df = 33:  cb8642e7d Publier la qualification SDK29 complete et la fin des ressources
