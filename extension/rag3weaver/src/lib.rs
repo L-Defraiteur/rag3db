@@ -246,7 +246,7 @@ pub mod canal;
 pub mod code_tree;
 /// Son cycle de vie (marche 4) : `daemon.json`, le jeton local, et le
 /// lancement par le premier client.
-#[cfg(all(feature = "daemon", feature = "rag3db-native"))]
+#[cfg(feature = "daemon")]
 pub mod daemon_lifecycle;
 pub mod schema;
 pub mod script;
