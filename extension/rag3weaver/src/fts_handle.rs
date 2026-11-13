@@ -856,28 +856,12 @@ mod mots_neufs_a_travers_une_fusion {
             .collect()
     }
 
-    /// `RAG3WEAVER_FTS_TEMOIN_GARDER=<dossier vide>` : le scénario avec fusion
-    /// s'écrit là, et le témoin s'arrête avant de rouvrir. Une réouverture
-    /// prend un writer, qui peut commiter ou fusionner à sa fermeture. Le
-    /// dossier reste tel que le scénario l'a laissé, pour qu'une sonde de
-    /// mots perdus ait une borne connue (hotfixs, 13 novembre 2026).
-    const GARDER: &str = "RAG3WEAVER_FTS_TEMOIN_GARDER";
-
     fn jouer(fusion: bool) {
-        let garde_dossier = std::env::var_os(GARDER).filter(|_| fusion).map(std::path::PathBuf::from);
-        let temporaire = tempfile::tempdir().unwrap();
-        let chemin = match &garde_dossier {
-            Some(d) => {
-                std::fs::create_dir_all(d).unwrap();
-                assert!(std::fs::read_dir(d).unwrap().next().is_none(), "{GARDER} doit nommer un dossier vide : {}", d.display());
-                d.clone()
-            }
-            None => temporaire.path().to_path_buf(),
-        };
+        let dossier = tempfile::tempdir().unwrap();
         let schema = build_schema_config(&[CHAMP.to_string()], &[], 1).unwrap();
         let neufs: BTreeSet<String> = (0..20).map(|i| format!("fn quokka_neuf_{i:02}() {{}}")).collect();
         {
-            let handle = LucivyHandle::create(StdFsDirectory::open(&chemin).unwrap(), &schema).unwrap();
+            let handle = LucivyHandle::create(StdFsDirectory::open(dossier.path()).unwrap(), &schema).unwrap();
             let champ = handle.field(CHAMP).unwrap();
             let mut garde = handle.writer.lock().unwrap();
             let writer = garde.as_mut().unwrap();
@@ -909,12 +893,8 @@ mod mots_neufs_a_travers_une_fusion {
             handle.reader.reload().unwrap();
             handle.wait_dictionary_fold();
         }
-        if let Some(d) = garde_dossier {
-            eprintln!("{GARDER} : index laissé sans réouverture dans {}", d.display());
-            return;
-        }
         // Rouvert : le dictionnaire est ce que tient le disque.
-        let handle = LucivyHandle::open(StdFsDirectory::open(&chemin).unwrap()).unwrap();
+        let handle = LucivyHandle::open(StdFsDirectory::open(dossier.path()).unwrap()).unwrap();
         assert_eq!(trouves(&handle, "quokka_neuf", 0), neufs, "l'exact retrouve chaque identifiant neuf après réouverture");
         assert_eq!(
             trouves(&handle, "quokka_neuf", 1),
