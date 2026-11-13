@@ -30,3 +30,20 @@ identiques SHA au manifeste après arrêt. Superviseur aussi copié localement.
 SHA lib.log : 8295e630e40de1f29d5b0a7df6eae5643cdb865e69722a66ce004acbbf3b71a5.
 C7/ED poursuivent attribution RO ; aucun défaut production encore établi.
 P14 ciblé reste vert dans sa portée ; aucune qualification globale obtenue.
+
+## Diagnostic RO supplémentaire : borne du tampon
+
+La lecture JSON décompressée de la copie
+`tmp/lib/.tmpfv48xK/runs/2379c4490f05/graph-1a1d3a704a0-609.json.zst`
+montre un NodeRun IndexNode ok=false : le petit dépôt demande au moins
+1073741824 octets, le processus déclare 536870912. Le graphe worktree voisin
+concerne open_branch ; ce n’est PAS une liaison établie au juge FAILED.
+Les quatre graphes conservés ont été lus comme fichiers uniquement, aucune DB.
+
+Contrat statique : estimate.rs64–72 calcule needed_bytes par
+text_bytes.div_ceil(TEXT_BYTES_PER_BUFFER_GIB).max(1)*(1<<30).
+IndexNode refuse buffer_refusal avant journal et spawn (index_nodes.rs714–718).
+Le profil commun 512MiB est donc incompatible avec ce chemin d’indexation.
+Cette preuve ne mesure pas le minimum réel du moteur et ne justifie aucune
+relaxation de la garde. Correction du profil éventuelle à revoir/autoriser
+exactement avant toute nouvelle exécution ; aucun retry lancé.

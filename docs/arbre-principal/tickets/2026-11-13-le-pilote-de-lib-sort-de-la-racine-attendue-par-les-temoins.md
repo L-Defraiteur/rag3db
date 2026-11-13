@@ -98,3 +98,10 @@ identiques SHA au manifeste après arrêt. Superviseur aussi copié localement.
 SHA lib.log : 8295e630e40de1f29d5b0a7df6eae5643cdb865e69722a66ce004acbbf3b71a5.
 C7/ED poursuivent attribution RO ; aucun défaut production encore établi.
 P14 ciblé reste vert dans sa portée ; aucune qualification globale obtenue.
+
+
+Diagnostic RO tampon : graphe conservé d’une fixture concurrente prouve un
+refus IndexNode du profil commun512MiB contre minimum de garde1GiB. Identité
+du juge FAILED non établie par ce graphe ; source estimate.rs64–72 et
+index_nodes.rs714–718 corroborent le contrat. Voir rapport05 pour preuve
+et limites. Aucun changement de garde/produit et aucun rejeu.
