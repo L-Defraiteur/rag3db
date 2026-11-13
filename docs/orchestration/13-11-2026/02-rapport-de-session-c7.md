@@ -409,3 +409,15 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   correctif de `check_tickets.py --lot`). La prochaine pose portera 4.3.5. Lot suivant de recherche : la
   lecture qui voit un lot à moitié sous la lib entière (la lecture sale sous V2 du 7 novembre, à départager
   entre le moteur et le témoin).
+- **20 h 46, les sessions sans lot relancées** (Lucie : « tout le monde dort là non ? » — quatre sessions idle
+  depuis une heure par ma faute : archi, codeparsers, tty, hotfixs ; leçon en mémoire, et règle dite : sans lot
+  plus de dix minutes, le dire). **codeparsers** : le lot require était atterri par Codex le 11 (pointeur
+  a730a9b, avec un second lot : export par défaut transmis, exports ambigus sans cible devinée) ; sa lecture
+  de la mesure (eb897c80f) : les 17 justes ôtées étaient toutes des arêtes vers une liaison que l'ancien code
+  devinait, **aucun require vrai perdu** ; les 415 muettes sont un défaut de l'oracle (il cherche la cible au
+  lieu du nom mentionné) ; le prix du lot est le poids des arêtes `liaison` (+36 % de CONSUMES TS/JS). Suite :
+  avance rapide de codeparsers master à a730a9b, l'oracle corrigé, le juge des 415, le compte d'import_binding.
+  **tty** : son lot de docs de Codex poussé (9ddfbcdf1), thème « forêt » ensuite. **hotfixs** : rejoue sa trace
+  des deux sens sous 835d5298f (ferme le ticket de l'index complet). **archi** : ordre changé, la sûreté d'abord
+  (l'accord borné à sa conversation, l'empreinte aveugle), puis la jauge au survol et les quatre mineurs.
+  **ED** : (b) commencé (témoin à six onglets, SharedWorker servi par l'hôte, état partagé).
