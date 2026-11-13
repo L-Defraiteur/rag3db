@@ -214,7 +214,7 @@ final après fermeture, réouverture et requêtes des deux cellules.
   fermé ; seul l'adaptateur possédé passe par sa capacité interne, après lecture
   RO de l'origine, du contrat et de la candidate/publiée.
 - Huit témoins natifs, dont enfant de mort avant premier COMMIT, après COMMIT,
-  après FTS et après publication, plus cinq témoins de capacités/erreurs CPU.
+  après FTS et après publication, plus sept témoins de capacités/erreurs CPU.
   Exactitude8/6/8/2, UUID/rendus/chunks par les producteurs communs ; réponses
   lexicales nom/doc/corps, cellules, codecs figés et refus étrangers sont vérifiés.
   Les fichiers Mermaid de fixture sont retirés après mort : reprise depuis le
@@ -225,10 +225,24 @@ qui appelle le superviseur commun depuis `/var/tmp`, délai initial600s, poste
 lourd/MemoryMax32G/Highmax, bus privé unique et preuves neuves `...-v1`. Le client
 `cible.py` compile une seule lib de tests native+code sans features par défaut,
 `-j8`, target unique32Go, lib29 du magasin ; il inventorie l'ELF, le copie/rehashe,
-atteste source et deux gabarits de recherche requis, puis joue5 CPU+8 natifs
+atteste source et deux gabarits de recherche requis, puis joue7 CPU+8 natifs
 avec0ignoré. Tous les lancements ELF exportent la même lib et le manifest_dir
 exact ; état/journaux/gabarits/TMP propres sont hors WT. Maps natives/cgroups,
 argv, sorties et témoins signés par les calculs sont enregistrés. Le résultat
 client VERT reste subordonné au reçu final du superviseur VERT/code0/restes[],
 bus physiquement absent et quiescence indépendante ; aucun master permis par
 cette seule préparation. Aucun Cargo de cette recette n'a encore été joué.
+
+
+Réserve Drop fermée dans le diff de revue : le buffer possède une invalidation
+partagée, sérialisée avec save/delete/flush ; ses clones et sa destruction ne
+retentent pas la persistance après l'issue inconnue. Les octets restent lisibles
+jusqu'à destruction, la reprise native conserve déjà son support durable.
+Le Catalog utilise aussi une famille de connexions révocable : writer, lecteurs,
+read_pool, connexion sync et Arc exportés partagent l'invalidation, y compris si
+le backend n'a pas poison. Les méthodes transactionnelles et settings restent
+explicitement déléguées au backend ; rollback seul demeure permis pour nettoyer.
+Cela ferme le contre-exemple set_scope trouvé en revue sans une liste fragile de
+gardes par API. Deux témoins CPU couvrent première poussée échouée qui réussirait
+à la suivante/clones/Drop sans retry, et délégation pool/révocation des lecteurs.
+Quinze témoins préparés au total, aucun exécuté à ce stade.
