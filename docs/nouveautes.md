@@ -17,6 +17,8 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **13 nov. — En JavaScript, un mot entre apostrophes ne passe plus pour un usage.** `external: ['fs',
+  'path']` ne relie plus la configuration au `require("path")` : codeparsers b5c91e1.
 - **13 nov. — Plusieurs onglets de l'IDE, un seul flux.**
   Les onglets d'un navigateur partagent le flux de l'hôte par un `SharedWorker`, qui porte aussi
   un petit état partagé entre les pages (la forme des fenêtres détachées à venir). Six onglets
