@@ -39,3 +39,10 @@ arithmétique du reste après poste et expiration sans reset. Publiés NON JOUÉ
 à cette étape ; AST9/diff/tickets seulement. Aucun Cargo/rustc/target/DB/service
 lancé ou modifié. Recette et couple exact soumis RO/GO C7 distinct, aucun ancien
 GO ne vaut pour ce pilote.
+
+Après publication c32ef789587b8a3dbdf8050626aa61da7e2743c2 : sept témoins
+CPU synthétiques VERT7/0 en0,039s sous timeout60/failfast ; aucun subprocess
+réel/Cargo/proc/target. Journal horsW pilote-c32ef-cpu.log SHA256
+3506bcf024763cfac4d8f8b27aa6dad47c84d92a64bfd0c5ab4a446fd636a49e.
+Ces témoins de préparation ne lèvent pas la pause runtime ni le besoin de
+RO et GO du nouveau couple exact.
