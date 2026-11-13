@@ -3221,7 +3221,17 @@ mod tests {
                     continue;
                 }
             };
-            if let Err(e) = crate::dataflow::plan_node::resoudre_les_plans(&mut outil, |c| Err(format!("{c} : un outil livré cite son Plan par @builtin:")), &schema_des_plans) {
+            if let Err(e) = crate::dataflow::plan_node::resoudre_les_plans(
+                &mut outil,
+                |c| match c.strip_prefix(crate::builtin_templates::PREFIX) {
+                    // Les outils livrés lisent leurs Plans livrés dans le binaire.
+                    Some(livre) => crate::builtin_templates::get(livre)
+                        .map(|o| String::from_utf8_lossy(o).into_owned())
+                        .ok_or_else(|| format!("aucun Plan livré « {livre} »")),
+                    None => Err(format!("{c} : un outil livré cite son Plan par @builtin:")),
+                },
+                &schema_des_plans,
+            ) {
                 echecs.push(format!("{nom} : {e}"));
                 continue;
             }
