@@ -250,9 +250,11 @@ dictionnaire du shard ne connaît pas (ni texte, ni métadonnée).
 `~/.cache/rag3weaver-build/lucivy-index-rouge-pour-hotfixs`, identique à
 `~/.cache/rag3weaver-build/lucivy-flou/index-rouge-60f7063`. Sur une copie neuve, la sonde compte
 **31 862 identifiants inconnus sur 2 693 974** dans le champ `content`, exactement le chiffre de
-lucivy. Elle en compte aussi 480 sur 26 493 dans le champ `path`, que lucivy dit stocké et non
-indexé ; ce champ a pourtant un `.gmap`, ce que je lui ai signalé. Cela ne change rien aux bases de
-Lucie, où tous les champs sont à 0.
+lucivy. Elle en compte aussi 480 sur 26 493 dans le champ `path`. C'est le même défaut, confirmé
+par lucivy : `build_schema` (`lucivy_core/src/handle.rs`) ignore l'option `indexed` pour un champ
+texte, donc tout champ texte est indexé, avec sa part du dictionnaire partagé (`sfx_field_ids [1, 2]`
+dans le `meta.json` de l'index rouge). Compter tous les champs texte est la bonne règle : les 0 des
+bases de Lucie valent pour tous leurs champs.
 
 **Ce qui a été lu.** Des copies neuves des `.fts` de l'instantané `avant-835d5298f` (luciepc à
 20 h 06, portable à 20 h 07), prises hôtes arrêtés avec `fuser` vide. L'outil ouvre chaque shard
