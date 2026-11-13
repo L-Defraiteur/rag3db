@@ -6,7 +6,8 @@ Ticket : docs/rag3weaver-archi/tickets/2026-11-12-exposer-la-navigation-dans-les
 Suite autorisée par Lucie/C7, Recherche confirme aucun chevauchement. WT neuf
 ~/.cache/rag3weaver-build/cx-wt-grep-symboles aux deux postes, branche
 cx-archi-grep-symboles-2, target unique PC cx-archi-target, scratch court cx-gs.
-Aucun ancien WT/target/base du premier lot recréé. Base798ab1aa7, Embar inclus.
+Les biens du premier lot ont été retirés ; le target de session est neuf.
+Base798ab1aa7 initiale, rebase sur garde intégrée e16768186, Embar inclus.
 
 Source ea7dcbb0b4bb15f89c6f8d7c3a7a2f542afee428 : ciblé VERT12/0/0 navigation
 en1,14s et2/0/0 grep en0,07s. Nouveau test : vrai chat du framework piloté par
@@ -42,3 +43,22 @@ Revue statique favorable C7 sur dea, ciblé correctif vert sur ea7 ; aucune glob
 ni master de la suite grep autorisés à ce stade. Relire entrants ED features et
 garde Recherche avant recette globale ; source/pilote publiés avant exécution.
 Pas de modèle/service/7879/GPU utilisé pour le ciblé, aucun daemon personnel posé.
+
+## Globale autorisée, avant entrée
+
+C7 donne GO6000 après intégration garde Recherche e16768186 (SHA6f3dfceb…).
+Branche neuve cx-archi-grep-symboles-3 ; diff ea7→HEAD src/templates/Cargo vide.
+Le ciblé n'est pas rejoué sur MD/scripts seuls. ED n'a pas de correctif Rust
+features disponible : cette passe ne qualifie pas daemon seul ni native+daemon
+sans code, qui restent son lot indépendant.
+
+Une primitive/budget6000, CPU/j8/Max32G/target32Go, native29 fixe, source et
+pilote publiés avant entrée. F5≤2100, minimal0≤120, trois compilations sous
+borne partagée1500, inventaires et attendus publiés avant lib≤900, NAV40≤600,
+puis lectures27/hôte13/PG36 et filets2 chacun≤120. Modèles/API retirés ;
+seul BGE7879 pour lectures après coordination, santé avant/après et rendu rapide.
+PG neuve privée cx_archi_grep_symboles_20261113 : absence vérifiée avant création,
+identité/propriétaire/OID conservés ; dump+SHA et zéro session avant futur drop.
+Première erreur inattendue : stop/diagnostic, pas de retry inchangé ni de reset6000.
+Le pilote prouve trois ELF réellement observés/native29 et quiescence finale.
+Aucun tour master accordé à ce stade.

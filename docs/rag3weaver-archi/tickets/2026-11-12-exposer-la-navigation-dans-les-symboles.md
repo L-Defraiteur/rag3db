@@ -446,3 +446,22 @@ cx-grep-symboles-ea7dcbb0b-cible-20261113, ELF d5b8dd4ca105a0588315f2916869921de
 Primitive validation-1_rx2ina VERT0/restes[]/nettoyé=true, quiescence target[].
 Les deux rouges précédents restent distincts et conservés. Pas de globale ni
 d'intégration de cette suite avant revue/tour explicite C7.
+
+## Recette globale autorisée — avant exécution
+
+GO C7 pour une portée6000 distincte du ciblé1800 terminé. Landing garde Recherche
+e16768186 relu, SHA6f3dfceb17c9703029d2f4f26385f9aa21820c84bc79c518e1338b6d0f36188c ;
+rebase branche neuve3, diff runtime ea7→HEAD vide. ED features : contrat seulement
+19cd9383d, aucune correction Rust disponible, combinaisons daemon seul/native+daemon
+sans code non couvertes par cette recette et non revendiquées.
+
+F5≤2100, vrai minimal0≤120, trois compiles liblarge/NAV/e2e sous borne partagée1500,
+inventaires figés publiés avant lib≤900 (dont navigation12+grep2), NAV40≤600,
+lectures27/hôte13/PG36 et filets2 chacun≤120. Ensemble sous une primitive/j8/
+Max32G/target32Go, native29 fixe, CPU, aucune API ni nouveau modèle GPU.
+Attente/coordinations et nettoyage inclus dans6000, pas de reset après un rouge.
+PG neuve privée cx_archi_grep_symboles_20261113 : absence avant création, identité/
+propriétaire/OID enregistrés ; dump+SHA puis zéro session avant suppression finale.
+7879 seulement pour lectures après coordination, santé avant/après, rendu immédiat.
+Trois ELF/223gabarits réels/native29 prouvés par PID/starttime/maps ; premier rouge
+stop/diagnostic, aucun master avant revue et tour explicite C7.
