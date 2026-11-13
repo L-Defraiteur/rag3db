@@ -22,14 +22,14 @@ toujours_du_code() {
   esac
   return 1
 }
-code_apporte() {
-  local base=$1 neuf=$2 f n change racines appeles candidats
+# Les scripts appelés dans un arbre (un commit), à transitivité : un fichier du crate (hors code toujours,
+# hors .md) dont le nom apparaît dans une racine jouée ou dans un script déjà appelé. Les noms sont
+# séparés par des espaces : un nom de fichier avec une espace casserait la liste (le crate n'en a pas).
+appeles_dans() {
+  local arbre=$1 f n change candidats appeles=""
   local -a racines_existantes=()
-  for r in $RACINES_JOUEES; do git cat-file -e "$neuf:$r" 2>/dev/null && racines_existantes+=("$r"); done
-  # Les scripts appelés, à transitivité : un fichier du crate (hors code toujours, hors .md) dont le
-  # nom apparaît dans une racine jouée ou dans un script déjà appelé.
-  candidats=$(git ls-tree -r --name-only "$neuf" -- extension/rag3weaver | grep -v '\.md$' | while read -r f; do toujours_du_code "$f" || echo "$f"; done)
-  appeles=""
+  for r in $RACINES_JOUEES; do git cat-file -e "$arbre:$r" 2>/dev/null && racines_existantes+=("$r"); done
+  candidats=$(git ls-tree -r --name-only "$arbre" -- extension/rag3weaver | grep -v '\.md$' | while read -r f; do toujours_du_code "$f" || echo "$f"; done)
   change=1
   while [ $change = 1 ]; do
     change=0
@@ -37,21 +37,46 @@ code_apporte() {
       case " $appeles " in *" $f "*) continue ;; esac
       n=$(basename "$f")
       # shellcheck disable=SC2086
-      if git grep -q -F -e "$n" "$neuf" -- "${racines_existantes[@]}" $appeles 2>/dev/null; then
+      if git grep -q -F -e "$n" "$arbre" -- "${racines_existantes[@]}" $appeles 2>/dev/null; then
         appeles="$appeles $f"; change=1
       fi
     done
   done
-  git diff --name-only "$base" "$neuf" -- extension/rag3weaver tools/rust_api extension/vector Cargo.lock ':!*.md' | while read -r f; do
+  echo "$appeles"
+}
+code_apporte() {
+  local base=$1 neuf=$2 f appeles
+  # Appelé d'un côté ou de l'autre : supprimer ou renommer un script appelé dans la base est du code
+  # (relecture de recherche, 13 novembre 2026), comme en ajouter un qu'appelle le nouvel arbre.
+  appeles="$(appeles_dans "$base") $(appeles_dans "$neuf")"
+  # --no-renames : un renommage se lit comme une suppression et un ajout, les deux chemins jugés.
+  git diff --no-renames --name-only "$base" "$neuf" -- extension/rag3weaver tools/rust_api extension/vector Cargo.lock ':!*.md' | while read -r f; do
     if toujours_du_code "$f"; then echo "$f"; continue; fi
     case " $appeles " in *" $f "*) echo "$f" ;; esac
   done
 }
 if [ "${1:-}" = "--code-apporte" ]; then code_apporte "$2" "$3"; exit 0; fi
+# **La dérive se voit** (c7, 13 novembre 2026) : la copie exécutée (au cache, `~/.cache/rag3weaver-build/`)
+# fait autorité — un lot ne peut pas affaiblir la garde qui le juge ; elle dit à chaque exécution son hash et
+# celui de `tools/poste/push_garde.sh` dans l'arbre poussé, et « garde en retard sur le dépôt » quand ils
+# diffèrent, sans refuser. Mode `--derive <arbre>`, joué par le témoin.
+derive() {
+  local moi depot
+  moi=$(sha256sum "$(realpath "$0")" | cut -c1-16)
+  if [ -f "$1/tools/poste/push_garde.sh" ]; then
+    depot=$(sha256sum "$1/tools/poste/push_garde.sh" | cut -c1-16)
+  else
+    depot="absente"
+  fi
+  echo "garde exécutée $moi, garde du dépôt $depot"
+  if [ "$moi" = "$depot" ]; then echo "garde à jour"; else echo "garde en retard sur le dépôt (la copie exécutée fait autorité ; recopie après relecture et mot de l'orchestration)"; fi
+}
+if [ "${1:-}" = "--derive" ]; then derive "$2"; exit 0; fi
 # Master tenu pour une autre session (fenêtre de c7) : pas de push tant que le fichier existe.
 [ -e $HOME/.cache/rag3weaver-build/master-tenu ] && { echo "ARRÊT : master tenu — $(cat $HOME/.cache/rag3weaver-build/master-tenu)"; exit 1; }
 J=$HOME/.cache/rag3weaver-build/$2
 cd $HOME/git_workspaces/$1 || exit 1
+derive "$PWD"
 gd=$(git rev-parse --git-dir)
 tail -1 $J/resume.log | grep -qx VERT || { echo "ARRÊT : la passe n'est pas VERTE"; exit 1; }
 teste=$(head -1 $J/resume.log | awk '{print $2}')
