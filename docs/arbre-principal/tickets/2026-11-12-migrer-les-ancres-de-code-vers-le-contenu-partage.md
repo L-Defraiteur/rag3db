@@ -2219,3 +2219,16 @@ transitoire du paquet explicites ; profil déjà eager, Max32 inchangé. Ajouter
 juge CPU store aucune écriture + assertion native handlesRO/root immuable et
 index absent refusé. Compte proposé20fonctions/19juges/8enfants, pas GO runtime.
 Fixture P10 conservée tmp/.tmp7Pmai8 (codecs/DB/WAL/plan), aucune mutation aprèsSTOP.
+
+
+P11 ec2f : compilation10CPU etjuge codec natif VERT, deuxième juge arrêté sur
+shard_0 sans fichiers dans helper snapshot. Fixture conservée tmp/.tmpAqrL9d.
+Cause RO confirmée dans lucivy4.3.3 BlobShardStorage/BlobDirectory : fichiers
+racine utilisent index brut, fichiers de shard utilisent BLOB_PREFIX+index/shard_N.
+Helper avait repris index/shard_N sans préfixe. Lecture binaire RO de la fixture
+retrouve effectivement Lucivy_Lucivy_SnippetContent__synthetic__Alpha/shard_0/meta
+et _config, etc. Réutiliser la constante PUBLIQUE BlobDirectory::BLOB_PREFIX
+(module blob_directory), sans hardcode/déplacement/mutation ni namespace nouveau.
+Pas de lecture SQL/native hors recette ; root/shard manquant doit toujours refuser.
+Échec suivant aucun modèle dense est secondaire à FTS indisponible, pas admission
+d'un modèle ; aucun calcul/modèle exécuté. Pas de rejeu avant delta/RO/GO distinct.
