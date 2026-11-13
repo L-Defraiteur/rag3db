@@ -101,3 +101,14 @@ Gio`. La raison :
 Le `poste lourd` extérieur tenait le poste avec un plafond plus haut : refus. **On lance
 `./run_e2e.sh` directement, sans `poste lourd` autour** ; il attend sa place dans la file comme les
 autres.
+
+## Une faute du même soir : pousser sans le « à toi » de c7
+
+J'ai poussé le correctif des gabarits (c13c76f72) dès son rejeu vert. Je m'appuyais sur ma lecture
+de la file : c7 avait écrit « tu passes dans la file après codeparsers ». Ce n'était pas un tour
+donné. La liaison d'arbre principal était alors en dernier pas, et un commit sous `tests/` est du code
+pour sa garde : il lui a coûté un rejeu court. Il n'y a pas eu de dégât.
+
+**La règle : on pousse au mot « à toi » de c7, jamais sur sa propre lecture de la file.** Une passe
+verte s'arrête avant le push : on dit « vert, prêt » à c7 avec le hash de la branche, puis on pousse
+à son mot. `poste push` sérialise les pushes ; il ne donne pas le tour.
