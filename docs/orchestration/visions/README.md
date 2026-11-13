@@ -102,5 +102,15 @@ le juge.
    une valeur ; le coffre fait l'appel, l'agent reçoit le résultat. C'est la règle de la maison (« les
    identifiants par le chemin de .vault, jamais leur contenu ») faite produit. « On verra plus tard ».
 
-Le code est le premier produit du framework ; ces quatre-là sont des vues et des agents de plus sur le
+5. **Un petit classifieur branchable, en garde devant l'agent** : un modèle local de surveillance des
+   fuites (pour le code comme pour les sessions d'agent), que l'équipe définit et branche. Quand
+   quelqu'un passe une variable d'environnement ou une valeur sensible dans un prompt, une commande ou un
+   fichier, elle atterrit d'abord dans ce modèle, qui la transforme en **référence structurée vers une
+   variable temporaire** stockée dans le coffre : l'agent voit `{{secret:DB_URL}}`, jamais la valeur,
+   mais ses scripts peuvent s'en servir (le lanceur résout la référence au moment d'exécuter, hors de
+   la fenêtre du modèle). Même mécanisme pour la sortie : ce qui ressemble à une valeur est caviardé
+   avant de revenir à l'agent. C'est la porte d'accord de l'atelier et le décideur local appliqués aux
+   secrets ; la graine 4 (le coffre) lui donne l'endroit où ranger.
+
+Le code est le premier produit du framework ; ces cinq-là sont des vues et des agents de plus sur le
 même index.
