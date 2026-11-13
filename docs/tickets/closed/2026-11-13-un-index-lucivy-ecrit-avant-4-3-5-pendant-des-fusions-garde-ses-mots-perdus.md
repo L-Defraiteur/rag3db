@@ -1,8 +1,9 @@
 # Un index lucivy écrit avant la 4.3.5 pendant des fusions de fond garde ses mots perdus
 
-- **État** : ouvert (13 novembre 2026). Relevé par c7 à la publication de lucivy 4.3.5. Pour
-  recherche, qui fait le chiffrage avec la montée, et pour hotfixs, qui joue la sonde sur les
-  copies.
+- **État** : corrigé (13 novembre 2026, lot lucivy-4-3-5, recherche). La montée à lucivy 4.3.5
+  arrête la perte, ce que prouve le témoin `fts_handle::mots_neufs_a_travers_une_fusion`, rouge sous
+  4.3.3 et vert sous 4.3.5. Le chiffrage des bases de Lucie donne 0 identifiant inconnu : rien à
+  reconstruire.
 - **Famille** : produit
 - **Gravité** : une recherche plein texte qui ne trouve plus un mot présent dans le code. L'exact
   manque un identifiant que seuls quelques documents portent, et le flou écarte ces documents.
@@ -56,6 +57,14 @@ La sonde a d'abord été vue rouge sur l'index sauvé de lucivy, dans une copie 
 champ texte qui a un `.gmap`, et lit `pending_segments`.
 
 **Rien à reconstruire** : aucune base de Lucie n'a perdu de mots.
+
+## Correctif
+
+- Un témoin dans rag3weaver, `fts_handle::mots_neufs_a_travers_une_fusion`, joue le scénario
+  déterministe de lucivy sur le schéma v4 que construit rag3weaver. Sous 4.3.3, après réouverture,
+  l'exact ne retrouve aucun des 20 identifiants neufs ; sous 4.3.5, il les retrouve tous, et le flou
+  aussi. Un contrôle sans fusion passe sous les deux versions.
+- lucivy-core, ld-lucivy et sparse-vector montent à 4.3.5 (format inchangé).
 
 ## Lot lié
 
