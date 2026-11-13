@@ -489,3 +489,23 @@ aucun Cargo/rustc/cgroup/DB/service ni vrai enfant.
 Correction finale purement de fin de fichier (ligne blanche) publiée ensuite ;
 le pilote plein reste HOLD jusqu’à RO/GO du nouveau couple exact. Sourcejuges3b
 reste inchangée, vert10FBD conservé, protocole de mesure non exécuté.
+
+### Relecture pilote streaming favorable et orchestration MESURE préparée
+
+ED relit le couple pilote `9b2be2fc2d100497f81aeb6edb7fa72e6041651d` / source
+`3b1661446c573ee794b918ec016c0cbff748e4ce`, favorable statique bornée : réserve
+premierFAILED levée, résultat du pilote ne vaut pas verdict du confinement.
+Lecture d’une ligne sans sortie peut bloquer : harddeadline et arrêt des
+échappés restent fournis par le confineur commun, pas une garantie autonome.
+Aucune qualification complète ni GO d’exécution déduit de cette relecture.
+
+Pilote de mesure concrétisé (NON exécuté) :
+`docs/lucivy/13-11-2026/outils/mesurer-envois.py`, publié b06c57ad7.
+Deux harnesses aux mêmes octets, manifests seuls chemins A/B différents,
+lockA copié puis B --locked et égalité stricte avant chronos ; release j4,
+8G/HIGHmax, affinité commune explicite4CPU, exécutables/SHA figés,96samples
+ABBA (trois blocs pour8cas), comptesFence exacts, quiescenceDrop horschrono,
+JSONL charge et dispersion/ratios DELTAglobal. ReçuMESURE600 unique contrôlé
+sans reset ; compile exclue du chronomètre mais incluse dans ce budget.
+Qualification correctness préalable et RO/GO mesure distincte toujours requis.
+Aucun lancement Cargo/runtime Rust/mesure depuis le vert10FBD.
