@@ -509,3 +509,18 @@ JSONL charge et dispersion/ratios DELTAglobal. ReçuMESURE600 unique contrôlé
 sans reset ; compile exclue du chronomètre mais incluse dans ce budget.
 Qualification correctness préalable et RO/GO mesure distincte toujours requis.
 Aucun lancement Cargo/runtime Rust/mesure depuis le vert10FBD.
+
+### Consigne avant entrée PLEIN900 (GO exact C7)
+
+Couple source3b1661446c573ee794b918ec016c0cbff748e4ce / pilote
+9b2be2fc2d100497f81aeb6edb7fa72e6041651d, octets extraits par git show.
+900uniques après vrai poste lourd, MemoryMax8GiB/HIGHmax/j4, helper commun.
+Réemploi documenté : targetprivé `cx-lucivy-barriere-target-13nov` créé pour
+FBD source fbd3f0a, même worktree cx-lucivy-shutdown-cpu ; ancien reçu terminé,
+verdict0/restes[]/nettoyétrue, aucun PID de l’inventaire encore présent au
+contrôle frais avant entrée. Aucun target d’autre session, aucune purge.
+P/Q/S nouveaux sous cache `cx-lucivy-plein-13nov-v1`, logs horsW.
+Lib entière inventoriée puis six coreexacts selon pilote ; premierFAILED ou
+code nonzero arrête, firstred immuable ; panics attendues non assimilées à rouge.
+Même reçuEND vérifié avant/après et posthash, verdict pilote provisoire jusqu’à
+scopecode0/restes[]/quiet. PasMESURE/SDK/CIphysique/release/mergelucivy.
