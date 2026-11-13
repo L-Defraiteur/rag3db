@@ -158,6 +158,28 @@ worktree et un commit deviennent des couches et des générations.
    - la rétention des générations indexées reste ouverte : on garde tout pour l'instant (le texte
      seul pour les anciennes), et on ne décide la coupe que sur une mesure.
 
+**La précision de Lucie sur la réponse 5**, dans ses mots : « si un entre-deux est l'état d'un scope,
+malgré qu'on n'ait pas indexé l'entre-deux, on peut le savoir en regardant le nœud, mais pour
+chercher dans cet entre-deux, il faut d'abord indexer explicitement ». Il y a donc deux niveaux :
+- **connu** : le nœud (le commit dans le graphe, et les scopes qu'il change) existe avec son
+  identité, lisible depuis le nœud, sans embarquement ni génération complète. Son coût est celui
+  d'une lecture git, pas d'un parse complet ;
+- **cherchable** : seulement après un index explicite de ce commit (`view: <branche>@<commit>`, ou
+  un geste « indexer ce commit » dans l'IDE), qui publie sa génération.
+
+**Le choix à trancher pour « connu »** : comment savoir quels scopes un commit change, sans l'indexer ?
+- **(a) Par la seule lecture git**, que je propose : `git diff -U0 <ancêtre indexé>..<commit>` donne
+  les fichiers et les plages de lignes touchées. Croisées avec les positions des occurrences de
+  l'ancêtre indexé le plus proche, déjà dans l'index, elles nomment les scopes modifiés ou retirés.
+  Ce qui ne se nomme pas sans analyse, ce sont les scopes **neufs** : ils se disent « lignes
+  ajoutées dans tel fichier, à telle place ».
+- **(b) Par un parse des seuls fichiers changés**, sans embarquement : il donne aussi le nom et
+  l'adresse des scopes neufs, mais coûte l'analyse de ces fichiers à chaque regard sur le nœud.
+
+Le témoin de « connu, non cherchable » : un commit non suivi apparaît au nœud avec les scopes qu'il
+touche ; une recherche sous `view` de ce commit répond « non indexé, indexer ? » au lieu d'un
+résultat ; après l'index explicite, elle répond.
+
 **Le modèle qui en sort** : par dépôt, un ensemble déclaré de branches suivies (l'ancre toujours),
 une génération par commit indexé d'une branche suivie, et « connu, non indexé » pour le reste.
 **Le témoin qui le prouve** : une branche non suivie n'a pas de couche ; l'IDE la montre comme
