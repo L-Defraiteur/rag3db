@@ -15,9 +15,9 @@ Archi et C7 favorables, tests encore non compilés et non exécutés.
 
 Exécution uniquement sur luciepc, clone/WT correspondant au hash publié,
 avec sous-modules épinglés et propres (contrôle récursif). Target neuf dédié
-~/.cache/rag3weaver-build/cx-target-ed-read-scope-r2 ; ne jamais employer
+~/.cache/rag3weaver-build/cx-target-ed-read-scope-r3 ; ne jamais employer
 cx-target-contenu-derive ni les ressources Arbre. Preuves dédiées
-~/.cache/rag3weaver-build/cx-preuves-ed-read-scope-r2. Avant création :
+~/.cache/rag3weaver-build/cx-preuves-ed-read-scope-r3. Avant création :
 attester absence du target et du dossier de preuves, source propre,
 aucun rebase, puis enregistrer hash/tree et état des sous-modules.
 
@@ -138,3 +138,26 @@ dans les phases actives, taille <=32GiB exigée et journalisée ; contrôle fina
 indépendant. C’est un contrôle observé périodiquement, pas un quota filesystem
 ni une preuve que le pic entre deux relevés est resté sous le plafond. Tout
 dépassement observé arrête sans vider le target pour rendre le verdict vert.
+
+
+### Rouge de lancement7a94 conservé — aucun Cargo
+
+Le lanceur r2 a reçu rc2 avant création du reçu et avant le driver : poste
+ne pouvait pas joindre le gestionnaire systemd utilisateur, puis le confineur
+a refusé l’absence de plafond effectif32GiB. Aucune compilation ni juge lancé,
+aucun target créé ; ce n’est pas un défaut produit ni un test réussi.
+Cause de recette : la liste blanche du lanceur avait supprimé l’adresse du
+bus utilisateur nécessaire à systemd-run (SSH : unix:path=/run/user/1000/bus).
+
+Correction bornée : avant poste, construire /run/user/UID/bus, vérifier
+propriétaire UID/socket et runtime non symlink, transmettre XDG_RUNTIME_DIR
+et l’adresse de CE bus au gestionnaire. Aucun endpoint applicatif hérité.
+Après acquisition, le confineur remplace DBUS_SESSION_BUS_ADDRESS par son bus
+privé ; le driver continue sa liste blanche et ses racines XDG privées.
+
+Les quatre fichiers du rouge r2 sont conservés sur PC et copie locale
+cx-preuves-ed-read-scope-r2-rouge-local, SHA tous identiques, manifeste
+b00796284c9140c5c3ef5f85bff68074adcdb0ead4f87ddd7cb578e9cfdd1111.
+Aucun retrait. Nouvelle source exacte et nouveau GO C7 requis avant lancement
+sur WT PC neuf cx-wt-ed-read-scope-r3 et paths target/preuves r3 neufs.
+Aucune portée6000 authentifiée n’avait démarré en r2 (aucun reçu créé).
