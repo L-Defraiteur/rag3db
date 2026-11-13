@@ -334,10 +334,7 @@ mod tests {
         let path = format!("{}.py", "x".repeat(1024));
         let s = Snapshot::new(
             "budget",
-            [(
-                path,
-                ("needle ".to_owned() + &"λ".repeat(100) + "\n").repeat(200),
-            )],
+            [(path, format!("needle {}\n", "λ".repeat(100)).repeat(200))],
         );
         let r = grep_files(
             &s,
