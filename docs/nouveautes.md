@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 13 novembre2026 — Le terminal de l'agent de code change d'univers : au thème « daemon » s'ajoutent **forêt**, **cyberpunk**, **cyborg** et **alien** (`--theme <nom>`), chacun avec ses trois animations (réfléchit, lit, écrit), sa palette du code et un jeu ASCII, tous tenus au même contraste minimal contre leur fond ; la règle a relevé d'un cheveu trois couleurs de daemon (`56deb90ea`, `87061f03c`).
+
 - 13 novembre2026 — Un index physique natif neuf BM25 sans modèle dense peut ingérer ses contenus dérivés, publier son état et reprendre le même programme après interruption, avec fermeture/réouverture et recherches vérifiées ; raccord synthétique qualifié, sans migration des index existants ni projection de coordonnées fichier (`b0a5177c0`).
 
 - 12 novembre2026 — Deux réponses à la même carte d'accord ne republient plus un droit ; un usage CetteFois consommé reste consommé et un refus gagnant n'est pas annulé par un oui concurrent.

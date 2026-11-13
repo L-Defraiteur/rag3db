@@ -689,7 +689,10 @@ bottom; Enter talks to the teammate, Esc stops it. It works over ssh (at most
 with the host's grammars and the theme `templates/themes/daemon.json`.
 While the agent thinks, reads or writes, the view plays the Daemon Code
 Summoning — runes, an alchemical symbol, a glitch — chosen by what the tool is
-allowed to do, at most 1.6 KB/s over ssh. `--plain` writes the stream as text.
+allowed to do, at most 1.6 KB/s over ssh. Four more themes share its form —
+`--theme foret`, `cyberpunk`, `cyborg` or `alien` (or `RAG3WEAVER_TTY_THEME`), each a file of
+`templates/themes/`, each held to the same minimal contrast against its background (4.5 for text
+and readable code, 3 for what goes with it). `--plain` writes the stream as text.
 
 ## Embeddings and rerankers
 
