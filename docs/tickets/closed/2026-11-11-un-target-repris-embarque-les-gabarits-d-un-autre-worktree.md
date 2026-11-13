@@ -298,3 +298,14 @@ Mémoire, ED et C7 favorables surcdcc032df ; aucune réparation CIstatique dédu
 Clôture du SEUL défaut de garde dans ce candidat : tickets CI et vues2b
 restent ouverts avec leurs prérequis propres. Aucun retrait de target/logs/W,
 aucun master autorisé par ce ticket ; tour C7 exact distinct encore requis.
+
+## Landing et fin des ressources
+
+Intégré master9feb7cdbadef6a60568dd4fc447bafddf7986942 sous ÀTOI C7 exact,
+poste push et verdict composé VERT ; trois contrôles lus verts deuxpostes.
+[Bilan16](../../recherche/13-11-2026/16-bilan-landing-garde-et-ressources.md) :
+14Wlocales+7WPC et target privé retirés après archives2postes/garde6f3fraîche
+VERT ; deux seuls refus structurels Git sousmodules traités avec nouvelles
+archives/nouveauxVERT/forceunique autorisée. Wprototype sale conservée,
+branches refusées-d conservées, aucun remote/log/ELF/preuve/autrelot effacé.
+CIstatique reste ouverte, aucun replayCI ni binaire de service posé.
