@@ -1,0 +1,118 @@
+{
+  "hote": "lucie-tablette",
+  "date": "2026-11-13 23:37",
+  "rouges": [],
+  "sans_position_du_curseur": {
+    "repli_dit": true,
+    "texte_brut_suit": true,
+    "panique": false
+  },
+  "scenario": {
+    "secondes": 3.73,
+    "octets": 11557,
+    "octets_par_seconde": 3096
+  },
+  "latence_affichage_ms": {
+    "n": 20,
+    "mediane": 47.5,
+    "p95": 49.6,
+    "max": 51.1
+  },
+  "echo_frappe_ms": {
+    "n": 20,
+    "mediane": 10.8,
+    "p95": 15.7,
+    "max": 21.4
+  },
+  "redimensionnement": [
+    {
+      "colonnes": 60,
+      "octets_apres": 320,
+      "colonne_max_visee": 3
+    },
+    {
+      "colonnes": 100,
+      "octets_apres": 271,
+      "colonne_max_visee": 61
+    }
+  ],
+  "ctrl_c_sortie_ms": 150,
+  "touches": {
+    "echap_stop": 1,
+    "o_accord": 1,
+    "reply_to": "faux/mesure:1"
+  },
+  "couleurs": [
+    {
+      "theme": "alien",
+      "mode": "vraie",
+      "sgr_texte": "38;2;57;255;20",
+      "vu": true,
+      "coeur_vu": true
+    },
+    {
+      "theme": "alien",
+      "mode": "256",
+      "sgr_texte": "38;5;82",
+      "vu": true,
+      "coeur_vu": true
+    },
+    {
+      "theme": "cyberpunk",
+      "mode": "vraie",
+      "sgr_texte": "38;2;255;43;214",
+      "vu": true,
+      "coeur_vu": true
+    },
+    {
+      "theme": "cyberpunk",
+      "mode": "256",
+      "sgr_texte": "38;5;200",
+      "vu": true,
+      "coeur_vu": true
+    },
+    {
+      "theme": "cyborg",
+      "mode": "vraie",
+      "sgr_texte": "38;2;215;221;229",
+      "vu": true,
+      "coeur_vu": true
+    },
+    {
+      "theme": "cyborg",
+      "mode": "256",
+      "sgr_texte": "38;5;253",
+      "vu": true,
+      "coeur_vu": true
+    },
+    {
+      "theme": "daemon",
+      "mode": "vraie",
+      "sgr_texte": "38;2;255;51;51",
+      "vu": true,
+      "coeur_vu": true
+    },
+    {
+      "theme": "daemon",
+      "mode": "256",
+      "sgr_texte": "38;5;203",
+      "vu": true,
+      "coeur_vu": true
+    },
+    {
+      "theme": "foret",
+      "mode": "vraie",
+      "sgr_texte": "38;2;143;209;106",
+      "vu": true,
+      "coeur_vu": true
+    },
+    {
+      "theme": "foret",
+      "mode": "256",
+      "sgr_texte": "38;5;113",
+      "vu": true,
+      "coeur_vu": true
+    }
+  ],
+  "verdict": "VERT"
+}
