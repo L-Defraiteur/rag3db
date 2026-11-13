@@ -459,3 +459,14 @@ Limite microbanc notée au plan : ActorRef::send sans notifier diagnostique sur
 stderr pour pinned dans les deux sources. Même puits A/B et coût I/O/formatage
 à déclarer, sans retoucher le code testé ; peut masquer le delta d’admission.
 Observation RO liée au coût du mécanisme, aucune correction hors périmètre.
+
+### ROED suite3b/piloteb29 : source favorable, HOLD pilote
+
+ED relit source3b : delta tests seuls favorable, RAMclose immédiat/pinnedqueued/
+ReplyClosed+répétition pertinents. Réserve avant delta pilote : subprocess.run
+attend la fin de lib entière et ne réalise pas l’arrêt au premier FAILED promis.
+Préparer streaming des verdicts libtest FAILED (pas du mot panic), first-red
+immuable et arrêt du seul groupe attribué PID/start créé par le pilote, nettoyage
+commun. Vérifier le même reçu900 actif et son reste avant chaque commande,
+sans reset. Aucune nouvelle exécution autorisée ; orchestration mesure encore
+à matérialiser, harnais source seul ne vaut pas pilote de mesure opérationnel.
