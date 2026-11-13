@@ -2182,3 +2182,16 @@ inchangée, puis fournir à Catalog normal une connexion owned RO pour éprouver
 la seconde porte initialize sans effets du cycle RW. Production/gardes inchangées.
 Assertions octets conservées avec diagnostics noms/empreintes, sans déverser les
 37Mo de tableaux d'octets dans le log. Aucun VERT complet ni rejeu avantRO/GO.
+
+
+P9 sourcec19f :9CPU+7juges natifs VERTS, huitième juge reprise stoppé. Premier
+enfant before-logical-commit atteint code91, puis ouverture RO de contrôle échoue
+dans Database::new : vector ANY non résolu. Reprise NON qualifiée ; deux enfants
+bootstrap seuls déjà qualifiés. Durée32,123s, pas d'autre juge/enfant lancé.
+Diagnostic RO : initialize_journal émet directement ALTER ... STRING DEFAULT NULL,
+contournant Rag3dbDialect::alter_add_column_default qui omet NULL explicite pour
+éviter son type ANY (historique du3oct, COPY). Réutiliser cette primitive avec
+ColumnType::Text et défaut NULL, sans changement de sens du journal. Lien causal
+au rejeu reste hypothèse à qualifier, pas un défaut SDK démontré ; C++ sollicité
+RO uniquement, aucun rebuild ni SDK nouveau autorisé. Base du témoin supprimée
+par TempDir à unwind, limite de preuve explicitée ; logs/ELF conservés.
