@@ -436,6 +436,8 @@ fn native_process_death_recovers_same_program_and_lost_ack_once() {
     for stage in [
         "before-logical-commit",
         "after-logical-commit",
+        "before-logical-commit:2",
+        "after-logical-commit:2",
         "after-lexical-durability",
         "after-publication",
     ] {
@@ -461,6 +463,36 @@ fn native_process_death_recovers_same_program_and_lost_ack_once() {
         );
         let origin = std::fs::read_to_string(dir.path().join("origin")).unwrap();
         let frozen = std::fs::read_to_string(dir.path().join("plan")).unwrap();
+        {
+            let probe = connection(&root, true).unwrap();
+            let entry = journal(&probe).unwrap().unwrap();
+            let expected_prefix = match stage {
+                "before-logical-commit" => 0,
+                "after-logical-commit" | "before-logical-commit:2" => 1,
+                _ => 2,
+            };
+            assert_eq!(
+                entry
+                    .committed
+                    .as_ref()
+                    .map_or(0, |prefix| prefix.next_step),
+                expected_prefix,
+                "durable prefix at {stage}"
+            );
+            let rows = probe
+                .execute("MATCH (s:Snippet) RETURN s._project ORDER BY s._project")
+                .unwrap()
+                .rows;
+            assert_eq!(
+                rows.len(),
+                match expected_prefix {
+                    0 => 0,
+                    1 => 6,
+                    _ => 8,
+                },
+                "actual data at {stage}"
+            );
+        }
         if stage != "after-publication" {
             assert!(OwnedPhysicalIndex::open_owned(&root, &origin).is_err());
         }
@@ -599,4 +631,85 @@ fn frozen_program_codec_binds_sources_records_and_probe_inputs() {
     value["program"]["steps"][0]["content"] =
         serde_json::json!("graph TD\nx[\"CypherNode(query='RETURN 1')\"]\n");
     assert!(StoredInitialPlan::restore(&value.to_string()).is_err());
+}
+
+fn root_files(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+    fn visit(root: &Path, dir: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                visit(root, &path, out)
+            } else {
+                out.insert(
+                    path.strip_prefix(root).unwrap().into(),
+                    std::fs::read(&path).unwrap(),
+                );
+            }
+        }
+    }
+    let mut files = BTreeMap::new();
+    visit(root, root, &mut files);
+    files
+}
+
+#[test]
+fn native_incomplete_bootstrap_is_quarantined_before_any_ordinary_database_open() {
+    for stage in ["after-root-claim", "after-bootstrap-initialize"] {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("owned");
+        let child = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "dataflow::migrations::physical_index::tests::physical_crash_child",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env("RAG3WEAVER_PHYSICAL_CHILD_ROOT", &root)
+            .env("RAG3WEAVER_PHYSICAL_CRASH", stage)
+            .output()
+            .unwrap();
+        assert_eq!(
+            child.status.code(),
+            Some(91),
+            "{stage}: {} {}",
+            String::from_utf8_lossy(&child.stdout),
+            String::from_utf8_lossy(&child.stderr)
+        );
+        let origin = std::fs::read_to_string(dir.path().join("origin")).unwrap();
+        assert_eq!(read_root_marker(&root).unwrap().origin, origin);
+        assert!(
+            !dir.path().join("plan").exists(),
+            "no P0/initial plan was minted"
+        );
+        let before = root_files(&root);
+        let database = root.join(DB_FILE);
+        assert!(Rag3dbConnection::new(&database).is_err());
+        assert!(Rag3dbConnection::read_only_patient(&database, 0).is_err());
+        assert!(Rag3dbConnection::with_config(
+            &database,
+            rag3db::SystemConfig::default().buffer_pool_size(64 * 1024 * 1024)
+        )
+        .is_err());
+        assert_eq!(
+            root_files(&root),
+            before,
+            "ordinary constructors must refuse before native recovery/writes"
+        );
+        if stage == "after-root-claim" {
+            assert!(!database.exists());
+        } else {
+            // An explicit owned diagnostic can open the claimed file; normal
+            // Catalog initialization remains forbidden before reading any data.
+            let conn = connection(&root, false).unwrap();
+            assert!(!read_metadata(&conn).unwrap().contains_key(STATE_KEY));
+            let mut normal =
+                Catalog::without_embedding_model(Box::new(conn), CatalogConfig::default());
+            assert!(normal.initialize().is_err());
+        }
+        assert!(OwnedPhysicalIndex::open_owned(&root, &origin).is_err());
+        println!(
+            "BOOTSTRAP_WITNESS {}",
+            serde_json::json!({"stage":stage,"origin":origin,"ordinary_opens_refused":3,"ordinary_bytes_unchanged":true,"p0_minted":false})
+        );
+    }
 }

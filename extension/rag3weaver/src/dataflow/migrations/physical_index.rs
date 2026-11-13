@@ -29,6 +29,93 @@ pub(crate) const STATE_KEY: &str = "owned_physical_index:v1";
 const REGISTRY_KEY: &str = "owned_physical_declarations:v1";
 const FORMAT: &str = "owned-initial-bm25:v1";
 const DB_FILE: &str = "index.rag3db";
+const ROOT_MARKER: &str = ".owned-physical-index-v1";
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RootMarker {
+    format: String,
+    origin: String,
+    database: String,
+}
+fn read_root_marker(root: &Path) -> Result<RootMarker> {
+    if !std::fs::symlink_metadata(root).map_err(storage)?.is_dir() {
+        return Err(PublicationError::NotOwned);
+    }
+    let path = root.join(ROOT_MARKER);
+    if !std::fs::symlink_metadata(&path).map_err(storage)?.is_file() {
+        return Err(PublicationError::NotOwned);
+    }
+    let bytes = std::fs::read_to_string(path).map_err(storage)?;
+    let marker: RootMarker = serde_json::from_str(&bytes).map_err(storage)?;
+    if encode(&marker)? != bytes || marker.format != FORMAT || marker.database != DB_FILE {
+        return Err(PublicationError::UnknownContract);
+    }
+    Ok(marker)
+}
+fn claim_root(root: &Path, origin: &str) -> Result<()> {
+    use std::io::Write;
+    let marker = RootMarker {
+        format: FORMAT.into(),
+        origin: origin.into(),
+        database: DB_FILE.into(),
+    };
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(root.join(ROOT_MARKER)).map_err(storage)?;
+    file.write_all(encode(&marker)?.as_bytes())
+        .map_err(storage)?;
+    file.sync_all().map_err(storage)?;
+    #[cfg(unix)]
+    std::fs::File::open(root)
+        .and_then(|directory| directory.sync_all())
+        .map_err(storage)?;
+    Ok(())
+}
+/// Native ordinary open checks only presence, so even a partial/malformed claim
+/// quarantines a failed bootstrap before constructing Database or replaying WAL.
+pub(crate) fn refuse_normal_storage_path(path: &Path) -> Result<()> {
+    let mut parents = Vec::new();
+    if let Some(parent) = path.parent() {
+        parents.push(parent.to_path_buf());
+    }
+    match std::fs::canonicalize(path) {
+        Ok(real) => {
+            if let Some(parent) = real.parent() {
+                parents.push(parent.to_path_buf());
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(storage(error)),
+    }
+    for parent in parents {
+        match std::fs::symlink_metadata(parent.join(ROOT_MARKER)) {
+            Ok(_)=>return Err(invalid("owned physical storage requires qualified root access, including incomplete bootstrap")),
+            Err(error) if error.kind()==std::io::ErrorKind::NotFound=>{},
+            Err(error)=>return Err(storage(error)),
+        }
+    }
+    Ok(())
+}
+/// Opaque access to one exact claimed database, never a boolean bypass.
+pub(crate) struct PhysicalRootPermit {
+    root: PathBuf,
+    origin: String,
+}
+impl PhysicalRootPermit {
+    pub(crate) fn validate_path(&self, path: &Path) -> Result<()> {
+        if path != self.root.join(DB_FILE) || read_root_marker(&self.root)?.origin != self.origin {
+            return Err(PublicationError::NotOwned);
+        }
+        Ok(())
+    }
+}
+
 fn storage(e: impl std::fmt::Display) -> PublicationError {
     PublicationError::Storage(e.to_string())
 }
@@ -66,11 +153,17 @@ fn write_meta<T: Serialize>(conn: &dyn DbConnection, key: &str, value: &T) -> Re
     metadata::write_value(conn, &Rag3dbDialect, key, &encode(value)?).map_err(storage)
 }
 fn connection(root: &Path, readonly: bool) -> Result<Rag3dbConnection> {
-    Rag3dbConnection::with_config(
+    let marker = read_root_marker(root)?;
+    let permit = PhysicalRootPermit {
+        root: root.into(),
+        origin: marker.origin,
+    };
+    Rag3dbConnection::with_owned_physical_config(
         root.join(DB_FILE),
         rag3db::SystemConfig::default()
             .buffer_pool_size(64 * 1024 * 1024)
             .read_only(readonly),
+        &permit,
     )
     .map_err(storage)
 }
@@ -618,7 +711,7 @@ fn descriptor(declaration: &PublishedDeclaration) -> StorageDescriptor {
 fn owned_catalog(
     root: &Path,
     conn: Rag3dbConnection,
-    access: Option<&PhysicalAccess>,
+    access: &PhysicalAccess,
 ) -> Result<Arc<Mutex<Catalog>>> {
     let mut catalog = Catalog::without_embedding_model(
         Box::new(conn),
@@ -629,17 +722,16 @@ fn owned_catalog(
     );
     catalog.set_moteur_texte(crate::search_backend::MoteurTexte::Lucivy);
     catalog.set_fts_storage(crate::fts_handle::FtsStorage::BlobBacked { lazy: false });
-    if let Some(access) = access {
-        catalog.initialize_owned_physical(access).map_err(storage)?;
-    } else {
-        catalog.initialize().map_err(storage)?;
-    }
+    catalog.initialize_owned_physical(access).map_err(storage)?;
     Ok(Arc::new(Mutex::new(catalog)))
 }
 
 /// No normal Catalog/host/CLI open may silently serve or modify this closed
 /// profile. The owned adapter mints its private access only after RO validation.
 pub(crate) fn refuse_normal_catalog_open(conn: &dyn DbConnection) -> Result<()> {
+    if let Some(path) = conn.database_path() {
+        refuse_normal_storage_path(&path)?;
+    }
     let tables = conn
         .execute("CALL show_tables() RETURN *")
         .map_err(storage)?;
@@ -655,13 +747,40 @@ pub(crate) fn refuse_normal_catalog_open(conn: &dyn DbConnection) -> Result<()> 
     }
     Ok(())
 }
+#[derive(Clone, Copy)]
+enum PhysicalAccessKind {
+    EmptyBootstrap,
+    ExistingProfile,
+}
 pub(crate) struct PhysicalAccess {
     origin: String,
     readonly: bool,
+    kind: PhysicalAccessKind,
 }
 impl PhysicalAccess {
     pub(crate) fn validate(&self, conn: &dyn DbConnection) -> Result<()> {
-        read_head(conn, &self.origin).map(|_| ())
+        let path = conn.database_path().ok_or(PublicationError::NotOwned)?;
+        let root = path.parent().ok_or(PublicationError::NotOwned)?;
+        if read_root_marker(root)?.origin != self.origin {
+            return Err(PublicationError::OriginMismatch);
+        }
+        match self.kind {
+            PhysicalAccessKind::ExistingProfile => read_head(conn, &self.origin).map(|_| ()),
+            PhysicalAccessKind::EmptyBootstrap => {
+                if self.readonly
+                    || !conn
+                        .execute("CALL show_tables() RETURN *")
+                        .map_err(storage)?
+                        .rows
+                        .is_empty()
+                {
+                    return Err(invalid(
+                        "bootstrap capability requires the actual empty newly claimed database",
+                    ));
+                }
+                Ok(())
+            }
+        }
     }
     pub(crate) fn readonly(&self) -> bool {
         self.readonly
@@ -709,7 +828,15 @@ impl OwnedPhysicalIndex {
                 storage(e)
             }
         })?;
-        let catalog = owned_catalog(root, connection(root, false)?, None)?;
+        claim_root(root, registry.origin())?;
+        physical_boundary("after-root-claim", None);
+        let access = PhysicalAccess {
+            origin: registry.origin().into(),
+            readonly: false,
+            kind: PhysicalAccessKind::EmptyBootstrap,
+        };
+        let catalog = owned_catalog(root, connection(root, false)?, &access)?;
+        physical_boundary("after-bootstrap-initialize", None);
         let mut cat = catalog.lock().map_err(storage)?;
         let facts = schema.supplied_facts();
         let mut pending = facts.entities().clone();
@@ -854,10 +981,16 @@ impl OwnedPhysicalIndex {
     }
 }
 
-fn physical_boundary(_stage: &str) {
+fn physical_boundary(_stage: &str, _step: Option<usize>) {
     #[cfg(test)]
-    if std::env::var("RAG3WEAVER_PHYSICAL_CRASH").ok().as_deref() == Some(_stage) {
-        std::process::exit(91);
+    {
+        let wanted = std::env::var("RAG3WEAVER_PHYSICAL_CRASH").ok();
+        if wanted.as_deref() == Some(_stage)
+            || _step
+                .is_some_and(|step| wanted.as_deref() == Some(format!("{_stage}:{step}").as_str()))
+        {
+            std::process::exit(91);
+        }
     }
 }
 fn same_committed_values(expected: &PhysicalSnapshot, actual: &PhysicalSnapshot) -> Result<()> {
@@ -992,8 +1125,9 @@ impl OwnedPhysicalIndex {
         let access = PhysicalAccess {
             origin: expected_origin.into(),
             readonly: true,
+            kind: PhysicalAccessKind::ExistingProfile,
         };
-        let catalog = owned_catalog(root, conn, Some(&access))?;
+        let catalog = owned_catalog(root, conn, &access)?;
         let entry = {
             let cat = catalog.lock().map_err(storage)?;
             journal(cat.conn())?
@@ -1102,9 +1236,9 @@ impl OwnedPhysicalIndex {
                     };
                     write_journal(cat.conn(), plan, "pending", Some(&committed))
                         .map_err(|e| super::MigrationError::DbError(e.to_string()))?;
-                    physical_boundary("before-logical-commit");
+                    physical_boundary("before-logical-commit", Some(next_step));
                     cat.commit_lot_after_native(|| {
-                        physical_boundary("after-logical-commit");
+                        physical_boundary("after-logical-commit", Some(next_step));
                         Ok(())
                     })
                     .map_err(|e| super::MigrationError::DbError(e.to_string()))
@@ -1112,7 +1246,7 @@ impl OwnedPhysicalIndex {
             )
             .map_err(storage)?;
         drop(checkpoint);
-        physical_boundary("after-lexical-durability");
+        physical_boundary("after-lexical-durability", None);
         drop(conn);
         drop(catalog);
         self.close_catalog()?;
@@ -1121,21 +1255,20 @@ impl OwnedPhysicalIndex {
         let head = read_head(&conn, &self.origin)?;
         let entry = journal(&conn)?.ok_or_else(|| invalid("missing committed initial plan"))?;
         validate_pending(&conn, &head, &entry)?;
-        if entry.committed.as_ref().is_none_or(|prefix| {
-            prefix.next_step
-                != plan
-                    .stored
-                    .program
-                    .step_scopes()
-                    .map_or(0, |steps| steps.len())
-        }) {
+        let required_steps = plan.stored.program.step_scopes().map_err(storage)?.len();
+        if entry
+            .committed
+            .as_ref()
+            .is_none_or(|prefix| prefix.next_step != required_steps)
+        {
             return Err(invalid("initial program is not fully committed"));
         }
         let access = PhysicalAccess {
             origin: self.origin.clone(),
             readonly: true,
+            kind: PhysicalAccessKind::ExistingProfile,
         };
-        let reader = owned_catalog(&self.root, conn, Some(&access))?;
+        let reader = owned_catalog(&self.root, conn, &access)?;
         verify_probes(&reader, &plan.stored.probes)?;
         let actual = PhysicalSnapshot::read(reader.lock().map_err(storage)?.conn())?;
         // Close the verification reader before reacquiring the exclusive writer.
@@ -1169,7 +1302,7 @@ impl OwnedPhysicalIndex {
             write_meta(&conn, STATE_KEY, &target)?;
             write_journal(&conn, plan, "applied", entry.committed.as_ref())
         })?;
-        physical_boundary("after-publication");
+        physical_boundary("after-publication", None);
         drop(conn);
         let reopened = Self::open_owned(&self.root, &self.origin)?;
         self.catalog = reopened.catalog;
@@ -1210,8 +1343,9 @@ impl OwnedPhysicalIndex {
         let access = PhysicalAccess {
             origin: origin.into(),
             readonly: false,
+            kind: PhysicalAccessKind::ExistingProfile,
         };
-        let catalog = owned_catalog(root, conn, Some(&access))?;
+        let catalog = owned_catalog(root, conn, &access)?;
         let mut owned = Self {
             root: root.into(),
             origin: origin.into(),

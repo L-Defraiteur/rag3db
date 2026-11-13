@@ -1592,7 +1592,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 56 + if cfg!(feature = "code") { 20 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 57 + if cfg!(feature = "code") { 20 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1831,6 +1831,7 @@ mod tests {
         // protège plus rien.
         let minimum = |node_type: &str| -> serde_json::Value {
             match node_type {
+                "IngestEntitiesNode" => serde_json::json!({ "entity":"Product", "records_json":"[]" }),
                 "CypherNode" => serde_json::json!({ "query": "MATCH (n) RETURN n" }),
                 "ValidateNode" => serde_json::json!({
                     "query": "MATCH (n) RETURN count(n) AS n",
