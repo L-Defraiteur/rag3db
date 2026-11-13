@@ -1,7 +1,12 @@
 # La garde du push n'est appelée que par le script de recherche ; les autres scripts de dernier pas ne la voient pas
 
-- **Session** : orchestration (c7), 13 novembre 2026, 22 h 30.
-- **État** : ouvert.
+- **État** : ouvert (13 novembre 2026, 22 h 30, orchestration).
+- **Gravité** : règle de push — la décision de rejeu d'un lot dépend du script de chaque session.
+- **Atteignable en service** : non (procédure de push seulement).
+- **Touche rag3weaver** : non (tools/poste et la procédure).
+- **Famille** : procédure
+- **Pour** : codeparsers (auteur de la garde), recherche en relecture ; toute réattribution passe par l'orchestration.
+- **Signalé par** : c7, à la lecture des pushes d'embarquement et d'ED du 13 novembre au soir.
 - **Constat** : `tools/poste/push_garde.sh` (recopié en `~/.cache/rag3weaver-build/push_garde.sh` aux deux
   postes, 0e3d202a4) est le **script de dernier pas de recherche** (worktree, journaux, VERT, libs, code
   apporté, rebase, push, trois contrôles). Ses modes `--code-apporte <base> <neuf>` et `--derive <arbre>`
