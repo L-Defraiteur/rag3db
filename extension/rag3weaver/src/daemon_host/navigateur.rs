@@ -1295,5 +1295,41 @@ fn six_onglets_ouverts_laissent_une_septieme_vue_se_rendre() {
     n.aller(&format!("{racine}/ide/code/{id}/fichier/main.rs"), "document.querySelector('#L5')?.innerText.includes('fn depart()')");
     let duree = debut.elapsed();
     assert!(duree < Duration::from_secs(5), "la septième vue a attendu {duree:?}");
+
+    // **Une seule connexion de flux** pour tout le navigateur, comptée par l'hôte.
+    let fenetres = || -> u64 {
+        let mut r = crate::daemon::agent_de_temoin().get(format!("http://{adresse}/ide/etat")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        let e: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+        e["fenetres_du_flux"].as_u64().unwrap_or_else(|| panic!("l'état ne compte pas les fenêtres du flux : {e}"))
+    };
+    let attendre_les_fenetres = |voulu: u64, quoi: &str| {
+        let fin = Instant::now() + Duration::from_secs(40);
+        loop {
+            let f = fenetres();
+            if f == voulu {
+                return;
+            }
+            assert!(Instant::now() < fin, "{quoi} : {f} fenêtre(s) du flux à l'hôte, {voulu} attendue(s)");
+            std::thread::sleep(Duration::from_millis(200));
+        }
+    };
+    attendre_les_fenetres(1, "sept onglets partagent un flux");
+
+    // **Le repli** : un onglet sans `SharedWorker` (navigation privée, navigateur qui ne l'a
+    // pas) ouvre son propre flux, et le ferme en partant.
+    n.nouvel_onglet();
+    n.commande("Page.addScriptToEvaluateOnNewDocument", json!({ "source": "delete window.SharedWorker;" }));
+    n.aller(&format!("{racine}/ide/code/{id}/arbre/"), arbre_vu);
+    attendre_les_fenetres(2, "l'onglet sans SharedWorker a son propre flux");
+    n.aller("about:blank", "true");
+    attendre_les_fenetres(1, "l'onglet sans SharedWorker a rendu son flux en partant");
+
+    // **Le dernier onglet parti ferme le flux** : l'hôte n'a plus de fenêtre.
+    n.session.clear();
+    let cibles = n.commande("Target.getTargets", json!({}));
+    for c in cibles["targetInfos"].as_array().unwrap().iter().filter(|c| c["type"] == "page") {
+        n.commande("Target.closeTarget", json!({ "targetId": c["targetId"] }));
+    }
+    attendre_les_fenetres(0, "tous les onglets fermés");
     assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
 }
