@@ -185,6 +185,33 @@ une génération par commit indexé d'une branche suivie, et « connu, non index
 **Le témoin qui le prouve** : une branche non suivie n'a pas de couche ; l'IDE la montre comme
 connue ; `view` la matérialise sans l'ajouter aux suivies.
 
+## La rétention : une règle proposée, à trancher par Lucie (lot à part, après la liaison)
+
+Lucie, sur la réponse 5 : « on essaie de garder une culture de tout ce que touche l'agent, ça reste
+indexé, puis des branches intermédiaires sont supprimées quand trop lourd ? problème : faut savoir
+c'est quoi la bonne racine à garder ». La règle que propose c7, à trancher par elle à la relecture :
+
+- **Tout ce que l'agent touche reste indexé tant que la branche vit** : la couche de travail et
+  chaque commit. Le « connu, non indexé » ne vaut que pour ce qu'aucun agent n'a ouvert.
+- **À la fusion, la couche se ferme.** Ses générations intermédiaires tombent. **La racine qui reste
+  est le commit d'atterrissage sur la branche suivie.** Les versions que l'ancre cite désormais
+  restent ; celles des essais abandonnés deviennent collectables (une version citée par aucune
+  génération).
+- **Survivent** :
+  - toute génération qu'une fiche de la mémoire cite (un apport y pointe) ;
+  - un point de reprise complet par branche suivie, tous les N commits, avec des deltas entre (sa
+    demande du 11 novembre).
+- **« Trop lourd » se mesure** en versions citées par aucune racine et en octets par dépôt, jamais en
+  nombre de générations. Aucune coupe sans mesure, et jamais automatique sur une base de Lucie sans
+  son mot.
+
+Les témoins de ce lot :
+- une branche fusionnée ne laisse que la génération du commit de fusion et celles qu'une fiche cite ;
+- une version orpheline est listée par la sonde avant d'être collectée ;
+- une génération citée par une fiche survit à la fermeture.
+
+Ce lot vient **après** celui de la liaison, et ne se code pas avec lui.
+
 ## Les questions qui étaient posées à Lucie
 
 1. **La parente d'une branche venue d'ailleurs** : l'inférer par le point de fourche (notée comme
