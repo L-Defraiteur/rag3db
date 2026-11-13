@@ -1421,7 +1421,7 @@ fn read_threads() -> u64 {
             // rebâtir » (voir `check_fts_counts`).
             if self.lecture_seule {
                 let docs = self.fts_handles.get(&table)?.num_docs();
-                if docs != self.count_rows_of(entity) as u64 {
+                if docs != self.count_rows_of(&table) as u64 {
                     return Some(0);
                 }
             }
@@ -1433,7 +1433,7 @@ fn read_threads() -> u64 {
             return Some(0);
         }
         let docs = self.fts_handles.get(&table).map(|h| h.num_docs()).unwrap_or(0);
-        let rows = self.count_rows_of(entity).max(1) as u64;
+        let rows = self.count_rows_of(&table).max(1) as u64;
         Some((100 * docs.min(rows) / rows) as u8)
     }
 
@@ -1458,7 +1458,13 @@ fn read_threads() -> u64 {
         let handle = self
             .ensure_fts_handle(&table, &target.bm25_fields, &crate::scope::fts_filter_fields())
             .ok_or_else(|| CatalogError::IndexPersistence(format!("plein texte de {entity} : index introuvable")))?;
-        let mut field_names: Vec<String> = self.check_entity(&entity)?.fields.keys().cloned().collect();
+        // **Les lignes de la table qui porte l'index**, ses champs et ses
+        // décalages : sous un `searchIndex` à contenu partagé, l'index de
+        // `ScopeContent` se rebâtit depuis les versions, pas depuis les
+        // occurrences `Scope` (13 novembre 2026). `entity` reste le nom de la
+        // cible et de la marque `fts_pending:`.
+        let source = table.clone();
+        let mut field_names: Vec<String> = self.check_entity(&source)?.fields.keys().cloned().collect();
         field_names.sort();
         let fields: Vec<&str> = field_names.iter().map(String::as_str).collect();
         let apres = self.fts_rebuild_cursor.get(&table).copied().unwrap_or(-1);
@@ -1466,7 +1472,7 @@ fn read_threads() -> u64 {
         let page = self
             .conn
             .execute_with_params(
-                &self.dialect.select_page_after_offset(&entity, &fields, lot),
+                &self.dialect.select_page_after_offset(&source, &fields, lot),
                 &[QueryParam::new("apres", CypherValue::Int(apres))],
             )
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
