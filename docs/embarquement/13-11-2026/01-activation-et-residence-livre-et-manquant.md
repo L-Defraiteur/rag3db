@@ -136,3 +136,8 @@ Une déclaration `residence: { "a_demande": { "inactivite_secs": N, "rendre_le_b
 Rien n'est lancé à l'ouverture ; le premier calcul active ; un calcul qui trouve le fournisseur
 parti le relance une fois (identité revérifiée), puis refuse en le disant. `Maintenir` et les
 services posés à la main ne changent pas.
+
+*Note de passe (13 novembre) : `target-activation`, d'abord bâti dans le worktree `rag3db-spans`
+(effacé), a été repris pour le worktree `rag3db-a-la-demande` par `RAG3WEAVER_TARGET_REPRENDRE=1`,
+l'usage prévu de la garde des targets (elle efface les empreintes des paquets locaux et garde les
+dépendances) ; sans lui, la garde refuse un target venu d'un autre arbre.*
