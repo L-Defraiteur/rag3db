@@ -133,3 +133,8 @@ cx-ed-read-scope-qualification-r2, commit produit a919ad9d9. Range-diff
 publiée avant GO lourd : cinq ciblés puis module inventorié et frontières
 features, target privé neuf, aucun partage de ressources Arbre. Aucun
 Cargo/test exécuté à ce stade ; ticket reste ouvert.
+
+Pilotes concrets publiés dans read-scope/ : appelants hors WT, CWD crate
+explicite pour Cargo/ELF, magasin SDK explicite, ledger et inventaires
+avant juges, check_features canonique 8/8, verdict composé sans retrait.
+Préparation seulement ; revue et GO C7 exact avant toute exécution lourde.
