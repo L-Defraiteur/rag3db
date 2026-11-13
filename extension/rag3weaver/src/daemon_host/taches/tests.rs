@@ -517,3 +517,40 @@ fn une_copie_qui_echoue_ne_laisse_pas_son_temporaire() {
     assert_eq!(restes, vec!["cible.rs".to_string()], "le temporaire est retiré");
     assert_eq!(std::fs::read_to_string(&vers).unwrap(), "ancien\n", "la cible n'est pas touchée");
 }
+
+/// **Une tâche entre aux branches suivies avec sa parente, et en sort à sa fermeture** (la
+/// liaison branche → couche, décision de Lucie du 13 novembre : « tout ce que touche l'agent, ça
+/// reste indexé »). Ouverte depuis la branche extraite du dépôt, `agent/<nom>` est suivie, sa
+/// parente déclarée et estampillée, sa base au commit de départ. Fermée, elle sort des suivies, sa
+/// couche est marquée fermée, et rien n'est effacé (l'estampille reste).
+#[cfg(feature = "rag3db-native")]
+#[test]
+fn une_tache_entre_aux_suivies_avec_sa_parente_et_en_sort_a_sa_fermeture() {
+    use crate::couches::{self, GenreDeParente, Parente};
+    let (d, host, manifeste, parent) = banc();
+    let depot = d.path().join("depot");
+    let id = couches::identifiant_du_depot(&depot).unwrap();
+    assert_eq!(id, git(&depot, &["rev-list", "--max-parents=0", "HEAD"]).unwrap());
+    let extraite = git(&depot, &["rev-parse", "--abbrev-ref", "HEAD"]).unwrap();
+    let tache = host.ouvrir_une_tache(&parent, "relecture").unwrap();
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |b| {
+        let cat = b.catalog.lock().unwrap();
+        let suivies = couches::branches_suivies(&cat, &id).unwrap().expect("les branches suivies du dépôt");
+        assert!(suivies.suivies.contains(&"agent/relecture".to_string()), "{suivies:?}");
+        assert_eq!(
+            couches::parente_estampillee(&cat, &id, "agent/relecture").unwrap(),
+            Some(Parente { branche: extraite.clone(), genre: GenreDeParente::Declaree, base: tache.depart.clone() })
+        );
+    })
+    .unwrap();
+    host.fermer_une_tache(&parent, "relecture").unwrap();
+    host.with_backend(&h, |b| {
+        let cat = b.catalog.lock().unwrap();
+        let suivies = couches::branches_suivies(&cat, &id).unwrap().expect("la déclaration reste");
+        assert!(!suivies.suivies.contains(&"agent/relecture".to_string()), "{suivies:?}");
+        assert!(couches::couche_fermee(&cat, &id, "agent/relecture").unwrap(), "la couche n'est pas marquée fermée");
+        assert!(couches::parente_estampillee(&cat, &id, "agent/relecture").unwrap().is_some(), "l'estampille a été effacée");
+    })
+    .unwrap();
+}
