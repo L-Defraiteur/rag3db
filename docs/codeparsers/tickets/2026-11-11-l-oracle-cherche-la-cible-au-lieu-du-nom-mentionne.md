@@ -91,6 +91,10 @@ TypeScript 5.9, juge strict, 2 590 s) :
 | faux | 1 | `tools/nodejs_api/install.js:103`, `path.toLowerCase()` : `path` y est un paramètre local qui masque l'import |
 | non interrogé | 2 | rien sur la ligne ne nomme la cible (`process.env` à `install.js:69`, `join(…)` à `smoke_warnings.mjs:11`) |
 
+Le faux d'`install.js:103` est **une portée, pas une liaison** : le paramètre `path` de la fonction qui
+contient la mention masque le `path` importé ; la règle de portée des locales JS (`visible_until_line`)
+ne couvre pas encore les paramètres face à un import du même nom.
+
 **408 sur 415 (98 %) sont saines** ; 7 sont des faux de l'index, dont la famille principale (4) est la
 lecture des chaînes.
 
