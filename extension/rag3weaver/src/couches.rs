@@ -641,6 +641,66 @@ mod tests_de_la_base {
         assert_eq!(parente_de(&apres, "a"), Some(a), "la parente estampillée a été recalculée : {apres:?}");
     }
 
+    /// **Un rebase suit** (décision 4 de Lucie, relecture d'ED) : l'estampille garde la parente et son
+    /// genre, pas la base. Après un rebase de `b` sur la pointe neuve de `a`, la base est la nouvelle
+    /// fourche.
+    #[test]
+    fn une_branche_rebasee_garde_sa_parente_avec_la_base_neuve() {
+        let t = tempfile::tempdir().unwrap();
+        let d = t.path().to_path_buf();
+        git(&d, &["init", "-q"]);
+        commit(&d, "m1");
+        git(&d, &["switch", "-q", "-c", "a"]);
+        commit(&d, "a1");
+        git(&d, &["switch", "-q", "-c", "b"]);
+        commit(&d, "b1");
+        let cat = catalogue();
+        declarer_les_branches_suivies(&cat, "depot", "main", &noms(&["a", "b"])).unwrap();
+        declarer_la_parente(&cat, "depot", "b", "a", &git(&d, &["merge-base", "b", "a"])).unwrap();
+        git(&d, &["switch", "-q", "a"]);
+        commit(&d, "a2");
+        git(&d, &["switch", "-q", "b"]);
+        git(&d, &["rebase", "-q", "a"]);
+        git(&d, &["switch", "-q", "main"]);
+        let etats = couches_du_depot(&cat, "depot", &d, "main").unwrap();
+        let p = parente_de(&etats, "b").unwrap_or_else(|| panic!("b sans parente : {etats:?}"));
+        assert_eq!((p.branche.as_str(), &p.genre), ("a", &GenreDeParente::Declaree), "{etats:?}");
+        assert_eq!(p.base, git(&d, &["rev-parse", "a"]), "la base n'a pas suivi le rebase : {etats:?}");
+    }
+
+    /// Une parente estampillée qui n'est plus suivie ne reste pas citée : la résolution retombe sur
+    /// le reflog ou la fourche (ici l'ancre).
+    #[test]
+    fn une_parente_qui_n_est_plus_suivie_n_est_plus_citee() {
+        let t = tempfile::tempdir().unwrap();
+        let d = t.path().to_path_buf();
+        git(&d, &["init", "-q"]);
+        commit(&d, "m1");
+        git(&d, &["switch", "-q", "-c", "a"]);
+        commit(&d, "a1");
+        git(&d, &["switch", "-q", "-c", "b"]);
+        commit(&d, "b1");
+        git(&d, &["switch", "-q", "main"]);
+        let cat = catalogue();
+        declarer_les_branches_suivies(&cat, "depot", "main", &noms(&["a", "b"])).unwrap();
+        declarer_la_parente(&cat, "depot", "b", "a", &git(&d, &["merge-base", "b", "a"])).unwrap();
+        declarer_les_branches_suivies(&cat, "depot", "main", &noms(&["b"])).unwrap();
+        let etats = couches_du_depot(&cat, "depot", &d, "main").unwrap();
+        assert_ne!(parente_de(&etats, "b").map(|p| p.branche), Some("a".to_string()), "a n'est plus suivie : {etats:?}");
+    }
+
+    /// Une tâche rouverte sous le même nom n'hérite pas de la fermeture de la précédente.
+    #[test]
+    fn une_branche_rouverte_sous_le_meme_nom_n_est_pas_fermee() {
+        let (_t, d) = depot();
+        let cat = catalogue();
+        ajouter_une_branche_suivie(&cat, "depot", &d, "doc").unwrap();
+        fermer_une_branche_suivie(&cat, "depot", "doc").unwrap();
+        assert!(couche_fermee(&cat, "depot", "doc").unwrap());
+        ajouter_une_branche_suivie(&cat, "depot", &d, "doc").unwrap();
+        assert!(!couche_fermee(&cat, "depot", "doc").unwrap(), "la couche neuve se lit fermée");
+    }
+
     /// Sans reflog qui la dise (branche créée par `switch -c` depuis HEAD), une divergence reste
     /// ambiguë, ses candidates nommées : connue, pas une erreur.
     #[test]
