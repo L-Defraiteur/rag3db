@@ -192,6 +192,7 @@ impl Client {
 
     /// **Un écrivain autonome** : la forme `--standalone`, qui possède sa
     /// base sans hôte.
+    #[cfg(feature = "rag3db-native")]
     fn autonome(manifeste: &Path, demon: &Demon) -> Self {
         let mut enfant = Command::new(env!("CARGO_BIN_EXE_rag3weaver-backend"))
             .args(["mcp", "--manifest", &manifeste.to_string_lossy(), "--standalone"])
