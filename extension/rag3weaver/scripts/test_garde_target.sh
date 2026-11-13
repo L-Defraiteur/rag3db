@@ -13,6 +13,13 @@ unset CARGO_TARGET_DIR RAG3WEAVER_TARGET_REPRENDRE
 # CI pose CARGO_TERM_COLOR=always, et ses trois cas de reprise y rougissaient sur les codes).
 export CARGO_TERM_COLOR=never
 TRIPLET="$(rustc -vV | sed -n 's/^host: //p')"
+# Les empreintes des paquets locaux, dans les deux dispositions de cargo : avant 1.100,
+# `<profil>/.fingerprint/<paquet>-<hachage>` ; depuis, `<profil>/build/<paquet>/<hachage>/fingerprint`.
+empreintes_locales() {
+  find "$1" \( -path '*/.fingerprint/*' -prune -regextype posix-extended \
+      -regex '.*/\.fingerprint/(ir|app)-[0-9a-f]{16}' -print \) -o \
+    \( -regextype posix-extended -regex '.*/build/(ir|app)/[0-9a-f]{16}/fingerprint' -print \) 2>/dev/null
+}
 echec=0
 cas() { if [ "$1" = 0 ]; then echo "OK     $2"; else echo "ÉCHEC  $2"; echec=1; fi; }
 
@@ -47,9 +54,8 @@ cas $? "un autre arbre est refusé (code 2)"
 
 RAG3WEAVER_TARGET_REPRENDRE=1 garder_le_target "$T" "$ICI/ancien" > /dev/null
 cas $? "la reprise rend 0"
-[ -z "$(find "$T" -path '*/.fingerprint/*' -prune -regextype posix-extended \
-        -regex '.*/\.fingerprint/(ir|app)-[0-9a-f]{16}' -print)" ]
-cas $? "aucune empreinte locale ne reste, hôte et triplet compris"
+[ -z "$(empreintes_locales "$T")" ]
+cas $? "aucune empreinte locale ne reste, hôte et triplet compris, dans l'une ou l'autre disposition de cargo"
 
 sortie="$(cd "$ICI/ancien" && cargo build -p app --target "$TRIPLET" 2>&1)"
 echo "$sortie" | grep -q 'Compiling ir '
@@ -83,8 +89,7 @@ cas $? "sans reprise, le target du cache est refusé comme celui d'un autre arbr
 RAG3WEAVER_TARGET_REPRENDRE=1 garder_le_target "$C" "$ICI/ancien" > /dev/null 2>&1
 cas $? "avec la reprise, la garde rend 0"
 [ "$(cat "$C/.arbre-du-target" 2>/dev/null)" = "$(cd "$ICI/ancien" && pwd -P)" ] \
-  && [ -z "$(find "$C" -path '*/.fingerprint/*' -prune -regextype posix-extended \
-        -regex '.*/\.fingerprint/(ir|app)-[0-9a-f]{16}' -print)" ]
+  && [ -z "$(empreintes_locales "$C")" ]
 cas $? "après la reprise, le marqueur dit l'arbre et aucune empreinte locale ne reste"
 V="$ICI/target-du-cache-vide"; mkdir -p "$V"
 bash "$PROVENANCE_CI" "$V" > /dev/null 2>&1 && [ ! -e "$V/.arbre-du-target" ]
