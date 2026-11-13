@@ -20,9 +20,16 @@ pub struct Activation {
     pub residence: Residence,
 }
 
+/// La politique de résidence d'un fournisseur lancé par l'activation.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Residence { Maintenir }
+pub enum Residence {
+    /// Garder le fournisseur tant qu'il vit.
+    Maintenir,
+    /// Le décharger après `inactivite_secs` sans bail ni calcul : il le
+    /// déclare dans son identité (`eviction`) et sort de lui-même.
+    ADemande { inactivite_secs: u64 },
+}
 
 #[cfg(feature = "daemon")]
 fn identite(source: &super::ModelSource) -> Result<crate::daemon::embeddings::IdentiteActivation, String> {
@@ -61,8 +68,14 @@ pub fn demander(source: &super::ModelSource) -> Result<crate::serveur::activatio
         .env("RAG3WEAVER_ACTIVATION_IDENTITE", &attendue.recette)
         .journal_dans(&a.journal)
         .attente(std::time::Duration::from_secs(a.budget_activation_secs));
+    if let Residence::ADemande { inactivite_secs } = a.residence {
+        if inactivite_secs == 0 {
+            return Err("activation : un délai d'inactivité nul déchargerait aussitôt".into());
+        }
+        serveur = serveur.env(crate::daemon::embeddings::EVICTION_VARIABLE, inactivite_secs.to_string());
+    }
     for (cle, valeur) in &a.env {
-        if matches!(cle.as_str(), "RAG3WEAVER_EMBED_MODEL" | "RAG3WEAVER_ACTIVATION_PROFIL" | "RAG3WEAVER_ACTIVATION_PERIPHERIQUE" | "RAG3WEAVER_ACTIVATION_IDENTITE") {
+        if matches!(cle.as_str(), "RAG3WEAVER_EMBED_MODEL" | "RAG3WEAVER_ACTIVATION_PROFIL" | "RAG3WEAVER_ACTIVATION_PERIPHERIQUE" | "RAG3WEAVER_ACTIVATION_IDENTITE" | crate::daemon::embeddings::EVICTION_VARIABLE) {
             return Err(format!("activation : {cle} est déterminé par l'identité déclarée"));
         }
         serveur = serveur.env(cle, valeur);

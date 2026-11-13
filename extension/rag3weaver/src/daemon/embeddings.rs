@@ -129,7 +129,29 @@ pub struct Identite {
     /// de calcul en cours. Absent : fournisseur d'avant les baux.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage: Option<Usage>,
+    /// **Évincable** : ce fournisseur a été lancé avec une politique de
+    /// déchargement et se déchargera après ce délai sans bail ni calcul.
+    /// Absent : il reste résident (les services posés à la main).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eviction: Option<Eviction>,
 }
+
+/// La politique de déchargement d'un fournisseur, telle qu'il la déclare.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Eviction {
+    /// Le délai sans bail ni calcul au bout duquel il se décharge.
+    pub inactivite_s: u64,
+    /// Depuis combien de temps il n'a ni bail ni calcul (0 s'il en a).
+    pub inactif_depuis_ms: u64,
+}
+
+/// La variable par laquelle l'activation déclare le délai de déchargement
+/// d'un fournisseur qu'elle lance (`Residence::ADemande`). Absente : résident.
+pub const EVICTION_VARIABLE: &str = "RAG3WEAVER_EVICTION_INACTIVITE_S";
+
+/// Ce que fait un fournisseur évincable quand son délai est passé : le binaire
+/// sort (code 0) après l'avoir dit ; un test observe.
+type QuandEvince = Arc<dyn Fn(&str) + Send + Sync>;
 
 /// L'usage d'un fournisseur, tel qu'il le déclare dans son identité : ce
 /// qu'une éviction devra attendre (ticket de la résidence des modèles). Un
@@ -252,6 +274,11 @@ pub struct EmbedDaemon {
     /// Les baux d'usage de ses clients, et ses requêtes de calcul en cours.
     baux: Baux,
     en_cours: std::sync::atomic::AtomicUsize,
+    /// La dernière activité (un appel reçu, un calcul fini) : le point de
+    /// départ du délai d'éviction.
+    derniere_activite: Mutex<std::time::Instant>,
+    /// Le délai d'éviction et ce qu'il fait quand il passe ; `None` : résident.
+    eviction: Option<(std::time::Duration, QuandEvince)>,
 }
 
 impl EmbedDaemon {
@@ -277,7 +304,49 @@ impl EmbedDaemon {
             gate: None,
             baux: Baux::default(),
             en_cours: std::sync::atomic::AtomicUsize::new(0),
+            derniere_activite: Mutex::new(std::time::Instant::now()),
+            eviction: None,
         }
+    }
+
+    /// **Évincable** : sans bail ni calcul pendant `delai`, il appelle
+    /// `quand_evince` avec la raison (le binaire sort). Sans cet appel, le
+    /// fournisseur reste résident. Réservé aux fournisseurs lancés par
+    /// l'activation (`Residence::ADemande`), jamais aux services posés à la main.
+    pub fn evincable(mut self, delai: std::time::Duration, quand_evince: impl Fn(&str) + Send + Sync + 'static) -> Self {
+        self.eviction = Some((delai.max(std::time::Duration::from_secs(1)), Arc::new(quand_evince)));
+        self
+    }
+
+    fn toucher(&self) {
+        *self.derniere_activite.lock().unwrap_or_else(|e| e.into_inner()) = std::time::Instant::now();
+    }
+
+    /// Depuis combien de temps il n'a ni bail ni calcul ; `None` s'il en a.
+    fn inactif_depuis(&self) -> Option<std::time::Duration> {
+        if self.baux.compte() > 0 || self.en_cours.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+            return None;
+        }
+        Some(self.derniere_activite.lock().unwrap_or_else(|e| e.into_inner()).elapsed())
+    }
+
+    /// Le fil qui guette l'inactivité d'un fournisseur évincable.
+    fn guetter_l_eviction(demon: &Arc<Self>) {
+        let Some((delai, quand)) = demon.eviction.clone() else { return };
+        let d = demon.clone();
+        let _ = std::thread::Builder::new().name("eviction".into()).spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            if let Some(inactif) = d.inactif_depuis() {
+                if inactif >= delai {
+                    quand(&format!(
+                        "évincé : aucun bail ni calcul depuis {} s (délai déclaré {} s)",
+                        inactif.as_secs(),
+                        delai.as_secs()
+                    ));
+                    return;
+                }
+            }
+        });
     }
 
     pub fn avec_activation(mut self, activation: Option<IdentiteActivation>) -> Self {
@@ -481,20 +550,28 @@ impl EmbedDaemon {
                 baux: self.baux.compte(),
                 en_cours: self.en_cours.load(std::sync::atomic::Ordering::SeqCst),
             }),
+            eviction: self.eviction.as_ref().map(|(delai, _)| Eviction {
+                inactivite_s: delai.as_secs(),
+                inactif_depuis_ms: self.inactif_depuis().map_or(0, |d| d.as_millis() as u64),
+            }),
         }
     }
 
     /// **Écoute, et ne rend jamais la main** (sauf erreur d'écoute).
     pub fn servir(self, adresse: &str) -> Result<(), DaemonError> {
         let (fils, expose) = (self.fils, self.expose);
-        super::servir(Arc::new(self), adresse, fils, expose)
+        let demon = Arc::new(self);
+        Self::guetter_l_eviction(&demon);
+        super::servir(demon, adresse, fils, expose)
     }
 
     /// Sert un écouteur déjà lié (voir [`super::servir_lie`]) : les tests se
     /// lient au port 0 et ne relâchent jamais le port.
     pub fn servir_lie(self, ecoute: std::net::TcpListener) -> Result<(), DaemonError> {
         let (fils, expose) = (self.fils, self.expose);
-        super::servir_lie(Arc::new(self), ecoute, fils, expose)
+        let demon = Arc::new(self);
+        Self::guetter_l_eviction(&demon);
+        super::servir_lie(demon, ecoute, fils, expose)
     }
 }
 
@@ -545,6 +622,17 @@ impl Service for EmbedDaemon {
     }
 
     fn repondre(&self, methode: &str, chemin: &str, req: &mut tiny_http::Request) -> (u16, String) {
+        // Toute demande compte comme activité, à son arrivée et à sa fin : le
+        // délai d'éviction part de la dernière.
+        self.toucher();
+        let reponse = self.repondre_a(methode, chemin, req);
+        self.toucher();
+        reponse
+    }
+}
+
+impl EmbedDaemon {
+    fn repondre_a(&self, methode: &str, chemin: &str, req: &mut tiny_http::Request) -> (u16, String) {
         // Une requête de calcul se compte tant qu'elle n'a pas répondu.
         let _en_cours = matches!(chemin, "/embed" | "/embed_dual" | "/embed_sparse" | "/rerank" | "/ocr")
             .then(|| EnCours::compter(&self.en_cours));
