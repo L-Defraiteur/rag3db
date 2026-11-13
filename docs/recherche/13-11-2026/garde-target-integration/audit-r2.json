@@ -1,0 +1,18 @@
+{
+  "previous_candidate": "8eefcd65687d8ae999620ed745385aa705432cdb",
+  "previous_master": "994e8fc9220c15f55886fd08c8543040aab14ffd",
+  "new_master": "d7a1236e2f8f5a416bac3aa5e9e13a4968575f7c",
+  "rebased_head": "458f12c04380f7731f29b4b6f39e967e8c53aee1",
+  "app_qualified": "9ec421069320b2f0cca4099fa27f83059e944de9",
+  "product_entries": 6783,
+  "product_differences": 0,
+  "new_entrants": [
+    "docs/orchestration/tickets/2026-11-13-la-ci-refuse-la-reouverture-du-temoin-physique.md"
+  ],
+  "new_entrants_preserved_exact": true,
+  "range_patches": 35,
+  "range_equal": 35,
+  "master_protected_entries": 8008,
+  "master_protected_differences": 0,
+  "no_runtime_rerun": true
+}
