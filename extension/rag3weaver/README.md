@@ -479,7 +479,8 @@ root. In the chat, the workshop:
   Use `format: "json"` for qualified references, provenance and limits; no code bodies are returned;
 - follows a command's returned journal with `wait_output`, using the existing bounded journal reader;
 - reads a file 200 lines at a time (`read_file`), or a scope from the index of an attached worktree
-  by its name (`read_scope`);
+  by its name (`read_scope`); if a worktree lookup fails, the search reports itself as incomplete
+  and preserves the error instead of claiming absence or uniqueness;
 - writes with `replace_text` (an old text that appears exactly once), `replace_lines` and
   `insert_lines`; the line edits require that those lines were read in this turn or the previous
   one. Every write returns the unified diff, and a write inside an attached worktree reindexes it;

@@ -2,7 +2,7 @@
 
 État : préparé, aucun Cargo ni runtime lancé. GO lourd C7 requis après
 landing physique ; aucun tour master demandé par cette préparation.
-Ticket : [erreurs des worktrees](../tickets/2026-11-13-read-scope-masque-les-erreurs-de-lecture-des-worktrees.md).
+Ticket : [erreurs des worktrees](../../tickets/closed/2026-11-13-read-scope-masque-les-erreurs-de-lecture-des-worktrees.md).
 
 ## Sources et isolation
 

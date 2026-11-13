@@ -4,7 +4,7 @@ Source exacte 461e8b868f40907bb0b2f731ff2fcaebc78923d2, branche
 cx-ed-read-scope-qualification-r2 ; GO R4 exact C7. Produit préparé674f,
 rebasé a919 sur masterb0 sans changement, puis une ligne TEST models.embed
 ajoutée après rouge de fixture. Propagation des deux Result inchangée.
-[Ticket ouvert](../tickets/2026-11-13-read-scope-masque-les-erreurs-de-lecture-des-worktrees.md).
+[Ticket corrigé](../../tickets/closed/2026-11-13-read-scope-masque-les-erreurs-de-lecture-des-worktrees.md).
 [Recette et historique](04-recette-read-scope.md).
 
 ## Résultat

@@ -1,6 +1,6 @@
 # read_scope masque les erreurs de lecture des worktrees
 
-- **État** : ouvert ; constat statique, correctif produit et témoins à planifier.
+- **État** : corrigé ; source qualifiée461e8b868, preuves07f346ec5 (5ciblés/module20/0/3/F8 8/8), clôture préparée pour intégration autorisée C7.
 - **Famille** : produit
 - **Gravité** : réponse fausse ; absence ou unicité annoncée malgré une recherche incomplète.
 - **Atteignable en service** : oui ; read_scope de l'atelier interroge les worktrees attachés via usages.
@@ -61,7 +61,7 @@ une preuve causale ni une autorisation de modifier ses assertions.
 Liens de coordination :
 
 - [Parent migration des ancres](../../arbre-principal/tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md), qualification physique indépendante.
-- [Parcours IDE qualifié](../../tickets/closed/2026-11-12-prouver-le-parcours-agent-de-code-complet-de-l-ide.md), preuve historique conservée ; ce ticket ne la rouvre pas.
+- [Parcours IDE qualifié](2026-11-12-prouver-le-parcours-agent-de-code-complet-de-l-ide.md), preuve historique conservée ; ce ticket ne la rouvre pas.
 
 ## Correction attendue et critères de fermeture
 
@@ -129,7 +129,7 @@ physique. Ce ticket reste ouvert : un patch écrit n'est pas une correction prou
 Patch repris sans modification sur base master b0a5177c, branche neuve
 cx-ed-read-scope-qualification-r2, commit produit a919ad9d9. Range-diff
 égal à 674f596c1 ; revues statiques Archi/C7 favorables.
-[Recette de qualification isolée](../13-11-2026/04-recette-read-scope.md)
+[Recette de qualification isolée](../../everything-declarative/13-11-2026/04-recette-read-scope.md)
 publiée avant GO lourd : cinq ciblés puis module inventorié et frontières
 features, target privé neuf, aucun partage de ressources Arbre. Aucun
 Cargo/test exécuté à ce stade ; ticket reste ouvert.
@@ -217,6 +217,6 @@ Source461e8b868 exacte : cinq ciblés1/0/0, module complet20/0/3NAVattendus,
 F8canonique8/8, superviseur/finaliseur verts. Borne R3 conservée :1170.821897s
 depuis départ initial, aucun reset.306fichiers SHA identiques deux postes,
 ELF033c31d0…0375a original/copie conservés, maps six phases de juges.
-[Preuves exactes et limites](../13-11-2026/05-preuves-read-scope.md).
+[Preuves exactes et limites](../../everything-declarative/13-11-2026/05-preuves-read-scope.md).
 Deux rouges historiques conservés ; aucune attribution du FAILED physique.
 Ticket reste ouvert jusqu’à revue/intégration autorisée C7 ; aucun retrait.

@@ -80,7 +80,7 @@ mini-W documentaire suit la même garde fraîche lors de son retrait après push
 ## Suite documentaire autorisée : erreur masquée dans read_scope
 
 C7 demande un ticket dédié après la revue RO du FAILED physique, sans
-attribuer cette panic au constat. [Ticket ouvert](../tickets/2026-11-13-read-scope-masque-les-erreurs-de-lecture-des-worktrees.md) :
+attribuer cette panic au constat. [Ticket corrigé](../../tickets/closed/2026-11-13-read-scope-masque-les-erreurs-de-lecture-des-worktrees.md) :
 atelier_lire_scope ignore les erreurs backend/usages puis peut annoncer une
 absence ou choisir un résultat sans unicité multi-worktree prouvée.
 Reproduction statique et critères d'erreur contextuelle/sans silence publiés.
