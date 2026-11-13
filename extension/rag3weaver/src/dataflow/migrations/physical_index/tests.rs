@@ -14,6 +14,25 @@ use std::{
     process::Command,
 };
 
+// Keep a failed native fixture available for read-only diagnosis instead of
+// deleting its DB/WAL during unwinding. Successful cases retain usual cleanup.
+struct FailedFixtureGuard(Option<tempfile::TempDir>);
+impl FailedFixtureGuard {
+    fn path(&self) -> &Path { self.0.as_ref().unwrap().path() }
+}
+impl Drop for FailedFixtureGuard {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            if let Some(dir) = self.0.take() {
+                eprintln!("PHYSICAL_FAILED_FIXTURE {}", dir.keep().display());
+            }
+        }
+    }
+}
+fn fixture_dir() -> FailedFixtureGuard {
+    FailedFixtureGuard(Some(tempfile::tempdir().unwrap()))
+}
+
 const FIXTURE: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../docs/arbre-principal/13-11-2026/raccord-physique/fixture.json"
@@ -310,7 +329,7 @@ fn verify_exact_fixture(owned: &OwnedPhysicalIndex) {
 
 #[test]
 fn native_initial_batch_publishes_exact_values_and_reopens_without_a_model() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = fixture_dir();
     let root = dir.path().join("owned");
     let source = NewPublicationOrigin::fresh();
     let origin = source.identifier().to_string();
@@ -358,7 +377,7 @@ fn native_initial_batch_publishes_exact_values_and_reopens_without_a_model() {
 #[test]
 fn native_legacy_foreign_schema_and_values_refuse_owned_open_without_writes() {
     for change in 0..4 {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = fixture_dir();
         let root = dir.path().join("owned");
         let source = NewPublicationOrigin::fresh();
         let origin = source.identifier().to_string();
@@ -403,7 +422,7 @@ fn native_legacy_foreign_schema_and_values_refuse_owned_open_without_writes() {
 
 #[test]
 fn native_normal_catalog_open_refuses_owned_profile_before_initialization() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = fixture_dir();
     let root = dir.path().join("owned");
     drop(
         OwnedPhysicalIndex::create_new(
@@ -459,7 +478,7 @@ fn native_process_death_recovers_same_program_and_lost_ack_once() {
         "after-lexical-durability",
         "after-publication",
     ] {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = fixture_dir();
         let root = dir.path().join("owned");
         let child = Command::new(std::env::current_exe().unwrap())
             .args([
@@ -555,7 +574,7 @@ fn native_process_death_recovers_same_program_and_lost_ack_once() {
 
 #[test]
 fn native_failed_lexical_closure_has_no_receipt_and_is_never_served() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = fixture_dir();
     let root = dir.path().join("owned");
     let seed = NewPublicationOrigin::fresh();
     let origin = seed.identifier().to_string();
@@ -585,7 +604,7 @@ fn native_failed_lexical_closure_has_no_receipt_and_is_never_served() {
 
 #[test]
 fn native_unowned_cell_or_changed_source_refuses_before_new_effects() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = fixture_dir();
     let root = dir.path().join("owned");
     let seed = NewPublicationOrigin::fresh();
     let (runner, vars, probes) = runner(&dir.path().join("migrations"));
@@ -640,7 +659,7 @@ fn frozen_program_codec_binds_sources_records_and_probe_inputs() {
     );
     assert!(!chain.is_unique_genesis_head());
     assert!(!chain.is_genesis_publication(chain.head()));
-    let dir = tempfile::tempdir().unwrap();
+    let dir = fixture_dir();
     let root = dir.path().join("owned");
     let (runner, vars, probes) = runner(&dir.path().join("migrations"));
     let index = OwnedPhysicalIndex::create_new(
@@ -717,7 +736,7 @@ fn root_files(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
 #[test]
 fn native_incomplete_bootstrap_is_quarantined_before_any_ordinary_database_open() {
     for stage in ["after-root-claim", "after-bootstrap-initialize"] {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = fixture_dir();
         let root = dir.path().join("owned");
         let child = Command::new(std::env::current_exe().unwrap())
             .args([
@@ -779,7 +798,7 @@ fn native_incomplete_bootstrap_is_quarantined_before_any_ordinary_database_open(
 #[test]
 fn native_applied_journal_is_required_and_must_match_the_complete_published_result() {
     for remove in [false, true] {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = fixture_dir();
         let root = dir.path().join("owned");
         let seed = NewPublicationOrigin::fresh();
         let origin = seed.identifier().to_string();
