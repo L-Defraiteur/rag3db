@@ -22,6 +22,8 @@ l'occurrence, selon la forme de la base). Restent ceux-ci, qui lisent `Scope_Chu
 - `tests/e2e_banc_etage.rs` (5, lignes 983 à 1009) ;
 - `tests/e2e_banc_hnsw.rs` (1) ;
 - `tests/e2e_mesure_ingestion_code.rs` (2).
+- `tests/sonde_identifiants_lucivy.rs` : l'index plein texte de `Scope` (`fts_handle(SCOPE)`), qui vit
+  sur `ScopeContent` dans une base à versions.
 
 ## Ce qu'il faut pour le fermer
 

@@ -129,11 +129,13 @@ worktree et un commit deviennent des couches et des générations.
   - le masque existe déjà : `ShardedHandle` prend un `allowed_ids` de `_node_id`, changé en bitset
     par segment, qui sert de documents vivants au collecteur et de filtre aux pré-recherches. La vue
     est classée et coupée en elle-même, pas filtrée après coup ;
-  - le classement : N vaut la taille de la vue, et le df des recherches `contains` et regex vient de
-    la pré-recherche, qui ne voit que la vue. La longueur moyenne reste celle du corpus, exprès. Une
-    réserve, non vérifiée : `doc_freq(term)` somme sur tout l'index pour une requête par terme qui
-    ne passe pas par la pré-recherche, d'où une IDF possiblement incohérente. lucivy en fait un
-    témoin rouge d'abord, dans son ticket ;
+  - **masque avant le top-k : oui ; statistiques BM25 de la vue : témoin rouge le 13 novembre,
+    correctif en cours.** lucivy a écrit le témoin, et il est rouge : sous `allowed_ids`, le score
+    prend le N de l'index entier avec le df de la vue, pour tous les types de requête (term,
+    contains, phrase, parse), sur un shard comme sur deux. `with_subset_docs` n'est pas appliqué sur
+    le chemin de `search_filtered`. « Classé dans la vue » est donc faux aujourd'hui : le masque
+    existe, le classement ne suit pas encore. Le correctif est prévu chez lucivy (4.3.7), avant la
+    mesure du poids ;
   - le coût : un passage sur `_node_id` par segment et par requête. Un bitset gardé par segment et
     par génération est à chiffrer, pas à faire. lucivy n'a pas besoin de connaître les versions.
 - **Les trois lunettes de l'IDE** (« voir en tant que… ») :
