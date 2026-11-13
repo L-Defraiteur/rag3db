@@ -357,12 +357,29 @@ fn native_initial_batch_publishes_exact_values_and_reopens_without_a_model() {
         encode(&receipt).unwrap()
     );
     drop(index);
+    let before_reopen = root_files(&root);
     let reopened = OwnedPhysicalIndex::open_owned(&root, &origin).unwrap();
     verify_exact_fixture(&reopened);
+    {
+        let catalog = reopened.catalog().unwrap();
+        let mut cat = catalog.lock().unwrap();
+        assert!(cat.en_lecture_seule());
+        assert!(!cat.fts_handles().is_empty());
+        for scope in cells() {
+            for handle in cat.fts_handles_in(&scope).expect("each probed cell has FTS handles").values() {
+                assert!(handle.is_read_only(), "reader must hold immutable snapshot handles");
+                assert!(handle.commit().is_err(), "read-only index refuses commit before persistence");
+            }
+        }
+        assert!(cat.ensure_fts_handle("AbsentSyntheticIndex", &["content".into()], &[]).is_none(),
+            "a reader must not create an absent index");
+    }
     assert_eq!(
         encode(&reopened.resolve_operation("initial-eight").unwrap()).unwrap(),
         encode(&receipt).unwrap()
     );
+    drop(reopened);
+    assert!(root_files(&root) == before_reopen, "read-only search/commit refusal/Drop changed owned files");
     println!(
         "PHYSICAL_WITNESS {}",
         serde_json::json!({

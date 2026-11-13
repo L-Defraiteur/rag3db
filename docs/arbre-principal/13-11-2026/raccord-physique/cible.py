@@ -5,7 +5,7 @@ import hashlib, json, mmap, os, re, shutil, subprocess, sys, time
 W=Path('/home/lucied/.cache/rag3weaver-build/cx-wt-raccord-physique')
 C=W/'extension/rag3weaver'
 T=Path('/home/lucied/.cache/rag3weaver-build/cx-target-contenu-derive')
-P=Path('/home/lucied/.cache/rag3weaver-build/cx-raccord-physique-cible-v10')
+P=Path('/home/lucied/.cache/rag3weaver-build/cx-raccord-physique-cible-v11')
 NATIVE='rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
 SOURCE=sys.argv[1]
 CONTINUE='--existing-v3' in sys.argv[2:]
@@ -142,6 +142,10 @@ try:
         assert exact+': test' in listing
         result=run(name,wrapper+[exact,'--exact','--nocapture','--test-threads=1'],cwd=Path('/var/tmp'))
         assert re.search(r'test result: ok\. 1 passed; 0 failed; 0 ignored;',result)
+    exact='cypher_blob_store::tests::read_only_blob_store_never_prepares_or_persists_writes'
+    assert exact+': test' in listing
+    result=run('read-only-blob-store',wrapper+[exact,'--exact','--nocapture','--test-threads=1'],cwd=Path('/var/tmp'))
+    assert re.search(r'test result: ok\. 1 passed; 0 failed; 0 ignored;',result)
     native_results=[]
     for index,exact in enumerate(sorted(expected)):
         result=run(f'physical-{index:02}',wrapper+[exact,'--exact','--show-output','--test-threads=1'],cwd=Path('/var/tmp'))
@@ -159,7 +163,7 @@ try:
     assert mappings,'no native library mapping actually observed'
     assert size()<=32*1024**3
     save('witnesses.json',witnesses)
-    save('result.json',dict(verdict='VERT',source=SOURCE,elapsed_s=time.monotonic()-START,deadline=DEADLINE,passed_functions=19,judged_scenarios=18,native_judges=9,native_helper_functions=1,child_death_runs=8,ignored=0,target_bytes=size(),native=NATIVE))
+    save('result.json',dict(verdict='VERT',source=SOURCE,elapsed_s=time.monotonic()-START,deadline=DEADLINE,passed_functions=20,judged_scenarios=19,native_judges=9,native_helper_functions=1,child_death_runs=8,ignored=0,target_bytes=size(),native=NATIVE))
 except BaseException as error:
     save('result.json',dict(verdict='ROUGE',source=SOURCE,error=repr(error),elapsed_s=time.monotonic()-START,deadline=DEADLINE))
     raise
