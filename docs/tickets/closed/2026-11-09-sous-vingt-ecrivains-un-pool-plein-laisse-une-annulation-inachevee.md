@@ -853,7 +853,8 @@ plage reste en place.
 (346 verts, 23 rouges : 20 dans `known_red.txt` ou `probabilistic.txt` ; `DdlEveryMinute`, inscrit
 par ce lot ; et les deux seuils `Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64`
 et `…WithRelation`, déjà rouges seuls sur master sans ce correctif le 9 novembre, sans lien avec
-lui et hors de toute liste).
+lui, inscrits par ce lot avec leur ticket
+`docs/coeur-cpp/tickets/2026-11-13-une-suppression-sous-un-index-vectoriel-rempli-par-set-coute-avec-sa-taille-avant-le-point-de-reprise.md`).
 
 Dans `TwentyWriters.DdlEveryMinute`, l'annulation inachevée a disparu : aucun « could not
 complete ». Le scénario reste rouge, pour la saturation du pool qui n'est plus masquée : voir le

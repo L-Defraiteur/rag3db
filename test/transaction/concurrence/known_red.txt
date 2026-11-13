@@ -166,3 +166,11 @@ VectorIndexCreateUnderManyWriters.NoWriterWaitsLongDuringTheCreate no-writer-wai
 # des lectures refusées pendant la création d'un index, et l'exception de fin (« Cannot find
 # property b », le ADD b refusé par le pool plein). Pour le cœur C++.
 TwentyWriters.DdlEveryMinute index-creation-refuses-no-reader,untagged
+#
+# Une suppression sous un index vectoriel rempli par SET coûte avec sa taille avant le point de
+# reprise (ticket docs/coeur-cpp/tickets/2026-11-13-une-suppression-sous-un-index-vectoriel-rempli-
+# par-set-coute-avec-sa-taille-avant-le-point-de-reprise.md). Rouges seuls sur master le 9 novembre
+# (813d7eda8) et le 13 (48c3f6cdc) : à 15 000 lignes, environ 8 ms par ligne pour 6 permises ; la
+# variante checkpointée passe. Le seuil ne se relâche pas sans mesure. Pour le cœur C++.
+Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64 delete-independent-of-index-size
+Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64WithRelation delete-independent-of-index-size
