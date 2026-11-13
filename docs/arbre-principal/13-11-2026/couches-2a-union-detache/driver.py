@@ -155,7 +155,10 @@ def run(name,args,cap,sdk=False):
 
    if time.monotonic()-last_size>5:
     size=int(subprocess.check_output(['du','-sb',str(T)],text=True).split()[0]);save('target-size.json',dict(bytes=size,time=time.monotonic()));assert size<=32*1024**3;last_size=time.monotonic()
-   if child.poll() is not None:break
+   if child.poll() is not None:
+    if name=='lib-large' and child.returncode==0 and not (P/'elf-exit-real.json').exists():
+     time.sleep(.01);continue
+    break
    time.sleep(.025)
   rc=child.wait();child=None
  size=int(subprocess.check_output(['du','-sb',str(T)],text=True).split()[0]);save('target-size.json',dict(bytes=size,time=time.monotonic()));assert size<=32*1024**3
