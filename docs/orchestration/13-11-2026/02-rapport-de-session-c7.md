@@ -358,3 +358,12 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   donné à G** : binaire de la tête (f74ddff73) contre 835d5298f, luciepc puis le portable, instantanés
   avant-835d5298f, courant aux deux postes. 96 (l'archive qui voit son document et nomme son sujet, rejeu
   en cours) puis embarquement (l'éviction locale, vert) poussent après la pose.
+- **20 h 08, la pose du soir** : luciepc à 20 h 06 (lib 835d5298f, binaire f74ddff73, réveil vert), le portable
+  coupé à 20 h 07 et réveillé (lib 835d5298f dans /sante). **lucivy 4.3.5 publiée** sur le mot de Lucie dans
+  sa session (tag sur main aaa7160, trois registres vérifiés) : une fusion de segments pendant l'indexation
+  faisait perdre des mots du dictionnaire partagé (le rouge intermittent de test_playground_repro, 31 862
+  identifiants inconnus sur un index sauvé). **Portée** : un .fts écrit avant la 4.3.5 pendant des fusions de
+  fond — le cas des bases de code de Lucie — peut avoir perdu des mots et les garde ; à reconstruire après
+  la montée. Décidé : recherche monte lucivy-core directement à 4.3.5 avec un ticket ; hotfixs sonde les .fts
+  des copies (identifiants inconnus du dictionnaire) et rejoue la sonde des orphelines sur avant-835d5298f ;
+  la reconstruction des .fts de Lucie sera à son mot, chiffre devant elle.
