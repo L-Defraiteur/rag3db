@@ -58,6 +58,27 @@ environ 2,6 fois sans. Cent fois, c'est d'un autre ordre : les réglages n'expli
 - **Une purge des supprimés**, si la piste 1 domine : une fusion qui réécrit les segments, ou une
   reconstruction.
 
+## Autres leviers discutés avec Lucie le 13 au soir (à chiffrer après la mesure)
+
+- **Fusion selon la part de documents supprimés.** Le moteur a `set_del_docs_ratio_before_merge`
+  (`src/indexer/log_merge_policy.rs:81`), mais à 1,0 par défaut, donc éteint, et `lucivy-core` ne le
+  règle pas (`handle.rs:166-169`, seulement la taille maximale des fusions). Un segment qui a atteint la
+  taille maximale n'est plus repris : ses versions supprimées n'en sortent jamais. Si la piste 1 domine,
+  c'est le premier lot : exposer ce seuil dans `SchemaConfig` (par exemple `merge_deleted_ratio: 0.25`),
+  avec un témoin rouge d'abord qu'un segment à la taille maximale soit repris passé le seuil.
+- **La compression du texte stocké, en série d'essais** : la taille des blocs (`docstore_blocksize`,
+  qui existe déjà dans les réglages de l'index, 16 384 par défaut, mais pas dans `SchemaConfig`), les
+  niveaux de zstd (1, 3, 9) contre lz4, le cache de blocs décompressés (il en existe un petit). Mesurer
+  la taille, la latence p50/p95/p99 et les octets décompressés par requête, sur les requêtes `contains`
+  et `regex`. Utile seulement si le texte stocké pèse : 6 % dans l'index rouge avec positions, plus sans.
+- **zstd avec un dictionnaire entraîné, piloté par rag3weaver par dépôt.** C'est la dernière étape, si
+  les essais simples ne suffisent pas. lucivy fournit le mécanisme : un dictionnaire reçu, avec un
+  identifiant, utilisé par les nouveaux segments et noté dans chacun, migré aux fusions, oublié quand plus
+  aucun segment ne le cite. rag3weaver fournit la politique : entraîner sur les fichiers du dépôt, par
+  langage, et réentraîner quand il a beaucoup changé. Un dictionnaire n'est jamais modifié, seulement
+  ajouté, donc aucune réindexation n'est nécessaire à chaque entraînement. C'est un changement de format :
+  une 4.4, avec une réindexation, une seule fois.
+
 ## À lire dans le code avant le lot
 
 - **Ce que `positions: false` retire aux requêtes** : phrases, proximité, surlignage, ce que les
@@ -75,11 +96,13 @@ environ 2,6 fois sans. Cent fois, c'est d'un autre ordre : les réglages n'expli
 
 ## Notés en passant (lucivy, vues filtrées, page 30 d'arbre principal)
 
-- **Une recherche filtrée par `allowed_ids` est classée dans la vue** : N vaut la taille de la vue, le
-  df des contains et regex est compté par la pré-recherche, qui ne voit que la vue, et la longueur
-  moyenne reste celle du corpus, exprès (`lucivy_core/src/bm25_global.rs:58-64`, `with_subset_docs`
-  l. 75, posé par `lucivy_core/src/search_dag.rs:451`).
-- **Défaut probable, à prouver par un témoin rouge d'abord** : `doc_freq(term)`
+- **FAUX tant que ce n'est pas corrigé** : je l'avais lu ainsi dans le code (`bm25_global.rs:58-64`,
+  `with_subset_docs` l. 75, posé par `search_dag.rs:451`). Le témoin du soir montre l'inverse : sous
+  `allowed_ids`, le score mélange N de l'index entier et df de la vue, pour tous les types de requête.
+  Ticket : `2026-11-13-une-recherche-filtree-ne-classe-pas-comme-sa-vue.md`. La page 30 ne peut pas
+  dire « classé dans la vue » avant le correctif.
+- **Témoin fait, rouge (voir le ticket ci-dessus)**, plus large que prévu. Le soupçon de départ :
+  `doc_freq(term)`
   (`bm25_global.rs:109-115`) somme `searcher.doc_freq` sur tout l'index. Une requête par terme qui ne
   passe pas par une pré-recherche aurait donc N de la vue et df du dépôt. Le témoin : une requête par
   terme sous `allowed_ids` sur dix documents doit avoir le même score que sur un index réduit à ces
