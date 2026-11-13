@@ -70,6 +70,17 @@ def require(ok,reason,payload=None):
   raise AssertionError(reason)
 def in_cache_context(value,roots):
  return any(value==str(root) or value.startswith(str(root)+'/') for root in roots)
+def controller_role(info,ancestors,roles):
+ ancestor=ancestors.get(info['pid'])
+ if not ancestor or any(info[k]!=ancestor[k] for k in ['starttime','ppid','cgroup']):return None
+ matches=[]
+ for name,role in roles.items():
+  if (info['uid']==role['uid'] and info['exe']==role['exe'] and info['exe_sha256']==role['exe_sha256']
+      and info['argv'][1:]==role['argv_tail'] and info['cwd']==role['cwd']):matches.append(name)
+ return matches[0] if len(matches)==1 else None
+def controller_fd_allowed(role,value,roles,protected):
+ return role=='poste' and not in_cache_context(value,protected) and value==roles[role]['script']
+
 def fresh_cache_guard():
  # Called after actual poste admission, immediately before the real common guard.
  subprocess.run(['python3',str(Q/'confiner_validation.py'),'verifier'],env=os.environ.copy(),check=True,stdout=subprocess.DEVNULL)
@@ -87,10 +98,28 @@ def fresh_cache_guard():
  require((target_stat.st_dev,target_stat.st_ino)==(initial['device'],initial['inode']),'target inode changed')
  require(target_stat.st_mode==initial['mode'] and target_stat.st_uid==initial['uid'],'target mode or owner changed')
  require(marker.is_file() and not marker.is_symlink() and marker.read_text().strip()==str(oldc),'target marker changed')
- roots=[T,oldw,W,CONTROL];found=[];unknown=[];old_groups={previous['cgroup'],second.get('cgroup',json.loads(Path(second['receipt']).read_text())['cgroup'])}
+ roots=[T,oldw,W,CONTROL];found=[];unknown=[];controllers=[]
+ old_groups={previous['cgroup'],second.get('cgroup',json.loads(Path(second['receipt']).read_text())['cgroup'])}
+ ancestors={};cursor=os.getppid()
+ while cursor>1 and cursor not in ancestors:
+  proc=Path('/proc')/str(cursor)
+  try:
+   st=(proc/'stat').read_text().rsplit(') ',1)[1].split();cg=(proc/'cgroup').read_text().strip().split('::',1)[1]
+   require((proc/'stat').read_text().rsplit(') ',1)[1].split()[19]==st[19],'controller ancestry changed')
+   ancestors[cursor]=dict(starttime=st[19],ppid=int(st[1]),cgroup=cg);cursor=int(st[1])
+  except (OSError,ProcessLookupError):break
+ launcher=CONTROL/'docs/recherche/13-11-2026/garde-target-union/lancer.py';poste=C/'scripts/poste'
+ launcher_blob=subprocess.check_output(['git','-C',str(CONTROL),'show',PILOT+':docs/recherche/13-11-2026/garde-target-union/lancer.py'])
+ poste_blob=subprocess.check_output(['git','-C',str(W),'show',APP+':extension/rag3weaver/scripts/poste'])
+ require(digest(launcher)==hashlib.sha256(launcher_blob).hexdigest() and digest(poste)==hashlib.sha256(poste_blob).hexdigest(),'controller script source changed')
+ pyexe=str(Path(sys.executable).resolve());bashexe=str(Path('/bin/bash').resolve())
+ roles={
+  'launcher':dict(uid=os.getuid(),exe=pyexe,exe_sha256=digest(pyexe),cwd='/var/tmp',script=str(launcher),script_sha256=digest(launcher),argv_tail=[str(launcher),PILOT]),
+  'poste':dict(uid=os.getuid(),exe=bashexe,exe_sha256=digest(bashexe),cwd='/var/tmp',script=str(poste),script_sha256=digest(poste),argv_tail=[str(poste),'lourd','python3',str(Q/'confiner_validation.py'),'lancer','--delai','4800','--preuves',str(S),'--','python3',str(Q/'driver.py')]),
+ }
  for proc in Path('/proc').iterdir():
   if not proc.name.isdigit() or int(proc.name)==os.getpid():continue
-  stamp=None;attributed=False;field='stat'
+  stamp=None;attributed=False;role=None;field='stat'
   try:
    st=(proc/'stat').read_text().rsplit(') ',1)[1].split();stamp=st[19]
    if st[0]=='Z':continue
@@ -98,23 +127,40 @@ def fresh_cache_guard():
    attributed=cg in old_groups or owned.get(int(proc.name))==stamp
    if proc.stat().st_uid!=os.getuid() and not attributed:continue
    field='cmdline';argv=[os.fsdecode(v) for v in (proc/'cmdline').read_bytes().split(b'\0') if v]
-   attributed=attributed or any(in_cache_context(value,roots) for value in argv)
-   for field in ['exe','cwd']:
-    value=os.readlink(proc/field)
-    if in_cache_context(value,roots):attributed=True;found.append(dict(pid=proc.name,starttime=stamp,field=field,path=value))
+   base_attributed=attributed;attributed=base_attributed or any(in_cache_context(value,roots) for value in argv)
+   field='exe';exe=os.readlink(proc/'exe');field='cwd';cwd=os.readlink(proc/'cwd')
+   if int(proc.name) in ancestors:
+    field='controller-exe-sha';exe_sha=digest(proc/'exe')
+    info=dict(pid=int(proc.name),starttime=stamp,ppid=int(st[1]),cgroup=cg,uid=proc.stat().st_uid,exe=exe,exe_sha256=exe_sha,argv=argv,cwd=cwd)
+    role=controller_role(info,ancestors,roles)
+    if role:
+     require((proc/'stat').read_text().rsplit(') ',1)[1].split()[19]==stamp and (proc/'cgroup').read_text().strip().split('::',1)[1]==cg,'controller identity changed',info)
+     controllers.append(dict(info,role=role,script_sha256=roles[role]['script_sha256'],allowed_script_fds=[]))
+   # A verified role permits only its exact control argv. Context cwd/exe/FD
+   # are still inspected, particularly target and old worktree descriptors.
+   if role:attributed=base_attributed
+   for name,value in [('exe',exe),('cwd',cwd)]:
+    if in_cache_context(value,roots):attributed=True;found.append(dict(pid=proc.name,starttime=stamp,field=name,path=value))
    field='fd'
    for fd in (proc/'fd').iterdir():
     try:value=os.readlink(fd)
     except (FileNotFoundError,ProcessLookupError):continue
-    if in_cache_context(value,roots):attributed=True;found.append(dict(pid=proc.name,starttime=stamp,field=str(fd),path=value))
+    if in_cache_context(value,roots):
+     if controller_fd_allowed(role,value,roles,[T,oldw]):
+      require(digest(value)==roles[role]['script_sha256'],'controller source FD changed',dict(pid=proc.name,fd=str(fd)))
+      controllers[-1]['allowed_script_fds'].append(dict(fd=str(fd),path=value));continue
+     attributed=True;found.append(dict(pid=proc.name,starttime=stamp,field=str(fd),path=value))
    if attributed and not any(v['pid']==proc.name for v in found):found.append(dict(pid=proc.name,starttime=stamp,observation='attributed-live'))
   except PermissionError:
+   attributed=attributed or role is not None
    row=dict(pid=proc.name,starttime=stamp,field=field,observation='UNKNOWN',attributed=attributed)
    unknown.append(row)
    if attributed:found.append(row)
   except (FileNotFoundError,ProcessLookupError):continue
- record=dict(observed=time.monotonic(),before_observed=initial['observed'],device=target_stat.st_dev,inode=target_stat.st_ino,mode=target_stat.st_mode,uid=target_stat.st_uid,marker=str(oldc),old_app=previous['app'],roots=[str(r) for r in roots],found=found,unknown=unknown,elf_sha256=ledger['sha256'])
- save('cache-after-poste.json',record);require(not found,'cache activity or attributed UNKNOWN after poste',record)
+ record=dict(observed=time.monotonic(),before_observed=initial['observed'],device=target_stat.st_dev,inode=target_stat.st_ino,mode=target_stat.st_mode,uid=target_stat.st_uid,marker=str(oldc),old_app=previous['app'],roots=[str(r) for r in roots],found=found,unknown=unknown,elf_sha256=ledger['sha256'],controllers=controllers,controller_policy=roles,ancestor_snapshot=ancestors)
+ save('cache-after-poste.json',record)
+ require({v['role'] for v in controllers}=={'launcher','poste'} and len(controllers)==2,'exact launcher/poste ancestry not proved',record)
+ require(not found,'cache activity or attributed UNKNOWN after poste',record)
 
 def observe(cleanup=False):
  table={}
