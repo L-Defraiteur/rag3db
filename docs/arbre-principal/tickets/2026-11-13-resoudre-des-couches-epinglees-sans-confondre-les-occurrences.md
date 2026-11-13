@@ -137,3 +137,22 @@ Rebase union NEUF sur ED4e2e effectué sans conflit,9range-diff égaux,3fichiers
 7930apportsmasterhorschevauchement+suppressionspréservés. Rapport14/audit
 conservés. Cette préparation n’étend pas les preuves72db à l’union ; nouvelle
 recette F8/liblarge/CPU2a à publier et GO exact requis avant run.
+
+
+BilanED940adMDseul intégré AVANT gel application par rebasebrancheWTneufs
+cx-arbre-couches-union-r2 depuis2009 :10patcheségaux, produitidentique2009,
+masterpréservé. R1nonjouée supersédée. Budget4800/caps du plan13 approuvés
+pour préparer le pilote seulement ; aucunGO exécution ni preuve rétroactive.
+
+
+## Pilote union concret pour revue — pas encore joué
+
+Applicationgel236e1e9f46f7e73eda21ac8cfa765f45a29f4595 surbase940MD,
+contrôle séparé cx-arbre-couches-union-pilote-r1. [Recette15](../13-11-2026/15-recette-union-couches-f8-large.md)
+4800aprèsposte ; F8canonique→2ELFsJSONlarge/CPU+ledgercopiépublié→libentière
+large→4exactCPU/publication10. Adaptateurminimal déjà F8jeu8 --checktests,
+pascheckredondant. SDK29profil/maps observés surVRAIprocessusliblarge ;
+CPUaucunSDK. Cache69 réutilisé privé après provenance/quiescence/reçu terminé,
+preuves67 intactes. Gardes firstFAILEDlarge/panicbrutCPUseul, finaldeadline
+posthash+prépublication conservées. Ticketsouverts et aucune preuve union
+avant GOcoupleexact. Aucun Cargo/rustc/target/DB/service lancé par préparation.
