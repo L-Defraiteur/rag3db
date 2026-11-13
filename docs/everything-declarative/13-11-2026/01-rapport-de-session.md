@@ -1,7 +1,7 @@
 # Session ED — 13 novembre 2026
 
 Suite unique autorisée après livraison du parcours IDE :
-[frontières de la boîte](../tickets/2026-11-12-la-boite-ne-compile-pas-sous-daemon-seul.md).
+[frontières de la boîte](../../tickets/closed/2026-11-12-la-boite-ne-compile-pas-sous-daemon-seul.md).
 WT neuf cx-ed-frontieres-boite, base master7308544ce après activation23ceed.
 Premier diagnostic et recette CPU publiés dans le ticket avant toute compilation.
 Default=[]/daemon client HTTP sans natif/code retenus ; introspection moteur
@@ -26,3 +26,20 @@ Revue C7 favorable204/4cc ; globale complète6000 autorisée après publication
 recette04/05/06, sur unionGREP déjà livrée. Préparation scripts Archi adaptée,
 F8fail-fast au premier gate/jeu rouge, lib entière/NAV40/lect27distincts+CREATE
 exact+hôte13/filets sans PG/Vertex. Aucun ciblé Rust inchangé à rejouer.
+
+## Qualification finale et livraison à terminer
+
+Source093 sur unionGREP : F8/minimum/lib2281/0/66/NAV40/0/0 verts. Rouge de
+recette expliqué : --no-default-features précompile NAV/E2E, wrappers default[]
+changent le hash ; aucun défaut Rust. Originaux conservés, ELF réels source093/
+223gabarits/native29/Max32 archivés : largea254…, NAV7497…, E2E6ead… ; inventaires
+réels comparés exhaustivement avant complément (pas publiés avant runtimesinitiaux).
+Recette27852 relue C7, aucune compilation/rejeu de vert. CREATEexact1/0/0 en1,08s,
+hôte13direct/0/0 en12,31s+filets2/gardes état/TMP verts ; profil raw conservé,
+unique flagancien retiré pour CREATE. Lectures27distincts/28brut, 7879 rendu.
+Verdict composé1850,30/6000, échéance888487.840738597 inchangée, scopecomplément
+VERT/nettoyétrue/restes[], quiescence[]. Preuves aux deux postes,
+I-luciepc/frontieres-boite-20261113/verdict-final-compose.json. Target16Go.
+Les deux tickets du même défaut sont clos/déplacés (boîte et natifdaemonhorsmatrice).
+Pas de PG/Vertex/modèle nouveau/daemon personnel. Revue finale/tour master C7 puis
+nettoyage gardé restent requis ; aucun push master encore à cette écriture.

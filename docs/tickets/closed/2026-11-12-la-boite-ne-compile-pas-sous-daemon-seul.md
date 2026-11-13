@@ -1,6 +1,6 @@
 # La boîte ne compile pas sous la feature daemon seule
 
-- **État** : ouvert ; relevé pendant la qualification CPU de résidence.
+- **État** : corrigé 09303fe39 ; trois frontières qualifiées, verdict composé VERT.
 - **Famille** : produit
 - **Gravité** : blocage ; compilation de la bibliothèque avec daemon seul impossible.
 - **Atteignable en service** : non ; refus de compilation.
@@ -122,7 +122,7 @@ Lecture de fiche factorisée sans changement de politique : trois témoins
 valide/absente/corrompue ou sans jeton, aucune requête ni démarrage implicite.
 Témoin moteur absent sans native ; jeton masqué dans Debug conservé.
 
-Recette corrective publiée [02-recette-frontieres-boite.sh](../13-11-2026/02-recette-frontieres-boite.sh) :
+Recette corrective publiée [02-recette-frontieres-boite.sh](../../everything-declarative/13-11-2026/02-recette-frontieres-boite.sh) :
 primitive1800s incluant nettoyage, j8/Max32/HIGH0/target privé existant ; chaque
 jeu check --tests <=180s, compilation ELF libtests <=420s, chaque filtre <=60s.
 Ordre minimum puis daemon puis rag3db-native,daemon sans code. Minimum joue
@@ -276,3 +276,28 @@ Pour hôte13 direct sans wrapper/Cargo, pilote07 reprend explicitement les
 réglages natifs capturés du wrapper (ROOT/SHARED/LIBRARY_DIR/INCLUDE_DIR/LD),
 exige lib29 pour les deux répertoires et SHARED=1. Les racines hôte/état restent
 neuves ; aucun environnement personnel ni ancien TMP n'est réutilisé pour hôte.
+
+### Résolution qualifiée — source093, recette27852
+
+C7 GO final reçu pour07/08/09 ; caches helpers vérifiés contre27852, W PC
+resté093, aucun Cargo/checkout/rejeu. Ledger tags default[] et inventaires
+réels des trois ELF comparés exhaustivement aux listes initiales avant effet :
+identiques hors seul tag default autorisé. CREATE exact6ead1/0/0 en1,08s,
+aucun nonjugé ; profil capturé identique sauf flagancien retiré ; vraies gardes
+état/résidus vertes. Santé réelle avant/après verte, 7879 rendu après CREATE.
+Hôte direct même6ead13/0/0 en12,31s, filets2/0/0 et gardes état/TMP verts.
+
+Verdict composé VERT : F8/minimum/lib2281/0/66/NAV40/0/0/lectures27distincts
+(28 invocations brutes dont un nonjugé compensé par exact1 réellement jugé)/
+hôte13/0/0, filets séparés. Durée1850,30/6000s, échéance888487.840738597 jamais
+réinitialisée ; complément primitive VERT/code0/nettoyétrue/restes[], quiescence[].
+Trois ELF réellement exécutés/source093/223gabarits/maps native29/Max32,
+cinq ELF historiques distincts conservés ; target16Go. Limite chronologique
+des inventaires canoniques conservée, jamais présentée comme publication avant
+leurs runtimes initiaux. Rouge de recette initial gardé, pas de vert de scope inventé.
+
+Preuves aux deux postes : ~/.cache/rag3weaver-build/I-luciepc/frontieres-boite-20261113,
+verdict-final-compose.json, globale-09303fe39 et complement-09303fe39.
+Revue statique C7 et Archi favorables, aucun défaut produit restant sur les
+trois frontières. Aucun PG/Vertex/modèle nouveau, aucun daemon personnel posé.
+Clôture technique ; intégration et nettoyage gardé restent les étapes de livraison.
