@@ -27,6 +27,8 @@ enum Msg {
     Note(String),
     Politiques(Value),
     Entete(String),
+    /// L'état de l'équipier selon `GET /ide/teammate/list`.
+    EtatHote(Option<String>),
 }
 
 /// La tâche suivie : son dépôt, et son nom.
@@ -108,9 +110,16 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     {
         let (ep, tx, arret, boite_au_flux, agent) = (ep.clone(), tx.clone(), arret.clone(), boite_au_flux.clone(), agent.clone());
         let chemin = format!("/ide/teammate?backend={}&task={}", client::encoder(&tache.depot.id), client::encoder(&tache.task));
+        let (parent, task) = (tache.depot.id.clone(), tache.task.clone());
         std::thread::spawn(move || {
             let mut lues = 0usize;
             while !arret.load(Ordering::SeqCst) {
+                // L'état de l'équipier (lot tty-4), par la liste de son superviseur.
+                if let Ok(liste) = client::lire(&agent, &ep, "/ide/teammate/list?supervisor=supervisor") {
+                    if tx.send(Msg::EtatHote(crate::boite::etat_dans_la_liste(&liste, &parent, &task))).is_err() {
+                        return;
+                    }
+                }
                 if let Ok(v) = client::lire(&agent, &ep, &chemin) {
                     let lignes = v["mailbox"].as_array().cloned().unwrap_or_default();
                     for l in lignes.iter().skip(lues) {
@@ -154,6 +163,7 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
                 Msg::Note(n) => vue.note(&n),
                 Msg::Politiques(d) => vue.politiques(&d),
                 Msg::Entete(e) => vue.entete = e,
+                Msg::EtatHote(e) => vue.etat_de_l_hote(e),
             }
             sale = true;
         }
@@ -203,6 +213,11 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
                 Some(Action::Envoyer(texte, kind)) => {
                     if let Err(e) = client::poster(agent, ep, "/ide/teammate/mailbox", &json!({ "backend": tache.depot.id, "task": tache.task, "kind": kind, "text": texte })) {
                         vue.note(&format!("refusé : {e}"));
+                    }
+                }
+                Some(Action::Repondre { attente, texte, accord }) => {
+                    if let Err(e) = client::poster(agent, ep, "/ide/teammate/mailbox", &crate::boite::reponse(&tache.depot.id, &tache.task, &attente, &texte, accord)) {
+                        vue.note(&format!("la réponse est refusée : {e}"));
                     }
                 }
                 Some(Action::Arreter) => {

@@ -30,7 +30,25 @@ pub struct Boite {
 
 impl Boite {
     /// Une ligne de la boîte, dans l'ordre où elle arrive.
-    pub fn ligne(&mut self, _l: &Value) {}
+    pub fn ligne(&mut self, l: &Value) {
+        // Toute ligne qui y répond retire ce qu'elle vise, d'où qu'elle vienne.
+        if let Some(r) = l["reply_to"].as_str() {
+            self.attentes.retain(|a| a.id != r);
+        }
+        let kind = l["kind"].as_str().unwrap_or_default();
+        if l["from"] == "teammate" && matches!(kind, "question" | "approval" | "proposal") {
+            if let Some(id) = l["id"].as_str() {
+                if !self.attentes.iter().any(|a| a.id == id) {
+                    self.attentes.push(Attente {
+                        id: id.to_string(),
+                        kind: kind.to_string(),
+                        text: l["text"].as_str().unwrap_or_default().to_string(),
+                        command: l["command"].as_str().map(str::to_string),
+                    });
+                }
+            }
+        }
+    }
 
     /// Ce qui attend, du plus ancien au plus récent.
     pub fn attentes(&self) -> &[Attente] {
@@ -45,14 +63,19 @@ impl Boite {
 
 /// **Le corps de la réponse** (`POST /ide/teammate/mailbox`) à `a`, de la part
 /// du superviseur ; `accord` pour une approbation (`approved`).
-pub fn reponse(_backend: &str, _task: &str, _a: &Attente, _texte: &str, _accord: Option<bool>) -> Value {
-    json!({})
+pub fn reponse(backend: &str, task: &str, a: &Attente, texte: &str, accord: Option<bool>) -> Value {
+    let mut v = json!({ "backend": backend, "task": task, "kind": "answer", "text": texte, "reply_to": a.id });
+    if let Some(oui) = accord {
+        v["approved"] = json!(oui);
+    }
+    v
 }
 
 /// **L'état d'une tâche** dans `GET /ide/teammate/list` (`running`, `waiting`,
 /// `ended`, `error`), cherché par son dépôt (`parent`) et son nom.
-pub fn etat_dans_la_liste(_liste: &Value, _parent: &str, _task: &str) -> Option<String> {
-    None
+pub fn etat_dans_la_liste(liste: &Value, parent: &str, task: &str) -> Option<String> {
+    let equipiers = liste["teammates"].as_array().or_else(|| liste["result"]["teammates"].as_array())?;
+    equipiers.iter().find(|t| t["parent"] == parent && t["task"] == task).and_then(|t| t["state"].as_str()).map(str::to_string)
 }
 
 #[cfg(test)]
