@@ -174,3 +174,16 @@ Deux bornes, à tenir et à dire :
 Témoins à jouer après le correctif : `PkLookupUnderCheckpoint` (rouge puis vert), puis
 `transaction_test` et `concurrence_test` entiers, puis `DdlEveryMinute` en trois tours, sans
 toucher à sa ligne known_red sans mesure.
+
+## Les bases de Lucie : aucun doublon (hotfixs, 13 novembre 2026)
+
+Sonde en lecture seule sur des copies des instantanés `avant-835d5298f` (luciepc à 20 h 06, portable à
+20 h 07), lib 835d5298f. Dans code-lourd, code-principal, code-rag3db-depot et memoire-longue : **0 clé
+primaire en double et 0 clé logique en double**. Les clés logiques regroupent Scope par `key`, File par
+`path`, Symbol par `_project` et `name`, Library par `_project` et `import_path`. Il n'y a donc aucun
+morceau ni vecteur rattaché à un doublon.
+
+La sonde a été vue rouge sur une base fabriquée qui porte deux Scope de même `key` sous deux uuid. Le
+détail, le programme et le témoin sont dans
+`docs/coeur-cpp-hotfixs-tickets/13-11-2026/02-sonde-des-doublons.md`. Pour memoire-longue, seules les
+clés primaires sont couvertes.
