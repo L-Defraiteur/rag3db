@@ -18,6 +18,8 @@ def main():
     i = 0
     while i < len(args) and args[i] != '--':
         arg = args[i]
+        if arg in ('--offline', '--locked', '--frozen'):
+            metadata_args.append(arg)
         for option in ('--manifest-path', '--target-dir'):
             if arg == option or arg.startswith(option + '='):
                 if arg == option:
