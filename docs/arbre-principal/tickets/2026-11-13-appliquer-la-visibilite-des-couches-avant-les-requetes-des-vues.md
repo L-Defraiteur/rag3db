@@ -35,3 +35,7 @@ Recherche/Mémoire/Archi : le premier témoin boucle trois labels mais n'exécut
 ## Delta après les réserves54142
 
 Nouvelle source :15fonctions écrites, NONJOUÉES. Vrais3nœuds+spiesauxargumentscandidats, denseincapablenonscan/soft, BM25natifrefus, offsetsNone/Err soussoft dansBM25/Sparse ; probes/faultsinjectioncfgtest explicitementlimitésàCPU. GetcontrôlepostDB avantNone/Some, callbackinvalide/raccourcitdeadlineeffectivesansflag ; vueétrangèresansadmission nepeutêtrecachéeparservicecellulecohérent. Rapport29/JSON misàjour ; pasdecompilation/runtime revendiqué, recetteCPU15exacts+libproposée avantRO/GOcouple.
+
+## Préparation union après garde intégrée
+
+APP193d77cd7, base master9feb, audit33 : neuf fichiers produit A identiques affa6, garde et master horsscope préservés, trois patches égaux. Recette34 puis pilote concret rapport35 sur branche privée séparée ; aucun run union avant RO/GO exact. A CPU preuves33a suffisantes selon C7, B/C restent ouverts ; aucune clôture par préparation ni correction du rouge CI physique revendiquée.
