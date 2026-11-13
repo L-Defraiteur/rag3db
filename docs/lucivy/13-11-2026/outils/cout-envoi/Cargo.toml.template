@@ -1,0 +1,13 @@
+[package]
+name = "cout-envoi-luciole"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+luciole = { path = "@LUCIOLE_PATH@" }
+
+[profile.release]
+debug = 0

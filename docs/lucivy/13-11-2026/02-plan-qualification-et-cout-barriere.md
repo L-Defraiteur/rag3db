@@ -2,14 +2,19 @@
 
 Ticket unique : `docs/orchestration/tickets/2026-11-13-la-ci-refuse-la-reouverture-du-temoin-physique.md`.
 Porteur Lucivy ; relecture ED ; coordination des fenêtres C7.
-**Aucune commande de cette page n’a été exécutée.** Le vert10/10 existant porte
+**Aucune commande de ce plan complet n’a été exécutée.** Le vert10/10 existant porte
 uniquement sur les témoins luciole de fbd3f0a, pas sur les phases proposées ici.
 
 ## Sources et invariants à figer avant GO
 
 Avant : tag lucivy4.3.3 `663975adf11fc4a9d6cadf90e70ee68f6c9db075`.
-Après : `fbd3f0a4179917e3674fa52a56ffde027831a354` ; tout nouveau témoin ou
-harnais doit être publié avec sa source exacte avant qualification distincte.
+Production après : `fbd3f0a4179917e3674fa52a56ffde027831a354` conservée.
+Juges supplémentaires publiés sur `cx-lucivy-core-barriere-temoins`, source
+`3b1661446c573ee794b918ec016c0cbff748e4ce` : uniquement tests en plus de FBD,
+aucun nouveau delta de production. Le harnais se trouve dans
+`outils/cout-envoi/` ; son Cargo.toml.template remplace uniquement LUCIOLE_PATH.
+Le pilote `outils/qualifier-barriere-complete.py` fixe la source3b16614,
+inventorie la lib et joue la lib entière puis six exacts core ; aucune exécution.
 Pas de patch registre, SDK, base réelle, dépendance rag3weaver ou publication.
 Les répertoires natifs temporaires des tests lucivy-core sont des fixtures
 synthétiques privées et nécessitent un GO explicite de phase, pas une ouverture
@@ -33,13 +38,16 @@ Compilation, inventaire puis exécution :
    - `sharded_handle::tests::test_writes_to_a_shard_without_writer_are_reported_by_commit`.
    Ces noms ont été relus dans la source, pas encore inventoriés par un binaire.
    Chacun doit annoncer1test,0ignoré ; corpus externe non requis par ces noms.
-3. Avant GO, préparer un juge core supplémentaire qui exige AU RETOUR de close
+3. Deux juges RAM publiés exigent AU RETOUR de close
    (succès puis erreur) `strong_count(handle.router)==1` et, pour chaque shard,
    `strong_count==1`, sans fenêtre de polling. Le juge amont existant autorise
    deux secondes après close et ne remplace pas ce contrat immédiat.
-4. Avant GO, compléter si nécessaire les témoins pinned de destruction de
-   message en attente (pas seulement refus self-join) et perte de réponse avec
-   ressource détenue jusqu’au Drop. Les témoins worker/coopératif, Drop réentrant,
+   Noms : `successful_close_releases_router_and_shards_at_return` et
+   `failed_close_releases_router_and_shards_at_return`. Injection déterministe
+   sur write_root_file d’un ShardStorage RAM, pas de suppression ni sleep.
+4. Juges publiés `scheduler::tests::destruction_completion_pinned` (queue avant
+   démarrage pinned) et `pool::tests::shutdown_without_reply_releases_worker_resource`
+   (réponse perdue puis libération immédiate et shutdown répété). Les témoins worker/coopératif, Drop réentrant,
    envoi admis/bloqué et unwind publiés restent obligatoires, non dupliqués.
 
 Au premier FAILED/code nonzero/refus : arrêt, brut conservé, pas de retry.
@@ -60,7 +68,9 @@ isolement si la machine n’est pas stable : consigner la charge ou refuser mesu
 Harnais autonome CPU à publier avant GO, identique octet pour octet entre A/B :
 dépendance `luciole` par chemin vers deux worktrees figés A/B, sans patch de
 .cargo/registry ni modification du code de production. Deux manifests ne diffèrent
-que du chemin ; même lock des dépendances tierces, toolchain, flume, profil
+que du chemin. Le premier build résout le lock du harnais ; copier ce lock au
+second avant build --locked, vérifier égalité octet pour octet et empreintes
+avant chronos. Toolchain, flume, profil
 release/debug0/features et flags. Un seul target privé Lucivy pour les deux builds
 séquentiels, exécutables figés/copiés horsW avec SHA ; compilation hors chronos.
 Aucun cache froid/chaud de compilation confondu avec le débit runtime.
@@ -79,12 +89,14 @@ arrête. Produire brut JSONL : source,toolchain,exeSHA,profil,affinité,cas,N,co
 durée monotone,débit,charge et statut. Vérifier nombre envoyé==Fence et absence
 de restes ; un mauvais compte n’est pas une mesure lente mais une erreur.
 Rapporter médiane et dispersion par case, ratios B/A et coûts par message.
-Aucun seuil de régression inventé : C7/Lucie décideront sur ces chiffres s’ils
+Le ratio mesure le **delta global**, incluant HandlerGuard et l’ensemble du
+changement ; il n’isole pas le mutex. Aucun seuil de régression inventé : C7/Lucie décideront sur ces chiffres s’ils
 justifient de revoir le mécanisme. Ce microbanc mesure envoi/dispatch CPU, pas
 une ingestion complète ni une performance du stockage.
 
 ## Fin attendue
 
 Preuves bornées de la lib entière et du contrat close/router, puis mesure CPU
-interprétable. Publication d’une version et fusion main lucivy restent décisions
-séparées de Lucie ; ce plan ne les autorise pas. Ticket partagé reste ouvert.
+interprétable. Une fusion ordinaire dans main lucivy relève du GO de coordination après revue
+et qualification dans ce correctif autorisé. Tag, release et publication de
+version restent des décisions explicites distinctes de Lucie ; aucun GO ici. Ticket partagé reste ouvert.

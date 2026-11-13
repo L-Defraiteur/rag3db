@@ -430,3 +430,27 @@ ancien/nouveau avec harnais identique/conditions égales/compte exact/ordreABBA.
 Aucun seuil inventé, coûtmutex+Arc parsend explicitement à mesurer. Avant GO,
 les juges supplémentaires et le harnais devront être publiés en source exacte.
 Aucune exécution de ce plan, aucun SDK/base réelle/patch rag3weaver/release.
+
+### Sources de la suite publiées, aucune exécution
+
+Source juges `3b1661446c573ee794b918ec016c0cbff748e4ce`, branche lucivy
+`cx-lucivy-core-barriere-temoins` : ajoute uniquement des tests au FBD qualifié,
+aucun nouveau code de production. Deux juges RAM de close succès/erreur
+(write_root_file fautif explicitement), Arcrouter/shards==1 immédiatement au
+retour ; pas de base/disque réel. Juges pinnedqueueavantspawn et shutdown sans
+réponse avec ressource libérée au retour/répétition également publiés.
+
+Plan02 actualisé : pilote `outils/qualifier-barriere-complete.py` source3b figée,
+compilation+inventaire puis libluciole entière et six exactscore ; nombrelib
+comparé à inventaire, zéro ignoré admis. Proposition900s/8G/HIGHmax/j4 à revalider
+au GO du couple exact. Harnais CPU `outils/cout-envoi/src/main.rs` et manifest
+standalone template publiés pour comparaison A663/Bfbd de production identique
+aux dix CPU qualifiés ; mêmes octets de harnais, seul chemin de dépendance varie,
+locks identiques exigés après résolution et avant chronos. Fence+notification
+Drop compatible ancienne API. Coût rapporté du DELTA GLOBAL (HandlerGuard aussi),
+pas coût du mutex isolé. Aucun seuil promis, aucune exécution de la mesure.
+
+RO ED/C7 demandée avant tout GO distinct. Une fusion ordinaire du correctif
+autorisé relève du GO de coordination après revue+qualif, pas d’une nouvelle
+permission humaine inventée ; tag/release/publication restent décision explicite
+séparée de Lucie. Le ticket partagé reste ouvert et le holder CI inconnu.
