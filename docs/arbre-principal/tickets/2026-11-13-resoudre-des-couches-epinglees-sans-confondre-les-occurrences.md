@@ -209,3 +209,7 @@ Sonde Cargo--version seulement cap20/scope<=60 bornée à échéanceORIGINALE
 911024.174319861 aprèsvraiposte, profils SDKexact etCargoobservé viaGDBexec,
 aucune compilation/mutationT, codeconcretpubliépourRO+GOsondedistinct.
 Pas de reprise-cach69 répétée : gardeuniondéjàrepriseprouvée.
+
+## Sonde seule et reprise proposée
+
+Voir [rapport17](../13-11-2026/17-sonde-cargo-et-reprise-bornee.md) : observation Cargo seule validée, rougeF8 inchangé ; correctif pilote distinct, cacheunion repris sans réinvalidation, même échéance originale. Reprise NON lancée, décision GO exact à C7.
