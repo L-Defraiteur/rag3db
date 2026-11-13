@@ -1,0 +1,7 @@
+# Ledger v4 avant invocation lib avec détachement
+
+GOdistinct C7 PILOTE64abd85142e995220aae3c6cd75e10d63297b5b1/APP236e1e9f46f7e73eda21ac8cfa765f45a29f4595. Reçuvalidation-xf_0iwtw, INITIAL906224.174319861/END911020.430939566<=borne911024.174319861. Aucunreset.
+
+Ledgerjoint SHA64ad74072fded4d1a9589b491a586b2c508e24f63a1edb5b6ce11c8205b567f4. F8/builds/inventairesv2portés sansaucunrejeuCargo/F8/build/adoption. DeuxELF originaux/copiesPC contrôlés, nouvellescopiesv4 et copiesportable réhashées conformes AVANT cettepublication : largef11c95d18b846533673a179e90814019d1234e6ed6d47e1ba25bf07e71bcac58/CPUe9ba69ebea77eb280a3eea5121ef9159ceb339910ec8861c6d2f8bff626d1d6d. Inventaire2373/66ignorées ; CPU4/0 etpublication10/0 inchangés.
+
+Pause avantmarqueur, aucune invocationlibv4 àpublication. Ensuite UNIQUElib600 : GDBfollowchildSDKexec→exec/main7strict puisDETACH avantjuges/TracerPid0/parentwaitpidréel ; exitstat0 exigé, pasrcGDBseul. CPU4exacts/pub10 seulementsiVERT. Anciensrougesconservés et causesnonaffirmées. MêmeENDoriginelle/capsMINEND−15/premierrougeSTOP.
