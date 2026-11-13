@@ -35,3 +35,7 @@ Recherche/Mémoire/Archi : le premier témoin boucle trois labels mais n'exécut
 ## Delta après les réserves54142
 
 Nouvelle source :15fonctions écrites, NONJOUÉES. Vrais3nœuds+spiesauxargumentscandidats, denseincapablenonscan/soft, BM25natifrefus, offsetsNone/Err soussoft dansBM25/Sparse ; probes/faultsinjectioncfgtest explicitementlimitésàCPU. GetcontrôlepostDB avantNone/Some, callbackinvalide/raccourcitdeadlineeffectivesansflag ; vueétrangèresansadmission nepeutêtrecachéeparservicecellulecohérent. Rapport29/JSON misàjour ; pasdecompilation/runtime revendiqué, recetteCPU15exacts+libproposée avantRO/GOcouple.
+
+## Pilote CPU distinct préparé
+
+[Recette30](../13-11-2026/30-pilote-cpu-admission-2b-a.md) : sourceaffa6 figée, pilote horssource sur nouvellebranche/WT,1800 uniques aprèsposte réel32HIGHmax/j8 ; garde commune initialeTNEUFsansreprise, buildCPU900/inventaires15/25/all+ledgercopiépubliédeuxpostes avant15exacts30+libCPUentière300horsGDB. AucunSDK/native-check. Recheckfinalposthash/prépublication, firstredimmutable/cleanupattributionseule. NONLANCÉ, RO+GOcouple/créneauC7distincts requis.
