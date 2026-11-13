@@ -193,3 +193,37 @@ comme vert. Quiescence privée[] ; target7,1Go, preuves532Mo, trois ELF/SHA.
 `bilan-cible.json` dans cache privé frontieres-boite-20261113 aux deux postes.
 Aucun modèle/service/PG/navigateur lancé pour ces ciblés. Le ticket reste ouvert
 jusqu'à revue, globale adaptée exigée par C7 et intégration.
+
+### Revue et recette globale composée — avant entrée
+
+C7 relit204 puis4cc favorablement et exige une globale6000 sur l'union grep,
+pas les seuls ciblés/F8. Rebase branche neuve cx-ed-frontieres-boite-2 sur
+f0feee30a (inclut d3f5a264d grep) ; seul conflit documentaire append du ticket
+résolu en conservant C7 et ED, diff des fichiers ED src/scripts vide après rebase.
+
+Recette publiée : 04-globale-frontieres-boite.py, 05-create-exact-meme-profil.sh,
+06-lancer-globale.py dans ../13-11-2026. Adaptation relue des quatre scripts
+Archi6786/transmission-ed, jamais lancés tels quels. Namespace ED neuf, target
+unique existant, TMP court ~/.cache/cx-ed-fb, aucune ressource Archi recréée.
+Lanceur06 exige le vrai poste avant de calculer6000s ; reçu commun/Max32/HIGH0
+vérifiés ; budget initial durable réutilisé pour tout éventuel complément,
+pas de reset implicite. Premier rouge arrête, logs gardés.
+
+Ordre : tickets/CPU état, F8 check-tests sous borne2100, minimum0<=120,
+compilation des trois ELF sous borne partagée1500, archive et inventaire complet
+publiés avant runtime ; lib entière large<=900, NAV40<=600, coordination7879,
+lectures raw27<=120 (ancien1 :26jugés+CREATE nonjugé attendu unique) puis même
+ELF/profil exactCREATE1<=120 sans seul flagancien, hôte13<=120 et filets2 par
+wrapper. CREATE restaure le marqueur d'état possédé puis appelle les vraies
+terminer_etat_suite_e2e/residus_de_la_suite, aucun garde réécrit/contourné.
+Santé BGE réelle avant/après, rendu immédiat après lectures ; pas PG/Vertex/
+juge/équipier, aucun nouveau modèle/service/GPU. Les modèles locaux restent
+CPU sans acquisition forcée. 223gabarits et source réellement embarqués par
+ELF, PID/start/maps native29 et cgroup observés ; plafond target32Go gardé.
+
+check_features s'arrête désormais au premier gate ou jeu rouge et nomme
+sans-feature même dans son verdict rouge ; aucun jeu suivant ne s'exécute.
+Contrôles shell/AST/diff propres avant publication ; ciblés Rust inchangés
+non rejoués. Passage global autorisé C7 après cette publication ; aucun tour
+master à ce stade. Inventaire global doit fixer ses propres comptes, sans
+copier les2278/66 d'Archi.
