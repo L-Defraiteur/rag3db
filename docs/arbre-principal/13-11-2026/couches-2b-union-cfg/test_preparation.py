@@ -45,6 +45,18 @@ class Composition(unittest.TestCase):
    self.assertTrue(h['first_red']('thread x panicked at x'))
    self.assertFalse(h['first_lib_red']('thread x panicked at x\ntest x - should panic ... ok'))
    self.assertTrue(h['first_lib_red']('test x ... FAILED'))
+ def test_top_level_launcher_provenance_and_driver_app_are_identical(self):
+  launcher=ast.parse((HERE/'lancer.py').read_text());driver=ast.parse((HERE/'driver.py').read_text())
+  launch_app=next(n for n in launcher.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='APP' for t in n.targets))
+  app=ast.literal_eval(launch_app.value)
+  self.assertEqual(app,'d9aa4be86c6f21665cf85c22e47134c87ab6aab8')
+  construction=next(n for n in ast.walk(launcher) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id=='dict' and {k.arg for k in n.keywords}>={'app','pilot','control','files'})
+  provenance=eval(compile(ast.Expression(body=construction),'real-launcher-provenance','eval'),dict(APP=app,PILOT='fixture-pilot',CONTROL=Path('/fixture/control'),records={}))
+  read=next(n for n in driver.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='APP' for t in n.targets))
+  check=next(n for n in driver.body if isinstance(n,ast.Assert) and isinstance(n.test,ast.Compare) and isinstance(n.test.left,ast.Name) and n.test.left.id=='APP')
+  code=compile(ast.Module(body=[read,check],type_ignores=[]),'real-driver-app-contract','exec')
+  exec(code,dict(PROVENANCE=provenance))
+  with self.assertRaises(AssertionError):exec(code,dict(PROVENANCE=dict(provenance,app='193d77cd71fa4cc1608e961ea4c8a8d3d445412e')))
  def test_remainder_is_bounded_by_original_deadline_without_reset(self):
   tree=ast.parse((HERE/'admettre.py').read_text());function=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='remaining')
   import math

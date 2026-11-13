@@ -25,3 +25,7 @@ Hors chemins/source/chaîne de provenance et admission du reste, déroulé du pi
 AST9 valide ; six témoins CPU hermétiques de composition verts en0,038s, dont le témoin budget adapté vérifie arithmétique du reste et expiration sans reset. Aucun subprocess/Cargo/rustc/proc/target réel par ces témoins. Produit APP→pilote vide ; aucune modification Rust dans le contrôleur. Le correctif cfg(test) a quatre RO statiques favorables, mais pas de preuve compilation.
 
 GO distinct C7 nécessaire. Premier rouge STOP sans retry/skip, risque jugeCI physique toujours séparé ; aucune nouvelle lib native ni B/C prouvée avant exécution. Ancien rouge e6e reste rouge, ACPU33a reste historique, tickets ouverts. Aucun master/retrait/ressource Recherche touché.
+
+## Retrait de9625 avant admission
+
+Assertion top-level APP193 résiduelle détectée owner/RO avant toute exécution :9625 non lancé, aucun reçu/destinationv2 consommé. Assertion courante corrigée vers d9aa uniquement ; identités193 de chaîne cache conservées. Septième témoin hermétique exécute les vrais nœuds AST top-level lanceur→construction provenance→assign/assertdriver, vérifie acceptation d9aa et refus193. Six témoins précédents maintenus. Aucun changement Rust/budget/parcours. Nouveau SHA pilote à relire avant tout GO.

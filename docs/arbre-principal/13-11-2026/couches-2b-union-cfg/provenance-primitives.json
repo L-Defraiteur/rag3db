@@ -16,7 +16,7 @@
   "driver.py": {
     "source": "65ad0810ca3f4f1496539d5e2945e5c959b94a07",
     "source_sha256": "3ffa2f7f037a7f45d72af5620839130c8a7d7758b180a9bbf193b9b57bf47556",
-    "prepared_sha256": "fa067bbf3b6d2df9af1da5450100ee2bc9442334ee2b1e8ca5735e060491582e",
+    "prepared_sha256": "329dcf8922c19f290adc5f0adf75867aebcae86086a13fef0ce76f7791b62bc2",
     "delta": "same primitive; corrective APP/proof paths, failed193 cache chain, remainder authority described report38",
     "previous_prepared_sha256": "25eef7848fb28ef4b08d14ee05802407a4422eecfbe106d68b0067ecaa181b63"
   },

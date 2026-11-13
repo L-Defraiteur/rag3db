@@ -4,7 +4,7 @@ from pathlib import Path
 import hashlib,json,mmap,os,re,shutil,signal,subprocess,sys,time,tempfile,importlib.util,stat,traceback
 R=Path('/home/lucied/.cache/rag3weaver-build');Q=Path(__file__).parent;W=R/'cx-wt-couches-2b-union-cfg';C=W/'extension/rag3weaver';T=R/'cx-target-contenu-derive';P=R/'cx-validation-couches-2b-union-v2';S=R/'cx-confinement-couches-2b-union-v2'
 PROVENANCE=json.loads((Q/'provenance.json').read_text());APP=PROVENANCE['app'];PILOT=PROVENANCE['pilot'];CONTROL=Path(PROVENANCE['control'])
-assert APP=='193d77cd71fa4cc1608e961ea4c8a8d3d445412e'
+assert APP=='d9aa4be86c6f21665cf85c22e47134c87ab6aab8'
 AUTH_PATH=Path(os.environ['RAG3WEAVER_VALIDATION_RECU']);AUTH=json.loads(AUTH_PATH.read_text());END=min(AUTH['echeance'],922938.385510088);START=918138.385510088
 assert START<=time.monotonic()<END
 assert AUTH['echeance']<=922938.385510088

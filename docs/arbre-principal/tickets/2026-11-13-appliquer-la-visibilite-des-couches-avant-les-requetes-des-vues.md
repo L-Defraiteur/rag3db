@@ -39,3 +39,7 @@ Nouvelle source :15fonctions écrites, NONJOUÉES. Vrais3nœuds+spiesauxargument
 ## Frontière fixture après rouge F8 union
 
 Preuves e6e6b8677 publiées avant édition ; rapport37 corrige uniquement les huit frontières cfg(test) fixture, sans modifier quinze juges ni raccords communs. Nouveau SHA à revoir, aucune qualification avant GOcouple et reste original ; B/C ouverts.
+
+## Blocage de préparation pilote9625 — aucun reçu consommé
+
+RO indépendante et contrôle final owner : driver L7 gardait assertAPP193 alors que le lanceur transmet APPd9aa via provenance. Échec déterministe avant P.mkdir/try ;9625 retiré sans exécution. Correctif requis : seule assertion APPcourante vers d9aa, conserver193 dans chaîne de cache, ajouter témoin AST des identités top-level lanceur→provenance→driver. Aucune modification sourceRust ni budget, revue du nouveau pilote avant GOdistinct.
