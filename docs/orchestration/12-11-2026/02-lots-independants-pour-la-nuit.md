@@ -129,6 +129,28 @@ appel tant que l'accès Vertex n'est pas disponible et vérifié.
 
 ## Validation et intégration
 
+### Reprise du 13 novembre après les premières livraisons
+
+Publication déclarative bc1a81500 et navigation3edbb8475 sont intégrées ; le
+parcours réel du chat IDE est intégré par43e4f185b. Leurs ressources de lot sont
+rendues ou en nettoyage immédiat. L'activation des modèles termine sa propre
+qualification, puis suit son tour d'intégration ; cet ordre reste prioritaire.
+
+Deux suites demandées par Lucie peuvent désormais avancer indépendamment :
+Arbre prépare le raccord physique minimal sur index synthétique neuf dans son
+[ticket migration](../../arbre-principal/tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md) ;
+Archi reprend l'enrichissement optionnel du grep dans son
+[ticket navigation](../../rag3weaver-archi/tickets/2026-11-12-exposer-la-navigation-dans-les-symboles.md).
+Ces tickets précisent les limites et critères. Source/recette avant lourd,
+fichiers communs coordonnés, aucun index utilisateur ni service existant modifié.
+Les autres sessions restent disponibles pour les revues ou leurs dépendances
+réelles ; on ne les réveille pas pour remplir les quatre postes.
+
+Le contrôle des tickets sur43e4f185b est vert :400 en-têtes valides,
+126 ouverts et274 fermés. Les runs CI C++ récents sont remplacés sans job ou
+encore en attente au relevé ; ils ne ferment pas le ticket CI. Card0 reste
+bornée à cette nuit et son ticket attend le constat réel du timer de07:54.
+
 Chaque travail reprend son ticket existant ou celui créé ci-dessous avant
 action. Source et recette publiées avant tests ; premier rouge inattendu arrêté
 et diagnostiqué, pas de replay inchangé ni reset silencieux de budget. Borne
