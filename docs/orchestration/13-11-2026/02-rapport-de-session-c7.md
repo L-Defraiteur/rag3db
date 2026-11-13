@@ -84,3 +84,15 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   grep_files, impact, list_files, navigate_symbols, outline, schema, search_code, usages, wait_output),
   conformes au gabarit de master. Les passes épinglent 207701bb2, sans MOTEUR_ANCIEN. Disques : portable
   298 Gio libres, luciepc 1,3 Tio.
+- **16 h 04, la CI rouge est un vrai défaut, les lots partent.** La mesure d'archi sur master (poste mesure,
+  lib 207701bb2, 32 Gio) : lib entière en 40,08 s puis 41,07 s pour 2 307 tests (33 s pour 2 094 le 9) ;
+  **la lenteur de 100 à 113 s n'existe plus** (le fil de relecture du journal retiré par les « fix(chat) »
+  du 11). Le seul rouge, aux deux tours, est le test du raccord physique de Codex
+  (`native_normal_catalog_open_refuses_owned_profile_before_initialization`), **rouge aussi sous la lib neuve
+  et le poste seul** : la piste de l'environnement tombe, c'est un état partagé entre tests dans le même
+  processus (ticket d3f899014). Lancé maintenant, sans attendre le soir, parce que master est rouge :
+  **arbre principal** reprend le raccord physique (les deux tests rouges : celui-ci et la réouverture refusée
+  après un Drop, tests.rs:414), **le cœur** cherche côté moteur l'écrivain qui reste vivant (registre des
+  writers, libération au Drop), **ED** joue enfin son correctif des réclamations (9da8e4433, jamais compilé,
+  le rouge intermittent d'une semaine). archi : le découpage au survol de la jauge (wt-pese, rouge joué).
+  Toutes les passes sous 207701bb2 sans MOTEUR_ANCIEN et 32 Gio.
