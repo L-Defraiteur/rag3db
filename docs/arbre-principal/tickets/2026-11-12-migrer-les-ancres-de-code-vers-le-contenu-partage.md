@@ -1938,3 +1938,17 @@ au même contrat, sans nouvelle base ni nouveau lot de migration :
 Arbre reste seul éditeur. Relectures Mémoire/Recherche/Embar limitées à leurs
 frontières, sans test ni base créés par les relecteurs. Ces constats statiques
 ne sont pas un rouge runtime joué ; source/recette/témoins avant ciblé600.
+
+
+Complément de revue Recherche, même source be9699 : les injections par nom
+de frontière surviennent à chaque cellule et meurent toujours dans la première.
+Avant de qualifier la reprise multicellule, ajouter un cas qui meurt dans la
+deuxième après acquisition du premier préfixe, puis prouver absence de rejeu
+des effets de la première, reprise exacte et fermeture lexicale des deux.
+L'identité du point d'arrêt doit être explicite dans le fils de fixture.
+Le total de huit fonctions natifs comprend physical_crash_child, auxiliaire
+réellement exercé par les enfants du parent ; il ne constitue pas un huitième
+scénario indépendant au lancement sans son environnement. Distinguer le compte
+Rust brut, les scénarios juges et les sous-processus dans l'inventaire/verdict.
+Ces réserves de couverture sont statiques ; aucun échec runtime observé ni
+second exécuteur trouvé par Recherche.
