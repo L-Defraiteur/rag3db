@@ -2029,6 +2029,43 @@ mod tests {
         (statut, serde_json::from_str(&texte).unwrap())
     }
 
+    /// Compare real HTTP bodies with the current worktree, not with another
+    /// embedded manifest. The qualification pilot additionally checks Git blobs.
+    #[test]
+    fn served_ide_assets_match_the_current_worktree() {
+        use sha2::Digest;
+        let (address, thread) = hote_garde("asset-witness");
+        let observed = (|| -> Result<Vec<(&str, Vec<u8>)>, String> {
+            let agent = crate::daemon::agent_with_timeout(DELAI_D_UNE_SONDE);
+            let mut values = Vec::new();
+            for name in ["app.js", "app.css"] {
+                let mut response = agent.get(format!("http://{address}/ide/{name}"))
+                    .header("Cookie", "rag3weaver_ide=asset-witness")
+                    .call().map_err(|e| e.to_string())?;
+                if response.status().as_u16() != 200 {
+                    return Err(format!("{name}: HTTP {}", response.status()));
+                }
+                let body = response.body_mut().read_to_string().map_err(|e| e.to_string())?;
+                values.push((name, body.into_bytes()));
+            }
+            Ok(values)
+        })();
+        let (status, _) = demander("POST", &format!("http://{address}/arret"), Some("asset-witness"));
+        assert_eq!(status, 200);
+        thread.join().unwrap();
+        for (name, body) in observed.expect("HTTP asset bodies") {
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("templates/ide/app").join(name);
+            let current = std::fs::read(&path).expect("current worktree asset");
+            assert!(body == current, "served {name} differs from {}", path.display());
+            println!("UI_ASSET_WITNESS {}", serde_json::json!({
+                "asset": name, "route": format!("/ide/{name}"), "status": 200,
+                "bytes": body.len(), "sha256": format!("{:x}", sha2::Sha256::digest(&body)),
+                "source": path,
+            }));
+        }
+    }
+
     /// **Le jeton local** (marche 4) : `GET /sante` répond sans lui — un client
     /// sonde avant de le connaître — ; tout le reste le demande, refusé en 403
     /// et nommé (401 voudrait dire « session inconnue », que le client rejoue).
