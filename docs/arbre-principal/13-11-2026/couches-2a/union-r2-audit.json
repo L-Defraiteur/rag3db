@@ -1,0 +1,19 @@
+{
+  "previous_master": "4e2e2bfbb7c8ce670a49a06a36580d481d9abbc0",
+  "previous_candidate": "2009eac3077cd6bbb13df4f25a2fac2d752bd739",
+  "master": "940ad65bf57461b714ff2671266bf84cb74f6966",
+  "rebased_code_head": "253c73bd9c96430b24f1e197f4cd6274c4da2d87",
+  "incoming_markdown_only": [
+    "docs/everything-declarative/13-11-2026/01-rapport-de-session.md",
+    "docs/everything-declarative/13-11-2026/03-knowledge-dump.md",
+    "docs/everything-declarative/13-11-2026/06-integration-read-scope.md",
+    "docs/tickets/closed/2026-11-13-read-scope-masque-les-erreurs-de-lecture-des-worktrees.md"
+  ],
+  "range_diff_equal_patches": 10,
+  "product_byte_identical_previous_candidate": true,
+  "master_nonoverlap_preserved": 7930,
+  "master_deletions_preserved": true,
+  "layer_files_identical_69": true,
+  "ed_rust_preserved": true,
+  "runtime_on_union": false
+}
