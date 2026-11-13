@@ -28,7 +28,9 @@ pub struct Rag3dbConnection {
     conn: rag3db::Connection<'static>,
     db: Arc<rag3db::Database>,
     /// Partagé par toutes les connexions d'une même `Database` : un point de
-    /// reprise échoué empoisonne la base, pas une connexion.
+    /// reprise échoué empoisonne la base, pas une connexion. Declared after
+    /// `db`: its last reference falls only once the database destructor has
+    /// returned, which is how the writer registry knows the files are at rest.
     reopen: Arc<ReopenState>,
     /// Le tampon retenu à l'ouverture, et sa source ; `None` pour une base
     /// ouverte avec une configuration fournie par l'appelant.
@@ -328,6 +330,19 @@ impl Rag3dbConnection {
     fn open_for_writing(path: &Path, config: rag3db::SystemConfig) -> Result<Self, DbError> {
         crate::dataflow::migrations::physical_index::refuse_normal_storage_path(path)
             .map_err(|e|DbError::ConnectionError(e.to_string()))?;
+        Self::open_registered_writer(path, config, true)
+    }
+
+    /// The single writer instance per file and per process, and the wait for
+    /// the previous one to die. Shared by the ordinary open and by the owned
+    /// physical index: a writer that skipped this registry was refused on
+    /// reopen while its last `Arc` still died on a lucivy actor thread, and
+    /// that late death wrote the base after the caller thought it closed
+    /// (ticket of 13 November 2026, the physical connector red in the full lib).
+    ///
+    /// `writer_mark`: the ordinary open also posts the `<base>.ecrivain` mark;
+    /// the owned physical root holds only its own files, so it does not.
+    fn open_registered_writer(path: &Path, config: rag3db::SystemConfig, writer_mark: bool) -> Result<Self, DbError> {
         let cle = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
         let debut = std::time::Instant::now();
         loop {
@@ -335,7 +350,7 @@ impl Rag3dbConnection {
                 .lock()
                 .unwrap_or_else(|p| p.into_inner())
                 .get(&cle)
-                .map(std::sync::Weak::strong_count)
+                .map(|w| w.database.strong_count())
                 .unwrap_or(0);
             let reste = REOPEN_WAIT.saturating_sub(debut.elapsed());
             if tenues == 0 {
@@ -343,15 +358,17 @@ impl Rag3dbConnection {
                 match rag3db::Database::new(path, config.clone()) {
                     Ok(db) => {
                         let db = Arc::new(db);
+                        let reopen = Self::fresh_reopen_state();
                         OPEN_FOR_WRITING
                             .lock()
                             .unwrap_or_else(|p| p.into_inner())
-                            .insert(cle, Arc::downgrade(&db));
+                            .insert(cle, RegisteredWriter { database: Arc::downgrade(&db), state: Arc::downgrade(&reopen) });
                         // La marque de l'écrivain, à côté de la base : un client
                         // ou un hôte qui la lit sait qui la tient.
-                        let reopen = Self::fresh_reopen_state();
-                        if let Ok(mut m) = reopen.marque.lock() {
-                            *m = crate::marque_d_ecrivain::poser(path);
+                        if writer_mark {
+                            if let Ok(mut m) = reopen.marque.lock() {
+                                *m = crate::marque_d_ecrivain::poser(path);
+                            }
                         }
                         return Self::connect(db, reopen);
                     }
@@ -392,9 +409,14 @@ impl Rag3dbConnection {
     )->Result<Self,DbError> {
         permit.validate_path(path.as_ref()).map_err(|e|DbError::ConnectionError(e.to_string()))?;
         let choice = buffer_pool_choice(None);
-        let mut connection = Self::open_explicit_config(
-            path.as_ref(), Self::config_with_buffer_pool(choice).read_only(readonly),
-        )?;
+        let config = Self::config_with_buffer_pool(choice).read_only(readonly);
+        let mut connection = if readonly {
+            Self::open_explicit_config(path.as_ref(), config)?
+        } else {
+            let mut c = Self::open_registered_writer(path.as_ref(), config, false)?;
+            c.path = Some(path.as_ref().to_path_buf());
+            c
+        };
         connection.buffer_pool = Some(choice);
         Ok(connection)
     }
@@ -980,10 +1002,64 @@ pub const ALREADY_OPEN_FOR_WRITING: &str = "is already open for writing in this 
 /// précédente du même fichier dans ce processus.
 pub const REOPEN_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
 
+/// The writer instance of a file, as the registry sees it.
+///
+/// `database` reaches zero strong references *before* the engine destructor
+/// runs, and that destructor still checkpoints and writes the files. Every
+/// [`Rag3dbConnection`] holds one clone of the database and one of its
+/// [`ReopenState`], and drops them in that order (field order): the state's
+/// last reference falls only once the database destructor has returned. A
+/// writer is at rest when both counts are zero.
+struct RegisteredWriter {
+    database: std::sync::Weak<rag3db::Database>,
+    state: std::sync::Weak<ReopenState>,
+}
+
 /// Les bases ouvertes en écriture par ce processus : chemin absolu → l'instance.
 static OPEN_FOR_WRITING: std::sync::LazyLock<
-    std::sync::Mutex<std::collections::HashMap<std::path::PathBuf, std::sync::Weak<rag3db::Database>>>,
+    std::sync::Mutex<std::collections::HashMap<std::path::PathBuf, RegisteredWriter>>,
 > = std::sync::LazyLock::new(Default::default);
+
+fn live_writer_references(path: &Path) -> usize {
+    let cle = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    OPEN_FOR_WRITING
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .get(&cle)
+        .map(|w| w.database.strong_count() + w.state.strong_count())
+        .unwrap_or(0)
+}
+
+/// **Wait until no writer instance of `path` lives in this process**, at most
+/// `wait`. Dropping the last handle does not end the instance at once: its
+/// last `Arc` may fall on a background thread (lucivy actors), and the engine
+/// still checkpoints and writes the files while it dies. A caller that needs
+/// the files at rest (a byte comparison, a copy) waits here first. Returns the
+/// references still held when the wait runs out.
+pub(crate) fn wait_writer_released(path: &Path, wait: std::time::Duration) -> Result<(), usize> {
+    let debut = std::time::Instant::now();
+    loop {
+        match live_writer_references(path) {
+            0 => return Ok(()),
+            n if debut.elapsed() >= wait => return Err(n),
+            _ => std::thread::sleep(std::time::Duration::from_millis(20)),
+        }
+    }
+}
+
+/// The live writer instance of `path` in this process, if any, held the way a
+/// connection holds it (database first, then its state). Tests hold it to stand
+/// for a late release on a background thread.
+#[cfg(test)]
+#[allow(dead_code)]
+pub(crate) struct HeldWriter(Arc<rag3db::Database>, Arc<ReopenState>);
+#[cfg(test)]
+pub(crate) fn registered_writer(path: &Path) -> Option<HeldWriter> {
+    let cle = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    let registry = OPEN_FOR_WRITING.lock().unwrap_or_else(|p| p.into_inner());
+    let w = registry.get(&cle)?;
+    Some(HeldWriter(w.database.upgrade()?, w.state.upgrade()?))
+}
 
 #[cfg(test)]
 mod tests {
