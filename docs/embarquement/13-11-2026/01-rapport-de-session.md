@@ -4,13 +4,15 @@
 
 Ticket porteur : [activation et résidence](../tickets/2026-11-12-gerer-activation-et-residence-des-modeles.md).
 La tranche dense locale `maintenir` est implémentée et son union publication/ED
-est qualifiée. Le tour de livraison master est demandé ; elle ne sera annoncée
-livrée qu’après push et ses trois contrôles. La conception distante/éviction/baux distribués/crash
+est qualifiée et livrée sur master par23ceed87b, après tour explicite.
+Les trois contrôles de livraison sont verts : propre, aucun rebase,
+origin/master égal à HEAD. La conception distante/éviction/baux distribués/crash
 reste dans le même ticket ouvert, sans prétendre l'avoir réalisée.
 
-Worktrees portable et luciepc : `/home/lucied/git_workspaces/cx-activation-modeles`.
-Branches : `cx-activation-modeles-4` (portable) et `cx-activation-modeles-pc-4`
-(luciepc). Source initiale84259404f puis union corrigée138268398, tous deux conservés.
+Worktrees utilisés jusqu’au retrait gardé : `/home/lucied/git_workspaces/cx-activation-modeles`.
+Branche de livraison `cx-activation-modeles-6` ; branches distantes précédentes
+conservées. Les worktrees et le target sont jetables après livraison : s’ils
+sont absents, repartir de master, ne pas restaurer leurs anciens caches. Source initiale84259404f puis union corrigée138268398, tous deux conservés.
 Le seul ajout Rust entre les deux est le témoin déterministe08c/c44 d’ED. Ne pas modifier l'arbre distant pendant la passe.
 Le target unique possédé est `~/.cache/rag3weaver-build/target-spans`, plafond
 32 Gio ; magasin29a7bc52a complet, j8. Aucun code de l'arbre de Lucie modifié.
@@ -70,3 +72,28 @@ avec le cache. Les nettoyages sélectifs et leurs limites sont dans le ticket.
 4. Appliquer docs/procedures/push-d-un-lot.md et la garde actuelle avant tout
    nettoyage : archives fidèles des administrations détruites, quiescence,
    garde VERT, jamais supprimer un sous-module partagé ni forcer un refus.
+
+
+## Livraison et retrait
+
+Livraison23ceed87b/tree3d8f853fa172e47a1fd41e27a167d950bf9e1032.
+Premier rebase sous verrou abandonné sans push : il rejouait des bilans ED
+anciens déjà livrés (quatre conflits MD). Reprise hors verrou sur branche6,
+`rebase --onto origin/master c9e6b6e39` ; aucun conflit, diff produit vide
+par rapport à a5977c930, puis dernier pas verrouillé et trois contrôles verts.
+Revue finale Mémoire favorable après lecture des logs/proofs et équivalences,
+bus physiquement absent, aucun nouveau défaut concret.
+
+Sources138 attestées archivées hors worktree sous
+`~/.cache/embarquement-notes/activation/sources-138268398.tar.gz`, SHA256
+937ed60424230e5fd8e1d5b6a9e4809e42c1ead70b8f07be383ab1f8cf00e5e2.
+Retrait préparé par poste : archives fidèles avant/après deinit des seules
+administrations privées, préservation des données générées, zéro référence
+active, garde actuelle et rapport neuf avant suppression sans force.
+Les reçus définitifs sont `archives-fin-portable/retrait.json` et
+`archives-fin-luciepc/retrait.json`, hors cible. Leur présence atteste le retrait
+réel ; aucun succès n’est déduit de sa simple préparation.
+
+Services finaux inchangés :278 PID966256/NRestarts4, BGE PID3415586/NRestarts0.
+Aucune demande de redéploiement dans ce lot. Le ticket global activation reste
+ouvert pour les politiques non implémentées ; la régression de fixture est résolue.

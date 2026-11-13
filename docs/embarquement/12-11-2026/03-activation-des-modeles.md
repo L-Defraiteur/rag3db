@@ -1,7 +1,8 @@
 # Première acquisition gérée d'un modèle
 
 Ticket : [activation et résidence](../tickets/2026-11-12-gerer-activation-et-residence-des-modeles.md).
-Cette tranche est en qualification, pas encore intégrée à master. Elle compose
+Cette tranche est livrée sur master par23ceed87b, après qualification de
+l’union et trois contrôles de livraison verts. Elle compose
 `ModelSource`, `Serveur` et `Attache` ; aucun service installé n'est modifié.
 
 ## Déclaration et appelant

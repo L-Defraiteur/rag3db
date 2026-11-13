@@ -587,3 +587,17 @@ nouvelle chargeGPU pour cette intégration. Prochain pas : tour master explicite
 contrôles et retrait gardé avec archives. Le ticket global reste ouvert pour
 les suites distante/éviction/baux distribués/crash ; seul ce défaut de fixture
 est résolu, aucune prétention de terminer ces politiques.
+
+
+### Livraison de la première tranche locale
+
+Master23ceed87b80c58fb0070bf69cab8fa610d133ab3,
+tree3d8f853fa172e47a1fd41e27a167d950bf9e1032. Tour explicite de
+l'orchestration, revue finale Mémoire favorable, dernier fetch/poste push/
+if VERT et trois contrôles lus propres. Rebase documentaire initial abandonné
+sans push (anciens bilans ED), puis --onto master c9 hors verrou sur branche6,
+diff produit vide et livraison sans nouveau rejeu. Les suites distante,
+éviction, baux distribués et reprise crash maintiennent ce ticket ouvert.
+Sources138 archivées hors cible et preuves qualifiées/rouges/remotes conservés.
+Retrait des seuls W/target propres après quiescence, archives fidèles et garde
+actuelle fraîche ; reçus externes dans activation/archives-fin-{portable,luciepc}.
