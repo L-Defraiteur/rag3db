@@ -224,20 +224,13 @@ impl Navigateur {
         );
     }
 
-    /// **Un onglet de plus**, vide, qui devient l'onglet courant ; rend la session de
-    /// l'onglet d'avant (pour y revenir par [`Self::onglet`]).
+    /// **Un onglet de plus**, vide, qui devient l'onglet courant ; les autres restent
+    /// ouverts.
     #[cfg(feature = "code")]
-    pub(crate) fn nouvel_onglet(&mut self) -> String {
-        let avant = std::mem::take(&mut self.session);
+    pub(crate) fn nouvel_onglet(&mut self) {
+        self.session.clear();
         let cree = self.commande("Target.createTarget", json!({ "url": "about:blank" }));
         self.attacher(cree["targetId"].clone());
-        avant
-    }
-
-    /// Revient à l'onglet de cette session.
-    #[cfg(feature = "code")]
-    pub(crate) fn onglet(&mut self, session: &str) {
-        self.session = session.to_string();
     }
 
     /// Une commande à l'onglet (au navigateur tant qu'aucune session), et sa
