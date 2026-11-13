@@ -105,11 +105,15 @@ bool HashIndex<T>::checkpointInMemory() {
     }
     pSlots->checkpointInMemoryIfNecessary();
     oSlots->checkpointInMemoryIfNecessary();
-    localStorage->clear();
     if constexpr (std::same_as<ku_string_t, T>) {
         overflowFileHandle->checkpointInMemory();
     }
     return true;
+}
+
+template<typename T>
+void HashIndex<T>::clearLocalStorage() {
+    localStorage->clear();
 }
 
 template<typename T>
@@ -631,11 +635,11 @@ void PrimaryKeyIndex::delete_(ValueVector* keyVector) {
 }
 
 void PrimaryKeyIndex::checkpointInMemory() {
+    std::vector<bool> changed(NUM_HASH_INDEXES, false);
     bool indexChanged = false;
     for (auto i = 0u; i < NUM_HASH_INDEXES; i++) {
-        if (hashIndices[i]->checkpointInMemory()) {
-            indexChanged = true;
-        }
+        changed[i] = hashIndices[i]->checkpointInMemory();
+        indexChanged = changed[i] || indexChanged;
     }
     if (indexChanged) {
         for (size_t i = 0; i < NUM_HASH_INDEXES; i++) {
@@ -645,6 +649,12 @@ void PrimaryKeyIndex::checkpointInMemory() {
     }
     if (overflowFile) {
         overflowFile->checkpointInMemory();
+    }
+    // En dernier : une clé ne quitte la mémoire locale qu'une fois lisible sur disque.
+    for (auto i = 0u; i < NUM_HASH_INDEXES; i++) {
+        if (changed[i]) {
+            hashIndices[i]->clearLocalStorage();
+        }
     }
 }
 
@@ -713,7 +723,8 @@ void PrimaryKeyIndex::checkpoint(main::ClientContext*, storage::PageAllocator& p
     // generally handle bypassing the WAL, but should only be run once per file, not once per
     // disk array
     pageAllocator.getDataFH()->flushAllDirtyPagesInFrames();
-    checkpointInMemory();
+    // La publication (checkpointInMemory) attend la recopie des pages fantômes : voir
+    // StorageManager::publishPrimaryKeyIndexes.
 }
 
 PrimaryKeyIndex::~PrimaryKeyIndex() = default;
