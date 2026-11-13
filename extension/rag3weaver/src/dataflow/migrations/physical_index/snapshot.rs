@@ -80,8 +80,8 @@ impl PhysicalSnapshot {
                     Ok(name.to_string())
                 })
                 .collect::<Result<Vec<_>>>()?;
-            if names.is_empty() {
-                return Err(invalid("table without explicit properties"));
+            if names.is_empty() && kind != "REL" {
+                return Err(invalid(format!("node table {name} without explicit properties")));
             }
             let connections = match kind {
                 "NODE" => vec![],
@@ -106,7 +106,8 @@ impl PhysicalSnapshot {
                 .collect::<Vec<_>>()
                 .join(", ");
             let query = if kind == "REL" {
-                format!("MATCH (src)-[n:{name}]->(dst) RETURN src._uuid, dst._uuid, {fields}")
+                let properties = if fields.is_empty() { String::new() } else { format!(", {fields}") };
+                format!("MATCH (src)-[n:{name}]->(dst) RETURN src._uuid, dst._uuid{properties}")
             } else {
                 format!("MATCH (n:{name}) RETURN {fields}")
             };
