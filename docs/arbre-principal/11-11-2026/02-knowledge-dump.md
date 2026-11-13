@@ -1,3 +1,36 @@
+## Union publication + symboles — qualifiée, avant tour master (13 novembre)
+
+Source **31db55abbfe928234de646895819ac12bae4e9fd**, basée sur master8f604328a (CI C++ et symboles intégrés),
+branche `cx-arbre-publication-composite-r2`, worktree local/luciepc
+`/home/lucied/.cache/rag3weaver-build/cx-wt-publication-composite`.
+Même ticket migration ; primitive des instantanés déclaratifs sur catalogues
+neufs dédiée. Les14témoins publication ET9symboles sont explicitement requis,
+nonignorés dans la lib. L'ancien runtime626/compositionv3+v8 reste historique,
+pas une qualification de ce nouveau delta Rust/graphes.
+
+Globale v5 **VERT en628.58s/5400**, F5 5/5, check minimum sans features,
+lib 2266/0/65, navigateur 40/0/0, cli 5/0/0, postgres 36/0/0, e2e_tx_ligne_a_ligne 3/0/0, e2e_tx_merge_puis_copy 1/0/0, e2e_tx_par_paquet_arret 18/0/0, e2e_tx_vecteurs_apres_rollback 3/0/0. Quatre ELF/source/native29/maps et223gabarits chacun attestés,
+copiés et rehashés DEUX postes ; maps du backend capturées déterministement
+au main, puis diagnostic sur stockage synthétique absent/null/code0/sanseffet.
+Superviseur commun VERT/code0/restes[]/bus physiquement retiré, scans propres
+vides, TMPNAV marqué retiré. Pas d'incident ni reprise au sein de cette passe.
+Preuves luciepc `cx-passe-publication-composite-v5/`, copies locales
+`cx-preuves-publication-union-final/`. Historiques626 intacts dans
+`cx-preuves-publication-final/` et `cx-preuves-publication-local/`.
+
+Code, recettes, valeurs et reçus atomiques sont qualifiés sur l'union :
+A→B→A, replay historique distinct de la tête, refus origine/publication
+étrangère et catalogue hors contrat, codec stable avant effets, reprise native
+avant/après COMMIT. Revue mémoire du contrat et du mécanisme favorable.
+Le ticket migration reste ouvert pour l'application physique et la pyramide.
+
+Reprise : demander tour C7 frais, dernierfetch/équivalence/ifVERT/postepush/
+3contrôles ; si nouveau Rust sur master, requalification hors verrou.
+Puis dump/SHA/drop des SEULES PGpossédées cx_pub_2191_20261113_v1 àv5,
+propriété et0sessions vérifiées. Archivesadministrativesfidèles/helperdca/garde
+JSONfraîche VERT avant retrait WT/branches locales/target. Aucun job de ce lot
+reste actif. Les états et attentes décrits ensuite sont historiques.
+
 ## Requalification de l'union sur master symboles — en cours (13 novembre)
 
 Master est désormais `8f604328a` (CI C++ et symboles intégrés). Lot reposé

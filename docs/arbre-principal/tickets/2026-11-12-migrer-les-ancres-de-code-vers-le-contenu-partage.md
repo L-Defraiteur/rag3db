@@ -1839,3 +1839,5 @@ CPU/j8/32G/targetunique. Attend explicitement14témoins publication et9symboles
 nonignorés dans la lib ; F5/min/lib/NAV40/CLI5/PG36/4tx. PGv5neuve, zéroreset.
 Aucun push master avant requalification et tour C7 frais. Les sections suivantes
 conservent la qualification historique626 et ses preuves séparées.
+
+Union31db55abb/master8f604328a VERT globalev5 en628.58s/5400 : F5/min et lib 2266/0/65, navigateur 40/0/0, cli 5/0/0, postgres 36/0/0, e2e_tx_ligne_a_ligne 3/0/0, e2e_tx_merge_puis_copy 1/0/0, e2e_tx_par_paquet_arret 18/0/0, e2e_tx_vecteurs_apres_rollback 3/0/0,14publication+9symboles requis ;4ELF/SHA/maps29/223gabarits rehashés2postes, superviseurcode0/restes[]/busabsent/scans[]/TMPNAVretiré. Prêt tourC7frais, pas encore intégré. Ancienne composition626 reste distincte et historique.
