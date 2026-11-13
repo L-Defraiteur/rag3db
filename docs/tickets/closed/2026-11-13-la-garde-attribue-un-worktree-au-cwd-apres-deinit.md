@@ -1,6 +1,6 @@
 # La garde attribue un worktree au cwd après deinit
 
-- **État** : ouvert ; correctif ed7607325 qualifié CPU29/29 aux deux postes, revue C7/mémoire favorable ; intégration puis garde fraîche/retrait Embar restent requis, ressources réelles conservées.
+- **État** : corrigé par e167681867390914610cf3fe6e9560c6f3ca1f30 ; garde réelle fraîche VERT et retrait W/target achevé sur les deux postes.
 - **Famille** : produit
 - **Gravité** : bloque le retrait sûr d'un lot livré et conserve son target24,4Go.
 - **Atteignable en service** : non, procédure de nettoyage des worktrees.
@@ -71,3 +71,33 @@ C7 et mémoire ont relu ed760 statiquement : principal ancré, linked réciproqu
 Preuves à conserver aux deux postes sous `~/.cache/rag3weaver-build/journaux-cx-recherche-garde-deinit-13nov/` : rouge-contre-exemple.log/rouge-code.txt et rouge/deinit-cwd.json, vert-cible.log/vert-cible/deinit-cwd.json, suite-cpu.log/suite/deinit-cwd.json, pc/{source.txt,git-version.txt,garde.sha256,suite-cpu.log,deinit-cwd.json}. Les rapports de fixture montrent l’état désinitialisé sans checkout et la preuve gitlink ; aucune archive ou source mutée par la garde. La procédure décrit le nouvel ancrage et la reprise propriétaire, sans overrideCWD/config ni contournement du refus.
 
 Soumission C7 : revue du diff/procédure/ticket et tour master requis ; ticket maintenu ouvert pour intégration puis garde fraîche Embar avant son retrait. Recherche n’efface aucune ressource d’Embar et ne remplace pas son rapport gardé. Arbre continue son raccord physique sans édition garde.
+
+## Résolution et retrait effectif
+
+Helper intégré e167681867390914610cf3fe6e9560c6f3ca1f30, SHA256
+6f3dfceb17c9703029d2f4f26385f9aa21820c84bc79c518e1338b6d0f36188c,
+qualifié29/29 CPU sur les deux postes puis extrait hors cible et re-vérifié.
+L'état désinitialisé est prouvé par les ancrages Git, sans source déduite du cwd.
+Aucune configuration/index du worktree Embar n'a été modifié pour passer.
+
+Preuve réelle PC : ~/.cache/embarquement-notes/activation/
+archives-fin-luciepc-e167-final/{garde.json,administration-fidele,
+quiescence-avant.json,quiescence-apres.json,retrait.json}.
+Archive neuve fidèle, rapport neuf VERT/refus[], puis quiescence immédiate.
+Le refus initial de Git worktree remove était structurel (sous-module), après
+une garde verte, distinct d'un refus de garde. L'orchestration a confirmé le
+bornage de la procédure : UN remove --force pour ce seul W, aucun double force,
+aucun rm manuel d'administration ni branch -D. Autorisation consignée AVANT
+l'action dans activation/bornage-retrait-e167.txt. Branche supprimée par -d.
+
+Le scan ne trouve aucune référence lisible vers W/target ; les unités propres
+ont MainPID0. Les FD protégés du bureau/système/transport restent nommés
+inconnus externes dans les preuves, jamais publiés zéro. Deux précontrôles
+stricts arrêtés avant garde/archive sont conservés ; aucune suppression avant
+le dernier verdict frais. Ancien rouge et toutes les archives restent intacts.
+
+Absences W et target vérifiées sur portable et luciepc après retrait ; le reçu
+portable initial est activation/archives-fin-portable/retrait.json. Sources138,
+binaires mesurés, preuves GPU, rouges et branches distantes sont conservés.
+Fixtures PG de l'union : bases0 et sessions0, contrôlées après retrait.
+Aucun Cargo, modèle, service ou GPU relancé pour ce nettoyage.

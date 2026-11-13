@@ -91,8 +91,12 @@ Retrait préparé par poste : archives fidèles avant/après deinit des seules
 administrations privées, préservation des données générées, zéro référence
 active, garde actuelle et rapport neuf avant suppression sans force.
 Les reçus définitifs sont `archives-fin-portable/retrait.json` et
-`archives-fin-luciepc/retrait.json`, hors cible. Leur présence atteste le retrait
-réel ; aucun succès n’est déduit de sa simple préparation.
+`archives-fin-luciepc/retrait.json`, hors cible. Le reçu PC définitif est désormais `archives-fin-luciepc-e167-final/retrait.json`
+(après correctif de garde intégré e167681867). W et target sont absents sur les
+deux postes, bases PG0/sessions0. La garde PC finale est VERT/refus[], archive
+fidèle et quiescence fraîche ; seul le drapeau structurel Git --force a été
+autorisé par orchestration après ce vert. Aucun refus de garde contourné.
+Le ticket de garde est clos avec ces preuves ; les anciens rouges sont gardés.
 
 Services finaux inchangés :278 PID966256/NRestarts4, BGE PID3415586/NRestarts0.
 Aucune demande de redéploiement dans ce lot. Le ticket global activation reste
