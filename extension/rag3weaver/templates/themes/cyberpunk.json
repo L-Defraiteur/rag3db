@@ -1,0 +1,114 @@
+{
+  "nom": "cyberpunk",
+  "couleurs": {
+    "fond": "#0d0221",
+    "texte": "#ff2bd6",
+    "halo": [
+      "#00f0ff",
+      "#6a1fb0"
+    ],
+    "sourdine": "#8a7fb0"
+  },
+  "police": "'Courier New', Courier, monospace",
+  "animations": {
+    "reflechit": {
+      "forme": "cercle",
+      "ms": 150,
+      "glyphes": [
+        "▚",
+        "▞",
+        "◢",
+        "◣",
+        "◤",
+        "◥",
+        "▣"
+      ],
+      "coeur": "◉",
+      "gabarits": [
+        "⟪ {gauche} {coeur} {droite} ⟫ JACKING IN..."
+      ]
+    },
+    "lit": {
+      "forme": "transmutation",
+      "ms": 200,
+      "glyphes": [
+        "░",
+        "▒",
+        "▓",
+        "█",
+        "▓",
+        "▒",
+        "░"
+      ],
+      "coeur": "◈",
+      "gabarits": [
+        "⁅ {coeur} ⁆—[ {s} ]—⁅ {coeur} ⁆ SCANNING THE GRID..."
+      ]
+    },
+    "ecrit": {
+      "forme": "glitch",
+      "ms": 100,
+      "glyphes": [
+        "0",
+        "1",
+        "#",
+        "%",
+        "&",
+        "$",
+        "@",
+        "¥",
+        "¤"
+      ],
+      "coeur": "◉",
+      "gabarits": [
+        "[{a} {coeur} {b}] ...OVERCLOCKING...",
+        "❬{a}{b} {coeur} {c}❭ ...HACKING THE MAINFRAME...",
+        " {a} ⸢{coeur}⸣ {b}  ...WRITING TO THE NET..."
+      ]
+    }
+  },
+  "replis": {},
+  "ascii": {
+    "coeur": "@",
+    "glyphes": [
+      "0",
+      "1",
+      "#",
+      "%"
+    ],
+    "cadre": {
+      "⟪": "<<",
+      "⟫": ">>",
+      "⁅": "[",
+      "⁆": "]",
+      "—": "-",
+      "⸢": "[",
+      "⸣": "]",
+      "❬": "<",
+      "❭": ">",
+      "Ê": "E",
+      "É": "E",
+      "È": "E",
+      "Ç": "C"
+    }
+  },
+  "code": {
+    "keyword": "#ff2bd6",
+    "type": "#00f0ff",
+    "function": "#f9f871",
+    "string": "#7cffcb",
+    "comment": "#8577ad",
+    "number": "#ffb86b",
+    "constant": "#ffb86b",
+    "variable": "#e8e1ff",
+    "property": "#b39dff",
+    "operator": "#ff6ec7",
+    "punctuation": "#8a7fb0",
+    "attribute": "#00c2d1",
+    "label": "#00c2d1",
+    "module": "#00c2d1",
+    "other": "#d6cfff",
+    "en_ligne": "#7cffcb",
+    "cadre": "#8a7fb0"
+  }
+}
