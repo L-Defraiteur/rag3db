@@ -234,4 +234,33 @@ TEST_F(RolledBackInsertReopenTest, ACopyAfterRelInsertsInARolledBackTransactionL
     run("ROLLBACK;");
 }
 
+// La forme de la base de rag3weaver (sondes du 13 novembre) : après A seul, aucune relation
+// orpheline ; elles naissent quand B refait par MERGE les mêmes nœuds que la transaction défaite
+// de A. Si une clé défaite survit dans l'index de clé primaire, le MERGE de B la trouve, prend la
+// ligne défaite (invisible) pour existante, et pose dessus des relations validées.
+TEST_F(RolledBackInsertReopenTest, MergingTheKeysOfARolledBackInsertCreatesTheRows) {
+    run("BEGIN TRANSACTION;");
+    run("UNWIND range(128, 159) AS i MERGE (c:Content {uuid: 'c' + CAST(i AS STRING)}) SET c.body "
+        "= 'a';");
+    run("UNWIND range(128, 159) AS i MATCH (a:Content {uuid: 'c' + CAST(i AS STRING)}) MATCH "
+        "(b:Scope {uuid: 's' + CAST(i % 10 AS STRING)}) MERGE (a)-[r:DERIVED_FROM]->(b) SET "
+        "r.hash = 'h';");
+    run("ROLLBACK;");
+    reopen();
+    run("BEGIN TRANSACTION;");
+    run("UNWIND range(128, 159) AS i MERGE (c:Content {uuid: 'c' + CAST(i AS STRING)}) SET c.body "
+        "= 'b';");
+    run("UNWIND range(128, 159) AS i MATCH (a:Content {uuid: 'c' + CAST(i AS STRING)}) MATCH "
+        "(b:Scope {uuid: 's' + CAST(i % 10 AS STRING)}) MERGE (a)-[r:DERIVED_FROM]->(b) SET "
+        "r.hash = 'h';");
+    run("COMMIT;");
+    EXPECT_EQ(row("MATCH (c:Content) RETURN count(c);"), "160\n")
+        << "the MERGE found the rolled-back rows instead of creating them";
+    EXPECT_EQ(row("MATCH (c:Content)-[r:DERIVED_FROM]->(:Scope) RETURN count(r);"), "160\n");
+    EXPECT_EQ(row("MATCH ()-[r:DERIVED_FROM]->(:Scope) RETURN count(r);"), "160\n");
+    run("BEGIN TRANSACTION;");
+    EXPECT_EQ(setOverScopes(), "160\n");
+    run("COMMIT;");
+}
+
 } // namespace
