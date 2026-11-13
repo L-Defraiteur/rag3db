@@ -121,7 +121,11 @@ export function openFlux(onEvent: (e: FluxEvent) => void, onStatus: (s: FluxStat
     source = null;
   };
   const revenir = (e: PageTransitionEvent) => {
-    if (e.persisted && !source) brancher();
+    if (e.persisted && !source) {
+      // Rien n'est branché pendant la reconnexion : la barre le dit (archi, relecture).
+      onStatus("coupé, reprise…");
+      brancher();
+    }
   };
   brancher();
   window.addEventListener("pagehide", partir);
