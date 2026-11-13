@@ -113,7 +113,7 @@ try:
  fin_compile=min(deadline-2,time.monotonic()+1500)
  bins={}
  for key,kind,features in [('large','--lib',F),('nav','--lib',F+',navigateur'),('e2e','--test',F)]:
-  args=['test','-j8','--no-run',kind]+(['e2e'] if kind=='--test' else [])+['--no-default-features','--features',features,'--message-format=json']
+  args=['test','-j8','--no-run',kind]+(['e2e'] if kind=='--test' else [])+(['--no-default-features'] if key=='large' else [])+['--features',features,'--message-format=json']
   bins[key]=binaire(run('compile-'+key,1500,cargo(*args),borne=fin_compile),'e2e' if key=='e2e' else 'rag3weaver')
   shutil.copy2(bins[key],O/('ELF-'+key))
  inventaire={};bin_infos={}

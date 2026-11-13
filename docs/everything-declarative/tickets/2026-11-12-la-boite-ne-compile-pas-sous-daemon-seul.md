@@ -227,3 +227,40 @@ Contrôles shell/AST/diff propres avant publication ; ciblés Rust inchangés
 non rejoués. Passage global autorisé C7 après cette publication ; aucun tour
 master à ce stade. Inventaire global doit fixer ses propres comptes, sans
 copier les2278/66 d'Archi.
+
+### Globale093 interrompue : erreur de recette d'identité ELF, pas de défaut produit
+
+F8/8, minimum, lib2281/0/66 (38,38s), NAV40/0/0 (131,81s) verts.
+Raw lectures27/0/0 nominal (9,47s), filets2 verts :26 réellement jugés et
+CREATE nonjugé attendu unique. Arrêt ensuite sur FileNotFound du précompilé
+E2E-f34, supprimé par le ménage normal du wrapper. Aucun CREATE exact/hôte13
+lancé. Santé réelle avant/après verte, 7879 rendu après arrêt, scope rouge
+nettoyée/restes[] ; originaux et logs conservés.
+
+Cause de mon adaptation : --no-default-features ajouté aux précompilations
+NAV/E2E, alors que leurs wrappers activent le tag Cargo default même vide[].
+Fingerprints E2E : seul ajout default, profils/config identiques ; aucun
+cfg(default)/CARGO_FEATURE_DEFAULT dans src/build.rs. La recette04 est corrigée
+pour préparer exactement les argv des wrappers (F8 reste no-default explicite).
+Aucun Cargo/rebuild/rejeu de vert n'est autorisé par cette correction de recette.
+
+Ledger : large réellement exécuté a25481dcf6fc… inchangé ; précompilés NAV00c3…
+et E2Efb0b… restent des archives historiques, PAS les binaires des runtimes.
+NAV réellement exécuté7497ef8b980cb374c9ed4922b8a98793c899899ebf0308a67cd6b0b7063e03bb,
+E2E réellement exécuté6ead5c3ae216816386950f14a44a4c5bde7e95e3799074ea85e819c604a94b7a
+archivés après arrêt, source093/223gabarits/maps native29/PID/start/Max32 relus.
+La limite chronologique est explicite : leurs inventaires effectifs n'étaient
+pas publiés avant les runtimes initiaux. C7 accepte le principe de composition
+sous comparaison exhaustive des inventaires et tags avant complément.
+
+Pilote07 et lanceur08 publiés : source PC demeure093, code Rust inchangé ;
+recette complément copiée du commit documentaire publié dans le cache privé,
+sans checkout du W de compilation. Aucun Cargo ni recompilation, borne locale
+min(600, reste échéance globale888487.840738597 après vrai poste), aucun reset.
+Inventaires des trois ELF réellement exécutés relus et comparés aux listes
+initiales avant CREATE ; tout autre écart/tag/hash/nonjugé refuse. Même E2E6ead
+et profil whitelist capturé raw, unique flagancien retiré, vraies primitives
+état/TMP inchangées. Puis hôte13+filets2 via09 sans Cargo, racines privées
+neuves et vraies primitives créer/terminer état/résidus, pas de copie de garde.
+Coordination/santés7879 avant/après seul CREATE, rendu immédiat ; zéroPG/Vertex.
+GO final de recette bornée C7 requis avant entrée, préparation autorisée.
