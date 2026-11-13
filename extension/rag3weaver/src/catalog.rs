@@ -11450,6 +11450,10 @@ mod tests {
         assert!(catalog.known_embedding_rate().unwrap().is_none());
         assert!(catalog.probe_embedding_rate(&["lexical only".into()]).unwrap().is_none());
         assert!(catalog.note_measured_embedding_rate(crate::estimate::Rate { chars_per_second: 10.0 }).is_err());
+        let progress = catalog.index_progress().unwrap();
+        assert!(progress.model.is_none());
+        assert!(serde_json::to_value(&progress).unwrap()["model"].is_null());
+        assert!(progress.line(None, 500).contains("sans vecteurs (non déclarés)"));
         assert!(catalog.registered_embedding_models().unwrap().is_empty());
         let mut services = ServiceRegistry::new();
         let _failures = catalog.enregistrer_les_services_d_ingestion(&mut services);
