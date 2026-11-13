@@ -58,3 +58,12 @@ module initialisé, pas de gc/prune/refrepair. Assert marker cache racinecrate
 et socketsIPC quiescents explicités dans rapport01, aucune fausse fidélité pax
 pour les sockets. Arbre prévenu codeentrant ; aucun usage7879/autrelot en cours.
 Les prochaines actions nécessitent un périmètre nouveau, pas un rejeu du lot fini.
+
+## Nouvelle dette suivie, sans correctif produit lancé
+
+Ticket ED 2026-11-13-read-scope-masque-les-erreurs-de-lecture-des-worktrees.md :
+branche else continue après with_backend/usages (atelier_fichiers409) perd
+l'erreur ; absence et unicité multi-worktree peuvent être fausses. Constat
+statique indépendant du FAILED physique sans panic capturée. Correction future
+à coordonner avec C7 ; seule sa publication documentaire est réalisée ici,
+sans Cargo/runtime ni reprise du lot ED terminé.
