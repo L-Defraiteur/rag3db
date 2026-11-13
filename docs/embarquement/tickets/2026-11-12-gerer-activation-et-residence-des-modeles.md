@@ -494,3 +494,24 @@ constructeurs, consommateur, fournisseur et observateur sont inchangés et
 preuves qualifiées. Contrôler leurs diffs/SHA et conserver les résultats déjà
 obtenus, sans les étendre à du code modifié. Parent ticket toujours ouvert pour
 les limites distante/éviction/baux distribués/crash.
+
+### Union figée Pub/ED du 13 novembre
+
+Spans combiné terminé : validation-twt84wn7 VERT. Empilage sans conflit sur
+ED c9e6b6e39/tree cddac94f03a4fb4e73f6870f5bbd3550c12ffdec, lui-même sur
+Pub31db55abb et navigation8f604. Branche neuve cx-activation-modeles-4,
+première tête dfa0f590a ; anciennes branches conservées. Diff vide des
+model_source, activation/serveur, fournisseur, consommateur et observateur
+par rapport à branche3 : preuves GPU précédentes conservées, aucun rejeu GPU
+pour cette seule intégration. Les deux modifications backend.rs restent
+séparées : constructeur ModelSource et montage BAC d'ED.
+
+Qualification d'union CPU distincte, autorisée par l'orchestration : recette
+`../13-11-2026/qualifier-union.py`, enveloppe commune globale2400 s calculée
+après acquisition réelle lourd, j8/memory.max32G/high0/bus privé ; target
+possédé target-spans (23187992576 octets avant). F5, lib entière, NAV puis
+les quatre suites catalogue neuves exactes3/1/18/3 ; une base PG de fixture
+créée exclusivement si absente, supprimée en finally. Premier rouge arrêté.
+L'ancienne échéance4q demeure historique et n'est pas renouvelée. Aucun
+changement de service ou de modèle ; porteur embarquement, fin attendue :
+preuves d'union vertes et atterrissage dans l'ordre Pub → ED → Embar.
