@@ -76,7 +76,7 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
    passe qui lit `courant` tourne encore (l'unité `ide-fusion` à luciepc le 25 octobre) ou si la md5
    diffère d'un poste à l'autre ; pose ici, puis là-bas, et relit les deux `readlink`.
 10. **Les tunnels d'embarquement avant le réveil** : l'hôte de ce poste embarque par
-   `127.0.0.1:7979-7981`, des tunnels vers luciepc. Un hôte réveillé sans eux pose 0 vecteur et se
+   `127.0.0.1:7979-7980`, des tunnels vers luciepc (7981, vers luciepc:7880 granite-107m, est arrêté depuis le 12 novembre au mot de Lucie : un script qui le cite encore attend dans le vide). Un hôte réveillé sans eux pose 0 vecteur et se
    replie en silence (le ticket du service injoignable à l'ouverture, revécu à 15 h 44 le
    25 octobre). Les reposer avant que G réveille.
 11. **Le réveil, par G**, et la vérification par `daemon_status` : le `build` nomme la lib neuve, et
