@@ -1,6 +1,9 @@
 # Sous vingt écrivains, un pool plein laisse une annulation inachevée
 
-- **État** : ouvert (9 novembre 2026, cœur c++)
+- **État** : fermé (13 novembre 2026, cœur c++) — corrigé par le lot qui déplace ce ticket
+  (branche `annulation-pool-plein-2`) ; voir « Corrigé », à la fin. La saturation du pool qui
+  reste sous `TwentyWriters.DdlEveryMinute` a son ticket :
+  `docs/coeur-cpp/tickets/2026-11-13-sous-vingt-ecrivains-le-pool-sature-et-ne-se-vide-plus.md`.
 - **Famille** : moteur
 - **Gravité** : indisponibilité — la base refuse toute transaction jusqu'à sa réouverture
 - **Atteignable en service** : à établir. Le banc le reproduit seul, sur master avant et après
@@ -818,3 +821,40 @@ l'historique : cause du rouge indéterminée, ticket ouvert, aucune optimisation
 ou sûreté globale déduite. Paquet834rehashsansécart,23preuves/logs/XML/CSV exportées.
 Aucun autre runtime/processus/créneau réservé ; la revue décide d'une éventuelle
 condition de reproduction contrôlable avant nouvelle autorisation.
+
+## Corrigé (13 novembre 2026, cœur c++)
+
+**La cause.** L'annulation d'insertions retirait leurs clés de l'index local de clé primaire en
+relisant la colonne de clé des lignes annulées (`RollbackPKDeleter`, un balayage par
+`scanIndexColumns`). Pour des clés STRING, relire une chaîne demande de la mémoire au pool. Sous un
+pool plein, cette allocation échouait au milieu de l'annulation, qui restait à moitié faite, et la
+base se mettait en état « à rouvrir ».
+
+**Le correctif** (écrit par Codex sur `cx-coeur-annulation`, `0511dece7`, reposé sur master dans
+`annulation-pool-plein-2`) : `NodeTable::rollbackPKIndexInsert` retire les clés par leur plage de
+lignes, `PrimaryKeyIndex::discardLocalRange`, sans relire aucune chaîne ni aucune page. L'index
+local connaît déjà, pour chaque clé, le décalage de sa ligne. Une clé en double qui mène hors de la
+plage reste en place.
+
+**Les témoins** (`test/transaction/concurrence/copy_rollback_full_buffer_test.cpp` et
+`full_buffer_rollback_test.cpp`) :
+- `CopyRollbackUnderAFullBuffer.StringKeysRemainUsableAfterRollback` est rouge sur master sans le
+  correctif (`c18a47de0`, luciepc, 13 novembre à 16 h 14) : les deux ROLLBACK sont refusés, puis le
+  BEGIN ; il est vert avec le correctif ;
+- `FullBufferRollback.ARollbackUnderAFullBufferLeavesTheDatabaseUsable` et
+  `FullBufferRollback.StringKeysRemainUsableAfterARollbackUnderAFullBuffer` sont verts des deux
+  côtés : ils restent comme gardes ;
+- `LocalHashIndexTests.DiscardOffsetsKeepsCollidingLongKeysAndReusesOverflowSlots` et
+  `DiscardOffsetRangeDoesNotWrapAtTheLastOffset` (`test/storage/local_hash_index_test.cpp`) gardent
+  le retrait par plage.
+
+**Ce qui a été joué** sur le correctif, à luciepc : les six témoins, `local_hash_index_test` (8 cas),
+`transaction_test` entier (357 verts, les deux outils attendus sautés), `concurrence_test` entier
+(346 verts, 23 rouges : 20 dans `known_red.txt` ou `probabilistic.txt` ; `DdlEveryMinute`, inscrit
+par ce lot ; et les deux seuils `Builds/VectorIndexDeleteCost.DoesNotDependOnIndexSize/SetInBatchesOf64`
+et `…WithRelation`, déjà rouges seuls sur master sans ce correctif le 9 novembre, sans lien avec
+lui et hors de toute liste).
+
+Dans `TwentyWriters.DdlEveryMinute`, l'annulation inachevée a disparu : aucun « could not
+complete ». Le scénario reste rouge, pour la saturation du pool qui n'est plus masquée : voir le
+ticket de la saturation.
