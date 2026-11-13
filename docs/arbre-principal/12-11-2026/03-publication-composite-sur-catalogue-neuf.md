@@ -2,7 +2,10 @@
 
 Suite bornée du [ticket migration](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md),
 après A et RO, autorisée par le [plan de nuit](../../orchestration/12-11-2026/02-lots-independants-pour-la-nuit.md).
-Ce document prépare la première primitive ; il ne décrit pas encore une capacité livrée.
+La première primitive est intégrée sur master `bc1a81500`, qualifiée sur l'union
+`31db55abb` (F5/min/lib2266/NAV40/CLI5/PG36/tx25, 223gabarits et4ELF attestés).
+Elle publie des déclarations complètes sur un catalogue dédié neuf ; l'application
+physique à un index et la pyramide restent des suites distinctes.
 
 ## Objet effectivement publié
 
@@ -57,7 +60,7 @@ pas des calculs externes dont les dépendances ne seraient pas requalifiées.
 Entrée native publique, gardant sa connexion d'écrivain privée :
 
 ```rust
-// Surface de la primitive proposée, noms ajustables avant le diff.
+// Surface de la primitive intégrée.
 let origin = NewPublicationOrigin::fresh();
 let expected_origin = origin.identifier().to_owned();
 let initial = DeclarationSnapshot::from_complete_input(input_a)?;

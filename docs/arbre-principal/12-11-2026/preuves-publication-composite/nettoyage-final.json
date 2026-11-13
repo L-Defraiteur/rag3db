@@ -1,0 +1,64 @@
+{
+  "code_master": "bc1a81500a05489673b64c2e5930d335510e6dda",
+  "source": "31db55abbfe928234de646895819ac12bae4e9fd",
+  "local": {
+    "final": "bc1a81500a05489673b64c2e5930d335510e6dda",
+    "remote": false,
+    "bases": [],
+    "worktree_absent": true
+  },
+  "remote": {
+    "final": "bc1a81500a05489673b64c2e5930d335510e6dda",
+    "remote": true,
+    "bases": [
+      {
+        "name": "cx_pub_2191_20261113_v1",
+        "dump_sha256": "689c27ae996845482aa74b4972f587dfffb4eb857d4ae6804fa9c44a333617b5",
+        "absente": true
+      },
+      {
+        "name": "cx_pub_2191_20261113_v2",
+        "dump_sha256": "f080da5b061f6386ca1b8568bbffa872e0df972d766478269238f5035d2d2475",
+        "absente": true
+      },
+      {
+        "name": "cx_pub_2191_20261113_v3",
+        "dump_sha256": "f2df15cb53f8c95aed3b32796509dec23f924c5a7f20cfb04f9c99bc379e55e5",
+        "absente": true
+      },
+      {
+        "name": "cx_pub_2191_20261113_v4",
+        "dump_sha256": "1bdee78e910aa6a0dd2da00ccd2ee60a3c2cdb6ddb7df6c15dfff09230e1f3b1",
+        "absente": true
+      },
+      {
+        "name": "cx_pub_2191_20261113_v5",
+        "dump_sha256": "6a024effb06abca1eb6e30163e24b95db71f6e7b258708311d3ff254f492faa6",
+        "absente": true
+      }
+    ],
+    "worktree_absent": true,
+    "target_absent": true
+  },
+  "branches": [
+    {
+      "branch": "cx-arbre-publication-composite",
+      "sha": "c7311473134c5fb9d2cfb7142782e1a5dec2da59",
+      "old_tracking": "origin/cx-arbre-publication-composite",
+      "preserved_remote": "origin/cx-arbre-publication-composite-r1",
+      "remote_sha": "5b5b20b45cbb5dd8051cd87608d5d2eff9284b74",
+      "ancestor_proven": true,
+      "forced": false
+    },
+    {
+      "branch": "cx-arbre-publication-composite-r1",
+      "sha": "5b5b20b45cbb5dd8051cd87608d5d2eff9284b74",
+      "old_tracking": "origin/cx-arbre-publication-composite-r1",
+      "preserved_remote": "origin/cx-arbre-publication-composite-r1",
+      "remote_sha": "5b5b20b45cbb5dd8051cd87608d5d2eff9284b74",
+      "ancestor_proven": true,
+      "forced": false
+    }
+  ],
+  "parent_ticket_open": true
+}

@@ -1,3 +1,67 @@
+## État final — publication déclarative intégrée et ressources du lot retirées
+
+**Master bc1a81500a05489673b64c2e5930d335510e6dda**, après « à toi » C7 et
+poste push/dernier fetch/ifVERT. Trois contrôles lus : arbre propre, aucun rebase,
+origin/master=HEAD. Arbre livré `2b0a79f6e972bfa024f44c733a5f6933a550071e`.
+ED puis embarquement informés directement du SHA/arbre et de l'équivalence
+produit avec la base figée31 ; ils gardent leurs propres tours C7.
+
+Source qualifiée **31db55abbfe928234de646895819ac12bae4e9fd**, union Pub+Symboles
+sur8f604328a. Globalev5 **VERT en628,58s/5400**, sans incident ni reprise : F5
+5/5, minimum sans features, lib2266/0/65 (14publication+9symboles requis),
+NAV40/0/0, CLI5/0/0, PG36/0/0 et transactions3+1+18+3/0/0. Quatre ELF/source31/
+native29/maps et223gabarits chacun attestés puis copiés/rehashés DEUX postes.
+Supervision `validation-okyv_2qj` VERT/code0/restes[], bus physiquement absent,
+scans indépendants vides, TMPNAV marqué retiré. Relecture indépendante mémoire
+favorable, dont comparaison des223SHA aux223blobsGit. Ancienne qualification626,
+rouges fonctionnels, erreurs de recette et annulations restent distincts et
+conservés ; aucune de ces preuves n'est réécrite en réussite.
+
+La primitive conserve les VALEURS déclaratives complètes, leurs événements de
+publication, tête et reçus atomiques dans un catalogue natif explicitement neuf.
+A→B→A sépare P et H ; replay historique explicite, ancien intent figé refusé
+sur une autre publication, nouvel intent après requalification. Registre et
+schéma fermés, codec stable avant effets, RO avant writer/recheck, reprise native
+avant/après COMMIT et handle inutilisable sur issue inconnue. L'application
+physique au catalogue d'index et la pyramide restent des suites : aucun
+storage_descriptor/apply/indexlayer certifié. Le parent migration reste OUVERT.
+
+**Ressources du code retirées sur les deux postes.** WTcx-wt-publication-composite
+absent local/luciepc, targetcx-target-contenu-derive absent (aucun Cargo local),
+brancheslocales du lot retirées par `branch -d`, remotes conservées. Avant chaque
+retrait WT : administration Git complète copiée fidèlement `cp -a` (sous-module
+et symlinks compris), helperSHA dca13abb… vérifié, gardeJSON FRAÎCHE VERT lue.
+Aucune suppression forcée de branche. Refus initial du premier `-d` conservé :
+le suivi pointait la branche distante d'avant rebase ; son histoire était bien
+ancêtre de la remoteR1, prouvé puis suivi corrigé et `-d` normal. Réfs/reflogs/
+configuration archivés avant ces retraits ; aucune purge d'objets ou remotes.
+
+Les CINQ seules bases synthétiques cx_pub_2191_20261113_v1 àv5 : propriété
+rag3weaver/commentaireown vérifiés, zéro session avant chaque export/DROP,
+export SQL+SHA conservé puis absence vérifiée. Dumps finaux copiés et rehashés
+sur le portable ; aucune base réelle lue ou effacée.
+
+| Base privée retirée | SHA-256 du dump final |
+|---|---|
+| cx_pub_2191_20261113_v1 | `689c27ae996845482aa74b4972f587dfffb4eb857d4ae6804fa9c44a333617b5` |
+| cx_pub_2191_20261113_v2 | `f080da5b061f6386ca1b8568bbffa872e0df972d766478269238f5035d2d2475` |
+| cx_pub_2191_20261113_v3 | `f2df15cb53f8c95aed3b32796509dec23f924c5a7f20cfb04f9c99bc379e55e5` |
+| cx_pub_2191_20261113_v4 | `1bdee78e910aa6a0dd2da00ccd2ee60a3c2cdb6ddb7df6c15dfff09230e1f3b1` |
+| cx_pub_2191_20261113_v5 | `6a024effb06abca1eb6e30163e24b95db71f6e7b258708311d3ff254f492faa6` |
+
+Archives : cache `cx-nettoyage-publication-composite-v1-{local,remote}-bc1a81500/`,
+`cx-nettoyage-publication-branches-bc1a81500/`. Preuves finales PC
+`cx-passe-publication-composite-v5/`, copie portable
+`cx-preuves-publication-union-final/` (4ELF, logs, cartes, dumps et gardes) ;
+historiques `cx-preuves-publication-local/` et `cx-preuves-publication-final/`.
+Aucun job, verrou lourd, modèle ou service du lot reste actif. Le petit
+worktree documentaire de ce bilan est retiré après publication par sa propre
+archive et garde fraîche ; son reçu de fin est conservé hors cible.
+
+Les états et attentes des sections suivantes sont historiques. La suite
+stockage se discutera avec C7 après cette fin de ressources ; aucun ancien
+lot, target ou essai n'est à reprendre.
+
 ## Union publication + symboles — qualifiée, avant tour master (13 novembre)
 
 Source **31db55abbfe928234de646895819ac12bae4e9fd**, basée sur master8f604328a (CI C++ et symboles intégrés),
