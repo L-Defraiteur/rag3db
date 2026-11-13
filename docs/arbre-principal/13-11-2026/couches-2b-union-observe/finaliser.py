@@ -61,7 +61,7 @@ try:
   row=json.loads(snapshot.read_text());resumed=json.loads(snapshot.with_suffix('.resume.json').read_text())
   assert row['status'] in ['OBSERVED_CARGO','NON_CARGO']
   if resumed['initiated']:assert resumed.get('continued') and 'error' not in resumed
-  if row['status']=='OBSERVED_CARGO':assert row['rawlen']>0 and all(row['present'].values()) and not row['diff'] and row['threads_before']==row['threads_after']
+  if row['status']=='OBSERVED_CARGO':assert row['rawlen']>0 and row['present']==row['expected_presence'] and not row['diff'] and row['threads_before']==row['threads_after']
  assets=json.loads((P/'assets-http-contre-git.json').read_text());assert len(assets)==2 and {v['asset'] for v in assets}=={'app.js','app.css'}
  qualification=json.loads((P/'qualification.json').read_text());assert qualification==dict(features='VERT_8_SUR_8',large='VERT',nav='VERT_40_SUR_40',assets='DEUX_CORPS_HTTP_IDENTIQUES_AUX_BLOBS_GIT',cpu='VERT_15_EXACTS',publication='VERT_25_SUR_25')
  with (R.parent/'rag3db-libs'/source['native']/'librag3db.so').open('rb') as stream:assert hashlib.file_digest(stream,'sha256').hexdigest()=='b014febe51417ca535218d1c0b18308e7d301157abf45027a5cbba70dfc54929'

@@ -43,3 +43,7 @@ Preuves e6e6b8677 publiées avant édition ; rapport37 corrige uniquement les hu
 ## Préparation capture Cargo cohérente, sans run
 
 Après preuves237614f83 et arbitrageC7, rapport40 prépare pidfdSTOP owned/CG/start revérifiés, tous threads stoppés, snapshot sélectionné avant assertions/CONTfinally et refus stricts. Produit d9aa figé, cache actuel déjàWTcfgd9 : gardecommune mêmepropriétaire sans réinvalidation acquise prétendue. Simulations CPU publiées avant exécution ; nouveau couple/RO/GO distinct sousENDoriginal, aucun Cargo lancé par préparation.
+
+## Réserves de composition pilote776 — aucun reçu consommé
+
+Archi : présence7 obligatoire contredit profilCPU où sixSDK sont explicitement absents ; ED : refusmodule PermissionError/disparition serait absorbé par grandtryobserve après firstred. HOLD776 avant toute entrée. Correctifs requis : politique de présence dérivée explicitement du profilphase, jamais relaxationSDK ; refusfatal nonOSError avec cause préservée ; témoins sur vrai profilCPU et vraie fonctionobserve qui empêchent prochaine invocation après refus. Publier avant simulations, nouveauSHA àRO/GOdistinct.

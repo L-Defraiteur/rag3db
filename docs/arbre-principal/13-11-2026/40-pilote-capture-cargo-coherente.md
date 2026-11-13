@@ -21,3 +21,9 @@ AST11 valide. Les sept témoins de préparation précédents et quinze nouveaux 
 ## Résultats après publication préalable
 
 Sources/témoins publiés et poussés sur38c0cb9d8b241dddba72162ad87dfaa7db694a0e AVANT leur premier essai. Puis7/7 préparation en0,042s et15/15 capture en0,003s, zéro échec. Ce sont exclusivement fixtures simulées, aucun vrai PID/proc/signal/Cargo/rustc/target ni reçu. Aucun arrêt réel qualifié ; résultats de simulations ne dispensent pas du nouveau GOcouple après RO. Code pilote strictement inchangé après ces essais.
+
+## HOLD776 et corrections avant tout reçu
+
+Deux réserves bloquantes consignées avant édition : présence7 obligatoire refusait le profilCPU conforme (sixSDK absents/LD rustlib présent) ; refusmodule OSError risquait absorption par grandtryobserve après firstred. 776 n’a pas été lancé. Nouvelle politique de présence EXPLICITE dérivée du profil attendu : chaque valeurNone attend une absence réelle, chaque valeur attendue attend présence et égalité ; SDK7 restent tous présents, CPU6 absents+LDprésent, rawenv nonvide toujours obligatoire. Snapshot contient expected_presence et finaliseur compare cette politique par phase. Refus de capture converti RuntimeError fatal nonOSError avec cause préservée avant sortie de observe, firstred immutable inchangé.
+
+Deux nouveaux témoins ÉCRITS/NONJOUÉS à cette publication : vrai profilCPU extrait des affectations AST driver et transmis à observe cargo-stop ; VRAIS observe+run AST avec /proc/Popen fictifs, trois sous-cas PermissionError/FileNotFoundError/ProcessLookupError prouvent erreur fatale/cause originale/une seule invocation courante et aucun lancement de la suivante/firstred inchangé. Ils complètent les22 témoins déjà verts ; sources publiées avant nouvel essai, aucun process ni signal réel. APPd9aa/budget/caches/parcours inchangés. Nouveau SHA àRO/GOdistinct, aucun transfert GO776.

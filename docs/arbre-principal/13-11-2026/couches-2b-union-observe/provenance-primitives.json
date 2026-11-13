@@ -16,14 +16,14 @@
   "driver.py": {
     "source": "65ad0810ca3f4f1496539d5e2945e5c959b94a07",
     "source_sha256": "3ffa2f7f037a7f45d72af5620839130c8a7d7758b180a9bbf193b9b57bf47556",
-    "prepared_sha256": "82bc9abbd8029e3502d232b323c34e1d2dd50fe5d1bf78d5eec04c27e9bc9775",
+    "prepared_sha256": "dd8c0762a239b5c6ac5eab824eb4157d6cbffb57ae5eb41262fc7997e389f839",
     "delta": "same primitive; v3 paths/current d9 cache owner/stopped Cargo observation report40",
     "previous_prepared_sha256": "25eef7848fb28ef4b08d14ee05802407a4422eecfbe106d68b0067ecaa181b63"
   },
   "finaliser.py": {
     "source": "65ad0810ca3f4f1496539d5e2945e5c959b94a07",
     "source_sha256": "a681d126e69d3a5b1b897c45a8faa5cb8b87d21112bbc62caba8bcf17c2c4ce9",
-    "prepared_sha256": "a713fe8ab19957819231f1900a919798f328db3fdff9babc4d010fe889a00047",
+    "prepared_sha256": "5cd8b02cb2f9a9c8a2e3c4e811e4eefbd60fb4e846102c1e400448f5165c6fe0",
     "delta": "same primitive; v3 paths/current d9 cache owner/stopped Cargo observation report40",
     "previous_prepared_sha256": "17990b960b09da58b5b85ddd862231c5c43145b739dab0ecf33a06406811b913"
   },
@@ -58,7 +58,7 @@
   "cargo-stop.py": {
     "source": "new controller primitive; no product change",
     "source_sha256": null,
-    "prepared_sha256": "67bf4a92605e19bb16a1d87379107488a6309f92223a419ce2f83ff20e98be9d",
+    "prepared_sha256": "93a94b745c90445a5a7e2a2f38aad16e1cb3bedbe96d4b2df01312f6d11507f5",
     "delta": "pidfd-owned coherent stop; hermetic tests published before execution"
   }
 }

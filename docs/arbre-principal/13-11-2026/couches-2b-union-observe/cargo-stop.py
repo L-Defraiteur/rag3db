@@ -32,7 +32,7 @@ def same_owner(identity,expected):
 
 def observe(pid,expected,profile,path,deadline,ops=None):
  """Return OBSERVED_CARGO or NON_CARGO. Every failure refuses qualification."""
- ops=ops or ProcOps();path=Path(path);record=dict(pid=pid,expected_identity=expected,expected=profile,observed=ops.now(),status='UNQUALIFIED');fd=None;initiated=False;primary=None
+ ops=ops or ProcOps();path=Path(path);record=dict(pid=pid,expected_identity=expected,expected=profile,expected_presence={k:v is not None for k,v in profile.items()},observed=ops.now(),status='UNQUALIFIED');fd=None;initiated=False;primary=None
  try:
   fd=ops.open(pid)
   before=ops.identity(pid);record['before']=before
@@ -65,7 +65,7 @@ def observe(pid,expected,profile,path,deadline,ops=None):
   assert ops.now()<limit,'capture deadline'
   if record['status']=='NON_CARGO':return record
   assert current['exe_sha256']==expected['exe_sha256'],'Cargo hash differs'
-  assert snapshot['rawlen']>0 and all(snapshot['present'].values()),'empty or incomplete Cargo environment'
+  assert snapshot['rawlen']>0 and snapshot['present']==record['expected_presence'],'empty or incorrect Cargo field presence for phase'
   assert not record['diff'],'Cargo selected profile differs'
   return record
  except BaseException as error:

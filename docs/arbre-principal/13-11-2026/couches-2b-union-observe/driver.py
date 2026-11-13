@@ -220,7 +220,8 @@ def observe(cleanup=False):
      identity=dict(pid=pid,starttime=stamp,uid=os.getuid(),cgroup=CG,exe=CARGO_EXE,exe_sha256=CARGO_SHA)
      try:payload=cargo_probe.observe(pid,identity,expected,capture_path,min(active_limit,END-15))
      except BaseException as error:
-      latch_first_red('coherent Cargo capture refused',dict(file=capture_path.name,error=repr(error)));raise
+      latch_first_red('coherent Cargo capture refused',dict(file=capture_path.name,error=repr(error)))
+      raise RuntimeError('fatal coherent Cargo capture refusal: '+capture_path.name) from error
      if payload['status']=='NON_CARGO':
       record_attempt('non-cargo-at-stop',dict(file=capture_path.name,observation=payload));continue
      require(payload['status']=='OBSERVED_CARGO','Cargo observation is unqualified',dict(file=capture_path.name))

@@ -1,13 +1,13 @@
 """Hermetic controller witnesses: fake pidfds/process states, no real signals."""
 from pathlib import Path
-import json,runpy,signal,tempfile,unittest
+import ast,json,runpy,signal,tempfile,unittest
 HERE=Path(__file__).parent
 probe=runpy.run_path(str(HERE/'cargo-stop.py'))
 PROFILE={k:'expected-'+k for k in ['RAG3DB_LIB','RAG3DB_SHARED','RAG3DB_LIBRARY_DIR','RAG3DB_INCLUDE_DIR','LD_LIBRARY_PATH','RAG3DB_BUFFER_POOL_SIZE','RAG3WEAVER_MOTEUR_ANCIEN']}
 EXPECTED=dict(pid=99,starttime='123',uid=42,cgroup='/owned',exe='/cargo',exe_sha256='abc')
 class FakeOps:
  def __init__(self,case='happy'):
-  self.case=case;self.signals=[];self.t=0.;self.state='T' if case=='already_stopped' else 'R';self.ids=0;self.thread_reads=0;self.snapshots=0;self.closed=False
+  self.case=case;self.signals=[];self.t=0.;self.state='T' if case=='already_stopped' else 'R';self.ids=0;self.thread_reads=0;self.snapshots=0;self.closed=False;self.profile=PROFILE
  def open(self,pid):assert pid==99;return 701
  def close(self,fd):assert fd==701;self.closed=True
  def now(self):return self.t
@@ -35,7 +35,7 @@ class FakeOps:
  def snapshot(self,pid,keys):
   self.snapshots+=1
   assert self.state=='T','no profile read before effective STOP'
-  actual=dict(PROFILE);present={k:True for k in keys};length=321
+  actual=dict(self.profile);present={k:self.profile[k] is not None for k in keys};length=321
   if self.case in ['raw_empty','noncargo_at_stop']:
    actual={k:None for k in keys};present={k:False for k in keys};length=0
   if self.case=='profile_diff':actual[keys[0]]='wrong'
@@ -79,6 +79,18 @@ class CargoStop(unittest.TestCase):
   _,row,resume=self.run_case('profile_diff',True);self.assertEqual(len(row['diff']),1);self.assertTrue(resume['continued'])
  def test_resume_failure_cannot_return_a_green_capture(self):
   _,_,resume=self.run_case('cont_failure',True);self.assertIn('error',resume)
+ def test_real_cpu_profile_requires_six_absent_fields_and_rustup_ld(self):
+  tree=ast.parse((HERE/'driver.py').read_text())
+  sdk=next(n for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='SDK_PROFILE' for t in n.targets))
+  rust=next(n for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='RUST_LIB' for t in n.targets))
+  statements=[n for n in tree.body if isinstance(n,ast.Assign) and any((isinstance(t,ast.Name) and t.id=='METADATA_BEFORE_EXPORT') or (isinstance(t,ast.Subscript) and isinstance(t.value,ast.Name) and t.value.id=='METADATA_BEFORE_EXPORT') for t in n.targets)]
+  env=dict(SDK_PROFILE={k.arg:'irrelevant' for k in sdk.value.keywords},RUST_LIB=ast.literal_eval(rust.value))
+  exec(compile(ast.Module(body=statements,type_ignores=[]),'real-cpu-profile','exec'),env)
+  profile=env['METADATA_BEFORE_EXPORT'];self.assertEqual(sum(v is None for v in profile.values()),6)
+  ops=FakeOps();ops.profile=profile
+  with tempfile.TemporaryDirectory(prefix='cx-cargo-cpu-fixture-') as tmp:
+   row=probe['observe'](99,EXPECTED,profile,Path(tmp)/'attempt.json',100.,ops)
+  self.assertEqual(row['status'],'OBSERVED_CARGO');self.assertEqual(row['present'],{k:v is not None for k,v in profile.items()});self.assertEqual(row['diff'],{})
  def test_real_snapshot_preserves_empty_argv_and_publishes_only_selected_keys(self):
   raw=b'RAG3DB_LIB=sdk29\0SECRET_KEY=do-not-publish\0';argv=b'cargo\0check\0--features\0\0'
   class FixturePath:
