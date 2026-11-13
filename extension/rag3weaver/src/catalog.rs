@@ -11548,7 +11548,14 @@ mod tests {
         assert!(matches!(error, CatalogError::MustReopen(_)));
         assert!(catalog.must_reopen().is_some());
         assert!(catalog.execute_raw("RETURN 1").is_err());
-        assert!(events.try_recv().is_err());
+        match events.try_recv().expect("the persistence error must remain observable") {
+            CatalogEvent::Error { context, message } => {
+                assert_eq!(context, "blob_flush:lot");
+                assert!(message.contains("first blob persistence failed"), "{message}");
+            }
+            event => panic!("unqualified rows announced an unexpected event: {event:?}"),
+        }
+        assert!(events.try_recv().is_err(), "no readiness event may follow the persistence error");
         assert_eq!(buffer.pending_len(), 1, "failed persistence retains its bytes");
         assert_eq!(calls.load(Ordering::SeqCst),1);
         drop(catalog);
