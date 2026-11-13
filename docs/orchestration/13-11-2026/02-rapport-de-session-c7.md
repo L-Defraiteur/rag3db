@@ -318,3 +318,16 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   **1a** : e2e_tx_vecteurs_apres_rollback reste rouge dix fois sous 835d5298f : le correctif de l'annulation
   ne suffit pas ; le cœur continue (les clés d'un paquet défait dans l'index de clé primaire, deux
   verdicts attendus). archi a son tour (bulle fantôme à deux facettes, dire vrai), puis la pose.
+- **19 h 52, le défaut du moteur, reproduit en C++ pur et déterministe par le cœur : un COMMIT réussi perd des
+  nœuds que la transaction vient d'insérer, et garde leurs relations.** Vu de l'intérieur de B (une bibliothèque
+  LD_PRELOAD qui intercepte les requêtes, rien de changé à la lib) : avant son COMMIT, B voit 256 ScopeContent
+  et 256 Scope ; juste après, 128 et 128 ; les nœuds perdus sont aux places 128 à 255, celles du paquet défait
+  de A, et les relations de B qui y aboutissent deviennent orphelines. Les 787 instructions de B capturées
+  avec leurs paramètres rejouent le même COMMIT sur une copie de la base de A ; une réduction automatique
+  (ddmin) tourne pour en faire le témoin gtest. **Portée** : une base qui a vécu un paquet défait peut perdre,
+  plus tard et en silence, des nœuds validés — des données, pas seulement des relations. Priorité absolue
+  du cœur (témoin, cause dans le COMMIT d'une table de nœuds après ROLLBACK et réouverture, correctif, lib).
+  **La sonde des bases de Lucie est confiée à hotfixs** : relations dont un bout manque et morceaux dont le
+  parent manque, par table et par sens, sur des copies de code-lourd et code-principal (instantanés de G),
+  chiffre en clair ; aucune réparation sans son mot. 96 : rouge posé pour l'archive qui ne voit pas ses
+  propres fiches (correctif générique : un paramètre porté d'un élément au suivant, `carry` du ForEachNode).
