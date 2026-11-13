@@ -37,11 +37,16 @@ impl std::fmt::Display for AdmissionError {
 }
 impl std::error::Error for AdmissionError {}
 
+// Model/generation/offset remain fixture checks until B has its qualified provider.
+// Runtime A uses the cell binding, not a physical permit.
 #[derive(Debug, Clone)]
 pub(crate) struct StorageAddress {
     cell: crate::scope::Scope,
+    #[cfg(test)]
     generation: LayerGeneration,
+    #[cfg(test)]
     model: String,
+    #[cfg(test)]
     offset: u64,
 }
 
@@ -51,6 +56,7 @@ pub(crate) struct StorageAddress {
 #[derive(Debug)]
 pub(crate) struct ReadAdmission {
     cell: crate::scope::Scope,
+    #[cfg(test)]
     selected: LayerGeneration,
     entities: BTreeSet<String>,
     winners: BTreeMap<OccurrenceKey, LayerGeneration>,
@@ -124,6 +130,7 @@ impl ReadAdmission {
     pub(crate) fn check(&self) -> Result<()> {
         self.check_at(Instant::now())
     }
+    #[cfg(test)]
     pub(crate) fn selected(&self) -> &LayerGeneration {
         &self.selected
     }
@@ -190,6 +197,7 @@ impl ReadAdmission {
         }
         self.check()
     }
+    #[cfg(test)]
     pub(crate) fn provenance(&self, key: &OccurrenceKey) -> Result<&LayerGeneration> {
         self.check()?;
         if !self.admits(key.entity(), key.uuid())? {
@@ -199,6 +207,7 @@ impl ReadAdmission {
             .get(key)
             .ok_or_else(|| self.invalidate(AdmissionError::LeakedOccurrence(key.clone())))
     }
+    #[cfg(test)]
     pub(crate) fn provenances(
         &self,
         keys: impl IntoIterator<Item = OccurrenceKey>,
@@ -215,6 +224,7 @@ impl ReadAdmission {
         self.check()?;
         Ok(Some(values))
     }
+    #[cfg(test)]
     pub(crate) fn validate_storage(
         &self,
         key: &OccurrenceKey,

@@ -35,3 +35,7 @@ Recherche/Mémoire/Archi : le premier témoin boucle trois labels mais n'exécut
 ## Delta après les réserves54142
 
 Nouvelle source :15fonctions écrites, NONJOUÉES. Vrais3nœuds+spiesauxargumentscandidats, denseincapablenonscan/soft, BM25natifrefus, offsetsNone/Err soussoft dansBM25/Sparse ; probes/faultsinjectioncfgtest explicitementlimitésàCPU. GetcontrôlepostDB avantNone/Some, callbackinvalide/raccourcitdeadlineeffectivesansflag ; vueétrangèresansadmission nepeutêtrecachéeparservicecellulecohérent. Rapport29/JSON misàjour ; pasdecompilation/runtime revendiqué, recetteCPU15exacts+libproposée avantRO/GOcouple.
+
+## Frontière fixture après rouge F8 union
+
+Preuves e6e6b8677 publiées avant édition ; rapport37 corrige uniquement les huit frontières cfg(test) fixture, sans modifier quinze juges ni raccords communs. Nouveau SHA à revoir, aucune qualification avant GOcouple et reste original ; B/C ouverts.
