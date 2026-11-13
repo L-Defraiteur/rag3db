@@ -42,7 +42,7 @@ for proc in Path('/proc').iterdir():
  except (FileNotFoundError,ProcessLookupError):pass
 (Q/'cache-before.json').write_text(json.dumps(dict(previous_app=previous['app'],previous_receipt=previous['receipt'],target=str(T),inode=T.stat().st_ino,quiescence=found,unknown_baseline=unknown),indent=2));assert not found
 
-for name in ['driver.py','finaliser.py','sdk-exec.py']:
+for name in ['driver.py','finaliser.py','sdk-exec.py','reprendre-cache.py']:
  src=Path(__file__).with_name(name);shutil.copy2(src,Q/name);records[name]=hashlib.sha256(src.read_bytes()).hexdigest()
 common=W/'extension/rag3weaver/scripts/confiner_validation.py';shutil.copy2(common,Q/'confiner_validation.py');records[common.name]=hashlib.sha256(common.read_bytes()).hexdigest()
 (Q/'provenance.json').write_text(json.dumps(dict(app=APP,pilot=PILOT,control=str(CONTROL),files=records),indent=2))

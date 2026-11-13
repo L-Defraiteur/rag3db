@@ -26,7 +26,7 @@ PREFIX='dataflow::migrations::publication::';LAYER=PREFIX+'layers::tests::'
 ED_REQUIRED={'daemon_host::atelier_fichiers::tests::'+name for name in ['read_scope_preserves_a_backend_error_instead_of_claiming_absence','read_scope_preserves_a_usages_error_instead_of_claiming_absence','read_scope_refuses_unproven_uniqueness_after_a_real_definition','read_scope_keeps_real_absence_and_ambiguity_after_complete_queries']}
 
 EXPECTED={LAYER+name for name in ['inherited_values_keep_occurrence_coordinates_and_exact_publication_provenance','tombstones_hide_all_ancestors_and_a_descendant_can_reintroduce_a_file','overrides_do_not_resurrect_an_old_file_and_anchor_advancement_is_not_followed','malformed_piles_and_ambiguous_local_changes_are_refused_without_partial_resolution']}
-owned={};seen={};maps={};protected={};devices={};phases=[];phase='preparation';child=None;binary=None;last_size=0;binary_sha=None;artifacts={};large=None;run_binary=None
+owned={};seen={};maps={};protected={};devices={};phases=[];phase='preparation';child=None;binary=None;last_size=0;binary_sha=None;artifacts={};large=None;run_binary=None;main_large=None
 
 def save(name,value):(P/name).write_text(json.dumps(value,ensure_ascii=False,indent=2)+'\n')
 def digest(path):
@@ -77,11 +77,23 @@ def observe():
     field='maps';data=(q/'maps').read_text();native=[line for line in data.splitlines() if 'librag3db.so' in line]
     assert all('/'+NATIVE+'/librag3db.so' in line for line in native),('wrong native maps',pid)
     if (pid,stamp) not in maps:
-     filename=f'maps-{pid}-{stamp}.txt';(P/filename).write_text(data);maps[(pid,stamp)]=dict(pid=pid,starttime=stamp,exe=exe,cgroup=cg,file=filename,native=native,phase=phase)
-    if large and exe==str(large) and phase=='lib-large' and child is not None and pid==child.pid:
+     first=f'maps-first-{pid}-{stamp}.txt';(P/first).write_text(data)
+     maps[(pid,stamp)]=dict(pid=pid,starttime=stamp,exe=exe,cgroup=cg,first_file=first,first_native=native,file=first,native=native,phase=phase)
+    if native:
+     loaded=f'maps-sdk-{pid}-{stamp}.txt';(P/loaded).write_text(data)
+     maps[(pid,stamp)].update(file=loaded,native=native,loaded_phase=phase)
+    principal=(main_large is not None and pid==main_large['pid'] and stamp==main_large['starttime'])
+    if large and exe==str(large) and phase=='lib-large' and principal:
      field='environ';raw=dict(x.split(b'=',1) for x in (q/'environ').read_bytes().split(b'\0') if b'=' in x)
      actual={k:os.fsdecode(raw[os.fsencode(k)]) for k in SDK_PROFILE};assert actual==SDK_PROFILE
-     save('large-real-sdk-env.json',dict(pid=pid,starttime=stamp,cgroup=cg,exe=exe,env=actual,phase=phase))
+     profile=dict(pid=pid,starttime=stamp,cgroup=cg,exe=exe,env=actual,phase=phase)
+     save('large-real-sdk-env.json',profile)
+     if native and not (P/'large-main-attestation.json').exists():
+      field='exe-sha256';actual_sha=digest(q/'exe');assert actual_sha==artifacts['large']['sha256']
+      assert (q/'stat').read_text().rsplit(') ',1)[1].split()[19]==stamp
+      snapshot='large-main-sdk-maps.txt';(P/snapshot).write_text(data)
+      attestation=dict(profile,exe_sha256=actual_sha,maps=snapshot,native=native,observed=time.monotonic(),principal=True)
+      save('large-main-attestation.json',attestation)
     if binary and exe==str(binary):
      field='environ';raw=dict(x.split(b'=',1) for x in (q/'environ').read_bytes().split(b'\0') if b'=' in x)
      wanted=['CARGO_MANIFEST_DIR','CARGO_TARGET_DIR','CARGO_BUILD_JOBS',*['RAG3WEAVER_BURN_DEVICE'+s for s in ['','_EMBEDDER','_RERANKER','_OCR']]]
@@ -136,7 +148,7 @@ def first_lib_red(text):
  return re.search(r'^test .* \.\.\. FAILED$|^\s*FAILED\s*$',text,re.M) is not None
 
 def run(name,args,cap,sdk=False):
- global child,phase,last_size
+ global child,phase,last_size,main_large
  guard();phase=name;limit=min(time.monotonic()+cap,END-15);assert time.monotonic()<limit
  state('EN_COURS');path=P/(name+'.log');start=time.monotonic();print('DEBUT',name,flush=True)
  env=E.copy();command=args
@@ -147,6 +159,10 @@ def run(name,args,cap,sdk=False):
 
  with path.open('w') as f:
   child=subprocess.Popen(command,cwd=C,env=env,stdout=f,stderr=subprocess.STDOUT)
+  if name=='lib-large':
+   st=(Path('/proc')/str(child.pid)/'stat').read_text().rsplit(') ',1)[1].split()
+   main_large=dict(pid=child.pid,starttime=st[19],expected_exe=str(large),expected_sha256=artifacts['large']['sha256'],cgroup=CG,phase=name)
+   save('large-main-process.json',main_large)
   while True:
    observe();memory()
    assert time.monotonic()<limit,('deadline',name)
@@ -240,8 +256,9 @@ def compile_elf(label,features,cap,sdk=False):
  return path
 try:
  guard();assert digest(LIB)=='b014febe51417ca535218d1c0b18308e7d301157abf45027a5cbba70dfc54929'
- save('source.json',dict(app=APP,pilot=PILOT,worktree=str(W),control=str(CONTROL),target=str(T),target_reused_from='69dc3fc25910f3e834652264edf6c71cca862ce0',initial=START,deadline=END,budget=4800,receipt=str(AUTH_PATH),cpu_features=[],large_features=F.split(','),native=NATIVE,driver_sha256=digest(__file__),cgroup=CG,memory_max=(G/'memory.max').read_text().strip(),memory_high=(G/'memory.high').read_text().strip(),caps=dict(features=2100,compile_large=900,compile_cpu=480,large_runtime=600,each_exact=60,publication=120),environment_keys=sorted(E),cpu_roles=4))
+ save('source.json',dict(app=APP,pilot=PILOT,worktree=str(W),control=str(CONTROL),target=str(T),target_reused_from='69dc3fc25910f3e834652264edf6c71cca862ce0',initial=START,deadline=END,budget=4800,receipt=str(AUTH_PATH),cpu_features=[],large_features=F.split(','),native=NATIVE,driver_sha256=digest(__file__),cgroup=CG,memory_max=(G/'memory.max').read_text().strip(),memory_high=(G/'memory.high').read_text().strip(),caps=dict(cache_reprise=120,features=2100,compile_large=900,compile_cpu=480,large_runtime=600,each_exact=60,publication=120),environment_keys=sorted(E),cpu_roles=4))
  run('verifier',['python3',str(Q/'confiner_validation.py'),'verifier'],30)
+ run('resume-cache',['python3',str(Q/'reprendre-cache.py'),str(P)],120)
  save('ledger-preparation.json',dict(app=APP,pilot=PILOT,check_features_sha256=digest(C/'scripts/check_features.sh'),target_provenance=json.loads((Q/'cache-before.json').read_text()),sdk=NATIVE,sdk_sha256=digest(LIB)))
  f8=run('features',['bash','scripts/check_features.sh'],2100,sdk='script');assert 'CHECK_FEATURES VERT 8/8' in f8
  assert (P/'features-real-sdk-env.json').exists()
@@ -260,7 +277,14 @@ try:
  assert counts and tuple(map(int,counts[-1]))==(len(largenames)-len(largeignored),0,len(largeignored))
  assert not re.search(r'\b(?:SAUTÉ|SKIPPED)\b',text)
  successes=set(re.findall(r'^test (.*?)(?: - should panic)? \.\.\. ok$',text,re.M));assert set(largenames)-set(largeignored)<=successes
- assert any(m['exe']==str(large) and m['native'] and m['phase']=='lib-large' for m in maps.values()),'actual large SDK maps missing'
+ attestation=json.loads((P/'large-main-attestation.json').read_text())
+ assert attestation['pid']==main_large['pid'] and attestation['starttime']==main_large['starttime']
+ assert attestation['exe']==str(large) and attestation['exe_sha256']==artifacts['large']['sha256'] and attestation['cgroup']==CG
+ assert attestation['native'] and attestation['env']==SDK_PROFILE and attestation['phase']=='lib-large'
+ sdk_launch=json.loads((P/'sdk-env-lib-large.json').read_text())
+ assert sdk_launch['pid']==main_large['pid'] and sdk_launch['starttime']==main_large['starttime']
+ assert sdk_launch['cgroup'].strip().split('::',1)[1]==CG and sdk_launch['env']==attestation['env']
+ assert [line for line in (P/attestation['maps']).read_text().splitlines() if 'librag3db.so' in line]==attestation['native']
  assert (P/'large-real-sdk-env.json').exists();qualification['large']='VERT'
  for index,name in enumerate(names):judged('exact-'+str(index),['--exact',name],1,0,60,attest_main=index==0)
  qualification['cpu']='VERT'

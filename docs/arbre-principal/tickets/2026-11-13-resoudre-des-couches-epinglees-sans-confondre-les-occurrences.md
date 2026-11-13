@@ -156,3 +156,41 @@ CPUaucunSDK. Cache69 réutilisé privé après provenance/quiescence/reçu termi
 preuves67 intactes. Gardes firstFAILEDlarge/panicbrutCPUseul, finaldeadline
 posthash+prépublication conservées. Ticketsouverts et aucune preuve union
 avant GOcoupleexact. Aucun Cargo/rustc/target/DB/service lancé par préparation.
+
+
+### Réserve mémoire cache pilote7a680 avant GO
+
+Sur PC, .arbre-du-target est ABSENT : le pilote69 appelait Cargo directement.
+Garde_target sur nouveau W écrirait ce W puis return0, sans invalider les
+empreintes locales. REPRENDRE1 et findAPP dans ELF principal ne prouvent pas
+la fraîcheur de toutes dépendances locales. Aucun run union n’a été lancé.
+
+Correction préparée : provenance69 prouvée (target initialement absent,
+W69/manifest réelELF figés, reçu terminé/copiesSHA) permet d’ancrer UNIQUEMENT
+cette ancienne origine attestée via gardecommune, puis imposer sa branche
+REPRENDRE vers union. Log de reprise obligatoire, inventaire empreintes
+locaux avant/après, aucune résiduelle ; aucune simple écriture nouveauW ni
+invalidation manuelle parallèle. Ambiguïté/marqueur étranger/refus STOP.
+Cette transition ne s’exécute qu’après revue+GO du nouveau pilote.
+
+
+### Réserve ED maps principal pilote7a680 avant GO
+
+Maps stockées seulement à première observation pouvaient rester natives=[]
+avant chargement, et assert any(exe/native/phase) accepter un enfant mêmeELF.
+Correction requise : garder premièresmaps séparées, relever chargement SDK
+puis lier attestation NONVIDE au PID/starttime PRINCIPAL Popen, exe/SHA réel
+/proc, cgroup et profilSDK. Les maps d’enfants ne peuvent satisfaire cette
+preuve. Aucun run ni faux rouge/vert effectivement observé : réservestatique.
+Nouveau pilote cache+maps à relire, application236e inchangée.
+
+
+Réparationscache+maps préparées ensemble, application236e inchangée :
+reprendre-cache.py2appelscommuns avecprovenance69 etlog/invalidationréels
+obligatoires ; témoinCPUgarde surfixture sansCargo2→0/externesgardées.
+Mapsfirstpréservées et chargéesactualisées, attestationIMMUTABLE réservée
+auprincipal PopenPID/start/exeSHA/cgroup/profilSDK/mappositive puis relue
+parfinaliseur. Plus de preuveSDK par enfant ni snapshotspréchargés figés.
+120spréflightcacheDANS4800, aucunreset. Aucun target réel modifié, Cargo/
+rustc/SDK/DB/service exécuté par cette réparation ; seule fixturegardeBash
+avec metadataSIMULÉE a été jugée, périmètre et logs dans recette15.

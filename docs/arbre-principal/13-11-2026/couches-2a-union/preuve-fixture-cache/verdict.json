@@ -1,0 +1,13 @@
+{
+  "verdict": "VERT_FIXTURE_GARDE",
+  "real_guard": "/home/lucied/.cache/rag3weaver-build/cx-wt-couches-union-pilote/extension/rag3weaver/scripts/garde_target.sh",
+  "direct_adoption_leaves_local_fingerprints": true,
+  "two_real_guard_calls_invalidate_local": true,
+  "local_before": 2,
+  "local_after": 0,
+  "external_retained": true,
+  "metadata_stub_calls": 1,
+  "real_cargo_or_rustc_calls": 0,
+  "real_target_mutated": false,
+  "scope": "guard branch fixture only, no Rust qualification"
+}
