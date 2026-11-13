@@ -902,7 +902,7 @@ jouer_les_suites() {
   echo "▸ Bâti : cargo test --no-run --features $FEATURES ${cibles[*]}"
   local json
   json="$(mktemp)"
-  confined cargo test --no-run --features "$FEATURES" "${cibles[@]}" \
+  confined python3 -B "$WEAVER/scripts/cargo_garde.py" test --no-run --features "$FEATURES" "${cibles[@]}" \
     --message-format=json-render-diagnostics > "$json"
   statut=$?
   bin="$(python3 -c '
@@ -1022,7 +1022,7 @@ for ligne in open(sys.argv[1]):
     args+=(-- --include-ignored --nocapture)
     [ -n "$TEST_FILTER" ] && args+=("$TEST_FILTER")
     args+=("${EXTRA_ARGS[@]}")
-    confined cargo test "${args[@]}" || code=101
+    confined python3 -B "$WEAVER/scripts/cargo_garde.py" test "${args[@]}" || code=101
   fi
   return "$code"
 }
