@@ -1129,3 +1129,152 @@ fn a_provider_refusal_waits_a_window_and_does_not_fail_the_step() {
     assert!(attentes[0].starts_with("le pas 1 attend le fournisseur (1 refus") && attentes[2].contains("reprise dans 4 s"), "{attentes:#?}");
     assert!(!boite.iter().any(|l| l["text"].as_str().unwrap_or_default().contains("n'a pas abouti")), "un refus n'est pas un pas raté : {boite:#?}");
 }
+
+/// Attend dans la boîte une ligne qui satisfait `ok`, 90 s au plus.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+fn attendre_dans(files: &super::teammate::TeammateFiles, quoi: &str, ok: &dyn Fn(&[Value]) -> bool) -> Vec<Value> {
+    use std::time::{Duration, Instant};
+    let borne = Instant::now() + Duration::from_secs(90);
+    loop {
+        let b = files.mailbox();
+        if ok(&b) {
+            return b;
+        }
+        assert!(Instant::now() < borne, "en 90 s : {quoi} — {b:#?}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+fn dit_par_l_hote(b: &[Value], debut: &str) -> bool {
+    b.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.starts_with(debut)))
+}
+
+/// **Un `step_done` qui dit ce qui reste n'est pas une fin** (ticket du 9 novembre 2026 :
+/// `readme-nouveautes-novembre` s'est close « fait sans plan » sur un premier pas dont
+/// `remaining` disait « Validation du verdict et soumission des ajouts un par un »). Sans
+/// plan, le pas suivant part, la boîte le dit ; il voit ce qui restait ; sans `remaining`,
+/// la fin reste « fait sans plan ».
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_step_done_that_says_what_remains_is_not_the_end() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let frontieres = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let frontieres = frontieres.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let frontieres = frontieres.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                if tool_results(turns).is_empty() {
+                    frontieres.lock().unwrap().push(last_user(turns));
+                }
+                let remaining = if step_of(turns) == 1 { "Soumettre les ajouts un par un" } else { "" };
+                answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "verdicts établis", "remaining": remaining }))]))
+            })))
+        })
+    };
+    let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    files.append("supervisor", "request", None, "Établis les verdicts, puis soumets chaque ajout.").unwrap();
+    let o = host.run_teammate(&h.id, "doc").unwrap();
+    let boite = files.mailbox();
+    assert_eq!((o.steps.len(), o.ended.as_str()), (2, "fait sans plan"), "{o:?} — {boite:#?}");
+    assert!(dit_par_l_hote(&boite, "pas fini : reste « Soumettre les ajouts un par un »"), "la boîte dit pourquoi le pas suivant part : {boite:#?}");
+    let f = frontieres.lock().unwrap();
+    assert!(f[1].contains("Soumettre les ajouts un par un"), "le pas 2 voit ce qui restait : {}", f[1]);
+}
+
+/// **Une request qui exige un report ne se clôt pas sans lui** (`expects: "report"`, déclaré
+/// par le superviseur) : un `step_done` sans `report` dit « fait sans le livrable demandé » et
+/// l'équipier attend la boîte sans appeler le modèle ; une ligne du superviseur le relance, le
+/// report vient, la tâche finit.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_request_that_expects_a_report_does_not_end_without_it() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let pas = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let pas = pas.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let pas = pas.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                if results.is_empty() {
+                    pas.lock().unwrap().push(last_user(turns));
+                }
+                let fini = calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "verdicts établis", "remaining": "" }))]);
+                match (step_of(turns), results.len()) {
+                    (1, _) => answer(turns, opts, sink, "", fini),
+                    (_, 0) => answer(turns, opts, sink, "", calls(&[("report", json!({ "text": "Verdicts : 31 lignes, 4 ajouts." }))])),
+                    _ => answer(turns, opts, sink, "", fini),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Rends tes verdicts.", &json!({ "expects": "report" })).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let boite = attendre_dans(&files, "l'attente du livrable", &|b| dit_par_l_hote(b, "fait sans le livrable demandé") || b.iter().any(|l| l["kind"] == "ended"));
+    assert!(!boite.iter().any(|l| l["kind"] == "ended"), "sans report, pas de fin : {boite:#?}");
+    assert!(dit_par_l_hote(&boite, "fait sans le livrable demandé (un report dans la boîte) : j'attends le superviseur"), "{boite:#?}");
+    assert!(pas.lock().unwrap()[0].contains("un report"), "la frontière dit ce que la demande exige : {}", pas.lock().unwrap()[0]);
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    assert_eq!(pas.lock().unwrap().len(), 1, "aucun appel au modèle pendant l'attente");
+    host.post_to_teammate(&h.id, "doc", "c7", "message", None, "Le report, s'il te plaît.", &Value::Null).expect("le rappel");
+    let boite = attendre_dans(&files, "la fin après le report", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    assert!(boite.iter().any(|l| l["from"] == "teammate" && l["kind"] == "report"), "{boite:#?}");
+    let fin = boite.iter().find(|l| l["kind"] == "ended").unwrap();
+    assert_eq!(fin["text"], "fait sans plan", "{boite:#?}");
+}
+
+/// **Une request qui exige l'accord du superviseur ne se clôt pas sans lui**
+/// (`expects: "approval"`) : un report suivi d'un `step_done` attend ; un `answer`
+/// `approved: true` du superviseur est l'accord ; la tâche finit après lui.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_request_that_expects_approval_does_not_end_without_it() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+            let fini = calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "proposé", "remaining": "" }))]);
+            match (step_of(turns), tool_results(turns).len()) {
+                (1, 0) => answer(turns, opts, sink, "", calls(&[("report", json!({ "text": "Je propose quatre ajouts." }))])),
+                _ => answer(turns, opts, sink, "", fini),
+            }
+        })))
+    });
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Propose les ajouts, et attends mon accord.", &json!({ "expects": "approval" })).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let boite = attendre_dans(&files, "l'attente de l'accord", &|b| dit_par_l_hote(b, "fait sans le livrable demandé") || b.iter().any(|l| l["kind"] == "ended"));
+    assert!(!boite.iter().any(|l| l["kind"] == "ended"), "sans accord, pas de fin : {boite:#?}");
+    assert!(dit_par_l_hote(&boite, "fait sans le livrable demandé (l'accord du superviseur) : j'attends le superviseur"), "{boite:#?}");
+    let report = boite.iter().find(|l| l["from"] == "teammate" && l["kind"] == "report").expect("le report").clone();
+    host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "d'accord", &json!({ "reply_to": report["id"], "approved": true })).expect("l'accord");
+    let boite = attendre_dans(&files, "la fin après l'accord", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    assert_eq!(boite.iter().find(|l| l["kind"] == "ended").unwrap()["text"], "fait sans plan", "{boite:#?}");
+}
+
+/// **`expects` se déclare sur une request, et seulement `report` ou `approval`.**
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn expects_is_a_request_field_with_two_values() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Err("pas de modèle ici".into()) });
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    let e = host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Fais-le.", &json!({ "expects": "un roman" })).unwrap_err();
+    assert!(e.contains("expects") && e.contains("report") && e.contains("approval"), "{e}");
+    assert!(host.tache(&h.id, "doc").is_none(), "une request refusée n'ouvre pas de tâche");
+}
