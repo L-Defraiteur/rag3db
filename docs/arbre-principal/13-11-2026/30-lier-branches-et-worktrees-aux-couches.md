@@ -205,6 +205,14 @@ c'est quoi la bonne racine à garder ». La règle que propose c7, à trancher p
   nombre de générations. Aucune coupe sans mesure, et jamais automatique sur une base de Lucie sans
   son mot.
 
+**Le budget, tranché par Lucie** : **15 Go par défaut, par dépôt**, réglable. Au-delà, la collecte
+**propose**, dans cet ordre :
+1. les versions citées par aucune racine ;
+2. puis les générations intermédiaires des branches fermées.
+
+Elle ne propose jamais une racine ni une génération qu'une fiche cite, et elle le dit avant d'agir sur
+une base de Lucie.
+
 Les témoins de ce lot :
 - une branche fusionnée ne laisse que la génération du commit de fusion et celles qu'une fiche cite ;
 - une version orpheline est listée par la sonde avant d'être collectée ;
