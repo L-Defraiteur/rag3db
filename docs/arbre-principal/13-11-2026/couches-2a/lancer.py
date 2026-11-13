@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+"""Prepare a reviewed controller outside both frozen worktrees, then actual poste."""
+from pathlib import Path
+import hashlib,json,os,shutil,subprocess,sys
+R=Path('/home/lucied/.cache/rag3weaver-build');W=R/'cx-wt-couches-epinglees';CONTROL=Path(__file__).resolve().parents[4]
+APP='69dc3fc25910f3e834652264edf6c71cca862ce0';PILOT=sys.argv[1]
+P=R/'cx-validation-couches-2a-v1';Q=R/'cx-pilote-couches-2a-v1';S=R/'cx-confinement-couches-2a-v1';T=R/'cx-target-contenu-derive'
+assert os.uname().nodename.lower()=='luciepc'
+for root,sha in [(W,APP),(CONTROL,PILOT)]:
+ assert subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()==sha
+ assert not subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip()
+cp=W/'extension/rag3weaver/codeparsers'
+assert (cp/'Cargo.toml').is_file(),'initialize the exact tracked submodule before freezing app W'
+expected=subprocess.check_output(['git','-C',str(W),'ls-tree',APP,'extension/rag3weaver/codeparsers'],text=True).split()[2]
+assert subprocess.check_output(['git','-C',str(cp),'rev-parse','HEAD'],text=True).strip()==expected
+assert shutil.which('gdb'),'gdb needed for deterministic maps at first exact test main'
+assert not any(p.exists() for p in [P,Q,S,T]),'destinations/target must be new; no reset'
+Q.mkdir();records={}
+for name in ['driver.py','finaliser.py']:
+ src=Path(__file__).with_name(name);shutil.copy2(src,Q/name);records[name]=hashlib.sha256(src.read_bytes()).hexdigest()
+common=W/'extension/rag3weaver/scripts/confiner_validation.py';shutil.copy2(common,Q/'confiner_validation.py');records[common.name]=hashlib.sha256(common.read_bytes()).hexdigest()
+(Q/'provenance.json').write_text(json.dumps(dict(app=APP,pilot=PILOT,control=str(CONTROL),files=records),indent=2))
+os.chdir('/var/tmp');env=os.environ.copy();env.update(POSTE_MEM_MAX='32G',RAG3WEAVER_BUILD_MEMORY_HIGH='0')
+command=[str(W/'extension/rag3weaver/scripts/poste'),'lourd','python3',str(Q/'confiner_validation.py'),'lancer','--delai','3000','--preuves',str(S),'--','python3',str(Q/'driver.py')]
+result=subprocess.run(command,env=env)
+# Outside the retired bus/cgroup and outside W, even after a refused admission.
+final=subprocess.run(['python3',str(Q/'finaliser.py'),str(result.returncode)],env=env)
+sys.exit(final.returncode)
