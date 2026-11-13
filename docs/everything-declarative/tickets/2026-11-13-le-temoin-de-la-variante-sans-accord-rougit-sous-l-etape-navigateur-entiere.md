@@ -33,3 +33,12 @@ tests du raccord physique.
 
 Départager une attente trop courte sous charge d'un tour de variante qui ne reçoit vraiment jamais
 son verdict. Pour cela, rejouer l'étape entière en gardant le journal de l'hôte du témoin.
+
+## La cause (13 novembre 2026, soir)
+
+Mesurée par everything declarative (`docs/everything-declarative/13-11-2026/02-mesure-de-l-etape-navigateur.md`) :
+ce n'est pas une attente trop courte. Le tour était fini dans la seconde ; la page de chat ouvrait
+une bulle fantôme sur un `RunStarted` arrivé après la réponse de son POST, et son statut ne passait
+jamais à « fini ». Trouvé et corrigé par archi (`origin/chat-sans-bulle-fantome`, témoin
+`a_late_run_started_of_a_finished_turn_opens_no_ghost_bubble`, rouge sur master puis vert). Ce
+ticket se ferme quand ce lot est sur master.

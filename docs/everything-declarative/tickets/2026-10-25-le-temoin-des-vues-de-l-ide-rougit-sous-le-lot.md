@@ -43,3 +43,12 @@ le délai de 20 s ne suffit pas toujours à `callees`.
 1. Reproduire sous charge : le lot en boucle, ou le témoin seul sous une charge de fond.
 2. Lire où `callees` attend dans ce cas (le catalogue, le démarrage de l'hôte du témoin, l'index
    encore en cours) avant de toucher au délai. Un délai allongé sans la cause ne se justifie pas.
+
+## La mesure du 13 novembre 2026
+
+Le rouge du 13 novembre (archi, page `graphe/depart`, 44 s dont 20 s de calme) vient d'un défaut du
+produit, pas de la charge : le **premier** `search_code` et le **premier** `impact`/`callees` d'un
+backend coûtent 59 s à chaque jeu, même seuls et sans charge ; les suivants 250 ms. Le témoin passe
+d'ordinaire parce que l'appel reste en vol. Détail et sonde suivante :
+`docs/everything-declarative/13-11-2026/02-mesure-de-l-etape-navigateur.md` (cause 2). Ne pas
+relever le seuil.
