@@ -108,15 +108,19 @@ hf-hub = { version = "0.4", optional = true }
 # index existant garde en revanche la version que dit son `meta.json` — il ne
 # gagne le dictionnaire qu'en étant rebâti.
 # La 4.3.3 ferme les acteurs même si la persistance échoue ; format inchangé.
-lucivy-core = "4.3.3"
+# La 4.3.5 (13 novembre 2026) : une fusion de fond lancée entre deux commits ne
+# fait plus perdre au dictionnaire partagé les mots des segments écrits depuis
+# le dernier commit (témoin `fts_handle::mots_neufs_a_travers_une_fusion`).
+# Format inchangé ; un index déjà touché garde ses pertes jusqu'à son rebâti.
+lucivy-core = "4.3.5"
 # Moteur : nécessaire pour construire les LucivyDocument à l'indexation.
-ld-lucivy = { version = "4.3.3", default-features = false, features = ["stopwords", "lz4-compression"] }
+ld-lucivy = { version = "4.3.5", default-features = false, features = ["stopwords", "lz4-compression"] }
 
 
 # sparse_vector — crate ami de lucivy (Apache-2.0, dérivé en partie de Qdrant,
-# voir son NOTICE), persistance via lucistore. Aligné sur lucivy en 4.3.3, publiée
-# le 11 novembre 2026 ; close() arrête aussi ses pools après une erreur.
-sparse-vector = "4.3.3"
+# voir son NOTICE), persistance via lucistore. Aligné sur lucivy en 4.3.5
+# (13 novembre 2026) ; depuis la 4.3.3, close() arrête aussi ses pools après une erreur.
+sparse-vector = "4.3.5"
 
 # rag3db native (feature flag, pour natif + Node.js)
 rag3db = { path = "../../tools/rust_api", optional = true }
