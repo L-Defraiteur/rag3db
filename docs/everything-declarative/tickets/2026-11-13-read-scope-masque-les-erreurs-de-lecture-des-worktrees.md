@@ -209,3 +209,14 @@ Ajout TEST d’une déclaration embed sans entités denses/index, RO Archi
 favorable au chemin sans service. Assertions inchangées. Proposition R4
 avec reçu neuf calculé après poste, borne R3 absolue908183.114381791 conservée
 (driver/finaliseur) ; target/preuves/WT neufs, revue et GO exact avant rejeu.
+
+
+## Qualification R4 verte, revue avant livraison
+
+Source461e8b868 exacte : cinq ciblés1/0/0, module complet20/0/3NAVattendus,
+F8canonique8/8, superviseur/finaliseur verts. Borne R3 conservée :1170.821897s
+depuis départ initial, aucun reset.306fichiers SHA identiques deux postes,
+ELF033c31d0…0375a original/copie conservés, maps six phases de juges.
+[Preuves exactes et limites](../13-11-2026/05-preuves-read-scope.md).
+Deux rouges historiques conservés ; aucune attribution du FAILED physique.
+Ticket reste ouvert jusqu’à revue/intégration autorisée C7 ; aucun retrait.
