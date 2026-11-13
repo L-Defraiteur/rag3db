@@ -126,7 +126,13 @@ fn l_equipier_ecrit_la_doc_d_un_depot_de_test_par_pas_juges() {
     let t = host.tache(&id, "doc").expect("la tâche est ouverte");
     let fin = Instant::now() + Duration::from_secs(900);
     while host.teammate_running(&id, "doc") {
-        assert!(Instant::now() < fin, "l'équipier tourne encore après 15 min");
+        if Instant::now() >= fin {
+            // La boîte d'abord : le dossier de la tâche part avec le tempdir.
+            for l in host.teammate_files(&id, "doc").map(|f| f.mailbox()).unwrap_or_default() {
+                eprintln!("boîte : {} {} : {}", l["from"].as_str().unwrap_or(""), l["kind"].as_str().unwrap_or(""), l["text"].as_str().unwrap_or("").replace('\n', " ").chars().take(300).collect::<String>());
+            }
+            panic!("l'équipier tourne encore après 15 min");
+        }
         std::thread::sleep(Duration::from_millis(500));
     }
     let files = host.teammate_files(&id, "doc").unwrap();
