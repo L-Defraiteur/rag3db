@@ -1,0 +1,30 @@
+{
+  "before": {
+    "time": 915203.796958472,
+    "current": 30011392,
+    "peak": 30011392,
+    "events": {
+      "low": 0,
+      "high": 0,
+      "max": 0,
+      "oom": 0,
+      "oom_kill": 0,
+      "oom_group_kill": 0,
+      "sock_throttled": 0
+    }
+  },
+  "after": {
+    "time": 916669.761939744,
+    "current": 6776328192,
+    "peak": 15069622272,
+    "events": {
+      "low": 0,
+      "high": 0,
+      "max": 0,
+      "oom": 0,
+      "oom_kill": 0,
+      "oom_group_kill": 0,
+      "sock_throttled": 0
+    }
+  }
+}

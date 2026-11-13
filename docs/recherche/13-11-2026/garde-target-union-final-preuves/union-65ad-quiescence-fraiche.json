@@ -1,0 +1,53 @@
+{
+  "observed": 916747.571443875,
+  "found": [],
+  "unknown": [
+    {
+      "pid": "1247",
+      "starttime": "1022",
+      "owned": false
+    },
+    {
+      "pid": "1256",
+      "starttime": "1023",
+      "owned": false
+    },
+    {
+      "pid": "2578",
+      "starttime": "2807",
+      "owned": false
+    },
+    {
+      "pid": "2754",
+      "starttime": "2866",
+      "owned": false
+    },
+    {
+      "pid": "1299298",
+      "starttime": "91672846",
+      "owned": false
+    },
+    {
+      "pid": "1304851",
+      "starttime": "91674746",
+      "owned": false
+    },
+    {
+      "pid": "2532216",
+      "starttime": "17178100",
+      "owned": false
+    },
+    {
+      "pid": "2532317",
+      "starttime": "17178136",
+      "owned": false
+    },
+    {
+      "pid": "2532319",
+      "starttime": "17178136",
+      "owned": false
+    }
+  ],
+  "authority": "termine",
+  "bus_absent": true
+}
