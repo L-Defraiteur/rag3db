@@ -107,8 +107,10 @@ protected:
                 rag3db::main::Connection b(&database);
                 concurrency::applyBenchSettings(a);
                 say(a, "A",
-                    stringKey ? "CREATE NODE TABLE Doc(id STRING PRIMARY KEY, titre STRING, vec FLOAT[64]);" :
-                                "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, titre STRING, vec FLOAT[64]);");
+                    stringKey ? "CREATE NODE TABLE Doc(id STRING PRIMARY KEY, titre STRING, vec "
+                                "FLOAT[64]);" :
+                                "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, titre STRING, vec "
+                                "FLOAT[64]);");
                 say(a, "A", "BEGIN TRANSACTION;");
                 for (int64_t at = 0; at < A_ROWS; at += 500) {
                     if (!insert(a, at, 500)) {
@@ -137,9 +139,10 @@ protected:
                     if (begun) {
                         say(a, "A", "ROLLBACK;");
                     }
-                    auto count = b.query(stringKey ?
-                        "MATCH (d:Doc) WHERE cast(d.id AS INT64) >= 10000000 RETURN count(*);" :
-                        "MATCH (d:Doc) WHERE d.id >= 10000000 RETURN count(*);");
+                    auto count = b.query(
+                        stringKey ?
+                            "MATCH (d:Doc) WHERE cast(d.id AS INT64) >= 10000000 RETURN count(*);" :
+                            "MATCH (d:Doc) WHERE d.id >= 10000000 RETURN count(*);");
                     steps << "B ROWS READ "
                           << (count->isSuccess() && count->hasNext() ?
                                      std::to_string(
@@ -216,8 +219,8 @@ TEST_F(FullBufferRollback, ARollbackUnderAFullBufferLeavesTheDatabaseUsable) {
         << "[check: committed-rows-read-back] B committed " << committed << " rows";
 }
 TEST_F(FullBufferRollback, StringKeysRemainUsableAfterARollbackUnderAFullBuffer) {
-    const auto [steps, status] = play(5'000, false /* withCheckpoint */, true /* beginAfter */,
-        true /* stringKey */);
+    const auto [steps, status] =
+        play(5'000, false /* withCheckpoint */, true /* beginAfter */, true /* stringKey */);
     ASSERT_EQ(steps.find("PLAN a-refused-at"), std::string::npos)
         << "[check: plan] A's block did not fit in the buffer: nothing is witnessed";
     ASSERT_NE(steps.find("BEGIN AFTER ROLLBACK"), std::string::npos)
