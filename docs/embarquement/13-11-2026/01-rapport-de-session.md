@@ -3,15 +3,15 @@
 ## Travail en cours
 
 Ticket porteur : [activation et résidence](../tickets/2026-11-12-gerer-activation-et-residence-des-modeles.md).
-La tranche dense locale `maintenir` est implémentée, qualifiée sur la navigation
-8f604 et empilée sur publication31db55abb puis EDc9e6b6e39. Elle n'est pas
-encore livrée sur master. La conception distante/éviction/baux distribués/crash
+La tranche dense locale `maintenir` est implémentée et son union publication/ED
+est qualifiée. Le tour de livraison master est demandé ; elle ne sera annoncée
+livrée qu’après push et ses trois contrôles. La conception distante/éviction/baux distribués/crash
 reste dans le même ticket ouvert, sans prétendre l'avoir réalisée.
 
 Worktrees portable et luciepc : `/home/lucied/git_workspaces/cx-activation-modeles`.
 Branches : `cx-activation-modeles-4` (portable) et `cx-activation-modeles-pc-4`
-(luciepc). Source en qualification CPU :84259404f ; les commits suivants sont
-uniquement documentaires. Ne pas modifier l'arbre distant pendant la passe.
+(luciepc). Source initiale84259404f puis union corrigée138268398, tous deux conservés.
+Le seul ajout Rust entre les deux est le témoin déterministe08c/c44 d’ED. Ne pas modifier l'arbre distant pendant la passe.
 Le target unique possédé est `~/.cache/rag3weaver-build/target-spans`, plafond
 32 Gio ; magasin29a7bc52a complet, j8. Aucun code de l'arbre de Lucie modifié.
 
@@ -33,7 +33,13 @@ Le target unique possédé est `~/.cache/rag3weaver-build/target-spans`, plafond
   suites catalogue3/1/18/3. Rouge `validation-hex7oup7` : F5/5 puis lib2272 passés/1 échec/66 ignorés.
   `a_progress_card_reaches_the_page_and_never_the_model` : deuxième carte
   show_progress absente ; pas de NAV/tx joués, restes[], bus et fixture nettoyés.
-  ED a pris le diagnostic ciblé ; la course fin d’index reste une hypothèse.
+  ED a corrigé la fixture par08c379b11 (cherry-pickc44dfde1a),
+  sans changement de production. Reprise138268398, `validation-5wmntc4y`
+  VERT/code0/restes[]/bus nettoyé : F5/5, lib2273/0/66, NAV40/0/0,
+  transactions3/1/18/3 sans échec ni ignoré. La barrière atteste un index réel
+  actif pendant les deux cartes puis le cas terminé sans UI. Échéance
+  877122,116265722 ≤ originale877122,611725539 ; aucun reset. Target final
+  24407724032 octets. Fixture PG supprimée, unité inactive/code0.
 
 Le code activation/serveur, ModelSource, fournisseur, consommateur et observateur
 est identique entre branches3/4. L'orchestration demande de conserver leurs
