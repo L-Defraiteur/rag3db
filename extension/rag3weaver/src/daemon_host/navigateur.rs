@@ -1097,7 +1097,8 @@ fn l_ide_d_un_vrai_hote_se_rend_en_lecture_seule() {
 /// cause 2) : dans le témoin des vues, le premier `search_code` et le premier `impact`/`callees`
 /// d'un backend prenaient 59 s à chaque jeu, même seuls, les suivants 250 ms ; c'est aussi ce
 /// que voit l'atelier à chaque réouverture. Par l'hôte, sans navigateur, sans service
-/// d'embarquement : chaque appel, le premier compris, rend en moins de 5 s.
+/// d'embarquement : chaque appel, le premier compris, et l'état de l'hôte que la page demande
+/// à chaque vue, rendent en moins de 5 s.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
 #[test]
 fn le_premier_appel_d_un_outil_ne_coute_pas_une_minute() {
@@ -1132,6 +1133,13 @@ fn le_premier_appel_d_un_outil_ne_coute_pas_une_minute() {
     }
     let recherche = json!({ "query": "arrivee", "options": { "limit": 30, "highlights": "sparse" } });
     let mut temps = Vec::new();
+    // L'état de l'hôte, que la page de l'IDE demande à chaque vue (`/ide/etat`).
+    for _ in 0..2 {
+        let debut = Instant::now();
+        let (statut, _) = host.handle("GET", "/etat", None, &[]);
+        assert_eq!(statut, 200);
+        temps.push(("/etat", debut.elapsed()));
+    }
     for (nom, args) in [
         ("search_code", recherche.clone()),
         ("search_code", recherche),
