@@ -120,4 +120,3 @@ manifest = {f.name: hashlib.sha256(f.read_bytes()).hexdigest() for f in out.iter
 budget()
 (out / 'resultat.json').write_text(json.dumps(dict(source=source, verdict='VERT', core_exacts=6,
     echeance=end, monotonic=time.monotonic(), quiescence='à confirmer par verdict du confineur commun')))
-
