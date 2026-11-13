@@ -113,6 +113,20 @@ worktree et un commit deviennent des couches et des générations.
   4. le masque avant le top-k (2b-B), ou un sur-tirage, faute de quoi le rappel baisse en silence.
   - À vérifier avec le cœur avant de l'écrire comme acquis : l'index HNSW suit-il l'instantané de la
     transaction de lecture ? À défaut, le point 2 s'applique aussi au dense.
+- **Le plein texte suit le même modèle que le graphe et les vecteurs** (demande de Lucie) : un
+  document lucivy par version de scope, une génération comme ensemble d'identifiants tenu par le
+  graphe, une vue comme requête plus masque **avant** le top-k. Ce que lucivy en dit (lu dans le
+  code, non mesuré) :
+  - le masque existe déjà : `ShardedHandle` prend un `allowed_ids` de `_node_id`, changé en bitset
+    par segment, qui sert de documents vivants au collecteur et de filtre aux pré-recherches. La vue
+    est classée et coupée en elle-même, pas filtrée après coup ;
+  - le classement : N vaut la taille de la vue, et le df des recherches `contains` et regex vient de
+    la pré-recherche, qui ne voit que la vue. La longueur moyenne reste celle du corpus, exprès. Une
+    réserve, non vérifiée : `doc_freq(term)` somme sur tout l'index pour une requête par terme qui
+    ne passe pas par la pré-recherche, d'où une IDF possiblement incohérente. lucivy en fait un
+    témoin rouge d'abord, dans son ticket ;
+  - le coût : un passage sur `_node_id` par segment et par requête. Un bitset gardé par segment et
+    par génération est à chiffrer, pas à faire. lucivy n'a pas besoin de connaître les versions.
 - **Les trois lunettes de l'IDE** (« voir en tant que… ») :
   - **worktree** : la branche plus la couche de travail, ce que l'agent voit ;
   - **branche** : la dernière génération publiée de la branche, sans le non-commité ;
@@ -205,7 +219,10 @@ c'est quoi la bonne racine à garder ». La règle que propose c7, à trancher p
   nombre de générations. Aucune coupe sans mesure, et jamais automatique sur une base de Lucie sans
   son mot.
 
-**Le budget, tranché par Lucie** : **15 Go par défaut, par dépôt**, réglable. Au-delà, la collecte
+**Le budget, tranché par Lucie** : **30 Go par défaut, par dépôt**, réglable (relevé le 13 novembre
+au soir depuis 15 Go). Son mot : c'est normal, un index vectoriel qui suit les worktrees pèse. Une
+génération complète du dépôt pèse aujourd'hui 7 Go (2,9 Go de graphe, et 4,1 Go de plein texte, à
+relire), pour 242 Go libres sur le portable et 1,3 Tio à luciepc. Au-delà, la collecte
 **propose**, dans cet ordre :
 1. les versions citées par aucune racine ;
 2. puis les générations intermédiaires des branches fermées.
