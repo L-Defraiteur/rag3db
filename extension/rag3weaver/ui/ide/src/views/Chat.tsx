@@ -387,6 +387,10 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
     const tokenLog = ((window as unknown as { __chatTokens?: TokenLog }).__chatTokens ??= { received: {}, applied: {}, missed: [] });
     return onFlux((d: FluxEvent) => {
       const ev = d.evenement ?? {};
+      // Un événement d'un run que la page sait fini arrive en retard : l'état de fin est poussé
+      // directement sur le flux de l'IDE, les événements du tour passent par le relais du bus et
+      // peuvent arriver après lui. Ni bulle, ni statut, ni jauge ne bougent pour lui.
+      if (ev.run !== undefined && ev.kind !== "RunFinished" && runsFinis.current.has(String(ev.run))) return;
       if (ev.kind === "Token" && typeof ev.seq === "number") (tokenLog.received[String(ev.run)] ??= []).push(ev.seq);
       // Le relais de l'hôte dit les événements qu'un débordement du bus lui a fait perdre.
       if (ev.kind === "EventsMissed") tokenLog.missed.push({ sujet: d.sujet, count: Number(ev.count ?? 0) });
