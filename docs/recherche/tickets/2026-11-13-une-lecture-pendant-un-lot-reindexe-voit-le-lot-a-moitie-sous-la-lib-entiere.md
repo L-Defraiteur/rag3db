@@ -1,14 +1,16 @@
 # Une lecture pendant un lot réindexé voit le lot à moitié, sous la lib entière
 
 - **État** : ouvert (13 novembre 2026), relevé par archi pendant la passe de son lot (la bulle
-  fantôme du chat et « dire vrai »). **Départagé le soir même par recherche** : c'est une lecture
-  sale du moteur, pas le témoin. Le lot était une seule transaction encore ouverte, et une lecture
-  sur une autre connexion, en READ ONLY, en a vu une partie. Pour le cœur, avec un repro C++.
-- **Famille** : moteur
+  fantôme du chat et « dire vrai »). Départagé le 14 novembre : **c'est un repli de rag3weaver, pas le
+  moteur**. L'instantané de lecture d'un appel, plafonné à 1 s, s'est validé en cours d'appel, et la
+  suite de l'appel a lu hors instantané sans le dire. La première conclusion de recherche (« lecture
+  sale du moteur », 13 novembre au soir) est retirée ; elle reste écrite plus bas, avec son retrait.
+  Correctif à trancher par Lucie (la proposition est en fin de ticket).
+- **Famille** : produit
 - **Gravité** : passe rouge sans cause dans le lot qui la joue ; et peut-être une lecture qui voit
   un lot réindexé à moitié, si ce n'est pas le seul témoin qui cède sous la charge.
-- **Atteignable en service** : oui. Toute lecture d'outil qui tombe pendant une réindexation de la
-  montre peut voir des lignes non validées.
+- **Atteignable en service** : oui. Un appel de lecture qui dure plus d'une seconde pendant une
+  réindexation de la montre peut répondre avec deux états mêlés, sans le dire.
 - **Touche rag3weaver** : oui (`src/backend.rs`, le témoin vers la ligne 7321).
 
 ## Ce que c'est
@@ -154,3 +156,49 @@ paraîtrait.
 Puis rejouer au portable, sous la charge du rouge. Si l'un des deux compteurs a bougé, le moteur
 est hors de cause, et le témoin doit tenir compte du repli : il dit vrai, mais pas sur le moteur.
 Si aucun n'a bougé, le cœur reprend, avec la capture au portable.
+
+## Le retrait et la cause (14 novembre 2026, recherche)
+
+**Ma conclusion du 13 novembre au soir était trop rapide.** J'avais vérifié que le lot tenait dans
+une seule transaction, et que la lecture passait par une autre connexion. Je n'avais pas vérifié
+que l'appel gardait son instantané d'un bout à l'autre. Le cœur ne reproduit rien dans le moteur (la
+section précédente), et il désigne deux replis de `read_pool`. Le témoin réarmé tranche entre eux.
+
+**Le réarmement** (branche `lecture-ecourtee`, c1dae9363) : au lot vu à moitié, le témoin imprime
+la réponse entière et les compteurs `reads` de `index_states` (`without_snapshot`,
+`shortened_snapshots`), au départ, au rouge et à la fin.
+
+**Le rouge**, au portable, lib e93710f36, sous `poste lourd` à 32 Gio, au tour 2 de la lib entière.
+Le journal est archivé sous `~/.cache/rag3weaver-build/archives/lecture-ecourtee-L3-portable-0015/lib.log` :
+
+```
+un lot vu à moitié (définition false, appel true) ;
+instantanés de lecture au départ {"connections":1,"max":8,"shortened_snapshots":0,"without_snapshot":0},
+au rouge {"connections":1,"max":8,"shortened_snapshots":1,"without_snapshot":0}, …
+[montre] 2 fichiers (neuf/__pause_du_lot__.rs, neuf/def.rs) réindexé : verrou attendu 8 ms, tenu 4700 ms
+```
+
+- **Le pool n'a jamais été plein** (`without_snapshot` reste à 0). Le repli (1) est hors de cause.
+- **Un instantané a été écourté, celui du rouge** (`shortened_snapshots` de 0 à 1). L'appel a duré plus
+  de 1 s (`RAG3WEAVER_SNAPSHOT_MAX_MS`) sur le portable chargé. Sa requête des définitions a lu dans
+  l'instantané, avant le COMMIT du lot. Ses requêtes suivantes ont lu requête par requête, après lui :
+  d'où `h` par MENTIONS, sans définition. La réponse ne le dit pas : seul le compteur le note.
+
+**La raison d'être du plafond est tombée.** Il existait parce qu'un point de reprise forcé (celui d'un
+COPY) attendait les lecteurs ouverts, puis échouait au bout de 5 s. Le témoin
+`read_pool::tests::un_lecteur_ouvert_ne_retient_pas_le_point_de_reprise_d_un_copy` était ignoré :
+« vert sous la lib de V2-2 (f8c0c8df0) : se retire quand courant la porte ». Sous e93710f36, il est
+vert dix fois sur dix (COPY 8 à 14 ms, CHECKPOINT 2 ms, un lecteur ouvert). Son `#[ignore]` est retiré
+(4205e1085) : il garde la décision.
+
+## La proposition, à trancher par Lucie
+
+- **Retirer le plafond de 1 s**, ou le rendre très large avec sa raison écrite. Le repli silencieux part
+  avec lui.
+- **Un appel ne mêle jamais deux instantanés** (la règle de c7), comme filet. Si un instantané doit
+  tomber en cours d'appel, l'appel recommence entier sous le nouvel instantané, et la réponse porte
+  `instantane_renouvele: n`. Le pool plein suit la même règle : attendre ou refuser en le disant,
+  jamais lire sans instantané en silence.
+- **Rouge d'abord** : un appel `usages` forcé à durer au-delà du plafond, pendant un lot ouvert, rend
+  aujourd'hui une réponse mêlée sans le dire. Après le correctif, il rend un seul état, ou il dit
+  qu'il a recommencé.
