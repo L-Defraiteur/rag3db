@@ -284,3 +284,23 @@ du registre de publication. Un scénario natif de corruption (ligne supprimée
 ou résultat modifié après publication) complète le refus RO sans nouvelle
 écriture. Comptes finaux :10 fonctions natives =9 juges+helper ;9 CPU ;19 brutes,
 18 scénarios juges,8 enfants. Ces comptes restent préparés/non joués.
+
+
+## Premier lancement arrêté avant Cargo — rouge v1 conservé
+
+Source8df28b0d3, GO C7 ciblé600, client arrêté en0,154s : l'isolation de
+XDG_CACHE_HOME a aussi déplacé le magasin implicite de libs. L'exporteur cherche
+lib29 sous le cache privé et refuse2 avant exec Cargo. SDK réel intact, target
+absent, aucune compilation, aucun index natif ni modèle/service exécuté.
+Superviseur `cx-raccord-physique-confinement-v1/validation-om027vtw` ROUGE/code1,
+restes[], nettoyé, autorité terminée ; bus `/tmp/r3v-m963pido` physiquement absent,
+scan contexte own[] et poste rendu. Les234 fichiers de preuves client/superviseur
+sont copiés et SHA identiques sur les deux postes, diagnostic/quiescence dans
+`cx-preuves-raccord-physique-cible-v1-local/`. Aucun rouge n'est effacé ni réétiqueté.
+
+Correction de recette seulement : `RAG3DB_LIBS_DIR` épingle explicitement le vrai
+magasin `/home/lucied/.cache/rag3db-libs`, en conservant XDG/cache de travail privés,
+la même lib29 immuable et tous les témoins. Preuves neuves v2 ; fenêtre corrigée
+plafonnée599s (coût de v1 conservé), sans prolonger ni réutiliser son reçu expiré.
+Nouveau SHA/argv soumis à coordination avant nouvelle exécution ; aucun rejeu
+inchangé, aucun changement Rust ou reconstruction/publication de SDK.

@@ -2053,3 +2053,13 @@ pas sur le seul texte d'opération. Le prédicat de chaîne est explicite ; le j
 codec existant construit aussi une tête non-genesis nommée create-owned-index et
 la refuse comme genèse. Source appliquée également vérifiée comme vrai Genesis.
 Comptes inchangés19 fonctions/18 juges/8 enfants, aucun runtime lancé.
+
+
+Premier ciblé8df arrêté ROUGE avant compilation : XDG_CACHE_HOME privé a déplacé
+le magasin implicite de libs, exporteur refuse2 en0,154s avant execCargo. Target
+absent/SDK29 réel intact/0native/0service. Superviseur validation-om027vtw code1,
+restes[], bus disparu, autorité terminée, scan contexte own[],234 preuves SHA
+identiques aux deux postes ; aucune relance inchangée. Correction de recette :
+RAG3DB_LIBS_DIR explicitement épinglé au magasin réel, caches privés préservés,
+nouveaux chemins preuves v2 et599s sans réutiliser/prolonger le reçu v1. Rust et
+modèle inchangés ; nouveau SHA/argv à coordonner avant toute nouvelle exécution.
