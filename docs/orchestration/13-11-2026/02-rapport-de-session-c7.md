@@ -310,3 +310,11 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   à blanc avec la voie « une création qui voit le document et nomme un sujet », pour que Lucie compare les
   deux listes et tranche la politique par défaut (sans création, une fiche par document, création qui voit
   le document). Rien n'est écrit dans sa mémoire ; tout reste à luciepc sous `blanc-96/`.
+- **19 h 43, embarquement a poussé 7042128d0** (les baux d'usage : POST /bail, renouveler, rendre ; l'identité
+  porte usage { baux, en_cours } ; l'activation prend un bail par client ; /sante recalculée à chaque
+  demande au lieu d'être figée au démarrage — un défaut de plomberie trouvé en route). Les trois services
+  de luciepc tournent sur un binaire d'avant les baux : rien ne change pour eux tant qu'ils ne sont pas
+  redéployés, les clients les tolèrent. Suite : l'éviction locale d'un fournisseur lancé par l'activation.
+  **1a** : e2e_tx_vecteurs_apres_rollback reste rouge dix fois sous 835d5298f : le correctif de l'annulation
+  ne suffit pas ; le cœur continue (les clés d'un paquet défait dans l'index de clé primaire, deux
+  verdicts attendus). archi a son tour (bulle fantôme à deux facettes, dire vrai), puis la pose.
