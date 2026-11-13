@@ -90,7 +90,11 @@ le juge.
    histoire), avec une raison et un lien vers le code, jamais un score sans explication.
 3. **Des revues automatiques en CI/CD avec un contexte persistant** : la revue d'une PR lit l'index du
    dépôt, les vues de la branche, la mémoire des revues passées (ce qui a été dit, accepté, refusé), et
-   n'oublie pas d'un run à l'autre.
+   n'oublie pas d'un run à l'autre. **Et jusqu'au correctif proposé** : comme le contexte est toujours
+   dans la mémoire du correcteur, et que l'équipe peut lui donner ses règles en fiches additionnelles
+   (conventions, interdits, préférences), il propose directement un correctif et l'envoie par mail à
+   l'auteur, ou se pose comme relecteur de la PR avec sa proposition. Le correctif est proposé, jamais
+   poussé à la place de l'auteur.
 
 Le code est le premier produit du framework ; ces trois-là sont des vues et des agents de plus sur le
 même index.
