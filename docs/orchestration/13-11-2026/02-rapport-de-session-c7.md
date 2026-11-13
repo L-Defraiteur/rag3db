@@ -76,3 +76,11 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   portable » donné à 15 h 5x : luciepc puis le portable, binaire 6a87986f0 (md5 bb983d4e), lib 207701bb2,
   instantanés avant-207701bb2, 7880 et 7981 retirés de l'env de l'hôte, puis l'exemple du README sur le
   binaire posé et les onze outils de l'atelier.
+- **15 h 55, les deux postes sont sur la lib 207701bb2 et le binaire 6a87986f0** (G) : luciepc posé à
+  15 h 51 min 53 s, le portable coupé de 15 h 53 min 31 s à 15 h 54 min 17 s, réveil vert, cinq backends
+  rouverts, IDE sans erreur, env des hôtes sans 7880/7981, instantanés avant-207701bb2 avec RETOUR.sh.
+  **L'exemple du README est vert sur le binaire installé** (`test_readme_quickstart.sh`, rc 0). L'atelier de
+  Lucie expose **21 outils** : les 11 attendus et les 10 outils de lecture du code livrés depuis (callees,
+  grep_files, impact, list_files, navigate_symbols, outline, schema, search_code, usages, wait_output),
+  conformes au gabarit de master. Les passes épinglent 207701bb2, sans MOTEUR_ANCIEN. Disques : portable
+  298 Gio libres, luciepc 1,3 Tio.
