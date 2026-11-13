@@ -8,7 +8,7 @@
 #   demo.sh [dépôt]            dépôt par défaut : extension/rag3weaver/codeparsers/src du dépôt rag3db
 #   DEMO_SOURCE=/chemin/vers/rag3weaver-<version>.tgz pour répéter sans publier (les sous-paquets épinglés
 #       viennent de npm ; DEMO_SOURCE_SUB=<archive> pour en installer un local avec)
-#   RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7979,127.0.0.1:7980,127.0.0.1:7981 (défaut) — les tunnels vers luciepc
+#   RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7979,127.0.0.1:7980 (défaut) — les tunnels vers luciepc (7981, granite-107m, arrêté le 12 nov. 2026)
 #   DEMO_QUERY, DEMO_SYMBOL : la question et le symbole montrés
 #   DEMO_VERSION : la version attendue (défaut : ce que `npm view rag3weaver@next version` rend)
 set -euo pipefail
@@ -16,7 +16,7 @@ set -euo pipefail
 ici=$(cd "$(dirname "$0")" && pwd)
 depot=${1:-$(cd "$ici/../../../codeparsers/src" 2>/dev/null && pwd || true)}
 [ -n "$depot" ] && [ -d "$depot" ] || { echo "donnez le dossier d'un dépôt : demo.sh <dossier>" >&2; exit 2; }
-export RAG3WEAVER_EMBED_SERVICE=${RAG3WEAVER_EMBED_SERVICE:-127.0.0.1:7979,127.0.0.1:7980,127.0.0.1:7981}
+export RAG3WEAVER_EMBED_SERVICE=${RAG3WEAVER_EMBED_SERVICE:-127.0.0.1:7979,127.0.0.1:7980}
 
 vide=$(mktemp -d "${TMPDIR:-/tmp}/rag3weaver-demo-XXXXXX")
 cd "$vide"
