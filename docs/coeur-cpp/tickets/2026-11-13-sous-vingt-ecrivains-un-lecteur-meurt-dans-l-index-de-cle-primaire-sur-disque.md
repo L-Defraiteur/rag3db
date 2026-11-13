@@ -39,6 +39,21 @@ Une lecture par clé primaire, dans le côté construction d'une jointure, lit u
 l'index de hachage (les pages d'emplacements ou leurs PIP) et sort de la mémoire. Juste avant, le
 journal du banc dit « Checkpoint postponed: other transactions are open » (16 Mio de journal).
 
+## Ce que dit le core (13 novembre, 22 h 15)
+
+Le core du 13 novembre à 22 h 04 m 27 s (pid 3911689, gardé par systemd-coredump, extrait dans
+`/tmp/core-ddl-3911689` à luciepc) : adresse fautive `0x8`, instruction `mov 0x8(%rdx,%rdi,4)` avec
+`rdx = 0` et `rdi = 0`. `DiskArrayInternal::get` lit donc `pips[0]` dans un vecteur de PIP **vide**
+(tampon nul). Ce n'est pas la famille du 8 novembre (un numéro de page au-delà du fichier, que la
+garde de `9bae60786` change en erreur) : le tableau disque est cru non vide par un lecteur alors que
+ses PIP ne sont pas encore dans `pips`.
+
+Pour une transaction de lecture, `getAPPageIdxNoLock` (`src/storage/disk_array.cpp`) ne lit que
+`pips` ; les PIP neufs restent dans `pipUpdates.newPIPs` jusqu'à ce que le point de reprise les y
+verse. L'en-tête de l'index que lit le lecteur se lit hors du verrou du tableau. Deux voies : le
+point de reprise V2, qui laisse lire pendant qu'il s'écrit, publie l'en-tête avant les PIP ; ou une
+annulation laisse l'en-tête et les PIP incohérents.
+
 ## Les questions
 
 1. Le tableau disque de l'index de clé primaire est-il lu pendant qu'un écrivain ou un point de
