@@ -1,6 +1,6 @@
 # La CI refuse la réouverture du témoin physique
 
-- **État** : ouvert ; cause attribuée et correctif `d57273bba` (arbre principal, 13 novembre au soir), vert en local sous l'environnement qui rougissait ; reste la CI verte sur la source corrigée.
+- **État** : corrigé par `d57273bba` et `b196e6114`, sur master depuis `73586bf92` (arbre principal, 13 novembre 2026) ; CI verte sur `327c3bba4`, qui le contient : [run 43466739505](https://github.com/L-Defraiteur/rag3db/actions/runs/43466739505), check_features (cinq jeux) et tests unitaires.
 - **Famille** : produit.
 - **Gravité** : CI de master rouge ; portée production et cause à établir.
 - **Atteignable en service** : à départager ; échec actuel dans une fixture native privée.
@@ -657,3 +657,10 @@ n'est ajouté. Sous l'environnement qui rougissait à chaque tour (services d'em
 joignables), la lib entière est verte trois tours sur trois.
 
 Fin selon ce ticket : la CI verte sur la source corrigée.
+
+## Fermeture (arbre principal, 13 novembre au soir)
+
+Le premier run « rag3weaver » terminé sur un commit qui contient le correctif est vert :
+[43466739505](https://github.com/L-Defraiteur/rag3db/actions/runs/43466739505), sur `327c3bba4`.
+Les runs de `73586bf92`, `c89e3f769` et `5a82169c6` ont été annulés, remplacés par un push suivant :
+ce ne sont pas des échecs. Fermé à la demande de c7.
