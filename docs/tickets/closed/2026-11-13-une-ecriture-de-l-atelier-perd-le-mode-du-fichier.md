@@ -1,6 +1,8 @@
 # Une écriture de l'atelier perd le mode, le propriétaire et les liens physiques du fichier
 
-- **État** : ouvert (13 novembre 2026), pour archi.
+- **État** : corrigé (13 novembre 2026, branche atelier-ecriture-sure, archi). Témoins
+  `a_workshop_write_keeps_the_file_mode`, `a_workshop_write_in_a_worktree_keeps_the_file_mode` et
+  `a_workshop_write_refuses_a_file_changed_since_it_was_read`, rouges puis verts.
 - **Famille** : produit
 - **Gravité** : réponse fausse — un script exécutable perd son bit `+x`, un fichier `0600` (un secret) devient lisible de tous selon l'umask
 - **Atteignable en service** : oui, à toute écriture hors worktree par l'atelier d'un fichier au mode non défaut ; probablement aussi côté worktree (`WorkingTree::write`, `code_tools.rs` 317-325, même schéma)
