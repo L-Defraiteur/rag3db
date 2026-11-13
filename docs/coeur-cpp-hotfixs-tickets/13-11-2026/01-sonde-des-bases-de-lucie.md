@@ -20,7 +20,8 @@ portent-elles ?
 
 ## La réponse
 
-**Non : 0 relation orpheline et 0 morceau sans parent, dans les deux bases, dans toutes les tables et
+**Non : 0 relation orpheline et 0 morceau sans parent, dans les deux bases (et, à la seconde lecture,
+dans memoire-longue et code-rag3db-depot), dans toutes les tables et
 dans les deux sens.** La lecture vaut pour l'état des bases au 11 novembre 2026 à 22 h 33, la
 dernière écriture de leurs fichiers (voir « Ce qui a été lu »). Les seules limites sont dites plus bas.
 
@@ -33,7 +34,32 @@ La sonde voit bien le défaut quand il est là. Sur une copie de la base de repr
 Elle rend le code 1 quand elle trouve un orphelin. Sur `a-seul/base`, l'autre base du cœur, elle
 compte 0 orphelin.
 
-## Ce qui a été lu
+## Seconde lecture : l'instantané avant-835d5298f (13 novembre, 20 h 08)
+
+G a pris l'instantané `avant-835d5298f` hôtes arrêtés : à luciepc à 20 h 06 (code-lourd,
+code-principal) et au portable à 20 h 07 (memoire-longue, code-rag3db-depot). Les fichiers de base y
+datent du 13 novembre à 16 h 22. Même sonde (binaire md5 f65c5a70b673), même lib 835d5298f, même
+lecture seule, sur des copies.
+
+| base | poste | orphelins | paires au sens non prouvé |
+|---|---|---:|---|
+| code-lourd | luciepc | **0** | Symbol_CHUNKED_FROM, avant (table d'ancrage vide) ; **comptes identiques**, table par table, à la première lecture |
+| code-principal | luciepc | **0** | Symbol_CHUNKED_FROM, avant ; **comptes identiques** à la première lecture |
+| code-rag3db-depot | portable | **0** | Symbol_CHUNKED_FROM, avant |
+| memoire-longue | portable | **0** | quatre au sens avant, voir ci-dessous |
+
+Pour memoire-longue :
+- **ETAT_DE, LIT et Ref_CHUNKED_FROM** n'ont aucune donnée sur disque : `CALL storage_info(…)` ne
+  rend rien, et leurs tables d'ancrage Etat et Ref_Chunk sont vides.
+- **CITE** (Memory → Ref) range ses deux sens, mais le planificateur part toujours de Ref, quelle que
+  soit la forme d'ancrage essayée (filtre, égalité, `WITH`). Au sens arrière, la sonde lit 1
+  relation, intacte. Le sens avant range 2 rangées : une relation vers une Ref disparue y échapperait.
+  C'est la seule part de cette base non couverte.
+
+Copies et relevés : à luciepc dans `~/.cache/rag3db-locks/sonde-orphelins-835d/`, au portable dans
+`~/.cache/rag3db-locks/sonde-orphelins/portable-835d/`.
+
+## Ce qui a été lu (première lecture)
 
 - **Les bases** : des **copies** (`cp -a --reflink=always`), avec fichier, extensions et `.fts`
   ensemble, et sans journal `.wal`. Elles viennent de l'instantané de G
