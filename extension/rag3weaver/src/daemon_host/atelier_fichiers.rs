@@ -479,9 +479,14 @@ impl DaemonHost {
     /// réindexe), et le diff unifié rendu.
     pub(super) fn atelier_ecrire(&self, racine: Option<&Path>, path: &str, edition: Edition) -> Result<String, String> {
         let r = self.atelier_resoudre(racine, path, "write")?;
-        let avant = match std::fs::read_to_string(&r.chemin) {
-            Ok(t) => t,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound && matches!(edition, Edition::Insertion { avant: 1, .. }) => String::new(),
+        // L'empreinte de ce qui a été lu : l'écriture refuse un fichier changé entre-temps
+        // (ticket d'ED, l'écriture sans contrôle de concurrence). `None` : un fichier à créer.
+        let (avant, lu) = match std::fs::read_to_string(&r.chemin) {
+            Ok(t) => {
+                let h = crate::hash::content_hash(&t);
+                (t, Some(h))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound && matches!(edition, Edition::Insertion { avant: 1, .. }) => (String::new(), None),
             Err(e) => return Err(format!("{} : {e}", r.chemin.display())),
         };
         #[cfg(test)]
@@ -500,7 +505,11 @@ impl DaemonHost {
         match &r.worktree {
             Some(w) => {
                 let rel = r.chemin.strip_prefix(&w.racine).unwrap_or(&r.chemin).to_string_lossy().to_string();
-                let v = self.with_backend(&w.hosted, |b| b.call_humain("edit_file", json!({ "path": rel, "content": apres }))).and_then(|x| x)?;
+                let mut args = json!({ "path": rel, "content": apres });
+                if let Some(h) = &lu {
+                    args["expected_hash"] = json!(h);
+                }
+                let v = self.with_backend(&w.hosted, |b| b.call_humain("edit_file", args)).and_then(|x| x)?;
                 let rendu = v["presentation"].as_str().or_else(|| v["result"].as_str()).unwrap_or_default().to_string();
                 // Ce que l'édition du dépôt dit de son index (le rendu de `EditResult`).
                 let index = if let Some(reste) = rendu.split("Index updated: ").nth(1) {
@@ -516,7 +525,7 @@ impl DaemonHost {
                 dit.push(format!("écrit dans le dépôt {} ; {index}", w.nom()));
             }
             None => {
-                ecrire_atomique(&r.chemin, &apres)?;
+                ecrire_atomique(&r.chemin, &apres, lu.as_deref())?;
                 dit.push("écrit sous la racine de l'atelier (sans index)".to_string());
             }
         }
@@ -562,14 +571,49 @@ pub(super) fn texte_apres(avant: &str, edition: &Edition) -> Result<String, Stri
     }
 }
 
-/// Écrire un fichier d'un coup (un fichier voisin, puis renommé).
-fn ecrire_atomique(chemin: &Path, texte: &str) -> Result<(), String> {
-    if let Some(d) = chemin.parent() {
-        std::fs::create_dir_all(d).map_err(|e| format!("{} : {e}", d.display()))?;
+/// **Écrire un fichier d'un coup** : un voisin au nom unique, écrit et rendu durable
+/// (`fsync`), qui prend le mode de l'ancien fichier, puis renommé sur la cible. `lu` est
+/// l'empreinte du contenu lu avant l'édition : si le fichier a changé depuis, rien n'est écrit
+/// et le refus le dit. Sur une erreur, le voisin est effacé (tickets d'ED du 13 novembre 2026 :
+/// le mode perdu, le temporaire au nom fixe, l'écriture sans contrôle de concurrence).
+fn ecrire_atomique(chemin: &Path, texte: &str, lu: Option<&str>) -> Result<(), String> {
+    use std::io::Write;
+    static SUIVANT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let dossier = chemin.parent().unwrap_or(Path::new("."));
+    std::fs::create_dir_all(dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
+    let nom = chemin.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let n = SUIVANT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = dossier.join(format!(".{nom}.atelier-{}-{}-{n}.tmp", std::process::id(), crate::events::maintenant_ms()));
+    let ecrire = || -> Result<(), String> {
+        let mut f = std::fs::File::create(&tmp).map_err(|e| format!("{} : {e}", tmp.display()))?;
+        f.write_all(texte.as_bytes()).map_err(|e| format!("{} : {e}", tmp.display()))?;
+        if let Ok(ancien) = std::fs::metadata(chemin) {
+            std::fs::set_permissions(&tmp, ancien.permissions()).map_err(|e| format!("{} : {e}", tmp.display()))?;
+        }
+        f.sync_all().map_err(|e| format!("{} : {e}", tmp.display()))?;
+        // Le contenu de la cible est-il encore celui qui a été lu ?
+        let maintenant = match std::fs::read_to_string(chemin) {
+            Ok(t) => Some(crate::hash::content_hash(&t)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(format!("{} : {e}", chemin.display())),
+        };
+        if maintenant.as_deref() != lu {
+            return Err(format!(
+                "{} a changé depuis sa lecture : rien n'est écrit ; relisez-le (read_file), puis réessayez sur ce qu'il contient maintenant",
+                chemin.display()
+            ));
+        }
+        std::fs::rename(&tmp, chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
+        if let Ok(d) = std::fs::File::open(dossier) {
+            let _ = d.sync_all();
+        }
+        Ok(())
+    };
+    let r = ecrire();
+    if r.is_err() {
+        let _ = std::fs::remove_file(&tmp);
     }
-    let tmp = chemin.with_extension(format!("{}.atelier-tmp", chemin.extension().and_then(|e| e.to_str()).unwrap_or("")));
-    std::fs::write(&tmp, texte).map_err(|e| format!("{} : {e}", tmp.display()))?;
-    std::fs::rename(&tmp, chemin).map_err(|e| format!("{} : {e}", chemin.display()))
+    r
 }
 
 /// **Le diff unifié d'une édition** : une région changée (les trois écritures n'en
@@ -755,6 +799,31 @@ pub(super) mod tests {
         }
         let restes: Vec<_> = std::fs::read_dir(&a.racine).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).filter(|n| n.contains("atelier-tmp")).collect();
         assert!(restes.is_empty(), "aucun temporaire ne reste : {restes:?}");
+    }
+
+    /// **Une écriture dans un worktree garde aussi le mode du fichier** (le même ticket, « même
+    /// vérification côté worktree ») : l'écriture passe alors par le backend de code du worktree
+    /// (`edit_file`, la source du disque de `code_tools`).
+    #[test]
+    fn a_workshop_write_in_a_worktree_keeps_the_file_mode() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let depot = petit_depot(&a.racine);
+        std::fs::write(depot.join("lancer.sh"), "echo un\n").unwrap();
+        std::fs::set_permissions(depot.join("lancer.sh"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        git(&depot, &["add", "-A"]);
+        git(&depot, &["commit", "-q", "-m", "le script"]);
+        a.appeler("open_branch", json!({ "path": depot, "branch": "atelier/mode" })).expect("open_branch");
+        let frere = a.racine.join("rag3db-essai-atelier-mode");
+        attendre_l_index(&a, &frere);
+        let f = frere.join("lancer.sh");
+        assert_eq!(std::fs::metadata(&f).unwrap().permissions().mode() & 0o777, 0o755, "le worktree frère a le script exécutable");
+        let dit = a.appeler("replace_text", json!({ "path": f, "old": "echo un", "new": "echo deux" })).expect("replace_text dans le worktree");
+        assert!(Atelier::texte(&dit).contains("+echo deux"), "{dit}");
+        let garde = std::fs::metadata(&f).unwrap().permissions().mode() & 0o777;
+        assert_eq!(garde, 0o755, "le script garde son mode 755 (il a {garde:o})");
+        attendre_l_index(&a, &frere);
     }
 
     /// **Une écriture refuse un fichier changé depuis sa lecture** (ticket d'ED,
