@@ -1613,6 +1613,72 @@ fn le_theme_daemon_se_choisit_et_l_invocation_tourne_pendant_que_le_modele_refle
     fil.join().unwrap();
 }
 
+/// **Le menu des thèmes** (c7, 13 novembre 2026 : Lucie a demandé trois thèmes de plus,
+/// tty les pose dans `templates/themes/`). Le menu de l'en-tête montre les thèmes du
+/// dossier, et eux seuls ; choisir forêt pose les couleurs que son fichier dit ; le choix
+/// tient au rechargement ; un nom gardé que l'hôte ne connaît pas (un thème retiré) n'est
+/// ni demandé ni montré : la page revient au choix du système, sans erreur.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn le_menu_des_themes_montre_ceux_du_dossier_et_le_choix_tient() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "le_menu_des_themes_montre_ceux_du_dossier_et_le_choix_tient";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let dossier = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/themes");
+    let mut noms: Vec<String> = std::fs::read_dir(&dossier)
+        .unwrap()
+        .filter_map(|e| {
+            let p = e.unwrap().path();
+            (p.extension()? == "json").then(|| p.file_stem().unwrap().to_string_lossy().into_owned())
+        })
+        .collect();
+    noms.sort();
+    let foret: Value = serde_json::from_str(&std::fs::read_to_string(dossier.join("foret.json")).unwrap()).unwrap();
+    let rgb = |hex: &str| {
+        let c = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).unwrap();
+        json!(format!("rgb({}, {}, {})", c(1), c(3), c(5)))
+    };
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", |h| h);
+    let racine = format!("http://{adresse}");
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    let pret = "document.querySelectorAll('#theme-fichier option').length > 1";
+    n.aller(&format!("{racine}/ide/"), pret);
+    let options = n.evaluer("[...document.querySelectorAll('#theme-fichier option')].map(o => o.value).filter(v => v)");
+    let mut montres: Vec<String> = serde_json::from_value(options).unwrap();
+    montres.sort();
+    assert_eq!(montres, noms, "le menu montre les thèmes du dossier, et eux seuls");
+
+    // Forêt : les couleurs de son fichier, sur la page.
+    n.evaluer("const s = document.querySelector('#theme-fichier'); s.value = 'foret'; s.dispatchEvent(new Event('change', { bubbles: true }))");
+    n.attendre("document.documentElement.dataset.theme === 'foret' && document.documentElement.classList.contains('theme-fichier')", "le thème forêt choisi");
+    let fond = foret["couleurs"]["fond"].as_str().unwrap();
+    n.attendre(&format!("getComputedStyle(document.documentElement).getPropertyValue('--theme-fond').trim() === '{fond}'"), "les couleurs lues dans foret.json");
+    assert_eq!(n.evaluer("getComputedStyle(document.body).backgroundColor"), rgb(fond), "le fond de la page est celui de forêt");
+    assert_eq!(n.evaluer("getComputedStyle(document.body).color"), rgb(foret["couleurs"]["texte"].as_str().unwrap()), "le texte de la page est celui de forêt");
+    assert_eq!(n.evaluer("localStorage.getItem('ide-theme')"), json!("foret"));
+    n.aller(&format!("{racine}/ide/"), pret);
+    n.attendre("document.documentElement.dataset.theme === 'foret'", "le choix tient au rechargement");
+    assert_eq!(n.evaluer("document.querySelector('#theme-fichier').value"), json!("foret"), "le menu dit le choix");
+
+    // Un nom inconnu gardé : ni demandé, ni montré ; repli sur le système.
+    n.evaluer("localStorage.setItem('ide-theme', 'inconnu')");
+    n.aller(&format!("{racine}/ide/"), pret);
+    n.attendre("['light', 'dark'].includes(document.documentElement.dataset.theme)", "le repli sur le choix du système");
+    assert_eq!(n.evaluer("document.documentElement.classList.contains('theme-fichier')"), json!(false));
+    assert_eq!(n.evaluer("document.querySelector('#theme-fichier').value"), json!(""));
+    assert_eq!(n.evaluer("!!document.querySelector('#theme-fichier option[value=\"inconnu\"]')"), json!(false), "le menu ne montre pas un thème inconnu");
+    assert_eq!(n.evaluer("performance.getEntriesByType('resource').some(e => e.name.includes('/ide/theme/inconnu'))"), json!(false), "un thème inconnu n'est pas demandé");
+
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
 /// **Un symbole cité par le modèle mène à sa définition** (ticket « le code dans le chat
 /// n'est ni coloré ni relié au dépôt », dernier point). La réponse cite `un()`, `double`,
 /// `inconnu_xyz` et `Ok` : `un()` devient un lien vers src/lib.rs à sa ligne, `double`
