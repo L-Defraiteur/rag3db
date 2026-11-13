@@ -390,3 +390,11 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   de tables — l'ingestion par paquets ; les bases de Lucie épargnées (0 orpheline) parce que l'ingestion par
   défaut valide plus petit. Correctif en cours (parcourir une copie des identifiants, puis les relations,
   celles créées en route comprises), suites entières, push, lib neuve, puis 1a rejoué dessus.
+- **20 h 25, embarquement a poussé 0ee027cf0** (l'éviction locale : un fournisseur lancé par une activation
+  `Residence::ADemande { inactivite_secs }` se décharge seul après son délai sans bail ni calcul, en disant
+  pourquoi dans son identité ; sans la variable il reste résident ; rien pour les services de luciepc).
+  Suite, **à relire par Lucie** : l'activation distante par ssh vers `systemctl --user` de luciepc — page
+  courte d'abord (unités à préfixe propre, Restart=on-failure, jamais une unité `rag3weaver-embeddings@`
+  touchée, refus net si ssh échoue, l'identité par tunnel ou port annoncé, la commande pour voir et arrêter
+  ces unités), puis rouge d'abord et le vrai jeu avec granite-107m à luciepc. Le second essai à blanc de 96
+  tourne (premier document : 3 fiches au lieu de 6, nommées par sujet).
