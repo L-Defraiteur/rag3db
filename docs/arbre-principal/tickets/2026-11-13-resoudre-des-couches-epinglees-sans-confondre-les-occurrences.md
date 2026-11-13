@@ -137,3 +137,9 @@ Rebase union NEUF sur ED4e2e effectué sans conflit,9range-diff égaux,3fichiers
 7930apportsmasterhorschevauchement+suppressionspréservés. Rapport14/audit
 conservés. Cette préparation n’étend pas les preuves72db à l’union ; nouvelle
 recette F8/liblarge/CPU2a à publier et GO exact requis avant run.
+
+
+BilanED940adMDseul intégré AVANT gel application par rebasebrancheWTneufs
+cx-arbre-couches-union-r2 depuis2009 :10patcheségaux, produitidentique2009,
+masterpréservé. R1nonjouée supersédée. Budget4800/caps du plan13 approuvés
+pour préparer le pilote seulement ; aucunGO exécution ni preuve rétroactive.

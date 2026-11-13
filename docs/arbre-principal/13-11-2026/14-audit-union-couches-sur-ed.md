@@ -17,3 +17,15 @@ Aucune qualification rétroactive : preuves72db restent app69/piloteabaf.
 Sourceunion différente doit recevoir qualification F8+liblarge+ciblé2a
 selon plan13 et recette/pilote exacts encore à faire relire avant GO.
 Tickets2a et parent restent ouverts, pas de master/retrait autorisé.
+
+
+## Gel révisé après bilan ED Markdown
+
+Master940ad65bf57461b714ff2671266bf84cb74f6966 = bilanED MD seulement
+après4e2e. Branche/WT ENCORE NEUFS cx-arbre-couches-union-r2, rebase
+depuis2009 sans conflit ;10range-diff égaux, produit byte-identique2009
+(donc3fichiers2a identiques69/entrantatelierED préservé).
+[Audit r2](couches-2a/union-r2-audit.json), [range-diff r2](couches-2a/union-r2-range-diff.txt).
+Apports master hors chevauchements et suppressions préservés. Les fichiers
+de ce nouveau bilan de gel restent documentaires, aucun runtime union joué.
+Cette r2 remplace r1 comme application à qualifier ; ancien état conservé.
