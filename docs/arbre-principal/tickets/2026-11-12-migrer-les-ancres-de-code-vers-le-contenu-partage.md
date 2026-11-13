@@ -1,6 +1,6 @@
 # Migrer les ancres de code vers le contenu partagé
 
-- **État** : ouvert ; premier raccord physique natif BM25 sur index explicitement neuf livré b0a5177c0, qualification composite achevée ; couches/pyramide, migration legacy, dense et projection de coordonnées fichier restent à traiter.
+- **État** : ouvert ; raccord physique BM25 neuf livré b0a5177c0 et résolveur pur2a livré d17a230b14f60fbac59aa1e4ac10510ba5f3c7e2, qualifications composites documentées ; raccord des couches aux index/L6/outils, durabilité, legacy, dense et coordonnées fichier restent à traiter.
 - **Famille** : produit
 - **Gravité** : capacité manquante ; le partage déclaratif1a ne transforme pas les index de code existants.
 - **Atteignable en service** : admission/plan/préflight et primitive de raccord physique neuf livrés sur master ; aucune activation de base réelle ou migration d’index existant.
@@ -12,8 +12,7 @@
 
 Le raccord neuf BM25 est livré b0a5177c0, bilan ba0317ed1 et preuves07.
 Les sections chronologiques ci-dessous conservent leurs autorisations et
-constats à leur date ; elles ne remplacent pas ce statut courant. Suite2a
-préparée sous [ticket couches](../../tickets/closed/2026-11-13-resoudre-des-couches-epinglees-sans-confondre-les-occurrences.md),
+constats à leur date ; elles ne remplacent pas ce statut courant. Historique de préparation2a sous [ticket couches](../../tickets/closed/2026-11-13-resoudre-des-couches-epinglees-sans-confondre-les-occurrences.md),
 sans Cargo/DB/service avant recette et GO de coordination.
 
 ## Livrable de préparation et périmètre
@@ -2447,3 +2446,7 @@ APP236e, de la qualification2a ou de l’autorisation de sonde.
 ## Lot2a pur qualifié — parent toujours ouvert
 
 Le résolveur pur2a est qualifié CPU sur69 puis sur unionAPP236 avec F8/liblarge et CPUciblé composite, preuves502d4dfa6b57dbba519a376ef8d113699d851478 ; son ticket seul est clôturé dans ce candidat, sur instructionC7. Cela ne branche aucune vue/index réel : 2b/masquesavanttop-k/L6/outils/persistancedescouches restent ouverts. Les clarifications Lucie checkpoints logiques futurs du contrat03 restent conception, aucune réalisation3a/3b ni politiqueGC déduite. Anciensrouges/preuves/sourcesfigées conservés, aucunrejeu/retrait/GOmaster par ce statut.
+
+## Landing2a et fin des ressources
+
+Résolveur pur2a livré masterd17a230b14f60fbac59aa1e4ac10510ba5f3c7e2, sans index/vue réelle branché. Qualification composite rapport25, landing et nettoyage rapport27. Ticket2a clos ; ce parent reste ouvert. C7 autorise ensuite une préparation DOCUMENTAIRE2b (contrats/testspec/chemins réels), pas nouveau Rust/runtime ni présomption de couches physiques persistées.

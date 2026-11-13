@@ -1,0 +1,2337 @@
+[
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/HEAD",
+    "size": 46,
+    "sha256": "e5ee713917b021e02e443047ab646d02b28cbf53e13b1bfa7201b113f4c0c747"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "9c92f932f09014ba567390b70c18620e28bac7170cc3b4a4bd695ad6b181f101"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/gitdir",
+    "size": 66,
+    "sha256": "0194d48dac25388d7a66a618b77849885b12707f934cb1fdeba7c299e4f12ba5"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/index",
+    "size": 1001770,
+    "sha256": "c59e99559f4239411c9900199c580806501c4435816347382453f046bb3976e2"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/logs/HEAD",
+    "size": 310,
+    "sha256": "b3812bc8241d99beb3c6cc44ea1f600604f92e403c6f51fcb158cbf2f67aa545"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/HEAD",
+    "size": 41,
+    "sha256": "297cef1585b203e000f0431fe0659548935e9e421e79f84d0225f807f8629550"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/config",
+    "size": 388,
+    "sha256": "dbe02859bb5a61c94e0945588c1142fbaf90265cfd299bf0d3d991996d165a6e"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/description",
+    "size": 73,
+    "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/hooks/applypatch-msg.sample",
+    "size": 478,
+    "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/hooks/commit-msg.sample",
+    "size": 1972,
+    "sha256": "efc1401b0e99d1ff51494d154d98b46c1e99059bcd8bf9f73cecde19fd3eb23b"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/hooks/fsmonitor-watchman.sample",
+    "size": 4611,
+    "sha256": "9159720099ad5595b8e66645cbfd47763c1e920f46e0b50ae75e642bbec57ef0"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/hooks/post-update.sample",
+    "size": 189,
+    "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-applypatch.sample",
+    "size": 424,
+    "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-commit.sample",
+    "size": 1649,
+    "sha256": "57185b7b9f05239d7ab52db045f5b89eb31348d7b2177eab214f5eb872e1971b"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-merge-commit.sample",
+    "size": 416,
+    "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-push.sample",
+    "size": 1374,
+    "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-rebase.sample",
+    "size": 4898,
+    "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-receive.sample",
+    "size": 544,
+    "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/hooks/prepare-commit-msg.sample",
+    "size": 1492,
+    "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/hooks/push-to-checkout.sample",
+    "size": 2783,
+    "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/hooks/sendemail-validate.sample",
+    "size": 2308,
+    "sha256": "44ebfc923dc5466bc009602f0ecf067b9c65459abfe8868ddc49b78e6ced7a92"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/hooks/update.sample",
+    "size": 3650,
+    "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/index",
+    "size": 19327,
+    "sha256": "353e5bfadc69a6080fddc74163b9877602f73304a35086466bb5b3fdc973f626"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/info/exclude",
+    "size": 240,
+    "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/logs/HEAD",
+    "size": 413,
+    "sha256": "a9e4575014d281a06c053c4903cd830e5e9d4e31fe14472785aa5e6697637abe"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/logs/refs/heads/master",
+    "size": 196,
+    "sha256": "27f146770a45ed783e88ce3ea568dda4c7518c2ce7893a93ac5d35c2422d6044"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/logs/refs/remotes/origin/HEAD",
+    "size": 196,
+    "sha256": "27f146770a45ed783e88ce3ea568dda4c7518c2ce7893a93ac5d35c2422d6044"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.idx",
+    "size": 31984,
+    "sha256": "289ae6a62f40a4333cd1acdad80c4762b590da0c95e6e1d8e36a28c888f05473"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.pack",
+    "size": 1346348,
+    "sha256": "bc9ce331be80cb8f26b979efc0d3e61f9dda6f44ab006093e5d6945141566e90"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.rev",
+    "size": 4468,
+    "sha256": "9cdd387589b77dd08aa34154a34a79526076fe9e98fd663f492a430dc8599a93"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/packed-refs",
+    "size": 1272,
+    "sha256": "3ab7f4b16b0165ef675a271d61c316f344ee256c65c1c5dd17e6b90b5966f94f"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/refs/heads/master",
+    "size": 41,
+    "sha256": "87df33890050af0cca8bde436c2c7bd86263a4e5c02610b0196de47a9b9914eb"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-administration/modules/extension/rag3weaver/codeparsers/refs/remotes/origin/HEAD",
+    "size": 32,
+    "sha256": "cdc65e67690c4c6475174e5ec662b70655246a2f3924354778835ab3be70aa76"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-garde.json",
+    "size": 11388,
+    "sha256": "59b16fdac300155b8be4432c261032a5136fc1c6ed303e817afd540516403fad"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/HEAD",
+    "size": 46,
+    "sha256": "e5ee713917b021e02e443047ab646d02b28cbf53e13b1bfa7201b113f4c0c747"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "9c92f932f09014ba567390b70c18620e28bac7170cc3b4a4bd695ad6b181f101"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/gitdir",
+    "size": 66,
+    "sha256": "0194d48dac25388d7a66a618b77849885b12707f934cb1fdeba7c299e4f12ba5"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/index",
+    "size": 1001770,
+    "sha256": "c59e99559f4239411c9900199c580806501c4435816347382453f046bb3976e2"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/logs/HEAD",
+    "size": 310,
+    "sha256": "b3812bc8241d99beb3c6cc44ea1f600604f92e403c6f51fcb158cbf2f67aa545"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/HEAD",
+    "size": 41,
+    "sha256": "297cef1585b203e000f0431fe0659548935e9e421e79f84d0225f807f8629550"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/config",
+    "size": 388,
+    "sha256": "dbe02859bb5a61c94e0945588c1142fbaf90265cfd299bf0d3d991996d165a6e"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/description",
+    "size": 73,
+    "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/applypatch-msg.sample",
+    "size": 478,
+    "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/commit-msg.sample",
+    "size": 1972,
+    "sha256": "efc1401b0e99d1ff51494d154d98b46c1e99059bcd8bf9f73cecde19fd3eb23b"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/fsmonitor-watchman.sample",
+    "size": 4611,
+    "sha256": "9159720099ad5595b8e66645cbfd47763c1e920f46e0b50ae75e642bbec57ef0"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/post-update.sample",
+    "size": 189,
+    "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-applypatch.sample",
+    "size": 424,
+    "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-commit.sample",
+    "size": 1649,
+    "sha256": "57185b7b9f05239d7ab52db045f5b89eb31348d7b2177eab214f5eb872e1971b"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-merge-commit.sample",
+    "size": 416,
+    "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-push.sample",
+    "size": 1374,
+    "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-rebase.sample",
+    "size": 4898,
+    "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-receive.sample",
+    "size": 544,
+    "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/prepare-commit-msg.sample",
+    "size": 1492,
+    "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/push-to-checkout.sample",
+    "size": 2783,
+    "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/sendemail-validate.sample",
+    "size": 2308,
+    "sha256": "44ebfc923dc5466bc009602f0ecf067b9c65459abfe8868ddc49b78e6ced7a92"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/update.sample",
+    "size": 3650,
+    "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/index",
+    "size": 19327,
+    "sha256": "353e5bfadc69a6080fddc74163b9877602f73304a35086466bb5b3fdc973f626"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/info/exclude",
+    "size": 240,
+    "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/logs/HEAD",
+    "size": 413,
+    "sha256": "a9e4575014d281a06c053c4903cd830e5e9d4e31fe14472785aa5e6697637abe"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/logs/refs/heads/master",
+    "size": 196,
+    "sha256": "27f146770a45ed783e88ce3ea568dda4c7518c2ce7893a93ac5d35c2422d6044"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/logs/refs/remotes/origin/HEAD",
+    "size": 196,
+    "sha256": "27f146770a45ed783e88ce3ea568dda4c7518c2ce7893a93ac5d35c2422d6044"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.idx",
+    "size": 31984,
+    "sha256": "289ae6a62f40a4333cd1acdad80c4762b590da0c95e6e1d8e36a28c888f05473"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.pack",
+    "size": 1346348,
+    "sha256": "bc9ce331be80cb8f26b979efc0d3e61f9dda6f44ab006093e5d6945141566e90"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.rev",
+    "size": 4468,
+    "sha256": "9cdd387589b77dd08aa34154a34a79526076fe9e98fd663f492a430dc8599a93"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/packed-refs",
+    "size": 1272,
+    "sha256": "3ab7f4b16b0165ef675a271d61c316f344ee256c65c1c5dd17e6b90b5966f94f"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/refs/heads/master",
+    "size": 41,
+    "sha256": "87df33890050af0cca8bde436c2c7bd86263a4e5c02610b0196de47a9b9914eb"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/refs/remotes/origin/HEAD",
+    "size": 32,
+    "sha256": "cdc65e67690c4c6475174e5ec662b70655246a2f3924354778835ab3be70aa76"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-garde.json",
+    "size": 11415,
+    "sha256": "3746b3dacb992c0c0effe8bf3707652ffa41d3f4ba2b2da81df16d1b6fa1df34"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-quiescence.json",
+    "size": 184,
+    "sha256": "17dc29500d95bbd39edfea0dcbe19737ca2595c42da8389645882de66b12e97b"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-nouvelle-garde-avant-force-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-quiescence.json",
+    "size": 184,
+    "sha256": "e0985e823081d3043f62786bf3a212633034a920b38d3cea0eb970487d8d7216"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-refus-git-structurel-911054660407411.json",
+    "size": 157,
+    "sha256": "24566c0cf80cbeb5c15088e17e783c640d36dbc3a7128349b483148b74de9b10"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-refus-git-structurel.json",
+    "size": 157,
+    "sha256": "24566c0cf80cbeb5c15088e17e783c640d36dbc3a7128349b483148b74de9b10"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/HEAD",
+    "size": 46,
+    "sha256": "e5ee713917b021e02e443047ab646d02b28cbf53e13b1bfa7201b113f4c0c747"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "9c92f932f09014ba567390b70c18620e28bac7170cc3b4a4bd695ad6b181f101"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/gitdir",
+    "size": 66,
+    "sha256": "0194d48dac25388d7a66a618b77849885b12707f934cb1fdeba7c299e4f12ba5"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/index",
+    "size": 1001770,
+    "sha256": "c59e99559f4239411c9900199c580806501c4435816347382453f046bb3976e2"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/logs/HEAD",
+    "size": 310,
+    "sha256": "b3812bc8241d99beb3c6cc44ea1f600604f92e403c6f51fcb158cbf2f67aa545"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/HEAD",
+    "size": 41,
+    "sha256": "297cef1585b203e000f0431fe0659548935e9e421e79f84d0225f807f8629550"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/config",
+    "size": 388,
+    "sha256": "dbe02859bb5a61c94e0945588c1142fbaf90265cfd299bf0d3d991996d165a6e"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/description",
+    "size": 73,
+    "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/hooks/applypatch-msg.sample",
+    "size": 478,
+    "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/hooks/commit-msg.sample",
+    "size": 1972,
+    "sha256": "efc1401b0e99d1ff51494d154d98b46c1e99059bcd8bf9f73cecde19fd3eb23b"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/hooks/fsmonitor-watchman.sample",
+    "size": 4611,
+    "sha256": "9159720099ad5595b8e66645cbfd47763c1e920f46e0b50ae75e642bbec57ef0"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/hooks/post-update.sample",
+    "size": 189,
+    "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-applypatch.sample",
+    "size": 424,
+    "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-commit.sample",
+    "size": 1649,
+    "sha256": "57185b7b9f05239d7ab52db045f5b89eb31348d7b2177eab214f5eb872e1971b"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-merge-commit.sample",
+    "size": 416,
+    "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-push.sample",
+    "size": 1374,
+    "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-rebase.sample",
+    "size": 4898,
+    "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-receive.sample",
+    "size": 544,
+    "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/hooks/prepare-commit-msg.sample",
+    "size": 1492,
+    "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/hooks/push-to-checkout.sample",
+    "size": 2783,
+    "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/hooks/sendemail-validate.sample",
+    "size": 2308,
+    "sha256": "44ebfc923dc5466bc009602f0ecf067b9c65459abfe8868ddc49b78e6ced7a92"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/hooks/update.sample",
+    "size": 3650,
+    "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/index",
+    "size": 19327,
+    "sha256": "353e5bfadc69a6080fddc74163b9877602f73304a35086466bb5b3fdc973f626"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/info/exclude",
+    "size": 240,
+    "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/logs/HEAD",
+    "size": 413,
+    "sha256": "a9e4575014d281a06c053c4903cd830e5e9d4e31fe14472785aa5e6697637abe"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/logs/refs/heads/master",
+    "size": 196,
+    "sha256": "27f146770a45ed783e88ce3ea568dda4c7518c2ce7893a93ac5d35c2422d6044"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/logs/refs/remotes/origin/HEAD",
+    "size": 196,
+    "sha256": "27f146770a45ed783e88ce3ea568dda4c7518c2ce7893a93ac5d35c2422d6044"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.idx",
+    "size": 31984,
+    "sha256": "289ae6a62f40a4333cd1acdad80c4762b590da0c95e6e1d8e36a28c888f05473"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.pack",
+    "size": 1346348,
+    "sha256": "bc9ce331be80cb8f26b979efc0d3e61f9dda6f44ab006093e5d6945141566e90"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.rev",
+    "size": 4468,
+    "sha256": "9cdd387589b77dd08aa34154a34a79526076fe9e98fd663f492a430dc8599a93"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/packed-refs",
+    "size": 1272,
+    "sha256": "3ab7f4b16b0165ef675a271d61c316f344ee256c65c1c5dd17e6b90b5966f94f"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/refs/heads/master",
+    "size": 41,
+    "sha256": "87df33890050af0cca8bde436c2c7bd86263a4e5c02610b0196de47a9b9914eb"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-administration/modules/extension/rag3weaver/codeparsers/refs/remotes/origin/HEAD",
+    "size": 32,
+    "sha256": "cdc65e67690c4c6475174e5ec662b70655246a2f3924354778835ab3be70aa76"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-garde.json",
+    "size": 11412,
+    "sha256": "214f53c12a51d75f5e5f59e551df3515ed10f1b697ab10c2bf13965f16a236e2"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-quiescence.json",
+    "size": 184,
+    "sha256": "a52ae649f8994f3ff0f41e88825fd7a2a6efd48d9086bf6eaa202ab26969e6a1"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-reprise-911054316328533-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-retire.json",
+    "size": 746,
+    "sha256": "2838aaa6e9c4c233699ededd83ebaedeaee9b0680cc77d6543e48da8d52fdf36"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-epinglees-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-integration-r2-administration/FETCH_HEAD",
+    "size": 92,
+    "sha256": "6f52fd5576d762ab22e402f5c6650f3e31f4cfff58510c2d527bb31d260dd544"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-integration-r2-administration/HEAD",
+    "size": 48,
+    "sha256": "d1db1d5394e3893fa0ed3002fefc239d0c3bb5621d27216dcc20e413a55e765d"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-integration-r2-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "84b131e3e99ccfef8d92d869f160302246e05ba0197a2164a2f64c8ac138be19"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-integration-r2-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-integration-r2-administration/gitdir",
+    "size": 71,
+    "sha256": "76360691b12bc2ae69478254a42195cddeab71e4c6ef7274a63b747eb99ec1d6"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-integration-r2-administration/index",
+    "size": 1011749,
+    "sha256": "08b391ff637f7f385e26df745a08f90d4666d95d97cd7a36158f6eef47b5dc1b"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-integration-r2-administration/logs/HEAD",
+    "size": 310,
+    "sha256": "1cb82657a402fee45e840689a02540e07e733e1c10fafdba0588bca7ead4a6a5"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-integration-r2-garde.json",
+    "size": 10531,
+    "sha256": "dab58b3b5a520fee5631edf899f3328da205d0d21cd4a8b7f884bd280edbbcf4"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-integration-r2-quiescence.json",
+    "size": 184,
+    "sha256": "c5085cb8cc291a9c579adcd1ef054b1c1fdae92e88c3b9876f36672e133b6b34"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-integration-r2-retire.json",
+    "size": 738,
+    "sha256": "2a69e60e7112fe6dc0e80c17db69ca3764b3c80949eee8d25a15772732c1e908"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-integration-r2-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-pilote-administration/HEAD",
+    "size": 43,
+    "sha256": "acb482704031c7aa73cd3b06a0798696390693264226d89dc6a6218c19ed56c6"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-pilote-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "9255878b3fa28c72f7e587bad8b3511b082fbb0ffec0de6c45519c04f37cfe5c"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-pilote-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-pilote-administration/gitdir",
+    "size": 63,
+    "sha256": "9e0acc2b786eaf04d03dec5171a061297357e3311a30b3409edef7be9adc0a3a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-pilote-administration/index",
+    "size": 1002430,
+    "sha256": "a0902903eadcde8ddbd58d3c56bce7b13fb363176585db701c8b80df130f7fd1"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-pilote-administration/logs/HEAD",
+    "size": 310,
+    "sha256": "6a3095f8e83524d2841179bee24ae0bbb78f52b2e7ee3a28c6ee3f80d3b76497"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-pilote-garde.json",
+    "size": 10194,
+    "sha256": "240ed1afe72c645287b227771ef4a749c03c8d7cf686874fd147d87a9f932e48"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-pilote-quiescence.json",
+    "size": 184,
+    "sha256": "eb77fc4629e3e4db06529464c13f6ab709f76d9ef644d98d2cea71f0b7426d85"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-pilote-retire.json",
+    "size": 702,
+    "sha256": "8a77e7f9ac2edb80ff5dd1ad9fa3d1c5cc79d320ebaeff69f1e74567dcef9c69"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-pilote-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-detache-administration/HEAD",
+    "size": 50,
+    "sha256": "f4b6eddcc04a2e15a07574e28ce04268b562881f75c6bfdd66df8e5a24fc0bfb"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-detache-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "40fe7cab5b811a70f6d4b08a85afeb12af82176c1dd3eb179acfe512868e0b55"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-detache-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-detache-administration/gitdir",
+    "size": 70,
+    "sha256": "1909929654f0e04ba0a78e9c1d2f178434d0052fe7be39fc5d8bb495d32dd8b7"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-detache-administration/index",
+    "size": 1009668,
+    "sha256": "b070f7f76a55e0e721e1a899e5b728d9745e87ec8864125ca0e6512a5aae9279"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-detache-administration/logs/HEAD",
+    "size": 310,
+    "sha256": "65d82354982c0e98696d65aa316bfefa7d9364722814ec373b4eba2bf7802761"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-detache-garde.json",
+    "size": 9957,
+    "sha256": "1726064d820d90bc45c2baabde93c16c4ac1a2906f543c422e77facebb04490c"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-detache-quiescence.json",
+    "size": 184,
+    "sha256": "1621232eee713d5d0d3570e569b95fc043bc7c57316b235ed6707ce08e7fe9f6"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-detache-retire.json",
+    "size": 744,
+    "sha256": "f174e38cc7b20e34ad0f32a3d240978e3d4c6eb62cc0be6c31b0bfe3e247715b"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-detache-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-diagnostic-administration/HEAD",
+    "size": 53,
+    "sha256": "413ec9b449b56f226ec4c7d3c38cd9e1a9dc4d19c0d9d01df1becf272cdfbcae"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-diagnostic-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "692245b881718497aeca1e91990694a19b4a682339ec8752adf74f8f1504d73b"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-diagnostic-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-diagnostic-administration/gitdir",
+    "size": 73,
+    "sha256": "b1257fd5a4530a516bbdf57ebfe5ae68d626016d74a7d48ac3a6fb5fdc0c349a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-diagnostic-administration/index",
+    "size": 1006666,
+    "sha256": "e623b7017c8ea3a662c21cdd12204f11ea61c2992969f4d5d7441843eb2d54f6"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-diagnostic-administration/logs/HEAD",
+    "size": 310,
+    "sha256": "6c2ac1d5b345a6ca2718b305ae354308b069195166fae06ba84dafa2904f8526"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-diagnostic-garde.json",
+    "size": 9679,
+    "sha256": "d62db9cbaab6c4c0f0cb4db7d6ee62696e5492cf962b3008351a9036b509c167"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-diagnostic-quiescence.json",
+    "size": 184,
+    "sha256": "cd8707ef695187c6f452ed86a88e8b6d59f6efcf1ceca2b6447feb826c67884f"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-diagnostic-retire.json",
+    "size": 762,
+    "sha256": "bfbab78ddace8c3ad0e664cf4d9cf8ffaff0faf85fceb9bb62ae01a20f42fafc"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-diagnostic-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-pilote-administration/HEAD",
+    "size": 49,
+    "sha256": "4a3f5aff9ea0d14eb8449cec453c6bf2e65a6af89ffef45d870d529bd7b8022c"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-pilote-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "336240ff243e73467400de5d96f23c0558c42d60e38db4e5dde6a950c9d545e1"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-pilote-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-pilote-administration/gitdir",
+    "size": 69,
+    "sha256": "2de0d51cdff3c5ffcc90a4eac15a21e9aef61b14571601577308fa426e5bf6cd"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-pilote-administration/index",
+    "size": 1005984,
+    "sha256": "6f90b129b2c91e33860465ecb06ff28a400c758d7e61cd2e6575f1fd07a14286"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-pilote-administration/logs/HEAD",
+    "size": 310,
+    "sha256": "fd42270ad6f2a2e7b3d0dbb6ea3a32249b1e77b3e187ba1a83d7830b2ac30e7c"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-pilote-garde.json",
+    "size": 9357,
+    "sha256": "14df7cef350e54037562af9276041a3e6c6734adb2dc2763c58422769b6c5c61"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-pilote-quiescence.json",
+    "size": 184,
+    "sha256": "c7b8dca42a3eb1594adf4849ca1982505b2183dbdd3744fc21df46e3a98fb775"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-pilote-retire.json",
+    "size": 738,
+    "sha256": "7f2464eaee870afb74d13388fbfad113ca249245b8883f1e761b9ba44c5124d0"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-pilote-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/HEAD",
+    "size": 42,
+    "sha256": "08e61daf5701c4c7d36dd86de8f7abd29a3644479b70a431c5c65c6526803754"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "ad534d40cea8bb03c71b7dddd6086ca9f5a3e3283cb058c277f2dd58cc2f22a6"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/gitdir",
+    "size": 65,
+    "sha256": "9f606da8ac573230c11edf316d735301fea3911be547b8e41e3e83fd5eb287c2"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/index",
+    "size": 1004522,
+    "sha256": "699e5f764cc52ecce000999196f036c29d9374122f4952875151bb03c35bfbab"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/logs/HEAD",
+    "size": 310,
+    "sha256": "bb895e5ff94b0e75c3ab53a1f525bfe291a911e87c4ca55a4df7211cd09d3c17"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/HEAD",
+    "size": 41,
+    "sha256": "297cef1585b203e000f0431fe0659548935e9e421e79f84d0225f807f8629550"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/config",
+    "size": 387,
+    "sha256": "2cec575044a0abd830fb19621cdf8672a386f973ea18aef557f655170b3446d5"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/description",
+    "size": 73,
+    "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/hooks/applypatch-msg.sample",
+    "size": 478,
+    "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/hooks/commit-msg.sample",
+    "size": 1972,
+    "sha256": "efc1401b0e99d1ff51494d154d98b46c1e99059bcd8bf9f73cecde19fd3eb23b"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/hooks/fsmonitor-watchman.sample",
+    "size": 4611,
+    "sha256": "9159720099ad5595b8e66645cbfd47763c1e920f46e0b50ae75e642bbec57ef0"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/hooks/post-update.sample",
+    "size": 189,
+    "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-applypatch.sample",
+    "size": 424,
+    "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-commit.sample",
+    "size": 1649,
+    "sha256": "57185b7b9f05239d7ab52db045f5b89eb31348d7b2177eab214f5eb872e1971b"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-merge-commit.sample",
+    "size": 416,
+    "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-push.sample",
+    "size": 1374,
+    "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-rebase.sample",
+    "size": 4898,
+    "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-receive.sample",
+    "size": 544,
+    "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/hooks/prepare-commit-msg.sample",
+    "size": 1492,
+    "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/hooks/push-to-checkout.sample",
+    "size": 2783,
+    "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/hooks/sendemail-validate.sample",
+    "size": 2308,
+    "sha256": "44ebfc923dc5466bc009602f0ecf067b9c65459abfe8868ddc49b78e6ced7a92"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/hooks/update.sample",
+    "size": 3650,
+    "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/index",
+    "size": 19327,
+    "sha256": "2ee2ec5aa4213a3181683bf8c6359075e99e8b2ad4aab487789b4b627f7cbff9"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/info/exclude",
+    "size": 240,
+    "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/logs/HEAD",
+    "size": 413,
+    "sha256": "378dad2cdb9a9289d28dd5453e068fafc3411dc8bd9bd0e094b2f0f0a65dc816"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/logs/refs/heads/master",
+    "size": 196,
+    "sha256": "1e98384156c610ba0e67c785eb490450acda5f72c2f3a8cf9bf95a12ede6f721"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/logs/refs/remotes/origin/HEAD",
+    "size": 196,
+    "sha256": "1e98384156c610ba0e67c785eb490450acda5f72c2f3a8cf9bf95a12ede6f721"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.idx",
+    "size": 31984,
+    "sha256": "289ae6a62f40a4333cd1acdad80c4762b590da0c95e6e1d8e36a28c888f05473"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.pack",
+    "size": 1346348,
+    "sha256": "bc9ce331be80cb8f26b979efc0d3e61f9dda6f44ab006093e5d6945141566e90"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.rev",
+    "size": 4468,
+    "sha256": "9cdd387589b77dd08aa34154a34a79526076fe9e98fd663f492a430dc8599a93"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/packed-refs",
+    "size": 1272,
+    "sha256": "3ab7f4b16b0165ef675a271d61c316f344ee256c65c1c5dd17e6b90b5966f94f"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/refs/heads/master",
+    "size": 41,
+    "sha256": "87df33890050af0cca8bde436c2c7bd86263a4e5c02610b0196de47a9b9914eb"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-administration/modules/extension/rag3weaver/codeparsers/refs/remotes/origin/HEAD",
+    "size": 32,
+    "sha256": "cdc65e67690c4c6475174e5ec662b70655246a2f3924354778835ab3be70aa76"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/HEAD",
+    "size": 42,
+    "sha256": "08e61daf5701c4c7d36dd86de8f7abd29a3644479b70a431c5c65c6526803754"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "ad534d40cea8bb03c71b7dddd6086ca9f5a3e3283cb058c277f2dd58cc2f22a6"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/gitdir",
+    "size": 65,
+    "sha256": "9f606da8ac573230c11edf316d735301fea3911be547b8e41e3e83fd5eb287c2"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/index",
+    "size": 1004522,
+    "sha256": "699e5f764cc52ecce000999196f036c29d9374122f4952875151bb03c35bfbab"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/logs/HEAD",
+    "size": 310,
+    "sha256": "bb895e5ff94b0e75c3ab53a1f525bfe291a911e87c4ca55a4df7211cd09d3c17"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/HEAD",
+    "size": 41,
+    "sha256": "297cef1585b203e000f0431fe0659548935e9e421e79f84d0225f807f8629550"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/config",
+    "size": 387,
+    "sha256": "2cec575044a0abd830fb19621cdf8672a386f973ea18aef557f655170b3446d5"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/description",
+    "size": 73,
+    "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/hooks/applypatch-msg.sample",
+    "size": 478,
+    "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/hooks/commit-msg.sample",
+    "size": 1972,
+    "sha256": "efc1401b0e99d1ff51494d154d98b46c1e99059bcd8bf9f73cecde19fd3eb23b"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/hooks/fsmonitor-watchman.sample",
+    "size": 4611,
+    "sha256": "9159720099ad5595b8e66645cbfd47763c1e920f46e0b50ae75e642bbec57ef0"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/hooks/post-update.sample",
+    "size": 189,
+    "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-applypatch.sample",
+    "size": 424,
+    "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-commit.sample",
+    "size": 1649,
+    "sha256": "57185b7b9f05239d7ab52db045f5b89eb31348d7b2177eab214f5eb872e1971b"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-merge-commit.sample",
+    "size": 416,
+    "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-push.sample",
+    "size": 1374,
+    "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-rebase.sample",
+    "size": 4898,
+    "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-receive.sample",
+    "size": 544,
+    "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/hooks/prepare-commit-msg.sample",
+    "size": 1492,
+    "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/hooks/push-to-checkout.sample",
+    "size": 2783,
+    "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/hooks/sendemail-validate.sample",
+    "size": 2308,
+    "sha256": "44ebfc923dc5466bc009602f0ecf067b9c65459abfe8868ddc49b78e6ced7a92"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/hooks/update.sample",
+    "size": 3650,
+    "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/index",
+    "size": 19327,
+    "sha256": "2ee2ec5aa4213a3181683bf8c6359075e99e8b2ad4aab487789b4b627f7cbff9"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/info/exclude",
+    "size": 240,
+    "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/logs/HEAD",
+    "size": 413,
+    "sha256": "378dad2cdb9a9289d28dd5453e068fafc3411dc8bd9bd0e094b2f0f0a65dc816"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/logs/refs/heads/master",
+    "size": 196,
+    "sha256": "1e98384156c610ba0e67c785eb490450acda5f72c2f3a8cf9bf95a12ede6f721"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/logs/refs/remotes/origin/HEAD",
+    "size": 196,
+    "sha256": "1e98384156c610ba0e67c785eb490450acda5f72c2f3a8cf9bf95a12ede6f721"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.idx",
+    "size": 31984,
+    "sha256": "289ae6a62f40a4333cd1acdad80c4762b590da0c95e6e1d8e36a28c888f05473"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.pack",
+    "size": 1346348,
+    "sha256": "bc9ce331be80cb8f26b979efc0d3e61f9dda6f44ab006093e5d6945141566e90"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.rev",
+    "size": 4468,
+    "sha256": "9cdd387589b77dd08aa34154a34a79526076fe9e98fd663f492a430dc8599a93"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/packed-refs",
+    "size": 1272,
+    "sha256": "3ab7f4b16b0165ef675a271d61c316f344ee256c65c1c5dd17e6b90b5966f94f"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/refs/heads/master",
+    "size": 41,
+    "sha256": "87df33890050af0cca8bde436c2c7bd86263a4e5c02610b0196de47a9b9914eb"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-administration/modules/extension/rag3weaver/codeparsers/refs/remotes/origin/HEAD",
+    "size": 32,
+    "sha256": "cdc65e67690c4c6475174e5ec662b70655246a2f3924354778835ab3be70aa76"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-garde.json",
+    "size": 9075,
+    "sha256": "3438445ca7006ae87475f08a453a3389765f45765bb9c342bb3ed84d4a80ba90"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-quiescence.json",
+    "size": 184,
+    "sha256": "9997b914a572eea680fe45336f121dc6820eda663e078a8d57d21691ca0a1f40"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-avant-target-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-garde.json",
+    "size": 9062,
+    "sha256": "a2981921deb254b38ab0ecf1c055d2ef286cf325477984dfc5126f29b783735a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/HEAD",
+    "size": 42,
+    "sha256": "08e61daf5701c4c7d36dd86de8f7abd29a3644479b70a431c5c65c6526803754"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "ad534d40cea8bb03c71b7dddd6086ca9f5a3e3283cb058c277f2dd58cc2f22a6"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/gitdir",
+    "size": 65,
+    "sha256": "9f606da8ac573230c11edf316d735301fea3911be547b8e41e3e83fd5eb287c2"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/index",
+    "size": 1004522,
+    "sha256": "699e5f764cc52ecce000999196f036c29d9374122f4952875151bb03c35bfbab"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/logs/HEAD",
+    "size": 310,
+    "sha256": "bb895e5ff94b0e75c3ab53a1f525bfe291a911e87c4ca55a4df7211cd09d3c17"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/HEAD",
+    "size": 41,
+    "sha256": "297cef1585b203e000f0431fe0659548935e9e421e79f84d0225f807f8629550"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/config",
+    "size": 387,
+    "sha256": "2cec575044a0abd830fb19621cdf8672a386f973ea18aef557f655170b3446d5"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/description",
+    "size": 73,
+    "sha256": "85ab6c163d43a17ea9cf7788308bca1466f1b0a8d1cc92e26e9bf63da4062aee"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/applypatch-msg.sample",
+    "size": 478,
+    "sha256": "0223497a0b8b033aa58a3a521b8629869386cf7ab0e2f101963d328aa62193f7"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/commit-msg.sample",
+    "size": 1972,
+    "sha256": "efc1401b0e99d1ff51494d154d98b46c1e99059bcd8bf9f73cecde19fd3eb23b"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/fsmonitor-watchman.sample",
+    "size": 4611,
+    "sha256": "9159720099ad5595b8e66645cbfd47763c1e920f46e0b50ae75e642bbec57ef0"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/post-update.sample",
+    "size": 189,
+    "sha256": "81765af2daef323061dcbc5e61fc16481cb74b3bac9ad8a174b186523586f6c5"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-applypatch.sample",
+    "size": 424,
+    "sha256": "e15c5b469ea3e0a695bea6f2c82bcf8e62821074939ddd85b77e0007ff165475"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-commit.sample",
+    "size": 1649,
+    "sha256": "57185b7b9f05239d7ab52db045f5b89eb31348d7b2177eab214f5eb872e1971b"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-merge-commit.sample",
+    "size": 416,
+    "sha256": "d3825a70337940ebbd0a5c072984e13245920cdf8898bd225c8d27a6dfc9cb53"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-push.sample",
+    "size": 1374,
+    "sha256": "ecce9c7e04d3f5dd9d8ada81753dd1d549a9634b26770042b58dda00217d086a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-rebase.sample",
+    "size": 4898,
+    "sha256": "4febce867790052338076f4e66cc47efb14879d18097d1d61c8261859eaaa7b3"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/pre-receive.sample",
+    "size": 544,
+    "sha256": "a4c3d2b9c7bb3fd8d1441c31bd4ee71a595d66b44fcf49ddb310252320169989"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/prepare-commit-msg.sample",
+    "size": 1492,
+    "sha256": "e9ddcaa4189fddd25ed97fc8c789eca7b6ca16390b2392ae3276f0c8e1aa4619"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/push-to-checkout.sample",
+    "size": 2783,
+    "sha256": "a53d0741798b287c6dd7afa64aee473f305e65d3f49463bb9d7408ec3b12bf5f"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/sendemail-validate.sample",
+    "size": 2308,
+    "sha256": "44ebfc923dc5466bc009602f0ecf067b9c65459abfe8868ddc49b78e6ced7a92"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/hooks/update.sample",
+    "size": 3650,
+    "sha256": "8d5f2fa83e103cf08b57eaa67521df9194f45cbdbcb37da52ad586097a14d106"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/index",
+    "size": 19327,
+    "sha256": "2ee2ec5aa4213a3181683bf8c6359075e99e8b2ad4aab487789b4b627f7cbff9"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/info/exclude",
+    "size": 240,
+    "sha256": "6671fe83b7a07c8932ee89164d1f2793b2318058eb8b98dc5c06ee0a5a3b0ec1"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/logs/HEAD",
+    "size": 413,
+    "sha256": "378dad2cdb9a9289d28dd5453e068fafc3411dc8bd9bd0e094b2f0f0a65dc816"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/logs/refs/heads/master",
+    "size": 196,
+    "sha256": "1e98384156c610ba0e67c785eb490450acda5f72c2f3a8cf9bf95a12ede6f721"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/logs/refs/remotes/origin/HEAD",
+    "size": 196,
+    "sha256": "1e98384156c610ba0e67c785eb490450acda5f72c2f3a8cf9bf95a12ede6f721"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.idx",
+    "size": 31984,
+    "sha256": "289ae6a62f40a4333cd1acdad80c4762b590da0c95e6e1d8e36a28c888f05473"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.pack",
+    "size": 1346348,
+    "sha256": "bc9ce331be80cb8f26b979efc0d3e61f9dda6f44ab006093e5d6945141566e90"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/objects/pack/pack-8d6e9a95d3b263495ff2a584a385df2471475890.rev",
+    "size": 4468,
+    "sha256": "9cdd387589b77dd08aa34154a34a79526076fe9e98fd663f492a430dc8599a93"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/packed-refs",
+    "size": 1272,
+    "sha256": "3ab7f4b16b0165ef675a271d61c316f344ee256c65c1c5dd17e6b90b5966f94f"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/refs/heads/master",
+    "size": 41,
+    "sha256": "87df33890050af0cca8bde436c2c7bd86263a4e5c02610b0196de47a9b9914eb"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-administration/modules/extension/rag3weaver/codeparsers/refs/remotes/origin/HEAD",
+    "size": 32,
+    "sha256": "cdc65e67690c4c6475174e5ec662b70655246a2f3924354778835ab3be70aa76"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-garde.json",
+    "size": 9089,
+    "sha256": "d5cdbd399ecf8c53625e9d344674ee5f6e3888eb77e43e56db0f13a10d3eba94"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-quiescence.json",
+    "size": 184,
+    "sha256": "98846a6df44a947b6556bc5b5ad4c54f0c6fdbf1c88daf714cf10d9c465a23bb"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-nouvelle-garde-avant-force-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-quiescence.json",
+    "size": 184,
+    "sha256": "8724222388f6f7d628727b4b74b27487a089978f56d4449c727ea265015f2d0d"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-refus-git-structurel-911077218370362.json",
+    "size": 157,
+    "sha256": "24566c0cf80cbeb5c15088e17e783c640d36dbc3a7128349b483148b74de9b10"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-retire.json",
+    "size": 728,
+    "sha256": "51857cb5d984099f9d854cc5f584841faff0580ed4e322abf14eadcd4a372534"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-r2-target-final-quiescence.json",
+    "size": 184,
+    "sha256": "a45faf623ceebf06e5ec6a5f66cdf66ab30b6a492818d586c7c782a69ad1aac9"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-reprise-administration/HEAD",
+    "size": 50,
+    "sha256": "371f892847783e9cc76182b407eb6a94207252e019f79de9be8b6e4a3549a948"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-reprise-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "1ba6d9bebd5ce10f0603e8476fd1c9390b57a4fdf29654304e55a9d4b2cb88bf"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-reprise-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-reprise-administration/gitdir",
+    "size": 70,
+    "sha256": "47e1452cba15e8e989d4d90bd91f64befd11ed8261f2d870db098f60a8e7387d"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-reprise-administration/index",
+    "size": 1007531,
+    "sha256": "6f5373922a88cc32d5023a9b1de300688d36f4f9597856301aaa51eb060d4aaa"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-reprise-administration/logs/HEAD",
+    "size": 310,
+    "sha256": "07e3ad0b02d90ef9964838a0437c1fe345e8e735084aa1a22051b25bcaa89bb5"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-reprise-garde.json",
+    "size": 9072,
+    "sha256": "aefe149c4771652ff3138e618faf2960b18ba3be3b2838e373b5ac38be0de197"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-reprise-quiescence.json",
+    "size": 184,
+    "sha256": "2ac15126a0bb0d4a85d7404de1003fa64041b1b00b6a1fbe5518a3179b56039c"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-reprise-retire.json",
+    "size": 744,
+    "sha256": "b9d227ac103ff4b6741bce4df6798af94ea9271a9040c06aac182b3a54284058"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-reprise-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-stable-administration/HEAD",
+    "size": 49,
+    "sha256": "d89dc8bc3134c127c0608d2e1d66a3284454120f62d8f7e5eb4ef5a39489eddd"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-stable-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "6c8c2499209476703eab0f8159931e225553a93d03ce34d95dcebf7944382762"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-stable-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-stable-administration/gitdir",
+    "size": 69,
+    "sha256": "a813a97cc09e8d6572f7ac8a2b4d216106e0d338ce1aa9d7aaa2f4614f7da3f3"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-stable-administration/index",
+    "size": 1008515,
+    "sha256": "3d12f4c10caf4a3b4631dca7bf61695b0fd85d5c31256a696377104bd8c1dcec"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-stable-administration/logs/HEAD",
+    "size": 310,
+    "sha256": "8a2b76403249dcf371a89f326de748b776a98ca8218707c7cd2481d2afa299b9"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-stable-garde.json",
+    "size": 8774,
+    "sha256": "8eb082e528735fd66d6b7284a2beddd8fee8d43500b41ad27ca19a3a1ef5ba76"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-stable-quiescence.json",
+    "size": 184,
+    "sha256": "d1d3254fbf1220278451de2cb6fa13066de2200da238fbe317e8f2d0e1875239"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-stable-retire.json",
+    "size": 738,
+    "sha256": "1a1d9e78bfa91b15a5d767220a8ff3ef430064efc98bc4a2188502e40b6c0e86"
+  },
+  {
+    "path": "LuciePC/cx-wt-couches-union-stable-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "LuciePC/fin.json",
+    "size": 189,
+    "sha256": "ff475ee7f9728d0891ec4627d09f0f0c6c02ad37f7894a68853ebe64be0b0f2a"
+  },
+  {
+    "path": "LuciePC/final-quiescence.json",
+    "size": 184,
+    "sha256": "6de34647d41777af1a71e5212864ff0e77c8979aa6b0ab322fff770b311db323"
+  },
+  {
+    "path": "LuciePC/inventaire-initial.json",
+    "size": 2366,
+    "sha256": "ffba9ddc41b0867b31a343ea1f630f4124f4b1d8d9106c4bfec6c1db37b044d4"
+  },
+  {
+    "path": "LuciePC/target-retire.json",
+    "size": 324,
+    "sha256": "22db30949166d6e3785cbc21a7d462056fc52b8b7cc69f50fc7eb55cbb78c4df"
+  },
+  {
+    "path": "garde_worktree.py",
+    "size": 19608,
+    "sha256": "6f3dfceb17c9703029d2f4f26385f9aa21820c84bc79c518e1338b6d0f36188c"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-epinglees-administration/COMMIT_EDITMSG",
+    "size": 70,
+    "sha256": "839944290067220785ffe69fc2a782f90873c4a21945e0cd565b38106a42e59d"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-epinglees-administration/HEAD",
+    "size": 46,
+    "sha256": "e5ee713917b021e02e443047ab646d02b28cbf53e13b1bfa7201b113f4c0c747"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-epinglees-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "4ae744fbba90d98064c36c871f43f9eb66133a36600f09445bc154823f55bf72"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-epinglees-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-epinglees-administration/gitdir",
+    "size": 66,
+    "sha256": "0194d48dac25388d7a66a618b77849885b12707f934cb1fdeba7c299e4f12ba5"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-epinglees-administration/index",
+    "size": 1001770,
+    "sha256": "8ecfb18e5275f3574d5d563da02d417526c1b3fdac119deac807c43fc73aaf25"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-epinglees-administration/logs/HEAD",
+    "size": 744,
+    "sha256": "0c72d821a8e346aac28eb4a195c93eab38ee447d86cb3a2eb3bcdae3e8226083"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-epinglees-garde.json",
+    "size": 21358,
+    "sha256": "e40e9950d6bcad5fe0dc0e3ee77f09c55cb8b1fa8f8c6597fae979651abc265f"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-epinglees-quiescence.json",
+    "size": 126,
+    "sha256": "3f84ba23a9e4d7b3b93f9b7a8c93583afd3669703aca5c48f0dbc6e590212e17"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-epinglees-retire.json",
+    "size": 663,
+    "sha256": "1ef50a581e5a96bca5fb2a46d52aef7ed219be20322d6ff8dc0b29818fda1912"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-epinglees-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-administration/AUTO_MERGE",
+    "size": 41,
+    "sha256": "81a4ae16197ddf69dced0401ba76043f8732b50eae204cc348dfd9379a3cef2b"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-administration/COMMIT_EDITMSG",
+    "size": 196,
+    "sha256": "d0262b96ce52a3a7673edcb439252a170fdeba70ffd71b143740333bbf9d8c17"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-administration/HEAD",
+    "size": 48,
+    "sha256": "fc4c6333c8369354b0daa4d14d844b42ad41852f6396edfeaf316d728b5dea01"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "9a78ba75858e5ad2dc880c571457f18e78e2f05a313bf7bc0ae85020dc2043ff"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-administration/gitdir",
+    "size": 68,
+    "sha256": "eae9a94d0ab7a50801939a3c986e0dc3385695fa0038092c66dabe89606291be"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-administration/index",
+    "size": 1011333,
+    "sha256": "ed85a7c21d33d311223a73ead540d4197c8ad4f003a93b9fad9e0501bb5a17b2"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-administration/logs/HEAD",
+    "size": 1004,
+    "sha256": "81f361ed9c0df68191f04e8e1e0cfbed9ef2517ac86ab1624b251cb955006b9b"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-garde.json",
+    "size": 21087,
+    "sha256": "a0bd2ff743a26d93a0b2476499394b1ca9a7c50b7cf372173e11880907aa7f1c"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-quiescence.json",
+    "size": 126,
+    "sha256": "420c89d0a2b0ea6799c7047955223593d2b9ceac27757ab014c610e58ab2d190"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-r2-administration/COMMIT_EDITMSG",
+    "size": 82,
+    "sha256": "d11d1cd40180b4db0c1e0329145468eb22ff56c015dce2767d50abe51a3a5059"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-r2-administration/FETCH_HEAD",
+    "size": 92,
+    "sha256": "6f52fd5576d762ab22e402f5c6650f3e31f4cfff58510c2d527bb31d260dd544"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-r2-administration/HEAD",
+    "size": 48,
+    "sha256": "d1db1d5394e3893fa0ed3002fefc239d0c3bb5621d27216dcc20e413a55e765d"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-r2-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "4793bc50a78024b1ff54acc3510f242cd7a917380ad4184d1a5284fa1af38f2d"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-r2-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-r2-administration/gitdir",
+    "size": 71,
+    "sha256": "76360691b12bc2ae69478254a42195cddeab71e4c6ef7274a63b747eb99ec1d6"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-r2-administration/index",
+    "size": 1011749,
+    "sha256": "481777b856d59da326cfa8eda13530ca6a6b47e8b469bc4767b2c04d1b79e156"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-r2-administration/logs/HEAD",
+    "size": 6099,
+    "sha256": "0fc7dd17a0d77a4c2d72728021a5a74da7e853cabb71d140bb3929924d89d8fb"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-r2-garde.json",
+    "size": 20815,
+    "sha256": "53aa52321d36ed29bc681dbae7003a1e986786b36bf559c0f4f0d85b2ac05855"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-r2-quiescence.json",
+    "size": 126,
+    "sha256": "a4d4e896fac7fc2bc843ac8d050cb17d11b3f79583d47dd84dda1a978a9b8830"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-r2-retire.json",
+    "size": 681,
+    "sha256": "05e0c71b78dd704baed253548ef8587301a37cccf514643106d01930629d3161"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-r2-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-retire.json",
+    "size": 675,
+    "sha256": "eaa09afc868afa99739d83889766731ea4500ca39eabe2323d9a1e156bade296"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-integration-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-pilote-administration/COMMIT_EDITMSG",
+    "size": 71,
+    "sha256": "75e6f35515c347ca8214841c6c4a906297dc816f660e9f266bf16499bb0ead07"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-pilote-administration/HEAD",
+    "size": 43,
+    "sha256": "acb482704031c7aa73cd3b06a0798696390693264226d89dc6a6218c19ed56c6"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-pilote-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "9c92f932f09014ba567390b70c18620e28bac7170cc3b4a4bd695ad6b181f101"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-pilote-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-pilote-administration/gitdir",
+    "size": 63,
+    "sha256": "9e0acc2b786eaf04d03dec5171a061297357e3311a30b3409edef7be9adc0a3a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-pilote-administration/index",
+    "size": 1002430,
+    "sha256": "6a23501e5835d78a23431d4d53b3c197591523f325de898a29f910df3b38fd97"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-pilote-administration/logs/HEAD",
+    "size": 1180,
+    "sha256": "0dc0f8bc0402de75a965f0ecdb6c499dab0188076f56be35a06f185090e516b5"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-pilote-garde.json",
+    "size": 20479,
+    "sha256": "623d5f12886c53a3a54a4b19410836d1aeaf8b1132fbcd293db7b42b51f8e5ee"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-pilote-quiescence.json",
+    "size": 126,
+    "sha256": "61fb7d3d5e193b88806b6ed0d13ca6dfdc25ea5b03577985b699fb77313bf6f3"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-pilote-retire.json",
+    "size": 645,
+    "sha256": "b16555e078c33c54264e1451e38e43108ce8c34125c8ce8e10329bc5a236d8fd"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-pilote-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-preuves-administration/COMMIT_EDITMSG",
+    "size": 67,
+    "sha256": "269ede15aca7ca39491144a348b478059a004076b71101082116c2b3473638e1"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-preuves-administration/HEAD",
+    "size": 44,
+    "sha256": "2d3e2a84594e2b21fbbc3c5c55675390acc11e0128157251697fa36435dabcc5"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-preuves-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "9255878b3fa28c72f7e587bad8b3511b082fbb0ffec0de6c45519c04f37cfe5c"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-preuves-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-preuves-administration/gitdir",
+    "size": 64,
+    "sha256": "792f057307fb61fe0e56440125efc877e75f90584b51cd03bece5d66dfaddc9e"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-preuves-administration/index",
+    "size": 1002558,
+    "sha256": "1e243babd4a6cbf573a22983b75633f09e2eafe85861e7319c23fb3f0cd04495"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-preuves-administration/logs/HEAD",
+    "size": 529,
+    "sha256": "e23b9012d5bd0604f0e841abbb49eb654c1eb0f2b7364d977b46ebf2506a9236"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-preuves-garde.json",
+    "size": 20212,
+    "sha256": "c4118d877faeaf5d64da895eccf2c856d993896e091017167866b63dccf6f367"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-preuves-quiescence.json",
+    "size": 126,
+    "sha256": "e07042146f18bfd2cd2fa20003ff18d01fc8cff65eec4d933d8af7a7955134e5"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-preuves-retire.json",
+    "size": 651,
+    "sha256": "bc67d3ed24bb5123b66aa428fd0e1e12b10f28ce5f7e636f8ddff7c4eb32fcbb"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-preuves-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-administration/COMMIT_EDITMSG",
+    "size": 61,
+    "sha256": "4d056b6d844d41d228960eedf589916bf7d21bc2f6dc37dcbc67eb387bb2e609"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-administration/HEAD",
+    "size": 42,
+    "sha256": "cfa7f8323d19f2daea48fa9a993f22f66c14e7a7ebb6810d54f31f04b807c842"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "e4b7130c751d66b2c44f3f5365c45ee3ac6d294bab37b8858d9ea885a6fea314"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-administration/gitdir",
+    "size": 62,
+    "sha256": "f0bec784d510ebbf439c3b9bd27033d7a07ac1fdeb78edca6f95361f01f010a6"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-administration/index",
+    "size": 1004258,
+    "sha256": "b5b4e2c357b0a55789ff4a0f392242bb49436978e03f28e852c9659ec0bb30e6"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-administration/logs/HEAD",
+    "size": 2964,
+    "sha256": "20cd778222b97b0276cb3b034a69199e202b1d9981e38848a559a71b414a3f61"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-detache-administration/COMMIT_EDITMSG",
+    "size": 69,
+    "sha256": "8cc5efc4208660f3fcbbb57f01bebceabd0cbd8dbca338b1f6a53ed66103d5be"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-detache-administration/HEAD",
+    "size": 50,
+    "sha256": "f4b6eddcc04a2e15a07574e28ce04268b562881f75c6bfdd66df8e5a24fc0bfb"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-detache-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "6c8c2499209476703eab0f8159931e225553a93d03ce34d95dcebf7944382762"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-detache-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-detache-administration/gitdir",
+    "size": 70,
+    "sha256": "1909929654f0e04ba0a78e9c1d2f178434d0052fe7be39fc5d8bb495d32dd8b7"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-detache-administration/index",
+    "size": 1009668,
+    "sha256": "5267735798061b6a9e764f07119dc3df5d716f86db20d19d15b5eb1b1571795a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-detache-administration/logs/HEAD",
+    "size": 753,
+    "sha256": "be3a3d849a6ff6327cf99352a4457d555780938fdc782e7ba58937703504c8c0"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-detache-garde.json",
+    "size": 19698,
+    "sha256": "4be2b65caf2b4dab728f16007984883a8485c6f8b06dd3454bf080770e996ea4"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-detache-quiescence.json",
+    "size": 126,
+    "sha256": "8b90943031f8a9d85ef502d6b960babd32270f92fd3e73837f37d34ea5a5d8aa"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-detache-retire.json",
+    "size": 687,
+    "sha256": "809bd11301068150e2dc4b3e6bb4a9987e588f9757fb58d882b9fa8887e55daa"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-detache-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-diagnostic-administration/COMMIT_EDITMSG",
+    "size": 74,
+    "sha256": "504bb9cef017d59a65d22529d467e21f792c27ddd189290f94bb2c7386d29ebf"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-diagnostic-administration/HEAD",
+    "size": 53,
+    "sha256": "413ec9b449b56f226ec4c7d3c38cd9e1a9dc4d19c0d9d01df1becf272cdfbcae"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-diagnostic-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "336240ff243e73467400de5d96f23c0558c42d60e38db4e5dde6a950c9d545e1"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-diagnostic-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-diagnostic-administration/gitdir",
+    "size": 73,
+    "sha256": "b1257fd5a4530a516bbdf57ebfe5ae68d626016d74a7d48ac3a6fb5fdc0c349a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-diagnostic-administration/index",
+    "size": 1006666,
+    "sha256": "f4df2605ecff58cd7442722e61065de33fe0307a27b1a8b569033258fb69be71"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-diagnostic-administration/logs/HEAD",
+    "size": 536,
+    "sha256": "0e7c54685066ee3b845b64078f8822ac41cad599f8f37d78e12f6486f04d59ee"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-diagnostic-garde.json",
+    "size": 19420,
+    "sha256": "0c112e673f48f8cb912fd928954b25f73bea9bde50a029d26895234be5bc3a4b"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-diagnostic-quiescence.json",
+    "size": 126,
+    "sha256": "1f2648695b7ca1fff3e9ccdc27670b80e744071e83c3090a0dc67b42d20807bd"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-diagnostic-retire.json",
+    "size": 705,
+    "sha256": "261cf2f07f6af27743f4108e36f0663e1785d82e3048abee28944615939ded36"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-diagnostic-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-garde.json",
+    "size": 19927,
+    "sha256": "681871fe91788a949597cd89694f75d657d809c30a47f23b7e9cafc8361d18cb"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-pilote-administration/COMMIT_EDITMSG",
+    "size": 74,
+    "sha256": "6b06874991ea17909d7fd3d2c084d5c32c2827225f63246d7b1c1cf9e7c1584b"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-pilote-administration/HEAD",
+    "size": 49,
+    "sha256": "4a3f5aff9ea0d14eb8449cec453c6bf2e65a6af89ffef45d870d529bd7b8022c"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-pilote-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "13ffa37ece0a628b9823ebbd2f6ca51c70aefe39339858854f61594b80fe297f"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-pilote-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-pilote-administration/gitdir",
+    "size": 69,
+    "sha256": "2de0d51cdff3c5ffcc90a4eac15a21e9aef61b14571601577308fa426e5bf6cd"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-pilote-administration/index",
+    "size": 1005984,
+    "sha256": "c5ed27677106f2c270c05273c0fd32a8ba378775d660d7ddc494db132e4d5571"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-pilote-administration/logs/HEAD",
+    "size": 746,
+    "sha256": "8426ea158ce2b6b7e616cbbb8d8ec140dc7e72373a6cc4a6268b671c07161245"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-pilote-garde.json",
+    "size": 19098,
+    "sha256": "6a8fa98864ad2e1d92e536999f92729b01ec74adc82f5b4bfe8c4d65d343d51e"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-pilote-quiescence.json",
+    "size": 126,
+    "sha256": "4798e72640f5b11ef80e28c8d8f212cb0ac23ab80c739d7524198890e4fc1ec8"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-pilote-retire.json",
+    "size": 681,
+    "sha256": "8f389d6a6960172236da2cb9f39fd0741b5e91bc1eb86fe3477b2bfb0b67e4ce"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-pilote-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-plan-administration/COMMIT_EDITMSG",
+    "size": 61,
+    "sha256": "c06194eef22ad6caf66b764e83f302bcf013fe1a80c4b2c3bc21828ba0a142fa"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-plan-administration/FETCH_HEAD",
+    "size": 92,
+    "sha256": "1849ef335f294973232be25a0fb73c17ad9b3257154d12097ac61e6f6b4f78f5"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-plan-administration/HEAD",
+    "size": 47,
+    "sha256": "869a56ddbbe6acaf188e3c7eb50d2dbc4987132e5009777d6fdae3a065771cde"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-plan-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "8dd578c5bcf00224143bbcc12fa0c2d94711cea3cae0c3cc33e681eff09d63ea"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-plan-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-plan-administration/gitdir",
+    "size": 67,
+    "sha256": "8a14397b3e7a997d05d9e6cca39128e4af3bb01a26cc7b70f3aa8ed5d4800641"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-plan-administration/index",
+    "size": 1002686,
+    "sha256": "039673c999ad47a8058dd08c211377fb8f17d19dcfd0df59020118eb10903fcc"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-plan-administration/logs/HEAD",
+    "size": 744,
+    "sha256": "27c46423d5f432adcc4aa3ada1807a0610456c503663754f53d67a4ddac179d6"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-plan-garde.json",
+    "size": 18798,
+    "sha256": "ffae7f1abf6e587ae156bf0aa9ba65df3b3106429821d0268c82ea012101877d"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-plan-quiescence.json",
+    "size": 126,
+    "sha256": "84ef60190fb45dbe64aa4b29249742532a4c5d90b3255cd5f5d08b5b2add1490"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-plan-retire.json",
+    "size": 669,
+    "sha256": "365902f235c7a9419d8e7d10a2336d3506549d4dcf93c13b091598d48f7b960d"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-plan-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-preuves-administration/COMMIT_EDITMSG",
+    "size": 67,
+    "sha256": "369f91d018f959e2daf214b0571c74882820711e4bb421503d7fcb7dcafe9fce"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-preuves-administration/FETCH_HEAD",
+    "size": 92,
+    "sha256": "1eaf6af3be5e2f3c988361a0e5b69c976571471c7b899ca530937b9fa2f220bc"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-preuves-administration/HEAD",
+    "size": 50,
+    "sha256": "116221588fce0b04b1004f81d5bdbfbc1c34aa4c4cfb053996993731a6bfb740"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-preuves-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "1ba6d9bebd5ce10f0603e8476fd1c9390b57a4fdf29654304e55a9d4b2cb88bf"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-preuves-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-preuves-administration/gitdir",
+    "size": 70,
+    "sha256": "89ff792cdac5e9dcc8b2c6573e5f6858277ded5253bc6cc52d30f61776f82059"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-preuves-administration/index",
+    "size": 1009196,
+    "sha256": "88a86b528ea4e24d090e489961b6737faea4dfb6ab056ab34d248b57125a4933"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-preuves-administration/logs/HEAD",
+    "size": 1579,
+    "sha256": "7238e6fa2346824f750b98e2ba5b5d3762ec658d3196cfaa778c7add96db7a4a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-preuves-garde.json",
+    "size": 18529,
+    "sha256": "2e73af025993b7ac1132d1ba20e4d9cf2d37e8946bad230d62d0ddebd1ff11df"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-preuves-quiescence.json",
+    "size": 126,
+    "sha256": "2eb29c81c7f06499282231540c530459738763ac69626436a44e63dca3646e50"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-preuves-retire.json",
+    "size": 687,
+    "sha256": "7bb3c1338ad0c3f9c052a8ff16b313c0dc87849295a94bad4deac6b54d142cca"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-preuves-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-quiescence.json",
+    "size": 126,
+    "sha256": "da19e7c0fa137b1df2c83ae5a121fbbc75f88701a4da8f639f05f8a2f2c1753c"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-r2-administration/COMMIT_EDITMSG",
+    "size": 59,
+    "sha256": "eaef76f633499ea55190ab03bcaad5963cdeaf7b6cd95d46fce4396e51dac393"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-r2-administration/HEAD",
+    "size": 42,
+    "sha256": "08e61daf5701c4c7d36dd86de8f7abd29a3644479b70a431c5c65c6526803754"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-r2-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "13ffa37ece0a628b9823ebbd2f6ca51c70aefe39339858854f61594b80fe297f"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-r2-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-r2-administration/gitdir",
+    "size": 65,
+    "sha256": "9f606da8ac573230c11edf316d735301fea3911be547b8e41e3e83fd5eb287c2"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-r2-administration/index",
+    "size": 1004522,
+    "sha256": "32b584fdbb35fee7a4f32fd022b4c6340c6f15623dbe3b72c516a709a1e75482"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-r2-administration/logs/HEAD",
+    "size": 3182,
+    "sha256": "6e975ca4bcc67e20cd1b8b78723e01f00a715d15de5240f1a0f87e390f2dee24"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-r2-garde.json",
+    "size": 17628,
+    "sha256": "5efb3e4e5a935f494a8bfb71a0d9a40f015b5e466fd4d7affa740d43f5484187"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-r2-quiescence.json",
+    "size": 126,
+    "sha256": "abbe6968b33368dc742dbff55641693627f579169582d4a859d2237493cf4abe"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-r2-retire.json",
+    "size": 645,
+    "sha256": "60ebf1a74e2ea4606ee3d0945c93083d5c4f125fe06fcab6be405af5b0bdbca6"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-r2-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-reprise-administration/COMMIT_EDITMSG",
+    "size": 71,
+    "sha256": "5073000fc27c6b4dbc90a7beea2dbad87bf5b60381eda5e829bf8343e4319aae"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-reprise-administration/HEAD",
+    "size": 50,
+    "sha256": "371f892847783e9cc76182b407eb6a94207252e019f79de9be8b6e4a3549a948"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-reprise-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "692245b881718497aeca1e91990694a19b4a682339ec8752adf74f8f1504d73b"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-reprise-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-reprise-administration/gitdir",
+    "size": 70,
+    "sha256": "47e1452cba15e8e989d4d90bd91f64befd11ed8261f2d870db098f60a8e7387d"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-reprise-administration/index",
+    "size": 1007531,
+    "sha256": "a4abc4b96b9eea474b304f4d778cea4fd69b701c8834009c13ba0a12fc426b38"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-reprise-administration/logs/HEAD",
+    "size": 533,
+    "sha256": "84228e7d90aece06e73c179a6e1fb7332143c803ed0eba7e1d94be1621c672ea"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-reprise-garde.json",
+    "size": 18236,
+    "sha256": "4fb9b0c14134fca4302f70a5a041a76e935dd7d0fe5df39ef014f67abee969c9"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-reprise-quiescence.json",
+    "size": 126,
+    "sha256": "1ac6f698ff1cc97a4fed07dbcbf5fbcb4bfc2730d8fde6fa4dc3ff52557cfbbb"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-reprise-retire.json",
+    "size": 687,
+    "sha256": "3f5fea118503f88096884aa95b87466d6b097eb73f7187103b8ecd1b0ba953fa"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-reprise-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-retire.json",
+    "size": 639,
+    "sha256": "8db2c5dc7b8e433a8bed1ad9a732c472253932973a931c204d0c7030c3fc6459"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-stable-administration/COMMIT_EDITMSG",
+    "size": 75,
+    "sha256": "3730b887a70d96311e8f530fecfc2fd4113586bdc3b8481f10d72cbb733474e4"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-stable-administration/HEAD",
+    "size": 49,
+    "sha256": "d89dc8bc3134c127c0608d2e1d66a3284454120f62d8f7e5eb4ef5a39489eddd"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-stable-administration/ORIG_HEAD",
+    "size": 41,
+    "sha256": "1ba6d9bebd5ce10f0603e8476fd1c9390b57a4fdf29654304e55a9d4b2cb88bf"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-stable-administration/commondir",
+    "size": 6,
+    "sha256": "340ddcb67a6204f742cd1e28e5b462622dde7daaa8ee36001897196aacdc6d47"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-stable-administration/gitdir",
+    "size": 69,
+    "sha256": "a813a97cc09e8d6572f7ac8a2b4d216106e0d338ce1aa9d7aaa2f4614f7da3f3"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-stable-administration/index",
+    "size": 1008515,
+    "sha256": "e76d7a0339697419eef00afe2046ba42fd7cdf11be8e25030391e46a548f440f"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-stable-administration/logs/HEAD",
+    "size": 537,
+    "sha256": "17c81f25f411f3433bea56c4b0cb4765e0731386480728774d40adb0fd5f3dde"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-stable-garde.json",
+    "size": 17938,
+    "sha256": "3f0a5cf04b26bbd3d6ab151b6c50403d3204c6c2ef517f816292b12eb7c3625c"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-stable-quiescence.json",
+    "size": 126,
+    "sha256": "8fbc25dc331964250259ecc7576494d83b80dd714dfbe9b1533b15d75932e7c2"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-stable-retire.json",
+    "size": 681,
+    "sha256": "dbdf0ba0dd9a00eb3a13468ba0b73b28d8e8c9262667f1f036b2cefa542d9868"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-stable-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "lucie-tablette/cx-wt-couches-union-status.json",
+    "size": 18,
+    "sha256": "3423983399eae87b56c58dfe2344ca92377bff8d10e12b78799f5e58a0d6d81a"
+  },
+  {
+    "path": "lucie-tablette/fin.json",
+    "size": 190,
+    "sha256": "f43128f9950bbe52778c6f96f8b5b78afa4efbd4e92075836e2ec1712a97749c"
+  },
+  {
+    "path": "lucie-tablette/final-quiescence.json",
+    "size": 126,
+    "sha256": "5783cddbcb71e1897c6f8e6cfcd08dc4dc685af64da0ef90aa3c2e7f5c13de75"
+  },
+  {
+    "path": "lucie-tablette/inventaire-initial.json",
+    "size": 3572,
+    "sha256": "c456df19726dd7db45cbc44d95eedf87f5da77c876a143abe3459cd92082016f"
+  },
+  {
+    "path": "nettoyer-initial.py",
+    "size": 6335,
+    "sha256": "ee35a4f9359186307fd42c86ba8ee16885fa264657756eb29256707e24f153d3"
+  },
+  {
+    "path": "nettoyer.py",
+    "size": 6920,
+    "sha256": "890982b082e8ff0d930edd2ac55adf970adecd0ee64b4335adb46940b658a51f"
+  }
+]

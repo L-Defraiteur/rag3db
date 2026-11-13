@@ -1106,3 +1106,7 @@ Ouverts par cette session mais pour d'autres : `2026-11-08-le-temoin-de-la-porte
    dans une fenêtre de file vide : c'est elle qui décide la marche 2.
 3. Le ticket du juge sur Gemini : départager dans la consigne du juge `parametre_devrait_etre_optionnel`
    et `description_trompeuse`, témoin sur plusieurs tirages.
+
+## Actualisation — lot2a livré et ressources terminées
+
+Masterd17a230b1 : résolveur purcouches2a, produit6781entréesidentiqueAPP236 qualifiéeF8v2+lib2307/0/66 etCPU4exacts/pub10v4. Preuvesrapport25, landing/finressourcesrapport27 (13-11-2026). Ticket2aseulclos,parentancresOUVERT ; aucunevue/indexL6/outils/persistancedescouches livrée. 14WTlocaux/9PC etT6.01G retirés sousgardesfraîches6f3VERT+archives ; remotes/ELF/proofs/anciensrougesconservésdeuxpostes. Aucunrejeu ni causalinstrumentationGDBaffirmée. SuiteC7 : préparationdoc2b seulement aprèsfinressources, ticketfilsavantdiff, pasnouveauRust/runtime/service.

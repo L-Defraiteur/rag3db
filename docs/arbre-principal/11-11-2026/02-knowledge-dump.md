@@ -647,3 +647,7 @@ La correction du script privé a été éprouvée : listes70000docs et70000docs+
 deux barrières, lecture complète et acceptation/refus attendus ; contrôle réel168
 chemins sans delta produit. Preuve-garde-delta-complet.json dans les preuves locales
 finales ; aucun push ou run CI rejoué pour ce témoin d'outillage.
+
+## Actualisation — lot2a livré et ressources terminées
+
+Masterd17a230b1 : résolveur purcouches2a, produit6781entréesidentiqueAPP236 qualifiéeF8v2+lib2307/0/66 etCPU4exacts/pub10v4. Preuvesrapport25, landing/finressourcesrapport27 (13-11-2026). Ticket2aseulclos,parentancresOUVERT ; aucunevue/indexL6/outils/persistancedescouches livrée. 14WTlocaux/9PC etT6.01G retirés sousgardesfraîches6f3VERT+archives ; remotes/ELF/proofs/anciensrougesconservésdeuxpostes. Aucunrejeu ni causalinstrumentationGDBaffirmée. SuiteC7 : préparationdoc2b seulement aprèsfinressources, ticketfilsavantdiff, pasnouveauRust/runtime/service.
