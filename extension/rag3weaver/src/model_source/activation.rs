@@ -253,6 +253,67 @@ mod tests {
         assert_eq!(texte.lines().filter(|l| l.contains("constructeur_demarre")).count(), 1, "un seul démarrage :\n{texte}");
     }
 
+    /// Une déclaration distante sur un faux ssh (`tests/fixtures/residence/faux_ssh.py`) :
+    /// le « poste distant » est ce poste-ci, le tunnel ne relaie rien et le
+    /// fournisseur écoute sur le port local même. Le port est réservé puis
+    /// relâché (une adresse distante est fixe par construction).
+    fn distante(f: &Fixture, echec: bool) -> (ModelSource, u16) {
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let mut source = f.source.clone();
+        source.address = Addresses::parse(&format!("127.0.0.1:{port}"));
+        let a = source.activation.as_mut().unwrap();
+        a.hote = Some("faux".into());
+        a.adresse_distante = Some(format!("127.0.0.1:{port}"));
+        let mut ssh = vec!["python3".to_string(), concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/residence/faux_ssh.py").to_string(),
+            "--journal".to_string(), f.dossier.path().join("ssh.jsonl").display().to_string()];
+        if echec { ssh.push("--echec".into()); }
+        a.ssh = Some(ssh);
+        (source, port)
+    }
+
+    fn appels_ssh(f: &Fixture) -> Vec<String> {
+        std::fs::read_to_string(f.dossier.path().join("ssh.jsonl")).unwrap_or_default().lines().map(String::from).collect()
+    }
+
+    /// **L'activation distante lance une unité transitoire par ssh** (règles de
+    /// `docs/embarquement/13-11-2026/01-activation-et-residence-livre-et-manquant.md`) :
+    /// `systemd-run --user`, préfixe `rag3weaver-fournisseur-`, `--collect`,
+    /// `Restart=on-failure`, jamais une unité `rag3weaver-embeddings@` ; un
+    /// tunnel `ssh -N -L` en `BatchMode` ; la seconde demande trouve le
+    /// fournisseur par le tunnel et ne relance rien.
+    #[test]
+    fn une_activation_distante_lance_une_unite_transitoire_par_ssh() {
+        let f = Fixture::nouvelle();
+        let (source, port) = distante(&f, false);
+        let (client, _) = connect_embedder(&source).unwrap_or_else(|e| panic!("{e}\n{:?}", appels_ssh(&f)));
+        assert_eq!(client.embed(&["distant".into()]).unwrap()[0].len(), 384);
+        let appels = appels_ssh(&f);
+        let lances: Vec<&String> = appels.iter().filter(|l| l.contains("systemd-run")).collect();
+        assert_eq!(lances.len(), 1, "{appels:?}");
+        let lance = lances[0];
+        for attendu in [format!("rag3weaver-fournisseur-fixture-residence-384-{port}"), "--user".into(), "--collect".into(), "Restart=on-failure".into()] {
+            assert!(lance.contains(&attendu), "{attendu} absent : {lance}");
+        }
+        assert!(appels.iter().all(|l| !l.contains("rag3weaver-embeddings@")), "jamais une unité posée à la main : {appels:?}");
+        assert!(appels.iter().any(|l| l.contains("\"-N\"") && l.contains("\"-L\"") && l.contains("BatchMode=yes")), "le tunnel : {appels:?}");
+        drop(client);
+        let (encore, _) = connect_embedder(&source).unwrap();
+        assert_eq!(encore.embed(&["encore".into()]).unwrap()[0].len(), 384);
+        assert_eq!(appels_ssh(&f).iter().filter(|l| l.contains("systemd-run")).count(), 1, "le fournisseur déjà là ne se relance pas");
+    }
+
+    /// **Un ssh en échec se refuse net** : nommé, sans attente ni nouvel essai.
+    #[test]
+    fn une_activation_distante_refuse_net_un_ssh_en_echec() {
+        let f = Fixture::nouvelle();
+        let (source, _) = distante(&f, true);
+        let debut = std::time::Instant::now();
+        let erreur = connect_embedder(&source).err().expect("refus");
+        assert!(erreur.contains("activation distante : ssh faux"), "{erreur}");
+        assert!(debut.elapsed() < std::time::Duration::from_secs(4), "refus net, sans attente : {:?}", debut.elapsed());
+        assert!(appels_ssh(&f).iter().all(|l| !l.contains("systemd-run")), "rien n'est lancé derrière un tunnel refusé");
+    }
+
     #[test]
     fn budget_de_sonde_ne_remplace_pas_delai_appel_par_defaut() {
         let mut f = Fixture::nouvelle(); f.source.timeout_secs = None;
