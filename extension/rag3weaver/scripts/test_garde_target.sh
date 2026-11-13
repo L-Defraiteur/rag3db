@@ -9,6 +9,9 @@ GARDE="${1:-$(cd "$(dirname "$0")" && pwd)/garde_target.sh}"
 ICI="$(mktemp -d "${TMPDIR:-/tmp}/test-garde-target.XXXXXX")"
 trap 'rm -rf "$ICI"' EXIT
 unset CARGO_TARGET_DIR RAG3WEAVER_TARGET_REPRENDRE
+# Le témoin lit la sortie de cargo (« Compiling ir ») : sans couleur, quel que soit l'appelant (la
+# CI pose CARGO_TERM_COLOR=always, et ses trois cas de reprise y rougissaient sur les codes).
+export CARGO_TERM_COLOR=never
 TRIPLET="$(rustc -vV | sed -n 's/^host: //p')"
 echec=0
 cas() { if [ "$1" = 0 ]; then echo "OK     $2"; else echo "ÉCHEC  $2"; echec=1; fi; }
