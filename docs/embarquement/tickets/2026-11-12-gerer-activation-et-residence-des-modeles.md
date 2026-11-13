@@ -601,3 +601,13 @@ diff produit vide et livraison sans nouveau rejeu. Les suites distante,
 Sources138 archivées hors cible et preuves qualifiées/rouges/remotes conservés.
 Retrait des seuls W/target propres après quiescence, archives fidèles et garde
 actuelle fraîche ; reçus externes dans activation/archives-fin-{portable,luciepc}.
+
+### Passation de week-end du 13 novembre
+
+Limite d'usage demandée par Lucie via orchestration : aucun nouveau GO/calcul.
+État livré, suites ouvertes, références, preuves, ressources et commandes dans
+`docs/embarquement/13-11-2026/99-passation-week-end.md`, branche dédiée
+`cx-embarquement-passation-week-end-20261113`, sans push master. Aucun WIP de
+code détenu non poussé ; W/target du lot produit absents sur les deux postes.
+Le W documentaire et les archives restent conservés. Tous les délais et markers
+anciens sont périmés et ne constituent aucune autorisation de reprise.
