@@ -855,6 +855,7 @@ impl<'a> OutilsDuChat<'a> {
                 }
             }
             // read_scope dit son fichier et ses bornes : « — <chemin> lignes D-F, ».
+            #[cfg(feature = "code")]
             "read_scope" => {
                 let texte = serde_json::from_str::<Value>(&resultat.content).ok().and_then(|v| v["result"].as_str().map(str::to_string)).unwrap_or_else(|| resultat.content.clone());
                 if let Some(apres) = texte.split(" — ").nth(1) {
