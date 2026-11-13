@@ -144,6 +144,10 @@ fn a_late_run_started_of_a_finished_turn_opens_no_ghost_bubble() {
     // Le RunStarted de ce run, arrivé en retard par le flux.
     let evenement = json!({ "sujet": "agent", "backend": manifeste.display().to_string(), "evenement": { "kind": "RunStarted", "run_kind": "agent", "name": format!("chat:{id}"), "run": run } });
     n.evaluer(&format!("window.__ide.flux.onmessage(new MessageEvent('message', {{ data: {} }}))", json!(evenement.to_string())));
+    // Et un appel d'outil de ce run, relayé par le bus après l'état de fin poussé : il remettait
+    // le statut au nom de l'outil (le rouge de la carte de chemin sous les 40, 13 novembre).
+    let outil = json!({ "sujet": "agent", "backend": manifeste.display().to_string(), "evenement": { "kind": "ToolCallStarted", "run": run, "tool": "read_file", "call_id": "x" } });
+    n.evaluer(&format!("window.__ide.flux.onmessage(new MessageEvent('message', {{ data: {} }}))", json!(outil.to_string())));
     std::thread::sleep(std::time::Duration::from_millis(1500));
     let statut = n.evaluer("document.querySelector('#status')?.textContent");
     let fantomes = n.evaluer("document.querySelectorAll('.message.en-cours').length");
