@@ -676,3 +676,9 @@ Décision : pas de lot vues chez lucivy maintenant ; 2b-B s'appuie sur `allowed_
 - **arbre principal, liaison** : premier rejeu vert sur bc010a0c0 mais dernier pas non joué (`poste push` sans nom de session) ; entre-temps c13c76f72 (test) listé par `--code-apporte` → rebasé et poussé sous **branches-suivies-4 (1649124a2)**, rejeu court relancé, puis le dernier pas.
 - archi s'arrête pour la nuit, les thèmes de l'IDE attendent demain.
 - hotfixs : règle du « à toi » notée dans sa page et en mémoire. Démo Node.js verte (branche demo-nodejs-7979-7980 : defaut 7979,7980, commentaire sur 7981 arrêté, ticket fermé) ; jouée une fois au portable (npm rag3weaver@next, index prêt, search_code, usages, impact, passe sans service, code 0). **« À toi »** (docs et script, sans passe). Observation → ticket pour embarquement : sans service, les vecteurs sont prêts à 100 % — l'embarqueur local du binaire prend la main sans le dire, ou l'en-tête de demo.sh promet un plein texte seul qui n'existe plus ; la démo doit dire quel embarqueur a répondu.
+
+## Vers 23 h 4x — le verrou de la clé primaire sur master ; la lib du matin à 0c41f9fe6
+
+- **cœur a poussé** : master = **0c41f9fe6**, C++ seul (rebase sans rejeu sur 17e18c245, cle-primaire-sous-point-de-reprise-3, C++ identique à 072f0d86c joué). Tickets (2c3dffdd3) : clé primaire « corrigée sur master 0c41f9fe6, à poser » avec les verdicts et la mesure de l'exclusif ; SIGSEGV de DdlEveryMinute « non reproduit en 3 tours après le verrou, known_red intacte, à rejouer ×10 ».
+- **G, au matin : la lib se bâtit à 0c41f9fe6**, lib + rag3db_vector_extension du même bâti (sinon les tests vector rougissent « was built from »), passe e2e 32G, une seule pose des deux postes avec Lucie portant les deux correctifs ; e93710f36 reste au magasin.
+- Suite du cœur : la lecture sale de recherche (repro C++), DdlEveryMinute ×10 quand le poste est libre.
