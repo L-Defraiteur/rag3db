@@ -52,3 +52,18 @@ explicitement ; pas de partage concurrent autorisé par un marqueur.
 
 Même recette timeout60/neuf fonctions CPU après publication de ce correctif,
 puis syntaxe et tickets. Aucun témoin Rust exécuté dans ce lot préparatoire.
+
+## Entrées suivies supplémentaires
+
+La revue des options révèle qu'une garde initiale sur CARGO_TARGET_DIR seul
+ne suffit pas si les arguments Cargo nomment une autre destination. Les appels
+Cargo compilants de check_features et run_e2e passent donc aussi par
+cargo_garde.py, sans réexport SDK (celui du script est conservé). NAV transite
+par cargo_magasin. Les anciennes gardes initiales restent des refus précoces.
+Les pilotes privés figés qui extraient run_e2e ne sont ni modifiés ni qualifiés
+par ce diff ; leur évolution devra être revue séparément. L'interface confined
+accepte toujours une commande, aucun changement de supervision.
+
+Résultat CPU sur302f9b827 : neuf fonctions passées,0 échec en0,216s ;
+vert-302f9.log. Nouveaux raccords shell publiés avant vérifications syntaxiques ;
+aucune compilation de produit ni suite navigateur/e2e prétendue.
