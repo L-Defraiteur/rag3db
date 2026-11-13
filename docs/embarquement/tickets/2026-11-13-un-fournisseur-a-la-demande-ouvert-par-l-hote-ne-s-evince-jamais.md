@@ -32,3 +32,15 @@ fournisseur est parti. Témoins rouges d'abord sur la fixture CPU : ouvrir sans 
 qui lance et a ses vecteurs en moins d'une minute ; l'éviction après l'index et le délai ; un second
 index qui relance ; une lecture sans besoin de vecteurs qui n'active rien, et une qui en a besoin
 qui active. `Residence::Maintenir` et les services posés à la main ne changent pas.
+
+## Le lot (13 novembre au soir, embarquement)
+
+`model_source::activation::connecter_ou_attendre` : une déclaration `ADemande` rend un
+`ALaDemande`, qui dit le modèle et la dimension déclarés sans rien lancer ; son premier `embed`
+active (par `connecter`, local ou distant, identité vérifiée) ; un fil rend le client (donc le
+bail et, à distance, le tunnel) après `rendre_le_bail_secs` sans appel ; un `embed` qui trouve le
+fournisseur parti (« ne répond pas », délai) réactive une fois. Les deux délais sont nommés dans les
+règles (`docs/embarquement/13-11-2026/01-…`, « À la demande : les deux délais »). La fixture compte
+les baux et s'évince comme le service réel. Témoins : `a_la_demande_*` (lib) et
+`e2e_embarqueur_a_la_demande` (une lecture par les mots n'active rien, une lecture dense active).
+

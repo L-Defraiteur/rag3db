@@ -122,3 +122,17 @@ transitoire, son préfixe, `Restart=on-failure`, le refus net d'un ssh en échec
 granite-107m (plus résident depuis le 12 novembre, 7880 libre, ~4 Go sur card2 qui en a 13 de
 libres), port distant 7890, tunnel local 7990, bail pris puis rendu, éviction à 60 s observée,
 l'unité effacée ensuite.
+
+## À la demande : les deux délais (13 novembre au soir)
+
+Une déclaration `residence: { "a_demande": { "inactivite_secs": N, "rendre_le_bail_secs": M } }` :
+- **`inactivite_secs`** (N) — côté fournisseur : sans bail ni calcul pendant N secondes, il se
+  décharge (`RAG3WEAVER_EVICTION_INACTIVITE_S`, dit dans son identité `eviction`).
+- **`rendre_le_bail_secs`** (M, défaut 30, `RENDRE_LE_BAIL_PAR_DEFAUT_SECS`) — côté client :
+  l'embarqueur à la demande rend son client, donc son bail, après M secondes sans appel.
+- M doit être non nul et **plus court** que N (sinon refus à la déclaration) : un client qui s'arrête
+  d'appeler rend son bail avant que le fournisseur ne compte son inactivité jusqu'au bout.
+
+Rien n'est lancé à l'ouverture ; le premier calcul active ; un calcul qui trouve le fournisseur
+parti le relance une fois (identité revérifiée), puis refuse en le disant. `Maintenir` et les
+services posés à la main ne changent pas.
