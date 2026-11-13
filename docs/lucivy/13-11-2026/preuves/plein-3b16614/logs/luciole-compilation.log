@@ -1,0 +1,60 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/lucivy-fst/Cargo.toml
+workspace: /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/lucivy_fts/rust/Cargo.toml
+workspace: /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/Cargo.toml
+   Compiling luciole v4.3.3 (/home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/luciole)
+warning: unused import: `crate::actor_state::ActorState`
+   --> luciole/src/generic_actor.rs:166:9
+    |
+166 |     use crate::actor_state::ActorState;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `ReplyPort`
+   --> luciole/src/generic_actor.rs:167:51
+    |
+167 |     use crate::envelope::{type_tag_hash, Message, ReplyPort};
+    |                                                   ^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+   --> luciole/src/generic_actor.rs:171:9
+    |
+171 |     use std::sync::Arc;
+    |         ^^^^^^^^^^^^^^
+
+warning: unused import: `self`
+   --> luciole/src/handler.rs:114:27
+    |
+114 |     use crate::envelope::{self, type_tag_hash};
+    |                           ^^^^
+
+warning: unused import: `PortDef`
+  --> luciole/src/scope.rs:82:42
+   |
+82 |     use crate::node::{Node, NodeContext, PortDef};
+   |                                          ^^^^^^^
+
+warning: unused imports: `PortType` and `PortValue`
+  --> luciole/src/scope.rs:84:23
+   |
+84 |     use crate::port::{PortType, PortValue};
+   |                       ^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `crate::reply::Reply`
+  --> luciole/src/scope.rs:85:9
+   |
+85 |     use crate::reply::Reply;
+   |         ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::reply::Reply`
+   --> luciole/src/stream_dag.rs:195:9
+    |
+195 |     use crate::reply::Reply;
+    |         ^^^^^^^^^^^^^^^^^^^
+
+warning: `luciole` (lib test) generated 8 warnings (run `cargo fix --lib -p luciole --tests` to apply 8 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.82s
+  Executable unittests src/lib.rs (/home/lucied/.cache/rag3weaver-build/cx-lucivy-barriere-target-13nov/debug/deps/luciole-8ef13a6d647be456)

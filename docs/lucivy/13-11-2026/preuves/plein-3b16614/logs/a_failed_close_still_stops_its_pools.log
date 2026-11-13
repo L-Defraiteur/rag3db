@@ -1,0 +1,62 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/lucivy-fst/Cargo.toml
+workspace: /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/lucivy_fts/rust/Cargo.toml
+workspace: /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/Cargo.toml
+warning: unused variable: `field_name`
+    --> lucivy_core/src/handle.rs:1530:22
+     |
+1530 |                 for (field_name, offsets) in &by_field {
+     |                      ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_field_name`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `index`
+    --> lucivy_core/src/query.rs:1344:22
+     |
+1344 |         let (schema, index) = make_filter_index();
+     |                      ^^^^^ help: if this is intentional, prefix it with an underscore: `_index`
+
+warning: unused variable: `index`
+    --> lucivy_core/src/query.rs:1349:22
+     |
+1349 |         let (schema, index) = make_filter_index();
+     |                      ^^^^^ help: if this is intentional, prefix it with an underscore: `_index`
+
+warning: unused variable: `index`
+    --> lucivy_core/src/query.rs:1425:22
+     |
+1425 |         let (schema, index) = make_filter_index();
+     |                      ^^^^^ help: if this is intentional, prefix it with an underscore: `_index`
+
+warning: unused variable: `index`
+    --> lucivy_core/src/query.rs:1438:22
+     |
+1438 |         let (schema, index) = make_filter_index();
+     |                      ^^^^^ help: if this is intentional, prefix it with an underscore: `_index`
+
+warning: struct `SchemaField` is never constructed
+   --> lucivy_core/src/handle.rs:684:12
+    |
+684 |     struct SchemaField {
+    |            ^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `TestSchemaConfig` is never constructed
+   --> lucivy_core/src/handle.rs:697:12
+    |
+697 |     struct TestSchemaConfig {
+    |            ^^^^^^^^^^^^^^^^
+
+warning: `lucivy-core` (lib test) generated 7 warnings (run `cargo fix --lib -p lucivy-core --tests` to apply 5 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running unittests src/lib.rs (/home/lucied/.cache/rag3weaver-build/cx-lucivy-barriere-target-13nov/debug/deps/lucivy_core-5520274f1e4f0684)
+
+running 1 test
+[scheduler] starting with 24 threads (available_parallelism)
+test sharded_handle::tests::a_failed_close_still_stops_its_pools ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 98 filtered out; finished in 0.15s
+

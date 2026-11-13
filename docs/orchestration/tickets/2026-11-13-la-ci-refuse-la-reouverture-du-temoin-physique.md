@@ -524,3 +524,28 @@ Lib entière inventoriée puis six coreexacts selon pilote ; premierFAILED ou
 code nonzero arrête, firstred immuable ; panics attendues non assimilées à rouge.
 Même reçuEND vérifié avant/après et posthash, verdict pilote provisoire jusqu’à
 scopecode0/restes[]/quiet. PasMESURE/SDK/CIphysique/release/mergelucivy.
+
+### PLEIN source3b/pilote9b :179+6 VERT, quiescence attestée
+
+GO exact C7 exécuté sans modifier source/pilote. Compilations et inventaires
+luciole/core réussis ; **libluciole entière179passés/0échec/0ignoré/0filtré**,
+puis sixcoreexacts chacun **1passé/0échec/0ignoré**. Inclut RAMcloseErr/Ok,
+Arcrouter et shards==1 immédiatement au retour, inertie. Pas de libcore entière
+revendiquée : six exacts seulement ; pas de DB réelle ni de CI physique.
+
+Vrai poste8G/HIGHmax/j4, target privé FBD quiescent réemployé, nouvelle portée
+900s unique END919078.345200792. Pilote exécuté SHA256
+`b85af56295b63f9e5840d5af59df3479ebbf69daed23d5a49ee24ab7f6e3827f`.
+Confineur VERT/code0/erreur=null/restes[]/zoneprivéenettoyée=true ; autorité
+terminée, contrôle frais PID/start : aucun vivant. Contrôle final à
+monotonic918247.320039371,831.025s restants sous mêmeEND, pas de reset.
+Sources propres après exécution. Aucune first-red créée ; avertissements de
+compilation conservés, pas de clippy revendiqué.
+
+[Bruts/manifeste](../../lucivy/13-11-2026/preuves/plein-3b16614/SHA256SUMS),
+[verdict confineur](../../lucivy/13-11-2026/preuves/plein-3b16614/confinement-verdict.json),
+[quiescence fraîche](../../lucivy/13-11-2026/preuves/plein-3b16614/quiescence-finale.json).
+JournauxPC cache/cx-lucivy-plein-13nov-v1 ; tous journaux horsW. Porteur Lucivy ;
+reste RO preuves et décision de phase MESURE/coût global, puis intégration
+coordonnée selon verdicts. Aucun GO de fusion, tag ou publication déduit de ce
+vert. Le détenteur historique du writerD17 reste inconnu, ticket CI ouvert.

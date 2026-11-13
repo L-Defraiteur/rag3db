@@ -1,0 +1,1 @@
+{"pid": 1417220, "start": "91818037", "argv": ["cargo", "test", "-j4", "-p", "lucivy-core", "--lib", "--no-run"]}

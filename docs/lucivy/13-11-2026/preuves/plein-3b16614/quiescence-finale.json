@@ -1,0 +1,16 @@
+{
+  "verdict": {
+    "verdict": "VERT",
+    "code": 0,
+    "erreur": null,
+    "restes": [],
+    "prive": "/tmp/r3v-pq5i839j",
+    "nettoye": true
+  },
+  "etat": "termine",
+  "echeance": 919078.345200792,
+  "monotonic": 918247.320039371,
+  "restant": 831.0251611559652,
+  "vivants": [],
+  "pilote_sha256": "b85af56295b63f9e5840d5af59df3479ebbf69daed23d5a49ee24ab7f6e3827f"
+}

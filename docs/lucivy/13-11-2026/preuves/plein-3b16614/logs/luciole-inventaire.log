@@ -1,0 +1,240 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/lucivy-fst/Cargo.toml
+workspace: /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/lucivy_fts/rust/Cargo.toml
+workspace: /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/Cargo.toml
+warning: unused import: `crate::actor_state::ActorState`
+   --> luciole/src/generic_actor.rs:166:9
+    |
+166 |     use crate::actor_state::ActorState;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `ReplyPort`
+   --> luciole/src/generic_actor.rs:167:51
+    |
+167 |     use crate::envelope::{type_tag_hash, Message, ReplyPort};
+    |                                                   ^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+   --> luciole/src/generic_actor.rs:171:9
+    |
+171 |     use std::sync::Arc;
+    |         ^^^^^^^^^^^^^^
+
+warning: unused import: `self`
+   --> luciole/src/handler.rs:114:27
+    |
+114 |     use crate::envelope::{self, type_tag_hash};
+    |                           ^^^^
+
+warning: unused import: `PortDef`
+  --> luciole/src/scope.rs:82:42
+   |
+82 |     use crate::node::{Node, NodeContext, PortDef};
+   |                                          ^^^^^^^
+
+warning: unused imports: `PortType` and `PortValue`
+  --> luciole/src/scope.rs:84:23
+   |
+84 |     use crate::port::{PortType, PortValue};
+   |                       ^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `crate::reply::Reply`
+  --> luciole/src/scope.rs:85:9
+   |
+85 |     use crate::reply::Reply;
+   |         ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::reply::Reply`
+   --> luciole/src/stream_dag.rs:195:9
+    |
+195 |     use crate::reply::Reply;
+    |         ^^^^^^^^^^^^^^^^^^^
+
+warning: `luciole` (lib test) generated 8 warnings (run `cargo fix --lib -p luciole --tests` to apply 8 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (/home/lucied/.cache/rag3weaver-build/cx-lucivy-barriere-target-13nov/debug/deps/luciole-8ef13a6d647be456)
+actor_state::tests::test_arc_resource: test
+actor_state::tests::test_empty: test
+actor_state::tests::test_get_missing: test
+actor_state::tests::test_get_mut: test
+actor_state::tests::test_has: test
+actor_state::tests::test_insert_and_get: test
+actor_state::tests::test_multiple_types: test
+actor_state::tests::test_remove: test
+actor_state::tests::test_replace: test
+async_executor::tests::test_async_with_computation: test
+async_executor::tests::test_signal_future: test
+async_executor::tests::test_signal_future_error: test
+async_executor::tests::test_spawn_and_wait: test
+async_executor::tests::test_spawn_detached: test
+async_executor::tests::test_spawn_multiple: test
+checkpoint::tests::file_checkpoint_store: test
+checkpoint::tests::mark_completed: test
+checkpoint::tests::memory_checkpoint_store: test
+dag::tests::chain_helper: test
+dag::tests::cycle_detection: test
+dag::tests::diamond_dag: test
+dag::tests::empty_dag: test
+dag::tests::linear_dag: test
+dag::tests::missing_required_input: test
+dag::tests::parallel_sources: test
+dag::tests::single_node_no_required_inputs: test
+dag::tests::trigger_connection: test
+dag::tests::type_mismatch: test
+dag::tests::unknown_node: test
+dag::tests::unknown_port: test
+envelope::tests::test_into_envelope: test
+envelope::tests::test_into_request_with_reply: test
+envelope::tests::test_message_roundtrip: test
+envelope::tests::test_reply_port_error: test
+envelope::tests::test_type_tag_hash_different: test
+envelope::tests::test_type_tag_hash_not_zero: test
+envelope::tests::test_type_tag_hash_stable: test
+events::tests::test_multiple_subscribers: test
+events::tests::test_no_subscriber_no_alloc: test
+events::tests::test_subscribe_receive: test
+events::tests::test_unsubscribe_on_drop: test
+generic_actor::tests::test_generic_actor_dispatch: test
+generic_actor::tests::test_generic_actor_in_scheduler: test
+generic_actor::tests::test_generic_actor_multiple_handlers: test
+generic_actor::tests::test_generic_actor_unknown_message: test
+generic_actor::tests::test_generic_actor_unregister: test
+generic_actor::tests::test_on_start_stores_self_ref: test
+generic_actor::tests::test_priority_fn: test
+generic_actor::tests::test_typed_actor_ref: test
+graph_node::tests::graph_node_basic: test
+graph_node::tests::graph_node_nested: test
+handler::tests::test_typed_handler_decode_error: test
+handler::tests::test_typed_handler_dispatch: test
+handler::tests::test_typed_handler_priority: test
+handler::tests::test_typed_handler_with_reply: test
+local_dag::tests::local_cycle_detection: test
+local_dag::tests::local_execute_and_take: test
+local_dag::tests::local_failure: test
+local_dag::tests::local_fan_out: test
+local_dag::tests::local_linear: test
+local_dag::tests::local_with_services: test
+mailbox::destruction_tests::completion_drains_admitted_send_and_rejects_new_sends: test
+mailbox::destruction_tests::panicking_message_drop_waits_for_admitted_send: test
+mailbox::destruction_tests::pending_destructor_can_reenter_closed_mailbox: test
+node::tests::context_trigger_helpers: test
+node::tests::node_context_without_services: test
+node::tests::node_execute_and_context: test
+node::tests::poll_node_in_dag: test
+node::tests::poll_node_incremental: test
+node::tests::port_def_constructors: test
+node::tests::service_registry: test
+observe::tests::no_subscriber_no_emit: test
+observe::tests::tap_all_edges: test
+observe::tests::tap_specific_edge: test
+observe::tests::zero_cost_when_inactive: test
+pool::tests::drain_and_shutdown_after_workers_left_do_not_panic: test
+pool::tests::request_dropped_reply_is_an_error: test
+pool::tests::shutdown_waits_for_worker_destruction: test
+pool::tests::shutdown_without_reply_releases_worker_resource: test
+pool::tests::test_drainable_ref: test
+pool::tests::test_drainable_ref_in_scope: test
+pool::tests::test_pool_broadcast: test
+pool::tests::test_pool_drain: test
+pool::tests::test_pool_from_refs: test
+pool::tests::test_pool_request: test
+pool::tests::test_pool_request_single: test
+pool::tests::test_pool_scatter: test
+pool::tests::test_pool_send_round_robin: test
+pool::tests::test_pool_send_to: test
+pool::tests::test_pool_shutdown: test
+port::tests::port_type_compatibility: test
+port::tests::port_value_clone_fanout: test
+port::tests::port_value_roundtrip: test
+port::tests::port_value_take_panics_on_fanout: test
+port::tests::port_value_trigger: test
+port::tests::port_value_wrong_type: test
+reply::tests::test_collect_replies_to_basic: test
+reply::tests::test_collect_replies_to_empty: test
+reply::tests::test_collect_replies_to_values_already_arrived: test
+reply::tests::test_join_resume_fires_on_last: test
+reply::tests::test_join_resume_with_reply: test
+reply::tests::test_reply_cooperative: test
+reply::tests::test_reply_dropped_sender_panics: test
+reply::tests::test_reply_send_recv: test
+reply::tests::test_reply_try_recv_after_send: test
+reply::tests::test_reply_try_recv_empty: test
+reply::tests::test_set_pipe_basic: test
+reply::tests::test_set_pipe_sender_dies: test
+reply::tests::test_set_pipe_value_already_arrived: test
+runtime::tests::async_dag_error_rollback: test
+runtime::tests::async_dag_linear: test
+runtime::tests::async_dag_parallel_level: test
+runtime::tests::checkpoint_records_failure: test
+runtime::tests::checkpoint_records_progress: test
+runtime::tests::checkpoint_skips_completed_nodes: test
+runtime::tests::display_progress_ascii: test
+runtime::tests::display_progress_parallel: test
+runtime::tests::display_summary: test
+runtime::tests::edge_tap_captures_data: test
+runtime::tests::empty_dag: test
+runtime::tests::events_emitted: test
+runtime::tests::fan_out_data_flow: test
+runtime::tests::linear_execution: test
+runtime::tests::metrics_and_logs: test
+runtime::tests::no_rollback_when_no_undo: test
+runtime::tests::no_subscriber_zero_cost: test
+runtime::tests::node_failure_stops_dag: test
+runtime::tests::node_log_events_emitted: test
+runtime::tests::panicking_node_is_a_dag_error_not_a_double_free: test
+runtime::tests::parallel_execution: test
+runtime::tests::rollback_on_failure: test
+runtime::tests::sequential_events_emitted: test
+runtime::tests::sequential_failure: test
+runtime::tests::sequential_fan_out: test
+runtime::tests::sequential_linear: test
+runtime::tests::sequential_matches_execute_dag: test
+runtime::tests::sequential_with_services: test
+runtime::tests::subscribe_dag_events_from_outside: test
+runtime::tests::take_works_for_single_consumer: test
+runtime::tests::tap_all_captures_everything: test
+runtime::tests::tap_inactive_zero_cost: test
+runtime::tests::total_metric_aggregation: test
+runtime::tests::trigger_chain: test
+scheduler::tests::destruction_completion_cooperative: test
+scheduler::tests::destruction_completion_pinned: test
+scheduler::tests::destruction_completion_worker: test
+scheduler::tests::on_start_panic_preserves_destruction_order_and_handler_flag: test
+scheduler::tests::pinned_handler_rejects_self_join: test
+scheduler::tests::stress_concurrent_sends_no_deadlock: test
+scheduler::tests::stress_ping_pong_actors: test
+scheduler::tests::stress_rapid_spawn_and_send: test
+scheduler::tests::stress_self_messages: test
+scheduler::tests::test_actor_counter: test
+scheduler::tests::test_actor_stop: test
+scheduler::tests::test_events_received: test
+scheduler::tests::test_multi_thread: test
+scheduler::tests::test_multiple_actors: test
+scheduler::tests::test_poll_idle_actor: test
+scheduler::tests::test_priority_ordering: test
+scheduler::tests::test_scheduler_drop_shutdown: test
+scheduler::tests::test_single_thread_cooperative_reply: test
+scheduler::tests::test_submit_task_basic: test
+scheduler::tests::test_submit_task_cooperative: test
+scheduler::tests::test_submit_task_mixed_with_actors: test
+scheduler::tests::test_submit_task_parallel: test
+scheduler::tests::test_submit_task_priority: test
+scheduler::tests::test_zero_cost_no_subscriber: test
+scope::tests::test_scope_drain_order: test
+scope::tests::test_scope_drain_pools: test
+scope::tests::test_scope_empty: test
+scope::tests::test_scope_execute_dag: test
+stream_dag::tests::stream_dag_display: test
+stream_dag::tests::stream_dag_drain_order: test
+stream_dag::tests::stream_dag_is_drainable: test
+wait_graph::tests::test_actor_waiter: test
+wait_graph::tests::test_dump_mermaid_empty: test
+wait_graph::tests::test_dump_text: test
+wait_graph::tests::test_guard_auto_unregister: test
+wait_graph::tests::test_register_unregister: test
+
+179 tests, 0 benchmarks

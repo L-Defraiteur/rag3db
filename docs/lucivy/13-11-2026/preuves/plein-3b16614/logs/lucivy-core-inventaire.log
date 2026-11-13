@@ -1,0 +1,156 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/lucivy-fst/Cargo.toml
+workspace: /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/lucivy_fts/rust/Cargo.toml
+workspace: /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/Cargo.toml
+warning: unused variable: `field_name`
+    --> lucivy_core/src/handle.rs:1530:22
+     |
+1530 |                 for (field_name, offsets) in &by_field {
+     |                      ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_field_name`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `index`
+    --> lucivy_core/src/query.rs:1344:22
+     |
+1344 |         let (schema, index) = make_filter_index();
+     |                      ^^^^^ help: if this is intentional, prefix it with an underscore: `_index`
+
+warning: unused variable: `index`
+    --> lucivy_core/src/query.rs:1349:22
+     |
+1349 |         let (schema, index) = make_filter_index();
+     |                      ^^^^^ help: if this is intentional, prefix it with an underscore: `_index`
+
+warning: unused variable: `index`
+    --> lucivy_core/src/query.rs:1425:22
+     |
+1425 |         let (schema, index) = make_filter_index();
+     |                      ^^^^^ help: if this is intentional, prefix it with an underscore: `_index`
+
+warning: unused variable: `index`
+    --> lucivy_core/src/query.rs:1438:22
+     |
+1438 |         let (schema, index) = make_filter_index();
+     |                      ^^^^^ help: if this is intentional, prefix it with an underscore: `_index`
+
+warning: struct `SchemaField` is never constructed
+   --> lucivy_core/src/handle.rs:684:12
+    |
+684 |     struct SchemaField {
+    |            ^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `TestSchemaConfig` is never constructed
+   --> lucivy_core/src/handle.rs:697:12
+    |
+697 |     struct TestSchemaConfig {
+    |            ^^^^^^^^^^^^^^^^
+
+warning: `lucivy-core` (lib test) generated 7 warnings (run `cargo fix --lib -p lucivy-core --tests` to apply 5 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running unittests src/lib.rs (/home/lucied/.cache/rag3weaver-build/cx-lucivy-barriere-target-13nov/debug/deps/lucivy_core-5520274f1e4f0684)
+blob_directory::tests::store_outage_leaves_no_lock_file_and_no_half_written_file: test
+blob_directory::tests::test_blob_directory_create_and_search: test
+blob_directory::tests::test_blob_directory_create_close_reopen: test
+blob_directory::tests::test_blob_directory_multiple_commits: test
+blob_directory::tests::test_blob_directory_multiple_indexes_isolated: test
+blob_directory::tests::test_blob_directory_search_after_reopen: test
+blob_directory::tests::test_blob_directory_survives_cache_cleanup: test
+blob_directory::tests::test_blob_directory_worm_semantics: test
+bm25_global::tests::test_aggregated_stats_single_shard: test
+bm25_global::tests::test_aggregated_stats_two_shards: test
+handle::tests::test_all_query_types_v2: test
+handle::tests::test_close_releases_lock: test
+handle::tests::test_contains_camel_case_highlight_offsets: test
+handle::tests::test_contains_flexible_positions: test
+handle::tests::test_contains_neural_networks: test
+handle::tests::test_diag_highlight_rag3weaver: test
+handle::tests::test_diag_luce_cross_token: test
+handle::tests::test_fuzzy_contains: test
+handle::tests::test_handle_close_reopen_lock: test
+handle::tests::test_handle_close_reopen_with_merges: test
+handle::tests::test_handle_reopen_cycles: test
+handle::tests::test_starts_with_multi_token_highlights: test
+handle::tests::test_stored_fields_retrieval: test
+handle::tests::test_string_filter_field_eq: test
+query::tests::test_filter_clause_between: test
+query::tests::test_filter_clause_between_bad_arity: test
+query::tests::test_filter_clause_composite_empty_clauses: test
+query::tests::test_filter_clause_composite_missing_clauses: test
+query::tests::test_filter_clause_contains: test
+query::tests::test_filter_clause_contains_with_fuzzy: test
+query::tests::test_filter_clause_eq: test
+query::tests::test_filter_clause_f64: test
+query::tests::test_filter_clause_in: test
+query::tests::test_filter_clause_in_empty: test
+query::tests::test_filter_clause_must_composite: test
+query::tests::test_filter_clause_must_not_composite: test
+query::tests::test_filter_clause_ne: test
+query::tests::test_filter_clause_not_in: test
+query::tests::test_filter_clause_not_in_empty: test
+query::tests::test_filter_clause_range_ops: test
+query::tests::test_filter_clause_should_composite: test
+query::tests::test_filter_clause_starts_with: test
+query::tests::test_filter_clause_string_eq: test
+query::tests::test_filter_clause_unknown_field: test
+query::tests::test_filter_clause_unknown_op: test
+query::tests::test_json_to_term_f64: test
+query::tests::test_json_to_term_i64: test
+query::tests::test_json_to_term_i64_from_positive: test
+query::tests::test_json_to_term_str: test
+query::tests::test_json_to_term_type_mismatch: test
+query::tests::test_json_to_term_u64: test
+query::tests::test_query_config_boolean: test
+query::tests::test_query_config_contains: test
+query::tests::test_query_config_contains_hybrid: test
+query::tests::test_query_config_contains_regex: test
+query::tests::test_query_config_fuzzy: test
+query::tests::test_query_config_phrase: test
+query::tests::test_query_config_with_filters: test
+query::tests::test_regex_escape_all_special: test
+query::tests::test_regex_escape_empty: test
+query::tests::test_regex_escape_plain: test
+query::tests::test_regex_escape_special_chars: test
+sharded_handle::tests::a_failed_close_still_stops_its_pools: test
+sharded_handle::tests::failed_close_releases_router_and_shards_at_return: test
+sharded_handle::tests::successful_close_releases_router_and_shards_at_return: test
+sharded_handle::tests::test_blob_shard_storage: test
+sharded_handle::tests::test_close_and_reopen: test
+sharded_handle::tests::test_commit_under_concurrent_searches_does_not_freeze: test
+sharded_handle::tests::test_create_and_search_multi_shard: test
+sharded_handle::tests::test_create_and_search_single_shard: test
+sharded_handle::tests::test_delete_by_node_id: test
+sharded_handle::tests::test_diag_rr_contains_search: test
+sharded_handle::tests::test_drop_commits_the_writes_still_queued: test
+sharded_handle::tests::test_fuzzy_contains_small_dataset: test
+sharded_handle::tests::test_multifield_string_query_bm25: test
+sharded_handle::tests::test_ram_shard_storage: test
+sharded_handle::tests::test_search_filtered_prefilter: test
+sharded_handle::tests::test_updates_during_commits_keep_their_order: test
+sharded_handle::tests::test_writes_to_a_shard_without_writer_are_reported_by_commit: test
+snapshot::tests::test_bad_magic: test
+snapshot::tests::test_bad_version: test
+snapshot::tests::test_empty_files: test
+snapshot::tests::test_read_schema_config_from_files: test
+snapshot::tests::test_read_schema_config_missing: test
+snapshot::tests::test_roundtrip_empty: test
+snapshot::tests::test_roundtrip_multi_index: test
+snapshot::tests::test_roundtrip_single_index: test
+snapshot::tests::test_truncated_after_magic: test
+snapshot::tests::test_truncated_header: test
+sync::tests::test_export_apply_delta_e2e: test
+sync::tests::test_sharded_delta_e2e: test
+sync::tests::test_sync_server_with_handle: test
+warnings::tests::boolean_recurses_and_dedups: test
+warnings::tests::clean_queries_are_silent: test
+warnings::tests::fuzzy_half_rewrite: test
+warnings::tests::index_legacy_segments: test
+warnings::tests::regex_full_scan_and_unbounded: test
+warnings::tests::relaxed_separators_are_reported: test
+warnings::tests::strict_separators_only_is_a_cost_warning: test
+
+99 tests, 0 benchmarks

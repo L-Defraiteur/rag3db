@@ -1,0 +1,291 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/lucivy-fst/Cargo.toml
+workspace: /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/lucivy_fts/rust/Cargo.toml
+workspace: /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/Cargo.toml
+warning: unused import: `crate::actor_state::ActorState`
+   --> luciole/src/generic_actor.rs:166:9
+    |
+166 |     use crate::actor_state::ActorState;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `ReplyPort`
+   --> luciole/src/generic_actor.rs:167:51
+    |
+167 |     use crate::envelope::{type_tag_hash, Message, ReplyPort};
+    |                                                   ^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+   --> luciole/src/generic_actor.rs:171:9
+    |
+171 |     use std::sync::Arc;
+    |         ^^^^^^^^^^^^^^
+
+warning: unused import: `self`
+   --> luciole/src/handler.rs:114:27
+    |
+114 |     use crate::envelope::{self, type_tag_hash};
+    |                           ^^^^
+
+warning: unused import: `PortDef`
+  --> luciole/src/scope.rs:82:42
+   |
+82 |     use crate::node::{Node, NodeContext, PortDef};
+   |                                          ^^^^^^^
+
+warning: unused imports: `PortType` and `PortValue`
+  --> luciole/src/scope.rs:84:23
+   |
+84 |     use crate::port::{PortType, PortValue};
+   |                       ^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `crate::reply::Reply`
+  --> luciole/src/scope.rs:85:9
+   |
+85 |     use crate::reply::Reply;
+   |         ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::reply::Reply`
+   --> luciole/src/stream_dag.rs:195:9
+    |
+195 |     use crate::reply::Reply;
+    |         ^^^^^^^^^^^^^^^^^^^
+
+warning: `luciole` (lib test) generated 8 warnings (run `cargo fix --lib -p luciole --tests` to apply 8 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (/home/lucied/.cache/rag3weaver-build/cx-lucivy-barriere-target-13nov/debug/deps/luciole-8ef13a6d647be456)
+
+running 179 tests
+[scheduler] starting with 24 threads (available_parallelism)
+test actor_state::tests::test_arc_resource ... ok
+test actor_state::tests::test_empty ... ok
+test actor_state::tests::test_get_missing ... ok
+test actor_state::tests::test_get_mut ... ok
+test actor_state::tests::test_has ... ok
+test actor_state::tests::test_insert_and_get ... ok
+test actor_state::tests::test_remove ... ok
+test actor_state::tests::test_multiple_types ... ok
+test actor_state::tests::test_replace ... ok
+test checkpoint::tests::mark_completed ... ok
+test checkpoint::tests::memory_checkpoint_store ... ok
+test dag::tests::chain_helper ... ok
+test checkpoint::tests::file_checkpoint_store ... ok
+test dag::tests::missing_required_input ... ok
+test dag::tests::parallel_sources ... ok
+test dag::tests::single_node_no_required_inputs ... ok
+test dag::tests::cycle_detection ... ok
+test dag::tests::trigger_connection ... ok
+test dag::tests::type_mismatch ... ok
+test dag::tests::unknown_node ... ok
+test dag::tests::unknown_port ... ok
+test dag::tests::linear_dag ... ok
+test dag::tests::diamond_dag ... ok
+test envelope::tests::test_into_envelope ... ok
+test envelope::tests::test_into_request_with_reply ... ok
+test generic_actor::tests::test_generic_actor_multiple_handlers ... ok
+test generic_actor::tests::test_generic_actor_unknown_message ... ok
+test envelope::tests::test_message_roundtrip ... ok
+test generic_actor::tests::test_generic_actor_unregister ... ok
+test generic_actor::tests::test_priority_fn ... ok
+test dag::tests::empty_dag ... ok
+test envelope::tests::test_reply_port_error ... ok
+test envelope::tests::test_type_tag_hash_different ... ok
+test envelope::tests::test_type_tag_hash_stable ... ok
+test envelope::tests::test_type_tag_hash_not_zero ... ok
+test events::tests::test_no_subscriber_no_alloc ... ok
+test events::tests::test_multiple_subscribers ... ok
+test events::tests::test_subscribe_receive ... ok
+test events::tests::test_unsubscribe_on_drop ... ok
+test generic_actor::tests::test_generic_actor_dispatch ... ok
+test local_dag::tests::local_failure ... ok
+[diag] ActorRef::send: NO notifier! mailbox_depth=1
+[diag] ActorRef::send: NO notifier! mailbox_depth=test local_dag::tests::local_execute_and_take ... 1ok
+
+[diag] ActorRef::send: NO notifier! mailbox_depth=1
+test local_dag::tests::local_fan_out ... ok
+test local_dag::tests::local_linear ... ok
+test local_dag::tests::local_with_services ... ok
+test node::tests::node_context_without_services ... ok
+test mailbox::destruction_tests::pending_destructor_can_reenter_closed_mailbox ... ok
+
+thread '<unnamed>' (1417043) panicked at luciole/src/mailbox.rs:373:21:
+expected queued destructor failure
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test generic_actor::tests::test_typed_actor_ref ... ok
+test async_executor::tests::test_spawn_and_wait ... ok
+test async_executor::tests::test_spawn_detached ... ok
+test mailbox::destruction_tests::completion_drains_admitted_send_and_rejects_new_sends ... ok
+test async_executor::tests::test_spawn_multiple ... ok
+test node::tests::poll_node_incremental ... ok
+test node::tests::node_execute_and_context ... ok
+test node::tests::poll_node_in_dag ... ok
+test graph_node::tests::graph_node_nested ... ok
+test node::tests::port_def_constructors ... ok
+test graph_node::tests::graph_node_basic ... ok
+test generic_actor::tests::test_on_start_stores_self_ref ... ok
+test node::tests::service_registry ... ok
+test handler::tests::test_typed_handler_decode_error ... ok
+test async_executor::tests::test_async_with_computation ... ok
+test generic_actor::tests::test_generic_actor_in_scheduler ... ok
+test observe::tests::no_subscriber_no_emit ... ok
+test observe::tests::tap_all_edges ... ok
+[luciole] WARNING: Reply dropped without send() — the waiter gets 'actor died without replying'
+[luciole] WARNING: Reply dropped without send() — the waiter gets 'actor died without replying'
+[luciole] WARNING: Reply dropped without send() — the waiter gets 'actor died without replying'
+test observe::tests::zero_cost_when_inactive ... ok
+test handler::tests::test_typed_handler_priority ... ok
+test handler::tests::test_typed_handler_dispatch ... ok
+test node::tests::context_trigger_helpers ... ok
+test async_executor::tests::test_signal_future_error ... ok
+test pool::tests::test_drainable_ref ... ok
+test pool::tests::shutdown_without_reply_releases_worker_resource ... ok
+
+thread 'port::tests::port_value_take_panics_on_fanout' (1417073) panicked at luciole/src/port.rs:89:33:
+PortValue::take() failed: 2 outstanding references to u64. This means the same output port is connected to multiple inputs (fan-out). Use separate output ports for data that will be taken, or use downcast() for read-only access.
+test pool::tests::request_dropped_reply_is_an_error ... ok
+test handler::tests::test_typed_handler_with_reply ... ok
+test pool::tests::test_pool_request_single ... ok
+test local_dag::tests::local_cycle_detection ... ok
+test observe::tests::tap_specific_edge ... ok
+test port::tests::port_type_compatibility ... ok
+test port::tests::port_value_clone_fanout ... ok
+test port::tests::port_value_roundtrip ... ok
+test port::tests::port_value_take_panics_on_fanout - should panic ... [luciole] WARNING: Reply dropped without send()ok
+ — the waiter gets 'actor died without replying'
+
+thread 'reply::tests::test_reply_dropped_sender_panics' (1417085) panicked at luciole/src/reply.rs:226:17:
+actor died without replying
+test pool::tests::test_pool_broadcast ... ok
+test port::tests::port_value_wrong_type ... ok
+[luciole] WARNING: Reply dropped without send() — the waiter gets 'actor died without replying'
+test port::tests::port_value_trigger ... ok
+test pool::tests::test_drainable_ref_in_scope ... ok
+[luciole] WARNING: Reply dropped without send()test reply::tests::test_join_resume_fires_on_last ...  while a pipe was attachedok — the waiter gets 'actor died without replying'
+; the pipe_to target / collect_replies_to will never complete
+test pool::tests::test_pool_from_refs ... ok
+test pool::tests::test_pool_send_to ... ok
+test reply::tests::test_join_resume_with_reply ... ok
+test pool::tests::test_pool_scatter ... ok
+test reply::tests::test_reply_send_recv ... ok
+test reply::tests::test_reply_dropped_sender_panics - should panic ... ok
+test reply::tests::test_reply_try_recv_after_send ... ok
+test reply::tests::test_reply_try_recv_empty ... ok
+test pool::tests::test_pool_request ... ok
+test reply::tests::test_set_pipe_basic ... ok
+test reply::tests::test_set_pipe_sender_dies ... ok
+test reply::tests::test_set_pipe_value_already_arrived ... ok
+test pool::tests::test_pool_drain ... ok
+test runtime::tests::checkpoint_records_failure ... ok
+test runtime::tests::checkpoint_records_progress ... ok
+test pool::tests::test_pool_send_round_robin ... ok
+test runtime::tests::empty_dag ... ok
+test runtime::tests::checkpoint_skips_completed_nodes ... ok
+test runtime::tests::edge_tap_captures_data ... ok
+test runtime::tests::display_progress_ascii ... ok
+
+thread 'scheduler-20' (1417033) panicked at luciole/src/runtime.rs:1483:13:
+boom in a parallel level
+test runtime::tests::events_emitted ... ok
+test runtime::tests::metrics_and_logs ... ok
+test runtime::tests::linear_execution ... ok
+test runtime::tests::fan_out_data_flow ... ok
+test runtime::tests::display_summary ... ok
+test runtime::tests::no_rollback_when_no_undo ... ok
+test runtime::tests::no_subscriber_zero_cost ... ok
+test runtime::tests::node_failure_stops_dag ... ok
+test runtime::tests::node_log_events_emitted ... ok
+test runtime::tests::rollback_on_failure ... ok
+test runtime::tests::sequential_events_emitted ... ok
+test runtime::tests::sequential_failure ... ok
+test runtime::tests::sequential_linear ... ok
+test runtime::tests::sequential_fan_out ... ok
+test runtime::tests::sequential_with_services ... ok
+test runtime::tests::sequential_matches_execute_dag ... ok
+[diag] ActorRef::send: NO notifier! mailbox_depth=1
+[diag] ActorRef::send: NO notifier! mailbox_depth=2
+[diag] ActorRef::send: NO notifier! mailbox_depth=1
+[diag] ActorRef::send: NO notifier! mailbox_depth=2
+test runtime::tests::subscribe_dag_events_from_outside ... ok
+[diag] ActorRef::send: NO notifier! mailbox_depth=1
+[diag] ActorRef::send: NO notifier! mailbox_depth=2
+test runtime::tests::take_works_for_single_consumer ... ok
+
+thread 'scheduler::tests::on_start_panic_preserves_destruction_order_and_handler_flag' (1417139) panicked at luciole/src/scheduler.rs:1591:55:
+expected start failure
+test runtime::tests::tap_inactive_zero_cost ... ok
+test runtime::tests::tap_all_captures_everything ... ok
+
+thread 'scheduler::tests::on_start_panic_preserves_destruction_order_and_handler_flag' (1417139) panicked at luciole/src/scheduler.rs:1591:55:
+expected start failure
+test runtime::tests::total_metric_aggregation ... ok
+test runtime::tests::trigger_chain ... ok
+[diag] ActorRef::send: NO notifier! mailbox_depth=1
+test scheduler::tests::destruction_completion_cooperative ... ok
+test scheduler::tests::destruction_completion_pinned ... ok
+test scheduler::tests::on_start_panic_preserves_destruction_order_and_handler_flag ... ok
+test scheduler::tests::pinned_handler_rejects_self_join ... ok
+test scheduler::tests::test_actor_counter ... ok
+test scheduler::tests::destruction_completion_worker ... ok
+test scheduler::tests::test_poll_idle_actor ... ok
+test scheduler::tests::test_priority_ordering ... ok
+test scheduler::tests::test_scheduler_drop_shutdown ... ok
+test scheduler::tests::test_single_thread_cooperative_reply ... ok
+test scheduler::tests::test_submit_task_basic ... ok
+test scheduler::tests::test_multi_thread ... ok
+test scheduler::tests::test_submit_task_cooperative ... ok
+test scheduler::tests::test_submit_task_mixed_with_actors ... ok
+test scheduler::tests::test_submit_task_priority ... ok
+test scheduler::tests::test_multiple_actors ... ok
+test scope::tests::test_scope_drain_order ... ok
+test scope::tests::test_scope_drain_pools ... ok
+test scope::tests::test_scope_empty ... ok
+test scope::tests::test_scope_execute_dag ... ok
+ingestion pipeline:
+  readers [4 workers]
+    ↓
+  router [1 worker]
+    ↓
+  shards [8 workers]
+test stream_dag::tests::stream_dag_display ... ok
+test stream_dag::tests::stream_dag_drain_order ... ok
+test stream_dag::tests::stream_dag_is_drainable ... ok
+test wait_graph::tests::test_actor_waiter ... ok
+test wait_graph::tests::test_dump_mermaid_empty ... ok
+test wait_graph::tests::test_dump_text ... ok
+test wait_graph::tests::test_guard_auto_unregister ... ok
+test wait_graph::tests::test_register_unregister ... ok
+test scheduler::tests::stress_rapid_spawn_and_send ... ok
+test scheduler::tests::test_zero_cost_no_subscriber ... ok
+test async_executor::tests::test_signal_future ... ok
+test reply::tests::test_reply_cooperative ... ok
+test runtime::tests::async_dag_error_rollback ... ok
+test runtime::tests::async_dag_linear ... ok
+test runtime::tests::async_dag_parallel_level ... ok
+[luciole] WARNING: Reply dropped without send() — the waiter gets 'actor died without replying'
+[luciole] WARNING: Reply dropped without send() — the waiter gets 'actor died without replying'
+[luciole] WARNING: Reply dropped without send() — the waiter gets 'actor died without replying'
+[luciole] WARNING: Reply dropped without send() — the waiter gets 'actor died without replying'
+[luciole] WARNING: Reply dropped without send() — the waiter gets 'actor died without replying'
+[luciole] WARNING: Reply dropped without send() — the waiter gets 'actor died without replying'
+test pool::tests::drain_and_shutdown_after_workers_left_do_not_panic ... ok
+test pool::tests::test_pool_shutdown ... ok
+test runtime::tests::display_progress_parallel ... ok
+test runtime::tests::panicking_node_is_a_dag_error_not_a_double_free ... ok
+test runtime::tests::parallel_execution ... ok
+test scheduler::tests::stress_concurrent_sends_no_deadlock ... ok
+test scheduler::tests::test_submit_task_parallel ... ok
+test reply::tests::test_collect_replies_to_values_already_arrived ... ok
+test reply::tests::test_collect_replies_to_basic ... ok
+test reply::tests::test_collect_replies_to_empty ... ok
+test scheduler::tests::test_events_received ... ok
+test scheduler::tests::test_actor_stop ... ok
+test scheduler::tests::stress_self_messages ... ok
+test scheduler::tests::stress_ping_pong_actors ... ok
+test mailbox::destruction_tests::panicking_message_drop_waits_for_admitted_send ... ok
+test pool::tests::shutdown_waits_for_worker_destruction ... ok
+
+test result: ok. 179 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.00s
+

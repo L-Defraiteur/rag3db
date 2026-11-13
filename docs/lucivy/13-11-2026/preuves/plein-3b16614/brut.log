@@ -1,0 +1,12 @@
+luciole-compilation.log rc 0
+luciole-inventaire.log rc 0
+luciole-lib-entiere.log rc 0
+lucivy-core-compilation.log rc 0
+lucivy-core-inventaire.log rc 0
+a_failed_close_still_stops_its_pools.log rc 0
+test_drop_commits_the_writes_still_queued.log rc 0
+test_close_and_reopen.log rc 0
+test_writes_to_a_shard_without_writer_are_reported_by_commit.log rc 0
+successful_close_releases_router_and_shards_at_return.log rc 0
+failed_close_releases_router_and_shards_at_return.log rc 0
+validation : VERT ; preuves : /home/lucied/.cache/rag3weaver-build/cx-lucivy-plein-13nov-v1/confinement/validation-0rnbsffn
