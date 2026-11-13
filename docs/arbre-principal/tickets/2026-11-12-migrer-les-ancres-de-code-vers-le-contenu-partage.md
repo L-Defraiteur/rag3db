@@ -1848,3 +1848,28 @@ sourceunion31 globalev5 VERT628,58s : lib2266/65,NAV40,CLI5,PG36,tx25,14pub+
 DROP/absence et gardes administratives fraîches VERT. Bilan/preuves dans les
 rapports et caches indiqués. Le ticket reste OUVERT pour le transfert physique,
 l'adoption de stockage et la pyramide ; le registre ne certifie pas ces suites.
+
+## Suite après livraison — 13 novembre, reprise par arbre-principal
+
+La dépendance publication est levée : bc1a81500 est intégré et ses ressources
+privées sont rendues. Le parcours IDE est également intégré par43e4f185b.
+La suite cohérente autorisée commence par le raccord au stockage réel, sur un
+nouveau worktree depuis master et des fixtures synthétiques neuves possédées.
+
+Publier d'abord le prochain contrat concret et la frontière du diff : comment
+le plan figé, la publication déclarative et l'état physique qualifié se relient,
+quels faits manquent encore avant de pouvoir ouvrir une vraie vue en couches.
+Choisir une tranche verticale minimale qui crée puis rouvre un index réel neuf,
+et permet d'en vérifier contenu, occurrences/relations et publication effective,
+en réutilisant runner, transactions, fournisseurs et gardes existants.
+La préparation doit préciser les témoins d'interruption/reprise, la distinction
+entre déclaration et application, et les refus avant tout effet non qualifié.
+Éviter un second registre qui ferait seulement avancer des métadonnées.
+
+Arbre reste porteur ; Mémoire relit le contrat et ED les frontières communes
+si elles changent. API, diff et recette ciblée se relisent avant un nouveau
+lourd ; cette préparation n'autorise pas à annoncer un format physique appliqué.
+Aucune base existante de Lucie n'est lue, copiée, migrée ou activée. Pas de GC,
+de changement des services ou de raccord implicite d'un modèle. Les décisions
+déjà prises, notamment publication distincte de l'empreinte, restent acquises.
+Le ticket reste ouvert jusqu'au résultat physique demandé et à ses preuves.

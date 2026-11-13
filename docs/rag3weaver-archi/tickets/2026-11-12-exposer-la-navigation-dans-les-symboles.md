@@ -333,3 +333,28 @@ vérifié aux deux postes, zéro session active, suppression et absence vérifi�
 Preuves finales : cx-symboles-d00661e96-reprise-20261112 ; aucun appel7879 à venir.
 Ne pas recréer ce worktree/target/base : pour la suite, repartir du master courant.
 
+## Suite autorisée — enrichissement du grep, 13 novembre
+
+La première tranche et le parcours IDE sont intégrés ; Archi reprend la demande
+de Lucie encore ouverte : `symbol_hierarchy_depth`, zéro par défaut, sur la
+recherche textuelle spécialisée lorsqu'un index qualifié est disponible.
+Nouveau worktree depuis master, cible et preuves privées ; aucun ancien lot
+nettoyé n'est recréé. Publier le contrat, les fichiers partagés et la recette
+avant le ciblé ; annoncer à Recherche toute modification de sa façade de grep.
+
+Composer le contrat de navigation et les Plans communs avec les résultats de
+recherche existants, sans refaire un moteur de hiérarchie par interface. Relier
+chaque match à sa source, son fichier et ses positions ; rendre la contenance
+et ses limites explicites. Profondeur bornée et budget global de sortie,
+ambiguïtés, couverture partielle et index périmé restent observables. L'option
+ne doit ni réindexer ni lire tous les corps pour fabriquer une hiérarchie.
+Les correspondances textuelles restent utilisables en l'absence de contexte
+qualifié ; le résultat enrichi indique précisément cette absence.
+
+Critères : défaut zéro inchangé, profondeur demandée réellement accessible à
+l'agent, homonymes de sources/fichiers isolés, plages ambiguës non arbitrées,
+index absent/périmé et troncature explicites ; vrai parcours commun de l'outil.
+La couverture IR reste celle qui a été qualifiée : ni héritage ni exhaustivité
+des membres ne sont inventés. Passe adaptée, revue et tour d'intégration avant
+master ; aucun déploiement du daemon personnel. Ticket global toujours ouvert.
+
