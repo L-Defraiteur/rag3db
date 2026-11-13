@@ -241,7 +241,10 @@ pub fn ajouter_une_branche_suivie(catalog: &crate::catalog::Catalog, depot: &str
         None => BranchesSuivies { ancre: ancre_du_depot(racine)?, suivies: Vec::new() },
     };
     d.suivies.push(branche.to_string());
-    declarer_les_branches_suivies(catalog, depot, &d.ancre, &d.suivies)
+    declarer_les_branches_suivies(catalog, depot, &d.ancre, &d.suivies)?;
+    // Une branche rouverte sous le même nom (une tâche « doc » refaite) n'hérite pas de la
+    // fermeture de la précédente (relecture d'ED).
+    catalog.persist_meta_key(&cle_de_fermeture(depot, branche), "").map_err(|e| e.to_string())
 }
 
 /// **Retirer une branche des suivies** et marquer sa couche fermée. Rien n'est effacé : son
@@ -358,10 +361,15 @@ fn resoudre(
                 continue;
             }
         };
-        // 1. L'estampille : une déclaration de l'atelier, ou une inférence déjà admise.
-        if let Some(p) = estampille(catalog, depot, &branche)? {
-            resolus.push(EtatDeBranche::Suivie { branche, pointe, parente: p });
-            continue;
+        // 1. L'estampille : une déclaration de l'atelier, ou une inférence déjà admise. Elle fixe la
+        //    parente et son genre, pas la base, recalculée ici (« le rebase suit », décision 4) ;
+        //    une parente qui n'est plus suivie ne reste pas citée (relecture d'ED).
+        if let Some(p) = estampille(catalog, depot, &branche)?.filter(|p| nommees.contains(p.branche.as_str())) {
+            if let Ok(la) = git(racine, &["rev-parse", &p.branche]) {
+                let base = git(racine, &["merge-base", &pointe, &la])?;
+                resolus.push(EtatDeBranche::Suivie { branche, pointe, parente: Parente { base, ..p } });
+                continue;
+            }
         }
         // 2. Le reflog local, s'il nomme une branche suivie qui ne contient pas déjà celle-ci.
         if let Some(nom) = nee_de(racine, &branche).filter(|n| n != &branche && nommees.contains(n.as_str())) {
@@ -633,12 +641,15 @@ mod tests_de_la_base {
         let p = parente_de(&etats, "b").unwrap_or_else(|| panic!("b sans parente : {etats:?}"));
         assert_eq!((p.branche.as_str(), &p.genre, p.base.as_str()), ("main", &GenreDeParente::Declaree, base.as_str()), "{etats:?}");
         // `a` se résout par la fourche (sur l'ancre), puis s'estampille : une fusion de `a` dans
-        // main, après laquelle main contient `a`, ne la change plus.
+        // main, après laquelle main contient `a` (plus aucune candidate), ne change plus sa parente
+        // ni son genre ; seule sa base suit, au point de fourche du moment (relecture d'ED).
         let a = parente_de(&etats, "a").unwrap_or_else(|| panic!("a sans parente : {etats:?}"));
         assert_eq!((a.branche.as_str(), &a.genre), ("main", &GenreDeParente::Inferee), "{etats:?}");
         git(&d, &["merge", "-q", "--no-edit", "--no-ff", "a"]);
         let apres = couches_du_depot(&cat, "depot", &d, "main").unwrap();
-        assert_eq!(parente_de(&apres, "a"), Some(a), "la parente estampillée a été recalculée : {apres:?}");
+        let a_apres = parente_de(&apres, "a").unwrap_or_else(|| panic!("a sans parente après la fusion : {apres:?}"));
+        assert_eq!((a_apres.branche.as_str(), &a_apres.genre), ("main", &GenreDeParente::Inferee), "la parente estampillée a été recalculée : {apres:?}");
+        assert_eq!(a_apres.base, git(&d, &["merge-base", "a", "main"]), "la base n'a pas suivi : {apres:?}");
     }
 
     /// **Un rebase suit** (décision 4 de Lucie, relecture d'ED) : l'estampille garde la parente et son
