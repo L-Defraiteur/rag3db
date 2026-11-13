@@ -34,3 +34,7 @@ Relire le diff puis nouvelle qualification synthétique sous budget distinct
 coordonné. Le premier juge natif doit dépasser les créations réelles des deux
 tables ; les juges de journal/reprise doivent ensuite exercer leurs écritures.
 Aucun VERT runtime attribué au correctif avant cette qualification.
+
+Qualification ciblée P14 sura43c475f9 : VERTE (voir bilan parent lié).
+Créations/écritures/reprise ou lecteur RO réellement éprouvés dans le profil
+synthétique BM25. Qualification générale et livraison non faites ; ticket ouvert.
