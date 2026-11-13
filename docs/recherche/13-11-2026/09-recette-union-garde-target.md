@@ -169,3 +169,11 @@ Journal horsW pilote-d2d47-cpu.log, SHA256 ae3a66992eac8ec4c991861f4305d5601869f
 AST des fonctions réelles, Popen sentinelle et fichiers temporaires uniquement ;
 aucun Cargo, scan proc réel, target, DB ou service. Les anciens rouges restent
 conservés. Ce complément documentaire ne vaut pas GO de la portée4800.
+
+Réserve Archi b884 consignée abe2e805d avant correction : S absent rendait
+la construction effective impossible, malgré les cinq tests extraits verts.
+Scope S désormais fixé au même chemin exact que le lanceur ; construction
+réelle extraite dans build_controller_policy et sixième témoin utilisant les
+assignations réelles R/Q/W/C/T/P/S du driver puis cette fonction. Interpréteur
+poste résolu depuis /bin/sh (son shebang), exe/SHA toujours stricts. Sixième
+témoin publié NON JOUÉ à cette étape ; aucun run lourd ni reprise cache.

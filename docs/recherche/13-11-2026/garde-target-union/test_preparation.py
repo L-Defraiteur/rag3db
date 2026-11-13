@@ -78,6 +78,24 @@ class Preparation(unittest.TestCase):
         self.assertFalse(ns['controller_fd_allowed']('launcher', '/control/lancer.py', roles, protected))
         self.assertFalse(ns['controller_fd_allowed']('poste', '/source/Cargo.toml', roles, protected))
 
+    def test_real_driver_constants_construct_the_poste_policy(self):
+        ns = dict(Path=Path, __file__='/proofs/driver.py')
+        tree = ast.parse(SOURCE.read_text())
+        constants = [n for n in tree.body if isinstance(n, ast.Assign) and
+                     any(isinstance(t, ast.Name) and t.id in {'R','Q','W','C','T','P','S'} for t in n.targets)]
+        exec(compile(ast.Module(body=constants, type_ignores=[]), str(SOURCE), 'exec'), ns)
+        load({'build_controller_policy'}, ns)
+        launcher = Path('/control/lancer.py')
+        poste = ns['C'] / 'scripts/poste'
+        roles = ns['build_controller_policy'](launcher, poste, '/python', '/resolved-sh', 1000,
+                                               'pilot-sha', ns['S'], ns['Q'], lambda p: 'sha:'+str(p))
+        self.assertEqual(ns['S'], ns['R'] / 'cx-confinement-garde-target-union-v1')
+        self.assertEqual(roles['poste']['exe'], '/resolved-sh')
+        self.assertEqual(roles['poste']['argv_tail'], [str(poste), 'lourd', 'python3',
+                         '/proofs/confiner_validation.py', 'lancer', '--delai', '4800', '--preuves',
+                         str(ns['S']), '--', 'python3', '/proofs/driver.py'])
+        self.assertEqual(roles['launcher']['argv_tail'], ['/control/lancer.py', 'pilot-sha'])
+
     def test_bad_attempt_and_first_red_are_immutable(self):
         with tempfile.TemporaryDirectory(prefix='cx-pilot-proof-') as d:
             ns = dict(P=Path(d), attempts={}, phase='features', hashlib=hashlib, json=json, time=time)
