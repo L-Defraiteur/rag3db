@@ -16,7 +16,7 @@ export RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7878,127.0.0.1:7879,127.0.0.1:7880 RAG
 # le dernier filtre) ; la borne de durée dans le lourd, pas devant (les lourds font la file).
 verdict=VERT
 for suite in e2e_code e2e_lectures; do
-  ~/.cache/rag3weaver-build/poste lourd timeout 1h ./run_e2e.sh --test $suite > $N/$suite.log 2>&1
+  POSTE_MEM_MAX=32G ~/.cache/rag3weaver-build/poste lourd timeout 1h ./run_e2e.sh --test $suite > $N/$suite.log 2>&1
   rc=$?
   [ $rc = 0 ] && grep -q 'test result: ok' $N/$suite.log && ! grep -q 'test result: FAILED' $N/$suite.log || verdict=ROUGE
   echo "$suite rc=$rc : $(grep -m1 'moteur lié.*librag' $N/$suite.log | grep -o 'rag3db-build-[0-9a-f]\{9\}') $(grep -E '^running [0-9]+ test' $N/$suite.log | tail -1) $(grep 'test result' $N/$suite.log | tail -1 | cut -c1-70)" >> $T
