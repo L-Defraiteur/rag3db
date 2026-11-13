@@ -280,6 +280,69 @@ pub fn couches_du_depot(
     racine: &Path,
     ancre_par_defaut: &str,
 ) -> Result<Vec<EtatDeBranche>, String> {
+    resoudre(catalog, depot, racine, ancre_par_defaut, true)
+}
+
+/// **Les couches d'un dépôt, en lecture seule** : la même résolution que
+/// [`couches_du_depot`], sans rien estampiller. Pour l'état (`index_state`, `/etat`, l'IDE),
+/// qui se lit souvent et parfois sur un catalogue en lecture seule.
+pub fn etat_des_couches(
+    catalog: &crate::catalog::Catalog,
+    depot: &str,
+    racine: &Path,
+    ancre_par_defaut: &str,
+) -> Result<Vec<EtatDeBranche>, String> {
+    resoudre(catalog, depot, racine, ancre_par_defaut, false)
+}
+
+/// **Le rapport des couches d'un dépôt**, pour l'état : `None` quand `racine` n'est dans aucun
+/// dépôt git, ou que le dépôt n'a pas de branches suivies déclarées (rien à dire, aucun appel git
+/// de plus). Rend le JSON et les avertissements (une couche ambiguë est à déclarer).
+pub fn rapport_des_couches(catalog: &crate::catalog::Catalog, racine: &Path) -> Result<Option<(serde_json::Value, Vec<String>)>, String> {
+    use serde_json::json;
+    let Ok(depot) = git(racine, &["rev-parse", "--show-toplevel"]) else { return Ok(None) };
+    let depot = Path::new(&depot);
+    let id = identifiant_du_depot(depot)?;
+    let Some(declares) = branches_suivies(catalog, &id)? else { return Ok(None) };
+    let etats = etat_des_couches(catalog, &id, depot, &declares.ancre)?;
+    let mut branches = Vec::new();
+    let mut connues = 0usize;
+    let mut avertissements = Vec::new();
+    let genre = |g: &GenreDeParente| match g {
+        GenreDeParente::Declaree => "declaree",
+        GenreDeParente::InfereeParReflog => "inferee-par-reflog",
+        GenreDeParente::Inferee => "inferee",
+    };
+    for e in &etats {
+        match e {
+            EtatDeBranche::Ancre { branche, pointe } => branches.push(json!({"name": branche, "state": "anchor", "head": pointe})),
+            EtatDeBranche::Suivie { branche, pointe, parente } => branches.push(json!({
+                "name": branche, "state": "tracked", "head": pointe,
+                "parent": parente.branche, "kind": genre(&parente.genre), "base": parente.base,
+            })),
+            EtatDeBranche::Ambigue { branche, pointe, candidates } => {
+                avertissements.push(format!(
+                    "couche « {branche} » ambiguë : sa parente est {} — à déclarer à l'ouverture",
+                    candidates.join(" ou ")
+                ));
+                branches.push(json!({"name": branche, "state": "ambiguous", "head": pointe, "candidates": candidates}));
+            }
+            EtatDeBranche::Connue { .. } => connues += 1,
+        }
+    }
+    Ok(Some((
+        json!({"repo": id, "root": depot.to_string_lossy(), "anchor": declares.ancre, "branches": branches, "known": connues}),
+        avertissements,
+    )))
+}
+
+fn resoudre(
+    catalog: &crate::catalog::Catalog,
+    depot: &str,
+    racine: &Path,
+    ancre_par_defaut: &str,
+    ecrire: bool,
+) -> Result<Vec<EtatDeBranche>, String> {
     let declares = branches_suivies(catalog, depot)?
         .unwrap_or(BranchesSuivies { ancre: ancre_par_defaut.to_string(), suivies: Vec::new() });
     let ancre = declares.ancre.as_str();
@@ -305,13 +368,15 @@ pub fn couches_du_depot(
             let la = git(racine, &["rev-parse", &nom])?;
             if !est_ancetre(racine, &pointe, &la)? {
                 let p = Parente { branche: nom, genre: GenreDeParente::InfereeParReflog, base: git(racine, &["merge-base", &pointe, &la])? };
-                estampiller(catalog, depot, &branche, &p)?;
+                if ecrire {
+                    estampiller(catalog, depot, &branche, &p)?;
+                }
                 resolus.push(EtatDeBranche::Suivie { branche, pointe, parente: p });
                 continue;
             }
         }
         // 3. La fourche, quand elle est certaine ; sinon l'ambiguïté reste dite, non estampillée.
-        if let EtatDeBranche::Suivie { parente, .. } = &etat {
+        if let (true, EtatDeBranche::Suivie { parente, .. }) = (ecrire, &etat) {
             estampiller(catalog, depot, &branche, parente)?;
         }
         resolus.push(etat);
