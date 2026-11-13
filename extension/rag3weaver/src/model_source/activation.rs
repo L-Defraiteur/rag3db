@@ -336,10 +336,19 @@ mod tests {
         fn drop(&mut self) {
             let journal = self.dossier.path().join("events.jsonl");
             if let Ok(texte) = std::fs::read_to_string(journal) {
-                if let Some(pid) = texte.lines().filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
-                    .find_map(|v| v.get("pid").and_then(|n| n.as_i64())) {
-                    // PID produit par notre fixture privée, jamais pgrep global.
-                    unsafe { libc::kill(pid as i32, libc::SIGTERM); libc::waitpid(pid as i32, std::ptr::null_mut(), 0); }
+                let lignes: Vec<serde_json::Value> = texte.lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
+                let mut pids: Vec<i64> = lignes.iter().filter_map(|v| v.get("pid").and_then(|n| n.as_i64())).collect();
+                pids.sort_unstable();
+                pids.dedup();
+                for pid in pids {
+                    // Seulement un fournisseur que son journal ne dit pas arrêté, et
+                    // dont le processus est encore notre fixture : un pid mort peut
+                    // avoir été repris par un autre processus. Jamais pgrep global.
+                    let arrete = lignes.iter().any(|v| v["pid"].as_i64() == Some(pid) && v["event"] == "arrete");
+                    let notre = std::fs::read(format!("/proc/{pid}/cmdline")).map(|c| String::from_utf8_lossy(&c).contains("fournisseur.py")).unwrap_or(false);
+                    if !arrete && notre {
+                        unsafe { libc::kill(pid as i32, libc::SIGTERM); libc::waitpid(pid as i32, std::ptr::null_mut(), 0); }
+                    }
                 }
             }
         }
@@ -536,6 +545,82 @@ mod tests {
         assert!(erreur.contains("activation distante : ssh faux"), "{erreur}");
         assert!(debut.elapsed() < std::time::Duration::from_secs(4), "refus net, sans attente : {:?}", debut.elapsed());
         assert!(appels_ssh(&f).iter().all(|l| !l.contains("systemd-run")), "rien n'est lancé derrière un tunnel refusé");
+    }
+
+    /// Une déclaration **à la demande** sur la fixture : le fournisseur
+    /// s'évince après `inactivite` secondes sans bail ni calcul ; le client
+    /// rend son bail après `rendre` secondes sans appel.
+    fn a_la_demande(inactivite: u64, rendre: u64) -> Fixture {
+        let mut f = Fixture::nouvelle();
+        f.source.activation.as_mut().unwrap().residence = Residence::ADemande { inactivite_secs: inactivite, rendre_le_bail_secs: rendre };
+        f
+    }
+
+    fn evenements(f: &Fixture, nom: &str) -> usize {
+        std::fs::read_to_string(f.dossier.path().join("events.jsonl")).unwrap_or_default().lines()
+            .filter(|l| l.contains(&format!("\"event\": \"{nom}\""))).count()
+    }
+
+    fn attendre_l_evenement(f: &Fixture, nom: &str, combien: usize, delai: std::time::Duration) -> bool {
+        let debut = std::time::Instant::now();
+        while debut.elapsed() < delai {
+            if evenements(f, nom) >= combien { return true; }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        false
+    }
+
+    /// **À la demande, ouvrir ne lance rien** (ticket
+    /// `2026-11-13-un-fournisseur-a-la-demande-ouvert-par-l-hote-ne-s-evince-jamais`) :
+    /// l'embarqueur dit son modèle et sa dimension déclarés sans fournisseur.
+    #[test]
+    fn a_la_demande_ouvrir_ne_lance_rien() {
+        let f = a_la_demande(2, 1);
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        assert_eq!(client.name(), "fixture-residence-384");
+        assert_eq!(client.dim(), 384);
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        assert_eq!(evenements(&f, "constructeur_demarre"), 0, "ouvrir ne lance pas le fournisseur");
+    }
+
+    /// **Le premier calcul lance le fournisseur** et rend ses vecteurs, en
+    /// moins d'une minute.
+    #[test]
+    fn a_la_demande_un_calcul_lance_et_rend_ses_vecteurs() {
+        let f = a_la_demande(2, 1);
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        let debut = std::time::Instant::now();
+        let v = client.embed(&["premier".into()]).unwrap();
+        assert_eq!(v[0].len(), 384);
+        assert!(debut.elapsed() < std::time::Duration::from_secs(60), "{:?}", debut.elapsed());
+        assert_eq!(evenements(&f, "constructeur_demarre"), 1);
+    }
+
+    /// **Le bail rendu, le fournisseur s'évince** : après le calcul, le client
+    /// rend son bail au bout de son délai, et le fournisseur s'en va au bout
+    /// du sien, même si le client vit encore.
+    #[test]
+    fn a_la_demande_le_bail_rendu_le_fournisseur_s_evince() {
+        let f = a_la_demande(2, 1);
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        client.embed(&["avant".into()]).unwrap();
+        assert!(attendre_l_evenement(&f, "evince", 1, std::time::Duration::from_secs(15)), "évincé alors que le client vit");
+        drop(client);
+    }
+
+    /// **Un calcul après l'éviction relance** le fournisseur, sans erreur pour
+    /// l'appelant, et l'identité est revérifiée.
+    #[test]
+    fn a_la_demande_un_second_calcul_relance() {
+        let f = a_la_demande(2, 1);
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        client.embed(&["avant".into()]).unwrap();
+        assert!(attendre_l_evenement(&f, "evince", 1, std::time::Duration::from_secs(15)));
+        // Le premier fournisseur est parti ; son pid n'est plus à tuer par la fixture.
+        assert!(attendre_l_evenement(&f, "arrete", 1, std::time::Duration::from_secs(5)));
+        let v = client.embed(&["après".into()]).unwrap();
+        assert_eq!(v[0].len(), 384);
+        assert_eq!(evenements(&f, "constructeur_demarre"), 2, "relancé une fois");
     }
 
     #[test]

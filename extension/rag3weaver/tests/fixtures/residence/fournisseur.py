@@ -46,6 +46,15 @@ class Fixture(ThreadingHTTPServer):
         self.deadline = time.monotonic() + args.budget_pret_ms / 1000
         self.log = args.journal.open('x', encoding='utf-8')
         self.stopped = False
+        # Les baux d'usage et l'éviction, comme le service réel
+        # (src/daemon/embeddings.rs) : numéro -> échéance, calculs en cours,
+        # dernière activité, délai d'éviction déclaré par l'activation.
+        self.baux = {}
+        self.prochain_bail = 0
+        self.en_cours = 0
+        self.derniere = time.monotonic()
+        delai = os.environ.get('RAG3WEAVER_EVICTION_INACTIVITE_S')
+        self.eviction = int(delai) if delai and delai.isdigit() else None
         super().__init__(('127.0.0.1', int(args.adresse.rsplit(':', 1)[1])), Handler, bind_and_activate=False)
 
     def event(self, event, **values):
@@ -66,6 +75,27 @@ class Fixture(ThreadingHTTPServer):
             raise TimeoutError(phase)
         self.event(phase + '_termine')
 
+    def baux_actifs(self):
+        maintenant = time.monotonic()
+        with self.lock:
+            self.baux = {n: e for n, e in self.baux.items() if e > maintenant}
+            return len(self.baux)
+
+    def inactif_depuis(self):
+        if self.baux_actifs() or self.en_cours:
+            return None
+        return time.monotonic() - self.derniere
+
+    def guetter(self):
+        """Sans bail ni calcul pendant le délai déclaré : le dire et s'arrêter."""
+        while self.eviction is not None and not self.stopped:
+            time.sleep(.2)
+            inactif = self.inactif_depuis()
+            if inactif is not None and inactif >= self.eviction:
+                self.event('evince', raison=f'aucun bail ni calcul depuis {int(inactif)} s (délai déclaré {self.eviction} s)')
+                threading.Thread(target=self.shutdown, daemon=True).start()
+                return
+
     def identity(self):
         # Contrat santé existant, sans inventer le schéma futur de chauffe.
         identity = dict(service='rag3weaver-embeddings', modele=self.args.modele, dim=self.args.dim,
@@ -78,6 +108,10 @@ class Fixture(ThreadingHTTPServer):
         declared = {field: os.environ.get(key) for field, key in keys.items()}
         if all(value is not None for value in declared.values()):
             identity['activation'] = declared
+        identity['usage'] = {'baux': self.baux_actifs(), 'en_cours': self.en_cours}
+        if self.eviction is not None:
+            inactif = self.inactif_depuis()
+            identity['eviction'] = {'inactivite_s': self.eviction, 'inactif_depuis_ms': int((inactif or 0) * 1000)}
         return identity
 
     def close(self):
@@ -124,7 +158,41 @@ class Handler(BaseHTTPRequestHandler):
         self.server.event('sante_servie')
         self.answer(200, self.server.identity())
 
+    def corps_json(self):
+        try:
+            size = int(self.headers.get('Content-Length', '0'))
+        except ValueError:
+            size = 0
+        if not 0 < size <= 65536:
+            return {}
+        try:
+            return json.loads(self.rfile.read(size))
+        except (ValueError, UnicodeError):
+            return {}
+
     def do_POST(self):
+        self.server.derniere = time.monotonic()
+        if self.path in ('/bail', '/bail/renouveler', '/bail/rendre'):
+            corps = self.corps_json()
+            duree = max(1, min(3600, int(corps.get('duree_s') or 60)))
+            with self.server.lock:
+                if self.path == '/bail':
+                    self.server.prochain_bail += 1
+                    numero = self.server.prochain_bail
+                    self.server.baux[numero] = time.monotonic() + duree
+                    reponse = (200, {'bail': numero, 'duree_s': duree})
+                elif self.path == '/bail/renouveler':
+                    numero = corps.get('bail')
+                    if numero in self.server.baux and self.server.baux[numero] > time.monotonic():
+                        self.server.baux[numero] = time.monotonic() + duree
+                        reponse = (200, {'bail': numero, 'duree_s': duree})
+                    else:
+                        reponse = (404, {'error': f'bail {numero} inconnu, rendu ou expiré'})
+                else:
+                    numero = corps.get('bail')
+                    reponse = (200, {'bail': numero, 'rendu': self.server.baux.pop(numero, None) is not None})
+            self.server.derniere = time.monotonic()
+            return self.answer(*reponse)
         if self.path != '/embed':
             self.drain()
             return self.answer(404, {'error': 'route absente'})
@@ -139,10 +207,13 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, UnicodeError):
             return self.answer(400, {'error': 'JSON invalide'})
         self.server.event('embed_commence', textes=len(texts))
+        self.server.en_cours += 1
         vectors = []
         for text in texts:
             h = hashlib.sha256(text.encode()).digest()
             vectors.append([(h[i % len(h)] - 127.5) / 127.5 for i in range(self.server.args.dim)])
+        self.server.en_cours -= 1
+        self.server.derniere = time.monotonic()
         self.answer(200, {'vectors': vectors})
         self.server.event('embed_termine', textes=len(texts))
 
@@ -165,6 +236,8 @@ def main():
         fixture.server_bind()
         fixture.server_activate()
         fixture.event('pret', adresse=f'127.0.0.1:{fixture.server_address[1]}')
+        fixture.derniere = time.monotonic()
+        threading.Thread(target=fixture.guetter, daemon=True).start()
         print('adresse liée : 127.0.0.1:' + str(fixture.server_address[1]), flush=True)
         fixture.serve_forever(poll_interval=.02)
         return 0
