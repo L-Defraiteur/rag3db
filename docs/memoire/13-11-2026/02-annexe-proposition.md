@@ -1,0 +1,478 @@
+# Annexe — les fiches que l'archiviste proposerait (archivage à blanc du 13 novembre 2026)
+
+Pour chaque fiche, les sections qu'il y rangerait (« document § section »). La page qui l'explique est
+`02-l-archivage-a-blanc-des-docs.md`, dans le même dossier. Rien de ceci n'est écrit dans la mémoire de Lucie.
+
+## Les sections rangées sous une fiche qui existe déjà
+
+- **bilan : tâche réelle, bornée, dans ce worktree du dépôt rag3db (extension/rag3weaver). ticket : docs/tickets/2026-10-04-** :
+  - 08-novembre-2026-orchestration/01-essais-de-l-equipier.md § Essai 3 — `journaux-annulation-tmp-3` (lancé 01 h 02), le premier qui travaille
+- **bilan : tâche réelle, bornée, dans ce worktree du dépôt rag3db (extension/rag3weaver). ticket : docs/tickets/2026-10-04-** :
+  - 08-novembre-2026-orchestration/01-essais-de-l-equipier.md § Essai 1 — `journaux-annulation-tmp` (00 h 03 → 00 h 13)
+- **bilan : tâche réelle, bornée, dans ce worktree du dépôt rag3db (extension/rag3weaver). ticket : docs/tickets/2026-10-11-** :
+  - 08-novembre-2026-orchestration/01-essais-de-l-equipier.md § Essai 4 — `racine-disparue` (lancé 01 h 46)
+- **bilan : tâche réelle, bornée, dans ce worktree du dépôt rag3db (extension/rag3weaver). ticket : docs/tickets/2026-10-18-** :
+  - 08-novembre-2026-orchestration/01-essais-de-l-equipier.md § Essai 5 — `tests-bases-dans-tmp` (lancé 03 h 44, sur l'hôte reposé par G)
+- **hooks-essai** :
+  - 07-novembre-2026-hooks-essai/02-rapport-de-session.md § Rapport de la session hooks-essai (7 novembre 2026)
+  - 07-novembre-2026-hooks-essai/03-knowledge-dump.md § Où sont les choses
+  - 07-novembre-2026-hooks-essai/04-la-recherche-de-code-par-les-hooks.md § La recherche de code par les hooks (conception)
+  - 07-novembre-2026-hooks-essai/01-journal-de-la-session.md § Tour de la levée de la fenêtre du cœur : le bloc revient, avec les scores
+  - 07-novembre-2026-hooks-essai/01-journal-de-la-session.md § Journal de la session hooks-essai (7 novembre 2026)
+  - 07-novembre-2026-hooks-claude-code/03-lot-2-les-blocs-de-lecture-et-l-essai-sur-un-worktree.md § 1. L'essai de Lucie : une seule session, du vrai travail
+
+## Les fiches qui rassemblent plusieurs documents (52)
+
+- **Puis : une vraie tâche sur Gemini** (8) :
+  - 07-novembre-2026-hooks-claude-code/06-essai-gemini-4-argon.md § Ce qui a été joué
+  - 07-novembre-2026-hooks-claude-code/06-essai-gemini-4-argon.md § Les heures
+  - 07-novembre-2026-hooks-claude-code/06-essai-gemini-4-argon.md § Ce qui reste à Lucie
+  - 07-novembre-2026-everything-declarative/01-l-equipier-agent-de-code.md § Puis : une vraie tâche sur Gemini
+  - 07-novembre-2026-hooks-claude-code/06-essai-gemini-4-argon.md § Ce que la réponse a de différent
+  - 09-novembre-2026-memoire-longue/01-l-equipier-sur-les-readme.md § L'équipier sur les README — l'essai du 9 novembre 2026
+  - 07-novembre-2026-hooks-claude-code/06-essai-gemini-4-argon.md § Le juge
+  - 07-novembre-2026-hooks-claude-code/06-essai-gemini-4-argon.md § Les jetons de l'équipier, lus dans le journal du run
+- **Banc, 7 novembre 2026 : le ménage et l'atterrissage** (6) :
+  - 07-novembre-2026-orchestration/02-rapport-de-session.md § 05 h 00 — la file de la nuit est vide, trois lots d'ED sur master, l'essai 5 au vert
+  - 07-novembre-2026-orchestration/02-rapport-de-session.md § D'où on part
+  - 07-novembre-2026-orchestration/02-rapport-de-session.md § Mise à jour de 22 h 30
+  - 07-novembre-2026-orchestration/01-la-reprise.md § L'après-midi (écrit à 16 h)
+  - 07-novembre-2026-orchestration/01-la-reprise.md § La reprise du 7 novembre 2026 : ménage, atterrissages, un bloquant
+  - 07-novembre-2026-banc/01-menage-et-atterrissage.md § Banc, 7 novembre 2026 : le ménage et l'atterrissage
+- **Plan du week-end des 8 et 9 novembre 2026 : la mémoire de code pour agents** (4) :
+  - 06-novembre-2026-orchestration/01-plan-du-week-end.md § Plan du week-end des 8 et 9 novembre 2026 : la mémoire de code pour agents
+  - 07-novembre-2026-everything-declarative/02-une-session-plusieurs-backends.md § Le vocabulaire : celui de git, jamais « backend » à l'écran
+  - 07-novembre-2026-orchestration/03-knowledge-dump.md § Les visions (toutes sur master, extension/rag3weaver/visions/)
+  - 07-novembre-2026-hooks-claude-code/07-lot-5-le-pont-claude-code-equipier-codex.md § Lot 5 — le pont : Claude Code, l'équipier et Codex par la boîte de l'hôte
+- **0. Le 8 novembre** (3) :
+  - 07-novembre-2026-orchestration/02-rapport-de-session.md § 04 h 15 — le délai partout sur master, la règle « sans service » levée
+  - 07-novembre-2026-hooks-claude-code/00-rapport-de-session-archi.md § 0. Le 8 novembre
+  - 07-novembre-2026-orchestration/02-rapport-de-session.md § 11 h 18 — les README remis à jour, la file de la mi-journée
+- **1. La mesure : le plein texte flou, seul** (3) :
+  - 07-novembre-2026-hooks-essai/01-journal-de-la-session.md § Le test « régime GPU » (message de c7, 17:07:49)
+  - 07-novembre-2026-hooks-essai/01-journal-de-la-session.md § Tour de 15 h 47 — toujours aucun bloc, et une base de deux fiches
+  - 07-novembre-2026-hooks-claude-code/08-lot-3-ter-le-rappel-tire-du-prompt-sans-redite.md § 1. La mesure : le plein texte flou, seul
+- **1. Le jeu** (3) :
+  - 08-novembre-2026-banc/01-modele-de-decision.md § 1. Le jeu
+  - 08-novembre-2026-banc/02-le-jeu-a-vrais-positifs.md § 1. Le jeu
+  - 09-novembre-2026-memoire-longue/04-la-precision-du-rappel-d-aujourd-hui.md § 1. Le jeu
+- **2. Décisions prises ou reçues** (3) :
+  - 07-novembre-2026-hooks-claude-code/00-rapport-de-session-archi.md § 2. Décisions prises ou reçues
+  - 07-novembre-2026-hooks-claude-code/04-lot-3-les-ecritures-mecaniques-et-la-correction-a-la-volee.md § 2 bis. Les trois défauts du premier usage réel (c7, session hooks-essai)
+  - 07-novembre-2026-hooks-claude-code/02-lot-1-la-commande-mince-le-reglage-le-journal-l-installation.md § Ce que la suite précise (réponses de c7 et de 96, 7 novembre)
+- **L'équipier, agent de code fonctionnel** (3) :
+  - 07-novembre-2026-everything-declarative/03-l-atelier-ouvre-les-depots.md § L'atelier ouvre les dépôts
+  - 07-novembre-2026-everything-declarative/01-l-equipier-agent-de-code.md § L'équipier, agent de code fonctionnel
+  - 07-novembre-2026-tty/02-conception.md § Le terminal de l'agent de code : conception
+- **La liste de la semaine du cœur (à partir du 7 novembre 2026)** (3) :
+  - 08-novembre-2026-recherche/01-rapport-de-session.md § Ce qui attend
+  - 07-novembre-2026-orchestration/01-la-reprise.md § La semaine du moteur (décidée l'après-midi)
+  - 07-novembre-2026-coeur-cpp/02-la-liste-de-la-semaine.md § La liste de la semaine du cœur (à partir du 7 novembre 2026)
+- **Les atterrissages (en cours)** (3) :
+  - 07-novembre-2026-orchestration/02-rapport-de-session.md § Mise à jour de 21 h 55
+  - 07-novembre-2026-orchestration/02-rapport-de-session.md § Ce qui reste en vol au moment d'écrire
+  - 07-novembre-2026-orchestration/01-la-reprise.md § Les atterrissages (en cours)
+- **Les hooks de Claude Code — la mémoire qui parle à la session** (3) :
+  - 07-novembre-2026-hooks-claude-code/02-lot-1-la-commande-mince-le-reglage-le-journal-l-installation.md § Lot 1 — la commande mince, le réglage, le journal, le silence, l'installation
+  - 07-novembre-2026-hooks-claude-code/03-lot-2-les-blocs-de-lecture-et-l-essai-sur-un-worktree.md § Lot 2 — les blocs de lecture : SessionStart et UserPromptSubmit, et l'essai sur un vrai worktree
+  - 07-novembre-2026-hooks-claude-code/01-conception-les-hooks-de-claude-code.md § Les hooks de Claude Code — la mémoire qui parle à la session
+- **1. Ce que dit déjà une mesure sur git** (2) :
+  - 07-novembre-2026-banc/01-menage-et-atterrissage.md § Les branches distantes
+  - 07-novembre-2026-arbre/01-ce-que-le-moteur-doit-au-modele-des-vues.md § 1. Ce que dit déjà une mesure sur git
+- **1. Une conversation d'atelier, non attachée, avec des outils de dépôts** (2) :
+  - 09-novembre-2026-atelier-lire-ecrire/01-conception.md § Les questions à trancher
+  - 07-novembre-2026-everything-declarative/03-l-atelier-ouvre-les-depots.md § 1. Une conversation d'atelier, non attachée, avec des outils de dépôts
+- **11. Le 3 ter (g) : le juge, son plafond et la session qu'il sert** (2) :
+  - 08-novembre-2026-banc/01-modele-de-decision.md § 5. Ce qui sert tout de suite
+  - 07-novembre-2026-hooks-claude-code/08-lot-3-ter-le-rappel-tire-du-prompt-sans-redite.md § 11. Le 3 ter (g) : le juge, son plafond et la session qu'il sert
+- **2 ter. Deux défauts vus par 73 sur la mémoire de Lucie** (2) :
+  - 07-novembre-2026-hooks-claude-code/05-lot-3-bis-la-table-des-serveurs-et-le-temoin-sur-une-vraie-memoire.md § 2 ter. Ce que la vraie mémoire a montré (le témoin de ce lot)
+  - 07-novembre-2026-hooks-claude-code/04-lot-3-les-ecritures-mecaniques-et-la-correction-a-la-volee.md § 2 ter. Deux défauts vus par 73 sur la mémoire de Lucie
+- **2. Le dessin : une commande mince, tout le travail dans l'hôte** (2) :
+  - 07-novembre-2026-hooks-claude-code/01-conception-les-hooks-de-claude-code.md § 2. Le dessin : une commande mince, tout le travail dans l'hôte
+  - 07-novembre-2026-hooks-claude-code/02-lot-1-la-commande-mince-le-reglage-le-journal-l-installation.md § Ce qui est posé
+- **3. Ce que le hook montre** (2) :
+  - 07-novembre-2026-hooks-essai/01-journal-de-la-session.md § Le premier bloc partiel (message de c7, après 17 h 06)
+  - 07-novembre-2026-hooks-claude-code/07-lot-5-le-pont-claude-code-equipier-codex.md § 3. Ce que le hook montre
+- **4. Les témoins du lot** (2) :
+  - 07-novembre-2026-hooks-claude-code/03-lot-2-les-blocs-de-lecture-et-l-essai-sur-un-worktree.md § 4. Les témoins du lot
+  - 07-novembre-2026-hooks-claude-code/05-lot-3-bis-la-table-des-serveurs-et-le-temoin-sur-une-vraie-memoire.md § 2. Le témoin sur un vrai gabarit `memory` (`tests/e2e_hooks_claude_code.rs`)
+- **5. Ce qui reste aux lots 3 et 4** (2) :
+  - 07-novembre-2026-hooks-claude-code/03-lot-2-les-blocs-de-lecture-et-l-essai-sur-un-worktree.md § 5. Ce qui reste aux lots 3 et 4
+  - 07-novembre-2026-hooks-claude-code/04-lot-3-les-ecritures-mecaniques-et-la-correction-a-la-volee.md § Lot 3 — les écritures mécaniques : PostCompact, Stop, PreCompact, le handle, le rappel
+- **6. La migration du gabarit de code et des bases existantes** (2) :
+  - 08-novembre-2026-arbre/01-conception-des-vues-marche-1.md § 6. La migration du gabarit de code et des bases existantes
+  - 09-novembre-2026-memoire-longue/02-m8-la-montee-des-gabarits.md § 6. Pour Lucie, une fois sur master
+- **6. Les témoins** (2) :
+  - 07-novembre-2026-hooks-claude-code/01-conception-les-hooks-de-claude-code.md § 6. Les témoins
+  - 07-novembre-2026-hooks-claude-code/02-lot-1-la-commande-mince-le-reglage-le-journal-l-installation.md § Les témoins
+- **6. Recommandation** (2) :
+  - 08-novembre-2026-banc/01-modele-de-decision.md § 6. Recommandation
+  - 08-novembre-2026-banc/02-le-jeu-a-vrais-positifs.md § 5. Ce que je recommande pour « ce bout de mémoire est-il pertinent avec le contexte de l'agent »
+- **Ce qu'il y a** (2) :
+  - 07-novembre-2026-tty/01-les-anciens-tty.md § Ce qu'il y a
+  - 07-novembre-2026-tty/07-le-code-colore-du-hub.md § Ce qu'il y a
+- **Ce que j'ai mal fait, et ce qui le garde** (2) :
+  - 07-novembre-2026-recherche/01-rapport-de-session.md § Incident : la garde `master-tenu` effacée
+  - 07-novembre-2026-everything-declarative/04-rapport-de-session.md § Ce que j'ai mal fait, et ce qui le garde
+- **Ce qui attend** (2) :
+  - 07-novembre-2026-arbre/03-rapport-de-session.md § Ce qui attend
+  - 07-novembre-2026-hooks-essai/03-knowledge-dump.md § Ce qui attend
+- **Ce qui est sur master** (2) :
+  - 07-novembre-2026-everything-declarative/04-rapport-de-session.md § Ce qui est sur master
+  - 08-novembre-2026-recherche/01-rapport-de-session.md § Sur master
+- **Fichiers** (2) :
+  - 08-novembre-2026-banc/02-le-jeu-a-vrais-positifs.md § Fichiers
+  - 08-novembre-2026-banc/01-modele-de-decision.md § Fichiers
+- **La lib unique de la bascule 43** (2) :
+  - 07-novembre-2026-coeur-cpp/01-rapport-de-session.md § Le soir : quatre lots de plus
+  - 07-novembre-2026-arbre/02-la-lib-unique-de-la-bascule-43.md § La lib unique de la bascule 43
+- **La nuit du 8 novembre (de 1 h à 7 h)** (2) :
+  - 07-novembre-2026-everything-declarative/04-rapport-de-session.md § La nuit du 8 novembre (de 1 h à 7 h)
+  - 07-novembre-2026-orchestration/02-rapport-de-session.md § 03 h 50 — le lot 2 et le premier lot de l'équipier sur master, l'hôte de Lucie reposé
+- **Le bloquant du jour : une lecture sale** (2) :
+  - 07-novembre-2026-coeur-cpp/01-rapport-de-session.md § Le bloquant du jour : une lecture sale
+  - 07-novembre-2026-orchestration/01-la-reprise.md § Le bloquant du jour
+- **Le cadre** (2) :
+  - 09-novembre-2026-memoire-longue/01-l-equipier-sur-les-readme.md § Le cadre
+  - 08-novembre-2026-orchestration/01-essais-de-l-equipier.md § Le cadre
+- **Le classeur local dans le rappel — page de conception** (2) :
+  - 09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md § Le classeur local dans le rappel — page de conception
+  - 09-novembre-2026-memoire-longue/04-la-precision-du-rappel-d-aujourd-hui.md § La précision du rappel d'aujourd'hui — la ligne de base du classeur
+- **Le design : la page HTML d'abord, puis des thèmes (Lucie, 7 nov. 2026)** (2) :
+  - 07-novembre-2026-tty/02-conception.md § Le design : la page HTML d'abord, puis des thèmes (Lucie, 7 nov. 2026)
+  - 07-novembre-2026-tty/06-theme-commun.md § Un thème commun au terminal et à l'IDE : « daemon »
+- **Le ménage (fait avant midi)** (2) :
+  - 07-novembre-2026-recherche/01-rapport-de-session.md § Le ménage
+  - 07-novembre-2026-orchestration/01-la-reprise.md § Le ménage (fait avant midi)
+- **Le passage unique (à reprendre ici après une compaction)** (2) :
+  - 07-novembre-2026-hooks-essai/01-journal-de-la-session.md § Le passage unique (à reprendre ici après une compaction)
+  - 07-novembre-2026-recherche/01-rapport-de-session.md § Ce qui suit
+- **Le poids des positions du creux, par le service d'embarquement (7 novembre 2026)** (2) :
+  - 07-novembre-2026-embarquements/00-spans-du-creux.md § Le poids des positions du creux, par le service d'embarquement (7 novembre 2026)
+  - 07-novembre-2026-recherche/01-rapport-de-session.md § Le défaut qu'il portait, et son correctif en file
+- **Le soir : trois lots en un passage, et le ménage qui suit** (2) :
+  - 07-novembre-2026-recherche/01-rapport-de-session.md § Le soir : trois lots en un passage, et le ménage qui suit
+  - 08-novembre-2026-recherche/01-rapport-de-session.md § Branches distantes laissées à Lucie
+- **Les anciens tty de RagForge** (2) :
+  - 07-novembre-2026-tty/01-les-anciens-tty.md § Les anciens tty de RagForge
+  - 07-novembre-2026-tty/07-le-code-colore-du-hub.md § Le code coloré de Luciform Hub
+- **Les chiffres à garder** (2) :
+  - 07-novembre-2026-arbre/04-knowledge-dump.md § Les chiffres à garder
+  - 07-novembre-2026-banc/01-menage-et-atterrissage.md § La mesure des lignes hors du graphe (8 novembre, 7 h 26 à 7 h 32)
+- **Les hooks (le double but de la session)** (2) :
+  - 07-novembre-2026-hooks-essai/02-rapport-de-session.md § Les hooks (le double but de la session)
+  - 09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md § 2. Ce qui est livré et ce qui reste proposé
+- **Les lots** (2) :
+  - 07-novembre-2026-everything-declarative/01-l-equipier-agent-de-code.md § Les lots
+  - 07-novembre-2026-everything-declarative/03-l-atelier-ouvre-les-depots.md § Les lots
+- **Les questions qui attendent Lucie** (2) :
+  - 07-novembre-2026-orchestration/02-rapport-de-session.md § Ce qui attend Lucie
+  - 06-novembre-2026-orchestration/01-plan-du-week-end.md § Les questions qui attendent Lucie
+- **Les sessions voisines** (2) :
+  - 07-novembre-2026-orchestration/03-knowledge-dump.md § Les sessions (clé stable → nom du 7 nov.)
+  - 07-novembre-2026-everything-declarative/05-knowledge-dump.md § Les sessions voisines
+- **Les tickets** (2) :
+  - 07-novembre-2026-hooks-essai/02-rapport-de-session.md § Les tickets
+  - 08-novembre-2026-orchestration/03-ide-ce-qui-reste.md § À côté (pas dans la liste de Lucie, mais au même endroit)
+- **Les états de l'agent et le design démoniaque** (2) :
+  - 07-novembre-2026-tty/06-theme-commun.md § Les règles communes
+  - 07-novembre-2026-tty/02-conception.md § Les états de l'agent et le design démoniaque
+- **Lot tty-3 : les octets du Daemon Code Summoning (7 nov. 2026)** (2) :
+  - 07-novembre-2026-tty/02-conception.md § Lot tty-3 : les octets du Daemon Code Summoning (7 nov. 2026)
+  - 07-novembre-2026-tty/03-rapport-de-session.md § Ce qui attend
+- **Rapport de session — l'arbre principal, 7 novembre 2026** (2) :
+  - 07-novembre-2026-arbre/03-rapport-de-session.md § Rapport de session — l'arbre principal, 7 novembre 2026
+  - 07-novembre-2026-arbre/04-knowledge-dump.md § Knowledge dump — l'arbre principal, 7 novembre 2026
+- **Soirée du 7 novembre : la tâche hors dépôt, puis le lot du chat sur master** (2) :
+  - 07-novembre-2026-orchestration/02-rapport-de-session.md § Mise à jour de 23 h 10 — fin de soirée
+  - 07-novembre-2026-hooks-essai/01-journal-de-la-session.md § Soirée du 7 novembre : la tâche hors dépôt, puis le lot du chat sur master
+- **Un petit modèle de décision : la première mesure (8 novembre 2026)** (2) :
+  - 08-novembre-2026-banc/01-modele-de-decision.md § Un petit modèle de décision : la première mesure (8 novembre 2026)
+  - 08-novembre-2026-banc/03-le-juge-local.md § 7. La suite : un décideur d'actions
+- **Un petit modèle de décision : le juge local (8 novembre 2026, soir)** (2) :
+  - 08-novembre-2026-banc/03-le-juge-local.md § Un petit modèle de décision : le juge local (8 novembre 2026, soir)
+  - 09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md § 1. Ce que les bancs ont établi
+- **À reprendre ici (21 h 50 environ) : le lot deadline_ms** (2) :
+  - 07-novembre-2026-hooks-essai/02-rapport-de-session.md § Ce qui est sur master
+  - 07-novembre-2026-hooks-essai/01-journal-de-la-session.md § À reprendre ici (21 h 50 environ) : le lot deadline_ms
+- **À reprendre ici (22 h 15 environ) : le chat lisible** (2) :
+  - 07-novembre-2026-hooks-essai/01-journal-de-la-session.md § À reprendre ici (22 h 15 environ) : le chat lisible
+  - 07-novembre-2026-tty/07-le-code-colore-du-hub.md § Ce que ça donne pour nous
+
+## Les fiches à une seule section (274)
+
+- **0. Atterrir ce que la nuit du 26 octobre a laissé vert (samedi matin)** ← 06-novembre-2026-orchestration/01-plan-du-week-end.md
+- **00 h 53 (9 novembre) — la file de la soirée est passée** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **01 h 35 (9 novembre) — les deux sens : c'est le point de reprise** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **01 h 58 (9 novembre) — la nuit de luciepc : le fstrim hebdomadaire** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **05 h 20 — fin des essais de la nuit, ce qui attend Lucie** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **09 h 15 — second plantage, repli de l'hôte, la base de code de Lucie à rendre** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **09 h 20 — la base de code de Lucie est rendue, la pièce du défaut mise de côté** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **09 h 30 — deux défauts du moteur nommés par le témoin de hotfixs** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **09 h 38 (9 novembre) — le matin : le portable posé, la CI verte** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **09 h 50 — pour Lucie au réveil : l'essentiel en six lignes** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **09 h 52 — la file du matin a tourné, le lot coupure du cœur est sur master** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **1 bis. Corriger les hooks à la volée (exigence de Lucie, 7 novembre)** ← 07-novembre-2026-hooks-claude-code/04-lot-3-les-ecritures-mecaniques-et-la-correction-a-la-volee.md
+- **1. Ce que Claude Code donne, relevé dans sa documentation le 7 novembre** ← 07-novembre-2026-hooks-claude-code/01-conception-les-hooks-de-claude-code.md
+- **1. Ce que le hook écrit, et où** ← 07-novembre-2026-hooks-claude-code/04-lot-3-les-ecritures-mecaniques-et-la-correction-a-la-volee.md
+- **1. Ce qui existe déjà (ED, pile de l'atelier, f16628f8b)** ← 09-novembre-2026-memoire-longue/02-m8-la-montee-des-gabarits.md
+- **1. La table `serveurs` dans le run d'un `Stop`** ← 07-novembre-2026-hooks-claude-code/05-lot-3-bis-la-table-des-serveurs-et-le-temoin-sur-une-vraie-memoire.md
+- **1. La version de scope, entité par empreinte de contenu** ← 08-novembre-2026-arbre/01-conception-des-vues-marche-1.md
+- **1. Le 7 novembre** ← 07-novembre-2026-hooks-claude-code/00-rapport-de-session-archi.md
+- **1. Le bus et les clés** ← 07-novembre-2026-hooks-claude-code/07-lot-5-le-pont-claude-code-equipier-codex.md
+- **1. Les hooks de Claude Code (samedi, en parallèle, session mémoire) : la mémoire qui parle à la session** ← 06-novembre-2026-orchestration/01-plan-du-week-end.md
+- **1. Les modèles, sur card0** ← 08-novembre-2026-banc/03-le-juge-local.md
+- **1. Les outils standards, complets et étanches** ← 07-novembre-2026-everything-declarative/01-l-equipier-agent-de-code.md
+- **1. Pourquoi aujourd'hui un chat = un backend** ← 07-novembre-2026-everything-declarative/02-une-session-plusieurs-backends.md
+- **1. `SessionStart` : dire que l'index existe, et comment s'en servir** ← 07-novembre-2026-hooks-essai/04-la-recherche-de-code-par-les-hooks.md
+- **10 h 03 — Lucie est réveillée : ses premières décisions** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **10 h 0x (9 novembre) — la cause des deux sens est trouvée, la mesure du `require` est finie** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **10 h 33 — six lots de plus, A sur master, le banc bloqué par une permission** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **10 h 58 — Lucie au clavier : le modèle de décision prend forme, le banc débloqué** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **10. Le 3 ter (f) : `recall_min_score` retiré** ← 07-novembre-2026-hooks-claude-code/08-lot-3-ter-le-rappel-tire-du-prompt-sans-redite.md
+- **11 h 58 — l'atelier et la barre du chat sur master, la lib se bâtit** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **13 h 11 — G3 sur master, le verdict de luciepc, la pose du portable à 13 h 40** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **13 h 54 — ÉCART : la pose du portable est annulée** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **14 h 39 — la base de Lucie saine, le départage relancé, un rouge de master sur l'index d'une tâche** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **14 h 48 — 7878 fait la queue pour tout luciepc pendant le départage** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **15 h 14 — le rouge de master innocente la lib : c'était la file de 7878** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **15 h 39 — le run 1b tranche : l'écart des deux sens existe déjà sous 17a094d12** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **16 h 40 — le portable est posé deux fois, Lucie essaie l'atelier, ce que son essai révèle** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **17 h 25 — le disque de luciepc, le mécanisme du SIGSEGV, le chemin du MERGE** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **18 h 15 — le disque de luciepc rendu : TRIM, puis de la place** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **19 h 20 — la file passe, ce qu'elle a laissé voir** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **2 bis. Deux retouches de l'usage** ← 07-novembre-2026-hooks-claude-code/05-lot-3-bis-la-table-des-serveurs-et-le-temoin-sur-une-vraie-memoire.md
+- **2 bis. La pyramide de couches (Lucie, 8 novembre, 20 h 35)** ← 08-novembre-2026-arbre/01-conception-des-vues-marche-1.md
+- **2 quater. Deux fiches citent le handle après une compaction** ← 07-novembre-2026-hooks-claude-code/05-lot-3-bis-la-table-des-serveurs-et-le-temoin-sur-une-vraie-memoire.md
+- **2. Ce que le hook rend** ← 07-novembre-2026-hooks-claude-code/03-lot-2-les-blocs-de-lecture-et-l-essai-sur-un-worktree.md
+- **2. Ce que serait une session à plusieurs backends** ← 07-novembre-2026-everything-declarative/02-une-session-plusieurs-backends.md
+- **2. Ce qui a été glissé** ← 09-novembre-2026-memoire-longue/04-la-precision-du-rappel-d-aujourd-hui.md
+- **2. Ce qui manque, vu de la mémoire de Lucie** ← 09-novembre-2026-memoire-longue/02-m8-la-montee-des-gabarits.md
+- **2. Dans l'hôte : la route `POST /journal/run`** ← 07-novembre-2026-hooks-claude-code/04-lot-3-les-ecritures-mecaniques-et-la-correction-a-la-volee.md
+- **2. La requête : des mots-clés, sans modèle** ← 07-novembre-2026-hooks-claude-code/08-lot-3-ter-le-rappel-tire-du-prompt-sans-redite.md
+- **2. La vue : une table chemin → version, contre la base de la tâche** ← 08-novembre-2026-arbre/01-conception-des-vues-marche-1.md
+- **2. Le prototype vertical (dimanche) : prouver le partage des versions** ← 06-novembre-2026-orchestration/01-plan-du-week-end.md
+- **2. Les mesures** ← 08-novembre-2026-banc/02-le-jeu-a-vrais-positifs.md
+- **2. Parler avec Claude Code, dans les deux sens** ← 07-novembre-2026-everything-declarative/01-l-equipier-agent-de-code.md
+- **2. Plusieurs fiches d'un coup** ← 08-novembre-2026-banc/03-le-juge-local.md
+- **2. Un worktree attaché devient un backend de code, à la volée** ← 07-novembre-2026-everything-declarative/03-l-atelier-ouvre-les-depots.md
+- **2. Une responsabilité par verbe** ← 07-novembre-2026-hooks-claude-code/07-lot-5-le-pont-claude-code-equipier-codex.md
+- **2. `UserPromptSubmit` : glisser le code que le prompt nomme** ← 07-novembre-2026-hooks-essai/04-la-recherche-de-code-par-les-hooks.md
+- **20 h 30 — la soirée : la file, la session de jeu, la priorité de demain** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **21 h 50 — la pile de l'atelier atterrit, le portable reposé** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **23 h 41 — la lib de la nuit est posée à luciepc** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **3. Ce que M8 ajoute** ← 09-novembre-2026-memoire-longue/02-m8-la-montee-des-gabarits.md
+- **3. Ce que le rappel avait sous la main** ← 09-novembre-2026-memoire-longue/04-la-precision-du-rappel-d-aujourd-hui.md
+- **3. Ce que ça coûte, ce que ça casse, par où commencer** ← 07-novembre-2026-everything-declarative/02-une-session-plusieurs-backends.md
+- **3. Ce qui manquerait, ou coûterait — sans proposition** ← 07-novembre-2026-arbre/01-ce-que-le-moteur-doit-au-modele-des-vues.md
+- **3. Ce qui reste** ← 07-novembre-2026-hooks-claude-code/05-lot-3-bis-la-table-des-serveurs-et-le-temoin-sur-une-vraie-memoire.md
+- **3. En cours et suite** ← 07-novembre-2026-hooks-claude-code/00-rapport-de-session-archi.md
+- **3. L'adaptateur de transcription (`src/claude_code_transcript.rs`)** ← 07-novembre-2026-hooks-claude-code/03-lot-2-les-blocs-de-lecture-et-l-essai-sur-un-worktree.md
+- **3. La passe GPU, interrompue** ← 08-novembre-2026-banc/02-le-jeu-a-vrais-positifs.md
+- **3. La sécurité** ← 07-novembre-2026-everything-declarative/03-l-atelier-ouvre-les-depots.md
+- **3. Le budget : une seconde** ← 07-novembre-2026-hooks-claude-code/08-lot-3-ter-le-rappel-tire-du-prompt-sans-redite.md
+- **3. Le coût au préchargement** ← 08-novembre-2026-banc/03-le-juge-local.md
+- **3. Le paramètre de vue sur les outils, et le filtre sous l'instantané L6** ← 08-novembre-2026-arbre/01-conception-des-vues-marche-1.md
+- **3. Les candidats** ← 08-novembre-2026-banc/01-modele-de-decision.md
+- **3. Les changements en fiches et `find_tasks` (dimanche, si la marche 1 tient)** ← 06-novembre-2026-orchestration/01-plan-du-week-end.md
+- **3. Les retouches de la pose de G** ← 07-novembre-2026-hooks-claude-code/04-lot-3-les-ecritures-mecaniques-et-la-correction-a-la-volee.md
+- **3. Les sous-équipiers** ← 07-novembre-2026-everything-declarative/01-l-equipier-agent-de-code.md
+- **3. Où le brancher : recommandation à confirmer** ← 09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md
+- **3. `PostToolUse` : après un `grep` ou un `Read` sur le dépôt indexé, une ligne** ← 07-novembre-2026-hooks-essai/04-la-recherche-de-code-par-les-hooks.md
+- **3. Événement par événement** ← 07-novembre-2026-hooks-claude-code/01-conception-les-hooks-de-claude-code.md
+- **4 bis. Le canal : atteindre une session Claude occupée ou à l'arrêt** ← 07-novembre-2026-hooks-claude-code/07-lot-5-le-pont-claude-code-equipier-codex.md
+- **4 ter. Ce que la livraison vers Codex fait dans l'hôte** ← 07-novembre-2026-hooks-claude-code/07-lot-5-le-pont-claude-code-equipier-codex.md
+- **4. Ce que M8 réutilise, sans second mécanisme** ← 09-novembre-2026-memoire-longue/02-m8-la-montee-des-gabarits.md
+- **4. Ce que je mesurerais d'abord, sur la base de code de Lucie** ← 07-novembre-2026-arbre/01-ce-que-le-moteur-doit-au-modele-des-vues.md
+- **4. Ce que la mesure ne dit pas** ← 08-novembre-2026-banc/01-modele-de-decision.md
+- **4. Ce qui attend Lucie** ← 07-novembre-2026-hooks-claude-code/00-rapport-de-session-archi.md
+- **4. Codex, le troisième bord** ← 07-novembre-2026-hooks-claude-code/07-lot-5-le-pont-claude-code-equipier-codex.md
+- **4. L'adaptateur de transcription** ← 07-novembre-2026-hooks-claude-code/01-conception-les-hooks-de-claude-code.md
+- **4. La voie** ← 09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md
+- **4. Le coût** ← 08-novembre-2026-banc/02-le-jeu-a-vrais-positifs.md
+- **4. Le disque** ← 07-novembre-2026-everything-declarative/03-l-atelier-ouvre-les-depots.md
+- **4. Le juge contrôlé** ← 09-novembre-2026-memoire-longue/04-la-precision-du-rappel-d-aujourd-hui.md
+- **4. Le premier index d'un worktree : les seules versions neuves** ← 08-novembre-2026-arbre/01-conception-des-vues-marche-1.md
+- **4. Les problèmes d'outils, dits par l'agent à chaque pas** ← 07-novembre-2026-everything-declarative/01-l-equipier-agent-de-code.md
+- **4. Les témoins** ← 07-novembre-2026-hooks-claude-code/04-lot-3-les-ecritures-mecaniques-et-la-correction-a-la-volee.md
+- **4. Recommandation** ← 08-novembre-2026-banc/03-le-juge-local.md
+- **4. Rien de ce que la session a déjà reçu** ← 07-novembre-2026-hooks-claude-code/08-lot-3-ter-le-rappel-tire-du-prompt-sans-redite.md
+- **5. Ce qui reste (lot 4)** ← 07-novembre-2026-hooks-claude-code/04-lot-3-les-ecritures-mecaniques-et-la-correction-a-la-volee.md
+- **5. Comment reprendre** ← 07-novembre-2026-hooks-claude-code/00-rapport-de-session-archi.md
+- **5. L'installation** ← 07-novembre-2026-hooks-claude-code/01-conception-les-hooks-de-claude-code.md
+- **5. La durée du rappel** ← 09-novembre-2026-memoire-longue/04-la-precision-du-rappel-d-aujourd-hui.md
+- **5. La mémoire en dernier** ← 07-novembre-2026-everything-declarative/01-l-equipier-agent-de-code.md
+- **5. Le contexte donné au juge** ← 09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md
+- **5. Le drain par empreinte, le compte de références, la fermeture** ← 08-novembre-2026-arbre/01-conception-des-vues-marche-1.md
+- **5. Le plein texte décide, le dense seul n'est pas jugé (3 ter b)** ← 07-novembre-2026-hooks-claude-code/08-lot-3-ter-le-rappel-tire-du-prompt-sans-redite.md
+- **5. Le témoin** ← 09-novembre-2026-memoire-longue/02-m8-la-montee-des-gabarits.md
+- **5. Les limites** ← 08-novembre-2026-banc/03-le-juge-local.md
+- **5. Les témoins** ← 07-novembre-2026-hooks-claude-code/07-lot-5-le-pont-claude-code-equipier-codex.md
+- **5. Les témoins (par le chemin de l'hôte)** ← 07-novembre-2026-everything-declarative/03-l-atelier-ouvre-les-depots.md
+- **6. Ce que ça dit du classeur** ← 09-novembre-2026-memoire-longue/04-la-precision-du-rappel-d-aujourd-hui.md
+- **6. Le journal** ← 07-novembre-2026-hooks-claude-code/08-lot-3-ter-le-rappel-tire-du-prompt-sans-redite.md
+- **6. Les notes d'outil du soir** ← 08-novembre-2026-banc/03-le-juge-local.md
+- **6. Sans llama-server** ← 09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md
+- **7. La mesure qui dira si ça vaut le coût** ← 09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md
+- **7. Le 3 ter (b) : le rappel fini en fond, et son juge** ← 07-novembre-2026-hooks-claude-code/08-lot-3-ter-le-rappel-tire-du-prompt-sans-redite.md
+- **7. Les lots, dans l'ordre** ← 07-novembre-2026-hooks-claude-code/01-conception-les-hooks-de-claude-code.md
+- **7. Pour rejouer** ← 09-novembre-2026-memoire-longue/04-la-precision-du-rappel-d-aujourd-hui.md
+- **7. Questions pour ED** ← 09-novembre-2026-memoire-longue/02-m8-la-montee-des-gabarits.md
+- **8. Ce qui attend c7 et 96** ← 07-novembre-2026-hooks-claude-code/01-conception-les-hooks-de-claude-code.md
+- **8. Le 3 ter (d) : l'hôte reçoit l'échéance du client** ← 07-novembre-2026-hooks-claude-code/08-lot-3-ter-le-rappel-tire-du-prompt-sans-redite.md
+- **8. Limites précisées par la relecture du 12 novembre** ← 09-novembre-2026-memoire-longue/02-m8-la-montee-des-gabarits.md
+- **8. Questions pour Lucie** ← 09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md
+- **9. L'ordre proposé après son mot** ← 09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md
+- **9. Le 3 ter (e) : le vocabulaire sans les bilans, une empreinte stable** ← 07-novembre-2026-hooks-claude-code/08-lot-3-ter-le-rappel-tire-du-prompt-sans-redite.md
+- **Atterri** ← 07-novembre-2026-banc/01-menage-et-atterrissage.md
+- **Bilan du bloc [mémoire] sur le lot « chercher sans dossier »** ← 07-novembre-2026-hooks-essai/01-journal-de-la-session.md
+- **Ce qu'elle mesure** ← 09-novembre-2026-atelier-lire-ecrire/02-la-jauge-du-contexte.md
+- **Ce qu'il faut en retenir (pour Lucie, le matin)** ← 08-novembre-2026-orchestration/01-essais-de-l-equipier.md
+- **Ce qu'il faut faire lundi, dans l'ordre** ← 07-novembre-2026-orchestration/03-knowledge-dump.md
+- **Ce qu'on en retient** ← 07-novembre-2026-tty/01-les-anciens-tty.md
+- **Ce que Lucie a décidé** ← 09-novembre-2026-atelier-lire-ecrire/01-conception.md
+- **Ce que Lucie a tranché (7 nov. 2026, soir)** ← 07-novembre-2026-tty/02-conception.md
+- **Ce que Lucie demande** ← 07-novembre-2026-tty/02-conception.md
+- **Ce que j'aurais voulu que la mémoire me rappelle (à ranger en premier)** ← 07-novembre-2026-hooks-essai/01-journal-de-la-session.md
+- **Ce que je propose** ← 07-novembre-2026-hooks-essai/04-la-recherche-de-code-par-les-hooks.md
+- **Ce que l'index fait aujourd'hui, et ce qu'il coûte** ← 08-novembre-2026-arbre/01-conception-des-vues-marche-1.md
+- **Ce que la lib porte** ← 07-novembre-2026-arbre/02-la-lib-unique-de-la-bascule-43.md
+- **Ce que la session tty a appris (7 novembre 2026)** ← 07-novembre-2026-tty/04-knowledge-dump.md
+- **Ce que le moteur doit au modèle des vues** ← 07-novembre-2026-arbre/01-ce-que-le-moteur-doit-au-modele-des-vues.md
+- **Ce que permet chaque lien** ← 07-novembre-2026-tty/02-conception.md
+- **Ce que prend archi** ← 08-novembre-2026-orchestration/03-ide-ce-qui-reste.md
+- **Ce que ratatui ouvre à côté** ← 07-novembre-2026-tty/02-conception.md
+- **Ce que ça coûte par tour (à confirmer par la mesure)** ← 07-novembre-2026-hooks-essai/04-la-recherche-de-code-par-les-hooks.md
+- **Ce qui a servi, et ce qui a été corrigé en route** ← 07-novembre-2026-arbre/02-la-lib-unique-de-la-bascule-43.md
+- **Ce qui a été fait le 7 novembre (ordre chronologique)** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **Ce qui est fait** ← 07-novembre-2026-tty/03-rapport-de-session.md
+- **Ce qui est fait (9 novembre 2026, branche atelier-lire-ecrire)** ← 09-novembre-2026-atelier-lire-ecrire/01-conception.md
+- **Ce qui est fait (branche jauge-du-contexte)** ← 09-novembre-2026-atelier-lire-ecrire/02-la-jauge-du-contexte.md
+- **Ce qui existe** ← 09-novembre-2026-atelier-lire-ecrire/01-conception.md
+- **Ce qui interroge l'hôte (relevé sur master `ab8272deb`)** ← 09-novembre-2026-ide-par-le-flux/01-inventaire-et-forme.md
+- **Ce qui manque côté hôte (à everything declarative)** ← 07-novembre-2026-tty/02-conception.md
+- **Ce qui reste, après la fenêtre** ← 07-novembre-2026-everything-declarative/04-rapport-de-session.md
+- **Ce qui reste, dans l'ordre** ← 07-novembre-2026-everything-declarative/04-rapport-de-session.md
+- **Ce qui s'est passé** ← 09-novembre-2026-memoire-longue/01-l-equipier-sur-les-readme.md
+- **Comment on le mesure, sur hooks-essai d'abord** ← 07-novembre-2026-hooks-essai/04-la-recherche-de-code-par-les-hooks.md
+- **Copier une base pour la mesurer : base et plein texte ensemble, à l'arrêt** ← 07-novembre-2026-recherche/01-rapport-de-session.md
+- **Cœur C++ — 7 novembre 2026 : rapport de session** ← 07-novembre-2026-coeur-cpp/01-rapport-de-session.md
+- **Demain matin (8 novembre)** ← 07-novembre-2026-everything-declarative/04-rapport-de-session.md
+- **En file** ← 08-novembre-2026-recherche/01-rapport-de-session.md
+- **Essai 2 — `journaux-annulation-tmp-2` (lancé 00 h 18)** ← 08-novembre-2026-orchestration/01-essais-de-l-equipier.md
+- **Essai de `gemini-4-argon` contre `gemini-3.8-flash` sur `e2e_equipier`** ← 07-novembre-2026-hooks-claude-code/06-essai-gemini-4-argon.md
+- **Graines du jour** ← 07-novembre-2026-orchestration/01-la-reprise.md
+- **Hooks 3 ter (a), premier tour (18 h 15, commit 7b41a1a04)** ← 07-novembre-2026-hooks-essai/01-journal-de-la-session.md
+- **Incidents et leçons** ← 08-novembre-2026-recherche/01-rapport-de-session.md
+- **Inventaire et ménage** ← 07-novembre-2026-coeur-cpp/01-rapport-de-session.md
+- **Knowledge dump de hooks-essai (7 novembre 2026, ~22 h)** ← 07-novembre-2026-hooks-essai/03-knowledge-dump.md
+- **Knowledge dump de l'orchestration, 7 novembre 2026** ← 07-novembre-2026-orchestration/03-knowledge-dump.md
+- **L'ABI** ← 07-novembre-2026-arbre/02-la-lib-unique-de-la-bascule-43.md
+- **L'IDE et le chat : ce qui reste des demandes de Lucie du 7 au soir** ← 08-novembre-2026-orchestration/03-ide-ce-qui-reste.md
+- **L'IDE par le flux : l'inventaire, puis la forme** ← 09-novembre-2026-ide-par-le-flux/01-inventaire-et-forme.md
+- **L'atelier lit et écrit : la forme proposée** ← 09-novembre-2026-atelier-lire-ecrire/01-conception.md
+- **L'index dense filtré : un pré-filtre par masque** ← 07-novembre-2026-arbre/01-ce-que-le-moteur-doit-au-modele-des-vues.md
+- **L'option** ← 07-novembre-2026-embarquements/00-spans-du-creux.md
+- **L'ordre des lots** ← 08-novembre-2026-arbre/01-conception-des-vues-marche-1.md
+- **L'écart du GGUF, mesuré (session banc, 11 novembre 2026)** ← 09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md
+- **La carte d'un chemin relance son tour (branche atelier-chemin-relance)** ← 09-novembre-2026-atelier-lire-ecrire/01-conception.md
+- **La coloration du code (8 nov. 2026)** ← 07-novembre-2026-tty/02-conception.md
+- **La durée d'e2e_tty varie (7 nov. 2026, à suivre)** ← 07-novembre-2026-tty/02-conception.md
+- **La forme** ← 09-novembre-2026-ide-par-le-flux/01-inventaire-et-forme.md
+- **La forme de `/ide/etat` pour cette barre** ← 07-novembre-2026-everything-declarative/02-une-session-plusieurs-backends.md
+- **La forme proposée** ← 09-novembre-2026-atelier-lire-ecrire/01-conception.md
+- **La jauge du contexte** ← 09-novembre-2026-atelier-lire-ecrire/02-la-jauge-du-contexte.md
+- **La latence de `search_code` en plein texte seul, mesurée (9 novembre, 12 h 45 à 12 h 49)** ← 07-novembre-2026-hooks-essai/04-la-recherche-de-code-par-les-hooks.md
+- **La nuit du 7 au 8 novembre** ← 07-novembre-2026-arbre/03-rapport-de-session.md
+- **La page « Daemon Code Summoning »** ← 07-novembre-2026-tty/01-les-anciens-tty.md
+- **La passe complète sur la base (35aede9f3)** ← 07-novembre-2026-hooks-essai/01-journal-de-la-session.md
+- **La recommandation : ratatui, avec notre couche déclarative par-dessus** ← 07-novembre-2026-tty/02-conception.md
+- **La requête entière longue dépend d'un correctif de lucivy** ← 07-novembre-2026-recherche/01-rapport-de-session.md
+- **La référence de la prochaine tentative (fait à la main le 9 novembre, l'après-midi)** ← 09-novembre-2026-memoire-longue/01-l-equipier-sur-les-readme.md
+- **La soirée du 7 (écrit vers 17 h 50, après une compaction)** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **La source** ← 07-novembre-2026-tty/06-theme-commun.md
+- **La suppression d'une ligne indexée** ← 07-novembre-2026-arbre/01-ce-que-le-moteur-doit-au-modele-des-vues.md
+- **Le binaire du lot 3 bis (posé à 16:24:43)** ← 07-novembre-2026-hooks-essai/01-journal-de-la-session.md
+- **Le bloc des pages (`CodeBlock.tsx`)** ← 07-novembre-2026-tty/07-le-code-colore-du-hub.md
+- **Le chat (`ChatWidget.tsx`)** ← 07-novembre-2026-tty/07-le-code-colore-du-hub.md
+- **Le code de ce jour** ← 07-novembre-2026-everything-declarative/05-knowledge-dump.md
+- **Le constat** ← 07-novembre-2026-hooks-essai/04-la-recherche-de-code-par-les-hooks.md
+- **Le creux à l'affichage, sur master (8f3659d8a)** ← 07-novembre-2026-recherche/01-rapport-de-session.md
+- **Le disque libéré** ← 07-novembre-2026-banc/01-menage-et-atterrissage.md
+- **Le flux depuis l'hôte (relevé du code, 7 nov.)** ← 07-novembre-2026-tty/02-conception.md
+- **Le groupe 1 : deux tickets non reproduits** ← 07-novembre-2026-coeur-cpp/01-rapport-de-session.md
+- **Le lot sur master : e2d5c9c88** ← 07-novembre-2026-hooks-essai/01-journal-de-la-session.md
+- **Le modèle : session › tâches › espaces** ← 07-novembre-2026-everything-declarative/02-une-session-plusieurs-backends.md
+- **Le plein texte filtré : un sous-ensemble poussé dans lucivy** ← 07-novembre-2026-arbre/01-ce-que-le-moteur-doit-au-modele-des-vues.md
+- **Le registre des fils d'un catalogue (arret-du-backend)** ← 08-novembre-2026-recherche/02-knowledge-dump.md
+- **Le service de luciepc** ← 07-novembre-2026-embarquements/00-spans-du-creux.md
+- **Le témoin** ← 09-novembre-2026-ide-par-le-flux/01-inventaire-et-forme.md
+- **Le témoin de suite (residus-de-suite)** ← 08-novembre-2026-recherche/02-knowledge-dump.md
+- **Le verdict** ← 07-novembre-2026-arbre/02-la-lib-unique-de-la-bascule-43.md
+- **Les bases étudiées** ← 07-novembre-2026-tty/02-conception.md
+- **Les commandes en attente sur la carte (lot 7, branche atelier-commandes-sur-la-carte)** ← 09-novembre-2026-atelier-lire-ecrire/01-conception.md
+- **Les empreintes et la montre** ← 07-novembre-2026-arbre/01-ce-que-le-moteur-doit-au-modele-des-vues.md
+- **Les essais de l'équipier, nuit du 7 au 8 novembre 2026** ← 08-novembre-2026-orchestration/01-essais-de-l-equipier.md
+- **Les formes posées (à ne pas casser)** ← 07-novembre-2026-hooks-essai/03-knowledge-dump.md
+- **Les gestes de la journée** ← 08-novembre-2026-recherche/02-knowledge-dump.md
+- **Les hooks de Claude Code** ← 07-novembre-2026-orchestration/01-la-reprise.md
+- **Les leçons** ← 07-novembre-2026-hooks-essai/02-rapport-de-session.md
+- **Les objets** ← 07-novembre-2026-orchestration/03-knowledge-dump.md
+- **Les pièges rencontrés** ← 07-novembre-2026-arbre/04-knowledge-dump.md
+- **Les postes** ← 07-novembre-2026-orchestration/03-knowledge-dump.md
+- **Les postes et les passes** ← 07-novembre-2026-everything-declarative/05-knowledge-dump.md
+- **Les premiers lots** ← 07-novembre-2026-tty/02-conception.md
+- **Les risques** ← 07-novembre-2026-hooks-essai/04-la-recherche-de-code-par-les-hooks.md
+- **Les règles qui tiennent (en plus de celles du 25)** ← 07-novembre-2026-orchestration/03-knowledge-dump.md
+- **Les scripts de passe (single source : ~/.cache/rag3weaver-build, copiés à luciepc)** ← 08-novembre-2026-recherche/02-knowledge-dump.md
+- **Les scripts et où ils sont** ← 07-novembre-2026-arbre/04-knowledge-dump.md
+- **Les tokens proposés** ← 07-novembre-2026-tty/06-theme-commun.md
+- **Les trois causes, relevées sur l'atelier de Lucie** ← 09-novembre-2026-atelier-lire-ecrire/02-la-jauge-du-contexte.md
+- **Les trois lots sur master : 3d09b32c2** ← 07-novembre-2026-hooks-essai/01-journal-de-la-session.md
+- **Les témoins (rouges d'abord)** ← 09-novembre-2026-atelier-lire-ecrire/01-conception.md
+- **Les vues par worktree : la conception de la marche 1** ← 08-novembre-2026-arbre/01-conception-des-vues-marche-1.md
+- **Les étapes, avec leurs heures** ← 07-novembre-2026-arbre/02-la-lib-unique-de-la-bascule-43.md
+- **Lot 2 : le journal de l'hôte horodaté et attribué** ← 07-novembre-2026-hooks-essai/01-journal-de-la-session.md
+- **Lot 3 bis — la table des serveurs du run, et le témoin sur une vraie mémoire** ← 07-novembre-2026-hooks-claude-code/05-lot-3-bis-la-table-des-serveurs-et-le-temoin-sur-une-vraie-memoire.md
+- **Lot 3 ter — le rappel tiré du prompt, sans redite** ← 07-novembre-2026-hooks-claude-code/08-lot-3-ter-le-rappel-tire-du-prompt-sans-redite.md
+- **Lot premier-jeton sur master : 23757c7d6 (nouveautés 95ff12238)** ← 07-novembre-2026-hooks-essai/01-journal-de-la-session.md
+- **Lot suivant : ce qui pèse, au survol** ← 09-novembre-2026-atelier-lire-ecrire/02-la-jauge-du-contexte.md
+- **Lot tty-2 : les octets de la vue inline (7 nov. 2026)** ← 07-novembre-2026-tty/02-conception.md
+- **Lot « le chat tient l'ordre » (A, Rust ; B, la page)** ← 07-novembre-2026-hooks-essai/01-journal-de-la-session.md
+- **M8 — la montée des gabarits d'un backend, sur le gabarit vivant** ← 09-novembre-2026-memoire-longue/02-m8-la-montee-des-gabarits.md
+- **Mes recherches** ← 08-novembre-2026-recherche/02-knowledge-dump.md
+- **Mise à jour de 18 h 10** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **Mise à jour de 20 h 05 — la bascule 43 est faite** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **Mise à jour de 21 h 10** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **Mise à jour de 22 h 35** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **Mise à jour de 23 h 45** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **Nuit du 8 novembre : la même fiche rappelée deux fois** ← 07-novembre-2026-hooks-essai/02-rapport-de-session.md
+- **Pour l'orchestration et pour ED** ← 09-novembre-2026-memoire-longue/01-l-equipier-sur-les-readme.md
+- **Q8/k5 et k10 sur card2, mesurés le 12 novembre** ← 09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md
+- **Questions pour Lucie** ← 07-novembre-2026-hooks-essai/04-la-recherche-de-code-par-les-hooks.md
+- **Questions pour Lucie (par c7)** ← 07-novembre-2026-tty/02-conception.md
+- **Rapport de session de l'orchestration, 6 et 7 novembre 2026** ← 07-novembre-2026-orchestration/02-rapport-de-session.md
+- **Recherche, la reprise du 7 novembre 2026** ← 07-novembre-2026-recherche/01-rapport-de-session.md
+- **Réponses de c7 (7 novembre 2026)** ← 07-novembre-2026-everything-declarative/01-l-equipier-agent-de-code.md
+- **Session recherche, 8 novembre 2026 : knowledge dump** ← 08-novembre-2026-recherche/02-knowledge-dump.md
+- **Session recherche, 8 novembre 2026 : rapport** ← 08-novembre-2026-recherche/01-rapport-de-session.md
+- **Sur des branches** ← 07-novembre-2026-arbre/03-rapport-de-session.md
+- **Sur master** ← 07-novembre-2026-arbre/03-rapport-de-session.md
+- **Sur master (7 nov. 2026, soir)** ← 07-novembre-2026-tty/03-rapport-de-session.md
+- **Tickets ouverts par la session** ← 08-novembre-2026-recherche/01-rapport-de-session.md
+- **Tour 1 — SessionStart, puis le premier message de c7** ← 07-novembre-2026-hooks-essai/01-journal-de-la-session.md
+- **Tour 2 — le lot « chercher sans dossier »** ← 07-novembre-2026-hooks-essai/01-journal-de-la-session.md
+- **Tour de 15 h 46 — le binaire du lot 3 des hooks, et aucun bloc** ← 07-novembre-2026-hooks-essai/01-journal-de-la-session.md
+- **Tour de 15 h 51 — de nouveau aucun bloc** ← 07-novembre-2026-hooks-essai/01-journal-de-la-session.md
+- **Tours 3 à 6 — les réponses de c7, la forme de 96, le code** ← 07-novembre-2026-hooks-essai/01-journal-de-la-session.md
+- **Trois chantiers distincts** ← 09-novembre-2026-memoire-longue/03-le-classeur-local-dans-le-rappel.md
+- **Témoins** ← 07-novembre-2026-embarquements/00-spans-du-creux.md
+- **Un filtre de chemin existe déjà de bout en bout** ← 07-novembre-2026-arbre/01-ce-que-le-moteur-doit-au-modele-des-vues.md
+- **Un petit modèle de décision : le jeu à vrais positifs (8 novembre 2026, après-midi)** ← 08-novembre-2026-banc/02-le-jeu-a-vrais-positifs.md
+- **Une session, plusieurs backends** ← 07-novembre-2026-everything-declarative/02-une-session-plusieurs-backends.md
+- **Vocabulaire (Lucie, 7 nov. 2026, par c7)** ← 07-novembre-2026-tty/02-conception.md
+- **rag3weaver archi — rapport de session** ← 07-novembre-2026-hooks-claude-code/00-rapport-de-session-archi.md
+- **À essayer dans ton atelier (sur master `d23af9cd2`)** ← 09-novembre-2026-atelier-lire-ecrire/01-conception.md
+- **À reprendre ici (22 h 40 environ) : la branche chat-lisible** ← 07-novembre-2026-hooks-essai/01-journal-de-la-session.md
+- **À suivre** ← 07-novembre-2026-coeur-cpp/01-rapport-de-session.md
