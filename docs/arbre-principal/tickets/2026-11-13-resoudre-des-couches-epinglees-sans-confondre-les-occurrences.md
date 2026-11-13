@@ -1,6 +1,6 @@
 # Résoudre des couches épinglées sans confondre les occurrences
 
-- **État** : ouvert ; sous-lot2a en préparation/code isolé, aucun runtime ni qualification.
+- **État** : ouvert ; résolveur pur2a et modulepublication qualifiés CPU sur69dc/piloteabaf, adaptateur natif compilé seulement ; revue/intégration en attente.
 - **Famille** : produit.
 - **Gravité** : capacité manquante ; pas encore de résolution de couches épinglées.
 - **Atteignable en service** : non pour la nouvelle primitive ; les outils lisent la vue L6 existante sans pile de couches.
@@ -95,3 +95,14 @@ Le pont manager doit aussi refuser runtime/socket liés ou propriétaire socket
 étranger ; vérifier lstat et stabilité autour du Ping. Aucun service redémarré.
 Réserves de recette, aucune exécution ni défaut2a établi ; nouveau couple à
 faire relire avant GO.
+
+
+## Qualification CPU bornée obtenue
+
+GO C7 exact APP69dc/piloteabaf, scope/finaliseurVERT214.675462s/3000.
+4exacts1/0/0 puis modulepublication10/0/0(4déjàjugés) :10fonctionsdistinctes,
+14invocationsbrutes ; check adaptateurnatif rc0, COMPILATION seulement.
+67fichiers SHA identiques deuxpostes. [Rapport12](../13-11-2026/12-preuves-cpu-couches-2a.md)
+avec ledger/ELF/caps/memory/maps et limites. Pas de persistance/L6/top-k/outils
+qualifiés, aucune DB/service/modèle ouvert. Ticket reste OUVERT pour revue
+et décision d’intégration/qualification complémentaire, pasGOmaster/retrait.
