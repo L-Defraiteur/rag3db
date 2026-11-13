@@ -4,7 +4,9 @@ import ast, json, os, pathlib, re, shlex, subprocess, sys, time
 W=pathlib.Path('/home/lucied/git_workspaces/cx-activation-modeles')
 C=W/'extension/rag3weaver'
 R=pathlib.Path.home()/'.cache/rag3weaver-build'
-P=pathlib.Path.home()/'.cache/embarquement-notes/activation/union-pub-ed'
+suffix=os.environ.get('ACTIVATION_UNION_SUFFIX','')
+assert re.fullmatch(r'(?:-[a-z0-9-]{1,32})?',suffix)
+P=pathlib.Path.home()/('.cache/embarquement-notes/activation/union-pub-ed'+suffix)
 P.mkdir(exist_ok=False)
 A=json.loads(pathlib.Path(os.environ['RAG3WEAVER_VALIDATION_RECU']).read_text())
 assert A['echeance']>time.monotonic()+10
@@ -20,7 +22,7 @@ v=[ast.literal_eval(n.value) for n in old.body if isinstance(n,ast.Assign) and a
 assert len(v)==1
 fields=dict(s.split('=',1) for s in shlex.split(v[0]))
 assert fields['host'] in ('127.0.0.1','localhost') and fields['port']=='5433' and fields['user']=='rag3weaver'
-PG='cx_embar_union_20261113'
+PG='cx_embar_union_20261113'+suffix.replace('-','_')
 fields['dbname']=PG
 E['RAG3WEAVER_PG']=' '.join(k+'='+shlex.quote(v) for k,v in fields.items())
 pg=['docker','exec','rag3weaver-pg']
