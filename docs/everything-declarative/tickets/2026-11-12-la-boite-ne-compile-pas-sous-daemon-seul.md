@@ -154,3 +154,17 @@ inutilisé sans native : son unique appel est le témoin écrivain gardé ci-des
 Même garde ajoutée au helper, omission de lecture corrigée ; rouge conservé
 cible-gardes-minimum, aucun test joué. Source/recette republiées avant reprise
 causale dans cible-garde-autonome, mêmes argv/bornes et aucun rejeu inchangé.
+
+29d56f6ef : minimum check --tests vert2,22s, ELF libtests compilé76s puis
+parcours chat exact1/0/0 vert (inventaire1641). Arrêt au jeu daemon/check-tests :
+agent_de_temoin et DELAI_DES_TEMOINS ne sont appelés que par daemon_host (native).
+Gardes test+native ajoutées, sans toucher aux clients HTTP de production.
+Relecture préventive du dernier jeu : BoiteDirecte et son impl sont réservés
+au seul test code déjà gardé ; même garde ajoutée à ces helpers.
+
+Reprise publiée : recette accepte troisième argument `daemon` pour reprendre
+les deux jeux non exécutés, dossier cible-garde-client ; les preuves minimum29d
+restent acquises. Équivalence du minimum : les seuls fichiers Rust changés
+après29d sont daemon/mod.rs et daemon_host/livraison_codex.rs, modules exclus
+sans daemon. Aucun rejouage inchangé du minimum, aucun saut de témoin daemon.
+Borne1800s/Max32/j8/lib29/ELF conservés et arrêt premier rouge maintenus.

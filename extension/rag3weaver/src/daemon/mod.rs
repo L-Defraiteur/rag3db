@@ -368,7 +368,7 @@ pub fn agent_with_timeout(delai: std::time::Duration) -> ureq::Agent {
 /// par un client sans délai, et la lib entière s'est figée 25 min le 9 sur une sonde tombée dans
 /// l'arrêt d'un hôte). Connexion, envoi et attente de la réponse bornés à [`DELAI_DES_TEMOINS`] ;
 /// la lecture du corps ne l'est pas, pour qu'un flux de l'IDE lu par un témoin ne soit pas coupé.
-#[cfg(test)]
+#[cfg(all(test, feature = "rag3db-native"))]
 pub(crate) fn agent_de_temoin() -> ureq::Agent {
     let d = Some(DELAI_DES_TEMOINS);
     ureq::Agent::new_with_config(
@@ -384,7 +384,7 @@ pub(crate) fn agent_de_temoin() -> ureq::Agent {
 
 /// Le délai de [`agent_de_temoin`] : large, un tour de chat ou un appel qui indexe sous la charge
 /// de la lib entière y tient ; il change un figement sans fin en un rouge qui se lit.
-#[cfg(test)]
+#[cfg(all(test, feature = "rag3db-native"))]
 pub(crate) const DELAI_DES_TEMOINS: std::time::Duration = std::time::Duration::from_secs(120);
 
 /// **Le nom d'un démon qui ne rend pas** (le ticket des figements de la lib entière, 8 novembre
