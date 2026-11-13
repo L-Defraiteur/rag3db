@@ -129,6 +129,10 @@ try:
  assert health.get('modele')=='bge-m3' and health.get('dim')==1024 and health.get('factice') is False and health.get('sparse') is True
  profile=json.loads((O/'profil-lectures.json').read_text())['env']
  assert profile['RAG3WEAVER_MOTEUR_ANCIEN']=='1' and profile['RAG3WEAVER_GARDER']=='1'
+ # L'hôte direct reçoit aussi les réglages natifs réellement posés par le wrapper.
+ assert profile['RAG3DB_LIBRARY_DIR']==str(lib) and profile['RAG3DB_INCLUDE_DIR']==str(lib) and profile['RAG3DB_SHARED']=='1'
+ for k in ['RAG3DB_ROOT','RAG3DB_SHARED','RAG3DB_LIBRARY_DIR','RAG3DB_INCLUDE_DIR','LD_LIBRARY_PATH']:
+  env[k]=profile[k]
  log=run('create-natif',120,['env','-u','RAG3WEAVER_MOTEUR_ANCIEN','bash',str(W/'docs/everything-declarative/13-11-2026/05-create-exact-meme-profil.sh'),str(bins['e2e']),actual['e2e']['sha256'],str(O)],profile)
  assert 'non jugé' not in log and 'SAUTÉ' not in log
  resultats['create_natif']=resultat(log,1,0)
