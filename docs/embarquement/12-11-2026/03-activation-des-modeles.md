@@ -87,19 +87,27 @@ L'absence du champ chez un ancien fournisseur est une information inconnue.
 
 ## Preuves disponibles
 
-- Rouge initial 5754a75ef : deux départs pour deux demandeurs, attendu un.
-- ef11f0e16 : 15 témoins CPU standalone verts, dont partage, annulation et
-  sonde lente à échéance absolue ; zéro ignoré.
-- f3f8dc80f : témoin de deux processus distincts, un seul départ, vert.
-- d5133197e : précontrôle Cargo, cinq tests du connecteur et un de chauffe
-  partielle verts ; lancement historique hors nouvelle portée commune et target
-  marqué de l'ancien arbre. Requalification confinée après garde du target requise.
-- `scripts/qualifier_activation_modeles.sh cpu` regroupe les témoins sous la
-  portée commune ; le mode `lib` prépare la passe large et le fournisseur privé.
-  Sur 6ddf622ca, validation-rw5c889b verte : 16/16 standalone, 5/5 connecteur,
-  1/1 chauffe, zéro ignoré ; target repris et quiescence contrôlée.
-  La mesure privée du banc n'est pas encore déclarée verte.
+- Validation confinée `validation-jqwupheq` : 17 témoins standalone,
+  5 tests du connecteur réel avec fournisseur CPU factice et un de chauffe
+  partielle, tous passés sans ignoré. Deux processus distincts partagent
+  un départ ; l'annulation d'un demandeur préserve l'autre.
+- Banc réel granite-107m : `validation-bvdguacm`, acquisitions concurrentes,
+  annulation indépendante, réattachement et nouveau départ après arrêt privé.
+  Deux activations, chauffe16/16, vecteurs384 non factices ; six captures
+  avec résidence et calcul PCI04, aucun FD PCI07 observé. Le détail et les
+  limites de latence figurent dans le [rapport du banc](../../banc/12-11-2026/03-resultats-residence-privee.md).
+- Fournisseurs BGE et granite-278m : `validation-tbwulyl4`, deux tests réels
+  sans ignoré, observateur attaché avant les départs et actif jusqu'à leur fin.
+  80 captures complètes, résidence et calcul PCI04 pour les deux processus ;
+  aucun client PCI07 observé. Une disparition `/proc` reste une donnée inconnue.
+- Union avec la navigation8f604 : `validation-qdm6acnb`, cinq jeux de features,
+  lib2258 passés/65 ignorés structurels non qualifiés, navigateur40/40 ;
+  fournisseurs privés2/2 et physique2/2 sous `validation-uu18g72q`, sparse
+  réel1/1 sous `validation-twt84wn7`. Aucun service installé relancé.
+- Union publication/ED en cours de qualification séparée sur branche4 ; les
+  fichiers du producteur, connecteur, activation et observateur sont identiques
+  à ceux déjà qualifiés. Aucune extension de preuve physique à un composant modifié.
 
-Les recettes, refus de compilation rencontrés et résultats suivants restent
-consignés dans le ticket. La fermeture attend les preuves réellement demandées,
-notamment l'appelant accessible, la concurrence et les limites aux deux postes.
+Les recettes, refus et échéances restent consignés dans le ticket. Celui-ci
+reste ouvert pour les politiques distante/éviction, baux distribués et reprise
+après crash ; la tranche dense locale `maintenir` ne les implémente pas.
