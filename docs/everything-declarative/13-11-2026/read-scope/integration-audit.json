@@ -1,0 +1,11 @@
+{
+  "source_qualified": "461e8b868f40907bb0b2f731ff2fcaebc78923d2",
+  "proofs": "07f346ec5566d764c7862e01f3e87c0e071e9c9e",
+  "master": "ba0317ed146e71f59bb8cbbf383822e100cb73e8",
+  "candidate_before_audit": "f7fceffb89d243c7d0db0380bcf34f28ff02ca25",
+  "product_entries": 6779,
+  "product_delta": [],
+  "includes": "all tracked non-docs entries, modes/blobs/gitlinks",
+  "range_diff_equal": 11,
+  "new_runtime": false
+}
