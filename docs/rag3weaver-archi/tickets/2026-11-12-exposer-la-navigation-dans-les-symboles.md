@@ -495,3 +495,16 @@ les preuves. Composant natif supplémentaire≤120s, santé/rendu7879 après les
 Source et pilote neufs publiés avant reprise complète dans le RESTE de6000 initial
 (deadline884429.442394705), pas de reset ; PG réemployée uniquement après identité/
 propriétaire/OID identiques à la création. Pas de reprise avant revue de ce point.
+
+Décision C7 après revue : réutiliser les composants F5/minimal/lib2278/NAV40
+verts INCHANGÉS et les trois ELF figés de SOURCE6786, pas de rebuild ni rejeu vert.
+Nouvelle portée dans le reste de la même échéance884429.442394705 ; seules
+lectures/complementCREATE/hôte13/PG36/attestations restent à jouer. Bilan exigé :
+27 distincts jugés=26+1,28 invocations brutes, filets comptés séparément ; le27
+du lanceur seul ne qualifie pas ce résultat et aucune compatibilité C++207701
+n'est affirmée. Profil utile/LD/native/extensions figés ; au complément, seul le
+drapeau ANCIEN est retiré. Les racines TMP/état/cache/checkpoints privées de la
+suite sont conservées puis réemployées, avec provenance capturée du vrai PID.
+Le marqueur possédé d'état est restauré et archivé par la primitive réelle
+terminer_etat_suite_e2e ; residus_de_la_suite vérifie le même TMP. Aucune assertion
+ou primitive Recherche modifiée ; premier rouge stop/diagnostic.
