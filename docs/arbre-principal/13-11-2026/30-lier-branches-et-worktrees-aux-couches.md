@@ -1,7 +1,7 @@
 # Lier les branches et les worktrees aux couches (le pas des vues après 1a et 1b)
 
 13 novembre 2026, arbre principal, à la demande de c7. Page de conception : aucun code avant le mot de
-Lucie. Relue par recherche le 13 novembre (ses points sont reportés et attribués) ; ED à venir. Elle s'appuie sur la conception du 8 novembre
+Lucie. Relue par recherche et par ED le 13 novembre ; leurs points sont reportés et attribués. Elle s'appuie sur la conception du 8 novembre
 (`extension/rag3weaver/docs/08-novembre-2026-arbre/01-conception-des-vues-marche-1.md`, §§ 2 à 5),
 sur le résolveur de couches 2a (`src/dataflow/migrations/publication/layers.rs`) et sur la décision
 de Lucie du 13 novembre : les vues se bâtissent sur l'index de code réel, sans second index.
@@ -26,17 +26,31 @@ worktree et un commit deviennent des couches et des générations.
     branche de départ et son commit (`depart`).
   - Pour une branche venue d'ailleurs, je propose une inférence prudente : parmi les couches
     connues, celle dont la pointe est l'ancêtre le plus proche du point de fourche. À défaut,
-    l'ancre. L'inférence est notée comme telle, jamais confondue avec une déclaration. **Question 1.**
+    l'ancre. **Question 1.**
+  - L'admission (ED) : une parente notée par l'atelier est une déclaration, admise. Une parente
+    inférée n'est admise que si la réponse est **unique** : deux candidates à égale distance font
+    une vue ambiguë, refusée en le disant (le contrat du 11), jamais un choix. Une fois admise,
+    l'inférence s'**estampille** avec son genre (« inférée ») et n'est plus recalculée à chaque
+    ouverture : l'admission lit une déclaration ou une estampille, jamais une inférence fraîche. La
+    provenance d'une occurrence venue d'une parente inférée le dit.
 - **Sa base** est le commit de la fourche. La couche se définit contre sa base, pas contre la pointe
   du moment de sa parente (la mesure du 7 novembre : 0 à 8 chemins contre la base, 5 à 53 contre le
   master du moment).
 
 ## 2. Une génération par commit indexé
 
-- **Une génération est l'état publié d'une couche pour un commit** : `(couche, commit)`, plus un rang
-  si le même commit est réindexé, par exemple après un changement de recette. L'identité vient du
-  commit, pas d'un tirage au hasard : deux processus qui indexent le même commit parlent de la
-  même génération. Le registre de Codex (chaîne de publications, refus d'une tête qui a bougé)
+- **Une génération est l'état publié d'une couche pour un commit.** Son identité (ED, relecture du
+  13 novembre) :
+  - le commit ;
+  - la couche et le commit de sa base, puisqu'une même pointe déclarée sur une autre parente ne
+    porte pas les mêmes occurrences ;
+  - l'empreinte de la recette (format de la version de scope, découpage, versions de l'analyseur ;
+    le modèle reste par colonne), et non un compteur.
+
+  Deux processus qui indexent le même commit avec la même recette parlent de la même génération :
+  réindexer est idempotent, une autre recette donne une autre génération, sans tirage ni compteur à
+  synchroniser. Le nom de branche n'est qu'une étiquette : une branche renommée, ou effacée puis
+  recréée, n'hérite pas d'une génération par son nom. Le registre de Codex (chaîne de publications, refus d'une tête qui a bougé)
   s'adopte pour la publication. Ses identifiants tirés au hasard ne s'adoptent pas.
 - **Quand une génération se publie.** Je propose : quand l'index a fini un commit, c'est-à-dire
   quand la montre voit `HEAD` bouger et que les versions neuves sont écrites. La génération
@@ -54,10 +68,17 @@ worktree et un commit deviennent des couches et des générations.
   ce qui est modifié et pas encore commité.
 - **La couche de travail n'est pas une génération.** Elle est vivante : la montre la réécrit à chaque
   édition, elle n'a pas d'identité stable, elle ne se publie pas. Elle appartient au worktree.
+  - Elle reste hors du chargeur durable (2b-B), qui ne charge que des générations publiées. Elle
+    vit dans l'hôte, par worktree, et se reconstruit depuis le disque après un redémarrage (ED).
+  - Une lecture la fige : à son début, elle prend la génération épinglée **et** un instantané de la
+    couche de travail. C'est une table immuable, échangée en entier à chaque réécriture de la
+    montre. Une réécriture pendant la lecture ne la touche pas (ED).
   - Au commit, ses occurrences entrent dans la génération neuve de la branche, et elle se vide.
   - À l'effacement du worktree, elle part.
 - **Question 3** : la couche de travail d'un worktree est-elle visible des autres sessions (un agent
-  qui lit le worktree d'un autre), ou seulement de celle qui le tient ?
+  qui lit le worktree d'un autre), ou seulement de celle qui le tient ? Proposition d'ED : lisible
+  par un `view` explicite (`<worktree>`), jamais par défaut ; la vue courante d'une session ne prend
+  que la couche de travail de son propre worktree.
 
 ## 4. Ce qu'on lit, et ce que l'IDE montre
 
@@ -123,7 +144,8 @@ worktree et un commit deviennent des couches et des générations.
 1. **La parente d'une branche venue d'ailleurs** : l'inférer par le point de fourche (notée comme
    inférée), ou exiger qu'elle soit déclarée ?
 2. **Quand publier une génération** : à chaque commit indexé, ou seulement à la demande, au push,
-   ou à la fin d'une tâche ?
+   ou à la fin d'une tâche ? (ED : publier à chaque commit est sûr, puisque l'identité est
+   déterministe ; une génération en double n'existe pas.)
 3. **La couche de travail** : privée à la session qui tient le worktree, ou lisible des autres ?
 4. **Un rebase** : la couche suit d'elle-même (génération neuve publiée par l'hôte), ou on attend un
    geste ?
