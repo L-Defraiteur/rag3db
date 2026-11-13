@@ -31,3 +31,18 @@ strict ; la maintenance interne suit les stockages physiques déjà entretenus.
 Qualification ciblée P14 sura43c475f9 : VERTE (voir bilan parent lié).
 Créations/écritures/reprise ou lecteur RO réellement éprouvés dans le profil
 synthétique BM25. Qualification générale et livraison non faites ; ticket ouvert.
+
+
+## Reprise corrective distincte — décision C7 après expiration
+
+L’échéance initiale 896572.526453239 est expirée : aucune reprise ni prolongation
+de ce reçu. Le rouge global initial reste conservé. Source application EXACTE
+4e5ae8a324f50313b74f70772eb2e92ee41fad6f et quatre ELF du ledger inchangés.
+Pilote préparé hors WT source, étape corrective DISTINCTE de 3600 s après poste
+réel, runtime complet avec cwd crate, sans Cargo/rebuild/F8/min déjà verts.
+PG initiale cx_phys_2191_20261113_u1 conservée, identité/OID et dump requis avant
+tout retrait ; nouvelle PG privée cx_phys_2191_20261113_u1c, absence préalable
+et création unique contrôlées. Aucun DROP/reset. Revue et GO exact requis avant
+lancement. Aucun résultat runtime global vert ; P14 ciblé seul demeure qualifié.
+Les champs protégés UNKNOWN ne prouvent pas une absence d’accès GPU.
+Voir [recette corrective](../13-11-2026/04-recette-corrective-runtime-physique.md).

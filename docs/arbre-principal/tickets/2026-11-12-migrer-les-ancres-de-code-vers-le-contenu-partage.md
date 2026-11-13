@@ -2298,3 +2298,27 @@ Le relevé d'ascendance lit les stat de tous PID avant attribution par parent+
 starttime, sans filtre UID qui ferait disparaître un descendant SUID. Aucune
 lecture env/FD ni signal à un PID tiers : observations/actions restent bornées
 aux descendants attribués ; scan final inclut aussi un PID attribué passé SUID.
+
+
+Globale4e STOPpremierrouge lib code_tools::tests::a_closed_policy_refuses_and_an_open_one_reads_outside_the_source. F8/min/4compiles/ledger verts conservés ; runtime
+lib non conclu, NAV/CLI/lectures/PGTX non lancés. Cause précondition CWD fausse
+confirmée métadonnées/source par ED/C7 : /var/tmp sans Cargo.toml. Ticket
+[correctif pilote](2026-11-13-le-pilote-de-lib-sort-de-la-racine-attendue-par-les-temoins.md).
+Préparation séparée du runtime complémentaire autorisée, source4e etELF figés,
+NOUVEAUreçu borné échéanceinitiale896572.526453239, aucune prolongation/GO runtime
+implicite. Aucun changement de politique/test produit pour masquer le rouge.
+
+
+## Reprise corrective distincte — décision C7 après expiration
+
+L’échéance initiale 896572.526453239 est expirée : aucune reprise ni prolongation
+de ce reçu. Le rouge global initial reste conservé. Source application EXACTE
+4e5ae8a324f50313b74f70772eb2e92ee41fad6f et quatre ELF du ledger inchangés.
+Pilote préparé hors WT source, étape corrective DISTINCTE de 3600 s après poste
+réel, runtime complet avec cwd crate, sans Cargo/rebuild/F8/min déjà verts.
+PG initiale cx_phys_2191_20261113_u1 conservée, identité/OID et dump requis avant
+tout retrait ; nouvelle PG privée cx_phys_2191_20261113_u1c, absence préalable
+et création unique contrôlées. Aucun DROP/reset. Revue et GO exact requis avant
+lancement. Aucun résultat runtime global vert ; P14 ciblé seul demeure qualifié.
+Les champs protégés UNKNOWN ne prouvent pas une absence d’accès GPU.
+Voir [recette corrective](../13-11-2026/04-recette-corrective-runtime-physique.md).
