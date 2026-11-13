@@ -642,3 +642,12 @@ Nouveaux juges comptageatomic et3sendadmis/cap1 ; tous anciensconservés.
 Pilotes distincts qualifier-barriere-atomique.py et mesurer-envois-ac.py publiés,
 sourcefixeC, mêmescontrats ; A/B inchangés. ROED/C7 demandée avant GOcorrectness,
 puis A/C distinct si vert. Aucunbuild/test/mesureC, SDK/DB/release/merge engagé.
+
+## Occurrence à luciepc, lib 835d5298f (recherche, 13 novembre 2026, 18 h 06)
+
+La lib entière du lot journal-apres-arret (4a8607e43, base ae088023e, sans d57273bba) :
+2311 passés, 1 échec, le même témoin à `tests.rs:414:49`, le même message
+(« already open for writing in this process »), fixture signalée PHYSICAL_FAILED_FIXTURE.
+Rejoué seul aussitôt (`physical_index::tests`, même binaire, même target) : 10/10 trois fois
+de suite. Rouge intermittent, dans la lib entière seulement ; le lot ne touche ni ce module
+ni la connexion native.
