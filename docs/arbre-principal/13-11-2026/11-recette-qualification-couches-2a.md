@@ -22,15 +22,24 @@ P=cache/cx-validation-couches-2a-v1, Q=cache/cx-pilote-couches-2a-v1,
 S=cache/cx-confinement-couches-2a-v1, T=cache/cx-target-contenu-derive.
 Ces quatre destinations doivent être ABSENTES, jamais effacées/réutilisées par
 le pilote. T privé et neuf ; aucun target ED partagé. Q reçoit copies hashées
-driver/finaliseur et primitive commune confiner_validation.py byte-identique
+driver/finaliseur/native-check et primitive commune confiner_validation.py byte-identique
 à l’application. Superviseur/driver/finaliseur et cwd lanceur /var/tmp horsW ;
 seuls Cargo et ELF prennent cwdcrate comme Cargo.
+
+Avant poste, le lanceur initialise XDG_RUNTIME_DIR=/run/user/UID et
+DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/UID/bus pour le manager utilisateur
+EXISTANT, vérifie propriétaire/socket et Ping busctl. Aucun redémarrage ou
+création de service : bus absent/illisible refuse avant admission, preuveQ
+conservée. La liste blanche du driver vient APRÈS poste et confiner, avec
+DBUS_SESSION_BUS_ADDRESS remplacée par le bus privé unique.
 
 Le lanceur prend poste lourd réel Max32GiB/HIGHmax, puis superviseur commun
 --delai3000 et bus privé UNIQUE. AUTH.echeance est l’unique borne, départ
 =echeance−3000. Chaque phase=min(cap,tempsrestant−15), aucune nouvelle fenêtre
-ni reset. jobs8 et quatre rôles BURNCPU, buffer1GiB, SDK29 exact+hash, ancien
-flag explicite. Aucun C++/SDK rebuild, DB, modèle, service ou benchmark.
+ni reset. jobs8 et quatre rôles BURNCPU ; buffer1GiB et SDK29 exact+hash,
+flag ancien explicite seulement pour le CHECK natif. Les juges CPU ne
+sourcent PAS exporter_la_lib, ne reçoivent aucune variable SDK et n’exigent
+pas de maps librag3db.so. Aucun C++/SDK rebuild, DB, modèle, service ou benchmark.
 Coordination ED autorise seulement deux slots lourds isolés, pas mesure perf.
 
 ## Commandes et assertions
@@ -44,7 +53,7 @@ Coordination ED autorise seulement deux slots lourds isolés, pas mesure perf.
 3. Inventaires ELF layers::tests et publication:: (+listignored) cap30 chacun.
    Layers doit être exactement les4 noms attendus et0ignored ; inventaire
    publication complet avec ignorés comptés, jamais promus verts. Ledger
-   source/pilote/ELF/SHA/deadline/inventaires écrit, PAUSE. Copie/preuve deux
+   source/pilote/features[]/ELF/SHA/deadline/inventaires écrit, PAUSE. Copie/preuve deux
    postes et publication du SHA ledger AVANT marqueur inventaire-publie.
 4. Quatre invocations --exact NOM --nocapture --test-threads=8, cap60 chacune,
    chacune exige1passed/0failed/0ignored. Le premier exact est exécuté via gdb
@@ -59,7 +68,9 @@ Coordination ED autorise seulement deux slots lourds isolés, pas mesure perf.
 6. cargo check --lib --no-default-features --features rag3db-native, cap900
    intersecté même échéance. S’il manque le budget, natif NON QUALIFIÉ et
    composite nonVERT : aucune déduction depuis CPU seul. Compile adapter
-   n’est PAS un runtime physique/natif ni une ouvertureDB.
+   n’est PAS un runtime physique/natif ni une ouvertureDB. Export magasin
+   limité à cette commande ; native-check.py enregistre le vrai env exporté
+   (SDK/LD/include/shared/pool), hash .so et cgroup puis exec ce même Cargo.
 7. SHA ELF original+copie inchangés, maps/profilréels à main, mémoire/events,
    target<=32GiB, quiescence, sources/pilote/copies figés.
 
