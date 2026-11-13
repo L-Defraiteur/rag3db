@@ -209,3 +209,35 @@ lucivy, branche cx-lucivy-shutdown-destruction, commit `645b6e6`, ajout unique
 aucune qualification de cette nouvelle source. Porteur Lucivy ; reste :
 relecture et nouveau GO CPU distinct par C7 avant tout lancement. La barrière
 de production reste à préparer après preuve rouge pertinente, ticket ouvert.
+
+## Arbitrage de la qualification garde SDK29, après préfixe65ad
+
+C7 a réempreinté indépendamment les100 fichiers du snapshot local figé
+`cx-preuves-garde-target-union-v2-avant-runtime` : zéro écart, manifeste
+`33b8863cab65617e1af4985ae0765c7beebbae61535edddbd33f52577597b7a8`.
+Ledger `6937bd93b2e87fe9cd752b87eb5e2b1c280d9afa83655a9fd278fe5c1faa29b7` ;
+les deux copies ELF ont également été réempreintées personnellement et concordent.
+Le contrôle indépendant porte sur la copie locale ; identité PC fournie par le porteur.
+
+La lecture ED ne trouve pas de motif établi pour retenir toute qualification
+SDK29. La fenêtre de destruction Lucivy est commune et le SDK29 n'est pas
+déclaré immunisé. Le détenteur réel de la base CI demeure non attribué.
+Le lot garde est une autre source et une autre construction : qualification
+SDK29 de ses entrées, gabarits et assets, sans remplacement de la CI statique.
+
+Décision C7 : la suite du couple gelé APP
+`9ec421069320b2f0cca4099fa27f83059e944de9` / PILOTE
+`65ad0810ca3f4f1496539d5e2945e5c959b94a07` peut être lancée, après message
+GO exact, avec le ledger publié ci-dessus. Lib entière puis NAV40/UI/attestations
+selon la recette déjà relue, sans exclusion supplémentaire ni changement de
+source, profil, ELF ou garde. Le juge physique qui échoue en CI reste inclus.
+Arrêt au premier rouge, aucune relance identique : si ce juge refuse également
+sous SDK29, conserver la fixture et relier les preuves à ce ticket. Un vert
+local ne répare pas le rouge CI et n'autorise pas le landing de la garde.
+
+Même START914593.915525602, END effectif919390.748839204 inférieur à
+l'original919393.915525602 ; tous caps MIN temps restant, attente déjà consommée,
+aucune remise à zéro. Confirmer reçu encore vivant et temps suffisant avant le
+marker. Aucun ancien run CI relancé, aucune dépendance/SDK modifié, aucun modèle
+ou service partagé requis. Les tickets restent ouverts jusqu'aux décisions
+de qualification et d'intégration correspondantes.

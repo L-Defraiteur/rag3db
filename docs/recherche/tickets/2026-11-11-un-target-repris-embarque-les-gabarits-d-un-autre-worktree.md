@@ -42,3 +42,15 @@ Pour fermer : rendre la frontière de propriété effective sur tous les points 
 Une seule modification de date de `build.rs`, SHA source inchangé et aucun diff git, a reconstruit le navigateur en 48,19 s. Attestation : 212 chemins du bon worktree, 212 contenus courants présents, chemins UI `.d` conformes, ELF SHA256 `3e3770df4000178626a8c07631ab124ab6673c67b643b7ad2cae6f6e7cfc7063`. Archi a vérifié cette attestation indépendamment.
 
 Les deux tests auparavant rouges passent inchangés séparément (1/0/0 chacun, 1,25 s et 67,85 s), puis le navigateur complet passe 36/0/0 en 132,35 s, ELF inchangé. Journaux nouveaux `nav-cible-erreur.log`, `nav-cible-flux.log`, `navigateur-reconstruit.log`, `attestation-nav-reconstruit.json` ; ancien rouge et ELF intacts. Le verdict agrégé R5 conserve les autres étapes vertes et remplace explicitement la seule étape navigateur. Aucune capture supplémentaire de la réponse HTTP n'a été ajoutée. Cette récupération confirme l'effet des gabarits périmés ; elle ne ferme pas le défaut de garde.
+
+## Coordination du préfixe65ad et de la suite SDK29
+
+Préfixe F8+deux compilations/223 attestations et ledger publiés, aucun juge
+runtime joué à ce point. C7 : réempreinte indépendante locale100/0écart,
+manifest33b8863cab65617e1af4985ae0765c7beebbae61535edddbd33f52577597b7a8,
+ledger6937bd93b2e87fe9cd752b87eb5e2b1c280d9afa83655a9fd278fe5c1faa29b7.
+La décision SDK29 bornée, les deux SHA gelés, l'échéance originale et la
+distinction du rouge CI sont consignés dans le
+[ticketCI](../../orchestration/tickets/2026-11-13-la-ci-refuse-la-reouverture-du-temoin-physique.md#arbitrage-de-la-qualification-garde-sdk29-après-préfixe65ad).
+Le message GO exact reste nécessaire avant le marker ; aucune exclusion ajoutée.
+Ce paragraphe ne vaut ni verdict global ni intégration.
