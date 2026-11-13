@@ -73,3 +73,13 @@ création/redémarrage de service. CPU features[] sans exportSDK ni exigence
 mapsnative. SDK29/export/profil réel/pool1G limités au CHECK natif,
 compilation≠exécutionSDK/DB. ED occupe son propre slot lourd/target, jamais
 partagé avec cette qualification2a. Aucun run avant GO du pilote révisé.
+
+
+### Réserve mémoire b38 : finaliseur et dernière borne
+
+Revue RO identifie un intervalle après la vérification d’échéance : scan
+/proc puis deux hashes ELF coûteux pouvaient terminer après END et encore
+publier VERT. Aucun run n’a exposé ce cas. Correction du pilote uniquement :
+relire monotonic après ces contrôles et immédiatement avant la publication
+composée ; expiration impose ROUGE. Aucun reset ni élargissement de durée.
+Nouvelle revue exacte requise avant GO, sourceapp69 inchangée.
