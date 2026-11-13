@@ -651,3 +651,13 @@ The notebook and validated-result backend templates declare BGE-M3 (1024 dimensi
 without a fixed service address. Set `RAG3WEAVER_SERVICE_EMBED` for the host or tunnel
 (the legacy `RAG3WEAVER_EMBED_SERVICE` is the fallback variable). An address explicitly
 written in a manifest takes priority. Existing user copies are not migrated automatically.
+
+`grep_files` accepte `symbol_hierarchy_depth` (0 par défaut : sortie et lectures
+habituelles). Entre1et16, il ajoute le scope contenant le premier match regex
+de chaque ligne, puis au plus ce nombre de parents de plages indexées. Les offsets
+UTF-8, la source et le chemin qualifient la correspondance ; index absent/périmé
+ou plages ambiguës restent explicites et les matches textuels sont conservés.
+Le contenu déjà cherché sert au contrôle de fraîcheur, sans relecture ni réindexation.
+Le budget de cette option est commun aux sorties JSON/Markdown :96Kio,200nœuds,
+8fichiers ; une coupure conserve les comptes et se signale. Les relations de plages
+à granularité ligne ne garantissent ni parent AST, ni appartenance, ni héritage.

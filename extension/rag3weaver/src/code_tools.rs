@@ -12,6 +12,8 @@
 //! l'appel suivant, tableau `| File | Line | Scope | Match |`, markdown par
 //! défaut, plafonds côté serveur avec `total_found` **et** `returned`.
 
+mod grep_symbols;
+
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -805,6 +807,8 @@ pub struct GrepOptions {
     pub relation: Option<String>,
     /// Voisins rendus par scope (0 = le défaut, 5).
     pub relation_limit: usize,
+    /// 0 : inchangé ; positif : scope contenant + au plus ce nombre de parents.
+    pub symbol_hierarchy_depth: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -813,6 +817,8 @@ pub struct GrepMatch {
     pub line: usize,
     pub text: String,
     pub scope: Option<ScopeRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub symbol_context: Option<serde_json::Value>,
     /// `Some(true)` : le fichier a changé depuis son indexation.
     pub stale: Option<bool>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -837,6 +843,8 @@ pub struct GrepResult {
     /// Un scope par entrée, dans l'ordre où `grep` l'a rencontré.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub related: Vec<RelatedScope>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub symbol_hierarchy: Option<serde_json::Value>,
 }
 
 /// Ce à quoi un scope trouvé par `grep` est relié.
@@ -869,10 +877,12 @@ impl GrepResult {
         out.push('\n');
         if let Some(hint) = &self.hint {
             out.push_str(&format!("\n{hint}\n"));
+            out.push_str(&grep_symbols::markdown(self));
             return out;
         }
         if self.matches.is_empty() {
             out.push_str("\n(no match)\n");
+            out.push_str(&grep_symbols::markdown(self));
             return out;
         }
         out.push_str("\n| File | Line | Scope | Match |\n|------|------|-------|-------|\n");
@@ -911,6 +921,7 @@ impl GrepResult {
             }
             out.push_str("```\n");
         }
+        out.push_str(&grep_symbols::markdown(self));
         out
     }
 }
@@ -934,6 +945,11 @@ pub fn grep_files(
     pattern: &str,
     opts: &GrepOptions,
 ) -> Result<GrepResult, String> {
+    if opts.symbol_hierarchy_depth > crate::symbol_navigation::MAX_DEPTH {
+        return Err(format!("symbol_hierarchy_depth: 0..{}",crate::symbol_navigation::MAX_DEPTH));
+    }
+    let enriched=opts.symbol_hierarchy_depth > 0;
+    let mut budget=grep_symbols::Budget::default();
     let re = regex::RegexBuilder::new(pattern)
         .case_insensitive(opts.case_insensitive)
         .build()
@@ -966,10 +982,14 @@ pub fn grep_files(
         }
         files_searched += 1;
         let lines: Vec<&str> = content.lines().collect();
+        let first=matches.len();
+        let mut spans=Vec::new();
+        let mut byte_start=0;
         for (i, line) in lines.iter().enumerate() {
-            if !re.is_match(line) {
-                continue;
-            }
+            // split_inclusive tient compte de CRLF et du dernier fragment sans LF.
+            let offset=byte_start;
+            byte_start += content[offset..].find('\n').map(|n|n+1).unwrap_or(content.len()-offset);
+            let Some(found)=re.find(line) else { continue };
             total_found += 1;
             if matches.len() >= max_results {
                 continue; // on compte, on ne rend plus
@@ -978,14 +998,14 @@ pub fn grep_files(
             let scopes = match scope_cache.get(&path) {
                 Some(s) => s,
                 None => {
-                    let s = scopes_of(catalog, &src_id, &indexed_path)?;
+                    let s = if enriched { Vec::new() } else { scopes_of(catalog, &src_id, &indexed_path)? };
                     scope_cache.entry(path.clone()).or_insert(s)
                 }
             };
             let stale = match stale_cache.get(&path) {
                 Some(s) => *s,
                 None => {
-                    let s = indexed_hash(catalog, &src_id, &indexed_path)?.map(|h| h != crate::hash::content_hash(&content));
+                    let s = if enriched { None } else { indexed_hash(catalog, &src_id, &indexed_path)?.map(|h| h != crate::hash::content_hash(&content)) };
                     stale_cache.insert(path.clone(), s);
                     s
                 }
@@ -996,10 +1016,15 @@ pub fn grep_files(
                 line: line_no,
                 text: clip(line, MAX_MATCH_CHARS),
                 scope: narrowest(scopes, line_no).cloned(),
+                symbol_context: None,
                 stale,
                 context_before: (i.saturating_sub(context)..i).map(|j| clip(lines[j], MAX_MATCH_CHARS)).collect(),
                 context_after: (i + 1..(i + 1 + context).min(lines.len())).map(|j| clip(lines[j], MAX_MATCH_CHARS)).collect(),
             });
+            if enriched { spans.push((offset+found.start(),offset+found.end())); }
+        }
+        if enriched && matches.len()>first {
+            grep_symbols::enrich_file(source,catalog,&path,&content,&mut matches[first..],&spans,opts.symbol_hierarchy_depth,&mut budget);
         }
     }
     // Aucun fichier regardé sous un préfixe : c'est le préfixe qui est faux,
@@ -1016,7 +1041,7 @@ pub fn grep_files(
         _ => Vec::new(),
     };
 
-    Ok(GrepResult {
+    let mut result=GrepResult {
         pattern: pattern.to_string(),
         cursor: source.cursor(),
         files_searched,
@@ -1026,7 +1051,10 @@ pub fn grep_files(
         matches,
         hint,
         related,
-    })
+        symbol_hierarchy: enriched.then(||budget.summary(opts.symbol_hierarchy_depth)),
+    };
+    if enriched { grep_symbols::bound(&mut result); }
+    Ok(result)
 }
 
 /// **La porte d'une relation demandée à `grep`** : un nom qui part dans une
