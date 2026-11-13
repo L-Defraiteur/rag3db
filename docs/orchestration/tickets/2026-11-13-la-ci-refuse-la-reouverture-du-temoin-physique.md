@@ -454,3 +454,8 @@ RO ED/C7 demandée avant tout GO distinct. Une fusion ordinaire du correctif
 autorisé relève du GO de coordination après revue+qualif, pas d’une nouvelle
 permission humaine inventée ; tag/release/publication restent décision explicite
 séparée de Lucie. Le ticket partagé reste ouvert et le holder CI inconnu.
+
+Limite microbanc notée au plan : ActorRef::send sans notifier diagnostique sur
+stderr pour pinned dans les deux sources. Même puits A/B et coût I/O/formatage
+à déclarer, sans retoucher le code testé ; peut masquer le delta d’admission.
+Observation RO liée au coût du mécanisme, aucune correction hors périmètre.

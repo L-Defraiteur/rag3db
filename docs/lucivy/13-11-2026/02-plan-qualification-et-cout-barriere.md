@@ -100,3 +100,13 @@ Preuves bornées de la lib entière et du contrat close/router, puis mesure CPU
 interprétable. Une fusion ordinaire dans main lucivy relève du GO de coordination après revue
 et qualification dans ce correctif autorisé. Tag, release et publication de
 version restent des décisions explicites distinctes de Lucie ; aucun GO ici. Ticket partagé reste ouvert.
+
+### Limite de mesure pinned relevée en lecture seule
+
+Dans les deux sources, ActorRef::send émet un diagnostic sur stderr lorsqu’il
+n’a pas de notifier, ce qui est le cas pinned. Ne pas ajouter silencieusement
+une suppression dans le code d’un seul côté. Fixer stderr vers le même puits
+pour A/B et le relever dans la recette ; même vers /dev/null, formatage/syscalls
+restent dans le chrono et peuvent masquer le coût d’admission. Les cas worker
+servent alors de comparaison sans ce diagnostic. Cette mesure doit déclarer
+cette limite et ne pas s’attribuer un coût « mutex seul ».
