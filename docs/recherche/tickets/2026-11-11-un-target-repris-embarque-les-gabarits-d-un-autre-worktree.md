@@ -190,3 +190,21 @@ APRÈS acquisition, juste avant reprise réelle, inode/device/UID/mode/marker,
 provenance698/reçus terminés/3SHA et scan incluant OLDW698, nouveauW et target.
 Activité ou UNKNOWN attribué refusés ; inconnus baseline restent inconnus.
 Ticket complété AVANT diff, aucune qualification/runtime supplémentaire.
+
+## Réserves ED438 avant GO — première preuve et frontière metadata
+
+stop() réappelait observe() complet : une observation de nettoyage pouvait
+écraser cargo-features-PID-start.json ou créer nav-real-profile après un rouge,
+et les assertions n'explicitaient pas toujours la cause. Séparer attribution/
+confinement de nettoyage et attestation ; tentatives append-only et premier
+rouge immuable avec champs sélectionnés avant assertion. Zéro attestation
+pendant nettoyage, ne pas repeindre un échec par une observation tardive.
+
+Autre réserve : METADATA_BEFORE_EXPORT était choisi en fonction du profil
+observé et argv metadata, sans preuve de phase initiale. Un metadata nested
+après export privé de SDK pourrait être accepté. Isoler la reprise initiale
+réelle dans une phase nommée avant F8, sous la même borne F82100 et souscap120,
+puis F8 n'admet QUE le contrat SDK exact pour tout Cargo, metadata compris.
+Le profil sans SDK n'est admissible QUE dans cette phase, pour la commande
+metadata --all-features exacte de la garde commune. Ticket avant diff ; aucune
+exécution/target muté et ancien438 non autorisé.
