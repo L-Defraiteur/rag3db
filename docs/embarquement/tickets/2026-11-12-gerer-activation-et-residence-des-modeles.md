@@ -563,3 +563,27 @@ script reprendre-union.sh, suffixe-r2, reste de hex calculé après acquisition
 et aucun nouveau2400. ED conserve son candidat produit c9 ; ce correctif test
 fait partie de notre lot d'intégration. Pas de rejeu GPU puisque ses composants
 protégés n'ont pas changé. Les journaux initiaux rouges ne sont pas écrasés.
+
+
+### Régression de fixture corrigée et union qualifiée
+
+Correction08c379b11/c44dfde1a : la fixture tient un vrai index à sa barrière
+CPU pendant les deux reçus de carte, puis prouve le cas terminé sans UI. Les
+assertions d'origine sur cartes/flux/confidentialité restent intégrales.
+Régression d'intégration résolue sur138268398, preuve validation-5wmntc4y :
+F5/5, lib2273 passés/0 échec/66 ignorés structurels non qualifiés, NAV40/0/0,
+transactions ligne-à-ligne3/0/0, merge-copy1/0/0, arrêt-paquet18/0/0,
+rollback-vecteurs3/0/0 ; quatre suites sur quatre, aucune sautée. Portée VERT,
+code0, restes[], nettoyage true ; fixture PG supprimée, unité inactive/code0.
+Échéance877122,116265722, inférieure à hex877122,611725539 ; budget1275 s
+restant réellement acquis, aucun renouvellement2400. Target24407724032 octets.
+Le rouge hex et ses logs restent conservés hors target.
+
+Pub livrébc1a81500 puis ED43e4f185b ; diff produit vide entre Pub31 etbc,
+et entre EDc9 et43. Parent code déjà qualifié : pas de nouveau rejeu pour
+leurs bilans documentaires. Composants activation/constructor/provider/consumer/
+observer inchangés depuis les deux passages physiques qualifiés ; pas de
+nouvelle chargeGPU pour cette intégration. Prochain pas : tour master explicite,
+contrôles et retrait gardé avec archives. Le ticket global reste ouvert pour
+les suites distante/éviction/baux distribués/crash ; seul ce défaut de fixture
+est résolu, aucune prétention de terminer ces politiques.

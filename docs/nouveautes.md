@@ -11,6 +11,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **13 nov. — Le manifeste peut démarrer son modèle dense local.**
+  `models.embed.activation` compose une acquisition partagée, l’annulation
+  indépendante d’un demandeur, le contrôle de l’identité et une chauffe visible.
+  Première politique : maintenir le fournisseur local ; activation distante et
+  éviction restent à venir. (`138268398`)
+
 - **13 nov. — Les déclarations complètes ont leurs publications durables.**
   L'API Rust crée un catalogue dédié neuf, y conserve les valeurs et leurs
   reçus atomiquement et distingue l'événement de publication de l'empreinte
