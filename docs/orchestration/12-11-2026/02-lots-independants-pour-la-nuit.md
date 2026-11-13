@@ -133,8 +133,8 @@ appel tant que l'accès Vertex n'est pas disponible et vérifié.
 
 Publication déclarative bc1a81500 et navigation3edbb8475 sont intégrées ; le
 parcours réel du chat IDE est intégré par43e4f185b. Leurs ressources de lot sont
-rendues ou en nettoyage immédiat. L'activation des modèles termine sa propre
-qualification, puis suit son tour d'intégration ; cet ordre reste prioritaire.
+rendues ou en nettoyage immédiat. L'activation des modèles est intégrée par
+23ceed87b après sa qualification et son tour ; son nettoyage privé se termine.
 
 Deux suites demandées par Lucie peuvent désormais avancer indépendamment :
 Arbre prépare le raccord physique minimal sur index synthétique neuf dans son
