@@ -49,6 +49,8 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
 
 **Mémoire (c7, 13 nov. 2026)** : **32 Gio pour toute validation**, l'invariant de `scripts/confiner_validation.py`. `poste` garde son défaut de **40 Gio pour les bâtis**. Donc `run_e2e.sh` se lance seul (il prend `poste` avec 32G), ou bien `POSTE_MEM_MAX=32G poste lourd … run_e2e.sh` : sous un `poste lourd` sans cette variable, la portée existe déjà à 40 Gio et le confineur refuse la passe.
 
+**Journaux (c7, 13 nov. 2026)** : après le push, les journaux de la passe **s'archivent** (sous `~/.cache/rag3weaver-build/archives/<lot>-<date>/`), ils ne s'effacent pas ; seuls le worktree et les targets s'effacent. Un rouge vu pendant la passe reste lisible après coup : un journal effacé a privé everything declarative de la vue d'un rouge du navigateur.
+
 ### Portée commune des validations Linux
 
 `run_e2e.sh` et `scripts/temoins_navigateur.sh` entrent désormais par
