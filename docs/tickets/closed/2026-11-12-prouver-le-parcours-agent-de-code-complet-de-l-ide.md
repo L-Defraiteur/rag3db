@@ -1,6 +1,6 @@
 # Prouver le parcours agent de code complet de l'IDE
 
-- **État** : corrigé — source union `e4eaf4ef2` ; parcours réel hôte/IDE et globale verts, intégration préparée.
+- **État** : corrigé — source union empilée `c9e6b6e39` ; parcours réel hôte/IDE et globale verts, livraison selon ordre Pub→ED.
 - **Famille** : produit
 - **Gravité** : capacité principale ; l'atelier doit réellement explorer, modifier, tester et reprendre.
 - **Atteignable en service** : les outils existent ; leur parcours complet dans une session réelle reste à qualifier.
@@ -348,3 +348,30 @@ strict de deadline878111.26244974, calculé APRÈS acquisition poste (environ390
 acquis par Arbre sur31, avec fichiers Pub identiques ; pas de rejeu aveugle de
 ces composants ni de Vertex. Ordre master Pub→ED→Embar fixé par C7.
 Ancien dumpPG conservé distinctement ; export final rafraîchi après cette union.
+
+## Union empilée C9 verte
+
+F5 5/5, minimal0, lib2267/0/66 en47.57s, NAV40/0/0 en131.66s,
+lectures27/0/0 en9.73s, hôte13/0/0 en12.45s, PostgreSQL36/0/0 en7.62s ;
+filets2/0/0 chaque e2e. ScopeVERT0/restes[]/nettoyé, quiescence indépendante[].
+Le contrôle2834.58≤6000 garde deadline878111.26244974 ; reste3809 effectif
+calculé après poste. Un chemin de relevé budget a repris celui de l’étape
+précédente : relevé Pub préservé au bon dossier, ancien restauré depuis la copie
+portable fidèle, runner utilisé et note d’audit conservés ; aucune incidence
+sur le délai effectif ni rejeu. Quatre ELF archivés, dont le canonique e2e
+INCREMENTAL0, et maps runtime NAV/e2e/native29/CG32. Target29846025589octets.
+
+Pub31 : neuf fichiers produit identiques, CLI5 et transactions3+1+18+3 qualifiés
+par Arbre sur cette base, pas revendiqués comme rejoués ED. Les helpers/tests
+réels4d/fe0 restent équivalents SHA. BGE7879 rendu, santé réelle/sparse avant/après.
+Dossier `globale-union-pub/verdict-compose.json`, rawlogs, équivalences et source
+223gabarits. DumpPG final rafraîchi, ancien avant-Pub et ses SHA gardés.
+La livraison attend Pub master puis équivalence/rebase MD ; aucune mutation Rust
+après C9, aucun push avant « à toi » C7.
+
+Signal indépendant d’Embarquement sur son union842 : carte de `show_progress`
+absente au second outil d’une fixture sans barrière temporelle. Diag RO transmis
+sous son ticket activation/résidence : contrat « index actif », deux causes
+possibles (index fini ou verrou indisponible), proposition de fixture contrôlée
+sans grossissement/sleep ni changement runtime. C9 reste figé, aucun Cargo ou
+modèle supplémentaire joué pour ce diagnostic ; son routage reste coordonné C7.
