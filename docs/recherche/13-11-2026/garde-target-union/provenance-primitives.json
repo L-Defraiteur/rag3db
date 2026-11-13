@@ -1,0 +1,14 @@
+{
+  "capture-stable.py": {
+    "source": "64abd85142e995220aae3c6cd75e10d63297b5b1",
+    "source_sha256": "07c66adb3d66fda8249abee1b983109ced7647effb0823e2f05cf926bfe6b2c7",
+    "prepared_sha256": "7a4a09af73c46063532bb5c624dd01a4c12d9688d0f6013e04c54f09ad15e391",
+    "delta": "proof directory only"
+  },
+  "superviser-elf.py": {
+    "source": "64abd85142e995220aae3c6cd75e10d63297b5b1",
+    "source_sha256": "b1c41a62891e2ee7cee76e33b0175be29d3aa4d6d16f20099b6487aba2eb3945",
+    "prepared_sha256": "b1c41a62891e2ee7cee76e33b0175be29d3aa4d6d16f20099b6487aba2eb3945",
+    "delta": "byte identical"
+  }
+}
