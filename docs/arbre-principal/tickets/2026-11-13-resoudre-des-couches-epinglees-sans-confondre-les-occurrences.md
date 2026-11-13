@@ -194,3 +194,18 @@ parfinaliseur. Plus de preuveSDK par enfant ni snapshotspréchargés figés.
 120spréflightcacheDANS4800, aucunreset. Aucun target réel modifié, Cargo/
 rustc/SDK/DB/service exécuté par cette réparation ; seule fixturegardeBash
 avec metadataSIMULÉE a été jugée, périmètre et logs dans recette15.
+
+
+## UnionV1 rouge F8 — diagnostic et sonde en préparation
+
+GOcouple236e/47861 a exécutéverifier+reprisecommune12FP→0 VERTS, puis
+assertionmuette d’observationprofil au premierCargo F8 ; tickets/étatVERTS
+mais aucun jeuF8 vert, aucun juge union. ScopeROUGE2.190969s, reçuTERMINE,
+busabsent/restes[]/scanlotvide,8UNKNOWNbaseline.37fichiersSHAidentiques
+deuxpostes, [rapport16](../13-11-2026/16-arret-f8-et-sonde-cargo.md).
+Valeursfautives noncapturées : LD/toolchain est hypothèse à observer, pas
+cause démontrée. Prépa archiveprofils/diffavantassert sansrelaxercontrat.
+Sonde Cargo--version seulement cap20/scope<=60 bornée à échéanceORIGINALE
+911024.174319861 aprèsvraiposte, profils SDKexact etCargoobservé viaGDBexec,
+aucune compilation/mutationT, codeconcretpubliépourRO+GOsondedistinct.
+Pas de reprise-cach69 répétée : gardeuniondéjàrepriseprouvée.

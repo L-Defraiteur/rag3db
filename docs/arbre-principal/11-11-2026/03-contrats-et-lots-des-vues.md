@@ -123,3 +123,21 @@ La préparation 1a est reprise sur cx-arbre-scope-version-3 ; lire
 [04-identite-des-derivees-et-projection.md](04-identite-des-derivees-et-projection.md). La relation
 vers la racine existe déjà pour les dérivées ; l'identité par contenu, le suivi par lien/racine et
 la projection déclarée doivent être composés et prouvés. Aucune migration de base vivante lancée.
+
+
+## Clarification Lucie — vues/checkpoints futurs, non implémentés ici
+
+La vue courante est choisie automatiquement par le contexte de consultation ;
+la provenance gagnante est PAR OCCURRENCE (scope hérité peut citer Pparent,
+autre scope remplacé peut citer Pworktree). Consulter une version ancienne
+est explicite : si déjà indexée, aucune ingestion ; sinon matérialiser
+l’état visé sans indexer tous les commits intermédiaires.
+
+Pour lots3a/3b, étudier des checkpoints logiques COMPLETS de visibilité,
+occurrences, arêtes, provenance et références contenus/index partagés, puis
+deltas ; ce n’est PAS un clone d’index. Un checkpoint qui ne porte qu’un
+delta dépend encore de ses parents : ne pas jeter ces dépendances.
+Chargement RAM à la demande et politique de rétention historique sont
+distincts. Aucun coût constant, code de checkpoint livré ou politique GC
+implémentée revendiqué. Clarification future du contrat, aucun changement
+APP236e, de la qualification2a ou de l’autorisation de sonde.
