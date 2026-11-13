@@ -207,6 +207,27 @@ mod tests {
         assert_eq!(texte.lines().filter(|l| l.contains("constructeur_demarre")).count(), 1);
     }
 
+    /// **Une activation déclarée sur le port 0** : le fournisseur se lie
+    /// lui-même et annonce l'adresse prise, aucun port n'est réservé puis
+    /// relâché (la course du ticket
+    /// `docs/embarquement/tickets/2026-11-13-un-test-d-activation-entre-processus-rougit-une-fois-sous-la-lib-entiere.md`).
+    /// Une seconde demande, après la première, retrouve ce fournisseur par
+    /// l'adresse retenue au dossier de coordination : un seul démarrage.
+    #[test]
+    fn une_activation_sur_port_nul_annonce_son_adresse_et_la_retrouve() {
+        let mut f = Fixture::nouvelle();
+        f.source.address = Addresses::parse("127.0.0.1:0");
+        let (premier, origine) = connect_embedder(&f.source).unwrap();
+        let prise = match origine { super::super::Origin::Service(a) => a, autre => panic!("origine {autre:?}") };
+        assert!(!prise.ends_with(":0"), "l'adresse rendue est celle que le fournisseur a prise : {prise}");
+        assert_eq!(premier.embed(&["premier".into()]).unwrap()[0].len(), 384);
+        let (second, origine) = connect_embedder(&f.source).unwrap();
+        assert_eq!(origine, super::super::Origin::Service(prise.clone()), "la seconde demande retrouve le même fournisseur");
+        assert_eq!(second.embed(&["second".into()]).unwrap()[0].len(), 384);
+        let texte = std::fs::read_to_string(f.dossier.path().join("events.jsonl")).unwrap();
+        assert_eq!(texte.lines().filter(|l| l.contains("constructeur_demarre")).count(), 1, "un seul démarrage :\n{texte}");
+    }
+
     #[test]
     fn budget_de_sonde_ne_remplace_pas_delai_appel_par_defaut() {
         let mut f = Fixture::nouvelle(); f.source.timeout_secs = None;
