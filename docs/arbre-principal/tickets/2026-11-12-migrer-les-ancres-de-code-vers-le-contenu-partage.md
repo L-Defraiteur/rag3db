@@ -2063,3 +2063,14 @@ identiques aux deux postes ; aucune relance inchangée. Correction de recette :
 RAG3DB_LIBS_DIR explicitement épinglé au magasin réel, caches privés préservés,
 nouveaux chemins preuves v2 et599s sans réutiliser/prolonger le reçu v1. Rust et
 modèle inchangés ; nouveau SHA/argv à coordonner avant toute nouvelle exécution.
+
+
+Ciblé correctifv2 source2e71e1755 arrêté au premier rouge en110,4066s : deux
+E0609 dans catalog/progress.rs319/357, current_embedding_entry devenu Option mais
+bilans IndexProgress.model restés String. Aucun ELF/tests natifs/DB/service/modèle
+joué. Superviseur validation-rcz_mqen ROUGE/code1/restes[], bus absent, autorité
+terminée, scan contexte own[] ; target unique conservé1 349 776 841octets (<32Go).
+Correctif produit à relire avant nouveau lancement : model Option<String> dans
+les bilans, Some garde son nom réel, None reste absence structurelle/JSONnull,
+ligne lexicale sans modèle inventé ; appelant e2e configuré rendu explicitement
+Some. Renforcer témoin lexical et exact fixture, préserver le rouge et les preuves.

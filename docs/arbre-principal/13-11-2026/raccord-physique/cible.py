@@ -5,7 +5,7 @@ import hashlib, json, mmap, os, re, shutil, subprocess, sys, time
 W=Path('/home/lucied/.cache/rag3weaver-build/cx-wt-raccord-physique')
 C=W/'extension/rag3weaver'
 T=Path('/home/lucied/.cache/rag3weaver-build/cx-target-contenu-derive')
-P=Path('/home/lucied/.cache/rag3weaver-build/cx-raccord-physique-cible-v2')
+P=Path('/home/lucied/.cache/rag3weaver-build/cx-raccord-physique-cible-v3')
 NATIVE='rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
 SOURCE=sys.argv[1]
 assert re.fullmatch('[0-9a-f]{40}',SOURCE)

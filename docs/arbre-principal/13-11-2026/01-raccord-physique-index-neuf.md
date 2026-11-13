@@ -304,3 +304,22 @@ la même lib29 immuable et tous les témoins. Preuves neuves v2 ; fenêtre corri
 plafonnée599s (coût de v1 conservé), sans prolonger ni réutiliser son reçu expiré.
 Nouveau SHA/argv soumis à coordination avant nouvelle exécution ; aucun rejeu
 inchangé, aucun changement Rust ou reconstruction/publication de SDK.
+
+
+## Compilation v2 arrêtée, bilan sans modèle corrigé
+
+Étape corrective distincte source2e71e1755 arrêtée au premier rouge en110,4066s :
+la compilation signale deux E0609, progress.rs319/357 prenaient encore name sur
+Option<EmbeddingModelEntry>. Aucun test ni ELF rag3weaver produit, aucun index
+natif/service/modèle exécuté. Superviseur validation-rcz_mqen ROUGE/code1/restes[],
+bus `/tmp/r3v-4yycm8du` absent, autorité terminée, scan contexte own[]. Le target
+unique de dépendances est conservé1 349 776 841octets, sans effacement/rejeu.
+
+Correctif produit en revue : IndexProgress.model est Option<String> ; un modèle
+configuré garde son nom et sa représentation JSON string, un profil lexical rend
+None/JSONnull et la ligne sans vecteurs non déclarés. Les deux producteurs de
+bilan utilisent map, le helper des tests conserve Some réel, et l'e2e du modèle
+attendu indisponible exige explicitement ce Some dans son affichage. Le témoin
+lexical existant et les assertions de la fixture native vérifient absence de
+modèle/dette fictive dans les bilans. Preuves/recette v3 distinctes, même plafond
+599s et même target/SDK29 ; delta/source à relire avant toute nouvelle exécution.

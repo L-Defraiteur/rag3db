@@ -282,6 +282,10 @@ fn verify_exact_fixture(owned: &OwnedPhysicalIndex) {
     assert!(cross.rows.is_empty());
     assert!(cat.registered_embedding_models().unwrap().is_empty());
     assert!(cat.current_embedding_slug().is_none());
+    let progress = cat.index_progress_for("Snippet").unwrap();
+    assert!(progress.model.is_none());
+    assert!(!progress.vectors_declared);
+    assert_eq!(progress.dense_missing(), 0);
     assert!(!read_metadata(cat.conn())
         .unwrap()
         .keys()
