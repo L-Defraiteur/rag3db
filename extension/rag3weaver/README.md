@@ -659,3 +659,13 @@ Warm-up facts are reported separately from availability. Remote activation and
 idle eviction remain outside this slice; existing sources without `activation`
 keep connecting to their configured provider. See the
 [contract and qualification](../../docs/embarquement/12-11-2026/03-activation-des-modeles.md).
+
+`grep_files` accepte `symbol_hierarchy_depth` (0 par défaut : sortie et lectures
+habituelles). Entre1et16, il ajoute le scope contenant le premier match regex
+de chaque ligne, puis au plus ce nombre de parents de plages indexées. Les offsets
+UTF-8, la source et le chemin qualifient la correspondance ; index absent/périmé
+ou plages ambiguës restent explicites et les matches textuels sont conservés.
+Le contenu déjà cherché sert au contrôle de fraîcheur, sans relecture ni réindexation.
+Le budget de cette option est commun aux sorties JSON/Markdown :96Kio,200nœuds,
+8fichiers ; une coupure conserve les comptes et se signale. Les relations de plages
+à granularité ligne ne garantissent ni parent AST, ni appartenance, ni héritage.
