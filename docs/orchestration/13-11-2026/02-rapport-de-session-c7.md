@@ -421,3 +421,14 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   des deux sens sous 835d5298f (ferme le ticket de l'index complet). **archi** : ordre changé, la sûreté d'abord
   (l'accord borné à sa conversation, l'empreinte aveugle), puis la jauge au survol et les quatre mineurs.
   **ED** : (b) commencé (témoin à six onglets, SharedWorker servi par l'hôte, état partagé).
+- **20 h 57, la page de la liaison branche/worktree → couche** (arbre principal, 99f6883e6 puis ac88b330d après
+  les relectures d'ED et de recherche : `docs/arbre-principal/13-11-2026/30-lier-branches-et-worktrees-aux-couches.md`) :
+  une couche par branche sur une ancre par dépôt ; une génération par commit indexé, identité = commit +
+  couche + commit de base + empreinte de la recette (réindexer est idempotent, pas de tirage au hasard) ;
+  la parente déclarée par l'atelier ou inférée du point de fourche si unique, puis estampillée ; la couche de
+  travail du non-commité hors du chargeur durable, lisible par un `view` explicite jamais par défaut ; une
+  version ancienne par `<branche>@<commit>` ; trois lunettes dans l'IDE. Recherche : une lecture a un
+  instantané composé (un seul searcher lucivy, résultats résolus par l'instantané épinglé, masque avant le
+  top-k) ; **une question pour le cœur : l'index HNSW suit-il l'instantané de lecture ?** Cinq questions pour
+  Lucie (parente inférée ou déclarée ; quand publier ; couche de travail privée ou partagée ; le rebase ;
+  quelle histoire garder). Le lot 1a attend la lib du cœur (concurrence_test en cours, push vers 21 h 50).
