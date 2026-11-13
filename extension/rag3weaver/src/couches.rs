@@ -14,7 +14,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 /// Comment une parente est connue.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum GenreDeParente {
     /// Notée par l'atelier à l'ouverture d'une tâche : une déclaration.
     Declaree,
@@ -26,7 +27,7 @@ pub enum GenreDeParente {
 }
 
 /// La parente d'une couche, et le commit où la couche s'en sépare (sa base).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Parente {
     pub branche: String,
     pub genre: GenreDeParente,
@@ -174,14 +175,22 @@ pub fn declarer_les_branches_suivies(
     ancre: &str,
     suivies: &[String],
 ) -> Result<(), String> {
-    let _ = (catalog, cle_des_suivies(depot), ancre, suivies);
-    Ok(())
+    let mut liste: Vec<String> = Vec::new();
+    for s in suivies {
+        if s != ancre && !liste.contains(s) {
+            liste.push(s.clone());
+        }
+    }
+    let valeur = serde_json::to_string(&BranchesSuivies { ancre: ancre.to_string(), suivies: liste }).map_err(|e| e.to_string())?;
+    catalog.persist_meta_key(&cle_des_suivies(depot), &valeur).map_err(|e| e.to_string())
 }
 
 /// Les branches suivies déclarées d'un dépôt, s'il y en a.
 pub fn branches_suivies(catalog: &crate::catalog::Catalog, depot: &str) -> Result<Option<BranchesSuivies>, String> {
-    let _ = (catalog, depot);
-    Ok(None)
+    match catalog.read_meta_key(&cle_des_suivies(depot)).map_err(|e| e.to_string())? {
+        Some(v) if !v.is_empty() => serde_json::from_str(&v).map(Some).map_err(|e| format!("branches suivies de « {depot} » illisibles : {e}")),
+        _ => Ok(None),
+    }
 }
 
 /// **La parente déclarée par l'atelier** à l'ouverture d'une tâche : estampillée, elle prime sur
@@ -193,8 +202,7 @@ pub fn declarer_la_parente(
     parente: &str,
     base: &str,
 ) -> Result<(), String> {
-    let _ = (catalog, cle_de_la_couche(depot, branche), parente, base);
-    Ok(())
+    estampiller(catalog, depot, branche, &Parente { branche: parente.to_string(), genre: GenreDeParente::Declaree, base: base.to_string() })
 }
 
 /// **Les couches d'un dépôt, résolues** : les branches suivies déclarées, chacune sur sa parente,
@@ -208,8 +216,66 @@ pub fn couches_du_depot(
     racine: &Path,
     ancre_par_defaut: &str,
 ) -> Result<Vec<EtatDeBranche>, String> {
-    let _ = (catalog, depot, racine, ancre_par_defaut);
-    Ok(Vec::new())
+    let declares = branches_suivies(catalog, depot)?
+        .unwrap_or(BranchesSuivies { ancre: ancre_par_defaut.to_string(), suivies: Vec::new() });
+    let ancre = declares.ancre.as_str();
+    let etats = etat_des_branches(racine, ancre, &declares.suivies)?;
+    let mut nommees: BTreeSet<&str> = declares.suivies.iter().map(String::as_str).collect();
+    nommees.insert(ancre);
+    let mut resolus = Vec::with_capacity(etats.len());
+    for etat in etats {
+        let (branche, pointe) = match &etat {
+            EtatDeBranche::Suivie { branche, pointe, .. } | EtatDeBranche::Ambigue { branche, pointe, .. } => (branche.clone(), pointe.clone()),
+            _ => {
+                resolus.push(etat);
+                continue;
+            }
+        };
+        // 1. L'estampille : une déclaration de l'atelier, ou une inférence déjà admise.
+        if let Some(p) = estampille(catalog, depot, &branche)? {
+            resolus.push(EtatDeBranche::Suivie { branche, pointe, parente: p });
+            continue;
+        }
+        // 2. Le reflog local, s'il nomme une branche suivie qui ne contient pas déjà celle-ci.
+        if let Some(nom) = nee_de(racine, &branche).filter(|n| n != &branche && nommees.contains(n.as_str())) {
+            let la = git(racine, &["rev-parse", &nom])?;
+            if !est_ancetre(racine, &pointe, &la)? {
+                let p = Parente { branche: nom, genre: GenreDeParente::InfereeParReflog, base: git(racine, &["merge-base", &pointe, &la])? };
+                estampiller(catalog, depot, &branche, &p)?;
+                resolus.push(EtatDeBranche::Suivie { branche, pointe, parente: p });
+                continue;
+            }
+        }
+        // 3. La fourche, quand elle est certaine ; sinon l'ambiguïté reste dite, non estampillée.
+        if let EtatDeBranche::Suivie { parente, .. } = &etat {
+            estampiller(catalog, depot, &branche, parente)?;
+        }
+        resolus.push(etat);
+    }
+    Ok(resolus)
+}
+
+fn estampiller(catalog: &crate::catalog::Catalog, depot: &str, branche: &str, parente: &Parente) -> Result<(), String> {
+    let valeur = serde_json::to_string(parente).map_err(|e| e.to_string())?;
+    catalog.persist_meta_key(&cle_de_la_couche(depot, branche), &valeur).map_err(|e| e.to_string())
+}
+
+fn estampille(catalog: &crate::catalog::Catalog, depot: &str, branche: &str) -> Result<Option<Parente>, String> {
+    match catalog.read_meta_key(&cle_de_la_couche(depot, branche)).map_err(|e| e.to_string())? {
+        Some(v) if !v.is_empty() => serde_json::from_str(&v).map(Some).map_err(|e| format!("parente estampillée de « {branche} » illisible : {e}")),
+        _ => Ok(None),
+    }
+}
+
+/// La branche d'où `branche` est née, d'après son reflog local (« branch: Created from <nom> »),
+/// quand il en nomme une. `HEAD` ou un hash ne nomment rien.
+fn nee_de(depot: &Path, branche: &str) -> Option<String> {
+    let journal = git(depot, &["reflog", "show", "--format=%gs", &format!("refs/heads/{branche}")]).ok()?;
+    let creation = journal.lines().last()?;
+    let nom = creation.strip_prefix("branch: Created from ")?.trim();
+    let nom = nom.strip_prefix("refs/heads/").unwrap_or(nom);
+    let hash = nom.len() >= 7 && nom.chars().all(|c| c.is_ascii_hexdigit());
+    (nom != "HEAD" && !hash && !nom.is_empty()).then(|| nom.to_string())
 }
 
 #[cfg(test)]
