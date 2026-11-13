@@ -5764,6 +5764,97 @@ fn read_threads() -> u64 {
     /// `Some(n)` quand la relecture a réussi, `None` quand on ne sait pas
     /// (entité inconnue, relecture impossible). `Some(0)`, c'est un lot de
     /// naissances : aucune clé ne peut heurter, le chemin de masse est permis.
+    /// **Les morceaux d'une version de contenu, complets comme ceux d'une
+    /// racine** (version de scope, 13 novembre 2026). Une racine routée par
+    /// `searchIndex` vers un contenu partagé n'a pas de morceaux à elle : la
+    /// complétude de l'inchangé ([`Self::split_unchanged`]) la jugeait complète
+    /// même quand les morceaux de sa version avaient perdu leur arête ou leur
+    /// texte (un groupe revenu à moitié d'une mort), et rien ne les refaisait.
+    /// Les versions des racines du lot dont un morceau manque son arête ou son
+    /// texte passent en dette de découpage (`_chunked_hash` nul), que
+    /// [`Self::rattraper_le_decoupage`] solde : anciens morceaux retirés,
+    /// redécoupage, liens. Une lecture qui échoue ne marque rien : la dette
+    /// sera vue à la prochaine passe, jamais inventée.
+    fn redecouper_les_versions_incompletes(
+        &mut self,
+        entity_name: &str,
+        config: &crate::config::EntityConfig,
+        racines: &[String],
+    ) {
+        let Some(index) = config.search_index.as_deref() else { return };
+        let Some(cible) = self.entity_configs.get(index) else { return };
+        let contenu = cible.derived.as_ref().is_some_and(|d| {
+            d.from == entity_name && matches!(d.identity, crate::config::DerivedIdentity::Content { .. })
+        });
+        if !contenu || cible.chunked == Some(false) || racines.is_empty() {
+            return;
+        }
+        let index = index.to_string();
+        let lien_de_version = crate::schema::derived_rel_name(&index);
+        let references = self.dialect.derived_references(&index, entity_name, &lien_de_version);
+        let liste = CypherValue::List(racines.iter().cloned().map(CypherValue::String).collect());
+        let Ok(res) = self.conn.execute_with_params(&references, &[QueryParam::new("uuids", liste)]) else { return };
+        let versions: std::collections::BTreeSet<String> =
+            res.rows.iter().filter_map(|l| l.get(1).and_then(|v| v.as_str()).map(str::to_string)).collect();
+        if versions.is_empty() {
+            return;
+        }
+        let morceaux = self.dialect.batch_select_chunks_with_parent_link(
+            &format!("{index}_Chunk"),
+            "uuid",
+            &format!("{index}_CHUNKED_FROM"),
+            &index,
+            &["_parent_uuid"],
+        );
+        let items = CypherValue::List(
+            versions
+                .iter()
+                .map(|v| CypherValue::Map(BTreeMap::from([("uuid".to_string(), CypherValue::String(v.clone()))])))
+                .collect(),
+        );
+        let Ok(res) = self.conn.execute_with_params(&morceaux, &[QueryParam::new("items", items)]) else { return };
+        // Par version : morceaux, reliés à elle, avec un texte.
+        let mut compte: HashMap<String, (usize, usize, usize)> = HashMap::new();
+        for l in &res.rows {
+            let Some(version) = l.first().and_then(|v| v.as_str()) else { continue };
+            let e = compte.entry(version.to_string()).or_insert((0, 0, 0));
+            e.0 += 1;
+            e.1 += usize::from(l.get(1).and_then(|v| v.as_str()) == Some(version));
+            e.2 += usize::from(l.get(2).and_then(|v| v.as_bool()) == Some(true));
+        }
+        let incompletes: Vec<CypherValue> = compte
+            .into_iter()
+            .filter(|(_, (n, relies, textes))| *n > 0 && (relies < n || textes < n))
+            .map(|(v, _)| CypherValue::String(v))
+            .collect();
+        if incompletes.is_empty() {
+            return;
+        }
+        let n = incompletes.len();
+        match self.conn.execute_with_params(
+            &self.dialect.batch_set_null(&index, "_chunked_hash"),
+            &[QueryParam::new("uuids", CypherValue::List(incompletes))],
+        ) {
+            Ok(_) => {
+                self.peut_devoir_un_redecoupage = true;
+                // Soldée tout de suite, comme la réingestion d'une racine
+                // incomplète refait ses morceaux dans le même appel : la
+                // consigne ne passe pas par une synchronisation.
+                let table = HashSet::from([index.clone()]);
+                if let Err(e) = self.rattraper_le_decoupage(Some(&table), n, true) {
+                    self.emit_event(CatalogEvent::Warning {
+                        context: "split_unchanged".into(),
+                        message: format!("{index} : {n} version(s) à redécouper, rattrapage en échec ({e}) — la dette reste en base"),
+                    });
+                }
+            }
+            Err(e) => self.emit_event(CatalogEvent::Warning {
+                context: "split_unchanged".into(),
+                message: format!("{index} : {n} version(s) aux morceaux incomplets, dette non posée ({e})"),
+            }),
+        }
+    }
+
     fn split_unchanged(
         &self,
         entity_name: &str,
@@ -6457,7 +6548,13 @@ fn read_threads() -> u64 {
             // elle est vide. Ce sont des naissances **prouvées**.
             (entity_records, 0, PreviousState::Read(HashMap::new()), Some(0))
         } else {
-            self.split_unchanged(entity_name, &entity_config, entity_records)
+            let racines: Vec<String> = entity_records
+                .iter()
+                .filter_map(|r| r.data.get("_uuid").and_then(|v| v.as_str()).map(str::to_string))
+                .collect();
+            let separees = self.split_unchanged(entity_name, &entity_config, entity_records);
+            self.redecouper_les_versions_incompletes(entity_name, &entity_config, &racines);
+            separees
         };
         crate::ingest_profile::add("entités · relire ce qui est en base (inchangés)", t);
         let t = std::time::Instant::now();
