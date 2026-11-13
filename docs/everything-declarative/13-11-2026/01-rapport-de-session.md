@@ -87,3 +87,13 @@ Reproduction statique et critères d'erreur contextuelle/sans silence publiés.
 Lien parent ancres et parcours IDE conservé, aucune réouverture du lot livré.
 WT documentaire neuf cx-ed-ticket-read-scope ; aucun Cargo/runtime/service,
 aucune édition ni intégration de code pendant la qualification physique.
+
+## Correctif read_scope isolé, préparé seulement
+
+Autorisation C7 explicite sur le même ticket : nouveau W/branche
+cx-ed-read-scope-erreurs, base4f6. Deux map_err contextuels préservent les
+niveaux backend/outil. Quatre témoins du vrai hôte écrits (panne chargement,
+panne usages, succès A puis panne B, ambiguïté/absence complètes) ; aucune
+compilation ni exécution. Ancien test et fixtures physiques inchangés.
+Diff publié avant revue ; aucun Cargo/lourd avant coordination, aucun master
+produit pendant la qualification physique. Le ticket reste ouvert.

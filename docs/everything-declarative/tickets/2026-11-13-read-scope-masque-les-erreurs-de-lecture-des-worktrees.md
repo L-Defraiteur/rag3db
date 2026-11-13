@@ -85,3 +85,40 @@ Liens de coordination :
 Lot documentaire seul dans un worktree cx neuf. Aucun Cargo, runtime,
 service, base, modèle ou ancien lot rouvert. Aucune intégration de code pendant
 la qualification physique ; la suite produit doit être coordonnée par C7.
+
+## Préparation du correctif isolé — aucun test exécuté
+
+Suite produit explicitement autorisée par C7 après publication du ticket.
+WT neuf cx-ed-read-scope-erreurs, branche homonyme, base master4f6f80ef4.
+Un seul fichier Rust : atelier_fichiers.rs. Les deux niveaux de Result sont
+propagés séparément avec nom demandé, opération usages, racine, identifiant
+backend et manifeste ; erreur d'origine conservée en suffixe. Première erreur
+refuse la recherche incomplète avant sélection/outline/lecture du fichier.
+Pas de retry ni de choix fondé sur les seuls worktrees répondants.
+
+Quatre témoins écrits, NON compilés/qualifiés :
+
+- Un worktree inscrit avec graphe usages manquant : erreur réelle du chargement
+  backend transmise par le vrai hôte, pas « aucun scope ».
+- Un backend inscrit sans outil usages : ouverture réelle puis erreur réelle
+  de l'appel b.call, contexte et cause conservés.
+- Un dépôt A réellement attaché/indexé et son scope effectivement lu avant
+  inscription de B sans usages. L'ordre A puis B est vérifié : la panne tardive
+  interdit de déclarer le résultat accumulé unique.
+- Deux vrais dépôts aux noms d'inscription distincts et indexés : ambiguïté
+  conservée pour leur nom commun, véritable absence après requêtes complètes.
+  Le témoin historique de lecture unique reste inchangé.
+
+Aucun helper de production factice ni mock de sélection ; les cas utilisent
+le gabarit atelier livré, les racines privées et les appels d'outil réels. Les
+pannes portent sur des déclarations de fixture nouvelles, pas sur les fixtures
+de la qualification physique. Aucun fournisseur de modèle requis par ces cas.
+
+Recette envisagée à coordonner AVANT Cargo/lourd : source/argv figés et publiés,
+luciepc seulement, lib29/Max32/HIGH0/j8/target de session neuf ; compilation
+libtests native+code+daemon puis quatre témoins `read_scope_` et témoin historique
+exact (comptes/inventaires à publier avant exécution). Profil d'indexation explicite
+conforme au contrat, pas d'accès aux bases de Lucie ou aux services partagés.
+Premier rouge arrêté/diagnostiqué, pas de retry inchangé. Aucun créneau acquis ni
+build lancé ; revue du diff requise, pas d'intégration produit pendant la globale
+physique. Ce ticket reste ouvert : un patch écrit n'est pas une correction prouvée.
