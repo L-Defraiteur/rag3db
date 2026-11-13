@@ -241,3 +241,16 @@ aucune remise à zéro. Confirmer reçu encore vivant et temps suffisant avant l
 marker. Aucun ancien run CI relancé, aucune dépendance/SDK modifié, aucun modèle
 ou service partagé requis. Les tickets restent ouverts jusqu'aux décisions
 de qualification et d'intégration correspondantes.
+### GO correctif fixture645b6e6 : budget résiduel seulement
+
+C7 relit et autorise la seule ligne priorityMedium de la source exacte
+`645b6e662c75e6d13dbb3ba5862226a2c4957866`. E0046 reste un rouge de compilation.
+Réemploi autorisé du seul target privé créé par PID1213520/start91619112,
+même worktree et provenance ; aucune purge ni deuxième target.
+Autorité initiale terminée, verdict restes=[] et nettoye=true relus ; aucun
+PID de l’inventaire encore présent au contrôle. À monotonic916480.60, échéance
+initiale916791.103284988, il reste310.49s. Après obtention de poste, calculer
+à nouveau floor(échéance-monotonic), refuser si <=60s ; reçu neuf et confineur
+bornés par ce reste, aucun reset600s. Priorité du worker Medium ; compilation
+j4/MemoryMax8G/MemoryHighmax, même témoin exact unique, aucun runtime DB/SDK.
+Tout autre rouge arrête sans retry ; qualification production distincte.
