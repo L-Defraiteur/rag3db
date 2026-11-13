@@ -40,6 +40,9 @@ pub(super) struct Accords {
     /// Les chemins accordés et leur mode (`read` ou `write` ; `write` vaut aussi lecture).
     ouverts: Vec<(PathBuf, String)>,
     suivant: u64,
+    /// L'échéance d'une demande : décidée plus tard, elle est refusée (ticket d'ED, un accord
+    /// sans fin). `None` : la valeur par défaut.
+    pub(super) echeance: Option<std::time::Duration>,
 }
 
 impl Accords {
@@ -972,6 +975,51 @@ pub(super) mod tests {
         let lu = a.appeler("read_file", json!({ "path": dehors.join("note.txt") }));
         let dit = match &lu { Ok(v) => Atelier::texte(v), Err(e) => e.clone() };
         assert!(dit.contains("hors de la racine") && !dit.contains("la note"), "aucun accord en vigueur : {dit}");
+    }
+
+    /// Un second atelier sur le même hôte et la même racine : une autre conversation.
+    fn second_atelier(a: &Atelier, d: &Path) -> Arc<super::super::Hosted> {
+        let gabarits = d.join("atelier-b/templates");
+        std::fs::create_dir_all(gabarits.parent().unwrap()).unwrap();
+        crate::code_tree::copy(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"), &gabarits, false).unwrap();
+        let manifeste = gabarits.join("backends/atelier/backend.json");
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(a.racine.to_string_lossy());
+        std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        let h = a.host.hosted(&manifeste).unwrap();
+        a.host.with_backend(&h, |_| ()).expect("le second atelier s'ouvre");
+        h
+    }
+
+    /// **Un accord vaut pour sa conversation, et pas sans fin** (ticket d'ED,
+    /// `2026-11-13-un-accord-de-l-atelier-vaut-pour-tout-l-hote-et-sans-fin.md`) : un accord en
+    /// lecture donné à l'atelier A n'ouvre pas le chemin à l'atelier B, sur le même hôte et la
+    /// même racine ; A lit. Une demande décidée après son échéance est refusée, et n'ouvre rien.
+    #[test]
+    fn a_grant_belongs_to_its_conversation_and_expires() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let b = second_atelier(&a, d.path());
+        let dehors = d.path().join("dehors");
+        std::fs::create_dir_all(&dehors).unwrap();
+        std::fs::write(dehors.join("note.txt"), "la note\n").unwrap();
+        std::fs::write(dehors.join("autre.txt"), "l'autre\n").unwrap();
+        let texte = |r: Result<Value, String>| match r { Ok(v) => Atelier::texte(&v), Err(e) => e };
+
+        let carte = a.appeler("ask_permission", json!({ "path": dehors.join("note.txt"), "mode": "read", "reason": "lire la note" })).expect("ask_permission");
+        let id = carte["ui"][0]["id"].as_str().map(str::to_string).or_else(|| a.host.accords.lock().unwrap().demandes.keys().next().cloned()).expect("une demande");
+        a.host.decider_accord(&id, true, "le témoin").expect("accorder");
+        assert!(texte(a.appeler("read_file", json!({ "path": dehors.join("note.txt") }))).contains("la note"), "A lit ce qui lui est accordé");
+        let par_b = texte(a.host.with_backend(&b, |x| x.call("read_file", json!({ "path": dehors.join("note.txt") }))).and_then(|r| r));
+        assert!(par_b.contains("hors de la racine") && !par_b.contains("la note"), "B n'a rien demandé : refusé ({par_b})");
+
+        let carte = a.appeler("ask_permission", json!({ "path": dehors.join("autre.txt"), "mode": "read", "reason": "lire l'autre" })).expect("ask_permission");
+        let id = carte["ui"][0]["id"].as_str().map(str::to_string).expect("une seconde demande");
+        a.host.accords.lock().unwrap().echeance = Some(std::time::Duration::ZERO);
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let r = a.host.decider_accord(&id, true, "le témoin");
+        assert!(r.as_ref().is_err_and(|e| e.contains("échue")), "une demande échue est refusée : {r:?}");
+        assert!(texte(a.appeler("read_file", json!({ "path": dehors.join("autre.txt") }))).contains("hors de la racine"), "et n'ouvre rien");
     }
 
     /// **`read_file` dans l'atelier** : jamais plus de 200 lignes d'un coup (Lucie), la
