@@ -2263,3 +2263,19 @@ Superviseur validation-gllfe1kq VERT/code0/restes[], autorité terminée, bus ab
 scan propre vide ;1653preuves+ELF SHAégaux2postes. Bilan et limites :
 [qualification ciblée](../13-11-2026/02-preuves-ciblee-raccord-physique.md).
 Tous rouges précédents restent distincts ; aucun GO global/master, tickets ouverts.
+
+
+Préparation union autorisée C7 après P14 : branche neuve
+cx-arbre-raccord-physique-union-r1, WTcache cx-wt-raccord-physique-union, base
+origin/masterf8cbd6a48 (ED/Archi/garde inclus). Rebase privé publié6b6f12d33 :
+22patches code range-diff tous= ; aucun conflit Rust, seul ticket parent en conflit
+repris canonique privé qui contient les ajouts master (aucun retrait). Fichiers
+master non chevauchants conservés exactement ; tous autres fichiers du lot
+identiques à la source privée. Audit et range-diff sous raccord-physique.
+Recette globale composée6000s à publier/relire AVANT GO lourd : F8+vrai minimal,
+lib large/NAV40/CLI5/lectures27 distincts+hôte13/PG36+TXpertinents. BGE7879
+existant autorisé par C7 pour lectures avec créneau réel futur,27distincts/28
+invocations (26jugés sous ancien1 +CREATEexact mêmeELF/profil sansceflag).
+PG synthétique neuf seulement, OID et dump à conserver avant retrait ultérieur.
+Aucun runtime global autorisé à cette préparation. Contrôle CPU tickets a trouvé
+un champ Atteignable absent sur ticketRO ; en-tête corrigé avant future F8.

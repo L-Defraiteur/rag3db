@@ -1,6 +1,6 @@
 # Les tables de migration omettent leur clé _uuid
 
-- **État** : ouvert, correctif privé publié, qualification non jouée.
+- **État** : ouvert ; ciblé privé P14 qualifié sur a43c475f9 (preuve liée), qualification globale de l’union et livraison attendues.
 - **Famille** : produit.
 - **Gravité** : création du journal de migration impossible sur base neuve native.
 - **Atteignable en service** : primitive commune MigrationRunner/Catalog ; reproduit dans le profil physique synthétique privé, aucun index réel touché.
