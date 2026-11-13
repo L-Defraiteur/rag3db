@@ -177,3 +177,42 @@ Le correctif touche la conception du flux ; il se propose à c7.
 
 Le témoin rouge du correctif est un témoin navigateur, et non la sonde de la lib (verte) : plus de
 six vues chargées de suite, chacune rendue en moins de 5 s.
+
+## Pour Lucie : le flux, et le plafond de six
+
+**Le flux va du serveur vers la page.**
+- Une page de l'IDE ouvre, une fois, une connexion vers l'hôte (`GET /ide/flux`), et la garde
+  ouverte.
+- L'hôte y écrit, quand il veut, ce qui change : un fichier modifié, un run qui avance, un tour
+  du chat qui finit, un état. La page ne redemande rien : elle reçoit.
+- C'est le format « Server-Sent Events » du navigateur (`EventSource`). La réponse HTTP ne finit
+  jamais, et l'hôte y ajoute une ligne à chaque événement.
+- Chaque événement porte un numéro. Une page qui se reconnecte dit le dernier reçu, et l'hôte
+  rejoue ce qui suit.
+
+Dans l'autre sens, de la page vers l'hôte, tout passe par des requêtes ordinaires qui finissent :
+un appel d'outil (`/ide/call`), l'état (`/ide/etat`), un fichier.
+
+**Le plafond de six.**
+- Une connexion HTTP/1.1 ne porte qu'une requête à la fois. Le flux en tient donc une pour lui
+  seul, en continu.
+- Le navigateur n'ouvre pas plus de **six connexions à la fois vers un même hôte** (même adresse,
+  même port). C'est une règle de tous les navigateurs pour HTTP/1.1, et l'hôte de rag3weaver parle
+  HTTP/1.1.
+- Six pages de l'IDE ouvertes sur le même hôte tiennent donc les six connexions avec leurs six
+  flux. La septième requête, de n'importe quelle page, attend qu'une connexion se libère.
+
+**Ce qui se passait.**
+- Une page quittée n'est pas toujours fermée. Le navigateur la garde vivante quelques instants
+  (le cache d'aller-retour, pour un retour arrière instantané), **avec son flux ouvert**.
+- Après quelques rechargements, ces pages gardées tenaient les six connexions, et la page neuve
+  attendait environ une minute que l'une d'elles parte.
+- Depuis le lot (a), une page ferme son flux en partant et le rouvre si elle revient.
+
+**Ce qui reste, avec plusieurs onglets ouverts.** Six onglets de l'IDE réellement ouverts tiennent
+encore six flux. C'est le lot (b) :
+- un seul flux par origine, tenu par un `SharedWorker`, un petit programme que le navigateur
+  partage entre les onglets d'un même site ;
+- il redistribue les événements à chaque onglet, selon les sujets que l'onglet demande ;
+- les onglets n'occupent plus qu'une connexion de flux à eux tous ;
+- là où le `SharedWorker` manque, chaque page garde son propre flux, comme aujourd'hui.
