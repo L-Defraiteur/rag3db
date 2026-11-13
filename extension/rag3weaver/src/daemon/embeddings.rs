@@ -125,6 +125,102 @@ pub struct Identite {
     /// L'OCR que ce démon sert aussi (`POST /ocr`), par son nom.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ocr: Option<String>,
+    /// **Qui s'en sert, maintenant** : les baux d'usage tenus et les requêtes
+    /// de calcul en cours. Absent : fournisseur d'avant les baux.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
+}
+
+/// L'usage d'un fournisseur, tel qu'il le déclare dans son identité : ce
+/// qu'une éviction devra attendre (ticket de la résidence des modèles). Un
+/// bail se prend par `POST /bail`, se renouvelle par `POST /bail/renouveler`,
+/// se rend par `POST /bail/rendre` ; non renouvelé, il expire.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct Usage {
+    /// Les baux d'usage non expirés.
+    pub baux: usize,
+    /// Les requêtes de calcul (embarquement, relecture, OCR) en cours.
+    pub en_cours: usize,
+}
+
+/// Durée d'un bail sans précision du porteur, et sa borne.
+const BAIL_DUREE_PAR_DEFAUT_S: u64 = 60;
+const BAIL_DUREE_MAX_S: u64 = 3600;
+
+/// Les baux tenus par un fournisseur : numéro → (échéance, porteur).
+#[derive(Default)]
+struct Baux {
+    tenus: Mutex<std::collections::HashMap<u64, (std::time::Instant, String)>>,
+    prochain: std::sync::atomic::AtomicU64,
+}
+
+impl Baux {
+    fn prendre(&self, porteur: String, duree: std::time::Duration) -> u64 {
+        let numero = self.prochain.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        self.tenus.lock().unwrap_or_else(|e| e.into_inner()).insert(numero, (std::time::Instant::now() + duree, porteur));
+        numero
+    }
+
+    /// Repousse l'échéance d'un bail encore tenu ; faux s'il est rendu ou expiré.
+    fn renouveler(&self, numero: u64, duree: std::time::Duration) -> bool {
+        let mut tenus = self.tenus.lock().unwrap_or_else(|e| e.into_inner());
+        Self::purger(&mut tenus);
+        match tenus.get_mut(&numero) {
+            Some((echeance, _)) => {
+                *echeance = std::time::Instant::now() + duree;
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn rendre(&self, numero: u64) -> bool {
+        self.tenus.lock().unwrap_or_else(|e| e.into_inner()).remove(&numero).is_some()
+    }
+
+    fn compte(&self) -> usize {
+        let mut tenus = self.tenus.lock().unwrap_or_else(|e| e.into_inner());
+        Self::purger(&mut tenus);
+        tenus.len()
+    }
+
+    fn purger(tenus: &mut std::collections::HashMap<u64, (std::time::Instant, String)>) {
+        let maintenant = std::time::Instant::now();
+        tenus.retain(|_, (echeance, _)| *echeance > maintenant);
+    }
+}
+
+/// Une requête de calcul en cours, comptée tant qu'elle vit.
+struct EnCours<'a>(&'a std::sync::atomic::AtomicUsize);
+impl<'a> EnCours<'a> {
+    fn compter(compteur: &'a std::sync::atomic::AtomicUsize) -> Self {
+        compteur.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Self(compteur)
+    }
+}
+impl Drop for EnCours<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+#[derive(Deserialize)]
+struct DemandeDeBail {
+    #[serde(default)]
+    porteur: String,
+    #[serde(default)]
+    duree_s: Option<u64>,
+}
+
+#[derive(Deserialize)]
+struct NumeroDeBail {
+    bail: u64,
+    #[serde(default)]
+    duree_s: Option<u64>,
+}
+
+fn duree_de_bail(demandee: Option<u64>) -> std::time::Duration {
+    std::time::Duration::from_secs(demandee.unwrap_or(BAIL_DUREE_PAR_DEFAUT_S).clamp(1, BAIL_DUREE_MAX_S))
 }
 
 // ─── Le serveur ──────────────────────────────────────────────────────────────
@@ -153,6 +249,9 @@ pub struct EmbedDaemon {
     /// ([`crate::burst`]). Une seule pour tous les clients : c'est la carte
     /// qu'on cadence, pas la requête.
     gate: Option<Mutex<crate::burst::BurstGate>>,
+    /// Les baux d'usage de ses clients, et ses requêtes de calcul en cours.
+    baux: Baux,
+    en_cours: std::sync::atomic::AtomicUsize,
 }
 
 impl EmbedDaemon {
@@ -176,6 +275,8 @@ impl EmbedDaemon {
             expose: false,
             passe: Mutex::new(()),
             gate: None,
+            baux: Baux::default(),
+            en_cours: std::sync::atomic::AtomicUsize::new(0),
         }
     }
 
@@ -376,6 +477,10 @@ impl EmbedDaemon {
             executable: String::new(),
             reranker: self.reranker.as_ref().map(|(model, _)| model.clone()),
             ocr: self.ocr.as_ref().map(|(model, _)| model.clone()),
+            usage: Some(Usage {
+                baux: self.baux.compte(),
+                en_cours: self.en_cours.load(std::sync::atomic::Ordering::SeqCst),
+            }),
         }
     }
 
@@ -440,7 +545,33 @@ impl Service for EmbedDaemon {
     }
 
     fn repondre(&self, methode: &str, chemin: &str, req: &mut tiny_http::Request) -> (u16, String) {
+        // Une requête de calcul se compte tant qu'elle n'a pas répondu.
+        let _en_cours = matches!(chemin, "/embed" | "/embed_dual" | "/embed_sparse" | "/rerank" | "/ocr")
+            .then(|| EnCours::compter(&self.en_cours));
         match (methode, chemin) {
+            ("POST", "/bail") => match lire_json::<DemandeDeBail>(req) {
+                Err(e) => (400, erreur(&e)),
+                Ok(d) => {
+                    let duree = duree_de_bail(d.duree_s);
+                    let numero = self.baux.prendre(d.porteur, duree);
+                    (200, serde_json::json!({ "bail": numero, "duree_s": duree.as_secs() }).to_string())
+                }
+            },
+            ("POST", "/bail/renouveler") => match lire_json::<NumeroDeBail>(req) {
+                Err(e) => (400, erreur(&e)),
+                Ok(n) => {
+                    let duree = duree_de_bail(n.duree_s);
+                    if self.baux.renouveler(n.bail, duree) {
+                        (200, serde_json::json!({ "bail": n.bail, "duree_s": duree.as_secs() }).to_string())
+                    } else {
+                        (404, erreur(&format!("bail {} inconnu, rendu ou expiré", n.bail)))
+                    }
+                }
+            },
+            ("POST", "/bail/rendre") => match lire_json::<NumeroDeBail>(req) {
+                Err(e) => (400, erreur(&e)),
+                Ok(n) => (200, serde_json::json!({ "bail": n.bail, "rendu": self.baux.rendre(n.bail) }).to_string()),
+            },
             ("POST", "/embed") => match lire_json::<Textes>(req) {
                 Err(e) => (400, erreur(&e)),
                 Ok(t) => match self.par_lots(&t.texts, |lot| self.embedder.embed(lot)) {
@@ -599,6 +730,59 @@ pub struct DaemonEmbedder {
     _attache: Option<crate::serveur::Attache>,
 }
 
+/// **Un bail d'usage tenu chez un fournisseur** ([`DaemonEmbedder::prendre_bail`]).
+/// Un fil le renouvelle au tiers de sa durée ; le lâcher arrête ce fil et rend
+/// le bail. Un processus qui meurt sans le rendre cesse de le renouveler : le
+/// fournisseur l'oublie à l'échéance.
+pub struct BailDistant {
+    numero: u64,
+    arret: Arc<std::sync::atomic::AtomicBool>,
+    fil: Option<std::thread::JoinHandle<()>>,
+    agent: ureq::Agent,
+    base: String,
+}
+
+impl BailDistant {
+    fn tenir(agent: ureq::Agent, base: String, numero: u64, duree: std::time::Duration) -> Self {
+        let arret = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (a, b, stop) = (agent.clone(), base.clone(), arret.clone());
+        let pas = (duree / 3).max(std::time::Duration::from_millis(200));
+        let fil = std::thread::Builder::new()
+            .name("bail-d-usage".into())
+            .spawn(move || {
+                let mut prochain = std::time::Instant::now() + pas;
+                while !stop.load(std::sync::atomic::Ordering::Acquire) {
+                    if std::time::Instant::now() >= prochain {
+                        let corps = serde_json::json!({ "bail": numero, "duree_s": duree.as_secs().max(1) }).to_string();
+                        // Un renouvellement manqué n'arrête pas l'usage : le
+                        // suivant réessaie ; un bail expiré redevient un usage
+                        // non compté, jamais une erreur pour l'appelant.
+                        let _ = poster(&a, &b, "/bail/renouveler", corps);
+                        prochain = std::time::Instant::now() + pas;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+            })
+            .ok();
+        Self { numero, arret, fil, agent, base }
+    }
+
+    /// Le numéro que le fournisseur lui a donné.
+    pub fn numero(&self) -> u64 {
+        self.numero
+    }
+}
+
+impl Drop for BailDistant {
+    fn drop(&mut self) {
+        self.arret.store(true, std::sync::atomic::Ordering::Release);
+        if let Some(fil) = self.fil.take() {
+            let _ = fil.join();
+        }
+        let _ = poster(&self.agent, &self.base, "/bail/rendre", serde_json::json!({ "bail": self.numero }).to_string());
+    }
+}
+
 impl std::fmt::Debug for DaemonEmbedder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DaemonEmbedder")
@@ -737,6 +921,23 @@ impl DaemonEmbedder {
     pub fn est_a_jour_avec(&self, binaire: &std::path::Path) -> bool {
         !self.identite.executable.is_empty()
             && self.identite.executable == super::empreinte_executable(binaire)
+    }
+
+    /// **Prendre un bail d'usage** chez ce fournisseur (`POST /bail`) : il
+    /// compte ce client parmi ses usagers tant que le bail est renouvelé, et le
+    /// dit dans son identité ([`Usage`]). Le [`BailDistant`] rendu se
+    /// renouvelle seul au tiers de sa durée et se rend quand on le lâche.
+    /// `Ok(None)` : un fournisseur d'avant les baux (404), qui ne compte pas.
+    pub fn prendre_bail(&self, porteur: &str, duree: std::time::Duration) -> Result<Option<BailDistant>, DaemonError> {
+        let corps = serde_json::json!({ "porteur": porteur, "duree_s": duree.as_secs().max(1) }).to_string();
+        let texte = match poster(&self.agent, &self.base, "/bail", corps) {
+            Err(DaemonError::Refus { statut: 404, .. }) => return Ok(None),
+            autre => autre?,
+        };
+        let v: serde_json::Value = serde_json::from_str(&texte).map_err(|e| DaemonError::Reponse(e.to_string()))?;
+        let numero = v["bail"].as_u64().ok_or_else(|| DaemonError::Reponse(format!("bail sans numéro : {texte}")))?;
+        let duree = std::time::Duration::from_secs(v["duree_s"].as_u64().unwrap_or(duree.as_secs()).max(1));
+        Ok(Some(BailDistant::tenir(self.agent.clone(), self.base.clone(), numero, duree)))
     }
 
     /// Lui demander de s'arrêter. Le port se libère dans la demi-seconde.
@@ -1266,6 +1467,20 @@ mod tests {
         assert_eq!(usage_de(&c)["baux"], 2);
         std::thread::sleep(std::time::Duration::from_millis(1300));
         assert_eq!(usage_de(&c)["baux"], 1, "le bail expiré ne compte plus");
+    }
+
+    /// **Le bail côté client** : pris, il compte ; lâché, il est rendu.
+    #[test]
+    fn un_bail_distant_compte_tant_qu_on_le_tient() {
+        let adresse = demon(EmbedDaemon::new(Arc::new(Regle(3))));
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+        let bail = c.prendre_bail("test", std::time::Duration::from_secs(1)).expect("bail").expect("fournisseur qui compte");
+        assert_eq!(usage_de(&c)["baux"], 1);
+        // Une seconde de bail, deux secondes d'attente : le fil l'a renouvelé.
+        std::thread::sleep(std::time::Duration::from_millis(2000));
+        assert_eq!(usage_de(&c)["baux"], 1, "renouvelé par son fil");
+        drop(bail);
+        assert_eq!(usage_de(&c)["baux"], 0, "rendu en le lâchant");
     }
 
     /// Un embarqueur qui attend le test avant de rendre : de quoi voir une

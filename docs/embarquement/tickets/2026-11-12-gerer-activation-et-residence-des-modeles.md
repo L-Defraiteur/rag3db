@@ -601,3 +601,20 @@ diff produit vide et livraison sans nouveau rejeu. Les suites distante,
 Sources138 archivées hors cible et preuves qualifiées/rouges/remotes conservés.
 Retrait des seuls W/target propres après quiescence, archives fidèles et garde
 actuelle fraîche ; reçus externes dans activation/archives-fin-{portable,luciepc}.
+
+### Baux d'usage entre processus (13 novembre, embarquement) — première étape de la suite
+
+Décisions de c7, à relire par Lucie : les fournisseurs à luciepc sont les unités systemd
+existantes, pilotées par `systemctl --user` ; l'éviction ne touchera jamais les services posés à la
+main (7878, 7879, 7880, 7882), seulement un fournisseur lancé par l'activation, qui le dira dans
+son identité. Cette étape-ci ne décharge rien.
+
+Le fournisseur (`src/daemon/embeddings.rs`) compte ses usagers : `POST /bail` (`porteur`,
+`duree_s`, défaut 60, de 1 à 3 600) rend un numéro ; `POST /bail/renouveler` repousse l'échéance
+(404 si rendu ou expiré) ; `POST /bail/rendre` le rend. Un bail non renouvelé expire. L'identité
+porte `usage: { baux, en_cours }` : les baux non expirés et les requêtes de calcul en cours
+(embarquement, creux, dual, relecture, OCR). Côté client, `DaemonEmbedder::prendre_bail` rend un
+`BailDistant` qu'un fil renouvelle au tiers de sa durée et qui se rend quand on le lâche ;
+`Ok(None)` devant un fournisseur d'avant les baux (404). L'activation (`connecter`) en prend un
+pour chaque client remis. Témoins : les baux se comptent, les requêtes en cours se comptent, un bail
+distant compte tant qu'on le tient (rouges avant le code : aucune route `/bail`).
