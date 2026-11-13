@@ -367,3 +367,10 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   la montée. Décidé : recherche monte lucivy-core directement à 4.3.5 avec un ticket ; hotfixs sonde les .fts
   des copies (identifiants inconnus du dictionnaire) et rejoue la sonde des orphelines sur avant-835d5298f ;
   la reconstruction des .fts de Lucie sera à son mot, chiffre devant elle.
+- **20 h 15, les deux sondes des bases de Lucie sont à zéro** (hotfixs, 589a26ff5 et 5e50e2800) : sur
+  l'instantané avant-835d5298f de ce soir, 0 relation orpheline et 0 morceau sans parent dans code-lourd,
+  code-principal, code-rag3db-depot et memoire-longue (une seule part non prouvée en un sens : CITE de la
+  mémoire, une ligne, intacte dans l'autre sens) ; et **0 identifiant de mot inconnu du dictionnaire dans les
+  .fts** des quatre bases : la perte de mots de lucivy d'avant la 4.3.5 ne les a pas touchées, aucune
+  reconstruction n'est due. Les deux programmes de sonde sont dans `docs/coeur-cpp-hotfixs-tickets/13-11-2026/outils/`,
+  à rejouer à chaque pose.
