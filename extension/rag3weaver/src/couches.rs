@@ -16,6 +16,11 @@ use std::path::Path;
 /// Comment une parente est connue.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenreDeParente {
+    /// Notée par l'atelier à l'ouverture d'une tâche : une déclaration.
+    Declaree,
+    /// Lue dans le reflog local de la branche (« branch: Created from … ») : fiable seulement sur le
+    /// poste où la branche est née, jamais une certitude distante.
+    InfereeParReflog,
     /// Déduite du point de fourche (décision 1 de Lucie).
     Inferee,
 }
@@ -142,6 +147,71 @@ fn git(depot: &Path, args: &[&str]) -> Result<String, String> {
     }
 }
 
+// ─── Ce que la base en garde : les branches suivies, et les parentes estampillées ─────────
+
+/// La clé de `_catalog_meta` des branches suivies d'un dépôt.
+fn cle_des_suivies(depot: &str) -> String {
+    format!("branches_suivies:{depot}")
+}
+
+/// La clé de `_catalog_meta` de la parente estampillée d'une couche.
+fn cle_de_la_couche(depot: &str, branche: &str) -> String {
+    format!("couche:{depot}:{branche}")
+}
+
+/// Les branches suivies d'un dépôt, telles que déclarées.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct BranchesSuivies {
+    pub ancre: String,
+    pub suivies: Vec<String>,
+}
+
+/// **Déclarer les branches suivies d'un dépôt** (`depot` est son identifiant dans l'index). L'ancre
+/// en est toujours.
+pub fn declarer_les_branches_suivies(
+    catalog: &crate::catalog::Catalog,
+    depot: &str,
+    ancre: &str,
+    suivies: &[String],
+) -> Result<(), String> {
+    let _ = (catalog, cle_des_suivies(depot), ancre, suivies);
+    Ok(())
+}
+
+/// Les branches suivies déclarées d'un dépôt, s'il y en a.
+pub fn branches_suivies(catalog: &crate::catalog::Catalog, depot: &str) -> Result<Option<BranchesSuivies>, String> {
+    let _ = (catalog, depot);
+    Ok(None)
+}
+
+/// **La parente déclarée par l'atelier** à l'ouverture d'une tâche : estampillée, elle prime sur
+/// toute inférence.
+pub fn declarer_la_parente(
+    catalog: &crate::catalog::Catalog,
+    depot: &str,
+    branche: &str,
+    parente: &str,
+    base: &str,
+) -> Result<(), String> {
+    let _ = (catalog, cle_de_la_couche(depot, branche), parente, base);
+    Ok(())
+}
+
+/// **Les couches d'un dépôt, résolues** : les branches suivies déclarées, chacune sur sa parente,
+/// dans cet ordre (c7, 13 novembre) : l'estampille (une déclaration de l'atelier, ou une inférence
+/// déjà admise), le reflog local, le point de fourche. Une parente résolue pour la première fois
+/// s'estampille avec son genre et n'est plus recalculée ; une parente qui ne se résout pas reste
+/// ambiguë, ses candidates nommées. Sans déclaration de branches suivies, l'ancre seule.
+pub fn couches_du_depot(
+    catalog: &crate::catalog::Catalog,
+    depot: &str,
+    racine: &Path,
+    ancre_par_defaut: &str,
+) -> Result<Vec<EtatDeBranche>, String> {
+    let _ = (catalog, depot, racine, ancre_par_defaut);
+    Ok(Vec::new())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -260,5 +330,137 @@ mod tests {
         let (_t, d) = depot();
         let refus = etat_des_branches(&d, "main", &noms(&["fantome"])).expect_err("fantome n'existe pas");
         assert!(refus.contains("fantome"), "{refus}");
+    }
+}
+
+#[cfg(all(test, feature = "rag3db-native"))]
+mod tests_de_la_base {
+    use super::*;
+    use crate::{Catalog, CatalogConfig};
+
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let o = std::process::Command::new("git")
+            .arg("-C").arg(dir)
+            .args(["-c", "user.name=Témoin", "-c", "user.email=temoin@example.invalid", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "git {args:?} : {}", String::from_utf8_lossy(&o.stderr));
+        String::from_utf8_lossy(&o.stdout).trim().to_string()
+    }
+
+    fn commit(dir: &Path, message: &str) {
+        git(dir, &["commit", "-q", "--allow-empty", "-m", message]);
+    }
+
+    fn catalogue() -> Catalog {
+        let conn = crate::Rag3dbConnection::in_memory().unwrap();
+        let mut cat = Catalog::without_embedding_model(Box::new(conn), CatalogConfig::default());
+        cat.initialize().unwrap();
+        cat
+    }
+
+    fn noms(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// main : m1 – m2 ; `a` part de m2 (a1) ; `d` part de a1 (d1) par `git branch d a` (le reflog
+    /// le dit) ; puis `a` avance (a2) : `a` et `d` divergent après un point commun.
+    fn depot() -> (tempfile::TempDir, std::path::PathBuf) {
+        let t = tempfile::tempdir().unwrap();
+        let d = t.path().to_path_buf();
+        git(&d, &["init", "-q"]);
+        commit(&d, "m1");
+        commit(&d, "m2");
+        git(&d, &["switch", "-q", "-c", "a"]);
+        commit(&d, "a1");
+        git(&d, &["branch", "d", "a"]);
+        git(&d, &["switch", "-q", "d"]);
+        commit(&d, "d1");
+        git(&d, &["switch", "-q", "a"]);
+        commit(&d, "a2");
+        git(&d, &["switch", "-q", "main"]);
+        (t, d)
+    }
+
+    fn parente_de(etats: &[EtatDeBranche], nom: &str) -> Option<Parente> {
+        etats.iter().find_map(|e| match e {
+            EtatDeBranche::Suivie { branche, parente, .. } if branche == nom => Some(parente.clone()),
+            _ => None,
+        })
+    }
+
+    #[test]
+    fn les_branches_suivies_se_declarent_et_se_relisent() {
+        let cat = catalogue();
+        assert_eq!(branches_suivies(&cat, "depot").unwrap(), None);
+        declarer_les_branches_suivies(&cat, "depot", "main", &noms(&["a", "d"])).unwrap();
+        assert_eq!(
+            branches_suivies(&cat, "depot").unwrap(),
+            Some(BranchesSuivies { ancre: "main".into(), suivies: noms(&["a", "d"]) })
+        );
+        assert_eq!(branches_suivies(&cat, "autre").unwrap(), None, "un autre dépôt n'a rien");
+    }
+
+    /// Le reflog local lève l'ambiguïté que la topologie laisse : `d` est née de `a`
+    /// (« branch: Created from a »), et sa parente est marquée inférée par reflog.
+    #[test]
+    fn le_reflog_local_dit_la_parente_que_la_fourche_ne_dit_pas() {
+        let (_t, d) = depot();
+        let cat = catalogue();
+        declarer_les_branches_suivies(&cat, "depot", "main", &noms(&["a", "d"])).unwrap();
+        let etats = couches_du_depot(&cat, "depot", &d, "main").unwrap();
+        let p = parente_de(&etats, "d").unwrap_or_else(|| panic!("d sans parente : {etats:?}"));
+        assert_eq!((p.branche.as_str(), &p.genre), ("a", &GenreDeParente::InfereeParReflog), "{etats:?}");
+        assert_eq!(p.base, git(&d, &["merge-base", "d", "a"]));
+    }
+
+    /// La déclaration de l'atelier prime, et une parente résolue s'estampille : elle ne se recalcule
+    /// pas quand le dépôt bouge ensuite. Décor : main m1 – m2 ; `a` part de m2 (a1) ; `b` part de la
+    /// pointe de `a` (b1).
+    #[test]
+    fn une_parente_declaree_prime_et_une_parente_resolue_ne_se_recalcule_pas() {
+        let t = tempfile::tempdir().unwrap();
+        let d = t.path().to_path_buf();
+        git(&d, &["init", "-q"]);
+        commit(&d, "m1");
+        commit(&d, "m2");
+        git(&d, &["switch", "-q", "-c", "a"]);
+        commit(&d, "a1");
+        git(&d, &["switch", "-q", "-c", "b"]);
+        commit(&d, "b1");
+        git(&d, &["switch", "-q", "main"]);
+        let cat = catalogue();
+        declarer_les_branches_suivies(&cat, "depot", "main", &noms(&["a", "b"])).unwrap();
+        let base = git(&d, &["merge-base", "b", "main"]);
+        declarer_la_parente(&cat, "depot", "b", "main", &base).unwrap();
+        let etats = couches_du_depot(&cat, "depot", &d, "main").unwrap();
+        let p = parente_de(&etats, "b").unwrap_or_else(|| panic!("b sans parente : {etats:?}"));
+        assert_eq!((p.branche.as_str(), &p.genre, p.base.as_str()), ("main", &GenreDeParente::Declaree, base.as_str()), "{etats:?}");
+        // `a` se résout par la fourche (sur l'ancre), puis s'estampille : une fusion de `a` dans
+        // main, après laquelle main contient `a`, ne la change plus.
+        let a = parente_de(&etats, "a").unwrap_or_else(|| panic!("a sans parente : {etats:?}"));
+        assert_eq!((a.branche.as_str(), &a.genre), ("main", &GenreDeParente::Inferee), "{etats:?}");
+        git(&d, &["merge", "-q", "--no-edit", "--no-ff", "a"]);
+        let apres = couches_du_depot(&cat, "depot", &d, "main").unwrap();
+        assert_eq!(parente_de(&apres, "a"), Some(a), "la parente estampillée a été recalculée : {apres:?}");
+    }
+
+    /// Sans reflog qui la dise (branche créée par `switch -c` depuis HEAD), une divergence reste
+    /// ambiguë, ses candidates nommées : connue, pas une erreur.
+    #[test]
+    fn une_parente_jamais_resolue_reste_ambigue_avec_ses_candidates() {
+        let (_t, d) = depot();
+        git(&d, &["switch", "-q", "a"]);
+        git(&d, &["switch", "-q", "-c", "e"]);
+        commit(&d, "e1");
+        git(&d, &["switch", "-q", "a"]);
+        commit(&d, "a3");
+        git(&d, &["switch", "-q", "main"]);
+        let cat = catalogue();
+        declarer_les_branches_suivies(&cat, "depot", "main", &noms(&["a", "e"])).unwrap();
+        let etats = couches_du_depot(&cat, "depot", &d, "main").unwrap();
+        let e = etats.iter().find(|x| matches!(x, EtatDeBranche::Ambigue { branche, .. } if branche == "e"));
+        assert!(e.is_some_and(|x| matches!(x, EtatDeBranche::Ambigue { candidates, .. } if candidates.contains(&"a".to_string()))), "{etats:?}");
     }
 }
