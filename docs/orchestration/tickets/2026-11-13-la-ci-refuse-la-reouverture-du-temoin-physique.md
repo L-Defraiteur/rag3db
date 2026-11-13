@@ -307,3 +307,20 @@ Reste : relecture ED du diff et des invariants/risques, puis nouveau créneau de
 qualification distincte C7 avec source/commandes/budget figés. Aucun CPU restant
 de la fenêtre rouge n’est utilisé pour qualifier ce correctif. Cause exacte du
 writer D17 toujours distincte et non prouvée par le témoin CPU.
+
+### Réserves ED/C7 sur07086b6 : HOLD qualification
+
+Avant tout delta et runtime : ED constate que flume Receiver::drop déconnecte
+mais conserve la queue dans Shared tant que les senders ActorRef vivent.
+L’ordre des champs seul ne prouve donc pas la destruction des messages.
+Le témoin PendingArc doit juger ce cas. Préparation du delta : fermer admission,
+dénombrer les envois déjà admis, drainer pour libérer les sends bloqués,
+attendre leur fin sans polling puis détruire la queue finale avant completion.
+Ne jamais détruire de message sous le mutex d’admission (Drop réentrant).
+
+ED relève aussi pinned::handle sans IN_ACTOR_HANDLER : le self-join n’est pas
+refusé. Préparer garde handler RAII commune avec restauration lors d’un unwind,
+témoin pinned-selfjoin ; emballer actor+mailbox AVANT on_start pour que la
+panique de ce callback conserve le même ordre de destruction.07086b6 reste
+NON qualifié. Nouveau SHA, témoins et recette doivent être publiés et relus
+avant tout GO CPU distinct. Aucun nouveau runtime lancé.
