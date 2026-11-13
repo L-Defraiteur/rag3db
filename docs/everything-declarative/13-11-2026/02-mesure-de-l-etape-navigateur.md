@@ -216,3 +216,32 @@ encore six flux. C'est le lot (b) :
 - il redistribue les événements à chaque onglet, selon les sujets que l'onglet demande ;
 - les onglets n'occupent plus qu'une connexion de flux à eux tous ;
 - là où le `SharedWorker` manque, chaque page garde son propre flux, comme aujourd'hui.
+
+## Le lot (b) : un flux par navigateur, et la forme des fenêtres détachées
+
+- **Un `SharedWorker`** (`ui/ide/lib/flux-worker.ts`, servi en `/ide/flux-worker.js`) tient
+  l'unique connexion `/ide/flux` de tous les onglets d'un navigateur.
+- **Chaque page s'y branche** par un port, s'abonne à ses sujets, et reçoit ce qui la
+  concerne, avec son numéro.
+- **Le worker porte un petit état partagé** : le dépôt courant, la sélection, la conversation
+  ouverte, les cartes en attente. Une page l'écrit (`etatPartage.ecrire`), toutes le reçoivent
+  (`etatPartage.suivre`), et une page neuve le reçoit en entier à son arrivée.
+  - C'est la forme que demandent des **fenêtres détachées de l'IDE** : le chat dans une fenêtre,
+    le graphe ou le dépôt dans une autre, sur deux écrans. Chacune serait une page du même site
+    qui suit le même état. Ce lot n'en ouvre aucune.
+- **Sans `SharedWorker`** (navigation privée, navigateur qui ne l'a pas), la page garde son
+  propre flux et le ferme en partant, comme au lot (a).
+- **Le worker garde sa connexion dix secondes** quand plus aucune page ne l'écoute : une
+  navigation dans un onglet reprend le même flux. Le dernier onglet fermé, le navigateur arrête le
+  worker et sa connexion.
+- **L'hôte compte les fenêtres de son flux** (`fenetres_du_flux` dans `/etat`), celles du
+  navigateur seulement. Son propre lecteur (la livraison Codex) n'en est pas une.
+- **Le témoin** `six_onglets_ouverts_laissent_une_septieme_vue_se_rendre` :
+  - six onglets ouverts, une septième vue en moins de 5 s (rouge avant : le sixième onglet
+    restait à « Chargement… ») ;
+  - l'hôte compte une seule fenêtre de flux ;
+  - un onglet sans `SharedWorker` ajoute la sienne et la rend en partant ;
+  - aucune fenêtre une fois tous les onglets fermés.
+- **Les témoins du lot (a)**, toujours joués :
+  - `plus_de_six_vues_de_suite_se_rendent_chacune_en_moins_de_cinq_secondes` ;
+  - la sonde de la lib `le_premier_appel_d_un_outil_ne_coute_pas_une_minute`.

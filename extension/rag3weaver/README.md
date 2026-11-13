@@ -669,7 +669,12 @@ File references with a line range open at the first line. The sidebar speaks in 
 (« Dépôts », « Mémoire », « Projets »), with a context gauge under each
 conversation. Host state and completed chat turns arrive through the shared event stream:
 an idle IDE sends no polling requests, and the sidebar's usage matches the chat state and
-recap, including immediately after a turn. Search can be typed from the home page, across every index, and
+recap, including immediately after a turn. All tabs of a browser share one stream: a
+`SharedWorker` holds the single `/ide/flux` connection, hands each tab the topics it asks for, and
+carries a small shared state (current repository, selection, open conversation, pending cards)
+that any tab reads and writes. Browsers open at most six HTTP/1.1 connections to a host, and six
+tabs each holding their own stream used to leave none for requests. Without a `SharedWorker`, a tab
+keeps its own stream; a page that leaves closes it. Search can be typed from the home page, across every index, and
 the folder open in the tree filters it (the `scope` of `search_code`).
 "My searches" lists the searches made in a repository,
 by you and by agents under their name, with their first results and the ones you
