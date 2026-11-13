@@ -253,3 +253,15 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   sérialise mal sur une version émise dans un paquet défait) — ils restent dans 1a ; sondes, bancs et
   mesures en 1a-2 avec ticket. File : embarquement (en tour), recherche (journal des runs, vert), archi
   (« dire vrai », vert), puis la pose de 835d5298f en une coupure.
+- **19 h 15, la soirée.** archi a poussé 7a50c824a (Chromium avec `--password-store=basic` et `--use-mock-keychain`,
+  inoffensif ; les journaux de passe archivés sous `~/.cache/rag3weaver-build/archives/`) et a trouvé **la
+  vraie cause des rouges navigateur « status jamais fini »** : une bulle fantôme dans Chat.tsx (un RunStarted
+  tardif pris pour un tour venu d'ailleurs, depuis son lot de la carte d'accord be319fa75) ; correctif en
+  cours, rouge d'abord ; ED en porte la cause dans sa mesure. embarquement : ticket d'activation fermé (dix
+  tours verts, 0977892ce), un rouge rare du raccord relevé pour arbre principal (reprise après mort du
+  processus, fixture gardée), et la page « activation et résidence : livré et manquant » (cda4a028e) ;
+  **décisions de c7, à relire par Lucie** : les baux entre processus d'abord ; les fournisseurs à luciepc
+  sont les unités systemd existantes pilotées par l'activation ; l'éviction ne touche jamais les trois
+  services résidents de Lucie, seulement un fournisseur lancé par l'activation. recherche : sa passe verte
+  a perdu la course contre le lot Chromium ; rejeu sur 0977892ce (journal-apres-arret-4), **fenêtre tenue**
+  jusqu'à son verdict (~19 h 40) ; puis archi (bulle fantôme, dire vrai), puis la pose de 835d5298f.
