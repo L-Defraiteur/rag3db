@@ -104,6 +104,34 @@ fn tube() -> (std::fs::File, std::fs::File) {
     unsafe { (std::fs::File::from_raw_fd(fds[0]), std::fs::File::from_raw_fd(fds[1])) }
 }
 
+/// Les arguments de Chrome pour un témoin.
+pub(crate) const ARGUMENTS_DU_NAVIGATEUR: &[&str] = &[
+    "--headless",
+    "--remote-debugging-pipe",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--disable-gpu",
+    "--disable-extensions",
+    "--disable-background-networking",
+    "--disable-sync",
+    // Les runners de la CI refusent le bac à sable sans espace de noms.
+    "--no-sandbox",
+];
+
+/// **Un témoin navigateur ne demande pas le trousseau du bureau** (Lucie, 13 novembre 2026 : sous
+/// KDE, chaque lancement ouvrait « Service de portefeuilles de KDE : création d'un nouveau
+/// portefeuille kdewallet », toutes les cinq minutes au rythme des passes). Chromium cherche le
+/// trousseau du système pour chiffrer ses cookies ; `--password-store=basic` et
+/// `--use-mock-keychain` l'en dispensent. Le lanceur de la lib et celui de
+/// `scripts/test_chat_app.py` les passent.
+#[test]
+fn le_navigateur_des_temoins_ne_demande_pas_le_trousseau_du_bureau() {
+    for drapeau in ["--password-store=basic", "--use-mock-keychain"] {
+        assert!(ARGUMENTS_DU_NAVIGATEUR.contains(&drapeau), "le lanceur de la lib passe {drapeau}");
+        assert!(include_str!("../../scripts/test_chat_app.py").contains(drapeau), "scripts/test_chat_app.py passe {drapeau}");
+    }
+}
+
 impl Navigateur {
     pub(crate) fn lancer(binaire: &std::path::Path) -> Navigateur {
         use std::os::fd::AsRawFd;
@@ -114,18 +142,7 @@ impl Navigateur {
         let (a, b) = (entree_lue.as_raw_fd(), sortie_ecrite.as_raw_fd());
         let mut commande = Command::new(binaire);
         commande
-            .args([
-                "--headless",
-                "--remote-debugging-pipe",
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--disable-gpu",
-                "--disable-extensions",
-                "--disable-background-networking",
-                "--disable-sync",
-                // Les runners de la CI refusent le bac à sable sans espace de noms.
-                "--no-sandbox",
-            ])
+            .args(ARGUMENTS_DU_NAVIGATEUR)
             .arg(format!("--user-data-dir={}", profil.path().display()))
             .arg("about:blank")
             .stdin(Stdio::null())
