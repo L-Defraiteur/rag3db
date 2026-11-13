@@ -388,6 +388,14 @@ fn tools(v: &Value) -> std::collections::BTreeSet<String> {
     v["tools"].as_object().map(|o| o.keys().cloned().collect()).unwrap_or_default()
 }
 
+/// **Ce que l'installeur dit d'un manifeste déjà posé** (`rag3weaver-backend atelier`
+/// sur un atelier qui existe) : s'il suit le gabarit livré ou non. Avec `rafraichir`
+/// (sans hôte pour l'ouvrir), la remise au gabarit du binaire se fait ici.
+pub fn suivi_d_une_pose(manifest: &Path, rafraichir: bool) -> Result<String, String> {
+    let _ = rafraichir;
+    Ok(format!("déjà posé : {}", manifest.display()))
+}
+
 /// **Remet un manifeste au gabarit du binaire**, s'il est resté tel que la pose l'a
 /// écrit : le gabarit neuf, plus ce que la pose avait changé au gabarit d'alors (chaque
 /// feuille différente, chaque clé ôtée). Un chemin de gabarit du neuf qu'aucune copie
@@ -686,5 +694,43 @@ mod tests {
         assert_eq!(refresh(&manifeste).unwrap(), Refresh::EditedByHand);
         assert_eq!(std::fs::read(&manifeste).unwrap(), avant, "rien n'est écrit");
         assert_eq!(refresh(&d.path().join("ailleurs.json")).unwrap(), Refresh::NotRecorded);
+    }
+
+    /// **Une pose d'avant `livre.json` se dit non suivie** (13 novembre 2026) : l'installeur
+    /// ne la remettra jamais au gabarit livré ; son adoption est l'affaire de M8.
+    #[test]
+    fn an_unrecorded_posed_manifest_is_said_untracked() {
+        let d = tempfile::tempdir().unwrap();
+        let manifeste = d.path().join("backends/atelier/backend.json");
+        std::fs::create_dir_all(manifeste.parent().unwrap()).unwrap();
+        std::fs::write(&manifeste, get("backends/atelier/backend.json").unwrap()).unwrap();
+        let avant = std::fs::read(&manifeste).unwrap();
+        let dit = suivi_d_une_pose(&manifeste, true).unwrap();
+        assert!(dit.contains("copie non suivie") && dit.contains("M8"), "{dit}");
+        assert_eq!(std::fs::read(&manifeste).unwrap(), avant, "rien n'est écrit");
+    }
+
+    /// **Une pose notée suit le livré** : sans hôte, l'installeur la remet lui-même au
+    /// gabarit du binaire et le dit ; avec l'hôte, il dit que l'ouverture s'en charge.
+    #[test]
+    fn a_recorded_posed_manifest_is_refreshed_without_a_host() {
+        let d = tempfile::tempdir().unwrap();
+        let manifeste = atelier_d_avant(d.path());
+        let dit = suivi_d_une_pose(&manifeste, false).unwrap();
+        assert!(dit.contains("suit le livré"), "{dit}");
+        assert_eq!(porte_open_branch(&manifeste), false, "avec l'hôte, l'installeur n'écrit rien");
+        let dit = suivi_d_une_pose(&manifeste, true).unwrap();
+        assert!(dit.contains("suit le livré") && dit.contains("open_branch") && dit.contains("run_command"), "{dit}");
+        let m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+        assert_eq!(m["tools"]["open_branch"]["graph"], "builtin:tools/open_branch.mmd", "{m:#}");
+        assert_eq!(m["workspace"]["root"], "/home/quelqu-une");
+        let dit = suivi_d_une_pose(&manifeste, true).unwrap();
+        assert!(dit.contains("à jour"), "{dit}");
+    }
+
+    /// Le manifeste a-t-il déjà `open_branch` ?
+    fn porte_open_branch(manifeste: &Path) -> bool {
+        let m: Value = serde_json::from_slice(&std::fs::read(manifeste).unwrap()).unwrap();
+        m["tools"].get("open_branch").is_some()
     }
 }
