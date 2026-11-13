@@ -79,3 +79,8 @@ Aucun Cargo réel ni rustc invoqué ; les métadonnées des neuf tests sont des
 fixtures explicites. Ressources gardées : un worktree de source sans target,
 journaux rouge/vert horsW ; aucun poste lourd pris. Revue indépendante demandée
 avant qualification Rust et intégration ; pas de clôture du ticket ici.
+
+Contrat des métadonnées : --offline/--locked/--frozen sont transmis aussi à
+metadata, pour ne pas lever les restrictions de résolution demandées par
+l'appelant avant la commande. Assertion ajoutée dans le juge existant des
+options, toujours neuf fonctions. Publication avant nouvelle exécution.
