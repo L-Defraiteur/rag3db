@@ -645,3 +645,4 @@ Décision : pas de lot vues chez lucivy maintenant ; 2b-B s'appuie sur `allowed_
 
 - **tty a poussé tty-4** : master = 212893a17 (la boîte de l'équipier dans le terminal) ; rejeu court à luciepc sur e93710f36 (crate 39/39 et 10/10, e2e_tty 4/4, catalogue 11/12 rouge nommé) ; dernier pas : `--code-apporte 18319a6d6 origin/master` vide, rebase cx-tty-4-3, `--derive` « garde à jour », push. Page du lot en docs seules à suivre.
 - **« À toi » à codeparsers** (chaînes), la liaison et les thèmes n'étant pas encore verts. File : codeparsers → thèmes de l'IDE / liaison (au premier vert) → hotfixs → 1a.
+- tty : page de tty-4, README et nouveauté (0cccf66f4) ; ménage du lot (worktrees et 5 targets, 21 229 Mo à luciepc) ; **tty-5 donné, borné** : mesure sous ssh entre les deux postes, tmux, mosh s'il est déjà installé ; Windows et macOS en plan de test écrit et ticket « à jouer quand une machine existe ».
