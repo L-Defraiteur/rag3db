@@ -769,6 +769,12 @@ pub fn scope_chunks(catalog: &Catalog) -> Result<ScopeChunks, CatalogError> {
     })
 }
 
+/// **Les entités du code dont le chemin de masse retire puis rebâtit l'index vectoriel** (le
+/// premier index : charger sans tenir le HNSW ligne à ligne). Sur une base à versions de scope,
+/// les vecteurs du code sont sur [`SCOPE_CONTENT`] ; une entité sans signal dense, ou absente du
+/// schéma, est ignorée.
+pub const ENTITES_EN_MASSE: [&str; 4] = [FILE, SCOPE, LIBRARY, SCOPE_CONTENT];
+
 /// Déclare les quatre entités et les quatorze relations du schéma nommé `code`.
 /// L'ordre d'enregistrement reste celui du schéma historique.
 ///
@@ -5137,5 +5143,26 @@ mod tests_resolution {
         let m = Mention { import_modules: vec!["crate::dataflow".into()], ..mention("CONSUMES", &[], &[]) };
         assert_eq!(choose_target(&m, &definers, &HashMap::new(), &fichiers, &HashMap::new(), &Default::default(), &reexports), Some(("E@runtime".into(), Resolution::Import)));
         assert_eq!(choose_target(&m, &definers, &HashMap::new(), &fichiers, &HashMap::new(), &Default::default(), &[]), None, "sans la réexportation, rien");
+    }
+}
+
+#[cfg(all(test, feature = "rag3db-native"))]
+mod tests_du_chemin_de_masse {
+    use super::*;
+
+    /// Sur une base à versions de scope, le chemin de masse du premier index retire et rebâtit
+    /// l'index vectoriel des versions (`ScopeContent_Chunk`), là où vivent les vecteurs du code :
+    /// sans lui, le premier index tenait le HNSW ligne à ligne, en silence.
+    #[test]
+    fn le_chemin_de_masse_rebatit_l_index_vectoriel_des_versions() {
+        let conn = crate::Rag3dbConnection::in_memory().unwrap();
+        let mut cat = Catalog::new(Box::new(conn), Box::new(crate::embedder::HashEmbedder::new(8)), crate::CatalogConfig {
+            allow_mock_embedder: true, embedding_dim: 8, ..Default::default()
+        });
+        cat.initialize().unwrap();
+        register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+        cat.ensure_embedding_model().unwrap();
+        let tables: Vec<String> = cat.vector_indexes_of(&ENTITES_EN_MASSE).into_iter().map(|(t, _, _)| t).collect();
+        assert!(tables.contains(&format!("{SCOPE_CONTENT}_Chunk")), "{tables:?}");
     }
 }

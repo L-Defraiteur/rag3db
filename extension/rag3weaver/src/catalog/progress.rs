@@ -438,14 +438,23 @@ impl Catalog {
         // poussée, arrêté ou en cours) : « mots : en cours » tant que la
         // marque est là, jamais un « prêt » sur un index vide.
         let pending = self.fts_pending_entities()?;
+        // La clé porte l'entité qui stocke l'index ; marques et rebâti parlent de l'entité
+        // publique dont c'est l'index (`Scope` pour `ScopeContent`, version de scope).
+        let publique: Option<String> = key.strip_prefix("index_state:").map(|t| {
+            self.entity_configs
+                .iter()
+                .find(|(_, c)| c.search_index.as_deref() == Some(t))
+                .map(|(n, _)| n.clone())
+                .unwrap_or_else(|| t.to_string())
+        });
         let touche = match key.strip_prefix("index_state:") {
-            Some(entite) => pending.iter().any(|e| e == entite),
+            Some(entite) => pending.iter().any(|e| e == entite || Some(e) == publique.as_ref()),
             None => !pending.is_empty(),
         };
         // **Le plein texte en fichiers à rebâtir** (génération du dossier qui
         // n'est pas celle de la base, ou rebâti en cours) : calculé à la
         // lecture, un lecteur seul le voit sans rien écrire.
-        if let Some(entite) = key.strip_prefix("index_state:") {
+        if let Some(entite) = publique.as_deref() {
             if let Some(percent) = self.fts_rebuild_percent(entite) {
                 return Ok(IndexState { text: Level::Running, text_percent: Some(percent), ..state });
             }
