@@ -205,6 +205,46 @@ pub fn declarer_la_parente(
     estampiller(catalog, depot, branche, &Parente { branche: parente.to_string(), genre: GenreDeParente::Declaree, base: base.to_string() })
 }
 
+/// **L'identifiant stable d'un dépôt** (c7, 13 novembre) : le hash de son commit racine (le
+/// premier, trié, s'il y en a plusieurs). Il est le même sur deux postes et dans tous les worktrees,
+/// indépendant du chemin et du remote ; le chemin n'est qu'un attribut d'affichage.
+pub fn identifiant_du_depot(racine: &Path) -> Result<String, String> {
+    let _ = racine;
+    Err("identifiant_du_depot : à écrire".into())
+}
+
+/// L'ancre d'un dépôt sans déclaration : `main`, sinon `master`, sinon la branche extraite.
+pub fn ancre_du_depot(racine: &Path) -> Result<String, String> {
+    let _ = racine;
+    Err("ancre_du_depot : à écrire".into())
+}
+
+/// **Ajouter une branche aux suivies** d'un dépôt, sans rien perdre de la déclaration ; sans
+/// déclaration, l'ancre est celle du dépôt ([`ancre_du_depot`]).
+pub fn ajouter_une_branche_suivie(catalog: &crate::catalog::Catalog, depot: &str, racine: &Path, branche: &str) -> Result<(), String> {
+    let _ = (catalog, depot, racine, branche);
+    Ok(())
+}
+
+/// **Retirer une branche des suivies** et marquer sa couche fermée. Rien n'est effacé : son
+/// estampille reste, la fermeture de la couche (ses générations) est un autre lot.
+pub fn fermer_une_branche_suivie(catalog: &crate::catalog::Catalog, depot: &str, branche: &str) -> Result<(), String> {
+    let _ = (catalog, depot, branche);
+    Ok(())
+}
+
+/// La couche de `branche` est-elle marquée fermée ?
+pub fn couche_fermee(catalog: &crate::catalog::Catalog, depot: &str, branche: &str) -> Result<bool, String> {
+    let _ = (catalog, depot, branche);
+    Ok(false)
+}
+
+/// La parente estampillée d'une couche, si elle en a une.
+pub fn parente_estampillee(catalog: &crate::catalog::Catalog, depot: &str, branche: &str) -> Result<Option<Parente>, String> {
+    let _ = (catalog, depot, branche);
+    Ok(None)
+}
+
 /// **Les couches d'un dépôt, résolues** : les branches suivies déclarées, chacune sur sa parente,
 /// dans cet ordre (c7, 13 novembre) : l'estampille (une déclaration de l'atelier, ou une inférence
 /// déjà admise), le reflog local, le point de fourche. Une parente résolue pour la première fois
