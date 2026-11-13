@@ -13,6 +13,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **13 nov. — Plusieurs onglets de l'IDE, un seul flux.**
+  Les onglets d'un navigateur partagent le flux de l'hôte par un `SharedWorker`, qui porte aussi
+  un petit état partagé entre les pages (la forme des fenêtres détachées à venir). Six onglets
+  ouverts ne prennent plus les six connexions que le navigateur ouvre vers l'hôte ; une page
+  quittée ferme son flux, et l'IDE n'attend plus une minute après quelques rechargements.
+
 - **13 nov. — Une tâche de l'équipier ne se dit plus faite à mi-chemin.**
   Un pas qui dit ce qui reste n'est jamais une fin : le pas suivant part, la boîte le dit.
   Une request peut déclarer ce qu'elle exige (`expects: report` ou `approval`, par l'IDE, la
