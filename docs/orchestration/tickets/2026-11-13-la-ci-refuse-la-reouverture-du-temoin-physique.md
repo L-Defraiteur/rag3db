@@ -419,3 +419,14 @@ non attribué. Aucun merge main lucivy, tag, version ni registre publié.
 Reste au même ticket, porteur Lucivy/ED/C7 selon périmètre : relire preuves,
 décider la qualification core et l’intégration ; GO CPU ne vaut pas GO fusion.
 Push master docs retenu pendant tour Recherche ; branche documentaire publiée.
+
+### Suite préparée après10verts, pas lancée
+
+[Plan qualification complète et coût CPU](../../lucivy/13-11-2026/02-plan-qualification-et-cout-barriere.md).
+Porteur Lucivy ; RO ED/C7, même ticket, pas de chantier séparé. Sources A/B
+figées663975a/fbd3f0a. Proposition libluciole entière, coreclose/router immédiat,
+perte de réponse/Drop réentrant/pinned+worker+coop, puis microbanc MESURE CPU
+ancien/nouveau avec harnais identique/conditions égales/compte exact/ordreABBA.
+Aucun seuil inventé, coûtmutex+Arc parsend explicitement à mesurer. Avant GO,
+les juges supplémentaires et le harnais devront être publiés en source exacte.
+Aucune exécution de ce plan, aucun SDK/base réelle/patch rag3weaver/release.
