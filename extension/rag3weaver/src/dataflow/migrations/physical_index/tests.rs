@@ -367,6 +367,7 @@ fn native_initial_batch_publishes_exact_values_and_reopens_without_a_model() {
         encode(&receipt).unwrap()
     );
     drop(index);
+    at_rest(&root);
     let before_reopen = root_files(&root);
     let reopened = OwnedPhysicalIndex::open_owned(&root, &origin).unwrap();
     verify_exact_fixture(&reopened);
@@ -434,6 +435,7 @@ fn native_legacy_foreign_schema_and_values_refuse_owned_open_without_writes() {
                 }
             }
         }
+        at_rest(&root);
         let before = std::fs::read(root.join(DB_FILE)).unwrap();
         let result = OwnedPhysicalIndex::open_owned(
             &root,
@@ -461,6 +463,7 @@ fn native_normal_catalog_open_refuses_owned_profile_before_initialization() {
         )
         .unwrap(),
     );
+    at_rest(&root);
     let before = root_files(&root);
     for refused in [
         Rag3dbConnection::new(root.join(DB_FILE)),
@@ -475,6 +478,26 @@ fn native_normal_catalog_open_refuses_owned_profile_before_initialization() {
     assert!(normal.initialize().is_err());
     drop(normal);
     assert!(root_files(&root) == before, "normal Catalog initialization through an owned RO handle changed files");
+}
+
+#[test]
+fn owned_writer_reopen_waits_for_a_previous_instance_released_late() {
+    let dir = fixture_dir();
+    let root = dir.path().join("owned");
+    let index = OwnedPhysicalIndex::create_new(&root, NewPublicationOrigin::fresh(), declarations(), cells()).unwrap();
+    // A lucivy actor that releases the last `Arc` after the drop, held on purpose.
+    let late = crate::rag3db_connection::registered_writer(&root.join(DB_FILE))
+        .expect("the owned writer is registered as the writer instance of its file");
+    drop(index);
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        drop(late);
+    });
+    let reopened = connection(&root, false);
+    release.join().unwrap();
+    assert!(reopened.is_ok(), "reopen refused while the previous instance died late: {:?}", reopened.err());
+    drop(reopened);
+    crate::rag3db_connection::wait_writer_released(&root.join(DB_FILE), std::time::Duration::from_secs(10)).unwrap();
 }
 
 #[test]
@@ -742,6 +765,12 @@ fn frozen_program_codec_binds_sources_records_and_probe_inputs() {
     println!("RELATION_WITNESS {}", serde_json::json!({"table":"SnapshotWitnessEdge","properties":0,"rows":[0,1,2],"same_endpoints_preserved":true}));
 }
 
+/// A dropped owned writer may still die on a lucivy actor thread, and the engine
+/// checkpoints while it dies: photograph the files only once it is gone.
+fn at_rest(root: &Path) {
+    crate::rag3db_connection::wait_writer_released(&root.join(DB_FILE), std::time::Duration::from_secs(10))
+        .expect("the dropped owned writer still lives after 10 s");
+}
 fn root_files(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     fn visit(root: &Path, dir: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
         for entry in std::fs::read_dir(dir).unwrap() {
