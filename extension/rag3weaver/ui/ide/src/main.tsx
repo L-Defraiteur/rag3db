@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Flame, Moon, Sun, Radio } from "lucide-react";
+import { Moon, Sun, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { dispatchFlux, fetchState, onEtat, openFlux, route, type FluxStatus, type HostState } from "@/lib/host";
@@ -17,7 +17,7 @@ import { GraphView } from "@/views/Graph";
 import { Dag } from "@/views/Dag";
 import { Reactions } from "@/views/Reactions";
 import { Propositions } from "@/views/Propositions";
-import { applyTheme, effectiveTheme, storedTheme, type Theme } from "@/lib/theme";
+import { applyTheme, effectiveTheme, storedTheme, themesLivres, type Theme } from "@/lib/theme";
 import { Home } from "@/views/Home";
 
 // **Le cadre de l'IDE** (page 08, vue 1) : l'en-tête, le flux ouvert une fois,
@@ -29,8 +29,15 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [flux, setFlux] = useState<FluxStatus>("fermé");
   const [theme, setTheme] = useState<Theme>(storedTheme());
+  const [livres, setLivres] = useState<string[]>([]);
 
-  useEffect(() => applyTheme(theme), [theme]);
+  // Un nom que l'hôte ne connaît pas revient au choix du système : l'état le suit.
+  useEffect(() => applyTheme(theme, (applique) => applique !== theme && setTheme(applique)), [theme]);
+  useEffect(() => {
+    themesLivres()
+      .then(setLivres)
+      .catch((e: Error) => console.warn(`[thème] ${e.message}`));
+  }, []);
   const reloadState = () => fetchState().then(setState).catch((e: Error) => setError(e.message));
   // Un worktree attaché par l'atelier (`RepoAttached`), puis la fin de son premier
   // index (`RepoIndexed`) : l'hôte pousse son état, la barre le montre sous « Dépôts »,
@@ -52,7 +59,7 @@ function App() {
   }, []);
 
   const dark = effectiveTheme(theme) !== "light";
-  const isDaemon = effectiveTheme(theme) === "daemon";
+  const fichier = livres.includes(theme) ? theme : "";
   const fullWindow = route().view === "chat";
   return (
     // Le chat prend toute la fenêtre : ses barres aux bords, un seul défilement
@@ -79,18 +86,22 @@ function App() {
         >
           {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
         </Button>
-        {/* Le troisième choix : le thème du terminal (templates/themes/daemon.json). */}
-        <Button
-          variant="ghost"
-          size="icon"
-          id="theme-daemon"
-          aria-pressed={isDaemon}
-          aria-label={isDaemon ? "quitter le thème daemon" : "thème daemon"}
-          title={isDaemon ? "quitter le thème daemon" : "thème daemon"}
-          onClick={() => setTheme(isDaemon ? "system" : "daemon")}
+        {/* Les thèmes du terminal (templates/themes/<nom>.json), ceux que l'hôte sert. */}
+        <select
+          id="theme-fichier"
+          aria-label="thème"
+          title="thème"
+          className="h-8 rounded-md border bg-background px-2 text-xs text-foreground"
+          value={fichier}
+          onChange={(e) => setTheme(e.target.value || "system")}
         >
-          <Flame className="size-4" />
-        </Button>
+          <option value="">thème…</option>
+          {livres.map((nom) => (
+            <option key={nom} value={nom}>
+              {nom}
+            </option>
+          ))}
+        </select>
       </header>
       <main id="vue" className={fullWindow ? "flex-1 min-h-0 w-full flex flex-col" : "flex-1 px-4 py-6 max-w-5xl w-full mx-auto"}>
         {error ? (

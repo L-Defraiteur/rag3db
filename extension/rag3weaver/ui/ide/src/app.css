@@ -139,55 +139,56 @@ a.code-ref { text-decoration: underline; text-decoration-style: dotted; }
 .dark .hljs-attr, .dark .hljs-property, .dark .hl-property, .dark .hl-attribute { color: #56b6c2; }
 .dark .hljs-meta, .dark .hljs-symbol, .dark .hl-label, .dark .hl-module { color: #56b6c2; }
 
-/* **Le thème daemon** (Lucie, 7 et 8 novembre 2026) : les couleurs du fichier commun
-   templates/themes/daemon.json, posées en variables --daemon-* par lib/theme.ts ;
-   `html.daemon` passe devant `.dark`, qui reste posé pour les composants. */
-html.daemon {
-  --background: var(--daemon-fond);
-  --foreground: var(--daemon-texte);
-  --card: var(--daemon-fond);
-  --card-foreground: var(--daemon-texte);
-  --popover: var(--daemon-fond);
-  --popover-foreground: var(--daemon-texte);
-  --primary: var(--daemon-texte);
-  --primary-foreground: var(--daemon-fond);
-  --secondary: color-mix(in oklch, var(--daemon-halo-sombre) 25%, var(--daemon-fond));
-  --secondary-foreground: var(--daemon-texte);
-  --muted: color-mix(in oklch, var(--daemon-halo-sombre) 18%, var(--daemon-fond));
-  --muted-foreground: var(--daemon-sourdine);
-  --accent: color-mix(in oklch, var(--daemon-halo-sombre) 30%, var(--daemon-fond));
-  --accent-foreground: var(--daemon-texte);
-  --destructive: var(--daemon-halo-vif);
-  --border: color-mix(in oklch, var(--daemon-halo-sombre) 55%, transparent);
-  --input: color-mix(in oklch, var(--daemon-halo-sombre) 55%, transparent);
-  --ring: var(--daemon-halo-vif);
-  --sidebar: var(--daemon-fond);
-  --sidebar-foreground: var(--daemon-texte);
-  --sidebar-primary: var(--daemon-halo-vif);
-  --sidebar-primary-foreground: var(--daemon-fond);
-  --sidebar-accent: color-mix(in oklch, var(--daemon-halo-sombre) 30%, var(--daemon-fond));
-  --sidebar-accent-foreground: var(--daemon-texte);
-  --sidebar-border: color-mix(in oklch, var(--daemon-halo-sombre) 55%, transparent);
-  --sidebar-ring: var(--daemon-halo-vif);
+/* **Les thèmes du dossier commun** (daemon, Lucie, 7 et 8 novembre 2026 ; forêt et les
+   suivants le 13) : les couleurs de templates/themes/<nom>.json, posées en variables
+   --theme-* par lib/theme.ts ; `html.theme-fichier` passe devant `.dark`, qui reste posé
+   pour les composants. */
+html.theme-fichier {
+  --background: var(--theme-fond);
+  --foreground: var(--theme-texte);
+  --card: var(--theme-fond);
+  --card-foreground: var(--theme-texte);
+  --popover: var(--theme-fond);
+  --popover-foreground: var(--theme-texte);
+  --primary: var(--theme-texte);
+  --primary-foreground: var(--theme-fond);
+  --secondary: color-mix(in oklch, var(--theme-halo-sombre) 25%, var(--theme-fond));
+  --secondary-foreground: var(--theme-texte);
+  --muted: color-mix(in oklch, var(--theme-halo-sombre) 18%, var(--theme-fond));
+  --muted-foreground: var(--theme-sourdine);
+  --accent: color-mix(in oklch, var(--theme-halo-sombre) 30%, var(--theme-fond));
+  --accent-foreground: var(--theme-texte);
+  --destructive: var(--theme-halo-vif);
+  --border: color-mix(in oklch, var(--theme-halo-sombre) 55%, transparent);
+  --input: color-mix(in oklch, var(--theme-halo-sombre) 55%, transparent);
+  --ring: var(--theme-halo-vif);
+  --sidebar: var(--theme-fond);
+  --sidebar-foreground: var(--theme-texte);
+  --sidebar-primary: var(--theme-halo-vif);
+  --sidebar-primary-foreground: var(--theme-fond);
+  --sidebar-accent: color-mix(in oklch, var(--theme-halo-sombre) 30%, var(--theme-fond));
+  --sidebar-accent-foreground: var(--theme-texte);
+  --sidebar-border: color-mix(in oklch, var(--theme-halo-sombre) 55%, transparent);
+  --sidebar-ring: var(--theme-halo-vif);
 }
-html.daemon body { font-family: var(--daemon-police); }
-html.daemon .markdown code, html.daemon .body code { color: var(--daemon-code-en-ligne); }
-html.daemon .hljs-keyword, html.daemon .hljs-selector-tag, html.daemon .hljs-built_in, html.daemon .hl-keyword { color: var(--daemon-code-keyword); }
-html.daemon .hljs-type, html.daemon .hljs-title.class_, html.daemon .hl-type { color: var(--daemon-code-type); }
-html.daemon .hljs-title.function_, html.daemon .hljs-function .hljs-title, html.daemon .hl-function { color: var(--daemon-code-function); }
-html.daemon .hljs-string, html.daemon .hljs-regexp, html.daemon .hl-string { color: var(--daemon-code-string); }
-html.daemon .hljs-comment, html.daemon .hljs-quote, html.daemon .hl-comment { color: var(--daemon-code-comment); }
-html.daemon .hljs-number, html.daemon .hl-number { color: var(--daemon-code-number); }
-html.daemon .hljs-literal, html.daemon .hl-constant { color: var(--daemon-code-constant); }
-html.daemon .hljs-variable, html.daemon .hljs-params, html.daemon .hl-variable { color: var(--daemon-code-variable); }
-html.daemon .hljs-property, html.daemon .hljs-attr, html.daemon .hl-property { color: var(--daemon-code-property); }
-html.daemon .hljs-operator, html.daemon .hl-operator { color: var(--daemon-code-operator); }
-html.daemon .hljs-punctuation, html.daemon .hl-punctuation { color: var(--daemon-code-punctuation); }
-html.daemon .hljs-meta, html.daemon .hl-attribute { color: var(--daemon-code-attribute); }
-html.daemon .hljs-symbol, html.daemon .hl-label { color: var(--daemon-code-label); }
-html.daemon .hljs-section, html.daemon .hl-module { color: var(--daemon-code-module); }
+html.theme-fichier body { font-family: var(--theme-police); }
+html.theme-fichier .markdown code, html.theme-fichier .body code { color: var(--theme-code-en-ligne); }
+html.theme-fichier .hljs-keyword, html.theme-fichier .hljs-selector-tag, html.theme-fichier .hljs-built_in, html.theme-fichier .hl-keyword { color: var(--theme-code-keyword); }
+html.theme-fichier .hljs-type, html.theme-fichier .hljs-title.class_, html.theme-fichier .hl-type { color: var(--theme-code-type); }
+html.theme-fichier .hljs-title.function_, html.theme-fichier .hljs-function .hljs-title, html.theme-fichier .hl-function { color: var(--theme-code-function); }
+html.theme-fichier .hljs-string, html.theme-fichier .hljs-regexp, html.theme-fichier .hl-string { color: var(--theme-code-string); }
+html.theme-fichier .hljs-comment, html.theme-fichier .hljs-quote, html.theme-fichier .hl-comment { color: var(--theme-code-comment); }
+html.theme-fichier .hljs-number, html.theme-fichier .hl-number { color: var(--theme-code-number); }
+html.theme-fichier .hljs-literal, html.theme-fichier .hl-constant { color: var(--theme-code-constant); }
+html.theme-fichier .hljs-variable, html.theme-fichier .hljs-params, html.theme-fichier .hl-variable { color: var(--theme-code-variable); }
+html.theme-fichier .hljs-property, html.theme-fichier .hljs-attr, html.theme-fichier .hl-property { color: var(--theme-code-property); }
+html.theme-fichier .hljs-operator, html.theme-fichier .hl-operator { color: var(--theme-code-operator); }
+html.theme-fichier .hljs-punctuation, html.theme-fichier .hl-punctuation { color: var(--theme-code-punctuation); }
+html.theme-fichier .hljs-meta, html.theme-fichier .hl-attribute { color: var(--theme-code-attribute); }
+html.theme-fichier .hljs-symbol, html.theme-fichier .hl-label { color: var(--theme-code-label); }
+html.theme-fichier .hljs-section, html.theme-fichier .hl-module { color: var(--theme-code-module); }
 /* L'invocation : l'animation « réfléchit » du thème, pendant que le modèle réfléchit. */
-#invocation { font-family: var(--daemon-police); color: var(--daemon-texte); text-shadow: 0 0 6px var(--daemon-halo-vif), 0 0 14px var(--daemon-halo-sombre); letter-spacing: 0.05em; }
+#invocation { font-family: var(--theme-police); color: var(--theme-texte); text-shadow: 0 0 6px var(--theme-halo-vif), 0 0 14px var(--theme-halo-sombre); letter-spacing: 0.05em; }
 
 /* Les graphes (le DAG vivant, le diff d'une proposition, le papillon). */
 .graphe-svg g.etape.passe rect { fill: color-mix(in oklch, var(--primary) 20%, var(--card)); }

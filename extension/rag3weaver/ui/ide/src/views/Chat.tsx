@@ -7,7 +7,7 @@ import { ToolResultView, toolContext } from "@/lib/toolview";
 import { RagDesDepots, UiDuTour } from "@/components/UiDuTour";
 import { Breadcrumb, ChatSidebar } from "@/views/ChatSidebar";
 import DOMPurify from "dompurify";
-import { daemonTheme, imageDe, type ThemeAnimation } from "@/lib/theme";
+import { fileTheme, imageDe, type ThemeAnimation } from "@/lib/theme";
 import { displayName, fetchChat, onEtat, onFlux, sendChat, stopRun, type Backend, type ChatContext, type ChatPousse, type ChatState, type ChatTurn, type ChatUsage, type FluxEvent, type UiComposant, type Rag, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
 
 // **Le chat de la tâche et de l'atelier** (page 08, vue 2) : la forme de ui/chat —
@@ -191,20 +191,21 @@ function useThemeDeLaPage(): string {
 }
 
 /// **L'invocation** (le « Daemon Code Summoning » du terminal, Lucie, 7 novembre 2026) :
-/// sous le thème daemon seulement, l'animation « réfléchit » du fichier commun tourne
-/// pendant que le modèle réfléchit (du départ d'un appel au premier jeton ou au premier
+/// sous un thème du dossier commun seulement (daemon, forêt…), son animation « réfléchit »
+/// tourne pendant que le modèle réfléchit (du départ d'un appel au premier jeton ou au premier
 /// outil) ; ailleurs la page reste sobre. Sous `prefers-reduced-motion`, l'image reste fixe.
 function Invocation({ actif }: { actif: boolean }) {
   const theme = useThemeDeLaPage();
-  const [anim, setAnim] = useState<ThemeAnimation | null>(null);
+  const [lue, setLue] = useState<{ theme: string; anim: ThemeAnimation | null } | null>(null);
   const [n, setN] = useState(0);
-  const montre = actif && theme === "daemon";
+  const montre = actif && theme !== "" && theme !== "light" && theme !== "dark";
+  const anim = lue?.theme === theme ? lue.anim : null;
   useEffect(() => {
-    if (!montre || anim) return;
-    daemonTheme()
-      .then((t) => setAnim(t.animations.reflechit ?? null))
+    if (!montre || lue?.theme === theme) return;
+    fileTheme(theme)
+      .then((t) => setLue({ theme, anim: t.animations.reflechit ?? null }))
       .catch((e: Error) => console.warn(`[thème] ${e.message}`));
-  }, [montre, anim]);
+  }, [montre, theme, lue]);
   useEffect(() => {
     if (!montre || !anim || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     const h = window.setInterval(() => setN((k) => k + 1), Math.max(anim.ms, 50));

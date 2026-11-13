@@ -77,8 +77,21 @@ const PAGE: &str = include_str!("ide/page.html");
 /// Le code de la page, en fichier (`GET /ide/page.js`) : lisible par un serveur
 /// de langage et par l'index de code, comme le reste du code.
 const PAGE_JS: &str = include_str!("ide/page.js");
-/// Le thème commun à l'IDE et au terminal (`tty/src/theme.rs` embarque le même fichier).
-const THEME_DAEMON: &str = include_str!("../templates/themes/daemon.json");
+/// **Les thèmes livrés** (`templates/themes/<nom>.json`, communs à l'IDE et au terminal :
+/// `tty/src/theme.rs` embarque les mêmes fichiers), par leur nom, dans l'ordre des noms.
+/// Ils viennent des gabarits embarqués : un fichier posé dans le dossier est servi sans
+/// rien changer ici.
+fn noms_des_themes() -> Vec<&'static str> {
+    crate::builtin_templates::names_under("themes/")
+        .filter_map(|n| n.strip_prefix("themes/")?.strip_suffix(".json"))
+        .filter(|n| !n.is_empty() && !n.contains('/'))
+        .collect()
+}
+
+/// Le fichier du thème livré `nom`, s'il en est un.
+fn theme_livre(nom: &str) -> Option<&'static [u8]> {
+    noms_des_themes().contains(&nom).then(|| crate::builtin_templates::get(&format!("themes/{nom}.json"))).flatten()
+}
 
 /// Un chemin de l'IDE ?
 pub fn est_a_lui(path: &str) -> bool {
@@ -527,10 +540,18 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
         ("GET", "/ide/app.css") => {
             let _ = request.respond(reponse_octets(200, "text/css; charset=utf-8", bundle("app.css")));
         }
-        // **Le thème commun** (Lucie, 7 et 8 novembre 2026) : le fichier que le terminal
-        // embarque, servi tel quel ; la page en tire ses couleurs et son animation.
-        ("GET", "/ide/theme/daemon.json") => {
-            let _ = request.respond(reponse(200, "application/json; charset=utf-8", THEME_DAEMON.to_string()));
+        // **Les thèmes communs** (Lucie, 7 et 8 novembre 2026 ; forêt et les suivants le
+        // 13) : la liste des thèmes livrés, puis chaque fichier que le terminal embarque,
+        // servi tel quel ; la page en tire ses couleurs et son animation. Un nom inconnu, 404.
+        ("GET", "/ide/themes.json") => {
+            let _ = request.respond(reponse(200, "application/json; charset=utf-8", json!(noms_des_themes()).to_string()));
+        }
+        ("GET", p) if p.starts_with("/ide/theme/") => {
+            let nom = p.strip_prefix("/ide/theme/").and_then(|r| r.strip_suffix(".json")).unwrap_or_default();
+            let _ = request.respond(match theme_livre(nom) {
+                Some(octets) => reponse_octets(200, "application/json; charset=utf-8", octets.to_vec()),
+                None => reponse(404, "text/plain; charset=utf-8", format!("thème inconnu : {p} (les thèmes : /ide/themes.json)")),
+            });
         }
         ("GET", "/ide") | ("GET", "/ide/") => {
             let _ = request.respond(reponse_octets(200, "text/html; charset=utf-8", bundle("index.html")));
