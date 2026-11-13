@@ -289,3 +289,14 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   sous la lib entière », une lecture pendant un lot réindexé qui voit le lot à moitié (test d'octobre) —
   ticket à recherche, la lecture sale sous V2 du 7 à départager. embarquement : les baux d'usage verts,
   en file après archi.
+- **19 h 37, les 59 s du premier appel : trouvé par ED, ce n'est pas l'hôte** (92c069725). Par l'hôte, sans
+  navigateur : /etat 38 ms, premier search_code 49 ms, impact 29 ms. Dans le navigateur, le serveur ne reçoit
+  rien pendant 59 s : **Chrome retient les requêtes** parce que chaque vue chargée ouvre son flux SSE et que
+  les flux des vues quittées restent tenus ~60 s — le plafond de six connexions HTTP/1.1 par hôte, atteint
+  au septième flux. Pour Lucie : six onglets ou rechargements de l'IDE en moins d'une minute, et l'IDE
+  attend une minute ; sans rapport avec l'embarquement. Décidé : (a) la page ferme son flux au départ
+  (pagehide, et un flux par page si la page sait multiplexer ses sujets), le serveur ferme un flux sans
+  battement ; témoin rouge : plus de six vues de suite, chacune sous 5 s, aucun seuil relevé ; ED le prend
+  en entier, archi relit. (b) un SharedWorker seulement si plusieurs onglets ouverts sont un usage réel de
+  Lucie — à lui demander. Le ticket 1a-2 est ouvert (06820c8ce) ; e2e_postgres par le pgvector de luciepc
+  par tunnel, rien à démarrer sur le portable.
