@@ -434,3 +434,15 @@ montres toujours explicitement désactivées pour le cas périmé. Preuve du ref
 cx-grep-symboles-d7525d9cb-cible-20261113/cible.log (ligne1096 du panic),
 primitive validation-j3lg1vlf rouge et quiescence target[]. Aucun vert de suite
 native revendiqué. Nouvelle source/pilote dans le même RESTE1800 initial.
+
+## Ciblé de la suite grep qualifié
+
+Source ea7dcbb0b4bb15f89c6f8d7c3a7a2f542afee428 : navigation12/0/0 en1,14s,
+grep2/0/0 en0,07s. Vrai chat du framework à modèle de fixture CallbackLlm,
+outillage et index réels ; relais atelier, puis stale_index sans réindexation
+implicite. Aucun fournisseur de modèle extérieur appelé. Preuves aux deux postes :
+cx-grep-symboles-ea7dcbb0b-cible-20261113, ELF d5b8dd4ca105a0588315f2916869921de0f6abb57627233d3a28b38e2b509fc9,
+223gabarits/aucun absent, PID2370583/start87775220/native29/Max32.
+Primitive validation-1_rx2ina VERT0/restes[]/nettoyé=true, quiescence target[].
+Les deux rouges précédents restent distincts et conservés. Pas de globale ni
+d'intégration de cette suite avant revue/tour explicite C7.
