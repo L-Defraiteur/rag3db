@@ -432,3 +432,9 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   top-k) ; **une question pour le cœur : l'index HNSW suit-il l'instantané de lecture ?** Cinq questions pour
   Lucie (parente inférée ou déclarée ; quand publier ; couche de travail privée ou partagée ; le rebase ;
   quelle histoire garder). Le lot 1a attend la lib du cœur (concurrence_test en cours, push vers 21 h 50).
+
+## Vers 21 h 0x — la place lourde du portable au cœur, le départage L3 par la ligne de lot
+
+- **recherche** : la lib entière en `--nocapture` sur 65c7dd96d et 835d5298f à luciepc, dix tours verts sur dix ; le lot du témoin L3 passe en un seul tenant (`2 fichiers`, 3,8 à 4,9 s). Le rouge d'archi est l'empreinte d'un lot coupé en deux (la mention de `__pause_du_lot__.rs` lue sans `def.rs`), ce qui exclut un instantané qui mentirait au milieu d'un lot. Deux voies restent : deux passages de la réaction, ou une reprise un à un après échec. **C'est la ligne de lot du rouge qui tranche**, pas douze tours verts de plus.
+- Décision : recherche cède la seule place lourde du portable (`lourds-max` = 1) après le tour en cours ; la soirée est au cœur (passe de push de `LocalStorage::commit` vers 21 h 50) puis à G (lib au hash du cœur). Archi donne à recherche la ligne de lot et le chemin du journal de son rouge ; si le journal a disparu, un témoin imprimera la ligne au prochain rouge.
+- Au cœur, pour après son push : la question de recherche (page 30), **l'index HNSW suit-il l'instantané de lecture ?** — socle du masque avant le top-k des vues.
