@@ -66,3 +66,21 @@ sans-default-features pour résolution CPU, puis contrôle de compilation sous
 feature native pour adapter typé et qualification native séparée si requise.
 Durée et GO exact appartiennent à coordination, ED se qualifie actuellement.
 Aucune commande Cargo n’est autorisée par ce document seul.
+
+
+### Précisions après revue statique5ec8
+
+Tombstone « scope » signifie ici occurrence de l’entité Scope par UUID, PAS
+cellule(org,project). OccurrenceKey doit être unique dans l’origine choisie.
+FileKey est une identité logique fournie : l’appelant inclut domaine/cellule
+si nécessaire ; deux cellules nommant a.rs par la même clé seraient masquées
+ensemble. Le résolveur ne peut reconstruire un domaine absent de ses entrées.
+Des racines indépendantes d’origines différentes sont admises ; seule une
+arête parent entre origines différentes est refusée.
+
+Le juge existant ajoute remplacement fichier tombstone+valeurs locales DANS
+la même révision et deux FileKeys qualifiées partageant le chemin affiché,
+ainsi que racines indépendantes multi-origines. Compte inchangé4fonctions,
+toujours NON JOUÉES. Validation cycles O(n²) dans une chaîne, aucun coût mesuré.
+Deux propositions de fenêtre ont été reçues(900sRecherche/3000sED) ; ni durée
+ni compilation autorisées avant décision/recette/GOexact C7 et disponibilité.
