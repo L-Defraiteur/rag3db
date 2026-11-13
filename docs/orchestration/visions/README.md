@@ -115,7 +115,11 @@ le juge.
    sur le résultat d'un outil, quand l'outil porte un drapeau « lit des données potentiellement
    sensibles » (un fichier de configuration, une base, un service externe), et l'agent peut lui-même
    demander qu'il passe sur un retour donné. Même effet : des références opaques à la place des
-   valeurs, avant que le retour n'entre dans la fenêtre du modèle.
+   valeurs, avant que le retour n'entre dans la fenêtre du modèle. **Et l'anonymisation** : le même
+   mécanisme sert à remplacer des données personnelles (noms, adresses, numéros, identifiants) par des
+   références opaques stables (`{{person:1}}`, la même pour la même personne dans tout le tour), pour
+   qu'un modèle cloud travaille sur des données anonymisées et que la désanonymisation se fasse en local,
+   par le lanceur ou à l'affichage.
 
 Le code est le premier produit du framework ; ces cinq-là sont des vues et des agents de plus sur le
 même index.
