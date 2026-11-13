@@ -515,3 +515,14 @@ créée exclusivement si absente, supprimée en finally. Premier rouge arrêté.
 L'ancienne échéance4q demeure historique et n'est pas renouvelée. Aucun
 changement de service ou de modèle ; porteur embarquement, fin attendue :
 preuves d'union vertes et atterrissage dans l'ordre Pub → ED → Embar.
+
+
+Précontrôle de lancement union : systemd refuse MemoryHigh=0 comme propriété
+brute ; aucun travail démarré. Remplacé par infinity (le paramètre commun high0
+signifie sans limite intermédiaire). Premier lancement ensuite refusé AVANT
+recette : « aucun plafond effectif <= 32 Gio », car poste crée sa propre portée
+au défaut40G, sans hériter de celle du service parent. Aucun test ni fixture
+créé, aucun budget de travail consommé. Deuxième unité fixe explicitement
+POSTE_MEM_MAX=32G avant poste, paramètre commun HIGH0 conservé ; entrée de
+recette réussie, échéance2400 s créée après acquisition réelle. Logs union.log
+et union-2.log conservés, pas de vert inventé pour ces précontrôles.
