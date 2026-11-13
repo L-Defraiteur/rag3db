@@ -234,3 +234,11 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   depuis sa base) ; « à toi » après embarquement, rejeu court qui doit le voir vert. archi : « dire vrai »
   en passe (réindexation en échec dite en échec ; une décision prise pendant le tour relance après ; le
   journal des décisions avant l'accord ; un test de Codex qui qualifiait l'ancien contrat passé au nouveau).
+- **18 h 29, décision de Lucie sur les couches** : **les vues se bâtissent sur l'index de code réel**, en lui
+  donnant ce qu'il faut (les versions par contenu, les couches, les générations), lot par lot : 1a (la version
+  de scope par contenu, en cours), 1b (la migration des bases existantes, à son mot), puis la liaison
+  branche/worktree → couche, le chargeur durable, le masque avant le top-k dans les signaux réels, le
+  paramètre `view` dans les outils. Pas de second index : le raccord physique de Codex (index neuf en BM25
+  seul, possédé) reste un banc d'essai de ces mécanismes (générations de publication, reprise), pas un
+  stockage à maintenir ; ce qui en vaut la peine s'adopte dans l'index réel. « Codex a pu se tromper, partir
+  dans une mauvaise direction. » Mes mots du 13 au soir, tranchés par elle.
