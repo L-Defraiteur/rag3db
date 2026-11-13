@@ -123,3 +123,12 @@ le juge.
 
 Le code est le premier produit du framework ; ces cinq-là sont des vues et des agents de plus sur le
 même index.
+
+## Graine : l'IDE en plusieurs fenêtres (Lucie, 13 novembre 2026, au soir)
+
+Le flux de l'IDE (l'hôte écrit, la page reçoit) sera tenu par un **SharedWorker**, un par navigateur, qui
+redistribue aux onglets par abonnement de sujets — d'abord pour passer sous le plafond de six connexions de
+Chrome (Lucie a plusieurs onglets ouverts). Même mécanisme pour **séparer l'IDE en fenêtres** : le chat dans
+une fenêtre, le graphe ou le dépôt dans une autre, sur deux écrans, avec un petit état partagé (dépôt courant,
+sélection, conversation ouverte, cartes d'accord en attente) porté par le worker. Le lot (b) d'ED prépare
+cette forme ; les fenêtres détachées viendront après, à son mot.
