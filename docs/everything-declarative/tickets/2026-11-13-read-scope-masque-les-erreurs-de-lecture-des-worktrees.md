@@ -188,3 +188,13 @@ physique antérieur n'est établie par cette inspection des pilotes.
 Suivi ED : réserves 1/3 corrigées dans ada2d3621 ; réserves 2/4 traitées
 dans le delta suivant par maps de juges identifiées et contrôle target périodique.
 Ce suivi décrit la préparation, aucune qualification runtime encore jouée.
+
+
+## Premier lancement7a94 arrêté avant Cargo
+
+GO exact C7 suivi ; refus de confinement avant driver/reçu/target : la whitelist
+lanceur supprimait le bus systemd utilisateur nécessaire à poste. Rouge et
+copie4fichiers SHA conservés (voir recette04). Aucun juge produit joué.
+Correction de préparation : bus usermanager fixe attribué avant poste, bus
+privé du confineur ensuite ; nouveauWT/paths r3 et GO exact à renouveler.
+Pas de rejeu inchangé, pas de cause produit déduite.
