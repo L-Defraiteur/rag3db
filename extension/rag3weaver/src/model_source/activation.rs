@@ -122,10 +122,11 @@ mod tests {
     impl Fixture {
         fn nouvelle() -> Self {
             let dossier = tempfile::tempdir().unwrap();
-            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-            let adresse = listener.local_addr().unwrap().to_string();
+            // Le port 0 : le fournisseur prend le sien et l'annonce. Réserver un
+            // port puis le relâcher laissait un autre test le prendre entre les
+            // deux (le rouge d'une lib entière sur sept, 13 novembre 2026).
             let mut source = ModelSource::service("fixture-residence-384");
-            source.address = Addresses::parse(&adresse);
+            source.address = Addresses::parse("127.0.0.1:0");
             source.dimensions = Some(384);
             source.timeout_secs = Some(1);
             source.activation = Some(Activation {
@@ -136,7 +137,6 @@ mod tests {
                 coordination: dossier.path().join("coordination"), journal: dossier.path().join("journaux"),
                 budget_activation_secs: 5, budget_attente_secs: 5, residence: Residence::Maintenir,
             });
-            drop(listener);
             // Même chemin que le manifeste : la déclaration traverse serde.
             let source = serde_json::from_str(&serde_json::to_string(&source).unwrap()).unwrap();
             Self { dossier, source }
@@ -166,7 +166,9 @@ mod tests {
         assert!(origine.remote());
         let vecteurs = client.embed(&["texte synthétique".into()]).unwrap();
         assert_eq!(vecteurs.len(), 1); assert_eq!(vecteurs[0].len(), 384);
-        let d = crate::daemon::DaemonEmbedder::joindre(&f.source.address.0[0]).unwrap();
+        let prise = crate::serveur::activation::adresse_retenue(&f.source.activation.as_ref().unwrap().coordination, &f.source.address.0[0])
+            .expect("l'adresse prise est retenue au dossier de coordination");
+        let d = crate::daemon::DaemonEmbedder::joindre(&prise).unwrap();
         assert!(d.identite().chauffe.is_none(), "legacy = chauffe inconnue");
     }
 
@@ -215,8 +217,8 @@ mod tests {
     /// l'adresse retenue au dossier de coordination : un seul démarrage.
     #[test]
     fn une_activation_sur_port_nul_annonce_son_adresse_et_la_retrouve() {
-        let mut f = Fixture::nouvelle();
-        f.source.address = Addresses::parse("127.0.0.1:0");
+        let f = Fixture::nouvelle();
+        assert_eq!(f.source.address.0[0], "127.0.0.1:0", "la fixture déclare le port 0");
         let (premier, origine) = connect_embedder(&f.source).unwrap();
         let prise = match origine { super::super::Origin::Service(a) => a, autre => panic!("origine {autre:?}") };
         assert!(!prise.ends_with(":0"), "l'adresse rendue est celle que le fournisseur a prise : {prise}");
