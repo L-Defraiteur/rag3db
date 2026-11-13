@@ -729,3 +729,7 @@ Décision : pas de lot vues chez lucivy maintenant ; 2b-B s'appuie sur `allowed_
 ## Vers 00 h 2x — 1a : passe entière verte, « à toi »
 
 - **1a (scope-version-3, 297f31130) : passe entière VERTE** à luciepc sur 0c41f9fe6, 00 h 05 → 00 h 19 — F8 ; lib entière 2363/0/71 avec et sans services ; 14 suites (scope_versions 8, entites_derivees 24, projection_occurrences 2, code 36, code_sync 17, lectures 27, search 40, search_queue 5, reprise_durcie 3, tx_vecteurs_apres_rollback 3, tx_ligne_a_ligne 3, tx_merge_puis_copy 1, tx_par_paquet_arret 18, postgres 36 en direct) ; navigateur 43/43. **« À toi »**, dernier pas par la garde. Après : la page 29 dit « sur master, (A) », la nouveauté ; 1b demain sur copie.
+
+## Vers 00 h 2x — 1a est sur master
+
+- **arbre principal a poussé 1a** : master = **e62151904** (fb4dd1617..e62151904), garde à jour, code apporté vide (rebase sans rejeu), passe entière celle de 297f31130 sur 0c41f9fe6. Docs (dbc9d1591) : la page 29 dit « 1a sur master, forme (A) : les bases neuves ont ScopeContent, les existantes se disent à migrer, 1b à part » ; le README décrit les versions de scope et l'estampille ; deux nouveautés (version de scope e62151904, liaison branche → couche 0672d624f). Ménage fait aux deux postes. Arbre principal dort ; **demain 1b sur copie, à son mot et à celui de Lucie pour ses bases**.
