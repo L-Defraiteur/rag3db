@@ -695,7 +695,10 @@ allowed to do, at most 1.6 KB/s over ssh. Four more themes share its form —
 and readable code, 3 for what goes with it). What the teammate waits for comes first on the
 status line: an approval shows its command, `o` grants it and `n` refuses it; a question is
 answered by what you type (`answer` with `reply_to`); otherwise the teammate's state comes from
-`GET /ide/teammate/list`. `--plain` writes the stream as text.
+`GET /ide/teammate/list`. `--plain` writes the stream as text, and takes over by itself when the
+inline view cannot start (a terminal that does not report its cursor position). Measured over ssh
+both ways between two machines: about 47 ms from the host to the screen, 11 to 20 ms for a
+keystroke's echo, 3 KB/s during a step (`tty/mesures/`, a scripted fake host and a pty harness).
 
 ## Embeddings and rerankers
 

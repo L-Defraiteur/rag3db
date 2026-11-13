@@ -55,3 +55,17 @@ Au départ, le harnais ne répondait pas à `ESC[6n`, et le terminal s'arrêtait
 | macOS (Apple Silicon) | Terminal.app ; iTerm2 ; ssh vers luciepc | les mêmes points. Terminal.app n'a pas la couleur vraie : le terminal doit tomber en 256 couleurs par `TERM=xterm-256color` sans `COLORTERM`. |
 
 **Comment.** On lance d'abord le même `mesure.py`, depuis la machine vers luciepc (ssh), puis le terminal localement contre un hôte joint par tunnel (`--daemon-cmd`, `--adresse`). Les chiffres attendus sont ceux du tableau, avec un ordre de grandeur de 50 ms pour l'affichage et de 10 à 20 ms pour l'écho. Ce qui ne se mesure pas par le harnais (les glyphes à l'œil, la police) passe par une capture d'écran par terminal, rangée à côté.
+
+## Le push (ec4f7aa6d)
+
+- **Repli moteur ancien, lot sans effet sur le moteur, lib e93710f36.** Le rejeu court sur la tête rebasée a tourné sous `RAG3WEAVER_MOTEUR_ANCIEN=1`, admis par c7 pour ce push seul. Le C++ du cœur (`0c41f9fe6`) était plus récent que la lib épinglée, et la lib neuve est arrivée pendant la passe.
+- **La passe.**
+
+  | Étape | Résultat |
+  |---|---|
+  | crate du terminal | 39/39 avec la vue, 10/10 sans |
+  | `e2e_tty` | 4/4 |
+  | `e2e_catalogue_gabarits` | 12/12, au second essai |
+
+  Le premier essai du catalogue avait fait 5/12 : le service bge-m3 de luciepc (7879) ne répondait plus pendant la passe, et les 7 tests qui l'exigent sont tombés au démarrage. La suite a été rejouée seule sur la même tête quand 7879 est revenu. Aucun service n'a été touché.
+- **Le rebase** s'est fait avec `git -c merge.directoryRenames=false`. Le ticket fermé par hotfixs avait vidé `docs/tty/tickets/`, et git voulait y voir un dossier renommé et ranger le ticket ouvert « Windows et macOS » parmi les fermés.
