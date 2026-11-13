@@ -263,4 +263,32 @@ TEST_F(RolledBackInsertReopenTest, MergingTheKeysOfARolledBackInsertCreatesTheRo
     run("COMMIT;");
 }
 
+// Le paquet défait de rag3weaver modifie ses nœuds après leur MERGE, dans une instruction à part
+// (SET n._chunked_hash) : la ligne insérée porte alors une mise à jour de la même transaction.
+TEST_F(RolledBackInsertReopenTest, KeysOfRowsUpdatedAfterTheirInsertLeaveWithTheRollback) {
+    run("BEGIN TRANSACTION;");
+    run("UNWIND range(128, 223) AS i MERGE (c:Content {uuid: 'c' + CAST(i AS STRING)}) SET c.body "
+        "= 'a';");
+    run("UNWIND range(128, 223) AS i MATCH (a:Content {uuid: 'c' + CAST(i AS STRING)}) MATCH "
+        "(b:Scope {uuid: 's' + CAST(i % 10 AS STRING)}) MERGE (a)-[r:DERIVED_FROM]->(b) SET "
+        "r.hash = 'h';");
+    run("UNWIND range(128, 223) AS i MATCH (c:Content {uuid: 'c' + CAST(i AS STRING)}) SET c.body "
+        "= 'modifié';");
+    run("ROLLBACK;");
+    reopen();
+    run("BEGIN TRANSACTION;");
+    run("UNWIND range(128, 255) AS i MERGE (c:Content {uuid: 'c' + CAST(i AS STRING)}) SET c.body "
+        "= 'b';");
+    run("UNWIND range(128, 255) AS i MATCH (a:Content {uuid: 'c' + CAST(i AS STRING)}) MATCH "
+        "(b:Scope {uuid: 's' + CAST(i % 10 AS STRING)}) MERGE (a)-[r:DERIVED_FROM]->(b) SET "
+        "r.hash = 'h';");
+    run("COMMIT;");
+    EXPECT_EQ(row("MATCH (c:Content) RETURN count(c);"), "256\n")
+        << "the MERGE found keys of rolled-back rows instead of creating them";
+    EXPECT_EQ(row("MATCH ()-[r:DERIVED_FROM]->(:Scope) RETURN count(r);"), "256\n");
+    run("BEGIN TRANSACTION;");
+    EXPECT_EQ(setOverScopes(), "256\n");
+    run("COMMIT;");
+}
+
 } // namespace
