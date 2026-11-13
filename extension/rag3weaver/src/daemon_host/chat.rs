@@ -742,6 +742,7 @@ pub(crate) struct OutilsDuChat<'a> {
     retires: HashMap<String, String>,
     /// **Une commande que la porte met en attente** (lot 7 de l'atelier, 9 novembre 2026) :
     /// la ligne donnée, rend le texte à ajouter au résultat et la carte d'accord.
+    #[cfg(feature = "code")]
     en_attente: Option<Box<dyn Fn(&str) -> (String, Value) + Send + Sync + 'a>>,
     /// **Une carte d'accord passée sous un appel** : son id, rattaché à la conversation pour
     /// que la décision y relance le tour (la carte d'un chemin ; c7, 9 novembre 2026).
@@ -779,7 +780,11 @@ impl<'a> OutilsDuChat<'a> {
                 }
             }
         }
-        Self { inner, ecrivent, retires, empreinte: None, en_attente: None, rattacher: None }
+        Self {
+            inner, ecrivent, retires, empreinte: None, rattacher: None,
+            #[cfg(feature = "code")]
+            en_attente: None,
+        }
     }
 
     /// Tenir l'empreinte de lecture de la conversation pendant ce tour (`tour` : son
@@ -856,12 +861,14 @@ impl<'a> OutilsDuChat<'a> {
 
     /// Hors d'une tâche, une commande mise en attente par la porte se décide sur une carte
     /// d'accord : `demander` la pose (l'hôte) et rend le texte et la carte.
+    #[cfg(feature = "code")]
     pub(crate) fn avec_les_commandes_en_attente(mut self, demander: impl Fn(&str) -> (String, Value) + Send + Sync + 'a) -> Self {
         self.en_attente = Some(Box::new(demander));
         self
     }
 
     /// Hors d'une tâche, chaque carte d'accord sous un appel se rattache à la conversation.
+    #[cfg(feature = "code")]
     pub(crate) fn avec_les_cartes_rattachees(mut self, rattacher: impl Fn(&str) + Send + Sync + 'a) -> Self {
         self.rattacher = Some(Box::new(rattacher));
         self
