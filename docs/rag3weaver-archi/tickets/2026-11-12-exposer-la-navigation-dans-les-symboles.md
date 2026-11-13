@@ -425,3 +425,12 @@ primitive validation-4xejkeug rouge, quiescence target[]. Aucun verdict de test 
 Correction bornée à ces expressions de fixture : format! et String explicite.
 Reprise source/pilote neufs annoncés avant exécution dans le RESTE de l'échéance
 1800s initiale du ciblé, sans remise à zéro ni changement d'assertion.
+
+Second arrêt d752 : compilation verte, dix témoins purs navigation observés ok ;
+le nouveau natif refuse le manifeste avant grep, champ catch_up_on_open placé
+par erreur sous workspace. Le contrat BackendEmbeddings et la fixture ED existante
+le déclarent sous embeddings. Correction de la fixture à cet emplacement uniquement ;
+montres toujours explicitement désactivées pour le cas périmé. Preuve du refus dans
+cx-grep-symboles-d7525d9cb-cible-20261113/cible.log (ligne1096 du panic),
+primitive validation-j3lg1vlf rouge et quiescence target[]. Aucun vert de suite
+native revendiqué. Nouvelle source/pilote dans le même RESTE1800 initial.

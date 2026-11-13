@@ -1051,7 +1051,7 @@ mod integration {
         let mut m: Value = serde_json::from_slice(&std::fs::read(&code).unwrap()).unwrap();
         // Fixture de péremption : index explicite uniquement, aucune montre ne répare le test.
         m["watches"] = json!({});
-        m["workspace"]["catch_up_on_open"] = json!(false);
+        m["embeddings"]["catch_up_on_open"] = json!(false);
         std::fs::write(&code, serde_json::to_vec(&m).unwrap()).unwrap();
         let observed = Arc::new(Mutex::new(Vec::<Value>::new()));
         let seen = observed.clone();
