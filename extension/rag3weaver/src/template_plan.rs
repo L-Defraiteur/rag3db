@@ -273,6 +273,57 @@ fn compatibility(
             ));
         }
     }
+    // **Ce qui change les outils sans paraître dans `tools`** : `search_graphs` et `graph_tool`
+    // ajoutent des outils que voit l'agent (absents : faux).
+    for key in ["search_graphs", "graph_tool"] {
+        let lu = |v: &Value| v.get(key).cloned().unwrap_or(Value::Bool(false));
+        if lu(local) != lu(candidate) {
+            errors.push(refusal(
+                RefusalKind::Compatibility,
+                format!("{manifest_name}#/{key}"),
+                "change les outils que voit l'agent sans paraître dans `tools` : à qualifier hors de ce plan",
+            ));
+        }
+    }
+    // **`name` est l'identité de format du dossier des fichiers** (`FormatDuDossier.gabarit`) :
+    // avec un `files_root`, un dossier écrit sous l'ancien nom serait refusé à l'ouverture.
+    if local.get("name") != candidate.get("name")
+        && (local.get("files_root").is_some() || candidate.get("files_root").is_some())
+    {
+        errors.push(refusal(
+            RefusalKind::Compatibility,
+            format!("{manifest_name}#/name"),
+            "le nom est l'identité de format du dossier des fichiers : un dossier écrit sous l'ancien nom serait refusé",
+        ));
+    }
+    // **Les fichiers qui réécrivent le dossier des fichiers** : les scripts des migrations de
+    // format et les gabarits jinja des fichiers miroir. Leur contenu changé seul n'est pas
+    // compatible, comme un schéma.
+    let mut reecrivains = BTreeSet::new();
+    for m in [local, candidate] {
+        for mig in m.pointer("/files_format/migrations").and_then(Value::as_array).into_iter().flatten() {
+            if let Some(s) = mig.get("script").and_then(Value::as_str) {
+                reecrivains.insert(s.to_string());
+            }
+        }
+        for entity in m.get("entities").and_then(Value::as_object).into_iter().flat_map(|o| o.values()) {
+            if let Some(s) = entity.pointer("/files/template").and_then(Value::as_str) {
+                reecrivains.insert(s.to_string());
+            }
+        }
+    }
+    let base_dir = root().join(manifest_name).parent().unwrap().to_path_buf();
+    for path in &reecrivains {
+        let avant = local_reader.lire_reference(&base_dir, path).ok();
+        let apres = candidate_reader.lire_reference(&base_dir, path).ok();
+        if avant != apres {
+            errors.push(refusal(
+                RefusalKind::Compatibility,
+                path.clone(),
+                "réécrit les fichiers sous files_root : son contenu changé n'est pas certifié compatible",
+            ));
+        }
+    }
     if let Some(entities) = candidate.get("entities").and_then(Value::as_object) {
         for (name, entity) in entities {
             let Some(schema_path) = entity.get("schema").and_then(Value::as_str) else {
@@ -788,5 +839,62 @@ mod tests {
             String::from_utf8_lossy(&result.stderr)
         );
         assert!(!dir.path().join("cache-vide").exists());
+    }
+
+    // **La relecture d'everything declarative** (13 novembre 2026) : trois changements que le
+    // plan disait compatibles. Tickets `docs/memoire/tickets/2026-11-13-*`.
+
+    /// `name` est l'identité de format du dossier des fichiers (`FormatDuDossier.gabarit`) :
+    /// un dossier écrit sous un autre nom est refusé à l'ouverture.
+    #[test]
+    fn renaming_a_backend_with_a_files_root_is_not_compatible() {
+        let b = edit(&fixture(), |v| v["files_root"] = json!("fichiers"));
+        let t = edit(&b, |v| v["name"] = json!("autre"));
+        let e = plan(&[b.clone()], &b, &t, "backend.json").unwrap_err();
+        assert!(e.iter().any(|r| r.kind == RefusalKind::Compatibility && r.path.ends_with("#/name")), "{e:?}");
+    }
+
+    /// Le script d'une migration de format réécrit les fichiers sous `files_root` : son
+    /// contenu changé seul n'est pas compatible.
+    #[test]
+    fn a_files_format_migration_script_changed_alone_is_not_compatible() {
+        let mut b = edit(&fixture(), |v| v["files_format"] = json!({"version": 2, "migrations": [{"from": 1, "to": 2, "script": "migrations/v2.rhai"}]}));
+        b.files.insert("migrations/v2.rhai".into(), b"input".to_vec());
+        rehash(&mut b);
+        let mut t = b.clone();
+        t.files.insert("migrations/v2.rhai".into(), b"let x = input; x".to_vec());
+        rehash(&mut t);
+        let e = plan(&[b.clone()], &b, &t, "backend.json").unwrap_err();
+        assert!(e.iter().any(|r| r.kind == RefusalKind::Compatibility && r.path == "migrations/v2.rhai"), "{e:?}");
+    }
+
+    /// `search_graphs` et `graph_tool` changent les outils que voit l'agent sans paraître
+    /// dans `tools` : les allumer n'est pas un changement silencieux.
+    #[test]
+    fn turning_on_graph_tool_or_search_graphs_is_not_a_silent_tool_change() {
+        let b = fixture();
+        for key in ["graph_tool", "search_graphs"] {
+            let t = edit(&b, |v| v[key] = json!(true));
+            let e = plan(&[b.clone()], &b, &t, "backend.json").expect_err(key);
+            assert!(e.iter().any(|r| r.kind == RefusalKind::Compatibility && r.path.ends_with(&format!("#/{key}"))), "{key} : {e:?}");
+        }
+    }
+
+    /// Le gabarit jinja d'un fichier miroir (`entities.*.files.template`) rend les fichiers
+    /// sous `files_root` : son contenu changé seul n'est pas compatible.
+    #[test]
+    fn a_mirror_file_template_changed_alone_is_not_compatible() {
+        let mut b = edit(&with_schema(), |v| {
+            v["files_root"] = json!("fichiers");
+            v["entities"]["Note"]["files"] = json!({"dir": "notes", "name": "{name}.md", "template": "note.md.jinja"});
+        });
+        b.files.insert("note.md.jinja".into(), b"{{ row.name }}\n".to_vec());
+        rehash(&mut b);
+        plan(&[b.clone()], &b, &b, "backend.json").expect("le paquet de départ est valide");
+        let mut t = b.clone();
+        t.files.insert("note.md.jinja".into(), b"# {{ row.name }}\n".to_vec());
+        rehash(&mut t);
+        let e = plan(&[b.clone()], &b, &t, "backend.json").unwrap_err();
+        assert!(e.iter().any(|r| r.kind == RefusalKind::Compatibility && r.path == "note.md.jinja"), "{e:?}");
     }
 }

@@ -27,8 +27,8 @@ Lu dans `src/builtin_templates.rs` :
     d'alors ; il rend les outils venus et partis (`TemplateRefreshed` sur le flux) ;
   - modifié à la main : gardé, `EditedByHand` ;
   - suivi par git (le dépôt des déclarations d'un arbre inscrit) : gardé, `TrackedByGit`.
-- **Politique de revue** (rapport du 7 novembre ; identité corrigée le 12 novembre) : un arbre dont les déclarations sont
-  suivies par git se remet au gabarit livré **par un commit à l'identité Gmail de Lucie**, fichiers propres
+- **Politique de revue** (rapport du 7 novembre ; identité tranchée par c7 le 13 novembre) : un arbre dont les déclarations sont
+  suivies par git se remet au gabarit livré **par un commit à l'identité neutre `rag3weaver <rag3weaver@localhost>` (ou `workspace.git_identity` si le manifeste la déclare)**, fichiers propres
   seulement, sinon refus dit ; lot à part chez ED.
 - **Deux défauts relevés ce matin** par ED : à l'installeur, « déjà posé » ne note ni ne
   rafraîchit, et une pose neuve n'écrit pas `livre.json`.
@@ -92,7 +92,7 @@ diagnostique. Cette page n'autorise pas à désactiver implicitement le suivi vi
 
 - `livre.json` et son dossier d'état, `record`, la fusion des feuilles de `refresh`, `link` et
   `builtin:` : M8 les étend, il ne les double pas.
-- **Les déclarations suivies par git** : la montée est **un commit à l'identité Gmail de Lucie** qu'ED a
+- **Les déclarations suivies par git** : la montée est **un commit à l'identité neutre `rag3weaver <rag3weaver@localhost>` (ou `workspace.git_identity` si le manifeste la déclare)**, qu'ED a
   tranché, sur une branche `gabarits/<version>` du dépôt des déclarations, fusionnée par git
   (git fait la fusion à trois et nomme les conflits) ; refus si l'arbre n'est pas propre.
 - **L'épingle envisagée** doit identifier le paquet de contenus, avec le commit Git en provenance.
@@ -122,7 +122,7 @@ dont le rapport lui est montré ; la montée à son mot, sur une copie d'abord.
 
 1. Le contenu d'alors des fichiers copiés : dans l'historique git de rag3db (léger, mais exige le
    dépôt sur le poste) ou dans `livre.json` (autonome, plus lourd) ?
-2. Le commit des déclarations suivies, à l'identité Gmail de Lucie : la même branche pour le rafraîchissement de
+2. Le commit des déclarations suivies, à l'identité neutre : la même branche pour le rafraîchissement de
    `refresh` et pour M8, ou M8 seul ?
 3. Vu à côté : `~/.local/state/rag3weaver/manifestes/` porte 428 `livre.json`, dont 400 de
    `backends/code` écrits depuis le 8 novembre à 21 h 43. Ils viennent sans doute des tests, qui
@@ -147,4 +147,9 @@ une exclusion, un instantané vérifié et une reprise durable relevant des cont
 système, sans moteur de migration M8 parallèle. La recette historique de la page 05 ne prouve
 pas ces garanties. Un ajout facultatif ou un undo ne prouvent pas à eux seuls la compatibilité
 ou la restauration multi-ressources. Le détail des preuves et des témoins proposés figure dans
-la note datée. L'identité Git applicable est `Lucie Defraiteur <luciedefraiteur@gmail.com>`.
+la note datée. L'identité Git d'un commit de gabarits est l'identité neutre `rag3weaver <rag3weaver@localhost>`,
+passée par `-c user.name -c user.email`, ou `workspace.git_identity` si le manifeste la déclare
+(`crate::backend_code::git_identity_or_default`) : jamais l'identité d'une personne, et jamais la
+configuration globale du poste, qui porte l'adresse professionnelle de Lucie (décision du 9 novembre
+de la session hooks-essai, 2d6e58d1a ; rappelée par everything declarative et tranchée par c7 le
+13 novembre). L'identité Gmail de Lucie reste celle des commits que les sessions écrivent pour elle.
