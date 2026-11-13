@@ -21,7 +21,7 @@ Réemploi du SEUL target privé cx-target-garde-target-qualification-v1 :
 provenance698 depuis ledger+3ELF réhashés+anciens reçus terminés, ancien W698
 propre, marqueur exact ancien crate, quiescence exe/cwd/FD fraîche. Deux
 preuves ciblées restent conservées, aucun nettoyage ni propriétaire inventé.
-F8 appelle réellement la garde avec REPRENDRE=1 vers nouveauC : branche
+Une phase reprise-cache commune avant F8 appelle réellement la garde avec REPRENDRE=1 vers nouveauC : branche
 reprise/log obligatoire, marker courant exigé, empreintes externes antérieures
 conservées. Aucun script Python n'écrit le marqueur ou ne purge d'empreintes.
 
@@ -51,12 +51,15 @@ par leur inclusion. Inventaires réels et ignorés, aucun compte lib figé inven
 
 SDK29/pool1GiB épinglés ; aucun modèle/service demandé. Tout Cargo observé
 F8 : chemin/SHA de la toolchain exacts, expected/actual/diff avant assert.
-Le tout premier metadata de la garde arrive AVANT exporter_la_lib : attendu
-strict distinct (SDKshared/include/library absents, rustup/lib seul dans LD),
-commande metadata seulement, aucune qualification de liaison SDK déduite.
-Après export, metadata et tous check/test Cargo doivent avoir le profil
-strict rustup/lib:SDK et les six autres champs SDK exacts, sans exemption
-nested. L'exécutable ELFlib doit avoir SDKnu strict, pas le préfixe Cargo.
+La phase reprise-cache120 est comprise dans la même borne F82100. Elle seule
+admet le profil metadata sans SDK, pour la commande exacte metadata
+--format-version1 --all-features de la garde réelle. Le choix du contrat est
+fait PAR PHASE, jamais par égalité des valeurs observées. F8 commence APRÈS
+cette frontière, marqueur nouveauC déjà attribué : TOUS ses Cargo, y compris
+metadata nested, exigent le profil SDK exact rustup/lib:SDK et six autres
+champs, sans exception. Tentatives attendues/actuelles/diff/argv/exeSHA
+append-only dédupliquées par contenu ; first-red immuable écrit avant assertion.
+L'exécutable ELFlib doit avoir SDKnu strict, pas le préfixe Cargo.
 
 CargoJSON désigne deux ELFs canoniques/package_id/build-script-out_dir,
 fermeture features comparée à Cargo.toml (large+default ; NAV+default),
@@ -106,3 +109,23 @@ targets, TMP, logs et preuves rouges conservés. Aucune clôture, intégration,
 pose binaire, master ou retrait déduits d'un éventuel vert. C7 seul arbitre
 suffisance, tour et éventuelle suite ; toute dérive ou entrant produit exige
 STOP/revue. Cette préparation n'a exécuté que AST/syntaxe source et tickets.
+
+## Réparations regroupées après les réserves438 (sans exécution)
+
+Le ticket a reçu les trois réserves AVANT diff. Après acquisition effective,
+et juste avant Popen de la reprise réelle, le driver revérifie verifier du
+confineur, provenance698/oldW propre/deux reçus terminés/3SHA, Tcanonique
+device/inode/mode/UID/marqueur puis scan exe/cwd/FD incluant OLDW698, nouveauW,
+contrôleur et target. Deux horodatages conservés ; activité et UNKNOWN attribué
+bloquent, inconnus baseline restent inconnus. L'ancien JSON seul n'autorise rien.
+
+stop appelle observe(cleanup=True), qui actualise seulement ascendance et
+confinement pour arrêter les siens. Aucun profil SDK/NAV/maps d'attestation
+créé ou modifié pendant cleanup. Un second état conforme ne remplace jamais
+first-red ni les tentatives précédentes ; erreur et traceback restent conservés.
+
+Quatre témoins de préparation écrits dans test_preparation.py : fonctions
+extraites AST seulement, faux lancement levé avant Popen, répertoires de
+preuves temporaires. Aucun sous-processus/Cargo ni cible réelle. Source de
+ce delta et recette publiées avant ces tests CPU, aucune ancienne preuve
+produit répétée ni durée/résultat de qualification lourde revendiqués.

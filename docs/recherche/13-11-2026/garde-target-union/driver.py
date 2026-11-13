@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One bounded F8/large/NAV qualification through the guarded entry points."""
 from pathlib import Path
-import hashlib,json,mmap,os,re,shutil,signal,subprocess,sys,time,tempfile,importlib.util
+import hashlib,json,mmap,os,re,shutil,signal,subprocess,sys,time,tempfile,importlib.util,stat,traceback
 R=Path('/home/lucied/.cache/rag3weaver-build');Q=Path(__file__).parent;W=R/'cx-wt-recherche-garde-target-union-r2';C=W/'extension/rag3weaver';T=R/'cx-target-garde-target-qualification-v1';P=R/'cx-validation-garde-target-union-v1'
 PROVENANCE=json.loads((Q/'provenance.json').read_text());APP=PROVENANCE['app'];PILOT=PROVENANCE['pilot'];CONTROL=Path(PROVENANCE['control'])
 assert APP=='9ec421069320b2f0cca4099fa27f83059e944de9'
@@ -27,13 +27,13 @@ CARGO_EXE='/home/lucied/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/c
 CARGO_SHA='ff3022fcbd13b08434ea7afde9a0ef9d5b3f5c17b5fc7a40031be3ee000a6a24'
 RUST_LIB='/home/lucied/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib'
 CARGO_PROFILE=dict(SDK_PROFILE,LD_LIBRARY_PATH=RUST_LIB+':'+SDK_PROFILE['LD_LIBRARY_PATH'])
-METADATA_BEFORE_EXPORT=dict(CARGO_PROFILE,RAG3DB_SHARED=None,RAG3DB_LIBRARY_DIR=None,RAG3DB_INCLUDE_DIR=None,LD_LIBRARY_PATH=RUST_LIB)
+METADATA_BEFORE_EXPORT={key:None for key in SDK_PROFILE};METADATA_BEFORE_EXPORT['LD_LIBRARY_PATH']=RUST_LIB
 UI_CASE='daemon_host::tests::served_ide_assets_match_the_current_worktree'
 PREFIX='dataflow::migrations::publication::';LAYER=PREFIX+'layers::tests::'
 ED_REQUIRED={'daemon_host::atelier_fichiers::tests::'+name for name in ['read_scope_preserves_a_backend_error_instead_of_claiming_absence','read_scope_preserves_a_usages_error_instead_of_claiming_absence','read_scope_refuses_unproven_uniqueness_after_a_real_definition','read_scope_keeps_real_absence_and_ambiguity_after_complete_queries']}
 
 EXPECTED={LAYER+name for name in ['inherited_values_keep_occurrence_coordinates_and_exact_publication_provenance','tombstones_hide_all_ancestors_and_a_descendant_can_reintroduce_a_file','overrides_do_not_resurrect_an_old_file_and_anchor_advancement_is_not_followed','malformed_piles_and_ambiguous_local_changes_are_refused_without_partial_resolution']}
-owned={};seen={};maps={};protected={};devices={};phases=[];phase='preparation';child=None;binary=None;last_size=0;binary_sha=None;artifacts={};large=None;nav=None;main_large=None
+owned={};seen={};maps={};protected={};devices={};phases=[];phase='preparation';child=None;binary=None;last_size=0;binary_sha=None;artifacts={};large=None;nav=None;main_large=None;attempts={}
 
 def save(name,value):(P/name).write_text(json.dumps(value,ensure_ascii=False,indent=2)+'\n')
 def digest(path):
@@ -50,7 +50,73 @@ def memory():
  with (P/'memory-samples.jsonl').open('a') as f:f.write(json.dumps(sample)+'\n')
  return sample
 
-def observe():
+def cargo_expected_for(phase_name):
+ return METADATA_BEFORE_EXPORT if phase_name=='cache-reprise' else CARGO_PROFILE
+def record_attempt(kind,payload):
+ fingerprint=(kind,hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest())
+ if fingerprint not in attempts:
+  name=f'attempt-{len(attempts):05d}-{kind}.json'
+  with (P/name).open('x') as f:json.dump(dict(payload,observed=time.monotonic()),f,indent=2)
+  attempts[fingerprint]=name
+ return attempts[fingerprint]
+def latch_first_red(reason,payload=None):
+ path=P/'first-red.json'
+ try:
+  with path.open('x') as f:json.dump(dict(phase=phase,reason=reason,payload=payload,observed=time.monotonic()),f,indent=2)
+ except FileExistsError:pass
+def require(ok,reason,payload=None):
+ if not ok:
+  latch_first_red(reason,payload)
+  raise AssertionError(reason)
+def in_cache_context(value,roots):
+ return any(value==str(root) or value.startswith(str(root)+'/') for root in roots)
+def fresh_cache_guard():
+ # Called after actual poste admission, immediately before the real common guard.
+ subprocess.run(['python3',str(Q/'confiner_validation.py'),'verifier'],env=os.environ.copy(),check=True,stdout=subprocess.DEVNULL)
+ old=R/'cx-validation-garde-target-v1';resume=R/'cx-validation-garde-target-v2';initial=json.loads((Q/'cache-before.json').read_text())
+ previous=json.loads((old/'source.json').read_text());second=json.loads((resume/'source.json').read_text())
+ oldc=Path(initial['old_crate']);oldw=oldc.parent.parent
+ require(previous['app']=='698b952ab89fd48ac112645650000ebae34e6742','old application changed')
+ require(git(oldw,'rev-parse','HEAD')==previous['app'] and not git(oldw,'status','--porcelain'),'old worktree changed')
+ for source in [previous,second]:require(json.loads(Path(source['receipt']).read_text())['etat']=='termine','old authority active')
+ ledger_path=old/'ledger.json';require(digest(ledger_path)==initial['previous_ledger_sha256'],'old ledger changed')
+ ledger=json.loads(ledger_path.read_text())
+ for file in [Path(ledger['binary']),old/'binaire-cpu',resume/'binaire-cpu']:require(digest(file)==ledger['sha256'],'old ELF changed',dict(file=str(file)))
+ target_stat=T.lstat();marker=T/'.arbre-du-target'
+ require(T.resolve()==T and stat.S_ISDIR(target_stat.st_mode) and target_stat.st_uid==os.getuid(),'target identity unsafe')
+ require((target_stat.st_dev,target_stat.st_ino)==(initial['device'],initial['inode']),'target inode changed')
+ require(target_stat.st_mode==initial['mode'] and target_stat.st_uid==initial['uid'],'target mode or owner changed')
+ require(marker.is_file() and not marker.is_symlink() and marker.read_text().strip()==str(oldc),'target marker changed')
+ roots=[T,oldw,W,CONTROL];found=[];unknown=[];old_groups={previous['cgroup'],second.get('cgroup',json.loads(Path(second['receipt']).read_text())['cgroup'])}
+ for proc in Path('/proc').iterdir():
+  if not proc.name.isdigit() or int(proc.name)==os.getpid():continue
+  stamp=None;attributed=False;field='stat'
+  try:
+   st=(proc/'stat').read_text().rsplit(') ',1)[1].split();stamp=st[19]
+   if st[0]=='Z':continue
+   field='cgroup';cg=(proc/'cgroup').read_text().strip().split('::',1)[1]
+   attributed=cg in old_groups or owned.get(int(proc.name))==stamp
+   if proc.stat().st_uid!=os.getuid() and not attributed:continue
+   field='cmdline';argv=[os.fsdecode(v) for v in (proc/'cmdline').read_bytes().split(b'\0') if v]
+   attributed=attributed or any(in_cache_context(value,roots) for value in argv)
+   for field in ['exe','cwd']:
+    value=os.readlink(proc/field)
+    if in_cache_context(value,roots):attributed=True;found.append(dict(pid=proc.name,starttime=stamp,field=field,path=value))
+   field='fd'
+   for fd in (proc/'fd').iterdir():
+    try:value=os.readlink(fd)
+    except (FileNotFoundError,ProcessLookupError):continue
+    if in_cache_context(value,roots):attributed=True;found.append(dict(pid=proc.name,starttime=stamp,field=str(fd),path=value))
+   if attributed and not any(v['pid']==proc.name for v in found):found.append(dict(pid=proc.name,starttime=stamp,observation='attributed-live'))
+  except PermissionError:
+   row=dict(pid=proc.name,starttime=stamp,field=field,observation='UNKNOWN',attributed=attributed)
+   unknown.append(row)
+   if attributed:found.append(row)
+  except (FileNotFoundError,ProcessLookupError):continue
+ record=dict(observed=time.monotonic(),before_observed=initial['observed'],device=target_stat.st_dev,inode=target_stat.st_ino,mode=target_stat.st_mode,uid=target_stat.st_uid,marker=str(oldc),old_app=previous['app'],roots=[str(r) for r in roots],found=found,unknown=unknown,elf_sha256=ledger['sha256'])
+ save('cache-after-poste.json',record);require(not found,'cache activity or attributed UNKNOWN after poste',record)
+
+def observe(cleanup=False):
  table={}
  for q in Path('/proc').iterdir():
   if not q.name.isdigit():continue
@@ -67,6 +133,13 @@ def observe():
  for pid,stamp in list(owned.items()):
   if pid not in table or table[pid][1]!=stamp or table[pid][2]=='Z':continue
   live.append(pid);q=Path('/proc')/str(pid);verified=False;cg=None;exe=None;field='cgroup'
+  if cleanup:
+   # Attribution/confinement only. Never create or replace a profile on stop.
+   try:
+    cleanup_cg=(q/'cgroup').read_text().strip().split('::',1)[1]
+    with (P/'cleanup-attribution.jsonl').open('a') as f:f.write(json.dumps(dict(pid=pid,starttime=stamp,cgroup=cleanup_cg,in_scope=cleanup_cg==CG))+'\n')
+   except (OSError,ProcessLookupError):pass
+   continue
   try:
    cg=(q/'cgroup').read_text().strip().split('::',1)[1];maximum=(Path('/sys/fs/cgroup'+cg)/'memory.max').read_text().strip()
    assert cg==CG and maximum=='34359738368',('confinement',pid,cg,maximum)
@@ -76,17 +149,22 @@ def observe():
     try:dest=os.readlink(fd)
     except (FileNotFoundError,ProcessLookupError):continue
     if dest.startswith('/dev/dri/') or dest=='/dev/kfd':devices[(pid,stamp,dest)]=dict(pid=pid,starttime=stamp,device=dest)
-   if phase=='features' and Path(exe).name=='cargo':
+   if phase in ['cache-reprise','features','large','navigateur'] and Path(exe).name=='cargo':
     field='cargo-profile';raw=dict(v.split(b'=',1) for v in (q/'environ').read_bytes().split(b'\0') if b'=' in v)
     actual={k:(os.fsdecode(raw[os.fsencode(k)]) if os.fsencode(k) in raw else None) for k in SDK_PROFILE}
     argv=[os.fsdecode(v) for v in (q/'cmdline').read_bytes().split(b'\0') if v]
-    expected=CARGO_PROFILE
-    if argv[1:2]==['metadata'] and actual==METADATA_BEFORE_EXPORT:expected=METADATA_BEFORE_EXPORT
+    expected=cargo_expected_for(phase)
     diff={k:dict(expected=expected[k],actual=actual[k]) for k in expected if expected[k]!=actual[k]}
-    save(f'cargo-features-{pid}-{stamp}.json',dict(pid=pid,starttime=stamp,cgroup=cg,exe=exe,argv=argv,actual=actual,expected=expected,diff=diff,purpose='metadata-only' if argv[1:2]==['metadata'] else 'compilation'))
-    assert exe==CARGO_EXE and digest(q/'exe')==CARGO_SHA and not diff
-    assert (q/'stat').read_text().rsplit(') ',1)[1].split()[19]==stamp
-    if argv[1:2]!=['metadata']:save('features-real-sdk-env.json',dict(pid=pid,starttime=stamp,cgroup=cg,env=actual))
+    actual_sha=digest(q/'exe')
+    payload=dict(pid=pid,starttime=stamp,cgroup=cg,exe=exe,exe_sha256=actual_sha,argv=argv,actual=actual,expected=expected,diff=diff,phase=phase)
+    attempt=record_attempt('cargo',payload)
+    require(exe==CARGO_EXE and actual_sha==CARGO_SHA,'Cargo executable identity differs',dict(payload,attempt=attempt))
+    require((q/'stat').read_text().rsplit(') ',1)[1].split()[19]==stamp,'Cargo PID reused',dict(payload,attempt=attempt))
+    if phase=='cache-reprise':require(argv[1:]==['metadata','--format-version','1','--all-features'],'unexpected command before SDK export',dict(payload,attempt=attempt))
+    require(not diff,'Cargo profile differs in '+phase,dict(payload,attempt=attempt))
+    summary='cache-metadata-profile.json' if phase=='cache-reprise' else 'features-real-sdk-env.json'
+    if (phase=='cache-reprise' or phase=='features') and not (P/summary).exists():
+     with (P/summary).open('x') as f:json.dump(dict(payload,attempt=attempt),f,indent=2)
    if exe.startswith(str(T)+'/'):
     field='maps';data=(q/'maps').read_text();native=[line for line in data.splitlines() if 'librag3db.so' in line]
     assert all('/'+NATIVE+'/librag3db.so' in line for line in native),('wrong native maps',pid)
@@ -99,9 +177,12 @@ def observe():
     if nav and exe==str(nav) and phase=='nav40' and native and not (P/'nav-real-profile.json').exists():
      field='nav-profile';raw=dict(v.split(b'=',1) for v in (q/'environ').read_bytes().split(b'\0') if b'=' in v)
      actual={k:(os.fsdecode(raw[os.fsencode(k)]) if os.fsencode(k) in raw else None) for k in SDK_PROFILE}
-     assert all(actual[k]==v for k,v in SDK_PROFILE.items() if k!='LD_LIBRARY_PATH')
-     assert all(os.fsdecode(raw[os.fsencode('RAG3WEAVER_BURN_DEVICE'+x)])=='cpu' for x in ['','_EMBEDDER','_RERANKER','_OCR'])
-     save('nav-real-profile.json',dict(pid=pid,starttime=stamp,exe=exe,exe_sha256=digest(q/'exe'),cgroup=cg,env=actual,native=native,meaning='LD is constructed by Cargo test; native mappings qualify SDK29'))
+     roles={x:os.fsdecode(raw[os.fsencode('RAG3WEAVER_BURN_DEVICE'+x)]) if os.fsencode('RAG3WEAVER_BURN_DEVICE'+x) in raw else None for x in ['','_EMBEDDER','_RERANKER','_OCR']}
+     payload=dict(pid=pid,starttime=stamp,exe=exe,exe_sha256=digest(q/'exe'),cgroup=cg,env=actual,roles=roles,native=native,meaning='LD constructed by Cargo test; maps qualify SDK29')
+     attempt=record_attempt('nav',payload)
+     require(all(actual[k]==v for k,v in SDK_PROFILE.items() if k!='LD_LIBRARY_PATH'),'NAV SDK profile differs',dict(payload,attempt=attempt))
+     require(all(v=='cpu' for v in roles.values()),'NAV CPU role differs',dict(payload,attempt=attempt))
+     with (P/'nav-real-profile.json').open('x') as f:json.dump(dict(payload,attempt=attempt),f,indent=2)
   except PermissionError as error:
    protected[(pid,stamp,field)]=dict(pid=pid,starttime=stamp,field=field,exe=exe,cgroup=cg,cgroup_verified=verified,observation='UNKNOWN',error=str(error))
    assert verified,('owned cgroup unreadable',pid,field)
@@ -126,7 +207,7 @@ def quiet():
   except (FileNotFoundError,ProcessLookupError):continue
  return dict(found=found,unknown_baseline=unknown)
 def stop():
- try:observe()
+ try:observe(cleanup=True)
  except BaseException as error:save('stop-observe-error.json',repr(error))
  for sig in [signal.SIGTERM,signal.SIGKILL]:
   for pid,stamp in list(owned.items()):
@@ -150,9 +231,9 @@ def first_lib_red(text):
  # --show-output keeps ordinary status lines intact; expected panics aren't reds.
  return re.search(r'^test .* \.\.\. FAILED$|^\s*FAILED\s*$',text,re.M) is not None
 
-def run(name,args,cap,sdk=False):
+def run(name,args,cap,sdk=False,absolute=None):
  global child,phase,last_size,main_large
- guard();phase=name;limit=min(time.monotonic()+cap,END-15);assert time.monotonic()<limit
+ guard();phase=name;limit=min(time.monotonic()+cap,END-15,absolute if absolute is not None else END);assert time.monotonic()<limit
  state('EN_COURS');path=P/(name+'.log');start=time.monotonic();print('DEBUT',name,flush=True)
  env=E.copy();command=args
  if sdk:
@@ -161,6 +242,7 @@ def run(name,args,cap,sdk=False):
   elif sdk=='gdb':command=EXPORT+args
   else:assert sdk=='script' # Canonical F8 already exports the SDK once.
 
+ if name=='cache-reprise':fresh_cache_guard()
  with path.open('w') as f:
   child=subprocess.Popen(command,cwd=C,env=env,stdout=f,stderr=subprocess.STDOUT)
   while True:
@@ -224,13 +306,16 @@ try:
  save('ledger-preparation.json',dict(app=APP,pilot=PILOT,check_features_sha256=digest(C/'scripts/check_features.sh'),target_provenance=json.loads((Q/'cache-before.json').read_text()),sdk=NATIVE,sdk_sha256=digest(LIB)))
  assert Path(E['RAG3WEAVER_PAQUETS_REACT']).is_dir()
  fp_before=sorted(str(c.relative_to(T)) for folder in T.rglob('.fingerprint') if folder.is_dir() for c in folder.iterdir() if c.is_dir());assert fp_before;save('fingerprints-before.json',fp_before)
- f8=run('features',['bash','scripts/check_features.sh'],2100,sdk='script');assert 'CHECK_FEATURES VERT 8/8' in f8
- assert (P/'features-real-sdk-env.json').exists()
+ f8_deadline=min(END-15,time.monotonic()+2100)
+ cachelog=run('cache-reprise',['bash','-c','. "$1"; garder_le_target "$2" "$3"','common-cache-guard',str(C/'scripts/garde_target.sh'),str(T),str(C)],120,absolute=f8_deadline)
  expected_resume='target repris de '+json.loads((Q/'cache-before.json').read_text())['old_crate']+' : empreintes effacées pour '
- assert expected_resume in f8,'common target invalidation branch not observed'
+ require(expected_resume in cachelog,'common target invalidation branch not observed')
+ require((P/'cache-metadata-profile.json').exists(),'real initial guard Cargo not observed')
+ f8=run('features',['bash','scripts/check_features.sh'],2100,sdk='script',absolute=f8_deadline);require('CHECK_FEATURES VERT 8/8' in f8,'F8 not fully judged')
+ require((P/'features-real-sdk-env.json').exists(),'real F8 Cargo SDK profile missing')
  assert (T/'.arbre-du-target').read_text().strip()==str(C)
- save('cache-reprise-reelle.json',dict(before=json.loads((Q/'cache-before.json').read_text()),message=next(line for line in f8.splitlines() if expected_resume in line),new_crate=str(C),manual_purge=False))
- packages=next(line for line in f8.splitlines() if expected_resume in line).split(expected_resume,1)[1].split();assert packages
+ save('cache-reprise-reelle.json',dict(before=json.loads((Q/'cache-before.json').read_text()),message=next(line for line in cachelog.splitlines() if expected_resume in line),new_crate=str(C),manual_purge=False))
+ packages=next(line for line in cachelog.splitlines() if expected_resume in line).split(expected_resume,1)[1].split();assert packages
  external=[x for x in fp_before if not any(re.fullmatch(re.escape(pkg)+r'-[0-9a-f]{16}',Path(x).name) for pkg in packages)]
  assert all((T/x).is_dir() for x in external),'external fingerprints removed'
  save('fingerprints-external-retained.json',external)
@@ -297,6 +382,7 @@ try:
  after=memory();save('memory-final.json',dict(before=before,after=after));assert all(after['events'][k]==before['events'][k] for k in ['high','max','oom','oom_kill'])
  assert not observe();q=quiet();save('quiescence.json',q);assert not q['found'];guard();assert time.monotonic()<END-10;verdict='VERT';state(verdict)
 except BaseException as error:
+ latch_first_red(repr(error),dict(traceback=traceback.format_exc()))
  state('ROUGE',repr(error));save('error.json',dict(phase=phase,error=repr(error)));print('ROUGE',phase,repr(error),flush=True);stop()
 finally:
  evidence();save('qualification.json',qualification);save('verdict.json',dict(verdict=verdict,app=APP,pilot=PILOT,phase=phase,initial=START,deadline=END,elapsed=time.monotonic()-START,phases=phases));(P/'VERDICT').write_text(verdict+'\n')

@@ -49,7 +49,9 @@ try:
  sdk=json.loads((P/'sdk-env-lib-large.json').read_text());profile=json.loads((P/'large-real-sdk-env.json').read_text())
  assert sdk['pid']==profile['pid']==main['pid'] and sdk['starttime']==profile['starttime']==main['starttime']
  assert sdk['env']==profile['env']==att['env'] and sdk['cgroup'].strip().split('::',1)[1]==source['cgroup']
- cache=json.loads((Q/'cache-before.json').read_text());assert not cache['quiescence']
+ cache=json.loads((Q/'cache-before.json').read_text());fresh=json.loads((P/'cache-after-poste.json').read_text());assert not cache['quiescence'] and not fresh['found'] and fresh['observed']>=fresh['before_observed']==cache['observed']
+ assert fresh['inode']==cache['inode'] and fresh['device']==cache['device'] and fresh['marker']==cache['old_crate']
+ assert (P/'cache-metadata-profile.json').exists() and not (P/'first-red.json').exists()
  assert (T/'.arbre-du-target').read_text().strip()==str(W/'extension/rag3weaver')
  assert (P/'features-real-sdk-env.json').exists() and (P/'nav-real-profile.json').exists()
  assets=json.loads((P/'assets-http-contre-git.json').read_text());assert len(assets)==2 and {v['asset'] for v in assets}=={'app.js','app.css'}
