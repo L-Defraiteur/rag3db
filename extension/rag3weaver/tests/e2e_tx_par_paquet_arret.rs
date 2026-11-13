@@ -168,7 +168,9 @@ fn comptes(catalog: &Catalog) -> BTreeMap<String, i64> {
             serde_json::from_value(serde_json::json!({"type": "contains", "field": champ, "value": mot, "distance": 0}))
                 .unwrap();
         let n = handle.search(&requete, 1_000_000, None).unwrap().len() as i64;
-        out.insert(format!("plein texte {entite} « {mot} »"), n);
+        // Une étiquette stable d'une forme à l'autre : le plein texte du code se nomme `Scope`.
+        let nom = if entite == code { "Scope" } else { entite };
+        out.insert(format!("plein texte {nom} « {mot} »"), n);
     }
     for d in rag3weaver::relation_directions::count_both_directions(conn).unwrap() {
         if d.from.starts_with('_') || d.to.starts_with('_') {
