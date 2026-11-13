@@ -2168,3 +2168,17 @@ config_with_buffer_pool(buffer_pool_choice(None)) et conserve BufferPoolChoice ;
 recette épingle RAG3DB_BUFFER_POOL_SIZE=536870912 pour toutes ouvertures/enfants,
 sous Max32GiB, comme témoin natif existant. Pas de nouvelle règle mémoire produit,
 ni auto-retry après OOM : ouverture/reprise explicite inchangée et source neuve.
+
+
+P8 source40d36eab4 : compilation9CPU et6juges natifs VERTS, dont publication
+/reopen exact8occ6versions8refs2cellules0modèle, corruption journal appliqué,
+bootstrap2enfants aux frontières prévues. Septième juge normal_catalog_open
+ROUGE comparaison octets (32,461s total), derniers juges et6enfants de reprise
+non joués. Diagnostic RO : le juge ouvre lui-même une connexion native owned RW
+avec permis AVANT Catalog::initialize ordinaire ; cette ouverture autorisée et
+sa fermeture/checkpoint ne sont pas un test de refus avant toute ouverture native.
+Corriger le juge : exiger refus des3constructeurs ordinaires avec racine entière
+inchangée, puis fournir à Catalog normal une connexion owned RO pour éprouver
+la seconde porte initialize sans effets du cycle RW. Production/gardes inchangées.
+Assertions octets conservées avec diagnostics noms/empreintes, sans déverser les
+37Mo de tableaux d'octets dans le log. Aucun VERT complet ni rejeu avantRO/GO.

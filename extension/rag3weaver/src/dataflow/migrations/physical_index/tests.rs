@@ -414,14 +414,20 @@ fn native_normal_catalog_open_refuses_owned_profile_before_initialization() {
         )
         .unwrap(),
     );
-    let before = std::fs::read(root.join(DB_FILE)).unwrap();
+    let before = root_files(&root);
+    for refused in [
+        Rag3dbConnection::new(root.join(DB_FILE)),
+        Rag3dbConnection::read_only_patient(root.join(DB_FILE), 0),
+        Rag3dbConnection::with_config(root.join(DB_FILE), rag3db::SystemConfig::default()),
+    ] { assert!(refused.is_err(), "ordinary storage constructor must refuse before native open"); }
+    assert!(root_files(&root) == before, "ordinary storage refusal changed owned files");
     let mut normal = Catalog::without_embedding_model(
-        Box::new(connection(&root, false).unwrap()),
+        Box::new(connection(&root, true).unwrap()),
         CatalogConfig::default(),
     );
     assert!(normal.initialize().is_err());
     drop(normal);
-    assert_eq!(std::fs::read(root.join(DB_FILE)).unwrap(), before);
+    assert!(root_files(&root) == before, "normal Catalog initialization through an owned RO handle changed files");
 }
 
 #[test]
