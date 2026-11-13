@@ -1628,9 +1628,23 @@ fn read_threads() -> u64 {
             }
         };
 
+        // Blob-backed readers use lucivy's existing immutable snapshot handle.
+        // No writable handle, deferred buffer, CREATE fallback or close commit.
+        if self.lecture_seule && matches!(self.fts_storage, crate::fts_handle::FtsStorage::BlobBacked { .. }) {
+            let handle = crate::fts_handle::open_blob_snapshot(blob_store.as_ref(), &index_name)
+                .map_err(|e| Some(format!("lecture du plein texte {table} : {e}")))?;
+            let handle = Arc::new(handle);
+            self.fts_handles.insert(table.to_string(), handle.clone());
+            self.publish_read_view();
+            return Ok(handle);
+        }
+
         let handle = match ShardedHandle::open_with_storage(storage()?) {
             Ok(h) => h,
             Err(ouverture) => {
+                if self.lecture_seule {
+                    return Err(Some(format!("index plein texte {table} absent ou illisible en lecture seule : {ouverture}")));
+                }
                 let config = match crate::fts_handle::build_schema_config_with_positions(
                     text_fields,
                     filter_fields,
@@ -6885,7 +6899,7 @@ fn read_threads() -> u64 {
                 Some(sc) => CypherBlobStore::from_sync_connection(sc),
                 None => CypherBlobStore::from_sync_connection(self.conn.clone()),
             };
-            self.blob_store = Some(Arc::new(BufferedBlobStore::new(store)));
+            self.blob_store = Some(Arc::new(store.read_only()));
         }
 
         // 10. Ce que l'écrivain a persisté : entités, relations, bases.
@@ -8216,7 +8230,7 @@ fn read_threads() -> u64 {
         self.set_scope(scope.clone())?;
         let mut targets = BTreeMap::new();
         for entity in self.entity_configs.keys() {
-            let target = self.resolve_search_target(entity)?;
+            let target = self.forme().resolve_storage_target(entity, true)?;
             if target.default_signals.bm25() {
                 targets.insert(target.parent_table.clone(), target.bm25_fields.clone());
             }
