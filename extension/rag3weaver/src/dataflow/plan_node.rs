@@ -286,14 +286,11 @@ pub fn lire_le_plan(cite: &str, lire: impl Fn(&str) -> Result<String, String>, s
     let Some(chemin) = cite.strip_prefix('@') else {
         return Err(format!("{NODE_TYPE}: `plan` se cite par @plans/<fichier>.json, pas « {cite} »"));
     };
-    // **Un Plan livré** se cite `@builtin:<chemin relatif à templates/>`, comme un graphe livré :
-    // il suit le binaire, et un manifeste relié ou installé ailleurs le trouve sans copier plans/.
-    let texte = match chemin.strip_prefix(crate::builtin_templates::PREFIX) {
-        Some(livre) => crate::builtin_templates::get(livre)
-            .map(|o| String::from_utf8_lossy(o).into_owned())
-            .ok_or_else(|| format!("{NODE_TYPE}: aucun Plan livré « {livre} »"))?,
-        None => lire(chemin)?,
-    };
+    // **Un Plan livré** se cite `@builtin:<chemin relatif à templates/>`, comme un graphe livré.
+    // La citation entière va au lecteur du chargement : la voie ordinaire lit le binaire
+    // (`Lecteur::lire_reference`), la voie fermée l'instantané fourni (`lecteur::Contenus`), sans
+    // repli sur le binaire (relecture d'everything declarative de M8, 13 novembre 2026).
+    let texte = lire(chemin)?;
     let plan = DeclaredPlan::from_json(&texte).map_err(|e| format!("{chemin} : {e}"))?;
     plan.check().map_err(|e| format!("{chemin} : {e}"))?;
     plan.check_schema(schema).map_err(|e| format!("{chemin} : {e}"))?;
@@ -344,5 +341,25 @@ mod tests {
         l.insert("brut".to_string(), CypherValue::Blob(vec![1, 2]));
         let e = ligne_en_json(&l).unwrap_err();
         assert!(e.contains("brut"), "{e}");
+    }
+
+    /// **Un Plan livré se lit par le lecteur fourni** (relecture d'everything declarative de la
+    /// première tranche de M8, 13 novembre 2026) : la citation `@builtin:` entière va au lecteur
+    /// donné par le chargement, qui sait lire le binaire en voie ordinaire et l'instantané fourni
+    /// en voie fermée (`lecteur::Contenus`). Avant, `lire_le_plan` lisait le binaire lui-même : un
+    /// Plan absent de l'instantané réussissait, une autre version était ignorée.
+    #[test]
+    fn un_plan_livre_se_lit_par_le_lecteur_fourni() {
+        let vus = std::cell::RefCell::new(Vec::<String>::new());
+        let lu = lire_le_plan(
+            "@builtin:backends/memory/plans/whois.json",
+            |c| {
+                vus.borrow_mut().push(c.to_string());
+                Err("absent du lecteur fourni".to_string())
+            },
+            &rag3weaver_ir::PlanSchema::default(),
+        );
+        assert_eq!(*vus.borrow(), ["builtin:backends/memory/plans/whois.json"], "la citation entière va au lecteur");
+        assert!(lu.is_err_and(|e| e.contains("absent du lecteur fourni")), "aucun repli sur le binaire");
     }
 }
