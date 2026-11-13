@@ -15,8 +15,7 @@ assert (G/'memory.max').read_text().strip()=='34359738368' and (G/'memory.high')
 NATIVE='rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
 LIB=R.parent/'rag3db-libs'/NATIVE/'librag3db.so'
 E={k:os.environ[k] for k in ['HOME','USER','LOGNAME','PATH','SHELL','LANG','LC_ALL','TZ','CARGO_HOME','RUSTUP_HOME','DBUS_SESSION_BUS_ADDRESS','RAG3WEAVER_VALIDATION_RECU','RAG3WEAVER_VALIDATION_JETON'] if k in os.environ}
-NATIVE_ENV=dict(RAG3DB_SHARED='1',RAG3DB_LIBRARY_DIR=str(LIB.parent),RAG3DB_INCLUDE_DIR=str(LIB.parent),LD_LIBRARY_PATH=str(LIB.parent))
-E.update(CARGO_MANIFEST_DIR=str(C),CARGO_TARGET_DIR=str(T),CARGO_BUILD_JOBS='8',CARGO_INCREMENTAL='0',LUCIVY_SCHEDULER_THREADS='8',RUST_TEST_THREADS='8',RUST_BACKTRACE='1',TMPDIR=str(P/'tmp'),XDG_CONFIG_HOME=str(P/'config'),XDG_DATA_HOME=str(P/'data'),XDG_CACHE_HOME=str(P/'cache'),RAG3WEAVER_CACHE_DIR=str(P/'cache'),RAG3WEAVER_STATE_DIR=str(P/'state'),POSTE_MEM_MAX='32G',RAG3WEAVER_BUILD_MEMORY_HIGH='0',RAG3WEAVER_TARGET_MAX_GO='32',RAG3WEAVER_TARGET_REPRENDRE='1',RAG3DB_LIB=NATIVE,RAG3DB_LIBS_DIR=str(R.parent/'rag3db-libs'),RAG3DB_BUFFER_POOL_SIZE='1073741824',RAG3WEAVER_MOTEUR_ANCIEN='1')
+E.update(CARGO_MANIFEST_DIR=str(C),CARGO_TARGET_DIR=str(T),CARGO_BUILD_JOBS='8',CARGO_INCREMENTAL='0',LUCIVY_SCHEDULER_THREADS='8',RUST_TEST_THREADS='8',RUST_BACKTRACE='1',TMPDIR=str(P/'tmp'),XDG_CONFIG_HOME=str(P/'config'),XDG_DATA_HOME=str(P/'data'),XDG_CACHE_HOME=str(P/'cache'),RAG3WEAVER_CACHE_DIR=str(P/'cache'),RAG3WEAVER_STATE_DIR=str(P/'state'),POSTE_MEM_MAX='32G',RAG3WEAVER_BUILD_MEMORY_HIGH='0',RAG3WEAVER_TARGET_MAX_GO='32',RAG3WEAVER_TARGET_REPRENDRE='1')
 for suffix in ['','_EMBEDDER','_RERANKER','_OCR']:E['RAG3WEAVER_BURN_DEVICE'+suffix]='cpu'
 EXPORT=['bash','-c','. "$1"; exporter_la_lib || exit 2; shift; exec "$@"','native-choice',str(C/'scripts/lib_du_magasin.sh')]
 PREFIX='dataflow::migrations::publication::';LAYER=PREFIX+'layers::tests::'
@@ -71,8 +70,8 @@ def observe():
      filename=f'maps-{pid}-{stamp}.txt';(P/filename).write_text(data);maps[(pid,stamp)]=dict(pid=pid,starttime=stamp,exe=exe,cgroup=cg,file=filename,native=native)
     if binary and exe==str(binary):
      field='environ';raw=dict(x.split(b'=',1) for x in (q/'environ').read_bytes().split(b'\0') if b'=' in x)
-     wanted=['CARGO_MANIFEST_DIR','CARGO_TARGET_DIR','CARGO_BUILD_JOBS','RAG3DB_LIB','RAG3DB_BUFFER_POOL_SIZE',*NATIVE_ENV,*['RAG3WEAVER_BURN_DEVICE'+s for s in ['','_EMBEDDER','_RERANKER','_OCR']]]
-     profile={k:os.fsdecode(raw[os.fsencode(k)]) for k in wanted};assert all(profile[k]==(E[k] if k in E else NATIVE_ENV[k]) for k in wanted)
+     wanted=['CARGO_MANIFEST_DIR','CARGO_TARGET_DIR','CARGO_BUILD_JOBS',*['RAG3WEAVER_BURN_DEVICE'+s for s in ['','_EMBEDDER','_RERANKER','_OCR']]]
+     profile={k:os.fsdecode(raw[os.fsencode(k)]) for k in wanted};assert all(profile[k]==E[k] for k in wanted)
      save('profil-elf-reel.json',dict(pid=pid,starttime=stamp,env=profile))
   except PermissionError as error:
    protected[(pid,stamp,field)]=dict(pid=pid,starttime=stamp,field=field,exe=exe,cgroup=cg,cgroup_verified=verified,observation='UNKNOWN',error=str(error))
@@ -114,12 +113,16 @@ def stop():
   except subprocess.TimeoutExpired:pass
 
 def state(verdict,error=None):save('etat.json',dict(verdict=verdict,phase=phase,error=error,phases=phases,remaining=END-time.monotonic()))
-def run(name,args,cap):
+def run(name,args,cap,native=False):
  global child,phase,last_size
  guard();phase=name;limit=min(time.monotonic()+cap,END-15);assert time.monotonic()<limit
  state('EN_COURS');path=P/(name+'.log');start=time.monotonic();print('DEBUT',name,flush=True)
+ env=E.copy();command=args
+ if native:
+  env.update(RAG3DB_LIB=NATIVE,RAG3DB_LIBS_DIR=str(R.parent/'rag3db-libs'),RAG3DB_BUFFER_POOL_SIZE='1073741824',RAG3WEAVER_MOTEUR_ANCIEN='1')
+  command=EXPORT+['python3',str(Q/'native-check.py'),str(P),*args]
  with path.open('w') as f:
-  child=subprocess.Popen(EXPORT+args,cwd=C,env=E,stdout=f,stderr=subprocess.STDOUT)
+  child=subprocess.Popen(command,cwd=C,env=env,stdout=f,stderr=subprocess.STDOUT)
   while True:
    observe();memory()
    assert time.monotonic()<limit,('deadline',name)
@@ -143,7 +146,7 @@ def judged(name,args,expected,ignored,cap,attest_main=False):
   # Stop the real first exact invocation at main, capture, then continue it.
   # No extra test invocation, fake ELF, injected delay or storage operation.
   gdb=P/'elf-main.gdb'
-  wanted=['CARGO_MANIFEST_DIR','CARGO_TARGET_DIR','CARGO_BUILD_JOBS','RAG3DB_LIB','RAG3DB_BUFFER_POOL_SIZE',*NATIVE_ENV,*['RAG3WEAVER_BURN_DEVICE'+x for x in ['','_EMBEDDER','_RERANKER','_OCR']]]
+  wanted=['CARGO_MANIFEST_DIR','CARGO_TARGET_DIR','CARGO_BUILD_JOBS',*['RAG3WEAVER_BURN_DEVICE'+x for x in ['','_EMBEDDER','_RERANKER','_OCR']]]
   body='''set confirm off
 set pagination off
 set debuginfod enabled off
@@ -168,7 +171,7 @@ continue
  text=run(name,command,cap)
  if attest_main:
   meta=json.loads((P/'elf-main.json').read_text());assert meta['exe']==str(binary) and meta['cgroup']==CG
-  assert all(meta['env'][k]==(E[k] if k in E else NATIVE_ENV[k]) for k in meta['env'])
+  assert all(meta['env'][k]==E[k] for k in meta['env'])
   native=[line for line in (P/'elf-main-maps.txt').read_text().splitlines() if 'librag3db.so' in line]
   assert all('/'+NATIVE+'/librag3db.so' in line for line in native)
   save('elf-main-native.json',dict(rows=native,native_runtime_qualified=False))
@@ -182,8 +185,8 @@ def interrupted(sig,_):raise RuntimeError('signal '+str(sig))
 for sig in [signal.SIGTERM,signal.SIGINT,signal.SIGHUP]:signal.signal(sig,interrupted)
 verdict='ROUGE';qualification=dict(cpu='NON_QUALIFIE',publication='NON_QUALIFIE',native_check='NON_QUALIFIE');before=memory()
 try:
- guard();assert digest(LIB)=='b014febe51417ca535218d1c0b18308e7d301157abf45027a5cbba70dfc54929'
- save('source.json',dict(app=APP,pilot=PILOT,worktree=str(W),control=str(CONTROL),target=str(T),target_started_absent=True,initial=START,deadline=END,budget=3000,receipt=str(AUTH_PATH),native=NATIVE,native_sha256=digest(LIB),driver_sha256=digest(__file__),cgroup=CG,memory_max=(G/'memory.max').read_text().strip(),memory_high=(G/'memory.high').read_text().strip(),caps=dict(compile=1800,each_exact=60,publication=120,native_check=900),environment_keys=sorted(E),cpu_roles=4))
+ guard()
+ save('source.json',dict(app=APP,pilot=PILOT,worktree=str(W),control=str(CONTROL),target=str(T),target_started_absent=True,initial=START,deadline=END,budget=3000,receipt=str(AUTH_PATH),cpu_features=[],native_check_features=['rag3db-native'],native_check_expected=NATIVE,driver_sha256=digest(__file__),cgroup=CG,memory_max=(G/'memory.max').read_text().strip(),memory_high=(G/'memory.high').read_text().strip(),caps=dict(compile=1800,each_exact=60,publication=120,native_check=900),environment_keys=sorted(E),cpu_roles=4))
  run('verifier',['python3',str(Q/'confiner_validation.py'),'verifier'],30)
  text=run('compile-cpu',['cargo','test','--lib','--no-default-features','--no-run','--message-format=json-render-diagnostics'],1800)
  paths=set()
@@ -196,7 +199,7 @@ try:
  binary_sha=digest(binary);shutil.copy2(binary,P/'binaire-cpu');assert digest(P/'binaire-cpu')==binary_sha
  names,ignored=inventory('layers',LAYER);assert set(names)==EXPECTED and not ignored
  pubnames,pubignored=inventory('publication',PREFIX);assert EXPECTED<=set(pubnames) and not EXPECTED&set(pubignored)
- save('inventaire-avant-runtime.json',dict(app=APP,pilot=PILOT,binary=str(binary),sha256=binary_sha,size=binary.stat().st_size,layers=names,ignored=ignored,publication=pubnames,publication_ignored=pubignored,deadline=END))
+ save('inventaire-avant-runtime.json',dict(app=APP,pilot=PILOT,binary=str(binary),sha256=binary_sha,size=binary.stat().st_size,features=[],layers=names,ignored=ignored,publication=pubnames,publication_ignored=pubignored,deadline=END))
  ledger=digest(P/'inventaire-avant-runtime.json');phase='attente-inventaire-publie';state('EN_COURS');print('INVENTAIRE_A_PUBLIER',ledger,flush=True)
  while not (P/'inventaire-publie').exists():assert time.monotonic()<END-15;memory();time.sleep(.1)
  assert (P/'inventaire-publie').read_text().strip()==ledger
@@ -204,7 +207,8 @@ try:
  qualification['cpu']='VERT'
  judged('publication',[PREFIX],len(pubnames)-len(pubignored),len(pubignored),120);qualification['publication']='VERT'
  assert time.monotonic()<END-45,'native adapter NON QUALIFIE: no remaining budget'
- run('native-check',['cargo','check','--lib','--no-default-features','--features','rag3db-native'],900);qualification['native_check']='COMPILATION_VERTE_SANS_RUNTIME_NATIF'
+ run('native-check',['cargo','check','--lib','--no-default-features','--features','rag3db-native'],900,native=True);qualification['native_check']='COMPILATION_VERTE_SANS_RUNTIME_NATIF'
+ native_env=json.loads((P/'native-check-env.json').read_text());assert native_env['cgroup'].strip().split('::',1)[1]==CG
  assert digest(binary)==digest(P/'binaire-cpu')==binary_sha
  assert digest(LIB)=='b014febe51417ca535218d1c0b18308e7d301157abf45027a5cbba70dfc54929'
  assert (P/'elf-main-maps.txt').is_file() and (P/'elf-main.json').is_file(),'actual CPU main maps/profile missing'

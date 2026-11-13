@@ -65,3 +65,11 @@ Sup/driver/final horsW, environnement liste blanche, cgroup32/HIGHmax/CPUj8
 etSDK29, target privé neuf absent avant GO. Sources et pilote propres figés.
 Compilation adaptateur ne vaut pas runtime natif. Revue+GO du couple SHA
 encore requis ; zéro Cargo/rustc/target/DB/service créé pendant préparation.
+
+
+Précision C7 intégrée au pilote : bus manager utilisateur initialisé dans
+l’environnement du lanceur AVANT poste puis sanitize du driver ; aucune
+création/redémarrage de service. CPU features[] sans exportSDK ni exigence
+mapsnative. SDK29/export/profil réel/pool1G limités au CHECK natif,
+compilation≠exécutionSDK/DB. ED occupe son propre slot lourd/target, jamais
+partagé avec cette qualification2a. Aucun run avant GO du pilote révisé.
