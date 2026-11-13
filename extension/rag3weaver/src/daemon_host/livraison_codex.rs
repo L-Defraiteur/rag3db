@@ -105,7 +105,7 @@ mod tests {
         }
         fn poster(&self, l: Value) -> Result<Value, String> {
             let s = |k: &str| l[k].as_str().unwrap_or("").to_string();
-            self.0.post_to_teammate(&s("parent"), &s("task"), &s("from"), &s("kind"), l["item"].as_str(), &s("text"), &json!({ "to": l["to"], "reply_to": l["reply_to"], "approved": l["approved"] }))
+            self.0.post_to_teammate(&s("parent"), &s("task"), &s("from"), &s("kind"), l["item"].as_str(), &s("text"), &json!({ "to": l["to"], "reply_to": l["reply_to"], "approved": l["approved"], "expects": l["expects"] }))
         }
         fn equipiers(&self, sup: &str) -> Result<Vec<Value>, String> {
             Ok(self.0.teammate_list(sup)["teammates"].as_array().cloned().unwrap_or_default())

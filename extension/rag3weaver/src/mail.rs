@@ -351,7 +351,7 @@ pub fn a_marquer_vus(items: &[Item]) -> Vec<String> {
 
 pub const USAGE: &str = "rag3weaver-backend mail — la boîte de l'hôte, depuis un shell d'agent
 
-  mail send    --from <clé> --to <clé> --task <parent>/<task> \"<texte>\"
+  mail send    --from <clé> --to <clé> --task <parent>/<task> [--kind <genre>] [--expects report|approval] \"<texte>\"
   mail reply   --from <clé> --to <id d'item> \"<texte>\"
   mail pending --for <clé>
   mail seen    --for <clé> <id>…
@@ -359,6 +359,8 @@ pub const USAGE: &str = "rag3weaver-backend mail — la boîte de l'hôte, depui
 Une clé : claude-code:<session_id>, codex:<nom>, teammate:<parent>/<task>, supervisor.
 Un id d'item : \"<parent>/<task>:<n>\" (le bloc du hook le donne, avec la commande).
 Rien n'est deviné : sans --from, --to ou --for, la commande refuse.
+Une request peut déclarer ce qu'elle exige avant la fin : --kind request --expects report (un
+report de l'équipier) ou --expects approval (l'accord du superviseur).
 Options : --daemon <adresse> (sinon daemon.json), --json (sortie brute).";
 
 /// **Le verbe `mail`** : `args` sans le mot `mail`. Code 0 si fait, 2 si refusé
@@ -391,7 +393,7 @@ pub fn commande_avec(args: &[String], sortie: &mut dyn std::io::Write, ouvrir: &
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
-            o @ ("--from" | "--to" | "--for" | "--task" | "--daemon" | "--kind") => {
+            o @ ("--from" | "--to" | "--for" | "--task" | "--daemon" | "--kind" | "--expects") => {
                 let v = args.get(i + 1).ok_or_else(|| format!("mail {verbe} : {o} sans valeur"))?;
                 options.insert(o, v.clone());
                 i += 2;
@@ -434,7 +436,7 @@ pub fn commande_avec(args: &[String], sortie: &mut dyn std::io::Write, ouvrir: &
                 dire("mail send : le texte est vide".into());
                 return Ok(2);
             }
-            json!({ "backend": parent, "parent": parent, "task": task, "from": from, "to": to, "kind": options.get("--kind").cloned().unwrap_or_else(|| "message".into()), "text": texte })
+            json!({ "backend": parent, "parent": parent, "task": task, "from": from, "to": to, "kind": options.get("--kind").cloned().unwrap_or_else(|| "message".into()), "text": texte, "expects": options.get("--expects") })
         }
         "reply" => {
             let from = match exiger_cle("--from") {
@@ -625,6 +627,19 @@ pub(crate) mod tests {
         assert_eq!(code, 0, "{s}");
         let l = b.postees.lock().unwrap()[0].clone();
         assert_eq!(l, json!({ "backend": "b1", "parent": "b1", "task": "doc", "from": "codex:rag3weaver1", "kind": "answer", "text": "oui, vas-y", "reply_to": "b1/doc:3" }));
+    }
+
+    /// **Une request déclare ce qu'elle exige** (`--expects`, 13 novembre 2026) : le champ part
+    /// avec la ligne ; sans lui, la ligne n'en porte pas.
+    #[test]
+    fn send_porte_expects_sur_une_request() {
+        let b = std::sync::Arc::new(FausseBoite::default());
+        let (code, s) = jouer(&["send", "--from", "claude-code:s1", "--to", "teammate:b1/doc", "--task", "b1/doc", "--kind", "request", "--expects", "report", "rends tes verdicts"], b.clone());
+        assert_eq!(code, 0, "{s}");
+        assert_eq!(b.postees.lock().unwrap()[0]["expects"], "report");
+        let (code, s) = jouer(&["send", "--from", "claude-code:s1", "--to", "codex:essai", "--task", "b1/doc", "relis"], b.clone());
+        assert_eq!(code, 0, "{s}");
+        assert!(b.postees.lock().unwrap()[1]["expects"].is_null());
     }
 
     #[test]
