@@ -2023,6 +2023,39 @@ mod tests {
         assert!(!runs.exists(), "un fil du journal a écrit après l'arrêt de l'hôte : {}", runs.display());
     }
 
+    /// **Un hôte qu'on laisse tomber vide aussi son journal** (13 novembre 2026) :
+    /// le même run fini juste avant, puis l'hôte lâché sans `shutdown()`, comme
+    /// le font les témoins (e2e_juge). Au retour du Drop, le journal est écrit, et
+    /// le dossier effacé ensuite reste absent.
+    #[test]
+    fn un_hote_qu_on_laisse_tomber_ecrit_les_journaux_en_attente_et_rien_apres() {
+        use crate::events::{Event, EventBus};
+        let d = tempfile::tempdir().unwrap();
+        let runs = d.path().join("runs");
+        let hote = hote_isole().with_runs_root(runs.clone());
+        let journal = hote.journal_des_runs().clone();
+        let bus = EventBus::new(64);
+        journal.suivre("b", &bus);
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        bus.emit(Event::RunStarted {
+            run: "r".into(),
+            parent: None,
+            kind: "agent".into(),
+            name: "le témoin".into(),
+            domain: String::new(),
+            scope: None,
+            target: None,
+            role: None,
+        });
+        bus.emit(Event::RunFinished { run: "r".into(), kind: "agent".into(), ms: 3, ok: true, cause: None, cancelled_by: None });
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        drop(hote);
+        assert!(journal.fichier("b", "r").is_some(), "au retour du Drop de l'hôte, le journal du run fini juste avant est écrit");
+        std::fs::remove_dir_all(&runs).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(600));
+        assert!(!runs.exists(), "un fil du journal a écrit après le Drop de l'hôte : {}", runs.display());
+    }
+
     pub(super) fn hote_isole() -> DaemonHost {
         DaemonHost::new().with_background(Arc::new(crate::dataflow::background::Registry::new()))
     }
