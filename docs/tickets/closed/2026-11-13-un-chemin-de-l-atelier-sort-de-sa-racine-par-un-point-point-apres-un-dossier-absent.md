@@ -1,6 +1,9 @@
 # Un chemin de l'atelier sort de sa racine par un `..` qui suit un dossier absent, sans accord
 
-- **État** : ouvert (13 novembre 2026), pour archi.
+- **État** : corrigé (13 novembre 2026, branche atelier-chemin-hors-racine, archi) : `canonique`
+  résout chaque composant avant le test de racine. Témoin
+  `daemon_host::atelier_fichiers::tests::a_dot_dot_after_a_missing_folder_does_not_leave_the_workshop_root`,
+  rouge puis vert.
 - **Famille** : produit
 - **Gravité** : perte — une écriture hors de la racine de l'atelier, sans accord, remplace un fichier entier (et dans la racine, écrase un fichier en le disant créé)
 - **Atteignable en service** : oui, par `insert_lines`, `replace_lines` ou `replace_text` de l'atelier avec un chemin relatif `<dossier absent>/../…` ; dans le chat, l'empreinte de lecture limite le cas à un fichier dont la ligne visée a été lue (un accord en lecture suffit) ; hors du chat, rien ne l'arrête
