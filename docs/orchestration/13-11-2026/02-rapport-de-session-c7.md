@@ -213,3 +213,14 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   207701bb2 avec MOTEUR_ANCIEN=1. archi a son tour (l'écriture sûre), puis embarquement (le port 0). Trois
   pushes de docs de ma main ont fait perdre des courses au tour de 96 : je garde mes commits de rapport
   pour les creux entre deux pushes de code.
+- **18 h 10, archi a poussé a9163c7c8** (l'écriture sûre : le mode du fichier gardé, l'écriture refusée sur
+  un fichier changé depuis sa lecture, côté racine par `ecrire_atomique` et côté worktree par
+  `expected_hash` puis `FileSource::write` ; rejeu sous 835d5298f, lib entière 2326/0, navigateur 40/40,
+  rien de nommé). Suite d'archi : « dire vrai » (réindexation en échec dite en échec, relance dite refusée).
+  **Lib 835d5298f** (G, 17 h 54 : annulation sous pool plein, ABI exportée identique, vtable interne
+  changée, lib et vector du même bâti) au magasin des deux postes ; binaire cb21e3cbb essayé vert aux deux
+  postes, passe e2e verte ; pose en une coupure après embarquement (le port 0 annoncé, en tour). recherche
+  attend une place lourde pour la passe entière du journal des runs (e2e_juge ne laisse plus de résidu) ;
+  arbre principal a trié ses douze rouges de 1a (neuf lectures en dur → une aide commune des tests ; la
+  relation interne ScopeContent_DERIVED_FROM masquée des outils de graphe ; un vrai rouge à comprendre :
+  deux fichiers qui partagent une version, l'un retiré, l'appel d'un tiers ne gagne pas son arête).
