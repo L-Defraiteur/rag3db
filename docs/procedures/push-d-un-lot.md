@@ -237,6 +237,27 @@ se jouent par `python3 scripts/test_confiner_validation.py`, sans Cargo/bus rée
   feuille : readlink/lstat sont enregistrés sans suivre sa cible. Lien source modifié ou non
   suivi, racine/admin/copie/.git liés restent refusés. Les administrations séparées sans nom
   `.git` sous les sources sont aussi inventoriées et attribuées par Git avant retrait.
+
+  Les checkouts sont attribués par leurs **ancrages vérifiés** : source `.git`,
+  core.worktree explicite et allers-retours avec l’administration ; les inscriptions
+  liées exigent gitdir/commondir réciproques. `git --git-dir ... worktree list` ou
+  `--show-toplevel` ne prouvent pas une source : après deinit ils peuvent rendre le
+  cwd ou l’administration. Ne jamais changer de cwd ou réécrire core.worktree pour
+  faire passer une garde.
+
+  Une administration de sous-module désinitialisée reste inventoriée et archivée.
+  L’état `desinitialise` exige une preuve positive : .gitmodules, gitlink160000
+  stage0, rangement privé attendu sous modules/nom, source vide ou absente et zéro
+  inscription liée. Absence de core.worktree seule, source non vide, partage,
+  ancrage cassé ou configuration ambiguë restent rouges. La garde ne lance aucun
+  deinit/prune/repair et ne supprime aucun contrôle d’archive.
+
+  Le propriétaire du lot relit le **nouveau** script qualifié intégré et son hash,
+  prépare les archives fidèles à l’état courant, puis produit un rapport frais hors
+  cible. Une ancienne garde rouge ou une ancienne copie du script ne se convertit
+  pas en autorisation de retrait. En particulier, le correctif de l’inventaire ne
+  retire pas de lui-même les ressources du porteur ; celui-ci vérifie quiescence,
+  fidélité des copies et rapport VERT sans nouvelle mutation entre garde et retrait.
   La quiescence relève du propriétaire ; une réussite est périmée dès qu'un état change avant
   le retrait. La garde ne supprime ni ne répare et ne garantit pas l'arrêt de writers tiers.
   Incident : `docs/codeparsers/tickets/2026-11-11-le-nettoyage-du-parent-invalide-un-worktree-de-sous-module.md`.

@@ -1,10 +1,14 @@
 # Session « recherche » : rapport de reprise (11 novembre 2026)
 
-## Travail courant : primitive commune des lanceurs (12 novembre)
+## Travail courant : garde des sous-modules désinitialisés (13 novembre)
 
-Ticket [scopes des validations](../../tickets/closed/2026-11-12-une-scope-e2e-imbriquee-peut-echapper-au-plafond-du-lanceur.md), propriété scripts recherche et relecture ED. Branche/worktrees `cx-recherche-confinement-lanceurs` aux deux postes, base43db9634a ; source réelle figée5fab0e1f9, helper productionecd605037, docs de recette ensuite. Primitive `scripts/confiner_validation.py` adoptée par run_e2e et temoins_navigateur ; aucun Rust produit ni source Arbre modifié, aucun ancien lot rejoué.
+Ticket [attribution au cwd après deinit](../../arbre-principal/tickets/2026-11-13-la-garde-attribue-un-worktree-au-cwd-apres-deinit.md), éditeur unique recherche ; Arbre triageRO/raccord, Embar propriétaire du retrait. WT/branche `cx-recherche-garde-deinit`, base798ab1aa7. Sourcecorrectifed7607325/gardeSHA6f3dfceb17c9703029d2f4f26385f9aa21820c84bc79c518e1338b6d0f36188c : inventaire ancré, état deinit positivement prouvé, sharing/ambiguïtés/archives conservés.
 
-CPU20/20 verts2,059s, après rouge d’assertion JSON20(19/1) diagnostiqué et gardé (pas d’adaptation du helper à une phrase). P1 parent/racine PID+start, P2 reçu/superviseur réel et borneENV seule, nettoyage/refus/arrêt testés. Unique préflight réelle verte1,306s sous vrai posteMax32,26s internes/30s totalextérieur après acquisition : CDPChrome156+close,16descendants/unCGMax32,20observationsindépendantes,quiescencebus/profil=[],baseline9préexistantsnonattribuée. Preuves2postes horscible dans journaux-cx-recherche-confinement-12nov/. Aucun Cargo/target créé ; aucune exécution réelle restante. Revue/intégration après A encore attendue, aucun master sans tour explicite. Reprendre depuis le ticket et sa recette figée, ne pas relancer la préflight unique.
+TDD rouge attendu conservé1test0,181s, deuxcwd externes attribués à tort sans mutation. Après correction : ciblé1/1 0,198s, CPU29/29 portable2,255s et luciepc2,454s/Git2.56.0/timeout60/fixtures privées. RO C7/mémoire favorable, aucun essai réel sur W/admin/target Embar, aucun Cargo/GPU/CDP. Preuves2postes journaux-cx-recherche-garde-deinit-13nov/. Revue/tour master puis gardeFRAÎCHE par Embar restent à faire, ticket ouvert et W/targetEmbar conservés. Aucun ancien helper dca ne doit être tenu pour corrigé.
+
+## Historique lanceurs communs livré
+
+Primitive commune intégrée sur mastercdd354e7d après A et revue du delta priorité. Ticket scopes clos dans docs/tickets/closed, ressources des deux postes retirées après archives/gardes fraîches, logs/remotes conservés. Preuve ponctuelle CPU20base+2ciblés/4variantes, préflight réelle unique1,306s sous Max32, jamais à relancer ; globale ED relève d’un autre lot. Ce chantier est livré, pas en attente d’un ancien planCDP26.
 
 ## Historique FTS déterministe livré
 

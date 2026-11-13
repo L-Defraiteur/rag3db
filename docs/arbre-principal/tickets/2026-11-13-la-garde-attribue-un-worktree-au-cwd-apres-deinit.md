@@ -1,6 +1,6 @@
 # La garde attribue un worktree au cwd après deinit
 
-- **État** : ouvert ; retrait luciepc suspendu sans force, sources et administrations archivées.
+- **État** : ouvert ; correctif ed7607325 qualifié CPU29/29 aux deux postes, revue C7/mémoire favorable ; intégration puis garde fraîche/retrait Embar restent requis, ressources réelles conservées.
 - **Famille** : produit
 - **Gravité** : bloque le retrait sûr d'un lot livré et conserve son target24,4Go.
 - **Atteignable en service** : non, procédure de nettoyage des worktrees.
@@ -61,3 +61,13 @@ Configurations incluses, multiples/ambiguës, bare ou source non attribuable ref
 Source et recette publiées avant tests. Contre-exemple désormais **VERT**,1test0,198s, deux cwd extérieurs sans attribution ni mutation. Puis suite entière **29/29 verts en2,255s**, bornée60s/failfast, sans Cargo/service/GPU ni ancien runtime. Les tests antérieurs de protections, liens, partage et archives restent verts, de même que les nouveaux refus conservatifs. Les états désinitialisés produisent une preuve gitlink explicite et zéro checkout, pas un chemin cwd ignoré arbitrairement.
 
 Prochaine qualification autorisée dans ce même périmètre CPU : même source ed7607325, worktreecx neuf sur luciepc, fixtures privées sous son dossier de preuves ; `POSTE_MEM_MAX=1G poste lourd timeout60 python3 scripts/test_garde_worktree.py`, log/observations hors worktree. Cela compare le comportement Git2.56.0 du poste affecté sans jamais lancer le garde sur W/admin/target Embar. Source/recette publiées avant cette qualification, premier rouge inattendu stop/diagnostic. Embar seul fera une garde réelle fraîche après revue et intégration du correctif.
+
+## Qualification CPU luciepc et preuves consolidées, avant master
+
+Source exacte **ed7607325f3796534b07625a16340ff40f212afe**, garde SHA256 **6f3dfceb17c9703029d2f4f26385f9aa21820c84bc79c518e1338b6d0f36188c**. Git2.56.0 sur les deux postes. Portable : ciblé1/1 en0,198s puis suite29/29 en2,255s ; luciepc : même suite29/29 en2,454s, sous poste lourd effectif1G/timeout60, fixturesGit privées et failfast. Aucun autre rouge que le TDD attendu1c30, aucun retry inchangé, aucun Cargo/GPU/CDP/service/ancien lot.
+
+C7 et mémoire ont relu ed760 statiquement : principal ancré, linked réciproques, résidu positif sans source/CWD, partage/ambi/archives préservés ; aucun défaut concret signalé. La preuve locale du ciblé/CPU et la preuve PC portent cette même source (commits suivants uniquement Markdown). Le garde n’a PAS été essayé sur le worktree/admin/target Embar ; ceux-ci restent intacts. Le vert réel frais appartient au porteur après intégration, pas à cette qualification de fixtures.
+
+Preuves à conserver aux deux postes sous `~/.cache/rag3weaver-build/journaux-cx-recherche-garde-deinit-13nov/` : rouge-contre-exemple.log/rouge-code.txt et rouge/deinit-cwd.json, vert-cible.log/vert-cible/deinit-cwd.json, suite-cpu.log/suite/deinit-cwd.json, pc/{source.txt,git-version.txt,garde.sha256,suite-cpu.log,deinit-cwd.json}. Les rapports de fixture montrent l’état désinitialisé sans checkout et la preuve gitlink ; aucune archive ou source mutée par la garde. La procédure décrit le nouvel ancrage et la reprise propriétaire, sans overrideCWD/config ni contournement du refus.
+
+Soumission C7 : revue du diff/procédure/ticket et tour master requis ; ticket maintenu ouvert pour intégration puis garde fraîche Embar avant son retrait. Recherche n’efface aucune ressource d’Embar et ne remplace pas son rapport gardé. Arbre continue son raccord physique sans édition garde.
