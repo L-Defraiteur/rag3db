@@ -687,6 +687,22 @@ pub fn scope_form(catalog: &Catalog) -> Result<ScopeForm, CatalogError> {
     })
 }
 
+/// **La forme d'avant les versions de scope, telle quelle** : `Scope` porte ses
+/// morceaux et ses vecteurs, sans estampille. Pour les témoins d'une base de
+/// cette forme (et pour la migration 1b, qui la lira) ; le chemin ordinaire
+/// est [`register_code_schema`], qui suit la base.
+pub fn register_code_schema_sans_versions(catalog: &mut Catalog, scope_chunking: ChunkingConfig) -> Result<(), CatalogError> {
+    let (mut entities, mut relations) = schema_configs(scope_chunking);
+    for name in [FILE, SCOPE, LIBRARY, SYMBOL] {
+        catalog.register_entity(name, entities.remove(name).expect("entité du schéma code"))?;
+    }
+    for (name, _, _) in RELATIONS {
+        let relation = relations.remove(name).expect("relation du schéma code");
+        catalog.register_relation_with(name, &relation.from, &relation.to, relation.properties.unwrap_or_default())?;
+    }
+    Ok(())
+}
+
 /// Les champs du scope qui font sa version : ce qui s'embarque (le titre `name`,
 /// `content`, `docstring`) et, par choix strict pour 1a, `signature`,
 /// `scope_type` et `language` — jamais un partage faux, au pire une version de
@@ -724,7 +740,13 @@ pub fn scope_version_configs(scope: EntityConfig, chunking: ChunkingConfig) -> (
 /// (`ScopeContent_DERIVED_FROM`) : un morceau partagé en a plusieurs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScopeChunks {
+    /// La table des morceaux (`Scope_Chunk` ou `ScopeContent_Chunk`).
     pub table: String,
+    /// Le parent direct d'un morceau (`Scope` ou `ScopeContent`).
+    pub parent: String,
+    /// La relation d'un morceau à son parent direct.
+    pub chunked_from: String,
+    /// Le motif d'un morceau `c` à son occurrence `s:Scope`.
     pub to_scope: String,
 }
 
@@ -732,10 +754,14 @@ pub fn scope_chunks(catalog: &Catalog) -> Result<ScopeChunks, CatalogError> {
     Ok(match scope_form(catalog)? {
         ScopeForm::SansVersions => ScopeChunks {
             table: format!("{SCOPE}_Chunk"),
+            parent: SCOPE.to_string(),
+            chunked_from: format!("{SCOPE}_CHUNKED_FROM"),
             to_scope: format!("(c:{SCOPE}_Chunk)-[:{SCOPE}_CHUNKED_FROM]->(s:{SCOPE})"),
         },
         ScopeForm::Versions | ScopeForm::Neuve => ScopeChunks {
             table: format!("{SCOPE_CONTENT}_Chunk"),
+            parent: SCOPE_CONTENT.to_string(),
+            chunked_from: format!("{SCOPE_CONTENT}_CHUNKED_FROM"),
             to_scope: format!(
                 "(c:{SCOPE_CONTENT}_Chunk)-[:{SCOPE_CONTENT}_CHUNKED_FROM]->(:{SCOPE_CONTENT})-[:{SCOPE_CONTENT}_DERIVED_FROM]->(s:{SCOPE})"
             ),

@@ -199,14 +199,16 @@ fn une_synchronisation_en_recherche_texte_n_embarque_rien() {
     let mut catalog = catalogue();
     let options = SourceSyncOptions { batch_files: 1, exige: Disponibilites::RECHERCHE_TEXTE, ..Default::default() };
     sync_source(&mut catalog, &Snapshot::new("depot", source_a_trois_fichiers()), &options, &mut |_| {}).unwrap();
-    let storage = catalog.vector_storage("Scope_Chunk").unwrap();
+    // La table des morceaux de la forme de la base (version de scope).
+    let table = rag3weaver::code::scope_chunks(&catalog).unwrap().table;
+    let storage = catalog.vector_storage(&table).unwrap();
     let vecteurs = catalog
-        .execute_raw(&format!("MATCH (c:Scope_Chunk) WHERE c.{} IS NOT NULL RETURN count(c)", storage.column))
+        .execute_raw(&format!("MATCH (c:`{table}`) WHERE c.{} IS NOT NULL RETURN count(c)", storage.column))
         .unwrap()
         .rows[0][0]
         .as_i64()
         .unwrap();
-    let morceaux = catalog.execute_raw("MATCH (c:Scope_Chunk) RETURN count(c)").unwrap().rows[0][0].as_i64().unwrap();
+    let morceaux = catalog.execute_raw(&format!("MATCH (c:`{table}`) RETURN count(c)")).unwrap().rows[0][0].as_i64().unwrap();
     assert!(morceaux > 0);
     assert_eq!(vecteurs, 0, "aucun vecteur calculé sur {morceaux} morceaux");
 }
