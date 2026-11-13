@@ -2,10 +2,13 @@
 
 Porteur arbre-principal, même [ticket migration](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md).
 Base de lecture master798ab1aa7, après livraison Pub, ED et embarquement.
-Diff physique en cours de revue, non compilé/non qualifié ; aucune API physique
-ci-dessous n'est livrée sur master. Aucun Cargo, target, index, service ou modèle
-créé à ce stade. La garde de retrait d823
-reste exclusivement chez Recherche ; aucun fichier de garde n'entre dans ce diff.
+Qualification ciblée privée P14 **VERTE** sur a43c475f9ce1f7cbd6c1c2a0ee56719b521678f1 :
+[preuves et limites](02-preuves-ciblee-raccord-physique.md).20fonctions/19juges,
+8enfants réels,44,321s ; aucun GO global/master. Aucune API physique ci-dessous
+n'est encore livrée sur master. Aucun index réel/service/modèle touché.
+Les étapes de préparation et leurs anciens comptes non joués ci-dessous sont
+historiques ; le bilan P14 lié ci-dessus fixe les comptes actuellement qualifiés.
+La garde de retrait reste exclusivement chez Recherche.
 
 ## Tranche verticale proposée
 
@@ -221,7 +224,7 @@ final après fermeture, réouverture et requêtes des deux cellules.
   Les fichiers Mermaid de fixture sont retirés après mort : reprise depuis le
   support durable du journal et non depuis l'ancien environnement.
 
-Recette exécutable publiée avec le diff : `raccord-physique/lancer-cible.sh SHA40`,
+Recette initiale publiée avec le diff (historique, remplacée par P14) : `raccord-physique/lancer-cible.sh SHA40`,
 qui appelle le superviseur commun depuis `/var/tmp`, délai initial600s, poste
 lourd/MemoryMax32G/Highmax, bus privé unique et preuves neuves `...-v1`. Le client
 `cible.py` compile une seule lib de tests native+code sans features par défaut,
@@ -323,3 +326,13 @@ attendu indisponible exige explicitement ce Some dans son affichage. Le témoin
 lexical existant et les assertions de la fixture native vérifient absence de
 modèle/dette fictive dans les bilans. Preuves/recette v3 distinctes, même plafond
 599s et même target/SDK29 ; delta/source à relire avant toute nouvelle exécution.
+
+
+## État ciblé final après corrections
+
+Voir le [bilan P14](02-preuves-ciblee-raccord-physique.md) :20fonctions brutes,
+19juges,8enfants réels, qualification ciblée VERTE sur sourcea43c475f9.
+La recette publiée lance désormais P14 distinct599s,10CPU et10fonctions natives
+exact par exact avec arrêt au premier rouge ; tampon explicite512MiB/Max32GiB.
+Les corrections et anciens rouges sont conservés dans le ticket parent et les
+preuves de chaque portée. Aucune qualification globale ou livraison master ici.
