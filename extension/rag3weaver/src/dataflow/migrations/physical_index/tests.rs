@@ -99,6 +99,16 @@ fn declarations() -> DeclarationSnapshot {
     })
     .unwrap()
 }
+fn foreign_column_ddl() -> String {
+    Rag3dbDialect.alter_add_column_default(
+        "Snippet",
+        &crate::dialect::ColumnDef {
+            name: "foreign_value".into(),
+            col_type: crate::dialect::ColumnType::Text,
+        },
+        "NULL",
+    )
+}
 fn records() -> Vec<BTreeMap<String, CypherValue>> {
     let fixture: serde_json::Value = serde_json::from_str(FIXTURE).unwrap();
     fixture["occurrences"]
@@ -404,7 +414,7 @@ fn native_legacy_foreign_schema_and_values_refuse_owned_open_without_writes() {
             let conn = connection(&root, false).unwrap();
             match change {
                 1 => {
-                    conn.execute("ALTER TABLE Snippet ADD foreign_value STRING DEFAULT NULL")
+                    conn.execute(&foreign_column_ddl())
                         .unwrap();
                 }
                 2 => {
@@ -648,7 +658,7 @@ fn native_unowned_cell_or_changed_source_refuses_before_new_effects() {
     catalog
         .lock()
         .unwrap()
-        .execute_raw("ALTER TABLE Snippet ADD foreign_value STRING DEFAULT NULL")
+        .execute_raw(&foreign_column_ddl())
         .unwrap();
     let before = PhysicalSnapshot::read(catalog.lock().unwrap().conn()).unwrap();
     drop(catalog);

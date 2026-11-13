@@ -2243,3 +2243,15 @@ exiger nonvide fts_handles_in de CHAQUE cellule sondée avant is_read_only/commi
 refusé, pas accepter une boucle vide. Prod inchangée, assertions fichiers entiers
 /index absent conservées ; fixture échec P12/tmp/.tmpy3EsNL préservée. Pasrejeu
 avant publication/revue/GO distinct.
+
+
+P13 source9c7361 :10CPU+8juges natifs VERTS ; six reprises après mort avec
+préfixe0/1/2 et exact8/6/8, plus2bootstrap =>8enfants réels qualifiés. Lecteur
+handlesRO/commitrefus/indexabsent/rootimmuable VERT. Neuvième juge négatif
+source altérée échoue ROreopen ANY après ALTER foreign_value STRING DEFAULT NULL
+écrit par le TEST lui-même. Même précaution DDL commune déjà connue, pas nouvelle
+régression produit établie. Durée44,010s ; helperisolé nonjoué. Fixture conservée
+P13/tmp/.tmpIo9yxf. Remplacer les DEUX injections foreign_value expliciteNULL
+des tests négatifs par primitive dialect.alter_add_column_default(ColumnText,
+"NULL") ; garder colonneétrangère/refus/instantanés/journalabsent inchangés.
+Production inchangée ; nouvelle qualification distincte aprèsRO/GO.
