@@ -137,7 +137,12 @@ class Journaux(unittest.TestCase):
         (self.d/'bin/pidof').write_text('#!/bin/sh\ncat "$FAKE_PIDS"\n')
         (self.d/'bin/pidof').chmod(0o755)
         (self.d/'e2e').write_text(E2E); (self.d/'e2e').chmod(0o755)
-        (self.d/'bin/cargo').write_text('#!/bin/sh\nprintf \'%s\\n\' \' '+json.dumps({'reason':'compiler-artifact','target':{'name':'e2e'},'executable':str(self.d/'e2e')})+'\'\n')
+        metadata = json.dumps({'workspace_root':str(CRATE), 'target_directory':str(self.d/'target'),
+                               'packages':[{'name':'rag3weaver','source':None}]})
+        artifact = json.dumps({'reason':'compiler-artifact','target':{'name':'e2e'},'executable':str(self.d/'e2e')})
+        (self.d/'bin/cargo').write_text('#!/bin/sh\nif [ "$1" = metadata ]; then\n'
+            + "printf '%s\\n' '" + metadata + "'\nelse\n"
+            + "printf '%s\\n' ' " + artifact + "'\nfi\n")
         (self.d/'bin/cargo').chmod(0o755)
 
     def tearDown(self):

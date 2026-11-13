@@ -67,3 +67,15 @@ accepte toujours une commande, aucun changement de supervision.
 Résultat CPU sur302f9b827 : neuf fonctions passées,0 échec en0,216s ;
 vert-302f9.log. Nouveaux raccords shell publiés avant vérifications syntaxiques ;
 aucune compilation de produit ni suite navigateur/e2e prétendue.
+
+La fixture Cargo du témoin existant test_journaux_demons_e2e.py sait maintenant
+répondre à metadata puis rendre l'artefact simulé comme auparavant. Ce témoin
+compile lui-même un adaptateur Rust : NON JOUÉ dans le périmètre autorisé.
+Adaptation lue et analysée AST uniquement, qualification future requise.
+
+Contrôles sur599109a86 avant cette adaptation : bash -n cinq scripts VERT,
+AST deux fichiers VERT,406 en-têtes tickets VERT, diffcheck VERT, WT propre.
+Aucun Cargo réel ni rustc invoqué ; les métadonnées des neuf tests sont des
+fixtures explicites. Ressources gardées : un worktree de source sans target,
+journaux rouge/vert horsW ; aucun poste lourd pris. Revue indépendante demandée
+avant qualification Rust et intégration ; pas de clôture du ticket ici.

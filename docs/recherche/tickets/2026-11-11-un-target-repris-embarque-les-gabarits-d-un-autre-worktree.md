@@ -103,3 +103,14 @@ sept témoins avant correction/exécution. Refus de l'origine inconnue et
 raccord de cargo_magasin à la garde commune ; métadonnées Cargo simulées
 uniquement. Aucun Cargo/rustc produit, target réel ou lot union touché.
 Le ticket reste ouvert ; pas de garantie d'ELF réel avant qualification dédiée.
+
+## Préparation et témoins CPU réalisés — lot isolé
+
+Source des témoins29087a73d publiée avant exécution ; rouges attendus conservés
+sur la garde initiale. Correctif302f9b827 puis neuf fonctions CPU vertes en
+0,216s, métadonnées Cargo simulées, aucun Cargo/rustc réel. Raccords supplémentaires
+599109a86 : F8 et compilations run_e2e utilisent aussi l'adaptateur de destination
+réelle ; SDK et primitives runtime inchangés. Refus explicite des surcharges
+--config non qualifiées. Fixture des journaux adaptée pour metadata, NON JOUÉE
+car elle compile un adaptateur Rust. Détails, limites et recette dans le plan.
+Revue requise avant qualification plus large ; ticket OUVERT, aucun master.
