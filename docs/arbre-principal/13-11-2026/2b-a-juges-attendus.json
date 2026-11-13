@@ -1,9 +1,9 @@
 {
   "status": "ECRITS_NON_JOUES",
   "features": [],
-  "new_functions": 13,
+  "new_functions": 15,
   "exacts": [
-    "dataflow::migrations::publication::admission::tests::all_three_signals_receive_the_mask_before_their_top_k",
+    "dataflow::migrations::publication::admission::tests::all_three_signal_nodes_transmit_the_admission_at_the_actual_candidate_boundary",
     "dataflow::migrations::publication::admission::tests::absent_empty_and_failed_admission_never_mean_the_same_mask",
     "dataflow::migrations::publication::admission::tests::shared_h_does_not_resurrect_a_hidden_occurrence_or_move_its_visible_peer",
     "dataflow::migrations::publication::admission::tests::same_revision_file_replacement_keeps_the_other_cells_file",
@@ -11,11 +11,13 @@
     "dataflow::migrations::publication::admission::tests::related_reads_admit_both_endpoints_before_limit_without_deduplicating_edges",
     "dataflow::migrations::publication::admission::tests::an_advanced_head_cannot_rebind_a_pinned_parent_or_storage_generation",
     "dataflow::migrations::publication::admission::tests::losing_the_snapshot_invalidates_all_copies_and_cannot_be_repaired_by_a_new_connection",
-    "dataflow::migrations::publication::admission::tests::incapable_filter_and_scan_are_errors_even_when_signal_fallback_is_soft",
+    "dataflow::migrations::publication::admission::tests::real_nodes_refuse_incapable_dense_native_text_and_missing_or_failed_offsets_even_when_soft",
     "dataflow::migrations::publication::admission::tests::unknown_ambiguous_or_fixture_only_views_never_fall_back_to_a_public_tool",
     "dataflow::migrations::publication::admission::tests::provenance_is_opt_in_and_belongs_to_each_winning_occurrence",
     "dataflow::migrations::publication::admission::tests::storage_offsets_never_alias_across_publications_or_models",
-    "dataflow::migrations::publication::admission::tests::expiry_after_the_last_read_checks_the_effective_deadline_and_latches_before_rendering"
+    "dataflow::migrations::publication::admission::tests::expiry_after_the_last_read_checks_the_effective_deadline_and_latches_before_rendering",
+    "dataflow::migrations::publication::admission::tests::get_rechecks_after_the_last_callback_for_both_empty_and_nonempty_rows_and_unlatched_expiry",
+    "dataflow::migrations::publication::admission::tests::direct_admission_cannot_hide_a_foreign_unadmitted_read_view_even_with_a_matching_scope_service"
   ],
   "physical_view_qualified": false,
   "public_tool_access": false

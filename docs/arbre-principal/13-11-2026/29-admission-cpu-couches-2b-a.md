@@ -18,11 +18,11 @@ Les graphes d'outils réels refusent toute admission fixture (`FixtureOnly`) ava
 - `FetchRelatedNode` et le cadre de groupe passent par la même aide de lecture admise. Identité source conservée avec l'entité, collision de UUID entre entités refusée ; sources réduites avant requête, cibles admises avant la troncature par parent. Le Hop existant n'a pas de LIMIT SQL ; aucune page visible n'est perdue derrière des voisins masqués. Doublons d'arêtes visibles conservés ; sens entrant/sortant jugés. Ce n'est pas une nouvelle réécriture de Cypher par chaîne.
 - `read_for_tool` ne peut oublier une admission invalide ou une cellule incompatible dans son repli. Les chemins ordinaires SANS admission gardent leurs comportements existants ; les treize témoins visent le nouveau contexte, pas une réécriture de la politique domaine/utilisateur.
 
-## Témoins écrits, NON JOUÉS
+## Témoins écrits, NON JOUÉS — source révisée après RO54142
 
-Treize fonctions nouvelles, noms exacts dans `2b-a-juges-attendus.json`, helpers non comptés comme juges. Écrites avant l'implémentation puis renforcées :
+Quinze fonctions nouvelles, noms exacts dans `2b-a-juges-attendus.json`, helpers non comptés comme juges. Écrites avant l'implémentation puis renforcées :
 
-1. Les trois signaux reçoivent le masque commun avant k sur un backend témoin CPU,20 invisibles dominants/deux visibles. Pas une qualification des trois moteurs physiques.
+1. Les vrais VectorSearchNode/SparseSearchNode/BM25SearchNode sont exécutés. Dense appelle un SearchBackend espion recevant la condition/jointure/paramètres avant k ; creux/FTS ont un probe cfgtest INLINE sur l’argument d’offsets effectivement passé au point candidat. Les spies appliquent les données de leur fixture20invisibles/deuxvisibles puis arrêtent volontairement avant recherche physique. Supprimer le raccord du masque du nœud supprime la capture ou la rend incohérente. Ni les trois moteurs physiques ni leurs scores ne sont qualifiés.
 2. Absence de contexte, ensemble admis vide et erreur de liaison distincts.
 3. H partagé : racines filtrées AVANT versions dans le vrai helper commun (connexion callback) ; pair visible/positions90/provenanceparente conservés, fuite de UUID rejetée par la finition commune.
 4. Remplacement fichier dans la même révision sans effacer l'autre cellule du résolveur ; l'appel courant garde néanmoins sa frontière de cellule.
@@ -30,13 +30,15 @@ Treize fonctions nouvelles, noms exacts dans `2b-a-juges-attendus.json`, helpers
 6. Relation deuxbouts/avantlimite/paramètres sources et doublons exacts, dans les deux sens.
 7. Même origine, publication avancée distincte refusée comme liaison du parent épinglé.
 8. Perte d'instantané invalide toutes les copies ; nouvelleconnexion ne répare pas le contexte.
-9. Scan et backend incapable refusés même si les signaux sont souples.
+9. Vrais nœuds en signaux souples : dense NON-SCAN avec backend incapable (zéroappel candidat), BM25natif refusé (latch), convertisseur d’offsets renvoyantNone OUerreur dans BM25/Sparse (faultfixture explicite) : erreur/latch avantcandidats ; scan reste jugé sur Vector. Les appels directs isolés de require_filter ne servent plus de preuve.
 10. Vue inconnue/ambiguë et contextefixture refusé comme autorité d'outil physique.
 11. Provenance interne opt-in et différente pour occurrences héritée/locale.
 12. Offset n'autorisant pas alias entre modèles ou publications de la même origine.
 13. Échéance après dernièrelecture : contrôle effectif à la finition, erreur mémorisée, aucun retour valide via une horloge passée ni un rendu sans provenance.
 
-Le témoin backend est une fixture de sélection CPU ; les connexions sont Mock/Callback. Aucune base/service/index physique n'est ouvert dans ces nouveaux tests. Portée partielle assumée : origine des lignes physiques, ouverture durable, transactions DB+handles synchronisées et accessibilité utilisateur B/C restent à qualifier séparément.
+Les témoins sont des fixtures CPU, connexionsMock/Callback, jamais une liaison physique qualifiée. Les nœuds requièrent une poignéecreuse concrète : fixturevide créée dans TempDir puis libérée, aucune recherche de cet index n’est exécutée ; le probe termine à la frontière des candidats. Aucun moteur DB/native, modèle ou service réel. Aucun writerlucivy n’est ouvert : catalogueMock positionnétexteNatif sans fournir ce service, sauf casderejet explicite. Deux témoins supplémentaires :14.getsurvraiCallback, casNone/Some × invalidation/échéanceraccourciesansflag, validationaprèsDB AVANTretour ;15.admissiondirecteA+servicecelluleA+ReadViewsansadmissioncelluleB refuse/latch AVANTcallback.
+
+Portée partielle assumée : origine des lignes physiques, ouverture durable, transactions DB+handles synchronisées et accessibilité utilisateur B/C restent à qualifier séparément.
 
 ## Contrôles d'écriture et recette CPU proposée
 
@@ -47,9 +49,13 @@ Proposition à arbitrer C7 sur couple source/pilote exact après RO courte :1800
 Ordre prévu avec primitive de confinement connue :
 
 1. `cargo test --lib --no-default-features --no-run --message-format=json-render-diagnostics`, cap900 intersectéEND−15. ArtifactJSON unique profiltest rag3weaver, features[] et SHA/source embarquée/copie contrôlés.
-2. Inventorier ELF entier/ignorés, nouveau module13/0ignoré et publication complète23/0ignoré (10historiques+13A). Liste exacte des13 obligatoire, aucun juge deviné. Ledger publié/copiedSHAdeuxpostes AVANTruntime.
-3. Treizeexacts --nocapture, cap30chacun ; premier SEUL sousGDBmain/captureprofilCPU puiscontinue MÊMEinvocation. Aucun test temporel de la lib entière gardé sousptrace.
-4. MêmeELF CPU, lib ENTIÈRE --show-output/threads8 cap300 ; comparer toussuccès àinventairemoinsignorés, arrêter premierFAILED (panics attendus préservés). Les13 rejouées dans la lib restent13nouvelles, N+13invocationsbrutes pour Nfonctionsdistinctes de la lib, pas deuxfois13nouveauxjuges.
+2. Inventorier ELF entier/ignorés, nouveau module15/0ignoré et publication complète25/0ignoré (10historiques+15A). Liste exacte des15 obligatoire, aucun juge deviné. Ledger publié/copiedSHAdeuxpostes AVANTruntime.
+3. Quinzeexacts --nocapture, cap30chacun ; premier SEUL sousGDBmain/captureprofilCPU puiscontinue MÊMEinvocation. Aucun test temporel de la lib entière gardé sousptrace.
+4. MêmeELF CPU, lib ENTIÈRE --show-output/threads8 cap300 ; comparer toussuccès àinventairemoinsignorés, arrêter premierFAILED (panics attendus préservés). Les15 rejouées dans la lib restent15nouvelles, N+15invocationsbrutes pour Nfonctionsdistinctes de la lib, pas deuxfois15nouveauxjuges.
 5. Hashoriginal/copie, événementsmémoire/du, arrêtquiescence et busabsent, finaliseur relisant END après hashes et avant publication. PremierrougeSTOP, logs/fixtures conservés, diagnostic avant tout correctif/GOdistinct, pasreset1800.
 
 Pas de compilation native/SDK29 ni runtime DB qualification déduits de cette recette CPU. Aucun master Rust2b avant priorité gardeRecherche puis revues/ÀTOIexact. Le plan28/B et ses13cas restent la référence de limites ; le présent diff matérialise seulement A et ne clôture pas le ticket2b.
+
+## Réserves et delta de source
+
+La source54142 n’a pas été exécutée. Les RO ont correctement borné son ancien témoin à un helper, sans preuve des trois nœuds ; le présent delta remplace ce juge et les refus isolés par leurs chemins de nœuds. Les probes d’offsets et de candidats sont explicitement cfg(test), renseignent ou interrompent des appels réels des nœuds ; ils ne produisent aucun permis B. La portée revendiquée est propagation/refus CPU jusqu’au point candidat, pas recherche physique. Le nombre de fonctions est15, pas le nombre de permutations internes. Le contexte peut uniquement raccourcir son échéance, jamais la prolonger ; le callback de get peut ainsi la faire expirer sans flag et sans sleep, puis le contrôlepostDB la constate.
