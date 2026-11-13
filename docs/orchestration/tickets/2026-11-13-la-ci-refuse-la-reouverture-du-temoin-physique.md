@@ -560,3 +560,13 @@ l’appariement individuel de trois noms à cause de l’entrelacement nocapture
 la preuve de succès global repose sur le résumé du harness, pas sur une liste
 normalisée de179lignes indépendantes. Sixcoreexacts,32SHA et confinement inchangés.
 Aucun rejeu autorisé ou lancé pour ce seul défaut de présentation du log.
+
+### Réserve C7 avant GO MESURE : conserver le contre-exemple
+
+Lecture méthode favorable, HOLD exécution : stderrDEVNULL perd diagnosticpanic,
+et assertion JSON/compte avant conservation perd stdout fautif. Delta de
+préparation : raw stdout+identité/rc de chaqueCAS écrits AVANT vérification,
+firstred contextuel immuable ; hookpanic identique dans les deux harnesses
+écrivant JSON structuré sur stdout SEULEMENT en cas de panique. Aucun replay,
+pas de stderr énorme ni modification de production luciole. MESURE reste
+soumise RO/GO distincts et coordination4CPU sans lourd concurrent sur ces cœurs.
