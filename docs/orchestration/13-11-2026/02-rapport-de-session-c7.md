@@ -501,3 +501,9 @@ Décision : pas de lot vues chez lucivy maintenant ; 2b-B s'appuie sur `allowed_
 
 - **archi a poussé** `6836ff86a` (accord borné : un accord vaut pour sa conversation, une demande échue après trente minutes est refusée ; ticket d'ED fermé) : rejeu court sur la tête rebasée sur f3897600f, lib entière **2344/0** (la lecture sale n'est pas revenue, la garde du rouge nommé n'a pas servi), e2e_hooks 2/2, navigateur 42/42 ; dernier pas sous `poste push` sans rejeu (docs seules entrées) ; trois contrôles ; worktree et targets effacés. Suite : l'empreinte aveugle.
 - **recherche a « à toi »** pour lecture-pendant-un-lot-2 (403f96274), avant le cœur dont le lot C++ n'exige pas de rejeu de l'autre côté.
+
+## Vers 21 h 4x — le second archivage à blanc ; lucivy et 96 relancés
+
+- **96 a poussé** f00210dc9 : page 03 du second archivage à blanc. 432 sections, 75,8 min, 10,5 s par section ; **113 fiches au lieu de 326**, 45 à une seule section au lieu de 274, 31 réunissant plusieurs sections d'un document, 33 noms courts au lieu de 95 (des sujets), 9 ancrages justes et 16 « none ». Défaut restant : les doublons d'un document à l'autre (« Hooks Claude Code » / « Hooks de Claude Code », quatre « Nettoyage des worktrees »…) — la première phrase d'une section ne fait pas remonter la fiche voisine. Quatre voies pour Lucie dans la page : sans création, une fiche par document, cette création avec dédoublonnage, ses choix dans l'annexe. Rien chez elle ; essais à luciepc (blanc-96, blanc-96-2).
+- Lot de 96 ce soir : le dédoublonnage par le nom de sujet (rouge d'abord sur deux documents au même sujet), puis un troisième blanc à luciepc avec les cinq nombres en face des deux premiers.
+- Lot de lucivy ce soir : le témoin `doc_freq(term)` sous masque (lucivy seule, rouge d'abord) et la mesure sur copie du dépôt dès que l'hôte n'écrit pas dessus (ticket 229c6c454).
