@@ -44,7 +44,10 @@ class Fixture(ThreadingHTTPServer):
         self.args = args
         self.lock = threading.Lock()
         self.deadline = time.monotonic() + args.budget_pret_ms / 1000
-        self.log = args.journal.open('x', encoding='utf-8')
+        # En ajout : un fournisseur relancé (activation à la demande, après une
+        # éviction) écrit à la suite du précédent ; chaque démarrage y laisse
+        # son `constructeur_demarre`, que les témoins comptent.
+        self.log = args.journal.open('a', encoding='utf-8')
         self.stopped = False
         # Les baux d'usage et l'éviction, comme le service réel
         # (src/daemon/embeddings.rs) : numéro -> échéance, calculs en cours,
