@@ -143,3 +143,22 @@ index, target réel ou service. Ancien log3OK/1ERROR03896 conservé. Journal
 pilote-acb9-cpu.log horsW. Ce résultat ne qualifie pas la portée4800 et
 ne recycle aucun GO438/03896. Seul ce complément documentaire est ajouté
 après ces témoins ; nouvelle revue exacte du couple requise avant exécution.
+
+## Contrôleurs du scan après poste (réserve410 avant diff)
+
+Le ticketd37019e41 consigne le contre-exemple des ancêtres légitimes. Le scan
+ne les ignore pas globalement : deux rôles seulement (lanceur Python et
+poste Bash) doivent correspondre à la chaîne d'ancêtres PID/start/PPID/CG,
+exe ET SHA, UID, argv COMPLET, cwd /var/tmp et sources des scripts contre Git.
+Les deux rôles et leur politique sont archivés dans cache-after-poste.
+Les seuls arguments de contrôle ainsi authentifiés ne constituent plus un
+lecteur. Tout exe/cwd/FD vers T ou OLDW reste BLOQUANT, même pour eux ; seul
+le FD du script POSTE exact avec hash Git conforme peut être attendu.
+Pas d'exemption du cgroup ni des autres ancêtres, UNKNOWN d'un rôle bloque.
+Un ancêtre qui change PID/start/CG/identité n'obtient jamais ce statut.
+
+Cinquième témoin de préparation publié avant exécution : deux rôles légitimes,
+lecteur OLDW, ancêtre du même CG non-rôle, PID réutilisé, changements UID/exe/
+CG, et FDtarget depuis rôle légitime. AST/fauxPopen/fichiers temporaires seuls,
+pas de scan /proc réel ni cible Cargo. Autorisation CPU distincte C7 pour
+borne60/failfast après publication ; aucune qualification4800 autorisée.
