@@ -265,3 +265,12 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   services résidents de Lucie, seulement un fournisseur lancé par l'activation. recherche : sa passe verte
   a perdu la course contre le lot Chromium ; rejeu sur 0977892ce (journal-apres-arret-4), **fenêtre tenue**
   jusqu'à son verdict (~19 h 40) ; puis archi (bulle fantôme, dire vrai), puis la pose de 835d5298f.
+- **19 h 24, recherche a poussé 93cc95a43** (le journal des runs : l'arrêt et le Drop de l'hôte écrivent les
+  journaux en attente de leur grâce puis plus rien ; l'arrêt de l'hôte arrête aussi le juge des bilans ;
+  e2e_juge sort des résidus ; ticket du 9 fermé ; lib entière 2330/2330 sans le rouge du raccord, navigateur
+  40/40). Elle attaque la montée de lucivy-core 4.3.4. archi a son tour (la bulle fantôme et « dire vrai »),
+  puis la pose. ED : la mesure de l'étape navigateur (a3fd235c8) dit que la charge n'est pas la cause ; deux
+  causes réelles, la bulle fantôme (archi) et **un premier search_code ou impact par backend à 59 s, les
+  suivants à 250 ms** (118 des 132 s de l'étape) — ED pose une sonde de la lib (chaque appel sous 5 s) et
+  cherche où vont les 60 s ; c'est aussi la première question lente de l'atelier de Lucie à chaque
+  réouverture.
