@@ -85,3 +85,7 @@ primitives du scheduler/pool ; pas de sleep, retry arbitraire ou garde affaiblie
 Le préfixe du garde Recherche (cache/F8/compilations/ledger) est indépendant
 et autorisé sur SDK29 ; il s'arrête avant tout runtime. Le nouveau rouge CI
 reste ouvert et n'est pas remplacé par les verts locaux.
+
+## Lecture coeur C++ : provenance et comparaison SDK29
+
+[Rapport borné et preuves](../../coeur-cpp/13-11-2026/01-ci-writer-d17-provenance-et-liberation.md) : CI archive/ELF statiques D17 attestés par le job ; garde C++ writer RAII effacée en dernier à destruction Database. Connection C++ ne possède pas Database. Chemin physique direct open_explicit_config sans boucle REOPEN_WAIT normale. SDK29 identifié29a7bc52a/en-tête/SHA bibliothèque relus : bloc registre/mutex/marque/deleter textuellement identique à D17, même ordre de destruction ; absence de garde29 exclue comme différence explicative. Aucun détenteur ni défaut moteur attribué par ce seul refus ; ED/Lucivy suivent les acteurs. Aucun build/SDK patch/DB/service/CI rerun, aucun code modifié. Ticket ouvert.
