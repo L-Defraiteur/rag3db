@@ -89,6 +89,7 @@ impl DaemonHost {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "code")]
     use crate::mail::Boite;
 
     /// La boîte de l'hôte, jointe en direct (le même trait que le client HTTP).

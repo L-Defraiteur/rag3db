@@ -117,7 +117,11 @@ fn echapper(s: &str) -> String {
 
 impl BoiteHttp {
     pub fn depuis_daemon_json(delai: Duration) -> Result<Self, String> {
-        let fiche = crate::daemon_lifecycle::read().ok_or("aucun hôte connu (daemon.json absent) : la boîte est injoignable")?;
+        Self::depuis_fiche(crate::daemon_lifecycle::read(), delai)
+    }
+
+    fn depuis_fiche(fiche: Option<crate::daemon_lifecycle::DaemonFile>, delai: Duration) -> Result<Self, String> {
+        let fiche = fiche.ok_or("aucun hôte connu (daemon.json absent) : la boîte est injoignable")?;
         Ok(Self::ouvrir(&fiche.address, Some(&fiche.token), delai))
     }
 
@@ -507,6 +511,42 @@ pub fn commande_avec(args: &[String], sortie: &mut dyn std::io::Write, ouvrir: &
 pub(crate) mod tests {
     use super::*;
     use std::sync::Mutex;
+
+    #[test]
+    fn decouverte_fiche_valide_conserve_adresse_et_jeton_sans_requete() {
+        let _: fn(Duration) -> Result<BoiteHttp, String> = BoiteHttp::depuis_daemon_json;
+        let d = tempfile::tempdir().unwrap();
+        let fiche = crate::daemon_lifecycle::DaemonFile {
+            address: "fixture.invalid:7970".into(), pid: 42,
+            token: "jeton-fixture".into(), build: "fixture".into(), started_at: 0,
+        };
+        std::fs::write(d.path().join("daemon.json"), serde_json::to_vec(&fiche).unwrap()).unwrap();
+        let boite = BoiteHttp::depuis_fiche(crate::daemon_lifecycle::read_in(d.path()), Duration::from_secs(1)).unwrap();
+        assert_eq!(boite.base, "http://fixture.invalid:7970");
+        assert_eq!(boite.token.as_deref(), Some("jeton-fixture"));
+        assert!(!format!("{boite:?}").contains("jeton-fixture"));
+        assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn decouverte_fiche_absente_refuse_sans_creation() {
+        let d = tempfile::tempdir().unwrap();
+        let erreur = BoiteHttp::depuis_fiche(crate::daemon_lifecycle::read_in(d.path()), Duration::from_secs(1)).unwrap_err();
+        assert_eq!(erreur, "aucun hôte connu (daemon.json absent) : la boîte est injoignable");
+        assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn decouverte_fiche_corrompue_ou_sans_jeton_refuse_sans_reparation() {
+        let d = tempfile::tempdir().unwrap();
+        let fichier = d.path().join("daemon.json");
+        for contenu in ["{", r#"{"address":"fixture.invalid:7970","pid":42,"build":"fixture"}"#] {
+            std::fs::write(&fichier, contenu).unwrap();
+            assert!(BoiteHttp::depuis_fiche(crate::daemon_lifecycle::read_in(d.path()), Duration::from_secs(1)).is_err());
+            assert_eq!(std::fs::read_to_string(&fichier).unwrap(), contenu);
+            assert_eq!(std::fs::read_dir(d.path()).unwrap().count(), 1);
+        }
+    }
 
     #[derive(Default)]
     pub struct FausseBoite {
