@@ -2,7 +2,7 @@
 """One bounded F8/large/NAV qualification through the guarded entry points."""
 from pathlib import Path
 import hashlib,json,mmap,os,re,shutil,signal,subprocess,sys,time,tempfile,importlib.util,stat,traceback
-R=Path('/home/lucied/.cache/rag3weaver-build');Q=Path(__file__).parent;W=R/'cx-wt-recherche-garde-target-union-r2';C=W/'extension/rag3weaver';T=R/'cx-target-garde-target-qualification-v1';P=R/'cx-validation-garde-target-union-v1'
+R=Path('/home/lucied/.cache/rag3weaver-build');Q=Path(__file__).parent;W=R/'cx-wt-recherche-garde-target-union-r2';C=W/'extension/rag3weaver';T=R/'cx-target-garde-target-qualification-v1';P=R/'cx-validation-garde-target-union-v1';S=R/'cx-confinement-garde-target-union-v1'
 PROVENANCE=json.loads((Q/'provenance.json').read_text());APP=PROVENANCE['app'];PILOT=PROVENANCE['pilot'];CONTROL=Path(PROVENANCE['control'])
 assert APP=='9ec421069320b2f0cca4099fa27f83059e944de9'
 AUTH_PATH=Path(os.environ['RAG3WEAVER_VALIDATION_RECU']);AUTH=json.loads(AUTH_PATH.read_text());END=AUTH['echeance'];START=END-4800
@@ -81,6 +81,12 @@ def controller_role(info,ancestors,roles):
 def controller_fd_allowed(role,value,roles,protected):
  return role=='poste' and not in_cache_context(value,protected) and value==roles[role]['script']
 
+def build_controller_policy(launcher,poste,pyexe,shellexe,uid,pilot,scope,proofs,sha):
+ return {
+  'launcher':dict(uid=uid,exe=pyexe,exe_sha256=sha(pyexe),cwd='/var/tmp',script=str(launcher),script_sha256=sha(launcher),argv_tail=[str(launcher),pilot]),
+  'poste':dict(uid=uid,exe=shellexe,exe_sha256=sha(shellexe),cwd='/var/tmp',script=str(poste),script_sha256=sha(poste),argv_tail=[str(poste),'lourd','python3',str(proofs/'confiner_validation.py'),'lancer','--delai','4800','--preuves',str(scope),'--','python3',str(proofs/'driver.py')]),
+ }
+
 def fresh_cache_guard():
  # Called after actual poste admission, immediately before the real common guard.
  subprocess.run(['python3',str(Q/'confiner_validation.py'),'verifier'],env=os.environ.copy(),check=True,stdout=subprocess.DEVNULL)
@@ -112,11 +118,8 @@ def fresh_cache_guard():
  launcher_blob=subprocess.check_output(['git','-C',str(CONTROL),'show',PILOT+':docs/recherche/13-11-2026/garde-target-union/lancer.py'])
  poste_blob=subprocess.check_output(['git','-C',str(W),'show',APP+':extension/rag3weaver/scripts/poste'])
  require(digest(launcher)==hashlib.sha256(launcher_blob).hexdigest() and digest(poste)==hashlib.sha256(poste_blob).hexdigest(),'controller script source changed')
- pyexe=str(Path(sys.executable).resolve());bashexe=str(Path('/bin/bash').resolve())
- roles={
-  'launcher':dict(uid=os.getuid(),exe=pyexe,exe_sha256=digest(pyexe),cwd='/var/tmp',script=str(launcher),script_sha256=digest(launcher),argv_tail=[str(launcher),PILOT]),
-  'poste':dict(uid=os.getuid(),exe=bashexe,exe_sha256=digest(bashexe),cwd='/var/tmp',script=str(poste),script_sha256=digest(poste),argv_tail=[str(poste),'lourd','python3',str(Q/'confiner_validation.py'),'lancer','--delai','4800','--preuves',str(S),'--','python3',str(Q/'driver.py')]),
- }
+ pyexe=str(Path(sys.executable).resolve());shellexe=str(Path('/bin/sh').resolve())
+ roles=build_controller_policy(launcher,poste,pyexe,shellexe,os.getuid(),PILOT,S,Q,digest)
  for proc in Path('/proc').iterdir():
   if not proc.name.isdigit() or int(proc.name)==os.getpid():continue
   stamp=None;attributed=False;role=None;field='stat'
