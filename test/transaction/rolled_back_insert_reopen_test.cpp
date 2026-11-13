@@ -179,4 +179,30 @@ TEST_F(RolledBackInsertReopenTest, ASetOnRelsCopiedInTheSameTransaction) {
     run("COMMIT;");
 }
 
+// La forme exacte du paquet défait de rag3weaver (trace d'arbre principal, 13 novembre) : dans la
+// transaction défaite, des Scope neufs par COPY, des Content neufs par MERGE, et leurs relations
+// par MERGE avec SET, puis un SET sur ces relations ; ROLLBACK, fermeture. Après réouverture, la
+// transaction suivante refait les mêmes Scope par MERGE — ils reprennent les places des Scope
+// défaits — puis le SET sur les relations qui les joignent : il n'y en a aucune.
+TEST_F(RolledBackInsertReopenTest, ScopesCopiedInARolledBackTransactionLeaveNoRelAtTheirPlaces) {
+    run("BEGIN TRANSACTION;");
+    run("COPY Scope FROM (UNWIND range(10, 41) AS i RETURN 'n' + CAST(i AS STRING) AS uuid);");
+    run("UNWIND range(128, 159) AS i MERGE (c:Content {uuid: 'c' + CAST(i AS STRING)}) SET c.body "
+        "= 'b';");
+    run("UNWIND range(128, 159) AS i MATCH (a:Content {uuid: 'c' + CAST(i AS STRING)}) MATCH "
+        "(b:Scope {uuid: 'n' + CAST(i - 118 AS STRING)}) MERGE (a)-[r:DERIVED_FROM]->(b) SET "
+        "r.hash = 'h';");
+    run("UNWIND range(10, 41) AS i MATCH (d:Content)-[r:DERIVED_FROM]->(s:Scope {uuid: 'n' + "
+        "CAST(i AS STRING)}) SET r.hash = '';");
+    run("ROLLBACK;");
+    reopen();
+    run("BEGIN TRANSACTION;");
+    run("UNWIND range(10, 41) AS i MERGE (s:Scope {uuid: 'n' + CAST(i AS STRING)});");
+    EXPECT_EQ(row("UNWIND range(10, 41) AS i MATCH (d:Content)-[r:DERIVED_FROM]->(s:Scope {uuid: "
+                  "'n' + CAST(i AS STRING)}) SET r.hash = '' RETURN count(r);"),
+        "0\n");
+    run("COMMIT;");
+    EXPECT_EQ(row("MATCH (:Content)-[r:DERIVED_FROM]->(:Scope) RETURN count(r);"), "128\n");
+}
+
 } // namespace
