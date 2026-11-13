@@ -1,5 +1,5 @@
 """Cinq ciblés, module inventorié, frontières canoniques ; premier rouge arrêt."""
-import hashlib, json, math, os, pathlib, re, subprocess, sys, time
+import hashlib, json, math, mmap, os, pathlib, re, shutil, subprocess, sys, time
 
 FEATURES = 'rag3db-native,code,daemon'
 MODULE = 'daemon_host::atelier_fichiers::'
@@ -46,8 +46,11 @@ def main():
                                   features=FEATURES, sdk=SDK, submodules=git('submodule', 'status', '--recursive')))
     (p / 'memory-before').write_text((cg / 'memory.events').read_text())
     assert not t.exists()
-    env = dict(os.environ)
-    old_ld = env.get('LD_LIBRARY_PATH')
+    allowed = ('HOME', 'USER', 'LOGNAME', 'PATH', 'LANG', 'LC_ALL',
+               'RAG3WEAVER_VALIDATION_RECU', 'RAG3WEAVER_VALIDATION_JETON',
+               'RAG3WEAVER_VERROU_TENU', 'RAG3WEAVER_BUILD_MEMORY_HIGH', 'DBUS_SESSION_BUS_ADDRESS')
+    env = {k: os.environ[k] for k in allowed if k in os.environ}
+    old_ld = None
     for name, sub in [('TMPDIR', 'tmp'), ('XDG_CACHE_HOME', 'cache'), ('XDG_CONFIG_HOME', 'config'),
                       ('XDG_DATA_HOME', 'data'), ('XDG_STATE_HOME', 'state'), ('RAG3WEAVER_STATE_DIR', 'state'),
                       ('RAG3WEAVER_JOURNAUX_DIR', 'commandes'), ('RAG3WEAVER_RUNS_DIR', 'runs'),
@@ -65,10 +68,22 @@ def main():
     # Export natif unique dans ce profil ; pas de deuxième EXPORT autour des ELF.
     script = '. scripts/garde_target.sh; garder_le_target "$CARGO_TARGET_DIR" "$PWD" || exit; . scripts/lib_du_magasin.sh; exporter_la_lib || exit; exec python3 -c "import os,json; print(json.dumps(dict(os.environ)))"'
     env = json.loads(subprocess.check_output(['bash', '-c', script], cwd=crate, env=env, text=True, timeout=max(1, min(60, math.floor(deadline-time.monotonic()-60)))))
-    write(p / 'profil.json', {k: v for k, v in env.items() if k.startswith(('RAG3', 'CARGO_', 'XDG_')) or k in ('LD_LIBRARY_PATH', 'TMPDIR')})
+    write(p / 'profil.json', {k: v for k, v in env.items() if k != 'RAG3WEAVER_VALIDATION_JETON' and (k.startswith(('RAG3', 'CARGO_', 'XDG_')) or k in ('LD_LIBRARY_PATH', 'TMPDIR'))})
     sdk_so = pathlib.Path(env['RAG3DB_LIBRARY_DIR']) / 'librag3db.so'
     assert sdk_so.parent.name == SDK
     write(p / 'sdk.json', dict(path=str(sdk_so), sha256=sha(sdk_so)))
+    def red_signal(label):
+        files = [p / (label + '.log')]
+        if label == 'features':
+            files += list((p / 'features').glob('*.log'))
+        for path in files:
+            if not path.exists():
+                continue
+            text = path.read_text(errors='replace')
+            match = re.search(r'(?m)^test [^\n]*\.\.\. FAILED|^failures:|^CHECK_FEATURES ROUGE|^ROUGE |^error(?:\[E\d+\])?:|^thread [^\n]*panicked', text)
+            if match:
+                write(p / 'premier-rouge.json', dict(phase=label, log=str(path), signal=match.group(), observed=time.monotonic()))
+                raise RuntimeError('premier rouge observé : arrêt attribué par superviseur ; ' + str(path))
     def run(label, argv, cap, runenv=None):
         seconds = min(cap, math.floor(deadline - time.monotonic() - 60))
         assert seconds > 0, 'budget global épuisé'
@@ -86,9 +101,11 @@ def main():
                         maps[str(proc.pid)] = content
                 except (FileNotFoundError, ProcessLookupError):
                     pass
+                red_signal(label)
                 time.sleep(.05)
             record.update(rc=proc.returncode, elapsed_s=time.monotonic() - started)
         write(p / 'phases.json', rows)
+        red_signal(label)
         assert record['rc'] == 0, label + ' rouge'
         return (p / (label + '.log')).read_text()
     run('compilation', ['ionice', '-c', '3', 'nice', '-n', '15', 'cargo', 'test', '--locked', '--lib', '--no-default-features', '--features', FEATURES,
@@ -106,6 +123,12 @@ def main():
     elf = pathlib.Path(item['executable']).resolve(strict=True)
     assert elf.is_relative_to(t.resolve())
     assert sorted(item['features']) == sorted(FEATURES.split(',')), item['features']
+    archived = p / 'binaire-lib'
+    shutil.copy2(elf, archived)
+    assert sha(archived) == sha(elf)
+    with archived.open('rb') as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as data:
+        source_offset = data.find(source[:9].encode())
+    assert source_offset >= 0, 'source embarquée absente du véritable ELF'
     listing = run('inventaire-module', [str(elf), MODULE, '--list', '--format', 'terse'], 30)
     ignored = run('inventaire-ignores', [str(elf), MODULE, '--list', '--ignored', '--format', 'terse'], 30)
     names = [l.removesuffix(': test') for l in listing.splitlines() if l.endswith(': test')]
@@ -119,18 +142,18 @@ def main():
     assert set(ignores) == expected_ignores, 'ignorés inattendus'
     assert set(PREFIX + n for n in JUGES) <= set(names) - set(ignores)
     # Publication hors source AVANT la première exécution d’un juge.
-    ledger = dict(source=source, features=item['features'], executable=str(elf), sha256=sha(elf),
+    ledger = dict(source=source, features=item['features'], executable=str(elf), copy=str(archived), source_offset=source_offset, sha256=sha(archived),
                   inventory=names, ignored=ignores, compiler_artifact=item, sdk_sha256=sha(sdk_so), before_runtime=time.monotonic())
     write(p / 'ledger-avant-runtime.json', ledger)
     def results(text, expected, nignore):
         matches = re.findall(r'test result: ok\. (\d+) passed; (\d+) failed; (\d+) ignored;', text)
         assert matches and tuple(map(int, matches[-1])) == (expected, 0, nignore), matches
     for i, name in enumerate(JUGES):
-        results(run(f'cible-{i+1}', [str(elf), PREFIX + name, '--exact', '--show-output', '--test-threads=1'], 120), 1, 0)
-    output = run('module', [str(elf), MODULE, '--show-output', '--test-threads=8'], 600)
+        results(run(f'cible-{i+1}', [str(elf), PREFIX + name, '--exact', '--nocapture', '--test-threads=1'], 120), 1, 0)
+    output = run('module', [str(elf), MODULE, '--nocapture', '--test-threads=8'], 600)
     results(output, len(names) - len(ignores), len(ignores))
-    for name in names:
-        assert re.search(r'^test ' + re.escape(name) + r' \.\.\. (ok|ignored[^\n]*)$', output, re.M), name
+    # --nocapture peut entrelacer les lignes par nom ; l'inventaire exact et
+    # les comptes libtest font foi, sans reconstruire des statuts par ligne.
     assert maps, 'aucune observation SDK29 runtime'
     for pid, content in maps.items():
         (p / f'maps-{pid}.txt').write_text(content)
@@ -142,10 +165,14 @@ def main():
         checkenv['LD_LIBRARY_PATH'] = old_ld
     text = run('features', ['ionice', '-c', '3', 'nice', '-n', '15', 'bash', 'scripts/check_features.sh'], 1800, checkenv)
     assert text.splitlines()[-1] == 'CHECK_FEATURES VERT 8/8'
-    assert sha(elf) == ledger['sha256']
+    assert sha(archived) == ledger['sha256']
+    original_present = elf.exists()
+    if original_present:
+        assert sha(elf) == ledger['sha256']
+    write(p / 'elf-apres-features.json', dict(original_present=original_present, pruned=not original_present, copy_sha256=sha(archived)))
     propre()
     (p / 'memory-after').write_text((cg / 'memory.events').read_text())
-    write(p / 'runtime.json', dict(verdict='VERT', source=source, elf_sha256=sha(elf), finished=time.monotonic(), deadline=deadline))
+    write(p / 'runtime.json', dict(verdict='VERT', source=source, elf_sha256=sha(archived), finished=time.monotonic(), deadline=deadline))
 
 
 if __name__ == '__main__':

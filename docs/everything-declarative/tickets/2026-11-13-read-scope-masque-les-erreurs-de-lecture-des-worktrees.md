@@ -138,3 +138,8 @@ Pilotes concrets publiés dans read-scope/ : appelants hors WT, CWD crate
 explicite pour Cargo/ELF, magasin SDK explicite, ledger et inventaires
 avant juges, check_features canonique 8/8, verdict composé sans retrait.
 Préparation seulement ; revue et GO C7 exact avant toute exécution lourde.
+
+Revue C7 pilote6a2 : GO suspendu avant runtime ; corrections de préparation
+publiées : UNKNOWN externes séparés des owned/scope/contexte, copie ELF hors
+target et source embarquée avant tests, environnement par liste blanche,
+surveillance active premier rouge/--nocapture. Aucun Cargo/runtime joué.

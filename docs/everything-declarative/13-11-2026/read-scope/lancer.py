@@ -15,7 +15,10 @@ def main():
     assert not p.exists() and not t.exists(), 'pas de reprise aveugle'
     p.mkdir(mode=0o700)
     here = w / 'docs/everything-declarative/13-11-2026/read-scope'
-    env = dict(os.environ, POSTE_MEM_MAX='32G')
+    allowed = ('HOME', 'USER', 'LOGNAME', 'LANG', 'LC_ALL',
+               'RAG3WEAVER_VALIDATION_RECU', 'RAG3WEAVER_VALIDATION_JETON')
+    env = {k: os.environ[k] for k in allowed if k in os.environ}
+    env.update(PATH=str(pathlib.Path.home() / '.cargo/bin') + ':/usr/local/bin:/usr/bin:/bin', POSTE_MEM_MAX='32G')
     cmd = [sys.executable, str(w / 'extension/rag3weaver/scripts/confiner_validation.py'),
            'lancer', '--mode', 'mesure', '--delai', '6000', '--preuves', str(p / 'supervision'),
            '--', sys.executable, str(here / 'driver.py'), str(w), source, str(p), str(t)]
