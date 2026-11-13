@@ -213,3 +213,7 @@ Pas de reprise-cach69 répétée : gardeuniondéjàrepriseprouvée.
 ## Sonde seule et reprise proposée
 
 Voir [rapport17](../13-11-2026/17-sonde-cargo-et-reprise-bornee.md) : observation Cargo seule validée, rougeF8 inchangé ; correctif pilote distinct, cacheunion repris sans réinvalidation, même échéance originale. Reprise NON lancée, décision GO exact à C7.
+
+## Préparation capture stable après rouge v2
+
+ArbitrageC7 autorise réemploi F8/builds/ledger, aucun Cargo/rebuild/cache à rejouer. [Recette20](../13-11-2026/20-recette-union-capture-stable.md), pilote distinct : capture GDB mêmeinferior helper→ELF/exec puismainSDKchargé, cleanup sans qualification/firstredimmuable. Runtime manquant seulement ; NONLANCÉ, RO/GOexact encore requis, même échéanceoriginale.
