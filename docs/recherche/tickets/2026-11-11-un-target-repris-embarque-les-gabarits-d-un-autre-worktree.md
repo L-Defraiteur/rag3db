@@ -124,3 +124,13 @@ finale. Nouveau dixième juge CPU sur cette branche, avant correction ; faux
 Cargo uniquement. Qualification/pilote non lancés, ancien avis préparatoire
 ne vaut pas validation de cette frontière. Transmettre les restrictions à
 la primitive commune sans modifier les arguments finaux ni l'export SDK.
+
+## Arrêt du pilote dédié AVANT correction de profil
+
+GO698/bdff : préparation10CPU/toy8/journaux7/compilation/223gabarits ELFcontreGit
+verte ; modulebuiltin8/1/0, juge state sousXDG_STATE_HOME refuse car pilote
+fixe deux racines égales. Diagnostic source+panic663, pas défaut produitgarde
+établi. STOP sans retry,252 fichiers SHA identiques deux postes, scopeROUGE
+code1/restes[]/busabsent et quiescence vide. [Rapport05](../13-11-2026/05-arret-qualification-garde-target.md).
+Préparer pilote à deux racines siblings et runtime manquant seulement sur
+ELF figé, mêmeSTART/END ; nouveau couple/RO/GO avant toute exécution.
