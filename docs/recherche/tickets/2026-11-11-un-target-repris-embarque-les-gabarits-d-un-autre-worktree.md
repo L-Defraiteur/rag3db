@@ -154,3 +154,16 @@ cfg(test) sur hôte HTTP privé qui compare app.js/app.css SERVIS aux fichiers
 courants du worktree ; le pilote comparera ces SHA aux blobs du commit.
 Ce témoin est une preuve du critère initial, aucune API de service ajoutée.
 Préparation seule, recette/couple source figés et revue avant nouveau GO lourd.
+
+## Couple union et qualification plus large préparés
+
+APP9ec421069320b2f0cca4099fa27f83059e944de9 sur base masterdb687,
+produit exactement3b259cfgtestHTTP (overlaygarde698+2aD17, audits13/14patcheségaux).
+[Recette09](../13-11-2026/09-recette-union-garde-target.md), pilote distinct :
+4800 uniques/capsC7/F8canonique+liblarge+NAV40+223Git/2corpsHTTP vsGit.
+Ciblés10CPU/toy8/journaux7/builtin9 acquis non rejoués séparément. Cacheprivé
+698 déjà attribué, reprise réelle par garde commune REPRENDRE1, pas purge.
+SDK29pool1G/CPU4/étatssiblings ; capturemain GDBdétachée AVANT juges +waitpid
+réel reprend primitives64abd documentées/hachées. AST7/PythonGDB/rustfmtparse
+et407tickets/diffcheck seuls ; zéroCargo/rustc/NAV/service/targetmuté.
+Aucun GO d'exécution, nouveau couple exact à relire et créneau à donner C7.
