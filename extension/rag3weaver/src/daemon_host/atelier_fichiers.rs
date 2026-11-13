@@ -511,17 +511,7 @@ impl DaemonHost {
                 }
                 let v = self.with_backend(&w.hosted, |b| b.call_humain("edit_file", args)).and_then(|x| x)?;
                 let rendu = v["presentation"].as_str().or_else(|| v["result"].as_str()).unwrap_or_default().to_string();
-                // Ce que l'édition du dépôt dit de son index (le rendu de `EditResult`).
-                let index = if let Some(reste) = rendu.split("Index updated: ").nth(1) {
-                    let n = |mot: &str| reste.split(mot).next().and_then(|x| x.rsplit(|c: char| !c.is_ascii_digit()).find(|m| !m.is_empty())).unwrap_or("0").to_string();
-                    format!("réindexé ({} scope(s) écrits, {} retirés)", n(" scopes upserted"), n(" removed"))
-                } else if rendu.contains("index will pick it up") || rendu.contains("indexing in progress will read it") {
-                    "un index tourne : il prendra ce fichier".to_string()
-                } else if let Some(e) = rendu.split("the index did not follow (").nth(1) {
-                    format!("sa réindexation n'a pas suivi ({})", e.split(") —").next().unwrap_or(e))
-                } else {
-                    "sans index".to_string()
-                };
+                let index = etat_de_la_reindexation(&rendu);
                 dit.push(format!("écrit dans le dépôt {} ; {index}", w.nom()));
             }
             None => {
@@ -530,6 +520,20 @@ impl DaemonHost {
             }
         }
         Ok(format!("{}\n{}", dit.join("\n"), diff_unifie(&r.chemin.display().to_string(), &avant, &apres)))
+    }
+}
+
+/// **Ce que l'édition d'un dépôt dit de son index** (le rendu de `EditResult::to_markdown`).
+fn etat_de_la_reindexation(rendu: &str) -> String {
+    if let Some(reste) = rendu.split("Index updated: ").nth(1) {
+        let n = |mot: &str| reste.split(mot).next().and_then(|x| x.rsplit(|c: char| !c.is_ascii_digit()).find(|m| !m.is_empty())).unwrap_or("0").to_string();
+        format!("réindexé ({} scope(s) écrits, {} retirés)", n(" scopes upserted"), n(" removed"))
+    } else if rendu.contains("index will pick it up") || rendu.contains("indexing in progress will read it") {
+        "un index tourne : il prendra ce fichier".to_string()
+    } else if let Some(e) = rendu.split("the index did not follow (").nth(1) {
+        format!("sa réindexation n'a pas suivi ({})", e.split(") —").next().unwrap_or(e))
+    } else {
+        "sans index".to_string()
     }
 }
 
@@ -844,6 +848,94 @@ pub(super) mod tests {
         let dit = match &r { Ok(v) => Atelier::texte(v), Err(e) => e.clone() };
         assert!(dit.contains("a changé depuis sa lecture"), "refusé en le disant : {dit}");
         assert_eq!(std::fs::read_to_string(&f).unwrap(), "changé ailleurs\n", "le changement fait ailleurs reste");
+    }
+
+    /// **Une réindexation en échec se dit en échec** (ticket d'ED,
+    /// `2026-11-13-une-reindexation-de-l-atelier-en-echec-se-dit-reussie.md`) : le compte
+    /// d'échecs du rendu de `EditResult` se lit et se dit ; un rendu non reconnu se dit tel,
+    /// au lieu de « sans index ».
+    #[test]
+    fn a_failed_reindex_says_it_failed() {
+        let dit = super::etat_de_la_reindexation("**src/a.rs** edited (3 → 4 lines, abcdef012345)\nIndex updated: 3 scopes upserted, 1 removed, 7 relations, 2 failed");
+        assert!(dit.contains("2 en échec"), "le compte d'échecs est dit : {dit}");
+        let dit = super::etat_de_la_reindexation("**src/a.rs** edited (3 → 4 lines, abcdef012345)\nIndex updated: 3 scopes upserted, 1 removed, 7 relations");
+        assert!(dit.contains("réindexé") && !dit.contains("échec"), "{dit}");
+        let dit = super::etat_de_la_reindexation("quelque chose d'inattendu");
+        assert!(dit.contains("rendu non reconnu"), "un rendu non reconnu se dit tel : {dit}");
+    }
+
+    /// **Une carte décidée pendant son propre tour relance après lui** (ticket d'ED,
+    /// `2026-11-13-la-relance-d-une-carte-de-l-atelier-se-dit-partie-quand-le-tour-la-refuse.md`) :
+    /// le tour qui a posé la carte n'est pas fini quand l'utilisatrice accorde ; la décision
+    /// doit arriver au modèle au tour suivant, une fois celui-là fini, au lieu d'être perdue sur
+    /// « un tour est déjà en cours ».
+    #[test]
+    fn a_card_decided_during_its_own_turn_relaunches_after_it() {
+        use crate::llm::{CallbackLlm, Turn};
+        let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            Ok(Arc::new(CallbackLlm::new("faux-atelier", 8192, move |turns: &[Turn], opts, sink| {
+                let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
+                let message = turns[depuis].content.clone();
+                let fait = turns[depuis..].iter().any(|t| t.role == "tool");
+                let commande = match message.strip_prefix("lance ") {
+                    Some(c) => Some(c.to_string()),
+                    None if message.contains("est accordée : relance-la") => message.split('`').nth(1).map(str::to_string),
+                    None => None,
+                };
+                match commande.filter(|_| !fait) {
+                    Some(c) => MockLlm::new("").with_tool_calls(vec![("run_command".to_string(), json!({ "command": c }).to_string())]).generate(turns, opts, sink),
+                    None => {
+                        // La réponse du premier tour tarde : la carte se décide pendant ce temps.
+                        if message.starts_with("lance ") {
+                            std::thread::sleep(std::time::Duration::from_millis(1500));
+                        }
+                        MockLlm::new("fait").generate(turns, opts, sink)
+                    }
+                }
+            })))
+        });
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier_avec(d.path(), model);
+        let (host, id_backend) = (a.host.clone(), a.h.id.clone());
+        let premier = std::thread::spawn(move || host.chat_turn(&id_backend, "lance mkdir faits"));
+        let debut = std::time::Instant::now();
+        let id = loop {
+            let trouve = a.host.accords.lock().unwrap().demandes.iter().find(|(_, d)| d.commande.as_deref() == Some("mkdir faits")).map(|(k, _)| k.clone());
+            if let Some(id) = trouve {
+                break id;
+            }
+            assert!(debut.elapsed() < std::time::Duration::from_secs(20), "la carte n'est pas posée");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        };
+        assert!(!premier.is_finished(), "la carte se décide pendant le tour qui l'a posée");
+        a.host.decider_accord(&id, true, "le témoin").expect("accorder");
+        premier.join().unwrap().expect("le premier tour");
+        let debut = std::time::Instant::now();
+        while !a.racine.join("faits").is_dir() {
+            assert!(debut.elapsed() < std::time::Duration::from_secs(20), "la décision n'est jamais arrivée au modèle : {:#}", a.host.chat_state(&a.h.id).unwrap()["turns"]);
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
+
+    /// **Un journal des décisions en échec n'ouvre aucun accord** (le même ticket) : la décision
+    /// s'écrit avant d'ouvrir le chemin ; si elle ne peut pas s'écrire, ni accord en vigueur, ni
+    /// `Ok`.
+    #[test]
+    fn a_decision_that_cannot_be_journaled_opens_nothing() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let dehors = d.path().join("dehors");
+        std::fs::create_dir_all(&dehors).unwrap();
+        std::fs::write(dehors.join("note.txt"), "la note\n").unwrap();
+        let carte = a.appeler("ask_permission", json!({ "path": dehors.join("note.txt"), "mode": "read", "reason": "lire la note" })).expect("ask_permission");
+        let id = carte["ui"][0]["id"].as_str().map(str::to_string).or_else(|| a.host.accords.lock().unwrap().demandes.keys().next().cloned()).expect("une demande");
+        // Le journal ne peut pas s'écrire : un dossier à sa place.
+        std::fs::create_dir_all(d.path().join("runs/decisions.jsonl")).unwrap();
+        let r = a.host.decider_accord(&id, true, "le témoin");
+        assert!(r.is_err(), "pas d'Ok sans journal : {r:?}");
+        let lu = a.appeler("read_file", json!({ "path": dehors.join("note.txt") }));
+        let dit = match &lu { Ok(v) => Atelier::texte(v), Err(e) => e.clone() };
+        assert!(dit.contains("hors de la racine") && !dit.contains("la note"), "aucun accord en vigueur : {dit}");
     }
 
     /// **`read_file` dans l'atelier** : jamais plus de 200 lignes d'un coup (Lucie), la
