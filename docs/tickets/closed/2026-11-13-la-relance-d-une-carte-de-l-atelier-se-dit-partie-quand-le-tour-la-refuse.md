@@ -1,6 +1,8 @@
 # La relance d'une carte de l'atelier se dit partie quand le tour la refuse, et la décision se perd
 
-- **État** : ouvert (13 novembre 2026), pour archi.
+- **État** : corrigé (13 novembre 2026, branche atelier-dire-vrai, archi). Témoins
+  `a_failed_reindex_says_it_failed`, `a_card_decided_during_its_own_turn_relaunches_after_it` et
+  `a_decision_that_cannot_be_journaled_opens_nothing`, rouges puis verts.
 - **Famille** : produit
 - **Gravité** : réponse fausse — l'IDE reçoit `relance: true`, le modèle n'apprend jamais la décision de l'utilisatrice
 - **Atteignable en service** : oui, dès qu'une carte (accord, commande, chemin) est décidée pendant que le tour qui l'a posée tourne encore
