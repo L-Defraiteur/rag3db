@@ -1,7 +1,7 @@
 # Le contrat de la version de scope (lot 1a des vues)
 
-13 novembre 2026, arbre principal, à la demande de c7. Page à relire par ED et recherche avant toute
-ligne de Rust. Les références de code sont celles d'`origin/master` d59e99ed7, relativement à
+13 novembre 2026, arbre principal, à la demande de c7. Relue par ED et recherche le 13 novembre ; leurs
+points sont reportés ci-dessous. Les références de code sont celles d'`origin/master` d59e99ed7, relativement à
 `extension/rag3weaver/`. Rien n'a été compilé ni joué pour l'écrire.
 
 ## Ce qui existe déjà, et ce qui manque
@@ -48,9 +48,14 @@ README le dit : les gabarits de code de production n'activent pas l'option. C'es
 - **Aucune normalisation** au départ : les octets sont gardés. Les surlignages (offsets lucivy)
   restent justes, et la recherche refuse un rendu qui exigerait un remappage
   (`src/search.rs:1555-1560`).
-- **Question pour la relecture** : faut-il rendre aussi `parent_name` ? Deux méthodes
-  identiques de deux classes partageraient sinon une version. C'est voulu pour l'embarquement, mais
-  le titre affiché viendrait de l'occurrence, pas de la version.
+- **`parent_name` n'entre pas** (ED, c7 et recherche, 13 novembre) : il ne s'embarque pas, c'est
+  de la position. Deux méthodes identiques de deux classes partagent une version, et c'est tout le
+  gain (accesseurs, `impl Trait for A` et `for B`). Le titre et le parent affichés viennent de
+  l'occurrence. La règle (recherche) : l'adresse est l'empreinte exacte des champs rendus, et aucun
+  champ rendu n'est hors de l'adresse.
+- **`signature`, `scope_type` et `language` sont rendus par choix**, pas parce qu'ils s'embarquent
+  (la signature n'est plus un champ de contenu depuis le 6 septembre). C'est plus strict que
+  nécessaire, dans le sens sûr : jamais un partage faux, au pire une version de trop (ED).
 
 ## 2. Ce qu'une occurrence référence
 
@@ -62,7 +67,10 @@ README le dit : les gabarits de code de production n'activent pas l'option. C'es
   la relation, `derive_nodes.rs:326-330`). Aucune relation `OF_VERSION` en plus : la conception du
   8 novembre la proposait, la composition existante la rend inutile.
 - **Une édition** repointe la référence de cette occurrence seule, dans la transaction de
-  l'ingestion. Les autres occurrences gardent leur version.
+  l'ingestion. Les autres occurrences gardent leur version, et l'ancienne version garde leurs
+  références (ED).
+- **Une version sans occurrence visible ne sort jamais d'une recherche** : une orpheline n'a rien à
+  projeter. Témoin : supprimer la seule occurrence, la recherche ne rend rien (ED).
 - **Les relations restent sur les occurrences.** Une version ne porte aucune analyse : un scope
   inchangé peut changer de comportement, on réutilise son embarquement, jamais ses arêtes.
 - **Les versions orphelines restent** : aucun ramasse-miettes dans ce lot. La politique attend la
@@ -78,9 +86,14 @@ README le dit : les gabarits de code de production n'activent pas l'option. C'es
   un cache global de textes.
 - **Les signaux** :
   - dense et BM25 sont prouvés par le test ;
-  - **le creux ne l'est pas**. Le lot doit le prouver sur `ScopeContent` (un témoin creux, comme
-    les deux autres) ou le refuser en le disant. Il ne doit jamais retomber en silence sur un
-    index vide.
+  - **le creux est refusé, en le disant** (recherche, 13 novembre). Le profil de production ne
+    le déclare pas (`Scope` prend HYBRID), aucun manifeste réel ne le demande (seul le README du
+    gabarit décrit `index_signals`), et 1b le refuse déjà. Le refus est générique : une entité de
+    contenu (`identity.mode = content`) qui déclare le creux est refusée à l'enregistrement, avant
+    toute table, avec un message qui nomme l'entité et le signal. Une base d'avant garde son creux
+    si son manifeste le demandait.
+  - `workspace.index_signals` sur `Scope` monte, sur une base à versions, sur `ScopeContent` :
+    c'est lui qui porte les signaux.
 - **La recherche publique reste sur `Scope`**, par `searchIndex`. Une recherche directe sur
   `ScopeContent` est refusée (`src/read_view.rs:213-218`). Les outils (`search_code`, `usages`,
   `outline`) ne changent pas d'entrée ; ils rendent des occurrences avec leur chemin et leurs lignes.
@@ -95,11 +108,21 @@ s'ouvrir tant que la migration 1b n'existe pas.
 
 Je propose, à faire trancher par c7 et Lucie :
 
-- **(A, proposé) Le schéma suit la base.** Une base vide, ou neuve, reçoit le schéma à versions. Une
-  base existante (son `Scope` peuplé sans `searchIndex`) garde l'ancien schéma, ouvre comme
-  aujourd'hui, et le dit (`daemon_status`, `inspect`) : « base de code sans versions de scope, à
-  migrer (1b) ». La forme se lit sur la base elle-même ; aucun choix silencieux. Rien ne casse,
-  et 1b migre ensuite chaque base sur une copie, à son mot.
+- **(A), retenu par c7 le 13 novembre : le schéma suit la base**, par une estampille, jamais par une
+  inférence (ED).
+  - Une base neuve, sans table `Scope`, écrit d'abord `code_scope_form = code-scope-v1/content`
+    dans `_catalog_meta`, puis enregistre le schéma à versions. Un arrêt entre les deux laisse
+    l'estampille : la réouverture reprend la forme neuve.
+  - Une base sans estampille qui a déjà une table `Scope` est de la forme d'avant, **même si `Scope`
+    est vide** : une base vidée ne bascule pas en silence. Elle ouvre comme aujourd'hui et le dit,
+    dans `index_state`, donc dans `/etat` et l'IDE : « base de code sans versions de scope … à
+    migrer (1b) ».
+  - Le manifeste est le même pour les deux formes : la montée des gabarits (M8) ne les traite pas
+    comme un changement de manifeste.
+  - 1b se jugera sur l'estampille posée après la migration.
+  - Une limite connue : un binaire d'avant 1a qui ouvre une base estampillée la refuse si son `Scope`
+    est peuplé (la garde de `searchIndex`), mais ne lit pas l'estampille. Une base estampillée
+    vide reprendrait sa forme d'avant. Le retour de courant n'est pas pris en charge.
 - **(B) 1a et 1b ensemble.** Le schéma neuf par défaut n'atterrit qu'avec la migration. Le lot est
   plus gros, et l'économie n'arrive qu'avec lui.
 - **(C) Une option du manifeste**, désactivée par défaut. C'est le plus sûr, mais un nouvel index
@@ -135,9 +158,16 @@ et le ticket parent (`docs/arbre-principal/tickets/2026-11-12-migrer-les-ancres-
 4. **Le creux** : prouvé sur `ScopeContent`, ou refusé en le disant (§ 3).
 5. **Les outils** : `search_code`, `usages` et `outline` rendent les mêmes occurrences sur une
    petite base, avant et après. Les e2e `e2e_code`, `e2e_code_sync` et `e2e_scope_versions` passent.
-6. **Selon la décision du § 4**, l'une ou l'autre :
-   - (A) une base existante ouvre comme avant et se dit « à migrer » ;
-   - (B ou C) son refus, ou son option, est témoigné.
+6. **La forme (A)**, en trois parties : une base neuve reçoit l'estampille et le schéma à versions ;
+   une base sans estampille, `Scope` peuplé, ouvre comme avant et se dit « à migrer » ; la même avec
+   `Scope` vide, aussi.
+7. **Les lecteurs sur les deux formes** (recherche) : les tests qui lisent `Scope_Chunk` en dur
+   (`a_reaction_pays_the_vector_debt_of_its_batch`, `e2e_code_sync`, `e2e_code`, les bancs et
+   mesures) lisent la table de la forme de leur base, et exigent au moins un morceau avant de
+   juger : aucun ne passe à vide. L'état des index denses retirés (`index_vectoriels_retires`)
+   nomme `Scope`, l'entité que l'utilisateur voit, pas `ScopeContent`.
+8. **Le creux refusé** : une entité de contenu qui déclare le creux est refusée, et aucune table
+   `ScopeContent_Chunk` n'existe après le refus.
 
 Lib `207701bb2`, 32 Gio, un target neuf. Aucune base de Lucie n'est lue ni ouverte.
 
@@ -147,3 +177,9 @@ Lib `207701bb2`, 32 Gio, un target neuf. Aucune base de Lucie n'est lue ni ouver
   suivants.
 - Le ramasse-miettes des versions (M5).
 - L'adoption du raccord physique par l'index réel, qui attend Lucie.
+
+## Pour plus tard (recherche)
+
+Le filtre dense par vue devra suivre morceau → version → occurrences, par la relation inverse de
+`DERIVED_FROM` : un résultat est dans la vue si au moins une de ses occurrences y est
+(`e2e_code.rs:1652` montre le motif d'aujourd'hui, morceau → `Scope` par `file_path`).
