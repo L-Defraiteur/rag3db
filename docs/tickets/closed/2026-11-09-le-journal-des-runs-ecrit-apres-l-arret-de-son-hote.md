@@ -1,6 +1,6 @@
 # Le journal des runs écrit encore après l'arrêt de son hôte
 
-- **État** : ouvert (9 novembre 2026, session recherche), cause relevée, correctif à écrire.
+- **État** : corrigé (13 novembre 2026, lot journal-apres-arret de la session recherche) : l'arrêt de l'hôte écrit les journaux en attente de leur grâce, attend leurs fils, et plus rien ne s'écrit après.
 - **Famille** : produit
 - **Gravité** : confort pour les tests (un TempDir à moitié effacé dans /tmp, qui est de la mémoire
   vive) ; à départager en service (un hôte arrêté dont un run finit d'écrire son journal).
@@ -43,3 +43,18 @@ L'arrêt de l'hôte (`shutdown`, et son Drop) écrit tout de suite les journaux 
 grâce et attend ses fils d'écriture ; un `TempDir` qui part après l'hôte ne voit plus rien venir.
 Témoin : un hôte de test lâché juste après la fin d'un run ne laisse rien écrire après son Drop.
 e2e_juge sort alors de la liste des résidus, prouvé par plusieurs passes propres.
+
+## Le correctif (13 novembre 2026, lot journal-apres-arret)
+
+- `JournalDesRuns` garde les runs racines finis qui attendent leur grâce, et les poignées de leurs
+  fils `journal-ecrire`. `vider()` marque le journal fermé (un événement arrivé ensuite n'écrit plus
+  rien), écrit tout de suite les journaux en attente, puis attend les fils ; un fil qui se réveille
+  après ne réécrit pas un run déjà écrit. Un fil d'écriture qui ne part pas écrit tout de suite.
+- `DaemonHost::shutdown()` appelle `vider()` après la fermeture des backends ; un `Drop` de
+  `DaemonHost` aussi (un hôte de témoin lâché sans `shutdown()`, comme e2e_juge).
+- Témoins (`src/daemon_host.rs`) : `l_arret_de_l_hote_ecrit_les_journaux_en_attente_et_rien_apres`
+  et `un_hote_qu_on_laisse_tomber_ecrit_les_journaux_en_attente_et_rien_apres`, rouges sur le
+  code d'avant (« au retour de shutdown() / du Drop, le journal du run fini juste avant est
+  écrit »), verts sur le correctif (0,9 s).
+- e2e_juge sort de la liste des résidus (`tests/e2e/suites_qui_laissent_des_residus.txt`),
+  prouvé par la passe du lot et trois rejeux d'e2e_juge propres.

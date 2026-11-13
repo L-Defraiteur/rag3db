@@ -16,8 +16,6 @@ e2e_prise_atomique
 e2e_rag3daemon
 e2e_repli_de_branche
 e2e_rouvrir
-# Intermittent (9 novembre 2026) : le journal des runs écrit après l'arrêt de son hôte.
-e2e_juge docs/recherche/tickets/2026-11-09-le-journal-des-runs-ecrit-apres-l-arret-de-son-hote.md
 
 # Intermittent : un processus tué pendant COPY ne peut plus effacer son CSV.
 e2e_tx_par_paquet_arret docs/recherche/tickets/2026-11-11-un-copy-tue-laisse-son-csv-dans-le-dossier-temporaire.md

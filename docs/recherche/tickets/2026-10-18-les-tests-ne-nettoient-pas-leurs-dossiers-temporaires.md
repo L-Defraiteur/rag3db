@@ -135,3 +135,8 @@ Aucun pour l'instant. Il faudrait :
   `closed/2026-11-08-un-backend-ecrit-encore-dans-son-dossier-apres-son-drop.md`). e2e_juge reste en
   rouge connu, une autre cause (`2026-11-09-le-journal-des-runs-ecrit-apres-l-arret-de-son-hote.md`),
   avec les cinq suites qui laissent leurs résidus à chaque passe.
+
+- **Le 13 novembre 2026** (lot journal-apres-arret) : e2e_juge sort de la liste, sa cause corrigée
+  (l'arrêt de l'hôte écrit les journaux en attente et attend leurs fils, ticket fermé
+  `closed/2026-11-09-le-journal-des-runs-ecrit-apres-l-arret-de-son-hote.md`). Restent les cinq
+  suites de dette fixe et e2e_tx_par_paquet_arret en rouge connu (le CSV d'un COPY tué).
