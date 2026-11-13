@@ -13,6 +13,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **13 nov. — Une tâche de l'équipier ne se dit plus faite à mi-chemin.**
+  Un pas qui dit ce qui reste n'est jamais une fin : le pas suivant part, la boîte le dit.
+  Une request peut déclarer ce qu'elle exige (`expects: report` ou `approval`, par l'IDE, la
+  boîte de Codex ou `mail send --expects`) : sans le report ou l'accord du superviseur, la
+  tâche le dit et attend sans appeler le modèle.
+
 - **13 nov. — Le grep situe ses matches dans les symboles.**
   `symbol_hierarchy_depth`, optionnel et à zéro par défaut, ajoute le contenant
   puis ses parents par inclusion de plages indexées, dans les outils code et atelier.

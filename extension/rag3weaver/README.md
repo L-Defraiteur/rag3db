@@ -557,6 +557,12 @@ weight and age with pinned runs. Since then:
   step is replayed after a growing delay, and the teammate stops after ten such
   steps, or at once on an exhausted daily quota. It resumes after a host
   restart, and a working teammate keeps the host from going idle.
+- **A task ends only when it is done.** A step that says what remains is not
+  the end, with or without a plan: the next step starts, and the mailbox says
+  why. A request may declare what it expects before the end (`expects:
+  "report"` or `"approval"`): without that report, or without the supervisor's
+  approval, the task says it is done without the expected deliverable and waits
+  for the mailbox.
 - **Without its backend, it still reads and edits** the task's files, and says
   so; it stops after three failed steps in a row.
 - **A task without git.** A task on a folder that no repository tracks opens
