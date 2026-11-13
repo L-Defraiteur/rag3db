@@ -2,7 +2,7 @@
 //! (lot tty-2) ; `--plain` écrit le texte brut, sans terminal riche (lot tty-1).
 //!
 //! ```text
-//! rag3weaver-tty [--plain] --depot <nom|chemin> --tache <nom> [--demande "<texte>"]
+//! rag3weaver-tty [--plain] [--theme daemon|foret] --depot <nom|chemin> --tache <nom> [--demande "<texte>"]
 //!                [--daemon-json <chemin> | --daemon-cmd "<commande>"] [--adresse hôte:port]
 //!                [--depuis <id>]
 //! ```
@@ -15,7 +15,7 @@
 //! L'hôte sur une autre machine : `--daemon-cmd "ssh luciepc cat .local/share/rag3weaver/daemon.json"`
 //! et `--adresse 127.0.0.1:17970` derrière un `ssh -L 17970:127.0.0.1:7970 luciepc`.
 
-use rag3weaver_tty::{client, endpoint::Endpoint, flux, plain, tui};
+use rag3weaver_tty::{client, endpoint::Endpoint, flux, plain, theme::Theme, tui};
 use serde_json::{json, Value};
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -33,15 +33,18 @@ struct Options {
     adresse: Option<String>,
     depuis: Option<u64>,
     plain: bool,
+    /// Le thème de la vue (`--theme`, ou `RAG3WEAVER_TTY_THEME`) ; « daemon » sans rien.
+    theme: Option<String>,
 }
 
 fn options() -> Result<Options, String> {
     let mut args = std::env::args().skip(1);
-    let mut o = Options { depot: String::new(), task: String::new(), ancien_nom: false, demande: None, daemon_json: None, daemon_cmd: None, adresse: None, depuis: None, plain: false };
+    let mut o = Options { depot: String::new(), task: String::new(), ancien_nom: false, demande: None, daemon_json: None, daemon_cmd: None, adresse: None, depuis: None, plain: false, theme: std::env::var("RAG3WEAVER_TTY_THEME").ok().filter(|v| !v.is_empty()) };
     while let Some(a) = args.next() {
         let mut valeur = || args.next().ok_or_else(|| format!("{a} attend une valeur"));
         match a.as_str() {
             "--plain" => o.plain = true,
+            "--theme" => o.theme = Some(valeur()?),
             "--depot" => o.depot = valeur()?,
             "--tache" => o.task = valeur()?,
             // Les noms du lot tty-1, lus encore un lot (docs/07-novembre-2026-tty/02, § Vocabulaire).
@@ -68,7 +71,7 @@ fn options() -> Result<Options, String> {
     Ok(o)
 }
 
-const AIDE: &str = "rag3weaver-tty [--plain] --depot <nom|chemin> --tache <nom> [--demande \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\"] [--adresse hôte:port] [--depuis <id>]";
+const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret] --depot <nom|chemin> --tache <nom> [--demande \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\"] [--adresse hôte:port] [--depuis <id>]";
 
 fn main() {
     let o = match options() {
@@ -105,7 +108,9 @@ fn lancer(o: Options) -> Result<(), String> {
     let etat = client::lire_brut(&agent, &ep, "/ide/etat")?;
     let depot = client::resoudre_depot(&etat, &o.depot)?;
     if !o.plain {
-        return tui::lancer(ep, tui::Tache { depot, task: o.task }, o.demande, o.depuis);
+        // Le thème se choisit avant d'ouvrir l'écran : un nom inconnu s'y dit.
+        let theme = Theme::par_nom(o.theme.as_deref().unwrap_or("daemon"))?;
+        return tui::lancer(ep, tui::Tache { depot, task: o.task }, o.demande, o.depuis, theme);
     }
     let backend = depot.id.clone();
     let sortie = Arc::new(Mutex::new(std::io::stdout()));
