@@ -54,7 +54,7 @@ demander(1, "initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, 
 p.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n"); p.stdin.flush()
 debut, i = time.time(), 2
 while time.time() - debut < 120:
-    r = demander(i, "tools/call", {"name": "search_code", "arguments": {"query": "where is the config parsed"}})
+    r = demander(i, "tools/call", {"name": "search_code", "arguments": {"query": "where is the config parsed", "options": {"limit": 5}}})
     texte = json.dumps(r)
     if "parse_config" in texte:
         print(texte[:2000]); p.stdin.close(); p.wait(10); sys.exit(0)
