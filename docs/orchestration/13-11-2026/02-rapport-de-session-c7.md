@@ -201,3 +201,15 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   de `search_graphs`/`graph_tool` ; l'identité des commits de gabarits corrigée dans la page : neutre). ED a
   son tour (l'équipier), puis le cœur, archi, embarquement. 96 reprend l'archivage à blanc des docs sur une
   copie de la mémoire de Lucie, pour une liste à approuver par elle.
+- **17 h 52, deux atterrissages de plus.** ED 327c3bba4 (l'équipier : un step_done dont le reste n'est pas vide
+  relance le pas suivant, plan ou pas, borné à 40 pas ; `expects: report|approval` sur la request, par
+  l'IDE, la boîte de Codex et `mail send` ; sans le livrable, l'équipier attend la boîte sans appeler le
+  modèle ; e2e_equipier sur Gemini vert ; un rouge de 15 min dit et compris : un reste non vide qui ne
+  disait rien). Le cœur b5c44313e (l'annulation sous pool plein : les clés annulées retirées de l'index
+  local par leur plage de lignes au lieu de relire les clés ; ticket fermé ; ticket neuf de la saturation
+  du pool sous vingt écrivains ; DdlEveryMinute et les deux seuils VectorIndexDeleteCost en known_red avec
+  leur ticket — la suppression sous un HNSW rempli par SET non checkpointé coûte avec sa taille ; C++ seul,
+  ABI vue par l'hôte inchangée, format 43). **G bâtit la lib de b5c44313e** ; d'ici là les passes gardent
+  207701bb2 avec MOTEUR_ANCIEN=1. archi a son tour (l'écriture sûre), puis embarquement (le port 0). Trois
+  pushes de docs de ma main ont fait perdre des courses au tour de 96 : je garde mes commits de rapport
+  pour les creux entre deux pushes de code.
