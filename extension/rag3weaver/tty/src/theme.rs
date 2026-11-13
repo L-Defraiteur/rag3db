@@ -79,7 +79,13 @@ pub const SOURCE: &str = include_str!("../../templates/themes/daemon.json");
 
 /// **Les thèmes embarqués**, par nom : chacun est un fichier de
 /// `templates/themes/`, de même forme que « daemon » (l'IDE lit les mêmes).
-pub const THEMES: &[(&str, &str)] = &[("daemon", SOURCE), ("foret", include_str!("../../templates/themes/foret.json"))];
+pub const THEMES: &[(&str, &str)] = &[
+    ("daemon", SOURCE),
+    ("foret", include_str!("../../templates/themes/foret.json")),
+    ("cyberpunk", include_str!("../../templates/themes/cyberpunk.json")),
+    ("cyborg", include_str!("../../templates/themes/cyborg.json")),
+    ("alien", include_str!("../../templates/themes/alien.json")),
+];
 
 impl Theme {
     /// Le thème « daemon », embarqué.
@@ -134,6 +140,54 @@ mod tests {
         assert_eq!(fichiers, embarques, "les fichiers de templates/themes et les thèmes embarqués");
         for (nom, source) in THEMES {
             assert_eq!(*source, std::fs::read_to_string(dossier.join(format!("{nom}.json"))).unwrap(), "{nom}");
+        }
+    }
+
+    /// La luminance relative d'une couleur (WCAG 2.x).
+    fn luminance(hex: &str) -> f64 {
+        let (r, g, b) = rgb(hex).unwrap();
+        let canal = |c: u8| {
+            let c = c as f64 / 255.0;
+            if c <= 0.039_28 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+        };
+        0.2126 * canal(r) + 0.7152 * canal(g) + 0.0722 * canal(b)
+    }
+
+    /// Le contraste de deux couleurs (WCAG 2.x), de 1 à 21.
+    fn contraste(a: &str, b: &str) -> f64 {
+        let (la, lb) = (luminance(a), luminance(b));
+        (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
+    }
+
+    /// **Le contraste minimal de chaque paire texte/fond, la même règle pour
+    /// tous les thèmes** : 4,5 pour le texte et le code qui se lit (le niveau AA
+    /// du texte courant), 3 pour ce qui accompagne (la sourdine, les
+    /// commentaires, la ponctuation, le cadre des blocs). Les couleurs du halo
+    /// ne portent que des glyphes décoratifs : elles n'y entrent pas.
+    #[test]
+    fn every_theme_keeps_a_minimal_contrast_against_its_background() {
+        let accompagne = ["comment", "punctuation", "cadre"];
+        for (nom, _) in THEMES {
+            let t = Theme::par_nom(nom).unwrap();
+            let fond = &t.couleurs.fond;
+            let mut paires: Vec<(String, &String, f64)> = vec![("texte".into(), &t.couleurs.texte, 4.5), ("sourdine".into(), &t.couleurs.sourdine, 3.0)];
+            for (sorte, c) in &t.code {
+                paires.push((format!("code.{sorte}"), c, if accompagne.contains(&sorte.as_str()) { 3.0 } else { 4.5 }));
+            }
+            for (quoi, c, min) in paires {
+                let k = contraste(c, fond);
+                assert!(k >= min, "{nom} : {quoi} {c} sur {fond} fait {k:.2}, il faut {min}");
+            }
+        }
+        assert!((contraste("#ffffff", "#000000") - 21.0).abs() < 1e-9 && (contraste("#777777", "#777777") - 1.0).abs() < 1e-9);
+    }
+
+    /// **Cyberpunk, cyborg, alien** (Lucie, 13 nov. 2026, 22 h).
+    #[test]
+    fn the_cyberpunk_cyborg_and_alien_themes_are_there() {
+        for nom in ["cyberpunk", "cyborg", "alien"] {
+            let t = Theme::par_nom(nom).unwrap_or_else(|e| panic!("{e}"));
+            assert_eq!(t.nom, nom);
         }
     }
 
