@@ -96,3 +96,61 @@ vert dans la lib entière.
    sous charge. Toute ligne vue avant le COMMIT est rouge.
 2. Le témoin rag3weaver reste tel quel : il dit vrai. Il redevient vert quand le moteur ne laisse
    plus voir une transaction ouverte.
+
+## Le cœur (13-14 novembre 2026)
+
+**La capture.** Le test Rust a été rejoué sous `LD_PRELOAD` à luciepc, sur la lib `835d5298f` et
+la branche `ba12af941`. Le capteur note chaque appel de `Connection::query` et de
+`executeWithParams`, avec son heure, sa connexion, son fil, son entrée et son issue :
+`~/.cache/rag3db-moteur-notes/lecture-sale/capture-1.txt` à luciepc, capteur `capture2.cpp`.
+Trois tours, tous verts. Ce que la capture établit :
+
+- **Le lot est une seule transaction** sur la connexion de l'écrivain : BEGIN, des
+  `UNWIND … MERGE/CREATE` (aucun COPY dans ce lot), la pause, puis COMMIT. Le Scope de
+  `__pause_du_lot__.rs` naît dans le lot : le `SET` qui le cherche au début rend « OK 0 ».
+- **Chaque `usages` est une transaction READ ONLY** sur une autre connexion, qui pose trois
+  requêtes :
+  1. `Symbol {_uuid} <-DEFINES- Scope` ;
+  2. `Symbol {_uuid} <-MENTIONS- Scope` ;
+  3. un balayage de `Scope.declarations`.
+- **Le COMMIT du lot dure moins d'une milliseconde.**
+
+**Le rouge est cohérent avec deux instantanés.** Il a vu « Définitions (0) », puis l'appel `h`
+par MENTIONS, « non attribué » faute de définition. C'est exactement ce que donne la requête 1
+avant le COMMIT et la requête 2 après, si ces deux requêtes ne partagent pas un instantané.
+
+**Le moteur, témoin C++ sur la forme capturée** : `ReadDuringOpenBatch`, branche
+`lecture-sale-sous-lot`, `0066dce28`.
+
+- L'écrivain crée par MERGE, dans une transaction et 400 fois : deux Scope, un Symbol, DEFINES
+  et MENTIONS. Il passe un point de reprise tous les 50 lots.
+- Six lecteurs posent les trois questions dans un même instantané READ ONLY.
+
+À luciepc : 5 tours seul et 5 tours sous 14 fils de charge, environ 300 000 lectures, **aucune
+vue à moitié**.
+
+**Le test Rust sous charge** : 60 tours sous capture et sous 15 fils de charge, **60 verts**. Le
+rouge ne se reproduit pas à luciepc : 0 sur 75 en tout, 12 tours de recherche compris.
+
+**Deux chemins de rag3weaver donnent ce rouge sans faute du moteur** (`src/read_pool.rs`) :
+
+1. **Le pool plein.** Après `ATTENTE` (50 ms), l'appel passe sans instantané, et chaque
+   requête valide seule. La réponse le dit par la ligne `SANS_INSTANTANE` (« Pas de connexion de
+   lecture libre… »).
+2. **L'instantané plafonné** (`RAG3WEAVER_SNAPSHOT_MAX_MS`, 1 000 ms par défaut). Passé le
+   plafond, la requête suivante valide l'instantané et en ouvre un neuf. Sur un poste très
+   chargé, un appel qui dépasse 1 s voit alors le COMMIT entre deux de ses requêtes.
+
+Le rouge du portable ne permet pas de trancher. Son message est coupé à 400 caractères par le
+`panic!` (`&u[..u.len().min(400)]`), avant la fin de la réponse où la ligne `SANS_INSTANTANE`
+paraîtrait.
+
+**Ce qu'il faut pour trancher**, côté rag3weaver : armer le témoin pour qu'au rouge, il imprime
+
+- la réponse entière ;
+- `ReadPool::sans_instantane` ;
+- le nombre d'instantanés renouvelés par le plafond.
+
+Puis rejouer au portable, sous la charge du rouge. Si l'un des deux compteurs a bougé, le moteur
+est hors de cause, et le témoin doit tenir compte du repli : il dit vrai, mais pas sur le moteur.
+Si aucun n'a bougé, le cœur reprend, avec la capture au portable.
