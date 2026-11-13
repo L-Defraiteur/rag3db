@@ -2201,3 +2201,21 @@ des seuls juges physiques deviennent gardés : nettoyage habituel au succès,
 keep explicite lors d'une panique avec chemin PHYSICAL_FAILED_FIXTURE imprimé.
 Le dossier privé sous TMPDIR du reçu garde alors DB/WAL/plan pour diagnostic RO
 et copie des preuves. Aucune base réelle concernée, aucun changement production.
+
+
+P10 e100 :9CPU+7juges VERTS ; reprise before-logical-commit VERT exacte8/6/8,
+puis after-logical-commit échoue récupération : maintenance appelle porte publique
+sur SnippetContent interne. Reprendre EXACTEMENT open_fts_handles_for :
+forme.resolve_storage_target(entity,true), chaque stockage physique, source
+comprise ; publics seulement omettrait un index entretenu. C7/Recherche convergent.
+Défaut distinct observé :20blobs retenus dans un lecteur puis tentative Drop RO.
+initialiser_en_lecture crée un BufferedBlobStore hors blob_buffer ; ouverture FTS
+peut créer si absent et close commite le handle writable. Correctif autorisé C7 :
+CypherBlobStore structurel RO (aucun DDL prépare/save/delete/batch avant query),
+sans buffer, BlobBacked RO assemblé depuis fichiers lus via format snapshot
+PUBLIC EXISTANT puis ShardedHandle::open_snapshot réellement RO (pas writer
+intermédiaire). Refus absence/corruption sans CREATE. Coût eager et copie RAM
+transitoire du paquet explicites ; profil déjà eager, Max32 inchangé. Ajouter
+juge CPU store aucune écriture + assertion native handlesRO/root immuable et
+index absent refusé. Compte proposé20fonctions/19juges/8enfants, pas GO runtime.
+Fixture P10 conservée tmp/.tmp7Pmai8 (codecs/DB/WAL/plan), aucune mutation aprèsSTOP.

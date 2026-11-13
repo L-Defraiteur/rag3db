@@ -768,3 +768,42 @@ mod repro_drop {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 }
+
+/// Read persisted blobs into lucivy's public snapshot format, then serve a true
+/// read-only handle. Eager: packaging temporarily holds the files and the
+/// resulting archive; it never opens an index writer or changes the blob store.
+pub(crate) fn open_blob_snapshot(
+    store: &dyn lucivy_core::blob_store::BlobStore,
+    index: &str,
+) -> Result<lucivy_core::sharded_handle::ShardedHandle, String> {
+    use lucivy_core::snapshot::{SnapshotIndex, export_snapshot_sharded};
+    let read = |name: &str, file: &str| store.load(name, file)
+        .map_err(|e| format!("blob {name}/{file}: {e}"));
+    let config_bytes = read(index, "_shard_config.json")?;
+    let config = lucivy_core::query::SchemaConfig::from_stored_json(&config_bytes)
+        .map_err(|e| format!("stored shard config: {e}"))?;
+    let count = config.shards.unwrap_or(1);
+    if count == 0 { return Err("stored index has zero shards".into()); }
+    let mut root_names = store.list(index).map_err(|e| e.to_string())?;
+    root_names.retain(|name| !name.contains('/'));
+    root_names.sort();
+    if !root_names.iter().any(|n| n == "_shard_config.json") {
+        return Err("stored shard config absent from blob inventory".into());
+    }
+    let roots = root_names.iter().map(|name| Ok((name.clone(), read(index, name)?)))
+        .collect::<Result<Vec<_>, String>>()?;
+    let paths = (0..count).map(|i| format!("shard_{i}")).collect::<Vec<_>>();
+    let shards = paths.iter().map(|path| {
+        let name = format!("{index}/{path}");
+        let mut names = store.list(&name).map_err(|e| e.to_string())?;
+        names.sort();
+        if names.is_empty() { return Err(format!("stored shard {name} has no files")); }
+        let files = names.iter().map(|file| Ok((file.clone(), read(&name, file)?)))
+            .collect::<Result<Vec<_>, String>>()?;
+        Ok(SnapshotIndex { path: path.as_str(), files })
+    }).collect::<Result<Vec<_>, String>>()?;
+    let blob = export_snapshot_sharded(&shards, &roots);
+    lucivy_core::sharded_handle::ShardedHandle::open_snapshot(
+        ld_lucivy::directory::OwnedBytes::new(blob),
+    )
+}

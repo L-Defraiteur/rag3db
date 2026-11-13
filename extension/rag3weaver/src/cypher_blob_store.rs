@@ -27,6 +27,7 @@ pub type QueryFn = Arc<dyn Fn(&str, &[QueryParam]) -> Result<QueryResult, String
 /// Each blob is keyed as `"{index_name}/{file_name}"`.
 pub struct CypherBlobStore {
     query_fn: QueryFn,
+    read_only: bool,
     /// Sauvegardes (lots `save_many`) pendant lesquelles un fichier supprimé
     /// garde ses octets — de quoi revenir à un état récent de l'index.
     retention: i64,
@@ -57,7 +58,20 @@ impl CypherBlobStore {
     /// For `Rag3dbConnection`, use [`from_connection`].
     pub fn new(query_fn: QueryFn) -> Self {
         let retention = std::env::var(RETENTION_ENV).ok().and_then(|v| v.parse().ok()).unwrap_or(2);
-        Self { query_fn, retention, generation: 0.into(), prepared: std::sync::OnceLock::new() }
+        Self { query_fn, read_only: false, retention, generation: 0.into(), prepared: std::sync::OnceLock::new() }
+    }
+
+    /// A read capability: no schema preparation or persistence, including Drop.
+    pub fn read_only(mut self) -> Self {
+        self.read_only = true;
+        self
+    }
+
+    fn ensure_writable(&self) -> io::Result<()> {
+        if self.read_only {
+            return Err(io::Error::new(io::ErrorKind::PermissionDenied, "read-only blob store"));
+        }
+        Ok(())
     }
 
     /// La colonne de marquage, et le numéro de sauvegarde repris de la base.
@@ -65,7 +79,9 @@ impl CypherBlobStore {
         self.prepared
             .get_or_init(|| {
                 // Existe déjà sur une base préparée : l'erreur ne dit rien d'autre.
-                let _ = self.execute("ALTER TABLE _index_blobs ADD _deleted_gen INT64 DEFAULT -1", &[]);
+                if !self.read_only {
+                    let _ = self.execute("ALTER TABLE _index_blobs ADD _deleted_gen INT64 DEFAULT -1", &[]);
+                }
                 let r = self.execute("MATCH (b:_index_blobs) RETURN max(b._deleted_gen)", &[])?;
                 let last = r.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64()).unwrap_or(-1);
                 self.generation.store(last.max(-1) + 1, std::sync::atomic::Ordering::SeqCst);
@@ -88,6 +104,7 @@ impl CypherBlobStore {
 
     /// Ensure the `_index_blobs` table exists. Call once during initialization.
     pub fn ensure_table(&self) -> Result<(), String> {
+        self.ensure_writable().map_err(|e| e.to_string())?;
         self.execute(
             "CREATE NODE TABLE IF NOT EXISTS _index_blobs (_key STRING, _data BLOB, PRIMARY KEY(_key))",
             &[],
@@ -106,6 +123,7 @@ impl CypherBlobStore {
 
 impl BlobStore for CypherBlobStore {
     fn save(&self, index_name: &str, file_name: &str, data: &[u8]) -> io::Result<()> {
+        self.ensure_writable()?;
         self.prepare()?;
         let key = Self::make_key(index_name, file_name);
         self.execute(
@@ -191,6 +209,7 @@ impl BlobStore for CypherBlobStore {
     }
 
     fn delete(&self, index_name: &str, file_name: &str) -> io::Result<()> {
+        self.ensure_writable()?;
         self.prepare()?;
         let key = Self::make_key(index_name, file_name);
         self.execute(
@@ -250,6 +269,7 @@ impl crate::buffered_blob_store::BatchSave for CypherBlobStore {
     /// are capped by payload size so a large segment set doesn't become one
     /// giant parameter.
     fn save_many(&self, items: Vec<(String, String, Vec<u8>)>) -> io::Result<()> {
+        self.ensure_writable()?;
         self.prepare()?;
         // Escape hatch to isolate the batched UNWIND path when chasing memory
         // corruption in the FFI: one MERGE per blob instead.
@@ -322,6 +342,31 @@ pub fn upsert_blobs_query() -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn read_only_blob_store_never_prepares_or_persists_writes() {
+        use super::*;
+        use crate::buffered_blob_store::BatchSave;
+        let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let observed = calls.clone();
+        let store = CypherBlobStore::new(Arc::new(move |query, _| {
+            observed.lock().unwrap().push(query.to_owned());
+            assert!(query.starts_with("MATCH "), "read capability attempted: {query}");
+            Ok(if query.contains("RETURN b._data") {
+                QueryResult { columns: vec!["data".into()], rows: vec![vec![CypherValue::Blob(b"persisted".to_vec())]] }
+            } else { QueryResult::default() })
+        })).read_only();
+        assert!(store.save("index", "file", b"forbidden").is_err());
+        assert!(store.delete("index", "file").is_err());
+        assert!(store.save_many(vec![("index".into(), "file".into(), b"forbidden".to_vec())]).is_err());
+        assert!(store.ensure_table().is_err());
+        assert!(calls.lock().unwrap().is_empty(), "write refusal precedes every query");
+        assert_eq!(store.load("index", "file").unwrap(), b"persisted");
+        let count = calls.lock().unwrap().len();
+        assert_eq!(count, 2, "only generation read and blob read");
+        drop(store);
+        assert_eq!(calls.lock().unwrap().len(), count, "Drop cannot persist");
+    }
+
     use super::*;
     use std::collections::HashMap;
     use std::sync::RwLock;
