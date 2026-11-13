@@ -684,3 +684,9 @@ Décision : pas de lot vues chez lucivy maintenant ; 2b-B s'appuie sur `allowed_
 - Suite du cœur : la lecture sale de recherche (repro C++), DdlEveryMinute ×10 quand le poste est libre.
 - **hotfixs a poussé la démo Node.js** (6337ad201 : 7979-7980, ticket fermé ; nouveau ticket pour embarquement « sans service, la démo embarque quand même sans dire par quoi » ; la note de sa faute de push dans sa page). Hotfixs dort.
 - **La liaison est sur master** (0672d624f et les commits couches:: en dessous) ; « poussé » d'arbre principal attendu.
+
+## Vers 23 h 4x — la liaison branche → couche est sur master
+
+- **arbre principal a poussé la liaison** : master = **0672d624f** (2c3dffdd3..0672d624f), sous `poste push arbre-principal` à luciepc, trois contrôles, garde à jour, aucun code apporté depuis la base rejouée c13c76f72 (rebase sans rejeu sur de la doc et le C++ du cœur) ; rejeu sur 1649124a2 : F8, couches 11/11, tâches 10/10, e2e_lectures 27/27. Hash envoyé à ED pour la relecture de la page 30 demain ; worktree, branche locale et target de la liaison nettoyés aux deux postes par la garde des worktrees.
+- **1a** : tour de luciepc vert partout sauf e2e_tx_par_paquet_arret 17/18 (une clé de compte renommée « ScopeContent » que le témoin lisait sous l'ancien nom) ; corrigé, 6b9fe55f5 ; **passe entière à luciepc**.
+- cœur : copie du core effacée (systemd-coredump garde 55,8 Mio compressés, pid 3911689) ; repro C++ de la lecture sale en cours ; rien ne pousse sans « à toi ».
