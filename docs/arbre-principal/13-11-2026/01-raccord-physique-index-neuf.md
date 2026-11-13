@@ -115,9 +115,12 @@ partagée ; ni booléen de test permissif ni embedder factice de production.
    Catalog, puis son chemin d'écriture/derive/chunk/index. Le batch d'entrée
    complet ou son support possédé durable fait partie de la reprise ; un simple
    digest qui demanderait de retrouver un ancien environnement ne suffit pas.
+   Après COMMIT, les données et l’entrée durables permettent de reconstruire
+   le tampon FTS perdu avec le processus.
 3. Après COMMIT logique et poussée FTS, relire le résultat et la matérialisation.
    Tant que cette fermeture n'est pas acquise, l'état est une candidate en
-   exécution, pas P1 publié ; une ouverture normale refuse sa lecture comme
+   exécution, pas P1 publié ; les notifications de disponibilité restent retenues (la fenêtre actuelle
+   `avec_retenue`, qui publie aussi sur erreur, ne suffit pas). Une ouverture normale refuse sa lecture comme
    index prêt. Les valeurs déjà écrites ne sont pas prétendues annulées.
 4. Publier atomiquement le reçu, la tête déclarative/physique et l'issue
    qualifiée du journal seulement après cette fermeture. Le reçu porte les
@@ -141,7 +144,7 @@ ne fournit aucune passerelle permissive pour les autres index.
 | Alpha/Beta, nom/doc/corps différents, positions | Déduplication seulement sur les rendus de la même cellule, positions/provenances intactes, aucun lien croisé. |
 | Reçu et entrée figés | Résolution par op après réponse perdue ; entrée/recette/plan changé sur même op refuse ; ancien plan identique octet pour octet. |
 | Origine/P/schema/données étrangers, legacy | Refus avant les nouveaux effets ; tous les octets de fixture inchangés par le refus RO. |
-| Mort enfant avant COMMIT logique | P0 vide encore valide, aucune publication candidate servie. |
+| Mort enfant avant COMMIT logique | Données applicatives P0 vides ; intent/journal durables possibles, aucune candidate servie. |
 | Mort après COMMIT logique avant FTS durable | Exécution reconnue/reprise du même plan, ouverture normale refusée, pas de faux rollback. |
 | Mort après FTS durable avant publication | Candidate non servie ; reprise vérifie puis publie une seule fois. |
 | Mort après publication avant accusé | P1, toutes valeurs et index persistés ; reçu retrouvé sans doublon. |
