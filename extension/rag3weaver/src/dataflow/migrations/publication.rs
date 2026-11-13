@@ -294,6 +294,14 @@ impl Registry {
     pub(super) fn origin(&self) -> &str { &self.origin }
     #[cfg(feature = "rag3db-native")]
     pub(super) fn head(&self) -> &str { &self.head }
+    #[cfg(feature = "rag3db-native")]
+    pub(super) fn is_genesis_publication(&self, id: &str) -> bool {
+        self.publications.get(id).is_some_and(|intent| matches!(intent.body.source, SourceRevision::Genesis))
+    }
+    #[cfg(feature = "rag3db-native")]
+    pub(super) fn is_unique_genesis_head(&self) -> bool {
+        self.publications.len() == 1 && self.is_genesis_publication(&self.head)
+    }
 
     pub(super) fn genesis(
         origin: NewPublicationOrigin,
