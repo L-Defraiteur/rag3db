@@ -1,6 +1,6 @@
 # La lib rag3weaver ne se bâtit pas sans `rag3db-native`
 
-- **État :** ouvert. Trouvé par la session tty le 7 nov. 2026. Le terminal l'a contourné en sortant son client dans un crate à part (`extension/rag3weaver/tty`).
+- **État :** corrigé 9231f07dc, c74e3310d et 5a4049b9e ; qualification F8 sur 9ec421069, publiée par cdcc032df. Constat initial : Trouvé par la session tty le 7 nov. 2026. Le terminal l'a contourné en sortant son client dans un crate à part (`extension/rag3weaver/tty`).
 - **Gravité :** bâti refusé (aucune réponse fausse).
 - **Atteignable en service :** non. Tout bâti réel pose `rag3db-native`.
 - **Touche rag3weaver :** oui.
@@ -46,3 +46,33 @@ Source propre inchangée, portée inactive et place arbre rendue. Pas de retry
 inchangé ni de allow(dead_code) ajouté. Coordination demandée à C7 : qualification
 sélective des helpers par leurs propriétaires, ou ciblé natif du même aperçu
 sans prétendre prouver le minimal ; aucun backend partagé modifié par arbre.
+
+
+## Clôture documentaire du 13 novembre 2026 — porteur tty
+
+Les critères sont satisfaits sans imposer le moteur par défaut :
+
+- `9231f07dc` isole l'ouverture de vérification dans `base_de_verification` :
+  connexion native sous `rag3db-native`, refus explicite sans cette feature.
+  Les ouvertures natives de stockage actuelles sont également sous cette feature.
+- `c74e3310d` qualifie le témoin de `record_nodes.rs` par `rag3db-native`.
+  Le helper `Backend::call_tool` est désormais sous `cfg(all(test, feature = "rag3db-native"))`.
+- `5a4049b9e` ajoute les jeux vide et `daemon` à `JEUX` dans
+  `scripts/check_features.sh`. Chaque entrée appelle `check --tests
+  --no-default-features --features "$jeu"` : la bibliothèque normale et ses
+  cibles de test sont vérifiées, sans prétendre exécuter les tests.
+
+Preuve publiée : [qualification finale Recherche](../../recherche/13-11-2026/13-preuves-finales-union-garde-target.md),
+commit `cdcc032df`, APP exact `9ec421069320b2f0cca4099fa27f83059e944de9`.
+Relecture directe des archives locales hors worktree :
+`~/.cache/rag3weaver-build/cx-preuves-garde-target-union-v2-final/client/features.log`
+porte `VERT  sans-feature`, `VERT  daemon`, puis `CHECK_FEATURES VERT 8/8`.
+Les journaux `client/features/sans-feature.log` et `daemon.log` finissent par
+`Finished dev profile`, respectivement en 18,97 s et 11,28 s.
+Le manifeste publié dans `garde-target-union-final-preuves/manifest.json`
+référence ces journaux. Les rouges historiques ci-dessus restent des rouges
+historiques ; aucune exécution nouvelle n'a été lancée par tty pour cette clôture.
+
+Le crate tty séparé est conservé : c'est une frontière de client portable,
+son déplacement dans la bibliothèque n'est pas un critère de ce ticket.
+Aucun reste à faire pour ce défaut ; aucun lot tty-4 ou thème n'est lancé.

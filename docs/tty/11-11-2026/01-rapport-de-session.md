@@ -93,14 +93,14 @@ Le target `~/.cache/rag3weaver-build/target-tty` n'existe plus : le premier bât
 
 ## Ce qui est bloqué, et sur quoi
 
-- **Le ticket `docs/tty/tickets/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md`** (ouvert, famille produit) : la lib `rag3weaver` ne compile pas sans la feature `rag3db-native`. Deux sorties possibles : poser deux `#[cfg(feature = "rag3db-native")]` (`src/backend.rs` vers la ligne 4411, `src/dataflow/record_nodes.rs` vers la ligne 4567), ou déclarer que la lib exige le moteur. Le choix revient à Lucie. Le terminal n'en souffre pas : il vit dans son propre crate.
+- **Le ticket `docs/tickets/closed/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md`** (ouvert, famille produit) : la lib `rag3weaver` ne compile pas sans la feature `rag3db-native`. Deux sorties possibles : poser deux `#[cfg(feature = "rag3db-native")]` (`src/backend.rs` vers la ligne 4411, `src/dataflow/record_nodes.rs` vers la ligne 4567), ou déclarer que la lib exige le moteur. Le choix revient à Lucie. Le terminal n'en souffre pas : il vit dans son propre crate.
 - **Rien d'autre n'est bloqué.** Lucie n'a pas encore dit si l'ordre des prochains pas lui convient.
 
 ## Les tickets ouverts qui sont à moi
 
 | Ticket | En une ligne |
 |---|---|
-| `docs/tty/tickets/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md` | la lib ne compile pas sans `rag3db-native` (contourné par le crate à part du terminal) |
+| `docs/tickets/closed/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md` | la lib ne compile pas sans `rag3db-native` (contourné par le crate à part du terminal) |
 
 Il n'a pas été déplacé : c7 dira « déplace » quand le script d'index lira `docs/*/tickets/`.
 
@@ -109,3 +109,18 @@ Il n'a pas été déplacé : c7 dira « déplace » quand le script d'index lira
 1. **tty-4, la boîte de l'équipier dans le terminal.** Il s'agit de montrer ses questions, d'y répondre (`answer` avec `reply_to`) et de valider ou refuser ses demandes d'exécution de commande (`approval`). On remplace aussi l'état déduit des événements par l'état explicite que l'hôte sert maintenant (`running|waiting|ended|error`). La forme exacte est dans `extension/rag3weaver/docs/07-novembre-2026-everything-declarative/01-l-equipier-agent-de-code.md`, § 2.
 2. **tty-5, la mesure à travers les liens.** On mesure le délai entre une frappe et son écho, et les octets par seconde, sous ssh, tmux et mosh, de luciepc vers le portable. Il faut aussi un passage sous Windows et un sous macOS, puisque le terminal doit tourner partout. Et regarder une fois de plus la durée variable d'`e2e_tty` (4 s, une fois 52,9 s).
 3. **Le premier thème suivant** (par exemple « forêt »), avec l'option `--theme`, puis prévenir archi pour la route et le menu de l'IDE.
+
+
+## Actualisation du 13 novembre 2026 — compilation minimale
+
+Le blocage de compilation sans `rag3db-native` décrit dans l'état historique
+ci-dessus est levé. Ticket clos :
+`docs/tickets/closed/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md`.
+Correctifs `9231f07dc`, `c74e3310d`, garde minimale `5a4049b9e` ; F8 canonique
+8/8 sur APP `9ec421069`, preuves publiées par `cdcc032df` dans le rapport
+Recherche `docs/recherche/13-11-2026/13-preuves-finales-union-garde-target.md`.
+Tty a relu les sources, la garde et les journaux minimaux conservés ; aucun
+Cargo, test, service ni bâti nouveau. Ce défaut n'attend plus de décision de
+Lucie. Le crate tty séparé est conservé ; aucun nouveau lot autorisé par cette
+régularisation. Les propositions tty-4, mesures et thèmes restent des pistes
+historiques en attente d'objectif établi, pas des actions démarrées.
