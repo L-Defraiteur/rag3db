@@ -162,3 +162,10 @@ lecteur OLDW, ancêtre du même CG non-rôle, PID réutilisé, changements UID/e
 CG, et FDtarget depuis rôle légitime. AST/fauxPopen/fichiers temporaires seuls,
 pas de scan /proc réel ni cible Cargo. Autorisation CPU distincte C7 pour
 borne60/failfast après publication ; aucune qualification4800 autorisée.
+
+Après publication d2d47cd6bd6b585f8f0f71c3179096159eb751d3 et GO CPU C7 :
+cinq fonctions de préparation VERT, 5/0 en0,028s, timeout60/failfast.
+Journal horsW pilote-d2d47-cpu.log, SHA256 ae3a66992eac8ec4c991861f4305d5601869f74c75d2520215f98480f2348d43.
+AST des fonctions réelles, Popen sentinelle et fichiers temporaires uniquement ;
+aucun Cargo, scan proc réel, target, DB ou service. Les anciens rouges restent
+conservés. Ce complément documentaire ne vaut pas GO de la portée4800.
