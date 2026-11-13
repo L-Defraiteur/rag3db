@@ -233,6 +233,10 @@
     if (!b) { console.info(`aperçu : backend ${backend} absent de /ide/etat, pas de rechargement à chaud`); return; }
     etat.flux = "connexion";
     const flux = new EventSource("/ide/flux?sujets=components");
+    // Fermé au départ de la page (le cache d'aller-retour tiendrait une des six connexions du
+    // navigateur, mesure du 13 novembre 2026) ; revenue du cache, la page se recharge.
+    window.addEventListener("pagehide", () => flux.close());
+    window.addEventListener("pageshow", (e) => { if (e.persisted) location.reload(); });
     // Ce qui a changé entre le premier rendu et l'ouverture du flux n'a été
     // dit à personne (le flux ne rejoue pas le passé d'une fenêtre neuve) :
     // relire à chaque ouverture, la première comme une reconnexion. Sans

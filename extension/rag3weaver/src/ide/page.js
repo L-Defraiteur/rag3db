@@ -1359,6 +1359,10 @@ const lien = document.getElementById("lien");
 const source = new EventSource("/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens");
 source.onopen = () => { lien.textContent = "flux : ouvert"; relireLeChat().catch(() => {}); };
 window.__ide.flux = source;
+// Fermé au départ de la page : une page gardée par le cache d'aller-retour tiendrait une des six
+// connexions du navigateur (mesure de l'étape navigateur, 13 novembre 2026) ; revenue, elle se relit.
+window.addEventListener("pagehide", () => source.close());
+window.addEventListener("pageshow", (e) => { if (e.persisted) location.reload(); });
 source.onerror = () => { lien.textContent = "flux : coupé, reprise…"; };
 let relire = null;
 source.onmessage = (e) => {
