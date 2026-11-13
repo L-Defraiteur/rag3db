@@ -28,13 +28,24 @@ if kind == "fiche" {
         throw `archive : alias « ${verdict} » sans nom de fiche valide`;
     }
 }
-let fiche = if kind == "create" { s.title } else if kind == "fiche" { resolved_name } else { "" };
+// Une fiche proposée plus haut dans ce document : la section la rejoint par la voie create, avec le
+// même enregistrement (une écriture identique), pour que la fiche existe avant son lien.
+let proposed = if input.proposed == () { [] } else { input.proposed };
+let rejoint = #{};
+let a_rejoint = false;
+if kind == "fiche" {
+    for p in proposed { if p.name == resolved_name { rejoint = p; a_rejoint = true; } }
+    if a_rejoint { kind = "create"; }
+}
+let fiche = if a_rejoint { resolved_name } else if kind == "create" { s.title } else if kind == "fiche" { resolved_name } else { "" };
 let texte = s.text;
 let about = texte;
 let point = about.index_of(". ");
 if point > 0 { about = about.sub_string(0, point + 1); }
 if about.len() > 200 { about = about.sub_string(0, 200) + "…"; }
 let key = #{ fiche: fiche, source: s.chemin, section: s.title };
+let fiche_record = if a_rejoint { rejoint } else { #{ name: fiche, about: about, state: "proposed", via: "archiviste" } };
+if kind == "create" && !a_rejoint { proposed.push(fiche_record); }
 #{
     kind: kind,
     fiche: fiche,
@@ -42,7 +53,8 @@ let key = #{ fiche: fiche, source: s.chemin, section: s.title };
     title: s.title,
     chemin: s.chemin,
     index: s.index,
-    fiche_record: #{ name: fiche, about: about, state: "proposed", via: "archiviste" },
+    fiche_record: fiche_record,
+    proposed: proposed,
     apport_record: #{ fiche: fiche, source: s.chemin, section: s.title, texte: texte, niveau: "L1", state: "current", via: "archiviste" },
     apport_key: key,
     links: [ #{ from: #{ name: fiche }, to: key } ],

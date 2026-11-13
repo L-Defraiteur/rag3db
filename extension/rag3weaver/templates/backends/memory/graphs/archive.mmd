@@ -17,7 +17,7 @@ graph LR
     params["RhaiNode(script_id=archive_params, inputs='titre,contenu,chemin,origine,jour', titre=$titre, contenu=$contenu, chemin=$chemin, origine=$origine, jour=$jour)"]
     source["EntityRecordNode(entity='Source', action='put', record=$source)"]
     split["SplitSections(field='contenu')"]
-    decide["ForEachNode(graph='@builtin:backends/memory/graphs/archive_decide.mmd', on_error='report', candidates=$candidates, allow_create=$allow_create, instruction=$instruction, search_options=$search_options)"]
+    decide["ForEachNode(graph='@builtin:backends/memory/graphs/archive_decide.mmd', on_error='report', carry='proposed', candidates=$candidates, allow_create=$allow_create, instruction=$instruction, search_options=$search_options)"]
     route["Route(key='kind', routes='none|create|fiche')"]
     write["ForEachNode(graph='@builtin:backends/memory/graphs/archive_write.mmd', on_error='report')"]
     create["ForEachNode(graph='@builtin:backends/memory/graphs/archive_create.mmd', on_error='report')"]

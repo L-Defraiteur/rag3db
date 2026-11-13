@@ -187,7 +187,7 @@ fn materialiser(config: &Value, registre: &NodeRegistry, qui: &str) -> Result<(S
 }
 
 /// Les clés de la configuration propres au nœud, qui ne sont pas des paramètres du graphe cité.
-const CLES_DU_NOEUD: [&str; 5] = ["graph", "element", "result", "on_error", "parallelism"];
+const CLES_DU_NOEUD: [&str; 6] = ["graph", "element", "result", "on_error", "parallelism", "carry"];
 
 /// Les paramètres du graphe cité, lus dans la configuration (hors l'élément).
 fn parametres(outil: &GraphTool, config: &Value, sauf: Option<&str>, qui: &str) -> Result<Map<String, Value>, String> {
@@ -398,8 +398,26 @@ impl NodeFactory for ForEachNodeFactory {
             None | Some(Value::Null) => 1,
             Some(v) => v.as_u64().filter(|n| (1..=64).contains(n)).ok_or_else(|| format!("{qui} : parallelism est un entier de 1 à 64, pas {v}"))? as usize,
         };
+        // **Une valeur portée d'un élément au suivant** (13 novembre 2026, l'archiviste : une section
+        // doit voir les fiches que les sections précédentes du même document viennent de proposer).
+        // `carry='<param>'` nomme un paramètre du graphe cité : chaque appel le reçoit, et le champ du
+        // même nom dans le résultat d'un appel devient sa valeur pour l'élément suivant. L'un après
+        // l'autre seulement.
+        let carry = match config.get("carry") {
+            None | Some(Value::Null) => None,
+            Some(Value::String(c)) if !c.is_empty() => {
+                if !outil.params().iter().any(|p| p.name == c.as_str()) {
+                    return Err(format!("{qui}, {cite} : carry nomme « {c} », que le graphe ne déclare pas (`%% param: {c} json = …`)"));
+                }
+                if parallelism != 1 {
+                    return Err(format!("{qui} : carry exige parallelism = 1 (une valeur portée d'un élément au suivant)"));
+                }
+                Some(c.clone())
+            }
+            Some(v) => return Err(format!("{qui} : carry est le nom d'un paramètre du graphe cité, pas {v}")),
+        };
         let resultat = resultat(&outil, config);
-        Ok(Box::new(ForEachNode { name: name.to_string(), cite, outil, element, args, resultat, on_error, parallelism, registre }))
+        Ok(Box::new(ForEachNode { name: name.to_string(), cite, outil, element, args, resultat, on_error, parallelism, carry, registre }))
     }
 
     fn node_type(&self) -> &str {
@@ -418,6 +436,7 @@ impl NodeFactory for ForEachNodeFactory {
                 param("result", ConfigParamType::String, false, None, "le port du résultat, nœud.port (défaut : le %% result du graphe cité)", None),
                 param("on_error", ConfigParamType::String, false, Some(json!("stop")), "stop : l'échec d'un élément arrête le run ; report : {error, element, index} dans le flux, et la suite continue", Some(Choices::fixed(["stop", "report"]))),
                 param("parallelism", ConfigParamType::Int, false, Some(json!(1)), "appels en même temps, au plus (1 : l'un après l'autre) ; l'ordre des résultats est celui des éléments", None),
+                param("carry", ConfigParamType::String, false, None, "un paramètre du graphe cité porté d'un élément au suivant : chaque appel le reçoit, le champ du même nom de son résultat le remplace pour le suivant (parallelism = 1)", None),
             ],
         }
     }
@@ -440,6 +459,7 @@ struct ForEachNode {
     resultat: (String, String),
     on_error: bool,
     parallelism: usize,
+    carry: Option<String>,
     registre: Arc<NodeRegistry>,
 }
 
@@ -470,13 +490,23 @@ impl Node for ForEachNode {
         let services = services_du_parent(ctx);
         let annulation = ctx.cancellation();
         let (rn, rp) = (self.resultat.0.as_str(), self.resultat.1.as_str());
+        let porte = std::sync::Mutex::new(self.carry.as_ref().map(|c| self.args.get(c).cloned().unwrap_or(Value::Null)));
         let appel = |i: usize, e: &Value| -> Result<PortValue, String> {
             if let Some(m) = champs_manquants(&self.outil, &self.element, e) {
                 return Err(format!("l'élément {i} n'a pas {m}"));
             }
             let mut args = self.args.clone();
             args.insert(self.element.clone(), e.clone());
-            appeler(&self.outil, &args, &self.registre, services.clone(), &annulation, (rn, rp))
+            if let (Some(c), Some(v)) = (&self.carry, porte.lock().unwrap().clone()) {
+                args.insert(c.clone(), v);
+            }
+            let rendu = appeler(&self.outil, &args, &self.registre, services.clone(), &annulation, (rn, rp))?;
+            if let Some(c) = &self.carry {
+                if let Some(suivant) = en_json(&rendu).ok().and_then(|j| j.get(c).cloned()) {
+                    *porte.lock().unwrap() = Some(suivant);
+                }
+            }
+            Ok(rendu)
         };
         let mut sorties: Vec<Result<PortValue, String>> = Vec::with_capacity(elements.len());
         // Par fenêtres de `parallelism` appels ; en stop, un échec arrête les
