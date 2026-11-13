@@ -48,3 +48,40 @@ contre deux writers ou forcer une ouverture concurrente.
 Fin : cause attribuée avec preuve, correction et qualification pertinentes,
 CI future verte sur source corrigée. Aucun ancien run rouge repeint ; ticket
 reste ouvert tant que cette conclusion n'est pas acquise.
+
+
+## Diagnostic de sources coordonné ED / coeur-cpp
+
+Le log CI lie la crate tools/rust_api (rag3db-src vers la racine) au moteur
+statique issu du checkoutD17, et non au SDK29. Coeur-cpp relève archive native
+SHA36ece6a62ab092dc575a57879acdef0dc25cd7742725825784532cd7a998bc9b et
+ELFfbd960f8ffbaf2ea810dd292f22deea7450d3238030615e35dfe048f0d60a1d9.
+Sa lecture montre le marqueur C++ d'écriture conservé jusqu'à la fin de la
+destruction Database. Les connexions C++ n'en sont pas les propriétaires.
+
+ED relève une course possible dans les sources Lucivy4.3.3 réellement liées :
+ShardedHandle::close attend ActorPool::shutdown, dont l'attente porte sur la
+réponse du message Shutdown. Le handler l'acquitte avant son retour Stop ;
+la destruction de la boîte d'acteur intervient ensuite dans le scheduler.
+Cet acteur peut retenir LucivyHandle/Index/BlobDirectory/BufferedBlobStore/
+CypherBlobStore puis la connexion/DB. Cette chaîne est cohérente avec un Drop
+natif retardé, mais ne prouve pas quel acteur ou Arc retenait la base du run CI.
+Aucune fuite ni attribution causale exacte n'est affirmée à ce stade.
+
+Porteurs : ED poursuit le cycle de vie Rust et la primitive physique qualifiée ;
+coeur-cpp conserve sa lecture de provenance et de la garde native ; Lucivy est
+sollicitée pour relire la sémantique shutdown/destruction et proposer un témoin
+déterministe puis une correction si ce contrat est effectivement violé.
+Rester sur le même ticket, sans dupliquer le signalement.
+
+Préparation Lucivy en branche/worktree isolés autorisée : lecture de la
+version4.3.3, plan et témoins/diff publiés avant qualification CPU coordonnée.
+Aucune modification de .cargo/registry, aucun patch local des dépendances de
+rag3weaver pour maquiller le juge, aucune reconstruction du SDK épinglé, aucun
+index/base réel, tag, publication crates/npm/PyPI ou release sans décision
+explicite distincte. Une barrière de destruction doit être fondée sur les
+primitives du scheduler/pool ; pas de sleep, retry arbitraire ou garde affaiblie.
+
+Le préfixe du garde Recherche (cache/F8/compilations/ledger) est indépendant
+et autorisé sur SDK29 ; il s'arrête avant tout runtime. Le nouveau rouge CI
+reste ouvert et n'est pas remplacé par les verts locaux.
