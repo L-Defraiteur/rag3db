@@ -42,7 +42,9 @@ def ssh(cmd, attendre=True):
 class Terminal:
     """Le terminal distant, vu d'ici : un pseudo-terminal dont on lit chaque octet, horodaté."""
 
-    def __init__(self, env, theme, colonnes=100, lignes=30):
+    def __init__(self, env, theme, colonnes=100, lignes=30, repond_au_curseur=True):
+        self.repond_au_curseur = repond_au_curseur
+        self.lignes = lignes
         self.maitre, esclave = pty.openpty()
         self.taille(colonnes, lignes, signaler=False)
         commande = f"env {env} {BINAIRE} --theme {theme} --depot faux --tache mesure --daemon-json {DOSSIER}/daemon.json --demande go"
@@ -54,6 +56,7 @@ class Terminal:
         threading.Thread(target=self.lire, daemon=True).start()
 
     def taille(self, colonnes, lignes, signaler=True):
+        self.lignes = lignes
         fcntl.ioctl(self.maitre, termios.TIOCSWINSZ, struct.pack("HHHH", lignes, colonnes, 0, 0))
         if signaler and self.p.poll() is None:
             os.killpg(self.p.pid, signal.SIGWINCH)
@@ -68,6 +71,11 @@ class Terminal:
                         break
                     with self.verrou:
                         self.recu.append((time.monotonic(), o))
+                    # Un vrai terminal répond à la demande de position du curseur (DSR,
+                    # ESC[6n) ; la vue inline en a besoin pour démarrer.
+                    if self.repond_au_curseur:
+                        for _ in range(o.count(b"\x1b[6n")):
+                            os.write(self.maitre, f"\x1b[{self.lignes};1R".encode())
                 elif self.p.poll() is not None:
                     break
             except OSError:
@@ -125,7 +133,8 @@ def rgb(h):
 
 
 def hote_demarrer():
-    ssh(f"mkdir -p {DOSSIER}; rm -f {DOSSIER}/journal.jsonl; setsid nohup python3 {FAUX} {PORT} {DOSSIER}/journal.jsonl {DOSSIER}/daemon.json > {DOSSIER}/faux.out 2>&1 < /dev/null & echo $! > {DOSSIER}/faux.pid; sleep 0.5")
+    # Le faux hôte écrit lui-même son pid dans faux.pid (pas celui d'un lanceur qui rend la main).
+    ssh(f"mkdir -p {DOSSIER}; rm -f {DOSSIER}/journal.jsonl {DOSSIER}/faux.pid; nohup python3 {FAUX} {PORT} {DOSSIER}/journal.jsonl {DOSSIER}/daemon.json > {DOSSIER}/faux.out 2>&1 < /dev/null & for i in $(seq 50); do [ -s {DOSSIER}/faux.pid ] && break; sleep 0.1; done")
 
 
 def hote_arreter():
@@ -154,6 +163,26 @@ def rouge(quoi):
     resultats["rouges"].append(quoi)
     print("ROUGE", quoi, flush=True)
 
+
+# 0. Un terminal qui ne rend pas la position du curseur : la vue ne démarre pas, le texte brut prend la
+#    suite (le défaut trouvé par ce harnais le 13 nov. 2026 : ratatui paniquait).
+hote_demarrer()
+tunnel = subprocess.Popen(["ssh", "-N", "-o", "BatchMode=yes", "-L", f"{TUNNEL}:127.0.0.1:{PORT}", HOTE])
+time.sleep(1.5)
+try:
+    t = Terminal("COLORTERM=truecolor TERM=xterm-256color", "daemon", repond_au_curseur=False)
+    t0 = time.monotonic()
+    repli = t.attendre(b"je passe en texte brut", borne=20)
+    vu_texte = t.attendre(b"mot199", apres=t0, borne=30) if repli else None
+    resultats["sans_position_du_curseur"] = {"repli_dit": repli is not None, "texte_brut_suit": vu_texte is not None, "panique": b"panicked" in t.tout()}
+    if repli is None or vu_texte is None or b"panicked" in t.tout():
+        rouge(f"sans position du curseur : {resultats['sans_position_du_curseur']}")
+    t.ecrire(b"\x03")
+    time.sleep(0.5)
+    t.arreter()
+finally:
+    tunnel.terminate()
+    hote_arreter()
 
 # 1. La séance principale (daemon, couleur vraie) : latences, redimensionnement, touches, débit.
 hote_demarrer()
