@@ -10,6 +10,10 @@ documents rangés en quelques fiches au lieu d'une par section. Il reste un déf
 document à l'autre, l'archiviste ne retrouve pas toujours la fiche qu'il a lui-même créée, et le
 même sujet existe sous deux à quatre noms voisins.**
 
+**Mise à jour, nuit du 13 au 14 novembre : un troisième essai** (§ 3 bis), après le dédoublonnage
+par le nom de sujet (25c6b63d5). Les paires de noms voisins parmi les fiches créées passent de 7 à 0,
+et le reste des nombres bouge peu.
+
 ## 1. Ce qui a changé entre les deux essais
 
 Deux corrections, poussées avant ce second essai (ticket chacune, dans `docs/tickets/closed/`) :
@@ -24,18 +28,22 @@ Le reste est identique : la même copie d'origine (l'instantané du 13 novembre 
 
 ## 2. Les deux listes, côte à côte
 
-| | premier essai | **second essai** |
-|---|---|---|
-| sections décidées | 432, sans erreur | 432, sans erreur |
-| durée | 110,5 min, 15,3 s par section | **75,8 min, 10,5 s** |
-| reculs du modèle | 1 | 0 |
-| sections jugées « none » | 24 | 16 |
-| sous une fiche existante | 10 | 9 |
-| **fiches créées** | **326** | **113** |
-| dont à une seule section | 274 | 45 |
-| dont réunissant plusieurs sections d'un même document | 0 | 31 |
-| dont réunissant plusieurs documents | 52 | 37 |
-| noms de moins de 25 caractères | 95 | 33 |
+| | premier essai | second essai | **troisième essai** |
+|---|---|---|---|
+| sections décidées | 432, sans erreur | 432, sans erreur | 432, sans erreur |
+| durée | 110,5 min, 15,3 s par section | 75,8 min, 10,5 s | **65,9 min, 9,2 s** |
+| reculs du modèle | 1 | 0 | 0 |
+| sections jugées « none » | 24 | 16 | 18 |
+| sous une fiche existante | 10 | 9 | **19** |
+| **fiches créées** | **326** | **113** | **115** |
+| dont à une seule section | 274 | 45 | 45 |
+| dont réunissant plusieurs sections d'un même document | 0 | 31 | 32 |
+| dont réunissant plusieurs documents | 52 | 37 | 38 |
+| noms de moins de 25 caractères | 95 | 33 | 29 |
+| paires de noms voisins parmi les fiches créées | — | 7 | **0** |
+
+Les paires de noms voisins sont comptées par la règle du correctif (§ 3 bis) sur les noms des fiches
+créées.
 
 ## 3. Ce que vaut la seconde liste
 
@@ -73,6 +81,49 @@ pas toujours parmi les cinq candidates, et le modèle crée un nom voisin.
 2026 » (30) sont des rapports de session rangés tels quels. C'est juste comme provenance, moins comme
 sujet : le contenu de ces rapports touche une dizaine de sujets.
 
+## 3 bis. Le troisième essai, après le dédoublonnage par le nom de sujet
+
+**Ce qui a changé.** Une correction, poussée sous 25c6b63d5 (ticket
+`docs/tickets/closed/2026-11-13-le-meme-sujet-sous-deux-formulations-fait-deux-fiches.md`) :
+
+- **Une section qui créerait une fiche cherche d'abord par le nom de sujet proposé**, parmi les fiches
+  déjà en base. Elle rejoint une fiche du même nom, ou d'un nom voisin.
+- **Le voisinage** se juge sur les mots, en minuscules, sans ponctuation ni mots vides. Deux noms sont
+  voisins si leurs mots sont les mêmes, ou si l'un contient l'autre et que le plus court en compte au
+  moins deux. La même règle vaut entre les candidates et les fiches proposées plus haut dans le
+  document.
+
+**Ce qui n'a pas changé.** Les mêmes sources (52 documents, sommes md5 identiques), la même copie
+d'origine (identique octet pour octet) et le même modèle. Seule la lib change : e93710f36, d'ABI
+identique à 835d5298f. L'essai s'est joué à luciepc, sous `poste lourd`, au régime des passes
+(`RAG3WEAVER_GPU_DUTY=70`, budget 4096).
+
+**Ce que le correctif a fait :**
+
+- **Les doublons de noms ont disparu.** Les sept paires du second essai ne se reforment pas.
+  - « Classeur local du rappel » réunit seul ses 9 sections.
+  - « Nettoyage des worktrees et espace disque » ne double plus « … et du disque ».
+  - « Session hooks-essai » et « Bilan de la session hooks-essai » rejoignent la fiche existante
+    « hooks-essai » : c'est ce qui double les sections rangées sous une fiche existante (9 → 19,
+    dont 17 sous « hooks-essai »).
+- **Les hooks se rangent sur deux fiches au lieu de quatre.** « Hooks Claude Code pour la mémoire »
+  réunit 23 sections de 6 documents, et « Hooks rag3weaver » 12 sections de 5 documents.
+
+**Ce qui reste :**
+
+- **Le voisinage ne voit que les mots.** « Hooks Claude Code pour la mémoire » et « Hooks
+  rag3weaver » parlent du même chantier sans partager deux mots. Une passe de fusion des fiches
+  `proposed` voisines par le sens reste la seconde piste (non codée).
+- **Les journaux ne font plus une fiche par jour, mais une par moment.** « Relance du 7 novembre
+  2026 » (14 sections), « Matinée du 8 novembre 2026 » (14), « Nuit du 7 au 8 novembre 2026 » (13)
+  et « Après-midi du 8 novembre 2026 » (10) prennent la place de « Journal du 7 » (20) et « Journal
+  du 8 » (30). Ce sont toujours des fiches de provenance plutôt que de sujet. Le choix (une fiche par
+  jour, ou une par chantier) est à faire avec Lucie : ticket ouvert
+  `docs/memoire/tickets/2026-11-13-un-document-journal-fait-une-fiche-trop-large.md`.
+
+La liste des fiches du troisième essai n'a pas d'annexe : elle se relit dans
+`~/.cache/rag3weaver-build/blanc-96-3/apports.json`, à luciepc.
+
 ## 4. Ce que Lucie tranche
 
 La politique par défaut de l'archiviste, sur sa vraie mémoire, une fois M8 posé :
@@ -82,9 +133,9 @@ La politique par défaut de l'archiviste, sur sa vraie mémoire, une fois M8 pos
 2. **Une fiche par document** : 52 fiches nommées par les titres des documents ; ce que le second
    essai fait déjà pour les rapports de session, sans le faire pour les autres.
 3. **La création qui voit le document et nomme un sujet** (ce second essai) : 113 fiches, utiles, avec
-   des doublons à fusionner. Deux corrections les réduiraient : chercher les candidates aussi par le
-   nom de sujet que le modèle propose avant de créer, et rejoindre une fiche dont le nom est voisin ;
-   ou une passe de fusion des fiches `proposed` voisines avant de les accepter.
+   des doublons à fusionner. La recherche par le nom de sujet (troisième essai, 115 fiches) a ôté
+   les doublons de noms ; restent les fiches voisines par le sens, qu'une passe de fusion des fiches
+   `proposed` réduirait avant de les accepter.
 4. **Ses choix dans l'annexe** : elle garde, fusionne ou retire les fiches de la seconde liste, et
    l'archivage réel n'écrit que celles-là.
 
@@ -92,7 +143,7 @@ Les fiches créées restent `proposed` dans tous les cas : rien ne devient `curr
 
 ## 5. Ce qui reste sur disque
 
-À luciepc : `~/.cache/rag3weaver-build/blanc-96-2/` (ce second essai : `copie/`, `copie-origine/`,
+À luciepc : `~/.cache/rag3weaver-build/blanc-96-3/` (le troisième essai, mêmes fichiers), `blanc-96-2/` (ce second essai : `copie/`, `copie-origine/`,
 `templates/`, `src/`, `lancer.py`, `resultats.jsonl`, `apports.json`) et `blanc-96/` (le premier,
 intact). Le binaire de la tête est `~/.cache/rag3weaver-build/target-96-m8/debug/rag3weaver-backend`.
 Rien n'a touché la mémoire de Lucie, son hôte ni ses fichiers.
