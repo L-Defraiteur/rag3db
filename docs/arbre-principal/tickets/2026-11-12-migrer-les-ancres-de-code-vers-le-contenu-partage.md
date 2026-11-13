@@ -2074,3 +2074,19 @@ Correctif produit à relire avant nouveau lancement : model Option<String> dans
 les bilans, Some garde son nom réel, None reste absence structurelle/JSONnull,
 ligne lexicale sans modèle inventé ; appelant e2e configuré rendu explicitement
 Some. Renforcer témoin lexical et exact fixture, préserver le rouge et les preuves.
+
+
+Ciblé v3 source10e6c75270a93c4db7a5d42c69c9dbd5d658f46e : compilation
+réussie23,595s puis ROUGE24,918s au contrôle provenance, avant inventaire/test.
+Cause prouvée RO sur le MÊME ELF : bytes in mmap vautFalse alors que find
+retrouve10e6c7527 à9822122. SHA original/copie conservée :
+8387de3dd95ef2c3d290166d6d2049c0a4cf9f4cb29ace565da362b9b8a9426d.
+Deuxième défaut de recette découvert sans exécution : search_base.mmd est sous
+templates/tools/, pas directement templates/. Les octets exacts sont présents
+dans cet ELF : tools/search_base.mmd à9788041, search_expansion.mmd à9722386.
+Superviseur validation-e94smksf ROUGE/code1/restes[], autorité terminée, bus
+absent, scan contexte propre vide ; target conservé1607645974octets. Preuves et
+ELF copiés local. Aucune recompilation ni aucun test relancé. Suite proposée à C7 :
+attestation autonome et seules phases jamais jouées sur ELF original10e6,
+sansCargo, sous échéance originale887138.455654083 si coordination l'autorise ;
+sinon nouveau budget correctif explicite, sans effacer ni requalifier le rougev3.
