@@ -1,0 +1,14 @@
+ 1:  2e518e004 =  1:  c86b31569 Préparer les témoins CPU de provenance des targets
+ 2:  1c98fd48e =  2:  1c8eebc0a Refuser les targets sans provenance et garder le lanceur Cargo commun
+ 3:  cd2aa73d0 =  3:  c407022c9 Raccorder les compilations des passes à la garde de destination Cargo
+ 4:  6fffb3675 =  4:  ef5c4f8ba Consigner les preuves CPU et adapter la fixture du lanceur e2e
+ 5:  88c2c289b =  5:  bacc49f7f Conserver les restrictions de résolution dans les métadonnées Cargo
+ 6:  a8aacd199 =  6:  7901bdd3d Publier le verdict CPU du garde de provenance des targets
+ 7:  ef0f2d69a =  7:  a1c4db720 Eprouver les restrictions Cargo pendant une reprise connue
+ 8:  4ebf0d0f7 =  8:  ee404f927 Preserver les restrictions de resolution dans la garde de reprise
+ 9:  c8cadc728 =  9:  5221359fb Preparer la qualification isolee du garde et des gabarits reels
+10:  fb3b9e1df = 10:  b9283667b Conserver le rouge de profil du pilote et les preuves de provenance
+11:  a8148ab1e = 11:  3784ae36b Preparer le runtime manquant avec des racines etat distinctes
+12:  4ed061de5 = 12:  b5c340015 Publier la qualification ciblee composite du garde target
+13:  1524b6a38 = 13:  41341401f Corriger la taille mesuree de l ELF du garde
+14:  3b259fbce = 14:  e9f81dfb4 Auditer l union du garde et ajouter le temoin des assets HTTP servis
