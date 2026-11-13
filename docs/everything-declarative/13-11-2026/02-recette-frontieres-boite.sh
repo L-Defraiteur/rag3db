@@ -15,9 +15,13 @@ cd "$W/extension/rag3weaver"
 git rev-parse HEAD > "$O/source"
 git status --porcelain > "$O/status-source"
 test ! -s "$O/status-source"
-jeux=(minimum daemon natif-daemon)
 # Reprise après le minimum vert : seulement si son équivalence est documentée.
-if [ "${3:-}" = daemon ]; then jeux=(daemon natif-daemon); fi
+case "${3:-minimum}" in
+  minimum) jeux=(minimum daemon natif-daemon);;
+  daemon) jeux=(daemon natif-daemon);;
+  natif-daemon) jeux=(natif-daemon);;
+  *) exit 2;;
+esac
 for nom in "${jeux[@]}"; do
   jeu=""
   if [ "$nom" = daemon ]; then jeu=daemon; fi
@@ -58,6 +62,10 @@ PY
     attendu=7
     if [ "$nom" = daemon ]; then attendu=8; fi
     rg -q "test result: ok. $attendu passed; 0 failed; 0 ignored;" "$O/$nom-lifecycle.log"
+    if [ "$nom" = natif-daemon ]; then
+      timeout 60 "$O/elf/$nom" daemon_host::livraison_codex::tests:: --nocapture > "$O/$nom-livraison.log" 2>&1
+      rg -q 'test result: ok. 2 passed; 0 failed; 0 ignored;' "$O/$nom-livraison.log"
+    fi
   fi
 done
 printf 'VERT\n' > "$O/verdict"
