@@ -21,7 +21,7 @@ def fixture_path(path):
 
 class ObserverRefusal(unittest.TestCase):
  def test_real_observe_refusal_is_fatal_and_never_launches_next_phase(self):
-  tree=ast.parse((HERE/'driver.py').read_text());names={'observe','run','latch_first_red','first_red','first_lib_red'}
+  tree=ast.parse((HERE/'driver.py').read_text());names={'observe','run','require','latch_first_red','first_red','first_lib_red'}
   functions=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in names];self.assertEqual(len(functions),len(names))
   code=compile(ast.Module(body=functions,type_ignores=[]),'real-observe-run-fixture','exec')
   for error_type in [PermissionError,FileNotFoundError,ProcessLookupError]:
