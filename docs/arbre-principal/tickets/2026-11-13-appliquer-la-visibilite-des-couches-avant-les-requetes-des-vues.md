@@ -16,4 +16,4 @@ Aucun nouveau Rust/Cargo/runtime/index/base/service/legacy/GPU autorisé ici ; a
 
 ## Préparation concrète soumise
 
-[Plan28](../13-11-2026/28-plan-visibilite-couches-2b.md) : chemins réels relus et ancrages Git joints ; admission commune2b-A proposée, qualification physique2b-B et accessibilitéoutils2b-C distinctes. Chargeur durable des révisions/liaisons et instantanécomposé DB+handles manquent ; dégradations L6 historiques ne peuvent qualifier2b. Douze contre-exemples de tests spécifiés NON ÉCRITS/NON JOUÉS. Autorisationcode/runtime nouvelle requise ; ticket demeure ouvert.
+[Plan28](../13-11-2026/28-plan-visibilite-couches-2b.md) : chemins réels relus et ancrages Git joints ; admission commune2b-A proposée, qualification physique2b-B et accessibilitéoutils2b-C distinctes. Chargeur durable des révisions/liaisons et instantanécomposé DB+handles manquent ; dégradations L6 historiques ne peuvent qualifier2b. Treize contre-exemples de tests spécifiés NON ÉCRITS/NON JOUÉS après complément ED : inclut expiration après dernière lecture et avant rendu, invalidation mémorisée, aucune réponse partielle. Autorisationcode/runtime nouvelle requise ; ticket demeure ouvert.

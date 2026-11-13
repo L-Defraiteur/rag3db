@@ -36,7 +36,7 @@ Réutiliser `ReadViewCell`, `Forme`, les services d'appel et la préparation com
 
 - origine/révision demandée et parents exacts, résolution2a et provenance gagnante par occurrence ; aucune consultation ultérieure d'une tête courante ;
 - ensemble des occurrences visibles et leur identité logique complète, conversion attestée vers versions/chunks/offsets de chaque stockage/modèle ;
-- ressources de lecture et d'index correspondant à ces mêmes générations, conservées jusqu'à la fin de l'appel ;
+- ressources de lecture et d'index correspondant à ces mêmes générations, conservées jusqu'à la fin de l'appel ; preuve d'admission et validité conservées jusqu'au rendu, pas seulement un nom de vue et une liste d'IDs ;
 - masque obligatoire en intersection avec la cellule et le filtre effectif existant, sans changer la précédence domaine/utilisateur ;
 - sélection inconnue, ambiguë, ressource absente ou capacité insuffisante : erreur nommée avant candidats, jamais masque omis ni changement de vue.
 
@@ -49,7 +49,7 @@ Le contexte sert également les outils de relations : source ET cible visibles, 
 1. **Chargeur de révisions.** Définir puis qualifier où résident parents exacts, valeurs, tombstones et liaisons aux publications physiques ; ouverture stricte, données manquantes refusées, reprise durable. Aucun format/table de stockage supplémentaire n'est choisi par cette préparation. Une carte en mémoire de l'appelant n'est pas une preuve de ce chargeur.
 2. **Liaison occurrence–stockage.** Fournir depuis la publication admise les lignes d'occurrences et les références canoniques aux contenus/chunks, avec cellule et modèle. Vérifier qu'un offset n'est pas réutilisé à travers deux générations. Les permissions physiques existantes ne sont pas élargies.
 3. **Instantané composé.** L6 fige une transaction DB, mais `ReadView::sur_connexion` superpose des services et remplace connexion/texte natif ; cela ne démontre pas une immobilité de tous les handles lucivy/creux hérités. Il faut épingler leurs snapshots/générations ou refuser un montage qui ne les garantit pas. Le snapshot readonly physique existant est une primitive à examiner, pas une qualification automatique de plusieurs couches.
-4. **Cycle de vie strict.** Pool indisponible, backend sans connexion de lecture, expiration ou changement de génération pendant l'appel : réponse d'erreur cohérente, jamais poursuite avec un demi-instantané. Ne pas étendre globalement la politique L6 hors2b sans décision distincte.
+4. **Cycle de vie strict.** Pool indisponible, backend sans connexion de lecture, expiration ou changement de génération pendant l'appel : réponse d'erreur cohérente, jamais poursuite avec un demi-instantané. Une invalidation est mémorisée irréversiblement pour cet appel et contrôlée avant projection, provenance et publication de la réponse, même après la dernière lecture DB ; aucune étape de finition ne peut revalider un contexte expiré. Ne pas étendre globalement la politique L6 hors2b sans décision distincte.
 5. **Accès complet.** Une fois ce contexte branché, vérifier les graphes d'outils effectivement accessibles, leurs paramètres et rendus ; une fonction appelée seulement par un test ne suffit pas à livrer une vue utilisateur. Les lectures directes/plans non capables d'admission doivent refuser la sélection2b plutôt que contourner le masque.
 
 ## Premier incrément proposé et ordre de livraison
@@ -76,6 +76,7 @@ Les lignes ci-dessous sont des tests SPECIFIÉS, **non écrits et non joués** d
 | arêtes A→B et C→A, A invisible ; doublons d'une arête entièrement visible | les deux premières absentes dans les deux sens, multiplicité des arêtes visibles conservée ; attrape filtre d'un seul bout ou dédup fautive |
 | commit/publication avancée entre admission, candidats, enrichissement et provenance | tout reste sur P épinglé ou erreur cohérente ; aucune combinaison masqueP0/résultatP1 ; parent EXACT inchangé |
 | pool plein, ouverture snapshot refusée, snapshot expiré, handle d'une autre génération | refus sans résultat partiel ni repli catalogue non épinglé ; attrape dégradation L6 silencieuse dans2b |
+| expiration après la dernière lecture DB, avant projection/provenance/publication de la réponse | invalidation mémorisée jusqu’au rendu ; refus de toute la réponse, aucun résultat partiel ni revalidation par une finition sans requête ; attrape un contrôle limité à la prochaine lecture |
 | backend déclare ne pas savoir filtrer, erreur de filtre, mode scan/projection sans admission | refus AVANT candidats, même en mode signaux souple ; aucun appel non filtré ni warning transformé en réussite |
 | vue inconnue/ambiguë et courant automatique impossible faute de contexte ; branche sans worktree | erreur nommée, zéro lecture de repli d'une autre vue ; branche explicite lisible seulement via ressources blob/composite réellement admises, pas disque présumé |
 | provenance désactivée puis activée, occurrences héritées et locales | rendu ordinaire stable ; provenance optionnelle gagnante par occurrence, jamais un P unique collé à tous les résultats |
@@ -92,3 +93,7 @@ Checkpoints3a/3b : étudier un état logique COMPLET (visibilité, occurrences, 
 ## Fin de cette préparation
 
 Livrable : ce plan, le ticket ouvert et les ancrages de code figés dans le relevé joint. Aucun changement produit/README, aucun nouveau test exécuté ou index créé. Soumission à RO/C7 pour choisir les prérequis et l'incrément, sans GO runtime ni master produit. Les preuves/archives2a conservées ne qualifient pas2b.
+
+## Delta documentaire après revue ED
+
+Ajout du témoin d'expiration après la dernière lecture et avant la finition : preuve d'admission/validité conservée jusqu'au rendu, erreur mémorisée pour l'appel, refus sans réponse partielle. Treize contre-exemples spécifiés au total, toujours non écrits/non joués. Les avis sur8260 portent sur leur SHA ; ce delta documentaire est soumis séparément, sans autorisation code/runtime.
