@@ -1,12 +1,153 @@
-# rag3weaver
+<h1 align="center">rag3weaver</h1>
 
-**Work in progress.** A Rust agent runtime and orchestrator where an agent's
-whole world lives in one embedded database: the data, the words, the vectors,
-the code graph, the processing graphs, the tools, the sessions and the memories
-— all declared, all addressable, all in one process.
+<p align="center"><b>Code and memory for your coding agents, kept fresh in one embedded database on your own machine.</b></p>
 
-It runs on [rag3db](../../README.md) (graph + HNSW, embedded) and on
-[lucivy](https://github.com/L-Defraiteur/lucivy/) 4.3.2 (BM25, in-process). Native only.
+<p align="center">
+  <a href="https://github.com/L-Defraiteur/rag3db/actions/workflows/rag3weaver-workflow.yml"><img alt="CI rag3weaver" src="https://github.com/L-Defraiteur/rag3db/actions/workflows/rag3weaver-workflow.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: LRSL 1.2 (source-available)" src="https://img.shields.io/badge/license-LRSL%201.2-blue"></a>
+  <a href="https://www.npmjs.com/package/rag3db"><img alt="rag3db on npm" src="https://img.shields.io/npm/v/rag3db?label=rag3db%20(npm)"></a>
+  <a href="https://crates.io/crates/lucivy"><img alt="lucivy on crates.io" src="https://img.shields.io/crates/v/lucivy?label=lucivy%20(crates.io)"></a>
+  <a href="https://pypi.org/project/lucivy/"><img alt="lucivy on PyPI" src="https://img.shields.io/pypi/v/lucivy?label=lucivy%20(PyPI)"></a>
+  <a href="https://www.npmjs.com/package/lucivy"><img alt="lucivy on npm" src="https://img.shields.io/npm/v/lucivy?label=lucivy%20(npm)"></a>
+</p>
+
+rag3weaver indexes your repositories (code graph, full text, dense and sparse vectors), keeps a
+long-term memory of your working sessions, and serves both to Claude Code, Codex or any MCP
+client. Everything is declared in JSON and Mermaid, runs in one host process, and stores into
+[rag3db](https://github.com/L-Defraiteur/rag3db), an embedded graph database, with
+[lucivy](https://github.com/L-Defraiteur/lucivy/) for full text. Work in progress, native only.
+
+## Get started
+
+Index a repository and ask about it from your coding agent:
+
+```sh
+# a host that keeps the backends open (127.0.0.1:7970 by default)
+rag3weaver-backend daemon &
+
+# declare the repository and index it — run from the root of this crate
+rag3weaver-backend code-tree add ~/src/my-repo --from templates/backends/code/backend.json
+
+# serve it to your agent over MCP (Claude Code shown; any MCP client works)
+claude mcp add my-repo -- rag3weaver-backend mcp \
+  --manifest ~/.config/rag3weaver/code-my-repo/templates/backends/code/backend.json
+```
+
+Then ask your agent *“where is the config parsed?”*: it calls `search_code`, which answers from
+the index, with paths and lines.
+
+- Without an embedding service the index is **full text only** and the vectors wait (they are
+  computed later, when a service is declared with `RAG3WEAVER_EMBED_SERVICE=host:port`).
+- The binary must come from the same sources as the templates: this example works from the
+  current `master` (the binary installed from `0b0ff221a` refuses the newer code template).
+- The example is checked as written, on an isolated host, by
+  [`scripts/test_readme_quickstart.sh`](scripts/test_readme_quickstart.sh).
+
+## What you can do with it
+
+<table>
+<tr>
+<td width="50%" valign="top">
+<a href="docs/images/ide-index-par-worktree.png"><img src="docs/images/ide-index-par-worktree.png" alt="The rag3weaver IDE in a browser (its interface is in French): the workshop chat has attached the git worktree demo-service on its branch feature/parser with attach_worktree; a progress card under the call says the index is finished with 2 files and 8 symbols, and a line of the chat says it took one second; the sidebar, grouped by repository (par dépôt), lists demo-service on feature/parser, loaded, its index ready (rag indexé)."></a>
+<p><b>A code index per worktree, grouped by repository.</b> Attach a worktree from the chat; it
+is indexed in the background and shows up under its repository and branch.
+<a href="docs/07-novembre-2026-everything-declarative/03-l-atelier-ouvre-les-depots.md">Design</a></p>
+</td>
+<td width="50%" valign="top">
+<a href="docs/images/memoire-recall.png"><img src="docs/images/memoire-recall.png" alt="A terminal: recall_fiches called over MCP on a memory backend with the question what happens to the index when I close a worktree; the answer lists three memory cards ranked by the vector and BM25 signals together, the first one saying each worktree attached by the workshop gets its own index and closing or merging the worktree deletes it, with the warnings the full-text engine gives about the query."></a>
+<p><b>A long-term memory for your sessions.</b> Cards written by your agents (and by the hooks),
+recalled by meaning and by words. Real output of <code>recall_fiches</code>.
+<a href="docs/09-novembre-2026-memoire-longue/04-la-precision-du-rappel-d-aujourd-hui.md">Recall precision</a></p>
+</td>
+</tr>
+<tr>
+<td valign="top">
+<a href="docs/images/ide-carte-d-accord.png"><img src="docs/images/ide-carte-d-accord.png" alt="The rag3weaver IDE chat (in French): the workshop agent called run_command with mkdir build, the command gate put it on hold, and an approval card under the call says l'atelier demande à lancer mkdir build, with the buttons accorder (grant) and refuser (refuse); the sidebar shows the context gauge of the conversation and its usage."></a>
+<p><b>An agent that edits behind an approval card.</b> The workshop reads, writes and runs
+commands; anything outside its root, or a command its gate holds, waits for your click.
+<a href="docs/09-novembre-2026-atelier-lire-ecrire/01-conception.md">The workshop</a></p>
+</td>
+<td valign="top">
+<a href="docs/images/ide-chat-et-jauge.png"><img src="docs/images/ide-chat-et-jauge.png" alt="The rag3weaver IDE chat (in French) after the agent called read_file three times on files of 200 lines; in the sidebar, the context gauge of the conversation reads contexte 6.3 k / 1 M · 0,6 %, the tokens of the last model call over a model window of one million tokens, with the input and output tokens of the turn below."></a>
+<p><b>The IDE: the chat and its context gauge.</b> Every tool call, its result and the context
+the last model call used, live from the host's event stream.
+<a href="docs/09-novembre-2026-atelier-lire-ecrire/02-la-jauge-du-contexte.md">The gauge</a></p>
+</td>
+</tr>
+<tr>
+<td valign="top">
+<a href="docs/images/juge-local.png"><img src="docs/images/juge-local.png" alt="A terminal (output in French): the verdict of the local judge bench, reread from the results of the 11 November 2026 run: Qwen3-4B in Q8_0 with cache, 2000 tokens of context, first choice right 0.76, AUC 0.92, median 83 ms per pair and 1076 ms per case of five, over 88 cases; then two variants, short context and without cache."></a>
+<p><b>A local judge.</b> A small model on your machine decides which memory is worth keeping,
+measured on 88 verified cases. Reread from the bench results, not a live run.
+<a href="https://github.com/L-Defraiteur/rag3db/blob/master/docs/banc/11-11-2026/03-le-juge-en-gguf.md">The bench</a></p>
+</td>
+<td valign="top">
+<a href="docs/images/trace-d-un-index.png"><img src="docs/images/trace-d-un-index.png" alt="A terminal (output in French): the journal of an index of the codeparsers repository, 184 files: full text first (2257 scopes, 7932 relations posed), checked, then the 4707 vectors by batches with their percentage and the time left, then indexation terminée, the last line."></a>
+<p><b>The trace of an index.</b> Full text is searchable first; vectors follow, with what is
+left and how long. The journal is the contract: its last line says the end.</p>
+</td>
+</tr>
+<tr>
+<td valign="top">
+<a href="docs/images/postgres.png"><img src="docs/images/postgres.png" alt="A terminal: the e2e_postgres suite run against PostgreSQL 17 with pgvector: the same catalog ingested and searched through the PostgreSQL dialect, each test passing, then the summary line."></a>
+<p><b>The same catalog on PostgreSQL.</b> The dialect runs the catalog on PostgreSQL + pgvector;
+partial today (a repository backend cannot yet be declared on it). Real run of the e2e suite.</p>
+</td>
+<td valign="top">
+<a href="docs/images/lucivy.png"><img src="docs/images/lucivy.png" alt="A terminal: lucivy 4.3.3 installed from PyPI alone, without rag3weaver, indexes the 284 Rust files of this crate and searches worktree; the five best files are listed with their BM25 scores, worktree_nodes.rs first."></a>
+<p><b>lucivy, on its own.</b> The full-text engine is a separate library on crates.io, PyPI and
+npm. Real output of <a href="docs/images/sorties/lucivy_demo.py">this script</a>.</p>
+</td>
+</tr>
+</table>
+
+Every image is a real capture: the IDE views come from a test host behind a scripted model, the
+terminals are real outputs kept in [`docs/images/sorties/`](docs/images/sorties/). They are all
+regenerated by one ignored test, `daemon_host::captures_du_readme` (see
+[`docs/images/README.md`](docs/images/README.md)).
+
+## Why views per worktree?
+
+A coding agent works on several branches at once, each in its own worktree. **Today** each
+worktree gets its own index: a base copied from a sibling (by reflink when the filesystem allows
+it), indexed in the background, and disposable — closing or merging the worktree deletes it. The
+sidebar groups them by repository and branch, and says the disk each one holds.
+
+**Where it is going** (decided on 6 and 8 November 2026, not delivered yet): **one index per
+repository**, and each worktree or branch a **view** over it — a filter, not a copy. What a branch
+changes is indexed once; what it shares with its repository is shared.
+
+```mermaid
+graph TB
+    repo["one index per repository<br/>(code graph, full text, vectors)"]
+    main["view: main"]
+    feat["view: feature/parser<br/>(its changed files)"]
+    fix["view: fix/close-backend<br/>(its changed files)"]
+    repo --> main
+    repo --> feat
+    repo --> fix
+    a1["agent A"] --> feat
+    a2["agent B"] --> fix
+    you["you, in the IDE"] --> main
+```
+
+The design of the first step: [views, step 1](docs/08-novembre-2026-arbre/01-conception-des-vues-marche-1.md);
+today's disk rule: [one worktree, one base](docs/07-novembre-2026-everything-declarative/03-l-atelier-ouvre-les-depots.md).
+
+## What we measure
+
+Every number comes with its method and its page; none is a promise for every machine.
+
+| What | Result | Where it is measured |
+|---|---|---|
+| First index of the rag3db repository (about 7 000 files, 80 000 scopes, 1.1 million relations) | **78 s** (median of three runs, 8 October 2026), from 753 s in September; first searchable results after 8–10 s | [the indexing bench](https://github.com/L-Defraiteur/rag3db/blob/master/docs/orchestration/11-11-2026/06-rag3weaver-presentation-du-framework.md) |
+| Local judge (Qwen3-4B, Q8_0, cache) | first choice right **0.76**, **AUC 0.92**, median **83 ms** per pair, on 88 verified cases | [the judge bench](https://github.com/L-Defraiteur/rag3db/blob/master/docs/banc/11-11-2026/03-le-juge-en-gguf.md) |
+| Precision of the memory recall slipped by the hooks | on 171 real recalls, **92 %** slipped no card; the content was missing, not the ranking | [the recall precision](https://github.com/L-Defraiteur/rag3db/blob/master/extension/rag3weaver/docs/09-novembre-2026-memoire-longue/04-la-precision-du-rappel-d-aujourd-hui.md) |
+| `search_code`, full text only, on code-shaped queries | median **258 ms**, p95 **532 ms** (48 queries) | [the hooks search page](https://github.com/L-Defraiteur/rag3db/blob/master/extension/rag3weaver/docs/07-novembre-2026-hooks-essai/04-la-recherche-de-code-par-les-hooks.md) |
+
+The first index settings that gave the 78 s are the defaults since 10 October 2026 (full text
+stored beside the database as files, one transaction per batch, batches of 2 048 files); each can
+be turned back: `RAG3WEAVER_FTS=blobs`, `RAG3WEAVER_TX_PAR_PAQUET=0`, `RAG3WEAVER_BATCH_FILES=64`.
 
 ## The idea
 
@@ -49,7 +190,7 @@ a binding marked `resolution = "liaison"`; ambiguous default exports are left
 unresolved. This is dependency navigation: a language server may instead return
 the local alias declaration. The graph's representative line does not identify
 every source occurrence. The strict LSP comparison and its attribution limits
-are recorded in [the validation report](../../docs/codeparsers/11-11-2026/04-bilan-navigation-et-provenance.md).
+are recorded in [the validation report](https://github.com/L-Defraiteur/rag3db/blob/master/docs/codeparsers/11-11-2026/04-bilan-navigation-et-provenance.md).
 
 ## Shared indexed content
 
@@ -198,25 +339,9 @@ are refused before storage creation. This library API stores declarations;
 index data transfer, physical-format publication and `migration apply` remain
 future work.
 
-## Measured
+## Library quick start (Rust)
 
-First index of this repository (about 7 000 files, 80 000 scopes, 1.1 million
-relations), on disk, with embeddings:
-
-| | September 2026 | 8 October 2026 |
-|---|---|---|
-| duration | 753 s | **78 s** (median of three runs) |
-| peak memory | | 9 Go |
-| first searchable results | at the end | after 8–10 s |
-
-The 78 s comes from three settings that are **the defaults since 10 October
-2026**: full text stored beside the database as files (instead of blobs inside
-it) for a new database, one transaction per batch, and batches of 2 048 files.
-Each can be turned back: `RAG3WEAVER_FTS=blobs`, `RAG3WEAVER_TX_PAR_PAQUET=0`,
-`RAG3WEAVER_BATCH_FILES=64`. Numbers come from a held measurement on one machine
-(AMD Radeon 8060S); they say "faster", not "fast everywhere".
-
-## Quick start
+The same engine used from Rust, without the host.
 
 ```rust
 let mut catalog = Catalog::new(conn, embedder, config);
@@ -659,7 +784,7 @@ checks its model, dimensions and recipe, and isolates each caller's cancellation
 Warm-up facts are reported separately from availability. Remote activation and
 idle eviction remain outside this slice; existing sources without `activation`
 keep connecting to their configured provider. See the
-[contract and qualification](../../docs/embarquement/12-11-2026/03-activation-des-modeles.md).
+[contract and qualification](https://github.com/L-Defraiteur/rag3db/blob/master/docs/embarquement/12-11-2026/03-activation-des-modeles.md).
 
 `grep_files` accepte `symbol_hierarchy_depth` (0 par défaut : sortie et lectures
 habituelles). Entre1et16, il ajoute le scope contenant le premier match regex

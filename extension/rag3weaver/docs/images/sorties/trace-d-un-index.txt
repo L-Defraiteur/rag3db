@@ -1,0 +1,17 @@
+cat ~/.cache/rag3weaver/commandes/index/<run>.out    # the journal of the index tool, on the codeparsers repository
+indexation lancée : 184 fichiers, granite-278m
+plein texte : 184 fichiers sur 184 (2257 scopes) · 33616 liens en file
+plein texte prêt · relations : 33616 liens à poser
+plein texte prêt : 184 fichiers, 2257 scopes, 7932 relations posées
+plein texte vérifié : autant de documents que de lignes (4 entité(s))
+plein texte prêt · vecteurs 0 sur 4707 (0 %, granite-278m) · reste environ 21 s
+plein texte prêt · vecteurs 711 sur 4707 (15 %, granite-278m) · reste environ 18 s
+plein texte prêt · vecteurs 1223 sur 4707 (25 %, granite-278m) · reste environ 16 s
+plein texte prêt · vecteurs 1735 sur 4707 (36 %, granite-278m) · reste environ 13 s
+plein texte prêt · vecteurs 2247 sur 4707 (47 %, granite-278m) · reste environ 11 s
+plein texte prêt · vecteurs 2759 sur 4707 (58 %, granite-278m) · reste environ 9 s
+plein texte prêt · vecteurs 3271 sur 4707 (69 %, granite-278m) · reste environ 6 s
+plein texte prêt · vecteurs 3783 sur 4707 (80 %, granite-278m) · reste environ 4 s
+plein texte prêt · vecteurs 4295 sur 4707 (91 %, granite-278m) · reste environ 1 s
+plein texte prêt · vecteurs prêts (4707 morceaux, granite-278m)
+indexation terminée

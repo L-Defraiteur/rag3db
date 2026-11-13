@@ -1777,6 +1777,9 @@ mod navigateur;
 mod apercu_a_chaud;
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_sur_un_depot;
+/// Les images du README : un générateur `#[ignore]`, pas un témoin.
+#[cfg(all(test, unix, feature = "code", feature = "daemon"))]
+mod captures_du_readme;
 /// L'IDE par le flux : ce que la page demande à l'hôte hors du flux.
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_par_le_flux;

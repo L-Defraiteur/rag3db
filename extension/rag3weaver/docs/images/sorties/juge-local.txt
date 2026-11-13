@@ -1,0 +1,4 @@
+python3 -I r_verdict.py Q8_0    # rereads the results of the 11 November bench run
+juge Qwen3-4B Q8_0 avec cache, contexte 2000 : premier 0.76 · AUC 0.92 · p50 83 ms par paire, 1076 ms par cas de 5 · 88 cas
+juge Qwen3-4B Q8_0 avec cache, contexte court : premier 0.77 · AUC 0.89 · p50 86 ms par paire, 445 ms par cas de 5 · 88 cas
+juge Qwen3-4B Q8_0 sans cache, contexte 2000 : premier 0.76 · AUC 0.92 · p50 651 ms par paire, 3288 ms par cas de 5 · 88 cas

@@ -1,0 +1,32 @@
+recall_fiches {"query": "what happens to the index when I close a worktree", "options": {"limit": 3}}    # by MCP, on a memory backend
+# Search: "what happens to the index when I close a worktree" — `Fiche`
+
+**Results:** 3
+
+⚠️ fuzzy search ignores separators: "what happens to the index when I close a worktree" is searched as "whathappenstotheindexwhenIcloseaworktree"
+⚠️ parse without boolean operators: "what happens to the index when I close a worktree" runs as OR of substring contains, one per word
+⚠️ le plein texte n'a rien de probant pour « what happens to the index when I close a worktree » : son meilleur candidat est à 0.87 de similarité lexicale, sous le seuil de 0.88 — il partage des mots avec la requête sans forcément y répondre. Un autre signal peut avoir mieux trouvé.
+
+---
+
+## Results
+
+### 1. worktree-index ★ 0.0164 · vector+bm25
+· about=Each worktree attached by the workshop gets its own index, copied from a sibling by reflink when possible; closing or me… · author=lucie · state=current · updated_at=1794580825922 · via=claude-code
+> Each worktree attached by the workshop gets its own index, copied from a sibling by reflink when possible; closing or merging the worktree deletes it.
+
+### 2. arret-propre-des-backends ★ 0.0161 · vector+bm25
+· about=Stop backends through the host (POST /backend/close) before copying a database: an abrupt stop can leave the WAL half wr… · author=lucie · state=current · updated_at=1794580826264 · via=claude-code
+> Stop backends through the host (POST /backend/close) before copying a database: an abrupt stop can leave the WAL half written.
+
+### 3. juge-local ★ 0.0159 · vector+bm25
+· about=A local judge model scores memory candidates on the machine, before anything is written. · author=lucie · state=current · updated_at=1794580826549 · via=claude-code
+> A local judge model scores memory candidates on the machine, before anything is written.
+
+---
+
+## Node Types Summary
+
+| Type | Count |
+|------|-------|
+| Fiche | 3 |
