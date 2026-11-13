@@ -166,6 +166,20 @@ pub struct JournalDesRuns {
     /// puis se faisait écraser ; et deux ajouts rapides s'effaçaient l'un l'autre.
     /// Prise avant `etat` et `inventaire`, jamais sous eux.
     ecritures: Mutex<()>,
+    /// **Les journaux qui attendent leur grâce** (13 novembre 2026, ticket « le
+    /// journal des runs écrit après l'arrêt de son hôte ») : les runs racines finis
+    /// dont le fil `journal-ecrire` dort encore, et les poignées de ces fils.
+    /// [`Self::vider`] les écrit tout de suite et attend les fils : rien ne
+    /// s'écrit plus après l'arrêt de l'hôte.
+    en_grace: Mutex<EnGrace>,
+    /// Vrai après [`Self::vider`] : un événement qui arrive encore n'écrit plus rien.
+    ferme: std::sync::atomic::AtomicBool,
+}
+
+#[derive(Default)]
+struct EnGrace {
+    runs: std::collections::HashSet<String>,
+    fils: Vec<std::thread::JoinHandle<()>>,
 }
 
 /// `RAG3WEAVER_RUNS_DIR`, sinon `~/.local/share/rag3weaver/runs`.
@@ -203,6 +217,8 @@ impl JournalDesRuns {
             etat: Mutex::new(Etat::default()),
             inventaire: Mutex::new(None),
             ecritures: Mutex::new(()),
+            en_grace: Mutex::new(EnGrace::default()),
+            ferme: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
@@ -311,6 +327,9 @@ impl JournalDesRuns {
     /// racine écrit son journal, après la grâce. Un appel d'agent qui déclare un
     /// outil épingle sa racine.
     fn noter(self: &Arc<Self>, backend: &str, e: &crate::events::Event) {
+        if self.ferme.load(std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
         let Some(run) = e.run().map(str::to_string) else { return };
         let json = e.to_json();
         let mut etat = self.etat.lock().unwrap_or_else(|p| p.into_inner());
@@ -339,13 +358,52 @@ impl JournalDesRuns {
         let fini = matches!(e, crate::events::Event::RunFinished { .. }) && run == racine;
         drop(etat);
         if fini {
+            let mut grace = self.en_grace.lock().unwrap_or_else(|p| p.into_inner());
+            grace.fils.retain(|f| !f.is_finished());
+            grace.runs.insert(racine.clone());
             let journal: Weak<Self> = Arc::downgrade(self);
-            let _ = std::thread::Builder::new().name("journal-ecrire".into()).spawn(move || {
+            let lance = std::thread::Builder::new().name("journal-ecrire".into()).spawn(move || {
                 std::thread::sleep(GRACE);
                 if let Some(j) = journal.upgrade() {
-                    j.ecrire(&racine);
+                    // Un run déjà écrit par `vider` ne s'écrit pas une seconde fois.
+                    let a_ecrire = j.en_grace.lock().unwrap_or_else(|p| p.into_inner()).runs.remove(&racine);
+                    if a_ecrire {
+                        j.ecrire(&racine);
+                    }
                 }
             });
+            match lance {
+                Ok(fil) => grace.fils.push(fil),
+                Err(err) => {
+                    // Sans fil, le journal s'écrit tout de suite plutôt que jamais.
+                    eprintln!("[journal des runs] le fil d'écriture ne part pas ({err}) : écrit sans grâce");
+                    grace.runs.remove(&racine);
+                    drop(grace);
+                    self.ecrire(&racine);
+                }
+            }
+        }
+    }
+
+    /// **Vider le journal à l'arrêt de l'hôte** (13 novembre 2026) : les journaux
+    /// qui attendaient leur grâce s'écrivent tout de suite, les fils d'écriture
+    /// sont attendus, et un événement qui arrive ensuite n'écrit plus rien. Sans
+    /// cela, un run fini juste avant l'arrêt s'écrivait 250 ms après, dans un
+    /// dossier peut-être déjà parti (le résidu d'e2e_juge). Idempotent.
+    pub fn vider(&self) {
+        self.ferme.store(true, std::sync::atomic::Ordering::SeqCst);
+        if !self.actif {
+            return;
+        }
+        let (runs, fils) = {
+            let mut grace = self.en_grace.lock().unwrap_or_else(|p| p.into_inner());
+            (std::mem::take(&mut grace.runs), std::mem::take(&mut grace.fils))
+        };
+        for run in &runs {
+            self.ecrire(run);
+        }
+        for fil in fils {
+            let _ = fil.join();
         }
     }
 
