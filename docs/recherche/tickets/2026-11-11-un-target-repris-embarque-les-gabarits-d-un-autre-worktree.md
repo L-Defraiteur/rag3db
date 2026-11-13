@@ -220,3 +220,12 @@ Ne pas exempter tous les ancêtres ou tout un cgroup. Continuer à contrôler le
 FD/cwd vers le target et OLDW698, même pour un contrôleur reconnu ; seul le FD
 du script poste exact peut être attendu. Lecteur/build étranger et UNKNOWN
 attribués doivent rester refusés. Aucun run410 ni ancienGO reporté.
+
+## Réserve b884 avant GO — construction effective de la politique
+
+Archi trouve S non défini dans le driver : NameError à la construction argv
+poste avant scan/reprise. Les cinq tests extraits ne construisaient pas cette
+politique. Aucun run lourd. Avant correction : définir le scope exact commun
+au lanceur, extraire et tester la construction réelle avec constantes du
+driver, et résoudre /bin/sh déclaré par le shebang poste plutôt que présumer
+/bin/bash. Aucune qualification4800 acquise par les cinq témoins précédents.
