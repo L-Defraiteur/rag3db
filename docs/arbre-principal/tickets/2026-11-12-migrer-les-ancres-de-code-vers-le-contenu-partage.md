@@ -2395,3 +2395,14 @@ Les tickets UUID, lecteurRO et piloteCWD/profil sont clos avec les preuves
 composites et leurs limites ; ce PARENT reste OUVERT pour pyramide/couches,
 legacy, migration complète, projection de coordonnées et autres suites non
 qualifiées ici. Aucun GO master ni retrait de ressources déduit de cette note.
+
+
+## Livré b0a5177c0, ressources actives du lot retirées
+
+Push master exact C7/ifVERT/postepush et trois contrôles PC+portable verts.
+Produit identique app4e, qualification composite rapports07/08, limites
+conservées. Retrait borné autorisé C7 effectué :6WTlocaux/5PC+admins/branches
+locales, targetprivé et3PGstrictementprivées, dumps+archives+gardesfrais
+DEUXpostes avant retrait. Remotes/preuves/fixtures/ELF conservés.
+[Rapport09](../13-11-2026/09-fin-ressources-raccord-physique.md).
+Parent OUVERT pour pyramide/legacy/coordonnées et autres suites non qualifiées.

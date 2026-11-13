@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 13 novembre2026 — Un index physique natif neuf BM25 sans modèle dense peut ingérer ses contenus dérivés, publier son état et reprendre le même programme après interruption, avec fermeture/réouverture et recherches vérifiées ; raccord synthétique qualifié, sans migration des index existants ni projection de coordonnées fichier (`b0a5177c0`).
+
 - 12 novembre2026 — Deux réponses à la même carte d'accord ne republient plus un droit ; un usage CetteFois consommé reste consommé et un refus gagnant n'est pas annulé par un oui concurrent.
 
 - 12 novembre2026 — Les gabarits notebook et validated-result conservent BGE-M3/1024 mais laissent chaque poste fournir ses adresses de service ; une adresse explicite dans une copie reste prioritaire. Les configurations utilisateur existantes ne sont pas migrées.

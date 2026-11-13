@@ -1,3 +1,51 @@
+## État courant — raccord physique intégré, ressources actives retirées
+
+Master **b0a5177c00bfaf3b37ae21ea0c630c515a19e224**, push fast-forward sous
+poste push après « à toi » exact C7 ; dernier fetch fa4, ifVERT et trois
+contrôles lus VERTS sur portable ET PC. Produit byte-identique à source
+qualifiée4e,6779 entrées hors docs,36 patches rebase égaux dont22 code.
+
+Le raccord physique natif neuf BM25 sans modèle dense est qualifié : ingestion
+réelle des contenus dérivés, journal existant/programme figé, préfixes durables
+et reprise après morts, fermeture/réouverture/recherche. P14 ciblé puis
+qualification composite globale : F8/min/compiles source4e hérités, runtime
+pilotea18 VERT dans échéance corrective conservée (1275s depuis début initial,
+sans reset). Lib2299/0/66,NAV40,CLI5,lectures27jugesdistincts/28bruts+CREATE
+exact,hôte13,PG36,4TX bruts3/1/18/3 ; filets séparés, ignorés/helpers/non-jugé
+non transformés en juges. Trois revues indépendantes et C7 favorables.
+
+Preuves07 et audit08 sous13-11-2026 ; sourceapp4e/pilotea18 conservés. Les
+deux rouges globaux historiques restent rouges ; cause panique non capturée
+non inventée. Profil1GiB conforme à garde IndexNode, pas minimum universel
+moteur. FDdri observés malgré rôlesCPU, pas claim absenceGPU/chargeGPU.
+
+Trois tickets UUID/lecteurRO/pilote clos ; parent migration reste OUVERT pour
+pyramide/couches/legacy et autres portées. Aucune migration d’index existant,
+activation dense ou projection de coordonnées fichier livrée par ce lot.
+
+Nettoyage autorisé C7 après landing :6WT/admins/brancheslocales portable et5PC
+retirés ; target unique PC8812176962octets retiré. Archives cp-a+PAX fidèles
+des administrations/sous-modules, liens et inventaires conservés DEUX postes.
+Garde couranteSHA6f3dfceb17c9703029d2f4f26385f9aa21820c84bc79c518e1338b6d0f36188c
+vérifiée, rapport neuf VERT lu avant chaque retrait. Deux refus structurels
+Git CP sur PC ont nécessité le seul --force autorisé après nouvelle garde
+VERT ; aucun refus garde, aucune branche-D, remotes conservées après preuve
+backup avant chaque-d. Quiescence sans référence détectée au périmètre ;
+UNKNOWN baseline21/24 consignés, pas preuve négative d’accès GPU.
+
+PG u1/u1c/u1d seules retirées après identité fraîche OID1989864/65/66,
+propriétaire/commentaire4e et zéro session, dumps-Fc/SHA vérifiés DEUX postes,
+absence finale vérifiée. Preuves, quatre ELF, P14 et rouges/fixtures conservés
+hors WT/target ;1064 fichiers preuve v2 identiques,270 fichiers nettoyage
+identiques. Nettoyage : ~/.cache/rag3weaver-build/cx-nettoyage-raccord-b0,
+manifest-finalSHA113ea903b4ef788e0634a16de5e5708da0d701bf418fa7639c02026eaa37e72d.
+Rapport09 donne les hashes dumps et la portée exacte. Aucun service/modèle/SDK
+ou cache partagé retiré. Pour poursuivre : WT neuf depuis master, relire
+parent ; ne rejouer aucune ancienne passe. Petit WT de ce bilan documentaire
+à retirer après livraison selon même garde, preuve externe conservée.
+
+---
+
 ## État final — publication déclarative intégrée et ressources du lot retirées
 
 **Master bc1a81500a05489673b64c2e5930d335510e6dda**, après « à toi » C7 et
