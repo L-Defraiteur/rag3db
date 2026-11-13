@@ -18,7 +18,22 @@ pub struct Activation {
     pub budget_activation_secs: u64,
     pub budget_attente_secs: u64,
     pub residence: Residence,
+    /// **Activation distante** : la cible ssh du poste qui porte le
+    /// fournisseur (`luciepc`). Absent : le fournisseur est lancé ici.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hote: Option<String>,
+    /// L'adresse du fournisseur sur le poste distant (port fixe) ; l'adresse
+    /// déclarée de la source est le bout local du tunnel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adresse_distante: Option<String>,
+    /// La commande ssh à employer (défaut `ssh`) ; les témoins y mettent un faux.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh: Option<Vec<String>>,
 }
+
+/// Le préfixe des unités que l'activation distante crée : jamais celui des
+/// services posés à la main (`rag3weaver-embeddings@`).
+pub const PREFIXE_UNITE: &str = "rag3weaver-fournisseur-";
 
 /// La politique de résidence d'un fournisseur lancé par l'activation.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,33 +77,49 @@ pub fn demander(source: &super::ModelSource) -> Result<crate::serveur::activatio
     }
     let mut serveur = crate::daemon::DaemonEmbedder::serveur(&adresses[0], &a.programme)
         .args(a.args.iter().cloned())
-        .env("RAG3WEAVER_EMBED_MODEL", &source.model)
-        .env("RAG3WEAVER_ACTIVATION_PROFIL", &a.profil)
-        .env("RAG3WEAVER_ACTIVATION_PERIPHERIQUE", &a.peripherique)
-        .env("RAG3WEAVER_ACTIVATION_IDENTITE", &attendue.recette)
         .journal_dans(&a.journal)
         .attente(std::time::Duration::from_secs(a.budget_activation_secs));
-    if let Residence::ADemande { inactivite_secs } = a.residence {
-        if inactivite_secs == 0 {
-            return Err("activation : un délai d'inactivité nul déchargerait aussitôt".into());
-        }
-        serveur = serveur.env(crate::daemon::embeddings::EVICTION_VARIABLE, inactivite_secs.to_string());
-    }
-    for (cle, valeur) in &a.env {
-        if matches!(cle.as_str(), "RAG3WEAVER_EMBED_MODEL" | "RAG3WEAVER_ACTIVATION_PROFIL" | "RAG3WEAVER_ACTIVATION_PERIPHERIQUE" | "RAG3WEAVER_ACTIVATION_IDENTITE" | crate::daemon::embeddings::EVICTION_VARIABLE) {
-            return Err(format!("activation : {cle} est déterminé par l'identité déclarée"));
-        }
+    for (cle, valeur) in variables(source, &attendue)? {
         serveur = serveur.env(cle, valeur);
     }
     crate::serveur::activation::acquerir(&serveur, &a.coordination)
 }
 
+/// L'environnement d'un fournisseur lancé par l'activation, ici ou à
+/// distance : son modèle, son identité attestée, sa politique de résidence,
+/// puis l'environnement déclaré, qui ne peut pas les redéfinir.
+#[cfg(feature = "daemon")]
+fn variables(source: &super::ModelSource, attendue: &crate::daemon::embeddings::IdentiteActivation) -> Result<Vec<(String, String)>, String> {
+    let a = source.activation.as_ref().ok_or("activation absente")?;
+    let mut v = vec![
+        ("RAG3WEAVER_EMBED_MODEL".to_string(), source.model.clone()),
+        ("RAG3WEAVER_ACTIVATION_PROFIL".to_string(), a.profil.clone()),
+        ("RAG3WEAVER_ACTIVATION_PERIPHERIQUE".to_string(), a.peripherique.clone()),
+        ("RAG3WEAVER_ACTIVATION_IDENTITE".to_string(), attendue.recette.clone()),
+    ];
+    if let Residence::ADemande { inactivite_secs } = a.residence {
+        if inactivite_secs == 0 {
+            return Err("activation : un délai d'inactivité nul déchargerait aussitôt".into());
+        }
+        v.push((crate::daemon::embeddings::EVICTION_VARIABLE.to_string(), inactivite_secs.to_string()));
+    }
+    for (cle, valeur) in &a.env {
+        if matches!(cle.as_str(), "RAG3WEAVER_EMBED_MODEL" | "RAG3WEAVER_ACTIVATION_PROFIL" | "RAG3WEAVER_ACTIVATION_PERIPHERIQUE" | "RAG3WEAVER_ACTIVATION_IDENTITE" | crate::daemon::embeddings::EVICTION_VARIABLE) {
+            return Err(format!("activation : {cle} est déterminé par l'identité déclarée"));
+        }
+        v.push((cle.clone(), valeur.clone()));
+    }
+    Ok(v)
+}
+
 #[cfg(feature = "daemon")]
 pub(super) fn connecter(source: &super::ModelSource, annule: &std::sync::atomic::AtomicBool)
     -> Result<(Box<dyn crate::embedder::Embedder>, super::Origin), String> {
-    use crate::embedder::Embedder;
     let debut = std::time::Instant::now();
     if annule.load(std::sync::atomic::Ordering::Acquire) { return Err("connexion annulée".into()); }
+    if source.activation.as_ref().is_some_and(|a| a.hote.is_some()) {
+        return connecter_distant(source, annule);
+    }
     let demande = demander(source)?;
     let a = source.activation.as_ref().unwrap();
     let bail = demande.attendre(annule, std::time::Duration::from_secs(a.budget_attente_secs))?;
@@ -99,27 +130,162 @@ pub(super) fn connecter(source: &super::ModelSource, annule: &std::sync::atomic:
         .unwrap_or_else(crate::daemon::embeddings::default_embed_timeout);
     client = client.with_timeout(delai_appel);
     if annule.load(std::sync::atomic::Ordering::Acquire) { return Err("connexion annulée".into()); }
-    if client.name() != source.model || Some(client.dim()) != source.dimensions {
-        return Err(format!("identité d'activation refusée : attendu {}/{:?}, reçu {}/{}", source.model, source.dimensions, client.name(), client.dim()));
-    }
-    if client.identite().activation.as_ref() != Some(&identite(source)?) {
-        return Err("identité d'activation refusée : recette/profil du fournisseur différent ou non attesté".into());
-    }
+    verifier_l_identite(source, &client)?;
     // Un bail d'usage chez le fournisseur : il compte cet usager tant que le
     // client vit (première étape de la résidence ; rien n'est déchargé). Un
     // fournisseur d'avant les baux ne compte pas : `None`, pas une erreur.
     let usage = client.prendre_bail(&format!("activation:{}:{}", std::process::id(), source.model), std::time::Duration::from_secs(60))
         .map_err(|e| format!("bail d'usage : {e}"))?;
     let origine = super::Origin::Service(bail.adresse().to_string());
-    Ok((Box::new(Gere { client, _usage: usage, _bail: bail }), origine))
+    Ok((Box::new(Gere { client, _usage: usage, _tenue: Box::new(bail) }), origine))
+}
+
+/// Le fournisseur trouvé est-il celui déclaré : modèle, dimension, et
+/// l'attestation de recette/profil/périphérique.
+#[cfg(feature = "daemon")]
+fn verifier_l_identite(source: &super::ModelSource, client: &crate::daemon::DaemonEmbedder) -> Result<(), String> {
+    use crate::embedder::Embedder;
+    if client.name() != source.model || Some(client.dim()) != source.dimensions {
+        return Err(format!("identité d'activation refusée : attendu {}/{:?}, reçu {}/{}", source.model, source.dimensions, client.name(), client.dim()));
+    }
+    if client.identite().activation.as_ref() != Some(&identite(source)?) {
+        return Err("identité d'activation refusée : recette/profil du fournisseur différent ou non attesté".into());
+    }
+    Ok(())
+}
+
+/// Le tunnel ssh d'une activation distante, tenu tant que le client vit.
+#[cfg(feature = "daemon")]
+struct Tunnel(std::process::Child);
+#[cfg(feature = "daemon")]
+impl Drop for Tunnel {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+/// **L'activation distante** (règles : `docs/embarquement/13-11-2026/01-activation-et-residence-livre-et-manquant.md`).
+/// Un tunnel `ssh -N -L <adresse locale>:<adresse distante>` tenu par le
+/// client ; par lui, la sonde de l'identité : le fournisseur déclaré déjà là,
+/// on s'y attache ; un autre, refus ; personne, on le lance par
+/// `ssh <hôte> systemd-run --user --unit=rag3weaver-fournisseur-<modèle>-<port> --collect --property=Restart=on-failure`.
+/// ssh en `BatchMode` : un échec se refuse net, sans nouvel essai ni repli.
+#[cfg(feature = "daemon")]
+fn connecter_distant(source: &super::ModelSource, annule: &std::sync::atomic::AtomicBool)
+    -> Result<(Box<dyn crate::embedder::Embedder>, super::Origin), String> {
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+    use super::{Capability, Fallback, Provider};
+    let a = source.activation.as_ref().ok_or("activation absente")?;
+    let hote = a.hote.as_deref().unwrap_or_default();
+    if hote.is_empty() || !hote.chars().all(|c| c.is_ascii_alphanumeric() || "-._@".contains(c)) {
+        return Err(format!("activation distante : hôte ssh invalide « {hote} »"));
+    }
+    if source.provider != Provider::Service || source.fallback != Fallback::Refuse {
+        return Err("activation gérée : service sans repli requis".into());
+    }
+    let adresses = source.addresses(Capability::Embed, &super::process_env);
+    let distante = a.adresse_distante.clone().ok_or("activation distante : adresse_distante requise")?;
+    if adresses.len() != 1 || source.dimensions.unwrap_or(0) == 0 {
+        return Err("activation gérée : une adresse et une dimension explicites requises".into());
+    }
+    let locale = adresses[0].clone();
+    let port_distant = {
+        let mut port = 0;
+        for (role, adr) in [("locale", &locale), ("distante", &distante)] {
+            let sa = adr.parse::<std::net::SocketAddr>().map_err(|_| format!("activation distante : adresse {role} numérique requise"))?;
+            if !sa.ip().is_loopback() || sa.port() == 0 {
+                return Err(format!("activation distante : adresse {role} locale à port fixe requise"));
+            }
+            port = sa.port();
+        }
+        port
+    };
+    if a.budget_activation_secs == 0 || a.budget_attente_secs == 0 {
+        return Err("activation gérée : budgets non vides requis".into());
+    }
+    let attendue = identite(source)?;
+    let env = variables(source, &attendue)?;
+    let ssh = a.ssh.clone().unwrap_or_else(|| vec!["ssh".into()]);
+    let commande = |args: Vec<String>| {
+        let mut c = Command::new(&ssh[0]);
+        c.args(&ssh[1..]).args(["-o", "BatchMode=yes", "-o", "ConnectTimeout=5"]).args(args).stdin(Stdio::null());
+        c
+    };
+    let refus = |cause: String| format!("activation distante : ssh {hote} : {}", cause.trim());
+
+    // 1. Le tunnel. Un ssh qui échoue sort vite (BatchMode) : c'est le refus net.
+    let mut enfant = commande(vec!["-N".into(), "-o".into(), "ExitOnForwardFailure=yes".into(), "-L".into(), format!("{locale}:{distante}"), hote.into()])
+        .stdout(Stdio::null()).stderr(Stdio::piped()).spawn().map_err(|e| refus(e.to_string()))?;
+    let debut = Instant::now();
+    while debut.elapsed() < Duration::from_millis(1000) {
+        if let Ok(Some(statut)) = enfant.try_wait() {
+            let mut erreur = String::new();
+            if let Some(mut e) = enfant.stderr.take() { let _ = std::io::Read::read_to_string(&mut e, &mut erreur); }
+            return Err(refus(if erreur.trim().is_empty() { format!("tunnel fermé ({statut})") } else { erreur }));
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let tunnel = Tunnel(enfant);
+
+    // 2. Par le tunnel : le fournisseur déclaré est-il déjà là ?
+    let joindre = || crate::daemon::DaemonEmbedder::joindre_dans(&locale, Duration::from_secs(2));
+    let client = match joindre() {
+        Ok(c) => {
+            verifier_l_identite(source, &c).map_err(|e| format!("activation distante : le port {distante} de {hote} est pris par un autre fournisseur ({e})"))?;
+            c
+        }
+        Err(_) => {
+            // 3. Personne : lancer l'unité transitoire, puis attendre qu'elle réponde.
+            let modele: String = source.model.chars().map(|c| if c.is_ascii_alphanumeric() || "-_.".contains(c) { c } else { '-' }).collect();
+            let unite = format!("{PREFIXE_UNITE}{modele}-{port_distant}");
+            let mut distants = vec!["systemd-run".to_string(), "--user".into(), format!("--unit={unite}"), "--collect".into(), "--property=Restart=on-failure".into()];
+            distants.extend(env.iter().map(|(k, v)| format!("--setenv={k}={v}")));
+            distants.push("--".into());
+            distants.push(a.programme.clone());
+            distants.extend(a.args.iter().cloned());
+            distants.push("--adresse".into());
+            distants.push(distante.clone());
+            // Cités pour le shell distant (fish ou sh) : entre apostrophes, et
+            // rien qui puisse en sortir.
+            if let Some(mauvais) = distants.iter().find(|x| x.contains('\'') || x.contains('\\')) {
+                return Err(format!("activation distante : argument non citable « {mauvais} »"));
+            }
+            let mut args = vec![hote.to_string()];
+            args.extend(distants.iter().map(|x| format!("'{x}'")));
+            let sortie = commande(args).output().map_err(|e| refus(e.to_string()))?;
+            if !sortie.status.success() {
+                return Err(refus(String::from_utf8_lossy(&sortie.stderr).to_string()));
+            }
+            let echeance = Instant::now() + Duration::from_secs(a.budget_activation_secs);
+            loop {
+                if annule.load(std::sync::atomic::Ordering::Acquire) { return Err("connexion annulée".into()); }
+                if let Ok(c) = joindre() { break c; }
+                if Instant::now() >= echeance {
+                    return Err(format!("activation distante : {unite} sur {hote} ne répond pas après {} s (journal : ssh {hote} journalctl --user -u {unite})", a.budget_activation_secs));
+                }
+                std::thread::sleep(Duration::from_millis(200));
+            }
+        }
+    };
+    verifier_l_identite(source, &client)?;
+    let delai_appel = source.timeout_secs.filter(|s| *s > 0).map(Duration::from_secs)
+        .unwrap_or_else(crate::daemon::embeddings::default_embed_timeout);
+    let client = client.with_timeout(delai_appel);
+    let usage = client.prendre_bail(&format!("activation:{}:{}", std::process::id(), source.model), Duration::from_secs(60))
+        .map_err(|e| format!("bail d'usage : {e}"))?;
+    let origine = super::Origin::Service(locale);
+    Ok((Box::new(Gere { client, _usage: usage, _tenue: Box::new(tunnel) }), origine))
 }
 
 #[cfg(feature = "daemon")]
 struct Gere {
     client: crate::daemon::DaemonEmbedder,
-    // Rendu avant le bail local : l'ordre des champs est l'ordre de leur fin.
+    // Rendu avant ce qui tient le fournisseur (bail local ou tunnel) : l'ordre
+    // des champs est l'ordre de leur fin.
     _usage: Option<crate::daemon::embeddings::BailDistant>,
-    _bail: crate::serveur::activation::Bail,
+    _tenue: Box<dyn std::any::Any + Send + Sync>,
 }
 
 #[cfg(feature = "daemon")]
@@ -300,6 +466,63 @@ mod tests {
         let (encore, _) = connect_embedder(&source).unwrap();
         assert_eq!(encore.embed(&["encore".into()]).unwrap()[0].len(), 384);
         assert_eq!(appels_ssh(&f).iter().filter(|l| l.contains("systemd-run")).count(), 1, "le fournisseur déjà là ne se relance pas");
+    }
+
+    /// **Le vrai jeu, une fois** : depuis ce poste, un fournisseur lancé sur
+    /// un autre par ssh, joint par le tunnel, compté, puis évincé après son
+    /// délai et son unité effacée. Ignoré par défaut ; piloté par
+    /// `RAG3WEAVER_ESSAI_DISTANT_{HOTE,PROGRAMME,MODELE,DIM,PORT_DISTANT,PORT_LOCAL,ENV,INACTIVITE}`
+    /// (`ENV` : `CLE=valeur;CLE=valeur`). Une variable absente rougit : il ne
+    /// se saute pas.
+    #[test]
+    #[ignore = "lance un fournisseur réel sur un autre poste par ssh"]
+    fn une_activation_distante_reelle_lance_compte_et_evince() {
+        let v = |n: &str| std::env::var(format!("RAG3WEAVER_ESSAI_DISTANT_{n}")).unwrap_or_else(|_| panic!("RAG3WEAVER_ESSAI_DISTANT_{n} requise"));
+        let (hote, modele) = (v("HOTE"), v("MODELE"));
+        let dim: usize = v("DIM").parse().unwrap();
+        let inactivite: u64 = v("INACTIVITE").parse().unwrap();
+        let (port_distant, port_local) = (v("PORT_DISTANT"), v("PORT_LOCAL"));
+        let dossier = tempfile::tempdir().unwrap();
+        let mut source = ModelSource::service(&modele);
+        source.address = Addresses::parse(&format!("127.0.0.1:{port_local}"));
+        source.dimensions = Some(dim);
+        source.timeout_secs = Some(60);
+        source.activation = Some(Activation {
+            programme: v("PROGRAMME"), args: vec![],
+            env: v("ENV").split(';').filter(|x| !x.is_empty()).map(|kv| { let (k, v) = kv.split_once('=').unwrap(); (k.to_string(), v.to_string()) }).collect(),
+            profil: "essai-distant".into(), peripherique: "card2".into(),
+            coordination: dossier.path().join("coordination"), journal: dossier.path().join("journaux"),
+            budget_activation_secs: 180, budget_attente_secs: 180,
+            residence: Residence::ADemande { inactivite_secs: inactivite },
+            hote: Some(hote.clone()), adresse_distante: Some(format!("127.0.0.1:{port_distant}")), ssh: None,
+        });
+        let unite = format!("{PREFIXE_UNITE}{modele}-{port_distant}");
+        let ssh = |cmd: &str| {
+            let s = std::process::Command::new("ssh").args(["-o", "BatchMode=yes", "-o", "ConnectTimeout=5", &hote, cmd]).output().unwrap();
+            String::from_utf8_lossy(&s.stdout).trim().to_string()
+        };
+        let debut = std::time::Instant::now();
+        let (client, origine) = connect_embedder(&source).unwrap_or_else(|e| panic!("{e}"));
+        println!("▸ activé en {:?} : {origine:?}", debut.elapsed());
+        let vecteurs = client.embed(&["un texte".into(), "un autre".into()]).unwrap();
+        assert!(vecteurs.iter().all(|x| x.len() == dim));
+        let id = crate::daemon::identite_de::<serde_json::Value>(&crate::daemon::agent_with_timeout(std::time::Duration::from_secs(5)), &format!("127.0.0.1:{port_local}"), crate::daemon::embeddings::SERVICE).unwrap();
+        println!("▸ identité : usage {} eviction {} executable {}", id["usage"], id["eviction"], id["executable"]);
+        assert!(id["usage"]["baux"].as_u64().unwrap_or(0) >= 1, "le bail compte : {id}");
+        assert_eq!(id["eviction"]["inactivite_s"], inactivite, "évincable : {id}");
+        println!("▸ unité : {}", ssh(&format!("systemctl --user is-active {unite}")));
+        drop(client);
+        let rendu = std::time::Instant::now();
+        let mut etat = String::new();
+        while rendu.elapsed() < std::time::Duration::from_secs(inactivite + 60) {
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            etat = ssh(&format!("systemctl --user is-active {unite}"));
+            if etat != "active" && etat != "activating" { break; }
+        }
+        println!("▸ après {:?} sans usage : {etat}", rendu.elapsed());
+        assert!(etat != "active" && etat != "activating", "évincé après son délai : {etat}");
+        let restantes = ssh(&format!("systemctl --user list-units --all --no-legend '{PREFIXE_UNITE}*'"));
+        assert!(!restantes.contains(&unite), "unité effacée (--collect) : {restantes}");
     }
 
     /// **Un ssh en échec se refuse net** : nommé, sans attente ni nouvel essai.
