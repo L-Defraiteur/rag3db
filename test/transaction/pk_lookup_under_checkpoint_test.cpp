@@ -59,8 +59,9 @@ protected:
                 std::thread readerThread([&] {
                     int64_t k = 0;
                     while (!stop.load()) {
-                        reader.query("BEGIN TRANSACTION READ ONLY;");
+                        // Relevé avant l'instantané : toute clé en deçà y est validée.
                         const auto upTo = committed.load();
+                        reader.query("BEGIN TRANSACTION READ ONLY;");
                         const auto key = upTo > 0 ? (k++ % upTo) : 0;
                         auto r = reader.query(
                             "MATCH (d:Doc {id: " + std::to_string(key) + "}) RETURN count(d);");
