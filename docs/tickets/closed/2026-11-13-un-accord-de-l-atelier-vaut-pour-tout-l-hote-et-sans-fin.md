@@ -1,6 +1,7 @@
 # Un accord de l'atelier vaut pour tout l'hôte, toutes conversations, et sans fin
 
-- **État** : ouvert (13 novembre 2026), pour archi.
+- **État** : corrigé (13 novembre 2026, branche atelier-accord-borne, archi). Témoin
+  `a_grant_belongs_to_its_conversation_and_expires`, rouge puis vert.
 - **Famille** : produit
 - **Gravité** : réponse fausse — un accord donné à une conversation ouvre le chemin aux autres (y compris en écriture sur un dépôt tenu par l'utilisatrice), et jusqu'au redémarrage de l'hôte
 - **Atteignable en service** : oui, dès qu'un accord est donné sur une carte d'accord et qu'une autre conversation d'atelier vise le même chemin
