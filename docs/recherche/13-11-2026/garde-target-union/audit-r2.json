@@ -1,0 +1,9 @@
+{
+  "master": "db687edf63f4857e654ce6f158d1ae21056ae09b",
+  "previous_app": "3b259fbce8f61b2f1cc1bad27dedf43560298386",
+  "rebased_head": "e9f81dfb4c49aca17f973696631203053a46b8d3",
+  "product_delta": [],
+  "range_equal": 14,
+  "incoming": "master MD only, parent header and 2a session report",
+  "runtime": false
+}
