@@ -14,7 +14,7 @@ Branche et WT neufs cx-ed-read-scope-qualification-r2. Revues statiques
 Archi et C7 favorables, tests encore non compilés et non exécutés.
 
 Exécution uniquement sur luciepc, clone/WT correspondant au hash publié,
-avec sous-modules épinglés. Target neuf dédié
+avec sous-modules épinglés et propres (contrôle récursif). Target neuf dédié
 ~/.cache/rag3weaver-build/cx-target-ed-read-scope-r2 ; ne jamais employer
 cx-target-contenu-derive ni les ressources Arbre. Preuves dédiées
 ~/.cache/rag3weaver-build/cx-preuves-ed-read-scope-r2. Avant création :
@@ -24,10 +24,12 @@ aucun rebase, puis enregistrer hash/tree et état des sous-modules.
 ## Portée et budget proposés à C7
 
 Un seul superviseur extérieur, budget global 6000 secondes incluant toutes
-compilations, contrôles et nettoyage. Commande depuis la crate :
+compilations, contrôles et nettoyage. Appelant dans /var/tmp ; le lanceur y maintient superviseur, driver et finaliseur.
+Cargo et chaque ELF ont cwd=crate explicitement. Commande après GO exact :
 
 ```sh
-python3 scripts/confiner_validation.py lancer --mode mesure --delai 6000 -- bash driver.sh
+cd /var/tmp
+python3 "$WT/docs/everything-declarative/13-11-2026/read-scope/lancer.py" "$WT" "$SOURCE_EXACTE"
 ```
 
 La primitive acquiert le vrai poste exclusif Max32GiB et porte reçu/bus/budget.
@@ -39,7 +41,8 @@ quatre rôles BURN CPU. TMP/cache/config/state/journaux privés sous les preuves
 Charger scripts/lib_du_magasin.sh et exporter_la_lib une seule fois dans
 le driver ; garder_le_target avec la racine crate exacte avant Cargo.
 
-Driver à matérialiser avant lancement : set -euo pipefail, chaque commande
+Pilotes [lanceur](read-scope/lancer.py), [driver](read-scope/driver.py) et
+[finaliseur](read-scope/finaliser.py) matérialisés ; exceptions fatales, chaque commande
 journalisée, timeout borné par le minimum cap de phase/temps global restant,
 réserve finale de nettoyage ; premier rouge inattendu STOP sans retry.
 Caps proposés : compilation 2400s, chaque témoin 120s, module 600s,
@@ -64,10 +67,13 @@ Si le budget ne permet plus une étape, verdict rouge/incomplet, pas de reset.
    avec le même ELF, --show-output --test-threads=8. Comparer noms/comptes
    à l’inventaire ; publier séparément les ignorés navigateur déjà déclarés
    dans la source, jamais les compter comme verts. Aucune exemption nouvelle.
-4. Frontières : cargo check --tests --no-default-features pour les huit jeux
-   du script check_features.sh (minimal, daemon, natif+daemon, batterie,
-   batterie+LLM, paquet npm, natif+code, natif seul), target privé commun.
-   Archiver chaque commande/log et arrêt immédiat au premier échec.
+4. Frontières : appel direct du script canonique scripts/check_features.sh
+   complet, exiger sa conclusion CHECK_FEATURES VERT 8/8 ; target privé
+   commun et logs par jeu. Aucun recopiage de matrice dans le driver.
+   Cet enfant réexporte lui-même le SDK depuis le LD antérieur au profil
+   tests, pour éviter le double préfixe. RAG3DB_LIBS_DIR est fixé explicitement
+   à $HOME/.cache/rag3db-libs, indépendamment des XDG privés.
+   Compilation et contrôles Cargo sous nice15/ionice3.
 
 Les résultats des témoins ciblés et du module sont deux invocations,
 pas des juges indépendants supplémentaires. Les contrôles de features
@@ -82,3 +88,12 @@ attestation maps SDK29 et événements mémoire avant/après. UNKNOWN n’est pa
 une absence. Archiver logs et manifeste SHA sur les deux postes, rouges compris.
 Aucun retrait du WT/target avant gardes fraîches et coordination distincte ;
 aucun push master avant tour explicite C7 et procédure de passe.
+
+
+Le ledger hors source est écrit avant les juges (après --list et --ignored) ;
+aucun hash de commit auto-référent dans les scripts : le lanceur exige le SHA
+exact fourni par C7 et le driver le revérifie. Trois ignorés NAV historiques
+sont nommément exigés ; toute variation refuse le lancement des juges.
+Le finaliseur ne tue ni ne supprime aucune ressource ; un /proc protégé
+non attribuable donne UNKNOWN et refuse la quiescence verte. Copie SHA des
+preuves vers le second poste à effectuer après finalisation, avant livraison.
