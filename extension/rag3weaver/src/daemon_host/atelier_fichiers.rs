@@ -31,14 +31,20 @@ pub(super) struct Demande {
     /// Le backend de la conversation qui l'a posée : sa porte accorde une commande, et la
     /// décision y relance le tour. Une demande posée hors d'un chat n'en a pas.
     pub backend: Option<String>,
+    /// Quand la demande a été posée : décidée après son échéance, elle est refusée.
+    posee: std::time::Instant,
 }
+
+/// **L'échéance d'une demande d'accord** (ticket d'ED, un accord sans fin) : décidée plus tard,
+/// une demande est refusée, au lieu de relancer une conversation passée à autre chose.
+pub(super) const ECHEANCE_D_UNE_DEMANDE: std::time::Duration = std::time::Duration::from_secs(30 * 60);
 
 /// Les demandes et les chemins ouverts de l'atelier.
 #[derive(Debug, Default)]
 pub(super) struct Accords {
     demandes: std::collections::HashMap<String, Demande>,
     /// Les chemins accordés et leur mode (`read` ou `write` ; `write` vaut aussi lecture).
-    ouverts: Vec<(PathBuf, String)>,
+    ouverts: Vec<(PathBuf, String, Option<String>)>,
     suivant: u64,
     /// L'échéance d'une demande : décidée plus tard, elle est refusée (ticket d'ED, un accord
     /// sans fin). `None` : la valeur par défaut.
@@ -50,6 +56,14 @@ impl Accords {
         let d = self.demandes.get(id).ok_or_else(|| format!("aucune demande {id}"))?;
         if let Some(deja) = d.decision {
             return Err(format!("la demande {id} est déjà {}", if deja { "accordée" } else { "refusée" }));
+        }
+        let echeance = self.echeance.unwrap_or(ECHEANCE_D_UNE_DEMANDE);
+        if d.posee.elapsed() > echeance {
+            return Err(format!(
+                "la demande {id} est échue (posée il y a {} min, échéance {} min) : rien n'est décidé ; que la conversation la repose si elle en a encore besoin",
+                d.posee.elapsed().as_secs() / 60,
+                echeance.as_secs() / 60
+            ));
         }
         Ok(d.clone())
     }
@@ -80,7 +94,7 @@ fn publier_decision(
         }
         e.decision = Some(accorder);
         if accorder && d.commande.is_none() {
-            a.ouverts.push((d.chemin.clone(), d.mode.clone()));
+            a.ouverts.push((d.chemin.clone(), d.mode.clone(), d.backend.clone()));
         }
     }
     Ok(d)
@@ -154,12 +168,12 @@ fn canonique(p: &Path) -> PathBuf {
 impl DaemonHost {
     /// **Résoudre un chemin de l'atelier** : relatif à sa racine, ou absolu (`~/`
     /// s'étend) ; refusé hors de la racine, avec les deux suites que le modèle a.
-    pub(super) fn atelier_resoudre(&self, racine: Option<&Path>, path: &str, mode: &str) -> Result<Resolu, String> {
+    pub(super) fn atelier_resoudre(&self, racine: Option<&Path>, path: &str, mode: &str, backend: Option<&str>) -> Result<Resolu, String> {
         let racine = racine.ok_or("l'atelier n'a pas de racine de travail (`workspace.root`)")?;
         let racine = canonique(racine);
         let p = crate::backend_code::etendre_tilde(path.trim());
         let chemin = canonique(&if p.is_absolute() { p } else { racine.join(p) });
-        if !chemin.starts_with(&racine) && !self.accorde(&chemin, mode) {
+        if !chemin.starts_with(&racine) && !self.accorde(&chemin, mode, backend) {
             return Err(format!(
                 "{} est hors de la racine de l'atelier ({}). Deux suites : déclarer l'espace (attach_worktree ou open_branch sur le worktree qui le contient), ou demander l'accord de l'utilisateur (ask_permission, avec la raison).",
                 chemin.display(),
@@ -192,8 +206,8 @@ impl DaemonHost {
     /// `open_branch`, marqué à côté de son manifeste), ou si l'utilisatrice l'a accordé
     /// (ask_permission) ; sinon non (décision de c7, 9 novembre 2026 : `task_writes` garde
     /// son sens pour l'arbre qu'elle tient).
-    fn atelier_peut_ecrire(&self, w: &Worktree, chemin: &Path) -> bool {
-        if self.accorde(chemin, "write") {
+    fn atelier_peut_ecrire(&self, w: &Worktree, chemin: &Path, backend: Option<&str>) -> bool {
+        if self.accorde(chemin, "write", backend) {
             return true;
         }
         let Ok(racines) = self.racines_de_code() else { return false };
@@ -201,13 +215,14 @@ impl DaemonHost {
     }
 
     /// Un accord couvre-t-il ce chemin pour ce mode ? (`write` vaut aussi lecture.)
-    fn accorde(&self, chemin: &Path, mode: &str) -> bool {
+    fn accorde(&self, chemin: &Path, mode: &str, backend: Option<&str>) -> bool {
         let a = self.accords.lock().unwrap_or_else(|p| p.into_inner());
-        a.ouverts.iter().any(|(p, m)| chemin.starts_with(p) && (m == "write" || m == mode))
+        // Un accord vaut pour la conversation (le backend) qui l'a demandé, et pour elle seule.
+        a.ouverts.iter().any(|(p, m, b)| chemin.starts_with(p) && (m == "write" || m == mode) && b.as_deref() == backend)
     }
 
     /// **Demander l'accord** (`ask_permission`) : la demande gardée, sa carte rendue.
-    pub(super) fn atelier_demander(&self, racine: Option<&Path>, path: &str, mode: &str, raison: &str) -> Result<crate::dataflow::worktree_nodes::WorktreeAnswer, String> {
+    pub(super) fn atelier_demander(&self, racine: Option<&Path>, path: &str, mode: &str, raison: &str, backend: Option<&str>) -> Result<crate::dataflow::worktree_nodes::WorktreeAnswer, String> {
         if !matches!(mode, "read" | "write") {
             return Err(format!("ask_permission : le mode est « read » ou « write » (reçu « {mode} »)"));
         }
@@ -223,7 +238,7 @@ impl DaemonHost {
             let mut a = self.accords.lock().unwrap_or_else(|p| p.into_inner());
             a.suivant += 1;
             let id = format!("accord-{}-{}", crate::events::maintenant_ms(), a.suivant);
-            a.demandes.insert(id.clone(), Demande { chemin: chemin.clone(), mode: mode.to_string(), raison: raison.trim().to_string(), publication: Arc::default(), decision: None, commande: None, backend: None });
+            a.demandes.insert(id.clone(), Demande { chemin: chemin.clone(), mode: mode.to_string(), raison: raison.trim().to_string(), publication: Arc::default(), decision: None, commande: None, backend: backend.map(str::to_string), posee: std::time::Instant::now() });
             id
         };
         let mot = if mode == "write" { "écrire" } else { "lire" };
@@ -250,7 +265,7 @@ impl DaemonHost {
             let id = format!("accord-{}-{}", crate::events::maintenant_ms(), a.suivant);
             a.demandes.insert(
                 id.clone(),
-                Demande { chemin: chemin.clone(), mode: "command".into(), raison: String::new(), publication: Arc::default(), decision: None, commande: Some(ligne.to_string()), backend: Some(backend.to_string()) },
+                Demande { chemin: chemin.clone(), mode: "command".into(), raison: String::new(), publication: Arc::default(), decision: None, commande: Some(ligne.to_string()), backend: Some(backend.to_string()), posee: std::time::Instant::now() },
             );
             id
         };
@@ -378,8 +393,8 @@ impl DaemonHost {
     }
 
     /// **Lire un fichier de l'atelier** (`read_file`) : 200 lignes au plus, la suite dite.
-    pub(super) fn atelier_lire(&self, racine: Option<&Path>, path: &str, offset: usize, length: usize) -> Result<String, String> {
-        let r = self.atelier_resoudre(racine, path, "read")?;
+    pub(super) fn atelier_lire(&self, racine: Option<&Path>, path: &str, offset: usize, length: usize, backend: Option<&str>) -> Result<String, String> {
+        let r = self.atelier_resoudre(racine, path, "read", backend)?;
         if let Some(w) = &r.worktree {
             let rel = r.chemin.strip_prefix(&w.racine).unwrap_or(&r.chemin).to_string_lossy().to_string();
             let v = self.with_backend(&w.hosted, |b| b.call("read_file", json!({ "path": rel, "offset": offset, "limit": length }))).and_then(|x| x)?;
@@ -423,11 +438,11 @@ impl DaemonHost {
     /// **Lire un scope** (`read_scope`) : par `usages` (où il est défini) et `outline` (ses
     /// bornes) dans le worktree attaché ; son texte lu entre ses bornes (200 lignes au
     /// plus, la suite dite).
-    pub(super) fn atelier_lire_scope(&self, racine: Option<&Path>, name: &str, path: &str) -> Result<String, String> {
+    pub(super) fn atelier_lire_scope(&self, racine: Option<&Path>, name: &str, path: &str, backend: Option<&str>) -> Result<String, String> {
         let (worktrees, rel_voulu): (Vec<Worktree>, Option<String>) = if path.trim().is_empty() {
             (self.worktrees_attaches(), None)
         } else {
-            let r = self.atelier_resoudre(racine, path, "read")?;
+            let r = self.atelier_resoudre(racine, path, "read", backend)?;
             let Some(w) = r.worktree else {
                 return Err(format!(
                     "{} est sous la racine de l'atelier, sans index : read_scope ne connaît que les worktrees attachés ; lisez-le par read_file",
@@ -509,8 +524,8 @@ impl DaemonHost {
     /// **Écrire un fichier** (`replace_text`, `replace_lines`, `insert_lines`) : le texte
     /// neuf calculé, écrit (par le dépôt s'il est dans un worktree attaché, qui le
     /// réindexe), et le diff unifié rendu.
-    pub(super) fn atelier_ecrire(&self, racine: Option<&Path>, path: &str, edition: Edition) -> Result<String, String> {
-        let r = self.atelier_resoudre(racine, path, "write")?;
+    pub(super) fn atelier_ecrire(&self, racine: Option<&Path>, path: &str, edition: Edition, backend: Option<&str>) -> Result<String, String> {
+        let r = self.atelier_resoudre(racine, path, "write", backend)?;
         // L'empreinte de ce qui a été lu : l'écriture refuse un fichier changé entre-temps
         // (ticket d'ED, l'écriture sans contrôle de concurrence). `None` : un fichier à créer.
         let (avant, lu) = match std::fs::read_to_string(&r.chemin) {
@@ -526,7 +541,7 @@ impl DaemonHost {
         let apres = texte_apres(&avant, &edition).map_err(|e| format!("{} : {e}", r.chemin.display()))?;
         let mut dit = Vec::new();
         if let Some(w) = &r.worktree {
-            if !self.atelier_peut_ecrire(w, &r.chemin) {
+            if !self.atelier_peut_ecrire(w, &r.chemin, backend) {
                 return Err(format!(
                     "{} est dans le dépôt {}, que l'atelier n'a pas ouvert lui-même (l'arbre que tient l'utilisatrice) : demandez son accord par ask_permission (path, mode « write », la raison), puis réessayez ; ou ouvrez une branche à vous (open_branch) et écrivez-y",
                     r.chemin.display(),
@@ -1799,7 +1814,7 @@ mod publication_accord_tests {
             let mut a = Accords::default();
             a.demandes.insert(ID.into(), Demande {
                 chemin: domaine.path().to_path_buf(), mode: "command".into(), raison: "fixture".into(),
-                publication: Arc::default(), decision: None, commande: Some(LIGNE.into()), backend: Some("backend-synthetique".into()),
+                publication: Arc::default(), decision: None, commande: Some(LIGNE.into()), backend: Some("backend-synthetique".into()), posee: std::time::Instant::now(),
             });
             Self { domaine, registre: Arc::new(Mutex::new(a)), garde: Arc::new(Garde::new(Mode::Approbation)) }
         }
@@ -1904,7 +1919,7 @@ mod publication_accord_tests {
         let d = tempfile::tempdir().unwrap();
         let host = DaemonHost::new().with_runs_root(d.path().join("runs"));
         let p = d.path().join("fixture");
-        let answer = host.atelier_demander(None, p.to_str().unwrap(), "read", "fixture").unwrap();
+        let answer = host.atelier_demander(None, p.to_str().unwrap(), "read", "fixture", None).unwrap();
         let id = answer.ui[0]["id"].as_str().unwrap();
         let recu = host.decider_accord(id, true, "fixture").unwrap();
         assert_eq!(recu["relance"], false);
@@ -1914,8 +1929,8 @@ mod publication_accord_tests {
         assert_eq!(journal.lines().count(), 1, "un perdant ne publie pas un second reçu");
         let nouveau = DaemonHost::new().with_runs_root(d.path().join("runs"));
         assert!(nouveau.etat_accord(id).is_none());
-        assert!(!nouveau.accorde(&p, "read"));
-        assert!(host.accorde(&p, "read"));
+        assert!(!nouveau.accorde(&p, "read", None));
+        assert!(host.accorde(&p, "read", None));
     }
 
     /// Le contrat du 13 novembre 2026 (ticket d'ED, la décision posée avant son journal) : ce
@@ -1928,13 +1943,13 @@ mod publication_accord_tests {
         let host = DaemonHost::new().with_runs_root(d.path().join("runs"));
         std::fs::create_dir_all(d.path().join("runs/decisions.jsonl")).unwrap();
         let p = d.path().join("fixture");
-        let answer = host.atelier_demander(None, p.to_str().unwrap(), "read", "fixture").unwrap();
+        let answer = host.atelier_demander(None, p.to_str().unwrap(), "read", "fixture", None).unwrap();
         let id = answer.ui[0]["id"].as_str().unwrap();
         assert!(host.decider_accord(id, true, "fixture").is_err());
         assert!(host.etat_accord(id).unwrap()["decision"].is_null(), "la demande reste ouverte");
-        assert!(!host.accorde(&p, "read"), "aucun accord sans journal");
+        assert!(!host.accorde(&p, "read", None), "aucun accord sans journal");
         std::fs::remove_dir(d.path().join("runs/decisions.jsonl")).unwrap();
         host.decider_accord(id, true, "fixture").expect("le journal réparé, la demande se décide");
-        assert!(host.accorde(&p, "read"));
+        assert!(host.accorde(&p, "read", None));
     }
 }
