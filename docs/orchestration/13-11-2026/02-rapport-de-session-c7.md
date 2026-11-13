@@ -438,3 +438,19 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
 - **recherche** : la lib entière en `--nocapture` sur 65c7dd96d et 835d5298f à luciepc, dix tours verts sur dix ; le lot du témoin L3 passe en un seul tenant (`2 fichiers`, 3,8 à 4,9 s). Le rouge d'archi est l'empreinte d'un lot coupé en deux (la mention de `__pause_du_lot__.rs` lue sans `def.rs`), ce qui exclut un instantané qui mentirait au milieu d'un lot. Deux voies restent : deux passages de la réaction, ou une reprise un à un après échec. **C'est la ligne de lot du rouge qui tranche**, pas douze tours verts de plus.
 - Décision : recherche cède la seule place lourde du portable (`lourds-max` = 1) après le tour en cours ; la soirée est au cœur (passe de push de `LocalStorage::commit` vers 21 h 50) puis à G (lib au hash du cœur). Archi donne à recherche la ligne de lot et le chemin du journal de son rouge ; si le journal a disparu, un témoin imprimera la ligne au prochain rouge.
 - Au cœur, pour après son push : la question de recherche (page 30), **l'index HNSW suit-il l'instantané de lecture ?** — socle du masque avant le top-k des vues.
+
+## Vers 21 h 0x — les cinq réponses de Lucie à la page 30 ; le lot de la liaison s'ouvre ce soir
+
+Lucie a tranché les cinq questions de la page 30 (liaison branches et worktrees → couches) :
+
+1. **Parente** : inférée par le point de fourche, marquée inférée.
+2. **Publication** : à chaque commit indexé, « pour l'instant ».
+3. **Couche de travail** : lisible des autres sessions — « ça fait argument pour plusieurs agents qui codent en même temps et se parlent ».
+4. **Rebase** : la couche suit d'elle-même, « pour l'instant ».
+5. **Histoire** : question déplacée, et « pas encore très sûre ». Plutôt que « combien de générations garder », **choisir explicitement ce qu'on indexe** : des branches suivies déclarées (main, et telle et telle branche partie de main) ; les commits et branches entre deux ne sont pas indexés systématiquement, on sait seulement qu'ils existent ; `view: <branche>@<commit>` les matérialise à la demande. La rétention des générations indexées reste ouverte : tout gardé pour l'instant, texte seul pour les anciennes, coupe sur mesure.
+
+Suite : arbre principal note les décisions dans la page 30 et ouvre le lot de la liaison sur sa branche, rouges d'abord, pendant que 1a attend la lib du cœur ; ED relecteur. Le modèle : un ensemble déclaré de branches suivies par dépôt, une génération par commit indexé d'une branche suivie, « connu, non indexé » pour le reste.
+
+Estimation donnée à Lucie : une vue par couche interrogeable sur l'index réel autour d'une semaine (1a demain, 1b et la liaison samedi, 2b-B dimanche, masque et `view` mardi ou mercredi) ; dix jours avec la migration de ses bases, l'IDE et l'historique. Plafonds : la file de push à un lot, une lib par jour, une place lourde sur le portable.
+
+ED a son rouge (b) : six onglets, le sixième à « Chargement… » 120 s (aa49d55c4) ; SharedWorker en écriture avec trois gardes (une connexion de flux par origine, repli par onglet quand le SharedWorker manque, fermeture au dernier onglet parti).
