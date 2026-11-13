@@ -167,3 +167,15 @@ SDK29pool1G/CPU4/étatssiblings ; capturemain GDBdétachée AVANT juges +waitpid
 réel reprend primitives64abd documentées/hachées. AST7/PythonGDB/rustfmtparse
 et407tickets/diffcheck seuls ; zéroCargo/rustc/NAV/service/targetmuté.
 Aucun GO d'exécution, nouveau couple exact à relire et créneau à donner C7.
+
+## Réserve Archi438 avant GO — scan après acquisition manquant
+
+Le scan cache exe/cwd/FD et les3SHA étaient faits avant poste, puis seulement
+cache-before.quiescence relu dans le driver. Un lecteur/build du W698 peut
+démarrer pendant l'attente : la reprise F8 invaliderait alors ses empreintes
+sans nouveau contrôle. Aucun target réel touché, réserve de lecture statique.
+438 n'a pas de GO et est remplacé pour préparation par un delta qui renouvelle
+APRÈS acquisition, juste avant reprise réelle, inode/device/UID/mode/marker,
+provenance698/reçus terminés/3SHA et scan incluant OLDW698, nouveauW et target.
+Activité ou UNKNOWN attribué refusés ; inconnus baseline restent inconnus.
+Ticket complété AVANT diff, aucune qualification/runtime supplémentaire.
