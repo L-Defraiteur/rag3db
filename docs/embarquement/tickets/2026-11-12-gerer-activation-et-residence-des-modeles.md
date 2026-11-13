@@ -659,5 +659,7 @@ qui place sur card2) et `ROCR_VISIBLE_DEVICES=0`. Activé en 3,9 s ; identité p
 `inactive` 62,9 s après le client lâché ; aucune unité `rag3weaver-fournisseur-*` ni écoute sur
 7890 ensuite. Mémoire relevée toutes les 5 s : card2 de 21,35 à 22,54 Go (granite-107m tient
 1,2 Go) puis revenue à 21,35 Go ; card0 entre 7,97 et 8,21 Go sans marche (le jeu de Lucie).
-Témoins faux ssh : 10 tours verts ; les tests d'activation 30 fois verts sur `b8f1c1dd0` (correctif
-de la fixture : elle lisait mal un refus, « Peer disconnected » une fois sur vingt).
+Témoins faux ssh : 10 tours verts. Un rouge d'un test d'activation existant, une fois sur vingt
+(« Peer disconnected » sur l'embed), à cause **plausible, non prouvée** : la fixture Python répondait
+404 à `POST /bail` sans lire le corps, et la fermeture avec des octets non lus envoie un reset ;
+corrigé en `b8f1c1dd0` (elle lit le corps et dit `Connection: close`), puis 30 tours sur 30 verts.
