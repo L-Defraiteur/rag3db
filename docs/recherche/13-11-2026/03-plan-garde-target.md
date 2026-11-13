@@ -33,3 +33,22 @@ ni prouver un ELF réellement reconstruit sans qualification Rust ultérieure.
 L'ancien témoin test_garde_target.sh compile une fixture Rust et n'est PAS
 inclus dans cette recette CPU. Les vieux tests ne sont pas supprimés.
 Ticket ouvert jusqu'à revues et qualification suffisante, aucun master/retrait.
+
+## Correctif isolé publié après rouges attendus
+
+Préparation29087a73d : sept fonctions jouées en0,138s ; deux passent,
+les cinq autres exposent les refus manquants (quatre assertions rouges avec
+sous-cas et deux fichiers marqueurs absents). Journal rouge-29087.log conservé.
+Aucun rouge hors défauts prévus. Suite étendue à neuf fonctions : marqueur
+vide/relatif non qualifié, et --config explicitement refusé par l'adaptateur.
+
+cargo_garde.py utilise les métadonnées --no-deps pour workspace/target,
+respecte les options manifest/target avant --, puis épingle CARGO_TARGET_DIR
+et appelle la garde shell réelle. --config est refusé avant toute commande :
+aucune prétention de qualifier les surcharges arbitraires Cargo. Le vieux
+témoin Rust attribue désormais son target AVANT build, pas après artefacts.
+Les invocations hors wrapper restent possibles et doivent appeler la garde
+explicitement ; pas de partage concurrent autorisé par un marqueur.
+
+Même recette timeout60/neuf fonctions CPU après publication de ce correctif,
+puis syntaxe et tickets. Aucun témoin Rust exécuté dans ce lot préparatoire.
