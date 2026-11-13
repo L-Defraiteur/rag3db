@@ -231,6 +231,12 @@ cd ~/git_workspaces/codeparsers-garde && git checkout require-js
 CARGO_TARGET_DIR=~/.cache/rag3weaver-build/target-codeparsers-local ~/.cache/rag3weaver-build/poste lourd timeout 3000 nice cargo test -j 8
 ```
 
+> **13 novembre 2026** : ce qui suit sur le lot `require` est **périmé** — le lot est sur master depuis
+> le 11 (voir « Lecture du 13 novembre » plus bas). Et **`~/git_workspaces/rag3db-brancher` n'existe plus
+> à luciepc** : la passation de Codex l'a retiré avec les autres worktrees de lots. Une passe neuve tire
+> son worktree d'un arbre rag3db existant (par exemple `~/git_workspaces/rag3db-mesure-garde`, ou
+> `~/git_workspaces/rag3db`), par `git worktree add --detach`.
+
 ### Le même lot, à luciepc (où se jouent la passe et le push)
 
 - **Worktree** : `~/git_workspaces/rag3db-brancher`, branche locale `local-require-js`, dernier commit
