@@ -22,6 +22,7 @@ LocalTable* LocalStorage::getOrCreateLocalTable(Table& table) {
     if (!tables.contains(tableID)) {
         switch (table.getTableType()) {
         case TableType::NODE: {
+            KU_ASSERT(!committingNodeTables);
             auto tableEntry = catalog->getTableCatalogEntry(transaction, table.getTableID());
             tables[tableID] = std::make_unique<LocalNodeTable>(tableEntry, table, mm);
         } break;
@@ -90,6 +91,7 @@ void LocalStorage::commit() {
             nodeTableIDs.push_back(tableID);
         }
     }
+    committingNodeTables = true;
     for (const auto tableID : nodeTableIDs) {
         auto* localTable = tables.at(tableID).get();
         {
@@ -105,6 +107,7 @@ void LocalStorage::commit() {
             }
         }
     }
+    committingNodeTables = false;
     // Les tables de relations ensuite, celles que les index ont créées en route comprises ;
     // relevées elles aussi avant d'en valider une.
     std::vector<table_id_t> relTableIDs;

@@ -59,6 +59,9 @@ public:
 private:
     main::ClientContext& clientContext;
     std::unordered_map<common::table_id_t, std::unique_ptr<LocalTable>> tables;
+    // Vrai pendant que commit() valide les tables de nœuds relevées : une table locale de nœuds
+    // créée à ce moment ne serait pas validée (les index n'en créent que de relations).
+    bool committingNodeTables = false;
     std::unordered_map<common::table_id_t, std::vector<PendingNodeStats>> pendingNodeStats;
 
     // The mutex is only needed when working with the optimistic allocators
