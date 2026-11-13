@@ -6,6 +6,7 @@
 %% param: extension string = "" -- Ne chercher que cette extension, sans le point (ex. 'rs').
 %% param: max_results int = 50 -- Lignes rendues (plafond 500) ; toutes sont comptées.
 %% param: context_lines int = 0 -- Lignes de contexte avant et après (plafond 5).
+%% param: symbol_hierarchy_depth int = 0 -- 0 : inchangé ; 1..16 : scope contenant le premier match regex de chaque ligne, puis au plus ce nombre de parents de plages. Index absent/périmé/ambigu explicite, sans corps ni réindexation ; sortie globale96Kio/200nœuds/8fichiers.
 %% param: relation string = "" -- Relation du schéma à suivre depuis les scopes trouvés, pour voir à quoi ils mènent : CONSUMES (ce qu'ils utilisent), CONSUMED_BY (qui les utilise), PARENT_OF / HAS_PARENT, IMPLEMENTS, INHERITS_FROM, USES_LIBRARY. Vide = les lignes seules.
 %% param: relation_limit int = 5 -- Voisins rendus par scope (plafond 20).
 %% param: format string = "markdown" -- markdown (pour le modèle, le défaut) ou json (structuré : chemins, lignes, uuid — pour une interface).
@@ -13,4 +14,4 @@
 %% result: invoke.results
 
 graph LR
-    invoke["InvokeToolNode(operation='grep_files', context=$context, arguments={"pattern":"$pattern","path_prefix":"$path_prefix","extension":"$extension","max_results":"$max_results","context_lines":"$context_lines","relation":"$relation","relation_limit":"$relation_limit","format":"$format"})"]
+    invoke["InvokeToolNode(operation='grep_files', context=$context, arguments={"pattern":"$pattern","path_prefix":"$path_prefix","extension":"$extension","max_results":"$max_results","context_lines":"$context_lines","relation":"$relation","relation_limit":"$relation_limit","symbol_hierarchy_depth":"$symbol_hierarchy_depth","format":"$format"})"]

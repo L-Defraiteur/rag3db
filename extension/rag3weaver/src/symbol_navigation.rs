@@ -80,266 +80,384 @@ fn bounded(mut out: Value) -> Value {
     out
 }
 
+/// Préparer une seule fois les positions, la fraîcheur et les parents d'un fichier.
+/// Les parcours de symboles et les rattachements du grep partagent ces invariants.
+pub struct PreparedNavigation<'a> {
+    selected: Vec<&'a Value>,
+    parents: Vec<Option<usize>>,
+    out: Value,
+    path: String,
+    query_source: String,
+    content: Option<String>,
+}
+
 pub fn navigate(
     rows: &[Value],
     total: usize,
     source: Option<&dyn FileSource>,
     q: Navigation<'_>,
 ) -> Result<Value, String> {
-    navigate_inner(rows, total, source, q).map(bounded)
+    validate(&q, false)?;
+    PreparedNavigation::new(rows, total, source, q.path, q.source)?
+        .render(q, None)
+        .map(bounded)
 }
-
-/// Les lignes/total viennent d'un seul Plan dans la vue de l'appel. Aucun
-/// voisin n'est inventé depuis un nom de parent ; aucun corps n'est rendu.
-fn navigate_inner(
-    rows: &[Value],
-    total: usize,
-    source: Option<&dyn FileSource>,
-    q: Navigation<'_>,
-) -> Result<Value, String> {
+fn validate(q: &Navigation<'_>, position: bool) -> Result<(), String> {
     if !["file", "parents", "children", "members"].contains(&q.mode) {
         return Err("mode: file | parents | children | members".into());
     }
     if q.depth > MAX_DEPTH || q.limit == 0 || q.limit > MAX_NODES {
         return Err(format!("depth: 0..{MAX_DEPTH}, limit: 1..{MAX_NODES}"));
     }
-    if q.mode != "file" && q.symbol.is_empty() {
+    if !position && q.mode != "file" && q.symbol.is_empty() {
         return Err("symbol requis (UUID ou nom exact dans path/source)".into());
     }
-    let mut out = json!({"mode":q.mode,"path":q.path,"source":q.source,"status":"ready","depth":q.depth,
+    Ok(())
+}
+impl<'a> PreparedNavigation<'a> {
+    fn unavailable(path: &str, source_id: &str, out: Value) -> Self {
+        Self {
+            selected: vec![],
+            parents: vec![],
+            out,
+            path: path.into(),
+            query_source: source_id.into(),
+            content: None,
+        }
+    }
+    pub fn new(
+        rows: &'a [Value],
+        total: usize,
+        source: Option<&dyn FileSource>,
+        path: &str,
+        source_id: &str,
+    ) -> Result<Self, String> {
+        let mut out = json!({"mode":"file","path":path,"source":source_id,"status":"ready","depth":0,
         "nodes":[],"members":[],"candidates":[],"total_indexed_scopes":total,"total_selected":0,
         "truncated":false,"provenance":{"relation":"range_containment","position_precision":"line_ranges",
         "freshness":"unverified","not_relations":["declared_membership","inheritance"]},
         "coverage":{"complete":false,"limits":["Scopes indexés seulement ; lambdas repliées et membres non extraits peuvent manquer.",
         "Inclusion de plages à granularité ligne, pas parent AST garanti ; méthodes hors classe non rattachées par ce parcours.",
         "Membres : scopes directs de plages, déclarations méthode/fonction et propriétés typées ; faits séparés, aucun inventaire exhaustif."]}});
-    // Une tranche de scopes ne permet pas de décider les racines/parents.
-    if total > MAX_INPUT || rows.len() < total {
-        out["status"] = json!("input_truncated");
-        out["truncated"] = json!(true);
-        return Ok(out);
-    }
-    let mut selected: Vec<&Value> = rows
-        .iter()
-        .filter(|r| q.source.is_empty() || text(r, "source") == q.source)
-        .collect();
-    let sources: std::collections::BTreeSet<_> =
-        selected.iter().map(|r| text(r, "source")).collect();
-    if sources.len() > 1 {
-        out["status"] = json!("ambiguous_source");
-        out["candidates"] = json!(sources);
-        return Ok(out);
-    }
-    if selected.is_empty() {
-        out["status"] = json!("no_indexed_scopes");
-        return Ok(out);
-    }
-    let src = text(selected[0], "source");
-    out["source"] = json!(src);
-    // Le hash de File est porté par DEFINED_IN dans la même lecture du Plan.
-    let Some(files) = selected[0]["indexed_file"].as_array() else {
-        out["status"] = json!("unverified_file");
-        return Ok(out);
-    };
-    if files.len() != 1 {
-        out["status"] = json!("unverified_file");
-        return Ok(out);
-    }
-    let file = &files[0];
-    let hash = text(file, "content_hash");
-    let coherent = selected.iter().all(|r| {
-        text(r, "file_path") == q.path
-            && text(r, "source") == src
-            && r["indexed_file"]
-                .as_array()
-                .is_some_and(|fs| fs.len() == 1 && fs[0] == *file)
-    });
-    if !coherent || hash.is_empty() {
-        out["status"] = json!("unverified_file");
-        return Ok(out);
-    }
-    out["provenance"]["indexed_hash"] = json!(hash);
-    out["provenance"]["indexed_cursor"] = file["cursor"].clone();
-    let Some(source) = source else {
-        out["status"] = json!("source_unavailable");
-        return Ok(out);
-    };
-    let (actual_src, actual_path) = indexed_name(source, q.path);
-    if actual_src != src || actual_path != q.path {
-        out["status"] = json!("source_unavailable");
-        return Ok(out);
-    }
-    out["provenance"]["source_cursor"] = json!(source.cursor());
-    let Some(content) = source.read(q.path)? else {
-        out["status"] = json!("file_missing");
-        return Ok(out);
-    };
-    let actual = crate::hash::content_hash(&content);
-    out["provenance"]["actual_hash"] = json!(actual);
-    if actual != hash {
-        out["status"] = json!("stale_index");
-        out["provenance"]["freshness"] = json!("stale");
-        return Ok(out);
-    }
-    out["provenance"]["freshness"] = json!("matches_observed_content");
-    if selected.iter().any(|r| {
-        text(r, "_uuid").is_empty() || interval(r).is_none_or(|(_, end)| end > content.len() as u64)
-    }) {
-        out["status"] = json!("invalid_positions");
-        return Ok(out);
-    }
-    selected.sort_by_key(|r| {
-        (
-            number(r, "start_byte"),
-            std::cmp::Reverse(number(r, "end_byte")),
-            text(r, "_uuid"),
-        )
-    });
-    let mut parents = vec![None; selected.len()];
-    let mut ambiguous = Vec::new();
-    let mut comparisons = 0usize;
-    // Deux scans par scope, pas une comparaison de chaque paire de parents
-    // pour chaque enfant. Un candidat minimal ne suffit que si tous les
-    // autres le contiennent ; des plages croisées restent ambiguës.
-    for (i, child) in selected.iter().enumerate() {
-        let mut candidates = Vec::new();
-        for (j, parent) in selected.iter().enumerate() {
-            comparisons += 1;
-            if i != j && contains(parent, child) {
-                candidates.push(j);
-            }
-            if i != j && interval(parent) == interval(child) {
-                ambiguous.push(text(child, "_uuid"));
-            }
+        // Une tranche de scopes ne permet pas de décider les racines/parents.
+        if total > MAX_INPUT || rows.len() < total {
+            out["status"] = json!("input_truncated");
+            out["truncated"] = json!(true);
+            return Ok(Self::unavailable(path, source_id, out));
         }
-        if let Some(&best) = candidates.iter().min_by_key(|&&j| {
-            let (a, b) = interval(selected[j]).unwrap();
-            b - a
+        let mut selected: Vec<&Value> = rows
+            .iter()
+            .filter(|r| source_id.is_empty() || text(r, "source") == source_id)
+            .collect();
+        let sources: std::collections::BTreeSet<_> =
+            selected.iter().map(|r| text(r, "source")).collect();
+        if sources.len() > 1 {
+            out["status"] = json!("ambiguous_source");
+            out["candidates"] = json!(sources);
+            return Ok(Self::unavailable(path, source_id, out));
+        }
+        if selected.is_empty() {
+            out["status"] = json!("no_indexed_scopes");
+            return Ok(Self::unavailable(path, source_id, out));
+        }
+        let src = text(selected[0], "source");
+        out["source"] = json!(src);
+        // Le hash de File est porté par DEFINED_IN dans la même lecture du Plan.
+        let Some(files) = selected[0]["indexed_file"].as_array() else {
+            out["status"] = json!("unverified_file");
+            return Ok(Self::unavailable(path, source_id, out));
+        };
+        if files.len() != 1 {
+            out["status"] = json!("unverified_file");
+            return Ok(Self::unavailable(path, source_id, out));
+        }
+        let file = &files[0];
+        let hash = text(file, "content_hash");
+        let coherent = selected.iter().all(|r| {
+            text(r, "file_path") == path
+                && text(r, "source") == src
+                && r["indexed_file"]
+                    .as_array()
+                    .is_some_and(|fs| fs.len() == 1 && fs[0] == *file)
+        });
+        if !coherent || hash.is_empty() {
+            out["status"] = json!("unverified_file");
+            return Ok(Self::unavailable(path, source_id, out));
+        }
+        out["provenance"]["indexed_hash"] = json!(hash);
+        out["provenance"]["indexed_cursor"] = file["cursor"].clone();
+        let Some(source) = source else {
+            out["status"] = json!("source_unavailable");
+            return Ok(Self::unavailable(path, source_id, out));
+        };
+        let (actual_src, actual_path) = indexed_name(source, path);
+        if actual_src != src || actual_path != path {
+            out["status"] = json!("source_unavailable");
+            return Ok(Self::unavailable(path, source_id, out));
+        }
+        out["provenance"]["source_cursor"] = json!(source.cursor());
+        let Some(content) = source.read(path)? else {
+            out["status"] = json!("file_missing");
+            return Ok(Self::unavailable(path, source_id, out));
+        };
+        let actual = crate::hash::content_hash(&content);
+        out["provenance"]["actual_hash"] = json!(actual);
+        if actual != hash {
+            out["status"] = json!("stale_index");
+            out["provenance"]["freshness"] = json!("stale");
+            return Ok(Self::unavailable(path, source_id, out));
+        }
+        out["provenance"]["freshness"] = json!("matches_observed_content");
+        if selected.iter().any(|r| {
+            text(r, "_uuid").is_empty()
+                || interval(r).is_none_or(|(_, end)| end > content.len() as u64)
         }) {
-            let mut unique = true;
-            for &j in &candidates {
+            out["status"] = json!("invalid_positions");
+            return Ok(Self::unavailable(path, source_id, out));
+        }
+        selected.sort_by_key(|r| {
+            (
+                number(r, "start_byte"),
+                std::cmp::Reverse(number(r, "end_byte")),
+                text(r, "_uuid"),
+            )
+        });
+        let mut parents = vec![None; selected.len()];
+        let mut ambiguous = Vec::new();
+        let mut comparisons = 0usize;
+        // Deux scans par scope, pas une comparaison de chaque paire de parents
+        // pour chaque enfant. Un candidat minimal ne suffit que si tous les
+        // autres le contiennent ; des plages croisées restent ambiguës.
+        for (i, child) in selected.iter().enumerate() {
+            let mut candidates = Vec::new();
+            for (j, parent) in selected.iter().enumerate() {
                 comparisons += 1;
-                if j != best && !contains(selected[j], selected[best]) {
-                    unique = false;
+                if i != j && contains(parent, child) {
+                    candidates.push(j);
+                }
+                if i != j && interval(parent) == interval(child) {
+                    ambiguous.push(text(child, "_uuid"));
                 }
             }
-            if unique {
-                parents[i] = Some(best);
-            } else {
-                ambiguous.push(text(child, "_uuid"));
+            if let Some(&best) = candidates.iter().min_by_key(|&&j| {
+                let (a, b) = interval(selected[j]).unwrap();
+                b - a
+            }) {
+                let mut unique = true;
+                for &j in &candidates {
+                    comparisons += 1;
+                    if j != best && !contains(selected[j], selected[best]) {
+                        unique = false;
+                    }
+                }
+                if unique {
+                    parents[i] = Some(best);
+                } else {
+                    ambiguous.push(text(child, "_uuid"));
+                }
             }
         }
+        ambiguous.sort_unstable();
+        ambiguous.dedup();
+        out["coverage"]["ambiguous_range_count"] = json!(ambiguous.len());
+        out["coverage"]["ambiguous_ranges"] = json!(ambiguous);
+        out["coverage"]["parent_comparisons"] = json!(comparisons);
+
+        Ok(Self {
+            selected,
+            parents,
+            out,
+            path: path.into(),
+            query_source: source_id.into(),
+            content: Some(content),
+        })
     }
-    ambiguous.sort_unstable();
-    ambiguous.dedup();
-    out["coverage"]["ambiguous_range_count"] = json!(ambiguous.len());
-    out["coverage"]["ambiguous_ranges"] = json!(ambiguous);
-    out["coverage"]["parent_comparisons"] = json!(comparisons);
-    let root = if q.mode == "file" {
-        None
-    } else {
-        let found: Vec<usize> = selected
-            .iter()
-            .enumerate()
-            .filter(|(_, r)| text(r, "_uuid") == q.symbol || text(r, "name") == q.symbol)
-            .map(|(i, _)| i)
-            .collect();
-        if found.len() != 1 {
-            out["status"] = json!(if found.is_empty() {
-                "symbol_not_found"
-            } else {
-                "ambiguous_symbol"
-            });
-            out["candidates"] = json!(found
-                .iter()
-                .take(q.limit)
-                .map(|&i| node(selected[i], 0, None))
-                .collect::<Vec<_>>());
-            out["truncated"] = json!(found.len() > q.limit);
+    /// Le premier match regex d'une ligne, en octets UTF-8 du contenu observé.
+    /// Le scope de départ est profondeur0, suivi d'au plus depth parents.
+    pub fn parents_at(
+        &self,
+        start: usize,
+        end: usize,
+        depth: usize,
+        limit: usize,
+    ) -> Result<Value, String> {
+        let q = Navigation {
+            path: &self.path,
+            source: &self.query_source,
+            mode: "parents",
+            symbol: "",
+            depth,
+            limit,
+        };
+        validate(&q, true)?;
+        if let Some(c) = &self.content {
+            if start > end
+                || end > c.len()
+                || !c.is_char_boundary(start)
+                || !c.is_char_boundary(end)
+            {
+                return Err("position UTF-8 invalide".into());
+            }
+        }
+        self.render(q, Some((start as u64, end as u64)))
+            .map(bounded)
+    }
+    fn render(&self, q: Navigation<'_>, position: Option<(u64, u64)>) -> Result<Value, String> {
+        let mut out = self.out.clone();
+        out["mode"] = json!(q.mode);
+        out["depth"] = json!(q.depth);
+        if let Some((a, b)) = position {
+            out["position"] =
+                json!({"start_byte":a,"end_byte":b,"precision":"regex_first_match_on_line"});
+        }
+        if out["status"] != "ready" {
             return Ok(out);
         }
-        Some(found[0])
-    };
-    let mut nodes = Vec::new();
-    if q.mode == "file" {
-        nodes.push(json!({"kind":"file","path":q.path,"source":src,"depth":0}));
-    }
-    // La stricte inclusion diminue la plage à chaque descente : pas de cycle.
-    // La visite garde néanmoins un ensemble pour borner toute évolution future.
-    let mut queue: std::collections::VecDeque<(usize, usize)> = match root {
-        Some(i) => [(i, 0)].into(),
-        None => parents
-            .iter()
-            .enumerate()
-            .filter(|(_, p)| p.is_none())
-            .map(|(i, _)| (i, 1))
-            .collect(),
-    };
-    let mut visited = std::collections::BTreeSet::new();
-    let mut omitted_depth = false;
-    while let Some((i, depth)) = queue.pop_front() {
-        if !visited.insert(i) {
-            continue;
-        }
-        if depth > q.depth {
-            omitted_depth = true;
-            continue;
-        }
-        nodes.push(node(
-            selected[i],
-            depth,
-            parents[i].map(|p| text(selected[p], "_uuid")),
-        ));
-        if q.mode == "parents" {
-            if let Some(p) = parents[i] {
-                queue.push_back((p, depth + 1));
+        let selected = &self.selected;
+        let parents = &self.parents;
+        let src = text(&out, "source").to_owned();
+        let root = if q.mode == "file" {
+            None
+        } else {
+            let found: Vec<usize> = if let Some((start, end)) = position {
+                let containers: Vec<usize> = selected
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, r)| {
+                        interval(r).is_some_and(|(a, b)| a <= start && start < b && end <= b)
+                    })
+                    .map(|(i, _)| i)
+                    .collect();
+                // A single minimum must be contained by every other candidate.
+                // Equal or crossing minimal ranges remain candidates, never a UUID lottery.
+                if let Some(&best) = containers.iter().min_by_key(|&&i| {
+                    let (a, b) = interval(selected[i]).unwrap();
+                    b - a
+                }) {
+                    if containers
+                        .iter()
+                        .all(|&i| i == best || contains(selected[i], selected[best]))
+                    {
+                        vec![best]
+                    } else {
+                        containers
+                    }
+                } else {
+                    vec![]
+                }
+            } else {
+                selected
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, r)| text(r, "_uuid") == q.symbol || text(r, "name") == q.symbol)
+                    .map(|(i, _)| i)
+                    .collect()
+            };
+            if found.len() != 1 {
+                out["status"] = json!(if found.is_empty() {
+                    if position.is_some() {
+                        "no_containing_scope"
+                    } else {
+                        "symbol_not_found"
+                    }
+                } else {
+                    if position.is_some() {
+                        "ambiguous_position"
+                    } else {
+                        "ambiguous_symbol"
+                    }
+                });
+                out["candidates"] = json!(found
+                    .iter()
+                    .take(q.limit)
+                    .map(|&i| node(selected[i], 0, None))
+                    .collect::<Vec<_>>());
+                out["truncated"] = json!(found.len() > q.limit);
+                return Ok(out);
             }
-        } else if q.mode != "members" || depth == 0 {
-            let children: Vec<_> = parents
+            Some(found[0])
+        };
+        let mut nodes = Vec::new();
+        if q.mode == "file" {
+            nodes.push(json!({"kind":"file","path":q.path,"source":src,"depth":0}));
+        }
+        // La stricte inclusion diminue la plage à chaque descente : pas de cycle.
+        // La visite garde néanmoins un ensemble pour borner toute évolution future.
+        let mut queue: std::collections::VecDeque<(usize, usize)> = match root {
+            Some(i) => [(i, 0)].into(),
+            None => parents
                 .iter()
                 .enumerate()
-                .filter(|(_, p)| **p == Some(i))
-                .map(|(j, _)| (j, depth + 1))
-                .collect();
-            // Préordre stable : une indentation représente le même arbre
-            // que parent_uuid, même après une coupure de volume.
-            for child in children.into_iter().rev() {
-                queue.push_front(child);
+                .filter(|(_, p)| p.is_none())
+                .map(|(i, _)| (i, 1))
+                .collect(),
+        };
+        let mut visited = std::collections::BTreeSet::new();
+        let mut omitted_depth = false;
+        while let Some((i, depth)) = queue.pop_front() {
+            if !visited.insert(i) {
+                continue;
+            }
+            if depth > q.depth {
+                omitted_depth = true;
+                continue;
+            }
+            nodes.push(node(
+                selected[i],
+                depth,
+                parents[i].map(|p| text(selected[p], "_uuid")),
+            ));
+            if q.mode == "parents" {
+                if let Some(p) = parents[i] {
+                    queue.push_back((p, depth + 1));
+                }
+            } else if q.mode != "members" || depth == 0 {
+                let children: Vec<_> = parents
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, p)| **p == Some(i))
+                    .map(|(j, _)| (j, depth + 1))
+                    .collect();
+                // Préordre stable : une indentation représente le même arbre
+                // que parent_uuid, même après une coupure de volume.
+                for child in children.into_iter().rev() {
+                    queue.push_front(child);
+                }
             }
         }
-    }
-    let mut members = Vec::new();
-    if q.mode == "members" && q.depth > 0 {
-        let r = selected[root.unwrap()];
-        for (field, origin) in [
-            ("declarations", "indexed_declaration"),
-            ("field_types", "indexed_typed_property"),
-        ] {
-            if let Ok(Value::Array(facts)) = serde_json::from_str::<Value>(text(r, field)) {
-                for fact in facts {
-                    // Identité de graphe et position absentes ne sont jamais fabriquées.
-                    members.push(json!({"name":clipped(text(&fact,"name"),256),"kind":if field=="field_types"{"property"}else{text(&fact,"kind")},
+        let mut members = Vec::new();
+        if q.mode == "members" && q.depth > 0 {
+            let r = selected[root.unwrap()];
+            for (field, origin) in [
+                ("declarations", "indexed_declaration"),
+                ("field_types", "indexed_typed_property"),
+            ] {
+                if let Ok(Value::Array(facts)) = serde_json::from_str::<Value>(text(r, field)) {
+                    for fact in facts {
+                        // Identité de graphe et position absentes ne sont jamais fabriquées.
+                        members.push(json!({"name":clipped(text(&fact,"name"),256),"kind":if field=="field_types"{"property"}else{text(&fact,"kind")},
                         "signature":clipped(text(&fact,"signature"),512),"type":fact["type"],"line":fact["line"],
                         "owner_ref":node(r,0,None)["ref"],"provenance":origin}));
+                    }
+                } else if !text(r, field).is_empty() {
+                    out["coverage"]["malformed_member_facts"] = json!(true);
                 }
-            } else if !text(r, field).is_empty() {
-                out["coverage"]["malformed_member_facts"] = json!(true);
             }
         }
-    }
-    let total_selected = nodes.len() + members.len();
-    while nodes.len() + members.len() > q.limit {
-        if !members.is_empty() {
-            members.pop();
-        } else {
-            nodes.pop();
+        let total_selected = nodes.len() + members.len();
+        while nodes.len() + members.len() > q.limit {
+            if !members.is_empty() {
+                members.pop();
+            } else {
+                nodes.pop();
+            }
         }
+        out["nodes"] = json!(nodes);
+        out["members"] = json!(members);
+        out["total_selected"] = json!(total_selected);
+        out["truncated"] = json!(total_selected > q.limit || omitted_depth);
+        Ok(out)
     }
-    out["nodes"] = json!(nodes);
-    out["members"] = json!(members);
-    out["total_selected"] = json!(total_selected);
-    out["truncated"] = json!(total_selected > q.limit || omitted_depth);
-    Ok(out)
 }
 
 pub fn markdown(v: &Value) -> String {
@@ -461,6 +579,70 @@ mod tests {
             },
         )
         .unwrap()
+    }
+    #[test]
+    fn prepared_positions_share_the_tree_and_refuse_ambiguous_or_stale_ranges() {
+        let (src, mut rows) = fixture();
+        let p = PreparedNavigation::new(&rows, rows.len(), Some(&src), "a.py", "").unwrap();
+        let a = p.parents_at(32, 36, 1, 80).unwrap();
+        let b = p.parents_at(70, 74, 2, 80).unwrap();
+        assert_eq!(a["nodes"][0]["ref"]["uuid"], "ar");
+        assert_eq!(a["nodes"][1]["ref"]["uuid"], "a");
+        assert_eq!(b["nodes"][0]["ref"]["uuid"], "br");
+        assert_eq!(b["nodes"][1]["ref"]["uuid"], "b");
+        assert_eq!(
+            a["coverage"]["parent_comparisons"],
+            b["coverage"]["parent_comparisons"]
+        );
+        assert_eq!(
+            p.parents_at(40, 40, 1, 80).unwrap()["status"],
+            "no_containing_scope",
+            "borne de fin exclusive"
+        );
+        let mut equal = rows[1].clone();
+        equal["_uuid"] = json!("equal");
+        rows.push(equal);
+        let p = PreparedNavigation::new(&rows, rows.len(), Some(&src), "a.py", "").unwrap();
+        let v = p.parents_at(32, 36, 1, 80).unwrap();
+        assert_eq!(v["status"], "ambiguous_position");
+        assert!(v["nodes"].as_array().unwrap().is_empty());
+        assert!(v["candidates"].as_array().unwrap().len() >= 2);
+        rows.pop();
+        let mut cross = rows[1].clone();
+        cross["_uuid"] = json!("cross");
+        cross["start_byte"] = json!(8);
+        cross["end_byte"] = json!(39);
+        rows.push(cross);
+        let p = PreparedNavigation::new(&rows, rows.len(), Some(&src), "a.py", "").unwrap();
+        assert_eq!(
+            p.parents_at(32, 36, 2, 80).unwrap()["status"],
+            "ambiguous_position"
+        );
+        src.insert("a.py", "changed");
+        let p = PreparedNavigation::new(&rows, rows.len(), Some(&src), "a.py", "").unwrap();
+        assert_eq!(p.parents_at(0, 1, 1, 80).unwrap()["status"], "stale_index");
+    }
+    #[test]
+    fn utf8_positions_and_parent_depth_use_the_observed_content() {
+        let content = "class É:\n    def méthode(self):\n        return 'λ'\n";
+        let src = Snapshot::new("utf", [("u.py".into(), content.into())]);
+        let file = json!([{"content_hash":crate::hash::content_hash(content),"cursor":"snapshot:utf","path":"u.py","source":"snapshot:utf"}]);
+        let mk = |id: &str, start: usize, end: usize| json!({"_uuid":id,"name":id,"scope_type":"function","source":"snapshot:utf","file_path":"u.py","start_byte":start,"end_byte":end,"start_line":1,"end_line":3,"indexed_file":file});
+        let inner = content.find("return").unwrap();
+        let lambda = content.find('λ').unwrap();
+        let rows = vec![
+            mk("outer", 0, content.len()),
+            mk("method", content.find("    def").unwrap(), content.len()),
+            mk("inner", inner, content.len() - 1),
+        ];
+        let p = PreparedNavigation::new(&rows, 3, Some(&src), "u.py", "").unwrap();
+        let one = p.parents_at(lambda, lambda + 2, 1, 80).unwrap();
+        let two = p.parents_at(lambda, lambda + 2, 2, 80).unwrap();
+        assert_eq!(one["nodes"].as_array().unwrap().len(), 2);
+        assert_eq!(two["nodes"].as_array().unwrap().len(), 3);
+        assert_eq!(one["truncated"], true);
+        assert_eq!(two["nodes"][2]["ref"]["uuid"], "outer");
+        assert!(p.parents_at(lambda + 1, lambda + 2, 1, 80).is_err());
     }
     #[test]
     fn depths_and_qualified_roundtrip_without_bodies() {
@@ -830,6 +1012,160 @@ mod integration {
             refused.to_string().contains("view") || refused.to_string().contains("vue"),
             "{refused}"
         );
+        host.shutdown();
+    }
+    fn grep_payload(mut v: Value) -> Value {
+        for _ in 0..8 {
+            if v["matches"].is_array() {
+                return v;
+            }
+            if let Some(x) = v.get("result") {
+                v = x.clone();
+            } else if let Some(x) = v.as_str() {
+                v = serde_json::from_str(x).unwrap();
+            } else {
+                panic!("résultat grep absent : {v}");
+            }
+        }
+        panic!("enveloppes grep excessives");
+    }
+    #[test]
+    fn the_chat_and_workspace_grep_qualify_positions_without_reindexing_stale_matches() {
+        let d = tempfile::tempdir().unwrap();
+        crate::code_tree::copy(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"),
+            &d.path().join("templates"),
+            false,
+        )
+        .unwrap();
+        std::fs::create_dir_all(d.path().join("ws")).unwrap();
+        let content = "class A:\n    def run(self):\n        return 'λNEEDLE'\n";
+        std::fs::write(d.path().join("ws/a.py"), content).unwrap();
+        std::fs::write(
+            d.path().join("ws/b.py"),
+            "class A:\n    def run(self):\n        return 'OTHER'\n",
+        )
+        .unwrap();
+        let code = manifest(d.path(), "code");
+        let atelier = manifest(d.path(), "atelier");
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&code).unwrap()).unwrap();
+        // Fixture de péremption : index explicite uniquement, aucune montre ne répare le test.
+        m["watches"] = json!({});
+        m["workspace"]["catch_up_on_open"] = json!(false);
+        std::fs::write(&code, serde_json::to_vec(&m).unwrap()).unwrap();
+        let observed = Arc::new(Mutex::new(Vec::<Value>::new()));
+        let seen = observed.clone();
+        let model = Arc::new(
+            move |_: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+                let seen = seen.clone();
+                Ok(Arc::new(CallbackLlm::new(
+                    "grep-fixture",
+                    32768,
+                    move |turns: &[Turn], opts, sink| {
+                        if !opts.tools.iter().any(|t| t.name == "grep_files") {
+                            return Err(LlmError::Model("grep_files inaccessible au chat".into()));
+                        }
+                        if let Some(t) = turns.iter().rev().find(|t| {
+                            t.role == "tool" && t.tool_name.as_deref() == Some("grep_files")
+                        }) {
+                            seen.lock()
+                                .unwrap()
+                                .push(grep_payload(serde_json::from_str(&t.content).unwrap()));
+                            MockLlm::new("Contexte vérifié.").generate(turns, opts, sink)
+                        } else {
+                            MockLlm::new("").with_tool_calls(vec![("grep_files".into(),json!({"pattern":"λNEEDLE","symbol_hierarchy_depth":2,"format":"json"}).to_string())]).generate(turns,opts,sink)
+                        }
+                    },
+                )))
+            },
+        );
+        let host = Arc::new(
+            DaemonHost::new()
+                .with_background(Arc::new(crate::dataflow::background::Registry::new()))
+                .with_runs_root(d.path().join("runs"))
+                .with_chats_root(d.path().join("chats"))
+                .with_racines_de_code(crate::code_tree::Roots {
+                    config: d.path().join("config"),
+                    data: d.path().join("data"),
+                })
+                .with_chat_model(model),
+        );
+        host.se_connaitre();
+        let session = host.open_session("fixture-grep", None, vec!["dev".into()], None);
+        let opened = host.open(Some(&session), &code);
+        assert_eq!(opened["ok"], true, "{opened}");
+        let id = opened["result"]["id"].as_str().unwrap();
+        // L'absence d'index ne supprime pas la correspondance textuelle.
+        let absent = grep_payload(host.call(
+            Some(&session),
+            &code,
+            "grep_files",
+            json!({"pattern":"λNEEDLE","symbol_hierarchy_depth":1,"format":"json"}),
+        ));
+        assert_eq!(absent["returned"], 1);
+        assert_ne!(absent["matches"][0]["symbol_context"]["status"], "ready");
+        let started = host.call(Some(&session), &code, "index", json!({"confirm":true}));
+        assert_eq!(started["ok"], true, "{started}");
+        let mut result = &started;
+        while let Some(v) = result.get("result") {
+            result = v;
+        }
+        let path = result
+            .as_str()
+            .and_then(|t| t.lines().find_map(|l| l.strip_prefix("journal : ")))
+            .expect("journal d'index");
+        let deadline = Instant::now() + Duration::from_secs(45);
+        while !std::fs::read_to_string(path)
+            .unwrap_or_default()
+            .contains("indexation terminée")
+        {
+            assert!(Instant::now() < deadline, "index fixture trop long");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        host.chat_turn(
+            id,
+            "Trouve λNEEDLE et son contexte de symboles sans lire tous les corps.",
+        )
+        .unwrap();
+        let seen = observed.lock().unwrap();
+        assert_eq!(seen.len(), 1);
+        let g = &seen[0];
+        assert_eq!(g["returned"], 1);
+        assert_eq!(g["symbol_hierarchy"]["files_queried"], 1);
+        let c = &g["matches"][0]["symbol_context"];
+        assert_eq!(c["status"], "ready", "{g}");
+        assert_eq!(c["nodes"][0]["name"], "run");
+        assert_eq!(c["nodes"][1]["name"], "A");
+        assert!(c["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|n| n["ref"]["path"] == "a.py"));
+        let offset = content.find("λNEEDLE").unwrap();
+        assert_eq!(c["match_ref"]["start_byte"], offset);
+        assert_eq!(c["match_ref"]["end_byte"], offset + "λNEEDLE".len());
+        drop(seen);
+        let a = host.open(Some(&session), &atelier);
+        assert_eq!(a["ok"], true, "{a}");
+        let relay=grep_payload(host.call(Some(&session),&atelier,"grep_files",json!({"context":{"target":{"kind":"backend","id":id}},"pattern":"λNEEDLE","symbol_hierarchy_depth":1,"format":"json"})));
+        assert_eq!(
+            relay["matches"][0]["symbol_context"]["status"], "ready",
+            "{relay}"
+        );
+        std::fs::write(d.path().join("ws/a.py"), format!("# shifted\n{content}")).unwrap();
+        let stale = grep_payload(host.call(
+            Some(&session),
+            &code,
+            "grep_files",
+            json!({"pattern":"λNEEDLE","symbol_hierarchy_depth":1,"format":"json"}),
+        ));
+        assert_eq!(stale["returned"], 1);
+        assert_eq!(
+            stale["matches"][0]["symbol_context"]["status"], "stale_index",
+            "{stale}"
+        );
+        assert!(stale["matches"][0]["scope"].is_null());
+        assert_eq!(stale["matches"][0]["line"], 4);
         host.shutdown();
     }
 }
