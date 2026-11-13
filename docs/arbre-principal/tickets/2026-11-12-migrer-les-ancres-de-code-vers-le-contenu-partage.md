@@ -2027,3 +2027,11 @@ reprise depuis le même support durable, fichiers sources retirés. Comptes
 corrigés :9 fonctions natives (8 scénarios juges+helper),9 CPU,18 fonctions
 brutes/17 scénarios juges/8 sous-processus de mort. Registre du nouveau nœud et
 ports communs inclus. Syntaxe seule, aucun Cargo/runtime encore lancé.
+
+
+Lecture transversale avant figer la source de qualification : usages du champ
+embedder encore directs dans catalog/progress.rs après le passage en Option.
+Adaptation du débit/origine/sonde à la capacité réelle : None rend débit inconnu,
+aucune sonde et refus d'une mesure sans modèle ; Some et Some(Absent) gardent
+leur sémantique antérieure. Le témoin lexical existant vérifie ces portes.
+Aucune compilation/runtime encore jouée,9c12 reste un état de revue non qualifié.
