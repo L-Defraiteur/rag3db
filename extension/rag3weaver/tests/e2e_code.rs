@@ -46,13 +46,28 @@ fn subset_sources(root: &str) -> Vec<(String, String)> {
 }
 
 fn setup() -> Arc<Mutex<Catalog>> {
+    setup_de_forme(true)
+}
+
+/// La forme d'avant les versions de scope : `Scope` porte ses morceaux. Pour
+/// les sondes du masque vectoriel du moteur, qui joignent un morceau à son
+/// `Scope` par `_parent_uuid` et `Scope_CHUNKED_FROM`.
+fn setup_sans_versions() -> Arc<Mutex<Catalog>> {
+    setup_de_forme(false)
+}
+
+fn setup_de_forme(versions: bool) -> Arc<Mutex<Catalog>> {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
     load_extensions(boxed.as_ref());
     let config = CatalogConfig { name: Some("code-e2e".into()), embedding_dim: 64, ..Default::default() };
     let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(64)), config);
     catalog.initialize().unwrap();
-    register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    if versions {
+        register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    } else {
+        rag3weaver::code::register_code_schema_sans_versions(&mut catalog, default_scope_chunking()).unwrap();
+    }
     Arc::new(Mutex::new(catalog))
 }
 
@@ -653,14 +668,16 @@ fn building_the_vector_index_in_bulk_beats_row_by_row() {
             // catalogue neuf, le modèle ne s'enregistre qu'au premier embarquement :
             // on manipule son index, donc on l'enregistre d'abord.
             cat.ensure_embedding_model().expect("enregistrer le modèle courant");
-            let st = cat.vector_storage("Scope_Chunk").expect("stockage du modèle courant");
-            cat.execute_raw(&format!("CALL DROP_VECTOR_INDEX('Scope_Chunk', '{}', skip_if_not_exists := true)", st.index))
+            // La table des morceaux de la forme de la base (version de scope).
+            let table = rag3weaver::code::scope_chunks(&cat).unwrap().table;
+            let st = cat.vector_storage(&table).expect("stockage du modèle courant");
+            cat.execute_raw(&format!("CALL DROP_VECTOR_INDEX('{table}', '{}', skip_if_not_exists := true)", st.index))
                 .expect("l'index doit pouvoir être détruit");
             let t = Instant::now();
             cat.ingest_code(&analysis).unwrap();
             let load = t.elapsed().as_millis();
             let t = Instant::now();
-            cat.execute_raw(&format!("CALL CREATE_VECTOR_INDEX('Scope_Chunk', '{}', '{}', metric := 'cosine', skip_if_exists := true)", st.index, st.column))
+            cat.execute_raw(&format!("CALL CREATE_VECTOR_INDEX('{table}', '{}', '{}', metric := 'cosine', skip_if_exists := true)", st.index, st.column))
                 .expect("l'index doit pouvoir être construit sur une table pleine");
             (load, t.elapsed().as_millis())
         };
@@ -1643,7 +1660,7 @@ fn does_the_projected_graph_actually_mask_the_vector_index() {
     use rag3weaver::code::analyze;
 
     let boot = |n: &str| format!("pub fn boot_{n}() -> i32 {{\n    7\n}}\n");
-    let catalog = setup();
+    let catalog = setup_sans_versions();
     let mut cat = catalog.lock().unwrap();
     cat.ingest_code(&analyze("/projets", vec![("alpha/a.rs".to_string(), boot("alpha"))])).unwrap();
     cat.ingest_code(&analyze("/projets", vec![("beta/b.rs".to_string(), boot("beta"))])).unwrap();
@@ -1706,7 +1723,7 @@ fn where_the_vector_pre_filter_stands_today() {
     use rag3weaver::embedder::HashEmbedder;
 
     let boot = |n: &str| format!("pub fn boot_{n}() -> i32 {{\n    7\n}}\n");
-    let catalog = setup();
+    let catalog = setup_sans_versions();
     let mut cat = catalog.lock().unwrap();
     cat.ingest_code(&analyze("/projets", vec![("alpha/a.rs".to_string(), boot("alpha"))])).unwrap();
     cat.ingest_code(&analyze("/projets", vec![("beta/b.rs".to_string(), boot("beta"))])).unwrap();

@@ -40,7 +40,11 @@ use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
 const ROLE: &str = "SONDE_VECTEURS_ROLE";
 const BASE: &str = "SONDE_VECTEURS_BASE";
-const TABLES: [&str; 2] = ["Scope_Chunk", "File_Chunk"];
+/// Les tables de morceaux vérifiées : celle du code dans la forme de la base
+/// (`ScopeContent_Chunk` sur une base à versions de scope), et `File_Chunk`.
+fn tables(catalog: &Catalog) -> [String; 2] {
+    [rag3weaver::code::scope_chunks(catalog).expect("la forme de la base").table, "File_Chunk".to_string()]
+}
 
 fn dossier(cas: &str) -> PathBuf {
     crate::common::dossier_de_suite("sonde-vecteurs", cas).join("base.rag3db")
@@ -81,7 +85,9 @@ fn options(reprendre: bool) -> SourceSyncOptions {
 
 /// Le vérificateur : par table, l'échantillon, et pour chacun sa recherche.
 fn verifier(catalog: &Catalog) {
-    for table in TABLES {
+    let code = rag3weaver::code::scope_chunks(catalog).expect("la forme de la base").table;
+    for table in tables(catalog) {
+        let table = table.as_str();
         let st = catalog.vector_storage(table).expect("stockage vectoriel");
         let lignes = catalog
             .execute_raw(&format!(
@@ -90,6 +96,8 @@ fn verifier(catalog: &Catalog) {
             ))
             .expect("lire les morceaux")
             .rows;
+        // Une table du code sans vecteur ne jugerait rien.
+        assert!(table != code || !lignes.is_empty(), "aucun vecteur dans {table}");
         let pas = (lignes.len() / 40).max(1);
         let (mut vus, mut manques, mut erreurs) = (0usize, 0usize, 0usize);
         let mut exemples: Vec<String> = Vec::new();
@@ -164,7 +172,7 @@ fn lancer(role: &str, base: &Path, piege: bool) -> String {
 /// Les lignes « VECTEURS … » d'une sortie, et leur verdict.
 fn bilan(sortie: &str) -> (Vec<String>, bool) {
     let lignes: Vec<String> = sortie.lines().filter(|l| l.starts_with("VECTEURS")).map(str::to_string).collect();
-    let sain = lignes.len() == TABLES.len() && lignes.iter().all(|l| l.contains(" manques=0 ") && l.contains(" erreurs=0 "));
+    let sain = lignes.len() == 2 && lignes.iter().all(|l| l.contains(" manques=0 ") && l.contains(" erreurs=0 "));
     (lignes, sain)
 }
 

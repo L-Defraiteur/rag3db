@@ -736,14 +736,16 @@ fn la_recherche_se_replie_sans_l_index_vectoriel(nom: &str, drapeau: bool, raiso
 
     {
         let cat = backend.catalog.lock().unwrap();
-        let index = cat.vector_storage("Scope_Chunk").expect("le stockage du modèle").index;
+        // La table des morceaux de la forme de la base (version de scope).
+        let t = rag3weaver::code::scope_chunks(&cat).expect("la table des morceaux du code").table;
+        let index = cat.vector_storage(&t).expect("le stockage du modèle").index;
         if drapeau {
             cat.execute_raw(&format!(
-                "MERGE (m:_catalog_meta {{_key: 'vector_index_dropped:Scope_Chunk:{index}'}}) SET m._value = 'embedding'"
+                "MERGE (m:_catalog_meta {{_key: 'vector_index_dropped:{t}:{index}'}}) SET m._value = 'embedding'"
             ))
             .expect("le drapeau");
         }
-        cat.execute_raw(&format!("CALL DROP_VECTOR_INDEX('Scope_Chunk', '{index}')")).expect("le retrait");
+        cat.execute_raw(&format!("CALL DROP_VECTOR_INDEX('{t}', '{index}')")).expect("le retrait");
     }
 
     let apres = cherche().unwrap_or_else(|e| panic!("la recherche tombe en entier sans l'index vectoriel : {e}"));
@@ -831,7 +833,8 @@ fn la_recherche_rend_les_mots_pendant_un_create_de_l_index_vectoriel() {
     // il le dit et rend la main, comme un plancher ; il se juge de lui-même après la bascule.
     let a_l_etat = std::env::var("RAG3WEAVER_MOTEUR_ANCIEN").as_deref() != Ok("1") && {
         let cat = backend.catalog.lock().unwrap();
-        let stockage = cat.vector_storage("Scope_Chunk").expect("le stockage du modèle");
+        let t = rag3weaver::code::scope_chunks(&cat).expect("la table des morceaux du code").table;
+        let stockage = cat.vector_storage(&t).expect("le stockage du modèle");
         let lignes = cat.execute_raw("CALL SHOW_INDEXES() RETURN *").expect("SHOW_INDEXES").rows;
         let ligne = lignes.iter().find(|l| l.get(1).and_then(|v| v.as_str()) == Some(stockage.index.as_str()));
         ligne.expect("l'index vectoriel dans SHOW_INDEXES avant le CREATE").len() > 6
@@ -841,11 +844,12 @@ fn la_recherche_rend_les_mots_pendant_un_create_de_l_index_vectoriel() {
         return;
     }
 
-    let (index, colonne, conn) = {
+    let (index, colonne, conn, table) = {
         let cat = backend.catalog.lock().unwrap();
-        let stockage = cat.vector_storage("Scope_Chunk").expect("le stockage du modèle");
-        cat.execute_raw(&format!("CALL DROP_VECTOR_INDEX('Scope_Chunk', '{}')", stockage.index)).expect("le retrait");
-        (stockage.index, stockage.column, cat.conn_arc())
+        let t = rag3weaver::code::scope_chunks(&cat).expect("la table des morceaux du code").table;
+        let stockage = cat.vector_storage(&t).expect("le stockage du modèle");
+        cat.execute_raw(&format!("CALL DROP_VECTOR_INDEX('{t}', '{}')", stockage.index)).expect("le retrait");
+        (stockage.index, stockage.column, cat.conn_arc(), t)
     };
     // L'écrivain ouvert avant le CREATE : le CREATE l'attend entre T_A et T_B.
     let ecrivain = conn.read_connection(2).expect("une connexion pour l'écrivain");
@@ -854,10 +858,10 @@ fn la_recherche_rend_les_mots_pendant_un_create_de_l_index_vectoriel() {
         .execute("MERGE (m:_catalog_meta {_key: 'temoin_create_retenu'}) SET m._value = 'x'")
         .expect("l'écriture de l'écrivain");
     let createur = conn.read_connection(4).expect("une connexion pour le CREATE");
-    let (index_c, colonne_c) = (index.clone(), colonne.clone());
+    let (index_c, colonne_c, table_c) = (index.clone(), colonne.clone(), table.clone());
     let fil = std::thread::spawn(move || {
         createur
-            .execute(&format!("CALL CREATE_VECTOR_INDEX('Scope_Chunk', '{index_c}', '{colonne_c}', metric := 'cosine')"))
+            .execute(&format!("CALL CREATE_VECTOR_INDEX('{table_c}', '{index_c}', '{colonne_c}', metric := 'cosine')"))
             .map(|_| ())
             .map_err(|e| e.to_string())
     });
@@ -942,8 +946,9 @@ fn la_recherche_rend_chaque_signal_et_sa_meta() {
     // Le repli se lit dans la méta, sans relire le markdown.
     {
         let cat = backend.catalog.lock().unwrap();
-        let index = cat.vector_storage("Scope_Chunk").expect("le stockage du modèle").index;
-        cat.execute_raw(&format!("CALL DROP_VECTOR_INDEX('Scope_Chunk', '{index}')")).expect("le retrait");
+        let t = rag3weaver::code::scope_chunks(&cat).expect("la table des morceaux du code").table;
+        let index = cat.vector_storage(&t).expect("le stockage du modèle").index;
+        cat.execute_raw(&format!("CALL DROP_VECTOR_INDEX('{t}', '{index}')")).expect("le retrait");
     }
     let apres = cherche();
     let avertis = apres["metadata"]["render.meta"]["warnings"].to_string();
