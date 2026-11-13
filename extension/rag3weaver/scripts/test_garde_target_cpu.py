@@ -112,13 +112,15 @@ else:
 
     def test_wrapper_honors_explicit_target_and_manifest(self):
         explicit = self.root / 'explicit'
-        result = self.wrapper('test', '--manifest-path', str(self.crate / 'Cargo.toml'),
+        result = self.wrapper('test', '--offline', '--locked', '--manifest-path', str(self.crate / 'Cargo.toml'),
                               '--target-dir=' + str(explicit), '--', '--target-dir=not-cargo')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((explicit / '.arbre-du-target').read_text().strip(), str(self.crate))
         self.assertFalse(self.target.exists())
         calls = [json.loads(x) for x in (self.root / 'calls').read_text().splitlines()]
         self.assertIn('--manifest-path', calls[0])
+        self.assertIn('--offline', calls[0])
+        self.assertIn('--locked', calls[0])
         self.assertIn('--target-dir=not-cargo', calls[-1])
 
     def test_wrapper_refuses_unqualified_config_override(self):
