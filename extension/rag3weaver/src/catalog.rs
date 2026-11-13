@@ -257,7 +257,7 @@ pub struct Catalog {
     // (6e6bd24 rend le handle inerte après `close()`), mais ça reposait sur le
     // fait que personne n'appelle le store pendant le drop — une garantie
     // qu'on ne veut pas devoir supposer.
-    embedder: Arc<dyn Embedder>,
+    embedder: Option<Arc<dyn Embedder>>,
     sparse_embedder: Option<Arc<dyn SparseEmbedder>>,
     /// Cross-encoder optionnel (doc 29, chantier 3) — `SearchOptions.rerank`.
     reranker: Option<Arc<dyn crate::reranker::Reranker>>,
@@ -686,6 +686,20 @@ fn read_threads() -> u64 {
         embedder: Box<dyn Embedder>,
         config: CatalogConfig,
     ) -> Self {
+        Self::with_embedding_capability(conn, Some(Arc::from(embedder)), config)
+    }
+
+    /// Un catalogue lexical sans modèle dense configuré. Contrairement à
+    /// `AbsentEmbedder`, cette absence ne déclare ni stockage ni dette dense.
+    pub fn without_embedding_model(conn: Box<dyn DbConnection>, config: CatalogConfig) -> Self {
+        Self::with_embedding_capability(conn, None, config)
+    }
+
+    fn with_embedding_capability(
+        conn: Box<dyn DbConnection>,
+        embedder: Option<Arc<dyn Embedder>>,
+        config: CatalogConfig,
+    ) -> Self {
         let conn: Arc<dyn DbConnection> = Arc::from(conn);
         let read_conn = conn.read_connection(Self::read_threads());
         let read_pool = crate::read_pool::ReadPool::new(conn.clone(), Self::read_threads());
@@ -695,7 +709,7 @@ fn read_threads() -> u64 {
             read_conn,
             read_pool,
             conn,
-            embedder: Arc::from(embedder),
+            embedder,
             sparse_embedder: None,
             reranker: None,
             ocr: None,
@@ -876,7 +890,7 @@ fn read_threads() -> u64 {
     }
 
     pub fn set_embedder(&mut self, embedder: Arc<dyn Embedder>) {
-        self.embedder = embedder;
+        self.embedder = Some(embedder);
     }
 
     /// Set the sparse embedder (optional). Must be called before `initialize()`.
@@ -927,28 +941,30 @@ fn read_threads() -> u64 {
     /// **L'avertissement nommé du montage sans service** : sur la sortie
     /// d'erreur, que personne n'a à écouter, et sur le bus.
     fn dire_l_embarqueur_absent(&self) {
-        if !self.embedder.is_absent() {
+        let Some(embedder) = &self.embedder else { return };
+        if !embedder.is_absent() {
             return;
         }
         let message = format!(
             "{} (modèle attendu « {} », {} dimensions) — la recherche dense dira « not available »",
             crate::embedder::AVERTISSEMENT_EMBARQUEUR_ABSENT,
-            self.embedder.name(),
-            self.embedder.dim()
+            embedder.name(),
+            embedder.dim()
         );
         eprintln!("[rag3weaver] {message}");
         self.emit_event(CatalogEvent::Warning { context: "initialize".to_string(), message });
     }
 
     fn warn_mock_query_embedder(&self) {
-        if !self.embedder.is_mock() || self.dual_embedder.is_none() {
+        let Some(embedder) = &self.embedder else { return };
+        if !embedder.is_mock() || self.dual_embedder.is_none() {
             return;
         }
         eprintln!(
             "[rag3weaver] embedder du catalogue : '{}' (factice). Les requêtes passeront par \
              lui pour toute entité qui ne demande pas `vector`+`sparse` ensemble — voir \
              `register_entity`.",
-            self.embedder.name()
+            embedder.name()
         );
     }
 
@@ -1721,6 +1737,13 @@ fn read_threads() -> u64 {
     }
 
     pub fn initialize(&mut self) -> Result<(), CatalogError> {
+        if self.embedder.is_none() && (self.config.embedding.is_some()
+            || self.config.knowledge_bases.values().any(|kb| kb.signals.vector()))
+        {
+            return Err(CatalogError::EmbeddingModelUnavailable(
+                "déclaration dense sans modèle dense configuré".into(),
+            ));
+        }
         self.choisir_le_stockage_du_plein_texte();
         self.dire_l_embarqueur_absent();
         if self.lecture_seule {
@@ -1981,16 +2004,21 @@ fn read_threads() -> u64 {
         //
         // C'est ici qu'on peut trancher, et pas quand le dual est posé : les
         // signaux d'une entité ne sont connus qu'à sa déclaration.
+        if config.signals.vector() && self.embedder.is_none() {
+            return Err(CatalogError::EmbeddingModelUnavailable(
+                format!("'{entity_name}' demande vector sans modèle dense configuré"),
+            ));
+        }
         let requete_par_le_dual = config.signals.vector() && config.signals.sparse();
         if config.signals.vector()
             && !requete_par_le_dual
             && self.dual_embedder.is_some()
-            && self.embedder.is_mock()
+            && self.embedder.as_ref().is_some_and(|e| e.is_mock())
             && !self.config.allow_mock_embedder
         {
             return Err(CatalogError::SchemaError(format!(
                 "'{entity_name}' demande le signal `vector` sans `sparse` : ses requêtes seront                  embarquées par '{}', l'embedder factice du catalogue, pendant que l'embedder                  dual indexera ses documents. Deux espaces vectoriels sans rapport — les scores                  seraient plausibles et faux. Passer le même modèle à `Catalog::new` (un                  `Arc<dyn Embedder>` convient), ou déclarer `allow_mock_embedder: true`.",
-                self.embedder.name()
+                self.embedder.as_ref().expect("mock capability checked").name()
             )));
         }
 
@@ -2296,7 +2324,7 @@ fn read_threads() -> u64 {
     /// et à signal vectoriel en a un — et seul l'index du modèle courant reçoit
     /// des vecteurs pendant un lot, donc c'est le seul qu'on détruit.
     fn vector_indexes_of(&self, entities: &[&str]) -> Vec<(String, String, String)> {
-        let slug = self.current_embedding_slug();
+        let Some(slug) = self.current_embedding_slug() else { return vec![] };
         let Some(entry) = self.registered_embedding_models().ok().and_then(|m| m.into_iter().find(|e| e.slug() == slug)) else {
             return vec![];
         };
@@ -3199,17 +3227,17 @@ fn read_threads() -> u64 {
     /// existait pour qu'un vrai modèle puisse arriver après un test sans
     /// conflit — avec plusieurs modèles par index, ce conflit n'existe plus,
     /// et la raison du cas spécial s'est évaporée avec lui.
-    fn current_embedding_entry(&self) -> crate::embedding_storage::EmbeddingModelEntry {
-        crate::embedding_storage::EmbeddingModelEntry {
-            name: self.embedder.name().to_string(),
-            dim: self.embedder.dim(),
+    fn current_embedding_entry(&self) -> Option<crate::embedding_storage::EmbeddingModelEntry> {
+        self.embedder.as_ref().map(|embedder| crate::embedding_storage::EmbeddingModelEntry {
+            name: embedder.name().to_string(),
+            dim: embedder.dim(),
             storage: crate::embedding_storage::StorageKind::Suffixed,
-        }
+        })
     }
 
-    /// Le slug du modèle courant — celui qui nomme son stockage.
-    pub fn current_embedding_slug(&self) -> String {
-        self.current_embedding_entry().slug()
+    /// Le slug du modèle configuré, absent pour un catalogue lexical seul.
+    pub fn current_embedding_slug(&self) -> Option<String> {
+        self.current_embedding_entry().map(|entry| entry.slug())
     }
 
     /// **Les modèles que cet index sait servir**, tels qu'ils se sont déclarés.
@@ -3254,7 +3282,7 @@ fn read_threads() -> u64 {
     ///
     /// Un modèle absent est refusé en nommant ceux qui sont là.
     pub fn vector_storage(&self, chunk_table: &str) -> Result<crate::embedding_storage::VectorStorage, CatalogError> {
-        let slug = self.current_embedding_slug();
+        let slug = self.current_embedding_slug().ok_or_else(|| CatalogError::EmbeddingModelUnavailable("aucun modèle dense configuré".into()))?;
         let registered = self.registered_embedding_models()?;
         match registered.iter().find(|e| e.slug() == slug) {
             Some(entry) => Ok(crate::embedding_storage::VectorStorage::resolve(chunk_table, entry)),
@@ -3276,7 +3304,7 @@ fn read_threads() -> u64 {
     /// est refusé en nommant ceux qui sont là, plutôt que de chercher dans
     /// une colonne qui n'existe pas et de rendre zéro.
     pub fn ensure_embedding_model(&self) -> Result<(), CatalogError> {
-        let current = self.current_embedding_entry();
+        let Some(current) = self.current_embedding_entry() else { return Ok(()) };
         let slug = current.slug();
         crate::embedding_storage::validate_slug(&slug).map_err(CatalogError::EmbeddingModelRejected)?;
         let registered = self.registered_embedding_models()?;
@@ -3701,7 +3729,10 @@ fn read_threads() -> u64 {
         if let Some(ref prouves) = self.proven_present {
             services.register(crate::dataflow::record_nodes::PROVEN_PRESENT, prouves.clone());
         }
-        services.register("embedder", self.embedder.clone());
+        if let Some(embedder) = &self.embedder {
+            services.register("embedder", embedder.clone());
+            services.register("embedding_dim", embedder.dim());
+        }
         if let Some(ref ocr) = self.ocr {
             services.register(crate::dataflow::OCR_SERVICE, ocr.clone());
         }
@@ -3713,7 +3744,6 @@ fn read_threads() -> u64 {
         }
         // La dimension est celle du **modèle**, pas d'une config globale qui
         // valait 384 par défaut sans jamais être confrontée à `embedder.dim()`.
-        services.register("embedding_dim", self.embedder.dim());
         // **Tout graphe qui embarque passe par ici** : le modèle courant y est
         // enregistré avant que la liste ne soit prise, sinon un chemin qui ne
         // passe pas par `ingest_entities_jusqu_a` — la branche des entités
@@ -3727,7 +3757,9 @@ fn read_threads() -> u64 {
         // Le stockage de chaque modèle enregistré, et le slug du courant : ce
         // que `EmbedNode` et la recherche résolvent au lieu de dériver.
         services.register("embedding_models", self.registered_embedding_models().unwrap_or_default());
-        services.register("embedding_slug", self.current_embedding_slug());
+        if let Some(slug) = self.current_embedding_slug() {
+            services.register("embedding_slug", slug);
+        }
         services.register("config", self.config.clone());
         services.register("entity_configs", self.entity_configs.clone());
         services.register("has_sparse",
@@ -4013,7 +4045,7 @@ fn read_threads() -> u64 {
         if self.lecture_seule {
             return;
         }
-        let slug = self.current_embedding_slug();
+        let Some(slug) = self.current_embedding_slug() else { return };
         let Ok(models) = self.registered_embedding_models() else { return };
         let Some(entry) = models.into_iter().find(|e| e.slug() == slug) else { return };
         for table in self.vector_tables() {
@@ -4147,7 +4179,8 @@ fn read_threads() -> u64 {
     ///
     /// [`AbsentEmbedder`]: crate::embedder::AbsentEmbedder
     fn peut_embarquer(&self, demande: bool) -> bool {
-        if demande && self.embedder.is_absent() {
+        let Some(embedder) = &self.embedder else { return false };
+        if demande && embedder.is_absent() {
             if !self.absent_signale.swap(true, std::sync::atomic::Ordering::Relaxed) {
                 self.emit_event(CatalogEvent::Warning {
                     context: "ingest".to_string(),
@@ -4155,7 +4188,7 @@ fn read_threads() -> u64 {
                         "vecteurs demandés, {} : cette écriture se replie sur le plein texte, \
                          les vecteurs de « {} » restent en dette",
                         crate::embedder::AVERTISSEMENT_EMBARQUEUR_ABSENT,
-                        self.embedder.name()
+                        embedder.name()
                     ),
                 });
             }
@@ -4239,7 +4272,7 @@ fn read_threads() -> u64 {
         }
         // Sans service, rien à rattraper : la dette reste notée, et l'index
         // n'est ni tombé ni rebâti pour un retard qu'on ne paiera pas.
-        if self.embedder.is_absent() {
+        if self.embedder.as_ref().is_none_or(|e| e.is_absent()) {
             return Ok(Vec::new());
         }
 
@@ -6491,7 +6524,7 @@ fn read_threads() -> u64 {
             graph.add_node(Box::new(EmbedNode::new("embed", signals, 32))).unwrap();
             graph.connect("chunk_insert", "inserted", "embed", "entities").unwrap();
             graph.connect("chunk_link", "done", "embed", "trigger").unwrap();
-        } else if !avec_embarquement {
+        } else if !avec_embarquement && self.embedder.is_some() && signals.vector() {
             self.peut_devoir_un_embarquement = true;
         }
 
@@ -8217,25 +8250,41 @@ fn read_threads() -> u64 {
         outcome
     }
 
-    /// **Valider un lot** : COMMIT, puis le plein texte du tampon appliqué
-    /// aux décalages relus par `_uuid` (une ligne neuve peut changer de
-    /// décalage au COMMIT sous plusieurs écrivains), puis la synchronisation
-    /// du plein texte. Un COMMIT refusé défait le lot comme un ROLLBACK, sans
-    /// empoisonner.
+    /// Valider les lignes, rendre le plein texte durable, puis annoncer le lot.
+    /// Une erreur après l'envoi du COMMIT ne prouve jamais une annulation :
+    /// le catalogue est empoisonné et doit être rouvert avant toute reprise.
     pub fn commit_lot(&mut self) -> Result<(), CatalogError> {
+        self.check_initialized()?;
         let tampon = self.fts_tampon.take();
-        if let Err(e) = self.conn.commit() {
-            let _ = self.conn.rollback();
+        if let Err(error) = self.conn.commit() {
+            self.conn.poison("COMMIT du lot : issue inconnue, réouverture requise");
+            self.conn.close_without_checkpoint();
+            let rollback = self.conn.rollback();
             self.set_in_transaction(false);
             self.vider_les_caches_du_lot();
-            return Err(CatalogError::DbError(format!("COMMIT du lot refusé, lot défait : {e}")));
+            let detail = match rollback {
+                Ok(()) => error.to_string(),
+                Err(rollback) => format!("{error}; ROLLBACK également en erreur : {rollback}"),
+            };
+            return Err(CatalogError::MustReopen(format!("COMMIT du lot : issue inconnue ; {detail}")));
         }
         self.set_in_transaction(false);
-        self.publier_les_evenements_retenus();
-        if let Some(t) = tampon {
-            self.appliquer_le_tampon(t.prendre())?;
+        let materialized = (|| {
+            if let Some(t) = tampon {
+                self.appliquer_le_tampon(t.prendre())?;
+            }
+            self.flush_blob_store("lot")
+        })();
+        if let Err(error) = materialized {
+            self.jeter_les_evenements_retenus();
+            self.conn.poison("lignes validées, plein texte non qualifié : réouverture requise");
+            self.conn.close_without_checkpoint();
+            return Err(CatalogError::MustReopen(format!(
+                "lignes validées, plein texte non qualifié : {error}"
+            )));
         }
-        self.flush_blob_store("lot")
+        self.publier_les_evenements_retenus();
+        Ok(())
     }
 
     /// **Défaire un lot, sans empoisonner** : ROLLBACK, le tampon jeté (rien
@@ -8627,7 +8676,9 @@ fn read_threads() -> u64 {
                 graph.connect("derive_chunk_link", "done", "derive_embed", "trigger").unwrap();
                 graph.connect("derive_embed", "done", "derive_flush", "trigger").unwrap();
             } else {
-                self.peut_devoir_un_embarquement = true;
+                if self.embedder.is_some() {
+                    self.peut_devoir_un_embarquement = true;
+                }
                 graph.connect("derive_chunk_link", "done", "derive_flush", "trigger").unwrap();
             }
         }
@@ -8733,7 +8784,7 @@ fn read_threads() -> u64 {
         // Le journal de ce drain seulement.
         self.journal_des_ecritures.prendre();
         let avec_embarquement = self.peut_embarquer(avec_embarquement);
-        if !avec_embarquement && self.has_pending() {
+        if !avec_embarquement && self.embedder.is_some() && self.has_pending() {
             // On s'apprête à poser des chunks sans les embarquer : la dette
             // naît ici, et l'indice la note.
             self.peut_devoir_un_embarquement = true;
@@ -9031,7 +9082,8 @@ fn read_threads() -> u64 {
     /// (idée de février, jamais tenue) ; elle change une surface de
     /// configuration, donc elle ne se décide pas ici.
     fn signaler_les_troncatures(&mut self, contexte: &str) {
-        let Some((total, limite)) = self.embedder.troncatures() else {
+        let Some(embedder) = &self.embedder else { return };
+        let Some((total, limite)) = embedder.troncatures() else {
             return;
         };
         if total <= self.troncatures_signalees {
@@ -9039,7 +9091,7 @@ fn read_threads() -> u64 {
         }
         let neuves = total - self.troncatures_signalees;
         self.troncatures_signalees = total;
-        let nom = self.embedder.name().to_string();
+        let nom = embedder.name().to_string();
         self.emit_event(CatalogEvent::Warning {
             context: contexte.to_string(),
             message: format!(
@@ -9635,9 +9687,13 @@ fn read_threads() -> u64 {
         // de lecture, dont les graphes ne sont pas des drains — un nœud qui y
         // noterait partagerait le journal de l'écrivain (73, 19 oct.).
         services.register("sparse_handles", self.sparse_handles.clone());
-        services.register::<Arc<dyn Embedder>>("embedder", self.embedder.clone());
+        if let Some(embedder) = &self.embedder {
+            services.register::<Arc<dyn Embedder>>("embedder", embedder.clone());
+        }
         services.register("embedding_models", self.registered_embedding_models().unwrap_or_default());
-        services.register("embedding_slug", self.current_embedding_slug());
+        if let Some(slug) = self.current_embedding_slug() {
+            services.register("embedding_slug", slug);
+        }
         if let Some(ref sparse) = self.sparse_embedder {
             services.register::<Arc<dyn crate::embedder::SparseEmbedder>>(
                 "sparse_embedder",
@@ -10455,10 +10511,13 @@ impl Catalog {
         need_dense: bool,
         need_sparse: bool,
     ) -> Result<(Vec<f32>, Option<crate::sparse_index::SparseVector>), CatalogError> {
+        if need_dense && self.embedder.is_none() {
+            return Err(CatalogError::EmbeddingModelUnavailable("aucun modèle dense configuré".into()));
+        }
         self.check_embedding_model()?;
         // Absent, pas de vecteur de requête : la branche dense le dira
         // « not available » par son repli, sans erreur ici.
-        let need_dense = need_dense && !self.embedder.is_absent();
+        let need_dense = need_dense && self.embedder.as_ref().is_some_and(|e| !e.is_absent());
         let vecteurs = if need_dense && need_sparse {
             if let Some(ref dual_emb) = self.dual_embedder {
                 // Single forward pass → dense + sparse
@@ -10471,7 +10530,7 @@ impl Catalog {
                 )
             } else {
                 // Fallback: separate embedders
-                let dense = search::embed_query(self.embedder.as_ref(), query, &mut self.embedding_cache)?;
+                let dense = search::embed_query(self.embedder.as_ref().expect("dense capability checked").as_ref(), query, &mut self.embedding_cache)?;
                 let sparse = if let Some(ref sparse_emb) = self.sparse_embedder {
                     sparse_emb.embed_sparse(&[query.to_string()])
                         .map_err(|e| CatalogError::EmbedError(e.to_string()))?
@@ -10485,7 +10544,7 @@ impl Catalog {
                     .map_err(|e| CatalogError::EmbedError(e.to_string()))?;
                 dense_vecs.into_iter().next().unwrap_or_default()
             } else {
-                search::embed_query(self.embedder.as_ref(), query, &mut self.embedding_cache)?
+                search::embed_query(self.embedder.as_ref().expect("dense capability checked").as_ref(), query, &mut self.embedding_cache)?
             };
             (dense, None)
         } else if need_sparse {
@@ -10986,7 +11045,7 @@ impl Catalog {
         execution_id: &str,
     ) -> Result<(), MigrationError> {
         let mut services = ServiceRegistry::new();
-        services.register("conn", self.conn.clone());
+        let failures = self.enregistrer_les_services_d_ingestion(&mut services);
 
         let checkpoint_store = CypherCheckpointStore::new(self.conn.clone());
         checkpoint_store
@@ -11001,6 +11060,12 @@ impl Catalog {
                 name: String::new(),
                 detail: e,
             })?;
+        let failures = failures.lock().map_err(|e| MigrationError::DbError(e.to_string()))?;
+        if !failures.is_empty() {
+            return Err(MigrationError::ExecutionError {
+                version: 0, name: String::new(), detail: format!("ingestion groups failed: {failures:?}"),
+            });
+        }
         Ok(())
     }
 
@@ -11255,6 +11320,49 @@ mod tests {
             make_test_config(),
         )
         .avec_regime(crate::disponibilite::RegimeEcriture::ParLot)
+    }
+
+    #[test]
+    fn lexical_catalog_has_no_dense_services_signature_or_debt() {
+        let mut catalog = Catalog::without_embedding_model(
+            Box::new(MockConnection::new()), CatalogConfig::default(),
+        );
+        catalog.initialized = true;
+        catalog.ensure_embedding_model().unwrap();
+        assert_eq!(catalog.current_embedding_slug(), None);
+        assert!(catalog.registered_embedding_models().unwrap().is_empty());
+        let mut services = ServiceRegistry::new();
+        let _failures = catalog.enregistrer_les_services_d_ingestion(&mut services);
+        for key in ["embedder", "embedding_dim", "embedding_slug"] {
+            assert!(!services.has(key), "invented capability: {key}");
+        }
+        let mut search_services = ServiceRegistry::new();
+        catalog.register_search_services(&mut search_services);
+        assert!(!search_services.has("embedder"));
+        assert!(!search_services.has("embedding_slug"));
+        catalog.noter_la_dette_du_modele_courant();
+        assert!(!catalog.peut_devoir_un_embarquement);
+        assert!(catalog.vector_storage("Document_Chunk").is_err());
+        assert!(catalog.embarquer_la_requete("dense", true, false).is_err());
+        assert_eq!(catalog.embarquer_la_requete("lexical", false, false).unwrap(), (vec![], None));
+    }
+
+    #[test]
+    fn lexical_catalog_refuses_dense_declarations_before_registration() {
+        let mut catalog = Catalog::without_embedding_model(
+            Box::new(MockConnection::new()), CatalogConfig::default(),
+        );
+        catalog.initialized = true;
+        let mut fields = HashMap::new();
+        fields.insert("body".into(), SimpleFieldDef {
+            field_type: FieldType::Text, is_content: true, ..Default::default()
+        });
+        let result = catalog.register_entity("Dense", EntityConfig {
+            fields, signals: search::SearchSignals::VECTOR, ..Default::default()
+        });
+        assert!(matches!(result, Err(CatalogError::EmbeddingModelUnavailable(_))));
+        assert!(catalog.entity_configs.is_empty());
+        assert!(catalog.config.entities.is_empty());
     }
 
     fn inject_blob_failure(cat: &mut Catalog) -> Arc<BufferedBlobStore<CypherBlobStore>> {
