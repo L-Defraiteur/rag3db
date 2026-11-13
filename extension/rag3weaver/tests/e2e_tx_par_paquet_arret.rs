@@ -161,7 +161,8 @@ fn comptes(catalog: &Catalog) -> BTreeMap<String, i64> {
     // Le plein texte aussi : un commit lucivy oublié ou défait se verrait
     // ici, pas dans les tables. Chaque scope du corpus dit « pub » ; chaque
     // chemin de fichier, « src » (File n'indexe que son chemin).
-    for (entite, champ, mot) in [("Scope", "content", "pub"), ("File", "path", "src")] {
+    let code = index_du_code(&catalog);
+    for (entite, champ, mot) in [(code.as_str(), "content", "pub"), ("File", "path", "src")] {
         let handle = catalog.fts_handle(entite).unwrap_or_else(|| panic!("index plein texte de {entite}"));
         let requete: lucivy_core::query::QueryConfig =
             serde_json::from_value(serde_json::json!({"type": "contains", "field": champ, "value": mot, "distance": 0}))
@@ -295,7 +296,13 @@ fn role_enfant() {
         let fichiers = compte("MATCH (f:File) RETURN count(f)");
         let mut orphelins = 0;
         let mut sans_morceau = 0;
-        for e in ["File", "Scope"] {
+        // Les morceaux du code dans la forme de la base : ceux des versions (`ScopeContent`) sur une
+        // base estampillée à versions de scope, ceux de `Scope` sinon.
+        let a_versions = rag3weaver::connection::DbConnection::execute(&conn, "MATCH (m:_catalog_meta) WHERE m._key = 'code_scope_form' RETURN m._value")
+            .map(|r| !r.rows.is_empty())
+            .unwrap_or(false);
+        let code = if a_versions { rag3weaver::code::SCOPE_CONTENT } else { "Scope" };
+        for e in ["File", code] {
             orphelins += compte(&format!("MATCH (c:{e}_Chunk) WHERE NOT EXISTS {{ MATCH (c)-[:{e}_CHUNKED_FROM]->(:{e}) }} RETURN count(c)"));
             sans_morceau += compte(&format!(
                 "MATCH (p:{e}) WHERE p._chunked_hash IS NOT NULL AND p._chunked_hash <> '' \
@@ -962,8 +969,8 @@ fn rendus(catalog: &std::sync::Arc<std::sync::Mutex<Catalog>>, mot: &str, k: usi
 }
 
 fn documents_et_lignes(catalog: &Catalog) -> (u64, i64) {
-    let docs = catalog.fts_handle("Scope").expect("index des scopes").num_docs();
-    let lignes = catalog.conn().execute("MATCH (n:Scope) RETURN count(n)").unwrap().rows[0][0].as_i64().unwrap();
+    let docs = catalog.fts_handle(&index_du_code(catalog)).expect("index des scopes").num_docs();
+    let lignes = catalog.conn().execute(&format!("MATCH (n:`{}`) RETURN count(n)", index_du_code(catalog))).unwrap().rows[0][0].as_i64().unwrap();
     (docs, lignes)
 }
 
@@ -993,7 +1000,7 @@ fn la_garde_retire_un_document_sans_ligne(fichiers: bool) {
     let (docs, lignes) = documents_et_lignes(&catalog);
     assert_eq!(docs as i64, lignes, "avant le fantôme, un document par ligne");
     {
-        let handle = catalog.fts_handle("Scope").unwrap();
+        let handle = catalog.fts_handle(&index_du_code(&catalog)).unwrap();
         let texte = "pub ".repeat(200) + "fantomatique";
         rag3weaver::fts_handle::index_document(&handle, &[("content".to_string(), texte)], 9_000_000).unwrap();
         handle.commit().unwrap();
@@ -1038,7 +1045,7 @@ fn a_la_relance_la_ligne_refaite_remplace_le_document_de_son_decalage() {
     synchroniser(&mut catalog, false);
     let (_, lignes) = documents_et_lignes(&catalog);
     {
-        let handle = catalog.fts_handle("Scope").unwrap();
+        let handle = catalog.fts_handle(&index_du_code(&catalog)).unwrap();
         rag3weaver::fts_handle::index_document(&handle, &[("content".to_string(), "fantomatique".to_string())], lignes as u64).unwrap();
         handle.commit().unwrap();
     }
@@ -1085,7 +1092,9 @@ fn une_marque_qui_echoue_ne_laisse_jamais_un_index_sans_marque() {
     {
         let mut catalog = catalogue_fichiers(&base);
         synchroniser(&mut catalog, false);
-        let handle = catalog.fts_handle("Scope").unwrap();
+        // La forme se lit avant d'empoisonner la base, qui refusera ensuite toute lecture.
+        let code = index_du_code(&catalog);
+        let handle = catalog.fts_handle(&code).unwrap();
         rag3weaver::fts_handle::index_document(&handle, &[("content".to_string(), "fantomatique".to_string())], 9_000_000).unwrap();
         handle.commit().unwrap();
         drop(handle);
@@ -1093,17 +1102,24 @@ fn une_marque_qui_echoue_ne_laisse_jamais_un_index_sans_marque() {
         catalog.poison("test : la base refuse toute écriture");
         let garde = catalog.check_fts_counts();
         assert!(garde.is_err(), "la marque n'a pas pu s'écrire : la garde échoue au lieu de jeter l'index : {garde:?}");
-        assert!(catalog.fts_handle("Scope").is_some(), "l'index n'a pas été retiré");
+        assert!(catalog.fts_handle(&code).is_some(), "l'index n'a pas été retiré");
         assert!(fts.exists(), "le dossier du plein texte est là");
     }
     // L'ouverture d'un dossier en désaccord, base empoisonnée.
     let dir_scope = std::fs::read_dir(&fts).unwrap().flatten().find(|e| e.file_name().to_string_lossy().contains("Scope")).expect("dossier de Scope").path();
     std::fs::remove_file(dir_scope.join("_generation")).expect("la génération du dossier");
     let mut catalog = catalogue_fichiers(&base);
+    let code = index_du_code(&catalog);
     catalog.poison("test : la base refuse toute écriture");
     catalog.open_fts_files();
-    assert!(catalog.fts_handle("Scope").is_none(), "sans marque posée, l'index n'est pas ouvert");
+    assert!(catalog.fts_handle(&code).is_none(), "sans marque posée, l'index n'est pas ouvert");
     assert!(dir_scope.exists(), "sans marque posée, le dossier n'est pas jeté");
     drop(catalog);
     let _ = std::fs::remove_dir_all(&dossier);
+}
+
+/// L'entité qui porte l'index plein texte du code dans la forme de la base :
+/// `ScopeContent` sur une base à versions de scope, `Scope` sinon.
+fn index_du_code(catalog: &rag3weaver::Catalog) -> String {
+    rag3weaver::code::scope_chunks(catalog).expect("la forme de la base").parent
 }
