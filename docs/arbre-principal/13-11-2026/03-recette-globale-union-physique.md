@@ -112,3 +112,10 @@ Avant gel, alignement de phase_caps sur lib900/nav600 réels et elapsed depuis
 le début réel du confineur (deadline−6000), début pilote séparé. Reçu delai6000
 asserté. Identité PG/OID/propriétaire/commentaire réattestée avant dump également ;
 aucun retrait accordé. Contrôles syntaxe/tickets CPU à rejouer, sans Cargo.
+
+Revue ED/Recherche/C7 sur5a3338 : seconde exportation LD du complément supprimée,
+appel DIRECT env-u/bash avec profil déjà capturé/exporté ; comparaisons strictes
+et maps maintenues. Lectures /proc protégées : unknown explicite et champ/PID/
+identité/cgroup vérifié ; cgroup illisible refuse, SDKmaps des4ELF restent
+obligatoires. Quiescence ne saute pas un PID possédé dont exe/cwd sont protégés.
+Fichiers devices ne prétendent pas couvrir des descripteurs illisibles.

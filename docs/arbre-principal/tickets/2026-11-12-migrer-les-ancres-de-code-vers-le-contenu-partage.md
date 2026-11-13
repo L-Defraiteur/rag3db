@@ -2284,3 +2284,17 @@ Revue RO recette ed13 favorable Mémoire/Recherche, sansGO : deux métadonnées
 à aligner avant gel (phase_caps lib900/nav600 ; elapsed depuis début réel
 confineur deadline−6000, pas entrée pilote). Corrigées ; identité PG avant
 dump renforcée OID/propriétaire/commentaire. Aucun Cargo/global lancé.
+
+RO ED/Recherche/C7 source5a3338 : défaut PILOTE concret avant runtime, seconde
+EXPORT sur profil lectures capturé préfixe encore LD_LIBRARY_PATH ; égalité
+stricte du complément échouerait avant test. Correction : complément env-u/bash
+DIRECT sur profil capturé déjà exporté, garder comparaisons exactes et maps.
+Aucun budget global consommé. Revue C7 demande aussi observations explicites
+PermissionError des processus protégés : enregistrer unknown/champ/pid/identité
+et preuve cgroup ; cgroup illisible reste ROUGE, pas d'échappement toléré.
+Quiescence vérifie les PID possédés même si exe/cwd protégés, jamais faux zéro.
+
+Le relevé d'ascendance lit les stat de tous PID avant attribution par parent+
+starttime, sans filtre UID qui ferait disparaître un descendant SUID. Aucune
+lecture env/FD ni signal à un PID tiers : observations/actions restent bornées
+aux descendants attribués ; scan final inclut aussi un PID attribué passé SUID.
