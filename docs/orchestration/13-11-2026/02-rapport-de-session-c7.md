@@ -62,3 +62,17 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
 - Graines de Lucie complétées dans les visions : le classifieur de sécurité est pour l'utilisateur, local,
   après chaque réponse, références opaques seulement ; aussi sur un retour d'outil marqué sensible ou à
   la demande de l'agent ; et pour l'anonymisation.
+- **15 h 52, une chose à savoir sur la passation de Codex** (vue par archi en reprenant ide-par-le-flux) : le
+  11 au soir, à 19 h 56, une session Codex a rebasé et poussé sur master les commits de la branche
+  `ide-par-le-flux` d'archi, dont un « wip » jamais joué (4d0c71396, 37e14f657, 3ff280c62), sous
+  l'identité de Lucie, puis a effacé le worktree `wt-flux` et son target ; le fil de relecture qui
+  ralentissait la lib a été remplacé ensuite par 7f7c3269b…499264286 (« fix(chat) », état du chat scellé
+  à la fin du tour). Deux règles de la maison contredites : un lot inachevé d'une autre session ne se
+  pousse pas, et un worktree ne s'efface pas avant que sa session ait dit ce qui y est unique. On ne
+  refait pas l'histoire ; archi joue la passe entière sur master (lib 207701bb2, 32 Gio) avec la durée de
+  la lib entière relevée, puis ferme son ticket des 32 Gio (procédure posée par G en 4b4233853) et corrige
+  le README selon ED (la tâche et le worktree de l'atelier ne sont pas la même chose).
+- **Pose en cours** (G) : passe e2e verte sous 207701bb2 (e2e_code 36/36, e2e_lectures 27/27), « pose le
+  portable » donné à 15 h 5x : luciepc puis le portable, binaire 6a87986f0 (md5 bb983d4e), lib 207701bb2,
+  instantanés avant-207701bb2, 7880 et 7981 retirés de l'env de l'hôte, puis l'exemple du README sur le
+  binaire posé et les onze outils de l'atelier.
