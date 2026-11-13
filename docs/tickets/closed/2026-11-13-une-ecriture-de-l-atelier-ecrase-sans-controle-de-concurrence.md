@@ -1,6 +1,8 @@
 # Une écriture de l'atelier écrase sans contrôle de concurrence
 
-- **État** : ouvert (13 novembre 2026), pour archi.
+- **État** : corrigé (13 novembre 2026, branche atelier-ecriture-sure, archi). Témoins
+  `a_workshop_write_keeps_the_file_mode`, `a_workshop_write_in_a_worktree_keeps_the_file_mode` et
+  `a_workshop_write_refuses_a_file_changed_since_it_was_read`, rouges puis verts.
 - **Famille** : produit
 - **Gravité** : perte — une modification arrivée entre la lecture et l'écriture est perdue sans un mot, et le diff rendu est faux
 - **Atteignable en service** : oui, dès que deux écritures (deux conversations, une commande, l'utilisatrice) visent le même fichier en même temps
