@@ -1,6 +1,7 @@
 # Un test d'activation entre processus rougit une fois sous la lib entière
 
 - **État** : ouvert (13 novembre 2026), relevé par arbre principal pendant le lot du raccord physique.
+- **Pour** : embarquement (décision de c7, 13 novembre 2026).
 - **Famille** : produit
 - **Gravité** : passe rouge sans cause dans le lot qui la joue ; une fois sur sept tours.
 - **Atteignable en service** : à départager.

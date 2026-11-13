@@ -101,6 +101,15 @@ avec `--test-threads=1`, sous l'environnement d'archi. Le relâchement tardif pa
 `Arc<dyn lucistore::blob_store::BlobStore>`, qui tient la connexion synchrone, donc la `Database`.
 Il le fait après `native_unowned_cell_or_changed_source_refuses_before_new_effects`, dont la
 fermeture du plein texte a échoué (« blob persistence invalidated: physical operation failed »).
-Une tâche du planificateur garde donc le magasin de blobs au-delà de la fermeture : c'est le sujet
+Cette fermeture en échec est voulue par ce test : il injecte une colonne étrangère, et
+`execute_initial_batch` doit échouer. L'échec d'une opération physique invalide la persistance du
+magasin de blobs (« explicit reopen/recovery required »), et le `save_metas` du plein texte est
+refusé à la fermeture. Une tâche du planificateur garde donc le magasin de blobs au-delà de la fermeture : c'est le sujet
 de la barrière d'arrêt de lucivy (variante B, suspendue). Le registre rend l'attente juste, il ne
 raccourcit pas la vie de l'instance.
+
+**Pour la suite.** La 4.3.4 de lucivy fait que `ShardedHandle::close()` ne rend la main qu'après la
+destruction réelle de ses acteurs, même en échec (témoin lucivy
+`failed_close_releases_router_and_shards_at_return`). Quand recherche aura monté lucivy-core, il
+faudra rejouer la trace du fil sur ce test : le dernier `Arc<dyn BlobStore>` devrait tomber sur le
+fil du test. L'attente de `d57273bba` reste en place, car un autre détenteur reste possible.
