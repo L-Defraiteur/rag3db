@@ -20,6 +20,10 @@ pub mod plan;
 pub mod facts;
 pub mod transfer;
 pub mod publication;
+#[cfg(feature = "rag3db-native")]
+mod program;
+#[cfg(feature = "rag3db-native")]
+pub mod physical_index;
 
 use std::collections::HashMap;
 use std::fmt;

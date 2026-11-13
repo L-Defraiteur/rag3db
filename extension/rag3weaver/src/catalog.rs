@@ -258,6 +258,7 @@ pub struct Catalog {
     // fait que personne n'appelle le store pendant le drop — une garantie
     // qu'on ne veut pas devoir supposer.
     embedder: Option<Arc<dyn Embedder>>,
+    publication_failure: Option<String>,
     sparse_embedder: Option<Arc<dyn SparseEmbedder>>,
     /// Cross-encoder optionnel (doc 29, chantier 3) — `SearchOptions.rerank`.
     reranker: Option<Arc<dyn crate::reranker::Reranker>>,
@@ -710,6 +711,7 @@ fn read_threads() -> u64 {
             read_pool,
             conn,
             embedder,
+            publication_failure: None,
             sparse_embedder: None,
             reranker: None,
             ocr: None,
@@ -1674,6 +1676,7 @@ fn read_threads() -> u64 {
     /// Must be called before dropping the Catalog when the DB will be reopened
     /// in the same process (e.g. tests, hot reload).
     pub fn shutdown(&mut self) -> Result<(), CatalogError> {
+        self.check_reopen()?;
         // La vue de lecture lâche ses poignées avant leur fermeture.
         self.read_view.clear();
         // Collect table names for FTS and sparse.
@@ -1726,24 +1729,53 @@ fn read_threads() -> u64 {
         //    boundary before the connection goes away.
         self.flush_blob_store("shutdown")?;
 
+        let close_error = if fts_failed.is_empty() && sparse_failed.is_empty() { None }
+            else { Some(format!("index shutdown incomplete: FTS {fts_failed:?}; sparse {sparse_failed:?}")) };
         self.emit_event(CatalogEvent::ShutdownCompleted {
             fts_closed,
             fts_failed,
             sparse_committed,
             sparse_failed,
         });
+        match close_error { Some(error) => Err(CatalogError::IndexPersistence(error)), None => Ok(()) }
+    }
 
+    fn check_model_capabilities(&self) -> Result<(), CatalogError> {
+        if self.embedder.is_none() && (self.config.embedding.is_some()
+            || self.sparse_embedder.is_some() || self.dual_embedder.is_some()
+            || self.config.knowledge_bases.values().any(|kb| kb.signals.vector() || kb.signals.sparse()))
+        {
+            return Err(CatalogError::EmbeddingModelUnavailable(
+                "catalogue sans modèle : profil lexical seul, fournisseur ou déclaration dense/sparse refusé".into(),
+            ));
+        }
         Ok(())
     }
 
     pub fn initialize(&mut self) -> Result<(), CatalogError> {
-        if self.embedder.is_none() && (self.config.embedding.is_some()
-            || self.config.knowledge_bases.values().any(|kb| kb.signals.vector()))
-        {
-            return Err(CatalogError::EmbeddingModelUnavailable(
-                "déclaration dense sans modèle dense configuré".into(),
-            ));
+        self.check_reopen()?;
+        self.check_model_capabilities()?;
+        #[cfg(feature = "rag3db-native")]
+        if self.dialect.speaks_cypher() {
+            crate::dataflow::migrations::physical_index::refuse_normal_catalog_open(self.conn.as_ref())
+                .map_err(|e| CatalogError::SchemaError(e.to_string()))?;
         }
+        self.initialize_storage()
+    }
+
+    #[cfg(feature = "rag3db-native")]
+    pub(crate) fn initialize_owned_physical(
+        &mut self,
+        access: &crate::dataflow::migrations::physical_index::PhysicalAccess,
+    ) -> Result<(), CatalogError> {
+        self.check_reopen()?;
+        self.check_model_capabilities()?;
+        access.validate(self.conn.as_ref()).map_err(|e| CatalogError::SchemaError(e.to_string()))?;
+        self.lecture_seule = access.readonly();
+        self.initialize_storage()
+    }
+
+    fn initialize_storage(&mut self) -> Result<(), CatalogError> {
         self.choisir_le_stockage_du_plein_texte();
         self.dire_l_embarqueur_absent();
         if self.lecture_seule {
@@ -2004,9 +2036,9 @@ fn read_threads() -> u64 {
         //
         // C'est ici qu'on peut trancher, et pas quand le dual est posé : les
         // signaux d'une entité ne sont connus qu'à sa déclaration.
-        if config.signals.vector() && self.embedder.is_none() {
+        if (config.signals.vector() || config.signals.sparse()) && self.embedder.is_none() {
             return Err(CatalogError::EmbeddingModelUnavailable(
-                format!("'{entity_name}' demande vector sans modèle dense configuré"),
+                format!("'{entity_name}' demande dense/sparse dans un catalogue lexical sans modèle"),
             ));
         }
         let requete_par_le_dual = config.signals.vector() && config.signals.sparse();
@@ -3718,6 +3750,32 @@ fn read_threads() -> u64 {
         &self,
         services: &mut ServiceRegistry,
     ) -> Arc<Mutex<Vec<crate::records::EchecDeGroupe>>> {
+        if !self.lecture_seule {
+            if let Err(e) = self.ensure_embedding_model() {
+                eprintln!("[rag3weaver] le modèle courant n'a pas pu être enregistré : {e}");
+            }
+        }
+        self.enregistrer_les_services_avec_modeles(
+            services, self.registered_embedding_models().unwrap_or_default(),
+        )
+    }
+
+    /// Qualified callers propagate every model-registry read/registration error.
+    pub(crate) fn migration_ingestion_services(
+        &self,
+        services: &mut ServiceRegistry,
+    ) -> Result<Arc<Mutex<Vec<crate::records::EchecDeGroupe>>>, CatalogError> {
+        self.check_initialized()?;
+        self.ensure_embedding_model()?;
+        let models = self.registered_embedding_models()?;
+        Ok(self.enregistrer_les_services_avec_modeles(services, models))
+    }
+
+    fn enregistrer_les_services_avec_modeles(
+        &self,
+        services: &mut ServiceRegistry,
+        models: Vec<crate::embedding_storage::EmbeddingModelEntry>,
+    ) -> Arc<Mutex<Vec<crate::records::EchecDeGroupe>>> {
         services.register("conn", self.conn.clone());
         services.register("dialect", self.dialect.clone());
         services.register(crate::fautes_de_test::SERVICE, self.fautes_de_test.clone());
@@ -3742,21 +3800,7 @@ fn read_threads() -> u64 {
             register_builtins(&mut tool_registry);
             services.register(crate::dataflow::NODE_REGISTRY_SERVICE, Arc::new(tool_registry));
         }
-        // La dimension est celle du **modèle**, pas d'une config globale qui
-        // valait 384 par défaut sans jamais être confrontée à `embedder.dim()`.
-        // **Tout graphe qui embarque passe par ici** : le modèle courant y est
-        // enregistré avant que la liste ne soit prise, sinon un chemin qui ne
-        // passe pas par `ingest_entities_jusqu_a` — la branche des entités
-        // dérivées — donne à `EmbedNode` une liste sans lui, et le drain échoue
-        // « modèle non disponible » (e2e_entites_derivees, 8 septembre 2026).
-        if !self.lecture_seule {
-            if let Err(e) = self.ensure_embedding_model() {
-                eprintln!("[rag3weaver] le modèle courant n'a pas pu être enregistré : {e}");
-            }
-        }
-        // Le stockage de chaque modèle enregistré, et le slug du courant : ce
-        // que `EmbedNode` et la recherche résolvent au lieu de dériver.
-        services.register("embedding_models", self.registered_embedding_models().unwrap_or_default());
+        services.register("embedding_models", models);
         if let Some(slug) = self.current_embedding_slug() {
             services.register("embedding_slug", slug);
         }
@@ -6210,6 +6254,7 @@ fn read_threads() -> u64 {
         records: Vec<BTreeMap<String, CypherValue>>,
         exige: crate::disponibilite::Disponibilites,
     ) -> Result<FlushResult, CatalogError> {
+        self.check_initialized()?;
         self.verifier_ecriture_de_version(entity_name)?;
         // **Un lot écrit dans une autre cellule que celle du catalogue**
         // (marche 1 bis) : ses lignes portent déjà leur cellule, posée par le
@@ -8155,6 +8200,47 @@ fn read_threads() -> u64 {
         Ok(())
     }
 
+    /// Reconstruct lexical materialization from persisted values only. No
+    /// rechunking, derivation or model call: a committed initial batch can have
+    /// lost its in-memory FTS tampon with the process. Every failure propagates.
+    #[cfg(feature = "rag3db-native")]
+    pub(crate) fn rebuild_lexical_cell_from_rows(&mut self, scope: &crate::scope::Scope) -> Result<(), CatalogError> {
+        self.check_initialized()?;
+        self.set_scope(scope.clone())?;
+        let mut targets = BTreeMap::new();
+        for entity in self.entity_configs.keys() {
+            let target = self.resolve_search_target(entity)?;
+            if target.default_signals.bm25() {
+                targets.insert(target.parent_table.clone(), target.bm25_fields.clone());
+            }
+        }
+        for (table, text_fields) in targets {
+            let config = self.entity_configs.get(&table).ok_or_else(|| CatalogError::UnknownEntity(table.clone()))?;
+            let mut fields: Vec<String> = config.fields.keys().cloned().collect();
+            fields.extend([crate::scope::ORG_COLUMN.into(), crate::scope::PROJECT_COLUMN.into()]);
+            fields.sort();fields.dedup();
+            let returns = fields.iter().map(|field| format!("n.{field}")).collect::<Vec<_>>().join(", ");
+            let offset = self.dialect.node_offset_expr("n");
+            let query = format!("MATCH (n:{table}) WHERE n._org = $owned_org AND n._project = $owned_project RETURN {offset}, {returns}");
+            let rows = self.conn.execute_with_params(&query, &[
+                QueryParam::new("owned_org", CypherValue::String(scope.org.clone())),
+                QueryParam::new("owned_project", CypherValue::String(scope.project.clone())),
+            ]).map_err(|e| CatalogError::DbError(e.to_string()))?;
+            let handle = self.ensure_fts_handle(&table, &text_fields, &crate::scope::fts_filter_fields())
+                .ok_or_else(|| CatalogError::IndexPersistence(format!("no lexical handle for {table}")))?;
+            for row in &rows.rows {
+                if row.len() != fields.len()+1 {return Err(CatalogError::IndexPersistence("malformed persisted lexical row".into()))}
+                let offset = row[0].as_i64().and_then(|n| u64::try_from(n).ok())
+                    .ok_or_else(|| CatalogError::IndexPersistence("invalid lexical row offset".into()))?;
+                let values = fields.iter().zip(&row[1..]).filter_map(|(field,value)| value.as_str().map(|value|(field.clone(),value.to_owned()))).collect::<Vec<_>>();
+                crate::fts_handle::upsert_document(&handle, &values, offset).map_err(CatalogError::IndexPersistence)?;
+            }
+            handle.commit().map_err(CatalogError::IndexPersistence)?;
+            if handle.num_docs()!=rows.rows.len() as u64 {return Err(CatalogError::IndexPersistence(format!("lexical multiplicity mismatch for {table}")))}
+        }
+        self.flush_blob_store("owned lexical reconstruction")
+    }
+
     /// **Rebâtir depuis les lignes le plein texte resté sans blobs** après
     /// un arrêt pendant une première indexation : pour chaque entité
     /// marquée, l'index est refait par [`reindex`](Self::reindex), puis la
@@ -8254,9 +8340,17 @@ fn read_threads() -> u64 {
     /// Une erreur après l'envoi du COMMIT ne prouve jamais une annulation :
     /// le catalogue est empoisonné et doit être rouvert avant toute reprise.
     pub fn commit_lot(&mut self) -> Result<(), CatalogError> {
+        self.commit_lot_after_native(|| Ok(()))
+    }
+
+    pub(crate) fn commit_lot_after_native(
+        &mut self,
+        after_native: impl FnOnce() -> Result<(), CatalogError>,
+    ) -> Result<(), CatalogError> {
         self.check_initialized()?;
         let tampon = self.fts_tampon.take();
         if let Err(error) = self.conn.commit() {
+            self.publication_failure = Some("COMMIT du lot : issue inconnue, réouverture requise".into());
             self.conn.poison("COMMIT du lot : issue inconnue, réouverture requise");
             self.conn.close_without_checkpoint();
             let rollback = self.conn.rollback();
@@ -8270,6 +8364,7 @@ fn read_threads() -> u64 {
         }
         self.set_in_transaction(false);
         let materialized = (|| {
+            after_native()?;
             if let Some(t) = tampon {
                 self.appliquer_le_tampon(t.prendre())?;
             }
@@ -8277,6 +8372,7 @@ fn read_threads() -> u64 {
         })();
         if let Err(error) = materialized {
             self.jeter_les_evenements_retenus();
+            self.publication_failure = Some("lignes validées, plein texte non qualifié : réouverture requise".into());
             self.conn.poison("lignes validées, plein texte non qualifié : réouverture requise");
             self.conn.close_without_checkpoint();
             return Err(CatalogError::MustReopen(format!(
@@ -10080,6 +10176,7 @@ fn read_threads() -> u64 {
     }
 
     pub fn execute_raw(&self, cypher: &str) -> Result<crate::connection::QueryResult, CatalogError> {
+        self.check_reopen()?;
         self.conn.execute(cypher).map_err(|e| CatalogError::DbError(e.to_string()))
     }
 
@@ -10095,6 +10192,7 @@ fn read_threads() -> u64 {
         cypher: &str,
         params: &[crate::connection::QueryParam],
     ) -> Result<crate::connection::QueryResult, CatalogError> {
+        self.check_reopen()?;
         self.conn
             .execute_with_params(cypher, params)
             .map_err(|e| CatalogError::DbError(e.to_string()))
@@ -10511,8 +10609,9 @@ impl Catalog {
         need_dense: bool,
         need_sparse: bool,
     ) -> Result<(Vec<f32>, Option<crate::sparse_index::SparseVector>), CatalogError> {
-        if need_dense && self.embedder.is_none() {
-            return Err(CatalogError::EmbeddingModelUnavailable("aucun modèle dense configuré".into()));
+        self.check_model_capabilities()?;
+        if (need_dense || need_sparse) && self.embedder.is_none() {
+            return Err(CatalogError::EmbeddingModelUnavailable("catalogue lexical : dense/sparse non configuré".into()));
         }
         self.check_embedding_model()?;
         // Absent, pas de vecteur de requête : la branche dense le dira
@@ -10579,15 +10678,29 @@ impl Catalog {
 
     // ── Private helpers ────────────────────────────────────────────────
 
-    fn check_initialized(&self) -> Result<(), CatalogError> {
-        if let Some(reason) = self.must_reopen() {
-            return Err(CatalogError::MustReopen(reason));
+    fn check_reopen(&self) -> Result<(), CatalogError> {
+        match self.must_reopen() {
+            Some(reason) => Err(CatalogError::MustReopen(reason)),
+            None => Ok(()),
         }
+    }
+
+    fn check_initialized(&self) -> Result<(), CatalogError> {
+        self.check_reopen()?;
+        self.check_model_capabilities()?;
         if !self.initialized {
             Err(CatalogError::NotInitialized)
         } else {
             Ok(())
         }
+    }
+
+    #[cfg(feature = "rag3db-native")]
+    pub(crate) fn invalidate_physical_publication(&mut self, reason: &str) {
+        self.publication_failure = Some(reason.into());
+        self.jeter_les_evenements_retenus();
+        self.conn.poison(reason);
+        self.conn.close_without_checkpoint();
     }
 
     /// **Ce catalogue doit-il être lâché, et sa base rouverte ?** `Some` dès
@@ -10599,9 +10712,8 @@ impl Catalog {
     /// C'est la question qu'un hôte pose après toute erreur : la réponse ne
     /// dépend pas du chemin par lequel l'erreur est remontée.
     pub fn must_reopen(&self) -> Option<String> {
-        let reason = self
-            .conn
-            .must_reopen()
+        let reason = self.publication_failure.clone()
+            .or_else(|| self.conn.must_reopen())
             .or_else(|| self.sync_conn.as_ref().and_then(|c| c.must_reopen()))?;
         let pending = self.pending.total_count() + self.parked_pending.values().map(PendingWork::total_count).sum::<usize>();
         Some(if pending == 0 {
@@ -11045,7 +11157,8 @@ impl Catalog {
         execution_id: &str,
     ) -> Result<(), MigrationError> {
         let mut services = ServiceRegistry::new();
-        let failures = self.enregistrer_les_services_d_ingestion(&mut services);
+        let failures = self.migration_ingestion_services(&mut services)
+            .map_err(|e| MigrationError::DbError(e.to_string()))?;
 
         let checkpoint_store = CypherCheckpointStore::new(self.conn.clone());
         checkpoint_store
@@ -11344,6 +11457,7 @@ mod tests {
         assert!(!catalog.peut_devoir_un_embarquement);
         assert!(catalog.vector_storage("Document_Chunk").is_err());
         assert!(catalog.embarquer_la_requete("dense", true, false).is_err());
+        assert!(catalog.embarquer_la_requete("sparse", false, true).is_err());
         assert_eq!(catalog.embarquer_la_requete("lexical", false, false).unwrap(), (vec![], None));
     }
 
@@ -11363,6 +11477,62 @@ mod tests {
         assert!(matches!(result, Err(CatalogError::EmbeddingModelUnavailable(_))));
         assert!(catalog.entity_configs.is_empty());
         assert!(catalog.config.entities.is_empty());
+    }
+
+    #[test]
+    fn commit_unknown_invalidates_catalog_even_if_backend_poison_is_noop() {
+        use crate::connection::{CallbackConnection, DbError, QueryResult};
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let observed = calls.clone();
+        let conn = CallbackConnection::new(move |query, _| {
+            observed.lock().unwrap().push(query.to_owned());
+            match query {
+                "COMMIT" => Err(DbError::QueryError("lost commit acknowledgement".into())),
+                "ROLLBACK" => Err(DbError::QueryError("rollback connection lost".into())),
+                _ => Ok(QueryResult::default()),
+            }
+        });
+        let mut catalog = Catalog::without_embedding_model(Box::new(conn), CatalogConfig::default());
+        catalog.initialized = true;
+        catalog.set_in_transaction(true);
+        let mut events = catalog.subscribe();
+        catalog.publier(CatalogEvent::entites_changees("Document", vec!["one".into()], "ingested"));
+        let error = catalog.commit_lot().unwrap_err().to_string();
+        assert!(error.contains("lost commit acknowledgement") && error.contains("rollback connection lost"), "{error}");
+        assert!(catalog.conn.must_reopen().is_none(), "counterexample backend has no poison support");
+        assert!(catalog.must_reopen().is_some());
+        assert!(catalog.check_initialized().is_err());
+        let before = calls.lock().unwrap().len();
+        assert!(catalog.execute_raw("RETURN 1").is_err());
+        assert!(catalog.initialize().is_err());
+        assert!(catalog.shutdown().is_err());
+        assert_eq!(calls.lock().unwrap().len(), before);
+        assert!(events.try_recv().is_err(), "an unqualified lot must not announce readiness");
+    }
+
+    #[test]
+    fn committed_rows_with_failed_fts_never_announce_readiness_or_reuse_handle() {
+        let mut catalog = Catalog::without_embedding_model(Box::new(MockConnection::new()), CatalogConfig::default());
+        catalog.initialized = true;
+        let buffer = inject_blob_failure(&mut catalog);
+        catalog.set_in_transaction(true);
+        let mut events = catalog.subscribe();
+        catalog.publier(CatalogEvent::entites_changees("Document", vec!["one".into()], "ingested"));
+        let error = catalog.commit_lot().unwrap_err();
+        assert!(matches!(error, CatalogError::MustReopen(_)));
+        assert!(catalog.must_reopen().is_some());
+        assert!(catalog.execute_raw("RETURN 1").is_err());
+        assert!(events.try_recv().is_err());
+        assert_eq!(buffer.pending_len(), 1, "failed persistence retains its bytes");
+    }
+
+    #[test]
+    fn lexical_catalog_refuses_sparse_provider_before_initialization_effects() {
+        let mut catalog = Catalog::without_embedding_model(Box::new(MockConnection::new()), CatalogConfig::default());
+        catalog.set_sparse_embedder(Arc::new(crate::embedder::MockSparseEmbedder::new()));
+        assert!(matches!(catalog.initialize(), Err(CatalogError::EmbeddingModelUnavailable(_))));
+        assert!(!catalog.initialized);
+        assert!(catalog.embarquer_la_requete("sparse", false, true).is_err());
     }
 
     fn inject_blob_failure(cat: &mut Catalog) -> Arc<BufferedBlobStore<CypherBlobStore>> {
@@ -13414,7 +13584,9 @@ impl Drop for Catalog {
             }
         }
         // `conn` is the last field to drop, so the backend is still reachable.
-        let _ = self.flush_blob_store("drop"); // Drop can only log; explicit APIs propagate.
+        if self.must_reopen().is_none() {
+            let _ = self.flush_blob_store("drop"); // Explicit APIs propagate persistence errors.
+        }
     }
 }
 
