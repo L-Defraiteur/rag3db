@@ -264,6 +264,7 @@ impl Navigateur {
 
     /// **Une touche au clavier**, par le protocole (keyDown puis keyUp) :
     /// `modificateurs` 2 = Ctrl. La page reçoit de vrais événements clavier.
+    #[cfg(feature = "code")]
     pub(crate) fn touche(&mut self, cle: &str, code: &str, virtuelle: u32, modificateurs: u32) {
         for genre in ["keyDown", "keyUp"] {
             self.commande(

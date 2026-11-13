@@ -168,3 +168,17 @@ restent acquises. Équivalence du minimum : les seuls fichiers Rust changés
 après29d sont daemon/mod.rs et daemon_host/livraison_codex.rs, modules exclus
 sans daemon. Aucun rejouage inchangé du minimum, aucun saut de témoin daemon.
 Borne1800s/Max32/j8/lib29/ELF conservés et arrêt premier rouge maintenus.
+
+004279d4a : daemon check-tests10,68s et compilation29,06s verts ; mail9/0/0,
+lifecycle8/0/0 verts, ELF/SHA/inventaire1722 archivés. Dépendances actives
+sans rag3db/codeparsers confirmées. Native+daemon check-tests s'arrête sur
+Hosted::rattrapage, OutilsDuChat::en_attente/deux builders, Navigateur::touche,
+utilisés exclusivement sous code. Gardes code précises champ/initialisation/
+méthodes, usage relu, aucun contournement de warnings. Pas de test natif exécuté.
+
+Reprise publiée : recette troisième argument natif-daemon, dossier neuf
+cible-garde-code, même portée1800 ; seul jeu restant. Deux parseurs existants
+livraison Codex ajoutés (sans code :2/0/0 attendus, ni hôte ni processus Codex).
+Preuves minimum29d et daemon004 conservées : tous les nouveaux fichiers Rust
+sont dans daemon_host, module exclu de ces deux jeux. Les gardes ne changent
+pas le comportement sous le jeu large qui possède code.

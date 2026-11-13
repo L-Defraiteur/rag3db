@@ -99,6 +99,7 @@ struct Hosted {
     /// **Un index reparti de lui-même à l'ouverture** (`worktrees::a_l_ouverture`) : il ne
     /// tient pas la porte, une fermeture l'arrête au paquet suivant (c7, 8 novembre 2026).
     /// Un index lancé par un outil, lui, la tient (`BUSY_INDEXING`).
+    #[cfg(feature = "code")]
     rattrapage: std::sync::atomic::AtomicBool,
     /// Combien de fois ce backend a été ouvert (1 au premier appel).
     opened: std::sync::atomic::AtomicUsize,
@@ -453,6 +454,7 @@ impl DaemonHost {
                     id,
                     manifest: canonical,
                     backend: std::sync::RwLock::new(None),
+                    #[cfg(feature = "code")]
                     rattrapage: Default::default(),
                     opened: Default::default(),
                     closed: Default::default(),
