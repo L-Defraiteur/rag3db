@@ -5,6 +5,32 @@ use luciole::scheduler::ActorContext;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+// No diagnostic on normal samples. Panic evidence survives stderr=/dev/null
+// identically in A and B, outside the successful throughput samples.
+fn json_string(value: &str) -> String {
+    let mut result = String::from("\"");
+    for c in value.chars() {
+        match c {
+            '\\' => result.push_str("\\\\"),
+            '"' => result.push_str("\\\""),
+            c if c <= '\u{001f}' => result.push_str(&format!("\\u{:04x}", c as u32)),
+            c => result.push(c),
+        }
+    }
+    result.push('"');
+    result
+}
+fn install_panic_evidence() {
+    std::panic::set_hook(Box::new(|info| {
+        let message = if let Some(text) = info.payload().downcast_ref::<&str>() { (*text).to_owned() }
+            else if let Some(text) = info.payload().downcast_ref::<String>() { text.clone() }
+            else { "non-string panic payload".to_owned() };
+        let (file, line) = info.location().map(|p| (p.file(), p.line())).unwrap_or(("unknown", 0));
+        println!("{{\"event\":\"panic\",\"message\":{},\"file\":{},\"line\":{}}}",
+            json_string(&message), json_string(file), line);
+    }));
+}
+
 struct Counter {
     count: u64,
     dropped: mpsc::Sender<()>,
@@ -35,6 +61,7 @@ fn fence(scheduler: &Scheduler, actor: &ActorRef<Msg>) -> u64 {
     scheduler.try_wait(rx, "benchmark_fence").expect("fence failed")
 }
 fn main() {
+    install_panic_evidence();
     let args: Vec<String> = std::env::args().collect();
     assert_eq!(args.len(), 5, "usage: bench worker|pinned producers capacity messages_per_producer");
     let dispatch = &args[1];

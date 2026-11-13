@@ -80,13 +80,43 @@ with (b / 'samples.jsonl').open('w') as output:
                 budget()
                 load = Path('/proc/loadavg').read_text().strip()
                 argv = [str(executables[variant]), dispatch, str(producers), str(capacity), '100000']
-                result = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-                if result.returncode:
-                    with (b / 'premier-rouge.json').open('x') as f:
-                        json.dump(dict(argv=argv, code=result.returncode, stdout=result.stdout), f)
-                    raise SystemExit(result.returncode)
-                row = json.loads(result.stdout)
-                assert row['count'] == row['messages'] == producers * 100000 and row['status'] == 'ok'
+                case = dict(index=len(rows)+1, variant=variant, source=source[variant],
+                            dispatch=dispatch, producers=producers, capacity=capacity,
+                            block=block, argv=argv, exe_sha256=meta['exe_sha256'][variant],
+                            cpus=sorted(cpus), load=load, stderr='/dev/null')
+                prefix = f"cas-{len(rows)+1:03d}"
+                child = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                case['pid'] = child.pid
+                try:
+                    case['start'] = Path(f'/proc/{child.pid}/stat').read_text().rsplit(') ', 1)[1].split()[19]
+                except OSError as error:
+                    case['start'] = None; case['start_error'] = repr(error)
+                stdout, _ = child.communicate()
+                case['code'] = child.returncode
+                # Freeze raw evidence BEFORE rc/JSON/schema/count checks.
+                with (b / (prefix + '.stdout')).open('w') as raw:
+                    raw.write(stdout); raw.flush(); os.fsync(raw.fileno())
+                case['stdout_sha256'] = hashlib.sha256(stdout.encode()).hexdigest()
+                (b / (prefix + '.json')).write_text(json.dumps(case, indent=2))
+                def case_red(reason):
+                    marker = b / 'premier-rouge.json'
+                    if not marker.exists():
+                        with marker.open('x') as f:
+                            json.dump(dict(raison=reason, raw=prefix+'.stdout', identite=case), f, indent=2)
+                            f.flush(); os.fsync(f.fileno())
+                    raise SystemExit(child.returncode if child.returncode > 0 else 2)
+                if case['start'] is None:
+                    case_red('identité PID/start non attestée ; stdout conservé')
+                if child.returncode:
+                    case_red('code cas non nul ; diagnostic panic éventuel dans raw stdout')
+                try:
+                    row = json.loads(stdout)
+                    assert row['count'] == row['messages'] == producers * 100000
+                    assert row['status'] == 'ok'
+                    assert row['dispatch'] == dispatch and row['producers'] == producers and row['capacity'] == capacity
+                    assert row['seconds'] > 0 and row['messages_per_second'] > 0
+                except (ValueError, KeyError, TypeError, AssertionError) as error:
+                    case_red('JSON/schema/compte invalide: ' + repr(error))
                 row.update(variant=variant, source=source[variant], block=block, load=load)
                 rows.append(row); output.write(json.dumps(row) + '\n'); output.flush()
                 budget()

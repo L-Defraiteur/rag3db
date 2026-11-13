@@ -570,3 +570,13 @@ firstred contextuel immuable ; hookpanic identique dans les deux harnesses
 écrivant JSON structuré sur stdout SEULEMENT en cas de panique. Aucun replay,
 pas de stderr énorme ni modification de production luciole. MESURE reste
 soumise RO/GO distincts et coordination4CPU sans lourd concurrent sur ces cœurs.
+
+### Delta MESURE préparé après réserve, NON lancé
+
+Pilote mesure conserve maintenant pour chaqueCAS rawstdout fsync et identité
+source/exeSHA/PID/start/argv/rc avant code/JSON/schema/compte ; firstred contextuel
+openx/fsync. Le harnais identique A/B inclut un hookpanic JSONstdout seulement
+sur panique, installé avant échauffement/chronos. stderrDEVNULL maintenu pour
+ne pas générer des logs pinned énormes ; coût formatage/syscall reste une limite.
+Pas de replay, aucun nouveau code production luciole, ni exécution MESURE/build.
+Reste RO nouveau couple pilote/hook avant GO600 et coordination explicite4CPU.

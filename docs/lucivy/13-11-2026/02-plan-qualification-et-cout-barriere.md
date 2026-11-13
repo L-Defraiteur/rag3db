@@ -110,3 +110,13 @@ pour A/B et le relever dans la recette ; même vers /dev/null, formatage/syscall
 restent dans le chrono et peuvent masquer le coût d’admission. Les cas worker
 servent alors de comparaison sans ce diagnostic. Cette mesure doit déclarer
 cette limite et ne pas s’attribuer un coût « mutex seul ».
+
+### Contre-exemples du pilote MESURE
+
+Chaque cas écrit raw stdout fsync, identité source/exeSHA/PID/start/argv/rc
+avant toute validation JSON/compte ; firstred est contextuel, ouvert x et fsync.
+Le harnais A/B identique installe horschrono un hook de panique JSON sur stdout,
+uniquement en cas de panique. stderr reste vers /dev/null pour les diagnostics
+pinned volumineux, avec la limite de coût déjà notée. Aucun replay pour retrouver
+une raison perdue ; aucun diagnostic normal ajouté dans la boucle chronométrée.
+Pilote et hook préparés seulement, aucun build ni MESURE exécutés.
