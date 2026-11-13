@@ -1,6 +1,6 @@
 # Reprise ED — frontières de compilation boîte
 
-Ticket canonique ouvert : ../tickets/2026-11-12-la-boite-ne-compile-pas-sous-daemon-seul.md.
+Ticket canonique ouvert : ../../tickets/closed/2026-11-12-la-boite-ne-compile-pas-sous-daemon-seul.md.
 WT neuf aux deux postes ~/git_workspaces/cx-ed-frontieres-boite ; branche même
 nom, base7308544ce, production finale204ca4c39. Aucun ancien W IDE rouvert.
 Cargo exécuté uniquement sur PC via primitive commune, Max32/HIGH0/j8.
@@ -32,3 +32,17 @@ soit27distincts/28brut. Coordination7879 avant prise/santés/rendu. Source/recet
 Pas de tour master encore ; revue diff et passe restent requises. Après livraison,
 garde fraîche/archives admins fidèles aux deux postes, supprimer W/target/branches
 locales, conserver remotes/ELF/logs/rouges. Pas de déploiement daemon personnel.
+
+## Fin de qualification
+
+Lire le rapport01, section qualification finale. Globale source093 et complément
+recette27852 entièrement qualifiés, preuve verdict-final-compose.json2postes.
+Le rouge de recette ELF reste conservé : précompile no-default diffère du tag
+default[] des wrappers ; F8 garde no-default, recettes futures04 corrigées, aucun
+rejeu des verts. Trois ELF réels a254/7497/6ead + deux historiques00c3/fb0 gardés,
+inventaires effectifs identiques après comparaison avant complément ; limite
+chronologique explicite. CREATE6ead1/0/0 sansnonjugé puis hôte13direct+filets2/gardes
+verts sans Cargo, mêmePCsource093. Lect27distincts/28brut, budget1850,30/6000,
+quiescence[], aucun usage7879 restant. Deux tickets clos même lot. Préparer revue
+finale/tour C7, master FF et trois contrôles, puis garde fraîche/archives fidèles
+et retrait des seuls W/target/branches locaux de ce lot ; preuves/remotes gardées.

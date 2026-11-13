@@ -1,6 +1,6 @@
 # La lib native+daemon ne compile pas hors matrice
 
-- **État** : ouvert ; compilation rouge observée, aucun correctif dans le lot BGE.
+- **État** : corrigé 09303fe39 ; même frontière native sans code, qualifiée dans le ticket boîte.
 - **Famille** : produit
 - **Gravité** : combinaison de features hors matrice empêchée de compiler.
 - **Atteignable en service** : non qualifié ; échec à la compilation des tests.
@@ -25,3 +25,8 @@ Suite : qualifier le contrat des features puis corriger gardes/dépendances et
 import au bon périmètre, sans masquer les warnings ni supprimer de témoins.
 Fin : compilation et témoins concernés verts pour la combinaison annoncée,
 ou refus explicite de cette combinaison documenté dans le contrat.
+
+Résolu dans le même lot que [la frontière boîte](2026-11-12-la-boite-ne-compile-pas-sous-daemon-seul.md) :
+F8/8 incluant native+daemon sans code, mail9/lifecycle7/parseurslivraison2 verts,
+puis globale lib2281/NAV40/lect27distincts/hôte13, revue C7/Archi. Aucun autre
+correctif produit ni lot BGE rejoué ; preuves frontieres-boite-20261113 aux deux postes.
