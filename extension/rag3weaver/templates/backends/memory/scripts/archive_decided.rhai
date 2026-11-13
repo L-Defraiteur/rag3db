@@ -31,13 +31,20 @@ if kind == "fiche" {
 // Une fiche proposée plus haut dans ce document : la section la rejoint par la voie create, avec le
 // même enregistrement (une écriture identique), pour que la fiche existe avant son lien.
 let proposed = if input.proposed == () { [] } else { input.proposed };
+// **Le nom d'une fiche créée** : le sujet que le modèle donne (Decide name_as='subject'), sinon le
+// titre de la section. Un sujet qui nomme une candidate ou une fiche proposée plus haut la rejoint.
+// (Decide rogne déjà le nom.)
+let sujet = if type_of(s.subject) == "string" { s.subject } else { "" };
+if kind == "create" && sujet != "" && type_of(s.candidate_names) == "array" {
+    for c in s.candidate_names { if c.name == sujet { kind = "fiche"; resolved_name = sujet; } }
+}
 let rejoint = #{};
 let a_rejoint = false;
 if kind == "fiche" {
     for p in proposed { if p.name == resolved_name { rejoint = p; a_rejoint = true; } }
     if a_rejoint { kind = "create"; }
 }
-let fiche = if a_rejoint { resolved_name } else if kind == "create" { s.title } else if kind == "fiche" { resolved_name } else { "" };
+let fiche = if a_rejoint { resolved_name } else if kind == "create" { if sujet != "" { sujet } else { s.title } } else if kind == "fiche" { resolved_name } else { "" };
 let texte = s.text;
 let about = texte;
 let point = about.index_of(". ");

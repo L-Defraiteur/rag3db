@@ -36,7 +36,7 @@ for p in proposed {
     let about = if p.about == () { "" } else { p.about };
     presentation += `- ${alias} : « ${name} » (proposée plus haut dans ce document) : ${about}\n`;
 }
-let choix = if input.allow_create { "none, ou create si le sujet est net et qu'aucune fiche ne le porte" } else { "none" };
+let choix = if input.allow_create { "none, ou create si le sujet est net et qu'aucune fiche ne le porte (avec, dans name, le nom de ce sujet en quelques mots)" } else { "none" };
 let texte = section.text;
 if texte.len() > 4000 { texte = texte.sub_string(0, 4000) + "…"; }
 let liste = if presentation == "" { "(aucune)\n" } else { presentation };

@@ -75,6 +75,16 @@ fn etiquette(label: &str) -> Reply {
     }
 }
 
+/// Une étiquette et un nom, sous le schéma strict du Decide quand il demande un nom (`name_as`).
+fn etiquette_nommee(label: &str, name: &str) -> Reply {
+    Reply::Sse {
+        frames: vec![
+            format!(r#"{{"id":"a1","choices":[{{"index":0,"delta":{{"role":"assistant","content":"{{\"label\": \"{label}\", \"name\": \"{name}\"}}"}},"finish_reason":null}}]}}"#),
+            r#"{"id":"a1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#.into(),
+        ],
+    }
+}
+
 const FICHE: &str = "le moteur de reprise du WAL";
 const DOCUMENT: &str = "# Journal du 26\n\n## Reprise\n\nLe journal se rejoue à l'ouverture, en entier, avant toute écriture : le moteur de reprise du WAL relit chaque enregistrement.\n\n## Météo\n\nIl pleut sur la ville.\n\n## Le compositeur\n\nÀ 100 % de rapport cyclique, le compositeur figeait ; à 70 % l'écran reste utilisable.\n";
 const CHEMIN: &str = "sources/2026-10-26-journal-du-26.md";
@@ -260,5 +270,26 @@ fn deux_sections_d_un_document_sur_le_meme_sujet_font_une_seule_fiche() {
     assert_eq!(r["result"]["ok"], json!(2), "{r}");
     assert_eq!(apports_de(&b, "La reprise du WAL").len(), 2, "les deux sections sur la fiche proposée par la première");
     assert!(apports_de(&b, "La reprise, suite").is_empty(), "aucune seconde fiche");
+}
+
+/// **Une fiche créée porte le nom d'un sujet, pas le titre de sa section** (13 novembre 2026,
+/// l'archivage à blanc : « 1. Le jeu », « Le témoin », « En file » devenaient des fiches). Sur la voie
+/// create, le modèle rend aussi un nom (schéma `{label, name}`) ; la fiche prend ce nom.
+#[test]
+#[ignore]
+fn une_fiche_creee_porte_le_nom_du_sujet_que_le_modele_donne() {
+    let serveur = FakeServer::start_sequence(vec![etiquette_nommee("create", "La reprise du journal")]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    const NOTE: &str = "# Note du 13\n\n## 1. Le jeu\n\nLe journal se rejoue à l'ouverture, en entier, avant toute écriture.\n";
+    let r = appel(&b, "archive", json!({"titre": "Note du 13", "contenu": NOTE, "jour": "2026-11-13", "allow_create": true}));
+    assert_eq!(r["result"]["errors"], json!([]), "{r}");
+    let request: Value = serde_json::from_str(&serveur.request.recv().unwrap()).unwrap();
+    assert!(request["response_format"]["json_schema"]["schema"]["properties"].get("name").is_some(), "le schéma demande un nom : {request}");
+    assert_eq!(apports_de(&b, "La reprise du journal").len(), 1, "la fiche porte le nom du sujet");
+    assert!(apports_de(&b, "1. Le jeu").is_empty(), "pas le titre de la section");
 }
 

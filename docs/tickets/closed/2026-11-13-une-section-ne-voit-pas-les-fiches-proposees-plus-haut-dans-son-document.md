@@ -36,6 +36,6 @@ pour la seconde. Rouge sur master 289ce7edc (« « candidate_1 » n'est pas une 
 
 ## Ce qui reste
 
-Le nom d'une fiche créée est toujours le titre de sa section : « 1. Le jeu » ou « Le témoin » ne
-sont pas des sujets. Une création qui nomme un sujet est l'étape suivante, à mesurer par un second
-archivage à blanc.
+Le nom d'une fiche créée était le titre de sa section : corrigé dans le même lot (ticket
+`2026-11-13-une-fiche-creee-par-l-archiviste-porte-le-titre-de-sa-section`). L'effet des deux se
+mesure par un second archivage à blanc.
