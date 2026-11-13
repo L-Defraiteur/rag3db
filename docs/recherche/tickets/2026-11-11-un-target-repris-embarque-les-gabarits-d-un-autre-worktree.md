@@ -114,3 +114,13 @@ réelle ; SDK et primitives runtime inchangés. Refus explicite des surcharges
 --config non qualifiées. Fixture des journaux adaptée pour metadata, NON JOUÉE
 car elle compile un adaptateur Rust. Détails, limites et recette dans le plan.
 Revue requise avant qualification plus large ; ticket OUVERT, aucun master.
+
+## Réserve Archi avant gel du pilote
+
+RO7cb7dde8 : sur reprise connue, le second cargo metadata --all-features de
+la garde oublie --offline/--locked/--frozen, pourtant transmis au premier
+metadata de l'adaptateur. Il pourrait résoudre autrement avant la commande
+finale. Nouveau dixième juge CPU sur cette branche, avant correction ; faux
+Cargo uniquement. Qualification/pilote non lancés, ancien avis préparatoire
+ne vaut pas validation de cette frontière. Transmettre les restrictions à
+la primitive commune sans modifier les arguments finaux ni l'export SDK.
