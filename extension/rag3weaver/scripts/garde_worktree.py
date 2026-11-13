@@ -50,26 +50,136 @@ def gitpath(path, name, admin=False):
     return safe_path(raw)
 
 
+def config_file(owner, path, admin=False):
+    """Lire uniquement ce fichier, sans suivre des includes vers d'autres lieux."""
+    path = safe_path(path)
+    raw = git(owner, 'config', '--file', str(path), '--no-includes', '--null', '--list', admin=admin)
+    result = {}
+    for row in raw.split(b'\0'):
+        if not row:
+            continue
+        key, sep, value = row.partition(b'\n')
+        key = os.fsdecode(key)
+        if key.startswith(('include.', 'includeif.')):
+            raise Refus(f'configuration incluse ambiguë : {path}')
+        result.setdefault(key, []).append(os.fsdecode(value) if sep else None)
+    return result
+
+
+def single(config, key):
+    values = config.get(key, [])
+    if len(values) > 1:
+        raise Refus(f'configuration multiple ambiguë : {key}')
+    return values[0] if values else None
+
+
+def anchor(source, admin):
+    """Une source est ancrée par sa propre entrée .git, jamais par le cwd de Git."""
+    source = safe_path(source)
+    entry = source / '.git'
+    if not entry.exists() or entry.is_symlink():
+        raise Refus(f'worktree sans ancrage .git : {source}')
+    if gitpath(source, '--absolute-git-dir') != admin or gitpath(source, '--show-toplevel') != source:
+        raise Refus(f'worktree et administration discordants : {source}')
+    return source
+
+
+def residual_module(common, sources):
+    """Prouver le gitlink désinitialisé et son rangement privé, pas une absence seule."""
+    matches = []
+    for parent in sorted(sources):
+        modules = parent / '.gitmodules'
+        if not modules.exists():
+            continue
+        config = config_file(parent, modules)
+        parent_admin = gitpath(parent, '--absolute-git-dir')
+        for key, values in config.items():
+            if not key.startswith('submodule.') or not key.endswith('.path'):
+                continue
+            name = key[len('submodule.'):-len('.path')]
+            if not name or Path(name).is_absolute() or '..' in Path(name).parts:
+                raise Refus(f'nom de sous-module ambigu : {parent}')
+            stored = parent_admin / 'modules' / name
+            if Path(os.path.abspath(stored)) != common:
+                continue
+            if len(values) != 1 or not values[0]:
+                raise Refus(f'chemin de sous-module ambigu : {parent}')
+            relative = values[0]
+            if Path(relative).is_absolute() or '..' in Path(relative).parts:
+                raise Refus(f'chemin de sous-module ambigu : {parent}')
+            source = safe_path(parent / relative, strict=False)
+            if not inside(source, parent) or source == parent:
+                raise Refus(f'sous-module hors de sa source : {parent}')
+            rows = [r for r in git(parent, 'ls-files', '--stage', '-z', '--', ':(literal)' + relative).split(b'\0') if r]
+            if len(rows) != 1 or b'\t' not in rows[0]:
+                raise Refus(f'gitlink de sous-module absent ou ambigu : {source}')
+            metadata, path = rows[0].split(b'\t', 1)
+            mode, oid, stage = metadata.split()
+            if mode != b'160000' or stage != b'0' or path != os.fsencode(relative):
+                raise Refus(f'gitlink de sous-module non attesté : {source}')
+            if source.exists() and (not source.is_dir() or any(source.iterdir())):
+                raise Refus(f'source désinitialisée non vide ou ambiguë : {source}')
+            matches.append(dict(source_attendue=str(source), parent=str(parent), nom=name, gitlink=oid.decode('ascii')))
+    if len(matches) != 1:
+        raise Refus(f'administration sans source principale attestée : {common}')
+    return matches[0]
+
+
+def worktree_state(common, sources=()):
+    """Reconstruire l'inventaire depuis les ancrages et inscriptions réciproques."""
+    config = config_file(common, common / 'config', admin=True)
+    extension = single(config, 'extensions.worktreeconfig')
+    if 'extensions.worktreeconfig' in config and extension not in ('false', 'no', 'off', '0'):
+        extra = common / 'config.worktree'
+        if extra.exists():
+            config.update(config_file(common, extra, admin=True))
+    bare = single(config, 'core.bare')
+    if bare not in ('false', 'no', 'off', '0'):
+        raise Refus(f'administration nue ou état principal ambigu : {common}')
+    candidates = {source for source in sources if gitpath(source, '--absolute-git-dir') == common}
+    configured = single(config, 'core.worktree')
+    if 'core.worktree' in config:
+        if not configured:
+            raise Refus(f'core.worktree vide ou ambigu : {common}')
+        path = Path(configured)
+        candidates.add(safe_path(path if path.is_absolute() else common / path))
+    elif common.name == '.git':
+        candidates.add(safe_path(common.parent))
+    if len(candidates) > 1:
+        raise Refus(f'ancrages de source principale discordants : {common}')
+    primary = anchor(next(iter(candidates)), common) if candidates else None
+    entries = [primary] if primary else []
+    registrations = common / 'worktrees'
+    linked = []
+    if registrations.exists():
+        safe_path(registrations)
+        for item in sorted(registrations.iterdir()):
+            item = safe_path(item)
+            if not item.is_dir() or (item / 'locked').exists():
+                raise Refus(f'inscription worktree ambiguë ou verrouillée : {item}')
+            backlink = safe_path(item / 'gitdir')
+            raw = os.fsdecode(backlink.read_bytes()).rstrip('\n')
+            gitfile = Path(raw)
+            if not gitfile.is_absolute():
+                raise Refus(f'inscription worktree non absolue : {item}')
+            gitfile = safe_path(gitfile)
+            if gitfile.name != '.git' or not gitfile.is_file() or gitpath(item, '--git-common-dir', admin=True) != common:
+                raise Refus(f'inscription worktree sans réciprocité : {item}')
+            source = anchor(gitfile.parent, item)
+            if source in entries:
+                raise Refus(f'inscription worktree dupliquée : {item}')
+            entries.append(source)
+            linked.append(dict(administration=str(item), source=str(source)))
+    if primary:
+        return dict(etat='initialise', worktrees=entries, ancrage_principal=str(primary), inscriptions=linked)
+    proof = residual_module(common, sources)
+    if linked:
+        raise Refus(f'administration désinitialisée sert un autre worktree : {common}')
+    return dict(etat='desinitialise', worktrees=[], preuve_gitlink=proof, inscriptions=[])
+
+
 def worktrees(common):
-    rows = git(common, 'worktree', 'list', '--porcelain', '-z', admin=True).split(b'\0')
-    entries = []
-    for row in rows:
-        if row.startswith(b'worktree '):
-            p = Path(os.fsdecode(row[9:]))
-            protected(p)
-            if not p.exists():
-                raise Refus(f'autre worktree manquant ou ambigu : {p}')
-            resolved = safe_path(p)
-            # Git peut nommer l'administration principale d'un sous-module
-            # au lieu du core.worktree ; lire sa racine effective.
-            if resolved == common:
-                resolved = gitpath(common, '--show-toplevel', admin=True)
-            entries.append(resolved)
-        elif row.startswith((b'prunable', b'locked')):
-            raise Refus(f'entrée worktree ambiguë ou verrouillée : {common}')
-    if not entries:
-        raise Refus(f'inventaire worktree vide : {common}')
-    return entries
+    return worktree_state(common)['worktrees']
 
 
 def walk_error(error):
@@ -200,9 +310,10 @@ def inspect(repo, target, archives, report):
     for admin in sorted(admins):
         try:
             c = gitpath(admin, '--git-common-dir', admin=True)
-            entries = worktrees(c)
+            state = worktree_state(c, sources)
+            entries = state.pop('worktrees')
             descriptions.append({'administration': str(admin), 'commune': str(c),
-                                 'worktrees': list(map(str, entries))})
+                                 'worktrees': list(map(str, entries)), **state})
             if any(inside(c, d) for d in destroyed) and len(entries) > 1:
                 refus.append(f'administration sert un autre worktree : {c}')
             for entry in entries:

@@ -96,7 +96,7 @@ class GardeWorktreeTests(unittest.TestCase):
         for name in ('cwd-exterieur-a', 'cwd-exterieur-b'):
             cwd = self.base / name
             cwd.mkdir()
-            raw = subprocess.run(['git', '--git-dir', str(module_admin), 'worktree', 'list', '--porcelain'], cwd=cwd, capture_output=True, text=True, check=True)
+            raw = subprocess.run(['git', '--git-dir', str(module_admin), '-c', 'gc.auto=0', 'worktree', 'list', '--porcelain', '-z'], cwd=cwd, env=dict(os.environ, GIT_OPTIONAL_LOCKS='0'), capture_output=True, text=True, check=True)
             report = self.base / (name + '.json')
             result = self.check([(self.admin, archive)], report=report, cwd=cwd)
             observations.append(dict(cwd=str(cwd), git_brut=raw.stdout, code=result.returncode,
@@ -119,6 +119,105 @@ class GardeWorktreeTests(unittest.TestCase):
         result = self.check([(self.admin, archive)])
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout + self.report.read_text())
         self.assertEqual(json.loads(self.report.read_text())['verdict'], 'VERT')
+
+    def test_desinitialise_partage_refuse_et_preserve_le_worktree_lie(self):
+        module = self.module()
+        other = self.base / 'lie-externe'
+        git(module, 'worktree', 'add', '-b', 'locale-privee', str(other))
+        git(self.parent, 'submodule', 'deinit', '--all')
+        (other/'source').write_text('modification privée liée\n')
+        before = (fingerprint(other), fingerprint(self.admin))
+        result = self.check([(self.admin, self.archive())])
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('autre worktree', ' '.join(json.loads(self.report.read_text())['refus']))
+        self.assertEqual(before, (fingerprint(other), fingerprint(self.admin)))
+
+    def test_desinitialise_avec_contenu_refuse_meme_archive(self):
+        module = self.module()
+        git(self.parent, 'submodule', 'deinit', '--all')
+        (module/'prive').write_text('donnée non effaçable\n')
+        before = fingerprint(self.parent)
+        result = self.check([(self.admin, self.archive())])
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('non vide', ' '.join(json.loads(self.report.read_text())['refus']))
+        self.assertEqual(before, fingerprint(self.parent))
+
+    def test_desinitialise_sans_gitlink_refuse(self):
+        self.module()
+        git(self.parent, 'submodule', 'deinit', '--all')
+        git(self.parent, 'rm', '--cached', 'module')
+        git(self.parent, 'commit', '-m', 'retire le gitlink, conserve le résidu')
+        result = self.check([(self.admin, self.archive())])
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('gitlink', ' '.join(json.loads(self.report.read_text())['refus']))
+
+    def test_desinitialise_archive_perimee_refuse(self):
+        module = self.module()
+        admin = git(module, 'rev-parse', '--absolute-git-dir')
+        git(self.parent, 'submodule', 'deinit', '--all')
+        archive = self.archive()
+        git(self.parent, '--git-dir', admin, 'branch', 'locale-apres-copie')
+        result = self.check([(self.admin, archive)])
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('diffère', ' '.join(json.loads(self.report.read_text())['refus']))
+
+    def test_configure_sans_gitfile_ne_devient_pas_desinitialise(self):
+        module = self.module()
+        (module/'.git').unlink()
+        result = self.check([(self.admin, self.archive())])
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('ancrage', ' '.join(json.loads(self.report.read_text())['refus']))
+
+    def test_worktree_lie_verrouille_refuse(self):
+        git(self.repo, 'worktree', 'lock', str(self.parent))
+        result = self.check([(self.admin, self.archive())])
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('verrouillée', ' '.join(json.loads(self.report.read_text())['refus']))
+
+    def test_inscription_liee_sans_gitfile_refuse(self):
+        module = self.module()
+        other = self.base/'lie-manquant'
+        git(module, 'worktree', 'add', '-b', 'lie', str(other))
+        (other/'.git').unlink()
+        result = self.check([(self.admin, self.archive())])
+        self.assertEqual(result.returncode, 2, result.stderr)
+
+    def test_administration_inconnue_sans_core_worktree_refuse(self):
+        admin = self.parent/'admin-inconnue'
+        external = self.base/'source-inconnue'
+        external.mkdir()
+        git(external, 'init', '-b', 'master', '--separate-git-dir', str(admin))
+        (external/'source').write_text('source ailleurs\n')
+        git(external, 'add', 'source')
+        git(external, 'commit', '-m', 'source')
+        git(self.parent, 'add', 'admin-inconnue')
+        git(self.parent, 'commit', '-m', 'administration sans identité de source')
+        saved = self.base/'archive-inconnue'
+        shutil.copytree(admin, saved, symlinks=True)
+        result = self.check([(self.admin, self.archive()), (admin, saved)])
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('source principale attestée', ' '.join(json.loads(self.report.read_text())['refus']))
+
+    def test_ancrage_ne_demande_jamais_de_checkout_a_git_dir(self):
+        self.module()
+        spec = importlib.util.spec_from_file_location('garde_fixture_ancrage', SCRIPT)
+        guard = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guard)
+        original = guard.git
+        def checked_git(path, *args, **kwargs):
+            if kwargs.get('admin'):
+                self.assertNotIn('worktree', args)
+                self.assertNotIn('--show-toplevel', args)
+            return original(path, *args, **kwargs)
+        for i in range(2):
+            if i:
+                git(self.parent, 'submodule', 'deinit', '--all')
+            saved = self.base/('archive-ancrage-'+str(i))
+            shutil.copytree(self.admin, saved, symlinks=True)
+            report = self.base/('rapport-ancrage-'+str(i)+'.json')
+            with patch.object(guard, 'git', side_effect=checked_git):
+                result = guard.inspect(self.repo, self.parent, {self.admin: saved}, report)
+            self.assertEqual(result['verdict'], 'VERT', result['refus'])
 
     def test_reference_locale_non_preservee_refuse(self):
         module = self.module()
@@ -306,4 +405,4 @@ class GardeWorktreeTests(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(failfast=True)
