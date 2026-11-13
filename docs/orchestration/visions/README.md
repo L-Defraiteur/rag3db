@@ -110,7 +110,10 @@ le juge.
    mais ses scripts peuvent s'en servir (le lanceur résout la référence au moment d'exécuter, hors de
    la fenêtre du modèle). Même mécanisme pour la sortie : ce qui ressemble à une valeur est caviardé
    avant de revenir à l'agent. C'est la porte d'accord de l'atelier et le décideur local appliqués aux
-   secrets ; la graine 4 (le coffre) lui donne l'endroit où ranger.
+   secrets ; la graine 4 (le coffre) lui donne l'endroit où ranger. Deux chemins selon l'équipe : si elle
+   a déjà son « mode auto » avec un modèle local, on le laisse décider directement ; sinon, une première
+   passe sur un modèle local à elle (la valeur ne sort pas de son poste), et c'est ce modèle qui range
+   ensuite la référence dans le vrai coffre durable.
 
 Le code est le premier produit du framework ; ces cinq-là sont des vues et des agents de plus sur le
 même index.
