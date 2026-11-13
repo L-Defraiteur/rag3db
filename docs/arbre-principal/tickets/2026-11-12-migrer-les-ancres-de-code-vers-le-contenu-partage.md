@@ -2450,3 +2450,7 @@ Le résolveur pur2a est qualifié CPU sur69 puis sur unionAPP236 avec F8/liblarg
 ## Landing2a et fin des ressources
 
 Résolveur pur2a livré masterd17a230b14f60fbac59aa1e4ac10510ba5f3c7e2, sans index/vue réelle branché. Qualification composite rapport25, landing et nettoyage rapport27. Ticket2a clos ; ce parent reste ouvert. C7 autorise ensuite une préparation DOCUMENTAIRE2b (contrats/testspec/chemins réels), pas nouveau Rust/runtime ni présomption de couches physiques persistées.
+
+## Préparation documentaire2b
+
+Suite ouverte : [visibilitédes couchesavantrequêtes](2026-11-13-appliquer-la-visibilite-des-couches-avant-les-requetes-des-vues.md), [plan28](../13-11-2026/28-plan-visibilite-couches-2b.md). Lecture des cheminsL6/signaux/projection/relations et prérequis physiques explicites ; aucun nouveau Rust/runtime ni résultat2b. LotgardeRecherche indépendant/prioritaire avant toutcode2b.

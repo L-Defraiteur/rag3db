@@ -1,0 +1,58 @@
+{
+  "base": "db687edf63f4857e654ce6f158d1ae21056ae09b",
+  "runtime": false,
+  "sources": [
+    {
+      "path": "extension/rag3weaver/src/dataflow/migrations/publication/layers.rs",
+      "tree_entry": "100644 blob 9a8caead99b122418c85a4dcd86aca3e445a0a6c\textension/rag3weaver/src/dataflow/migrations/publication/layers.rs"
+    },
+    {
+      "path": "extension/rag3weaver/src/dataflow/migrations/physical_index.rs",
+      "tree_entry": "100644 blob 5a1fffcaf637ebc24254633463155b7433f7a4f9\textension/rag3weaver/src/dataflow/migrations/physical_index.rs"
+    },
+    {
+      "path": "extension/rag3weaver/src/read_view.rs",
+      "tree_entry": "100644 blob 83b24838264c40581105e23e450ddfab886dcab5\textension/rag3weaver/src/read_view.rs"
+    },
+    {
+      "path": "extension/rag3weaver/src/read_pool.rs",
+      "tree_entry": "100644 blob 09465c7e349d3f775321eff57f1ad2f80cd3dee2\textension/rag3weaver/src/read_pool.rs"
+    },
+    {
+      "path": "extension/rag3weaver/src/backend.rs",
+      "tree_entry": "100644 blob db2bf439b666eae2dfc9e2199f2de1c4113e340e\textension/rag3weaver/src/backend.rs"
+    },
+    {
+      "path": "extension/rag3weaver/src/dataflow/catalog_read.rs",
+      "tree_entry": "100644 blob 026c161a96d8c28a4d72bf12a492c4c210e11ae8\textension/rag3weaver/src/dataflow/catalog_read.rs"
+    },
+    {
+      "path": "extension/rag3weaver/src/dataflow/generic_search_nodes.rs",
+      "tree_entry": "100644 blob aee11bf1c9c49d8e318622712d5e57ea837b6e8a\textension/rag3weaver/src/dataflow/generic_search_nodes.rs"
+    },
+    {
+      "path": "extension/rag3weaver/src/search.rs",
+      "tree_entry": "100644 blob 81ee43beb23bdadec8cd2bb512554463803355ca\textension/rag3weaver/src/search.rs"
+    },
+    {
+      "path": "extension/rag3weaver/src/search_backend.rs",
+      "tree_entry": "100644 blob 2f3e76c9178a73c758b87aee3446df8fb6eb12d8\textension/rag3weaver/src/search_backend.rs"
+    },
+    {
+      "path": "extension/rag3weaver/src/rag3db_search_backend.rs",
+      "tree_entry": "100644 blob 1f46d7007dc086a0d1d5c727cc6f562061b3dc7c\textension/rag3weaver/src/rag3db_search_backend.rs"
+    },
+    {
+      "path": "extension/rag3weaver/src/postgres_search_backend.rs",
+      "tree_entry": "100644 blob 3f209d8b44596c899e32796163fb3a64ab62b505\textension/rag3weaver/src/postgres_search_backend.rs"
+    },
+    {
+      "path": "extension/rag3weaver/src/dataflow/usage_nodes.rs",
+      "tree_entry": "100644 blob 074a795edc5e4535884750723d40994e3c8de87f\textension/rag3weaver/src/dataflow/usage_nodes.rs"
+    },
+    {
+      "path": "extension/rag3weaver/src/dataflow/search_nodes.rs",
+      "tree_entry": "100644 blob e1d7d215fa051efd14744d5733e449e5209104c3\textension/rag3weaver/src/dataflow/search_nodes.rs"
+    }
+  ]
+}

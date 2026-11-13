@@ -141,3 +141,7 @@ Chargement RAM à la demande et politique de rétention historique sont
 distincts. Aucun coût constant, code de checkpoint livré ou politique GC
 implémentée revendiqué. Clarification future du contrat, aucun changement
 APP236e, de la qualification2a ou de l’autorisation de sonde.
+
+## État après livraison2a et préparation2b
+
+Masterd17 livre uniquement le résolveur pur2a (qualification composite rapport25, finressources27). Les sections historiques précédentes conservent leurs états à leur date. La [préparation2b](../13-11-2026/28-plan-visibilite-couches-2b.md) identifie admissioncommune et prérequis chargeurphysique/snapshots DB+handles ; aucun filtre de couche branché aux index/L6/outils par ce plan. Tests contractuels spécifiés, non écrits/non joués. Les checkpoints et le courant automatique restent des contrats futurs sans réalisation présumée.
