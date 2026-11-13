@@ -1079,7 +1079,7 @@ pub(super) mod tests {
         std::fs::write(&f, "zéro\nun\ndeux\ntrois\n").unwrap();
         a.host.chat_turn(&a.h.id, "t2").expect("t2");
         let r = vus.lock().unwrap().iter().find(|(m, o, _)| m == "t2" && o == "replace_lines").map(|(_, _, c)| c.clone()).unwrap_or_default();
-        assert!(r.contains("relis d'abord"), "le fichier a changé depuis la lecture : refusé ({r})");
+        assert!(r.contains("le fichier a changé depuis ta lecture") && r.contains("lues au tour 1") && r.contains("relis-le avant d'écrire"), "refusé en disant quoi faire ({r})");
         assert_eq!(std::fs::read_to_string(&f).unwrap(), "zéro\nun\ndeux\ntrois\n", "rien n'est écrit");
     }
 
@@ -1093,7 +1093,7 @@ pub(super) mod tests {
         let frere = racine.join("rag3db-essai-atelier-long");
         let fichier: &'static str = Box::leak(frere.join("src/long.rs").display().to_string().into_boxed_str());
         let model = modele_scripte(
-            vec![("t1", vec![("read_scope", json!({ "name": "long" }))]), ("t2", vec![("replace_lines", json!({ "path": fichier, "from": 250, "to": 250, "text": "    let x = 0;" }))])],
+            vec![("t1", vec![("read_scope", json!({ "name": "long" }))]), ("t2", vec![("replace_lines", json!({ "path": fichier, "from": 250, "to": 250, "text": "    let x = 0;" })), ("replace_lines", json!({ "path": fichier, "from": 150, "to": 150, "text": "    let y = 0;" }))])],
             vus.clone(),
         );
         let a = atelier_avec(d.path(), model);
@@ -1108,8 +1108,10 @@ pub(super) mod tests {
         let lu = vus.lock().unwrap().iter().find(|(m, o, _)| m == "t1" && o == "read_scope").map(|(_, _, c)| c.clone()).unwrap_or_default();
         assert!(lu.contains("long") && lu.contains("lignes 1-300"), "read_scope trouve la fonction de 300 lignes : {lu}");
         a.host.chat_turn(&a.h.id, "t2").expect("t2");
-        let r = vus.lock().unwrap().iter().find(|(m, o, _)| m == "t2" && o == "replace_lines").map(|(_, _, c)| c.clone()).unwrap_or_default();
-        assert!(r.contains("relis d'abord"), "la ligne 250 n'a pas été montrée : refusé ({r})");
+        let ecritures: Vec<String> = vus.lock().unwrap().iter().filter(|(m, o, _)| m == "t2" && o == "replace_lines").map(|(_, _, c)| c.clone()).collect();
+        assert_eq!(ecritures.len(), 2, "{ecritures:#?}");
+        assert!(ecritures[0].contains("relis d'abord"), "la ligne 250 n'a pas été montrée : refusée ({})", ecritures[0]);
+        assert!(ecritures[1].contains("+    let y = 0;"), "la ligne 150 a été montrée : écrite ({})", ecritures[1]);
         attendre_l_index(&a, &frere);
     }
 
