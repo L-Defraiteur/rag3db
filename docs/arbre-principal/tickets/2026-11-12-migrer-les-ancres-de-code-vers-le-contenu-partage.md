@@ -2372,3 +2372,15 @@ de cette échéance (marge15s), finaliseur vérifie échéance effective ET
 borne absolue. Départ initial correctif898110.830219227 conservé : aucun
 reset3600. Anciennes portées rouges restent historiques. Revue/GO EXACT
 requis avant runtime. Max32GiB, CPUj8/native29/busunique inchangés.
+
+
+## Qualification corrective v2 obtenue — livraison en attente
+
+GO C7 exact pilotea18/application4e, lib2299/0/66,NAV40,CLI5,
+lectures27jugesdistincts/28bruts,CREATEexact,hôte13,PG36 et4TX passés ;
+superviseur/finaliseurVERT sansrésidu, échéancecorrective conservée.
+1064 fichiersSHAidentiques deuxpostes. AucunCargo/rebuild ; deuxrouges
+antérieurs conservés. PasGOmaster, tickets ouverts avant livraison/revue.
+FD /dev/dri observés : aucune absence d’ouverture GPU revendiquée.
+Détails, compteshelpers, bornes et dump dans
+[preuves07](../13-11-2026/07-preuves-globales-correctives-physiques.md).

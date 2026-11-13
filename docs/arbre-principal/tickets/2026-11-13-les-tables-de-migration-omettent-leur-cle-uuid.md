@@ -84,3 +84,15 @@ identiques SHA au manifeste après arrêt. Superviseur aussi copié localement.
 SHA lib.log : 8295e630e40de1f29d5b0a7df6eae5643cdb865e69722a66ce004acbbf3b71a5.
 C7/ED poursuivent attribution RO ; aucun défaut production encore établi.
 P14 ciblé reste vert dans sa portée ; aucune qualification globale obtenue.
+
+
+## Qualification corrective v2 obtenue — livraison en attente
+
+GO C7 exact pilotea18/application4e, lib2299/0/66,NAV40,CLI5,
+lectures27jugesdistincts/28bruts,CREATEexact,hôte13,PG36 et4TX passés ;
+superviseur/finaliseurVERT sansrésidu, échéancecorrective conservée.
+1064 fichiersSHAidentiques deuxpostes. AucunCargo/rebuild ; deuxrouges
+antérieurs conservés. PasGOmaster, tickets ouverts avant livraison/revue.
+FD /dev/dri observés : aucune absence d’ouverture GPU revendiquée.
+Détails, compteshelpers, bornes et dump dans
+[preuves07](../13-11-2026/07-preuves-globales-correctives-physiques.md).
