@@ -74,3 +74,47 @@ Chacun se mesure avant le suivant ; aucun ne change les services en place sans f
 Questions à trancher avant le code : le propriétaire des fournisseurs à luciepc (point 3), et si
 l'éviction peut toucher les trois services d'aujourd'hui ou seulement de nouveaux fournisseurs
 déclarés.
+
+## L'activation distante : les règles (à relire par Lucie)
+
+*13 novembre au soir, avant tout code. C'est la première fois qu'un poste en pilote un autre :
+le portable lance un fournisseur sur luciepc. Décision de c7 : par ssh vers `systemctl --user`
+de luciepc, rien d'autre à inventer. Fait depuis : l'éviction locale (master `0ee027cf0`).*
+
+**La déclaration.** Une `Activation` qui porte `hote: "luciepc"` (une cible ssh) et
+`adresse_distante: "127.0.0.1:<port>"` est distante. Son `address` reste locale : c'est le bout
+du tunnel par lequel le client la joint (`127.0.0.1:<port local>`). Le programme, les arguments,
+l'environnement, le profil et le périphérique sont ceux du poste distant.
+
+**Les unités.** L'activation lance le fournisseur par
+`ssh <hôte> systemd-run --user --unit=rag3weaver-fournisseur-<modèle>-<port> --collect --property=Restart=on-failure --setenv=… -- <programme> --adresse <adresse distante>`.
+- Une **unité transitoire** : aucun fichier n'est écrit à luciepc, `--collect` l'efface quand
+  elle s'arrête.
+- **Son propre préfixe**, `rag3weaver-fournisseur-` : l'activation ne touche, n'arrête ni ne
+  remplace jamais une unité `rag3weaver-embeddings@…` (les services posés à la main).
+- **`Restart=on-failure`** : un plantage relance (borné par systemd), une éviction (sortie en
+  code 0) ne relance pas.
+- **Un port déjà pris** sur luciepc, par un fournisseur qui n'est pas celui déclaré (identité ou
+  recette différente) : refus nommé, rien n'est lancé. Pris par le même : on s'y attache.
+
+**Le chemin du client.** L'activation ouvre elle-même un tunnel,
+`ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes -L <address>:<adresse distante> <hôte>`,
+tenu par le bail local et fermé avec lui. L'identité du fournisseur (`/sante`, son attestation de
+recette, `usage`, `eviction`) se lit par ce tunnel, comme pour un fournisseur local ; le port
+distant est déclaré, pas annoncé (un port 0 distant demanderait de lire le journal de l'unité).
+
+**Si ssh échoue** (hôte injoignable, clé refusée, `systemd-run` en erreur) : refus net et nommé,
+`ssh -o BatchMode=yes -o ConnectTimeout=5`, aucune attente ni nouvel essai ; l'appelant voit
+« activation distante : ssh <hôte> : <cause> ». Pas de repli local : le repli reste explicite.
+
+**Ce que Lucie voit et comment elle arrête** (une commande chacune, depuis le portable) :
+- voir : `ssh luciepc systemctl --user list-units 'rag3weaver-fournisseur-*'`
+- arrêter : `ssh luciepc systemctl --user stop 'rag3weaver-fournisseur-*'`
+
+**Les témoins.** Rouge d'abord sans luciepc : un faux `ssh` (un script qui journalise ses
+arguments et exécute la commande en local) donné par une variable de test ; il prouve l'unité
+transitoire, son préfixe, `Restart=on-failure`, le refus net d'un ssh en échec, et qu'aucune unité
+`rag3weaver-embeddings@` n'est nommée. Puis le vrai jeu, une fois, à luciepc sous `poste lourd` :
+granite-107m (plus résident depuis le 12 novembre, 7880 libre, ~4 Go sur card2 qui en a 13 de
+libres), port distant 7890, tunnel local 7990, bail pris puis rendu, éviction à 60 s observée,
+l'unité effacée ensuite.
