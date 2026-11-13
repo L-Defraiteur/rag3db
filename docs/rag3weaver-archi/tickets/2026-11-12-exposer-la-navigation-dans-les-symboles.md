@@ -333,3 +333,67 @@ vérifié aux deux postes, zéro session active, suppression et absence vérifi�
 Preuves finales : cx-symboles-d00661e96-reprise-20261112 ; aucun appel7879 à venir.
 Ne pas recréer ce worktree/target/base : pour la suite, repartir du master courant.
 
+## Suite autorisée — enrichissement du grep, 13 novembre
+
+La première tranche et le parcours IDE sont intégrés ; Archi reprend la demande
+de Lucie encore ouverte : `symbol_hierarchy_depth`, zéro par défaut, sur la
+recherche textuelle spécialisée lorsqu'un index qualifié est disponible.
+Nouveau worktree depuis master, cible et preuves privées ; aucun ancien lot
+nettoyé n'est recréé. Publier le contrat, les fichiers partagés et la recette
+avant le ciblé ; annoncer à Recherche toute modification de sa façade de grep.
+
+Composer le contrat de navigation et les Plans communs avec les résultats de
+recherche existants, sans refaire un moteur de hiérarchie par interface. Relier
+chaque match à sa source, son fichier et ses positions ; rendre la contenance
+et ses limites explicites. Profondeur bornée et budget global de sortie,
+ambiguïtés, couverture partielle et index périmé restent observables. L'option
+ne doit ni réindexer ni lire tous les corps pour fabriquer une hiérarchie.
+Les correspondances textuelles restent utilisables en l'absence de contexte
+qualifié ; le résultat enrichi indique précisément cette absence.
+
+Critères : défaut zéro inchangé, profondeur demandée réellement accessible à
+l'agent, homonymes de sources/fichiers isolés, plages ambiguës non arbitrées,
+index absent/périmé et troncature explicites ; vrai parcours commun de l'outil.
+La couverture IR reste celle qui a été qualifiée : ni héritage ni exhaustivité
+des membres ne sont inventés. Passe adaptée, revue et tour d'intégration avant
+master ; aucun déploiement du daemon personnel. Ticket global toujours ouvert.
+
+
+## Contrat de la suite grep — 13 novembre, avant code
+
+WT neuf cx-wt-grep-symboles, branche cx-archi-grep-symboles-1, base43e4f185b ;
+target PC unique cx-archi-target (ancien target bien retiré), scratch privé court
+cx-gs, preuves neuves hors target. Aucun fichier d'activation/résidence touché.
+Fichiers partagés annoncés à Recherche : code_tools.rs, dataflow/code_nodes.rs,
+templates/tools/{grep,atelier_grep_files}.mmd ; navigation commune dans
+symbol_navigation.rs, tests et README propres. Pas de second moteur de parents.
+
+symbol_hierarchy_depth=0 conserve les sorties JSON/Markdown et les lectures actuelles,
+sans Plan supplémentaire. Valeur positive≤16 : pour chaque ligne retenue, situer le
+premier match regex avec ses offsets UTF-8 exacts (la recherche reste ligne par ligne,
+une correspondance rendue par ligne), source/path/ligne et intervalle qualifiés.
+Sélectionner le contenant minimal uniquement si les plages le permettent sans choix
+arbitraire ; égalités/croisements donnent des candidats explicites. Ajouter ce scope
+puis au plus depth arêtes de parents par range_containment à granularité ligne.
+Aucun héritage/AST ou rattachement de méthode hors classe inventé.
+
+Réutiliser le Plan déclaré symbol_navigation.json via ReadCatalog et la préparation
+commune des plages/parents. Un Plan par fichier enrichi, même lecteur que le grep ;
+calcul des parents une fois par fichier et non par match. Réutiliser le contenu déjà
+observé par grep pour fraîcheur/positions, aucune seconde lecture des corps ni
+réindexation. Les erreurs/absences du contexte restent dans l'enrichissement, sans
+faire disparaître les correspondances textuelles. L'ancien scope indicatif du grep
+ne sera pas promu en contexte qualifié.
+
+Budget global des sorties enrichies96Kio (JSON et Markdown), nœuds200 et scopes2000
+par fichier comme navigation, bornes de fichiers enrichis/appels déclarées ; au-delà,
+conserver les matches sous le budget et annoncer troncature/raison, total connu et
+absence de contexte pour les lignes non qualifiées. Le défaut zéro n'est pas soumis
+à un nouveau budget ni à une nouvelle forme de réponse.
+
+Recette ciblée à publier après le code : montageCPU/lib29/j8/Max32G/target32Go et
+primitive commune, tests des invariants purs + vrai outil grep code et relais atelier
+sur fixture privée indexée. Témoins défaut0 identique, profondeur1/2, UTF-8, sources
+homonymes/fichiers, plages égales/croisées, index absent/périmé, budget global et
+absence de lectures supplémentaires. Premier rouge inattendu : stop/diagnostic,
+pas de retry inchangé. Revue C7 avant lourde globale et avant master.
