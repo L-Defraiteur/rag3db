@@ -152,3 +152,8 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   unique de model_source (profil_etranger, 1 sur 7) à embarquement. **File réordonnée pour la CI** : archi
   (en cours), puis arbre principal, puis 96 (M8, vert), puis ED (la fin sans livrable, avec le champ
   `expects` sur la request : report ou approval, déclaré par le superviseur).
+- **17 h 22, la CI de master est verte** sur 62b5c5bfa (run 43456691914 : la garde a repris le target du cache,
+  check_features 8/8, lib 2259/0 — les deux tests du raccord n'y ont pas rougi ce coup-ci, sans que ce soit
+  une preuve ; le correctif d'arbre principal suit). recherche prépare arret-du-backend : le CSV d'un COPY tué
+  devient un rouge connu avec son ticket (cause à part : écrire ces CSV dans le dossier de la base ou les
+  balayer à l'ouverture, lot à lui), rejeu court, puis son tour après ED.
