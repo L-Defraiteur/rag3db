@@ -37,6 +37,26 @@ Ce qui en découle (CHANGELOG de lucivy, entrées 4.3.4 et 4.3.5) :
    du plein texte. Si des `.fts` ont perdu des mots, la reconstruire est un lot à part, présenté à
    Lucie avec le chiffre devant elle. Aucune base de Lucie n'est reconstruite sans son mot.
 
+## Le chiffre (13 novembre 2026)
+
+Chiffré le 13 novembre sur des copies neuves de l'instantané avant-835d5298f, hôtes arrêtés,
+0 segment en attente partout (hotfixs, page `docs/coeur-cpp-hotfixs-tickets/13-11-2026/01-sonde-des-bases-de-lucie.md`,
+section « Seconde sonde », 5e50e2800). Les `.fts` ont **0 identifiant inconnu** :
+
+| base | identifiants inconnus | identifiants du dictionnaire |
+|---|---|---|
+| code-lourd | 0 | 6 945 348 |
+| code-principal | 0 | 5 732 393 |
+| code-rag3db-depot | 0 | 11 818 307 |
+| memoire-longue | 0 | 261 925 |
+
+La sonde a d'abord été vue rouge sur l'index sauvé de lucivy, dans une copie neuve : 31 862 sur
+2 693 974, le chiffre de lucivy. L'outil est `diag_ids_sans_texte_tous_champs`, sur la branche lucivy
+`diag-mots-perdus-tous-champs` (a4e2d16). Il parcourt chaque `Lucivy_*`, chaque shard et chaque
+champ texte qui a un `.gmap`, et lit `pending_segments`.
+
+**Rien à reconstruire** : aucune base de Lucie n'a perdu de mots.
+
 ## Lot lié
 
 La montée de lucivy-core, ld-lucivy et sparse-vector à 4.3.5 (branche `lucivy-4-3-5`, recherche).
