@@ -106,3 +106,12 @@ Delta après RO mémoire b38 : le finaliseur relit l’échéance APRÈS scan et
 hashes ELF, puis juste avant publication du verdict composé. Dépassement
 pendant ces contrôles coûteux donne ROUGE ; aucun VERT d’échéance antérieure
 réutilisé pour certifier une fin tardive. Aucun changement de l’application.
+
+
+Delta après RO ED5a0a : en phase exact/publication, détection en activité de
+« test ... FAILED », FAILED autonome OU « panicked at », y compris préfixe
+libtest mélangé avec stdoutnocapture. Aucun should_panic/catch attendu dans
+ces modules ; arrêt avant rc pour ces marqueurs, log conservé. Pas de
+ouverture d’autre phase. Le pont manager vérifie resolve==chemin/lstat type
+dir+socket/UIDdesDEUX et stabilité dev+ino+mode+UID autour du Ping ; aucun
+redémarrage ou repli vers un bus différent.

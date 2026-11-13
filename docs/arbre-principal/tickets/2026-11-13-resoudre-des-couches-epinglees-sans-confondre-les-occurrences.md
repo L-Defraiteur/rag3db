@@ -83,3 +83,15 @@ publier VERT. Aucun run n’a exposé ce cas. Correction du pilote uniquement :
 relire monotonic après ces contrôles et immédiatement avant la publication
 composée ; expiration impose ROUGE. Aucun reset ni élargissement de durée.
 Nouvelle revue exacte requise avant GO, sourceapp69 inchangée.
+
+
+### Réserves ED pilote5a0a avant GO
+
+Le détecteur lisait seulement « test ... FAILED » ; sous nocapture un panic
+peut être suivi de FAILED seul, avant rc final. Ajouter détection en activité
+du panic/FAILED autonome pendant les juges, aucun test should_panic/catch
+attendu dans ces deux modules. Conserver log et stop immédiat du périmètre.
+Le pont manager doit aussi refuser runtime/socket liés ou propriétaire socket
+étranger ; vérifier lstat et stabilité autour du Ping. Aucun service redémarré.
+Réserves de recette, aucune exécution ni défaut2a établi ; nouveau couple à
+faire relire avant GO.
