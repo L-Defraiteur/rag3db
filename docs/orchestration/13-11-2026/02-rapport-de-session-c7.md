@@ -350,3 +350,11 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   sonde ancre chaque sens, lit le plan, et dit « SENS NON PROUVÉ » sinon. Limites dites (une relation aux
   deux bouts manquants échappe ; Symbol_Chunk vide). Les 103 et 128 places vides de code-lourd sont les
   scopes effacés par l'index, sans relation vers elles.
+- **20 h 04, ED a poussé f74ddff73** (le flux des pages quittées : la page ferme son flux sur pagehide et le
+  rouvre au retour depuis le dernier id, la barre dit « coupé, reprise… » ; la sonde de la lib gardée comme
+  garde-fou de l'hôte ; témoin des douze vues vu rouge à 59,4 s, vert à 155 ms ; étape navigateur 42/42). Un
+  rouge d'environnement dit : le confineur a conclu ROUGE une fois pour des « descendants laissés » (un rendu
+  de Chrome qui survit un instant), non reproduit. ED passe à (b), le SharedWorker. **« Pose le portable »
+  donné à G** : binaire de la tête (f74ddff73) contre 835d5298f, luciepc puis le portable, instantanés
+  avant-835d5298f, courant aux deux postes. 96 (l'archive qui voit son document et nomme son sujet, rejeu
+  en cours) puis embarquement (l'éviction locale, vert) poussent après la pose.
