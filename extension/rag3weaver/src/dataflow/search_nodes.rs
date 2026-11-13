@@ -15,6 +15,7 @@ use crate::search_strategy::{
 use super::node::{Node, NodeContext};
 use super::port::{take_or_clone, PortDef, PortValue, QueryPayload};
 use super::services::ConnService;
+use crate::dataflow::migrations::publication::admission;
 
 // ─── KBQuerySourceNode ─────────────────────────────────────────────────────────
 
@@ -191,7 +192,16 @@ impl Node for FetchRelatedNode {
             (None, Some(c)) => c.lock().map_err(|_| "FetchRelatedNode: catalogue empoisonné")?.dialect_arc(), // L4 : repli sans vue
             (None, None) => std::sync::Arc::new(crate::dialect::Rag3dbDialect),
         };
-        let children_map = fetch_related_in(dialect.as_ref(), conn.as_ref(), &source_uuids, &self.relation, self.direction, self.limit)?;
+        let admitted = admission::for_node(ctx).map_err(|e| e.to_string())?;
+        let mut source_entities = HashMap::new();
+        for (entity, uuid) in results.iter().filter_map(source_info) {
+            if let Some(previous) = source_entities.insert(uuid, entity.clone()) {
+                if previous != entity && admitted.is_some() {
+                    return Err(admitted.as_ref().unwrap().invalidate(admission::AdmissionError::MissingSourceIdentity).to_string());
+                }
+            }
+        }
+        let children_map = fetch_related_admitted_in(dialect.as_ref(), conn.as_ref(), &source_uuids, &self.relation, self.direction, self.limit, admitted.as_deref(), Some(&source_entities))?;
         ctx.set_output("children", PortValue::new(children_map));
         Ok(())
     }
@@ -220,6 +230,25 @@ pub fn fetch_related_in(
     direction: ExpansionDirection,
     limit: usize,
 ) -> Result<HashMap<String, Vec<ChildSummary>>, String> {
+    fetch_related_admitted_in(dialect, conn, source_uuids, relation, direction, limit, None, None)
+}
+
+/// Admission of both endpoints, before the existing per-parent truncation.
+/// `related_hop` has no DB limit: filtering children here cannot starve the
+/// visible page behind invisible neighbors. No content or edge deduplication.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn fetch_related_admitted_in(
+    dialect: &dyn crate::dialect::SchemaDialect,
+    conn: &dyn crate::connection::DbConnection,
+    source_uuids: &[String], relation: &str, direction: ExpansionDirection, limit: usize,
+    admitted: Option<&admission::ReadAdmission>, source_entities: Option<&HashMap<String, String>>,
+) -> Result<HashMap<String, Vec<ChildSummary>>, String> {
+    let filtered = match admitted {
+        Some(a) => Some(a.admit_sources(source_uuids, source_entities.ok_or_else(|| a.invalidate(admission::AdmissionError::MissingSourceIdentity).to_string())?).map_err(|e| e.to_string())?),
+        None => None,
+    };
+    let source_uuids = filtered.as_deref().unwrap_or(source_uuids);
+    if source_uuids.is_empty() { return Ok(HashMap::new()); }
     let uuids_param = CypherValue::List(
         source_uuids
             .iter()
@@ -256,6 +285,13 @@ pub fn fetch_related_in(
             _ => BTreeMap::new(),
         };
 
+        if let Some(a) = admitted {
+            let sources = source_entities.ok_or_else(|| a.invalidate(admission::AdmissionError::MissingSourceIdentity).to_string())?;
+            let Some(entity) = sources.get(&parent_uuid) else { continue };
+            if !source_uuids.contains(&parent_uuid) || !a.admits(entity, &parent_uuid).map_err(|e| e.to_string())?
+                || !a.admits(&child_entity, &child_uuid).map_err(|e| e.to_string())? { continue; }
+        }
+
         children_map
             .entry(parent_uuid)
             .or_default()
@@ -274,6 +310,7 @@ pub fn fetch_related_in(
         }
     }
 
+    if let Some(a) = admitted { a.check().map_err(|e| e.to_string())?; }
     Ok(children_map)
 }
 
@@ -355,7 +392,9 @@ impl Node for GroupFrameNode {
             };
             let Some((group_by, title_field, dialect)) = trouve else { continue };
             let conn = ctx.service::<ConnService>("conn").ok_or("GroupFrameNode: 'conn' service not found")?.0.clone();
-            let parents = fetch_related_in(dialect.as_ref(), conn.as_ref(), &uuids, &group_by.relation, ExpansionDirection::Outgoing, 1)?;
+            let admitted = admission::for_node(ctx).map_err(|e| e.to_string())?;
+            let sources = uuids.iter().cloned().map(|uuid| (uuid, entite.clone())).collect();
+            let parents = fetch_related_admitted_in(dialect.as_ref(), conn.as_ref(), &uuids, &group_by.relation, ExpansionDirection::Outgoing, 1, admitted.as_deref(), Some(&sources))?;
             for (uuid, mut liste) in parents {
                 let Some(mut parent) = liste.drain(..).next() else { continue };
                 let titre = title_field

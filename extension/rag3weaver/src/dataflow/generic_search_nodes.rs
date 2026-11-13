@@ -41,6 +41,7 @@ use crate::search_strategy::UnifiedResult;
 use super::node::{Node, NodeContext};
 use super::port::{take_or_clone, PortDef, PortValue, QueryPayload};
 use super::services::ConnService;
+use crate::dataflow::migrations::publication::admission;
 
 // ─── Le statut d'une branche de signal (repli par branche, 5 octobre 2026) ──
 
@@ -445,7 +446,11 @@ impl Node for SearchSourceNode {
             Some(v) => Some(v.forme().resolve_search_target(&self.target_name)),
             None => catalog.try_lock().ok().map(|cat| cat.resolve_search_target(&self.target_name)),
         }.transpose().map_err(|e| format!("SearchSourceNode: {e}"))?;
-        let projected = resolved.as_ref().is_some_and(|target| target.occurrence_projection.is_some());
+        let layered = admission::for_node(ctx).map_err(|e| e.to_string())?;
+        let projected = layered.is_some() || resolved.as_ref().is_some_and(|target| target.occurrence_projection.is_some());
+        if self.mode == SearchMode::Scan {
+            if let Some(a) = &layered { return Err(a.invalidate(admission::AdmissionError::ScanWithoutAdmission).to_string()); }
+        }
         if projected && self.mode == SearchMode::Scan {
             return Err("SearchSourceNode: mode scan indisponible pour une projection d'occurrences sans masque de fichiers déclaré".into());
         }
@@ -922,7 +927,7 @@ impl Node for VectorSearchNode {
                     match compiled {
                         Ok(c) => c,
                         Err(e) => {
-                            if target.occurrence_projection.is_some() { return Err(format!("masque des occurrences non compilé : {e}")); }
+                            if target.occurrence_projection.is_some() || admission::for_node(ctx).map_err(|e| e.to_string())?.is_some() { return Err(format!("masque des occurrences non compilé : {e}")); }
                             node_warnings.push(format!(
                                 "VectorSearchNode: filtre non compilé ({e}) — les \
                                  résultats ne sont PAS restreints au domaine demandé"
@@ -932,6 +937,9 @@ impl Node for VectorSearchNode {
                     }
                 }
                 None => {
+                    if let Some(a) = admission::for_node(ctx).map_err(|e| e.to_string())? {
+                        return Err(a.invalidate(admission::AdmissionError::MissingBinding(target.parent_table.clone())).to_string());
+                    }
                     if options.filter_condition.is_some() {
                         node_warnings.push(
                             "VectorSearchNode: un filtre est demandé mais le service \
@@ -1073,6 +1081,9 @@ impl Node for VectorSearchNode {
         }
 
         let backend = moteur_de_recherche(ctx, &conn);
+        if let Some(a) = admission::for_node(ctx).map_err(|e| e.to_string())? {
+            a.require_filter(backend.honore_le_filtre()).map_err(|e| e.to_string())?;
+        }
         let chunk_results = search_vector_via_backend(
             backend.as_ref(),
             &target.chunk_table,
@@ -1381,7 +1392,7 @@ impl Node for BM25SearchNode {
 
         if let Some(backend) = natif {
             // Filet du ticket docs/arbre-principal/tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md
-            if target.occurrence_projection.is_some() {
+            if target.occurrence_projection.is_some() || admission::for_node(ctx).map_err(|e| e.to_string())?.is_some() {
                 return Err("BM25 natif : masque des occurrences non garanti par ce signal".into());
             }
             // Le domaine de travail descend en SQL ici, pas en offsets : c'est
@@ -2893,6 +2904,9 @@ fn extract_query_and_target(
         .and_then(|pv| take_or_clone::<QueryPayload>(pv))
         .ok_or_else(|| format!("{node_type}: missing 'query' input"))?;
     if qp.scan {
+        if let Some(a) = admission::for_node(ctx).map_err(|e| e.to_string())? {
+            return Err(a.invalidate(admission::AdmissionError::ScanWithoutAdmission).to_string());
+        }
         return Ok(SignalInput::Scan);
     }
     let vecteurs = (qp.embedding, qp.sparse);
@@ -2977,12 +2991,28 @@ fn occurrence_roots_for(
     Ok(rows.rows.into_iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).collect())
 }
 
-fn occurrence_mask_options(
+pub(crate) fn occurrence_mask_options(
     ctx: &NodeContext, target: &SearchTarget, mut options: SearchOptions,
     conn: &Arc<dyn crate::connection::DbConnection>,
 ) -> Result<(SearchOptions, Option<HashSet<String>>), String> {
-    let Some(projection) = &target.occurrence_projection else { return Ok((options, None)) };
-    let roots = occurrence_roots_for(ctx, target, &options, conn)?;
+    let admitted = admission::for_node(ctx).map_err(|e| e.to_string())?;
+    if let (Some(a), Some(cell)) = (&admitted, &options.scope) { a.check_cell(cell).map_err(|e| e.to_string())?; }
+    let Some(projection) = &target.occurrence_projection else {
+        if let Some(a) = admitted {
+            let roots = a.mask(&target.parent_table, None).map_err(|e| e.to_string())?;
+            let mut ids: Vec<_> = roots.iter().cloned().map(crate::connection::CypherValue::String).collect();
+            ids.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
+            let mandatory = crate::filter::FilterCondition::Field { key: "_uuid".into(), value: crate::filter::FilterValue::List(ids) };
+            options.filter_condition = Some(match options.filter_condition.take() {
+                Some(user) => crate::filter::FilterCondition::Must(vec![user, mandatory]),
+                None => mandatory,
+            });
+            return Ok((options, Some(roots)));
+        }
+        return Ok((options, None));
+    };
+    let mut roots = occurrence_roots_for(ctx, target, &options, conn)?;
+    if let Some(a) = admitted { roots = a.mask(&projection.entity, Some(&roots)).map_err(|e| e.to_string())?; }
     let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").ok_or("projection : dialecte absent")?;
     // La relation canonique est imposée par le contrat, jamais choisie parmi
     // d'autres liens entre les mêmes entités (ticket des occurrences partagées).
@@ -3085,10 +3115,14 @@ fn allowed_ids_in(
     options: &crate::search::SearchOptions,
     chunk_table: Option<&str>,
 ) -> Result<Option<Vec<u64>>, String> {
-    let Some(condition) = options.filter_condition.as_ref() else { return Ok(None) };
+    let mandatory = admission::for_node(ctx).map_err(|e| e.to_string())?;
+    let Some(condition) = options.filter_condition.as_ref() else {
+        if let Some(a) = mandatory { return Err(a.invalidate(admission::AdmissionError::MissingBinding(target.parent_table.clone())).to_string()); }
+        return Ok(None);
+    };
     let Some(catalog) = ctx.service::<Arc<Mutex<Catalog>>>("catalog").cloned() else {
         ctx.warn(&format!("{node_type}: un filtre est demandé mais le service 'catalog' manque — la recherche n'est pas restreinte"));
-        if target.occurrence_projection.is_some() { return Err("masque des occurrences : catalogue absent".into()); }
+        if target.occurrence_projection.is_some() || mandatory.is_some() { return Err("masque des occurrences : catalogue absent".into()); }
         return Ok(None);
     };
     // `parent_table` : la table qui porte les lignes, `MaKB_Index` pour une
@@ -3101,11 +3135,11 @@ fn allowed_ids_in(
     };
     match resolved {
         Ok(ids) => {
-            if target.occurrence_projection.is_some() && ids.is_none() { return Err("masque des occurrences non résolu".into()); }
+            if (target.occurrence_projection.is_some() || mandatory.is_some()) && ids.is_none() { return Err("masque des occurrences non résolu".into()); }
             Ok(ids)
         },
         Err(e) => {
-            if target.occurrence_projection.is_some() { return Err(format!("masque des occurrences non résolu : {e}")); }
+            if target.occurrence_projection.is_some() || mandatory.is_some() { return Err(format!("masque des occurrences non résolu : {e}")); }
             ctx.warn(&format!("{node_type}: filtre non résolu ({e}) — la recherche n'est pas restreinte"));
             Ok(None)
         }
@@ -3189,7 +3223,7 @@ fn declares(target: &SearchTarget, options: &SearchOptions, signal: &str) -> boo
 /// `SourceResolved` sur une cible qui a des références source (KB), puis
 /// étiquetage. C'est la résolution vers la source qui rend deux KB fusionnables
 /// — leurs lignes d'index diffèrent, leurs entités sont les mêmes.
-fn finish_signal(
+pub(crate) fn finish_signal(
     ctx: &mut NodeContext,
     _node_type: &str,
     target: &SearchTarget,
@@ -3198,12 +3232,19 @@ fn finish_signal(
     admitted_occurrences: Option<&HashSet<String>>,
     label: &str,
 ) -> Result<Vec<UnifiedResult>, String> {
+    let admitted = admission::for_node(ctx).map_err(|e| e.to_string())?;
     let results = if target.occurrence_projection.is_some() {
         let conn = ctx.service::<ConnService>("conn").ok_or("projection : connexion absente")?.0.clone();
         let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").ok_or("projection : dialecte absent")?;
         let roots = admitted_occurrences.ok_or("projection : masque des occurrences absent")?;
         crate::search::project_occurrence_results(conn.as_ref(), dialect.as_ref(), target, results, roots).map_err(|e| e.to_string())?
     } else { results };
+
+    if let Some(a) = &admitted {
+        let entity = target.occurrence_projection.as_ref().map(|p| p.entity.as_str()).unwrap_or(&target.parent_table);
+        a.assert_results(entity, results.iter().map(|r| r.uuid.as_str())).map_err(|e| e.to_string())?;
+        a.check().map_err(|e| e.to_string())?;
+    }
 
     // La résolution vers l'entité **source** ne se fait plus ici, par signal
     // et avant la fusion : elle se fait dans `ResolveParentNode`, après la

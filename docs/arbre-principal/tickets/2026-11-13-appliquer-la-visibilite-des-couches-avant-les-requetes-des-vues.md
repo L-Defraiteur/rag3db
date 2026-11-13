@@ -17,3 +17,13 @@ Aucun nouveau Rust/Cargo/runtime/index/base/service/legacy/GPU autorisé ici ; a
 ## Préparation concrète soumise
 
 [Plan28](../13-11-2026/28-plan-visibilite-couches-2b.md) : chemins réels relus et ancrages Git joints ; admission commune2b-A proposée, qualification physique2b-B et accessibilitéoutils2b-C distinctes. Chargeur durable des révisions/liaisons et instantanécomposé DB+handles manquent ; dégradations L6 historiques ne peuvent qualifier2b. Treize contre-exemples de tests spécifiés NON ÉCRITS/NON JOUÉS après complément ED : inclut expiration après dernière lecture et avant rendu, invalidation mémorisée, aucune réponse partielle. Autorisationcode/runtime nouvelle requise ; ticket demeure ouvert.
+
+## Autorisation distincte C7 — code et témoins2b-A
+
+Après livraison du plan8711 et fin des ressources, C7 lève explicitement la barrière d'attente de la garde pour le CODE2b-A seulement. WT/branche neufs cx-wt-couches-2b-admission/cx-arbre-couches-2b-admission-r1 sur8711. Actualisation AVANT tout diff Rust : admission CPU et propagation aux points communs réels ReadView/occurrence_mask_options/PinnedLayers ; masque avant k/projection mêmevisible/deuxboutsrelations/None-vide-erreur/capacité stricte/inconnue/invalidation mémorisée et échéance effective jusqu'au rendu. Treize cas du plan à matérialiser sans inventer de qualification physique.
+
+Liaison de stockage des témoins explicitement fixture ; aucun accès réel à une vue, base legacy, service ou GPU. B chargeur durable et snapshot composé restent documentaires ; pas d'implémentation B/C. Code/testspec source puis recette CPU exacte publiés avant RO/créneau/GO d'exécution distinct. Aucun Cargo, rustc, target ou runtime autorisé par la seule écriture du code ; intégration de la garde Recherche prioritaire avant tout master Rust2b.
+
+## Source et treize témoins A écrits
+
+[Rapport29](../13-11-2026/29-admission-cpu-couches-2b-a.md), noms exacts joints. Admission interne avec constructeurfixturecfgtest uniquement, propagation pointscommuns/masquesavantk/deuxbouts/validitéjusqu'aurendu ; outils physiques refusés commefixture. AucunchargeurB/Cimplémenté. Rustfmtparse/diffcheck/ticketchecker seulement ; aucunCargo/rustc/runtime/testjoué. RecetteCPU1800proposée, source/pilote/RO+créneau+GOdistinct restent à figer. Intégrationgardeprioritaire avant masterRust2b.
