@@ -1,0 +1,8 @@
+pip install lucivy && python3 lucivy_demo.py .    # lucivy 4.3.3 alone, on the rag3weaver sources
+indexed 284 Rust files
+search "worktree", 5 best:
+   8.8162  src/dataflow/worktree_nodes.rs
+   8.7664  src/daemon_host/worktrees.rs
+   4.2439  src/workspace_path.rs
+   4.1834  src/daemon_host/atelier_fichiers.rs
+   4.1512  src/dataflow/fichier_nodes.rs
