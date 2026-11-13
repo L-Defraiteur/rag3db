@@ -593,3 +593,15 @@ Delta préparé : rawCAS ouvert avantPopen, stdoutdirectfichier (pasPIPE), ident
 source/exeSHA/PID/start/argv/étaten-cours fsync avantwait. Panique avantFencebloqué
 reste écrite surdisque même si CF600 tue tout ; état final/rc/SHA complétés après
 retour seulement, firstred inchangé. Aucunrun/affinité ni productionLuciole modifié.
+
+### Consigne avant MESURE GO exact fffe / A663 / BFBD
+
+GO C7 distinct reçu : pilote/harness extraits du commit
+fffe6b74ab86eb121f1a17014660fd63b7a2fd78, sources A663975a/Bfbd3f0a propres,
+worktrees dédiés cx-lucivy-mesure-ancien/nouveau. Empreintes des copies relevées
+avant build, CPU20,21,22,23 revérifiés dans allowed. Vrai posteMESURE exclusif,
+attente des autres lourds AVANT début reçu600 neuf, MemoryMax8GiB/HIGHmax/j4.
+Pzone cx-mesure-lucivy-envois-v1 / target cx-target-mesure-lucivy-envois-v1 /
+S cx-confinement-mesure-lucivy-envois-v1 tous neufs privés. Sources/locks/harness
+identiques hors chemin,96ABBA, comptesFence+Drophorschrono. Rawpanic directfichier
+avantwait/firstredSTOP, aucun replay ; libérer poste à fin. PasSDK/CI/merge/release.
