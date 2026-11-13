@@ -11551,7 +11551,7 @@ mod tests {
         match events.try_recv().expect("the persistence error must remain observable") {
             CatalogEvent::Error { context, message } => {
                 assert_eq!(context, "blob_flush:lot");
-                assert!(message.contains("first blob persistence failed"), "{message}");
+                assert_eq!(message, "index blobs not persisted: first blob persistence failed");
             }
             event => panic!("unqualified rows announced an unexpected event: {event:?}"),
         }
