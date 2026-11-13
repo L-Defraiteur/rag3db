@@ -1155,3 +1155,67 @@ fn le_premier_appel_d_un_outil_ne_coute_pas_une_minute() {
         assert!(*duree < Duration::from_secs(5), "{nom} a pris {duree:?} ; tous : {temps:?}");
     }
 }
+
+/// **Plus de six vues de suite se rendent chacune en moins de 5 s** (mesure de l'étape navigateur,
+/// 13 novembre 2026, cause 2 : `docs/everything-declarative/13-11-2026/02-mesure-de-l-etape-navigateur.md`).
+/// Chaque vue chargée ouvre son flux (`/ide/flux`) ; le navigateur plafonne à six connexions
+/// HTTP/1.1 par hôte. Quand les flux des vues quittées restent tenus, la septième vue attend une
+/// minute qu'une connexion se libère, et l'IDE de Lucie avec elle après quelques rechargements.
+/// Douze vues de suite, alternées : aucune n'attend.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+#[test]
+fn plus_de_six_vues_de_suite_se_rendent_chacune_en_moins_de_cinq_secondes() {
+    let Some(binaire) = navigateur_ou_saut("plus_de_six_vues_de_suite_se_rendent_chacune_en_moins_de_cinq_secondes") else {
+        return;
+    };
+    let d = tempfile::tempdir().unwrap();
+    let (base, arbre) = (d.path().join("base"), d.path().join("arbre"));
+    std::fs::create_dir_all(&base).unwrap();
+    std::fs::create_dir_all(arbre.join("src")).unwrap();
+    std::fs::write(arbre.join("main.rs"), "fn main() {\n    depart();\n}\n\nfn depart() {}\n").unwrap();
+    let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+    let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &base).unwrap();
+    let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+    m["workspace"]["root"] = json!(arbre.to_string_lossy());
+    std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    let manifeste = manifeste.to_string_lossy().to_string();
+    let (adresse, _fil) = super::tests::hote_garde("j");
+    let etat: Value = {
+        let r = crate::daemon::agent_de_temoin()
+            .post(format!("http://{adresse}/ide/call"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(json!({ "manifest": manifeste, "name": "index", "arguments": { "confirm": true } }).to_string())
+            .unwrap();
+        assert_eq!(r.status(), 200);
+        let mut r = crate::daemon::agent_de_temoin().get(format!("http://{adresse}/ide/etat")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let id = etat["backends"]
+        .as_array()
+        .and_then(|b| b.iter().find(|b| b["manifest"] == manifeste.as_str()))
+        .unwrap_or_else(|| panic!("le backend n'est pas dans l'état : {etat}"))["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let mut n = Navigateur::lancer(&binaire);
+    let racine = format!("http://{adresse}");
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), &format!("document.querySelector('#vue a[href=\"/ide/code/{id}/arbre/\"]')"));
+    let mut temps = Vec::new();
+    for i in 0..12 {
+        let (url, condition) = if i % 2 == 0 {
+            (format!("{racine}/ide/code/{id}/arbre/"), "document.querySelectorAll('#vue li a').length > 0".to_string())
+        } else {
+            (format!("{racine}/ide/"), "document.querySelector('#vue h1')?.textContent === 'Dépôts'".to_string())
+        };
+        let debut = Instant::now();
+        n.aller(&url, &condition);
+        temps.push(debut.elapsed());
+    }
+    eprintln!("[douze vues] {:?}", temps.iter().map(|t| t.as_millis()).collect::<Vec<_>>());
+    for (i, t) in temps.iter().enumerate() {
+        assert!(*t < Duration::from_secs(5), "la vue n°{} a attendu {t:?} ; toutes (ms) : {:?}", i + 1, temps.iter().map(|t| t.as_millis()).collect::<Vec<_>>());
+    }
+    assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
+}
