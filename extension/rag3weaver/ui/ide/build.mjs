@@ -38,13 +38,25 @@ await build({
   logLevel: "warning",
   absWorkingDir: here,
 });
+// Le flux partagé : un second script, le `SharedWorker` que les onglets partagent.
+await build({
+  entryPoints: [join(here, "lib/flux-worker.ts")],
+  bundle: true,
+  minify: true,
+  format: "iife",
+  target: "es2022",
+  outfile: join(out, "flux-worker.js"),
+  legalComments: "none",
+  logLevel: "warning",
+  absWorkingDir: here,
+});
 // La feuille : le CLI de tailwind lit src/app.css (le thème shadcn, @import "tailwindcss")
 // et balaie src/ et components/ pour les classes employées.
 execFileSync(join(here, "node_modules/.bin/tailwindcss"), ["-i", join(here, "src/app.css"), "-o", join(out, "app.css"), "--minify", "--cwd", here], { stdio: "inherit" });
 
 const sha256 = (p) => createHash("sha256").update(readFileSync(p)).digest("hex");
 const manifest = {
-  sha256: { "app.js": sha256(join(out, "app.js")), "app.css": sha256(join(out, "app.css")) },
+  sha256: { "app.js": sha256(join(out, "app.js")), "app.css": sha256(join(out, "app.css")), "flux-worker.js": sha256(join(out, "flux-worker.js")) },
   versions,
   node: process.version,
 };
@@ -52,7 +64,7 @@ writeFileSync(join(out, "bundle.json"), JSON.stringify(manifest, null, 2) + "\n"
 
 if (check) {
   let differ = [];
-  for (const f of ["app.js", "app.css"]) {
+  for (const f of ["app.js", "app.css", "flux-worker.js"]) {
     const a = join(out, f), b = join(target, f);
     if (!existsSync(b) || sha256(a) !== sha256(b)) differ.push(f);
   }

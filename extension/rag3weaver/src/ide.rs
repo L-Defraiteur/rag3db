@@ -524,6 +524,11 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
         ("GET", "/ide/app.js") => {
             let _ = request.respond(reponse_octets(200, "text/javascript; charset=utf-8", bundle("app.js")));
         }
+        // **Le flux partagé** (13 novembre 2026) : le `SharedWorker` qui tient un seul flux
+        // pour tous les onglets d'un navigateur (`ui/ide/lib/flux-worker.ts`).
+        ("GET", "/ide/flux-worker.js") => {
+            let _ = request.respond(reponse_octets(200, "text/javascript; charset=utf-8", bundle("flux-worker.js")));
+        }
         ("GET", "/ide/app.css") => {
             let _ = request.respond(reponse_octets(200, "text/css; charset=utf-8", bundle("app.css")));
         }
