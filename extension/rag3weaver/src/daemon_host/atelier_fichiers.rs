@@ -1037,6 +1037,82 @@ pub(super) mod tests {
         assert!(texte(a.appeler("read_file", json!({ "path": dehors.join("autre.txt") }))).contains("hors de la racine"), "et n'ouvre rien");
     }
 
+    /// Un faux modèle qui joue, pour chaque message, ses appels d'outils dans l'ordre, puis « fait » ;
+    /// il relève le dernier résultat d'outil de chaque message.
+    fn modele_scripte(script: Vec<(&'static str, Vec<(&'static str, Value)>)>, vus: Arc<std::sync::Mutex<Vec<(String, String, String)>>>) -> ChatModel {
+        use crate::llm::{CallbackLlm, Turn};
+        let script = Arc::new(script);
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let (script, vus) = (script.clone(), vus.clone());
+            Ok(Arc::new(CallbackLlm::new("faux-atelier", 8192, move |turns: &[Turn], opts, sink| {
+                let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
+                let message = turns[depuis].content.clone();
+                let faits: Vec<&Turn> = turns[depuis..].iter().filter(|t| t.role == "tool").collect();
+                if let Some(t) = faits.last() {
+                    vus.lock().unwrap().push((message.clone(), t.tool_name.clone().unwrap_or_default(), t.content.clone()));
+                }
+                let appels = script.iter().find(|(m, _)| *m == message).map(|(_, c)| c.clone()).unwrap_or_default();
+                match appels.get(faits.len()) {
+                    Some((nom, args)) => MockLlm::new("").with_tool_calls(vec![(nom.to_string(), args.to_string())]).generate(turns, opts, sink),
+                    None => MockLlm::new("fait").generate(turns, opts, sink),
+                }
+            })))
+        })
+    }
+
+    /// **L'empreinte voit un changement fait ailleurs** (ticket d'ED,
+    /// `2026-11-13-l-empreinte-de-lecture-de-l-atelier-ignore-les-changements-faits-ailleurs.md`) :
+    /// lu au tour 1, le fichier change hors de la conversation (une ligne en tête), et
+    /// `replace_lines 2-2` au tour 2 viserait une autre ligne que celle lue : refusé, relis d'abord.
+    #[test]
+    fn a_line_write_after_a_change_made_elsewhere_must_read_again() {
+        let vus = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let model = modele_scripte(
+            vec![("t1", vec![("read_file", json!({ "path": "liste.txt" }))]), ("t2", vec![("replace_lines", json!({ "path": "liste.txt", "from": 2, "to": 2, "text": "DEUX" }))])],
+            vus.clone(),
+        );
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier_avec(d.path(), model);
+        let f = a.racine.join("liste.txt");
+        std::fs::write(&f, "un\ndeux\ntrois\n").unwrap();
+        a.host.chat_turn(&a.h.id, "t1").expect("t1");
+        std::fs::write(&f, "zéro\nun\ndeux\ntrois\n").unwrap();
+        a.host.chat_turn(&a.h.id, "t2").expect("t2");
+        let r = vus.lock().unwrap().iter().find(|(m, o, _)| m == "t2" && o == "replace_lines").map(|(_, _, c)| c.clone()).unwrap_or_default();
+        assert!(r.contains("relis d'abord"), "le fichier a changé depuis la lecture : refusé ({r})");
+        assert_eq!(std::fs::read_to_string(&f).unwrap(), "zéro\nun\ndeux\ntrois\n", "rien n'est écrit");
+    }
+
+    /// **L'empreinte ne note que les lignes montrées** (le même ticket) : `read_scope` d'une
+    /// fonction de 300 lignes n'en montre que 200 ; une écriture de la ligne 250 n'a pas été lue.
+    #[test]
+    fn a_scope_read_covers_only_the_lines_it_showed() {
+        let vus = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let d = tempfile::tempdir().unwrap();
+        let racine = d.path().join("rw");
+        let frere = racine.join("rag3db-essai-atelier-long");
+        let fichier: &'static str = Box::leak(frere.join("src/long.rs").display().to_string().into_boxed_str());
+        let model = modele_scripte(
+            vec![("t1", vec![("read_scope", json!({ "name": "long" }))]), ("t2", vec![("replace_lines", json!({ "path": fichier, "from": 250, "to": 250, "text": "    let x = 0;" }))])],
+            vus.clone(),
+        );
+        let a = atelier_avec(d.path(), model);
+        let depot = petit_depot(&a.racine);
+        let corps: String = (1..=298).map(|i| format!("    let v{i} = {i};\n")).collect();
+        std::fs::write(depot.join("src/long.rs"), format!("pub fn long() {{\n{corps}}}\n")).unwrap();
+        git(&depot, &["add", "-A"]);
+        git(&depot, &["commit", "-q", "-m", "une longue fonction"]);
+        a.appeler("open_branch", json!({ "path": depot, "branch": "atelier/long" })).expect("open_branch");
+        attendre_l_index(&a, &frere);
+        a.host.chat_turn(&a.h.id, "t1").expect("t1");
+        let lu = vus.lock().unwrap().iter().find(|(m, o, _)| m == "t1" && o == "read_scope").map(|(_, _, c)| c.clone()).unwrap_or_default();
+        assert!(lu.contains("long") && lu.contains("lignes 1-300"), "read_scope trouve la fonction de 300 lignes : {lu}");
+        a.host.chat_turn(&a.h.id, "t2").expect("t2");
+        let r = vus.lock().unwrap().iter().find(|(m, o, _)| m == "t2" && o == "replace_lines").map(|(_, _, c)| c.clone()).unwrap_or_default();
+        assert!(r.contains("relis d'abord"), "la ligne 250 n'a pas été montrée : refusé ({r})");
+        attendre_l_index(&a, &frere);
+    }
+
     /// **`read_file` dans l'atelier** : jamais plus de 200 lignes d'un coup (Lucie), la
     /// suite dite ; un fichier sous la racine se lit sans index ; un fichier d'un worktree
     /// attaché se lit par le backend de ce worktree.
