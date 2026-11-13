@@ -107,6 +107,10 @@ distant est déclaré, pas annoncé (un port 0 distant demanderait de lire le jo
 `ssh -o BatchMode=yes -o ConnectTimeout=5`, aucune attente ni nouvel essai ; l'appelant voit
 « activation distante : ssh <hôte> : <cause> ». Pas de repli local : le repli reste explicite.
 
+**La carte.** Le service calcule en Vulkan : c'est `RAG3WEAVER_BURN_DEVICE_EMBEDDER=gpu:0` qui le
+place sur card2 à luciepc (`gpu:0` = card2 en Vulkan) ; `ROCR_VISIBLE_DEVICES` ne vaut que pour
+ROCm et ne place rien ici. Vérifié par la mémoire des deux cartes pendant le vrai jeu.
+
 **Ce que Lucie voit et comment elle arrête** (une commande chacune, depuis le portable) :
 - voir : `ssh luciepc systemctl --user list-units 'rag3weaver-fournisseur-*'`
 - arrêter : `ssh luciepc systemctl --user stop 'rag3weaver-fournisseur-*'`
