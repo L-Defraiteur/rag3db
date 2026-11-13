@@ -465,3 +465,33 @@ propriétaire/OID enregistrés ; dump+SHA puis zéro session avant suppression f
 7879 seulement pour lectures après coordination, santé avant/après, rendu immédiat.
 Trois ELF/223gabarits réels/native29 prouvés par PID/starttime/maps ; premier rouge
 stop/diagnostic, aucun master avant revue et tour explicite C7.
+
+## Arrêt global avant e2e — âge natif, 13 novembre
+
+Source6786 : F5/minimal0/3compiles/inventaires, lib2278/0/66 en38,36s et
+NAV40/0/0 en131,66s verts. Le lanceur e2e_lectures sort1 AVANT filets/tests :
+native29 et vector sont plus anciens que le commit207701bb2 du formatage C++18.
+Lib29 reste celle autorisée et fixée ; ni rebâti C++ ni substitution. Primitive
+validation-3l2_x1i5 rouge/code1/restes[]/nettoyé=true, quiescence target[].
+Les trois e2e ne sont pas verts ni exécutés ; globale rouge conservée dans
+cx-grep-symboles-6786c03b5-globale-20261113. Santé BGE avant/après arrêt identique,
+7879 rendu, aucun appel sparse de test n'a eu lieu.
+
+La procédure push ligne91 prescrit RAG3WEAVER_MOTEUR_ANCIEN=1 dans ce cas.
+Relecture avant application : tests/e2e_lectures.rs832 utilise AUSSI ce drapeau
+pour forcer « non jugé » du témoin la_recherche_rend_les_mots_pendant_un_create_de_l_index_vectoriel,
+indépendamment de la capacité réellement exposée par SHOW_INDEXES. Ne pas masquer
+cette absence par le seul total27 marqué ok. La passe d006 conservée, sous la même
+native29 sans ce drapeau avant le formatage, avait réellement joué ce témoin sans
+ligne « non jugé ». Cela ne dispense pas de sa qualification sur la source actuelle.
+
+Recette corrigée à faire relire : drapeau ancien explicite pour le lanceur, puis
+même témoin exact de l'ELF e2e FIGÉ exécuté sans ce drapeau, sous la même portée et
+les mêmes sources/paramètres, 1/0/0 attendu et refus de toute ligne « non jugé ».
+Cela conserve la couverture de la suite sans modifier le lanceur ou les assertions
+possédées par Recherche. Les filets2 et le27/0/0 restent prouvés par run_e2e ; le
+non-jugé du premier appel et sa compensation sont conservés distinctement dans
+les preuves. Composant natif supplémentaire≤120s, santé/rendu7879 après les deux.
+Source et pilote neufs publiés avant reprise complète dans le RESTE de6000 initial
+(deadline884429.442394705), pas de reset ; PG réemployée uniquement après identité/
+propriétaire/OID identiques à la création. Pas de reprise avant revue de ce point.
