@@ -1,0 +1,79 @@
+[
+  {
+    "pid": 1264352,
+    "parent": 1264247,
+    "session": 1264352,
+    "debut": "91650947",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1264247-i89263664.scope",
+    "memoire": {
+      "direct": "8589934592",
+      "effectif": 8589934592
+    }
+  },
+  {
+    "pid": 1264353,
+    "parent": 1264352,
+    "session": 1264352,
+    "debut": "91650947",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1264247-i89263664.scope",
+    "memoire": {
+      "direct": "8589934592",
+      "effectif": 8589934592
+    }
+  },
+  {
+    "pid": 1264354,
+    "parent": 1264352,
+    "session": 1264352,
+    "debut": "91650947",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1264247-i89263664.scope",
+    "memoire": {
+      "direct": "8589934592",
+      "effectif": 8589934592
+    }
+  },
+  {
+    "pid": 1264370,
+    "parent": 1264354,
+    "session": 1264352,
+    "debut": "91650954",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1264247-i89263664.scope",
+    "memoire": {
+      "direct": "8589934592",
+      "effectif": 8589934592
+    }
+  },
+  {
+    "pid": 1265694,
+    "parent": 1264370,
+    "session": 1264352,
+    "debut": "91651152",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1264247-i89263664.scope",
+    "memoire": {
+      "direct": "8589934592",
+      "effectif": 8589934592
+    }
+  },
+  {
+    "pid": 1265695,
+    "parent": 1265694,
+    "session": 1264352,
+    "debut": "91651153",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1264247-i89263664.scope",
+    "memoire": {
+      "direct": "8589934592",
+      "effectif": 8589934592
+    }
+  },
+  {
+    "pid": 1265696,
+    "parent": 1265695,
+    "session": 1264352,
+    "debut": "91651153",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1264247-i89263664.scope",
+    "memoire": {
+      "direct": "8589934592",
+      "effectif": 8589934592
+    }
+  }
+]

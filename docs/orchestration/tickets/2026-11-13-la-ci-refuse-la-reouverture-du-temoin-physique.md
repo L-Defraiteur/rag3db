@@ -223,3 +223,19 @@ initiale916791.103284988, il reste310.49s. Après obtention de poste, calculer
 bornés par ce reste, aucun reset600s. Priorité du worker Medium ; compilation
 j4/MemoryMax8G/MemoryHighmax, même témoin exact unique, aucun runtime DB/SDK.
 Tout autre rouge arrête sans retry ; qualification production distincte.
+
+### Rouge TDD posé sur645b6e6, budget résiduel280s
+
+Même worktree/target privé réemployé sans purge, GO C7 correctif fixture.
+Après poste, reçu280s sous END initial916791.103284988, mémoire réelle
+8G/HIGHmax, j4. PID1264354/start91650947.
+**running1test ;0passé,1échec,0ignoré,169filtrés**,0,00s. Échec attendu
+exact à pool.rs:628 : `shutdown returned before worker destruction: Some(Ok(3))`.
+Le destructeur était retenu par le canal et détenait encore l’Arc au retour
+de shutdown. Cela prouve ce défaut de barrière, pas l’identité du writer CI.
+Confineur code101, erreur=null, restes=[], nettoye=true ; aucun retry.
+[Brut](../../lucivy/13-11-2026/preuves/shutdown-rouge-tdd.log),
+[verdict](../../lucivy/13-11-2026/preuves/shutdown-rouge-verdict.json),
+[PID/start](../../lucivy/13-11-2026/preuves/shutdown-rouge-enfants.json).
+Reste autorisé : préparer/publication de la barrière et témoins worker/coopératif ;
+qualification distincte, relecture ED, aucune publication/version/SDK/DB.
