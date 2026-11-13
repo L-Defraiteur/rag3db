@@ -208,3 +208,13 @@ puis F8 n'admet QUE le contrat SDK exact pour tout Cargo, metadata compris.
 Le profil sans SDK n'est admissible QUE dans cette phase, pour la commande
 metadata --all-features exacte de la garde commune. Ticket avant diff ; aucune
 exécution/target muté et ancien438 non autorisé.
+
+## Arrêt d'une fixture CPU de préparation, avant correction
+
+Delta03896d62f publié avant quatre tests de préparation AST, sans Cargo.
+Trois passent, le test freshavantPopen ERROR : namespace simulé oublie C,
+NameError driver247 pendant évaluation des arguments, AVANT stubPopen.
+Aucun sous-processus ou target réel créé ; C est bien défini dans le driver
+réel, défaut limité à la fixture. Journal pilote-03896-cpu.log conservé,
+STOP sans retry. Compléter namespace C et constante subprocess.STDOUT avant
+nouvelle revue ; pas de qualification du pilote déduite de trois témoins.
