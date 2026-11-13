@@ -270,3 +270,40 @@ Confineur code101, erreur=null, restes=[], nettoye=true ; aucun retry.
 [PID/start](../../lucivy/13-11-2026/preuves/shutdown-rouge-enfants.json).
 Reste autorisé : préparer/publication de la barrière et témoins worker/coopératif ;
 qualification distincte, relecture ED, aucune publication/version/SDK/DB.
+
+### Barrière préparée et publiée, non qualifiée :07086b6
+
+Porteur Lucivy ; dépôt lucivy branche `cx-lucivy-shutdown-destruction`, tête
+`07086b6` (base4.3.3 ; rougeTDD645b6e6 conservé). Aucun nouveau runtime.
+`git diff --check` propre. Pas de version, fusion main, tag ou publication.
+
+Primitive : Completion partagée par ActorRef, abonnements Reply existants sous
+Mutex ; une garde terminale dans Mailbox signale seulement après destruction
+du receiver et des messages en attente. ActorWrapper déclare actor AVANT
+mailbox : cet ordre de destruction constitue l’invariant. Le chemin pinned
+capture le wrapper entier explicitement pour éviter les captures de champs
+séparés qui pourraient changer cet ordre. Aucun polling/sleep ni lecture du
+registre/event pour décider que la destruction est finie. Callbacks envoyés
+hors mutex de completion ; attente via Scheduler::try_wait (worker/cooperative).
+
+ActorRef::wait_stopped refuse l’attente depuis un handler ; Pool::shutdown
+refuse avant envoi dans ce même contexte (pas de self-join suspendu). Puis
+attend acquittements ET destruction de tous ses workers, y compris ceux dont
+l’envoi échoue. Les appels répétés s’abonnent à une completion déjà satisfaite.
+ShardedHandle attend aussi la destruction du routeur ; une erreur éventuelle
+est conservée via le mécanisme first_error existant, sans sauter les shards.
+
+Témoins publiés, NON exécutés :
+- `pool::tests::shutdown_waits_for_worker_destruction` (rouge observé avantfix).
+- `scheduler::tests::destruction_completion_worker`.
+- `scheduler::tests::destruction_completion_cooperative`.
+Ces deux derniers vérifient actor ET Arc d’un message laissé après Stop, attente
+répétée et refus d’envoi après destruction. Compléter la couverture pinned,
+réponse perdue et rejet depuis handler lors de la relecture ; ces chemins ne
+sont pas déclarés qualifiés. Le garde ne fait pas disparaître les limites du
+scheduler en cas de panique non interceptée/arrêt global ; lecture à terminer.
+
+Reste : relecture ED du diff et des invariants/risques, puis nouveau créneau de
+qualification distincte C7 avec source/commandes/budget figés. Aucun CPU restant
+de la fenêtre rouge n’est utilisé pour qualifier ce correctif. Cause exacte du
+writer D17 toujours distincte et non prouvée par le témoin CPU.
