@@ -331,3 +331,12 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   parent manque, par table et par sens, sur des copies de code-lourd et code-principal (instantanés de G),
   chiffre en clair ; aucune réparation sans son mot. 96 : rouge posé pour l'archive qui ne voit pas ses
   propres fiches (correctif générique : un paramètre porté d'un élément au suivant, `carry` du ForEachNode).
+- **19 h 57, archi a poussé f3bdb7483** : la bulle fantôme à trois facettes (un RunStarted tardif pris pour un tour
+  venu d'ailleurs ; un ToolCallStarted en retard qui remettait le statut ; le filtre des runs finis passé après
+  le relevé des jetons, qui laissait tomber un jeton arrivé après la réponse) et « dire vrai » (réindexation
+  en échec dite en échec ; décision pendant le tour relancée après ; le journal des décisions avant l'accord).
+  Les rouges navigateur « status jamais fini » ont leur cause et leur correctif. ED a son tour pour (a) (la
+  page ferme son flux sur pagehide, reprise depuis le dernier id ; douze vues à 155 ms au lieu d'une minute
+  pour la sixième), **puis la pose des deux postes** ; 96 (l'archive qui voit son document) après la pose,
+  avec le lot du nom de sujet, puis un seul second essai à blanc. Lucie a dit avoir plusieurs onglets de l'IDE
+  ouverts : (b) le SharedWorker suit, conçu pour les fenêtres séparées (graine, acb4f02e0).
