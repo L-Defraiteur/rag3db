@@ -120,4 +120,19 @@ CARGO_TARGET_DIR=~/.cache/rag3weaver-build/target-tty cargo run --release -- \
 
 | Ticket | En une ligne |
 |---|---|
-| `docs/tty/tickets/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md` | la lib ne compile pas sans `rag3db-native` (`src/backend.rs` vers la ligne 4411, `src/dataflow/record_nodes.rs` vers la ligne 4567) ; le correctif ou la déclaration « la lib exige le moteur » est à trancher par Lucie |
+| `docs/tickets/closed/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md` | la lib ne compile pas sans `rag3db-native` (`src/backend.rs` vers la ligne 4411, `src/dataflow/record_nodes.rs` vers la ligne 4567) ; le correctif ou la déclaration « la lib exige le moteur » est à trancher par Lucie |
+
+
+## Actualisation du 13 novembre 2026 — compilation minimale
+
+Le blocage de compilation sans `rag3db-native` décrit dans l'état historique
+ci-dessus est levé. Ticket clos :
+`docs/tickets/closed/2026-11-07-la-lib-rag3weaver-ne-se-batit-pas-sans-rag3db-native.md`.
+Correctifs `9231f07dc`, `c74e3310d`, garde minimale `5a4049b9e` ; F8 canonique
+8/8 sur APP `9ec421069`, preuves publiées par `cdcc032df` dans le rapport
+Recherche `docs/recherche/13-11-2026/13-preuves-finales-union-garde-target.md`.
+Tty a relu les sources, la garde et les journaux minimaux conservés ; aucun
+Cargo, test, service ni bâti nouveau. Ce défaut n'attend plus de décision de
+Lucie. Le crate tty séparé est conservé ; aucun nouveau lot autorisé par cette
+régularisation. Les propositions tty-4, mesures et thèmes restent des pistes
+historiques en attente d'objectif établi, pas des actions démarrées.
