@@ -217,3 +217,7 @@ Voir [rapport17](../13-11-2026/17-sonde-cargo-et-reprise-bornee.md) : observatio
 ## Qualification union v2 arrêtée
 
 Voir [rapport19](../13-11-2026/19-arret-union-v2-profil-principal.md) et ledger18 : F8/compilations/inventaires acquis ; premierrouge profilprincipal natif, lib nonqualifiée/CPUexacts et publication nonjoués. 158preuves SHA deuxpostes, aucune reprise. DiagnosticRO ED demandé, ticket reste ouvert.
+
+## Arrêt v3 juges de délai
+
+[Rapport22](../13-11-2026/22-arret-union-v3-juges-delai.md) : capturestableSDK conforme, premierFAILEDlib STOP, aucunCPUexact/pub. 1774preuvesSHAidentiquesdeuxpostes, causesnonétablies/diagRO ED demandé, aucunretry. Ticketouvert.
