@@ -370,4 +370,7 @@ fn le_terminal_accorde_une_commande_que_l_equipier_attend() {
     assert!(reponse["granted"].as_str().is_some_and(|g| g.starts_with("commande accordée pour la tâche : echo accorde-moi")), "l'hôte a posé l'accord : {reponse}");
     assert!(lignes.iter().any(|l| l["kind"] == "step_done" && l["succeeded"] == true), "la commande s'est jouée et le pas a réussi : {lignes:#?}");
     assert!(vue_boite.attentes().is_empty(), "plus rien n'attend : {:?}", vue_boite.attentes());
+    // Le journal des runs s'écrit 250 ms après la fin d'un run, sur son fil : on
+    // le vide avant que le dossier du témoin parte, sinon le dernier pas le recrée.
+    host.journal_des_runs().vider();
 }
