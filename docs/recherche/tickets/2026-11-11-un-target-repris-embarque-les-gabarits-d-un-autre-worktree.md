@@ -141,3 +141,16 @@ mêmeELF/SHA et borneinitiale1800 (649,830963sdepuisSTART). Scope/finaliseurVERT
 busabsent/quiescencevide,250preuvesv2SHAidentiquesdeuxpostes. [Rapport07](../13-11-2026/07-preuves-ciblees-garde-target.md).
 AucunCargo/rebuildv2 ; ressources gardées. Ticket OUVERT avant revue/suffisance
 et qualification F8/liblarge/NAV éventuelle, pas de master/retrait autorisé.
+
+## Qualification plus large à préparer — avant témoin HTTP
+
+C7 juge preuves67fc suffisantes pour le ciblé et demande l'union sur master
+D17a (couches2a pures livrées), F8 canonique/liblarge/NAV40 et provenance des
+223gabarits contre Git ET deux assets UI réellement servis. Nouvelle branche
+cx-recherche-garde-target-union-r1 ; rebase des13 patches sans conflit.
+Le témoin actuel ide::le_bundle_de_l_ide_est_celui_que_son_manifeste_decrit
+compare seulement deux contenus embarqués entre eux. Ajouter un témoin
+cfg(test) sur hôte HTTP privé qui compare app.js/app.css SERVIS aux fichiers
+courants du worktree ; le pilote comparera ces SHA aux blobs du commit.
+Ce témoin est une preuve du critère initial, aucune API de service ajoutée.
+Préparation seule, recette/couple source figés et revue avant nouveau GO lourd.
