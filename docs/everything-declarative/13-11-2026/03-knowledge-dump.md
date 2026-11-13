@@ -1,0 +1,34 @@
+# Reprise ED — frontières de compilation boîte
+
+Ticket canonique ouvert : ../tickets/2026-11-12-la-boite-ne-compile-pas-sous-daemon-seul.md.
+WT neuf aux deux postes ~/git_workspaces/cx-ed-frontieres-boite ; branche même
+nom, base7308544ce, production finale204ca4c39. Aucun ancien W IDE rouvert.
+Cargo exécuté uniquement sur PC via primitive commune, Max32/HIGH0/j8.
+Target unique ~/.cache/rag3weaver-build/target-cx-ed-frontieres-boite (7,1Go au ciblé).
+
+Contrat : default=[] inchangé, client HTTP daemon sans natif/code ; hôte sous
+native+daemon. Lifecycle accessible au client, engine_build_id retourne None
+sans natif ; identité HOST_SERVICE commune, ancien alias hôte conservé.
+Aucune règle jeton/découverte changée ; helper read_in permet les fiches privées
+sans ENV global ni requête. Les gardes découvertes concernent code et les
+helpers/tests natifs, aucun allow(warnings), aucune suppression de module.
+
+Preuves privées aux deux postes :
+~/.cache/rag3weaver-build/I-luciepc/frontieres-boite-20261113.
+Bilan cible composé36/0/0 : minimum29d chat1 ; client004 mail9+lifecycle8 ;
+natif204 mail9+lifecycle7+parseurslivraison2. Trois ELF/SHA/inventaires archivés.
+Les portées29d/004 sont rouges sur l'étape suivante, pas sur leurs verts
+conservés ; nettoyagestrue/restes[] partout, quiescence finale[]. Équivalences :
+changements après29d dans modules daemon exclus du minimum ; après004 dans
+modules daemon_host exclus du client. Détails et premiers rouges gardés dans
+ticket et bilan-cible.json. Pas de modèle/service/PG/NAV pendant le ciblé.
+
+Globale6000 exigée par C7 : après rebase entrant grep d3f5a264d, F8/minimum/lib
+large entière/NAV40/lectures27distincts+hôte13+filets ; pas PG/Vertex/juge/équipier
+ni nouveau modèle. Lib29 fixe, trois ELF/223gabarits/maps/Max32 à observer,
+lectures âge207 : raw27(flagancien1, CREATE nonjugé) + exactCREATE1 sans flag,
+soit27distincts/28brut. Coordination7879 avant prise/santés/rendu. Source/recette
+à publier avant entrée ; premier rouge stop, aucun reset budget global implicite.
+Pas de tour master encore ; revue diff et passe restent requises. Après livraison,
+garde fraîche/archives admins fidèles aux deux postes, supprimer W/target/branches
+locales, conserver remotes/ELF/logs/rouges. Pas de déploiement daemon personnel.

@@ -182,3 +182,14 @@ livraison Codex ajoutés (sans code :2/0/0 attendus, ni hôte ni processus Codex
 Preuves minimum29d et daemon004 conservées : tous les nouveaux fichiers Rust
 sont dans daemon_host, module exclu de ces deux jeux. Les gardes ne changent
 pas le comportement sous le jeu large qui possède code.
+
+### Ciblé final 204ca4c39 vert, globale encore requise
+
+Native+daemon sans code : check-tests vert, compilation ELF69s, mail9/0/0,
+lifecycle7/0/0 et parseurs livraison2/0/0. Inventaire1879 ; primitive
+validation-neivavmm VERT/code0/nettoyétrue/restes[]. Bilan composé36/0/0 avec
+minimum29d et client004 selon équivalences ci-dessus. Aucun test sauté présenté
+comme vert. Quiescence privée[] ; target7,1Go, preuves532Mo, trois ELF/SHA.
+`bilan-cible.json` dans cache privé frontieres-boite-20261113 aux deux postes.
+Aucun modèle/service/PG/navigateur lancé pour ces ciblés. Le ticket reste ouvert
+jusqu'à revue, globale adaptée exigée par C7 et intégration.
