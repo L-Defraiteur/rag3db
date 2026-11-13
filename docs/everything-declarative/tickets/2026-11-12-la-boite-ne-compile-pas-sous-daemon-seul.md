@@ -64,3 +64,37 @@ Coordonner les rares fichiers partagés avec Archi ; son lot grep garde ses
 outils/Plans. Aucun ancien worktree nettoyé n'est rouvert, aucune pose du daemon
 personnel. Revue et passe adaptée avant tour master ; clôture seulement après
 correction et preuves des combinaisons réellement annoncées.
+
+## Diagnostic ED sur master7308544ce et contrat retenu
+
+Worktree neuf `cx-ed-frontieres-boite`, branche homonyme ; aucun Cargo lancé
+à ce constat. Cargo conserve `default=[]`, `daemon` ne demande ni `code` ni
+`rag3db-native`. La boîte HTTP et la découverte d’une fiche existante sont donc
+supportées avec daemon seul ; l’hôte natif reste sous daemon+natif.
+
+Couplages encore présents : mail120 appelle lifecycle exclu sous daemon seul ;
+lifecycle utilise le moteur uniquement pour engine_build_id et l’identité du
+protocole via daemon_host::SERVICE. L’identité doit être commune client/serveur,
+sans importer le serveur. Chat835/836 traite read_file via une constante du
+module exclusivement code ; l’import du trait Boite des tests livraison n’est
+utilisé que par leurs cas code. Pas de dépendance native ajoutée par défaut.
+Archi réserve code_tools/grep et symbol_navigation, pas ces fichiers ; frontière
+communiquée avant édition. Aucun plan global partagé édité.
+
+Recette initiale CPU AVANT correction : source publiée, luciepc seulement,
+poste réel/Max32G/HIGH0/j8/target privé neuf. Portée900s inclut cleanup ;
+`cargo check --lib --no-default-features` <=300s doit être vert, puis même
+commande avec `--features daemon` <=300s reproduit le E0433 connu et STOPPE.
+Aucun troisième jeu après ce rouge ; logs et quiescence conservés. Aucune
+variable native pour ces deux commandes, aucun modèle/service/PG/navigateur,
+aucune lecture de configuration personnelle ; bus privé du lanceur commun seul.
+
+Après diagnostic du rouge : source corrective et recette publiées avant ciblé.
+Frontières attendues : minimum réellement sans features, daemon seul, puis
+rag3db-native+daemon SANS code. Lib29 épinglée uniquement pour la dernière.
+Tests de découverte sur fiches synthétiques (valide/absente/corrompue) sans
+modifier ENV global, sans HTTP écoutant, sans appeler ensure/answers ni lancer
+un hôte. Compiler l’API publique depuis_daemon_json sous daemon seul et préserver
+les règles du jeton et l’identité du service. Gardes/imports de code ajustés
+sans élargir les outils accessibles. Arrêt au premier rouge inattendu ; revue
+et passe adaptée avant tour C7, pas de clôture sur un simple check natif/code.
