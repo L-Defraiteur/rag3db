@@ -1,9 +1,9 @@
 # Gérer l'activation et la résidence des modèles selon les usages
 
-- **État** : ouvert ; première tranche locale/dense qualifiée, combinaison avec master en cours sur cx-activation-modeles-3 ; suite distante/éviction ouverte.
+- **État** : ouvert ; première tranche locale/dense livrée sur master23ceed87b, union qualifiée ; suite distante/éviction ouverte.
 - **Famille** : produit
 - **Gravité** : coût et disponibilité ; éviter l'accumulation de modèles résidents et permettre leur reprise à la demande.
-- **Atteignable en service** : non pour cette gestion automatique ; lancement sondé et chauffe initiale existent séparément.
+- **Atteignable en service** : oui pour activation dense locale déclarée via Backend::connect_embedder ; gestion distante et éviction non implémentées.
 - **Touche rag3weaver** : oui, ModelSource, Serveur, fournisseurs de modèles et déclarations de ressources.
 - **Pour** : embarquement et ED pour les contrats communs ; optimiseur pour l'activation distante et les unités.
 - **Signalé par** : Lucie, demande de résidence pertinente et de warming ; audit des services résidents.
