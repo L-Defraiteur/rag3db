@@ -82,3 +82,12 @@ Source461e8b868 : cinq ciblés1/0/0, module20/0/3NAVattendus et F8canonique8/8,
 superviseur/finaliseur verts.306fichiers SHA deux postes ; rouges R2/R3 gardés.
 [Preuves et limites](05-preuves-read-scope.md). WT PC r4/source461e figés ;
 aucun master/retrait. Suite : revue C7, candidat exact et livraison coordonnée.
+
+
+### Livré et nettoyé : read_scope
+
+Master4e2e2bfbb7c8ce670a49a06a36580d481d9abbc0, trois contrôles verts
+deux postes. Les sept WT et deux targets ED sont retirés ; ne pas rouvrir
+les anciens chemins ci-dessus. Branches distantes/ELF/preuves/rouges et
+archives fidèles deux postes conservés. [Bilan final](06-integration-read-scope.md).
+Aucun runtime ou nettoyage2a à lancer depuis ce lot terminé.

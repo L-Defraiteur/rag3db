@@ -1,6 +1,6 @@
 # read_scope masque les erreurs de lecture des worktrees
 
-- **État** : corrigé ; source qualifiée461e8b868, preuves07f346ec5 (5ciblés/module20/0/3/F8 8/8), clôture préparée pour intégration autorisée C7.
+- **État** : corrigé ; source qualifiée461e8b868, preuves07f346ec5 (5ciblés/module20/0/3/F8 8/8), intégré master4e2e2bfbb7c8ce670a49a06a36580d481d9abbc0 après revue/tour C7.
 - **Famille** : produit
 - **Gravité** : réponse fausse ; absence ou unicité annoncée malgré une recherche incomplète.
 - **Atteignable en service** : oui ; read_scope de l'atelier interroge les worktrees attachés via usages.
@@ -220,3 +220,11 @@ ELF033c31d0…0375a original/copie conservés, maps six phases de juges.
 [Preuves exactes et limites](../../everything-declarative/13-11-2026/05-preuves-read-scope.md).
 Deux rouges historiques conservés ; aucune attribution du FAILED physique.
 Ticket reste ouvert jusqu’à revue/intégration autorisée C7 ; aucun retrait.
+
+
+## Livraison et clôture effective
+
+Master4e2e2bfbb intégré et vérifié deux postes ; ressources ED retirées
+sous gardes fraîches, archives/ELF/preuves/rouges conservés.
+[Bilan final](../../everything-declarative/13-11-2026/06-integration-read-scope.md).
+Aucun travail restant pour ce ticket ; pas d’attribution de la panic physique.
