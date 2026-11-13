@@ -94,6 +94,13 @@ et les relâche dans cet ordre. Le dernier `ReopenState` tombe donc après le re
 - avant le correctif : 2308 passés et 1 échec, deux tours sur deux ;
 - après : 2309 passés, 0 échec, 67 ignorés, trois tours sur trois.
 
-**Ce qui reste.** Le porteur qui garde la base après le `drop` n'est pas nommé dans ce ticket
-(poignée plein texte, fil de fusion lucivy ou `read_connection`). Le registre rend l'attente juste ;
-il ne raccourcit pas la vie de l'instance.
+**Le porteur, nommé.** Un diagnostic temporaire, non commité, a écrit le fil et la pile du
+relâchement du dernier `ReopenState` quand ce fil n'est pas un fil de test. Le module a été joué
+avec `--test-threads=1`, sous l'environnement d'archi. Le relâchement tardif passe par le fil
+`scheduler-3` du planificateur de lucivy, dans `luciole::scheduler::run_loop`. Ce fil lâche un
+`Arc<dyn lucistore::blob_store::BlobStore>`, qui tient la connexion synchrone, donc la `Database`.
+Il le fait après `native_unowned_cell_or_changed_source_refuses_before_new_effects`, dont la
+fermeture du plein texte a échoué (« blob persistence invalidated: physical operation failed »).
+Une tâche du planificateur garde donc le magasin de blobs au-delà de la fermeture : c'est le sujet
+de la barrière d'arrêt de lucivy (variante B, suspendue). Le registre rend l'attente juste, il ne
+raccourcit pas la vie de l'instance.
