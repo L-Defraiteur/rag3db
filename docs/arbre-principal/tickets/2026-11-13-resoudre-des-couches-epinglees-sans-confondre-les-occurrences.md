@@ -225,3 +225,7 @@ Voir [rapport19](../13-11-2026/19-arret-union-v2-profil-principal.md) et ledger1
 ## Qualification union composite verte soumise
 
 [Rapport25](../13-11-2026/25-preuves-union-composite-verte.md) : F8/builds/inventairesv2 acquis +v4lib2307/0/66 etCPU4exacts/pub10, vraiswaitstatus/SDKstabledétaché/scopefinalverts dansbudgetoriginal4068.565s<4800. 449preuvesv4SHAdeuxpostes0écart ; anciensrougesv1/v2/v3conservés. Revue/C7décisionsuffisanceetintégrationattendues ; aucunGOmaster/retrait, ticketresteouvert.
+
+## Préparation capture stable après rouge v2
+
+ArbitrageC7 autorise réemploi F8/builds/ledger, aucun Cargo/rebuild/cache à rejouer. [Recette20](../13-11-2026/20-recette-union-capture-stable.md), pilote distinct : capture GDB mêmeinferior helper→ELF/exec puismainSDKchargé, cleanup sans qualification/firstredimmuable. Runtime manquant seulement ; NONLANCÉ, RO/GOexact encore requis, même échéanceoriginale.
