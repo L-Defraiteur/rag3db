@@ -1,6 +1,6 @@
 # Conserver et résorber le reliquat de préparation garde target
 
-- **État** : ouvert (13 novembre 2026), prototype archivé et W retirée ; trois références refusées-d conservées avec leur motif, sans suppression forcée.
+- **État** : résolu (13 novembre 2026), prototype préservé et W retirées ; arbitrage C7 : trois références classées archives historiques conservées, suppression abandonnée dans ce lot.
 - **Famille** : produit
 - **Gravité** : conservation de travail local et de références après retrait des ressources qualifiées ; aucun défaut runtime nouveau établi.
 - **Atteignable en service** : non, préparation documentaire hors source de service.
@@ -19,7 +19,7 @@ Recherche avant pilote438 puis abandonnée au profit du pilote-r2. Aucune
 ressource Lucie/autre lot attribuée à ce prototype. Aucun .env/.vault ne sera
 lu/copier ; présence éventuelle d'une telle zone ferait conserver la W.
 
-Branches locales conservées après seul `git branch -d` :
+Branches locales PC conservées après seul `git branch -d` :
 cx-recherche-garde-target (698), cx-recherche-garde-target-pilote-r1 (bdff),
 cx-recherche-garde-target-reprise-r1 (a5e). Git les dit non complètement
 fusionnées (histoires sources d'avant rebase) ; leurs branches distantes et
@@ -57,5 +57,34 @@ Les trois références historiques restent : refus-d « non complètement
 fusionnée » (698/bdff/a5e non ancêtres du master rebasé), sans W ni target.
 Archivesfidèles et branchesdistantes les rendent retrouvables. Aucun usage
 mémoire/disque de build associé, aucun-D/contournement proposé. Ticket garde
-reste clos ; le présent suivi reste ouvert tant que ces références sont
-conservées ou qu'un arbitrage les classe sans suppression.
+reste clos ; à ce stade du suivi, il restait ouvert en attendant leur
+classement sans suppression. Arbitrage final ci-dessous.
+
+## Résolution par classement C7, sans suppression de référence
+
+C7 arbitre explicitement : les trois références sont des ARCHIVES HISTORIQUES
+CONSERVÉES et leur suppression est ABANDONNÉE DANS CE LOT. Aucune action
+fonctionnelle ne reste à faire dans ce suivi. Aucun-D/renommage/rebase/forçage.
+
+Contrôle RO final : branches locales PC et branches distantes origin existent
+aux SHA exacts :
+
+| Référence conservée | SHA |
+|---|---|
+| cx-recherche-garde-target | 698b952ab89fd48ac112645650000ebae34e6742 |
+| cx-recherche-garde-target-pilote-r1 | bdffcef070d78f5a97cc7d2a1edbf60baef7b58e |
+| cx-recherche-garde-target-reprise-r1 | a5e678b05b3b139ac71432589271485b25e8bc25 |
+
+Leurs références locales sur l'autre poste avaient été retirées par-d normal ;
+aucune recréation ni suppression supplémentaire. Remotes inchangés, archives
+administratives fidèles sous cx-archives-garde-target-integration-13nov sur
+DEUX postes (manifest70953730...55fec), et preuves/ELF/logs conservés horsW/T.
+Prototype isoléNONMERGEccb3d90c416bbde37ee8f65176c017207de5f265 toujours publié,
+sauvegarde5fichiers identiques deuxpostes sous cx-archive-prototype-garde-13nov.
+Les W du prototype, des qualifications et du premier bilan sont retirées sous
+archives/gardesfraîchesVERTES ; aucun W/T associé aux trois refs historiques.
+
+Le présent ticket est résolu par conservation assumée et abandon de la seule
+suppression, pas par effacement ni fausse déclaration d'absence des références.
+Le ticket produit garde reste corrigé depuis master9feb ; CI statique et
+vues2b restent des lots distincts. Aucun runtime/nouveau test par cette clôture.

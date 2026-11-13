@@ -61,7 +61,7 @@ sale conservé. Aucun nouveau runtime ni effet produit par ce bilan.
 
 ## Suite du reliquat, après le premier bilan
 
-Le [ticket distinct de reliquat](../tickets/2026-11-13-conserver-et-resorber-le-reliquat-de-preparation-garde-target.md)
+Le [ticket distinct de reliquat](../../tickets/closed/2026-11-13-conserver-et-resorber-le-reliquat-de-preparation-garde-target.md)
 a été publié AVANT la résorption, sans rouvrir le défaut garde corrigé.
 Inventaire : exactement cinq scripts docs non suivis de Recherche, aucun
 fichier ignoré/suivi modifié, UID1000 régulier ; sauvegarde fidèle deuxpostes
@@ -80,3 +80,12 @@ Le périmètre initial propre est retiré et la Wsale a été résorbée par arc
 les trois références conservées restent un reliquat suivi, pas une déclaration
 absolue « toutes ressources supprimées ». Le contrôleur DOCSSEULES de cette
 mise à jour sera lui aussi retiré par archive/garde, résultat journalisé horsW.
+
+## Arbitrage final C7 du reliquat
+
+Les trois références PC/origin698/bdff/a5e sont désormais classées ARCHIVES
+HISTORIQUES CONSERVÉES ; leur suppression est ABANDONNÉE DANS CE LOT.
+Le ticket distinct est résolu et déplacéclosed, sans-D/renommage/rebase/force.
+Aucun W/T associé ; prototype et preuves demeurent préservés sur deuxpostes.
+Les mentions antérieures « suivi ouvert » décrivent l'attente d'arbitrage,
+pas un défaut garde restant : le correctif garde est intégré depuis9feb.

@@ -534,7 +534,9 @@ restent explicitement en cours. Les chiffres sont datés et leurs protocoles ré
   conservé ; une régénération sans modification de source a produit les212 bons gabarits,
   puis les deux ciblés inchangés et les36 navigateurs verts. Le
   [ticket de provenance](../../tickets/closed/2026-11-11-un-target-repris-embarque-les-gabarits-d-un-autre-worktree.md)
-  reste ouvert : la récupération ponctuelle n’est pas une correction durable du garde.
+  était encore ouvert à cette date : la récupération ponctuelle seule ne corrigeait pas le garde.
+  Mise à jour du13 novembre : correction durable intégrée master9feb, ticket garde clos ;
+  reliquat résolu par classement C7 des trois références historiques conservées, sans suppression.
 - **f96acc6cf97692804520e2d672de080bcae730a3** : dépendances Lucivy4.3.3 intégrées,
   trois minimums et cinq paquets du lock registre seulement. Même témoin public close en
   erreur : rouge4.3.2, vert4.3.3 avec handle fermé et sortie enfant normale. Neuf e2e121/0/0,
