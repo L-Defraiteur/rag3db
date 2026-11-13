@@ -1898,6 +1898,45 @@ mod tests {
         let racine = d.path().join("poste");
         std::fs::create_dir_all(&racine).unwrap();
         let (atelier, racines) = atelier_pose(d.path(), &racine);
+        // Ticket activation/résidence, rouge d'union : 200 fichiers ne sont
+        // pas une barrière. Garder un vrai index actif jusqu'aux deux reçus.
+        struct Libere(Arc<(Mutex<bool>, std::sync::Condvar)>);
+        impl Drop for Libere {
+            fn drop(&mut self) {
+                let (verrou, reveil) = &*self.0;
+                *verrou.lock().unwrap_or_else(|p| p.into_inner()) = true;
+                reveil.notify_all();
+            }
+        }
+        struct GraniteControle {
+            porte: Arc<(Mutex<bool>, std::sync::Condvar)>,
+            entre: std::sync::mpsc::Sender<()>,
+        }
+        impl crate::embedder::Embedder for GraniteControle {
+            fn name(&self) -> &str { "granite-278m" }
+            fn dim(&self) -> usize { 768 }
+            fn embed(&self, textes: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+                let _ = self.entre.send(());
+                let (verrou, reveil) = &*self.porte;
+                let debut = std::time::Instant::now();
+                let mut libre = verrou.lock().unwrap_or_else(|p| p.into_inner());
+                while !*libre {
+                    let reste = std::time::Duration::from_secs(30).saturating_sub(debut.elapsed());
+                    if reste.is_zero() { return Err(crate::embedder::EmbedError::Timeout); }
+                    libre = reveil.wait_timeout(libre, reste).unwrap_or_else(|p| p.into_inner()).0;
+                }
+                Ok(textes.iter().map(|_| { let mut v = vec![0.0; 768]; v[0] = 1.0; v }).collect())
+            }
+        }
+        let porte = Arc::new((Mutex::new(false), std::sync::Condvar::new()));
+        let (entre, entre_rx) = std::sync::mpsc::channel();
+        let adresse = servir(Arc::new(GraniteControle { porte: porte.clone(), entre }));
+        let source = racines.config.join("atelier/templates/backends/code/backend.json");
+        let inscrit = crate::code_tree::add_files(&racines, &depot, &source.display().to_string(), Some("code-rag3db-essai")).unwrap();
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&inscrit.manifest).unwrap()).unwrap();
+        m["embeddings"]["address"] = json!(adresse);
+        m["embeddings"]["catch_up_on_open"] = json!(false);
+        std::fs::write(&inscrit.manifest, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
         let vus = Arc::new(Mutex::new(String::new()));
         let chemin = depot.display().to_string();
         let model: ChatModel = {
@@ -1918,11 +1957,23 @@ mod tests {
             })
         };
         let host = Arc::new(hote(d.path(), model).with_racines_de_code(racines).with_runs_root(d.path().join("runs")));
+        // La sonde de débit est synchrone, avant le lancement de l'index :
+        // un débit de fixture noté évite de bloquer attach sur cette sonde.
+        let lie = host.hosted(&inscrit.manifest).unwrap();
+        host.with_backend(&lie, |b| b.catalog.lock().unwrap().note_measured_embedding_rate(
+            crate::estimate::Rate::from_sample(100_000, std::time::Duration::from_secs(1)).unwrap(),
+        ).unwrap()).unwrap();
+        let session = host.open_session("préparation fixture carte", None, Vec::new(), None);
+        assert_eq!(host.close(Some(&session), &inscrit.manifest)["ok"], true);
         host.se_connaitre();
         let flux = Arc::new(Mutex::new(Vec::new()));
         host.ide_flux().abonner(Box::new(Capte(flux.clone())), None, None);
         let h = host.hosted(&atelier).unwrap();
+        // Déclaré après l'hôte : une panique libère avant son arrêt/join.
+        let liberation = Libere(porte);
         host.chat_turn(&h.id, &format!("Ouvre le worktree {}", depot.display())).expect("le tour");
+        entre_rx.recv_timeout(std::time::Duration::from_secs(10)).expect("la vraie passe de vecteurs a atteint la barrière");
+        assert!(host.with_backend(&lie, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0);
 
         let etat = host.chat_state(&h.id).unwrap();
         let outils: Vec<&Value> = etat["turns"].as_array().unwrap().iter().filter(|t| t["role"] == "tool").collect();
@@ -1938,6 +1989,18 @@ mod tests {
         assert!(!vus.lock().unwrap().contains("index_progress"), "le modèle a vu la carte");
         let capte = String::from_utf8_lossy(&flux.lock().unwrap()).into_owned();
         assert!(capte.lines().any(|l| l.contains("ToolCallFinished") && l.contains("index_progress")), "ToolCallFinished porte la carte sur le flux");
+        drop(liberation);
+        let debut = std::time::Instant::now();
+        while host.with_backend(&lie, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
+            assert!(debut.elapsed() < std::time::Duration::from_secs(10), "l'index doit finir après libération");
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        host.chat_turn(&h.id, "Montre l'état du dépôt dont l'index est terminé.").unwrap();
+        let fini = host.chat_state(&h.id).unwrap();
+        let dernier = fini["turns"].as_array().unwrap().iter().rev().find(|t| t["role"] == "tool" && t["tool_name"] == "show_progress").unwrap();
+        assert!(dernier["ui"].as_array().is_none_or(|u| u.is_empty()), "pas de carte d'index ACTIF une fois terminé : {dernier}");
+        assert!(dernier["content"].as_str().unwrap().contains("plein texte prêt"), "l'état terminé réel reste dit : {dernier}");
+        assert!(!vus.lock().unwrap().contains("index_progress"), "la reprise ne transmet aucune carte au modèle");
     }
 
     /// **Un dépôt fermé pendant son index n'est pas rouvert pour ses comptes** (passe de la
