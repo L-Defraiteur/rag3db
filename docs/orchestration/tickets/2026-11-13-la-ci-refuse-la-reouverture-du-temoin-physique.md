@@ -145,3 +145,27 @@ Reste : coordonner puis jouer le témoin CPU publié, relever le résultat exact
 concevoir/qualifier la barrière si nécessaire, et relier séparément cette course
 au détenteur réel du writer CI. Le ticket reste ouvert ; l’échec D17 n’est
 ni rejoué ni attribué définitivement à Lucivy par cette lecture.
+
+## Tentative CPU Lucivy : entrée refusée, aucun témoin joué
+
+GO C7 reçu pour source exacte `273b7c6ccaff5b3d49507ca62aebb5bfe87095fa`,
+fenêtre unique 600 s après poste lourd, MemoryMax 8 Gio, MemoryHigh infinity,
+quatre jobs, target neuf privé. Consigne figée avant entrée dans
+`luciepc:~/.cache/rag3weaver-build/cx-lucivy-shutdown-13nov/consigne.txt`.
+Worktree `cx-lucivy-shutdown-cpu` propre, aucun patch registre/SDK/DB.
+
+Le lancement de confinement a échoué avant Cargo, code 1 :
+`Failed to start transient scope unit: Unit run-p1207294-i89214559.scope was already loaded or has a fragment file.`
+Commande : poste lourd puis scope utilisateur explicite MemoryMax=8G,
+MemoryHigh=infinity, RuntimeMaxSec=600s puis helper commun
+confiner_validation.py --delai 600 et cargo test ciblé -j4. Le poste utilise
+lui-même systemd-run ; une collision de nom de scope est observée à l’entrée,
+sans attribuer davantage la cause avant examen.
+
+[Brut conservé](../../lucivy/13-11-2026/preuves/shutdown-entree-refusee.log).
+Aucun compte de tests, aucun rouge TDD et aucune compilation observés.
+Conformément au GO « compilation/autre rouge STOP diagnostic, aucun retry »,
+aucune seconde tentative lancée. Porteur Lucivy ; reste : coordonner avec C7
+la correction de l’entrée (nom de scope explicite unique) et une nouvelle
+autorisation de qualification. La correction de production n’est pas entamée
+avant le rouge CPU attendu. Le ticket CI reste ouvert et sa cause non attribuée.
