@@ -94,11 +94,14 @@ struct Entree {
     trame: String,
 }
 
-/// Une fenêtre abonnée : ses sujets (tous si `None`), le dernier id envoyé.
+/// Une fenêtre abonnée : ses sujets (tous si `None`), le dernier id envoyé, et si c'est une
+/// fenêtre du navigateur (`GET /ide/flux`) ou un lecteur de l'hôte lui-même (la livraison
+/// Codex, les témoins).
 struct Abonne {
     sujets: Option<HashSet<String>>,
     dernier: u64,
     ecrivain: Box<dyn Write + Send>,
+    navigateur: bool,
 }
 
 impl Abonne {
@@ -173,7 +176,17 @@ impl Flux {
 
     /// **Abonne une fenêtre** : l'en-tête SSE, puis ce qu'elle a manqué depuis
     /// `depuis` (une `lacune` dite si le tampon ne le garde plus), puis la suite.
-    pub fn abonner(&self, mut ecrivain: Box<dyn Write + Send>, sujets: Option<HashSet<String>>, depuis: Option<u64>) {
+    pub fn abonner(&self, ecrivain: Box<dyn Write + Send>, sujets: Option<HashSet<String>>, depuis: Option<u64>) {
+        self.abonner_avec(ecrivain, sujets, depuis, false);
+    }
+
+    /// [`Self::abonner`] pour une fenêtre du navigateur (`GET /ide/flux`) : celles que
+    /// [`Self::fenetres`] compte.
+    pub fn abonner_une_fenetre(&self, ecrivain: Box<dyn Write + Send>, sujets: Option<HashSet<String>>, depuis: Option<u64>) {
+        self.abonner_avec(ecrivain, sujets, depuis, true);
+    }
+
+    fn abonner_avec(&self, mut ecrivain: Box<dyn Write + Send>, sujets: Option<HashSet<String>>, depuis: Option<u64>, navigateur: bool) {
         // Sous le verrou des abonnés : une publication qui tombe pendant le
         // rejeu attend, puis passe ; l'abonné saute ce qu'il a déjà eu.
         let mut abonnes = self.abonnes.lock().unwrap_or_else(|p| p.into_inner());
@@ -182,7 +195,7 @@ impl Flux {
         if ecrivain.write_all(entete).and_then(|_| ecrivain.flush()).is_err() {
             return;
         }
-        let mut abonne = Abonne { sujets, dernier: 0, ecrivain };
+        let mut abonne = Abonne { sujets, dernier: 0, ecrivain, navigateur };
         if let Some(depuis) = depuis {
             abonne.dernier = depuis;
             let tampon: Vec<Arc<Entree>> = self.tampon.lock().unwrap_or_else(|p| p.into_inner()).iter().cloned().collect();
@@ -216,9 +229,10 @@ impl Flux {
             .retain_mut(|a| a.ecrivain.write_all(b": battement\n\n").and_then(|_| a.ecrivain.flush()).is_ok());
     }
 
-    /// Combien de fenêtres écoutent.
+    /// Combien de fenêtres du navigateur écoutent (une par navigateur quand ses onglets
+    /// partagent le flux, une par page sinon) ; les lecteurs de l'hôte n'y comptent pas.
     pub fn fenetres(&self) -> usize {
-        self.abonnes.lock().unwrap_or_else(|p| p.into_inner()).len()
+        self.abonnes.lock().unwrap_or_else(|p| p.into_inner()).iter().filter(|a| a.navigateur).count()
     }
 
     /// **Relaie le bus d'un backend** qui vient de s'ouvrir : un fil par
@@ -515,7 +529,7 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             let sujets = param("sujets").map(|s| s.split(',').filter(|x| !x.is_empty()).map(str::to_string).collect::<HashSet<_>>());
             let depuis = entete(&request, "Last-Event-ID").map(str::to_string).or_else(|| param("depuis")).and_then(|v| v.trim().parse::<u64>().ok());
             let ecrivain = request.into_writer();
-            host.ide_flux().abonner(ecrivain, sujets, depuis);
+            host.ide_flux().abonner_une_fenetre(ecrivain, sujets, depuis);
         }
         // **La page nouvelle** (page 08 du 25 octobre 2026) : le bundle React commité
         // sous templates/ide/app, embarqué avec les gabarits et servi d'ici — jamais
