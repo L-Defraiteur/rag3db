@@ -169,3 +169,21 @@ aucune seconde tentative lancée. Porteur Lucivy ; reste : coordonner avec C7
 la correction de l’entrée (nom de scope explicite unique) et une nouvelle
 autorisation de qualification. La correction de production n’est pas entamée
 avant le rouge CPU attendu. Le ticket CI reste ouvert et sa cause non attribuée.
+
+### Recette corrigée avant seconde entrée (GO C7)
+
+C7 attribue la collision au systemd-run immédiatement imbriqué dans poste,
+avec réutilisation du même PID exec pour les noms automatiques. Correction
+limitée au lanceur : retirer le scope intérieur, ne changer ni test ni source.
+GO reçu pour cette entrée corrigée seule, fenêtre unique 600 s après vrai poste.
+Target toujours absent et confineur non entré vérifiés ; ancien scope inactif,
+SubState dead, ControlGroup vide. Aucun processus Cargo/témoin à arrêter.
+
+Argv corrigé : `env POSTE_MEM_MAX=8G RAG3WEAVER_BUILD_MEMORY_HIGH=0 poste lourd python3 confiner_validation.py lancer --delai 600 --preuves <cache>/confinement-corrige -- python3 <cache>/verifier-et-lancer.py`.
+Le wrapper lit cgroup réel `memory.max=8589934592` et `memory.high=max`,
+les publie avant exec, refuse sinon, puis exec exactement
+`cargo test -j4 -p luciole --lib pool::tests::shutdown_waits_for_worker_destruction -- --exact --nocapture`.
+Environnement Cargo : CARGO_BUILD_JOBS=4, CARGO_TARGET_DIR privé neuf
+`~/.cache/rag3weaver-build/cx-lucivy-shutdown-target-13nov`.
+Source inchangée `273b7c6ccaff5b3d49507ca62aebb5bfe87095fa`.
+Journal et contrôle PID/start hors worktree, aucune relance après autre rouge.
