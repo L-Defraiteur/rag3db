@@ -2035,3 +2035,13 @@ Adaptation du débit/origine/sonde à la capacité réelle : None rend débit in
 aucune sonde et refus d'une mesure sans modèle ; Some et Some(Absent) gardent
 leur sémantique antérieure. Le témoin lexical existant vérifie ces portes.
 Aucune compilation/runtime encore jouée,9c12 reste un état de revue non qualifié.
+
+
+Lecture statique finale avant lancement : l'ouverture publiée compare les valeurs
+à la tête mais ne relie pas encore le relevé qualified_result appliqué à cette
+tête ; une ligne de journal supprimée pourrait aussi passer pour l'absence de
+journal du P0. Même périmètre, correctif avant qualification : absence de journal
+permise seulement à la publication de création, et résultat appliqué complet
+(préfixe final, valeurs/schema/checkpoints) obligé à correspondre à la tête.
+Témoin de corruption après publication (résultat modifié ou ligne retirée),
+refus RO sans nouvelle écriture ; aucun Cargo/runtime exécuté à ce constat.
