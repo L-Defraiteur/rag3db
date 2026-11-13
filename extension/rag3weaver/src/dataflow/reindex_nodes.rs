@@ -339,7 +339,11 @@ impl Node for ReindexFileNode {
                     fichiers.iter().map(|(p, c)| (p.clone(), c.is_some(), Ok(o))).collect()
                 }
                 Err(e) => {
-                    ctx.warn(&format!("ReindexFileNode : le lot de {} fichier(s) a échoué ({e}) ; repris un à un", fichiers.len()));
+                    let message = format!("ReindexFileNode : le lot de {} fichier(s) a échoué ({e}) ; repris un à un", fichiers.len());
+                    // Au journal de l'hôte aussi : la reprise un à un rend chaque
+                    // fichier visible à son tour, et la ligne du lot ne la dit pas.
+                    eprintln!("[montre] {message}");
+                    ctx.warn(&message);
                     fichiers
                         .iter()
                         .map(|(p, c)| {
