@@ -205,4 +205,33 @@ TEST_F(RolledBackInsertReopenTest, ScopesCopiedInARolledBackTransactionLeaveNoRe
     EXPECT_EQ(row("MATCH (:Content)-[r:DERIVED_FROM]->(:Scope) RETURN count(r);"), "128\n");
 }
 
+// Ce que la base de rag3weaver montre (sonde du 13 novembre sur la base gardée par arbre
+// principal) : 128 relations du paquet défait survivent sur disque. Dans ce paquet, chaque MERGE de
+// relations est suivi d'un COPY dans une autre table de nœuds, dans la même transaction.
+TEST_F(RolledBackInsertReopenTest, ACopyAfterRelInsertsInARolledBackTransactionLeavesNoRel) {
+    run("CREATE NODE TABLE Symbol(uuid STRING, PRIMARY KEY(uuid));");
+    run("BEGIN TRANSACTION;");
+    run("COPY Scope FROM (UNWIND range(10, 41) AS i RETURN 'n' + CAST(i AS STRING) AS uuid);");
+    run("UNWIND range(128, 159) AS i MERGE (c:Content {uuid: 'c' + CAST(i AS STRING)}) SET c.body "
+        "= 'b';");
+    run("UNWIND range(128, 159) AS i MATCH (a:Content {uuid: 'c' + CAST(i AS STRING)}) MATCH "
+        "(b:Scope {uuid: 'n' + CAST(i - 118 AS STRING)}) MERGE (a)-[r:DERIVED_FROM]->(b) SET "
+        "r.hash = 'h';");
+    run("COPY Symbol FROM (UNWIND range(0, 31) AS i RETURN 'y' + CAST(i AS STRING) AS uuid);");
+    run("ROLLBACK;");
+    EXPECT_EQ(row("MATCH ()-[r:DERIVED_FROM]->() RETURN count(r);"), "128\n") << "before reopening";
+    reopen();
+    EXPECT_EQ(row("MATCH ()-[r:DERIVED_FROM]->() RETURN count(r);"), "128\n") << "after reopening";
+    run("BEGIN TRANSACTION;");
+    run("UNWIND range(10, 41) AS i MERGE (s:Scope {uuid: 'n' + CAST(i AS STRING)});");
+    EXPECT_EQ(row("MATCH (d)-[r:DERIVED_FROM]->(s:Scope) WHERE s.uuid STARTS WITH 'n' RETURN "
+                  "count(r);"),
+        "0\n")
+        << "rels of the rolled-back transaction came back at the places of the new Scope";
+    EXPECT_EQ(row("UNWIND range(10, 41) AS i MATCH (d:Content)-[r:DERIVED_FROM]->(s:Scope {uuid: "
+                  "'n' + CAST(i AS STRING)}) SET r.hash = '' RETURN count(r);"),
+        "0\n");
+    run("ROLLBACK;");
+}
+
 } // namespace
