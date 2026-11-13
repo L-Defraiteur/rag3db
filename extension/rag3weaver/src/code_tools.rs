@@ -313,16 +313,39 @@ impl FileSource for WorkingTree {
         }
     }
     /// Écriture atomique : fichier temporaire à côté, puis renommage — un
-    /// lecteur concurrent voit l'ancien ou le nouveau, jamais un mélange.
+    /// lecteur concurrent voit l'ancien ou le nouveau, jamais un mélange. Le
+    /// temporaire a un nom unique (deux écritures du même fichier ne se marchent
+    /// pas dessus), prend le mode de l'ancien fichier (un script `+x` le reste),
+    /// est rendu durable (`fsync`) avant le renommage, et s'efface sur une erreur
+    /// (ticket du 13 novembre 2026, une écriture de l'atelier perd le mode du fichier).
     fn write(&self, path: &str, content: &str) -> Result<(), String> {
+        use std::io::Write;
+        static SUIVANT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         check_relative(path)?;
         let full = full_path_within(&self.root, path)?;
-        if let Some(parent) = full.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        let parent = full.parent().map(Path::to_path_buf).unwrap_or_else(|| self.root.clone());
+        std::fs::create_dir_all(&parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        let nom = full.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let n = SUIVANT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let tmp = parent.join(format!(".{nom}.rag3weaver-{}-{n}.tmp", std::process::id()));
+        let ecrire = || -> Result<(), String> {
+            let mut f = std::fs::File::create(&tmp).map_err(|e| format!("{}: {e}", tmp.display()))?;
+            f.write_all(content.as_bytes()).map_err(|e| format!("{}: {e}", tmp.display()))?;
+            if let Ok(ancien) = std::fs::metadata(&full) {
+                std::fs::set_permissions(&tmp, ancien.permissions()).map_err(|e| format!("{}: {e}", tmp.display()))?;
+            }
+            f.sync_all().map_err(|e| format!("{}: {e}", tmp.display()))?;
+            std::fs::rename(&tmp, &full).map_err(|e| format!("{}: {e}", full.display()))?;
+            if let Ok(d) = std::fs::File::open(&parent) {
+                let _ = d.sync_all();
+            }
+            Ok(())
+        };
+        let r = ecrire();
+        if r.is_err() {
+            let _ = std::fs::remove_file(&tmp);
         }
-        let tmp = full.with_extension(format!("{}.rag3weaver-tmp", full.extension().and_then(|e| e.to_str()).unwrap_or("")));
-        std::fs::write(&tmp, content).map_err(|e| format!("{}: {e}", tmp.display()))?;
-        std::fs::rename(&tmp, &full).map_err(|e| format!("{}: {e}", full.display()))
+        r
     }
 }
 
