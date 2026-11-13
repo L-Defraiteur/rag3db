@@ -131,3 +131,12 @@ encore chaque contenu identique.
 - Une question à trancher avant 2b-B : **l'index de code réel adopte-t-il le raccord physique**,
   aujourd'hui interdit (« no adoption of existing storage »), ou 2b-B reste-t-il sur un index neuf ?
   Sans l'un ou l'autre, aucune base de Lucie n'aura de vue.
+
+## 7. Ce que Lucie a tranché (13 novembre 2026, par c7)
+
+**Les vues se bâtissent sur l'index de code réel** : les versions par contenu, puis les couches et les
+générations, ajoutées lot par lot. L'index neuf de Codex (le raccord physique BM25) reste un banc
+d'essai de ses mécanismes, pas la base des vues. La question du § 6 est donc close : pas d'adoption
+du raccord physique par l'index réel pour les vues. Arbre principal poursuit le lot 1a dans ce sens
+(`docs/arbre-principal/13-11-2026/29-contrat-de-la-version-de-scope.md`) ; everything declarative
+relit les lots 1a et 1b.
