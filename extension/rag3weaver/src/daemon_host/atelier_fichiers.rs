@@ -406,7 +406,15 @@ impl DaemonHost {
         let mut trouves: Vec<(&Worktree, String, u64)> = Vec::new();
         for w in &worktrees {
             let args = json!({ "name": name, "path": rel_voulu.clone().unwrap_or_default(), "limit": 1, "format": "json" });
-            let Ok(Ok(v)) = self.with_backend(&w.hosted, |b| b.call("usages", args)) else { continue };
+            // Une panne ne prouve ni l'absence ni l'unicité parmi les autres arbres.
+            // Ticket : docs/everything-declarative/tickets/2026-11-13-read-scope-masque-les-erreurs-de-lecture-des-worktrees.md.
+            let contexte = format!(
+                "read_scope « {name} » : recherche incomplète ; usages du worktree {} (backend {}, manifeste {})",
+                w.racine.display(), w.hosted.id, w.hosted.manifest.display()
+            );
+            let v = self.with_backend(&w.hosted, |b| b.call("usages", args))
+                .map_err(|e| format!("{contexte} : accès au backend en échec : {e}"))?
+                .map_err(|e| format!("{contexte} : appel usages en échec : {e}"))?;
             for d in json_de(&v)["definitions"].as_array().into_iter().flatten() {
                 if let (Some(p), Some(l)) = (d["path"].as_str(), d["line"].as_u64()) {
                     trouves.push((w, p.to_string(), l));
@@ -767,6 +775,95 @@ pub(super) mod tests {
         let refus = a.appeler("read_scope", json!({ "name": "rien", "path": "notes.txt" })).unwrap_err();
         assert!(refus.contains("sans index") && refus.contains("read_file"), "sous la racine, read_scope dit pourquoi : {refus}");
         attendre_l_index(&a, &depot);
+    }
+
+    /// Inscrire une déclaration complète dans les racines privées du vrai hôte,
+    /// sans lancer d'index. Les outils choisis déterminent la panne observée.
+    fn manifeste_de_scope_en_panne(a: &Atelier, nom: &str, outils: Value) -> PathBuf {
+        let roots = a.host.racines_de_code().unwrap();
+        let racine = a.racine.join(nom);
+        let manifeste = roots.manifest(nom);
+        std::fs::create_dir_all(&racine).unwrap();
+        std::fs::create_dir_all(&roots.data).unwrap();
+        std::fs::create_dir_all(manifeste.parent().unwrap()).unwrap();
+        std::fs::write(&manifeste, serde_json::to_vec_pretty(&json!({
+            "version": 1, "kind": "code", "name": nom,
+            "database": roots.data.join(format!("{nom}.rag3db")),
+            "entities": {}, "tools": outils,
+            "workspace": { "source": "working_tree", "root": racine }
+        })).unwrap()).unwrap();
+        manifeste
+    }
+
+    #[test]
+    fn read_scope_preserves_a_backend_error_instead_of_claiming_absence() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let manifeste = manifeste_de_scope_en_panne(&a, "ouverture-en-panne", json!({
+            "usages": { "graph": "read-scope-ouverture-introuvable.mmd" }
+        }));
+        assert_eq!(a.host.worktrees_attaches().len(), 1);
+        let erreur = a.appeler("read_scope", json!({ "name": "deux" })).unwrap_err();
+        assert!(erreur.contains("read-scope-ouverture-introuvable.mmd"), "l'erreur initiale reste lisible : {erreur}");
+        assert!(erreur.contains("accès au backend en échec") && erreur.contains("recherche incomplète"), "{erreur}");
+        assert!(erreur.contains("deux") && erreur.contains("usages") && erreur.contains(manifeste.to_str().unwrap()), "{erreur}");
+        assert!(!erreur.contains("aucun scope"), "une panne n'est pas une absence : {erreur}");
+    }
+
+    #[test]
+    fn read_scope_preserves_a_usages_error_instead_of_claiming_absence() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let manifeste = manifeste_de_scope_en_panne(&a, "usages-non-expose", json!({}));
+        assert_eq!(a.host.worktrees_attaches().len(), 1);
+        let erreur = a.appeler("read_scope", json!({ "name": "deux" })).unwrap_err();
+        assert!(erreur.contains("unexposed tool usages") && erreur.contains("appel usages en échec"), "{erreur}");
+        assert!(erreur.contains("recherche incomplète") && erreur.contains("deux") && erreur.contains(manifeste.to_str().unwrap()), "{erreur}");
+        assert!(!erreur.contains("aucun scope"), "{erreur}");
+    }
+
+    #[test]
+    fn read_scope_refuses_unproven_uniqueness_after_a_real_definition() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let depot = petit_depot(&a.racine);
+        a.appeler("attach_worktree", json!({ "path": depot })).unwrap();
+        attendre_l_index(&a, &depot);
+        let trouve = a.appeler("read_scope", json!({ "name": "deux" })).unwrap();
+        assert!(Atelier::texte(&trouve).contains("pub fn deux()"), "le premier index répond réellement : {trouve}");
+
+        let manifeste = manifeste_de_scope_en_panne(&a, "zz-usages-indisponible", json!({}));
+        let arbres = a.host.worktrees_attaches();
+        assert_eq!(arbres.len(), 2);
+        let premier = arbres.iter().position(|w| w.racine == depot.canonicalize().unwrap()).unwrap();
+        let dernier = arbres.iter().position(|w| w.hosted.manifest == manifeste.canonicalize().unwrap()).unwrap();
+        assert!(premier < dernier, "la définition valide est accumulée AVANT la panne");
+        let erreur = a.appeler("read_scope", json!({ "name": "deux" })).unwrap_err();
+        assert!(erreur.contains("recherche incomplète") && erreur.contains("unexposed tool usages"), "{erreur}");
+        assert!(erreur.contains(manifeste.to_str().unwrap()), "le worktree en panne est nommé : {erreur}");
+        assert!(!erreur.contains("aucun scope"), "{erreur}");
+        attendre_l_index(&a, &depot);
+    }
+
+    #[test]
+    fn read_scope_keeps_real_absence_and_ambiguity_after_complete_queries() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let premier = petit_depot(&a.racine.join("a"));
+        // L'inscription nomme les arbres par leur dernier segment : deux noms distincts.
+        let second = a.racine.join("autre-depot");
+        std::fs::rename(petit_depot(&a.racine.join("b")), &second).unwrap();
+        for depot in [&premier, &second] {
+            a.appeler("attach_worktree", json!({ "path": depot })).unwrap();
+            attendre_l_index(&a, depot);
+        }
+        let ambigu = a.appeler("read_scope", json!({ "name": "deux" })).unwrap_err();
+        assert!(ambigu.contains("défini 2 fois") && ambigu.contains("donnez `path`"), "{ambigu}");
+        assert!(!ambigu.contains("recherche incomplète"), "{ambigu}");
+        let absent = a.appeler("read_scope", json!({ "name": "absent_des_deux_arbres" })).unwrap_err();
+        assert!(absent.contains("aucun scope") && absent.contains("absent_des_deux_arbres"), "{absent}");
+        assert!(!absent.contains("recherche incomplète"), "{absent}");
+        for depot in [&premier, &second] { attendre_l_index(&a, depot); }
     }
 
     /// **L'empreinte de lecture** (Lucie : replace_lines et insert_lines exigent d'avoir lu

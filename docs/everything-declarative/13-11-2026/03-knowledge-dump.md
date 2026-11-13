@@ -67,3 +67,10 @@ l'erreur ; absence et unicité multi-worktree peuvent être fausses. Constat
 statique indépendant du FAILED physique sans panic capturée. Correction future
 à coordonner avec C7 ; seule sa publication documentaire est réalisée ici,
 sans Cargo/runtime ni reprise du lot ED terminé.
+
+Préparation isolée read_scope autorisée C7 : W/branchecx-ed-read-scope-erreurs
+base4f6, un seul Rust atelier_fichiers.rs, propagation distincte des deux Result
+avec contexte/cause. Quatre nouveaux témoins vrais hôtes/dépôts écrits, non
+compilés. Noms des deux dépôts distincts pour l'inscription code_tree (nom par
+basename). Attendre revue/coordination avant toute compilation/ressource lourde ;
+pas d'intégration code pendant la globale physique, pas de réemploi ancien target.
