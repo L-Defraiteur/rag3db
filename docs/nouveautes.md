@@ -15,7 +15,7 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
   `symbol_hierarchy_depth`, optionnel et à zéro par défaut, ajoute le contenant
   puis ses parents par inclusion de plages indexées, dans les outils code et atelier.
   Positions UTF-8, fraîcheur, ambiguïtés et coupures de budget restent visibles ;
-  la couverture dépend des scopes réellement indexés. Source qualifiée6786c03b5.
+  la couverture dépend des scopes réellement indexés. Livré d3f5a264d (source qualifiée6786c03b5).
 
 - **13 nov. — Le manifeste peut démarrer son modèle dense local.**
   `models.embed.activation` compose une acquisition partagée, l’annulation

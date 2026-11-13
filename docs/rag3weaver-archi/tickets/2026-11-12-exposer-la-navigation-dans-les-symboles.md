@@ -1,6 +1,6 @@
 # Exposer la navigation dans les symboles
 
-- **État** : ouvert ; première tranche intégrée par 3edbb8475 ; grep enrichi qualifié sur6786c03b5, revue/intégration à terminer ; couverture étendue reste ouverte.
+- **État** : ouvert ; première tranche intégrée par 3edbb8475 ; grep enrichi intégré par d3f5a264d, qualifié sur6786c03b5 ; couverture étendue reste ouverte.
 - **Famille** : produit
 - **Gravité** : capacité manquante ; l'agent doit pouvoir explorer des arbres de code sans lire tous les corps.
 - **Atteignable en service** : oui sur master depuis 3edbb8475 via outil code et relais atelier ; outline reste disponible.
@@ -543,3 +543,30 @@ vérifié aux deux postes, zéro session relevé ; conserver jusqu'au tour de pu
 puis recontrôler identité/zéro session avant drop. Rapport de garde frais6f3dfceb…
 et archives fidèles requis au retrait, sous-module privé PC inclus.
 Revue finale/tour C7 encore requis : aucun master de la suite grep publié.
+
+## Livraison et nettoyage attestés
+
+Grep enrichi intégré sur masterd3f5a264d7fb7f77775644f549ff77267e6517d6 après
+revue finale C7/Mémoire et tour explicite. Dernier fetch, statut propre, absence de
+rebase et origin/master=HEAD lus. Code de la source qualifiée6786 strictement
+identique au code publié ; seuls MD après le ciblé/la qualification complète.
+README et nouveauté livrés ; ticket parent toujours ouvert pour couverture étendue.
+
+Nettoyage immédiat aux deux postes : nouvelle garde intégrée6f3dfceb… VERT,
+archives administratives fidèles (sous-module privé PC inclus), quiescence.
+W cx-wt-grep-symboles, target cx-archi-target, scratch cx-gs et branches locales
+cx-archi-grep-symboles-1..4 retirés. Branches distantes, logs, preuves et trois ELF
+archivés/hashes vérifiés aux deux postes conservés. Preuves de retrait :
+cx-grep-symboles-nettoyage-{pc,portable}-20261113 dans le cache de build.
+
+PG privée OID1972072 : dumpSHA39b49ca482491a619b2d11f7337dfbba365b6255bd7e271d28c4f8776bc9fe44
+vérifié, identité/propriétaire et zéro session revérifiés avant DROP ; absence
+de la base confirmée après. Aucune ressource lourde ni7879 gardée par Archi.
+Le daemon personnel n'a pas été posé. Pour la suite, partir d'un nouveau lot
+sur master courant ; les anciennes ressources de validation sont retirées.
+
+ED et Arbre informés directement du hash/code/retrait. La recette de compensation
+CREATE demandée par ED est conservée aux deux postes dans le dossier complément/
+transmission-ed : scripts exacts/hash/profils/gardes et manifest-reprise.json.
+Elle exige l'adaptation à son SHA/ELF/racines et à son nouveau budget ; nos chemins
+retirés et notre échéance ne sont pas des ressources à réutiliser.
