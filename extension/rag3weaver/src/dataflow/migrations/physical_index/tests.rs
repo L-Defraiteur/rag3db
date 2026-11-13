@@ -659,6 +659,34 @@ fn frozen_program_codec_binds_sources_records_and_probe_inputs() {
     value["program"]["steps"][0]["content"] =
         serde_json::json!("graph TD\nx[\"CypherNode(query='RETURN 1')\"]\n");
     assert!(StoredInitialPlan::restore(&value.to_string()).is_err());
+
+    // Native counterexample: omitting propertyless relations, or deduplicating
+    // their endpoints, would make one of these distinct states indistinguishable.
+    let catalog = index.catalog().unwrap();
+    let cat = catalog.lock().unwrap();
+    for query in [
+        "CREATE NODE TABLE SnapshotWitnessNode(_uuid STRING, PRIMARY KEY(_uuid))",
+        "CREATE REL TABLE SnapshotWitnessEdge(FROM SnapshotWitnessNode TO SnapshotWitnessNode)",
+        "CREATE (:SnapshotWitnessNode {_uuid:'left'}), (:SnapshotWitnessNode {_uuid:'right'})",
+    ] { cat.execute_raw(query).unwrap(); }
+    assert!(cat.execute_raw("CALL table_info('SnapshotWitnessEdge') RETURN *").unwrap().rows.is_empty());
+    let zero = PhysicalSnapshot::read(cat.conn()).unwrap();
+    assert!(zero.logical_rows["SnapshotWitnessEdge"].is_empty());
+    let add = "MATCH (a:SnapshotWitnessNode), (b:SnapshotWitnessNode) WHERE a._uuid='left' AND b._uuid='right' CREATE (a)-[:SnapshotWitnessEdge]->(b)";
+    cat.execute_raw(add).unwrap();
+    let one = PhysicalSnapshot::read(cat.conn()).unwrap();
+    assert_eq!(one.logical_rows["SnapshotWitnessEdge"].len(), 1);
+    cat.execute_raw(add).unwrap();
+    let two = PhysicalSnapshot::read(cat.conn()).unwrap();
+    let edges = &two.logical_rows["SnapshotWitnessEdge"];
+    assert_eq!(edges.len(), 2);
+    assert_eq!(edges[0], edges[1], "equal endpoints retain their multiplicity");
+    assert_eq!(zero.schema, one.schema);
+    assert_eq!(one.schema, two.schema);
+    assert_ne!(zero.logical_fingerprint().unwrap(), one.logical_fingerprint().unwrap());
+    assert_ne!(one.logical_fingerprint().unwrap(), two.logical_fingerprint().unwrap());
+    assert_ne!(zero.logical_fingerprint().unwrap(), two.logical_fingerprint().unwrap());
+    println!("RELATION_WITNESS {}", serde_json::json!({"table":"SnapshotWitnessEdge","properties":0,"rows":[0,1,2],"same_endpoints_preserved":true}));
 }
 
 fn root_files(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
