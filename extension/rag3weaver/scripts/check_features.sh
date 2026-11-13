@@ -68,7 +68,7 @@ for jeu in "${JEUX[@]}"; do
   nom="${jeu:-sans-feature}"
   sortie=/dev/null
   [ -n "${CHECK_FEATURES_LOGS:-}" ] && sortie="$CHECK_FEATURES_LOGS/${nom//,/+}.log"
-  if timeout "${CHECK_FEATURES_TIMEOUT:-1800}" cargo check --tests --no-default-features --features "$jeu" > "$sortie" 2>&1; then
+  if timeout "${CHECK_FEATURES_TIMEOUT:-1800}" python3 -B "$ICI/scripts/cargo_garde.py" check --tests --no-default-features --features "$jeu" > "$sortie" 2>&1; then
     echo "VERT  $nom"
   else
     echo "ROUGE $nom   (cargo check --tests --no-default-features --features $jeu)"
