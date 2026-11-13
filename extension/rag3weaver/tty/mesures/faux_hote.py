@@ -154,6 +154,11 @@ class Serveur(socketserver.ThreadingMixIn, http.server.HTTPServer):
     allow_reuse_address = True
 
 
+import os
+
+# Le pid écrit par le faux hôte lui-même : celui qui l'arrête vise ce processus, pas un lanceur.
+with open(os.path.join(os.path.dirname(DAEMON_JSON), "faux.pid"), "w") as f:
+    f.write(str(os.getpid()))
 with open(DAEMON_JSON, "w") as f:
     json.dump({"address": f"127.0.0.1:{PORT}", "pid": 0, "token": JETON, "build": "faux"}, f)
 Serveur(("127.0.0.1", PORT), Gestion).serve_forever()
