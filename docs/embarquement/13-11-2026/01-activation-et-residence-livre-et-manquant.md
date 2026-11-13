@@ -47,6 +47,16 @@ luciepc, card2.
 7. **Les services de card2 eux-mêmes** : les trois unités systemd sont résidentes en dur
    (`Restart=always`) ; aucune n'est encore déclarée par une `Activation`.
 
+## Fait depuis : les baux d'usage (master `7042128d0`)
+
+Le fournisseur compte ses baux et ses calculs en cours et le dit dans `/sante`
+(`usage: { baux, en_cours }`) ; l'activation prend un bail par client remis ; `/sante` se
+recalcule à chaque demande. **Pour les trois services de luciepc, la pose de ce soir ne change
+rien tant qu'ils ne sont pas redéployés** : ils tournent sur un binaire d'avant les baux, et les
+clients tolèrent un tel fournisseur (pas de compte, pas d'erreur). Décisions de c7, à relire par
+Lucie : les fournisseurs à luciepc sont les unités systemd, et l'éviction ne touchera jamais les
+services posés à la main (7878, 7879, 7880, 7882).
+
 ## Ordre proposé
 
 Chacun se mesure avant le suivant ; aucun ne change les services en place sans fenêtre annoncée.
