@@ -62,12 +62,12 @@ class GardeWorktreeTests(unittest.TestCase):
         shutil.copytree(self.admin, target, symlinks=True)
         return target
 
-    def check(self, archives=(), report=None):
+    def check(self, archives=(), report=None, cwd=None):
         args = [sys.executable, str(SCRIPT), '--depot', str(self.repo),
                 '--worktree', str(self.parent), '--rapport', str(report or self.report)]
         for source, copy in archives:
             args += ['--archive', str(source), str(copy)]
-        return subprocess.run(args, capture_output=True, text=True)
+        return subprocess.run(args, capture_output=True, text=True, cwd=cwd)
 
     def test_partage_refuse_meme_archive_et_ne_change_rien(self):
         module = self.module()
@@ -85,6 +85,33 @@ class GardeWorktreeTests(unittest.TestCase):
         after = (fingerprint(other), fingerprint(admin), fingerprint(self.admin),
                  git(other, 'show-ref'), git(other, 'rev-parse', 'HEAD'))
         self.assertEqual(before, after)
+
+    def test_desinitialise_n_attribue_pas_le_cwd_et_ne_change_rien(self):
+        module = self.module()
+        module_admin = Path(git(module, 'rev-parse', '--absolute-git-dir'))
+        git(self.parent, 'submodule', 'deinit', '--all')
+        archive = self.archive()
+        before = (fingerprint(self.parent), fingerprint(self.admin))
+        observations = []
+        for name in ('cwd-exterieur-a', 'cwd-exterieur-b'):
+            cwd = self.base / name
+            cwd.mkdir()
+            raw = subprocess.run(['git', '--git-dir', str(module_admin), 'worktree', 'list', '--porcelain'], cwd=cwd, capture_output=True, text=True, check=True)
+            report = self.base / (name + '.json')
+            result = self.check([(self.admin, archive)], report=report, cwd=cwd)
+            observations.append(dict(cwd=str(cwd), git_brut=raw.stdout, code=result.returncode,
+                                     rapport=json.loads(report.read_text())))
+        after = (fingerprint(self.parent), fingerprint(self.admin))
+        preuves = os.environ.get('GARDE_WORKTREE_TEST_PREUVES')
+        if preuves:
+            root = Path(preuves)
+            root.mkdir(parents=True, exist_ok=True)
+            (root/'deinit-cwd.json').write_text(json.dumps(dict(observations=observations, sources_inchangees=before == after), ensure_ascii=False, indent=2))
+        self.assertEqual(before, after)
+        for row in observations:
+            self.assertEqual(row['code'], 0, json.dumps(row, ensure_ascii=False))
+            self.assertEqual(row['rapport']['verdict'], 'VERT')
+            self.assertNotIn(row['cwd'], json.dumps(row['rapport'], ensure_ascii=False))
 
     def test_nominal_administration_archivee_fidelement(self):
         self.module()
