@@ -588,3 +588,8 @@ qu’au retour du cas ; un Fence bloqué peut laisser le diagnostic en mémoire
 jusqu’au kill600. Préparer stdout direct vers rawfile ouvert AVANTPopen et
 identité du cas persistée AVANTwait, lecture/validation seulement aprèsfin.
 Même mécanisme A/B ; pas de replay, ni de mesure autorisée par ce delta.
+
+Delta préparé : rawCAS ouvert avantPopen, stdoutdirectfichier (pasPIPE), identité
+source/exeSHA/PID/start/argv/étaten-cours fsync avantwait. Panique avantFencebloqué
+reste écrite surdisque même si CF600 tue tout ; état final/rc/SHA complétés après
+retour seulement, firstred inchangé. Aucunrun/affinité ni productionLuciole modifié.

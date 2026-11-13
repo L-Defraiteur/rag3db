@@ -85,17 +85,25 @@ with (b / 'samples.jsonl').open('w') as output:
                             block=block, argv=argv, exe_sha256=meta['exe_sha256'][variant],
                             cpus=sorted(cpus), load=load, stderr='/dev/null')
                 prefix = f"cas-{len(rows)+1:03d}"
-                child = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-                case['pid'] = child.pid
-                try:
-                    case['start'] = Path(f'/proc/{child.pid}/stat').read_text().rsplit(') ', 1)[1].split()[19]
-                except OSError as error:
-                    case['start'] = None; case['start_error'] = repr(error)
-                stdout, _ = child.communicate()
-                case['code'] = child.returncode
-                # Freeze raw evidence BEFORE rc/JSON/schema/count checks.
-                with (b / (prefix + '.stdout')).open('w') as raw:
-                    raw.write(stdout); raw.flush(); os.fsync(raw.fileno())
+                raw_path = b / (prefix + '.stdout')
+                # Direct file output survives a worker panic followed by a
+                # blocked Fence and an eventual common-supervisor timeout.
+                # Persist identity BEFORE waiting; no PIPE buffer can hide it.
+                with raw_path.open('w') as raw:
+                    child = subprocess.Popen(argv, stdout=raw, stderr=subprocess.DEVNULL, text=True)
+                    case['pid'] = child.pid
+                    try:
+                        case['start'] = Path(f'/proc/{child.pid}/stat').read_text().rsplit(') ', 1)[1].split()[19]
+                    except OSError as error:
+                        case['start'] = None; case['start_error'] = repr(error)
+                    case['etat'] = 'en cours'; case['code'] = None
+                    with (b / (prefix + '.json')).open('w') as identity:
+                        json.dump(case, identity, indent=2)
+                        identity.flush(); os.fsync(identity.fileno())
+                    case['code'] = child.wait()
+                    case['etat'] = 'termine'
+                    raw.flush(); os.fsync(raw.fileno())
+                stdout = raw_path.read_text()
                 case['stdout_sha256'] = hashlib.sha256(stdout.encode()).hexdigest()
                 (b / (prefix + '.json')).write_text(json.dumps(case, indent=2))
                 def case_red(reason):

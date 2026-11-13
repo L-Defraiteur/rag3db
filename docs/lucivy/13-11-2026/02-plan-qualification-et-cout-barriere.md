@@ -120,3 +120,9 @@ uniquement en cas de panique. stderr reste vers /dev/null pour les diagnostics
 pinned volumineux, avec la limite de coût déjà notée. Aucun replay pour retrouver
 une raison perdue ; aucun diagnostic normal ajouté dans la boucle chronométrée.
 Pilote et hook préparés seulement, aucun build ni MESURE exécutés.
+
+Persistance sur fin forcée : rawfile ouvert avant Popen, stdout dirigé directement
+vers ce fichier (aucun PIPE/communicate pour les cas) ; identité PID/start/source
+et état en cours fsync avant wait. Si Fence bloque, le hookpanic déjà écrit
+reste sur disque et le confineur600 conserve le motif de timeout et les restes.
+Lecture JSON et SHA ont lieu seulement après la fin ; pas de second lancement.
