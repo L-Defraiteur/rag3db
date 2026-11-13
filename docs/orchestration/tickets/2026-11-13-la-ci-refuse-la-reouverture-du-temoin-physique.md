@@ -580,3 +580,11 @@ sur panique, installé avant échauffement/chronos. stderrDEVNULL maintenu pour
 ne pas générer des logs pinned énormes ; coût formatage/syscall reste une limite.
 Pas de replay, aucun nouveau code production luciole, ni exécution MESURE/build.
 Reste RO nouveau couple pilote/hook avant GO600 et coordination explicite4CPU.
+
+### Réserve ED MESURE6cad : persistance avant fin forcée
+
+HOLD exécution confirmé. stdoutPIPE+communicate ne conserve le diagnosticpanic
+qu’au retour du cas ; un Fence bloqué peut laisser le diagnostic en mémoire
+jusqu’au kill600. Préparer stdout direct vers rawfile ouvert AVANTPopen et
+identité du cas persistée AVANTwait, lecture/validation seulement aprèsfin.
+Même mécanisme A/B ; pas de replay, ni de mesure autorisée par ce delta.
