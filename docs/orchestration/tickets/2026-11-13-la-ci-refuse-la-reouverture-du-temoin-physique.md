@@ -470,3 +470,22 @@ immuable et arrêt du seul groupe attribué PID/start créé par le pilote, nett
 commun. Vérifier le même reçu900 actif et son reste avant chaque commande,
 sans reset. Aucune nouvelle exécution autorisée ; orchestration mesure encore
 à matérialiser, harnais source seul ne vaut pas pilote de mesure opérationnel.
+
+### Pilote streaming publié et simulation factice4/0
+
+Pilote remplacé après réserve : lecture continue, pattern libtest qualifié65ad
+(`test...FAILED` ou `FAILED` autonome), pas panicked brut ; résumé FAILED aussi
+refusé. premier-rouge.json ouvert x/fsync avant arrêt attribué du groupe créé
+par Popen(start_new_session), PID/start vérifié racine non récoltée. Le confineur
+commun reste propriétaire du nettoyage final et du verdict de quiescence.
+Même reçu900 actif vérifié avant/après chaque commande, aucun reset ; empreintes
+des logs puis recontrôle échéance avant le résultat final provisoire du pilote.
+Ce résultat n’est vert global que si le confineur confirme ensuite code0/restes[].
+
+Source initiale publiée b9f5b25f7 avant simulation. Quatre témoins Python avec
+Popen/stop/PID entièrement factices :4passés/0échec en0,006s sous timeout60,
+aucun Cargo/rustc/cgroup/DB/service ni vrai enfant.
+[Brut simulateur](../../lucivy/13-11-2026/preuves/pilote-streaming-4.log).
+Correction finale purement de fin de fichier (ligne blanche) publiée ensuite ;
+le pilote plein reste HOLD jusqu’à RO/GO du nouveau couple exact. Sourcejuges3b
+reste inchangée, vert10FBD conservé, protocole de mesure non exécuté.

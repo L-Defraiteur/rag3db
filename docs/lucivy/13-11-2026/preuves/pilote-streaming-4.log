@@ -1,0 +1,9 @@
+ok.log rc 0
+.failed.log rc -15
+.compile.log rc 101
+.split.log rc -15
+.
+----------------------------------------------------------------------
+Ran 4 tests in 0.006s
+
+OK
