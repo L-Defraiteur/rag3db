@@ -66,9 +66,21 @@ jobs:
           workspaces: extension/rag3weaver
           key: check-features
 
+      # **La provenance du target restauré** (13 novembre 2026) : le cache rend target/ sans le
+      # marqueur de la garde des targets (scripts/garde_target.sh), qui refusait alors tout,
+      # avant le premier test. Le marqueur dit « le cache de la CI », et check_features passe
+      # par la reprise de la garde (les empreintes des paquets locaux effacées, l'arbre noté).
+      - name: La provenance du target restauré par le cache
+        run: bash scripts/provenance_du_cache_ci.sh target
+
+      # Le témoin de la garde, dont celui du target restauré par le cache.
+      - name: Le témoin de la garde des targets
+        run: bash scripts/test_garde_target.sh
+
       - name: check_features.sh
         env:
           RAG3DB_LIB: statique
+          RAG3WEAVER_TARGET_REPRENDRE: '1'
           # Sans couleur : la sortie des jeux rouges se lit par `^error` (18 octobre 2026).
           CARGO_TERM_COLOR: never
           CHECK_FEATURES_LOGS: ${{ runner.temp }}/check-features
