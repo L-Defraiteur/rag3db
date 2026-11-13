@@ -158,11 +158,9 @@ fn connection(root: &Path, readonly: bool) -> Result<Rag3dbConnection> {
         root: root.into(),
         origin: marker.origin,
     };
-    Rag3dbConnection::with_owned_physical_config(
+    Rag3dbConnection::with_owned_physical_buffer_pool(
         root.join(DB_FILE),
-        rag3db::SystemConfig::default()
-            .buffer_pool_size(64 * 1024 * 1024)
-            .read_only(readonly),
+        readonly,
         &permit,
     )
     .map_err(storage)

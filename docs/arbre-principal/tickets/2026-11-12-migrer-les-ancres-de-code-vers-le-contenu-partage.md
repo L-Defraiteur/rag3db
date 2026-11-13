@@ -2156,3 +2156,15 @@ sa base synthétique, après ses assertions de plan. Définition stable et deux
 identités noeuds fixes ; cardinalités0/1/2, deux lignes identiques conservées,
 empreintes logiques distinctes. Aucun juge supplémentaire ni mock seul ; aucune
 publication de la base ainsi altérée. Nom tableP6 toujours non attribué.
+
+
+P7 source857a2 : neuf CPU et premier juge natif codec VERT, y compris
+RELATION_WITNESS physique0/1/2. Deuxième juge exact applied_journal échoue à
+l'ingestion Alpha : tampon natif plein, limite explicite64MiB du profil. Durée
+25,170s, aucun autre juge/enfant lancé. Pas de panne SDK ou OOM machine déduite.
+Cause : tampon copié du profil publication métadonnées, sans politique commune
+du catalogue complet. Correctif proposé avant revue : porte owned opaque réutilise
+config_with_buffer_pool(buffer_pool_choice(None)) et conserve BufferPoolChoice ;
+recette épingle RAG3DB_BUFFER_POOL_SIZE=536870912 pour toutes ouvertures/enfants,
+sous Max32GiB, comme témoin natif existant. Pas de nouvelle règle mémoire produit,
+ni auto-retry après OOM : ouverture/reprise explicite inchangée et source neuve.
