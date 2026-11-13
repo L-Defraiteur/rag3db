@@ -237,3 +237,28 @@ fn les_noms_dupliques_ne_creent_pas_d_alias_ambigus_et_les_decisions_fixes_reste
         assert_eq!(resoudre_alias(section).unwrap()["kind"], decision);
     }
 }
+
+/// **Une section voit les fiches que les sections précédentes du même document viennent de
+/// proposer** (13 novembre 2026, l'archivage à blanc des docs de la semaine : 326 fiches pour 432
+/// sections, et aucune qui réunisse deux sections d'un même document ; ticket
+/// `2026-11-13-une-section-ne-voit-pas-les-fiches-proposees-plus-haut-dans-son-document`). Deux
+/// sections sur le même sujet : le faux modèle crée pour la première, puis choisit, pour la seconde,
+/// la seule candidate qui puisse exister (la base est vide), la fiche proposée par la première. Une
+/// seule fiche, deux apports.
+#[test]
+#[ignore]
+fn deux_sections_d_un_document_sur_le_meme_sujet_font_une_seule_fiche() {
+    let serveur = FakeServer::start_sequence(vec![etiquette("create"), etiquette("candidate_1")]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    const NOTES: &str = "# Notes du 13\n\n## La reprise du WAL\n\nLe journal se rejoue à l'ouverture, en entier.\n\n## La reprise, suite\n\nLe moteur de reprise relit chaque enregistrement avant toute écriture.\n";
+    let r = appel(&b, "archive", json!({"titre": "Notes du 13", "contenu": NOTES, "jour": "2026-11-13", "allow_create": true}));
+    assert_eq!(r["result"]["errors"], json!([]), "les deux sections décidées sans erreur : {r}");
+    assert_eq!(r["result"]["ok"], json!(2), "{r}");
+    assert_eq!(apports_de(&b, "La reprise du WAL").len(), 2, "les deux sections sur la fiche proposée par la première");
+    assert!(apports_de(&b, "La reprise, suite").is_empty(), "aucune seconde fiche");
+}
+
