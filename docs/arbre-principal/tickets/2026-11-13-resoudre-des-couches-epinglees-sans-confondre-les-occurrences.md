@@ -213,3 +213,7 @@ Pas de reprise-cach69 répétée : gardeuniondéjàrepriseprouvée.
 ## Sonde seule et reprise proposée
 
 Voir [rapport17](../13-11-2026/17-sonde-cargo-et-reprise-bornee.md) : observation Cargo seule validée, rougeF8 inchangé ; correctif pilote distinct, cacheunion repris sans réinvalidation, même échéance originale. Reprise NON lancée, décision GO exact à C7.
+
+## Qualification union v2 arrêtée
+
+Voir [rapport19](../13-11-2026/19-arret-union-v2-profil-principal.md) et ledger18 : F8/compilations/inventaires acquis ; premierrouge profilprincipal natif, lib nonqualifiée/CPUexacts et publication nonjoués. 158preuves SHA deuxpostes, aucune reprise. DiagnosticRO ED demandé, ticket reste ouvert.
