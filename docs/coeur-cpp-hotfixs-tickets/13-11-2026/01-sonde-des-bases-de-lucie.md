@@ -1,4 +1,4 @@
-# La sonde des bases de Lucie : relations orphelines et morceaux sans parent (13 novembre 2026)
+# La sonde des bases de Lucie : relations orphelines, morceaux sans parent et mots perdus de lucivy (13 novembre 2026)
 
 Session hotfixs, à la demande de c7 (l'orchestration) et du cœur (la première session du cœur C++).
 Le texte suppose qu'on n'a rien suivi.
@@ -227,7 +227,64 @@ Copies et relevés : à luciepc dans `~/.cache/rag3db-locks/sonde-orphelins-835d
 | Symbol_Chunk | 0 | -1 | 0 |
 | Scope | 65 914 | 66015 | 102 |
 
-## Rejouer
+## Seconde sonde : les mots perdus du dictionnaire de lucivy (13 novembre, 20 h 30)
+
+**Le défaut** (ticket de recherche
+`docs/recherche/tickets/2026-11-13-un-index-lucivy-ecrit-avant-4-3-5-pendant-des-fusions-garde-ses-mots-perdus.md`,
+branche `lucivy-4-3-5`). Avant lucivy 4.3.5, une fusion de segments lancée entre deux commits faisait
+perdre au dictionnaire partagé les mots des segments écrits depuis le dernier commit. Un index
+plein texte (`.fts`) touché garde ces pertes, et la montée de version ne les répare pas. Un mot
+perdu se voit ainsi : le segment le désigne par un identifiant (dans son fichier `.gmap`) que le
+dictionnaire du shard ne connaît pas (ni texte, ni métadonnée).
+
+**La réponse : 0 identifiant inconnu dans les quatre `.fts`.**
+
+| base | poste | identifiants lus | inconnus du dictionnaire | segments en attente |
+|---|---|---:|---:|---:|
+| code-lourd | luciepc | 6 945 348 | **0** | 0 |
+| code-principal | luciepc | 5 732 393 | **0** | 0 |
+| code-rag3db-depot | portable | 11 818 307 | **0** | 0 |
+| memoire-longue | portable | 261 925 | **0** | 0 |
+
+**Le témoin rouge.** lucivy m'a confié une copie de son index sauvé, à luciepc :
+`~/.cache/rag3weaver-build/lucivy-index-rouge-pour-hotfixs`, identique à
+`~/.cache/rag3weaver-build/lucivy-flou/index-rouge-60f7063`. Sur une copie neuve, la sonde compte
+**31 862 identifiants inconnus sur 2 693 974** dans le champ `content`, exactement le chiffre de
+lucivy. Elle en compte aussi 480 sur 26 493 dans le champ `path`, que lucivy dit stocké et non
+indexé ; ce champ a pourtant un `.gmap`, ce que je lui ai signalé. Cela ne change rien aux bases de
+Lucie, où tous les champs sont à 0.
+
+**Ce qui a été lu.** Des copies neuves des `.fts` de l'instantané `avant-835d5298f` (luciepc à
+20 h 06, portable à 20 h 07), prises hôtes arrêtés avec `fuser` vide. L'outil ouvre chaque shard
+avec un writer, qui peut écrire : chaque lancement se fait sur une copie neuve, jamais sur un index
+en service.
+
+**L'outil.** Une variante du test de lucivy `diag_flou_ids_sans_texte`, nommée
+`diag_ids_sans_texte_tous_champs`, dans `lucivy_core/tests/diag_flou_monotonie.rs`, sur la branche
+lucivy `diag-mots-perdus-tous-champs` (a4e2d16, au-dessus de `diag-flou-monotonie` 9d7b6b1, soit
+lucivy-core 4.3.4). Elle parcourt chaque table `Lucivy_*` d'un `.fts`, chaque `shard_*` et chaque
+champ texte qui a un `.gmap`. Elle lit `pending_segments` dans le `meta.json` de chaque shard :
+aucun n'en avait. Une copie de l'outil est jointe dans `outils/diag_flou_monotonie.rs`.
+
+**Rejouer** (à luciepc ; le binaire est déjà dans `~/.cache/rag3db-tickets-notes/lucivy-sonde/`) :
+
+```bash
+ssh -T lucied@luciepc 'bash -s' <<'EOF'
+X=~/.cache/rag3db-tickets-notes/lucivy-sonde/diag_flou_monotonie
+I=~/.local/share/rag3weaver/instantanes/<instantané>; b=code-lourd
+C=~/.cache/rag3db-locks/sonde-lucivy/$b-<étiquette neuve>
+mkdir -p $C && cp -a --reflink=always $I/$b/$b.rag3db.fts $C/
+cd ~/.cache/rag3weaver-build && DIAG_FTS=$C/$b.rag3db.fts ./poste lourd timeout 3600 $X diag_ids_sans_texte_tous_champs --ignored --nocapture > $C.txt 2>&1
+grep -E 'PERDUS|^ATTENTE|^BILAN' $C.txt
+EOF
+```
+
+Relevés : à luciepc dans `~/.cache/rag3db-locks/sonde-lucivy/{code-lourd-1,code-principal-1,temoin-rouge-1}.txt`,
+et au portable dans `~/.cache/rag3db-locks/sonde-lucivy/{memoire-longue-1,code-rag3db-depot-1}.txt`.
+Aucun `.fts` de Lucie n'a été reconstruit : la reconstruction est à son mot, et ces chiffres
+disent qu'elle n'a rien à rattraper.
+
+## Rejouer (la sonde des orphelines)
 
 À luciepc, toujours sur une copie et jamais sur une base tenue par un hôte. Luciepc est en fish :
 passer par `bash -s`.
