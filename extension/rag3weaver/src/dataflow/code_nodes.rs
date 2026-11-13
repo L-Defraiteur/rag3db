@@ -309,6 +309,7 @@ impl Node for GrepNode {
             "extension": self.opts.extension,
             "max_results": self.opts.max_results,
             "context_lines": self.opts.context_lines,
+            "symbol_hierarchy_depth": self.opts.symbol_hierarchy_depth,
         })))
     }
     fn outputs(&self) -> Vec<PortDef> {
@@ -573,7 +574,9 @@ impl NodeFactory for GrepNodeFactory {
             context_lines: usize_param(config, "context_lines", "GrepNode")?.unwrap_or(0),
             relation: config.get("relation").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()).map(String::from),
             relation_limit: usize_param(config, "relation_limit", "GrepNode")?.unwrap_or(0),
+            symbol_hierarchy_depth: usize_param(config, "symbol_hierarchy_depth", "GrepNode")?.unwrap_or(0),
         };
+        if opts.symbol_hierarchy_depth > crate::symbol_navigation::MAX_DEPTH { return Err("GrepNode: symbol_hierarchy_depth doit être entre0et16".into()); }
         let format = match config.get("format").and_then(|v| v.as_str()) {
             Some(f) => ToolFormat::parse(f).map_err(|e| format!("GrepNode: {e}"))?,
             None => ToolFormat::Markdown,
@@ -596,6 +599,7 @@ impl NodeFactory for GrepNodeFactory {
                 ConfigParam { name: "case_insensitive".into(), param_type: ConfigParamType::Bool, required: false, default: Some(serde_json::json!(false)), description: "Ignorer la casse".into(), choices: None, json_schema: None },
                 ConfigParam { name: "max_results".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_GREP_LIMIT)), description: "Résultats rendus (plafond 500) ; tous sont comptés".into(), choices: None, json_schema: None },
                 ConfigParam { name: "context_lines".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(0)), description: "Lignes de contexte avant/après (plafond 5)".into(), choices: None, json_schema: None },
+                ConfigParam { name:"symbol_hierarchy_depth".into(),param_type:ConfigParamType::Int,required:false,default:Some(serde_json::json!(0)),description:"0 : grep inchangé ; 1..16 : contenant du match puis au plus ce nombre de parents de plages qualifiées, sans corps. Index absent/périmé/ambigu explicite, budget global96Kio/200nœuds/8fichiers".into(),choices:None,json_schema:None },
                 // **Le graphe se greffe là où les agents vont.** Mesuré le
                 // 28 août 2026 : `grep` 10 appels, l'outil de graphe séparé 0.
                 ConfigParam { name: "relation".into(), param_type: ConfigParamType::String, required: false, default: Some(serde_json::json!("")), description: "Relation du schéma à suivre depuis les scopes trouvés (CONSUMES, CONSUMED_BY…) ; vide = pas d'expansion".into(), choices: Some(Choices::relations_read()), json_schema: None },

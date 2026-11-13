@@ -397,3 +397,20 @@ sur fixture privée indexée. Témoins défaut0 identique, profondeur1/2, UTF-8,
 homonymes/fichiers, plages égales/croisées, index absent/périmé, budget global et
 absence de lectures supplémentaires. Premier rouge inattendu : stop/diagnostic,
 pas de retry inchangé. Revue C7 avant lourde globale et avant master.
+
+## Source candidate avant ciblé
+
+Préparation commune PreparedNavigation : hash/positions/plages et parents calculés
+une fois, puis sélecteur UUID/nom ou position UTF-8 dans le même moteur. Le grep
+charge le Plan déclaré existant une fois par fichier et fournit le contenu observé.
+Plafonds du contexte optionnel :8fichiers interrogés,200nœuds/candidats cumulés,
+96Kio pour les deux représentations. Au dépassement, les comptes restent exacts et
+une troncature explicite réduit le préfixe des matches rendus ; aucune référence
+partielle n'est présentée comme une identité exacte. Les erreurs de Plan sont des
+statuts index_context_error, sans faire échouer le texte cherché.
+
+Douze témoins symbol_navigation attendus (dix purs, deux parcours natifs) et deux
+témoins grep_symbols (défaut0, absence d'index, UTF-8/CRLF sans relecture, budget).
+Le nouveau parcours natif demande l'option par le vrai chat et son outil déclaré,
+puis relais atelier ; fixture sans montre pour éprouver la péremption sans réparation
+implicite. Hôtes avec registres background privés. Ces tests ne sont pas encore joués.
