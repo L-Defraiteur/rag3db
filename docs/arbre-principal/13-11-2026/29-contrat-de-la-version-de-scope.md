@@ -4,6 +4,19 @@
 points sont reportés ci-dessous. Les références de code sont celles d'`origin/master` d59e99ed7, relativement à
 `extension/rag3weaver/`. Rien n'a été compilé ni joué pour l'écrire.
 
+> **Décision de Lucie (13 novembre 2026, relayée par c7)** : les vues se bâtissent sur l'index de
+> code réel, en lui donnant ce qu'il faut, lot par lot :
+> 1. 1a, cette page ;
+> 2. 1b, à son mot ;
+> 3. la liaison branche/worktree → couche ;
+> 4. le chargeur durable ;
+> 5. le masque avant le top-k dans les signaux réels ;
+> 6. le paramètre `view`.
+>
+> Il n'y a pas de second index. Le raccord physique de Codex (BM25 seul, possédé) reste un banc
+> d'essai des mécanismes, comme les générations de publication et la reprise. Ce qui en vaut la
+> peine s'adopte dans l'index réel, et rien ne s'y ajoute comme stockage.
+
 ## Ce qui existe déjà, et ce qui manque
 
 **Le mécanisme est livré, générique.** Une entité dérivée déclare `derived.identity =
@@ -94,6 +107,14 @@ README le dit : les gabarits de code de production n'activent pas l'option. C'es
     si son manifeste le demandait.
   - `workspace.index_signals` sur `Scope` monte, sur une base à versions, sur `ScopeContent` :
     c'est lui qui porte les signaux.
+- **La relation `ScopeContent_DERIVED_FROM` est masquée dans les outils de graphe**, comme
+  `ScopeContent` l'est des cibles (décision de c7) : une référence de version interne n'est pas une
+  relation du code. `relation_summaries` la retire, ce qui couvre aussi l'outil `schema`.
+- **La garde des comptes du plein texte compte les lignes de la table qui porte l'index**, pas
+  celles de l'entité publique (défaut trouvé au lot 1a, dans le mécanisme générique). Deux
+  occurrences d'un même contenu font un seul document. Avant ce correctif, la garde y voyait une
+  écriture perdue : elle rebâtissait l'index à chaque ouverture et réécrivait les `Scope`, ce qui
+  gardait une occurrence retirée. `index_state` disait à tort « des écritures ont été perdues ».
 - **La recherche publique reste sur `Scope`**, par `searchIndex`. Une recherche directe sur
   `ScopeContent` est refusée (`src/read_view.rs:213-218`). Les outils (`search_code`, `usages`,
   `outline`) ne changent pas d'entrée ; ils rendent des occurrences avec leur chemin et leurs lignes.

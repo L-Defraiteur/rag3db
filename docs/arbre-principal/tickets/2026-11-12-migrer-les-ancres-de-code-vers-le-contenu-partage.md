@@ -8,6 +8,20 @@
 - **Pour** : arbre-principal ; orchestration et ED pour revue/autorisation, recherche pour contrat d’index si besoin.
 - **Signalé par** : préparation autorisée par orchestration après le lot1a08086ba36 ; ticket de préparation distinct ci-dessous.
 
+## Décision de Lucie du 13 novembre 2026 (relayée par c7)
+
+Les vues se bâtissent sur l'index de code réel, lot par lot :
+1. 1a, la version de scope (`docs/arbre-principal/13-11-2026/29-contrat-de-la-version-de-scope.md`) ;
+2. 1b, la migration de ce ticket, à son mot ;
+3. la liaison branche/worktree → couche ;
+4. le chargeur durable ;
+5. le masque avant le top-k dans les signaux réels ;
+6. le paramètre `view`.
+
+Il n'y a pas de second index. Le raccord physique (BM25 seul, possédé) reste un banc d'essai des
+mécanismes. Ce qui en vaut la peine s'adopte dans l'index réel, et rien ne s'y ajoute comme
+stockage.
+
 ## État courant et historique
 
 Le raccord neuf BM25 est livré b0a5177c0, bilan ba0317ed1 et preuves07.
