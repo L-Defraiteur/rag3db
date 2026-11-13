@@ -1,7 +1,8 @@
 # run_e2e exige un plafond de 32 Gio, poste en donne 40 par défaut
 
-- **État** : ouvert (13 novembre 2026), relevé par archi pendant la passe du lot du README ; décidé
-  par c7 le jour même (voir « La décision ») ; reste la procédure, chez G.
+- **État** : fermé (13 novembre 2026) sur `4b4233853` de G : la règle de c7 est en tête de « La
+  passe » dans `docs/procedures/push-d-un-lot.md` (32 Gio pour toute validation, 40 Gio par défaut
+  de `poste` pour les bâtis).
 - **Famille** : produit
 - **Gravité** : passe refusée d'entrée. `run_e2e.sh` rougit « aucun plafond effectif <= 32 Gio » sous un
   `poste lourd` sans réglage.
