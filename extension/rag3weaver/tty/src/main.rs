@@ -110,7 +110,14 @@ fn lancer(o: Options) -> Result<(), String> {
     if !o.plain {
         // Le thème se choisit avant d'ouvrir l'écran : un nom inconnu s'y dit.
         let theme = Theme::par_nom(o.theme.as_deref().unwrap_or("daemon"))?;
-        return tui::lancer(ep, tui::Tache { depot, task: o.task }, o.demande, o.depuis, theme);
+        match tui::lancer(ep.clone(), tui::Tache { depot: depot.clone(), task: o.task.clone() }, o.demande.clone(), o.depuis, theme) {
+            Ok(()) => return Ok(()),
+            Err(tui::Echec::Autre(e)) => return Err(e),
+            // La vue ne démarre pas (un terminal qui ne rend pas la position du
+            // curseur, un lien trop lent) : on le dit, et le texte brut prend la
+            // suite, plutôt que de s'arrêter.
+            Err(tui::Echec::VueIndisponible(e)) => eprintln!("[tty] la vue ne démarre pas ({e}) : je passe en texte brut (--plain)"),
+        }
     }
     let backend = depot.id.clone();
     let sortie = Arc::new(Mutex::new(std::io::stdout()));

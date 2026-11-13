@@ -56,7 +56,27 @@ fn connaitre(agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, filtre: &Mutex<O
     }
 }
 
-pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Option<u64>, theme: crate::theme::Theme) -> Result<(), String> {
+/// Pourquoi la vue s'est arrêtée.
+#[derive(Debug)]
+pub enum Echec {
+    /// La vue inline n'a pas pu démarrer (le terminal ne rend pas la position du
+    /// curseur, par exemple) : rien n'est encore parti à l'hôte, `--plain` peut
+    /// prendre la suite.
+    VueIndisponible(String),
+    /// Une erreur pendant la séance.
+    Autre(String),
+}
+
+pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Option<u64>, theme: crate::theme::Theme) -> Result<(), Echec> {
+    // La vue d'abord : si elle ne démarre pas, rien n'est parti à l'hôte (ni la
+    // demande, ni un abonnement), et `--plain` prend la suite sans doublon.
+    let mut terminal = match ratatui::try_init_with_options(TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }) {
+        Ok(t) => t,
+        Err(e) => {
+            let _ = ratatui::try_restore();
+            return Err(Echec::VueIndisponible(e.to_string()));
+        }
+    };
     let agent = client::agent();
     let (tx, rx) = mpsc::channel::<Msg>();
     let arret = Arc::new(AtomicBool::new(false));
@@ -134,7 +154,6 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
         });
     }
 
-    let mut terminal = ratatui::init_with_options(TerminalOptions { viewport: Viewport::Inline(HAUTEUR) });
     let largeur = terminal.size().map(|s| s.width).unwrap_or(80);
     let mut vue = Vue::new(largeur, demande.is_some());
     vue.capacites = Capacites::du_terminal();
@@ -147,7 +166,7 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     ratatui::restore();
     println!();
     let _ = flux_fil.join();
-    rendu
+    rendu.map_err(Echec::Autre)
 }
 
 fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Receiver<Msg>, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache) -> Result<(), String> {
