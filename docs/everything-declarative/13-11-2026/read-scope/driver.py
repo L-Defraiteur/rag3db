@@ -30,6 +30,7 @@ def main():
     receipt = pathlib.Path(os.environ['RAG3WEAVER_VALIDATION_RECU'])
     authority = json.loads(receipt.read_text())
     deadline = authority['echeance']
+    assert deadline <= 908183.114381791, 'interdit de réinitialiser les 6000s R3'
     rows, maps, disk_samples, unknown_maps = [], {}, [], []
     elf = None
     runtime_elf_sha = None
@@ -45,7 +46,7 @@ def main():
     assert (cg / 'memory.max').read_text().strip() == str(32 * 1024**3)
     assert (cg / 'memory.high').read_text().strip() == 'max'
     write(p / 'source.json', dict(source=source, tree=git('rev-parse', 'HEAD^{tree}'), receipt=str(receipt), deadline=deadline,
-                                  features=FEATURES, sdk=SDK, submodules=git('submodule', 'status', '--recursive')))
+                                  original_deadline=908183.114381791, original_start=902183.114381791, features=FEATURES, sdk=SDK, submodules=git('submodule', 'status', '--recursive')))
     (p / 'memory-before').write_text((cg / 'memory.events').read_text())
     assert not t.exists()
     allowed = ('HOME', 'USER', 'LOGNAME', 'PATH', 'LANG', 'LC_ALL',

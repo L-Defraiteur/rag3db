@@ -10,8 +10,8 @@ def main():
     assert subprocess.check_output(['git', '-C', str(w), 'rev-parse', 'HEAD'], text=True).strip() == source
     assert not subprocess.check_output(['git', '-C', str(w), 'status', '--porcelain'])
     root = pathlib.Path.home() / '.cache/rag3weaver-build'
-    p = root / 'cx-preuves-ed-read-scope-r3'
-    t = root / 'cx-target-ed-read-scope-r3'
+    p = root / 'cx-preuves-ed-read-scope-r4'
+    t = root / 'cx-target-ed-read-scope-r4'
     assert not p.exists() and not t.exists(), 'pas de reprise aveugle'
     p.mkdir(mode=0o700)
     here = w / 'docs/everything-declarative/13-11-2026/read-scope'
@@ -26,9 +26,8 @@ def main():
     # Le confineur fournira ensuite son bus privé au driver et à ses enfants.
     env.update(XDG_RUNTIME_DIR=str(runtime), DBUS_SESSION_BUS_ADDRESS='unix:path=' + str(bus))
     env.update(PATH=str(pathlib.Path.home() / '.cargo/bin') + ':/usr/local/bin:/usr/bin:/bin', POSTE_MEM_MAX='32G', RAG3WEAVER_BUILD_MEMORY_HIGH='0')
-    cmd = [sys.executable, str(w / 'extension/rag3weaver/scripts/confiner_validation.py'),
-           'lancer', '--mode', 'lourd', '--delai', '6000', '--preuves', str(p / 'supervision'),
-           '--', sys.executable, str(here / 'driver.py'), str(w), source, str(p), str(t)]
+    cmd = [str(w / 'extension/rag3weaver/scripts/poste'), 'lourd',
+           sys.executable, str(here / 'apres-poste.py'), str(w), source, str(p), str(t)]
     (p / 'lancement.json').write_text(json.dumps(dict(source=source, commande=cmd), indent=2))
     with (p / 'supervision.log').open('w') as log:
         rc = subprocess.run(cmd, cwd='/var/tmp', env=env, stdout=log, stderr=subprocess.STDOUT).returncode

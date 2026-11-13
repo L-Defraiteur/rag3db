@@ -790,6 +790,7 @@ pub(super) mod tests {
             "version": 1, "kind": "code", "name": nom,
             "database": roots.data.join(format!("{nom}.rag3db")),
             "entities": {}, "tools": outils,
+            "models": { "embed": { "provider": "service", "model": "granite-278m", "dimensions": 768 } },
             "workspace": { "source": "working_tree", "root": racine }
         })).unwrap()).unwrap();
         manifeste

@@ -11,6 +11,7 @@ def main():
         runtime = json.loads((p / 'runtime.json').read_text())
         assert runtime['source'] == source and runtime['verdict'] == 'VERT'
         src = json.loads((p / 'source.json').read_text())
+        assert src['original_deadline'] == 908183.114381791 and src['deadline'] <= src['original_deadline']
         receipt = pathlib.Path(src['receipt'])
         assert receipt.parent.is_relative_to(p / 'supervision')
         supervisor = json.loads((receipt.parent / 'verdict.json').read_text())
@@ -101,6 +102,7 @@ def main():
         before = dict(l.split() for l in (p / 'memory-before').read_text().splitlines())
         after = dict(l.split() for l in (p / 'memory-after').read_text().splitlines())
         assert all(before[k] == after[k] for k in ('high', 'max', 'oom', 'oom_kill'))
+        result['elapsed_since_r3'] = time.monotonic() - src['original_start']
         result.update(verdict='VERT', supervisor=supervisor, elf_sha256=ledger['sha256'], quiescence=quiet, original_present=original.exists())
     except BaseException as e:
         result['erreur'] = repr(e)
