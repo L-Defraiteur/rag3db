@@ -123,16 +123,29 @@ pub(super) struct Resolu {
     pub worktree: Option<Worktree>,
 }
 
-/// La forme canonique d'un chemin qui peut ne pas exister encore (un fichier à créer) :
-/// son dossier canonique et son nom.
+/// **La forme canonique d'un chemin qui peut ne pas exister encore** (un fichier à créer),
+/// résolue composant par composant : un composant qui existe se canonise (liens symboliques
+/// compris), un composant absent reste un nom, et `..` remonte depuis la forme déjà résolue.
+/// Avant le 13 novembre 2026, un `..` qui suivait un dossier absent restait dans le chemin
+/// (`racine/nouveau/../../x`), et le test de racine, lexical, le croyait dedans : l'atelier
+/// écrivait hors de sa racine sans accord (relecture d'everything declarative).
 fn canonique(p: &Path) -> PathBuf {
-    if let Ok(c) = p.canonicalize() {
-        return c;
+    use std::path::Component;
+    let mut forme = PathBuf::new();
+    for c in p.components() {
+        match c {
+            Component::Prefix(_) | Component::RootDir => forme.push(c.as_os_str()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                forme.pop();
+            }
+            Component::Normal(n) => {
+                let suivant = forme.join(n);
+                forme = if std::fs::symlink_metadata(&suivant).is_ok() { suivant.canonicalize().unwrap_or(suivant) } else { suivant };
+            }
+        }
     }
-    match (p.parent(), p.file_name()) {
-        (Some(d), Some(n)) => canonique(d).join(n),
-        _ => p.to_path_buf(),
-    }
+    forme
 }
 
 impl DaemonHost {
