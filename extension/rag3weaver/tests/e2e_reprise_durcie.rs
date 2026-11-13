@@ -58,8 +58,15 @@ fn compte(catalog: &Catalog, q: &str) -> i64 {
     catalog.execute_raw(q).unwrap().rows[0][0].as_i64().unwrap()
 }
 
-const SANS_ARETE: &str =
-    "MATCH (c:Scope_Chunk) WHERE NOT EXISTS { MATCH (c)-[:Scope_CHUNKED_FROM]->(:Scope) } RETURN count(c)";
+/// Les morceaux du code sans arête vers leur parent direct, dans la forme de
+/// la base : `ScopeContent` sur une base à versions de scope.
+fn sans_arete(catalog: &Catalog) -> i64 {
+    let m = rag3weaver::code::scope_chunks(catalog).expect("la forme de la base");
+    compte(catalog, &format!(
+        "MATCH (c:`{}`) WHERE NOT EXISTS {{ MATCH (c)-[:`{}`]->(:`{}`) }} RETURN count(c)",
+        m.table, m.chunked_from, m.parent
+    ))
+}
 
 /// La fonction `f10` est-elle rendue par une recherche par vecteur sur son
 /// propre texte ?
@@ -84,13 +91,19 @@ fn des_morceaux_sans_leur_arete_sont_refaits_a_la_relance() {
     let snapshot = Snapshot::new("depot", corpus(40));
     let r = sync_source(&mut catalog, &snapshot, &options, &mut |_| {}).expect("première passe");
     assert_eq!(r.failed, 0, "{r:?}");
-    assert_eq!(compte(&catalog, SANS_ARETE), 0, "une passe saine relie chaque morceau");
+    assert_eq!(sans_arete(&catalog), 0, "une passe saine relie chaque morceau");
 
     // L'état fabriqué : les morceaux de deux scopes, sans leur arête.
     catalog
-        .execute_raw("MATCH (c:Scope_Chunk)-[r:Scope_CHUNKED_FROM]->(s:Scope) WHERE s.name IN ['f10', 'f11'] DELETE r")
+        .execute_raw(&{
+            let m = rag3weaver::code::scope_chunks(&catalog).expect("la forme de la base");
+            // L'arête du morceau à son parent direct, pour les scopes f10 et f11.
+            let (debut, _) = m.to_scope.split_once("]->").unwrap();
+            let suite = &m.to_scope[debut.len() + 3..];
+            format!("MATCH (c:`{}`)-[r:`{}`]->{suite} WHERE s.name IN ['f10', 'f11'] DELETE r", m.table, m.chunked_from)
+        })
         .unwrap();
-    let orphelins = compte(&catalog, SANS_ARETE);
+    let orphelins = sans_arete(&catalog);
     assert!(orphelins >= 2, "les morceaux de f10 et f11 sont sans arête ({orphelins})");
     let (avant, c) = retrouvee(catalog);
     catalog = c;
@@ -98,7 +111,7 @@ fn des_morceaux_sans_leur_arete_sont_refaits_a_la_relance() {
 
     let r = sync_source(&mut catalog, &snapshot, &options, &mut |_| {}).expect("relance");
     assert_eq!(r.failed, 0, "{r:?}");
-    assert_eq!(compte(&catalog, SANS_ARETE), 0, "la relance a refait les morceaux sans arête");
+    assert_eq!(sans_arete(&catalog), 0, "la relance a refait les morceaux sans arête");
     let (apres, _) = retrouvee(catalog);
     assert!(apres, "après la relance, la recherche retrouve f10 par son vecteur");
 }

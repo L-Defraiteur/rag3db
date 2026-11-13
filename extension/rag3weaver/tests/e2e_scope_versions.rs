@@ -183,18 +183,6 @@ fn catalogue_de_production() -> (Catalog, Arc<Mutex<Vec<String>>>) {
     (cat, texts)
 }
 
-/// La forme d'avant les versions, telle que `register_code_schema` l'écrivait
-/// jusqu'au 13 novembre 2026 : `Scope` porte ses morceaux et ses vecteurs.
-fn enregistrer_la_forme_d_avant(cat: &mut Catalog) {
-    let (mut entities, mut relations) = rag3weaver::code::schema_configs(default_scope_chunking());
-    for name in ["File", "Scope", "Library", "Symbol"] {
-        cat.register_entity(name, entities.remove(name).unwrap()).unwrap();
-    }
-    for (name, relation) in std::mem::take(&mut relations) {
-        cat.register_relation_with(&name, &relation.from, &relation.to, relation.properties.unwrap_or_default()).unwrap();
-    }
-}
-
 #[test]
 #[ignore]
 fn le_schema_de_production_partage_le_contenu_de_deux_fichiers() {
@@ -230,7 +218,7 @@ fn une_base_d_avant_ouvre_comme_avant_et_se_dit_a_migrer() {
         {
             let (embedder, _) = compteur();
             let mut cat = ouvrir(Rag3dbConnection::new(&chemin).unwrap(), embedder);
-            enregistrer_la_forme_d_avant(&mut cat);
+            rag3weaver::code::register_code_schema_sans_versions(&mut cat, default_scope_chunking()).unwrap();
             if peuplee {
                 let source = Snapshot::new("ancre", [("a.rs".to_string(), FONCTION.to_string())]);
                 assert_eq!(cat.ingest_code(&analyze_source(&source).unwrap()).unwrap().failed, 0);
@@ -247,5 +235,26 @@ fn une_base_d_avant_ouvre_comme_avant_et_se_dit_a_migrer() {
         let morceaux = cat.execute_raw("MATCH (c:Scope_Chunk) RETURN count(c)").unwrap().rows[0][0].as_i64().unwrap();
         assert!(morceaux > 0, "peuplée={peuplee} : les morceaux restent sur Scope dans la forme d'avant");
         assert!(texts.lock().unwrap().iter().any(|t| t.contains("marque_contenu_partage")), "peuplée={peuplee}");
+    }
+}
+
+/// La garde des comptes du plein texte compte les lignes de la table qui porte
+/// l'index (`ScopeContent`), pas celles de l'occurrence : deux occurrences d'un
+/// même contenu font un document, et ce n'est pas une écriture perdue.
+/// Rouge, la garde rebâtissait l'index à chaque ouverture, et sa réécriture des
+/// `Scope` gardait une occurrence retirée (e2e_code_sync, nom ambigu).
+#[test]
+#[ignore]
+fn deux_occurrences_d_un_contenu_ne_sont_pas_une_ecriture_perdue() {
+    let (mut cat, _) = catalogue_de_production();
+    let source = Snapshot::new("ancre", [
+        ("a.rs".to_string(), FONCTION.to_string()),
+        ("b.rs".to_string(), format!("\n\n{FONCTION}")),
+    ]);
+    assert_eq!(cat.ingest_code(&analyze_source(&source).unwrap()).unwrap().failed, 0);
+    let a_rebatir = cat.check_fts_counts().unwrap();
+    assert!(a_rebatir.is_empty(), "la garde voit une écriture perdue là où deux occurrences partagent un contenu : {a_rebatir:?}");
+    for (entite, documents, lignes) in cat.comptes_du_plein_texte() {
+        assert_eq!(documents, lignes, "« {entite} » : {documents} documents pour {lignes} lignes");
     }
 }

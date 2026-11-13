@@ -559,8 +559,20 @@ impl Forme<'_> {
 impl Forme<'_> {
     /// Les relations déclarées, `(nom, de, vers)`, triées.
     pub fn relation_summaries(&self) -> Vec<(String, String, String)> {
-        let mut rels: Vec<(String, String, String)> =
-            self.relations.iter().map(|(name, def)| (name.clone(), def.from.clone(), def.to.clone())).collect();
+        // **La référence d'une version de contenu à ses occurrences** n'est
+        // pas une relation du schéma de l'utilisateur, comme la version n'est
+        // pas une cible (`search_target_names`) : elle reste interne (version
+        // de scope, décision de c7 du 13 novembre 2026).
+        let contenu = |entite: &str| {
+            self.entity_configs.get(entite).and_then(|c| c.derived.as_ref())
+                .is_some_and(|d| matches!(d.identity, crate::config::DerivedIdentity::Content { .. }))
+        };
+        let mut rels: Vec<(String, String, String)> = self
+            .relations
+            .iter()
+            .filter(|(name, def)| !(contenu(&def.from) && name.as_str() == crate::schema::derived_rel_name(&def.from)))
+            .map(|(name, def)| (name.clone(), def.from.clone(), def.to.clone()))
+            .collect();
         rels.sort();
         rels
     }

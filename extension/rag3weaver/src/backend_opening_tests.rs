@@ -168,7 +168,11 @@ fn opening_named_schema_accepts_a_manifest_relation_to_its_entity() {
     let backend = prepare(dir.path(),&m).unwrap_or_else(|e| panic!("relation vers le schéma nommé : {e}"))
         .open(Box::new(crate::Rag3dbConnection::in_memory().unwrap()),None).unwrap();
     assert!(backend.catalog.lock().unwrap().relation_names().iter().any(|n| n=="ANNOTATES"));
-    assert_eq!(backend.catalog.lock().unwrap().entity_config("Scope").unwrap().signals,
+    // Les signaux montent sur l'entité qui porte les index de `Scope` : son
+    // contenu partagé sur une base à versions de scope (lot 1a des vues).
+    let cat = backend.catalog.lock().unwrap();
+    let porteur = cat.entity_config("Scope").unwrap().search_index.clone().unwrap_or_else(|| "Scope".into());
+    assert_eq!(cat.entity_config(&porteur).unwrap().signals,
         crate::search::SearchSignals::BM25,"l'overlay déclaré n'est pas un conflit avec le fournisseur");
 }
 
