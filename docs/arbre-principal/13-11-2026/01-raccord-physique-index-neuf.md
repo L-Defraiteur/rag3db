@@ -274,3 +274,13 @@ Avec9 scénarios CPU (dont les2 contrats du registre de nœuds existants), cela
 fait18 fonctions Rust brutes,17 scénarios juges et8 exécutions enfant. Aucun
 Cargo ou de ces scénarios n'est encore exécuté ; la recette600 consigne ces
 comptes séparément dans le verdict et attend revue du delta bootstrap.
+
+
+Dernier filet de publication en revue : l'ouverture et observe_published ne
+permettent l'absence de journal qu'à la publication de création. Une cible
+appliquée exige le journal, le préfixe final et son relevé de valeurs/schema/
+checkpoints correspondant à la tête ; son intent et sa source doivent être ceux
+du registre de publication. Un scénario natif de corruption (ligne supprimée
+ou résultat modifié après publication) complète le refus RO sans nouvelle
+écriture. Comptes finaux :10 fonctions natives =9 juges+helper ;9 CPU ;19 brutes,
+18 scénarios juges,8 enfants. Ces comptes restent préparés/non joués.

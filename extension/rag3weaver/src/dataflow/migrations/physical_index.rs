@@ -906,11 +906,7 @@ impl OwnedPhysicalIndex {
         let catalog = self.catalog()?;
         let cat = catalog.lock().map_err(storage)?;
         let head = read_head(cat.conn(), &self.origin)?;
-        if journal(cat.conn())?.is_some_and(|entry| entry.status != "applied") {
-            return Err(invalid(
-                "candidate execution requires explicit same-plan recovery",
-            ));
-        }
+        validate_published(cat.conn(), &head)?;
         if PhysicalSnapshot::read(cat.conn())? != head.snapshot {
             return Err(invalid("published physical state changed"));
         }
@@ -1089,6 +1085,59 @@ fn validate_pending(
         Ok(())
     }
 }
+fn validate_published(
+    conn: &dyn DbConnection,
+    head: &StoredHead,
+) -> Result<Option<InitialJournal>> {
+    let registry = read_registry(conn)?;
+    let declaration = registry.published(registry.head())?;
+    let Some(entry) = journal(conn)? else {
+        if declaration.operation() != "create-owned-index" {
+            return Err(invalid(
+                "published target lost its qualified migration journal",
+            ));
+        }
+        return Ok(None);
+    };
+    if entry.status != "applied" {
+        return Err(invalid(
+            "candidate execution requires explicit same-plan recovery",
+        ));
+    }
+    let plan = &entry.plan;
+    if plan.stored.origin != head.origin
+        || plan.stored.source.origin != head.origin
+        || plan.target_publication() != head.publication
+        || plan.stored.inputs.target != head.descriptor
+        || plan.stored.inputs.source != plan.stored.source.descriptor
+        || plan.stored.source.cells != head.cells
+        || declaration.intent_identity() != plan.stored.intent.identity()
+        || declaration.operation() != plan.operation()
+    {
+        return Err(invalid(
+            "applied initial plan does not match the publication head",
+        ));
+    }
+    let source = registry.published(&plan.stored.source.publication)?;
+    if source.operation() != "create-owned-index"
+        || descriptor(&source) != plan.stored.source.descriptor
+    {
+        return Err(invalid(
+            "applied initial plan lost its qualified creation source",
+        ));
+    }
+    let committed = entry
+        .committed
+        .as_ref()
+        .ok_or_else(|| invalid("missing applied physical result"))?;
+    let count = plan.stored.program.step_scopes().map_err(storage)?.len();
+    if committed.next_step != count {
+        return Err(invalid("applied initial program has an incomplete prefix"));
+    }
+    same_committed_values(&committed.snapshot, &head.snapshot)?;
+    Ok(Some(entry))
+}
+
 impl OwnedPhysicalIndex {
     fn close_catalog(&mut self) -> Result<()> {
         if let Some(catalog) = self.catalog.take() {
@@ -1106,11 +1155,7 @@ impl OwnedPhysicalIndex {
         {
             let reader = connection(root, true)?;
             let head = read_head(&reader, expected_origin)?;
-            if journal(&reader)?.is_some_and(|entry| entry.status != "applied") {
-                return Err(invalid(
-                    "candidate refused by normal owned open; recover exact operation explicitly",
-                ));
-            }
+            validate_published(&reader, &head)?;
             if PhysicalSnapshot::read(&reader)? != head.snapshot {
                 return Err(invalid("published state/schema/materialization changed"));
             }
@@ -1119,6 +1164,7 @@ impl OwnedPhysicalIndex {
         // lives. Recheck on the actual connection before constructing services.
         let conn = connection(root, true)?;
         let head = read_head(&conn, expected_origin)?;
+        let entry = validate_published(&conn, &head)?;
         if PhysicalSnapshot::read(&conn)? != head.snapshot {
             return Err(invalid("state changed while opening owned reader"));
         }
@@ -1128,14 +1174,7 @@ impl OwnedPhysicalIndex {
             kind: PhysicalAccessKind::ExistingProfile,
         };
         let catalog = owned_catalog(root, conn, &access)?;
-        let entry = {
-            let cat = catalog.lock().map_err(storage)?;
-            journal(cat.conn())?
-        };
         if let Some(entry) = entry {
-            if entry.status != "applied" || entry.plan.stored.inputs.target != head.descriptor {
-                return Err(invalid("published journal/head mismatch"));
-            }
             verify_probes(&catalog, &entry.plan.stored.probes)?;
         }
         Ok(Self {

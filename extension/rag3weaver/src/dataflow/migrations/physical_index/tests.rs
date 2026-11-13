@@ -713,3 +713,47 @@ fn native_incomplete_bootstrap_is_quarantined_before_any_ordinary_database_open(
         );
     }
 }
+
+#[test]
+fn native_applied_journal_is_required_and_must_match_the_complete_published_result() {
+    for remove in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("owned");
+        let seed = NewPublicationOrigin::fresh();
+        let origin = seed.identifier().to_string();
+        let (runner, vars, probes) = runner(&dir.path().join("migrations"));
+        let mut index =
+            OwnedPhysicalIndex::create_new(&root, seed, declarations(), cells()).unwrap();
+        let plan = index
+            .prepare_initial_batch(&runner, "applied-journal", vars, probes)
+            .unwrap();
+        index.execute_initial_batch(&runner, &plan).unwrap();
+        drop(index);
+        {
+            let conn = connection(&root, false).unwrap();
+            if remove {
+                conn.execute("MATCH (n:_DataflowMigration) DELETE n")
+                    .unwrap();
+            } else {
+                let mut entry = journal(&conn).unwrap().unwrap();
+                entry
+                    .committed
+                    .as_mut()
+                    .unwrap()
+                    .snapshot
+                    .logical_rows
+                    .get_mut("Snippet")
+                    .unwrap()
+                    .push("foreign observed row".into());
+                write_journal(&conn, &entry.plan, "applied", entry.committed.as_ref()).unwrap();
+            }
+        }
+        let before = root_files(&root);
+        assert!(OwnedPhysicalIndex::open_owned(&root, &origin).is_err());
+        assert_eq!(
+            root_files(&root),
+            before,
+            "corrupt applied journal refuses before any writer is opened"
+        );
+    }
+}
