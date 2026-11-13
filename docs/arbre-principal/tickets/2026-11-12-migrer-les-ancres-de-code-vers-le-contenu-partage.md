@@ -2090,3 +2090,16 @@ ELF copiés local. Aucune recompilation ni aucun test relancé. Suite proposée 
 attestation autonome et seules phases jamais jouées sur ELF original10e6,
 sansCargo, sous échéance originale887138.455654083 si coordination l'autorise ;
 sinon nouveau budget correctif explicite, sans effacer ni requalifier le rougev3.
+
+
+Attestation autonome recette4cc12159a : VERT RO, source/ELF/gabarits/SDK29
+identifiés, zéroCargo/test. Complément autorisé par C7 sous échéance originale :
+inventaire puis4CPU verts, premier autre rouge au5e CPU en0,846s. Aucun build
+rejoué, aucun juge natif/enfant lancé. Superviseur validation-9ls9hhzp ROUGE/code1,
+restes[], nettoyé. Le juge committed_rows_with_failed_fts échoue sur file vide.
+Diagnostic RO : flush_blob_store émet explicitement CatalogEvent::Error avec
+context blob_flush:lot avant de rendre IndexPersistence ; commit_lot jette les
+annonces retenues et révoque les accès. Le juge doit exiger cette erreur précise,
+puis file vide (donc aucune annonce de disponibilité), plutôt que supprimer le
+signal d'erreur légitime. Correctif limité au juge, pas au chemin de production ;
+à publier et relire avant nouveau budget correctif explicite, aucun rejeu inchangé.
