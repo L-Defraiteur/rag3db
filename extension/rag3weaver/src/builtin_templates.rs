@@ -392,8 +392,25 @@ fn tools(v: &Value) -> std::collections::BTreeSet<String> {
 /// sur un atelier qui existe) : s'il suit le gabarit livré ou non. Avec `rafraichir`
 /// (sans hôte pour l'ouvrir), la remise au gabarit du binaire se fait ici.
 pub fn suivi_d_une_pose(manifest: &Path, rafraichir: bool) -> Result<String, String> {
-    let _ = rafraichir;
-    Ok(format!("déjà posé : {}", manifest.display()))
+    if !livre_of(manifest).is_file() {
+        return Ok(format!(
+            "copie non suivie : {} a été posé avant livre.json, il ne suivra pas le gabarit livré ; son adoption viendra avec M8",
+            manifest.display()
+        ));
+    }
+    if !rafraichir {
+        return Ok(format!("suit le livré : l'hôte remet {} au gabarit de son binaire à l'ouverture", manifest.display()));
+    }
+    Ok(match refresh(manifest)? {
+        Refresh::Refreshed { added, removed } => {
+            let liste = |v: &[String]| if v.is_empty() { "aucun".to_string() } else { v.join(", ") };
+            format!("suit le livré : remis au gabarit de ce binaire (outils ajoutés : {} ; ôtés : {})", liste(&added), liste(&removed))
+        }
+        Refresh::UpToDate => "suit le livré : à jour".to_string(),
+        Refresh::EditedByHand => "suit le livré, mais modifié à la main depuis la pose : gardé tel quel".to_string(),
+        Refresh::TrackedByGit => "suit le livré, mais suivi par git : gardé tel quel".to_string(),
+        Refresh::NotRecorded => "copie non suivie : livre.json illisible ; son adoption viendra avec M8".to_string(),
+    })
 }
 
 /// **Remet un manifeste au gabarit du binaire**, s'il est resté tel que la pose l'a

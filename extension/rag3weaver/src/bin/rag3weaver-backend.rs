@@ -720,6 +720,8 @@ fn atelier_cli(args: &[String]) -> Result<(), String> {
         println!("atelier posé : {}", manifeste.display());
     } else {
         println!("atelier déjà posé : {}", manifeste.display());
+        // Sans hôte pour l'ouvrir, la remise au gabarit du binaire se fait ici.
+        println!("{}", rag3weaver::builtin_templates::suivi_d_une_pose(&manifeste, sans_hote)?);
         // La racine d'un atelier posé reste la sienne (celle de Lucie : son dossier).
         let racine = std::fs::read_to_string(&manifeste).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).and_then(|m| m["workspace"]["root"].as_str().map(str::to_string));
         if let Some(r) = racine {
