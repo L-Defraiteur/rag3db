@@ -2137,3 +2137,15 @@ migration_record/acquire_lock ainsi que journal_row fournissent déjà _uuid.
 Correctif partagé minimal : déclarer _uuid Text dans les deux listes de colonnes
 existantes ; aucun nouveau journal, ni identité, ni reprise alternative. Le juge
 natif existant couvre réellement ces créations ; avis RO avant nouveau budget.
+
+
+P6 source4c35c3136 : compilation/inventaire/9CPU verts, premier juge exact
+refusé Corrupt(table without explicit properties), durée24,735s ; autres juges
+/enfants non lancés. Le journal dépasse le défaut binder précédent. Diagnostic
+RO : PhysicalSnapshot refuse toute table sans propriétés, alors que les relations
+CHUNK_OF produites par schema.rs374 sont légitimement sans propriétés. Leurs
+extrémités ET la multiplicité sont des valeurs physiques à capturer. Correctif
+adaptateur : autoriser zéro propriété seulement pour REL, capturer src._uuid et
+dst._uuid même sans champs supplémentaires, conserver définition+connexions et
+doublons. NODE sans propriétés reste refusé avec nom explicite. Aucun saut de
+table/relations ni affaiblissement des valeurs, pas de rejeu avant RO/budget.
