@@ -5,6 +5,24 @@ scripts cités sont copiés dans **`docs/optimiseur/scripts/`** (dépôt rag3db)
 copie de travail à luciepc dans `~/.cache/rag3weaver-build/`, d'où les scripts de pose les appellent.
 Les procédures communes vivent dans `docs/procedures/scripts/`.
 
+## Mise à jour du 13 novembre : fenêtre card0 terminée
+
+L’exception card0 du13novembre00–08Paris n’est pas reconduite. Le cutoff privé
+a réellement fini le13novembre à07:54CET (Resultsuccess, statut0), registre
+fermé sans réouverture ; vérification indépendante à07:58, zéro unité/cgroup
+de modèle privé et aucun descendant. Le registre était vide : ne pas présenter
+ce cas comme un test de déchargement de poids GPU réels. Les 22 fixtures et les
+preuves CPU de portée/descendants de la préparation restent des faits distincts.
+
+Ticket clos : `docs/tickets/closed/2026-11-12-borner-la-fenetre-nocturne-de-card0.md`.
+Reçus/configuration/sources stables à luciepc sous
+`~/.cache/optimiseur-notes/card0-20261113/` : `restitution.json`, `ferme.json`,
+preuve indépendante `preparation/verification-restitution-13nov.json`.
+Timer active/elapsed sans prochaine échéance, service inactive/dead ; aucun
+modèle rechargé ni service modifié pour la clôture. Ne pas réutiliser le reçu
+ou la date pour ouvrir une autre nuit. Card2 conserve son usage normal ;
+une autre fenêtre de card0 demanderait une consigne spécifique.
+
 ## Le vocabulaire
 
 - **Moteur** : le C++ de `src/` et `extension/vector` ; bâti, il donne `librag3db.so` (la **lib**).

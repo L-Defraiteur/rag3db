@@ -1,6 +1,6 @@
 # Borner la fenêtre nocturne de card0
 
-- **État** : en cours ; revue finale favorable et entrée requalifiée sur SHA0e11e0a3, 22 fixtures CPU et entrées réelles CPU vertes ; timer réel actif13nov07:54Paris, aucun modèle enregistré, restitution réelle encore attendue.
+- **État** : fait 24f3603cf ; cutoff réel du 13 novembre07:54CET réussi et restitution revérifiée indépendamment à07:58, aucune unité privée enregistrée, aucun descendant ; clôture documentaire sans action GPU.
 - **Famille** : produit
 - **Gravité** : disponibilité ; les modèles temporaires doivent rendre le GPU du jeu à l'heure convenue.
 - **Atteignable en service** : oui pour les processus privés nocturnes, aucune modification des services courants requise.
@@ -260,3 +260,38 @@ pas un chargement cérémoniel ni un profil de modèle non prouvé. Toujours zé
 modèle demandé ; tout premier besoin doit qualifier son placement réel.
 Le timer et les preuves stables restent hors worktree après nettoyage.
 Ticket ouvert jusqu’au constat effectif de restitution au matin.
+
+## Restitution réelle vérifiée le 13 novembre : clôture
+
+L’orchestration a signalé la fin du cutoff ; optimiseur l’a revérifiée en
+lecture seule à **07:58:09–07:58:26 Paris**. Aucun lancement, arrêt manuel,
+rejeu de test ou changement de service effectué pour cette vérification.
+
+- cutoff.service : `Result=success`, `ExecMainStatus=0`, début et fin
+  **Fri 2026-11-13 07:54:00 CET**, MainPID0, inactive/dead, ControlGroup vide ;
+- cutoff.timer : dernier déclenchement07:54CET, active/elapsed, aucune prochaine
+  échéance, Persistent=yes ; il n’ouvre pas une nouvelle nuit ;
+- `restitution.json` : date **06:54:00.765643UTC = 07:54:00.765643CET**,
+  verdict VERT, avant/après et pids_groupes_avant vides,
+  unites_privees_arretees et descendants_restants vides,
+  aucun_redemarrage=true ;
+- `ferme.json` : date06:54:00.765356UTC, reouverture=false ;
+- aucune recette dans le registre effectif, aucune unité
+  `cx-card0-20261113-modele-*`, aucun cgroup correspondant au relevé indépendant.
+
+Preuve brute conservée à luciepc dans le même dossier stable :
+`preparation/verification-restitution-13nov.json`, avec unité systemd,
+reçus et limite. SHA256 du reçu `restitution.json` relu :
+`406dc82e8e274138542096967481601738f4b40870946950b8006e9c7f0dd8a9`.
+Les anciens rouges, fixtures CPU, sources, configurations et reçus restent
+conservés ; aucune suppression de donnée ni dépose d’unité demandée ici.
+
+**Limite de la preuve** : aucune unité privée n’a été enregistrée pendant
+cette fenêtre. L’échéance et la fermeture réelle sont prouvées ; ce cas ne
+prouve pas un déchargement de poids GPU réels ni un placement de modèle
+réel cette nuit. Les tests de portée/descendants CPU antérieurs restent
+distincts de ce constat et n’ont pas été rejoués. La portée est rendue,
+sans extension implicite de l’autorisation à une autre nuit.
+
+Ticket déplacé dans closed avec cet état, les preuves et cette limite dans
+le même commit ; rapport et knowledge dump actualisés.

@@ -1,20 +1,26 @@
 # Rapport de session — G, « l'optimiseur » (11 novembre 2026, 16 h 25)
 
-## Nuit du 12 au 13 novembre : portée card0 à restituer
+## Nuit du 12 au 13 novembre : portée card0 restituée
 
-Ticket ouvert `docs/optimiseur/tickets/2026-11-12-borner-la-fenetre-nocturne-de-card0.md`,
+Ticket fermé `docs/tickets/closed/2026-11-12-borner-la-fenetre-nocturne-de-card0.md`,
 branche `cx-optimiseur-card0-nuit-2`, worktree `cx-optimiseur-card0-nuit`. À luciepc : source SHA
 0e11e0a3…, entrée requalifiée après revue finale, refus hors nuit avant commande GPU, unités privées sans restart,
 RuntimeMaxSec + cutoff.timer réel le13novembre **07:54 Paris**, Persistent=yes,
-active/waiting. 22 fixtures CPU vertes aux deux postes, vraie entrée CPU dans
+au relevé de préparation active/waiting. 22 fixtures CPU vertes aux deux postes, vraie entrée CPU dans
 sa portée (hors unité/étrangère refusés avant GPU) et vrai probe systemd
 de descendant setsid terminé sans résidu. Aucun modèle demandé/enregistré,
 pas d’utilisation card0 ; Banc/Embarquement n’en ont pas besoin actuellement.
 
+Cutoff réel **13nov07:54CET**, Resultsuccess/rc0 ; reçu VERT, fermeture sans
+réouverture, aucune unité ni descendant. Vérification indépendante optimiseur
+à07:58 : registre, unités et cgroups de modèle vides. Aucune unité privée
+n’avait été enregistrée : cela prouve la fermeture réelle de la fenêtre,
+pas un déchargement GPU de modèle réel. Aucun test ni service rejoué pour clore.
+
 Sources/configs/preuves stables hors worktree dans
-`~/.cache/optimiseur-notes/card0-20261113/` à luciepc. Lire `restitution.json`
-après 07:54 et vérifier les seules unités/cgroups privés avant de dire card0
-rendue et de fermer le ticket. Ne pas confondre timer armé avec restitution.
+`~/.cache/optimiseur-notes/card0-20261113/` à luciepc ; preuve indépendante
+`preparation/verification-restitution-13nov.json`. Timer désormais elapsed,
+sans prochaine échéance ; configurations et anciens reçus conservés.
 Les services chauds 7878/7879 et les modèles froids 7880/7882 restent inchangés.
 
 ## Reprise du 12 novembre : provenance du bâti vectoriel de CI
