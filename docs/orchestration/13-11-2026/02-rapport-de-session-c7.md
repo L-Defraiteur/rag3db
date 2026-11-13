@@ -379,3 +379,14 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   fiche homonyme au lieu d'en créer une ; e2e_archiviste 7/7, rejeu complet puis court verts). Le second et
   dernier essai à blanc est lancé sur la même copie et les 52 documents, binaire de cette tête : résultat
   vers 22 h 20, puis la page de comparaison pour Lucie. embarquement a son tour (l'éviction locale).
+- **20 h 21, la cause du COMMIT qui perd des nœuds est lue (cœur)** : ni le paquet défait ni la réouverture,
+  mais **un comportement indéfini dans `LocalStorage::commit`** — un parcours de la table de hachage des
+  tables locales pendant lequel la validation d'une table sous index HNSW crée une table locale de relations
+  dans cette même table de hachage ; si elle se réorganise, les itérateurs sont invalidés et des tables de
+  nœuds sont sautées : leurs lignes ne sont jamais publiées, le COMMIT rend succès, et les relations,
+  parcourues après, deviennent orphelines. Réduction à 15 instructions sur 787 ; témoin gtest
+  `ACommitWithAVectorIndexKeepsTheRowsOfEveryTable` rouge sur master sans ROLLBACK ni réouverture (dès 12
+  tables, 86 pertes de 12 à 40). Portée : toute transaction qui écrit sous un index vectoriel et touche assez
+  de tables — l'ingestion par paquets ; les bases de Lucie épargnées (0 orpheline) parce que l'ingestion par
+  défaut valide plus petit. Correctif en cours (parcourir une copie des identifiants, puis les relations,
+  celles créées en route comprises), suites entières, push, lib neuve, puis 1a rejoué dessus.
