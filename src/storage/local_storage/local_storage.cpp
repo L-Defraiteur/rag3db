@@ -78,29 +78,51 @@ void LocalStorage::commit() {
             numLocalRelsBeforeCommit[tableID] = localTable->getNumTotalRows();
         }
     }
+    // Les tables de nœuds, relevées avant de valider la première : valider une table sous index
+    // vectoriel insère ses lignes dans l'index HNSW, qui pose des arêtes dans ses tables de
+    // relations internes et crée pour elles une table locale dans `tables` (getOrCreateLocalTable).
+    // Parcourir `tables` pendant ces ajouts invalidait le parcours dès une réorganisation de la
+    // table de hachage : des tables de nœuds étaient sautées, leurs lignes jamais publiées, et le
+    // COMMIT rendait succès (relations orphelines vers des nœuds perdus, 13 novembre 2026).
+    std::vector<table_id_t> nodeTableIDs;
     for (auto& [tableID, localTable] : tables) {
         if (localTable->getTableType() == TableType::NODE) {
+            nodeTableIDs.push_back(tableID);
+        }
+    }
+    for (const auto tableID : nodeTableIDs) {
+        auto* localTable = tables.at(tableID).get();
+        {
             const auto tableEntry = catalog->getTableCatalogEntry(transaction, tableID);
             const auto table = storageManager->getTable(tableID);
             const auto oldStartOffset = localTable->cast<LocalNodeTable>().getStartOffset();
             const auto newStartOffset = table->getNumTotalRows(nullptr /* transaction */);
             const auto numRows = localTable->getNumTotalRows();
-            table->commit(&clientContext, tableEntry, localTable.get());
+            table->commit(&clientContext, tableEntry, localTable);
             if (numRows > 0) {
                 nodeOffsetMap[tableID] =
                     LocalNodeOffsetMap{oldStartOffset, newStartOffset, numRows};
             }
         }
     }
+    // Les tables de relations ensuite, celles que les index ont créées en route comprises ;
+    // relevées elles aussi avant d'en valider une.
+    std::vector<table_id_t> relTableIDs;
     for (auto& [tableID, localTable] : tables) {
         if (localTable->getTableType() == TableType::REL) {
+            relTableIDs.push_back(tableID);
+        }
+    }
+    for (const auto tableID : relTableIDs) {
+        auto* localTable = tables.at(tableID).get();
+        {
             const auto table = storageManager->getTable(tableID);
             const auto tableEntry =
                 catalog->getTableCatalogEntry(transaction, table->cast<RelTable>().getRelGroupID());
             const auto numRowsBefore = numLocalRelsBeforeCommit.find(tableID);
             localTable->cast<LocalRelTable>().remapNodeOffsets(nodeOffsetMap,
                 numRowsBefore == numLocalRelsBeforeCommit.end() ? 0 : numRowsBefore->second);
-            table->commit(&clientContext, tableEntry, localTable.get());
+            table->commit(&clientContext, tableEntry, localTable);
         }
     }
     for (auto& [tableID, pendingStats] : pendingNodeStats) {
