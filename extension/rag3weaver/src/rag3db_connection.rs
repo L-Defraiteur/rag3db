@@ -386,12 +386,17 @@ impl Rag3dbConnection {
         Self::open_explicit_config(path.as_ref(),config)
     }
 
-    pub(crate) fn with_owned_physical_config(
-        path: impl AsRef<Path>, config:rag3db::SystemConfig,
+    pub(crate) fn with_owned_physical_buffer_pool(
+        path: impl AsRef<Path>, readonly:bool,
         permit:&crate::dataflow::migrations::physical_index::PhysicalRootPermit,
     )->Result<Self,DbError> {
         permit.validate_path(path.as_ref()).map_err(|e|DbError::ConnectionError(e.to_string()))?;
-        Self::open_explicit_config(path.as_ref(),config)
+        let choice = buffer_pool_choice(None);
+        let mut connection = Self::open_explicit_config(
+            path.as_ref(), Self::config_with_buffer_pool(choice).read_only(readonly),
+        )?;
+        connection.buffer_pool = Some(choice);
+        Ok(connection)
     }
 
     fn open_explicit_config(path:&Path,config:rag3db::SystemConfig)->Result<Self,DbError> {
