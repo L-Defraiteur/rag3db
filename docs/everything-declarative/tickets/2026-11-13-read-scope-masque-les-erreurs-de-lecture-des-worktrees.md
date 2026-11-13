@@ -198,3 +198,14 @@ copie4fichiers SHA conservés (voir recette04). Aucun juge produit joué.
 Correction de préparation : bus usermanager fixe attribué avant poste, bus
 privé du confineur ensuite ; nouveauWT/paths r3 et GO exact à renouveler.
 Pas de rejeu inchangé, pas de cause produit déduite.
+
+
+## R3 rouge fixture, préparation corrective bornée
+
+Compileverte mais cible1 échoue avant cause visée : déclaration models.embed
+absente du helper. Cause et panic capturées ; scope nettoyé, rouge23fichiers
+SHA conservé deux postes. Aucune attribution au produit/ancien FAILED.
+Ajout TEST d’une déclaration embed sans entités denses/index, RO Archi
+favorable au chemin sans service. Assertions inchangées. Proposition R4
+avec reçu neuf calculé après poste, borne R3 absolue908183.114381791 conservée
+(driver/finaliseur) ; target/preuves/WT neufs, revue et GO exact avant rejeu.
