@@ -167,3 +167,9 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   rouge d'environnement nommé, second jeu de l'étape, push ; mais si un troisième témoin fait pareil, c'est
   la charge de l'étape qu'il faut mesurer (un ticket d'ED sur l'étape, pas sur chaque témoin). archi passe
   à l'écriture sûre (mode du fichier gardé, refus d'un fichier changé depuis sa lecture).
+- **17 h 33, le correctif du raccord physique est sur master** (arbre principal, 73586bf92) : l'écrivain du
+  raccord passe par le registre OPEN_FOR_WRITING et REOPEN_WAIT, la boucle d'ouverture compte la base et
+  l'état de réouverture et attend la vraie fin du destructeur ; rejeu court net (lib entière 2312/0,
+  physical_index 11/11 trois fois, navigateur 40/40). Ticket du raccord fermé ; le ticket CI se ferme au
+  premier run vert de 73586bf92 (arbre principal). Suite d'arbre principal : wt-deplace (le garde-fou), son
+  inachevé du 11 ; les couches 2b-A attendent la décision de Lucie. 96 a son tour (M8), puis ED (l'équipier).
