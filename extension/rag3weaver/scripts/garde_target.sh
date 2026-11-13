@@ -22,11 +22,25 @@ garder_le_target() {
   target="$(cd "$target" && pwd -P)" || return 2
   arbre="$(cd "$arbre" && pwd -P)" || return 2
   marque="$target/.arbre-du-target"
+  if [ -L "$marque" ] || { [ -e "$marque" ] && [ ! -f "$marque" ]; }; then
+    echo "✗ marqueur de target non régulier : $marque" >&2
+    return 2
+  fi
   if [ ! -f "$marque" ]; then
+    local contenu
+    contenu="$(find "$target" -mindepth 1 -maxdepth 1 -print -quit)" || return 2
+    if [ -n "$contenu" ]; then
+      echo "✗ target non vide sans provenance : $target ; conserver et diagnostiquer, ou choisir un target neuf" >&2
+      return 2
+    fi
     echo "$arbre" > "$marque"
     return 0
   fi
   note="$(cat "$marque")"
+  if [ -z "$note" ] || [[ "$note" != /* ]]; then
+    echo "✗ provenance de target invalide : $marque" >&2
+    return 2
+  fi
   [ "$note" = "$arbre" ] && return 0
 
   if [ "${RAG3WEAVER_TARGET_REPRENDRE:-0}" != "1" ]; then
