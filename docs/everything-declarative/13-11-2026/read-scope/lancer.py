@@ -18,9 +18,9 @@ def main():
     allowed = ('HOME', 'USER', 'LOGNAME', 'LANG', 'LC_ALL',
                'RAG3WEAVER_VALIDATION_RECU', 'RAG3WEAVER_VALIDATION_JETON')
     env = {k: os.environ[k] for k in allowed if k in os.environ}
-    env.update(PATH=str(pathlib.Path.home() / '.cargo/bin') + ':/usr/local/bin:/usr/bin:/bin', POSTE_MEM_MAX='32G')
+    env.update(PATH=str(pathlib.Path.home() / '.cargo/bin') + ':/usr/local/bin:/usr/bin:/bin', POSTE_MEM_MAX='32G', RAG3WEAVER_BUILD_MEMORY_HIGH='0')
     cmd = [sys.executable, str(w / 'extension/rag3weaver/scripts/confiner_validation.py'),
-           'lancer', '--mode', 'mesure', '--delai', '6000', '--preuves', str(p / 'supervision'),
+           'lancer', '--mode', 'lourd', '--delai', '6000', '--preuves', str(p / 'supervision'),
            '--', sys.executable, str(here / 'driver.py'), str(w), source, str(p), str(t)]
     (p / 'lancement.json').write_text(json.dumps(dict(source=source, commande=cmd), indent=2))
     with (p / 'supervision.log').open('w') as log:
