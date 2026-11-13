@@ -59,4 +59,35 @@ touch "$ICI/ancien/ir/src/lib.rs"
 (cd "$ICI/ancien" && cargo check -p app 2>&1) | grep -q 'Checking ir '
 cas $? "un fichier local touché après reprise est revu (ligne « Checking ir »)"
 
+# **Un target restauré par le cache de la CI** (13 novembre 2026) : Swatinem/rust-cache rend
+# target/ non vide et sans son marqueur ; la garde le refusait, et la CI s'arrêtait avant tout
+# test. La provenance se déclare (« le cache de la CI », pas l'arbre courant), puis la reprise
+# efface les empreintes locales : aucune exemption, sans reprise c'est un refus.
+PROVENANCE_CI="$(cd "$(dirname "$GARDE")" && pwd)/provenance_du_cache_ci.sh"
+C="$ICI/target-du-cache"
+mkdir -p "$C" && cp -a "$T/." "$C/" && rm -f "$C/.arbre-du-target"
+garder_le_target "$C" "$ICI/ancien" > /dev/null 2>&1
+[ $? = 2 ]
+cas $? "un target restauré sans marqueur est refusé tel quel (code 2)"
+bash "$PROVENANCE_CI" "$C" > /dev/null 2>&1
+[ "$(cat "$C/.arbre-du-target" 2>/dev/null)" = "/cache-de-la-ci/rust-cache" ]
+cas $? "la provenance du cache de la CI se déclare dans le marqueur"
+bash "$PROVENANCE_CI" "$C" > /dev/null 2>&1 && [ "$(cat "$C/.arbre-du-target" 2>/dev/null)" = "/cache-de-la-ci/rust-cache" ]
+cas $? "la déclarer deux fois ne change rien"
+garder_le_target "$C" "$ICI/ancien" > /dev/null 2>&1
+[ $? = 2 ]
+cas $? "sans reprise, le target du cache est refusé comme celui d'un autre arbre"
+RAG3WEAVER_TARGET_REPRENDRE=1 garder_le_target "$C" "$ICI/ancien" > /dev/null 2>&1
+cas $? "avec la reprise, la garde rend 0"
+[ "$(cat "$C/.arbre-du-target" 2>/dev/null)" = "$(cd "$ICI/ancien" && pwd -P)" ] \
+  && [ -z "$(find "$C" -path '*/.fingerprint/*' -prune -regextype posix-extended \
+        -regex '.*/\.fingerprint/(ir|app)-[0-9a-f]{16}' -print)" ]
+cas $? "après la reprise, le marqueur dit l'arbre et aucune empreinte locale ne reste"
+V="$ICI/target-du-cache-vide"; mkdir -p "$V"
+bash "$PROVENANCE_CI" "$V" > /dev/null 2>&1 && [ ! -e "$V/.arbre-du-target" ]
+cas $? "un target vide (pas de cache) ne reçoit aucune provenance"
+P="$ICI/target-deja-marque"; mkdir -p "$P" && echo "$ICI/neuf" > "$P/.arbre-du-target" && touch "$P/x"
+bash "$PROVENANCE_CI" "$P" > /dev/null 2>&1 && [ "$(cat "$P/.arbre-du-target")" = "$ICI/neuf" ]
+cas $? "une provenance déjà dite ne se réécrit pas"
+
 exit $echec
