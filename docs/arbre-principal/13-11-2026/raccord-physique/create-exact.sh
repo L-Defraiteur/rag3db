@@ -11,7 +11,7 @@ o=Path(sys.argv[3]);profile=json.loads((o/'profil-lectures.json').read_text())['
 assert 'RAG3WEAVER_MOTEUR_ANCIEN' not in os.environ
 for k,v in profile.items():
  if k!='RAG3WEAVER_MOTEUR_ANCIEN':assert os.environ.get(k)==v,(k,os.environ.get(k),v)
-root=Path.home()/'.cache/rag3weaver-build';pid=os.environ['RAG3WEAVER_PASSE_E2E'].split('-')[0];assert pid.isdigit()
+root=o/'runtime-disk';pid=os.environ['RAG3WEAVER_PASSE_E2E'].split('-')[0];assert pid.isdigit()
 tmp=Path(os.environ['TMPDIR']);disk=Path(os.environ['RAG3WEAVER_E2E_DOSSIER']);state=Path(os.environ['RAG3WEAVER_STATE_DIR'])
 assert tmp.is_relative_to(o/'tmp') and tmp.parent.name=='rag3weaver-e2e-'+pid and tmp.name=='e2e_lectures'
 assert disk==root/('e2e-'+pid)/'e2e_lectures'

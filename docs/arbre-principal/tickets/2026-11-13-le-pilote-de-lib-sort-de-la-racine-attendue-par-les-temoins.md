@@ -58,3 +58,12 @@ et création unique contrôlées. Aucun DROP/reset. Revue et GO exact requis ava
 lancement. Aucun résultat runtime global vert ; P14 ciblé seul demeure qualifié.
 Les champs protégés UNKNOWN ne prouvent pas une absence d’accès GPU.
 Voir [recette corrective](../13-11-2026/04-recette-corrective-runtime-physique.md).
+
+
+### Delta de garde CREATE après revue 9587eac0a
+
+Recherche identifie une assertion garantie : le runtime e2e utilise la racine
+privée preuve/runtime-disk, mais CREATE exigeait encore la racine historique
+partagée. La garde exige maintenant exactement o/runtime-disk/e2e-PID/e2e_lectures.
+Contraintes PID, TMP, checkpoints, cache, état possédé et absence de résidus
+inchangées. Aucun runtime exécuté ; nouvelle revue exacte avant GO.
