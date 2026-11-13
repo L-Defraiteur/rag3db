@@ -111,7 +111,11 @@ le juge.
    s'en sert par le lanceur (qui résout la référence au moment d'exécuter, hors de la fenêtre du
    modèle), et la sait temporaire. Rien d'autre : pas de décision, pas de droits. C'est ensuite l'agent
    qui, sur demande, range la référence dans le coffre durable (graine 4). Le modèle cloud ne voit
-   jamais un vrai secret.
+   jamais un vrai secret. **Une exception, sur les retours d'outils** : le classifieur peut aussi passer
+   sur le résultat d'un outil, quand l'outil porte un drapeau « lit des données potentiellement
+   sensibles » (un fichier de configuration, une base, un service externe), et l'agent peut lui-même
+   demander qu'il passe sur un retour donné. Même effet : des références opaques à la place des
+   valeurs, avant que le retour n'entre dans la fenêtre du modèle.
 
 Le code est le premier produit du framework ; ces cinq-là sont des vues et des agents de plus sur le
 même index.
