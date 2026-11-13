@@ -258,3 +258,45 @@ fn deux_occurrences_d_un_contenu_ne_sont_pas_une_ecriture_perdue() {
         assert_eq!(documents, lignes, "« {entite} » : {documents} documents pour {lignes} lignes");
     }
 }
+
+/// Le rebâti du plein texte en fichiers lit les lignes de la table qui porte
+/// l'index : l'index de `ScopeContent` se refait depuis les versions, pas depuis
+/// les occurrences `Scope` (deux occurrences d'un contenu, un document). Rouge,
+/// il y rangeait les lignes et les décalages de `Scope`.
+#[test]
+#[ignore]
+fn le_plein_texte_d_une_version_se_rebatit_depuis_les_versions() {
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().join("code.rag3db");
+    let fts = dir.path().join("fts");
+    let ouvrir_fichiers = || {
+        let (embedder, _) = compteur();
+        let conn = Rag3dbConnection::new(&base).unwrap();
+        conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension())).unwrap();
+        let mut cat = Catalog::new(Box::new(conn), Box::new(embedder), CatalogConfig {
+            allow_mock_embedder: true, embedding_dim: 8, ..Default::default()
+        });
+        cat.set_fts_storage(rag3weaver::fts_handle::FtsStorage::Files { base_path: fts.to_string_lossy().into_owned() });
+        cat.initialize().unwrap();
+        register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+        cat
+    };
+    {
+        let mut cat = ouvrir_fichiers();
+        let source = Snapshot::new("ancre", [
+            ("a.rs".to_string(), FONCTION.to_string()),
+            ("b.rs".to_string(), format!("\n\n{FONCTION}")),
+            ("c.rs".to_string(), "pub fn seule() -> u32 { 7 }\n".to_string()),
+        ]);
+        assert_eq!(cat.ingest_code(&analyze_source(&source).unwrap()).unwrap().failed, 0);
+        cat.mark_fts_pending(&["Scope"]).unwrap();
+    }
+    let mut cat = ouvrir_fichiers();
+    cat.verify_fts_files();
+    let versions = cat.execute_raw("MATCH (v:ScopeContent) RETURN count(v)").unwrap().rows[0][0].as_i64().unwrap() as u64;
+    let occurrences = cat.execute_raw("MATCH (s:Scope) RETURN count(s)").unwrap().rows[0][0].as_i64().unwrap() as u64;
+    assert!(occurrences > versions, "le témoin veut un contenu partagé : {occurrences} occurrences, {versions} versions");
+    let comptes = cat.comptes_du_plein_texte();
+    let (_, documents, _) = comptes.iter().find(|(e, _, _)| e == "Scope").cloned().expect("le plein texte de Scope");
+    assert_eq!(documents, versions, "l'index de ScopeContent rebâti porte {documents} documents pour {versions} versions ({occurrences} occurrences)");
+}
