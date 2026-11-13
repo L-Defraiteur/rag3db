@@ -630,3 +630,15 @@ fermeture et notifications. Conserver linéarisation closing/rejet et compte
 sendengagés, drainage/unwind/pinned/selfjoin ; ROED avant GO correctness distinct,
 puis comparaisonA/C distincte, sans réécrire A/B. Pas de runtime/merge/release
 par cet arbitrage ; créneau MESURE rendu, ne pas gêner Arbre.
+
+### Alternative C publiée, aucun runtime
+
+[Source/invariants/planA-C](../../lucivy/13-11-2026/04-alternative-admission-atomique.md).
+Branche neuve lucivy cx-lucivy-barriere-admission-atomique tête
+fa1d0273c468b997163f3cf9d5f56bae052f522a. Admission+closing mêmeAtomicUsizeCAS,
+garde empruntée sansArcclone, mutex/condvar seulementclosing. Notifier chaque
+finadmisclosing (pas seulementdernier) pour drainer canal pluspetit qu’actifs.
+Nouveaux juges comptageatomic et3sendadmis/cap1 ; tous anciensconservés.
+Pilotes distincts qualifier-barriere-atomique.py et mesurer-envois-ac.py publiés,
+sourcefixeC, mêmescontrats ; A/B inchangés. ROED/C7 demandée avant GOcorrectness,
+puis A/C distinct si vert. Aucunbuild/test/mesureC, SDK/DB/release/merge engagé.
