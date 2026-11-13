@@ -794,7 +794,7 @@ pub(crate) fn open_blob_snapshot(
         .collect::<Result<Vec<_>, String>>()?;
     let paths = (0..count).map(|i| format!("shard_{i}")).collect::<Vec<_>>();
     let shards = paths.iter().map(|path| {
-        let name = format!("{index}/{path}");
+        let name = format!("{}{index}/{path}", lucivy_core::blob_directory::BLOB_PREFIX);
         let mut names = store.list(&name).map_err(|e| e.to_string())?;
         names.sort();
         if names.is_empty() { return Err(format!("stored shard {name} has no files")); }
