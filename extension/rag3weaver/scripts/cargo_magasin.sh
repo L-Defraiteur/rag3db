@@ -10,4 +10,4 @@
 set -u
 . "$(cd "$(dirname "$0")" && pwd)/lib_du_magasin.sh"
 exporter_la_lib || exit 2
-exec cargo "$@"
+exec python3 -B "$(cd "$(dirname "$0")" && pwd)/cargo_garde.py" "$@"
