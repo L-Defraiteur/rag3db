@@ -5,12 +5,12 @@ import hashlib, json, mmap, os, re, shutil, subprocess, sys, time
 W=Path('/home/lucied/.cache/rag3weaver-build/cx-wt-raccord-physique')
 C=W/'extension/rag3weaver'
 T=Path('/home/lucied/.cache/rag3weaver-build/cx-target-contenu-derive')
-P=Path('/home/lucied/.cache/rag3weaver-build/cx-raccord-physique-cible-v1')
+P=Path('/home/lucied/.cache/rag3weaver-build/cx-raccord-physique-cible-v2')
 NATIVE='rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
 SOURCE=sys.argv[1]
 assert re.fullmatch('[0-9a-f]{40}',SOURCE)
 AUTH=json.loads(Path(os.environ['RAG3WEAVER_VALIDATION_RECU']).read_text())
-DEADLINE=AUTH['echeance']; START=DEADLINE-600
+DEADLINE=AUTH['echeance']; START=DEADLINE-599
 assert time.monotonic()<DEADLINE-10
 P.mkdir(exist_ok=False)
 for name in ['tmp','state','journaux','builtin_templates','elf','cache']: (P/name).mkdir()
@@ -18,7 +18,7 @@ E=os.environ.copy()
 for key in list(E):
     if key.startswith(('RAG3WEAVER_SERVICE_','RAG3WEAVER_EMBED_')) or key in ('RAG3WEAVER_PG','GOOGLE_APPLICATION_CREDENTIALS','RAG3WEAVER_PHYSICAL_CRASH','RAG3WEAVER_PHYSICAL_CHILD_ROOT'):
         E.pop(key,None)
-E.update(CARGO_TARGET_DIR=str(T),CARGO_BUILD_JOBS='8',CARGO_INCREMENTAL='0',RAG3DB_LIB=NATIVE,RAG3WEAVER_MOTEUR_ANCIEN='1',
+E.update(CARGO_TARGET_DIR=str(T),CARGO_BUILD_JOBS='8',CARGO_INCREMENTAL='0',RAG3DB_LIB=NATIVE,RAG3DB_LIBS_DIR='/home/lucied/.cache/rag3db-libs',RAG3WEAVER_MOTEUR_ANCIEN='1',
     LUCIVY_SCHEDULER_THREADS='8',CARGO_MANIFEST_DIR=str(C),TMPDIR=str(P/'tmp'),
     XDG_CACHE_HOME=str(P/'cache'),RAG3WEAVER_CACHE_DIR=str(P/'cache'),
     RAG3WEAVER_STATE_DIR=str(P/'state'),RAG3WEAVER_JOURNAUX_DIR=str(P/'journaux'),RAG3WEAVER_BUILTIN_TEMPLATES_DIR=str(P/'builtin_templates'))
