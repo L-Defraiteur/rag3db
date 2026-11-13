@@ -114,12 +114,25 @@ autre cause.
 
 ## Piste de correctif (à valider avec c7 avant le code)
 
-- Publier côté lecture (en-têtes de lecture, pips des tableaux disque) **avant** de vider la
-  mémoire locale. Ainsi une clé est toujours trouvable soit en mémoire, soit sur disque.
-- Ne vider la mémoire locale et ne publier les pips qu'**après** `applyShadowPages`, dans
-  `finalizeCheckpoint`, pour que les pages lues par les nouveaux pips aient leur nouveau contenu.
-- Ou bien un `shared_mutex` par index de clé primaire : recherche en partagé, publication en
-  exclusif. C'est plus simple à prouver, mais cela ajoute un verrou sur le chemin chaud.
+Il ne suffit pas de réordonner la publication. Ma première idée était de publier les en-têtes de
+lecture avant de vider la mémoire locale, et de publier après `applyShadowPages` ; cela ne
+suffit pas. `Checkpointer::holdReadersLock` (`checkpointer.cpp` l. 130) est un verrou de
+**fichier**, pris contre les ouvertures en lecture seule d'autres processus. Les lecteurs du même
+processus continuent pendant `applyShadowPages`, qui réécrit **sur place** les pages des slots :
+les fentes déplacent des clés existantes. Un lecteur pris pendant l'application lit l'ancien
+en-tête sur une page déjà réécrite.
+
+Proposé à c7 le 13 nov. :
+
+- un `shared_mutex` par `PrimaryKeyIndex`, pris **en partagé** par `lookup`, pour la paire
+  mémoire locale + disque ;
+- pris **en exclusif** par le point de reprise, de l'application des pages ombres jusqu'à la
+  publication en mémoire ;
+- `checkpointInMemory` de l'index de clé primaire passe **après** `applyShadowPages`, et publie
+  les en-têtes de lecture **avant** de vider la mémoire locale.
+
+Seules les recherches par clé attendent, et seulement pendant l'application. Les autres lecteurs
+V2 ne sont pas touchés.
 
 Témoins à jouer après le correctif : `PkLookupUnderCheckpoint` (rouge puis vert), puis
 `transaction_test` et `concurrence_test` entiers, puis `DdlEveryMinute` en trois tours, sans
