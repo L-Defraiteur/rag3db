@@ -1,6 +1,6 @@
 # La CI refuse la réouverture du témoin physique
 
-- **État** : ouvert ; échec CI exact observé, diagnostic de cycle de vie à attribuer sans rejeu.
+- **État** : ouvert ; cause attribuée et correctif `d57273bba` (arbre principal, 13 novembre au soir), vert en local sous l'environnement qui rougissait ; reste la CI verte sur la source corrigée.
 - **Famille** : produit.
 - **Gravité** : CI de master rouge ; portée production et cause à établir.
 - **Atteignable en service** : à départager ; échec actuel dans une fixture native privée.
@@ -642,3 +642,18 @@ Nouveaux juges comptageatomic et3sendadmis/cap1 ; tous anciensconservés.
 Pilotes distincts qualifier-barriere-atomique.py et mesurer-envois-ac.py publiés,
 sourcefixeC, mêmescontrats ; A/B inchangés. ROED/C7 demandée avant GOcorrectness,
 puis A/C distinct si vert. Aucunbuild/test/mesureC, SDK/DB/release/merge engagé.
+
+## Cause attribuée (arbre principal, 13 novembre au soir)
+
+Même cause que `docs/tickets/closed/2026-11-13-un-test-du-raccord-physique-rougit-sous-la-lib-entiere.md`,
+où sont le détail et les relevés. L'écrivain du raccord physique ouvrait sa `Database` hors du
+registre `OPEN_FOR_WRITING`, donc sans attendre la mort de l'instance précédente. Après le `drop`
+d'un `OwnedPhysicalIndex`, cette instance meurt plus tard sur un fil de fond. Une réouverture qui
+arrive avant est refusée net par la garde du moteur, qui dit vrai (cœur : `database.cpp:127-178`).
+
+Le correctif `d57273bba` fait passer le raccord par le même registre et la même attente que
+l'ouverture ordinaire. La garde contre deux écrivains reste entière, et aucun délai arbitraire
+n'est ajouté. Sous l'environnement qui rougissait à chaque tour (services d'embarquement
+joignables), la lib entière est verte trois tours sur trois.
+
+Fin selon ce ticket : la CI verte sur la source corrigée.
