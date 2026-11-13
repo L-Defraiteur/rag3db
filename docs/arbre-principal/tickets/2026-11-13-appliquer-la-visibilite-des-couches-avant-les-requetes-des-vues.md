@@ -39,3 +39,7 @@ Nouvelle source :15fonctions écrites, NONJOUÉES. Vrais3nœuds+spiesauxargument
 ## Frontière fixture après rouge F8 union
 
 Preuves e6e6b8677 publiées avant édition ; rapport37 corrige uniquement les huit frontières cfg(test) fixture, sans modifier quinze juges ni raccords communs. Nouveau SHA à revoir, aucune qualification avant GOcouple et reste original ; B/C ouverts.
+
+## Préparation capture Cargo cohérente, sans run
+
+Après preuves237614f83 et arbitrageC7, rapport40 prépare pidfdSTOP owned/CG/start revérifiés, tous threads stoppés, snapshot sélectionné avant assertions/CONTfinally et refus stricts. Produit d9aa figé, cache actuel déjàWTcfgd9 : gardecommune mêmepropriétaire sans réinvalidation acquise prétendue. Simulations CPU publiées avant exécution ; nouveau couple/RO/GO distinct sousENDoriginal, aucun Cargo lancé par préparation.
