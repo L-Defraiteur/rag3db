@@ -52,3 +52,16 @@ ainsi que racines indépendantes multi-origines. Compte inchangé4fonctions,
 toujours NON JOUÉES. Validation cycles O(n²) dans une chaîne, aucun coût mesuré.
 Deux propositions de fenêtre ont été reçues(900sRecherche/3000sED) ; ni durée
 ni compilation autorisées avant décision/recette/GOexact C7 et disponibilité.
+
+
+## Pilote concret préparé après arbitrage3000 C7
+
+Application69dc figée, contrôle en WT/branche séparés ; [recette11](../13-11-2026/11-recette-qualification-couches-2a.md).
+Build1800→inventaires4exact0ignored/ELFJSONcopiéledgerpublié→4exact60
+chacun→publication120→checknatif900 dans même échéance3000 après poste
+réel. Attestation maps/profil déterministe au main du premier exact via gdb,
+puis continuation de ce même test, aucun test ou modèle supplémentaire.
+Sup/driver/final horsW, environnement liste blanche, cgroup32/HIGHmax/CPUj8
+etSDK29, target privé neuf absent avant GO. Sources et pilote propres figés.
+Compilation adaptateur ne vaut pas runtime natif. Revue+GO du couple SHA
+encore requis ; zéro Cargo/rustc/target/DB/service créé pendant préparation.
