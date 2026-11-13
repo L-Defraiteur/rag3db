@@ -375,3 +375,13 @@ sous son ticket activation/résidence : contrat « index actif », deux causes
 possibles (index fini ou verrou indisponible), proposition de fixture contrôlée
 sans grossissement/sleep ni changement runtime. C9 reste figé, aucun Cargo ou
 modèle supplémentaire joué pour ce diagnostic ; son routage reste coordonné C7.
+
+Base Pub effectivement livrée `bc1a81500a05489673b64c2e5930d335510e6dda` ;
+rebase de nos commits sur elle, branche5, delta sourceC9 Markdown/JSON seulement.
+La qualification reste celle de C9, sans rejeu du modèle ou des phases inchangées.
+
+Le signal de carte a reçu un correctif TESTSEUL compagnon `08c379b11` (parentC9),
+qualifié exact1/0/0 en3.70s après compileF3/native29, scope0/restes[]/nettoyé et
+quiescence[]. Barrière réelle, RAII et cas terminé ajouté, assertions initiales
+maintenues. Transmis à Embar pour son union, sous ticket activation ; ce correctif
+n’est pas mélangé au candidat ED dont le Rust reste C9 figé.
