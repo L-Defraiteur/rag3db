@@ -1,0 +1,88 @@
+{
+  "verdict": "VERT",
+  "app": "9ec421069320b2f0cca4099fa27f83059e944de9",
+  "pilot": "65ad0810ca3f4f1496539d5e2945e5c959b94a07",
+  "phase": "nav40",
+  "initial": 914593.915525602,
+  "deadline": 919390.748839204,
+  "elapsed": 2075.898208416067,
+  "phases": [
+    {
+      "name": "verifier",
+      "rc": 0,
+      "elapsed": 0.05201392201706767,
+      "cap": 30,
+      "effective_deadline": 915234.027141296
+    },
+    {
+      "name": "cache-reprise",
+      "rc": 0,
+      "elapsed": 0.6726932519814,
+      "cap": 120,
+      "effective_deadline": 915324.330198456
+    },
+    {
+      "name": "features",
+      "rc": 0,
+      "elapsed": 226.90393110108562,
+      "cap": 2100,
+      "effective_deadline": 917304.213019005
+    },
+    {
+      "name": "large",
+      "rc": 0,
+      "elapsed": 233.9486336359987,
+      "cap": 900,
+      "effective_deadline": 916332.379224522
+    },
+    {
+      "name": "navigateur",
+      "rc": 0,
+      "elapsed": 39.024301829049364,
+      "cap": 600,
+      "effective_deadline": 916266.934380272
+    },
+    {
+      "name": "large-list",
+      "rc": 0,
+      "elapsed": 0.13102010206785053,
+      "cap": 30,
+      "effective_deadline": 915737.714332314
+    },
+    {
+      "name": "large-ignored",
+      "rc": 0,
+      "elapsed": 0.12627329805400223,
+      "cap": 30,
+      "effective_deadline": 915738.07273898
+    },
+    {
+      "name": "nav-list",
+      "rc": 0,
+      "elapsed": 0.13073740701656789,
+      "cap": 30,
+      "effective_deadline": 915738.45291424
+    },
+    {
+      "name": "nav-ignored",
+      "rc": 0,
+      "elapsed": 0.13580954796634614,
+      "cap": 30,
+      "effective_deadline": 915738.819607258
+    },
+    {
+      "name": "lib-large",
+      "rc": 0,
+      "elapsed": 51.589563677087426,
+      "cap": 600,
+      "effective_deadline": 917078.075086675
+    },
+    {
+      "name": "nav40",
+      "rc": 0,
+      "elapsed": 138.31117040105164,
+      "cap": 360,
+      "effective_deadline": 916889.740273229
+    }
+  ]
+}

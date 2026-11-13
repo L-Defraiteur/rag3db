@@ -1,0 +1,33 @@
+{
+  "verdict": "VERT",
+  "client_rc": 0,
+  "scope": {
+    "verdict": "VERT",
+    "code": 0,
+    "erreur": null,
+    "restes": [],
+    "prive": "/tmp/r3v-aae67739",
+    "nettoye": true
+  },
+  "quiescence": [],
+  "unknown_baseline": [
+    "1247",
+    "1256",
+    "2578",
+    "2754",
+    "2532216",
+    "2532317",
+    "2532319"
+  ],
+  "qualification": {
+    "features": "VERT_8_SUR_8",
+    "large": "VERT",
+    "nav": "VERT_40_SUR_40",
+    "assets": "DEUX_CORPS_HTTP_IDENTIQUES_AUX_BLOBS_GIT"
+  },
+  "elapsed": 2076.5546370750526,
+  "deadline": 919390.748839204,
+  "native_unit_runtime_observed": true,
+  "assets_http_against_git": 2,
+  "no_pg_bge_or_old_physical_lot": true
+}
