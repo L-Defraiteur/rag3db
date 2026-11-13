@@ -2303,7 +2303,7 @@ aux descendants attribués ; scan final inclut aussi un PID attribué passé SUI
 Globale4e STOPpremierrouge lib code_tools::tests::a_closed_policy_refuses_and_an_open_one_reads_outside_the_source. F8/min/4compiles/ledger verts conservés ; runtime
 lib non conclu, NAV/CLI/lectures/PGTX non lancés. Cause précondition CWD fausse
 confirmée métadonnées/source par ED/C7 : /var/tmp sans Cargo.toml. Ticket
-[correctif pilote](2026-11-13-le-pilote-de-lib-sort-de-la-racine-attendue-par-les-temoins.md).
+[correctif pilote](../../tickets/closed/2026-11-13-le-pilote-de-lib-sort-de-la-racine-attendue-par-les-temoins.md).
 Préparation séparée du runtime complémentaire autorisée, source4e etELF figés,
 NOUVEAUreçu borné échéanceinitiale896572.526453239, aucune prolongation/GO runtime
 implicite. Aucun changement de politique/test produit pour masquer le rouge.
@@ -2384,3 +2384,14 @@ antérieurs conservés. PasGOmaster, tickets ouverts avant livraison/revue.
 FD /dev/dri observés : aucune absence d’ouverture GPU revendiquée.
 Détails, compteshelpers, bornes et dump dans
 [preuves07](../13-11-2026/07-preuves-globales-correctives-physiques.md).
+
+
+## Préparation intégration après revue des preuves
+
+Rebase sur masterfa4dc3500 : seuls deux commits Markdown sont entrés depuis
+f8cbd6a48, aucun nouveau runtime requis selon décision C7. Le produit final
+doit rester byte-identique à app4e, y compris tests/gabarits/gitlinks/lockfiles.
+Les tickets UUID, lecteurRO et piloteCWD/profil sont clos avec les preuves
+composites et leurs limites ; ce PARENT reste OUVERT pour pyramide/couches,
+legacy, migration complète, projection de coordonnées et autres suites non
+qualifiées ici. Aucun GO master ni retrait de ressources déduit de cette note.

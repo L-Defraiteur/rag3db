@@ -1,6 +1,6 @@
 # Les tables de migration omettent leur clé _uuid
 
-- **État** : ouvert ; ciblé privé P14 qualifié sur a43c475f9 (preuve liée), qualification globale de l’union et livraison attendues.
+- **État** : corrigé ; application4e5ae8a32/pilotea18f8006d qualifiés par preuves composites0f260599a, clôture décidée C7 pour intégration ; limites conservées.
 - **Famille** : produit.
 - **Gravité** : création du journal de migration impossible sur base neuve native.
 - **Atteignable en service** : primitive commune MigrationRunner/Catalog ; reproduit dans le profil physique synthétique privé, aucun index réel touché.
@@ -8,7 +8,7 @@
 - **Pour** : arbre-principal ; revue mémoire/orchestration.
 - **Signalé par** : qualification P5 source39f798f99dfc6c5c100f5a73de9c00fc29ffc992.
 
-Parent : [raccord des ancres](2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md).
+Parent : [raccord des ancres](../../arbre-principal/tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md).
 
 ## Preuve et cause
 
@@ -52,7 +52,7 @@ tout retrait ; nouvelle PG privée cx_phys_2191_20261113_u1c, absence préalable
 et création unique contrôlées. Aucun DROP/reset. Revue et GO exact requis avant
 lancement. Aucun résultat runtime global vert ; P14 ciblé seul demeure qualifié.
 Les champs protégés UNKNOWN ne prouvent pas une absence d’accès GPU.
-Voir [recette corrective](../13-11-2026/04-recette-corrective-runtime-physique.md).
+Voir [recette corrective](../../arbre-principal/13-11-2026/04-recette-corrective-runtime-physique.md).
 
 
 ## Étape corrective distincte : arrêt au premier nouveau rouge
@@ -95,4 +95,4 @@ superviseur/finaliseurVERT sansrésidu, échéancecorrective conservée.
 antérieurs conservés. PasGOmaster, tickets ouverts avant livraison/revue.
 FD /dev/dri observés : aucune absence d’ouverture GPU revendiquée.
 Détails, compteshelpers, bornes et dump dans
-[preuves07](../13-11-2026/07-preuves-globales-correctives-physiques.md).
+[preuves07](../../arbre-principal/13-11-2026/07-preuves-globales-correctives-physiques.md).

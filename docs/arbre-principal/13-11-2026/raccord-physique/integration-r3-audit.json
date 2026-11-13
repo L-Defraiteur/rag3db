@@ -1,0 +1,26 @@
+{
+  "application_source": "4e5ae8a324f50313b74f70772eb2e92ee41fad6f",
+  "old_proof_package": "0f260599ac336e72e6b48b3afbb9dc110eba07e3",
+  "old_base": "f8cbd6a48abac5ad563883689132d0f45621916f",
+  "master": "fa4dc35001c4b86494ab0b9954cb6e2d2d619f0d",
+  "rebased_code_head": "21183958e8d7b384611b4657313af2a4e85f9b50",
+  "incoming_paths": [
+    "docs/everything-declarative/13-11-2026/01-rapport-de-session.md",
+    "docs/everything-declarative/13-11-2026/03-knowledge-dump.md",
+    "docs/everything-declarative/tickets/2026-11-13-read-scope-masque-les-erreurs-de-lecture-des-worktrees.md",
+    "docs/optimiseur/11-11-2026/01-rapport-de-session.md",
+    "docs/optimiseur/11-11-2026/02-knowledge-dump.md",
+    "docs/tickets/closed/2026-11-12-borner-la-fenetre-nocturne-de-card0.md"
+  ],
+  "product_entries_compared": 6779,
+  "product_delta": [],
+  "includes": "all tracked entries outside docs/: tests templates gitlinks lockfiles C++ included",
+  "master_nonoverlap_entries_preserved": 7871,
+  "master_deletions_preserved": true,
+  "range_diff_equal_patches": 36,
+  "code_commits_equal": 22,
+  "runtime_replayed": false,
+  "runtime_app_source": "4e5ae8a324f50313b74f70772eb2e92ee41fad6f",
+  "runtime_control_source": "a18f8006d052f1fb57ff88cfd5d38965ea3ce179",
+  "proofs": "0f260599ac336e72e6b48b3afbb9dc110eba07e3"
+}

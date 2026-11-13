@@ -1,6 +1,6 @@
 # Le pilote de lib sort de la racine attendue par les témoins
 
-- **État** : ouvert ; globale source4e arrêtée, correctif de recette en préparation.
+- **État** : corrigé ; application4e5ae8a32/pilotea18f8006d qualifiés par preuves composites0f260599a, clôture décidée C7 pour intégration ; limites conservées.
 - **Famille** : produit.
 - **Gravité** : la recette fait échouer un témoin existant par précondition fausse.
 - **Atteignable en service** : non, pilote privé ; aucun défaut production établi.
@@ -8,7 +8,7 @@
 - **Pour** : arbre-principal ; revue ED et orchestration.
 - **Signalé par** : première globale du raccord physique, source4e5ae8a32.
 
-Parent : [migration/raccord physique](2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md).
+Parent : [migration/raccord physique](../../arbre-principal/tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md).
 
 ## Rouge et préconditions observées
 
@@ -57,7 +57,7 @@ tout retrait ; nouvelle PG privée cx_phys_2191_20261113_u1c, absence préalable
 et création unique contrôlées. Aucun DROP/reset. Revue et GO exact requis avant
 lancement. Aucun résultat runtime global vert ; P14 ciblé seul demeure qualifié.
 Les champs protégés UNKNOWN ne prouvent pas une absence d’accès GPU.
-Voir [recette corrective](../13-11-2026/04-recette-corrective-runtime-physique.md).
+Voir [recette corrective](../../arbre-principal/13-11-2026/04-recette-corrective-runtime-physique.md).
 
 
 ### Delta de garde CREATE après revue 9587eac0a
@@ -135,4 +135,4 @@ superviseur/finaliseurVERT sansrésidu, échéancecorrective conservée.
 antérieurs conservés. PasGOmaster, tickets ouverts avant livraison/revue.
 FD /dev/dri observés : aucune absence d’ouverture GPU revendiquée.
 Détails, compteshelpers, bornes et dump dans
-[preuves07](../13-11-2026/07-preuves-globales-correctives-physiques.md).
+[preuves07](../../arbre-principal/13-11-2026/07-preuves-globales-correctives-physiques.md).
