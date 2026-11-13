@@ -39,3 +39,16 @@ Joué seul (`cargo test --lib -- native_normal_catalog_open_refuses_owned_profil
 
 Le rejouer dans la lib entière sur la lib neuve. Vert : fermer, avec ce résultat. Rouge : la
 cause (le fichier changé et qui l'écrit), puis le correctif ou la borne du test.
+
+## Le départage du 13 novembre au soir (archi)
+
+Sur master `4b4233853`, sous la **lib neuve 207701bb2, sans `MOTEUR_ANCIEN`**, et sous `poste mesure` (le
+poste à lui seul, aucune autre passe), le jeu large (`rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm`) :
+
+- tour 1 : 2307 passés, **1 échec** (ce test), 40,08 s ;
+- tour 2 : 2307 passés, **1 échec** (ce test), 41,07 s.
+
+La piste de la lib tombe : le rouge tient sous la lib neuve. Celle de la charge faiblit : le poste
+n'avait aucune autre passe. Reste ce que la lib entière fait que le test seul ne fait pas, dans le
+même processus : un autre test qui écrit dans les fichiers ouverts, un état global partagé, ou un
+ordre des tests. À départager en jouant le module `physical_index` entier, puis par moitiés.
