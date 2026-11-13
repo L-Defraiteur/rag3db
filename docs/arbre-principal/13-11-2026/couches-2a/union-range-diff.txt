@@ -1,0 +1,9 @@
+ 1:  5ec8dac8d =  1:  ac0c1d727 feat: préparer la résolution pure des couches épinglées
+ 2:  69dc3fc25 =  2:  1804c6094 test: préciser les tombstones de fichier et les domaines des couches
+ 3:  2339dbe9a =  3:  6bd2b0c4e docs: préparer le pilote CPU borné des couches épinglées
+ 4:  b38db981e =  4:  2c62df713 docs: séparer les juges CPU du SDK et préparer le bus avant poste
+ 5:  5a0a0e08a =  5:  e67453dea docs: revérifier la borne après les hashes du finaliseur 2a
+ 6:  abaf460df =  6:  ca6ebcec3 docs: arrêter les rouges nocapture et vérifier le socket utilisateur
+ 7:  72db9b21f =  7:  1e006ec9c docs: publier la qualification CPU bornée des couches épinglées
+ 8:  32478a73f =  8:  cb28fa603 docs: préparer l’union ciblée des couches après intégration ED
+ 9:  99b9796a0 =  9:  d77046bb9 docs: appliquer F8 et la lib large à l’union 2a après ED
