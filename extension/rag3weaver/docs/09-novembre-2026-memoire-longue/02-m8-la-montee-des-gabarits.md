@@ -50,6 +50,13 @@ Trois limites du gabarit vivant, pour ce cas :
 3. **Il ne sait rien des données.** Un schéma d'entité qui change (un champ requis, un type) ne
    se lit plus sur les lignes déjà en base ; rien ne le dit avant l'ouverture.
 
+Un quatrième cas, relevé par la mesure de la précision du rappel (page 04) : la réponse de
+`recall_fiches` dans la mémoire de Lucie **ne porte pas `via`** (sa copie du 25 octobre n'a pas
+les `returnFields` que le gabarit livre depuis le pas 3 de M4, ff7a18fe2). Le crochet de Claude
+Code devine donc les fiches du juge à leur nom (« bilan : », « outil : »), et ne les écartait pas
+avant le 8 novembre à 18 h 17 : dix fiches du juge glissées, aucune pertinente. Un champ rendu
+par un outil, ajouté au gabarit, n'arrive jamais chez elle sans montée.
+
 ## 3. Ce que M8 ajoute
 
 **Une commande, explicite, une mémoire à la fois** : `rag3weaver-backend templates upgrade
