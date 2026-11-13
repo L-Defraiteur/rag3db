@@ -4,7 +4,7 @@
 - **Gravité** : règle de push — la décision de rejeu d'un lot dépend du script de chaque session.
 - **Atteignable en service** : non (procédure de push seulement).
 - **Touche rag3weaver** : non (tools/poste et la procédure).
-- **Famille** : procédure
+- **Famille** : produit (la procédure de push et ses outils)
 - **Pour** : codeparsers (auteur de la garde), recherche en relecture ; toute réattribution passe par l'orchestration.
 - **Signalé par** : c7, à la lecture des pushes d'embarquement et d'ED du 13 novembre au soir.
 - **Constat** : `tools/poste/push_garde.sh` (recopié en `~/.cache/rag3weaver-build/push_garde.sh` aux deux
