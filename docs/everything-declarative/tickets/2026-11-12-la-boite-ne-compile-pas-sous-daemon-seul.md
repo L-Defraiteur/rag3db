@@ -98,3 +98,15 @@ un hôte. Compiler l’API publique depuis_daemon_json sous daemon seul et prés
 les règles du jeton et l’identité du service. Gardes/imports de code ajustés
 sans élargir les outils accessibles. Arrêt au premier rouge inattendu ; revue
 et passe adaptée avant tour C7, pas de clôture sur un simple check natif/code.
+
+### Diagnostic initial interrompu avant rustc
+
+Le premier lancement sur 19cd9383d échoue au chargement du manifeste path
+`codeparsers/Cargo.toml`, sous-module non initialisé dans le W PC. Le journal
+`frontieres-boite-20261113/initial/minimum.log` est conservé ; aucun résultat
+sur les features n'en est déduit. Correction de préparation : initialiser le
+seul sous-module codeparsers à son gitlink, sans activer sa feature.
+Reprise diagnostique séparée `diagnostic-gitlink`, même cible privée, primitive
+900 s : minimum `cargo check --lib --no-default-features -j8` (timeout 300 s),
+puis daemon seul avec `--features daemon` (300 s). Premier rouge arrête ; le
+rouge E0433 attendu doit être constaté avant correction de production.
