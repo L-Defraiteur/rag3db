@@ -215,3 +215,18 @@ Preuves relues par le cœur sur luciepc :
 `~/.cache/rag3db-tickets-notes/reprise-codex-11nov-29a7/d796.log` et `item2.log`.
 Elles complètent le contrôle vert par le chemin de l’hôte déjà décrit au rapport.
 La réparation des bases déjà abîmées reste un index complet décidé par Lucie.
+
+## Confirmé le 13 novembre 2026 sous 835d5298f
+
+hotfixs a rejoué à luciepc, sous poste lourd, chaque fois sur une copie neuve, avec `rejoue` et
+`check_rel_directions` rebâtis contre la lib `rag3db-build-835d5298f…-Release-…`, qui contient
+`29a7bc52a` :
+1. la trace complète de l'index (3 178 instructions) sur `coupure-12h06/code-lourd` : aucune
+   erreur, 118 contrôles d'INHERITS_FROM, QUERIES et LOCKS, aucun écart ;
+2. `check_rel_directions` sur la base fermée : 18 tables sur 18 égales dans les deux sens, dont
+   INHERITS_FROM 658/658 (650/658 sous `9bae60786`), QUERIES 20 093/20 093, LOCKS 546/546, MENTIONS
+   466 845/466 845 ;
+3. la recette « 1..796 puis CHECKPOINT », et la recette item-2 sur fixture-729 : aucun écart.
+
+Relevés : `~/.cache/rag3db-locks/rejeu-835d/` et `~/.cache/rag3db-tickets-notes/rejeu-835d.log` à
+luciepc.
