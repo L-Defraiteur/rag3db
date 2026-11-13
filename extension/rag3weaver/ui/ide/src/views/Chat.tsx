@@ -310,6 +310,11 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   // Un tour envoyé par cette page ; un tour venu d'ailleurs (relancé par la carte d'accord,
   // lot 7 de l'atelier) se suit par le flux et se relit à sa fin.
   const envoiDeLaPage = useRef(false);
+  // **Les runs que la page sait finis** (la bulle fantôme, relevée par everything declarative le
+  // 13 novembre 2026) : sous charge, le RunStarted d'un tour envoyé d'ici peut arriver après la
+  // réponse de son POST ; pris pour un tour venu d'ailleurs, il ouvrait une bulle que rien ne
+  // fermait. Un RunStarted d'un run fini est ignoré.
+  const runsFinis = useRef(new Set<string>());
   runRef.current = run;
   // **Le défilement** (tickets « le chat saute au scroll », « déplier un outil
   // déplace le scroll ») : c'est l'état du dernier défilement de la personne qui
@@ -421,6 +426,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       if (ev.kind === "RunStarted" && ev.run_kind === "graph" && target?.reaction) reactionsEnCours.current.add(String(ev.run));
       else if (ev.kind === "RunFinished" && reactionsEnCours.current.delete(String(ev.run))) forgetSymbols(id, `fin de la réaction ${String(ev.run)}`);
       if (ev.kind === "RunStarted" && ev.run_kind === "agent" && ev.name === `chat:${id}`) {
+        if (runsFinis.current.has(String(ev.run))) return;
         setRun(String(ev.run));
         setBusy(true);
         if (!envoiDeLaPage.current) {
@@ -470,6 +476,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       } else if (ev.kind === "PropositionChanged" && ev.change === "proposed") {
         live((m) => (m.propositions.some((p) => p.id === ev.id) ? m : { ...m, propositions: [...m.propositions, { id: Number(ev.id), paths: ev.paths as string[] | undefined, accepted: ev.accepted as boolean | undefined }] }));
       } else if (ev.kind === "RunFinished" && ev.run === runRef.current) {
+        runsFinis.current.add(String(ev.run));
         setRun(null);
       }
     });
@@ -500,6 +507,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
         setChat(s);
         setRecaps((cur) => ({ ...cur, [id]: { ...cur[id], context: p.context, model: p.model, writes: p.memory_writes, writesWhy: p.memory_writes_why, usage: p.usage } }));
         const run = p.tour;
+        if (run) runsFinis.current.add(run);
         if (envoiDeLaPage.current) {
           const attente = run ? attentes.current.get(run) : undefined;
           if (attente) attente(s);
@@ -550,6 +558,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
     setItems((cur) => [...cur, message("user", text), message("assistant", "", { live: true })]);
     try {
       const r = await sendChat(id, text);
+      if (r.run) runsFinis.current.add(r.run);
       // Le tour fini : les résultats entiers et les heures arrivent avec l'état que
       // l'hôte pousse, et se rattachent par l'appel — la bulle garde sa suite.
       const s = await etatDuTour(r.run);
