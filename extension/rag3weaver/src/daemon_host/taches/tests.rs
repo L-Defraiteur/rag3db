@@ -542,6 +542,15 @@ fn une_tache_entre_aux_suivies_avec_sa_parente_et_en_sort_a_sa_fermeture() {
             couches::parente_estampillee(&cat, &id, "agent/relecture").unwrap(),
             Some(Parente { branche: extraite.clone(), genre: GenreDeParente::Declaree, base: tache.depart.clone() })
         );
+        drop(cat);
+        // **L'état le dit** (index_states, donc /etat et l'IDE) : la couche suivie, sa parente et son genre.
+        let etat = b.index_states().unwrap();
+        let couches = etat["layers"].as_array().unwrap_or_else(|| panic!("pas de « layers » dans l'état : {etat}"));
+        let d = couches.iter().find(|c| c["repo"] == serde_json::json!(id)).unwrap_or_else(|| panic!("le dépôt absent : {etat}"));
+        let agent = d["branches"].as_array().unwrap().iter().find(|x| x["name"] == "agent/relecture").unwrap_or_else(|| panic!("la tâche absente : {d}"));
+        assert_eq!(agent["state"], "tracked", "{agent}");
+        assert_eq!(agent["parent"], serde_json::json!(extraite), "{agent}");
+        assert_eq!(agent["kind"], "declaree", "{agent}");
     })
     .unwrap();
     host.fermer_une_tache(&parent, "relecture").unwrap();
