@@ -300,3 +300,13 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   en entier, archi relit. (b) un SharedWorker seulement si plusieurs onglets ouverts sont un usage réel de
   Lucie — à lui demander. Le ticket 1a-2 est ouvert (06820c8ce) ; e2e_postgres par le pgvector de luciepc
   par tunnel, rien à démarrer sur le portable.
+- **19 h 40, l'archivage à blanc des docs est fini** (96, c3864d6f5, page et annexe fiche par fiche) : 52
+  documents, 432 sections, 110 min, 15,3 s par section, aucun 400. Avec la création permise sur la copie :
+  **326 fiches créées dont 274 à une seule section**, 95 noms génériques de moins de 25 caractères (« Le
+  témoin », « En file ») ; 10 rangements sous les 19 fiches existantes, tous justes ; des regroupements
+  tantôt justes, tantôt sur un titre générique. **Un défaut d'archive** : l'outil décide tout un document puis
+  écrit, donc une section ne voit pas la fiche créée par la précédente — aucune fiche ne réunit deux sections
+  d'un même document. Décidé : ce défaut se corrige sans attendre (ticket et lot, 96), puis un second essai
+  à blanc avec la voie « une création qui voit le document et nomme un sujet », pour que Lucie compare les
+  deux listes et tranche la politique par défaut (sans création, une fiche par document, création qui voit
+  le document). Rien n'est écrit dans sa mémoire ; tout reste à luciepc sous `blanc-96/`.
