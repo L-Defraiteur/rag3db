@@ -209,3 +209,17 @@ lucivy, branche cx-lucivy-shutdown-destruction, commit `645b6e6`, ajout unique
 aucune qualification de cette nouvelle source. Porteur Lucivy ; reste :
 relecture et nouveau GO CPU distinct par C7 avant tout lancement. La barrière
 de production reste à préparer après preuve rouge pertinente, ticket ouvert.
+
+### GO correctif fixture645b6e6 : budget résiduel seulement
+
+C7 relit et autorise la seule ligne priorityMedium de la source exacte
+`645b6e662c75e6d13dbb3ba5862226a2c4957866`. E0046 reste un rouge de compilation.
+Réemploi autorisé du seul target privé créé par PID1213520/start91619112,
+même worktree et provenance ; aucune purge ni deuxième target.
+Autorité initiale terminée, verdict restes=[] et nettoye=true relus ; aucun
+PID de l’inventaire encore présent au contrôle. À monotonic916480.60, échéance
+initiale916791.103284988, il reste310.49s. Après obtention de poste, calculer
+à nouveau floor(échéance-monotonic), refuser si <=60s ; reçu neuf et confineur
+bornés par ce reste, aucun reset600s. Priorité du worker Medium ; compilation
+j4/MemoryMax8G/MemoryHighmax, même témoin exact unique, aucun runtime DB/SDK.
+Tout autre rouge arrête sans retry ; qualification production distincte.
