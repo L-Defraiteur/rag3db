@@ -2103,3 +2103,25 @@ annonces retenues et révoque les accès. Le juge doit exiger cette erreur préc
 puis file vide (donc aucune annonce de disponibilité), plutôt que supprimer le
 signal d'erreur légitime. Correctif limité au juge, pas au chemin de production ;
 à publier et relire avant nouveau budget correctif explicite, aucun rejeu inchangé.
+
+
+Ciblé v4 bb894 : compilation23,437s, inventaire et9CPU VERTS. Groupe natif
+ROUGE24,671s total :9juges échouent dans declarations() avant ouverture, même
+refus du contrat search_index (champ dérivé content absent de Snippet). Helper
+sans environnement passe mais ne juge rien ;2enfants lancés échouent101 avant
+injection, aucun des8enfants attendus validé. Pas de VERT natif. Diagnostic RO :
+validate_search_index_context exige que les champs cherchables dérivés existent
+sur l'occurrence ; fixture déclarait body sur source et content sur dérivée.
+Correction fixture seule : nommer body le champ rendu dérivé également, adapter
+les attentes exactes/chunks/UUID/colonnes à ce nom, sans toucher au validateur ni
+aux valeurs rendues name+docstring+body. Recette à scinder en juges natifs exacts
+pour arrêter au premier échec à l'intérieur du groupe (libtest continue sinon).
+Pas de rejeu avant publication/revue/budget correctif distinct.
+
+Précision RO C7/Recherche avant publication : simple renommage body insuffisant
+pour prouver les coordonnées du rendu composite. Correction retenue : déclarer
+ET peupler Snippet.content avec le texte exact name\n docstring\n body (sans espaces
+ajoutés), garder body/file/start/end distincts, conserver dérivée content et
+assertion explicite égalité champ source/rendu, lecture native exacte du champ
+source supplémentaire. Offsets chunks dans content rendu uniquement, aucune
+projection vers body brut ou lignes fichier annoncée. Validateur inchangé.
