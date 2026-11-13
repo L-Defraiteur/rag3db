@@ -157,3 +157,13 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   une preuve ; le correctif d'arbre principal suit). recherche prépare arret-du-backend : le CSV d'un COPY tué
   devient un rouge connu avec son ticket (cause à part : écrire ces CSV dans le dossier de la base ou les
   balayer à l'ouverture, lot à lui), rejeu court, puis son tour après ED.
+- **17 h 27, archi a poussé 5a82169c6** (le chemin hors racine refusé : `canonique` résout composant par
+  composant ; ticket d'ED fermé ; lib entière avec les deux rouges nommés du raccord ; navigateur 40/40 au
+  second jeu). Arbre principal a son tour (correctif du raccord physique, plus un vrai rouge de son lot
+  corrigé en route : code mort sous rag3db-native,daemon ; lib entière 2309/0 avec et sans services).
+  **Un motif qui revient** : sous l'étape navigateur entière (40 témoins), un témoin rougit par attente sous
+  charge et passe vert seul — tour à tour `les_vues_de_l_ide_se_rendent_dans_un_vrai_navigateur` (archi)
+  et `un_accord_exterieur_reprend_la_ligne_exacte…` (arbre principal, ticket pour ED). Règle appliquée :
+  rouge d'environnement nommé, second jeu de l'étape, push ; mais si un troisième témoin fait pareil, c'est
+  la charge de l'étape qu'il faut mesurer (un ticket d'ED sur l'étape, pas sur chaque témoin). archi passe
+  à l'écriture sûre (mode du fichier gardé, refus d'un fichier changé depuis sa lecture).
