@@ -7340,11 +7340,17 @@ mod tests {
         std::fs::write(prep.join("__pause_du_lot__.rs"), "fn h() { arrivee(); }\n").unwrap();
         std::fs::rename(&prep, dir.path().join("sources/neuf")).unwrap();
         let fin = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        // Les compteurs des instantanés de lecture (L6) au départ : un appel passé sans instantané
+        // (pool plein) ou dont l'instantané a été écourté par son plafond lit requête par requête,
+        // et peut encadrer le COMMIT du lot (le cœur, 14 novembre 2026).
+        let lectures = || backend.index_states().ok().map(|e| e["reads"].clone()).unwrap_or_default();
+        let lectures_au_depart = lectures();
         let (mut avant, mut apres) = (0, false);
         while std::time::Instant::now() < fin {
             let u = usages_de(&backend, "arrivee");
             let (def, appel) = (u.contains("neuf/def.rs"), u.contains("__pause_du_lot__"));
             if def != appel {
+                let lectures_au_rouge = lectures();
                 // **Le départage avant l'échec** (ticket recherche du 13 novembre) : attendre
                 // la fin des lots, pour que les lignes `[montre]` de la réaction (un lot de
                 // deux fichiers, deux lots, ou un lot repris un à un) entrent dans la sortie
@@ -7358,7 +7364,10 @@ mod tests {
                     std::thread::sleep(std::time::Duration::from_millis(100));
                 }
                 std::thread::sleep(std::time::Duration::from_millis(500));
-                panic!("un lot vu à moitié (définition {def}, appel {appel}) : {}", &u[..u.len().min(400)]);
+                panic!(
+                    "un lot vu à moitié (définition {def}, appel {appel}) ; instantanés de lecture au départ {lectures_au_depart}, au rouge {lectures_au_rouge}, à la fin {} ; la réponse entière : {u}",
+                    lectures()
+                );
             }
             if def {
                 apres = true;
