@@ -364,9 +364,10 @@ fn native_initial_batch_publishes_exact_values_and_reopens_without_a_model() {
         let catalog = reopened.catalog().unwrap();
         let mut cat = catalog.lock().unwrap();
         assert!(cat.en_lecture_seule());
-        assert!(!cat.fts_handles().is_empty());
         for scope in cells() {
-            for handle in cat.fts_handles_in(&scope).expect("each probed cell has FTS handles").values() {
+            let handles = cat.fts_handles_in(&scope).expect("each probed cell has FTS handles");
+            assert!(!handles.is_empty(), "each probed cell must have opened its actual FTS handles");
+            for handle in handles.values() {
                 assert!(handle.is_read_only(), "reader must hold immutable snapshot handles");
                 assert!(handle.commit().is_err(), "read-only index refuses commit before persistence");
             }

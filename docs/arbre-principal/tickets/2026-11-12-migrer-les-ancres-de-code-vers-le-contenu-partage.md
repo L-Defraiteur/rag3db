@@ -2232,3 +2232,14 @@ et _config, etc. Réutiliser la constante PUBLIQUE BlobDirectory::BLOB_PREFIX
 Pas de lecture SQL/native hors recette ; root/shard manquant doit toujours refuser.
 Échec suivant aucun modèle dense est secondaire à FTS indisponible, pas admission
 d'un modèle ; aucun calcul/modèle exécuté. Pas de rejeu avant delta/RO/GO distinct.
+
+
+P12 source1477e506e : compilation10CPU et4juges natifs VERTS, namespace corrigé
+dépasse le refus précédent, deux enfants bootstrap qualifiés, aucune alerte de
+blobs lecteur dans ces logs. Cinquième juge normal-reopen échoue assertion ajoutée
+fts_handles() nonvide : recherche dans_la_cellule restaure la cellule courante
+par défaut ; les handles réels Alpha/Beta sont garés. Corriger ce juge seul pour
+exiger nonvide fts_handles_in de CHAQUE cellule sondée avant is_read_only/commit
+refusé, pas accepter une boucle vide. Prod inchangée, assertions fichiers entiers
+/index absent conservées ; fixture échec P12/tmp/.tmpy3EsNL préservée. Pasrejeu
+avant publication/revue/GO distinct.
