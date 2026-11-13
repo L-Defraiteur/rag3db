@@ -692,7 +692,10 @@ Summoning — runes, an alchemical symbol, a glitch — chosen by what the tool 
 allowed to do, at most 1.6 KB/s over ssh. Four more themes share its form —
 `--theme foret`, `cyberpunk`, `cyborg` or `alien` (or `RAG3WEAVER_TTY_THEME`), each a file of
 `templates/themes/`, each held to the same minimal contrast against its background (4.5 for text
-and readable code, 3 for what goes with it). `--plain` writes the stream as text.
+and readable code, 3 for what goes with it). What the teammate waits for comes first on the
+status line: an approval shows its command, `o` grants it and `n` refuses it; a question is
+answered by what you type (`answer` with `reply_to`); otherwise the teammate's state comes from
+`GET /ide/teammate/list`. `--plain` writes the stream as text.
 
 ## Embeddings and rerankers
 
