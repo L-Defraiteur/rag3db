@@ -807,3 +807,110 @@ pub(crate) fn open_blob_snapshot(
         ld_lucivy::directory::OwnedBytes::new(blob),
     )
 }
+
+/// **Une fusion entre deux commits garde les mots des segments neufs** : le
+/// contrat que rag3weaver attend de lucivy pour ses `.fts`, sur le schéma v4
+/// qu'il construit lui-même (`build_schema_config`, dictionnaire partagé).
+///
+/// Jusqu'à la 4.3.3, une fusion lancée entre deux commits commitait aussi les
+/// segments écrits depuis le dernier commit sans plier leurs textes dans le
+/// dictionnaire ; le commit suivant les sautait, et leurs mots n'étaient plus
+/// dans aucune génération du dictionnaire. Un index de code alimenté au fil
+/// de l'eau, avec ses fusions de fond, ne trouvait plus par le flou les
+/// documents touchés, et l'exact plus un identifiant qu'eux seuls portaient.
+/// Corrigé dans lucivy 4.3.5 ; le scénario déterministe est celui de son test
+/// `test_merge_keeps_new_words`, rejoué ici par l'API que rag3weaver lie.
+/// Ticket : recherche/tickets/2026-11-13-un-index-lucivy-ecrit-avant-4-3-5-pendant-des-fusions-garde-ses-mots-perdus.md.
+#[cfg(test)]
+mod mots_neufs_a_travers_une_fusion {
+    use super::*;
+    use lucivy_core::directory::StdFsDirectory;
+    use lucivy_core::handle::LucivyHandle;
+    use lucivy_core::query::QueryConfig;
+    use std::collections::BTreeSet;
+
+    const CHAMP: &str = "_content";
+
+    fn trouves(handle: &LucivyHandle, mot: &str, distance: u8) -> BTreeSet<String> {
+        let requete = QueryConfig {
+            query_type: "contains".into(),
+            field: Some(CHAMP.into()),
+            value: Some(mot.to_string()),
+            distance: Some(distance),
+            ..Default::default()
+        };
+        let resultats = handle.search(&requete, 10_000, None).unwrap();
+        let searcher = handle.reader.searcher();
+        let champ = handle.field(CHAMP).unwrap();
+        resultats
+            .iter()
+            .map(|(_, adresse)| {
+                let doc: ld_lucivy::LucivyDocument = searcher.doc(*adresse).unwrap();
+                doc.get_first(champ)
+                    .map(|v| match ld_lucivy::schema::OwnedValue::from(v) {
+                        ld_lucivy::schema::OwnedValue::Str(s) => s,
+                        _ => String::new(),
+                    })
+                    .unwrap_or_default()
+            })
+            .collect()
+    }
+
+    fn jouer(fusion: bool) {
+        let dossier = tempfile::tempdir().unwrap();
+        let schema = build_schema_config(&[CHAMP.to_string()], &[], 1).unwrap();
+        let neufs: BTreeSet<String> = (0..20).map(|i| format!("fn quokka_neuf_{i:02}() {{}}")).collect();
+        {
+            let handle = LucivyHandle::create(StdFsDirectory::open(dossier.path()).unwrap(), &schema).unwrap();
+            let champ = handle.field(CHAMP).unwrap();
+            let mut garde = handle.writer.lock().unwrap();
+            let writer = garde.as_mut().unwrap();
+            writer.set_merge_policy(Box::new(ld_lucivy::indexer::NoMergePolicy));
+            // Deux lots commités : au moins deux segments commités à fusionner.
+            for lot in 0..2 {
+                for i in 0..20 {
+                    let mut doc = ld_lucivy::LucivyDocument::new();
+                    doc.add_text(champ, format!("fn ordinaire_{lot}_{i}() {{}}"));
+                    writer.add_document(doc).unwrap();
+                }
+                writer.commit().unwrap();
+            }
+            // Des identifiants neufs, écrits dans un segment mais pas encore commités.
+            for texte in &neufs {
+                let mut doc = ld_lucivy::LucivyDocument::new();
+                doc.add_text(champ, texte);
+                writer.add_document(doc).unwrap();
+            }
+            drop(writer.prepare_commit().unwrap());
+            // La fusion de fond qui démarre entre les deux commits.
+            if fusion {
+                let commites = handle.index.searchable_segment_ids().unwrap();
+                assert!(commites.len() >= 2, "deux segments commités à fusionner, vu {}", commites.len());
+                writer.merge(&commites).unwrap();
+            }
+            writer.commit().unwrap();
+            drop(garde);
+            handle.reader.reload().unwrap();
+            handle.wait_dictionary_fold();
+        }
+        // Rouvert : le dictionnaire est ce que tient le disque.
+        let handle = LucivyHandle::open(StdFsDirectory::open(dossier.path()).unwrap()).unwrap();
+        assert_eq!(trouves(&handle, "quokka_neuf", 0), neufs, "l'exact retrouve chaque identifiant neuf après réouverture");
+        assert_eq!(
+            trouves(&handle, "quokka_neuf", 1),
+            neufs,
+            "le flou retrouve chaque document neuf après réouverture : un mot absent de toute génération du dictionnaire l'écarte"
+        );
+    }
+
+    #[test]
+    fn une_fusion_entre_deux_commits_garde_les_mots_des_segments_neufs() {
+        jouer(true)
+    }
+
+    /// Le même chemin sans fusion : le témoin du témoin.
+    #[test]
+    fn sans_fusion_les_mots_des_segments_neufs_se_retrouvent() {
+        jouer(false)
+    }
+}
