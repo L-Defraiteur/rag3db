@@ -1,5 +1,8 @@
 # Session « embarquement » — rapport de passation du 11 novembre 2026
 
+> État historique. La reprise actuelle et les worktrees actifs sont dans
+> [le rapport du 13 novembre](../13-11-2026/01-rapport-de-session.md).
+
 *Pour un agent qui reprend sans aucune mémoire des échanges. Le savoir de fond (les modèles, le
 service, le régime GPU, le rattrapage, les pièges) est dans `02-knowledge-dump.md`, à côté.*
 
