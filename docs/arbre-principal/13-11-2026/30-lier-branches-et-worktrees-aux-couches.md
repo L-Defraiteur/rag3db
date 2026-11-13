@@ -111,8 +111,14 @@ worktree et un commit deviennent des couches et des générations.
   3. aucun effacement physique d'une version qu'une lecture peut voir : le ramasse-miettes (M5)
      attend les lectures épinglées, sous un bail ;
   4. le masque avant le top-k (2b-B), ou un sur-tirage, faute de quoi le rappel baisse en silence.
-  - À vérifier avec le cœur avant de l'écrire comme acquis : l'index HNSW suit-il l'instantané de la
-    transaction de lecture ? À défaut, le point 2 s'applique aussi au dense.
+  - **L'index dense suit l'instantané de son lecteur** (le cœur, prouvé par un témoin vert :
+    `VectorSearchUnderSnapshot`, `test/transaction/vector_search_under_snapshot_test.cpp`, branche
+    `lecture-et-instantane`, d5aa49c49). Chaque nœud se lit sous la transaction du lecteur. Un nœud
+    invisible à son instantané rend un vecteur nul : il n'est ni rendu ni compté. Un vecteur validé
+    après le début de la lecture n'est jamais rendu. **La réserve** : le graphe lui-même n'est pas
+    versionné. Les résultats sont exacts pour l'instantané, mais le rappel n'est pas celui d'un index
+    figé à cet instantané. Si une vue exige un top-k exact, il faut un repli exhaustif sous le masque
+    quand le rappel compte.
 - **Le plein texte suit le même modèle que le graphe et les vecteurs** (demande de Lucie) : un
   document lucivy par version de scope, une génération comme ensemble d'identifiants tenu par le
   graphe, une vue comme requête plus masque **avant** le top-k. Ce que lucivy en dit (lu dans le
@@ -234,6 +240,29 @@ Les témoins de ce lot :
 - une branche fusionnée ne laisse que la génération du commit de fusion et celles qu'une fiche cite ;
 - une version orpheline est listée par la sonde avant d'être collectée ;
 - une génération citée par une fiche survit à la fermeture.
+
+**À la fusion d'une PR** (Lucie : « faut être intelligent au merge d'une PR : hop on supprime
+worktrees et on supprime index intermédiaires »). Les règles que propose c7, pour ce même lot :
+- **La couche se ferme automatiquement.** Quand l'hôte voit au fetch qu'une branche suivie est
+  entièrement contenue dans sa parente (fusion ou squash, jugé par le contenu de l'arbre et pas
+  seulement par l'ancêtre), il ferme la couche :
+  - les générations intermédiaires sont supprimées ;
+  - celle du commit d'atterrissage est gardée, ainsi que celles qu'une fiche cite ;
+  - les versions orphelines deviennent collectables sous le budget.
+
+  C'est réversible par un index explicite du commit, et c'est journalisé.
+- **Le worktree n'est supprimé que sous condition.** L'hôte le supprime seulement si la branche est
+  fusionnée **et** l'arbre est propre **et** aucun processus n'a de fichier ouvert dessous **et** le
+  sous-module est sur son commit. Le target cargo lié, par la garde des targets, part avec lui.
+  Sinon, rien n'est touché, et l'IDE montre « fusionné, à ranger » avec la raison (fichiers modifiés,
+  base ouverte, processus). L'arbre principal de Lucie n'est jamais candidat. « Rien sur ses bases
+  sans son mot » reste vrai pour tout ce qui n'est pas une couche fermée.
+- **Les témoins** :
+  - une branche fusionnée et propre : la couche est fermée, le worktree et le target sont partis,
+    la génération d'atterrissage répond ;
+  - une branche fusionnée avec un fichier modifié : la couche est fermée, le worktree est intact et
+    signalé ;
+  - une génération citée par une fiche survit.
 
 Ce lot vient **après** celui de la liaison, et ne se code pas avec lui.
 
