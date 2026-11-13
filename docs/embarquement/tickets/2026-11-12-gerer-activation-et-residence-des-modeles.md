@@ -633,3 +633,19 @@ fournisseur évincé : l'activation distante (étape suivante) devra lancer les 
 `Restart=on-failure`. Témoins : un fournisseur évincable tient sous un bail et se décharge après le
 dernier bail rendu en disant pourquoi ; un fournisseur non déclaré ne se décharge jamais (rouges
 avant le code : l'API n'existait pas, rouge de compilation).
+
+### Activation distante (13 novembre au soir, embarquement) — troisième étape
+
+Les règles sont dans `docs/embarquement/13-11-2026/01-activation-et-residence-livre-et-manquant.md`
+(« L'activation distante : les règles », à relire par Lucie). Code (`src/model_source/activation.rs`) :
+`Activation.hote`, `adresse_distante` et `ssh` (commande ssh, défaut `ssh`) ; `connecter_distant`
+ouvre `ssh -N -L <locale>:<distante> <hôte>` en `BatchMode`, sonde l'identité par ce tunnel (le
+fournisseur déclaré déjà là : on s'y attache ; un autre : refus nommé), sinon lance
+`ssh <hôte> systemd-run --user --unit=rag3weaver-fournisseur-<modèle>-<port> --collect --property=Restart=on-failure --setenv=… -- <programme> --adresse <distante>`
+(arguments cités pour le shell distant, refus d'un argument non citable), attend la réponse dans le
+budget, vérifie l'identité et prend un bail ; le tunnel vit avec le client. Un ssh en échec : refus
+net et nommé. Les variables du fournisseur (modèle, attestation, éviction, environnement déclaré)
+sont communes au local et au distant (`variables`). Témoins sur un faux ssh
+(`tests/fixtures/residence/faux_ssh.py`) ; le vrai jeu par
+`une_activation_distante_reelle_lance_compte_et_evince` (ignoré, piloté par
+`RAG3WEAVER_ESSAI_DISTANT_*`).
