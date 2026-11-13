@@ -119,3 +119,14 @@ cache privé conservé, pas globalephysique. Recette sourceunion/controlSHA
 à publier et GOcréneau exact nécessaires avant runtime. Proposition1200s
 à arbitrer C7, aucun reset de l’ancienne portée. Sources69/abaf/preuves/
 target conservés intacts, tickets ouverts jusqu’à intégration.
+
+
+Décision C7 complémentaire : l’arrivée Rust ED impose F8 CANONIQUE et lib
+entière jeu large avant juges2a/modulepublication sur l’union ; ciblé seul
+initialement proposé ne vaut PAS dispense. Plan13 remplacé en conséquence,
+proposition4800s à arbitrer sur coûts/cache ;2ELFs(large/CPU) et ledger avant
+runtime. Checkadaptateurminimal déjà inclus au jeu8 F8 --checktests, pas
+commande redondante sans preuve distincte. NAV/lectures/PG/globalesphysiques
+non rejoués explicitement selon C7, sans résultat neuf inventé. LandingED
+confirmé4e2e2bfbb7c8ce670a49a06a36580d481d9abbc0, prépare rebase neuf,
+aucun run avant recette/SHAcouple/GOcréneau.
