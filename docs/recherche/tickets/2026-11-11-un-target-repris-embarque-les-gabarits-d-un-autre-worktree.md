@@ -131,3 +131,13 @@ state-fixture et xdg-state siblings, mêmes application698/ELF/SHA et deadline
 originale911625.832473217. Préparations héritées, seul module9/attestations
 à exécuter après nouveau GO exact ; pas Cargo/rustc/rebuild/NAV/service.
 Anciennes preuves intactes, diagnosticf107 publié AVANT ce diff, ticket ouvert.
+
+## Qualification ciblée composite obtenue, revue attendue
+
+Application698b952ab / préparationbdff / reprisea5e sur GO distinct C7.
+10CPU+8contrôlesRusttoy+7jugesjournaux+compilation et223blobsGit/chemins/ELF
+acquisv1, rougeprofil8/1 conservé ; modulemanquantseul9/0/0 enreprise,
+mêmeELF/SHA et borneinitiale1800 (649,830963sdepuisSTART). Scope/finaliseurVERT,
+busabsent/quiescencevide,250preuvesv2SHAidentiquesdeuxpostes. [Rapport07](../13-11-2026/07-preuves-ciblees-garde-target.md).
+AucunCargo/rebuildv2 ; ressources gardées. Ticket OUVERT avant revue/suffisance
+et qualification F8/liblarge/NAV éventuelle, pas de master/retrait autorisé.
