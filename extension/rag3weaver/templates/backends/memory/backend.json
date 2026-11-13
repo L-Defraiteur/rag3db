@@ -687,6 +687,7 @@
     "archive_params": "scripts/archive_params.rhai",
     "archive_candidates": "scripts/archive_candidates.rhai",
     "archive_decided": "scripts/archive_decided.rhai",
+    "archive_subject": "scripts/archive_subject.rhai",
     "archive_pass": "scripts/archive_pass.rhai",
     "archive_linked": "scripts/archive_linked.rhai",
     "archive_summary": "scripts/archive_summary.rhai"

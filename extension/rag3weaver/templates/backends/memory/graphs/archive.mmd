@@ -1,5 +1,5 @@
 %% tool: archive
-%% description: Envoie un document Markdown à l'archiviste : le document est gardé tel quel (une Source, le L0, immuable, écrite une fois les sections décidées : une écriture pendant la recherche des candidates la rendrait indisponible), découpé par ses titres, et chaque section est rangée sur une fiche par une décision fermée du modèle déclaré au manifeste (models.llm) parmi les fiches candidates que la recherche rappelle — ou none (rien d'écrit, la section reste dans le L0), ou create (une fiche proposée, nommée par le titre de la section). Chaque section rangée devient un apport L1 de sa fiche, qui cite sa provenance doc:<chemin>#<titre>. Sans modèle déclaré, le L0 est gardé et chaque section est dite en erreur. Rend le rapport des décisions ({elements, ok, errors} : une ligne par section, et chaque refus avec sa raison). Ce qui est écrit se relit par recall_apports, get_fiche ou cited_by sur le chemin de la Source.
+%% description: Envoie un document Markdown à l'archiviste : le document est gardé tel quel (une Source, le L0, immuable, écrite une fois les sections décidées : une écriture pendant la recherche des candidates la rendrait indisponible), découpé par ses titres, et chaque section est rangée sur une fiche par une décision fermée du modèle déclaré au manifeste (models.llm) parmi les fiches candidates que la recherche rappelle — ou none (rien d'écrit, la section reste dans le L0), ou create (une fiche proposée, nommée par le sujet que le modèle donne ; avant de la créer, une recherche par ce nom parmi les fiches déjà là : une fiche du même nom ou d'un nom voisin la remplace, archive_subject). Chaque section rangée devient un apport L1 de sa fiche, qui cite sa provenance doc:<chemin>#<titre>. Sans modèle déclaré, le L0 est gardé et chaque section est dite en erreur. Rend le rapport des décisions ({elements, ok, errors} : une ligne par section, et chaque refus avec sa raison). Ce qui est écrit se relit par recall_apports, get_fiche ou cited_by sur le chemin de la Source.
 %% param: titre string! -- Le titre du document.
 %% param: contenu string! -- Le Markdown, tel quel.
 %% param: chemin string = "" -- Le chemin de la Source ; vide : sources/<jour>-<slug du titre>.md.
@@ -18,6 +18,8 @@ graph LR
     source["EntityRecordNode(entity='Source', action='put', record=$source)"]
     split["SplitSections(field='contenu')"]
     decide["ForEachNode(graph='@builtin:backends/memory/graphs/archive_decide.mmd', on_error='report', carry='proposed', candidates=$candidates, allow_create=$allow_create, instruction=$instruction, search_options=$search_options)"]
+    decided["Route(key='stage', routes='decided')"]
+    subject["ForEachNode(graph='@builtin:backends/memory/graphs/archive_subject.mmd', search_options=$search_options)"]
     route["Route(key='kind', routes='none|create|fiche')"]
     write["ForEachNode(graph='@builtin:backends/memory/graphs/archive_write.mmd', on_error='report')"]
     create["ForEachNode(graph='@builtin:backends/memory/graphs/archive_create.mmd', on_error='report')"]
@@ -31,7 +33,9 @@ graph LR
     decide -->|report:value| sourcer
     sourcer -->|result:record| source
     split -->|element:elements| decide
-    decide -->|results:element| route
+    decide -->|results:element| decided
+    decided -->|decided:elements| subject
+    subject -->|results:element| route
     route -->|fiche:elements| write
     route -->|create:elements| create
     write -->|results:elements| refs

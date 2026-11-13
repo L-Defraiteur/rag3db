@@ -293,3 +293,55 @@ fn une_fiche_creee_porte_le_nom_du_sujet_que_le_modele_donne() {
     assert!(apports_de(&b, "1. Le jeu").is_empty(), "pas le titre de la section");
 }
 
+/// **Le même sujet sous deux formulations, dans deux documents, fait une seule fiche** (13 novembre
+/// 2026, le second archivage à blanc : « Hooks Claude Code », « Hooks Claude Code de rag3weaver » et
+/// « Hooks de Claude Code », trois fiches de 11 à 12 sections chacune). Le premier document crée
+/// « Hooks Claude Code » ; le second, sans aucune candidate présentée (`candidates: 0`), répond create
+/// et « Hooks de Claude Code » : seule la recherche par le nom de sujet peut retrouver la première.
+#[test]
+#[ignore]
+fn le_meme_sujet_sous_deux_formulations_fait_une_seule_fiche() {
+    let serveur = FakeServer::start_sequence(vec![
+        etiquette_nommee("create", "Hooks Claude Code"),
+        etiquette_nommee("create", "Hooks de Claude Code"),
+    ]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    const A: &str = "# Lot 1\n\n## La commande mince\n\nLes hooks de Claude Code appellent l'hôte par une commande mince, qui sort toujours en zéro.\n";
+    const B: &str = "# Lot 2\n\n## Les blocs de lecture\n\nÀ chaque prompt, les hooks de Claude Code glissent une fiche de la mémoire dans la session.\n";
+    let r = appel(&b, "archive", json!({"titre": "Lot 1", "contenu": A, "jour": "2026-11-07", "allow_create": true}));
+    assert_eq!(r["result"]["errors"], json!([]), "{r}");
+    let r = appel(&b, "archive", json!({"titre": "Lot 2", "contenu": B, "jour": "2026-11-07", "allow_create": true, "candidates": 0}));
+    assert_eq!(r["result"]["errors"], json!([]), "{r}");
+    assert_eq!(apports_de(&b, "Hooks Claude Code").len(), 2, "le second document rejoint la fiche du premier");
+    assert!(apports_de(&b, "Hooks de Claude Code").is_empty(), "aucune fiche voisine de plus");
+}
+
+/// **Dans un même document, un sujet voisin d'une fiche proposée plus haut la rejoint**, et un sujet
+/// d'un seul mot contenu dans un autre ne rejoint rien. La première section crée « Hooks Claude Code » ;
+/// la deuxième répond create avec « Hooks de Claude Code » (le même jeu de mots, les mots vides ôtés) :
+/// elle rejoint la première. La troisième répond create avec « Hooks » : un seul mot, elle fait sa fiche.
+#[test]
+#[ignore]
+fn un_sujet_voisin_d_une_fiche_proposee_plus_haut_la_rejoint() {
+    let serveur = FakeServer::start_sequence(vec![
+        etiquette_nommee("create", "Hooks Claude Code"),
+        etiquette_nommee("create", "Hooks de Claude Code"),
+        etiquette_nommee("create", "Hooks"),
+    ]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    const NOTES: &str = "# Lot 3\n\n## La commande mince\n\nLes hooks de Claude Code appellent l'hôte par une commande mince.\n\n## Les blocs\n\nÀ chaque prompt, les hooks de Claude Code glissent une fiche.\n\n## Ailleurs\n\nUn crochet de git, tout autre chose.\n";
+    let r = appel(&b, "archive", json!({"titre": "Lot 3", "contenu": NOTES, "jour": "2026-11-13", "allow_create": true}));
+    assert_eq!(r["result"]["errors"], json!([]), "{r}");
+    assert_eq!(apports_de(&b, "Hooks Claude Code").len(), 2, "la deuxième section rejoint la première");
+    assert!(apports_de(&b, "Hooks de Claude Code").is_empty(), "aucune fiche voisine de plus");
+    assert_eq!(apports_de(&b, "Hooks").len(), 1, "un seul mot ne rejoint pas une fiche plus longue");
+}
+

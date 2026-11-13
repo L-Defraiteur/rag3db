@@ -1,0 +1,10 @@
+%% tool: archive_subject
+%% description: Un élément décidé (archive_decided) : une section qui créerait une fiche cherche d'abord, par le nom de sujet proposé, les fiches déjà validées ; une fiche du même nom ou d'un nom voisin devient la sienne (kind fiche). Hors de create, l'élément passe tel quel. Appelé une fois par section par le ForEachNode de archive, après la décision.
+%% param: element json! -- L'élément décidé : kind, fiche, subject_query, apport_record, apport_key, links…
+%% param: search_options json! -- Les options de la recherche (limit…), celles des candidates.
+%% result: subject.result
+
+graph LR
+    recall["GraphNode(graph='@builtin:tools/search_structured.mmd', target='Fiche', query=$element.subject_query, options=$search_options)"]
+    subject["RhaiNode(script_id=archive_subject, inputs='element', element=$element)"]
+    recall -->|result:value| subject
