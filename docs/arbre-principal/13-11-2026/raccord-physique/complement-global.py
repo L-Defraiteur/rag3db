@@ -3,17 +3,19 @@
 from pathlib import Path
 import ast, datetime, hashlib, json, mmap, os, re, shlex, shutil, signal, subprocess, sys, tempfile, time
 R=Path('/home/lucied/.cache/rag3weaver-build'); W=R/'cx-wt-raccord-physique-union'; C=W/'extension/rag3weaver'
-P=R/'cx-passe-raccord-physique-union-complement-v1'; T=R/'cx-target-contenu-derive'
+P=R/'cx-passe-raccord-physique-union-complement-v2'; T=R/'cx-target-contenu-derive'
 PREVIOUS=R/'cx-passe-raccord-physique-union-v1'
 ORIGINAL=json.loads((PREVIOUS/'source.json').read_text())
 assert ORIGINAL['source']=='4e5ae8a324f50313b74f70772eb2e92ee41fad6f' and ORIGINAL['deadline_monotonic']==896572.526453239
+CORRECTIVE=json.loads((R/'cx-passe-raccord-physique-union-complement-v1/source.json').read_text())
+assert CORRECTIVE['deadline_monotonic']==901710.830219227
 CONTROL=Path(__file__).resolve().parents[4]
 CONTROL_SOURCE=subprocess.check_output(['git','rev-parse','HEAD'],cwd=CONTROL,text=True).strip()
-SOURCE=sys.argv[1]; RECEIPT=Path(os.environ['RAG3WEAVER_VALIDATION_RECU']); AUTH=json.loads(RECEIPT.read_text()); DEADLINE=AUTH['echeance']; INITIAL=DEADLINE-3600; DRIVER_START=time.monotonic()
-assert SOURCE==ORIGINAL['source'] and DRIVER_START>=INITIAL and DRIVER_START<DEADLINE
+SOURCE=sys.argv[1]; RECEIPT=Path(os.environ['RAG3WEAVER_VALIDATION_RECU']); AUTH=json.loads(RECEIPT.read_text()); DEADLINE=min(AUTH['echeance'],CORRECTIVE['deadline_monotonic']); INITIAL=CORRECTIVE['initial_monotonic']; DRIVER_START=time.monotonic()
+assert SOURCE==ORIGINAL['source'] and DRIVER_START>=INITIAL and DRIVER_START<DEADLINE and AUTH['echeance']<=CORRECTIVE['deadline_monotonic']
 F='rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm'
 NATIVE='rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
-PG='cx_phys_2191_20261113_u1c'; ROLE='rag3weaver'
+PG='cx_phys_2191_20261113_u1d'; ROLE='rag3weaver'
 assert re.fullmatch('[0-9a-f]{40}',SOURCE) and time.monotonic()<DEADLINE-15
 P.mkdir(exist_ok=False)
 for name in ('tmp','tmp/lib','config','data','cache','commandes','builtin-cache'):(P/name).mkdir(exist_ok=True)
@@ -32,7 +34,7 @@ fields=dict(s.split('=',1) for s in shlex.split(values[0]))
 assert fields['host'] in ('127.0.0.1','localhost') and fields['port']=='5433' and fields['user']==ROLE
 fields['dbname']=PG
 DSN=' '.join(k+'='+shlex.quote(v) for k,v in fields.items())
-E.update(CARGO_MANIFEST_DIR=str(C),CARGO_TARGET_DIR=str(T),CARGO_BUILD_JOBS='8',CARGO_INCREMENTAL='0',LUCIVY_SCHEDULER_THREADS='8',RUST_TEST_THREADS='8',POSTE_MEM_MAX='32G',RAG3WEAVER_TARGET_MAX_GO='32',RAG3WEAVER_TARGET_REPRENDRE='1',RAG3DB_LIB=NATIVE,RAG3DB_LIBS_DIR=str(R.parent/'rag3db-libs'),RAG3DB_BUFFER_POOL_SIZE='536870912',TMPDIR=str(P/'tmp/lib'),XDG_CONFIG_HOME=str(P/'config'),XDG_DATA_HOME=str(P/'data'),XDG_CACHE_HOME=str(P/'cache'),RAG3WEAVER_CACHE_DIR=str(P/'cache'),RAG3WEAVER_MOTEUR_ANCIEN='1',RAG3WEAVER_BUILD_MEMORY_HIGH='0',RAG3WEAVER_PG=DSN,RAG3WEAVER_PAQUETS_REACT=str(R/'I-paquets-react'),RAG3WEAVER_EXIGER_NAVIGATEUR='1',CHECK_FEATURES_LOGS=str(P/'features'),CHECK_FEATURES_TIMEOUT='1500',FEATURES=F,RAG3WEAVER_E2E_FEATURES=F,RAG3WEAVER_NAVIGATEUR='/usr/lib/chromium/chromium',RAG3WEAVER_JOURNAUX_DIR=str(P/'commandes'),RAG3WEAVER_RUNS_DIR=str(P/'runs'),RAG3WEAVER_CHATS_DIR=str(P/'chats'),RAG3WEAVER_TACHES_DIR=str(P/'taches'),RAG3WEAVER_E2E_JOURNAUX_DEMONS=str(P/'journaux-demons'),RAG3WEAVER_BUILTIN_TEMPLATES_DIR=str(P/'builtin-cache'))
+E.update(CARGO_MANIFEST_DIR=str(C),CARGO_TARGET_DIR=str(T),CARGO_BUILD_JOBS='8',CARGO_INCREMENTAL='0',LUCIVY_SCHEDULER_THREADS='8',RUST_TEST_THREADS='8',POSTE_MEM_MAX='32G',RAG3WEAVER_TARGET_MAX_GO='32',RAG3WEAVER_TARGET_REPRENDRE='1',RAG3DB_LIB=NATIVE,RAG3DB_LIBS_DIR=str(R.parent/'rag3db-libs'),RAG3DB_BUFFER_POOL_SIZE='1073741824',TMPDIR=str(P/'tmp/lib'),XDG_CONFIG_HOME=str(P/'config'),XDG_DATA_HOME=str(P/'data'),XDG_CACHE_HOME=str(P/'cache'),RAG3WEAVER_CACHE_DIR=str(P/'cache'),RAG3WEAVER_MOTEUR_ANCIEN='1',RAG3WEAVER_BUILD_MEMORY_HIGH='0',RAG3WEAVER_PG=DSN,RAG3WEAVER_PAQUETS_REACT=str(R/'I-paquets-react'),RAG3WEAVER_EXIGER_NAVIGATEUR='1',CHECK_FEATURES_LOGS=str(P/'features'),CHECK_FEATURES_TIMEOUT='1500',FEATURES=F,RAG3WEAVER_E2E_FEATURES=F,RAG3WEAVER_NAVIGATEUR='/usr/lib/chromium/chromium',RAG3WEAVER_JOURNAUX_DIR=str(P/'commandes'),RAG3WEAVER_RUNS_DIR=str(P/'runs'),RAG3WEAVER_CHATS_DIR=str(P/'chats'),RAG3WEAVER_TACHES_DIR=str(P/'taches'),RAG3WEAVER_E2E_JOURNAUX_DEMONS=str(P/'journaux-demons'),RAG3WEAVER_BUILTIN_TEMPLATES_DIR=str(P/'builtin-cache'))
 for suffix in ('','_EMBEDDER','_RERANKER','_OCR'): E['RAG3WEAVER_BURN_DEVICE'+suffix]='cpu'
 assert all(isinstance(k,str) and isinstance(v,str) for k,v in E.items())
 EXPORT=['bash','-c','. "$1"; exporter_la_lib || exit 2; shift; exec "$@"','native-test',str(C/'scripts/lib_du_magasin.sh')]
@@ -221,12 +223,12 @@ before=events();verdict='ROUGE'
 try:
     import tomllib
     assert tomllib.loads((C/'Cargo.toml').read_text())['features']['default']==[]
-    assert json.loads((RECEIPT.parent/'recette.json').read_text())['delai']==3600
+    assert 30<json.loads((RECEIPT.parent/'recette.json').read_text())['delai']<3600
     guard();assert E['DBUS_SESSION_BUS_ADDRESS'],'bus privé commun manquant'
     assert C.resolve()==C and (C/'Cargo.toml').is_file()
     assert any(l.startswith('+ ') for l in git('cherry','origin/master','HEAD').splitlines()),'lot déjà intégré'
     assert int(git('rev-list','--count','HEAD..origin/master'))<=200
-    save('source.json',dict(source=SOURCE,tree=git('rev-parse','HEAD^{tree}'),origin_master_observed_ref=git('rev-parse','origin/master'),started=now(),initial_monotonic=INITIAL,driver_start_monotonic=DRIVER_START,deadline_monotonic=DEADLINE,global_budget_s=3600,stage="corrective-distincte",original_deadline_expired=True,control_source=CONTROL_SOURCE,original_source_file=str(PREVIOUS/'source.json'),original_deadline=ORIGINAL['deadline_monotonic'],preparation_carried=True,cgroup=CG,supervision_receipt=str(RECEIPT),driver_sha256=digest(Path(__file__)),native=NATIVE,features=F,private_pg=PG,cpu_roles=['common','embedder','reranker','ocr'],services='absent',phase_caps=dict(lib=900,nav=600,cli=180,pg=300,attestation=120,tx_per_suite=900)))
+    save('source.json',dict(source=SOURCE,tree=git('rev-parse','HEAD^{tree}'),origin_master_observed_ref=git('rev-parse','origin/master'),started=now(),initial_monotonic=INITIAL,driver_start_monotonic=DRIVER_START,deadline_monotonic=DEADLINE,global_budget_s=3600,stage="corrective-profil-1GiB-temps-restant",corrective_absolute_deadline=CORRECTIVE['deadline_monotonic'],corrective_previous_source=str(R/'cx-passe-raccord-physique-union-complement-v1/source.json'),original_deadline_expired=True,control_source=CONTROL_SOURCE,original_source_file=str(PREVIOUS/'source.json'),original_deadline=ORIGINAL['deadline_monotonic'],preparation_carried=True,cgroup=CG,supervision_receipt=str(RECEIPT),driver_sha256=digest(Path(__file__)),native=NATIVE,features=F,private_pg=PG,cpu_roles=['common','embedder','reranker','ocr'],services='absent',phase_caps=dict(lib=900,nav=600,cli=180,pg=300,attestation=120,tx_per_suite=900)))
     state('EN_COURS');limit=budget(120)
     run('supervision',['python3','scripts/confiner_validation.py','verifier'],limit)
     assert Path(E['RAG3WEAVER_PAQUETS_REACT']).is_dir()
@@ -262,7 +264,7 @@ try:
             assert all(data.find(p.read_bytes())>=0 for p in files)
         shutil.copy2(copy,P/('binaire-'+label));assert digest(P/('binaire-'+label))==item['sha256']
     save('artefacts.json',artifacts)
-    save('preparation-heritee.json',dict(source=SOURCE,initial_steps=initial_steps,initial_ledger_sha256=digest(ledger_path),initial_scope=ORIGINAL['supervision_receipt'],initial_verdict='ROUGE',cargo_executed_by_this_driver=False,runtime_cwd_corrected=True,distinct_budget_s=3600,previous_red_preserved=True))
+    save('preparation-heritee.json',dict(source=SOURCE,initial_steps=initial_steps,initial_ledger_sha256=digest(ledger_path),initial_scope=ORIGINAL['supervision_receipt'],initial_verdict='ROUGE',cargo_executed_by_this_driver=False,runtime_cwd_corrected=True,corrective_total_budget_s=3600,absolute_deadline=CORRECTIVE['deadline_monotonic'],buffer_pool_bytes=1073741824,previous_red_preserved=True))
     names=ledger['lib']['names'];ignores=ledger['lib']['ignored'];physical=ledger['physical'];required_cpu=ledger['cpu_required']
     assert len(physical)==10 and len(required_cpu)==10 and not (set(physical)|set(required_cpu))&set(ignores)
     lib=Path(artifacts['lib']['actual_path']);nav=Path(artifacts['navigateur']['actual_path']);cli=Path(artifacts['cli']['actual_path'])

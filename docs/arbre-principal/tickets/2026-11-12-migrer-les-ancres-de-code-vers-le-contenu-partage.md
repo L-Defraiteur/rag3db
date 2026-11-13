@@ -2353,3 +2353,22 @@ identiques SHA au manifeste après arrêt. Superviseur aussi copié localement.
 SHA lib.log : 8295e630e40de1f29d5b0a7df6eae5643cdb865e69722a66ce004acbbf3b71a5.
 C7/ED poursuivent attribution RO ; aucun défaut production encore établi.
 P14 ciblé reste vert dans sa portée ; aucune qualification globale obtenue.
+
+
+## Préparation v2 profil 1 Gio — échéance corrective conservée
+
+Décision C7 : nouveau pilote hors sources figées, profil global
+RAG3DB_BUFFER_POOL_SIZE=1073741824 selon garde IndexNode/BufferCheck observée.
+Aucune modification produit/garde ; pas de minimum universel moteur revendiqué.
+Trace open_branch concurrente et contrat prouvent un défaut de profil, sans
+inventer l’identité du FAILED. La lib entière et toutes les suites sont à
+qualifier de nouveau, mêmes quatre ELF app4e, aucun Cargo/F8/min/rebuild.
+
+Nouvelle branche cx-arbre-qualification-physique-r2, preuve complement-v2,
+PG u1d créée seulement après absence préalable ; PG u1/u1c conservées.
+Après vrai poste, reçu neuf avec délai floor(901710.830219227−monotonic)−3 ;
+refus si reste<=60. Driver coupe chaque phase au minimum de son cap et
+de cette échéance (marge15s), finaliseur vérifie échéance effective ET
+borne absolue. Départ initial correctif898110.830219227 conservé : aucun
+reset3600. Anciennes portées rouges restent historiques. Revue/GO EXACT
+requis avant runtime. Max32GiB, CPUj8/native29/busunique inchangés.
