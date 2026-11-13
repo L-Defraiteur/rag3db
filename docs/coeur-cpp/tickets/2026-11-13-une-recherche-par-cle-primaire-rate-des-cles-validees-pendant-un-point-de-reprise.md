@@ -112,27 +112,56 @@ Pour trancher, il faut rejouer le test sous `RAG3DB_PROFILE_CHECKPOINT=1`. Si un
 tombe dans la pause, leur test est la reproduction de ce défaut sous charge ; sinon, c'est une
 autre cause.
 
-## Piste de correctif (à valider avec c7 avant le code)
+## Pourquoi un verrou : cohérent par page, pas par index
 
-Il ne suffit pas de réordonner la publication. Ma première idée était de publier les en-têtes de
-lecture avant de vider la mémoire locale, et de publier après `applyShadowPages` ; cela ne
-suffit pas. `Checkpointer::holdReadersLock` (`checkpointer.cpp` l. 130) est un verrou de
-**fichier**, pris contre les ouvertures en lecture seule d'autres processus. Les lecteurs du même
-processus continuent pendant `applyShadowPages`, qui réécrit **sur place** les pages des slots :
-les fentes déplacent des clés existantes. Un lecteur pris pendant l'application lit l'ancien
-en-tête sur une page déjà réécrite.
+C'est cette preuve qui justifie un verrou sur un chemin chaud (c7, 13 nov.).
 
-Proposé à c7 le 13 nov. :
+**Au niveau de la page, V2 est cohérent.**
 
-- un `shared_mutex` par `PrimaryKeyIndex`, pris **en partagé** par `lookup`, pour la paire
-  mémoire locale + disque ;
-- pris **en exclusif** par le point de reprise, de l'application des pages ombres jusqu'à la
-  publication en mémoire ;
+- `ShadowFile::applyShadowPages` (`shadow_file.cpp` l. 66-80) écrit la page dans le fichier,
+  puis appelle `updateFrameIfPageIsInFrame`.
+- Celui-ci (`buffer_manager.cpp` l. 484-509) attend qu'une page `LOCKED` (épinglée, ou en
+  cours de chargement) soit rendue. Il la verrouille, recopie le cadre et la déverrouille.
+- Le changement de version fait recommencer une lecture optimiste en cours. Une page `EVICTED`
+  se recharge depuis le fichier, déjà écrit.
+- `DiskArrayInternal::get` lit par `optimisticReadPage` (`disk_array.cpp` l. 79).
+
+Un lecteur voit donc une page entière, ancienne ou neuve, jamais à moitié recopiée.
+
+**Au niveau de l'index, ce n'est pas cohérent.**
+
+- Les pages de slots sont réécrites **sur place**. Une fente déplace des clés du slot `s` vers
+  `s + 2^niveau`, et la page de `s` passe par une page ombre.
+- Si l'on publiait seulement après `applyShadowPages`, un lecteur admis pendant la recopie
+  garderait l'ancien en-tête (niveau, `nextSplitSlotId`) et les anciens pips. Il calculerait `s`,
+  puis lirait la page de `s` déjà neuve, d'où la clé est partie. Une clé déjà sur disque avant ce
+  point de reprise n'est pas non plus dans la mémoire locale : elle est ratée.
+- Le même mélange vaut entre un slot primaire et sa chaîne de débordement (`oSlots`), lus sur
+  deux pages distinctes.
+
+Aucune version épinglée ni copie ne couvre plusieurs pages. Réordonner déplace la fenêtre sans
+la fermer : c'est le verrou qui la ferme. `holdReadersLock` (`checkpointer.cpp` l. 130) ne le
+fait pas, car c'est un verrou de **fichier**, pris contre les ouvertures en lecture seule d'autres
+processus. Les lecteurs du même processus lisent pendant la recopie.
+
+## Correctif retenu (« à toi » de c7, 13 nov.)
+
+- Un `shared_mutex` par `PrimaryKeyIndex` :
+  - **partagé** dans `lookup`, sur la paire mémoire locale + disque ;
+  - **exclusif** pris par le point de reprise, de `applyShadowPages` jusqu'à la publication.
 - `checkpointInMemory` de l'index de clé primaire passe **après** `applyShadowPages`, et publie
   les en-têtes de lecture **avant** de vider la mémoire locale.
 
-Seules les recherches par clé attendent, et seulement pendant l'application. Les autres lecteurs
-V2 ne sont pas touchés.
+Deux bornes, à tenir et à dire :
+
+1. **Le partagé ne couvre que la recherche.** Le lecteur ne le prend pas en tenant une page
+   épinglée. Sous lui, il ne prend que le verrou partagé du tableau disque et les verrous des
+   groupes de nœuds (visibilité), jamais l'inverse. Le point de reprise, qui tient l'exclusif, ne
+   tient aucun de ces verrous en l'attendant : il a fini l'écriture des tables dans
+   `checkpointStorage`, avant la recopie. L'ordre index de clé primaire → tableau disque est le
+   même des deux côtés.
+2. **L'exclusif est borné** par la recopie des pages ombres et la publication. Son temps se
+   mesure en ms aux profils du point de reprise, dans `PkLookupUnderCheckpoint` vert.
 
 Témoins à jouer après le correctif : `PkLookupUnderCheckpoint` (rouge puis vert), puis
 `transaction_test` et `concurrence_test` entiers, puis `DdlEveryMinute` en trois tours, sans
