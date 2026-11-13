@@ -1,0 +1,160 @@
+{
+  "contract": "physical-index-fixture-proposal:v1",
+  "production_format": false,
+  "source_entity": "Snippet",
+  "content_entity": "SnippetContent",
+  "content_identity_format": "synthetic-snippet-content:v1",
+  "signals": [
+    "bm25"
+  ],
+  "model_sources": {},
+  "dense_models": {},
+  "occurrences": [
+    {
+      "cell": {
+        "org": "synthetic",
+        "project": "Alpha"
+      },
+      "occurrence_uuid": "Alpha-A",
+      "render_input": {
+        "name": "alpha",
+        "docstring": "synthetic documentation",
+        "body": "fn alpha() { return 1; }"
+      },
+      "position": {
+        "file": "synthetic/Alpha/A.rs",
+        "start_line": 10,
+        "end_line": 12
+      }
+    },
+    {
+      "cell": {
+        "org": "synthetic",
+        "project": "Alpha"
+      },
+      "occurrence_uuid": "Alpha-B",
+      "render_input": {
+        "name": "alpha",
+        "docstring": "synthetic documentation",
+        "body": "fn alpha() { return 1; }"
+      },
+      "position": {
+        "file": "synthetic/Alpha/B.rs",
+        "start_line": 20,
+        "end_line": 22
+      }
+    },
+    {
+      "cell": {
+        "org": "synthetic",
+        "project": "Alpha"
+      },
+      "occurrence_uuid": "Alpha-C",
+      "render_input": {
+        "name": "alpha",
+        "docstring": "synthetic documentation",
+        "body": "fn alpha() { return 2; }"
+      },
+      "position": {
+        "file": "synthetic/Alpha/C.rs",
+        "start_line": 30,
+        "end_line": 32
+      }
+    },
+    {
+      "cell": {
+        "org": "synthetic",
+        "project": "Alpha"
+      },
+      "occurrence_uuid": "Alpha-D",
+      "render_input": {
+        "name": "alpha",
+        "docstring": "another documentation",
+        "body": "fn alpha() { return 1; }"
+      },
+      "position": {
+        "file": "synthetic/Alpha/D.rs",
+        "start_line": 40,
+        "end_line": 42
+      }
+    },
+    {
+      "cell": {
+        "org": "synthetic",
+        "project": "Alpha"
+      },
+      "occurrence_uuid": "Alpha-E",
+      "render_input": {
+        "name": "renamed",
+        "docstring": "synthetic documentation",
+        "body": "fn alpha() { return 1; }"
+      },
+      "position": {
+        "file": "synthetic/Alpha/E.rs",
+        "start_line": 50,
+        "end_line": 52
+      }
+    },
+    {
+      "cell": {
+        "org": "synthetic",
+        "project": "Alpha"
+      },
+      "occurrence_uuid": "Alpha-F",
+      "render_input": {
+        "name": "alpha",
+        "docstring": "",
+        "body": "fn alpha() { return 1; }"
+      },
+      "position": {
+        "file": "synthetic/Alpha/F.rs",
+        "start_line": 60,
+        "end_line": 62
+      }
+    },
+    {
+      "cell": {
+        "org": "synthetic",
+        "project": "Beta"
+      },
+      "occurrence_uuid": "Beta-A",
+      "render_input": {
+        "name": "alpha",
+        "docstring": "synthetic documentation",
+        "body": "fn alpha() { return 1; }"
+      },
+      "position": {
+        "file": "synthetic/Beta/A.rs",
+        "start_line": 10,
+        "end_line": 12
+      }
+    },
+    {
+      "cell": {
+        "org": "synthetic",
+        "project": "Beta"
+      },
+      "occurrence_uuid": "Beta-B",
+      "render_input": {
+        "name": "alpha",
+        "docstring": "synthetic documentation",
+        "body": "fn alpha() { return 1; }"
+      },
+      "position": {
+        "file": "synthetic/Beta/B.rs",
+        "start_line": 20,
+        "end_line": 22
+      }
+    }
+  ],
+  "expected": {
+    "occurrences": 8,
+    "content_versions": 6,
+    "derived_references": 8,
+    "cross_cell_references": 0,
+    "relation_direction": "SnippetContent -> Snippet",
+    "relation_name_producer": "schema::derived_rel_name",
+    "identity_producer": "derive_nodes::derived_content_uuid",
+    "fixture_only_classification": 6
+  }
+}
