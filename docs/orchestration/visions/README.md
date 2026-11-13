@@ -102,20 +102,16 @@ le juge.
    une valeur ; le coffre fait l'appel, l'agent reçoit le résultat. C'est la règle de la maison (« les
    identifiants par le chemin de .vault, jamais leur contenu ») faite produit. « On verra plus tard ».
 
-5. **Un petit classifieur de sécurité local, en garde devant l'agent**, et la chaîne qui va avec
-   (précisée par Lucie le 13 au soir). Le classifieur ne fait rien de compliqué : quand une vraie valeur
-   sensible passe (variable d'environnement, jeton, mot de passe, dans un prompt, une commande ou un
-   fichier), il la remplace par une **référence opaque** dont l'agent ne connaît que le nom
-   (`{{secret:DB_URL}}`), qu'il peut utiliser (le lanceur résout la référence au moment d'exécuter, hors
-   de la fenêtre du modèle), et qu'il sait **temporaire**. C'est ensuite **l'agent** qui, sur demande,
-   range la référence dans le coffre durable (graine 4) ou fait autre chose avec. La sortie est caviardée
-   au retour. Deux chaînes selon l'équipe :
-   - classifieur sécurité local → classifieur des droits d'action « auto » (cloud) → l'agent et son
-     modèle cloud ;
-   - classifieur sécurité + « auto » local (quand l'auto est déjà local, pas de raison de les séparer)
-     → l'agent et son modèle cloud.
-   Dans les deux, le modèle cloud ne voit jamais un vrai secret : il ne voit que des références. C'est la
-   porte d'accord de l'atelier et le décideur local, appliqués aux secrets.
+5. **Un classifieur de sécurité local, du côté de l'utilisateur** (précisé par Lucie le 13 au soir, en
+   deux temps). Il ne faut pas le confondre avec le mode « auto » : le mode auto, c'est pour l'agent, il
+   l'empêche de faire certaines choses ; le classifieur de sécurité, c'est toujours pour l'utilisateur.
+   Il est **toujours local**, il se branche ou non, et quand il est branché il passe **après chaque
+   réponse de l'utilisateur** (prompt, commande, fichier), **uniquement pour créer des références
+   opaques** : une vraie valeur sensible devient `{{secret:DB_URL}}`, l'agent n'en connaît que le nom,
+   s'en sert par le lanceur (qui résout la référence au moment d'exécuter, hors de la fenêtre du
+   modèle), et la sait temporaire. Rien d'autre : pas de décision, pas de droits. C'est ensuite l'agent
+   qui, sur demande, range la référence dans le coffre durable (graine 4). Le modèle cloud ne voit
+   jamais un vrai secret.
 
 Le code est le premier produit du framework ; ces cinq-là sont des vues et des agents de plus sur le
 même index.
