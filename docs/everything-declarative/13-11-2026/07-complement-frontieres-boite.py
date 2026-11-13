@@ -1,6 +1,6 @@
 # Recette composée adaptée du handover Archi6786 ; aucun lancement autonome.
 from pathlib import Path
-import os,sys,json,time,subprocess,threading,hashlib,re,traceback,shlex,shutil
+import os,sys,json,time,subprocess,threading,hashlib,re,traceback,shlex,shutil,tomllib
 source=sys.argv[1]
 B=Path.home()/'.cache/rag3weaver-build';O=B/'I-luciepc/frontieres-boite-20261113'/f'complement-{source[:9]}';O.mkdir(exist_ok=True)
 BASE=B/'I-luciepc/frontieres-boite-20261113'/f'globale-{source[:9]}'
@@ -101,6 +101,20 @@ try:
  assert raw.count('non jugé')==1 and "non jugé : la lib n'a pas la colonne state (format 43 requis)" in raw
  assert 'SAUTÉ' not in raw and re.search(r'test result: ok\. 2 passed; 0 failed; 0 ignored;',raw)
  actual=json.loads((BASE/'elf-reellement-executes.json').read_text());bins={k:Path(v['exe']) for k,v in actual.items()}
+ assert tomllib.loads((C/'Cargo.toml').read_text())['features']['default']==[]
+ assert not any(re.search(r'feature\s*=\s*"default"|CARGO_FEATURE_DEFAULT',p.read_text()) for p in [C/'build.rs',*(C/'src').rglob('*.rs')])
+ tags={}
+ for k,b in bins.items():
+  before=Path(plan['binaires'][k]['executable']);before_dir=T/'debug/.fingerprint'/('rag3weaver-'+before.name.rsplit('-',1)[1]);after_dir=T/'debug/.fingerprint'/('rag3weaver-'+b.name.rsplit('-',1)[1])
+  def fingerprint(d):
+   files=list(d.glob('test-*.json'));assert len(files)==1,(d,files);return json.loads(files[0].read_text())
+  old=fingerprint(before_dir);new=fingerprint(after_dir)
+  old_tags=set(json.loads(old['features']));new_tags=set(json.loads(new['features']))
+  assert old['profile']==new['profile'] and old['config']==new['config']
+  assert not old_tags-new_tags and new_tags-old_tags==(set() if k=='large' else {'default'}),(k,old_tags,new_tags)
+  tags[k]=dict(avant=sorted(old_tags),apres=sorted(new_tags),seul_default_vide=True)
+ (O/'ledger-tags-default.json').write_text(json.dumps(tags,indent=2))
+ assert 'non jugé' not in (BASE/'lib-large.log').read_text() and 'non jugé' not in (BASE/'navigateur.log').read_text()
  for k,b in bins.items():
   assert hashlib.file_digest(b.open('rb'),'sha256').hexdigest()==actual[k]['sha256']
   names=noms(run('inventaire-reel-'+k,30,[str(b),'--list']))
