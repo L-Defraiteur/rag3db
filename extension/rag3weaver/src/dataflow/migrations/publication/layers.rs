@@ -74,6 +74,8 @@ impl LayerGeneration {
 }
 
 /// Caller-supplied stable entity/occurrence identity, distinct from content H.
+/// For Scope this identifies a Scope UUID, not a tenant (org, project) cell.
+/// The caller must supply occurrence identities unique in the selected origin.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct OccurrenceKey {
     entity: String,
@@ -97,6 +99,8 @@ impl OccurrenceKey {
 }
 /// Logical file identity supplied by the same occurrence projection, not a
 /// filesystem path to resolve or a content digest to deduplicate.
+/// The caller must include its domain/cell namespace when needed: a bare
+/// "a.rs" shared by two cells would intentionally name the same file here.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FileKey(String);
 impl FileKey {

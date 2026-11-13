@@ -112,6 +112,41 @@ fn tombstones_hide_all_ancestors_and_a_descendant_can_reintroduce_a_file() {
         17
     );
     assert_eq!(visible.occurrences()[&id("new")].provenance(), &c);
+
+    // One revision can replace a file: hide its old rows and provide new ones.
+    // Distinct cells with the same displayed path require distinct FileKeys.
+    let replacement = LayerRevision::new(
+        b.clone(),
+        Some(a.clone()),
+        vec![row("replacement", "org1/project1:a.rs", "new-H", 41)],
+        BTreeSet::new(),
+        BTreeSet::from([file("org1/project1:a.rs")]),
+    )
+    .unwrap();
+    let replaced = PinnedLayers::new(vec![
+        revision(
+            a.clone(),
+            None,
+            vec![
+                row("old", "org1/project1:a.rs", "H", 1),
+                row("other-cell", "org2/project2:a.rs", "H", 7),
+            ],
+        ),
+        replacement,
+    ])
+    .unwrap();
+    let result = replaced.resolve(&b).unwrap();
+    assert_eq!(result.occurrences().len(), 2);
+    assert!(!result.occurrences().contains_key(&id("old")));
+    assert_eq!(result.occurrences()[&id("replacement")].provenance(), &b);
+    assert_eq!(
+        result.occurrences()[&id("replacement")]
+            .occurrence()
+            .value()
+            .line,
+        41
+    );
+    assert_eq!(result.occurrences()[&id("other-cell")].provenance(), &a);
 }
 
 #[test]
@@ -217,6 +252,12 @@ fn malformed_piles_and_ambiguous_local_changes_are_refused_without_partial_resol
         ]),
         Err(LayerError::ForeignOrigin)
     ));
+    let independent = PinnedLayers::new(vec![
+        revision(a.clone(), None, vec![]),
+        revision(f.clone(), None, vec![]),
+    ])
+    .unwrap();
+    assert_eq!(independent.select("foreign").unwrap(), &f);
     assert!(LayerGeneration::from_publication(" ", &p[0]).is_err());
     assert!(FileKey::new("").is_err());
     assert!(OccurrenceKey::new("", "x").is_err());
