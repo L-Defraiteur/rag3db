@@ -33,7 +33,7 @@ include_bytes aux chemins courants et octets ELF sont revérifiés avant/après.
 
 ELF original/copie v1/copie v2 :
 688fe230a86c1329e2b485177c3a8d2ec1acf36bfa192ac13bd0dbaeaef1392f,
-173539432octets. Table générée :
+172845080octets. Table générée :
 84a813c3bc039103c924b6134fe0f7265218241c6f317c3db1eb5b9ca941096a.
 LedgerP2 SHA25a764a4d928851fc977e589006f8dc2b83712e8420a4a2cd25bc36e1af0ae24,
 ELF+ledger+source+attestation copiés/réhashés localement AVANT marqueur et
