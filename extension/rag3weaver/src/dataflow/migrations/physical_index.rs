@@ -1092,7 +1092,7 @@ fn validate_published(
     let registry = read_registry(conn)?;
     let declaration = registry.published(registry.head())?;
     let Some(entry) = journal(conn)? else {
-        if declaration.operation() != "create-owned-index" {
+        if !registry.is_unique_genesis_head() || declaration.operation() != "create-owned-index" {
             return Err(invalid(
                 "published target lost its qualified migration journal",
             ));
@@ -1119,7 +1119,8 @@ fn validate_published(
         ));
     }
     let source = registry.published(&plan.stored.source.publication)?;
-    if source.operation() != "create-owned-index"
+    if !registry.is_genesis_publication(source.publication())
+        || source.operation() != "create-owned-index"
         || descriptor(&source) != plan.stored.source.descriptor
     {
         return Err(invalid(

@@ -2045,3 +2045,11 @@ permise seulement à la publication de création, et résultat appliqué complet
 (préfixe final, valeurs/schema/checkpoints) obligé à correspondre à la tête.
 Témoin de corruption après publication (résultat modifié ou ligne retirée),
 refus RO sans nouvelle écriture ; aucun Cargo/runtime exécuté à ce constat.
+
+
+Précision C7 sur la genèse, avant lancement : absence de journal admise seulement
+sur le vrai SourceRevision::Genesis d'un registre validé à une publication unique,
+pas sur le seul texte d'opération. Le prédicat de chaîne est explicite ; le juge
+codec existant construit aussi une tête non-genesis nommée create-owned-index et
+la refuse comme genèse. Source appliquée également vérifiée comme vrai Genesis.
+Comptes inchangés19 fonctions/18 juges/8 enfants, aucun runtime lancé.
