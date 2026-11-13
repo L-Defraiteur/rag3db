@@ -32,6 +32,10 @@ try:
  assert (T/'.arbre-du-target').read_text().strip()==str(W/'extension/rag3weaver')
  for file in [Path(inventory['binary']),P/'binaire-cpu']:
   with file.open('rb') as f:assert hashlib.file_digest(f,'sha256').hexdigest()==inventory['sha256']
+ profile=json.loads((P/'elf-main.json').read_text())['env']
+ assert profile['XDG_STATE_HOME']==source['state_roots']['xdg']==str(P/'xdg-state')
+ assert profile['RAG3WEAVER_STATE_DIR']==source['state_roots']['rag']==str(P/'state-fixture/private')
+ assert not Path(profile['RAG3WEAVER_STATE_DIR']).is_relative_to(Path(profile['XDG_STATE_HOME'])) and not Path(profile['XDG_STATE_HOME']).is_relative_to(Path(profile['RAG3WEAVER_STATE_DIR']))
  qualification=json.loads((P/'qualification.json').read_text());assert qualification==dict(cpu_exacts='VERT_15_EXACTS',cpu_lib='VERT_CPU_LIB')
  finished=time.monotonic()
  assert finished<source['deadline'] and finished-source['initial']<1800,'deadline after scan and ELF hashes'

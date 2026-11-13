@@ -39,3 +39,7 @@ Nouvelle source :15fonctions écrites, NONJOUÉES. Vrais3nœuds+spiesauxargument
 ## Pilote CPU distinct préparé
 
 [Recette30](../13-11-2026/30-pilote-cpu-admission-2b-a.md) : sourceaffa6 figée, pilote horssource sur nouvellebranche/WT,1800 uniques aprèsposte réel32HIGHmax/j8 ; garde commune initialeTNEUFsansreprise, buildCPU900/inventaires15/25/all+ledgercopiépubliédeuxpostes avant15exacts30+libCPUentière300horsGDB. AucunSDK/native-check. Recheckfinalposthash/prépublication, firstredimmutable/cleanupattributionseule. NONLANCÉ, RO+GOcouple/créneauC7distincts requis.
+
+## Réserve profil pilote8c8 levée dans le delta préparé
+
+Avant toutGO/run, Recherche signale XDG_STATE_HOME manquant avec HOME réel. Nouveauprofil crée P/xdg-state et P/state-fixture/private nonimbriqués, exportsdes2racines et attestationGDB+finale ; sourceRustaffa inchangée. AucunAuth/T/Cargo consommé sur8c8. RO/GOexactnouveaupilote encore requis.
