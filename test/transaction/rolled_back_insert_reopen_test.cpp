@@ -8,11 +8,13 @@
 // Chaque cas : 128 nœuds Content validés avec une relation chacun vers Scope, puis une transaction
 // qui ajoute des nœuds (à partir du décalage 128) et leurs relations, défaite ; fermeture,
 // réouverture ; puis dans une transaction le SET sur les relations, avec ou sans écritures avant.
+#include <filesystem>
 #include <string>
 
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
 #include "main/database.h"
+#include "test_helper/test_helper.h"
 
 using namespace rag3db::main;
 using namespace rag3db::testing;
@@ -109,15 +111,44 @@ TEST_F(RolledBackInsertReopenTest, ARolledBackStatementInsideACommittedTransacti
                               "ELSE 'c' + CAST(i AS STRING) END, body: 'b'})-[:DERIVED_FROM {hash: "
                               "'h'}]->(s);");
     EXPECT_FALSE(failed->isSuccess()) << "the duplicate key c0 must fail the statement";
+    // Une instruction échouée rend la transaction échouée : son COMMIT est refusé et la ferme.
     auto commit = conn->query("COMMIT;");
-    if (!commit->isSuccess()) {
-        run("ROLLBACK;");
-    }
     reopen();
     run("BEGIN TRANSACTION;");
     const auto expected = commit->isSuccess() ? "132\n" : "128\n";
     EXPECT_EQ(setOverScopes(), expected);
     run("COMMIT;");
+}
+
+// La forme du produit (le repro de rag3weaver s'appelle e2e_tx_vecteurs_apres_rollback) : la table
+// défaite porte un index vectoriel, ses vecteurs sont posés par SET depuis NULL dans la
+// transaction défaite ; après réouverture, la transaction suivante fait des MERGE puis le SET.
+TEST_F(RolledBackInsertReopenTest, AVectorIndexedTableKeepsBothRelsAndRowsAfterARolledBackInsert) {
+    const auto extension =
+        TestHelper::appendRag3dbRootPath("extension/vector/build/libvector.rag3db_extension");
+    if (!std::filesystem::exists(extension)) {
+        GTEST_SKIP() << "the vector extension is not built (-DBUILD_EXTENSIONS=vector)";
+    }
+    run("LOAD EXTENSION '" + extension + "';");
+    run("ALTER TABLE Content ADD vec FLOAT[4];");
+    run("MATCH (c:Content) SET c.vec = [1.0, 0.5, CAST(c.uuid = 'c1' AS FLOAT), 0.25];");
+    run("CALL CREATE_VECTOR_INDEX('Content', 'content_vec', 'vec', metric := 'l2');");
+    run("CHECKPOINT;");
+    run("BEGIN TRANSACTION;");
+    run("UNWIND range(128, 167) AS i MATCH (s:Scope {uuid: 's' + CAST(i % 10 AS STRING)}) CREATE "
+        "(c:Content {uuid: 'c' + CAST(i AS STRING), body: 'b'})-[:DERIVED_FROM {hash: 'h'}]->(s);");
+    run("UNWIND range(128, 167) AS i MATCH (c:Content {uuid: 'c' + CAST(i AS STRING)}) SET c.vec "
+        "= [0.5, 1.0, CAST(i AS FLOAT) / 200.0, 0.75];");
+    run("ROLLBACK;");
+    reopen();
+    run("BEGIN TRANSACTION;");
+    run("UNWIND range(500, 519) AS i MATCH (s:Scope {uuid: 's' + CAST(i % 10 AS STRING)}) "
+        "MERGE (c:Content {uuid: 'c' + CAST(i AS STRING)}) MERGE (c)-[:DERIVED_FROM]->(s);");
+    run("UNWIND range(500, 519) AS i MATCH (c:Content {uuid: 'c' + CAST(i AS STRING)}) SET c.vec "
+        "= [0.25, 0.5, CAST(i AS FLOAT) / 1000.0, 1.0];");
+    EXPECT_EQ(setOverScopes(), "148\n");
+    run("COMMIT;");
+    EXPECT_EQ(row("MATCH (c:Content) RETURN count(c);"), "148\n");
 }
 
 } // namespace
