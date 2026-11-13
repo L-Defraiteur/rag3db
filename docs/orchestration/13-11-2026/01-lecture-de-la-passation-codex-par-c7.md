@@ -55,8 +55,9 @@ est dit tel quel.
   jouée**. Pour reprendre : qualifier C, mesurer A contre C, décider ; jamais de tag sans ton mot.
 - **recherche** : la garde des targets est atterrie ; la clôture du reliquat (a6c23af93) attend un
   « à toi » ; un prototype archivé sur branche, à ne pas fusionner.
-- **everything declarative** : parcours IDE, frontières de la boîte, read_scope atterris ; un diagnostic
-  documentaire du rouge CI sur branche. En veille de relecture.
+- **everything declarative** : parcours IDE, frontières de la boîte, read_scope atterris ; le correctif des
+  réclamations est sur master depuis le 11 (b3f31b544) ; un diagnostic documentaire du rouge CI sur
+  branche. En veille de relecture.
 - **mémoire** : M8 première tranche atterrie le 12 ; rien le 13 ; M9 (mémoire automatique) conçu, pas
   livré.
 - **archi** : navigation des symboles et grep enrichi atterris ; un lot de docs (f66105e8e) poussé sur
@@ -108,9 +109,11 @@ est dit tel quel.
 
 ## 5. Ce soir, avec les sessions Claude (proposition)
 
-1. **La CI au vert** : le témoin du raccord physique (écrivain vivant après Drop) — cœur C++ pour la
-   provenance de l'écrivain, ED pour le Rust ; puis le correctif des réclamations d'ED, dans cet ordre.
-   Rien d'autre n'atterrit tant que master est rouge.
+1. **La CI au vert**, deux causes (corrigé le 13 au soir) : d'abord la **garde des targets** de recherche
+   (9feb7cdba), qui refuse le target restauré par le cache de la CI (« target non vide sans provenance »)
+   et arrête le job avant tout test — recherche ; puis le témoin du raccord physique, rouge en local sous
+   la lib entière (état partagé entre tests), et l'écrivain vivant après un Drop — arbre principal avec le
+   cœur. Rien d'autre n'atterrit tant que master est rouge.
 2. **Les trois lots de notre page de reprise** : arrêt du backend (recherche), IDE par le flux (archi),
    puis la clôture du reliquat de recherche et le lot docs de tty (fusion entière).
 3. **Les couches** : relire d9aa4be86 et 4fca0dd38 (arbre principal) avant de les jouer ; une page courte
