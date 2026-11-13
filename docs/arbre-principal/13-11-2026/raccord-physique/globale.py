@@ -30,7 +30,7 @@ E.update(CARGO_MANIFEST_DIR=str(C),CARGO_TARGET_DIR=str(T),CARGO_BUILD_JOBS='8',
 for suffix in ('','_EMBEDDER','_RERANKER','_OCR'): E['RAG3WEAVER_BURN_DEVICE'+suffix]='cpu'
 assert all(isinstance(k,str) and isinstance(v,str) for k,v in E.items())
 EXPORT=['bash','-c','. "$1"; exporter_la_lib || exit 2; shift; exec "$@"','native-test',str(C/'scripts/lib_du_magasin.sh')]
-owned={}; seen={}; devices={}; mappings={}; artifacts={}; phases=[]; phase='preparation'; child=None; bus_tmp=None
+owned={}; seen={}; devices={}; mappings={}; protected={}; artifacts={}; phases=[]; phase='preparation'; child=None; bus_tmp=None
 CASE='e2e_lectures::la_recherche_rend_les_mots_pendant_un_create_de_l_index_vectoriel'
 PROFILE_KEYS={'TMPDIR','PATH','LD_LIBRARY_PATH','CUDA_ROOT','CARGO_MANIFEST_DIR','CARGO_TARGET_DIR','CARGO_INCREMENTAL','RUST_BACKTRACE','XDG_CONFIG_HOME','XDG_DATA_HOME','XDG_CACHE_HOME','RAG3DB_LIB','RAG3DB_LIBS_DIR','RAG3DB_ROOT','RAG3DB_SHARED','RAG3DB_LIBRARY_DIR','RAG3DB_INCLUDE_DIR','RAG3DB_BUFFER_POOL_SIZE','RAG3WEAVER_REGIME','RAG3WEAVER_MOTEUR_ANCIEN','RAG3WEAVER_GARDER','RAG3WEAVER_PASSE_E2E','RAG3WEAVER_E2E_JOURNAUX_DEMONS','RAG3WEAVER_E2E_DOSSIER','RAG3WEAVER_CHECKPOINT_DIR','RAG3WEAVER_STATE_DIR','RAG3WEAVER_CACHE_DIR','RAG3WEAVER_BUILTIN_TEMPLATES_DIR','RAG3WEAVER_RUNS_DIR','RAG3WEAVER_CHATS_DIR','RAG3WEAVER_TACHES_DIR','RAG3WEAVER_JOURNAUX_DIR','RAG3WEAVER_SERVICE_SPARSE','RAG3WEAVER_BURN_DEVICE','RAG3WEAVER_BURN_DEVICE_EMBEDDER','RAG3WEAVER_BURN_DEVICE_RERANKER','RAG3WEAVER_BURN_DEVICE_OCR'}
 
@@ -50,7 +50,6 @@ def observe():
     for q in Path('/proc').iterdir():
         if not q.name.isdigit():continue
         try:
-            if q.stat().st_uid!=os.getuid():continue
             st=(q/'stat').read_text().rsplit(') ',1)[1].split();table[int(q.name)]=(int(st[1]),st[19],st[0])
         except (OSError,ProcessLookupError):continue
     changed=True
@@ -65,16 +64,20 @@ def observe():
     for pid,stamp in list(owned.items()):
         if pid not in table or table[pid][1]!=stamp or table[pid][2]=='Z':continue
         live.append(pid)
+        verified=False;cg=None;exe=None;field='cgroup'
         try:
             q=Path('/proc')/str(pid);cg=(q/'cgroup').read_text().strip().split('::',1)[1]
-            maximum=(Path('/sys/fs/cgroup'+cg)/'memory.max').read_text().strip();exe=os.readlink(q/'exe')
-            seen[(pid,stamp,cg,exe)]=dict(pid=pid,starttime=stamp,cgroup=cg,memory_max=maximum,exe=exe)
+            maximum=(Path('/sys/fs/cgroup'+cg)/'memory.max').read_text().strip()
             assert cg==CG or cg.startswith(CG+'/'),('hors scope',pid,cg)
             assert maximum=='34359738368',('plafond enfant',pid,maximum)
+            verified=True;field='exe';exe=os.readlink(q/'exe')
+            seen[(pid,stamp,cg,exe)]=dict(pid=pid,starttime=stamp,cgroup=cg,memory_max=maximum,exe=exe)
+            field='fd'
             for fd in (q/'fd').iterdir():
                 try:dest=os.readlink(fd)
-                except OSError:continue
+                except (FileNotFoundError,ProcessLookupError):continue
                 if dest.startswith('/dev/dri/') or dest=='/dev/kfd':devices[(pid,stamp,dest)]=dict(pid=pid,starttime=stamp,device=dest,cgroup=cg)
+            field='environ'
             if phase in ('e2e_lectures','create-natif') and '/deps/e2e-' in exe:
                 raw=dict(v.split(b'=',1) for v in (q/'environ').read_bytes().split(b'\0') if b'=' in v)
                 profile={k:os.fsdecode(raw[os.fsencode(k)]) for k in PROFILE_KEYS if os.fsencode(k) in raw}
@@ -82,6 +85,7 @@ def observe():
                     save('profil-lectures.json',dict(env=profile,pid=pid,starttime=stamp,cgroup=cg,exe=exe))
                 if phase=='create-natif' and not (P/'profil-create.json').exists():
                     save('profil-create.json',dict(env=profile,pid=pid,starttime=stamp,cgroup=cg,exe=exe))
+            field='maps'
             if exe.startswith(str(T/'debug/')) and (('/deps/rag3weaver-' in exe) or '/deps/e2e-' in exe or exe.endswith('/rag3weaver-backend')):
                 maps=(q/'maps').read_text();rows=[r for r in maps.splitlines() if 'librag3db.so' in r]
                 if rows:
@@ -89,6 +93,10 @@ def observe():
                     if (pid,stamp) not in mappings:
                         file=f'maps-{pid}-{stamp}.txt';(P/file).write_text(maps)
                         mappings[(pid,stamp)]=dict(pid=pid,starttime=stamp,exe=exe,maps=file,native=rows,cgroup=cg)
+        except PermissionError as error:
+            protected[(pid,stamp,field)]=dict(pid=pid,starttime=stamp,field=field,exe=exe,cgroup=cg,cgroup_verified=verified,observation='UNKNOWN',error=str(error))
+            save('observations-protegees.json',list(protected.values()))
+            assert verified,('cgroup possédé illisible : aucun confinement déduit',pid,field)
         except (FileNotFoundError,ProcessLookupError):continue
     return live
 
@@ -97,17 +105,22 @@ def scan_context():
     for q in Path('/proc').iterdir():
         if not q.name.isdigit() or int(q.name)==os.getpid():continue
         try:
-            if q.stat().st_uid!=os.getuid():continue
             stat=(q/'stat').read_text().rsplit(') ',1)[1].split()
+            if q.stat().st_uid!=os.getuid() and owned.get(int(q.name))!=stat[19]:continue
             if stat[0]=='Z':continue
             exe=os.readlink(q/'exe');cwd=os.readlink(q/'cwd');args=(q/'cmdline').read_bytes().split(b'\0')
             if exe.startswith(str(T)+'/') or cwd==str(W) or cwd.startswith(str(W)+'/') or (bus_tmp and any(str(bus_tmp).encode() in a for a in args)):
                 found.append(dict(pid=int(q.name),starttime=stat[19],exe=exe,cwd=cwd))
-        except (OSError,ProcessLookupError):continue
+        except (OSError,ProcessLookupError):
+            try:
+                pid=int(q.name);st=(q/'stat').read_text().rsplit(') ',1)[1].split()
+                if st[0]!='Z' and owned.get(pid)==st[19]:
+                    found.append(dict(pid=pid,starttime=st[19],exe=None,cwd=None,observation='UNKNOWN-owned-live'))
+            except OSError:pass
     return found
 
 def observations():
-    save('descendants.json',list(seen.values()));save('devices.json',list(devices.values()));save('maps.json',list(mappings.values()))
+    save('descendants.json',list(seen.values()));save('devices.json',list(devices.values()));save('maps.json',list(mappings.values()));save('observations-protegees.json',list(protected.values()))
 def stop_owned():
     try:observe()
     except BaseException as error:save('erreur-observation-arret.json',dict(error=repr(error)))
@@ -339,7 +352,7 @@ try:
     profile=json.loads((P/'profil-lectures.json').read_text())['env'];assert profile['RAG3WEAVER_MOTEUR_ANCIEN']=='1'
     actual=E.copy();actual.update(profile);actual.pop('RAG3WEAVER_MOTEUR_ANCIEN',None)
     # run(extra) overlays E, so explicitly remove the flag in its env below.
-    complement=run('create-natif',EXPORT+['env','-u','RAG3WEAVER_MOTEUR_ANCIEN','bash',str(Path(__file__).with_name('create-exact.sh')),str(cli),artifacts['cli']['sha256'],str(P)],budget(180),actual,cwd=Path('/var/tmp'))
+    complement=run('create-natif',['env','-u','RAG3WEAVER_MOTEUR_ANCIEN','bash',str(Path(__file__).with_name('create-exact.sh')),str(cli),artifacts['cli']['sha256'],str(P)],budget(180),actual,cwd=Path('/var/tmp'))
     assert re.findall(r'test result: ok\. (\d+) passed; (\d+) failed; (\d+) ignored;',complement)[-1]==('1','0','0')
     assert 'non jugé' not in complement and 'SAUTÉ' not in complement
     after_profile=json.loads((P/'profil-create.json').read_text())['env']
