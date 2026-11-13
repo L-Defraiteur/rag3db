@@ -1,0 +1,129 @@
+{"pid": 1213520, "start": "91619112", "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1213517-i89238432.scope", "memoire": {"memory.max": "8589934592", "memory.high": "max"}}
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/lucivy-fst/Cargo.toml
+workspace: /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/lucivy_fts/rust/Cargo.toml
+workspace: /home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/Cargo.toml
+    Updating crates.io index
+     Locking 349 packages to latest Rust 1.85 compatible versions
+      Adding base64 v0.22.1 (available: v0.23.1)
+      Adding bincode v1.3.3 (available: v3.0.0)
+      Adding binggan v0.14.2 (available: v0.17.0)
+      Adding bon v3.9.3 (available: v3.10.3, requires Rust 1.88.0)
+      Adding bon-macros v3.9.3 (available: v3.10.3, requires Rust 1.88.0)
+      Adding criterion v0.5.1 (available: v0.7.0)
+      Adding ctutils v0.4.2 (available: v0.4.8)
+      Adding cxx v1.0.198 (available: v1.0.205)
+      Adding cxx-build v1.0.198 (available: v1.0.205)
+      Adding cxxbridge-cmd v1.0.198 (available: v1.0.205)
+      Adding cxxbridge-flags v1.0.198 (available: v1.0.205)
+      Adding cxxbridge-macro v1.0.198 (available: v1.0.205)
+      Adding flume v0.11.1 (available: v0.12.0)
+      Adding fs4 v0.13.1 (available: v1.1.0)
+      Adding getrandom v0.2.17 (available: v0.4.3)
+      Adding hashbrown v0.15.5 (available: v0.17.1)
+      Adding itertools v0.14.0 (available: v0.15.0)
+      Adding lru v0.12.5 (available: v0.19.0)
+      Adding lz4_flex v0.11.6 (available: v0.14.0)
+      Adding memmap2 v0.5.10 (available: v0.9.12)
+      Adding murmurhash32 v0.3.1 (available: v0.4.0)
+      Adding napi v2.16.17 (available: v3.16.2)
+      Adding napi-build v2.2.4 (available: v2.6.0)
+      Adding napi-derive v2.16.13 (available: v3.7.1)
+      Adding nom v7.1.3 (available: v8.0.0)
+      Adding oneshot v0.1.13 (available: v0.2.1)
+      Adding ordered-float v4.6.0 (available: v5.5.1)
+      Adding ordered-float v5.4.0 (available: v5.5.1, requires Rust 1.90)
+      Adding proptest v1.11.0 (available: v1.12.0, requires Rust 1.88)
+      Adding pyo3 v0.24.2 (available: v0.30.1)
+      Adding quickcheck v0.9.2 (available: v1.1.0)
+      Adding rand v0.7.3 (available: v0.10.3)
+      Adding rand v0.8.8 (available: v0.10.3)
+      Adding rand_distr v0.4.3 (available: v0.6.0)
+      Adding sha2 v0.11.0 (available: v0.11.1)
+      Adding sketches-ddsketch v0.3.2 (available: v0.4.2)
+      Adding tantivy v0.25.0 (available: v0.27.0)
+      Adding textwrap v0.16.2 (available: v0.16.4, requires Rust 1.88)
+      Adding time v0.3.45 (available: v0.3.55, requires Rust 1.88.0)
+      Adding time-core v0.1.7 (available: v0.1.9, requires Rust 1.88.0)
+      Adding time-macros v0.2.25 (available: v0.2.32, requires Rust 1.88.0)
+      Adding uuid v1.26.1 (available: v1.29.2, requires Rust 1.89.0)
+      Adding wasip2 v1.0.1+wasi-0.2.4 (available: v1.0.4+wasi-0.2.12, requires Rust 1.87.0)
+      Adding zstd v0.13.5 (available: v0.14.4)
+   Compiling libc v0.2.191
+   Compiling scopeguard v1.2.0
+   Compiling cfg-if v1.0.5
+   Compiling futures-sink v0.3.34
+   Compiling futures-core v0.3.34
+   Compiling lock_api v0.4.14
+   Compiling spin v0.9.9
+   Compiling getrandom v0.2.17
+   Compiling nanorand v0.7.0
+   Compiling flume v0.11.1
+   Compiling luciole v4.3.3 (/home/lucied/git_workspaces/cx-lucivy-shutdown-cpu/luciole)
+warning: unused import: `crate::actor_state::ActorState`
+   --> luciole/src/generic_actor.rs:166:9
+    |
+166 |     use crate::actor_state::ActorState;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `ReplyPort`
+   --> luciole/src/generic_actor.rs:167:51
+    |
+167 |     use crate::envelope::{type_tag_hash, Message, ReplyPort};
+    |                                                   ^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+   --> luciole/src/generic_actor.rs:171:9
+    |
+171 |     use std::sync::Arc;
+    |         ^^^^^^^^^^^^^^
+
+warning: unused import: `self`
+   --> luciole/src/handler.rs:114:27
+    |
+114 |     use crate::envelope::{self, type_tag_hash};
+    |                           ^^^^
+
+warning: unused import: `PortDef`
+  --> luciole/src/scope.rs:82:42
+   |
+82 |     use crate::node::{Node, NodeContext, PortDef};
+   |                                          ^^^^^^^
+
+warning: unused imports: `PortType` and `PortValue`
+  --> luciole/src/scope.rs:84:23
+   |
+84 |     use crate::port::{PortType, PortValue};
+   |                       ^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `crate::reply::Reply`
+  --> luciole/src/scope.rs:85:9
+   |
+85 |     use crate::reply::Reply;
+   |         ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::reply::Reply`
+   --> luciole/src/stream_dag.rs:195:9
+    |
+195 |     use crate::reply::Reply;
+    |         ^^^^^^^^^^^^^^^^^^^
+
+error[E0046]: not all trait items implemented, missing: `priority`
+   --> luciole/src/pool.rs:583:9
+    |
+583 |         impl Actor for DropWorker {
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^ missing `priority` in implementation
+    |
+   ::: luciole/src/lib.rs:81:5
+    |
+ 81 |     fn priority(&self) -> Priority;
+    |     ------------------------------- `priority` from trait
+
+For more information about this error, try `rustc --explain E0046`.
+warning: `luciole` (lib test) generated 8 warnings
+error: could not compile `luciole` (lib test) due to 1 previous error; 8 warnings emitted
+validation : ROUGE ; preuves : /home/lucied/.cache/rag3weaver-build/cx-lucivy-shutdown-13nov/confinement-corrige/validation-39f9ptl0

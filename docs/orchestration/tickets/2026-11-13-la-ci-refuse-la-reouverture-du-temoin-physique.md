@@ -187,3 +187,25 @@ Environnement Cargo : CARGO_BUILD_JOBS=4, CARGO_TARGET_DIR privé neuf
 `~/.cache/rag3weaver-build/cx-lucivy-shutdown-target-13nov`.
 Source inchangée `273b7c6ccaff5b3d49507ca62aebb5bfe87095fa`.
 Journal et contrôle PID/start hors worktree, aucune relance après autre rouge.
+
+### Entrée corrigée : compilation refusée, arrêt sans retry
+
+Source `273b7c6` effectivement lancée sous vrai poste et confinement 600 s.
+Contrôles mémoire réels lus avant Cargo : memory.max=8589934592,
+memory.high=max ; PID1213520/start91619112 dans scope
+run-p1213517-i89238432.scope. Cargo -j4, target neuf privé.
+Résultat : E0046, méthode obligatoire `Actor::priority` absente du DropWorker
+du nouveau témoin. Aucun test exécuté ; ce n’est pas le rouge TDD attendu.
+Erreur de préparation du témoin, aucune attribution au code de production.
+Confineur : code101, erreur=null, restes=[], zone privée nettoyée=true.
+[Brut](../../lucivy/13-11-2026/preuves/shutdown-compilation.log),
+[verdict](../../lucivy/13-11-2026/preuves/shutdown-verdict.json),
+[inventaire PID/start](../../lucivy/13-11-2026/preuves/shutdown-enfants.json),
+[recette effective](../../lucivy/13-11-2026/preuves/shutdown-recette.json).
+
+STOP sans retry respecté. Correction de source publiée seulement : dépôt
+lucivy, branche cx-lucivy-shutdown-destruction, commit `645b6e6`, ajout unique
+`fn priority(&self) -> Priority { Priority::Medium }`. Diff --check propre ;
+aucune qualification de cette nouvelle source. Porteur Lucivy ; reste :
+relecture et nouveau GO CPU distinct par C7 avant tout lancement. La barrière
+de production reste à préparer après preuve rouge pertinente, ticket ouvert.
