@@ -1,0 +1,25 @@
+{
+  "argv": [
+    "/usr/bin/dbus-run-session",
+    "--config-file=/tmp/r3v-4wa8b6gx/bus.xml",
+    "--",
+    "/usr/bin/python3",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-shutdown-13nov/verifier-et-lancer.py"
+  ],
+  "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1264247-i89263664.scope",
+  "memoire": {
+    "direct": "8589934592",
+    "effectif": 8589934592
+  },
+  "delai": 280,
+  "outils": {
+    "dbus-run-session": {
+      "path": "/usr/bin/dbus-run-session",
+      "sha256": "d310854dcd72b103aa95a7f6a54eae2cb1579d6c71af40243f840e37fa64d4c5"
+    },
+    "dbus-daemon": {
+      "path": "/usr/bin/dbus-daemon",
+      "sha256": "b5d6c0469c7dc4050733f2a90fe64e9f55a3377521dbb295f03ee2cd9807acc4"
+    }
+  }
+}
