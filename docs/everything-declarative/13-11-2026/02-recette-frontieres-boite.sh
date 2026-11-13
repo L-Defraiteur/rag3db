@@ -15,7 +15,10 @@ cd "$W/extension/rag3weaver"
 git rev-parse HEAD > "$O/source"
 git status --porcelain > "$O/status-source"
 test ! -s "$O/status-source"
-for nom in minimum daemon natif-daemon; do
+jeux=(minimum daemon natif-daemon)
+# Reprise après le minimum vert : seulement si son équivalence est documentée.
+if [ "${3:-}" = daemon ]; then jeux=(daemon natif-daemon); fi
+for nom in "${jeux[@]}"; do
   jeu=""
   if [ "$nom" = daemon ]; then jeu=daemon; fi
   if [ "$nom" = natif-daemon ]; then
