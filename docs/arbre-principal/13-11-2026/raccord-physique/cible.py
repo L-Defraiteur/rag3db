@@ -8,9 +8,11 @@ T=Path('/home/lucied/.cache/rag3weaver-build/cx-target-contenu-derive')
 P=Path('/home/lucied/.cache/rag3weaver-build/cx-raccord-physique-cible-v3')
 NATIVE='rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
 SOURCE=sys.argv[1]
+CONTINUE='--existing-v3' in sys.argv[2:]
+if CONTINUE:P=Path('/home/lucied/.cache/rag3weaver-build/cx-raccord-physique-complement-v3')
 assert re.fullmatch('[0-9a-f]{40}',SOURCE)
 AUTH=json.loads(Path(os.environ['RAG3WEAVER_VALIDATION_RECU']).read_text())
-DEADLINE=AUTH['echeance']; START=DEADLINE-599
+DEADLINE=min(AUTH['echeance'],887138.455654083) if CONTINUE else AUTH['echeance']; START=time.monotonic()
 assert time.monotonic()<DEADLINE-10
 P.mkdir(exist_ok=False)
 for name in ['tmp','state','journaux','builtin_templates','elf','cache']: (P/name).mkdir()
@@ -80,7 +82,10 @@ def run(label,argv,cwd=C):
     return logfile.read_text(errors='replace')
 
 try:
-    assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=W,text=True).strip()==SOURCE
+    if CONTINUE:
+        assert SOURCE=='10e6c75270a93c4db7a5d42c69c9dbd5d658f46e'
+        assert not subprocess.check_output(['git','diff',SOURCE,'HEAD','--','extension/rag3weaver'],cwd=W)
+    else:assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=W,text=True).strip()==SOURCE
     assert not subprocess.check_output(['git','status','--porcelain'],cwd=W,text=True).strip()
     assert int(subprocess.check_output(['git','rev-list','--count','HEAD..origin/master'],cwd=W,text=True))<=200
     # Copy only tracked public templates from the qualified source tree.
@@ -90,17 +95,25 @@ try:
         relative=path.relative_to(C/'templates');dest=P/'builtin_templates'/relative;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(path,dest)
         records.append(dict(path=str(relative),sha256=sha(path),size=path.stat().st_size))
     assert records;save('templates.json',records)
-    build=run('build',['bash','scripts/cargo_magasin.sh','test','--lib','--no-default-features','--features','rag3db-native,code','-j8','--no-run','--message-format=json'])
+    if CONTINUE:
+        previous=Path('/home/lucied/.cache/rag3weaver-build/cx-raccord-physique-cible-v3')
+        build=(previous/'build.log').read_text()
+        attestation=json.loads(Path('/home/lucied/.cache/rag3weaver-build/cx-raccord-physique-attestation-v3.json').read_text())
+        assert attestation['verdict']=='VERT_ATTESTATION_RO' and attestation['source']==SOURCE
+    else:
+        build=run('build',['bash','scripts/cargo_magasin.sh','test','--lib','--no-default-features','--features','rag3db-native,code','-j8','--no-run','--message-format=json'])
     artifacts=[]
     for line in build.splitlines():
         try:message=json.loads(line)
         except json.JSONDecodeError:continue
         if message.get('reason')=='compiler-artifact' and message.get('executable') and message.get('profile',{}).get('test') and message['target']['name']=='rag3weaver':artifacts.append(Path(message['executable']))
     assert len(set(artifacts))==1,artifacts
-    binary=artifacts[0];dest=P/'elf'/binary.name;shutil.copy2(binary,dest);assert sha(binary)==sha(dest)
+    binary=artifacts[0]
+    if CONTINUE:assert sha(binary)==attestation['sha256']=='8387de3dd95ef2c3d290166d6d2049c0a4cf9f4cb29ace565da362b9b8a9426d'
+    dest=P/'elf'/binary.name;shutil.copy2(binary,dest);assert sha(binary)==sha(dest)
     with binary.open('rb') as stream,mmap.mmap(stream.fileno(),0,access=mmap.ACCESS_READ) as data:
-        assert SOURCE[:9].encode() in data,'source revision absent from ELF'
-        required_templates=['search_base.mmd','search_expansion.mmd']
+        assert data.find(SOURCE[:9].encode())>=0,'source revision absent from ELF'
+        required_templates=['tools/search_base.mmd','search_expansion.mmd']
         for name in required_templates:
             payload=(C/'templates'/name).read_bytes()
             assert payload and data.find(payload)>=0,('required template absent from ELF',name)
