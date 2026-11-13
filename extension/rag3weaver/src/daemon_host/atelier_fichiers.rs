@@ -265,17 +265,6 @@ impl DaemonHost {
     /// et au flux (`accords`).
     pub fn decider_accord(&self, id: &str, accorder: bool, qui: &str) -> Result<Value, String> {
         let d = self.accords.lock().unwrap_or_else(|p| p.into_inner()).demande_a_decider(id)?;
-        let d = publier_decision(&self.accords, id, d, accorder, |d| {
-            let (Some(commande), Some(backend)) = (&d.commande, &d.backend) else { return Ok(()) };
-            let domaine = Some(d.chemin.clone()).filter(|c| !c.as_os_str().is_empty());
-            self.with_backend_id(backend, |b| match b.garde() {
-                Some(g) => g.accorder_ligne(commande, &crate::commande::Contexte { accorde_par_l_utilisateur: true, domaine }),
-                None => Err("ce backend n'a pas de porte des commandes (workspace.commands)".into()),
-            })
-            .and_then(|r| r)
-            .map(|_| ())
-            .map_err(|e| format!("l'accord de « {commande} » n'a pas pu se poser : {e}"))
-        })?;
         let mut ligne = json!({
             "id": id,
             "genre": if d.commande.is_some() { "commande" } else { "chemin" },
@@ -289,17 +278,43 @@ impl DaemonHost {
         if let Some(commande) = &d.commande {
             ligne["commande"] = json!(commande);
         }
-        let journal = self.journal.racine().join("decisions.jsonl");
-        if let Some(dir) = journal.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| format!("{} : {e}", dir.display()))?;
-        }
-        use std::io::Write;
-        let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&journal).map_err(|e| format!("{} : {e}", journal.display()))?;
-        writeln!(f, "{ligne}").map_err(|e| format!("{} : {e}", journal.display()))?;
+        // **Le journal d'abord** (ticket d'ED, la décision posée avant son journal) : une
+        // décision qui ne peut pas s'écrire n'ouvre rien, et le refus le dit.
+        self.journaliser_la_decision(&ligne)?;
+        let publiee = publier_decision(&self.accords, id, d, accorder, |d| {
+            let (Some(commande), Some(backend)) = (&d.commande, &d.backend) else { return Ok(()) };
+            let domaine = Some(d.chemin.clone()).filter(|c| !c.as_os_str().is_empty());
+            self.with_backend_id(backend, |b| match b.garde() {
+                Some(g) => g.accorder_ligne(commande, &crate::commande::Contexte { accorde_par_l_utilisateur: true, domaine }),
+                None => Err("ce backend n'a pas de porte des commandes (workspace.commands)".into()),
+            })
+            .and_then(|r| r)
+            .map(|_| ())
+            .map_err(|e| format!("l'accord de « {commande} » n'a pas pu se poser : {e}"))
+        });
+        let d = match publiee {
+            Ok(d) => d,
+            Err(e) => {
+                // La ligne écrite ne vaut plus : la suivante le dit.
+                let _ = self.journaliser_la_decision(&json!({ "id": id, "decision": "non posé", "raison": e, "qui": qui, "quand_ms": crate::events::maintenant_ms() }));
+                return Err(e);
+            }
+        };
         self.ide_flux().publier("accords", "*", json!({ "kind": "AccordDecide", "id": id, "decision": ligne["decision"], "chemin": d.chemin, "mode": d.mode, "commande": ligne["commande"] }));
         let mut rendu = ligne;
         rendu["relance"] = json!(d.backend.as_deref().is_some_and(|b| self.relancer_apres_la_carte(b, &message_de_la_carte(&d, accorder))));
         Ok(rendu)
+    }
+
+    /// Une ligne au journal des décisions (`<racine des runs>/decisions.jsonl`).
+    fn journaliser_la_decision(&self, ligne: &Value) -> Result<(), String> {
+        use std::io::Write;
+        let journal = self.journal.racine().join("decisions.jsonl");
+        if let Some(dir) = journal.parent() {
+            std::fs::create_dir_all(dir).map_err(|e| format!("{} : {e}", dir.display()))?;
+        }
+        let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&journal).map_err(|e| format!("le journal des décisions {} : {e} — rien n'est décidé", journal.display()))?;
+        writeln!(f, "{ligne}").map_err(|e| format!("le journal des décisions {} : {e} — rien n'est décidé", journal.display()))
     }
 
     /// **Rattacher une demande à la conversation qui l'a posée** : le nœud d'`ask_permission`
@@ -322,8 +337,22 @@ impl DaemonHost {
         let Some(hote) = self.soi.get().and_then(std::sync::Weak::upgrade) else { return false };
         let backend = backend.to_string();
         std::thread::spawn(move || {
-            if let Err(e) = hote.chat_turn(&backend, &message) {
-                eprintln!("[démon] la relance après la carte d'accord n'est pas partie ({backend}) : {e}");
+            // **Une carte décidée pendant son propre tour** (ticket d'ED) : le tour en cours
+            // finit d'abord, puis la décision part ; au-delà de dix minutes, ou sur un autre
+            // refus, l'IDE l'apprend par le flux.
+            let debut = std::time::Instant::now();
+            loop {
+                match hote.chat_turn(&backend, &message) {
+                    Err(e) if e.contains("un tour est déjà en cours") && debut.elapsed() < std::time::Duration::from_secs(600) => {
+                        std::thread::sleep(std::time::Duration::from_millis(200));
+                    }
+                    Err(e) => {
+                        eprintln!("[démon] la relance après la carte d'accord n'est pas partie ({backend}) : {e}");
+                        hote.ide_flux().publier("accords", "*", json!({ "kind": "RelanceRefusee", "backend": backend, "raison": e }));
+                        break;
+                    }
+                    Ok(_) => break,
+                }
             }
         });
         true
@@ -527,13 +556,20 @@ impl DaemonHost {
 fn etat_de_la_reindexation(rendu: &str) -> String {
     if let Some(reste) = rendu.split("Index updated: ").nth(1) {
         let n = |mot: &str| reste.split(mot).next().and_then(|x| x.rsplit(|c: char| !c.is_ascii_digit()).find(|m| !m.is_empty())).unwrap_or("0").to_string();
-        format!("réindexé ({} scope(s) écrits, {} retirés)", n(" scopes upserted"), n(" removed"))
+        // Le compte d'échecs (ticket d'ED, la réindexation en échec dite réussie).
+        let echecs = if reste.contains(" failed") { n(" failed") } else { "0".to_string() };
+        if echecs != "0" {
+            format!("réindexé en partie : {} scope(s) écrits, {} retirés, {echecs} en échec — relancez index ou lisez son journal", n(" scopes upserted"), n(" removed"))
+        } else {
+            format!("réindexé ({} scope(s) écrits, {} retirés)", n(" scopes upserted"), n(" removed"))
+        }
     } else if rendu.contains("index will pick it up") || rendu.contains("indexing in progress will read it") {
         "un index tourne : il prendra ce fichier".to_string()
     } else if let Some(e) = rendu.split("the index did not follow (").nth(1) {
         format!("sa réindexation n'a pas suivi ({})", e.split(") —").next().unwrap_or(e))
     } else {
-        "sans index".to_string()
+        let debut: String = rendu.chars().take(120).collect();
+        format!("écrit ; réindexation : rendu non reconnu (« {debut} »), l'état de l'index n'est pas su")
     }
 }
 
@@ -1834,6 +1870,10 @@ mod publication_accord_tests {
         assert!(host.accorde(&p, "read"));
     }
 
+    /// Le contrat du 13 novembre 2026 (ticket d'ED, la décision posée avant son journal) : ce
+    /// test qualifiait l'ancien contrat (« une erreur de journal après la pose laisse l'accord en
+    /// vigueur ») ; le journal s'écrit maintenant d'abord. Sans journal : `Err`, la demande reste
+    /// ouverte, aucun accord ; le journal réparé, la même demande se décide.
     #[test]
     fn erreur_du_journal_apres_commit_ne_signifie_pas_absence_d_effet() {
         let d = tempfile::tempdir().unwrap();
@@ -1843,8 +1883,10 @@ mod publication_accord_tests {
         let answer = host.atelier_demander(None, p.to_str().unwrap(), "read", "fixture").unwrap();
         let id = answer.ui[0]["id"].as_str().unwrap();
         assert!(host.decider_accord(id, true, "fixture").is_err());
-        assert_eq!(host.etat_accord(id).unwrap()["decision"], "accordé");
-        assert!(host.accorde(&p, "read"), "qualification du contrat actuel, pas correction du journal");
-        assert!(host.decider_accord(id, true, "fixture").unwrap_err().contains("déjà"));
+        assert!(host.etat_accord(id).unwrap()["decision"].is_null(), "la demande reste ouverte");
+        assert!(!host.accorde(&p, "read"), "aucun accord sans journal");
+        std::fs::remove_dir(d.path().join("runs/decisions.jsonl")).unwrap();
+        host.decider_accord(id, true, "fixture").expect("le journal réparé, la demande se décide");
+        assert!(host.accorde(&p, "read"));
     }
 }
