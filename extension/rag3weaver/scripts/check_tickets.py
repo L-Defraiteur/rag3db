@@ -238,7 +238,8 @@ def relire_le_lot(racine, base):
             else:
                 vus.append(f"déplacé  {apres[0]} (depuis {avant[0]})")
         elif apres:
-            vus.append(f"ouvert   {apres[0]}")
+            # Ajouté directement dans closed/ : le lot l'ouvre et le ferme.
+            vus.append(f"ouvert et fermé  {apres[0]}" if apres[1] else f"ouvert   {apres[0]}")
         else:
             vus.append(f"retiré   {avant[0]}")
     print(f"▸ les tickets du lot depuis {base} ({len(vus)}), à relire avant le push :")
