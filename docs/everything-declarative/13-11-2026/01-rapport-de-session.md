@@ -1,5 +1,9 @@
 # Session ED — 13 novembre 2026
 
+**État final : livré et nettoyé.** Code master `b87688188`, arbre
+`9e305f6edb3a734195e262a296e9f4ae514fb9df`. Deux tickets clos ; aucun W/target/
+TMP/fixture ni branche locale du lot produit aux deux postes. Preuves/remotes gardées.
+
 Suite unique autorisée après livraison du parcours IDE :
 [frontières de la boîte](../../tickets/closed/2026-11-12-la-boite-ne-compile-pas-sous-daemon-seul.md).
 WT neuf cx-ed-frontieres-boite, base master7308544ce après activation23ceed.
@@ -43,3 +47,32 @@ I-luciepc/frontieres-boite-20261113/verdict-final-compose.json. Target16Go.
 Les deux tickets du même défaut sont clos/déplacés (boîte et natifdaemonhorsmatrice).
 Pas de PG/Vertex/modèle nouveau/daemon personnel. Revue finale/tour master C7 puis
 nettoyage gardé restent requis ; aucun push master encore à cette écriture.
+
+
+## Fin des ressources
+
+Master b876881887d174f9ce4e889d64aebf671a8a4f61 poussé sous poste push après
+« à toi » C7 ; dernier fetch et ifVERT, trois contrôles lus : propre/aucunrebase/
+originmaster=HEAD. Revue finale Mémoire indépendante favorable, limites ELF
+chronologiques conservées. Arbre a reçu directement le code entrant pour sa
+future globale ; aucun autre lot lancé.
+
+Nettoyage réel terminé aux deux postes : W produit, targetPC16Go, TMP court et
+fixtures originaux, quatre branches locales retirés ; remotes, cinq ELF distincts,
+logs/rouges/gabarits/ledger et preuves conservés. Garde CURRENT6f3dfceb fraîche
+VERTE lue aux deux postes, administrations fidèles cp-a + pax/SHA vérifiés aux
+deux postes (module CP privé PC inclus). Un seul --force Git structurel PC après
+VERT ; portable sans force, branches -d sans force/GC/prune. Arbre Lucie garde
+ses seuls M codeparsers et docs/lucie-tmp préexistants.
+
+Arrêt protecteur pendant le retrait du cache : mon assertion attendait racineW,
+alors que le marqueur du target désigne la crate W/extension/rag3weaver, comme
+la recette publiée. Valeur lue/diagnostic conservés, vérification exacte de la
+crate et quiescence répétée avant retrait, pas de contournement du garde.
+Quarante entrées socket Chromium quiescentes ne se sérialisent pas dans pax :
+copie cp-a et métadonnées séparées gardées ; les archives Git pax sont fidèles.
+
+Attestation privée `I-luciepc/frontieres-boite-20261113/nettoyage-final.json`
+aux deux postes. Aucun usage7879/CPU lourd/modèle/service/GPU restant, aucun
+PG/Vertex ou daemon personnel créé. Ce bilan ne lance aucune validation ; son
+mini-W documentaire suit la même garde fraîche lors de son retrait après push.

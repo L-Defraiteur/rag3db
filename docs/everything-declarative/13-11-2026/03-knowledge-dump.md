@@ -1,7 +1,7 @@
 # Reprise ED — frontières de compilation boîte
 
-Ticket canonique ouvert : ../../tickets/closed/2026-11-12-la-boite-ne-compile-pas-sous-daemon-seul.md.
-WT neuf aux deux postes ~/git_workspaces/cx-ed-frontieres-boite ; branche même
+Ticket canonique clos : ../../tickets/closed/2026-11-12-la-boite-ne-compile-pas-sous-daemon-seul.md.
+Historique du WT désormais retiré aux deux postes : ~/git_workspaces/cx-ed-frontieres-boite ; branche même
 nom, base7308544ce, production finale204ca4c39. Aucun ancien W IDE rouvert.
 Cargo exécuté uniquement sur PC via primitive commune, Max32/HIGH0/j8.
 Target unique ~/.cache/rag3weaver-build/target-cx-ed-frontieres-boite (7,1Go au ciblé).
@@ -46,3 +46,15 @@ verts sans Cargo, mêmePCsource093. Lect27distincts/28brut, budget1850,30/6000,
 quiescence[], aucun usage7879 restant. Deux tickets clos même lot. Préparer revue
 finale/tour C7, master FF et trois contrôles, puis garde fraîche/archives fidèles
 et retrait des seuls W/target/branches locaux de ce lot ; preuves/remotes gardées.
+
+
+## État final livré/nettoyé
+
+Master code b87688188/tree9e305f6e ; bilan du rapport01 et nettoyage-final.json
+privé2postes font foi. Aucun W/target/TMP/fixture/branche locale produit restant.
+Garde6f3dfceb fraîche VERT2postes, archives fidèles Git cp-a/pax/SHA et cinqELF
+conservés, remotes gardées. Un seul --force PC structurel aprèsVERT pour le
+module initialisé, pas de gc/prune/refrepair. Assert marker cache racinecrate
+et socketsIPC quiescents explicités dans rapport01, aucune fausse fidélité pax
+pour les sockets. Arbre prévenu codeentrant ; aucun usage7879/autrelot en cours.
+Les prochaines actions nécessitent un périmètre nouveau, pas un rejeu du lot fini.

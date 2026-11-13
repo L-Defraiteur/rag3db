@@ -1,6 +1,6 @@
 # La boîte ne compile pas sous la feature daemon seule
 
-- **État** : corrigé 09303fe39 ; trois frontières qualifiées, verdict composé VERT.
+- **État** : corrigé b87688188 ; trois frontières qualifiées, verdict composé VERT.
 - **Famille** : produit
 - **Gravité** : blocage ; compilation de la bibliothèque avec daemon seul impossible.
 - **Atteignable en service** : non ; refus de compilation.
@@ -301,3 +301,8 @@ verdict-final-compose.json, globale-09303fe39 et complement-09303fe39.
 Revue statique C7 et Archi favorables, aucun défaut produit restant sur les
 trois frontières. Aucun PG/Vertex/modèle nouveau, aucun daemon personnel posé.
 Clôture technique ; intégration et nettoyage gardé restent les étapes de livraison.
+
+Livré sur master b876881887d174f9ce4e889d64aebf671a8a4f61 après revue C7/Archi/Mémoire
+et passe composée source093. Trois contrôles lus ; W/target/fixtures/branches
+locales retirés aux deux postes après gardes fraîches vertes et archives fidèles.
+Preuves/ELF/rouges/remotes conservés, aucun service personnel déployé.
