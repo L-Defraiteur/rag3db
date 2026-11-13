@@ -1374,6 +1374,9 @@ impl DaemonHost {
             ("GET", "/etat") => {
                 let mut etat = self.state();
                 etat["build"] = json!(crate::daemon_lifecycle::build_id());
+                // Les fenêtres qui écoutent le flux de l'IDE : une par navigateur quand ses
+                // onglets le partagent (`flux-worker.js`), une par page sinon.
+                etat["fenetres_du_flux"] = json!(self.ide_flux().fenetres());
                 (200, etat)
             }
             ("POST", "/session") => match corps() {
