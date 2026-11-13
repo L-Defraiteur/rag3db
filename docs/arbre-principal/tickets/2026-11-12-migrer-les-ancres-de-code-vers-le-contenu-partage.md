@@ -2414,3 +2414,14 @@ locales, targetprivé et3PGstrictementprivées, dumps+archives+gardesfrais
 DEUXpostes avant retrait. Remotes/preuves/fixtures/ELF conservés.
 [Rapport09](../13-11-2026/09-fin-ressources-raccord-physique.md).
 Parent OUVERT pour pyramide/legacy/coordonnées et autres suites non qualifiées.
+
+
+## Qualification CPU bornée obtenue
+
+GO C7 exact APP69dc/piloteabaf, scope/finaliseurVERT214.675462s/3000.
+4exacts1/0/0 puis modulepublication10/0/0(4déjàjugés) :10fonctionsdistinctes,
+14invocationsbrutes ; check adaptateurnatif rc0, COMPILATION seulement.
+67fichiers SHA identiques deuxpostes. [Rapport12](../13-11-2026/12-preuves-cpu-couches-2a.md)
+avec ledger/ELF/caps/memory/maps et limites. Pas de persistance/L6/top-k/outils
+qualifiés, aucune DB/service/modèle ouvert. Ticket reste OUVERT pour revue
+et décision d’intégration/qualification complémentaire, pasGOmaster/retrait.
