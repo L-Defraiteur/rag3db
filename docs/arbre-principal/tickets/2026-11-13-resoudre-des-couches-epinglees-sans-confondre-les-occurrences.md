@@ -217,3 +217,7 @@ Voir [rapport17](../13-11-2026/17-sonde-cargo-et-reprise-bornee.md) : observatio
 ## Préparation capture stable après rouge v2
 
 ArbitrageC7 autorise réemploi F8/builds/ledger, aucun Cargo/rebuild/cache à rejouer. [Recette20](../13-11-2026/20-recette-union-capture-stable.md), pilote distinct : capture GDB mêmeinferior helper→ELF/exec puismainSDKchargé, cleanup sans qualification/firstredimmuable. Runtime manquant seulement ; NONLANCÉ, RO/GOexact encore requis, même échéanceoriginale.
+
+## Préparation détachement avant les juges
+
+[Recette23](../13-11-2026/23-recette-union-detache-avant-juges.md) : mêmecaptureSDKstricte, superviseurfork/waitpidreel puis GDBdetachàmainavantjuges, vrai exitcode natif requis. Ancienrougeconservé, aucuneextensiondeadline ni timeout. NONLANCÉ, RO/GOexact requis.
