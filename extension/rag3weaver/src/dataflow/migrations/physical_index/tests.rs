@@ -606,6 +606,22 @@ fn native_unowned_cell_or_changed_source_refuses_before_new_effects() {
 
 #[test]
 fn frozen_program_codec_binds_sources_records_and_probe_inputs() {
+    // Genesis is a fact of the validated chain, never an operation-name alias.
+    let mut chain = Registry::genesis(
+        NewPublicationOrigin::fresh(),
+        "another-creation-name",
+        declarations(),
+    )
+    .unwrap();
+    assert!(chain.is_unique_genesis_head());
+    let named_creation = chain.prepare("create-owned-index", declarations()).unwrap();
+    chain.apply(&named_creation).unwrap();
+    assert_eq!(
+        chain.published(chain.head()).unwrap().operation(),
+        "create-owned-index"
+    );
+    assert!(!chain.is_unique_genesis_head());
+    assert!(!chain.is_genesis_publication(chain.head()));
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("owned");
     let (runner, vars, probes) = runner(&dir.path().join("migrations"));
