@@ -526,3 +526,20 @@ créé, aucun budget de travail consommé. Deuxième unité fixe explicitement
 POSTE_MEM_MAX=32G avant poste, paramètre commun HIGH0 conservé ; entrée de
 recette réussie, échéance2400 s créée après acquisition réelle. Logs union.log
 et union-2.log conservés, pas de vert inventé pour ces précontrôles.
+
+### Rouge d'union — carte show_progress absente
+
+Source84259404f, validation-hex7oup7 ROUGE/code1/restes[]/bus nettoyé.
+F5/5 verts puis lib2272 passés/1 échec/66 ignorés structurels en47,53 s.
+Échec `daemon_host::worktrees::tests::a_progress_card_reaches_the_page_and_never_the_model`,
+worktrees.rs1934 : `ui[0].kind` vaut null au lieu de index_progress sur le
+second tour outil show_progress. Son contenu comporte une enveloppe delivery,
+metadata vide, résultat plein texte prêt4/4 et vecteurs0/3. La première carte
+attach_worktree ne rougit pas. Aucun NAV/tx joué après ce rouge. Log exact
+hors target : activation/union-pub-ed/lib.log lignes2673–2698.
+
+Nouvelle action d'intégration dans ce même ticket : porteur attendu ED pour
+le parcours carte/progression, embarquement pour la requalification finale.
+Diagnostiquer cette absence sans affaiblir l'assertion ni la remplacer par
+un rejeu chanceux ; conserver le rouge et utiliser le restant de l'échéance
+hex7oup7 pour une reprise éventuelle. Aucune nouvelle charge de modèle demandée.
