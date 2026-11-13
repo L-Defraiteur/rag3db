@@ -361,14 +361,14 @@ impl JournalDesRuns {
             let mut grace = self.en_grace.lock().unwrap_or_else(|p| p.into_inner());
             grace.fils.retain(|f| !f.is_finished());
             grace.runs.insert(racine.clone());
-            let journal: Weak<Self> = Arc::downgrade(self);
+            let (journal, du_fil): (Weak<Self>, String) = (Arc::downgrade(self), racine.clone());
             let lance = std::thread::Builder::new().name("journal-ecrire".into()).spawn(move || {
                 std::thread::sleep(GRACE);
                 if let Some(j) = journal.upgrade() {
                     // Un run déjà écrit par `vider` ne s'écrit pas une seconde fois.
-                    let a_ecrire = j.en_grace.lock().unwrap_or_else(|p| p.into_inner()).runs.remove(&racine);
+                    let a_ecrire = j.en_grace.lock().unwrap_or_else(|p| p.into_inner()).runs.remove(&du_fil);
                     if a_ecrire {
-                        j.ecrire(&racine);
+                        j.ecrire(&du_fil);
                     }
                 }
             });
