@@ -1874,6 +1874,28 @@ de changement des services ou de raccord implicite d'un modèle. Les décisions
 déjà prises, notamment publication distincte de l'empreinte, restent acquises.
 Le ticket reste ouvert jusqu'au résultat physique demandé et à ses preuves.
 
+Préparation physique sur master798ab1aa7 : contrat/API/fixture publiés dans
+`docs/arbre-principal/13-11-2026/01-raccord-physique-index-neuf.md`. Trois
+écarts relus : Catalog impose un modèle, runner n'a pas d'identité résolue
+durable/montage des services d'ingestion, commit_lot précède la durabilitéFTS.
+Proposition de profil BM25sansmodèle sur index neuf, journal unique existant
+qualifié, candidate non servie avant fermeture physique/publication ; entrée
+durable et même plan pour reprise. Fixture8occurrences/6versions/2cellules,
+recette600s à relire avant lourd. Aucun Rust/Cargo/target/index/service créé.
+Recherche seul éditeur de la garde d823 ; diagnostic RO transmis séparément.
+
+
+Précurseur physique7d62a8113 publié, non qualifié : absence dense structurelle,
+montage commun ingestion/migration, notifications après persistance FTS et
+COMMIT ambigu nommé/poisonné. Deux témoins écrits, aucun Cargo joué. Revue
+Mémoire favorable comme précurseur seulement. Embarquement relève avant toute
+suite un cas sparse : None dense coupe actuellement ingestion/rattrapage alors
+que set_sparse_embedder et les services peuvent annoncer sparse présent. Pour
+cette première capacité strictement lexicale, refuser explicitement ces montages
+et les entités/requêtes sparse ; ne pas annoncer une capacité non exécutée.
+ED demande une lecture stricte du registre dans l'entrée qualifiée : ni erreur
+absorbée ni unwrap_or_default comme preuve de registre vide.
+
 
 ## Revue du précurseur7d62 — 13 novembre, avant qualification
 
@@ -1905,6 +1927,37 @@ Arbre conserve seul le code ; Mémoire et Embar restent en lecture seule.
 Les gardes, leurs 29 témoins et le lot grep restent séparés. Préparation de
 ces témoins puis source/recette publiées avant ciblé ; premier rouge inattendu
 arrêté et diagnostiqué, aucune nouvelle autorisation humaine nécessaire.
+
+
+Diff physique proposé après les réserves : programme Mermaid/records figés,
+IngestEntitiesNode déléguant au Catalog, nouveau profil possédé BM25 sans modèle,
+cellules créées avant P0 et transactions par cellule sous contrôle du runner.
+Journal existant étendu sur le neuf seulement avec qualified_input et
+qualified_result (préfixe accompli + relevé de valeurs), candidate fermée aux
+ouvertures normales, fermeture/reprise FTS depuis valeurs exactes, reçu/tête/
+journal publié atomiquement. Huit témoins natifs et cinq CPU préparés ; recette
+600s/source/API/diff dans le rapport13-11-2026/01 et raccord-physique. Aucun
+Cargo, index réel de fixture ni target nouveau encore lancé ; revue avant lourd.
+
+
+Lecture statique après publication be9699e73 : BufferedBlobStore::Drop pousse
+encore les écritures retenues, et delete touche directement son backend. Un
+Catalog invalidé après issue de COMMIT inconnue ne doit pas retenter ces effets
+via sa destruction, même si DbConnection::poison est sans effet. Même porteur,
+même ticket : ajouter une invalidation de persistance partagée par le buffer,
+qui refuse save/delete/flush et le flush de Drop sans jeter les octets retenus
+avant destruction. Témoin CPU avec backend compté ; aucune exécution revendiquée.
+
+
+Réserve complémentaire Mémoire consignée avant action : set_scope pouvait encore
+écrire après erreur de COMMIT avec poison backend sans effet. La correction en
+revue porte la révocation sur la famille de connexions du Catalog (writer,
+read_pool/read_conn/sync et clones), avec délégation des transactions/settings
+au backend et rollback réservé au nettoyage. Barrière de persistance partagée
+du buffer avant fermeture/Drop, y compris derniers clones. Témoins CPU renforcés
+COMMIT+ROLLBACK perdus, set_scope/Arc exporté refusés sans requêtes, première
+poussée échouée qui réussirait à la suivante mais aucun retry après invalidation.
+Recette adaptée à7 CPU+8 natifs, toujours aucun Cargo/test natif exécuté.
 
 
 ## Revue du diff physique be9699 — fenêtres avant qualification
@@ -1940,6 +1993,15 @@ frontières, sans test ni base créés par les relecteurs. Ces constats statique
 ne sont pas un rouge runtime joué ; source/recette/témoins avant ciblé600.
 
 
+Revue indépendante Recherche be969 : lecture favorable bornée du journal,
+programme et préfixe. Deux limites de qualification, avant nouvelle édition :
+les injections COMMIT visent toujours la première cellule ; ajouter morts avant
+et après COMMIT de la deuxième avec préfixe acquis. Huit fonctions natives
+comprennent sept scénarios juges et un helper enfant, exercé par les sous-processus
+du parent, pas huit scénarios indépendants. Recompter explicitement fonctions,
+scénarios juges et exécutions enfant. Aucun runtime exécuté par Recherche.
+
+
 Complément de revue Recherche, même source be9699 : les injections par nom
 de frontière surviennent à chaque cellule et meurent toujours dans la première.
 Avant de qualifier la reprise multicellule, ajouter un cas qui meurt dans la
@@ -1952,3 +2014,252 @@ scénario indépendant au lancement sans son environnement. Distinguer le compte
 Rust brut, les scénarios juges et les sous-processus dans l'inventaire/verdict.
 Ces réserves de couverture sont statiques ; aucun échec runtime observé ni
 second exécuteur trouvé par Recherche.
+
+
+Correctifs des réserves bootstrap/couverture en revue : claim de root immuable
+et synchronisé AVANT création native ; trois constructeurs natifs ordinaires
+et Catalog refusent cette appartenance, même incomplète, avant effets. Capacité
+interne scellée root/origine/chemin exact, bootstrap limité au native vraiment
+vide ; restes avant P0 quarantinés, aucune adoption automatique. Deux morts
+enfant supplémentaires couvrent claim/init avant P0. Deux morts explicites :2
+couvrent avant/après COMMIT de cellule2, avec préfixe natif acquis constaté et
+reprise depuis le même support durable, fichiers sources retirés. Comptes
+corrigés :9 fonctions natives (8 scénarios juges+helper),9 CPU,18 fonctions
+brutes/17 scénarios juges/8 sous-processus de mort. Registre du nouveau nœud et
+ports communs inclus. Syntaxe seule, aucun Cargo/runtime encore lancé.
+
+
+Lecture transversale avant figer la source de qualification : usages du champ
+embedder encore directs dans catalog/progress.rs après le passage en Option.
+Adaptation du débit/origine/sonde à la capacité réelle : None rend débit inconnu,
+aucune sonde et refus d'une mesure sans modèle ; Some et Some(Absent) gardent
+leur sémantique antérieure. Le témoin lexical existant vérifie ces portes.
+Aucune compilation/runtime encore jouée,9c12 reste un état de revue non qualifié.
+
+
+Lecture statique finale avant lancement : l'ouverture publiée compare les valeurs
+à la tête mais ne relie pas encore le relevé qualified_result appliqué à cette
+tête ; une ligne de journal supprimée pourrait aussi passer pour l'absence de
+journal du P0. Même périmètre, correctif avant qualification : absence de journal
+permise seulement à la publication de création, et résultat appliqué complet
+(préfixe final, valeurs/schema/checkpoints) obligé à correspondre à la tête.
+Témoin de corruption après publication (résultat modifié ou ligne retirée),
+refus RO sans nouvelle écriture ; aucun Cargo/runtime exécuté à ce constat.
+
+
+Précision C7 sur la genèse, avant lancement : absence de journal admise seulement
+sur le vrai SourceRevision::Genesis d'un registre validé à une publication unique,
+pas sur le seul texte d'opération. Le prédicat de chaîne est explicite ; le juge
+codec existant construit aussi une tête non-genesis nommée create-owned-index et
+la refuse comme genèse. Source appliquée également vérifiée comme vrai Genesis.
+Comptes inchangés19 fonctions/18 juges/8 enfants, aucun runtime lancé.
+
+
+Premier ciblé8df arrêté ROUGE avant compilation : XDG_CACHE_HOME privé a déplacé
+le magasin implicite de libs, exporteur refuse2 en0,154s avant execCargo. Target
+absent/SDK29 réel intact/0native/0service. Superviseur validation-om027vtw code1,
+restes[], bus disparu, autorité terminée, scan contexte own[],234 preuves SHA
+identiques aux deux postes ; aucune relance inchangée. Correction de recette :
+RAG3DB_LIBS_DIR explicitement épinglé au magasin réel, caches privés préservés,
+nouveaux chemins preuves v2 et599s sans réutiliser/prolonger le reçu v1. Rust et
+modèle inchangés ; nouveau SHA/argv à coordonner avant toute nouvelle exécution.
+
+
+Ciblé correctifv2 source2e71e1755 arrêté au premier rouge en110,4066s : deux
+E0609 dans catalog/progress.rs319/357, current_embedding_entry devenu Option mais
+bilans IndexProgress.model restés String. Aucun ELF/tests natifs/DB/service/modèle
+joué. Superviseur validation-rcz_mqen ROUGE/code1/restes[], bus absent, autorité
+terminée, scan contexte own[] ; target unique conservé1 349 776 841octets (<32Go).
+Correctif produit à relire avant nouveau lancement : model Option<String> dans
+les bilans, Some garde son nom réel, None reste absence structurelle/JSONnull,
+ligne lexicale sans modèle inventé ; appelant e2e configuré rendu explicitement
+Some. Renforcer témoin lexical et exact fixture, préserver le rouge et les preuves.
+
+
+Ciblé v3 source10e6c75270a93c4db7a5d42c69c9dbd5d658f46e : compilation
+réussie23,595s puis ROUGE24,918s au contrôle provenance, avant inventaire/test.
+Cause prouvée RO sur le MÊME ELF : bytes in mmap vautFalse alors que find
+retrouve10e6c7527 à9822122. SHA original/copie conservée :
+8387de3dd95ef2c3d290166d6d2049c0a4cf9f4cb29ace565da362b9b8a9426d.
+Deuxième défaut de recette découvert sans exécution : search_base.mmd est sous
+templates/tools/, pas directement templates/. Les octets exacts sont présents
+dans cet ELF : tools/search_base.mmd à9788041, search_expansion.mmd à9722386.
+Superviseur validation-e94smksf ROUGE/code1/restes[], autorité terminée, bus
+absent, scan contexte propre vide ; target conservé1607645974octets. Preuves et
+ELF copiés local. Aucune recompilation ni aucun test relancé. Suite proposée à C7 :
+attestation autonome et seules phases jamais jouées sur ELF original10e6,
+sansCargo, sous échéance originale887138.455654083 si coordination l'autorise ;
+sinon nouveau budget correctif explicite, sans effacer ni requalifier le rougev3.
+
+
+Attestation autonome recette4cc12159a : VERT RO, source/ELF/gabarits/SDK29
+identifiés, zéroCargo/test. Complément autorisé par C7 sous échéance originale :
+inventaire puis4CPU verts, premier autre rouge au5e CPU en0,846s. Aucun build
+rejoué, aucun juge natif/enfant lancé. Superviseur validation-9ls9hhzp ROUGE/code1,
+restes[], nettoyé. Le juge committed_rows_with_failed_fts échoue sur file vide.
+Diagnostic RO : flush_blob_store émet explicitement CatalogEvent::Error avec
+context blob_flush:lot avant de rendre IndexPersistence ; commit_lot jette les
+annonces retenues et révoque les accès. Le juge doit exiger cette erreur précise,
+puis file vide (donc aucune annonce de disponibilité), plutôt que supprimer le
+signal d'erreur légitime. Correctif limité au juge, pas au chemin de production ;
+à publier et relire avant nouveau budget correctif explicite, aucun rejeu inchangé.
+
+
+Ciblé v4 bb894 : compilation23,437s, inventaire et9CPU VERTS. Groupe natif
+ROUGE24,671s total :9juges échouent dans declarations() avant ouverture, même
+refus du contrat search_index (champ dérivé content absent de Snippet). Helper
+sans environnement passe mais ne juge rien ;2enfants lancés échouent101 avant
+injection, aucun des8enfants attendus validé. Pas de VERT natif. Diagnostic RO :
+validate_search_index_context exige que les champs cherchables dérivés existent
+sur l'occurrence ; fixture déclarait body sur source et content sur dérivée.
+Correction fixture seule : nommer body le champ rendu dérivé également, adapter
+les attentes exactes/chunks/UUID/colonnes à ce nom, sans toucher au validateur ni
+aux valeurs rendues name+docstring+body. Recette à scinder en juges natifs exacts
+pour arrêter au premier échec à l'intérieur du groupe (libtest continue sinon).
+Pas de rejeu avant publication/revue/budget correctif distinct.
+
+Précision RO C7/Recherche avant publication : simple renommage body insuffisant
+pour prouver les coordonnées du rendu composite. Correction retenue : déclarer
+ET peupler Snippet.content avec le texte exact name\n docstring\n body (sans espaces
+ajoutés), garder body/file/start/end distincts, conserver dérivée content et
+assertion explicite égalité champ source/rendu, lecture native exacte du champ
+source supplémentaire. Offsets chunks dans content rendu uniquement, aucune
+projection vers body brut ou lignes fichier annoncée. Validateur inchangé.
+
+
+P5 source39f798 : compilation/inventaire/9CPU verts puis premier juge natif
+exact frozen_program_codec refusé par binder : PRIMARY KEY(_uuid) ne correspond
+à aucune propriété déclarée. Aucun autre juge natif/enfant lancé, arrêt failfast.
+Diagnostic RO précis : Catalog::migration_initialize appelle dialect.create_table
+pour _DataflowMigration et _DataflowMigrationLock avec colonnes sans _uuid ; les
+deux dialectes ont pourtant PRIMARY KEY(_uuid), et les écritures existantes
+migration_record/acquire_lock ainsi que journal_row fournissent déjà _uuid.
+Correctif partagé minimal : déclarer _uuid Text dans les deux listes de colonnes
+existantes ; aucun nouveau journal, ni identité, ni reprise alternative. Le juge
+natif existant couvre réellement ces créations ; avis RO avant nouveau budget.
+
+
+P6 source4c35c3136 : compilation/inventaire/9CPU verts, premier juge exact
+refusé Corrupt(table without explicit properties), durée24,735s ; autres juges
+/enfants non lancés. Le journal dépasse le défaut binder précédent. Diagnostic
+RO : PhysicalSnapshot refuse toute table sans propriétés, alors que les relations
+CHUNK_OF produites par schema.rs374 sont légitimement sans propriétés. Leurs
+extrémités ET la multiplicité sont des valeurs physiques à capturer. Correctif
+adaptateur : autoriser zéro propriété seulement pour REL, capturer src._uuid et
+dst._uuid même sans champs supplémentaires, conserver définition+connexions et
+doublons. NODE sans propriétés reste refusé avec nom explicite. Aucun saut de
+table/relations ni affaiblissement des valeurs, pas de rejeu avant RO/budget.
+
+Demande C7 après RO favorable6bd : renforcer le juge natif existant codec par
+contre-exemple physique 0/1/2arêtes sans propriétés aux mêmes extrémités dans
+sa base synthétique, après ses assertions de plan. Définition stable et deux
+identités noeuds fixes ; cardinalités0/1/2, deux lignes identiques conservées,
+empreintes logiques distinctes. Aucun juge supplémentaire ni mock seul ; aucune
+publication de la base ainsi altérée. Nom tableP6 toujours non attribué.
+
+
+P7 source857a2 : neuf CPU et premier juge natif codec VERT, y compris
+RELATION_WITNESS physique0/1/2. Deuxième juge exact applied_journal échoue à
+l'ingestion Alpha : tampon natif plein, limite explicite64MiB du profil. Durée
+25,170s, aucun autre juge/enfant lancé. Pas de panne SDK ou OOM machine déduite.
+Cause : tampon copié du profil publication métadonnées, sans politique commune
+du catalogue complet. Correctif proposé avant revue : porte owned opaque réutilise
+config_with_buffer_pool(buffer_pool_choice(None)) et conserve BufferPoolChoice ;
+recette épingle RAG3DB_BUFFER_POOL_SIZE=536870912 pour toutes ouvertures/enfants,
+sous Max32GiB, comme témoin natif existant. Pas de nouvelle règle mémoire produit,
+ni auto-retry après OOM : ouverture/reprise explicite inchangée et source neuve.
+
+
+P8 source40d36eab4 : compilation9CPU et6juges natifs VERTS, dont publication
+/reopen exact8occ6versions8refs2cellules0modèle, corruption journal appliqué,
+bootstrap2enfants aux frontières prévues. Septième juge normal_catalog_open
+ROUGE comparaison octets (32,461s total), derniers juges et6enfants de reprise
+non joués. Diagnostic RO : le juge ouvre lui-même une connexion native owned RW
+avec permis AVANT Catalog::initialize ordinaire ; cette ouverture autorisée et
+sa fermeture/checkpoint ne sont pas un test de refus avant toute ouverture native.
+Corriger le juge : exiger refus des3constructeurs ordinaires avec racine entière
+inchangée, puis fournir à Catalog normal une connexion owned RO pour éprouver
+la seconde porte initialize sans effets du cycle RW. Production/gardes inchangées.
+Assertions octets conservées avec diagnostics noms/empreintes, sans déverser les
+37Mo de tableaux d'octets dans le log. Aucun VERT complet ni rejeu avantRO/GO.
+
+
+P9 sourcec19f :9CPU+7juges natifs VERTS, huitième juge reprise stoppé. Premier
+enfant before-logical-commit atteint code91, puis ouverture RO de contrôle échoue
+dans Database::new : vector ANY non résolu. Reprise NON qualifiée ; deux enfants
+bootstrap seuls déjà qualifiés. Durée32,123s, pas d'autre juge/enfant lancé.
+Diagnostic RO : initialize_journal émet directement ALTER ... STRING DEFAULT NULL,
+contournant Rag3dbDialect::alter_add_column_default qui omet NULL explicite pour
+éviter son type ANY (historique du3oct, COPY). Réutiliser cette primitive avec
+ColumnType::Text et défaut NULL, sans changement de sens du journal. Lien causal
+au rejeu reste hypothèse à qualifier, pas un défaut SDK démontré ; C++ sollicité
+RO uniquement, aucun rebuild ni SDK nouveau autorisé. Base du témoin supprimée
+par TempDir à unwind, limite de preuve explicitée ; logs/ELF conservés.
+
+Pour ne plus perdre la base synthétique au prochain premier rouge, les TempDir
+des seuls juges physiques deviennent gardés : nettoyage habituel au succès,
+keep explicite lors d'une panique avec chemin PHYSICAL_FAILED_FIXTURE imprimé.
+Le dossier privé sous TMPDIR du reçu garde alors DB/WAL/plan pour diagnostic RO
+et copie des preuves. Aucune base réelle concernée, aucun changement production.
+
+
+P10 e100 :9CPU+7juges VERTS ; reprise before-logical-commit VERT exacte8/6/8,
+puis after-logical-commit échoue récupération : maintenance appelle porte publique
+sur SnippetContent interne. Reprendre EXACTEMENT open_fts_handles_for :
+forme.resolve_storage_target(entity,true), chaque stockage physique, source
+comprise ; publics seulement omettrait un index entretenu. C7/Recherche convergent.
+Défaut distinct observé :20blobs retenus dans un lecteur puis tentative Drop RO.
+initialiser_en_lecture crée un BufferedBlobStore hors blob_buffer ; ouverture FTS
+peut créer si absent et close commite le handle writable. Correctif autorisé C7 :
+CypherBlobStore structurel RO (aucun DDL prépare/save/delete/batch avant query),
+sans buffer, BlobBacked RO assemblé depuis fichiers lus via format snapshot
+PUBLIC EXISTANT puis ShardedHandle::open_snapshot réellement RO (pas writer
+intermédiaire). Refus absence/corruption sans CREATE. Coût eager et copie RAM
+transitoire du paquet explicites ; profil déjà eager, Max32 inchangé. Ajouter
+juge CPU store aucune écriture + assertion native handlesRO/root immuable et
+index absent refusé. Compte proposé20fonctions/19juges/8enfants, pas GO runtime.
+Fixture P10 conservée tmp/.tmp7Pmai8 (codecs/DB/WAL/plan), aucune mutation aprèsSTOP.
+
+
+P11 ec2f : compilation10CPU etjuge codec natif VERT, deuxième juge arrêté sur
+shard_0 sans fichiers dans helper snapshot. Fixture conservée tmp/.tmpAqrL9d.
+Cause RO confirmée dans lucivy4.3.3 BlobShardStorage/BlobDirectory : fichiers
+racine utilisent index brut, fichiers de shard utilisent BLOB_PREFIX+index/shard_N.
+Helper avait repris index/shard_N sans préfixe. Lecture binaire RO de la fixture
+retrouve effectivement Lucivy_Lucivy_SnippetContent__synthetic__Alpha/shard_0/meta
+et _config, etc. Réutiliser la constante PUBLIQUE BlobDirectory::BLOB_PREFIX
+(module blob_directory), sans hardcode/déplacement/mutation ni namespace nouveau.
+Pas de lecture SQL/native hors recette ; root/shard manquant doit toujours refuser.
+Échec suivant aucun modèle dense est secondaire à FTS indisponible, pas admission
+d'un modèle ; aucun calcul/modèle exécuté. Pas de rejeu avant delta/RO/GO distinct.
+
+
+P12 source1477e506e : compilation10CPU et4juges natifs VERTS, namespace corrigé
+dépasse le refus précédent, deux enfants bootstrap qualifiés, aucune alerte de
+blobs lecteur dans ces logs. Cinquième juge normal-reopen échoue assertion ajoutée
+fts_handles() nonvide : recherche dans_la_cellule restaure la cellule courante
+par défaut ; les handles réels Alpha/Beta sont garés. Corriger ce juge seul pour
+exiger nonvide fts_handles_in de CHAQUE cellule sondée avant is_read_only/commit
+refusé, pas accepter une boucle vide. Prod inchangée, assertions fichiers entiers
+/index absent conservées ; fixture échec P12/tmp/.tmpy3EsNL préservée. Pasrejeu
+avant publication/revue/GO distinct.
+
+
+P13 source9c7361 :10CPU+8juges natifs VERTS ; six reprises après mort avec
+préfixe0/1/2 et exact8/6/8, plus2bootstrap =>8enfants réels qualifiés. Lecteur
+handlesRO/commitrefus/indexabsent/rootimmuable VERT. Neuvième juge négatif
+source altérée échoue ROreopen ANY après ALTER foreign_value STRING DEFAULT NULL
+écrit par le TEST lui-même. Même précaution DDL commune déjà connue, pas nouvelle
+régression produit établie. Durée44,010s ; helperisolé nonjoué. Fixture conservée
+P13/tmp/.tmpIo9yxf. Remplacer les DEUX injections foreign_value expliciteNULL
+des tests négatifs par primitive dialect.alter_add_column_default(ColumnText,
+"NULL") ; garder colonneétrangère/refus/instantanés/journalabsent inchangés.
+Production inchangée ; nouvelle qualification distincte aprèsRO/GO.
+
+
+P14 sourceEXACTa43c475f9ce1f7cbd6c1c2a0ee56719b521678f1 VERTE :44,321345s,
+20fonctions/19juges/helper1,10CPU+9jugesnatifs,8enfants réels qualifiés,0ignoré.
+Superviseur validation-gllfe1kq VERT/code0/restes[], autorité terminée, bus absent,
+scan propre vide ;1653preuves+ELF SHAégaux2postes. Bilan et limites :
+[qualification ciblée](../13-11-2026/02-preuves-ciblee-raccord-physique.md).
+Tous rouges précédents restent distincts ; aucun GO global/master, tickets ouverts.
