@@ -1,6 +1,7 @@
 # Un gabarit fourni masqué par un projet, puis démasqué, ne revient pas dans la bibliothèque
 
-- **État** : ouvert. Trouvé par la session tty le 13 nov. 2026 pendant la passe du thème forêt, et reproduit sur master seul.
+- **État** : corrigé le 13 novembre 2026 (session hotfixs) : le défaut était dans le test, pas dans
+  le catalogue. Trouvé par la session tty, et reproduit sur master seul.
 - **Famille** : produit
 - **Gravité** : réponse fausse (une fiche de gabarit fournie manque au catalogue après une synchronisation).
 - **Atteignable en service** : oui, par `sync_templates` d'un projet qui supprime un gabarit qu'il masquait.
@@ -28,9 +29,39 @@ Le rouge est identique sur master seul, au commit `503a5ba2d`, avec la même lib
 
 Le test lui-même : `tests/e2e_catalogue_gabarits.rs`, `la_synchronisation_alimente_la_couche_du_projet`.
 
-## La cause
+## La cause (trouvée le 13 novembre 2026, hotfixs)
 
-Elle n'est pas cherchée. Pistes à lire :
+Le défaut était dans le test, pas dans `sync_templates`. La fiche `user` revenait bien à la
+bibliothèque. Mais `fiches_par_origine` cherchait « gabarit » avec une limite de 50 résultats, et
+le test concluait à l'absence de tout ce qui tombait au-delà. Les outils de l'atelier, ajoutés à
+partir du 9 novembre (76647d66d et suivants), ont fait passer la bibliothèque fournie au-delà de 50
+fiches. Mesuré sans plafond sur la recherche du test :
+
+| état | fiches fournies rendues | rang de `user` |
+|---|---:|---:|
+| c22975067~1 (9 nov., 13 h 25) | 49 | 47 |
+| c22975067 (9 nov., 13 h 29) | 50 | 48 |
+| master (13 nov.) | 65 | 63 (la 50e est `atelier_ask_permission`) |
+
+Avec la limite portée à 200, la suite passe à 12 sur 12. Le résidu `etat-temoins.*` du dossier
+temporaire n'est pas un second défaut : il disparaît avec le vert. C'est la trace laissée par le
+panic.
+
+**Le correctif** (`tests/e2e_catalogue_gabarits.rs`) ne relâche pas le plafond. Une présence se lit
+par le nom de la fiche : la nouvelle aide `fiche_nommee` passe par `Catalog::find_by_field`, sans
+recherche. Les étapes 2 et 5 l'utilisent pour `user` et `product`. `fiches_par_origine` ne sert plus
+qu'aux quelques fiches du projet, et elle échoue si elle atteint son plafond, au lieu de rendre une
+liste tronquée.
+
+**Les preuves**, sur e93710f36 avec la lib bâtie sur ce commit :
+- l'ancien test est rouge, 11 sur 12 ;
+- le test lu par nom est vert, 12 sur 12, sans résidu ;
+- avec l'étape 5 sabotée (`user.json` laissé dans le projet, `r7` non vérifié), la nouvelle
+  assertion rougit sur `left: [("project", …)]` contre `right: [("builtin", …)]`.
+
+Le reste de cette section est ce que le ticket disait à son ouverture.
+
+Pistes notées à l'ouverture : Pistes à lire :
 - la reprise de la fiche fournie quand le fichier du projet disparaît (`sync_templates`) ;
 - l'origine écrite sur la fiche ;
 - `fiches_par_origine` côté test, peut-être après un changement récent du catalogue.
