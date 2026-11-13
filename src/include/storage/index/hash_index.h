@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <shared_mutex>
 #include <string_view>
 #include <type_traits>
 
@@ -42,7 +43,10 @@ public:
     virtual ~OnDiskHashIndex() = default;
     virtual void discardLocalRange(common::offset_t first, common::offset_t count) = 0;
     virtual bool checkpoint(PageAllocator& pageAllocator) = 0;
+    // Publie les pips aux lecteurs, sans vider la mémoire locale : voir
+    // PrimaryKeyIndex::checkpointInMemory, qui la vide après avoir publié les en-têtes.
     virtual bool checkpointInMemory() = 0;
+    virtual void clearLocalStorage() = 0;
     virtual bool rollbackInMemory() = 0;
     virtual void rollbackCheckpoint() = 0;
     virtual void bulkReserve(uint64_t numValuesToAppend) = 0;
@@ -181,6 +185,7 @@ public:
 
     bool checkpoint(PageAllocator& pageAllocator) override;
     bool checkpointInMemory() override;
+    void clearLocalStorage() override;
     bool rollbackInMemory() override;
     void rollbackCheckpoint() override;
     void reclaimStorage(PageAllocator& pageAllocator) override;
@@ -393,6 +398,11 @@ public:
     inline bool lookup(const transaction::Transaction* trx, T key, common::offset_t& result,
         visible_func isVisible) {
         KU_ASSERT(indexInfo.keyDataTypes[0] == common::TypeUtils::getPhysicalTypeIDForType<T>());
+        // La mémoire locale puis le disque, sous le partagé : le point de reprise recopie les
+        // pages des slots en place et publie les en-têtes sous l'exclusif (lockForPublication).
+        // Rien d'autre ne se prend sous ce partagé que le verrou du tableau disque et ceux des
+        // groupes de nœuds (visibilité), qu'il ne tient pas en l'attendant.
+        std::shared_lock publicationLock{publicationMtx};
         return getTypedHashIndex(key)->lookupInternal(trx, key, result, isVisible);
     }
 
@@ -488,8 +498,17 @@ public:
 
     void delete_(common::ValueVector* keyVector);
 
+    // Publie aux lecteurs ce que checkpoint a écrit : pips, en-têtes de lecture, puis vide la
+    // mémoire locale. Appelé par le point de reprise APRÈS la recopie des pages fantômes, sous
+    // lockForPublication : un lecteur admis pendant l'écriture (V2) ne voit ni un en-tête neuf
+    // sur une page d'origine, ni un ancien en-tête sur une page recopiée, ni une clé sortie de la
+    // mémoire avant d'être lisible sur disque.
     void checkpointInMemory() override;
+    // N'écrit que dans les pages fantômes et les pages neuves : ne publie rien.
     void checkpoint(main::ClientContext*, storage::PageAllocator& pageAllocator) override;
+    std::unique_lock<std::shared_mutex> lockForPublication() {
+        return std::unique_lock{publicationMtx};
+    }
     OverflowFile* getOverflowFile() const { return overflowFile.get(); }
 
     void rollbackCheckpoint() override;
@@ -528,6 +547,8 @@ private:
     // Stores both primary and overflow slots
     std::unique_ptr<DiskArrayCollection> hashIndexDiskArrays;
     std::vector<ReplayedDuplicate> replayedDuplicates;
+    // Partagé par lookup, exclusif de la recopie des pages fantômes à la publication.
+    std::shared_mutex publicationMtx;
 };
 
 } // namespace storage

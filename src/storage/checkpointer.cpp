@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <shared_mutex>
+#include <vector>
 
 #include "catalog/catalog.h"
 #include "common/assert.h"
@@ -18,6 +20,7 @@
 #include "storage/buffer_manager/buffer_manager.h"
 #include "storage/checkpoint_profile.h"
 #include "storage/database_header.h"
+#include "storage/index/hash_index.h"
 #include "storage/page_allocator.h"
 #include "storage/readers_lock.h"
 #include "storage/shadow_utils.h"
@@ -243,8 +246,24 @@ void Checkpointer::logCheckpointAndApplyShadowPages() {
     common::TestHooks::dieIfAt(clientContext.getDBConfig()->testDiePoint,
         common::TestDiePoint::CHECKPOINT_LOGGED);
     const auto walMs = profile.lap();
+    // Les pages des slots des index de clé primaire sont recopiées EN PLACE, sous les lecteurs
+    // admis pendant l'écriture (V2) : une page lue est entière (updateFrameIfPageIsInFrame), mais
+    // un slot et sa chaîne, ou un en-tête et ses slots, se liraient d'âges différents. Les
+    // recherches par clé attendent donc la recopie et la publication, et seulement elles.
+    const auto pkIndexes = storageManager->getPrimaryKeyIndexes();
+    std::vector<std::unique_lock<std::shared_mutex>> publicationLocks;
+    publicationLocks.reserve(pkIndexes.size());
+    for (auto* pkIndex : pkIndexes) {
+        publicationLocks.push_back(pkIndex->lockForPublication());
+    }
+    const auto lockWaitMs = profile.lap();
     shadowFile.applyShadowPages(clientContext);
     const auto applyMs = profile.lap();
+    for (auto* pkIndex : pkIndexes) {
+        pkIndex->checkpointInMemory();
+    }
+    publicationLocks.clear();
+    const auto publishMs = profile.lap();
     // Clear the wal and also shadowing files.
     auto bufferManager = MemoryManager::Get(clientContext)->getBufferManager();
     wal->clear();
@@ -256,6 +275,11 @@ void Checkpointer::logCheckpointAndApplyShadowPages() {
             "pages) synchro-donnees=%.1f marque-au-journal=%.1f application=%.1f vidage=%.1f\n",
             profile.total(), flushMs, static_cast<unsigned long>(numShadowPages), syncDataMs, walMs,
             applyMs, clearMs);
+        fprintf(stderr,
+            "[checkpoint-profile]   cles-primaires (%lu index) : attente-exclusif=%.1f ms "
+            "tenu=%.1f ms (application=%.1f publication=%.1f)\n",
+            static_cast<unsigned long>(pkIndexes.size()), lockWaitMs, applyMs + publishMs,
+            applyMs, publishMs);
     }
 }
 

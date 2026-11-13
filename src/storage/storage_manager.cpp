@@ -95,6 +95,14 @@ std::vector<Table*> StorageManager::getNodeTables() {
     return result;
 }
 
+std::vector<PrimaryKeyIndex*> StorageManager::getPrimaryKeyIndexes() {
+    std::vector<PrimaryKeyIndex*> result;
+    for (auto* table : getNodeTables()) {
+        result.push_back(table->cast<NodeTable>().getPKIndex());
+    }
+    return result;
+}
+
 std::vector<Table*> StorageManager::getRelTablesOf(table_id_t nodeTableID) {
     std::lock_guard lck{mtx};
     std::vector<Table*> result;
