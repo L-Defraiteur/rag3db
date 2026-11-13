@@ -598,8 +598,8 @@ root. In the chat, the workshop:
   `file` shows a file root and indexed scopes, `parents`/`children` follow strict range inclusion,
   and `members` combines direct enclosed scopes with separately labelled declaration/property facts.
   `symbol` is a UUID or an exact name within the file/source; ambiguous names return candidates.
-  Depth counts edges from the supplied root (0 keeps the root), with depth16,200 output items,
-  2000 input scopes and96KiB caps. Ranges have line precision, not exact AST containment or inheritance;
+  Depth counts edges from the supplied root (0 keeps the root), with depth 16, 200 output items,
+  2000 input scopes and 96 KiB caps. Ranges have line precision, not exact AST containment or inheritance;
   out-of-class methods and missing/untyped members remain explicit coverage limits. The tool checks
   the current source hash and withholds neighbors for stale or unverifiable indexed files.
   Use `format: "json"` for qualified references, provenance and limits; no code bodies are returned;
