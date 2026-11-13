@@ -31,8 +31,16 @@ try:
  for file in [Path(inventory['binary']),P/'binaire-cpu']:
   with file.open('rb') as f:assert hashlib.file_digest(f,'sha256').hexdigest()==inventory['sha256']
  qualification=json.loads((P/'qualification.json').read_text());assert qualification==dict(cpu='VERT',publication='VERT',native_check='COMPILATION_VERTE_SANS_RUNTIME_NATIF')
- record.update(verdict='VERT',scope=scope,quiescence=found,unknown_baseline=unknown,qualification=qualification,elapsed=time.monotonic()-source['initial'],deadline=source['deadline'],native_runtime_qualified=False)
+ finished=time.monotonic()
+ assert finished<source['deadline'] and finished-source['initial']<3000,'deadline after scan and ELF hashes'
+ record.update(verdict='VERT',scope=scope,quiescence=found,unknown_baseline=unknown,qualification=qualification,elapsed=finished-source['initial'],deadline=source['deadline'],native_runtime_qualified=False)
 except BaseException as error:record['error']=repr(error)
 finally:
+ # Recheck at publication too; expensive scan/hashes must never outlive END.
+ if record['verdict']=='VERT':
+  finished=time.monotonic()
+  if finished>=source['deadline'] or finished-source['initial']>=3000:
+   record.update(verdict='ROUGE',error='deadline before composed publication')
+  record['elapsed']=finished-source['initial']
  (P/'verdict-compose.json').write_text(json.dumps(record,indent=2)+'\n');(P/'VERDICT_COMPOSE').write_text(record['verdict']+'\n');print(json.dumps(record),flush=True)
 sys.exit(0 if record['verdict']=='VERT' else 1)
