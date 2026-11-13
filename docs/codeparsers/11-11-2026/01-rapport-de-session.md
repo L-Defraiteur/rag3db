@@ -145,6 +145,34 @@ Ils sont dans `docs/codeparsers/tickets/` depuis le 11 novembre, avec un dixièm
 `docs/codeparsers/tickets/2026-11-11-une-mention-d-un-import-es-externe-n-a-pas-de-cible-a-elle.md` (la sorte
 `import_binding`, le compte à faire).
 
+## Lecture du 13 novembre : le lot est sur master, et ce que disait la mesure
+
+**Le lot `require` est atterri** : Codex l'a poussé le 11 novembre au soir (master 2e910930d, pointeur
+codeparsers **a730a9b**), avec le « second lot » prévu plus haut (l'export par défaut transmis au
+rendez-vous de `code.rs`, les exports ambigus sans cible devinée) ; mes commits y sont rebasés (3e68f7b0d),
+le contenu de l'oracle de 280b5a3f1 aussi ; le ticket du `require` relatif est fermé. Rien à pousser de
+la branche `codeparsers/require-js`.
+
+En trois lignes, la mesure du 9 novembre (`~/.cache/codeparsers-notes/require-mesure-2/` à luciepc) :
+
+1. **Les 17 justes ôtées** visaient toutes une ligne `const X = require(…)` : 13 réexportations ou
+   mentions d'un module relatif de l'arbre (`index.js` de tools/wasm et tools/nodejs_api, `FS`), 1 module
+   relatif absent de l'arbre (`../rag3db/rag3db_wasm.js`), 3 modules externes (`mtga-reader` ×2,
+   `tree-sitter-css/grammar`) ; l'ancien code posait l'arête vers la liaison, que le serveur accepte comme
+   définition : ce ne sont **pas des `require` vrais perdus**, la mention va désormais au module (relatif)
+   ou à la zone de liaison (externe).
+2. **Les 415 « muettes »** sont les arêtes `liaison` : l'oracle y cherchait, sur la ligne de la mention,
+   **le nom de la cible** (`file_scope_01`) au lieu du nom mentionné, ne le trouvait pas et rendait
+   « muet » — elles ne disent rien du lot ; c'est le ticket
+   `docs/codeparsers/tickets/2026-11-11-l-oracle-cherche-la-cible-au-lieu-du-nom-mentionne.md`.
+3. Bilan : toutes les liaisons d'import ôtées (51), 14 faux ôtés, aucun `require` vrai perdu ; le prix
+   est le poids des arêtes `liaison` (+36 % de CONSUMES TS/JS sur code-lourd), à juger avec un oracle
+   corrigé et avec le ticket `import_binding`.
+
+**Écart à régler** : le `master` du dépôt codeparsers est resté à **c660893**, alors que le pointeur de
+rag3db vise **a730a9b** (sur la branche codeparsers `cx-codeparsers-default-metadata`, descendante de
+c660893). Une avance rapide de `master` à a730a9b le remettrait d'accord, sur le mot de l'orchestration.
+
 ## Ce qui reste sur disque (rien n'a été supprimé)
 
 **luciepc** :
