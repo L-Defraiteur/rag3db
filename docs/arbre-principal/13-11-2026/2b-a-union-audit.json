@@ -1,0 +1,35 @@
+{
+  "base": "8711a8b033d25586518ef162724619c481c466e6",
+  "master": "9feb7cdbadef6a60568dd4fc447bafddf7986942",
+  "qualified_app": "affa6d03b5a57dd99810b6853783dc1a267f76b9",
+  "union": "06e2086f8398a6916c16d90a570ef177dc6bf9ad",
+  "scope": [
+    "docs/arbre-principal/13-11-2026/29-admission-cpu-couches-2b-a.md",
+    "docs/arbre-principal/13-11-2026/2b-a-juges-attendus.json",
+    "docs/arbre-principal/tickets/2026-11-13-appliquer-la-visibilite-des-couches-avant-les-requetes-des-vues.md",
+    "extension/rag3weaver/src/backend.rs",
+    "extension/rag3weaver/src/dataflow/catalog_read.rs",
+    "extension/rag3weaver/src/dataflow/generic_search_nodes.rs",
+    "extension/rag3weaver/src/dataflow/migrations/publication.rs",
+    "extension/rag3weaver/src/dataflow/migrations/publication/admission.rs",
+    "extension/rag3weaver/src/dataflow/migrations/publication/admission/node_probe.rs",
+    "extension/rag3weaver/src/dataflow/migrations/publication/admission/tests.rs",
+    "extension/rag3weaver/src/dataflow/search_nodes.rs",
+    "extension/rag3weaver/src/read_view.rs"
+  ],
+  "product": [
+    "extension/rag3weaver/src/backend.rs",
+    "extension/rag3weaver/src/dataflow/catalog_read.rs",
+    "extension/rag3weaver/src/dataflow/generic_search_nodes.rs",
+    "extension/rag3weaver/src/dataflow/migrations/publication.rs",
+    "extension/rag3weaver/src/dataflow/migrations/publication/admission.rs",
+    "extension/rag3weaver/src/dataflow/migrations/publication/admission/node_probe.rs",
+    "extension/rag3weaver/src/dataflow/migrations/publication/admission/tests.rs",
+    "extension/rag3weaver/src/dataflow/search_nodes.rs",
+    "extension/rag3weaver/src/read_view.rs"
+  ],
+  "protected_entries_and_absences": 8074,
+  "protected_mismatches": [],
+  "source_delta_mismatches": [],
+  "range_diff_equal": 3
+}
