@@ -68,3 +68,10 @@ dossiers ne tiennent plus ; l'histoire est là, pas l'état).
 `extension/rag3weaver/docs/23-aout-2026-20h33/36-…`, `49-…`, `51-…` ; `29-aout-2026-12h24/01-…` ;
 `3-septembre-2026-17h50/02-…` ; `docs/23-fevrier-2026-22h09/10-…` ; `docs/14-fevrier-2026-20h36/04-…` ;
 `extension/rag3weaver/docs/25-octobre-2026-memoire-longue/03-roadmaps-et-visions-en-memoire.md`.
+
+## Décision d'horizon (Lucie, 13 novembre 2026)
+
+**Un dépôt officiel rag3weaver, séparé de rag3db**, « un jour ou l'autre, quand on aura un truc vraiment
+utilisable ». D'ici là, tout ce qui s'écrit pour rag3weaver (README, `AGENTS.md`, procédures, docs) doit
+tenir seul : pas de chemin vers le moteur autrement que comme dépendance, pas de `../..`. Le README de
+rag3weaver se refait sur le modèle de CocoIndex (`concurrents-cocoindex.md`) : lot d'archi du 13.
