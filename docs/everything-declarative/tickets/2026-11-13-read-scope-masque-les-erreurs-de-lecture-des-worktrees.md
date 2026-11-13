@@ -85,3 +85,43 @@ Liens de coordination :
 Lot documentaire seul dans un worktree cx neuf. Aucun Cargo, runtime,
 service, base, modèle ou ancien lot rouvert. Aucune intégration de code pendant
 la qualification physique ; la suite produit doit être coordonnée par C7.
+
+## RO Archi des pilotes exacts6a2d1c8 — avant GO lourd
+
+Revue statique uniquement, aucun Cargo/test/runtime lancé. Produit674f reste
+hors de ces réserves ; elles concernent lancer/driver/finaliser de la recette R2.
+Le porteur reste ED, GO lourd C7 encore requis.
+
+1. Arrêt premier rouge : driver.run ne surveille que délai/maps pendant la vie
+   du processus, puis son rc à la fin. Un FAILED précoce du module à8threads
+   laisse donc les autres témoins continuer, contrairement à la recette. Détecter
+   l'échec pendant l'exécution et laisser le superviseur arrêter les descendants ;
+   conserver la panic utile (show-output la diffère en fin de suite, nocapture
+   ou instrumentation immédiate évite de la perdre). Le script canonique F8
+   est déjà failfast : cette réserve vise la boucle des ELF, pas sa matrice.
+
+2. Provenance SDK runtime : maps est aussi rempli par les deux inventaires --list,
+   et assert maps ne distingue aucune phase. Un inventaire seul peut satisfaire
+   cette attestation sans observation d'un juge/module. Les entrées n'ont ni
+   starttime, ni phase, ni exe résolu/cgroup réel. Capturer ces champs et exiger
+   une observation pendant cible-* ou module, sur le même ELF SHA et SDK29.
+   Les inventaires restent des preuves distinctes, jamais des exécutions de juge.
+
+3. Profil : env=dict(os.environ) conserve endpoints de services/modèles et autres
+   paramètres personnels. BURN=cpu ne désactive pas un fournisseur distant hérité.
+   La promesse « aucun service externe » n'est donc pas portée par la recette.
+   Neutraliser les endpoints/API et rediriger explicitement les racines privées
+   pertinentes avant Cargo/ELF ; ne pas afficher leurs anciennes valeurs.
+   profil.json écrit actuellement tous les noms RAG3* : ce préfixe inclut aussi
+   DSN/credentials éventuels et le jeton du reçu. Remplacer par une liste explicite
+   de paramètres utiles non secrets ; le contenu hérité n'a pas été inspecté ici.
+
+4. Plafond target : garder_le_target vérifie l'attribution à l'arbre, pas32Gio.
+   Ni la boucle run ni le finaliseur ne contrôlent la taille du target pendant
+   ou après compilation/F8. Ajouter le contrôle borné32Gio et sa preuve finale
+   sans supprimer/vider le target pour faire passer la qualification.
+
+Le refus conservateur UNKNOWN du finaliseur est explicitement documenté et
+n'est pas présenté ici comme un défaut nouveau. La revue du produit reste
+favorable sur la propagation des deux Result ; aucune causalité du FAILED
+physique antérieur n'est établie par cette inspection des pilotes.
