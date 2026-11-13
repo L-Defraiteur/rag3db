@@ -1,0 +1,19 @@
+{
+  "verdict": {
+    "verdict": "VERT",
+    "code": 0,
+    "erreur": null,
+    "restes": [],
+    "prive": "/tmp/r3v-vrvivo3t",
+    "nettoye": true
+  },
+  "etat": "termine",
+  "echeance": 919800.434295504,
+  "monotonic": 919306.237361605,
+  "restant": 494.19693363504484,
+  "vivants": [],
+  "sources_propres": {
+    "ancien": true,
+    "nouveau": true
+  }
+}

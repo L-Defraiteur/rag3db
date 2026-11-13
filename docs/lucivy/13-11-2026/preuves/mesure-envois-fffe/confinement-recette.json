@@ -1,0 +1,35 @@
+{
+  "argv": [
+    "/usr/bin/dbus-run-session",
+    "--config-file=/tmp/r3v-vrvivo3t/bus.xml",
+    "--",
+    "python3",
+    "/home/lucied/.cache/rag3weaver-build/cx-mesure-lucivy-pilote-v1/mesurer-envois.py",
+    "--ancien",
+    "/home/lucied/git_workspaces/cx-lucivy-mesure-ancien",
+    "--nouveau",
+    "/home/lucied/git_workspaces/cx-lucivy-mesure-nouveau",
+    "--zone",
+    "/home/lucied/.cache/rag3weaver-build/cx-mesure-lucivy-envois-v1",
+    "--target",
+    "/home/lucied/.cache/rag3weaver-build/cx-target-mesure-lucivy-envois-v1",
+    "--cpus",
+    "20,21,22,23"
+  ],
+  "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1494524-i89532190.scope",
+  "memoire": {
+    "direct": "8589934592",
+    "effectif": 8589934592
+  },
+  "delai": 600,
+  "outils": {
+    "dbus-run-session": {
+      "path": "/usr/bin/dbus-run-session",
+      "sha256": "d310854dcd72b103aa95a7f6a54eae2cb1579d6c71af40243f840e37fa64d4c5"
+    },
+    "dbus-daemon": {
+      "path": "/usr/bin/dbus-daemon",
+      "sha256": "b5d6c0469c7dc4050733f2a90fe64e9f55a3377521dbb295f03ee2cd9807acc4"
+    }
+  }
+}

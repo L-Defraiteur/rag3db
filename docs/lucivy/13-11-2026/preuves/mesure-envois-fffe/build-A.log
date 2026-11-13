@@ -1,0 +1,15 @@
+    Updating crates.io index
+     Locking 27 packages to latest compatible versions
+   Compiling libc v0.2.191
+   Compiling scopeguard v1.2.0
+   Compiling cfg-if v1.0.5
+   Compiling futures-sink v0.3.34
+   Compiling futures-core v0.3.34
+   Compiling lock_api v0.4.14
+   Compiling spin v0.9.9
+   Compiling getrandom v0.2.17
+   Compiling nanorand v0.7.0
+   Compiling flume v0.11.1
+   Compiling luciole v4.3.3 (/home/lucied/git_workspaces/cx-lucivy-mesure-ancien/luciole)
+   Compiling cout-envoi-luciole v0.0.0 (/home/lucied/.cache/rag3weaver-build/cx-mesure-lucivy-envois-v1/harnais-A)
+    Finished `release` profile [optimized] target(s) in 3.01s

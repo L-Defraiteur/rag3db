@@ -1,0 +1,43 @@
+{
+  "heads": {
+    "ancien": "663975adf11fc4a9d6cadf90e70ee68f6c9db075",
+    "nouveau": "fbd3f0a4179917e3674fa52a56ffde027831a354"
+  },
+  "allowed": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23
+  ],
+  "affinite_proposee": [
+    20,
+    21,
+    22,
+    23
+  ],
+  "hashes": {
+    "mesurer-envois.py": "c55507158b4ef8fa04d8bf5f065df2f779d363e5613355905d7c9306566dd65e",
+    "cout-envoi/Cargo.toml.template": "cd1d63d6074a5cc957cfe409214be28770c4e42467ebe39d3ffa69a9da9846b3",
+    "cout-envoi/src/main.rs": "088dcbe275e2ca7947fa9aba5a0705e1f66fe29f56f438154bddda2c48c3746c"
+  }
+}

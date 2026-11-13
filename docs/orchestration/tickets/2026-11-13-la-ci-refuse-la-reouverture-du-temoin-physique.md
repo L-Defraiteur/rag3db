@@ -605,3 +605,16 @@ Pzone cx-mesure-lucivy-envois-v1 / target cx-target-mesure-lucivy-envois-v1 /
 S cx-confinement-mesure-lucivy-envois-v1 tous neufs privés. Sources/locks/harness
 identiques hors chemin,96ABBA, comptesFence+Drophorschrono. Rawpanic directfichier
 avantwait/firstredSTOP, aucun replay ; libérer poste à fin. PasSDK/CI/merge/release.
+
+### MESURE exécutée :96/96 valides, coût global à arbitrer
+
+[Rapport et preuves](../../lucivy/13-11-2026/03-mesure-cout-envois.md). GO C7
+exactfffe/A663/BFBD, vrais posteMESUREexclusif/CPU20-23/8G-HIGHmax/j4, P/T/S
+neufs ; mêmes harness/locks vérifiés avant chronos,96ABBA valides et aucunreplay.
+Débits B/A : workers1/cap0 −30,9%,1/cap1024 −17,5%,4/cap0 −40,1%,
+4/cap1024 +80,0% ; pinned −9,3% à −20,9% seloncas. Coût DELTAglobal,
+pas mutex isolé ni ingestion réelle ; biaisdiagnosticpinneddevnull conservé.
+ConfineurVERT0/restes[]/nettoyétrue, sourcespropres, autoritéterminée et
+scanPID/startvide,494srestantsENDinitial. PosteMESURE rendu immédiatement.
+Aucun seuil ni verdict de livraison inventé ; porteurLucivy, resteRO/arbitrage
+C7/ED du coût avant intégration. Pasautrevariante/SDK/CI/merge/release lancée.

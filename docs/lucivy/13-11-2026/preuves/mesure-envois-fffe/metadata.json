@@ -1,0 +1,27 @@
+{
+  "sources": {
+    "A": "663975adf11fc4a9d6cadf90e70ee68f6c9db075",
+    "B": "fbd3f0a4179917e3674fa52a56ffde027831a354"
+  },
+  "cpus": [
+    20,
+    21,
+    22,
+    23
+  ],
+  "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1494524-i89532190.scope",
+  "memory": {
+    "memory.max": "8589934592",
+    "memory.high": "max"
+  },
+  "echeance": 919800.434295504,
+  "harness_sha256": "088dcbe275e2ca7947fa9aba5a0705e1f66fe29f56f438154bddda2c48c3746c",
+  "stderr_samples": "/dev/null",
+  "limitation": "global delta incl HandlerGuard; pinned diagnostics still cost CPU",
+  "toolchain": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+  "lock_sha256": "934c0d4b31857d09ed60a865b019e712c42b805dec98f6215ebd31b1e7eb4e87",
+  "exe_sha256": {
+    "A": "9e8383d659b9c58ff5fe9e7ff05a3293f4f4923d0b83b6e5ab076402b95b16ff",
+    "B": "b254cc43d9ae354a89f1569307778e4c2807858c354877f650fe20a497b42904"
+  }
+}

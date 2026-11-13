@@ -1,0 +1,30 @@
+{
+  "index": 81,
+  "variant": "A",
+  "source": "663975adf11fc4a9d6cadf90e70ee68f6c9db075",
+  "dispatch": "pinned",
+  "producers": 4,
+  "capacity": 0,
+  "block": 2,
+  "argv": [
+    "/home/lucied/.cache/rag3weaver-build/cx-mesure-lucivy-envois-v1/exe-A",
+    "pinned",
+    "4",
+    "0",
+    "100000"
+  ],
+  "exe_sha256": "9e8383d659b9c58ff5fe9e7ff05a3293f4f4923d0b83b6e5ab076402b95b16ff",
+  "cpus": [
+    20,
+    21,
+    22,
+    23
+  ],
+  "load": "2.53 2.56 2.77 4/1512 1496001",
+  "stderr": "/dev/null",
+  "pid": 1496002,
+  "start": "91921217",
+  "etat": "termine",
+  "code": 0,
+  "stdout_sha256": "41db6e6fa8d46edfffc0eafb6f1b0a1b89ac9ee3e73b0cbf7b5ddcc393048a15"
+}

@@ -1,0 +1,1 @@
+{"dispatch":"worker","producers":1,"capacity":1024,"messages":100000,"count":100000,"seconds":0.024310524,"messages_per_second":4113444.860,"status":"ok"}
