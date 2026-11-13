@@ -131,7 +131,7 @@ TEST_F(RolledBackInsertReopenTest, AVectorIndexedTableKeepsBothRelsAndRowsAfterA
     }
     run("LOAD EXTENSION '" + extension + "';");
     run("ALTER TABLE Content ADD vec FLOAT[4];");
-    run("MATCH (c:Content) SET c.vec = [1.0, 0.5, CAST(c.uuid = 'c1' AS FLOAT), 0.25];");
+    run("MATCH (c:Content) SET c.vec = [1.0, 0.5, 0.125, 0.25];");
     run("CALL CREATE_VECTOR_INDEX('Content', 'content_vec', 'vec', metric := 'l2');");
     run("CHECKPOINT;");
     run("BEGIN TRANSACTION;");
@@ -149,6 +149,34 @@ TEST_F(RolledBackInsertReopenTest, AVectorIndexedTableKeepsBothRelsAndRowsAfterA
     EXPECT_EQ(setOverScopes(), "148\n");
     run("COMMIT;");
     EXPECT_EQ(row("MATCH (c:Content) RETURN count(c);"), "148\n");
+}
+
+// Les écritures de la transaction suivante par COPY, comme une ingestion par paquet : un COPY écrit
+// ses nœuds dans les groupes de nœuds, hors du stockage local de la transaction.
+TEST_F(RolledBackInsertReopenTest, ASetOnRelsCopiedInTheSameTransactionAfterARolledBackInsert) {
+    insertThenRollBack(128, 40);
+    reopen();
+    run("BEGIN TRANSACTION;");
+    run("COPY Content FROM (UNWIND range(600, 619) AS i RETURN 'c' + CAST(i AS STRING) AS uuid, "
+        "'b' "
+        "AS body);");
+    run("COPY DERIVED_FROM FROM (UNWIND range(600, 619) AS i RETURN 'c' + CAST(i AS STRING) AS f, "
+        "'s' + CAST(i % 10 AS STRING) AS t, 'h' AS hash);");
+    EXPECT_EQ(setOverScopes(), "148\n");
+    run("COMMIT;");
+    EXPECT_EQ(row("MATCH (:Content)-[r:DERIVED_FROM]->(:Scope) RETURN count(r);"), "148\n");
+}
+
+// Le même, sans insertion défaite ni réouverture : la cause est-elle le COPY seul ?
+TEST_F(RolledBackInsertReopenTest, ASetOnRelsCopiedInTheSameTransaction) {
+    run("BEGIN TRANSACTION;");
+    run("COPY Content FROM (UNWIND range(600, 619) AS i RETURN 'c' + CAST(i AS STRING) AS uuid, "
+        "'b' "
+        "AS body);");
+    run("COPY DERIVED_FROM FROM (UNWIND range(600, 619) AS i RETURN 'c' + CAST(i AS STRING) AS f, "
+        "'s' + CAST(i % 10 AS STRING) AS t, 'h' AS hash);");
+    EXPECT_EQ(setOverScopes(), "148\n");
+    run("COMMIT;");
 }
 
 } // namespace
