@@ -641,12 +641,131 @@ pub fn plan_schema() -> (BTreeMap<String, std::collections::BTreeSet<String>>, B
     (tables, relations)
 }
 
+// ─── La version de scope (lot 1a des vues, 13 novembre 2026) ─────────────────
+//
+// Contrat : docs/arbre-principal/13-11-2026/29-contrat-de-la-version-de-scope.md.
+
+/// L'entité dérivée qui porte le contenu partagé d'un scope : ses morceaux et
+/// ses vecteurs, une fois par contenu, quelles que soient ses occurrences.
+pub const SCOPE_CONTENT: &str = "ScopeContent";
+/// Le format de l'identité par contenu de [`SCOPE_CONTENT`].
+pub const SCOPE_CONTENT_FORMAT: &str = "code-scope-v1";
+/// La clé de `_catalog_meta` qui dit la forme du schéma de code d'une base.
+pub const SCOPE_FORM_KEY: &str = "code_scope_form";
+/// L'estampille d'une base à versions de scope.
+pub const SCOPE_FORM_VERSIONS: &str = "code-scope-v1/content";
+/// Ce que dit une base de code d'avant les versions de scope.
+pub const SANS_VERSIONS: &str = "base de code sans versions de scope (forme d'avant le 13 novembre 2026) : \
+    chaque occurrence garde ses morceaux et ses vecteurs, et un contenu identique dans deux fichiers \
+    s'embarque deux fois — à migrer (1b, une migration à part, sur une copie d'abord)";
+
+/// La forme du schéma de code d'une base.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScopeForm {
+    /// Estampillée [`SCOPE_FORM_VERSIONS`] : les scopes sont des occurrences
+    /// d'un [`SCOPE_CONTENT`] partagé.
+    Versions,
+    /// Une table `Scope` sans estampille, vide ou peuplée : la forme d'avant,
+    /// qui ouvre comme avant et se dit [`SANS_VERSIONS`].
+    SansVersions,
+    /// Aucune table `Scope` : une base neuve, qui recevra l'estampille.
+    Neuve,
+}
+
+/// **La forme se lit sur l'estampille, jamais sur le contenu de la base** (ED,
+/// relecture du 13 novembre) : une base vidée ne bascule pas en silence.
+pub fn scope_form(catalog: &Catalog) -> Result<ScopeForm, CatalogError> {
+    if catalog.read_meta_key(SCOPE_FORM_KEY)?.as_deref() == Some(SCOPE_FORM_VERSIONS) {
+        return Ok(ScopeForm::Versions);
+    }
+    let mut select = rag3weaver_ir::Select::all(SCOPE, vec![rag3weaver_ir::Column::Node("_uuid".into())]);
+    select.limit = Some(rag3weaver_ir::Limit::Literal(1));
+    let q = catalog.dialect_arc().select(&select).map_err(|e| CatalogError::DbError(e.to_string()))?;
+    Ok(match catalog.execute_raw_with_params(&q, &[]) {
+        Ok(_) => ScopeForm::SansVersions,
+        Err(_) => ScopeForm::Neuve,
+    })
+}
+
+/// Les champs du scope qui font sa version : ce qui s'embarque (le titre `name`,
+/// `content`, `docstring`) et, par choix strict pour 1a, `signature`,
+/// `scope_type` et `language` — jamais un partage faux, au pire une version de
+/// trop. Ni la position, ni le chemin, ni le parent : ils restent à l'occurrence.
+pub const SCOPE_VERSION_FIELDS: [&str; 6] = ["name", "signature", "content", "docstring", "scope_type", "language"];
+
+/// **L'occurrence et son contenu** : `Scope` garde ses champs, sa clé et ses
+/// relations, sans morceaux ni signaux, et route ses recherches publiques par
+/// [`SCOPE_CONTENT`], qui porte les morceaux, les vecteurs et les signaux.
+pub fn scope_version_configs(scope: EntityConfig, chunking: ChunkingConfig) -> (EntityConfig, EntityConfig) {
+    let mut occurrence = scope.clone();
+    occurrence.search_index = Some(SCOPE_CONTENT.into());
+    occurrence.chunked = Some(false);
+    occurrence.signals = crate::search::SearchSignals::NONE;
+    let fields = SCOPE_VERSION_FIELDS.iter().map(|f| (f.to_string(), scope.fields[*f].clone())).collect();
+    let render = SCOPE_VERSION_FIELDS.iter().map(|f| (f.to_string(), format!("{{{{ root.{f} }}}}"))).collect();
+    let contenu = EntityConfig {
+        fields,
+        chunking,
+        signals: scope.signals,
+        derived: Some(crate::config::DerivedConfig {
+            from: SCOPE.into(),
+            identity: crate::config::DerivedIdentity::Content { format: SCOPE_CONTENT_FORMAT.into() },
+            gather: vec![],
+            render,
+        }),
+        ..Default::default()
+    };
+    (occurrence, contenu)
+}
+
+/// **Où sont les morceaux du code d'une base**, selon sa forme : la table, et
+/// le motif Cypher qui mène d'un morceau `c` à son occurrence `s:Scope`. Sur
+/// une base à versions, un morceau rejoint ses occurrences par sa version
+/// (`ScopeContent_DERIVED_FROM`) : un morceau partagé en a plusieurs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScopeChunks {
+    pub table: String,
+    pub to_scope: String,
+}
+
+pub fn scope_chunks(catalog: &Catalog) -> Result<ScopeChunks, CatalogError> {
+    Ok(match scope_form(catalog)? {
+        ScopeForm::SansVersions => ScopeChunks {
+            table: format!("{SCOPE}_Chunk"),
+            to_scope: format!("(c:{SCOPE}_Chunk)-[:{SCOPE}_CHUNKED_FROM]->(s:{SCOPE})"),
+        },
+        ScopeForm::Versions | ScopeForm::Neuve => ScopeChunks {
+            table: format!("{SCOPE_CONTENT}_Chunk"),
+            to_scope: format!(
+                "(c:{SCOPE_CONTENT}_Chunk)-[:{SCOPE_CONTENT}_CHUNKED_FROM]->(:{SCOPE_CONTENT})-[:{SCOPE_CONTENT}_DERIVED_FROM]->(s:{SCOPE})"
+            ),
+        },
+    })
+}
+
 /// Déclare les quatre entités et les quatorze relations du schéma nommé `code`.
 /// L'ordre d'enregistrement reste celui du schéma historique.
+///
+/// **La forme suit la base** (lot 1a, décision de c7 du 13 novembre 2026) : une
+/// base neuve reçoit l'estampille [`SCOPE_FORM_VERSIONS`], **avant** ses tables,
+/// puis le schéma à versions ; une base de la forme d'avant garde son schéma et
+/// se dit [`SANS_VERSIONS`] (`index_state`). Aucune base ne change de forme ici.
 pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfig) -> Result<(), CatalogError> {
-    let (mut entities, mut relations) = schema_configs(scope_chunking);
+    let form = scope_form(catalog)?;
+    if form == ScopeForm::Neuve {
+        catalog.persist_meta_key(SCOPE_FORM_KEY, SCOPE_FORM_VERSIONS)?;
+    }
+    let versions = form != ScopeForm::SansVersions;
+    let (mut entities, mut relations) = schema_configs(scope_chunking.clone());
     for name in [FILE, SCOPE, LIBRARY, SYMBOL] {
-        catalog.register_entity(name, entities.remove(name).expect("entité du schéma code"))?;
+        let config = entities.remove(name).expect("entité du schéma code");
+        if name == SCOPE && versions {
+            let (occurrence, contenu) = scope_version_configs(config, scope_chunking.clone());
+            catalog.register_entity(SCOPE, occurrence)?;
+            catalog.register_entity(SCOPE_CONTENT, contenu)?;
+        } else {
+            catalog.register_entity(name, config)?;
+        }
     }
     for (name, _, _) in RELATIONS {
         let relation = relations.remove(name).expect("relation du schéma code");

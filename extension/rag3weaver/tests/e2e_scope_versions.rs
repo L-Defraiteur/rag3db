@@ -157,3 +157,95 @@ fn le_schema_prive_garde_la_recherche_scope_et_les_aretes_des_occurrences() {
         }
     }
 }
+
+// ─── Le schéma de production (lot 1a, 13 novembre 2026) ──────────────────────
+// docs/arbre-principal/13-11-2026/29-contrat-de-la-version-de-scope.md
+
+fn compteur() -> (Compteur, Arc<Mutex<Vec<String>>>) {
+    let texts = Arc::new(Mutex::new(Vec::new()));
+    (Compteur { inner: HashEmbedder::new(8), texts: texts.clone() }, texts)
+}
+
+fn ouvrir(conn: Rag3dbConnection, embedder: Compteur) -> Catalog {
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension())).unwrap();
+    let mut cat = Catalog::new(Box::new(conn), Box::new(embedder), CatalogConfig {
+        allow_mock_embedder: true, embedding_dim: 8, ..Default::default()
+    });
+    cat.initialize().unwrap();
+    cat
+}
+
+/// Une base neuve, par le seul schéma de production : aucune déclaration privée.
+fn catalogue_de_production() -> (Catalog, Arc<Mutex<Vec<String>>>) {
+    let (embedder, texts) = compteur();
+    let mut cat = ouvrir(Rag3dbConnection::in_memory().expect("base privée en mémoire"), embedder);
+    register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+    (cat, texts)
+}
+
+/// La forme d'avant les versions, telle que `register_code_schema` l'écrivait
+/// jusqu'au 13 novembre 2026 : `Scope` porte ses morceaux et ses vecteurs.
+fn enregistrer_la_forme_d_avant(cat: &mut Catalog) {
+    let (mut entities, mut relations) = rag3weaver::code::schema_configs(default_scope_chunking());
+    for name in ["File", "Scope", "Library", "Symbol"] {
+        cat.register_entity(name, entities.remove(name).unwrap()).unwrap();
+    }
+    for (name, relation) in std::mem::take(&mut relations) {
+        cat.register_relation_with(&name, &relation.from, &relation.to, relation.properties.unwrap_or_default()).unwrap();
+    }
+}
+
+#[test]
+#[ignore]
+fn le_schema_de_production_partage_le_contenu_de_deux_fichiers() {
+    let (mut cat, texts) = catalogue_de_production();
+    let source = Snapshot::new("ancre", [
+        ("a.rs".to_string(), FONCTION.to_string()),
+        ("b.rs".to_string(), format!("\n\n{FONCTION}")),
+    ]);
+    assert_eq!(cat.ingest_code(&analyze_source(&source).unwrap()).unwrap().failed, 0);
+    let r = cat.execute_raw("MATCH (s:Scope) WHERE s.name = 'partagee' RETURN s.file_path, s.start_line ORDER BY s.file_path").unwrap();
+    assert_eq!(r.rows.len(), 2, "les occurrences ont été fusionnées : {:?}", r.rows);
+    assert_eq!(r.rows[1][1].as_i64().unwrap() - r.rows[0][1].as_i64().unwrap(), 2, "chaque occurrence garde ses lignes");
+    let embarques = texts.lock().unwrap().iter().filter(|s| s.contains("marque_contenu_partage")).count();
+    assert_eq!(embarques, 1, "le schéma de production réembarque un contenu identique");
+}
+
+#[test]
+#[ignore]
+fn une_base_neuve_recoit_l_estampille_des_versions() {
+    let (cat, _) = catalogue_de_production();
+    assert_eq!(rag3weaver::code::scope_form(&cat).unwrap(), rag3weaver::code::ScopeForm::Versions);
+    assert!(cat.entity_configs().contains_key(rag3weaver::code::SCOPE_CONTENT), "pas d'entité de contenu sur une base neuve");
+}
+
+/// Une base de la forme d'avant, peuplée ou vide : elle ouvre comme avant, garde
+/// ses morceaux sur `Scope`, et se dit à migrer. Aucune bascule silencieuse.
+#[test]
+#[ignore]
+fn une_base_d_avant_ouvre_comme_avant_et_se_dit_a_migrer() {
+    for peuplee in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let chemin = dir.path().join("code.rag3db");
+        {
+            let (embedder, _) = compteur();
+            let mut cat = ouvrir(Rag3dbConnection::new(&chemin).unwrap(), embedder);
+            enregistrer_la_forme_d_avant(&mut cat);
+            if peuplee {
+                let source = Snapshot::new("ancre", [("a.rs".to_string(), FONCTION.to_string())]);
+                assert_eq!(cat.ingest_code(&analyze_source(&source).unwrap()).unwrap().failed, 0);
+            }
+        }
+        let (embedder, texts) = compteur();
+        let mut cat = ouvrir(Rag3dbConnection::new(&chemin).unwrap(), embedder);
+        register_code_schema(&mut cat, default_scope_chunking())
+            .unwrap_or_else(|e| panic!("peuplée={peuplee} : la base d'avant ne s'ouvre plus : {e}"));
+        assert_eq!(rag3weaver::code::scope_form(&cat).unwrap(), rag3weaver::code::ScopeForm::SansVersions, "peuplée={peuplee}");
+        assert!(!cat.entity_configs().contains_key(rag3weaver::code::SCOPE_CONTENT), "peuplée={peuplee} : bascule silencieuse");
+        let source = Snapshot::new("ancre", [("b.rs".to_string(), format!("\n{FONCTION}"))]);
+        assert_eq!(cat.ingest_code(&analyze_source(&source).unwrap()).unwrap().failed, 0, "peuplée={peuplee}");
+        let morceaux = cat.execute_raw("MATCH (c:Scope_Chunk) RETURN count(c)").unwrap().rows[0][0].as_i64().unwrap();
+        assert!(morceaux > 0, "peuplée={peuplee} : les morceaux restent sur Scope dans la forme d'avant");
+        assert!(texts.lock().unwrap().iter().any(|t| t.contains("marque_contenu_partage")), "peuplée={peuplee}");
+    }
+}
