@@ -414,3 +414,14 @@ témoins grep_symbols (défaut0, absence d'index, UTF-8/CRLF sans relecture, bud
 Le nouveau parcours natif demande l'option par le vrai chat et son outil déclaré,
 puis relais atelier ; fixture sans montre pour éprouver la péremption sans réparation
 implicite. Hôtes avec registres background privés. Ces tests ne sont pas encore joués.
+
+## Premier ciblé — compilation rouge, aucun test exécuté
+
+Source dea3570ab02d01ef6a4b332be65e06c6090aa684, recette a163d5e7… :
+Cargo101, E0277 concaténation String+&String dans fixture budget, E0283 conversion
+.into ambiguë dans l'appel MockLlm de la nouvelle fixture grep. Diagnostic complet
+dans cx-grep-symboles-dea3570ab-cible-20261113/diagnostic-compilation.txt ;
+primitive validation-4xejkeug rouge, quiescence target[]. Aucun verdict de test vert.
+Correction bornée à ces expressions de fixture : format! et String explicite.
+Reprise source/pilote neufs annoncés avant exécution dans le RESTE de l'échéance
+1800s initiale du ciblé, sans remise à zéro ni changement d'assertion.
