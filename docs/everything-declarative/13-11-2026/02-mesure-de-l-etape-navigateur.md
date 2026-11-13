@@ -136,3 +136,44 @@ Les fichiers sont sous `~/.cache/rag3weaver-build/ed-navigateur/` des deux poste
 - `vol.err`, les appels en vol ;
 - `vue.err`, le texte des vues lentes.
 - Les instrumentations : `instrumenter*.py` (luciepc).
+
+## Cause 2, trouvée (13 novembre 2026, soir) : le plafond de connexions du navigateur
+
+**Ce n'est pas l'hôte.**
+- La sonde de la lib (`le_premier_appel_d_un_outil_ne_coute_pas_une_minute`, branche
+  `premier-appel-sans-minute`) appelle les outils par l'hôte, sans navigateur. Tout est rapide :
+
+  | appel | durée |
+  |---|---|
+  | `/etat` | 38 ms |
+  | premier `search_code` | 49 ms |
+  | `impact` | 29 ms |
+  | `callees` | 11 ms |
+
+- Le serveur, mesuré dans le témoin des vues (heure de réception et durée de chaque requête de
+  l'IDE), **ne reçoit rien pendant les 59 s**. `/ide/etat` et `/ide/call` lui arrivent 59 s après
+  la requête précédente, et il y répond en 11 et 33 ms. C'est le **navigateur** qui retient les
+  requêtes de la page.
+
+**Pourquoi il les retient.**
+- Chaque vue chargée ouvre son flux (`GET /ide/flux`, SSE). Le témoin charge les vues l'une
+  après l'autre (`Page.navigate`). Le blocage tombe au septième flux ouvert, puis de nouveau six
+  vues plus loin (sur la recherche, puis sur le graphe).
+- Chrome plafonne à 6 connexions HTTP/1.1 par hôte. Les flux des vues quittées restent tenus
+  environ 60 s. La vue suivante attend qu'une connexion se libère.
+- C'est la même chose pour les témoins de 60 à 72 s : relais du chat, tâche d'à côté.
+
+**Ce que ça coûte hors des témoins.** Toute fenêtre de l'IDE tient un flux. À partir de six onglets
+ou rechargements sur le même hôte en moins d'une minute, l'IDE de Lucie attend lui aussi une
+minute. C'est peut-être aussi le « premier appel à une minute » à la réouverture de l'atelier.
+
+**Ce qui reste à départager avant le correctif** : ce qui tient ces flux 60 s après le départ de
+leur page (le cache d'aller-retour de Chrome, la fermeture côté navigateur ou côté serveur).
+Le correctif touche la conception du flux ; il se propose à c7.
+- (a) La page ferme son flux en partant (`pagehide`), et le serveur ferme un flux qui ne répond plus
+  au battement.
+- (b) Un seul flux par origine, partagé entre les fenêtres (un `SharedWorker`).
+- (c) Le flux et les appels par un transport qui ne compte pas dans le plafond.
+
+Le témoin rouge du correctif est un témoin navigateur, et non la sonde de la lib (verte) : plus de
+six vues chargées de suite, chacune rendue en moins de 5 s.
