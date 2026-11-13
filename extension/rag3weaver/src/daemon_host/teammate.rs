@@ -411,6 +411,28 @@ pub(crate) fn open_question(files: &TeammateFiles) -> Option<(usize, Value)> {
     ouverte
 }
 
+/// **Ce que la request en cours exige avant la fin** (`expects`, déclaré par le superviseur,
+/// 13 novembre 2026) : `report` (un report de l'équipier dans la boîte) ou `approval` (un
+/// `answer` `approved: true` du superviseur). Rend la valeur et le rang de la request.
+pub(crate) fn expected_deliverable(lignes: &[Value]) -> Option<(usize, String)> {
+    let n = lignes.iter().rposition(|l| l["kind"] == "request" && l["from"] != "teammate" && l["from"] != "host")?;
+    lignes[n]["expects"].as_str().map(|e| (n, e.to_string()))
+}
+
+/// Le livrable exigé par la request en cours, s'il manque encore : son nom, pour la boîte.
+pub(crate) fn missing_deliverable(lignes: &[Value]) -> Option<&'static str> {
+    let (n, expects) = expected_deliverable(lignes)?;
+    let apres = &lignes[n + 1..];
+    match expects.as_str() {
+        "report" => (!apres.iter().any(|l| l["from"] == "teammate" && l["kind"] == "report")).then_some("un report dans la boîte"),
+        "approval" => (!apres.iter().any(|l| l["from"] != "teammate" && l["from"] != "host" && l["kind"] == "answer" && l["approved"] == true)).then_some("l'accord du superviseur"),
+        _ => None,
+    }
+}
+
+/// Les valeurs permises de `expects` sur une request.
+pub const EXPECTS: [&str; 2] = ["report", "approval"];
+
 pub(crate) fn unread_news(files: &TeammateFiles) -> bool {
     files
         .mailbox()
@@ -1059,6 +1081,13 @@ impl DaemonHost {
         if text.trim().is_empty() && kind != "stop" {
             return Err("le texte est vide".into());
         }
+        // **Ce que la request exige avant la fin** se déclare, il ne se devine pas.
+        match extra.get("expects").filter(|v| !v.is_null()) {
+            None => {}
+            Some(_) if kind != "request" => return Err(format!("expects se déclare sur une request, pas sur un {kind}")),
+            Some(e) if e.as_str().is_some_and(|e| EXPECTS.contains(&e)) => {}
+            Some(e) => return Err(format!("expects vaut report ou approval, pas {e}")),
+        }
         let ouverte = self.tache(parent, task).is_none();
         if ouverte {
             if kind != "request" {
@@ -1261,6 +1290,8 @@ impl DaemonHost {
         let mut stalled = 0usize;
         // Un plan a-t-il existé pendant ce lancement ? (la fin le dit autrement)
         let mut plan_seen = false;
+        // **Un pas a dit ce qui reste** (sans plan vivant) : le suivant part sans attendre la boîte.
+        let mut encore = false;
         let request = files.mailbox().iter().find(|l| l["kind"] == "request").and_then(|l| l["text"].as_str()).unwrap_or_default().to_string();
         // `number` numérote les pas joués ; `counted` ne compte pas ceux qui
         // finissent en attente du superviseur : MAX_STEPS borne le travail, pas
@@ -1291,7 +1322,7 @@ impl DaemonHost {
             let waiting = active.is_some_and(|p| !p.waiting().is_empty());
             // Un pas de travail : une nouvelle dans la boîte, un élément faisable,
             // ou un plan actif qui ne fait plus qu'attendre rien (à clore).
-            let work = !news.is_empty() || alone || (active.is_some() && !waiting) || (active.is_none() && !plans.paused().is_empty() && number == 0);
+            let work = std::mem::take(&mut encore) || !news.is_empty() || alone || (active.is_some() && !waiting) || (active.is_none() && !plans.paused().is_empty() && number == 0);
             let last = active.is_some() && !alone && !waiting && news.is_empty();
             // **En attente du superviseur** : une question ou une commande
             // demandée, sans réponse ni ligne nouvelle, suspend l'équipier.
@@ -1333,7 +1364,12 @@ impl DaemonHost {
             let derniere = lines.iter().rposition(|l| l["kind"] == "request" && l["from"] != "teammate" && l["from"] != "host");
             let consigne = derniere.and_then(|n| lines[n]["text"].as_str()).unwrap_or_default().to_string();
             let faits: Vec<Value> = lines.iter().skip(derniere.map_or(0, |n| n + 1)).filter(|l| l["from"] == "teammate" && l["kind"] == "step_done").cloned().collect();
-            let message = frontier_message(number, &news, &plans, last, &consigne, &faits);
+            let mut message = frontier_message(number, &news, &plans, last, &consigne, &faits);
+            match expected_deliverable(&lines).map(|(_, e)| e) {
+                Some(e) if e == "report" => message.push_str("\nLa demande exige un report (outil report) avant la fin : sans lui, la tâche attend le superviseur.\n"),
+                Some(e) if e == "approval" => message.push_str("\nLa demande exige l'accord du superviseur avant la fin : propose (report, question), puis attends sa réponse.\n"),
+                _ => {}
+            }
             let mut step = Step::new(files.clone(), task, &request, bus.clone(), number);
             step.woke_by = woke_by.take();
             // **Un pas qui n'aboutit pas ne termine pas l'équipier** : l'échec va
@@ -1464,9 +1500,25 @@ impl DaemonHost {
             let after = files.read_plans();
             plan_seen |= !step.closed_plans().is_empty();
             if after.active().is_none() && after.paused().is_empty() && declared.is_some() && !unread_news(&files) {
-                outcome.ended = if plan_seen { "plus rien à faire : compte rendu".into() } else { "fait sans plan".into() };
-                return Ok(outcome);
+                // **Un `step_done` qui dit ce qui reste n'est pas une fin** (ticket du 9
+                // novembre 2026) : le pas suivant part ; MAX_STEPS et MAX_STALLED bornent.
+                let reste = declared.as_ref().and_then(|d| d["remaining"].as_str()).map(str::trim).filter(|r| !r.is_empty()).map(str::to_string);
+                if let Some(r) = reste {
+                    let line = files.append("host", "report", None, &format!("pas fini : reste « {r} » ; le pas suivant part"))?;
+                    publish(bus.as_ref(), task, &line);
+                    encore = true;
+                } else if let Some(manque) = missing_deliverable(&files.mailbox()) {
+                    // **Le livrable exigé manque** : l'équipier attend la boîte, sans
+                    // appeler le modèle ; une ligne du superviseur le relance.
+                    let line = files.append("host", "report", None, &format!("fait sans le livrable demandé ({manque}) : j'attends le superviseur"))?;
+                    publish(bus.as_ref(), task, &line);
+                    continue;
+                } else {
+                    outcome.ended = if plan_seen { "plus rien à faire : compte rendu".into() } else { "fait sans plan".into() };
+                    return Ok(outcome);
+                }
             }
+
             let _ = last;
             match &declared {
                 Some(d) if d["succeeded"] == true => stalled = 0,
