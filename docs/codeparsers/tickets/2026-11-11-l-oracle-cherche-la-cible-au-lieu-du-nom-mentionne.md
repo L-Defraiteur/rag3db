@@ -1,6 +1,8 @@
 # L'oracle cherche la cible au lieu du nom réellement mentionné
 
-- **État** : ouvert — lecture du code et vérification des 415 lignes historiques le 11 novembre 2026 ; aucun changement d'oracle dans le lot des exports
+- **État** : en cours (13 novembre 2026) — l'oracle interroge le nom réellement mentionné (branche rag3db
+  `codeparsers/oracle-mention`, 985d91d88) ; les 415 liaisons rejugées ; restent les témoins alias et
+  instance, et la ligne agrégée des sites (complément ci-dessous)
 - **Gravité** : preuve incomplète (un faux peut devenir muet sans interrogation du LSP)
 - **Atteignable en service** : non (oracle de mesure seulement)
 - **Touche rag3weaver** : oui (outillage de validation des arêtes)
@@ -63,3 +65,35 @@ puis réutilisation des réponses LSP existantes. Ne pas attribuer les arêtes
 nouvelle campagne, schéma ou refonte générale sans cadrage supplémentaire.
 Reste : valider le périmètre, réaliser la capture, rendre explicites les cas
 non attribuables, et satisfaire les critères généraux de fermeture ci-dessus.
+
+## Le 13 novembre : le nom mentionné interrogé, les 415 liaisons rejugées
+
+**La correction** (`scripts/oracle_lsp.py`, `mentions_a_interroger`) : l'oracle interroge le nom de la
+cible s'il est sur la ligne ; sinon un nom qu'une ligne d'import lie **dans la cible** (une zone de
+liaison) ; sinon un nom qu'un import du fichier de la mention lie **depuis le fichier de la cible** (un
+alias). Quand rien sur la ligne ne nomme la cible, aucune question ne part et le verdict est **« non
+interrogé »**, distinct de « muet » (interrogé, sans réponse). Le TSV gagne une colonne « nom interrogé ».
+Les catégories « liaison d'import » et « réexportation » se jugent sur ce nom.
+
+**Rouge d'abord** : trois des 415 arêtes `liaison`, sous l'oracle de master, « muet » ×3 en 0 s (aucune
+question) ; sous l'oracle corrigé, 2 « liaison d'import » (`path`, `rmSync` vers `@types/node`) et
+1 « muet » interrogé (une chaîne, ci-dessous). Fichiers : `~/.cache/codeparsers-notes/oracle-mention/`
+à luciepc (`verdicts-avant.tsv`, `verdicts-apres.tsv`).
+
+**Les 415** (`liaisons-415.txt`, `verdicts-415.tsv`, même arbre a72acfeef, typescript-language-server sur
+TypeScript 5.9, juge strict, 2 590 s) :
+
+| verdict | nombre | ce que c'est |
+|---|---|---|
+| liaison d'import | 376 | le serveur rend le module externe (`@types/node`…) ; notre cible est la ligne qui le lie |
+| juste | 32 | le serveur rend la ligne de liaison elle-même (un module sans types : `chromium`, `uuidv4`) |
+| muet | 4 | interrogé sans réponse : **les quatre nomment le mot dans une chaîne** (`'path'`, `'.result-path'`, `'mtga-…'`) — de vrais faux de l'index (la lecture du texte des zones prend des mots dans les chaînes) |
+| faux | 1 | `tools/nodejs_api/install.js:103`, `path.toLowerCase()` : `path` y est un paramètre local qui masque l'import |
+| non interrogé | 2 | rien sur la ligne ne nomme la cible (`process.env` à `install.js:69`, `join(…)` à `smoke_warnings.mjs:11`) |
+
+**408 sur 415 (98 %) sont saines** ; 7 sont des faux de l'index, dont la famille principale (4) est la
+lecture des chaînes.
+
+**Reste pour fermer** : les témoins alias (`const Alias = require("./outil")` vers `class Outil`) et
+instance (`module.exports = new FS()`) sous l'oracle corrigé ; la ligne agrégée des sites (le complément
+plus haut) ; rejouer l'échantillon de référence TypeScript (les 298 mentions) avec l'oracle corrigé.
