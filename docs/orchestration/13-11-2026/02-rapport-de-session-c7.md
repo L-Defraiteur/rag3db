@@ -142,3 +142,13 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   comme preuve finale) ; ED e140b4e9b (l'installeur de l'atelier dit le suivi, `suivi_d_une_pose`). archi a
   son tour (le chemin hors racine), puis 96 (M8), puis ED (la fin sans livrable de l'équipier, son lot
   suivant). recherche passe à arret-du-backend.
+- **16 h 59, le correctif du rouge CI est prêt** (arbre principal, branche `arbre-principal/ci-raccord-physique`,
+  d57273bba) : l'écrivain du raccord physique passe par OPEN_FOR_WRITING et REOPEN_WAIT ; le registre tient
+  aussi un Weak<ReopenState> qui tombe après le retour de ~Database ; `wait_writer_released` avant chaque
+  photo d'octets ; témoin déterministe vu rouge puis vert ; lib entière 2309/0 trois fois sous l'env qui
+  rougissait. Le porteur nommé : le fil scheduler-3 de lucivy qui lâche en dernier un Arc<dyn BlobStore>
+  après une fermeture du plein texte en échec — ce que la 4.3.4 de lucivy corrige côté close(). Ticket du
+  raccord fermé ; celui de la CI garde l'état ouvert jusqu'au run vert ; un ticket neuf pour un rouge
+  unique de model_source (profil_etranger, 1 sur 7) à embarquement. **File réordonnée pour la CI** : archi
+  (en cours), puis arbre principal, puis 96 (M8, vert), puis ED (la fin sans livrable, avec le champ
+  `expects` sur la request : report ou approval, déclaré par le superviseur).
