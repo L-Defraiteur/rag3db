@@ -1073,7 +1073,7 @@ mod integration {
                                 .push(grep_payload(serde_json::from_str(&t.content).unwrap()));
                             MockLlm::new("Contexte vérifié.").generate(turns, opts, sink)
                         } else {
-                            MockLlm::new("").with_tool_calls(vec![("grep_files".into(),json!({"pattern":"λNEEDLE","symbol_hierarchy_depth":2,"format":"json"}).to_string())]).generate(turns,opts,sink)
+                            MockLlm::new("").with_tool_calls(vec![("grep_files".to_string(),json!({"pattern":"λNEEDLE","symbol_hierarchy_depth":2,"format":"json"}).to_string())]).generate(turns,opts,sink)
                         }
                     },
                 )))
