@@ -54,7 +54,7 @@ Si le budget ne permet plus une étape, verdict rouge/incomplet, pas de reset.
 1. Construire une seule lib de tests avec --no-default-features --features
    rag3db-native,code,daemon ; extraire l’ELF depuis les messages JSON Cargo,
    archiver commande/source/SHA/features/SDK et inventaire --list.
-2. Exécuter séparément, --exact --show-output --test-threads=1, les quatre
+2. Exécuter séparément, --exact --nocapture --test-threads=1, les quatre
    nouveaux témoins sous daemon_host::atelier_fichiers::tests :
    read_scope_preserves_a_backend_error_instead_of_claiming_absence ;
    read_scope_preserves_a_usages_error_instead_of_claiming_absence ;
@@ -64,7 +64,7 @@ Si le budget ne permet plus une étape, verdict rouge/incomplet, pas de reset.
    the_workshop_reads_a_scope_from_the_index_of_an_attached_worktree.
    Exiger exactement un passé/aucun échec/aucun ignoré pour chaque invocation.
 3. Inventorier puis jouer le module complet daemon_host::atelier_fichiers::
-   avec le même ELF, --show-output --test-threads=8. Comparer noms/comptes
+   avec le même ELF, --nocapture --test-threads=8. Comparer noms/comptes
    à l’inventaire ; publier séparément les ignorés navigateur déjà déclarés
    dans la source, jamais les compter comme verts. Aucune exemption nouvelle.
 4. Frontières : appel direct du script canonique scripts/check_features.sh
@@ -94,6 +94,29 @@ Le ledger hors source est écrit avant les juges (après --list et --ignored) ;
 aucun hash de commit auto-référent dans les scripts : le lanceur exige le SHA
 exact fourni par C7 et le driver le revérifie. Trois ignorés NAV historiques
 sont nommément exigés ; toute variation refuse le lancement des juges.
-Le finaliseur ne tue ni ne supprime aucune ressource ; un /proc protégé
-non attribuable donne UNKNOWN et refuse la quiescence verte. Copie SHA des
+Le finaliseur ne tue ni ne supprime aucune ressource ; les UNKNOWN sont classés par identité PID/start du registre enfants du confineur,
+appartenance au scope et contexte exe/cwd. Une baseline protégée au cgroup
+lisible hors scope reste UNKNOWN externe explicitement conservé ; un owned,
+un contexte vivant ou un rattachement non excluable bloque le vert. Copie SHA des
 preuves vers le second poste à effectuer après finalisation, avant livraison.
+
+
+### Corrections après revue C7 du pilote6a2
+
+ELF copié par copy2 vers preuves/binaire-lib et SHA comparé AVANT inventaires
+et tests. Recherche réelle du hash source court embarqué (offset>=0), ledger
+hors target avant juges ; finaliseur rehash copie et original si encore présent.
+Une disparition de l’original après check_features doit être documentée dans
+elf-apres-features.json ; la copie conservée reste obligatoire et vérifiée.
+
+Lanceur et driver reconstruisent l’environnement par liste blanche (outils,
+identité Unix, langue, capacités confineur/bus privé nécessaires). Aucune
+variable héritée de service/embeddings/PG/clé API/credentials n’est transmise.
+Le jeton de validation n’est pas dupliqué dans le profil archivé.
+
+Pendant chaque phase, surveillance du log actif et des logs features : premier
+FAILED, panic, erreur compilateur ou CHECK_FEATURES ROUGE provoque sortie du
+driver et arrêt des descendants par le confineur. --nocapture conserve les
+messages précédant FAILED ; un arrêt peut néanmoins empêcher une stack complète,
+ce qui doit rester explicite. Pas de retry. Les lignes par nom peuvent être
+entrelacées sous huit threads ; inventaire et comptes libtest sont comparés.
