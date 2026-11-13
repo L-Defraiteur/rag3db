@@ -122,3 +122,14 @@ conforme au contrat, pas d'accès aux bases de Lucie ou aux services partagés.
 Premier rouge arrêté/diagnostiqué, pas de retry inchangé. Aucun créneau acquis ni
 build lancé ; revue du diff requise, pas d'intégration produit pendant la globale
 physique. Ce ticket reste ouvert : un patch écrit n'est pas une correction prouvée.
+
+
+## Préparation après landing physique
+
+Patch repris sans modification sur base master b0a5177c, branche neuve
+cx-ed-read-scope-qualification-r2, commit produit a919ad9d9. Range-diff
+égal à 674f596c1 ; revues statiques Archi/C7 favorables.
+[Recette de qualification isolée](../13-11-2026/04-recette-read-scope.md)
+publiée avant GO lourd : cinq ciblés puis module inventorié et frontières
+features, target privé neuf, aucun partage de ressources Arbre. Aucun
+Cargo/test exécuté à ce stade ; ticket reste ouvert.
