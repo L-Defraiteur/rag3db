@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prepare a reviewed controller outside both frozen worktrees, then actual poste."""
 from pathlib import Path
-import hashlib,json,os,shutil,subprocess,sys,stat
+import hashlib,json,os,shutil,subprocess,sys,stat,time
 R=Path('/home/lucied/.cache/rag3weaver-build');W=R/'cx-wt-recherche-garde-target-union-r2';CONTROL=Path(__file__).resolve().parents[4]
 APP='9ec421069320b2f0cca4099fa27f83059e944de9';PILOT=sys.argv[1]
 P=R/'cx-validation-garde-target-union-v1';Q=R/'cx-pilote-garde-target-union-v1';S=R/'cx-confinement-garde-target-union-v1';T=R/'cx-target-garde-target-qualification-v1'
@@ -44,7 +44,7 @@ for proc in Path('/proc').iterdir():
    except (FileNotFoundError,ProcessLookupError):pass
  except PermissionError:unknown.append(proc.name)
  except (FileNotFoundError,ProcessLookupError):pass
-(Q/'cache-before.json').write_text(json.dumps(dict(previous_app=previous['app'],previous_receipt=previous['receipt'],old_crate=str(oldc),previous_ledger_sha256=hashlib.sha256((old/'ledger.json').read_bytes()).hexdigest(),target=str(T),inode=T.stat().st_ino,quiescence=found,unknown_baseline=unknown),indent=2));assert not found
+(Q/'cache-before.json').write_text(json.dumps(dict(previous_app=previous['app'],previous_receipt=previous['receipt'],old_crate=str(oldc),previous_ledger_sha256=hashlib.sha256((old/'ledger.json').read_bytes()).hexdigest(),target=str(T),inode=T.stat().st_ino,device=T.stat().st_dev,mode=T.stat().st_mode,uid=T.stat().st_uid,observed=time.monotonic(),quiescence=found,unknown_baseline=unknown),indent=2));assert not found
 
 for name in ['driver.py','finaliser.py','sdk-exec.py','attester.py','capture-stable.py','superviser-elf.py','provenance-primitives.json']:
  src=Path(__file__).with_name(name);shutil.copy2(src,Q/name);records[name]=hashlib.sha256(src.read_bytes()).hexdigest()
