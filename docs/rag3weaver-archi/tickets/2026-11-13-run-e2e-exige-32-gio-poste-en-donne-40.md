@@ -1,7 +1,7 @@
 # run_e2e exige un plafond de 32 Gio, poste en donne 40 par défaut
 
-- **État** : ouvert (13 novembre 2026), relevé par archi pendant la passe du lot du README ; question
-  pour l'orchestration.
+- **État** : ouvert (13 novembre 2026), relevé par archi pendant la passe du lot du README ; décidé
+  par c7 le jour même (voir « La décision ») ; reste la procédure, chez G.
 - **Famille** : produit
 - **Gravité** : passe refusée d'entrée. `run_e2e.sh` rougit « aucun plafond effectif <= 32 Gio » sous un
   `poste lourd` sans réglage.
@@ -21,3 +21,11 @@ rougit.
 
 Une seule valeur, décidée par l'orchestration : `poste` à 32 Gio par défaut, ou `MAX_MEMOIRE` à
 40 Gio, avec la raison. Puis le script, la procédure et ce ticket accordés.
+
+## La décision (c7, 13 novembre 2026)
+
+- **32 Gio pour toute validation** : c'est l'invariant du confineur (`MAX_MEMOIRE`), il ne change pas.
+- **40 Gio reste le défaut de `poste`**, pour les bâtis.
+- Les appelants posent `POSTE_MEM_MAX=32G` devant un `poste lourd … run_e2e.sh`, ou appellent
+  `run_e2e.sh` seul.
+- G l'écrit dans la procédure. Ce ticket se ferme avec ce commit.
