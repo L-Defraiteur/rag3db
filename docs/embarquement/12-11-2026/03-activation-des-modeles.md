@@ -104,7 +104,8 @@ L'absence du champ chez un ancien fournisseur est une information inconnue.
   lib2258 passés/65 ignorés structurels non qualifiés, navigateur40/40 ;
   fournisseurs privés2/2 et physique2/2 sous `validation-uu18g72q`, sparse
   réel1/1 sous `validation-twt84wn7`. Aucun service installé relancé.
-- Union publication/ED en cours de qualification séparée sur branche4 ; les
+- Union publication/ED : F5 verts puis rouge `validation-hex7oup7` sur
+  la carte show_progress (lib2272/1/66), diagnostic confié à ED. Les
   fichiers du producteur, connecteur, activation et observateur sont identiques
   à ceux déjà qualifiés. Aucune extension de preuve physique à un composant modifié.
 
