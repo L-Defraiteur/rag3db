@@ -404,3 +404,8 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   correctif de `check_tickets.py --lot`, « ouvert et fermé »). « À toi » donné, la file étant vide. Le binaire
   posé ce soir garde lucivy 4.3.3 ; la prochaine pose portera 4.3.5. embarquement écrit l'activation distante
   selon ses règles (à relire par Lucie, 8e7e26e47).
+- **20 h 38, recherche a poussé 23d3c24d9** : lucivy-core, ld-lucivy et sparse-vector à **4.3.5** (témoin des mots
+  neufs à travers une fusion, lib entière 2341/2341, navigateur 42/42, ticket des mots perdus fermé, un
+  correctif de `check_tickets.py --lot`). La prochaine pose portera 4.3.5. Lot suivant de recherche : la
+  lecture qui voit un lot à moitié sous la lib entière (la lecture sale sous V2 du 7 novembre, à départager
+  entre le moteur et le témoin).
