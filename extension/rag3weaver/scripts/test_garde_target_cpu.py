@@ -128,6 +128,21 @@ else:
         self.assertFalse((self.root / 'compiled').exists())
         self.assertFalse(self.target.exists())
 
+    def test_wrapper_keeps_resolution_restrictions_during_known_retake(self):
+        self.target.mkdir()
+        (self.target / '.arbre-du-target').write_text('/old/crate\n')
+        fp = self.target / 'debug/.fingerprint/local-0123456789abcdef'
+        fp.mkdir(parents=True)
+        self.env['RAG3WEAVER_TARGET_REPRENDRE'] = '1'
+        result = self.wrapper('check', '--offline', '--locked', '--frozen')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = [json.loads(x) for x in (self.root / 'calls').read_text().splitlines()]
+        metadata = [c for c in calls if c[0] == 'metadata']
+        self.assertEqual(len(metadata), 2)
+        for call in metadata:
+            for flag in ('--offline', '--locked', '--frozen'):
+                self.assertIn(flag, call)
+
 
 if __name__ == '__main__':
     unittest.main()
