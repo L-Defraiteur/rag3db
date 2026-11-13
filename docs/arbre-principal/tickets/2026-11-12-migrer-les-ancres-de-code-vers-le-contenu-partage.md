@@ -1873,3 +1873,13 @@ Aucune base existante de Lucie n'est lue, copiée, migrée ou activée. Pas de G
 de changement des services ou de raccord implicite d'un modèle. Les décisions
 déjà prises, notamment publication distincte de l'empreinte, restent acquises.
 Le ticket reste ouvert jusqu'au résultat physique demandé et à ses preuves.
+
+Préparation physique sur master798ab1aa7 : contrat/API/fixture publiés dans
+`docs/arbre-principal/13-11-2026/01-raccord-physique-index-neuf.md`. Trois
+écarts relus : Catalog impose un modèle, runner n'a pas d'identité résolue
+durable/montage des services d'ingestion, commit_lot précède la durabilitéFTS.
+Proposition de profil BM25sansmodèle sur index neuf, journal unique existant
+qualifié, candidate non servie avant fermeture physique/publication ; entrée
+durable et même plan pour reprise. Fixture8occurrences/6versions/2cellules,
+recette600s à relire avant lourd. Aucun Rust/Cargo/target/index/service créé.
+Recherche seul éditeur de la garde d823 ; diagnostic RO transmis séparément.
