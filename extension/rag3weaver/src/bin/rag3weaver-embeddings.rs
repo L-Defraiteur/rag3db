@@ -124,6 +124,16 @@ fn servir() -> Result<(), String> {
         );
     }
     let demon = demon.burst(rafales);
+    // **Évincable**, seulement si l'activation qui le lance l'a déclaré
+    // (`Residence::ADemande`) : sans bail ni calcul pendant ce délai, il le dit
+    // et sort (code 0). Absente : résident, comme les services posés à la main.
+    let demon = match std::env::var(rag3weaver::daemon::embeddings::EVICTION_VARIABLE).ok().and_then(|v| v.trim().parse::<u64>().ok()) {
+        Some(secondes) => demon.evincable(std::time::Duration::from_secs(secondes), |raison: &str| {
+            eprintln!("▸ {raison}");
+            std::process::exit(0);
+        }),
+        None => demon,
+    };
     // **Un seul démon à relancer** : il peut porter aussi un relecteur et un
     // OCR, sur la même carte et sous la même file. `RAG3WEAVER_RERANK_MODEL`
     // (`msmarco-minilm`, `mmarco-mminilm`, `bge-reranker-v2-m3`) et
