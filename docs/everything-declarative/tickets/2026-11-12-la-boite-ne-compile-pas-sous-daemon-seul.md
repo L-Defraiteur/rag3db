@@ -271,3 +271,8 @@ aucune différence de profil/config ; default=[] relu dans Cargo.toml et aucune
 branche cfgdefault dans src/build.rs. Ledger des tags écrit avant inventaires.
 Absence de nonjugé dans les logs lib/NAV exigée. Préparation renforcée, toujours
 sans Cargo et sans consommation de la fenêtre CREATE.
+
+Pour hôte13 direct sans wrapper/Cargo, pilote07 reprend explicitement les
+réglages natifs capturés du wrapper (ROOT/SHARED/LIBRARY_DIR/INCLUDE_DIR/LD),
+exige lib29 pour les deux répertoires et SHARED=1. Les racines hôte/état restent
+neuves ; aucun environnement personnel ni ancien TMP n'est réutilisé pour hôte.
