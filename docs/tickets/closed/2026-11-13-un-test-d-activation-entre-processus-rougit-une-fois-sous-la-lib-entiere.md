@@ -1,6 +1,6 @@
 # Un test d'activation entre processus rougit une fois sous la lib entière
 
-- **État** : ouvert (13 novembre 2026), relevé par arbre principal pendant le lot du raccord physique.
+- **État** : fermé (13 novembre 2026, embarquement) : dix tours de la lib entière sans rouge de ce test après le port 0 annoncé (00e9fde57) ; ouvert le 13 novembre, relevé par arbre principal pendant le lot du raccord physique.
 - **Pour** : embarquement (décision de c7, 13 novembre 2026).
 - **Famille** : produit
 - **Gravité** : passe rouge sans cause dans le lot qui la joue ; une fois sur sept tours.
@@ -72,6 +72,28 @@ Témoin, rouge sur l'ancien code (qui refusait le port 0) :
 
 Si le rouge de la lib entière revient avec le port 0, la seconde piste (le python lent sous charge,
 5 s de budget) reste ouverte, et ce ticket aussi.
+
+## La fermeture (13 novembre, embarquement)
+
+Le remède (le port 0 annoncé par le fournisseur) est sur master : `2d7d9b165` (le témoin, rouge sur
+l'ancien code : « adresse locale fixe requise ») et `00e9fde57` (le correctif).
+
+Dix tours de la lib entière sur `00e9fde57`, à luciepc, lib
+`rag3db-build-835d5298f80b832377a7caa80ee58d242e3ece23-…`, sans `RAG3WEAVER_EMBED_SERVICE`, sous
+`POSTE_MEM_MAX=32G poste lourd`, sortie entière gardée par tour
+(`~/.cache/rag3weaver-build/activation/tour-<n>.log` à luciepc) :
+`profil_etranger_entre_processus_est_refuse` vert dix fois sur dix. Neuf tours à 2220/0 ; le tour 7 a
+rougi un autre test, `dataflow::migrations::physical_index::tests::native_process_death_recovers_same_program_and_lost_ack_once`
+(« after-lexical-durability », `left: None, right: Some(91)`, fixture gardée à luciepc en
+`/tmp/.tmpGr3L1P`), sans rapport avec l'activation : dit à l'arbre principal.
+
+Avant le correctif, les tests d'activation avaient aussi passé 20 puis 10 fois de suite, et la lib
+entière deux fois.
+
+**Ce que ça prouve et ce que ça ne prouve pas** : à un rouge sur sept, dix tours verts arriveraient
+encore une fois sur cinq par hasard. La course de port est ôtée par construction (plus aucun port
+réservé puis relâché) ; la seconde piste (un python lent sous charge, 5 s de budget) n'est pas
+réfutée. Si ce test rougit encore, rouvrir ce ticket avec le message de la panique.
 
 ## Ce qu'il faut pour le fermer
 
