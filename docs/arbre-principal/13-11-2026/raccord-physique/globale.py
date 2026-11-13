@@ -4,7 +4,7 @@ from pathlib import Path
 import ast, datetime, hashlib, json, mmap, os, re, shlex, shutil, signal, subprocess, sys, tempfile, time
 R=Path('/home/lucied/.cache/rag3weaver-build'); W=R/'cx-wt-raccord-physique-union'; C=W/'extension/rag3weaver'
 P=R/'cx-passe-raccord-physique-union-v1'; T=R/'cx-target-contenu-derive'
-SOURCE=sys.argv[1]; RECEIPT=Path(os.environ['RAG3WEAVER_VALIDATION_RECU']); AUTH=json.loads(RECEIPT.read_text()); DEADLINE=AUTH['echeance']; INITIAL=time.monotonic()
+SOURCE=sys.argv[1]; RECEIPT=Path(os.environ['RAG3WEAVER_VALIDATION_RECU']); AUTH=json.loads(RECEIPT.read_text()); DEADLINE=AUTH['echeance']; INITIAL=DEADLINE-6000; DRIVER_START=time.monotonic()
 F='rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm'
 NATIVE='rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
 PG='cx_phys_2191_20261113_u1'; ROLE='rag3weaver'
@@ -220,11 +220,12 @@ before=events();verdict='ROUGE'
 try:
     import tomllib
     assert tomllib.loads((C/'Cargo.toml').read_text())['features']['default']==[]
+    assert json.loads((RECEIPT.parent/'recette.json').read_text())['delai']==6000
     guard();assert E['DBUS_SESSION_BUS_ADDRESS'],'bus privé commun manquant'
     assert C.resolve()==C and (C/'Cargo.toml').is_file()
     assert any(l.startswith('+ ') for l in git('cherry','origin/master','HEAD').splitlines()),'lot déjà intégré'
     assert int(git('rev-list','--count','HEAD..origin/master'))<=200
-    save('source.json',dict(source=SOURCE,tree=git('rev-parse','HEAD^{tree}'),origin_master_observed_ref=git('rev-parse','origin/master'),started=now(),initial_monotonic=INITIAL,deadline_monotonic=DEADLINE,global_budget_s=6000,cgroup=CG,supervision_receipt=str(RECEIPT),driver_sha256=digest(Path(__file__)),native=NATIVE,features=F,private_pg=PG,cpu_roles=['common','embedder','reranker','ocr'],services='absent',phase_caps=dict(features=2100,minimal=120,compile_large=1500,lib=300,nav=360,cli=180,pg=300,attestation=120,tx_per_suite=900)))
+    save('source.json',dict(source=SOURCE,tree=git('rev-parse','HEAD^{tree}'),origin_master_observed_ref=git('rev-parse','origin/master'),started=now(),initial_monotonic=INITIAL,driver_start_monotonic=DRIVER_START,deadline_monotonic=DEADLINE,global_budget_s=6000,cgroup=CG,supervision_receipt=str(RECEIPT),driver_sha256=digest(Path(__file__)),native=NATIVE,features=F,private_pg=PG,cpu_roles=['common','embedder','reranker','ocr'],services='absent',phase_caps=dict(features=2100,minimal=120,compile_large=1500,lib=900,nav=600,cli=180,pg=300,attestation=120,tx_per_suite=900)))
     state('EN_COURS');limit=budget(120)
     run('supervision',['python3','scripts/confiner_validation.py','verifier'],limit)
     assert Path(E['RAG3WEAVER_PAQUETS_REACT']).is_dir()
@@ -355,6 +356,8 @@ try:
         txnames,txignores=inventory(suite,cli,budget(30),[suite+'::']);assert txnames
         e2e_suite(suite,len(txnames),900)
     sessions=run('pg-sessions',pg+['-d','postgres','-c',f"SELECT pid FROM pg_stat_activity WHERE datname='{PG}';"],budget(15));assert not sessions.strip()
+    fresh_pg=run('pg-identite-avant-dump',pg+['-d','postgres','-c',f"SELECT oid::text || '|' || pg_get_userbyid(datdba) || '|' || shobj_description(oid,'pg_database') FROM pg_database WHERE datname='{PG}';"],budget(15))
+    assert fresh_pg.strip()==oid.strip()+'|'+ROLE+'|owned by arbre 2191 source '+SOURCE
     dump=run('pg-dump',['docker','exec','rag3weaver-pg','pg_dump','-U',ROLE,'-Fc','--dbname',PG],budget(60),raw=True)
     assert dump.stat().st_size>0;save('pg-dump.json',dict(database=PG,sha256=digest(dump),size=dump.stat().st_size,preserved=True,drop_authorized=False))
     backend=Path(artifacts['backend']['actual_path'])

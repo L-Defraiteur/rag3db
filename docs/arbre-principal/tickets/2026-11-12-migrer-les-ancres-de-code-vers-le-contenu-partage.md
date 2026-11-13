@@ -2279,3 +2279,8 @@ invocations (26jugés sous ancien1 +CREATEexact mêmeELF/profil sansceflag).
 PG synthétique neuf seulement, OID et dump à conserver avant retrait ultérieur.
 Aucun runtime global autorisé à cette préparation. Contrôle CPU tickets a trouvé
 un champ Atteignable absent sur ticketRO ; en-tête corrigé avant future F8.
+
+Revue RO recette ed13 favorable Mémoire/Recherche, sansGO : deux métadonnées
+à aligner avant gel (phase_caps lib900/nav600 ; elapsed depuis début réel
+confineur deadline−6000, pas entrée pilote). Corrigées ; identité PG avant
+dump renforcée OID/propriétaire/commentaire. Aucun Cargo/global lancé.
