@@ -134,3 +134,17 @@ Lib29 immuable exportée uniquement pour le troisième jeu. Pas de service,
 modèle, base personnelle, navigateur, PG ni HTTP. check_features conserve les
 cinq jeux antérieurs et en ajoute trois (minimum/daemon/natif-daemon), avec
 no-default-features explicite. Diff à revoir avant globale/master.
+
+### Premier ciblé ad021 : minimum libtests/E2E révèle trois gardes manquantes
+
+Arrêt au premier jeu/check-tests, avant toute exécution de test : deux helpers
+libtests (`Instantane::vieillir`, `Backend::call_tool`) ne servent qu'aux tests
+native, et le seul cas E2E qui inspecte marque_d_ecrivain oublie native.
+Les usages sont tous relus : gardes exactes native ajoutées aux deux helpers
+et à ce cas, aucun allow(warnings), aucune suppression de module/suite, aucune
+exclusion du témoin sous son jeu natif supporté. Logs/supervision rouges dans
+cible-ad021 conservés. Recette corrective suivante identique et republiée avec
+ces changements causaux, dossier neuf cible-gardes-minimum ; pas de replay
+inchangé. Les jeux daemon et natif n'avaient pas été lancés. Le ticket ancien
+la-lib-native-daemon-ne-compile-pas-hors-matrice décrit le même bord code que
+le présent ticket canonique, pas un deuxième lot produit.

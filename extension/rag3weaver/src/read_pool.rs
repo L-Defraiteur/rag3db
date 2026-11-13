@@ -192,7 +192,7 @@ impl Instantane {
     /// Pour les témoins : l'instantané ouvert passe son plafond, sans attendre
     /// (une attente réelle rougit sous charge : un `CREATE` de l'écrivain peut à
     /// lui seul dépasser un plafond court).
-    #[cfg(test)]
+    #[cfg(all(test, feature = "rag3db-native"))]
     fn vieillir(&self) {
         if let Some(c) = &self.conn {
             let mut etat = c.etat.lock().unwrap_or_else(|e| e.into_inner());
