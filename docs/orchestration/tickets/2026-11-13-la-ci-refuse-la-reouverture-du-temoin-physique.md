@@ -85,3 +85,60 @@ primitives du scheduler/pool ; pas de sleep, retry arbitraire ou garde affaiblie
 Le préfixe du garde Recherche (cache/F8/compilations/ledger) est indépendant
 et autorisé sur SDK29 ; il s'arrête avant tout runtime. Le nouveau rouge CI
 reste ouvert et n'est pas remplacé par les verts locaux.
+
+## Relecture Lucivy 4.3.3 et plan CPU publié (13 novembre)
+
+Porteur Lucivy pour le contrat destruction ; ED et coeur-cpp conservent leurs
+périmètres ci-dessus. Source exacte relue : tag `v4.3.3`, commit
+`663975adf11fc4a9d6cadf90e70ee68f6c9db075` du dépôt lucivy.
+
+Constats de source, sans runtime :
+
+- `luciole/src/pool.rs`, `Pool::shutdown` attend uniquement les `Reply<()>`
+  des `ShutdownMsg`. Le protocole documenté exige `ack()` avant `Stop`.
+- `luciole/src/scheduler.rs`, `run_loop_handle_actor` et
+  `run_one_step_actor` retirent le slot et émettent `ActorStopped` alors que
+  `actor_box` est encore une variable locale. Le registre vide et l’événement
+  d’arrêt ne constituent donc pas une preuve de destruction achevée.
+- Le témoin amont de fermeture 4.3.3 précédemment joué autorise jusqu’à deux
+  secondes après `close()` pour observer la libération des shards : il prouve
+  une libération éventuelle, pas une barrière au retour de `close()`.
+
+Préparation publiée, sans qualification : dépôt lucivy, branche
+`cx-lucivy-shutdown-destruction`, worktree
+`/home/lucied/git_workspaces/cx-lucivy-shutdown-destruction`, tête `273b7c6`.
+Diff limité au test `pool::tests::shutdown_waits_for_worker_destruction`,
+aucun correctif de production. `git diff --check` joué et propre ; aucun
+Cargo/rustc ni test exécuté pour cette préparation.
+
+Témoin proposé : un worker CPU reçoit Shutdown, acquitte puis retourne Stop.
+Son destructeur signale son entrée et retient un Arc témoin derrière un canal.
+Un thread externe appelle shutdown. Après l’entrée dans Drop, l’observateur
+attend au plus une seconde un retour prématuré, libère toujours le destructeur,
+puis joint le thread avant d’asserter. Les délais bornent les canaux du test ;
+aucun sleep, DB, GPU, index, SDK ou corpus. Un retour dans l’intervalle où Drop
+est explicitement retenu est un contre-exemple concret au contrat « destruction
+achevée ». L’absence de retour prématuré sur une exécution ne suffit pas, seule,
+à démontrer l’absence universelle de course ; la garantie doit venir du code.
+La voie coopérative reste à couvrir par un témoin distinct si correction.
+
+Commande CPU candidate, uniquement après créneau coordonné C7 :
+`cargo test -j8 -p luciole --lib pool::tests::shutdown_waits_for_worker_destruction -- --exact --nocapture`,
+sous `poste lourd`, avec target unique Lucivy, timeout externe et journal séparé.
+Pas de relance CI, build SDK ni patch de registre. Aucun rouge observé revendiqué
+avant cette exécution.
+
+Correction proposée à concevoir après rouge : primitive de fin de vie portée
+par le scheduler et partagée avec ActorRef, complétée seulement après destruction
+de l’acteur et de sa mailbox, sans tenir le mutex des acteurs pendant Drop.
+Pool::shutdown doit attendre cette primitive via les attentes coopératives
+existantes, et non inférer la fin de vie d’un ack, d’un registre absent ou d’un
+événement ActorStopped. Vérifier aussi les arrêts sans réponse, appels répétés,
+chemins worker et coopératif, panique et interdiction d’attendre sa propre
+fin de vie. Le routeur de ShardedHandle doit employer la même garantie.
+Aucune implémentation de cette primitive n’est livrée à ce stade.
+
+Reste : coordonner puis jouer le témoin CPU publié, relever le résultat exact,
+concevoir/qualifier la barrière si nécessaire, et relier séparément cette course
+au détenteur réel du writer CI. Le ticket reste ouvert ; l’échec D17 n’est
+ni rejoué ni attribué définitivement à Lucivy par cette lecture.
