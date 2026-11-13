@@ -1905,3 +1905,36 @@ Arbre conserve seul le code ; Mémoire et Embar restent en lecture seule.
 Les gardes, leurs 29 témoins et le lot grep restent séparés. Préparation de
 ces témoins puis source/recette publiées avant ciblé ; premier rouge inattendu
 arrêté et diagnostiqué, aucune nouvelle autorisation humaine nécessaire.
+
+
+## Revue du diff physique be9699 — fenêtres avant qualification
+
+Code encore non compilé/non exécuté. Les réserves suivantes appartiennent
+au même contrat, sans nouvelle base ni nouveau lot de migration :
+
+- Création avant P0 : physical_index.rs712 initialise le Catalog ordinaire,
+  enregistre les entités, étend le journal et prépare cellules/FTS avant
+  d'écrire STATE_KEY dans la transaction759. Le refus des ouvertures
+  ordinaires642 ne reconnaît que cette clé. Un processus mort ou une erreur
+  avant sa première écriture laisse donc une base initialisée sans marque
+  d'appartenance physique : l'ouverture Catalog ordinaire peut la prendre
+  pour un legacy. Poser un arrêt enfant entre initialisation et P0, puis
+  exiger refus de toutes portes ordinaires sans nouveaux effets. Établir
+  l'appartenance et l'état incomplet avant les effets de préparation, ou
+  garder la matérialisation inaccessible jusqu'à sa création qualifiée.
+  Aucune adoption implicite d'un reste ne devient permise.
+- Invalidation déjà demandée : Mémoire relève que set_scope5101 peut encore
+  atteindre les UPSERT ensure_scope_nodes sans check_reopen avec un backend
+  poisonNOOP. Étendre le témoin COMMIT ambigu au changement de cellule et
+  exiger MustReopen avec compteur d'écritures inchangé. Les autres portes
+  publiques restent à relire, pas seulement execute_raw/initialize/shutdown.
+- Drop déjà signalé par Arbre : fermer les handles FTS peut remplir le tampon,
+  et BufferedBlobStore::drop retente flush après un échec. L'interdiction
+  d'effets après invalidation doit atteindre le store et ses clones avant
+  fermeture ; un simple if autour de flush dans Catalog::drop est insuffisant.
+  Témoin : save_many échoue puis réussirait, invalider et lâcher Catalog plus
+  dernier clone ; aucune tentative supplémentaire ni notification prête.
+
+Arbre reste seul éditeur. Relectures Mémoire/Recherche/Embar limitées à leurs
+frontières, sans test ni base créés par les relecteurs. Ces constats statiques
+ne sont pas un rouge runtime joué ; source/recette/témoins avant ciblé600.
