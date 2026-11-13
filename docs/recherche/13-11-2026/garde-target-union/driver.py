@@ -243,6 +243,7 @@ def run(name,args,cap,sdk=False,absolute=None):
   else:assert sdk=='script' # Canonical F8 already exports the SDK once.
 
  if name=='cache-reprise':fresh_cache_guard()
+ require(time.monotonic()<limit,'preparation exceeded command budget before launch')
  with path.open('w') as f:
   child=subprocess.Popen(command,cwd=C,env=env,stdout=f,stderr=subprocess.STDOUT)
   while True:

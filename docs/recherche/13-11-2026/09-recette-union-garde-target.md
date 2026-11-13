@@ -129,3 +129,10 @@ extraites AST seulement, faux lancement levé avant Popen, répertoires de
 preuves temporaires. Aucun sous-processus/Cargo ni cible réelle. Source de
 ce delta et recette publiées avant ces tests CPU, aucune ancienne preuve
 produit répétée ni durée/résultat de qualification lourde revendiqués.
+
+Vérification de préparation03896 : trois témoins OK et une erreur du harness
+(C absent du namespace, avant fauxPopen), source et log conservés. Le ticket a
+été complété935c61d27 avant correction. Contexte C/STDOUT complété, budget
+revalidé après contrôle frais et AVANT Popen. Ces témoins corrigés restent
+NON REJOUÉS en attente d'arbitrage CPU, aucun vert4/4 annoncé. AST8 et
+contrôles tickets/diff seuls effectués sur ce nouveau delta.
