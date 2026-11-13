@@ -133,6 +133,13 @@ produit répétée ni durée/résultat de qualification lourde revendiqués.
 Vérification de préparation03896 : trois témoins OK et une erreur du harness
 (C absent du namespace, avant fauxPopen), source et log conservés. Le ticket a
 été complété935c61d27 avant correction. Contexte C/STDOUT complété, budget
-revalidé après contrôle frais et AVANT Popen. Ces témoins corrigés restent
-NON REJOUÉS en attente d'arbitrage CPU, aucun vert4/4 annoncé. AST8 et
+revalidé après contrôle frais et AVANT Popen. À la publication acb9, ces témoins corrigés restaient
+NON REJOUÉS en attente d'arbitrage CPU, aucun vert4/4 annoncé à cette étape. AST8 et
 contrôles tickets/diff seuls effectués sur ce nouveau delta.
+
+Après GO CPU explicite C7 : quatre témoins corrigés de préparation VERT
+en0,023s suracb9f16d3, timeout60/failfast ; aucun vrai Popen, Cargo, rustc,
+index, target réel ou service. Ancien log3OK/1ERROR03896 conservé. Journal
+pilote-acb9-cpu.log horsW. Ce résultat ne qualifie pas la portée4800 et
+ne recycle aucun GO438/03896. Seul ce complément documentaire est ajouté
+après ces témoins ; nouvelle revue exacte du couple requise avant exécution.
