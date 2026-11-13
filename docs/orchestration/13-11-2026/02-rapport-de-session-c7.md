@@ -136,3 +136,9 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   déterministe rouge. **Cœur** : rouge de l'annulation sous pool plein posé, correctif de Codex repris,
   suites en cours. La garde des targets a fait prendre un target neuf à trois sessions (targets d'avant
   sans provenance) : attendu, dit dans la procédure par recherche.
+- **16 h 52, deux atterrissages** : recherche 62b5c5bfa (cinq commits : le témoin du cache, la provenance du
+  cache et la reprise dans le workflow, le témoin sans couleur, le témoin des deux dispositions de cargo,
+  la garde qui les connaît ; run de branche vert, lib 2259/0 en CI ; run de master 43456691914 en cours
+  comme preuve finale) ; ED e140b4e9b (l'installeur de l'atelier dit le suivi, `suivi_d_une_pose`). archi a
+  son tour (le chemin hors racine), puis 96 (M8), puis ED (la fin sans livrable de l'équipier, son lot
+  suivant). recherche passe à arret-du-backend.
