@@ -1,0 +1,26 @@
+{
+  "base": "940ad65bf57461b714ff2671266bf84cb74f6966",
+  "master": "d17a230b14f60fbac59aa1e4ac10510ba5f3c7e2",
+  "package": "67fc6983d3e10748364f55d6e6d00930f1b65507",
+  "rebased_head": "1524b6a383b6e7e7e1556ef6636ce897cc63313b",
+  "range_equal": 13,
+  "guard_product_overlay": {
+    "extension/rag3weaver/scripts/check_features.sh": "100755 blob 2a7572c01a5a689d282dc25252cbfdfde9f859c4",
+    "extension/rag3weaver/scripts/garde_target.sh": "100644 blob 84e7189ad4f3db27057f1c33d0a92495c7258fed",
+    "extension/rag3weaver/scripts/cargo_magasin.sh": "100755 blob 517582b0f3e91bf6192fd58adec0edc5622c858d",
+    "extension/rag3weaver/scripts/test_garde_target_cpu.py": "100644 blob 31fa4ac403821566eb8e83db306299e267836a98",
+    "extension/rag3weaver/run_e2e.sh": "100755 blob bb1a42eda2f5ab8f2395ee86c328d9e0ce3f8419",
+    "extension/rag3weaver/scripts/test_garde_target.sh": "100755 blob 7c8299871d5ef5c01cdc22bc5ae0879d66f0f012",
+    "extension/rag3weaver/scripts/test_journaux_demons_e2e.py": "100644 blob 60a6eb8aa3d688d6c3430d0dec1b5fdbf9a8f288",
+    "extension/rag3weaver/scripts/cargo_garde.py": "100644 blob d21414fe43e134c4a2d7002bfde316750616569c"
+  },
+  "master_protected": 7992,
+  "errors": [],
+  "incoming_product": [
+    "extension/rag3weaver/src/dataflow/migrations/publication.rs",
+    "extension/rag3weaver/src/dataflow/migrations/publication/layers.rs",
+    "extension/rag3weaver/src/dataflow/migrations/publication/layers/tests.rs"
+  ],
+  "runtime": false,
+  "additional_witness": "subsequent cfg(test) HTTP app.js/app.css witness in daemon_host.rs, not covered by the rebase identity claim"
+}

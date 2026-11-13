@@ -1,0 +1,13 @@
+ 1:  29087a73d =  1:  2e518e004 Préparer les témoins CPU de provenance des targets
+ 2:  302f9b827 =  2:  1c98fd48e Refuser les targets sans provenance et garder le lanceur Cargo commun
+ 3:  599109a86 =  3:  cd2aa73d0 Raccorder les compilations des passes à la garde de destination Cargo
+ 4:  e7939e995 =  4:  6fffb3675 Consigner les preuves CPU et adapter la fixture du lanceur e2e
+ 5:  aa28b6f68 =  5:  88c2c289b Conserver les restrictions de résolution dans les métadonnées Cargo
+ 6:  7cb7dde8f =  6:  a8aacd199 Publier le verdict CPU du garde de provenance des targets
+ 7:  d28fcf7ea =  7:  ef0f2d69a Eprouver les restrictions Cargo pendant une reprise connue
+ 8:  698b952ab =  8:  4ebf0d0f7 Preserver les restrictions de resolution dans la garde de reprise
+ 9:  bdffcef07 =  9:  c8cadc728 Preparer la qualification isolee du garde et des gabarits reels
+10:  f107a3a0d = 10:  fb3b9e1df Conserver le rouge de profil du pilote et les preuves de provenance
+11:  a5e678b05 = 11:  a8148ab1e Preparer le runtime manquant avec des racines etat distinctes
+12:  95718a6dc = 12:  4ed061de5 Publier la qualification ciblee composite du garde target
+13:  67fc6983d = 13:  1524b6a38 Corriger la taille mesuree de l ELF du garde
