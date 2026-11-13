@@ -707,3 +707,4 @@ Décision : pas de lot vues chez lucivy maintenant ; 2b-B s'appuie sur `allowed_
 ## Vers 00 h 0x — tty-5 sur master
 
 - **tty a poussé tty-5** : master = ec4f7aa6d ; rejeu court à luciepc sous **repli moteur ancien dit** (lot sans effet sur le moteur, e93710f36) : crate 39/39 et 10/10, e2e_tty 4/4, **catalogue_gabarits 12/12** (le correctif de hotfixs confirmé) au second essai — au premier, 5/12 : **le service bge-m3 de luciepc (7879) ne répondait plus pendant la passe**, revenu seul, suite rejouée seule avec EMBED_SERVICE=7878,7879 ; à surveiller, ticket pour embarquement si ça se reproduit. Dernier pas par la garde (code apporté vide, « garde à jour ») ; rebase sans détection de renommage de dossiers (docs/tty/tickets/ vidé par la fermeture de hotfixs). Page à suivre, puis tty dort.
+- tty : page de tty-5, README et nouveauté (d7a8245c9) ; ménage fait (worktrees, branches locales, targets 176 Mo ici et 11 011 Mo à luciepc) ; tty dort.
