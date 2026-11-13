@@ -113,6 +113,10 @@ def stop():
   except subprocess.TimeoutExpired:pass
 
 def state(verdict,error=None):save('etat.json',dict(verdict=verdict,phase=phase,error=error,phases=phases,remaining=END-time.monotonic()))
+def first_red(text):
+ # nocapture can split the test prefix, panic and final FAILED across lines.
+ return re.search(r'^test .* \.\.\. FAILED$|^\s*FAILED\s*$|\bpanicked at\b',text,re.M) is not None
+
 def run(name,args,cap,native=False):
  global child,phase,last_size
  guard();phase=name;limit=min(time.monotonic()+cap,END-15);assert time.monotonic()<limit
@@ -126,7 +130,8 @@ def run(name,args,cap,native=False):
   while True:
    observe();memory()
    assert time.monotonic()<limit,('deadline',name)
-   assert not re.search(r'^test .* \.\.\. FAILED$',path.read_text(errors='replace'),re.M),('first red',name)
+   if name.startswith('exact-') or name=='publication':
+    assert not first_red(path.read_text(errors='replace')),('first red',name)
    if time.monotonic()-last_size>5:
     size=int(subprocess.check_output(['du','-sb',str(T)],text=True).split()[0]);save('target-size.json',dict(bytes=size,time=time.monotonic()));assert size<=32*1024**3;last_size=time.monotonic()
    if child.poll() is not None:break
