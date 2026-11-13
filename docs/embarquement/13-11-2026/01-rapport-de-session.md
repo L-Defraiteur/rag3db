@@ -30,7 +30,10 @@ Le target unique possédé est `~/.cache/rag3weaver-build/target-spans`, plafond
   (`validation-uu18g72q`), sparse réel1/1 (`validation-twt84wn7`).
 - Union Pub/ED : recette `qualifier-union.py`, portée commune2400 s après
   acquisition lourd, CPU quatre rôles, fixture PG neuve, F5/lib/NAV et quatre
-  suites catalogue3/1/18/3. En cours ; ne pas annoncer ce verdict avant preuve.
+  suites catalogue3/1/18/3. Rouge `validation-hex7oup7` : F5/5 puis lib2272 passés/1 échec/66 ignorés.
+  `a_progress_card_reaches_the_page_and_never_the_model` : deuxième carte
+  show_progress absente ; pas de NAV/tx joués, restes[], bus et fixture nettoyés.
+  ED a pris le diagnostic ciblé ; la course fin d’index reste une hypothèse.
 
 Le code activation/serveur, ModelSource, fournisseur, consommateur et observateur
 est identique entre branches3/4. L'orchestration demande de conserver leurs
