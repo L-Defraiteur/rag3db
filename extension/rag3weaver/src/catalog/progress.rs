@@ -34,8 +34,10 @@ pub struct TableProgress {
 /// L'avancement de l'index, toutes tables à vecteurs confondues.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IndexProgress {
-    /// Le modèle dont on compte les vecteurs.
-    pub model: String,
+    /// Le modèle configuré dont on compte les vecteurs. None est une absence
+    /// de capacité, jamais un nom de modèle ni une dimension sentinelle.
+    #[serde(default)]
+    pub model: Option<String>,
     pub tables: Vec<TableProgress>,
     /// Ce processus a encore des écritures en file : le plein texte de ces
     /// lignes-là n'est pas prêt.
@@ -114,14 +116,13 @@ impl IndexProgress {
         };
         let chunks = self.chunks();
         let missing = self.dense_missing();
-        let mut line = if !self.vectors_declared {
-            format!("{text} · sans vecteurs (non déclarés)")
-        } else if missing == 0 {
-            format!("{text} · vecteurs prêts ({chunks} morceaux, {})", self.model)
-        } else {
-            format!("{text} · vecteurs {} sur {chunks} ({} %, {})", chunks - missing.min(chunks), self.dense_percent(), self.model)
+        let mut line = match (self.vectors_declared, self.model.as_deref()) {
+            (false, _) => format!("{text} · sans vecteurs (non déclarés)"),
+            (true, None) => format!("{text} · vecteurs indisponibles (aucun modèle configuré)"),
+            (true, Some(model)) if missing == 0 => format!("{text} · vecteurs prêts ({chunks} morceaux, {model})"),
+            (true, Some(model)) => format!("{text} · vecteurs {} sur {chunks} ({} %, {model})", chunks - missing.min(chunks), self.dense_percent()),
         };
-        if missing > 0 {
+        if missing > 0 && self.model.is_some() {
             if let Some(rate) = rate {
                 let left = rate.duration_for((missing * chars_per_chunk) as u64).as_secs();
                 line.push_str(&match left {
@@ -316,7 +317,7 @@ impl Catalog {
         // Rien ne lui manque : elle ne déclare pas de vecteurs.
         let rows = self.count_rows_of(entity);
         Ok(IndexProgress {
-            model: self.current_embedding_entry().name.clone(),
+            model: self.current_embedding_entry().map(|entry| entry.name),
             tables: vec![TableProgress { table: entity.to_string(), chunks: rows, dense_missing: 0, sparse_missing: None }],
             writes_pending: self.pending.total_count(),
             relations_pending: self.relations_pending()?,
@@ -354,7 +355,7 @@ impl Catalog {
             });
         }
         Ok(IndexProgress {
-            model: self.current_embedding_entry().name.clone(),
+            model: self.current_embedding_entry().map(|entry| entry.name),
             tables,
             writes_pending: self.pending.total_count(),
             relations_pending: self.relations_pending()?,
@@ -596,7 +597,7 @@ mod tests {
 
     fn progress(chunks: usize, dense_missing: usize, sparse_missing: Option<usize>, writes_pending: usize) -> IndexProgress {
         IndexProgress {
-            model: "granite-278m".into(),
+            model: Some("granite-278m".into()),
             tables: vec![TableProgress { table: "Scope_Chunk".into(), chunks, dense_missing, sparse_missing }],
             writes_pending,
             relations_pending: None,

@@ -75,7 +75,7 @@ fn sans_service_l_index_est_en_plein_texte_et_la_dette_se_lit() {
 
     // 2. La dette se lit, contre le modèle attendu.
     let progres = catalog.index_progress_for(SCOPE).expect("avancement");
-    println!("▸ modèle {} : {} morceaux, {} sans vecteur", progres.model, progres.chunks(), progres.dense_missing());
+    println!("▸ modèle {} : {} morceaux, {} sans vecteur", progres.model.as_deref().expect("modèle attendu configuré"), progres.chunks(), progres.dense_missing());
     assert!(progres.chunks() > 0, "des morceaux ont été écrits");
     assert_eq!(progres.dense_missing(), progres.chunks(), "aucun vecteur écrit : toute la dette reste");
 
