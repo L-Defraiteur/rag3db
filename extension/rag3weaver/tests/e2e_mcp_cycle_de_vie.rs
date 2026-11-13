@@ -555,6 +555,7 @@ fn un_backend_de_code_sans_service_s_ouvre_dans_l_hote() {
 /// l'hôte et s'y attache.
 #[test]
 #[ignore = "e2e : un écrivain autonome, puis le client MCP"]
+#[cfg(feature = "rag3db-native")]
 fn un_client_ne_lance_pas_d_hote_sur_une_base_tenue_par_un_ecrivain_autonome() {
     let tmp = tempfile::tempdir().unwrap();
     let manifeste = boutique(tmp.path());
