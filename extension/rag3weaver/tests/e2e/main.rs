@@ -118,6 +118,8 @@ mod e2e_demon_embeddings;
 mod e2e_demon_hote;
 #[path = "../e2e_drain_unified.rs"]
 mod e2e_drain_unified;
+#[path = "../e2e_embarqueur_a_la_demande.rs"]
+mod e2e_embarqueur_a_la_demande;
 #[path = "../e2e_embarqueur_absent.rs"]
 mod e2e_embarqueur_absent;
 #[path = "../e2e_entites_derivees.rs"]
