@@ -119,6 +119,9 @@ worktree et un commit deviennent des couches et des générations.
     versionné. Les résultats sont exacts pour l'instantané, mais le rappel n'est pas celui d'un index
     figé à cet instantané. Si une vue exige un top-k exact, il faut un repli exhaustif sous le masque
     quand le rappel compte.
+  - **Ce que cela change** : le masque des vues dans le dense (2b-B) n'attend pas de lot moteur ni
+    de lib neuve. La lecture sous instantané est déjà là ; il reste à appliquer le masque avant le
+    top-k, avec un repli exhaustif sous le masque quand un top-k exact compte.
 - **Le plein texte suit le même modèle que le graphe et les vecteurs** (demande de Lucie) : un
   document lucivy par version de scope, une génération comme ensemble d'identifiants tenu par le
   graphe, une vue comme requête plus masque **avant** le top-k. Ce que lucivy en dit (lu dans le
