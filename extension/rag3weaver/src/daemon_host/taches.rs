@@ -697,6 +697,23 @@ impl DaemonHost {
             sans_depot,
             git_init_fait,
         };
+        // **La tâche devient une couche** (liaison branche → couche, décision de Lucie du
+        // 13 novembre : « tout ce que touche l'agent, ça reste indexé ») : dans chaque dépôt de la
+        // tâche, sa branche entre aux suivies, sur la branche extraite à l'ouverture (sa parente
+        // déclarée), à son commit de départ. Une erreur ici se dit, sans défaire la tâche.
+        if let Err(e) = self.with_backend(&hote, |b| -> Result<(), String> {
+            let cat = b.catalog.lock().unwrap_or_else(|p| p.into_inner());
+            for v in tache.volets() {
+                let id = crate::couches::identifiant_du_depot(v.depot)?;
+                let extraite = git(v.depot, &["rev-parse", "--abbrev-ref", "HEAD"])?;
+                let parente = if extraite.is_empty() || extraite == "HEAD" { crate::couches::ancre_du_depot(v.depot)? } else { extraite };
+                crate::couches::ajouter_une_branche_suivie(&cat, &id, v.depot, &tache.branche)?;
+                crate::couches::declarer_la_parente(&cat, &id, &tache.branche, &parente, v.depart)?;
+            }
+            Ok(())
+        }).and_then(|r| r) {
+            eprintln!("[rag3weaver] tâche « {nom} » : la couche de sa branche n'est pas déclarée ({e})");
+        }
         // Inscrite avant l'ouverture : `open_slot` y lit ses surcharges.
         self.taches.lock().unwrap_or_else(|p| p.into_inner()).insert(manifest.clone(), tache.clone());
         let ouverte = self.hosted(&manifest).and_then(|h| self.with_backend(&h, |_| ()));
@@ -723,6 +740,19 @@ impl DaemonHost {
         }
         self.backends.lock().unwrap_or_else(|p| p.into_inner()).remove(&tache.manifest);
         self.taches.lock().unwrap_or_else(|p| p.into_inner()).remove(&tache.manifest);
+        // La couche de la tâche sort des suivies et se marque fermée ; rien n'est effacé ici (la
+        // fermeture de ses générations est un autre lot). Dit, sans empêcher la fermeture.
+        if let Ok(hote) = self.hote_par_id(parent) {
+            if let Err(e) = self.with_backend(&hote, |b| -> Result<(), String> {
+                let cat = b.catalog.lock().unwrap_or_else(|p| p.into_inner());
+                for v in tache.volets() {
+                    crate::couches::fermer_une_branche_suivie(&cat, &crate::couches::identifiant_du_depot(v.depot)?, &tache.branche)?;
+                }
+                Ok(())
+            }).and_then(|r| r) {
+                eprintln!("[rag3weaver] tâche « {nom} » : la couche de sa branche n'est pas fermée ({e})");
+            }
+        }
         for v in tache.volets() {
             git(v.depot, &["worktree", "remove", "--force", &v.arbre.to_string_lossy()])?;
             git(v.depot, &["branch", "-D", &tache.branche])?;

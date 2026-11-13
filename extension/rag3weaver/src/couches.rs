@@ -209,40 +209,64 @@ pub fn declarer_la_parente(
 /// premier, trié, s'il y en a plusieurs). Il est le même sur deux postes et dans tous les worktrees,
 /// indépendant du chemin et du remote ; le chemin n'est qu'un attribut d'affichage.
 pub fn identifiant_du_depot(racine: &Path) -> Result<String, String> {
-    let _ = racine;
-    Err("identifiant_du_depot : à écrire".into())
+    let mut racines: Vec<String> = git(racine, &["rev-list", "--max-parents=0", "HEAD"])?
+        .lines()
+        .map(str::to_string)
+        .filter(|l| !l.is_empty())
+        .collect();
+    racines.sort();
+    racines.into_iter().next().ok_or_else(|| format!("{} : aucun commit racine", racine.display()))
 }
 
 /// L'ancre d'un dépôt sans déclaration : `main`, sinon `master`, sinon la branche extraite.
 pub fn ancre_du_depot(racine: &Path) -> Result<String, String> {
-    let _ = racine;
-    Err("ancre_du_depot : à écrire".into())
+    let pointes = pointes_des_branches(racine)?;
+    for nom in ["main", "master"] {
+        if pointes.contains_key(nom) {
+            return Ok(nom.to_string());
+        }
+    }
+    let extraite = git(racine, &["rev-parse", "--abbrev-ref", "HEAD"])?;
+    if extraite.is_empty() || extraite == "HEAD" {
+        return Err(format!("{} : ni main, ni master, et HEAD détachée — l'ancre est à déclarer", racine.display()));
+    }
+    Ok(extraite)
 }
 
 /// **Ajouter une branche aux suivies** d'un dépôt, sans rien perdre de la déclaration ; sans
 /// déclaration, l'ancre est celle du dépôt ([`ancre_du_depot`]).
 pub fn ajouter_une_branche_suivie(catalog: &crate::catalog::Catalog, depot: &str, racine: &Path, branche: &str) -> Result<(), String> {
-    let _ = (catalog, depot, racine, branche);
-    Ok(())
+    let mut d = match branches_suivies(catalog, depot)? {
+        Some(d) => d,
+        None => BranchesSuivies { ancre: ancre_du_depot(racine)?, suivies: Vec::new() },
+    };
+    d.suivies.push(branche.to_string());
+    declarer_les_branches_suivies(catalog, depot, &d.ancre, &d.suivies)
 }
 
 /// **Retirer une branche des suivies** et marquer sa couche fermée. Rien n'est effacé : son
 /// estampille reste, la fermeture de la couche (ses générations) est un autre lot.
 pub fn fermer_une_branche_suivie(catalog: &crate::catalog::Catalog, depot: &str, branche: &str) -> Result<(), String> {
-    let _ = (catalog, depot, branche);
-    Ok(())
+    if let Some(mut d) = branches_suivies(catalog, depot)? {
+        d.suivies.retain(|b| b != branche);
+        declarer_les_branches_suivies(catalog, depot, &d.ancre, &d.suivies)?;
+    }
+    catalog.persist_meta_key(&cle_de_fermeture(depot, branche), "fermée").map_err(|e| e.to_string())
+}
+
+/// La clé de `_catalog_meta` qui marque une couche fermée.
+fn cle_de_fermeture(depot: &str, branche: &str) -> String {
+    format!("couche_fermee:{depot}:{branche}")
 }
 
 /// La couche de `branche` est-elle marquée fermée ?
 pub fn couche_fermee(catalog: &crate::catalog::Catalog, depot: &str, branche: &str) -> Result<bool, String> {
-    let _ = (catalog, depot, branche);
-    Ok(false)
+    Ok(catalog.read_meta_key(&cle_de_fermeture(depot, branche)).map_err(|e| e.to_string())?.is_some_and(|v| !v.is_empty()))
 }
 
 /// La parente estampillée d'une couche, si elle en a une.
 pub fn parente_estampillee(catalog: &crate::catalog::Catalog, depot: &str, branche: &str) -> Result<Option<Parente>, String> {
-    let _ = (catalog, depot, branche);
-    Ok(None)
+    estampille(catalog, depot, branche)
 }
 
 /// **Les couches d'un dépôt, résolues** : les branches suivies déclarées, chacune sur sa parente,
