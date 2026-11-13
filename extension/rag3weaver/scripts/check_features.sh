@@ -47,23 +47,22 @@ else
   exporter_la_lib || exit 2
 fi
 [ -n "${CHECK_FEATURES_LOGS:-}" ] && mkdir -p "$CHECK_FEATURES_LOGS"
-echec=0
-rouges=()
+refuser() {
+  echo "CHECK_FEATURES ROUGE $1"
+  exit 1
+}
 # Les tickets : chaque en-tête complet, et son état d'accord avec son dossier
 # (l'index se génère, il ne se compte plus à la main) ; puis le témoin du contrôle.
 if ! python3 "$ICI/scripts/check_tickets.py" "$ICI/../.."; then
-  echec=1
-  rouges+=("tickets")
+  refuser tickets
 fi
 if ! python3 "$ICI/scripts/test_check_tickets.py" > /dev/null 2>&1; then
-  echec=1
-  rouges+=("test_check_tickets")
+  refuser test_check_tickets
 fi
 # Le lanceur possède et libère son état de fixture ; le garde doit rester
 # rouge pour les résidus étrangers et les défauts de nettoyage.
 if ! timeout 60 bash "$ICI/scripts/test_etat_suite_e2e.sh"; then
-  echec=1
-  rouges+=("test_etat_suite_e2e")
+  refuser test_etat_suite_e2e
 fi
 for jeu in "${JEUX[@]}"; do
   nom="${jeu:-sans-feature}"
@@ -73,17 +72,11 @@ for jeu in "${JEUX[@]}"; do
     echo "VERT  $nom"
   else
     echo "ROUGE $nom   (cargo check --tests --no-default-features --features $jeu)"
-    echec=1
-    rouges+=("$jeu")
+    refuser "$nom"
   fi
 done
 # **La conclusion en une ligne, la dernière** : une commande de push lit
 # celle-ci et le code de sortie, jamais un compte de lignes VERT (le nombre de
 # jeux change ; quatre verts et un rouge sont passés pour un vert le
 # 11 octobre au soir).
-if [ $echec -eq 0 ]; then
-  echo "CHECK_FEATURES VERT ${#JEUX[@]}/${#JEUX[@]}"
-else
-  echo "CHECK_FEATURES ROUGE ${rouges[*]}"
-fi
-exit $echec
+echo "CHECK_FEATURES VERT ${#JEUX[@]}/${#JEUX[@]}"

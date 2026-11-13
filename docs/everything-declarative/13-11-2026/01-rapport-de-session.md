@@ -21,3 +21,8 @@ aux deux postes ; nettoyagestrue/restes[] et quiescence[] vérifiés. Les rouges
 intermédiaires restent explicites dans le ticket ; pas de vert inventé de portée.
 C7 exige globale6000 complète sansPG/Vertex après rebaseGREP ; préparation en
 cours, aucun tour master. Voir knowledge-dump03 et recette ciblée02.
+
+Revue C7 favorable204/4cc ; globale complète6000 autorisée après publication
+recette04/05/06, sur unionGREP déjà livrée. Préparation scripts Archi adaptée,
+F8fail-fast au premier gate/jeu rouge, lib entière/NAV40/lect27distincts+CREATE
+exact+hôte13/filets sans PG/Vertex. Aucun ciblé Rust inchangé à rejouer.
