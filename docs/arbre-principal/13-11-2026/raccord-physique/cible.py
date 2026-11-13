@@ -109,7 +109,7 @@ try:
     wrapper=['bash','-c','source "$1"; exporter_la_lib || exit 2; shift; exec "$@"','native-export',str(C/'scripts/lib_du_magasin.sh'),str(binary)]
     listing=run('inventory',wrapper+['--list','--format','terse'],cwd=Path('/var/tmp'))
     expected={line.removesuffix(': test') for line in listing.splitlines() if line.endswith(': test') and line.startswith('dataflow::migrations::physical_index::tests::')}
-    assert len(expected)==9,expected
+    assert len(expected)==10,expected
     cpu=['lexical_catalog_has_no_dense_services_signature_or_debt','lexical_catalog_refuses_dense_declarations_before_registration','lexical_catalog_refuses_sparse_provider_before_initialization_effects','commit_unknown_invalidates_catalog_even_if_backend_poison_is_noop','committed_rows_with_failed_fts_never_announce_readiness_or_reuse_handle']
     for name in cpu:
         exact='catalog::tests::'+name
@@ -132,7 +132,7 @@ try:
     result=run('physical',wrapper+['dataflow::migrations::physical_index::tests::','--show-output','--test-threads=1'],cwd=Path('/var/tmp'))
     passed=set(re.findall(r'^test (.*?)(?: - should panic)? \.\.\. ok$',result,re.M))
     assert expected<=passed,(expected-passed)
-    assert re.search(r'test result: ok\. 9 passed; 0 failed; 0 ignored;',result)
+    assert re.search(r'test result: ok\. 10 passed; 0 failed; 0 ignored;',result)
     witnesses=[json.loads(line.split('PHYSICAL_WITNESS ',1)[1]) for line in result.splitlines() if 'PHYSICAL_WITNESS ' in line]
     assert {w['stage'] for w in witnesses}=={'normal-reopen','before-logical-commit','after-logical-commit','before-logical-commit:2','after-logical-commit:2','after-lexical-durability','after-publication'}
     assert all(w['occurrences']==8 and w['content_versions']==6 and w['dense_models']==0 for w in witnesses)
@@ -143,7 +143,7 @@ try:
     assert mappings,'no native library mapping actually observed'
     assert size()<=32*1024**3
     save('witnesses.json',witnesses)
-    save('result.json',dict(verdict='VERT',source=SOURCE,elapsed_s=time.monotonic()-START,deadline=DEADLINE,passed_functions=18,judged_scenarios=17,native_judges=8,native_helper_functions=1,child_death_runs=8,ignored=0,target_bytes=size(),native=NATIVE))
+    save('result.json',dict(verdict='VERT',source=SOURCE,elapsed_s=time.monotonic()-START,deadline=DEADLINE,passed_functions=19,judged_scenarios=18,native_judges=9,native_helper_functions=1,child_death_runs=8,ignored=0,target_bytes=size(),native=NATIVE))
 except BaseException as error:
     save('result.json',dict(verdict='ROUGE',source=SOURCE,error=repr(error),elapsed_s=time.monotonic()-START,deadline=DEADLINE))
     raise
