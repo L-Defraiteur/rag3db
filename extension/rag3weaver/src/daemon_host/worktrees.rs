@@ -24,6 +24,8 @@ use crate::dataflow::worktree_nodes::{WorktreeAnswer, WorktreeHost};
 /// L'hôte des worktrees que l'hôte pose sur chaque backend qu'il ouvre.
 pub struct HoteDesWorktrees {
     pub hote: Weak<DaemonHost>,
+    /// Le backend de la conversation qui appelle : ses accords sont les siens.
+    pub backend: String,
 }
 
 impl HoteDesWorktrees {
@@ -711,19 +713,19 @@ impl WorktreeHost for HoteDesWorktrees {
     }
 
     fn read(&self, racine: Option<&Path>, path: &str, offset: usize, length: usize) -> Result<WorktreeAnswer, String> {
-        self.hote()?.atelier_lire(racine, path, offset, length).map(WorktreeAnswer::from)
+        self.hote()?.atelier_lire(racine, path, offset, length, Some(&self.backend)).map(WorktreeAnswer::from)
     }
 
     fn read_scope(&self, racine: Option<&Path>, name: &str, path: &str) -> Result<WorktreeAnswer, String> {
-        self.hote()?.atelier_lire_scope(racine, name, path).map(WorktreeAnswer::from)
+        self.hote()?.atelier_lire_scope(racine, name, path, Some(&self.backend)).map(WorktreeAnswer::from)
     }
 
     fn ask(&self, racine: Option<&Path>, path: &str, mode: &str, reason: &str) -> Result<WorktreeAnswer, String> {
-        self.hote()?.atelier_demander(racine, path, mode, reason)
+        self.hote()?.atelier_demander(racine, path, mode, reason, Some(&self.backend))
     }
 
     fn edit(&self, racine: Option<&Path>, path: &str, edition: crate::dataflow::fichier_nodes::Edition) -> Result<WorktreeAnswer, String> {
-        self.hote()?.atelier_ecrire(racine, path, edition).map(WorktreeAnswer::from)
+        self.hote()?.atelier_ecrire(racine, path, edition, Some(&self.backend)).map(WorktreeAnswer::from)
     }
 
     fn list(&self) -> Result<WorktreeAnswer, String> {

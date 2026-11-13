@@ -597,7 +597,7 @@ impl DaemonHost {
             #[cfg(feature = "code")]
             if let Some(soi) = self.soi.get() {
                 if let Some(b) = slot.as_ref() {
-                    b.poser_l_hote_des_worktrees(Arc::new(worktrees::HoteDesWorktrees { hote: soi.clone() }));
+                    b.poser_l_hote_des_worktrees(Arc::new(worktrees::HoteDesWorktrees { hote: soi.clone(), backend: hosted.id.clone() }));
                     b.poser_l_hote_des_invocations(Arc::new(invocation::HostedInvocations { host: soi.clone() }));
                 }
             }
