@@ -346,12 +346,7 @@ impl Rag3dbConnection {
         let cle = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
         let debut = std::time::Instant::now();
         loop {
-            let tenues = OPEN_FOR_WRITING
-                .lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .get(&cle)
-                .map(|w| w.database.strong_count())
-                .unwrap_or(0);
+            let tenues = live_writer_references(&cle);
             let reste = REOPEN_WAIT.saturating_sub(debut.elapsed());
             if tenues == 0 {
                 crate::build_check::check_loaded().map_err(DbError::ConnectionError)?;
@@ -1036,6 +1031,7 @@ fn live_writer_references(path: &Path) -> usize {
 /// still checkpoints and writes the files while it dies. A caller that needs
 /// the files at rest (a byte comparison, a copy) waits here first. Returns the
 /// references still held when the wait runs out.
+#[cfg(test)]
 pub(crate) fn wait_writer_released(path: &Path, wait: std::time::Duration) -> Result<(), usize> {
     let debut = std::time::Instant::now();
     loop {
