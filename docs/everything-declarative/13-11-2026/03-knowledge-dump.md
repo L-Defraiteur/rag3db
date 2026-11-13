@@ -74,3 +74,11 @@ avec contexte/cause. Quatre nouveaux témoins vrais hôtes/dépôts écrits, non
 compilés. Noms des deux dépôts distincts pour l'inscription code_tree (nom par
 basename). Attendre revue/coordination avant toute compilation/ressource lourde ;
 pas d'intégration code pendant la globale physique, pas de réemploi ancien target.
+
+
+### Qualification read_scope R4
+
+Source461e8b868 : cinq ciblés1/0/0, module20/0/3NAVattendus et F8canonique8/8,
+superviseur/finaliseur verts.306fichiers SHA deux postes ; rouges R2/R3 gardés.
+[Preuves et limites](05-preuves-read-scope.md). WT PC r4/source461e figés ;
+aucun master/retrait. Suite : revue C7, candidat exact et livraison coordonnée.

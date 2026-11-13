@@ -97,3 +97,11 @@ panne usages, succès A puis panne B, ambiguïté/absence complètes) ; aucune
 compilation ni exécution. Ancien test et fixtures physiques inchangés.
 Diff publié avant revue ; aucun Cargo/lourd avant coordination, aucun master
 produit pendant la qualification physique. Le ticket reste ouvert.
+
+
+### Qualification read_scope R4
+
+Source461e8b868 : cinq ciblés1/0/0, module20/0/3NAVattendus et F8canonique8/8,
+superviseur/finaliseur verts.306fichiers SHA deux postes ; rouges R2/R3 gardés.
+[Preuves et limites](05-preuves-read-scope.md). WT PC r4/source461e figés ;
+aucun master/retrait. Suite : revue C7, candidat exact et livraison coordonnée.
