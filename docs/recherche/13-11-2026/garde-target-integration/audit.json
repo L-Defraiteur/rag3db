@@ -1,0 +1,56 @@
+{
+  "app_qualified": "9ec421069320b2f0cca4099fa27f83059e944de9",
+  "proofs": "cdcc032dfde186f9b33fb8d9804ca50fcf2c1a4b",
+  "master_fetched": "994e8fc9220c15f55886fd08c8543040aab14ffd",
+  "rebased_head": "cb8642e7dccdc5a18502e5c85d0e4a0b952ede58",
+  "product_outside_docs_entries": 6783,
+  "product_difference_count": 0,
+  "product_intended_paths": [
+    "extension/rag3weaver/run_e2e.sh",
+    "extension/rag3weaver/scripts/cargo_garde.py",
+    "extension/rag3weaver/scripts/cargo_magasin.sh",
+    "extension/rag3weaver/scripts/check_features.sh",
+    "extension/rag3weaver/scripts/garde_target.sh",
+    "extension/rag3weaver/scripts/test_garde_target.sh",
+    "extension/rag3weaver/scripts/test_garde_target_cpu.py",
+    "extension/rag3weaver/scripts/test_journaux_demons_e2e.py",
+    "extension/rag3weaver/src/daemon_host.rs"
+  ],
+  "master_protected_entries": 8008,
+  "master_protected_differences": 0,
+  "master_entrant_paths": [
+    "docs/arbre-principal/11-11-2026/03-contrats-et-lots-des-vues.md",
+    "docs/arbre-principal/13-11-2026/28-plan-visibilite-couches-2b.md",
+    "docs/arbre-principal/13-11-2026/2b-sources-relues.json",
+    "docs/arbre-principal/tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md",
+    "docs/arbre-principal/tickets/2026-11-13-appliquer-la-visibilite-des-couches-avant-les-requetes-des-vues.md",
+    "docs/coeur-cpp/13-11-2026/01-ci-writer-d17-provenance-et-liberation.md",
+    "docs/coeur-cpp/13-11-2026/preuves/ci-writer-d17-extraits.log",
+    "docs/coeur-cpp/13-11-2026/preuves/sdk29-garde-comparee.json",
+    "docs/lucivy/13-11-2026/preuves/shutdown-compilation.log",
+    "docs/lucivy/13-11-2026/preuves/shutdown-enfants.json",
+    "docs/lucivy/13-11-2026/preuves/shutdown-entree-refusee.log",
+    "docs/lucivy/13-11-2026/preuves/shutdown-recette.json",
+    "docs/lucivy/13-11-2026/preuves/shutdown-rouge-enfants.json",
+    "docs/lucivy/13-11-2026/preuves/shutdown-rouge-recette.json",
+    "docs/lucivy/13-11-2026/preuves/shutdown-rouge-tdd.log",
+    "docs/lucivy/13-11-2026/preuves/shutdown-rouge-verdict.json",
+    "docs/lucivy/13-11-2026/preuves/shutdown-verdict.json",
+    "docs/orchestration/tickets/2026-11-13-la-ci-refuse-la-reouverture-du-temoin-physique.md",
+    "docs/recherche/tickets/2026-11-11-un-target-repris-embarque-les-gabarits-d-un-autre-worktree.md"
+  ],
+  "master_entrants_non_docs": [],
+  "ticket_merge": "single conflict first patch; both master C7 and full lot history preserved",
+  "range_diff": {
+    "total": 33,
+    "equal": 32,
+    "changed": 1
+  },
+  "closure": "single garde ticket moved to docs/tickets/closed, links repaired; CI and 2b left open",
+  "no_runtime_rerun": true,
+  "candidate_documentary_changes": [
+    "docs/orchestration/11-11-2026/01-rapport-de-session.md",
+    "docs/recherche/tickets/2026-11-11-un-target-repris-embarque-les-gabarits-d-un-autre-worktree.md"
+  ],
+  "ticket_merge_master_paragraph_preserved": true
+}

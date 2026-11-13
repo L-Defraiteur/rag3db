@@ -533,7 +533,7 @@ restent explicitement en cours. Les chiffres sont datés et leurs protocoles ré
 - Le premier navigateur rouge utilisait deux anciens gabarits UI sur212. L’ancien ELF est
   conservé ; une régénération sans modification de source a produit les212 bons gabarits,
   puis les deux ciblés inchangés et les36 navigateurs verts. Le
-  [ticket de provenance](../../recherche/tickets/2026-11-11-un-target-repris-embarque-les-gabarits-d-un-autre-worktree.md)
+  [ticket de provenance](../../tickets/closed/2026-11-11-un-target-repris-embarque-les-gabarits-d-un-autre-worktree.md)
   reste ouvert : la récupération ponctuelle n’est pas une correction durable du garde.
 - **f96acc6cf97692804520e2d672de080bcae730a3** : dépendances Lucivy4.3.3 intégrées,
   trois minimums et cinq paquets du lock registre seulement. Même témoin public close en

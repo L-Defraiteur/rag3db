@@ -1,12 +1,12 @@
 # Un target repris embarque les gabarits d'un autre worktree
 
-- **État** : ouvert (11 novembre 2026), défaut de provenance des artefacts constaté pendant R5 ; récupération ponctuelle autorisée, correction durable du garde à faire dans un lot distinct.
+- **État** : corrigé (13 novembre 2026), garde commune des entrées Cargo et qualification SDK29 complètes ; candidat soumis à revue finale avant intégration C7.
 - **Famille** : produit
 - **Gravité** : une validation peut mélanger du Rust récent et des gabarits anciens ; rouge navigateur observé, risque de faux vert sur des comportements non éprouvés.
 - **Atteignable en service** : oui si un binaire ainsi construit est posé ; aucune pose réalisée ici.
 - **Touche rag3weaver** : oui (`build.rs`, `scripts/garde_target.sh`, chemins Cargo et attestation des gabarits).
 - **Pour** : recherche (suivi et lot ; toute réattribution passe par l’orchestration).
-- **Signalé par** : recherche ; sources et observations dans ce ticket et le [rapport de session](../11-11-2026/01-rapport-de-session.md).
+- **Signalé par** : recherche ; sources et observations dans ce ticket et le [rapport de session](../../recherche/11-11-2026/01-rapport-de-session.md).
 
 ## Faits vérifiés
 
@@ -98,7 +98,7 @@ Le ticket reste ouvert jusqu'à correction durable et critères initiaux prouvé
 ## Lot Recherche repris avant diff — 13 novembre
 
 Branche cx-recherche-garde-target, base940ad65bf, worktree isolé neuf.
-[Plan et recette CPU](../13-11-2026/03-plan-garde-target.md) publiés avec les
+[Plan et recette CPU](../../recherche/13-11-2026/03-plan-garde-target.md) publiés avec les
 sept témoins avant correction/exécution. Refus de l'origine inconnue et
 raccord de cargo_magasin à la garde commune ; métadonnées Cargo simulées
 uniquement. Aucun Cargo/rustc produit, target réel ou lot union touché.
@@ -131,13 +131,13 @@ GO698/bdff : préparation10CPU/toy8/journaux7/compilation/223gabarits ELFcontreG
 verte ; modulebuiltin8/1/0, juge state sousXDG_STATE_HOME refuse car pilote
 fixe deux racines égales. Diagnostic source+panic663, pas défaut produitgarde
 établi. STOP sans retry,252 fichiers SHA identiques deux postes, scopeROUGE
-code1/restes[]/busabsent et quiescence vide. [Rapport05](../13-11-2026/05-arret-qualification-garde-target.md).
+code1/restes[]/busabsent et quiescence vide. [Rapport05](../../recherche/13-11-2026/05-arret-qualification-garde-target.md).
 Préparer pilote à deux racines siblings et runtime manquant seulement sur
 ELF figé, mêmeSTART/END ; nouveau couple/RO/GO avant toute exécution.
 
 ## Correctif pilote proposé après diagnostic publié
 
-[Recette06](../13-11-2026/06-reprise-module-gabarits.md), nouveau pilote isolé :
+[Recette06](../../recherche/13-11-2026/06-reprise-module-gabarits.md), nouveau pilote isolé :
 state-fixture et xdg-state siblings, mêmes application698/ELF/SHA et deadline
 originale911625.832473217. Préparations héritées, seul module9/attestations
 à exécuter après nouveau GO exact ; pas Cargo/rustc/rebuild/NAV/service.
@@ -149,7 +149,7 @@ Application698b952ab / préparationbdff / reprisea5e sur GO distinct C7.
 10CPU+8contrôlesRusttoy+7jugesjournaux+compilation et223blobsGit/chemins/ELF
 acquisv1, rougeprofil8/1 conservé ; modulemanquantseul9/0/0 enreprise,
 mêmeELF/SHA et borneinitiale1800 (649,830963sdepuisSTART). Scope/finaliseurVERT,
-busabsent/quiescencevide,250preuvesv2SHAidentiquesdeuxpostes. [Rapport07](../13-11-2026/07-preuves-ciblees-garde-target.md).
+busabsent/quiescencevide,250preuvesv2SHAidentiquesdeuxpostes. [Rapport07](../../recherche/13-11-2026/07-preuves-ciblees-garde-target.md).
 AucunCargo/rebuildv2 ; ressources gardées. Ticket OUVERT avant revue/suffisance
 et qualification F8/liblarge/NAV éventuelle, pas de master/retrait autorisé.
 
@@ -170,7 +170,7 @@ Préparation seule, recette/couple source figés et revue avant nouveau GO lourd
 
 APP9ec421069320b2f0cca4099fa27f83059e944de9 sur base masterdb687,
 produit exactement3b259cfgtestHTTP (overlaygarde698+2aD17, audits13/14patcheségaux).
-[Recette09](../13-11-2026/09-recette-union-garde-target.md), pilote distinct :
+[Recette09](../../recherche/13-11-2026/09-recette-union-garde-target.md), pilote distinct :
 4800 uniques/capsC7/F8canonique+liblarge+NAV40+223Git/2corpsHTTP vsGit.
 Ciblés10CPU/toy8/journaux7/builtin9 acquis non rejoués séparément. Cacheprivé
 698 déjà attribué, reprise réelle par garde commune REPRENDRE1, pas purge.
@@ -243,7 +243,7 @@ driver, et résoudre /bin/sh déclaré par le shebang poste plutôt que présume
 
 ## Préfixe union4d38 ROUGE avant cache — diagnostic avant toute reprise
 
-[Diagnostic10](../13-11-2026/10-diagnostic-prefixe-union-garde-target.md) :
+[Diagnostic10](../../recherche/13-11-2026/10-diagnostic-prefixe-union-garde-target.md) :
 owner a ajouté -B au lanceur, incompatible avec argv exact de son rôle.
 Refus frais avant cache/Cargo/F8, aucun juge produit. Scope terminé ROUGE1,
 restes[], bus absent/PIDabsents/poste libéré. 37preuves identiques deuxpostes,
@@ -252,7 +252,7 @@ Aucun retry ni correction implicite ; sources/target/ancienslots conservés.
 
 ## Préparation de reprise distincte après diagnostic8d473
 
-[Recette11](../13-11-2026/11-recette-reprise-prefixe-union-garde-target.md) :
+[Recette11](../../recherche/13-11-2026/11-recette-reprise-prefixe-union-garde-target.md) :
 commande stricte sans-B, sys.orig_argv contrôlé, P/Q/Sv2 neufs, reçu du reste
 APRÈS poste et ENDoriginal919393.915525602 conservé ; sept témoins préparés
 NON JOUÉS, aucun run. Sourceapp9ec/target698/anciens4d38 et preuves intacts.
@@ -260,7 +260,7 @@ Nouveau couple soumis RO+GO distinct ; pause ledger avant tout runtime.
 
 ## Préfixe union65ad acquis, qualification runtime toujours en pause
 
-[Preuves12](../13-11-2026/12-preuves-prefixe-union-garde-target.md) :
+[Preuves12](../../recherche/13-11-2026/12-preuves-prefixe-union-garde-target.md) :
 F8 8/8, builds2code0, 223gabarits/ELF et inventaires2374/66+NAV40,
 ledger6937bd93...29b7 publié/copié2postes avant runtime ; snapshot100fichiers
 identiques manifest33b8863c...b7a8. Aucun juge lib/NAV/UI joué, marker absent,
@@ -268,7 +268,7 @@ scope encoreactif sous échéanceoriginale. TicketOUVERT, aucunGOmaster/retrait.
 
 ## Qualification union SDK29 terminée, revue preuves requise
 
-[Rapport13](../13-11-2026/13-preuves-finales-union-garde-target.md) :
+[Rapport13](../../recherche/13-11-2026/13-preuves-finales-union-garde-target.md) :
 APP9ec/PILOTE65ad, lib2308/0/66 sansfiltre, NAV40/0/0, HTTP2blobsGit,
 223attests/ELF avant/après, principal SDK7exec/main/detachTracer0/vraiwait0.
 FinalVERT2076.554637075s depuisSTARToriginal4800, scopeVERT0/restes[]/busabsent,
@@ -276,3 +276,25 @@ scanindépendantfraisvide/postelibéré. 558preuves identiques2postes manifest
 cece3588719044bf461eb6f7f322eb8f9b0db524e2b63e979eb07f782522cb3d.
 CinqdeviceFD/UNKNOWNowned0 transparents ; ancienrouges et préfixefigé gardés.
 CIstatique non déclarée réparée ; ticketgardeOUVERT, pasGOmaster/retrait.
+
+## Clôture du défaut de provenance — candidat d'intégration
+
+Correctif durable source qualifiée9ec421069320b2f0cca4099fa27f83059e944de9 :
+entrée cargo_magasin/F8/e2e gardée via cargo_garde et primitive garde_target,
+refus target nonvide sans provenance et marqueur invalide, résolution réelle
+workspace/target/manifest et restrictions offline/locked/frozen propagées aux
+deux métadonnées. Reprise connue invalide les empreintes locales et conserve
+les externes ; aucune propriété inventée ni purge globale. Les appels Cargo
+bruts externes restent hors de cette frontière, explicitement non empêchés.
+
+Preuves finales [rapport13](../../recherche/13-11-2026/13-preuves-finales-union-garde-target.md),
+SHApreuvescdcc032dfde186f9b33fb8d9804ca50fcf2c1a4b, pilote65ad0810ca3f4f1496539d5e2945e5c959b94a07 :
+F8 8/8, lib2308/0/66 sansfiltre, NAV40/0/0,223gabarits/ELF et deux réponsesHTTP
+contre blobsGit. Le témoin HTTP est cfg(test), aucune API/outillage produit
+nouveau ni pose de binaire de service. Contrôles mémoire/SDK/maps/bornes et
+fin de ressources prouvés, anciens rouges conservés. RO indépendantes Archi,
+Mémoire, ED et C7 favorables surcdcc032df ; aucune réparation CIstatique déduite.
+
+Clôture du SEUL défaut de garde dans ce candidat : tickets CI et vues2b
+restent ouverts avec leurs prérequis propres. Aucun retrait de target/logs/W,
+aucun master autorisé par ce ticket ; tour C7 exact distinct encore requis.

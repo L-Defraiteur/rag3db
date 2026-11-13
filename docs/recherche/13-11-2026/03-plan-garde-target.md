@@ -1,6 +1,6 @@
 # Reprise durable de la garde des targets
 
-Ticket existant : [provenance](../tickets/2026-11-11-un-target-repris-embarque-les-gabarits-d-un-autre-worktree.md).
+Ticket existant : [provenance](../../tickets/closed/2026-11-11-un-target-repris-embarque-les-gabarits-d-un-autre-worktree.md).
 Complément C7 ff0d6661b repris par le seul blob du ticket ; base940ad65bf.
 Lot neuf cx-recherche-garde-target, aucune ressource union employée.
 
