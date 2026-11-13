@@ -26,6 +26,13 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
+/// Les lignes qu'un read_scope montre au plus : `fichier_nodes::LIGNES_MAX`, qui
+/// n'existe qu'avec la feature `code` ; sans elle, aucune borne.
+#[cfg(feature = "code")]
+const LIGNES_MONTREES_PAR_READ_SCOPE: usize = crate::dataflow::fichier_nodes::LIGNES_MAX;
+#[cfg(not(feature = "code"))]
+const LIGNES_MONTREES_PAR_READ_SCOPE: usize = usize::MAX;
+
 /// Ce qui donne le modèle d'un backend : celui de son manifeste, sinon le
 /// défaut de Vertex. Les témoins le remplacent par un faux modèle.
 /// Il prend le manifeste préparé, pas le backend ouvert : un équipier dont la base
@@ -855,7 +862,6 @@ impl<'a> OutilsDuChat<'a> {
                 }
             }
             // read_scope dit son fichier et ses bornes : « — <chemin> lignes D-F, ».
-            #[cfg(feature = "code")]
             "read_scope" => {
                 let texte = serde_json::from_str::<Value>(&resultat.content).ok().and_then(|v| v["result"].as_str().map(str::to_string)).unwrap_or_else(|| resultat.content.clone());
                 if let Some(apres) = texte.split(" — ").nth(1) {
@@ -863,7 +869,7 @@ impl<'a> OutilsDuChat<'a> {
                         let bornes: Vec<usize> = reste.split(|c: char| !c.is_ascii_digit()).filter(|x| !x.is_empty()).take(2).filter_map(|x| x.parse().ok()).collect();
                         if let [de, a] = bornes[..] {
                             // read_scope ne montre que ses 200 premières lignes.
-                            let a = a.min(de + crate::dataflow::fichier_nodes::LIGNES_MAX - 1);
+                            let a = a.min(de.saturating_add(LIGNES_MONTREES_PAR_READ_SCOPE - 1));
                             let chemin = super::empreintes::cle_vraie(racine.as_deref(), chemin);
                             if let Some((h, total)) = super::empreintes::empreinte_du_fichier(&chemin) {
                                 e.noter(chemin, de, a.min(total), *tour, h);
