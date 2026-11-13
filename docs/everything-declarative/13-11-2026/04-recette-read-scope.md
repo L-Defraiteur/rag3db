@@ -161,3 +161,7 @@ b00796284c9140c5c3ef5f85bff68074adcdb0ead4f87ddd7cb578e9cfdd1111.
 Aucun retrait. Nouvelle source exacte et nouveau GO C7 requis avant lancement
 sur WT PC neuf cx-wt-ed-read-scope-r3 et paths target/preuves r3 neufs.
 Aucune portée6000 authentifiée n’avait démarré en r2 (aucun reçu créé).
+
+Contrôle complémentaire C7 : bus lui-même non symlink et runtime répertoire
+explicites ; sonde manager autorisée en lecture seule (Version), sans changement
+de manager/KDE/policy et sans repli autorisé hors plafond.

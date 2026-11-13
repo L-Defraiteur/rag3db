@@ -19,9 +19,9 @@ def main():
                'RAG3WEAVER_VALIDATION_RECU', 'RAG3WEAVER_VALIDATION_JETON')
     env = {k: os.environ[k] for k in allowed if k in os.environ}
     runtime = pathlib.Path('/run/user') / str(os.getuid())
-    assert runtime.stat().st_uid == os.getuid() and not runtime.is_symlink()
+    assert runtime.is_dir() and runtime.stat().st_uid == os.getuid() and not runtime.is_symlink()
     bus = runtime / 'bus'
-    assert bus.stat().st_uid == os.getuid() and stat.S_ISSOCK(bus.stat().st_mode)
+    assert not bus.is_symlink() and bus.stat().st_uid == os.getuid() and stat.S_ISSOCK(bus.stat().st_mode)
     # Bus du gestionnaire utilisateur pour poste/systemd-run seulement.
     # Le confineur fournira ensuite son bus privé au driver et à ses enfants.
     env.update(XDG_RUNTIME_DIR=str(runtime), DBUS_SESSION_BUS_ADDRESS='unix:path=' + str(bus))
