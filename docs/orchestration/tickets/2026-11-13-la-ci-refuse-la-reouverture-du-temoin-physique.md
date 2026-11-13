@@ -618,3 +618,15 @@ ConfineurVERT0/restes[]/nettoyétrue, sourcespropres, autoritéterminée et
 scanPID/startvide,494srestantsENDinitial. PosteMESURE rendu immédiatement.
 Aucun seuil ni verdict de livraison inventé ; porteurLucivy, resteRO/arbitrage
 C7/ED du coût avant intégration. Pasautrevariante/SDK/CI/merge/release lancée.
+
+### Arbitrage C7 avant alternative : fusion forme FBD retenue
+
+179+6 correctness et mesureA/B96/96 restent acquis tels quels, non repeints.
+C7 retient la fusion de la forme actuelle après baisse de débit dans7/8cas,
+sans seuil inventé ni inférence ingestion. Aucun rerun identiqueB.
+Préparation autorisée sur branche neuve : admission+closing atomiqueCAS,
+garde empruntée Completion (pas cloneArc parsend), mutex/condvar uniquement
+fermeture et notifications. Conserver linéarisation closing/rejet et compte
+sendengagés, drainage/unwind/pinned/selfjoin ; ROED avant GO correctness distinct,
+puis comparaisonA/C distincte, sans réécrire A/B. Pas de runtime/merge/release
+par cet arbitrage ; créneau MESURE rendu, ne pas gêner Arbre.
