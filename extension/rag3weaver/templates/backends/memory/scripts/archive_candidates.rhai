@@ -23,7 +23,20 @@ for r in found {
     let about = if d.about == () { "" } else { d.about };
     presentation += `- ${alias} : « ${name} » : ${about}\n`;
 }
-let choix = if input.allow_create { "none, ou create si le sujet est net et qu'aucune fiche ne le porte" } else { "none" };
+// Les fiches proposées plus haut dans ce document : pas encore cherchables (la transaction de l'outil
+// ne les a pas validées), elles sont ajoutées aux candidates pour qu'une section puisse les rejoindre.
+let proposed = if input.proposed == () { [] } else { input.proposed };
+for p in proposed {
+    let name = p.name;
+    if name == () || names.contains(name) { continue; }
+    names.push(name);
+    let alias = "candidate_" + names.len().to_string();
+    aliases.push(alias);
+    candidate_names.push(#{ alias: alias, name: name });
+    let about = if p.about == () { "" } else { p.about };
+    presentation += `- ${alias} : « ${name} » (proposée plus haut dans ce document) : ${about}\n`;
+}
+let choix = if input.allow_create { "none, ou create si le sujet est net et qu'aucune fiche ne le porte (avec, dans name, le nom de ce sujet en quelques mots)" } else { "none" };
 let texte = section.text;
 if texte.len() > 4000 { texte = texte.sub_string(0, 4000) + "…"; }
 let liste = if presentation == "" { "(aucune)\n" } else { presentation };

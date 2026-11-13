@@ -8,7 +8,7 @@
 %% param: candidates int = 5 -- Fiches candidates rappelées par section.
 %% param: search_options json = {"limit": 8} -- Les options de la recherche de candidates.
 %% param: allow_create bool = false -- Éteint par défaut : la tentative 5 des fiches classées (9 nov. 2026) a vu Gemini créer sur toute fiche sans candidate juste, et deux fois là où la bonne fiche était candidate. Sans create, une section sans candidate est none.
-%% param: instruction string = "Tu ranges une section d’un document sous l’une des fiches candidates. Une section va sous une fiche si elle parle de ce que la fiche décrit ; une règle va sous le domaine où elle s’applique. Partager un mot ne suffit pas. Si aucune candidate ne convient, réponds none ; si le sujet est net et qu’aucune fiche ne le porte, réponds create." -- Ce que l'étiquette veut dire, pour le modèle ; sans apostrophe droite (la typographique ’ passe), elle est substituée entre apostrophes dans le graphe cité.
+%% param: instruction string = "Tu ranges une section d’un document sous l’une des fiches candidates. Une section va sous une fiche si elle parle de ce que la fiche décrit ; une règle va sous le domaine où elle s’applique. Partager un mot ne suffit pas. Si aucune candidate ne convient, réponds none ; si le sujet est net et qu’aucune fiche ne le porte, réponds create, et donne dans name le nom de ce sujet en quelques mots, comme le titre d’une fiche de mémoire, pas le titre de la section. Hors de create, name est vide." -- Ce que l'étiquette veut dire, pour le modèle ; sans apostrophe droite (la typographique ’ passe), elle est substituée entre apostrophes dans le graphe cité.
 %% param: source json = {} -- Réservé : la Source (le L0) se compose depuis titre, contenu, chemin et origine, et remplace toute valeur donnée ici (EntityRecordNode exige un objet en configuration, que le mermaid ne sait pas écrire en littéral).
 %% result: rapport.result
 
@@ -17,7 +17,7 @@ graph LR
     params["RhaiNode(script_id=archive_params, inputs='titre,contenu,chemin,origine,jour', titre=$titre, contenu=$contenu, chemin=$chemin, origine=$origine, jour=$jour)"]
     source["EntityRecordNode(entity='Source', action='put', record=$source)"]
     split["SplitSections(field='contenu')"]
-    decide["ForEachNode(graph='@builtin:backends/memory/graphs/archive_decide.mmd', on_error='report', candidates=$candidates, allow_create=$allow_create, instruction=$instruction, search_options=$search_options)"]
+    decide["ForEachNode(graph='@builtin:backends/memory/graphs/archive_decide.mmd', on_error='report', carry='proposed', candidates=$candidates, allow_create=$allow_create, instruction=$instruction, search_options=$search_options)"]
     route["Route(key='kind', routes='none|create|fiche')"]
     write["ForEachNode(graph='@builtin:backends/memory/graphs/archive_write.mmd', on_error='report')"]
     create["ForEachNode(graph='@builtin:backends/memory/graphs/archive_create.mmd', on_error='report')"]
