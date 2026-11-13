@@ -341,3 +341,24 @@ mod tests {
         assert_eq!(de(&[("RAG3WEAVER_TTY_GLYPHES", "ascii")]).glyphes, Glyphes::Ascii);
     }
 }
+
+#[cfg(test)]
+mod tests_de_tous_les_themes {
+    use super::*;
+    use crate::theme::THEMES;
+
+    /// **L'ASCII pur, pour chaque thème** : un terminal qui ne montre que
+    /// l'ASCII lit toutes les animations de tous les thèmes.
+    #[test]
+    fn ascii_mode_is_pure_ascii_for_every_theme() {
+        for (nom, _) in THEMES {
+            let t = Theme::par_nom(nom).unwrap();
+            for q in [Quelle::Reflechit, Quelle::Lit, Quelle::Ecrit] {
+                for n in 0..30 {
+                    let s = texte(&t, q, n, 11, Capacites { couleurs: Niveau::Aucune, glyphes: Glyphes::Ascii });
+                    assert!(s.is_ascii(), "{nom} {q:?} {n} : {s}");
+                }
+            }
+        }
+    }
+}

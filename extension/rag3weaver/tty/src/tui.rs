@@ -54,7 +54,7 @@ fn connaitre(agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, filtre: &Mutex<O
     }
 }
 
-pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Option<u64>) -> Result<(), String> {
+pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Option<u64>, theme: crate::theme::Theme) -> Result<(), String> {
     let agent = client::agent();
     let (tx, rx) = mpsc::channel::<Msg>();
     let arret = Arc::new(AtomicBool::new(false));
@@ -129,6 +129,7 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     let largeur = terminal.size().map(|s| s.width).unwrap_or(80);
     let mut vue = Vue::new(largeur, demande.is_some());
     vue.capacites = Capacites::du_terminal();
+    vue.theme = theme;
     vue.graine = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1) | 1;
     let rendu = boucle(&mut terminal, &mut vue, &rx, &agent, &ep, &tache);
     arret.store(true, Ordering::SeqCst);
