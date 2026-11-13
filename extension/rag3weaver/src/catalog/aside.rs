@@ -172,7 +172,7 @@ impl Catalog {
             let chunk_table = format!("{entity_name}_Chunk");
             if let Ok(storage) = self.vector_storage(&chunk_table) {
                 if let Some(cypher) = self.dialect.select_chunk_vectors(&chunk_table, &storage.column, &storage.marker) {
-                    slug = self.current_embedding_slug();
+                    slug = self.current_embedding_slug().ok_or_else(|| CatalogError::EmbeddingModelUnavailable("aucun modèle dense configuré".into()))?;
                     let list = CypherValue::List(uuids.iter().cloned().map(CypherValue::String).collect());
                     let res = self
                         .conn
@@ -286,7 +286,7 @@ impl Catalog {
                 .and_then(|v| v.as_str())
                 .and_then(|s| serde_json::from_str(s).ok())
                 .unwrap_or_default();
-            if chunks.slug.is_empty() || chunks.slug != current_slug {
+            if chunks.slug.is_empty() || Some(chunks.slug.as_str()) != current_slug.as_deref() {
                 continue;
             }
             known.slug = chunks.slug;
