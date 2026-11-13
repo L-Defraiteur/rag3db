@@ -92,25 +92,33 @@ le SIGSEGV de `DdlEveryMinute` meurt dans `DiskArrayInternal::get` sous
 pendant qu'une publication en mémoire remplace les pips sous le lecteur. Le correctif de ce ticket
 se rejouera sur ce banc.
 
-## La lecture sale de recherche : non établi
+## La lecture sale de recherche : une autre famille, d'après le code
 
-Le ticket `docs/recherche/tickets/2026-11-13-une-lecture-pendant-un-lot-reindexe-voit-le-lot-a-moitie-sous-la-lib-entiere.md`
-(test `backend::tests::a_read_during_a_reindexed_batch_sees_the_batch_before_whole`) a son
-journal L3 au portable :
-`~/.cache/rag3weaver-build/archives/lecture-sale-L3-portable-2112/lib.log`.
+Il s'agit du ticket `docs/recherche/tickets/2026-11-13-une-lecture-pendant-un-lot-reindexe-voit-le-lot-a-moitie-sous-la-lib-entiere.md`
+(test `backend::tests::a_read_during_a_reindexed_batch_sees_the_batch_before_whole`).
 
-Je l'ai lu le 13 nov. La pause du lot y est à la ligne 2259 : `[montre] 2 fichiers
-(neuf/__pause_du_lot__.rs, neuf/def.rs) réindexé : verrou attendu 0 ms, tenu 3737 ms`. Le journal
-ne dit **ni oui ni non** pour un point de reprise pendant cette pause :
+**Le journal ne tranche pas.** Sa L3 au portable
+(`~/.cache/rag3weaver-build/archives/lecture-sale-L3-portable-2112/lib.log`, pause du lot l. 2259,
+`tenu 3737 ms`) n'a aucune ligne de point de reprise du moteur :
 
-- les 33 lignes qui contiennent « checkpoint » sont des noms de tests Rust (`dataflow::checkpoint`,
-  `catalog::tests::checkpoint_*`), aucune n'est le moteur ;
-- la lib ne trace un point de reprise que sous `RAG3DB_PROFILE_CHECKPOINT`
-  (`checkpoint_profile.h`), absent de cette passe.
+- les 33 lignes qui contiennent « checkpoint » sont des noms de tests Rust ;
+- la lib ne trace un point de reprise que sous `RAG3DB_PROFILE_CHECKPOINT`, absent de la passe.
 
-Pour trancher, il faut rejouer le test sous `RAG3DB_PROFILE_CHECKPOINT=1`. Si un point de reprise
-tombe dans la pause, leur test est la reproduction de ce défaut sous charge ; sinon, c'est une
-autre cause.
+**Le code tranche.** Recherche a établi que le lot de leur test est **une seule transaction
+d'écriture tenue ouverte** pendant la pause (BEGIN, deux fichiers, 2 s, COMMIT). Or :
+
+- `TransactionManager::checkpointNoLock` appelle `stopNewTransactionsAndWaitForOthersNoLock(…,
+  readersToo = false)` ;
+- celle-ci attend que **toutes les transactions d'écriture** actives soient parties, ou rangées
+  dans la file des validations (`othersLeftOrQueued`, `transaction_manager.cpp` l. 372-379). Au-delà
+  du délai, elle lève « Timeout waiting for active transactions… ».
+
+Aucun point de reprise ne s'écrit donc pendant que le lot est ouvert.
+
+Les symptômes sont d'ailleurs inverses. Leur lecteur voit **trop** : des rangées non validées
+(`Scope` de `h`, `Symbol arrivee`, l'arête `MENTIONS`). Ce ticket-ci voit **trop peu** : une clé
+validée dite absente. Leur test n'est pas la reproduction de ce défaut. Leur famille est celle de
+la lecture sale sous V2 (`RollbackUnderReaders.AReaderSurvivesTheRollbackOfAnotherWriter`, 7 nov.).
 
 ## Pourquoi un verrou : cohérent par page, pas par index
 
