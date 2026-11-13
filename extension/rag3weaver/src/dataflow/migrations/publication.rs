@@ -1,6 +1,7 @@
 //! Publication of complete DECLARATION snapshots on explicitly new owned catalogs.
 //! Revisions identify publication events, not content and not an applied index format.
 pub mod layers;
+pub(crate) mod admission;
 
 use super::facts::{self, DeclaredSchemaFacts, DeclaredSchemaInput, FactsError};
 use serde::{Deserialize, Serialize};

@@ -5124,6 +5124,13 @@ impl Backend {
         target: Option<GraphTarget>,
         restauration: bool,
     ) -> Result<Value, String> {
+        // 2b-A contexts are CPU fixtures, not physical permits for tools.
+        // No fixture view may silently turn into a catalogue/unpinned fallback.
+        let read_admission = self.read_view.current().and_then(|v| v.admission().cloned());
+        if let Some(a) = &read_admission {
+            a.check().map_err(|e| e.to_string())?;
+            a.require_physical_tool_access().map_err(|e| e.to_string())?;
+        }
         let mut graph =
             build_definition(def, &prepared.nodes, policy).map_err(|e| e.to_string())?;
         // Des services neufs à chaque appel : les appels parallèles de l'hôte
@@ -5237,6 +5244,7 @@ impl Backend {
         if output.get(result_port.0, "ui").is_some() {
             response["ui"] = read(result_port.0, "ui")?;
         }
+        if let Some(a) = &read_admission { a.finish_at(std::time::Instant::now()).map_err(|e| e.to_string())?; }
         Ok(response)
     }
     /// **Le journal d'une conversation, écrit au fil de l'eau** (27 septembre

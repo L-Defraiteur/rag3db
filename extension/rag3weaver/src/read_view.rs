@@ -639,6 +639,10 @@ pub struct ReadView {
 }
 
 impl ReadView {
+    pub(crate) fn admission(&self) -> Option<&Arc<crate::dataflow::migrations::publication::admission::ReadAdmission>> {
+        self.search_services.get(crate::dataflow::migrations::publication::admission::SERVICE)
+    }
+
     /// **La vue d'un appel, sur sa connexion** (L6) : la même forme, ses
     /// requêtes sur `conn` (un instantané du pool), et ses services de
     /// recherche posés par-dessus ceux de la vue, `"conn"` et `"texte_natif"`
@@ -656,6 +660,7 @@ impl ReadView {
 
     /// La vue d'un appel qui n'a pas eu d'instantané : la même, qui le dit.
     pub(crate) fn sans_instantane(&self) -> ReadView {
+        if let Some(a) = self.admission() { a.invalidate(crate::dataflow::migrations::publication::admission::AdmissionError::MissingSnapshot); }
         ReadView { sans_instantane: true, ..self.copie() }
     }
 
@@ -709,9 +714,17 @@ impl ReadCatalog for ReadView {
         self.dialect.clone()
     }
     fn execute_read_with_params(&self, cypher: &str, params: &[QueryParam]) -> Result<QueryResult, CatalogError> {
+        if let Some(a) = self.admission() {
+            a.check().map_err(|e| CatalogError::DbError(e.to_string()))?;
+            return Err(CatalogError::DbError(a.invalidate(crate::dataflow::migrations::publication::admission::AdmissionError::UnsupportedRead).to_string()));
+        }
         self.conn.execute_with_params(cypher, params).map_err(|e| CatalogError::DbError(e.to_string()))
     }
     fn run_read_plan(&self, plan: &rag3weaver_ir::Plan, mut options: crate::plan::PlanOptions) -> Result<crate::plan::PlanReport, crate::plan::PlanError> {
+        if let Some(a) = self.admission() {
+            a.check().map_err(|e| crate::plan::PlanError::Invalid(e.to_string()))?;
+            return Err(crate::plan::PlanError::Invalid(a.invalidate(crate::dataflow::migrations::publication::admission::AdmissionError::UnsupportedRead).to_string()));
+        }
         if options.fanout.is_none() {
             options.fanout = self.fanout;
         }
@@ -729,6 +742,10 @@ impl ReadCatalog for ReadView {
         Ok(Catalog::uuid_for_in(&self.scope, entity_name, def, data))
     }
     fn read_meta_key(&self, key: &str) -> Result<Option<String>, CatalogError> {
+        if let Some(a) = self.admission() {
+            a.check().map_err(|e| CatalogError::DbError(e.to_string()))?;
+            return Err(CatalogError::DbError(a.invalidate(crate::dataflow::migrations::publication::admission::AdmissionError::UnsupportedRead).to_string()));
+        }
         Catalog::read_meta_key_on(self.dialect.as_ref(), self.conn.as_ref(), key)
     }
     fn two_step_hops(&self) -> bool {
@@ -738,6 +755,9 @@ impl ReadCatalog for ReadView {
         self.event_bus.in_scope(&self.scope).emit(event);
     }
     fn get(&self, entity_name: &str, uuid: &str) -> Result<Option<BTreeMap<String, CypherValue>>, CatalogError> {
+        if let Some(a) = self.admission() {
+            if !a.admits(entity_name, uuid).map_err(|e| CatalogError::DbError(e.to_string()))? { return Ok(None); }
+        }
         self.entite_connue(entity_name)?;
         let cypher = self.dialect.select_entity_all_by_uuids(entity_name);
         let result = self
@@ -750,6 +770,10 @@ impl ReadCatalog for ReadView {
         Ok(Some(ligne_en_dictionnaire(&result.columns, &result.rows[0])))
     }
     fn find_by_field(&self, entity_name: &str, field: &str, value: CypherValue, fields: &[&str]) -> Result<Vec<BTreeMap<String, CypherValue>>, CatalogError> {
+        if let Some(a) = self.admission() {
+            a.check().map_err(|e| CatalogError::DbError(e.to_string()))?;
+            return Err(CatalogError::DbError(a.invalidate(crate::dataflow::migrations::publication::admission::AdmissionError::UnsupportedRead).to_string()));
+        }
         self.entite_connue(entity_name)?;
         let cypher = self.dialect.select_by_field(entity_name, field, fields);
         let result = self

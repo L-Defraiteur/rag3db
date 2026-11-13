@@ -276,6 +276,11 @@ pub fn read_for_tool<'a>(
     cell: Option<&crate::scope::Scope>,
 ) -> CatalogRead<'a> {
     let vue = view.and_then(|c| c.current());
+    if let Some(a) = vue.as_ref().and_then(|v| v.admission()) {
+        if let Err(error) = a.check().and_then(|_| cell.map_or(Ok(()), |cell| a.check_cell(cell))) {
+            return CatalogRead::Refused(error.to_string());
+        }
+    }
     let Some(vue) = vue.filter(|v| cell.is_none_or(|c| *c == v.scope)) else {
         return read_catalog_in(catalog, entity, cell);
     };
