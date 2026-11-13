@@ -1331,6 +1331,9 @@ impl DaemonHost {
                 }
             }
         }
+        // **Le journal des runs, en dernier** (13 novembre 2026) : les journaux des
+        // runs finis juste avant s'écrivent maintenant, et rien ne s'écrit après.
+        self.journal.vider();
         erreurs
     }
 
@@ -1765,6 +1768,16 @@ fn lignes_du_rendu(rendu: &Value) -> &[Value] {
         Value::Array(a) => a,
         Value::Object(o) => o.get("result").or_else(|| o.get("results")).and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&[]),
         _ => &[],
+    }
+}
+
+/// **Un hôte qu'on laisse tomber vide son journal** (13 novembre 2026) : les journaux
+/// des runs finis juste avant s'écrivent, les fils d'écriture sont attendus, et rien ne
+/// s'écrit après (un hôte de témoin lâché sans `shutdown()`, e2e_juge). Ses backends se
+/// ferment ensuite par leur propre Drop.
+impl Drop for DaemonHost {
+    fn drop(&mut self) {
+        self.journal.vider();
     }
 }
 
