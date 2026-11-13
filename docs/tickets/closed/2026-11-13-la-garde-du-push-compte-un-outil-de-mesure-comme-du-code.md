@@ -1,7 +1,9 @@
 # La garde du push compte un outil de mesure comme du code
 
-- **État** : ouvert (13 novembre 2026), demandé par c7 après un push arrêté ; codeparsers le code
-  (il touche `scripts/`), recherche relit.
+- **État** : corrigé (13 novembre 2026, 0e3d202a4, codeparsers ; relu par recherche). La garde est entrée
+  dans le dépôt, sous `tools/poste/push_garde.sh`, avec son témoin `tools/poste/test_push_garde.sh` (18 cas,
+  rouges d'abord). La copie exécutée a été recopiée aux deux postes le soir même, au mot de c7 :
+  `--derive` dit « garde à jour » des deux côtés (c57a3fb1aad59172).
 - **Famille** : produit
 - **Gravité** : une passe verte à rejouer pour rien (environ 16 minutes, et une fenêtre de master
   tenue pendant ce temps). Pas de réponse fausse : la garde refuse trop, jamais trop peu.
@@ -37,6 +39,18 @@ push :
 
 c7 (13 novembre) : pas de retrait de chemin à la main, même à son mot. Une exception tapée pour un
 push est la graine d'une règle floue.
+
+## Correctif
+
+- **La règle** : est du code ce qui se compile ou se joue (le Rust, le Cargo, `src/`, `ir/`, `ui/`, les
+  gabarits, les tests, `tools/rust_api`, `extension/vector`, le sous-module, les scripts de passe), et tout
+  fichier dont le nom apparaît dans ce code ou dans un script qu'il appelle, à transitivité. Le reste
+  compte comme de la doc. Le cas réel, c76e4a482, n'apporte plus de code.
+- **La relecture de recherche** a trouvé qu'un script appelé, supprimé ou renommé, passait pour de la doc.
+  Le correctif cherche les appelés dans les deux arbres et lit le diff avec `--no-renames`.
+- **La dérive se voit** : à chaque push, la garde exécutée dit son hash et celui du dépôt, et elle dit
+  « garde en retard sur le dépôt » s'ils diffèrent, sans refuser. La copie du cache fait autorité ; elle
+  ne se recopie qu'après relecture et au mot de l'orchestration (`docs/procedures/push-d-un-lot.md`).
 
 ## Lot
 
