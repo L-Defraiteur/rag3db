@@ -7318,7 +7318,22 @@ mod tests {
         while std::time::Instant::now() < fin {
             let u = usages_de(&backend, "arrivee");
             let (def, appel) = (u.contains("neuf/def.rs"), u.contains("__pause_du_lot__"));
-            assert_eq!(def, appel, "un lot vu à moitié : {}", &u[..u.len().min(400)]);
+            if def != appel {
+                // **Le départage avant l'échec** (ticket recherche du 13 novembre) : attendre
+                // la fin des lots, pour que les lignes `[montre]` de la réaction (un lot de
+                // deux fichiers, deux lots, ou un lot repris un à un) entrent dans la sortie
+                // capturée de ce test.
+                let fin_des_lots = std::time::Instant::now() + std::time::Duration::from_secs(20);
+                while std::time::Instant::now() < fin_des_lots {
+                    let v = usages_de(&backend, "arrivee");
+                    if v.contains("neuf/def.rs") && v.contains("__pause_du_lot__") {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                panic!("un lot vu à moitié (définition {def}, appel {appel}) : {}", &u[..u.len().min(400)]);
+            }
             if def {
                 apres = true;
                 break;
