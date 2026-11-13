@@ -676,6 +676,37 @@ pub(super) mod tests {
         depot
     }
 
+    /// **Un `..` après un dossier absent ne sort pas de la racine** (relecture d'ED, 13 novembre
+    /// 2026 ; ticket `2026-11-13-…-chemin-…-hors-de-la-racine`). `nouveau` n'existe pas :
+    /// `nouveau/../../x.txt` se résout au-dessus de la racine et doit être refusé avant toute
+    /// écriture, le fichier du dehors intact ; `nouveau/../notes.txt` vise le vrai `notes.txt`,
+    /// qu'une insertion complète au lieu de l'écraser comme une création.
+    #[test]
+    fn a_dot_dot_after_a_missing_folder_does_not_leave_the_workshop_root() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let dehors = d.path().join("x.txt");
+        std::fs::write(&dehors, "le fichier du dehors\n").unwrap();
+        assert!(!a.racine.join("nouveau").exists());
+
+        for outil in ["insert_lines", "replace_lines"] {
+            let args = if outil == "insert_lines" { json!({ "path": "nouveau/../../x.txt", "at": 1, "text": "écrasé" }) } else { json!({ "path": "nouveau/../../x.txt", "from": 1, "to": 1, "text": "écrasé" }) };
+            let r = a.appeler(outil, args);
+            let dit = match &r { Ok(v) => Atelier::texte(v), Err(e) => e.clone() };
+            assert!(dit.contains("hors de la racine"), "{outil} sur nouveau/../../x.txt est refusé : {dit}");
+            assert_eq!(std::fs::read_to_string(&dehors).unwrap(), "le fichier du dehors\n", "{outil} : le fichier du dehors est intact");
+            assert!(!a.racine.join("nouveau").exists(), "{outil} : rien n'est créé dans la racine");
+        }
+        let r = a.appeler("read_file", json!({ "path": "nouveau/../../x.txt" }));
+        let dit = match &r { Ok(v) => Atelier::texte(v), Err(e) => e.clone() };
+        assert!(dit.contains("hors de la racine") && !dit.contains("le fichier du dehors"), "la lecture aussi est refusée : {dit}");
+
+        std::fs::write(a.racine.join("notes.txt"), "un\ndeux\n").unwrap();
+        a.appeler("insert_lines", json!({ "path": "nouveau/../notes.txt", "at": 3, "text": "trois" })).expect("dans la racine, le vrai notes.txt");
+        assert_eq!(std::fs::read_to_string(a.racine.join("notes.txt")).unwrap(), "un\ndeux\ntrois\n", "notes.txt complété, pas écrasé");
+        assert!(!a.racine.join("nouveau").exists(), "le dossier absent n'est pas créé");
+    }
+
     /// **`read_file` dans l'atelier** : jamais plus de 200 lignes d'un coup (Lucie), la
     /// suite dite ; un fichier sous la racine se lit sans index ; un fichier d'un worktree
     /// attaché se lit par le backend de ce worktree.
