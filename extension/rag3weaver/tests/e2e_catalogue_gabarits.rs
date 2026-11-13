@@ -570,13 +570,53 @@ fn un_gabarit_sans_description_est_refuse() {
 // ─── La couche utilisateur (doc 6 septembre 2026, 14h43) ────────────────────
 
 /// Les fiches visibles par la recherche, avec leur origine, pour un filtre.
+/// La fiche `famille/nom` du catalogue, lue par son nom (sans recherche) :
+/// (origine, uuid) de chaque rangée. Une présence se vérifie ainsi, jamais dans
+/// le haut d'une recherche : la bibliothèque fournie a dépassé 50 fiches le 9
+/// novembre 2026 (les outils de l'atelier), et `user` tombait au rang 63 de
+/// « gabarit » — le test le croyait absent (ticket
+/// 2026-11-13-un-gabarit-masque-puis-retire-ne-revient-pas-a-la-bibliotheque).
+fn fiche_nommee(cat: &Arc<std::sync::Mutex<Catalog>>, famille: &str, nom: &str) -> Vec<(String, String)> {
+    let rangees = cat
+        .lock()
+        .unwrap()
+        .find_by_field(
+            TEMPLATE_ENTITY,
+            "name",
+            rag3weaver::connection::CypherValue::String(nom.into()),
+            &["_uuid", "origin", "family"],
+        )
+        .expect("lecture par nom");
+    // Les colonnes reviennent nommées `n.<champ>` : on lit la dernière partie du nom.
+    let texte = |r: &std::collections::BTreeMap<String, rag3weaver::connection::CypherValue>, champ: &str| match r
+        .iter()
+        .find(|(k, _)| k.as_str() == champ || k.rsplit('.').next() == Some(champ))
+        .map(|(_, v)| v)
+    {
+        Some(rag3weaver::connection::CypherValue::String(v)) => v.clone(),
+        autre => panic!("{champ} : {autre:?}"),
+    };
+    let mut v: Vec<(String, String)> =
+        rangees.iter().filter(|r| texte(r, "family") == famille).map(|r| (texte(r, "origin"), texte(r, "_uuid"))).collect();
+    v.sort();
+    v
+}
+
+/// Les fiches d'une origine, par la recherche du catalogue. Réservé aux petites
+/// listes (la couche du projet) : la recherche a un plafond, et l'atteindre
+/// est un refus, pas une liste tronquée en silence.
 fn fiches_par_origine(cat: &Arc<std::sync::Mutex<Catalog>>, origine: &str) -> Vec<(String, String)> {
-    let mut o = SearchOptions { limit: 50, ..Default::default() };
+    const PLAFOND: usize = 50;
+    let mut o = SearchOptions { limit: PLAFOND, ..Default::default() };
     o.filters.insert(
         "origin".to_string(),
         rag3weaver::filter::FilterValue::Direct(rag3weaver::connection::CypherValue::String(origine.into())),
     );
     let out = Catalog::rechercher(cat, TEMPLATE_ENTITY, "gabarit", o).expect("recherche");
+    assert!(
+        out.results.len() < PLAFOND,
+        "la recherche des fiches « {origine} » atteint son plafond de {PLAFOND} : la liste serait tronquée — lire la fiche par son nom (fiche_nommee)"
+    );
     let mut v: Vec<(String, String)> = out
         .results
         .iter()
@@ -644,9 +684,8 @@ fn la_synchronisation_alimente_la_couche_du_projet() {
     let projet_seul = fiches_par_origine(&cat, "project");
     assert_eq!(projet_seul.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), vec!["user"]);
     let uuid_user = projet_seul[0].1.clone();
-    let fournis_visibles = fiches_par_origine(&cat, "builtin");
-    assert!(!fournis_visibles.iter().any(|(n, _)| n == "user"), "masquer n'est pas ajouter");
-    assert!(fournis_visibles.iter().any(|(n, _)| n == "product"));
+    assert_eq!(fiche_nommee(&cat, "entity", "user"), vec![("project".to_string(), uuid_user.clone())], "masquer n'est pas ajouter");
+    assert_eq!(fiche_nommee(&cat, "entity", "product").iter().map(|(o, _)| o.as_str()).collect::<Vec<_>>(), vec!["builtin"]);
 
     // 3. Seule l'origine change : un `product` copié tel quel dans le projet.
     let dir = racine.join(rag3weaver::template::PROJECT_DIR).join("entities");
@@ -679,9 +718,11 @@ fn la_synchronisation_alimente_la_couche_du_projet() {
     let r7 = catalog.sync_templates(Some(racine)).unwrap();
     assert_eq!(r7.updated, vec!["entity/user".to_string()], "{r7:?}");
     let cat = Arc::new(std::sync::Mutex::new(catalog));
-    let fournis_visibles = fiches_par_origine(&cat, "builtin");
-    let user = fournis_visibles.iter().find(|(n, _)| n == "user").expect("user revenu à la bibliothèque");
-    assert_eq!(user.1, uuid_user, "même identité des deux côtés du masque");
+    assert_eq!(
+        fiche_nommee(&cat, "entity", "user"),
+        vec![("builtin".to_string(), uuid_user.clone())],
+        "user revenu à la bibliothèque, sous la même identité des deux côtés du masque"
+    );
 
     // 6. « Il a bougé depuis que tu l'as pris » : une empreinte d'hier.
     let mut catalog = Arc::try_unwrap(cat).ok().unwrap().into_inner().unwrap();
