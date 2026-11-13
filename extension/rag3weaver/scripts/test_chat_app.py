@@ -248,7 +248,7 @@ for line in sys.stdin:
                     if time.monotonic() > deadline:
                         raise
                     time.sleep(.1)
-            result = wd("/session", {"capabilities": {"alwaysMatch": {"browserName": "chrome", "goog:chromeOptions": {"binary": shutil.which("chromium"), "args": ["--headless=new", "--no-sandbox", "--disable-dev-shm-usage", "--window-size=1280,900", f"--user-data-dir={self.path / 'browser'}"]}}}})
+            result = wd("/session", {"capabilities": {"alwaysMatch": {"browserName": "chrome", "goog:chromeOptions": {"binary": shutil.which("chromium"), "args": ["--headless=new", "--no-sandbox", "--disable-dev-shm-usage", "--password-store=basic", "--use-mock-keychain", "--window-size=1280,900", f"--user-data-dir={self.path / 'browser'}"]}}}})
             sid = result["sessionId"]
             endpoint = f"/session/{sid}"
             wd(endpoint + "/url", {"url": self.server.origin + "/#token=test-token"})

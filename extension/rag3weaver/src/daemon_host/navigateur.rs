@@ -116,6 +116,10 @@ pub(crate) const ARGUMENTS_DU_NAVIGATEUR: &[&str] = &[
     "--disable-sync",
     // Les runners de la CI refusent le bac à sable sans espace de noms.
     "--no-sandbox",
+    // Ni le trousseau du bureau (kdewallet, gnome-keyring), ni sa fenêtre : voir le témoin
+    // `le_navigateur_des_temoins_ne_demande_pas_le_trousseau_du_bureau`.
+    "--password-store=basic",
+    "--use-mock-keychain",
 ];
 
 /// **Un témoin navigateur ne demande pas le trousseau du bureau** (Lucie, 13 novembre 2026 : sous
