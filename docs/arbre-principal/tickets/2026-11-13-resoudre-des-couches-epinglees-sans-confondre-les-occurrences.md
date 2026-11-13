@@ -106,3 +106,16 @@ GO C7 exact APP69dc/piloteabaf, scope/finaliseurVERT214.675462s/3000.
 avec ledger/ELF/caps/memory/maps et limites. Pas de persistance/L6/top-k/outils
 qualifiés, aucune DB/service/modèle ouvert. Ticket reste OUVERT pour revue
 et décision d’intégration/qualification complémentaire, pasGOmaster/retrait.
+
+
+## Préparation union après ED — aucun run autorisé
+
+C7 juge preuves72db suffisantes dans portée2a, attend landingED avant notre
+intégration. [Plan13](../13-11-2026/13-plan-union-couches-apres-ed.md) :
+branche de rebase NEUVE depuis72db après fetchED, audit range-diff+identité
+fichierslayers69 et préservation master. Source entrante Rust justifie
+qualification union ciblée4exacts/publication10/checkadaptateur avec notre
+cache privé conservé, pas globalephysique. Recette sourceunion/controlSHA
+à publier et GOcréneau exact nécessaires avant runtime. Proposition1200s
+à arbitrer C7, aucun reset de l’ancienne portée. Sources69/abaf/preuves/
+target conservés intacts, tickets ouverts jusqu’à intégration.
