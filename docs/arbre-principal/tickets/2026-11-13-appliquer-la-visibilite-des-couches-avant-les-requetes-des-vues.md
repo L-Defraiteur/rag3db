@@ -39,3 +39,7 @@ Nouvelle source :15fonctions écrites, NONJOUÉES. Vrais3nœuds+spiesauxargument
 ## Préparation union après garde intégrée
 
 APP193d77cd7, base master9feb, audit33 : neuf fichiers produit A identiques affa6, garde et master horsscope préservés, trois patches égaux. Recette34 puis pilote concret rapport35 sur branche privée séparée ; aucun run union avant RO/GO exact. A CPU preuves33a suffisantes selon C7, B/C restent ouverts ; aucune clôture par préparation ni correction du rouge CI physique revendiquée.
+
+## Premier rouge union A — qualification arrêtée
+
+Rapport36 : couple193/0d5, cache repris et quiescent, F8sans-feature refuse dead_code hors cfg(test) des champs/observateurs fixture admission.rs. Zéro juge runtime union ; pas le juge CI physique. Preuves archivées, correction de frontières cfg(test) proposée avant édition et revue exacte, sans allow général ni implémentation B/C. Ancienne qualificationCPU33a conservée historique ; union NONQUALIFIÉE et ticket ouvert.
