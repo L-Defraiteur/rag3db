@@ -96,5 +96,11 @@ le juge.
    l'auteur, ou se pose comme relecteur de la PR avec sa proposition. Le correctif est proposé, jamais
    poussé à la place de l'auteur.
 
-Le code est le premier produit du framework ; ces trois-là sont des vues et des agents de plus sur le
+4. **Un coffre de secrets (à la Vault ou Infisical) servi directement aux CI/CD et aux agents** : le
+   relecteur automatique peut alors vérifier la base de données ou un service externe (« tout va
+   bien ? ») en se servant d'un accès nommé, **sans jamais lire une variable d'environnement** ni voir
+   une valeur ; le coffre fait l'appel, l'agent reçoit le résultat. C'est la règle de la maison (« les
+   identifiants par le chemin de .vault, jamais leur contenu ») faite produit. « On verra plus tard ».
+
+Le code est le premier produit du framework ; ces quatre-là sont des vues et des agents de plus sur le
 même index.
