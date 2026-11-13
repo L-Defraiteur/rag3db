@@ -173,3 +173,13 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   physical_index 11/11 trois fois, navigateur 40/40). Ticket du raccord fermé ; le ticket CI se ferme au
   premier run vert de 73586bf92 (arbre principal). Suite d'arbre principal : wt-deplace (le garde-fou), son
   inachevé du 11 ; les couches 2b-A attendent la décision de Lucie. 96 a son tour (M8), puis ED (l'équipier).
+- **17 h 35, la file du soir et deux décisions à relire par Lucie.** File : 96 (M8, en tour), ED (l'équipier :
+  reste non vide, `expects`), le cœur (l'annulation sous pool plein : correctif de Codex repris, ticket
+  fermé, ticket neuf de la saturation du pool sous vingt écrivains, DdlEveryMinute et les deux seuils de
+  VectorIndexDeleteCost en known_red avec leurs tickets), archi (l'écriture sûre : mode gardé, écriture
+  atomique avec relecture avant renommage, `expected_hash` dans le worktree, et le même défaut corrigé
+  dans le backend de code), embarquement (le test d'activation). **Décisions de c7** : embarquement adopte
+  le port 0 annoncé par le fournisseur pour l'activation gérée, comme le démon d'embarquement (une course
+  de port plausible dans la fixture) — à relire par Lucie, ça touche l'activation ; arbre principal prend le
+  **lot 1a des vues, la version de scope par contenu**, page de contrat d'abord (relue par ED et recherche),
+  indépendant de la question de l'adoption du raccord ; wt-deplace était déjà atterri par Codex (1904e04e4).
