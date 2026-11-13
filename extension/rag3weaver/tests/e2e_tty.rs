@@ -8,7 +8,7 @@
 
 use rag3weaver::daemon_host::{DaemonHost, DaemonServer};
 use rag3weaver::llm::{CallbackLlm, Llm, MockLlm};
-use rag3weaver_tty::{client, endpoint::Endpoint, flux, plain};
+use rag3weaver_tty::{boite, client, endpoint::Endpoint, flux, plain};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -270,4 +270,104 @@ fn le_code_d_un_bloc_se_colore_par_les_spans_de_l_hote() {
     assert_eq!(client::surligner(&agent, &ep, "x", "brainfuck"), None, "une langue inconnue : pas de couleur");
     let faux = Endpoint { token: "faux".into(), ..ep.clone() };
     assert_eq!(client::surligner(&agent, &faux, code, "rust"), None, "un faux jeton : rien, sans panique");
+}
+
+/// **Le faux équipier qui demande un accord** (le scénario du témoin unitaire
+/// `a_teammate_runs_commands_through_the_declared_gate_and_asks_for_the_rest`) :
+/// `ls` passe par la liste sûre, `echo accorde-moi` attend l'accord du superviseur,
+/// puis, une fois accordée, se joue et le pas réussit.
+fn faux_equipier_qui_demande() -> rag3weaver::daemon_host::chat::ChatModel {
+    Arc::new(|_b: &rag3weaver::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-equipier", 1 << 20, |turns, opts, sink| {
+            let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
+            let resultats = turns[depuis..].iter().filter(|t| t.role == "tool").count();
+            let accorde = turns.iter().any(|t| t.content.contains("commande accordée"));
+            let run = |ligne: &str| json!({ "command": ligne }).to_string();
+            let fin = |ok: bool, fait: &str, reste: &str| json!({ "item": "", "succeeded": ok, "done": fait, "remaining": reste }).to_string();
+            let (nom, args) = match (accorde, resultats) {
+                (false, 0) => ("run_command", run("ls")),
+                (false, 1) => ("run_command", run("echo accorde-moi")),
+                (false, _) => ("step_done", fin(false, "ls joué", "echo attend l'accord")),
+                (true, 0) => ("run_command", run("echo accorde-moi")),
+                (true, _) => ("step_done", fin(true, "echo joué après l'accord", "")),
+            };
+            MockLlm::new("").with_tool_calls(vec![(nom, args.as_str())]).generate(turns, opts, sink)
+        })))
+    })
+}
+
+/// **La boîte de l'équipier par le terminal** (lot tty-4), par le vrai chemin
+/// de l'hôte : l'équipier demande l'accord pour une commande ; le terminal lit
+/// la demande en attente (sa logique de boîte, `rag3weaver_tty::boite`), voit
+/// l'état `waiting` dans `GET /ide/teammate/list`, accorde par la réponse qu'il
+/// construit (`answer`, `reply_to`, `approved`) ; l'hôte pose l'accord, la
+/// commande se joue, la tâche finit, et la liste le dit.
+#[test]
+#[ignore]
+fn le_terminal_accorde_une_commande_que_l_equipier_attend() {
+    let d = tempfile::tempdir().unwrap();
+    let manifeste = depot_inscrit(d.path());
+    let host = Arc::new(
+        DaemonHost::new()
+            .with_background(Arc::new(rag3weaver::dataflow::background::Registry::new()))
+            .with_racine_des_taches(d.path().join("taches"))
+            .with_chats_root(d.path().join("chats"))
+            .with_runs_root(d.path().join("runs"))
+            .with_chat_model(faux_equipier_qui_demande()),
+    );
+    let parent = heberger(&host, &manifeste);
+    let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = ecoute.local_addr().unwrap().to_string();
+    let server = tiny_http::Server::from_listener(ecoute, None).unwrap();
+    {
+        let host = host.clone();
+        std::thread::spawn(move || DaemonServer::new(server, 4).serve(host, Some("jeton-du-temoin".into())));
+    }
+    let ep = Endpoint { address, token: "jeton-du-temoin".into() };
+    let agent = client::agent();
+    // La demande, comme le terminal la pose (le superviseur par défaut).
+    let r = client::poster(&agent, &ep, "/ide/teammate/mailbox", &json!({ "backend": parent, "task": "porte", "kind": "request", "text": "Liste le dépôt, puis dis bonjour par echo." }))
+        .expect("la demande ouvre la tâche");
+    assert_eq!(r["started"], true, "{r}");
+
+    let chemin = format!("/ide/teammate?backend={}&task=porte", client::encoder(&parent));
+    let mut vue_boite = boite::Boite::default();
+    let mut lues = 0usize;
+    let mut relire = |b: &mut boite::Boite| {
+        let lignes = client::lire(&agent, &ep, &chemin).expect("la boîte se lit")["mailbox"].as_array().cloned().unwrap_or_default();
+        for l in lignes.iter().skip(lues) {
+            b.ligne(l);
+        }
+        lues = lignes.len();
+        lignes
+    };
+    let etat = |agent: &ureq::Agent| boite::etat_dans_la_liste(&client::lire(agent, &ep, "/ide/teammate/list?supervisor=supervisor").expect("la liste se lit"), &parent, "porte");
+    let borne = Instant::now() + Duration::from_secs(120);
+    let demande = loop {
+        relire(&mut vue_boite);
+        if let (Some(a), Some("waiting")) = (vue_boite.premiere().cloned(), etat(&agent).as_deref()) {
+            break a;
+        }
+        assert!(Instant::now() < borne, "en 120 s, pas d'accord en attente avec l'équipier en waiting : {:?}, état {:?}", vue_boite.attentes(), etat(&agent));
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    assert_eq!((demande.kind.as_str(), demande.command.as_deref()), ("approval", Some("echo accorde-moi")), "{demande:?}");
+
+    // L'accord, tel que le terminal le construit.
+    let corps = boite::reponse(&parent, "porte", &demande, "oui", Some(true));
+    client::poster(&agent, &ep, "/ide/teammate/mailbox", &corps).expect("l'accord est posé");
+    let borne = Instant::now() + Duration::from_secs(120);
+    let lignes = loop {
+        let lignes = relire(&mut vue_boite);
+        if etat(&agent).as_deref() == Some("ended") {
+            break lignes;
+        }
+        assert!(Instant::now() < borne, "en 120 s, la tâche n'a pas fini après l'accord : {lignes:#?}");
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    let reponse = lignes.iter().find(|l| l["kind"] == "answer").expect("la réponse est dans la boîte");
+    assert_eq!((reponse["reply_to"].as_str(), reponse["approved"].as_bool()), (Some(demande.id.as_str()), Some(true)), "{reponse}");
+    assert!(reponse["granted"].as_str().is_some_and(|g| g.starts_with("commande accordée pour la tâche : echo accorde-moi")), "l'hôte a posé l'accord : {reponse}");
+    assert!(lignes.iter().any(|l| l["kind"] == "step_done" && l["succeeded"] == true), "la commande s'est jouée et le pas a réussi : {lignes:#?}");
+    assert!(vue_boite.attentes().is_empty(), "plus rien n'attend : {:?}", vue_boite.attentes());
 }
