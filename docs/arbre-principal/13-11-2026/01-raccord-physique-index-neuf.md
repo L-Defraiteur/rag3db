@@ -2,8 +2,9 @@
 
 Porteur arbre-principal, même [ticket migration](../tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md).
 Base de lecture master798ab1aa7, après livraison Pub, ED et embarquement.
-Préparation seulement : aucune API physique ci-dessous n'est encore livrée,
-aucun Cargo, target, index, service ou modèle créé. La garde de retrait d823
+Diff physique en cours de revue, non compilé/non qualifié ; aucune API physique
+ci-dessous n'est livrée sur master. Aucun Cargo, target, index, service ou modèle
+créé à ce stade. La garde de retrait d823
 reste exclusivement chez Recherche ; aucun fichier de garde n'entre dans ce diff.
 
 ## Tranche verticale proposée
@@ -75,12 +76,12 @@ Le calcul des UUID et des chunks est exclusivement celui de `derive_nodes`,
 
 ```rust
 // Proposition de surface, pas des symboles déjà disponibles.
-let mut index = OwnedPhysicalIndex::create_new(root_absent, origin_seed, schema)?;
+let mut index = OwnedPhysicalIndex::create_new(root_absent, origin_seed, schema, cells)?;
 let before: QualifiedPhysicalState = index.observe_published()?;
 let plan: QualifiedIndexPlan = index.prepare_initial_batch(
-    &migration_runner, operation_id, complete_input_batch,
+    &migration_runner, operation_id, complete_record_variables, lexical_probes,
 )?;
-let receipt: PhysicalPublicationReceipt = index.execute_initial_batch(&plan)?;
+let receipt: PhysicalPublicationReceipt = index.execute_initial_batch(&migration_runner, &plan)?;
 drop(index);
 let reopened = OwnedPhysicalIndex::open_owned(root, expected_origin)?;
 let after = reopened.observe_published()?;
@@ -172,3 +173,62 @@ modèle/service/base réelle ; noms de fixtures absents et possédés. Premier
 rouge arrêté/diagnostiqué, sans retry inchangé. Passe adaptée et tour master
 seulement après la preuve physique. Ce périmètre n'autorise aucun GC, parent
 layer, activation de service ou accès à une base de Lucie.
+
+
+## Précision du diff : cellules et transactions
+
+La lecture de `dans_la_cellule` confirme un refus explicite de changer/emprunter
+une cellule sous transaction ; `TamponPleinTexte` est adressé par entité, pas par
+cellule. La tranche conserve cette frontière. La création reçoit donc les cellules
+finies du nouveau profil, crée leurs nœuds et leurs index FTS vides avant de sceller
+P0. Le programme figé contient une cellule par étape ; le runner valide une
+transaction native par étape et conserve dans le journal existant les valeurs
+observées et la longueur du préfixe validé, dans cette même transaction. Ce
+résultat n'est pas un second journal de statuts : la ligne reste pending jusqu'à
+publication globale. Un arrêt avant le premier COMMIT laisse les données P0 ;
+après un COMMIT intermédiaire, la candidate peut contenir un préfixe non servi.
+La reprise vérifie ses valeurs, rebâtit le FTS perdu et poursuit les seules étapes
+restantes du même programme. Reçu/tête/journal appliqué restent un seul COMMIT
+final après fermeture, réouverture et requêtes des deux cellules.
+
+
+## Diff proposé et recette figée avant premier Cargo
+
+- `Catalog` : Option du modèle, profil lexical strict (dense/sparse refusés),
+  assemblage commun des services avec lecture stricte pour les migrations ;
+  invalidation locale même avec un backend dont poison est sans effet ; annonce
+  après FTS/blobs et fermeture incomplète propagée. Le montage physique impose
+  `BlobBacked { lazy: false }`, indépendamment de l'environnement.
+- `IngestEntitiesNode` appelle le verbe complet existant, depuis des records JSON
+  canoniques conservés dans la définition du graphe. Aucun nouveau derive/chunk/
+  exécuteur. Le runner fige sources+variables et conserve la boucle d'étapes.
+- `_DataflowMigration` neuf garde les colonnes historiques et ajoute
+  `qualified_input` (protocole1, source complète, intent, programme, entrées,
+  sondes et identité qualifiée) et `qualified_result` (préfixe accompli et
+  valeurs observées dans la transaction des données). Le vieux journal n'est
+  ni adopté ni requalifié. La ligne reste pending jusqu'au COMMIT final unique.
+- `physical_index` capture toutes les tables/propriétés, les valeurs logiques,
+  les multiplicités et les métadonnées ; blobs FTS et lignes de checkpoints
+  restent des témoins séparés. Le relevé sert de garde contre les modifications
+  avant la reprise. Les ouvertures normales Catalog/CLI/hôte refusent ce profil
+  fermé ; seul l'adaptateur possédé passe par sa capacité interne, après lecture
+  RO de l'origine, du contrat et de la candidate/publiée.
+- Huit témoins natifs, dont enfant de mort avant premier COMMIT, après COMMIT,
+  après FTS et après publication, plus cinq témoins de capacités/erreurs CPU.
+  Exactitude8/6/8/2, UUID/rendus/chunks par les producteurs communs ; réponses
+  lexicales nom/doc/corps, cellules, codecs figés et refus étrangers sont vérifiés.
+  Les fichiers Mermaid de fixture sont retirés après mort : reprise depuis le
+  support durable du journal et non depuis l'ancien environnement.
+
+Recette exécutable publiée avec le diff : `raccord-physique/lancer-cible.sh SHA40`,
+qui appelle le superviseur commun depuis `/var/tmp`, délai initial600s, poste
+lourd/MemoryMax32G/Highmax, bus privé unique et preuves neuves `...-v1`. Le client
+`cible.py` compile une seule lib de tests native+code sans features par défaut,
+`-j8`, target unique32Go, lib29 du magasin ; il inventorie l'ELF, le copie/rehashe,
+atteste source et deux gabarits de recherche requis, puis joue5 CPU+8 natifs
+avec0ignoré. Tous les lancements ELF exportent la même lib et le manifest_dir
+exact ; état/journaux/gabarits/TMP propres sont hors WT. Maps natives/cgroups,
+argv, sorties et témoins signés par les calculs sont enregistrés. Le résultat
+client VERT reste subordonné au reçu final du superviseur VERT/code0/restes[],
+bus physiquement absent et quiescence indépendante ; aucun master permis par
+cette seule préparation. Aucun Cargo de cette recette n'a encore été joué.

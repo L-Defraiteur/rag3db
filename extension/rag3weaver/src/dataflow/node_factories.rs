@@ -1549,6 +1549,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(FlushNodeFactory));
     registry.register(Box::new(SparseCommitNodeFactory));
     // Migration nodes
+    registry.register(Box::new(super::ingest_node::IngestEntitiesNodeFactory));
     registry.register(Box::new(CypherNodeFactory));
     registry.register(Box::new(ValidateNodeFactory));
     // Média

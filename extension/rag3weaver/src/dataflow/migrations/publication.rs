@@ -120,6 +120,7 @@ impl DeclarationSnapshot {
     pub fn fingerprint(&self) -> &str {
         &self.fingerprint
     }
+    pub(super) fn complete_input(&self) -> &DeclaredSchemaInput { &self.input }
     pub fn supplied_facts(&self) -> &DeclaredSchemaFacts {
         &self.facts
     }
@@ -280,7 +281,7 @@ impl PublicationOutcome {
 #[cfg(any(feature = "rag3db-native", test))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Registry {
+pub(super) struct Registry {
     version: u32,
     origin: String,
     head: String,
@@ -288,7 +289,10 @@ struct Registry {
 }
 #[cfg(any(feature = "rag3db-native", test))]
 impl Registry {
-    fn genesis(
+    pub(super) fn origin(&self) -> &str { &self.origin }
+    pub(super) fn head(&self) -> &str { &self.head }
+
+    pub(super) fn genesis(
         origin: NewPublicationOrigin,
         op: &str,
         target: DeclarationSnapshot,
@@ -309,7 +313,7 @@ impl Registry {
             publications: BTreeMap::from([(id, intent.stored)]),
         })
     }
-    fn decode(encoded: &str) -> Result<Self> {
+    pub(super) fn decode(encoded: &str) -> Result<Self> {
         let record: Self =
             serde_json::from_str(encoded).map_err(|e| PublicationError::Corrupt(e.to_string()))?;
         // The writer emits exactly this canonical wire form. This also refuses
@@ -322,7 +326,7 @@ impl Registry {
         record.validate()?;
         Ok(record)
     }
-    fn validate(&self) -> Result<()> {
+    pub(super) fn validate(&self) -> Result<()> {
         if self.version != PROTOCOL {
             return Err(PublicationError::UnknownContract);
         }
@@ -378,7 +382,7 @@ impl Registry {
         }
         Ok(())
     }
-    fn published(&self, id: &str) -> Result<PublishedDeclaration> {
+    pub(super) fn published(&self, id: &str) -> Result<PublishedDeclaration> {
         let intent = PublicationIntent::restore(
             self.publications
                 .get(id)
@@ -401,7 +405,7 @@ impl Registry {
             .map(PublicationIntent::restore)
             .transpose()
     }
-    fn prepare(&self, op: &str, target: DeclarationSnapshot) -> Result<PublicationIntent> {
+    pub(super) fn prepare(&self, op: &str, target: DeclarationSnapshot) -> Result<PublicationIntent> {
         operation(op)?;
         if let Some(known) = self.known_operation(op)? {
             if canonical(&known.target.facts)? != canonical(&target.facts)? {
@@ -422,7 +426,7 @@ impl Registry {
             target: target.input,
         })
     }
-    fn apply(&mut self, intent: &PublicationIntent) -> Result<PublicationOutcome> {
+    pub(super) fn apply(&mut self, intent: &PublicationIntent) -> Result<PublicationOutcome> {
         if intent.stored.body.origin != self.origin {
             return Err(PublicationError::OriginMismatch);
         }
