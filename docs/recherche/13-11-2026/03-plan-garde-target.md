@@ -95,3 +95,14 @@ metadata explicitement simulée ; aucun cache produit créé ni muté.
 Qualification plus large NON JOUÉE : F8, lib Rust, NAV, e2e et vieux témoin
 Rust. Demande de revue de ce couple code/préparation avant recette dédiée,
 avec focus paramètres Cargo, refus target inconnu et reprise connue.
+
+## Restriction de reprise corrigée avant qualification
+
+Archi a établi une omission dans la seconde résolution metadata de la garde.
+Dixième juge publié d28fcf7ea, puis rouge attendu : --offline absent de
+metadata --all-features (0,090s), journal rouge-restrictions.log. Correction :
+arguments optionnels de la garde limités à offline/locked/frozen, validés avant
+mutation puis transmis à sa résolution ; l'adaptateur transmet la même liste
+aux DEUX résolutions. Les anciens appels à deux paramètres restent compatibles.
+Même recette CPU dix fonctions après publication ; aucune compilation réelle.
+Ancien candidat7cb remplacé pour revue par le correctif, aucun GO repris.

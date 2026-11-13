@@ -18,6 +18,14 @@
 # Le témoin : scripts/test_garde_target.sh.
 garder_le_target() {
   local target="$1" arbre="$2" marque note paquets restes p
+  shift 2
+  local restrictions=("$@") option
+  for option in "${restrictions[@]}"; do
+    case "$option" in
+      --offline|--locked|--frozen) ;;
+      *) echo "✗ restriction Cargo inconnue pour la garde : $option" >&2; return 2 ;;
+    esac
+  done
   mkdir -p "$target" || return 2
   target="$(cd "$target" && pwd -P)" || return 2
   arbre="$(cd "$arbre" && pwd -P)" || return 2
@@ -60,7 +68,7 @@ garder_le_target() {
   # sous la feature code) n'est pas listée, et ses empreintes resteraient.
   local meta err
   err="$(mktemp)"
-  if ! meta="$(cd "$arbre" && cargo metadata --format-version 1 --all-features 2>"$err")"; then
+  if ! meta="$(cd "$arbre" && cargo metadata --format-version 1 --all-features "${restrictions[@]}" 2>"$err")"; then
     echo "✗ reprise du target : cargo metadata a échoué dans $arbre"
     grep -E '^(error|Caused by|  )' "$err" | head -4 | sed 's/^/    /'
     echo "  (un sous-module non initialisé ? git submodule update --init)"
