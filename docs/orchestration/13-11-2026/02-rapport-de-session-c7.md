@@ -469,3 +469,12 @@ ED a son rouge (b) : six onglets, le sixième à « Chargement… » 120 s (aa49
 - recherche : passe de lecture-pendant-un-lot-2 (403f96274) lancée à luciepc à 21 h 14 ; « à toi » au « poussé » du cœur.
 - **archi, accord borné** (`origin/atelier-accord-borne`) : témoin `a_grant_belongs_to_its_conversation_and_expires` rouge puis vert ; l'accord porte le backend de sa conversation, une décision après trente minutes est refusée ; ticket d'ED fermé. Lib entière 2341 passés, 1 rouge : le témoin L3 (lecture sale du moteur, ticket ba12af941) — admis dans le vert seulement rejoué vert seul et nommé avec le ticket. Suites e2e_hooks et navigateur en cours. File : embarquement, cœur, puis le premier vert entre archi et recherche.
 - lucivy : `indexed: false` ignoré est une question posée par Lucie à lucivy ce soir ; avertissement et doc pour l'instant, honorer en 4.4 si la mesure ou un besoin le justifie — son mot.
+
+## Vers 21 h 1x — le plein texte dans le masque : lucivy l'offre déjà
+
+Question de Lucie : lucivy peut-elle servir des vues filtrées par version de document plutôt qu'un index par version, « comme nous » ? Réponse de lucivy, lue dans le code :
+- **le masque par ensemble d'identifiants avant le top-k existe** (`allowed_ids` sur ShardedHandle, `search_filtered` ; bitset par segment construit sur le champ rapide `_node_id`, donné au collecteur TopDocs comme documents vivants et aux pré-recherches v3 ; seuls les shards qui tiennent des ids permis sont interrogés). Le modèle « un document par version, une génération = ensemble d'ids hors des documents, une vue = requête + masque » se pose dessus sans changer le format ;
+- **non vérifié** : les statistiques BM25 (df, longueur moyenne) sur la vue ou sur l'index entier — à lire d'abord ; si c'est le dépôt, une option de statistiques restreintes à la vue serait à ajouter ;
+- **coût** : un passage sur le champ `_node_id` de chaque segment par requête, O(documents du segment), ~ms par shard à chiffrer ; amélioration évidente : cache du bitset par segment et par génération ;
+- **pour les 4 Go** : une ligne réindexée est supprimée puis réajoutée (delete_by_node_id), chaque réindexation laisse un document supprimé jusqu'à une fusion ; des lignes par version non supprimées feraient des vivants en double. La mesure par segment départagera (max_doc / num_docs, num_docs / lignes Scope, taille par document).
+Décision : pas de lot vues chez lucivy maintenant ; 2b-B s'appuie sur `allowed_ids` ; lucivy lit le point IDF dans son ticket de mesure. La page 30 reçoit ces lignes par arbre principal.
