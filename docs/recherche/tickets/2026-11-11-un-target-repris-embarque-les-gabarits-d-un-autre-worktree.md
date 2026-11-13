@@ -207,3 +207,16 @@ Aucun sous-processus ou target réel créé ; C est bien défini dans le driver
 réel, défaut limité à la fixture. Journal pilote-03896-cpu.log conservé,
 STOP sans retry. Compléter namespace C et constante subprocess.STDOUT avant
 nouvelle revue ; pas de qualification du pilote déduite de trois témoins.
+
+## Réserve410 avant GO — contrôleurs légitimes du scan frais
+
+Archi puis Mémoire : le lanceur parent reste vivant avec argv sous CONTROL,
+le poste ancêtre avec argv sous W. fresh_cache_guard n'exclut que son PID,
+donc les classerait attributed-live et refuserait toute reprise saine.
+Les quatre tests prépa stubent le scan complet et n'établissent pas ce cas.
+Ticket avant correction : reconnaître seulement deux rôles contrôleurs exacts,
+par ascendance PID/start, exe/SHA, argv complet, UID et cgroup stable archivés.
+Ne pas exempter tous les ancêtres ou tout un cgroup. Continuer à contrôler les
+FD/cwd vers le target et OLDW698, même pour un contrôleur reconnu ; seul le FD
+du script poste exact peut être attendu. Lecteur/build étranger et UNKNOWN
+attribués doivent rester refusés. Aucun run410 ni ancienGO reporté.
