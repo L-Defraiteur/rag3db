@@ -42,3 +42,44 @@ Pour fermer : rendre la frontière de propriété effective sur tous les points 
 Une seule modification de date de `build.rs`, SHA source inchangé et aucun diff git, a reconstruit le navigateur en 48,19 s. Attestation : 212 chemins du bon worktree, 212 contenus courants présents, chemins UI `.d` conformes, ELF SHA256 `3e3770df4000178626a8c07631ab124ab6673c67b643b7ad2cae6f6e7cfc7063`. Archi a vérifié cette attestation indépendamment.
 
 Les deux tests auparavant rouges passent inchangés séparément (1/0/0 chacun, 1,25 s et 67,85 s), puis le navigateur complet passe 36/0/0 en 132,35 s, ELF inchangé. Journaux nouveaux `nav-cible-erreur.log`, `nav-cible-flux.log`, `navigateur-reconstruit.log`, `attestation-nav-reconstruit.json` ; ancien rouge et ELF intacts. Le verdict agrégé R5 conserve les autres étapes vertes et remplace explicitement la seule étape navigateur. Aucune capture supplémentaire de la réponse HTTP n'a été ajoutée. Cette récupération confirme l'effet des gabarits périmés ; elle ne ferme pas le défaut de garde.
+
+
+## Reprise coordonnée — 13 novembre, contrôle périodique
+
+Le travail durable reste ouvert et relève de Recherche. La récupération de R5
+et la reprise ponctuelle du cache des couches ne corrigent pas les entrées
+Cargo non gardées. Reprise autorisée de ce ticket existant, en lot isolé,
+sans modifier les sources ni le target de la qualification union active.
+
+Nouveau cas concret lié à la même frontière : application couches69dc3fc25910f3e834652264edf6c71cca862ce0,
+piloteabaf460df4a254d825396051fffa9a648920d716, compilation Cargo directe dans
+un target initialement absent ; après qualification CPU, le target ne portait
+pas `.arbre-du-target`. Sur source union236e1e9f46f7e73eda21ac8cfa765f45a29f4595,
+la branche « marqueur absent » de `garder_le_target` aurait adopté le nouvel
+arbre sans invalider les empreintes locales. Réserve découverte en lecture
+seule, avant exécution ; aucun faux vert produit n'est établi par ce cas.
+
+Le pilote47861db8bc7321c9d8564ea784f20cb8538232a0 a exécuté une récupération
+explicite sur ce cache privé : provenance69 prouvée, appel de la garde sous
+l'ancien crate puis reprise sous le nouveau ; douze empreintes locales ont
+été retirées, zéro restante, empreintes externes conservées. Preuve conservée
+`cx-validation-couches-2a-union-v1/cache-reprise.json`, SHA256
+f6e2cb53026b8af0a0e0cf60363f737bc0a72314b0240287a4a44c451e1a60ee.
+L'arrêt F8 de ce pilote reste rouge ; cette attestation concerne la reprise
+du cache seulement. La continuation8110 utilise le cache déjà attribué à
+l'union, sans nouvelle invalidation. Ces ressources actives sont hors lot.
+
+Prochain travail Recherche : relire les entrées Cargo actuelles et la garde
+commune, écrire un contre-exemple CPU déterministe et proposer une correction
+durable fondée sur les primitives existantes. Un target absent/vide doit
+rester utilisable ; un target non vide sans provenance ne doit pas être
+silencieusement attribué au nouvel arbre. Aucune origine ne sera inventée,
+aucun partage adopté, aucune purge globale ni affaiblissement de provenance.
+Conserver les dépendances externes quand une reprise qualifiée est possible.
+
+Préparation, publication du plan/diff et témoins CPU sur fixtures privées
+sont autorisées ; source/recette publiées avant exécution, premier rouge
+inattendu STOP et diagnostic. Aucun Cargo/rustc de produit, navigateur,
+service, modèle, ancien target ni lot union touché. Toute qualification
+lourde ou intégration ultérieure attend un créneau et un couple exact revu.
+Le ticket reste ouvert jusqu'à correction durable et critères initiaux prouvés.
