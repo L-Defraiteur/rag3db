@@ -22,6 +22,7 @@ struct RelTableCatalogInfo;
 namespace storage {
 class Table;
 class NodeTable;
+class PrimaryKeyIndex;
 class RelTable;
 class DiskArrayCollection;
 struct DatabaseHeader;
@@ -36,6 +37,9 @@ public:
     // Les tables de relations dont une extrémité est cette table de nœuds.
     std::vector<Table*> getRelTablesOf(common::table_id_t nodeTableID);
     std::vector<Table*> getNodeTables();
+    // L'index de clé primaire de chaque table de nœuds : le point de reprise les tient en
+    // exclusif de la recopie des pages fantômes à leur publication.
+    std::vector<PrimaryKeyIndex*> getPrimaryKeyIndexes();
 
     static void recover(main::ClientContext& clientContext, bool throwOnWalReplayFailure,
         bool enableChecksums);
