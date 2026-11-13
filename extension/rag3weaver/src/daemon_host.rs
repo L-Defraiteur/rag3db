@@ -2233,6 +2233,47 @@ mod tests {
         String::from_utf8_lossy(&lu).into_owned()
     }
 
+    /// **Les thèmes de l'IDE** (c7, 13 novembre 2026 : tty pose forêt, puis cyberpunk,
+    /// cyborg et alien, dans `templates/themes/`, de la forme de daemon). Chaque fichier du
+    /// dossier est servi octet pour octet à `/ide/theme/<nom>.json` ; `/ide/themes.json` en
+    /// donne la liste, celle du dossier ; un nom inconnu rend 404.
+    #[test]
+    fn every_templates_theme_is_served_and_an_unknown_one_is_404() {
+        let (adresse, fil) = hote_garde("theme");
+        let get = |route: &str| {
+            let r = brut(&adresse, &format!("GET {route} HTTP/1.1\r\nHost: x\r\nCookie: rag3weaver_ide=theme\r\nConnection: close\r\n\r\n"), "\u{0}");
+            let (tete, corps) = r.split_once("\r\n\r\n").unwrap_or((r.as_str(), ""));
+            (tete.to_string(), corps.to_string())
+        };
+        let dossier = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/themes");
+        let mut noms: Vec<String> = std::fs::read_dir(&dossier)
+            .unwrap()
+            .filter_map(|e| {
+                let p = e.unwrap().path();
+                (p.extension()? == "json").then(|| p.file_stem().unwrap().to_string_lossy().into_owned())
+            })
+            .collect();
+        noms.sort();
+        assert!(noms.iter().any(|n| n == "foret") && noms.iter().any(|n| n == "daemon"), "{noms:?}");
+        for nom in &noms {
+            let (tete, corps) = get(&format!("/ide/theme/{nom}.json"));
+            assert!(tete.starts_with("HTTP/1.1 200") && tete.contains("application/json"), "{nom} : {tete}");
+            assert_eq!(corps, std::fs::read_to_string(dossier.join(format!("{nom}.json"))).unwrap(), "/ide/theme/{nom}.json sert templates/themes/{nom}.json");
+        }
+        let (tete, corps) = get("/ide/themes.json");
+        assert!(tete.starts_with("HTTP/1.1 200") && tete.contains("application/json"), "{tete}");
+        let mut servis: Vec<String> = serde_json::from_str(&corps).unwrap_or_else(|e| panic!("/ide/themes.json : {e} — {corps}"));
+        servis.sort();
+        assert_eq!(servis, noms, "la liste des thèmes est celle du dossier");
+        for inconnu in ["/ide/theme/inconnu.json", "/ide/theme/daemon", "/ide/theme/.json", "/ide/theme/../themes.json"] {
+            let (tete, _) = get(inconnu);
+            assert!(tete.starts_with("HTTP/1.1 404"), "{inconnu} : {tete}");
+        }
+        let (statut, _) = demander("POST", &format!("http://{adresse}/arret"), Some("theme"));
+        assert_eq!(statut, 200);
+        fil.join().unwrap();
+    }
+
     /// **L'entrée de l'IDE** (page 05 §2, lot A2) : sans jeton, rien ; l'URL
     /// d'entrée avec un faux jeton est refusée ; avec le bon, un 303 vers la
     /// page et le cookie `HttpOnly; SameSite=Lax`. Avec ce cookie seul, la
