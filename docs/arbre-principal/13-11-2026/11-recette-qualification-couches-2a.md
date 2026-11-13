@@ -100,3 +100,9 @@ Après fin/arrêt : copie intégrale preuves+superviseur sur deux postes et
 manifestes SHA comparés, sources propres et quiescence relues. Aucun master
 ou retrait/relance autorisé par cette recette. Quatre CPU et module restent
 NON JOUÉS à la publication du pilote ;2b/L6/top-k/outils non qualifiés.
+
+
+Delta après RO mémoire b38 : le finaliseur relit l’échéance APRÈS scan et
+hashes ELF, puis juste avant publication du verdict composé. Dépassement
+pendant ces contrôles coûteux donne ROUGE ; aucun VERT d’échéance antérieure
+réutilisé pour certifier une fin tardive. Aucun changement de l’application.
