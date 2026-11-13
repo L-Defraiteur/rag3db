@@ -143,6 +143,10 @@ Archi reprend l'enrichissement optionnel du grep dans son
 [ticket navigation](../../rag3weaver-archi/tickets/2026-11-12-exposer-la-navigation-dans-les-symboles.md).
 Ces tickets précisent les limites et critères. Source/recette avant lourd,
 fichiers communs coordonnés, aucun index utilisateur ni service existant modifié.
+Après fin du nettoyage de son parcours IDE, ED reprend également le défaut de
+[compilation de la boîte sans les features natives/code](../../everything-declarative/tickets/2026-11-12-la-boite-ne-compile-pas-sous-daemon-seul.md),
+déjà signalé par Embarquement et désormais publié sur master23ceed87b.
+Diagnostic du master courant avant correction ; ciblé CPU, aucune charge modèle.
 Les autres sessions restent disponibles pour les revues ou leurs dépendances
 réelles ; on ne les réveille pas pour remplir les quatre postes.
 

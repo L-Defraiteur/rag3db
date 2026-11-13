@@ -41,3 +41,26 @@ Log luciepc `~/.cache/embarquement-notes/activation/cpu-c.log`.
 Ces fichiers ne sont pas modifiés par la tranche d'embarquement.
 La prochaine qualification utilise `rag3db-native,code,daemon`, jeu supporté
 par les passes usuelles, avec la lib épinglée et aucun GPU requis.
+
+## Reprise autorisée après la livraison du parcours IDE — 13 novembre
+
+Les preuves initiales viennent de l'ancienne source ; vérifier d'abord les
+frontières de features sur le master qui intègre ED43e4f185b et Embar23ceed87b.
+ED reprend ce défaut existant après son nettoyage terminé, dans un worktree
+neuf. Le périmètre est boîte, lifecycle et usages d'outils sous leurs features
+réellement nécessaires ; ni nouveau comportement d'agent ni feature native
+ajoutée par défaut pour cacher la dépendance.
+
+Publier le diagnostic actuel, le contrat de features retenu et la recette CPU
+bornée avant compilation. Corriger les gardes/imports si les combinaisons sont
+bien supportées, puis prouver le jeu minimal sans natif, daemon seul et
+daemon+natif sans code, ainsi que le parcours de découverte concerné. Un refus
+volontaire doit être explicite et cohérent avec le contrat publié, pas un E0433
+accidentel ni une exclusion silencieuse des témoins. Pas de modèle/service/PG
+pour ce ciblé ; source figée, poste et plafond mémoire réels, lib épinglée pour
+la combinaison native. Premier rouge inattendu arrêté et diagnostiqué.
+
+Coordonner les rares fichiers partagés avec Archi ; son lot grep garde ses
+outils/Plans. Aucun ancien worktree nettoyé n'est rouvert, aucune pose du daemon
+personnel. Revue et passe adaptée avant tour master ; clôture seulement après
+correction et preuves des combinaisons réellement annoncées.
