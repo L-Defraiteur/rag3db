@@ -1,0 +1,38 @@
+{
+  "base": "ba0317ed146e71f59bb8cbbf383822e100cb73e8",
+  "previous_package": "99b9796a01b8c6a98e2d44a591d446813333a806",
+  "master": "4e2e2bfbb7c8ce670a49a06a36580d481d9abbc0",
+  "rebased_code_head": "d77046bb90e4a655375caa689ea5c7ae623604f8",
+  "old_qualified_app": "69dc3fc25910f3e834652264edf6c71cca862ce0",
+  "range_diff_equal_patches": 9,
+  "layer_files_byte_identical": [
+    "extension/rag3weaver/src/dataflow/migrations/publication.rs",
+    "extension/rag3weaver/src/dataflow/migrations/publication/layers.rs",
+    "extension/rag3weaver/src/dataflow/migrations/publication/layers/tests.rs"
+  ],
+  "incoming_rust": [
+    "extension/rag3weaver/src/daemon_host/atelier_fichiers.rs"
+  ],
+  "incoming_paths": [
+    "docs/everything-declarative/13-11-2026/01-rapport-de-session.md",
+    "docs/everything-declarative/13-11-2026/03-knowledge-dump.md",
+    "docs/everything-declarative/13-11-2026/04-recette-read-scope.md",
+    "docs/everything-declarative/13-11-2026/05-preuves-read-scope.md",
+    "docs/everything-declarative/13-11-2026/06-integration-read-scope.md",
+    "docs/everything-declarative/13-11-2026/read-scope/apres-poste.py",
+    "docs/everything-declarative/13-11-2026/read-scope/driver.py",
+    "docs/everything-declarative/13-11-2026/read-scope/finaliser.py",
+    "docs/everything-declarative/13-11-2026/read-scope/integration-audit.json",
+    "docs/everything-declarative/13-11-2026/read-scope/lancer.py",
+    "docs/everything-declarative/13-11-2026/read-scope/range-diff.txt",
+    "docs/everything-declarative/tickets/2026-11-13-read-scope-masque-les-erreurs-de-lecture-des-worktrees.md",
+    "docs/tickets/closed/2026-11-13-read-scope-masque-les-erreurs-de-lecture-des-worktrees.md",
+    "extension/rag3weaver/README.md",
+    "extension/rag3weaver/src/daemon_host/atelier_fichiers.rs"
+  ],
+  "master_nonoverlap_preserved": 7930,
+  "master_deletions_preserved": true,
+  "union_product_equals_exact_overlay": true,
+  "runtime_on_union": false,
+  "previous_proofs": "72db9b21f65d7bfa6430eb10740cf77d2a17e9d2"
+}
