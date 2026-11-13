@@ -9,11 +9,11 @@ AUTH_PATH=Path(os.environ['RAG3WEAVER_VALIDATION_RECU']);AUTH=json.loads(AUTH_PA
 assert START<=time.monotonic()<END
 assert json.loads((AUTH_PATH.parent/'recette.json').read_text())['delai']==1800
 P.mkdir(exist_ok=False);assert not T.exists(),'target must start absent';T.mkdir()
-for name in ['tmp','config','data','cache','xdg-state','state-fixture/private']:(P/name).mkdir(parents=True)
+for name in ['tmp','config','data','cache','xdg-state','state-fixture']:(P/name).mkdir(parents=True)
 CG=Path('/proc/self/cgroup').read_text().strip().split('::',1)[1];G=Path('/sys/fs/cgroup'+CG)
 assert (G/'memory.max').read_text().strip()=='34359738368' and (G/'memory.high').read_text().strip()=='max'
 E={k:os.environ[k] for k in ['HOME','USER','LOGNAME','PATH','SHELL','LANG','LC_ALL','TZ','CARGO_HOME','RUSTUP_HOME','DBUS_SESSION_BUS_ADDRESS','RAG3WEAVER_VALIDATION_RECU','RAG3WEAVER_VALIDATION_JETON'] if k in os.environ}
-E.update(CARGO_MANIFEST_DIR=str(C),CARGO_TARGET_DIR=str(T),CARGO_BUILD_JOBS='8',CARGO_INCREMENTAL='0',LUCIVY_SCHEDULER_THREADS='8',RUST_TEST_THREADS='8',RUST_BACKTRACE='1',TMPDIR=str(P/'tmp'),XDG_CONFIG_HOME=str(P/'config'),XDG_DATA_HOME=str(P/'data'),XDG_CACHE_HOME=str(P/'cache'),RAG3WEAVER_CACHE_DIR=str(P/'cache'),XDG_STATE_HOME=str(P/'xdg-state'),RAG3WEAVER_STATE_DIR=str(P/'state-fixture/private'),POSTE_MEM_MAX='32G',RAG3WEAVER_BUILD_MEMORY_HIGH='0',RAG3WEAVER_TARGET_MAX_GO='32')
+E.update(CARGO_MANIFEST_DIR=str(C),CARGO_TARGET_DIR=str(T),CARGO_BUILD_JOBS='8',CARGO_INCREMENTAL='0',LUCIVY_SCHEDULER_THREADS='8',RUST_TEST_THREADS='8',RUST_BACKTRACE='1',TMPDIR=str(P/'tmp'),XDG_CONFIG_HOME=str(P/'config'),XDG_DATA_HOME=str(P/'data'),XDG_CACHE_HOME=str(P/'cache'),RAG3WEAVER_CACHE_DIR=str(P/'cache'),XDG_STATE_HOME=str(P/'xdg-state'),RAG3WEAVER_STATE_DIR=str(P/'state-fixture'),POSTE_MEM_MAX='32G',RAG3WEAVER_BUILD_MEMORY_HIGH='0',RAG3WEAVER_TARGET_MAX_GO='32')
 assert not Path(E['RAG3WEAVER_STATE_DIR']).is_relative_to(Path(E['XDG_STATE_HOME'])) and not Path(E['XDG_STATE_HOME']).is_relative_to(Path(E['RAG3WEAVER_STATE_DIR']))
 for suffix in ['','_EMBEDDER','_RERANKER','_OCR']:E['RAG3WEAVER_BURN_DEVICE'+suffix]='cpu'
 PREFIX='dataflow::migrations::publication::';ADMISSION=PREFIX+'admission::tests::'
@@ -183,7 +183,7 @@ for sig in [signal.SIGTERM,signal.SIGINT,signal.SIGHUP]:signal.signal(sig,interr
 verdict='ROUGE';qualification=dict(cpu_exacts='NON_QUALIFIE',cpu_lib='NON_QUALIFIE');before=memory()
 try:
  guard()
- save('source.json',dict(app=APP,pilot=PILOT,worktree=str(W),control=str(CONTROL),target=str(T),target_started_absent=True,initial=START,deadline=END,budget=1800,receipt=str(AUTH_PATH),cpu_features=[],state_roots=dict(xdg=str(P/'xdg-state'),rag=str(P/'state-fixture/private')),native_runtime_qualified=False,driver_sha256=digest(__file__),cgroup=CG,memory_max=(G/'memory.max').read_text().strip(),memory_high=(G/'memory.high').read_text().strip(),caps=dict(target_guard=30,compile=900,each_exact=30,cpu_lib=300),environment_keys=sorted(E),cpu_roles=4))
+ save('source.json',dict(app=APP,pilot=PILOT,worktree=str(W),control=str(CONTROL),target=str(T),target_started_absent=True,initial=START,deadline=END,budget=1800,receipt=str(AUTH_PATH),cpu_features=[],state_roots=dict(xdg=str(P/'xdg-state'),rag=str(P/'state-fixture')),native_runtime_qualified=False,driver_sha256=digest(__file__),cgroup=CG,memory_max=(G/'memory.max').read_text().strip(),memory_high=(G/'memory.high').read_text().strip(),caps=dict(target_guard=30,compile=900,each_exact=30,cpu_lib=300),environment_keys=sorted(E),cpu_roles=4))
  run('verifier',['python3',str(Q/'confiner_validation.py'),'verifier'],30)
  run('target-guard',['bash','-c','. "$1"; garder_le_target "$2" "$3"','initial-empty-target',str(Q/'garde_target.sh'),str(T),str(C)],30)
  assert (T/'.arbre-du-target').read_text().strip()==str(C) and not list(T.glob('**/.fingerprint/*'))

@@ -42,4 +42,4 @@ Nouvelle source :15fonctions écrites, NONJOUÉES. Vrais3nœuds+spiesauxargument
 
 ## Réserve profil pilote8c8 levée dans le delta préparé
 
-Avant toutGO/run, Recherche signale XDG_STATE_HOME manquant avec HOME réel. Nouveauprofil crée P/xdg-state et P/state-fixture/private nonimbriqués, exportsdes2racines et attestationGDB+finale ; sourceRustaffa inchangée. AucunAuth/T/Cargo consommé sur8c8. RO/GOexactnouveaupilote encore requis.
+Avant toutGO/run, Recherche signale XDG_STATE_HOME manquant avec HOME réel. Nouveauprofil crée P/xdg-state et P/state-fixture nonimbriqués, exportsdes2racines et attestationGDB+finale ; sourceRustaffa inchangée. AucunAuth/T/Cargo consommé sur8c8. RO/GOexactnouveaupilote encore requis.
