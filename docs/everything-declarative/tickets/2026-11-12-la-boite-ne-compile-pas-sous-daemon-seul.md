@@ -110,3 +110,27 @@ Reprise diagnostique séparée `diagnostic-gitlink`, même cible privée, primit
 900 s : minimum `cargo check --lib --no-default-features -j8` (timeout 300 s),
 puis daemon seul avec `--features daemon` (300 s). Premier rouge arrête ; le
 rouge E0433 attendu doit être constaté avant correction de production.
+
+### Défaut reproduit puis source corrective préparée
+
+533639368, diagnostic-gitlink : minimum vert 48,10 s ; daemon seul reproduit
+exactement E0433 mail120/lifecycle exclu. Portée arrêtée rouge, aucun troisième
+jeu exécuté. Source corrective : lifecycle sous daemon, introspection native
+seule conditionnelle, identité HOST_SERVICE de protocole réexportée par hôte.
+Gardes code sur read_file/import trait ; Cargo.toml/default inchangés.
+Lecture de fiche factorisée sans changement de politique : trois témoins
+valide/absente/corrompue ou sans jeton, aucune requête ni démarrage implicite.
+Témoin moteur absent sans native ; jeton masqué dans Debug conservé.
+
+Recette corrective publiée [02-recette-frontieres-boite.sh](../13-11-2026/02-recette-frontieres-boite.sh) :
+primitive1800s incluant nettoyage, j8/Max32/HIGH0/target privé existant ; chaque
+jeu check --tests <=180s, compilation ELF libtests <=420s, chaque filtre <=60s.
+Ordre minimum puis daemon puis rag3db-native,daemon sans code. Minimum joue
+le parcours chat générique existant (1) ; daemon mail9+lifecycle8 ; natif
+mail9+lifecycle7. Zéro ignoré attendu, inventaire et copie ELF/SHA par jeu
+AVANT toute compilation suivante ; arrêt au premier défaut même de comptage.
+Arbres de dépendances minimum/daemon refusent rag3db et codeparsers actifs.
+Lib29 immuable exportée uniquement pour le troisième jeu. Pas de service,
+modèle, base personnelle, navigateur, PG ni HTTP. check_features conserve les
+cinq jeux antérieurs et en ajoute trois (minimum/daemon/natif-daemon), avec
+no-default-features explicite. Diff à revoir avant globale/master.
