@@ -86,23 +86,52 @@ export type FluxStatus = "ouvert" | "coupé, reprise…" | "fermé";
 
 /// Le flux de l'hôte : un `EventSource` pour toute la page. `Last-Event-ID` est
 /// renvoyé par le navigateur à la reconnexion ; l'hôte rejoue ce qu'il garde.
+///
+/// **Fermé au départ de la page, rouvert à son retour** (mesure de l'étape navigateur,
+/// 13 novembre 2026) : une page quittée reste vivante dans le cache d'aller-retour du
+/// navigateur, son flux ouvert. Le navigateur ne tient que six connexions par hôte : après
+/// six vues ou rechargements, la suivante attendait une minute qu'une connexion se libère.
+/// La page ferme son flux sur `pagehide` ; revenue du cache (`pageshow`, `persisted`), elle
+/// le rouvre depuis le dernier événement reçu, que l'hôte rejoue.
 export function openFlux(onEvent: (e: FluxEvent) => void, onStatus: (s: FluxStatus) => void): () => void {
   // `repos` : un worktree attaché par l'atelier (`RepoAttached`), que la barre montre.
   // `etat` : les états que l'hôte pousse (`onEtat`), au lieu d'une relecture après un événement.
-  const source = new EventSource("/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens,repos,accords,etat");
-  source.onopen = () => onStatus("ouvert");
-  source.onerror = () => onStatus("coupé, reprise…");
-  source.onmessage = (e) => {
-    try {
-      onEvent(JSON.parse(e.data));
-    } catch {
-      /* une ligne illisible ne coupe pas le flux */
-    }
+  const adresse = "/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens,repos,accords,etat";
+  let source: EventSource | null = null;
+  let dernier = "";
+  const brancher = () => {
+    const s = new EventSource(dernier ? `${adresse}&depuis=${encodeURIComponent(dernier)}` : adresse);
+    s.onopen = () => onStatus("ouvert");
+    s.onerror = () => onStatus("coupé, reprise…");
+    s.onmessage = (e) => {
+      if (e.lastEventId) dernier = e.lastEventId;
+      try {
+        onEvent(JSON.parse(e.data));
+      } catch {
+        /* une ligne illisible ne coupe pas le flux */
+      }
+    };
+    source = s;
+    // Le reste de `__ide` (les relevés des vues, que les témoins lisent) est gardé.
+    const w = window as unknown as { __ide?: Record<string, unknown> };
+    w.__ide = { ...(w.__ide ?? {}), flux: s };
   };
-  // Le reste de `__ide` (les relevés des vues, que les témoins lisent) est gardé.
-  const w = window as unknown as { __ide?: Record<string, unknown> };
-  w.__ide = { ...(w.__ide ?? {}), flux: source };
-  return () => source.close();
+  const partir = () => {
+    source?.close();
+    source = null;
+  };
+  const revenir = (e: PageTransitionEvent) => {
+    if (e.persisted && !source) brancher();
+  };
+  brancher();
+  window.addEventListener("pagehide", partir);
+  window.addEventListener("pageshow", revenir);
+  return () => {
+    window.removeEventListener("pagehide", partir);
+    window.removeEventListener("pageshow", revenir);
+    partir();
+    onStatus("fermé");
+  };
 }
 
 // **Le bus du flux dans la page** : une vue s'abonne aux événements que le
