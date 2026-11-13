@@ -484,6 +484,8 @@ impl DaemonHost {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound && matches!(edition, Edition::Insertion { avant: 1, .. }) => String::new(),
             Err(e) => return Err(format!("{} : {e}", r.chemin.display())),
         };
+        #[cfg(test)]
+        tests::apres_lecture(&r.chemin);
         let apres = texte_apres(&avant, &edition).map_err(|e| format!("{} : {e}", r.chemin.display()))?;
         let mut dit = Vec::new();
         if let Some(w) = &r.worktree {
@@ -718,6 +720,61 @@ pub(super) mod tests {
         a.appeler("insert_lines", json!({ "path": "nouveau/../notes.txt", "at": 3, "text": "trois" })).expect("dans la racine, le vrai notes.txt");
         assert_eq!(std::fs::read_to_string(a.racine.join("notes.txt")).unwrap(), "un\ndeux\ntrois\n", "notes.txt complété, pas écrasé");
         assert!(!a.racine.join("nouveau").exists(), "le dossier absent n'est pas créé");
+    }
+
+    /// **Le crochet d'un témoin entre la lecture d'un fichier et son écriture** : un changement
+    /// fait ailleurs à ce moment-là (une autre conversation, un `sed`, l'utilisatrice).
+    #[allow(clippy::type_complexity)]
+    static CROCHETS: std::sync::Mutex<Vec<(PathBuf, Box<dyn Fn() + Send>)>> = std::sync::Mutex::new(Vec::new());
+
+    pub(crate) fn apres_lecture(chemin: &Path) {
+        let crochets = CROCHETS.lock().unwrap_or_else(|p| p.into_inner());
+        for (p, f) in crochets.iter() {
+            if p == chemin {
+                f();
+            }
+        }
+    }
+
+    /// **Une écriture garde le mode du fichier** (ticket d'ED,
+    /// `2026-11-13-une-ecriture-de-l-atelier-perd-le-mode-du-fichier.md`) : un script `0755` et
+    /// un fichier `0600`, réécrits par `replace_text`, gardent leur mode.
+    #[test]
+    fn a_workshop_write_keeps_the_file_mode() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        for (nom, mode) in [("lancer.sh", 0o755), ("secret.txt", 0o600)] {
+            let f = a.racine.join(nom);
+            std::fs::write(&f, "un\ndeux\n").unwrap();
+            std::fs::set_permissions(&f, std::fs::Permissions::from_mode(mode)).unwrap();
+            a.appeler("replace_text", json!({ "path": nom, "old": "deux", "new": "DEUX" })).expect("replace_text");
+            assert_eq!(std::fs::read_to_string(&f).unwrap(), "un\nDEUX\n");
+            let garde = std::fs::metadata(&f).unwrap().permissions().mode() & 0o777;
+            assert_eq!(garde, mode, "{nom} garde son mode {mode:o} (il a {garde:o})");
+        }
+        let restes: Vec<_> = std::fs::read_dir(&a.racine).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).filter(|n| n.contains("atelier-tmp")).collect();
+        assert!(restes.is_empty(), "aucun temporaire ne reste : {restes:?}");
+    }
+
+    /// **Une écriture refuse un fichier changé depuis sa lecture** (ticket d'ED,
+    /// `2026-11-13-une-ecriture-de-l-atelier-ecrase-sans-controle-de-concurrence.md`) : le
+    /// fichier change entre la lecture d'`avant` et l'écriture ; l'atelier refuse en le
+    /// disant, et le changement fait ailleurs reste.
+    #[test]
+    fn a_workshop_write_refuses_a_file_changed_since_it_was_read() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let f = a.racine.join("notes.txt");
+        std::fs::write(&f, "un\ndeux\n").unwrap();
+        let canon = f.canonicalize().unwrap();
+        let ailleurs = canon.clone();
+        CROCHETS.lock().unwrap().push((canon.clone(), Box::new(move || std::fs::write(&ailleurs, "changé ailleurs\n").unwrap())));
+        let r = a.appeler("replace_text", json!({ "path": "notes.txt", "old": "deux", "new": "DEUX" }));
+        CROCHETS.lock().unwrap().retain(|(p, _)| *p != canon);
+        let dit = match &r { Ok(v) => Atelier::texte(v), Err(e) => e.clone() };
+        assert!(dit.contains("a changé depuis sa lecture"), "refusé en le disant : {dit}");
+        assert_eq!(std::fs::read_to_string(&f).unwrap(), "changé ailleurs\n", "le changement fait ailleurs reste");
     }
 
     /// **`read_file` dans l'atelier** : jamais plus de 200 lignes d'un coup (Lucie), la
