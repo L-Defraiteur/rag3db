@@ -264,3 +264,10 @@ et profil whitelist capturé raw, unique flagancien retiré, vraies primitives
 neuves et vraies primitives créer/terminer état/résidus, pas de copie de garde.
 Coordination/santés7879 avant/après seul CREATE, rendu immédiat ; zéroPG/Vertex.
 GO final de recette bornée C7 requis avant entrée, préparation autorisée.
+
+Le pilote07 exige aussi avant tout complément les fingerprints effectifs des
+paires précompilé/réel : aucun tag supplémentaire sauf default pour NAV/E2E,
+aucune différence de profil/config ; default=[] relu dans Cargo.toml et aucune
+branche cfgdefault dans src/build.rs. Ledger des tags écrit avant inventaires.
+Absence de nonjugé dans les logs lib/NAV exigée. Préparation renforcée, toujours
+sans Cargo et sans consommation de la fenêtre CREATE.
