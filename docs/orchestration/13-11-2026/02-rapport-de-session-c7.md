@@ -274,3 +274,18 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   suivants à 250 ms** (118 des 132 s de l'étape) — ED pose une sonde de la lib (chaque appel sous 5 s) et
   cherche où vont les 60 s ; c'est aussi la première question lente de l'atelier de Lucie à chaque
   réouverture.
+- **19 h 35, un défaut du moteur trouvé par le lot 1a, établi par le cœur** sur une copie de la base d'arbre
+  principal : dans une transaction, des relations posées par MERGE puis un COPY dans une autre table de
+  nœuds ; **au ROLLBACK, les nœuds sont défaits mais pas les relations**, qui restent orphelines sur disque
+  et reviennent quand les places sont réoccupées — d'où le faux « supprimée par une autre transaction » du
+  repreneur. Le cœur pose le témoin C++, le correctif (le ROLLBACK défait les relations avec leurs nœuds),
+  le ticket moteur avec sa portée, et **une sonde** (relations dont un bout n'existe plus, par table et par
+  sens) à jouer sur des copies de code-lourd et code-principal : si des orphelines dorment dans les bases
+  de Lucie après un paquet défait, la réparation sera un lot à part, à son mot. Le lot 1a (branche
+  `arbre-principal/scope-version`, 2a2917440 : schéma à versions, estampille, « à migrer », creux refusé,
+  garde des comptes, rebâti du plein texte, versions incomplètes, relation interne masquée, lecteurs
+  adaptés) est vert partout sauf ce test ; **on attend la lib du correctif** plutôt que de pousser à côté
+  d'un vrai défaut ; 1a-2 (sondes, bancs, mesures) en ticket. archi : un rouge de plus « vert seul, rouge
+  sous la lib entière », une lecture pendant un lot réindexé qui voit le lot à moitié (test d'octobre) —
+  ticket à recherche, la lecture sale sous V2 du 7 à départager. embarquement : les baux d'usage verts,
+  en file après archi.
