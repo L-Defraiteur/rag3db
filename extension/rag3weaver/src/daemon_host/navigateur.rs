@@ -201,21 +201,43 @@ impl Navigateur {
             .and_then(|t| t.iter().find(|c| c["type"] == "page"))
             .unwrap_or_else(|| panic!("aucun onglet : {cibles}"))["targetId"]
             .clone();
-        let attache = n.commande("Target.attachToTarget", json!({ "targetId": onglet, "flatten": true }));
-        n.session = attache["sessionId"].as_str().unwrap().to_string();
+        n.attacher(onglet);
+        n
+    }
+
+    /// Attache l'onglet `cible`, en fait l'onglet courant et le prépare : ses domaines, et
+    /// le relevé des appels en vol.
+    fn attacher(&mut self, cible: Value) {
+        let attache = self.commande("Target.attachToTarget", json!({ "targetId": cible, "flatten": true }));
+        self.session = attache["sessionId"].as_str().unwrap().to_string();
         for domaine in ["Runtime.enable", "Log.enable", "Page.enable"] {
-            n.commande(domaine, json!({}));
+            self.commande(domaine, json!({}));
         }
         // Les appels en vol, relevés dès la création de chaque document : une
         // attente dépassée dit lesquels n'ont jamais répondu.
-        n.commande(
+        self.commande(
             "Page.addScriptToEvaluateOnNewDocument",
             json!({ "source": "(() => { const vol = new Map(); let n = 0; window.__temoin_en_vol = vol; \
                 const f = window.fetch; window.fetch = (...a) => { const k = ++n; \
                 vol.set(k, `${a[0]} ${typeof a[1]?.body === 'string' ? a[1].body.slice(0, 300) : ''}`); \
                 return f(...a).finally(() => vol.delete(k)); }; })()" }),
         );
-        n
+    }
+
+    /// **Un onglet de plus**, vide, qui devient l'onglet courant ; rend la session de
+    /// l'onglet d'avant (pour y revenir par [`Self::onglet`]).
+    #[cfg(feature = "code")]
+    pub(crate) fn nouvel_onglet(&mut self) -> String {
+        let avant = std::mem::take(&mut self.session);
+        let cree = self.commande("Target.createTarget", json!({ "url": "about:blank" }));
+        self.attacher(cree["targetId"].clone());
+        avant
+    }
+
+    /// Revient à l'onglet de cette session.
+    #[cfg(feature = "code")]
+    pub(crate) fn onglet(&mut self, session: &str) {
+        self.session = session.to_string();
     }
 
     /// Une commande à l'onglet (au navigateur tant qu'aucune session), et sa
@@ -1217,5 +1239,68 @@ fn plus_de_six_vues_de_suite_se_rendent_chacune_en_moins_de_cinq_secondes() {
     for (i, t) in temps.iter().enumerate() {
         assert!(*t < Duration::from_secs(5), "la vue n°{} a attendu {t:?} ; toutes (ms) : {:?}", i + 1, temps.iter().map(|t| t.as_millis()).collect::<Vec<_>>());
     }
+    assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
+}
+
+
+/// **Six onglets de l'IDE ouverts, une septième vue se rend en moins de 5 s** (Lucie, 13 novembre
+/// 2026 : « oui, absolument », plusieurs onglets de l'IDE ouverts en même temps). Chaque page
+/// tenait son flux (`/ide/flux`), une des six connexions HTTP/1.1 que le navigateur ouvre au plus
+/// vers un même hôte : six onglets ouverts, et toute requête d'un septième attendait sans fin.
+/// Un seul flux par navigateur, partagé par les onglets (`SharedWorker`), laisse les autres
+/// connexions aux requêtes. `docs/everything-declarative/13-11-2026/02-mesure-de-l-etape-navigateur.md`.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+#[test]
+fn six_onglets_ouverts_laissent_une_septieme_vue_se_rendre() {
+    let Some(binaire) = navigateur_ou_saut("six_onglets_ouverts_laissent_une_septieme_vue_se_rendre") else {
+        return;
+    };
+    let d = tempfile::tempdir().unwrap();
+    let (base, arbre) = (d.path().join("base"), d.path().join("arbre"));
+    std::fs::create_dir_all(&base).unwrap();
+    std::fs::create_dir_all(arbre.join("src")).unwrap();
+    std::fs::write(arbre.join("main.rs"), "fn main() {\n    depart();\n}\n\nfn depart() {}\n").unwrap();
+    let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+    let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &base).unwrap();
+    let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+    m["workspace"]["root"] = json!(arbre.to_string_lossy());
+    std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    let manifeste = manifeste.to_string_lossy().to_string();
+    let (adresse, _fil) = super::tests::hote_garde("j");
+    let r = crate::daemon::agent_de_temoin()
+        .post(format!("http://{adresse}/ide/call"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": manifeste, "name": "index", "arguments": { "confirm": true } }).to_string())
+        .unwrap();
+    assert_eq!(r.status(), 200);
+    let etat: Value = {
+        let mut r = crate::daemon::agent_de_temoin().get(format!("http://{adresse}/ide/etat")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    let id = etat["backends"]
+        .as_array()
+        .and_then(|b| b.iter().find(|b| b["manifest"] == manifeste.as_str()))
+        .unwrap_or_else(|| panic!("le backend n'est pas dans l'état : {etat}"))["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let racine = format!("http://{adresse}");
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), &format!("document.querySelector('#vue a[href=\"/ide/code/{id}/arbre/\"]')"));
+    // Six onglets ouverts sur l'IDE, chacun son flux branché.
+    let arbre_vu = "document.querySelectorAll('#vue li a').length > 0 && window.__ide?.flux?.readyState === 1";
+    n.aller(&format!("{racine}/ide/code/{id}/arbre/"), arbre_vu);
+    for _ in 1..6 {
+        n.nouvel_onglet();
+        n.aller(&format!("{racine}/ide/code/{id}/arbre/"), arbre_vu);
+    }
+    // Le septième.
+    n.nouvel_onglet();
+    let debut = Instant::now();
+    n.aller(&format!("{racine}/ide/code/{id}/fichier/main.rs"), "document.querySelector('#L5')?.innerText.includes('fn depart()')");
+    let duree = debut.elapsed();
+    assert!(duree < Duration::from_secs(5), "la septième vue a attendu {duree:?}");
     assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
 }
