@@ -189,4 +189,8 @@ fn l_equipier_ecrit_la_doc_d_un_depot_de_test_par_pas_juges() {
     } else {
         eprintln!("l'équipier a fait sans plan ({} pas)", pas.len());
     }
+    // Le juge servi tient l'hôte le temps d'un jugement : l'arrêter avant de lâcher le
+    // dossier (13 novembre 2026).
+    let erreurs = host.shutdown();
+    assert!(erreurs.is_empty(), "l'arrêt de l'hôte : {erreurs:?}");
 }

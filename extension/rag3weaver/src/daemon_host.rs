@@ -1298,6 +1298,11 @@ impl DaemonHost {
     /// indexations au prochain paquet, leurs réactions, leur catalogue.
     pub fn shutdown(&self) -> Vec<String> {
         let mut erreurs = Vec::new();
+        // **Le juge d'abord** (13 novembre 2026) : il appelle les backends, et ses
+        // appels écrivaient encore des runs après l'arrêt.
+        if let Some(e) = self.arreter_le_juge() {
+            erreurs.push(e);
+        }
         // La cause est celle du registre : `host_stopped`.
         let annules = self.background.cancel_all();
         if annules > 0 {
