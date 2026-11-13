@@ -27,10 +27,11 @@ class Preparation(unittest.TestCase):
             def launch(*a, **kw):
                 events.append('launch')
                 raise Launched
-            ns = dict(P=Path(d), E={}, END=1000, time=types.SimpleNamespace(monotonic=lambda: 1),
+            ns = dict(P=Path(d), C=Path(d), E={}, END=1000, time=types.SimpleNamespace(monotonic=lambda: 1),
                       guard=lambda: events.append('guard'), state=lambda *a: None,
+                      require=lambda ok, reason: self.assertTrue(ok, reason),
                       fresh_cache_guard=lambda: events.append('fresh'),
-                      subprocess=types.SimpleNamespace(Popen=launch))
+                      subprocess=types.SimpleNamespace(Popen=launch, STDOUT=None))
             load({'run'}, ns)
             with self.assertRaises(Launched): ns['run']('cache-reprise', ['fixture-not-executed'], 120)
             self.assertEqual(events, ['guard', 'fresh', 'launch'])
