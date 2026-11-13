@@ -1,8 +1,9 @@
 # Un lecteur plein texte retient des écritures de blobs
 
-- **État** : ouvert, correctif en préparation, qualification non jouée.
+- **État** : ouvert ; ciblé privé P14 qualifié sur a43c475f9 (preuve liée), qualification globale de l’union et livraison attendues.
 - **Famille** : produit.
 - **Gravité** : tentative de persistance en lecture seule ; la connexion native refuse, mais le lecteur ne doit pas préparer ces écritures.
+- **Atteignable en service** : oui, lecteur Catalog BlobBacked ; tentative observée sur fixture synthétique privée, pas de persistance réussie prouvée.
 - **Touche rag3weaver** : oui, initialiser_en_lecture, ouverture FTS et CypherBlobStore.
 - **Pour** : arbre-principal ; revues mémoire/recherche/orchestration.
 
