@@ -183,3 +183,16 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   de port plausible dans la fixture) — à relire par Lucie, ça touche l'activation ; arbre principal prend le
   **lot 1a des vues, la version de scope par contenu**, page de contrat d'abord (relue par ED et recherche),
   indépendant de la question de l'adoption du raccord ; wt-deplace était déjà atterri par Codex (1904e04e4).
+- **17 h 41, le contrat de la version de scope (lot 1a) est écrit** (arbre principal, 8b579d2d4,
+  `docs/arbre-principal/13-11-2026/29-contrat-de-la-version-de-scope.md`) : le mécanisme générique existe
+  depuis le 12 (identité par contenu, projection, masque) et la forme pour le code dans un e2e privé ; le
+  lot 1a l'active dans le schéma de production. Identité = format, cellule, champs rendus octet pour octet
+  (name, signature, content, docstring, scope_type, language), sans position ni modèle ; une seule
+  référence ScopeContent_DERIVED_FROM avec l'état de rendu par occurrence ; morceaux et vecteurs partagés
+  par version, modèle, cellule ; le creux à témoigner. **Décision de c7, à relire par Lucie** : (A) le
+  schéma suit la base — une base neuve reçoit les versions, une base existante ouvre comme avant et se
+  dit « à migrer (1b) » dans /etat et l'IDE ; aucune base de Lucie ne change avant 1b. parent_name hors
+  de la version (c'est de la position), ED tranche. Le cœur : ses deux seuils mesurés disent un vrai
+  défaut (une suppression sous un HNSW rempli par SET, non checkpointé, coûte avec la taille : 1,97 → 8,01 ms
+  de 1 500 à 15 000 lignes ; checkpointé 1,96 → 2,39), ticket posé, known_red. Embarquement : port 0
+  annoncé codé, passe lancée.
