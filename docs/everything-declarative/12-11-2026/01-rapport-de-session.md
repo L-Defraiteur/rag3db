@@ -525,3 +525,20 @@ les trois suites réellement jouées dessus, distinct du préparé. Tous logs/ro
 conservés. Ticket déplacé fermé avec source/proofs, README et nouveauté/recette
 actualisés. Revues C7/Mémoire Git et Mémoire UI favorables ; tour master à demander
 après copie finale2postes, puis contrôles et cleanup gardé W/target/PG après dump.
+
+### Empilage C7 Pub→ED→Embar, union C9 finie
+
+Avant tout master, C7 a demandé basePub31 (parent8f) ; branche4 nouvelle, sourcec9,
+seul conflit news résolu en gardant les deux nouveautés. Les neuf fichiers Pub
+strictement inchangés ; aucun Rust après gelc9, SHA/tree transmis à Embarquement.
+Union complète : F5/min/3ELF verts, lib2267/0/66(47.57s), NAV40(131.66s),
+lect27(9.73s), hôte13(12.45s), PG36(7.62s), filets2, scopeVERT/restes[]/quiescence[].
+Même deadline878111, reste3809 aprèsposte, bornecontrôle2834.58/6000 inclut
+préunions/préparation. Relevé budget au mauvais chemin séparé/restauré depuis
+copie fidèle, noteaudit conservée sans effet sur délai. Target29846025589octets.
+
+Rawproofs `globale-union-pub`, quatreELF(SHAs/mappings), 223gabarits, équivalences
+Git/UI4d/fe0 et Pub31 ; CLI5/tx25 restent preuve Arbre. PGdumpfinalrafraîchi, ancien
+avant-Pub conservé. Aucun master ED avant Pub+C7. Signalshow_progress d’Embar842
+reçu/diagROtransmis, aucun runtimeédité : fixture demande index actif sansbarrière.
+Routage C7 en cours ; préserver sourcec9 immutable pour sa qualification parallèle.

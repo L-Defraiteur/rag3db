@@ -97,3 +97,13 @@ Reste livraison : tourC7/postepush/dernierfetch/ifVERT/3contrôles puisquiescenc
 PGdump+SHA/drop0connexions, archiveadmcp-a/gardefraîchedca13/retraitW2postes,
 brancheslocales-d/targetretiré ; remotes/logs/rouges/ELF/admins2postes restent.
 Ancien reste-explicite et arbre personnel Lucie restent hors périmètre.
+
+Dernierjalon : C7imposePub→ED→Embar, basePub31, branche4 sourceRUSTFIGÉEc9e6b6e39
+TREEcddac94f03a4fb4e73f6870f5bbd3550c12ffdec. ToutproduitPubinchangé(9paths).
+UnionEDPubSymboles VERTE F5/min/lib2267/66/NAV40/lect27/hôte13/PG36, scopes0/restes[].
+Preuvesglobale-union-pub, borne2834.58/6000mêmedeadline878111, pasVertexbis.
+AttendrePubmaster puisrebaseMD/équivalencecode sourcec9 etàtoiC7. Candidat3024/scripts
+push3024 restentHISTORIQUES NONexécutés ; mettreàjouravanttoutpush. DumpPGfinalnouveau,
+ancienavant-Pubgardé. Sourcec9transmiseEmbar, aucuneéditionRustautoriséeaveugle.
+DiagROshow_progress842 relèvefixture200sansbarrièreentre2outils, contratcarteindexactif ;
+Embarrougegardéetpropositiongatefixture+RAII+RateprénotétransmiseC7, pasderejeuED.

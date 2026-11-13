@@ -83,3 +83,14 @@ Git et les témoins réels sont byte-identiques aux sources4d/fe0 acquises.
 Le lanceur e2e canonique désactive l’incrémental Cargo : son ELF réellement
 exécuté est archivé séparément des trois préparés. Target29.7Go<32Gio.
 Le tour master C7 puis le nettoyage gardé2postes restent la fin de livraison.
+
+
+### Union empilée finale
+
+À la demande de C7, source `c9e6b6e39` = Pub31 + Symboles + ED : F5/min verts,
+lib2267/0/66, NAV40, lectures27, hôte13 et PG36 verts, filets2 par e2e. Scope0,
+restes[] et quiescence[]. Contrôle2834.58/6000 dans la même échéance initiale.
+Pub conserve ses neuf fichiers produit ; ses CLI5/tx25 sont les preuves Arbre,
+qualifiées séparément sur31. Git/UI réels restent équivalents aux sources4d/fe0.
+Preuves distinctes `globale-union-pub`, avec quatre ELF et dumpPG rafraîchi.
+La livraison suit l’ordre Pub→ED ; bilans ultérieurs seuls peuvent changer.
