@@ -28,6 +28,7 @@ T="$ICI/target"
 export CARGO_TARGET_DIR="$T"
 
 # Le neuf bâtit, sur l'hôte et sous un triplet explicite (les bâtis du paquet npm).
+garder_le_target "$T" "$ICI/neuf/ir/.." > /dev/null || exit 1
 (cd "$ICI/neuf" && cargo build -q -p app && cargo build -q -p app --target "$TRIPLET") 2>/dev/null
 garder_le_target "$T" "$ICI/neuf/ir/.." > /dev/null
 [ "$(cat "$T/.arbre-du-target")" = "$(cd "$ICI/neuf" && pwd -P)" ]

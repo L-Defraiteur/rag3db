@@ -80,6 +80,14 @@ else:
         self.assertFalse(list(self.target.rglob('local-0123456789abcdef')))
         self.assertEqual(len(list(self.target.rglob('external-0123456789abcdef'))), 2)
 
+    def test_invalid_marker_is_not_a_proven_origin(self):
+        self.target.mkdir()
+        marker = self.target / '.arbre-du-target'
+        for value in ('', 'relative/path'):
+            marker.write_text(value)
+            self.assertEqual(self.guard(True).returncode, 2)
+            self.assertEqual(marker.read_text(), value)
+
     def wrapper(self, *args):
         scripts = self.crate / 'scripts'
         scripts.mkdir(exist_ok=True)
@@ -112,6 +120,11 @@ else:
         calls = [json.loads(x) for x in (self.root / 'calls').read_text().splitlines()]
         self.assertIn('--manifest-path', calls[0])
         self.assertIn('--target-dir=not-cargo', calls[-1])
+
+    def test_wrapper_refuses_unqualified_config_override(self):
+        self.assertEqual(self.wrapper('check', '--config', 'build.target-dir="other"').returncode, 2)
+        self.assertFalse((self.root / 'compiled').exists())
+        self.assertFalse(self.target.exists())
 
 
 if __name__ == '__main__':
