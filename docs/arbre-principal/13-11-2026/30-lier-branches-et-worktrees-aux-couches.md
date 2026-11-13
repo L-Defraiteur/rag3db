@@ -139,7 +139,31 @@ worktree et un commit deviennent des couches et des générations.
   top-k dans les signaux réels, puis le paramètre `view` des outils (2b-C). Le témoin cruel (aucune
   réponse ne mélange deux générations) se joue dès qu'une vue est interrogeable.
 
-## Les questions pour Lucie
+## Les décisions de Lucie (13 novembre 2026, 21 h 30, relayées par c7)
+
+1. **La parente** est inférée par le point de fourche et marquée « inférée ». Elle n'est admise que
+   si elle est unique ; sinon, elle est demandée à l'ouverture.
+2. **La publication** : une génération à chaque commit indexé, « pour l'instant ».
+3. **La couche de travail** est lisible des autres sessions, sous le nom `travail`. Son mot : c'est
+   un argument pour plusieurs agents qui codent en même temps et se parlent.
+4. **Le rebase** : la couche suit d'elle-même, « pour l'instant ».
+5. **L'histoire.** Lucie déplace la question et n'est « pas encore très sûre ». Plutôt que de
+   décider combien de générations garder, on **choisit explicitement ce qu'on indexe** :
+   - on déclare, par dépôt, les **branches suivies** (l'ancre toujours, puis telle et telle branche
+     partie d'elle) ;
+   - les branches et les commits entre deux ne sont **pas indexés systématiquement** : on sait
+     seulement qu'ils existent (le graphe git les connaît, l'index non) ;
+   - `view: <branche>@<commit>` d'un commit jamais indexé le matérialise à la demande, jetable
+     (§ 4) ;
+   - la rétention des générations indexées reste ouverte : on garde tout pour l'instant (le texte
+     seul pour les anciennes), et on ne décide la coupe que sur une mesure.
+
+**Le modèle qui en sort** : par dépôt, un ensemble déclaré de branches suivies (l'ancre toujours),
+une génération par commit indexé d'une branche suivie, et « connu, non indexé » pour le reste.
+**Le témoin qui le prouve** : une branche non suivie n'a pas de couche ; l'IDE la montre comme
+connue ; `view` la matérialise sans l'ajouter aux suivies.
+
+## Les questions qui étaient posées à Lucie
 
 1. **La parente d'une branche venue d'ailleurs** : l'inférer par le point de fourche (notée comme
    inférée), ou exiger qu'elle soit déclarée ?
