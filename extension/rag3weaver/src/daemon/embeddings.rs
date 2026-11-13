@@ -1469,6 +1469,39 @@ mod tests {
         assert_eq!(usage_de(&c)["baux"], 1, "le bail expiré ne compte plus");
     }
 
+    /// **Un fournisseur déclaré évincable se décharge sans usage** (ticket de
+    /// la résidence des modèles, deuxième étape) : il dit son délai dans son
+    /// identité ; il tient tant qu'un bail est tenu ; le dernier bail rendu,
+    /// il se décharge après le délai et dit pourquoi.
+    #[test]
+    fn un_fournisseur_evincable_se_decharge_apres_son_delai_sans_usage() {
+        let (evince, raison) = std::sync::mpsc::channel::<String>();
+        let d = EmbedDaemon::new(Arc::new(Regle(3)))
+            .evincable(std::time::Duration::from_secs(1), move |r: &str| { let _ = evince.send(r.to_string()); });
+        let adresse = demon(d);
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+        let id = super::super::identite_de::<serde_json::Value>(&c.agent, &c.adresse, SERVICE).expect("identité");
+        assert_eq!(id["eviction"]["inactivite_s"], 1, "le délai déclaré se lit dans l'identité : {id}");
+        let bail = c.prendre_bail("tenir", std::time::Duration::from_secs(1)).expect("bail").expect("compte");
+        assert!(raison.recv_timeout(std::time::Duration::from_millis(2500)).is_err(), "un bail tenu empêche l'éviction");
+        drop(bail);
+        let r = raison.recv_timeout(std::time::Duration::from_secs(4)).expect("évincé après le dernier bail rendu");
+        assert!(r.contains("aucun bail ni calcul"), "la raison se dit : {r}");
+    }
+
+    /// **Un fournisseur non déclaré ne se décharge jamais** : les services
+    /// posés à la main restent résidents ; son identité n'a pas de champ
+    /// `eviction`.
+    #[test]
+    fn un_fournisseur_non_declare_ne_se_decharge_jamais() {
+        let adresse = demon(EmbedDaemon::new(Arc::new(Regle(3))));
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+        let id = super::super::identite_de::<serde_json::Value>(&c.agent, &c.adresse, SERVICE).expect("identité");
+        assert!(id.get("eviction").is_none(), "pas de politique d'éviction : {id}");
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        assert!(DaemonEmbedder::joindre(&adresse).is_ok(), "toujours là");
+    }
+
     /// **Le bail côté client** : pris, il compte ; lâché, il est rendu.
     #[test]
     fn un_bail_distant_compte_tant_qu_on_le_tient() {
