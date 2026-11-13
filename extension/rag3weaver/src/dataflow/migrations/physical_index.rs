@@ -411,8 +411,13 @@ fn initialize_journal(catalog: &Catalog) -> Result<()> {
     for column in ["qualified_input", "qualified_result"] {
         catalog
             .conn()
-            .execute(&format!(
-                "ALTER TABLE _DataflowMigration ADD {column} STRING DEFAULT NULL"
+            .execute(&Rag3dbDialect.alter_add_column_default(
+                "_DataflowMigration",
+                &crate::dialect::ColumnDef {
+                    name: column.into(),
+                    col_type: crate::dialect::ColumnType::Text,
+                },
+                "NULL",
             ))
             .map_err(storage)?;
     }
