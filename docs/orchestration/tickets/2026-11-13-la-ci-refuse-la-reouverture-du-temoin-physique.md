@@ -358,3 +358,15 @@ Jouer les sept nouveaux témoins par nom exact (1 attendu par appel), puis
 Arrêt au premier rouge/compilation/refus ; compte attendu9/9, aucun ignoré.
 Cela ne qualifie pas encore lucivy-core ni la réouverture physique CI : étape
 ultérieure distincte, pas de patch du registre/SDK/DB, aucune release.
+
+### Réserve unwind ED sur4c41543, avant delta
+
+ED valide statiquement traitement queue/admission et callbackRAII, puis relève
+Drop arbitraire de message : drop(pending) peut paniquer avant active0 et faire
+signaler CompletionGuard trop tôt pendant unwind. HOLD runtime maintenu.
+Delta préparé : capturer chaque panique de destruction de message séparément,
+finir drainage/attente active0, reprendre la première panique seulement après
+ce nettoyage ; si déjà en unwind, préserver l’unwind initial sans doublepanic.
+Témoin proposé : envoi admis gelé avec payload, message queued à Drop paniquant,
+catch_unwind du mailboxDrop ; completion doit rester en attente jusqu’à fin de
+l’envoi admis et destruction de son payload. Aucun runtime exécuté.
