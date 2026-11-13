@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <cstdio>
 #include <string>
 #include <thread>
 
@@ -61,13 +62,25 @@ protected:
                     while (!stop.load()) {
                         // Relevé avant l'instantané : toute clé en deçà y est validée.
                         const auto upTo = committed.load();
-                        reader.query("BEGIN TRANSACTION READ ONLY;");
+                        auto begun = reader.query("BEGIN TRANSACTION READ ONLY;");
+                        if (!begun->isSuccess()) {
+                            fprintf(stderr, "[témoin] BEGIN du lecteur refusé : %s\n",
+                                begun->getErrorMessage().c_str());
+                        }
                         const auto key = upTo > 0 ? (k++ % upTo) : 0;
                         auto r = reader.query(
                             "MATCH (d:Doc {id: " + std::to_string(key) + "}) RETURN count(d);");
-                        if (upTo > 0 && r->isSuccess() &&
-                            r->getNext()->getValue(0)->getValue<int64_t>() != 1) {
-                            wrong++;
+                        if (!r->isSuccess()) {
+                            fprintf(stderr, "[témoin] lecture refusée : %s\n",
+                                r->getErrorMessage().c_str());
+                        } else if (upTo > 0) {
+                            const auto n = r->getNext()->getValue(0)->getValue<int64_t>();
+                            if (n != 1 && wrong++ < 5) {
+                                fprintf(stderr,
+                                    "[témoin] clé %ld manquée : compte %ld, %ld clés validées\n",
+                                    static_cast<long>(key), static_cast<long>(n),
+                                    static_cast<long>(upTo));
+                            }
                         }
                         reader.query("COMMIT;");
                     }
@@ -87,7 +100,12 @@ protected:
                     if (rollBack) {
                         writer.query("ROLLBACK;");
                     } else {
-                        writer.query("COMMIT;");
+                        auto done = writer.query("COMMIT;");
+                        if (!done->isSuccess()) {
+                            fprintf(stderr, "[témoin] COMMIT refusé : %s\n",
+                                done->getErrorMessage().c_str());
+                            status = 4;
+                        }
                         next += 100;
                         committed.store(next);
                     }
