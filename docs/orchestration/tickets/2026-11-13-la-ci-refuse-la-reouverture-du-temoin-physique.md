@@ -549,3 +549,14 @@ JournauxPC cache/cx-lucivy-plein-13nov-v1 ; tous journaux horsW. Porteur Lucivy 
 reste RO preuves et décision de phase MESURE/coût global, puis intégration
 coordonnée selon verdicts. Aucun GO de fusion, tag ou publication déduit de ce
 vert. Le détenteur historique du writerD17 reste inconnu, ticket CI ouvert.
+
+### Précision ROED sur les noms du log lib entière (sans rejeu)
+
+ED rectifie sa relecture initiale : inventaire179 et résumé harness179/0/0
+confirmés, mais l’extraction stricte de lignes `test...ok` ne permet pas
+l’appariement individuel de trois noms à cause de l’entrelacement nocapture :
+`local_execute_and_take`, `test_join_resume_fires_on_last`,
+`port_value_take_panics_on_fanout`. Aucun échec de ces tests n’est établi ;
+la preuve de succès global repose sur le résumé du harness, pas sur une liste
+normalisée de179lignes indépendantes. Sixcoreexacts,32SHA et confinement inchangés.
+Aucun rejeu autorisé ou lancé pour ce seul défaut de présentation du log.
