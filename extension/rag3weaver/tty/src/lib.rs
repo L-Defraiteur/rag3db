@@ -10,6 +10,7 @@
 //! là où est l'hôte, ou sur une autre machine, à côté de lui par un tunnel
 //! (Windows, macOS, Linux).
 
+pub mod boite;
 pub mod client;
 pub mod endpoint;
 pub mod flux;
