@@ -148,3 +148,9 @@ ces changements causaux, dossier neuf cible-gardes-minimum ; pas de replay
 inchangé. Les jeux daemon et natif n'avaient pas été lancés. Le ticket ancien
 la-lib-native-daemon-ne-compile-pas-hors-matrice décrit le même bord code que
 le présent ticket canonique, pas un deuxième lot produit.
+
+Le contrôle de75 s'arrête sur le helper E2E `Client::autonome` devenu
+inutilisé sans native : son unique appel est le témoin écrivain gardé ci-dessus.
+Même garde ajoutée au helper, omission de lecture corrigée ; rouge conservé
+cible-gardes-minimum, aucun test joué. Source/recette republiées avant reprise
+causale dans cible-garde-autonome, mêmes argv/bornes et aucun rejeu inchangé.
