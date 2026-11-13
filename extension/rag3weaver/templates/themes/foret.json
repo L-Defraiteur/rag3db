@@ -1,0 +1,114 @@
+{
+  "nom": "foret",
+  "couleurs": {
+    "fond": "#07130b",
+    "texte": "#8fd16a",
+    "halo": [
+      "#c5f07a",
+      "#2f5d2a"
+    ],
+    "sourdine": "#5f6e58"
+  },
+  "police": "'Courier New', Courier, monospace",
+  "animations": {
+    "reflechit": {
+      "forme": "cercle",
+      "ms": 150,
+      "glyphes": [
+        "❦",
+        "❧",
+        "☘",
+        "✿",
+        "❀",
+        "♣",
+        "⚘"
+      ],
+      "coeur": "⸙",
+      "gabarits": [
+        "⟪ {gauche} {coeur} {droite} ⟫ LA FORÊT ÉCOUTE..."
+      ]
+    },
+    "lit": {
+      "forme": "transmutation",
+      "ms": 200,
+      "glyphes": [
+        "☽",
+        "◐",
+        "◓",
+        "◑",
+        "◒",
+        "☾",
+        "●"
+      ],
+      "coeur": "❦",
+      "gabarits": [
+        "⁅ {coeur} ⁆—[ {s} ]—⁅ {coeur} ⁆ LES RACINES CHERCHENT..."
+      ]
+    },
+    "ecrit": {
+      "forme": "glitch",
+      "ms": 100,
+      "glyphes": [
+        "⁂",
+        "∴",
+        "⁖",
+        "⁘",
+        "⁙",
+        "⸪",
+        "⸫",
+        "⸬",
+        "⸭"
+      ],
+      "coeur": "⸙",
+      "gabarits": [
+        "[{a} {coeur} {b}] ...LA SÈVE MONTE...",
+        "❬{a}{b} {coeur} {c}❭ ...LES FEUILLES ÉCRIVENT...",
+        " {a} ⸢{coeur}⸣ {b}  ...L'ÉCORCE SE GRAVE..."
+      ]
+    }
+  },
+  "replis": {},
+  "ascii": {
+    "coeur": "&",
+    "glyphes": [
+      "*",
+      "~",
+      "'",
+      ","
+    ],
+    "cadre": {
+      "⟪": "<<",
+      "⟫": ">>",
+      "⁅": "[",
+      "⁆": "]",
+      "—": "-",
+      "⸢": "[",
+      "⸣": "]",
+      "❬": "<",
+      "❭": ">",
+      "❦": "&",
+      "Ê": "E",
+      "É": "E",
+      "È": "E"
+    }
+  },
+  "code": {
+    "keyword": "#8fd16a",
+    "type": "#c5f07a",
+    "function": "#e0c56e",
+    "string": "#b8a27a",
+    "comment": "#5f6e58",
+    "number": "#d9a75b",
+    "constant": "#d9a75b",
+    "variable": "#d8e6cf",
+    "property": "#a9c8a0",
+    "operator": "#6fbf5a",
+    "punctuation": "#7d8a76",
+    "attribute": "#7fa86a",
+    "label": "#7fa86a",
+    "module": "#7fa86a",
+    "other": "#cfdcc6",
+    "en_ligne": "#d9a75b",
+    "cadre": "#5f6e58"
+  }
+}
