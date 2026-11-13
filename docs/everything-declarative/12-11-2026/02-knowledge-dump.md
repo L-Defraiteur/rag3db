@@ -107,3 +107,9 @@ push3024 restentHISTORIQUES NONexécutés ; mettreàjouravanttoutpush. DumpPGfin
 ancienavant-Pubgardé. Sourcec9transmiseEmbar, aucuneéditionRustautoriséeaveugle.
 DiagROshow_progress842 relèvefixture200sansbarrièreentre2outils, contratcarteindexactif ;
 Embarrougegardéetpropositiongatefixture+RAII+RateprénotétransmiseC7, pasderejeuED.
+
+Pubmasterbc1 reçu, branche5 rebaseMDseulement (c9Rustinchangé). TourEDencoreC7.
+Fixturecompagnon08c379b11(testseulworktrees) QUALIFIÉE1/0/0 3.70s/lib29/F3,
+barrière réelle+RAII+étatterminé ; scope0/restes[]/quiescence[], transmiseEmbarqui
+la consomme pour son unionlarge. Ne pas la confondre avec la sourceEDc9 : branche
+compagnon distincte, aucunruntime/candidatEDmuté. Preuvesfixture-carte-index etELF/SHA.

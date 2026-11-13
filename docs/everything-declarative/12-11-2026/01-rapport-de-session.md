@@ -542,3 +542,19 @@ Git/UI4d/fe0 et Pub31 ; CLI5/tx25 restent preuve Arbre. PGdumpfinalrafraîchi, a
 avant-Pub conservé. Aucun master ED avant Pub+C7. Signalshow_progress d’Embar842
 reçu/diagROtransmis, aucun runtimeédité : fixture demande index actif sansbarrière.
 Routage C7 en cours ; préserver sourcec9 immutable pour sa qualification parallèle.
+
+### Base Pub livrée, candidat ED rebâti sans changement de code
+
+Pub intégrée masterbc1a81500a05489673b64c2e5930d335510e6dda. RebaseMD sur cette
+base, branche5 neuve ; delta sourcec9 uniquementMarkdown/JSON de bilans. Le produit
+Pub31 et les Rust/Cargo/gabarits ED restent identiques à la qualification C9.
+Les scripts3024 sont historiques et seront remplacés pour ce candidat avant push.
+
+Correctif de fixture COMPAGNON, hors sourceC9 figée : `08c379b11` sur
+`cx-ed-carte-index-fixture`, parentc9, seulworktrees.rs/test+63lignes. Préinscription
+fermée+débit de fixture évitent la sonde synchrone, serviceGranite factice CPU à
+barrière maintient un vrai index actif, libérationRAII avantjoin. Assertions originales
+conservées + état terminé texte réel sans carte. Ciblé exact1/0/0 vert3.70s après
+compileF3/lib29 30.75s, scopeVERT0/restes[]/quiescence[], aucuneAPIruntime modifiée,
+aucunGPU/Vertex. Commit/preuves transmis à Embar pour consommation dans son union,
+sous ticket activation ; il ne modifie pas le candidat ED déjà qualifié.

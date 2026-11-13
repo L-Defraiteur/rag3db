@@ -94,3 +94,8 @@ Pub conserve ses neuf fichiers produit ; ses CLI5/tx25 sont les preuves Arbre,
 qualifiées séparément sur31. Git/UI réels restent équivalents aux sources4d/fe0.
 Preuves distinctes `globale-union-pub`, avec quatre ELF et dumpPG rafraîchi.
 La livraison suit l’ordre Pub→ED ; bilans ultérieurs seuls peuvent changer.
+
+Pub est livrée sous `bc1a81500a`. Le candidat ED est rebasé sur cette base avec
+seuls bilans Markdown/JSON différents : le code qualifié reste celui de C9.
+Le correctif de fixture de carte08c (test seul, cible1/0/0 verte) est transmis
+séparément à Embarquement ; il ne change ni le runtime ni cette provenance.
