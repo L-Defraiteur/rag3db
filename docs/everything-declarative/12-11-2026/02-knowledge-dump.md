@@ -113,3 +113,12 @@ Fixturecompagnon08c379b11(testseulworktrees) QUALIFIÉE1/0/0 3.70s/lib29/F3,
 barrière réelle+RAII+étatterminé ; scope0/restes[]/quiescence[], transmiseEmbarqui
 la consomme pour son unionlarge. Ne pas la confondre avec la sourceEDc9 : branche
 compagnon distincte, aucunruntime/candidatEDmuté. Preuvesfixture-carte-index etELF/SHA.
+
+Fin effective : livré codeMASTER43e4f185be72366841ce4e7344cac866fd441e75,
+3contrôlesLUS, sourceC9byteidentique. W/7brancheslocales/target/PGprivés retirés,
+gardesfraîchesdca13VERT/adminsCPa+paxSHAfidèles2postes, dumpPGSHA/0connexions/drop
+confirmés. ProoffolderI-luciepc/parcours-agent-ide-20261112 conserveELF/logs/rouges
+/HTML/JSON/admins/dumps/remotes ; rienàrejouer/nouveauservice. 7879rendudepuisfin.
+Compagnon08cTESTseultransmisEmbar(c44cherry), excluEDmain ; sonunionlib2273verte,
+Embarrestepropriétaireduconstatactivation/fullqualif. Aucunmodel/daemonpersonnel
+posé, pasd’orchestrateur/jugeuniversel. BilanMDdansWTtemporaireàretireraprèspush.

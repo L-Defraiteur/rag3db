@@ -1,6 +1,6 @@
 # Prouver le parcours agent de code complet de l'IDE
 
-- **État** : corrigé — source union empilée `c9e6b6e39` ; parcours réel hôte/IDE et globale verts, livraison selon ordre Pub→ED.
+- **État** : corrigé — livré master `43e4f185be72366841ce4e7344cac866fd441e75`, qualification C9 et retrait gardé des ressources privées terminé.
 - **Famille** : produit
 - **Gravité** : capacité principale ; l'atelier doit réellement explorer, modifier, tester et reprendre.
 - **Atteignable en service** : les outils existent ; leur parcours complet dans une session réelle reste à qualifier.
@@ -385,3 +385,25 @@ qualifié exact1/0/0 en3.70s après compileF3/native29, scope0/restes[]/nettoyé
 quiescence[]. Barrière réelle, RAII et cas terminé ajouté, assertions initiales
 maintenues. Transmis à Embar pour son union, sous ticket activation ; ce correctif
 n’est pas mélangé au candidat ED dont le Rust reste C9 figé.
+
+## Livraison effective et retrait terminé
+
+Code livré master43e4f185be72366841ce4e7344cac866fd441e75, tree
+6ff6de99f64fdabe917aacf3fcd0c3317c09ffe9, sous poste push après tour C7.
+Premier essai arrêté avant écriture par la garde FF (bilan Pub1a4 arrivé), puis
+nouvelle branche6/rebase MD seulement ; aucun code/passe/modèle rejoué.
+Dernier fetch, ifVERT et trois contrôles lus : propre, aucun rebase,
+origin/master=HEAD. SHA/tree transmis directement à Embar pour son empilage.
+
+Retrait terminé2postes : gardes frais SHA dca13 VERT, archives admins cp-a puis
+pax/SHA croisées vérifiées, W privés absents, sept branches locales retirées par
+-d normal, targetPC retiré. DumpPG final et SHA présents aux deux postes, zéro
+connexion puis drop/absence confirmée. Aucun service partagé arrêté. Temporaires
+courts attribués conservés dans les preuves, hors racines actives. Remotes,
+ELF/logs/rouges/JSON/HTML/dumps/admins fidèles restent2postes. Ancien reste-explicite
+et données/configuration de Lucie hors périmètre. Bilan MD seul sans nouveauCargo.
+
+Le correctif compagnon08c reste séparé : qualifié1/0/0 ici et consommé par Embar,
+qui rapporte sa lib entière2273/0/66 verte et poursuit sa propre qualification.
+Aucun déploiement du daemon personnel, aucune orchestration ou juge universel
+revendiqué : la preuve porte sur le vrai parcours dans le projet isolé.

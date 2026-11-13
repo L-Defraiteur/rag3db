@@ -1,0 +1,32 @@
+{
+  "master_code": "43e4f185be72366841ce4e7344cac866fd441e75",
+  "source_qualifiee": "c9e6b6e39",
+  "verdict": "VERT",
+  "garde_sha256": "dca13abb7a84cf3c1419f728697837a6b1b9b20e34e34c144c9fbf835252f628",
+  "pc": {
+    "verdict": "VERT",
+    "worktree_retire": true,
+    "target_retire": true,
+    "pg_retire": true,
+    "admins_archives": true,
+    "remotes_conserves": true
+  },
+  "portable": {
+    "verdict": "VERT",
+    "worktree_retire": true,
+    "branches_locales_retirees_par_d": 7,
+    "archives_fideles": true,
+    "remotes_conserves": true
+  },
+  "archives_sha256": {
+    "admin-pc.tar": "8c95b4a5e4c00101487e0aabea043691d913f6969fd62c8d3f3b00b7b08bb22b",
+    "admin-portable.tar": "40fdb14c3f77c2cd9aa82213bcfa3badb3e718c3fd9b47337f572cb327d37d94",
+    "cx_ed_parcours_20261113.dump": "9dc0e788e5d956f1b174d8b2f505c8b4c4dbd525fe530868ed19371577e52e6f"
+  },
+  "preuves_privees": "/home/lucied/.cache/rag3weaver-build/I-luciepc/parcours-agent-ide-20261112",
+  "limites": [
+    "projet synth\u00e9tique isol\u00e9 et page IDE r\u00e9elle, daemon personnel non d\u00e9ploy\u00e9",
+    "premiers ELF36e/b009/b310 non archiv\u00e9s avant remplacement, SHA/logs conserv\u00e9s",
+    "fixture08c s\u00e9par\u00e9e, transmise \u00e0 Embar et exclue du master ED"
+  ]
+}

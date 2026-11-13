@@ -558,3 +558,22 @@ conservées + état terminé texte réel sans carte. Ciblé exact1/0/0 vert3.70s
 compileF3/lib29 30.75s, scopeVERT0/restes[]/quiescence[], aucuneAPIruntime modifiée,
 aucunGPU/Vertex. Commit/preuves transmis à Embar pour consommation dans son union,
 sous ticket activation ; il ne modifie pas le candidat ED déjà qualifié.
+
+### Livré43e4, fin réelle des ressources
+
+Master43e4f185be72366841ce4e7344cac866fd441e75/tree6ff6de99f64fdabe917aacf3fcd0c3317c09ffe9
+poussé selon tour C7 ; première tentative proprement refusée FF avant écriture
+après bilanPub1a4, rebaseMD branche6 puis push/dernierfetch/ifVERT/3contrôleslus.
+Rust reste C9 qualifié. SHA/tree remis DIRECTEMENT à Embar, son companion08c reste
+hors EDmain (son unionlib2273/0/66 rapportée verte). Aucun nouveau modèle/passe.
+
+PC : quiescence[], PGdumpSHA2postes+0connexions/drop/absence, garde fraîche dca13
+VERT et admin cp-a/paxSHA, W initialisé retiré --force après garde seulement,
+target retiré. Portable : garde fraîche VERT/admin fidèle puis W/7branches locales
+-d normal retirés. Archives administrations deux postes/SHA croisés vérifiés.
+Remotes/rouges/ELF/JSON/HTML/dumps gardés. Aucun service partagé arrêté ni daemon
+personnel déployé ; ancien reste-explicite et arbre de Lucie non touchés.
+
+Le seul W temporaire suivant est ce bilan Markdown, sans sous-module initialisé,
+retiré après push sous l’exception docs avec nouvelle archive et garde fraîche.
+État structuré : preuves-parcours-ide/nettoyage-final.json.

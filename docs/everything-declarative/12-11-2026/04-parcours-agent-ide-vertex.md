@@ -99,3 +99,11 @@ Pub est livrée sous `bc1a81500a`. Le candidat ED est rebasé sur cette base ave
 seuls bilans Markdown/JSON différents : le code qualifié reste celui de C9.
 Le correctif de fixture de carte08c (test seul, cible1/0/0 verte) est transmis
 séparément à Embarquement ; il ne change ni le runtime ni cette provenance.
+
+### Livraison et ressources rendues
+
+Livré dans `43e4f185be72366841ce4e7344cac866fd441e75` après tour C7 et contrôles
+propres ; code identique à la source C9 qualifiée. W/branches locales/target/basePG
+privés retirés après quiescence, dump/SHA et gardes frais avec archives fidèles
+aux deux postes. Les preuves et remotes restent conservés. Le daemon personnel
+n’a pas été déployé. La fixture08c reste chez Embarquement, hors de ce master ED.
