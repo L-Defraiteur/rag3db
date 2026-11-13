@@ -242,9 +242,16 @@ other occurrences keep their version. Old versions are retained, with no
 orphan garbage collection. Direct edits to content versions and canonical
 references are refused. Input columns remain stored on each occurrence.
 Changing identity mode or format, or changing `searchIndex` on a populated
-entity, requires a migration; no automatic migration is provided. Production
-code templates do not enable this option, and no total database size saving
-has been measured.
+entity, requires a migration; no automatic migration is provided. No total
+database size saving has been measured.
+
+The code schema uses this for its scopes. A new code database gets a
+`ScopeContent` version per scope content (`name`, `signature`, `content`,
+`docstring`, `scope_type`, `language`): a function identical in two files is
+embedded once, and moving it re-embeds nothing. Each `Scope` keeps its key,
+lines and relations. The form is stamped in the database (`code_scope_form`),
+never inferred: a database indexed before this keeps its schema, opens as
+before, and says in `index_state` that it is still to migrate.
 
 Queue inspection (`has_pending`, `pending_work`, `drain_stats.pending`) describes
 only the active cell, which the next drain can write. The catalogue-wide

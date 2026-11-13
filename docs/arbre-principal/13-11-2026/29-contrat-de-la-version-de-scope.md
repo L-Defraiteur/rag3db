@@ -4,6 +4,12 @@
 points sont reportés ci-dessous. Les références de code sont celles d'`origin/master` d59e99ed7, relativement à
 `extension/rag3weaver/`. Rien n'a été compilé ni joué pour l'écrire.
 
+> **État, le 14 novembre 2026 : 1a est sur master (`e62151904`), forme (A).** Les bases de code
+> neuves ont `ScopeContent`, une version par contenu de scope. Les bases existantes s'ouvrent comme
+> avant et se disent « à migrer » : la migration 1b se fera à part, sur une copie d'abord, et au mot
+> de Lucie pour ses bases. Passe entière verte à luciepc sur la lib `0c41f9fe6` : deux lib entières
+> 2363/0/71, 14 suites dont `e2e_postgres`, et le navigateur 43/43.
+
 > **Décision de Lucie (13 novembre 2026, relayée par c7)** : les vues se bâtissent sur l'index de
 > code réel, en lui donnant ce qu'il faut, lot par lot :
 > 1. 1a, cette page ;

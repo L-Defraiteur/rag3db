@@ -19,6 +19,13 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **14 nov. — Un même contenu ne s'embarque plus qu'une fois.** Une base de code neuve range chaque
+  contenu de scope comme une version partagée : une fonction identique dans deux fichiers, ou
+  déplacée, n'est embarquée qu'une fois, et chaque occurrence garde ses lignes et ses relations. Une
+  base d'avant ouvre comme avant et se dit « à migrer » (`e62151904`).
+- **14 nov. — Une tâche est une couche.** Chaque dépôt déclare ses branches suivies ; une tâche y
+  entre avec sa parente, et l'état d'index dit les couches de chaque dépôt, leur parente et les
+  ambiguës (`0672d624f`).
 - **13 nov. — En JavaScript, un mot entre apostrophes ne passe plus pour un usage.** `external: ['fs',
   'path']` ne relie plus la configuration au `require("path")` : codeparsers b5c91e1.
 - **13 nov. — Plusieurs onglets de l'IDE, un seul flux.**
