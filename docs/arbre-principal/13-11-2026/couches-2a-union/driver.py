@@ -71,7 +71,10 @@ def observe():
     if dest.startswith('/dev/dri/') or dest=='/dev/kfd':devices[(pid,stamp,dest)]=dict(pid=pid,starttime=stamp,device=dest)
    if phase=='features' and Path(exe).name=='cargo':
     field='environ';raw=dict(x.split(b'=',1) for x in (q/'environ').read_bytes().split(b'\0') if b'=' in x)
-    actual={k:os.fsdecode(raw[os.fsencode(k)]) for k in SDK_PROFILE};assert actual==SDK_PROFILE
+    actual={k:(os.fsdecode(raw[os.fsencode(k)]) if os.fsencode(k) in raw else None) for k in SDK_PROFILE}
+    diff={k:dict(expected=SDK_PROFILE[k],actual=actual[k]) for k in SDK_PROFILE if actual[k]!=SDK_PROFILE[k]}
+    save(f'features-cargo-env-{pid}-{stamp}.json',dict(pid=pid,starttime=stamp,exe=exe,cgroup=cg,expected=SDK_PROFILE,actual=actual,diff=diff))
+    assert not diff,('Cargo SDK profile differs; observation archived',pid,diff)
     save('features-real-sdk-env.json',dict(pid=pid,starttime=stamp,cgroup=cg,env=actual))
    if exe.startswith(str(T)+'/'):
     field='maps';data=(q/'maps').read_text();native=[line for line in data.splitlines() if 'librag3db.so' in line]
@@ -85,7 +88,10 @@ def observe():
     principal=(main_large is not None and pid==main_large['pid'] and stamp==main_large['starttime'])
     if large and exe==str(large) and phase=='lib-large' and principal:
      field='environ';raw=dict(x.split(b'=',1) for x in (q/'environ').read_bytes().split(b'\0') if b'=' in x)
-     actual={k:os.fsdecode(raw[os.fsencode(k)]) for k in SDK_PROFILE};assert actual==SDK_PROFILE
+     actual={k:(os.fsdecode(raw[os.fsencode(k)]) if os.fsencode(k) in raw else None) for k in SDK_PROFILE}
+     diff={k:dict(expected=SDK_PROFILE[k],actual=actual[k]) for k in SDK_PROFILE if actual[k]!=SDK_PROFILE[k]}
+     save('large-main-sdk-profile-attempt.json',dict(pid=pid,starttime=stamp,exe=exe,cgroup=cg,expected=SDK_PROFILE,actual=actual,diff=diff))
+     assert not diff,('ELF SDK profile differs; observation archived',pid,diff)
      profile=dict(pid=pid,starttime=stamp,cgroup=cg,exe=exe,env=actual,phase=phase)
      save('large-real-sdk-env.json',profile)
      if native and not (P/'large-main-attestation.json').exists():
