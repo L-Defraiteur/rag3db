@@ -10966,6 +10966,7 @@ impl Catalog {
         use crate::dialect::{ColumnDef, ColumnType};
 
         let migration_cols = vec![
+            ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
             ColumnDef { name: "version".into(), col_type: ColumnType::Int64 },
             ColumnDef { name: "name".into(), col_type: ColumnType::Text },
             ColumnDef { name: "status".into(), col_type: ColumnType::Text },
@@ -10981,6 +10982,7 @@ impl Catalog {
             .map_err(|e| MigrationError::DbError(e.to_string()))?;
 
         let lock_cols = vec![
+            ColumnDef { name: "_uuid".into(), col_type: ColumnType::Text },
             ColumnDef { name: "locked_by".into(), col_type: ColumnType::Text },
             ColumnDef { name: "locked_at".into(), col_type: ColumnType::Int64 },
             ColumnDef { name: "expires_at".into(), col_type: ColumnType::Int64 },

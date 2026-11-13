@@ -2125,3 +2125,15 @@ ajoutés), garder body/file/start/end distincts, conserver dérivée content et
 assertion explicite égalité champ source/rendu, lecture native exacte du champ
 source supplémentaire. Offsets chunks dans content rendu uniquement, aucune
 projection vers body brut ou lignes fichier annoncée. Validateur inchangé.
+
+
+P5 source39f798 : compilation/inventaire/9CPU verts puis premier juge natif
+exact frozen_program_codec refusé par binder : PRIMARY KEY(_uuid) ne correspond
+à aucune propriété déclarée. Aucun autre juge natif/enfant lancé, arrêt failfast.
+Diagnostic RO précis : Catalog::migration_initialize appelle dialect.create_table
+pour _DataflowMigration et _DataflowMigrationLock avec colonnes sans _uuid ; les
+deux dialectes ont pourtant PRIMARY KEY(_uuid), et les écritures existantes
+migration_record/acquire_lock ainsi que journal_row fournissent déjà _uuid.
+Correctif partagé minimal : déclarer _uuid Text dans les deux listes de colonnes
+existantes ; aucun nouveau journal, ni identité, ni reprise alternative. Le juge
+natif existant couvre réellement ces créations ; avis RO avant nouveau budget.
