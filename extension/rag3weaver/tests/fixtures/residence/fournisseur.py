@@ -99,8 +99,24 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(data)))
+        # HTTP/1.0 ferme après chaque réponse : le dire, pour qu'aucun client
+        # ne garde la connexion pour la requête suivante.
+        self.send_header('Connection', 'close')
         self.end_headers()
         self.wfile.write(data)
+
+    def drain(self):
+        """Lire le corps d'une requête qu'on refuse : fermer une connexion
+        avec des octets non lus envoie un reset, que le client peut lire comme
+        « Peer disconnected » sur sa requête suivante (une fois sur vingt,
+        13 novembre 2026, depuis que l'activation pose un bail : POST /bail,
+        route que ce fournisseur ne sert pas)."""
+        try:
+            size = int(self.headers.get('Content-Length', '0'))
+        except ValueError:
+            size = 0
+        if 0 < size <= 65536:
+            self.rfile.read(size)
 
     def do_GET(self):
         if self.path != '/sante':
@@ -110,6 +126,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path != '/embed':
+            self.drain()
             return self.answer(404, {'error': 'route absente'})
         try:
             size = int(self.headers.get('Content-Length', '-1'))
