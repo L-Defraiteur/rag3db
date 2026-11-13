@@ -16,6 +16,19 @@
 # `cargo clean -p` n'est pas employé : chez G il a rendu « Removed 0 files »
 # sans dire pourquoi, et la reprise passait pour faite.
 # Le témoin : scripts/test_garde_target.sh.
+# **Les empreintes d'un paquet, dans les deux dispositions de cargo** (13 novembre 2026) :
+# jusqu'à cargo 1.99, `<profil>/.fingerprint/<paquet>-<hachage>` ; depuis cargo 1.100,
+# `<profil>/build/<paquet>/<hachage>/fingerprint`. La reprise ne connaissait que la première :
+# sous le cargo de la CI, elle n'effaçait rien, et son contrôle « aucune empreinte ne reste »
+# cherchait au même endroit, donc passait à vide (run 43450165154). Une disposition de plus,
+# demain, se verra au témoin (scripts/test_garde_target.sh), qui rebâtit après la reprise.
+empreintes_du_paquet() {
+  local target="$1" p="$2"
+  find "$target" \( -path '*/.fingerprint/*' -prune -regextype posix-extended \
+      -regex ".*/\.fingerprint/${p}-[0-9a-f]{16}" -print \) -o \
+    \( -regextype posix-extended -regex ".*/build/${p}/[0-9a-f]{16}/fingerprint" -print -prune \) 2>/dev/null
+}
+
 garder_le_target() {
   local target="$1" arbre="$2" marque note paquets restes p
   shift 2
@@ -87,13 +100,11 @@ print(" ".join(sorted({p["name"] for p in m["packages"] if p["source"] is None})
   fi
   echo "▸ target repris de $note : empreintes effacées pour $paquets"
   for p in $paquets; do
-    find "$target" -path '*/.fingerprint/*' -prune -regextype posix-extended \
-      -regex ".*/\.fingerprint/${p}-[0-9a-f]{16}" -exec rm -rf {} + 2>/dev/null
+    empreintes_du_paquet "$target" "$p" | while IFS= read -r e; do rm -rf -- "$e"; done
   done
   restes=""
   for p in $paquets; do
-    restes="$restes$(find "$target" -path '*/.fingerprint/*' -prune -regextype posix-extended \
-      -regex ".*/\.fingerprint/${p}-[0-9a-f]{16}" -print 2>/dev/null)"
+    restes="$restes$(empreintes_du_paquet "$target" "$p")"
   done
   if [ -n "$restes" ]; then
     echo "✗ reprise du target : des empreintes de paquets locaux restent :"
