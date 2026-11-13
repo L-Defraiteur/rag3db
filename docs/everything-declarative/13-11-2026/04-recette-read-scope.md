@@ -32,8 +32,10 @@ cd /var/tmp
 python3 "$WT/docs/everything-declarative/13-11-2026/read-scope/lancer.py" "$WT" "$SOURCE_EXACTE"
 ```
 
-La primitive acquiert le vrai poste exclusif Max32GiB et porte reçu/bus/budget.
-Ne pas imbriquer un autre poste ou scope. CPU j8, pas de service externe,
+La primitive acquiert un slot lourd Max32GiB et porte reçu/bus/budget.
+Ne pas imbriquer un autre poste ou scope. Ce lot fonctionnel n’est pas exclusif ;
+C7 autorise le parallélisme avec le lot2a sur un autre slot privé.
+RAG3WEAVER_BUILD_MEMORY_HIGH=0 est posé AVANT acquisition du poste. CPU j8, pas de service externe,
 pas de NAV/CDP/7879 demandé. SDK29 du magasin épinglé
 rag3db-build-29a7bc52aaf11e6204f9beafaffb154105417e13-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF.
 CARGO_BUILD_JOBS=8, CARGO_INCREMENTAL=0, RAG3DB_BUFFER_POOL_SIZE=1073741824,
