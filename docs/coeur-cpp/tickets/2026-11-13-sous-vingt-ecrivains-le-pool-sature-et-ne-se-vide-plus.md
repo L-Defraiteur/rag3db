@@ -59,3 +59,12 @@ La lib du banc : celle de `aab8ad0ba`, bâtie dans `~/git_workspaces/rag3db-colo
 
 La cause de la saturation, le correctif, `DdlEveryMinute` vert et sa ligne retirée de
 `known_red.txt` dans le même commit.
+
+## Joué seul trois fois (13 novembre 2026, soir)
+
+Sur `d5aa49c49` (master `2ac8080ca` plus deux témoins de test), à luciepc : rouge au tour 1
+(442 BEGIN refusés « buffer pool is full », 31 512 erreurs hors DDL, le ADD refusé puis l'exception
+« Cannot find property rang »), vert au tour 2, SIGSEGV au tour 3 (ticket
+`2026-11-13-sous-vingt-ecrivains-un-lecteur-meurt-dans-l-index-de-cle-primaire-sur-disque.md`). Le
+banc entier du même soir l'avait vu vert. Le cas est donc variable ; sa ligne de `known_red.txt`
+reste telle quelle jusqu'à une mesure qui décide entre `known_red.txt` et `probabilistic.txt`.
