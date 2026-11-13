@@ -17,3 +17,7 @@ Parcours inchangé : F8 depuis premierjeu,3ELF JSON exacts13/14/[]/223Git prépo
 ## Témoins publiés avant leur exécution
 
 AST11 valide. Les sept témoins de préparation précédents et quinze nouveaux témoins cargo-stop sont ÉCRITS/NONJOUÉS à cette publication : pidfd unique et threads stables ; PIDreuse aprèsopen ; CGinconnu/étranger ; déjàSTOP/tracé sans reprise ; timeout ; thread nonstoppé ; TIDset changé ; exe changé pendant capture ; exe devenu NONCargo auSTOP ; rawvide ; profil différent ; CONT qui échoue ; vrai parse argvNUL conservant vide et absence de publication d’un secret. Fixtures entièrement simulées (pidfds/signaux/proc fictifs), aucun subprocess/Cargo/rustc/target réel. Résultats à publier après ce commit, avant demande de GO réel.
+
+## Résultats après publication préalable
+
+Sources/témoins publiés et poussés sur38c0cb9d8b241dddba72162ad87dfaa7db694a0e AVANT leur premier essai. Puis7/7 préparation en0,042s et15/15 capture en0,003s, zéro échec. Ce sont exclusivement fixtures simulées, aucun vrai PID/proc/signal/Cargo/rustc/target ni reçu. Aucun arrêt réel qualifié ; résultats de simulations ne dispensent pas du nouveau GOcouple après RO. Code pilote strictement inchangé après ces essais.
