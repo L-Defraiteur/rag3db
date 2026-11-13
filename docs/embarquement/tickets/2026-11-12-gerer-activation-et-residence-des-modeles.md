@@ -649,3 +649,15 @@ sont communes au local et au distant (`variables`). Témoins sur un faux ssh
 (`tests/fixtures/residence/faux_ssh.py`) ; le vrai jeu par
 `une_activation_distante_reelle_lance_compte_et_evince` (ignoré, piloté par
 `RAG3WEAVER_ESSAI_DISTANT_*`).
+
+**Le vrai jeu, 13 novembre, 21 h 07** (depuis le portable, client de test bâti à luciepc en
+`--features daemon`, fournisseur = le binaire du service bâti sur `5b866c19c`, place `poste lourd`
+tenue à luciepc pendant l'essai) : granite-107m, `Residence::ADemande { inactivite_secs: 60 }`,
+port distant 7890, tunnel local 7990, `RAG3WEAVER_BURN_DEVICE_EMBEDDER=gpu:0` (Vulkan : c'est lui
+qui place sur card2) et `ROCR_VISIBLE_DEVICES=0`. Activé en 3,9 s ; identité par le tunnel
+`usage { baux: 1, en_cours: 0 }`, `eviction { inactivite_s: 60 }` ; unité `active`, puis
+`inactive` 62,9 s après le client lâché ; aucune unité `rag3weaver-fournisseur-*` ni écoute sur
+7890 ensuite. Mémoire relevée toutes les 5 s : card2 de 21,35 à 22,54 Go (granite-107m tient
+1,2 Go) puis revenue à 21,35 Go ; card0 entre 7,97 et 8,21 Go sans marche (le jeu de Lucie).
+Témoins faux ssh : 10 tours verts ; les tests d'activation 30 fois verts sur `b8f1c1dd0` (correctif
+de la fixture : elle lisait mal un refus, « Peer disconnected » une fois sur vingt).
