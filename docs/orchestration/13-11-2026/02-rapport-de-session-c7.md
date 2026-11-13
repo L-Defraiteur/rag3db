@@ -96,3 +96,18 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   writers, libération au Drop), **ED** joue enfin son correctif des réclamations (9da8e4433, jamais compilé,
   le rouge intermittent d'une semaine). archi : le découpage au survol de la jauge (wt-pese, rouge joué).
   Toutes les passes sous 207701bb2 sans MOTEUR_ANCIEN et 32 Gio.
+- **16 h 18, lucivy 4.3.4 publiée** (tag v4.3.4 sur main, sur le mot de Lucie dans la session lucivy ; run de
+  publication vert au second essai, le premier annulé par GitHub faute de runner macOS en 15 min, rien
+  publié à moitié) : crates.io (luciole, lucistore, ld-lucivy, lucivy-core, sparse-vector), npm (lucivy,
+  cinq paquets de plateforme, lucivy-wasm), PyPI (5 wheels + sdist). Le correctif : la variante C de Codex
+  (barrière d'admission atomique) relue et corrigée (clippy ; un réveil perdu dans l'arrêt de
+  l'ordonnanceur, présent depuis mars), mesurée moins chère que la 4.3.3 sur le worker. La montée de
+  `lucivy-core` dans rag3weaver revient à recherche après son lot de la CI. **La CI de lucivy est passée
+  à Rust 1.100** (nouveaux lints clippy, nouveau rangement des dossiers de build de Cargo) ; recherche
+  vient d'en trouver l'effet chez nous : la garde des targets cherchait les empreintes au vieil endroit
+  sous Cargo 1.100 (faux vert), corrigée pour les deux dispositions (10caefbac), run de CI en cours.
+- **Relecture de l'atelier par ED** : un défaut de sûreté (`canonique` garde un `..` après un dossier
+  absent et le test de racine est lexical : une écriture hors de la racine sans accord), six défauts de
+  correction ; sept tickets (b51a0287f) ; archi prend la sûreté en lot court devant la jauge. **Cœur** :
+  rouge posé pour l'annulation sous pool plein (le témoin de Codex rougit sur master, son correctif
+  0511dece7 repris en aab8ad0ba, suites en cours).
