@@ -92,12 +92,22 @@ pub(super) fn connecter(source: &super::ModelSource, annule: &std::sync::atomic:
     if client.identite().activation.as_ref() != Some(&identite(source)?) {
         return Err("identité d'activation refusée : recette/profil du fournisseur différent ou non attesté".into());
     }
+    // Un bail d'usage chez le fournisseur : il compte cet usager tant que le
+    // client vit (première étape de la résidence ; rien n'est déchargé). Un
+    // fournisseur d'avant les baux ne compte pas : `None`, pas une erreur.
+    let usage = client.prendre_bail(&format!("activation:{}:{}", std::process::id(), source.model), std::time::Duration::from_secs(60))
+        .map_err(|e| format!("bail d'usage : {e}"))?;
     let origine = super::Origin::Service(bail.adresse().to_string());
-    Ok((Box::new(Gere { client, _bail: bail }), origine))
+    Ok((Box::new(Gere { client, _usage: usage, _bail: bail }), origine))
 }
 
 #[cfg(feature = "daemon")]
-struct Gere { client: crate::daemon::DaemonEmbedder, _bail: crate::serveur::activation::Bail }
+struct Gere {
+    client: crate::daemon::DaemonEmbedder,
+    // Rendu avant le bail local : l'ordre des champs est l'ordre de leur fin.
+    _usage: Option<crate::daemon::embeddings::BailDistant>,
+    _bail: crate::serveur::activation::Bail,
+}
 
 #[cfg(feature = "daemon")]
 impl crate::embedder::Embedder for Gere {
