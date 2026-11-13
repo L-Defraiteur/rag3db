@@ -87,34 +87,105 @@ export type FluxStatus = "ouvert" | "coupé, reprise…" | "fermé";
 /// Le flux de l'hôte : un `EventSource` pour toute la page. `Last-Event-ID` est
 /// renvoyé par le navigateur à la reconnexion ; l'hôte rejoue ce qu'il garde.
 ///
-/// **Fermé au départ de la page, rouvert à son retour** (mesure de l'étape navigateur,
-/// 13 novembre 2026) : une page quittée reste vivante dans le cache d'aller-retour du
-/// navigateur, son flux ouvert. Le navigateur ne tient que six connexions par hôte : après
-/// six vues ou rechargements, la suivante attendait une minute qu'une connexion se libère.
-/// La page ferme son flux sur `pagehide` ; revenue du cache (`pageshow`, `persisted`), elle
-/// le rouvre depuis le dernier événement reçu, que l'hôte rejoue.
+/// **Un seul flux par navigateur** (Lucie, 13 novembre 2026 : plusieurs onglets de l'IDE ouverts
+/// en même temps) : le navigateur n'ouvre que six connexions HTTP/1.1 vers un hôte, et chaque
+/// page tenait la sienne pour son flux. Les pages partagent donc un `SharedWorker`
+/// (`/ide/flux-worker.js`, `lib/flux-worker.ts`) qui tient l'unique flux et le leur
+/// redistribue ; il porte aussi l'état partagé ([`etatPartage`]). Sans `SharedWorker`
+/// (navigation privée, navigateur qui ne l'a pas), la page ouvre son propre flux.
+///
+/// **Fermé au départ de la page, rouvert à son retour** (mesure de l'étape navigateur) : une
+/// page quittée reste vivante dans le cache d'aller-retour du navigateur. Elle quitte le flux
+/// sur `pagehide` ; revenue du cache (`pageshow`, `persisted`), elle le rejoint.
+///
+/// `window.__ide.flux` garde la forme d'un `EventSource` (`readyState`, `onmessage`) : les
+/// témoins y lisent l'état du flux et y rejouent un événement.
 export function openFlux(onEvent: (e: FluxEvent) => void, onStatus: (s: FluxStatus) => void): () => void {
-  // `repos` : un worktree attaché par l'atelier (`RepoAttached`), que la barre montre.
-  // `etat` : les états que l'hôte pousse (`onEtat`), au lieu d'une relecture après un événement.
+  let ferme = false;
+  const recevoir = (data: string) => {
+    if (ferme) return;
+    try {
+      onEvent(JSON.parse(data));
+    } catch {
+      /* une ligne illisible ne coupe pas le flux */
+    }
+  };
+  const w = window as unknown as { __ide?: Record<string, unknown>; SharedWorker?: typeof SharedWorker };
+  const statut = (s: FluxStatus) => {
+    vue.readyState = s === "ouvert" ? 1 : s === "fermé" ? 2 : 0;
+    onStatus(s);
+  };
+  // `close` coupe la page de son flux ; `onopen` dit le flux ouvert (les vues relisent leur
+  // état) : les deux gestes d'un `EventSource`, que les témoins emploient.
+  const vue = {
+    readyState: 0,
+    onmessage: (e: { data: string }) => recevoir(e.data),
+    onopen: () => statut("ouvert"),
+    close: () => {
+      ferme = true;
+      fermer();
+    },
+  };
+  w.__ide = { ...(w.__ide ?? {}), flux: vue };
+  const fermer = (w.SharedWorker ? partager(vue, statut) : null) ?? fluxDeLaPage(vue, statut);
+  return () => {
+    ferme = true;
+    fermer();
+  };
+}
+
+/// Le flux par le `SharedWorker` ; `null` s'il ne se lance pas.
+function partager(vue: { onmessage: (e: { data: string }) => void }, statut: (s: FluxStatus) => void): (() => void) | null {
+  let port: MessagePort;
+  try {
+    port = new SharedWorker("/ide/flux-worker.js", { name: "rag3weaver-flux" }).port;
+  } catch {
+    return null;
+  }
+  port.onmessage = (m: MessageEvent) => {
+    const d = m.data ?? {};
+    if (d.type === "evenement") vue.onmessage({ data: d.data });
+    else if (d.type === "statut") statut(d.statut);
+    else if (d.type === "etat") etatRecu(d.cle, d.valeur);
+    else if (d.type === "etat-complet") for (const [cle, valeur] of Object.entries(d.etat ?? {})) etatRecu(cle, valeur);
+  };
+  port.start();
+  ecrireEtat = (cle, valeur) => port.postMessage({ type: "etat-ecrire", cle, valeur });
+  const battement = setInterval(() => port.postMessage({ type: "battement" }), 15_000);
+  const partir = () => port.postMessage({ type: "partir" });
+  const revenir = (e: PageTransitionEvent) => {
+    if (e.persisted) {
+      statut("coupé, reprise…");
+      port.postMessage({ type: "revenir" });
+    }
+  };
+  window.addEventListener("pagehide", partir);
+  window.addEventListener("pageshow", revenir);
+  return () => {
+    clearInterval(battement);
+    window.removeEventListener("pagehide", partir);
+    window.removeEventListener("pageshow", revenir);
+    partir();
+    port.close();
+    ecrireEtat = ecrireLocalement;
+    statut("fermé");
+  };
+}
+
+/// Le flux de la page seule, quand le `SharedWorker` manque.
+function fluxDeLaPage(vue: { onmessage: (e: { data: string }) => void }, statut: (s: FluxStatus) => void): () => void {
   const adresse = "/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens,repos,accords,etat";
   let source: EventSource | null = null;
   let dernier = "";
   const brancher = () => {
     const s = new EventSource(dernier ? `${adresse}&depuis=${encodeURIComponent(dernier)}` : adresse);
-    s.onopen = () => onStatus("ouvert");
-    s.onerror = () => onStatus("coupé, reprise…");
+    s.onopen = () => statut("ouvert");
+    s.onerror = () => statut("coupé, reprise…");
     s.onmessage = (e) => {
       if (e.lastEventId) dernier = e.lastEventId;
-      try {
-        onEvent(JSON.parse(e.data));
-      } catch {
-        /* une ligne illisible ne coupe pas le flux */
-      }
+      vue.onmessage({ data: e.data });
     };
     source = s;
-    // Le reste de `__ide` (les relevés des vues, que les témoins lisent) est gardé.
-    const w = window as unknown as { __ide?: Record<string, unknown> };
-    w.__ide = { ...(w.__ide ?? {}), flux: s };
   };
   const partir = () => {
     source?.close();
@@ -123,7 +194,7 @@ export function openFlux(onEvent: (e: FluxEvent) => void, onStatus: (s: FluxStat
   const revenir = (e: PageTransitionEvent) => {
     if (e.persisted && !source) {
       // Rien n'est branché pendant la reconnexion : la barre le dit (archi, relecture).
-      onStatus("coupé, reprise…");
+      statut("coupé, reprise…");
       brancher();
     }
   };
@@ -134,9 +205,32 @@ export function openFlux(onEvent: (e: FluxEvent) => void, onStatus: (s: FluxStat
     window.removeEventListener("pagehide", partir);
     window.removeEventListener("pageshow", revenir);
     partir();
-    onStatus("fermé");
+    statut("fermé");
   };
 }
+
+/// **L'état partagé entre les pages** d'un même site (dépôt courant, sélection, conversation
+/// ouverte, cartes en attente…) : écrit par une page, reçu par toutes, par le `SharedWorker`
+/// du flux. C'est la forme qui laissera des fenêtres détachées de l'IDE se suivre. Sans
+/// `SharedWorker`, il reste propre à la page.
+const etatLocal = new Map<string, unknown>();
+const suiveurs = new Map<string, Set<(valeur: unknown) => void>>();
+function etatRecu(cle: string, valeur: unknown) {
+  etatLocal.set(cle, valeur);
+  for (const f of suiveurs.get(cle) ?? []) f(valeur);
+}
+const ecrireLocalement = (cle: string, valeur: unknown) => etatRecu(cle, valeur);
+let ecrireEtat: (cle: string, valeur: unknown) => void = ecrireLocalement;
+export const etatPartage = {
+  lire: (cle: string): unknown => etatLocal.get(cle),
+  ecrire: (cle: string, valeur: unknown) => ecrireEtat(cle, valeur),
+  suivre: (cle: string, f: (valeur: unknown) => void): (() => void) => {
+    const s = suiveurs.get(cle) ?? new Set();
+    s.add(f);
+    suiveurs.set(cle, s);
+    return () => s.delete(f);
+  },
+};
 
 // **Le bus du flux dans la page** : une vue s'abonne aux événements que le
 // cadre reçoit (un seul `EventSource` pour toute la page).
