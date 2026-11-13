@@ -325,6 +325,7 @@ mod tests {
                 env: Default::default(), profil: "fixture-cpu".into(), peripherique: "cpu".into(),
                 coordination: dossier.path().join("coordination"), journal: dossier.path().join("journaux"),
                 budget_activation_secs: 5, budget_attente_secs: 5, residence: Residence::Maintenir,
+                hote: None, adresse_distante: None, ssh: None,
             });
             // Même chemin que le manifeste : la déclaration traverse serde.
             let source = serde_json::from_str(&serde_json::to_string(&source).unwrap()).unwrap();
