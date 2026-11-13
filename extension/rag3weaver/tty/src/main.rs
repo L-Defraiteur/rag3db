@@ -2,7 +2,7 @@
 //! (lot tty-2) ; `--plain` écrit le texte brut, sans terminal riche (lot tty-1).
 //!
 //! ```text
-//! rag3weaver-tty [--plain] [--theme daemon|foret] --depot <nom|chemin> --tache <nom> [--demande "<texte>"]
+//! rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] --depot <nom|chemin> --tache <nom> [--demande "<texte>"]
 //!                [--daemon-json <chemin> | --daemon-cmd "<commande>"] [--adresse hôte:port]
 //!                [--depuis <id>]
 //! ```
@@ -71,7 +71,7 @@ fn options() -> Result<Options, String> {
     Ok(o)
 }
 
-const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret] --depot <nom|chemin> --tache <nom> [--demande \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\"] [--adresse hôte:port] [--depuis <id>]";
+const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] --depot <nom|chemin> --tache <nom> [--demande \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\"] [--adresse hôte:port] [--depuis <id>]";
 
 fn main() {
     let o = match options() {

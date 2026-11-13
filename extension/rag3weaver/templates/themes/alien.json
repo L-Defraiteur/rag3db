@@ -1,0 +1,114 @@
+{
+  "nom": "alien",
+  "couleurs": {
+    "fond": "#020d06",
+    "texte": "#39ff14",
+    "halo": [
+      "#b6ff3b",
+      "#0b5e3c"
+    ],
+    "sourdine": "#55836a"
+  },
+  "police": "'Courier New', Courier, monospace",
+  "animations": {
+    "reflechit": {
+      "forme": "cercle",
+      "ms": 150,
+      "glyphes": [
+        "⍜",
+        "⏁",
+        "⏂",
+        "⎎",
+        "⍙",
+        "⏃",
+        "⎅"
+      ],
+      "coeur": "◬",
+      "gabarits": [
+        "⟪ {gauche} {coeur} {droite} ⟫ SIGNAL REÇU..."
+      ]
+    },
+    "lit": {
+      "forme": "transmutation",
+      "ms": 200,
+      "glyphes": [
+        "·",
+        "∘",
+        "○",
+        "◌",
+        "◍",
+        "◎",
+        "●"
+      ],
+      "coeur": "◬",
+      "gabarits": [
+        "⁅ {coeur} ⁆—[ {s} ]—⁅ {coeur} ⁆ ÉCHANTILLONNAGE..."
+      ]
+    },
+    "ecrit": {
+      "forme": "glitch",
+      "ms": 100,
+      "glyphes": [
+        "⟟",
+        "⟒",
+        "⋔",
+        "⍀",
+        "⌰",
+        "⏁",
+        "⏚",
+        "⌖",
+        "⟊"
+      ],
+      "coeur": "◬",
+      "gabarits": [
+        "[{a} {coeur} {b}] ...MUTATION DU CODE...",
+        "❬{a}{b} {coeur} {c}❭ ...LA RUCHE ÉCRIT...",
+        " {a} ⸢{coeur}⸣ {b}  ...PONTE DANS LE NOYAU..."
+      ]
+    }
+  },
+  "replis": {},
+  "ascii": {
+    "coeur": "%",
+    "glyphes": [
+      "o",
+      ".",
+      "*",
+      "~"
+    ],
+    "cadre": {
+      "⟪": "<<",
+      "⟫": ">>",
+      "⁅": "[",
+      "⁆": "]",
+      "—": "-",
+      "⸢": "[",
+      "⸣": "]",
+      "❬": "<",
+      "❭": ">",
+      "Ê": "E",
+      "É": "E",
+      "È": "E",
+      "Ç": "C"
+    }
+  },
+  "code": {
+    "keyword": "#39ff14",
+    "type": "#b6ff3b",
+    "function": "#7dffb0",
+    "string": "#c4f0a0",
+    "comment": "#55836a",
+    "number": "#e6ff6b",
+    "constant": "#e6ff6b",
+    "variable": "#d9ffe6",
+    "property": "#8fe3b0",
+    "operator": "#5cff8f",
+    "punctuation": "#55836a",
+    "attribute": "#2fd18a",
+    "label": "#2fd18a",
+    "module": "#2fd18a",
+    "other": "#c9f5d8",
+    "en_ligne": "#e6ff6b",
+    "cadre": "#55836a"
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "nom": "cyborg",
+  "couleurs": {
+    "fond": "#1c1f24",
+    "texte": "#d7dde5",
+    "halo": [
+      "#ffb000",
+      "#5a6270"
+    ],
+    "sourdine": "#8b949e"
+  },
+  "police": "'Courier New', Courier, monospace",
+  "animations": {
+    "reflechit": {
+      "forme": "cercle",
+      "ms": 150,
+      "glyphes": [
+        "⊕",
+        "⊗",
+        "⊙",
+        "⊚",
+        "⊛",
+        "⊜",
+        "⊝"
+      ],
+      "coeur": "⏣",
+      "gabarits": [
+        "⟪ {gauche} {coeur} {droite} ⟫ DIAGNOSTIC EN COURS..."
+      ]
+    },
+    "lit": {
+      "forme": "transmutation",
+      "ms": 200,
+      "glyphes": [
+        "▁",
+        "▂",
+        "▃",
+        "▄",
+        "▅",
+        "▆",
+        "▇"
+      ],
+      "coeur": "⏣",
+      "gabarits": [
+        "⁅ {coeur} ⁆—[ {s} ]—⁅ {coeur} ⁆ LECTURE DES CAPTEURS..."
+      ]
+    },
+    "ecrit": {
+      "forme": "glitch",
+      "ms": 100,
+      "glyphes": [
+        "⌁",
+        "⌇",
+        "⎓",
+        "⏚",
+        "⎍",
+        "⌬",
+        "⍜",
+        "⏛",
+        "⎔"
+      ],
+      "coeur": "⏣",
+      "gabarits": [
+        "[{a} {coeur} {b}] ...ALERTE : ÉCRITURE...",
+        "❬{a}{b} {coeur} {c}❭ ...SERVOMOTEURS ENGAGÉS...",
+        " {a} ⸢{coeur}⸣ {b}  ...SOUDURE DU CODE..."
+      ]
+    }
+  },
+  "replis": {},
+  "ascii": {
+    "coeur": "O",
+    "glyphes": [
+      "=",
+      "+",
+      "-",
+      "|"
+    ],
+    "cadre": {
+      "⟪": "<<",
+      "⟫": ">>",
+      "⁅": "[",
+      "⁆": "]",
+      "—": "-",
+      "⸢": "[",
+      "⸣": "]",
+      "❬": "<",
+      "❭": ">",
+      "Ê": "E",
+      "É": "E",
+      "È": "E",
+      "Ç": "C"
+    }
+  },
+  "code": {
+    "keyword": "#ffb000",
+    "type": "#9fbad1",
+    "function": "#e6edf3",
+    "string": "#c9d1a0",
+    "comment": "#858d98",
+    "number": "#ffcc66",
+    "constant": "#ffcc66",
+    "variable": "#d7dde5",
+    "property": "#aeb9c5",
+    "operator": "#ffb000",
+    "punctuation": "#8b949e",
+    "attribute": "#93a8bd",
+    "label": "#93a8bd",
+    "module": "#93a8bd",
+    "other": "#c5ccd4",
+    "en_ligne": "#ffcc66",
+    "cadre": "#8b949e"
+  }
+}
