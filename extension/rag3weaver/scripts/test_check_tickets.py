@@ -256,5 +256,20 @@ class CheckTickets(unittest.TestCase):
         self.assertIn("déplacé  coeur-cpp/tickets/2026-10-18-fige.md (depuis banc/tickets/2026-10-18-fige.md)", out)
 
 
+    def test_un_ticket_ouvert_et_ferme_dans_le_lot_se_lit_ouvert_et_ferme(self):
+        # Un lot qui ouvre un ticket puis le ferme ne l'ajoute que dans closed/ depuis sa base :
+        # --lot ne doit pas le donner pour ouvert (lot lucivy-4-3-5, 13 novembre 2026).
+        r = self.racine
+        git(r, "init", "-q", "-b", "master")
+        git(r, "add", "-A")
+        git(r, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "base")
+        ecrire(r, "closed/2026-11-13-neuf.md", "Neuf", etat="corrigé `abc`")
+        git(r, "add", "-A")
+        git(r, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "ouvrir et fermer")
+        rc, out = jouer(r, "--lot", "HEAD~1")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("ouvert et fermé  closed/2026-11-13-neuf.md", out)
+        self.assertNotIn("ouvert   closed/", out)
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
