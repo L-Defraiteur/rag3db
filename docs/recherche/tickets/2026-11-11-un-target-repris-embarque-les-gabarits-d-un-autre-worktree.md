@@ -134,3 +134,11 @@ fixe deux racines égales. Diagnostic source+panic663, pas défaut produitgarde
 code1/restes[]/busabsent et quiescence vide. [Rapport05](../13-11-2026/05-arret-qualification-garde-target.md).
 Préparer pilote à deux racines siblings et runtime manquant seulement sur
 ELF figé, mêmeSTART/END ; nouveau couple/RO/GO avant toute exécution.
+
+## Correctif pilote proposé après diagnostic publié
+
+[Recette06](../13-11-2026/06-reprise-module-gabarits.md), nouveau pilote isolé :
+state-fixture et xdg-state siblings, mêmes application698/ELF/SHA et deadline
+originale911625.832473217. Préparations héritées, seul module9/attestations
+à exécuter après nouveau GO exact ; pas Cargo/rustc/rebuild/NAV/service.
+Anciennes preuves intactes, diagnosticf107 publié AVANT ce diff, ticket ouvert.
