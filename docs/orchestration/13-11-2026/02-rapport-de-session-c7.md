@@ -196,3 +196,8 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   défaut (une suppression sous un HNSW rempli par SET, non checkpointé, coûte avec la taille : 1,97 → 8,01 ms
   de 1 500 à 15 000 lignes ; checkpointé 1,96 → 2,39), ticket posé, known_red. Embarquement : port 0
   annoncé codé, passe lancée.
+- **17 h 41, 96 a poussé c89e3f769** (M8 : le plan de gabarits refuse un Plan `@builtin:` lu hors du contenu
+  fourni, un changement de `name`, un script Rhai ou un gabarit jinja changé seul, et dit les changements
+  de `search_graphs`/`graph_tool` ; l'identité des commits de gabarits corrigée dans la page : neutre). ED a
+  son tour (l'équipier), puis le cœur, archi, embarquement. 96 reprend l'archivage à blanc des docs sur une
+  copie de la mémoire de Lucie, pour une liste à approuver par elle.
