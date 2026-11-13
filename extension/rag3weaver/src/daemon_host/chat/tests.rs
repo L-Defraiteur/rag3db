@@ -1574,13 +1574,14 @@ fn le_theme_daemon_se_choisit_et_l_invocation_tourne_pendant_que_le_modele_refle
     n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
     let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
     n.aller(&format!("{racine}/ide/code/{id}/chat"), prete);
-    // Le choix « daemon » : la marque sur <html>, les couleurs du fichier commun.
-    n.evaluer("document.querySelector('#theme-daemon').click()");
-    n.attendre("document.documentElement.dataset.theme === 'daemon' && document.documentElement.classList.contains('daemon')", "le thème daemon choisi");
+    // Le choix « daemon » au menu : la marque sur <html>, les couleurs du fichier commun.
+    n.attendre("!!document.querySelector('#theme-fichier option[value=\"daemon\"]')", "le menu des thèmes");
+    n.evaluer("const s = document.querySelector('#theme-fichier'); s.value = 'daemon'; s.dispatchEvent(new Event('change', { bubbles: true }))");
+    n.attendre("document.documentElement.dataset.theme === 'daemon' && document.documentElement.classList.contains('theme-fichier')", "le thème daemon choisi");
     let var = |n: &mut Navigateur, v: &str| n.evaluer(&format!("getComputedStyle(document.documentElement).getPropertyValue('{v}').trim()"));
-    n.attendre(&format!("getComputedStyle(document.documentElement).getPropertyValue('--daemon-fond').trim() === '{}'", theme["couleurs"]["fond"].as_str().unwrap()), "les couleurs lues dans le fichier commun");
-    assert_eq!(var(&mut n, "--daemon-texte"), theme["couleurs"]["texte"]);
-    assert_eq!(var(&mut n, "--daemon-code-keyword"), theme["code"]["keyword"]);
+    n.attendre(&format!("getComputedStyle(document.documentElement).getPropertyValue('--theme-fond').trim() === '{}'", theme["couleurs"]["fond"].as_str().unwrap()), "les couleurs lues dans le fichier commun");
+    assert_eq!(var(&mut n, "--theme-texte"), theme["couleurs"]["texte"]);
+    assert_eq!(var(&mut n, "--theme-code-keyword"), theme["code"]["keyword"]);
     assert_eq!(n.evaluer("getComputedStyle(document.body).backgroundColor"), json!("rgb(5, 5, 5)"), "le fond de la page est celui du thème");
     assert_eq!(n.evaluer("getComputedStyle(document.body).color"), json!("rgb(255, 51, 51)"), "le texte de la page est celui du thème");
     assert_eq!(n.evaluer("localStorage.getItem('ide-theme')"), json!("daemon"));
@@ -1598,8 +1599,8 @@ fn le_theme_daemon_se_choisit_et_l_invocation_tourne_pendant_que_le_modele_refle
     assert_eq!(n.evaluer("!!document.querySelector('#invocation')"), json!(false), "l'invocation disparaît à la fin du tour");
 
     // Hors du thème daemon (retour au choix du système), la page reste sobre pendant un tour.
-    n.evaluer("document.querySelector('#theme-daemon').click()");
-    n.attendre("document.documentElement.dataset.theme !== 'daemon' && !document.documentElement.classList.contains('daemon')", "le thème daemon quitté");
+    n.evaluer("const s = document.querySelector('#theme-fichier'); s.value = ''; s.dispatchEvent(new Event('change', { bubbles: true }))");
+    n.attendre("document.documentElement.dataset.theme !== 'daemon' && !document.documentElement.classList.contains('theme-fichier')", "le thème daemon quitté");
     n.evaluer("document.querySelector('#message').value = 'encore'; document.querySelector('#send').click()");
     n.attendre("document.querySelector('#status')?.textContent === \"l'agent travaille…\"", "le second tour part");
     assert_eq!(n.evaluer("!!document.querySelector('#invocation')"), json!(false), "pas d'invocation hors du thème daemon");
