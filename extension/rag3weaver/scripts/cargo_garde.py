@@ -14,12 +14,14 @@ import sys
 def main():
     args = sys.argv[1:]
     metadata_args = []
+    restrictions = []
     target = None
     i = 0
     while i < len(args) and args[i] != '--':
         arg = args[i]
         if arg in ('--offline', '--locked', '--frozen'):
             metadata_args.append(arg)
+            restrictions.append(arg)
         for option in ('--manifest-path', '--target-dir'):
             if arg == option or arg.startswith(option + '='):
                 if arg == option:
@@ -47,8 +49,8 @@ def main():
     destination = Path(target if target is not None else metadata['target_directory']).absolute()
     env = dict(os.environ, CARGO_TARGET_DIR=str(destination))
     guard = Path(__file__).with_name('garde_target.sh')
-    subprocess.run(['bash', '-c', '. "$1"; garder_le_target "$2" "$3"',
-                    'cargo-guard', str(guard), str(destination), str(workspace)], env=env, check=True)
+    subprocess.run(['bash', '-c', '. "$1"; shift; garder_le_target "$@"',
+                    'cargo-guard', str(guard), str(destination), str(workspace), *restrictions], env=env, check=True)
     os.execvpe('cargo', ['cargo', *args], env)
 
 
