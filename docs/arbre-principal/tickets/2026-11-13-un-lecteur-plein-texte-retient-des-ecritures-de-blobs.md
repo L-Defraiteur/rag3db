@@ -26,3 +26,7 @@ Qualification attendue : CPU aucune query d'écriture même à Drop ; natif hand
 is_read_only, commit refusé, index absent non créé et fichiers DB inchangés après
 recherche/fermeture. Le garde de lecture publique sur versions internes reste
 strict ; la maintenance interne suit les stockages physiques déjà entretenus.
+
+Qualification ciblée P14 sura43c475f9 : VERTE (voir bilan parent lié).
+Créations/écritures/reprise ou lecteur RO réellement éprouvés dans le profil
+synthétique BM25. Qualification générale et livraison non faites ; ticket ouvert.

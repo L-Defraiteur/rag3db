@@ -2255,3 +2255,11 @@ P13/tmp/.tmpIo9yxf. Remplacer les DEUX injections foreign_value expliciteNULL
 des tests négatifs par primitive dialect.alter_add_column_default(ColumnText,
 "NULL") ; garder colonneétrangère/refus/instantanés/journalabsent inchangés.
 Production inchangée ; nouvelle qualification distincte aprèsRO/GO.
+
+
+P14 sourceEXACTa43c475f9ce1f7cbd6c1c2a0ee56719b521678f1 VERTE :44,321345s,
+20fonctions/19juges/helper1,10CPU+9jugesnatifs,8enfants réels qualifiés,0ignoré.
+Superviseur validation-gllfe1kq VERT/code0/restes[], autorité terminée, bus absent,
+scan propre vide ;1653preuves+ELF SHAégaux2postes. Bilan et limites :
+[qualification ciblée](../13-11-2026/02-preuves-ciblee-raccord-physique.md).
+Tous rouges précédents restent distincts ; aucun GO global/master, tickets ouverts.
