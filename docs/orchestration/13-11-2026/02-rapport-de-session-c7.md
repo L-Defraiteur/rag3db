@@ -242,3 +242,14 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   seul, possédé) reste un banc d'essai de ces mécanismes (générations de publication, reprise), pas un
   stockage à maintenir ; ce qui en vaut la peine s'adopte dans l'index réel. « Codex a pu se tromper, partir
   dans une mauvaise direction. » Mes mots du 13 au soir, tranchés par elle.
+- **18 h 38, la fenêtre KDE de Lucie** (« créer un portefeuille kdewallet », toutes les cinq minutes) : ce n'est
+  pas Chromium mais **`gh`**, dont les jetons des deux comptes sont « (keyring) », servi sous KDE 6 par
+  kwalletd6 ; chaque `gh` (dont `poste push` à chaque push, les `gh auth switch` des sessions Sairen, mes
+  lectures de la CI) demande un portefeuille qui n'existe pas. Vu par `busctl --user monitor` sur
+  `org.freedesktop.Secret.Service`. Remède à sa main : un portefeuille vide, ou `gh auth login
+  --insecure-storage` par compte. archi pousse quand même `--password-store=basic` pour Chromium
+  (inoffensif). **1a** (arbre principal) : second tour vert partout sauf deux vrais rouges de reprise après
+  incident d'une base à versions (les morceaux d'une version non refaits à la relance ; un repreneur qui
+  sérialise mal sur une version émise dans un paquet défait) — ils restent dans 1a ; sondes, bancs et
+  mesures en 1a-2 avec ticket. File : embarquement (en tour), recherche (journal des runs, vert), archi
+  (« dire vrai », vert), puis la pose de 835d5298f en une coupure.
