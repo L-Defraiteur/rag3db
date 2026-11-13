@@ -73,3 +73,14 @@ point de reprise passe, sous ASAN.
 ## Pour le fermer
 
 La cause sous ASAN ou par un témoin réduit rouge, le correctif, le témoin vert.
+
+## Après le verrou de la clé primaire (13 nov., `0c41f9fe6`)
+
+Non reproduit en 3 tours après le verrou (vert, rouge sur `index-creation-refuses-no-reader`,
+vert), sans aucun SIGSEGV. Avant le correctif, les trois tours avaient donné rouge, vert, puis
+SIGSEGV.
+
+0 plantage sur 3 tours est un indice, pas une preuve. Le correctif ferme la fenêtre où un lecteur
+lisait les pips pendant leur publication : voir le ticket
+`2026-11-13-une-recherche-par-cle-primaire-rate-des-cles-validees-pendant-un-point-de-reprise.md`.
+La ligne known_red de `DdlEveryMinute` reste intacte. Il faut le rejouer ×10 avant de fermer.

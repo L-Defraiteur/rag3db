@@ -1,6 +1,7 @@
 # Une recherche par clé primaire rate des clés validées pendant un point de reprise
 
-- **État** : ouvert (13 novembre 2026, cœur c++)
+- **État** : ouvert (13 novembre 2026, cœur c++) — corrigé sur master `0c41f9fe6`, à poser
+  (lib bâtie à ce hash ; se ferme quand la lib posée a passé l'e2e de G)
 - **Famille** : moteur
 - **Gravité** : lecture fausse (une rangée validée est dite absente)
 - **Atteignable en service** : oui. Il suffit d'un lecteur READ ONLY qui cherche par clé pendant
@@ -187,3 +188,36 @@ La sonde a été vue rouge sur une base fabriquée qui porte deux Scope de même
 détail, le programme et le témoin sont dans
 `docs/coeur-cpp-hotfixs-tickets/13-11-2026/02-sonde-des-doublons.md`. Pour memoire-longue, seules les
 clés primaires sont couvertes.
+
+## Correctif sur master (13 nov., `0c41f9fe6`)
+
+Branche `cle-primaire-sous-point-de-reprise-3`, rebasée sans rejeu sur `17e18c245`. Entre
+`072f0d86c`, qui a été joué, et ce lot, master n'a apporté que du code rag3weaver ; le C++ est
+identique.
+
+Ce que fait le code :
+
+- `PrimaryKeyIndex::checkpoint` ne publie plus rien.
+- `Checkpointer::logCheckpointAndApplyShadowPages` prend l'exclusif de chaque index de clé
+  primaire (`StorageManager::getPrimaryKeyIndexes`, `lockForPublication`) et recopie les pages
+  fantômes. Il appelle ensuite `checkpointInMemory`, qui publie les pips, puis les en-têtes de
+  lecture, et ne vide la mémoire locale qu'en dernier (`HashIndex::clearLocalStorage`).
+- `lookup` prend le partagé.
+
+Verdicts à luciepc :
+
+| Test | Verdict |
+|---|---|
+| `PkLookupUnderCheckpoint` | rouge sur `6d8619f49`, vert 5 tours sur 5 sur `754c9aeea` |
+| `transaction_test` entier sur `072f0d86c` | vert : 371 passés ; 2 sautés, la sonde de processus neuf et `WalReader.PrintAFile` |
+| `concurrence_test.known_red` | vert |
+| `TwentyWriters.DdlEveryMinute` ×3 | vert, rouge sur `index-creation-refuses-no-reader` (son étiquette connue), vert ; aucun plantage |
+
+La première passe des suites ne vaut rien. L'extension vector y datait du bâti `e93710f36` et a
+été refusée (« was built from »), et ctest, lancé depuis la racine du build, n'avait trouvé aucun
+test. Les suites ont été rejouées avec `rag3db_vector_extension` dans la cible, et ctest lancé
+depuis `build/moteur/test/transaction/concurrence`.
+
+L'exclusif est mesuré sous `RAG3DB_PROFILE_CHECKPOINT=1` par la ligne
+`[checkpoint-profile]   cles-primaires`. Sur 810 points de reprise du témoin, l'attente est de
+0,0 ms, et l'exclusif est tenu au plus 12,7 ms : 9 à 12 ms de recopie, 0,4 à 1,1 ms de publication.
