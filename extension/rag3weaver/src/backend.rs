@@ -2405,6 +2405,13 @@ impl PreparedBackend {
             // produit choisit. Une entité inconnue refuse en listant.
             if let Some(w) = &self.manifest.workspace {
                 for (entite, signaux) in &w.index_signals {
+                    // Sur une base à versions de scope, les signaux de `Scope`
+                    // vivent sur son contenu : c'est lui qui porte les index.
+                    let entite = match cat.entity_configs().get(entite.as_str()).and_then(|c| c.search_index.clone()) {
+                        Some(index) => index,
+                        None => entite.clone(),
+                    };
+                    let entite = &entite;
                     let Some(config) = cat.entity_configs().get(entite.as_str()).cloned() else {
                         let connues: Vec<String> =
                             cat.entity_configs().keys().map(|k| k.to_string()).collect();
@@ -5420,6 +5427,11 @@ impl Backend {
         if !entites.is_empty() && crate::code_sync::avant_la_regle(&cat).unwrap_or(false) {
             avertissements.push(crate::code_sync::AVANT_LA_REGLE.to_string());
         }
+        // Une base de code de la forme d'avant les versions de scope : elle
+        // sert comme avant, et se dit à migrer (lot 1a, décision de c7).
+        if !entites.is_empty() && crate::code::scope_form(&cat).ok() == Some(crate::code::ScopeForm::SansVersions) {
+            avertissements.push(crate::code::SANS_VERSIONS.to_string());
+        }
         // **La garde des comptes du dernier index** : documents contre
         // lignes, par entité ; un écart se dit aussi en avertissement.
         if let Some(Value::Object(comptes)) = cat.comptes_notes_du_plein_texte() {
@@ -5463,7 +5475,15 @@ impl Backend {
         // embarquer, et qu'il revient dès que c'est soldé.
         for (table, _, index) in cat.index_vectoriels_retires().unwrap_or_default() {
             let reste = cat.vector_storage(&table).map(|s| cat.count_marqueur_manquant(&table, &s.marker)).unwrap_or(0);
-            let entite = table.strip_suffix("_Chunk").unwrap_or(&table).to_string();
+            let indexee = table.strip_suffix("_Chunk").unwrap_or(&table).to_string();
+            // L'entité que l'utilisateur voit : celle dont les recherches passent
+            // par cet index (`Scope` pour `ScopeContent`, version de scope).
+            let entite = cat
+                .entity_configs()
+                .iter()
+                .find(|(_, c)| c.search_index.as_deref() == Some(indexee.as_str()))
+                .map(|(nom, _)| nom.clone())
+                .unwrap_or(indexee);
             if let Some(Value::Object(e)) = etats.get_mut(&entite) {
                 e.insert("vector_index".into(), json!({ "dropped": index, "missing": reste }));
             }

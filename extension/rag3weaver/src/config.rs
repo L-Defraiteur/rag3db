@@ -1212,6 +1212,20 @@ impl EntityConfig {
             if self.hashsafe.is_some() {
                 return Err("derived : pas de `hashsafe` sur une entité dérivée, son identité est sa racine".into());
             }
+            // **Le creux n'est pas pris par le contenu partagé** (lot 1a des
+            // vues, relecture de recherche du 13 novembre 2026) : son transfert
+            // et son rattrapage ne sont pas prouvés sur une version partagée.
+            // Refusé ici, avant toute table, plutôt qu'un index creux vide en
+            // silence.
+            if matches!(derivee.identity, DerivedIdentity::Content { .. })
+                && self.signals.sparse()
+            {
+                return Err(format!(
+                    "derived.identity content : le signal creux (sparse) n'est pas pris par une entité de \
+                     contenu partagé (dérivée de « {} ») — retirer « sparse » de ses signaux",
+                    derivee.from
+                ));
+            }
         }
         if let Some(hs) = &self.hashsafe {
             if hs.is_empty() {
@@ -1420,6 +1434,26 @@ mod tests_derived {
             gather: vec![GatherRule { name: "comments".into(), relation: "HAS_COMMENT".into(), direction: GatherDirection::Out, fields: vec!["body".into()] }],
             render: [("content".to_string(), "{{ root.body }}{% for c in comments %}{{ c.body }}{% endfor %}".to_string())].into_iter().collect(),
         }
+    }
+
+    /// Lot 1a des vues (relecture de recherche, 13 novembre 2026) : une entité de
+    /// contenu partagé refuse le creux à la validation, donc avant toute table ;
+    /// les signaux denses et plein texte, et l'identité par racine, restent admis.
+    #[test]
+    fn une_entite_de_contenu_partage_refuse_le_creux() {
+        let config = |identity: DerivedIdentity, signals: crate::search::SearchSignals| EntityConfig {
+            fields: champs(&["content"]),
+            signals,
+            derived: Some(DerivedConfig { identity, gather: vec![], render: [("content".to_string(), "{{ root.body }}".to_string())].into_iter().collect(), ..derivee() }),
+            ..Default::default()
+        };
+        let contenu = || DerivedIdentity::Content { format: "texte-v1".into() };
+        let refus = config(contenu(), crate::search::SearchSignals::HYBRID | crate::search::SearchSignals::SPARSE)
+            .validate()
+            .expect_err("le creux sur un contenu partagé doit être refusé");
+        assert!(refus.contains("creux") && refus.contains("Ticket"), "{refus}");
+        assert!(config(contenu(), crate::search::SearchSignals::HYBRID).validate().is_ok());
+        assert!(config(DerivedIdentity::Root, crate::search::SearchSignals::HYBRID | crate::search::SearchSignals::SPARSE).validate().is_ok());
     }
 
     #[test]
