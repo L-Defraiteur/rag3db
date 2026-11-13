@@ -1983,6 +1983,46 @@ mod tests {
         assert!(host.state()["backends"].as_array().is_none_or(|b| b.is_empty()), "aucun backend n'a été ouvert");
     }
 
+    /// **L'arrêt de l'hôte écrit les journaux en attente, et plus rien ne s'écrit
+    /// après lui** (13 novembre 2026, ticket « le journal des runs écrit après
+    /// l'arrêt de son hôte ») : un run finit juste avant `shutdown()`. Son journal
+    /// attendait sa grâce de 250 ms dans un fil détaché, que l'arrêt n'attendait
+    /// pas : il s'écrivait après, dans un dossier peut-être déjà parti (le résidu
+    /// d'e2e_juge). Au retour de `shutdown()`, le journal est écrit ; le dossier
+    /// effacé ensuite reste absent.
+    #[test]
+    fn l_arret_de_l_hote_ecrit_les_journaux_en_attente_et_rien_apres() {
+        use crate::events::{Event, EventBus};
+        let d = tempfile::tempdir().unwrap();
+        let runs = d.path().join("runs");
+        let hote = hote_isole().with_runs_root(runs.clone());
+        let bus = EventBus::new(64);
+        hote.journal_des_runs().suivre("b", &bus);
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        bus.emit(Event::RunStarted {
+            run: "r".into(),
+            parent: None,
+            kind: "agent".into(),
+            name: "le témoin".into(),
+            domain: String::new(),
+            scope: None,
+            target: None,
+            role: None,
+        });
+        bus.emit(Event::RunFinished { run: "r".into(), kind: "agent".into(), ms: 3, ok: true, cause: None, cancelled_by: None });
+        // Le temps que le fil du sujet range l'événement, bien moins que la grâce.
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        let erreurs = hote.shutdown();
+        assert!(erreurs.is_empty(), "{erreurs:?}");
+        assert!(
+            hote.journal_des_runs().fichier("b", "r").is_some(),
+            "au retour de shutdown(), le journal du run fini juste avant est écrit"
+        );
+        std::fs::remove_dir_all(&runs).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(600));
+        assert!(!runs.exists(), "un fil du journal a écrit après l'arrêt de l'hôte : {}", runs.display());
+    }
+
     pub(super) fn hote_isole() -> DaemonHost {
         DaemonHost::new().with_background(Arc::new(crate::dataflow::background::Registry::new()))
     }
