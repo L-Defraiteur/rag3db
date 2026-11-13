@@ -177,3 +177,10 @@ réelle extraite dans build_controller_policy et sixième témoin utilisant les
 assignations réelles R/Q/W/C/T/P/S du driver puis cette fonction. Interpréteur
 poste résolu depuis /bin/sh (son shebang), exe/SHA toujours stricts. Sixième
 témoin publié NON JOUÉ à cette étape ; aucun run lourd ni reprise cache.
+
+Après publication c8ca5d53b197f2748bcd49bd2bb010e604ef09c4 : six témoins
+CPU VERT6/0 en0,038s, timeout60/failfast, même périmètre synthétique sans
+Cargo/proc réel/target. Journal horsW pilote-c8ca5-cpu.log SHA256
+117c590847f067981d882b41dc91dee1aef08d0ad1e0cb68a0ed971443b95d25.
+Les cinq témoins antérieurs ne prouvaient pas la construction réelle ; ce
+sixième couvre désormais ce manque. GO lourd toujours distinct et absent.
