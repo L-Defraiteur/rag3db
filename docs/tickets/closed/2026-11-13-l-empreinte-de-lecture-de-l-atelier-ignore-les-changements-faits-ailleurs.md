@@ -1,6 +1,8 @@
 # L'empreinte de lecture de l'atelier ignore les changements faits ailleurs, et note des lignes jamais montrées
 
-- **État** : ouvert (13 novembre 2026), pour archi.
+- **État** : corrigé (13 novembre 2026, branche atelier-empreinte-voyante, archi). Témoins
+  `a_line_write_after_a_change_made_elsewhere_must_read_again` et
+  `a_scope_read_covers_only_the_lines_it_showed`, rouges puis verts.
 - **Famille** : produit
 - **Gravité** : perte — `replace_lines` ou `insert_lines` remplace des lignes qui ne sont plus celles que le modèle a lues
 - **Atteignable en service** : oui, dès qu'un fichier lu par une conversation change par un autre chemin (une autre conversation, une commande, un `git checkout`, l'utilisatrice) avant son écriture ; ou par `read_scope` d'un scope de plus de 200 lignes
