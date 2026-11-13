@@ -15,3 +15,5 @@ Aucune nouvelle invocation ni testfiltré, pasallongementtimeout. Logs thread-ev
 Commande APRÈS RO/GOexact C7 uniquement : python3 /home/lucied/.cache/rag3weaver-build/cx-wt-couches-union-detache/docs/arbre-principal/13-11-2026/couches-2a-union-detache/lancer.py SHA_CONTROLE_EXACT
 
 Vérifications préparation : AST7, produitAPP→pilotevide, sdk-execinchangé, diffcheck. Aucun runtime/GDB/Cargo neuf joué ; ancienrougev3 conservé. Pasmaster/retrait/service/NAV/BGE/PG déduit.
+
+Les reçus parent/waitpid sont publiés COMPLETS par fichiertemporaireprivé exclusif+flush/fsync+link sansécrasement ; paslectureJSONpartielle. Le driver continue supervision si GDBrc0 arrive avantreçuwaitpid, sousmêmecap, puis exige le vrai statut et quiescence.
