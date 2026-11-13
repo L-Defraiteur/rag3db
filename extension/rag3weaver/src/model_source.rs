@@ -344,7 +344,7 @@ pub fn connect_embedder(source: &ModelSource) -> Result<(Box<dyn crate::embedder
 pub fn connect_embedder_annulable(source: &ModelSource, annule: &std::sync::atomic::AtomicBool) -> Result<(Box<dyn crate::embedder::Embedder>, Origin), String> {
     if source.activation.is_some() {
         #[cfg(feature = "daemon")]
-        return activation::connecter(source, annule);
+        return activation::connecter_ou_attendre(source, annule);
         #[cfg(not(feature = "daemon"))]
         return Err("activation d'embarquement : feature daemon requise".into());
     }

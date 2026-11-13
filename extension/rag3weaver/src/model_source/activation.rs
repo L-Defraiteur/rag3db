@@ -41,9 +41,26 @@ pub const PREFIXE_UNITE: &str = "rag3weaver-fournisseur-";
 pub enum Residence {
     /// Garder le fournisseur tant qu'il vit.
     Maintenir,
-    /// Le décharger après `inactivite_secs` sans bail ni calcul : il le
-    /// déclare dans son identité (`eviction`) et sort de lui-même.
-    ADemande { inactivite_secs: u64 },
+    /// **À la demande** : rien n'est lancé à l'ouverture ; le premier calcul
+    /// lance le fournisseur et prend un bail, rendu après
+    /// `rendre_le_bail_secs` sans appel ; le fournisseur se décharge après
+    /// `inactivite_secs` sans bail ni calcul (il le déclare dans son identité,
+    /// `eviction`) ; un calcul suivant le relance. Les deux délais sont
+    /// nommés dans les règles (`docs/embarquement/13-11-2026/01-…`) ;
+    /// `rendre_le_bail_secs` est plus court qu'`inactivite_secs`.
+    ADemande {
+        inactivite_secs: u64,
+        #[serde(default = "rendre_le_bail_par_defaut")]
+        rendre_le_bail_secs: u64,
+    },
+}
+
+/// Le délai par défaut au bout duquel un embarqueur à la demande rend son
+/// bail sans appel.
+pub const RENDRE_LE_BAIL_PAR_DEFAUT_SECS: u64 = 30;
+
+fn rendre_le_bail_par_defaut() -> u64 {
+    RENDRE_LE_BAIL_PAR_DEFAUT_SECS
 }
 
 #[cfg(feature = "daemon")]
@@ -97,7 +114,7 @@ fn variables(source: &super::ModelSource, attendue: &crate::daemon::embeddings::
         ("RAG3WEAVER_ACTIVATION_PERIPHERIQUE".to_string(), a.peripherique.clone()),
         ("RAG3WEAVER_ACTIVATION_IDENTITE".to_string(), attendue.recette.clone()),
     ];
-    if let Residence::ADemande { inactivite_secs } = a.residence {
+    if let Residence::ADemande { inactivite_secs, .. } = a.residence {
         if inactivite_secs == 0 {
             return Err("activation : un délai d'inactivité nul déchargerait aussitôt".into());
         }
@@ -277,6 +294,128 @@ fn connecter_distant(source: &super::ModelSource, annule: &std::sync::atomic::At
         .map_err(|e| format!("bail d'usage : {e}"))?;
     let origine = super::Origin::Service(locale);
     Ok((Box::new(Gere { client, _usage: usage, _tenue: Box::new(tunnel) }), origine))
+}
+
+/// **Le point d'entrée** : une déclaration à la demande rend un embarqueur
+/// qui n'active rien avant son premier calcul ; toute autre active
+/// maintenant (`Maintenir`, comme avant).
+#[cfg(feature = "daemon")]
+pub(super) fn connecter_ou_attendre(source: &super::ModelSource, annule: &std::sync::atomic::AtomicBool)
+    -> Result<(Box<dyn crate::embedder::Embedder>, super::Origin), String> {
+    let a = source.activation.as_ref().ok_or("activation absente")?;
+    let Residence::ADemande { inactivite_secs, rendre_le_bail_secs } = a.residence else {
+        return connecter(source, annule);
+    };
+    if inactivite_secs == 0 || rendre_le_bail_secs == 0 || rendre_le_bail_secs >= inactivite_secs {
+        return Err(format!(
+            "activation à la demande : rendre_le_bail_secs ({rendre_le_bail_secs}) doit être non nul et plus court qu'inactivite_secs ({inactivite_secs})"
+        ));
+    }
+    let dim = source.dimensions.filter(|d| *d > 0).ok_or("activation à la demande : une dimension explicite requise")?;
+    let adresse = source.addresses(super::Capability::Embed, &super::process_env).into_iter().next()
+        .ok_or("activation à la demande : une adresse requise")?;
+    if annule.load(std::sync::atomic::Ordering::Acquire) { return Err("connexion annulée".into()); }
+    Ok((Box::new(ALaDemande::new(source.clone(), dim, std::time::Duration::from_secs(rendre_le_bail_secs))), super::Origin::Service(adresse)))
+}
+
+/// L'état d'un embarqueur à la demande : le client activé (bail compris) et
+/// son dernier appel ; `None` : rien n'est tenu.
+#[cfg(feature = "daemon")]
+type Tenu = std::sync::Arc<std::sync::Mutex<Option<(Box<dyn crate::embedder::Embedder>, std::time::Instant)>>>;
+
+/// **L'embarqueur activé à la demande** (ticket
+/// `2026-11-13-un-fournisseur-a-la-demande-ouvert-par-l-hote-ne-s-evince-jamais`).
+/// Il dit le modèle et la dimension déclarés sans fournisseur ; son premier
+/// calcul active (local ou distant, identité vérifiée) ; un fil rend le
+/// client, donc son bail, après `rendre` sans appel ; un calcul qui trouve
+/// le fournisseur parti réactive une fois, puis refuse en le disant.
+#[cfg(feature = "daemon")]
+struct ALaDemande {
+    source: super::ModelSource,
+    dim: usize,
+    tenu: Tenu,
+    arret: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// Ce que le client activé a dit de lui, gardé après qu'il est rendu.
+    vu: std::sync::Mutex<Option<(bool, Option<(usize, usize)>)>>,
+}
+
+#[cfg(feature = "daemon")]
+impl ALaDemande {
+    fn new(source: super::ModelSource, dim: usize, rendre: std::time::Duration) -> Self {
+        let tenu: Tenu = Default::default();
+        let arret = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (t, stop) = (std::sync::Arc::downgrade(&tenu), arret.clone());
+        let _ = std::thread::Builder::new().name("rendre-le-bail".into()).spawn(move || {
+            while !stop.load(std::sync::atomic::Ordering::Acquire) {
+                std::thread::sleep(std::time::Duration::from_millis(200));
+                let Some(tenu) = t.upgrade() else { return };
+                let rendu = {
+                    let mut g = tenu.lock().unwrap_or_else(|e| e.into_inner());
+                    if g.as_ref().is_some_and(|(_, dernier)| dernier.elapsed() >= rendre) { g.take() } else { None }
+                };
+                // Lâché hors du verrou : rendre le bail est un appel HTTP.
+                drop(rendu);
+            }
+        });
+        Self { source, dim, tenu, arret, vu: std::sync::Mutex::new(None) }
+    }
+
+    fn activer(&self) -> Result<Box<dyn crate::embedder::Embedder>, crate::embedder::EmbedError> {
+        let (client, _) = connecter(&self.source, &std::sync::atomic::AtomicBool::new(false))
+            .map_err(|e| crate::embedder::EmbedError::ProviderError(format!("activation à la demande : {e}")))?;
+        *self.vu.lock().unwrap_or_else(|e| e.into_inner()) = Some((client.is_mock(), client.budget_conseille()));
+        Ok(client)
+    }
+
+    /// Le fournisseur n'est plus là (évincé, mort) : l'erreur d'un appel qui
+    /// n'a trouvé personne, pas celle d'un calcul refusé.
+    fn parti(e: &crate::embedder::EmbedError) -> bool {
+        match e {
+            crate::embedder::EmbedError::Timeout => true,
+            crate::embedder::EmbedError::ProviderError(m) => m.contains("ne répond pas") || m.contains("refused") || m.contains("Connection reset"),
+            _ => false,
+        }
+    }
+}
+
+#[cfg(feature = "daemon")]
+impl Drop for ALaDemande {
+    fn drop(&mut self) {
+        self.arret.store(true, std::sync::atomic::Ordering::Release);
+    }
+}
+
+#[cfg(feature = "daemon")]
+impl crate::embedder::Embedder for ALaDemande {
+    fn embed(&self, textes: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+        let mut g = self.tenu.lock().unwrap_or_else(|e| e.into_inner());
+        if g.is_none() {
+            *g = Some((self.activer()?, std::time::Instant::now()));
+        }
+        let mut r = g.as_ref().unwrap().0.embed(textes);
+        if let Err(e) = &r {
+            if Self::parti(e) {
+                // Une fois : le fournisseur parti se relance, l'identité revérifiée.
+                *g = None;
+                *g = Some((self.activer()?, std::time::Instant::now()));
+                r = g.as_ref().unwrap().0.embed(textes);
+            }
+        }
+        if let Some((_, dernier)) = g.as_mut() {
+            *dernier = std::time::Instant::now();
+        }
+        r
+    }
+    fn dim(&self) -> usize { self.dim }
+    fn name(&self) -> &str { &self.source.model }
+    fn is_mock(&self) -> bool { self.vu.lock().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|(m, _)| *m) }
+    fn is_absent(&self) -> bool { false }
+    fn distant(&self) -> bool { true }
+    fn budget_conseille(&self) -> Option<(usize, usize)> { self.vu.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|(_, b)| *b) }
+    fn timeout(&self) -> Option<std::time::Duration> {
+        Some(self.source.timeout_secs.filter(|s| *s > 0).map(std::time::Duration::from_secs)
+            .unwrap_or_else(crate::daemon::embeddings::default_embed_timeout))
+    }
 }
 
 #[cfg(feature = "daemon")]
@@ -503,7 +642,7 @@ mod tests {
             profil: "essai-distant".into(), peripherique: "card2".into(),
             coordination: dossier.path().join("coordination"), journal: dossier.path().join("journaux"),
             budget_activation_secs: 180, budget_attente_secs: 180,
-            residence: Residence::ADemande { inactivite_secs: inactivite },
+            residence: Residence::ADemande { inactivite_secs: inactivite, rendre_le_bail_secs: RENDRE_LE_BAIL_PAR_DEFAUT_SECS.min(inactivite.saturating_sub(1).max(1)) },
             hote: Some(hote.clone()), adresse_distante: Some(format!("127.0.0.1:{port_distant}")), ssh: None,
         });
         let unite = format!("{PREFIXE_UNITE}{modele}-{port_distant}");
