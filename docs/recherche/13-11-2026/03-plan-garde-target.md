@@ -84,3 +84,14 @@ Contrat des métadonnées : --offline/--locked/--frozen sont transmis aussi à
 metadata, pour ne pas lever les restrictions de résolution demandées par
 l'appelant avant la commande. Assertion ajoutée dans le juge existant des
 options, toujours neuf fonctions. Publication avant nouvelle exécution.
+
+## Validation finale de préparation sur aa28b6f68
+
+Neuf fonctions CPU passent,0 échec en0,233s, journal vert-aa28.log.
+Bash -n cinq scripts et AST trois fichiers Python passent ;406 en-têtes
+valides (124 ouverts/282 fermés), diffcheck propre. Aucun compiler réel.
+Le faux Cargo est exécuté depuis PATH privé de chaque fixture, sa commande
+metadata explicitement simulée ; aucun cache produit créé ni muté.
+Qualification plus large NON JOUÉE : F8, lib Rust, NAV, e2e et vieux témoin
+Rust. Demande de revue de ce couple code/préparation avant recette dédiée,
+avec focus paramètres Cargo, refus target inconnu et reprise connue.
