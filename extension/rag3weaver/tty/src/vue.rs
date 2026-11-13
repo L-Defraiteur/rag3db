@@ -45,6 +45,9 @@ pub enum Action {
     Arreter,
     /// Quitter le terminal (l'équipier continue).
     Quitter,
+    /// Répondre à ce que l'équipier attend (lot tty-4) : `answer` avec
+    /// `reply_to`, et `approved` pour une approbation.
+    Repondre { attente: crate::boite::Attente, texte: String, accord: Option<bool> },
 }
 
 /// Une touche, indépendante du backend (les tests n'ont pas de terminal).
@@ -109,6 +112,10 @@ pub struct Vue {
     /// Le bloc de code ouvert (```) : il se valide entier à sa clôture, pour se
     /// colorer d'un coup ; sa ligne en cours reste visible dans la zone vivante.
     bloc: Option<Bloc>,
+    /// Ce que l'équipier attend du superviseur (questions, approbations).
+    pub boite: crate::boite::Boite,
+    /// L'état de l'équipier selon l'hôte (`running`, `waiting`, `ended`, `error`).
+    pub etat_hote: Option<String>,
 }
 
 /// La largeur d'un texte en colonnes.
@@ -132,6 +139,8 @@ impl Vue {
             depuis: Instant::now(),
             entete: String::new(),
             bloc: None,
+            boite: crate::boite::Boite::default(),
+            etat_hote: None,
         }
     }
 
@@ -302,6 +311,7 @@ impl Vue {
 
     /// Une ligne de la boîte de l'équipier.
     pub fn ligne_de_boite(&mut self, l: &Value) {
+        self.boite.ligne(l);
         self.clore();
         let item = l["item"].as_str().filter(|i| !i.is_empty()).map(|i| format!(" [{i}]")).unwrap_or_default();
         let tete = format!("[{} · {}{item}] ", l["from"].as_str().unwrap_or("?"), l["kind"].as_str().unwrap_or("?"));
@@ -314,6 +324,11 @@ impl Vue {
         }
     }
 
+    /// L'état de l'équipier selon `GET /ide/teammate/list`.
+    pub fn etat_de_l_hote(&mut self, etat: Option<String>) {
+        self.etat_hote = etat;
+    }
+
     /// Une note du terminal lui-même (une coupure du flux, un refus).
     pub fn note(&mut self, t: &str) {
         self.clore();
@@ -323,6 +338,14 @@ impl Vue {
     /// Une touche : rend l'action qu'elle demande.
     pub fn touche(&mut self, t: Touche) -> Option<Action> {
         match t {
+            // Une approbation en attente et rien de tapé : `o` accorde, `n` refuse.
+            Touche::Car(c @ ('o' | 'O' | 'y' | 'Y' | 'n' | 'N')) if self.saisie.is_empty() && self.boite.premiere().is_some_and(|a| a.kind == "approval") => {
+                let attente = self.boite.premiere().cloned()?;
+                let oui = matches!(c, 'o' | 'O' | 'y' | 'Y');
+                self.clore();
+                self.valider(Genre::Boite, format!("› {} : {}", if oui { "accordé" } else { "refusé" }, attente.command.clone().unwrap_or_default()));
+                Some(Action::Repondre { attente, texte: if oui { "oui".into() } else { "non".into() }, accord: Some(oui) })
+            }
             Touche::Car(c) => {
                 self.saisie.push(c);
                 None
@@ -335,6 +358,12 @@ impl Vue {
                 let texte = std::mem::take(&mut self.saisie);
                 if texte.trim().is_empty() {
                     return None;
+                }
+                // Ce que l'équipier attend passe avant : la saisie y répond.
+                if let Some(attente) = self.boite.premiere().cloned() {
+                    self.clore();
+                    self.valider(Genre::Boite, format!("› {texte}"));
+                    return Some(Action::Repondre { attente, texte, accord: None });
                 }
                 let genre = self.genre_d_envoi();
                 self.demande_posee = true;
@@ -365,7 +394,22 @@ impl Vue {
     /// Le texte de la ligne d'état, sans son animation.
     pub fn ligne_d_etat(&self) -> String {
         let c = self.coeur();
+        // Ce que l'équipier attend de toi passe avant tout autre état.
+        if !matches!(self.etat, Etat::Fini(_)) {
+            if let Some(a) = self.boite.premiere() {
+                let reste = match self.boite.attentes().len() {
+                    1 => String::new(),
+                    n => format!(" (+{})", n - 1),
+                };
+                return match (a.kind.as_str(), &a.command) {
+                    ("approval", Some(cmd)) => format!("{c} attend ton accord : {cmd} — o / n{reste}"),
+                    _ => format!("{c} attend ta réponse : {}{reste}", a.text.lines().next().unwrap_or_default()),
+                };
+            }
+        }
         match &self.etat {
+            Etat::Attend if self.etat_hote.as_deref() == Some("waiting") => format!("{c} attend la boîte"),
+            Etat::Attend if self.etat_hote.as_deref() == Some("error") => format!("{c} en erreur"),
             Etat::Attend => format!("{c} attend"),
             Etat::Reflechit => format!("{c} réfléchit…"),
             Etat::Ecrit => format!("{c} écrit"),
@@ -577,6 +621,48 @@ mod tests {
         assert_eq!(colonnes(&large), 60);
         assert_eq!(texte(&v, 20), "⛧ attend", "trop étroit : l'en-tête se tait");
         assert!(!large.contains("backend"));
+    }
+
+    fn ligne_b(n: usize, from: &str, kind: &str, extra: Value) -> Value {
+        let mut l = json!({ "id": format!("a1/doc:{n}"), "from": from, "kind": kind, "text": format!("texte {n}") });
+        if let (Some(o), Some(e)) = (l.as_object_mut(), extra.as_object()) {
+            for (k, v) in e {
+                o.insert(k.clone(), v.clone());
+            }
+        }
+        l
+    }
+
+    /// **La boîte dans la vue** (lot tty-4) : une approbation en attente se dit
+    /// sur la ligne d'état avec sa commande ; `o` l'accorde, `n` la refuse, sans
+    /// rien taper d'autre ; une saisie répond à ce qui attend avant d'être une
+    /// instruction.
+    #[test]
+    fn what_the_teammate_waits_for_is_shown_and_answered_from_the_keyboard() {
+        let mut v = Vue::new(120, true);
+        v.ligne_de_boite(&ligne_b(1, "teammate", "approval", json!({ "command": "cargo build" })));
+        v.ligne_de_boite(&ligne_b(2, "teammate", "question", json!({})));
+        assert_eq!(v.ligne_d_etat(), "⛧ attend ton accord : cargo build — o / n (+1)");
+        let Some(Action::Repondre { attente, texte, accord }) = v.touche(Touche::Car('o')) else { panic!("o accorde") };
+        assert_eq!((attente.id.as_str(), texte.as_str(), accord), ("a1/doc:1", "oui", Some(true)));
+        // L'hôte rend la réponse : la boîte la voit, la question passe devant.
+        v.ligne_de_boite(&ligne_b(3, "supervisor", "answer", json!({ "reply_to": "a1/doc:1", "approved": true })));
+        assert_eq!(v.ligne_d_etat(), "⛧ attend ta réponse : texte 2");
+        assert_eq!(v.touche(Touche::Car('o')), None, "sans approbation en attente, o est une lettre");
+        v.touche(Touche::Retour);
+        for c in "Petit dépôt".chars() {
+            v.touche(Touche::Car(c));
+        }
+        let Some(Action::Repondre { attente, texte, accord }) = v.touche(Touche::Entree) else { panic!("la saisie répond") };
+        assert_eq!((attente.id.as_str(), texte.as_str(), accord), ("a1/doc:2", "Petit dépôt", None));
+        v.ligne_de_boite(&ligne_b(4, "supervisor", "answer", json!({ "reply_to": "a1/doc:2" })));
+        v.etat_de_l_hote(Some("waiting".into()));
+        assert_eq!(v.ligne_d_etat(), "⛧ attend la boîte", "plus rien n'attend de toi : l'hôte dit qu'il attend la boîte");
+        v.ligne_de_boite(&ligne_b(5, "teammate", "approval", json!({ "command": "rm -rf build" })));
+        let Some(Action::Repondre { accord, .. }) = v.touche(Touche::Car('n')) else { panic!("n refuse") };
+        assert_eq!(accord, Some(false));
+        let saisie_suivante: Vec<_> = "fais ça".chars().map(|c| v.touche(Touche::Car(c))).collect();
+        assert!(saisie_suivante.iter().all(|a| a.is_none()), "{saisie_suivante:?}");
     }
 
     #[test]
