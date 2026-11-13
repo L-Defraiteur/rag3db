@@ -120,6 +120,7 @@ impl DeclarationSnapshot {
     pub fn fingerprint(&self) -> &str {
         &self.fingerprint
     }
+    #[cfg(feature = "rag3db-native")]
     pub(super) fn complete_input(&self) -> &DeclaredSchemaInput { &self.input }
     pub fn supplied_facts(&self) -> &DeclaredSchemaFacts {
         &self.facts
@@ -289,7 +290,9 @@ pub(super) struct Registry {
 }
 #[cfg(any(feature = "rag3db-native", test))]
 impl Registry {
+    #[cfg(feature = "rag3db-native")]
     pub(super) fn origin(&self) -> &str { &self.origin }
+    #[cfg(feature = "rag3db-native")]
     pub(super) fn head(&self) -> &str { &self.head }
 
     pub(super) fn genesis(

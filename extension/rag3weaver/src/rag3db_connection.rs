@@ -177,6 +177,8 @@ impl Rag3dbConnection {
     /// plutôt que d'échouer — il sait, lui, combien de temps il peut donner.
     pub fn read_only_patient(path: impl AsRef<Path>, budget_ms: u64) -> Result<Self, DbError> {
         let path = path.as_ref();
+        crate::dataflow::migrations::physical_index::refuse_normal_storage_path(path)
+            .map_err(|e|DbError::ConnectionError(e.to_string()))?;
         let debut = std::time::Instant::now();
         let mut tentatives = 0u32;
         let mut croisees = 0u32;
@@ -324,6 +326,8 @@ impl Rag3dbConnection {
     /// l'instance précédente soit morte et que le moteur l'accepte ; au-delà,
     /// une erreur nommée dit combien de références la retiennent encore.
     fn open_for_writing(path: &Path, config: rag3db::SystemConfig) -> Result<Self, DbError> {
+        crate::dataflow::migrations::physical_index::refuse_normal_storage_path(path)
+            .map_err(|e|DbError::ConnectionError(e.to_string()))?;
         let cle = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
         let debut = std::time::Instant::now();
         loop {
@@ -377,13 +381,27 @@ impl Rag3dbConnection {
 
     /// Open a database with a custom [`SystemConfig`](rag3db::SystemConfig).
     pub fn with_config(path: impl AsRef<Path>, config: rag3db::SystemConfig) -> Result<Self, DbError> {
+        crate::dataflow::migrations::physical_index::refuse_normal_storage_path(path.as_ref())
+            .map_err(|e|DbError::ConnectionError(e.to_string()))?;
+        Self::open_explicit_config(path.as_ref(),config)
+    }
+
+    pub(crate) fn with_owned_physical_config(
+        path: impl AsRef<Path>, config:rag3db::SystemConfig,
+        permit:&crate::dataflow::migrations::physical_index::PhysicalRootPermit,
+    )->Result<Self,DbError> {
+        permit.validate_path(path.as_ref()).map_err(|e|DbError::ConnectionError(e.to_string()))?;
+        Self::open_explicit_config(path.as_ref(),config)
+    }
+
+    fn open_explicit_config(path:&Path,config:rag3db::SystemConfig)->Result<Self,DbError> {
         crate::build_check::check_loaded().map_err(DbError::ConnectionError)?;
         let db = Arc::new(
-            rag3db::Database::new(path.as_ref(), config)
+            rag3db::Database::new(path, config)
                 .map_err(|e| DbError::ConnectionError(e.to_string()))?,
         );
         let mut conn = Self::connect(db, Self::fresh_reopen_state())?;
-        conn.path = Some(path.as_ref().to_path_buf());
+        conn.path = Some(path.to_path_buf());
         Ok(conn)
     }
 

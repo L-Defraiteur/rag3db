@@ -1958,3 +1958,72 @@ du buffer avant fermeture/Drop, y compris derniers clones. Témoins CPU renforc�
 COMMIT+ROLLBACK perdus, set_scope/Arc exporté refusés sans requêtes, première
 poussée échouée qui réussirait à la suivante mais aucun retry après invalidation.
 Recette adaptée à7 CPU+8 natifs, toujours aucun Cargo/test natif exécuté.
+
+
+## Revue du diff physique be9699 — fenêtres avant qualification
+
+Code encore non compilé/non exécuté. Les réserves suivantes appartiennent
+au même contrat, sans nouvelle base ni nouveau lot de migration :
+
+- Création avant P0 : physical_index.rs712 initialise le Catalog ordinaire,
+  enregistre les entités, étend le journal et prépare cellules/FTS avant
+  d'écrire STATE_KEY dans la transaction759. Le refus des ouvertures
+  ordinaires642 ne reconnaît que cette clé. Un processus mort ou une erreur
+  avant sa première écriture laisse donc une base initialisée sans marque
+  d'appartenance physique : l'ouverture Catalog ordinaire peut la prendre
+  pour un legacy. Poser un arrêt enfant entre initialisation et P0, puis
+  exiger refus de toutes portes ordinaires sans nouveaux effets. Établir
+  l'appartenance et l'état incomplet avant les effets de préparation, ou
+  garder la matérialisation inaccessible jusqu'à sa création qualifiée.
+  Aucune adoption implicite d'un reste ne devient permise.
+- Invalidation déjà demandée : Mémoire relève que set_scope5101 peut encore
+  atteindre les UPSERT ensure_scope_nodes sans check_reopen avec un backend
+  poisonNOOP. Étendre le témoin COMMIT ambigu au changement de cellule et
+  exiger MustReopen avec compteur d'écritures inchangé. Les autres portes
+  publiques restent à relire, pas seulement execute_raw/initialize/shutdown.
+- Drop déjà signalé par Arbre : fermer les handles FTS peut remplir le tampon,
+  et BufferedBlobStore::drop retente flush après un échec. L'interdiction
+  d'effets après invalidation doit atteindre le store et ses clones avant
+  fermeture ; un simple if autour de flush dans Catalog::drop est insuffisant.
+  Témoin : save_many échoue puis réussirait, invalider et lâcher Catalog plus
+  dernier clone ; aucune tentative supplémentaire ni notification prête.
+
+Arbre reste seul éditeur. Relectures Mémoire/Recherche/Embar limitées à leurs
+frontières, sans test ni base créés par les relecteurs. Ces constats statiques
+ne sont pas un rouge runtime joué ; source/recette/témoins avant ciblé600.
+
+
+Revue indépendante Recherche be969 : lecture favorable bornée du journal,
+programme et préfixe. Deux limites de qualification, avant nouvelle édition :
+les injections COMMIT visent toujours la première cellule ; ajouter morts avant
+et après COMMIT de la deuxième avec préfixe acquis. Huit fonctions natives
+comprennent sept scénarios juges et un helper enfant, exercé par les sous-processus
+du parent, pas huit scénarios indépendants. Recompter explicitement fonctions,
+scénarios juges et exécutions enfant. Aucun runtime exécuté par Recherche.
+
+
+Complément de revue Recherche, même source be9699 : les injections par nom
+de frontière surviennent à chaque cellule et meurent toujours dans la première.
+Avant de qualifier la reprise multicellule, ajouter un cas qui meurt dans la
+deuxième après acquisition du premier préfixe, puis prouver absence de rejeu
+des effets de la première, reprise exacte et fermeture lexicale des deux.
+L'identité du point d'arrêt doit être explicite dans le fils de fixture.
+Le total de huit fonctions natifs comprend physical_crash_child, auxiliaire
+réellement exercé par les enfants du parent ; il ne constitue pas un huitième
+scénario indépendant au lancement sans son environnement. Distinguer le compte
+Rust brut, les scénarios juges et les sous-processus dans l'inventaire/verdict.
+Ces réserves de couverture sont statiques ; aucun échec runtime observé ni
+second exécuteur trouvé par Recherche.
+
+
+Correctifs des réserves bootstrap/couverture en revue : claim de root immuable
+et synchronisé AVANT création native ; trois constructeurs natifs ordinaires
+et Catalog refusent cette appartenance, même incomplète, avant effets. Capacité
+interne scellée root/origine/chemin exact, bootstrap limité au native vraiment
+vide ; restes avant P0 quarantinés, aucune adoption automatique. Deux morts
+enfant supplémentaires couvrent claim/init avant P0. Deux morts explicites :2
+couvrent avant/après COMMIT de cellule2, avec préfixe natif acquis constaté et
+reprise depuis le même support durable, fichiers sources retirés. Comptes
+corrigés :9 fonctions natives (8 scénarios juges+helper),9 CPU,18 fonctions
+brutes/17 scénarios juges/8 sous-processus de mort. Registre du nouveau nœud et
+ports communs inclus. Syntaxe seule, aucun Cargo/runtime encore lancé.
