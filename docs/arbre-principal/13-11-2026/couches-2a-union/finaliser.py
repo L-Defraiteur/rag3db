@@ -31,6 +31,16 @@ try:
  for item in inventory['artifacts'].values():
   for file in [Path(item['binary']),Path(item['copy'])]:
    with file.open('rb') as f:assert hashlib.file_digest(f,'sha256').hexdigest()==item['sha256']
+ main=json.loads((P/'large-main-process.json').read_text());att=json.loads((P/'large-main-attestation.json').read_text())
+ assert att['pid']==main['pid'] and att['starttime']==main['starttime']
+ assert att['exe']==main['expected_exe']==inventory['artifacts']['large']['binary'] and att['exe_sha256']==main['expected_sha256']==inventory['artifacts']['large']['sha256']
+ assert att['cgroup']==main['cgroup']==source['cgroup'] and att['phase']=='lib-large' and att['principal']
+ rows=[line for line in (P/att['maps']).read_text().splitlines() if 'librag3db.so' in line]
+ assert rows==att['native'] and rows and all('/'+source['native']+'/librag3db.so' in line for line in rows)
+ sdk=json.loads((P/'sdk-env-lib-large.json').read_text());profile=json.loads((P/'large-real-sdk-env.json').read_text())
+ assert sdk['pid']==profile['pid']==main['pid'] and sdk['starttime']==profile['starttime']==main['starttime']
+ assert sdk['env']==profile['env']==att['env'] and sdk['cgroup'].strip().split('::',1)[1]==source['cgroup']
+ reprise=json.loads((P/'cache-reprise.json').read_text());assert reprise['calls']==2 and reprise['before'] and not reprise['after']
  qualification=json.loads((P/'qualification.json').read_text());assert qualification==dict(features='VERT_8_SUR_8',large='VERT',cpu='VERT',publication='VERT',minimal_native_check='COMPILATION_F8_JEU8_CHECK_TESTS_SANS_RUNTIME')
  finished=time.monotonic()
  assert finished<source['deadline'] and finished-source['initial']<4800,'deadline after scan and ELF hashes'

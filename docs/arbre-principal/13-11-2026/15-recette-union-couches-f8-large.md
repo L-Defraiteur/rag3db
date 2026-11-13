@@ -104,3 +104,50 @@ de couchepersistée/L6/masque avanttop-k/outils/view/cloneindex/legacy
 prétendu. Après fin : preuves+pilote+superviseurSHA DEUXpostes, revue puis
 éventuel tourC7/dernierfetch/postepush/ifVERT/3contrôles. Aucun GOmaster ou
 retrait par cette recette. Source69/proof72db restent historiques distinctes.
+
+
+## Réparation après réserves7a680 : cache et principalSDK
+
+L’ancien couple7a680 est retiré, aucune exécution ni GO reporté. APP236e
+inchangée. Préflight borné120s supplémentaire DANS END4800 après verifier
+et avant F8 : reprendre-cache.py vérifie source69, target_started_absent,
+ancienWT69propre, manifestdir réellement capturéGDB69, ancienreçuterminé
+et ELF original+copieSHA. Marqueur absent ou ancienC69 SEULEMENT ; tout
+autrecontenu/lien/propriétaire ambigu refuse.
+
+Argv réel après GO : bash -c « sourcegardecommune ;
+garder_le_target T C69 ; RAG3WEAVER_TARGET_REPRENDRE=1
+garder_le_target T Cunion » avec positions séparées/quotées. Première
+adoption note UNIQUEMENT ancienne origine attestée via primitive existante,
+pas écriturePythonfictive. Seconde branche DOIT produire « target repris de
+C69 : empreintes effacées pour ... », metadata--all-features réelle,
+invalidationcommune et aucun reste. Inventaire .fingerprint avant/après,
+locauxavantnonvides→0, externes conservés, nouveaumarqueurCunion et
+log/hashgarde archivés. RefusSTOP, pas purgeT/cargoclean/invalidationad-hoc.
+Puis F8canonique voit Cunion déjà repris, sans adoption silencieuse initiale.
+
+Contre-exemple de branche exécuté par temoin-cache-sans-cargo.py sur /var/tmp
+jetable : vraie gardecommune, Cargo metadata remplacé par fonction shell de
+fixture (aucun executableCargo/rustc), empreintes hôte+triplet jouets.
+Sansmarqueur/adoptiondirecte :2empreinteslocalesrestent,0appelmetadata.
+Deuxappelscommuns :1appelmetadataSIMULÉ,2→0locales,externeconservée.
+Preuveportable cx-preuves-fixture-cache-union-01/verdict.json etdeuxlogs,
+pas preuve de fraîcheur réelle dépendancesRust ni mutation targetréel.
+
+Maps : premier snapshot de chaque PID/start conservé en maps-first-* même
+si native=[] ; snapshotschargés rafraîchis séparément en maps-sdk-*.
+Le Popen liblarge enregistre PRINCIPALPID/starttime attendu/exe/SHA/cgroup.
+Attestation principale seulement sur cette identité exacte, après SDKmaps
+NONVIDES ; SHA du vrai /proc/PID/exe comparé à artifactJSON et starttime
+revalidé, envSDK exact/cgroup, snapshot IMMUTABLE large-main-sdk-maps.txt.
+Comparaison avec sdk-exec avantexec du mêmePID/start et profil observé
+pendantlib. Ni descendant mêmeexe ni inventaire ni snapshotpréchargement
+ne peut satisfaire l’attestation ; finaliseur relie également ces témoins
+au principal+artefact et refuse preuveabsente/incohérente.
+
+
+Les trois sorties du témoin sont aussi publiées sous
+couches-2a-union/preuve-fixture-cache (verdict/logcontre-exemple/logreprise).
+Le script de fixture/fonction Cargo simulée n’est PAS copié dansQ ni utilisé
+dans le pilote réel : reprendre-cache.py appelle le Cargo réel uniquement
+pour metadata de la primitive commune après GO.
