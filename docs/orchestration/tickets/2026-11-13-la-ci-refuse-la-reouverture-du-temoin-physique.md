@@ -370,3 +370,26 @@ ce nettoyage ; si déjà en unwind, préserver l’unwind initial sans doublepan
 Témoin proposé : envoi admis gelé avec payload, message queued à Drop paniquant,
 catch_unwind du mailboxDrop ; completion doit rester en attente jusqu’à fin de
 l’envoi admis et destruction de son payload. Aucun runtime exécuté.
+
+### Delta unwind publié fbd3f0a, HOLD qualification maintenu
+
+Source lucivy `cx-lucivy-shutdown-destruction` tête `fbd3f0a`. MailboxDrop
+capture séparément la panique de chaque message, poursuit drainage et attente
+des envois admis jusqu’à active0/queuevide, puis reprend la première panique.
+Si déjà en unwind, préserve l’unwind initial au lieu de provoquer une double
+panique de nettoyage. CompletionGuard ne s’exécute qu’après ces invariants.
+Limites normales Rust : abort/panic=abort et double panique interne à un même
+Drop ne permettent aucune garantie de reprise du processus.
+
+Nouveau témoin publié non joué :
+`mailbox::destruction_tests::panicking_message_drop_waits_for_admitted_send`.
+Un envoi admis reste gelé, le Drop du message queued panique ; l’observateur
+exige absence de retour et absence de completion avant de libérer l’envoi,
+puis vérifie propagation de la panique et libération du payload. Libération
+faite avant assertions pour ne pas laisser un sender captif lors d’un rouge.
+Diff --check propre ; aucun Cargo/runtime depuis le rouge645b6e6.
+
+Recette candidate précédente portée à10 témoins exacts (8nouveaux+2régressions),
+même fenêtre globale600s après poste, même targetprivé/8G/HIGHmax/j4,
+arrêt premierrouge. Nécessite ROED de cette source et GO exact distinct ;
+ce texte ne vaut pas une autorisation d’exécution. Ticket CI reste ouvert.
