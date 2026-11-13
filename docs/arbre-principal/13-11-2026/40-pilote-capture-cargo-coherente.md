@@ -31,3 +31,7 @@ Deux nouveaux témoins ÉCRITS/NONJOUÉS à cette publication : vrai profilCPU e
 Première exécution après publication e6164f335 :7/7 préparation et16/16 capture verts ; le témoin observe/run s’arrête NameError(require) dans son harnais AST incomplet, avant appel observe. Aucun défaut runtime déduit. Correction du harnais ajoute la VRAIE fonction require extraite au même AST, publiée avant nouvel essai ciblé ; code pilote inchangé.
 
 Le second essai ciblé du harnais s’arrête avant observe : constante STDOUT absente du faux subprocess. Harnais complété avec cette constante uniquement, code réel inchangé, correction publiée avant prochain essai. Ces deux échecs de préparation ne sont pas des preuves runtime/Cargo.
+
+## Résultat final de préparation
+
+Après publication préalable e6164f335 : préparation7/7 (0,044s), capture16/16 (0,013s). Après compléments de harnais publiés67d6c6298 puis d13b811b9, témoin VRAIobserve/run1/1 (0,008s), trois sous-cas d’erreurs système tous jugés. Total24 fonctions de simulation vertes ;26 cas si ces trois sous-cas sont dépliés, pas26 fonctions. Causes PermissionError/FileNotFoundError/ProcessLookupError conservées, firstred inchangé et Popen de prochaine phase absent. Ces résultats sont hermétiques exclusivement ; aucun Cargo/proc/signal/target/reçu réel, pas de qualification A/native/CI déduite. Le code réel corrigé e616 reste inchangé depuis ces essais ; les deux erreurs de harnais précédentes restent visibles dans l’historique.
