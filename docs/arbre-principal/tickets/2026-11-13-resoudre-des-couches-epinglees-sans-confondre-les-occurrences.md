@@ -130,3 +130,10 @@ commande redondante sans preuve distincte. NAV/lectures/PG/globalesphysiques
 non rejoués explicitement selon C7, sans résultat neuf inventé. LandingED
 confirmé4e2e2bfbb7c8ce670a49a06a36580d481d9abbc0, prépare rebase neuf,
 aucun run avant recette/SHAcouple/GOcréneau.
+
+
+Rebase union NEUF sur ED4e2e effectué sans conflit,9range-diff égaux,3fichiers
+2a identiques à69 et entrant RustED préservé ; overlayproduitexact sansparasite,
+7930apportsmasterhorschevauchement+suppressionspréservés. Rapport14/audit
+conservés. Cette préparation n’étend pas les preuves72db à l’union ; nouvelle
+recette F8/liblarge/CPU2a à publier et GO exact requis avant run.
