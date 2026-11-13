@@ -1873,3 +1873,35 @@ Aucune base existante de Lucie n'est lue, copiée, migrée ou activée. Pas de G
 de changement des services ou de raccord implicite d'un modèle. Les décisions
 déjà prises, notamment publication distincte de l'empreinte, restent acquises.
 Le ticket reste ouvert jusqu'au résultat physique demandé et à ses preuves.
+
+
+## Revue du précurseur7d62 — 13 novembre, avant qualification
+
+Le diff natif n'est pas livré ni compilé. Deux frontières du même contrat
+restent à matérialiser avant avis favorable global ; aucun test réel nouveau
+n'est revendiqué par ces constats statiques.
+
+- `commit_lot` appelle `conn.poison` sur erreur de COMMIT ou de FTS après
+  COMMIT, puis rend MustReopen. Le défaut de `DbConnection::poison` ne fait
+  rien et `must_reopen` rend None ; PostgreSQL ne les redéfinit pas. Une
+  connexion callback ou PostgreSQL peut donc recevoir MustReopen alors que
+  `Catalog::must_reopen` reste None et que le handle demeure utilisable. Le
+  nouvel invariant d'inutilisabilité ne doit pas dépendre silencieusement du
+  backend. Poser un témoin causal avec connexion dont COMMIT échoue et poison
+  est le défaut ; qualifier aussi le chemin FTS post-COMMIT. Choisir une
+  invalidation commune ou borner explicitement le contrat, sans faux succès
+  ni suppression de l'erreur d'origine/ROLLBACK. Pas de serveur PG requis
+  pour ce contre-exemple CPU.
+- L'absence dense structurelle peut coexister actuellement avec
+  `set_sparse_embedder` et une entité SPARSE. Le registre annonce has_sparse
+  et la requête sparse appelle le fournisseur, mais `peut_embarquer` et
+  `preparer_l_embarquement` s'arrêtent sur l'absence dense : ingestion et
+  rattrapage sparse n'ont pas cette capacité annoncée. Revue Embar : rendre
+  cette composition cohérente ou refuser explicitement le profil non pris
+  en charge. Ne pas créer de dense factice. Le profil initial reste BM25,
+  sans élargissement implicite au transfert sparse.
+
+Arbre conserve seul le code ; Mémoire et Embar restent en lecture seule.
+Les gardes, leurs 29 témoins et le lot grep restent séparés. Préparation de
+ces témoins puis source/recette publiées avant ciblé ; premier rouge inattendu
+arrêté et diagnostiqué, aucune nouvelle autorisation humaine nécessaire.
