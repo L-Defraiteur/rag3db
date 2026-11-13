@@ -29,3 +29,8 @@
 - **À qui** : codeparsers (auteur de la garde), recherche en relecture, demain.
 - **Pourquoi** : « vert est aucun rouge » tient sur la décision de rejeu ; six détections différentes ne
   font pas une règle.
+- **Ajout du 13 novembre, 23 h (archi)** : la **base testée** à passer à `--code-apporte` est le parent du
+  premier commit du lot (ou le commit joué par la passe), jamais `origin/master` lu au moment du dernier pas :
+  les refs sont communes aux worktrees du dépôt, un `fetch` d'une autre session la fait bouger entre la passe
+  et le push ; la garde a refusé (« HEAD ne descend pas de la base testée »), c'est le bon comportement. La
+  procédure doit nommer cette base.
