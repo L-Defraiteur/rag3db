@@ -93,7 +93,9 @@ mod tests {
     use crate::mail::Boite;
 
     /// La boîte de l'hôte, jointe en direct (le même trait que le client HTTP).
+    #[cfg(feature = "code")]
     struct BoiteDirecte(Arc<DaemonHost>);
+    #[cfg(feature = "code")]
     impl crate::mail::Boite for BoiteDirecte {
         fn pending(&self, pour: &str) -> Result<Vec<crate::mail::Item>, String> {
             Ok(self.0.teammate_pending(pour)["items"].as_array().map(|a| a.iter().filter_map(crate::mail::Item::depuis).collect()).unwrap_or_default())
