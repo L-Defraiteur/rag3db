@@ -55,7 +55,7 @@ pub(crate) struct ReadAdmission {
     entities: BTreeSet<String>,
     winners: BTreeMap<OccurrenceKey, LayerGeneration>,
     bindings: BTreeMap<OccurrenceKey, StorageAddress>,
-    deadline: Instant,
+    deadline: Mutex<Instant>,
     invalid: Mutex<Option<AdmissionError>>,
 }
 impl ReadAdmission {
@@ -89,7 +89,7 @@ impl ReadAdmission {
             entities,
             winners,
             bindings,
-            deadline,
+            deadline: Mutex::new(deadline),
             invalid: Mutex::new(None),
         })
     }
@@ -108,11 +108,18 @@ impl ReadAdmission {
         }
         // Evaluating the effective deadline is essential after the last DB
         // read: no subsequent ConnDInstantane::avant may have latched expiry.
-        if now >= self.deadline {
+        if now >= *self.deadline.lock().unwrap_or_else(|p| p.into_inner()) {
             *invalid = Some(AdmissionError::Expired);
             return Err(AdmissionError::Expired);
         }
         Ok(())
+    }
+    /// A later binding may only shorten the effective call/snapshot lifetime.
+    /// It does not need to latch expiry: every finishing boundary reevaluates
+    /// the actual deadline even when no subsequent DB read has run.
+    pub(crate) fn tighten_deadline(&self, at: Instant) {
+        let mut deadline = self.deadline.lock().unwrap_or_else(|p| p.into_inner());
+        *deadline = (*deadline).min(at);
     }
     pub(crate) fn check(&self) -> Result<()> {
         self.check_at(Instant::now())
@@ -269,6 +276,11 @@ pub(crate) fn for_node(ctx: &crate::dataflow::NodeContext) -> Result<Option<Arc<
     let selected = direct.or(from_view);
     if let Some(a) = &selected {
         a.check()?;
+        // Even an unadmitted ReadView supplies the Forme/connection used by
+        // nodes; a direct service cannot hide that view's foreign cell.
+        if let Some(view) = &view {
+            a.check_cell(view.scope())?;
+        }
         if let Some(cell) = ctx.service::<crate::scope::Scope>("scope") {
             a.check_cell(cell)?;
         } else if let Some(view) = &view {
@@ -280,5 +292,7 @@ pub(crate) fn for_node(ctx: &crate::dataflow::NodeContext) -> Result<Option<Arc<
     Ok(selected)
 }
 
+#[cfg(test)]
+pub(crate) mod node_probe;
 #[cfg(test)]
 mod tests;

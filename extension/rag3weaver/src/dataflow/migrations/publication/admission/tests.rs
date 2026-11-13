@@ -158,30 +158,62 @@ fn matches_filter(f: &crate::filter::FilterCondition, id: &str) -> bool {
     }
 }
 
+fn query_for_node(ctx: &mut NodeContext, soft: bool, scan: bool) {
+    use crate::dataflow::{PortValue, QueryPayload};
+    let mut options = SearchOptions::default();
+    options.limit = 2;
+    options.strict_signals = !soft;
+    options.bm25_mode = crate::search::BM25Mode::Parse;
+    options.signals =
+        Some(crate::search::SearchSignals::HYBRID | crate::search::SearchSignals::SPARSE);
+    ctx.set_input(
+        "query",
+        PortValue::new(QueryPayload {
+            target_name: "Snippet".into(),
+            query: "query".into(),
+            options,
+            target: Some(target()),
+            embedding: Some(vec![1.0; 4]),
+            sparse: Some(crate::sparse_index::SparseVector::new(vec![1], vec![1.0])),
+            scan,
+        }),
+    );
+}
+
 #[test]
-fn all_three_signals_receive_the_mask_before_their_top_k() {
-    let a = admission();
-    let conn: Arc<dyn crate::connection::DbConnection> = Arc::new(MockConnection::new());
+fn all_three_signal_nodes_transmit_the_admission_at_the_actual_candidate_boundary() {
+    use super::node_probe::{NodeFixture, STOP};
+    use crate::dataflow::{
+        generic_search_nodes::{BM25SearchNode, SparseSearchNode, VectorSearchNode},
+        Node,
+    };
+    use std::sync::atomic::Ordering;
     for signal in ["dense", "sparse", "fts"] {
-        a.require_filter(true).unwrap();
-        let ctx = context(Some(a.clone()));
-        let (options, _) = crate::dataflow::generic_search_nodes::occurrence_mask_options(
-            &ctx,
-            &target(),
-            SearchOptions::default(),
-            &conn,
-        )
-        .unwrap();
-        let mut ranked: Vec<String> = (0..20).map(|i| format!("invisible-{i}")).collect();
-        ranked.extend(["b".into(), "c".into()]);
-        // The backend witness applies admission BEFORE selecting k, like its contract.
-        let hits: Vec<_> = ranked
-            .iter()
-            .filter(|id| matches_filter(options.filter_condition.as_ref().unwrap(), id))
-            .take(2)
-            .cloned()
-            .collect();
-        assert_eq!(hits, ["b", "c"], "{signal}");
+        let mut fixture = NodeFixture::new(admission(), true, false, None);
+        query_for_node(&mut fixture.ctx, false, false);
+        let result = match signal {
+            "dense" => VectorSearchNode::new("dense", 2).execute(&mut fixture.ctx),
+            "sparse" => SparseSearchNode::new("sparse", 2).execute(&mut fixture.ctx),
+            _ => BM25SearchNode::new("fts", 2).execute(&mut fixture.ctx),
+        };
+        assert!(
+            result.unwrap_err().contains(STOP),
+            "the actual node must reach its candidate spy: {signal}"
+        );
+        if signal == "dense" {
+            assert_eq!(fixture.dense.calls.load(Ordering::SeqCst), 1);
+            assert_eq!(*fixture.dense.selected.lock().unwrap(), ["b", "c"]);
+            assert_eq!(*fixture.dense.limits.lock().unwrap(), [2]);
+            assert!(fixture.candidates.lock().unwrap().is_empty());
+        } else {
+            let calls = fixture.candidates.lock().unwrap();
+            assert_eq!(calls.len(), 1);
+            assert_eq!(calls[0].signal, signal);
+            assert_eq!(calls[0].limit, 2);
+            assert_eq!(calls[0].offsets.as_deref(), Some(&[41_u64, 77][..]));
+            assert_eq!(*fixture.selected_offsets.lock().unwrap(), [41, 77]);
+            assert_eq!(fixture.dense.calls.load(Ordering::SeqCst), 0);
+        }
     }
 }
 
@@ -533,27 +565,74 @@ fn losing_the_snapshot_invalidates_all_copies_and_cannot_be_repaired_by_a_new_co
 }
 
 #[test]
-fn incapable_filter_and_scan_are_errors_even_when_signal_fallback_is_soft() {
-    use crate::dataflow::{Node, PortValue, QueryPayload};
+fn real_nodes_refuse_incapable_dense_native_text_and_missing_or_failed_offsets_even_when_soft() {
+    use super::node_probe::{NodeFixture, OffsetProbe};
+    use crate::dataflow::{
+        generic_search_nodes::{BM25SearchNode, SparseSearchNode, VectorSearchNode},
+        Node,
+    };
+    use std::sync::atomic::Ordering;
     let a = admission();
-    let mut options = SearchOptions::default();
-    options.strict_signals = false;
-    let mut ctx = context(Some(a));
-    ctx.set_input(
-        "query",
-        PortValue::new(QueryPayload {
-            target_name: "Snippet".into(),
-            query: "q".into(),
-            options,
-            target: Some(target()),
-            embedding: None,
-            sparse: None,
-            scan: true,
-        }),
-    );
-    let mut node = crate::dataflow::generic_search_nodes::VectorSearchNode::new("dense", 2);
-    assert!(node.execute(&mut ctx).unwrap_err().contains("admission"));
-    assert!(admission().require_filter(false).is_err());
+    let mut fixture = NodeFixture::new(a.clone(), false, false, None);
+    query_for_node(&mut fixture.ctx, true, false);
+    assert!(VectorSearchNode::new("dense", 2)
+        .execute(&mut fixture.ctx)
+        .unwrap_err()
+        .contains("IncapableFilter"));
+    assert_eq!(fixture.dense.calls.load(Ordering::SeqCst), 0);
+    assert!(fixture.candidates.lock().unwrap().is_empty());
+    assert_eq!(a.check(), Err(AdmissionError::IncapableFilter));
+
+    let a = admission();
+    let mut fixture = NodeFixture::new(a.clone(), true, true, None);
+    query_for_node(&mut fixture.ctx, true, false);
+    assert!(BM25SearchNode::new("fts", 2)
+        .execute(&mut fixture.ctx)
+        .unwrap_err()
+        .contains("BM25 natif"));
+    assert_eq!(a.check(), Err(AdmissionError::IncapableFilter));
+    assert!(fixture.candidates.lock().unwrap().is_empty());
+
+    for sparse in [false, true] {
+        for error in [false, true] {
+            let a = admission();
+            let resolution_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let count = resolution_calls.clone();
+            let fault = OffsetProbe(Arc::new(move |condition, chunks| {
+                count.fetch_add(1, Ordering::SeqCst);
+                assert_eq!(chunks, sparse);
+                assert!(matches_filter(condition, "b") && !matches_filter(condition, "hidden"));
+                if error {
+                    Err(crate::catalog::CatalogError::DbError(
+                        "fixture offset failure".into(),
+                    ))
+                } else {
+                    Ok(None)
+                }
+            }));
+            let mut fixture = NodeFixture::new(a.clone(), true, false, Some(fault));
+            query_for_node(&mut fixture.ctx, true, false);
+            let result = if sparse {
+                SparseSearchNode::new("sparse", 2).execute(&mut fixture.ctx)
+            } else {
+                BM25SearchNode::new("fts", 2).execute(&mut fixture.ctx)
+            };
+            assert!(result.unwrap_err().contains("admission"));
+            assert_eq!(resolution_calls.load(Ordering::SeqCst), 1);
+            assert!(
+                fixture.candidates.lock().unwrap().is_empty(),
+                "failed conversion must not reach unmasked candidates"
+            );
+            assert_eq!(fixture.dense.calls.load(Ordering::SeqCst), 0);
+            assert_eq!(a.check(), Err(AdmissionError::StorageChanged));
+        }
+    }
+    let mut ctx = context(Some(admission()));
+    query_for_node(&mut ctx, true, true);
+    assert!(VectorSearchNode::new("dense", 2)
+        .execute(&mut ctx)
+        .unwrap_err()
+        .contains("ScanWithoutAdmission"));
 }
 
 #[test]
@@ -626,4 +705,121 @@ fn expiry_after_the_last_read_checks_the_effective_deadline_and_latches_before_r
         a.provenances([id("b")], false).is_err(),
         "even the ordinary renderer must refuse the entire response"
     );
+}
+
+fn read_fixture_view(
+    a: Option<Arc<ReadAdmission>>,
+    cell: crate::scope::Scope,
+    conn: Arc<dyn crate::connection::DbConnection>,
+) -> crate::read_view::ReadView {
+    let mut services = ServiceRegistry::new();
+    if let Some(a) = a {
+        services.register(SERVICE, a);
+    }
+    crate::read_view::ReadView {
+        dialect: Arc::new(crate::dialect::Rag3dbDialect),
+        conn,
+        entity_configs: HashMap::new(),
+        entity_defs: HashMap::from([(
+            "Snippet".into(),
+            crate::config::EntityDef {
+                fields: HashMap::new(),
+                hashsafe: None,
+                derived_from: None,
+            },
+        )]),
+        relations: HashMap::new(),
+        scope: cell,
+        fanout: None,
+        two_step_hops: false,
+        multi_cell: false,
+        search_backend_externe: None,
+        event_bus: crate::events::EventBus::new(8),
+        search_services: Arc::new(services),
+        pool: None,
+        sans_instantane: false,
+        texte_natif: false,
+    }
+}
+
+#[test]
+fn get_rechecks_after_the_last_callback_for_both_empty_and_nonempty_rows_and_unlatched_expiry() {
+    use crate::read_view::ReadCatalog;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    for empty in [false, true] {
+        for expiry_without_flag in [false, true] {
+            let a = admission();
+            let invalidated = a.clone();
+            let calls = Arc::new(AtomicUsize::new(0));
+            let count = calls.clone();
+            let conn = Arc::new(crate::connection::CallbackConnection::new(move |_, _| {
+                count.fetch_add(1, Ordering::SeqCst);
+                if expiry_without_flag {
+                    invalidated.tighten_deadline(Instant::now());
+                    assert!(
+                        invalidated.invalid.lock().unwrap().is_none(),
+                        "the DB callback does not latch a flag for this case"
+                    );
+                } else {
+                    invalidated.invalidate(AdmissionError::MissingSnapshot);
+                }
+                Ok(QueryResult {
+                    columns: vec!["_uuid".into()],
+                    rows: if empty {
+                        vec![]
+                    } else {
+                        vec![vec![CypherValue::String("b".into())]]
+                    },
+                })
+            }));
+            let view = read_fixture_view(Some(a.clone()), a.cell.clone(), conn);
+            let error = view.get("Snippet", "b").unwrap_err();
+            assert_eq!(
+                calls.load(Ordering::SeqCst),
+                1,
+                "must reach the real get callback, not reject before the DB read"
+            );
+            assert!(error.to_string().contains(if expiry_without_flag {
+                "Expired"
+            } else {
+                "MissingSnapshot"
+            }));
+            assert!(a.check().is_err());
+        }
+    }
+}
+
+#[test]
+fn direct_admission_cannot_hide_a_foreign_unadmitted_read_view_even_with_a_matching_scope_service()
+{
+    let a = admission();
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let count = calls.clone();
+    let conn = Arc::new(crate::connection::CallbackConnection::new(move |_, _| {
+        count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(QueryResult::default())
+    }));
+    let view = read_fixture_view(
+        None,
+        crate::scope::Scope::new("org", "foreign"),
+        conn.clone(),
+    );
+    let mut services = ServiceRegistry::new();
+    services.register(SERVICE, a.clone());
+    services.register("scope", a.cell.clone());
+    services.register(
+        crate::read_view::READ_VIEW_SERVICE,
+        Arc::new(crate::read_view::ReadViewCell::avec(view)),
+    );
+    let ctx = NodeContext::with_services(Arc::new(services));
+    let error = crate::dataflow::generic_search_nodes::occurrence_mask_options(
+        &ctx,
+        &target(),
+        SearchOptions::default(),
+        &(conn as Arc<dyn crate::connection::DbConnection>),
+    )
+    .unwrap_err();
+    assert!(error.contains("ForeignCell"));
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+    assert_eq!(a.check(), Err(AdmissionError::ForeignCell));
 }

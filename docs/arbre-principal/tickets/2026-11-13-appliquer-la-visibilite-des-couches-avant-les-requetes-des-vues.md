@@ -27,3 +27,11 @@ Liaison de stockage des témoins explicitement fixture ; aucun accès réel à u
 ## Source et treize témoins A écrits
 
 [Rapport29](../13-11-2026/29-admission-cpu-couches-2b-a.md), noms exacts joints. Admission interne avec constructeurfixturecfgtest uniquement, propagation pointscommuns/masquesavantk/deuxbouts/validitéjusqu'aurendu ; outils physiques refusés commefixture. AucunchargeurB/Cimplémenté. Rustfmtparse/diffcheck/ticketchecker seulement ; aucunCargo/rustc/runtime/testjoué. RecetteCPU1800proposée, source/pilote/RO+créneau+GOdistinct restent à figer. Intégrationgardeprioritaire avant masterRust2b.
+
+## Réserves RO sur54142 avant toute qualification
+
+Recherche/Mémoire/Archi : le premier témoin boucle trois labels mais n'exécute pas les trois nœuds ; le témoin de refus ne juge que Vector scan puis un appel direct de capacité. Renforcer par exécution des vrais nœuds et spies au point candidat, et branches dense incapable, BM25 natif, offsets None/erreur sous signaux souples. Archi : ReadView::get doit recontrôler après DB avant None/Some, avec Callback invalidant pendant cette dernière lecture. Réserves acceptées, aucun run/Cargo sur54142 ; delta source/tests et revue exacts avant qualification.
+
+## Delta après les réserves54142
+
+Nouvelle source :15fonctions écrites, NONJOUÉES. Vrais3nœuds+spiesauxargumentscandidats, denseincapablenonscan/soft, BM25natifrefus, offsetsNone/Err soussoft dansBM25/Sparse ; probes/faultsinjectioncfgtest explicitementlimitésàCPU. GetcontrôlepostDB avantNone/Some, callbackinvalide/raccourcitdeadlineeffectivesansflag ; vueétrangèresansadmission nepeutêtrecachéeparservicecellulecohérent. Rapport29/JSON misàjour ; pasdecompilation/runtime revendiqué, recetteCPU15exacts+libproposée avantRO/GOcouple.

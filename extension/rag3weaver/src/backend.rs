@@ -5128,6 +5128,7 @@ impl Backend {
         // No fixture view may silently turn into a catalogue/unpinned fallback.
         let read_admission = self.read_view.current().and_then(|v| v.admission().cloned());
         if let Some(a) = &read_admission {
+            DEADLINE_OF_CALL.with(|deadline| { if let Some(d) = deadline.borrow().as_ref() { a.tighten_deadline(d.at); } });
             a.check().map_err(|e| e.to_string())?;
             a.require_physical_tool_access().map_err(|e| e.to_string())?;
         }

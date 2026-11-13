@@ -1392,7 +1392,10 @@ impl Node for BM25SearchNode {
 
         if let Some(backend) = natif {
             // Filet du ticket docs/arbre-principal/tickets/2026-11-11-deux-occurrences-identiques-reembarquent-le-meme-contenu.md
-            if target.occurrence_projection.is_some() || admission::for_node(ctx).map_err(|e| e.to_string())?.is_some() {
+            if let Some(a) = admission::for_node(ctx).map_err(|e| e.to_string())? {
+                return Err(format!("BM25 natif : {}", a.invalidate(admission::AdmissionError::IncapableFilter)));
+            }
+            if target.occurrence_projection.is_some() {
                 return Err("BM25 natif : masque des occurrences non garanti par ce signal".into());
             }
             // Le domaine de travail descend en SQL ici, pas en offsets : c'est
@@ -1485,6 +1488,7 @@ impl Node for BM25SearchNode {
         let distance = self.fuzzy_distance.unwrap_or(options.fuzzy_distance);
         let result_mode = self.result_mode.unwrap_or(options.result_mode);
         let label = self.signal.clone().unwrap_or_else(|| self.node_name.clone());
+        let candidate_services = ctx.services_arc();
         let cherche = |requete: &str, mode: BM25Mode, distance: u8, diag: Option<&mut crate::search::SearchDiagnostics>, avert: &mut Vec<String>| {
             search_bm25_chunked(
                 &*conn,
@@ -1495,7 +1499,7 @@ impl Node for BM25SearchNode {
                 mode,
                 distance,
                 limite,
-                allowed.as_deref(),
+                candidate_offsets(candidate_services.as_ref(), "fts", limite, allowed.as_deref())?,
                 &target.enrich_fields,
                 result_mode,
                 diag,
@@ -1856,7 +1860,7 @@ impl Node for SparseSearchNode {
             &sparse_vec,
             limite,
             &[], // empty fields for chunked entities (fields are on parent table)
-            allowed.as_deref(),
+            candidate_offsets(ctx.services_arc().as_ref(), "sparse", limite, allowed.as_deref()).map_err(|e| e.to_string())?,
         );
         let chunk_results = match chunk_results {
             Ok(r) => r,
@@ -3133,13 +3137,22 @@ fn allowed_ids_in(
         (None, None) => catalog.lock().unwrap().resolve_filter_to_ids(&target.parent_table, condition, target), // L4 : repli sans vue
         (None, Some(chunks)) => catalog.lock().unwrap().resolve_filter_to_chunk_ids(&target.parent_table, chunks, condition, target), // L4 : repli sans vue
     };
+    #[cfg(test)]
+    let resolved = match ctx.service::<admission::node_probe::OffsetProbe>(admission::node_probe::OFFSETS) {
+        Some(probe) => (probe.0)(condition, chunk_table.is_some()),
+        None => resolved,
+    };
     match resolved {
         Ok(ids) => {
-            if (target.occurrence_projection.is_some() || mandatory.is_some()) && ids.is_none() { return Err("masque des occurrences non résolu".into()); }
+            if ids.is_none() {
+                if let Some(a) = &mandatory { return Err(a.invalidate(admission::AdmissionError::StorageChanged).to_string()); }
+                if target.occurrence_projection.is_some() { return Err("masque des occurrences non résolu".into()); }
+            }
             Ok(ids)
         },
         Err(e) => {
-            if target.occurrence_projection.is_some() || mandatory.is_some() { return Err(format!("masque des occurrences non résolu : {e}")); }
+            if let Some(a) = &mandatory { return Err(format!("{} : {e}", a.invalidate(admission::AdmissionError::StorageChanged))); }
+            if target.occurrence_projection.is_some() { return Err(format!("masque des occurrences non résolu : {e}")); }
             ctx.warn(&format!("{node_type}: filtre non résolu ({e}) — la recherche n'est pas restreinte"));
             Ok(None)
         }
@@ -3181,6 +3194,18 @@ fn filtre_utilisateur_for(
             None
         }
     }
+}
+
+/// Observe the exact offsets argument at the actual candidate call in CPU
+/// fixture builds. No probe means no extra behavior; the returned reference is
+/// the one consumed by lucivy/sparse, not a parallel mask computed by a test.
+fn candidate_offsets<'a>(services: &crate::dataflow::ServiceRegistry, signal: &'static str, limit: usize, offsets: Option<&'a [u64]>) -> Result<Option<&'a [u64]>, crate::catalog::CatalogError> {
+    let _ = (services, signal, limit);
+    #[cfg(test)]
+    if let Some(probe) = services.get::<admission::node_probe::CandidateProbe>(admission::node_probe::CANDIDATES) {
+        (probe.0)(admission::node_probe::CandidateObservation { signal, limit, offsets: offsets.map(|v| v.to_vec()) }).map_err(crate::catalog::CatalogError::DbError)?;
+    }
+    Ok(offsets)
 }
 
 /// **Combien un signal va chercher.** La limite du nœud si le gabarit l'a

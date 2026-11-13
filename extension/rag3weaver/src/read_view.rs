@@ -764,6 +764,7 @@ impl ReadCatalog for ReadView {
             .conn
             .execute_with_params(&cypher, &[QueryParam::new("uuids", CypherValue::List(vec![CypherValue::String(uuid.to_string())]))])
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        if let Some(a) = self.admission() { a.check().map_err(|e| CatalogError::DbError(e.to_string()))?; }
         if result.is_empty() {
             return Ok(None);
         }
