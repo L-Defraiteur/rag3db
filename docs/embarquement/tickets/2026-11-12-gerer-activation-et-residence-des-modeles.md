@@ -543,3 +543,10 @@ le parcours carte/progression, embarquement pour la requalification finale.
 Diagnostiquer cette absence sans affaiblir l'assertion ni la remplacer par
 un rejeu chanceux ; conserver le rouge et utiliser le restant de l'échéance
 hex7oup7 pour une reprise éventuelle. Aucune nouvelle charge de modèle demandée.
+
+Reprise préparée, pas encore exécutée : `13-11-2026/reprendre-union.sh` lit
+l'échéance absolue877122,611725539 de hex7oup7 APRÈS acquisition lourd, refuse
+l'expiration et limite la nouvelle portée au restant seulement. Le suffixe
+explicite impose de nouveaux journaux/fixture PG sans écraser le rouge initial.
+ED confirme prendre le diagnostic source, aucun rejeu Cargo chanceux ni édition
+concurrente de worktrees.rs par cette session ; c9 demeure figé jusqu'au routage.
