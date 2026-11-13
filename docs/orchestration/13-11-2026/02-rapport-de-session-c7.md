@@ -340,3 +340,13 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   pour la sixième), **puis la pose des deux postes** ; 96 (l'archive qui voit son document) après la pose,
   avec le lot du nom de sujet, puis un seul second essai à blanc. Lucie a dit avoir plusieurs onglets de l'IDE
   ouverts : (b) le SharedWorker suit, conçu pour les fenêtres séparées (graine, acb4f02e0).
+- **19 h 58, la sonde des bases de Lucie : 0 relation orpheline, 0 morceau sans parent** dans code-lourd et
+  code-principal, toutes tables, les deux sens (hotfixs, 2ccc093ed, page et programme dans `outils/`).
+  Lecture sur des copies prises hôte arrêté (instantané avant-207701bb2 du 13, dont les fichiers datent du
+  11 à 22 h 33 ; à rejouer sur l'instantané de la pose de ce soir), lib 835d5298f, lecture seule ; rien n'a
+  touché les bases de Lucie. La sonde est éprouvée : sur une copie de la base de reproduction du cœur, elle
+  trouve les 128 morceaux sans parent et les 128 + 96 + 96 relations orphelines. Un piège pour le cœur : une
+  requête MATCH sur une destination disparue n'est pas sûre si le planificateur part de l'autre bout ; la
+  sonde ancre chaque sens, lit le plan, et dit « SENS NON PROUVÉ » sinon. Limites dites (une relation aux
+  deux bouts manquants échappe ; Symbol_Chunk vide). Les 103 et 128 places vides de code-lourd sont les
+  scopes effacés par l'index, sans relation vers elles.
