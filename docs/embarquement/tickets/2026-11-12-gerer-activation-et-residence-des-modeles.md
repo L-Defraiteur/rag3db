@@ -618,3 +618,18 @@ porte `usage: { baux, en_cours }` : les baux non expirés et les requêtes de ca
 `Ok(None)` devant un fournisseur d'avant les baux (404). L'activation (`connecter`) en prend un
 pour chaque client remis. Témoins : les baux se comptent, les requêtes en cours se comptent, un bail
 distant compte tant qu'on le tient (rouges avant le code : aucune route `/bail`).
+
+### Éviction locale (13 novembre, embarquement) — deuxième étape
+
+Seulement un fournisseur lancé par l'activation avec `residence: { "a_demande": { "inactivite_secs": N } }`
+(`Residence::ADemande`) : l'activation lui passe `RAG3WEAVER_EVICTION_INACTIVITE_S=N`, le binaire
+le rend évincable (`EmbedDaemon::evincable`), son identité porte
+`eviction: { inactivite_s, inactif_depuis_ms }`. Sans bail ni calcul pendant N secondes (le délai
+repart de la dernière demande reçue ou finie), il écrit « évincé : aucun bail ni calcul depuis … »
+sur sa sortie et sort (code 0) ; l'adresse retenue au dossier de coordination ne répond plus et la
+demande suivante le relance. **Un fournisseur sans la variable reste résident** : les services
+posés à la main n'en ont pas et n'en auront pas. Une unité systemd `Restart=always` relancerait un
+fournisseur évincé : l'activation distante (étape suivante) devra lancer les siens en
+`Restart=on-failure`. Témoins : un fournisseur évincable tient sous un bail et se décharge après le
+dernier bail rendu en disant pourquoi ; un fournisseur non déclaré ne se décharge jamais (rouges
+avant le code : l'API n'existait pas, rouge de compilation).
