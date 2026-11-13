@@ -5420,6 +5420,32 @@ impl Backend {
         if !entites.is_empty() && crate::code_sync::avant_la_regle(&cat).unwrap_or(false) {
             avertissements.push(crate::code_sync::AVANT_LA_REGLE.to_string());
         }
+        // **Les couches des dépôts** (liaison branche → couche) : l'ancre, les branches suivies sur
+        // leur parente et son genre, les ambiguës à déclarer. Lu sans rien estampiller ; rien
+        // n'est dit d'un dépôt sans branches suivies déclarées.
+        if !entites.is_empty() {
+            let mut racines: Vec<std::path::PathBuf> = vec![self.prepared().directory.clone()];
+            if let Some(w) = self.prepared().manifest.workspace.as_ref() {
+                racines.push(if w.root.is_absolute() { w.root.clone() } else { self.prepared().directory.join(&w.root) });
+            }
+            let mut couches = Vec::new();
+            let mut vus = std::collections::BTreeSet::new();
+            for r in &racines {
+                match crate::couches::rapport_des_couches(&cat, r) {
+                    Ok(Some((rapport, avert))) => {
+                        if vus.insert(rapport["repo"].to_string()) {
+                            couches.push(rapport);
+                            avertissements.extend(avert);
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(e) => avertissements.push(format!("couches de {} : {e}", r.display())),
+                }
+            }
+            if !couches.is_empty() {
+                etats.insert("layers".to_string(), Value::Array(couches));
+            }
+        }
         // **La garde des comptes du dernier index** : documents contre
         // lignes, par entité ; un écart se dit aussi en avertissement.
         if let Some(Value::Object(comptes)) = cat.comptes_notes_du_plein_texte() {
