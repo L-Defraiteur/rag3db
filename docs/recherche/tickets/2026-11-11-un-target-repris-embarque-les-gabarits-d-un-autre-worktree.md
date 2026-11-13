@@ -238,3 +238,11 @@ Refus frais avant cache/Cargo/F8, aucun juge produit. Scope terminé ROUGE1,
 restes[], bus absent/PIDabsents/poste libéré. 37preuves identiques deuxpostes,
 manifest6e1f7b6a2889cbc555fb0c62863a54fdff4203f9aa3786e41e756ca8277bf666.
 Aucun retry ni correction implicite ; sources/target/ancienslots conservés.
+
+## Préparation de reprise distincte après diagnostic8d473
+
+[Recette11](../13-11-2026/11-recette-reprise-prefixe-union-garde-target.md) :
+commande stricte sans-B, sys.orig_argv contrôlé, P/Q/Sv2 neufs, reçu du reste
+APRÈS poste et ENDoriginal919393.915525602 conservé ; sept témoins préparés
+NON JOUÉS, aucun run. Sourceapp9ec/target698/anciens4d38 et preuves intacts.
+Nouveau couple soumis RO+GO distinct ; pause ledger avant tout runtime.
