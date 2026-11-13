@@ -265,3 +265,14 @@ F8 8/8, builds2code0, 223gabarits/ELF et inventaires2374/66+NAV40,
 ledger6937bd93...29b7 publié/copié2postes avant runtime ; snapshot100fichiers
 identiques manifest33b8863c...b7a8. Aucun juge lib/NAV/UI joué, marker absent,
 scope encoreactif sous échéanceoriginale. TicketOUVERT, aucunGOmaster/retrait.
+
+## Qualification union SDK29 terminée, revue preuves requise
+
+[Rapport13](../13-11-2026/13-preuves-finales-union-garde-target.md) :
+APP9ec/PILOTE65ad, lib2308/0/66 sansfiltre, NAV40/0/0, HTTP2blobsGit,
+223attests/ELF avant/après, principal SDK7exec/main/detachTracer0/vraiwait0.
+FinalVERT2076.554637075s depuisSTARToriginal4800, scopeVERT0/restes[]/busabsent,
+scanindépendantfraisvide/postelibéré. 558preuves identiques2postes manifest
+cece3588719044bf461eb6f7f322eb8f9b0db524e2b63e979eb07f782522cb3d.
+CinqdeviceFD/UNKNOWNowned0 transparents ; ancienrouges et préfixefigé gardés.
+CIstatique non déclarée réparée ; ticketgardeOUVERT, pasGOmaster/retrait.
