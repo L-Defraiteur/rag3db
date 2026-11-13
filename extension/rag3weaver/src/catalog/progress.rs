@@ -531,41 +531,42 @@ impl Catalog {
         Ok(global)
     }
 
-    /// L'embarqueur de ce catalogue vit-il ailleurs (un démon, un service) ?
+    /// L'embarqueur configuré vit-il ailleurs ? Aucun modèle n'annonce pas
+    /// un service distant ; son débit reste inconnu et aucune sonde ne part.
     pub fn embedder_is_remote(&self) -> bool {
-        self.embedder.distant()
+        self.embedder.as_ref().is_some_and(|embedder| embedder.distant())
     }
 
-    /// D'où vient le calcul, pour ranger un débit : `service` ou `local`.
-    fn embedder_origin(&self) -> &'static str {
-        if self.embedder.distant() {
-            "service"
-        } else {
-            "local"
-        }
+    fn embedder_origin(embedder: &dyn crate::embedder::Embedder) -> &'static str {
+        if embedder.distant() { "service" } else { "local" }
     }
 
     /// Le débit noté pour l'embarqueur de ce catalogue, s'il y en a un.
     pub fn known_embedding_rate(&self) -> Result<Option<Rate>, CatalogError> {
-        // Absent, rien ne s'embarquera ici : le débit d'un autre montage du
-        // même modèle ne prévoit rien.
-        if self.embedder.is_absent() {
-            return Ok(None);
-        }
-        self.embedding_rate(self.embedder.name(), self.embedder_origin())
+        self.check_reopen()?;
+        let Some(embedder) = &self.embedder else { return Ok(None) };
+        // Un modèle configuré indisponible ne fournit pas davantage de débit.
+        if embedder.is_absent() { return Ok(None) }
+        self.embedding_rate(embedder.name(), Self::embedder_origin(embedder.as_ref()))
     }
 
-    /// Note le débit **constaté** de l'embarqueur de ce catalogue — ce qu'une
-    /// indexation vient de mesurer en vrai, écritures comprises.
+    /// Note le débit constaté d'un modèle configuré. Le profil lexical ne
+    /// peut recevoir une mesure sans modèle sous une identité inventée.
     pub fn note_measured_embedding_rate(&self, rate: Rate) -> Result<(), CatalogError> {
-        self.note_embedding_rate(self.embedder.name(), self.embedder_origin(), rate)
+        self.check_reopen()?;
+        let embedder = self.embedder.as_ref().ok_or_else(||
+            CatalogError::EmbeddingModelUnavailable("aucun modèle configuré pour noter un débit".into()))?;
+        self.note_embedding_rate(embedder.name(), Self::embedder_origin(embedder.as_ref()), rate)
     }
 
-    /// **Sonde** l'embarqueur de ce catalogue sur `samples`, et note le débit.
+    /// Sonde le modèle configuré sur samples. Sans modèle, aucune acquisition,
+    /// aucun appel ni métadonnée de débit n'est créé.
     pub fn probe_embedding_rate(&self, samples: &[String]) -> Result<Option<Rate>, CatalogError> {
-        let rate = crate::estimate::probe_rate(self.embedder.as_ref(), samples).map_err(CatalogError::DbError)?;
+        self.check_reopen()?;
+        let Some(embedder) = &self.embedder else { return Ok(None) };
+        let rate = crate::estimate::probe_rate(embedder.as_ref(), samples).map_err(CatalogError::DbError)?;
         if let Some(rate) = rate {
-            self.note_embedding_rate(self.embedder.name(), self.embedder_origin(), rate)?;
+            self.note_embedding_rate(embedder.name(), Self::embedder_origin(embedder.as_ref()), rate)?;
         }
         Ok(rate)
     }

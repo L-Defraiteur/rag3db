@@ -11446,6 +11446,10 @@ mod tests {
         catalog.initialized = true;
         catalog.ensure_embedding_model().unwrap();
         assert_eq!(catalog.current_embedding_slug(), None);
+        assert!(!catalog.embedder_is_remote());
+        assert!(catalog.known_embedding_rate().unwrap().is_none());
+        assert!(catalog.probe_embedding_rate(&["lexical only".into()]).unwrap().is_none());
+        assert!(catalog.note_measured_embedding_rate(crate::estimate::Rate { chars_per_second: 10.0 }).is_err());
         assert!(catalog.registered_embedding_models().unwrap().is_empty());
         let mut services = ServiceRegistry::new();
         let _failures = catalog.enregistrer_les_services_d_ingestion(&mut services);
