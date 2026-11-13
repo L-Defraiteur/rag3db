@@ -257,3 +257,11 @@ commande stricte sans-B, sys.orig_argv contrôlé, P/Q/Sv2 neufs, reçu du reste
 APRÈS poste et ENDoriginal919393.915525602 conservé ; sept témoins préparés
 NON JOUÉS, aucun run. Sourceapp9ec/target698/anciens4d38 et preuves intacts.
 Nouveau couple soumis RO+GO distinct ; pause ledger avant tout runtime.
+
+## Préfixe union65ad acquis, qualification runtime toujours en pause
+
+[Preuves12](../13-11-2026/12-preuves-prefixe-union-garde-target.md) :
+F8 8/8, builds2code0, 223gabarits/ELF et inventaires2374/66+NAV40,
+ledger6937bd93...29b7 publié/copié2postes avant runtime ; snapshot100fichiers
+identiques manifest33b8863c...b7a8. Aucun juge lib/NAV/UI joué, marker absent,
+scope encoreactif sous échéanceoriginale. TicketOUVERT, aucunGOmaster/retrait.
