@@ -830,6 +830,7 @@ impl<'a> OutilsDuChat<'a> {
         let path = args["path"].as_str().unwrap_or_default();
         let mut e = e.lock().unwrap_or_else(|p| p.into_inner());
         match call.name.as_str() {
+            #[cfg(feature = "code")]
             "read_file" => {
                 let de = args["offset"].as_u64().unwrap_or(1).max(1) as usize;
                 let longueur = args["length"].as_u64().map(|l| l as usize).unwrap_or(crate::dataflow::fichier_nodes::LIGNES_MAX);

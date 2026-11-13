@@ -144,10 +144,14 @@ pub fn build_id() -> String {
 
 /// L'identifiant du moteur, lu **une fois** (une connexion en mémoire) puis
 /// gardé : `/sante` est appelé à chaque garde de client.
+/// Sans moteur natif, le client ne construit aucune connexion et rend `None`.
 pub fn engine_build_id() -> &'static Option<String> {
     static MOTEUR: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
     MOTEUR.get_or_init(|| {
-        crate::Rag3dbConnection::in_memory().ok().and_then(|c| engine_build_from(&c))
+        #[cfg(feature = "rag3db-native")]
+        { crate::Rag3dbConnection::in_memory().ok().and_then(|c| engine_build_from(&c)) }
+        #[cfg(not(feature = "rag3db-native"))]
+        { None }
     })
 }
 
@@ -229,7 +233,11 @@ fn sans_heriter_les_entrees_sorties<T>(lancer: impl FnOnce() -> T) -> T {
 
 /// `daemon.json`, s'il existe et se lit.
 pub fn read() -> Option<DaemonFile> {
-    let octets = std::fs::read(racine(Dossier::Donnees).ok()?.join("daemon.json")).ok()?;
+    read_in(&racine(Dossier::Donnees).ok()?)
+}
+
+pub(crate) fn read_in(dossier: &Path) -> Option<DaemonFile> {
+    let octets = std::fs::read(dossier.join("daemon.json")).ok()?;
     serde_json::from_slice(&octets).ok()
 }
 
@@ -471,7 +479,7 @@ pub fn answers(file: &DaemonFile) -> bool {
     };
     let Ok(texte) = r.body_mut().read_to_string() else { return false };
     serde_json::from_str::<serde_json::Value>(&texte).is_ok_and(|v| {
-        v["service"] == crate::daemon_host::SERVICE && v["pid"].as_u64() == Some(file.pid as u64)
+        v["service"] == crate::daemon::HOST_SERVICE && v["pid"].as_u64() == Some(file.pid as u64)
     })
 }
 
@@ -865,6 +873,13 @@ mod tests {
         // Et la chaîne entière se forme dans les deux cas : le moteur de ce poste
         // décide lequel.
         assert!(build_id().starts_with("rag3weaver "), "{}", build_id());
+    }
+
+    #[cfg(not(feature = "rag3db-native"))]
+    #[test]
+    fn le_client_sans_natif_ne_designe_aucun_moteur() {
+        assert_eq!(engine_build_id(), &None);
+        assert!(build_id().ends_with("moteur sans identifiant de bâti"));
     }
 
     #[test]

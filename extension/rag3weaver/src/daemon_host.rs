@@ -39,7 +39,7 @@ pub const SESSION_HEADER: &str = "X-Rag3weaver-Session";
 pub const STOP: &str = "/arret";
 
 /// Le nom de service que `/sante` rend, celui que `Serveur::assurer` sonde.
-pub const SERVICE: &str = "rag3weaver-daemon";
+pub use crate::daemon::HOST_SERVICE as SERVICE;
 
 /// Le début de l'erreur d'un appel qui a croisé une réouverture : il n'a pas
 /// abouti, et il n'est pas rejoué.

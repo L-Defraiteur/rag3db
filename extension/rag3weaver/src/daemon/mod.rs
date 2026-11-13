@@ -45,6 +45,9 @@ pub const SANTE: &str = "/sante";
 /// `POST /quitter` : le démon répond puis s'arrête. Refusé s'il est exposé.
 pub const QUITTER: &str = "/quitter";
 
+/// L'identité de protocole de l'hôte, partagée avec ses clients sans moteur.
+pub const HOST_SERVICE: &str = "rag3weaver-daemon";
+
 /// **L'empreinte d'un exécutable** : son chemin résolu et sa date de
 /// modification. Elle change à chaque reconstruction, et c'est tout ce qu'on
 /// lui demande — pas de hachage de cent mégaoctets au démarrage.

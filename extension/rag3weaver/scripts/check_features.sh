@@ -19,6 +19,11 @@
 # le premier bâtissant tout le moteur.
 set -u
 JEUX=(
+  # Le vrai minimum et le client HTTP, sans moteur ni outils de code.
+  ""
+  "daemon"
+  # L'hôte natif sans les outils de code.
+  "rag3db-native,daemon"
   # Celui de run_e2e.sh, la batterie.
   "rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres"
   # Le même, avec les suites qui appellent un vrai modèle.
@@ -61,12 +66,13 @@ if ! timeout 60 bash "$ICI/scripts/test_etat_suite_e2e.sh"; then
   rouges+=("test_etat_suite_e2e")
 fi
 for jeu in "${JEUX[@]}"; do
+  nom="${jeu:-sans-feature}"
   sortie=/dev/null
-  [ -n "${CHECK_FEATURES_LOGS:-}" ] && sortie="$CHECK_FEATURES_LOGS/${jeu//,/+}.log"
-  if timeout "${CHECK_FEATURES_TIMEOUT:-1800}" cargo check --tests --features "$jeu" > "$sortie" 2>&1; then
-    echo "VERT  $jeu"
+  [ -n "${CHECK_FEATURES_LOGS:-}" ] && sortie="$CHECK_FEATURES_LOGS/${nom//,/+}.log"
+  if timeout "${CHECK_FEATURES_TIMEOUT:-1800}" cargo check --tests --no-default-features --features "$jeu" > "$sortie" 2>&1; then
+    echo "VERT  $nom"
   else
-    echo "ROUGE $jeu   (cargo check --tests --features $jeu)"
+    echo "ROUGE $nom   (cargo check --tests --no-default-features --features $jeu)"
     echec=1
     rouges+=("$jeu")
   fi
