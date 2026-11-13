@@ -1,12 +1,20 @@
 # Migrer les ancres de code vers le contenu partagé
 
-- **État** : ouvert, premier patch contrat/admission/plan/préflight autorisé après publication du plan corrigé ; transformation et activation non autorisées.
+- **État** : ouvert ; premier raccord physique natif BM25 sur index explicitement neuf livré b0a5177c0, qualification composite achevée ; couches/pyramide, migration legacy, dense et projection de coordonnées fichier restent à traiter.
 - **Famille** : produit
 - **Gravité** : capacité manquante ; le partage déclaratif1a ne transforme pas les index de code existants.
-- **Atteignable en service** : parcours CLI/daemon raccordés sur branche privée, non livrés sur master ; gabarits et index de production inchangés.
+- **Atteignable en service** : admission/plan/préflight et primitive de raccord physique neuf livrés sur master ; aucune activation de base réelle ou migration d’index existant.
 - **Touche rag3weaver** : oui, admission de format, migrations déclarées, transfert des valeurs indexées, schéma code et témoins.
 - **Pour** : arbre-principal ; orchestration et ED pour revue/autorisation, recherche pour contrat d’index si besoin.
 - **Signalé par** : préparation autorisée par orchestration après le lot1a08086ba36 ; ticket de préparation distinct ci-dessous.
+
+## État courant et historique
+
+Le raccord neuf BM25 est livré b0a5177c0, bilan ba0317ed1 et preuves07.
+Les sections chronologiques ci-dessous conservent leurs autorisations et
+constats à leur date ; elles ne remplacent pas ce statut courant. Suite2a
+préparée sous [ticket couches](2026-11-13-resoudre-des-couches-epinglees-sans-confondre-les-occurrences.md),
+sans Cargo/DB/service avant recette et GO de coordination.
 
 ## Livrable de préparation et périmètre
 
