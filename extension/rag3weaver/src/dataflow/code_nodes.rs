@@ -146,7 +146,7 @@ impl Node for CodeIngestNode {
         let report = if self.bulk_index {
             // Les trois entités que l'analyse écrit ; `bulk_vector_index`
             // ignore celles qui n'ont pas de signal vectoriel.
-            cat.bulk_vector_index(&[crate::code::FILE, crate::code::SCOPE, crate::code::LIBRARY], |c| {
+            cat.bulk_vector_index(&crate::code::ENTITES_EN_MASSE, |c| {
                 c.ingest_code(&analysis)
             })
             .map_err(|e| format!("CodeIngestNode: {e}"))?

@@ -2383,7 +2383,7 @@ fn read_threads() -> u64 {
     /// `(table de chunks, colonne, index)`. Seule une entité à pipeline simple
     /// et à signal vectoriel en a un — et seul l'index du modèle courant reçoit
     /// des vecteurs pendant un lot, donc c'est le seul qu'on détruit.
-    fn vector_indexes_of(&self, entities: &[&str]) -> Vec<(String, String, String)> {
+    pub(crate) fn vector_indexes_of(&self, entities: &[&str]) -> Vec<(String, String, String)> {
         let Some(slug) = self.current_embedding_slug() else { return vec![] };
         let Some(entry) = self.registered_embedding_models().ok().and_then(|m| m.into_iter().find(|e| e.slug() == slug)) else {
             return vec![];
@@ -8371,6 +8371,38 @@ fn read_threads() -> u64 {
         self.flush_blob_store("owned lexical reconstruction")
     }
 
+    /// **Le plein texte d'une table, refait depuis ses seules lignes** : l'index est retiré, puis
+    /// chaque ligne (toutes cellules) y redevient un document, à son décalage, sans mise à jour,
+    /// découpage ni modèle. Pour une table de versions de contenu, qui ne se met pas à jour.
+    fn rebatir_le_plein_texte_d_une_table(&mut self, table: &str, champs_texte: &[String]) -> Result<(), CatalogError> {
+        self.drop_fts_index(table);
+        let config = self.entity_configs.get(table).ok_or_else(|| CatalogError::UnknownEntity(table.to_string()))?;
+        let mut champs: Vec<String> = config.fields.keys().cloned().collect();
+        champs.extend([crate::scope::ORG_COLUMN.into(), crate::scope::PROJECT_COLUMN.into()]);
+        champs.sort();
+        champs.dedup();
+        let rendus = champs.iter().map(|c| format!("n.{c}")).collect::<Vec<_>>().join(", ");
+        let decalage = self.dialect.node_offset_expr("n");
+        let lignes = self
+            .conn
+            .execute(&format!("MATCH (n:{table}) RETURN {decalage}, {rendus}"))
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let handle = self
+            .ensure_fts_handle(table, champs_texte, &crate::scope::fts_filter_fields())
+            .ok_or_else(|| CatalogError::IndexPersistence(format!("plein texte de {table} : index introuvable")))?;
+        for ligne in &lignes.rows {
+            let Some(decalage) = ligne.first().and_then(|v| v.as_i64()).and_then(|n| u64::try_from(n).ok()) else { continue };
+            let valeurs: Vec<(String, String)> = champs
+                .iter()
+                .zip(&ligne[1..])
+                .filter_map(|(c, v)| v.as_str().map(|v| (c.clone(), v.to_owned())))
+                .collect();
+            crate::fts_handle::upsert_document(&handle, &valeurs, decalage).map_err(CatalogError::IndexPersistence)?;
+        }
+        handle.commit().map_err(CatalogError::IndexPersistence)?;
+        self.flush_blob_store("rebâti du plein texte d'une table de versions")
+    }
+
     /// **Rebâtir depuis les lignes le plein texte resté sans blobs** après
     /// un arrêt pendant une première indexation : pour chaque entité
     /// marquée, l'index est refait par [`reindex`](Self::reindex), puis la
@@ -8379,7 +8411,15 @@ fn read_threads() -> u64 {
         let pending = self.fts_pending_entities()?;
         for e in &pending {
             eprintln!("[rag3weaver] plein texte de « {e} » laissé sans blobs par un arrêt : reconstruction depuis les lignes");
-            self.reindex(e)?;
+            // **La table qui porte l'index** : sous un `searchIndex` à contenu partagé, les
+            // documents de `Scope` sont ceux de `ScopeContent` (13 novembre 2026). Une version de
+            // contenu ne se met pas à jour ; son plein texte se refait depuis ses lignes.
+            match self.resolve_search_target(e) {
+                Ok(t) if t.parent_table != *e => self.rebatir_le_plein_texte_d_une_table(&t.parent_table, &t.bm25_fields)?,
+                _ => {
+                    self.reindex(e)?;
+                }
+            }
             self.persist_meta_key(&format!("{FTS_PENDING}{e}"), "")?;
         }
         Ok(pending)

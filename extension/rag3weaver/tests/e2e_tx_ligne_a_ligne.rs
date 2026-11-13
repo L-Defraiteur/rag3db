@@ -138,12 +138,14 @@ fn vider(catalog: &Catalog) -> BTreeMap<String, BTreeSet<String>> {
                 .extend(lignes.rows.iter().map(|l| format!("{}→{} {}", canonique(&l[0]), canonique(&l[1]), canonique(&l[2]))));
         }
     }
-    for (entite, champ, mot) in [("Scope", "content", "pub"), ("File", "path", "src")] {
+    let code = index_du_code(&catalog);
+    for (entite, champ, mot) in [(code.as_str(), "content", "pub"), ("File", "path", "src")] {
         let handle = catalog.fts_handle(entite).unwrap_or_else(|| panic!("index plein texte de {entite}"));
         let requete: lucivy_core::query::QueryConfig =
             serde_json::from_value(serde_json::json!({"type": "contains", "field": champ, "value": mot, "distance": 0})).unwrap();
         let n = handle.search(&requete, 1_000_000, None).unwrap().len();
-        out.entry(format!("plein texte {entite} « {mot} »")).or_default().insert(n.to_string());
+        let nom = if entite == code { "Scope" } else { entite };
+        out.entry(format!("plein texte {nom} « {mot} »")).or_default().insert(n.to_string());
     }
     out
 }
@@ -271,4 +273,10 @@ fn une_reprise_sous_transaction_rend_le_meme_graphe_ligne_a_ligne() {
     assert!(e.is_empty(), "le graphe diffère sous transaction (bases gardées : {} et {}) :\n{}", avec.display(), sans.display(), e.join("\n"));
     let _ = std::fs::remove_dir_all(avec.parent().unwrap());
     let _ = std::fs::remove_dir_all(sans.parent().unwrap());
+}
+
+/// L'entité qui porte l'index plein texte du code dans la forme de la base :
+/// `ScopeContent` sur une base à versions de scope, `Scope` sinon.
+fn index_du_code(catalog: &rag3weaver::Catalog) -> String {
+    rag3weaver::code::scope_chunks(catalog).expect("la forme de la base").parent
 }
