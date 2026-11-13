@@ -2149,3 +2149,10 @@ adaptateur : autoriser zéro propriété seulement pour REL, capturer src._uuid 
 dst._uuid même sans champs supplémentaires, conserver définition+connexions et
 doublons. NODE sans propriétés reste refusé avec nom explicite. Aucun saut de
 table/relations ni affaiblissement des valeurs, pas de rejeu avant RO/budget.
+
+Demande C7 après RO favorable6bd : renforcer le juge natif existant codec par
+contre-exemple physique 0/1/2arêtes sans propriétés aux mêmes extrémités dans
+sa base synthétique, après ses assertions de plan. Définition stable et deux
+identités noeuds fixes ; cardinalités0/1/2, deux lignes identiques conservées,
+empreintes logiques distinctes. Aucun juge supplémentaire ni mock seul ; aucune
+publication de la base ainsi altérée. Nom tableP6 toujours non attribué.
