@@ -28,4 +28,4 @@ Une seule valeur, décidée par l'orchestration : `poste` à 32 Gio par défaut,
 - **40 Gio reste le défaut de `poste`**, pour les bâtis.
 - Les appelants posent `POSTE_MEM_MAX=32G` devant un `poste lourd … run_e2e.sh`, ou appellent
   `run_e2e.sh` seul.
-- G l'écrit dans la procédure. Ce ticket se ferme avec ce commit.
+- G l'écrit dans la procédure ; ce ticket se ferme quand elle le dit.
