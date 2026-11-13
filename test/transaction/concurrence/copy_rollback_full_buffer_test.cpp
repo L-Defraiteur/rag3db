@@ -64,7 +64,8 @@ protected:
         std::ofstream out(path);
         const auto vector = vectorText();
         for (int64_t i = 0; i < A_ROWS; i++) {
-            out << (stringKey ? std::string(128, 'k') : "") << i << ",titre,\"[" << vector << "]\"\n";
+            out << (stringKey ? std::string(128, 'k') : "") << i << ",titre,\"[" << vector
+                << "]\"\n";
         }
         return path;
     }
@@ -103,8 +104,10 @@ protected:
                 rag3db::main::Connection b(&database);
                 concurrency::applyBenchSettings(a);
                 say(a, "A",
-                    stringKey ? "CREATE NODE TABLE Doc(id STRING PRIMARY KEY, titre STRING, vec FLOAT[64]);" :
-                                "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, titre STRING, vec FLOAT[64]);");
+                    stringKey ? "CREATE NODE TABLE Doc(id STRING PRIMARY KEY, titre STRING, vec "
+                                "FLOAT[64]);" :
+                                "CREATE NODE TABLE Doc(id INT64 PRIMARY KEY, titre STRING, vec "
+                                "FLOAT[64]);");
                 // B écrit dans une autre table : le COPY de A tient Doc jusqu'à sa fin.
                 say(a, "A",
                     "CREATE NODE TABLE Other(id INT64 PRIMARY KEY, titre STRING, vec FLOAT[64]);");
@@ -149,12 +152,14 @@ protected:
                 auto countRows = [&](const char* query) -> int64_t {
                     auto result = reader.query(query);
                     return result->isSuccess() && result->hasNext() ?
-                               result->getNext()->getValue(0)->getValue<int64_t>() : -1;
+                               result->getNext()->getValue(0)->getValue<int64_t>() :
+                               -1;
                 };
                 const auto aRows = countRows("MATCH (d:Doc) RETURN count(*);");
                 const auto bRows = countRows("MATCH (d:Other) RETURN count(*);");
                 steps << "REOPEN " << (aRows == 0 && bRows == committedB ? "passed" : "refused")
-                      << " A=" << aRows << " B=" << bRows << " expected=" << committedB << std::endl;
+                      << " A=" << aRows << " B=" << bRows << " expected=" << committedB
+                      << std::endl;
             }
             _exit(0);
         }
@@ -188,7 +193,8 @@ TEST_F(CopyRollbackUnderAFullBuffer, RollsBackAndKeepsTheDatabaseOpen) {
     EXPECT_NE(steps.find("COUNT empty"), std::string::npos)
         << "[check: database-stays-open-after-the-copy-rollback] the rolled-back COPY left rows";
     EXPECT_NE(steps.find("REOPEN passed"), std::string::npos)
-        << "[check: recovery-after-rollback] reopened database lost committed rows or kept COPY rows";
+        << "[check: recovery-after-rollback] reopened database lost committed rows or kept COPY "
+           "rows";
     EXPECT_FALSE(WIFSIGNALED(status))
         << "[check: closing-a-connection-does-not-abort] the child died of signal "
         << WTERMSIG(status);
@@ -210,7 +216,8 @@ TEST_F(CopyRollbackUnderAFullBuffer, StringKeysRemainUsableAfterRollback) {
     EXPECT_NE(steps.find("COUNT empty"), std::string::npos)
         << "[check: database-stays-open-after-the-copy-rollback] the rolled-back COPY left rows";
     EXPECT_NE(steps.find("REOPEN passed"), std::string::npos)
-        << "[check: recovery-after-rollback] reopened database lost committed rows or kept COPY rows";
+        << "[check: recovery-after-rollback] reopened database lost committed rows or kept COPY "
+           "rows";
     EXPECT_FALSE(WIFSIGNALED(status))
         << "[check: closing-a-connection-does-not-abort] the child died of signal "
         << WTERMSIG(status);
