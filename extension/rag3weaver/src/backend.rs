@@ -7163,9 +7163,15 @@ mod tests {
         let du = loop {
             let n = {
                 let cat = backend.catalog.lock().unwrap();
-                let marqueur = cat.vector_storage("Scope_Chunk").unwrap().marker;
+                // La table des morceaux de la forme de cette base (version de
+                // scope : ceux de `ScopeContent`), et au moins un morceau : un
+                // compte sur une table vide passerait sans rien juger.
+                let table = crate::code::scope_chunks(&cat).unwrap().table;
+                let morceaux = cat.execute_raw(&format!("MATCH (c:`{table}`) WHERE c._text <> '' RETURN count(c)")).unwrap().rows[0][0].as_i64().unwrap_or(0);
+                assert!(morceaux > 0, "aucun morceau dans {table} : le témoin ne jugerait rien");
+                let marqueur = cat.vector_storage(&table).unwrap().marker;
                 cat.execute_raw(&format!(
-                    "MATCH (c:Scope_Chunk) WHERE c._text <> '' AND (c.`{marqueur}` IS NULL OR c.`{marqueur}` = '') RETURN count(c)"
+                    "MATCH (c:`{table}`) WHERE c._text <> '' AND (c.`{marqueur}` IS NULL OR c.`{marqueur}` = '') RETURN count(c)"
                 ))
                 .unwrap()
                 .rows[0][0]

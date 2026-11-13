@@ -1254,14 +1254,19 @@ fn read_threads() -> u64 {
             .collect();
         self.open_fts_handles_for(&names);
         let mut ecarts = Vec::new();
+        let mut vues = std::collections::HashSet::new();
         for entity in names {
             let Ok(target) = self.resolve_search_target(&entity) else { continue };
             let table = target.parent_table;
-            if self.fts_rebuild.contains(&table) {
+            if self.fts_rebuild.contains(&table) || !vues.insert(table.clone()) {
                 continue;
             }
             let Some(docs) = self.fts_handles.get(&table).map(|h| h.num_docs()) else { continue };
-            let lignes = self.count_rows_of(&entity) as u64;
+            // **Les lignes de la table qui porte l'index**, pas celles de
+            // l'entité publique : sous un `searchIndex` à contenu partagé
+            // (version de scope), deux occurrences d'un contenu font un seul
+            // document, et ce n'est pas une écriture perdue (13 novembre 2026).
+            let lignes = self.count_rows_of(&table) as u64;
             if docs == lignes {
                 continue;
             }
@@ -1295,7 +1300,8 @@ fn read_threads() -> u64 {
                 continue;
             }
             let Some(docs) = self.fts_handles.get(&target.parent_table).map(|h| h.num_docs()) else { continue };
-            comptes.push((entity.clone(), docs, self.count_rows_of(entity) as u64));
+            // Comme `check_fts_counts` : les lignes de la table de l'index.
+            comptes.push((entity.clone(), docs, self.count_rows_of(&target.parent_table) as u64));
         }
         comptes.sort();
         comptes

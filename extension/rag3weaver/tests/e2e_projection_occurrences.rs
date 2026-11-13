@@ -2,7 +2,7 @@
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
 use std::sync::{Arc, Mutex};
-use rag3weaver::code::{analyze_source, default_scope_chunking, register_code_schema};
+use rag3weaver::code::{analyze_source, default_scope_chunking, register_code_schema_sans_versions};
 use rag3weaver::code_tools::Snapshot;
 use rag3weaver::connection::DbConnection;
 use rag3weaver::embedder::HashEmbedder;
@@ -15,7 +15,10 @@ fn catalogue() -> Catalog {
         allow_mock_embedder: true, embedding_dim: 8, ..Default::default()
     });
     cat.initialize().unwrap();
-    register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+    // La forme d'avant les versions de scope : ce témoin éprouve la projection
+    // d'un morceau à plusieurs parents posés à la main (pré-lot 1a0). Sur une
+    // base à versions, le partage est natif (e2e_scope_versions).
+    register_code_schema_sans_versions(&mut cat, default_scope_chunking()).unwrap();
     cat
 }
 
