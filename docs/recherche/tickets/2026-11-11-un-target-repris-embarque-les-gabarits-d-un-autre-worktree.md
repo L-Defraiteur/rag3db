@@ -240,3 +240,12 @@ politique. Aucun run lourd. Avant correction : définir le scope exact commun
 au lanceur, extraire et tester la construction réelle avec constantes du
 driver, et résoudre /bin/sh déclaré par le shebang poste plutôt que présumer
 /bin/bash. Aucune qualification4800 acquise par les cinq témoins précédents.
+
+## Préfixe union4d38 ROUGE avant cache — diagnostic avant toute reprise
+
+[Diagnostic10](../13-11-2026/10-diagnostic-prefixe-union-garde-target.md) :
+owner a ajouté -B au lanceur, incompatible avec argv exact de son rôle.
+Refus frais avant cache/Cargo/F8, aucun juge produit. Scope terminé ROUGE1,
+restes[], bus absent/PIDabsents/poste libéré. 37preuves identiques deuxpostes,
+manifest6e1f7b6a2889cbc555fb0c62863a54fdff4203f9aa3786e41e756ca8277bf666.
+Aucun retry ni correction implicite ; sources/target/ancienslots conservés.
