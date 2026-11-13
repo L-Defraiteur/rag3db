@@ -20,16 +20,32 @@ use std::sync::atomic::AtomicBool;
 /// ([`DaemonHost::servir_les_bilans`]) les juge un par un. Un bilan qu'il faut
 /// demander n'existerait pas (c7).
 pub struct FileDesBilans {
-    envoi: std::sync::mpsc::Sender<(String, String)>,
+    /// Fermé (`None`) par l'arrêt de l'hôte : un bilan demandé ensuite ne part plus.
+    envoi: Mutex<Option<std::sync::mpsc::Sender<(String, String)>>>,
     reception: Mutex<Option<std::sync::mpsc::Receiver<(String, String)>>>,
+    /// **Le fil du juge, et son arrêt** (13 novembre 2026, ticket « le journal des runs
+    /// écrit après l'arrêt de son hôte ») : le juge tient l'hôte le temps d'un jugement,
+    /// et ses appels à la mémoire écrivaient encore leurs runs après la fin d'un témoin,
+    /// dans un dossier déjà parti (le résidu d'e2e_juge). L'arrêt de l'hôte ferme la file,
+    /// dit au juge de ne plus juger ce qui reste, et attend son fil.
+    fil: Mutex<Option<std::thread::JoinHandle<()>>>,
+    arrete: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Default for FileDesBilans {
     fn default() -> Self {
         let (envoi, reception) = std::sync::mpsc::channel();
-        Self { envoi, reception: Mutex::new(Some(reception)) }
+        Self {
+            envoi: Mutex::new(Some(envoi)),
+            reception: Mutex::new(Some(reception)),
+            fil: Mutex::new(None),
+            arrete: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
     }
 }
+
+/// Le temps qu'un arrêt de l'hôte laisse au jugement en cours.
+const ARRET_DU_JUGE: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// Ce qu'un outil du juge rend au plus au modèle.
 const BORNE: usize = 24 * 1024;
@@ -601,7 +617,9 @@ impl DaemonHost {
     pub(super) fn demander_un_bilan(&self, hosted: &Arc<Hosted>, run: &str) {
         let declare = self.with_backend(hosted, |b| b.prepared().manifest.bilans.is_some()).unwrap_or(false);
         if declare {
-            let _ = self.bilans.envoi.send((hosted.id.clone(), run.to_string()));
+            if let Some(envoi) = self.bilans.envoi.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
+                let _ = envoi.send((hosted.id.clone(), run.to_string()));
+            }
         }
     }
 
@@ -611,9 +629,13 @@ impl DaemonHost {
     pub fn servir_les_bilans(self: &Arc<Self>) {
         let Some(reception) = self.bilans.reception.lock().unwrap_or_else(|p| p.into_inner()).take() else { return };
         let hote = Arc::downgrade(self);
-        let _ = std::thread::Builder::new().name("juge".into()).spawn(move || {
+        let arrete = self.bilans.arrete.clone();
+        let lance = std::thread::Builder::new().name("juge".into()).spawn(move || {
             let mut plafonds = PlafondDuJuge::default();
             for (backend, run) in reception {
+                if arrete.load(std::sync::atomic::Ordering::SeqCst) {
+                    break;
+                }
                 let Some(h) = hote.upgrade() else { break };
                 let plafond = h.with_backend_id(&backend, |b| b.prepared().manifest.bilans.as_ref().map(|d| d.max_per_hour)).ok().flatten().unwrap_or(20);
                 if !plafonds.admettre(&backend, plafond, std::time::Instant::now()) {
@@ -637,6 +659,28 @@ impl DaemonHost {
                 }
             }
         });
+        match lance {
+            Ok(fil) => *self.bilans.fil.lock().unwrap_or_else(|p| p.into_inner()) = Some(fil),
+            Err(e) => eprintln!("[juge] le fil des bilans ne part pas : {e}"),
+        }
+    }
+
+    /// **Arrêter le juge** (à l'arrêt de l'hôte) : la file se ferme, ce qui reste n'est
+    /// plus jugé, et le jugement en cours est attendu, au plus `ARRET_DU_JUGE`. Rend une
+    /// erreur dite si le juge tient encore. Sans fil (le juge jamais servi), rien.
+    pub(super) fn arreter_le_juge(&self) -> Option<String> {
+        self.bilans.arrete.store(true, std::sync::atomic::Ordering::SeqCst);
+        drop(self.bilans.envoi.lock().unwrap_or_else(|p| p.into_inner()).take());
+        let fil = self.bilans.fil.lock().unwrap_or_else(|p| p.into_inner()).take()?;
+        let fin = std::time::Instant::now() + ARRET_DU_JUGE;
+        while !fil.is_finished() {
+            if std::time::Instant::now() > fin {
+                return Some(format!("le juge juge encore après {} s : l'hôte s'arrête sans lui", ARRET_DU_JUGE.as_secs()));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let _ = fil.join();
+        None
     }
 
     /// **Un run que le plafond laisse sans jugement** : le saut se dit au journal du

@@ -303,6 +303,10 @@ fn le_juge_se_declenche_seul_a_la_fin_d_un_tour() {
         assert!(Instant::now() < fin, "aucun bilan en 60 s : le juge ne s'est pas déclenché seul ({apports})");
         std::thread::sleep(Duration::from_millis(200));
     }
+    // Le juge servi tient l'hôte le temps d'un jugement : l'arrêter avant de lâcher le
+    // dossier, sans quoi ses appels écrivent encore dedans (13 novembre 2026).
+    let erreurs = host.shutdown();
+    assert!(erreurs.is_empty(), "l'arrêt de l'hôte : {erreurs:?}");
 }
 
 /// Un faux chat qui croit une description d'outil qui ment : `read_file` dit
