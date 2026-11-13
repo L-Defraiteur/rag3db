@@ -99,12 +99,12 @@ README le dit : les gabarits de code de production n'activent pas l'option. C'es
   un cache global de textes.
 - **Les signaux** :
   - dense et BM25 sont prouvés par le test ;
-  - **le creux est refusé, en le disant** (recherche, 13 novembre). Le profil de production ne
-    le déclare pas (`Scope` prend HYBRID), aucun manifeste réel ne le demande (seul le README du
-    gabarit décrit `index_signals`), et 1b le refuse déjà. Le refus est générique : une entité de
-    contenu (`identity.mode = content`) qui déclare le creux est refusée à l'enregistrement, avant
-    toute table, avec un message qui nomme l'entité et le signal. Une base d'avant garde son creux
-    si son manifeste le demandait.
+  - **le creux** : le schéma de code ne le déclare pas (`Scope` prend HYBRID, et `ScopeContent` ses
+    signaux), et aucun manifeste réel ne le demande. Le mécanisme générique, lui, prend le creux sur
+    une entité de contenu, et c'est témoigné : `e2e_entites_derivees` éprouve la projection creuse
+    jusqu'au masque avant le top-k. Un refus générique du creux, codé d'abord sur le conseil de
+    recherche, a été retiré le 13 novembre au soir : il cassait ces témoins. Ce que la décision du 12
+    refuse, c'est le **transfert** du creux par la migration 1b, pas le creux sur une version.
   - `workspace.index_signals` sur `Scope` monte, sur une base à versions, sur `ScopeContent` :
     c'est lui qui porte les signaux.
 - **La relation `ScopeContent_DERIVED_FROM` est masquée dans les outils de graphe**, comme
@@ -187,8 +187,8 @@ et le ticket parent (`docs/arbre-principal/tickets/2026-11-12-migrer-les-ancres-
    mesures) lisent la table de la forme de leur base, et exigent au moins un morceau avant de
    juger : aucun ne passe à vide. L'état des index denses retirés (`index_vectoriels_retires`)
    nomme `Scope`, l'entité que l'utilisateur voit, pas `ScopeContent`.
-8. **Le creux refusé** : une entité de contenu qui déclare le creux est refusée, et aucune table
-   `ScopeContent_Chunk` n'existe après le refus.
+8. **Le creux** : pas de refus générique ; les témoins de `e2e_entites_derivees` sur le creux d'une
+   version restent verts.
 
 Lib `207701bb2`, 32 Gio, un target neuf. Aucune base de Lucie n'est lue ni ouverte.
 
