@@ -474,3 +474,23 @@ AVANT mutation, confirmer garde propriétaire/quiescence, dry-run puis seul
 cargo clean -p rag3weaver avec manifest et target ABSOLUS, mesurer et
 conserver les preuves. Rien du magasin29, des modèles/services ou d'autrui
 n'est visé. Les anciens rouges et binaires345 restent conservés.
+
+### Combinaison navigation puis pile Pub → ED → Embarquement
+
+Sur f01acd980 (master8f604 + lot), validation-qdm6acnb VERT : F5/5,
+lib2258 passés/65 ignorés, NAV40/40 sans ignoré. Plafond1200 s et échéance
+4q conservés. Rejeu fournisseur combiné validation-uu18g72q VERT : deux
+tests/0 ignoré et capture continue de deux privés avec résidence/gfx PCI04.
+Les trois courses de lecture de processus quittant la portée restent nommées
+inconnues dans le résumé. Spans combiné en cours sous300 s/min ancien4q.
+
+Consigne d'intégration reçue : Pub puis ED puis ce lot. Préparer notre union
+sur candidats Pub/ED publiés figés, sans attendre leurs atterrissages. Demander
+SHA/tree/propriétés des fichiers communs ; préserver nos seules lignes de
+constructeur dans backend.rs et les BAC d'ED. Une vraie union Rust impose sa
+qualification et les quatre e2e_tx de liaison catalogue à coordonner avec Arbre.
+Pas de nouveau mécanisme ; pas de rejeu GPU107/BGE/278 pour rebase seule si
+constructeurs, consommateur, fournisseur et observateur sont inchangés et
+preuves qualifiées. Contrôler leurs diffs/SHA et conserver les résultats déjà
+obtenus, sans les étendre à du code modifié. Parent ticket toujours ouvert pour
+les limites distante/éviction/baux distribués/crash.
