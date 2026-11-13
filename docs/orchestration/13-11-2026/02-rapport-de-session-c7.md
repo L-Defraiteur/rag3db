@@ -398,3 +398,9 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   touchée, refus net si ssh échoue, l'identité par tunnel ou port annoncé, la commande pour voir et arrêter
   ces unités), puis rouge d'abord et le vrai jeu avec granite-107m à luciepc. Le second essai à blanc de 96
   tourne (premier document : 3 fiches au lieu de 6, nommées par sujet).
+- **20 h 28, recherche est verte pour lucivy 4.3.5** (lucivy-core, ld-lucivy, sparse-vector ; témoin
+  `mots_neufs_a_travers_une_fusion` rouge sous 4.3.3 et vert sous 4.3.5 ; lib entière 2339/2339 dont
+  physical_index 11/11 ; navigateur 42/42 ; le ticket des mots perdus fermé avec les 0 de hotfixs ; un
+  correctif de `check_tickets.py --lot`, « ouvert et fermé »). « À toi » donné, la file étant vide. Le binaire
+  posé ce soir garde lucivy 4.3.3 ; la prochaine pose portera 4.3.5. embarquement écrit l'activation distante
+  selon ses règles (à relire par Lucie, 8e7e26e47).
