@@ -1,0 +1,11 @@
+# Candidat neuf d'intégration2a
+
+Branche cx-arbre-couches-integration-r2, base masterfetchfrais 940ad65bf57461b714ff2671266bf84cb74f6966. Sourceappqualifiée236e1e9f46f7e73eda21ac8cfa765f45a29f4595 conservée, preuve502d4dfa6b57dbba519a376ef8d113699d851478 et pilote64abd inchangés. Aucun nouveau runtime ni requalification d'un nouveauSHA : intégrationdocumentaire sur produit identique.
+
+Auditjoint : 6781entrées horsdocs mode+OID strictement identiques APP236 (gitlinks/locks/tests/templates/C++ compris). 7929chemins univers protégé master intacts horspérimètreprivé explicite, absenceincluse ; zéroécart. Entrantsdepuisbase4e exclusivementdocumentaires : docs/everything-declarative/13-11-2026/01-rapport-de-session.md, docs/everything-declarative/13-11-2026/03-knowledge-dump.md, docs/everything-declarative/13-11-2026/06-integration-read-scope.md, docs/tickets/closed/2026-11-13-read-scope-masque-les-erreurs-de-lecture-des-worktrees.md. Range-diff23patches '=' ; fermetureseulticket2a+liensparent ajoutés après ce range.
+
+Conflit de cherry-pick limité au ticket2a append-only lorsréunionpreuves et pilotes : deuxchronologiesconservées ; aucunproduitretouché. Nouvellebranche AVANTrebase940, ancienneR1 et sources/pilotes/proofsfigésconservés. Troisfichiersproduit2a byte-identiques69 par APP236 ; runtimequalifiéCPU/libunion composite reste rapport25, anciensrougesrestentrouges. Aucunbesoinrejeu établi par entrantsMDseuls.
+
+Ticket2a déplacé docs/tickets/closed avec Étatcorrigé/référencescode et qualification ; parentancres explicitementOUVERT, liensréparés. Contrat03 etparent conservent clarificationLucie : vueautomatiquecontexte/provenanceparoccurrence, historiqueindexé sansingest sinonmatérialisationciblée, futurscheckpointslogiquesCOMPLETS puisdeltas, dépendancesparents noncollectables si encoreutilisées, RAMàlademande distincterétention. Aucuneimplémentation3a/3b ni coûtconstantni vueindexréelle annoncés.
+
+Ticketchecker407en-têtesVERT, diffcheckVERT. READMEinchangé : primitivepure documentéecontrat/ticket, aucunoutil/vuepersistéeuser nouvelle àannoncer. RevueC7/ED/Recherche/Mémoire/Archi puis éventuel ÀTOI EXACT/postepush/dernierfetch/diffentrants/ifVERT+3contrôles ; aucunGOmaster ni retrait par ce candidat. Toutentrantproduit nouveau imposeSTOP/revue ; aucunrejeuautomatique.

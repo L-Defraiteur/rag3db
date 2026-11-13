@@ -1,15 +1,17 @@
 # Résoudre des couches épinglées sans confondre les occurrences
 
-- **État** : ouvert ; résolveur pur2a et modulepublication qualifiés CPU sur69dc/piloteabaf, adaptateur natif compilé seulement ; revue/intégration en attente.
+- **État** : corrigé — résolveur pur2a code69dc3fc25910f3e834652264edf6c71cca862ce0 ; qualification CPU2a puis union composite APP236e1e9f46f7e73eda21ac8cfa765f45a29f4595, preuves502d4dfa6b57dbba519a376ef8d113699d851478 ; clôture du seul lot2a autorisée C7, parent reste ouvert.
 - **Famille** : produit.
-- **Gravité** : capacité manquante ; pas encore de résolution de couches épinglées.
+- **Gravité** : capacité manquante corrigée pour la résolution pure2a ; branchement aux vues/outils et persistance hors portée.
 - **Atteignable en service** : non pour la nouvelle primitive ; les outils lisent la vue L6 existante sans pile de couches.
 - **Touche rag3weaver** : oui, résolution pure de publications/couches ; aucun stockage ou chemin de recherche modifié dans ce premier diff.
 - **Pour** : arbre-principal ; revues C7/ED/Recherche/Mémoire.
 - **Signalé par** : suite cohérente pyramide demandée C7 après landing b0a5177c0.
 
-Parent [ancres](2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md).
-Contrat [lots2a/2b](../11-11-2026/03-contrats-et-lots-des-vues.md).
+Parent [ancres](../../arbre-principal/tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md).
+Contrat [lots2a/2b](../../arbre-principal/11-11-2026/03-contrats-et-lots-des-vues.md).
+
+Les sections historiques ci-dessous conservent leurs états et autorisations à leur date ; le statut courant est celui de la clôture ci-dessus.
 
 Avant diff produit : déclarer une pile immuable de révisions de couches, chaque
 révision liée à origine/publicationP existantes et parent exact. Résolution
@@ -56,7 +58,7 @@ ni compilation autorisées avant décision/recette/GOexact C7 et disponibilité.
 
 ## Pilote concret préparé après arbitrage3000 C7
 
-Application69dc figée, contrôle en WT/branche séparés ; [recette11](../13-11-2026/11-recette-qualification-couches-2a.md).
+Application69dc figée, contrôle en WT/branche séparés ; [recette11](../../arbre-principal/13-11-2026/11-recette-qualification-couches-2a.md).
 Build1800→inventaires4exact0ignored/ELFJSONcopiéledgerpublié→4exact60
 chacun→publication120→checknatif900 dans même échéance3000 après poste
 réel. Attestation maps/profil déterministe au main du premier exact via gdb,
@@ -102,7 +104,7 @@ faire relire avant GO.
 GO C7 exact APP69dc/piloteabaf, scope/finaliseurVERT214.675462s/3000.
 4exacts1/0/0 puis modulepublication10/0/0(4déjàjugés) :10fonctionsdistinctes,
 14invocationsbrutes ; check adaptateurnatif rc0, COMPILATION seulement.
-67fichiers SHA identiques deuxpostes. [Rapport12](../13-11-2026/12-preuves-cpu-couches-2a.md)
+67fichiers SHA identiques deuxpostes. [Rapport12](../../arbre-principal/13-11-2026/12-preuves-cpu-couches-2a.md)
 avec ledger/ELF/caps/memory/maps et limites. Pas de persistance/L6/top-k/outils
 qualifiés, aucune DB/service/modèle ouvert. Ticket reste OUVERT pour revue
 et décision d’intégration/qualification complémentaire, pasGOmaster/retrait.
@@ -111,7 +113,7 @@ et décision d’intégration/qualification complémentaire, pasGOmaster/retrait
 ## Préparation union après ED — aucun run autorisé
 
 C7 juge preuves72db suffisantes dans portée2a, attend landingED avant notre
-intégration. [Plan13](../13-11-2026/13-plan-union-couches-apres-ed.md) :
+intégration. [Plan13](../../arbre-principal/13-11-2026/13-plan-union-couches-apres-ed.md) :
 branche de rebase NEUVE depuis72db après fetchED, audit range-diff+identité
 fichierslayers69 et préservation master. Source entrante Rust justifie
 qualification union ciblée4exacts/publication10/checkadaptateur avec notre
@@ -148,7 +150,7 @@ pour préparer le pilote seulement ; aucunGO exécution ni preuve rétroactive.
 ## Pilote union concret pour revue — pas encore joué
 
 Applicationgel236e1e9f46f7e73eda21ac8cfa765f45a29f4595 surbase940MD,
-contrôle séparé cx-arbre-couches-union-pilote-r1. [Recette15](../13-11-2026/15-recette-union-couches-f8-large.md)
+contrôle séparé cx-arbre-couches-union-pilote-r1. [Recette15](../../arbre-principal/13-11-2026/15-recette-union-couches-f8-large.md)
 4800aprèsposte ; F8canonique→2ELFsJSONlarge/CPU+ledgercopiépublié→libentière
 large→4exactCPU/publication10. Adaptateurminimal déjà F8jeu8 --checktests,
 pascheckredondant. SDK29profil/maps observés surVRAIprocessusliblarge ;
@@ -202,7 +204,7 @@ GOcouple236e/47861 a exécutéverifier+reprisecommune12FP→0 VERTS, puis
 assertionmuette d’observationprofil au premierCargo F8 ; tickets/étatVERTS
 mais aucun jeuF8 vert, aucun juge union. ScopeROUGE2.190969s, reçuTERMINE,
 busabsent/restes[]/scanlotvide,8UNKNOWNbaseline.37fichiersSHAidentiques
-deuxpostes, [rapport16](../13-11-2026/16-arret-f8-et-sonde-cargo.md).
+deuxpostes, [rapport16](../../arbre-principal/13-11-2026/16-arret-f8-et-sonde-cargo.md).
 Valeursfautives noncapturées : LD/toolchain est hypothèse à observer, pas
 cause démontrée. Prépa archiveprofils/diffavantassert sansrelaxercontrat.
 Sonde Cargo--version seulement cap20/scope<=60 bornée à échéanceORIGINALE
@@ -212,24 +214,24 @@ Pas de reprise-cach69 répétée : gardeuniondéjàrepriseprouvée.
 
 ## Sonde seule et reprise proposée
 
-Voir [rapport17](../13-11-2026/17-sonde-cargo-et-reprise-bornee.md) : observation Cargo seule validée, rougeF8 inchangé ; correctif pilote distinct, cacheunion repris sans réinvalidation, même échéance originale. Reprise NON lancée, décision GO exact à C7.
+Voir [rapport17](../../arbre-principal/13-11-2026/17-sonde-cargo-et-reprise-bornee.md) : observation Cargo seule validée, rougeF8 inchangé ; correctif pilote distinct, cacheunion repris sans réinvalidation, même échéance originale. Reprise NON lancée, décision GO exact à C7.
 
 ## Qualification union v2 arrêtée
 
-Voir [rapport19](../13-11-2026/19-arret-union-v2-profil-principal.md) et ledger18 : F8/compilations/inventaires acquis ; premierrouge profilprincipal natif, lib nonqualifiée/CPUexacts et publication nonjoués. 158preuves SHA deuxpostes, aucune reprise. DiagnosticRO ED demandé, ticket reste ouvert.
+Voir [rapport19](../../arbre-principal/13-11-2026/19-arret-union-v2-profil-principal.md) et ledger18 : F8/compilations/inventaires acquis ; premierrouge profilprincipal natif, lib nonqualifiée/CPUexacts et publication nonjoués. 158preuves SHA deuxpostes, aucune reprise. DiagnosticRO ED demandé, ticket reste ouvert.
 
 ## Arrêt v3 juges de délai
 
-[Rapport22](../13-11-2026/22-arret-union-v3-juges-delai.md) : capturestableSDK conforme, premierFAILEDlib STOP, aucunCPUexact/pub. 1774preuvesSHAidentiquesdeuxpostes, causesnonétablies/diagRO ED demandé, aucunretry. Ticketouvert.
+[Rapport22](../../arbre-principal/13-11-2026/22-arret-union-v3-juges-delai.md) : capturestableSDK conforme, premierFAILEDlib STOP, aucunCPUexact/pub. 1774preuvesSHAidentiquesdeuxpostes, causesnonétablies/diagRO ED demandé, aucunretry. Ticketouvert.
 
 ## Qualification union composite verte soumise
 
-[Rapport25](../13-11-2026/25-preuves-union-composite-verte.md) : F8/builds/inventairesv2 acquis +v4lib2307/0/66 etCPU4exacts/pub10, vraiswaitstatus/SDKstabledétaché/scopefinalverts dansbudgetoriginal4068.565s<4800. 449preuvesv4SHAdeuxpostes0écart ; anciensrougesv1/v2/v3conservés. Revue/C7décisionsuffisanceetintégrationattendues ; aucunGOmaster/retrait, ticketresteouvert.
+[Rapport25](../../arbre-principal/13-11-2026/25-preuves-union-composite-verte.md) : F8/builds/inventairesv2 acquis +v4lib2307/0/66 etCPU4exacts/pub10, vraiswaitstatus/SDKstabledétaché/scopefinalverts dansbudgetoriginal4068.565s<4800. 449preuvesv4SHAdeuxpostes0écart ; anciensrougesv1/v2/v3conservés. Revue/C7décisionsuffisanceetintégrationattendues ; aucunGOmaster/retrait, ticketresteouvert.
 
 ## Préparation capture stable après rouge v2
 
-ArbitrageC7 autorise réemploi F8/builds/ledger, aucun Cargo/rebuild/cache à rejouer. [Recette20](../13-11-2026/20-recette-union-capture-stable.md), pilote distinct : capture GDB mêmeinferior helper→ELF/exec puismainSDKchargé, cleanup sans qualification/firstredimmuable. Runtime manquant seulement ; NONLANCÉ, RO/GOexact encore requis, même échéanceoriginale.
+ArbitrageC7 autorise réemploi F8/builds/ledger, aucun Cargo/rebuild/cache à rejouer. [Recette20](../../arbre-principal/13-11-2026/20-recette-union-capture-stable.md), pilote distinct : capture GDB mêmeinferior helper→ELF/exec puismainSDKchargé, cleanup sans qualification/firstredimmuable. Runtime manquant seulement ; NONLANCÉ, RO/GOexact encore requis, même échéanceoriginale.
 
 ## Préparation détachement avant les juges
 
-[Recette23](../13-11-2026/23-recette-union-detache-avant-juges.md) : mêmecaptureSDKstricte, superviseurfork/waitpidreel puis GDBdetachàmainavantjuges, vrai exitcode natif requis. Ancienrougeconservé, aucuneextensiondeadline ni timeout. NONLANCÉ, RO/GOexact requis.
+[Recette23](../../arbre-principal/13-11-2026/23-recette-union-detache-avant-juges.md) : mêmecaptureSDKstricte, superviseurfork/waitpidreel puis GDBdetachàmainavantjuges, vrai exitcode natif requis. Ancienrougeconservé, aucuneextensiondeadline ni timeout. NONLANCÉ, RO/GOexact requis.
