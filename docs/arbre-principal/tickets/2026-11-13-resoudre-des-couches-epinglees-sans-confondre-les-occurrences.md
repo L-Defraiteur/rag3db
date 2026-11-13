@@ -221,3 +221,7 @@ Voir [rapport19](../13-11-2026/19-arret-union-v2-profil-principal.md) et ledger1
 ## Arrêt v3 juges de délai
 
 [Rapport22](../13-11-2026/22-arret-union-v3-juges-delai.md) : capturestableSDK conforme, premierFAILEDlib STOP, aucunCPUexact/pub. 1774preuvesSHAidentiquesdeuxpostes, causesnonétablies/diagRO ED demandé, aucunretry. Ticketouvert.
+
+## Qualification union composite verte soumise
+
+[Rapport25](../13-11-2026/25-preuves-union-composite-verte.md) : F8/builds/inventairesv2 acquis +v4lib2307/0/66 etCPU4exacts/pub10, vraiswaitstatus/SDKstabledétaché/scopefinalverts dansbudgetoriginal4068.565s<4800. 449preuvesv4SHAdeuxpostes0écart ; anciensrougesv1/v2/v3conservés. Revue/C7décisionsuffisanceetintégrationattendues ; aucunGOmaster/retrait, ticketresteouvert.
