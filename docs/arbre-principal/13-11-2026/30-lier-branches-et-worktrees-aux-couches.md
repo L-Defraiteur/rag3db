@@ -1,7 +1,7 @@
 # Lier les branches et les worktrees aux couches (le pas des vues après 1a et 1b)
 
 13 novembre 2026, arbre principal, à la demande de c7. Page de conception : aucun code avant le mot de
-Lucie. À relire par ED et recherche. Elle s'appuie sur la conception du 8 novembre
+Lucie. Relue par recherche le 13 novembre (ses points sont reportés et attribués) ; ED à venir. Elle s'appuie sur la conception du 8 novembre
 (`extension/rag3weaver/docs/08-novembre-2026-arbre/01-conception-des-vues-marche-1.md`, §§ 2 à 5),
 sur le résolveur de couches 2a (`src/dataflow/migrations/publication/layers.rs`) et sur la décision
 de Lucie du 13 novembre : les vues se bâtissent sur l'index de code réel, sans second index.
@@ -69,11 +69,40 @@ worktree et un commit deviennent des couches et des générations.
 - **Une version ancienne se demande explicitement** : `view: <branche>@<commit>`. Si ce commit a une
   génération, elle se lit sans rien indexer. Sinon, on matérialise ce seul état, sans indexer les
   commits intermédiaires.
+- **Le coût d'une version ancienne** (recherche, relecture du 13 novembre) :
+  - Avec 1a, ce n'est pas un index entier. Un vieux commit retombe surtout sur des versions déjà
+    embarquées ; seules les versions jamais vues coûtent du dense. L'analyse se fait en delta contre
+    l'ancêtre le plus proche qui a une génération, par `git show`, sans checkout.
+  - **Le texte d'abord** : la réponse sert le plein texte tout de suite, la dette dense se paie hors
+    du verrou, et la réponse le dit (« dense partiel : N versions en cours »). Une lecture n'attend
+    jamais l'embarqueur.
+  - **Une seule matérialisation par (couche, commit)**, sous un verrou par génération : deux lectures
+    simultanées se partagent le travail.
+  - **Ces générations de lecture sont jetables**, distinctes de celles qu'un commit publie, et
+    évincées en premier (un cas de plus pour la question 5).
+- **Lire une génération jusqu'au bout pendant qu'un commit publie la suivante** (recherche) :
+  l'épinglage L6 ne suffit pas, car lucivy, et peut-être l'index dense, vivent hors de la MVCC de
+  rag3db. L'instantané composé reste petit :
+  1. un seul searcher lucivy pour toute la lecture, pris au début, jamais rechargé au milieu ;
+  2. chaque résultat, plein texte ou dense, se résout par l'instantané épinglé : de la version à
+     l'occurrence visible dans la génération lue. Un résultat d'une version neuve n'y a pas
+     d'occurrence et tombe ;
+  3. aucun effacement physique d'une version qu'une lecture peut voir : le ramasse-miettes (M5)
+     attend les lectures épinglées, sous un bail ;
+  4. le masque avant le top-k (2b-B), ou un sur-tirage, faute de quoi le rappel baisse en silence.
+  - À vérifier avec le cœur avant de l'écrire comme acquis : l'index HNSW suit-il l'instantané de la
+    transaction de lecture ? À défaut, le point 2 s'applique aussi au dense.
 - **Les trois lunettes de l'IDE** (« voir en tant que… ») :
   - **worktree** : la branche plus la couche de travail, ce que l'agent voit ;
   - **branche** : la dernière génération publiée de la branche, sans le non-commité ;
   - **pyramide** : la même vue, chaque scope marqué de sa couche (de la vue, de la parente, de
     l'ancre). On remonte la pile scope par scope, comme Lucie l'a décrite le 8 novembre.
+- **Deux ajouts de recherche** :
+  - la lunette worktree marque le non-commité à part, puisqu'il n'a pas de génération, et dit ce
+    qu'il n'a pas encore : une édition pas encore embarquée, trouvable par mots seulement (la dette,
+    montrée scope par scope) ;
+  - la pyramide montre, à la demande, ce qu'un tombstone masque (le scope de la parente ou de
+    l'ancre retiré par la branche). Sinon, « pourquoi je ne vois plus `f` » n'a pas de réponse.
 - **La provenance** reste à la demande pour un agent (`provenance: true`), sans coût sinon. L'IDE la
   montre toujours.
 
@@ -110,4 +139,6 @@ worktree et un commit deviennent des couches et des générations.
   jusqu'au bout.
 - Une édition non commitée se voit dans la vue du worktree, pas dans celle de la branche.
 - La fusion fait descendre les versions sans réembarquement et ferme la couche.
+- **Le témoin cruel** (recherche) : une génération se publie pendant une lecture tenue, dans les trois
+  signaux à la fois, et aucune réponse ne mélange deux générations.
 - `view: <branche>@<commit>` d'un commit jamais indexé matérialise ce seul état.
