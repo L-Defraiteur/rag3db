@@ -111,3 +111,15 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   correction ; sept tickets (b51a0287f) ; archi prend la sûreté en lot court devant la jauge. **Cœur** :
   rouge posé pour l'annulation sous pool plein (le témoin de Codex rougit sur master, son correctif
   0511dece7 repris en aab8ad0ba, suites en cours).
+- **16 h 29, à lire par Lucie : les couches de Codex face aux vues** (ED, 3b4a59872,
+  `docs/everything-declarative/13-11-2026/01-les-couches-de-codex-face-aux-vues.md`). En une phrase : deux
+  briques de bibliothèque testées, qu'aucun chemin réel n'appelle. Converge avec la conception du 8 :
+  la pyramide (la plus proche gagne, les tombstones masquent), les générations épinglées, la provenance
+  par occurrence, le refus d'une vue ambiguë. Diverge : une couche est un nom libre plus un uuid, ni une
+  branche ni un worktree ; l'identité n'est pas le contenu (ScopeVersion, lot 1a, non livré : l'économie
+  d'embarquement n'existe pas) ; le raccord ne connaît qu'un index neuf en BM25 seul, l'index de code
+  réel exclu par construction ; pas de couche de travail. Pour qu'une vue soit interrogeable : les cinq
+  prérequis du 2b de Codex (chargeur durable, liaison occurrence → stockage, instantané composé, masque
+  avant le top-k, paramètre `view` dans les outils), plus 1a/1b et la liaison branche/worktree → couche.
+  **Question pour Lucie** : l'index de code réel adopte-t-il le raccord physique (aujourd'hui interdit), ou
+  le 2b reste-t-il sur un index neuf ? Sans l'un ou l'autre, aucune de ses bases n'aura de vue.
