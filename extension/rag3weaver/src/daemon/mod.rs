@@ -250,19 +250,28 @@ fn servir_serveur(
 ) -> Result<(), DaemonError> {
     let ecoute = Arc::new(ecoute);
 
-    let mut identite = service.identite();
-    if let Some(o) = identite.as_object_mut() {
-        o.insert("service".into(), serde_json::json!(service.nom()));
-        // **Quel binaire répond.** Un démon survit à celui qui l'a lancé —
-        // c'est son rôle — donc il survit aussi aux reconstructions : le
-        // 6 septembre 2026, un démon de la veille a servi une journée entière
-        // avec un code que plus personne n'avait, et les mesures avec. Le
-        // client compare cette empreinte à celle de son propre binaire.
-        o.insert("executable".into(), serde_json::json!(mon_empreinte()));
-        // L'adresse réellement liée : celle qu'un port nul a fait choisir.
-        o.insert("adresse".into(), serde_json::json!(adresse));
-    }
-    let identite = Arc::new(identite.to_string());
+    // **Quel binaire répond.** Un démon survit à celui qui l'a lancé —
+    // c'est son rôle — donc il survit aussi aux reconstructions : le
+    // 6 septembre 2026, un démon de la veille a servi une journée entière
+    // avec un code que plus personne n'avait, et les mesures avec. Le
+    // client compare cette empreinte à celle de son propre binaire.
+    let executable = mon_empreinte();
+    let adresse_liee = adresse.to_string();
+    // L'identité se recalcule à chaque `/sante` : elle porte l'usage du
+    // moment (baux, requêtes en cours), pas celui du démarrage.
+    let identite: Arc<dyn Fn() -> String + Send + Sync> = {
+        let service = service.clone();
+        Arc::new(move || {
+            let mut identite = service.identite();
+            if let Some(o) = identite.as_object_mut() {
+                o.insert("service".into(), serde_json::json!(service.nom()));
+                o.insert("executable".into(), serde_json::json!(executable));
+                // L'adresse réellement liée : celle qu'un port nul a fait choisir.
+                o.insert("adresse".into(), serde_json::json!(adresse_liee));
+            }
+            identite.to_string()
+        })
+    };
 
     let mut poignees = Vec::new();
     for i in 0..fils.max(1) {
@@ -277,7 +286,7 @@ fn servir_serveur(
                         let methode = req.method().as_str().to_string();
                         let route = chemin(req.url());
                         let (statut, corps) = if methode == "GET" && route == SANTE {
-                            (200, identite.as_str().to_string())
+                            (200, identite())
                         } else if methode == "POST" && route == QUITTER {
                             // Un démon périmé se remplace : on répond, puis on
                             // s'en va. Jamais quand il est exposé hors de la
