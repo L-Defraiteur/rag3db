@@ -258,7 +258,7 @@ pub struct Catalog {
     // fait que personne n'appelle le store pendant le drop — une garantie
     // qu'on ne veut pas devoir supposer.
     embedder: Option<Arc<dyn Embedder>>,
-    publication_failure: Option<String>,
+    publication_failure: Arc<crate::connection::ConnectionLifecycle>,
     sparse_embedder: Option<Arc<dyn SparseEmbedder>>,
     /// Cross-encoder optionnel (doc 29, chantier 3) — `SearchOptions.rerank`.
     reranker: Option<Arc<dyn crate::reranker::Reranker>>,
@@ -701,7 +701,9 @@ fn read_threads() -> u64 {
         embedder: Option<Arc<dyn Embedder>>,
         config: CatalogConfig,
     ) -> Self {
-        let conn: Arc<dyn DbConnection> = Arc::from(conn);
+        let publication_failure = Arc::new(crate::connection::ConnectionLifecycle::default());
+        let inner: Arc<dyn DbConnection> = Arc::from(conn);
+        let conn: Arc<dyn DbConnection> = Arc::new(crate::connection::RevocableConnection::new(inner, publication_failure.clone()));
         let read_conn = conn.read_connection(Self::read_threads());
         let read_pool = crate::read_pool::ReadPool::new(conn.clone(), Self::read_threads());
         Self {
@@ -711,7 +713,7 @@ fn read_threads() -> u64 {
             read_pool,
             conn,
             embedder,
-            publication_failure: None,
+            publication_failure,
             sparse_embedder: None,
             reranker: None,
             ocr: None,
@@ -988,7 +990,7 @@ fn read_threads() -> u64 {
     /// Set the sync database connection for BlobStore operations.
     /// Must be called before `initialize()` for BlobStore to work.
     pub fn set_sync_connection(&mut self, conn: Arc<dyn SyncDbConnection>) {
-        self.sync_conn = Some(conn);
+        self.sync_conn = Some(Arc::new(crate::connection::RevocableConnection::new(conn, self.publication_failure.clone())));
     }
 
     /// Set the base directory for sparse/FTS mmap caches.
@@ -3274,6 +3276,7 @@ fn read_threads() -> u64 {
 
     /// **Les modèles que cet index sait servir**, tels qu'ils se sont déclarés.
     pub fn registered_embedding_models(&self) -> Result<Vec<crate::embedding_storage::EmbeddingModelEntry>, CatalogError> {
+        self.check_reopen()?;
         let stmt = self.dialect.load_meta_by_prefix("prefix");
         let result = self
             .conn
@@ -3336,6 +3339,7 @@ fn read_threads() -> u64 {
     /// est refusé en nommant ceux qui sont là, plutôt que de chercher dans
     /// une colonne qui n'existe pas et de rendre zéro.
     pub fn ensure_embedding_model(&self) -> Result<(), CatalogError> {
+        self.check_reopen()?;
         let Some(current) = self.current_embedding_entry() else { return Ok(()) };
         let slug = current.slug();
         crate::embedding_storage::validate_slug(&slug).map_err(CatalogError::EmbeddingModelRejected)?;
@@ -3513,6 +3517,7 @@ fn read_threads() -> u64 {
 
     /// Persist a key-value pair to `_catalog_meta`.
     pub(crate) fn persist_meta_key(&self, key: &str, value: &str) -> Result<(), CatalogError> {
+        self.check_reopen()?;
         metadata::write_value(self.conn.as_ref(), self.dialect.as_ref(), key, value)
             .map_err(|e| CatalogError::DbError(e.to_string()))
     }
@@ -5099,6 +5104,7 @@ fn read_threads() -> u64 {
     /// avec, les recherches y sont limitées par défaut. Les nœuds `_Org` /
     /// `_Project` sont créés s'ils manquent.
     pub fn set_scope(&mut self, scope: crate::scope::Scope) -> Result<(), CatalogError> {
+        self.check_reopen()?;
         scope.validate().map_err(CatalogError::SchemaError)?;
         if scope != self.scope && self.in_transaction {
             return Err(CatalogError::SchemaError("changement de cellule interdit dans une transaction ouverte".into()));
@@ -6784,6 +6790,7 @@ fn read_threads() -> u64 {
 
     /// Refuse un verbe d'écriture sur un catalogue en lecture — en le nommant.
     fn check_ecriture(&self, verbe: &str) -> Result<(), CatalogError> {
+        self.check_reopen()?;
         if self.lecture_seule {
             return Err(CatalogError::LectureSeule(verbe.to_string()));
         }
@@ -8350,9 +8357,7 @@ fn read_threads() -> u64 {
         self.check_initialized()?;
         let tampon = self.fts_tampon.take();
         if let Err(error) = self.conn.commit() {
-            self.publication_failure = Some("COMMIT du lot : issue inconnue, réouverture requise".into());
-            self.conn.poison("COMMIT du lot : issue inconnue, réouverture requise");
-            self.conn.close_without_checkpoint();
+            self.invalidate_publication("COMMIT du lot : issue inconnue, réouverture requise");
             let rollback = self.conn.rollback();
             self.set_in_transaction(false);
             self.vider_les_caches_du_lot();
@@ -8372,9 +8377,7 @@ fn read_threads() -> u64 {
         })();
         if let Err(error) = materialized {
             self.jeter_les_evenements_retenus();
-            self.publication_failure = Some("lignes validées, plein texte non qualifié : réouverture requise".into());
-            self.conn.poison("lignes validées, plein texte non qualifié : réouverture requise");
-            self.conn.close_without_checkpoint();
+            self.invalidate_publication("lignes validées, plein texte non qualifié : réouverture requise");
             return Err(CatalogError::MustReopen(format!(
                 "lignes validées, plein texte non qualifié : {error}"
             )));
@@ -10695,9 +10698,9 @@ impl Catalog {
         }
     }
 
-    #[cfg(feature = "rag3db-native")]
-    pub(crate) fn invalidate_physical_publication(&mut self, reason: &str) {
-        self.publication_failure = Some(reason.into());
+    pub(crate) fn invalidate_publication(&mut self, reason: &str) {
+        self.publication_failure.invalidate(reason);
+        if let Some(buffer) = &self.blob_buffer { buffer.invalidate_persistence(reason); }
         self.jeter_les_evenements_retenus();
         self.conn.poison(reason);
         self.conn.close_without_checkpoint();
@@ -10712,7 +10715,7 @@ impl Catalog {
     /// C'est la question qu'un hôte pose après toute erreur : la réponse ne
     /// dépend pas du chemin par lequel l'erreur est remontée.
     pub fn must_reopen(&self) -> Option<String> {
-        let reason = self.publication_failure.clone()
+        let reason = self.publication_failure.reason()
             .or_else(|| self.conn.must_reopen())
             .or_else(|| self.sync_conn.as_ref().and_then(|c| c.must_reopen()))?;
         let pending = self.pending.total_count() + self.parked_pending.values().map(PendingWork::total_count).sum::<usize>();
@@ -11492,18 +11495,23 @@ mod tests {
                 _ => Ok(QueryResult::default()),
             }
         });
+        assert!(conn.must_reopen().is_none(), "counterexample backend has no poison support");
         let mut catalog = Catalog::without_embedding_model(Box::new(conn), CatalogConfig::default());
+        let escaped = catalog.conn_arc();
         catalog.initialized = true;
         catalog.set_in_transaction(true);
         let mut events = catalog.subscribe();
         catalog.publier(CatalogEvent::entites_changees("Document", vec!["one".into()], "ingested"));
         let error = catalog.commit_lot().unwrap_err().to_string();
         assert!(error.contains("lost commit acknowledgement") && error.contains("rollback connection lost"), "{error}");
-        assert!(catalog.conn.must_reopen().is_none(), "counterexample backend has no poison support");
+        assert!(catalog.conn.must_reopen().is_some(), "the catalog family owns revocation");
         assert!(catalog.must_reopen().is_some());
         assert!(catalog.check_initialized().is_err());
         let before = calls.lock().unwrap().len();
         assert!(catalog.execute_raw("RETURN 1").is_err());
+        assert!(escaped.execute("RETURN 1").is_err());
+        assert!(catalog.set_scope(crate::scope::Scope::new("other", "cell")).is_err());
+        assert!(catalog.persist_meta_key("foreign", "must not write").is_err());
         assert!(catalog.initialize().is_err());
         assert!(catalog.shutdown().is_err());
         assert_eq!(calls.lock().unwrap().len(), before);
@@ -11512,9 +11520,19 @@ mod tests {
 
     #[test]
     fn committed_rows_with_failed_fts_never_announce_readiness_or_reuse_handle() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
         let mut catalog = Catalog::without_embedding_model(Box::new(MockConnection::new()), CatalogConfig::default());
         catalog.initialized = true;
-        let buffer = inject_blob_failure(&mut catalog);
+        let calls=Arc::new(AtomicUsize::new(0));let observed=calls.clone();
+        let store=CypherBlobStore::new(Arc::new(move |query, _| {
+            if query==crate::cypher_blob_store::upsert_blobs_query() && observed.fetch_add(1,Ordering::SeqCst)==0 {
+                return Err("first blob persistence failed".into());
+            }
+            Ok(crate::connection::QueryResult::default())
+        }));
+        let buffer=Arc::new(BufferedBlobStore::new(store));
+        buffer.save("test-index","segment",b"retained after failed persistence").unwrap();
+        catalog.blob_buffer=Some(buffer.clone());
         catalog.set_in_transaction(true);
         let mut events = catalog.subscribe();
         catalog.publier(CatalogEvent::entites_changees("Document", vec!["one".into()], "ingested"));
@@ -11524,6 +11542,11 @@ mod tests {
         assert!(catalog.execute_raw("RETURN 1").is_err());
         assert!(events.try_recv().is_err());
         assert_eq!(buffer.pending_len(), 1, "failed persistence retains its bytes");
+        assert_eq!(calls.load(Ordering::SeqCst),1);
+        drop(catalog);
+        assert!(buffer.flush().is_err(), "last external clone must share the persistence fence");
+        drop(buffer);
+        assert_eq!(calls.load(Ordering::SeqCst),1,"shutdown and final buffer Drop must not retry");
     }
 
     #[test]
