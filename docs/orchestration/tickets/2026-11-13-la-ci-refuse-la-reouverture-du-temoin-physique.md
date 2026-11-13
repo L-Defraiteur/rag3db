@@ -393,3 +393,29 @@ Recette candidate précédente portée à10 témoins exacts (8nouveaux+2régress
 même fenêtre globale600s après poste, même targetprivé/8G/HIGHmax/j4,
 arrêt premierrouge. Nécessite ROED de cette source et GO exact distinct ;
 ce texte ne vaut pas une autorisation d’exécution. Ticket CI reste ouvert.
+
+### Qualification CPU fbd3f0a :10/10 VERT, portée bornée
+
+GO exact C7 reçu après ROED favorable. Source
+`fbd3f0a4179917e3674fa52a56ffde027831a354` propre, même worktree isolé
+`cx-lucivy-shutdown-cpu`, target neuf privé de qualification
+`cx-lucivy-barriere-target-13nov` (ancien target rouge conservé figé, non utilisé).
+Vrai poste lourd, MemoryMax8589934592/HIGHmax relus, j4, nouveau reçu global
+600s après poste. Compilation réussie (8 avertissements existants, pasclippy),
+inventaire exact des10 noms présent, puis10 appels exacts à1test chacun :
+**10passés,0échec,0ignoré**, arrêt premierrouge prévu mais non déclenché.
+Les paniques prévues par catch_unwind ne sont pas des échecs : ces juges passent.
+
+[Preuves brutes et manifeste](../../lucivy/13-11-2026/preuves/barriere-fbd3f0a/SHA256SUMS),
+[recette10noms](../../lucivy/13-11-2026/preuves/barriere-fbd3f0a/recette-10.json),
+[verdict confineur](../../lucivy/13-11-2026/preuves/barriere-fbd3f0a/confinement-verdict.json),
+[inventairePID/start](../../lucivy/13-11-2026/preuves/barriere-fbd3f0a/confinement-enfants.json).
+Code0/erreur=null/restes=[]/zoneprivéenettoyée=true ; sources propres aprèsrun.
+Journaux luciepc : ~/.cache/rag3weaver-build/cx-lucivy-barriere-qualif-13nov/.
+
+Portée : barrière CPU luciole seulement. Routeur lucivy-core NON compilé/qualifié
+par ces commandes, juge physique CI NON rejoué, détenteur du writer D17 toujours
+non attribué. Aucun merge main lucivy, tag, version ni registre publié.
+Reste au même ticket, porteur Lucivy/ED/C7 selon périmètre : relire preuves,
+décider la qualification core et l’intégration ; GO CPU ne vaut pas GO fusion.
+Push master docs retenu pendant tour Recherche ; branche documentaire publiée.

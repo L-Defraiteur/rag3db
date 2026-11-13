@@ -1,0 +1,23 @@
+{
+  "source": "fbd3f0a4179917e3674fa52a56ffde027831a354",
+  "names": [
+    "pool::tests::shutdown_waits_for_worker_destruction",
+    "scheduler::tests::destruction_completion_worker",
+    "scheduler::tests::destruction_completion_cooperative",
+    "mailbox::destruction_tests::completion_drains_admitted_send_and_rejects_new_sends",
+    "mailbox::destruction_tests::pending_destructor_can_reenter_closed_mailbox",
+    "scheduler::tests::pinned_handler_rejects_self_join",
+    "scheduler::tests::on_start_panic_preserves_destruction_order_and_handler_flag",
+    "mailbox::destruction_tests::panicking_message_drop_waits_for_admitted_send",
+    "pool::tests::drain_and_shutdown_after_workers_left_do_not_panic",
+    "pool::tests::request_dropped_reply_is_an_error"
+  ],
+  "commande": [
+    "cargo",
+    "test",
+    "-j4",
+    "-p",
+    "luciole",
+    "--lib"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "source": "fbd3f0a4179917e3674fa52a56ffde027831a354",
+  "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1351489-i89357913.scope",
+  "memoire": {
+    "memory.max": "8589934592",
+    "memory.high": "max"
+  },
+  "monotonic": 917293.30573726
+}
