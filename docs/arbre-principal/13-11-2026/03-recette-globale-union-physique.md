@@ -88,7 +88,7 @@ uniquement son TMP navigateur marqué après quiescence ; pas le WT/target/PG.
 9. Maps backend capturées à main via témoin d'inspection de stockage synthétique
    explicitement absent, aucun daemon/backend service démarré. Attestation finale
    4ELF/source/223gabarits/mapsSDK29/cgroups/CPU devices/événements mémoire, scan
-   quiescence. DumpPG privé/OID/SHA gardés AVANT tout futur DROP,0session privée.
+   quiescence. OID/propriétaire/commentaire source réattestés avant dump ; dumpPG privé/OID/SHA gardés AVANT tout futur DROP,0session privée.
    La base reste pour revue ; retrait ultérieur coordonné seulement après preuves.
 
 ## Points de revue et limites
@@ -105,3 +105,10 @@ Aucun master push autorisé ici. Même une globale verte attendra revue des preu
 source exacte, éventuels changements master, tour « à toi » de C7, poste push et
 les trois contrôles. Aucune activation/migration d'une base réelle, GC ou couches
 n'est incluse. Anciennes preuves rouges et P14 vert restent distinctes.
+
+
+Revue RO ed13 par Mémoire/Recherche : favorable bornée au pilote, aucun runtime.
+Avant gel, alignement de phase_caps sur lib900/nav600 réels et elapsed depuis
+le début réel du confineur (deadline−6000), début pilote séparé. Reçu delai6000
+asserté. Identité PG/OID/propriétaire/commentaire réattestée avant dump également ;
+aucun retrait accordé. Contrôles syntaxe/tickets CPU à rejouer, sans Cargo.
