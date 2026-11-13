@@ -77,10 +77,23 @@ pub struct Ascii {
 /// le terminal et la page lisent les mêmes couleurs et les mêmes animations.
 pub const SOURCE: &str = include_str!("../../templates/themes/daemon.json");
 
+/// **Les thèmes embarqués**, par nom : chacun est un fichier de
+/// `templates/themes/`, de même forme que « daemon » (l'IDE lit les mêmes).
+pub const THEMES: &[(&str, &str)] = &[("daemon", SOURCE), ("foret", include_str!("../../templates/themes/foret.json"))];
+
 impl Theme {
     /// Le thème « daemon », embarqué.
     pub fn daemon() -> Theme {
         serde_json::from_str(SOURCE).expect("le thème daemon se lit (témoin : theme::tests)")
+    }
+
+    /// Un thème embarqué, par son nom (`--theme <nom>`).
+    pub fn par_nom(nom: &str) -> Result<Theme, String> {
+        let (_, source) = THEMES
+            .iter()
+            .find(|(n, _)| *n == nom)
+            .ok_or_else(|| format!("pas de thème « {nom} » ; thèmes : {}", THEMES.iter().map(|(n, _)| *n).collect::<Vec<_>>().join(", ")))?;
+        serde_json::from_str(source).map_err(|e| format!("le thème « {nom} » ne se lit pas : {e}"))
     }
 }
 
@@ -107,6 +120,56 @@ mod tests {
         let octets = std::fs::read_to_string(&commun).unwrap_or_else(|e| panic!("{} : {e}", commun.display()));
         assert_eq!(SOURCE, octets, "le thème embarqué est templates/themes/daemon.json");
         assert!(!std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("themes/daemon.json").exists(), "plus de copie locale au crate");
+    }
+
+    /// **Chaque fichier de `templates/themes/` est un thème embarqué**, octet pour
+    /// octet, et aucun thème embarqué n'est absent du dossier commun à l'IDE.
+    #[test]
+    fn every_templates_theme_file_is_embedded_byte_for_byte() {
+        let dossier = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../templates/themes");
+        let mut fichiers: Vec<String> = std::fs::read_dir(&dossier).unwrap().filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.ends_with(".json")).collect();
+        fichiers.sort();
+        let mut embarques: Vec<String> = THEMES.iter().map(|(n, _)| format!("{n}.json")).collect();
+        embarques.sort();
+        assert_eq!(fichiers, embarques, "les fichiers de templates/themes et les thèmes embarqués");
+        for (nom, source) in THEMES {
+            assert_eq!(*source, std::fs::read_to_string(dossier.join(format!("{nom}.json"))).unwrap(), "{nom}");
+        }
+    }
+
+    /// **La forêt** (le deuxième thème de la liste de Lucie : fées, forêt,
+    /// bureau, papillons, Mordor, Dracula).
+    #[test]
+    fn the_forest_theme_is_there_and_named_foret() {
+        let t = Theme::par_nom("foret").unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(t.nom, "foret");
+        assert!(Theme::par_nom("inconnu").unwrap_err().contains("daemon"), "un nom inconnu liste les thèmes");
+    }
+
+    /// **Tout thème a la forme de « daemon »** : couleurs en hex, cadences de
+    /// 100 ms au moins, une colonne par glyphe une fois les replis appliqués,
+    /// et la palette du code complète.
+    #[test]
+    fn every_theme_has_the_daemon_shape_and_one_column_glyphs() {
+        use unicode_width::UnicodeWidthChar;
+        let sortes = ["keyword", "type", "function", "string", "comment", "number", "constant", "variable", "property", "operator", "punctuation", "attribute", "label", "module", "other", "en_ligne", "cadre"];
+        for (nom, _) in THEMES {
+            let t = Theme::par_nom(nom).unwrap();
+            for c in [&t.couleurs.fond, &t.couleurs.texte, &t.couleurs.sourdine].into_iter().chain(t.couleurs.halo.iter()) {
+                assert!(rgb(c).is_some(), "{nom} : couleur en hex : {c}");
+            }
+            for s in sortes {
+                assert!(t.code.get(s).and_then(|c| rgb(c)).is_some(), "{nom} : la couleur de code « {s} »");
+            }
+            for a in [&t.animations.reflechit, &t.animations.lit, &t.animations.ecrit] {
+                assert!(a.ms >= 100, "{nom} : pas plus de 10 images/s");
+                assert!(!a.glyphes.is_empty() && !a.gabarits.is_empty(), "{nom}");
+                for g in a.glyphes.iter().chain(std::iter::once(&a.coeur)) {
+                    let g = t.replis.get(g).unwrap_or(g);
+                    assert!(g.chars().all(|c| c.width() == Some(1)), "{nom} : « {g} » ne fait pas une colonne");
+                }
+            }
+        }
     }
 
     #[test]

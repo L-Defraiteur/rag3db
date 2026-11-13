@@ -542,6 +542,31 @@ mod tests {
         assert!((0..buf.area.width).all(|x| buf[(x, ligne)].fg != Color::Red), "plus de rouge de base sur la ligne du thème");
     }
 
+    /// **Pour chaque thème embarqué**, ses couleurs atteignent les cellules du
+    /// Cercle : son cœur dans `texte` en gras, un glyphe du cercle dans le halo
+    /// sombre.
+    #[test]
+    fn every_theme_colours_its_circle_cells() {
+        for (nom, _) in crate::theme::THEMES {
+            let mut v = Vue::new(100, true);
+            v.theme = crate::theme::Theme::par_nom(nom).unwrap();
+            v.trame(&json!({ "evenement": { "kind": "LlmCall" } }));
+            let mut t = Terminal::with_options(TestBackend::new(100, 6), TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }).unwrap();
+            let instant = v.depuis;
+            t.draw(|f| v.dessiner_a(f, f.area(), instant)).unwrap();
+            let buf = t.backend().buffer().clone();
+            let a = &v.theme.animations.reflechit;
+            let coeur = v.theme.replis.get(&a.coeur).cloned().unwrap_or(a.coeur.clone());
+            let glyphe = v.theme.replis.get(&a.glyphes[1]).cloned().unwrap_or(a.glyphes[1].clone());
+            let ligne = (0..buf.area.height).find(|y| (0..buf.area.width).any(|x| buf[(x, *y)].symbol() == coeur)).unwrap_or_else(|| panic!("{nom} : la ligne du Cercle"));
+            let cellule = |s: &str| (0..buf.area.width).map(|x| &buf[(x, ligne)]).find(|c| c.symbol() == s).unwrap_or_else(|| panic!("{nom} : pas de {s}")).clone();
+            let (texte, halo) = (rgb(&v.theme.couleurs.texte).unwrap(), rgb(v.theme.couleurs.halo.last().unwrap()).unwrap());
+            assert_eq!(cellule(&coeur).fg, Color::Rgb(texte.0, texte.1, texte.2), "{nom} : le cœur");
+            assert!(cellule(&coeur).modifier.contains(Modifier::BOLD), "{nom}");
+            assert_eq!(cellule(&glyphe).fg, Color::Rgb(halo.0, halo.1, halo.2), "{nom} : un glyphe du cercle");
+        }
+    }
+
     #[test]
     fn the_header_says_repo_branch_and_task_on_the_right_when_it_fits() {
         let mut v = Vue::new(60, true);
