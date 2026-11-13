@@ -329,3 +329,22 @@ rouges et arrêts historiques. Aucun vert n’efface ces limites de provenance.
 Revues RO Git C7/Mémoire favorables, revue Mémoire deltaUI/stderr favorable ;
 préparation du push selon tour C7 puis contrôles et retrait gardé2postes.
 Cette livraison ne déploie ni ne redémarre le daemon personnel.
+
+## Livraison empilée demandée par C7
+
+Avant tout push master, C7 demande l’union Pub+Symboles+ED : base figée Arbre
+`31db55abbfe928234de646895819ac12bae4e9fd`, branche
+`cx-arbre-publication-composite-r2`, parent8f604328a. Empilage de nos seuls
+commits depuis8f, nouvelle branche4 `cx-ed-parcours-agent-ide-4`, source9ad2d7bdb
+publiée ; conflit documentaire news résolu en conservant les deux capacités.
+Les fichiers Publication/KV d’Arbre sont inchangés, tout comme Git/UI acquis.
+Le candidat3024 et son script push restent historiques, jamais exécutés sur master.
+
+Recette même F5/min/3ELF/lib/NAV/lect27/hôte13/PG36 sous portée canonique, source
+empilée publiée avant compilation, preuves `globale-union-pub`. Même target/basePG,
+Max32/HIGH0/j8/BurnCPU, TMPDIR privé court et racine journaux avec espace. Reste
+strict de deadline878111.26244974, calculé APRÈS acquisition poste (environ3900s
+à préparation), aucune remise à6000. Les tests CLI5/tx25 de Pub+Symboles sont
+acquis par Arbre sur31, avec fichiers Pub identiques ; pas de rejeu aveugle de
+ces composants ni de Vertex. Ordre master Pub→ED→Embar fixé par C7.
+Ancien dumpPG conservé distinctement ; export final rafraîchi après cette union.
