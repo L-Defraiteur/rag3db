@@ -1,0 +1,20 @@
+{
+  "utc": "2026-11-13T12:51:59.952129+00:00",
+  "verified": 13,
+  "mismatches": [],
+  "heads": {
+    "refs/heads/cx-arbre-passation-week-end-2026-11-13": "495d11907ea016a2d2cea34a1d39d5863a10e1a1",
+    "refs/heads/cx-archi-passation-week-end-20261113": "9d6ead2bc0a492c89ade415140a0de645c81a65f",
+    "refs/heads/cx-banc-residence-appels": "6df3ff2bcb876e387d4045fb8ca59eb3f360e99b",
+    "refs/heads/cx-codeparsers-passation-weekend": "2753df2ceaed92b1ba01fa58b0d52195c1756dc4",
+    "refs/heads/cx-coeur-passation-weekend": "04b92a1e464fc4d1a1764b75e1fbd74fc7a0bd4b",
+    "refs/heads/cx-docs-tty-features": "a20ad187ceef770a75e64d339315c11b54a698f5",
+    "refs/heads/cx-ed-ci-writer-diagnostic-r1": "73977a2bc45193f540c1081058fff689292745f9",
+    "refs/heads/cx-embarquement-passation-week-end-20261113": "f4d791a0956b571c5f5a4d8cc23f71db6e2b0b51",
+    "refs/heads/cx-hotfixs-passation-week-end-20261113": "0eb6ded42eac977f8c66247a49183c3c7e398f68",
+    "refs/heads/cx-lucivy-passation-weekend": "942fc34f8b1f78b589026834a237b2122930db93",
+    "refs/heads/cx-memoire-passation-weekend-r1": "8ff6bba85927e33f761a4c8ee18c9857fd0d68e4",
+    "refs/heads/cx-optimiseur-passation-weekend": "13e69050a46528aedc21ade49c0025600a655168",
+    "refs/heads/cx-recherche-passation-weekend-13nov-r1": "9cb6de90ada183869a4a15bef636ee9739822d32"
+  }
+}

@@ -1,0 +1,134 @@
+[
+  {
+    "session": "arbre-principal",
+    "commit": "495d11907ea016a2d2cea34a1d39d5863a10e1a1",
+    "branch": "cx-arbre-passation-week-end-2026-11-13",
+    "report": "docs/arbre-principal/13-11-2026/99-passation-week-end.md",
+    "bytes": 15896,
+    "companions": [],
+    "source_sha256": "ad6432ddfb689494acdacf8eb9bae1a7423944245b670b3fe90289132780a180",
+    "collected_sha256": "ad6432ddfb689494acdacf8eb9bae1a7423944245b670b3fe90289132780a180"
+  },
+  {
+    "session": "lucivy",
+    "commit": "942fc34f8b1f78b589026834a237b2122930db93",
+    "branch": "cx-lucivy-passation-weekend",
+    "report": "docs/lucivy/13-11-2026/99-passation-week-end.md",
+    "bytes": 10338,
+    "companions": [],
+    "source_sha256": "99e07ff05296a86908e24a65a342089a317b4b0b6f7915cc137bf52cb519f108",
+    "collected_sha256": "99e07ff05296a86908e24a65a342089a317b4b0b6f7915cc137bf52cb519f108"
+  },
+  {
+    "session": "recherche",
+    "commit": "9cb6de90ada183869a4a15bef636ee9739822d32",
+    "branch": "cx-recherche-passation-weekend-13nov-r1",
+    "report": "docs/recherche/13-11-2026/99-passation-week-end.md",
+    "bytes": 15769,
+    "companions": [
+      "docs/recherche/13-11-2026/passation-week-end/remotes-garde.txt"
+    ],
+    "source_sha256": "37b57bf31648ebb3fdad890f7d977f4c2adfd442b7455f92f3f6f4ce48c9c20a",
+    "collected_sha256": "37b57bf31648ebb3fdad890f7d977f4c2adfd442b7455f92f3f6f4ce48c9c20a"
+  },
+  {
+    "session": "everything-declarative",
+    "commit": "73977a2bc45193f540c1081058fff689292745f9",
+    "branch": "cx-ed-ci-writer-diagnostic-r1",
+    "report": "docs/everything-declarative/13-11-2026/99-passation-week-end.md",
+    "bytes": 14559,
+    "companions": [],
+    "source_sha256": "f9dc27f16ffc4c87e2aa11110728632bc081e3a712e9e0da11e9408bc5bec306",
+    "collected_sha256": "f9dc27f16ffc4c87e2aa11110728632bc081e3a712e9e0da11e9408bc5bec306"
+  },
+  {
+    "session": "memoire",
+    "commit": "8ff6bba85927e33f761a4c8ee18c9857fd0d68e4",
+    "branch": "cx-memoire-passation-weekend-r1",
+    "report": "docs/memoire/13-11-2026/99-passation-week-end.md",
+    "bytes": 14297,
+    "companions": [],
+    "source_sha256": "cd62784db235444e4046dc97051dbe9f7ad3087068272419ebcadc6aa567bb77",
+    "collected_sha256": "cd62784db235444e4046dc97051dbe9f7ad3087068272419ebcadc6aa567bb77"
+  },
+  {
+    "session": "rag3weaver-archi",
+    "commit": "9d6ead2bc0a492c89ade415140a0de645c81a65f",
+    "branch": "cx-archi-passation-week-end-20261113",
+    "report": "docs/rag3weaver-archi/13-11-2026/99-passation-week-end.md",
+    "bytes": 12114,
+    "companions": [],
+    "source_sha256": "2de52939f73d9a4497605085b14e1bc029fc97c646953124fc80b8b4e943fdf7",
+    "collected_sha256": "2de52939f73d9a4497605085b14e1bc029fc97c646953124fc80b8b4e943fdf7"
+  },
+  {
+    "session": "coeur-cpp",
+    "commit": "04b92a1e464fc4d1a1764b75e1fbd74fc7a0bd4b",
+    "branch": "cx-coeur-passation-weekend",
+    "report": "docs/coeur-cpp/13-11-2026/99-passation-week-end.md",
+    "bytes": 11952,
+    "companions": [],
+    "source_sha256": "ae49abe923284c09b9b9a5670b39b6c6c4915f179e87aab4fe05bdeb6cdf259a",
+    "collected_sha256": "ae49abe923284c09b9b9a5670b39b6c6c4915f179e87aab4fe05bdeb6cdf259a"
+  },
+  {
+    "session": "optimiseur",
+    "commit": "13e69050a46528aedc21ade49c0025600a655168",
+    "branch": "cx-optimiseur-passation-weekend",
+    "report": "docs/optimiseur/13-11-2026/99-passation-week-end.md",
+    "bytes": 8252,
+    "companions": [],
+    "source_sha256": "8f11cda35ae835031eb1796486dbd672da83dafe6ffaf2b9563633ab0335a250",
+    "collected_sha256": "8f11cda35ae835031eb1796486dbd672da83dafe6ffaf2b9563633ab0335a250"
+  },
+  {
+    "session": "embarquement",
+    "commit": "f4d791a0956b571c5f5a4d8cc23f71db6e2b0b51",
+    "branch": "cx-embarquement-passation-week-end-20261113",
+    "report": "docs/embarquement/13-11-2026/99-passation-week-end.md",
+    "bytes": 14248,
+    "companions": [],
+    "source_sha256": "f08691bbf4fe14357c862ad8a273d92d19587f3361785c0cfa336d795674c31b",
+    "collected_sha256": "f08691bbf4fe14357c862ad8a273d92d19587f3361785c0cfa336d795674c31b"
+  },
+  {
+    "session": "banc",
+    "commit": "6df3ff2bcb876e387d4045fb8ca59eb3f360e99b",
+    "branch": "cx-banc-residence-appels",
+    "report": "docs/banc/13-11-2026/99-passation-week-end.md",
+    "bytes": 7682,
+    "companions": [],
+    "source_sha256": "63397ec61145206a959a9e5aa13d7ed9c5436d6f4b01ee8cbecb8a530f6312ba",
+    "collected_sha256": "63397ec61145206a959a9e5aa13d7ed9c5436d6f4b01ee8cbecb8a530f6312ba"
+  },
+  {
+    "session": "coeur-cpp-hotfixs-tickets",
+    "commit": "0eb6ded42eac977f8c66247a49183c3c7e398f68",
+    "branch": "cx-hotfixs-passation-week-end-20261113",
+    "report": "docs/coeur-cpp-hotfixs-tickets/13-11-2026/99-passation-week-end.md",
+    "bytes": 13161,
+    "companions": [],
+    "source_sha256": "3ae6805a064328cdc33e28b10aa91d2bee50af8dd93a316fbc72de278b41ea5a",
+    "collected_sha256": "3ae6805a064328cdc33e28b10aa91d2bee50af8dd93a316fbc72de278b41ea5a"
+  },
+  {
+    "session": "tty",
+    "commit": "a20ad187ceef770a75e64d339315c11b54a698f5",
+    "branch": "cx-docs-tty-features",
+    "report": "docs/tty/13-11-2026/99-passation-week-end.md",
+    "bytes": 5006,
+    "companions": [],
+    "source_sha256": "21991b9dce78de7533e8ff3b5871a2746cb8cdbb13016d471d3074ff79d180cc",
+    "collected_sha256": "21991b9dce78de7533e8ff3b5871a2746cb8cdbb13016d471d3074ff79d180cc"
+  },
+  {
+    "session": "codeparsers",
+    "commit": "2753df2ceaed92b1ba01fa58b0d52195c1756dc4",
+    "branch": "cx-codeparsers-passation-weekend",
+    "report": "docs/codeparsers/13-11-2026/99-passation-week-end.md",
+    "bytes": 12961,
+    "companions": [],
+    "source_sha256": "bf5171e5c642f24d904ae721c0518a4ec3f02a0908353a8b75f1949d6eb324b5",
+    "collected_sha256": "bf5171e5c642f24d904ae721c0518a4ec3f02a0908353a8b75f1949d6eb324b5"
+  }
+]
