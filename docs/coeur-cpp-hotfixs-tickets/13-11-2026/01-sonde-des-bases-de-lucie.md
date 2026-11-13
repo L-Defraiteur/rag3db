@@ -15,6 +15,16 @@ relations. On perd ainsi des données en silence, et il reste des **relations or
 bout ne désigne plus aucun nœud, ainsi que des **morceaux** (les nœuds `*_Chunk` qui découpent le
 texte d'un Scope pour la recherche) dont le parent manque.
 
+**La cause, trouvée ensuite par le cœur** (même soir) : ce n'était pas le paquet défait.
+`LocalStorage::commit` parcourait la `std::unordered_map` de ses tables locales pendant que l'index
+vectoriel (HNSW) y créait les siennes, en validant sa table. Quand la table de hachage se
+réorganisait, des tables de nœuds étaient sautées : leurs nœuds n'étaient jamais publiés, le COMMIT
+réussissait, et leurs relations restaient orphelines. Le témoin `CommitLocalTablesTest` rougit dès
+douze tables dans une transaction. Le ticket est
+`docs/coeur-cpp/tickets/2026-11-13-un-commit-sous-index-vectoriel-saute-des-tables-de-noeuds.md`, et
+le correctif est sur la branche `insertion-defaite-reouverture`. La sonde compte les orphelines dans
+l'état des bases, quelle que soit leur cause : ses zéros valent pour ce défaut-là.
+
 La question posée : les deux bases de code de Lucie, **code-lourd** et **code-principal**, en
 portent-elles ?
 
