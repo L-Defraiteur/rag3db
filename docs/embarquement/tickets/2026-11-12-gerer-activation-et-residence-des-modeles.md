@@ -550,3 +550,16 @@ l'expiration et limite la nouvelle portée au restant seulement. Le suffixe
 explicite impose de nouveaux journaux/fixture PG sans écraser le rouge initial.
 ED confirme prendre le diagnostic source, aucun rejeu Cargo chanceux ni édition
 concurrente de worktrees.rs par cette session ; c9 demeure figé jusqu'au routage.
+
+Correctif ED08c379b11 consommé par cherry-pick c44dfde1a, seul testworktrees.rs
++63lignes, production inchangée. Preuve ED : compilationF3/lib29 30,75 s,
+exact1/0/0 en3,70 s, portée commune VERT/restes[]/nettoyétrue ; preuves
+I-luciepc/parcours-agent-ide-20261112/fixture-carte-index. Barrière réellement
+atteinte, assertions initiales2cartes/flux/confidentialité conservées, état
+terminé testé sans UI. Pas de nouveau mécanisme ni seuil affaibli.
+
+Reprise de l'union complète préparée sur cette source : F5/lib/NAV/4tx CPU,
+script reprendre-union.sh, suffixe-r2, reste de hex calculé après acquisition
+et aucun nouveau2400. ED conserve son candidat produit c9 ; ce correctif test
+fait partie de notre lot d'intégration. Pas de rejeu GPU puisque ses composants
+protégés n'ont pas changé. Les journaux initiaux rouges ne sont pas écrasés.
