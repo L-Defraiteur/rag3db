@@ -374,3 +374,8 @@ Claude, vivantes depuis le 11. Lecture préalable : `01-lecture-de-la-passation-
   .fts** des quatre bases : la perte de mots de lucivy d'avant la 4.3.5 ne les a pas touchées, aucune
   reconstruction n'est due. Les deux programmes de sonde sont dans `docs/coeur-cpp-hotfixs-tickets/13-11-2026/outils/`,
   à rejouer à chaque pose.
+- **20 h 20, 96 a poussé cd51ab5cd** (l'archiviste voit son document — `carry` du ForEachNode porte les fiches
+  proposées d'une section à la suivante — et nomme ses sujets — `name_as` du Decide ; une section rejoint une
+  fiche homonyme au lieu d'en créer une ; e2e_archiviste 7/7, rejeu complet puis court verts). Le second et
+  dernier essai à blanc est lancé sur la même copie et les 52 documents, binaire de cette tête : résultat
+  vers 22 h 20, puis la page de comparaison pour Lucie. embarquement a son tour (l'éviction locale).
