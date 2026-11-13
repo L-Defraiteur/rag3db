@@ -4002,7 +4002,7 @@ impl Backend {
         Ok(())
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "rag3db-native"))]
     fn call_tool(&self, name: &str, args: Value) -> Result<Value, String> {
         self.call_tool_on(&self.prepared(), name, args)
     }
