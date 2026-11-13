@@ -38,6 +38,7 @@ pub mod port;
 pub mod resultat;
 pub mod record;
 pub mod record_nodes;
+pub mod ingest_node;
 pub mod derive_nodes;
 pub mod report;
 pub mod runtime;
