@@ -43,8 +43,11 @@ est dit tel quel.
   et des fixtures. **La CI est rouge depuis d17a230b1** : un témoin du raccord physique
   (`physical_index/tests.rs:414`) trouve un écrivain encore vivant après un Drop ; ticket
   `docs/orchestration/tickets/2026-11-13-la-ci-refuse-la-reouverture-du-temoin-physique.md`, cause non
-  attribuée. Notre correctif des réclamations (ED, `reclamations-rendues`), l'arrêt du backend
-  (recherche) et l'IDE par le flux (archi) **n'ont pas été joués**.
+  attribuée. **Corrigé le 13 au soir (lu par ED, archi, recherche)** : les trois lots de reprise du 11 **avaient tous
+  été atterris par Codex le 11 au soir** — le correctif des réclamations (b3f31b544, 17 h 34), l'IDE par le
+  flux d'archi (19 h 56, commits non joués compris) et l'arrêt du backend de recherche (80b467dd3, avec une
+  vraie passe R5 verte consignée dans docs/recherche/11-11-2026/01-rapport-de-session.md, et la montée
+  de lucivy-core 4.3.3, f96acc6cf). Ma lecture du matin les disait « pas joués » : c'était faux.
 - **Couches 2b-A (arbre principal)** : dix branches `cx-arbre-couches-2b-*` poussées ; la source courante
   d9aa4be86 et le pilote 4fca0dd38, **jamais joué** ; deux passes rouges conservées (un dead_code sous
   -D warnings, corrigé ; une observation cargo à sept champs vides, cause non attribuée). Un target à
@@ -53,9 +56,9 @@ est dit tel quel.
   mais trop chère (jusqu'à 40 % de perte sur le worker) ; Codex l'a **suspendue** (« retenue » veut dire
   suspendue, pas adoptée). Variante C (admission atomique, fa1d0273) relue mais **jamais compilée ni
   jouée**. Pour reprendre : qualifier C, mesurer A contre C, décider ; jamais de tag sans ton mot.
-- **recherche** : la garde des targets est atterrie ; la clôture du reliquat (a6c23af93) attend un
+- **recherche** : la garde des targets est atterrie, et l'arrêt du backend aussi (80b467dd3, passe R5 verte) ; la clôture du reliquat (a6c23af93) attend un
   « à toi » ; un prototype archivé sur branche, à ne pas fusionner.
-- **everything declarative** : parcours IDE, frontières de la boîte, read_scope atterris ; le correctif des
+- **everything declarative** : parcours IDE, frontières de la boîte, read_scope atterris ; le correctif des réclamations est sur master depuis le 11 (b3f31b544) ; le correctif des
   réclamations est sur master depuis le 11 (b3f31b544) ; un diagnostic documentaire du rouge CI sur
   branche. En veille de relecture.
 - **mémoire** : M8 première tranche atterrie le 12 ; rien le 13 ; M9 (mémoire automatique) conçu, pas
@@ -110,10 +113,10 @@ est dit tel quel.
 ## 5. Ce soir, avec les sessions Claude (proposition)
 
 1. **La CI au vert**, deux causes (corrigé le 13 au soir) : d'abord la **garde des targets** de recherche
-   (9feb7cdba), qui refuse le target restauré par le cache de la CI (« target non vide sans provenance »)
-   et arrête le job avant tout test — recherche ; puis le témoin du raccord physique, rouge en local sous
-   la lib entière (état partagé entre tests), et l'écrivain vivant après un Drop — arbre principal avec le
-   cœur. Rien d'autre n'atterrit tant que master est rouge.
+   (9feb7cdba), qui refusait le target restauré par le cache de la CI et arrêtait le job avant tout test —
+   corrigé par recherche (62b5c5bfa), CI verte ; puis le témoin du raccord physique, rouge en local sous la
+   lib entière (une instance précédente qui meurt tard sur un fil lucivy) — correctif d'arbre principal
+   (d57273bba) en file. Rien d'autre n'atterrit tant que master est rouge.
 2. **Les trois lots de notre page de reprise** : arrêt du backend (recherche), IDE par le flux (archi),
    puis la clôture du reliquat de recherche et le lot docs de tty (fusion entière).
 3. **Les couches** : relire d9aa4be86 et 4fca0dd38 (arbre principal) avant de les jouer ; une page courte
