@@ -26,6 +26,37 @@ La ligne 196 est `connect_embedder(&f.source).unwrap()` dans le processus parent
 processus enfant. C'est donc l'activation de la fixture elle-même qui a échoué, pas le refus du
 profil étranger.
 
+## Lecture du code (13 novembre, embarquement) : une course de port, plausible, pas prouvée
+
+Le message de la panique du rouge n'a pas été gardé, et le test n'a pas rougi dans les quatre lib
+entières suivantes (`~/.cache/rag3weaver-build/ci-physique-passe/` et `ci-physique-rejeu/`). La
+cause n'est donc pas établie. Ce qui se lit dans le code :
+
+- L'activation gérée exige une **adresse locale fixe** et refuse le port 0
+  (`src/serveur/activation.rs`, « activation gérée : adresse locale fixe requise »).
+- Pour en avoir une, `Fixture::nouvelle` (`src/model_source/activation.rs`, module `tests`) lie
+  `127.0.0.1:0`, lit le port, **relâche l'écouteur** (`drop(listener)`), puis passe ce port au
+  fournisseur (`tests/fixtures/residence/fournisseur.py`, `--adresse`), qui ne s'y lie qu'à son
+  démarrage, plus tard.
+- Sous la lib entière, beaucoup de tests lient des ports en même temps : un autre peut prendre ce
+  port entre le relâchement et la liaison du fournisseur. Le `connect_embedder` du parent (la ligne
+  196:55 de la panique) tomberait alors sur un autre serveur ou sur rien. C'est le même motif que la
+  course `port_libre` du démon (11 octobre 2026), réglée là par un port 0 annoncé.
+
+Autre piste, non écartée : `budget_activation_secs = 5` et `timeout_secs = 1` pour lancer un python
+et le faire répondre, sur un poste chargé.
+
+Le message départage : « identité », refus de connexion ou serveur inattendu pour la course ;
+délai ou budget pour la seconde. Garder la sortie entière de toute lib qui le rougirait.
+
+Remèdes possibles pour la course, **à choisir (ils touchent la conception de l'activation)** :
+1. le test garde son écouteur et le passe au fournisseur (descripteur hérité) : rien ne change au
+   produit, mais la fixture se complique ;
+2. l'activation accepte un port 0 si le fournisseur annonce l'adresse prise, comme le démon
+   d'embarquement : une adresse fixe reste possible, la fixture n'en réserve plus ;
+3. la fixture réessaie quand l'identité trouvée n'est pas la sienne : simple, mais cache la course
+   au lieu de l'ôter.
+
 ## Ce qu'il faut pour le fermer
 
 Retrouver le message, en rejouant la lib entière avec la sortie complète gardée. Puis départager
