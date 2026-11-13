@@ -1429,6 +1429,91 @@ pub(super) mod tests {
         assert_eq!(statut, 200);
         fil.join().unwrap();
     }
+
+    /// **Ce qui pèse dans le contexte, au survol de la jauge** (le lot nommé le 9 novembre 2026
+    /// dans `09-novembre-2026-atelier-lire-ecrire/02-la-jauge-du-contexte.md`) : le fournisseur
+    /// ne rend qu'un total ; l'hôte l'estime au prorata des caractères du dernier appel —
+    /// instructions (le message système), définitions des outils, historique, résultats
+    /// d'outils. Après trois lectures de 200 lignes, les résultats pèsent le plus, les parts
+    /// retombent sur le total, et le survol les dit.
+    #[test]
+    #[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+    fn the_context_gauge_says_what_weighs_on_hover() {
+        use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+        use crate::llm::{CallbackLlm, Turn};
+        const TEMOIN: &str = "the_context_gauge_says_what_weighs_on_hover";
+        let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+            return;
+        };
+        let d = tempfile::tempdir().unwrap();
+        let racine = d.path().join("rw");
+        std::fs::create_dir_all(&racine).unwrap();
+        for f in ["a", "b", "c"] {
+            let texte: String = (1..=200).map(|i| format!("ligne {i} du fichier {f}, quelques mots de plus pour peser dans le contexte\n")).collect();
+            std::fs::write(racine.join(format!("{f}.txt")), texte).unwrap();
+        }
+        let gabarits = d.path().join("atelier/templates");
+        std::fs::create_dir_all(gabarits.parent().unwrap()).unwrap();
+        crate::code_tree::copy(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"), &gabarits, false).unwrap();
+        let manifeste = gabarits.join("backends/atelier/backend.json");
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(racine.to_string_lossy());
+        std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            Ok(Arc::new(CallbackLlm::new("faux-atelier", 1_000_000, move |turns: &[Turn], opts, sink| {
+                let depuis = turns.iter().rposition(|t| t.role == "user").unwrap_or(0);
+                let faits = turns[depuis..].iter().filter(|t| t.role == "tool").count();
+                match ["a.txt", "b.txt", "c.txt"].get(faits) {
+                    Some(f) => MockLlm { context_len: 1_000_000, ..MockLlm::new("") }.with_tool_calls(vec![("read_file".to_string(), json!({ "path": f }).to_string())]).generate(turns, opts, sink),
+                    None => MockLlm { context_len: 1_000_000, ..MockLlm::new("lu") }.generate(turns, opts, sink),
+                }
+            })))
+        });
+        let (runs, chats, taches) = (d.path().join("runs"), d.path().join("chats"), d.path().join("taches"));
+        let racines = crate::code_tree::Roots { config: d.path().join("config"), data: d.path().join("data") };
+        let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+            h.with_racines_de_code(racines).with_runs_root(runs).with_chats_root(chats).with_racine_des_taches(taches).with_chat_model(model)
+        });
+        let racine_url = format!("http://{adresse}");
+        let mut r = crate::daemon::agent_de_temoin()
+            .post(format!("{racine_url}/ide/describe"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(json!({ "manifest": manifeste }).to_string())
+            .unwrap();
+        let decrit: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+        assert_eq!(decrit["ok"], true, "{decrit}");
+        let mut r = crate::daemon::agent_de_temoin().get(format!("{racine_url}/ide/etat")).header("Cookie", "rag3weaver_ide=j").call().unwrap();
+        let etat: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+        let canon = manifeste.canonicalize().unwrap();
+        let id = etat["backends"].as_array().and_then(|bs| bs.iter().find(|b| b["manifest"].as_str().map(Path::new) == Some(canon.as_path()))).and_then(|b| b["id"].as_str()).unwrap().to_string();
+        let jauge = format!(".conversation[data-backend=\"{id}\"] .usage");
+
+        let mut n = Navigateur::lancer(&binaire);
+        n.aller(&format!("{racine_url}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+        let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
+        n.aller(&format!("{racine_url}/ide/code/{id}/chat"), prete);
+        n.evaluer("document.querySelector('#message').value = 'lis les trois'; document.querySelector('#send').click()");
+        n.attendre("document.querySelector('#status')?.textContent === 'fini'", "le tour des trois lectures");
+        n.attendre(&format!("!!document.querySelector('{jauge}')?.dataset.parts"), "les parts estimées sur la jauge");
+        let parts: Value = serde_json::from_str(n.evaluer(&format!("document.querySelector('{jauge}').dataset.parts")).as_str().unwrap()).unwrap();
+        let used = n.evaluer(&format!("Number(document.querySelector('{jauge}').dataset.used)")).as_f64().unwrap();
+        let part = |k: &str| parts[k].as_f64().unwrap_or_else(|| panic!("la part {k} : {parts}"));
+        let somme = part("instructions") + part("outils") + part("historique") + part("resultats");
+        assert!((somme - used).abs() <= used * 0.01 + 4.0, "les parts retombent sur le total : {somme} pour {used} ({parts})");
+        assert!(part("resultats") > part("historique") && part("resultats") > part("instructions"), "trois lectures de 200 lignes pèsent le plus : {parts}");
+        assert!(part("outils") > 0.0, "les définitions des outils comptent : {parts}");
+        let titre = n.evaluer(&format!("document.querySelector('{jauge}').title")).as_str().unwrap_or_default().to_string();
+        for mot in ["instructions", "outils", "historique", "résultats d'outils", "estimé"] {
+            assert!(titre.contains(mot), "le survol dit « {mot} » : {titre}");
+        }
+
+        assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+        drop(n);
+        let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine_url}/arret"), Some("j"));
+        assert_eq!(statut, 200);
+        fil.join().unwrap();
+    }
 }
 
 
