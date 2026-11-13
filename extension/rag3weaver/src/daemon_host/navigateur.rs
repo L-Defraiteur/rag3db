@@ -1091,3 +1091,59 @@ fn l_ide_d_un_vrai_hote_se_rend_en_lecture_seule() {
         eprintln!("{nom} : {quoi} rendu");
     }
 }
+
+/// **Le premier appel d'un outil ne coûte pas une minute** (mesure de l'étape navigateur,
+/// 13 novembre 2026, `docs/everything-declarative/13-11-2026/02-mesure-de-l-etape-navigateur.md`,
+/// cause 2) : dans le témoin des vues, le premier `search_code` et le premier `impact`/`callees`
+/// d'un backend prenaient 59 s à chaque jeu, même seuls, les suivants 250 ms ; c'est aussi ce
+/// que voit l'atelier à chaque réouverture. Par l'hôte, sans navigateur, sans service
+/// d'embarquement : chaque appel, le premier compris, rend en moins de 5 s.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn le_premier_appel_d_un_outil_ne_coute_pas_une_minute() {
+    let d = tempfile::tempdir().unwrap();
+    let (base, arbre) = (d.path().join("base"), d.path().join("arbre"));
+    std::fs::create_dir_all(&base).unwrap();
+    std::fs::create_dir_all(arbre.join("src")).unwrap();
+    std::fs::write(arbre.join("main.rs"), "fn main() {\n    depart();\n}\n\nfn depart() {\n    arrivee();\n}\n").unwrap();
+    std::fs::write(arbre.join("src/arrivee.rs"), "pub fn arrivee() {\n    let _ = 1;\n}\n").unwrap();
+    let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+    let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &base).unwrap();
+    let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+    m["workspace"]["root"] = json!(arbre.to_string_lossy());
+    std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    let host = super::DaemonHost::new().with_background(std::sync::Arc::new(crate::dataflow::background::Registry::new()));
+    let session = host.ide_session();
+    let appeler = |nom: &str, args: Value| -> (Value, Duration) {
+        let debut = Instant::now();
+        let (_, r) = host.handle("POST", "/call", Some(&session), json!({ "manifest": manifeste, "name": nom, "arguments": args }).to_string().as_bytes());
+        (r, debut.elapsed())
+    };
+    let (index, _) = appeler("index", json!({ "confirm": true }));
+    assert_eq!(index["ok"], true, "{index}");
+    let debut = Instant::now();
+    loop {
+        let (u, _) = appeler("usages", json!({ "name": "depart", "format": "json" }));
+        if u["ok"] == true && u["result"]["result"]["result"]["definitions"].as_array().is_some_and(|d| !d.is_empty()) {
+            break;
+        }
+        assert!(debut.elapsed() < Duration::from_secs(60), "depart n'est pas indexé en 60 s : {u}");
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    let recherche = json!({ "query": "arrivee", "options": { "limit": 30, "highlights": "sparse" } });
+    let mut temps = Vec::new();
+    for (nom, args) in [
+        ("search_code", recherche.clone()),
+        ("search_code", recherche),
+        ("impact", json!({ "name": "depart", "depth": 3, "format": "json" })),
+        ("callees", json!({ "name": "depart", "depth": 3, "format": "json" })),
+    ] {
+        let (r, duree) = appeler(nom, args);
+        assert_eq!(r["ok"], true, "{nom} : {r}");
+        temps.push((nom, duree));
+    }
+    eprintln!("[premier appel] {temps:?}");
+    for (nom, duree) in &temps {
+        assert!(*duree < Duration::from_secs(5), "{nom} a pris {duree:?} ; tous : {temps:?}");
+    }
+}
