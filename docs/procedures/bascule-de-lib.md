@@ -82,7 +82,11 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
    **L'outil tourne sous `poste lourd`** (14 novembre, relevé d'ED) : il prend 250 à 370 % de CPU pendant 15 à
    30 minutes par base de code. Lancé hors du verrou, il a faussé une mesure d'ED à luciepc et échappé au compte
    des lourds. Le script l'appelle par `~/.cache/rag3weaver-build/poste lourd`, la borne dans le lourd. Aucun
-   écart ne prouve pas qu'une table est saine. Un contrôle qui ne trouve aucune base à lire est
+   écart ne prouve pas qu'une table est saine : le contrôle juge la cohérence des deux rangements, pas la
+   complétude (14 novembre, hotfixs : une relation vraie perdue par un relevé non ancré lu dans un seul sens,
+   « égales » au contrôle). Un relevé qui sert à reconstruire se fait par tranches d'offsets ancrées sur chaque
+   étiquette, le sens prouvé par EXPLAIN, avec un compte par table (lues dans chaque sens, union, perdues
+   d'un sens) ; `usages` et `impact` par le binaire, avant et après, sont le témoin final. Un contrôle qui ne trouve aucune base à lire est
    rouge (code 7), jamais « aucun écart » : le script compte les bases contrôlées (hotfixs,
    7 novembre). Référence connue : l'instantané
    `bascule-04063ee06` de `code-rag3db-depot` (25 octobre, avant le rebâti de la base de code)

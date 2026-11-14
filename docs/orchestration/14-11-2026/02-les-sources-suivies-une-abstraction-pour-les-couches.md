@@ -29,7 +29,7 @@ montre pour une version la liste des couches qui la citent : « présente dans a
 Un dépôt déclare des **sources suivies**. Une source est **un sélecteur git** plus trois réglages.
 Rien d'autre n'existe : ni mode, ni notion à part pour un worktree ou pour l'arbre entier.
 
-- **Le sélecteur** : ce que git sait nommer — une branche, un motif de refs (`refs/heads/*`,
+- **Le sélecteur** : ce que git sait nommer — une branche, un motif de refs (`refs:refs/heads`, un préfixe : comme pour git, le joker `*` ne franchit pas `/`,
   `release/*`, `agent/*`), un worktree, un commit, une plage. Tout ce que `git for-each-ref` ou
   `git rev-parse` comprend est une source possible : un cas non prévu marche dès que git le nomme.
 - **La parente** : *aucune* ; *inférée* (la source suivie dont le parent commun est le plus récent,
@@ -63,7 +63,7 @@ réindexer) et une **parente** inférée. C'est un confort pour qui pense en bra
 
 | Ce que veut l'utilisateur | Sources | Parente | Histoire | Travail | Racine |
 |---|---|---|---|---|---|
-| tout son arbre git indexé | `refs/heads/*` | inférée | tous | non | calculée |
+| tout son arbre git indexé | `refs:refs/heads` | inférée | tous | non | calculée |
 | plusieurs worktrees chargés ensemble | un par worktree | inférée | la pointe | oui | calculée |
 | quelques worktrees + une branche racine par worktree | un par worktree | déclarée (`main`, `release/2`) | la pointe | oui | déclarée |
 | les agents : chaque tâche de l'atelier | `agent/*` + main | déclarée à l'ouverture | la pointe + N | oui | `main` |
@@ -109,7 +109,7 @@ l'ancienne ; en français dans les docs : « les suivies ». Lucie peut dire aut
    qui couvre l'arbre indexé (le worktree du backend, sa couche de travail comprise). Une lecture sans
    vue est « la suivie courante de la session, à son rang en attente », l'arbre vivant comme avant (ED).
 2. **Une suivie sans worktree s'indexe par les objets git** (`git cat-file --batch`, sans checkout) : la
-   racine calculée, un motif `refs/heads/*`, un `view: b@c`. Capacité neuve, avant ou dans 2a′-3 (ED).
+   racine calculée, un motif `refs:refs/heads`, un `view: b@c`. Capacité neuve, avant ou dans 2a′-3 (ED).
 3. **Une racine vide coûte N fois les occurrences** : les versions et les vecteurs restent partagés, mais
    les lignes `Scope` et les arêtes sont recopiées une fois par suivie (sur code-lourd : N × 82 855 lignes
    et 151 744 CONSUMES). Simple à raisonner, chère ; le défaut (racine calculée) l'évite (ED).
@@ -118,7 +118,7 @@ l'ancienne ; en français dans les docs : « les suivies ». Lucie peut dire aut
 5. **Le défaut n'est pas « tous les worktrees présents »** (le dépôt de Lucie en a des dizaines) : c'est
    **le worktree que le backend indexe, plus les tâches que l'atelier ouvre** ; les autres worktrees
    restent connus, non indexés, et un sélecteur de worktrees les prend à la demande (arbre principal).
-6. **Une racine calculée suit la suivie la plus vieille** : une branche oubliée dans `refs/heads/*` tire
+6. **Une racine calculée suit la suivie la plus vieille** : une branche oubliée dans `refs:refs/heads` tire
    le merge-base des années en arrière et chaque couche grossit. L'état nomme la suivie qui fixe la
    racine ; le témoin de « tout son arbre git » la montre (arbre principal).
 7. **L'identifiant du dépôt** ne peut plus venir de HEAD ni de l'ancre (racine vide, historiques
@@ -154,3 +154,50 @@ Ajout : **quand des suivies forment un cycle de fusions, l'état le dit** (« fl
 staging et main : déclare leurs parentes ») au lieu d'une ambiguïté qui changerait au prochain resync.
 Témoin : trois branches avec promotions et redescentes, l'état nomme le flux et ne pose aucune parente
 inférée entre elles.
+
+## Décisions de relecture (14 novembre, 22 h)
+
+- **L'identifiant d'une couche est le nom complet de la ref** (`refs/heads/<x>`) ; les clés courtes d'aujourd'hui
+  se relisent comme `refs/heads/<nom>` et se réécrivent, avec témoin, à la résolution qui les voit ; une
+  étiquette homonyme ne doit rien faire perdre (témoin). Un renommage de branche est une couche qui finit et
+  une qui commence, sur la même génération.
+- **La couche de travail appartient au worktree**, pas à la branche : une par worktree, parente = la couche
+  de la branche extraite ; un worktree détaché a pour parente une génération épinglée sur son commit ;
+  nommée par son chemin. Une génération épinglée par une enfant vivante est gardée ; `cited` rend ses citants.
+- **Le flux** : X → Y quand une fusion faite par Y, sur sa ligne de premier parent, apporte un commit fait
+  par X sur la sienne ; une composante à plus d'une couche est un flux nommé, sans parente inférée.
+  **Une couche dont la pointe est contenue dans la pointe d'une autre suivie ne compte pas dans un flux**
+  (branche finie : une fonctionnalité qui a repris main puis que main a fusionnée) ; un flux exige deux
+  couches qui ne se contiennent pas. Décision c7, que Lucie peut retourner.
+- Fait au 22 h 2x : déclaration (défaut, refus nommés, ancienne clé), résolution des sélecteurs, racine
+  (trois natures, la suivie qui la fixe), parente inférée (ambiguë, aucune, déclarée), flux. Reste : identifiant
+  du dépôt et migration des clés, cache sous le hash des deux sorties, branchement à la place de
+  `couches.rs` (relevé des lecteurs par grep d'abord, e2e_lectures au rejeu), témoins par ligne du tableau.
+- 22 h 2x : la fonctionnalité finie (strictement contenue → aucun flux ; fusionnée → parente = la fusionnante,
+  base = la fourche avec ce qu'elle était avant ; pointes égales → `Egales` sans avertissement) ; l'identifiant
+  du dépôt = racine du plus vieux commit (date d'auteur) parmi les historiques suivis, à égalité la première
+  par hash ; migration des clés `couche:`, `couche_fermee:`, `branches_suivies:` d'un identifiant à l'autre et
+  du court au complet, une clé courte nomme toujours une branche, une cible posée n'est jamais écrasée.
+  Relevé des lecteurs : seul `couches.rs` lit ces clés ; `_couche` des générations (colonne de Scope,
+  `COUCHE_DU_BACKEND`) entre dans l'uuid des lignes neuves : son passage au nom complet se décide avec ED
+  avant d'écrire (ni recalcul ni dédoublement des lignes posées).
+- 22 h 2x, **`_couche` tranché à deux (arbre principal et ED), voie (b)** : une couche a un identifiant stable
+  de naissance, distinct de son nom — hash(dépôt, nom complet, commit de naissance), ou chemin et commit pour
+  une couche de travail —, gardé dans `_catalog_meta` avec l'index nom → id, recalculable, jamais réutilisé
+  pour une autre lignée. `COUCHE_DU_BACKEND` reste : aucun uuid de 2a′-1 ne bouge. **Un renommage ne
+  termine plus une couche** : la règle écrite plus haut est retirée. Ferme le ticket « le nom comme
+  étiquette ». Le cache est vert (sans mouvement de refs : deux appels git, aucun merge-base ; 11 tests).
+- 22 h 3x : l'identifiant stable des couches vert (12 tests) : même id d'une résolution à l'autre, `branch -m`
+  le garde, une branche effacée reçoit sa fin et recréée ailleurs sous le même nom un id neuf ; le worktree du
+  backend reçoit `backend`. Gardes : effacée puis recréée sur une pointe que main porte encore = fin et
+  naissance, pas renommage (ED) ; deux vivantes ne partagent jamais un id, un id dérivé déjà pris prend le
+  suivant (c7). Écarts à la proposition d'ED, acceptés : le commit de naissance est la pointe à la première
+  vue, gardée dans la fiche ; préfixes `fiche_couche:` et `couche_nom:`. Reste : le branchement à la place de
+  `couches.rs` (relevé des appelants d'abord), les témoins du tableau, la passe avec e2e_lectures.
+- 22 h 4x : **les suivies sont branchées** (tête 2e41a4a11, 14 tests, check_features 8/8) : `tracked` dans le
+  manifeste ; `index_states.layers` vient de `rapport_des_suivies` ; un dépôt git dit ses couches par le
+  défaut sans rien déclarer ; l'atelier ouvre et ferme ses tâches par les suivies (11/11) ; le reflog local
+  départage une parente ambiguë ; `couches.rs` n'est plus appelé. Le test par ligne du tableau a trouvé deux
+  points : le joker de `refs:refs/heads/*` ne franchit pas `/` (tout l'arbre s'écrit `refs:refs/heads`,
+  corrigé dans cette page) ; une couche sans candidate dont d'autres partagent la pointe se dit « égales ».
+  Passe complète en file à luciepc (22 h 48, neuvième), verdict relu à 23 h 19 ; rang 30 bis dans la pile.

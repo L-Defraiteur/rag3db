@@ -358,3 +358,127 @@ le prédicat (ED, après la parité) → la chaîne Rust 1.98.1 (G, dernière).
 dormait depuis le 13 (e2e_demon_hote 14/14 sous 373b5477b). Recherche pousse la réécriture du `IN`
 (e0aaa2d1f) à son vert ; puis le cœur (deux pushs), G (garde-pile-3), embarquement (dense sur `Tenue<C>`,
 vrai jeu vert), ED (prédicat, après la parité), G (chaîne Rust 1.98.1).
+
+**21 h 5x — vingt-huit atterris** : la réécriture du `IN` (recherche, 9fd946ec3, 2 commits : rouge
+843927e68 puis le filtre par la clé primaire ; 30 000 uuids 1,10 s → 0,28 s ; range-diff tout en « = » sur
+PILE_AVANT=d1578cd56 ; rejeu court vert sous 373b5477b, check_features 8/8). Le cœur a le « à toi » pour
+ses deux pushs du rang 27, posés sur e0aaa2d1f : (B) l'`IN` haché (in-liste-hachee-pile a56af398d,
+3 commits, PILE_AVANT=e0aaa2d1f) puis le pliage des listes littérales (projection-rend-sa-memoire-pile
+9d90edbb6, 5 commits, PILE_AVANT=a56af398d) ; ni `src/` ni `test/` n'ont bougé entre ses bases et
+e0aaa2d1f, les suites C++ se rejouent quand même sur les têtes reposées (DropNodeTableReclaim seul admis,
+sous ticket). ED : la parité du prédicat (959d73513 contre 3e3a07f9d, 30/30 au bit près, sans filtre comme
+sous filtre ; le commit rouge intermédiaire ne compile pas seul sous `deny(warnings)`, la tête l'appelle) —
+le lot est prêt au rang 30. Puis G (garde-pile-3), embarquement (dense), ED (prédicat), G (chaîne Rust).
+
+**22 h 0x — un lot s'insère au rang 27 ter** : les orphelins de recherche (orphelins-pile e947089dd :
+`DeleteRecordNode` lit en base l'offset des lignes que le cache de session ignore, `select_offsets_by_uuids`
+avec sa forme Postgres ; témoin rouge 6 documents pour 5 Scope), posés d'abord sur master 9fd946ec3, à
+reposer sur le pliage du cœur 9d90edbb6 ; Rust seul sous deux lots C++ : rejeu court sous 373b5477b avec
+`RAG3WEAVER_MOTEUR_ANCIEN=1` dit au journal, check_features avant la tête. G repose garde-pile-3 dessus.
+Ordre : cœur (B) → cœur pliage → recherche orphelins → G garde-pile-3 → embarquement dense → ED prédicat →
+G chaîne Rust.
+
+**22 h 0x — banc** : la parité du `IN` (e0aaa2d1f contre 08aa781db) verte au bit près 30/30 ; un appel
+sans chauffe, parent → lot : chemin 2 272 → 1 176 ms, langage 1 508 → 910 ms, sans filtre 623 → 624 ms.
+Les trois optimisations du soir (court-circuit, prédicat, `IN`) sont vertes au bit près. Laya synthétique à
+question fixe : 0,09 en zéro-coup, 0,58 spécialisé (créer 0,91, rejoindre 0,24 — le hasard parmi cinq) ;
+le titre seul apprend « créer » ; le vrai jeu attend la trace de 96.
+
+**22 h 0x — codeparsers au rang 28 bis** : la provenance par langue (codeparsers cf90e1c : tables
+`declared_dependencies_by_language` et `project_packages_by_language`, noms normalisés par les variantes
+de la langue, csharp.toml tiré de dotnet-api-docs a010100, 417 espaces de noms ; rag3db
+codeparsers/provenance-par-langue d1ff77ac7 : manifestes rangés par langue, go.mod lu, code.rs ne passe que
+les tables par langue, Cargo.lock inchangé ; témoin `l_analyse_compare_aux_manifestes_de_la_langue`).
+Découverte : un import Go ne produit aucune bibliothèque (le parseur Go passe par l'extraction JavaScript),
+ticket dans le lot ; lot suivant validé : les imports Go par tree-sitter. Base = la tête de garde-pile-3 ;
+e2e_postgres au rejeu (code.rs), `RAG3WEAVER_MOTEUR_ANCIEN=1` dit. Ordre : cœur ×2 → recherche orphelins →
+G garde-pile-3 → codeparsers → embarquement dense → ED prédicat → G chaîne Rust.
+
+**22 h 0x — archi au rang 27 quater** : le fil `index-suivi` joint à l'hôte (index-suivi-joint-2 b1d99ae6f,
+passe entière verte sur master 9c71f3b80 sous 373b5477b, target propre 15 Go après un plafond à 33 :
+check_features, lib 2401/0, e2e_hooks 2+2, navigateur 45/45, e2e_demon_hote 14/14, e2e_lectures 27/27),
+reposé sur la tête des orphelins de recherche ; rejeu court (check_features, e2e_demon_hote, e2e_lectures,
+témoin du script) sous `RAG3WEAVER_MOTEUR_ANCIEN=1`. Ordre : cœur ×2 → recherche orphelins → archi
+index-suivi → G garde-pile-3 → codeparsers → embarquement dense → ED prédicat → G chaîne Rust.
+
+**22 h 1x — codeparsers** : les imports Go par tree-sitter rouges puis verts (branche imports-go sur cf90e1c :
+chaque `import_spec` donne une ImportReference Namespace, alias sinon dernier élément, `/vN` renvoie à
+l'élément d'avant, `gopkg.in/yaml.v3` → yaml, `_` SideEffect, `.` ne lie rien ; 315 passés). Voie (a) :
+le pointeur du rang 28 bis monte sur cette tête, le témoin Go de manifestes.rs revient, le ticket se ferme
+dans le lot.
+Prêt à 22 h 1x : deux commits (d1ff77ac7, 50601f55e), pointeur a1972c0 → cf90e1c → 6ba8478 ; témoin
+`go_l_analyse_garde_la_casse_du_module_requis` rouge sous cf90e1c, vert sous 6ba8478 ; manifestes:: 8/8 ;
+deux tickets fermés, check_tickets VERT 508 ; Cargo.lock inchangé. Attend la tête de garde-pile-3.
+
+**22 h 3x — le cœur** : ses suites de pile attendaient derrière son témoin des deux sens (plus de 20 min par
+tour, 20 000 relations versées par recherche de clé), arrêté par ses pids à 22 h 29 ; son premier tour sur
+f41c0ba5b, avant le correctif, était déjà rouge (la relation validée de B perdue dans les deux sens). Les
+suites partent sous `poste lourd` : planner_tests sur a56af398d, puis projected_graph_memory_test,
+planner_tests et e2e_test `--gtest_filter='*'` sur 9d90edbb6 ; deux pushs vers 23 h. Leçon : une mesure ou
+un témoin long ne se met pas devant un push de pile dans le même arbre — un arbre de pile ne porte que le
+lot qui pousse.
+
+**22 h 3x — G, second push du rang 28** : `check-rel-ancre` (tools/check_rel_directions : bouts par tranches
+de 500 offsets ancrées sur l'étiquette, quatre comptes par table — lues au sens avant, au sens arrière,
+union, perdues d'un sens — ; rouge d'abord sur une base jetable où une relation n'est lisible que par
+l'ancrage, EXPLAIN dans le témoin ; ticket 2329a532f). Outillage de procédure, mais code pour la garde (c) :
+dans la pile, posé sur garde-pile-3, même tour. Codeparsers se pose sur sa tête.
+
+**22 h 3x — 96 au rang 28 ter** : la trace d'archive (lot-96-trace : `ForEachNode` reçoit `report_results`,
+`archive` reçoit `trace` qui rend par section les candidates, l'étiquette brute, le sujet, la voie ; rien en
+base, le rapport va dans reponse.jsonl du lanceur ; e2e_archiviste 15/15, foreach_node 38/38, rouges sur
+6ba1427e4), derrière codeparsers. Le rejeu des deux corpus sur copie pour banc part sans attendre.
+Ordre : cœur ×2 → recherche orphelins → archi index-suivi → G garde-pile-3 + check-rel-ancre → codeparsers →
+96 trace → embarquement dense → ED prédicat → G chaîne Rust.
+22 h 4x : les replace de go.mod rejoignent le 28 bis (un replace local rend `project`, un replace distant
+garde la dépendance sous son nom et ajoute la cible ; manifestes:: 10/10) : trois commits.
+
+**22 h 4x — arbre principal au rang 30 bis** : les sources suivies (arbre-principal/suivies 2e41a4a11 :
+déclaration, résolution, racine, parente, flux, id stable, migration des clés, cache, branchement à la place
+de `couches.rs`, test par ligne du tableau ; 14 tests, check_features 8/8), passe complète en file à luciepc.
+Base = la tête du prédicat d'ED (rang 30) ; devant la chaîne Rust de G, toujours dernière.
+
+**22 h 5x — les orphelins sortent de la file** : reposés en 832a5896d sur 9d90edbb6, rejeu court vert
+(e2e_code, e2e_code_sync, e2e_postgres, check_features 8/8) mais le témoin de la lib toujours rouge
+(6 documents pour 5 Scope : lire l'offset en base au moment de `DeleteRecordNode` ne suffit pas) ; recherche
+trace à luciepc, la parité de banc sur 832a5896d sert de témoin indépendant. Archi se pose directement sur
+le pliage 9d90edbb6 ; recherche revient à son vert, sur la tête du dernier lot posé alors. Ordre : cœur ×2 →
+archi index-suivi → G garde-pile-3 + check-rel-ancre → codeparsers → 96 trace → embarquement dense → ED
+prédicat → arbre principal suivies → G chaîne Rust.
+22 h 5x : le 28 bis fait cinq commits (nouveautés avec « une dépendance déclarée pour une autre langue ne
+compte plus », README de la provenance, ticket souhait du `[lib] name`, puis requirements : dossier
+requirements/, `nom[extras] @ url`, `-e …#egg=nom`, une URL sans nom n'en invente pas ; manifestes:: 11/11).
+Le lot 1 (renommages Python en données + champ `imports`) entrera à part, à son vert.
+
+**22 h 5x — archi a donné sa tête** : index-suivi-joint-2-pile 58b7a8eab sur 9d90edbb6, rejeu court en
+cours sous MOTEUR_ANCIEN=1 ; G repose garde-pile-3 dessus. À son atterrissage, un commit de docs retire dans
+la minute la copie ouverte du ticket qu'il ferme (le `git mv` du lot n'a rien trouvé sur 9fd946ec3, plus
+ancien que le ticket 7aac92bfb). G : le relevé ancré trouve 11 relations perdues d'un sens dans LOCKS de
+code-principal là où l'ancien outil disait 0 ; le témoin de check-rel-ancre joue sur une copie reflink
+jetable de la base réelle, ROUGE « non joué » sans elle, hors de tout jeu sans base. Codeparsers : 28 bis
+de3d450c1 (cinq commits) ; lot 1 sur la table de pipreqs (Apache-2.0, attribution) + champ `imports`
+(`replace`, `distributions`) du manifeste.
+Banc : la parité des orphelins (832a5896d contre 9d90edbb6) verte au bit près 30/30, mais le témoin des
+comptes ne juge pas sur la forme à versions (84 211 / 84 211 avant et après l'effacement d'arbre.rs, parent
+et lot identiques). Deux faits à lire par les colonnes de version, pas les comptes : les Scope d'un fichier
+effacé sont-ils fermés (`_jusqu_a`) ou ouverts ; la ligne File est-elle fermée ou effacée (une histoire
+perdue sous versions). Banc vérifie ; ticket pour ED selon l'issue.
+Archi, 22 h 5x : rejeu court vert (check_features 8/8, témoin du script, e2e_demon_hote 14/14, e2e_lectures
+27/27, une seule lib) ; attend le « à toi » au « poussé » du cœur, PILE_AVANT=9d90edbb6.
+G, 22 h 5x : les deux lots du rang 28 prêts — garde-pile-3-pile 79d15a5fb sur 58b7a8eab (test_push_garde
+33/0, check_features 8/8 après un rouge de la garde du target repris par RAG3WEAVER_TARGET_REPRENDRE=1) ;
+check-rel-ancre-pile 0f9a149ed dessus (témoin : 4 ROUGE sur l'ancien outil, 5 vert sur le neuf ; LOCKS de
+code-principal : avant 436, arrière 425, union 436, perdues 11 ; hors de tout jeu automatique, vérifié).
+Codeparsers a sa base : 0f9a149ed.
+
+**22 h 5x — l'`IN` haché est sur master** (c8e6e7f18, dd43a2be3, e5e626803) ; le pliage suit. Codeparsers :
+28 bis reposé sur 0f9a149ed, provenance-par-langue-pile 498799f34 (cinq commits, pointeur a1972c0 →
+6ba8478, Cargo.lock inchangé, check_tickets VERT 493), rejeu court en file sous le lourd ; 96 se posera sur
+498799f34. Lot 1 : la partie codeparsers verte (renommages-python 85fe233, 318 passés).
+
+**22 h 5x — vingt-neuf atterris, le cœur a poussé ses deux** : l'`IN` haché (e5e626803, 3/3 en « =») et le
+pliage des listes littérales (1d5580d74, 5/5 en « = ») ; C++ seul, pas de rejeu Rust ; planner_tests (rapport
+IN/UNWIND 0,64), projected_graph_memory_test 10, e2e_test 1 867 verts, DropNodeTableReclaim seul rouge sous
+ticket. Réserve au ticket d'ED : les cas LongQueryPeak ne départagent que joués seuls, chacun dans son
+processus. ABI inchangée : la lib d'après portera les deux. Archi a le « à toi » (PILE_AVANT=9d90edbb6) ;
+puis G ×2, codeparsers, 96, embarquement, ED, arbre principal, G chaîne Rust.

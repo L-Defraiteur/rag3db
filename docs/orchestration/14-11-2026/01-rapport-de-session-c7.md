@@ -901,3 +901,75 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   un instantané du 13 à 20 h 36 dira depuis quand. **Banc** : la parité du prédicat verte 30/30 ; Laya
   synthétique rejoué à question fixe (22 % en zéro-coup, hasard 17 %). **96** : la trace d'archive commence
   (resté au repos après son push, dit tel quel).
+
+## 21 h 5x — vingt-huit atterris ; MALLOC_ARENA_MAX à l'hôte réel ne confirme pas la sonde
+
+- **Le `IN`** de recherche est sur master (9fd946ec3, 30 000 uuids 1,10 s → 0,28 s, tout en « = »). Le cœur
+  a le « à toi » pour ses deux pushs du rang 27 (a56af398d puis 9d90edbb6, suites C++ rejouées sur les
+  têtes reposées) ; puis G, embarquement, ED (parité 30/30 au bit près : prêt au rang 30), G.
+- **Arbre principal** : deux formes de la résolution changées à la relecture d'ED et validées — l'identifiant
+  d'une couche est le nom complet de la ref (clés courtes relues et réécrites avec témoin ; renommage =
+  une couche finit, une commence) ; la couche de travail est au worktree, pas à la branche (détaché =
+  génération épinglée sur son commit). Garde demandée : relire une clé courte ne perd rien quand une
+  étiquette homonyme existe.
+- **G, MALLOC_ARENA_MAX=2 sur l'hôte réel** (binaire 10b7a0edb, 373b5477b, hôte à part 7996, 50
+  search_code) : RSS 6 005 → 5 083 Mio au 50e (−0,9 Gio, −15 %), pente ÷4, mais médiane 460 → 793 ms
+  (+70 %), la série « avec » jouée en second sur un poste à load 24. La paire inverse tourne (13 min). Les
+  20,6 → 9,8 Gio d'ED venaient d'un hôte qui projette 2,9 Mo de Cypher ; celui de master court-circuite.
+  Rien à Lucie avant les deux paires ; si la lenteur suit le réglage, la ligne reste une note.
+
+## 22 h 2x — MALLOC_ARENA_MAX=2 : la lenteur suit le réglage, la ligne reste une note
+
+- **G, paire inverse faite** (hôte à part 7996, binaire 10b7a0edb, 373b5477b, 50 search_code) : dans les deux
+  ordres, moins d'1 Gio gagné au 50e appel (6 005 → 5 083 et 6 044 → 5 028 Mio, −16 %) et des appels 70 à
+  77 % plus lents (460 → 793 ms, 436 → 771 ms). Le poste n'y est pour rien (load 13 et 6). **La ligne
+  n'entre pas dans l'env** ; la page 03 de G (bdec3dd4f) garde les deux paires et la conclusion « sous un hôte
+  qui projette, à mesurer ». Rien à Lucie. Le ticket de la fuite dense d'ED reste ouvert ; l'hôte de mesure
+  est arrêté, la place mesure rendue.
+- **La pile** : le cœur rejoue ses suites C++ sur ses têtes reposées (a56af398d, 9d90edbb6) ; derrière,
+  recherche (orphelins, 27 ter), archi (index-suivi, 27 quater), G (garde-pile-3, 28), codeparsers
+  (provenance par langue + imports Go par tree-sitter, 28 bis), embarquement (dense), ED (prédicat), G
+  (chaîne Rust). Banc : le `IN` au bit près 30/30, les trois optimisations du soir jugées identiques.
+- **Arbre principal** (sources suivies) : déclaration, résolution, racine, parente, flux, fonctionnalité
+  finie, identifiant du dépôt et migration des clés — tous rouges puis verts (10 tests). Décisions dans la
+  page 02. Reste : cache, branchement (le `_couche` des générations se décide avec ED), témoins, passe.
+- **Correction d'ED à 22 h 2x** : l'écart entre sa série (20,6 → 9,8 Gio) et celle de G n'était pas la
+  projection du Cypher de 2,9 Mo — sa sonde tournait sur vue-publiee, masque déjà en prédicat, **sans le
+  court-circuit** d'arbre principal : le prédicat rejouait la jointure sur 72 652 versions à chaque appel sans
+  filtre. Page 03 de G corrigée (777413893). La conclusion tient : réglage non posé. Reste ouvert : le cas
+  filtré sur une base à versions, plat vers 20 Gio dans la sonde d'ED, à mesurer sur l'hôte réel après
+  vue-publiee.
+- **Hotfixs, 22 h 3x** : une première reconstruction des deux bases de luciepc donnait « égales » au contrôle
+  de G, mais `usages`/`impact` par le binaire avant et après montraient une relation vraie perdue
+  (lockIndexForWrite → acquireLock, l. 1173). Cause : le relevé — le sien comme l'outil de G — tirait ses
+  sources d'une seule lecture non ancrée, dans un seul sens. Corrigé (tranches d'offsets ancrées par
+  étiquette, sens prouvé par EXPLAIN) ; la chaîne rejoue sur copies neuves. Le reste tenait : lignes des impl
+  justes à 284cc00c0, fantômes des .md d'offset 0 disparus, héritages mal rattachés tombés. **« Aucun écart »
+  ne prouve pas qu'il ne manque rien** : demandé un compte par table dans le relevé et le ticket.
+- **ED, 2a′-2 conçu** (page 06, 987bdd49e) : deux rangs vivants par couche (n publié, w = n+1 en attente,
+  la couche de travail) ; l'écrivain ligne par ligne à six cas (réécrire ce qui est né à w, retirer par
+  `_jusqu_a = w`, ligne neuve à uuid hash(clé, couche, w), effacer au retour à l'identique) ; publication
+  au commit par une ligne `_generation` puis n := w ; cache à clé (couche, rang, époque si w, filtre,
+  cellule), borné, qui ferme côté lexical l'état B ; dense en post-filtre (k′ = 4k, repli à la projection
+  courte). Tranché : arbre sale → `arbre_propre: false` sur la génération avec le nombre de chemins sales,
+  2a′-3 rend le propre exact ; ordre : mesure des déplacés (50 commits de code-lourd), mémoire du filtré,
+  écrivain, cache, post-filtre dense mesuré avec parité et rappel en chiffres.
+- **Codeparsers, 22 h 4x** : le 28 bis fait trois commits (d7832ad7d, replace de go.mod compris). Relevé des
+  trous des sept langues contre les manifestes : Python (nom importé ≠ nom distribué : PyYAML → yaml,
+  Pillow → PIL… ; requirements PEP 508 `@` et `-e` perdus, requirements/ non reconnu ; setup.py, setup.cfg,
+  Pipfile, PEP 735 non lus), JS/TS (alias `#…`, `paths`, `@/` comptés inconnue ou paquet), C# (aucun
+  .csproj lu, espace de noms comparé au paquet entier), Go (go.work), C/C++ (conan, CMake ; tiret des ports
+  vcpkg), partout (une dépendance d'une autre langue ne compte plus — à dire dans les nouveautés). Ordre
+  donné : requirements, renommages Python en données + champ `imports` déclaré du manifeste, .csproj +
+  préfixe C#, alias de résolution, go.work, conan/CMake ; un lot par trou, rouge d'abord.
+- **lucivy, pièce 1 verte** (dictionary-compaction) : rouge sur main (un segment seul gardait ses
+  200 supprimés), vert (réécrit en un tour, .gmap 631 ids = l'index neuf, hits et scores au bit près). Coût à
+  luciepc sous le lourd : indexation +0,6 à +1,8 % (sous le bruit), compaction +12 % (le pré-passage qui
+  relit les postings ; 17,7 Mo rendus). Décision : garder tel quel, PR, fusion à la CI verte, pas de tag ;
+  la réduction (a) en ticket souhait ; pièce 2 ensuite.
+- **ED, la mesure des déplacés** (sonde sur les 50 derniers commits de master, arêtes lues sur une copie
+  de R) : 44 849 arêtes recopiées, 86 % par les seuls déplacés ; médiane 0 sur les 50 (docs), 1 500 parmi les
+  commits de code, maximum 12 444 (cbb529c7e). À la lettre du seuil d'arbre principal, la position reste
+  dans l'identité. Tranché : **elle reste pour 2a′-2**, avec le compte des recopies à chaque publication dans
+  l'état et 20 000 comme seuil de réouverture ; **elle sort de l'identité avec 2a′-3**, en une seule
+  migration avec celle des objets git — la mesure en est la justification écrite.
