@@ -1000,7 +1000,9 @@ fn synchroniser(
     // **Les manifestes du dépôt**, lus une fois sur la liste complète (le Cargo.lock n'est pas un fichier
     // admis à l'index) : la provenance des noms importés, et l'état d'index les dit.
     let t = std::time::Instant::now();
-    let manifestes = crate::manifestes::Manifestes::lire(&listed, |c| source.read(c).ok().flatten());
+    let mut manifestes = crate::manifestes::Manifestes::lire(&listed, |c| source.read(c).ok().flatten());
+    // Les renommages du manifeste du backend (`workspace.imports`) voyagent avec eux.
+    manifestes.renommages = options.generated.imports.clone();
     catalog.note_manifestes(&manifestes).map_err(|e| e.to_string())?;
     profil.add("lire les manifestes", t);
     // Le tri au nom seul, comme `analyze_source` : ne pas lire un gros

@@ -33,6 +33,22 @@ pub struct Manifestes {
     /// Les `replace` de `go.mod` (`ancien => nouveau`), tels qu'écrits (ils sont suivis : voir `lire_go_mod`).
     #[serde(default)]
     pub remplacements_go: BTreeSet<String>,
+    /// **Les renommages que le manifeste du backend déclare** (`workspace.imports`), par langue : posés
+    /// par la synchronisation, ils voyagent avec les manifestes jusqu'à l'analyse.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub renommages: BTreeMap<String, Renommages>,
+}
+
+/// **Une langue sous `workspace.imports`** : les distributions dont le module importé porte un autre nom
+/// (`"mon-paquet": ["mon_module"]`). Elles complètent la table livrée de la langue (codeparsers,
+/// `data/imports/<langue>.toml`, `[distributions]`), ou la remplacent si `replace`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Renommages {
+    #[serde(default)]
+    pub replace: bool,
+    #[serde(default)]
+    pub distributions: BTreeMap<String, Vec<String>>,
 }
 
 /// Un nom de fichier de manifeste reconnu.
@@ -440,6 +456,23 @@ mod tests {
         assert_eq!(m.lus, vec!["requirements/base.txt", "requirements/dev.txt"]);
         let py: Vec<&str> = m.dependances_par_langue["python"].iter().map(String::as_str).collect();
         assert_eq!(py, vec!["Django", "httpx", "mon-outil", "requests"]);
+    }
+
+    /// De bout en bout : un module qui ne porte pas le nom de sa distribution (`PyYAML` → `yaml`, par la
+    /// table livrée ; `mon-paquet` → `mon_module`, par `workspace.imports`) est une dépendance.
+    #[cfg(feature = "code")]
+    #[test]
+    fn l_analyse_suit_les_renommages_livres_et_declares() {
+        let mut m = lire(&[("requirements.txt", "PyYAML>=6\nmon-paquet==1.0\n")]);
+        m.renommages.insert(
+            "python".to_string(),
+            Renommages { replace: false, distributions: BTreeMap::from([("mon-paquet".to_string(), vec!["mon_module".to_string()])]) },
+        );
+        let source = "import yaml\nimport mon_module\n\ndef lire():\n    return yaml.load, mon_module.f\n";
+        let a = crate::code::analyze_in_project_avec("/virtual", vec![("a.py".to_string(), source.to_string())], "", None, Some(&m));
+        let provenance = |nom: &str| a.libraries.iter().find(|l| l.name == nom).map(|l| l.provenance.clone());
+        assert_eq!(provenance("yaml"), Some(Some("dependency".to_string())), "PyYAML, par la table livrée : {:?}", a.libraries);
+        assert_eq!(provenance("mon_module"), Some(Some("dependency".to_string())), "mon-paquet, par workspace.imports : {:?}", a.libraries);
     }
 
     #[test]
