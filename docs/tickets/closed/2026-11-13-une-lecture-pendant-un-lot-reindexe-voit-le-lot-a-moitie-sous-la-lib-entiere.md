@@ -1,11 +1,9 @@
 # Une lecture pendant un lot réindexé voit le lot à moitié, sous la lib entière
 
-- **État** : ouvert (13 novembre 2026), relevé par archi pendant la passe de son lot (la bulle
-  fantôme du chat et « dire vrai »). Départagé le 14 novembre : **c'est un repli de rag3weaver, pas le
-  moteur**. L'instantané de lecture d'un appel, plafonné à 1 s, s'est validé en cours d'appel, et la
-  suite de l'appel a lu hors instantané sans le dire. La première conclusion de recherche (« lecture
-  sale du moteur », 13 novembre au soir) est retirée ; elle reste écrite plus bas, avec son retrait.
-  Correctif à trancher par Lucie (la proposition est en fin de ticket).
+- **État** : corrigé (14 novembre 2026, lot plafond-d-instantane, recherche). La cause était le plafond de
+  1 s de l'instantané de lecture, qui validait l'instantané en cours d'appel ; il est retiré, et un appel
+  ne mêle plus jamais deux instantanés (décision de Lucie). La première conclusion, « lecture sale du
+  moteur », reste écrite plus bas, avec son retrait.
 - **Famille** : produit
 - **Gravité** : passe rouge sans cause dans le lot qui la joue ; et peut-être une lecture qui voit
   un lot réindexé à moitié, si ce n'est pas le seul témoin qui cède sous la charge.
@@ -202,3 +200,22 @@ vert dix fois sur dix (COPY 8 à 14 ms, CHECKPOINT 2 ms, un lecteur ouvert). Son
 - **Rouge d'abord** : un appel `usages` forcé à durer au-delà du plafond, pendant un lot ouvert, rend
   aujourd'hui une réponse mêlée sans le dire. Après le correctif, il rend un seul état, ou il dit
   qu'il a recommencé.
+
+## Le correctif (14 novembre 2026, recherche, à la décision de Lucie)
+
+- **Le plafond se retire** : l'instantané tient jusqu'à la fin de l'appel. `RAG3WEAVER_SNAPSHOT_MAX_MS`
+  disparaît. Le témoin `read_pool::tests::un_lecteur_ouvert_ne_retient_pas_le_point_de_reprise_d_un_copy`
+  garde la raison : un lecteur ouvert ne retient plus le point de reprise d'un COPY.
+- **Le filet** : une ouverture d'instantané refusée le rompt ; ses requêtes échouent au lieu de lire hors
+  de lui. `Backend::execute_plan_avec` rejoue l'appel entier sous un instantané neuf, au plus deux fois
+  (`RENOUVELLEMENTS_MAX`), et la réponse porte `instantane_renouvele: n`. Au-delà, l'appel est refusé en
+  le disant.
+- **Le pool plein** fait attendre jusqu'à 5 s (`ATTENTE`), puis refuse l'appel avec la raison. Il ne
+  laisse plus lire sans instantané.
+- **L'état** : les compteurs de `reads` deviennent `refused_full` et `broken_snapshots`.
+- **Les témoins, rouges d'abord** :
+  - `read_pool::tests::un_instantane_tient_tout_l_appel_meme_au_dela_d_une_seconde` ;
+  - `read_pool::tests::pool_plein_un_appel_attend_la_connexion_rendue` ;
+  - puis `read_pool::tests::une_ouverture_refusee_rompt_l_instantane_sans_lire_hors_de_lui`,
+    `read_pool::tests::pool_plein_au_dela_de_l_attente_l_appel_est_refuse_et_c_est_compte` et
+    `backend::tests::un_appel_dont_l_instantane_se_rompt_recommence_entier_et_le_dit`.
