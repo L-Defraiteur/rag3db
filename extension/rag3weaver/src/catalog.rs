@@ -3335,6 +3335,25 @@ fn read_threads() -> u64 {
         self.current_embedding_entry().map(|entry| entry.slug())
     }
 
+    /// Les clés de `_catalog_meta` qui commencent par `prefixe`, avec leur valeur (une valeur vide vaut
+    /// absente et n'est pas rendue).
+    pub(crate) fn meta_par_prefixe(&self, prefixe: &str) -> Result<Vec<(String, String)>, CatalogError> {
+        self.check_reopen()?;
+        let stmt = self.dialect.load_meta_by_prefix("prefix");
+        let result = self
+            .conn
+            .execute_with_params(&stmt, &[QueryParam::new("prefix", CypherValue::String(prefixe.into()))])
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        Ok(result
+            .rows
+            .iter()
+            .filter_map(|row| match (row.get(0), row.get(1)) {
+                (Some(CypherValue::String(k)), Some(CypherValue::String(v))) if k.starts_with(prefixe) && !v.is_empty() => Some((k.clone(), v.clone())),
+                _ => None,
+            })
+            .collect())
+    }
+
     /// **Les modèles que cet index sait servir**, tels qu'ils se sont déclarés.
     pub fn registered_embedding_models(&self) -> Result<Vec<crate::embedding_storage::EmbeddingModelEntry>, CatalogError> {
         self.check_reopen()?;

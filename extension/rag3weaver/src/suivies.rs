@@ -549,8 +549,32 @@ pub struct Identifiant {
 
 /// **L'identifiant du dépôt** depuis les pointes suivies ; `None` sans pointe.
 pub fn identifiant_des_suivies(racine: &std::path::Path, pointes: &[String]) -> Result<Option<Identifiant>, String> {
-    let _ = (racine, pointes);
-    Err("l'identifiant des suivies n'existe pas encore".into())
+    use crate::couches::git;
+    if pointes.is_empty() {
+        return Ok(None);
+    }
+    let mut args = vec!["rev-list", "--max-parents=0"];
+    args.extend(pointes.iter().map(String::as_str));
+    let racines: Vec<String> = git(racine, &args)?.lines().map(str::to_string).filter(|l| !l.is_empty()).collect();
+    if racines.is_empty() {
+        return Ok(None);
+    }
+    let mut args = vec!["log", "--no-walk=unsorted", "--format=%H %at"];
+    args.extend(racines.iter().map(String::as_str));
+    let mut datees: Vec<(i64, String)> = git(racine, &args)?
+        .lines()
+        .filter_map(|l| {
+            let (h, t) = l.split_once(' ')?;
+            Some((t.trim().parse().ok()?, h.to_string()))
+        })
+        .collect();
+    datees.sort();
+    let Some((premiere, _)) = datees.first().cloned() else { return Ok(None) };
+    let mut egaux: Vec<String> = datees.iter().filter(|(t, _)| *t == premiere).map(|(_, h)| h.clone()).collect();
+    egaux.sort();
+    egaux.dedup();
+    let id = egaux[0].clone();
+    Ok(Some(Identifiant { id, egaux: if egaux.len() > 1 { egaux } else { Vec::new() } }))
 }
 
 /// **Migrer les clés d'un dépôt** dans `_catalog_meta` : de l'identifiant `ancien` à `neuf` (ils peuvent être
@@ -558,8 +582,39 @@ pub fn identifiant_des_suivies(racine: &std::path::Path, pointes: &[String]) -> 
 /// (`refs/heads/<branche>`). **Rien ne se perd** : une clé cible déjà posée n'est jamais écrasée, la source
 /// reste alors et le journal le dit. Rend le journal de ce qui a bougé.
 pub fn migrer_les_cles(catalog: &crate::catalog::Catalog, ancien: &str, neuf: &str) -> Result<Vec<String>, String> {
-    let _ = (catalog, ancien, neuf);
-    Err("la migration des clés n'existe pas encore".into())
+    let e = |e: crate::catalog::CatalogError| e.to_string();
+    let mut journal = Vec::new();
+    let mut deplacer = |source: &str, valeur: &str, cible: &str| -> Result<(), String> {
+        if source == cible {
+            return Ok(());
+        }
+        match catalog.read_meta_key(cible).map_err(e)?.filter(|v| !v.is_empty()) {
+            Some(deja) if deja == valeur => {
+                catalog.persist_meta_key(source, "").map_err(e)?;
+                journal.push(format!("{source} : déjà en {cible}, retirée"));
+            }
+            Some(_) => journal.push(format!("{source} gardée : {cible} est déjà posée autrement (la garde, rien ne s'écrase)")),
+            None => {
+                catalog.persist_meta_key(cible, valeur).map_err(e)?;
+                catalog.persist_meta_key(source, "").map_err(e)?;
+                journal.push(format!("{source} → {cible}"));
+            }
+        }
+        Ok(())
+    };
+    for genre in ["couche", "couche_fermee"] {
+        let prefixe = format!("{genre}:{ancien}:");
+        for (cle, valeur) in catalog.meta_par_prefixe(&prefixe).map_err(e)? {
+            let reste = &cle[prefixe.len()..];
+            let complet = if reste.starts_with("refs/") { reste.to_string() } else { format!("refs/heads/{reste}") };
+            deplacer(&cle, &valeur, &format!("{genre}:{neuf}:{complet}"))?;
+        }
+    }
+    let ancienne = format!("branches_suivies:{ancien}");
+    if let Some(valeur) = catalog.read_meta_key(&ancienne).map_err(e)?.filter(|v| !v.is_empty()) {
+        deplacer(&ancienne, &valeur, &format!("branches_suivies:{neuf}"))?;
+    }
+    Ok(journal)
 }
 
 /// Les refs du dépôt, chacune sur son commit (une étiquette annotée, déréférencée).
