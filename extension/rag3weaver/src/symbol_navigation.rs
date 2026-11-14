@@ -478,7 +478,8 @@ impl<'a> PreparedNavigation<'a> {
             // une définition C++ hors classe, dans ce fichier. Génériques retirés (« Foo<U> » → « Foo »).
             // Une déclaration et une définition seules de leur nom fusionnent ; des surcharges restent
             // séparées, et la couverture le dit.
-            let sans_generiques = |n: &str| n.split('<').next().unwrap_or(n).trim().to_string();
+            // `<` pour Rust et C++, `[` pour Go (`Pile[K]`, la forme d'avant le 15 novembre).
+            let sans_generiques = |n: &str| n.split(['<', '[']).next().unwrap_or(n).trim().to_string();
             let nom_du_type = sans_generiques(text(r, "name"));
             let declares: Vec<usize> = (0..selected.len())
                 .filter(|&j| j != racine && !nom_du_type.is_empty() && sans_generiques(text(selected[j], "parent_name")) == nom_du_type)
@@ -962,6 +963,19 @@ mod tests {
         let v = membres_de(&src, &rows, "t.go", "t");
         assert_eq!(noms(&v), vec!["M".to_string()], "{v}");
         assert_eq!(v["members"][0]["provenances"], json!(["declared_parent"]), "{v}");
+    }
+
+    /// **Go générique : `Pile[K]` nomme le type `Pile`** (un index d'avant codeparsers c6216ea portait
+    /// le parent « Pile[K] » ; la forme neuve porte « Pile » ; les deux se lisent).
+    #[test]
+    fn go_generic_receivers_name_their_type() {
+        let c = "type Pile[K any] struct {\n\tv []K\n}\n\nfunc (p *Pile[K]) Push(k K) {\n\tp.v = append(p.v, k)\n}\nfunc (p Pile[K]) Len() int {\n\treturn len(p.v)\n}\n";
+        let (src, rows) = lignes("p.go", c, &[
+            ("t", "Pile", "class", 1, 3, "", "type Pile[K any] struct"),
+            ("push", "Push", "method", 5, 7, "Pile[K]", "func (p *Pile[K]) Push(k K)"),
+            ("len", "Len", "method", 8, 10, "Pile", "func (p Pile[K]) Len() int"),
+        ]);
+        assert_eq!(noms(&membres_de(&src, &rows, "p.go", "t")), vec!["Len".to_string(), "Push".to_string()]);
     }
 
     /// **C++ : déclarée dans la classe, définie hors d'elle, une méthode n'est qu'un membre** (la
