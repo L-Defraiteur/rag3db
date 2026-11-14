@@ -102,7 +102,7 @@ Environment=RAG3WEAVER_EXEC_THREADS=8
 `check-lib.conf.avant-*`, laissées par mes poses (`bascule-pose.sh`). systemd ne les lit pas, puisqu'elles ne
 finissent pas par `.conf`, mais elles encombrent. Elles peuvent partir, au mot de Lucie.
 
-## MALLOC_ARENA_MAX=2, une ligne pour l'environnement de l'hôte (proposition, 14 novembre, 22 h)
+## MALLOC_ARENA_MAX=2 : mesuré sur l'hôte réel, non retenu (14 novembre, 22 h 30)
 
 **Le chiffre d'ED** (ticket `docs/everything-declarative/tickets/2026-11-14-une-recherche-a-versions-garde-20-gio-de-memoire-residente.md`) :
 50 recherches sans filtre sur une base à versions (la copie migrée de 1b), embarqueur connecté, dans un processus de
@@ -118,9 +118,31 @@ Le drop-in de la section précédente n'est pas nécessaire pour elle.
 **Avant de la poser**, une mesure sur l'hôte réel (mot de c7) : un second hôte sur un port à part (jamais 7878), sur
 une copie reflink de la même base à versions, avec puis sans la ligne, de vraies requêtes `search_code` par HTTP,
 le VmRSS relevé à chaque appel. La sonde d'ED mesure un processus de test qui cherche ; cette mesure-là dit l'hôte.
-Le chiffre viendra ici.
 
-**La commande pour Lucie**, aux deux postes, quand elle dit oui (redémarre l'hôte : les bases se rouvrent au premier
+**La mesure, faite le 14 novembre de 21 h 45 à 22 h 27** à luciepc, sous `poste mesure` :
+- le montage : binaire de master 10b7a0edb (il porte 1b), sous 373b5477b, non posé ; un hôte à part sur 7996, avec son
+  propre dossier de démon ; une copie reflink de `~/.cache/rag3weaver-build/1b-copie/migree-20261114-1641`, avec
+  `.extensions` réécrit sur la libvector de 373b5477b ; le manifeste d'ED sans `watches` ;
+- le relevé : 50 `search_code` par HTTP (10 requêtes en boucle), le VmRSS de l'hôte après chaque appel ;
+- la mesure : deux paires, dans les deux ordres, pour séparer le réglage de la charge du poste (load 24, puis 13 à 6).
+  Script : `~/.cache/optimiseur-mesure/arena/mesure.sh` à luciepc.
+
+| série | ordre | RSS 1er → 10e → 50e appel | pente 11e → 50e | médiane 2–50 |
+|---|---|---|---|---|
+| sans | 1re | 5 034 → 5 678 → 6 005 Mio | +170 Mio | 460 ms |
+| avec | 2e | 4 682 → 4 888 → 5 083 Mio | +38 Mio | 793 ms |
+| avec | 1re | 4 795 → 4 921 → 5 028 Mio | +60 Mio | 771 ms |
+| sans | 2e | 5 048 → 5 614 → 6 044 Mio | +301 Mio | 436 ms |
+
+Le réglage gagne un peu moins d'1 Gio (−16 %) et aplatit la pente. Mais **il ralentit les appels de 70 à 77 %**, dans
+les deux ordres : la lenteur vient du réglage, pas de la charge du poste. L'écart avec les 20,6 → 9,8 Gio d'ED est
+attendu, d'après c7 : sa sonde projetait un Cypher de 2,9 Mo (la rétention de la projection), et l'hôte de master
+passe désormais par le court-circuit sans masque, qui ne projette plus ainsi.
+
+**Conclusion : la ligne n'entre pas dans l'environnement de l'hôte.** Elle reste une note, « sous un hôte qui
+projette, à mesurer ». La commande ci-dessous reste écrite pour ce jour-là, et ne se pose pas sans une nouvelle mesure.
+
+**La commande, si une mesure la justifie un jour**, aux deux postes, au mot de Lucie (redémarre l'hôte : les bases se rouvrent au premier
 appel) :
 
 ```sh
