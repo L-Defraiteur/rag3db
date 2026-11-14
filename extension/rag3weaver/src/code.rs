@@ -5752,4 +5752,30 @@ mod tests_de_l_ecrivain {
         assert_eq!(lignes(&cat, "f").len(), 2, "les deux lignes de f restent : {:?}", lignes(&cat, "f"));
         assert_eq!(lignes(&cat, "a").len(), 1, "la ligne de a est retirée, pas effacée");
     }
+
+    /// Les arêtes recopiées que la génération publiée au rang `rang` dit.
+    fn recopiees_a(cat: &Catalog, rang: i64) -> i64 {
+        let r = cat
+            .conn()
+            .execute_with_params(
+                &format!("MATCH (g:{}) WHERE g.rang = $r RETURN g.aretes_recopiees", crate::generations::TABLE),
+                &[QueryParam::new("r", CypherValue::Int(rang))],
+            )
+            .unwrap();
+        r.rows[0][0].as_i64().unwrap()
+    }
+
+    /// **Témoin 11 : la publication dit les arêtes recopiées.** `f` change sous l'appel de `a` : la
+    /// génération qui le publie dit une arête recopiée au moins ; la suivante, sans changement, zéro.
+    #[test]
+    fn la_publication_dit_les_aretes_recopiees() {
+        let (mut cat, src) = base();
+        let n = cat.publier_la_generation("c1", 0).expect("publier");
+        assert_eq!(recopiees_a(&cat, n), 0, "rien de recopié avant le premier changement");
+        sauver(&mut cat, &src, "b.rs", F2);
+        let m = cat.publier_la_generation("c2", 0).expect("publier");
+        assert!(recopiees_a(&cat, m) >= 1, "l'arête de a vers f recopiée : {}", recopiees_a(&cat, m));
+        let o = cat.publier_la_generation("c3", 0).expect("publier");
+        assert_eq!(recopiees_a(&cat, o), 0, "le compte repart de zéro à chaque publication");
+    }
 }
