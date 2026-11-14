@@ -59,8 +59,9 @@ l'autre, dix fois de suite, même sans rouge.
 | 16 | archi | les quatre mineurs de l'atelier | atelier-quatre-mineurs-2 dd9504157 (vert, passe complète) | rejeu court après tty-7 |
 | 17 | embarquement | activations nommées au manifeste, le groupe bge-m3/relecteur/OCR à la demande | activations-nommees 7074130e7 + docs 73262341b (vert, luciepc) | vrai jeu par hôte isolé 7971 / fournisseur 7891 après la mesure d'ED |
 | 18 | arbre principal | 1b, la migration par lots (représentant par version) | arbre-principal/migration-1b c26f906b7 (vert sur la copie réelle) | jeu fixe de requêtes puis passe complète |
-| 19 | G | `RAG3WEAVER_DB_THREADS` → `SystemConfig::max_num_threads` | à venir | rouge d'abord |
-| 20 | archi | aucun client HTTP sans délai (reponse_s 120, sonde_s 5 dans daemon.json) | à venir | rouge d'abord |
+| 19 | G | `RAG3WEAVER_DB_THREADS` → `SystemConfig::max_num_threads` (le pool du moteur suit le quota ; avant, `hardware_concurrency` l'ignorait) | fils-du-moteur 0a8142493 | rouge (branche jetable) puis vert en file à luciepc |
+| 20 | archi | aucun client HTTP sans délai (reponse_s 120, sonde_s 5 dans daemon.json, borne jusqu'aux en-têtes) | clients-avec-delai 3bb802936 (vert, passe complète) | e2e_lectures et e2e_code en plus, puis en pile derrière les mineurs |
+| 21 | hotfixs | les arêtes en double : le témoin de la clé primaire sous point de reprise (rouge e93710f36 attendu, vert 0c41f9fe6) | liens-sous-point-de-reprise ae7e6ae70 | en file au portable |
 
 Chaque session dit à c7 et au rang suivant la tête de sa branche de pile dès qu'elle est poussée.
 
