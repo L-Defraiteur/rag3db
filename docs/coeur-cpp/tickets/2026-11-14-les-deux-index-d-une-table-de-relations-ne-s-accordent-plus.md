@@ -117,3 +117,34 @@ pool ou des COMMIT refusés sous plusieurs écrivains ? `journalctl --user -u ra
    s'annule, puis le contrôle des deux sens (`tools/check_rel_directions`) rend un écart.
 2. Le même témoin, vert sous 373b5477b.
 3. Les deux bases réparées dans la fenêtre d'hotfixs, puis le contrôle des deux sens égal sur les 22 tables.
+
+## Le cœur : la fenêtre de l'annulation perd des relations validées (14 nov., 23 h 35)
+
+**Le témoin** : `RefusedCommitRelDirections.BothDirectionsKeepTheRelationsOfAnotherWriter`
+(`test/transaction/refused_commit_rel_directions_test.cpp`, branche `deux-sens-sous-annulation`,
+`7c92562b1`, pas sur master).
+
+- Le COMMIT de A (5 000 relations) est refusé : le journal ne se synchronise pas
+  (`CutFileSystem`).
+- B valide une relation pendant que A se déroule.
+- Chaque relation de B est lue par sa source (sens avant) et par sa destination (sens arrière).
+- Les bouts sont dans des groupes de nœuds différents : A va du groupe 0 au groupe 2, B du groupe
+  0 au groupe 1.
+
+| Base | Verdict |
+|---|---|
+| `f41c0ba5b` (avant le correctif de l'annulation, `373b5477b`) | rouge 2/2 : à chaque tour, la relation validée de B est perdue, par la source **et** par la destination (0 et 0) |
+| `7c92562b1` (master, avec le correctif) | vert 3/3 |
+
+Ce que cela établit : sous une lib d'avant `373b5477b`, la fenêtre de l'annulation (un COMMIT
+refusé, annulé hors du verrou, qui tronquait les groupes) **perd des relations validées**.
+code-lourd et code-principal ont tourné sous de telles libs.
+
+**Ce que cela n'établit pas encore** : la forme d'**un seul côté**, ni les cases « vues deux
+fois ». Le témoin perd la relation des deux côtés, alors que code-lourd la garde d'un côté. Il
+faut une troncature qui ne touche qu'un sens : par exemple un refus entre le versement d'un sens
+et celui de l'autre, ou une annulation dont un sens a déjà été réécrit par un point de reprise. Ce
+sera le prochain témoin. Tant qu'il manque, la cause du désaccord n'est que probable.
+
+**Pour la réparation** : la garde de `373b5477b` empêche la suite, mais ne répare pas ce qui est
+déjà écrit. La reconstruction des trois tables sur copie (hotfixs) reste le remède.
