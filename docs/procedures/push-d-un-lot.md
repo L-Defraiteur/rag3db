@@ -51,6 +51,11 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
 
 **Journaux (c7, 13 nov. 2026)** : après le push, les journaux de la passe **s'archivent** (sous `~/.cache/rag3weaver-build/archives/<lot>-<date>/`), ils ne s'effacent pas ; seuls le worktree et les targets s'effacent. Un rouge vu pendant la passe reste lisible après coup : un journal effacé a privé everything declarative de la vue d'un rouge du navigateur.
 
+**La passe épinglée vit dans le dépôt** (c7, 14 nov. 2026) : `tools/poste/passe_epinglee.sh`, avec son témoin
+`tools/poste/test_passe_epinglee.sh`. Les postes l'appellent par sa copie `~/.cache/rag3weaver-build/passe_epinglee.sh`,
+recopiée depuis master au mot de c7 (sha256 avant et après, l'ancienne gardée), comme `push_garde.sh`. Une copie du cache
+qui diffère du dépôt se corrige dans le dépôt, puis se recopie : jamais à la main dans le cache.
+
 ### Portée commune des validations Linux
 
 `run_e2e.sh` et `scripts/temoins_navigateur.sh` entrent désormais par
