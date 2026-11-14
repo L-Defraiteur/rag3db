@@ -460,24 +460,35 @@ impl Forme<'_> {
             } else {
                 (entity, "n", None)
             };
-
-        let mut parser = FilterParser::new(&self.relations, self.dialect.as_ref());
-        let parsed = parser
-            .parse_condition(condition, filter_entity, filter_alias)
-            .map_err(|e| CatalogError::FilterError(e.to_string()))?;
-
         let resolve_alias = if join_from.is_some() { "idx" } else { "n" };
-        // La visibilité des générations (2a′, page 03, § 3) : imposée à côté du filtre ; sans
-        // filtre, seulement si une ligne de la table n'est pas visible, car « aucune clause »
-        // veut dire ici « toutes les lignes ».
-        let mut parsed = parsed;
-        if let Some(v) = self.generations.as_ref() {
-            if !parsed.where_clauses.is_empty() || !v.tout_visible {
-                if let Some(c) = v.clause_sur(self.dialect.as_ref(), entity, resolve_alias) {
-                    parsed.where_clauses.push(c);
+
+        // Un filtre par uuids se lit par la clé primaire, jamais par un `IN` sur
+        // toute la table : 30 000 uuids y coûtaient 1,1 s, la table fois la liste.
+        // L'indirection (le filtre porte sur l'entité titre) garde le balayage.
+        if join_from.is_none() {
+            if let (Some(cles), reste) = extraire_les_uuids(condition) {
+                let parsed = self.parser_le_filtre(entity, reste.as_ref(), filter_entity, filter_alias, resolve_alias)?;
+                let where_clause = (!parsed.where_clauses.is_empty()).then(|| parsed.combine_where());
+                if let Some(query) = self.dialect.filter_resolve_offsets_by_keys(
+                    entity,
+                    chunk_table,
+                    resolve_alias,
+                    &parsed.match_clauses,
+                    where_clause.as_deref(),
+                    PARAM_DES_CLES,
+                ) {
+                    let mut params = parsed.params;
+                    params.push(QueryParam::new(PARAM_DES_CLES, CypherValue::List(cles)));
+                    let result = self
+                        .conn
+                        .execute_with_params(&query, &params)
+                        .map_err(|e| CatalogError::DbError(e.to_string()))?;
+                    return Ok(Some(offsets_tries(&result)));
                 }
             }
         }
+
+        let parsed = self.parser_le_filtre(entity, Some(condition), filter_entity, filter_alias, resolve_alias)?;
         if parsed.where_clauses.is_empty() {
             return Ok(None);
         }
@@ -506,20 +517,40 @@ impl Forme<'_> {
                 .execute_with_params(&query, &parsed.params)
                 .map_err(|e| CatalogError::DbError(e.to_string()))?
         };
-        let mut ids: Vec<u64> = result
-            .rows
-            .iter()
-            .filter_map(|r| r.first().and_then(|v| v.as_i64()).map(|i| i as u64))
-            .collect();
-        // **Contrat d'API de lucivy** (doc 09, §2.4) : un ensemble trié et
-        // sans doublon est lu sur place, sans allocation ; un ensemble
-        // quelconque est copié, trié et dédupliqué **à chaque requête**. Ils
-        // l'ont mesuré : 540 000 ids passent de 6,004 ms à 0,220 ms. La
-        // requête les rend probablement déjà triés — on ne parie pas dessus,
-        // ça coûte un tri une fois contre un tri par requête.
-        ids.sort_unstable();
-        ids.dedup();
-        Ok(Some(ids))
+        Ok(Some(offsets_tries(&result)))
+    }
+
+    /// Le filtre traduit, avec la visibilité des générations (2a′, page 03,
+    /// § 3) imposée à côté ; sans filtre, seulement si une ligne de la table
+    /// n'est pas visible, car « aucune clause » veut dire ici « toutes les
+    /// lignes ».
+    fn parser_le_filtre(
+        &self,
+        entity: &str,
+        condition: Option<&FilterCondition>,
+        filter_entity: &str,
+        filter_alias: &str,
+        resolve_alias: &str,
+    ) -> Result<crate::filter::ParsedFilter, CatalogError> {
+        let mut parsed = match condition {
+            Some(c) => FilterParser::new(&self.relations, self.dialect.as_ref())
+                .parse_condition(c, filter_entity, filter_alias)
+                .map_err(|e| CatalogError::FilterError(e.to_string()))?,
+            None => crate::filter::ParsedFilter {
+                where_clauses: Vec::new(),
+                match_clauses: Vec::new(),
+                params: Vec::new(),
+                aliases: HashMap::new(),
+            },
+        };
+        if let Some(v) = self.generations.as_ref() {
+            if !parsed.where_clauses.is_empty() || !v.tout_visible {
+                if let Some(c) = v.clause_sur(self.dialect.as_ref(), entity, resolve_alias) {
+                    parsed.where_clauses.push(c);
+                }
+            }
+        }
+        Ok(parsed)
     }
 
     pub fn search_target_names(&self) -> Vec<String> {
@@ -881,6 +912,59 @@ impl ReadViewCell {
     }
 }
 
+/// Le nom du paramètre qui porte les uuids d'un filtre lu par la clé ; le
+/// parseur nomme les siens `p0`, `p1`…, jamais ainsi.
+const PARAM_DES_CLES: &str = "_cles_du_filtre";
+
+/// **Les uuids d'un filtre, s'il en désigne** : `_uuid` en liste ou en `In`,
+/// seul ou comme l'un des termes d'un `Must` ; rend la liste et le reste du
+/// filtre (`None` s'il n'en reste rien). Un `Must` à deux listes d'uuids, ou
+/// une forme où l'uuid n'est pas une conjonction (`Should`, `MustNot`), garde
+/// le filtre entier : `(None, Some(filtre))`.
+fn extraire_les_uuids(condition: &FilterCondition) -> (Option<Vec<CypherValue>>, Option<FilterCondition>) {
+    fn liste(c: &FilterCondition) -> Option<Vec<CypherValue>> {
+        use rag3weaver_ir::{FilterOp, FilterValue};
+        match c {
+            FilterCondition::Field { key, value } if key == "_uuid" => match value {
+                FilterValue::List(v) => Some(v.clone()),
+                FilterValue::Ops(ops) => match ops.as_slice() {
+                    [FilterOp::In(v)] => Some(v.clone()),
+                    _ => None,
+                },
+                FilterValue::Direct(_) => None,
+            },
+            _ => None,
+        }
+    }
+    if let Some(v) = liste(condition) {
+        return (Some(v), None);
+    }
+    if let FilterCondition::Must(termes) = condition {
+        let a_cles: Vec<usize> = termes.iter().enumerate().filter(|(_, t)| liste(t).is_some()).map(|(i, _)| i).collect();
+        if let [i] = a_cles.as_slice() {
+            let cles = liste(&termes[*i]);
+            let reste: Vec<FilterCondition> =
+                termes.iter().enumerate().filter(|(j, _)| j != i).map(|(_, t)| t.clone()).collect();
+            return (cles, (!reste.is_empty()).then_some(FilterCondition::Must(reste)));
+        }
+    }
+    (None, Some(condition.clone()))
+}
+
+/// **Contrat d'API de lucivy** (doc 09, §2.4) : un ensemble trié et sans
+/// doublon est lu sur place, sans allocation ; un ensemble quelconque est
+/// copié, trié et dédupliqué **à chaque requête**. Ils l'ont mesuré : 540 000
+/// ids passent de 6,004 ms à 0,220 ms. La requête les rend probablement déjà
+/// triés — on ne parie pas dessus, ça coûte un tri une fois contre un tri par
+/// requête.
+fn offsets_tries(result: &QueryResult) -> Vec<u64> {
+    let mut ids: Vec<u64> =
+        result.rows.iter().filter_map(|r| r.first().and_then(|v| v.as_i64()).map(|i| i as u64)).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    ids
+}
+
 #[cfg(all(test, feature = "rag3db-native"))]
 mod tests {
     use crate::dataflow::services::ConnService;
@@ -921,3 +1005,4 @@ mod tests {
         assert_eq!(compte(&lecture), 2, "après le COMMIT, la vue voit les deux");
     }
 }
+
