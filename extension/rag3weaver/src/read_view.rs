@@ -666,11 +666,6 @@ impl ReadView {
         ReadView { conn, search_services: Arc::new(search), sans_instantane: false, ..self.copie() }
     }
 
-    /// La vue d'un appel qui n'a pas eu d'instantané : la même, qui le dit.
-    pub(crate) fn sans_instantane(&self) -> ReadView {
-        ReadView { sans_instantane: true, ..self.copie() }
-    }
-
     fn copie(&self) -> ReadView {
         ReadView {
             dialect: self.dialect.clone(),
