@@ -1,6 +1,6 @@
 # replace_text de l'atelier ne compte pas les occurrences qui se chevauchent
 
-- **État** : ouvert (13 novembre 2026), pour archi.
+- **État** : corrigé (14 novembre 2026), lot `atelier-quatre-mineurs` d'archi
 - **Famille** : produit
 - **Gravité** : réponse fausse, mineure — un remplacement dit « une seule occurrence » quand le texte en contient deux qui se chevauchent
 - **Atteignable en service** : oui, à tout `replace_text` dont l'ancien texte peut se recouvrir lui-même (`aa` dans `aaa`, une ligne répétée)
