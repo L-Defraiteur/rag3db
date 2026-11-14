@@ -70,8 +70,9 @@ visibles gardé en mémoire par (couche, rang), calculé une fois à la publicat
 Dans l'ordre accepté par c7 :
 - la mesure du § 2, et ses chiffres à c7 avant le drapeau ;
 - `outline` dans le témoin de non-fuite ;
-- le `#[allow(dead_code)]` de `marquer_des_lignes_invisibles` retiré avec son appelant, l'écrivain
-  d'une seconde génération ;
+- l'écrivain d'une seconde génération, qui appelle `marquer_des_lignes_invisibles`. Le
+  `#[allow(dead_code)]` de la méthode est déjà parti (3a7cf136c) : publique pour la sonde, elle n'est
+  plus du code mort ;
 - les arêtes et la forme C du § 6 de la page 03.
 
 Chaque témoin est vu rouge d'abord.
