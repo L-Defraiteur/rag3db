@@ -317,6 +317,11 @@ impl DaemonConnection {
     }
 
     fn depuis(adresse: &str, attache: Option<crate::serveur::Attache>) -> Result<Self, DaemonError> {
+        Self::depuis_avec(adresse, attache, super::Delais::lus().reponse)
+    }
+
+    /// [`Self::depuis`], l'agent gardé borné à `delai`.
+    pub(crate) fn depuis_avec(adresse: &str, attache: Option<crate::serveur::Attache>, _delai: std::time::Duration) -> Result<Self, DaemonError> {
         let agent = agent();
         let identite: Identite = identite_de(&agent, adresse, SERVICE)?;
         Ok(Self { adresse: adresse.to_string(), base_url: base_url(adresse), agent, identite, _attache: attache, reopen: Default::default() })

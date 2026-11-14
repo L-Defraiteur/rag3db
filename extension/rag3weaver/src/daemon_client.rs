@@ -174,6 +174,18 @@ impl DaemonClient {
         client: &str,
         keys: Vec<String>,
     ) -> Result<Self, String> {
+        Self::attach_as_sent_avec(endpoint, relaunch, manifest, client, keys, crate::daemon::Delais::lus().reponse)
+    }
+
+    /// [`Self::attach_as_sent`], l'agent gardé borné à `delai` pour tous ses appels.
+    fn attach_as_sent_avec(
+        endpoint: Endpoint,
+        relaunch: Option<PathBuf>,
+        manifest: PathBuf,
+        client: &str,
+        keys: Vec<String>,
+        _delai: std::time::Duration,
+    ) -> Result<Self, String> {
         let agent = crate::daemon::agent();
         let base = crate::daemon::base_url(&endpoint.address);
         let session = open_session(&agent, &base, endpoint.token.as_deref(), client, &keys)?;
@@ -839,6 +851,78 @@ impl Hote for McpClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **Aucun client de production n'attend un hôte muet sans fin** (ticket
+    /// `2026-11-09-cinq-clients-de-production-attendent-sans-delai.md`, délais tranchés par c7 le
+    /// 14 novembre 2026). Un faux hôte accepte chaque connexion et ne répond jamais ; chacun des
+    /// cinq chemins rend la main dans son délai (baissé ici à 1 s) et, quand il rend une erreur,
+    /// nomme la route qui ne répond pas.
+    #[test]
+    fn no_production_client_waits_forever_for_a_silent_host() {
+        let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let adresse = ecoute.local_addr().unwrap().to_string();
+        std::thread::spawn(move || {
+            let mut gardees = Vec::new();
+            for c in ecoute.incoming().flatten() {
+                gardees.push(c); // acceptée, jamais lue ni répondue
+            }
+        });
+        let delai = std::time::Duration::from_secs(1);
+        let figes = std::sync::Arc::new(Mutex::new(Vec::<String>::new()));
+        // Un chemin qui ne rend pas la main en délai + 5 s est figé : le témoin le note et passe au
+        // suivant, pour dire les cinq d'un coup.
+        let borne = |nom: &'static str, f: Box<dyn FnOnce() -> Option<String> + Send>| -> Option<String> {
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let _ = tx.send(f());
+            });
+            match rx.recv_timeout(delai + std::time::Duration::from_secs(5)) {
+                Ok(r) => r,
+                Err(_) => {
+                    figes.lock().unwrap().push(format!("{nom} attend sans fin un hôte muet"));
+                    None
+                }
+            }
+        };
+        let a = adresse.clone();
+        if let Some(e) = borne("host_state (/etat)", Box::new(move || crate::code_tree::host_state_avec(&a, delai).map(|v| format!("un état rendu : {v}")))) {
+            figes.lock().unwrap().push(e);
+        }
+        let fiche = crate::daemon_lifecycle::DaemonFile {
+            address: adresse.clone(),
+            pid: std::process::id(),
+            token: "j".into(),
+            build: "témoin".into(),
+            started_at: 0,
+            reponse_s: None,
+            sonde_s: Some(1),
+        };
+        if let Some(e) = borne("answers (/sante)", Box::new(move || crate::daemon_lifecycle::answers(&fiche).then(|| "un hôte muet dit répondre".to_string()))) {
+            figes.lock().unwrap().push(e);
+        }
+        let a = adresse.clone();
+        borne("la sonde de réveil de l'unité (/sante)", Box::new(move || {
+            crate::daemon_lifecycle::reveiller_l_unite(&a, delai);
+            None
+        }));
+        let a = adresse.clone();
+        let refus = borne("le client MCP de l'hôte (/session)", Box::new(move || {
+            Some(DaemonClient::attach_as_sent_avec(Endpoint::forced(&a), None, PathBuf::from("/nulle/part/backend.json"), "témoin", Vec::new(), delai).err().unwrap_or_else(|| "une session ouverte".into()))
+        }));
+        if let Some(r) = refus.filter(|r| !r.contains("/session : ne répond pas après 1 s")) {
+            figes.lock().unwrap().push(format!("le client MCP ne nomme pas la route et le délai : {r}"));
+        }
+        let a = adresse.clone();
+        let refus = borne("le client du démon de base (/sante)", Box::new(move || {
+            Some(crate::daemon::db::DaemonConnection::depuis_avec(&a, None, delai).err().map(|e| e.to_string()).unwrap_or_else(|| "attaché".into()))
+        }));
+        if let Some(r) = refus.filter(|r| !r.contains("/sante : ne répond pas après 1 s")) {
+            figes.lock().unwrap().push(format!("le client du démon de base ne nomme pas la route et le délai : {r}"));
+        }
+        let figes = figes.lock().unwrap().clone();
+        assert!(figes.is_empty(), "devant un hôte muet :\n{}", figes.join("\n"));
+    }
+
 
     /// Un hôte de fantaisie, sur un vrai port : il rend, dans l'ordre, les
     /// réponses qu'on lui donne, et garde les requêtes reçues.
