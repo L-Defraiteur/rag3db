@@ -429,6 +429,14 @@ pub struct SparseClients {
 /// - `compatible` : aucune forme aujourd'hui — le contrat OpenAI ne rend pas
 ///   de vecteurs creux.
 pub fn connect_sparse(source: &ModelSource) -> Result<(SparseClients, Origin), String> {
+    // Une activation déclarée : le fournisseur se lance ou s'attache par elle
+    // (le groupe d'une activation nommée, à la demande ou maintenu).
+    if source.activation.is_some() {
+        #[cfg(feature = "daemon")]
+        return activation::connecter_creux(source);
+        #[cfg(not(feature = "daemon"))]
+        return Err("activation : feature daemon requise".into());
+    }
     #[cfg(feature = "burn-embedder")]
     let local = |s: &ModelSource| -> Result<SparseClients, String> {
         if s.model != "bge-m3" {
@@ -474,6 +482,14 @@ pub fn connect_sparse(source: &ModelSource) -> Result<(SparseClients, Origin), S
 /// `bge-reranker-v2-m3` (multilingue, 2,2 Go). `service` : le démon
 /// d'embarquement qui déclare ce relecteur (`POST /rerank`). Pas de tiers.
 pub fn connect_reranker(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::reranker::Reranker>, Origin), String> {
+    // Une activation déclarée : le fournisseur se lance ou s'attache par elle
+    // (le groupe d'une activation nommée, à la demande ou maintenu).
+    if source.activation.is_some() {
+        #[cfg(feature = "daemon")]
+        return activation::connecter_relecteur(source);
+        #[cfg(not(feature = "daemon"))]
+        return Err("activation : feature daemon requise".into());
+    }
     type Client = std::sync::Arc<dyn crate::reranker::Reranker>;
     #[cfg(feature = "burn-embedder")]
     let local = |s: &ModelSource| -> Result<Client, String> {
@@ -518,6 +534,14 @@ pub fn connect_reranker(source: &ModelSource) -> Result<(std::sync::Arc<dyn crat
 /// les poids là où les tests les cherchent. `service` : le démon
 /// d'embarquement qui déclare cet OCR (`POST /ocr`).
 pub fn connect_ocr(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::ocr::Ocr>, Origin), String> {
+    // Une activation déclarée : le fournisseur se lance ou s'attache par elle
+    // (le groupe d'une activation nommée, à la demande ou maintenu).
+    if source.activation.is_some() {
+        #[cfg(feature = "daemon")]
+        return activation::connecter_ocr(source);
+        #[cfg(not(feature = "daemon"))]
+        return Err("activation : feature daemon requise".into());
+    }
     type Client = std::sync::Arc<dyn crate::ocr::Ocr>;
     #[cfg(feature = "burn-ocr")]
     let local = |s: &ModelSource| -> Result<Client, String> {
