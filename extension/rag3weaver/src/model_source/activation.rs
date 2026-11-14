@@ -842,6 +842,60 @@ mod tests {
         assert_eq!(evenements(&f, "constructeur_demarre"), 2, "une seule relance");
     }
 
+    /// L'identité du fournisseur de la fixture, par l'adresse que son dossier
+    /// de coordination retient (port 0 annoncé).
+    fn identite_du_fournisseur(f: &Fixture) -> serde_json::Value {
+        let a = f.source.activation.as_ref().unwrap();
+        let adresse = crate::serveur::activation::adresse_retenue(&a.coordination, &f.source.address.0[0]).expect("adresse retenue");
+        crate::daemon::identite_de::<serde_json::Value>(&crate::daemon::agent_with_timeout(std::time::Duration::from_secs(2)), &adresse, crate::daemon::embeddings::SERVICE)
+            .unwrap_or_else(|e| panic!("identité du fournisseur à {adresse} : {e}"))
+    }
+
+    /// **Un fournisseur déclaré `Maintenir` qui plante se relance une fois**
+    /// (décision de c7, 14 novembre 2026 : « maintenir » veut dire tenir le
+    /// fournisseur debout) : le calcul suivant le relance, identité revérifiée,
+    /// et le relancé dit `relances: 1` à son /sante — un fournisseur qui meurt
+    /// en boucle se voit sans lire un journal.
+    #[test]
+    fn maintenir_un_fournisseur_plante_se_relance_une_fois_et_le_compte() {
+        let f = Fixture::nouvelle();
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        client.embed(&["premier lot".into()]).unwrap();
+        let au_lancement = identite_du_fournisseur(&f)["relances"].clone();
+        planter(pid_demarre(&f, 0));
+        let debut = std::time::Instant::now();
+        let v = client.embed(&["lot suivant".into()]).unwrap_or_else(|e| panic!("le calcul après le plantage : {e}"));
+        assert_eq!(v[0].len(), 384);
+        assert!(debut.elapsed() < std::time::Duration::from_secs(10), "relancé vite : {:?}", debut.elapsed());
+        assert_eq!(evenements(&f, "constructeur_demarre"), 2, "relancé une fois");
+        assert_eq!(au_lancement, 0, "lancé par l'activation, jamais relancé : relances 0");
+        assert_eq!(identite_du_fournisseur(&f)["relances"], 1, "le relancé dit sa relance");
+        client.embed(&["encore".into()]).unwrap();
+        assert_eq!(evenements(&f, "constructeur_demarre"), 2, "pas de relance sans plantage");
+    }
+
+    /// **Sa relance qui échoue se refuse en le disant** : déclaré maintenir,
+    /// parti, relancé une fois, pas répondu — et quoi faire.
+    #[test]
+    fn maintenir_une_relance_qui_echoue_se_refuse_en_le_disant() {
+        let mut f = Fixture::nouvelle();
+        let liberer = f.dossier.path().join("liberer-chargement");
+        std::fs::write(&liberer, b"").unwrap();
+        let a = f.source.activation.as_mut().unwrap();
+        a.args.extend(["--liberer-chargement".into(), liberer.display().to_string(), "--budget-pret-ms".into(), "1500".into()]);
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        client.embed(&["premier lot".into()]).unwrap();
+        std::fs::remove_file(&liberer).unwrap();
+        planter(pid_demarre(&f, 0));
+        let debut = std::time::Instant::now();
+        let erreur = client.embed(&["lot suivant".into()]).err().expect("la relance échoue").to_string();
+        assert!(debut.elapsed() < std::time::Duration::from_secs(15), "refus dans le budget : {:?}", debut.elapsed());
+        for mot in ["déclaré maintenir", "parti", "relancé une fois", "rouvrez"] {
+            assert!(erreur.contains(mot), "le refus dit « {mot} » : {erreur}");
+        }
+        assert_eq!(evenements(&f, "constructeur_demarre"), 2, "une seule relance");
+    }
+
     #[test]
     fn budget_de_sonde_ne_remplace_pas_delai_appel_par_defaut() {
         let mut f = Fixture::nouvelle(); f.source.timeout_secs = None;
