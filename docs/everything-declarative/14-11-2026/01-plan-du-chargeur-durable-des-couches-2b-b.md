@@ -179,13 +179,56 @@ Puis la passe complète et les e2e du changement : `e2e_code`, `e2e_code_sync`, 
 5. **La rétention** : M5 et le bail qui protège les lectures épinglées (page 30, la règle proposée
    par c7, à trancher).
 
+## 7 bis. Les décisions de Lucie (14 novembre 2026, relayées par c7)
+
+Lucie a dit oui aux cinq points du § 7 : « au pire ce sont des décisions qui peuvent se retravailler
+après pour proposer amélioration ou flexibilité ; partons dessus jusqu'à ce qu'on se rende compte d'un
+truc emmerdant pour l'user ».
+
+1. **Une entité à part pour la génération.** Une génération est un **ensemble d'identifiants**, et
+   non une propriété d'un scope. C'est une entité `Generation` (identité du § 2), qui cite ses
+   occurrences, ses occurrences retirées et ses fichiers retirés, et sa génération parente épinglée.
+   - **Les occurrences elles-mêmes restent des lignes `Scope`** (la relecture d'arbre principal) :
+     les relations de code, `ScopeContent_DERIVED_FROM` et les morceaux restent ceux d'aujourd'hui,
+     sans second schéma de code.
+   - Leur `_uuid` devient **hash(clé stable, génération qui l'a posée)**, et la clé stable une
+     colonne à part. Sinon, deux générations d'un même scope se percutent sur `_uuid`. Les lignes de
+     l'ancre reçoivent la génération de l'ancre.
+   - C'est un format estampillé, comme 1a. Aucune base existante n'est touchée avant 1b, qui doit le
+     connaître.
+   - Ce point se lit ainsi (génération à part, occurrences en lignes `Scope`) ; si c7 ou Lucie
+     voulaient des occurrences dans une entité à part elles aussi, il faut le redire avant le pas 2a′.
+2. **Une lecture sans instantané sous une vue est refusée** (« réessayer »), comme le plafond retiré
+   ce matin.
+3. **Les relations sont restreintes aux occurrences visibles** (§ 5).
+4. **Le repli exhaustif du dense se mesure d'abord** : aucune règle avant le chiffre.
+5. **La rétention** telle que posée (page 30), plus un **bail** sur une génération épinglée par une
+   lecture.
+
+## 7 ter. La relecture d'arbre principal (14 novembre 2026)
+
+- **Le chemin sans vue devient « vue = génération de l'ancre » dans le même pas que le stockage.**
+  Sinon, les lignes d'une couche fuient dans toutes les lectures d'aujourd'hui : recherche, usages,
+  outline, `read_view`, comptes du plein texte.
+- Il y a beaucoup de lecteurs de `Scope` en dur en dehors d'`occurrence_roots_for` (la passe du 13 :
+  deux passes de deux heures pour deux lecteurs oubliés). Avant le pas 2a′, il faut **relever par
+  grep tous les `MATCH (… :Scope` et `Scope_` en dur, et les classer un à un**.
+- **Le témoin de non-fuite**, numéroté 0 : une couche publiée ne change aucune réponse sans vue,
+  dans les trois signaux et dans `usages` et `impact`.
+
 ## 8. L'ordre du lot
 
 1. Monter lucivy en 4.3.7, et son témoin des statistiques de la vue.
-2. Le stockage des générations, leur chargeur et le point de composition `occurrence_roots_for`
-   (§ 2, § 3), sur un dépôt de test : témoins 1, 2, 4, 5, 10, 11, 12.
+2. **2a′** : le stockage des générations, l'uuid par génération, et le filtre de l'ancre pour
+   tous les lecteurs sans vue, après le relevé des lecteurs en dur (§ 7 ter) : témoin 0.
+   **2b′** : le chargeur et le point de composition `occurrence_roots_for` (§ 2, § 3), sur un dépôt
+   de test : témoins 1, 2, 4, 5, 10, 11, 12.
 3. L'instantané composé et les refus (§ 4) : témoins 7, 8, 9.
 4. Les relations (§ 5) : témoin 6.
+
+Le lot des octets d'un scope (codeparsers, puis rag3weaver) passe **avant** le pas 1 : il change
+les adresses de contenu que les générations citeront (c7, 14 novembre). Arbre principal relit chaque
+pas.
 
 Chaque pas sur sa branche, rouge d'abord, et aucune base de Lucie lue ni ouverte. 2b-C (le `view`
 des outils, la vue courante choisie par le contexte, la couche de travail lisible) vient après.
