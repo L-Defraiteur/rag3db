@@ -12,9 +12,9 @@
 
 use rag3weaver_ir::{Count, Form, Hop, Plan, Predicate, Select};
 use crate::connection::CypherValue;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 /// **La table des générations** : une ligne par génération publiée d'une couche (page 03, § 2).
 /// Interne au catalogue, comme `_catalog_meta` : elle n'est pas une entité des outils.
@@ -36,8 +36,6 @@ pub const JUSQU_A: &str = "_jusqu_a";
 pub struct EnsemblesPoses {
     /// Combien de fois le masque des versions a été résolu : un témoin s'y lit.
     pub(crate) resolutions: AtomicUsize,
-    /// Les offsets admis, par clé de (couche, rang, table).
-    pub(crate) cache: Mutex<HashMap<String, Arc<Vec<u64>>>>,
 }
 
 impl EnsemblesPoses {
