@@ -2,9 +2,14 @@
 """Ferme ou rouvre UN backend de l'hôte 7970 du poste, sans arrêter l'hôte (14 nov. 2026, passe de l'archiviste).
 fermer <manifeste> <relevé.json> : POST /backend/close, puis relève taille et mtime de chaque fichier de la base.
 rouvrir <manifeste> <relevé.json> : relit les fichiers et dit ce qui a changé depuis le relevé (sans rien refuser :
-c'est à l'appelant de juger), puis POST /backend/open."""
+c'est à l'appelant de juger), puis POST /backend/open.
+fermer <manifeste> <relevé.json> <raison> <jusqu'à> : la fermeture qui tient (archi, 1cbf1cf3a, 15 nov. 2026). Tout
+appel pendant la fenêtre (juge, hook, client MCP) est refusé en disant la raison, et la base ne se rouvre qu'au
+`rouvrir`. Sans raison, l'ancien sens demeure : le premier appel rouvre la base (l'hôte du portable, 4b43c3afc, n'a
+que celui-là)."""
 import json, os, sys, glob, urllib.request
 action, manifeste, releve = sys.argv[1:4]
+raison, jusqua = (sys.argv[4:6] + [None, None])[:2]
 J = open(os.path.expanduser("~/.local/share/rag3weaver/daemon.token")).read().strip()
 def d(m, r, c=None, s=None):
     q = urllib.request.Request("http://127.0.0.1:7970"+r, method=m, data=json.dumps(c).encode() if c is not None else None,
@@ -22,7 +27,7 @@ def fichiers():
 s = d("POST", "/session", {"client": "G-" + action, "pid": os.getpid()})["session"]
 try:
     if action == "fermer":
-        o = d("POST", "/backend/close", {"manifest": manifeste}, s); print("fermeture :", json.dumps(o, ensure_ascii=False)[:300])
+        o = d("POST", "/backend/close", {"manifest": manifeste, **({"reason": raison, "until": jusqua} if raison else {})}, s); print("fermeture :", json.dumps(o, ensure_ascii=False)[:300])
         f = fichiers(); json.dump(f, open(releve, "w"), indent=1); print(len(f), "fichiers relevés ;", "wal :", [k for k in f if k.endswith(".wal")])
     else:
         avant = json.load(open(releve)); apres = fichiers()
