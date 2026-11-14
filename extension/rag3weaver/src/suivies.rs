@@ -313,7 +313,9 @@ pub enum ParenteResolue {
     Declaree(String),
     /// Le parent commun le plus récent parmi les suivies, et la base (le point de fourche).
     Inferee { parente: String, base: String },
-    /// Plusieurs suivies à égalité : à déclarer.
+    /// Plusieurs suivies aux pointes égales : rien à décider, dit tel quel (sans avertissement).
+    Egales(Vec<String>),
+    /// Plusieurs suivies, aux fourches différentes et sans ordre entre elles : à déclarer.
     Ambigue(Vec<String>),
     /// La couche est dans un cycle de fusions (un flux multi-env) : sa parente est à déclarer.
     DansUnFlux,
@@ -824,7 +826,8 @@ mod tests {
         assert_eq!(parente(&p, "main"), &ParenteResolue::Aucune, "les autres contiennent main : {p:?}");
         // a et c pointent sur le même commit, e en part : deux candidates à égalité.
         let egalite = pile(&d, &branches(&["main", "a", "c", "e"], Parente::Inferee));
-        assert_eq!(parente(&egalite, "e"), &ParenteResolue::Ambigue(vec!["refs/heads/a".into(), "refs/heads/c".into()]), "{egalite:?}");
+        assert_eq!(parente(&egalite, "e"), &ParenteResolue::Egales(vec!["refs/heads/a".into(), "refs/heads/c".into()]), "{egalite:?}");
+        assert!(!egalite.avertissements.iter().any(|a| a.contains("refs/heads/e")), "des pointes égales ne s'avertissent pas : {:?}", egalite.avertissements);
         let mut declaree = branches(&["main", "a", "b"], Parente::Inferee);
         declaree.sources[2].parent = Parente::Declaree("main".into());
         declaree.sources[1].parent = Parente::Aucune;
@@ -833,9 +836,33 @@ mod tests {
         assert_eq!(parente(&d2, "a"), &ParenteResolue::Aucune);
     }
 
+    /// **Une fonctionnalité finie n'est pas un flux** (décision de c7, 14 nov.) : `f` part de main, reprend
+    /// main en elle, puis main la fusionne. Sa pointe est contenue dans main : elle ne compte dans aucun flux,
+    /// sa parente est main, et main n'a pas `f` pour parente. Rien ne s'avertit.
+    #[test]
+    fn une_fonctionnalite_reprise_puis_fusionnee_n_est_pas_un_flux() {
+        let (_t, d) = vierge();
+        commit(&d, "m1");
+        git(&d, &["switch", "-q", "-c", "f"]);
+        commit(&d, "f1");
+        git(&d, &["switch", "-q", "main"]);
+        commit(&d, "m2");
+        git(&d, &["switch", "-q", "f"]);
+        git(&d, &["merge", "-q", "--no-ff", "--no-edit", "main"]);
+        commit(&d, "f2");
+        git(&d, &["switch", "-q", "main"]);
+        git(&d, &["merge", "-q", "--no-ff", "--no-edit", "f"]);
+        let p = pile(&d, &branches(&["main", "f"], Parente::Inferee));
+        assert!(p.flux.is_empty(), "une fonctionnalité finie n'est pas un flux : {p:?}");
+        assert!(matches!(parente(&p, "f"), ParenteResolue::Inferee { parente, .. } if parente == "refs/heads/main"), "{p:?}");
+        assert_eq!(parente(&p, "main"), &ParenteResolue::Aucune, "{p:?}");
+        assert!(p.avertissements.is_empty(), "{:?}", p.avertissements);
+    }
+
     /// **Le flux multi-env** (Lucie, 14 nov.) : develop → staging → main par promotions, un hotfix sur main
-    /// redescendu dans develop. Les suivies forment un cycle de fusions : l'état le nomme, et ne pose aucune
-    /// parente inférée entre elles (elle changerait au prochain resync).
+    /// redescendu dans develop, puis la promotion suivante en cours (develop devant, un second hotfix sur
+    /// main) : trois pointes dont aucune ne contient l'autre, liées par un cycle de fusions. L'état le nomme,
+    /// et ne pose aucune parente inférée entre elles (elle changerait au prochain resync).
     #[test]
     fn un_cycle_de_fusions_entre_suivies_est_un_flux_nomme() {
         let (_t, d) = vierge();
@@ -843,16 +870,23 @@ mod tests {
         for b in ["develop", "staging"] {
             git(&d, &["branch", b]);
         }
-        git(&d, &["switch", "-q", "develop"]);
-        commit(&d, "d1");
-        git(&d, &["switch", "-q", "staging"]);
-        git(&d, &["merge", "-q", "--no-ff", "--no-edit", "develop"]);
-        git(&d, &["switch", "-q", "main"]);
-        git(&d, &["merge", "-q", "--no-ff", "--no-edit", "staging"]);
-        commit(&d, "hotfix");
-        git(&d, &["switch", "-q", "develop"]);
-        git(&d, &["merge", "-q", "--no-ff", "--no-edit", "main"]);
-        commit(&d, "d2");
+        let fusionner = |dans: &str, quoi: &str| {
+            git(&d, &["switch", "-q", dans]);
+            git(&d, &["merge", "-q", "--no-ff", "--no-edit", quoi]);
+        };
+        let sur = |b: &str, m: &str| {
+            git(&d, &["switch", "-q", b]);
+            commit(&d, m);
+        };
+        sur("develop", "d1");
+        fusionner("staging", "develop");
+        fusionner("main", "staging");
+        sur("main", "h1");
+        fusionner("develop", "main");
+        sur("develop", "d2");
+        fusionner("staging", "develop");
+        sur("develop", "d3");
+        sur("main", "h2");
         git(&d, &["switch", "-q", "main"]);
         let p = pile(&d, &branches(&["develop", "staging", "main"], Parente::Inferee));
         assert_eq!(p.flux, vec![vec!["refs/heads/develop".to_string(), "refs/heads/main".into(), "refs/heads/staging".into()]], "{p:?}");
