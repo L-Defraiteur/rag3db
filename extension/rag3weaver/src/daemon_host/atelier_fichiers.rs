@@ -1060,6 +1060,94 @@ pub(super) mod tests {
         })
     }
 
+    /// **Des occurrences qui se chevauchent sont ambiguës** (ticket d'ED,
+    /// `2026-11-13-replace-text-de-l-atelier-ne-compte-pas-les-occurrences-qui-se-chevauchent.md`) :
+    /// `aa` dans `aaa` part de deux positions ; `replace_text` refuse et rien n'est écrit.
+    #[test]
+    fn overlapping_occurrences_make_a_text_replace_ambiguous() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        std::fs::write(a.racine.join("a.txt"), "aaa\n").unwrap();
+        let refus = a.appeler("replace_text", json!({ "path": "a.txt", "old": "aa", "new": "b" })).unwrap_err();
+        assert!(refus.contains("2 occurrences"), "aa dans aaa : deux positions, refusé ({refus})");
+        assert_eq!(std::fs::read_to_string(a.racine.join("a.txt")).unwrap(), "aaa\n", "rien n'est écrit");
+    }
+
+    /// **Un fichier en CRLF garde ses fins de ligne** (ticket d'ED,
+    /// `2026-11-13-l-atelier-perd-les-fins-de-ligne-crlf.md`) : `replace_text` sur deux lignes
+    /// telles que lues (sans `\r`) les trouve ; `replace_lines` écrit en CRLF ; le diff montre
+    /// le changement.
+    #[test]
+    fn a_crlf_file_keeps_its_line_endings() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let f = a.racine.join("win.txt");
+        std::fs::write(&f, "un\r\ndeux\r\ntrois\r\n").unwrap();
+        let lu = Atelier::texte(&a.appeler("read_file", json!({ "path": "win.txt" })).expect("read_file"));
+        assert!(lu.contains("un") && lu.contains("deux") && !lu.contains('\r'), "la lecture montre les lignes : {lu:?}");
+        let r = a.appeler("replace_text", json!({ "path": "win.txt", "old": "un\ndeux", "new": "UN\nDEUX" })).expect("replace_text sur deux lignes lues");
+        assert!(Atelier::texte(&r).contains("+UN") && Atelier::texte(&r).contains("-un"), "le diff montre le changement : {}", Atelier::texte(&r));
+        assert_eq!(std::fs::read_to_string(&f).unwrap(), "UN\r\nDEUX\r\ntrois\r\n", "les fins CRLF gardées");
+        let r = a.appeler("replace_lines", json!({ "path": "win.txt", "from": 3, "to": 3, "text": "TROIS" })).expect("replace_lines");
+        assert!(Atelier::texte(&r).contains("+TROIS"), "le diff montre le changement : {}", Atelier::texte(&r));
+        a.appeler("insert_lines", json!({ "path": "win.txt", "at": 4, "text": "quatre" })).expect("insert_lines");
+        assert_eq!(std::fs::read_to_string(&f).unwrap(), "UN\r\nDEUX\r\nTROIS\r\nquatre\r\n", "CRLF partout, lignes neuves comprises");
+    }
+
+    /// **Un worktree attaché hors de la racine se lit** (ticket d'ED,
+    /// `2026-11-13-un-worktree-attache-hors-de-la-racine-reste-refuse-a-read-file-et-aux-ecritures.md`) :
+    /// `read_file` d'un de ses fichiers le rend, une écriture y suit la règle des worktrees
+    /// (l'accord pour un arbre que tient l'utilisatrice, pas « hors de la racine »), et un chemin
+    /// hors de la racine et de tout worktree attaché reste refusé.
+    #[test]
+    fn an_attached_worktree_outside_the_root_reads() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let ailleurs = d.path().join("ailleurs");
+        std::fs::create_dir_all(&ailleurs).unwrap();
+        let depot = petit_depot(&ailleurs);
+        assert!(!depot.starts_with(&a.racine), "le dépôt est hors de la racine de l'atelier");
+        a.appeler("attach_worktree", json!({ "path": depot })).unwrap();
+        attendre_l_index(&a, &depot);
+        let lu = a.appeler("read_file", json!({ "path": depot.join("src/lib.rs") })).map(|v| Atelier::texte(&v)).unwrap_or_else(|e| e);
+        assert!(lu.contains("pub fn un()"), "read_file d'un worktree attaché hors de la racine : {lu}");
+        let refus = a.appeler("replace_text", json!({ "path": depot.join("src/lib.rs"), "old": "pub fn deux()", "new": "pub fn trois()" })).unwrap_err();
+        assert!(refus.contains("ask_permission") && !refus.contains("hors de la racine"), "l'écriture suit la règle du worktree : {refus}");
+        let seul = d.path().join("seul.txt");
+        std::fs::write(&seul, "x\n").unwrap();
+        let refus = a.appeler("read_file", json!({ "path": seul })).unwrap_err();
+        assert!(refus.contains("hors de la racine"), "hors de la racine et de tout worktree, refusé : {refus}");
+        attendre_l_index(&a, &depot);
+    }
+
+    /// **Le chat crée un fichier** (ticket d'ED,
+    /// `2026-11-13-le-chat-de-l-atelier-ne-peut-pas-creer-de-fichier.md`) : `insert_lines at=1`
+    /// sur un fichier absent sous la racine le crée et rend son diff, sans lecture préalable (il
+    /// n'y avait rien à lire) ; sur un fichier existant jamais lu, il reste refusé.
+    #[test]
+    fn the_chat_creates_a_missing_file() {
+        let vus = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let model = modele_scripte(
+            vec![
+                ("t1", vec![("insert_lines", json!({ "path": "neuf/notes.txt", "at": 1, "text": "premiere ligne" }))]),
+                ("t2", vec![("insert_lines", json!({ "path": "vieux.txt", "at": 1, "text": "par-dessus" }))]),
+            ],
+            vus.clone(),
+        );
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier_avec(d.path(), model);
+        std::fs::write(a.racine.join("vieux.txt"), "déjà là\n").unwrap();
+        a.host.chat_turn(&a.h.id, "t1").expect("t1");
+        a.host.chat_turn(&a.h.id, "t2").expect("t2");
+        let rendu = |tour: &str| vus.lock().unwrap().iter().find(|(m, o, _)| m == tour && o == "insert_lines").map(|(_, _, c)| c.clone()).unwrap_or_default();
+        let cree = rendu("t1");
+        assert_eq!(std::fs::read_to_string(a.racine.join("neuf/notes.txt")).ok().as_deref(), Some("premiere ligne\n"), "le fichier absent est créé ({cree})");
+        assert!(cree.contains("+premiere ligne"), "la création rend son diff : {cree}");
+        let refus = rendu("t2");
+        assert!(refus.contains("relis"), "un fichier existant jamais lu reste refusé : {refus}");
+        assert_eq!(std::fs::read_to_string(a.racine.join("vieux.txt")).unwrap(), "déjà là\n", "rien n'est écrit");
+    }
+
     /// **L'empreinte voit un changement fait ailleurs** (ticket d'ED,
     /// `2026-11-13-l-empreinte-de-lecture-de-l-atelier-ignore-les-changements-faits-ailleurs.md`) :
     /// lu au tour 1, le fichier change hors de la conversation (une ligne en tête), et
