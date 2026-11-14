@@ -101,7 +101,7 @@ fn la_mesure_bornee_des_deplaces() {
             for (cle, (texte, debut, nom, genre)) in &sb {
                 match sa.get(cle) {
                     None => ajoutes += 1,
-                    Some((t0, d0, _, _)) if t0 != texte => {
+                    Some((t0, _, _, _)) if t0 != texte => {
                         changes += 1;
                         a_changes += e.get(&(nom.clone(), genre.clone())).copied().unwrap_or(0);
                     }
@@ -141,5 +141,4 @@ fn la_mesure_bornee_des_deplaces() {
         med,
         if part > 0.5 && med > 2_000 { "la position sort de l'identité" } else { "la position reste dans l'identité" }
     );
-    let _ = conn.execute("RETURN 1");
 }
