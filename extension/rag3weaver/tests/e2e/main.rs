@@ -170,6 +170,8 @@ mod e2e_lecture_seule_apres_fermeture_sans_point_de_reprise;
 mod e2e_lectures;
 #[path = "../e2e_liens.rs"]
 mod e2e_liens;
+#[path = "../e2e_liens_de_morceaux_reverses.rs"]
+mod e2e_liens_de_morceaux_reverses;
 #[path = "../e2e_liens_sous_point_de_reprise.rs"]
 mod e2e_liens_sous_point_de_reprise;
 #[path = "../e2e_mcp_cycle_de_vie.rs"]
