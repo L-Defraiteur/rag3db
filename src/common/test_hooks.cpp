@@ -5,6 +5,8 @@
 #include <cstring>
 
 #include <atomic>
+#include <chrono>
+#include <thread>
 
 #include "common/exception/runtime.h"
 
@@ -36,6 +38,7 @@ TestDiePoint TestHooks::readFromEnvironment() {
 
 namespace {
 std::atomic<uint8_t> armedFailPoint{static_cast<uint8_t>(TestFailPoint::NONE)};
+std::atomic<uint32_t> armedFailDelayMs{0};
 } // namespace
 
 void TestHooks::armFailPointFromEnvironment() {
@@ -61,7 +64,8 @@ void TestHooks::armFailPointFromEnvironment() {
         at);
 }
 
-void TestHooks::armFailPoint(TestFailPoint point) {
+void TestHooks::armFailPoint(TestFailPoint point, uint32_t delayMs) {
+    armedFailDelayMs = delayMs;
     armedFailPoint = static_cast<uint8_t>(point);
 }
 
@@ -70,6 +74,9 @@ void TestHooks::failOnceIfArmed(TestFailPoint point) {
     if (point != TestFailPoint::NONE &&
         armedFailPoint.compare_exchange_strong(expected,
             static_cast<uint8_t>(TestFailPoint::NONE))) {
+        if (const auto delay = armedFailDelayMs.load(); delay > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+        }
         throw RuntimeException("TEST HOOK: failure injected at rel-commit-between-directions");
     }
 }
