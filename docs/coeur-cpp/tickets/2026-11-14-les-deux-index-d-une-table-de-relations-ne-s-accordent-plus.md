@@ -144,12 +144,18 @@ code-lourd et code-principal ont tourné sous de telles libs.
 fois ». Le témoin perd la relation des deux côtés, alors que code-lourd la garde d'un côté. Il
 faut une troncature qui ne touche qu'un sens : par exemple un refus entre le versement d'un sens
 et celui de l'autre, ou une annulation dont un sens a déjà été réécrit par un point de reprise. Ce
-sera le prochain témoin. Tant qu'il manque, la cause du désaccord n'est que probable.
+sera le prochain témoin. *(Le 15 nov., ce second témoin a établi la cause : voir la section
+suivante.)*
 
 **Pour la réparation** : la garde de `373b5477b` empêche la suite, mais ne répare pas ce qui est
 déjà écrit. La reconstruction des trois tables sur copie (hotfixs) reste le remède.
 
 ## La forme d'un seul côté, reproduite (15 nov., 0 h 30)
+
+**Cause établie**, par le témoin
+`RefusedCommitRelDirections.ACommitRefusedBetweenItsDirectionsLeavesBothDirectionsWhole` : rouge
+2/2 sur la lib d'avant `373b5477b`, avec la forme exacte de code-lourd, vert 3/3 sur master. Les
+cases « vues deux fois » relèvent de la même troncature, mais ne sont pas reproduites une à une.
 
 **Le point de faute** : `rel-commit-between-directions` (branche `deux-sens-sous-annulation`,
 `394f2a27d` et `7900e1b7b`). Il fait lever `RelTable::commit` une seule fois, après le versement
