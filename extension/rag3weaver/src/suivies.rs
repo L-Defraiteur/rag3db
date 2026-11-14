@@ -617,6 +617,43 @@ pub fn migrer_les_cles(catalog: &crate::catalog::Catalog, ancien: &str, neuf: &s
     Ok(journal)
 }
 
+/// La résolution entière d'un dépôt : ses sources, sa pile, son identifiant.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Resolution {
+    pub sources: Vec<SourceResolue>,
+    pub pile: Pile,
+    pub identifiant: Option<Identifiant>,
+}
+
+/// **Le résolveur d'un dépôt, et son cache** : la résolution ne se refait que si l'empreinte bouge. Cette
+/// empreinte est le hash des sorties de `git for-each-ref` et `git worktree list --porcelain`, de la
+/// déclaration, des tâches et du worktree du backend. Sans mouvement, deux appels git et rien d'autre : pas
+/// de merge-base (le ticket O(suivies²) de l'état).
+#[derive(Default)]
+pub struct Resolveur {
+    cache: std::sync::Mutex<Option<(u64, Resolution)>>,
+    calculs: std::sync::atomic::AtomicUsize,
+}
+
+impl Resolveur {
+    /// La résolution, depuis le cache si l'empreinte n'a pas bougé.
+    pub fn resoudre(
+        &self,
+        racine: &std::path::Path,
+        worktree_du_backend: &std::path::Path,
+        taches: &[String],
+        declaration: &Declaration,
+    ) -> Result<Resolution, String> {
+        let _ = (racine, worktree_du_backend, taches, declaration, &self.cache);
+        Err("le résolveur n'existe pas encore".into())
+    }
+
+    /// Combien de résolutions entières ce résolveur a calculées (les autres sont venues du cache).
+    pub fn calculs(&self) -> usize {
+        self.calculs.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
 /// Les refs du dépôt, chacune sur son commit (une étiquette annotée, déréférencée).
 fn lire_les_refs(racine: &std::path::Path) -> Result<Vec<RefResolue>, String> {
     let sortie = crate::couches::git(racine, &["for-each-ref", "--format=%(refname)%00%(objectname)%00%(*objectname)"])?;
@@ -1098,5 +1135,36 @@ mod tests {
         migrer_les_cles(&cat, "neuf", "neuf").unwrap();
         assert_eq!(lire("couche:neuf:refs/heads/d").as_deref(), Some("{\"branche\":\"main\"}"));
         assert_eq!(lire("couche:neuf:d"), None);
+    }
+
+    /// **Sans mouvement de refs, la résolution vient du cache** : un deuxième appel ne recalcule rien ; un
+    /// commit sur une suivie, une branche neuve sous un motif ou une tâche de plus la recalculent.
+    #[test]
+    fn sans_mouvement_de_refs_la_resolution_vient_du_cache() {
+        let (_t, d) = vierge();
+        commit(&d, "m1");
+        git(&d, &["branch", "a"]);
+        let decl = Declaration {
+            root: Racine::Calculee,
+            sources: vec![
+                source(Selecteur::Branche("main".into()), Parente::Inferee, Histoire::Pointe, false),
+                source(Selecteur::Refs("refs/heads/r/*".into()), Parente::Inferee, Histoire::Pointe, false),
+            ],
+        };
+        let r = Resolveur::default();
+        let premiere = r.resoudre(&d, &d, &[], &decl).unwrap();
+        assert_eq!(r.calculs(), 1);
+        assert_eq!(r.resoudre(&d, &d, &[], &decl).unwrap(), premiere, "le cache rend la même résolution");
+        assert_eq!(r.calculs(), 1, "un deuxième appel sans mouvement a recalculé");
+        commit(&d, "m2");
+        let apres = r.resoudre(&d, &d, &[], &decl).unwrap();
+        assert_eq!(r.calculs(), 2, "un commit sur une suivie n'a pas recalculé");
+        assert_ne!(apres.pile.couches[0].pointe, premiere.pile.couches[0].pointe);
+        git(&d, &["branch", "r/neuve"]);
+        let motif = r.resoudre(&d, &d, &[], &decl).unwrap();
+        assert_eq!(r.calculs(), 3, "une branche neuve sous le motif n'a pas recalculé");
+        assert!(motif.sources[1].refs.iter().any(|x| x.nom == "refs/heads/r/neuve"), "{motif:?}");
+        r.resoudre(&d, &d, &["a".to_string()], &decl).unwrap();
+        assert_eq!(r.calculs(), 4, "une tâche de plus n'a pas recalculé");
     }
 }
