@@ -1369,7 +1369,12 @@ impl DaemonHost {
         match (method, path) {
             ("GET", "/sante") => (
                 200,
-                json!({ "service": SERVICE, "pid": std::process::id(), "build": crate::daemon_lifecycle::build_id() }),
+                json!({
+                    "service": SERVICE,
+                    "pid": std::process::id(),
+                    "build": crate::daemon_lifecycle::build_id(),
+                    "fils_du_moteur": fils_du_moteur(),
+                }),
             ),
             ("GET", "/etat") => {
                 let mut etat = self.state();
@@ -1476,6 +1481,15 @@ fn open_on_disk(prepared: PreparedBackend) -> Result<Backend, String> {
 /// **Servir l'hôte** sur un écouteur déjà ouvert, jusqu'à `POST /arret`,
 /// puis fermer tous ses backends proprement. Sans jeton : les témoins qui
 /// lancent un hôte à la main ; le binaire passe par [`DaemonServer`].
+/// Les fils du moteur qu'aura chaque base ouverte, dit au `/sante` : `RAG3WEAVER_DB_THREADS`, sinon le quota du
+/// cgroup (sans le moteur natif, rien à dire).
+fn fils_du_moteur() -> Value {
+    #[cfg(feature = "rag3db-native")]
+    return json!(crate::rag3db_connection::db_threads());
+    #[cfg(not(feature = "rag3db-native"))]
+    return Value::Null;
+}
+
 pub fn serve_daemon(host: Arc<DaemonHost>, server: tiny_http::Server, threads: usize) {
     DaemonServer::new(server, threads).serve(host, None)
 }
