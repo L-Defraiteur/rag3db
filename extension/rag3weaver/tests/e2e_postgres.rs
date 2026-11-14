@@ -53,12 +53,10 @@ use rag3weaver::disponibilite::RegimeEcriture;
 // ─── Le socle ────────────────────────────────────────────────────────────────
 
 /// Chaîne de connexion : surchargeable, avec le conteneur ci-dessus par défaut.
+/// L'adresse de la base de CE processus : une base par passe sur le service de `RAG3WEAVER_PG`, créée au premier
+/// appel et effacée à la sortie (`tests/common/base_pg.rs`, 14 novembre 2026 : deux passes partageaient la base).
 fn conn_str() -> String {
-    std::env::var("RAG3WEAVER_PG").unwrap_or_else(|_| {
-        "host=localhost port=5433 user=rag3weaver password=rag3weaver \
-         dbname=rag3weaver_test"
-            .to_string()
-    })
+    crate::common::base_pg::conn_str()
 }
 
 /// Ouvrir la connexion — et rien d'autre.
@@ -2188,4 +2186,42 @@ fn les_appels_concurrents_progressent_dans_une_session_epinglee() {
     for worker in workers { worker.join().unwrap(); }
     conn.rollback().unwrap();
     eprintln!("PG_PIN_ROLLBACK");
+}
+
+// ─── Une base par passe (14 novembre 2026) ──────────────────────────────────
+
+/// Ce processus travaille dans **sa** base, pas dans `rag3weaver_test` que se partageaient toutes les passes du service
+/// (deux passes y effaçaient chacune les schémas de l'autre : « referenced schema was concurrently dropped »).
+#[test]
+#[ignore]
+fn chaque_processus_a_sa_base() {
+    let conn = ouvrir();
+    let r = conn.execute("SELECT current_database()").expect("current_database()");
+    let base = match r.rows.first().and_then(|l| l.first()) {
+        Some(rag3weaver::connection::CypherValue::String(s)) => s.clone(),
+        autre => panic!("current_database() a rendu {autre:?}"),
+    };
+    let attendu = format!("_{}", std::process::id());
+    assert!(base.starts_with("rag3weaver_test_") && base.ends_with(&attendu),
+        "la base de ce processus est « {base} », attendu rag3weaver_test_<poste>{attendu}");
+}
+
+#[test]
+#[ignore]
+fn la_base_se_remplace_dans_les_deux_formes_d_adresse() {
+    use crate::common::base_pg::avec_la_base;
+    assert_eq!(avec_la_base("postgres://u:p@h:5433/rag3weaver_test", "b"), "postgres://u:p@h:5433/b");
+    assert_eq!(avec_la_base("postgresql://u@h/x?sslmode=disable", "b"), "postgresql://u@h/b?sslmode=disable");
+    assert_eq!(avec_la_base("host=h port=5433 user=u dbname=rag3weaver_test", "b"), "host=h port=5433 user=u dbname=b");
+    assert_eq!(avec_la_base("host=h user=u", "b"), "host=h user=u dbname=b");
+}
+
+#[test]
+#[ignore]
+fn seules_les_bases_mortes_de_ce_poste_sont_orphelines() {
+    use crate::common::base_pg::orphelines;
+    let noms: Vec<String> = ["rag3weaver_test", "rag3weaver_test_pc10_10", "rag3weaver_test_pc10_11", "rag3weaver_test_autre_12", "rag3weaver_test_pc10_x"]
+        .iter().map(|s| s.to_string()).collect();
+    // un poste dont le nom finit par des zéros : le préfixe ne les rogne pas
+    assert_eq!(orphelines(&noms, "PC10", |pid| pid == 11), vec!["rag3weaver_test_pc10_10".to_string()]);
 }

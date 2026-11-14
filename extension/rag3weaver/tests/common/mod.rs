@@ -31,6 +31,8 @@ pub fn journal_de_l_index(recu: &serde_json::Value) -> std::path::PathBuf {
 /// aucun secret. Sous la feature qui l'utilise, pour ne rien compiler ailleurs.
 #[cfg(feature = "openai-llm")]
 pub mod fake_sse;
+#[cfg(feature = "postgres")]
+pub mod base_pg;
 
 #[cfg(feature = "burn-embedder")]
 pub mod burn {
