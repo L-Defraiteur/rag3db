@@ -762,6 +762,73 @@ mod tests {
         assert_eq!(evenements(&f, "constructeur_demarre"), 2, "relancé une fois");
     }
 
+    /// Le pid du fournisseur de la fixture démarré en `rang` (0 pour le premier).
+    fn pid_demarre(f: &Fixture, rang: usize) -> i32 {
+        let texte = std::fs::read_to_string(f.dossier.path().join("events.jsonl")).unwrap_or_default();
+        texte.lines().filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+            .filter(|v| v["event"] == "constructeur_demarre").nth(rang)
+            .and_then(|v| v["pid"].as_i64()).expect("fournisseur démarré") as i32
+    }
+
+    /// Tuer un fournisseur comme un plantage (SIGKILL), sans le réclamer : son
+    /// parent (le client) garde la main sur son processus.
+    fn planter(pid: i32) {
+        unsafe { libc::kill(pid, libc::SIGKILL); }
+        let debut = std::time::Instant::now();
+        // Mort quand son /proc ne dit plus la fixture (zombie ou parti).
+        while debut.elapsed() < std::time::Duration::from_secs(5) {
+            let vivant = std::fs::read(format!("/proc/{pid}/cmdline")).map(|c| String::from_utf8_lossy(&c).contains("fournisseur.py")).unwrap_or(false);
+            if !vivant { return; }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        panic!("le fournisseur {pid} ne meurt pas");
+    }
+
+    /// **Un fournisseur à la demande qui plante sous bail se relance une fois**
+    /// (la reprise après plantage, « Manquant » 6 de la page des règles) : un
+    /// index est une suite de calculs du même client ; le fournisseur tué entre
+    /// deux, le suivant le relance, identité revérifiée, et rend ses vecteurs,
+    /// vite, sans erreur pour l'appelant.
+    #[test]
+    fn a_la_demande_un_fournisseur_plante_sous_bail_se_relance_une_fois() {
+        // Des délais longs : ni bail rendu ni éviction pendant le témoin.
+        let f = a_la_demande(60, 30);
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        client.embed(&["premier lot".into()]).unwrap();
+        planter(pid_demarre(&f, 0));
+        let debut = std::time::Instant::now();
+        let v = client.embed(&["lot suivant".into()]).unwrap_or_else(|e| panic!("le calcul après le plantage : {e}"));
+        assert_eq!(v[0].len(), 384);
+        assert!(debut.elapsed() < std::time::Duration::from_secs(10), "relancé vite : {:?}", debut.elapsed());
+        assert_eq!(evenements(&f, "constructeur_demarre"), 2, "relancé une fois");
+        // Le relancé tient le bail : un troisième calcul ne relance rien.
+        client.embed(&["encore".into()]).unwrap();
+        assert_eq!(evenements(&f, "constructeur_demarre"), 2, "pas de relance sans plantage");
+    }
+
+    /// **Une relance qui échoue se refuse en le disant** : le fournisseur
+    /// planté, sa relance n'arrive pas à se préparer (la fixture attend un
+    /// fichier qui n'est plus là) ; le calcul rend une erreur qui dit que le
+    /// fournisseur est parti et que la relance unique a échoué, dans le budget
+    /// d'activation, sans seconde relance.
+    #[test]
+    fn a_la_demande_une_relance_qui_echoue_se_refuse_en_le_disant() {
+        let mut f = a_la_demande(60, 30);
+        let liberer = f.dossier.path().join("liberer-chargement");
+        std::fs::write(&liberer, b"").unwrap();
+        let a = f.source.activation.as_mut().unwrap();
+        a.args.extend(["--liberer-chargement".into(), liberer.display().to_string(), "--budget-pret-ms".into(), "1500".into()]);
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        client.embed(&["premier lot".into()]).unwrap();
+        std::fs::remove_file(&liberer).unwrap();
+        planter(pid_demarre(&f, 0));
+        let debut = std::time::Instant::now();
+        let erreur = client.embed(&["lot suivant".into()]).err().expect("la relance échoue").to_string();
+        assert!(debut.elapsed() < std::time::Duration::from_secs(15), "refus dans le budget : {:?}", debut.elapsed());
+        assert!(erreur.contains("parti") && erreur.contains("relancé une fois"), "le refus dit le plantage et la relance : {erreur}");
+        assert_eq!(evenements(&f, "constructeur_demarre"), 2, "une seule relance");
+    }
+
     #[test]
     fn budget_de_sonde_ne_remplace_pas_delai_appel_par_defaut() {
         let mut f = Fixture::nouvelle(); f.source.timeout_secs = None;
