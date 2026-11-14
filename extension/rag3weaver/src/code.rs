@@ -1279,6 +1279,14 @@ pub fn analyze_in_project_avec(
             // (`declared_dependencies`) mettraient le Go en minuscules.
             declared_dependencies_by_language: manifestes.map(|m| m.dependances_par_langue.iter().map(|(l, n)| (l.clone(), n.iter().cloned().collect())).collect()),
             project_packages_by_language: manifestes.map(|m| m.paquets_par_langue.iter().map(|(l, n)| (l.clone(), n.iter().cloned().collect())).collect()),
+            // Les alias du dépôt : lus des tsconfig, et déclarés sous `workspace.imports.<langue>.local_prefixes`.
+            local_prefixes_by_language: manifestes.map(|m| {
+                let mut p: HashMap<String, Vec<String>> = m.prefixes_locaux_par_langue.iter().map(|(l, s)| (l.clone(), s.iter().cloned().collect())).collect();
+                for (l, r) in &m.renommages {
+                    p.entry(l.clone()).or_default().extend(r.local_prefixes.iter().cloned());
+                }
+                p
+            }),
             import_renames: manifestes.filter(|m| !m.renommages.is_empty()).map(|m| {
                 m.renommages
                     .iter()
