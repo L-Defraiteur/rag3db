@@ -70,6 +70,9 @@ let kind = "fiche";
 if verdict == "none" { kind = "none"; }
 else if verdict == "create" { kind = if input.allow_create { "create" } else { "none" }; }
 let resolved_name = "";
+// La voie du rangement, pour la trace : candidate (l'alias que le modèle a choisi), nom_exact ou
+// voisine (un create dont le sujet nomme une candidate), proposee_document (une fiche proposée plus haut).
+let voie = if kind == "fiche" { "candidate" } else { () };
 if kind == "fiche" {
     if type_of(s.candidates) != "array" || !s.candidates.contains(verdict) {
         throw `archive : alias inconnu « ${verdict} »`;
@@ -99,10 +102,10 @@ let proposed = if input.proposed == () { [] } else { input.proposed };
 // candidates. (Decide rogne déjà le nom.)
 let sujet = if type_of(s.subject) == "string" { s.subject } else { "" };
 if kind == "create" && sujet != "" && type_of(s.candidate_names) == "array" {
-    for c in s.candidate_names { if c.name == sujet { kind = "fiche"; resolved_name = sujet; } }
+    for c in s.candidate_names { if c.name == sujet { kind = "fiche"; resolved_name = sujet; voie = "nom_exact"; } }
     if kind == "create" {
         for c in s.candidate_names {
-            if sujets_voisins(c.name, sujet) { kind = "fiche"; resolved_name = c.name; break; }
+            if sujets_voisins(c.name, sujet) { kind = "fiche"; resolved_name = c.name; voie = "voisine"; break; }
         }
     }
 }
@@ -110,7 +113,7 @@ let rejoint = #{};
 let a_rejoint = false;
 if kind == "fiche" {
     for p in proposed { if p.name == resolved_name { rejoint = p; a_rejoint = true; } }
-    if a_rejoint { kind = "create"; }
+    if a_rejoint { kind = "create"; voie = "proposee_document"; }
 }
 let fiche = if a_rejoint { resolved_name } else if kind == "create" { if sujet != "" { sujet } else { s.title } } else if kind == "fiche" { resolved_name } else { "" };
 if kind == "create" && !a_rejoint && nom_date(fiche) {
@@ -131,6 +134,13 @@ if kind == "create" && !a_rejoint { proposed.push(fiche_record); }
     // Le filtre d'archive (Route sur stage) : seuls les éléments décidés passent à l'étage du sujet ; les
     // échecs du Decide ({error, element, index}) restent dans son rapport.
     stage: "decided",
+    // La trace (archive trace=true) : ce que le modèle a vu et rendu, avant ce que l'archiviste en a fait.
+    section: s.title,
+    texte: texte,
+    candidates: if type_of(s.candidate_names) == "array" { s.candidate_names.map(|c| #{ alias: c.alias, nom: c.name, resume: if c.about == () { "" } else { c.about } }) } else { [] },
+    etiquette: s.verdict,
+    sujet: if sujet == "" { () } else { sujet },
+    voie: voie,
     kind: kind,
     fiche: fiche,
     verdict: if kind == "fiche" { fiche } else { verdict },
