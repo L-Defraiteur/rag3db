@@ -59,6 +59,10 @@ pub enum Touche {
     Echap,
     CtrlC,
     CtrlD,
+    /// Arrêter, comme Échap, mais sans le délai d'échappement d'un multiplexeur
+    /// (tmux attend 500 ms par défaut avant de rendre un Échap seul, mesuré au
+    /// lot tty-6).
+    CtrlG,
 }
 
 /// Le style d'une ligne validée.
@@ -373,6 +377,7 @@ impl Vue {
             }
             Touche::Echap => Some(Action::Arreter),
             Touche::CtrlC => Some(Action::Quitter),
+            Touche::CtrlG => Some(Action::Arreter),
             Touche::CtrlD if self.saisie.is_empty() => Some(Action::Quitter),
             Touche::CtrlD => None,
         }
@@ -677,6 +682,7 @@ mod tests {
         v.touche(Touche::Car('x'));
         assert_eq!(v.touche(Touche::Entree), Some(Action::Envoyer("x".into(), "instruction")), "les suivantes lui parlent");
         assert_eq!(v.touche(Touche::Echap), Some(Action::Arreter));
+        assert_eq!(v.touche(Touche::CtrlG), Some(Action::Arreter), "Ctrl-G arrête, sans le délai d'Échap sous tmux");
         assert_eq!(v.touche(Touche::CtrlD), Some(Action::Quitter));
     }
 
