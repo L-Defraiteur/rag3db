@@ -52,15 +52,15 @@ l'autre, dix fois de suite, même sans rouge.
 | 9 | archi | jauge du contexte (+ quatre mineurs s'ils sont verts) | jauge-ce-qui-pese-pile-2 | 67d759962 sur e00fd562d — **atterri** à 16 h 47, master cdbd346aa, pile tenue |
 | 10 | cœur | correctif (a) perte de Note | annulation-garde-les-autres-2 → annulation-garde-les-autres-pile | 9b0e73c9c → pile 960eb8e3a, puis **41a7de35a** sur 67d759962 (annulation-garde-les-autres-pile-2) ; juge vers 17 h 15 |
 | 11 | recherche | la CI : `fetch_update` déprécié par la chaîne stable de la CI (read_pool.rs:261), pas par le poste 1.98.1 | ci-try-update-pile | **passe devant le cœur** (son juge vers 17 h 30) : posée sur master du moment ; le cœur se repose dessus sans rejeu (C++ seul) |
-| 12 | tty | tty-7, le journal de séance et le repli sous mosh | cx-tty-7-pile 132c0248d sur 41a7de35a, vert | juste après le cœur ; rejeu court attendu (la ligne de la CI touche la lib sous sa base) |
-| 13 | G | la garde apprend la pile | garde-pile 24ab270be | cd103b619 sur c93f73f06 (garde 2f1914405 : --onto, push refusé remis, 27 témoins ; relue par recherche à 16 h 2x ; **posée au cache des deux postes à 16 h 22**, sha256 c57a3fb1 → a58a649f, l'ancienne en push_garde.sh.avant-garde-pile) |
+| 12 | tty | tty-7, le journal de séance et le repli sous mosh | cx-tty-7-pile-2 **cce8970af** sur 27cfe33a8 (8 commits, 6 `=` 2 `!` docs) | rejeu court en cours à luciepc |
+| 13 | G | la garde apprend la pile (six corrections depuis cd103b619, ticket du quota fermé) | garde-pile-2 **40f6b63a5** sur a4936c7a3 ; relecture d'ensemble par recherche ; recopie au cache à l'atterrissage | cd103b619 sur c93f73f06 (garde 2f1914405 : --onto, push refusé remis, 27 témoins ; relue par recherche à 16 h 2x ; **posée au cache des deux postes à 16 h 22**, sha256 c57a3fb1 → a58a649f, l'ancienne en push_garde.sh.avant-garde-pile) |
 | 14 | codeparsers | l'import pointé (lot 1) | codeparsers/import-python-pointe 343ead799 (vert dans codeparsers, 301/0) | passe sur la dernière tête de pile quand une place vient (~19 h) |
 | 15 | recherche | exclusions 1 et 5 dans le manifeste | à venir | à son vert |
-| 16 | archi | les quatre mineurs de l'atelier | atelier-quatre-mineurs-2 dd9504157 (vert, passe complète) | rejeu court après tty-7 |
+| 16 → 13 bis | archi | les quatre mineurs de l'atelier | atelier-quatre-mineurs-pile **c14a389c4** sur cce8970af | rejeu court sur delais-c |
 | 17 | embarquement | activations nommées au manifeste, le groupe bge-m3/relecteur/OCR à la demande | activations-nommees 7074130e7 + docs 73262341b (vert, luciepc) | vrai jeu par hôte isolé 7971 / fournisseur 7891 après la mesure d'ED |
 | 18 | arbre principal | 1b, la migration par lots (représentant par version) | arbre-principal/migration-1b c26f906b7 (vert sur la copie réelle) | jeu fixe de requêtes puis passe complète |
-| 19 | G | `RAG3WEAVER_DB_THREADS` → `SystemConfig::max_num_threads` (le pool du moteur suit le quota ; avant, `hardware_concurrency` l'ignorait) | fils-du-moteur 0a8142493 | rouge (branche jetable) puis vert en file à luciepc |
-| 20 | archi | aucun client HTTP sans délai (reponse_s 120, sonde_s 5 dans daemon.json, borne jusqu'aux en-têtes) | clients-avec-delai 3bb802936 (vert, passe complète) | e2e_lectures et e2e_code en plus, puis en pile derrière les mineurs |
+| 19 | G | `RAG3WEAVER_DB_THREADS` → `SystemConfig::max_num_threads` (le pool du moteur suit le quota ; avant, `hardware_concurrency` l'ignorait) | fils-du-moteur 0a8142493 | **rouge lu (« 24 ») puis vert lu** ; dernier de la chaîne, base = 1b |
+| 20 → 13 ter | archi | aucun client HTTP sans délai (reponse_s 120, sonde_s 5 dans daemon.json, borne jusqu'aux en-têtes) | clients-avec-delai-pile **a4936c7a3** sur c14a389c4 (vert, e2e_lectures 27/0, e2e_code 36/0) | rejeu court après les mineurs ; garde-pile-2 est posée dessus |
 | 21 | hotfixs | les arêtes en double : le témoin de la clé primaire sous point de reprise (rouge e93710f36 attendu, vert 0c41f9fe6) | liens-sous-point-de-reprise ae7e6ae70 | en file au portable |
 
 Chaque session dit à c7 et au rang suivant la tête de sa branche de pile dès qu'elle est poussée.
@@ -190,3 +190,11 @@ rang) est le lot. Le poste est libre : la chaîne reprend, chacun dit sa tête a
 (CI, PILE_AVANT=96f06eb87) → cœur (27cfe33a8, PILE_AVANT=34271fc37, à son juge) → tty-7 (reposé sur
 27cfe33a8) → mineurs → clients (archi) → garde-pile-2 (G) → import pointé (codeparsers) → exclusions
 (recherche) → activations (embarquement) → 1b (arbre principal) → fils du moteur (G).
+
+## L'ordre réel de la chaîne (18 h 1x)
+
+recherche (CI) → cœur (27cfe33a8, juge) → tty-7 (cce8970af) → mineurs (c14a389c4) → clients (a4936c7a3)
+→ garde-pile-2 (40f6b63a5) → import pointé (codeparsers, à poser) → exclusions (recherche, à son vert)
+→ activations (embarquement, à poser) → 1b (arbre principal, à poser) → fils du moteur (G, à poser).
+La mesure d'ED n'a pas été arrêtée par quelqu'un : l'oom-killer de sa portée (`POSTE_MEM_MAX=32G`) a
+tué la sonde à 33 Gio de RSS après ~250 search_code — un second défaut à départager (RSS par appel).
