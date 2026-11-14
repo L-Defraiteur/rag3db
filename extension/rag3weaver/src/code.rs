@@ -4608,7 +4608,7 @@ mod tests {
     #[test]
     fn le_contenu_d_un_scope_est_borne_a_ses_octets() {
         let src = "function a(){return 1}function b(){return 2}\n";
-        let a = analyze("/virtual", vec![("bundle.min.js".into(), src.into())]);
+        let a = analyze("/virtual", vec![("bundle.js".into(), src.into())]);
         let contenu = |nom: &str| a.scopes.iter().find(|s| s.name == nom).unwrap_or_else(|| panic!("scope {nom}")).content.clone();
         assert_eq!(contenu("a"), "function a(){return 1}");
         assert_eq!(contenu("b"), "function b(){return 2}");
