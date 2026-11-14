@@ -5,6 +5,9 @@
 //! dans la largeur donnée et défile autour du curseur, en comptant les
 //! caractères larges pour deux colonnes.
 
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
+
 /// Le texte en cours de saisie et la place du curseur (un indice d'octet, sur
 /// une frontière de graphème).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -27,35 +30,110 @@ impl Saisie {
         self.curseur
     }
 
-    /// Insère `s` au curseur, qui passe après lui.
-    pub fn inserer(&mut self, _s: &str) {}
+    /// Insère `s` au curseur, qui passe après lui. Un retour chariot devient un
+    /// saut de ligne, une tabulation quatre espaces.
+    pub fn inserer(&mut self, s: &str) {
+        let s = s.replace("\r\n", "\n").replace('\r', "\n").replace('\t', "    ");
+        self.texte.insert_str(self.curseur, &s);
+        self.curseur += s.len();
+    }
+
+    /// Le début du graphème avant `i`.
+    fn precedent(&self, i: usize) -> usize {
+        self.texte[..i].grapheme_indices(true).next_back().map(|(j, _)| j).unwrap_or(0)
+    }
+
+    /// La fin du graphème qui commence en `i`.
+    fn suivant(&self, i: usize) -> usize {
+        self.texte[i..].graphemes(true).next().map(|g| i + g.len()).unwrap_or(i)
+    }
 
     /// Un graphème vers la gauche.
-    pub fn gauche(&mut self) {}
+    pub fn gauche(&mut self) {
+        self.curseur = self.precedent(self.curseur);
+    }
 
     /// Un graphème vers la droite.
-    pub fn droite(&mut self) {}
+    pub fn droite(&mut self) {
+        self.curseur = self.suivant(self.curseur);
+    }
 
     /// Au début de la ligne du curseur.
-    pub fn debut(&mut self) {}
+    pub fn debut(&mut self) {
+        self.curseur = self.texte[..self.curseur].rfind('\n').map(|j| j + 1).unwrap_or(0);
+    }
 
     /// À la fin de la ligne du curseur.
-    pub fn fin(&mut self) {}
+    pub fn fin(&mut self) {
+        self.curseur = self.texte[self.curseur..].find('\n').map(|j| self.curseur + j).unwrap_or(self.texte.len());
+    }
 
     /// Efface le graphème avant le curseur (retour arrière).
-    pub fn effacer_avant(&mut self) {}
+    pub fn effacer_avant(&mut self) {
+        let j = self.precedent(self.curseur);
+        self.texte.replace_range(j..self.curseur, "");
+        self.curseur = j;
+    }
 
     /// Efface le graphème sous le curseur (Suppr).
-    pub fn effacer_apres(&mut self) {}
+    pub fn effacer_apres(&mut self) {
+        let j = self.suivant(self.curseur);
+        self.texte.replace_range(self.curseur..j, "");
+    }
 
     /// Rend le texte et vide la saisie.
     pub fn prendre(&mut self) -> String {
-        String::new()
+        self.curseur = 0;
+        std::mem::take(&mut self.texte)
     }
 
-    /// Ce qui s'affiche dans `largeur` colonnes, et la colonne du curseur.
-    pub fn affichage(&self, _largeur: usize) -> (String, usize) {
-        (String::new(), 0)
+    /// Ce qui s'affiche dans `largeur` colonnes, et la colonne du curseur. Un
+    /// saut de ligne se montre `↵`. Trop longue, la saisie défile pour garder
+    /// le curseur visible, et chaque bout coupé se dit par `…`.
+    pub fn affichage(&self, largeur: usize) -> (String, usize) {
+        let largeur = largeur.max(4);
+        // (octet de début, ce qui se montre, colonne de début, largeur)
+        let mut morceaux: Vec<(usize, &str, usize, usize)> = Vec::new();
+        let mut col = 0;
+        for (i, g) in self.texte.grapheme_indices(true) {
+            let montre = if g == "\n" { "↵" } else { g };
+            let w = montre.width();
+            morceaux.push((i, montre, col, w));
+            col += w;
+        }
+        let total = col;
+        let c = morceaux.iter().find(|m| m.0 >= self.curseur).map(|m| m.2).unwrap_or(total);
+        if total < largeur {
+            return (morceaux.iter().map(|m| m.1).collect(), c);
+        }
+        let mut out = String::new();
+        let mut w_out = 0;
+        let premier = if c < largeur - 1 {
+            0
+        } else {
+            out.push('…');
+            w_out = 1;
+            let min = c.saturating_sub(largeur - 3);
+            morceaux.iter().position(|m| m.2 >= min).unwrap_or(morceaux.len())
+        };
+        let mut col_curseur = None;
+        let mut tout = true;
+        for m in &morceaux[premier..] {
+            if m.0 >= self.curseur && col_curseur.is_none() {
+                col_curseur = Some(w_out);
+            }
+            if w_out + m.3 > largeur - 1 {
+                tout = false;
+                break;
+            }
+            out.push_str(m.1);
+            w_out += m.3;
+        }
+        let col_curseur = col_curseur.unwrap_or(w_out);
+        if !tout {
+            out.push('…');
+        }
+        (out, col_curseur)
     }
 }
 
@@ -126,7 +204,6 @@ mod tests {
         s.gauche();
         s.effacer_avant();
         assert_eq!(s.texte(), "ae\u{301}漢z", "la famille part d'un coup");
-        s.gauche();
         s.effacer_avant();
         assert_eq!(s.texte(), "a漢z", "l'accent part avec sa lettre");
     }
