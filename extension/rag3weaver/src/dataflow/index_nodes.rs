@@ -1020,7 +1020,8 @@ mod tests {
         let config = crate::CatalogConfig { name: Some("orphelins".into()), embedding_dim: 4, ..Default::default() };
         let mut catalog = Catalog::new(Box::new(conn), Box::new(crate::embedder::AbsentEmbedder::new("absent", 4)), config);
         catalog.initialize().unwrap();
-        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        // La forme des bases de Lucie (d'avant les versions de scope) : `Scope` porte son document.
+        crate::code::register_code_schema_sans_versions(&mut catalog, crate::code::default_scope_chunking()).unwrap();
         let catalog = Arc::new(Mutex::new(catalog));
         let indexer = |fichiers: Vec<(String, String)>| {
             let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", fichiers));
