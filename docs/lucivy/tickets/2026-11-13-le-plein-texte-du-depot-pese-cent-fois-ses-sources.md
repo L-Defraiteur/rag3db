@@ -1,7 +1,7 @@
 # Le plein texte de la base du dépôt pèse cent fois ses sources
 
-- **État** : ouvert (13 novembre 2026, au soir). La mesure se fait le 14, dans un creux, sur une
-  copie. Ensuite, le lot « profil léger », à la décision de Lucie.
+- **État** : ouvert ; **mesuré le 14 novembre** (voir « La mesure »). Le poids vient surtout de fichiers
+  générés, importés ou minifiés indexés par rag3weaver. Ensuite, le lot « profil léger », à la décision de Lucie.
 - **Gravité** : place disque. Lucie a fixé un budget de rétention de 15 Go par dépôt, et le chiffre
   dépend de ce ticket.
 - **Atteignable en service** : oui (`~/.local/share/rag3weaver/code-rag3db-depot.rag3db.fts`).
@@ -16,6 +16,44 @@ La base du dépôt pèse 4,1 Go. Le plein texte en fait 4,0 Go, presque tout dan
 D'après la documentation de lucivy, un index avec positions pèse environ six fois son texte, et
 environ 2,6 fois sans. Cent fois, c'est d'un autre ordre : les réglages n'expliquent qu'un facteur 2 à
 3, le reste vient d'ailleurs.
+
+## La mesure (14 novembre, 13 h 10, sur copie)
+
+Copie par reflink de `Lucivy_Scope` seul (le plein texte ; la base rag3db n'est pas lue), cohérente : tous
+les segments nommés par chaque `meta.json` sont complets. 4 shards, 27 segments, 4,59 Go. Lue par les
+métadonnées, puis par le test ignoré `diag_poids_du_texte` (branche lucivy `diag-poids-du-texte`, 7174fdd),
+sur une copie de la copie.
+
+**Le poids vient de ce qui est indexé, pas du moteur.**
+
+- **Le texte indexé fait 928 Mo** (champ `content`), pas 37 Mo. L'index pèse **4,9 fois son texte**,
+  normal pour un index avec positions (la doc annonce environ 6). Le « cent fois » compare l'index aux
+  seules sources suivies par git.
+- **10 % des documents portent 91,6 % du texte.** Médiane 275 o, p90 20 Ko, p99 133 Ko, maximum 1,9 Mo.
+  Les plus gros sont générés ou importés : la table Unicode d'`utf8proc` (1,9 Mo), un fichier
+  « Copyright 2013 Google » de 470 Ko (probablement brotli), des **bundles JavaScript minifiés de 220 Ko
+  en plusieurs versions**. Rien de tout ça ne sert à une recherche de code.
+- **21 % des contenus sont des doublons exacts** : 71 024 contenus distincts pour 89 886 documents.
+- **Documents supprimés : 12 %** (12 174 sur 102 068). La piste 1 n'est pas la cause principale.
+- **Composition de l'index** : `sfxpost` 21 %, `word_pos_map` 19,4 %, `word_sfxpost` 17,7 %, `posmap`
+  15,8 %, texte stocké (`.store`, lz4) 10,4 %, dictionnaire partagé 11,4 %, `sibling_v3` 1,6 %. Les
+  fichiers de positions (`word_pos_map`, `posmap`, `sibling_v3`) font **environ 37 %**.
+- Les gros segments sont au plafond de fusion (10 000 documents), à 300-400 Mo chacun.
+- **Écart non expliqué** : 89 894 documents vivants, tous de `_node_id` distincts, alors que l'hôte annonce
+  68 585 documents `Scope` pour le backend `rag3db` (branche master). Ce `.fts` n'est probablement pas
+  celui du backend ouvert. À vérifier côté rag3weaver avant de reconstruire quoi que ce soit.
+
+### Ce que ça change aux leviers, dans l'ordre du gain
+
+1. **Ne pas indexer les fichiers générés, importés ou minifiés** (côté rag3weaver) : sources hors git, les
+   dossiers de dépendances importées, les fichiers minifiés, une taille maximale par document. C'est le
+   plus gros levier : le texte indexé pourrait revenir près des sources suivies.
+2. **`positions: false`** (décidé par Lucie) : environ 37 % de l'index, plus les positions dans les
+   postings.
+3. **Les doublons exacts** (21 % des contenus) : à comprendre côté rag3weaver (des scopes imbriqués qui
+   répètent le texte, ou des fichiers copiés).
+4. **La purge des supprimés** (12 %) : la fusion selon la part de supprimés, plus tard.
+5. **La compression du texte stocké** (10 %) : la dernière, un gain de quelques pourcents.
 
 ## Les pistes à départager (la mesure, pas une supposition)
 
