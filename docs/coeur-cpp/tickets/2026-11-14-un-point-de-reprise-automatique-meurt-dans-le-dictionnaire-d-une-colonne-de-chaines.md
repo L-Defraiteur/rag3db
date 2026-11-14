@@ -42,6 +42,20 @@ gardé par systemd-coredump à luciepc (pid 3980144, 14:17:21).
 Le point de reprise automatique, demandé par un COMMIT (A8), écrit une colonne de chaînes. En
 recopiant une chaîne dans le dictionnaire du segment, il en hache une qui n'est plus lisible.
 
+Les autres fils, lus avec le binaire de `9b0e73c9c` encore en place : trace complète à luciepc,
+`~/.cache/rag3db-moteur-notes/core-3980144.txt` (`thread apply all bt 8`).
+
+- Un seul fil écrit le point de reprise : le fil 1, celui qui meurt.
+- 20 fils attendent à `BEGIN` (`waitWhileCheckpointPendingNoLock`), ce qui est normal : un
+  point de reprise est en cours.
+- Des lecteurs admis sous V2 balaient pendant ce temps : `ScanRelTable`, `PrimaryKeyScanNodeTable`,
+  et le fil 3 dans `Column::scanSegment` → `BufferManager::optimisticRead` → `decompressFromPage`.
+  C'est une lecture optimiste ordinaire, qui n'est pas en cause d'après sa pile.
+- La chaîne illisible est lue par le point de reprise dans un bloc **en mémoire** de la colonne
+  (`StringChunkData::write` à partir des données du bloc). Ce tour n'a eu aucune annulation d'un
+  COMMIT refusé. Les échecs ordinaires du scénario (clé dupliquée, accès concurrent) s'annulent
+  dans le stockage local de leur transaction.
+
 ## Ce qu'on ne sait pas
 
 - **Quelle table.** Note a `texte STRING`, Doc a `titre STRING`. Le dictionnaire peut lire une
