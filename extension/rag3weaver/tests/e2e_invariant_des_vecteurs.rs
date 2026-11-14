@@ -447,6 +447,10 @@ struct Surveillant {
     en_vol: std::sync::Arc<std::sync::atomic::AtomicUsize>,
     max_en_vol: std::sync::Arc<std::sync::atomic::AtomicUsize>,
     refus: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    /// **Une sonde à la fois** : un `try_lock` réussi tient le verrou du catalogue un instant, et la
+    /// sonde d'un autre appel en vol à cet instant le voyait tenu. Les sondes passent l'une après
+    /// l'autre ; un vrai détenteur du catalogue ne passe pas par ici et reste vu.
+    sonde: std::sync::Mutex<()>,
 }
 
 impl Embedder for Surveillant {
@@ -456,6 +460,7 @@ impl Embedder for Surveillant {
         let en_vol = self.en_vol.fetch_add(1, SeqCst) + 1;
         self.max_en_vol.fetch_max(en_vol, SeqCst);
         if let Some(c) = self.catalogue.get() {
+            let _une_sonde_a_la_fois = self.sonde.lock().unwrap_or_else(|e| e.into_inner());
             if let Err(e) = c.try_lock() {
                 self.tenu.store(true, SeqCst);
                 let pourquoi = match e {
@@ -498,6 +503,7 @@ fn surveillant_sur_un_catalogue() -> (
         en_vol: Default::default(),
         max_en_vol: max_en_vol.clone(),
         refus: Default::default(),
+        sonde: Default::default(),
     };
     let catalogue = std::sync::Arc::new(std::sync::Mutex::new(monter(Rag3dbConnection::in_memory().expect("base en mémoire"), "hachage")));
     cellule.set(catalogue.clone()).ok();
@@ -562,6 +568,7 @@ fn l_embarquement_du_retard_appelle_le_service_hors_du_verrou() {
         en_vol: Default::default(),
         max_en_vol: max_en_vol.clone(),
         refus: refus.clone(),
+        sonde: Default::default(),
     };
     let mut catalog = monter_avec(Rag3dbConnection::in_memory().expect("base en mémoire"), Box::new(surveillant));
     catalog.ingest_entities_jusqu_a("Fiche", lignes(0..40, "v1"), D::RECHERCHE_TEXTE).expect("mots");
