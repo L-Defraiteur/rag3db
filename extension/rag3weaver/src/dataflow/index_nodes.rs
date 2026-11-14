@@ -1004,6 +1004,45 @@ mod tests {
         assert_eq!(docs, lignes + 1, "un document de trop se compte : {comptes:?}");
     }
 
+    /// **Un Scope effacé après un redémarrage emporte son document plein texte**
+    /// (ticket recherche du 14 novembre 2026, les orphelins de la base du dépôt :
+    /// 8 809 documents vivants sans Scope). Le document d'un Scope est rangé sous
+    /// l'offset de sa ligne, et `DeleteRecordNode` ne trouvait cet offset que
+    /// dans le cache uuid → offset de la session, qui naît vide à l'ouverture.
+    /// Ici : six fichiers indexés, le cache vidé comme par un redémarrage, puis
+    /// la même source sans l'un d'eux ; ses Scope partent par la fin
+    /// d'instantané, et leurs documents doivent partir avec eux.
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    #[test]
+    fn un_scope_efface_apres_un_redemarrage_emporte_son_document() {
+        let fichiers: Vec<(String, String)> = (0..6).map(|i| (format!("src/f{i}.rs"), format!("pub fn f{i}() -> u32 {{ {i} }}\n"))).collect();
+        let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
+        let config = crate::CatalogConfig { name: Some("orphelins".into()), embedding_dim: 4, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(crate::embedder::AbsentEmbedder::new("absent", 4)), config);
+        catalog.initialize().unwrap();
+        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        let catalog = Arc::new(Mutex::new(catalog));
+        let indexer = |fichiers: Vec<(String, String)>| {
+            let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", fichiers));
+            let journal = new_index_journal().expect("journal");
+            spawn_index(catalog.clone(), source, journal.clone(), 0, Default::default()).join().expect("le fil d'indexation");
+            let _ = std::fs::remove_file(&journal);
+        };
+        let comptes = || {
+            let cat = catalog.lock().unwrap();
+            cat.comptes_du_plein_texte().into_iter().find(|(e, _, _)| e == crate::code::SCOPE).expect("Scope compté")
+        };
+        indexer(fichiers.clone());
+        let (_, docs, lignes) = comptes();
+        assert_eq!(docs, lignes, "après le premier index, un document par Scope");
+        // Le redémarrage de l'hôte : le cache de la session est vide.
+        catalog.lock().unwrap().node_id_cache().write().unwrap().clear();
+        indexer(fichiers[..5].to_vec());
+        let (_, docs_apres, lignes_apres) = comptes();
+        assert!(lignes_apres < lignes, "les Scope du fichier retiré sont partis du graphe ({lignes} → {lignes_apres})");
+        assert_eq!(docs_apres, lignes_apres, "un document par Scope après le retrait : {docs_apres} documents pour {lignes_apres} Scope");
+    }
+
     #[test]
     fn index_exige_un_catalogue_et_son_journal_est_attendable() {
         let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", [("a.rs".to_string(), "fn a() {}\n".to_string())]));
