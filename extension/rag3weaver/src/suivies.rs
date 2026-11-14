@@ -293,6 +293,58 @@ pub fn resoudre_les_sources(
         .collect())
 }
 
+/// La racine des couches, résolue.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RacineResolue {
+    /// Le merge-base de toutes les pointes, et la ou les suivies qui le fixent (sans elles, il avancerait).
+    Calculee { commit: String, fixee_par: Vec<String> },
+    /// Les suivies n'ont aucun ancêtre commun (des historiques orphelins) : chacune est sa propre racine.
+    SansAncetreCommun,
+    Vide,
+    Declaree { rev: String, commit: String },
+    /// Une racine déclarée que git ne nomme pas : dite, jamais devinée.
+    Introuvable(String),
+}
+
+/// La parente d'une couche, résolue.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParenteResolue {
+    Aucune,
+    Declaree(String),
+    /// Le parent commun le plus récent parmi les suivies, et la base (le point de fourche).
+    Inferee { parente: String, base: String },
+    /// Plusieurs suivies à égalité : à déclarer.
+    Ambigue(Vec<String>),
+    /// La couche est dans un cycle de fusions (un flux multi-env) : sa parente est à déclarer.
+    DansUnFlux,
+}
+
+/// Une couche d'histoire : une ref résolue, sa pointe, sa parente.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoucheResolue {
+    pub nom: String,
+    pub pointe: String,
+    pub parente: ParenteResolue,
+}
+
+/// La pile d'un dépôt : sa racine, ses couches, ses flux, ce qui est à dire.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pile {
+    pub racine: RacineResolue,
+    pub couches: Vec<CoucheResolue>,
+    /// Les cycles de fusions entre suivies (« flux détecté entre develop, staging et main »), chacun trié.
+    pub flux: Vec<Vec<String>>,
+    pub avertissements: Vec<String>,
+}
+
+/// **La pile** des sources résolues : la racine dans sa nature, la parente de chaque couche (déclarée,
+/// aucune, ou inférée parmi les suivies : le parent commun le plus récent, admis seulement s'il est unique),
+/// et les flux. Sans ancre : `main` n'a aucune place particulière.
+pub fn resoudre_la_pile(racine: &std::path::Path, declaration: &Declaration, sources: &[SourceResolue]) -> Result<Pile, String> {
+    let _ = (racine, declaration, sources);
+    Err("la pile ne se résout pas encore".into())
+}
+
 /// Les refs du dépôt, chacune sur son commit (une étiquette annotée, déréférencée).
 fn lire_les_refs(racine: &std::path::Path) -> Result<Vec<RefResolue>, String> {
     let sortie = crate::couches::git(racine, &["for-each-ref", "--format=%(refname)%00%(objectname)%00%(*objectname)"])?;
@@ -537,5 +589,132 @@ mod tests {
         let taches = resoudre(&une(Selecteur::Taches, true));
         assert_eq!(taches.refs, vec![RefResolue { nom: "refs/heads/agent/t1".into(), pointe: pointe("agent/t1") }]);
         assert_eq!(taches.travail.iter().map(|c| c.chemin.clone()).collect::<Vec<_>>(), vec![reel(&t.path().join("wt-t1"))]);
+    }
+
+    /// Un dépôt de test vierge, pour les décors de la pile.
+    fn vierge() -> (tempfile::TempDir, std::path::PathBuf) {
+        let t = tempfile::tempdir().unwrap();
+        let d = t.path().join("depot");
+        std::fs::create_dir_all(&d).unwrap();
+        git(&d, &["init", "-q"]);
+        (t, d)
+    }
+
+    fn commit(d: &std::path::Path, m: &str) {
+        git(d, &["commit", "-q", "--allow-empty", "-m", m]);
+    }
+
+    fn branches(noms: &[&str], parent: Parente) -> Declaration {
+        Declaration {
+            root: Racine::Calculee,
+            sources: noms.iter().map(|n| source(Selecteur::Branche((*n).into()), parent.clone(), Histoire::Pointe, false)).collect(),
+        }
+    }
+
+    fn pile(d: &std::path::Path, decl: &Declaration) -> Pile {
+        let sources = resoudre_les_sources(d, d, &[], decl).unwrap();
+        resoudre_la_pile(d, decl, &sources).unwrap()
+    }
+
+    fn parente<'a>(p: &'a Pile, nom: &str) -> &'a ParenteResolue {
+        &p.couches.iter().find(|c| c.nom == format!("refs/heads/{nom}")).unwrap_or_else(|| panic!("{nom} absente : {p:?}")).parente
+    }
+
+    /// **La racine, dans ses trois natures** : calculée (le merge-base de toutes les pointes, et la suivie
+    /// qui la fixe : une branche partie de loin la tire en arrière), vide, déclarée ; une racine déclarée que
+    /// git ne nomme pas est dite introuvable ; des historiques orphelins n'ont aucun ancêtre commun.
+    #[test]
+    fn la_racine_dans_ses_trois_natures_et_la_suivie_qui_la_fixe() {
+        let (_t, d) = vierge();
+        commit(&d, "m1");
+        git(&d, &["branch", "vieille"]);
+        commit(&d, "m2");
+        commit(&d, "m3");
+        git(&d, &["switch", "-q", "-c", "a"]);
+        commit(&d, "a1");
+        git(&d, &["switch", "-q", "vieille"]);
+        commit(&d, "v1");
+        git(&d, &["switch", "-q", "main"]);
+        let m1 = git(&d, &["rev-parse", "main~2"]);
+        let toutes = pile(&d, &branches(&["main", "a", "vieille"], Parente::Inferee));
+        assert_eq!(toutes.racine, RacineResolue::Calculee { commit: m1.clone(), fixee_par: vec!["refs/heads/vieille".into()] }, "{toutes:?}");
+        let sans_la_vieille = pile(&d, &branches(&["main", "a"], Parente::Inferee));
+        assert_eq!(sans_la_vieille.racine, RacineResolue::Calculee { commit: git(&d, &["rev-parse", "main"]), fixee_par: vec!["refs/heads/main".into()] }, "{sans_la_vieille:?}");
+        let mut vide = branches(&["main", "a"], Parente::Inferee);
+        vide.root = Racine::Vide;
+        assert_eq!(pile(&d, &vide).racine, RacineResolue::Vide);
+        let mut declaree = branches(&["main", "a"], Parente::Inferee);
+        declaree.root = Racine::Declaree("main~1".into());
+        assert_eq!(pile(&d, &declaree).racine, RacineResolue::Declaree { rev: "main~1".into(), commit: git(&d, &["rev-parse", "main~1"]) });
+        declaree.root = Racine::Declaree("nulle-part".into());
+        assert_eq!(pile(&d, &declaree).racine, RacineResolue::Introuvable("nulle-part".into()));
+        git(&d, &["switch", "-q", "--orphan", "orpheline"]);
+        commit(&d, "o1");
+        git(&d, &["switch", "-q", "main"]);
+        let orphelins = pile(&d, &branches(&["main", "orpheline"], Parente::Inferee));
+        assert_eq!(orphelins.racine, RacineResolue::SansAncetreCommun, "{orphelins:?}");
+        assert_eq!(parente(&orphelins, "orpheline"), &ParenteResolue::Aucune, "deux suivies sans ancêtre commun : aucune parente");
+    }
+
+    /// **La parente inférée parmi les suivies** : le parent commun le plus récent, avec sa base ; une branche
+    /// que les autres contiennent n'a pas de parente parmi elles ; deux candidates à égalité, c'est ambigu ;
+    /// une parente déclarée ou « aucune » est gardée telle quelle.
+    #[test]
+    fn la_parente_inferee_parmi_les_suivies_unique_ou_ambigue() {
+        let (_t, d) = vierge();
+        commit(&d, "m1");
+        commit(&d, "m2");
+        git(&d, &["switch", "-q", "-c", "a"]);
+        commit(&d, "a1");
+        git(&d, &["switch", "-q", "-c", "b"]);
+        commit(&d, "b1");
+        git(&d, &["switch", "-q", "main"]);
+        git(&d, &["branch", "c", "a"]);
+        git(&d, &["branch", "e", "a"]);
+        git(&d, &["switch", "-q", "e"]);
+        commit(&d, "e1");
+        git(&d, &["switch", "-q", "main"]);
+        let p = pile(&d, &branches(&["main", "a", "b"], Parente::Inferee));
+        assert_eq!(parente(&p, "a"), &ParenteResolue::Inferee { parente: "refs/heads/main".into(), base: git(&d, &["rev-parse", "main"]) }, "{p:?}");
+        assert_eq!(parente(&p, "b"), &ParenteResolue::Inferee { parente: "refs/heads/a".into(), base: git(&d, &["rev-parse", "a"]) }, "{p:?}");
+        assert_eq!(parente(&p, "main"), &ParenteResolue::Aucune, "les autres contiennent main : {p:?}");
+        // a et c pointent sur le même commit, e en part : deux candidates à égalité.
+        let egalite = pile(&d, &branches(&["main", "a", "c", "e"], Parente::Inferee));
+        assert_eq!(parente(&egalite, "e"), &ParenteResolue::Ambigue(vec!["refs/heads/a".into(), "refs/heads/c".into()]), "{egalite:?}");
+        let mut declaree = branches(&["main", "a", "b"], Parente::Inferee);
+        declaree.sources[2].parent = Parente::Declaree("main".into());
+        declaree.sources[1].parent = Parente::Aucune;
+        let d2 = pile(&d, &declaree);
+        assert_eq!(parente(&d2, "b"), &ParenteResolue::Declaree("refs/heads/main".into()));
+        assert_eq!(parente(&d2, "a"), &ParenteResolue::Aucune);
+    }
+
+    /// **Le flux multi-env** (Lucie, 14 nov.) : develop → staging → main par promotions, un hotfix sur main
+    /// redescendu dans develop. Les suivies forment un cycle de fusions : l'état le nomme, et ne pose aucune
+    /// parente inférée entre elles (elle changerait au prochain resync).
+    #[test]
+    fn un_cycle_de_fusions_entre_suivies_est_un_flux_nomme() {
+        let (_t, d) = vierge();
+        commit(&d, "m1");
+        for b in ["develop", "staging"] {
+            git(&d, &["branch", b]);
+        }
+        git(&d, &["switch", "-q", "develop"]);
+        commit(&d, "d1");
+        git(&d, &["switch", "-q", "staging"]);
+        git(&d, &["merge", "-q", "--no-ff", "--no-edit", "develop"]);
+        git(&d, &["switch", "-q", "main"]);
+        git(&d, &["merge", "-q", "--no-ff", "--no-edit", "staging"]);
+        commit(&d, "hotfix");
+        git(&d, &["switch", "-q", "develop"]);
+        git(&d, &["merge", "-q", "--no-ff", "--no-edit", "main"]);
+        commit(&d, "d2");
+        git(&d, &["switch", "-q", "main"]);
+        let p = pile(&d, &branches(&["develop", "staging", "main"], Parente::Inferee));
+        assert_eq!(p.flux, vec![vec!["refs/heads/develop".to_string(), "refs/heads/main".into(), "refs/heads/staging".into()]], "{p:?}");
+        for b in ["develop", "staging", "main"] {
+            assert_eq!(parente(&p, b), &ParenteResolue::DansUnFlux, "{b} : {p:?}");
+        }
+        assert!(p.avertissements.iter().any(|a| a.contains("flux") && a.contains("develop") && a.contains("staging") && a.contains("main")), "{:?}", p.avertissements);
     }
 }
