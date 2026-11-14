@@ -667,6 +667,56 @@ pub struct LastCall {
     pub prompt_tokens: usize,
     /// L'heure de l'appel mesuré (ms epoch), prise à son retour.
     pub at_ms: u64,
+    /// **Ce qui composait l'appel**, en caractères (le fournisseur ne rend qu'un total de
+    /// jetons) : ce que la jauge du chat répartit au prorata. Absent d'un appel noté avant.
+    #[serde(default)]
+    pub parts: Option<PartsDeLAppel>,
+}
+
+/// Les caractères d'un appel au modèle, par sorte : les instructions (les tours système), les
+/// définitions des outils (nom, description, schéma), l'historique (les tours de la personne et
+/// de l'assistant, appels d'outils compris), les résultats d'outils.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PartsDeLAppel {
+    pub instructions: usize,
+    pub outils: usize,
+    pub historique: usize,
+    pub resultats: usize,
+}
+
+impl PartsDeLAppel {
+    /// Mesure ce qui part au modèle : `turns` tels qu'envoyés, `tools` les définitions offertes.
+    pub fn mesurer(turns: &[crate::llm::Turn], tools: &[ToolDef]) -> Self {
+        let mut p = Self::default();
+        for t in turns {
+            let n = t.content.chars().count();
+            match t.role.as_str() {
+                "system" => p.instructions += n,
+                "tool" => p.resultats += n,
+                _ => {
+                    p.historique += n + t.tool_calls.iter().map(|c| c.name.chars().count() + c.arguments.chars().count()).sum::<usize>();
+                }
+            }
+        }
+        p.outils = tools.iter().map(|d| d.name.chars().count() + d.description.chars().count() + d.parameters.to_string().chars().count()).sum();
+        p
+    }
+
+    /// Les `total` jetons répartis au prorata des caractères ; la somme retombe sur `total`
+    /// (le reste de l'arrondi va à la plus grosse part). `None` sans caractère.
+    pub fn en_jetons(&self, total: usize) -> Option<[(&'static str, usize); 4]> {
+        let parts = [("instructions", self.instructions), ("outils", self.outils), ("historique", self.historique), ("resultats", self.resultats)];
+        let somme: usize = parts.iter().map(|(_, n)| n).sum();
+        if somme == 0 {
+            return None;
+        }
+        let mut jetons = parts.map(|(k, n)| (k, ((total as u128 * n as u128) / somme as u128) as usize));
+        let reste = total - jetons.iter().map(|(_, n)| n).sum::<usize>();
+        if let Some(i) = (0..4).max_by_key(|&i| parts[i].1) {
+            jetons[i].1 += reste;
+        }
+        Some(jetons)
+    }
 }
 
 impl AgentRun {
@@ -1746,7 +1796,11 @@ impl<'a> Agent<'a> {
 
             run.text = text.clone();
             accumulate(&mut run.usage, &usage);
-            run.last_call = Some(LastCall { prompt_tokens: usage.prompt_tokens, at_ms: crate::events::maintenant_ms() });
+            run.last_call = Some(LastCall {
+                prompt_tokens: usage.prompt_tokens,
+                at_ms: crate::events::maintenant_ms(),
+                parts: Some(PartsDeLAppel::mesurer(&turns[..], &opts.tools)),
+            });
             last_finish = finish.clone();
             let model = self.llm.name().to_string();
             self.emit(crate::events::CatalogEvent::LlmCall {

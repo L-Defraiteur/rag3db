@@ -235,8 +235,19 @@ function Gauge({ context, model, counters }: { context?: ChatContext; model?: st
     used == null
       ? "aucun appel au modèle encore"
       : `${entier(used)} jetons au dernier appel au modèle${max ? ` sur ${entier(max)} (plafond du modèle)` : " (plafond du modèle inconnu)"}${context?.at ? ` · ${new Date(context.at).toLocaleTimeString()}` : ""}`;
+  // **Ce qui pèse** (le lot de la jauge, 9 et 14 novembre 2026) : la part de chaque sorte dans le
+  // total, estimée par l'hôte ; le survol le dit, plus gros d'abord.
+  const parts = context?.parts ?? null;
+  const detail = parts && used
+    ? ([["instructions", parts.instructions], ["outils", parts.outils], ["historique", parts.historique], ["résultats d'outils", parts.resultats]] as const)
+        .slice()
+        .sort((a, b) => b[1] - a[1])
+        .map(([nom, n]) => `${nom} ${entier(n)} (${pourcent(n / used)})`)
+        .join(" · ")
+    : null;
+  const titre = detail ? `${survol}\nce qui pèse, estimé au prorata des caractères : ${detail}` : survol;
   return (
-    <div className="usage mt-1 mb-2 pl-6 pr-1 text-[11px] text-muted-foreground" data-used={used ?? ""} data-max={max ?? ""} title={survol}>
+    <div className="usage mt-1 mb-2 pl-6 pr-1 text-[11px] text-muted-foreground" data-used={used ?? ""} data-max={max ?? ""} data-parts={parts ? JSON.stringify(parts) : undefined} title={titre}>
       <div className="h-1.5 rounded bg-sidebar-accent overflow-hidden" role="meter" aria-label="contexte utilisé" aria-valuemin={0} aria-valuemax={max ?? undefined} aria-valuenow={used ?? undefined}>
         <div className="h-full bg-primary" style={{ width: ratio ? `max(3px, ${(ratio * 100).toFixed(2)}%)` : "0" }} />
       </div>
@@ -452,7 +463,9 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
         setRecaps((cur) => {
           const r = cur[id] ?? {};
           const c: ChatContext = { used: null, max: null, source: "run", at: null, ...r.context };
-          return { ...cur, [id]: { ...r, context: { ...c, used, at: Date.now() } } };
+          // Les parts sont celles d'un appel fini : un nouveau total les rend fausses, l'hôte
+          // redonne les siennes à la fin du tour.
+          return { ...cur, [id]: { ...r, context: { ...c, used, at: Date.now(), parts: null } } };
         });
       }
       // L'invocation ne suit que le run du tour (relecture d'everything declarative) : le
