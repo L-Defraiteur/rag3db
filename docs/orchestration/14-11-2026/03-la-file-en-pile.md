@@ -306,3 +306,10 @@ apprend `PILE_TESTE`, garde-pile-3 posée au cache d9a6c083) → sans-filtre →
 pointeur des règles → fermeture qui tient (7c0cb6f6c) → crochet en `Weak` (arbre principal) → réécriture
 du `IN` (recherche) → gestes de 96 → (B) l'`IN` haché (cœur, ab26b045d, C++) → garde-pile-3 (52f674ad7) →
 chaîne Rust 1.98.1. La bascule de la lib 373b5477b part après la recopie ; les passes épinglent la lib.
+
+**20 h 5x — vingt atterris** (activations 441f28e08, par `PILE_TESTE` après un conflit de nouveautes.md).
+L'ordre du bout de chaîne : sans-filtre → 1b (arbre principal, passe) → fils du moteur (G, vert) →
+pointeur des règles (codeparsers, passe) → fermeture qui tient (archi, 7c0cb6f6c, rejeu) → **gestes de
+96** (rang 24, sur 7c0cb6f6c) → **crochet en `Weak`** (arbre principal, 25) → **réécriture du `IN`**
+(recherche, 26) → (B) l'`IN` haché (cœur, 27, C++) → garde-pile-3 (G, 28) → chaîne Rust 1.98.1 (G). La
+bascule de la lib 373b5477b est partie à 20 h 52 (hôtes arrêtés, réveil vers 21 h 10 et 21 h 25).
