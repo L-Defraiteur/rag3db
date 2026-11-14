@@ -63,7 +63,92 @@ puis leurs références par lots. Le drapeau ne fait que remplacer `select_all` 
 sans filtre change de forme avant que le drapeau tombe. La forme de repli : l'ensemble des offsets
 visibles gardé en mémoire par (couche, rang), calculé une fois à la publication d'une génération.
 
-**Les chiffres** : à venir.
+**Les chiffres** : au § 2 bis.
+
+## 2 bis. Ce que la mesure a dit (14 novembre 2026, luciepc, `poste mesure`)
+
+Le mot de Lucie, par c7 : « si on apporte la feature faut faire le max pour qu'elle devienne viable ». La
+mesure ne porte donc plus seulement sur le drapeau : elle dit ce que coûte une recherche, étage par
+étage, avant et après les versions.
+
+**Les bases.**
+- **R** : la base d'avant les versions, telle que les utilisateurs l'ont aujourd'hui. C'est une
+  copie reflink de l'instantané de G `avant-835d5298f/code-rag3db-depot` : la même base que 1b a
+  migrée, prise avant sa migration. Recopiée à luciepc, md5 identique. 79 662 `Scope`.
+- **A, B, C** : la copie de `1b-copie/migree-20261114-1641`, montée aux générations par la
+  migration du § 1. Elle a 79 662 occurrences et 72 652 versions.
+
+**Le jeu** : 10 requêtes. Ce sont les 5 noms les plus appelés et 5 phrases, figés ensuite par banc
+dans `tests/donnees/jeu-recherche-2a2.json`. Chaque requête est jouée sous trois formes :
+- sans filtre ;
+- filtrée par chemin, `src/include/` (12,4 % des scopes) ;
+- filtrée par langage, python (8,1 %).
+
+1 tour de chauffe, puis 5 tours. Les étages sont lus sur les `NodeRun` que le flux publie déjà, sans
+rien ajouter au code de production.
+
+**Une réserve sur le dense et le creux** : dans cette passe, ils n'ont tourné ni en R ni en A. La
+sonde ouvrait le backend sans embarqueur, et l'adresse du manifeste ne suffit pas : le journal dit
+« embarqueur absent ». Les 1 557 ms du nœud dense en A ne sont que son masque, calculé avant de
+découvrir qu'il n'avait pas de modèle. Corrigé dans 02bcdc9e3 : les sondes ouvrent l'embarqueur du
+manifeste (`connect_embedder`). **Les chiffres du lexical restent justes.**
+
+**Une recherche, médianes sur 50 appels (10 requêtes × 5 tours)** :
+
+| forme | R | A | du lexical (R → A) |
+|---|---|---|---|
+| sans filtre | 965 ms | **7 032 ms** | 874 → **6 928** ms |
+| chemin `src/include/` | 247 ms | 2 154 ms | 150 → 2 041 ms |
+| langage python | 229 ms | 1 371 ms | 127 → 1 247 ms |
+
+Les autres étages pèsent peu, et pareil des deux côtés : `resolve` environ 50 ms, le crochet
+`links` de 30 à 47 ms, la source 3 ms, la fusion et le rendu près de 0.
+
+**L'intérieur du nœud lexical, sans filtre** (`tests/sonde_noeud_lexical.rs`) :
+
+| étape | médiane |
+|---|---|
+| 1. les racines (`select_all`) | 19,7 ms |
+| 2. le masque (`derived_references`) | 901,8 ms |
+| **3. `_uuid IN [72 652 versions]` en offsets (`resolve_filter_to_ids`)** | **5 001,2 ms** |
+| 1 + 2 + 3 | 5 922,6 ms, sur les 6 928 du nœud |
+
+Le reste, environ 1 s, est la recherche lucivy. lucivy mesure de son côté 6 à 10 ms de filtre par
+requête. **Ce n'est donc pas BM25, mais la résolution de l'`IN` par le moteur.** Le nœud dense refait
+le même masque de son côté.
+
+**Le drapeau.**
+- La migration prend 18 à 20 ms.
+- En B, les racines par la clause puis `resolve_offsets` coûtent 1 198 ms, contre 19,7 ms par
+  `select_all` en A : **environ 1,2 s de plus par recherche sans filtre, au-dessus du seuil**.
+- La forme de repli est acquise (c7) : l'ensemble par (couche, rang), posé une fois.
+
+**L'arrêt de la passe** : le noyau a tué la sonde à 18 h 03 min 49 s, pendant B. Elle tenait
+anon-rss 33,1 Gio au plafond `POSTE_MEM_MAX=32G`, pour une base de 4 Go, après environ 250 appels.
+R avait passé ses 150 appels. La pente du RSS par appel est mesurée à part.
+
+**Le partage des chantiers** (c7, 14 novembre 2026) :
+- **arbre principal** prend le court-circuit de 1a : sans filtre ni vue, pas de masque ; seule reste la
+  remontée version → occurrences des résultats retenus. C'est un lot à part, avant 1b, et il ne vaut
+  que si aucune version n'est orpheline (`NOT EXISTS`, compté une fois par appel) ;
+- **everything declarative** prend la vue publiée par (couche, rang), pour le cas filtré et le cas
+  sous vue : elle se pose une fois en offsets et remplace l'étape 3. Il prend aussi la fuite de RSS ;
+- **lucivy** prend la vue côté index (`define_view`), mais seulement si ses 6 à 10 ms comptent une
+  fois les 5,9 s retirées ;
+- **banc** tient le juge de parité (`tests/sonde_parite_search_code.rs`) : au bit près entre la base
+  migrée et chaque optimisation, sur l'ensemble des 10 premiers entre R et la base migrée ;
+- **un ticket moteur** pour la résolution de l'`IN` (5 s pour 72 652 clés primaires).
+
+**Le point de composition avec le lot d'arbre principal.**
+- Sous 2a′-1 tel qu'il a atterri, une édition ou une suppression **efface** encore ses `Scope` (la
+  fin d'instantané, puis la file de suppressions). Les versions `ScopeContent` survivent : les
+  orphelines existent sur une base vivante.
+- 2a′-2 ferme cela : retirer, c'est poser `_jusqu_a`, et la ligne garde son arête.
+- Quand le drapeau tombe :
+  - le test du court-circuit devient « aucune version sans occurrence **visible** au rang lu » ;
+  - la projection version → occurrences ne garde que les occurrences visibles.
+- Le témoin d'arbre principal, « une orpheline ne fait jamais perdre un résultat », se joue sous
+  2a′-2, avec le cas d'une version dont toutes les occurrences sont retirées.
 
 ## 3. La suite de 2a′-2 (page 03, § 7)
 
