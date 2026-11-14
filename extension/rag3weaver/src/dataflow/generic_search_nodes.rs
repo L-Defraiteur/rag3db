@@ -3008,6 +3008,9 @@ fn occurrence_mask_options(
 ) -> Result<(SearchOptions, Option<crate::search::Admission>), String> {
     let Some(projection) = &target.occurrence_projection else { return Ok((options, None)) };
     let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").ok_or("projection : dialecte absent")?;
+    // Les racines admises restent un ensemble côté Rust : la projection des k résultats s'en sert.
+    // Sans filtre ni vue (le court-circuit d'arbre principal), rien à masquer tant qu'aucune version
+    // n'est orpheline.
     let roots = match occurrence_roots_for(ctx, target, &options, conn)? {
         Some(roots) => roots,
         None => {
@@ -3027,11 +3030,33 @@ fn occurrence_mask_options(
             rows.rows.into_iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).collect()
         }
     };
-    // Le compte des résolutions du masque en liste (2a′-2) : un témoin y lit qu'il ne sert plus.
-    let visibilite = match vue_de(ctx) {
-        Some(v) => crate::read_view::ReadCatalog::visibilite(v.as_ref()).cloned(),
-        None => ctx.service::<Arc<Mutex<Catalog>>>("catalog").and_then(|c| c.lock().ok().and_then(|c| c.generations.clone())), // L4 : repli sans vue
+    // **Le masque en prédicat** (2a′-2, page 05) : une version est admise si une de ses occurrences est
+    // visible et passe le filtre. Une requête courte, sans liste ; le repli sur la liste ne vaut que
+    // pour une forme que le prédicat ne sait pas dire.
+    let (predicat, visibilite) = {
+        let construire = |forme: crate::read_view::Forme<'_>, cell: &crate::scope::Scope| {
+            (masque_en_predicat(&forme, cell, target, projection, options.filter_condition.as_ref()), forme.generations.clone())
+        };
+        match vue_de(ctx) {
+            Some(v) => {
+                let cell = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_else(|| v.scope().clone());
+                construire(v.forme(), &cell)
+            }
+            None => match ctx.service::<Arc<Mutex<Catalog>>>("catalog") {
+                Some(c) => {
+                    let cat = c.lock().map_err(|_| "projection : catalogue indisponible")?; // L4 : repli sans vue
+                    let cell = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_else(|| cat.scope().clone());
+                    construire(cat.forme(), &cell)
+                }
+                None => (None, None),
+            },
+        }
     };
+    if let Some(condition) = predicat {
+        options.filter_condition = Some(condition);
+        return Ok((options, Some(crate::search::Admission::Parmi(roots))));
+    }
+    // Le repli : la liste des versions. Compté, pour qu'un témoin voie qu'il ne sert plus.
     if let Some(v) = &visibilite {
         v.ensembles.compter_une_resolution();
     }
@@ -3054,6 +3079,65 @@ fn occurrence_mask_options(
         value: crate::filter::FilterValue::List(ids.into_iter().map(crate::connection::CypherValue::String).collect()),
     });
     Ok((options, Some(crate::search::Admission::Parmi(roots))))
+}
+
+/// **Le masque des versions en prédicat** (2a′-2) : « une occurrence de la version, reliée par la
+/// relation canonique, est visible au rang lu, est de la cellule de l'appel, et passe le filtre de
+/// l'utilisateur ». Les champs de l'occurrence s'écrivent `<entité>.<champ>` : le parseur de filtres
+/// les joint par un seul alias, donc par une seule occurrence qui les vérifie tous.
+///
+/// `None` quand le prédicat ne saurait pas le dire, et c'est alors le repli sur la liste :
+/// - plus d'une relation entre la version et l'occurrence (le parseur prendrait la première) ;
+/// - un filtre qui porte déjà une jointure (`a.b`), ou un chemin d'objet (`Path`, `Nested`).
+fn masque_en_predicat(
+    forme: &crate::read_view::Forme<'_>,
+    cell: &crate::scope::Scope,
+    target: &SearchTarget,
+    projection: &crate::search::OccurrenceProjection,
+    utilisateur: Option<&crate::filter::FilterCondition>,
+) -> Option<crate::filter::FilterCondition> {
+    use crate::connection::CypherValue;
+    use crate::filter::{FilterCondition, FilterOp, FilterValue};
+    let e = projection.entity.as_str();
+    let entre: Vec<&String> = forme
+        .relations
+        .iter()
+        .filter(|(_, d)| (d.from == target.parent_table && d.to == e) || (d.from == e && d.to == target.parent_table))
+        .map(|(n, _)| n)
+        .collect();
+    if entre != [&projection.relation] {
+        return None;
+    }
+    fn prefixer(c: &FilterCondition, e: &str) -> Option<FilterCondition> {
+        Some(match c {
+            FilterCondition::Field { key, value } if !key.contains('.') => FilterCondition::Field { key: format!("{e}.{key}"), value: value.clone() },
+            FilterCondition::Must(v) => FilterCondition::Must(v.iter().map(|c| prefixer(c, e)).collect::<Option<_>>()?),
+            FilterCondition::Should(v) => FilterCondition::Should(v.iter().map(|c| prefixer(c, e)).collect::<Option<_>>()?),
+            FilterCondition::MustNot(v) => FilterCondition::MustNot(v.iter().map(|c| prefixer(c, e)).collect::<Option<_>>()?),
+            _ => return None,
+        })
+    }
+    let champ = |nom: &str, valeur: FilterValue| FilterCondition::Field { key: format!("{e}.{nom}"), value: valeur };
+    let mut conditions = Vec::new();
+    if let Some(u) = utilisateur {
+        conditions.push(prefixer(u, e)?);
+    }
+    if forme.multi_cell {
+        conditions.push(champ(crate::scope::ORG_COLUMN, FilterValue::Direct(CypherValue::String(cell.org.clone()))));
+        conditions.push(champ(crate::scope::PROJECT_COLUMN, FilterValue::Direct(CypherValue::String(cell.project.clone()))));
+    }
+    if let Some(v) = forme.generations.as_ref().filter(|v| !v.tout_visible && v.tables.contains(e)) {
+        conditions.push(champ(crate::generations::COUCHE, FilterValue::Direct(CypherValue::String(v.couche.clone()))));
+        conditions.push(champ(crate::generations::DEPUIS, FilterValue::Ops(vec![FilterOp::Lte(CypherValue::Int(v.rang))])));
+        conditions.push(FilterCondition::Should(vec![
+            champ(crate::generations::JUSQU_A, FilterValue::Ops(vec![FilterOp::IsNull])),
+            champ(crate::generations::JUSQU_A, FilterValue::Ops(vec![FilterOp::Gt(CypherValue::Int(v.rang))])),
+        ]));
+    }
+    // Sans autre condition, la jointure seule dit « a au moins une occurrence » : une version orpheline
+    // n'est pas admise.
+    conditions.push(champ("_uuid", FilterValue::Ops(vec![FilterOp::IsNotNull])));
+    Some(FilterCondition::Must(conditions))
 }
 
 /// Les parents admis dans la forme et la cellule de l'appel. Le préfiltre des
