@@ -112,3 +112,35 @@ celle de ce lot.
 2. Les témoins 1, 3 et 5, rouges.
 3. Le masque par prédicat, le dense puis le lexical, et la règle d'`inline_params`.
 4. Les témoins verts, la parité de banc, les sondes 2 sous `poste mesure`.
+
+## 7. Ce que le prédicat a donné (14 novembre 2026, 21 h 09 à 21 h 24, vue-publiee 959d73513)
+
+**Les témoins** sont passés du rouge au vert sous `poste lourd`, lib 373b5477b :
+- 1, aucune projection longue : 6 120 octets, puis vert ;
+- 3, le masque ne se résout plus par liste : 2 résolutions, puis 0 ;
+- 5, une grande liste refusée : 88 926 octets écrits en clair, puis refusée.
+
+La non-fuite de 2a′-1 et les trois témoins des générations sont restés verts.
+
+**La mesure** : `poste mesure`, embarqueur connecté, 10 requêtes × 5 tours. La charge du poste était
+haute à cause d'un contrôle de G lancé hors du verrou, donc les durées sont pessimistes ; le RSS ne
+l'est pas.
+
+| forme | R, base d'avant | prédicat (drapeau tenu) | avant le prédicat |
+|---|---|---|---|
+| sans filtre | 1 238 ms | 2 832 ms | 7 032 ms de lexical seul ; 17 à 23 s de dense |
+| chemin `src/include/` | 745 ms | 1 299 ms | 2 154 ms, sans dense |
+| langage python | 787 ms | 1 020 ms | 1 371 ms, sans dense |
+
+**Ce que ça décide** (c7, 21 h 30) :
+- **le sans-filtre revient au court-circuit d'arbre principal**, comme convenu : sans filtre ni vue,
+  pas de masque, seulement la remontée des k résultats (0,3 à 0,8 s mesurés par lui). Le prédicat ne
+  sert qu'au cas filtré et au cas sous vue ;
+- le filtré, à ×1,3 et ×1,74 de R, reste au-dessus des 20 %. Le reste est la jointure version →
+  occurrence, rejouée par chaque signal ;
+- le lot va en pile tel quel : il retire la projection de 2,9 Mo et divise la durée par 2 à 6 ;
+- deux tickets, sur master :
+  - `2026-11-14-une-recherche-a-versions-garde-20-gio-de-memoire-residente.md`, à trancher d'abord
+    par `MALLOC_ARENA_MAX=2` ;
+  - `2026-11-14-la-visibilite-dans-le-predicat-du-masque-coute-et-mene-a-l-oom.md` : l'état B,
+    5 à 8 s puis l'OOM, à fermer par le cache par rang. Le drapeau ne tombe pas avant.
