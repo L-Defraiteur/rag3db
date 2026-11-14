@@ -21,6 +21,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **14 nov. — Une écriture validée ne disparaît plus quand un autre COMMIT échoue.**
+  Sous plusieurs écrivains, un COMMIT refusé (tampon plein, journal non synchronisé) était annulé
+  après avoir rendu la main ; un autre écrivain qui validait juste à ce moment pouvait perdre ses
+  lignes avec l'annulation. Le COMMIT refusé s'annule désormais avant de laisser passer quiconque
+  (`373b5477b`, à poser avec la lib suivante).
 - **14 nov. — Un fournisseur qui plante se relance, et le dit.** Un modèle déclaré `maintenir` ou
   `a_demande` dont le fournisseur meurt en plein travail est relancé une fois par le calcul suivant,
   identité revérifiée. Si la relance échoue, le refus dit les deux temps : parti, puis relancé une

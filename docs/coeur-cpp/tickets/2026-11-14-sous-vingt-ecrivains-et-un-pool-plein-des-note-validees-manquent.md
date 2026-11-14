@@ -1,6 +1,7 @@
 # Sous vingt écrivains et un pool plein, des Note validées manquent
 
-- **État** : ouvert (14 novembre 2026, cœur c++)
+- **État** : ouvert (14 novembre 2026, cœur c++) — corrigé sur master `373b5477b`, à poser
+  (se ferme quand la lib bâtie à ce hash est posée)
 - **Famille** : moteur
 - **Gravité** : perte de données validées (une écriture dite validée est absente, avant le point
   de reprise comme après la réouverture)
@@ -123,3 +124,21 @@ Après la pose du matin :
 2. `transaction_test` et `concurrence_test` entiers ;
 3. `DdlEveryMinute` ×10, `counts-match-commits` vert partout ;
 4. la lib d'après, à ce hash.
+
+## Correctif sur master (14 nov., `373b5477b`)
+
+Atterri par la pile : `annulation-garde-les-autres-pile-3`, `PILE_AVANT=34271fc37`. Le `src/` est
+identique à `9b0e73c9c`.
+
+| Témoin | Sans le correctif | Avec le correctif |
+|---|---|---|
+| `RefusedCommitRollback.AWriterCommittingWhileARefusedCommitUnwindsKeepsItsRow` | rouge 3/3 | vert 5/5 |
+| `DdlEveryMinute` ×10, `counts-match-commits` | 3/10 | 0/10 |
+| `transaction_test` entier | — | vert (376) |
+| `concurrence_test.known_red` | — | vert, rejoué sur `27cfe33a8` |
+
+- L'annulation sous le verrou : médiane 0,0 ms, p99 0,3 ms sous `DdlEveryMinute`. Le max,
+  5 875 ms, est l'annulation d'un `CREATE_VECTOR_INDEX` refusé, déjà tenue sous ce verrou avant.
+- `SingleWriterCrash.DeathDuringDeletesAndVectorSearchKeepsTheIndexExact` n'est pas une preuve
+  de ce correctif. Il départageait le rouge d'extension du premier juge : 0/36 avec, 0/26 sans.
+  Voir `docs/coeur-cpp/14-11-2026/01-rapport-de-session.md`.
