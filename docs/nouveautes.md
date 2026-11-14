@@ -21,6 +21,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **14 nov. — Un fournisseur qui plante se relance, et le dit.** Un modèle déclaré `maintenir` ou
+  `a_demande` dont le fournisseur meurt en plein travail est relancé une fois par le calcul suivant,
+  identité revérifiée. Si la relance échoue, le refus dit les deux temps : parti, puis relancé une
+  fois sans réponse, et quoi faire. Le `/sante` du relancé compte ses relances (`relances: n`), et un
+  fournisseur qui meurt en boucle se voit sans lire un journal.
 - **14 nov. — Le plein texte ne perd plus de mots, et une recherche filtrée classe comme sa vue.**
   lucivy 4.3.5 : une fusion de fond lancée entre deux commits ne fait plus perdre au dictionnaire les
   mots des segments neufs (un document pouvait sortir des recherches floues, et des exactes pour un
