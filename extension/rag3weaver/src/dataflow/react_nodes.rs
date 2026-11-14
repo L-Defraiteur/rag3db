@@ -282,7 +282,7 @@ impl Node for ReactTransitionNode {
 
         let lignes = {
             let cat = catalog.lock().map_err(|_| "ReactTransitionNode: catalog poisoned".to_string())?;
-            let cypher = cat.dialect_arc().hop(&saut).map_err(|e| format!("ReactTransitionNode: {e}"))?;
+            let cypher = cat.traduire_hop(&saut).map_err(|e| format!("ReactTransitionNode: {e}"))?;
             cat.execute_raw_with_params(
                 &cypher,
                 &[QueryParam::new(

@@ -231,7 +231,7 @@ impl Node for SetNode {
                 };
                 selection.order_by.push(rag3weaver_ir::OrderKey::field("_uuid"));
                 selection.limit = limite.map(|n| rag3weaver_ir::Limit::Literal(n as usize + 1));
-                let q = dialect.select(&selection).map_err(|e| e.to_string())?;
+                let q = cat.traduire_select(&selection).map_err(|e| e.to_string())?;
                 let mut rows = cat.execute_read_with_params(&q, &parsed.params).map_err(|e| e.to_string())?;
                 let mut warnings = Vec::new();
                 if let Some(n) = limite.filter(|n| rows.rows.len() as u64 > *n) {
@@ -240,8 +240,8 @@ impl Node for SetNode {
                         Some(f) => rag3weaver_ir::Count::Matching { table: entity.to_string(), filter: Some(f.clone()) },
                         None => rag3weaver_ir::Count::Rows { table: entity.to_string() },
                     };
-                    let total = dialect
-                        .count(&compte)
+                    let total = cat
+                        .traduire_count(&compte)
                         .ok()
                         .and_then(|q| cat.execute_read_with_params(&q, &parsed.params).ok())
                         .and_then(|r| r.rows.first().and_then(|row| row.first()).and_then(|v| v.as_i64()));

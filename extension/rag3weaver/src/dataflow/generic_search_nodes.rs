@@ -3047,7 +3047,10 @@ fn admitted_parent_uuids_for(
                 });
             }
         }
-        if conditions.is_empty() {
+        // Sans condition, « aucun filtre » admet toutes les lignes : juste tant qu'elles sont
+        // toutes visibles (2a′). Sinon, la visibilité que `resoudre_le_filtre` impose admet seule.
+        let toutes_visibles = forme.generations.as_ref().map_or(true, |v| v.tout_visible);
+        if conditions.is_empty() && toutes_visibles {
             return Ok(None);
         }
         forme.resolve_filter_to_ids(&target.parent_table, &FilterCondition::Must(conditions), target)
