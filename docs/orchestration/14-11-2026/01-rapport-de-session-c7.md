@@ -641,3 +641,29 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   seul `/backend/open` la lève). **Codeparsers** : règles d'import rebasées (308/0), Go en cours.
 - Luciepc saturé (huit lourds pour quatre places) : le verdict de la lib 373b5477b attend sa place, la
   bascule viendra plus tard dans la soirée.
+
+## 19 h 3x — dix-huit atterris ; un vrai rouge sur master à départager ; la purge des orphelins chiffrée
+
+- **tty-8 atterri** (b3f58c30e, 15/15 ; la CI de master revenue au vert). Dix-huit lots par la pile.
+- **Un vrai rouge sur master**, vu par archi dans la passe de la fermeture qui tient (son lot est vert) :
+  `e2e_demon_hote::une_base_a_rouvrir_ne_lache_que_son_backend` (point de reprise qu'on fait échouer, puis
+  la réouverture doit relire le validé) rouge sous 0c41f9fe6 + MOTEUR_ANCIEN=1, joué seul, vert avant ce
+  soir. ED prouve par le code que 2a′-1 n'y est pour rien (manifeste carnet, `generations = None`).
+  Suspects : le miroir de 96 (`stop_reactors` régénère depuis la base à la fermeture), le plafond de
+  recherche (read_pool : renouvellement, pool plein qui refuse), le correctif (a) du cœur. Archi joue le
+  test à 42c84cb77, c350dc9c3, a646bf215 ; 96 et recherche lisent leur code. **Rien ne se pousse sur un
+  rouge non compris** ; les lots dont les passes ne jouent pas cette suite continuent.
+- **Les orphelins du plein texte** (hotfixs, sur copie) : 8 809 Scope et 124 File effacés en 921 ms ; ils
+  remontaient en masse dans les recherches (« commit » : 8 651 hits dont 5 822 orphelins ; « return »
+  33 930 → 25 518) et pesaient **2,78 Go, 68 % de la table pour 10 % des documents** (78 Ko par orphelin,
+  les minifiés réindexés à chaque rebâti) ; compactage après purge 4,27 → 1,30 Go, mêmes hits. Sur les
+  vraies bases par la règle de Lucie, en fenêtre tenue dès que la fermeture qui tient d'archi est sur
+  master ; le correctif de `DeleteRecordNode` à recherche.
+- **ED** : l'`IN` du moteur est un balayage (SCAN + LIST_CONTAINS, 5 008 ms) là où `UNWIND … MATCH {_uuid}`
+  prend la clé (113 ms) : ticket moteur pour le planificateur, la réécriture à recherche ; le moteur ne
+  retient rien (plateau sur 30 tours) ; **le dense à versions prend ~20 s et plusieurs Gio par appel**
+  (16 → 29 Gio en six appels), suspect `compile_filter_for_vector_in` : ED départage.
+- **Banc** : le soupçon « même contenu, autre occurrence » réfuté par le hash ; un ticket pour les copies
+  d'un même contenu dans les dix premiers (29 places sur 289 sur la base migrée) ; parité au bit près du
+  court-circuit en file. **Codeparsers** : toutes les règles d'import en données (311/0). **96** : la trace
+  d'archive pour Laya après confirmer_fiche.
