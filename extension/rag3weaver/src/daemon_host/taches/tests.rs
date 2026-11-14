@@ -563,3 +563,33 @@ fn une_tache_entre_aux_suivies_avec_sa_parente_et_en_sort_a_sa_fermeture() {
     })
     .unwrap();
 }
+
+/// **La parente déclarée d'une tâche entre aux suivies avec elle** (relecture d'ED, 14 nov. :
+/// « tout ce que touche l'agent reste indexé ») : une tâche ouverte depuis une branche `b` que rien
+/// ne déclarait a `b` pour parente, de genre « declaree », et `b` est suivie. Une résolution qui
+/// écrit (l'état) ne la réinfère pas sur l'ancre.
+#[cfg(feature = "rag3db-native")]
+#[test]
+fn la_parente_d_une_tache_entre_aux_suivies_et_reste_declaree() {
+    use crate::couches::{self, GenreDeParente};
+    let (d, host, manifeste, parent) = banc();
+    let depot = d.path().join("depot");
+    let id = couches::identifiant_du_depot(&depot).unwrap();
+    git(&depot, &["switch", "-q", "-c", "b"]).unwrap();
+    git(&depot, &["-c", "user.name=Personne Test", "-c", "user.email=personne@example.org", "commit", "-q", "--allow-empty", "-m", "b1"]).unwrap();
+    let ancre = couches::ancre_du_depot(&depot).unwrap();
+    assert_ne!(ancre, "b", "le décor : b n'est pas l'ancre");
+    host.ouvrir_une_tache(&parent, "depuis-b").unwrap();
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |b| {
+        let cat = b.catalog.lock().unwrap();
+        let suivies = couches::branches_suivies(&cat, &id).unwrap().expect("les branches suivies du dépôt");
+        assert!(suivies.suivies.contains(&"b".to_string()), "la parente n'est pas suivie : {suivies:?}");
+        let ancre = suivies.ancre.clone();
+        couches::couches_du_depot(&cat, &id, &depot, &ancre).unwrap();
+        let p = couches::parente_estampillee(&cat, &id, "agent/depuis-b").unwrap();
+        assert_eq!(p.as_ref().map(|p| (p.branche.as_str(), &p.genre)), Some(("b", &GenreDeParente::Declaree)), "{p:?}");
+    })
+    .unwrap();
+    host.fermer_une_tache(&parent, "depuis-b").unwrap();
+}
