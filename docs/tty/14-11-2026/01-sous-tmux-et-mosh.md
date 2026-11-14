@@ -38,3 +38,9 @@ Sous tmux et mosh, c'est le multiplexeur qui répond à la position du curseur e
 | **mosh ne garde aucun historique au-delà de l'écran** : les lignes que la vue envoie dans l'historique du terminal sortent de l'écran et ne se relisent pas par le défilement. C'est une propriété de mosh, qui ne synchronise que l'écran, et que le harnais ne peut pas observer octet par octet. | Non résolu : ticket `docs/tty/tickets/2026-11-14-sous-mosh-l-historique-du-terminal-se-perd.md`, avec la piste d'un journal de la séance à relire. |
 
 La latence de tmux vu par ssh a une queue plus longue (147 ms au p95, contre 52 pour ssh seul) : tmux rend l'écran à son rythme, puis ssh le porte. La médiane reste à 48 ms.
+
+## Le push par la pile
+
+Ce lot est le premier poussé en mode pile (`docs/orchestration/14-11-2026/03-la-file-en-pile.md`). Le rejeu a été joué sur la tête du lot d'avant, `cd6d02907` (lucivy) : crate du terminal 39/39 avec la vue et 10/10 sans, `e2e_tty` 4/4, `e2e_catalogue_gabarits` 12/12. Le dernier pas a été la garde du poste, appelée à luciepc avec `PILE_AVANT=cd6d02907`. Elle a dit « pile tenue », a reposé les cinq commits sur master sans rien rejouer, puisque master n'avait reçu que des docs, et a poussé `ce4a3140a`.
+
+**Pourquoi un `temoins.log` dans le dossier des journaux de cette passe.** La garde cherche la lib liée de la passe dans des journaux aux noms fixes, ceux d'une passe entière (`temoins.log` et les autres). Une passe courte comme celle-ci n'en écrit aucun : le témoin du lot, `e2e_tty`, écrit `e2e_tty.log`. J'ai copié `e2e_tty.log` sous le nom de `temoins.log` avant l'appel, ce qui ne trompe pas la garde : la passe ne nomme qu'une seule lib (`e93710f36`), la même dans tous ses journaux. Ce fichier n'est donc pas la sortie d'une suite `temoins`. L'écart, avec celui de la lecture d'un fichier `base` qui ne sert pas en mode pile, est chez G pour garde-pile.
