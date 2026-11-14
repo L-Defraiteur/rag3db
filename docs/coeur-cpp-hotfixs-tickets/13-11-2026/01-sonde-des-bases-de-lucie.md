@@ -335,3 +335,16 @@ portable, dans `~/.cache/rag3db-locks/sonde-orphelins/lucie/`. Le témoin sur la
 
 Aucune réparation, aucune écriture sur une base de Lucie : la décision est à elle. Les copies restent
 sur disque (environ 100 Mio à luciepc) et peuvent partir.
+
+## Troisième lecture : la base migrée par 1b (14 novembre 2026, 17 h 41)
+
+Une copie reflink neuve de `~/.cache/rag3weaver-build/1b-copie/migree-20261114-1641/`
+(`code-rag3db-depot` en forme à versions, lib 0c41f9fe6), par la sonde rebâtie contre cette lib. Elle
+nomme maintenant dix exemples par table : le bout vivant par son `_uuid`, et l'offset du bout absent.
+Résultat : **0 orphelin**, dans les 20 tables de relations et les morceaux. Le détail est dans le ticket
+`docs/coeur-cpp/tickets/2026-11-13-un-commit-sous-index-vectoriel-saute-des-tables-de-noeuds.md`.
+
+La sonde a vu en passant **des arêtes en double** : 1 291 morceaux Scope_Chunk portent 2 à 7 arêtes
+`Scope_CHUNKED_FROM` vers le **même** Scope, soit 2 205 arêtes en trop. Elles étaient déjà là avant la
+migration. Elles ont leur ticket :
+`docs/coeur-cpp-hotfixs-tickets/tickets/2026-11-14-des-morceaux-de-scope-portent-plusieurs-aretes-vers-le-meme-scope.md`.

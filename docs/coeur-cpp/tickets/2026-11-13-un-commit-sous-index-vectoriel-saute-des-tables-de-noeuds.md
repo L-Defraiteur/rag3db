@@ -68,6 +68,23 @@ trouve aucune orpheline dans les copies de code-lourd et de code-principal : l'i
 y valide plus petit, sans franchir le seuil. Une base ingérée en transaction par paquets sous une lib
 d'avant ce correctif peut porter des nœuds perdus et des relations orphelines.
 
+## La base migrée par 1b : aucune orpheline (hotfixs, 14 novembre 2026)
+
+La sonde des orphelines (`docs/coeur-cpp-hotfixs-tickets/13-11-2026/outils/sonde-orphelins.cpp`,
+bâtie contre la lib 0c41f9fe6) a lu une copie reflink neuve de
+`~/.cache/rag3weaver-build/1b-copie/migree-20261114-1641/` : `code-rag3db-depot` en forme à versions,
+migrée par 1b depuis l'instantané `avant-835d5298f`. Lecture seule, sous `poste lourd`, le sens de chaque
+requête prouvé par son plan. La sonde a d'abord été vue rouge sous cette lib, sur la base de reproduction
+du cœur, avec ses dix exemples nommés.
+
+- **0 relation orpheline**, dans les 20 tables de relations et les deux sens. Il y a notamment
+  `ScopeContent_DERIVED_FROM` (79 662), `ScopeContent_CHUNKED_FROM` (119 887), `MENTIONS` (453 348),
+  `DEFINES` (93 425) et `CONSUMES` (116 215).
+- **0 morceau sans parent** : ScopeContent_Chunk 119 887, Scope_Chunk 127 195, File_Chunk 7 803,
+  Library_Chunk 448.
+- Seule Symbol_CHUNKED_FROM a un sens non prouvé, sa table d'ancrage étant vide, comme dans toutes les
+  bases.
+
 ## Pour le fermer
 
 Le correctif sur master, la lib bâtie par G, et le repreneur d'arbre principal vert dessus.
