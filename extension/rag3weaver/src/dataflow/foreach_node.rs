@@ -187,7 +187,7 @@ fn materialiser(config: &Value, registre: &NodeRegistry, qui: &str) -> Result<(S
 }
 
 /// Les clés de la configuration propres au nœud, qui ne sont pas des paramètres du graphe cité.
-const CLES_DU_NOEUD: [&str; 6] = ["graph", "element", "result", "on_error", "parallelism", "carry"];
+const CLES_DU_NOEUD: [&str; 7] = ["graph", "element", "result", "on_error", "parallelism", "carry", "report_results"];
 
 /// Les paramètres du graphe cité, lus dans la configuration (hors l'élément).
 fn parametres(outil: &GraphTool, config: &Value, sauf: Option<&str>, qui: &str) -> Result<Map<String, Value>, String> {
@@ -417,7 +417,13 @@ impl NodeFactory for ForEachNodeFactory {
             Some(v) => return Err(format!("{qui} : carry est le nom d'un paramètre du graphe cité, pas {v}")),
         };
         let resultat = resultat(&outil, config);
-        Ok(Box::new(ForEachNode { name: name.to_string(), cite, outil, element, args, resultat, on_error, parallelism, carry, registre }))
+        // `report_results` : le rapport porte aussi ce que chaque élément a rendu (une trace, 14 nov. 2026).
+        let report_results = match config.get("report_results") {
+            None | Some(Value::Null) => false,
+            Some(Value::Bool(b)) => *b,
+            Some(v) => return Err(format!("{qui} : report_results est un booléen, pas {v}")),
+        };
+        Ok(Box::new(ForEachNode { name: name.to_string(), cite, outil, element, args, resultat, on_error, parallelism, carry, report_results, registre }))
     }
 
     fn node_type(&self) -> &str {
@@ -437,6 +443,7 @@ impl NodeFactory for ForEachNodeFactory {
                 param("on_error", ConfigParamType::String, false, Some(json!("stop")), "stop : l'échec d'un élément arrête le run ; report : {error, element, index} dans le flux, et la suite continue", Some(Choices::fixed(["stop", "report"]))),
                 param("parallelism", ConfigParamType::Int, false, Some(json!(1)), "appels en même temps, au plus (1 : l'un après l'autre) ; l'ordre des résultats est celui des éléments", None),
                 param("carry", ConfigParamType::String, false, None, "un paramètre du graphe cité porté d'un élément au suivant : chaque appel le reçoit, le champ du même nom de son résultat le remplace pour le suivant (parallelism = 1)", None),
+                param("report_results", ConfigParamType::Bool, false, Some(json!(false)), "le rapport porte aussi `results` : ce que chaque élément a rendu, dans l'ordre, l'échec en {index, error, element} (une trace)", None),
             ],
         }
     }
@@ -460,6 +467,7 @@ struct ForEachNode {
     on_error: bool,
     parallelism: usize,
     carry: Option<String>,
+    report_results: bool,
     registre: Arc<NodeRegistry>,
 }
 
@@ -528,7 +536,14 @@ impl Node for ForEachNode {
             }
         }
         let mut erreurs = Vec::new();
+        let mut rendus: Vec<Value> = Vec::new();
         for (i, r) in sorties.into_iter().enumerate() {
+            if self.report_results {
+                rendus.push(match &r {
+                    Ok(v) => en_json(v).unwrap_or(Value::Null),
+                    Err(e) => json!({"index": i, "error": e, "element": elements[i]}),
+                });
+            }
             match r {
                 Ok(v) => match ctx.emit("results", v) {
                     Ok(()) | Err(super::node::Stopped::NoReader) => {}
@@ -546,7 +561,11 @@ impl Node for ForEachNode {
             }
         }
         let n = elements.len();
-        ctx.set_output("report", PortValue::new(json!({"elements": n, "ok": n - erreurs.len(), "errors": erreurs})));
+        let mut rapport = json!({"elements": n, "ok": n - erreurs.len(), "errors": erreurs});
+        if self.report_results {
+            rapport["results"] = Value::Array(rendus);
+        }
+        ctx.set_output("report", PortValue::new(rapport));
         Ok(())
     }
 }
@@ -754,6 +773,20 @@ mod tests {
         assert_eq!(rapport["errors"][0]["index"], 1);
         assert!(journal.iter().any(|l| l == "écrit s3"), "la suite continue : {journal:?}");
         assert!(journal.iter().any(|l| l.starts_with("reçu {") && l.contains("refus voulu sur s2") && l.contains("\"index\":1")), "l'échec dans le flux : {journal:?}");
+    }
+
+    /// **Le rapport peut porter ce que chaque élément a rendu** (`report_results`, 14 novembre 2026 : la
+    /// trace de l'archiviste pour le jeu de banc) : une entrée par élément, dans l'ordre, l'échec en
+    /// `{index, error, element}`. Éteint, le rapport ne change pas (le premier témoin le fige).
+    #[test]
+    fn le_rapport_porte_les_resultats_quand_on_le_demande() {
+        let elements = vec![section("s1", false), section("s2", true), section("s3", false)];
+        let (_, rapport) = jouer(elements, json!({"on_error": "report", "report_results": true}));
+        let rapport = rapport.unwrap();
+        let resultats = rapport["results"].as_array().unwrap_or_else(|| panic!("results dans le rapport : {rapport}"));
+        assert_eq!(resultats.len(), 3, "{rapport}");
+        assert!(resultats[1]["error"].as_str().is_some_and(|e| e.contains("refus voulu sur s2")), "{rapport}");
+        assert!(resultats[0].get("error").is_none() && resultats[2].get("error").is_none(), "{rapport}");
     }
 
     /// **En parallèle, l'ordre des résultats reste celui des éléments.**

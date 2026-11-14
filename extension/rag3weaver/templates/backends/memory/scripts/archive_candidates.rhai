@@ -19,8 +19,8 @@ for r in found {
     names.push(name);
     let alias = "candidate_" + names.len().to_string();
     aliases.push(alias);
-    candidate_names.push(#{ alias: alias, name: name });
     let about = if d.about == () { "" } else { d.about };
+    candidate_names.push(#{ alias: alias, name: name, about: about });
     presentation += `- ${alias} : « ${name} » : ${about}\n`;
 }
 // Les fiches proposées plus haut dans ce document : pas encore cherchables (la transaction de l'outil
@@ -32,8 +32,8 @@ for p in proposed {
     names.push(name);
     let alias = "candidate_" + names.len().to_string();
     aliases.push(alias);
-    candidate_names.push(#{ alias: alias, name: name });
     let about = if p.about == () { "" } else { p.about };
+    candidate_names.push(#{ alias: alias, name: name, about: about });
     presentation += `- ${alias} : « ${name} » (proposée plus haut dans ce document) : ${about}\n`;
 }
 let choix = if input.allow_create { "none, ou create si le sujet est net et qu'aucune fiche ne le porte (avec, dans name, le nom de ce sujet en quelques mots)" } else { "none" };
