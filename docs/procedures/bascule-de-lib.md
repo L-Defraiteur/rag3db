@@ -85,6 +85,11 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
 
 ## Revenir
 
+**Où sont les copies d'avant la pose** (14 novembre 2026) : le binaire et `rag3db-check-lib` d'avant restent dans
+`~/.local/bin/` sous `.<étiquette>` ; l'env et le filet (`check-lib.conf`) d'avant vont dans
+`~/.cache/rag3weaver-build/sauvegardes-de-pose/`, jamais dans le dossier d'unités systemd, où soixante copies
+s'étaient accumulées. Le ménage de fin de session ramasse ce dossier.
+
 Hôtes arrêtés, `courant` ramené à la lib d'avant, puis `RETOUR.sh` de l'instantané, à chaque poste :
 il met l'état d'après de côté (`apres-<étiquette>-<base>`) et recopie l'instantané. Jamais en
 ramenant `courant` seul sur une base que la lib neuve a touchée.

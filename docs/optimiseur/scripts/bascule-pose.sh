@@ -8,6 +8,9 @@ NOUVELLE=${1:?id de lib}; AVANT=${2:?étiquette de l\'ancien}
 B=$HOME/.local/bin
 ENV=$HOME/.config/rag3weaver/rag3weaver-daemon.env
 FILET=$HOME/.config/systemd/user/rag3weaver-daemon.service.d/check-lib.conf
+# Les copies du filet et de l'env d'avant la pose vivent hors du dossier d'unités (14 novembre 2026, mot de Lucie :
+# soixante `check-lib.conf.avant-*` y traînaient) : dans le cache de bâti, une par pose, sous l'étiquette.
+GARDE="${POSTE_SAUVEGARDES:-$HOME/.cache/rag3weaver-build/sauvegardes-de-pose}"
 INSTALLEUR=${INSTALLEUR:-/home/lucied/git_workspaces/rag3db-docs-G/extension/rag3weaver/scripts/installer-l-unite-de-l-hote.sh}
 dire() { echo "== $(date +%H:%M:%S) $(hostname -s) $*"; }
 remettre() {
@@ -15,8 +18,8 @@ remettre() {
   systemctl --user stop rag3weaver-daemon.socket rag3weaver-daemon.service 2>/dev/null
   [ -f $B/rag3weaver-backend.$AVANT ] && cp -p $B/rag3weaver-backend.$AVANT $B/rag3weaver-backend
   [ -f $B/rag3db-check-lib.$AVANT ] && cp -p $B/rag3db-check-lib.$AVANT $B/rag3db-check-lib
-  [ -f $ENV.$AVANT ] && cp -p $ENV.$AVANT $ENV
-  [ -f $FILET.$AVANT ] && cp -p $FILET.$AVANT $FILET
+  [ -f $GARDE/env.$AVANT ] && cp -p $GARDE/env.$AVANT $ENV
+  [ -f $GARDE/check-lib.conf.$AVANT ] && cp -p $GARDE/check-lib.conf.$AVANT $FILET
   systemctl --user daemon-reload
   echo ROUGE; exit 1
 }
@@ -33,8 +36,9 @@ if [ "$etat" != inactive ]; then
   [ "$(systemctl --user show rag3weaver-daemon.service -p ActiveState --value)" = inactive ] || { dire "l'hôte ne s'arrête pas en 5 min : je ne tue rien"; echo ROUGE; exit 1; }
 fi
 dire "hôte arrêté, socket arrêtée"
-cp -p $B/rag3weaver-backend $B/rag3weaver-backend.$AVANT && cp -p $B/rag3db-check-lib $B/rag3db-check-lib.$AVANT && cp -p $ENV $ENV.$AVANT || remettre "copie de l'ancien"
-[ -f $FILET ] && cp -p $FILET $FILET.$AVANT
+mkdir -p $GARDE
+cp -p $B/rag3weaver-backend $B/rag3weaver-backend.$AVANT && cp -p $B/rag3db-check-lib $B/rag3db-check-lib.$AVANT && cp -p $ENV $GARDE/env.$AVANT || remettre "copie de l'ancien"
+[ -f $FILET ] && cp -p $FILET $GARDE/check-lib.conf.$AVANT
 mv $B/rag3weaver-backend.nouveau $B/rag3weaver-backend && mv $B/rag3db-check-lib.nouveau $B/rag3db-check-lib || remettre "pose du nouveau"
 dire "binaire $(md5sum $B/rag3weaver-backend | cut -c1-8), check-lib $(md5sum $B/rag3db-check-lib | cut -c1-8) ; ancien en .$AVANT"
 sed -i "s|^RAG3DB_LIBRARY_DIR=.*|RAG3DB_LIBRARY_DIR=$HOME/.cache/rag3db-libs/$NOUVELLE|" $ENV

@@ -20,7 +20,8 @@
 #   moins ; la mémoire se rend par malloc_trim seul (src/allocateur.rs).
 # - `--montrer` écrit les deux unités sur la sortie, sans rien poser.
 # - `--nom` : une autre unité (les témoins : rag3weaver-daemon-essai).
-# - Les unités remplacées sont gardées à côté (`.avant-socket`).
+# - Les unités remplacées sont gardées à côté (`.avant-socket`) ; l'ancien filet, lui, hors du dossier d'unités
+#   (`~/.cache/rag3weaver-build/sauvegardes-de-pose/`).
 # - **Le filet de la lib** (`<nom>.service.d/check-lib.conf`) : si le binaire est lié par
 #   RUNPATH à une lib du magasin, l'unité refuse de démarrer un binaire et une lib de bâtis
 #   différents (`rag3db-check-lib`, à côté du binaire), ou une extension vector d'un autre
@@ -125,7 +126,13 @@ poser_le_filet() {
   fi
   [ -x "$(dirname "$binaire")/rag3db-check-lib" ] || { echo "pas de rag3db-check-lib à côté de $binaire : le filet ne peut pas être posé" >&2; return 3; }
   mkdir -p "$d"
-  [ -f "$d/check-lib.conf" ] && cp -p "$d/check-lib.conf" "$d/check-lib.conf.avant-$(date +%Y%m%d-%H%M%S)"
+  # L'ancien filet est gardé **hors du dossier d'unités** (14 novembre 2026, mot de Lucie : soixante copies
+  # `check-lib.conf.avant-*` s'y étaient accumulées), dans le cache de bâti où le ménage de fin de session le
+  # ramasse ; un seul fichier par pose, horodaté. POSTE_SAUVEGARDES désigne un autre dossier (les témoins).
+  local garde="${POSTE_SAUVEGARDES:-$HOME/.cache/rag3weaver-build/sauvegardes-de-pose}"
+  if [ -f "$d/check-lib.conf" ]; then
+    mkdir -p "$garde" && cp -p "$d/check-lib.conf" "$garde/$nom.check-lib.conf.$(date +%Y%m%d-%H%M%S)"
+  fi
   texte_filet > "$d/check-lib.conf"
   echo "filet de la lib : $d/check-lib.conf"
 }
