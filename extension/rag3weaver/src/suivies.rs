@@ -672,6 +672,27 @@ impl Resolveur {
     }
 }
 
+/// L'identifiant de la couche de travail du worktree du backend : celui des lignes de 2a′-1
+/// (`COUCHE_DU_BACKEND`), posé tel quel et jamais dérivé, pour que rien de posé ne bouge.
+pub const ID_DE_LA_COUCHE_DU_BACKEND: &str = "backend";
+
+/// **Les identifiants stables des couches** d'une résolution (décision d'ED et d'arbre principal, 14 nov.,
+/// page `docs/arbre-principal/14-11-2026/02-les-suivies-tracked.md`) : un id par couche, distinct de son nom,
+/// dérivé de sa naissance (le dépôt, le nom complet et la pointe à la première vue) et gardé dans
+/// `_catalog_meta` (`fiche_couche:<dépôt>:<id>`, et l'index `couche_nom:<dépôt>:<nom>`). Un renommage garde
+/// l'id ; une ref effacée reçoit sa fin ; recréée ensuite sous le même nom, elle reçoit un id neuf ; la couche
+/// de travail du worktree du backend reçoit [`ID_DE_LA_COUCHE_DU_BACKEND`]. Rend nom → id, une entrée par
+/// couche d'histoire (son nom complet) et par couche de travail (`worktree:<chemin>`).
+pub fn identifiants_des_couches(
+    catalog: &crate::catalog::Catalog,
+    depot: &str,
+    worktree_du_backend: &std::path::Path,
+    resolution: &Resolution,
+) -> Result<std::collections::BTreeMap<String, String>, String> {
+    let _ = (catalog, depot, worktree_du_backend, resolution);
+    Err("les identifiants des couches n'existent pas encore".into())
+}
+
 /// Les refs du dépôt, chacune sur son commit (une étiquette annotée, déréférencée).
 fn lire_les_refs(racine: &std::path::Path) -> Result<Vec<RefResolue>, String> {
     let sortie = crate::couches::git(racine, &["for-each-ref", "--format=%(refname)%00%(objectname)%00%(*objectname)"])?;
@@ -1184,5 +1205,59 @@ mod tests {
         assert!(motif.sources[1].refs.iter().any(|x| x.nom == "refs/heads/r/neuve"), "{motif:?}");
         r.resoudre(&d, &d, &["a".to_string()], &decl).unwrap();
         assert_eq!(r.calculs(), 4, "une tâche de plus n'a pas recalculé");
+    }
+
+    /// **Une couche a un identifiant stable, distinct de son nom** : le même d'une résolution à l'autre ; un
+    /// renommage de branche le garde ; une branche effacée puis recréée ailleurs sous le même nom en reçoit un
+    /// neuf, et l'ancienne fiche garde sa fin ; la couche de travail du worktree du backend reçoit `backend`.
+    #[test]
+    fn une_couche_a_un_identifiant_stable_distinct_de_son_nom() {
+        let (_t, d) = vierge();
+        commit(&d, "m1");
+        git(&d, &["switch", "-q", "-c", "a"]);
+        commit(&d, "a1");
+        git(&d, &["switch", "-q", "main"]);
+        let cat = catalogue();
+        let decl = Declaration {
+            root: Racine::Calculee,
+            sources: vec![
+                source(Selecteur::Worktree(Worktree::DuBackend), Parente::Inferee, Histoire::Pointe, true),
+                source(Selecteur::Refs("refs/heads/*".into()), Parente::Inferee, Histoire::Pointe, false),
+            ],
+        };
+        let ids = |r: &Resolveur| identifiants_des_couches(&cat, "depot", &d, &r.resoudre(&d, &d, &[], &decl).unwrap()).unwrap();
+        let r = Resolveur::default();
+        let premiers = ids(&r);
+        let a = premiers["refs/heads/a"].clone();
+        assert_eq!(premiers[&format!("worktree:{}", reel(&d).display())], ID_DE_LA_COUCHE_DU_BACKEND, "{premiers:?}");
+        assert_ne!(premiers["refs/heads/main"], ID_DE_LA_COUCHE_DU_BACKEND, "l'histoire de main n'est pas la couche de travail du backend");
+        assert_ne!(a, premiers["refs/heads/main"]);
+        assert_eq!(ids(&r), premiers, "l'identifiant a changé sans mouvement");
+        // Le renommage garde l'identifiant.
+        git(&d, &["branch", "-m", "a", "b"]);
+        let renomme = ids(&r);
+        assert_eq!(renomme.get("refs/heads/b"), Some(&a), "le renommage a changé l'identifiant : {renomme:?}");
+        assert!(!renomme.contains_key("refs/heads/a"), "{renomme:?}");
+        // Effacée, puis recréée ailleurs sous le même nom : un identifiant neuf, l'ancien garde sa fin.
+        git(&d, &["branch", "-D", "b"]);
+        ids(&r);
+        let fiche = cat.read_meta_key(&format!("fiche_couche:depot:{a}")).unwrap().unwrap_or_default();
+        assert!(fiche.contains("fin"), "la fiche de la couche effacée n'a pas sa fin : {fiche}");
+        git(&d, &["branch", "b", "main"]);
+        let recree = ids(&r);
+        assert_ne!(recree["refs/heads/b"], a, "une branche recréée ailleurs a repris l'identifiant de l'ancienne");
+        // La garde d'ED : une branche effacée et une autre créée sur la même pointe, pendant qu'une ref vivante
+        // (main) la porte encore, ce n'est pas un renommage : une fin et une naissance.
+        let b = recree["refs/heads/b"].clone();
+        git(&d, &["branch", "-D", "b"]);
+        git(&d, &["branch", "c", "main"]);
+        let apres = ids(&r);
+        assert_ne!(apres["refs/heads/c"], b, "une branche neuve sur une pointe que main porte a repris l'identifiant d'une effacée : {apres:?}");
+        // La garde de c7 : deux couches vivantes n'ont jamais le même identifiant.
+        let mut vus: Vec<&String> = apres.values().collect();
+        vus.sort();
+        let avant = vus.len();
+        vus.dedup();
+        assert_eq!(vus.len(), avant, "deux couches vivantes partagent un identifiant : {apres:?}");
     }
 }
