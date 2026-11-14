@@ -8865,9 +8865,21 @@ fn read_threads() -> u64 {
 
         // ─── 0. DeleteRecordNode ────────────────────────────────────
         if has_deletes {
+            // **Les suppressions validées au plein texte** : `delete_by_node_id`
+            // n'est vu des lecteurs qu'au commit de la poignée, et aucun autre
+            // nœud ne valide une table qui ne fait que perdre des lignes. Une
+            // fin d'instantané qui ne retire que des scopes laissait leurs
+            // documents vivants, puis perdus à la fermeture : des orphelins
+            // (ticket recherche du 14 novembre 2026). Dans un lot, le nœud ne
+            // fait rien, le tampon attend le COMMIT.
+            let mut tables_effacees: Vec<String> = pending.deletes.iter().map(|d| d.entity_name.clone()).collect();
+            tables_effacees.sort();
+            tables_effacees.dedup();
             graph.add_node(Box::new(DeleteRecordNode::new("deletes"))).unwrap();
             graph.set_initial_input("deletes", "deletes",
                 PortValue::new(BatchPayload::new(PortType::Deletes, pending.deletes)));
+            graph.add_node(Box::new(FlushNode::new("deletes_flush", tables_effacees))).unwrap();
+            graph.connect("deletes", "done", "deletes_flush", "trigger").unwrap();
         }
 
         // ─── 1. UpdateRecordNode ────────────────────────────────────
