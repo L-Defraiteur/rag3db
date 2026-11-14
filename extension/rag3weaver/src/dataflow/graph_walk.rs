@@ -191,6 +191,10 @@ pub fn degrees(catalog: &dyn crate::read_view::ReadCatalog, rels: &[RelInfo], di
 /// n'est promis ni par l'un ni par l'autre. Sinon, le saut tel quel.
 pub fn run_hop(catalog: &dyn crate::read_view::ReadCatalog, hop: &rag3weaver_ir::Hop, params: &[crate::connection::QueryParam]) -> Result<crate::connection::QueryResult, String> {
     use rag3weaver_ir::Column;
+    // Le nœud atteint d'une base à générations : ses lignes visibles seulement (2a′). Borné, le
+    // saut porte un filtre, et prend le chemin direct.
+    let borne = catalog.visibilite().map(|v| v.borner_hop(hop));
+    let hop = borne.as_ref().unwrap_or(hop);
     let dialect = catalog.dialect_arc();
     let champ = |c: &Column| match c {
         Column::Node(f) if f != "_uuid" => Some(f.clone()),

@@ -331,6 +331,13 @@ pub trait SchemaDialect: Send + Sync {
         None
     }
 
+    /// **Ce dialecte sait-il les générations** (2a′) : les colonnes `_couche`, `_depuis` et
+    /// `_jusqu_a`, et le prédicat [`rag3weaver_ir::Predicate::Visible`] ? Non par défaut : une base
+    /// neuve garde alors la forme d'avant (postgres, ticket du 14 novembre 2026).
+    fn sait_les_generations(&self) -> bool {
+        false
+    }
+
     /// **Un saut** ([`rag3weaver_ir::Hop`]) dans la langue de ce dialecte. Le
     /// défaut le refuse en le nommant : une forme se traduit, elle ne
     /// s'hérite pas en Cypher.
@@ -1397,6 +1404,10 @@ fn postgres_condition_sur(d: &PostgresDialect, p: &rag3weaver_ir::Predicate, a: 
         // Un Plan lié n'en porte plus : la validation les a refusées avant.
         Predicate::Optional(_) | Predicate::Let(_) => "FALSE".to_string(),
         Predicate::Compiled(c) => c.clone(),
+        Predicate::Visible { couche, rang } => format!(
+            "({a}.\"_couche\" = '{}' AND {a}.\"_depuis\" <= {rang} AND ({a}.\"_jusqu_a\" IS NULL OR {a}.\"_jusqu_a\" > {rang}))",
+            couche.replace('\'', "''")
+        ),
     }
 }
 
@@ -1504,6 +1515,10 @@ fn rag3db_condition_sur(p: &rag3weaver_ir::Predicate, a: &str, n: &mut usize) ->
         // Un Plan lié n'en porte plus : la validation les a refusées avant.
         Predicate::Optional(_) | Predicate::Let(_) => "false".to_string(),
         Predicate::Compiled(c) => c.clone(),
+        Predicate::Visible { couche, rang } => format!(
+            "({a}._couche = '{}' AND {a}._depuis <= {rang} AND ({a}._jusqu_a IS NULL OR {a}._jusqu_a > {rang}))",
+            couche.replace('\\', "\\\\").replace('\'', "\\'")
+        ),
     }
 }
 
@@ -1540,6 +1555,10 @@ impl Rag3dbDialect {
 }
 
 impl SchemaDialect for Rag3dbDialect {
+    fn sait_les_generations(&self) -> bool {
+        true
+    }
+
     /// Par uuids : `UNWIND $uuids AS u MATCH (m:T {_uuid: u}) RETURN u, …` ;
     /// sinon `MATCH (m:T) WHERE … RETURN … ORDER BY … LIMIT n`.
     fn write(&self, write: &rag3weaver_ir::Write) -> Result<String, rag3weaver_ir::TranslateError> {

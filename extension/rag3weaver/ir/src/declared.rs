@@ -307,6 +307,7 @@ impl DeclaredPlan {
                 }
             }
             Predicate::Compiled(_) => Err("une condition compilée n'a pas sa place dans un Plan déclaré".into()),
+            Predicate::Visible { .. } => Err("la visibilité d'une génération n'a pas sa place dans un Plan déclaré".into()),
         }
     }
 
@@ -538,6 +539,7 @@ fn lier_predicat(p: &Predicate, params: &BTreeMap<String, Value>, noms: &mut BTr
         }
         Predicate::Let(nom) => return Err(format!("la condition « {nom} » n'a pas été dépliée")),
         Predicate::Compiled(_) => return Err("une condition compilée n'a pas sa place dans un Plan déclaré".into()),
+        Predicate::Visible { .. } => return Err("la visibilité d'une génération n'a pas sa place dans un Plan déclaré".into()),
     })
 }
 

@@ -5466,8 +5466,13 @@ impl Backend {
         }
         // Une base de code de la forme d'avant les versions de scope : elle
         // sert comme avant, et se dit à migrer (lot 1a, décision de c7).
-        if !entites.is_empty() && crate::code::scope_form(&cat).ok() == Some(crate::code::ScopeForm::SansVersions) {
-            avertissements.push(crate::code::SANS_VERSIONS.to_string());
+        match (entites.is_empty(), crate::code::scope_form(&cat).ok()) {
+            (false, Some(crate::code::ScopeForm::SansVersions)) => avertissements.push(crate::code::SANS_VERSIONS.to_string()),
+            // Une base à versions d'avant les générations (2a′) : elle se lit comme avant, et le dit.
+            (false, Some(crate::code::ScopeForm::Versions)) if cat.dialect_arc().sait_les_generations() => {
+                avertissements.push(crate::code::SANS_COUCHES.to_string())
+            }
+            _ => {}
         }
         // **La garde des comptes du dernier index** : documents contre
         // lignes, par entité ; un écart se dit aussi en avertissement.

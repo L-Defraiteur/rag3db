@@ -427,6 +427,12 @@ pub enum Predicate {
     /// désérialise jamais.
     #[serde(skip)]
     Compiled(String),
+    /// **La ligne est visible** (les générations de 2a′) : dans la couche `couche`, vivante au
+    /// rang `rang` — `_couche = couche AND _depuis <= rang AND (_jusqu_a IS NULL OR _jusqu_a >
+    /// rang)`. Posée par l'exécution sur les tables à générations, jamais déclarée ; elle ne se
+    /// désérialise pas.
+    #[serde(skip)]
+    Visible { couche: String, rang: i64 },
 }
 
 impl Predicate {
@@ -455,7 +461,7 @@ impl Predicate {
             Predicate::Through { filter: Some(f), .. } => f.params(out),
             Predicate::Optional(p) => p.params(out),
             Predicate::AnyOf(v) | Predicate::AllOf(v) => v.iter().for_each(|p| p.params(out)),
-            Predicate::Through { filter: None, .. } | Predicate::Let(_) | Predicate::Compiled(_) => {}
+            Predicate::Through { filter: None, .. } | Predicate::Let(_) | Predicate::Compiled(_) | Predicate::Visible { .. } => {}
         }
     }
 
@@ -483,7 +489,7 @@ impl Predicate {
             // comme un nom qui n'est pas un identifiant, avant le moteur.
             Predicate::AnyOf(v) | Predicate::AllOf(v) if v.is_empty() => out.push("(condition vide)".into()),
             Predicate::AnyOf(v) | Predicate::AllOf(v) => v.iter().for_each(|p| p.names(out)),
-            Predicate::Compiled(_) => {}
+            Predicate::Compiled(_) | Predicate::Visible { .. } => {}
         }
     }
 }
