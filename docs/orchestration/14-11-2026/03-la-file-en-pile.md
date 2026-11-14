@@ -46,14 +46,16 @@ l'autre, dix fois de suite, même sans rouge.
 | 3 | recherche | surveillant, puis plafond d'instantané | surveillant-2, plafond-d-instantane → recherche-pile | 2c3bc3eb7 sur 7ac2c13d9 — **atterri** à 16 h 27, master a48b535d1, dix commits en un push, pile tenue |
 | 4 | G | cas 6c du poste (trap avant la CI) | tenant-signal → tenant-signal-pile | c93f73f06 sur 2c3bc3eb7 — **atterri** à 16 h 30, master 89f46c87d, pile tenue ; cas 6c clos |
 | 5 | embarquement | reprise après plantage | reprise-apres-plantage → reprise-apres-plantage-pile | 512b5e420 sur c93f73f06 — **atterri** à 16 h 39, master 67dabc121, 6/6 en `=` plus le `>` du ticket ; le `!` attendu sur nouveautes.md n'a pas eu lieu, la pile d'avant ayant atterri avec les mêmes lignes de tête |
-| 6 | 96 | miroir, nom exact, about | lot-96-pile (miroir 48445fdeb, nomex bff4ea79f, about 84f949d2c) | pile 84f949d2c sur 512b5e420 |
-| 7 | hotfixs | témoin du dictionnaire (C++ test seul) | chaine-au-point-de-reprise-2 → chaine-au-point-de-reprise-pile | 9ded42107 → pile cabcc8640 sur 84f949d2c |
+| 6 | 96 | miroir, nom exact, about | lot-96-pile (miroir, nomex, about) | 84f949d2c sur 512b5e420 — **atterri** à 16 h 40, master c350dc9c3, trois lots en un push, 3/3 en `=` |
+| 7 | hotfixs | témoin du dictionnaire (C++ test seul) | chaine-au-point-de-reprise-2 → chaine-au-point-de-reprise-pile | cabcc8640 sur 84f949d2c — **atterri** à 16 h 44, master 42c84cb77, pile tenue |
 | 8 | ED | 2a′-1 (générations de l'ancre) | generations-de-l-ancre-3 → generations-de-l-ancre-pile | 9b0620f66 → pile c22fdbf31, puis **e00fd562d** sur cabcc8640 (19 commits + le témoin e2e_scope_versions corrigé ; rang gardé, un commit ajouté) |
 | 9 | archi | jauge du contexte (+ quatre mineurs s'ils sont verts) | jauge-ce-qui-pese-3 → jauge-ce-qui-pese-pile | 5ad3c990e → pile 214e9a99b, puis **67d759962** sur e00fd562d (jauge-ce-qui-pese-pile-2) |
 | 10 | cœur | correctif (a) perte de Note | annulation-garde-les-autres-2 → annulation-garde-les-autres-pile | 9b0e73c9c → pile 960eb8e3a, puis **41a7de35a** sur 67d759962 (annulation-garde-les-autres-pile-2) ; juge vers 17 h 15 |
-| 11 | G | la garde apprend la pile | garde-pile | cd103b619 sur c93f73f06 (garde 2f1914405 : --onto, push refusé remis, 27 témoins ; relue par recherche à 16 h 2x ; **posée au cache des deux postes à 16 h 22**, sha256 c57a3fb1 → a58a649f, l'ancienne en push_garde.sh.avant-garde-pile) |
-| 12 | codeparsers | l'import pointé (lot 1) | à venir | à son vert |
-| 13 | recherche | exclusions 1 et 5 dans le manifeste | à venir | à son vert |
+| 11 | recherche | la CI : `fetch_update` déprécié par la chaîne stable de la CI (read_pool.rs:261), pas par le poste 1.98.1 | ci-try-update-pile | à venir, sur la tête du cœur 41a7de35a |
+| 12 | G | la garde apprend la pile | garde-pile | cd103b619 sur c93f73f06 (garde 2f1914405 : --onto, push refusé remis, 27 témoins ; relue par recherche à 16 h 2x ; **posée au cache des deux postes à 16 h 22**, sha256 c57a3fb1 → a58a649f, l'ancienne en push_garde.sh.avant-garde-pile) |
+| 13 | codeparsers | l'import pointé (lot 1) | à venir | à son vert |
+| 14 | recherche | exclusions 1 et 5 dans le manifeste | à venir | à son vert |
+| 15 | tty | tty-7, le journal de séance et le repli sous mosh | cx-tty-7 dc6d484c6 | rejoue sur 41a7de35a ; rejeu court probable à son tour, accepté |
 
 Chaque session dit à c7 et au rang suivant la tête de sa branche de pile dès qu'elle est poussée.
 
@@ -132,3 +134,13 @@ que celles sur lesquelles le conflit avait été résolu, le commit est `=`. Pou
 « garde en retard sur le dépôt » dit l'inverse quand c'est la copie du cache qui est en avance (dire
 les deux empreintes et le sens) ; `verifier_pile` doit imprimer le range-diff jugé, pas seulement
 « pile tenue ».
+
+## La CI rouge (16 h 45) : la chaîne de la CI flotte, celle du poste non
+
+`poste push` signale « CI rouge depuis 15 h 30 UTC » à chaque push de la pile : depuis a48b535d1
+(recherche), le jeu `sans-feature` de check_features rougit sur la CI sous `-D warnings` —
+`Atomic::<u64>::fetch_update` déprécié (renommé `try_update`) à `src/read_pool.rs:261`. Le poste est
+en rustc 1.98.1 et ne le voit pas ; la CI prend `dtolnay/rust-toolchain@stable`, plus récent. Ce
+n'est ni un lot cassé ni le poste : c'est deux chaînes. Recherche corrige en une ligne au rang 11 ;
+G ouvre le ticket du fond (épingler la chaîne de la CI à celle du poste par `rust-toolchain.toml`,
+ou laisser flotter et monter le poste), décision à Lucie.
