@@ -11,7 +11,7 @@ use crate::endpoint::Endpoint;
 use crate::flux;
 use crate::journal::Journal;
 use crate::vue::{Action, Touche, Validee, Vue, HAUTEUR};
-use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::widgets::{Paragraph, Widget};
 use ratatui::{TerminalOptions, Viewport};
 use serde_json::{json, Value};
@@ -81,6 +81,10 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
             return Err(Echec::VueIndisponible(e.to_string(), journal));
         }
     };
+    // Le collage d'un bloc (bracketed paste) : un texte collé arrive entier, ses
+    // sauts de ligne ne valent pas Entrée. Un terminal qui ne le connaît pas
+    // ignore la demande.
+    let _ = ratatui::crossterm::execute!(std::io::stdout(), EnableBracketedPaste);
     let agent = client::agent();
     let (tx, rx) = mpsc::channel::<Msg>();
     let arret = Arc::new(AtomicBool::new(false));
@@ -170,6 +174,7 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     arret.store(true, Ordering::SeqCst);
     // La zone vivante reste à l'écran telle quelle ; le curseur passe dessous.
     let _ = terminal.draw(|f| vue.dessiner(f, f.area()));
+    let _ = ratatui::crossterm::execute!(std::io::stdout(), DisableBracketedPaste);
     ratatui::restore();
     println!();
     let _ = flux_fil.join();
@@ -217,6 +222,11 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
                     sale = true;
                     touche_de(k).and_then(|t| vue.touche(t))
                 }
+                // Un collage d'un bloc : ses sauts de ligne restent dans la saisie.
+                Event::Paste(texte) => {
+                    sale = true;
+                    vue.touche(Touche::Coller(texte))
+                }
                 Event::Resize(l, _) => {
                     vue.redimensionner(l);
                     sale = true;
@@ -252,15 +262,36 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
 /// La touche de la vue pour une touche du terminal, ou rien.
 pub fn touche_de(k: KeyEvent) -> Option<Touche> {
     let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
+    let alt = k.modifiers.contains(KeyModifiers::ALT);
     match k.code {
         KeyCode::Char('c') if ctrl => Some(Touche::CtrlC),
         KeyCode::Char('d') if ctrl => Some(Touche::CtrlD),
         KeyCode::Char('g') if ctrl => Some(Touche::CtrlG),
+        KeyCode::Char('a') if ctrl => Some(Touche::Debut),
+        KeyCode::Char('e') if ctrl => Some(Touche::Fin),
+        KeyCode::Char('w') if ctrl => Some(Touche::EffacerMot),
+        KeyCode::Char('u') if ctrl => Some(Touche::EffacerDebut),
+        KeyCode::Char('k') if ctrl => Some(Touche::EffacerFin),
         // Une autre combinaison Ctrl + lettre n'entre pas dans la saisie.
         KeyCode::Char(_) if ctrl => None,
+        KeyCode::Char('b') if alt => Some(Touche::MotGauche),
+        KeyCode::Char('f') if alt => Some(Touche::MotDroite),
+        KeyCode::Char(_) if alt => None,
         KeyCode::Char(c) => Some(Touche::Car(c)),
+        // Alt-Entrée partout ; Maj-Entrée là où le terminal la distingue.
+        KeyCode::Enter if alt || k.modifiers.contains(KeyModifiers::SHIFT) => Some(Touche::Saut),
         KeyCode::Enter => Some(Touche::Entree),
+        KeyCode::Backspace if alt || ctrl => Some(Touche::EffacerMot),
         KeyCode::Backspace => Some(Touche::Retour),
+        KeyCode::Left if alt || ctrl => Some(Touche::MotGauche),
+        KeyCode::Right if alt || ctrl => Some(Touche::MotDroite),
+        KeyCode::Left => Some(Touche::Gauche),
+        KeyCode::Right => Some(Touche::Droite),
+        KeyCode::Home => Some(Touche::Debut),
+        KeyCode::End => Some(Touche::Fin),
+        KeyCode::Delete => Some(Touche::Suppr),
+        KeyCode::Up => Some(Touche::Haut),
+        KeyCode::Down => Some(Touche::Bas),
         KeyCode::Esc => Some(Touche::Echap),
         _ => None,
     }
