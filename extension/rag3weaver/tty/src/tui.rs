@@ -167,7 +167,7 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     vue.capacites = Capacites::du_terminal();
     vue.theme = theme;
     if let (true, Some(j)) = (mosh, &journal) {
-        vue.repli = Some(format!("sous mosh, l'historique ne se relit pas au défilement : {}", j.relecture()));
+        vue.repli = Some(crate::vue::Repli { phrase: "sous mosh, l'historique ne se relit pas au défilement".into(), commande: j.relecture() });
     }
     vue.graine = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1) | 1;
     let rendu = boucle(&mut terminal, &mut vue, &rx, &agent, &ep, &tache, &mut journal);

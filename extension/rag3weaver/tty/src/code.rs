@@ -289,6 +289,21 @@ mod tests {
         assert_eq!(texte(&boite), "[équipier · réponse] fait", "le Markdown vaut aussi dans la boîte");
     }
 
+    /// **tty-9** : la prose passe à la ligne entre deux mots, pas au milieu d'un
+    /// mot ; un mot plus long que la largeur se coupe, et le code se replie tel quel.
+    #[test]
+    fn prose_folds_between_words_and_only_cuts_a_word_longer_than_the_width() {
+        let t = Theme::daemon();
+        let rendu = |genre, texte: &str, tete: usize, largeur| {
+            let v = Validee { genre, texte: texte.into(), langue: String::new(), tete };
+            lignes(&v, &t, cap(), largeur, None).iter().map(|l| l.spans.iter().map(|s| s.content.to_string()).collect::<String>()).collect::<Vec<_>>()
+        };
+        assert_eq!(rendu(Genre::Texte, "ses déclarations et son code sont ceux de ce commit", 0, 20), vec!["ses déclarations et", "son code sont ceux", "de ce commit"]);
+        let tete = "[hôte · compte rendu] ".len();
+        assert_eq!(rendu(Genre::Boite, "[hôte · compte rendu] tâche ouverte depuis d61fe30d7", tete, 30), vec!["[hôte · compte rendu] tâche", "ouverte depuis d61fe30d7"]);
+        assert_eq!(rendu(Genre::Texte, "abcdefghijklmnop qr", 0, 8), vec!["abcdefgh", "ijklmnop", "qr"], "un mot trop long se coupe");
+    }
+
     #[test]
     fn inline_code_is_tinted_and_the_backticks_stay() {
         let t = Theme::daemon();
