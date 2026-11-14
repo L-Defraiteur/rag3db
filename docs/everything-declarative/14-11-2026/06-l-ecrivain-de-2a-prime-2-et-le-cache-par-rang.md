@@ -123,3 +123,28 @@ dans l'état B.
 4. L'écrivain (§ 2), la publication (§ 3), l'époque et le cache (§ 4).
 5. Les témoins verts, la parité de banc.
 6. Le post-filtre du dense (§ 5), mesuré ; le témoin 7 sous `poste mesure`.
+
+## 9. La mesure des déplacés, et sa décision (14 novembre 2026, 22 h 52)
+
+Sonde `tests/sonde_deplaces.rs` (branche mesure-deplaces, 03f6fc2c9), à luciepc, sur les 50 derniers
+commits d'origin/master (987bdd49e). Pour chaque fichier de code touché, les scopes avant et après sont
+analysés et appariés par leur clé. Les arêtes entrantes sont lues sur une copie de la base d'avant les
+versions : c'est un ordre de grandeur, pas un compte exact.
+
+- **44 849 arêtes recopiées, dont 38 467 par les seuls déplacés, soit 86 %.**
+- La médiane par commit vaut 0, car la plupart des commits ne touchent que des docs. **La médiane des
+  commits de code est de 1 500 arêtes**, et le maximum de 12 444 (cbb529c7e, un commit de masse de 1b).
+  Les suivants : 194a4e572, 9 967 arêtes dont 8 908 par 414 déplacés ; 00e28eee6, 6 820 ;
+  9fd946ec3, 5 839.
+
+**La décision** (arbre principal, avec c7) : **la position reste dans l'identité de la ligne pour
+2a′-2.** À la lettre, le seuil ne la sort pas : plus de la moitié des recopies sont bien des déplacés,
+mais le commit de code médian est sous « quelques milliers ». La recopie se paie une fois, à la
+publication, jamais à la sauvegarde.
+
+86 % de ces recopies n'achètent pourtant qu'un numéro de ligne. C'est une dette, nommée, avec deux
+conditions :
+- **l'écrivain dit dans l'état, à chaque publication, le compte des recopies** : le total, et la part
+  des déplacés ;
+- **on redécide au-delà de 20 000 recopies sur un commit réel.** La position sort alors de
+  l'identité, vers un petit enregistrement par génération (page 03, § 2 bis).
