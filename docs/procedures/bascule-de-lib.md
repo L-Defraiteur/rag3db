@@ -34,8 +34,8 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
    `shared_ptr` de `PreparedStatement` du 25 octobre) ; c'est le cœur qui le déclare
    (`ABI_CHANGEE=1`). Annoncer : symboles retirés, ajoutés, vtables changées, et ce qui doit se
    rebâtir.
-4. **Le verdict, sous la lib explicite** (`scripts/verdict-e2e-code.sh`) : `e2e_code` et
-   `e2e_lectures` verts, sous `RAG3DB_LIB=<id>`, les sources du crate prises sur master, sans
+4. **Le verdict, sous la lib explicite** (`scripts/verdict-e2e-code.sh`) : `e2e_code`,
+   `e2e_lectures` et `e2e_demon_hote` verts, sous `RAG3DB_LIB=<id>`, les sources du crate prises sur master, sans
    `RAG3WEAVER_MOTEUR_ANCIEN` ; la ligne « moteur lié » de chaque passe doit nommer la lib. Seules
    des bases temporaires de test s'ouvrent. Dans `e2e_lectures`, trois témoins se lisent par leur
    nom : `la_branche_dense_filtree_par_langage_repond_dans_l_instantane_de_l_appel` et
@@ -44,6 +44,12 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
    `la_recherche_rend_les_mots_pendant_un_create_de_l_index_vectoriel`, qui sous une lib d'avant
    le format 43 se rend en disant « non jugé » : sous la lib d'une bascule 43, ce « non jugé » est
    un rouge — le témoin doit se juger (`VERDICT_FORMAT=43` le fait compter ainsi par le script).
+   `e2e_demon_hote` est au verdict depuis le 14 novembre 2026 (c7) : la réouverture d'une base
+   après un point de reprise échoué (`une_base_a_rouvrir_ne_lache_que_son_backend`) y rougissait
+   depuis le 13 novembre, sous e93710f36 puis 0c41f9fe6, et les deux suites d'avant ne la voyaient
+   pas. Un rouge de cette suite se départage lib contre Rust par deux jeux croisés (sources
+   d'avant sous la lib neuve, sources neuves sous la lib d'avant) avant d'accuser la lib ; s'il
+   vient de la lib, la bascule attend le cœur.
 5. **Copier la lib à l'autre poste**, md5 vérifiée, sans poser `courant`.
 6. **Les hôtes, par G** : rebâtis contre la lib explicite, essayés — dont l'essai de l'IDE sur la
    lib neuve, avant le « posé » —, puis arrêtés avec leurs sockets (une socket éveille un hôte au

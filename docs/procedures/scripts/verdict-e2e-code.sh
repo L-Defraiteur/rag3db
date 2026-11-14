@@ -10,12 +10,13 @@ cd extension/rag3weaver
 unset RAG3WEAVER_LINK_COPY_THRESHOLD RAG3WEAVER_MOTEUR_ANCIEN
 export CARGO_TARGET_DIR=~/.cache/rag3weaver-build/target-A-instable CARGO_INCREMENTAL=0
 export RAG3DB_LIB=$(cat $N/id)
-export RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7878,127.0.0.1:7879,127.0.0.1:7880 RAG3WEAVER_EMBED_CHAR_BUDGET=4096 RAG3WEAVER_GPU_DUTY=70
-# e2e_code, puis e2e_lectures (7 novembre 2026) : une suite par appel (run_e2e.sh ne garde que
+export RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7878,127.0.0.1:7879 RAG3WEAVER_EMBED_CHAR_BUDGET=4096 RAG3WEAVER_GPU_DUTY=70
+# e2e_code, puis e2e_lectures (7 novembre 2026), puis e2e_demon_hote (c7, 14 novembre : la réouverture
+# après un point de reprise échoué y rougissait depuis le 13 sans que le verdict le voie) : une suite par appel (run_e2e.sh ne garde que
 # le dernier filtre) ; la borne de durée dans le lourd, pas devant (les lourds font la file).
 verdict=VERT
-for suite in e2e_code e2e_lectures; do
-  ~/.cache/rag3weaver-build/poste lourd timeout 1h ./run_e2e.sh --test $suite > $N/$suite.log 2>&1
+for suite in e2e_code e2e_lectures e2e_demon_hote; do
+  POSTE_MEM_MAX=32G ~/.cache/rag3weaver-build/poste lourd timeout 1h ./run_e2e.sh --test $suite > $N/$suite.log 2>&1
   rc=$?
   [ $rc = 0 ] && grep -q 'test result: ok' $N/$suite.log && ! grep -q 'test result: FAILED' $N/$suite.log || verdict=ROUGE
   echo "$suite rc=$rc : $(grep -m1 'moteur lié.*librag' $N/$suite.log | grep -o 'rag3db-build-[0-9a-f]\{9\}') $(grep -E '^running [0-9]+ test' $N/$suite.log | tail -1) $(grep 'test result' $N/$suite.log | tail -1 | cut -c1-70)" >> $T
