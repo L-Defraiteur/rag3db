@@ -191,23 +191,14 @@ fn noter_une_relance(source: &super::ModelSource) {
     }
 }
 
-/// **Un fournisseur activé pour une capacité** : son client (identité, bail),
+/// **Un fournisseur activé pour une capacité** (son identité vérifiée) :
 /// le bail d'usage, ce qui le tient (bail local d'activation ou tunnel) et
 /// l'adresse où le joindre.
 #[cfg(feature = "daemon")]
 pub(super) struct Actif {
-    client: crate::daemon::DaemonEmbedder,
     usage: Option<crate::daemon::embeddings::BailDistant>,
     tenue: Box<dyn std::any::Any + Send + Sync>,
     adresse: String,
-}
-
-#[cfg(feature = "daemon")]
-pub(super) fn connecter(source: &super::ModelSource, annule: &std::sync::atomic::AtomicBool)
-    -> Result<(Box<dyn crate::embedder::Embedder>, super::Origin), String> {
-    let a = activer(source, super::Capability::Embed, annule)?;
-    let origine = super::Origin::Service(a.adresse.clone());
-    Ok((Box::new(Gere { client: a.client, _usage: a.usage, _tenue: a.tenue }), origine))
 }
 
 /// **Activer le fournisseur d'une déclaration, pour une capacité** : le lancer
@@ -237,7 +228,7 @@ fn activer(source: &super::ModelSource, capacite: super::Capability, annule: &st
     let usage = client.prendre_bail(&format!("activation:{}:{}", std::process::id(), source.model), std::time::Duration::from_secs(60))
         .map_err(|e| format!("bail d'usage : {e}"))?;
     let adresse = bail.adresse().to_string();
-    Ok(Actif { client, usage, tenue: Box::new(bail), adresse })
+    Ok(Actif { usage, tenue: Box::new(bail), adresse })
 }
 
 /// Le fournisseur trouvé est-il celui déclaré : modèle, dimension, et
@@ -386,183 +377,46 @@ fn activer_distant(source: &super::ModelSource, capacite: super::Capability, ann
     let client = client.with_timeout(delai_appel);
     let usage = client.prendre_bail(&format!("activation:{}:{}", std::process::id(), source.model), Duration::from_secs(60))
         .map_err(|e| format!("bail d'usage : {e}"))?;
-    Ok(Actif { client, usage, tenue: Box::new(tunnel), adresse: locale })
+    Ok(Actif { usage, tenue: Box::new(tunnel), adresse: locale })
 }
 
-/// **Le point d'entrée** : une déclaration à la demande rend un embarqueur
-/// qui n'active rien avant son premier calcul ; toute autre active
-/// maintenant (`Maintenir`, comme avant).
+/// **Le point d'entrée du dense** : une tenue, comme pour les trois autres
+/// capacités (décision de c7, 14 novembre 2026 : un seul mécanisme). À la
+/// demande, rien n'est activé avant le premier calcul ; maintenu, le
+/// fournisseur est activé maintenant, et l'annulation de l'appelant vaut pour
+/// cette activation.
 #[cfg(feature = "daemon")]
 pub(super) fn connecter_ou_attendre(source: &super::ModelSource, annule: &std::sync::atomic::AtomicBool)
     -> Result<(Box<dyn crate::embedder::Embedder>, super::Origin), String> {
     let a = source.activation.as_ref().ok_or("activation absente")?;
-    let Residence::ADemande { inactivite_secs, rendre_le_bail_secs } = a.residence else {
-        // Maintenir : lancé maintenant, tenu debout — un plantage se relance
-        // une fois (décision de c7, 14 novembre 2026).
-        let (client, origine) = connecter(source, annule)?;
-        return Ok((Box::new(Maintenu { source: source.clone(), client: std::sync::Mutex::new(client) }), origine));
+    let a_demande = matches!(a.residence, Residence::ADemande { .. });
+    let mut dim = 0;
+    let mut declaree = None;
+    if let Residence::ADemande { inactivite_secs, rendre_le_bail_secs } = a.residence {
+        if inactivite_secs == 0 || rendre_le_bail_secs == 0 || rendre_le_bail_secs >= inactivite_secs {
+            return Err(format!(
+                "activation à la demande : rendre_le_bail_secs ({rendre_le_bail_secs}) doit être non nul et plus court qu'inactivite_secs ({inactivite_secs})"
+            ));
+        }
+        dim = source.dimensions.filter(|d| *d > 0).ok_or("activation à la demande : une dimension explicite requise")?;
+        declaree = Some(source.addresses(super::Capability::Embed, &super::process_env).into_iter().next()
+            .ok_or("activation à la demande : une adresse requise")?);
+        if annule.load(std::sync::atomic::Ordering::Acquire) { return Err("connexion annulée".into()); }
+    }
+    let tenue = Tenue::new(source, super::Capability::Embed, |s, a| {
+        crate::daemon::DaemonEmbedder::joindre(a).map(|d| d.with_timeout(delai_appel(s))).map_err(|e| e.to_string())
+    }, annule)?;
+    use crate::embedder::Embedder as _;
+    // Maintenu : activé, son adresse prise (port 0 compris) et ce qu'il dit de lui.
+    let vu = tenue.regarder(|c| (c.is_mock(), c.budget_conseille(), c.troncatures()));
+    if !a_demande {
+        dim = tenue.regarder(|c| c.dim()).unwrap_or(0);
+    }
+    let adresse = match declaree {
+        Some(a) => a,
+        None => tenue.adresse_active().ok_or("activation : fournisseur maintenu sans adresse")?,
     };
-    if inactivite_secs == 0 || rendre_le_bail_secs == 0 || rendre_le_bail_secs >= inactivite_secs {
-        return Err(format!(
-            "activation à la demande : rendre_le_bail_secs ({rendre_le_bail_secs}) doit être non nul et plus court qu'inactivite_secs ({inactivite_secs})"
-        ));
-    }
-    let dim = source.dimensions.filter(|d| *d > 0).ok_or("activation à la demande : une dimension explicite requise")?;
-    let adresse = source.addresses(super::Capability::Embed, &super::process_env).into_iter().next()
-        .ok_or("activation à la demande : une adresse requise")?;
-    if annule.load(std::sync::atomic::Ordering::Acquire) { return Err("connexion annulée".into()); }
-    Ok((Box::new(ALaDemande::new(source.clone(), dim, std::time::Duration::from_secs(rendre_le_bail_secs))), super::Origin::Service(adresse)))
-}
-
-/// L'état d'un embarqueur à la demande : le client activé (bail compris) et
-/// son dernier appel ; `None` : rien n'est tenu.
-#[cfg(feature = "daemon")]
-type Tenu = std::sync::Arc<std::sync::Mutex<Option<(Box<dyn crate::embedder::Embedder>, std::time::Instant)>>>;
-
-/// **L'embarqueur activé à la demande** (ticket
-/// `2026-11-13-un-fournisseur-a-la-demande-ouvert-par-l-hote-ne-s-evince-jamais`).
-/// Il dit le modèle et la dimension déclarés sans fournisseur ; son premier
-/// calcul active (local ou distant, identité vérifiée) ; un fil rend le
-/// client, donc son bail, après `rendre` sans appel ; un calcul qui trouve
-/// le fournisseur parti réactive une fois, puis refuse en le disant.
-#[cfg(feature = "daemon")]
-struct ALaDemande {
-    source: super::ModelSource,
-    dim: usize,
-    tenu: Tenu,
-    arret: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    /// Ce que le client activé a dit de lui, gardé après qu'il est rendu.
-    vu: std::sync::Mutex<Option<(bool, Option<(usize, usize)>)>>,
-}
-
-#[cfg(feature = "daemon")]
-impl ALaDemande {
-    fn new(source: super::ModelSource, dim: usize, rendre: std::time::Duration) -> Self {
-        let tenu: Tenu = Default::default();
-        let arret = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let (t, stop) = (std::sync::Arc::downgrade(&tenu), arret.clone());
-        let _ = std::thread::Builder::new().name("rendre-le-bail".into()).spawn(move || {
-            while !stop.load(std::sync::atomic::Ordering::Acquire) {
-                std::thread::sleep(std::time::Duration::from_millis(200));
-                let Some(tenu) = t.upgrade() else { return };
-                let rendu = {
-                    let mut g = tenu.lock().unwrap_or_else(|e| e.into_inner());
-                    if g.as_ref().is_some_and(|(_, dernier)| dernier.elapsed() >= rendre) { g.take() } else { None }
-                };
-                // Lâché hors du verrou : rendre le bail est un appel HTTP.
-                drop(rendu);
-            }
-        });
-        Self { source, dim, tenu, arret, vu: std::sync::Mutex::new(None) }
-    }
-
-    fn activer(&self) -> Result<Box<dyn crate::embedder::Embedder>, crate::embedder::EmbedError> {
-        let (client, _) = connecter(&self.source, &std::sync::atomic::AtomicBool::new(false))
-            .map_err(|e| crate::embedder::EmbedError::ProviderError(format!("activation à la demande : {e}")))?;
-        *self.vu.lock().unwrap_or_else(|e| e.into_inner()) = Some((client.is_mock(), client.budget_conseille()));
-        Ok(client)
-    }
-
-    /// Le fournisseur n'est plus là (évincé, mort) : l'erreur d'un appel qui
-    /// n'a trouvé personne, pas celle d'un calcul refusé.
-    fn parti(e: &crate::embedder::EmbedError) -> bool {
-        match e {
-            crate::embedder::EmbedError::Timeout => true,
-            crate::embedder::EmbedError::ProviderError(m) => m.contains("ne répond pas") || m.contains("refused") || m.contains("Connection reset"),
-            _ => false,
-        }
-    }
-}
-
-#[cfg(feature = "daemon")]
-impl Drop for ALaDemande {
-    fn drop(&mut self) {
-        self.arret.store(true, std::sync::atomic::Ordering::Release);
-    }
-}
-
-#[cfg(feature = "daemon")]
-impl crate::embedder::Embedder for ALaDemande {
-    fn embed(&self, textes: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
-        let mut g = self.tenu.lock().unwrap_or_else(|e| e.into_inner());
-        if g.is_none() {
-            *g = Some((self.activer()?, std::time::Instant::now()));
-        }
-        let mut r = g.as_ref().unwrap().0.embed(textes);
-        if let Err(e) = &r {
-            if Self::parti(e) {
-                // Une fois : le fournisseur parti (évincé, planté) se relance,
-                // l'identité revérifiée. Un refus dit les deux temps : le départ,
-                // puis ce qu'a fait la relance unique — sans eux, l'appelant ne
-                // lisait qu'« est mort avant de répondre » et ne savait pas qu'un
-                // premier fournisseur avait servi puis planté (14 novembre 2026).
-                let depart = e.to_string();
-                *g = None;
-                noter_une_relance(&self.source);
-                let relance = self.activer().map_err(|e| crate::embedder::EmbedError::ProviderError(format!(
-                    "le fournisseur {} est parti ({depart}) ; relancé une fois, il n'a pas répondu : {e}", self.source.model)))?;
-                *g = Some((relance, std::time::Instant::now()));
-                r = g.as_ref().unwrap().0.embed(textes);
-                if let Err(e) = &r {
-                    if Self::parti(e) {
-                        r = Err(crate::embedder::EmbedError::ProviderError(format!(
-                            "le fournisseur {} est parti ({depart}) ; relancé une fois, il est reparti : {e}", self.source.model)));
-                    }
-                }
-            }
-        }
-        if let Some((_, dernier)) = g.as_mut() {
-            *dernier = std::time::Instant::now();
-        }
-        r
-    }
-    fn dim(&self) -> usize { self.dim }
-    fn name(&self) -> &str { &self.source.model }
-    fn is_mock(&self) -> bool { self.vu.lock().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|(m, _)| *m) }
-    fn is_absent(&self) -> bool { false }
-    fn distant(&self) -> bool { true }
-    fn budget_conseille(&self) -> Option<(usize, usize)> { self.vu.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|(_, b)| *b) }
-    fn timeout(&self) -> Option<std::time::Duration> {
-        Some(self.source.timeout_secs.filter(|s| *s > 0).map(std::time::Duration::from_secs)
-            .unwrap_or_else(crate::daemon::embeddings::default_embed_timeout))
-    }
-}
-
-/// **Le fournisseur déclaré `Maintenir`, tenu debout** : le client géré, et
-/// une relance unique quand un calcul le trouve parti (planté) ; si elle
-/// échoue, le refus dit la déclaration, le départ, la relance et quoi faire.
-#[cfg(feature = "daemon")]
-struct Maintenu {
-    source: super::ModelSource,
-    client: std::sync::Mutex<Box<dyn crate::embedder::Embedder>>,
-}
-
-#[cfg(feature = "daemon")]
-impl crate::embedder::Embedder for Maintenu {
-    fn embed(&self, textes: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
-        let mut c = self.client.lock().unwrap_or_else(|e| e.into_inner());
-        let r = c.embed(textes);
-        let Err(e) = &r else { return r };
-        if !ALaDemande::parti(e) { return r; }
-        let depart = e.to_string();
-        let modele = &self.source.model;
-        noter_une_relance(&self.source);
-        let (relance, _) = connecter(&self.source, &std::sync::atomic::AtomicBool::new(false)).map_err(|e| crate::embedder::EmbedError::ProviderError(format!(
-            "le fournisseur {modele} déclaré maintenir est parti ({depart}) ; relancé une fois, il n'a pas répondu : {e} — rouvrez le backend ou corrigez la déclaration")))?;
-        *c = relance;
-        c.embed(textes).map_err(|e| if ALaDemande::parti(&e) {
-            crate::embedder::EmbedError::ProviderError(format!(
-                "le fournisseur {modele} déclaré maintenir est parti ({depart}) ; relancé une fois, il est reparti : {e} — rouvrez le backend ou corrigez la déclaration"))
-        } else { e })
-    }
-    fn dim(&self) -> usize { self.client.lock().unwrap_or_else(|e| e.into_inner()).dim() }
-    fn name(&self) -> &str { &self.source.model }
-    fn is_mock(&self) -> bool { self.client.lock().unwrap_or_else(|e| e.into_inner()).is_mock() }
-    fn is_absent(&self) -> bool { self.client.lock().unwrap_or_else(|e| e.into_inner()).is_absent() }
-    fn distant(&self) -> bool { self.client.lock().unwrap_or_else(|e| e.into_inner()).distant() }
-    fn budget_conseille(&self) -> Option<(usize, usize)> { self.client.lock().unwrap_or_else(|e| e.into_inner()).budget_conseille() }
-    fn troncatures(&self) -> Option<(usize, usize)> { self.client.lock().unwrap_or_else(|e| e.into_inner()).troncatures() }
-    fn timeout(&self) -> Option<std::time::Duration> { self.client.lock().unwrap_or_else(|e| e.into_inner()).timeout() }
+    Ok((Box::new(DenseTenu { tenue, dim, vu: std::sync::Mutex::new(vu) }), super::Origin::Service(adresse)))
 }
 
 /// **Un fournisseur tenu pour une capacité** : son client, et ce qui le
@@ -571,6 +425,7 @@ impl crate::embedder::Embedder for Maintenu {
 #[cfg(feature = "daemon")]
 struct Prise<C> {
     client: C,
+    adresse: String,
     _usage: Option<crate::daemon::embeddings::BailDistant>,
     _tenue: Box<dyn std::any::Any + Send + Sync>,
 }
@@ -587,8 +442,8 @@ type EtatPrise<C> = std::sync::Arc<std::sync::Mutex<Option<(Prise<C>, std::time:
 /// - `maintenir` : activé tout de suite, tenu.
 ///
 /// Un appel qui trouve le fournisseur parti (évincé, planté) le relance une
-/// fois, et sinon se refuse en disant le départ et la relance. Le dense garde
-/// son embarqueur à lui (`ALaDemande`, `Maintenu`), même comportement.
+/// fois, et sinon se refuse en disant le départ et la relance. Le dense passe
+/// par elle aussi (`DenseTenu`) : un seul mécanisme pour les quatre capacités.
 #[cfg(feature = "daemon")]
 struct Tenue<C: Send + 'static> {
     source: super::ModelSource,
@@ -601,7 +456,8 @@ struct Tenue<C: Send + 'static> {
 
 #[cfg(feature = "daemon")]
 impl<C: Send + 'static> Tenue<C> {
-    fn new(source: &super::ModelSource, capacite: super::Capability, joindre: fn(&super::ModelSource, &str) -> Result<C, String>) -> Result<Self, String> {
+    fn new(source: &super::ModelSource, capacite: super::Capability, joindre: fn(&super::ModelSource, &str) -> Result<C, String>,
+        annule: &std::sync::atomic::AtomicBool) -> Result<Self, String> {
         let a = source.activation.as_ref().ok_or("activation absente")?;
         let etat: EtatPrise<C> = Default::default();
         let arret = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -632,16 +488,30 @@ impl<C: Send + 'static> Tenue<C> {
         };
         let t = Self { source: source.clone(), capacite, joindre, etat, arret, maintenir };
         if maintenir {
-            let tenu = t.activer()?;
+            let tenu = t.activer_annulable(annule)?;
             *t.etat.lock().unwrap_or_else(|e| e.into_inner()) = Some((tenu, std::time::Instant::now()));
         }
         Ok(t)
     }
 
     fn activer(&self) -> Result<Prise<C>, String> {
-        let actif = activer(&self.source, self.capacite, &std::sync::atomic::AtomicBool::new(false))?;
+        self.activer_annulable(&std::sync::atomic::AtomicBool::new(false))
+    }
+
+    fn activer_annulable(&self, annule: &std::sync::atomic::AtomicBool) -> Result<Prise<C>, String> {
+        let actif = activer(&self.source, self.capacite, annule)?;
         let client = (self.joindre)(&self.source, &actif.adresse)?;
-        Ok(Prise { client, _usage: actif.usage, _tenue: actif.tenue })
+        Ok(Prise { client, adresse: actif.adresse, _usage: actif.usage, _tenue: actif.tenue })
+    }
+
+    /// Un regard sur le client tenu, s'il l'est (ce qu'un maintenu dit de lui).
+    fn regarder<R>(&self, f: impl Fn(&C) -> R) -> Option<R> {
+        self.etat.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(p, _)| f(&p.client))
+    }
+
+    /// L'adresse où le fournisseur tenu répond (celle qu'il a prise, port 0 compris).
+    fn adresse_active(&self) -> Option<String> {
+        self.etat.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map(|(p, _)| p.adresse.clone())
     }
 
     /// Un appel au fournisseur tenu : l'activer s'il ne l'est pas ; s'il est
@@ -723,6 +593,37 @@ fn delai_appel(source: &super::ModelSource) -> std::time::Duration {
         .unwrap_or_else(crate::daemon::embeddings::default_embed_timeout)
 }
 
+/// **Le dense d'une activation** : un embarqueur tenu. Il dit son modèle et sa
+/// dimension déclarés sans fournisseur ; ce que le client activé dit de lui
+/// (factice, lot conseillé, troncatures) est gardé après qu'il est rendu.
+#[cfg(feature = "daemon")]
+struct DenseTenu {
+    tenue: Tenue<crate::daemon::DaemonEmbedder>,
+    dim: usize,
+    vu: std::sync::Mutex<Option<(bool, Option<(usize, usize)>, Option<(usize, usize)>)>>,
+}
+
+#[cfg(feature = "daemon")]
+impl crate::embedder::Embedder for DenseTenu {
+    fn embed(&self, textes: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+        self.tenue.appeler(|c| {
+            let r = c.embed(textes);
+            if r.is_ok() {
+                *self.vu.lock().unwrap_or_else(|e| e.into_inner()) = Some((c.is_mock(), c.budget_conseille(), c.troncatures()));
+            }
+            r
+        }, parti_calcul, crate::embedder::EmbedError::ProviderError)
+    }
+    fn dim(&self) -> usize { self.dim }
+    fn name(&self) -> &str { &self.tenue.source.model }
+    fn is_mock(&self) -> bool { self.vu.lock().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|(m, _, _)| *m) }
+    fn is_absent(&self) -> bool { false }
+    fn distant(&self) -> bool { true }
+    fn budget_conseille(&self) -> Option<(usize, usize)> { self.vu.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|(_, b, _)| *b) }
+    fn troncatures(&self) -> Option<(usize, usize)> { self.vu.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|(_, _, t)| *t) }
+    fn timeout(&self) -> Option<std::time::Duration> { Some(delai_appel(&self.tenue.source)) }
+}
+
 /// **Le creux d'une activation** (le groupe bge-m3) : un embarqueur creux
 /// tenu. Pas de dual : il se décide aujourd'hui sur l'identité du fournisseur,
 /// qu'un client à la demande ne connaît pas avant son premier appel.
@@ -770,7 +671,7 @@ pub(super) fn connecter_creux(source: &super::ModelSource) -> Result<(super::Spa
     let adresse = adresse_declaree(source)?;
     let tenue = Tenue::new(source, super::Capability::Sparse, |s, a| {
         crate::daemon::DaemonEmbedder::joindre(a).map(|d| d.with_timeout(delai_appel(s))).map_err(|e| e.to_string())
-    })?;
+    }, &std::sync::atomic::AtomicBool::new(false))?;
     Ok((super::SparseClients { sparse: std::sync::Arc::new(CreuxTenu(tenue)), dual: None }, super::Origin::Service(adresse)))
 }
 
@@ -780,7 +681,7 @@ pub(super) fn connecter_relecteur(source: &super::ModelSource) -> Result<(std::s
     let adresse = adresse_declaree(source)?;
     let tenue = Tenue::new(source, super::Capability::Rerank, |_, a| {
         crate::daemon::embeddings::DaemonReranker::joindre(a).map_err(|e| e.to_string())
-    })?;
+    }, &std::sync::atomic::AtomicBool::new(false))?;
     Ok((std::sync::Arc::new(RelecteurTenu { tenue, nom: source.model.clone() }), super::Origin::Service(adresse)))
 }
 
@@ -790,31 +691,10 @@ pub(super) fn connecter_ocr(source: &super::ModelSource) -> Result<(std::sync::A
     let adresse = adresse_declaree(source)?;
     let tenue = Tenue::new(source, super::Capability::Ocr, |_, a| {
         crate::daemon::embeddings::DaemonOcr::joindre(a).map_err(|e| e.to_string())
-    })?;
+    }, &std::sync::atomic::AtomicBool::new(false))?;
     Ok((std::sync::Arc::new(OcrTenu { tenue, nom: source.model.clone() }), super::Origin::Service(adresse)))
 }
 
-#[cfg(feature = "daemon")]
-struct Gere {
-    client: crate::daemon::DaemonEmbedder,
-    // Rendu avant ce qui tient le fournisseur (bail local ou tunnel) : l'ordre
-    // des champs est l'ordre de leur fin.
-    _usage: Option<crate::daemon::embeddings::BailDistant>,
-    _tenue: Box<dyn std::any::Any + Send + Sync>,
-}
-
-#[cfg(feature = "daemon")]
-impl crate::embedder::Embedder for Gere {
-    fn embed(&self, textes: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> { self.client.embed(textes) }
-    fn dim(&self) -> usize { self.client.dim() }
-    fn name(&self) -> &str { self.client.name() }
-    fn is_mock(&self) -> bool { self.client.is_mock() }
-    fn is_absent(&self) -> bool { self.client.is_absent() }
-    fn distant(&self) -> bool { self.client.distant() }
-    fn budget_conseille(&self) -> Option<(usize, usize)> { self.client.budget_conseille() }
-    fn troncatures(&self) -> Option<(usize, usize)> { self.client.troncatures() }
-    fn timeout(&self) -> Option<std::time::Duration> { self.client.timeout() }
-}
 
 #[cfg(all(test, feature = "daemon", unix))]
 mod tests {
