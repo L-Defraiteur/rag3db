@@ -597,3 +597,51 @@ fn l_embarquement_du_retard_appelle_le_service_hors_du_verrou() {
     verifier(&cat, "embarquement hors du verrou");
 }
 
+
+/// **Un filtre par `_uuid IN liste` se résout par la clé primaire** (14 novembre 2026, mesure d'ED :
+/// le masque des versions passe `_uuid IN [toutes les versions]` à chaque recherche). La forme
+/// `MATCH (n:T) WHERE n._uuid IN $liste` se planifie en balayage de la table et `LIST_CONTAINS` sur
+/// chaque ligne (5 008 ms pour 72 652 versions) ; `UNWIND $liste AS u MATCH (n:T {_uuid: u})` prend la
+/// clé (112,6 ms, les mêmes offsets). Ici, 30 000 fiches : la résolution de toutes doit tenir sous
+/// 500 ms, et chaque forme rend le même ensemble — doublons, liste vide, `IN` combiné à une autre
+/// clause, `IN` sur un champ qui n'est pas la clé (qui garde sa forme).
+#[test]
+#[ignore]
+fn un_filtre_par_uuid_se_resout_par_la_cle_primaire() {
+    use rag3weaver::{FilterCondition, FilterValue};
+    let catalog = catalogue();
+    catalog
+        .execute_raw("UNWIND range(0, 29999) AS i CREATE (:Fiche {_uuid: 'fiche-' + CAST(i AS STRING), cle: 'c' + CAST(i % 3 AS STRING)})")
+        .unwrap();
+    let uuids: Vec<rag3weaver_ir::Value> = catalog
+        .execute_raw("MATCH (n:Fiche) RETURN n._uuid")
+        .unwrap()
+        .rows
+        .into_iter()
+        .filter_map(|r| r.first().and_then(|v| v.as_str()).map(|s| rag3weaver_ir::Value::String(s.to_string())))
+        .collect();
+    assert_eq!(uuids.len(), 30_000);
+    let cible = catalog.resolve_search_target("Fiche").unwrap();
+    let par_uuid = |vals: Vec<rag3weaver_ir::Value>| FilterCondition::Field { key: "_uuid".into(), value: FilterValue::List(vals) };
+    let resoudre = |c: &FilterCondition| catalog.resolve_filter_to_ids("Fiche", c, &cible).unwrap().unwrap_or_default();
+
+    let t = std::time::Instant::now();
+    let toutes = resoudre(&par_uuid(uuids.clone()));
+    let duree = t.elapsed();
+    assert_eq!(toutes.len(), 30_000, "chaque fiche est rendue une fois");
+    assert!(duree < std::time::Duration::from_millis(500), "30 000 uuids se résolvent par la clé, pas par un balayage : {duree:?}");
+
+    let u = |i: usize| rag3weaver_ir::Value::String(format!("fiche-{i}"));
+    assert_eq!(resoudre(&par_uuid(vec![u(1), u(1), u(2)])).len(), 2, "les doublons de la liste ne doublent rien");
+    assert_eq!(resoudre(&par_uuid(vec![])).len(), 0, "une liste vide ne rend rien");
+    let combine = |cle: &str| {
+        FilterCondition::Must(vec![
+            par_uuid(vec![u(0), u(1), u(2), u(3)]),
+            FilterCondition::Field { key: "cle".into(), value: FilterValue::Direct(rag3weaver_ir::Value::String(cle.into())) },
+        ])
+    };
+    assert_eq!(resoudre(&combine("c1")).len(), 1, "l'IN combiné garde l'autre clause (fiche-1 seule a c1)");
+    assert_eq!(resoudre(&combine("aucune")).len(), 0);
+    let hors_cle = FilterCondition::Field { key: "cle".into(), value: FilterValue::List(vec![rag3weaver_ir::Value::String("c0".into())]) };
+    assert_eq!(resoudre(&hors_cle).len(), 10_000, "un IN sur un champ qui n'est pas la clé garde sa forme et son résultat");
+}
