@@ -541,6 +541,51 @@ fn fermer_un_backend_lache_sa_base_et_les_refus_sont_nommes() {
     let _ = std::fs::remove_dir_all(d);
 }
 
+/// **Une fermeture avec une raison tient** (14 novembre 2026, c7 : la mémoire longue fermée par
+/// `/backend/close` pour la passe de l'archiviste s'est rouverte à 18 h 35 sous l'écriture d'un
+/// juge ; « l'annonce n'est pas un verrou »). Tant qu'elle tient, un appel qui rouvrirait (ici un
+/// `put_fiche`, et l'ancienne route `/open` qu'un client prend à son attache) est refusé en disant
+/// la raison, la base reste lâchée, et `/etat` le dit ; `/backend/open`, explicite, la lève.
+#[test]
+#[ignore]
+fn une_fermeture_avec_une_raison_tient_jusqu_a_l_ouverture_explicite() {
+    let d = dossier("fermeture-tenue");
+    let m = manifeste(&d);
+    let host = DaemonHost::new();
+    let s = host.open_session("témoin", None, vec![], None);
+    ok(&host.open(Some(&s), &m));
+    ok(&put(&host, &s, &m, "put_fiche", "avant"));
+
+    let (code, r) = route(&host, "/backend/close", &s, json!({"manifest": m, "reason": "passe de l'archiviste", "until": "18 h 50"}));
+    assert_eq!(code, 200, "{r}");
+    assert_eq!(r["result"]["closed"], json!(true), "{r}");
+
+    // Un put_fiche pendant la fermeture : refusé en disant la raison, rien ne rouvre.
+    let r = put(&host, &s, &m, "put_fiche", "pendant");
+    let e = r["error"].as_str().unwrap_or_default().to_string();
+    assert!(r["ok"] != json!(true) && e.contains("fermé : passe de l'archiviste") && e.contains("jusqu'à 18 h 50") && e.contains("/backend/open"), "le put_fiche est refusé en disant la raison : {r}");
+    let etat = host.state();
+    assert_eq!(etat["backends"][0]["open"], json!(false), "rien n'a rouvert la base : {etat}");
+    assert_eq!(etat["backends"][0]["opened"], json!(1), "{etat}");
+    let dit = etat["backends"][0]["held_closed"].as_str().unwrap_or_default().to_string();
+    assert!(dit.contains("fermé : passe de l'archiviste") && dit.contains("jusqu'à 18 h 50"), "/etat dit la fermeture : {etat}");
+
+    // L'ancienne route /open, celle d'un client qui s'attache, ne la lève pas.
+    let (_, r) = route(&host, "/open", &s, json!({"manifest": m}));
+    assert!(r["ok"] != json!(true) && r["error"].as_str().unwrap_or_default().contains("fermé : passe de l'archiviste"), "/open ne lève pas la fermeture : {r}");
+    assert_eq!(host.state()["backends"][0]["open"], json!(false));
+
+    // /backend/open, explicite, la lève : l'écriture repasse, celle du refus n'a pas eu lieu.
+    let (code, r) = route(&host, "/backend/open", &s, json!({"manifest": m}));
+    assert_eq!(code, 200, "{r}");
+    assert_eq!(host.state()["backends"][0]["held_closed"], json!(null), "la fermeture est levée");
+    ok(&put(&host, &s, &m, "put_fiche", "apres"));
+    assert!(fiche(&host, &s, &m, "avant").is_some() && fiche(&host, &s, &m, "apres").is_some(), "les écritures d'avant et d'après sont là");
+    assert!(fiche(&host, &s, &m, "pendant").is_none(), "l'écriture refusée n'a pas eu lieu");
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}
+
 /// **`code-tree add | remove` par un vrai hôte** (page
 /// `codeparsers/06-code-tree-l-arbre-du-coeur.md`) : un arbre posé depuis un
 /// `--from` (le gabarit `code`), enregistré à l'hôte par `/backend/open`,
