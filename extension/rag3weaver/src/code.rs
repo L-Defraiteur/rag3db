@@ -840,9 +840,24 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
 }
 
 /// **Monter une base à versions aux générations** (2a′-2, la migration de la page 03, § 5).
+///
+/// Une base de la forme [`SCOPE_FORM_VERSIONS`], au schéma déjà enregistré, reçoit les trois colonnes
+/// sur `Scope` et `File` (défauts : la couche du backend, rang 0, vivante) et la génération 0 de la
+/// couche, puis l'estampille [`SCOPE_FORM_GENERATIONS`]. Toutes ses lignes deviennent la génération 0 :
+/// aucun uuid ne change, aucune arête n'est réécrite. L'estampille vient en dernier : une migration
+/// interrompue laisse une base à versions, qui se relit comme avant et se remigre.
+///
+/// Refusée sur toute autre forme, et sur un dialecte qui ne sait pas les générations.
 pub fn migrer_vers_les_generations(catalog: &mut Catalog) -> Result<(), CatalogError> {
-    let _ = catalog;
-    Err(CatalogError::DbError("la migration vers les générations n'est pas encore écrite".into()))
+    let forme = scope_form(catalog)?;
+    if forme != ScopeForm::Versions {
+        return Err(CatalogError::DbError(format!("migration vers les générations : la base est de la forme {forme:?}, pas à versions")));
+    }
+    if !catalog.dialect_arc().sait_les_generations() {
+        return Err(CatalogError::DbError("migration vers les générations : ce dialecte ne les sait pas".into()));
+    }
+    catalog.poser_les_generations(&[FILE, SCOPE], COUCHE_DU_BACKEND)?;
+    catalog.persist_meta_key(SCOPE_FORM_KEY, SCOPE_FORM_GENERATIONS)
 }
 
 // ─── Analyse ─────────────────────────────────────────────────────────────────
