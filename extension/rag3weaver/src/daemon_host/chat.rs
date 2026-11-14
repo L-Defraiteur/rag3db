@@ -244,11 +244,18 @@ impl DaemonHost {
         // (`Llm::context_len`, `models.llm.context_tokens`), null s'il est
         // inconnu ; `at`, l'heure de l'appel mesuré. Pas de ratio : la page le
         // calcule.
+        // `parts` (lot de la jauge, 14 novembre 2026) : ce qui pèse dans `used`, estimé au
+        // prorata des caractères du dernier appel (le fournisseur ne rend qu'un total) ; la
+        // somme retombe sur `used`. Null pour un appel noté sans sa composition.
+        let parts = dernier.and_then(|c| c.parts.and_then(|p| p.en_jetons(c.prompt_tokens))).map(|j| {
+            Value::Object(j.into_iter().map(|(k, n)| (k.to_string(), json!(n))).collect())
+        });
         let contexte = json!({
             "used": dernier.map(|c| c.prompt_tokens),
             "max": llm.as_ref().ok().map(|(_, n)| *n).filter(|n| *n > 0),
             "source": "run",
             "at": dernier.map(|c| c.at_ms),
+            "parts": parts,
         });
         let fil: Vec<Value> = fil.as_array().cloned().unwrap_or_default().into_iter().filter(|t| t["role"] != "system").collect();
         drop(chats);
