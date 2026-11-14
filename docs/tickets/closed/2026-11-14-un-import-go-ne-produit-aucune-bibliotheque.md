@@ -1,6 +1,6 @@
 # Un import Go ne produit aucune bibliothèque
 
-- **État** : ouvert (14 novembre 2026)
+- **État** : corrigé (14 novembre 2026) — codeparsers 6ba8478 (`imports-go`) : les imports Go se lisent sur l'arbre ; témoin `tests/imports_go.rs` (codeparsers) et `manifestes::tests::go_l_analyse_garde_la_casse_du_module_requis` (rag3weaver), rouges sous cf90e1c
 - **Gravité** : manque de rappel : aucun nom importé d'un fichier Go n'a de bibliothèque, donc ni
   provenance ni arête `USES_LIBRARY`
 - **Atteignable en service** : oui, sur tout dépôt Go indexé
@@ -30,3 +30,12 @@ par `go.mod` (`plus_long_prefixe_declare`, casse gardée).
 
 La règle Go (`data/imports/go.toml`), le plus long préfixe déclaré, la table par langue (casse gardée) et
 la lecture de `go.mod` par rag3weaver : il ne manque que les imports.
+
+## La correction
+
+`GoScopeExtractionParser::extract_go_imports` lit chaque `import_spec` (seul ou en bloc) : `source` = le
+chemin, `imported` = le nom lié (l'alias, sinon le dernier élément ; `/vN` renvoie à l'élément d'avant,
+`gopkg.in/yaml.v3` donne `yaml` ; un élément qui n'est pas un identifiant Go ne lie rien), `_` un
+`SideEffect`, `.` sans nom lié. Corrigé dans le lot qui l'a vu (la provenance par langue) : `fmt` est
+builtin, `github.com/Azure/azure-sdk-for-go/sdk/azcore/policy` est `dependency` par `go.mod`, le même chemin
+sous une autre casse est `inconnue`.
