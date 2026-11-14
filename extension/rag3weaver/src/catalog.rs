@@ -10278,6 +10278,16 @@ fn read_threads() -> u64 {
         Ok(())
     }
 
+    /// **Une ligne invisible existe désormais** (d'une autre couche, retirée ou à venir) : les
+    /// lecteurs sans filtre bornent à leur tour (`Visibilite::tout_visible`). L'écrivain d'une
+    /// seconde génération l'appelle (2a′-2) ; le témoin de la non-fuite aussi.
+    pub(crate) fn marquer_des_lignes_invisibles(&mut self) {
+        if let Some(v) = self.generations.as_mut() {
+            v.tout_visible = false;
+            self.publish_read_view();
+        }
+    }
+
     /// **Lever (ou baisser) la fusion des éventails pour ce montage**, quoi
     /// que déclare le dialecte : un PostgreSQL distant, où chaque
     /// aller-retour coûte cher, la lève ; `None` rend la main au dialecte.
