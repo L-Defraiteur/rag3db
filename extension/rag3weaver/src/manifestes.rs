@@ -30,7 +30,7 @@ pub struct Manifestes {
     /// Les paquets du dépôt, par langue.
     #[serde(default)]
     pub paquets_par_langue: BTreeMap<String, BTreeSet<String>>,
-    /// Les `replace` de `go.mod` (`ancien => nouveau`), notés sans être suivis.
+    /// Les `replace` de `go.mod` (`ancien => nouveau`), tels qu'écrits (ils sont suivis : voir `lire_go_mod`).
     #[serde(default)]
     pub remplacements_go: BTreeSet<String>,
 }
@@ -85,8 +85,9 @@ impl Manifestes {
     }
 
     /// `go.mod` : `module X` est du projet ; `require X v` (sur une ligne ou dans un bloc `require ( … )`)
-    /// est une dépendance ; `replace A => B` se note sans être suivi ; `exclude`, `retract` et les autres
-    /// directives ne disent rien d'un import.
+    /// est une dépendance ; `replace A => ../local` fait de A un paquet du projet, `replace A => B v` garde A
+    /// en dépendance et y ajoute B (tous deux notés dans `remplacements_go`) ; `exclude`, `retract` et les
+    /// autres directives ne disent rien d'un import.
     fn lire_go_mod(&mut self, texte: &str) {
         let mut bloc: Option<String> = None;
         for ligne in texte.lines() {
@@ -125,7 +126,18 @@ impl Manifestes {
                 self.dependances.insert(premier.to_string());
             }
             "replace" => {
-                self.remplacements_go.insert(argument.split_whitespace().collect::<Vec<_>>().join(" "));
+                let argument = argument.split_whitespace().collect::<Vec<_>>().join(" ");
+                // `A [vX] => B [vY]` : vers un chemin local (`./`, `../`, `/`), A est du projet ; vers un
+                // autre module, A reste une dépendance (le code l'importe sous son nom) et B en devient une.
+                if let Some((_, droite)) = argument.split_once("=>") {
+                    let remplacant = droite.split_whitespace().next().unwrap_or("");
+                    if remplacant.starts_with("./") || remplacant.starts_with("../") || remplacant.starts_with('/') {
+                        self.paquets_du_projet.insert(premier.to_string());
+                    } else if !remplacant.is_empty() {
+                        self.dependances.insert(remplacant.to_string());
+                    }
+                }
+                self.remplacements_go.insert(argument);
             }
             _ => {}
         }
@@ -310,8 +322,9 @@ mod tests {
         )]);
         assert_eq!(m.lus, vec!["go.mod"]);
         let go = &m.dependances_par_langue["go"];
-        assert_eq!(go.iter().map(String::as_str).collect::<Vec<_>>(), vec!["github.com/Azure/azure-sdk-for-go/sdk/azcore", "github.com/spf13/cobra", "golang.org/x/sync"]);
-        assert_eq!(m.paquets_par_langue["go"].iter().map(String::as_str).collect::<Vec<_>>(), vec!["example.com/moi/Outil"], "la casse du module est gardée");
+        // cobra est remplacé par `../cobra` : du projet, plus une dépendance (le suivi des replace).
+        assert_eq!(go.iter().map(String::as_str).collect::<Vec<_>>(), vec!["github.com/Azure/azure-sdk-for-go/sdk/azcore", "golang.org/x/sync"]);
+        assert_eq!(m.paquets_par_langue["go"].iter().map(String::as_str).collect::<Vec<_>>(), vec!["example.com/moi/Outil", "github.com/spf13/cobra"], "la casse du module est gardée");
         assert_eq!(m.remplacements_go.iter().map(String::as_str).collect::<Vec<_>>(), vec!["github.com/spf13/cobra => ../cobra"]);
         assert!(!go.contains("golang.org/x/net"), "exclude n'est pas une dépendance");
     }
@@ -362,6 +375,33 @@ mod tests {
         assert_eq!(provenance("fmt"), Some(Some("builtin".to_string())), "{:?}", a.libraries);
         assert_eq!(provenance("github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"), Some(Some("dependency".to_string())), "{:?}", a.libraries);
         assert_eq!(provenance("github.com/azure/azure-sdk-for-go/sdk/azcore"), Some(Some("inconnue".to_string())), "{:?}", a.libraries);
+    }
+
+    /// `replace` de go.mod : vers un chemin local, le module est du projet ; vers un autre module, il reste
+    /// une dépendance et le module remplaçant en devient une.
+    #[test]
+    fn go_mod_un_replace_local_est_du_projet_un_replace_distant_une_dependance() {
+        let m = lire(&[(
+            "go.mod",
+            "module example.com/moi/outil\n\nrequire (\n\tgithub.com/a/local v1.0.0\n\tgithub.com/b/ancien v1.0.0\n)\n\nreplace github.com/a/local => ../local\n\nreplace (\n\tgithub.com/b/ancien v1.0.0 => github.com/c/Nouveau v1.2.0\n)\n",
+        )]);
+        let go = &m.dependances_par_langue["go"];
+        let projet = &m.paquets_par_langue["go"];
+        assert!(projet.contains("github.com/a/local"), "remplacé par ../local : du projet ({projet:?})");
+        assert!(!go.contains("github.com/a/local"), "et plus une dépendance ({go:?})");
+        assert!(go.contains("github.com/b/ancien"), "l'import écrit garde son nom ({go:?})");
+        assert!(go.contains("github.com/c/Nouveau"), "le module remplaçant est une dépendance, casse gardée ({go:?})");
+    }
+
+    /// De bout en bout : un import d'un module remplacé par un chemin local n'est pas une dépendance.
+    #[cfg(feature = "code")]
+    #[test]
+    fn go_l_analyse_suit_un_replace_local() {
+        let m = lire(&[("go.mod", "module example.com/moi/outil\n\nrequire github.com/a/local v1.0.0\n\nreplace github.com/a/local => ../local\n")]);
+        let source = "package main\n\nimport \"github.com/a/local/outils\"\n\nfunc lancer() {\n\toutils.F()\n}\n";
+        let a = crate::code::analyze_in_project_avec("/virtual", vec![("main.go".to_string(), source.to_string())], "", None, Some(&m));
+        let p = a.libraries.iter().find(|l| l.name == "github.com/a/local/outils").map(|l| l.provenance.clone());
+        assert_ne!(p, Some(Some("dependency".to_string())), "remplacé par ../local, le module est du projet : {:?}", a.libraries);
     }
 
     #[test]
