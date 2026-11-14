@@ -166,6 +166,50 @@ fn transferer_les_vecteurs(catalog: &Catalog, modele: &crate::embedding_storage:
 /// À jouer sur une copie, sans autre ouvreur.
 #[cfg(feature = "rag3db-native")]
 pub fn migrer_la_base(chemin: &std::path::Path) -> Result<Bilan, String> {
-    let _ = chemin;
-    Err("la migration d'une base par son chemin n'existe pas encore".into())
+    use crate::connection::DbConnection;
+    use crate::{CatalogConfig, Rag3dbConnection};
+    let ouvrir = || -> Result<Rag3dbConnection, String> {
+        let conn = Rag3dbConnection::new(chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
+        let extension = crate::backend::vector_extension_of_this_process()?;
+        conn.execute(&format!("LOAD EXTENSION {}", crate::connection::cypher_path_literal(&extension)))
+            .map_err(|e| format!("l'extension vectorielle : {e}"))?;
+        Ok(conn)
+    };
+    let fts = crate::fts_handle::FtsStorage::Files { base_path: format!("{}.fts", chemin.display()) };
+    // Les modèles de la base, lus sans modèle ni initialisation.
+    let modeles = Catalog::without_embedding_model(Box::new(ouvrir()?), CatalogConfig::default())
+        .registered_embedding_models()
+        .map_err(|e| format!("les modèles enregistrés : {e}"))?;
+    let modele = modeles.first().ok_or("aucun modèle dense enregistré dans la base : rien à transférer, la migration ordinaire suffit")?;
+    let refus = Box::new(Refus { nom: modele.name.clone(), dim: modele.dim });
+    let mut catalog = Catalog::new(Box::new(ouvrir()?), refus, CatalogConfig { embedding_dim: modele.dim, ..Default::default() });
+    catalog.set_fts_storage(fts);
+    catalog.initialize().map_err(|e| format!("l'ouverture du catalogue : {e}"))?;
+    crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).map_err(|e| format!("le schéma de code : {e}"))?;
+    migrer_vers_les_versions(&mut catalog, crate::code::default_scope_chunking())
+}
+
+/// L'embarqueur d'une migration : le nom et la dimension d'un modèle de la base, et un refus à
+/// chaque appel. La migration ne calcule rien ; un appel serait un défaut, qu'il faut voir.
+#[cfg(feature = "rag3db-native")]
+struct Refus {
+    nom: String,
+    dim: usize,
+}
+
+#[cfg(feature = "rag3db-native")]
+impl crate::embedder::Embedder for Refus {
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+        Err(crate::embedder::EmbedError::ProviderError(format!(
+            "la migration vers les versions n'embarque rien ; {} textes demandés à « {} »",
+            texts.len(),
+            self.nom
+        )))
+    }
+    fn dim(&self) -> usize {
+        self.dim
+    }
+    fn name(&self) -> &str {
+        &self.nom
+    }
 }
