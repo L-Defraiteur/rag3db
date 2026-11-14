@@ -19,6 +19,7 @@ pub mod allocateur;
 pub mod arbre;
 pub mod builtin_templates;
 pub mod couches;
+pub mod suivies;
 pub mod template_plan;
 pub mod fusion;
 pub mod en_tete;
