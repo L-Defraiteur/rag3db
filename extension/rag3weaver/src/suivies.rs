@@ -508,7 +508,14 @@ pub fn resoudre_la_pile(racine: &std::path::Path, declaration: &Declaration, sou
                     .iter()
                     .filter(|(_, b)| !candidates.iter().any(|(_, autre)| autre != b && est_ancetre(b, autre)))
                     .collect();
+                // Aucune candidate, mais d'autres suivies sur la même pointe : rien à décider, « égales ».
+                let egales: Vec<String> = {
+                    let mut l: Vec<String> = couches.iter().enumerate().filter(|(j, (p, _))| *j != i && p.pointe == r.pointe).map(|(_, (p, _))| p.nom.clone()).collect();
+                    l.sort();
+                    l
+                };
                 match plus_recentes.as_slice() {
+                    [] if !egales.is_empty() => ParenteResolue::Egales(egales),
                     [] => ParenteResolue::Aucune,
                     [(p, b)] => ParenteResolue::Inferee { parente: p.clone(), base: b.clone() },
                     plusieurs => {
@@ -1626,5 +1633,59 @@ mod tests {
         assert!(lire_les_ajouts(&cat, &id).unwrap().taches.is_empty());
         assert!(crate::couches::couche_fermee(&cat, &id, "refs/heads/agent/relecture").unwrap(), "la couche n'est pas marquée fermée");
         assert!(crate::couches::parente_estampillee(&cat, &id, "refs/heads/agent/relecture").unwrap().is_some(), "l'estampille a été effacée");
+    }
+
+    /// **Chaque ligne du tableau de la page 02 est une déclaration du même objet** (Lucie, 14 nov. : « même
+    /// des trucs pas prévus doivent marcher ») : tout l'arbre, plusieurs worktrees, des worktrees sur une
+    /// branche racine déclarée, les agents, une revue de deux branches sans lien, et le cas non prévu
+    /// (`agent/*` à la pointe, main en entier). Chacune se lit par le rapport de l'état.
+    #[test]
+    fn chaque_ligne_du_tableau_est_une_declaration_du_meme_objet() {
+        let (t, d) = vierge();
+        commit(&d, "m1");
+        for b in ["a", "agent/t1", "agent/t2"] {
+            git(&d, &["branch", b]);
+        }
+        git(&d, &["switch", "-q", "a"]);
+        commit(&d, "a1");
+        git(&d, &["switch", "-q", "--orphan", "o"]);
+        commit(&d, "o1");
+        git(&d, &["switch", "-q", "main"]);
+        git(&d, &["worktree", "add", "-q", t.path().join("wt-a").to_str().unwrap(), "a"]);
+        let cat = catalogue();
+        let rapport = |decl: Value| rapport_des_suivies(&cat, &d, Some(&decl)).unwrap().unwrap().0;
+        let refs = |r: &Value| -> Vec<String> { r["branches"].as_array().unwrap().iter().map(|b| b["ref"].as_str().unwrap().to_string()).collect() };
+        let parente = |r: &Value, nom: &str| -> (Value, Value) {
+            let b = r["branches"].as_array().unwrap().iter().find(|b| b["ref"] == nom).unwrap_or_else(|| panic!("{nom} : {r}")).clone();
+            (b["parent"].clone(), b["kind"].clone())
+        };
+        // Tout l'arbre git : toutes les branches, la racine calculée (sans ancêtre commun, à cause de o).
+        // Comme pour git, le joker de `refs/heads/*` ne franchit pas `/` : il oublierait `agent/t1` ;
+        // `refs/heads` prend la ref et tout ce qui est sous elle.
+        let joker = rapport(json!({"sources": [{"select": "refs:refs/heads/*"}]}));
+        assert!(!refs(&joker).contains(&"refs/heads/agent/t1".to_string()), "{joker}");
+        let tout = rapport(json!({"sources": [{"select": "refs:refs/heads"}]}));
+        assert_eq!(refs(&tout), vec!["refs/heads/a", "refs/heads/agent/t1", "refs/heads/agent/t2", "refs/heads/main", "refs/heads/o"], "{tout}");
+        assert_eq!(tout["racine"]["nature"], "sans_ancetre_commun", "{tout}");
+        // Plusieurs worktrees chargés ensemble : une couche de travail chacun.
+        let wts = rapport(json!({"sources": [{"select": "worktree:*"}]}));
+        assert_eq!(wts["work"].as_array().unwrap().len(), 2, "{wts}");
+        // Des worktrees sur une branche racine déclarée.
+        let declares = rapport(json!({"root": {"declared": "main"}, "sources": [{"select": "worktree:*", "parent": {"declared": "main"}}]}));
+        assert_eq!(declares["racine"]["nature"], "declaree");
+        assert_eq!(parente(&declares, "refs/heads/a"), (json!("refs/heads/main"), json!("declaree")), "{declares}");
+        // Les agents : les tâches et main ; sans tâche ouverte, la source des tâches se dit vide.
+        let agents = rapport(json!({"root": {"declared": "main"}, "sources": [{"select": "tasks"}, {"select": "branch:main", "history": "all"}]}));
+        assert_eq!(refs(&agents), vec!["refs/heads/main"], "{agents}");
+        assert!(agents["sources"][0]["empty"].is_string(), "{agents}");
+        // Une revue de deux branches sans lien : la racine vide, aucune parente.
+        let revue = rapport(json!({"root": "empty", "sources": [{"select": "branch:a", "parent": "none"}, {"select": "branch:o", "parent": "none"}]}));
+        assert_eq!(revue["racine"]["nature"], "vide");
+        assert_eq!(parente(&revue, "refs/heads/o"), (Value::Null, json!("aucune")));
+        // Le cas non prévu : agent/* à la pointe, main en entier, sans parente.
+        let imprevu = rapport(json!({"sources": [{"select": "refs:refs/heads/agent/*"}, {"select": "branch:main", "parent": "none", "history": "all"}]}));
+        assert_eq!(refs(&imprevu), vec!["refs/heads/agent/t1", "refs/heads/agent/t2", "refs/heads/main"], "{imprevu}");
+        assert_eq!(parente(&imprevu, "refs/heads/main"), (Value::Null, json!("aucune")));
+        assert_eq!(parente(&imprevu, "refs/heads/agent/t1").1, json!("egales"), "deux agents au même commit, main contenue : {imprevu}");
     }
 }
