@@ -51,11 +51,32 @@ pub enum Action {
 }
 
 /// Une touche, indépendante du backend (les tests n'ont pas de terminal).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Touche {
     Car(char),
     Entree,
     Retour,
+    /// ←, →, Début, Fin (et Ctrl-A, Ctrl-E), Suppr.
+    Gauche,
+    Droite,
+    Debut,
+    Fin,
+    Suppr,
+    /// Ctrl-← et Ctrl-→ (et Alt-B, Alt-F).
+    MotGauche,
+    MotDroite,
+    /// Ctrl-W, Ctrl-U, Ctrl-K.
+    EffacerMot,
+    EffacerDebut,
+    EffacerFin,
+    /// ↑ et ↓ : la ligne d'au-dessus ou d'en dessous, sinon l'historique des envois.
+    Haut,
+    Bas,
+    /// Alt-Entrée : un saut de ligne dans la saisie, sans l'envoyer.
+    Saut,
+    /// Un collage d'un bloc (bracketed paste) : ses sauts de ligne restent dans
+    /// la saisie, rien ne part avant Entrée.
+    Coller(String),
     Echap,
     CtrlC,
     CtrlD,
@@ -100,7 +121,7 @@ pub struct Vue {
     en_cours: String,
     validees: Vec<Validee>,
     pub etat: Etat,
-    saisie: String,
+    saisie: crate::saisie::Saisie,
     demande_posee: bool,
     pub theme: Theme,
     pub capacites: Capacites,
@@ -137,7 +158,7 @@ impl Vue {
             en_cours: String::new(),
             validees: Vec::new(),
             etat: Etat::Attend,
-            saisie: String::new(),
+            saisie: crate::saisie::Saisie::default(),
             demande_posee,
             theme: Theme::daemon(),
             capacites: Capacites { couleurs: Niveau::Vraie, glyphes: Glyphes::Surs },
@@ -347,7 +368,7 @@ impl Vue {
     pub fn touche(&mut self, t: Touche) -> Option<Action> {
         match t {
             // Une approbation en attente et rien de tapé : `o` accorde, `n` refuse.
-            Touche::Car(c @ ('o' | 'O' | 'y' | 'Y' | 'n' | 'N')) if self.saisie.is_empty() && self.boite.premiere().is_some_and(|a| a.kind == "approval") => {
+            Touche::Car(c @ ('o' | 'O' | 'y' | 'Y' | 'n' | 'N')) if self.saisie.est_vide() && self.boite.premiere().is_some_and(|a| a.kind == "approval") => {
                 let attente = self.boite.premiere().cloned()?;
                 let oui = matches!(c, 'o' | 'O' | 'y' | 'Y');
                 self.clore();
@@ -355,15 +376,16 @@ impl Vue {
                 Some(Action::Repondre { attente, texte: if oui { "oui".into() } else { "non".into() }, accord: Some(oui) })
             }
             Touche::Car(c) => {
-                self.saisie.push(c);
+                self.saisie.inserer(c.encode_utf8(&mut [0; 4]));
                 None
             }
             Touche::Retour => {
-                self.saisie.pop();
+                self.saisie.effacer_avant();
                 None
             }
+            Touche::Gauche | Touche::Droite | Touche::Debut | Touche::Fin | Touche::Suppr | Touche::MotGauche | Touche::MotDroite | Touche::EffacerMot | Touche::EffacerDebut | Touche::EffacerFin | Touche::Haut | Touche::Bas | Touche::Saut | Touche::Coller(_) => None,
             Touche::Entree => {
-                let texte = std::mem::take(&mut self.saisie);
+                let texte = self.saisie.prendre();
                 if texte.trim().is_empty() {
                     return None;
                 }
@@ -382,7 +404,7 @@ impl Vue {
             Touche::Echap => Some(Action::Arreter),
             Touche::CtrlC => Some(Action::Quitter),
             Touche::CtrlG => Some(Action::Arreter),
-            Touche::CtrlD if self.saisie.is_empty() => Some(Action::Quitter),
+            Touche::CtrlD if self.saisie.est_vide() => Some(Action::Quitter),
             Touche::CtrlD => None,
         }
     }
@@ -460,7 +482,7 @@ impl Vue {
         let largeur = zone.width as usize;
         // La fin de la ligne en cours, si elle déborde (elle ne déborde pas : `couper`).
         let en_cours = queue(&self.en_cours, largeur);
-        let saisie = queue(&format!("› {}", self.saisie), largeur.saturating_sub(1));
+        let saisie = queue(&format!("› {}", self.saisie.texte()), largeur.saturating_sub(1));
         let haut = match &self.repli {
             Some(r) if en_cours.is_empty() => {
                 let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
@@ -600,6 +622,61 @@ mod tests {
         assert_eq!(cellule("ᚨ").fg, Color::Rgb(halo.0, halo.1, halo.2), "une rune du cercle");
         assert_eq!(cellule("I").fg, Color::Rgb(texte.0, texte.1, texte.2), "le libellé INVOCATION");
         assert!((0..buf.area.width).all(|x| buf[(x, ligne)].fg != Color::Red), "plus de rouge de base sur la ligne du thème");
+    }
+
+    /// **La saisie s'édite au clavier** : flèches, Début et Fin, mots, effacements,
+    /// historique, saut de ligne et collage d'un bloc ; et le curseur de l'écran
+    /// est là où la saisie l'a mis.
+    #[test]
+    fn the_input_line_is_edited_with_the_keyboard_and_the_screen_cursor_follows() {
+        let mut v = Vue::new(60, true);
+        let tape = |v: &mut Vue, t: &str| t.chars().for_each(|c| assert_eq!(v.touche(Touche::Car(c)), None));
+        tape(&mut v, "lis vue.rs");
+        for _ in 0..6 {
+            v.touche(Touche::Gauche);
+        }
+        tape(&mut v, "src/");
+        v.touche(Touche::Fin);
+        v.touche(Touche::MotGauche);
+        v.touche(Touche::Suppr);
+        tape(&mut v, "R");
+        v.touche(Touche::Debut);
+        v.touche(Touche::Droite);
+        v.touche(Touche::Retour);
+        tape(&mut v, "L");
+        assert_eq!(v.saisie.texte(), "Lis src/vue.Rs");
+        v.touche(Touche::Fin);
+        v.touche(Touche::Saut);
+        v.touche(Touche::Coller("puis\r\nrésume".into()));
+        assert_eq!(v.saisie.texte(), "Lis src/vue.Rs\npuis\nrésume", "le collage garde ses sauts, rien ne part");
+        assert_eq!(v.touche(Touche::Entree), Some(Action::Envoyer("Lis src/vue.Rs\npuis\nrésume".into(), "instruction")));
+        v.touche(Touche::Haut);
+        assert_eq!(v.saisie.texte(), "Lis src/vue.Rs\npuis\nrésume", "↑ rappelle l'envoi");
+        v.touche(Touche::EffacerDebut);
+        v.touche(Touche::Haut);
+        v.touche(Touche::EffacerFin);
+        v.touche(Touche::EffacerMot);
+        assert_eq!(v.saisie.texte(), "Lis src/vue.Rs\n\n", "Ctrl-W s'arrête au début de la ligne");
+        v.touche(Touche::MotDroite);
+        assert_eq!(v.touche(Touche::CtrlC), None, "Ctrl-C vide d'abord une saisie non vide");
+        assert!(v.saisie.est_vide());
+        assert_eq!(v.touche(Touche::CtrlC), Some(Action::Quitter), "puis quitte");
+
+        // Le curseur de l'écran : « › » et une espace, puis la colonne de la saisie.
+        let mut v = Vue::new(40, true);
+        tape(&mut v, "漢字ab");
+        v.touche(Touche::Gauche);
+        let mut t = Terminal::with_options(TestBackend::new(40, 6), TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }).unwrap();
+        let instant = v.depuis;
+        let mut zone = None;
+        t.draw(|f| {
+            zone = Some(f.area());
+            v.dessiner_a(f, f.area(), instant)
+        })
+        .unwrap();
+        let z = zone.unwrap();
+        let pos = t.get_cursor_position().unwrap();
+        assert_eq!((pos.x - z.x, pos.y - z.y), (2 + 5, 2), "deux idéogrammes (4 colonnes), a, et le curseur avant b");
     }
 
     /// Le repli (sous mosh, la commande qui relit le journal) se dit sur la
