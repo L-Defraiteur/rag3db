@@ -10275,10 +10275,8 @@ fn read_threads() -> u64 {
     /// lecteurs sans filtre bornent à leur tour (`Visibilite::tout_visible`). L'écrivain d'une
     /// seconde génération l'appelle (2a′-2) ; le témoin de la non-fuite aussi.
     pub(crate) fn marquer_des_lignes_invisibles(&mut self) {
-        if let Some(v) = self.generations.as_mut() {
-            v.tout_visible = false;
-            self.publish_read_view();
-        }
+        // Sans les lecteurs bornés un par un, le drapeau n'existe pas encore : rien à défaire.
+        self.publish_read_view();
     }
 
     /// **Lever (ou baisser) la fusion des éventails pour ce montage**, quoi
