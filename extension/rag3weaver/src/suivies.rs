@@ -341,8 +341,152 @@ pub struct Pile {
 /// aucune, ou inférée parmi les suivies : le parent commun le plus récent, admis seulement s'il est unique),
 /// et les flux. Sans ancre : `main` n'a aucune place particulière.
 pub fn resoudre_la_pile(racine: &std::path::Path, declaration: &Declaration, sources: &[SourceResolue]) -> Result<Pile, String> {
-    let _ = (racine, declaration, sources);
-    Err("la pile ne se résout pas encore".into())
+    use crate::couches::git;
+    // Les couches d'histoire, une par ref résolue (la première source qui la nomme fixe sa parente voulue).
+    let mut couches: Vec<(RefResolue, Parente)> = Vec::new();
+    for s in sources {
+        for r in &s.refs {
+            if !couches.iter().any(|(c, _)| c.nom == r.nom) {
+                couches.push((r.clone(), s.source.parent.clone()));
+            }
+        }
+    }
+    let pointes: Vec<String> = couches.iter().map(|(r, _)| r.pointe.clone()).collect();
+    let octopus = |p: &[String]| -> Option<String> {
+        if p.is_empty() {
+            return None;
+        }
+        let mut args = vec!["merge-base", "--octopus"];
+        args.extend(p.iter().map(String::as_str));
+        git(racine, &args).ok().filter(|s| !s.is_empty())
+    };
+    let racine_resolue = match &declaration.root {
+        Racine::Vide => RacineResolue::Vide,
+        Racine::Declaree(rev) => match git(racine, &["rev-parse", "--verify", "--quiet", &format!("{rev}^{{commit}}")]) {
+            Ok(c) if !c.is_empty() => RacineResolue::Declaree { rev: rev.clone(), commit: c },
+            _ => RacineResolue::Introuvable(rev.clone()),
+        },
+        Racine::Calculee => match octopus(&pointes) {
+            None => RacineResolue::SansAncetreCommun,
+            Some(commit) => {
+                let fixee_par = couches
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| {
+                        let autres: Vec<String> = pointes.iter().enumerate().filter(|(j, _)| j != i).map(|(_, p)| p.clone()).collect();
+                        octopus(&autres).as_deref() != Some(commit.as_str())
+                    })
+                    .map(|(_, (r, _))| r.nom.clone())
+                    .collect();
+                RacineResolue::Calculee { commit, fixee_par }
+            }
+        },
+    };
+    let est_ancetre = |a: &str, b: &str| -> bool {
+        std::process::Command::new("git").arg("-C").arg(racine).args(["merge-base", "--is-ancestor", a, b]).status().is_ok_and(|s| s.success())
+    };
+    let merge_base = |a: &str, b: &str| -> Option<String> { git(racine, &["merge-base", a, b]).ok().filter(|s| !s.is_empty()) };
+
+    // Les flux : X → Y quand une fusion faite par Y (sur sa ligne de premier parent) apporte un commit fait
+    // par X (sur la sienne). Un cycle de ces arêtes est un flux multi-env.
+    let ligne = |r: &str, merges: bool| -> Vec<String> {
+        let mut args = vec!["rev-list", "--first-parent"];
+        if merges {
+            args.extend(["--merges", "--parents"]);
+        }
+        args.push(r);
+        git(racine, &args).map(|s| s.lines().map(str::to_string).collect()).unwrap_or_default()
+    };
+    let lignes: Vec<std::collections::HashSet<String>> = couches.iter().map(|(r, _)| ligne(&r.pointe, false).into_iter().collect()).collect();
+    let n = couches.len();
+    let mut arete = vec![vec![false; n]; n];
+    for (y, (ry, _)) in couches.iter().enumerate() {
+        for fusion in ligne(&ry.pointe, true) {
+            for apporte in fusion.split_whitespace().skip(2) {
+                for x in (0..n).filter(|&x| x != y) {
+                    if lignes[x].contains(apporte) {
+                        arete[x][y] = true;
+                    }
+                }
+            }
+        }
+    }
+    // La fermeture transitive, puis les composantes à plus d'une couche.
+    let mut atteint = arete.clone();
+    for k in 0..n {
+        for i in 0..n {
+            for j in 0..n {
+                if atteint[i][k] && atteint[k][j] {
+                    atteint[i][j] = true;
+                }
+            }
+        }
+    }
+    let mut flux: Vec<Vec<String>> = Vec::new();
+    let mut dans_un_flux = vec![false; n];
+    for i in 0..n {
+        if dans_un_flux[i] {
+            continue;
+        }
+        let mut cycle: Vec<usize> = (0..n).filter(|&j| j == i || (atteint[i][j] && atteint[j][i])).collect();
+        if cycle.len() > 1 {
+            cycle.sort_by(|a, b| couches[*a].0.nom.cmp(&couches[*b].0.nom));
+            for &j in &cycle {
+                dans_un_flux[j] = true;
+            }
+            flux.push(cycle.iter().map(|&j| couches[j].0.nom.clone()).collect());
+        }
+    }
+    flux.sort();
+
+    let nom_complet = |p: &str| -> String {
+        if p.starts_with("refs/") {
+            return p.to_string();
+        }
+        let tete = format!("refs/heads/{p}");
+        if git(racine, &["rev-parse", "--verify", "--quiet", &tete]).is_ok() { tete } else { p.to_string() }
+    };
+    let mut avertissements = Vec::new();
+    let mut resolues = Vec::with_capacity(n);
+    for (i, (r, voulue)) in couches.iter().enumerate() {
+        let parente = match voulue {
+            Parente::Aucune => ParenteResolue::Aucune,
+            Parente::Declaree(p) => ParenteResolue::Declaree(nom_complet(p)),
+            Parente::Inferee if dans_un_flux[i] => ParenteResolue::DansUnFlux,
+            Parente::Inferee => {
+                // Les candidates : les autres suivies dont la fourche avec celle-ci n'est pas sa propre pointe
+                // (une suivie qui la contient est une enfant, pas une parente).
+                let candidates: Vec<(String, String)> = couches
+                    .iter()
+                    .enumerate()
+                    .filter(|(j, _)| *j != i)
+                    .filter_map(|(_, (p, _))| merge_base(&r.pointe, &p.pointe).filter(|b| *b != r.pointe).map(|b| (p.nom.clone(), b)))
+                    .collect();
+                let plus_recentes: Vec<&(String, String)> = candidates
+                    .iter()
+                    .filter(|(_, b)| !candidates.iter().any(|(_, autre)| autre != b && est_ancetre(b, autre)))
+                    .collect();
+                match plus_recentes.as_slice() {
+                    [] => ParenteResolue::Aucune,
+                    [(p, b)] => ParenteResolue::Inferee { parente: p.clone(), base: b.clone() },
+                    plusieurs => {
+                        let mut noms: Vec<String> = plusieurs.iter().map(|(p, _)| p.clone()).collect();
+                        noms.sort();
+                        avertissements.push(format!("couche « {} » ambiguë : sa parente est {} — à déclarer", r.nom, noms.join(" ou ")));
+                        ParenteResolue::Ambigue(noms)
+                    }
+                }
+            }
+        };
+        resolues.push(CoucheResolue { nom: r.nom.clone(), pointe: r.pointe.clone(), parente });
+    }
+    for f in &flux {
+        avertissements.push(format!("flux détecté entre {} : déclare leurs parentes", f.join(", ")));
+    }
+    if let RacineResolue::Introuvable(rev) = &racine_resolue {
+        avertissements.push(format!("racine déclarée « {rev} » introuvable"));
+    }
+    Ok(Pile { racine: racine_resolue, couches: resolues, flux, avertissements })
 }
 
 /// Les refs du dépôt, chacune sur son commit (une étiquette annotée, déréférencée).
