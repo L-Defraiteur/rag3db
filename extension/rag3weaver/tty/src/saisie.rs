@@ -81,6 +81,23 @@ impl Saisie {
         self.texte.replace_range(self.curseur..j, "");
     }
 
+    /// Au début du mot avant le curseur (Ctrl-←, Alt-B) : un mot est une suite
+    /// de lettres et de chiffres.
+    pub fn mot_gauche(&mut self) {}
+
+    /// À la fin du mot après le curseur (Ctrl-→, Alt-F).
+    pub fn mot_droite(&mut self) {}
+
+    /// Efface jusqu'au début du mot avant le curseur, espaces compris (Ctrl-W,
+    /// comme un shell : un mot y va jusqu'à l'espace).
+    pub fn effacer_mot_avant(&mut self) {}
+
+    /// Efface jusqu'au début de la ligne (Ctrl-U).
+    pub fn effacer_debut(&mut self) {}
+
+    /// Efface jusqu'à la fin de la ligne (Ctrl-K).
+    pub fn effacer_fin(&mut self) {}
+
     /// Rend le texte et vide la saisie.
     pub fn prendre(&mut self) -> String {
         self.curseur = 0;
@@ -206,6 +223,54 @@ mod tests {
         assert_eq!(s.texte(), "ae\u{301}漢z", "la famille part d'un coup");
         s.effacer_avant();
         assert_eq!(s.texte(), "a漢z", "l'accent part avec sa lettre");
+    }
+
+    /// Les mots : Ctrl-← et Ctrl-→ sautent les mots, la ponctuation ne compte pas.
+    #[test]
+    fn word_jumps_skip_punctuation_and_land_on_word_edges() {
+        let mut s = Saisie::default();
+        tape(&mut s, "lis src/vue.rs, puis été");
+        s.mot_gauche();
+        assert_eq!(&s.texte()[s.curseur()..], "été", "au début du dernier mot, accentué");
+        s.mot_gauche();
+        assert_eq!(&s.texte()[s.curseur()..], "puis été");
+        s.mot_gauche();
+        assert_eq!(&s.texte()[s.curseur()..], "rs, puis été", "le point coupe un mot");
+        s.debut();
+        s.mot_droite();
+        assert_eq!(&s.texte()[..s.curseur()], "lis");
+        s.mot_droite();
+        assert_eq!(&s.texte()[..s.curseur()], "lis src");
+        s.fin();
+        s.mot_droite();
+        assert_eq!(s.curseur(), s.texte().len());
+        s.debut();
+        s.mot_gauche();
+        assert_eq!(s.curseur(), 0);
+    }
+
+    /// Ctrl-W efface le mot d'avant jusqu'à l'espace, Ctrl-U le début, Ctrl-K la fin.
+    #[test]
+    fn ctrl_w_u_and_k_erase_the_word_before_the_start_and_the_end() {
+        let mut s = Saisie::default();
+        tape(&mut s, "cargo test --lib  ");
+        s.effacer_mot_avant();
+        assert_eq!(s.texte(), "cargo test ", "le mot et les espaces qui le suivent");
+        s.effacer_mot_avant();
+        assert_eq!(s.texte(), "cargo ");
+        tape(&mut s, "build --release");
+        for _ in 0.."--release".len() {
+            s.gauche();
+        }
+        s.effacer_fin();
+        assert_eq!((s.texte(), s.curseur()), ("cargo build ", 12));
+        s.gauche();
+        s.effacer_debut();
+        assert_eq!((s.texte(), s.curseur()), (" ", 0));
+        let mut m = Saisie::default();
+        m.inserer("une\ndeux trois");
+        m.effacer_debut();
+        assert_eq!(m.texte(), "une\n", "Ctrl-U s'arrête au début de la ligne");
     }
 
     /// L'affichage tient dans la largeur : les caractères larges comptent deux
