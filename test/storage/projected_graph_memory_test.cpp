@@ -229,15 +229,21 @@ protected:
         return unescaped("MATCH (n:C) MATCH (n)-[:C_FROM]->(p:P) WHERE p._uuid IN [" + quotedList +
                          "] RETURN count(n);");
     }
+    // Rend la montée de la pointe du RSS pendant f.
     template<typename F>
-    void peakOf(const std::string& phase, F f) {
+    int64_t peakOf(const std::string& phase, F f) {
         malloc_trim(0);
         const auto before = peakMib();
         f();
         fprintf(stderr, "[pointe] %s : pointe du RSS %ld -> %ld Mio (+%ld)\n", phase.c_str(),
             static_cast<long>(before), static_cast<long>(peakMib()),
             static_cast<long>(peakMib() - before));
+        return peakMib() - before;
     }
+    // Une liste littérale de 72 652 chaînes fait 2,2 Mo de texte : la lier ne doit pas coûter des
+    // Gio. Le pliage de la liste montait un évaluateur littéral par élément, chacun avec un vecteur
+    // de 2 048 places (environ 50 Kio) : 3,5 Gio de pointe.
+    static constexpr int64_t MAX_PEAK_MIB = 512;
 };
 
 TEST_F(LongQueryPeak, Parse) {
@@ -247,26 +253,38 @@ TEST_F(LongQueryPeak, Parse) {
 
 TEST_F(LongQueryPeak, Prepare) {
     const auto q = joinQuery();
-    peakOf("préparation (analyse, liaison, plan)", [&] {
-        auto statement = conn->prepare(q);
-        ASSERT_TRUE(statement->isSuccess()) << statement->getErrorMessage();
-    });
+    EXPECT_LT(peakOf("préparation (analyse, liaison, plan)",
+                  [&] {
+                      auto statement = conn->prepare(q);
+                      ASSERT_TRUE(statement->isSuccess()) << statement->getErrorMessage();
+                  }),
+        MAX_PEAK_MIB)
+        << "[check: binding-a-long-literal-list-stays-small]";
 }
 
 TEST_F(LongQueryPeak, Query) {
     const auto q = joinQuery();
-    peakOf("requête entière", [&] {
-        auto r = conn->query(q);
-        ASSERT_TRUE(r->isSuccess()) << r->getErrorMessage();
-    });
+    EXPECT_LT(peakOf("requête entière",
+                  [&] {
+                      auto r = conn->query(q);
+                      ASSERT_TRUE(r->isSuccess()) << r->getErrorMessage();
+                  }),
+        MAX_PEAK_MIB)
+        << "[check: a-query-with-a-long-literal-list-stays-small]";
 }
 
 TEST_F(LongQueryPeak, ReturnSize) {
     const auto q = unescaped("RETURN size([" + quotedList + "]);");
-    peakOf("RETURN size(liste) entière", [&] {
-        auto r = conn->query(q);
-        ASSERT_TRUE(r->isSuccess()) << r->getErrorMessage();
-    });
+    int64_t size = -1;
+    EXPECT_LT(peakOf("RETURN size(liste) entière",
+                  [&] {
+                      auto r = conn->query(q);
+                      ASSERT_TRUE(r->isSuccess()) << r->getErrorMessage();
+                      size = r->getNext()->getValue(0)->getValue<int64_t>();
+                  }),
+        MAX_PEAK_MIB)
+        << "[check: a-long-literal-list-stays-small]";
+    EXPECT_EQ(size, NUM_PARENTS);
 }
 
 TEST_F(ProjectedGraphMemory, TheFilterWithAParameterListGivesBackItsMemory) {
