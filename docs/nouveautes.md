@@ -29,6 +29,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **15 nov. — Une méthode se retrouve sous son type, même hors de son bloc.** Un récepteur Go générique
+  (`func (p *Pile[K])`) nomme son type `Pile` (deux de ses méthodes n'en avaient aucun) ; un bloc `impl`
+  Rust porte le nom court du type (`impl<U> Foo<U>` → `Foo`) et le dit (`extends_type`) ; le chemin écrit
+  du propriétaire est gardé (`parent_path` : `kz::Foo`, `crate::a::Barre`) ; une définition C++ hors classe
+  est une méthode quand sa classe est dans le fichier ; `impl crate::Outil for …` et `impl Conv<u8> for …`
+  se disent IMPLEMENTS. Deux colonnes neuves sur Scope, vides sur une base d'avant (codeparsers `5885e13`).
 - **14 nov. — `~/lib/b` et `#utils/a` sont du projet, plus des paquets inconnus.** Les `paths` d'un
   `tsconfig.json` (commentaires et virgules finales compris) sont lus comme alias du dépôt, et les imports
   internes `#…` de Node sont toujours du projet ; un alias que les manifestes ne disent pas (celui de vite)
