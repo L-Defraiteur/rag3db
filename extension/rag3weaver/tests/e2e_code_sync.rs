@@ -97,6 +97,44 @@ fn source_a_trois_fichiers() -> Vec<(String, String)> {
     ]
 }
 
+/// **Les exclusions du manifeste** (décision de Lucie du 14 novembre 2026, page
+/// `docs/recherche/14-11-2026/01-ce-qu-on-n-indexe-pas.md`, règles 1 et 5) : un
+/// fichier de code minifié (une ligne au-delà de `minified_line_max_bytes`) et un
+/// fichier de code au-delà de `code_file_max_bytes` ne sont pas indexés, et le
+/// rapport les compte sous leur raison ; un fichier de 700 Ko écrit à la main
+/// l'est. Les seuils viennent du manifeste (`workspace.exclude`), pas de constantes.
+#[test]
+#[ignore]
+fn les_exclusions_du_manifeste_ecartent_le_minifie_et_le_trop_gros_et_le_disent() {
+    let workspace: rag3weaver::backend_code::WorkspaceConfig = serde_json::from_value(serde_json::json!({
+        "index": "code",
+        "exclude": {"minified_line_max_bytes": 5000, "code_file_max_bytes": 1048576}
+    }))
+    .expect("le manifeste déclare ses exclusions sous workspace.exclude");
+    let options = SourceSyncOptions { generated: workspace.generated.clone(), ..Default::default() };
+    let mut catalog = catalogue();
+    let mut source = source_a_trois_fichiers();
+    // Un bundle d'une ligne de 12 000 octets.
+    source.push(("app.js".to_string(), format!("function minifie(){{{}}}\n", "var a=1;".repeat(1500))));
+    // Une table générée de 1,8 Mio.
+    source.push(("table.c".to_string(), format!("int table[] = {{\n{}}};\n", "1,\n".repeat(600_000))));
+    // Un fichier écrit à la main de 700 Ko.
+    source.push(("gros.rs".to_string(), format!("pub fn gros() {{}}\n{}", "// une ligne écrite à la main\n".repeat(23_000))));
+    let r = sync_source(&mut catalog, &Snapshot::new("depot", source), &options, &mut |_| {}).unwrap();
+    assert_eq!(
+        r.files_set_aside.get("minifié — une ligne au-delà du seuil du manifeste"),
+        Some(&1),
+        "le minifié est écarté et compté : {r:?}"
+    );
+    assert_eq!(
+        r.files_set_aside.get("fichier de code au-delà de la taille maximale du manifeste"),
+        Some(&1),
+        "le trop gros est écarté et compté : {r:?}"
+    );
+    assert_eq!(scopes_nommes(&catalog, "minifie"), 0, "le minifié n'a aucun scope");
+    assert_eq!(scopes_nommes(&catalog, "gros"), 1, "un fichier de 700 Ko écrit à la main reste indexé");
+}
+
 /// **Un fichier généré n'est pas indexé, et le rapport le compte** ; la règle
 /// levée, il l'est ; la règle remise, ce qu'il avait laissé est retiré.
 #[test]
