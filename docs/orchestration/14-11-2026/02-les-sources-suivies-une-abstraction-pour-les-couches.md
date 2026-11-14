@@ -136,3 +136,21 @@ l'ancienne ; en français dans les docs : « les suivies ». Lucie peut dire aut
 
 Ordre : 2a′-1 et 2a′-2 (ED, rien ne change pour eux) ; 1b (arbre principal, la copie réelle migre) ;
 puis la généralisation de la déclaration (arbre principal, ED relit) ; puis 2a′-3.
+
+## Le flux multi-env (Lucie, 15 h 40) : develop / staging / main, hotfix sur main, resync main → develop
+
+Pour **la base de partage**, la déduction ne pose pas de problème : après un hotfix sur main et un resync
+vers develop, le parent commun de develop et de main est le commit du hotfix, récent ; la racine calculée
+des trois avance à chaque resync (une génération de plus, l'ancienne reste pour les lectures épinglées) ;
+et le hotfix est la même version par contenu dans les trois couches, embarquée une fois.
+
+Pour **la parente au sens métier**, un flux multi-env n'est pas une arborescence mais un cycle dans le
+temps (develop → staging → main, puis main → develop) : le parent commun le plus récent de staging est
+develop après une promotion, main après un hotfix redescendu, selon le dernier événement. La déduction
+dirait tantôt l'un tantôt l'autre, et « ambiguë » à égalité — c'est la vérité du graphe, pas une erreur.
+La parente métier se **déclare** une fois dans le manifeste.
+
+Ajout : **quand des suivies forment un cycle de fusions, l'état le dit** (« flux détecté entre develop,
+staging et main : déclare leurs parentes ») au lieu d'une ambiguïté qui changerait au prochain resync.
+Témoin : trois branches avec promotions et redescentes, l'état nomme le flux et ne pose aucune parente
+inférée entre elles.
