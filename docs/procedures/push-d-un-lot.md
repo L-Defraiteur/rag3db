@@ -53,6 +53,11 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
 
 **Le rejeu court d'un lot d'une ligne (c7 et recherche, 14 nov. 2026)** : un lot qui ne touche ni l'arrêt, ni le bus, ni le code indexé (une ligne de lib, un crochet de test) n'a pas à rejouer `e2e_lectures` et `e2e_code`. Le script de passe de recherche (`~/.cache/rag3weaver-build/passe_epinglee.sh`) prend `SUITES=<liste>` (séparée par des virgules), qui remplace la liste des suites e2e, ou `SUITES=-`, qui n'en joue aucune. Le témoin, check_features avec sa preuve, la lib entière et le témoin navigateur restent. **Un journal de passe se produit par la passe, jamais à la main** : la garde le lit comme preuve, et un journal composé, même des seuls vrais résultats, la contourne (le 14 novembre, la ligne `try_update` a refait sa passe entière pour cette raison).
 
+**La passe épinglée vit dans le dépôt** (c7, 14 nov. 2026) : `tools/poste/passe_epinglee.sh`, avec son témoin
+`tools/poste/test_passe_epinglee.sh`. Les postes l'appellent par sa copie `~/.cache/rag3weaver-build/passe_epinglee.sh`,
+recopiée depuis master au mot de c7 (sha256 avant et après, l'ancienne gardée), comme `push_garde.sh`. Une copie du cache
+qui diffère du dépôt se corrige dans le dépôt, puis se recopie : jamais à la main dans le cache.
+
 ### Portée commune des validations Linux
 
 `run_e2e.sh` et `scripts/temoins_navigateur.sh` entrent désormais par
