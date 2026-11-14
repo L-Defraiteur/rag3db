@@ -49,6 +49,27 @@ plate.
   Le poser une fois n'économiserait donc que l'analyse d'un texte de 150 octets. **La projection
   courte par requête reste la forme du dense.**
 
+## 2 bis. L'inflexion du 14 novembre 2026, 21 h 30 : pas de cache dans ce lot
+
+**Un ensemble posé une fois par (couche, rang) mentirait sous 2a′-1.** Le rang reste à 0 pendant que
+l'ingest insère et retire. Un ensemble posé à l'ouverture serait donc périmé dès la première écriture :
+les scopes neufs manqueraient aux recherches, et les retirés y resteraient. Aucune époque d'écriture
+ne l'invaliderait. Un cache n'est juste qu'avec une époque, et c'est l'écrivain de 2a′-2 qui la
+donne, quand chaque écriture publie un rang neuf et que la couche de travail vit à part.
+
+**Ce lot, au mot de c7** :
+- le masque en prédicat, **sans cache** : une requête courte par recherche, pour le lexical comme
+  pour le dense. Elle remplace les 5,9 s du masque et de l'`IN`, et les 2,9 Mo de la projection ;
+- les racines admises restent un `HashSet` côté Rust, qui sert à projeter les k résultats : 20 ms
+  sans filtre, une requête courte avec filtre ;
+- le témoin 3 devient « le masque ne se résout plus par liste » : le compteur reste à 0 ;
+- le cache par (couche, rang) viendra avec l'écrivain, mesuré alors contre le prédicat seul ;
+- la mesure du lot : le prédicat seul contre R (le seuil des 20 %) et contre les 5,9 s
+  d'aujourd'hui, un RSS plat sur dix appels, et la parité de banc.
+
+Le § 2 ci-dessus (« ce qui se pose une fois ») décrit donc la forme visée avec l'écrivain, et non
+celle de ce lot.
+
 ## 3. Le filtre de l'utilisateur se compose
 
 - **Lexical** : les offsets du filtre (une requête courte, comme sur R) intersectés avec

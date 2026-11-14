@@ -34,12 +34,13 @@ pub const JUSQU_A: &str = "_jusqu_a";
 /// le catalogue et ses vues de lecture (la `Visibilite` est copiée, l'`Arc` reste le même).
 #[derive(Default)]
 pub struct EnsemblesPoses {
-    /// Combien de fois le masque des versions a été résolu : un témoin s'y lit.
+    /// Combien de fois le masque des versions a été résolu **en liste** (les références par lots, puis
+    /// un `_uuid IN [...]`) : un témoin y lit qu'il ne l'est plus, le masque étant un prédicat.
     pub(crate) resolutions: AtomicUsize,
 }
 
 impl EnsemblesPoses {
-    /// Le nombre de résolutions du masque des versions depuis l'ouverture.
+    /// Le nombre de résolutions du masque des versions en liste depuis l'ouverture.
     pub fn resolutions(&self) -> usize {
         self.resolutions.load(Ordering::Relaxed)
     }
