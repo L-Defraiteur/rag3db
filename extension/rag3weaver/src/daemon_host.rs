@@ -248,6 +248,10 @@ pub struct DaemonHost {
     chat_meter: Arc<crate::meter::Meter>,
     /// Le journal des runs (`RAG3WEAVER_RUNS_DIR`) : un fichier par run racine.
     journal: Arc<journal_des_runs::JournalDesRuns>,
+    /// **Les fils qui suivent un premier index** (`index-suivi:<id>`), joints quand l'hôte se défait
+    /// (ticket « un fil index-suivi survit à la fin du processus de test ») : détachés, ils tenaient
+    /// leur backend au-delà de l'hôte, et un processus pouvait finir sous eux.
+    suivis: Mutex<Vec<std::thread::JoinHandle<()>>>,
     /// Les bilans à faire, jugés par le fil que le serveur lance.
     bilans: juge::FileDesBilans,
     /// Le modèle du juge (par défaut celui de l'hôte, Vertex) : à part de celui
@@ -370,6 +374,7 @@ impl DaemonHost {
             chat_model: chat::default_chat_model(),
             chat_meter: Arc::new(crate::meter::Meter::new()),
             journal: journal_des_runs::JournalDesRuns::par_defaut(),
+            suivis: Default::default(),
             bilans: juge::FileDesBilans::default(),
             juge_model: chat::default_chat_model(),
             teammates: Mutex::new(std::collections::HashSet::new()),
@@ -1885,6 +1890,15 @@ fn lignes_du_rendu(rendu: &Value) -> &[Value] {
 impl Drop for DaemonHost {
     fn drop(&mut self) {
         self.journal.vider();
+        // Les suiveurs voient l'hôte parti à leur prochain tour (250 ms au plus) et rendent leur
+        // backend : on les attend. Un suiveur qui rend lui-même le dernier Arc de l'hôte (en publiant)
+        // n'est pas joint par lui-même.
+        let ici = std::thread::current().id();
+        for f in std::mem::take(self.suivis.get_mut().unwrap_or_else(|p| p.into_inner())) {
+            if f.thread().id() != ici {
+                let _ = f.join();
+            }
+        }
     }
 }
 
