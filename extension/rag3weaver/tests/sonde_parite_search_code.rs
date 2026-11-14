@@ -43,6 +43,32 @@ fn releve_les_reponses_de_search_code() {
         format!("{avant:?} → {:?}", rag3weaver::code::scope_form(&cat).unwrap())
     };
     eprintln!("[parité] base {} ; forme {forme} ; k = {k}", base.to_string_lossy());
+    // **Des versions orphelines, à la demande** (le sens changé de la vue publiée, 14 nov.) : sous
+    // `RAG3WEAVER_PARITE_ORPHELINES` (un fichier de `_uuid` de Scope, un par ligne), toutes les
+    // occurrences des versions de ces Scope sont effacées de la copie. Leurs ScopeContent restent sans
+    // origine : une recherche sans filtre ne peut plus court-circuiter le masque. Les mêmes lignes au
+    // parent et au lot, sur la même copie neuve : la parité reste au bit près.
+    let orphelines = if let Some(f) = var("RAG3WEAVER_PARITE_ORPHELINES") {
+        let graines: Vec<String> = std::fs::read_to_string(&f).expect("les Scope à rendre orphelins").lines()
+            .map(str::trim).filter(|l| !l.is_empty()).map(|l| format!("'{l}'")).collect();
+        let conn = backend.catalog.lock().unwrap().conn_arc();
+        let compter = || conn.execute("MATCH (d:ScopeContent) WHERE NOT EXISTS { MATCH (d)-[:ScopeContent_DERIVED_FROM]->(:Scope) } RETURN count(d)")
+            .map(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()).unwrap_or(-1)).unwrap_or_else(|e| panic!("compter les orphelines : {e}"));
+        let avant = compter();
+        let cibles: Vec<String> = conn.execute(&format!(
+            "MATCH (d:ScopeContent)-[:ScopeContent_DERIVED_FROM]->(s0:Scope) WHERE s0._uuid IN [{}] \
+             MATCH (d)-[:ScopeContent_DERIVED_FROM]->(s:Scope) RETURN DISTINCT s._uuid", graines.join(", ")))
+            .expect("les occurrences des versions visées").rows.iter()
+            .filter_map(|l| l.first().and_then(|v| v.as_str()).map(|u| format!("'{u}'"))).collect();
+        conn.execute(&format!("MATCH (s:Scope) WHERE s._uuid IN [{}] DETACH DELETE s", cibles.join(", ")))
+            .expect("effacer les occurrences");
+        let apres = compter();
+        eprintln!("[parité] orphelines : {} Scope visés, {} occurrences effacées ; versions sans origine {avant} → {apres}", graines.len(), cibles.len());
+        assert!(apres > avant, "aucune version orpheline fabriquée ({avant} → {apres})");
+        json!({"scope_vises": graines.len(), "occurrences_effacees": cibles.len(), "orphelines_avant": avant, "orphelines_apres": apres})
+    } else {
+        Value::Null
+    };
     // Tous les `_uuid` de Scope, à côté du relevé : la clé ne vaut que si R et la base migrée en
     // partagent l'essentiel (la migration 1b a recopié les lignes).
     {
@@ -103,7 +129,7 @@ fn releve_les_reponses_de_search_code() {
             releve.push(json!({"requete": q, "forme": nom, "ms": ms, "resultats": resultats}));
         }
     }
-    let doc = json!({"base": base.to_string_lossy(), "manifeste": manifeste.to_string_lossy(), "forme_de_la_base": forme, "k": k, "jeu": jeu, "releve": releve});
+    let doc = json!({"base": base.to_string_lossy(), "manifeste": manifeste.to_string_lossy(), "forme_de_la_base": forme, "orphelines": orphelines, "k": k, "jeu": jeu, "releve": releve});
     std::fs::write(&sortie, serde_json::to_string_pretty(&doc).unwrap()).expect("écrire le relevé");
     eprintln!("[parité] relevé écrit : {}", sortie.to_string_lossy());
 }
