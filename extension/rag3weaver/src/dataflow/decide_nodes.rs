@@ -341,6 +341,9 @@ pub struct DecideNode {
     /// **Un nom rendu avec l'étiquette** (voie llm) : le schéma demande aussi `name`, posé sur
     /// l'élément sous ce champ (l'archiviste : le sujet d'une fiche créée, 13 novembre 2026).
     name_as: Option<String>,
+    /// **Une phrase rendue avec l'étiquette** (voie llm) : le schéma demande aussi `about`, posée sur
+    /// l'élément sous ce champ (l'archiviste : ce que couvre une fiche créée, 14 novembre 2026).
+    about_as: Option<String>,
 }
 
 impl DecideNode {
@@ -458,23 +461,30 @@ impl DecideNode {
         Ok((labels[i].clone(), Some(*p)))
     }
 
-    fn by_llm(&self, llm: &dyn Llm, text: &str, labels: &[String], ctx: &mut NodeContext) -> Result<(String, Option<f64>, Option<String>), String> {
+    fn by_llm(&self, llm: &dyn Llm, text: &str, labels: &[String], ctx: &mut NodeContext) -> Result<(String, Option<f64>, Option<String>, Option<String>), String> {
         let cancel = ctx.cancellation();
-        let schema = match &self.name_as {
-            None => json!({
-                "type": "object",
-                "properties": {"label": {"type": "string", "enum": labels}},
-                "required": ["label"],
-                "additionalProperties": false,
-            }),
-            Some(_) => json!({
-                "type": "object",
-                "properties": {"label": {"type": "string", "enum": labels}, "name": {"type": "string"}},
-                "required": ["label", "name"],
-                "additionalProperties": false,
-            }),
-        };
-        let forme = if self.name_as.is_some() { "{\"label\": \"<étiquette>\", \"name\": \"<nom>\"}" } else { "{\"label\": \"<étiquette>\"}" };
+        // Le schéma : l'étiquette, puis le nom et la phrase quand ils sont demandés.
+        let mut properties = serde_json::Map::new();
+        properties.insert("label".into(), json!({"type": "string", "enum": labels}));
+        let mut required = vec![json!("label")];
+        let mut forme = String::from("{\"label\": \"<étiquette>\"");
+        if self.name_as.is_some() {
+            properties.insert("name".into(), json!({"type": "string"}));
+            required.push(json!("name"));
+            forme.push_str(", \"name\": \"<nom>\"");
+        }
+        if self.about_as.is_some() {
+            properties.insert("about".into(), json!({"type": "string"}));
+            required.push(json!("about"));
+            forme.push_str(", \"about\": \"<phrase>\"");
+        }
+        forme.push('}');
+        let schema = json!({
+            "type": "object",
+            "properties": properties,
+            "required": required,
+            "additionalProperties": false,
+        });
         let opts = GenOptions::default()
             .with_response_format(ResponseFormat::strict_schema("decision", schema))
             .with_temperature(0.0)
@@ -523,13 +533,14 @@ impl DecideNode {
             .and_then(|v| v.get("label").and_then(Value::as_str).map(str::to_string))
             .unwrap_or_else(|| reply.trim_matches('"').to_string());
         let name = parsed.as_ref().and_then(|v| v.get("name").and_then(Value::as_str)).map(|s| s.trim().to_string());
+        let about = parsed.as_ref().and_then(|v| v.get("about").and_then(Value::as_str)).map(|s| s.trim().to_string());
         if !labels.contains(&label) {
             return Err(format!(
                 "Decide : « {label} » n'est pas une étiquette admise ({})",
                 labels.join(", ")
             ));
         }
-        Ok((label, None, name))
+        Ok((label, None, name, about))
     }
 }
 
@@ -569,6 +580,9 @@ impl Node for DecideNode {
         if let Some(n) = &self.name_as {
             config["name_as"] = json!(n);
         }
+        if let Some(a) = &self.about_as {
+            config["about_as"] = json!(a);
+        }
         Some(Box::new(config))
     }
     fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
@@ -594,10 +608,10 @@ impl DecideNode {
     fn label(&self, ctx: &mut NodeContext, element: Value, decider: Option<&dyn Decider>, llm: Option<&dyn Llm>) -> Result<Value, String> {
         let text = self.text_of(&element);
         let labels = self.labels_for(&element)?;
-        let (label, probability, name) = match (self.via, decider, llm) {
+        let (label, probability, name, about) = match (self.via, decider, llm) {
             (Via::Auto | Via::Decider, Some(d), _) => {
                 let (l, p) = self.by_decider(d, &text, &labels)?;
-                (l, p, None)
+                (l, p, None, None)
             }
             (Via::Decider, None, _) => return Err("Decide : via='decider' mais aucun 'decider' n'est servi".into()),
             (Via::Auto | Via::Llm, _, Some(l)) => self.by_llm(l, &text, &labels, ctx)?,
@@ -613,6 +627,9 @@ impl DecideNode {
         out[self.target.as_str()] = json!(label);
         if let (Some(champ), Some(n)) = (&self.name_as, name) {
             out[champ.as_str()] = json!(n);
+        }
+        if let (Some(champ), Some(a)) = (&self.about_as, about) {
+            out[champ.as_str()] = json!(a);
         }
         if let Some(p) = probability {
             out[format!("{}_probability", self.target).as_str()] = json!(p);
@@ -664,6 +681,10 @@ impl NodeFactory for DecideNodeFactory {
                 let n = str_param(config, "name_as", "")?;
                 (!n.is_empty()).then_some(n)
             },
+            about_as: {
+                let a = str_param(config, "about_as", "")?;
+                (!a.is_empty()).then_some(a)
+            },
         }))
     }
     fn node_type(&self) -> &str {
@@ -688,6 +709,7 @@ impl NodeFactory for DecideNodeFactory {
                 param("as", ConfigParamType::String, false, Some(json!("label")), "le champ où poser l'étiquette ; sa probabilité, quand le decider la donne, va sous <as>_probability"),
                 param("via", ConfigParamType::String, false, Some(json!("auto")), "auto, decider ou llm"),
                 param("name_as", ConfigParamType::String, false, Some(json!("")), "voie llm : le modèle rend aussi un nom (schéma {label, name}), posé sur l'élément sous ce champ ; vide : l'étiquette seule"),
+                param("about_as", ConfigParamType::String, false, Some(json!("")), "voie llm : le modèle rend aussi une phrase (schéma {label, …, about}), posée sur l'élément sous ce champ ; vide : pas de phrase"),
                 param("max_tokens", ConfigParamType::Int, false, Some(json!(2048)), "le plafond de jetons de l'appel au modèle (voie llm) ; la réflexion d'un modèle y passe avant l'étiquette"),
             ],
         }

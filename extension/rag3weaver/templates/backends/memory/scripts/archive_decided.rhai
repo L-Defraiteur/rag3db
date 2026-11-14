@@ -32,6 +32,28 @@ fn nom_date(nom) {
     }
     a_mois && a_nombre
 }
+// **Une phrase qui dit le sujet** (14 novembre 2026, la première passe : « 1. », « Accepté par c7. »).
+// Au moins six mots, sans compter les marques de liste ni les numéros de tête.
+fn phrase_suffisante(p) {
+    if type_of(p) != "string" { return false; }
+    let n = 0;
+    for m in p.split(" ") { if m != "" && m != "-" && m != "*" { n += 1; } }
+    n >= 6
+}
+// La première phrase de la section qui en a au moins six mots : les lignes de titre, de tableau ou de
+// code passent ; une ligne de liste perd sa marque.
+fn premiere_phrase(texte) {
+    let morceaux = texte;
+    morceaux.replace(". ", ".\n");
+    for m in morceaux.split("\n") {
+        let l = m;
+        l.trim();
+        if l.starts_with("- ") || l.starts_with("* ") { l = l.sub_string(2); }
+        if l == "" || l.starts_with("#") || l.starts_with("|") || l.starts_with("`") { continue; }
+        if phrase_suffisante(l) { return l; }
+    }
+    ""
+}
 fn sujets_voisins(a, b) {
     if type_of(a) != "string" || type_of(b) != "string" { return false; }
     let ma = sujet_mots(a);
@@ -95,10 +117,13 @@ if kind == "create" && !a_rejoint && nom_date(fiche) {
     throw `archive : le sujet « ${fiche} » est une date ou un moment, pas un chantier — un journal donne une fiche par chantier`;
 }
 let texte = s.text;
-let about = texte;
-let point = about.index_of(". ");
-if point > 0 { about = about.sub_string(0, point + 1); }
-if about.len() > 200 { about = about.sub_string(0, 200) + "…"; }
+// La phrase que le modèle donne (Decide about_as='subject_about') ; trop courte, la première phrase
+// de la section qui a au moins six mots ; sans elle, la création est refusée et se dit.
+let about = if phrase_suffisante(s.subject_about) { s.subject_about } else { premiere_phrase(texte) };
+if about.len() > 300 { about = about.sub_string(0, 300) + "…"; }
+if kind == "create" && !a_rejoint && about == "" {
+    throw `archive : aucune phrase d’au moins six mots ne dit ce que couvre « ${fiche} »`;
+}
 let key = #{ fiche: fiche, source: s.chemin, section: s.title };
 let fiche_record = if a_rejoint { rejoint } else { #{ name: fiche, about: about, state: "proposed", via: "archiviste" } };
 if kind == "create" && !a_rejoint { proposed.push(fiche_record); }
