@@ -24,6 +24,13 @@ fn env_n(nom: &str, defaut: usize) -> usize {
     std::env::var(nom).ok().and_then(|v| v.parse().ok()).unwrap_or(defaut)
 }
 
+fn rss_mio() -> f64 {
+    std::fs::read_to_string("/proc/self/status")
+        .ok()
+        .and_then(|s| s.lines().find(|l| l.starts_with("VmRSS:")).and_then(|l| l.split_whitespace().nth(1)).and_then(|k| k.parse::<f64>().ok()))
+        .map_or(f64::NAN, |k| k / 1024.0)
+}
+
 fn chrono<T>(chauffe: usize, tours: usize, mut f: impl FnMut() -> T) -> (f64, f64, T) {
     for _ in 0..chauffe {
         f();
@@ -49,7 +56,12 @@ fn l_interieur_du_noeud_lexical() {
     let role = std::env::var("RAG3WEAVER_SONDE_ROLE").unwrap_or_else(|_| "versions".into());
     let (chauffe, tours) = (env_n("RAG3WEAVER_SONDE_CHAUFFE", 1), env_n("RAG3WEAVER_SONDE_TOURS", 5));
     let prepared = PreparedBackend::load(std::path::Path::new(&manifeste)).expect("le manifeste");
-    let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), None).expect("ouvrir le backend");
+    let backend = {
+        // L'embarqueur du manifeste, comme l'hôte : sans lui, le dense et le creux disent « not available ».
+        let embarqueur = prepared.connect_embedder().map(|(e, _)| e).map_err(|e| eprintln!("[sonde] AVERTISSEMENT embarqueur absent : {e}")).ok();
+        eprintln!("[sonde] embarqueur : {}", if embarqueur.is_some() { "connecté" } else { "ABSENT" });
+        prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), embarqueur).expect("ouvrir le backend")
+    };
     let mut cat = backend.catalog.lock().unwrap();
     let forme = rag3weaver::code::scope_form(&cat).unwrap();
     eprintln!("[sonde] rôle {role} ; forme {forme:?}");
@@ -105,5 +117,73 @@ fn l_interieur_du_noeud_lexical() {
         "[sonde] 3 filtre en offsets   médiane {m3:>8.1} ms   max {x3:>8.1} ms   {} offsets",
         offsets.map_or(0, |o| o.len())
     );
+    // **Pour le ticket moteur** : la requête telle que `resolve_filter_to_ids` l'écrit, son plan, et la
+    // même résolution par `UNWIND` et un accès par clé primaire.
+    let mut parseur = rag3weaver::filter::FilterParser::new(&std::collections::HashMap::new(), dialecte.as_ref());
+    let analyse = parseur.parse_condition(&filtre, &cible.parent_table, "n").expect("le filtre");
+    let requete = dialecte.filter_resolve_offsets(&cible.parent_table, "n", &analyse.match_clauses, &analyse.combine_where(), None);
+    eprintln!("[sonde] requête de resolve_filter_to_ids : {requete}");
+    eprintln!("[sonde] paramètres : {}", analyse.params.iter().map(|p| p.name.clone()).collect::<Vec<_>>().join(", "));
+    match conn.execute_with_params(&format!("EXPLAIN {requete}"), &analyse.params) {
+        Ok(r) => {
+            for l in &r.rows {
+                for v in l {
+                    for ligne in format!("{}", v.as_str().unwrap_or(&format!("{v:?}"))).lines() {
+                        eprintln!("[sonde] EXPLAIN | {ligne}");
+                    }
+                }
+            }
+        }
+        Err(e) => eprintln!("[sonde] EXPLAIN refusé : {e}"),
+    }
+    let par_cle = format!("UNWIND $ids AS u MATCH (n:{} {{_uuid: u}}) RETURN OFFSET(id(n))", cible.parent_table);
+    let liste = QueryParam::new("ids", CypherValue::List(versions.iter().cloned().map(CypherValue::String).collect()));
+    let (m4, x4, n4) = chrono(chauffe, tours, || conn.execute_with_params(&par_cle, std::slice::from_ref(&liste)).unwrap().rows.len());
+    eprintln!("[sonde] 4 même ensemble par UNWIND et clé primaire   médiane {m4:>8.1} ms   max {x4:>8.1} ms   {n4} offsets");
+    eprintln!("[sonde] RSS {:.0} Mio", rss_mio());
     eprintln!("[sonde] RÉSUMÉ 1+2+3 = {:.1} ms (le nœud lexical sans filtre : 6 928 ms en médiane à la mesure par étage)", m1 + m2 + m3);
+
+    // **Les ensembles pour le banc de lucivy** (`RAG3WEAVER_SONDE_OFFSETS=<dossier>`) : les offsets que
+    // `allowed_ids_for` passe à lucivy, un u64 par ligne. Deux fichiers : sans filtre, et pour les
+    // racines sous `<racine>/src/include/`. Le second est **approché** : il prend les `Scope` dont le
+    // chemin commence par ce préfixe, sans repasser par la traduction du paramètre `scope` de l'outil.
+    if let Some(dossier) = std::env::var_os("RAG3WEAVER_SONDE_OFFSETS") {
+        let dossier = std::path::PathBuf::from(dossier);
+        std::fs::create_dir_all(&dossier).unwrap();
+        let ecrire = |nom: &str, versions: &[String]| {
+            let f = FilterCondition::Field {
+                key: "_uuid".into(),
+                value: FilterValue::List(versions.iter().cloned().map(CypherValue::String).collect()),
+            };
+            let mut o = cat.resolve_filter_to_ids(&cible.parent_table, &f, &cible).unwrap().unwrap_or_default();
+            o.sort_unstable();
+            let texte: String = o.iter().map(|i| format!("{i}\n")).collect();
+            std::fs::write(dossier.join(nom), texte).unwrap();
+            eprintln!("[sonde] écrit {} : {} offsets", dossier.join(nom).display(), o.len());
+        };
+        ecrire("sans-filtre.ids", &versions);
+        let racine = std::env::var("RAG3WEAVER_SONDE_RACINE").unwrap_or_else(|_| "/home/lucied/git_workspaces/rag3db".into());
+        let prefixe = format!("{racine}/src/include/");
+        let r = conn
+            .execute_with_params(
+                &format!("MATCH (s:{}) WHERE s.file_path STARTS WITH $p RETURN s._uuid", projection.entity),
+                &[QueryParam::new("p", CypherValue::String(prefixe.clone()))],
+            )
+            .unwrap();
+        let mut sous: Vec<String> = r.rows.iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::to_string)).collect();
+        sous.sort();
+        let mut v = std::collections::HashSet::new();
+        for lot in sous.chunks(5_000) {
+            let p = QueryParam::new("uuids", CypherValue::List(lot.iter().cloned().map(CypherValue::String).collect()));
+            for l in conn.execute_with_params(&masque, &[p]).unwrap().rows {
+                if let Some(id) = l.get(1).and_then(|v| v.as_str()) {
+                    v.insert(id.to_string());
+                }
+            }
+        }
+        let v: Vec<String> = v.into_iter().collect();
+        eprintln!("[sonde] {} racines sous {prefixe}, {} versions", sous.len(), v.len());
+        ecrire("chemin-src-include.ids", &v);
+    }
 }
+
