@@ -699,3 +699,22 @@ est au ticket fermé `2026-11-13-un-fournisseur-a-la-demande-ouvert-par-l-hote-n
   par capacité, l'éviction quand plus aucun bail, la relance unique.
 - **Suites** : `2026-11-14-un-creux-a-la-demande-n-a-pas-de-dual.md` et
   `2026-11-14-le-dense-a-son-embarqueur-a-cote-de-la-tenue-generique.md`.
+
+4f43b712d7e61903), fournisseur de groupe à part sur card2, port 7891 (service 12783f97e8dbdd45), à la
+demande (60 s, 30 s) ; le dense, le creux, le relecteur et l'OCR citent l'activation `bge-m3`. L'hôte de
+Lucie n'a jamais été appelé.
+- **L'ouverture** ne lance rien.
+- **L'index 1** (80 fichiers, 2219 morceaux) active le groupe pendant l'appel. Identité au /sante :
+  bge-m3 1024, creux, dual, relecteur bge-reranker-v2-m3, OCR ppocrv6-tiny, `relances` 0.
+- **Une `search_code` relue** (20 candidats) relit dans le même processus.
+- **Les baux** : jusqu'à deux tenus ensemble, rendus à +30 s ; l'éviction suit à +60,5 s.
+- **L'index 2** réactive le groupe en 6 s ; puis les baux sont rendus et le groupe s'évince de même.
+- **L'OCR** n'est pas exercé par l'hôte : aucun outil du backend de code ne l'appelle.
+
+**La marge sur card2** : le groupe a tenu jusqu'à 11,4 Gio (le 7879 en place : 8,3), et card2 est
+montée à 30 573 Mio sur 32 624, soit 2 Gio libres au pic. Règle (c7) : un groupe à côté des résidents
+de card2 ne part qu'avec 13 Gio libres, ou le 7879 arrêté.
+
+**L'index 1 a pris 904 s** (bge-m3 dense et creux, carte presque pleine, deux lourds à côté). La cause
+n'est pas tirée. À faire : une mesure à part, card2 calme, pour départager le modèle et la carte pleine.
+Scripts et journaux à luciepc : `~/.cache/rag3weaver-build/groupe-vrai-jeu/`.
