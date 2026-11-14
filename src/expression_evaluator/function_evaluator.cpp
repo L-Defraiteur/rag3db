@@ -51,7 +51,10 @@ bool FunctionExpressionEvaluator::selectInternal(SelectionVector& selVector) {
     // implemented (e.g. list_contains). We should remove this if statement eventually.
     if (function->selectFunc == nullptr) {
         KU_ASSERT(resultVector->dataType.getLogicalTypeID() == LogicalTypeID::BOOL);
-        runExecFunc();
+        // La donnée liée, comme evaluate() : une fonction qui y garde un état (l'ensemble haché de
+        // list_contains) le retrouve aussi dans un FILTER.
+        bindData->clientContext = localState.clientContext;
+        runExecFunc(bindData.get());
         return updateSelectedPos(selVector);
     }
     return function->selectFunc(parameters, selVector, bindData.get());
