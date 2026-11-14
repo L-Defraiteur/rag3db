@@ -113,6 +113,9 @@ pub struct Vue {
     depuis: Instant,
     /// « dépôt · branche · tâche », jamais l'id d'un backend.
     pub entete: String,
+    /// Un repli à dire dans la zone vivante, sur la ligne du texte en cours quand
+    /// rien n'y passe : sous mosh, la commande qui relit le journal (lot tty-7).
+    pub repli: Option<String>,
     /// Le bloc de code ouvert (```) : il se valide entier à sa clôture, pour se
     /// colorer d'un coup ; sa ligne en cours reste visible dans la zone vivante.
     bloc: Option<Bloc>,
@@ -142,6 +145,7 @@ impl Vue {
             politiques: HashMap::new(),
             depuis: Instant::now(),
             entete: String::new(),
+            repli: None,
             bloc: None,
             boite: crate::boite::Boite::default(),
             etat_hote: None,
@@ -457,7 +461,14 @@ impl Vue {
         // La fin de la ligne en cours, si elle déborde (elle ne déborde pas : `couper`).
         let en_cours = queue(&self.en_cours, largeur);
         let saisie = queue(&format!("› {}", self.saisie), largeur.saturating_sub(1));
-        let lignes = vec![Line::from(en_cours), self.ligne_vivante(largeur, maintenant), Line::from(saisie.clone())];
+        let haut = match &self.repli {
+            Some(r) if en_cours.is_empty() => {
+                let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
+                Line::from(Span::styled(queue(r, largeur), sourdine))
+            }
+            _ => Line::from(en_cours),
+        };
+        let lignes = vec![haut, self.ligne_vivante(largeur, maintenant), Line::from(saisie.clone())];
         f.render_widget(Paragraph::new(lignes), zone);
         let x = zone.x + (colonnes(&saisie) as u16).min(zone.width.saturating_sub(1));
         f.set_cursor_position((x, zone.y + 2));
@@ -589,6 +600,34 @@ mod tests {
         assert_eq!(cellule("ᚨ").fg, Color::Rgb(halo.0, halo.1, halo.2), "une rune du cercle");
         assert_eq!(cellule("I").fg, Color::Rgb(texte.0, texte.1, texte.2), "le libellé INVOCATION");
         assert!((0..buf.area.width).all(|x| buf[(x, ligne)].fg != Color::Red), "plus de rouge de base sur la ligne du thème");
+    }
+
+    /// Le repli (sous mosh, la commande qui relit le journal) se dit sur la
+    /// ligne du texte en cours quand rien n'y passe, en sourdine, et garde sa fin
+    /// (la commande) quand la largeur manque ; le texte en cours passe avant lui.
+    #[test]
+    fn the_fallback_shows_on_the_top_line_while_nothing_streams_and_keeps_its_command() {
+        let ligne0 = |v: &Vue, largeur: u16| {
+            let mut t = Terminal::with_options(TestBackend::new(largeur, 6), TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }).unwrap();
+            let instant = v.depuis;
+            let mut zone = None;
+            t.draw(|f| {
+                zone = Some(f.area());
+                v.dessiner_a(f, f.area(), instant)
+            })
+            .unwrap();
+            let (buf, z) = (t.backend().buffer().clone(), zone.unwrap());
+            ((0..z.width).map(|x| buf[(z.x + x, z.y)].symbol().to_string()).collect::<String>().trim_end().to_string(), buf[(z.x, z.y)].fg)
+        };
+        let mut v = Vue::new(100, true);
+        v.repli = Some("sous mosh, l'historique ne se relit pas au défilement : less /h/seance-1.txt".into());
+        let (texte, fg) = ligne0(&v, 100);
+        assert_eq!(texte, "sous mosh, l'historique ne se relit pas au défilement : less /h/seance-1.txt");
+        let s = rgb(&v.theme.couleurs.sourdine).unwrap();
+        assert_eq!(fg, Color::Rgb(s.0, s.1, s.2), "en sourdine");
+        assert!(ligne0(&v, 30).0.ends_with("less /h/seance-1.txt"), "{}", ligne0(&v, 30).0);
+        v.trame(&tok("en cours"));
+        assert_eq!(ligne0(&v, 100).0, "en cours", "le texte en cours passe avant le repli");
     }
 
     /// **Pour chaque thème embarqué**, ses couleurs atteignent les cellules du
