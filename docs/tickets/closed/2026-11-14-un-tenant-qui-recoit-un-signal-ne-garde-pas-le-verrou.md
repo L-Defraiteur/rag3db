@@ -1,6 +1,6 @@
 # Un tenant de poste qui reçoit un signal ne garde pas le verrou jusqu'à la fin de sa commande
 
-- **État** : ouvert (14 novembre 2026), relevé par G en jouant `test_poste.sh` pour l'enveloppe CPU.
+- **État** : corrigé (14 novembre 2026, branche tenant-signal) : le verrou de `poste push` est protégé dès qu'il est pris.
 - **Famille** : produit
 - **Gravité** : blocage ; une mesure peut entrer pendant que la commande d'un tenant interrompu tourne encore.
 - **Atteignable en service** : oui, en envoyant TERM à un `poste mesure|lourd` qui tient la place.
@@ -25,9 +25,18 @@ Le cas 6c lui-même.
 
 ## La cause
 
-Pas encore lue. Piste : le `trap … TERM` de `poste` sort par `exit 143` alors que la commande tourne encore,
-ce qui rend les descripteurs 8 et 9 ; à départager entre le `trap` et la manière dont le témoin envoie le signal.
+Lue le 14 novembre. Le cas concerne `poste push`, pas `poste lourd`. Le script prend le verrou, puis lit l'état
+de la CI de master (`etat_de_la_ci`, jusqu'à 20 s de réseau, ajoutée le 18 octobre en b0c0de81e), et **n'installe
+son `trap` qu'après**, une fois la commande lancée. Un TERM reçu pendant la lecture de la CI tuait donc le script :
+le verrou était rendu, la commande jamais lancée, sans un mot. Le témoin envoie son signal à 1 s : vert avec
+`POSTE_CI=0`, rouge avec la lecture de la CI.
 
 ## Pour le fermer
 
 Le cas 6c vert, sans relâcher les autres cas du témoin.
+
+## Le correctif
+
+Le `trap TERM INT HUP` est posé **dès la prise du verrou**, avant `etat_de_la_ci`. Un signal reçu avant la
+commande est dit, et la commande court ; celui reçu pendant la commande garde l'ancien message. Le cas 6c est
+vert avec la lecture de la CI : 29 OK et 0 ÉCHEC à `test_poste.sh`, contre ÉCHEC sur master.

@@ -266,6 +266,10 @@ case "$1" in
     done
     plafond="${POSTE_PUSH_MAX:-1200}"
     echo "$nom depuis $(date '+%H:%M:%S') (pid $$)" > "$PUSH_FICHE"
+    # Le verrou est protégé **dès qu'il est pris** (14 novembre 2026, cas 6c du témoin) : la lecture de la CI
+    # qui suit dure jusqu'à 20 s, et un TERM reçu pendant elle tuait le script avant le `trap` d'en dessous —
+    # la place rendue, la commande jamais lancée, sans un mot. Le signal est dit, et la commande court.
+    trap 'echo "poste push : $nom — signal reçu avant la commande ; le verrou reste tenu, la commande va courir" >&2' TERM INT HUP
     etat_de_la_ci 7>&-
     # L'entrée est gardée explicitement : sans job control, un `&` la remplace
     # par /dev/null, et le relais d'un autre poste (qui tient le verrou tant
