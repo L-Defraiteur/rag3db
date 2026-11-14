@@ -593,6 +593,10 @@ name = "sonde_cout_du_predicat"
 path = "tests/sonde_cout_du_predicat.rs"
 required-features = ["rag3db-native"]
 [[test]]
+name = "sonde_deplaces"
+path = "tests/sonde_deplaces.rs"
+required-features = ["rag3db-native", "code"]
+[[test]]
 name = "sonde_liste_analyse"
 path = "tests/sonde_liste_analyse.rs"
 [[test]]
