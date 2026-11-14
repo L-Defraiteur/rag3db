@@ -134,3 +134,89 @@ fn des_liens_reverses_pendant_un_point_de_reprise_ne_se_doublent_pas() {
     }
     assert_eq!(total, PAIRES as i64, "[check: liens-sans-doublon] {total} arêtes pour {PAIRES} paires");
 }
+
+/// **La forme du raté** (ticket du cœur) : la recherche par clé primaire rate les clés qu'un point de
+/// reprise est en train de déplacer de la mémoire de l'index vers le disque, c'est-à-dire des clés
+/// validées depuis le point de reprise précédent. Le premier cas lisait des clés déjà reprises, et il
+/// est resté vert sous les deux libs. Ici, à chaque tour, 300 morceaux neufs et leurs liens sont posés,
+/// puis reversés cinq fois pendant qu'une seconde connexion enchaîne les points de reprise : le premier
+/// d'entre eux déplace justement ces clés neuves.
+#[test]
+#[ignore]
+fn des_liens_neufs_reverses_pendant_le_point_de_reprise_qui_les_reprend_ne_se_doublent_pas() {
+    const PAR_TOUR: usize = 300;
+    const TOURS_NEUFS: usize = 30;
+    const REVERSEMENTS: usize = 5;
+    let d = tempfile::tempdir().unwrap();
+    let conn = Rag3dbConnection::new(d.path().join("base.rag3db")).expect("base sur disque");
+    let autre = conn.create_sync_connection().expect("seconde connexion");
+    let config = CatalogConfig { name: Some("liens-neufs-sous-point-de-reprise".into()), embedding_dim: 4, ..Default::default() };
+    let mut catalog = Catalog::new(Box::new(conn), Box::new(MockEmbedder::new(4)), config);
+    catalog.initialize().unwrap();
+    catalog.execute_raw("CALL auto_checkpoint=false").unwrap();
+    catalog.register_entity("Gauche", bout()).unwrap();
+    catalog.register_entity("Droite", bout()).unwrap();
+    catalog.register_relation_with("Lien", "Gauche", "Droite", HashMap::new()).unwrap();
+    let droites: Vec<String> = (0..PAR_TOUR).map(|i| format!("d{i}")).collect();
+    catalog.ingest_entities("Droite", droites.iter().map(|n| ligne(n)).collect()).unwrap();
+    let uuids_droite: Vec<String> = droites.iter().map(|d| catalog.entity_uuid("Droite", &ligne(d)).unwrap()).collect();
+    catalog.execute_raw("CHECKPOINT").unwrap();
+
+    // La seconde connexion enchaîne les points de reprise.
+    let arret = Arc::new(AtomicBool::new(false));
+    let points = Arc::new(AtomicUsize::new(0));
+    let fond = {
+        let (arret, points, autre) = (arret.clone(), points.clone(), autre.clone());
+        std::thread::spawn(move || {
+            while !arret.load(Ordering::Relaxed) {
+                if autre.execute("CHECKPOINT").is_ok() {
+                    points.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        })
+    };
+
+    let mut premier_rouge: Option<(usize, usize, i64)> = None;
+    let mut deja_la_vus = 0usize;
+    for tour in 0..TOURS_NEUFS {
+        let gauches: Vec<String> = (0..PAR_TOUR).map(|i| format!("t{tour}-g{i}")).collect();
+        catalog.ingest_entities("Gauche", gauches.iter().map(|n| ligne(n)).collect()).unwrap();
+        let paires: Vec<(String, String)> = gauches
+            .iter()
+            .zip(&uuids_droite)
+            .map(|(g, d)| (catalog.entity_uuid("Gauche", &ligne(g)).unwrap(), d.clone()))
+            .collect();
+        for versement in 0..=REVERSEMENTS {
+            for (g, d) in &paires {
+                catalog
+                    .link_jusqu_a("Lien", RefOrUuid::Uuid(g.clone()), RefOrUuid::Uuid(d.clone()), BTreeMap::new(), Disponibilites::AUCUNE)
+                    .unwrap();
+            }
+            let res = catalog.drain();
+            assert_eq!(res.failed, 0, "{:?}", res.warnings);
+            if versement > 0 {
+                deja_la_vus += 1;
+            }
+        }
+        let doubles = entier(
+            &catalog,
+            "MATCH (a:Gauche)-[r:Lien]->(b:Droite) WITH a, b, count(r) AS n WHERE n > 1 RETURN count(*)",
+        );
+        if doubles != 0 && premier_rouge.is_none() {
+            premier_rouge = Some((tour, PAR_TOUR, doubles));
+        }
+    }
+    arret.store(true, Ordering::Relaxed);
+    fond.join().unwrap();
+    let total = entier(&catalog, "MATCH ()-[r:Lien]->() RETURN count(r)");
+    println!(
+        "[témoin] {TOURS_NEUFS} tours de {PAR_TOUR} liens neufs, {deja_la_vus} reversements, {} points de reprise de la seconde connexion ; arêtes à la fin : {total} pour {}",
+        points.load(Ordering::Relaxed),
+        TOURS_NEUFS * PAR_TOUR
+    );
+    assert!(points.load(Ordering::Relaxed) > 0, "[check: un-point-de-reprise-a-croise] aucun point de reprise n'a tourné");
+    if let Some((tour, par_tour, doubles)) = premier_rouge {
+        panic!("[check: liens-neufs-sans-doublon] au tour {tour}, {doubles} paires sur {par_tour} portaient plus d'une arête");
+    }
+    assert_eq!(total, (TOURS_NEUFS * PAR_TOUR) as i64, "[check: liens-neufs-sans-doublon] {total} arêtes");
+}
