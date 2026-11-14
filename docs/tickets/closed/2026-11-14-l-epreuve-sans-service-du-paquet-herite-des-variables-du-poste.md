@@ -1,7 +1,9 @@
 # L'épreuve « sans service » du paquet Node.js hérite des variables du poste
 
-- **État** : ouvert (14 novembre 2026, embarquement, relevé en fermant
-  `2026-11-14-sans-service-la-demo-nodejs-embarque-quand-meme`)
+- **État** : fermé (14 novembre 2026, embarquement) : l'épreuve retire toutes les variables de
+  service, et le balayage avant l'index est une rouge connue à part, avec son ticket chez recherche.
+  Ouvert le 14 novembre, embarquement, relevé en fermant
+  `2026-11-14-sans-service-la-demo-nodejs-embarque-quand-meme`.
 - **Pour** : embarquement
 - **Famille** : produit
 - **Gravité** : témoin qui dépend du poste. Sur un poste qui pose un service, l'épreuve rougit sans
@@ -44,3 +46,23 @@ l'extension vecteur posée à côté par un lien, et les gabarits de master `8e8
   La démo d'alpha.1 balayait avant l'index le 14 novembre. **À départager** : écart de l'épreuve
   ou régression du binaire. Ce n'est pas la cause du ticket, mais l'épreuve ne peut pas verdir sans
   lui.
+
+## Le correctif (14 novembre 2026, embarquement)
+
+- **Les variables** : `test/essai.js` retire de son environnement, avant d'ouvrir le backend, toutes
+  les variables `RAG3WEAVER_SERVICE_*` et l'alias `RAG3WEAVER_EMBED_SERVICE`, et dit lesquelles. La
+  règle est celle de la démo.
+- **Deux sortes d'assertions** (décision de c7) :
+  - **les exigences** : l'avertissement « pas de service d'embarquement », `list_files`,
+    `grep_files`, l'index, la recherche après l'index et le repli du dense. Un rouge arrête l'épreuve.
+  - **les rouges connues**, liées à un ticket ouvert. Le balayage avant l'index en est une, avec
+    `docs/recherche/tickets/2026-11-14-search-code-avant-l-index-ne-balaie-plus-les-fichiers.md`. Elle
+    est dite ROUGE CONNUE sans arrêter l'épreuve, ou VERTE avec le ticket à fermer, et l'épreuve finit
+    sur `OK (rouges connues : N — …)`.
+- **Joué au portable** (binaire posé 012be4a58, lib 0c41f9fe6) :
+
+| Cas | Verdict |
+|---|---|
+| Avant le correctif, sur `3245f7037`, la variable du poste posée | **rouge** : « describe sans l'avertissement « pas de service d'embarquement » » |
+| Après, la variable du poste posée | **code 0** : « variables de service retirées : RAG3WEAVER_SERVICE_EMBED », l'avertissement vu, `OK (rouges connues : 1 — search_code avant tout index balaie les fichiers)` |
+| Après, sans aucune variable | **code 0**, même sortie |
