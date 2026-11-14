@@ -1026,10 +1026,30 @@ fn cypher_value_to_literal(value: &CypherValue) -> String {
     }
 }
 
-/// **Les paramètres en littéraux, bornés** (2a′-2) : jamais une grande liste en clair dans un Cypher,
-/// dont l'analyse coûte environ 50 Kio par élément (ticket du 14 novembre 2026). Pas encore bornée :
-/// le témoin `une_grande_liste_ne_s_ecrit_pas_en_clair` la voit rouge.
+/// **La plus longue liste qu'un Cypher accepte en clair.** Au-delà, la liaison d'une liste littérale
+/// coûte environ 50 Kio par élément dans le moteur (ticket du 14 novembre 2026, cause trouvée par le
+/// cœur) : 72 652 éléments en font 3,5 Gio.
+pub(crate) const PLUS_LONGUE_LISTE_EN_CLAIR: usize = 1_000;
+
+fn plus_longue_liste(v: &CypherValue) -> usize {
+    match v {
+        CypherValue::List(l) => l.len().max(l.iter().map(plus_longue_liste).max().unwrap_or(0)),
+        CypherValue::Typed { value, .. } => plus_longue_liste(value),
+        _ => 0,
+    }
+}
+
+/// **Les paramètres en littéraux, bornés** (2a′-2, page 05, § 4) : jamais une grande liste en clair
+/// dans un Cypher. Une liste de plus de [`PLUS_LONGUE_LISTE_EN_CLAIR`] éléments est refusée par une
+/// erreur qui le dit ; rien n'est tronqué en silence.
 pub(crate) fn inline_params_borne(query: &str, params: &[QueryParam]) -> Result<String, String> {
+    if let Some(p) = params.iter().find(|p| plus_longue_liste(&p.value) > PLUS_LONGUE_LISTE_EN_CLAIR) {
+        return Err(format!(
+            "le paramètre ${} porte une liste de {} éléments : au-delà de {PLUS_LONGUE_LISTE_EN_CLAIR}, une liste ne s'écrit pas en clair dans un Cypher (sa liaison coûte environ 50 Kio par élément)",
+            p.name,
+            plus_longue_liste(&p.value)
+        ));
+    }
     Ok(inline_params(query, params))
 }
 

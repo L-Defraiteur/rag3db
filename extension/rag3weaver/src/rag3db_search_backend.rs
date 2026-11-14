@@ -22,7 +22,7 @@ impl Rag3dbSearchBackend {
     }
 }
 
-use crate::search::inline_params;
+use crate::search::inline_params_borne;
 
 /// **Citer un nom du schéma en Cypher** : l'accent grave, la règle de
 /// [`crate::dialect::SchemaDialect::quote`] pour rag3db. Ce moteur écrit ses
@@ -107,10 +107,12 @@ impl SearchBackend for Rag3dbSearchBackend {
             Some(w) => format!(" WHERE {w}"),
             None => String::new(),
         };
-        let filter_cypher = inline_params(
+        // Jamais une grande liste en clair (2a′-2) : refusée en le disant, plutôt qu'analysée à 50 Kio
+        // par élément.
+        let filter_cypher = inline_params_borne(
             &format!("{match_clause}{where_clause} RETURN n"),
             filter_params,
-        );
+        )?;
         PLUS_LONG_CYPHER_PROJETE.fetch_max(filter_cypher.len(), std::sync::atomic::Ordering::Relaxed);
         PROJECTIONS_POSEES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let escaped = filter_cypher.replace('\\', "\\\\").replace('\'', "\\'");
