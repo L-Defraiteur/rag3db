@@ -19,6 +19,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **14 nov. — rag3weaver ne dépend plus d'openssl au bâti.** Le TLS passait déjà par rustls,
+  compilé dans le binaire ; deux dépendances tiraient encore openssl sans s'en servir. Elles n'en
+  tirent plus rien : un poste passé à openssl 4 bâtit à neuf sans rien installer ni régler, la CI et
+  les utilisateurs aussi, et douze paquets quittent le lock (`015172c00`).
 - **14 nov. — Chaque lourd a sa part de CPU, le poste garde ses cœurs libres.** `poste lourd` donne à chaque travail un quota CPU (les cœurs
   du poste moins deux, partagés entre les places) et le même nombre de fils aux outils (`CARGO_BUILD_JOBS`,
   `RAYON_NUM_THREADS`, `RUST_TEST_THREADS`) : quatre lourds qui saturent ne débordent plus des cœurs utiles,
