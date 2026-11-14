@@ -6507,6 +6507,134 @@ mod tests {
         assert!(backend.call("read_file", json!({"path": "outils.rs", "format": "html"})).is_err());
     }
 
+    /// **Témoin 0 de 2a′ : la non-fuite** (page 03, § 4). Chaque ligne de `Scope` et de `File` est
+    /// recopiée deux fois, avec ses arêtes : dans une autre couche, et retirée au rang lu. Aucune
+    /// des deux copies n'est visible ; les outils de lecture rendent donc, au caractère près, ce
+    /// qu'ils rendaient avant. Les arêtes elles-mêmes n'ont pas de prédicat avant 2a′-2 : la copie
+    /// d'une arête n'est atteinte que par son bout recopié, que le prédicat du nœud écarte.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn une_generation_invisible_ne_change_aucune_reponse_des_outils() {
+        use crate::connection::{CypherValue, QueryParam};
+        let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools");
+        let graphes = ["read.mmd", "list.mmd", "grep.mmd", "usages.mmd", "impact.mmd", "callees.mmd", "outline.mmd", "search_workspace.mmd"];
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            for (outil, graphe) in [
+                ("list_files", "list.mmd"),
+                ("grep_files", "grep.mmd"),
+                ("usages", "usages.mmd"),
+                ("impact", "impact.mmd"),
+                ("callees", "callees.mmd"),
+                ("outline", "outline.mmd"),
+                ("read_file", "read.mmd"),
+            ] {
+                m["tools"][outil] = json!({"graph": graphe, "policy": {"read_files": true}});
+            }
+            m["tools"]["search_code"] =
+                json!({"graph": "search_workspace.mmd", "bindings": {"target": "Scope"}, "policy": {"read_files": true}});
+        });
+        drop(p);
+        for g in graphes {
+            std::fs::copy(tools.join(g), dir.path().join(g)).unwrap();
+        }
+        std::fs::write(dir.path().join("sources/outils.rs"), "pub fn depart() {}\n").unwrap();
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
+        let backend = backend_de_code(dir.path(), prepared);
+        {
+            let source = backend.file_source.clone().unwrap();
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("l'index");
+        }
+        let appels: Vec<(&str, Value)> = vec![
+            ("read_file", json!({"path": "outils.rs", "format": "json"})),
+            ("read_file", json!({"path": "main.rs"})),
+            ("list_files", json!({"format": "json"})),
+            ("grep_files", json!({"pattern": "depart", "format": "json"})),
+            ("usages", json!({"name": "depart", "format": "json"})),
+            ("impact", json!({"name": "depart", "format": "json"})),
+            ("callees", json!({"name": "main", "format": "json"})),
+            ("outline", json!({"path": "outils.rs", "format": "json"})),
+            ("search_code", json!({"query": "depart"})),
+        ];
+        let reponses = || -> Vec<String> {
+            appels
+                .iter()
+                .map(|(outil, args)| {
+                    let mut r = backend.call(outil, args.clone()).unwrap_or_else(|e| panic!("{outil} : {e}"));
+                    r.as_object_mut().map(|o| o.remove("run"));
+                    format!("{outil} {args} → {r}")
+                })
+                .collect()
+        };
+        let avant = reponses();
+        assert!(avant.iter().any(|r| r.starts_with("usages") && r.contains("main.rs")), "le témoin a de quoi fuir : {avant:#?}");
+
+        {
+            let mut cat = backend.catalog.lock().unwrap();
+            let conn = cat.conn();
+            let lire = |q: &str, params: &[QueryParam]| conn.execute_with_params(q, params).unwrap_or_else(|e| panic!("{q} : {e}"));
+            // (suffixe d'uuid, couche, rang retiré)
+            let copies = [("-autre", "autre", None), ("-retiree", crate::code::COUCHE_DU_BACKEND, Some(0i64))];
+            let internes = ["_label", "_id", "_src", "_dst"];
+            let creer = |label: &str, mut props: std::collections::BTreeMap<String, CypherValue>| {
+                props.retain(|k, v| !internes.contains(&k.as_str()) && !matches!(v, CypherValue::Null));
+                let noms: Vec<String> = props.keys().cloned().collect();
+                let liste = noms.iter().enumerate().map(|(i, k)| format!("`{k}`: $p{i}")).collect::<Vec<_>>().join(", ");
+                let params: Vec<QueryParam> = noms.iter().enumerate().map(|(i, k)| QueryParam::new(format!("p{i}"), props[k].clone())).collect();
+                lire(&format!("CREATE (:`{label}` {{{liste}}})"), &params);
+            };
+            let mut lignes = 0;
+            for table in [crate::code::FILE, crate::code::SCOPE] {
+                let rows = lire(&format!("MATCH (n:`{table}`) RETURN n"), &[]);
+                for row in &rows.rows {
+                    let Some(CypherValue::Map(n)) = row.first() else { panic!("{table} : {row:?}") };
+                    let uuid = n["_uuid"].as_str().unwrap().to_string();
+                    for (suffixe, couche, retire) in copies {
+                        let mut c = n.clone();
+                        c.insert("_uuid".into(), CypherValue::String(format!("{uuid}{suffixe}")));
+                        c.insert(crate::generations::COUCHE.into(), CypherValue::String(couche.into()));
+                        if let Some(r) = retire {
+                            c.insert(crate::generations::JUSQU_A.into(), CypherValue::Int(r));
+                        }
+                        creer(table, c);
+                        lignes += 1;
+                    }
+                }
+            }
+            // Les arêtes qui touchent une ligne recopiée, recopiées vers (ou depuis) sa copie.
+            let mut aretes = 0;
+            for rel in cat.relation_names() {
+                let rows = lire(
+                    &format!("MATCH (a)-[r:`{rel}`]->(b) WHERE label(a) IN ['File', 'Scope'] OR label(b) IN ['File', 'Scope'] RETURN label(a), a._uuid, label(b), b._uuid, r"),
+                    &[],
+                );
+                for row in &rows.rows {
+                    let s = |i: usize| row[i].as_str().unwrap().to_string();
+                    let (la, ua, lb, ub) = (s(0), s(1), s(2), s(3));
+                    let Some(CypherValue::Map(mut props)) = row.get(4).cloned() else { panic!("{rel} : {row:?}") };
+                    props.retain(|k, v| !internes.contains(&k.as_str()) && !matches!(v, CypherValue::Null));
+                    let noms: Vec<String> = props.keys().cloned().collect();
+                    let liste = noms.iter().enumerate().map(|(i, k)| format!("`{k}`: $p{i}")).collect::<Vec<_>>().join(", ");
+                    for (suffixe, _, _) in copies {
+                        let recopie = |l: &str, u: &str| if ["File", "Scope"].contains(&l) { format!("{u}{suffixe}") } else { u.to_string() };
+                        let mut params: Vec<QueryParam> = noms.iter().enumerate().map(|(i, k)| QueryParam::new(format!("p{i}"), props[k].clone())).collect();
+                        params.push(QueryParam::new("a", CypherValue::String(recopie(&la, &ua))));
+                        params.push(QueryParam::new("b", CypherValue::String(recopie(&lb, &ub))));
+                        lire(&format!("MATCH (a:`{la}` {{_uuid: $a}}), (b:`{lb}` {{_uuid: $b}}) CREATE (a)-[:`{rel}` {{{liste}}}]->(b)"), &params);
+                        aretes += 1;
+                    }
+                }
+            }
+            assert!(lignes > 0 && aretes > 0, "rien de recopié : {lignes} lignes, {aretes} arêtes");
+            cat.marquer_des_lignes_invisibles();
+        }
+
+        let apres = reponses();
+        for (a, b) in avant.iter().zip(&apres) {
+            assert!(a == b, "une génération invisible a changé une réponse :\navant : {a}\naprès : {b}");
+        }
+    }
+
     /// **Chaque nœud atteint dit d'où il vient** (`from`, l'IDE, lot A5) :
     /// une chaîne `a → b → c` dans un fichier (des appels résolus), et le JSON
     /// d'impact et de callees relie chaque niveau au précédent — ce qui fait un
