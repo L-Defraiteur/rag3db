@@ -63,7 +63,11 @@ fn releve_les_reponses_de_search_code() {
         for (nom, extra) in &formes {
             let mut args = extra.clone();
             args["query"] = q.clone();
+            // Le temps d'un seul appel, à titre indicatif : pas de chauffe ni de répétition, ce n'est
+            // pas une mesure (la sonde de la recherche en est une).
+            let debut = std::time::Instant::now();
             let r = backend.call("search_code", args).unwrap_or_else(|e| panic!("search_code {q} ({nom}) : {e}"));
+            let ms = debut.elapsed().as_secs_f64() * 1000.0;
             let lignes: Vec<Value> = r["result"].as_array().map(|a| a.iter().take(k).cloned().collect()).unwrap_or_default();
             let resultats: Vec<Value> = lignes
                 .iter()
@@ -95,7 +99,7 @@ fn releve_les_reponses_de_search_code() {
             } else {
                 eprintln!("[parité] {q} · {nom} : aucun résultat");
             }
-            releve.push(json!({"requete": q, "forme": nom, "resultats": resultats}));
+            releve.push(json!({"requete": q, "forme": nom, "ms": ms, "resultats": resultats}));
         }
     }
     let doc = json!({"base": base.to_string_lossy(), "manifeste": manifeste.to_string_lossy(), "forme_de_la_base": forme, "k": k, "jeu": jeu, "releve": releve});
