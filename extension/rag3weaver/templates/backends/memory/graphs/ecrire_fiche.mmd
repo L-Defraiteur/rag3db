@@ -1,0 +1,7 @@
+%% tool: ecrire_fiche
+%% description: Écrit une fiche (la ligne : {record, expected_revision}) sous la politique de l'entité, cycle de vie compris. Appelé par les gestes sur les fiches (confirmer_fiche), sous un ForEachNode lui-même cité : son paramètre s'appelle ligne, pas element, pour que le contrôle des champs de l'élément d'au-dessus ne le prenne pas pour le sien.
+%% param: ligne json! -- {record, expected_revision} : la fiche complète et la révision lue.
+%% result: write.record
+
+graph LR
+    write["EntityRecordNode(entity='Fiche', action='put', record=$ligne.record, expected_revision=$ligne.expected_revision)"]
