@@ -26,6 +26,8 @@ mosh luciepc -- bash -c "ssh -N -L 17970:127.0.0.1:7970 lucie-tablette & ~/.cach
 
 - **Le Markdown.** Le terminal sait rendre titres, puces, gras et italique, mais l'équipier n'en a pas écrit. Je lui ai demandé deux fois une présentation avec un titre, une liste et un mot en gras. Il a répondu chaque fois par un compte rendu, « Présentation fournie au superviseur conformément au format demandé », sans la présentation. C'est le comportement de l'équipier, pas celui du terminal : c'est signalé à l'orchestration.
 
+  **À relire à ton prochain essai** (note du 15 nov., vers minuit) : archi a corrigé l'équipier. Désormais, `report` ou sa réponse porte le texte lui-même, et le texte d'un pas arrive dans la boîte. Le banc ne reproduisait pas ta séance (10/10 avec et sans le correctif) : le juge, c'est ton prochain essai dans le terminal, sur un hôte qui porte le correctif (il atterrit dans la nuit du 14 au 15). Demande-lui un titre, une liste à puces et un mot en gras : tu dois les voir rendus, et non plus « Présentation fournie au superviseur… ». Si le compte rendu revient à la place du contenu, le ticket de l'équipier se rouvre, avec ta séance.
+
 ## Les défauts vus à l'essai, corrigés au lot tty-9 (`05-les-defauts-de-l-essai.md`)
 
 - Sous tmux, ta demande s'est affichée **deux fois**, alors que la boîte de l'hôte n'en a qu'une : le terminal la reçoit par deux chemins.
