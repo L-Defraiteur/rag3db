@@ -155,7 +155,7 @@ NVMe), et non en mémoire.
 | `claude-1000/` | 7,0 Gio | 1 | 0 | 13/11 | dossiers des sessions Claude Code : sairen 3,0 Gio, rag3db 2,0 Gio (dont la session `25b7ff4b…` 1,7 Gio), `~` 1,9 Gio. Ce ne sont pas des tests. |
 | `jest_rs/` | 5,6 Gio | 1 | 0 | 13/11 | cache de jest (haste-map) du dépôt sairen, hors de rag3db |
 | `tmpxxxxxxxx` Python, à `outils/` | 961 Mio | 1 150 | 775 Mio | 09/11 | Sairen, hors de rag3db |
-| `tmpxxxxxxxx` Python, à `secrets/` | 43 Mio | 1 025 | 39 Mio | 09/11 | Sairen, tests de la voix ; **ils contiennent des clés LiveKit (`LIVEKIT_API_SECRET`) en clair dans `/tmp`** |
+| `tmpxxxxxxxx` Python, à `secrets/` | 43 Mio | 1 025 | 39 Mio | 09/11 | Sairen, tests de la voix ; **ils contiennent des fichiers d'identifiants en clair** ; le fait est porté à Lucie par c7, et rien n'en est recopié ici |
 | `tmpxxxxxxxx` Python, audio et texte | 18 Mio | 2 481 | 2 Mio | 09/11 | Sairen, cache de la synthèse vocale (`.pcm`, « Maison Aurèle, bonsoir. ») |
 | `.tmpXXXXXX`, profils Chrome | 327 Mio | 2 233 | 251 Mio | 07/11 | `src/daemon_host/navigateur.rs` (`user_data_dir`) |
 | `com.google.Chrome…url_fetcher…` | 253 Mio | 5 497 | 162 Mio | 06/11 | Chrome, lancé par les mêmes tests ou par l'utilisatrice |
