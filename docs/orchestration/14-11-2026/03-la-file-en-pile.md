@@ -348,3 +348,8 @@ d'import (7215d18ad0, sept langues en données). **La lib 373b5477b est courante
 code-principal) en un ticket pour hotfixs, reconstruction des six tables sur copie. Archi a le « à toi »
 (fermeture qui tient) ; puis 96, le crochet, le `IN`, (B), garde-pile-3, le dense, le prédicat, la chaîne
 Rust.
+
+**21 h 4x — vingt-six atterris** : la fermeture qui tient (1cbf1cf3a) et confirmer_fiche (10b7a0edb). Le
+crochet en `Weak` (arbre principal, d1578cd56) pousse ; puis la réécriture du `IN` (recherche) → (B) et le
+pliage des listes (cœur, deux pushs, rang 27) → garde-pile-3 (G) → dense sur `Tenue<C>` (embarquement) →
+le prédicat (ED, après la parité) → la chaîne Rust 1.98.1 (G, dernière).

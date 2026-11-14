@@ -861,3 +861,26 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   tronquait chaque index séparément — la famille que 373b5477b ferme.
 - **La chaîne** : G (fils du moteur) → codeparsers → archi (fermeture) → 96 (gestes) → crochet → `IN` →
   (B) → garde-pile-3 → dense sur `Tenue<C>` → prédicat → chaîne Rust 1.98.1.
+
+## 21 h 4x — vingt-six atterris ; la lib courante aux deux postes ; la mémoire des recherches plafonnée
+
+- **Atterris depuis 21 h 30** : le court-circuit et 1b (194a4e572, un push de 11 commits), les fils du
+  moteur (77b9e5f18), le pointeur des règles d'import (7215d18ad0 : sept langues en données, plus aucune
+  liste dans le code), la fermeture qui tient (1cbf1cf3a), confirmer_fiche (10b7a0edb). Vingt-six lots par
+  la pile, zéro rejeu au dernier pas ; deux pushs refusés au premier essai par des docs arrivées entre
+  fetch et push, remis par la garde et repassés. Le crochet en `Weak` pousse (il ferme le rouge de l'hôte).
+- **La bascule** : `courant` et `lib-des-passes` à 373b5477b aux deux postes à 21 h 33, luciepc réveillé à
+  21 h 33 (code-lourd et code-principal rouverts, search_code ok) ; page 04 de la pose ; les deux écarts en
+  un ticket pour hotfixs (reconstruction des six tables sur copie) ; `controle-des-deux-sens.sh` passe sous
+  `poste lourd` ; la nuance au § 8.
+- **La mémoire des recherches à versions** : `MALLOC_ARENA_MAX=2` plafonne le RSS à **9,8 Gio** au lieu de
+  20,6 après 50 recherches, sans coût (ED) ; la pente venait des arènes de glibc. Proposition écrite par G
+  dans sa page 03 (la ligne dans `rag3weaver-daemon.env`, que la pose écrit déjà, aucune unité touchée) ;
+  mesure sur l'hôte réel cette nuit, puis la question à Lucie avec les deux chiffres.
+- **Le cœur** : le pliage des listes littérales vert (le pic de 3 524 → 192 Mio : un évaluateur et un
+  ValueVector de 2 048 places par élément), au rang 27 avec l'`IN` haché ; un rouge antérieur et
+  indépendant (`DropNodeTableReclaim`) en ticket ; **`e2e_test` sans filtre dit « PASSED 0 tests »** — en
+  mémoire. **Lucivy** : un second défaut trouvé par la pièce 1 — la compaction ne réécrivait jamais un shard
+  réduit à un seul segment, ses supprimés y restaient pour toujours ; corrigé, passe en cours. **Archi** :
+  le fil `index-suivi` joint à la fin de l'hôte (le SIGSEGV à la sortie expliqué), passe en cours.
+  **Codeparsers** : le plan Go validé (tables par langue, `go.mod` lu), C# par la documentation.
