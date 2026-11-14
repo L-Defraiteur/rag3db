@@ -295,3 +295,8 @@ ticket du rouge de l'hôte avec, Pour : arbre principal) → **rang 24 : le croc
 (arbre principal : le rouge de l'hôte se ferme) → chaîne Rust 1.98.1 (G, dernier). La bissection d'archi
 confirme : 9977acbdc vert, 1e9bf5089e rouge, seul. La bascule de la lib 373b5477b reste suspendue
 jusqu'au verdict commun de G et archi (jeux croisés + jeu instrumenté sous les deux libs).
+
+**20 h 35 — dix-neuf atterris** : les exclusions de recherche (1bb929755, quatre commits, 4/4 en `=`, le `cfg`
+avec : `workspace.index_exclude`, minifié par contenu et fichiers de plus de 1 Mio, défauts dans les
+gabarits). tty-9 a le « à toi » ; puis activations, sans-filtre, 1b, fils du moteur, pointeur des règles,
+la fermeture qui tient, le crochet en `Weak`, la réécriture du `IN` (recherche, rang 25), la chaîne Rust.
