@@ -7824,6 +7824,24 @@ mod tests {
         assert!(backend.stop_reactions().is_empty());
     }
 
+    /// **Un instantané rompu sur une base à rouvrir ne recommence pas** : un
+    /// appel neuf romprait de même. La réponse dit l'erreur d'origine du BEGIN,
+    /// sans rien lire hors d'un instantané.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn un_instantane_rompu_sur_une_base_a_rouvrir_ne_recommence_pas_et_dit_sa_cause() {
+        let (_dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        attendre_les_usages(&backend, "depart", |u| u.contains("outils.rs"));
+        let pool = backend.read_view.current().and_then(|v| v.pool.clone()).expect("un pool d'instantanés");
+        pool.rompre_sur_une_base_a_rouvrir(1);
+        let u = usages_de(&backend, "depart");
+        assert!(u.contains(crate::read_pool::CAUSE_DU_CROCHET), "la réponse dit la cause du refus : {u}");
+        assert!(!u.contains("instantane_renouvele"), "pas de second essai sur une base à rouvrir : {u}");
+        assert!(!u.contains("outils.rs"), "rien n'est lu hors d'un instantané : {u}");
+        assert!(backend.stop_reactions().is_empty());
+    }
+
     /// **Une lecture pendant un lot réindexé voit le lot d'avant, entier**
     /// (L3, page 12-octobre-2026-arbre-principal/02). Deux fichiers arrivent
     /// d'un seul coup (un dossier renommé) : l'un définit `arrivee`, l'autre
