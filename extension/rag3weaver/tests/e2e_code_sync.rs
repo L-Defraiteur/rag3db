@@ -654,3 +654,31 @@ fn apres_un_point_de_reprise_les_deux_sens_d_une_relation_restent_egaux() {
     let attendu = etat(&a_neuf(&snapshot, "sens", &options));
     assert_eq!(fini.2, attendu.2, "les arêtes de la base rouverte valent un index bâti à neuf");
 }
+
+/// **La provenance par les manifestes du dépôt** (14 novembre 2026, second lot de la provenance) : la
+/// synchronisation lit Cargo.toml, Cargo.lock et le workspace sur la liste complète de la source (le
+/// Cargo.lock n'est pas un fichier admis à l'index), une crate du Cargo.lock devient `dependency`, une
+/// crate du workspace importée par son nom devient `project`, et les chemins lus sont notés.
+#[test]
+#[ignore]
+fn les_manifestes_du_depot_disent_la_provenance_des_bibliotheques() {
+    let mut catalog = catalogue();
+    let source = vec![
+        ("Cargo.toml".to_string(), "[workspace]\nmembers = [\"crates/ma-crate\", \"crates/app\"]\n".to_string()),
+        ("crates/ma-crate/Cargo.toml".to_string(), "[package]\nname = \"ma-crate\"\n".to_string()),
+        ("crates/ma-crate/src/lib.rs".to_string(), "pub mod outils {\n    pub fn f() {}\n}\n".to_string()),
+        ("crates/app/Cargo.toml".to_string(), "[package]\nname = \"app\"\n\n[dependencies]\nserde_json = \"1\"\nma-crate = { path = \"../ma-crate\" }\n".to_string()),
+        ("Cargo.lock".to_string(), "[[package]]\nname = \"app\"\n\n[[package]]\nname = \"ma-crate\"\n\n[[package]]\nname = \"serde_json\"\n".to_string()),
+        ("crates/app/src/main.rs".to_string(), "use serde_json::Value;\nuse ma_crate::outils;\nuse inconnue_de_tous::X;\n\nfn main() {\n    outils::f();\n    let _v = Value::Null;\n}\n".to_string()),
+    ];
+    sync_source(&mut catalog, &Snapshot::new("depot", source), &SourceSyncOptions::default(), &mut |_| {}).unwrap();
+    let r = catalog.execute_raw("MATCH (l:Library) RETURN l.name, l.provenance ORDER BY l.name").unwrap();
+    let texte = |v: Option<&CypherValue>| match v { Some(CypherValue::String(t)) => Some(t.clone()), _ => None };
+    let libs: Vec<(Option<String>, Option<String>)> = r.rows.iter().map(|l| (texte(l.first()), texte(l.get(1)))).collect();
+    let de = |nom: &str| libs.iter().find(|(n, _)| n.as_deref() == Some(nom)).map(|(_, p)| p.clone());
+    assert_eq!(de("serde_json"), Some(Some("dependency".to_string())), "une crate du Cargo.lock : {libs:?}");
+    assert_eq!(de("ma_crate"), Some(Some("project".to_string())), "une crate du workspace, importée par son nom : {libs:?}");
+    assert_eq!(de("inconnue_de_tous"), Some(Some("inconnue".to_string())), "un nom que les manifestes ne disent pas : {libs:?}");
+    let m = catalog.manifestes_notes().expect("les manifestes notés");
+    assert_eq!(m.lus, vec!["Cargo.lock", "Cargo.toml", "crates/app/Cargo.toml", "crates/ma-crate/Cargo.toml"], "les chemins lus, dits");
+}

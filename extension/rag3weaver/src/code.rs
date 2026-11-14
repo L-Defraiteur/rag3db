@@ -1154,6 +1154,19 @@ pub fn analyze_in_project(
     cursor: &str,
     project_files: Option<&[String]>,
 ) -> CodeAnalysis {
+    analyze_in_project_avec(root, sources, cursor, project_files, None)
+}
+
+/// [`analyze_in_project`], avec **les manifestes du dépôt** (14 novembre 2026) : leurs dépendances et
+/// leurs paquets vont à codeparsers, qui pose la provenance `dependency` ou `project` d'un nom importé au
+/// lieu d'`inconnue`.
+pub fn analyze_in_project_avec(
+    root: &str,
+    sources: Vec<(String, String)>,
+    cursor: &str,
+    project_files: Option<&[String]>,
+    manifestes: Option<&crate::manifestes::Manifestes>,
+) -> CodeAnalysis {
     let mut content_map = HashMap::new();
     let mut files = Vec::new();
     let mut skipped = Vec::new();
@@ -1232,6 +1245,8 @@ pub fn analyze_in_project(
             include_child_refs: Some(false),
             resolve_cross_file: Some(false),
             project_files: project_files.map(<[String]>::to_vec),
+            declared_dependencies: manifestes.map(|m| m.dependances.iter().cloned().collect()),
+            project_packages: manifestes.map(|m| m.paquets_du_projet.iter().cloned().collect()),
             ..Default::default()
         }),
     });
@@ -3644,6 +3659,8 @@ pub(crate) enum Resolution {
 /// Clé méta : le compte des arêtes ambiguës de la base, recompté en fin
 /// d'indexation ; l'état de l'index le dit sans recompter.
 pub const AMBIGUOUS_EDGES_KEY: &str = "ambiguous_edges";
+/// Clé méta : les manifestes du dépôt lus à la dernière synchronisation (`manifestes::Manifestes`, JSON).
+pub const MANIFESTS_KEY: &str = "manifests_read";
 
 impl Catalog {
     /// **Les arêtes ambiguës de la base**, recomptées par relation d'usage
@@ -3675,6 +3692,17 @@ impl Catalog {
     /// Le dernier compte noté des arêtes ambiguës (0 sans note).
     pub fn aretes_ambigues_notees(&self) -> usize {
         self.read_meta_key(AMBIGUOUS_EDGES_KEY).ok().flatten().and_then(|v| v.parse().ok()).unwrap_or(0)
+    }
+
+    /// Noter les manifestes lus à la synchronisation (leurs chemins, leurs dépendances, les paquets du
+    /// dépôt) : la réindexation d'un fichier les relit d'ici, et l'état d'index dit les chemins.
+    pub fn note_manifestes(&self, m: &crate::manifestes::Manifestes) -> Result<(), CatalogError> {
+        self.persist_meta_key(MANIFESTS_KEY, &serde_json::to_string(m).unwrap_or_default())
+    }
+
+    /// Les derniers manifestes notés (`None` avant la première synchronisation qui les lit).
+    pub fn manifestes_notes(&self) -> Option<crate::manifestes::Manifestes> {
+        self.read_meta_key(MANIFESTS_KEY).ok().flatten().and_then(|v| serde_json::from_str(&v).ok())
     }
 }
 
