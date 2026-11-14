@@ -212,6 +212,13 @@ A module alias is project code, not a package: Node's internal `#…` imports al
 the `paths` of `tsconfig.json`/`jsconfig.json`, and the prefixes declared under
 `workspace.imports.<language>.local_prefixes` (for aliases no manifest states, such as vite's).
 
+A method defined outside its type's block keeps its owner: `parent_name` is the
+type's short name (a Go generic receiver `*Pile[K]` gives `Pile`, a Rust
+`impl<U> Foo<U>` gives `Foo`), `parent_path` the qualified path when the code
+writes one (`kz::Foo`, `crate::a::Bar`), and `extends_type` marks a Rust `impl`
+block. An out-of-class C++ definition is a `method` when its class is in the same
+file.
+
 ## Shared indexed content
 
 A derived entity can opt into immutable content versions with
