@@ -113,12 +113,13 @@ git checkout -q "$BASE" 2>/dev/null
   git checkout -q -B atterrissage origin/master; mkdir -p extension/rag3weaver/docs; echo '- autre' >> extension/rag3weaver/docs/nouveautes.md; git add -A; git commit -qm autre
   git cherry-pick "$P1" > /dev/null 2>&1 || { printf -- '- autre\n- p1\n' > extension/rag3weaver/docs/nouveautes.md; git add -A; GIT_EDITOR=true git cherry-pick --continue > /dev/null 2>&1; }
   git push -q origin HEAD:master 2>/dev/null; git checkout -q pile
-  printf 'teste %s\nVERT\n' "$TESTE" > "$H/.cache/rag3weaver-build/j/resume.log"; echo "$P1" > "$H/.cache/rag3weaver-build/j/base"
-  echo "rag3db-build-0123456789012345678901234567890123456789-Release" > "$H/.cache/rag3weaver-build/j/lib.log"
+  printf 'teste %s\nVERT\n' "$TESTE" > "$H/.cache/rag3weaver-build/j/resume.log"
+  # une passe courte : la lib n'est nommée que dans e2e_tty.log (relevé de tty), et pas de fichier base en pile
+  echo "rag3db-build-0123456789012345678901234567890123456789-Release" > "$H/.cache/rag3weaver-build/j/e2e_tty.log"
   sortie=$(HOME="$H" PILE_AVANT="$P1" bash "$GARDE" wt j 2>&1); rc=$?
   sujets=$(git -C "$D/nu8.git" log --format=%s master | tr '\n' ' ')
-  if [ $rc = 0 ] && echo "$sortie" | grep -qx POUSSE && [ "$sujets" = "p2 p1 autre base " ]; then
-    echo "vert   pile, chemin de push : P1 atterri après un conflit, P2 seul poussé ($sujets)"; exit 0
+  if [ $rc = 0 ] && echo "$sortie" | grep -qx POUSSE && [ "$sujets" = "p2 p1 autre base " ] && ! echo "$sortie" | grep -q "Aucun fichier"; then
+    echo "vert   pile, chemin de push : P1 atterri après un conflit, P2 seul poussé ($sujets), lib lue dans e2e_tty.log, base non lue"; exit 0
   fi
   echo "ROUGE  pile, chemin de push : rc $rc, master « $sujets »"; echo "$sortie" | tail -4; exit 1
 ) || rouge=1
@@ -138,12 +139,28 @@ git checkout -q "$BASE" 2>/dev/null
   printf 'teste %s\nVERT\n' "$TESTE" > "$H/.cache/rag3weaver-build/j/resume.log"
   git rev-parse origin/master > "$H/.cache/rag3weaver-build/j/base"
   echo "rag3db-build-0123456789012345678901234567890123456789-Release" > "$H/.cache/rag3weaver-build/j/lib.log"
-  un=$(HOME="$H" bash "$GARDE" wt j 2>&1); r1=$?
+  # lancée comme au cache, par un chemin relatif : son empreinte doit rester lisible après son `cd` dans le worktree
+  mkdir -p "$D/cache"; cp "$GARDE" "$D/cache/push_garde.sh"
+  un=$(cd "$D/cache" && HOME="$H" bash push_garde.sh wt j 2>&1); r1=$?
+  echo "$un" | grep -qE '^garde exécutée [0-9a-f]{16},' && echo "vert   la garde lancée par un chemin relatif dit son empreinte" || { echo "ROUGE  garde exécutée sans empreinte : $(echo "$un" | grep 'garde exécutée')"; rouge=1; }
   deux=$(HOME="$H" bash "$GARDE" wt j 2>&1); r2=$?
   if [ $r1 != 0 ] && echo "$un" | grep -q "push refusé" && echo "$un" | grep -q "worktree remis sur" && [ $r2 = 0 ] && echo "$deux" | grep -qx POUSSE; then
     echo "vert   push refusé une fois, puis le même appel pousse (worktree remis sur la tête testée)"; exit 0
   fi
   echo "ROUGE  push refusé puis rejoué : rc $r1 puis $r2"; echo "$un" | tail -3; echo "$deux" | tail -3; exit 1
+) || rouge=1
+# Aucun journal qui nomme une lib : ARRÊT, même si la liste des journaux s'élargit à $J/*.log.
+(
+  H="$D/home0"; mkdir -p "$H/git_workspaces" "$H/.cache/rag3weaver-build/j"
+  git clone -q --bare "$D" "$D/nu0.git" 2>/dev/null; git -C "$D/nu0.git" update-ref refs/heads/master "$BASE"
+  git clone -q "$D/nu0.git" "$H/git_workspaces/wt" 2>/dev/null
+  cd "$H/git_workspaces/wt" && git config user.email luciedefraiteur@gmail.com && git config user.name t
+  git checkout -q --detach origin/master; echo 'fn z() {}' > extension/rag3weaver/src/z.rs; git add -A; git commit -qm z
+  printf 'teste %s\nVERT\n' "$(git rev-parse --short HEAD)" > "$H/.cache/rag3weaver-build/j/resume.log"; git rev-parse origin/master > "$H/.cache/rag3weaver-build/j/base"
+  echo "aucune lib ici" > "$H/.cache/rag3weaver-build/j/crate.log"
+  sortie=$(HOME="$H" bash "$GARDE" wt j 2>&1); rc=$?
+  if [ $rc != 0 ] && echo "$sortie" | grep -q "aucun journal de la passe"; then echo "vert   aucun journal ne nomme de lib : ARRÊT"; exit 0; fi
+  echo "ROUGE  aucun journal ne nomme de lib : rc $rc — $(echo "$sortie" | tail -2)"; exit 1
 ) || rouge=1
 # La dérive : la garde exécutée et celle du dépôt, identiques puis différentes ; jamais un refus.
 git checkout -q "$BASE" 2>/dev/null

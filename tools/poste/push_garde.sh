@@ -3,6 +3,9 @@
 # pousse le worktree seulement si la passe a fini VERT sur ce commit, sur une seule lib, et
 # si master n'a apporté aucun code depuis la base testée. Puis les trois contrôles.
 set -u
+# Le chemin de cette garde, résolu avant tout `cd` (14 novembre 2026) : lancée par `bash push_garde.sh` depuis le
+# cache, son `$0` relatif ne se résolvait plus une fois dans le worktree, et « garde exécutée » restait vide.
+MOI=$(realpath "$0")
 # **Le code qu'apporte un intervalle de commits** (`<base> <neuf>`), un chemin par ligne : ce qui oblige
 # à rejouer la passe. Mode `--code-apporte <base> <neuf>`, joué par le témoin `test_push_garde.sh`.
 #
@@ -101,7 +104,7 @@ if [ "${1:-}" = "--pile" ]; then verifier_pile "$2" "$3" "$4" "$5"; exit $?; fi
 # diffèrent, sans refuser. Mode `--derive <arbre>`, joué par le témoin.
 derive() {
   local moi depot
-  moi=$(sha256sum "$(realpath "$0")" | cut -c1-16)
+  moi=$(sha256sum "$MOI" | cut -c1-16)
   if [ -f "$1/tools/poste/push_garde.sh" ]; then
     depot=$(sha256sum "$1/tools/poste/push_garde.sh" | cut -c1-16)
   else
@@ -129,10 +132,16 @@ if [ -z "${PILE_AVANT:-}" ] && [ "$(git rev-parse --short HEAD)" != "$teste" ]; 
 fi
 [ -z "$(git status --porcelain)" ] || { echo "ARRÊT : arbre sale"; exit 1; }
 [ "$(git config user.email)" = "luciedefraiteur@gmail.com" ] || { echo "ARRÊT : identité git"; exit 1; }
-libs=$(grep -ho 'rag3db-build-[0-9a-f]\{40\}' $J/temoins.log $J/e2e_lectures.log $J/e2e_code.log $J/check_features.log $J/preuve.log $J/lib.log $J/navigateur.log 2>/dev/null | sort -u)
-[ "$(echo "$libs" | grep -c .)" = 1 ] || { echo "ARRÊT : la passe a vu plusieurs libs du magasin :"; echo "$libs"; exit 1; }
+# La lib se cherche dans **tous les journaux** de la passe (`$J/*.log`, 14 novembre 2026, relevé de tty) : une passe
+# courte (crate.log, e2e_tty.log…) n'avait aucun des journaux d'une liste fixe. Une seule lib, et au moins un
+# journal qui la nomme : zéro reste un ARRÊT.
+libs=$(grep -ho 'rag3db-build-[0-9a-f]\{40\}' "$J"/*.log 2>/dev/null | sort -u)
+case "$(echo "$libs" | grep -c .)" in
+  1) ;;
+  0) echo "ARRÊT : aucun journal de la passe ($J/*.log) ne nomme une lib du magasin"; exit 1 ;;
+  *) echo "ARRÊT : la passe a vu plusieurs libs du magasin :"; echo "$libs"; exit 1 ;;
+esac
 echo "lib de toute la passe : $libs"
-base=$(cat $J/base)
 git fetch -q origin master || exit 1
 neuf=$(git rev-parse FETCH_HEAD)
 # Le C++ du moteur (src/, test/) n'est pas lié par la lib épinglée : il se rebase sans rejeu
@@ -154,6 +163,8 @@ if [ -n "${PILE_AVANT:-}" ]; then
   fi
   verifier_pile "$PILE_AVANT" "$teste" "$neuf" HEAD || { revenir; exit 1; }
 else
+  # La base du rejeu ne sert que hors du mode pile (relevé de tty : lue avant, elle faisait « cat: …/base ») .
+  base=$(cat "$J/base") || { echo "ARRÊT : pas de base de rejeu ($J/base)"; exit 1; }
   apporte=$(code_apporte $base $neuf)
   if [ -n "$apporte" ]; then echo "ARRÊT : master a apporté du code depuis la base testée"; echo "$apporte"; exit 1; fi
   echo "master $(git rev-parse --short $neuf), base testée $(git rev-parse --short $base) : rien de code entre les deux"

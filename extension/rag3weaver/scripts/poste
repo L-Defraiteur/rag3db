@@ -314,7 +314,9 @@ coeurs_libres() {
 }
 # fils_par <mode> : les cœurs d'une commande de ce mode, au moins 1.
 fils_par() {
-  _u=$(( $(nproc 2>/dev/null || echo 1) - $(coeurs_libres) ))
+  # `nproc --all` : les cœurs du poste. Sous un quota (cpu.max), `nproc` rend le quota (14 novembre 2026 : 5 dans un
+  # lourd de 500 % à luciepc), et un poste lancé sous un quota étranger calculait ses parts sur lui.
+  _u=$(( $(nproc --all 2>/dev/null || echo 1) - $(coeurs_libres) ))
   [ "$_u" -ge 1 ] || _u=1
   if [ "$1" = lourd ]; then _u=$(( _u / $(places) )); fi
   [ "$_u" -ge 1 ] || _u=1
