@@ -1,6 +1,6 @@
 # Un worktree attaché hors de la racine reste refusé à read_file et aux écritures
 
-- **État** : ouvert (13 novembre 2026), pour archi.
+- **État** : corrigé (14 novembre 2026), lot `atelier-quatre-mineurs` d'archi
 - **Famille** : produit
 - **Gravité** : capacité manquante, et un message faux — le refus dit qu'attacher le worktree suffit, ce qui n'est pas le cas
 - **Atteignable en service** : oui, pour tout worktree attaché hors de `workspace.root` (un dépôt sous `~/git_workspaces` quand la racine est `~/rw-code`)
