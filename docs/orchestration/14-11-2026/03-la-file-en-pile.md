@@ -47,8 +47,8 @@ l'autre, dix fois de suite, même sans rouge.
 | 5 | embarquement | reprise après plantage | reprise-apres-plantage → reprise-apres-plantage-pile | 17afd3820 → pile 512b5e420 sur c93f73f06 (conflit de docs/nouveautes.md résolu) |
 | 6 | 96 | miroir, nom exact, about | lot-96-pile (miroir 48445fdeb, nomex bff4ea79f, about 84f949d2c) | pile 84f949d2c sur 512b5e420 |
 | 7 | hotfixs | témoin du dictionnaire (C++ test seul) | chaine-au-point-de-reprise-2 → chaine-au-point-de-reprise-pile | 9ded42107 → pile cabcc8640 sur 84f949d2c |
-| 8 | ED | 2a′-1 (générations de l'ancre) | generations-de-l-ancre-3 → generations-de-l-ancre-pile | 9b0620f66 → pile c22fdbf31 sur cabcc8640 (19 commits) |
-| 9 | archi | jauge du contexte (+ quatre mineurs s'ils sont verts) | jauge-ce-qui-pese-3 → jauge-ce-qui-pese-pile | 5ad3c990e → pile 214e9a99b sur c22fdbf31 |
+| 8 | ED | 2a′-1 (générations de l'ancre) | generations-de-l-ancre-3 → generations-de-l-ancre-pile | 9b0620f66 → pile c22fdbf31, puis **e00fd562d** sur cabcc8640 (19 commits + le témoin e2e_scope_versions corrigé ; rang gardé, un commit ajouté) |
+| 9 | archi | jauge du contexte (+ quatre mineurs s'ils sont verts) | jauge-ce-qui-pese-3 → jauge-ce-qui-pese-pile | 5ad3c990e → pile 214e9a99b, puis **67d759962** sur e00fd562d (jauge-ce-qui-pese-pile-2) |
 | 10 | cœur | correctif (a) perte de Note | annulation-garde-les-autres-2 → annulation-garde-les-autres-pile | 9b0e73c9c → pile 960eb8e3a sur 214e9a99b ; juge vers 17 h 15 |
 | 11 | G | la garde apprend la pile | garde-pile | 06c0a3771 sur c93f73f06 (vert 16 h 15, 25 témoins ; relecture recherche ; la copie du cache la porte avant master) |
 | 12 | codeparsers | l'import pointé (lot 1) | à venir | à son vert |
@@ -87,5 +87,20 @@ master)` vide, sinon « ARRÊT : la pile a changé » ; (a) `git range-diff avan
 `=`, `!` toléré si les deux versions du commit ont le même diff hors `.md`, `>` toléré s'il ne touche
 que des `.md`, le reste refusé. Sans `PILE_AVANT`, rien ne change. Les têtes d'avant : tty cd6d02907 ·
 recherche 7ac2c13d9 · G 2c3bc3eb7 · embarquement c93f73f06 · 96 512b5e420 · hotfixs 84f949d2c · ED
-cabcc8640 · archi c22fdbf31 · cœur 214e9a99b. Un push refusé (« fetch first ») remet le worktree sur
+cabcc8640 · archi e00fd562d · cœur 67d759962 (à sa repose). Un push refusé (« fetch first ») remet le worktree sur
 la tête testée : à ajouter dans garde-pile (aléa de lucivy).
+
+## Un lot change dans la pile (16 h 3x) : le rang se garde quand c'est un commit ajouté
+
+La passe entière d'ED était rouge à un témoin d'avant le lot (`une_base_neuve_recoit_l_estampille_des_versions`,
+qui figeait la forme Versions ; 2a′-1 pose Generations, c'est l'objet du lot). Le contrat dit « sort et revient
+derrière » ; ici sortir coûtait plus : archi et le cœur sont posés sur ses 19 commits, les retirer de sous eux
+changeait leur code autant qu'un témoin ajouté. **Règle précisée** : un changement qui est un **commit ajouté**
+par-dessus la pile (pas une réécriture) garde son rang ; ceux derrière se reposent sur la nouvelle tête et
+rejouent leur court (un fichier de tests/ est du code pour la garde) ; un C++ seul derrière ne rejoue rien.
+Une réécriture des commits, elle, sort de la pile.
+
+La relecture de recherche sur garde-pile : (c) juge les deux côtés, le `!` compare les diffs hors .md (les `@@`
+gardés, côté prudent), sans PILE_AVANT rien ne change ; **un défaut** : le chemin du push faisait `git rebase
+$neuf` sur une HEAD de pile au lieu de `git rebase --onto $neuf $PILE_AVANT` — un lot d'avant atterri après un
+conflit aurait fait s'arrêter le push à tort. Cas 8 sur le chemin complet, rouge d'abord, puis la recopie.
