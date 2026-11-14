@@ -848,6 +848,56 @@ impl DaemonHost {
         op_response(result)
     }
 
+    /// **`POST /backend/fts-live-ids`** : les documents vivants du plein texte
+    /// d'une table d'un backend ouvert, et le jeton du même lecteur
+    /// (`fts_maintenance`). Le premier temps d'une maintenance : **d'abord ce
+    /// relevé, ensuite la lecture du graphe, puis `POST /backend/maintain`**.
+    /// N'ouvre pas un backend fermé.
+    pub fn fts_live_ids(&self, session: Option<&str>, manifest: &Path, table: &str) -> Value {
+        let result = self.check_session(session).and_then(|_| {
+            let hosted = self.hosted_existing(manifest).ok_or_else(|| format!("{NOT_HOSTED} : {}", manifest.display()))?;
+            let slot = hosted.backend.read().unwrap_or_else(|p| p.into_inner());
+            let backend = slot.as_ref().ok_or_else(|| format!("le backend {} est fermé : l'ouvrir d'abord", hosted.id))?;
+            let (ids, jeton) = backend.catalog.lock().unwrap_or_else(|p| p.into_inner()).fts_live_ids(table)?;
+            Ok(json!({ "table": table, "count": ids.len(), "ids": ids, "token": jeton }))
+        });
+        op_response(result)
+    }
+
+    /// **`POST /backend/maintain`** : la purge d'une liste de `_node_id` et la
+    /// compaction du plein texte d'une table, si elle n'a pas changé depuis le
+    /// relevé dont `token` vient (`fts_maintenance`). **Ordre des verrous : le
+    /// slot du backend en écriture (plus aucun appel, migration ou nœud d'un
+    /// graphe déclaré), puis le catalogue (plus aucun fil de fond)** — l'ordre de
+    /// tout l'hôte, qui ne prend jamais le slot catalogue tenu. Les appels de ce
+    /// backend attendent pendant ce temps (une vingtaine de secondes sur un
+    /// grand index).
+    pub fn fts_maintain(&self, session: Option<&str>, manifest: &Path, v: &Value) -> Value {
+        let result = self.check_session(session).and_then(|_| {
+            let table = v["table"].as_str().ok_or("« table » manque : la table du plein texte (Scope, ou Lucivy_Scope)")?;
+            let jeton = v["token"].as_str().ok_or("« token » manque : celui que rend /backend/fts-live-ids, pris avant la lecture du graphe")?;
+            let purge: Vec<u64> = match v.get("purge_ids") {
+                None | Some(Value::Null) => Vec::new(),
+                Some(Value::Array(a)) => a.iter().map(|x| x.as_u64().ok_or_else(|| format!("« purge_ids » : {x} n'est pas un _node_id"))).collect::<Result<_, _>>()?,
+                Some(x) => return Err(format!("« purge_ids » doit être une liste de _node_id, pas {x}")),
+            };
+            let demande = crate::fts_maintenance::Demande {
+                purge,
+                compact: v["compact"].as_bool().unwrap_or(false),
+                max_purge_ratio: v["max_purge_ratio"].as_f64(),
+                jeton: jeton.to_string(),
+            };
+            let hosted = self.hosted_existing(manifest).ok_or_else(|| format!("{NOT_HOSTED} : {}", manifest.display()))?;
+            let slot = self.ecrire_le_slot(&hosted)?;
+            let backend = slot.as_ref().ok_or_else(|| format!("le backend {} est fermé : l'ouvrir d'abord", hosted.id))?;
+            let mut catalog = backend.catalog.lock().unwrap_or_else(|p| p.into_inner());
+            let rendu = catalog.fts_maintain(table, &demande)?;
+            eprintln!("[démon] {} : maintenance de {table} — {}", hosted.manifest.display(), rendu["summary"].as_str().unwrap_or(""));
+            Ok(rendu)
+        });
+        op_response(result)
+    }
+
     /// **`describe`** : la description du backend.
     pub fn describe(&self, session: Option<&str>, manifest: &Path) -> Value {
         let result = self
@@ -1442,6 +1492,8 @@ impl DaemonHost {
     /// | `DELETE /session` | | `{closed}` |
     /// | `POST /backend/open` (ou `/open`) | `{manifest}` | `{ok, result: {id, reread, describe, reactions}}` ; un manifeste modifié est relu |
     /// | `POST /backend/close` | `{manifest, reason?, until?}` | `{ok, result: {id, closed, held_closed}}` ; la base est lâchée ; avec une raison, la fermeture tient jusqu'à `POST /backend/open` |
+    /// | `POST /backend/fts-live-ids` | `{manifest, table}` | `{ok, result: {table, count, ids, token}}` ; les vivants du plein texte et le jeton du même lecteur ; **d'abord ce relevé, ensuite la lecture du graphe, puis maintain** |
+    /// | `POST /backend/maintain` | `{manifest, table, token, purge_ids?, compact?, max_purge_ratio?}` | `{ok, result: {live_docs, requested, purged, absent, merge_rounds, dictionary_texts, before, after, summary}}` ; refusé si la table a changé depuis le relevé, ou si la purge dépasse `max_purge_ratio` (0,5) des vivants ; ordre des verrous : slot, puis catalogue |
     /// | `POST /describe` | `{manifest}` | `{ok, result}` |
     /// | `POST /call` | `{manifest, name, arguments}` | `{ok, result}` ou `{ok: false, error}` |
     pub fn handle(&self, method: &str, path: &str, session: Option<&str>, body: &[u8]) -> (u16, Value) {
@@ -1506,6 +1558,21 @@ impl DaemonHost {
                     Ok(r) => (200, r),
                     Err(e) => (422, json!({ "ok": false, "error": e })),
                 }
+            }
+            ("POST", "/backend/fts-live-ids" | "/backend/maintain") => {
+                let (v, m) = match corps().and_then(|v| manifeste(&v).map(|m| (v, m))) {
+                    Ok(x) => x,
+                    Err(e) => return (400, json!({ "ok": false, "error": e })),
+                };
+                let reponse = if path == "/backend/maintain" {
+                    self.fts_maintain(session, &m, &v)
+                } else {
+                    match v["table"].as_str() {
+                        Some(table) => self.fts_live_ids(session, &m, table),
+                        None => json!({ "ok": false, "error": "« table » manque : la table du plein texte (Scope, ou Lucivy_Scope)" }),
+                    }
+                };
+                (statut(&reponse), reponse)
             }
             ("POST", "/open" | "/backend/open" | "/backend/close" | "/describe" | "/call") => {
                 let v = match corps().and_then(|v| manifeste(&v).map(|m| (v, m))) {
