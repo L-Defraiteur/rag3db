@@ -183,3 +183,33 @@ fn une_memoire_perdue_revient_entiere_depuis_son_dossier() {
     let apres: Vec<i64> = requetes.iter().map(|q| compter(&neuve, q)).collect();
     assert_eq!(apres, avant, "la mémoire revient entière : {rapport}");
 }
+
+/// **La base est la vérité, les fichiers suivent — jusqu'à l'arrêt compris** (14 novembre 2026, la
+/// première passe de l'archiviste sur la mémoire de Lucie : à la fin de la passe, deux fiches du dernier
+/// document étaient en base sans fichier et quatre fichiers étaient périmés ; la réouverture les a
+/// réécrits). La réaction de miroir attend 50 ms après une rafale ; un arrêt qui la coupe avant perdait
+/// ce qu'elle attendait. Une fiche réécrite et une fiche née juste avant l'arrêt ont leur fichier à jour
+/// quand `shutdown` rend, sans attendre ni rouvrir.
+#[test]
+#[ignore]
+fn un_arret_laisse_les_fichiers_a_jour_de_la_base() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let mut b = ouvrir(&manifeste(dir.path(), "backend.json", "memoire.rag3db"));
+    let fiches = dir.path().join("templates/backends/memory/fichiers/fiches");
+    let premiere = appel(&b, "put_fiche", json!({"record": {"name": FICHE, "about": "Le premier about.", "state": "current"}}));
+    let uuid = premiere["result"]["uuid"].as_str().expect("l'uuid").to_string();
+    let debut = std::time::Instant::now();
+    while !std::fs::read_to_string(fiches.join(format!("{uuid}.md"))).unwrap_or_default().contains("Le premier about.") {
+        assert!(debut.elapsed() < std::time::Duration::from_secs(10), "le miroir n'écrit pas la première fiche en 10 s");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    appel(&b, "put_fiche", json!({"record": {"name": FICHE, "about": "Le second about, écrit juste avant l'arrêt.", "state": "current"}, "expected_revision": 1}));
+    let neuve = appel(&b, "put_fiche", json!({"record": {"name": "une fiche née juste avant l'arrêt", "about": "Elle naît puis le backend s'arrête.", "state": "proposed"}}));
+    let uuid_neuve = neuve["result"]["uuid"].as_str().expect("l'uuid").to_string();
+    b.shutdown().expect("l'arrêt");
+    let texte = std::fs::read_to_string(fiches.join(format!("{uuid}.md"))).unwrap_or_default();
+    assert!(texte.contains("Le second about, écrit juste avant l'arrêt."), "le fichier suit la base à l'arrêt : {texte}");
+    let texte = std::fs::read_to_string(fiches.join(format!("{uuid_neuve}.md"))).unwrap_or_default();
+    assert!(texte.contains("une fiche née juste avant l'arrêt"), "la fiche née juste avant l'arrêt a son fichier : {texte:?}");
+}
+

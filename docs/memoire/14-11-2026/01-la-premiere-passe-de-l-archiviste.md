@@ -94,7 +94,10 @@ la rend `current`), la retirer (`reject`), ou dire lesquelles fusionner.
   (`shutdown`) sans réécrire les fichiers des fiches touchées par ses derniers documents : 2
   manquaient et 4 étaient périmés. La base, elle, les portait. L'hôte les a réécrits à la réouverture,
   à 14 h 51 min 28 s. Ticket :
-  `docs/memoire/tickets/2026-11-14-un-arret-du-backend-laisse-les-fichiers-de-ses-dernieres-ecritures-en-retard.md`.
+  `docs/tickets/closed/2026-11-14-un-arret-du-backend-laisse-les-fichiers-de-ses-dernieres-ecritures-en-retard.md`.
+  C'est corrigé depuis, selon une règle : **la base est la vérité, et les fichiers la suivent jusqu'à
+  l'arrêt compris**. L'arrêt d'un backend régénère ses fichiers composés depuis la base avant de
+  rendre.
 
 ## 6. Ce qui reste sur disque
 
