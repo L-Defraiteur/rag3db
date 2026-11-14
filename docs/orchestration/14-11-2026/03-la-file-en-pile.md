@@ -50,7 +50,7 @@ l'autre, dix fois de suite, même sans rouge.
 | 8 | ED | 2a′-1 (générations de l'ancre) | generations-de-l-ancre-3 → generations-de-l-ancre-pile | 9b0620f66 → pile c22fdbf31, puis **e00fd562d** sur cabcc8640 (19 commits + le témoin e2e_scope_versions corrigé ; rang gardé, un commit ajouté) |
 | 9 | archi | jauge du contexte (+ quatre mineurs s'ils sont verts) | jauge-ce-qui-pese-3 → jauge-ce-qui-pese-pile | 5ad3c990e → pile 214e9a99b, puis **67d759962** sur e00fd562d (jauge-ce-qui-pese-pile-2) |
 | 10 | cœur | correctif (a) perte de Note | annulation-garde-les-autres-2 → annulation-garde-les-autres-pile | 9b0e73c9c → pile 960eb8e3a, puis **41a7de35a** sur 67d759962 (annulation-garde-les-autres-pile-2) ; juge vers 17 h 15 |
-| 11 | G | la garde apprend la pile | garde-pile | 06c0a3771 sur c93f73f06 (vert 16 h 15, 25 témoins ; relecture recherche ; la copie du cache la porte avant master) |
+| 11 | G | la garde apprend la pile | garde-pile | cd103b619 sur c93f73f06 (garde 2f1914405 : --onto, push refusé remis, 27 témoins ; relue par recherche à 16 h 2x ; recopie au cache des deux postes au mot de c7) |
 | 12 | codeparsers | l'import pointé (lot 1) | à venir | à son vert |
 
 Chaque session dit à c7 et au rang suivant la tête de sa branche de pile dès qu'elle est poussée.
