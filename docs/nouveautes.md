@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 14 novembre2026 — Le terminal de l'agent, rejoué contre un vrai hôte : une demande ne s'affiche plus deux fois sous tmux, « fini » ne se lit plus à l'ouverture d'une tâche qui repart, tous les genres de la boîte sont en français (compte rendu, étape faite…), la prose passe à la ligne entre deux mots, et le repli sous mosh garde sa commande entière. Le même essai a trouvé que l'équipier rend parfois un compte rendu au lieu du texte demandé : ticket pour archi.
+
 - 14 novembre2026 — La saisie du terminal de l'agent devient un éditeur de ligne : flèches, Début et Fin, sauts de mot, Suppr, Ctrl-W, Ctrl-U, Ctrl-K, historique des envois aux flèches, saut de ligne par Alt-Entrée, collage d'un bloc, Ctrl-C qui vide avant de quitter, AltGr gardé sous Windows ; prouvé au clavier à travers ssh, tmux et mosh. Plus de rouge uni : la prose de l'équipier prend la couleur du terminal, avec le Markdown courant (titres, puces, gras, italique), et les en-têtes de la boîte gardent l'accent du thème, en français.
 
 - 14 novembre2026 — Sous mosh, qui ne garde aucun historique au-delà de l'écran, le terminal de l'agent ouvre de lui-même un journal de la séance en texte brut, et dit dans sa zone vivante la commande qui le relit (`less <journal>`) ; `--journal <fichier>` fait de même partout. Rien à installer ni à régler ; les journaux de plus de sept jours partent d'eux-mêmes. Rouge puis vert sous mosh par le harnais, la latence inchangée (47 ms).
