@@ -353,3 +353,8 @@ Rust.
 crochet en `Weak` (arbre principal, d1578cd56) pousse ; puis la réécriture du `IN` (recherche) → (B) et le
 pliage des listes (cœur, deux pushs, rang 27) → garde-pile-3 (G) → dense sur `Tenue<C>` (embarquement) →
 le prédicat (ED, après la parité) → la chaîne Rust 1.98.1 (G, dernière).
+
+**21 h 4x — vingt-sept atterris** : le crochet en `Weak` (a76f36a08d, 3/3) **ferme le rouge de l'hôte** qui
+dormait depuis le 13 (e2e_demon_hote 14/14 sous 373b5477b). Recherche pousse la réécriture du `IN`
+(e0aaa2d1f) à son vert ; puis le cœur (deux pushs), G (garde-pile-3), embarquement (dense sur `Tenue<C>`,
+vrai jeu vert), ED (prédicat, après la parité), G (chaîne Rust 1.98.1).
