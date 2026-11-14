@@ -1293,6 +1293,10 @@ fn synchroniser_par_generations(
     let mut avancement = SourceSyncProgress { files_total: retenus.len() + partis.len(), ..Default::default() };
     let par_paquet = catalog.file_batch_size().unwrap_or(options.batch_files).max(1);
     for paquet in retenus.chunks(par_paquet) {
+        // Lus, avant de les lire, et le retard qui tombe après l'écriture : comme la synchronisation
+        // d'instantané (`a_sync_clears_the_lag_of_the_files_it_reads`).
+        marquer_lus(&registry_key(source), paquet);
+        let lu_a = crate::catalog::retard::now_ms();
         let mut lot = Vec::with_capacity(paquet.len());
         for path in paquet {
             let contenu = source.read(path)?;
@@ -1308,6 +1312,10 @@ fn synchroniser_par_generations(
         report.scopes_written += r.scopes_upserted;
         report.relations += r.relations;
         report.failed += r.failed;
+        let (lag, cell) = (catalog.file_lag(), catalog.scope().clone());
+        for path in paquet {
+            lag.done(&cell, path, lu_a);
+        }
         avancement.files_done += paquet.len();
         avancement.scopes_written = report.scopes_written;
         progress(avancement);
@@ -1320,6 +1328,24 @@ fn synchroniser_par_generations(
         progress(avancement);
     }
     Ok((report, avancement))
+}
+
+/// **Le pas de l'écrivain avant une ingestion directe** (`Catalog::ingest_code_jusqu_a` hors des chemins
+/// de ce module) : sous les générations, il décide la naissance de chaque ligne de l'analyse et retire
+/// ce qui change. Sans lui, une ligne née au rang en attente et sa clé nue se doubleraient.
+#[cfg(test)]
+pub(crate) fn preparer_par_generations(catalog: &mut Catalog, source: &dyn FileSource, analysis: &crate::code::CodeAnalysis) -> Result<(), String> {
+    if catalog.generations.is_none() {
+        return Ok(());
+    }
+    catalog.naissances.clear();
+    for f in &analysis.files {
+        let (source_id, indexed_path) = crate::code_tools::indexed_name(source, &f.path);
+        let scopes: Vec<&crate::code::ScopeRecord> =
+            analysis.scopes.iter().filter(|sc| crate::workspace_path::slash(&sc.file_path) == indexed_path).collect();
+        ecrire_par_generations(catalog, &scopes, Some(f), &source_id, &indexed_path)?;
+    }
+    Ok(())
 }
 
 /// L'arrêt est-il demandé après ce paquet ? Le drapeau des options, ou le
