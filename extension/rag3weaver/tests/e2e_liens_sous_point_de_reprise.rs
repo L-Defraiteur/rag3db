@@ -26,7 +26,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use rag3weaver::config::FieldType;
-use rag3weaver::connection::{CypherValue, DbConnection};
+use rag3weaver::connection::CypherValue;
 use rag3weaver::disponibilite::Disponibilites;
 use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::records::RefOrUuid;
