@@ -548,6 +548,23 @@ mod tests {
         assert_eq!(projet, vec!["Mon.Outil", "Mon.Outil.Core"]);
     }
 
+    /// De bout en bout : un `using` d'un paquet du `.csproj` est une dépendance (au plus long préfixe), un
+    /// espace de la bibliothèque standard est builtin, un espace du projet (son `RootNamespace`) est project.
+    #[cfg(feature = "code")]
+    #[test]
+    fn l_analyse_relie_un_using_a_son_paquet_nuget() {
+        let m = lire(&[(
+            "Outil.csproj",
+            "<Project><PropertyGroup><RootNamespace>Mon.Outil</RootNamespace></PropertyGroup><ItemGroup><PackageReference Include=\"Newtonsoft.Json\" Version=\"13\" /></ItemGroup></Project>\n",
+        )]);
+        let source = "using System.Text.Json;\nusing Newtonsoft.Json.Linq;\nusing Mon.Outil.Interne;\n\nnamespace Mon.Outil\n{\n    public class Lecteur\n    {\n        public JObject Lire(string s) { return JObject.Parse(s); }\n    }\n}\n";
+        let a = crate::code::analyze_in_project_avec("/virtual", vec![("Lecteur.cs".to_string(), source.to_string())], "", None, Some(&m));
+        let provenance = |nom: &str| a.libraries.iter().find(|l| l.name == nom).map(|l| l.provenance.clone());
+        assert_eq!(provenance("Newtonsoft.Json.Linq"), Some(Some("dependency".to_string())), "{:?}", a.libraries);
+        assert_eq!(provenance("System.Text.Json"), Some(Some("builtin".to_string())), "{:?}", a.libraries);
+        assert_eq!(provenance("Mon.Outil.Interne"), Some(Some("project".to_string())), "{:?}", a.libraries);
+    }
+
     #[test]
     fn pyproject_poetry_requirements_et_vcpkg() {
         let m = lire(&[
