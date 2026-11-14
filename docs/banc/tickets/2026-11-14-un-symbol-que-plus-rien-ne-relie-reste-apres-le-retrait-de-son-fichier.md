@@ -1,12 +1,12 @@
 # Un Symbol que plus rien ne relie reste après le retrait de son fichier
 
 - **État** : ouvert ; constat, pas de correctif. Rétention voulue ou fuite, c'est à décider.
-- **Famille** : produit
+- **Famille** : rag3weaver, schéma de code
 - **Gravité** : faible aujourd'hui. Les lignes restent et ne se reprennent jamais.
 - **Atteignable en service** : oui, à chaque fichier supprimé ou renommé, et à chaque nom qui
   disparaît du code.
 - **Touche rag3weaver** : oui, `code.rs`, l'ingestion des symboles.
-- **Pour** : à attribuer par l'orchestration.
+- **Pour** : everything declarative (au mot de c7, 14 nov. 23 h 3x).
 - **Signalé par** : banc, relevé des orphelins du 14 novembre (vérification demandée par c7).
 - **Ouvert le** : 14 novembre 2026
 
@@ -37,6 +37,19 @@ File.
   des réponses : `usages` ou une recherche sur Symbol rendent un nom qui n'existe plus dans le code.
 - **Fuite** : la table grandit à chaque nom disparu. Le remède serait de reprendre, à la fin de
   l'instantané du code, les Symbol sans aucune relation.
+
+## La lecture de l'orchestration (c7, 14 nov. 23 h 3x), telle quelle
+
+Un Symbol est un rendez-vous par nom, hors session : son retrait n'appartient à aucune fin
+d'instantané. Ce n'est donc pas une fuite du retrait, c'est **une rétention sans règle**.
+
+- **La règle se pose dans l'écrivain de 2a′-2** : un Symbol que plus aucune relation vivante ne
+  relie se ferme à la publication (w). Il se rouvre si le nom revient, avec le même uuid, par
+  `hashsafe`.
+- **Sous la forme sans générations, on ne touche à rien** : trois Symbol par fichier retiré, c'est
+  une poussière. Un ménage à part l'effacerait sans histoire.
+
+Everything declarative tranche.
 
 ## La preuve
 
