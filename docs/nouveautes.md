@@ -27,6 +27,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **14 nov. — Un `using` C# trouve son paquet NuGet.** Les `using` se lisent enfin (le parseur C# n'en
+  trouvait aucun) et chacun a sa bibliothèque et sa provenance, sans rien deviner : `using
+  Newtonsoft.Json.Linq` est une dépendance du `.csproj` (le paquet `Newtonsoft.Json`, au plus long
+  préfixe), `System.Text.Json` est la bibliothèque standard (417 espaces tirés de la doc .NET), un espace
+  du `RootNamespace` est du projet ; un alias (`using J = …`) lie son nom. Se lisent : les `.csproj`,
+  `packages.config` et `Directory.Packages.props` (codeparsers `4194456`).
 - **14 nov. — `import yaml` se reconnaît dans `PyYAML`.** Un nom de distribution Python qui n'est pas celui
   de son module (PyYAML → yaml, scikit-learn → sklearn, Pillow → PIL, beautifulsoup4 → bs4…) se relie
   désormais par une table livrée de 1 094 distributions (tirée de pipreqs, sa source et sa date en tête).
