@@ -161,3 +161,26 @@ cette culture de travail pourrait servir au projet. » Deux étages :
   (systemd-nspawn ou bubblewrap : ressources bornées, arbre du worktree seul visible, réseau déclaré),
   déclaré dans le manifeste de la tâche. Graine ; à ouvrir quand les commandes de l'atelier sortent du
   « test et relance ».
+
+## Infra as code, deux étages (Lucie, 14 novembre 2026, 16 h 30)
+
+« Il y a deux trucs : avec un backend rag3weaver, ou avec un backend standard — docker, NestJS… —
+mais managé par rag3weaver. »
+
+1. **L'infra de rag3weaver lui-même**, déclarée : les postes, leurs enveloppes (`lourds-max`,
+   `coeurs-libres`, mémoire), les services d'embarquement et leur carte, leur résidence (`maintenir`,
+   `a_demande`, baux, éviction, activation distante), les backends et leurs bases. Aujourd'hui répartie
+   entre les manifestes, `poste` et les unités systemd posées à la main ; la cible est un seul fichier
+   d'hôte que le poste applique (le Manquant 7 d'embarquement, « les services résidents déclarés par une
+   Activation », en est le premier pas).
+2. **L'infra d'un projet quelconque, managée par rag3weaver** : les services que l'agent a besoin de voir
+   tourner pour travailler (un `docker compose`, un serveur NestJS, une base de dev, un worker) déclarés
+   dans le manifeste du projet ou de la tâche **avec le même modèle que nos fournisseurs** — résidence,
+   activation au premier usage, bail, éviction, identité vérifiée, journal, état dans `/etat` et l'IDE.
+   L'agent ne lance plus `docker compose up` en aveugle : rag3weaver sait ce qui tourne, pour qui, depuis
+   quand, et le rend. C'est l'hybride worktree / agent / infra : un bac à sable par tâche dont l'infra
+   déclarée fait partie.
+
+Le GPU reste partagé par les services d'embarquement : les modèles servent à tous, aucune tâche ne
+les emporte dans sa boîte. Graine ; pas de lot avant que l'atelier exécute des commandes au-delà de
+« teste et relance » et que le Manquant 7 soit posé.
