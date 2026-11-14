@@ -141,3 +141,34 @@ services posés à la main ne changent pas.
 (effacé), a été repris pour le worktree `rag3db-a-la-demande` par `RAG3WEAVER_TARGET_REPRENDRE=1`,
 l'usage prévu de la garde des targets (elle efface les empreintes des paquets locaux et garde les
 dépendances) ; sans lui, la garde refuse un target venu d'un autre arbre.*
+
+## Les activations nommées et le groupe (14 novembre)
+
+*Décision de c7, au mot de Lucie : « une abstraction, pas trois configs qui divergent ».*
+
+- **La déclaration.** `activations: { "<nom>": {…} }` au niveau du manifeste. Chaque déclaration de
+  `models` la cite par son nom : `"activation": "<nom>"`. Au chargement, le nom cité reçoit le bloc et
+  son `nom` (`resoudre_les_activations`, `src/backend.rs`). Un nom absent est refusé en le nommant, avec
+  la liste des noms déclarés. Une activation nommée dit le **`modele`** que son processus charge
+  (`RAG3WEAVER_EMBED_MODEL`), parce que le modèle d'une déclaration du relecteur n'est pas celui du
+  processus.
+- **Un seul mécanisme.** Un bloc écrit dans la déclaration reste valable : c'est une activation nommée
+  d'après son `model`. Le lot du 13 novembre ne change donc pas de forme.
+- **La recette** attestée par le fournisseur devient `hash(nom, modele, programme, args, env, profil,
+  peripherique)`. La dimension n'en fait plus partie ; elle se vérifie à part, pour le dense.
+- **L'identité, par capacité** : le dense (modèle et dimension), le creux (modèle servi et `sparse`), le
+  relecteur (`reranker` au `/sante`), l'OCR (`ocr` au `/sante`). Toutes avec la même recette.
+- **Partagés** : deux déclarations qui citent le même nom, à la même adresse, partagent le processus,
+  la coordination et l'éviction. Chaque capacité tient son bail ; le fournisseur s'évince quand plus
+  aucun bail ne le tient.
+- **Le comportement**, pour le creux, le relecteur et l'OCR, comme pour le dense :
+  - à la demande, rien à l'ouverture ; le premier appel active ; le bail est rendu après
+    `rendre_le_bail_secs` sans appel ;
+  - maintenu, l'activation est immédiate ;
+  - un appel qui trouve le fournisseur planté le relance une fois, ou se refuse en disant les deux
+    temps ; `relances` compte.
+- **Ce que ce lot ne fait pas** (tickets) :
+  - un creux à la demande n'a **pas de dual** : le dual se décide aujourd'hui sur l'identité du
+    fournisseur, inconnue avant le premier appel ;
+  - le dense garde son embarqueur à lui (`ALaDemande`, `Maintenu`) à côté de la tenue générique des
+    trois autres capacités.
