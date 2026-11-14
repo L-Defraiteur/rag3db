@@ -488,3 +488,37 @@ fn une_fiche_proposee_se_confirme_par_son_uuid() {
     assert!(e.contains("aucune fiche"), "{e}");
 }
 
+/// **La trace de l'archiviste** (14 novembre 2026, le jeu de banc pour juger un décideur sur les
+/// décisions de l'archiviste) : `trace: true` fait rendre, par section, le texte, les candidates dans
+/// l'ordre présenté (alias, nom, résumé), l'étiquette brute du modèle, le sujet proposé, la voie du
+/// rangement et le kind décidé. Rien n'en est écrit dans la base ; sans `trace`, le rapport ne change pas.
+#[test]
+#[ignore]
+fn la_trace_rend_par_section_les_candidates_et_l_etiquette_brute() {
+    let serveur = FakeServer::start_sequence(vec![etiquette("candidate_1"), etiquette_decrite("create", "Hooks de Claude Code", "Les crochets de Claude Code qui appellent la mémoire de rag3weaver."), etiquette("none")]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    appel(&b, "put_fiche", json!({"record": {"name": FICHE, "about": "Comment le moteur rejoue son journal à l'ouverture.", "state": "current"}}));
+    const NOTE: &str = "# Note\n\n## Reprise\n\nLe journal se rejoue à l'ouverture, en entier, avant toute écriture.\n\n## Les crochets\n\nLes hooks de Claude Code appellent la mémoire à chaque prompt de la session.\n";
+    let r = appel(&b, "archive", json!({"titre": "Note", "contenu": NOTE, "jour": "2026-11-14", "allow_create": true, "trace": true}));
+    assert_eq!(r["result"]["errors"], json!([]), "{r}");
+    let t = r["result"]["results"].as_array().unwrap_or_else(|| panic!("la trace : {r}"));
+    assert_eq!(t.len(), 2, "{r}");
+    assert_eq!(t[0]["section"], json!("Reprise"), "{r}");
+    assert!(t[0]["texte"].as_str().unwrap().contains("se rejoue"), "{r}");
+    assert_eq!(t[0]["etiquette"], json!("candidate_1"), "l'étiquette brute du modèle : {r}");
+    assert_eq!(t[0]["candidates"][0]["alias"], json!("candidate_1"), "{r}");
+    assert_eq!(t[0]["candidates"][0]["nom"], json!(FICHE), "{r}");
+    assert!(t[0]["candidates"][0]["resume"].as_str().unwrap().contains("rejoue"), "{r}");
+    assert_eq!(t[0]["voie"], json!("candidate"), "{r}");
+    assert_eq!(t[0]["kind"], json!("fiche"), "{r}");
+    assert_eq!(t[1]["etiquette"], json!("create"), "{r}");
+    assert_eq!(t[1]["sujet"], json!("Hooks de Claude Code"), "{r}");
+    assert_eq!(t[1]["kind"], json!("create"), "{r}");
+    let sans = appel(&b, "archive", json!({"titre": "Note 2", "contenu": "# Note 2\n\n## Rien\n\nUne section de plus, sans aucun rapport avec le reste.\n", "jour": "2026-11-14"}));
+    assert!(sans["result"].get("results").is_none(), "sans trace, le rapport ne change pas : {sans}");
+}
+
