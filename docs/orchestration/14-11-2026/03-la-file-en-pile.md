@@ -44,8 +44,8 @@ l'autre, dix fois de suite, même sans rouge.
 | 2 | tty | tty-6 (tmux/mosh mesurés) | cx-tty-6-2 → cx-tty-6-pile | 4583eff8e → pile 7ac2c13d9 sur cd6d02907 |
 | 3 | recherche | surveillant, puis plafond d'instantané | surveillant-2, plafond-d-instantane → recherche-pile | a36f707dd, 9b7ff76e8 → pile 2c3bc3eb7 sur 7ac2c13d9 |
 | 4 | G | cas 6c du poste (trap avant la CI) | tenant-signal → tenant-signal-pile | ab7c44fb5 → pile c93f73f06 sur 2c3bc3eb7 |
-| 5 | embarquement | reprise après plantage | reprise-apres-plantage (luciepc) | 17afd3820 |
-| 6 | 96 | miroir, nom exact, about | (miroir), lot-96-nom-exact, lot-96-about | —, ccd7f721b, 73c20f333 |
+| 5 | embarquement | reprise après plantage | reprise-apres-plantage → reprise-apres-plantage-pile | 17afd3820 → pile 512b5e420 sur c93f73f06 (conflit de docs/nouveautes.md résolu) |
+| 6 | 96 | miroir, nom exact, about | lot-96-pile (miroir 48445fdeb, nomex bff4ea79f, about 84f949d2c) | pile 84f949d2c sur 512b5e420 |
 | 7 | hotfixs | témoin du dictionnaire (C++ test seul) | chaine-au-point-de-reprise-2 | 9ded42107 |
 | 8 | ED | 2a′-1 (générations de l'ancre) | generations-de-l-ancre-3 | 9b0620f66 (check_features corrigé ; passe en cours) |
 | 9 | archi | jauge du contexte (+ quatre mineurs s'ils sont verts) | jauge-ce-qui-pese-3 | 5ad3c990e |
@@ -61,8 +61,9 @@ Chaque session dit à c7 et au rang suivant la tête de sa branche de pile dès 
 descend plus du commit testé, et la base du rejeu ferait voir le code des lots d'avant. G écrit un
 mode `PILE_AVANT=<tête du lot d'avant>` dans un lot à part, `garde-pile` (rang 11 : sa tête de pile était
 déjà publiée et prise pour base par embarquement) : (a) `git range-diff
-<avant>..<testé> origin/master..HEAD` à `=` seuls, sauf des commits ajoutés qui ne touchent que des
-`.md` ; (b) `<avant>` ancêtre du testé ; (c) `code_apporte(<avant>, origin/master)` vide, sinon
+<avant>..<testé> origin/master..HEAD` à `=` pour tout commit qui touche du code ; un `!` toléré si la
+différence entre les deux versions ne touche que des `.md` (le conflit de `docs/nouveautes.md` résolu au
+rebase), un `>` toléré s'il ne touche que des `.md` ; (b) `<avant>` ancêtre du testé ; (c) `code_apporte(<avant>, origin/master)` vide, sinon
 « la pile a changé » et rejeu. Rouge d'abord dans `test_push_garde.sh`, relecture par recherche,
 recopie au cache des deux postes au mot de c7, avant le dernier pas de tty, le premier de la pile.
 La copie du cache fait autorité et n'attend pas master : entre la recopie et le rang 11, `--derive`
