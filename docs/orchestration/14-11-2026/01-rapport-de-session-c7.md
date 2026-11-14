@@ -353,3 +353,33 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   qui dit ce qu'il chassait sans le trouver.
 - **Second « à toi » à codeparsers** : le lot des manifestes. Puis lucivy, tty-6, recherche, G,
   embarquement, 96, hotfixs (le témoin), le cœur.
+
+## 15 h 5x — la provenance par les manifestes sur master, le tour à lucivy
+
+- **codeparsers a poussé e34da698d** : `manifestes.rs` lit Cargo.toml, Cargo.lock, package.json,
+  pyproject (un correctif : une liste pyproject ne se fermait pas sur le `]` des extras,
+  `requests[socks]`), la provenance `dependency` et `project` en sort, `/etat` dit la limite des
+  manifestes à côté de `manifests_read`. Pointeur du sous-module f413dc63ac vérifié. Passe complète
+  (lib 0c41f9fe6 : check_features 8/8, lib 2 374/0, e2e_code 54/54, e2e_postgres 36/36,
+  e2e_code_sync 18/18, e2e_usages 19/19), dernier pas sans rejeu (rien de code depuis la base),
+  garde à jour, trois contrôles lus. Les 415 jugés ce matin tiennent (241 → 0 inconnue). Ménage à
+  luciepc autorisé, journaux archivés d'abord ; ensuite ses tickets (import Python pointé, builtins
+  en fichiers de données).
+- **« À toi » à lucivy** pour la montée 4.3.7. Puis tty-6, recherche (surveillant puis plafond, un
+  tour), G (6c), embarquement, 96 (miroir puis nomex, un tour), hotfixs (le témoin), le cœur.
+- **lucivy** a fusionné #32 et l'outil de graisse (#34, cinq commits reportés sur main, fdf20d4), sans
+  tag. Lucie a tranché dans sa fenêtre : fusion dans main dès la CI verte sans lui repasser, une
+  version seulement quand ce qui s'accumule apporte assez, ou pour un correctif obligatoire. Écrit
+  en mémoire.
+- **recherche** : plafond-d-instantane vert sur toute la passe au portable (9b7ff76e8 ; lib entière
+  2 367/2 367, e2e_lectures 27/27, e2e_code 36/36, navigateur 43/43) ; un crochet mort sans
+  `rag3db-native` corrigé pour check_features ; un faux rouge de son moniteur (il lisait le
+  passe.code d'avant) dit pour ce qu'il est. Ses deux lots dans un même tour ; elle passe aux
+  exclusions 1 et 5 dans le manifeste.
+- **96** : nomex vert — `archive_subject` cherchait la voisine avec les options des candidates
+  (`limit 8`) : elle n'y était que deux fois sur huit, classée jusqu'au 38e rang sur 116. Il lit
+  maintenant toutes les fiches sans classement, nom exact d'abord, sinon la plus proche en mots. Le
+  témoin a dû mettre 119 leurres plus proches que la voisine pour rougir. Miroir puis nomex dans un
+  tour ; le lot 3 (les about), empilé, suit s'il est vert.
+- **hotfixs** : le témoin du dictionnaire (chaine-au-point-de-reprise-2, 9ded42107) vert en Release
+  sur la tête rebasée, en file après 96.
