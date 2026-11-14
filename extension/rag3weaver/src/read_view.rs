@@ -36,6 +36,28 @@ pub trait ReadCatalog {
     /// **Ce que voient les lectures** de cette base, si elle a des générations (2a′) : un saut ou
     /// une sélection qu'un lecteur traduit lui-même s'y borne ([`crate::generations::Visibilite`]).
     fn visibilite(&self) -> Option<&crate::generations::Visibilite>;
+    /// **Une sélection traduite et bornée** aux lignes visibles (2a′) : pour le lecteur qui exécute
+    /// lui-même ce que le dialecte traduit, au lieu de passer par `run_read_plan`.
+    fn traduire_select(&self, s: &rag3weaver_ir::Select) -> Result<String, rag3weaver_ir::TranslateError> {
+        match self.visibilite() {
+            Some(v) => self.dialect_arc().select(&v.borner_select(s)),
+            None => self.dialect_arc().select(s),
+        }
+    }
+    /// Un saut traduit et borné au nœud atteint (voir [`crate::generations::Visibilite::borner_hop`]).
+    fn traduire_hop(&self, h: &rag3weaver_ir::Hop) -> Result<String, rag3weaver_ir::TranslateError> {
+        match self.visibilite() {
+            Some(v) => self.dialect_arc().hop(&v.borner_hop(h)),
+            None => self.dialect_arc().hop(h),
+        }
+    }
+    /// Un compte traduit et borné aux lignes visibles.
+    fn traduire_count(&self, c: &rag3weaver_ir::Count) -> Result<String, rag3weaver_ir::TranslateError> {
+        match self.visibilite() {
+            Some(v) => self.dialect_arc().count(&v.borner_count(c)),
+            None => self.dialect_arc().count(c),
+        }
+    }
     fn entity_config(&self, name: &str) -> Option<&EntityConfig>;
     fn get_relation_def(&self, name: &str) -> Option<&RelationDef>;
     fn entity_uuid(&self, entity_name: &str, data: &BTreeMap<String, CypherValue>) -> Result<String, CatalogError>;
@@ -363,8 +385,28 @@ impl Forme<'_> {
         // moins de résultats : il **plantait**, « Cannot find property
         // file_path for n » — sur `Catalog::search` comme sur le nœud. Trouvé
         // le 27 août en câblant le domaine de travail au chemin vectoriel.
-        let (where_str, mut params, match_str) =
+        let (mut where_str, params, mut match_str) =
             self.compile_filter_utilisateur(entity, condition)?;
+        // La visibilité du parent (2a′), sur l'alias `p` du filtre : imposée à côté d'un filtre,
+        // et seule si une ligne n'est pas visible (voir `resoudre_le_filtre`).
+        if let Some(v) = self.generations.as_ref() {
+            if where_str.is_some() || !v.tout_visible {
+                if let Some(c) = v.clause_sur(self.dialect.as_ref(), entity, "p") {
+                    if where_str.is_none() {
+                        let jointure = self.dialect.chunk_parent_join("n", "p", entity);
+                        match_str = Some(match match_str.take() {
+                            Some(m) => format!("{jointure} {m}"),
+                            None => jointure,
+                        });
+                    }
+                    where_str = Some(match where_str.take() {
+                        Some(w) => format!("({w}) AND {c}"),
+                        None => c,
+                    });
+                }
+            }
+        }
+        let mut params = params;
 
         if !self.multi_cell {
             return Ok((where_str, params, match_str));
@@ -424,11 +466,22 @@ impl Forme<'_> {
             .parse_condition(condition, filter_entity, filter_alias)
             .map_err(|e| CatalogError::FilterError(e.to_string()))?;
 
+        let resolve_alias = if join_from.is_some() { "idx" } else { "n" };
+        // La visibilité des générations (2a′, page 03, § 3) : imposée à côté du filtre ; sans
+        // filtre, seulement si une ligne de la table n'est pas visible, car « aucune clause »
+        // veut dire ici « toutes les lignes ».
+        let mut parsed = parsed;
+        if let Some(v) = self.generations.as_ref() {
+            if !parsed.where_clauses.is_empty() || !v.tout_visible {
+                if let Some(c) = v.clause_sur(self.dialect.as_ref(), entity, resolve_alias) {
+                    parsed.where_clauses.push(c);
+                }
+            }
+        }
         if parsed.where_clauses.is_empty() {
             return Ok(None);
         }
 
-        let resolve_alias = if join_from.is_some() { "idx" } else { "n" };
         let query = match chunk_table {
             None => self.dialect.filter_resolve_offsets(
                 entity,
@@ -778,16 +831,22 @@ impl ReadCatalog for ReadView {
         if result.is_empty() {
             return Ok(None);
         }
-        Ok(Some(ligne_en_dictionnaire(&result.columns, &result.rows[0])))
+        let ligne = ligne_en_dictionnaire(&result.columns, &result.rows[0]);
+        // Une ligne d'une autre génération n'est pas rendue (2a′).
+        Ok(self.generations.as_ref().is_none_or(|v| v.admet(&ligne)).then_some(ligne))
     }
     fn find_by_field(&self, entity_name: &str, field: &str, value: CypherValue, fields: &[&str]) -> Result<Vec<BTreeMap<String, CypherValue>>, CatalogError> {
         self.entite_connue(entity_name)?;
-        let cypher = self.dialect.select_by_field(entity_name, field, fields);
+        // La visibilité des générations (2a′) : ce lecteur écrit sa requête sans IR, la ligne est
+        // donc lue avec ses trois colonnes et gardée si elle est visible.
+        let (fields, ajoutes) = crate::generations::champs_et_visibilite(self.generations.as_ref(), entity_name, fields);
+        let cypher = self.dialect.select_by_field(entity_name, field, &fields);
         let result = self
             .conn
             .execute_with_params(&cypher, &[QueryParam::new("value", value)])
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
-        Ok(result.rows.iter().map(|row| ligne_en_dictionnaire(&result.columns, row)).collect())
+        let lignes = result.rows.iter().map(|row| ligne_en_dictionnaire(&result.columns, row)).collect();
+        Ok(crate::generations::garder_les_visibles(self.generations.as_ref(), entity_name, lignes, &ajoutes))
     }
     fn relation_names(&self) -> Vec<String> {
         let mut v: Vec<String> = self.relations.keys().cloned().collect();

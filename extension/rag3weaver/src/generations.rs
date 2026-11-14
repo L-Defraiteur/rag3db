@@ -11,7 +11,8 @@
 //! `graph_walk::run_hop`), une sélection ou un compte que le code traduit lui-même.
 
 use rag3weaver_ir::{Count, Form, Hop, Plan, Predicate, Select};
-use std::collections::BTreeSet;
+use crate::connection::CypherValue;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// La colonne de la couche d'une ligne.
 pub const COUCHE: &str = "_couche";
@@ -26,6 +27,11 @@ pub struct Visibilite {
     pub tables: BTreeSet<String>,
     pub couche: String,
     pub rang: i64,
+    /// **Toutes les lignes sont visibles** : aucune ligne d'une autre couche, ni retirée, ni posée
+    /// après `rang`. C'est l'état de toute base de 2a′-1, dont rien n'écrit encore une seconde
+    /// génération ; l'écrivain qui en pose une le défait (2a′-2). Il ne sert qu'à un lecteur sans
+    /// filtre, qui rendrait sinon l'ensemble des lignes visibles au lieu de « toutes » (page 03, § 3).
+    pub tout_visible: bool,
 }
 
 impl Visibilite {
@@ -43,6 +49,14 @@ impl Visibilite {
             }
             Some(f) => Predicate::AllOf(vec![f, visible]),
         }
+    }
+
+    /// La clause SQL de visibilité de `table` sur `alias`, si elle a des générations.
+    pub fn clause_sur(&self, dialect: &dyn crate::dialect::SchemaDialect, table: &str, alias: &str) -> Option<String> {
+        if !self.tables.contains(table) {
+            return None;
+        }
+        dialect.condition_visible_sur(alias, &self.couche, self.rang)
     }
 
     /// Une sélection bornée aux lignes visibles de sa table.
@@ -95,4 +109,53 @@ impl Visibilite {
         }
         p
     }
+
+    /// **Une ligne lue à la main est-elle visible ?** Pour les lecteurs qui écrivent leur requête
+    /// sans IR (`get`, `find_by_field`) : la ligne porte ses trois colonnes, sous leur nom ou sous
+    /// `alias.nom`. Une ligne qui ne les porte pas est d'une table sans générations.
+    pub fn admet(&self, ligne: &BTreeMap<String, CypherValue>) -> bool {
+        let champ = |nom: &str| {
+            ligne.iter().find(|(k, _)| k.as_str() == nom || k.rsplit_once('.').is_some_and(|(_, c)| c == nom)).map(|(_, v)| v)
+        };
+        let Some(couche) = champ(COUCHE) else { return true };
+        let entier = |v: Option<&CypherValue>| v.and_then(|v| v.as_i64());
+        couche.as_str() == Some(self.couche.as_str())
+            && entier(champ(DEPUIS)).is_some_and(|d| d <= self.rang)
+            && entier(champ(JUSQU_A)).is_none_or(|j| j > self.rang)
+    }
+}
+
+/// Les champs d'un `find_by_field` avec ceux de la visibilité quand la table en a, et ceux qui ont
+/// été ajoutés (pour les ôter du résultat).
+pub fn champs_et_visibilite<'a>(v: Option<&Visibilite>, table: &str, fields: &[&'a str]) -> (Vec<&'a str>, Vec<&'static str>) {
+    let mut f = fields.to_vec();
+    let mut ajoutes = Vec::new();
+    if v.is_some_and(|v| v.tables.contains(table)) {
+        for c in [COUCHE, DEPUIS, JUSQU_A] {
+            if !f.contains(&c) {
+                f.push(c);
+                ajoutes.push(c);
+            }
+        }
+    }
+    (f, ajoutes)
+}
+
+/// Les lignes visibles d'un `find_by_field`, sans les champs que [`champs_et_visibilite`] a ajoutés.
+pub fn garder_les_visibles(
+    v: Option<&Visibilite>,
+    table: &str,
+    lignes: Vec<BTreeMap<String, CypherValue>>,
+    ajoutes: &[&str],
+) -> Vec<BTreeMap<String, CypherValue>> {
+    let Some(v) = v.filter(|v| v.tables.contains(table)) else { return lignes };
+    let base = |k: &str| k.rsplit_once('.').map_or(k, |(_, c)| c).to_string();
+    lignes
+        .into_iter()
+        .filter(|l| v.admet(l))
+        .map(|mut l| {
+            l.retain(|k, _| !ajoutes.contains(&base(k).as_str()));
+            l
+        })
+        .collect()
 }
