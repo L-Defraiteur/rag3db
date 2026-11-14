@@ -33,6 +33,10 @@ pub struct Manifestes {
     /// Les `replace` de `go.mod` (`ancien => nouveau`), tels qu'écrits (ils sont suivis : voir `lire_go_mod`).
     #[serde(default)]
     pub remplacements_go: BTreeSet<String>,
+    /// **Les alias de résolution du dépôt, par langue** (les `paths` de tsconfig : `@app/*` → `@app/`) : un
+    /// import qui commence par l'un d'eux est du projet.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub prefixes_locaux_par_langue: BTreeMap<String, BTreeSet<String>>,
     /// **Les renommages que le manifeste du backend déclare** (`workspace.imports`), par langue : posés
     /// par la synchronisation, ils voyagent avec les manifestes jusqu'à l'analyse.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -49,6 +53,10 @@ pub struct Renommages {
     pub replace: bool,
     #[serde(default)]
     pub distributions: BTreeMap<String, Vec<String>>,
+    /// Les alias de résolution que le dépôt déclare (`["@/", "~/"]`, ceux de vite par exemple, que la
+    /// lecture des manifestes ne voit pas) : un import qui commence par l'un d'eux est du projet.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub local_prefixes: Vec<String>,
 }
 
 /// Un nom de fichier de manifeste reconnu.
@@ -56,6 +64,9 @@ pub fn est_un_manifeste(chemin: &str) -> bool {
     let nom = chemin.rsplit('/').next().unwrap_or(chemin);
     matches!(nom, "Cargo.toml" | "Cargo.lock" | "package.json" | "pyproject.toml" | "vcpkg.json" | "go.mod" | "packages.config" | "Directory.Packages.props")
         || nom.ends_with(".csproj")
+        // `tsconfig.json`, `jsconfig.json`, `tsconfig.base.json` : leurs `paths` sont des alias du dépôt.
+        || nom == "jsconfig.json"
+        || (nom.starts_with("tsconfig") && nom.ends_with(".json"))
         || (nom.starts_with("requirements") && nom.ends_with(".txt"))
         // Un dossier `requirements/` (`requirements/base.txt`, `requirements/dev.txt`).
         || (nom.ends_with(".txt") && chemin.rsplit('/').nth(1) == Some("requirements"))
@@ -81,6 +92,13 @@ impl Manifestes {
                 "go.mod" => { un.lire_go_mod(&texte); &["go"] }
                 "packages.config" | "Directory.Packages.props" => { un.lire_dotnet(&texte, None); &["csharp"] }
                 n if n.ends_with(".csproj") => { un.lire_dotnet(&texte, n.strip_suffix(".csproj")); &["csharp"] }
+                n if n.ends_with(".json") && (n == "jsconfig.json" || n.starts_with("tsconfig")) => {
+                    // Ses alias vont aux préfixes locaux de javascript, ses noms exacts aux paquets du projet.
+                    let (prefixes, exacts) = alias_de_tsconfig(&texte);
+                    m.prefixes_locaux_par_langue.entry("javascript".to_string()).or_default().extend(prefixes);
+                    un.paquets_du_projet.extend(exacts);
+                    &["javascript"]
+                }
                 _ => { un.dependances.extend(texte.lines().filter_map(nom_pep508)); &["python"] }
             };
             for langue in langues {
@@ -282,6 +300,69 @@ impl Manifestes {
             }
         }
     }
+}
+
+/// Les alias de `compilerOptions.paths` d'un tsconfig : une clé `@app/*` donne le préfixe `@app/`, une clé
+/// sans étoile (`config`) un nom exact. Le texte est du JSON à commentaires (JSONC) : `//`, `/* */` et les
+/// virgules finales s'ôtent avant la lecture, hors des chaînes. Un tsconfig illisible ne donne rien.
+fn alias_de_tsconfig(texte: &str) -> (Vec<String>, Vec<String>) {
+    let mut propre = String::with_capacity(texte.len());
+    let (mut dans_chaine, mut echappe) = (false, false);
+    let mut car = texte.chars().peekable();
+    while let Some(c) = car.next() {
+        if dans_chaine {
+            propre.push(c);
+            if echappe {
+                echappe = false;
+            } else if c == '\\' {
+                echappe = true;
+            } else if c == '"' {
+                dans_chaine = false;
+            }
+            continue;
+        }
+        match (c, car.peek()) {
+            ('"', _) => {
+                dans_chaine = true;
+                propre.push(c);
+            }
+            ('/', Some('/')) => {
+                while car.peek().is_some_and(|&n| n != '\n') {
+                    car.next();
+                }
+            }
+            ('/', Some('*')) => {
+                car.next();
+                let mut avant = ' ';
+                for n in car.by_ref() {
+                    if avant == '*' && n == '/' {
+                        break;
+                    }
+                    avant = n;
+                }
+            }
+            _ => propre.push(c),
+        }
+    }
+    // Les virgules finales (`, }` et `, ]`), hors des chaînes : les chaînes n'ont pas d'accolade ici.
+    let mut sans_virgule = String::with_capacity(propre.len());
+    let octets: Vec<char> = propre.chars().collect();
+    for (i, &c) in octets.iter().enumerate() {
+        if c == ',' && octets[i + 1..].iter().find(|ch| !ch.is_whitespace()).is_some_and(|ch| *ch == '}' || *ch == ']') {
+            continue;
+        }
+        sans_virgule.push(c);
+    }
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&sans_virgule) else { return (Vec::new(), Vec::new()) };
+    let (mut prefixes, mut exacts) = (Vec::new(), Vec::new());
+    for cle in v.pointer("/compilerOptions/paths").and_then(|p| p.as_object()).into_iter().flat_map(|o| o.keys()) {
+        match cle.strip_suffix('*') {
+            Some(p) if !p.is_empty() => prefixes.push(p.to_string()),
+            Some(_) => {}
+            None => exacts.push(cle.clone()),
+        }
+    }
+    (prefixes, exacts)
 }
 
 /// La valeur d'un attribut XML (`Include="Newtonsoft.Json"`) dans le texte d'une balise.
@@ -520,7 +601,7 @@ mod tests {
         let mut m = lire(&[("requirements.txt", "PyYAML>=6\nmon-paquet==1.0\n")]);
         m.renommages.insert(
             "python".to_string(),
-            Renommages { replace: false, distributions: BTreeMap::from([("mon-paquet".to_string(), vec!["mon_module".to_string()])]) },
+            Renommages { replace: false, distributions: BTreeMap::from([("mon-paquet".to_string(), vec!["mon_module".to_string()])]), ..Default::default() },
         );
         let source = "import yaml\nimport mon_module\n\ndef lire():\n    return yaml.load, mon_module.f\n";
         let a = crate::code::analyze_in_project_avec("/virtual", vec![("a.py".to_string(), source.to_string())], "", None, Some(&m));
@@ -563,6 +644,35 @@ mod tests {
         assert_eq!(provenance("Newtonsoft.Json.Linq"), Some(Some("dependency".to_string())), "{:?}", a.libraries);
         assert_eq!(provenance("System.Text.Json"), Some(Some("builtin".to_string())), "{:?}", a.libraries);
         assert_eq!(provenance("Mon.Outil.Interne"), Some(Some("project".to_string())), "{:?}", a.libraries);
+    }
+
+    /// Les `paths` d'un tsconfig à commentaires et à virgule finale : `@app/*` et `~/*` sont des alias du
+    /// dépôt, `config` un nom exact du projet.
+    #[test]
+    fn tsconfig_ses_paths_sont_des_alias_du_depot() {
+        let m = lire(&[(
+            "tsconfig.json",
+            "{\n  // les alias\n  \"compilerOptions\": {\n    \"baseUrl\": \".\",\n    /* un bloc */\n    \"paths\": {\n      \"@app/*\": [\"src/app/*\"],\n      \"~/*\": [\"src/*\"],\n      \"config\": [\"src/config.ts\"],\n    },\n  },\n}\n",
+        )]);
+        assert_eq!(m.lus, vec!["tsconfig.json"]);
+        let p: Vec<&str> = m.prefixes_locaux_par_langue["javascript"].iter().map(String::as_str).collect();
+        assert_eq!(p, vec!["@app/", "~/"]);
+        assert!(m.paquets_par_langue["javascript"].contains("config"));
+    }
+
+    /// De bout en bout : un import par un alias du tsconfig, ou par un alias déclaré
+    /// (`workspace.imports.javascript.local_prefixes`, ceux de vite), est du projet ; un paquet reste un paquet.
+    #[cfg(feature = "code")]
+    #[test]
+    fn l_analyse_tient_les_alias_du_depot_pour_du_projet() {
+        let mut m = lire(&[("tsconfig.json", r#"{"compilerOptions": {"paths": {"~/*": ["src/*"]}}}"#), ("package.json", r#"{"dependencies": {"lodash": "4"}}"#)]);
+        m.renommages.insert("javascript".to_string(), Renommages { local_prefixes: vec!["@vite/".to_string()], ..Default::default() });
+        let source = "import { b } from \"~/lib/b\";\nimport { v } from \"@vite/v\";\nimport _ from \"lodash\";\n\nexport function lancer() {\n  return [b, v, _.head];\n}\n";
+        let a = crate::code::analyze_in_project_avec("/virtual", vec![("main.ts".to_string(), source.to_string())], "", None, Some(&m));
+        let provenance = |nom: &str| a.libraries.iter().find(|l| l.name == nom).map(|l| l.provenance.clone());
+        assert_eq!(provenance("~/lib/b"), Some(Some("project".to_string())), "{:?}", a.libraries);
+        assert_eq!(provenance("@vite/v"), Some(Some("project".to_string())), "{:?}", a.libraries);
+        assert_eq!(provenance("lodash"), Some(Some("dependency".to_string())), "{:?}", a.libraries);
     }
 
     #[test]
