@@ -542,3 +542,27 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   procédure) → import pointé (9b4d82175, passe en cours) → exclusions → activations → sans-filtre →
   1b → fils du moteur (rouge « 24 » lu, vert lu). Mémoire fermée 18 h 20 → ~18 h 50 (96, journal des
   chantiers, instantané avant-chantiers-14-nov-2).
+
+## 18 h 3x — les quatre mots de Lucie ; tty-7 atterri ; le profil léger tranché
+
+- **Lucie** : la chaîne Rust → « oui épinglons en une version, à voir si on prend la dernière en date
+  d'abord » (lot à G : rust-toolchain.toml + CI ; 1.98.1 maintenant ou la dernière stable, coût des deux
+  demandé) ; Laya → « oui bien sûr, faut expérimenter, et pas seulement pour le rappel : aussi pour
+  choisir une fiche ou en créer une nouvelle » (lot à banc, sur les décisions de l'archiviste) ; le
+  drop-in de l'hôte → « ça l'a pas refait depuis un moment, possible que c'était les e2e qui
+  recompilaient tout » (pas posé, la page reste prête) ; les soixante copies → « oui les supprimer,
+  voire un mécanisme pour que ça n'arrive plus » (G : effacer, et la sauvegarde hors du dossier
+  d'unités).
+- **tty-7 atterri** (0de3884b9, 8/8 en `=`, treize lots par la pile) : le journal de séance et le repli
+  sous mosh. Archi a « à toi » pour les mineurs puis les clients, à condition que le SIGSEGV à la sortie
+  du binaire de lib (après 89/0) soit un rouge d'environnement connu — il rejoue trois fois.
+- **Le profil léger (lucivy)** : `positions:false` tient le budget (4,39 → 1,44 Go, −67 %) mais pas
+  search_code (×7 à ×16 sur les requêtes courtes, ×150 sur quatre mots, l'archiviste 180 ms → 63 s) :
+  **on garde les positions** ; le budget vient des versions partagées (ScopeContent 1,2 Gio contre 4,0)
+  et des exclusions ; ticket lucivy pour le chemin sans positions. Les fils sous quota : 5 à 9
+  d'ordonnanceur, jusqu'à 19 `docstore-compressor` brefs, 26 au plus.
+- **Les arêtes en double** : le témoin d'hotfixs est **vert sous e93710f36 aussi** — l'hypothèse de la
+  clé primaire est affaiblie, pas réfutée ; il lit la forme exacte des clés ratées dans le ticket du
+  cœur et instrumente le chemin COPY avant d'élargir. Sous 2a′-1, une édition efface encore (les
+  orphelines existent sur une base vivante ; 2a′-2 passe au retrait par `_jusqu_a`) : le court-circuit
+  d'arbre principal garde son comptage des orphelines ; on ne retire pas une version à l'édition.
