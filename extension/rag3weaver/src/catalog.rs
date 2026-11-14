@@ -2799,6 +2799,8 @@ fn read_threads() -> u64 {
     /// **Enregistrer une entité peuplée sous un autre index public, par une migration déclarée**
     /// (1b) : la seule voie qui passe la garde de `register_entity` sur ce changement, pour cette
     /// entité et cet index seulement, le temps de cet enregistrement. Les autres gardes restent.
+    /// Sous `code`, comme son seul appelant (`migration_des_versions`).
+    #[cfg(feature = "code")]
     pub(crate) fn basculer_l_index_public_par_migration(
         &mut self,
         entity_name: &str,
@@ -2810,7 +2812,9 @@ fn read_threads() -> u64 {
         fait
     }
 
-    /// La connexion et le dialecte, pour une migration qui écrit hors des graphes d'ingestion.
+    /// La connexion et le dialecte, pour une migration qui écrit hors des graphes d'ingestion. Sous
+    /// `code`, comme son seul appelant.
+    #[cfg(feature = "code")]
     pub(crate) fn connexion_et_dialecte(&self) -> (Arc<dyn DbConnection>, Arc<dyn crate::dialect::SchemaDialect>) {
         (self.conn.clone(), self.dialect.clone())
     }
