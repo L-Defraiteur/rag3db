@@ -278,6 +278,10 @@ try:
                 rouge(f"une écriture vise la colonne {max(cols)} pour une largeur de {colonnes}")
             resultats.setdefault("redimensionnement", []).append(entry)
         # Les touches : Échap → stop ; o → l'accord ; puis la fin dite ; Ctrl-C → la sortie.
+        # Ctrl-G arrête sans le délai d'échappement d'un multiplexeur (tty-6) ; puis Échap.
+        ctrlg_mur = time.time()
+        t.ecrire(b"\x07")
+        time.sleep(1.0)
         echap_mur = time.time()
         t.ecrire(b"\x1b")
         time.sleep(1.5)
@@ -297,10 +301,15 @@ try:
         j = journal()
         stops = [e for e in j if e["corps"].get("kind") == "stop"]
         accords = [e for e in j if e["corps"].get("kind") == "answer" and e["corps"].get("approved") is True]
-        resultats["touches"] = {"echap_stop": len(stops), "o_accord": len(accords), "reply_to": accords[0]["corps"].get("reply_to") if accords else None,
-                                "echap_vers_stop_ms": round((stops[0]["t"] - echap_mur) * 1000) if stops else None}
-        if len(stops) != 1:
-            rouge(f"Échap : {len(stops)} stop au lieu d'un")
+        stops_g = [e for e in stops if e["t"] < echap_mur]
+        stops_e = [e for e in stops if e["t"] >= echap_mur]
+        resultats["touches"] = {"ctrl_g_stop": len(stops_g), "echap_stop": len(stops_e), "o_accord": len(accords), "reply_to": accords[0]["corps"].get("reply_to") if accords else None,
+                                "ctrl_g_vers_stop_ms": round((stops_g[0]["t"] - ctrlg_mur) * 1000) if stops_g else None,
+                                "echap_vers_stop_ms": round((stops_e[0]["t"] - echap_mur) * 1000) if stops_e else None}
+        if len(stops_g) != 1:
+            rouge(f"Ctrl-G : {len(stops_g)} stop au lieu d'un")
+        if len(stops_e) != 1:
+            rouge(f"Échap : {len(stops_e)} stop au lieu d'un")
         if len(accords) != 1 or not str(accords[0]["corps"].get("reply_to", "")).startswith("faux/mesure:"):
             rouge(f"o : l'accord n'est pas parti tel quel : {accords}")
     t.arreter()
