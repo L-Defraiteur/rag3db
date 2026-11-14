@@ -698,6 +698,15 @@ mod tests_de_la_base {
         declarer_les_branches_suivies(&cat, "depot", "main", &noms(&["b"])).unwrap();
         let etats = couches_du_depot(&cat, "depot", &d, "main").unwrap();
         assert_ne!(parente_de(&etats, "b").map(|p| p.branche), Some("a".to_string()), "a n'est plus suivie : {etats:?}");
+        // **Une déclaration ne s'écrase jamais par une inférence** (relecture d'ED, 14 nov.) : écartée,
+        // l'estampille reste « declaree » sur `a`, et le rapport le signale.
+        let p = parente_estampillee(&cat, "depot", "b").unwrap();
+        assert_eq!(p.as_ref().map(|p| (p.branche.as_str(), &p.genre)), Some(("a", &GenreDeParente::Declaree)), "l'estampille déclarée a été écrasée : {p:?}");
+        let id = identifiant_du_depot(&d).unwrap();
+        declarer_les_branches_suivies(&cat, &id, "main", &noms(&["b"])).unwrap();
+        declarer_la_parente(&cat, &id, "b", "a", &git(&d, &["merge-base", "b", "a"])).unwrap();
+        let (_, avertissements) = rapport_des_couches(&cat, &d).unwrap().expect("le rapport du dépôt");
+        assert!(avertissements.iter().any(|a| a.contains("« b »") && a.contains("« a »")), "l'estampille écartée ne se dit pas : {avertissements:?}");
     }
 
     /// Une tâche rouverte sous le même nom n'hérite pas de la fermeture de la précédente.
