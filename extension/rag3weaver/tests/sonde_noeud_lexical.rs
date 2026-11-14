@@ -119,7 +119,8 @@ fn l_interieur_du_noeud_lexical() {
     );
     // **Pour le ticket moteur** : la requête telle que `resolve_filter_to_ids` l'écrit, son plan, et la
     // même résolution par `UNWIND` et un accès par clé primaire.
-    let mut parseur = rag3weaver::filter::FilterParser::new(&std::collections::HashMap::new(), dialecte.as_ref());
+    let sans_relations = std::collections::HashMap::new();
+    let mut parseur = rag3weaver::filter::FilterParser::new(&sans_relations, dialecte.as_ref());
     let analyse = parseur.parse_condition(&filtre, &cible.parent_table, "n").expect("le filtre");
     let requete = dialecte.filter_resolve_offsets(&cible.parent_table, "n", &analyse.match_clauses, &analyse.combine_where(), None);
     eprintln!("[sonde] requête de resolve_filter_to_ids : {requete}");
@@ -141,6 +142,14 @@ fn l_interieur_du_noeud_lexical() {
     let (m4, x4, n4) = chrono(chauffe, tours, || conn.execute_with_params(&par_cle, std::slice::from_ref(&liste)).unwrap().rows.len());
     eprintln!("[sonde] 4 même ensemble par UNWIND et clé primaire   médiane {m4:>8.1} ms   max {x4:>8.1} ms   {n4} offsets");
     eprintln!("[sonde] RSS {:.0} Mio", rss_mio());
+    // **La mémoire, sans search_code** (`RAG3WEAVER_SONDE_REPETITIONS`, 30 par défaut) : l'étape 3 rejouée,
+    // le RSS après chaque tour. Une pente ici, c'est le moteur qui garde, et pas le flux de la recherche.
+    let repetitions = env_n("RAG3WEAVER_SONDE_REPETITIONS", 30);
+    let depart = rss_mio();
+    for i in 1..=repetitions {
+        cat.resolve_filter_to_ids(&cible.parent_table, &filtre, &cible).unwrap();
+        eprintln!("[sonde] étape 3, répétition {i:>3} : RSS {:.0} Mio ({:+.0} depuis le départ)", rss_mio(), rss_mio() - depart);
+    }
     eprintln!("[sonde] RÉSUMÉ 1+2+3 = {:.1} ms (le nœud lexical sans filtre : 6 928 ms en médiane à la mesure par étage)", m1 + m2 + m3);
 
     // **Les ensembles pour le banc de lucivy** (`RAG3WEAVER_SONDE_OFFSETS=<dossier>`) : les offsets que
