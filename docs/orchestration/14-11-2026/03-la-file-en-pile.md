@@ -41,7 +41,7 @@ l'autre, dix fois de suite, même sans rouge.
 | rang | session | lot | branche | tête testée |
 |---|---|---|---|---|
 | 1 | lucivy | montée 4.3.7 | lucivy-4-3-7-4 | cd6d02907, la base de la pile — **atterri** à 16 h 16, master c99b2f05e, contenu identique |
-| 2 | tty | tty-6 (tmux/mosh mesurés) | cx-tty-6-2 → cx-tty-6-pile | 4583eff8e → pile 7ac2c13d9 sur cd6d02907 |
+| 2 | tty | tty-6 (tmux/mosh mesurés) | cx-tty-6-2 → cx-tty-6-pile | 7ac2c13d9 sur cd6d02907 — **atterri** à 16 h 25, master ce4a3140a, range-diff 5/5 en `=`, premier push en mode pile |
 | 3 | recherche | surveillant, puis plafond d'instantané | surveillant-2, plafond-d-instantane → recherche-pile | a36f707dd, 9b7ff76e8 → pile 2c3bc3eb7 sur 7ac2c13d9 |
 | 4 | G | cas 6c du poste (trap avant la CI) | tenant-signal → tenant-signal-pile | ab7c44fb5 → pile c93f73f06 sur 2c3bc3eb7 |
 | 5 | embarquement | reprise après plantage | reprise-apres-plantage → reprise-apres-plantage-pile | 17afd3820 → pile 512b5e420 sur c93f73f06 (conflit de docs/nouveautes.md résolu) |
@@ -104,3 +104,14 @@ La relecture de recherche sur garde-pile : (c) juge les deux côtés, le `!` com
 gardés, côté prudent), sans PILE_AVANT rien ne change ; **un défaut** : le chemin du push faisait `git rebase
 $neuf` sur une HEAD de pile au lieu de `git rebase --onto $neuf $PILE_AVANT` — un lot d'avant atterri après un
 conflit aurait fait s'arrêter le push à tort. Cas 8 sur le chemin complet, rouge d'abord, puis la recopie.
+
+## Premier push en mode pile (16 h 25, tty)
+
+La garde du cache (a58a649f) a imprimé : « garde en retard sur le dépôt » (attendu), « lib de toute la
+passe : 0c41f9fe6 », « mode pile : tête d'avant cd6d02907, commit testé 7ac2c13d9 », « pile tenue :
+les commits du lot sont ceux du rejeu, et la pile d'avant est sur master », les trois contrôles, POUSSE.
+Deux écarts de forme pour garde-pile : `$J/base` lu avant de connaître le mode (« cat : Aucun
+fichier », sans effet) ; la liste des journaux où la garde cherche la lib ne couvre pas une passe
+courte (tty a copié `e2e_tty.log` en `temoins.log`) — à élargir à `*.log`, une seule lib, zéro journal
+reste un arrêt. Et la lecture de `nproc` sous un lourd (G) : le quota du cgroup rend 5, pas 24 ;
+`nproc --all` dans `fils_par` et le cas 8 du témoin, dans garde-pile, avec un ticket.
