@@ -644,8 +644,26 @@ impl Resolveur {
         taches: &[String],
         declaration: &Declaration,
     ) -> Result<Resolution, String> {
-        let _ = (racine, worktree_du_backend, taches, declaration, &self.cache);
-        Err("le résolveur n'existe pas encore".into())
+        use std::hash::{Hash, Hasher};
+        let refs = crate::couches::git(racine, &["for-each-ref", "--format=%(refname)%00%(objectname)%00%(*objectname)"])?;
+        let worktrees = crate::couches::git(racine, &["worktree", "list", "--porcelain"])?;
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (refs, worktrees, format!("{declaration:?}"), taches, worktree_du_backend).hash(&mut h);
+        let empreinte = h.finish();
+        let mut cache = self.cache.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some((e, resolution)) = cache.as_ref() {
+            if *e == empreinte {
+                return Ok(resolution.clone());
+            }
+        }
+        let sources = resoudre_les_sources(racine, worktree_du_backend, taches, declaration)?;
+        let pile = resoudre_la_pile(racine, declaration, &sources)?;
+        let pointes: Vec<String> = pile.couches.iter().map(|c| c.pointe.clone()).collect();
+        let identifiant = identifiant_des_suivies(racine, &pointes)?;
+        let resolution = Resolution { sources, pile, identifiant };
+        self.calculs.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        *cache = Some((empreinte, resolution.clone()));
+        Ok(resolution)
     }
 
     /// Combien de résolutions entières ce résolveur a calculées (les autres sont venues du cache).
