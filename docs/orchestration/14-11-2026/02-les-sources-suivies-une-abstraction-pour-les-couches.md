@@ -35,6 +35,8 @@ Rien d'autre n'existe : ni mode, ni notion à part pour un worktree ou pour l'ar
 - **La parente** : *aucune* ; *inférée* (la source suivie dont le parent commun est le plus récent,
   marquée inférée) ; *déclarée* (par l'atelier à l'ouverture d'une tâche, ou dans le manifeste).
 - **L'histoire** : *tous les commits* ; *les N derniers* ; *la pointe seule* ; *ceux qu'une fiche cite*.
+  Par défaut la pointe seule, sauf pour une source `refs:` (un motif large) : *ceux qu'on cite*, sans quoi
+  cent branches coûteraient cent écritures à chaque fetch (ED et c7, 14 nov., 23 h 55).
 - **La couche de travail** : le non-commité du worktree, *oui* ou *non*.
 
 Tout le reste se dérive : chaque commit résolu est une génération ; chaque source est une couche ;
