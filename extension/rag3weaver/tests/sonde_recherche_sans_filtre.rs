@@ -236,6 +236,12 @@ fn le_cout_d_une_recherche_par_etage() {
     eprintln!("[sonde] RSS à l'ouverture : {:.0} Mio", rss_mio());
     let mut ecoute = Ecoute::sur(&backend);
     if !versions {
+        // `RAG3WEAVER_SONDE_SEUL_A=1` vaut aussi pour la référence : la forme sans filtre seule.
+        if std::env::var("RAG3WEAVER_SONDE_SEUL_A").is_ok() {
+            let (_, sans) = formes(&chemin, &langage, false).remove(0);
+            jouer(&backend, &mut ecoute, "R", "sans filtre", &sans, &requetes, chauffe, tours);
+            return;
+        }
         for (forme, extra) in formes(&chemin, &langage, true) {
             jouer(&backend, &mut ecoute, "R", &forme, &extra, &requetes, chauffe, tours);
         }
