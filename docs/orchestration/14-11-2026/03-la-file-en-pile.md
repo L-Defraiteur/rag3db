@@ -239,3 +239,15 @@ passe) → activations (embarquement, a7d39e4e6, passe courte) → sans-filtre (
 règles d'import (codeparsers, a1972c0f7 dans codeparsers : toutes les langues en données, 311/0). En
 attente d'une place à luciepc : le verdict de la lib 373b5477b, la parité au bit près de banc, la
 passe de 1b, la mesure du dense d'ED.
+
+## Un rouge sur master pendant la pile (19 h 3x → )
+
+`e2e_demon_hote::une_base_a_rouvrir_ne_lache_que_son_backend` est rouge sur master depuis un lot du soir
+(vert à 2a1f52c21, rouge dès c350dc9c3) : après un point de reprise échoué, la réouverture de A dit
+« already open for writing in this process — 1 référence à l'instance précédente tenue après 10 s ». Ce
+n'est pas 2a′-1 (manifeste carnet, `generations = None`), ni le plafond ni le Surveillant de recherche
+(lecture, et le message n'est pas celui d'un instantané rompu). Premier suspect commun : la régénération
+des fichiers composés à l'arrêt du miroir (96, 27f5c21a1), qui relit la base sur le catalogue du backend
+que l'hôte lâche ; contre-essai avec/sans par 96, bissection par archi (2a1f52c21..42c84cb77, cinq pas).
+Règle tenue : **aucun lot ne pousse avec un rouge qu'on ne comprend pas** ; les lots dont les passes ne
+jouent pas cette suite continuent, le coupable corrige en tête de pile.
