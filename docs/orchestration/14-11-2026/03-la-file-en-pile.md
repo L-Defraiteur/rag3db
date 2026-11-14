@@ -45,7 +45,7 @@ l'autre, dix fois de suite, même sans rouge.
 | 2 | tty | tty-6 (tmux/mosh mesurés) | cx-tty-6-2 → cx-tty-6-pile | 7ac2c13d9 sur cd6d02907 — **atterri** à 16 h 25, master ce4a3140a, range-diff 5/5 en `=`, premier push en mode pile |
 | 3 | recherche | surveillant, puis plafond d'instantané | surveillant-2, plafond-d-instantane → recherche-pile | 2c3bc3eb7 sur 7ac2c13d9 — **atterri** à 16 h 27, master a48b535d1, dix commits en un push, pile tenue |
 | 4 | G | cas 6c du poste (trap avant la CI) | tenant-signal → tenant-signal-pile | c93f73f06 sur 2c3bc3eb7 — **atterri** à 16 h 30, master 89f46c87d, pile tenue ; cas 6c clos |
-| 5 | embarquement | reprise après plantage | reprise-apres-plantage → reprise-apres-plantage-pile | 17afd3820 → pile 512b5e420 sur c93f73f06 (conflit de docs/nouveautes.md résolu) |
+| 5 | embarquement | reprise après plantage | reprise-apres-plantage → reprise-apres-plantage-pile | 512b5e420 sur c93f73f06 — **atterri** à 16 h 39, master 67dabc121, 6/6 en `=` plus le `>` du ticket ; le `!` attendu sur nouveautes.md n'a pas eu lieu, la pile d'avant ayant atterri avec les mêmes lignes de tête |
 | 6 | 96 | miroir, nom exact, about | lot-96-pile (miroir 48445fdeb, nomex bff4ea79f, about 84f949d2c) | pile 84f949d2c sur 512b5e420 |
 | 7 | hotfixs | témoin du dictionnaire (C++ test seul) | chaine-au-point-de-reprise-2 → chaine-au-point-de-reprise-pile | 9ded42107 → pile cabcc8640 sur 84f949d2c |
 | 8 | ED | 2a′-1 (générations de l'ancre) | generations-de-l-ancre-3 → generations-de-l-ancre-pile | 9b0620f66 → pile c22fdbf31, puis **e00fd562d** sur cabcc8640 (19 commits + le témoin e2e_scope_versions corrigé ; rang gardé, un commit ajouté) |
@@ -123,3 +123,12 @@ reste un arrêt. Et la lecture de `nproc` sous un lourd (G) : le quota du cgroup
 tty (ce4a3140a), recherche (a48b535d1, dix commits en un push), G (89f46c87d) : trois « pile tenue »,
 zéro rejeu. Deux défauts de forme de plus pour garde-pile, vus par G : `--derive` fait `realpath "$0"`
 après le `cd` et imprime une empreinte vide quand `$0` est relatif ; et le `cat base` déjà dit.
+
+## Cinq atterris (16 h 39) ; ce que la garde devrait dire de plus
+
+embarquement : « mode pile : tête d'avant c93f73f06, commit testé 512b5e420 / pile tenue ». Le `!`
+attendu sur nouveautes.md n'a pas eu lieu : la pile d'avant a atterri avec les mêmes lignes de tête
+que celles sur lesquelles le conflit avait été résolu, le commit est `=`. Pour garde-pile : la phrase
+« garde en retard sur le dépôt » dit l'inverse quand c'est la copie du cache qui est en avance (dire
+les deux empreintes et le sens) ; `verifier_pile` doit imprimer le range-diff jugé, pas seulement
+« pile tenue ».
