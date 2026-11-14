@@ -29,6 +29,83 @@ empreintes_du_paquet() {
     \( -regextype posix-extended -regex ".*/build/${p}/[0-9a-f]{16}/fingerprint" -print -prune \) 2>/dev/null
 }
 
+# **Effacer les empreintes des paquets locaux** d'un target : tous (`<sous>` vide), ou ceux dont le manifeste est sous
+# le dossier `<sous>` (un sous-module). Usage : effacer_empreintes_locales <target> <arbre> <raison> <sous> [restrictions…]
+effacer_empreintes_locales() {
+  local target="$1" arbre="$2" raison="$3" sous="$4"
+  shift 4
+  local restrictions=("$@")
+  # --all-features : sans lui, une dépendance locale optionnelle (codeparsers,
+  # sous la feature code) n'est pas listée, et ses empreintes resteraient.
+  local meta err paquets restes p
+  err="$(mktemp)"
+  if ! meta="$(cd "$arbre" && cargo metadata --format-version 1 --all-features "${restrictions[@]}" 2>"$err")"; then
+    echo "✗ reprise du target : cargo metadata a échoué dans $arbre"
+    grep -E '^(error|Caused by|  )' "$err" | head -4 | sed 's/^/    /'
+    echo "  (un sous-module non initialisé ? git submodule update --init)"
+    rm -f "$err"
+    return 2
+  fi
+  rm -f "$err"
+  paquets="$(echo "$meta" | python3 -c '
+import json, sys
+m = json.load(sys.stdin)
+racine = sys.argv[1]
+print(" ".join(sorted({p["name"] for p in m["packages"] if p["source"] is None
+                        and (not racine or p["manifest_path"].startswith(racine.rstrip("/") + "/"))})))
+' "$sous" 2>/dev/null)"
+  if [ -z "$paquets" ]; then
+    echo "✗ reprise du target : la liste des paquets locaux est vide"
+    return 2
+  fi
+  echo "▸ target $raison : empreintes effacées pour $paquets"
+  for p in $paquets; do
+    empreintes_du_paquet "$target" "$p" | while IFS= read -r e; do rm -rf -- "$e"; done
+  done
+  restes=""
+  for p in $paquets; do
+    restes="$restes$(empreintes_du_paquet "$target" "$p")"
+  done
+  if [ -n "$restes" ]; then
+    echo "✗ reprise du target : des empreintes de paquets locaux restent :"
+    echo "$restes" | sed 's/^/    /'
+    return 2
+  fi
+}
+
+# **Les commits des sous-modules** (14 novembre 2026, faux rouge de codeparsers) : un sous-module ramené à un commit plus
+# vieux a des fichiers datés d'avant les artefacts, que cargo juge frais. Le target note le commit de chaque sous-module
+# de l'arbre dans `.sous-modules-du-target` ; un commit changé, ou une liste encore jamais notée, efface les empreintes
+# des paquets de ce sous-module.
+sous_modules_de() { # <arbre> : « <chemin absolu> <commit> » par sous-module initialisé
+  local haut
+  haut="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" || return 0
+  git -C "$haut" submodule status --recursive 2>/dev/null | while read -r sha chemin _; do
+    case "$sha" in -*) continue ;; esac
+    sha="${sha#[+U ]}"
+    echo "$(cd "$haut/$chemin" && pwd -P) $sha"
+  done
+}
+noter_les_sous_modules() { # <target> <arbre>
+  sous_modules_de "$2" > "$1/.sous-modules-du-target"
+}
+suivre_les_sous_modules() { # <target> <arbre> [restrictions…] : efface ce qui a changé, puis note
+  local target="$1" arbre="$2" fichier="$1/.sous-modules-du-target" ligne chemin sha
+  shift 2
+  local actuels
+  actuels="$(sous_modules_de "$arbre")"
+  [ -n "$actuels" ] || { : > "$fichier"; return 0; }
+  while read -r chemin sha; do
+    [ -n "$chemin" ] || continue
+    if [ ! -f "$fichier" ]; then
+      effacer_empreintes_locales "$target" "$arbre" "sans commit noté pour le sous-module $chemin" "$chemin" "$@" || return 2
+    elif ! grep -qxF "$chemin $sha" "$fichier"; then
+      effacer_empreintes_locales "$target" "$arbre" "à un autre commit du sous-module $chemin ($(grep -F "$chemin " "$fichier" | cut -d' ' -f2 | cut -c1-9) → ${sha:0:9})" "$chemin" "$@" || return 2
+    fi
+  done <<< "$actuels"
+  echo "$actuels" > "$fichier"
+}
+
 garder_le_target() {
   local target="$1" arbre="$2" marque note paquets restes p
   shift 2
@@ -55,6 +132,7 @@ garder_le_target() {
       return 2
     fi
     echo "$arbre" > "$marque"
+    noter_les_sous_modules "$target" "$arbre"
     return 0
   fi
   note="$(cat "$marque")"
@@ -62,7 +140,10 @@ garder_le_target() {
     echo "✗ provenance de target invalide : $marque" >&2
     return 2
   fi
-  [ "$note" = "$arbre" ] && return 0
+  if [ "$note" = "$arbre" ]; then
+    suivre_les_sous_modules "$target" "$arbre" "${restrictions[@]}"
+    return
+  fi
 
   if [ "${RAG3WEAVER_TARGET_REPRENDRE:-0}" != "1" ]; then
     echo "✗ le target $target a été bâti par un autre arbre :"
@@ -77,39 +158,23 @@ garder_le_target() {
     return 2
   fi
 
-  # --all-features : sans lui, une dépendance locale optionnelle (codeparsers,
-  # sous la feature code) n'est pas listée, et ses empreintes resteraient.
-  local meta err
-  err="$(mktemp)"
-  if ! meta="$(cd "$arbre" && cargo metadata --format-version 1 --all-features "${restrictions[@]}" 2>"$err")"; then
-    echo "✗ reprise du target : cargo metadata a échoué dans $arbre"
-    grep -E '^(error|Caused by|  )' "$err" | head -4 | sed 's/^/    /'
-    echo "  (un sous-module non initialisé ? git submodule update --init)"
-    rm -f "$err"
-    return 2
-  fi
-  rm -f "$err"
-  paquets="$(echo "$meta" | python3 -c '
-import json, sys
-m = json.load(sys.stdin)
-print(" ".join(sorted({p["name"] for p in m["packages"] if p["source"] is None})))
-' 2>/dev/null)"
-  if [ -z "$paquets" ]; then
-    echo "✗ reprise du target : la liste des paquets locaux est vide"
-    return 2
-  fi
-  echo "▸ target repris de $note : empreintes effacées pour $paquets"
-  for p in $paquets; do
-    empreintes_du_paquet "$target" "$p" | while IFS= read -r e; do rm -rf -- "$e"; done
-  done
-  restes=""
-  for p in $paquets; do
-    restes="$restes$(empreintes_du_paquet "$target" "$p")"
-  done
-  if [ -n "$restes" ]; then
-    echo "✗ reprise du target : des empreintes de paquets locaux restent :"
-    echo "$restes" | sed 's/^/    /'
-    return 2
-  fi
+  effacer_empreintes_locales "$target" "$arbre" "repris de $note" "" "${restrictions[@]}" || return 2
   echo "$arbre" > "$marque"
+  noter_les_sous_modules "$target" "$arbre"
 }
+
+
+# **`garde_target.sh --reprendre <target> <arbre>`** (14 novembre 2026, suggestion de codeparsers) : avant un `cargo`
+# lancé à la main, hors des scripts de passe ; efface toujours les empreintes des paquets locaux, même pour l'arbre noté,
+# puis note l'arbre et les commits de ses sous-modules.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  if [ "${1:-}" = "--reprendre" ] && [ $# = 3 ]; then
+    mkdir -p "$2" && t="$(cd "$2" && pwd -P)" && a="$(cd "$3" && pwd -P)" || exit 2
+    effacer_empreintes_locales "$t" "$a" "repris à la main" "" || exit 2
+    echo "$a" > "$t/.arbre-du-target"
+    noter_les_sous_modules "$t" "$a"
+    exit 0
+  fi
+  echo "usage : garde_target.sh --reprendre <target> <arbre>   (ou : . garde_target.sh ; garder_le_target <target> <arbre>)" >&2
+  exit 2
+fi
