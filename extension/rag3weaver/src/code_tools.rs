@@ -1143,7 +1143,7 @@ fn voisins_des_scopes(
 
     // Le saut ne dépend que de la relation et de la borne : bâti une fois.
     let saut = neighbor_hop(catalog, relation, limit)?;
-    let cypher = catalog.dialect_arc().hop(&saut).map_err(|e| e.to_string())?;
+    let cypher = catalog.traduire_hop(&saut).map_err(|e| e.to_string())?;
     let mut out = Vec::new();
     for (uuid, nom) in vus {
         // Un saut depuis ce seul scope, de table quelconque, borné : la

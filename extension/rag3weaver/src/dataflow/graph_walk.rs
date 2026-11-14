@@ -318,7 +318,7 @@ pub fn neighbors(catalog: &dyn crate::read_view::ReadCatalog, rel: &RelInfo, dir
     if mark.applies(rel) {
         hop.returns.push(mark.column_ir(rel));
     }
-    let q = catalog.dialect_arc().hop(&hop).map_err(|e| e.to_string())?;
+    let q = catalog.traduire_hop(&hop).map_err(|e| e.to_string())?;
     let rows = catalog.execute_read_with_params(&q, &[uuid_param(uuids)]).map_err(|e| e.to_string())?;
     Ok(rows.rows.iter().map(|r| (text(r.first()), text(r.get(1)), text(r.get(2)))).collect())
 }

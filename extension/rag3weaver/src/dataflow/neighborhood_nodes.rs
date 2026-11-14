@@ -387,7 +387,7 @@ pub fn follow_also(catalog: &dyn crate::read_view::ReadCatalog, chemin: &[Step],
                 if filtre {
                     hop.returns.push(Column::Node(same.to_string()));
                 }
-                let q = catalog.dialect_arc().hop(&hop).map_err(|e| format!("NeighborhoodNode: {e}"))?;
+                let q = catalog.traduire_hop(&hop).map_err(|e| format!("NeighborhoodNode: {e}"))?;
                 let rows = catalog.execute_read_with_params(&q, &[QueryParam::new("uuids", liste.clone())]).map_err(|e| format!("NeighborhoodNode: {e}"))?;
                 for r in &rows.rows {
                     let de = texte(r.first());
@@ -450,7 +450,7 @@ fn relever(moteur: &Moteur<'_>, departs: &[super::usage_nodes::Item], atteints: 
     let mut hop = super::graph_walk::hop_of(&rel, c.step.direction, &super::graph_walk::EdgeMark::default());
     hop.returns.push(Column::Node(c.field.clone()));
     hop.returns.push(Column::Edge(c.note.clone()));
-    let q = moteur.catalog.dialect_arc().hop(&hop).map_err(|e| format!("NeighborhoodNode: {e}"))?;
+    let q = moteur.catalog.traduire_hop(&hop).map_err(|e| format!("NeighborhoodNode: {e}"))?;
     let liste = CypherValue::List(qui.keys().map(|u| CypherValue::String(u.clone())).collect());
     let rows = moteur.catalog.execute_read_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(Moteur::err)?;
     let mut out: Vec<Collected> = rows
@@ -669,7 +669,7 @@ pub fn neighborhood_of_file(catalog: &dyn crate::read_view::ReadCatalog, cfg: &N
     );
     let mut colonnes_depart = vec![Column::Node("_uuid".into())];
     colonnes_depart.extend(colonnes(cfg));
-    let q = catalog.dialect_arc().select(&rag3weaver_ir::Select::filtered(&table, condition, colonnes_depart)).map_err(Moteur::err_ir)?;
+    let q = catalog.traduire_select(&rag3weaver_ir::Select::filtered(&table, condition, colonnes_depart)).map_err(Moteur::err_ir)?;
     let rows = catalog
         .execute_read_with_params(&q, &[QueryParam::new("file", CypherValue::String(file.to_string()))])
         .map_err(Moteur::err)?;
@@ -817,7 +817,7 @@ fn fiches(moteur: &Moteur<'_>, uuids: &[String]) -> Result<Vec<Reached>, String>
         Direction::Incoming => &rel.from,
         Direction::Outgoing => &rel.to,
     };
-    let q = moteur.catalog.dialect_arc().select(&rag3weaver_ir::Select::by_uuids(table, colonnes(moteur.cfg))).map_err(|e| format!("NeighborhoodNode: {e}"))?;
+    let q = moteur.catalog.traduire_select(&rag3weaver_ir::Select::by_uuids(table, colonnes(moteur.cfg))).map_err(|e| format!("NeighborhoodNode: {e}"))?;
     let liste = CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
     let rows = moteur.catalog.execute_read_with_params(&q, &[QueryParam::new("uuids", liste)]).map_err(Moteur::err)?;
     Ok(rows.rows.iter().map(|r| reached_from(r, 1, moteur.cfg)).collect())

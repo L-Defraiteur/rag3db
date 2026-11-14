@@ -338,6 +338,13 @@ pub trait SchemaDialect: Send + Sync {
         false
     }
 
+    /// **La clause de visibilité sur l'alias `alias`**, pour un lecteur qui écrit sa requête à la
+    /// main (`resoudre_le_filtre`, le filtre vectoriel). Aucune pour un dialecte sans générations.
+    fn condition_visible_sur(&self, alias: &str, couche: &str, rang: i64) -> Option<String> {
+        let _ = (alias, couche, rang);
+        None
+    }
+
     /// **Un saut** ([`rag3weaver_ir::Hop`]) dans la langue de ce dialecte. Le
     /// défaut le refuse en le nommant : une forme se traduit, elle ne
     /// s'hérite pas en Cypher.
@@ -1557,6 +1564,11 @@ impl Rag3dbDialect {
 impl SchemaDialect for Rag3dbDialect {
     fn sait_les_generations(&self) -> bool {
         true
+    }
+
+    fn condition_visible_sur(&self, alias: &str, couche: &str, rang: i64) -> Option<String> {
+        let p = rag3weaver_ir::Predicate::Visible { couche: couche.to_string(), rang };
+        Some(rag3db_condition_sur(&p, alias, &mut 0))
     }
 
     /// Par uuids : `UNWIND $uuids AS u MATCH (m:T {_uuid: u}) RETURN u, …` ;

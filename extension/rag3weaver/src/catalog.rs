@@ -7938,7 +7938,9 @@ fn read_threads() -> u64 {
         if result.is_empty() {
             return Ok(None);
         }
-        Ok(Some(self.row_to_map(&result.columns, &result.rows[0])))
+        let ligne = self.row_to_map(&result.columns, &result.rows[0]);
+        // Une ligne d'une autre génération n'est pas rendue (2a′).
+        Ok(self.generations.as_ref().is_none_or(|v| v.admet(&ligne)).then_some(ligne))
     }
 
     /// Les lignes de `entity_name` dont `field` vaut `value`, avec `fields`.
@@ -7953,12 +7955,16 @@ fn read_threads() -> u64 {
     ) -> Result<Vec<BTreeMap<String, CypherValue>>, CatalogError> {
         self.check_initialized()?;
         self.check_entity(entity_name)?;
-        let cypher = self.dialect.select_by_field(entity_name, field, fields);
+        // La visibilité des générations (2a′) : ce lecteur écrit sa requête sans IR, la ligne est
+        // donc lue avec ses trois colonnes et gardée si elle est visible.
+        let (fields, ajoutes) = crate::generations::champs_et_visibilite(self.generations.as_ref(), entity_name, fields);
+        let cypher = self.dialect.select_by_field(entity_name, field, &fields);
         let result = self
             .conn
             .execute_with_params(&cypher, &[QueryParam::new("value", value)])
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
-        Ok(result.rows.iter().map(|row| self.row_to_map(&result.columns, row)).collect())
+        let lignes = result.rows.iter().map(|row| self.row_to_map(&result.columns, row)).collect();
+        Ok(crate::generations::garder_les_visibles(self.generations.as_ref(), entity_name, lignes, &ajoutes))
     }
 
     pub fn get_many(
@@ -10266,6 +10272,7 @@ fn read_threads() -> u64 {
             tables: tables.iter().map(|t| t.to_string()).collect(),
             couche: couche.to_string(),
             rang: 0,
+            tout_visible: true,
         });
         self.publish_read_view();
         Ok(())
