@@ -739,6 +739,14 @@ pub trait SchemaDialect: Send + Sync {
             self.quote(entity), self.quote(relation), self.quote(root))
     }
 
+    /// **Combien de versions n'ont aucune origine** par la relation canonique : les orphelines qu'une
+    /// suppression ou une édition laisse (leur rétention est un pas à part).
+    fn count_derived_without_reference(&self, entity: &str, root: &str, relation: &str) -> String {
+        if !self.capabilities().cypher { return self.untranslated("count_derived_without_reference"); }
+        format!("MATCH (d:{}) WHERE NOT EXISTS {{ MATCH (d)-[:{}]->(:{}) }} RETURN count(d)",
+            self.quote(entity), self.quote(relation), self.quote(root))
+    }
+
     fn mark_derived_references_pending(&self, entity: &str, root: &str, relation: &str) -> String {
         if !self.capabilities().cypher { return self.untranslated("mark_derived_references_pending"); }
         format!("UNWIND $uuids AS u MATCH (d:{})-[r:{}]->(s:{} {{_uuid: u}}) SET r._render_hash = ''",
