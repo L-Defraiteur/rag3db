@@ -690,7 +690,7 @@ tree-sitter grammars that index it (`POST /highlight`).
 
 `rag3weaver-tty` (crate `tty/`) follows a teammate from a terminal: the agent's
 text scrolls into the terminal's own history and three lines are redrawn at the
-bottom; Enter talks to the teammate, Esc or Ctrl-G stops it (Ctrl-G without the escape delay tmux adds). It works over ssh (at most
+bottom; Enter talks to the teammate, Esc or Ctrl-G stops it (Ctrl-G without the escape delay tmux adds). The input is a line editor like a shell's: arrows, Home and End, word jumps (Ctrl or Alt + arrow, Alt-B/F), Delete, Ctrl-W/U/K, ↑ and ↓ through what was sent, Alt-Enter for a new line, a paste arriving whole, Ctrl-C clearing the input before quitting, AltGr kept on Windows. The teammate's prose is in the terminal's own colour (or the theme's optional `couleurs.prose`) with common Markdown rendered (titles, bullets, bold, italic); mailbox headers keep the theme's accent, in French. It works over ssh (at most
 30 redraws per second), resumes after a cut without loss or duplicate
 (`Last-Event-ID`), degrades to 256 colours, 16, none and ASCII, and colours code
 with the host's grammars and the theme `templates/themes/daemon.json`.
