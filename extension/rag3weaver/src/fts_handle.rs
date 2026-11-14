@@ -36,8 +36,11 @@ pub fn index_document(
 /// Préfixe des clés de blob d'un index FTS, pour ne pas collisionner avec les
 /// index sparse (qui utilisent `Sparse_{table}`).
 pub fn fts_index_name(table: &str) -> String {
-    format!("Lucivy_{table}")
+    format!("{INDEX_PREFIX}{table}")
 }
+
+/// Le préfixe de `fts_index_name`.
+pub const INDEX_PREFIX: &str = "Lucivy_";
 
 /// Construit le `SchemaConfig` v4 d'une table à partir de ses champs texte.
 ///

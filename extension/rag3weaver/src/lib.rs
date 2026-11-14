@@ -189,6 +189,7 @@ pub mod exclusion;
 pub mod generated;
 pub mod workspace_path;
 pub mod fts_handle;
+pub mod fts_maintenance;
 pub mod fts_directory;
 pub mod disponibilite;
 pub mod hash;
