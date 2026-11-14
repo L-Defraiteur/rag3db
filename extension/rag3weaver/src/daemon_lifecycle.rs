@@ -487,8 +487,7 @@ pub fn answers(file: &DaemonFile) -> bool {
     if pid_state(file.pid) == Some(false) {
         return false;
     }
-    let _delai = file.delais().sonde;
-    let agent = crate::daemon::agent();
+    let agent = crate::daemon::agent_borne(file.delais().sonde);
     let Ok(mut r) = agent.get(format!("{}/sante", crate::daemon::base_url(&file.address))).call() else {
         return false;
     };
@@ -623,8 +622,8 @@ pub fn binaire_perime(installe: &Path) -> Option<String> {
 
 /// **La sonde qui réveille l'unité** : une connexion `/sante` sur sa socket (systemd lance le
 /// service à la connexion) ; sa réponse n'importe pas, la boucle d'attente juge.
-pub(crate) fn reveiller_l_unite(adresse: &str, _delai: Duration) {
-    let agent = crate::daemon::agent();
+pub(crate) fn reveiller_l_unite(adresse: &str, delai: Duration) {
+    let agent = crate::daemon::agent_borne(delai);
     let _ = agent.get(format!("{}/sante", crate::daemon::base_url(adresse))).call();
 }
 
