@@ -44,3 +44,15 @@ scripts de session, un par lot : elles ne sont pas listées.
 À faire, un par un, en pile, comme `push_garde.sh` : `passe_epinglee.sh` d'abord (deux versions selon le poste), puis
 `lib_seule.sh`, dans `tools/poste/` ; `poste` et `rag3db_libs.py` recopiés depuis master, après relecture et au mot de
 c7 ; `mesure-hote.py` reste un outil de mesure, sous `docs/optimiseur/scripts/` s'il sert encore.
+
+### passe_epinglee.sh, le diff des deux copies (23 h 55)
+
+- **Ce que luciepc a de plus** : deux lignes après `rouge()`, qui disent `RAG3WEAVER_MOTEUR_ANCIEN=<valeur> : le C++ du
+  lot est plus neuf que la lib <id>` au résumé quand la variable est posée (la règle 7). C'est un correctif.
+- **Ce que le portable a de plus** : rien.
+- **Ce que les deux ont de faux** : `RAG3WEAVER_EMBED_SERVICE` cite encore 7880 (luciepc) et 7981 (portable), arrêtés
+  depuis le 12 novembre au mot de Lucie.
+
+Le lot `passe-epinglee` (tools/poste/passe_epinglee.sh) part de la copie de luciepc, sans 7880 ni 7981. Son témoin
+`tools/poste/test_passe_epinglee.sh` joue le script sur un dépôt jouet : 16 vert ; 3 ROUGE sur la copie du portable
+(le résumé muet sur MOTEUR_ANCIEN, 7880 et 7981), 2 sur celle de luciepc (7880 et 7981). En pile derrière les lots de G.
