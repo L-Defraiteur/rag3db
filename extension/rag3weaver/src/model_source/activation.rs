@@ -6,6 +6,18 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Activation {
+    /// **Le nom de l'activation** : celui sous lequel `activations` la déclare
+    /// au niveau du manifeste, et que chaque déclaration cite. Absent (un bloc
+    /// écrit dans la déclaration) : le `model` de la déclaration. Deux
+    /// déclarations qui citent le même nom partagent le processus, la
+    /// coordination et l'éviction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nom: Option<String>,
+    /// **Le modèle que le processus charge** (`RAG3WEAVER_EMBED_MODEL`) : pour un
+    /// groupe cité par le relecteur ou l'OCR, ce n'est pas le modèle de la
+    /// déclaration. Absent : le `model` de la déclaration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modele: Option<String>,
     pub programme: String,
     #[serde(default)]
     pub args: Vec<String>,
@@ -63,12 +75,26 @@ fn rendre_le_bail_par_defaut() -> u64 {
     RENDRE_LE_BAIL_PAR_DEFAUT_SECS
 }
 
+impl Activation {
+    /// Le nom de l'activation pour cette déclaration : déclaré, sinon son modèle.
+    pub fn nom_pour<'a>(&'a self, source: &'a super::ModelSource) -> &'a str {
+        self.nom.as_deref().unwrap_or(&source.model)
+    }
+    /// Le modèle que le processus charge : déclaré, sinon celui de la déclaration.
+    pub fn modele_pour<'a>(&'a self, source: &'a super::ModelSource) -> &'a str {
+        self.modele.as_deref().unwrap_or(&source.model)
+    }
+}
+
 #[cfg(feature = "daemon")]
 fn identite(source: &super::ModelSource) -> Result<crate::daemon::embeddings::IdentiteActivation, String> {
     let a = source.activation.as_ref().ok_or("activation absente")?;
     // Les budgets d'attente et chemins de coordination ne changent pas le
     // fournisseur. L'empreinte décrit la recette, elle ne divulgue pas son env.
-    let recette = serde_json::to_vec(&(&source.model, source.dimensions, &a.programme, &a.args, &a.env, &a.profil, &a.peripherique))
+    // Le nom et le bloc : deux déclarations qui citent la même activation (le
+    // creux, le relecteur et l'OCR d'un groupe) attendent la même recette. La
+    // dimension n'en est plus : elle se vérifie à part, pour le dense.
+    let recette = serde_json::to_vec(&(a.nom_pour(source), a.modele_pour(source), &a.programme, &a.args, &a.env, &a.profil, &a.peripherique))
         .map_err(|e| e.to_string())?;
     Ok(crate::daemon::embeddings::IdentiteActivation {
         profil: a.profil.clone(), peripherique: a.peripherique.clone(),
@@ -78,6 +104,13 @@ fn identite(source: &super::ModelSource) -> Result<crate::daemon::embeddings::Id
 
 #[cfg(feature = "daemon")]
 pub fn demander(source: &super::ModelSource) -> Result<crate::serveur::activation::Demande, String> {
+    demander_pour(source, super::Capability::Embed)
+}
+
+/// [`demander`], pour une capacité : le creux, le relecteur et l'OCR n'ont pas
+/// de dimension à déclarer.
+#[cfg(feature = "daemon")]
+pub fn demander_pour(source: &super::ModelSource, capacite: super::Capability) -> Result<crate::serveur::activation::Demande, String> {
     use super::{Capability, Fallback, Provider};
     let a = source.activation.as_ref().ok_or("activation absente")?;
     let attendue = identite(source)?;
@@ -85,7 +118,7 @@ pub fn demander(source: &super::ModelSource) -> Result<crate::serveur::activatio
         return Err("activation gérée : service sans repli requis".into());
     }
     let adresses = source.addresses(Capability::Embed, &super::process_env);
-    if adresses.len() != 1 || source.dimensions.unwrap_or(0) == 0 {
+    if adresses.len() != 1 || (capacite == Capability::Embed && source.dimensions.unwrap_or(0) == 0) {
         return Err("activation gérée : une adresse et une dimension explicites requises".into());
     }
     if a.profil.trim().is_empty() || a.peripherique.trim().is_empty()
@@ -109,7 +142,7 @@ pub fn demander(source: &super::ModelSource) -> Result<crate::serveur::activatio
 fn variables(source: &super::ModelSource, attendue: &crate::daemon::embeddings::IdentiteActivation) -> Result<Vec<(String, String)>, String> {
     let a = source.activation.as_ref().ok_or("activation absente")?;
     let mut v = vec![
-        ("RAG3WEAVER_EMBED_MODEL".to_string(), source.model.clone()),
+        ("RAG3WEAVER_EMBED_MODEL".to_string(), a.modele_pour(source).to_string()),
         ("RAG3WEAVER_ACTIVATION_PROFIL".to_string(), a.profil.clone()),
         ("RAG3WEAVER_ACTIVATION_PERIPHERIQUE".to_string(), a.peripherique.clone()),
         ("RAG3WEAVER_ACTIVATION_IDENTITE".to_string(), attendue.recette.clone()),
@@ -158,15 +191,36 @@ fn noter_une_relance(source: &super::ModelSource) {
     }
 }
 
+/// **Un fournisseur activé pour une capacité** : son client (identité, bail),
+/// le bail d'usage, ce qui le tient (bail local d'activation ou tunnel) et
+/// l'adresse où le joindre.
+#[cfg(feature = "daemon")]
+pub(super) struct Actif {
+    client: crate::daemon::DaemonEmbedder,
+    usage: Option<crate::daemon::embeddings::BailDistant>,
+    tenue: Box<dyn std::any::Any + Send + Sync>,
+    adresse: String,
+}
+
 #[cfg(feature = "daemon")]
 pub(super) fn connecter(source: &super::ModelSource, annule: &std::sync::atomic::AtomicBool)
     -> Result<(Box<dyn crate::embedder::Embedder>, super::Origin), String> {
+    let a = activer(source, super::Capability::Embed, annule)?;
+    let origine = super::Origin::Service(a.adresse.clone());
+    Ok((Box::new(Gere { client: a.client, _usage: a.usage, _tenue: a.tenue }), origine))
+}
+
+/// **Activer le fournisseur d'une déclaration, pour une capacité** : le lancer
+/// ou s'y attacher (ici ou à distance), vérifier son identité pour cette
+/// capacité, prendre un bail d'usage.
+#[cfg(feature = "daemon")]
+fn activer(source: &super::ModelSource, capacite: super::Capability, annule: &std::sync::atomic::AtomicBool) -> Result<Actif, String> {
     let debut = std::time::Instant::now();
     if annule.load(std::sync::atomic::Ordering::Acquire) { return Err("connexion annulée".into()); }
     if source.activation.as_ref().is_some_and(|a| a.hote.is_some()) {
-        return connecter_distant(source, annule);
+        return activer_distant(source, capacite, annule);
     }
-    let demande = demander(source)?;
+    let demande = demander_pour(source, capacite)?;
     let a = source.activation.as_ref().unwrap();
     let bail = demande.attendre(annule, std::time::Duration::from_secs(a.budget_attente_secs))?;
     let restant = std::time::Duration::from_secs(a.budget_attente_secs).saturating_sub(debut.elapsed());
@@ -176,23 +230,35 @@ pub(super) fn connecter(source: &super::ModelSource, annule: &std::sync::atomic:
         .unwrap_or_else(crate::daemon::embeddings::default_embed_timeout);
     client = client.with_timeout(delai_appel);
     if annule.load(std::sync::atomic::Ordering::Acquire) { return Err("connexion annulée".into()); }
-    verifier_l_identite(source, &client)?;
+    verifier_pour(source, capacite, &client)?;
     // Un bail d'usage chez le fournisseur : il compte cet usager tant que le
-    // client vit (première étape de la résidence ; rien n'est déchargé). Un
-    // fournisseur d'avant les baux ne compte pas : `None`, pas une erreur.
+    // client vit. Un fournisseur d'avant les baux ne compte pas : `None`, pas
+    // une erreur.
     let usage = client.prendre_bail(&format!("activation:{}:{}", std::process::id(), source.model), std::time::Duration::from_secs(60))
         .map_err(|e| format!("bail d'usage : {e}"))?;
-    let origine = super::Origin::Service(bail.adresse().to_string());
-    Ok((Box::new(Gere { client, _usage: usage, _tenue: Box::new(bail) }), origine))
+    let adresse = bail.adresse().to_string();
+    Ok(Actif { client, usage, tenue: Box::new(bail), adresse })
 }
 
 /// Le fournisseur trouvé est-il celui déclaré : modèle, dimension, et
 /// l'attestation de recette/profil/périphérique.
 #[cfg(feature = "daemon")]
-fn verifier_l_identite(source: &super::ModelSource, client: &crate::daemon::DaemonEmbedder) -> Result<(), String> {
+fn verifier_pour(source: &super::ModelSource, capacite: super::Capability, client: &crate::daemon::DaemonEmbedder) -> Result<(), String> {
     use crate::embedder::Embedder;
-    if client.name() != source.model || Some(client.dim()) != source.dimensions {
-        return Err(format!("identité d'activation refusée : attendu {}/{:?}, reçu {}/{}", source.model, source.dimensions, client.name(), client.dim()));
+    use super::Capability;
+    let id = client.identite();
+    let sert = match capacite {
+        Capability::Embed => client.name() == source.model && Some(client.dim()) == source.dimensions,
+        Capability::Sparse => id.modele == source.model && id.sparse,
+        Capability::Rerank => id.reranker.as_deref() == Some(source.model.as_str()),
+        Capability::Ocr => id.ocr.as_deref() == Some(source.model.as_str()),
+        _ => false,
+    };
+    if !sert {
+        return Err(format!(
+            "identité d'activation refusée : {} {} attendu, le fournisseur sert {}/{} (creux {}, relecteur {:?}, OCR {:?})",
+            capacite.name(), source.model, id.modele, id.dim, id.sparse, id.reranker, id.ocr
+        ));
     }
     if client.identite().activation.as_ref() != Some(&identite(source)?) {
         return Err("identité d'activation refusée : recette/profil du fournisseur différent ou non attesté".into());
@@ -218,8 +284,7 @@ impl Drop for Tunnel {
 /// `ssh <hôte> systemd-run --user --unit=rag3weaver-fournisseur-<modèle>-<port> --collect --property=Restart=on-failure`.
 /// ssh en `BatchMode` : un échec se refuse net, sans nouvel essai ni repli.
 #[cfg(feature = "daemon")]
-fn connecter_distant(source: &super::ModelSource, annule: &std::sync::atomic::AtomicBool)
-    -> Result<(Box<dyn crate::embedder::Embedder>, super::Origin), String> {
+fn activer_distant(source: &super::ModelSource, capacite: super::Capability, annule: &std::sync::atomic::AtomicBool) -> Result<Actif, String> {
     use std::process::{Command, Stdio};
     use std::time::{Duration, Instant};
     use super::{Capability, Fallback, Provider};
@@ -233,7 +298,7 @@ fn connecter_distant(source: &super::ModelSource, annule: &std::sync::atomic::At
     }
     let adresses = source.addresses(Capability::Embed, &super::process_env);
     let distante = a.adresse_distante.clone().ok_or("activation distante : adresse_distante requise")?;
-    if adresses.len() != 1 || source.dimensions.unwrap_or(0) == 0 {
+    if adresses.len() != 1 || (capacite == Capability::Embed && source.dimensions.unwrap_or(0) == 0) {
         return Err("activation gérée : une adresse et une dimension explicites requises".into());
     }
     let locale = adresses[0].clone();
@@ -279,12 +344,12 @@ fn connecter_distant(source: &super::ModelSource, annule: &std::sync::atomic::At
     let joindre = || crate::daemon::DaemonEmbedder::joindre_dans(&locale, Duration::from_secs(2));
     let client = match joindre() {
         Ok(c) => {
-            verifier_l_identite(source, &c).map_err(|e| format!("activation distante : le port {distante} de {hote} est pris par un autre fournisseur ({e})"))?;
+            verifier_pour(source, capacite, &c).map_err(|e| format!("activation distante : le port {distante} de {hote} est pris par un autre fournisseur ({e})"))?;
             c
         }
         Err(_) => {
             // 3. Personne : lancer l'unité transitoire, puis attendre qu'elle réponde.
-            let modele: String = source.model.chars().map(|c| if c.is_ascii_alphanumeric() || "-_.".contains(c) { c } else { '-' }).collect();
+            let modele: String = a.nom_pour(source).chars().map(|c| if c.is_ascii_alphanumeric() || "-_.".contains(c) { c } else { '-' }).collect();
             let unite = format!("{PREFIXE_UNITE}{modele}-{port_distant}");
             let mut distants = vec!["systemd-run".to_string(), "--user".into(), format!("--unit={unite}"), "--collect".into(), "--property=Restart=on-failure".into()];
             distants.extend(env.iter().map(|(k, v)| format!("--setenv={k}={v}")));
@@ -315,14 +380,13 @@ fn connecter_distant(source: &super::ModelSource, annule: &std::sync::atomic::At
             }
         }
     };
-    verifier_l_identite(source, &client)?;
+    verifier_pour(source, capacite, &client)?;
     let delai_appel = source.timeout_secs.filter(|s| *s > 0).map(Duration::from_secs)
         .unwrap_or_else(crate::daemon::embeddings::default_embed_timeout);
     let client = client.with_timeout(delai_appel);
     let usage = client.prendre_bail(&format!("activation:{}:{}", std::process::id(), source.model), Duration::from_secs(60))
         .map_err(|e| format!("bail d'usage : {e}"))?;
-    let origine = super::Origin::Service(locale);
-    Ok((Box::new(Gere { client, _usage: usage, _tenue: Box::new(tunnel) }), origine))
+    Ok(Actif { client, usage, tenue: Box::new(tunnel), adresse: locale })
 }
 
 /// **Le point d'entrée** : une déclaration à la demande rend un embarqueur
@@ -501,6 +565,235 @@ impl crate::embedder::Embedder for Maintenu {
     fn timeout(&self) -> Option<std::time::Duration> { self.client.lock().unwrap_or_else(|e| e.into_inner()).timeout() }
 }
 
+/// **Un fournisseur tenu pour une capacité** : son client, et ce qui le
+/// garde (le bail d'usage, puis le bail local d'activation ou le tunnel).
+/// L'ordre des champs est l'ordre de leur fin.
+#[cfg(feature = "daemon")]
+struct Prise<C> {
+    client: C,
+    _usage: Option<crate::daemon::embeddings::BailDistant>,
+    _tenue: Box<dyn std::any::Any + Send + Sync>,
+}
+
+#[cfg(feature = "daemon")]
+type EtatPrise<C> = std::sync::Arc<std::sync::Mutex<Option<(Prise<C>, std::time::Instant)>>>;
+
+/// **La tenue d'un fournisseur pour une capacité** (le creux, le relecteur,
+/// l'OCR d'un groupe ; décision de c7, 14 novembre 2026). Elle porte la
+/// résidence déclarée, pour toute capacité :
+/// - `a_demande` : rien à l'ouverture ; le premier appel active (identité
+///   vérifiée pour cette capacité, un bail à elle) ; le client est rendu,
+///   bail compris, après `rendre_le_bail_secs` sans appel ;
+/// - `maintenir` : activé tout de suite, tenu.
+///
+/// Un appel qui trouve le fournisseur parti (évincé, planté) le relance une
+/// fois, et sinon se refuse en disant le départ et la relance. Le dense garde
+/// son embarqueur à lui (`ALaDemande`, `Maintenu`), même comportement.
+#[cfg(feature = "daemon")]
+struct Tenue<C: Send + 'static> {
+    source: super::ModelSource,
+    capacite: super::Capability,
+    joindre: fn(&super::ModelSource, &str) -> Result<C, String>,
+    etat: EtatPrise<C>,
+    arret: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    maintenir: bool,
+}
+
+#[cfg(feature = "daemon")]
+impl<C: Send + 'static> Tenue<C> {
+    fn new(source: &super::ModelSource, capacite: super::Capability, joindre: fn(&super::ModelSource, &str) -> Result<C, String>) -> Result<Self, String> {
+        let a = source.activation.as_ref().ok_or("activation absente")?;
+        let etat: EtatPrise<C> = Default::default();
+        let arret = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let maintenir = match a.residence {
+            Residence::Maintenir => true,
+            Residence::ADemande { inactivite_secs, rendre_le_bail_secs } => {
+                if inactivite_secs == 0 || rendre_le_bail_secs == 0 || rendre_le_bail_secs >= inactivite_secs {
+                    return Err(format!(
+                        "activation à la demande : rendre_le_bail_secs ({rendre_le_bail_secs}) doit être non nul et plus court qu'inactivite_secs ({inactivite_secs})"
+                    ));
+                }
+                let rendre = std::time::Duration::from_secs(rendre_le_bail_secs);
+                let (e, stop) = (std::sync::Arc::downgrade(&etat), arret.clone());
+                let _ = std::thread::Builder::new().name("rendre-le-bail".into()).spawn(move || {
+                    while !stop.load(std::sync::atomic::Ordering::Acquire) {
+                        std::thread::sleep(std::time::Duration::from_millis(200));
+                        let Some(etat) = e.upgrade() else { return };
+                        let rendu = {
+                            let mut g = etat.lock().unwrap_or_else(|e| e.into_inner());
+                            if g.as_ref().is_some_and(|(_, dernier)| dernier.elapsed() >= rendre) { g.take() } else { None }
+                        };
+                        // Lâché hors du verrou : rendre le bail est un appel HTTP.
+                        drop(rendu);
+                    }
+                });
+                false
+            }
+        };
+        let t = Self { source: source.clone(), capacite, joindre, etat, arret, maintenir };
+        if maintenir {
+            let tenu = t.activer()?;
+            *t.etat.lock().unwrap_or_else(|e| e.into_inner()) = Some((tenu, std::time::Instant::now()));
+        }
+        Ok(t)
+    }
+
+    fn activer(&self) -> Result<Prise<C>, String> {
+        let actif = activer(&self.source, self.capacite, &std::sync::atomic::AtomicBool::new(false))?;
+        let client = (self.joindre)(&self.source, &actif.adresse)?;
+        Ok(Prise { client, _usage: actif.usage, _tenue: actif.tenue })
+    }
+
+    /// Un appel au fournisseur tenu : l'activer s'il ne l'est pas ; s'il est
+    /// parti, le relancer une fois.
+    fn appeler<R, E: std::fmt::Display>(&self, f: impl Fn(&C) -> Result<R, E>, parti: impl Fn(&E) -> bool, erreur: impl Fn(String) -> E) -> Result<R, E> {
+        let mut g = self.etat.lock().unwrap_or_else(|e| e.into_inner());
+        if g.is_none() {
+            let tenu = self.activer().map_err(|e| erreur(format!("activation à la demande : {e}")))?;
+            *g = Some((tenu, std::time::Instant::now()));
+        }
+        let mut r = f(&g.as_ref().unwrap().0.client);
+        if let Err(e) = &r {
+            if parti(e) {
+                let depart = e.to_string();
+                let modele = &self.source.model;
+                let (declare, quoi) = if self.maintenir {
+                    (" déclaré maintenir", " — rouvrez le backend ou corrigez la déclaration")
+                } else {
+                    ("", "")
+                };
+                *g = None;
+                noter_une_relance(&self.source);
+                let relance = self.activer().map_err(|e| erreur(format!(
+                    "le fournisseur {modele}{declare} est parti ({depart}) ; relancé une fois, il n'a pas répondu : {e}{quoi}")))?;
+                *g = Some((relance, std::time::Instant::now()));
+                r = f(&g.as_ref().unwrap().0.client);
+                if let Err(e) = &r {
+                    if parti(e) {
+                        let m = format!("le fournisseur {modele}{declare} est parti ({depart}) ; relancé une fois, il est reparti : {e}{quoi}");
+                        r = Err(erreur(m));
+                    }
+                }
+            }
+        }
+        if let Some((_, dernier)) = g.as_mut() {
+            *dernier = std::time::Instant::now();
+        }
+        r
+    }
+}
+
+#[cfg(feature = "daemon")]
+impl<C: Send + 'static> Drop for Tenue<C> {
+    fn drop(&mut self) {
+        self.arret.store(true, std::sync::atomic::Ordering::Release);
+    }
+}
+
+/// Le fournisseur n'est plus là : le message d'un appel qui n'a trouvé personne.
+#[cfg(feature = "daemon")]
+fn parti_dit(m: &str) -> bool {
+    m.contains("ne répond pas") || m.contains("refused") || m.contains("Connection reset")
+}
+
+#[cfg(feature = "daemon")]
+fn parti_calcul(e: &crate::embedder::EmbedError) -> bool {
+    match e {
+        crate::embedder::EmbedError::Timeout => true,
+        crate::embedder::EmbedError::ProviderError(m) => parti_dit(m),
+        _ => false,
+    }
+}
+
+#[cfg(feature = "daemon")]
+fn parti_ocr(e: &crate::ocr::OcrError) -> bool {
+    matches!(e, crate::ocr::OcrError::Model(m) if parti_dit(m))
+}
+
+/// La seule adresse déclarée d'une source activée.
+#[cfg(feature = "daemon")]
+fn adresse_declaree(source: &super::ModelSource) -> Result<String, String> {
+    source.addresses(super::Capability::Embed, &super::process_env).into_iter().next()
+        .ok_or_else(|| "activation : une adresse explicite requise".to_string())
+}
+
+#[cfg(feature = "daemon")]
+fn delai_appel(source: &super::ModelSource) -> std::time::Duration {
+    source.timeout_secs.filter(|s| *s > 0).map(std::time::Duration::from_secs)
+        .unwrap_or_else(crate::daemon::embeddings::default_embed_timeout)
+}
+
+/// **Le creux d'une activation** (le groupe bge-m3) : un embarqueur creux
+/// tenu. Pas de dual : il se décide aujourd'hui sur l'identité du fournisseur,
+/// qu'un client à la demande ne connaît pas avant son premier appel.
+#[cfg(feature = "daemon")]
+struct CreuxTenu(Tenue<crate::daemon::DaemonEmbedder>);
+
+#[cfg(feature = "daemon")]
+impl crate::embedder::SparseEmbedder for CreuxTenu {
+    fn embed_sparse(&self, textes: &[String]) -> Result<Vec<crate::sparse_index::SparseVector>, crate::embedder::EmbedError> {
+        self.0.appeler(|c| c.embed_sparse(textes), parti_calcul, crate::embedder::EmbedError::ProviderError)
+    }
+    fn embed_sparse_spans(&self, textes: &[String]) -> Result<Vec<(crate::sparse_index::SparseVector, Vec<crate::sparse_index::SparseSpan>)>, crate::embedder::EmbedError> {
+        self.0.appeler(|c| c.embed_sparse_spans(textes), parti_calcul, crate::embedder::EmbedError::ProviderError)
+    }
+    fn distant(&self) -> bool { true }
+}
+
+/// **Le relecteur d'une activation** : un relecteur tenu.
+#[cfg(feature = "daemon")]
+struct RelecteurTenu { tenue: Tenue<crate::daemon::embeddings::DaemonReranker>, nom: String }
+
+#[cfg(feature = "daemon")]
+impl crate::reranker::Reranker for RelecteurTenu {
+    fn rerank(&self, requete: &str, passages: &[String]) -> Result<Vec<f32>, crate::embedder::EmbedError> {
+        self.tenue.appeler(|c| c.rerank(requete, passages), parti_calcul, crate::embedder::EmbedError::ProviderError)
+    }
+    fn name(&self) -> &str { &self.nom }
+}
+
+/// **L'OCR d'une activation** : un OCR tenu.
+#[cfg(feature = "daemon")]
+struct OcrTenu { tenue: Tenue<crate::daemon::embeddings::DaemonOcr>, nom: String }
+
+#[cfg(feature = "daemon")]
+impl crate::ocr::Ocr for OcrTenu {
+    fn recognize(&self, image: &crate::ocr::OcrImage) -> Result<crate::ocr::OcrOutput, crate::ocr::OcrError> {
+        self.tenue.appeler(|c| c.recognize(image), parti_ocr, crate::ocr::OcrError::Model)
+    }
+    fn name(&self) -> &str { &self.nom }
+}
+
+/// **Le creux déclaré avec une activation** : à la demande ou maintenu.
+#[cfg(feature = "daemon")]
+pub(super) fn connecter_creux(source: &super::ModelSource) -> Result<(super::SparseClients, super::Origin), String> {
+    let adresse = adresse_declaree(source)?;
+    let tenue = Tenue::new(source, super::Capability::Sparse, |s, a| {
+        crate::daemon::DaemonEmbedder::joindre(a).map(|d| d.with_timeout(delai_appel(s))).map_err(|e| e.to_string())
+    })?;
+    Ok((super::SparseClients { sparse: std::sync::Arc::new(CreuxTenu(tenue)), dual: None }, super::Origin::Service(adresse)))
+}
+
+/// **Le relecteur déclaré avec une activation.**
+#[cfg(feature = "daemon")]
+pub(super) fn connecter_relecteur(source: &super::ModelSource) -> Result<(std::sync::Arc<dyn crate::reranker::Reranker>, super::Origin), String> {
+    let adresse = adresse_declaree(source)?;
+    let tenue = Tenue::new(source, super::Capability::Rerank, |_, a| {
+        crate::daemon::embeddings::DaemonReranker::joindre(a).map_err(|e| e.to_string())
+    })?;
+    Ok((std::sync::Arc::new(RelecteurTenu { tenue, nom: source.model.clone() }), super::Origin::Service(adresse)))
+}
+
+/// **L'OCR déclaré avec une activation.**
+#[cfg(feature = "daemon")]
+pub(super) fn connecter_ocr(source: &super::ModelSource) -> Result<(std::sync::Arc<dyn crate::ocr::Ocr>, super::Origin), String> {
+    let adresse = adresse_declaree(source)?;
+    let tenue = Tenue::new(source, super::Capability::Ocr, |_, a| {
+        crate::daemon::embeddings::DaemonOcr::joindre(a).map_err(|e| e.to_string())
+    })?;
+    Ok((std::sync::Arc::new(OcrTenu { tenue, nom: source.model.clone() }), super::Origin::Service(adresse)))
+}
+
 #[cfg(feature = "daemon")]
 struct Gere {
     client: crate::daemon::DaemonEmbedder,
@@ -547,7 +840,7 @@ mod tests {
                 env: Default::default(), profil: "fixture-cpu".into(), peripherique: "cpu".into(),
                 coordination: dossier.path().join("coordination"), journal: dossier.path().join("journaux"),
                 budget_activation_secs: 5, budget_attente_secs: 5, residence: Residence::Maintenir,
-                hote: None, adresse_distante: None, ssh: None,
+                hote: None, adresse_distante: None, ssh: None, nom: None, modele: None,
             });
             // Même chemin que le manifeste : la déclaration traverse serde.
             let source = serde_json::from_str(&serde_json::to_string(&source).unwrap()).unwrap();
@@ -726,7 +1019,7 @@ mod tests {
             coordination: dossier.path().join("coordination"), journal: dossier.path().join("journaux"),
             budget_activation_secs: 180, budget_attente_secs: 180,
             residence: Residence::ADemande { inactivite_secs: inactivite, rendre_le_bail_secs: RENDRE_LE_BAIL_PAR_DEFAUT_SECS.min(inactivite.saturating_sub(1).max(1)) },
-            hote: Some(hote.clone()), adresse_distante: Some(format!("127.0.0.1:{port_distant}")), ssh: None,
+            hote: Some(hote.clone()), adresse_distante: Some(format!("127.0.0.1:{port_distant}")), ssh: None, nom: None, modele: None,
         });
         let unite = format!("{PREFIXE_UNITE}{modele}-{port_distant}");
         let ssh = |cmd: &str| {
@@ -964,6 +1257,95 @@ mod tests {
             assert!(erreur.contains(mot), "le refus dit « {mot} » : {erreur}");
         }
         assert_eq!(evenements(&f, "constructeur_demarre"), 2, "une seule relance");
+    }
+
+    /// **Le groupe** (décision de c7, 14 novembre 2026 : une activation nommée,
+    /// citée par chaque déclaration) : le creux, le relecteur et l'OCR servis
+    /// par un même fournisseur, déclaré une fois sous le nom « groupe », chacun
+    /// à son modèle, à la même adresse et la même coordination.
+    fn groupe(inactivite: u64, rendre: u64) -> (Fixture, ModelSource, ModelSource, ModelSource) {
+        let f = Fixture::nouvelle();
+        let d = f.dossier.path();
+        let bloc = serde_json::json!({
+            "nom": "groupe", "modele": "fixture-groupe",
+            "programme": concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/residence/fournisseur.py"),
+            "args": ["--journal", d.join("events.jsonl").display().to_string(), "--generation", "groupe", "--modele", "fixture-groupe", "--sparse"],
+            "env": {"RAG3WEAVER_RERANK_MODEL": "fixture-relecteur", "RAG3WEAVER_OCR_MODEL": "fixture-ocr"},
+            "profil": "fixture-cpu", "peripherique": "cpu",
+            "coordination": d.join("coordination").display().to_string(), "journal": d.join("journaux").display().to_string(),
+            "budget_activation_secs": 5, "budget_attente_secs": 5,
+            "residence": {"a_demande": {"inactivite_secs": inactivite, "rendre_le_bail_secs": rendre}},
+        });
+        let source = |modele: &str| -> ModelSource {
+            serde_json::from_value(serde_json::json!({
+                "provider": "service", "model": modele, "address": "127.0.0.1:0", "timeout_secs": 2, "activation": bloc.clone(),
+            })).unwrap_or_else(|e| panic!("la déclaration du groupe ({modele}) : {e}"))
+        };
+        let (creux, relecteur, ocr) = (source("fixture-groupe"), source("fixture-relecteur"), source("fixture-ocr"));
+        (f, creux, relecteur, ocr)
+    }
+
+    fn une_image() -> crate::ocr::OcrImage {
+        crate::ocr::OcrImage::from_rgb(2, 2, vec![255; 12]).unwrap()
+    }
+
+    /// **Ouvrir le groupe ne lance rien** : trois capacités déclarées à la
+    /// demande rendent leurs clients sans fournisseur.
+    #[test]
+    fn groupe_ouvrir_trois_capacites_ne_lance_rien() {
+        let (f, creux, relecteur, ocr) = groupe(2, 1);
+        crate::model_source::connect_sparse(&creux).unwrap_or_else(|e| panic!("le creux à la demande : {e}"));
+        crate::model_source::connect_reranker(&relecteur).unwrap_or_else(|e| panic!("le relecteur à la demande : {e}"));
+        crate::model_source::connect_ocr(&ocr).unwrap_or_else(|e| panic!("l'OCR à la demande : {e}"));
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        assert_eq!(evenements(&f, "constructeur_demarre"), 0, "ouvrir le groupe ne lance pas le fournisseur");
+    }
+
+    /// **Un relecteur lance le groupe, l'OCR ne le relance pas** : un seul
+    /// fournisseur, deux baux, chacun le sien.
+    #[test]
+    fn groupe_un_relecteur_lance_l_ocr_ne_relance_pas() {
+        let (f, _, relecteur, ocr) = groupe(60, 30);
+        let (r, _) = crate::model_source::connect_reranker(&relecteur).unwrap_or_else(|e| panic!("{e}"));
+        let (o, _) = crate::model_source::connect_ocr(&ocr).unwrap_or_else(|e| panic!("{e}"));
+        let scores = r.rerank("chat noir", &["un chat noir".into(), "une voiture".into()]).unwrap_or_else(|e| panic!("relire : {e}"));
+        assert_eq!(scores.len(), 2);
+        assert!(scores[0] > scores[1], "le relecteur de la fixture classe par mots communs : {scores:?}");
+        assert_eq!(evenements(&f, "constructeur_demarre"), 1, "le relecteur a lancé le groupe");
+        let lu = o.recognize(&une_image()).unwrap_or_else(|e| panic!("lire l'image : {e}"));
+        assert_eq!(lu.lines.len(), 1);
+        assert_eq!(evenements(&f, "constructeur_demarre"), 1, "l'OCR s'attache au même fournisseur");
+        assert_eq!(identite_du_fournisseur(&f)["usage"]["baux"], 2, "deux baux, un par capacité");
+    }
+
+    /// **Le groupe s'évince quand plus aucun bail ne le tient**, puis **un
+    /// appel d'après l'éviction le relance**.
+    #[test]
+    fn groupe_s_evince_quand_plus_aucun_bail_puis_se_relance() {
+        let (f, creux, relecteur, _) = groupe(2, 1);
+        let (r, _) = crate::model_source::connect_reranker(&relecteur).unwrap_or_else(|e| panic!("{e}"));
+        let (c, _) = crate::model_source::connect_sparse(&creux).unwrap_or_else(|e| panic!("{e}"));
+        r.rerank("a", &["a".into()]).unwrap_or_else(|e| panic!("relire : {e}"));
+        c.sparse.embed_sparse(&["un texte".into()]).unwrap_or_else(|e| panic!("le creux : {e}"));
+        assert_eq!(evenements(&f, "constructeur_demarre"), 1);
+        assert!(attendre_l_evenement(&f, "evince", 1, std::time::Duration::from_secs(15)), "évincé quand plus aucun bail");
+        assert!(attendre_l_evenement(&f, "arrete", 1, std::time::Duration::from_secs(5)));
+        let v = c.sparse.embed_sparse(&["après".into()]).unwrap_or_else(|e| panic!("le creux après l'éviction : {e}"));
+        assert_eq!(v.len(), 1);
+        assert_eq!(evenements(&f, "constructeur_demarre"), 2, "relancé une fois");
+    }
+
+    /// **Le groupe planté sous bail se relance une fois** et le dit au /sante.
+    #[test]
+    fn groupe_plante_sous_bail_se_relance_une_fois() {
+        let (f, _, relecteur, _) = groupe(60, 30);
+        let (r, _) = crate::model_source::connect_reranker(&relecteur).unwrap_or_else(|e| panic!("{e}"));
+        r.rerank("a", &["a".into()]).unwrap_or_else(|e| panic!("relire : {e}"));
+        planter(pid_demarre(&f, 0));
+        let scores = r.rerank("a", &["a".into(), "b".into()]).unwrap_or_else(|e| panic!("relire après le plantage : {e}"));
+        assert_eq!(scores.len(), 2);
+        assert_eq!(evenements(&f, "constructeur_demarre"), 2, "relancé une fois");
+        assert_eq!(identite_du_fournisseur(&f)["relances"], 1);
     }
 
     #[test]

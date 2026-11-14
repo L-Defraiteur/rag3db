@@ -520,7 +520,7 @@ pub(crate) mod tests {
         let d = tempfile::tempdir().unwrap();
         let fiche = crate::daemon_lifecycle::DaemonFile {
             address: "fixture.invalid:7970".into(), pid: 42,
-            token: "jeton-fixture".into(), build: "fixture".into(), started_at: 0,
+            token: "jeton-fixture".into(), build: "fixture".into(), started_at: 0, reponse_s: None, sonde_s: None,
         };
         std::fs::write(d.path().join("daemon.json"), serde_json::to_vec(&fiche).unwrap()).unwrap();
         let boite = BoiteHttp::depuis_fiche(crate::daemon_lifecycle::read_in(d.path()), Duration::from_secs(1)).unwrap();

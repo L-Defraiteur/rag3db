@@ -51,11 +51,32 @@ pub enum Action {
 }
 
 /// Une touche, indépendante du backend (les tests n'ont pas de terminal).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Touche {
     Car(char),
     Entree,
     Retour,
+    /// ←, →, Début, Fin (et Ctrl-A, Ctrl-E), Suppr.
+    Gauche,
+    Droite,
+    Debut,
+    Fin,
+    Suppr,
+    /// Ctrl-← et Ctrl-→ (et Alt-B, Alt-F).
+    MotGauche,
+    MotDroite,
+    /// Ctrl-W, Ctrl-U, Ctrl-K.
+    EffacerMot,
+    EffacerDebut,
+    EffacerFin,
+    /// ↑ et ↓ : la ligne d'au-dessus ou d'en dessous, sinon l'historique des envois.
+    Haut,
+    Bas,
+    /// Alt-Entrée : un saut de ligne dans la saisie, sans l'envoyer.
+    Saut,
+    /// Un collage d'un bloc (bracketed paste) : ses sauts de ligne restent dans
+    /// la saisie, rien ne part avant Entrée.
+    Coller(String),
     Echap,
     CtrlC,
     CtrlD,
@@ -84,6 +105,9 @@ pub struct Validee {
     pub texte: String,
     /// La langue d'un bloc de code (`rust`, `ts`…), vide si la clôture n'en dit pas.
     pub langue: String,
+    /// La longueur, en octets, de l'en-tête de la ligne (`[équipier · réponse] `
+    /// d'une ligne de boîte) : il garde l'accent du thème, la suite est de la prose.
+    pub tete: usize,
 }
 
 /// Un bloc de code en cours de réception.
@@ -100,7 +124,7 @@ pub struct Vue {
     en_cours: String,
     validees: Vec<Validee>,
     pub etat: Etat,
-    saisie: String,
+    saisie: crate::saisie::Saisie,
     demande_posee: bool,
     pub theme: Theme,
     pub capacites: Capacites,
@@ -113,6 +137,9 @@ pub struct Vue {
     depuis: Instant,
     /// « dépôt · branche · tâche », jamais l'id d'un backend.
     pub entete: String,
+    /// Un repli à dire dans la zone vivante, sur la ligne du texte en cours quand
+    /// rien n'y passe : sous mosh, la commande qui relit le journal (lot tty-7).
+    pub repli: Option<String>,
     /// Le bloc de code ouvert (```) : il se valide entier à sa clôture, pour se
     /// colorer d'un coup ; sa ligne en cours reste visible dans la zone vivante.
     bloc: Option<Bloc>,
@@ -134,7 +161,7 @@ impl Vue {
             en_cours: String::new(),
             validees: Vec::new(),
             etat: Etat::Attend,
-            saisie: String::new(),
+            saisie: crate::saisie::Saisie::default(),
             demande_posee,
             theme: Theme::daemon(),
             capacites: Capacites { couleurs: Niveau::Vraie, glyphes: Glyphes::Surs },
@@ -142,6 +169,7 @@ impl Vue {
             politiques: HashMap::new(),
             depuis: Instant::now(),
             entete: String::new(),
+            repli: None,
             bloc: None,
             boite: crate::boite::Boite::default(),
             etat_hote: None,
@@ -200,7 +228,12 @@ impl Vue {
     }
 
     fn valider(&mut self, genre: Genre, texte: String) {
-        self.validees.push(Validee { genre, texte, langue: String::new() });
+        self.validees.push(Validee { genre, texte, langue: String::new(), tete: 0 });
+    }
+
+    /// Une ligne dont l'en-tête garde l'accent du thème.
+    fn valider_avec_tete(&mut self, genre: Genre, tete: &str, corps: &str) {
+        self.validees.push(Validee { genre, texte: format!("{tete}{corps}"), langue: String::new(), tete: tete.len() });
     }
 
     /// Une ligne de texte du modèle : elle ouvre ou ferme un bloc de code, y
@@ -221,7 +254,7 @@ impl Vue {
     /// Valide le bloc ouvert, fermé ou non.
     fn fermer_bloc(&mut self) {
         if let Some(b) = self.bloc.take() {
-            self.validees.push(Validee { genre: Genre::Code, texte: b.lignes.join("\n"), langue: b.langue });
+            self.validees.push(Validee { genre: Genre::Code, texte: b.lignes.join("\n"), langue: b.langue, tete: 0 });
         }
     }
 
@@ -317,11 +350,14 @@ impl Vue {
     pub fn ligne_de_boite(&mut self, l: &Value) {
         self.boite.ligne(l);
         self.clore();
-        let item = l["item"].as_str().filter(|i| !i.is_empty()).map(|i| format!(" [{i}]")).unwrap_or_default();
-        let tete = format!("[{} · {}{item}] ", l["from"].as_str().unwrap_or("?"), l["kind"].as_str().unwrap_or("?"));
+        let tete = crate::boite::en_tete(l);
         let texte = l["text"].as_str().unwrap_or("");
         for (i, ligne) in texte.split('\n').enumerate() {
-            self.valider(Genre::Boite, if i == 0 { format!("{tete}{ligne}") } else { format!("  {ligne}") });
+            if i == 0 {
+                self.valider_avec_tete(Genre::Boite, &tete, ligne);
+            } else {
+                self.valider(Genre::Boite, format!("  {ligne}"));
+            }
         }
         if l["kind"] == "ended" {
             self.changer(Etat::Fini(texte.to_string()));
@@ -343,44 +379,66 @@ impl Vue {
     pub fn touche(&mut self, t: Touche) -> Option<Action> {
         match t {
             // Une approbation en attente et rien de tapé : `o` accorde, `n` refuse.
-            Touche::Car(c @ ('o' | 'O' | 'y' | 'Y' | 'n' | 'N')) if self.saisie.is_empty() && self.boite.premiere().is_some_and(|a| a.kind == "approval") => {
+            Touche::Car(c @ ('o' | 'O' | 'y' | 'Y' | 'n' | 'N')) if self.saisie.est_vide() && self.boite.premiere().is_some_and(|a| a.kind == "approval") => {
                 let attente = self.boite.premiere().cloned()?;
                 let oui = matches!(c, 'o' | 'O' | 'y' | 'Y');
                 self.clore();
-                self.valider(Genre::Boite, format!("› {} : {}", if oui { "accordé" } else { "refusé" }, attente.command.clone().unwrap_or_default()));
+                self.valider_avec_tete(Genre::Boite, "› ", &format!("{} : {}", if oui { "accordé" } else { "refusé" }, attente.command.clone().unwrap_or_default()));
                 Some(Action::Repondre { attente, texte: if oui { "oui".into() } else { "non".into() }, accord: Some(oui) })
             }
             Touche::Car(c) => {
-                self.saisie.push(c);
+                self.saisie.inserer(c.encode_utf8(&mut [0; 4]));
                 None
             }
             Touche::Retour => {
-                self.saisie.pop();
+                self.saisie.effacer_avant();
                 None
             }
+            Touche::Gauche => self.edite(crate::saisie::Saisie::gauche),
+            Touche::Droite => self.edite(crate::saisie::Saisie::droite),
+            Touche::Debut => self.edite(crate::saisie::Saisie::debut),
+            Touche::Fin => self.edite(crate::saisie::Saisie::fin),
+            Touche::Suppr => self.edite(crate::saisie::Saisie::effacer_apres),
+            Touche::MotGauche => self.edite(crate::saisie::Saisie::mot_gauche),
+            Touche::MotDroite => self.edite(crate::saisie::Saisie::mot_droite),
+            Touche::EffacerMot => self.edite(crate::saisie::Saisie::effacer_mot_avant),
+            Touche::EffacerDebut => self.edite(crate::saisie::Saisie::effacer_debut),
+            Touche::EffacerFin => self.edite(crate::saisie::Saisie::effacer_fin),
+            Touche::Haut => self.edite(crate::saisie::Saisie::monter),
+            Touche::Bas => self.edite(crate::saisie::Saisie::descendre),
+            Touche::Saut => self.edite(|s| s.inserer("\n")),
+            Touche::Coller(texte) => self.edite(|s| s.inserer(&texte)),
             Touche::Entree => {
-                let texte = std::mem::take(&mut self.saisie);
+                let texte = self.saisie.prendre();
                 if texte.trim().is_empty() {
                     return None;
                 }
                 // Ce que l'équipier attend passe avant : la saisie y répond.
                 if let Some(attente) = self.boite.premiere().cloned() {
                     self.clore();
-                    self.valider(Genre::Boite, format!("› {texte}"));
+                    self.valider_avec_tete(Genre::Boite, "› ", &texte);
                     return Some(Action::Repondre { attente, texte, accord: None });
                 }
                 let genre = self.genre_d_envoi();
                 self.demande_posee = true;
                 self.clore();
-                self.valider(Genre::Boite, format!("› {texte}"));
+                self.valider_avec_tete(Genre::Boite, "› ", &texte);
                 Some(Action::Envoyer(texte, genre))
             }
             Touche::Echap => Some(Action::Arreter),
+            // Une saisie en cours se vide d'abord, comme dans un shell.
+            Touche::CtrlC if !self.saisie.est_vide() => self.edite(crate::saisie::Saisie::vider),
             Touche::CtrlC => Some(Action::Quitter),
             Touche::CtrlG => Some(Action::Arreter),
-            Touche::CtrlD if self.saisie.is_empty() => Some(Action::Quitter),
+            Touche::CtrlD if self.saisie.est_vide() => Some(Action::Quitter),
             Touche::CtrlD => None,
         }
+    }
+
+    /// Une édition de la saisie : aucune action.
+    fn edite(&mut self, f: impl FnOnce(&mut crate::saisie::Saisie)) -> Option<Action> {
+        f(&mut self.saisie);
+        None
     }
 
     /// Le genre de ligne de boîte qu'une saisie envoie.
@@ -456,10 +514,18 @@ impl Vue {
         let largeur = zone.width as usize;
         // La fin de la ligne en cours, si elle déborde (elle ne déborde pas : `couper`).
         let en_cours = queue(&self.en_cours, largeur);
-        let saisie = queue(&format!("› {}", self.saisie), largeur.saturating_sub(1));
-        let lignes = vec![Line::from(en_cours), self.ligne_vivante(largeur, maintenant), Line::from(saisie.clone())];
+        let (vu, col) = self.saisie.affichage(largeur.saturating_sub(2));
+        let saisie = format!("› {vu}");
+        let haut = match &self.repli {
+            Some(r) if en_cours.is_empty() => {
+                let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
+                Line::from(Span::styled(queue(r, largeur), sourdine))
+            }
+            _ => Line::from(en_cours),
+        };
+        let lignes = vec![haut, self.ligne_vivante(largeur, maintenant), Line::from(saisie.clone())];
         f.render_widget(Paragraph::new(lignes), zone);
-        let x = zone.x + (colonnes(&saisie) as u16).min(zone.width.saturating_sub(1));
+        let x = zone.x + ((2 + col) as u16).min(zone.width.saturating_sub(1));
         f.set_cursor_position((x, zone.y + 2));
     }
 }
@@ -540,7 +606,7 @@ mod tests {
         v.ligne_de_boite(&json!({ "from": "host", "kind": "ended", "text": "fait sans plan" }));
         assert_eq!(v.etat, Etat::Fini("fait sans plan".into()));
         let lignes: Vec<String> = v.prendre_lignes().into_iter().map(|l| l.texte).collect();
-        assert_eq!(lignes, vec!["salut", "» read_file", "  fait (3 ms)", "[host · ended] fait sans plan"]);
+        assert_eq!(lignes, vec!["salut", "» read_file", "  fait (3 ms)", "[hôte · fini] fait sans plan"]);
     }
 
     #[test]
@@ -589,6 +655,102 @@ mod tests {
         assert_eq!(cellule("ᚨ").fg, Color::Rgb(halo.0, halo.1, halo.2), "une rune du cercle");
         assert_eq!(cellule("I").fg, Color::Rgb(texte.0, texte.1, texte.2), "le libellé INVOCATION");
         assert!((0..buf.area.width).all(|x| buf[(x, ligne)].fg != Color::Red), "plus de rouge de base sur la ligne du thème");
+    }
+
+    /// **La saisie s'édite au clavier** : flèches, Début et Fin, mots, effacements,
+    /// historique, saut de ligne et collage d'un bloc ; et le curseur de l'écran
+    /// est là où la saisie l'a mis.
+    #[test]
+    fn the_input_line_is_edited_with_the_keyboard_and_the_screen_cursor_follows() {
+        let mut v = Vue::new(60, true);
+        let tape = |v: &mut Vue, t: &str| t.chars().for_each(|c| assert_eq!(v.touche(Touche::Car(c)), None));
+        tape(&mut v, "lis vue.rs");
+        for _ in 0..6 {
+            v.touche(Touche::Gauche);
+        }
+        tape(&mut v, "src/");
+        v.touche(Touche::Fin);
+        v.touche(Touche::MotGauche);
+        v.touche(Touche::Suppr);
+        tape(&mut v, "R");
+        v.touche(Touche::Debut);
+        v.touche(Touche::Droite);
+        v.touche(Touche::Retour);
+        tape(&mut v, "L");
+        assert_eq!(v.saisie.texte(), "Lis src/vue.Rs");
+        v.touche(Touche::Fin);
+        v.touche(Touche::Saut);
+        v.touche(Touche::Coller("puis\r\nrésume".into()));
+        assert_eq!(v.saisie.texte(), "Lis src/vue.Rs\npuis\nrésume", "le collage garde ses sauts, rien ne part");
+        assert_eq!(v.touche(Touche::Entree), Some(Action::Envoyer("Lis src/vue.Rs\npuis\nrésume".into(), "instruction")));
+        v.touche(Touche::Haut);
+        assert_eq!(v.saisie.texte(), "Lis src/vue.Rs\npuis\nrésume", "↑ rappelle l'envoi");
+        v.touche(Touche::EffacerDebut);
+        v.touche(Touche::Haut);
+        v.touche(Touche::EffacerFin);
+        v.touche(Touche::EffacerMot);
+        assert_eq!(v.saisie.texte(), "Lis src/vue.Rs\n\n", "Ctrl-W s'arrête au début de la ligne");
+        v.touche(Touche::MotDroite);
+        assert_eq!(v.touche(Touche::CtrlC), None, "Ctrl-C vide d'abord une saisie non vide");
+        assert!(v.saisie.est_vide());
+        assert_eq!(v.touche(Touche::CtrlC), Some(Action::Quitter), "puis quitte");
+
+        // Le curseur de l'écran : « › » et une espace, puis la colonne de la saisie.
+        let mut v = Vue::new(40, true);
+        tape(&mut v, "漢字ab");
+        v.touche(Touche::Gauche);
+        let mut t = Terminal::with_options(TestBackend::new(40, 6), TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }).unwrap();
+        let instant = v.depuis;
+        let mut zone = None;
+        t.draw(|f| {
+            zone = Some(f.area());
+            v.dessiner_a(f, f.area(), instant)
+        })
+        .unwrap();
+        let z = zone.unwrap();
+        let pos = t.get_cursor_position().unwrap();
+        assert_eq!((pos.x - z.x, pos.y - z.y), (2 + 5, 2), "deux idéogrammes (4 colonnes), a, et le curseur avant b");
+    }
+
+    /// Une ligne de la boîte s'annonce en français, `[équipier · réponse]`, et
+    /// son en-tête est marqué pour garder l'accent du thème.
+    #[test]
+    fn a_mailbox_line_is_announced_in_french_with_its_header_marked() {
+        let mut v = Vue::new(80, true);
+        v.ligne_de_boite(&json!({ "from": "teammate", "kind": "answer", "text": "le plan tient\net la suite" }));
+        v.ligne_de_boite(&json!({ "from": "supervisor", "kind": "instruction", "text": "vas-y" }));
+        v.ligne_de_boite(&json!({ "from": "teammate", "kind": "inédit", "text": "x" }));
+        let l = v.prendre_lignes();
+        let vus: Vec<(&str, &str)> = l.iter().map(|l| (&l.texte[..l.tete], &l.texte[l.tete..])).collect();
+        assert_eq!(vus, vec![("[équipier · réponse] ", "le plan tient"), ("", "  et la suite"), ("[toi · consigne] ", "vas-y"), ("[équipier · inédit] ", "x")]);
+    }
+
+    /// Le repli (sous mosh, la commande qui relit le journal) se dit sur la
+    /// ligne du texte en cours quand rien n'y passe, en sourdine, et garde sa fin
+    /// (la commande) quand la largeur manque ; le texte en cours passe avant lui.
+    #[test]
+    fn the_fallback_shows_on_the_top_line_while_nothing_streams_and_keeps_its_command() {
+        let ligne0 = |v: &Vue, largeur: u16| {
+            let mut t = Terminal::with_options(TestBackend::new(largeur, 6), TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }).unwrap();
+            let instant = v.depuis;
+            let mut zone = None;
+            t.draw(|f| {
+                zone = Some(f.area());
+                v.dessiner_a(f, f.area(), instant)
+            })
+            .unwrap();
+            let (buf, z) = (t.backend().buffer().clone(), zone.unwrap());
+            ((0..z.width).map(|x| buf[(z.x + x, z.y)].symbol().to_string()).collect::<String>().trim_end().to_string(), buf[(z.x, z.y)].fg)
+        };
+        let mut v = Vue::new(100, true);
+        v.repli = Some("sous mosh, l'historique ne se relit pas au défilement : less /h/seance-1.txt".into());
+        let (texte, fg) = ligne0(&v, 100);
+        assert_eq!(texte, "sous mosh, l'historique ne se relit pas au défilement : less /h/seance-1.txt");
+        let s = rgb(&v.theme.couleurs.sourdine).unwrap();
+        assert_eq!(fg, Color::Rgb(s.0, s.1, s.2), "en sourdine");
+        assert!(ligne0(&v, 30).0.ends_with("less /h/seance-1.txt"), "{}", ligne0(&v, 30).0);
+        v.trame(&tok("en cours"));
+        assert_eq!(ligne0(&v, 100).0, "en cours", "le texte en cours passe avant le repli");
     }
 
     /// **Pour chaque thème embarqué**, ses couleurs atteignent les cellules du

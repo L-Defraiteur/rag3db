@@ -258,7 +258,7 @@ impl ConnDInstantane {
         let mut etat = self.etat.lock().unwrap_or_else(|e| e.into_inner());
         if let Phase::AOuvrir = *etat {
             #[cfg(test)]
-            let refusee = self.a_rompre.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1)).is_ok();
+            let refusee = self.a_rompre.try_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1)).is_ok();
             #[cfg(not(test))]
             let refusee = false;
             *etat = if !refusee && self.inner.begin_read_only().is_ok() {

@@ -1,6 +1,6 @@
 # Le chat de l'atelier ne peut pas créer de fichier
 
-- **État** : ouvert (13 novembre 2026), pour archi.
+- **État** : corrigé (14 novembre 2026), lot `atelier-quatre-mineurs` d'archi
 - **Famille** : produit
 - **Gravité** : capacité manquante — le modèle n'a aucun chemin pour créer un fichier neuf
 - **Atteignable en service** : oui, à toute demande de création d'un fichier depuis le chat

@@ -71,6 +71,30 @@ pub fn reponse(backend: &str, task: &str, a: &Attente, texte: &str, accord: Opti
     v
 }
 
+/// L'en-tête d'une ligne de boîte, en français : `[équipier · réponse] `
+/// (lot tty-8). Un genre ou un auteur inconnu s'écrit tel quel.
+pub fn en_tete(l: &Value) -> String {
+    let de = match l["from"].as_str().unwrap_or("?") {
+        "teammate" => "équipier",
+        "supervisor" => "toi",
+        "host" => "hôte",
+        autre => autre,
+    };
+    let kind = match l["kind"].as_str().unwrap_or("?") {
+        "request" => "demande",
+        "instruction" => "consigne",
+        "answer" => "réponse",
+        "question" => "question",
+        "approval" => "accord demandé",
+        "message" => "message",
+        "stop" => "arrêt",
+        "ended" => "fini",
+        autre => autre,
+    };
+    let item = l["item"].as_str().filter(|i| !i.is_empty()).map(|i| format!(" [{i}]")).unwrap_or_default();
+    format!("[{de} · {kind}{item}] ")
+}
+
 /// **L'état d'une tâche** dans `GET /ide/teammate/list` (`running`, `waiting`,
 /// `ended`, `error`), cherché par son dépôt (`parent`) et son nom.
 pub fn etat_dans_la_liste(liste: &Value, parent: &str, task: &str) -> Option<String> {

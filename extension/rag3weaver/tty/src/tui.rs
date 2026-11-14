@@ -9,8 +9,9 @@ use crate::anim::Capacites;
 use crate::client::{self, Depot};
 use crate::endpoint::Endpoint;
 use crate::flux;
+use crate::journal::Journal;
 use crate::vue::{Action, Touche, Validee, Vue, HAUTEUR};
-use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::widgets::{Paragraph, Widget};
 use ratatui::{TerminalOptions, Viewport};
 use serde_json::{json, Value};
@@ -61,22 +62,29 @@ fn connaitre(agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, filtre: &Mutex<O
 pub enum Echec {
     /// La vue inline n'a pas pu démarrer (le terminal ne rend pas la position du
     /// curseur, par exemple) : rien n'est encore parti à l'hôte, `--plain` peut
-    /// prendre la suite.
-    VueIndisponible(String),
+    /// prendre la suite ; le journal lui est rendu.
+    VueIndisponible(String, Option<Journal>),
     /// Une erreur pendant la séance.
     Autre(String),
 }
 
-pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Option<u64>, theme: crate::theme::Theme) -> Result<(), Echec> {
+/// `journal` reçoit en texte brut ce qui part dans l'historique ; `mosh` dit que
+/// cet historique ne se relira pas, et la zone vivante donne alors la commande
+/// qui relit le journal (lot tty-7).
+pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Option<u64>, theme: crate::theme::Theme, mut journal: Option<Journal>, mosh: bool) -> Result<(), Echec> {
     // La vue d'abord : si elle ne démarre pas, rien n'est parti à l'hôte (ni la
     // demande, ni un abonnement), et `--plain` prend la suite sans doublon.
     let mut terminal = match ratatui::try_init_with_options(TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }) {
         Ok(t) => t,
         Err(e) => {
             let _ = ratatui::try_restore();
-            return Err(Echec::VueIndisponible(e.to_string()));
+            return Err(Echec::VueIndisponible(e.to_string(), journal));
         }
     };
+    // Le collage d'un bloc (bracketed paste) : un texte collé arrive entier, ses
+    // sauts de ligne ne valent pas Entrée. Un terminal qui ne le connaît pas
+    // ignore la demande.
+    let _ = ratatui::crossterm::execute!(std::io::stdout(), EnableBracketedPaste);
     let agent = client::agent();
     let (tx, rx) = mpsc::channel::<Msg>();
     let arret = Arc::new(AtomicBool::new(false));
@@ -158,18 +166,22 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     let mut vue = Vue::new(largeur, demande.is_some());
     vue.capacites = Capacites::du_terminal();
     vue.theme = theme;
+    if let (true, Some(j)) = (mosh, &journal) {
+        vue.repli = Some(format!("sous mosh, l'historique ne se relit pas au défilement : {}", j.relecture()));
+    }
     vue.graine = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1) | 1;
-    let rendu = boucle(&mut terminal, &mut vue, &rx, &agent, &ep, &tache);
+    let rendu = boucle(&mut terminal, &mut vue, &rx, &agent, &ep, &tache, &mut journal);
     arret.store(true, Ordering::SeqCst);
     // La zone vivante reste à l'écran telle quelle ; le curseur passe dessous.
     let _ = terminal.draw(|f| vue.dessiner(f, f.area()));
+    let _ = ratatui::crossterm::execute!(std::io::stdout(), DisableBracketedPaste);
     ratatui::restore();
     println!();
     let _ = flux_fil.join();
     rendu.map_err(Echec::Autre)
 }
 
-fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Receiver<Msg>, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache) -> Result<(), String> {
+fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Receiver<Msg>, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, journal: &mut Option<Journal>) -> Result<(), String> {
     let mut sale = true;
     let mut derniere = Instant::now() - IMAGE;
     let mut image_vue = u64::MAX;
@@ -196,7 +208,7 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
         }
         if sale && derniere.elapsed() >= IMAGE {
             let colorer = |texte: &str, langue: &str| if langue.is_empty() { None } else { client::surligner(agent, ep, texte, langue) };
-            dessiner(terminal, vue, &colorer)?;
+            dessiner(terminal, vue, &colorer, journal.as_mut())?;
             sale = false;
             derniere = Instant::now();
         }
@@ -207,21 +219,13 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
         if event::poll(attente).map_err(|e| e.to_string())? {
             let action = match event::read().map_err(|e| e.to_string())? {
                 Event::Key(k) if k.kind == KeyEventKind::Press => {
-                    let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
-                    let t = match k.code {
-                        KeyCode::Char('c') if ctrl => Some(Touche::CtrlC),
-                        KeyCode::Char('d') if ctrl => Some(Touche::CtrlD),
-                        KeyCode::Char('g') if ctrl => Some(Touche::CtrlG),
-                        // Une autre combinaison Ctrl + lettre n'entre pas dans la saisie.
-                        KeyCode::Char(_) if ctrl => None,
-                        KeyCode::Char(c) => Some(Touche::Car(c)),
-                        KeyCode::Enter => Some(Touche::Entree),
-                        KeyCode::Backspace => Some(Touche::Retour),
-                        KeyCode::Esc => Some(Touche::Echap),
-                        _ => None,
-                    };
                     sale = true;
-                    t.and_then(|t| vue.touche(t))
+                    touche_de(k).and_then(|t| vue.touche(t))
+                }
+                // Un collage d'un bloc : ses sauts de ligne restent dans la saisie.
+                Event::Paste(texte) => {
+                    sale = true;
+                    vue.touche(Touche::Coller(texte))
                 }
                 Event::Resize(l, _) => {
                     vue.redimensionner(l);
@@ -255,12 +259,53 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
     }
 }
 
+/// La touche de la vue pour une touche du terminal, ou rien.
+pub fn touche_de(k: KeyEvent) -> Option<Touche> {
+    let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
+    let alt = k.modifiers.contains(KeyModifiers::ALT);
+    match k.code {
+        // AltGr (Ctrl+Alt sous Windows) : le caractère qu'il compose.
+        KeyCode::Char(c) if ctrl && alt => Some(Touche::Car(c)),
+        KeyCode::Char('c') if ctrl => Some(Touche::CtrlC),
+        KeyCode::Char('d') if ctrl => Some(Touche::CtrlD),
+        KeyCode::Char('g') if ctrl => Some(Touche::CtrlG),
+        KeyCode::Char('a') if ctrl => Some(Touche::Debut),
+        KeyCode::Char('e') if ctrl => Some(Touche::Fin),
+        KeyCode::Char('w') if ctrl => Some(Touche::EffacerMot),
+        KeyCode::Char('u') if ctrl => Some(Touche::EffacerDebut),
+        KeyCode::Char('k') if ctrl => Some(Touche::EffacerFin),
+        // Une autre combinaison Ctrl + lettre n'entre pas dans la saisie.
+        KeyCode::Char(_) if ctrl => None,
+        KeyCode::Char('b') if alt => Some(Touche::MotGauche),
+        KeyCode::Char('f') if alt => Some(Touche::MotDroite),
+        KeyCode::Char(_) if alt => None,
+        KeyCode::Char(c) => Some(Touche::Car(c)),
+        // Alt-Entrée partout ; Maj-Entrée là où le terminal la distingue.
+        KeyCode::Enter if alt || k.modifiers.contains(KeyModifiers::SHIFT) => Some(Touche::Saut),
+        KeyCode::Enter => Some(Touche::Entree),
+        KeyCode::Backspace if alt || ctrl => Some(Touche::EffacerMot),
+        KeyCode::Backspace => Some(Touche::Retour),
+        KeyCode::Left if alt || ctrl => Some(Touche::MotGauche),
+        KeyCode::Right if alt || ctrl => Some(Touche::MotDroite),
+        KeyCode::Left => Some(Touche::Gauche),
+        KeyCode::Right => Some(Touche::Droite),
+        KeyCode::Home => Some(Touche::Debut),
+        KeyCode::End => Some(Touche::Fin),
+        KeyCode::Delete => Some(Touche::Suppr),
+        KeyCode::Up => Some(Touche::Haut),
+        KeyCode::Down => Some(Touche::Bas),
+        KeyCode::Esc => Some(Touche::Echap),
+        _ => None,
+    }
+}
+
 /// Ce qui colore un bloc de code : `(texte, langue) → spans`, ou rien.
 pub type Colorer<'a> = &'a dyn Fn(&str, &str) -> Option<Vec<crate::client::Span>>;
 
 /// Les lignes validées dans l'historique (repliées, les blocs de code colorés
-/// par `colorer`), puis la zone vivante.
-pub fn dessiner<B: ratatui::backend::Backend>(terminal: &mut ratatui::Terminal<B>, vue: &mut Vue, colorer: Colorer) -> Result<(), String> {
+/// par `colorer`), puis la zone vivante. Les mêmes lignes, sans leurs couleurs,
+/// vont au `journal` s'il y en a un.
+pub fn dessiner<B: ratatui::backend::Backend>(terminal: &mut ratatui::Terminal<B>, vue: &mut Vue, colorer: Colorer, journal: Option<&mut Journal>) -> Result<(), String> {
     let validees: Vec<Validee> = vue.prendre_lignes();
     if !validees.is_empty() {
         let largeur = terminal.size().map(|s| s.width).unwrap_or(80) as usize;
@@ -268,6 +313,10 @@ pub fn dessiner<B: ratatui::backend::Backend>(terminal: &mut ratatui::Terminal<B
         for v in &validees {
             let spans = if v.genre == crate::vue::Genre::Code { colorer(&v.texte, &v.langue) } else { None };
             lignes.extend(crate::code::lignes(v, &vue.theme, vue.capacites, largeur, spans.as_deref()));
+        }
+        if let Some(j) = journal {
+            let brutes: Vec<String> = lignes.iter().map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect()).collect();
+            j.lignes(brutes.iter().map(String::as_str));
         }
         terminal
             .insert_before(lignes.len() as u16, |buf| {
@@ -356,11 +405,78 @@ mod tests {
         for i in 0..n {
             vue.trame(&json!({ "evenement": { "kind": "Token", "text": format!(" mot{i}") } }));
             if (i + 1) % par_image == 0 {
-                dessiner(&mut t, &mut vue, &|_, _| None).unwrap();
+                dessiner(&mut t, &mut vue, &|_, _| None, None).unwrap();
             }
         }
-        dessiner(&mut t, &mut vue, &|_, _| None).unwrap();
+        dessiner(&mut t, &mut vue, &|_, _| None, None).unwrap();
         compte.load(Ordering::SeqCst)
+    }
+
+    /// Les touches du terminal deviennent celles de l'éditeur : flèches, Début et
+    /// Fin, Suppr, les raccourcis Ctrl et Alt d'un shell, Alt-Entrée.
+    #[test]
+    fn terminal_keys_map_to_the_line_editor() {
+        let k = |code, m| touche_de(KeyEvent::new(code, m));
+        let (rien, ctrl, alt) = (KeyModifiers::NONE, KeyModifiers::CONTROL, KeyModifiers::ALT);
+        let attendus = [
+            (k(KeyCode::Left, rien), Some(Touche::Gauche)),
+            (k(KeyCode::Right, rien), Some(Touche::Droite)),
+            (k(KeyCode::Home, rien), Some(Touche::Debut)),
+            (k(KeyCode::End, rien), Some(Touche::Fin)),
+            (k(KeyCode::Delete, rien), Some(Touche::Suppr)),
+            (k(KeyCode::Up, rien), Some(Touche::Haut)),
+            (k(KeyCode::Down, rien), Some(Touche::Bas)),
+            (k(KeyCode::Left, ctrl), Some(Touche::MotGauche)),
+            (k(KeyCode::Right, ctrl), Some(Touche::MotDroite)),
+            (k(KeyCode::Left, alt), Some(Touche::MotGauche)),
+            (k(KeyCode::Right, alt), Some(Touche::MotDroite)),
+            (k(KeyCode::Char('b'), alt), Some(Touche::MotGauche)),
+            (k(KeyCode::Char('f'), alt), Some(Touche::MotDroite)),
+            (k(KeyCode::Char('a'), ctrl), Some(Touche::Debut)),
+            (k(KeyCode::Char('e'), ctrl), Some(Touche::Fin)),
+            (k(KeyCode::Char('w'), ctrl), Some(Touche::EffacerMot)),
+            (k(KeyCode::Backspace, alt), Some(Touche::EffacerMot)),
+            (k(KeyCode::Char('u'), ctrl), Some(Touche::EffacerDebut)),
+            (k(KeyCode::Char('k'), ctrl), Some(Touche::EffacerFin)),
+            (k(KeyCode::Enter, alt), Some(Touche::Saut)),
+            (k(KeyCode::Enter, KeyModifiers::SHIFT), Some(Touche::Saut)),
+            (k(KeyCode::Char('c'), ctrl), Some(Touche::CtrlC)),
+            (k(KeyCode::Char('g'), ctrl), Some(Touche::CtrlG)),
+            (k(KeyCode::Char('x'), ctrl), None),
+            (k(KeyCode::Char('é'), rien), Some(Touche::Car('é'))),
+            (k(KeyCode::Char('B'), KeyModifiers::SHIFT), Some(Touche::Car('B'))),
+            (k(KeyCode::Enter, rien), Some(Touche::Entree)),
+            // AltGr d'un clavier français arrive comme Ctrl+Alt sous Windows : c'est un caractère.
+            (k(KeyCode::Char('@'), ctrl | alt), Some(Touche::Car('@'))),
+            (k(KeyCode::Char('{'), ctrl | alt), Some(Touche::Car('{'))),
+        ];
+        let faux: Vec<_> = attendus.iter().enumerate().filter(|(_, (vu, attendu))| vu != attendu).map(|(i, (vu, attendu))| format!("#{i} : {vu:?} au lieu de {attendu:?}")).collect();
+        assert!(faux.is_empty(), "{faux:#?}");
+    }
+
+    /// Le journal reçoit, en texte brut, chaque ligne envoyée dans l'historique,
+    /// dans l'ordre : le texte replié à la largeur et le bloc de code entier.
+    #[test]
+    fn the_journal_receives_every_line_sent_to_the_history_without_colours() {
+        let d = std::env::temp_dir().join(format!("tty-dessin-journal-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let mut j = Journal::ouvrir(&d.join("j.txt")).unwrap();
+        let backend = Compte { inner: CrosstermBackend::new(Compteur(Arc::new(AtomicUsize::new(0)))), taille: Size::new(40, 24) };
+        let mut t = Terminal::with_options(backend, TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }).unwrap();
+        let mut vue = Vue::new(40, true);
+        for i in 0..30 {
+            vue.trame(&json!({ "evenement": { "kind": "Token", "text": format!(" mot{i}") } }));
+            dessiner(&mut t, &mut vue, &|_, _| None, Some(&mut j)).unwrap();
+        }
+        vue.trame(&json!({ "evenement": { "kind": "Token", "text": "\n```rust\nfn main() {}\n```\n" } }));
+        dessiner(&mut t, &mut vue, &|_, _| None, Some(&mut j)).unwrap();
+        let texte = std::fs::read_to_string(j.chemin()).unwrap();
+        let mots: Vec<String> = texte.split_whitespace().filter(|m| m.starts_with("mot")).map(String::from).collect();
+        assert_eq!(mots, (0..30).map(|i| format!("mot{i}")).collect::<Vec<_>>(), "{texte}");
+        assert!(texte.contains("fn main() {}"), "{texte}");
+        assert!(!texte.contains('\x1b'), "aucune séquence de couleur : {texte:?}");
+        assert!(texte.lines().all(|l| l.chars().count() <= 40), "replié à la largeur : {texte}");
+        std::fs::remove_dir_all(&d).unwrap();
     }
 
     /// Les octets émis pour `n` images d'une animation, la vue en `etat`.
@@ -372,7 +488,7 @@ mod tests {
         vue.politiques(&json!({ "tools": [{ "name": "edit_file", "policy": { "write_files": true } }] }));
         vue.entete = "rag3db · tty-3 · tâche parle".into();
         vue.trame(&evenement);
-        dessiner(&mut t, &mut vue, &|_, _| None).unwrap();
+        dessiner(&mut t, &mut vue, &|_, _| None, None).unwrap();
         let debut = std::time::Instant::now();
         compte.store(0, Ordering::SeqCst);
         let ms = vue.quelle().unwrap().de(&vue.theme).ms;

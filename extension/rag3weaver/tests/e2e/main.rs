@@ -142,6 +142,8 @@ mod e2e_generic_search;
 mod e2e_graph_tool;
 #[path = "../e2e_graphe_et_paquets.rs"]
 mod e2e_graphe_et_paquets;
+#[path = "../e2e_groupe_a_la_demande.rs"]
+mod e2e_groupe_a_la_demande;
 #[path = "../e2e_highlight_long_text.rs"]
 mod e2e_highlight_long_text;
 #[path = "../e2e_hnsw_scale.rs"]
@@ -170,6 +172,8 @@ mod e2e_lecture_seule_apres_fermeture_sans_point_de_reprise;
 mod e2e_lectures;
 #[path = "../e2e_liens.rs"]
 mod e2e_liens;
+#[path = "../e2e_masque_sans_filtre.rs"]
+mod e2e_masque_sans_filtre;
 #[path = "../e2e_mcp_cycle_de_vie.rs"]
 mod e2e_mcp_cycle_de_vie;
 #[path = "../e2e_mcp_hote_designe.rs"]

@@ -3,6 +3,9 @@
 # pousse le worktree seulement si la passe a fini VERT sur ce commit, sur une seule lib, et
 # si master n'a apporté aucun code depuis la base testée. Puis les trois contrôles.
 set -u
+# Le chemin de cette garde, résolu avant tout `cd` (14 novembre 2026) : lancée par `bash push_garde.sh` depuis le
+# cache, son `$0` relatif ne se résolvait plus une fois dans le worktree, et « garde exécutée » restait vide.
+MOI=$(realpath "$0")
 # **Le code qu'apporte un intervalle de commits** (`<base> <neuf>`), un chemin par ligne : ce qui oblige
 # à rejouer la passe. Mode `--code-apporte <base> <neuf>`, joué par le témoin `test_push_garde.sh`.
 #
@@ -56,20 +59,76 @@ code_apporte() {
   done
 }
 if [ "${1:-}" = "--code-apporte" ]; then code_apporte "$2" "$3"; exit 0; fi
+# **Le mode pile** (14 novembre 2026, la file en pile, demande de c7 et relevé de recherche) : un lot rejoué
+# sur la pile de ceux devant lui, puis posé au dernier pas par `rebase --onto origin/master <avant>`, ne descend
+# plus du commit testé. PILE_AVANT=<tête du lot d'avant> remplace alors deux contrôles :
+#   (b) <avant> est un ancêtre du commit testé : le rejeu s'est bien fait sur la pile ;
+#   (c) `code_apporte(<avant>, master)` est vide : les lots d'avant ont atterri avec le contenu testé, sinon
+#       « la pile a changé », et c'est un rejeu ;
+#   (a) `git range-diff <avant>..<testé> <master>..HEAD` : `=` pour tout commit ; un `!` toléré si ses deux
+#       versions ne diffèrent que par des `.md` (un conflit de nouveautes.md résolu au rebase) ; un `>` (commit
+#       ajouté) toléré s'il ne touche que des `.md` ; un `<` (commit perdu) refusé.
+# Mode `--pile <avant> <testé> <master> <tête>`, joué par le témoin : rend 0 et « pile tenue », ou 1 et la raison.
+verifier_pile() {
+  local avant=$1 teste=$2 maitre=$3 tete=$4 apporte ligne c
+  git merge-base --is-ancestor "$avant" "$teste" || { echo "ARRÊT : la tête d'avant ($avant) n'est pas un ancêtre du commit testé ($teste)"; return 1; }
+  apporte=$(code_apporte "$avant" "$maitre")
+  [ -z "$apporte" ] || { echo "ARRÊT : la pile a changé — master a du code que la tête d'avant n'avait pas :"; echo "$apporte"; return 1; }
+  local ancien signe nouveau
+  echo "range-diff jugé ($(git rev-parse --short "$avant")..$(git rev-parse --short "$teste") contre $(git rev-parse --short "$maitre")..$(git rev-parse --short "$tete")) :"
+  # --creation-factor=100 : un petit commit dont seule une ligne de .md a changé (un fichier créé devenu un fichier
+  # modifié par un conflit résolu) serait sinon vu « < » puis « > », deux commits sans rapport.
+  while IFS= read -r ligne; do
+    [ -n "$ligne" ] || continue
+    # Une ligne d'en-tête : « 1:  <ancien> <signe> 1:  <nouveau> <sujet> » ; les lignes de diff qui suivent un `!`
+    # commencent par une espace et sont sautées.
+    case "$ligne" in [0-9-]*:*) ;; *) continue ;; esac
+    ancien=$(echo "$ligne" | awk '{print $2}'); signe=$(echo "$ligne" | awk '{print $3}'); nouveau=$(echo "$ligne" | awk '{print $5}')
+    case "$signe" in
+      =) echo "  = égal : $ligne" ;;
+      '>')
+        [ -z "$(git diff --name-only "$nouveau^" "$nouveau" -- . ':!*.md')" ] || { echo "ARRÊT : un commit ajouté après le rejeu touche autre chose que de la doc : $ligne"; return 1; }
+        echo "  > toléré, .md seuls : $ligne" ;;
+      '!')
+        # Toléré si les deux versions du commit ne diffèrent que par des .md : le même diff hors .md.
+        if [ "$(git diff --no-color "$ancien^!" -- . ':!*.md' | grep -vE '^(index |@@)')" != "$(git diff --no-color "$nouveau^!" -- . ':!*.md' | grep -vE '^(index |@@)')" ]; then
+          echo "ARRÊT : un commit du lot a changé hors des .md depuis le rejeu : $ligne"; return 1
+        fi
+        echo "  ! toléré, ne diffère que par des .md : $ligne" ;;
+      *) echo "ARRÊT : le lot n'est plus celui qui a été testé : $ligne"; return 1 ;;
+    esac
+  done < <(git range-diff --no-color --creation-factor=100 "$avant..$teste" "$maitre..$tete")
+  echo "pile tenue : les commits du lot sont ceux du rejeu, et la pile d'avant est sur master"
+}
+if [ "${1:-}" = "--pile" ]; then verifier_pile "$2" "$3" "$4" "$5"; exit $?; fi
 # **La dérive se voit** (c7, 13 novembre 2026) : la copie exécutée (au cache, `~/.cache/rag3weaver-build/`)
 # fait autorité — un lot ne peut pas affaiblir la garde qui le juge ; elle dit à chaque exécution son hash et
 # celui de `tools/poste/push_garde.sh` dans l'arbre poussé, et « garde en retard sur le dépôt » quand ils
 # diffèrent, sans refuser. Mode `--derive <arbre>`, joué par le témoin.
 derive() {
   local moi depot
-  moi=$(sha256sum "$(realpath "$0")" | cut -c1-16)
+  moi=$(sha256sum "$MOI" | cut -c1-16)
   if [ -f "$1/tools/poste/push_garde.sh" ]; then
     depot=$(sha256sum "$1/tools/poste/push_garde.sh" | cut -c1-16)
   else
     depot="absente"
   fi
   echo "garde exécutée $moi, garde du dépôt $depot"
-  if [ "$moi" = "$depot" ]; then echo "garde à jour"; else echo "garde en retard sur le dépôt (la copie exécutée fait autorité ; recopie après relecture et mot de l'orchestration)"; fi
+  if [ "$moi" = "$depot" ]; then echo "garde à jour"; return 0; fi
+  # Le sens (14 novembre 2026, relevé de c7) : la copie exécutée est-elle une version passée de la garde du dépôt
+  # (le dépôt l'a changée depuis) ou une version qu'il n'a pas encore (une branche relue, posée avant d'atterrir) ?
+  local blob c passe=0
+  blob=$(git hash-object "$MOI" 2>/dev/null)
+  if [ -n "$blob" ] && git -C "$1" rev-parse -q --verify HEAD > /dev/null 2>&1; then
+    for c in $(git -C "$1" rev-list HEAD -- tools/poste/push_garde.sh 2>/dev/null); do
+      [ "$(git -C "$1" rev-parse -q "$c:tools/poste/push_garde.sh" 2>/dev/null)" = "$blob" ] && { passe=1; break; }
+    done
+  fi
+  if [ "$passe" = 1 ]; then
+    echo "garde différente : le dépôt a changé la garde depuis la copie exécutée — copie à relire et à recopier (la copie exécutée fait autorité jusque-là)"
+  else
+    echo "garde différente : la copie exécutée porte ce que le dépôt n'a pas encore (la copie exécutée fait autorité)"
+  fi
 }
 if [ "${1:-}" = "--derive" ]; then derive "$2"; exit 0; fi
 # Master tenu pour une autre session (fenêtre de c7) : pas de push tant que le fichier existe.
@@ -80,8 +139,9 @@ derive "$PWD"
 gd=$(git rev-parse --git-dir)
 tail -1 $J/resume.log | grep -qx VERT || { echo "ARRÊT : la passe n'est pas VERTE"; exit 1; }
 teste=$(head -1 $J/resume.log | awk '{print $2}')
-# HEAD est le commit testé, ou en descend par des commits de doc seuls (des .md).
-if [ "$(git rev-parse --short HEAD)" != "$teste" ]; then
+# HEAD est le commit testé, ou en descend par des commits de doc seuls (des .md). En mode pile, c'est
+# verifier_pile qui juge, plus bas, une fois master relu.
+if [ -z "${PILE_AVANT:-}" ] && [ "$(git rev-parse --short HEAD)" != "$teste" ]; then
   git merge-base --is-ancestor "$teste" HEAD || { echo "ARRÊT : HEAD ne descend pas du commit testé ($teste)"; exit 1; }
   ajoute=$(git diff --name-only "$teste" HEAD -- . ':!*.md')
   [ -z "$ajoute" ] || { echo "ARRÊT : HEAD ajoute autre chose que de la doc au commit testé ($teste) :"; echo "$ajoute"; exit 1; }
@@ -89,22 +149,48 @@ if [ "$(git rev-parse --short HEAD)" != "$teste" ]; then
 fi
 [ -z "$(git status --porcelain)" ] || { echo "ARRÊT : arbre sale"; exit 1; }
 [ "$(git config user.email)" = "luciedefraiteur@gmail.com" ] || { echo "ARRÊT : identité git"; exit 1; }
-libs=$(grep -ho 'rag3db-build-[0-9a-f]\{40\}' $J/temoins.log $J/e2e_lectures.log $J/e2e_code.log $J/check_features.log $J/preuve.log $J/lib.log $J/navigateur.log 2>/dev/null | sort -u)
-[ "$(echo "$libs" | grep -c .)" = 1 ] || { echo "ARRÊT : la passe a vu plusieurs libs du magasin :"; echo "$libs"; exit 1; }
+# La lib se cherche dans **tous les journaux** de la passe (`$J/*.log`, 14 novembre 2026, relevé de tty) : une passe
+# courte (crate.log, e2e_tty.log…) n'avait aucun des journaux d'une liste fixe. Une seule lib, et au moins un
+# journal qui la nomme : zéro reste un ARRÊT.
+libs=$(grep -ho 'rag3db-build-[0-9a-f]\{40\}' "$J"/*.log 2>/dev/null | sort -u)
+case "$(echo "$libs" | grep -c .)" in
+  1) ;;
+  0) echo "ARRÊT : aucun journal de la passe ($J/*.log) ne nomme une lib du magasin"; exit 1 ;;
+  *) echo "ARRÊT : la passe a vu plusieurs libs du magasin :"; echo "$libs"; exit 1 ;;
+esac
 echo "lib de toute la passe : $libs"
-base=$(cat $J/base)
 git fetch -q origin master || exit 1
 neuf=$(git rev-parse FETCH_HEAD)
 # Le C++ du moteur (src/, test/) n'est pas lié par la lib épinglée : il se rebase sans rejeu
 # (docs/procedures/push-d-un-lot.md).
-apporte=$(code_apporte $base $neuf)
-if [ -n "$apporte" ]; then echo "ARRÊT : master a apporté du code depuis la base testée"; echo "$apporte"; exit 1; fi
-echo "master $(git rev-parse --short $neuf), base testée $(git rev-parse --short $base) : rien de code entre les deux"
-git rebase $neuf > /dev/null 2>&1
-if [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ] || git status --short | grep -q '^UU'; then
-  git rebase --abort; echo "ARRÊT : le rebase sur $neuf bute"; exit 1
+# **Revenir sur la tête d'avant le rebase** (14 novembre 2026, relevé de lucivy) : un push refusé (master a
+# bougé entre le fetch et le push) ou un ARRÊT après le rebase laissait le worktree rebasé, sur des copies des
+# commits testés ; le passage suivant s'arrêtait sur « HEAD ne descend pas du commit testé ». La garde remet le
+# worktree où il était avant son rebase, et le dit : le même appel, rejoué, repart du commit testé.
+avant_rebase=$(git rev-parse HEAD)
+revenir() { git reset -q --keep "$avant_rebase" 2>/dev/null || git checkout -q --detach "$avant_rebase"; echo "worktree remis sur $(git rev-parse --short "$avant_rebase"), la tête d'avant le rebase : rejouer le même appel"; }
+if [ -n "${PILE_AVANT:-}" ]; then
+  echo "mode pile : tête d'avant $(git rev-parse --short "$PILE_AVANT"), commit testé $teste"
+  # `--onto` (relecture de recherche) : HEAD est encore la branche de pile, avec les commits des lots d'avant sous
+  # leurs anciens hashes ; un lot d'avant qui a résolu un conflit en atterrissant a un autre patch, et un rebase
+  # simple le rejouerait. Seuls les commits du lot se reposent.
+  git rebase --onto $neuf "$PILE_AVANT" > /dev/null 2>&1
+  if [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ] || git status --short | grep -q '^UU'; then
+    git rebase --abort; echo "ARRÊT : le rebase sur $neuf bute"; exit 1
+  fi
+  verifier_pile "$PILE_AVANT" "$teste" "$neuf" HEAD || { revenir; exit 1; }
+else
+  # La base du rejeu ne sert que hors du mode pile (relevé de tty : lue avant, elle faisait « cat: …/base ») .
+  base=$(cat "$J/base") || { echo "ARRÊT : pas de base de rejeu ($J/base)"; exit 1; }
+  apporte=$(code_apporte $base $neuf)
+  if [ -n "$apporte" ]; then echo "ARRÊT : master a apporté du code depuis la base testée"; echo "$apporte"; exit 1; fi
+  echo "master $(git rev-parse --short $neuf), base testée $(git rev-parse --short $base) : rien de code entre les deux"
+  git rebase $neuf > /dev/null 2>&1
+  if [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ] || git status --short | grep -q '^UU'; then
+    git rebase --abort; echo "ARRÊT : le rebase sur $neuf bute"; exit 1
+  fi
 fi
-git push -q origin HEAD:master || { echo "ARRÊT : push refusé"; exit 1; }
+git push -q origin HEAD:master || { echo "ARRÊT : push refusé"; revenir; exit 1; }
 git fetch -q origin master
 echo "== trois contrôles"
 echo "status : [$(git status --porcelain)]"

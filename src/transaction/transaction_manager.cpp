@@ -156,7 +156,7 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
             if (forced || waitsWithoutCheckpoint) {
                 allowNewTransactionsNoLock();
             }
-            throw;
+            rollBackRefusedCommitNoLock(transaction, std::current_exception());
         }
         const auto commitMs = profile.lap();
         auto shouldCheckpoint =
@@ -249,22 +249,8 @@ void TransactionManager::rollback(main::ClientContext& clientContext, Transactio
     } break;
     case TransactionType::RECOVERY:
     case TransactionType::WRITE: {
-        // La transaction quitte le système même si son annulation lève : restée active, elle
-        // gardait ses verrous, et tout le monde l'attendait, BEGIN et CHECKPOINT compris (ticket
-        // du ROLLBACK sous un tampon plein). L'erreur dit ce qu'il en est.
-        std::optional<std::string> failure;
-        if (!transaction->hasFailed()) {
-            try {
-                transaction->rollback(&wal);
-            } catch (const std::exception& e) {
-                failure = e.what();
-            }
-        }
-        const auto halfDone = failure && transaction->hasHalfDoneRollback();
-        if (halfDone) {
-            rollbackFailed = true;
-        }
-        clearTransactionNoLock(transaction->getID());
+        bool halfDone = false;
+        const auto failure = rollbackWriteNoLock(transaction, halfDone);
         if (failure) {
             if (autoCheckpointRequested && activeTransactions.empty()) {
                 cancelAutoCheckpointRequestNoLock();
@@ -285,6 +271,64 @@ void TransactionManager::rollback(main::ClientContext& clientContext, Transactio
     if (autoCheckpointRequested && activeTransactions.empty()) {
         cancelAutoCheckpointRequestNoLock();
     }
+}
+
+std::optional<std::string> TransactionManager::rollbackWriteNoLock(Transaction* transaction,
+    bool& halfDone) {
+    // La transaction quitte le système même si son annulation lève : restée active, elle
+    // gardait ses verrous, et tout le monde l'attendait, BEGIN et CHECKPOINT compris (ticket
+    // du ROLLBACK sous un tampon plein). L'erreur dit ce qu'il en est.
+    std::optional<std::string> failure;
+    if (!transaction->hasFailed()) {
+        try {
+            transaction->rollback(&wal);
+        } catch (const std::exception& e) {
+            failure = e.what();
+        }
+    }
+    halfDone = failure && transaction->hasHalfDoneRollback();
+    if (halfDone) {
+        rollbackFailed = true;
+    }
+    clearTransactionNoLock(transaction->getID());
+    return failure;
+}
+
+void TransactionManager::rollBackRefusedCommitNoLock(Transaction* transaction,
+    std::exception_ptr commitError) {
+    // Le COMMIT a pu verser ses lignes dans les groupes de nœuds avant d'échouer (journal non
+    // synchronisé, tampon plein). Annulé hors du verrou, comme avant, il laissait une fenêtre :
+    // un COMMIT qui attendait le verrou le prenait, versait ses lignes à la suite, validait, et
+    // l'annulation tronquait le groupe à la première ligne refusée, emportant les siennes (ticket
+    // du 14 novembre 2026, des Note validées perdues sous un pool plein). Annulé ici, avant que le
+    // verrou soit rendu, il n'y a plus d'entre-deux. L'appelant trouve la transaction retirée
+    // (TransactionContext::commit l'oublie) et n'a plus rien à annuler.
+    storage::CheckpointProfile profile;
+    bool halfDone = false;
+    const auto failure = rollbackWriteNoLock(transaction, halfDone);
+    if (storage::CheckpointProfile::enabled()) {
+        fprintf(stderr,
+            "[checkpoint-profile] annulation d'un COMMIT refusé sous le verrou : %.1f ms%s\n",
+            profile.lap(), failure ? " (échouée)" : "");
+    }
+    if (autoCheckpointRequested && activeTransactions.empty()) {
+        cancelAutoCheckpointRequestNoLock();
+    }
+    if (failure) {
+        std::string commitMessage = "unknown error";
+        try {
+            std::rethrow_exception(commitError);
+        } catch (const std::exception& e) {
+            commitMessage = e.what();
+        } catch (...) {
+        }
+        throw TransactionManagerException(common::stringFormat(
+            "The commit failed ({}) and its rollback could not complete ({}). The transaction is "
+            "closed and its locks are released{}",
+            commitMessage, *failure,
+            halfDone ? std::string{". "} + REOPEN_AFTER_FAILED_ROLLBACK + "." : "."));
+    }
+    std::rethrow_exception(commitError);
 }
 
 void TransactionManager::checkpoint(main::ClientContext& clientContext) {
@@ -447,7 +491,7 @@ bool TransactionManager::commitInCheckpointQueueNoLock(main::ClientContext& clie
         checkpointCarriesForcedCommit = true;
     } catch (...) {
         leaveQueue();
-        throw;
+        rollBackRefusedCommitNoLock(transaction, std::current_exception());
     }
     // Le numéro se prend sous le verrou public, la validation faite : un point de reprise
     // commencé après lui la contient.

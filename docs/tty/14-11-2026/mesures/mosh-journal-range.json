@@ -1,0 +1,150 @@
+{
+  "hote": "luciepc",
+  "lanceur": "mosh",
+  "date": "2026-11-14 16:42",
+  "rouges": [],
+  "sans_position_du_curseur": {
+    "repli_dit": false,
+    "texte_brut_suit": false,
+    "panique": false,
+    "vue_inline_demarre": true
+  },
+  "scenario": {
+    "secondes": 3.92,
+    "octets": 10285,
+    "octets_par_seconde": 2624
+  },
+  "latence_affichage_ms": {
+    "n": 20,
+    "mediane": 48.2,
+    "p95": 50.4,
+    "max": 59.2
+  },
+  "echo_frappe_ms": {
+    "n": 20,
+    "mediane": 17.1,
+    "p95": 22.5,
+    "max": 51.7
+  },
+  "redimensionnement": [
+    {
+      "colonnes": 60,
+      "octets_apres": 286,
+      "colonne_max_visee": 3
+    },
+    {
+      "colonnes": 100,
+      "octets_apres": 363,
+      "colonne_max_visee": 61
+    }
+  ],
+  "ctrl_c_sortie_ms": 250,
+  "curseur_rendu_a_la_sortie": true,
+  "touches": {
+    "ctrl_g_stop": 1,
+    "echap_stop": 1,
+    "o_accord": 1,
+    "reply_to": "faux/mesure:1",
+    "ctrl_g_vers_stop_ms": 6,
+    "echap_vers_stop_ms": 55
+  },
+  "journal_explicite_relecture_dite": true,
+  "journal": {
+    "journal_explicite": {
+      "octets": 1487,
+      "mots_manquants": 0,
+      "code": true
+    },
+    "journal_de_lui_meme": {
+      "octets": 1487,
+      "mots_manquants": 0,
+      "code": true
+    }
+  },
+  "journal_de_lui_meme_fichiers": [
+    "seance-1794670964-2367138.txt"
+  ],
+  "couleurs": [
+    {
+      "theme": "alien",
+      "mode": "vraie",
+      "sgr_texte": "38;2;57;255;20",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "alien",
+      "mode": "256",
+      "sgr_texte": "38;5;82",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "cyberpunk",
+      "mode": "vraie",
+      "sgr_texte": "38;2;255;43;214",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "cyberpunk",
+      "mode": "256",
+      "sgr_texte": "38;5;200",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "cyborg",
+      "mode": "vraie",
+      "sgr_texte": "38;2;215;221;229",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "cyborg",
+      "mode": "256",
+      "sgr_texte": "38;5;253",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "daemon",
+      "mode": "vraie",
+      "sgr_texte": "38;2;255;51;51",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "daemon",
+      "mode": "256",
+      "sgr_texte": "38;5;203",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "foret",
+      "mode": "vraie",
+      "sgr_texte": "38;2;143;209;106",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "foret",
+      "mode": "256",
+      "sgr_texte": "38;5;113",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    }
+  ],
+  "verdict": "VERT"
+}

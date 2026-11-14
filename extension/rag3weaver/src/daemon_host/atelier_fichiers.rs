@@ -173,14 +173,18 @@ impl DaemonHost {
         let racine = canonique(racine);
         let p = crate::backend_code::etendre_tilde(path.trim());
         let chemin = canonique(&if p.is_absolute() { p } else { racine.join(p) });
-        if !chemin.starts_with(&racine) && !self.accorde(&chemin, mode, backend) {
+        // Un worktree attaché (attach_worktree, open_branch) se lit, même hors de la racine ; son
+        // écriture suit la règle des worktrees (`atelier_peut_ecrire`) à l'appel qui écrit
+        // (ticket d'ED du 13 novembre 2026 : le refus conseillait d'attacher un worktree déjà attaché).
+        let worktree = self.worktree_qui_contient(&chemin)?;
+        if !chemin.starts_with(&racine) && worktree.is_none() && !self.accorde(&chemin, mode, backend) {
             return Err(format!(
                 "{} est hors de la racine de l'atelier ({}). Deux suites : déclarer l'espace (attach_worktree ou open_branch sur le worktree qui le contient), ou demander l'accord de l'utilisateur (ask_permission, avec la raison).",
                 chemin.display(),
                 racine.display()
             ));
         }
-        Ok(Resolu { worktree: self.worktree_qui_contient(&chemin)?, chemin })
+        Ok(Resolu { worktree, chemin })
     }
 
     /// Le worktree attaché (un arbre inscrit) dont la racine contient `chemin` : le plus
@@ -601,20 +605,51 @@ fn en_lignes(t: &str) -> String {
     if t.is_empty() || t.ends_with('\n') { t.to_string() } else { format!("{t}\n") }
 }
 
+/// Les positions de départ de `motif` dans `texte`, chevauchements compris (`aa` dans `aaa` : 2) ;
+/// une recherche sans chevauchement (`matches`) en comptait une (ticket d'ED du 13 novembre 2026).
+fn positions(texte: &str, motif: &str) -> usize {
+    let Some(premier) = motif.chars().next() else { return 0 };
+    let (mut n, mut depuis) = (0, 0);
+    while let Some(i) = texte[depuis..].find(motif) {
+        n += 1;
+        depuis += i + premier.len_utf8();
+    }
+    n
+}
+
+/// **La fin de ligne du fichier** : `\r\n` si le fichier en a, sinon `\n` (ticket d'ED du
+/// 13 novembre 2026 : la lecture rend les lignes sans `\r`, les écritures les gardent).
+fn fin_de_ligne(avant: &str) -> &'static str {
+    if avant.contains("\r\n") { "\r\n" } else { "\n" }
+}
+
+/// `t` dans la fin de ligne `fin` (ses `\r\n` et `\n` ramenés à `fin`).
+fn aux_fins(t: &str, fin: &str) -> String {
+    if fin == "\n" { t.to_string() } else { t.replace("\r\n", "\n").replace('\n', fin) }
+}
+
 /// **Le texte après une édition**, ou le refus qui dit pourquoi.
 pub(super) fn texte_apres(avant: &str, edition: &Edition) -> Result<String, String> {
+    let fin = fin_de_ligne(avant);
     match edition {
-        Edition::Texte { ancien, nouveau } => match avant.matches(ancien.as_str()).count() {
-            0 => Err("l'ancien texte n'y est pas : relisez le fichier (read_file) et recopiez-le exactement".into()),
-            1 => Ok(avant.replacen(ancien.as_str(), nouveau, 1)),
-            n => Err(format!("l'ancien texte y est {n} occurrences : donnez plus de contexte pour qu'il soit unique")),
-        },
+        Edition::Texte { ancien, nouveau } => {
+            // L'ancien texte recopié d'une lecture n'a pas les `\r` du fichier : comparé à ses fins.
+            let (ancien, nouveau) = (aux_fins(ancien, fin), aux_fins(nouveau, fin));
+            if ancien.is_empty() {
+                return Err("l'ancien texte est vide : recopiez ce qu'il faut remplacer".into());
+            }
+            match positions(avant, &ancien) {
+                0 => Err("l'ancien texte n'y est pas : relisez le fichier (read_file) et recopiez-le exactement".into()),
+                1 => Ok(avant.replacen(ancien.as_str(), &nouveau, 1)),
+                n => Err(format!("l'ancien texte y est {n} occurrences : donnez plus de contexte pour qu'il soit unique")),
+            }
+        }
         Edition::Lignes { de, a, texte } => {
             let l = lignes(avant);
             if *de < 1 || *a < *de || *a > l.len() {
                 return Err(format!("le fichier a {} lignes : les lignes {de}..{a} n'y sont pas", l.len()));
             }
-            Ok(format!("{}{}{}", l[..de - 1].concat(), en_lignes(texte), l[*a..].concat()))
+            Ok(format!("{}{}{}", l[..de - 1].concat(), aux_fins(&en_lignes(texte), fin), l[*a..].concat()))
         }
         Edition::Insertion { avant: at, texte } => {
             let l = lignes(avant);
@@ -623,8 +658,8 @@ pub(super) fn texte_apres(avant: &str, edition: &Edition) -> Result<String, Stri
             }
             // Un fichier sans retour final : la ligne d'avant reçoit le sien avant l'ajout.
             let tete = l[..at - 1].concat();
-            let tete = if *at - 1 == l.len() { en_lignes(&tete) } else { tete };
-            Ok(format!("{tete}{}{}", en_lignes(texte), l[at - 1..].concat()))
+            let tete = if *at - 1 == l.len() && !tete.is_empty() && !tete.ends_with('\n') { format!("{tete}{fin}") } else { tete };
+            Ok(format!("{tete}{}{}", aux_fins(&en_lignes(texte), fin), l[at - 1..].concat()))
         }
     }
 }
@@ -1058,6 +1093,94 @@ pub(super) mod tests {
                 }
             })))
         })
+    }
+
+    /// **Des occurrences qui se chevauchent sont ambiguës** (ticket d'ED,
+    /// `2026-11-13-replace-text-de-l-atelier-ne-compte-pas-les-occurrences-qui-se-chevauchent.md`) :
+    /// `aa` dans `aaa` part de deux positions ; `replace_text` refuse et rien n'est écrit.
+    #[test]
+    fn overlapping_occurrences_make_a_text_replace_ambiguous() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        std::fs::write(a.racine.join("a.txt"), "aaa\n").unwrap();
+        let refus = a.appeler("replace_text", json!({ "path": "a.txt", "old": "aa", "new": "b" })).unwrap_err();
+        assert!(refus.contains("2 occurrences"), "aa dans aaa : deux positions, refusé ({refus})");
+        assert_eq!(std::fs::read_to_string(a.racine.join("a.txt")).unwrap(), "aaa\n", "rien n'est écrit");
+    }
+
+    /// **Un fichier en CRLF garde ses fins de ligne** (ticket d'ED,
+    /// `2026-11-13-l-atelier-perd-les-fins-de-ligne-crlf.md`) : `replace_text` sur deux lignes
+    /// telles que lues (sans `\r`) les trouve ; `replace_lines` écrit en CRLF ; le diff montre
+    /// le changement.
+    #[test]
+    fn a_crlf_file_keeps_its_line_endings() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let f = a.racine.join("win.txt");
+        std::fs::write(&f, "un\r\ndeux\r\ntrois\r\n").unwrap();
+        let lu = Atelier::texte(&a.appeler("read_file", json!({ "path": "win.txt" })).expect("read_file"));
+        assert!(lu.contains("un") && lu.contains("deux") && !lu.contains('\r'), "la lecture montre les lignes : {lu:?}");
+        let r = a.appeler("replace_text", json!({ "path": "win.txt", "old": "un\ndeux", "new": "UN\nDEUX" })).expect("replace_text sur deux lignes lues");
+        assert!(Atelier::texte(&r).contains("+UN") && Atelier::texte(&r).contains("-un"), "le diff montre le changement : {}", Atelier::texte(&r));
+        assert_eq!(std::fs::read_to_string(&f).unwrap(), "UN\r\nDEUX\r\ntrois\r\n", "les fins CRLF gardées");
+        let r = a.appeler("replace_lines", json!({ "path": "win.txt", "from": 3, "to": 3, "text": "TROIS" })).expect("replace_lines");
+        assert!(Atelier::texte(&r).contains("+TROIS"), "le diff montre le changement : {}", Atelier::texte(&r));
+        a.appeler("insert_lines", json!({ "path": "win.txt", "at": 4, "text": "quatre" })).expect("insert_lines");
+        assert_eq!(std::fs::read_to_string(&f).unwrap(), "UN\r\nDEUX\r\nTROIS\r\nquatre\r\n", "CRLF partout, lignes neuves comprises");
+    }
+
+    /// **Un worktree attaché hors de la racine se lit** (ticket d'ED,
+    /// `2026-11-13-un-worktree-attache-hors-de-la-racine-reste-refuse-a-read-file-et-aux-ecritures.md`) :
+    /// `read_file` d'un de ses fichiers le rend, une écriture y suit la règle des worktrees
+    /// (l'accord pour un arbre que tient l'utilisatrice, pas « hors de la racine »), et un chemin
+    /// hors de la racine et de tout worktree attaché reste refusé.
+    #[test]
+    fn an_attached_worktree_outside_the_root_reads() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let ailleurs = d.path().join("ailleurs");
+        std::fs::create_dir_all(&ailleurs).unwrap();
+        let depot = petit_depot(&ailleurs);
+        assert!(!depot.starts_with(&a.racine), "le dépôt est hors de la racine de l'atelier");
+        a.appeler("attach_worktree", json!({ "path": depot })).unwrap();
+        attendre_l_index(&a, &depot);
+        let lu = a.appeler("read_file", json!({ "path": depot.join("src/lib.rs") })).map(|v| Atelier::texte(&v)).unwrap_or_else(|e| e);
+        assert!(lu.contains("pub fn un()"), "read_file d'un worktree attaché hors de la racine : {lu}");
+        let refus = a.appeler("replace_text", json!({ "path": depot.join("src/lib.rs"), "old": "pub fn deux()", "new": "pub fn trois()" })).unwrap_err();
+        assert!(refus.contains("ask_permission") && !refus.contains("hors de la racine"), "l'écriture suit la règle du worktree : {refus}");
+        let seul = d.path().join("seul.txt");
+        std::fs::write(&seul, "x\n").unwrap();
+        let refus = a.appeler("read_file", json!({ "path": seul })).unwrap_err();
+        assert!(refus.contains("hors de la racine"), "hors de la racine et de tout worktree, refusé : {refus}");
+        attendre_l_index(&a, &depot);
+    }
+
+    /// **Le chat crée un fichier** (ticket d'ED,
+    /// `2026-11-13-le-chat-de-l-atelier-ne-peut-pas-creer-de-fichier.md`) : `insert_lines at=1`
+    /// sur un fichier absent sous la racine le crée et rend son diff, sans lecture préalable (il
+    /// n'y avait rien à lire) ; sur un fichier existant jamais lu, il reste refusé.
+    #[test]
+    fn the_chat_creates_a_missing_file() {
+        let vus = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let model = modele_scripte(
+            vec![
+                ("t1", vec![("insert_lines", json!({ "path": "neuf/notes.txt", "at": 1, "text": "premiere ligne" }))]),
+                ("t2", vec![("insert_lines", json!({ "path": "vieux.txt", "at": 1, "text": "par-dessus" }))]),
+            ],
+            vus.clone(),
+        );
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier_avec(d.path(), model);
+        std::fs::write(a.racine.join("vieux.txt"), "déjà là\n").unwrap();
+        a.host.chat_turn(&a.h.id, "t1").expect("t1");
+        a.host.chat_turn(&a.h.id, "t2").expect("t2");
+        let rendu = |tour: &str| vus.lock().unwrap().iter().find(|(m, o, _)| m == tour && o == "insert_lines").map(|(_, _, c)| c.clone()).unwrap_or_default();
+        let cree = rendu("t1");
+        assert_eq!(std::fs::read_to_string(a.racine.join("neuf/notes.txt")).ok().as_deref(), Some("premiere ligne\n"), "le fichier absent est créé ({cree})");
+        assert!(cree.contains("+premiere ligne"), "la création rend son diff : {cree}");
+        let refus = rendu("t2");
+        assert!(refus.contains("relis"), "un fichier existant jamais lu reste refusé : {refus}");
+        assert_eq!(std::fs::read_to_string(a.racine.join("vieux.txt")).unwrap(), "déjà là\n", "rien n'est écrit");
     }
 
     /// **L'empreinte voit un changement fait ailleurs** (ticket d'ED,

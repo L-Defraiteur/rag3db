@@ -39,7 +39,7 @@ use std::sync::Arc;
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 
-use super::{agent, base_url, erreur, identite_de, lire_json, poster, sonde, DaemonError, Service};
+use super::{base_url, erreur, identite_de, lire_json, poster, sonde, DaemonError, Service};
 use crate::connection::{CypherValue, DbConnection, DbError, QueryParam, QueryResult};
 use crate::serveur::{Fin, Serveur};
 
@@ -317,8 +317,19 @@ impl DaemonConnection {
     }
 
     fn depuis(adresse: &str, attache: Option<crate::serveur::Attache>) -> Result<Self, DaemonError> {
-        let agent = agent();
-        let identite: Identite = identite_de(&agent, adresse, SERVICE)?;
+        Self::depuis_avec(adresse, attache, super::Delais::lus().reponse)
+    }
+
+    /// [`Self::depuis`], l'agent gardé borné à `delai`.
+    pub(crate) fn depuis_avec(adresse: &str, attache: Option<crate::serveur::Attache>, delai: std::time::Duration) -> Result<Self, DaemonError> {
+        let agent = super::agent_borne(delai);
+        let identite: Identite = identite_de(&agent, adresse, SERVICE).map_err(|e| match e {
+            DaemonError::SansReponse { adresse, .. } => {
+                let route = format!("{}{}", base_url(&adresse), super::SANTE);
+                DaemonError::SansReponse { adresse, cause: super::ne_repond_pas(&route, delai) }
+            }
+            e => e,
+        })?;
         Ok(Self { adresse: adresse.to_string(), base_url: base_url(adresse), agent, identite, _attache: attache, reopen: Default::default() })
     }
 

@@ -690,7 +690,7 @@ tree-sitter grammars that index it (`POST /highlight`).
 
 `rag3weaver-tty` (crate `tty/`) follows a teammate from a terminal: the agent's
 text scrolls into the terminal's own history and three lines are redrawn at the
-bottom; Enter talks to the teammate, Esc or Ctrl-G stops it (Ctrl-G without the escape delay tmux adds). It works over ssh (at most
+bottom; Enter talks to the teammate, Esc or Ctrl-G stops it (Ctrl-G without the escape delay tmux adds). The input is a line editor like a shell's: arrows, Home and End, word jumps (Ctrl or Alt + arrow, Alt-B/F), Delete, Ctrl-W/U/K, ↑ and ↓ through what was sent, Alt-Enter for a new line, a paste arriving whole, Ctrl-C clearing the input before quitting, AltGr kept on Windows. The teammate's prose is in the terminal's own colour (or the theme's optional `couleurs.prose`) with common Markdown rendered (titles, bullets, bold, italic); mailbox headers keep the theme's accent, in French. It works over ssh (at most
 30 redraws per second), resumes after a cut without loss or duplicate
 (`Last-Event-ID`), degrades to 256 colours, 16, none and ASCII, and colours code
 with the host's grammars and the theme `templates/themes/daemon.json`.
@@ -702,7 +702,10 @@ allowed to do, at most 1.6 KB/s over ssh. Four more themes share its form —
 and readable code, 3 for what goes with it). What the teammate waits for comes first on the
 status line: an approval shows its command, `o` grants it and `n` refuses it; a question is
 answered by what you type (`answer` with `reply_to`); otherwise the teammate's state comes from
-`GET /ide/teammate/list`. `--plain` writes the stream as text, and takes over by itself when the
+`GET /ide/teammate/list`. `--journal <file>` writes, as plain text, every line sent to the terminal's
+history. Under mosh, which keeps no scrollback, a journal opens by itself in
+`~/.local/state/rag3weaver/tty/` (journals older than seven days are removed), and the view shows the
+command that reads it back (`less <journal>`). `--plain` writes the stream as text, and takes over by itself when the
 inline view cannot start (a terminal that does not report its cursor position). Measured over ssh
 both ways between two machines: about 47 ms from the host to the screen, 11 to 20 ms for a
 keystroke's echo, 3 KB/s during a step (`tty/mesures/`, a scripted fake host and a pty harness).
@@ -806,9 +809,10 @@ without a fixed service address. Set `RAG3WEAVER_SERVICE_EMBED` for the host or 
 (the legacy `RAG3WEAVER_EMBED_SERVICE` is the fallback variable). An address explicitly
 written in a manifest takes priority. Existing user copies are not migrated automatically.
 
-`models.embed.activation` can explicitly start a dense provider through
-the shared `Serveur` acquisition. It checks the provider's model, dimensions and recipe,
-and isolates each caller's cancellation. Warm-up facts are reported separately from
+`models.<capability>.activation` can explicitly start a provider through the shared
+`Serveur` acquisition, for the dense, sparse, reranker and OCR capabilities. It checks the
+provider's identity for that capability (the dense model and dimensions, the sparse model, the
+reranker, the OCR) and its recipe, and isolates each caller's cancellation. Warm-up facts are reported separately from
 availability. Existing sources without `activation` keep connecting to their configured
 provider.
 
@@ -826,9 +830,19 @@ provider.
   by an activation also says in `/sante` how many crash restarts its declaration has had
   (`relances`, counted in the declaration's coordination folder), so a provider that keeps dying
   shows without reading a log.
+- **Named activations.** One provider process can serve several capabilities (bge-m3 with its
+  sparse vectors, the bge-reranker-v2-m3 reranker and the ppocrv6-tiny OCR, for example). Declare
+  it once at the top of the manifest, `activations: { "bge-m3": { "modele": "bge-m3", … } }`,
+  and cite it by name from each declaration: `"activation": "bge-m3"`. `modele` is the model the
+  process loads; the reranker and OCR it adds go in its `env` (`RAG3WEAVER_RERANK_MODEL`,
+  `RAG3WEAVER_OCR_MODEL`). Declarations that cite the same name share one process, one
+  coordination folder and one eviction: each capability holds its own lease, and the provider
+  unloads when none is held. A cited name that is not declared is refused when the manifest
+  loads. An activation block written inside a declaration is a named activation too, named after
+  its `model`. The recipe the provider attests is a hash of the name and the block.
 - **Remote activation.** `hote` (an ssh target) and `adresse_distante` start the provider on
   another machine. The activation runs `ssh <host> systemd-run --user
-  --unit=rag3weaver-fournisseur-<model>-<port> --collect --property=Restart=on-failure …` there,
+  --unit=rag3weaver-fournisseur-<name>-<port> --collect --property=Restart=on-failure …` there,
   reaches it through an `ssh -N -L` tunnel held by the client, and probes its identity through the
   tunnel. A failing ssh is refused at once, by name. Units named `rag3weaver-embeddings@…` are
   never touched.

@@ -21,6 +21,7 @@
     "root": "workspace",
     "commands": "approval",
     "index": "code",
+    "index_exclude": {"minified_line_max_bytes": 5000, "code_file_max_bytes": 1048576},
     "sandbox": {
       "extra_read": ["~/.rustup", "~/.cargo/bin", "~/.cargo/registry", "~/.cargo/git", "~/.cargo/config.toml"],
       "env": {

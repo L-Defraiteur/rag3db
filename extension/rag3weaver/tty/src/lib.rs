@@ -14,12 +14,15 @@ pub mod boite;
 pub mod client;
 pub mod endpoint;
 pub mod flux;
+pub mod journal;
 pub mod plain;
 pub mod sse;
 #[cfg(feature = "vue")]
 pub mod anim;
 #[cfg(feature = "vue")]
 pub mod code;
+#[cfg(feature = "vue")]
+pub mod saisie;
 #[cfg(feature = "vue")]
 pub mod theme;
 #[cfg(feature = "vue")]
