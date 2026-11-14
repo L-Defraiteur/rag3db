@@ -806,12 +806,29 @@ without a fixed service address. Set `RAG3WEAVER_SERVICE_EMBED` for the host or 
 (the legacy `RAG3WEAVER_EMBED_SERVICE` is the fallback variable). An address explicitly
 written in a manifest takes priority. Existing user copies are not migrated automatically.
 
-`models.embed.activation` can explicitly start a local dense provider through
-the shared `Serveur` acquisition. The first slice keeps the service running,
-checks its model, dimensions and recipe, and isolates each caller's cancellation.
-Warm-up facts are reported separately from availability. Remote activation and
-idle eviction remain outside this slice; existing sources without `activation`
-keep connecting to their configured provider. See the
+`models.embed.activation` can explicitly start a dense provider through
+the shared `Serveur` acquisition. It checks the provider's model, dimensions and recipe,
+and isolates each caller's cancellation. Warm-up facts are reported separately from
+availability. Existing sources without `activation` keep connecting to their configured
+provider.
+
+- **Residence.** With `residence: "maintenir"`, the provider is kept running. With
+  `residence: { "a_demande": { "inactivite_secs": N, "rendre_le_bail_secs": M } }`, it only
+  starts on the first computation: opening the backend starts nothing, and neither does a
+  full-text-only search. The client returns its usage lease after M seconds without a call. The
+  provider unloads itself after N seconds without lease or call (M must be non-zero and shorter
+  than N). The next index or dense search starts it again, once, with its identity re-checked.
+- **Leases.** Each process that uses a provider holds a lease, renewed while it is in use. The
+  provider counts its leases and calls in flight in `/sante` (`usage`), and says its eviction delay
+  there (`eviction`). Providers started by hand never get an eviction delay.
+- **Remote activation.** `hote` (an ssh target) and `adresse_distante` start the provider on
+  another machine. The activation runs `ssh <host> systemd-run --user
+  --unit=rag3weaver-fournisseur-<model>-<port> --collect --property=Restart=on-failure …` there,
+  reaches it through an `ssh -N -L` tunnel held by the client, and probes its identity through the
+  tunnel. A failing ssh is refused at once, by name. Units named `rag3weaver-embeddings@…` are
+  never touched.
+
+See the
 [contract and qualification](https://github.com/L-Defraiteur/rag3db/blob/master/docs/embarquement/12-11-2026/03-activation-des-modeles.md).
 
 `grep_files` accepte `symbol_hierarchy_depth` (0 par défaut : sortie et lectures
