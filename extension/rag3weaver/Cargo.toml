@@ -90,7 +90,11 @@ candle-core = { version = "0.8", optional = true }
 candle-nn = { version = "0.8", optional = true }
 candle-transformers = { version = "0.8", optional = true }
 tokenizers = { version = "0.21", optional = true, default-features = false, features = ["fancy-regex"] }
-hf-hub = { version = "0.4", optional = true }
+# Sans ses features par défaut (`default-tls` = native-tls, donc openssl-sys) : l'API
+# synchrone (`hf_hub::api::sync`, feature `ureq`) suffit, et ureq 2 chiffre par rustls.
+# Rien à installer sur le poste (14 novembre 2026 : openssl 4.1.0 au poste, que
+# openssl-sys 0.9.111 refusait).
+hf-hub = { version = "0.4", optional = true, default-features = false, features = ["ureq"] }
 
 # lucivy — **publié**, 4.0.1 (6 septembre 2026). C'était une dépendance par
 # chemin tant que la v3 n'était pas sur crates.io : l'usage naïf de rag3weaver
@@ -314,7 +318,8 @@ codegen-units = 1
 # Le client du terminal (son crate à part, sans le moteur) : le témoin e2e_tty.
 rag3weaver-tty = { path = "tty", default-features = false }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
-reqwest = { version = "0.12", features = ["json", "blocking"] }
+# rustls, pas `default-tls` (native-tls, openssl-sys) : le TLS des témoins comme celui du binaire.
+reqwest = { version = "0.12", default-features = false, features = ["json", "blocking", "rustls-tls", "charset", "http2"] }
 async-openai = { version = "0.32", features = ["embedding"] }
 tempfile = "3"
 
