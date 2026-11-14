@@ -170,8 +170,8 @@ dépendances) ; sans lui, la garde refuse un target venu d'un autre arbre.*
 - **Ce que ce lot ne fait pas** (tickets) :
   - un creux à la demande n'a **pas de dual** : le dual se décide aujourd'hui sur l'identité du
     fournisseur, inconnue avant le premier appel ;
-  - le dense garde son embarqueur à lui (`ALaDemande`, `Maintenu`) à côté de la tenue générique des
-    trois autres capacités.
+  - ~~le dense garde son embarqueur à lui à côté de la tenue générique~~ : porté sur `Tenue<C>` le
+    14 novembre au soir, un seul mécanisme pour les quatre capacités.
 
 **Le vrai jeu du groupe, 14 novembre, 18 h 46 → 19 h 06** : vert. Hôte isolé 7971 (binaire de la branche
 4f43b712d7e61903), fournisseur de groupe à part sur card2, port 7891 (service 12783f97e8dbdd45), à la
