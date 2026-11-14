@@ -56,7 +56,11 @@ l'autre, dix fois de suite, même sans rouge.
 | 13 | G | la garde apprend la pile | garde-pile 24ab270be | cd103b619 sur c93f73f06 (garde 2f1914405 : --onto, push refusé remis, 27 témoins ; relue par recherche à 16 h 2x ; **posée au cache des deux postes à 16 h 22**, sha256 c57a3fb1 → a58a649f, l'ancienne en push_garde.sh.avant-garde-pile) |
 | 14 | codeparsers | l'import pointé (lot 1) | codeparsers/import-python-pointe 343ead799 (vert dans codeparsers, 301/0) | passe sur la dernière tête de pile quand une place vient (~19 h) |
 | 15 | recherche | exclusions 1 et 5 dans le manifeste | à venir | à son vert |
-| 16 | archi | les quatre mineurs de l'atelier | atelier-quatre-mineurs 8f8c31ec4 | passe complète en cours |
+| 16 | archi | les quatre mineurs de l'atelier | atelier-quatre-mineurs-2 dd9504157 (vert, passe complète) | rejeu court après tty-7 |
+| 17 | embarquement | activations nommées au manifeste, le groupe bge-m3/relecteur/OCR à la demande | activations-nommees 7074130e7 + docs 73262341b (vert, luciepc) | vrai jeu par hôte isolé 7971 / fournisseur 7891 après la mesure d'ED |
+| 18 | arbre principal | 1b, la migration par lots (représentant par version) | arbre-principal/migration-1b c26f906b7 (vert sur la copie réelle) | jeu fixe de requêtes puis passe complète |
+| 19 | G | `RAG3WEAVER_DB_THREADS` → `SystemConfig::max_num_threads` | à venir | rouge d'abord |
+| 20 | archi | aucun client HTTP sans délai (reponse_s 120, sonde_s 5 dans daemon.json) | à venir | rouge d'abord |
 
 Chaque session dit à c7 et au rang suivant la tête de sa branche de pile dès qu'elle est poussée.
 
@@ -157,3 +161,21 @@ par nœud lues sur NodeRun, trois formes sans filtre / par chemin / par langage 
 la même base avant 1b — et sur A ; B et C sans filtre ; 10 requêtes × 5) tient `poste mesure` environ
 1 h 10 dès son départ : les rejeux de la pile (tty-7, les quatre mineurs, codeparsers) attendent vers
 19 h. Les pushs sous `poste push` (recherche pour la CI, le cœur) ne sont pas des lourds et passent.
+
+## Ce que l'après-midi a appris (17 h 5x)
+
+- **1b est vert sur la copie réelle** (arbre principal, 861 s, 119 887 vecteurs repris sans un appel au
+  modèle, RSS 18 Gio, deux sens égaux sur 21 tables, couverture sans trou, comptes identiques). Le
+  tampon plein n'était pas le moteur mais la jointure du transfert ; la version la plus partagée est
+  `namespace rag3db` (295 occurrences). Pose sur les vraies bases : une bascule à part.
+- **Hotfixs** : 0 orpheline sur la base migrée, 0 morceau sans parent ; un défaut antérieur à 1b,
+  1 291 morceaux `Scope_Chunk` à 2–7 arêtes vers le même Scope (2 205 de trop), ticket ; la cause à
+  hotfixs, le sort de la table à arbre principal (reste-t-elle après 1b ?).
+- **G** : l'hôte n'a aucun quota ; les 168 `demon-#` sont **cinq pools du moteur à 32 fils** (une base
+  ouverte = `max_num_threads` 0 = tous les cœurs) ; page 03 d'optimiseur, drop-in proposé à Lucie
+  (le poids protège l'écran plus que le quota) ; le lot Rust `RAG3WEAVER_DB_THREADS` à G.
+- **Embarquement** : activations nommées (forme B) et le groupe à la demande verts.
+- **Codeparsers** : l'import pointé vert ; les règles d'import Python en données (`data/imports/
+  python.toml`, 297 noms de la stdlib 3.14.9, défaut compilé, dossier remplaçable par langue).
+- **Banc** : le juge de parité de `search_code` pour 2a′-2 (jeu commun avec ED, `_uuid`, ordre aux
+  10 premiers entre R et la base migrée, au bit près entre la base migrée et chaque optimisation).
