@@ -397,3 +397,33 @@ fn une_fiche_courante_rejointe_reste_courante() {
     assert_eq!(f["result"]["data"]["state"], json!("current"), "{f}");
 }
 
+/// **La recherche par nom est exacte, pas un classement tronqué** (14 novembre 2026, la première passe
+/// sur la mémoire de Lucie : quatre paires de noms voisins sont restées séparées, la voisine se
+/// classant de la 5e à la 38e place sur 116 alors que l'étage n'en lisait que 8). 119 fiches leurres
+/// (« Claude Code de rag3weaver, essai k ») partagent trois mots avec le nom proposé sans en être
+/// voisines, et passent devant dans un classement ; une seule fiche,
+/// « Hooks de rag3weaver », l'est. La section, sans candidate, répond create avec « hooks Claude Code
+/// de rag3weaver » : elle rejoint la voisine, où qu'elle se classe. Les options de la recherche des
+/// candidates (`limit: 1` ici) ne bornent pas la recherche par le nom.
+#[test]
+#[ignore]
+fn la_recherche_par_nom_trouve_la_voisine_parmi_cent_vingt_fiches() {
+    let serveur = FakeServer::start_sequence(vec![etiquette_nommee("create", "hooks Claude Code de rag3weaver")]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    appel(&b, "put_fiche", json!({"record": {"name": "Hooks de rag3weaver", "about": "Une note brève, sans autre mot du sujet.", "state": "proposed"}}));
+    for k in 1..=119 {
+        appel(&b, "put_fiche", json!({"record": {"name": format!("Claude Code de rag3weaver, essai {k}"),
+            "about": format!("Les hooks Claude Code de rag3weaver, essai {k}."), "state": "proposed"}}));
+    }
+    const NOTE: &str = "# Lot 4\n\n## Le binaire des hooks\n\nLes hooks Claude Code de rag3weaver passent par une commande mince.\n";
+    let r = appel(&b, "archive", json!({"titre": "Lot 4", "contenu": NOTE, "jour": "2026-11-14", "allow_create": true, "candidates": 0,
+        "search_options": {"limit": 1}}));
+    assert_eq!(r["result"]["errors"], json!([]), "{r}");
+    assert_eq!(apports_de(&b, "Hooks de rag3weaver").len(), 1, "la section rejoint la voisine");
+    assert!(apports_de(&b, "hooks Claude Code de rag3weaver").is_empty(), "aucune fiche voisine de plus");
+}
+
