@@ -676,6 +676,18 @@ pub trait SchemaDialect: Send + Sync {
     /// pg: SELECT * FROM table WHERE _uuid = ANY($uuids)
     fn select_entity_all_by_uuids(&self, table: &str) -> String;
 
+    /// **L'offset de chaque ligne désignée par son uuid** : `(_uuid, offset)`,
+    /// lu dans la base. Le document plein texte d'une ligne est rangé sous cet
+    /// offset ; le cache uuid → offset de la session naît vide à l'ouverture, et
+    /// une suppression qui ne le trouve pas là le lit ici, avant d'effacer.
+    fn select_offsets_by_uuids(&self, table: &str) -> String {
+        format!(
+            "UNWIND $uuids AS uuid MATCH (n:{} {{_uuid: uuid}}) RETURN n._uuid, {}",
+            self.quote(table),
+            self.node_offset_expr("n")
+        )
+    }
+
     /// Delete related entities via a relation, returning count per source UUID.
     /// rag3db: MATCH (e {_uuid})-[:REL]->(c:Target) DETACH DELETE c RETURN uuid, count
     /// pg: DELETE via subquery on rel table, GROUP BY source
@@ -3677,6 +3689,10 @@ impl SchemaDialect for PostgresDialect {
 
     fn select_entity_all_by_uuids(&self, table: &str) -> String {
         format!("SELECT * FROM {} WHERE _uuid = ANY($uuids)", self.quote(table))
+    }
+
+    fn select_offsets_by_uuids(&self, table: &str) -> String {
+        format!("SELECT _uuid, {} FROM {} AS m WHERE m._uuid = ANY($uuids)", self.node_offset_expr("m"), self.quote(table))
     }
 
     fn join_delete_returning_count(
