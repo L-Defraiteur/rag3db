@@ -134,6 +134,7 @@ fn jouer(backend: &Backend, ecoute: &mut Ecoute, etat: &str, forme: &str, extra:
             }
             resultats.push(r["result"].as_array().map_or(0, |a| a.len()));
             rss_par_appel.push(rss_mio());
+            eprintln!("[sonde] {etat} {forme} appel {:>3} : {:.0} ms, RSS {:.0} Mio", rss_par_appel.len(), appels.last().unwrap(), rss_par_appel.last().unwrap());
         }
     }
     let rss_apres = rss_mio();
