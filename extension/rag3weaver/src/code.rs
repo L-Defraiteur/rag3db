@@ -468,6 +468,10 @@ pub fn library_config() -> EntityConfig {
     let mut fields = HashMap::new();
     fields.insert("name".into(), title_and_content(FieldType::String));
     fields.insert("import_path".into(), field(FieldType::String));
+    // **D'où vient la bibliothèque** (14 novembre 2026, décision de Lucie) : `builtin` (la bibliothèque
+    // standard du langage), `dependency` (un gestionnaire de paquets), `inconnue` (codeparsers
+    // `import_resolution::provenance`). Une base d'avant reçoit la colonne à l'enregistrement.
+    fields.insert("provenance".into(), field(FieldType::String));
     EntityConfig { fields, hashsafe: Some(vec!["name".into()]), ..Default::default() }
 }
 /// Un nom, et rien d'autre. `hashsafe` sur le nom : l'uuid se calcule sans
@@ -625,6 +629,9 @@ fn code_relation_properties(rel: &str) -> HashMap<String, crate::config::FieldDe
         // est dans la fermeture des #include), « entete » (un en-tête de même nom de base l'est :
         // la définition d'un .cpp que son .h déclare). Vide hors C/C++ et sur une base d'avant.
         props.insert("visibility".to_string(), field_def(FieldType::String));
+        // Une liaison (marque « liaison ») : les provenances des noms importés qu'elle réunit
+        // (`builtin`, `project`, `dependency`, `inconnue`, séparées par des virgules). Vide ailleurs.
+        props.insert("provenances".to_string(), field_def(FieldType::String));
         return props;
     }
     HashMap::new()
@@ -903,6 +910,9 @@ pub struct LibraryRecord {
     pub name: String,
     pub import_path: String,
     pub symbols: Vec<String>,
+    /// `builtin`, `dependency` ou `inconnue` (codeparsers) ; vide sur une analyse d'avant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<String>,
 }
 
 /// Une arête, par entité et clé d'identité (pas par uuid : l'uuid est
@@ -929,6 +939,10 @@ pub struct CodeRelation {
     /// de sa ligne d'import. Marquée « liaison » : la cible est sûre, mais ce n'est pas la définition.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub external_binding: bool,
+    /// **Les provenances des noms importés** d'une liaison (codeparsers `provenances`) : `builtin`,
+    /// `project`, `dependency`, `inconnue`, distinctes et triées ; vide hors liaison.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub provenances: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -1349,6 +1363,7 @@ pub fn analyze_in_project(
                     sites: Vec::new(),
                     by_name: false,
             external_binding: false,
+            provenances: Vec::new(),
                 });
                 if let Some(p) = g.parent {
                     for (rel_nom, de, vers) in [("HAS_PARENT", &key, &cles[p]), ("PARENT_OF", &cles[p], &key)] {
@@ -1361,6 +1376,7 @@ pub fn analyze_in_project(
                             sites: Vec::new(),
                             by_name: false,
             external_binding: false,
+            provenances: Vec::new(),
                         });
                     }
                 }
@@ -1418,6 +1434,7 @@ pub fn analyze_in_project(
             sites: Vec::new(),
             by_name: false,
             external_binding: false,
+            provenances: Vec::new(),
         });
     }
 
@@ -1447,6 +1464,7 @@ pub fn analyze_in_project(
             name: name.clone(),
             import_path: name.clone(),
             symbols: lib.symbols.clone(),
+            provenance: lib.provenance.map(|p| p.as_str().to_string()),
         });
     }
     analysis.libraries.sort_by(|a, b| a.name.cmp(&b.name));
@@ -1531,6 +1549,7 @@ pub fn analyze_in_project(
             sites: r.metadata.as_ref().map(|m| m.sites.clone()).unwrap_or_default(),
             by_name: r.metadata.as_ref().and_then(|m| m.by_name).unwrap_or(false),
             external_binding: r.metadata.as_ref().and_then(|m| m.external_binding).unwrap_or(false),
+            provenances: r.metadata.as_ref().map(|m| m.provenances.iter().map(|p| p.as_str().to_string()).collect()).unwrap_or_default(),
         });
     }
     // ── Ce que le lot référence, par nom ────────────────────────────────
@@ -2324,6 +2343,7 @@ impl LibraryRecord {
         BTreeMap::from([
             ("name".into(), s(&self.name)),
             ("import_path".into(), s(&self.import_path)),
+            ("provenance".into(), self.provenance.as_deref().map_or(CypherValue::Null, s)),
         ])
     }
 }
@@ -2500,6 +2520,9 @@ impl Catalog {
                     Resolution::File
                 };
                 p.insert("resolution".to_string(), s(resolution.as_str()));
+                if !r.provenances.is_empty() {
+                    p.insert("provenances".to_string(), s(&r.provenances.join(",")));
+                }
                 p
             } else {
                 BTreeMap::new()
@@ -4494,7 +4517,7 @@ mod tests {
                 "MENTIONS" => &["usage", "usages", "line", "kind", "qualifier_types", "import_modules", "self_types", "deferred", "untyped_receiver", "reexport_from"],
                 "LOCKS" => &["usage", "usages", "line", "via"],
                 "QUERIES" => &["via"],
-                "CONSUMES" | "CONSUMED_BY" | "INHERITS_FROM" | "IMPLEMENTS" | "DECORATES" | "USES_LIBRARY" => &["usage", "usages", "line", "resolution", "visibility"],
+                "CONSUMES" | "CONSUMED_BY" | "INHERITS_FROM" | "IMPLEMENTS" | "DECORATES" | "USES_LIBRARY" => &["usage", "usages", "line", "resolution", "visibility", "provenances"],
                 _ => &[],
             };
             let properties = relation.properties.as_ref().unwrap();

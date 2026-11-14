@@ -1885,14 +1885,24 @@ fn an_external_module_binding_is_marked_liaison() {
 
     let catalog = setup();
     let mut cat = catalog.lock().unwrap();
-    let source = "\"use strict\";\n\nconst reader = require(\"mtga-reader\");\n\nfunction lire() {\n  return reader.read();\n}\n\nmodule.exports = lire;\n";
+    let source = "\"use strict\";\n\nconst reader = require(\"mtga-reader\");\nconst path = require(\"node:path\");\n\nfunction lire() {\n  return reader.read(path.sep);\n}\n\nmodule.exports = lire;\n";
     let rapport = cat.ingest_code(&analyze("/projet", vec![("collect.js".to_string(), source.to_string())])).unwrap();
     assert_eq!(rapport.failed, 0, "{rapport:?}");
     let r = cat
-        .execute_raw("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE a.name = 'lire' AND b.name STARTS WITH 'file_scope' RETURN r.resolution")
+        .execute_raw("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE a.name = 'lire' AND b.name STARTS WITH 'file_scope' RETURN r.resolution, r.provenances")
         .unwrap();
-    let marques: Vec<Option<String>> = r.rows.iter().map(|r| match r.first() { Some(CypherValue::String(v)) => Some(v.clone()), _ => None }).collect();
-    assert_eq!(marques, vec![Some("liaison".to_string())], "la mention va à la zone de son require, marquée liaison");
+    let texte = |v: Option<&CypherValue>| match v { Some(CypherValue::String(t)) => Some(t.clone()), _ => None };
+    let marques: Vec<(Option<String>, Option<String>)> = r.rows.iter().map(|r| (texte(r.first()), texte(r.get(1)))).collect();
+    // Une liaison réunit les mentions de `lire` vers la zone des deux `require` : sa marque, et les
+    // provenances de ses noms importés (14 novembre 2026, décision de Lucie).
+    assert_eq!(marques, vec![(Some("liaison".to_string()), Some("builtin,inconnue".to_string()))], "la mention va à la zone de ses require, marquée liaison, avec ses provenances");
+    let libs = cat.execute_raw("MATCH (l:Library) RETURN l.name, l.provenance ORDER BY l.name").unwrap();
+    let libs: Vec<(Option<String>, Option<String>)> = libs.rows.iter().map(|r| (texte(r.first()), texte(r.get(1)))).collect();
+    assert_eq!(
+        libs,
+        vec![(Some("mtga-reader".to_string()), Some("inconnue".to_string())), (Some("node:path".to_string()), Some("builtin".to_string()))],
+        "chaque bibliothèque dit sa provenance"
+    );
 }
 
 // Navigation vers une définition et définition LSP de la liaison locale sont deux contrats.
