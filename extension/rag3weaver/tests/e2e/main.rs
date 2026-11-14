@@ -142,6 +142,8 @@ mod e2e_generic_search;
 mod e2e_graph_tool;
 #[path = "../e2e_graphe_et_paquets.rs"]
 mod e2e_graphe_et_paquets;
+#[path = "../e2e_groupe_a_la_demande.rs"]
+mod e2e_groupe_a_la_demande;
 #[path = "../e2e_highlight_long_text.rs"]
 mod e2e_highlight_long_text;
 #[path = "../e2e_hnsw_scale.rs"]
