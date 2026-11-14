@@ -17,6 +17,7 @@
 
 use rag3weaver::backend::PreparedBackend;
 use rag3weaver::Rag3dbConnection;
+use rag3weaver::connection::CypherValue;
 use serde_json::{json, Value};
 
 #[test]
@@ -134,7 +135,7 @@ fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
     let du_fichier = |etape: &str| -> Value {
         let conn = backend.catalog.lock().unwrap().conn_arc();
         let mut out = serde_json::Map::new();
-        for (table, champ) in [("Scope", "file_path"), ("File", "path"), ("Symbol", "file_path")] {
+        for (table, champ) in [("Scope", "file_path"), ("File", "path")] {
             let q = format!("MATCH (n:{table}) WHERE n.{champ} ENDS WITH '{nom_retire}' RETURN count(*)");
             let v = match conn.execute(&q) {
                 Ok(r) => r.rows.first().and_then(|l| l.first()).map(|v| format!("{v:?}")).unwrap_or_default(),
@@ -153,6 +154,44 @@ fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
             out.insert(table.to_string(), json!({"compte": v, "lignes": lignes}));
         }
         Value::Object(out)
+    };
+    // **Les Symbol du fichier, par la relation** : `Symbol` n'a pas de chemin ; il est le rendez-vous
+    // des scopes (DEFINES, MENTIONS, LOCKS, QUERIES, REGISTERS). Ceux du fichier sont ceux qu'un de ses
+    // Scope relie ; ses exclusifs, ceux qu'aucun Scope d'un autre fichier ne relie. Après le retrait,
+    // un exclusif encore là et que plus rien ne relie est un Symbol orphelin.
+    let uuids_de = |q: &str| -> Result<Vec<String>, String> {
+        let conn = backend.catalog.lock().unwrap().conn_arc();
+        conn.execute(q).map_err(|e| format!("refus : {e}")).map(|r| {
+            r.rows.iter().filter_map(|l| match l.first() { Some(CypherValue::String(u)) => Some(u.clone()), _ => None }).collect()
+        })
+    };
+    let symboles_avant = || -> Value {
+        let tous = uuids_de(&format!(
+            "MATCH (s:Scope)-[]->(y:Symbol) WHERE s.file_path ENDS WITH '{nom_retire}' RETURN DISTINCT y._uuid"));
+        let exclusifs = uuids_de(&format!(
+            "MATCH (s:Scope)-[]->(y:Symbol) WHERE s.file_path ENDS WITH '{nom_retire}' WITH DISTINCT y \
+             WHERE NOT EXISTS {{ MATCH (t:Scope)-[]->(y) WHERE NOT t.file_path ENDS WITH '{nom_retire}' }} RETURN y._uuid"));
+        eprintln!("[orphelins] après l'index de la source entière : Symbol reliés au fichier — {:?} ; exclusifs — {:?}",
+                  tous.as_ref().map(Vec::len), exclusifs.as_ref().map(Vec::len));
+        json!({"relies": tous.as_ref().map(Vec::len).map_err(Clone::clone), "exclusifs": exclusifs.clone().unwrap_or_default(),
+               "refus": exclusifs.err()})
+    };
+    let symboles_apres = |exclusifs: &[String]| -> Value {
+        let conn = backend.catalog.lock().unwrap().conn_arc();
+        let liste = exclusifs.iter().map(|u| format!("'{u}'")).collect::<Vec<_>>().join(", ");
+        let q = format!("UNWIND [{liste}] AS u MATCH (y:Symbol {{_uuid: u}}) OPTIONAL MATCH (s:Scope)-[]->(y) \
+                         RETURN y._uuid, y.name, count(s)");
+        let lignes = match conn.execute(&q) {
+            Ok(r) => r.rows.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>(),
+            Err(e) => vec![format!("refus : {e}")],
+        };
+        let orphelins = lignes.iter().filter(|l| l.ends_with("Int(0)]")).count();
+        eprintln!("[orphelins] après l'index sans le fichier : Symbol exclusifs encore là — {} sur {} ; sans aucune relation — {orphelins}",
+                  lignes.len(), exclusifs.len());
+        for l in lignes.iter().take(20) {
+            eprintln!("[orphelins] après l'index sans le fichier : Symbol exclusif {l}");
+        }
+        json!({"exclusifs_avant": exclusifs.len(), "encore_la": lignes, "sans_relation": orphelins})
     };
     let comptes = |etape: &str| -> Value {
         let c = backend.catalog.lock().unwrap().comptes_du_plein_texte();
@@ -186,14 +225,18 @@ fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
     let fin1 = indexer("source entière");
     let entiere = comptes("après l'index de la source entière");
     let fichier_avant = du_fichier("après l'index de la source entière");
+    let symb_avant = symboles_avant();
+    let exclusifs: Vec<String> = symb_avant["exclusifs"].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default();
     std::fs::remove_file(&fichier).expect("retirer le fichier");
     let fin2 = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| indexer("sans le fichier")));
     std::fs::write(&fichier, &contenu).expect("remettre le fichier");
     let fin2 = fin2.unwrap_or_else(|e| std::panic::resume_unwind(e));
     let sans = comptes("après l'index sans le fichier");
     let fichier_apres = du_fichier("après l'index sans le fichier");
+    let symb_apres = symboles_apres(&exclusifs);
     let doc = json!({"base": base.to_string_lossy(), "racine": racine, "retire": retirer.to_string_lossy(),
                      "ouverture": ouverture, "apres_source_entiere": entiere, "apres_effacement": sans, "fichier_retire_avant": fichier_avant, "fichier_retire_apres": fichier_apres,
+                     "symboles_avant": symb_avant, "symboles_apres": symb_apres,
                      "fin_index_source_entiere": fin1, "fin_index_effacement": fin2});
     std::fs::write(&sortie, serde_json::to_string_pretty(&doc).unwrap()).expect("écrire le relevé");
     eprintln!("[orphelins] relevé écrit : {}", sortie.to_string_lossy());
