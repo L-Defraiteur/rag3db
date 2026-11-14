@@ -46,7 +46,7 @@ l'autre, dix fois de suite, même sans rouge.
 | 4 | G | cas 6c du poste (trap avant la CI) | tenant-signal → tenant-signal-pile | ab7c44fb5 → pile c93f73f06 sur 2c3bc3eb7 |
 | 5 | embarquement | reprise après plantage | reprise-apres-plantage → reprise-apres-plantage-pile | 17afd3820 → pile 512b5e420 sur c93f73f06 (conflit de docs/nouveautes.md résolu) |
 | 6 | 96 | miroir, nom exact, about | lot-96-pile (miroir 48445fdeb, nomex bff4ea79f, about 84f949d2c) | pile 84f949d2c sur 512b5e420 |
-| 7 | hotfixs | témoin du dictionnaire (C++ test seul) | chaine-au-point-de-reprise-2 | 9ded42107 |
+| 7 | hotfixs | témoin du dictionnaire (C++ test seul) | chaine-au-point-de-reprise-2 → chaine-au-point-de-reprise-pile | 9ded42107 → pile cabcc8640 sur 84f949d2c |
 | 8 | ED | 2a′-1 (générations de l'ancre) | generations-de-l-ancre-3 | 9b0620f66 (check_features corrigé ; passe en cours) |
 | 9 | archi | jauge du contexte (+ quatre mineurs s'ils sont verts) | jauge-ce-qui-pese-3 | 5ad3c990e |
 | 10 | cœur | correctif (a) perte de Note | annulation-garde-les-autres-2 | 9b0e73c9c, à son juge vert |
