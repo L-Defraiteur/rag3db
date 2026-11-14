@@ -79,6 +79,38 @@ sur une copie de la copie.
 - `num_docs` contre le nombre de lignes `Scope` du graphe (les doublons vivants).
 - La taille du texte indexé, pour le rapport `.fts` / texte.
 
+## Le départage des comptes de Scope (hotfixs, 14 novembre 2026)
+
+À la question de c7 : lucivy compte 89 894 documents vivants dans `Lucivy_Scope`, tous de
+`_node_id` distincts, et `daemon_status` annonce 68 585 Scope. Pour comparer les deux sur un même
+état, j'ai pris **une seule copie fidèle**, base et `.fts` ensemble : l'instantané
+`avant-835d5298f/code-rag3db-depot`, pris par G hôte arrêté le 13 novembre à 20 h 07, `fuser` vide.
+J'ai lu le graphe en lecture seule par la lib 835d5298f, et le `.fts` sur une copie neuve, par le test
+lucivy `diag_node_ids_vivants` (branche `diag-mots-perdus-tous-champs`).
+
+| mesure, sur la même copie | valeur |
+|---|---:|
+| Scope du graphe | 79 662 (plus grand offset 93 718) |
+| documents de `Lucivy_Scope`, `max_doc` | 100 350 |
+| documents vivants (`num_docs`) | 88 471, tous de `_node_id` distincts |
+| documents supprimés encore dans leurs segments | 11 879 |
+| Scope qui ont leur document | 79 662 : tous |
+| **documents vivants sans Scope (orphelins)** | **8 809** |
+| `_node_id` au-delà du plus grand offset | 0 |
+
+**Lecture : des documents orphelins dans le `.fts`.** Ce sont des Scope effacés du graphe mais pas de
+l'index, et ils tombent tous dans les places laissées vides par les Scope effacés. C'est la famille
+des réindexations : la piste 1 de ce ticket pour les supprimés, et une forme vivante en plus.
+
+Les 89 894 de lucivy et les 68 585 de `daemon_status` viennent d'autres instants que cette copie. Ils
+ne se comparent ni entre eux ni à elle. Pour une jointure à l'instant présent, il faut un nouvel
+instantané pris hôte arrêté.
+
+**Ce que je n'ai pas fait** : savoir si les recherches rendent ces orphelins, ce qui demande la
+jointure par l'hôte, ni d'où ils viennent, c'est-à-dire quel chemin d'effacement oublie le `.fts`.
+Les relevés sont au portable, dans `~/.cache/rag3db-locks/sonde-coherence/` (`node-ids.txt`,
+`scope-offsets.txt`, `node-ids.log`).
+
 ## Les leviers, une fois la mesure faite
 
 - **Décidé par Lucie** (13 novembre au soir) : **dictionnaire partagé + `positions: false`** pour le
