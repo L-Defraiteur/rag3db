@@ -230,3 +230,12 @@ deux postes, f9521fb3, « garde à jour ») · import pointé (b45056943). La ch
 (b0ecb3bb3 : 406 s → 12 s sur 24 requêtes, 24/24 identiques) → 1b (0ed318ad7, passe complète en file) →
 fils du moteur (G) → chaîne Rust 1.98.1 (G, d950d8790) → pointeur des règles d'import (codeparsers,
 regles-imports-2 d7d9ce7a2, rang 22).
+
+## Dix-huit atterris (19 h 2x)
+
+tty-8 (b3f58c30e, 15/15 en `=`, la CI de master verte). La chaîne : exclusions (recherche, bb0cea68d,
+passe) → activations (embarquement, a7d39e4e6, passe courte) → sans-filtre (arbre principal, b0ecb3bb3)
+→ 1b (0ed318ad7, passe complète en file) → fils du moteur (G) → chaîne Rust 1.98.1 (G) → pointeur des
+règles d'import (codeparsers, a1972c0f7 dans codeparsers : toutes les langues en données, 311/0). En
+attente d'une place à luciepc : le verdict de la lib 373b5477b, la parité au bit près de banc, la
+passe de 1b, la mesure du dense d'ED.
