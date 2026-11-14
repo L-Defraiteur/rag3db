@@ -1,11 +1,11 @@
 // archive_subject — une fiche à créer qu'une fiche déjà là porte sous un nom voisin : la section la
 // rejoint (13 novembre 2026, le second archivage à blanc : « Hooks Claude Code », « Hooks de Claude
 // Code », « Hooks Claude Code de rag3weaver », trois fiches nées de trois documents).
-// input : #{ element: l'élément décidé (archive_decided), value: les fiches que la recherche rend pour
-//           element.subject_query (search_structured) }
-// Hors de kind create, l'élément passe tel quel. En create, la première fiche rendue dont le nom est le
-// même ou voisin (sujets_voisins) devient la fiche de la section : kind fiche, et l'apport, sa clé et son
-// lien la nomment. La recherche ne voit que les fiches validées : celles d'un document précédent, pas
+// input : #{ element: l'élément décidé (archive_decided), value: toutes les fiches en base
+//           (select_structured, limit 0) }
+// Hors de kind create, l'élément passe tel quel. En create, la fiche du même nom, sinon la plus proche des
+// voisines (sujets_voisins), devient la fiche de la section : kind fiche, et l'apport, sa clé et son
+// lien la nomment. La sélection ne voit que les fiches validées : celles d'un document précédent, pas
 // celles que ce document propose (archive_decided les rejoint déjà, portées par le carry).
 // **Le voisinage de deux noms de sujet** : en minuscules, la ponctuation et les mots vides ôtés, deux
 // noms sont voisins si leurs jeux de mots sont égaux, ou si l'un contient l'autre et que le plus petit
@@ -39,18 +39,22 @@ if e.kind != "create" { return e; }
 let found = input.value;
 if type_of(found) != "array" { found = []; }
 let nom = e.fiche;
+// **Toutes les fiches, sans classement** (14 novembre 2026 : la recherche classée tronquée à 8 laissait
+// la voisine de la 5e à la 38e place sur 116). Le nom exact d'abord ; sinon, parmi les voisines, celle
+// qui diffère du moins de mots (à égalité, la première lue).
 let retenu = "";
+let ecart_retenu = 1000000;
+let mots_nom = sujet_mots(nom);
 for r in found {
     let d = r.data;
     if d == () || type_of(d.name) != "string" { continue; }
-    if d.name == nom { retenu = d.name; break; }
-}
-if retenu == "" {
-    for r in found {
-        let d = r.data;
-        if d == () || type_of(d.name) != "string" { continue; }
-        if sujets_voisins(d.name, nom) { retenu = d.name; break; }
-    }
+    if d.name == nom { retenu = d.name; ecart_retenu = -1; break; }
+    if !sujets_voisins(d.name, nom) { continue; }
+    let mots = sujet_mots(d.name);
+    let ecart = 0;
+    for m in mots { if !mots_nom.contains(m) { ecart += 1; } }
+    for m in mots_nom { if !mots.contains(m) { ecart += 1; } }
+    if ecart < ecart_retenu { retenu = d.name; ecart_retenu = ecart; }
 }
 if retenu == "" { return e; }
 e.kind = "fiche";
