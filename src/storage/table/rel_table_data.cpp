@@ -62,6 +62,21 @@ void InMemoryVersionRecordHandler::compactDeadRows(node_group_idx_t nodeGroupIdx
 
 void InMemoryVersionRecordHandler::rollbackInsert(main::ClientContext* context,
     node_group_idx_t nodeGroupIdx, row_idx_t startRow, row_idx_t numRows) const {
+    // La garde : l'annulation tronque le groupe à startRow. Elle refuse si le groupe porte des
+    // lignes au-delà de celles de cet enregistrement, versées après par une autre transaction :
+    // les tronquer perdrait des lignes validées (ticket du 14 novembre 2026, des Note perdues sous
+    // un pool plein). Une annulation qui échoue condamne la base, ce qui vaut mieux qu'une perte
+    // silencieuse.
+    {
+        const auto rowsInGroup = relTableData->getNodeGroupNoLock(nodeGroupIdx)->getNumRows();
+        KU_ASSERT(rowsInGroup <= startRow + numRows);
+        if (rowsInGroup > startRow + numRows) {
+            throw RuntimeException(stringFormat(
+                "Rollback refused: rows [{}, {}) of relationship group {} are followed by {} rows "
+                "written by another transaction, which truncating would lose.",
+                startRow, startRow + numRows, nodeGroupIdx, rowsInGroup - startRow - numRows));
+        }
+    }
     VersionRecordHandler::rollbackInsert(context, nodeGroupIdx, startRow, numRows);
     auto* nodeGroup = relTableData->getNodeGroupNoLock(nodeGroupIdx);
     const auto numRowsToRollback = std::min(numRows, nodeGroup->getNumRows() - startRow);

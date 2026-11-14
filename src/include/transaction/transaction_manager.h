@@ -1,6 +1,9 @@
 #pragma once
 
 #include <chrono>
+#include <exception>
+#include <optional>
+#include <string>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -155,6 +158,13 @@ private:
     }
 
     void clearTransactionNoLock(common::transaction_t transactionID);
+    // Annule une transaction d'écriture et la retire, sous le verrou public déjà tenu ; rend le
+    // message de l'annulation si elle a échoué (la transaction est retirée quand même), et dit
+    // dans halfDone si elle s'est arrêtée à moitié.
+    std::optional<std::string> rollbackWriteNoLock(Transaction* transaction, bool& halfDone);
+    // Un COMMIT refusé s'annule sous le même verrou, avant de le rendre, puis l'erreur repart.
+    [[noreturn]] void rollBackRefusedCommitNoLock(Transaction* transaction,
+        std::exception_ptr commitError);
 
 private:
     storage::WAL& wal;
