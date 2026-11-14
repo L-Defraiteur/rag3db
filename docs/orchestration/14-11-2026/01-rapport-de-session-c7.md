@@ -446,3 +446,26 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   importé au paquet » validée (TOML/JSON, défaut compilé + dossier, table au manifeste), lot 1 rang 13.
 - Faute de c7 : un ticket demandé à 96 sur une ligne ✗ d'e2e_postgres citée sans son test ; 96 a lu le
   code, le ✗ est asserté (la falaise du plancher) ; pas de ticket.
+
+## 17 h 1x — une faute de c7 : la mémoire de Lucie fermée derrière une mesure
+
+- **Le journal des chantiers sur copie** (96, 16 h 44 → 17 h 11) : 156 sections, 56 fiches proposées
+  (37 à une section, 19 thématiques — les 19 conseils du harnais en une, codeparsers en une : Lucie
+  scinde au survol), 2 rejointes, 0 refus ; le miroir corrigé vérifié (172 fiches, 172 fichiers ; il a
+  écrit à la fermeture les deux fichiers que l'ancien défaut avait laissés manquer). « Va » donné pour
+  la vraie passe, en-tête du journal écarté.
+- **La faute** : dans la même minute, « feu » à la mesure d'ED (`poste mesure`, qui exclut tout lourd)
+  et « va » à la passe de 96 (sous lourd, après fermeture du backend memoire-longue par G à 17 h 15).
+  La passe de 96 est restée 4e en file, la mémoire de Lucie fermée pour rien. Choix : G rouvre tout
+  de suite, l'instantané avant-chantiers-14-nov (116 fiches, sommes vérifiées aux deux postes) est
+  gardé, la fenêtre se refait après la mesure. Règle en mémoire : lire `poste --qui` avant tout « va »
+  qui ferme une base.
+- **La pile** : recherche (la ligne pour la CI, rouge reproduit sous rustc 1.100.0) vers 17 h 15, le cœur
+  reposé dessus (27cfe33a8) à son juge vers 17 h 30, puis tty-7 (après la mesure), les quatre mineurs
+  d'archi (verts), garde-pile, codeparsers, les exclusions.
+- **2a′-2** (ED) : la migration versions → générations manquait à 2a′-1 (une base à versions restait
+  « sans couches ») : écrite, rouge puis vert, estampille en dernier ; la mesure de la clause sans
+  filtre tourne sur une copie de code-rag3db-depot migrée par 1b (79 662 scopes), (a)/(b)/(c), A/B/C,
+  seuil 20 % ou 50 ms avant tout drapeau.
+- **Archi** sans lot jusqu'à sa base : « aucun client HTTP sans délai » (cinq clients de production, et
+  le test de la lib qui parle au service s'il partage le mécanisme ; un délai nommé, réglable).
