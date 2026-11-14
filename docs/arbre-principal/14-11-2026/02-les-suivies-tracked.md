@@ -89,6 +89,26 @@ ne change que son nom d'affichage (ED retire sa règle d'hier). Les trois préci
    dans `_catalog_meta` avec sa fin, tant que la rétention garde ses lignes. La recherche nom → id ne
    rend que les couches vivantes.
 
+**Deux écarts à la précision 1**, acceptés par ED :
+- **le commit de naissance est la pointe à la première vue de la ref**, gardée dans la fiche, et non le
+  premier commit publié dans la couche. Une branche neuve n'en a pas encore, et une fourche bouge au
+  rebase. L'id est recalculable tant que la ref n'a pas bougé depuis sa naissance ; ensuite, la fiche
+  fait foi, et elle le dit (`naissance.pointe`) ;
+- **des préfixes distincts** : `fiche_couche:<dépôt>:<id>` pour la fiche (`{nom, naissance: {nom,
+  pointe}, pointe_vue, fin?}`) et `couche_nom:<dépôt>:<nom complet>` pour l'index des couches vivantes
+  (`worktree:<chemin>` pour une couche de travail). Les estampilles `couche:<dépôt>:<ref>` d'aujourd'hui
+  ne s'y mêlent pas.
+
+**Deux gardes** :
+- **un renommage n'est dit que sans équivoque** (ED) : sur cette pointe, dans une même résolution,
+  une seule couche a disparu, une seule est apparue, et aucune autre couche présente ne la porte.
+  Sinon, c'est une fin et une naissance : une erreur dans ce sens coûte une couche neuve, dans l'autre
+  deux lignées mêlées ;
+- **deux couches vivantes ne partagent jamais un id**, et un nom libéré puis repris donne un id neuf
+  (c7). Une naissance dont l'id dérivé existe déjà prend le suivant.
+
+Livré : rouge 7cd867c7b, vert dans le commit qui suit (`identifiants_des_couches`).
+
 **Le coût** : un tour par `_catalog_meta` par résolution, en cache avec la résolution. Sous 2a′-3, ED lit
 l'id par la suivie résolue, jamais par le nom de la ref ; il l'écrit dans sa page 03.
 
