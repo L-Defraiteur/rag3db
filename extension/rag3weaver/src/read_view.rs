@@ -711,7 +711,7 @@ impl ReadView {
 
     /// La forme de la vue, sur sa connexion de lecture.
     pub fn forme(&self) -> Forme<'_> {
-        Forme { entity_configs: &self.entity_configs, relations: &self.relations, dialect: &self.dialect, conn: &self.conn, multi_cell: self.multi_cell }
+        Forme { entity_configs: &self.entity_configs, relations: &self.relations, dialect: &self.dialect, conn: &self.conn, multi_cell: self.multi_cell, generations: self.generations.clone() }
     }
 
     /// La cellule de la vue.
