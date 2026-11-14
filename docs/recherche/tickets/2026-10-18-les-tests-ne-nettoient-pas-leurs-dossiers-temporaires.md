@@ -145,7 +145,7 @@ Aucun pour l'instant. Il faudrait :
 
 Inventaire par motif de nom, avec la taille réelle (blocs), le nombre d'entrées et l'âge de la plus
 vieille. On ouvre un dossier anonyme pour lire ce qu'il contient, sans rien effacer. Au portable,
-`/tmp` est un tmpfs de 61 Gio, rempli à 16 Gio. **À luciepc, `/tmp` est sur le disque** (ext4 sur le
+`/tmp` est un tmpfs de 61 Gio, rempli à 16 Gio. **À luciepc, `/tmp` est sur le disque** (la racine btrfs du
 NVMe), et non en mémoire.
 
 **Portable : 14,9 Gio au total, dont 1,9 Gio de plus de 24 h, en 14 236 entrées.**
