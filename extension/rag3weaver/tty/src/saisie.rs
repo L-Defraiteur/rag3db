@@ -14,6 +14,12 @@ use unicode_width::UnicodeWidthStr;
 pub struct Saisie {
     texte: String,
     curseur: usize,
+    /// Ce qui a été envoyé, du plus ancien au plus récent.
+    historique: Vec<String>,
+    /// Le rang lu dans l'historique (↑), `None` sur la saisie en cours.
+    rang: Option<usize>,
+    /// La saisie en cours, gardée pendant qu'on remonte l'historique.
+    brouillon: String,
 }
 
 impl Saisie {
@@ -141,6 +147,13 @@ impl Saisie {
         }
         i
     }
+
+    /// ↑ : la ligne d'au-dessus dans une saisie de plusieurs lignes, sinon
+    /// l'envoi d'avant dans l'historique (la saisie en cours est gardée).
+    pub fn monter(&mut self) {}
+
+    /// ↓ : la ligne d'en dessous, sinon l'envoi suivant, puis la saisie en cours.
+    pub fn descendre(&mut self) {}
 
     /// Rend le texte et vide la saisie.
     pub fn prendre(&mut self) -> String {
@@ -320,6 +333,50 @@ mod tests {
         m.inserer("une\ndeux trois");
         m.effacer_debut();
         assert_eq!(m.texte(), "une\n", "Ctrl-U s'arrête au début de la ligne");
+    }
+
+    /// ↑ et ↓ parcourent les envois sans doublon, et rendent la saisie en cours.
+    #[test]
+    fn up_and_down_walk_the_sent_history_and_give_back_the_draft() {
+        let mut s = Saisie::default();
+        for envoi in ["un", "deux", "deux"] {
+            tape(&mut s, envoi);
+            s.prendre();
+        }
+        tape(&mut s, "brouillon");
+        s.monter();
+        assert_eq!((s.texte(), s.curseur()), ("deux", 4), "le dernier envoi, curseur à la fin");
+        s.monter();
+        assert_eq!(s.texte(), "un", "le doublon n'est gardé qu'une fois");
+        s.monter();
+        assert_eq!(s.texte(), "un", "rien avant le plus ancien");
+        s.descendre();
+        assert_eq!(s.texte(), "deux");
+        s.descendre();
+        assert_eq!(s.texte(), "brouillon", "la saisie en cours revient");
+        s.monter();
+        tape(&mut s, " fois");
+        assert_eq!(s.prendre(), "deux fois", "un envoi rappelé se modifie avant de repartir");
+        s.monter();
+        assert_eq!(s.texte(), "deux fois");
+        s.descendre();
+        assert_eq!(s.texte(), "", "après un envoi, la saisie en cours est vide");
+    }
+
+    /// Dans une saisie de plusieurs lignes, ↑ et ↓ changent de ligne d'abord.
+    #[test]
+    fn up_and_down_move_between_lines_before_the_history() {
+        let mut s = Saisie::default();
+        tape(&mut s, "ancien");
+        s.prendre();
+        s.inserer("a\nbcd");
+        s.monter();
+        assert_eq!((s.texte(), s.curseur()), ("a\nbcd", 1), "la colonne est gardée au plus près");
+        s.descendre();
+        assert_eq!(s.curseur(), 3, "retour sur la seconde ligne, colonne 1");
+        s.monter();
+        s.monter();
+        assert_eq!(s.texte(), "ancien", "depuis la première ligne, ↑ va à l'historique");
     }
 
     /// L'affichage tient dans la largeur : les caractères larges comptent deux
