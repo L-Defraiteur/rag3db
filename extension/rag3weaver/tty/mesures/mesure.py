@@ -304,8 +304,11 @@ try:
         j = journal()
         stops = [e for e in j if e["corps"].get("kind") == "stop"]
         accords = [e for e in j if e["corps"].get("kind") == "answer" and e["corps"].get("approved") is True]
-        stops_g = [e for e in stops if e["t"] < echap_mur]
-        stops_e = [e for e in stops if e["t"] >= echap_mur]
+        # La frontière au milieu de la seconde entre Ctrl-G et Échap : les horloges des deux postes
+        # s'écartent de quelques millisecondes (tty-9 : un stop d'Échap daté 6 ms trop tôt comptait pour Ctrl-G).
+        frontiere = (ctrlg_mur + echap_mur) / 2
+        stops_g = [e for e in stops if e["t"] < frontiere]
+        stops_e = [e for e in stops if e["t"] >= frontiere]
         resultats["touches"] = {"ctrl_g_stop": len(stops_g), "echap_stop": len(stops_e), "o_accord": len(accords), "reply_to": accords[0]["corps"].get("reply_to") if accords else None,
                                 "ctrl_g_vers_stop_ms": round((stops_g[0]["t"] - ctrlg_mur) * 1000) if stops_g else None,
                                 "echap_vers_stop_ms": round((stops_e[0]["t"] - echap_mur) * 1000) if stops_e else None}
