@@ -466,3 +466,25 @@ fn une_fiche_creee_porte_une_phrase_qui_dit_son_sujet() {
     assert_eq!(f["result"]["data"]["about"], json!("Le rappel tire ses mots du prompt de la session, sans redite d'un tour à l'autre."), "une phrase trop courte est écartée : {f}");
 }
 
+/// **Confirmer une fiche proposée, d'un appel** (14 novembre 2026, les gestes de Lucie : la page de
+/// survol donne l'uuid de chaque fiche que l'archiviste propose). `confirmer_fiche(uuid)` applique la
+/// transition `accept` — proposed → current — et rend l'estampille (révision, date, auteur posé par
+/// l'hôte). Une fiche qui n'est pas proposée est refusée en le disant, un uuid inconnu aussi.
+#[test]
+#[ignore]
+fn une_fiche_proposee_se_confirme_par_son_uuid() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |_| {});
+    let f = appel(&b, "put_fiche", json!({"record": {"name": "Le jeu des clés", "about": "Comment les sessions du poste se partagent les clés de leurs dépôts.", "state": "proposed"}}));
+    let uuid = f["result"]["uuid"].as_str().expect("l'uuid").to_string();
+    let r = appel(&b, "confirmer_fiche", json!({"uuid": uuid}));
+    assert_eq!(r["result"]["state"], json!("current"), "{r}");
+    assert_eq!(r["result"]["revision"], json!(2), "la confirmation est une écriture de plus : {r}");
+    let lue = appel(&b, "get_fiche", json!({"record": {"name": "Le jeu des clés"}}));
+    assert_eq!(lue["result"]["data"]["state"], json!("current"), "{lue}");
+    let e = b.call("confirmer_fiche", json!({"uuid": uuid})).err().expect("une fiche déjà courante ne se confirme pas");
+    assert!(e.contains("proposed") && e.contains("current"), "le refus dit l'état : {e}");
+    let e = b.call("confirmer_fiche", json!({"uuid": "00000000-0000-0000-0000-000000000000"})).err().expect("un uuid inconnu est refusé");
+    assert!(e.contains("aucune fiche"), "{e}");
+}
+

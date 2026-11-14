@@ -690,7 +690,8 @@
     "archive_subject": "scripts/archive_subject.rhai",
     "archive_pass": "scripts/archive_pass.rhai",
     "archive_linked": "scripts/archive_linked.rhai",
-    "archive_summary": "scripts/archive_summary.rhai"
+    "archive_summary": "scripts/archive_summary.rhai",
+    "gestes_confirmer": "scripts/gestes_confirmer.rhai"
   },
   "tools": {
     "put_memory": {
@@ -918,6 +919,9 @@
     },
     "whois": {
       "graph": "graphs/whois.mmd"
+    },
+    "confirmer_fiche": {
+      "graph": "graphs/confirmer_fiche.mmd"
     },
     "archive": {
       "graph": "graphs/archive.mmd",
