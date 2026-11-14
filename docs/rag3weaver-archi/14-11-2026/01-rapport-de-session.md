@@ -45,7 +45,8 @@ En attente de la pile : **l'équipier rend le contenu demandé** (`equipier-rend
   la séance de tty : sa tâche (un dépôt de test, sans l'historique ni les déclarations de la vraie
   tâche `essai-tty`) n'est pas la séance du ticket. Ce que le correctif garantit est ce que le faux
   modèle prouve (un texte écrit dans le pas arrive ; la consigne dit où va un texte demandé), pas un
-  taux de Gemini.
+  taux de Gemini. Non reproduit par le banc (dépôt de test sans l'historique de la tâche) ; le
+  prochain essai de Lucie en tty, sur le binaire qui porte le correctif, est le juge (c7).
 
 ## Reprendre
 
