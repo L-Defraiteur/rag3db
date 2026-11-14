@@ -441,17 +441,33 @@ struct Surveillant {
     tenu: std::sync::Arc<std::sync::atomic::AtomicBool>,
     appels: std::sync::Arc<std::sync::atomic::AtomicUsize>,
     interieur: HashEmbedder,
+    /// Le relevé du départage (ticket recherche du 8 novembre) : les appels en vol en même temps,
+    /// leur maximum, et ce que voyait chaque `try_lock` refusé (combien d'appels en vol, et
+    /// pourquoi le refus).
+    en_vol: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    max_en_vol: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    refus: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
 }
 
 impl Embedder for Surveillant {
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
-        self.appels.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        use std::sync::atomic::Ordering::SeqCst;
+        self.appels.fetch_add(1, SeqCst);
+        let en_vol = self.en_vol.fetch_add(1, SeqCst) + 1;
+        self.max_en_vol.fetch_max(en_vol, SeqCst);
         if let Some(c) = self.catalogue.get() {
-            if c.try_lock().is_err() {
-                self.tenu.store(true, std::sync::atomic::Ordering::SeqCst);
+            if let Err(e) = c.try_lock() {
+                self.tenu.store(true, SeqCst);
+                let pourquoi = match e {
+                    std::sync::TryLockError::WouldBlock => "tenu",
+                    std::sync::TryLockError::Poisoned(_) => "empoisonné",
+                };
+                self.refus.lock().unwrap().push(format!("{pourquoi}, {en_vol} appel(s) en vol, fil {:?}", std::thread::current().id()));
             }
         }
-        self.interieur.embed(texts)
+        let rendu = self.interieur.embed(texts);
+        self.en_vol.fetch_sub(1, SeqCst);
+        rendu
     }
     fn dim(&self) -> usize {
         self.interieur.dim()
@@ -473,11 +489,16 @@ fn l_embarquement_du_retard_appelle_le_service_hors_du_verrou() {
     let cellule = std::sync::Arc::new(std::sync::OnceLock::new());
     let tenu = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let appels = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let max_en_vol = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let refus = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let surveillant = Surveillant {
         catalogue: cellule.clone(),
         tenu: tenu.clone(),
         appels: appels.clone(),
         interieur: HashEmbedder::new(DIM),
+        en_vol: Default::default(),
+        max_en_vol: max_en_vol.clone(),
+        refus: refus.clone(),
     };
     let mut catalog = monter_avec(Rag3dbConnection::in_memory().expect("base en mémoire"), Box::new(surveillant));
     catalog.ingest_entities_jusqu_a("Fiche", lignes(0..40, "v1"), D::RECHERCHE_TEXTE).expect("mots");
@@ -485,7 +506,18 @@ fn l_embarquement_du_retard_appelle_le_service_hors_du_verrou() {
     cellule.set(partage.clone()).ok();
     let n = Catalog::embarquer_le_retard_hors_verrou(&partage, D::TOUT, 10_000, None).expect("embarquement");
     assert!(n > 0 && appels.load(std::sync::atomic::Ordering::SeqCst) > 0, "rien n'a été embarqué");
-    assert!(!tenu.load(std::sync::atomic::Ordering::SeqCst), "le service a été appelé sous le verrou du catalogue");
+    eprintln!(
+        "[surveillant] {} appel(s), au plus {} en vol, refus : {:?}",
+        appels.load(std::sync::atomic::Ordering::SeqCst),
+        max_en_vol.load(std::sync::atomic::Ordering::SeqCst),
+        refus.lock().unwrap()
+    );
+    assert!(
+        !tenu.load(std::sync::atomic::Ordering::SeqCst),
+        "le service a été appelé sous le verrou du catalogue ; au plus {} appel(s) en vol, refus : {:?}",
+        max_en_vol.load(std::sync::atomic::Ordering::SeqCst),
+        refus.lock().unwrap()
+    );
     // Et la dette est payée : les vecteurs sont posés, l'invariant tient.
     let cat = partage.lock().unwrap();
     verifier(&cat, "embarquement hors du verrou");
