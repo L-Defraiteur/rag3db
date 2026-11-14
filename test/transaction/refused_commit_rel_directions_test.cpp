@@ -151,7 +151,9 @@ int playBetweenDirections(const std::string& databasePath, rag3db::main::SystemC
         b.query("BEGIN TRANSACTION;");
         b.query("MATCH (x:N {id: " + std::to_string(src) + "}), (y:N {id: " + std::to_string(dst) +
                 "}) CREATE (x)-[:R {line: " + std::to_string(line) + "}]->(y);");
-        TestHooks::armFailPoint(TestFailPoint::REL_COMMIT_BETWEEN_DIRECTIONS);
+        // Le point attend 200 ms sous le verrou avant de lever : B, lancé 5 ms après A, est alors en
+        // file sur ce verrou, comme un écrivain de plus sous un pool plein.
+        TestHooks::armFailPoint(TestFailPoint::REL_COMMIT_BETWEEN_DIRECTIONS, 200);
         bool aRefused = false;
         std::thread ta([&] { aRefused = !a.query("COMMIT;")->isSuccess(); });
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
