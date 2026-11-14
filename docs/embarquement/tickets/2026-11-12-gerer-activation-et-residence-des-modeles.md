@@ -1,6 +1,6 @@
 # Gérer l'activation et la résidence des modèles selon les usages
 
-- **État** : ouvert ; première tranche locale/dense livrée sur master23ceed87b, union qualifiée ; suite distante/éviction ouverte.
+- **État** : ouvert ; première tranche locale/dense livrée sur master23ceed87b, union qualifiée ; depuis livrés et joués en vrai à luciepc : baux d'usage, éviction, activation distante (13 nov.), embarqueur à la demande par l'hôte (14 nov.) ; restent le préchauffage, les autres capacités, la reprise après plantage et les services de card2 eux-mêmes (page `docs/embarquement/13-11-2026/01-…`, « Manquant » 4 à 7).
 - **Famille** : produit
 - **Gravité** : coût et disponibilité ; éviter l'accumulation de modèles résidents et permettre leur reprise à la demande.
 - **Atteignable en service** : oui pour activation dense locale déclarée via Backend::connect_embedder ; gestion distante et éviction non implémentées.
@@ -663,3 +663,14 @@ Témoins faux ssh : 10 tours verts. Un rouge d'un test d'activation existant, un
 (« Peer disconnected » sur l'embed), à cause **plausible, non prouvée** : la fixture Python répondait
 404 à `POST /bail` sans lire le corps, et la fermeture avec des octets non lus envoie un reset ;
 corrigé en `b8f1c1dd0` (elle lit le corps et dit `Connection: close`), puis 30 tours sur 30 verts.
+
+**Le vrai jeu à la demande par l'hôte, 14 novembre, 13 h 51** : le résultat est vert ; le détail
+est au ticket fermé `2026-11-13-un-fournisseur-a-la-demande-ouvert-par-l-hote-ne-s-evince-jamais.md`.
+- **Le chemin** : l'hôte de luciepc, avec un index de mesure à son propre fournisseur granite-107m
+  sur card2.
+- **L'ouverture** ne lance rien.
+- **Le premier index** active le fournisseur, identité vérifiée.
+- **Le bail** est rendu à +29,5 s, puis l'éviction suit à +60,5 s.
+- **Le second index** réactive, avec la même identité, puis bail et éviction se répètent.
+- **La mémoire** : card2 culmine à 26 087 Mio, le fournisseur tenant au plus 5,7 Gio, puis revient
+  à sa valeur de départ ; card0 reste à 88 Mio d'un bout à l'autre.
