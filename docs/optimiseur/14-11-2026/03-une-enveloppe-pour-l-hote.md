@@ -135,9 +135,18 @@ le VmRSS relevé à chaque appel. La sonde d'ED mesure un processus de test qui 
 | sans | 2e | 5 048 → 5 614 → 6 044 Mio | +301 Mio | 436 ms |
 
 Le réglage gagne un peu moins d'1 Gio (−16 %) et aplatit la pente. Mais **il ralentit les appels de 70 à 77 %**, dans
-les deux ordres : la lenteur vient du réglage, pas de la charge du poste. L'écart avec les 20,6 → 9,8 Gio d'ED est
-attendu, d'après c7 : sa sonde projetait un Cypher de 2,9 Mo (la rétention de la projection), et l'hôte de master
-passe désormais par le court-circuit sans masque, qui ne projette plus ainsi.
+les deux ordres : la lenteur vient du réglage, pas de la charge du poste. L'écart avec les 20,6 → 9,8 Gio d'ED vient du
+**court-circuit sans filtre** (correction d'ED, 22 h 35) : sa série tournait sur `vue-publiee` 2bdb8a6e4, où le masque
+des versions est déjà un prédicat (une jointure version → occurrence, moins de 4 Kio projetés, sans le Cypher de
+2,9 Mo). Mais cette branche n'a pas le court-circuit d'arbre principal : sans filtre, le prédicat y rejoue la jointure
+sur 72 652 versions, dans le lexical et dans le dense, à chaque appel. C'est ce qui laissait 20 Gio. L'hôte de master
+court-circuite le cas sans filtre et n'a plus de masque du tout, d'où ses 6 Gio. Sur la vitesse, la sonde d'ED ne
+voyait aucun coût du réglage (2,5 s contre 2,8 s) là où l'hôte en voit 70 à 77 % ; aucune cause sûre (peut-être le
+nombre de fils qui allouent à la fois dans l'hôte).
+
+**Reste ouvert : le cas filtré sur une base à versions.** Il garde le masque, en liste sur master, en prédicat avec le
+lot d'ED, et la sonde d'ED le voit plat vers 20 Gio sans réglage. Il se mesurera sur l'hôte réel, pour la mémoire comme
+pour la vitesse, une fois `vue-publiee` posée.
 
 **Conclusion : la ligne n'entre pas dans l'environnement de l'hôte.** Elle reste une note, « sous un hôte qui
 projette, à mesurer ». La commande ci-dessous reste écrite pour ce jour-là, et ne se pose pas sans une nouvelle mesure.
