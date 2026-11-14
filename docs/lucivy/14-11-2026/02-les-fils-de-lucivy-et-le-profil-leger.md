@@ -126,3 +126,62 @@ l'archiviste envoie à `Lucivy_Fiche`, et le prompt que le hook envoie à `recal
 ### Les chiffres
 
 À venir, sur cette page.
+
+## 3. La vue filtrée : ce que coûte `allowed_ids` dans lucivy
+
+Demande de c7, après la mesure d'ED sur la base à versions : le nœud lexical de `search_code` y passe de 874 à
+6 928 ms (×8), et le masque des versions passe à lucivy un `allowed_ids` de 72 652 ids à chaque requête. Question
+de Lucie : lucivy ne pourrait-elle pas tenir ces vues filtrées elle-même ?
+
+### Ce que fait `allowed_ids` à chaque requête
+
+Le code est dans `lucivy_core/src/sharded_handle.rs`.
+- Les ids sont partagés par shard au travers du routeur : un lookup par id, sous verrou.
+- Pour chaque segment des shards concernés, un bitset est reconstruit en parcourant toute la colonne `_node_id`.
+  Cela se fait deux fois par requête : au préscan, puis au collecteur.
+- Le BM25 est calculé sur N = la taille de l'ensemble.
+- Il n'y a aucune résolution par le dictionnaire : les ids sont des u64 de colonne rapide.
+
+### Les chiffres
+
+Banc `lucivy_core/tests/test_filter_cost.rs` (branche lucivy `mesure-profil-leger`, dd8ce19), à luciepc sous
+`poste lourd` (5 cœurs). Il tourne sur une copie de `1b-copie/migree-20261114-1641/…/Lucivy_ScopeContent`, avec
+72 652 ids tirés parmi les documents vivants. La copie en compte justement **72 652** : le masque sans filtre
+admet tout l'index.
+
+Les parties du filtre :
+- construire l'ensemble : 1,0 ms ;
+- le partager par shard : 4,5 à 6,9 ms ;
+- les bitsets des 14 segments : 1,2 à 1,3 ms par passe.
+
+| requête (banc de la partie 2) | sans filtre (ms) | avec `allowed_ids` (ms) | écart (ms) |
+|---|---|---|---|
+| 1 mot, contains d1 | 26,5 | 33,9 | 7,4 |
+| 1 mot court, contains d1 | 73,0 | 79,5 | 6,4 |
+| 1 mot, contains d0 | 4,1 | 12,9 | 8,8 |
+| 2 mots, contains d1 | 26,2 | 36,0 | 9,9 |
+| 2 mots, parse | 21,5 | 29,7 | 8,2 |
+| 4 mots, contains d1 | 10,5 | 20,1 | 9,6 |
+| 4 mots, parse | 59,6 | 67,6 | 8,0 |
+| phrase entre guillemets | 2,9 | 12,1 | 9,2 |
+| longue d1 (archiviste) | 84,4 | 93,2 | 8,8 |
+| longue d0 (> 900 caractères) | 362,4 | 371,0 | 8,6 |
+
+Médianes de cinq courses. Les nombres de hits sont les mêmes avec et sans filtre.
+
+### Verdict
+
+**Dans lucivy, le filtre coûte 6 à 10 ms par requête.** Le ×8 vient d'ailleurs. La sonde d'ED dans le nœud
+lexical (copie migrée, sans filtre) le place ainsi :
+- les racines : 20 ms ;
+- le masque `derived_references` : 902 ms ;
+- **la conversion de `_uuid IN [72 652]` en offsets par rag3db (`resolve_filter_to_ids`) : 5 001 ms**.
+
+Cela fait 5 923 des 6 928 ms. Le reste comprend les ~9 ms de lucivy et les deux passes du mode `auto`.
+
+- **Le remède est de poser les offsets une fois par (couche, rang) côté rag3weaver**, au lieu de résoudre un `IN`
+  d'uuid à chaque appel. Arbre principal prend le court-circuit sans filtre.
+- **`define_view` n'est pas écrite.** La forme est convenue avec ED : une vue nommée en mémoire, un bitset par
+  segment recalculé pour les seuls segments neufs, `update_view(add, remove)`, l'intersection avec un
+  `allowed_ids`, et un score égal au bit près à celui d'`allowed_ids`. Elle ne gagnerait que les 6 à 10 ms par
+  appel. On y revient si ces millisecondes comptent une fois les 5,9 s retirées.
