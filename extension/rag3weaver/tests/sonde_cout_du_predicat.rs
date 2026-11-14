@@ -45,8 +45,8 @@ fn le_cout_du_predicat_de_visibilite() {
     eprintln!("[sonde] Scope {} lignes, File {}, CONSUMES {}", scalaire(&c, "MATCH (s:Scope) RETURN count(*)"),
         scalaire(&c, "MATCH (f:File) RETURN count(*)"), scalaire(&c, "MATCH ()-[r:CONSUMES]->() RETURN count(*)"));
     // Les entrées du jeu : le fichier le plus peuplé, le nom le plus appelé, la source.
-    let fichier = scalaire(&c, "MATCH (s:Scope) RETURN s.file_path AS f, count(*) AS n ORDER BY n DESC LIMIT 1");
-    let fichier = fichier.trim_matches(|ch| !char::is_alphanumeric(ch) && ch != '/' && ch != '.' && ch != '_' && ch != '-').to_string();
+    let r = c.execute("MATCH (s:Scope) RETURN s.file_path AS f, count(*) AS n ORDER BY n DESC LIMIT 1").unwrap();
+    let fichier = match r.rows.first().and_then(|l| l.first()) { Some(rag3weaver::connection::CypherValue::String(s)) => s.clone(), v => panic!("fichier : {v:?}") };
     let r = c.execute("MATCH (a:Scope)-[:CONSUMES]->(b:Scope) RETURN b.name AS n, count(*) AS k ORDER BY k DESC LIMIT 1").unwrap();
     let nom = match r.rows.first().and_then(|l| l.first()) { Some(rag3weaver::connection::CypherValue::String(s)) => s.clone(), v => panic!("nom : {v:?}") };
     let r = c.execute(&format!("MATCH (s:Scope) WHERE s.file_path = '{fichier}' RETURN s.source LIMIT 1")).unwrap();
