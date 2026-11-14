@@ -168,8 +168,8 @@ dépendances) ; sans lui, la garde refuse un target venu d'un autre arbre.*
   - un appel qui trouve le fournisseur planté le relance une fois, ou se refuse en disant les deux
     temps ; `relances` compte.
 - **Ce que ce lot ne fait pas** (tickets) :
-  - un creux à la demande n'a **pas de dual** : le dual se décide aujourd'hui sur l'identité du
-    fournisseur, inconnue avant le premier appel ;
+  - ~~un creux à la demande n'a pas de dual~~ : le dual se déclare par `dimensions` depuis le
+    14 novembre au soir (section « Le dual d'un creux à la demande » plus bas) ;
   - ~~le dense garde son embarqueur à lui à côté de la tenue générique~~ : porté sur `Tenue<C>` le
     14 novembre au soir, un seul mécanisme pour les quatre capacités.
 
@@ -192,3 +192,15 @@ de card2 ne part qu'avec 13 Gio libres, ou le 7879 arrêté.
 **L'index 1 a pris 904 s** (bge-m3 dense et creux, carte presque pleine, deux lourds à côté). La cause
 n'est pas tirée. À faire : une mesure à part, card2 calme, pour départager le modèle et la carte pleine.
 Scripts et journaux à luciepc : `~/.cache/rag3weaver-build/groupe-vrai-jeu/`.
+
+**Le dual, livré (14 novembre au soir)** : la conception ci-dessus, telle quelle, plus la garde de c7 :
+une dimension du creux différente de celle du dense est refusée au chargement du manifeste.
+
+**Le vrai jeu du dense sur `Tenue<C>`, 14 novembre, 21 h 39 → 21 h 43** : vert, par un hôte isolé
+(7971, binaire de dense-sur-tenue 1cd3200d5ccd81b8, lib 373b5477b).
+- **Le fournisseur** : granite-107m à la demande, déclaré en bloc inline (une activation nommée d'après
+  son modèle), sur card2, port 7892 ; jamais 7878.
+- **Le déroulé** : rien à l'ouverture ; activation pendant le premier index (13,4 s) ; bail rendu à
+  +29,6 s ; éviction à +59,8 s ; réactivation en 6 s au second index.
+- **La mémoire** : card2 au plus 26 504 Mio (6,1 Gio libres au pire), le fournisseur au plus 5,7 Gio,
+  card0 à 88 Mio. Le dense porté se comporte en vrai comme l'embarqueur d'avant.
