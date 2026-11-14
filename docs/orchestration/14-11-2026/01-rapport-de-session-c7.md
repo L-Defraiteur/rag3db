@@ -283,3 +283,4 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 ## Vers 15 h 2x — la montée en lucivy 4.3.7 est verte
 
 - **lucivy** : lucivy-4-3-7-2 (d3595e110) vert sur 0c41f9fe6, target neuf : témoin rouge sous 4.3.5 (« filtré 2,2637, vue seule 0,0465 »), vert sous 4.3.7 ; fts_handle 13/0 ; F8 8/8 ; e2e_code 38/0 ; e2e_lectures 29/0 (un premier 28/1 sans RAG3WEAVER_EMBED_SERVICE, le test exige bge-m3 ; rejoué avec 7878,7879 sans changer le code). En file après archi et codeparsers.
+- **archi a poussé recherche-lit-le-catalogue** : master = 6981de5ec (lock_for_read borné à READ_WAIT, la raison dite au-delà ; rejeu court 37/0 et 43/43, garde à jour). Les thèmes (ide-themes-route-5, 2299e0052, avec la nouveauté openssl) en rejeu court, même tour.
