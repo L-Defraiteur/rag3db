@@ -1,8 +1,8 @@
 # Cinq clients de production attendent sans délai
 
-- **État** : ouvert (9 novembre 2026), relevé par archi en bornant les témoins de l'hôte
-  (`closed/2026-11-08-un-test-de-l-hote-attend-son-hote-par-un-client-sans-delai.md`). Une
-  question de conception attend Lucie.
+- **État** : corrigé (14 novembre 2026), lot `clients-avec-delai` d'archi ; relevé par archi en
+  bornant les témoins de l'hôte (`closed/2026-11-08-un-test-de-l-hote-attend-son-hote-par-un-client-sans-delai.md`).
+  La question de conception tranchée par c7 : un seul réglage, deux valeurs dans `daemon.json`.
 - **Famille** : produit
 - **Gravité** : figement possible. Un hôte qui accepte la connexion et ne répond plus tient
   l'appelant sans fin : outil MCP, CLI, sonde de cycle de vie.
@@ -47,3 +47,12 @@ le disant.
 ## Ce qu'il faut pour le fermer
 
 La décision de Lucie, les délais posés selon elle, et le témoin pour chaque chemin.
+
+## Ce qui l'a fermé
+
+`crate::daemon::Delais`, lu dans `daemon.json` (que tous les clients lisent, et que l'hôte réécrit
+en gardant ces deux valeurs) : `reponse_s` (120 s par défaut) pour les agents gardés, le client MCP
+de l'hôte et le client du démon de base ; `sonde_s` (5 s) pour les trois sondes, `/etat`, `/sante`
+et le réveil de l'unité. L'agent borné (`agent_borne`) borne la connexion, l'envoi et l'attente des
+en-têtes ; le corps reste libre, un flux n'est pas coupé. Les refus disent « <route> : ne répond pas
+après <n> s ». Témoin : `daemon_client::tests::no_production_client_waits_forever_for_a_silent_host`.
