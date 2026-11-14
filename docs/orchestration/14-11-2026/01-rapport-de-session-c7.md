@@ -411,3 +411,38 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   `CHECKPOINT` par lot, qui départage « pages validées non évincées » de « la jointure du transfert ».
 - **hotfixs** : le témoin du dictionnaire ne reproduit pas le plantage (vert 4/4 sous ASAN) ; l'ADD
   COLUMN sous écriture ouverte en ticket moteur ; le cœur donne son verdict vers 17 h 15.
+
+## 16 h 4x — huit lots atterris par la pile en vingt minutes, 2a′-1 sur master
+
+- **La pile a tenu** : tty (ce4a3140a, 16 h 25), recherche (a48b535d1, dix commits en un push), G
+  (89f46c87d, cas 6c clos), embarquement (67dabc121, la reprise après plantage), 96 (c350dc9c3, trois
+  lots en un push : le miroir régénéré à l'arrêt, la recherche par nom sur toutes les fiches, l'about à
+  six mots), hotfixs (42c84cb77, le témoin du dictionnaire en non-régression), **ED (78c8997de, 2a′-1 :
+  Generation, `_couche`, `_depuis/_jusqu_a`, estampille generations, le prédicat de visibilité dans les
+  lecteurs, témoin de non-fuite)**. Huit « pile tenue », tous les range-diff en `=`, **zéro rejeu au
+  dernier pas**. Archi a le « à toi » ; le cœur à son juge vers 17 h 15.
+- **La garde a appris la pile en route** : G (mode `PILE_AVANT`, relu par recherche qui a trouvé le
+  `--onto` manquant, posé au cache des deux postes à 16 h 22) ; puis six corrections de forme vues aux
+  pushs réels (base lu trop tôt, journaux de lib, empreinte vide, sens de la dérive, range-diff imprimé,
+  `nproc` sous quota) dans garde-pile, rang 12, relecture d'ensemble avant son tour. Règle apprise :
+  en mode pile **on ne rebase pas à la main**, la garde le fait.
+- **La CI GitHub est rouge depuis 16 h 30** (ticket ce525a014, G) : `dtolnay/rust-toolchain@stable` a
+  pris une chaîne plus récente que les postes (portable 1.98.1, luciepc 1.98.0, par rustup) et déprécie
+  `fetch_update` (read_pool.rs:261, lot du plafond). Recherche corrige en une ligne au rang 11. Le fond
+  est à Lucie : épingler (rust-toolchain.toml 1.98.1, la CI et les postes compilent la même chose, la
+  montée devient un lot) ou flotter (la CI rougit sans lot fautif à chaque dépréciation). Dans les deux
+  cas luciepc doit rejoindre 1.98.1.
+- **Le compte gh actif était revenu sur le compte pro** : remis sur L-Defraiteur ; la clé ssh répond
+  L-Defraiteur, aucun push n'était concerné.
+- **1b** (arbre principal) : le refus « buffer pool is full » n'était pas le moteur mais la requête de
+  transfert (jointure de chaque morceau neuf à toutes les occurrences d'une version) ; un représentant
+  par version ; CHECKPOINT par lot retiré (mesuré sans effet) ; ticket souhait pour le cœur (le tri
+  refuse au lieu de déborder).
+- **Lots lancés** : embarquement, le groupe bge-m3/relecteur/OCR à la demande avec des **activations
+  nommées au manifeste** (forme B, un bloc inline vaut une activation nommée d'après son modèle) ; 96,
+  le journal des chantiers en une fiche par chantier (156 sections, copie, fin vers 17 h 15) ; tty-7
+  (journal de séance, repli sous mosh) prêt, rang 15 ; lucivy, profil léger et relevé des fils (sa
+  mesure retirée de `poste mesure` pour laisser passer la pile) ; codeparsers, la règle « du nom
+  importé au paquet » validée (TOML/JSON, défaut compilé + dossier, table au manifeste), lot 1 rang 13.
+- Faute de c7 : un ticket demandé à 96 sur une ligne ✗ d'e2e_postgres citée sans son test ; 96 a lu le
+  code, le ✗ est asserté (la falaise du plancher) ; pas de ticket.
