@@ -1300,6 +1300,12 @@ pub fn analyze_in_project_avec(
             // (`declared_dependencies`) mettraient le Go en minuscules.
             declared_dependencies_by_language: manifestes.map(|m| m.dependances_par_langue.iter().map(|(l, n)| (l.clone(), n.iter().cloned().collect())).collect()),
             project_packages_by_language: manifestes.map(|m| m.paquets_par_langue.iter().map(|(l, n)| (l.clone(), n.iter().cloned().collect())).collect()),
+            import_renames: manifestes.filter(|m| !m.renommages.is_empty()).map(|m| {
+                m.renommages
+                    .iter()
+                    .map(|(l, r)| (l.clone(), codeparsers::relationship_resolution::types::ImportRenames { replace: r.replace, distributions: r.distributions.clone().into_iter().collect() }))
+                    .collect()
+            }),
             ..Default::default()
         }),
     });
