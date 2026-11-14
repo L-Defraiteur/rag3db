@@ -47,6 +47,21 @@ pub struct Bilan {
 /// Les morceaux et le plein texte d'avant (`Scope_Chunk`, `Lucivy_Scope`) restent sur le disque :
 /// leur retrait est une décision à part, après validation.
 pub fn migrer_vers_les_versions(catalog: &mut Catalog, scope_chunking: ChunkingConfig) -> Result<Bilan, String> {
+    migrer_d_un_seul_lot(catalog, scope_chunking)
+}
+
+/// Les occurrences dérivées par lot, et les versions dont on transfère les vecteurs par lot : la
+/// mémoire d'une migration reste bornée (la copie de `code-rag3db-depot`, 14 novembre : un lot
+/// unique a dépassé 32 Gio en trois minutes).
+pub const LOT: usize = 2000;
+
+/// [`migrer_vers_les_versions`], au lot donné.
+pub fn migrer_vers_les_versions_par_lots(catalog: &mut Catalog, scope_chunking: ChunkingConfig, lot: usize) -> Result<Bilan, String> {
+    let _ = (catalog, scope_chunking, lot);
+    Err("la migration par lots n'existe pas encore".into())
+}
+
+fn migrer_d_un_seul_lot(catalog: &mut Catalog, scope_chunking: ChunkingConfig) -> Result<Bilan, String> {
     use crate::code::{scope_form, ScopeForm, SCOPE, SCOPE_CONTENT, SCOPE_FORM_KEY, SCOPE_FORM_VERSIONS};
     let e = |e: crate::catalog::CatalogError| e.to_string();
 
