@@ -286,7 +286,10 @@ export type ChatTurn = {
 export type UiComposant = { kind: string; sujets?: string[]; repo?: string; manifest?: string; titre?: string; id?: string; chemin?: string; mode?: string; raison?: string; genre?: string; commande?: string };
 // La jauge du contexte : `used`, les jetons d'entrée (cache compris) du dernier
 // appel au modèle ; `max`, le contexte du modèle déclaré (null : inconnu).
-export type ChatContext = { used: number | null; max: number | null; source: string; at: number | null };
+/// `parts` : ce qui pèse dans `used`, estimé par l'hôte au prorata des caractères du dernier
+/// appel (le fournisseur ne rend qu'un total) ; null en cours de tour ou pour un appel ancien.
+export type ContextParts = { instructions: number; outils: number; historique: number; resultats: number };
+export type ChatContext = { used: number | null; max: number | null; source: string; at: number | null; parts?: ContextParts | null };
 // Une fiche de la mémoire déclarée écrite pendant cette conversation : par une
 // Source dont `session` est un run de la conversation (le juge), ou un apport qui
 // la cite. Les écritures de l'agent lui-même attendent M7 (la session posée par
