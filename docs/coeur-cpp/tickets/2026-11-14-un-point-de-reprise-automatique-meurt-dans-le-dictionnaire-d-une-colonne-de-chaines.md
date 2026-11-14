@@ -72,3 +72,43 @@ Les autres fils, lus avec le binaire de `9b0e73c9c` encore en place : trace comp
    rebâti à l'identique si celui de l'arbre a changé.
 2. Un témoin qui meure de même, puis le correctif.
 3. `DdlEveryMinute` ×10 sans SIGSEGV.
+
+## La lecture du core 3980144 (hotfixs, 14 novembre 2026)
+
+Le core a été lu à luciepc avec le binaire de `9b0e73c9c` encore en place, en Release sans `-g`, donc
+sans variables locales.
+
+- **Le signal est `SEGV_ACCERR`, à l'adresse `0x7ef93bfff000`, un début de page.** D'après les
+  segments `LOAD` du core, cette page est la seule page sans droits entre deux régions RW de 64 Mio
+  (`0x7ef938000000-0x7ef93bfff000`, puis `0x7ef93c000000…`). C'est la forme d'une arène de `malloc`
+  de glibc par fil, avec sa queue pas encore ouverte par `mprotect`. `_Hash_bytes` lisait donc une
+  chaîne qui sort du bout d'un tampon alloué par `malloc`. Ce n'est ni une page du pool de tampons, ni
+  une page relue du disque. Les octets juste avant (0x11, 0x10, 0x01 puis des zéros, par mots de 8)
+  ressemblent à des longueurs ou à des en-têtes, pas à du texte.
+- **La chaîne est lue dans `segmentCheckpointState.chunkData`**, la colonne en mémoire des écritures
+  non reprises : `Column::checkpointSegment` (`column.cpp:418`) appelle
+  `fresh->write(&segmentCheckpointState.chunkData, startRowInData, offsetInSegment, numRows)`, qui
+  appelle `StringChunkData::write`, puis `srcStringChunk.getValue<std::string_view>(srcPos)`, puis
+  `appendString`.
+- **Deux lectures possibles :**
+  - un index de dictionnaire de cette colonne qui dépasse son tampon de chaînes (`srcPos` au-delà des
+    valeurs vraiment écrites, ou un tampon réduit sous l'index) ;
+  - un `chunkData` libéré puis réutilisé.
+
+## Le témoin réduit : vert sous ASAN (hotfixs, 14 novembre 2026)
+
+La branche `chaine-au-point-de-reprise` ajoute trois cas à
+`test/transaction/concurrence/string_rewrite_test.cpp`, dans la fixture `StringRewriteAcrossAddColumn` :
+- `RewriteThenAddThenCheckpoint` : une réécriture des chaînes, un `ADD … DEFAULT`, une seconde
+  réécriture, puis CHECKPOINT et réouverture ;
+- `AnOpenWriterCommitsAfterAnAdd` : une transaction ouverte réécrit 5 000 lignes et en crée 500,
+  l'`ADD` passe par une autre connexion, puis la transaction valide ;
+- `AutomaticCheckpointsBetweenAddsAndDrops` : `auto_checkpoint` et `checkpoint_threshold=4096`,
+  cinq lots avec des `ADD … DEFAULT` et des `DROP` entre eux, sous un lecteur qui balaie.
+
+Ils ont été joués dans le `build/asan` du cœur (`rag3db-bissect`, RelWithDebInfo + ASAN, rebâti
+incrémentalement sur la branche) : **4 sur 4 verts, aucun rapport ASAN.** Le plantage n'est donc pas
+reproduit par ces formes. Il manque au témoin, par rapport au scénario, les vingt écrivains
+simultanés, les MERGE par clé avec relations et vecteur, et `CREATE_VECTOR_INDEX`. Ces cas
+apprennent en revanche l'isolement du catalogue, qui fait l'objet d'un ticket à part :
+`docs/coeur-cpp-hotfixs-tickets/tickets/2026-11-14-un-add-column-passe-sous-une-transaction-d-ecriture-ouverte.md`.
