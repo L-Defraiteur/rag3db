@@ -52,10 +52,12 @@ cas code Cargo.lock 'version = 3'
 cas code tools/rust_api/src/lib.rs 'fn f() {}'
 # Le mode pile (14 novembre 2026) : une pile de deux lots, P1 (code) puis P2 (code), P2 rejoué sur P1 ;
 # au dernier pas, P1 a atterri sur master et P2 est reposé par `rebase --onto master P1`.
-pile() { # pile <attendu: tenue|arret> <description> : juge la pile préparée dans M, P1, P2T (testé), TETE
-  local sortie rc
+pile() { # pile <attendu: tenue|arret> <description> [motif] : juge la pile préparée dans M, P1, P2T (testé), TETE.
+  # Un arrêt doit porter son motif (relecture de recherche) : sans lui, n'importe quel arrêt ferait passer le cas.
+  local sortie rc motif=${3:-}
   sortie=$(bash "$GARDE" --pile "$P1" "$P2T" "$M" "$TETE" 2>&1); rc=$?;
-  if { [ "$1" = tenue ] && [ $rc = 0 ]; } || { [ "$1" = arret ] && [ $rc != 0 ]; }; then echo "vert   pile $1 : $2"
+  if [ "$1" = arret ] && [ -z "$motif" ]; then echo "ROUGE  pile arret sans motif attendu : $2"; rouge=1; return; fi
+  if { [ "$1" = tenue ] && [ $rc = 0 ]; } || { [ "$1" = arret ] && [ $rc != 0 ] && echo "$sortie" | grep -qF -- "$motif"; }; then echo "vert   pile $1 : $2"
   else echo "ROUGE  pile, attendu $1 (rc $rc) : $2 — $sortie"; rouge=1; fi
 }
 preparer_pile() { # le master d'origine, P1 sur lui, P2 sur P1 (le commit testé)
@@ -71,7 +73,7 @@ pile tenue "P1 atterri tel quel, P2 reposé dessus"
 # 2. La pile a changé : P1 a atterri avec un autre code que celui sur lequel P2 a été rejoué.
 git checkout -q -B maitre "$M0"; echo 'fn p1() { autre(); }' > extension/rag3weaver/src/p1.rs; git add -A; git commit -qm "p1 changé"; M=$(git rev-parse HEAD)
 git checkout -q -B p2b "$P2T"; git rebase -q --onto "$M" "$P1" >/dev/null 2>&1; TETE=$(git rev-parse HEAD)
-pile arret "P1 a atterri avec un autre code : la pile a changé"
+pile arret "P1 a atterri avec un autre code : la pile a changé" "la pile a changé"
 # 3. Un .md ajouté après le rejeu (le ticket posé après le rebase) : toléré.
 git checkout -q -B maitre "$P1"; M=$(git rev-parse HEAD)
 git checkout -q -B p2b "$P2T"; git rebase -q --onto "$M" "$P1" >/dev/null 2>&1
@@ -79,7 +81,7 @@ echo '# ticket' > extension/rag3weaver/docs/ticket.md; git add -A; git commit -q
 pile tenue "un commit de .md ajouté après le rejeu"
 # 4. Du code ajouté après le rejeu : refusé.
 echo 'fn tard() {}' > extension/rag3weaver/src/tard.rs; git add -A; git commit -qm "code tardif"; TETE=$(git rev-parse HEAD)
-pile arret "un commit de code ajouté après le rejeu"
+pile arret "un commit de code ajouté après le rejeu" "un commit ajouté après le rejeu touche autre chose"
 # 5. Un conflit de nouveautes.md résolu au rebase (un `!` qui ne diffère que par des .md) : toléré.
 git checkout -q -B maitre "$P1"; mkdir -p extension/rag3weaver/docs; echo '- autre lot' >> extension/rag3weaver/docs/nouveautes.md; git add -A; git commit -qm "nouveauté d'un autre"; M=$(git rev-parse HEAD)
 git checkout -q -B p2b "$P2T"; git rebase -q --onto "$M" "$P1" >/dev/null 2>&1 || { printf -- '- autre lot\n- p2\n' > extension/rag3weaver/docs/nouveautes.md; git add -A; GIT_EDITOR=true git rebase --continue >/dev/null 2>&1; }
@@ -89,12 +91,12 @@ pile tenue "un conflit de nouveautes.md résolu au rebase (! sur des .md seuls)"
 # 6. Un commit du lot changé hors .md au rebase : refusé.
 git checkout -q -B p2b "$P2T"; git rebase -q --onto "$M" "$P1" >/dev/null 2>&1 || { printf -- '- autre lot\n- p2\n' > extension/rag3weaver/docs/nouveautes.md; git add -A; GIT_EDITOR=true git rebase --continue >/dev/null 2>&1; }
 echo 'fn p2() { change(); }' > extension/rag3weaver/src/p2.rs; git add -A; git commit -q --amend --no-edit; TETE=$(git rev-parse HEAD)
-pile arret "un commit du lot changé hors des .md au rebase (! sur du code)"
+pile arret "un commit du lot changé hors des .md au rebase (! sur du code)" "a changé hors des .md"
 # 7. La tête d'avant n'est pas un ancêtre du commit testé : le rejeu ne s'est pas fait sur la pile.
 git checkout -q -B maitre "$P1"; M=$(git rev-parse HEAD)
 git checkout -q -B p2b "$P2T"; git rebase -q --onto "$M" "$P1" >/dev/null 2>&1; TETE=$(git rev-parse HEAD)
-git checkout -q -B ailleurs "$M0"; echo '# ailleurs' > extension/rag3weaver/docs/ailleurs.md; git add -A; git commit -qm ailleurs
-P1_VRAI=$P1; P1=$(git rev-parse HEAD); pile arret "la tête d'avant n'est pas un ancêtre du commit testé"; P1=$P1_VRAI
+git checkout -q -B ailleurs "$M0"; mkdir -p extension/rag3weaver/docs; echo '# ailleurs' > extension/rag3weaver/docs/ailleurs.md; git add -A; git commit -qm ailleurs
+P1_VRAI=$P1; P1=$(git rev-parse HEAD); pile arret "la tête d'avant n'est pas un ancêtre du commit testé" "n'est pas un ancêtre"; P1=$P1_VRAI
 git checkout -q "$BASE" 2>/dev/null
 # 8. Le chemin de push complet en mode pile (relecture de recherche, 14 novembre 2026) : HEAD est encore la
 # branche de pile (P1 puis P2) ; P1 a atterri sur master après un conflit de nouveautes.md, donc sous un autre
