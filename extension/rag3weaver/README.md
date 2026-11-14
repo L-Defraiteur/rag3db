@@ -690,7 +690,7 @@ tree-sitter grammars that index it (`POST /highlight`).
 
 `rag3weaver-tty` (crate `tty/`) follows a teammate from a terminal: the agent's
 text scrolls into the terminal's own history and three lines are redrawn at the
-bottom; Enter talks to the teammate, Esc stops it. It works over ssh (at most
+bottom; Enter talks to the teammate, Esc or Ctrl-G stops it (Ctrl-G without the escape delay tmux adds). It works over ssh (at most
 30 redraws per second), resumes after a cut without loss or duplicate
 (`Last-Event-ID`), degrades to 256 colours, 16, none and ASCII, and colours code
 with the host's grammars and the theme `templates/themes/daemon.json`.
