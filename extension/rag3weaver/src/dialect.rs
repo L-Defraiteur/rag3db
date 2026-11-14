@@ -1334,6 +1334,25 @@ pub trait SchemaDialect: Send + Sync {
         where_clause: &str,
         join_from: Option<(&str, &str, &str)>,
     ) -> String;
+
+    /// **Les offsets des lignes désignées par leurs uuids**, lus par la clé
+    /// primaire : la liste `$key_param` déroulée, chaque uuid cherché dans
+    /// l'index de la clé, puis `where_clause` (le reste du filtre, les
+    /// générations) sur les seules lignes trouvées ; avec `chunk_table`, les
+    /// offsets de leurs morceaux. `None` : le dialecte ne sait pas la dire, et
+    /// le filtre passe par [`Self::filter_resolve_offsets`], où un `IN` sur une
+    /// longue liste coûte la table entière fois la liste.
+    fn filter_resolve_offsets_by_keys(
+        &self,
+        _table: &str,
+        _chunk_table: Option<&str>,
+        _alias: &str,
+        _join_clauses: &[String],
+        _where_clause: Option<&str>,
+        _key_param: &str,
+    ) -> Option<String> {
+        None
+    }
 }
 
 // ─── Rag3db Dialect ──────────────────────────────────────────────────────────
@@ -2699,6 +2718,30 @@ impl SchemaDialect for Rag3dbDialect {
             "{parents} WHERE {where_clause} WITH DISTINCT {alias}._uuid AS _parent \
              MATCH (_morceau:{chunk_table}) WHERE _morceau._parent_uuid = _parent RETURN {offset_expr}"
         )
+    }
+
+    fn filter_resolve_offsets_by_keys(
+        &self,
+        table: &str,
+        chunk_table: Option<&str>,
+        alias: &str,
+        join_clauses: &[String],
+        where_clause: Option<&str>,
+        key_param: &str,
+    ) -> Option<String> {
+        let table = self.quote(table);
+        let joins = if join_clauses.is_empty() { String::new() } else { format!(" {}", join_clauses.join(" ")) };
+        let filtre = where_clause.map(|w| format!(" WHERE {w}")).unwrap_or_default();
+        let lignes = format!("UNWIND ${key_param} AS _cle MATCH ({alias}:{table} {{_uuid: _cle}}){joins}{filtre}");
+        Some(match chunk_table {
+            None => format!("{lignes} RETURN {}", self.node_offset_expr(alias)),
+            Some(chunks) => format!(
+                "{lignes} WITH DISTINCT {alias}._uuid AS _parent \
+                 MATCH (_morceau:{}) WHERE _morceau._parent_uuid = _parent RETURN {}",
+                self.quote(chunks),
+                self.node_offset_expr("_morceau")
+            ),
+        })
     }
 }
 
