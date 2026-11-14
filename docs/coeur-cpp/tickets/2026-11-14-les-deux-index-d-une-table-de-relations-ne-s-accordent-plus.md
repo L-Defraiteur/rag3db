@@ -42,6 +42,61 @@ donne : **avant 436, arrière 425, union 436, et 11 relations perdues d'un seul 
 et absentes au sens arrière. L'outil d'avant n'en voyait aucune. Parmi elles, le cas d'hotfixs : `lockIndexForWrite`
 → `acquireLock`, ligne 1173 (`node_table.cpp:1173` à 284cc00c0), que le sens arrière attribue à `lockRowForWrite`.
 
+## Un angle mort du relevé, et les comptes (hotfixs, 14 novembre, 23 h 20)
+
+**Le contrôle des deux sens juge la cohérence des deux rangements, pas leur complétude.** Le premier relevé,
+celui de `check_rel_directions` et le mien qui le reprenait, tirait ses sources et ses destinations d'une seule
+lecture non ancrée, `MATCH (a)-[r:T]->(b) RETURN label(a), offset(id(a))…`. Le planificateur joue cette
+lecture dans un seul sens. Une source perdue par ce sens n'était jamais ancrée, et sa relation n'était pas relue,
+même par l'autre sens qui l'avait encore.
+
+Le cas prouvé : dans code-principal, LOCKS, `lockIndexForWrite` (Scope des lignes 1169 à 1177) prend
+`acquireLock` à la ligne 1173. C'est vrai dans le code (`src/storage/table/node_table.cpp:1173` à 284cc00c0),
+et une requête ancrée sur ce Scope la rend. Pourtant, cette relation manquait aux deux relevés. Le sens arrière
+attribue sa ligne 1173 à `lockRowForWrite`, et une première reconstruction l'avait perdue, alors même que le
+contrôle disait « égales ».
+
+**Le relevé corrigé** (`releve_sens2`) parcourt les bouts par tranches de 500 offsets, chacune ancrée sur son
+étiquette (`CALL show_connection`). Le plan prouve le sens :
+- `MATCH (a:Scope) WHERE offset(id(a)) in [o, o+500) MATCH (a)-[r]->(b)` donne `SCAN_NODE_TABLE Scope` puis
+  `SCAN_REL_TABLE`, `Direction: (a)-[r]->(b)` ;
+- la même tranche ancrée sur `Symbol` donne `Direction: (b)<-[r]-(a)`.
+
+G porte ce correctif, avec les quatre comptes, dans `tools/check_rel_directions` (ticket 2329a532f).
+
+**Les quatre comptes par table**, lus par le relevé ancré : lectures au sens avant / au sens arrière / union
+des identifiants / identifiants d'un seul sens. Avant, sur l'instantané `avant-373b5477b`. Après, sur la copie
+reconstruite, avec les arêtes en accord plus les lectures plausibles, une arête par paire :
+
+| base | table | avant | après |
+|---|---|---|---|
+| code-principal | QUERIES | 20 210 / 20 210 / 20 210 / 7 | 20 210 / 20 210 / 20 210 / 0 |
+| code-principal | IMPLEMENTS | 334 / 334 / 334 / 6 | 331 / 331 / 331 / 0 |
+| code-principal | LOCKS | 436 / 436 / 436 / 11 | 436 / 436 / 436 / 0 |
+| code-lourd | INHERITS_FROM | 658 / 658 / 658 / 9 | 658 / 658 / 658 / 0 |
+| code-lourd | QUERIES | 20 093 / 20 093 / 20 093 / 5 | 20 093 / 20 093 / 20 093 / 0 |
+| code-lourd | LOCKS | 546 / 546 / 546 / 2 | 546 / 546 / 546 / 0 |
+
+Ancré, chaque sens lit autant de relations que l'autre : la lecture non ancrée de G en voyait 650/658, 331/334,
+425/436. Les écarts sont des identifiants rattachés à des bouts différents, pas des relations en moins.
+IMPLEMENTS perd 3 relations à la reconstruction : ce sont trois copies exactes d'arêtes déjà en accord, une par
+paire suffit.
+
+Sur les deux bases du portable (memoire-longue, code-rag3db-depot), le relevé ancré trouve toutes les tables
+égales et complètes.
+
+`usages` et `impact`, par le binaire installé, avant et après sur 8 noms touchés par base, ne montrent que des
+corrections que le code confirme :
+- les relations fantômes depuis les `.md` d'offset 0 disparaissent ;
+- les lignes deviennent celles des `impl` (`WorkingTree` à 257, `Snapshot` à 347, `MockDecider` à 182,
+  `LlamaServerDecider` à 293, à 284cc00c0) ;
+- les héritages mal rattachés tombent (`LocalDuckDBConnector` → `RecordBase`, `Fixe` sur une ligne de
+  commentaire) ;
+- `acquireLock` garde `lockIndexForWrite`.
+
+Les deux réparations sont prêtes pour la fenêtre. Les outils sont à luciepc, dans
+`~/.cache/rag3db-locks/` : `chaine-complete.sh`, `reconstruire.sh`, `releve_sens2`, et les scripts de jugement.
+
 ## La piste (cœur, relayée par c7)
 
 Sous 0c41f9fe6, l'annulation d'un COMMIT refusé tronquait le groupe CSR sens par sens
