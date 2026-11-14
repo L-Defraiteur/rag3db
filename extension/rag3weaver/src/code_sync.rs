@@ -473,10 +473,16 @@ fn ecrire_par_generations(
             return Ok(());
         }
         let liste = CypherValue::List(uuids.iter().cloned().map(CypherValue::String).collect());
+        // Un NULL en paramètre se type en STRING côté moteur, et la colonne est INT64 : rouvrir s'écrit
+        // donc en littéral.
+        let (affecte, params) = match valeur {
+            CypherValue::Null => ("NULL".to_string(), vec![p("uuids", liste)]),
+            autre => ("$valeur".to_string(), vec![p("uuids", liste), p("valeur", autre)]),
+        };
         catalog
             .execute_raw_with_params(
-                &format!("UNWIND $uuids AS u MATCH (s:{SCOPE} {{_uuid: u}}) SET s.{} = $valeur", crate::generations::JUSQU_A),
-                &[p("uuids", liste), p("valeur", valeur)],
+                &format!("UNWIND $uuids AS u MATCH (s:{SCOPE} {{_uuid: u}}) SET s.{} = {affecte}", crate::generations::JUSQU_A),
+                &params,
             )
             .map(|_| ())
             .map_err(|e| e.to_string())
