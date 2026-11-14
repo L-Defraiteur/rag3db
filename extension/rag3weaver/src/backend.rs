@@ -1112,6 +1112,19 @@ impl PreparedBackend {
             return Err("unsupported backend manifest version".into());
         }
         let embed = manifest.embed_source()?;
+        // Un creux qui déclare sa dimension déclare son dual : elle est celle du
+        // dense, sinon le dual rendrait des vecteurs d'une autre taille que ceux
+        // du catalogue (garde de c7, 14 novembre 2026). Dit au chargement, pas à
+        // la première recherche.
+        if let Some(creux) = manifest.models.get(&crate::model_source::Capability::Sparse) {
+            if let (Some(d), Some(e)) = (creux.dimensions, embed.dimensions) {
+                if d != e {
+                    return Err(format!(
+                        "models.sparse.dimensions ({d}) diffère de la dimension du dense ({e}) : le dual du creux rendrait des vecteurs d'une autre taille que ceux du catalogue"
+                    ));
+                }
+            }
+        }
         if manifest.database.as_os_str().is_empty()
             || manifest.database.to_string_lossy() == ":memoire:"
         {
@@ -6513,7 +6526,8 @@ mod tests {
             m["models"]["sparse"] = json!({"provider": "service", "model": "bge-m3", "address": "127.0.0.1:7891", "dimensions": 384});
         });
         let e = p.err().expect("un creux d'une autre dimension que le dense se refuse");
-        assert!(e.contains("models.sparse") && e.contains("384") && e.contains("768"), "le refus dit les deux dimensions : {e}");
+        // La dimension du dense est celle du gabarit de la fixture (1024) : le refus dit les deux.
+        assert!(e.contains("models.sparse") && e.contains("(384)") && e.contains("diffère de la dimension du dense ("), "le refus dit les deux dimensions : {e}");
     }
 
     /// Un Backend sans base réelle, comme `search_verbs_…` : le catalogue
