@@ -76,6 +76,16 @@ fn etiquette(label: &str) -> Reply {
 }
 
 /// Une étiquette et un nom, sous le schéma strict du Decide quand il demande un nom (`name_as`).
+/// Une étiquette, un nom et une phrase qui dit le sujet (`about_as`, voie create).
+fn etiquette_decrite(label: &str, name: &str, about: &str) -> Reply {
+    Reply::Sse {
+        frames: vec![
+            format!(r#"{{"id":"a1","choices":[{{"index":0,"delta":{{"role":"assistant","content":"{{\"label\": \"{label}\", \"name\": \"{name}\", \"about\": \"{about}\"}}"}},"finish_reason":null}}]}}"#),
+            r#"{"id":"a1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#.into(),
+        ],
+    }
+}
+
 fn etiquette_nommee(label: &str, name: &str) -> Reply {
     Reply::Sse {
         frames: vec![
@@ -181,7 +191,8 @@ fn script_archive(script: &str, input: Value) -> Result<Value, String> {
 
 fn preparer_alias(noms: &[&str]) -> Value {
     script_archive(include_str!("../templates/backends/memory/scripts/archive_candidates.rhai"), json!({
-        "section": {"title": "Reprise", "text": "Le journal se rejoue.", "chemin": CHEMIN, "index": 0},
+        // Au moins six mots : une création sans phrase qui dit le sujet est refusée (14 novembre 2026).
+        "section": {"title": "Reprise", "text": "Le journal se rejoue à l'ouverture, en entier.", "chemin": CHEMIN, "index": 0},
         "candidates": 5, "allow_create": true,
         "value": noms.iter().map(|name| json!({"data": {"name": name, "about": "Description conservée"}})).collect::<Vec<_>>()
     })).unwrap()
@@ -425,5 +436,33 @@ fn la_recherche_par_nom_trouve_la_voisine_parmi_cent_vingt_fiches() {
     assert_eq!(r["result"]["errors"], json!([]), "{r}");
     assert_eq!(apports_de(&b, "Hooks de rag3weaver").len(), 1, "la section rejoint la voisine");
     assert!(apports_de(&b, "hooks Claude Code de rag3weaver").is_empty(), "aucune fiche voisine de plus");
+}
+
+/// **Une fiche créée porte une phrase qui dit son sujet** (14 novembre 2026, la première passe sur la
+/// mémoire de Lucie : des fiches décrites par « 1. », « Session archi, 9 novembre 2026. », « Accepté par
+/// c7. » — la première phrase de la section, coupée au premier point). Le modèle rend aussi `about`, une
+/// phrase qui dit ce que la fiche couvre ; une phrase de moins de six mots est écartée, et la fiche prend
+/// alors la première phrase de la section qui en a au moins six.
+#[test]
+#[ignore]
+fn une_fiche_creee_porte_une_phrase_qui_dit_son_sujet() {
+    let serveur = FakeServer::start_sequence(vec![
+        etiquette_decrite("create", "Le jeu des clés", "Comment les sessions du poste se partagent les clés de leurs dépôts."),
+        etiquette_decrite("create", "Le rappel tiré du prompt", "Accepté par c7."),
+    ]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    const NOTE: &str = "# Note\n\n## 1. Le jeu\n\n1. Le jeu des clés se joue à deux.\n\n## Le rappel\n\nAccepté par c7. Le rappel tire ses mots du prompt de la session, sans redite d'un tour à l'autre.\n";
+    let r = appel(&b, "archive", json!({"titre": "Note", "contenu": NOTE, "jour": "2026-11-14", "allow_create": true}));
+    assert_eq!(r["result"]["errors"], json!([]), "{r}");
+    let request: Value = serde_json::from_str(&serveur.request.recv().unwrap()).unwrap();
+    assert!(request["response_format"]["json_schema"]["schema"]["properties"]["about"].is_object(), "le schéma demande about : {}", request["response_format"]);
+    let f = appel(&b, "get_fiche", json!({"record": {"name": "Le jeu des clés"}}));
+    assert_eq!(f["result"]["data"]["about"], json!("Comment les sessions du poste se partagent les clés de leurs dépôts."), "{f}");
+    let f = appel(&b, "get_fiche", json!({"record": {"name": "Le rappel tiré du prompt"}}));
+    assert_eq!(f["result"]["data"]["about"], json!("Le rappel tire ses mots du prompt de la session, sans redite d'un tour à l'autre."), "une phrase trop courte est écartée : {f}");
 }
 
