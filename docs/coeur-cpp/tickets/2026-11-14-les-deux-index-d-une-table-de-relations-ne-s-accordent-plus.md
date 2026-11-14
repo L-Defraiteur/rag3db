@@ -34,6 +34,14 @@ en comparant les deux sens par leur **contenu** (bouts en `_uuid`, propriétés)
   tables : code-lourd 650, 20 093 et 544 ; code-principal 20 210, 328 et 425. Les lectures du sens arrière en
   désaccord sont presque toutes fausses (LOCKS de code-principal : 36 sur 36).
 
+## Les comptes ancrés (G, 14 novembre 23 h, outil a34fe130a)
+
+L'outil d'avant tirait ses bouts d'une seule lecture non ancrée, et ce que cette lecture perdait n'était relu par aucun
+sens. Avec les bouts ancrés par tranches, LOCKS de code-principal (copie jetable de l'instantané `avant-373b5477b`)
+donne : **avant 436, arrière 425, union 436, et 11 relations perdues d'un seul sens**, toutes présentes au sens avant
+et absentes au sens arrière. L'outil d'avant n'en voyait aucune. Parmi elles, le cas d'hotfixs : `lockIndexForWrite`
+→ `acquireLock`, ligne 1173 (`node_table.cpp:1173` à 284cc00c0), que le sens arrière attribue à `lockRowForWrite`.
+
 ## La piste (cœur, relayée par c7)
 
 Sous 0c41f9fe6, l'annulation d'un COMMIT refusé tronquait le groupe CSR sens par sens

@@ -1,6 +1,6 @@
 # check_rel_directions tire ses bouts d'une seule lecture non ancrée
 
-- **État** : ouvert (14 novembre 2026, 22 h 45), relevé d'hotfixs.
+- **État** : corrigé (14 novembre 2026, a34fe130a) : les bouts se parcourent par tranches ancrées, avec quatre comptes par table.
 - **Famille** : produit
 - **Gravité** : faux vert ; un « égales » de l'outil ne prouve pas qu'il ne manque rien.
 - **Atteignable en service** : non, c'est l'outil du contrôle des deux sens de la bascule (procédure, § 8).
@@ -36,3 +36,19 @@ non plus depuis une lecture de la relation. Le plan prouve le sens :
 
 Le rouge d'abord : une base jetable où une relation n'est lisible que par l'ancrage d'un sens, invisible à la lecture
 non ancrée. Avec l'outil d'aujourd'hui, elle doit rendre « égales » ; avec le correctif, l'écart.
+
+## La correction (a34fe130a, 14 novembre 23 h 02)
+
+`tools/check_rel_directions/check_rel_directions.cpp` parcourt les bouts par tranches de 500 offsets de chaque étiquette
+(`show_connection`). Une étiquette vide se compte avant son `max(offset)`. L'outil donne quatre comptes par table
+(avant, arrière, union, perdues d'un seul sens), et `CHECK_REL_PLANS=1` imprime le plan d'une tranche de chaque sens.
+
+Le témoin `tools/check_rel_directions/test_check_rel_directions.sh` se lance par son nom, sur une copie jetable de la
+base réelle (code-principal, instantané `avant-373b5477b`, à luciepc) :
+- sur l'outil d'avant, **4 ROUGE** : aucune relation d'un seul côté, pas de comptes, pas de plans ;
+- sur l'outil corrigé, **5 vert**. LOCKS donne avant 436, arrière 425, union 436, et 11 relations perdues d'un seul
+  sens. Les plans montrent `SCAN_NODE_TABLE Scope` puis `(a)-[r]->(b)`, et `SCAN_NODE_TABLE Symbol` puis
+  `(b)<-[r]-(a)`.
+
+Une base fabriquée (une relation lisible d'un seul sens) demanderait un crochet d'injection dans le moteur. C'est le
+ticket souhait `docs/optimiseur/tickets/2026-11-14-un-crochet-pour-abimer-un-seul-rangement-d-une-relation.md`.

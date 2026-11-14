@@ -78,7 +78,7 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
    ou plus grand, arrête toujours la bascule.
    **Un « aucun écart » est plus faible qu'il n'y paraît** (14 novembre, relevé d'hotfixs) : l'outil tire ses bouts
    d'une seule lecture non ancrée, jouée dans un seul sens, et ce que cette lecture perd n'est relu par aucun sens.
-   Ticket `docs/optimiseur/tickets/2026-11-14-check-rel-directions-tire-ses-bouts-d-une-seule-lecture-non-ancree.md`.
+   Ticket fermé par a34fe130a (bouts ancrés par tranches, quatre comptes par table) : `docs/tickets/closed/2026-11-14-check-rel-directions-tire-ses-bouts-d-une-seule-lecture-non-ancree.md`.
    **L'outil tourne sous `poste lourd`** (14 novembre, relevé d'ED) : il prend 250 à 370 % de CPU pendant 15 à
    30 minutes par base de code. Lancé hors du verrou, il a faussé une mesure d'ED à luciepc et échappé au compte
    des lourds. Le script l'appelle par `~/.cache/rag3weaver-build/poste lourd`, la borne dans le lourd. Aucun
