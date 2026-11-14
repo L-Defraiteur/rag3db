@@ -308,3 +308,26 @@ prédicat. C'est juste tant qu'aucune ligne n'est retirée alors que ses deux bo
 - mesurer la clause sans filtre sur code-lourd, puis appeler `marquer_des_lignes_invisibles` à la
   première écriture d'une seconde génération ;
 - mettre `outline` dans le témoin de non-fuite, ou dire pourquoi il n'y est toujours pas.
+
+## 8. Ce que `_couche` porte : un identifiant stable de couche (14 novembre 2026, 22 h 15)
+
+Décidé avec arbre principal (voie (b)). Le détail est dans
+`docs/arbre-principal/14-11-2026/02-les-suivies-tracked.md`, section « La décision » (master 6ba1427e4).
+
+- **`_couche` porte l'identifiant de la couche, jamais le nom d'une ref.** L'identifiant entre dans
+  l'uuid des lignes neuves (`[clé, couche, _depuis]`, § 2) : un renommage de branche ne change donc
+  aucun uuid.
+- **L'identifiant se dérive de la naissance de la couche** : hash(dépôt, nom complet, pointe à la
+  première vue de la ref). Pour une couche de travail, c'est le chemin du worktree et le commit
+  extrait. Il est gardé dans la fiche `fiche_couche:<dépôt>:<id>`, avec l'index
+  `couche_nom:<dépôt>:<nom complet>`. Il est recalculable tant que la ref n'a pas bougé depuis sa
+  naissance ; au-delà, la fiche fait foi.
+- **La couche du backend garde l'identifiant `backend`** (`COUCHE_DU_BACKEND`). C'est la seule
+  exception, pour que rien de 2a′-1 ne bouge.
+- **Un identifiant ne se réutilise jamais pour une autre lignée.** Une ref effacée reçoit `fin`. Une
+  ref recréée sous le même nom après sa fin reçoit un identifiant neuf.
+- **Un renommage ne termine plus une couche** (ce qui retire la règle de la veille). Une ref ne se dit
+  renommée que si, dans une même résolution, une seule ref a disparu et une seule est apparue sur la
+  pointe vue en dernier, et qu'aucune autre ref vivante ne la porte. Sinon, c'est une fin et une
+  naissance.
+- Sous 2a′-3, l'écrivain lit l'identifiant par la suivie résolue, jamais par le nom de la ref.
