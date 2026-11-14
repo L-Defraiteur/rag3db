@@ -108,6 +108,14 @@ rend `ScopeContent_Chunk` dès l'estampille ; `Scope` n'a plus ni morceaux ni si
   durée, avec un instantané avant. On fait `DROP` de `Scope_Chunk` et `Scope_CHUNKED_FROM`, on efface
   `Lucivy_Scope`, et on pose une estampille « retour impossible ». Les doublons de hotfixs partent avec
   lui.
+- **Répété sur copie par hotfixs**, vert deux fois (page des sondes 08f3b6a9d) : DROP du HNSW et des
+  tables, effacement de `Lucivy_Scope`, estampille. **4,28 Go rendus**, 8 requêtes identiques avant et
+  après, et le retour par `RETOUR.sh` éprouvé. Deux choses à savoir pour le jour de la bascule :
+  - **l'estampille « retour impossible » n'est lue par aucun code** : c'est un écriteau. Une commande
+    de retour qui naîtrait un jour devra la lire, et refuser ;
+  - **le fichier de base ne rétrécit pas** : le Go de `Scope_Chunk` devient des pages libres,
+    réutilisables par la base, et seul `Lucivy_Scope` rend ses 4,28 Go au disque (un ticket de souhait
+    moteur, chez hotfixs).
 - **Les lecteurs en dur hors produit**, qui liraient un index mort : les sondes, bancs et mesures du
   ticket `2026-11-13-les-sondes-bancs-et-mesures-du-code-lisent-scope-chunk-en-dur`. Ils sont à faire
   passer par `code::scope_chunks` avant le retrait.
