@@ -291,7 +291,7 @@ impl Rag3dbConnection {
     }
 
     fn config_with_buffer_pool(choice: BufferPoolChoice) -> rag3db::SystemConfig {
-        let mut config = rag3db::SystemConfig::default().max_num_threads(db_threads());
+        let mut config = rag3db::SystemConfig::default();
         if let Some(v) = std::env::var("RAG3DB_MAX_DB_SIZE").ok().and_then(|s| s.parse::<u64>().ok()) {
             config = config.max_db_size(v);
         }
