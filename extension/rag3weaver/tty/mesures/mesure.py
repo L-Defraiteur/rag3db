@@ -11,7 +11,13 @@ Lancé sur le poste où l'on regarde, il démarre le faux hôte (`faux_hote.py`)
 - le débit (octets reçus par seconde).
 Il écrit un JSON de résultats et dit VERT ou ROUGE à la fin. Bibliothèque standard seulement.
 
-    mesure.py <hôte ssh> <binaire distant> <faux_hote.py distant> <dossier distant> <thèmes.json local> <sortie.json>
+    mesure.py <hôte ssh|local> <binaire distant> <faux_hote.py distant> <dossier distant> <thèmes.json local> <sortie.json> [lanceur]
+
+Le lanceur (tty-6, 14 nov. 2026) : `ssh` (par défaut, `ssh -tt`), `tmux-local` (tmux sur ce poste, hôte
+`local`), `tmux-ssh` (tmux sur l'autre poste, vu par ssh), `mosh` (mosh-server sur l'autre poste). Sous
+tmux et mosh, c'est le multiplexeur qui répond à la position du curseur : on note ce qui arrive (la vue
+inline démarre-t-elle, la couleur vraie passe-t-elle ou tombe-t-elle en 256), sans l'exiger — rag3weaver
+n'exige ni tmux ni mosh (Lucie, 14 nov.), il doit s'y tenir et se dégrader proprement.
 """
 import fcntl
 import json
@@ -30,13 +36,36 @@ import time
 import urllib.request
 
 HOTE, BINAIRE, FAUX, DOSSIER, THEMES, SORTIE = sys.argv[1:7]
+LANCEUR = sys.argv[7] if len(sys.argv) > 7 else "ssh"
+LOCAL = HOTE == "local"
+MULTIPLEXEUR = LANCEUR in ("tmux-local", "tmux-ssh", "mosh")
 PORT = 17990
-TUNNEL = 17991
+TUNNEL = PORT if LOCAL else 17991
+seance = [0]
 
 
 def ssh(cmd, attendre=True):
-    p = subprocess.run(["ssh", "-o", "BatchMode=yes", HOTE, "bash", "-s"], input=cmd, text=True, capture_output=True, timeout=120)
+    argv = ["bash", "-s"] if LOCAL else ["ssh", "-o", "BatchMode=yes", HOTE, "bash", "-s"]
+    p = subprocess.run(argv, input=cmd, text=True, capture_output=True, timeout=120)
     return p.stdout
+
+
+def commande(base):
+    """La commande qui lance le terminal, selon le lanceur."""
+    seance[0] += 1
+    nom = f"mesure{os.getpid()}-{seance[0]}"
+    if LANCEUR == "ssh":
+        return ["ssh", "-tt", "-o", "BatchMode=yes", HOTE, base]
+    if LANCEUR == "tmux-local":
+        return ["tmux", "-L", nom, "-f", "/dev/null", "new-session", "-s", nom, base]
+    if LANCEUR == "tmux-ssh":
+        return ["ssh", "-tt", "-o", "BatchMode=yes", HOTE, f"tmux -L {nom} -f /dev/null new-session -s {nom} '{base}'"]
+    if LANCEUR == "mosh":
+        return ["mosh", HOTE, "--", "bash", "-c", base]
+    raise SystemExit(f"lanceur inconnu : {LANCEUR}")
+
+
+commande_ = commande
 
 
 class Terminal:
@@ -48,7 +77,7 @@ class Terminal:
         self.maitre, esclave = pty.openpty()
         self.taille(colonnes, lignes, signaler=False)
         commande = f"env {env} {BINAIRE} --theme {theme} --depot faux --tache mesure --daemon-json {DOSSIER}/daemon.json --demande go"
-        self.p = subprocess.Popen(["ssh", "-tt", "-o", "BatchMode=yes", HOTE, commande], stdin=esclave, stdout=esclave, stderr=esclave, start_new_session=True)
+        self.p = subprocess.Popen(commande_(commande), stdin=esclave, stdout=esclave, stderr=esclave, start_new_session=True, env=dict(os.environ, TERM="xterm-256color", LANG=os.environ.get("LANG", "fr_FR.UTF-8")))
         os.close(esclave)
         self.recu = []  # (t, octets)
         self.verrou = threading.Lock()
@@ -155,7 +184,7 @@ def p(valeurs, q):
     return v[min(len(v) - 1, int(round(q * (len(v) - 1))))]
 
 
-resultats = {"hote": HOTE, "date": time.strftime("%Y-%m-%d %H:%M"), "rouges": []}
+resultats = {"hote": HOTE, "lanceur": LANCEUR, "date": time.strftime("%Y-%m-%d %H:%M"), "rouges": []}
 themes = json.load(open(THEMES))
 
 
@@ -167,15 +196,21 @@ def rouge(quoi):
 # 0. Un terminal qui ne rend pas la position du curseur : la vue ne démarre pas, le texte brut prend la
 #    suite (le défaut trouvé par ce harnais le 13 nov. 2026 : ratatui paniquait).
 hote_demarrer()
-tunnel = subprocess.Popen(["ssh", "-N", "-o", "BatchMode=yes", "-L", f"{TUNNEL}:127.0.0.1:{PORT}", HOTE])
+tunnel = subprocess.Popen(["sleep", "86400"] if LOCAL else ["ssh", "-N", "-o", "BatchMode=yes", "-L", f"{TUNNEL}:127.0.0.1:{PORT}", HOTE])
 time.sleep(1.5)
 try:
     t = Terminal("COLORTERM=truecolor TERM=xterm-256color", "daemon", repond_au_curseur=False)
     t0 = time.monotonic()
-    repli = t.attendre(b"je passe en texte brut", borne=20)
+    repli = t.attendre(b"je passe en texte brut", borne=8 if MULTIPLEXEUR else 20)
     vu_texte = t.attendre(b"mot199", apres=t0, borne=30) if repli else None
     resultats["sans_position_du_curseur"] = {"repli_dit": repli is not None, "texte_brut_suit": vu_texte is not None, "panique": b"panicked" in t.tout()}
-    if repli is None or vu_texte is None or b"panicked" in t.tout():
+    if MULTIPLEXEUR:
+        # Le multiplexeur répond lui-même au curseur : la vue inline doit démarrer, sans panique.
+        vue = t.attendre(b"attend ton accord", apres=t0, borne=40) is not None
+        resultats["sans_position_du_curseur"]["vue_inline_demarre"] = vue
+        if b"panicked" in t.tout() or not (vue or (repli and vu_texte)):
+            rouge(f"sous {LANCEUR}, sans réponse du harnais au curseur : {resultats['sans_position_du_curseur']}")
+    elif repli is None or vu_texte is None or b"panicked" in t.tout():
         rouge(f"sans position du curseur : {resultats['sans_position_du_curseur']}")
     t.ecrire(b"\x03")
     time.sleep(0.5)
@@ -186,7 +221,7 @@ finally:
 
 # 1. La séance principale (daemon, couleur vraie) : latences, redimensionnement, touches, débit.
 hote_demarrer()
-tunnel = subprocess.Popen(["ssh", "-N", "-o", "BatchMode=yes", "-L", f"{TUNNEL}:127.0.0.1:{PORT}", HOTE])
+tunnel = subprocess.Popen(["sleep", "86400"] if LOCAL else ["ssh", "-N", "-o", "BatchMode=yes", "-L", f"{TUNNEL}:127.0.0.1:{PORT}", HOTE])
 time.sleep(1.5)
 try:
     t = Terminal("COLORTERM=truecolor TERM=xterm-256color", "daemon")
@@ -238,8 +273,9 @@ try:
                 rouge(f"une écriture vise la colonne {max(cols)} pour une largeur de {colonnes}")
             resultats.setdefault("redimensionnement", []).append(entry)
         # Les touches : Échap → stop ; o → l'accord ; puis la fin dite ; Ctrl-C → la sortie.
+        echap_mur = time.time()
         t.ecrire(b"\x1b")
-        time.sleep(1.0)
+        time.sleep(1.5)
         t0 = t.ecrire(b"o")
         if t.attendre("fini".encode(), apres=t0, borne=15) is None:
             rouge("après o, la fin ne paraît pas")
@@ -250,12 +286,14 @@ try:
         resultats["ctrl_c_sortie_ms"] = round((time.monotonic() - t0) * 1000) if t.p.poll() is not None else None
         if t.p.poll() is None:
             rouge("Ctrl-C ne fait pas sortir en 10 s")
-        if b"\x1b[?25h" not in t.tout()[-4096:]:
+        resultats["curseur_rendu_a_la_sortie"] = b"\x1b[?25h" in t.tout()[-4096:]
+        if not resultats["curseur_rendu_a_la_sortie"] and not MULTIPLEXEUR:
             rouge("le curseur n'est pas rendu à la sortie")
         j = journal()
         stops = [e for e in j if e["corps"].get("kind") == "stop"]
         accords = [e for e in j if e["corps"].get("kind") == "answer" and e["corps"].get("approved") is True]
-        resultats["touches"] = {"echap_stop": len(stops), "o_accord": len(accords), "reply_to": accords[0]["corps"].get("reply_to") if accords else None}
+        resultats["touches"] = {"echap_stop": len(stops), "o_accord": len(accords), "reply_to": accords[0]["corps"].get("reply_to") if accords else None,
+                                "echap_vers_stop_ms": round((stops[0]["t"] - echap_mur) * 1000) if stops else None}
         if len(stops) != 1:
             rouge(f"Échap : {len(stops)} stop au lieu d'un")
         if len(accords) != 1 or not str(accords[0]["corps"].get("reply_to", "")).startswith("faux/mesure:"):
@@ -276,11 +314,16 @@ for nom, th in themes.items():
         hote_demarrer()
         try:
             t = Terminal(env, nom)
-            vu = t.attendre(sgr, borne=20) is not None
+            vu = t.attendre(sgr, borne=20 if not MULTIPLEXEUR else 8) is not None
+            repli_256 = None
+            if not vu and mode == "vraie":
+                # La couleur vraie peut tomber en 256 sous un multiplexeur : un repli, pas un rouge.
+                repli_256 = t.attendre(f"38;5;{indice_256(r, g, b)}".encode(), borne=8) is not None
+                vu = bool(repli_256)
             coeur = th["animations"]["reflechit"]["coeur"]
             coeur = th.get("replis", {}).get(coeur, coeur).encode()
             vu_coeur = t.attendre(coeur, borne=5) is not None
-            couleurs.append({"theme": nom, "mode": mode, "sgr_texte": sgr.decode(), "vu": vu, "coeur_vu": vu_coeur})
+            couleurs.append({"theme": nom, "mode": mode, "sgr_texte": sgr.decode(), "vu": vu, "tombe_en_256": repli_256, "coeur_vu": vu_coeur})
             if not vu:
                 rouge(f"{nom} en {mode} : la couleur texte ({sgr.decode()}) ne paraît pas")
             if not vu_coeur:
