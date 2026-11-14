@@ -104,6 +104,26 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
     chaque backend rouvre sa base sans refus (`refused: null`). La première ouverture de chaque base
     sous la lib neuve est le vrai essai de son format.
 
+## Poser un binaire seul, sans changer de lib
+
+Pour donner aux hôtes un binaire neuf de master (une fermeture qui tient, un correctif de l'hôte), sans toucher à
+`courant` :
+
+1. **Le bâti et l'essai** (`docs/optimiseur/scripts/preparer-binaire.sh <commit>`, `LIB=<id>` pour une lib qui n'est pas
+   `courant`) : bâti à luciepc, essai sur 7991 et check-manifests aux deux postes. Il fait checkout dans
+   `rag3db-controle-G` : jamais pendant un verdict ou un rejeu dans ce worktree.
+2. **Le verdict des trois suites sur les sources du binaire** (`e2e_code`, `e2e_lectures`, `e2e_demon_hote`), sous la
+   lib qu'il liera, nommée.
+   **Un moteur plus neuf que la lib** (c7, 14 novembre 2026) : dès qu'un lot C++ atterrit, les sources du verdict portent
+   un moteur plus neuf que la lib posée, et `run_e2e.sh` refuse la lib (« librag3db.so est plus vieux que le dernier
+   commit de ses sources »). Le verdict se joue alors sous `RAG3WEAVER_MOTEUR_ANCIEN=1`, **dit** dans son état et dans
+   la page de la pose. C'est juste : l'hôte posé tourne sous sa lib par son env et son filet, quel que soit le C++ de
+   ses sources.
+3. **Le nom** : un binaire se nomme par son commit **et** la lib qu'il lie, « binaire fac67a208 sur 373b5477b », jamais
+   par son commit seul.
+4. **L'annonce aux sessions**, puis la pose (`bascule-pose.sh` et `bascule-reveil.sh`, avec la même lib) quand aucune
+   passe ne lit l'hôte, puis les témoins : `/sante` nomme la lib, chaque backend rouvre sans refus.
+
 ## Revenir
 
 **Où sont les copies d'avant la pose** (14 novembre 2026) : le binaire et `rag3db-check-lib` d'avant restent dans
