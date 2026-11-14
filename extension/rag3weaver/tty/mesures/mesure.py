@@ -381,6 +381,55 @@ if LANCEUR == "mosh":
     for n in nouveaux:
         ssh(f"rm -f {etat_tty}/{n}")
 
+# 1d. La saisie au clavier (tty-8) : les séquences d'un vrai terminal (flèches, Début et Fin, Suppr,
+#     Ctrl-← et Alt-B, Ctrl-W, Alt-Entrée, collage d'un bloc, ↑), à travers le lanceur ; la boîte du
+#     faux hôte doit recevoir le texte édité, tel quel. Puis Ctrl-C vide une saisie avant de quitter.
+CLAVIER = [
+    b"lis vue.rs", b"\x1b[D" * 6, b"src/", b"\x1b[F", b"\x1b[1;5D", b"\x1b[3~", b"R", b"\x1b[H", b"\x1b[C", b"\x7f", b"L",
+    b"\x1b[F", b"\x1b\r", "\x1b[200~puis\nrésume\x1b[201~".encode(), b"\x17", "résume tout".encode(), b"\r",
+]
+ATTENDU = "Lis src/vue.Rs\npuis\nrésume tout"
+hote_demarrer()
+tunnel = subprocess.Popen(["sleep", "86400"] if LOCAL else ["ssh", "-N", "-o", "BatchMode=yes", "-L", f"{TUNNEL}:127.0.0.1:{PORT}", HOTE])
+time.sleep(1.5)
+try:
+    t = Terminal("COLORTERM=truecolor TERM=xterm-256color", "daemon")
+    if t.attendre(b"attend ton accord", borne=40) is None:
+        rouge("clavier : la demande d'accord ne paraît pas en 40 s")
+    for morceau in CLAVIER:
+        t.ecrire(morceau)
+        time.sleep(0.15)
+    time.sleep(1.5)
+    # ↑ rappelle l'envoi, Fin, « ! », Entrée : un second envoi, édité depuis l'historique.
+    for morceau in (b"\x1b[A", b"\x1b[F", b" !", b"\r"):
+        t.ecrire(morceau)
+        time.sleep(0.15)
+    time.sleep(1.5)
+    textes = [e["corps"].get("text") for e in journal() if e["corps"].get("kind") in ("answer", "instruction", "request") and e["corps"].get("text") not in (None, "go")]
+    resultats["clavier"] = {"textes_recus": textes}
+    if textes[:2] != [ATTENDU, ATTENDU + " !"]:
+        rouge(f"clavier : la boîte a reçu {textes!r} au lieu de {[ATTENDU, ATTENDU + ' !']!r}")
+    # Ctrl-C sur une saisie non vide la vide, sans quitter ; le second quitte.
+    t.ecrire(b"zzz")
+    time.sleep(0.3)
+    t.ecrire(b"\x03")
+    time.sleep(1.0)
+    vivant = t.p.poll() is None
+    t.ecrire(b"\x03")
+    fin = time.monotonic() + 10
+    while t.p.poll() is None and time.monotonic() < fin:
+        time.sleep(0.05)
+    resultats["clavier"]["ctrl_c_vide_d_abord"] = vivant
+    resultats["clavier"]["ctrl_c_quitte_ensuite"] = t.p.poll() is not None
+    if not vivant:
+        rouge("clavier : Ctrl-C a quitté au lieu de vider la saisie")
+    if t.p.poll() is None:
+        rouge("clavier : le second Ctrl-C ne quitte pas")
+    t.arreter()
+finally:
+    tunnel.terminate()
+    hote_arreter()
+
 # 2. Les couleurs de chaque thème, en couleur vraie puis en 256 couleurs.
 couleurs = []
 for nom, th in themes.items():
