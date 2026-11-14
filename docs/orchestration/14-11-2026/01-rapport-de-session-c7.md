@@ -310,3 +310,27 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   (provenance-imports-3, puis son lot des manifestes), lucivy (4.3.7), tty-6, recherche (surveillant,
   puis plafond), G (cas 6c), embarquement, 96, puis le cœur à son juge vert. À chacun : worktree
   prêt, rebase et passe courte au mot seulement.
+
+## 15 h 3x — les thèmes sur master, la file passe à codeparsers
+
+- **archi a poussé 061669ce5** : `/ide/theme/<nom>.json` sert chaque `templates/themes/<nom>.json` depuis
+  les gabarits embarqués, `/ide/themes.json` donne la liste, un nom inconnu rend 404 ; le menu de
+  l'en-tête montre les cinq thèmes (dont cyberpunk, cyborg, alien), le choix tient au rechargement.
+  Rejeu court sur 2299e0052 (lib ciblée 13/0, navigateur 44/44), garde à jour, trois contrôles lus.
+  La ligne de nouveautés openssl est dedans. Archi prend la jauge du contexte puis quatre mineurs.
+- **« À toi » à codeparsers** pour provenance-imports-3 seul ; son lot des manifestes attend un second
+  mot. Puis lucivy, tty-6, recherche, G, embarquement, 96, le cœur.
+- **lucivy** a livré `index_report()` (PR #33 sur #32, sans tag) : par segment, par champ (p50/p90/
+  p99/max, dix plus gros, doublons exacts), octets par famille, rapport index/texte ; il retrouve la
+  mesure du matin sur Lucivy_Scope (4,59 Go pour 932 Mo, ×4,9, 11,9 % supprimés, 843,7 Mo de
+  doublons). Commande relayée à recherche (exclusions, octets des scopes) et hotfixs (purge des
+  orphelins) : le gain se prouve avec, sur une copie de la table. Fusion #32 puis #33 à la CI verte,
+  sans tag.
+- **ED** : rouge du témoin 4 vu (generations-de-l-ancre-2, 7072aa733 : `_couche` absente, estampille
+  `content`). Bornes tranchées : les arêtes avec 2a′-2 (un Hop part d'uuids visibles et ne filtre que
+  le nœud atteint) ; postgres hors du lot par `sait_les_generations` du dialecte, e2e_postgres rejoué
+  et un ticket pour la forme postgres.
+- **hotfixs** : le témoin du dictionnaire n'est plus en pause, Lucie a dit « go » dans sa fenêtre ;
+  trois cas dans string_rewrite_test.cpp (chaine-au-point-de-reprise, c1a8f8171), sous ASAN dans le
+  build du cœur. Appris en passant : un ADD COLUMN d'une autre connexion est accepté pendant une
+  transaction d'écriture ouverte — ticket moteur demandé si c'est un défaut d'isolement.
