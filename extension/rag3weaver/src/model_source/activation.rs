@@ -251,6 +251,18 @@ fn verifier_pour(source: &super::ModelSource, capacite: super::Capability, clien
             capacite.name(), source.model, id.modele, id.dim, id.sparse, id.reranker, id.ocr
         ));
     }
+    // Un creux qui déclare sa dimension déclare son dual (décision de c7, 14
+    // novembre 2026) : le fournisseur le sait, à cette dimension.
+    if capacite == Capability::Sparse {
+        if let Some(d) = source.dimensions.filter(|d| *d > 0) {
+            if !id.dual {
+                return Err(format!("identité d'activation refusée : le fournisseur sert {} sans le dual (models.sparse déclare dimensions {d})", id.modele));
+            }
+            if id.dim != d {
+                return Err(format!("identité d'activation refusée : le fournisseur sert {} en {} au lieu de {d} (models.sparse.dimensions)", id.modele, id.dim));
+            }
+        }
+    }
     if client.identite().activation.as_ref() != Some(&identite(source)?) {
         return Err("identité d'activation refusée : recette/profil du fournisseur différent ou non attesté".into());
     }
@@ -625,10 +637,24 @@ impl crate::embedder::Embedder for DenseTenu {
 }
 
 /// **Le creux d'une activation** (le groupe bge-m3) : un embarqueur creux
-/// tenu. Pas de dual : il se décide aujourd'hui sur l'identité du fournisseur,
-/// qu'un client à la demande ne connaît pas avant son premier appel.
+/// tenu. Son dual se déclare par `dimensions` (voir [`DualTenu`]) : un client
+/// à la demande ne connaît pas l'identité du fournisseur avant son premier appel.
 #[cfg(feature = "daemon")]
-struct CreuxTenu(Tenue<crate::daemon::DaemonEmbedder>);
+struct CreuxTenu(std::sync::Arc<Tenue<crate::daemon::DaemonEmbedder>>);
+
+/// **Le dual d'une activation** : le creux qui déclare sa dimension rend aussi
+/// un dual, sur **la même tenue** (un bail, une activation, une éviction).
+#[cfg(feature = "daemon")]
+struct DualTenu { tenue: std::sync::Arc<Tenue<crate::daemon::DaemonEmbedder>>, dim: usize }
+
+#[cfg(feature = "daemon")]
+impl crate::embedder::DualEmbedder for DualTenu {
+    fn embed_dual(&self, textes: &[String]) -> Result<(Vec<Vec<f32>>, Vec<crate::sparse_index::SparseVector>), crate::embedder::EmbedError> {
+        self.tenue.appeler(|c| c.embed_dual(textes), parti_calcul, crate::embedder::EmbedError::ProviderError)
+    }
+    fn dim(&self) -> usize { self.dim }
+    fn distant(&self) -> bool { true }
+}
 
 #[cfg(feature = "daemon")]
 impl crate::embedder::SparseEmbedder for CreuxTenu {
@@ -672,7 +698,11 @@ pub(super) fn connecter_creux(source: &super::ModelSource) -> Result<(super::Spa
     let tenue = Tenue::new(source, super::Capability::Sparse, |s, a| {
         crate::daemon::DaemonEmbedder::joindre(a).map(|d| d.with_timeout(delai_appel(s))).map_err(|e| e.to_string())
     }, &std::sync::atomic::AtomicBool::new(false))?;
-    Ok((super::SparseClients { sparse: std::sync::Arc::new(CreuxTenu(tenue)), dual: None }, super::Origin::Service(adresse)))
+    let tenue = std::sync::Arc::new(tenue);
+    let dual = source.dimensions.filter(|d| *d > 0).map(|dim| {
+        std::sync::Arc::new(DualTenu { tenue: tenue.clone(), dim }) as std::sync::Arc<dyn crate::embedder::DualEmbedder>
+    });
+    Ok((super::SparseClients { sparse: std::sync::Arc::new(CreuxTenu(tenue)), dual }, super::Origin::Service(adresse)))
 }
 
 /// **Le relecteur déclaré avec une activation.**
