@@ -15,17 +15,21 @@
 //!
 //! Le pool grandit à la demande jusqu'à son plafond (`RAG3WEAVER_READ_POOL`,
 //! 8 par défaut : L5 rend les appels d'un backend parallèles). Plafond atteint,
-//! un appel attend [`ATTENTE`] au plus, puis passe sans instantané (comme avant
-//! L6), et le dit ; les passages sont comptés ([`ReadPool::sans_instantane`]).
+//! un appel attend [`ATTENTE`] qu'une connexion revienne, puis **est refusé**, et
+//! le dit ; les refus sont comptés ([`ReadPool::sans_instantane`]).
 //!
-//! **Un instantané a une durée plafonnée** (`RAG3WEAVER_SNAPSHOT_MAX_MS`, 1 000
-//! par défaut) : un point de reprise forcé, et donc le COMMIT d'un COPY,
-//! attend que les transactions ouvertes partent, bloque les nouvelles pendant
-//! ce temps, et échoue au bout de 5 s (`DEFAULT_CHECKPOINT_WAIT_TIMEOUT_IN_MICROS`).
-//! Un appel de lecture lent ne doit pas faire échouer un écrivain : passé le
-//! plafond, l'instantané se valide à la requête suivante, et la suite de
-//! l'appel lit requête par requête, comme avant L6. Les instantanés écourtés
-//! sont comptés ([`ReadPool::ecourtes`]).
+//! **Un appel ne mêle jamais deux instantanés** (décision de Lucie, 14 novembre
+//! 2026). L'instantané tient jusqu'à la fin de l'appel, sans durée plafonnée :
+//! le plafond de 1 s d'avant (`RAG3WEAVER_SNAPSHOT_MAX_MS`) validait
+//! l'instantané en cours d'appel, et la suite lisait hors de lui sans le dire —
+//! la lecture pendant un lot réindexé voyait le lot à moitié (ticket recherche
+//! du 13 novembre). Sa raison d'être, un point de reprise de COPY qui attendait
+//! les lecteurs ouverts, est tombée avec V2-2 du moteur : le témoin
+//! `un_lecteur_ouvert_ne_retient_pas_le_point_de_reprise_d_un_copy` la garde.
+//! Un instantané dont l'ouverture est refusée **se rompt** : ses requêtes
+//! échouent au lieu de lire hors de lui, et l'appel recommence entier sous un
+//! instantané neuf (`Backend::execute_plan_avec`), en le disant
+//! (`instantane_renouvele`). Les ruptures sont comptées ([`ReadPool::rompus`]).
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -33,9 +37,8 @@ use std::time::{Duration, Instant};
 
 use crate::connection::{BufferPoolChoice, DbConnection, DbError, QueryParam, QueryResult};
 
-/// L'attente d'une connexion libre, plafond atteint, avant de passer sans
-/// instantané.
-pub const ATTENTE: Duration = Duration::from_millis(50);
+/// L'attente d'une connexion libre, plafond atteint, avant de refuser l'appel.
+pub const ATTENTE: Duration = Duration::from_secs(5);
 
 /// La clé de la garde de l'instantané dans les services d'un appel.
 pub const SERVICE: &str = "instantane_de_lecture";
@@ -44,10 +47,16 @@ pub const SERVICE: &str = "instantane_de_lecture";
 pub const SANS_INSTANTANE: &str =
     "Pas de connexion de lecture libre : les requêtes de cette réponse ne partagent pas un instantané, et peuvent encadrer une écriture.";
 
-/// La durée au plus d'un instantané : `RAG3WEAVER_SNAPSHOT_MAX_MS`, 1 000 par défaut.
-pub fn duree_max() -> Duration {
-    Duration::from_millis(std::env::var("RAG3WEAVER_SNAPSHOT_MAX_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(1_000))
+/// Le refus d'un appel de lecture quand aucune connexion ne revient à temps.
+pub fn refus_pool_plein(plafond: usize) -> String {
+    format!(
+        "Lectures saturées : les {plafond} connexions de lecture sont prises depuis {} s ; l'appel n'a pas été lu sans instantané. Réessayez.",
+        ATTENTE.as_secs()
+    )
 }
+
+/// L'erreur d'une requête dont l'instantané s'est rompu.
+pub const INSTANTANE_ROMPU: &str = "instantané de lecture rompu (ouverture refusée) : la requête n'est pas lue hors de lui";
 
 /// Le plafond du pool : `RAG3WEAVER_READ_POOL`, 8 par défaut. **0 coupe les
 /// instantanés** : pas de pool, les lectures partent requête par requête comme
@@ -70,8 +79,10 @@ pub struct ReadPool {
     etat: Mutex<Etat>,
     rendue: Condvar,
     sans_instantane: Arc<AtomicU64>,
-    duree_max: Duration,
-    ecourtes: Arc<AtomicU64>,
+    rompus: Arc<AtomicU64>,
+    /// Pour les témoins : tant d'ouvertures d'instantané à refuser.
+    #[cfg(test)]
+    a_rompre: Arc<AtomicU64>,
 }
 
 impl ReadPool {
@@ -90,14 +101,15 @@ impl ReadPool {
             etat: Mutex::new(Etat { libres: vec![premiere], ouvertes: 1 }),
             rendue: Condvar::new(),
             sans_instantane: Arc::new(AtomicU64::new(0)),
-            duree_max: duree_max(),
-            ecourtes: Arc::new(AtomicU64::new(0)),
+            rompus: Arc::new(AtomicU64::new(0)),
+            #[cfg(test)]
+            a_rompre: Arc::new(AtomicU64::new(0)),
         }))
     }
 
     /// **Un instantané** : une connexion libre (ou neuve sous le plafond), dont
     /// la transaction READ ONLY s'ouvrira à la première requête. `None` si
-    /// aucune ne se libère en `attente` : l'appel passe sans, et c'est compté.
+    /// aucune ne se libère en `attente` : l'appel est refusé, et c'est compté.
     pub fn instantane(self: &Arc<Self>, attente: Duration) -> Option<Instantane> {
         let Some(conn) = self.prendre(attente) else {
             self.sans_instantane.fetch_add(1, Ordering::Relaxed);
@@ -105,10 +117,10 @@ impl ReadPool {
         };
         let conn = Arc::new(ConnDInstantane {
             inner: conn,
-            duree_max: self.duree_max,
             etat: Mutex::new(Phase::AOuvrir),
-            ecourtes: self.ecourtes.clone(),
-            sans_instantane: self.sans_instantane.clone(),
+            rompus: self.rompus.clone(),
+            #[cfg(test)]
+            a_rompre: self.a_rompre.clone(),
         });
         Some(Instantane { conn: Some(conn), pool: self.clone() })
     }
@@ -157,14 +169,20 @@ impl ReadPool {
         self.rendue.notify_one();
     }
 
-    /// Les appels de lecture passés sans instantané depuis l'ouverture.
+    /// Les appels de lecture refusés faute de connexion libre depuis l'ouverture.
     pub fn sans_instantane(&self) -> u64 {
         self.sans_instantane.load(Ordering::Relaxed)
     }
 
-    /// Les instantanés écourtés par leur durée plafonnée depuis l'ouverture.
-    pub fn ecourtes(&self) -> u64 {
-        self.ecourtes.load(Ordering::Relaxed)
+    /// Les instantanés rompus (ouverture refusée) depuis l'ouverture.
+    pub fn rompus(&self) -> u64 {
+        self.rompus.load(Ordering::Relaxed)
+    }
+
+    /// Pour les témoins : les `n` prochaines ouvertures d'instantané sont refusées.
+    #[cfg(test)]
+    pub(crate) fn rompre_les_prochaines(&self, n: u64) {
+        self.a_rompre.store(n, Ordering::SeqCst);
     }
 
     /// Les connexions ouvertes, et le plafond.
@@ -183,23 +201,14 @@ pub struct Instantane {
 }
 
 impl Instantane {
-    /// La connexion de l'appel : ses requêtes lisent dans l'instantané, jusqu'à
-    /// son plafond de durée.
+    /// La connexion de l'appel : toutes ses requêtes lisent dans l'instantané.
     pub fn conn(&self) -> Arc<dyn DbConnection> {
         self.conn.as_ref().expect("la connexion vit jusqu'à la chute de l'instantané").clone()
     }
 
-    /// Pour les témoins : l'instantané ouvert passe son plafond, sans attendre
-    /// (une attente réelle rougit sous charge : un `CREATE` de l'écrivain peut à
-    /// lui seul dépasser un plafond court).
-    #[cfg(all(test, feature = "rag3db-native"))]
-    fn vieillir(&self) {
-        if let Some(c) = &self.conn {
-            let mut etat = c.etat.lock().unwrap_or_else(|e| e.into_inner());
-            if let Phase::Ouvert(_) = *etat {
-                *etat = Phase::Ouvert(Instant::now() - c.duree_max - Duration::from_millis(1));
-            }
-        }
+    /// L'instantané s'est rompu : l'appel doit recommencer sous un neuf.
+    pub fn rompu(&self) -> bool {
+        self.conn.as_ref().is_some_and(|c| matches!(*c.etat.lock().unwrap_or_else(|e| e.into_inner()), Phase::Rompu))
     }
 }
 
@@ -221,44 +230,47 @@ impl Drop for Instantane {
 enum Phase {
     /// Aucune requête encore : la transaction s'ouvrira à la première.
     AOuvrir,
-    /// La transaction READ ONLY, ouverte à cet instant.
-    Ouvert(Instant),
-    /// Validé (passé son plafond) ou jamais ouvert (refus) : la suite de
-    /// l'appel lit requête par requête.
+    /// La transaction READ ONLY, ouverte : elle tient jusqu'à la fin de l'appel.
+    Ouvert,
+    /// L'ouverture a été refusée : les requêtes échouent, l'appel recommence.
+    Rompu,
+    /// L'appel est fini.
     Fini,
 }
 
 /// **La connexion d'un instantané** : celle du pool. Sa transaction READ ONLY
-/// s'ouvre à la première requête et tient jusqu'à sa durée plafonnée ; au-delà,
-/// la requête suivante valide d'abord l'instantané, et les autres partent
-/// chacune dans la sienne. L'état est sous un verrou court : plusieurs nœuds
-/// de l'appel interrogent en même temps, et un seul ouvre ou valide.
+/// s'ouvre à la première requête et tient jusqu'à la fin de l'appel. Une
+/// ouverture refusée rompt l'instantané : la requête et les suivantes échouent,
+/// jamais lues hors de lui. L'état est sous un verrou court : plusieurs nœuds
+/// de l'appel interrogent en même temps, et un seul ouvre.
 pub struct ConnDInstantane {
     inner: Arc<dyn DbConnection>,
-    duree_max: Duration,
     etat: Mutex<Phase>,
-    ecourtes: Arc<AtomicU64>,
-    sans_instantane: Arc<AtomicU64>,
+    rompus: Arc<AtomicU64>,
+    #[cfg(test)]
+    a_rompre: Arc<AtomicU64>,
 }
 
 impl ConnDInstantane {
-    fn avant(&self) {
+    /// Avant chaque requête : ouvrir l'instantané à la première, et refuser
+    /// toute requête d'un instantané rompu.
+    fn avant(&self) -> Result<(), DbError> {
         let mut etat = self.etat.lock().unwrap_or_else(|e| e.into_inner());
+        if let Phase::AOuvrir = *etat {
+            #[cfg(test)]
+            let refusee = self.a_rompre.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1)).is_ok();
+            #[cfg(not(test))]
+            let refusee = false;
+            *etat = if !refusee && self.inner.begin_read_only().is_ok() {
+                Phase::Ouvert
+            } else {
+                self.rompus.fetch_add(1, Ordering::Relaxed);
+                Phase::Rompu
+            };
+        }
         match *etat {
-            Phase::AOuvrir => {
-                *etat = if self.inner.begin_read_only().is_ok() {
-                    Phase::Ouvert(Instant::now())
-                } else {
-                    self.sans_instantane.fetch_add(1, Ordering::Relaxed);
-                    Phase::Fini
-                };
-            }
-            Phase::Ouvert(depuis) if depuis.elapsed() > self.duree_max => {
-                let _ = self.inner.commit();
-                self.ecourtes.fetch_add(1, Ordering::Relaxed);
-                *etat = Phase::Fini;
-            }
-            _ => {}
+            Phase::Rompu => Err(DbError::QueryError(INSTANTANE_ROMPU.into())),
+            _ => Ok(()),
         }
     }
 
@@ -266,7 +278,7 @@ impl ConnDInstantane {
     /// COMMIT a échoué.
     fn terminer(&self) -> bool {
         let mut etat = self.etat.lock().unwrap_or_else(|e| e.into_inner());
-        let ouvert = matches!(*etat, Phase::Ouvert(_));
+        let ouvert = matches!(*etat, Phase::Ouvert);
         *etat = Phase::Fini;
         !ouvert || self.inner.commit().is_ok()
     }
@@ -274,15 +286,15 @@ impl ConnDInstantane {
 
 impl DbConnection for ConnDInstantane {
     fn execute(&self, cypher: &str) -> Result<QueryResult, DbError> {
-        self.avant();
+        self.avant()?;
         self.inner.execute(cypher)
     }
     fn execute_with_params(&self, cypher: &str, params: &[QueryParam]) -> Result<QueryResult, DbError> {
-        self.avant();
+        self.avant()?;
         self.inner.execute_with_params(cypher, params)
     }
     fn execute_with_local_settings(&self, sql: &str, params: &[QueryParam], settings: &[(&str, String)]) -> Result<QueryResult, DbError> {
-        self.avant();
+        self.avant()?;
         self.inner.execute_with_local_settings(sql, params, settings)
     }
     fn must_reopen(&self) -> Option<String> {
@@ -397,32 +409,27 @@ mod tests {
         assert_eq!(p.sans_instantane(), 0, "aucun appel n'est passé sans instantané");
     }
 
-    /// **La durée plafonnée** : passé le plafond, la requête suivante valide
-    /// l'instantané et voit ce que l'écrivain a validé depuis ; c'est compté.
-    /// Un instantané tenu ne retient donc pas un point de reprise forcé (qui
-    /// échoue au bout de 5 s) plus longtemps que son plafond.
+    /// **Une ouverture refusée rompt l'instantané** : ses requêtes échouent, et
+    /// aucune n'est lue hors de lui ; la rupture est comptée, et une connexion
+    /// rendue sert de nouveau.
     #[test]
-    fn passe_son_plafond_l_instantane_se_valide_et_la_suite_lit_le_neuf() {
+    fn une_ouverture_refusee_rompt_l_instantane_sans_lire_hors_de_lui() {
         let dir = tempfile::tempdir().unwrap();
-        // Un plafond large, que rien dans le témoin n'atteint seul ; le
-        // dépassement se pose par `vieillir`, pas par une attente (rouge une
-        // fois sous charge avec 100 ms, codeparsers, 19 octobre 2026).
-        let (ecrivain, mut p) = pool(dir.path(), 2);
-        Arc::get_mut(&mut p).unwrap().duree_max = Duration::from_secs(60);
+        let (ecrivain, p) = pool(dir.path(), 2);
         ecrivain.execute("CREATE (:T {id: 1})").unwrap();
+        p.rompre_les_prochaines(1);
         let i = p.instantane(ATTENTE).expect("un instantané");
         let c = i.conn();
-        assert_eq!(compte(&c), 1);
-        ecrivain.execute("CREATE (:T {id: 2})").unwrap();
-        assert_eq!(compte(&c), 1, "sous le plafond, l'instantané tient");
-        i.vieillir();
-        assert_eq!(compte(&c), 2, "passé le plafond, la requête suivante lit le validé");
-        assert_eq!(p.ecourtes(), 1);
+        let e = c.execute("MATCH (t:T) RETURN count(t)").expect_err("rompu, la requête échoue");
+        assert!(e.to_string().contains(INSTANTANE_ROMPU), "{e}");
+        assert!(c.execute("MATCH (t:T) RETURN count(t)").is_err(), "la suivante aussi");
+        assert!(i.rompu());
+        assert_eq!(p.rompus(), 1);
         drop(c);
         drop(i);
-        assert_eq!(p.occupation().0, 1, "la connexion revient au pool");
         let j = p.instantane(ATTENTE).expect("de nouveau");
-        assert_eq!(compte(&j.conn()), 2);
+        assert_eq!(compte(&j.conn()), 1, "un instantané neuf lit");
+        assert!(!j.rompu());
     }
 
     /// **Un lecteur ouvert ne retient pas le point de reprise d'un COPY** (25
@@ -439,8 +446,7 @@ mod tests {
     #[test]
     fn un_lecteur_ouvert_ne_retient_pas_le_point_de_reprise_d_un_copy() {
         let dir = tempfile::tempdir().unwrap();
-        let (ecrivain, mut p) = pool(dir.path(), 2);
-        Arc::get_mut(&mut p).unwrap().duree_max = Duration::from_secs(60);
+        let (ecrivain, p) = pool(dir.path(), 2);
         ecrivain.execute("CREATE (:T {id: 1})").unwrap();
         let csv = dir.path().join("t.csv");
         std::fs::write(&csv, "2\n3\n4\n").unwrap();
@@ -463,7 +469,6 @@ mod tests {
         assert!(reprise.is_ok(), "le point de reprise passe pendant qu'un lecteur tient son instantané ({duree:?}) : {reprise:?}");
         assert!(duree < Duration::from_secs(2), "sans attendre le lecteur : {duree:?}");
         assert_eq!(compte(&c), 1, "le lecteur relit sa génération");
-        assert_eq!(p.ecourtes(), 0, "sans que le plafond ait servi");
         drop(c);
         drop(i);
         let j = p.instantane(ATTENTE).expect("de nouveau");
@@ -505,21 +510,22 @@ mod tests {
         p.rendre(c);
     }
 
-    /// Plafond atteint : l'attente est bornée, l'appel passe sans instantané,
-    /// et c'est compté ; une connexion rendue sert l'appel suivant.
+    /// Pool plein au-delà de l'attente : l'appel est refusé (aucune lecture sans
+    /// instantané), et c'est compté ; une connexion rendue sert l'appel suivant.
     #[test]
-    fn plafond_atteint_l_appel_passe_sans_instantane_et_c_est_compte() {
+    fn pool_plein_au_dela_de_l_attente_l_appel_est_refuse_et_c_est_compte() {
         let dir = tempfile::tempdir().unwrap();
         let (_ecrivain, p) = pool(dir.path(), 2);
-        let a = p.instantane(ATTENTE).expect("première");
-        let b = p.instantane(ATTENTE).expect("seconde, ouverte à la demande");
+        let courte = Duration::from_millis(50);
+        let a = p.instantane(courte).expect("première");
+        let b = p.instantane(courte).expect("seconde, ouverte à la demande");
         assert_eq!(p.occupation(), (2, 2));
         let t = Instant::now();
-        assert!(p.instantane(ATTENTE).is_none(), "plafond atteint");
-        assert!(t.elapsed() < ATTENTE * 4, "l'attente est bornée : {:?}", t.elapsed());
+        assert!(p.instantane(courte).is_none(), "plafond atteint : refusé");
+        assert!(t.elapsed() < courte * 4, "l'attente est bornée : {:?}", t.elapsed());
         assert_eq!(p.sans_instantane(), 1);
         drop(a);
-        assert!(p.instantane(ATTENTE).is_some(), "une connexion rendue sert de nouveau");
+        assert!(p.instantane(courte).is_some(), "une connexion rendue sert de nouveau");
         drop(b);
     }
 }
