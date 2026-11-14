@@ -84,15 +84,114 @@ pub struct Declaration {
 /// **La déclaration du manifeste**, ou le défaut quand `tracked` est absent : le worktree que le backend
 /// indexe (avec sa couche de travail) et les tâches de l'atelier, la racine calculée.
 pub fn declaration_du_manifeste(tracked: Option<&Value>) -> Result<Declaration, String> {
-    let _ = tracked;
-    Err("les suivies ne se lisent pas encore".into())
+    let Some(tracked) = tracked else {
+        return Ok(Declaration {
+            root: Racine::Calculee,
+            sources: vec![
+                Source { select: Selecteur::Worktree(Worktree::DuBackend), parent: Parente::Inferee, history: Histoire::Pointe, work: true },
+                Source { select: Selecteur::Taches, parent: Parente::Inferee, history: Histoire::Pointe, work: true },
+            ],
+        });
+    };
+    let objet = tracked.as_object().ok_or("tracked : un objet {root, sources} attendu")?;
+    for cle in objet.keys() {
+        if cle != "root" && cle != "sources" {
+            return Err(format!("tracked : clé inconnue « {cle} » (root, sources)"));
+        }
+    }
+    let root = match objet.get("root") {
+        None => Racine::Calculee,
+        Some(Value::String(s)) if s == "computed" => Racine::Calculee,
+        Some(Value::String(s)) if s == "empty" => Racine::Vide,
+        Some(Value::Object(o)) if o.len() == 1 && o.get("declared").and_then(Value::as_str).is_some_and(|r| !r.is_empty()) => {
+            Racine::Declaree(o["declared"].as_str().unwrap_or_default().to_string())
+        }
+        Some(autre) => return Err(format!("tracked.root : « computed », « empty » ou {{\"declared\": \"<rev>\"}} attendu, pas {autre}")),
+    };
+    let sources = match objet.get("sources") {
+        None => Vec::new(),
+        Some(Value::Array(a)) => a.iter().enumerate().map(|(i, s)| lire_une_source(i, s)).collect::<Result<_, _>>()?,
+        Some(autre) => return Err(format!("tracked.sources : une liste attendue, pas {autre}")),
+    };
+    Ok(Declaration { root, sources })
+}
+
+fn lire_une_source(i: usize, v: &Value) -> Result<Source, String> {
+    let ou = |quoi: &str| format!("tracked.sources[{i}].{quoi}");
+    let objet = v.as_object().ok_or_else(|| format!("tracked.sources[{i}] : un objet {{select, parent?, history?, work?}} attendu"))?;
+    for cle in objet.keys() {
+        if !["select", "parent", "history", "work"].contains(&cle.as_str()) {
+            return Err(format!("{} : clé inconnue (select, parent, history, work)", ou(cle)));
+        }
+    }
+    let texte = objet.get("select").and_then(Value::as_str).ok_or_else(|| format!("{} : un sélecteur préfixé attendu", ou("select")))?;
+    let non_vide = |reste: &str| -> Result<String, String> {
+        if reste.trim().is_empty() {
+            Err(format!("{} : « {texte} » ne nomme rien", ou("select")))
+        } else {
+            Ok(reste.to_string())
+        }
+    };
+    let select = if texte == "tasks" {
+        Selecteur::Taches
+    } else if let Some(r) = texte.strip_prefix("branch:") {
+        Selecteur::Branche(non_vide(r)?)
+    } else if let Some(r) = texte.strip_prefix("refs:") {
+        Selecteur::Refs(non_vide(r)?)
+    } else if let Some(r) = texte.strip_prefix("commit:") {
+        Selecteur::Commit(non_vide(r)?)
+    } else if let Some(r) = texte.strip_prefix("worktree:") {
+        match r {
+            "backend" => Selecteur::Worktree(Worktree::DuBackend),
+            "*" => Selecteur::Worktree(Worktree::Tous),
+            chemin => Selecteur::Worktree(Worktree::Chemin(non_vide(chemin)?)),
+        }
+    } else {
+        return Err(format!("{} : « {texte} » n'a pas de préfixe connu (branch:, refs:, worktree:, commit:, tasks)", ou("select")));
+    };
+    let parent = match objet.get("parent") {
+        None => Parente::Inferee,
+        Some(Value::String(s)) if s == "inferred" => Parente::Inferee,
+        Some(Value::String(s)) if s == "none" => Parente::Aucune,
+        Some(Value::Object(o)) if o.len() == 1 && o.get("declared").and_then(Value::as_str).is_some_and(|r| !r.is_empty()) => {
+            Parente::Declaree(o["declared"].as_str().unwrap_or_default().to_string())
+        }
+        Some(autre) => return Err(format!("{} : « inferred », « none » ou {{\"declared\": \"<branche>\"}} attendu, pas {autre}", ou("parent"))),
+    };
+    let history = match objet.get("history") {
+        None => Histoire::Pointe,
+        Some(Value::String(s)) if s == "tip" => Histoire::Pointe,
+        Some(Value::String(s)) if s == "all" => Histoire::Tout,
+        Some(Value::String(s)) if s == "cited" => Histoire::Citee,
+        Some(Value::Object(o)) if o.len() == 1 && o.contains_key("last") => match o["last"].as_u64() {
+            Some(n) if n > 0 && n <= u32::MAX as u64 => Histoire::Derniers(n as u32),
+            _ => return Err(format!("{} : {{\"last\": N}} attend un entier positif, pas {}", ou("history"), o["last"])),
+        },
+        Some(autre) => return Err(format!("{} : « tip », « all », « cited » ou {{\"last\": N}} attendu, pas {autre}", ou("history"))),
+    };
+    let a_un_worktree = matches!(select, Selecteur::Worktree(_) | Selecteur::Taches);
+    let work = match objet.get("work") {
+        None => a_un_worktree,
+        Some(Value::Bool(true)) if !a_un_worktree => {
+            return Err(format!("{} : « {texte} » n'a pas de worktree, donc pas de couche de travail", ou("work")))
+        }
+        Some(Value::Bool(b)) => *b,
+        Some(autre) => return Err(format!("{} : un booléen attendu, pas {autre}", ou("work"))),
+    };
+    Ok(Source { select, parent, history, work })
 }
 
 /// **L'ancienne clé** `branches_suivies:<dépôt>`, lue et plus écrite : son ancre devient une racine
 /// déclarée, chaque nom une source `branch:`.
 pub fn declaration_de_l_ancienne_cle(ancienne: &BranchesSuivies) -> Declaration {
-    let _ = ancienne;
-    Declaration { root: Racine::Vide, sources: Vec::new() }
+    Declaration {
+        root: Racine::Declaree(ancienne.ancre.clone()),
+        sources: ancienne
+            .suivies
+            .iter()
+            .map(|b| Source { select: Selecteur::Branche(b.clone()), parent: Parente::Inferee, history: Histoire::Pointe, work: false })
+            .collect(),
+    }
 }
 
 #[cfg(test)]
