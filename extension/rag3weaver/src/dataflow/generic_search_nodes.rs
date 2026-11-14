@@ -443,7 +443,9 @@ impl Node for SearchSourceNode {
         let vue = vue_de(ctx);
         let resolved = match &vue {
             Some(v) => Some(v.forme().resolve_search_target(&self.target_name)),
-            None => catalog.try_lock().ok().map(|cat| cat.resolve_search_target(&self.target_name)),
+            // Comme l'état ci-dessous : une tenue courte (une lecture d'état, la réindexation d'un
+            // fichier) s'attend, bornée à READ_WAIT.
+            None => crate::dataflow::catalog_read::lock_for_read(&catalog).map(|cat| cat.resolve_search_target(&self.target_name)),
         }.transpose().map_err(|e| format!("SearchSourceNode: {e}"))?;
         let projected = resolved.as_ref().is_some_and(|target| target.occurrence_projection.is_some());
         if projected && self.mode == SearchMode::Scan {
@@ -456,20 +458,37 @@ impl Node for SearchSourceNode {
                 false,
                 Some("mode scan demandé sans source de fichiers — recherche sur l'index".to_string()),
             ),
-            // `try_lock` : une indexation qui tient le verrou ne s'attend
-            // jamais — l'échec est une réponse (« occupé »), pas une erreur.
+            // `lock_for_read` (14 novembre 2026) : une tenue courte s'attend, bornée à
+            // READ_WAIT, comme pour `index_states` — un `try_lock` nu balayait dès qu'une
+            // lecture d'état (`/ide/etat`, à chaque chargement de page de l'IDE) tenait le
+            // catalogue un instant (ticket « une recherche qui croise une lecture d'état
+            // répond par balayage »). Au-delà, une indexation entière : elle ne s'attend
+            // jamais, la recherche balaye et le dit.
             // L'état est celui de la CIBLE : l'état global mentait dès que le
             // journal de conversation écrivait dans la même base (trouvé par
             // la reprise de passe du 3 octobre — `index_state_for`, session
             // embarquements, et son test « le journal d'une conversation ne
             // fait pas croire le code indexé »).
-            SearchMode::Auto => {
-                let state = catalog
-                    .try_lock()
-                    .ok()
-                    .and_then(|cat| cat.index_state_for(&self.target_name).ok());
-                adaptive_search_decision(state, has_source && !projected)
-            }
+            SearchMode::Auto => match crate::dataflow::catalog_read::lock_for_read(&catalog) {
+                Some(cat) => adaptive_search_decision(cat.index_state_for(&self.target_name).ok(), has_source && !projected),
+                None if has_source && !projected => (
+                    true,
+                    Some(format!(
+                        "{}catalogue tenu plus de {} s (une indexation en cours) — réponse par balayage des fichiers \
+                         (mots exacts seulement) ; relancez la recherche quand elle aura fini",
+                        crate::search::INDEX_STATUS_PREFIX,
+                        crate::dataflow::catalog_read::READ_WAIT.as_secs()
+                    )),
+                ),
+                None => (
+                    false,
+                    Some(format!(
+                        "{}catalogue tenu plus de {} s (une indexation en cours) — recherche sur ce qui est posé",
+                        crate::search::INDEX_STATUS_PREFIX,
+                        crate::dataflow::catalog_read::READ_WAIT.as_secs()
+                    )),
+                ),
+            },
         };
 
         if scan_mode {
