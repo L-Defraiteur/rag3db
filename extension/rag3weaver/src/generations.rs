@@ -14,6 +14,10 @@ use rag3weaver_ir::{Count, Form, Hop, Plan, Predicate, Select};
 use crate::connection::CypherValue;
 use std::collections::{BTreeMap, BTreeSet};
 
+/// **La table des générations** : une ligne par génération publiée d'une couche (page 03, § 2).
+/// Interne au catalogue, comme `_catalog_meta` : elle n'est pas une entité des outils.
+pub const TABLE: &str = "_generation";
+
 /// La colonne de la couche d'une ligne.
 pub const COUCHE: &str = "_couche";
 /// La colonne du rang qui a posé la ligne.
