@@ -33,6 +33,9 @@ pub trait ReadCatalog {
     fn dialect_arc(&self) -> Arc<dyn SchemaDialect>;
     fn execute_read_with_params(&self, cypher: &str, params: &[QueryParam]) -> Result<QueryResult, CatalogError>;
     fn run_read_plan(&self, plan: &rag3weaver_ir::Plan, options: crate::plan::PlanOptions) -> Result<crate::plan::PlanReport, crate::plan::PlanError>;
+    /// **Ce que voient les lectures** de cette base, si elle a des générations (2a′) : un saut ou
+    /// une sélection qu'un lecteur traduit lui-même s'y borne ([`crate::generations::Visibilite`]).
+    fn visibilite(&self) -> Option<&crate::generations::Visibilite>;
     fn entity_config(&self, name: &str) -> Option<&EntityConfig>;
     fn get_relation_def(&self, name: &str) -> Option<&RelationDef>;
     fn entity_uuid(&self, entity_name: &str, data: &BTreeMap<String, CypherValue>) -> Result<String, CatalogError>;
@@ -56,6 +59,9 @@ impl ReadCatalog for Catalog {
     }
     fn run_read_plan(&self, plan: &rag3weaver_ir::Plan, options: crate::plan::PlanOptions) -> Result<crate::plan::PlanReport, crate::plan::PlanError> {
         Catalog::run_read_plan(self, plan, options)
+    }
+    fn visibilite(&self) -> Option<&crate::generations::Visibilite> {
+        self.generations.as_ref()
     }
     fn entity_config(&self, name: &str) -> Option<&EntityConfig> {
         Catalog::entity_config(self, name)
@@ -96,6 +102,9 @@ impl ReadCatalog for std::sync::MutexGuard<'_, Catalog> {
     }
     fn run_read_plan(&self, plan: &rag3weaver_ir::Plan, options: crate::plan::PlanOptions) -> Result<crate::plan::PlanReport, crate::plan::PlanError> {
         Catalog::run_read_plan(self, plan, options)
+    }
+    fn visibilite(&self) -> Option<&crate::generations::Visibilite> {
+        self.generations.as_ref()
     }
     fn entity_config(&self, name: &str) -> Option<&EntityConfig> {
         Catalog::entity_config(self, name)
@@ -138,6 +147,8 @@ pub struct Forme<'a> {
     pub(crate) dialect: &'a Arc<dyn SchemaDialect>,
     pub(crate) conn: &'a Arc<dyn DbConnection>,
     pub(crate) multi_cell: bool,
+    /// Les générations de la base, s'il y en a (2a′).
+    pub(crate) generations: Option<crate::generations::Visibilite>,
 }
 
 impl Forme<'_> {
@@ -632,6 +643,8 @@ pub struct ReadView {
     pub(crate) two_step_hops: bool,
     /// Plusieurs cellules en base : le filtre vectoriel y ajoute la cellule.
     pub(crate) multi_cell: bool,
+    /// Les générations de la base, s'il y en a (2a′) : ce que voient ses lectures sans vue.
+    pub(crate) generations: Option<crate::generations::Visibilite>,
     /// Le moteur de recherche posé du dehors (Elasticsearch…), s'il y en a
     /// un ; `None` pour celui du catalogue, que la vue rebâtit sur sa
     /// connexion de lecture.
@@ -677,6 +690,7 @@ impl ReadView {
             fanout: self.fanout,
             two_step_hops: self.two_step_hops,
             multi_cell: self.multi_cell,
+            generations: self.generations.clone(),
             search_backend_externe: self.search_backend_externe.clone(),
             event_bus: self.event_bus.clone(),
             search_services: self.search_services.clone(),
@@ -718,12 +732,17 @@ impl ReadCatalog for ReadView {
     fn execute_read_with_params(&self, cypher: &str, params: &[QueryParam]) -> Result<QueryResult, CatalogError> {
         self.conn.execute_with_params(cypher, params).map_err(|e| CatalogError::DbError(e.to_string()))
     }
+    fn visibilite(&self) -> Option<&crate::generations::Visibilite> {
+        self.generations.as_ref()
+    }
     fn run_read_plan(&self, plan: &rag3weaver_ir::Plan, mut options: crate::plan::PlanOptions) -> Result<crate::plan::PlanReport, crate::plan::PlanError> {
         if options.fanout.is_none() {
             options.fanout = self.fanout;
         }
         options.no_transaction = true;
-        crate::plan::run_plan(self.dialect.as_ref(), self.conn.as_ref(), plan, options)
+        // Les lectures d'une base à générations ne voient que les lignes visibles (2a′).
+        let borne = self.generations.as_ref().map(|v| v.borner_plan(plan));
+        crate::plan::run_plan(self.dialect.as_ref(), self.conn.as_ref(), borne.as_ref().unwrap_or(plan), options)
     }
     fn entity_config(&self, name: &str) -> Option<&EntityConfig> {
         self.entity_configs.get(name)
