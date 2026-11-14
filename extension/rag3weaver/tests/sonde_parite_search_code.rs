@@ -106,3 +106,68 @@ fn releve_les_reponses_de_search_code() {
     std::fs::write(&sortie, serde_json::to_string_pretty(&doc).unwrap()).expect("écrire le relevé");
     eprintln!("[parité] relevé écrit : {}", sortie.to_string_lossy());
 }
+
+/// **Les orphelins du plein texte après un effacement** (le lot des orphelins de recherche, 14 nov.
+/// 2026). Sur une copie et sa source (le manifeste repointé sur un worktree à soi), dans un processus
+/// neuf : les comptes du plein texte à l'ouverture, puis après un index de la source entière (qui ne
+/// doit rien changer), puis après un index de la même source sans `RAG3WEAVER_PARITE_A_RETIRER`.
+/// Pour chaque entité, (documents de l'index plein texte, lignes de la table) : au code d'avant,
+/// l'écart documents − lignes grandit du nombre de Scope effacés ; au lot, il ne bouge pas. Le fichier
+/// retiré est remis à la fin. Sortie : `RAG3WEAVER_PARITE_SORTIE`.
+#[test]
+#[ignore]
+fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
+    let var = |n: &str| std::env::var_os(n);
+    let (Some(base), Some(manifeste), Some(retirer), Some(sortie)) =
+        (var("RAG3WEAVER_PARITE_BASE"), var("RAG3WEAVER_PARITE_MANIFESTE"), var("RAG3WEAVER_PARITE_A_RETIRER"), var("RAG3WEAVER_PARITE_SORTIE"))
+    else {
+        eprintln!("SAUTÉ releve_les_comptes_du_plein_texte_apres_un_effacement : RAG3WEAVER_PARITE_BASE, _MANIFESTE, _A_RETIRER ou _SORTIE manque");
+        return;
+    };
+    let prepared = PreparedBackend::load(std::path::Path::new(&manifeste)).expect("le manifeste");
+    let racine = prepared.manifest.workspace.as_ref().map(|w| w.root.clone()).expect("la racine du manifeste");
+    let fichier = racine.join(&retirer);
+    let contenu = std::fs::read(&fichier).unwrap_or_else(|e| panic!("le fichier à retirer {} : {e}", fichier.display()));
+    let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), None).expect("ouvrir le backend");
+    let comptes = |etape: &str| -> Value {
+        let c = backend.catalog.lock().unwrap().comptes_du_plein_texte();
+        for (e, d, l) in &c {
+            eprintln!("[orphelins] {etape} : {e} — {d} documents, {l} lignes, écart {}", *d as i64 - *l as i64);
+        }
+        json!(c.iter().map(|(e, d, l)| json!({"entite": e, "documents": d, "lignes": l, "ecart": *d as i64 - *l as i64})).collect::<Vec<_>>())
+    };
+    let indexer = |etape: &str| {
+        let lance = backend.call("index", json!({"confirm": true})).unwrap_or_else(|e| panic!("index ({etape}) : {e}"));
+        let mut r = &lance;
+        while let Some(i) = r.get("result") {
+            r = i;
+        }
+        let journal = r.get("journal").and_then(Value::as_str).map(str::to_string)
+            .or_else(|| r.as_str().and_then(|t| t.lines().find_map(|l| l.strip_prefix("journal : ").map(str::to_string))))
+            .unwrap_or_else(|| panic!("le journal de l'index ({etape}) : {lance}"));
+        let debut = std::time::Instant::now();
+        loop {
+            let lu = std::fs::read_to_string(&journal).unwrap_or_default();
+            if lu.contains("indexation terminée") {
+                eprintln!("[orphelins] index {etape} fini en {:.0} s", debut.elapsed().as_secs_f64());
+                return lu.lines().rev().take(6).collect::<Vec<_>>().join("\n");
+            }
+            assert!(!lu.contains("indexation échouée"), "index {etape} : {lu}");
+            assert!(debut.elapsed().as_secs() < 3600, "index {etape} : pas fini en une heure");
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+    };
+    let ouverture = comptes("ouverture");
+    let fin1 = indexer("source entière");
+    let entiere = comptes("après l'index de la source entière");
+    std::fs::remove_file(&fichier).expect("retirer le fichier");
+    let fin2 = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| indexer("sans le fichier")));
+    std::fs::write(&fichier, &contenu).expect("remettre le fichier");
+    let fin2 = fin2.unwrap_or_else(|e| std::panic::resume_unwind(e));
+    let sans = comptes("après l'index sans le fichier");
+    let doc = json!({"base": base.to_string_lossy(), "racine": racine, "retire": retirer.to_string_lossy(),
+                     "ouverture": ouverture, "apres_source_entiere": entiere, "apres_effacement": sans,
+                     "fin_index_source_entiere": fin1, "fin_index_effacement": fin2});
+    std::fs::write(&sortie, serde_json::to_string_pretty(&doc).unwrap()).expect("écrire le relevé");
+    eprintln!("[orphelins] relevé écrit : {}", sortie.to_string_lossy());
+}
