@@ -139,7 +139,7 @@ fn est_ancetre(depot: &Path, a: &str, b: &str) -> Result<bool, String> {
     }
 }
 
-fn git(depot: &Path, args: &[&str]) -> Result<String, String> {
+pub(crate) fn git(depot: &Path, args: &[&str]) -> Result<String, String> {
     let o = std::process::Command::new("git").arg("-C").arg(depot).args(args).output().map_err(|e| format!("git : {e}"))?;
     if o.status.success() {
         Ok(String::from_utf8_lossy(&o.stdout).trim().to_string())
