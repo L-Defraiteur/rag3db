@@ -95,6 +95,22 @@ void NodeTableVersionRecordHandler::applyFuncToChunkedGroups(version_record_hand
 
 void NodeTableVersionRecordHandler::rollbackInsert(main::ClientContext* context,
     node_group_idx_t nodeGroupIdx, row_idx_t startRow, row_idx_t numRows) const {
+    // La garde : l'annulation tronque le groupe à startRow. Elle refuse si le groupe porte des
+    // lignes au-delà de celles de cet enregistrement, versées après par une autre transaction :
+    // les tronquer perdrait des lignes validées (ticket du 14 novembre 2026, des Note perdues sous
+    // un pool plein). Une annulation qui échoue condamne la base, ce qui vaut mieux qu'une perte
+    // silencieuse.
+    if (nodeGroupIdx < table->getNumNodeGroups()) {
+        const auto rowsInGroup = table->getNodeGroupNoLock(nodeGroupIdx)->getNumRows();
+        KU_ASSERT(rowsInGroup <= startRow + numRows);
+        if (rowsInGroup > startRow + numRows) {
+            throw RuntimeException(stringFormat(
+                "Rollback refused: rows [{}, {}) of node group {} of table {} are followed by {} "
+                "rows written by another transaction, which truncating would lose.",
+                startRow, startRow + numRows, nodeGroupIdx, table->getTableName(),
+                rowsInGroup - startRow - numRows));
+        }
+    }
     table->rollbackPKIndexInsert(context, startRow, numRows, nodeGroupIdx);
     table->rollbackIndexInsert(StorageUtils::getStartOffsetOfNodeGroup(nodeGroupIdx) + startRow,
         transaction::Transaction::Get(*context));
