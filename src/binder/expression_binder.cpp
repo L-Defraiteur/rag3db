@@ -1,5 +1,7 @@
 #include "binder/expression_binder.h"
 
+#include <optional>
+
 #include "binder/binder.h"
 #include "binder/expression/expression_util.h"
 #include "binder/expression/literal_expression.h"
@@ -12,6 +14,7 @@
 #include "common/types/value/nested.h"
 #include "expression_evaluator/expression_evaluator_utils.h"
 #include "function/cast/vector_cast_functions.h"
+#include "function/list/vector_list_functions.h"
 #include "function/struct/vector_struct_functions.h"
 #include "parser/expression/parsed_expression_visitor.h"
 #include "parser/expression/parsed_parameter_expression.h"
@@ -87,10 +90,43 @@ std::shared_ptr<Expression> ExpressionBinder::bindExpression(
     return expression;
 }
 
+// **Une liste de littéraux se plie sans évaluateurs** (ticket
+// docs/everything-declarative/tickets/2026-11-14-une-projection-de-graphe-retient-sa-memoire-apres-
+// son-retrait.md). evaluateConstantExpression monte un évaluateur par enfant, et chaque évaluateur
+// littéral alloue un vecteur de DEFAULT_VECTOR_CAPACITY places pour une seule valeur : une liste de
+// 72 652 chaînes en clair prenait 3,5 Gio de pointe pour 2,2 Mo de texte. Quand chaque enfant est déjà
+// un littéral du type de l'élément, la valeur de la liste se bâtit de leurs valeurs, la même que
+// l'évaluateur rendrait. Sinon (un cast, une expression, une liste vide), le chemin ordinaire.
+static std::optional<Value> foldListOfLiterals(const Expression& expression) {
+    if (expression.expressionType != ExpressionType::FUNCTION ||
+        expression.dataType.getLogicalTypeID() != LogicalTypeID::LIST) {
+        return std::nullopt;
+    }
+    const auto& function = expression.constCast<ScalarFunctionExpression>().getFunction();
+    if (function.name != function::ListCreationFunction::name ||
+        expression.getNumChildren() == 0) {
+        return std::nullopt;
+    }
+    const auto& childType = ListType::getChildType(expression.dataType);
+    std::vector<std::unique_ptr<Value>> children;
+    children.reserve(expression.getNumChildren());
+    for (const auto& child : expression.getChildren()) {
+        if (child->expressionType != ExpressionType::LITERAL || child->dataType != childType) {
+            return std::nullopt;
+        }
+        children.push_back(
+            std::make_unique<Value>(child->constCast<LiteralExpression>().getValue()));
+    }
+    return Value(expression.dataType.copy(), std::move(children));
+}
+
 std::shared_ptr<Expression> ExpressionBinder::foldExpression(
     const std::shared_ptr<Expression>& expression) const {
-    auto value =
-        evaluator::ExpressionEvaluatorUtils::evaluateConstantExpression(expression, context);
+    auto folded = foldListOfLiterals(*expression);
+    auto value = folded.has_value() ?
+                     std::move(*folded) :
+                     evaluator::ExpressionEvaluatorUtils::evaluateConstantExpression(expression,
+                         context);
     auto result = createLiteralExpression(value);
     // Fold result should preserve the alias original expression. E.g.
     // RETURN 2, 1 + 1 AS x
