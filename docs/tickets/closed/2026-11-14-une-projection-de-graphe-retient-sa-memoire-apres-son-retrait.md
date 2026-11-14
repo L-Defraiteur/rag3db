@@ -4,7 +4,7 @@
 > constat : « une projection de graphe retient sa mémoire après son retrait ». Ce n'est pas une
 > rétention : la mémoire est rendue. Le défaut est le pic d'analyse.
 
-- **État** : ouvert (14 novembre 2026).
+- **État** : fermé le 14 novembre 2026, sur 1d5580d74 (le cœur) : le pliage des listes littérales. La pointe de la liaison de la liste de 72 652 chaînes passe de +3 524 Mio à +192 Mio ; ce qui reste est l'analyse ANTLR. L'IN haché, e5e626803, le précède. Le correctif ne se pose qu'avec la lib d'après 373b5477b
 - **Famille** : moteur
 - **Gravité** : pic de mémoire. Analyser et exécuter **une fois** un Cypher de 2,9 Mo, dont 72 652
   littéraux de liste, prend environ 3,6 Gio, soit environ 50 Kio par élément et 1 200 fois la taille
@@ -114,3 +114,20 @@ Deux variantes, à jouer en C++ :
 
 `RAG3WEAVER_SONDE_BASE` et `RAG3WEAVER_SONDE_MANIFESTE` sur une copie d'une base à versions,
 `RAG3WEAVER_SONDE_VARIANTES=V3,V2,V1`, sous `POSTE_MEM_MAX=32G` : les lignes `V2 tour`.
+
+## La fermeture (14 novembre 2026, 23 h)
+
+Le cœur, sur master :
+- **1d5580d74**, le pliage des listes littérales : une liste dont chaque enfant est un littéral du type
+  de l'élément se plie directement depuis leurs valeurs, sans un évaluateur et un `ValueVector` de
+  2 048 places par élément. Sur la forme à 72 652 chaînes, la pointe de la préparation passe de
+  +3 524 Mio à +192 Mio, celle de la requête entière de +3 560 à +216, et celle du `RETURN size` de
+  +3 530 à +197. Ce qui reste est l'analyse ANTLR, mesurée seule à +197 Mio ;
+- **e5e626803**, juste avant, l'`IN` haché : un `IN` sur une liste constante ne coûte plus le N².
+
+**Il ne se pose qu'avec la lib d'après 373b5477b.** D'ici là, rag3weaver n'écrit plus de grande
+liste en clair (vue-publiee : `inline_params_borne`, et le masque en prédicat).
+
+**Une note pour le rejouer** : les cas `LongQueryPeak` de `projected_graph_memory_test` ne départagent
+que joués seuls, chacun dans son processus, parce que `ru_maxrss` ne fait que monter.
+
