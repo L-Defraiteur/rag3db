@@ -56,6 +56,43 @@ code_apporte() {
   done
 }
 if [ "${1:-}" = "--code-apporte" ]; then code_apporte "$2" "$3"; exit 0; fi
+# **Le mode pile** (14 novembre 2026, la file en pile, demande de c7 et relevé de recherche) : un lot rejoué
+# sur la pile de ceux devant lui, puis posé au dernier pas par `rebase --onto origin/master <avant>`, ne descend
+# plus du commit testé. PILE_AVANT=<tête du lot d'avant> remplace alors deux contrôles :
+#   (b) <avant> est un ancêtre du commit testé : le rejeu s'est bien fait sur la pile ;
+#   (c) `code_apporte(<avant>, master)` est vide : les lots d'avant ont atterri avec le contenu testé, sinon
+#       « la pile a changé », et c'est un rejeu ;
+#   (a) `git range-diff <avant>..<testé> <master>..HEAD` : `=` pour tout commit ; un `!` toléré si ses deux
+#       versions ne diffèrent que par des `.md` (un conflit de nouveautes.md résolu au rebase) ; un `>` (commit
+#       ajouté) toléré s'il ne touche que des `.md` ; un `<` (commit perdu) refusé.
+# Mode `--pile <avant> <testé> <master> <tête>`, joué par le témoin : rend 0 et « pile tenue », ou 1 et la raison.
+verifier_pile() {
+  local avant=$1 teste=$2 maitre=$3 tete=$4 apporte ligne c
+  git merge-base --is-ancestor "$avant" "$teste" || { echo "ARRÊT : la tête d'avant ($avant) n'est pas un ancêtre du commit testé ($teste)"; return 1; }
+  apporte=$(code_apporte "$avant" "$maitre")
+  [ -z "$apporte" ] || { echo "ARRÊT : la pile a changé — master a du code que la tête d'avant n'avait pas :"; echo "$apporte"; return 1; }
+  local ancien signe nouveau
+  while IFS= read -r ligne; do
+    [ -n "$ligne" ] || continue
+    # Une ligne d'en-tête : « 1:  <ancien> <signe> 1:  <nouveau> <sujet> » ; les lignes de diff qui suivent un `!`
+    # commencent par une espace et sont sautées.
+    case "$ligne" in [0-9-]*:*) ;; *) continue ;; esac
+    ancien=$(echo "$ligne" | awk '{print $2}'); signe=$(echo "$ligne" | awk '{print $3}'); nouveau=$(echo "$ligne" | awk '{print $5}')
+    case "$signe" in
+      =) ;;
+      '>')
+        [ -z "$(git diff --name-only "$nouveau^" "$nouveau" -- . ':!*.md')" ] || { echo "ARRÊT : un commit ajouté après le rejeu touche autre chose que de la doc : $ligne"; return 1; } ;;
+      '!')
+        # Toléré si les deux versions du commit ne diffèrent que par des .md : le même diff hors .md.
+        if [ "$(git diff --no-color "$ancien^!" -- . ':!*.md' | grep -v '^index ')" != "$(git diff --no-color "$nouveau^!" -- . ':!*.md' | grep -v '^index ')" ]; then
+          echo "ARRÊT : un commit du lot a changé hors des .md depuis le rejeu : $ligne"; return 1
+        fi ;;
+      *) echo "ARRÊT : le lot n'est plus celui qui a été testé : $ligne"; return 1 ;;
+    esac
+  done < <(git range-diff --no-color "$avant..$teste" "$maitre..$tete")
+  echo "pile tenue : les commits du lot sont ceux du rejeu, et la pile d'avant est sur master"
+}
+if [ "${1:-}" = "--pile" ]; then verifier_pile "$2" "$3" "$4" "$5"; exit $?; fi
 # **La dérive se voit** (c7, 13 novembre 2026) : la copie exécutée (au cache, `~/.cache/rag3weaver-build/`)
 # fait autorité — un lot ne peut pas affaiblir la garde qui le juge ; elle dit à chaque exécution son hash et
 # celui de `tools/poste/push_garde.sh` dans l'arbre poussé, et « garde en retard sur le dépôt » quand ils
@@ -80,8 +117,9 @@ derive "$PWD"
 gd=$(git rev-parse --git-dir)
 tail -1 $J/resume.log | grep -qx VERT || { echo "ARRÊT : la passe n'est pas VERTE"; exit 1; }
 teste=$(head -1 $J/resume.log | awk '{print $2}')
-# HEAD est le commit testé, ou en descend par des commits de doc seuls (des .md).
-if [ "$(git rev-parse --short HEAD)" != "$teste" ]; then
+# HEAD est le commit testé, ou en descend par des commits de doc seuls (des .md). En mode pile, c'est
+# verifier_pile qui juge, plus bas, une fois master relu.
+if [ -z "${PILE_AVANT:-}" ] && [ "$(git rev-parse --short HEAD)" != "$teste" ]; then
   git merge-base --is-ancestor "$teste" HEAD || { echo "ARRÊT : HEAD ne descend pas du commit testé ($teste)"; exit 1; }
   ajoute=$(git diff --name-only "$teste" HEAD -- . ':!*.md')
   [ -z "$ajoute" ] || { echo "ARRÊT : HEAD ajoute autre chose que de la doc au commit testé ($teste) :"; echo "$ajoute"; exit 1; }
@@ -97,12 +135,21 @@ git fetch -q origin master || exit 1
 neuf=$(git rev-parse FETCH_HEAD)
 # Le C++ du moteur (src/, test/) n'est pas lié par la lib épinglée : il se rebase sans rejeu
 # (docs/procedures/push-d-un-lot.md).
-apporte=$(code_apporte $base $neuf)
-if [ -n "$apporte" ]; then echo "ARRÊT : master a apporté du code depuis la base testée"; echo "$apporte"; exit 1; fi
-echo "master $(git rev-parse --short $neuf), base testée $(git rev-parse --short $base) : rien de code entre les deux"
-git rebase $neuf > /dev/null 2>&1
-if [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ] || git status --short | grep -q '^UU'; then
-  git rebase --abort; echo "ARRÊT : le rebase sur $neuf bute"; exit 1
+if [ -n "${PILE_AVANT:-}" ]; then
+  echo "mode pile : tête d'avant $(git rev-parse --short "$PILE_AVANT"), commit testé $teste"
+  git rebase $neuf > /dev/null 2>&1
+  if [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ] || git status --short | grep -q '^UU'; then
+    git rebase --abort; echo "ARRÊT : le rebase sur $neuf bute"; exit 1
+  fi
+  verifier_pile "$PILE_AVANT" "$teste" "$neuf" HEAD || exit 1
+else
+  apporte=$(code_apporte $base $neuf)
+  if [ -n "$apporte" ]; then echo "ARRÊT : master a apporté du code depuis la base testée"; echo "$apporte"; exit 1; fi
+  echo "master $(git rev-parse --short $neuf), base testée $(git rev-parse --short $base) : rien de code entre les deux"
+  git rebase $neuf > /dev/null 2>&1
+  if [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ] || git status --short | grep -q '^UU'; then
+    git rebase --abort; echo "ARRÊT : le rebase sur $neuf bute"; exit 1
+  fi
 fi
 git push -q origin HEAD:master || { echo "ARRÊT : push refusé"; exit 1; }
 git fetch -q origin master
