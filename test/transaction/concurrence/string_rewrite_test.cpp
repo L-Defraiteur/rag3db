@@ -202,14 +202,26 @@ TEST_F(StringRewriteAcrossAddColumn, AnOpenWriterCommitsAfterAnAdd) {
         rag3db::main::Connection writer(database.get());
         ASSERT_TRUE(writer.query("BEGIN TRANSACTION;")->isSuccess());
         rewrite(writer, 0, NUM_ROWS);
+        std::atomic<bool> alterDone{false};
         std::thread alter([&] {
             rag3db::main::Connection other(database.get());
             auto result = other.query("ALTER TABLE Chunk ADD note STRING DEFAULT 'n-defaut';");
             if (!result->isSuccess()) {
                 alterError = result->getErrorMessage();
             }
+            alterDone = true;
         });
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        // Ce que voit l'écrivain : l'ADD a-t-il abouti avant son COMMIT, et la colonne lui est-elle
+        // visible dans sa transaction ? Imprimé pour le ticket de l'isolement du catalogue.
+        const bool doneBeforeCommit = alterDone.load();
+        auto seen = writer.query("MATCH (n:Chunk) RETURN count(n.note);");
+        std::cout << "[témoin] ADD terminé avant le COMMIT de l'écrivain : "
+                  << (doneBeforeCommit ? "oui" : "non") << " ; note vue dans sa transaction : "
+                  << (seen->isSuccess() ? "oui, " + seen->getNext()->getValue(0)->toString() +
+                                              " valeurs non nulles" :
+                                          "non (" + seen->getErrorMessage().substr(0, 120) + ")")
+                  << std::endl;
         auto commit = writer.query("COMMIT;");
         alter.join();
         ASSERT_TRUE(commit->isSuccess()) << commit->getErrorMessage();
@@ -217,6 +229,14 @@ TEST_F(StringRewriteAcrossAddColumn, AnOpenWriterCommitsAfterAnAdd) {
     std::cout << "[témoin] ADD pendant la transaction : "
               << (alterError.empty() ? "accepté" : "refusé : " + alterError) << std::endl;
     expectAllRight("before-checkpoint");
+    {
+        auto result = conn->query("MATCH (n:Chunk) RETURN count(n), count(n.note), "
+                                  "sum(CASE WHEN n.note = 'n-defaut' THEN 1 ELSE 0 END);");
+        if (result->isSuccess()) {
+            std::cout << "[témoin] après le COMMIT, lignes, note non nulles, note = défaut : "
+                      << result->getNext()->toString() << std::endl;
+        }
+    }
     ok("CHECKPOINT;");
     expectAllRight("after-checkpoint");
     conn.reset();
