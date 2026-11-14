@@ -1,0 +1,125 @@
+# L'écrivain de 2a′-2 et le cache par (couche, rang)
+
+Conception, écrite avant le code, au mot de c7 du 14 novembre 2026 (22 h 30). Elle prolonge :
+- la page 03, § 2 bis : la couche de travail, et une génération par commit ;
+- la page 03, § 8 : l'identifiant stable de couche ;
+- la page 05 : la vue en prédicat, et la raison de l'absence de cache dans vue-publiee (§ 2 bis).
+
+## 1. Deux rangs vivants par couche
+
+- **n**, le dernier rang **publié**. Il est figé : aucune ligne visible à n ne change plus.
+- **w = n + 1**, le rang **en attente** : la couche de travail. La montre le réécrit à chaque
+  sauvegarde.
+- **La lecture sans vue prend w** : c'est l'arbre vivant, comme aujourd'hui. Une vue (une couche, un
+  appel épinglé) prend un rang publié, **jamais w**.
+
+## 2. Les règles de l'écrivain, ligne par ligne
+
+Elles valent pour `Scope`, pour `File` et pour leurs arêtes, sur la couche écrite.
+
+| la ligne trouvée | le scope réindexé est… | l'écrivain fait |
+|---|---|---|
+| `_depuis = w` (née dans l'attente) | changé | la réécrit **sur place** |
+| `_depuis = w` | disparu | l'**efface** physiquement (elle n'a jamais été publiée) |
+| `_depuis ≤ n`, vivante | identique | ne fait rien |
+| `_depuis ≤ n`, vivante | changé | pose `_jusqu_a = w` sur l'ancienne, écrit une **ligne neuve** `_depuis = w`, uuid `hash(clé, couche, w)` |
+| `_depuis ≤ n`, vivante | disparu | pose `_jusqu_a = w` (retrait, sans effacement) |
+| `_depuis ≤ n`, retirée à w | revenu à l'identique (l'édition revient en arrière) | efface la ligne neuve de w, remet `_jusqu_a` à vide |
+
+**Les arêtes entrantes suivent** (page 03, § 2 bis, 1). Quand une ligne neuve remplace une ligne
+vivante, chaque arête entrante vivante se recopie vers la ligne neuve avec `_depuis = w`, et l'ancienne
+se ferme à w. Les arêtes sortantes sont celles que l'analyse du fichier réécrit déjà.
+
+**Le grain du snapshot** prend la couche (page 03, § 3). Réindexer un fichier n'efface plus ce qui
+n'est pas de w : il retire.
+
+**Le drapeau** : la première pose de `_jusqu_a` appelle `marquer_des_lignes_invisibles`. C'est son
+appelant, qui manquait (page 04, § 3).
+
+## 3. La publication
+
+- Au commit de la source suivie : une ligne `_generation` (couche, rang = w, commit, base, recette,
+  parente épinglée), puis n := w et w := n + 1. **Aucune ligne n'est réécrite** : les lignes nées à w
+  deviennent publiées par le seul rang.
+- **Le cas d'un arbre sale au commit** : la couche de travail porte alors des sauvegardes que le commit
+  n'a pas. Publier w, ce serait publier l'arbre et non le commit. Je propose que la génération dise
+  `arbre_propre: false` quand le worktree a des changements non commités au moment de la publication,
+  et qu'une vue qui l'épingle le dise. Indexer le commit lui-même, par ses objets git, revient à 2a′-3.
+  **À trancher avec arbre principal et c7 avant le code.**
+
+## 4. L'époque d'écriture, et le cache
+
+- **L'époque** : un compteur de la couche, incrémenté à chaque écriture validée de l'écrivain, et porté
+  par la `Visibilite` (donc par la vue de lecture).
+- **Le cache des ensembles admis** (`EnsemblesPoses`, déjà posé sans contenu dans vue-publiee) :
+  - la clé est (couche, rang, époque si le rang est w, l'empreinte du filtre de l'utilisateur, la
+    cellule) ;
+  - la valeur est l'ensemble des offsets admis pour le lexical (`Arc<[u64]>`), et l'ensemble des
+    racines admises pour la projection des k résultats (`Arc<HashSet<String>>`) ;
+  - **un rang publié a un cache définitif** : ses lignes visibles ne changent plus, puisqu'un retrait
+    plus tard pose `_jusqu_a = w > n`. Ce cache se retire avec la rétention ;
+  - **le rang w a un cache par époque**, refait à la première recherche après une écriture ;
+  - il est borné : un petit nombre d'entrées par couche (quelques filtres), dont la plus ancienne sort
+    la première.
+- C'est ce cache qui ferme le ticket de l'état B
+  (`2026-11-14-la-visibilite-dans-le-predicat-du-masque-coute-et-mene-a-l-oom.md`) côté lexical.
+  La visibilité ne se rejoue plus par requête, mais par époque.
+
+## 5. Le dense sous visibilité
+
+Le dense ne peut pas recevoir un ensemble d'offsets. `QUERY_VECTOR_INDEX` ne filtre que par un graphe
+projeté, et ce graphe se recalcule à chaque requête sur sa connexion (le cœur, page 05, § 2). Sous
+visibilité, la projection courte porte donc le prédicat de visibilité, et c'est elle qui coûtait cher
+dans l'état B.
+
+**La proposition : le post-filtre du dense, mesuré.**
+- La recherche HNSW **sans** projection, k′ = 4k candidats.
+- Ils sont filtrés côté Rust par l'ensemble des morceaux admis, tiré du cache (l'équivalent de
+  `allowed_chunk_ids_for`).
+- Si moins de k candidats passent, k′ double, jusqu'à un plafond. Au-delà du plafond, ou quand le
+  cache dit que la part admise est petite (moins de 20 % de la table), on revient à la projection
+  courte.
+- **Le risque est le rappel**, et non la justesse : un résultat admis ne sort jamais du post-filtre ;
+  il faut seulement aller le chercher assez loin. Le juge de banc tient la parité au régime
+  « optimisation » contre la projection, sur les trois formes, avant que le post-filtre soit le défaut.
+
+## 6. Les témoins, rouges d'abord
+
+1. **L'ancre garde son passé** : après une réindexation qui change `f` et un commit, la génération
+   d'avant rend l'ancien `f`, et la courante le neuf. Aucune ligne n'est effacée.
+2. **Aucune base ne change d'uuid** : une base de 2a′-1 garde tous ses uuid. Ses lignes sont la
+   génération 0.
+3. **Les arêtes entrantes suivent** : `A` (`a.rs`) appelle `f` (`b.rs`) ; `f` change ; `usages(f)` rend
+   `A` à la génération courante comme à celle d'avant.
+4. **La couche de travail** : dix sauvegardes du même fichier ne publient aucune génération ; un commit
+   en publie une. Une lecture sous une vue de l'ancre à son rang publié ne voit pas les sauvegardes en
+   attente.
+5. **Un retour en arrière s'efface** : sauvegarder une édition, puis revenir au texte publié, laisse la
+   base identique à avant l'édition.
+6. **Le cache suit l'écriture** : une recherche filtrée, puis une écriture qui ajoute un scope, puis la
+   même recherche, qui rend le scope neuf (l'époque a changé). Et la même recherche refaite sans
+   écriture ne résout rien (le cache sert).
+7. **Le drapeau tombé ne ralentit pas** : sous la sonde, l'état B reste dans les 20 % de l'état A. C'est
+   une sonde sous `poste mesure`, pas un test de la passe.
+8. **La non-fuite étendue** : le témoin 0 de 2a′-1 joue aussi `outline`, ou dit pourquoi il ne le peut
+   pas (page 03, § 7).
+9. **La parité de banc** au bit près, contre master, sur les trois formes, sous le drapeau tenu.
+
+## 7. Ce qui se mesure avant le code
+
+- **La mesure bornée des déplacés** (arbre principal, page 03, § 4) : sur les 50 derniers commits de
+  master de code-lourd, rejoués sur une copie, le nombre d'arêtes entrantes recopiées par commit, et la
+  part des seuls déplacés. Si les déplacés font plus de la moitié des recopies, **et** qu'un commit
+  médian dépasse quelques milliers d'arêtes, la position sort de l'identité de la ligne. C'est elle qui
+  décide de la forme de la ligne neuve du § 2 ; elle passe avant tout.
+- **La mémoire du cas filtré sous le prédicat** (ticket de la mémoire résidente, cas ouvert) : où vont
+  les 20 Gio, par la sonde de la vue, avant que G mesure sur l'hôte réel.
+
+## 8. L'ordre
+
+1. La mesure des déplacés, et la décision sur la position.
+2. La question de l'arbre sale au commit (§ 3), tranchée.
+3. Les témoins 1 à 6, rouges.
+4. L'écrivain (§ 2), la publication (§ 3), l'époque et le cache (§ 4).
+5. Les témoins verts, la parité de banc.
+6. Le post-filtre du dense (§ 5), mesuré ; le témoin 7 sous `poste mesure`.
