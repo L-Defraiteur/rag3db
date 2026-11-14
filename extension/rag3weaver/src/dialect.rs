@@ -345,6 +345,25 @@ pub trait SchemaDialect: Send + Sync {
         None
     }
 
+    /// **La table des générations** (`_generation`, 2a′) : une ligne par génération publiée d'une
+    /// couche, clé `{couche}:{rang}`. Elle porte l'identité de la page 30 (le commit, la base,
+    /// l'empreinte de la recette), sa parente épinglée et ses tombstones de fichier (JSON). Aucune
+    /// pour un dialecte sans générations.
+    fn create_generation_table(&self) -> Option<String> {
+        None
+    }
+
+    /// Enregistrer une génération, sans toucher une ligne déjà posée. Paramètres `$key`, `$couche`,
+    /// `$rang`, `$commit`, `$base`, `$recette`, `$tombstones`, `$publiee_le`.
+    fn merge_generation(&self) -> Option<String> {
+        None
+    }
+
+    /// Le dernier rang publié d'une couche (`$couche`) : une ligne, une colonne, vide sans génération.
+    fn latest_generation_rank(&self) -> Option<String> {
+        None
+    }
+
     /// **Un saut** ([`rag3weaver_ir::Hop`]) dans la langue de ce dialecte. Le
     /// défaut le refuse en le nommant : une forme se traduit, elle ne
     /// s'hérite pas en Cypher.
@@ -1569,6 +1588,36 @@ impl SchemaDialect for Rag3dbDialect {
     fn condition_visible_sur(&self, alias: &str, couche: &str, rang: i64) -> Option<String> {
         let p = rag3weaver_ir::Predicate::Visible { couche: couche.to_string(), rang };
         Some(rag3db_condition_sur(&p, alias, &mut 0))
+    }
+
+    fn create_generation_table(&self) -> Option<String> {
+        Some(format!(
+            "CREATE NODE TABLE IF NOT EXISTS {}(\n    \
+             _key STRING,\n    \
+             couche STRING,\n    \
+             rang INT64,\n    \
+             commit STRING,\n    \
+             base STRING,\n    \
+             recette STRING,\n    \
+             parente_couche STRING,\n    \
+             parente_rang INT64,\n    \
+             tombstones STRING,\n    \
+             publiee_le INT64,\n    \
+             PRIMARY KEY(_key)\n)",
+            crate::generations::TABLE
+        ))
+    }
+
+    fn merge_generation(&self) -> Option<String> {
+        Some(format!(
+            "MERGE (g:{} {{_key: $key}}) ON CREATE SET g.couche = $couche, g.rang = $rang, g.commit = $commit, \
+             g.base = $base, g.recette = $recette, g.tombstones = $tombstones, g.publiee_le = $publiee_le",
+            crate::generations::TABLE
+        ))
+    }
+
+    fn latest_generation_rank(&self) -> Option<String> {
+        Some(format!("MATCH (g:{}) WHERE g.couche = $couche RETURN max(g.rang)", crate::generations::TABLE))
     }
 
     /// Par uuids : `UNWIND $uuids AS u MATCH (m:T {_uuid: u}) RETURN u, …` ;
