@@ -232,7 +232,7 @@ cas $? "à la fin, aucune fiche ni aucun billet ne reste"
 # boucles actives pendant 4 s ; on lit le temps CPU de sa portée (cpu.stat) : la somme des quatre ne doit pas
 # dépasser 4 cœurs × 4 s, à 15 % près. Les nombres de fils dits aux outils valent 1.
 if systemd-run --user --scope -q -- true 2>/dev/null; then
-  n=$(nproc)
+  n=$(nproc --all)
   if [ "$n" -ge 6 ]; then
     echo 4 > "$POSTE_LOCK_DIR/lourds-max"; echo $((n - 4)) > "$POSTE_LOCK_DIR/coeurs-libres"
     sature='g=$(cut -d: -f3 /proc/self/cgroup); echo "$POSTE_FILS $RAYON_NUM_THREADS $CARGO_BUILD_JOBS $RUST_TEST_THREADS" > "$1.fils";
@@ -251,6 +251,21 @@ if systemd-run --user --scope -q -- true 2>/dev/null; then
   fi
 else
   echo "SAUTÉ  l'enveloppe CPU : systemd-run --user indisponible"
+fi
+
+# ── 9. Sous un quota étranger, les parts se calculent sur les cœurs du poste ──────────────
+# (14 novembre 2026 : dans un lourd de 500 % à luciepc, `nproc` rendait 5 et le cas 8 sautait.) Un poste lancé
+# dans une portée à quota (CPUQuota=200 %, un `systemd-run` qui n'est pas un poste) doit donner à un lourd
+# (cœurs du poste − 2) / 4, pas (2 − 2) / 4.
+if systemd-run --user --scope -q -- true 2>/dev/null && [ "$(nproc --all)" -ge 10 ]; then
+  echo 4 > "$POSTE_LOCK_DIR/lourds-max"; echo 2 > "$POSTE_LOCK_DIR/coeurs-libres"
+  attendu=$(( ($(nproc --all) - 2) / 4 ))
+  lu=$(systemd-run --user --scope -q -p CPUQuota=200% -E POSTE_LOCK_DIR="$POSTE_LOCK_DIR" -- "$POSTE" lourd sh -c 'echo $POSTE_FILS' 2>/dev/null | tail -1)
+  [ "$lu" = "$attendu" ]
+  cas $? "sous un quota étranger de 200 %, un lourd reçoit $attendu fils (lu : $lu)"
+  rm -f "$POSTE_LOCK_DIR/lourds-max" "$POSTE_LOCK_DIR/coeurs-libres"
+else
+  echo "SAUTÉ  le quota étranger : systemd-run --user indisponible ou moins de 10 cœurs"
 fi
 
 exit $echec
