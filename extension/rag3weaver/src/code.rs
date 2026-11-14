@@ -5433,3 +5433,168 @@ mod tests_des_generations {
         assert_eq!(cat.generations.as_ref().map(|v| (v.couche.as_str(), v.rang)), Some((COUCHE_DU_BACKEND, 0)));
     }
 }
+
+/// **Les témoins de l'écrivain de 2a′-2** (page
+/// `docs/everything-declarative/14-11-2026/06-l-ecrivain-de-2a-prime-2-et-le-cache-par-rang.md`, § 6),
+/// rouges d'abord. Le dépôt : `a()` dans `a.rs` appelle `f()` dans `b.rs`. Les versions de `f` se
+/// distinguent par leur ligne de fin, lue sur `Scope` (le contenu, lui, vit dans `ScopeContent`).
+#[cfg(test)]
+mod tests_de_l_ecrivain {
+    use super::*;
+    use crate::connection::{CypherValue, QueryParam};
+    use crate::code_tools::Snapshot;
+
+    const A: &str = "pub fn a() -> u32 {\n    f()\n}\n";
+    const F1: &str = "pub fn f() -> u32 {\n    1\n}\n";
+    const F2: &str = "pub fn f() -> u32 {\n    let x = 2;\n    x\n}\n";
+
+    fn base() -> (Catalog, Snapshot) {
+        let conn = crate::Rag3dbConnection::in_memory().unwrap();
+        let mut cat = Catalog::new(Box::new(conn), Box::new(crate::embedder::HashEmbedder::new(8)), crate::CatalogConfig {
+            allow_mock_embedder: true, embedding_dim: 8, ..Default::default()
+        });
+        cat.initialize().unwrap();
+        register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+        assert_eq!(scope_form(&cat).unwrap(), ScopeForm::Generations);
+        let src = Snapshot::new("ancre", [("a.rs".to_string(), A.to_string()), ("b.rs".to_string(), F1.to_string())]);
+        cat.ingest_code(&analyze_source(&src).unwrap()).unwrap();
+        (cat, src)
+    }
+
+    fn sauver(cat: &mut Catalog, src: &Snapshot, chemin: &str, texte: &str) {
+        src.insert(chemin, texte);
+        crate::code_tools::reingest_file(cat, src, chemin, texte).expect("la réindexation");
+    }
+
+    fn texte(v: &CypherValue) -> String {
+        match v { CypherValue::String(s) => s.clone(), autre => format!("{autre:?}") }
+    }
+
+    /// Toutes les lignes `Scope` d'un nom, sans visibilité : (uuid, fin, `_depuis`, `_jusqu_a`).
+    fn lignes(cat: &Catalog, nom: &str) -> Vec<(String, i64, i64, Option<i64>)> {
+        let r = cat
+            .conn()
+            .execute_with_params(
+                "MATCH (s:Scope) WHERE s.name = $n RETURN s._uuid, s.end_line, s._depuis, s._jusqu_a ORDER BY s._depuis",
+                &[QueryParam::new("n", CypherValue::String(nom.into()))],
+            )
+            .unwrap();
+        r.rows.iter().map(|l| (texte(&l[0]), l[1].as_i64().unwrap_or(-1), l[2].as_i64().unwrap_or(-1), l[3].as_i64())).collect()
+    }
+
+    /// Les fins des lignes `Scope` d'un nom visibles au rang lu, par le chemin des lecteurs (un plan).
+    fn fins_visibles(cat: &Catalog, nom: &str) -> Vec<i64> {
+        use crate::read_view::ReadCatalog;
+        let select = rag3weaver_ir::Select::filtered(
+            SCOPE,
+            rag3weaver_ir::Predicate::Equals { field: "name".into(), param: "n".into() },
+            vec![rag3weaver_ir::Column::Node("end_line".into())],
+        );
+        let mut plan = rag3weaver_ir::Plan::new();
+        plan.nodes.push(rag3weaver_ir::PlanNode {
+            id: "fins".into(),
+            form: rag3weaver_ir::Form::Select(select),
+            params: vec![rag3weaver_ir::QueryParam::new("n", rag3weaver_ir::Value::String(nom.into()))],
+        });
+        plan.outputs = vec!["fins".into()];
+        let rapport = ReadCatalog::run_read_plan(cat, &plan, Default::default()).expect("le plan");
+        let mut fins: Vec<i64> = rapport.outputs["fins"].rows.iter().filter_map(|l| l.first().and_then(|v| v.as_i64())).collect();
+        fins.sort();
+        fins
+    }
+
+    /// Les appelants de `nom` visibles au rang lu : les deux bouts sous la visibilité.
+    fn appelants(cat: &Catalog, nom: &str) -> Vec<String> {
+        let v = cat.generations.clone().expect("une base à générations");
+        let d = cat.dialect_arc();
+        let (pa, pf) = (d.condition_visible_sur("a", &v.couche, v.rang).unwrap(), d.condition_visible_sur("f", &v.couche, v.rang).unwrap());
+        let r = cat
+            .conn()
+            .execute_with_params(
+                &format!("MATCH (a:Scope)-[:CONSUMES]->(f:Scope) WHERE f.name = $n AND {pa} AND {pf} RETURN a.name ORDER BY a.name"),
+                &[QueryParam::new("n", CypherValue::String(nom.into()))],
+            )
+            .unwrap();
+        r.rows.iter().map(|l| texte(&l[0])).collect()
+    }
+
+    fn generations_publiees(cat: &Catalog) -> i64 {
+        let r = cat.conn().execute(&format!("MATCH (g:{}) RETURN count(*)", crate::generations::TABLE)).unwrap();
+        r.rows[0][0].as_i64().unwrap()
+    }
+
+    /// **Témoin 1 : l'ancre garde son passé.** Après une réindexation qui change `f` et un commit, la
+    /// génération d'avant rend l'ancien `f`, et la courante le neuf. Aucune ligne n'est effacée.
+    #[test]
+    fn l_ancre_garde_son_passe() {
+        let (mut cat, src) = base();
+        let n = cat.publier_la_generation("c1", 0).expect("publier");
+        sauver(&mut cat, &src, "b.rs", F2);
+        let m = cat.publier_la_generation("c2", 0).expect("publier");
+        assert!(m > n, "un rang neuf : {n} puis {m}");
+        assert_eq!(cat.au_rang(n, |c| fins_visibles(c, "f")), vec![3], "la génération d'avant rend l'ancien f");
+        assert_eq!(cat.au_rang(m, |c| fins_visibles(c, "f")), vec![4], "la génération courante rend le neuf");
+        assert_eq!(lignes(&cat, "f").len(), 2, "les deux lignes de f restent : {:?}", lignes(&cat, "f"));
+    }
+
+    /// **Témoin 2 : aucune ligne publiée ne change.** Chaque uuid visible à un rang publié garde, après
+    /// une écriture et une publication, la même ligne de fin.
+    #[test]
+    fn aucune_ligne_publiee_ne_change() {
+        let (mut cat, src) = base();
+        let n = cat.publier_la_generation("c1", 0).expect("publier");
+        let avant: Vec<_> = ["a", "f"].iter().flat_map(|nom| lignes(&cat, nom)).map(|(u, fin, _, _)| (u, fin)).collect();
+        sauver(&mut cat, &src, "b.rs", F2);
+        cat.publier_la_generation("c2", 0).expect("publier");
+        let apres: Vec<_> = ["a", "f"].iter().flat_map(|nom| lignes(&cat, nom)).map(|(u, fin, _, _)| (u, fin)).collect();
+        for ligne in &avant {
+            assert!(apres.contains(ligne), "la ligne publiée {ligne:?} a changé ou disparu : {apres:?}");
+        }
+        assert_eq!(cat.au_rang(n, |c| fins_visibles(c, "f")), vec![3]);
+    }
+
+    /// **Témoin 3 : les arêtes entrantes suivent.** `a` appelle `f` ; `f` change ; `a` reste l'appelant
+    /// de `f` à la génération courante comme à celle d'avant.
+    #[test]
+    fn les_aretes_entrantes_suivent() {
+        let (mut cat, src) = base();
+        let n = cat.publier_la_generation("c1", 0).expect("publier");
+        assert_eq!(cat.au_rang(n, |c| appelants(c, "f")), vec!["a".to_string()], "le dépôt du témoin relie a à f");
+        sauver(&mut cat, &src, "b.rs", F2);
+        let m = cat.publier_la_generation("c2", 0).expect("publier");
+        assert_eq!(cat.au_rang(m, |c| appelants(c, "f")), vec!["a".to_string()], "à la génération courante");
+        assert_eq!(cat.au_rang(n, |c| appelants(c, "f")), vec!["a".to_string()], "à la génération d'avant");
+    }
+
+    /// **Témoin 4 : la couche de travail.** Dix sauvegardes ne publient aucune génération et ne laissent
+    /// qu'une ligne en attente ; le rang publié ne les voit pas ; un commit en publie une.
+    #[test]
+    fn dix_sauvegardes_ne_publient_rien() {
+        let (mut cat, src) = base();
+        let n = cat.publier_la_generation("c1", 0).expect("publier");
+        let publiees = generations_publiees(&cat);
+        for i in 0..10 {
+            let corps: String = (0..=i).map(|k| format!("    let x{k} = {k};\n")).collect();
+            sauver(&mut cat, &src, "b.rs", &format!("pub fn f() -> u32 {{\n{corps}    1\n}}\n"));
+        }
+        assert_eq!(generations_publiees(&cat), publiees, "une sauvegarde ne publie rien");
+        assert_eq!(lignes(&cat, "f").len(), 2, "la ligne publiée et une seule ligne en attente : {:?}", lignes(&cat, "f"));
+        assert_eq!(cat.au_rang(n, |c| fins_visibles(c, "f")), vec![3], "le rang publié ne voit pas l'attente");
+        cat.publier_la_generation("c2", 0).expect("publier");
+        assert_eq!(generations_publiees(&cat), publiees + 1, "un commit publie une génération");
+    }
+
+    /// **Témoin 5 : un retour en arrière s'efface.** Sauvegarder une édition, puis revenir au texte
+    /// publié, laisse la couche comme avant l'édition : aucune ligne en attente, la ligne publiée vivante.
+    #[test]
+    fn un_retour_en_arriere_s_efface() {
+        let (mut cat, src) = base();
+        let n = cat.publier_la_generation("c1", 0).expect("publier");
+        let avant = lignes(&cat, "f");
+        sauver(&mut cat, &src, "b.rs", F2);
+        sauver(&mut cat, &src, "b.rs", F1);
+        assert_eq!(cat.rang_en_attente(), Some(n + 1), "le rang en attente suit le rang publié");
+        assert_eq!(lignes(&cat, "f"), avant, "la couche est revenue à l'identique");
+        assert!(lignes(&cat, "f").iter().all(|(_, _, _, fin)| fin.is_none()), "la ligne publiée est vivante");
+    }
+}
