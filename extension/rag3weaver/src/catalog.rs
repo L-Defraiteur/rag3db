@@ -288,6 +288,11 @@ pub struct Catalog {
     /// recherche le dit quand même par `expliquer_le_silence_d_un_signal`.
     /// C'est pour ça qu'il a le droit d'être approximatif.
     peut_devoir_un_embarquement: bool,
+    /// **La bascule d'index public déclarée par une migration** (1b) : l'entité et l'index public
+    /// qu'elle prend. Posée le temps d'un seul enregistrement par
+    /// [`Catalog::basculer_l_index_public_par_migration`] ; hors d'elle, la garde de
+    /// `register_entity` refuse tout changement d'index public sur une entité peuplée.
+    bascule_declaree: Option<(String, Option<String>)>,
     /// Le mot « embarquement demandé, embarqueur absent » est-il déjà dit ?
     /// Une fois par catalogue : chaque paquet le redirait.
     absent_signale: std::sync::atomic::AtomicBool,
@@ -726,6 +731,7 @@ fn read_threads() -> u64 {
             pending: PendingWork::new(),
             parked_pending: HashMap::new(),
             peut_devoir_un_embarquement: false,
+            bascule_declaree: None,
             absent_signale: std::sync::atomic::AtomicBool::new(false),
             in_transaction: false,
             fanout: None,
@@ -2113,7 +2119,9 @@ fn read_threads() -> u64 {
                     .map_err(|e| CatalogError::DbError(e.to_string()))?;
                 let count = rows.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64())
                     .ok_or_else(|| CatalogError::DbError(format!("{entity_name} : comptage avant changement d'index public illisible")))?;
-                if count > 0 {
+                let declaree = self.bascule_declaree.as_ref()
+                    .is_some_and(|(entite, index)| entite == entity_name && index == &config.search_index);
+                if count > 0 && !declaree {
                     return Err(CatalogError::SchemaError(format!("{entity_name} : changement d'index public interdit sur une entité peuplée sans migration déclarée")));
                 }
             }
@@ -2788,6 +2796,25 @@ fn read_threads() -> u64 {
         Ok(())
     }
 
+    /// **Enregistrer une entité peuplée sous un autre index public, par une migration déclarée**
+    /// (1b) : la seule voie qui passe la garde de `register_entity` sur ce changement, pour cette
+    /// entité et cet index seulement, le temps de cet enregistrement. Les autres gardes restent.
+    pub(crate) fn basculer_l_index_public_par_migration(
+        &mut self,
+        entity_name: &str,
+        config: crate::config::EntityConfig,
+    ) -> Result<(), CatalogError> {
+        self.bascule_declaree = Some((entity_name.to_string(), config.search_index.clone()));
+        let fait = self.register_entity(entity_name, config);
+        self.bascule_declaree = None;
+        fait
+    }
+
+    /// La connexion et le dialecte, pour une migration qui écrit hors des graphes d'ingestion.
+    pub(crate) fn connexion_et_dialecte(&self) -> (Arc<dyn DbConnection>, Arc<dyn crate::dialect::SchemaDialect>) {
+        (self.conn.clone(), self.dialect.clone())
+    }
+
     /// Check if a name is a registered entity (simple or KB-only).
     pub fn is_registered_entity(&self, name: &str) -> bool {
         self.entity_configs.contains_key(name)
@@ -3106,7 +3133,7 @@ fn read_threads() -> u64 {
     /// **Re-rendre toutes les lignes d'une entité dérivée** : chaque racine
     /// est mise en file. Le court-circuit par `_render_hash` évite d'écrire
     /// ce qui n'a pas bougé.
-    fn rederiver_tout(&mut self, entity: &str) -> Result<(), CatalogError> {
+    pub(crate) fn rederiver_tout(&mut self, entity: &str) -> Result<(), CatalogError> {
         let Some(racine) = self.entity_configs.get(entity).and_then(|c| c.derived.as_ref()).map(|d| d.from.clone()) else {
             return Ok(());
         };
