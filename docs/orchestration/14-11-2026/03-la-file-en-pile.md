@@ -286,3 +286,12 @@ test `FailedCheckpointHook` tient un `Arc<ReopenState>` pour toute la durée du 
 réouverture attend 10 s puis refuse. Aucun chemin produit ; correctif = `Weak` + `upgrade` dans le
 crochet, en lot à part en bout de chaîne (base = la tête de codeparsers), rouge = le test puis un témoin
 court. La règle du 13 (attendre les deux références) reste.
+
+**20 h 3x — la chaîne reposée, deux rangs de plus** : exclusions (recherche, f63d1bf4e, passe) → tty-9
+(805af3bb6, vert) → activations (embarquement, 767d214fd, passe) → sans-filtre → 1b corrigée (arbre
+principal, 5fc11e0f1, passe) → fils du moteur (G, be641a3c5, check_features 8/8 avant la tête) → pointeur
+des règles d'import (codeparsers, 5551741db, passe) → **rang 23 : la fermeture qui tient** (archi, le
+ticket du rouge de l'hôte avec, Pour : arbre principal) → **rang 24 : le crochet de test en `Weak`**
+(arbre principal : le rouge de l'hôte se ferme) → chaîne Rust 1.98.1 (G, dernier). La bissection d'archi
+confirme : 9977acbdc vert, 1e9bf5089e rouge, seul. La bascule de la lib 373b5477b reste suspendue
+jusqu'au verdict commun de G et archi (jeux croisés + jeu instrumenté sous les deux libs).
