@@ -60,6 +60,47 @@ clés ont été vérifiés.
 - **Sans vue, la lecture d'aujourd'hui devient** « l'ancre, à son rang courant » : `_couche` =
   ancre, et le prédicat au rang courant. Les lignes d'une couche n'y apparaissent jamais (le témoin 0).
 
+## 2 bis. La relecture d'arbre principal (14 novembre 2026) : trois règles de plus
+
+1. **Les arêtes portent aussi `_depuis` et `_jusqu_a`** (variante (a) d'arbre principal).
+   - Avec des lignes immuables, un `f` changé prend une ligne neuve à uuid neuf. L'arête `A → f`
+     d'un fichier inchangé visait l'ancienne ligne : sans règle, l'appel de `A` à `f` disparaîtrait de
+     la vue courante à la première édition de `f`.
+   - Quand une ligne neuve remplace une ligne vivante, ses **arêtes entrantes se recopient** vers la
+     ligne neuve au rang n, et les anciennes se ferment à n. Les arêtes sortantes sont celles que
+     l'analyse du fichier réécrit déjà. L'écriture paie, proportionnellement aux appelants ; la
+     lecture reste un prédicat.
+   - L'alternative (b), viser la clé stable et résoudre le bout à la lecture, coûterait une jointure
+     par saut. Écartée.
+   - **Le cas des scopes seulement déplacés.** Un scope dont le texte ne change pas mais dont les
+     lignes bougent (une édition au-dessus) a une position neuve. Sa ligne est donc neuve elle aussi,
+     et ses arêtes entrantes se recopient. C'est le cas des 72 % de déplacés de la mesure du 8
+     novembre. Pour l'ancre, d'un commit au suivant, ce n'est que les fichiers touchés, mais **le coût
+     d'écriture se mesure avant d'atterrir** (§ 5), sur une copie de code-lourd. Si c'est trop, la
+     position sort de l'identité de la ligne vers un petit enregistrement par génération, et c'est
+     alors à redécider.
+2. **L'ancre a une couche de travail, et une génération par commit** (décision 2 de Lucie, page 30).
+   - Une base de Lucie indexe l'arbre vivant, non commité compris, et la montre réindexe à chaque
+     sauvegarde. Si chaque réindexation était une génération, la chaîne croîtrait à chaque frappe.
+   - Donc, au-dessus du dernier commit indexé (rang n), les lignes de l'ancre au rang **n+1 en
+     attente** sont sa couche de travail : réécrites sur place par la montre, et retirées sur place
+     si l'édition revient en arrière. Au commit, le rang n+1 se fige et se publie, et un rang n+2 en
+     attente s'ouvre.
+   - **Sans vue**, la lecture prend l'ancre au rang en attente : c'est l'arbre vivant, comme
+     aujourd'hui. Une couche épingle un rang figé, jamais le rang en attente.
+3. **`File` reçoit les deux colonnes, `Symbol` reste partagé.**
+   - `File` se réécrit sur place (`content_hash`, `lines_of_code`, `includes`), et la visibilité en
+     dépend (`includes`). Une génération d'avant doit voir son `File` d'alors : `File` suit la même
+     règle que `Scope`, et ses arêtes aussi.
+   - `Symbol` est par nom et idempotent : partagé entre générations, sans colonnes.
+
+Le témoin de plus (arbre principal) : `A` dans `a.rs` appelle `f` dans `b.rs` ; `f` change ;
+`usages(f)` rend `A` dans la génération courante, et dans celle d'avant.
+
+**L'ordre avec 1b** : 1b vise la forme du binaire. Si 2a′ atterrit avant que 1b joue sur les bases de
+Lucie, sa migration triviale (`_depuis` = 0, `_couche` = ancre, la génération 0, sur `Scope`, `File`
+et leurs arêtes) s'ajoute à la fin de 1b, sans deuxième passe.
+
 ## 3. Ce que le relevé dit des lecteurs, et où le filtre entre
 
 **L'écriture** (deux points, qui empêchent les générations de s'écraser) :
@@ -121,6 +162,10 @@ n'atteint que des lignes visibles.
    lignes sont la génération 0.
 3. **Une branche réindexée n'efface rien de master** (le grain du snapshot).
 4. **Le prédicat** : une ligne retirée au rang n est visible à n-1 et pas à n.
+5. **Les arêtes entrantes suivent** : `A` (`a.rs`) appelle `f` (`b.rs`) ; `f` change ; `usages(f)`
+   rend `A` à la génération courante et à celle d'avant.
+6. **La couche de travail de l'ancre** : dix sauvegardes du même fichier ne publient aucune
+   génération ; un commit en publie une.
 
 ## 5. Ce qui se décide avant le code
 
