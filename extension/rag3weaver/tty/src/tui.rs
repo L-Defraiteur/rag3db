@@ -264,6 +264,8 @@ pub fn touche_de(k: KeyEvent) -> Option<Touche> {
     let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
     let alt = k.modifiers.contains(KeyModifiers::ALT);
     match k.code {
+        // AltGr (Ctrl+Alt sous Windows) : le caractère qu'il compose.
+        KeyCode::Char(c) if ctrl && alt => Some(Touche::Car(c)),
         KeyCode::Char('c') if ctrl => Some(Touche::CtrlC),
         KeyCode::Char('d') if ctrl => Some(Touche::CtrlD),
         KeyCode::Char('g') if ctrl => Some(Touche::CtrlG),
