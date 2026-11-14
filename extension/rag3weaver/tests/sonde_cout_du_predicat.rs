@@ -95,6 +95,25 @@ fn le_cout_du_predicat_de_visibilite() {
         ("impact (1 à 3 sauts)", format!("MATCH (a:Scope)-[:CONSUMES*1..3 (r, n | WHERE {})]->(b:Scope) WHERE b.name = '{nom}' AND {} AND {} RETURN count(DISTINCT a)", pn("n"), pn("a"), pn("b"))),
         ("usages, arête seule", format!("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE b.name = '{nom}' AND {} RETURN a._uuid", pn("r"))),
     ]);
+    // Les formes de la clause complète (nœuds et arête), pour la traduction IR de 2a′-1.
+    let formes = vec![
+        ("A : une seule clause", format!("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE b.name = '{nom}' AND {} AND {} AND {} RETURN a._uuid", pn("b"), pn("r"), pn("a"))),
+        ("B : WITH entre le bout et le saut", format!("MATCH (b:Scope) WHERE b.name = '{nom}' AND {} WITH b MATCH (a:Scope)-[r:CONSUMES]->(b) WHERE {} AND {} RETURN a._uuid", pn("b"), pn("r"), pn("a"))),
+        ("C : WITH après le saut", format!("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE b.name = '{nom}' AND {} WITH a, r WHERE {} AND {} RETURN a._uuid", pn("b"), pn("r"), pn("a"))),
+        ("D : l'arête dans le motif", format!("MATCH (a:Scope)-[r:CONSUMES {{_couche: 'ancre'}}]->(b:Scope) WHERE b.name = '{nom}' AND {} AND {} AND r._depuis <= 0 AND (r._jusqu_a IS NULL OR r._jusqu_a > 0) RETURN a._uuid", pn("b"), pn("a"))),
+    ];
+    let mut meilleure = (f64::MAX, String::new());
+    for (quoi, q) in &formes {
+        let (ms, n) = mediane(&c, q, tours);
+        eprintln!("[sonde] {:>12} | {quoi:<34} | {ms:>9.2} ms | {n} ligne(s)", "forme");
+        if ms < meilleure.0 { meilleure = (ms, q.clone()); }
+    }
+    for (etiquette, q) in [("A", &formes[0].1), ("meilleure", &meilleure.1)] {
+        match c.execute(&format!("EXPLAIN {q}")) {
+            Ok(r) => for l in r.rows { eprintln!("[sonde] EXPLAIN {etiquette} | {}", l.iter().map(|v| format!("{v:?}")).collect::<Vec<_>>().join(" ")); },
+            Err(e) => eprintln!("[sonde] EXPLAIN {etiquette} refusé : {e}"),
+        }
+    }
 
     // L'alternative : une table d'appartenance de la génération 0 vers chaque Scope.
     c.execute("CREATE NODE TABLE Generation_sonde(id STRING, PRIMARY KEY(id))").unwrap();
