@@ -193,6 +193,16 @@ the local alias declaration. The graph's representative line does not identify
 every source occurrence. The strict LSP comparison and its attribution limits
 are recorded in [the validation report](https://github.com/L-Defraiteur/rag3db/blob/master/docs/codeparsers/11-11-2026/04-bilan-navigation-et-provenance.md).
 
+Every imported library carries a provenance: `builtin`, `dependency`, `project` or
+`inconnue` (unknown — never a guess). The standard library of each language comes
+from data files in codeparsers (`data/imports/<language>.toml`, each naming its
+source, version and date). Dependencies come from the repository's manifests —
+`Cargo.toml`/`Cargo.lock`, `package.json`, `pyproject.toml`, `requirements*.txt`,
+`vcpkg.json`, `go.mod` — and each manifest only speaks for its own language: a
+name declared in `package.json` does not make a Python or Rust import a dependency.
+Go module paths keep their case, and `go.mod` `replace` directives are followed
+(a module replaced by a local path belongs to the project).
+
 ## Shared indexed content
 
 A derived entity can opt into immutable content versions with
