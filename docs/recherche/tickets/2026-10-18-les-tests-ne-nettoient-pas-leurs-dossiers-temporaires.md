@@ -196,3 +196,44 @@ NVMe), et non en mémoire.
 lucivy tournent peut-être encore. Les orphelins de plus de 24 h sont à lister pour le mot de Lucie :
 1,9 Gio au portable et 3,2 Gio à luciepc, surtout des profils Chrome et des dossiers de tests
 rag3weaver. Les deux restes de `rag3weaver_cache` ne servent plus.
+
+### L'effacement du 14 novembre (hotfixs, sur le oui de Lucie)
+
+Lucie a dit oui, d'abord par c7, puis dans la session hotfixs elle-même. Le script `purge-tmp.py`
+(au portable dans le scratchpad de la session, à luciepc dans `~/.cache/rag3db-tickets-notes/`) a d'abord
+dressé la liste sans rien effacer, puis effacé chaque entrée. Juste avant chaque effacement, il a vérifié,
+par un relevé de `/proc/*/fd`, `cwd` et `root`, qu'aucun processus n'y tenait de fichier ouvert. Il n'a
+jamais touché `claude-1000/` ni `jest_rs/`, ni le Chrome de Lucie au portable
+(`com.google.Chrome…url_fetcher…`), ni rien de moins de 24 h, sauf les dossiers de Sairen qu'elle
+avait nommés. Les journaux, une ligne par entrée, sont dans `~/.cache/rag3db-locks/purge-tmp/` aux
+deux postes.
+
+| poste | catégorie | parties | rendus | restées (moins de 24 h) |
+|---|---|---:|---:|---:|
+| portable | dossiers Python de Sairen (`outils/`, `secrets/` effacés sans être lus, audio et texte) | 4 656 | 1 022 Mio | 0 |
+| portable | tests rag3weaver `.tmp` | 191 | 345 Mio | 229 (108 Mio) |
+| portable | profils Chrome de test | 1 622 | 251 Mio | 699 (86 Mio) |
+| portable | `rag3weaver_cache` d'avant le 8 nov. | 1 | 128 Mio | 0 |
+| portable | lucivy, worktree Codex (`lucivy-demo-index`, `lucivy-433-scheduler.rs`, `lucivy-close-433.log`) | 3 | 75 Mio | 0 |
+| portable | `rag3weaver-hook-temoins-*` et `rag3weaver-cibles-de-test-*` | 289 | 1 Mio | 152 |
+| luciepc | profils Chrome de test | 1 679 | 1 897 Mio | 627 (995 Mio) |
+| luciepc | Chromium de test (`org.chromium.Chromium…`) | 6 130 | 277 Mio | 3 150 (273 Mio) |
+| luciepc | tests rag3weaver `.tmp` | 493 | 212 Mio | 354 (288 Mio) |
+| luciepc | `rag3weaver-bulk*` (`e2e_code`) | 28 | 196 Mio | 16 (118 Mio) |
+| luciepc | `rag3weaver_cache` d'avant le 8 nov. | 1 | 101 Mio | 0 |
+| luciepc | `rag3weaver-cibles-de-test-*` et `rag3weaver-hook-temoins-*` | 616 | 16 Mio | 305 |
+
+**Rendus : 1,78 Gio au portable** (6 762 entrées ; `/tmp` est passé de 16 à 14 Gio pris sur 61) **et
+2,64 Gio à luciepc** (8 947 entrées ; il y reste 1,8 Gio dans `/tmp`). Aucune entrée n'était tenue
+par un processus, et aucun effacement n'a échoué.
+
+**Ce qui reste, et pourquoi :**
+- `claude-1000/` (7,0 Gio) : les sessions vivantes ;
+- `jest_rs/` (5,6 Gio) : le cache du travail de Lucie, qu'elle n'a pas nommé ;
+- le Chrome de Lucie au portable ;
+- tout ce qui avait moins de 24 h ;
+- les tests lucivy du jour à luciepc (`test_*`, sous des noms fixes), que c7 lui a signalés ;
+- `rag3weaver-etat-des-temoins-*` et les `.tmp` sans contenu reconnu, qui n'étaient pas dans la liste.
+
+Les suites qui récidivent (section précédente) en remettront : le correctif reste à faire dans les
+suites elles-mêmes.
