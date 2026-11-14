@@ -133,8 +133,16 @@ TEST_F(StringRewrite, MergeSetSurvivesCheckpointAndReopen) {
 // docs/coeur-cpp/tickets/2026-11-14-un-point-de-reprise-automatique-meurt-dans-le-dictionnaire-d-une-
 // colonne-de-chaines.md, core 3980144) : sous TwentyWriters.DdlEveryMinute, le point de reprise
 // automatique d'un COMMIT a lu, dans la colonne en mémoire des écritures non reprises
-// (Column::checkpointSegment → StringChunkData::write), une chaîne au-delà de son tampon. Les cas
-// suivants mettent un ADD COLUMN entre les écritures et le point de reprise.
+// (Column::checkpointSegment → StringChunkData::write → DictionaryChunk::appendString), une chaîne
+// au-delà de son tampon. Les cas suivants mettent un ADD COLUMN entre les écritures et le point de
+// reprise.
+//
+// **Ce sont des non-régressions, pas le témoin de ce plantage** : ils chassaient le core 3980144 et
+// ne l'ont pas reproduit (verts sous ASAN le 14 novembre 2026, 4 sur 4). Il leur manque, par rapport
+// au scénario, les vingt écrivains simultanés, les MERGE avec relations et vecteur, et
+// CREATE_VECTOR_INDEX. AnOpenWriterCommitsAfterAnAdd montre en passant qu'un ADD COLUMN aboutit sous
+// une transaction d'écriture ouverte (ticket
+// docs/coeur-cpp-hotfixs-tickets/tickets/2026-11-14-un-add-column-passe-sous-une-transaction-d-ecriture-ouverte.md).
 class StringRewriteAcrossAddColumn : public StringRewrite {
 protected:
     void load() {
