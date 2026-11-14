@@ -73,7 +73,23 @@ requête en bm25 et 25 s en bm25+vector, contre environ 1 s sur la copie d'avant
 `IN` en offsets, et 0,9 s pour le masque lui-même. Il touche toute base neuve depuis e62151904.
 
 Le correctif est un lot à part, **avant 1b dans la pile** (décision de c7) : sans filtre utilisateur et
-sans vue, il n'y a rien à masquer.
+sans vue, il n'y a rien à masquer. Il est posé : branche `arbre-principal/masque-sans-filtre`, vert
+530b442e1, ticket `2026-11-14-la-recherche-a-versions-masque-toutes-les-occurrences-sans-filtre`.
+
+**La mesure**, sur la copie migrée, avec le même jeu de 24 requêtes, le même poste et un binaire de
+debug :
+- le jeu passe de **406 s à 12 s** au total, soit 0,3 à 0,8 s par requête en bm25 comme en
+  bm25+vector, contre 7,5 et 25 s avant ;
+- les réponses sont **identiques, 24 sur 24**, à celles du masque d'avant (mêmes uuid, même ordre).
+
+**Ce que le gain couvre, et ce qu'il ne couvre pas** :
+- il vaut **sans filtre et sans version orpheline**. La copie migrée en a 0. Une base vivante en fait
+  dès qu'un fichier est supprimé ou qu'un scope édité laisse sa version, tant que 2a′-2 ne retire pas
+  les occurrences par `_jusqu_a`. Avec des orphelines, le masque d'avant reste : juste, mais lent ;
+- **le cas filtré** reste lent : ×8,7 par chemin et ×6 par langage, mesurés par ED. Il attend la vue
+  par (couche, rang) d'ED et le `define_view` de lucivy ;
+- **la fuite de mémoire résidente** relevée par ED (33 Gio après environ 250 recherches, puis
+  l'oom-killer) reste à fermer **avant la bascule des vraies bases**.
 
 ## Après la bascule : le retrait de l'ancien index (un pas à part)
 
