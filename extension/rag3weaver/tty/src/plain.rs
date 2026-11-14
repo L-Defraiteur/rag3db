@@ -22,8 +22,7 @@ pub fn trame(enveloppe: &Value) -> Option<String> {
 
 /// Une ligne de la boîte (`{at, from, kind, text, item?, …}`).
 pub fn ligne_de_boite(l: &Value) -> String {
-    let item = l["item"].as_str().filter(|i| !i.is_empty()).map(|i| format!(" [{i}]")).unwrap_or_default();
-    format!("\n[{} · {}{item}] {}\n", l["from"].as_str().unwrap_or("?"), l["kind"].as_str().unwrap_or("?"), l["text"].as_str().unwrap_or(""))
+    format!("\n{}{}\n", crate::boite::en_tete(l), l["text"].as_str().unwrap_or(""))
 }
 
 #[cfg(test)]
