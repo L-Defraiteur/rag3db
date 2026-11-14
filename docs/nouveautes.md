@@ -27,6 +27,13 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **14 nov. — Un import se juge aux manifestes de sa langue, et Go garde sa casse.** Chaque manifeste
+  range ses noms sous la langue qu'il décrit, et `go.mod` se lit (le module, ses `require`, ses `replace`
+  suivis : un module remplacé par `../local` est du projet). Un chemin Go garde sa casse et ses tirets
+  (`github.com/Azure/…` n'est pas `github.com/azure/…`), et les imports Go produisent enfin leurs
+  bibliothèques. **À savoir** : une dépendance déclarée pour une autre langue ne compte plus — un nom
+  que seul `package.json` déclare ne fait plus d'un import Python ou Rust une dépendance (codeparsers
+  `6ba8478`).
 - **14 nov. — Un fournisseur se déclare une fois, et chaque capacité le cite.** Le manifeste déclare
   ses activations par leur nom (`activations: { "bge-m3": {…} }`), et le creux, le relecteur et
   l'OCR d'un même processus le citent (`"activation": "bge-m3"`). Ils partagent un seul processus et
