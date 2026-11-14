@@ -620,3 +620,37 @@ dual, renommages Python, G ×2, orphelins, équipier, .NET, base par passe.
 à son vert (PILE_AVANT=23101838b) ; puis le dual (embarquement), les renommages Python (codeparsers), la
 chaîne Rust + garde-sous-module (G), les orphelins (recherche), l'équipier (archi), .NET (codeparsers), la base
 par passe (G), la troncature d'un sens (cœur).
+Embarquement, 23 h 4x : dual-du-creux-pile 870bb4a5e sur arbre-principal/suivies-pile 8d9c15310 (« = » test
+et code, un commit de docs dans le lot : ticket du dual fermé, page des règles, README) ; passe entière à
+luciepc. Codeparsers se pose dessus.
+Codeparsers, 23 h 4x : renommages-python-3 4a10a5939 sur 870bb4a5e (deux commits, lock inchangé,
+check_tickets VERT), passe complète en file. G a sa base (4a10a5939) pour la chaîne Rust puis
+garde-sous-module ; recherche se posera sur la tête du second.
+
+**23 h 43 — trente-sept atterris** : les sources suivies (arbre principal, 844d01247, 19/19 en « = », tête
+testée 8d9c15310 ; rejeu court check_features 8/8, daemon_host::taches 11/11, suivies:: 14/14, e2e_lectures
+27/27, e2e_demon_hote 14/14 ; passe complète sur 2e41a4a11 avec e2e_estimate 5/5 rejoué sans service).
+Embarquement a le « à toi » à son vert (dual, PILE_AVANT=8d9c15310) ; puis codeparsers (PILE_AVANT=870bb4a5e),
+G ×2 (sur 4a10a5939), recherche, archi, .NET, base par passe, cœur.
+Codeparsers, 23 h 4x : controle-du-worktree.sh refuse « 275 commits de retard (plafond 200) » sur une base de
+pile non atterrie — il compte en hashes, les lots atterris en portent d'autres ; par `--cherry-pick
+--right-only` il en reste 133. RETARD_MAX=300 pour cette passe, dit au journal ; ticket pour G : compter avec
+--cherry-pick en mode pile.
+G, 23 h 4x : chaine-rust-pile b1990e6e2 sur 4a10a5939 (rustc 1.98.1 par rust-toolchain.toml) et
+garde-sous-module-pile 8a2b85f81 dessus, « = » ; rejeux au portable dans un target neuf (1.98.1 rebâtit tout,
+40 à 60 min), MOTEUR_ANCIEN dit ; la tête du second va à recherche au vert. Le verdict de fac67a208 pour
+l'hôte de luciepc tourne.
+G, 23 h 4x : controle-du-worktree.sh corrigé (retard compté par contenu, `git log --cherry-pick --right-only
+--no-merges HEAD...origin/master | wc -l` ; témoin sur dépôt jouet, ancien 4 deux ROUGE, neuf 3 deux vert ;
+0cc9bbf67) ; recopie au cache des deux postes au mot de c7. Le script n'était dans aucun dépôt : demandé la
+liste des scripts du cache sans dépôt, à faire entrer dans tools/poste/ un par un, en pile.
+
+**23 h 5x — G, trois lots verts et prêts, un seul tour** : chaine-rust-pile b1990e6e2 (check_features 8/8 sous
+rustc 1.98.1 ; PILE_AVANT=4a10a5939) → garde-sous-module-pile 8a2b85f81 (test_garde_target 21 OK, 8/8 ;
+PILE_AVANT=b1990e6e2) → passe-epinglee 3f159b542 (passe_epinglee.sh entre dans tools/poste/ depuis la copie
+de luciepc, sans 7880 ni 7981 ; témoin 16 vert, 3 ROUGE sur la copie du portable, 2 sur celle de luciepc ;
+PILE_AVANT=8a2b85f81 ; push-d-un-lot.md le cite par son chemin). La base de recherche (orphelins) est
+3f159b542. Ordre restant : dual (embarquement) → renommages (codeparsers) → G ×3 → orphelins → équipier →
+.NET → base par passe → cœur → `cited` par défaut (arbre).
+G, 23 h 5x : tête du troisième lot 0416455b5 (un .md par-dessus 3f159b542 : push-d-un-lot.md cite
+tools/poste/passe_epinglee.sh) ; base donnée à recherche : 0416455b5.

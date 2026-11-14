@@ -201,3 +201,16 @@ inférée entre elles.
   points : le joker de `refs:refs/heads/*` ne franchit pas `/` (tout l'arbre s'écrit `refs:refs/heads`,
   corrigé dans cette page) ; une couche sans candidate dont d'autres partagent la pointe se dit « égales ».
   Passe complète en file à luciepc (22 h 48, neuvième), verdict relu à 23 h 19 ; rang 30 bis dans la pile.
+
+## 2a′-3, côté suivies (23 h 4x, arbre principal avec ED ; page docs/arbre-principal/14-11-2026/03)
+
+Une couche d'histoire s'écrit par les objets git, sur les seuls chemins qui diffèrent de sa base ; `_couche`
+porte l'id de la couche ; la couche de travail reste au worktree ; la position sort de l'identité vers
+l'enregistrement par génération. **Une seule bascule** pour les bases de Lucie (versions, rang 0, position),
+sous trois conditions : répétition sur copies avec parité et mesure par étage ; instantané gardé comme retour
+jusqu'au mot de Lucie ; le ticket « une recherche à versions prend des Gio » fermé d'abord. **`history`
+décide qui écrit** : `tip` à chaque mouvement de la ref avec un amortisseur ; `all`/`{last: N}` la pointe puis
+un rattrapage paresseux en tâche de fond ; `cited` à la citation seulement. **Changement du défaut livré** :
+une source `refs:` prend `cited` par défaut (cent branches ne coûtent pas cent écritures par fetch) — petit
+lot, rouge d'abord, à faire avant qu'un dépôt réel reçoive le défaut. L'état dit par génération les chemins
+écrits, les lignes neuves et retirées, la durée.

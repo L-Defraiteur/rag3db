@@ -1033,3 +1033,34 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   code-lourd, sous pool plein). Validé : un point de faute de test dans le moteur (TestDiePoint, sans effet en
   service) qui fait lever après le sens avant ; témoin rouge sur f41c0ba5b, vert sur master, plus l'assertion
   que l'annulation sous le verrou rend les deux sens.
+
+## 23 h 4x — trente-sept atterris ; la pile reposée jusqu'à la garde des sous-modules
+
+- **Atterris depuis 23 h** : index-suivi (archi), garde-pile-3 et l'outil des deux sens ancré (G), la provenance
+  par langue (codeparsers), la trace (96), le dense sur `Tenue<C>` (embarquement), le prédicat (ED, 28 commits),
+  les sources suivies (arbre principal, 19 commits). Chaque fois « = » et « pile tenue », identité gmail,
+  aucune attribution. **Reposés et en rejeu** : le dual du creux (870bb4a5e, « à toi » à son vert), les
+  renommages Python (4a10a5939), la chaîne Rust 1.98.1 (b1990e6e2) et la garde des sous-modules (8a2b85f81,
+  40 à 60 min de bâti à froid). Derrière : les orphelins (recherche, cause trouvée : aucun FlushNode après
+  DeleteRecordNode), l'équipier (archi), .NET + using C# (codeparsers), la base postgres par passe (G), la
+  troncature d'un sens (cœur).
+- **Trois défauts d'outillage trouvés par la pile elle-même**, tous en ticket pour G : la garde du target ne
+  voit pas un sous-module qui change de commit (corrigé, en pile) ; deux passes partagent la base postgres de
+  test (une base par passe, en branche) ; controle-du-worktree.sh compte le retard en hashes et refuse une
+  base de pile non atterrie (RETARD_MAX=300 dit pour la passe de codeparsers ; --cherry-pick à écrire).
+- **Les mesures de la soirée** : lucivy pièce 2 (index 4,27 → 1,16 Go sur la copie réelle, 4.3.8 attend
+  Lucie) ; les déplacés d'ED (86 % des recopies, position gardée pour 2a′-2, sortie avec 2a′-3) ;
+  MALLOC_ARENA_MAX écarté ; les trois parités du soir et celle de la pile d'ED (avec orphelines) au bit près.
+- **La fenêtre de luciepc** vers 1 h : G pose un binaire de la tête de master (verdict à trois suites en
+  cours), hotfixs répare les deux index puis purge les orphelins du plein texte, une fermeture et un
+  instantané par base, relevé ancré jugé entre les deux.
+- **G, 23 h 5x — l'inventaire des scripts du cache** (ticket bd175de35) : `poste` au cache en retard sur master
+  aux deux postes (sans le `nproc --all` de garde-pile-2 : un lourd sous quota étranger calcule ses parts sur
+  le quota) → recopie validée, test_poste.sh d'abord ; `passe_epinglee.sh` dans aucun dépôt et différent d'un
+  poste à l'autre (57 appelants à luciepc, cité par push-d-un-lot.md) → entre le premier dans tools/poste/,
+  diff des deux versions, base luciepc ; puis lib_seule.sh et rag3db_libs.py. Le contrôle du worktree recopié
+  (sha 94d5c09b6c85b737, témoin 2 vert).
+- **Hotfixs, 23 h 55** : la répétition de reparer-les-deux-sens.sh sur copie neuve de code-lourd verte de bout
+  en bout (23 h 35 → 23 h 55 : instantané, relevé ancré, jugement, reconstruction, contrôle de G égal, relevé
+  ancré après à 0 d'un seul sens sur les trois tables) ; le contrôle de G prend ~20 min par base : compter une
+  heure de fenêtre pour les deux bases avec la purge et les bancs. Prêt pour le « posé » de G.
