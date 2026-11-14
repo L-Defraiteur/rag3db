@@ -199,4 +199,6 @@ fn une_migration_par_lots_d_une_occurrence_donne_le_meme_resultat() {
     let morceaux = compte(&cat, "MATCH (c:ScopeContent_Chunk) RETURN count(c)");
     assert_eq!(compte(&cat, &format!("MATCH (c:ScopeContent_Chunk) WHERE c.{} = c._text_hash RETURN count(c)", stockage.marker)), morceaux);
     assert_eq!(bilan.vecteurs_repris.values().sum::<usize>() as i64, morceaux, "{bilan:?}");
+    // **Rien ne tient en mémoire plus qu'un lot** : la borne se lit dans le bilan.
+    assert_eq!(bilan.plus_gros_lot, 1, "un lot de plus d'une unité a été tenu en mémoire : {bilan:?}");
 }

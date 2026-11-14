@@ -7248,7 +7248,7 @@ fn read_threads() -> u64 {
     }
 
     /// Mettre des dérivations en file, sans doublon, et déclarer la dette.
-    fn mettre_en_file_les_derivations(&mut self, derivations: Vec<crate::records::Derivation>) {
+    pub(crate) fn mettre_en_file_les_derivations(&mut self, derivations: Vec<crate::records::Derivation>) {
         if derivations.is_empty() {
             return;
         }
