@@ -1,6 +1,6 @@
 # Un backend fermé par l'hôte se rouvre au premier appel, et ce qu'on y écrit alors se perd au retour
 
-- **État** : ouvert, le 14 novembre 2026.
+- **État** : corrigé (14 novembre 2026) par le lot `fermeture-qui-tient` d'archi, master `1cbf1cf3a` ; fermé le 15 novembre.
 - **Famille** : produit
 - **Gravité** : perte. Une écriture faite dans la fenêtre d'une passe (une base fermée pour être copiée, puis remplacée) s'efface au retour, si personne ne la voit et ne la rejoue.
 - **Atteignable en service** : oui. Toute passe qui ferme `memoire-longue` par `POST /backend/close` pour la copier, la jouer ailleurs et la rendre.
@@ -34,3 +34,21 @@ disant, ou se range en file. Une fermeture sans raison garde le comportement d'a
 
 Le témoin rouge d'abord : fermer avec une raison, appeler `recall_fiches`, et voir l'appel
 réussir et la base rouverte.
+
+## Ce qui l'a fermé
+
+`1cbf1cf3a` (le lot `fermeture-qui-tient`, son ticket :
+`docs/tickets/closed/2026-11-14-une-fermeture-annoncee-ne-tient-pas-un-appel-rouvre-la-base.md`).
+`POST /backend/close` prend `reason` et `until` ; avec une raison, toute ouverture est refusée — un
+`/call`, un `/describe`, un hook, un juge, et l'ancienne route `/open` qu'un client MCP prend en
+s'attachant — en disant « fermé : <raison>, jusqu'à <quand>, par <client> (session <id>) — rien ne le
+rouvre avant un POST /backend/open explicite ». Seul `POST /backend/open` la lève ; l'heure annoncée
+n'ouvre rien d'elle-même. `/etat` et `daemon_status` le disent (`held_closed`). Sans raison,
+l'ancien sens demeure. Témoin :
+`e2e_demon_hote::une_fermeture_avec_une_raison_tient_jusqu_a_l_ouverture_explicite` (un `put_fiche`
+pendant la fermeture refusé, la base non rouverte, l'écriture refusée absente après l'ouverture).
+
+Ce qui reste hors de ce lot : l'heure de fermeture n'est pas dans le refus (le « jusqu'à » annoncé
+et la session qui a fermé, oui) ; une écriture refusée est perdue en le disant, pas rangée en file.
+Pour qu'une passe en profite, elle doit fermer **avec une raison** : G, et toute passe qui copie une
+base, passent `reason` à `/backend/close`.
