@@ -849,6 +849,85 @@ mod tests {
         assert_eq!(run[0]["provenances"], json!(["indexed_declaration", "range_containment"]), "{v}");
     }
 
+    /// Des lignes du Plan pour un fichier `f` (positions en lignes, octets dérivés), sans corps.
+    fn lignes(f: &str, contenu: &str, scopes: &[(&str, &str, &str, u64, u64, &str, &str)]) -> (Snapshot, Vec<Value>) {
+        let src = Snapshot::new("nav", [(f.into(), contenu.into())]);
+        let h = crate::hash::content_hash(contenu);
+        let file = json!([{"source":"snapshot:nav","path":f,"content_hash":h,"cursor":"snapshot:nav"}]);
+        let debut_de = |l: u64| contenu.lines().take(l as usize - 1).map(|x| x.len() + 1).sum::<usize>() as u64;
+        let rows = scopes
+            .iter()
+            .map(|(id, name, kind, l1, l2, parent, signature)| {
+                json!({"_uuid":id,"name":name,"scope_type":kind,"source":"snapshot:nav","file_path":f,
+                "start_byte":debut_de(*l1),"end_byte":debut_de(*l2 + 1).min(contenu.len() as u64),"start_line":l1,"end_line":l2,
+                "signature":signature,"parent_name":parent,"indexed_file":file,"declarations":"","field_types":""})
+            })
+            .collect();
+        (src, rows)
+    }
+    fn membres_de(src: &Snapshot, rows: &[Value], path: &str, symbol: &str) -> Value {
+        navigate(rows, rows.len(), Some(src), Navigation { path, source: "", mode: "members", symbol, depth: 1, limit: 80 }).unwrap()
+    }
+    fn noms(v: &Value) -> Vec<String> {
+        let mut n: Vec<String> = v["members"].as_array().unwrap().iter().map(|m| m["name"].as_str().unwrap_or_default().to_string()).collect();
+        n.sort();
+        n
+    }
+
+    /// **Rust : les méthodes d'un bloc `impl` sont des membres de la struct** (codeparsers, 15 novembre
+    /// 2026 : le bloc `impl` est un scope à part, nommé du type, génériques compris ; ses méthodes ont
+    /// `parent_name` = ce nom). La struct ne contient pas l'`impl` : ses membres se lisent par le nom.
+    #[test]
+    fn rust_methods_of_a_separate_impl_are_members_of_the_struct() {
+        let c = "struct Foo<U> {\n    x: U,\n}\n\nimpl<U> Foo<U> {\n    fn new(x: U) -> Self {\n        Foo { x }\n    }\n}\n";
+        let (src, rows) = lignes("lib.rs", c, &[
+            ("s", "Foo", "class", 1, 3, "", "struct Foo<U>"),
+            ("i", "Foo<U>", "class", 5, 9, "", "impl<U> Foo<U>"),
+            ("n", "new", "method", 6, 8, "Foo<U>", "fn new(x: U) -> Self"),
+        ]);
+        let v = membres_de(&src, &rows, "lib.rs", "s");
+        assert!(noms(&v).contains(&"new".to_string()), "la méthode de l'impl est un membre de la struct : {v}");
+        let new = v["members"].as_array().unwrap().iter().find(|m| m["name"] == "new").unwrap();
+        assert_eq!(new["provenances"], json!(["declared_parent"]), "{v}");
+        assert_eq!(new["ref"]["uuid"], "n", "{v}");
+    }
+
+    /// **Go : une méthode à récepteur est un membre de son type** (`parent_name` = « T »), hors de la
+    /// plage du type, dans le même fichier.
+    #[test]
+    fn go_methods_with_a_receiver_are_members_of_their_type() {
+        let c = "type T struct {\n\tn int\n}\n\nfunc (t *T) M() int {\n\treturn t.n\n}\n";
+        let (src, rows) = lignes("t.go", c, &[
+            ("t", "T", "class", 1, 3, "", "type T struct"),
+            ("m", "M", "method", 5, 7, "T", "func (t *T) M() int"),
+        ]);
+        let v = membres_de(&src, &rows, "t.go", "t");
+        assert_eq!(noms(&v), vec!["M".to_string()], "{v}");
+        assert_eq!(v["members"][0]["provenances"], json!(["declared_parent"]), "{v}");
+    }
+
+    /// **C++ : déclarée dans la classe, définie hors d'elle, une méthode n'est qu'un membre** (la
+    /// définition `void A::f() {}` a `parent_name` = « A », genre function ; la déclaration vit dans
+    /// `declarations`). Seule de son nom, elles fusionnent avec leurs deux provenances ; des surcharges
+    /// restent séparées.
+    #[test]
+    fn cpp_a_declared_then_defined_method_is_one_member() {
+        let c = "class A {\n  void f();\n  int g(int);\n  int g(double);\n};\n\nvoid A::f() {}\nint A::g(int x) { return x; }\nint A::g(double x) { return 0; }\n";
+        let (src, mut rows) = lignes("a.cpp", c, &[
+            ("a", "A", "class", 1, 5, "", "class A"),
+            ("f", "f", "function", 7, 7, "A", "void f()"),
+            ("g1", "g", "function", 8, 8, "A", "int g(int x)"),
+            ("g2", "g", "function", 9, 9, "A", "int g(double x)"),
+        ]);
+        rows[0]["declarations"] = json!(r#"[{"name":"f","line":2,"signature":"void f()","kind":"method"},{"name":"g","line":3,"signature":"int g(int)","kind":"method"},{"name":"g","line":4,"signature":"int g(double)","kind":"method"}]"#);
+        let v = membres_de(&src, &rows, "a.cpp", "a");
+        let f: Vec<&Value> = v["members"].as_array().unwrap().iter().filter(|m| m["name"] == "f").collect();
+        assert_eq!(f.len(), 1, "déclarée et définie, f n'est qu'un membre : {v}");
+        assert_eq!(f[0]["provenances"], json!(["indexed_declaration", "declared_parent"]), "{v}");
+        assert_eq!(v["members"].as_array().unwrap().iter().filter(|m| m["name"] == "g").count(), 4, "les surcharges ne fusionnent pas au hasard : {v}");
+        assert_eq!(v["coverage"]["unpaired_overloads"], json!(["g"]), "la couverture le dit : {v}");
+    }
+
     #[test]
     fn member_facts_are_partial_without_fabricated_ids_or_positions() {
         let (src, mut rows) = fixture();
