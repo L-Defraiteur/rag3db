@@ -973,3 +973,63 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   dans l'identité. Tranché : **elle reste pour 2a′-2**, avec le compte des recopies à chaque publication dans
   l'état et 20 000 comme seuil de réouverture ; **elle sort de l'identité avec 2a′-3**, en une seule
   migration avec celle des objets git — la mesure en est la justification écrite.
+
+## 22 h 5x — vingt-neuf atterris ; archi a le « à toi »
+
+- **Le cœur a poussé ses deux** : l'`IN` haché (e5e626803) et le pliage des listes littérales (1d5580d74), tout
+  en « = », C++ seul. Archi (index-suivi, 58b7a8eab sur 9d90edbb6) a le « à toi » ; puis G (garde-pile-3
+  79d15a5fb, check-rel-ancre 0f9a149ed), codeparsers (498799f34, cinq commits), 96 (trace, base donnée),
+  embarquement (dense), ED (prédicat), arbre principal (suivies, verdict de la passe à 23 h 19), G (chaîne
+  Rust). Les orphelins de recherche sont sortis de la file (témoin rouge, 6 documents pour 5 Scope ; parité
+  de banc verte au bit près, comptes à relire par les colonnes de version).
+- **Décisions de l'heure** : la position reste dans l'identité pour 2a′-2 et en sort avec 2a′-3 (mesure d'ED :
+  86 % des recopies pour un numéro de ligne) ; l'arbre sale au commit par `arbre_propre: false` ; la pièce 1
+  de lucivy gardée telle quelle (+12 % sur la compaction, 17,7 Mo rendus) ; la table de pipreqs pour les
+  renommages Python avec un champ `imports` déclarable ; l'outil des deux sens joue sur une copie jetable de
+  la base réelle, hors de tout jeu automatique.
+- **Hotfixs, 23 h 3x** : les deux reconstructions vertes sur copie avec le relevé ancré, comptes au ticket
+  (677b5297a) — code-principal QUERIES 7 → 0, IMPLEMENTS 6 → 0 (3 copies exactes ôtées), LOCKS 11 → 0 ;
+  code-lourd INHERITS_FROM 9 → 0, QUERIES 5 → 0, LOCKS 2 → 0 ; contrôle de G égal, relevé ancré égal ;
+  usages/impact par le binaire confirment (acquireLock garde lockIndexForWrite). Le portable complet et
+  égal sur toutes ses tables. La réparation attend un hôte de luciepc avec la fermeture qui tient : G dit
+  quand il pose un binaire ; sinon demain matin.
+- **Banc, 23 h 3x** : le trou de Symbol comblé (page 02 § 4, e635ffee8) : après le retrait d'arbre.rs, 3 Symbol
+  (relation_label, le_libelle_est_en_casse_de_phrase, la_forme_du_graphe_de_dependances) restent sans aucune
+  relation — rendez-vous par nom, hors session. Ticket pour ED : rétention sans règle ; la règle va dans
+  l'écrivain de 2a′-2 (fermé à la publication quand plus rien ne le relie, rouvert si le nom revient), rien à
+  toucher sous la forme sans générations.
+- **G, 23 h 3x** : le binaire 10b7a0edb (porte 1cbf1cf3a, bâti contre 373b5477b, md5 ffb6d2e6, essai 7991
+  vert aux deux postes) se pose sur l'hôte de luciepc vers 1 h 15 : verdict à trois suites lancé à 23 h 30
+  (en file derrière 4/4 lourds), annonce aux sessions au vert, pose quand aucune passe ne lit l'hôte. La
+  fenêtre d'hotfixs suit. Le portable attend.
+- **La fenêtre de luciepc (vers 1 h 15, hotfixs)** : une seule fermeture et un seul instantané par base pour
+  deux gestes — la réparation des deux index (reparer-les-deux-sens.sh) puis la purge des orphelins du plein
+  texte (fenetre-purge.sh ; code-lourd 103 Scope, code-principal 102) ; code-lourd puis code-principal ;
+  relevé ancré jugé entre les deux (un écart arrête la base, RETOUR.sh, pas de purge) ; les trois gardes de la
+  purge sur la base réparée ; banc de recherche par l'hôte avant et après ; comptes aux deux tickets.
+- **Le cœur, 23 h 3x** : RefusedCommitRelDirections dit déjà — avant le correctif (f41c0ba5b) la relation
+  validée de B est perdue à chaque tour, **dans les deux sens** ; après (7c92562b1) vert au tour 1. La fenêtre
+  corrigée en 373b5477b perdait des relations validées, mais le témoin ne reproduit pas encore la forme d'un
+  seul côté de code-lourd : le cœur cherche l'asymétrie (une troncature dans un sens seul) avant de conclure
+  à la même cause. Son témoin retiré de la file de luciepc pour laisser passer 96.
+- **G, 23 h 35** : le verdict de 10b7a0edb ne suffit pas (e2e_demon_hote 13/14 : le rouge connu de la l. 280,
+  le crochet en Weak dc5bc9853 a atterri après lui) ; G bâtit le binaire de la tête de master (porte
+  dc5bc9853 et 1cbf1cf3a), essai aux deux postes, verdict à trois suites, 14/14 attendu ; pose vers 1 h.
+- **lucivy, pièce 2 verte** (PR #38, 943ada6) : sur la copie réelle de Lucivy_Scope, purge des 8 809 orphelins
+  puis compaction : dictionnaire 513,8 → 400,7 Mo, textes 8,15 M → 6,31 M, **index entier 4,27 → 1,16 Go**
+  (1,30 avec la pièce 1 seule), sous l'index neuf d'hier (420 Mo de dictionnaire, hypothèse : plusieurs
+  générations). Témoin textes 631 = 631, octets +2,25 à +3,65 % (marge 5 % justifiée dans le test), hits et
+  scores au bit près ; coût dans le bruit. Fusion à la CI verte ; **4.3.8 attend le mot de Lucie** pour que
+  rag3weaver pointe dessus et que la compaction joue sur les vraies bases.
+- **Le cœur, 23 h 3x** : RefusedCommitRelDirections rouge 2/2 sur f41c0ba5b, vert 3/3 sur 7c92562b1 (15 à 25 s
+  par tour) ; au ticket 94c431abf8. Établi : sous une lib d'avant 373b5477b, la fenêtre d'annulation perd des
+  relations validées (des deux côtés). Non établi : la forme d'un seul côté et les « vues deux fois » ; prochain
+  témoin = une troncature d'un seul sens (point de reprise entre les deux versements d'abord). Le témoin entre
+  avec le prochain, en un lot.
+- **Le cœur, 23 h 3x** : la piste du point de reprise est exclue par le code (un écrivain refusé reste ACTIF
+  jusqu'à son annulation, le point de reprise attend tout écrivain actif) ; reste **un refus entre le versement
+  du sens avant et celui du sens arrière** (RelTable::commit : l'enregistrement d'annulation ne couvre que le
+  premier sens → le sens avant tronqué avec la relation de B, le sens arrière la garde — la forme de
+  code-lourd, sous pool plein). Validé : un point de faute de test dans le moteur (TestDiePoint, sans effet en
+  service) qui fait lever après le sens avant ; témoin rouge sur f41c0ba5b, vert sur master, plus l'assertion
+  que l'annulation sous le verrou rend les deux sens.

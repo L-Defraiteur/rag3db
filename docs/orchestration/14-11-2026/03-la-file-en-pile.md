@@ -482,3 +482,141 @@ IN/UNWIND 0,64), projected_graph_memory_test 10, e2e_test 1 867 verts, DropNodeT
 ticket. Réserve au ticket d'ED : les cas LongQueryPeak ne départagent que joués seuls, chacun dans son
 processus. ABI inchangée : la lib d'après portera les deux. Archi a le « à toi » (PILE_AVANT=9d90edbb6) ;
 puis G ×2, codeparsers, 96, embarquement, ED, arbre principal, G chaîne Rust.
+
+**23 h 0x — trente atterris** : le fil `index-suivi` joint à l'hôte (archi, 0a5cd8168 : témoin 9befdc3b0,
+correctif ef12ba4ea, ticket fermé ; 3/3 en « = », « pile tenue ») ; la copie ouverte du ticket retirée dans
+la minute (863b81b46), check_tickets VERT 511. G a le « à toi » pour ses deux (garde-pile-3 79d15a5fb,
+PILE_AVANT=58b7a8eab ; check-rel-ancre 0f9a149ed, PILE_AVANT=79d15a5fb) ; puis codeparsers (498799f34),
+96, embarquement, ED, arbre principal, G chaîne Rust.
+
+**23 h 0x — trente-deux atterris** : garde-pile-3 (533e5cbb3, PILE_TESTE pour une tête reposée à la main) et
+l'outil des deux sens ancré (a34fe130a2 : tranches de 500 offsets par étiquette, quatre comptes par table,
+plans sous CHECK_REL_PLANS=1). Codeparsers a le « à toi » à son vert (PILE_AVANT=0f9a149ed) ; puis 96
+(sur 498799f34), embarquement, ED, arbre principal, G chaîne Rust. G recopie la garde au cache des deux postes.
+G, 23 h 05 : la garde du cache (d9a6c083afc8aed6, posée à 20 h 43) est celle de master à a34fe130a, rien à
+recopier, `--derive` dit « garde à jour » ; docs 9da00dfd8 (ticket de l'outil fermé, les 11 perdues au
+ticket 9426bc2a8, ticket souhait du crochet d'injection pour le cœur, page 04 : le portable sain).
+
+**23 h 0x — trente-trois atterris** : la provenance par langue (codeparsers, a12f08bdf2, cinq « = », pointeur
+6ba8478 ; rejeu check_features 8/8, manifestes:: 11/11, e2e_code 55/55, e2e_postgres 36/36). 96 a le « à toi »
+à son vert (lot-96-trace-pile 77fccf493 sur 498799f34, check_features 8/8) ; embarquement a sa base 77fccf493.
+**CI rag3weaver rouge à 22:00 UTC sur 0a5cd8168** : check_tickets « 1 refus », la minute où le ticket d'archi
+vivait en deux copies (fermée par 863b81b46) ; les runs d'après annulés par les pushs successifs ; celui de
+a12f08bdf2 en cours dira le vert. Leçon : un lot qui ferme un ticket par `git mv` se repose sur une base
+qui porte la copie ouverte, ou retire la copie dans le même push ; une minute à deux copies rougit la CI.
+Embarquement, 23 h 1x : dense-sur-tenue-pile ac8644784 sur 77fccf493 (`=` sur le test et le remaniement, `!`
+sur le commit de docs seules : la page des règles avait déjà le paragraphe du vrai jeu sur master) ; passe
+courte à luciepc sous MOTEUR_ANCIEN=1. ED a sa base (ac8644784). Le dual du creux (dual-du-creux, 26da6dafb
+rouge, 7d3cb5935 vert : activation 23, chargement, e2e du groupe 2/2) prend le rang 30 ter après arbre
+principal. Ordre : 96 → embarquement → ED → arbre principal → embarquement (dual) → G chaîne Rust.
+Codeparsers, 23 h 1x : le lot 1 vert (renommages-python-2 b45530b2a : pointeur 6ba8478 → 85fe233 avec
+1 094 distributions de pipreqs + 13 du témoin croisé ; `workspace.imports` par langue, `replace`,
+`distributions`, refus nommé d'une langue inconnue ; 13/13) prend le rang 30 quater, base = la tête du dual.
+**La fin de la pile est fixée** : … → ED (30) → arbre principal (30 bis) → dual du creux (30 ter) →
+renommages Python (30 quater) → G chaîne Rust 1.98.1 ; tout lot neuf passe derrière. Un faux rouge chez
+codeparsers : cargo a repris l'artefact du sous-module bâti dans un autre worktree (dates plus vieilles) ;
+sans check_features, RAG3WEAVER_TARGET_REPRENDRE n'agit pas — question posée à G pour la garde du target.
+Banc, 23 h 1x (page 02 § 4, eef0a6e90) : pas de défaut de version derrière les comptes des orphelins — forme
+Versions sans générations, la fin d'instantané efface les lignes que la source n'a plus ; seul écart : le
+document de plein texte de File (7 608 pour 7 607), ce que vise le lot. Rejeu sous générations au vert de
+recherche ; Symbol à compter par sa relation au File.
+G, 23 h 1x : la garde du target ne note que l'arbre, pas le commit des sous-modules ; cargo reprend les
+artefacts d'un sous-module changé dont le checkout porte des dates plus vieilles ; cargo_magasin.sh seul ne
+passe pas par la garde. Correction validée (commit des sous-modules dans `.arbre-du-target`, effacement
+d'elle-même des empreintes, cargo_magasin.sh appelle la garde, rouge d'abord par un sous-module ramené en
+arrière) : second push du tour de la chaîne Rust. Codeparsers : lot 1 à deux commits (57e2c1847), page 03
+avec la reprise ; commence les manifestes .NET à part.
+Recherche, 23 h 1x : la vraie cause des orphelins — le drain ne pose aucun FlushNode après DeleteRecordNode ;
+`delete_by_node_id` n'est vu qu'au commit de la poignée lucivy, une fin d'instantané qui ne fait que
+retirer laisse le document vivant puis le perd à la fermeture. Correctif : un FlushNode `deletes_flush` sur
+les tables effacées + l'offset d'une ligne inconnue du cache lu par select_node_ids ; deux témoins (avec et
+sans redémarrage) rejoués à luciepc. Rang : derrière la chaîne Rust de G.
+
+**23 h 1x — ED a poussé sa pile** : vue-publiee-pile 3a6bf34cd sur ac8644784 (tête réelle 895d5a5c9, un
+docs de plus que 2bdb8a6e4). Deux conflits dans `occurrence_mask_options` contre le court-circuit d'arbre
+principal, résolus : sans filtre ni vue ni orpheline le court-circuit (Admission::Toutes) ; sinon le
+prédicat (Admission::Parmi) ; la liste en repli compté. **Sens changé** : sans filtre avec des orphelines,
+le prédicat sert au lieu de la liste (sa jointure les exclut). range-diff 25 `=`, 2 `!` de code, 1 `<`
+absorbé. Passe courte sous le lourd depuis 23 h 11. Règle : deux « ! » de code et un sens changé → la parité
+de banc se rejoue sur la tête de pile (3a6bf34cd contre ac8644784, + un cas orphelines sans filtre) ; le
+« à toi » attend la passe et la parité.
+ED, 23 h 1x : tête de pile 23101838b (un commit de docs, page 05 § 9, au-dessus de 3a6bf34cd testé) ;
+PILE_TESTE=3a6bf34cd au push ; arbre principal se posera sur 23101838b.
+Banc, 23 h 1x : la parité de la pile d'ED en file à luciepc (3a6bf34cd contre ac8644784, 30 cas ; puis une
+copie à versions orphelines fabriquées — occurrences des versions des trois premiers rangs effacées,
+compte des versions sans origine relevé —, RAG3WEAVER_PARITE_ORPHELINES, 64bf68daf0) ; puis les orphelins
+de recherche (ff4ced00a contre 9d90edbb6).
+G, 23 h 1x : garde-sous-module dba057156 prêt (le commit de chaque sous-module noté dans
+`<target>/.sous-modules-du-target`, empreintes des paquets du sous-module changé effacées d'office,
+`garde_target.sh --reprendre <target> <arbre>` ; rouge 3 ÉCHEC sur la garde de master, 21 OK ; check_features
+8/8) : second push du tour de la chaîne Rust. Correction : cargo_magasin.sh appelait déjà la garde (par
+cargo_garde.py), le contournement de codeparsers était un `cargo test` direct (ticket 18ad5cef3). À la pose,
+la première passe rebâtit codeparsers une fois par target : voulu.
+
+**23 h 2x — la passe des suivies : rouge d'environnement à e2e_estimate** (arbre principal, 2e41a4a11) : vert
+sur check_features, lib entière, e2e_lectures, e2e_code, e2e_demon_hote, e2e_etat_non_declare ;
+`ce_depot_s_estime_avant_de_s_indexer` panique dans l'aide des tests sous RAG3WEAVER_EMBED_SERVICE : aucun
+service ne sert granite-107m à luciepc (7880 arrêté depuis le 12). Rejeu seul sans la variable, dit au
+journal, + les quatre suites restantes ; verdict 23 h 45. Ticket à embarquement : l'aide se replie sur le
+chargement sur place pour un modèle sans service, au lieu de paniquer (pas de SAUTÉ).
+Embarquement, 23 h 2x : passe courte verte sur ac8644784 (activation/service 0 rouge, les deux e2e, lib
+2302/0, check_features 8/8, navigateur 45/0) ; dernier pas prêt, attend le « poussé » de 96. Le ticket de
+l'aide des tests : le repli charge sur place sur le périphérique permis (CPU si rien n'est dit), jamais sur
+la carte que la variable épargne (card0 de Lucie) ; interdit → rouge nommé, jamais sauté.
+Archi, 23 h 2x : l'équipier rend le contenu (equipier-rend-le-contenu 47b1955de : report ou la réponse
+porte le texte lui-même, le texte d'un pas fini par step_done va dans la boîte sauf si un report le porte,
+sans heuristique ; lib 2403/0, e2e_hooks 2+2, navigateur 45/45, cas Gemini 1/1 — vert aussi une fois sans
+correctif, le rouge sûr est le faux modèle ; ticket de tty fermé). Place : derrière la chaîne Rust et les
+orphelins. Banc : dix tirages Gemini avec et sans, pour un taux.
+
+**23 h 2x — la passe d'ED : rouge d'environnement à e2e_postgres** (7/36 : « referenced schema was
+concurrently dropped », `_dataflow_node_state` absente) — une autre passe jouait e2e_postgres sur le même
+schéma `rag3weaver_test` ; le lot ne touche pas au dialecte postgres. Vert partout ailleurs (lib 2 413/0,
+e2e_code 36, e2e_code_sync 19, e2e_scope_versions 8, e2e_lectures 27). Rejeu seul + e2e_masque_sans_filtre
+(demande d'arbre). Ticket à G : un schéma postgres par passe, pas un verrou.
+G, 23 h 2x : le schéma `rag3weaver` est fixé par le produit (dialect.rs), `rag3weaver_test` est la base ;
+correctif validé : **une base par passe** créée par run_e2e.sh (`rag3weaver_test_<worktree>_<pid>` sur 5433,
+RAG3WEAVER_PG exporté, effacée au trap, un RAG3WEAVER_PG explicite respecté), ménage des bases orphelines au
+départ ; rouge d'abord par deux e2e_postgres en parallèle. Lot derrière les deux pushs de G.
+Codeparsers, 23 h 2x : .NET vert (manifestes-dotnet 3474cea : plus long préfixe déclaré pour C# ; rag3db :
+.csproj, packages.config, Directory.Packages.props sous `csharp`, 13/13) ; défaut trouvé : un `using` C# ne
+produit aucune bibliothèque (extraction JavaScript, comme Go). Décision : voies 1 + 3 (une bibliothèque par
+using sans symbole deviné ; les alias et `using static` lient leur nom), dans le même lot que .NET, derrière
+le 30 quater et les lots de G.
+23 h 27 : **la CI rag3weaver est verte sur a12f08bdf2** (la tête de codeparsers) : le rouge de 23 h (deux
+copies du ticket d'archi pendant une minute) est fermé ; les runs intermédiaires annulés par les pushs.
+
+**23 h 3x — la parité de la pile d'ED est verte** (3a6bf34cd contre ac8644784, 30/30 au bit près, parent =
+ligne de base migree.json ; le parent lit la forme Versions, le lot les générations, mêmes réponses) ; le cas
+des orphelines finit (~3 min), puis banc coupe sa file pour laisser une place à 96 et relance les orphelins
+de recherche au « poussé ». ED (page 06 § 10, fac67a208) sur le Symbol sans relation : pas de fermeture à la
+publication — un Symbol est visible à un rang s'il a une relation visible à ce rang, l'effacement physique
+revient à la rétention. 96 : vert partout sauf quatre suites courtes en attente d'une place (quatre lourds
+tenus à luciepc : p2c.sh, chaine-23h.sh, wt-suivies-reste.sh, run_e2e e2e_code du verdict de G).
+Codeparsers, 23 h 3x : .NET complet (e6c06581e sur 57e2c1847 : .csproj/packages.config/Directory.Packages.props,
+pointeur 85fe233 → 3474cea → 4194456 ; chaque `using_directive` porté par le plus petit scope, alias lié,
+`using static` en voie 1 ; témoin de bout en bout Newtonsoft.Json.Linq dependency, System.Text.Json builtin,
+Mon.Outil.Interne project ; 14/14, check_tickets VERT 515). File derrière G : chaîne Rust + garde-sous-module →
+orphelins de recherche → équipier d'archi → .NET → (base par passe de G).
+ED, 23 h 3x : passe courte verte sur 23101838b (lib 2 413/0, e2e_code 36, e2e_code_sync 19,
+e2e_scope_versions 8, e2e_lectures 27, e2e_postgres rouge à la passe par le schéma partagé puis 36/36 rejoué
+seul, e2e_masque_sans_filtre 2/2 avec les orphelines) ; journaux ed-pile-vue-journaux ; attend le « poussé »
+d'embarquement. Arbre principal a sa base : 23101838b.
+
+**23 h 34 — trente-quatre atterris** : la trace d'archive (96, d234d4d18, « = », pile tenue ; rejeu complet
+vert dont e2e_postgres 36/36). Banc : la pile d'ED aussi verte sur la copie à orphelines (30/30). Embarquement
+a le « à toi » (PILE_AVANT=77fccf493) ; puis ED (PILE_AVANT=ac8644784), arbre principal, dual, renommages
+Python, G ×2, orphelins, équipier, .NET, base par passe. Hotfixs, le cœur et banc relancent leurs lourds.
+
+**23 h 37 — trente-cinq atterris** : le dense porté sur `Tenue<C>` (embarquement, e14b32ad1 : test 6da82374d,
+remaniement 7846abddb en « = », docs « ! » tolérée). Le premier dernier pas avait buté au rebase sur sa page
+des règles (la conception du dual poussée hors file plus tôt) : repose à la main sur dense-sur-tenue-pile-2,
+PILE_TESTE=ac8644784, « pile tenue ». **Leçon** : pendant qu'un lot est en pile, les docs de sa page restent
+dans le lot ou attendent son atterrissage. ED a le « à toi » (PILE_AVANT=ac8644784) ; puis arbre principal,
+dual, renommages Python, G ×2, orphelins, équipier, .NET, base par passe.
+
+**23 h 4x — trente-six atterris** : le masque des versions en prédicat, la vue publiée par (couche, rang)
+(ED, e89cdb8e6 : 28 commits, tout « = », tête testée 23101838b, git diff du code vide). Arbre principal suit
+à son vert (PILE_AVANT=23101838b) ; puis le dual (embarquement), les renommages Python (codeparsers), la
+chaîne Rust + garde-sous-module (G), les orphelins (recherche), l'équipier (archi), .NET (codeparsers), la base
+par passe (G), la troncature d'un sens (cœur).
