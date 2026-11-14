@@ -112,3 +112,14 @@ reproduit par ces formes. Il manque au témoin, par rapport au scénario, les vi
 simultanés, les MERGE par clé avec relations et vecteur, et `CREATE_VECTOR_INDEX`. Ces cas
 apprennent en revanche l'isolement du catalogue, qui fait l'objet d'un ticket à part :
 `docs/coeur-cpp-hotfixs-tickets/tickets/2026-11-14-un-add-column-passe-sous-une-transaction-d-ecriture-ouverte.md`.
+
+## Une occurrence à la sortie d'un binaire de lib (archi, 14 novembre 2026, 18 h 22)
+
+Rattachée ici par c7 : même signature (`SEGV_ACCERR`, un accès à une page rendue). Au portable,
+`cargo test --lib` sous le jeu large, filtres `agent:: daemon_host::chat daemon_host::atelier_fichiers::`,
+lib `0c41f9fe6`, worktree de la pile `atelier-quatre-mineurs-pile` (`c14a389c4`) : « test result: ok.
+89 passed; 0 failed », puis le processus meurt **à sa sortie**, tous ses tests finis (`signal: 11,
+SIGSEGV`). Core gardé par systemd-coredump, `coredumpctl info 2513521` (18:22:39), **tronqué** : sa
+pile ne se lit pas (`#0 0x000055c1d29e9860 n/a`). Rejoué seul sur le même arbre, la même lib et le
+même target : vert, sortie propre, deux fois sur deux (18 h 44, 18 h 52). Aucun point de reprise
+demandé par ces tests à notre connaissance : c'est la destruction du processus qui touche la page.
