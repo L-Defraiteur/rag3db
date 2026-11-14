@@ -10,6 +10,11 @@
 // CutFileSystem) ; B valide une relation pendant que A se déroule ; puis chaque relation validée de B
 // est lue par sa source (sens avant) et par sa destination (sens arrière). Les deux comptes doivent
 // valoir 1, et l'ensemble des deux sens être le même.
+//
+// Les bouts sont dans des groupes de nœuds différents (2 048 nœuds par groupe), comme dans une vraie
+// base : les relations de A vont du groupe 0 au groupe 2, celle de B du groupe 0 au groupe 1. Au sens
+// avant, A et B partagent le groupe CSR 0, et la troncature de A emportait B ; au sens arrière, B est
+// seule dans le groupe 1 et survivait : une relation d'un seul côté, la forme de code-lourd.
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -56,20 +61,21 @@ int play(const std::string& databasePath, rag3db::main::SystemConfig& config, st
     Connection b(&database);
     for (const auto* q : {"CREATE NODE TABLE N(id INT64, PRIMARY KEY(id));",
              "CREATE REL TABLE R(FROM N TO N, line INT64);",
-             "UNWIND range(0, 1999) AS i CREATE (:N {id: i});",
-             // Des relations validées avant : des groupes CSR déjà là, que les lots prolongent.
-             "UNWIND range(0, 999) AS i MATCH (x:N {id: i}), (y:N {id: 1999 - i}) CREATE "
+             "UNWIND range(0, 5999) AS i CREATE (:N {id: i});",
+             // Des relations validées avant, dans les trois groupes : des groupes CSR déjà là, que les
+             // lots prolongent.
+             "UNWIND range(0, 2999) AS i MATCH (x:N {id: i}), (y:N {id: 5999 - i}) CREATE "
              "(x)-[:R {line: -1}]->(y);"}) {
         if (!a.query(q)->isSuccess()) {
             _exit(11);
         }
     }
     int disagreements = 0, refused = 0, bCommits = 0;
-    for (auto round = 0; round < 20; round++) {
+    for (auto round = 0; round < 8; round++) {
         a.query("BEGIN TRANSACTION;");
-        a.query("UNWIND range(0, 19999) AS i MATCH (x:N {id: i % 2000}), (y:N {id: (i * 7) % 2000}) "
+        a.query("UNWIND range(0, 4999) AS i MATCH (x:N {id: i % 2048}), (y:N {id: 4096 + i % 1900}) "
                 "CREATE (x)-[:R {line: 100000 + i}]->(y);");
-        const auto src = (round * 37) % 2000, dst = (round * 53 + 11) % 2000;
+        const auto src = (round * 37) % 2048, dst = 2048 + round;
         const auto line = 1000 + round;
         b.query("BEGIN TRANSACTION;");
         b.query("MATCH (x:N {id: " + std::to_string(src) + "}), (y:N {id: " + std::to_string(dst) +
