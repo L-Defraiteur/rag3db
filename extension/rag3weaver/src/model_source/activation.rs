@@ -1177,6 +1177,8 @@ mod tests {
         assert_eq!(v[0].len(), 384);
         assert!(debut.elapsed() < std::time::Duration::from_secs(10), "relancé vite : {:?}", debut.elapsed());
         assert_eq!(evenements(&f, "constructeur_demarre"), 2, "relancé une fois");
+        // Le relancé dit sa relance au /sante, comme sous `Maintenir`.
+        assert_eq!(identite_du_fournisseur(&f)["relances"], 1, "le relancé dit sa relance au /sante");
         // Le relancé tient le bail : un troisième calcul ne relance rien.
         client.embed(&["encore".into()]).unwrap();
         assert_eq!(evenements(&f, "constructeur_demarre"), 2, "pas de relance sans plantage");
