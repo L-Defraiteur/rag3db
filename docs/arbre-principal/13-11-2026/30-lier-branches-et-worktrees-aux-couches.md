@@ -1,7 +1,7 @@
 # Lier les branches et les worktrees aux couches (le pas des vues après 1a et 1b)
 
-13 novembre 2026, arbre principal, à la demande de c7. Page de conception : aucun code avant le mot de
-Lucie. Relue par recherche et par ED le 13 novembre ; leurs points sont reportés et attribués. Elle s'appuie sur la conception du 8 novembre
+13 novembre 2026, arbre principal, à la demande de c7. Page de conception, tranchée par Lucie le 13 au
+soir ; la liaison est livrée (voir « Ce qui est livré », à la fin), relue contre le code par ED le 14. Relue par recherche et par ED le 13 novembre ; leurs points sont reportés et attribués. Elle s'appuie sur la conception du 8 novembre
 (`extension/rag3weaver/docs/08-novembre-2026-arbre/01-conception-des-vues-marche-1.md`, §§ 2 à 5),
 sur le résolveur de couches 2a (`src/dataflow/migrations/publication/layers.rs`) et sur la décision
 de Lucie du 13 novembre : les vues se bâtissent sur l'index de code réel, sans second index.
@@ -24,9 +24,11 @@ worktree et un commit deviennent des couches et des générations.
   Lucie). Git ne garde pas cette information : il faut la noter quelque part.
   - Une tâche ouverte par l'atelier la note à sa création : `ouvrir_une_tache` connaît déjà sa
     branche de départ et son commit (`depart`).
-  - Pour une branche venue d'ailleurs, je propose une inférence prudente : parmi les couches
-    connues, celle dont la pointe est l'ancêtre le plus proche du point de fourche. À défaut,
-    l'ancre. **Question 1.**
+  - Pour une branche venue d'ailleurs, **décision 1** : la parente s'infère, dans cet ordre,
+    après l'estampille : le reflog local (« branch: Created from <nom> », s'il nomme une branche
+    suivie), puis le point de fourche (parmi les couches suivies, celle dont la pointe est l'ancêtre
+    le plus proche). **Pas d'ancre par défaut** : une fourche qui ne désigne pas une seule candidate
+    reste ambiguë, ses candidates nommées, et se déclare à l'ouverture.
   - L'admission (ED) : une parente notée par l'atelier est une déclaration, admise. Une parente
     inférée n'est admise que si la réponse est **unique** : deux candidates à égale distance font
     une vue ambiguë, refusée en le disant (le contrat du 11), jamais un choix. Une fois admise,
@@ -52,15 +54,20 @@ worktree et un commit deviennent des couches et des générations.
   synchroniser. Le nom de branche n'est qu'une étiquette : une branche renommée, ou effacée puis
   recréée, n'hérite pas d'une génération par son nom. Le registre de Codex (chaîne de publications, refus d'une tête qui a bougé)
   s'adopte pour la publication. Ses identifiants tirés au hasard ne s'adoptent pas.
-- **Quand une génération se publie.** Je propose : quand l'index a fini un commit, c'est-à-dire
+- **Quand une génération se publie** (**décision 2**, « pour l'instant ») : à chaque commit indexé,
   quand la montre voit `HEAD` bouger et que les versions neuves sont écrites. La génération
-  précédente reste lisible jusqu'à la fin des lectures en cours (épinglage L6). **Question 2** :
-  à chaque commit, ou seulement à la demande, au push, ou à la fin d'une tâche ?
+  précédente reste lisible jusqu'à la fin des lectures en cours (épinglage L6).
+- **Réserve, le nom comme étiquette** : le code livré range encore l'estampille d'une couche et sa
+  marque de fermeture par **nom** de branche. Une branche effacée puis recréée sous le même nom
+  hérite de l'estampille de l'ancienne, tant que l'atelier ne la redéclare pas. Ticket d'ED :
+  [`l-identifiant-d-un-depot-depend-de-la-branche-extraite`](../../everything-declarative/tickets/2026-11-13-l-identifiant-d-un-depot-depend-de-la-branche-extraite.md)
+  (la clé par branche et commit de création le fermerait).
 - **La fusion** d'une branche dans sa parente publie une génération de la parente au commit de
   fusion. Les versions de la couche y descendent sans réembarquement, ses tombstones s'appliquent,
   et la couche se ferme (§ 5 de la conception du 8 novembre).
-- **Un rebase** déplace la base : c'est une génération neuve de la couche sur une autre génération
-  de sa parente, publiée explicitement. Jamais un glissement silencieux. **Question 4.**
+- **Un rebase** déplace la base (**décision 4**, « pour l'instant ») : **la couche suit d'elle-même**.
+  L'estampille fixe la parente et son genre, pas la base, recalculée à chaque résolution au point
+  de fourche du moment ; la génération neuve se publie comme pour un commit, sans geste.
 
 ## 3. La couche de travail : le non-commité d'un worktree
 
@@ -75,10 +82,11 @@ worktree et un commit deviennent des couches et des générations.
     montre. Une réécriture pendant la lecture ne la touche pas (ED).
   - Au commit, ses occurrences entrent dans la génération neuve de la branche, et elle se vide.
   - À l'effacement du worktree, elle part.
-- **Question 3** : la couche de travail d'un worktree est-elle visible des autres sessions (un agent
-  qui lit le worktree d'un autre), ou seulement de celle qui le tient ? Proposition d'ED : lisible
-  par un `view` explicite (`<worktree>`), jamais par défaut ; la vue courante d'une session ne prend
-  que la couche de travail de son propre worktree.
+- **Décision 3** : la couche de travail d'un worktree est **lisible des autres sessions**, sous le
+  nom `travail`, par un `view` explicite, jamais par défaut ; la vue courante d'une session ne prend
+  que la couche de travail de son propre worktree. C'est un **lot à part**, rien n'en est livré :
+  ticket d'ED
+  [`la-couche-de-travail-lisible-des-autres-sessions-n-existe-pas-encore`](../../everything-declarative/tickets/2026-11-13-la-couche-de-travail-lisible-des-autres-sessions-n-existe-pas-encore.md).
 
 ## 4. Ce qu'on lit, et ce que l'IDE montre
 
@@ -154,7 +162,8 @@ worktree et un commit deviennent des couches et des générations.
 
 ## 5. Ce qui s'appuie sur 1a et 1b
 
-- **Sur 1a** (la version de scope, en cours) : une couche ne porte que des références d'occurrences
+- **Sur 1a** (la version de scope, **sur master depuis e62151904**, forme (A) : les bases neuves ont
+  les versions, les existantes se disent « à migrer ») : une couche ne porte que des références d'occurrences
   vers des versions partagées. Ouvrir une couche ne coûte que les versions neuves, embarquées une
   fois (12 à 151 par branche au lieu de 88 à 1 278 scopes).
 - **Sur 1b** (la migration, à son mot) : une base de la forme d'avant n'a pas de versions, donc pas
@@ -271,7 +280,10 @@ worktrees et on supprime index intermédiaires »). Les règles que propose c7, 
 
 Ce lot vient **après** celui de la liaison, et ne se code pas avec lui.
 
-## Les questions qui étaient posées à Lucie
+## Les questions qui étaient posées à Lucie (closes)
+
+Toutes tranchées le 13 novembre au soir : voir « Les décisions de Lucie » plus haut ; la 5 est
+déplacée vers les branches suivies, sa rétention reste un lot à part.
 
 1. **La parente d'une branche venue d'ailleurs** : l'inférer par le point de fourche (notée comme
    inférée), ou exiger qu'elle soit déclarée ?
@@ -296,3 +308,54 @@ Ce lot vient **après** celui de la liaison, et ne se code pas avec lui.
 - **Le témoin cruel** (recherche) : une génération se publie pendant une lecture tenue, dans les trois
   signaux à la fois, et aucune réponse ne mélange deux générations.
 - `view: <branche>@<commit>` d'un commit jamais indexé matérialise ce seul état.
+
+## Ce qui est livré
+
+**La liaison branche → couche, master 0672d624f** (13 novembre), dans
+`extension/rag3weaver/src/couches.rs` et l'ouverture des tâches :
+
+- **Les clés de `_catalog_meta`**, par dépôt (identifiant = le hash du commit racine) :
+  - `branches_suivies:<dépôt>` : l'ancre et la liste des branches suivies ;
+  - `couche:<dépôt>:<branche>` : l'estampille de la parente (branche, genre, base) ;
+  - `couche_fermee:<dépôt>:<branche>` : la marque de fermeture.
+- **L'ordre de résolution** d'une branche suivie :
+  1. l'estampille (une déclaration de l'atelier ou une inférence déjà admise), qui fixe la parente
+     et son genre ; la base se recalcule ;
+  2. le reflog local ;
+  3. le point de fourche, s'il est unique ; sinon la couche est ambiguë, ses candidates nommées.
+
+  Une inférence admise s'estampille et ne se recalcule plus.
+- **L'état le dit** : `index_states` (donc `/etat` et l'IDE) porte un bloc `layers` par dépôt, avec
+  l'ancre, chaque couche suivie, sa parente, son genre (`declaree`, `inferee-par-reflog`,
+  `inferee`) et sa base. Le reste du dépôt est compté comme « connu ». Une couche ambiguë se dit en
+  avertissement.
+- **Le parcours d'une tâche** :
+  - à l'ouverture, `agent/<nom>` entre aux suivies, sa parente (la branche extraite, l'ancre si
+    HEAD est détachée) déclarée et estampillée, sa base au commit de départ ;
+  - à la fermeture, elle sort des suivies et sa couche est marquée fermée. Rien n'est effacé : son
+    estampille reste.
+
+**Le correctif de la relecture d'ED (14 novembre), master 912ea2084** :
+- **la parente déclarée d'une tâche entre aux suivies avec elle**, sauf si elle est l'ancre ou y
+  est déjà. Sans elle, la résolution écartait l'estampille et réinférait la tâche sur l'ancre ;
+- **une déclaration écartée ne s'écrase jamais par une inférence** : si la parente déclarée n'est
+  plus suivie ou n'existe plus, la résolution du moment se dit sans s'estampiller, et le rapport
+  des couches le signale en avertissement ;
+- **à la fermeture de la tâche, sa parente reste suivie** : c'est la couche de la tâche qui se
+  ferme, pas celle de sa parente. Le lot de rétention (fusion → fermeture) décidera des suivies
+  orphelines.
+
+**La version de scope (1a), master e62151904** : le contrat de la page 29, forme (A).
+
+**Rien n'est encore persisté comme génération** : la liaison donne la pile (couches, parentes,
+bases), pas encore son contenu. Le chargeur durable des couches est 2b-B (plan d'ED,
+`docs/everything-declarative/14-11-2026/01-plan-du-chargeur-durable-des-couches-2b-b.md`).
+
+**Les trois tickets d'ED sur la liaison**, ouverts :
+- [l'identifiant du dépôt par la racine de l'ancre, et la couche nommée par sa branche](../../everything-declarative/tickets/2026-11-13-l-identifiant-d-un-depot-depend-de-la-branche-extraite.md) :
+  aujourd'hui, l'identifiant est la racine de HEAD, et un worktree sur une branche orpheline change
+  d'identifiant ;
+- [l'état des couches en O(suivies²) appels git à chaque lecture de l'état](../../everything-declarative/tickets/2026-11-13-l-etat-des-couches-relance-git-a-chaque-lecture-de-l-etat.md),
+  avec le catalogue tenu pendant git à l'ouverture d'une tâche ;
+- [la couche de travail lisible des autres sessions](../../everything-declarative/tickets/2026-11-13-la-couche-de-travail-lisible-des-autres-sessions-n-existe-pas-encore.md),
+  un lot à part (décision 3).
