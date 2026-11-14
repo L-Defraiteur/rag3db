@@ -54,6 +54,12 @@ le dépôt migré, `File_CHUNKED_FROM`, `Library_CHUNKED_FROM`, `ScopeContent_CH
   réindexation, le morceau inchangé est retrouvé par son uuid, et une arête neuve est posée sans que
   l'ancienne soit vue.
 
+**Ce que retire la règle d'exclusion.** 1 140 des 1 291 morceaux sont dans
+`templates/ide/app/app.js`, le bundle minifié de l'IDE. La règle d'exclusion 1 de recherche (en cours),
+qui écarte les fichiers minifiés et générés, en retire la plus grande part. Les gros `.rs` souvent
+édités restent concernés : `backend.rs`, `catalog.rs`, `daemon/embeddings.rs`, `daemon_host.rs`,
+`search.rs`…
+
 ## Le chemin d'écriture et une hypothèse (non prouvée)
 
 L'arête vient de `LinkRecordNode` (« chunk_link », `src/catalog.rs` vers la ligne 6684). Au-delà de
@@ -70,7 +76,8 @@ libs d'avant. Un raté sur le morceau rendrait la paire « absente », et le COP
 forme vue : même morceau, même Scope, une arête de plus par passage, sur les gros fichiers dont les
 lots dépassent le seuil du COPY.
 
-Ce n'est pas prouvé. La preuve demande un témoin :
+Ce n'est pas prouvé. La preuve demande un témoin (confié à hotfixs par c7, le 14 novembre : un e2e, rouge
+sous e93710f36 et vert sous 0c41f9fe6, qui atterrit comme non-régression et ferme la cause) :
 1. un `Scope_Chunk` et son arête déjà en base ;
 2. une réindexation du même fichier, dont le lot de liens passe par COPY, pendant un point de reprise
    V2 ;
