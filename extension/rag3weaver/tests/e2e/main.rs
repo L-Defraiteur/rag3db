@@ -26,6 +26,8 @@ static ETAT_DES_TEMOINS: extern "C" fn() = common::poser_l_etat_des_temoins;
 
 #[path = "../e2e_agent_loop.rs"]
 mod e2e_agent_loop;
+#[path = "../e2e_aide_des_tests_repli.rs"]
+mod e2e_aide_des_tests_repli;
 #[path = "../e2e_archiviste.rs"]
 mod e2e_archiviste;
 #[path = "../e2e_arret_borne.rs"]
