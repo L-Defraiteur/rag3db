@@ -199,11 +199,14 @@ fn le_schema_de_production_partage_le_contenu_de_deux_fichiers() {
     assert_eq!(embarques, 1, "le schéma de production réembarque un contenu identique");
 }
 
+/// Une base neuve sur rag3db reçoit la forme à générations (2a′-1) : les versions de scope, plus la
+/// visibilité par génération. L'entité de contenu partagé reste. Un dialecte qui ne sait pas les
+/// générations (postgres, ticket du 14 novembre 2026) garde la forme à versions.
 #[test]
 #[ignore]
-fn une_base_neuve_recoit_l_estampille_des_versions() {
+fn une_base_neuve_recoit_l_estampille_des_generations() {
     let (cat, _) = catalogue_de_production();
-    assert_eq!(rag3weaver::code::scope_form(&cat).unwrap(), rag3weaver::code::ScopeForm::Versions);
+    assert_eq!(rag3weaver::code::scope_form(&cat).unwrap(), rag3weaver::code::ScopeForm::Generations);
     assert!(cat.entity_configs().contains_key(rag3weaver::code::SCOPE_CONTENT), "pas d'entité de contenu sur une base neuve");
 }
 
