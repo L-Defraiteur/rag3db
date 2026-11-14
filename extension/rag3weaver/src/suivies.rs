@@ -689,8 +689,106 @@ pub fn identifiants_des_couches(
     worktree_du_backend: &std::path::Path,
     resolution: &Resolution,
 ) -> Result<std::collections::BTreeMap<String, String>, String> {
-    let _ = (catalog, depot, worktree_du_backend, resolution);
-    Err("les identifiants des couches n'existent pas encore".into())
+    use serde_json::json;
+    use std::collections::BTreeMap;
+    let e = |e: crate::catalog::CatalogError| e.to_string();
+    let index = |nom: &str| format!("couche_nom:{depot}:{nom}");
+    let fiche = |id: &str| format!("fiche_couche:{depot}:{id}");
+    let lire_fiche = |id: &str| -> Result<Option<Value>, String> {
+        Ok(catalog.read_meta_key(&fiche(id)).map_err(e)?.filter(|v| !v.is_empty()).and_then(|v| serde_json::from_str(&v).ok()))
+    };
+    let ecrire_fiche = |id: &str, v: &Value| catalog.persist_meta_key(&fiche(id), &v.to_string()).map_err(e);
+
+    // Ce qui est là : chaque couche d'histoire par son nom complet, chaque couche de travail par son chemin.
+    let mut presents: BTreeMap<String, String> = resolution.pile.couches.iter().map(|c| (c.nom.clone(), c.pointe.clone())).collect();
+    for s in &resolution.sources {
+        for t in &s.travail {
+            presents.insert(format!("worktree:{}", t.chemin.display()), t.commit.clone());
+        }
+    }
+    let du_backend = worktree_du_backend.canonicalize().ok().and_then(|b| {
+        resolution
+            .sources
+            .iter()
+            .flat_map(|s| s.travail.iter())
+            .filter(|t| b.starts_with(&t.chemin))
+            .max_by_key(|t| t.chemin.as_os_str().len())
+            .map(|t| format!("worktree:{}", t.chemin.display()))
+    });
+
+    // Ce que l'index tenait de vivant.
+    let prefixe = format!("couche_nom:{depot}:");
+    let mut vivants: BTreeMap<String, (String, Value)> = BTreeMap::new();
+    for (cle, id) in catalog.meta_par_prefixe(&prefixe).map_err(e)? {
+        if let Some(f) = lire_fiche(&id)? {
+            if f.get("fin").is_none() {
+                vivants.insert(cle[prefixe.len()..].to_string(), (id, f));
+            }
+        }
+    }
+    let disparus: Vec<String> = vivants.keys().filter(|n| !presents.contains_key(*n)).cloned().collect();
+    let mut apparus: Vec<String> = presents.keys().filter(|n| !vivants.contains_key(*n)).cloned().collect();
+    let mut out: BTreeMap<String, String> = BTreeMap::new();
+
+    // Un renommage, seulement sans équivoque (la garde d'ED) : sur cette pointe, une seule couche a disparu,
+    // une seule est apparue, et aucune autre couche présente ne la porte.
+    for d in &disparus {
+        let (id, f) = vivants[d].clone();
+        let vue = f.get("pointe_vue").and_then(Value::as_str).unwrap_or_default().to_string();
+        let meme_pointe_disparus = disparus.iter().filter(|x| vivants[*x].1.get("pointe_vue").and_then(Value::as_str) == Some(vue.as_str())).count();
+        let sur_la_pointe: Vec<&String> = apparus.iter().filter(|n| presents[*n] == vue).collect();
+        let autres_vivants = presents.iter().filter(|(n, p)| **p == vue && !apparus.contains(n)).count();
+        let meme_genre = |n: &str| n.starts_with("worktree:") == d.starts_with("worktree:");
+        if meme_pointe_disparus == 1 && sur_la_pointe.len() == 1 && autres_vivants == 0 && meme_genre(sur_la_pointe[0]) {
+            let neuf = sur_la_pointe[0].clone();
+            let mut f = f.clone();
+            f["nom"] = json!(neuf);
+            ecrire_fiche(&id, &f)?;
+            catalog.persist_meta_key(&index(d), "").map_err(e)?;
+            catalog.persist_meta_key(&index(&neuf), &id).map_err(e)?;
+            apparus.retain(|n| *n != neuf);
+            out.insert(neuf, id);
+        } else {
+            let mut f = f.clone();
+            f["fin"] = json!(true);
+            ecrire_fiche(&id, &f)?;
+            catalog.persist_meta_key(&index(d), "").map_err(e)?;
+        }
+    }
+    // Les naissances : l'id dérivé de la naissance, jamais celui d'une autre lignée (une fiche qui existe déjà
+    // sous cet id, finie, fait prendre le suivant).
+    for n in &apparus {
+        let pointe = presents[n].clone();
+        let id = if du_backend.as_deref() == Some(n.as_str()) && lire_fiche(ID_DE_LA_COUCHE_DU_BACKEND)?.is_none_or(|f| f.get("fin").is_some()) {
+            ID_DE_LA_COUCHE_DU_BACKEND.to_string()
+        } else {
+            let mut rang = 0u32;
+            loop {
+                let r = rang.to_string();
+                let parts: Vec<&str> = if rang == 0 { vec![depot, n, &pointe] } else { vec![depot, n, &pointe, &r] };
+                let id = crate::uuid::hashsafe_uuid("Couche", &parts);
+                if lire_fiche(&id)?.is_none() {
+                    break id;
+                }
+                rang += 1;
+            }
+        };
+        ecrire_fiche(&id, &json!({"nom": n, "naissance": {"nom": n, "pointe": pointe}, "pointe_vue": pointe}))?;
+        catalog.persist_meta_key(&index(n), &id).map_err(e)?;
+        out.insert(n.clone(), id);
+    }
+    // Les vivantes restées : leur pointe vue suit.
+    for (n, (id, f)) in &vivants {
+        if let Some(p) = presents.get(n) {
+            if f.get("pointe_vue").and_then(Value::as_str) != Some(p.as_str()) {
+                let mut f = f.clone();
+                f["pointe_vue"] = json!(p);
+                ecrire_fiche(id, &f)?;
+            }
+            out.insert(n.clone(), id.clone());
+        }
+    }
+    Ok(out)
 }
 
 /// Les refs du dépôt, chacune sur son commit (une étiquette annotée, déréférencée).
