@@ -276,7 +276,7 @@ fn reingest_file_retenu(
     crate::ingest_profile::add("réindexer · lister le projet (source.list)", t);
     let t = std::time::Instant::now();
     let mut analysis =
-        crate::code::analyze_in_project(&root, vec![(path.to_string(), content.to_string())], &cursor, projet.as_deref());
+        crate::code::analyze_in_project_avec(&root, vec![(path.to_string(), content.to_string())], &cursor, projet.as_deref(), catalog.manifestes_notes().as_ref());
     crate::ingest_profile::add("réindexer · analyser le fichier", t);
     for f in &mut analysis.files {
         f.cursor = cursor.clone();
@@ -480,7 +480,7 @@ fn reingest_files_retenu(
         let projet = source.list().ok();
         crate::ingest_profile::add("réindexer · lister le projet (source.list)", t);
         let t = std::time::Instant::now();
-        let mut a = crate::code::analyze_in_project(&root, presents, &cursor, projet.as_deref());
+        let mut a = crate::code::analyze_in_project_avec(&root, presents, &cursor, projet.as_deref(), catalog.manifestes_notes().as_ref());
         crate::ingest_profile::add("réindexer · analyser le fichier", t);
         for f in &mut a.files {
             f.cursor = cursor.clone();
@@ -997,6 +997,12 @@ fn synchroniser(
     let t = std::time::Instant::now();
     let listed = source.list()?;
     profil.add("lister la source", t);
+    // **Les manifestes du dépôt**, lus une fois sur la liste complète (le Cargo.lock n'est pas un fichier
+    // admis à l'index) : la provenance des noms importés, et l'état d'index les dit.
+    let t = std::time::Instant::now();
+    let manifestes = crate::manifestes::Manifestes::lire(&listed, |c| source.read(c).ok().flatten());
+    catalog.note_manifestes(&manifestes).map_err(|e| e.to_string())?;
+    profil.add("lire les manifestes", t);
     // Le tri au nom seul, comme `analyze_source` : ne pas lire un gros
     // fichier binaire pour l'écarter ensuite.
     let retenus: Vec<String> = listed
@@ -1072,7 +1078,7 @@ fn synchroniser(
         }
         profil.add("lire les fichiers", t);
         let t = std::time::Instant::now();
-        let mut analysis = crate::code::analyze_in_project(&root, sources, &cursor, Some(&retenus));
+        let mut analysis = crate::code::analyze_in_project_avec(&root, sources, &cursor, Some(&retenus), Some(&manifestes));
         profil.add("analyser (codeparsers)", t);
         for f in &mut analysis.files {
             f.cursor = cursor.clone();

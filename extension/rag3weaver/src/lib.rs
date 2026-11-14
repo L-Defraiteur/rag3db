@@ -190,6 +190,7 @@ pub mod host_log;
 pub mod node_id_cache;
 pub mod derived_kb;
 pub mod ocr;
+pub mod manifestes;
 pub mod origin;
 pub mod plan;
 #[cfg(all(test, feature = "rag3db-native"))]
