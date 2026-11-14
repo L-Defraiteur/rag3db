@@ -50,8 +50,8 @@ l'autre, dix fois de suite, même sans rouge.
 | 7 | hotfixs | témoin du dictionnaire (C++ test seul) | chaine-au-point-de-reprise-2 → chaine-au-point-de-reprise-pile | cabcc8640 sur 84f949d2c — **atterri** à 16 h 44, master 42c84cb77, pile tenue |
 | 8 | ED | 2a′-1 (générations de l'ancre) | generations-de-l-ancre-pile | e00fd562d sur cabcc8640 — **atterri** à 16 h 46, master 78c8997de, 20/20 en `=` |
 | 9 | archi | jauge du contexte (+ quatre mineurs s'ils sont verts) | jauge-ce-qui-pese-pile-2 | 67d759962 sur e00fd562d — **atterri** à 16 h 47, master cdbd346aa, pile tenue |
-| 10 | cœur | correctif (a) perte de Note | annulation-garde-les-autres-2 → annulation-garde-les-autres-pile | 9b0e73c9c → pile 960eb8e3a, puis **41a7de35a** sur 67d759962 (annulation-garde-les-autres-pile-2) ; juge vers 17 h 15 |
-| 11 | recherche | la CI : `fetch_update` déprécié par la chaîne stable de la CI (read_pool.rs:261), pas par le poste 1.98.1 | ci-try-update-pile | **passe devant le cœur** (son juge vers 17 h 30) : posée sur master du moment ; le cœur se repose dessus sans rejeu (C++ seul) |
+| 10 | cœur | correctif (a) perte de Note | annulation-garde-les-autres-pile-3 27cfe33a8 | **atterri** à 18 h 20, master 373b5477b, pile tenue, juge vert 18 h 17 ; **la lib d'après se bâtit à 373b5477b** (G) |
+| 11 | recherche | la CI : `fetch_update` déprécié par la chaîne stable de la CI (read_pool.rs:261), pas par le poste 1.98.1 | ci-try-update-pile 34271fc37 | **atterri** à 18 h 17, master a646bf215, pile tenue ; la CI se rejoue dessus |
 | 12 | tty | tty-7, le journal de séance et le repli sous mosh | cx-tty-7-pile-2 **cce8970af** sur 27cfe33a8 (8 commits, 6 `=` 2 `!` docs) | rejeu court en cours à luciepc |
 | 13 | G | la garde apprend la pile (six corrections depuis cd103b619, ticket du quota fermé) | garde-pile-2 **40f6b63a5** sur a4936c7a3 ; relecture d'ensemble par recherche ; recopie au cache à l'atterrissage | cd103b619 sur c93f73f06 (garde 2f1914405 : --onto, push refusé remis, 27 témoins ; relue par recherche à 16 h 2x ; **posée au cache des deux postes à 16 h 22**, sha256 c57a3fb1 → a58a649f, l'ancienne en push_garde.sh.avant-garde-pile) |
 | 14 | codeparsers | l'import pointé (lot 1) | codeparsers/import-python-pointe 343ead799 (vert dans codeparsers, 301/0) | passe sur la dernière tête de pile quand une place vient (~19 h) |
@@ -198,3 +198,13 @@ recherche (CI) → cœur (27cfe33a8, juge) → tty-7 (cce8970af) → mineurs (c1
 → activations (embarquement, à poser) → 1b (arbre principal, à poser) → fils du moteur (G, à poser).
 La mesure d'ED n'a pas été arrêtée par quelqu'un : l'oom-killer de sa portée (`POSTE_MEM_MAX=32G`) a
 tué la sonde à 33 Gio de RSS après ~250 search_code — un second défaut à départager (RSS par appel).
+
+## Douze atterris (18 h 2x) ; la lib d'après
+
+recherche (la ligne pour la CI, a646bf215) puis le cœur (373b5477b, le correctif (a) de la perte de
+Note avec ses trois témoins, juge vert à 18 h 17) : douze lots atterris par la pile, zéro rejeu au
+dernier pas. G bâtit la lib d'après à 373b5477b et bascule par la procédure sans attendre Lucie, après la
+passe de 96 (mémoire fermée 18 h 20 → ~18 h 50). La chaîne : tty-7 (à toi à son vert) → mineurs →
+clients → garde-pile-2 → import pointé → exclusions → activations → 1b → fils du moteur ; devant 1b, le
+lot d'arbre principal « sans filtre ni vue, pas de masque » (le ×8 de la recherche à versions, 5,0 s de
+`_uuid IN [72 652]` → offsets côté moteur, ticket moteur ; lucivy mesurée hors de cause, 6 à 10 ms).
