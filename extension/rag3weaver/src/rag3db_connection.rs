@@ -1059,6 +1059,28 @@ pub(crate) fn registered_writer(path: &Path) -> Option<HeldWriter> {
 
 #[cfg(test)]
 mod tests {
+    /// **Un crochet de test gardé n'empêche pas la réouverture** : la base fermée, son crochet encore
+    /// tenu (comme le garde `e2e_demon_hote::une_base_a_rouvrir_ne_lache_que_son_backend`), la base
+    /// se rouvre tout de suite. Rouge, le crochet tenait l'état « à rouvrir », que le registre des
+    /// écrivains attend : 10 s, puis le refus « 1 référence tenue ».
+    #[test]
+    fn un_crochet_garde_n_empeche_pas_la_reouverture() {
+        use super::*;
+        let dossier = tempfile::tempdir().unwrap();
+        let chemin = dossier.path().join("base.rag3db");
+        let conn = Rag3dbConnection::new(&chemin).expect("la base s'ouvre");
+        let crochet = conn.failed_checkpoint_hook();
+        drop(conn);
+        let debut = std::time::Instant::now();
+        let encore = Rag3dbConnection::new(&chemin);
+        let ecoule = debut.elapsed();
+        assert!(encore.is_ok(), "la réouverture refuse, le crochet tenu : {:?}", encore.err());
+        assert!(ecoule < std::time::Duration::from_secs(5), "la réouverture a attendu {ecoule:?}, le crochet tenu");
+        drop(encore);
+        // Sur une base fermée, le crochet ne fait rien.
+        crochet.after(0);
+    }
+
     #[test]
     fn la_regle_du_tampon_prend_la_moitie_de_la_memoire_au_plus_8_gio() {
         use super::*;
