@@ -4600,6 +4600,30 @@ mod tests {
         assert_eq!(sans_ligne.get("line"), Some(&CypherValue::Null), "la clé reste, pour le chemin COPY");
     }
 
+    /// **Le contenu d'un scope est borné à ses propres octets, pas à ses lignes** (mesure de
+    /// lucivy du 14 novembre 2026 : dans un bundle minifié d'une ligne, chaque fonction recevait la
+    /// ligne entière, un même morceau de 133 Ko répété 484 fois, 844 Mo de trop). codeparsers donne
+    /// l'empan du nœud (`node_start_byte`, `node_end_byte`) ; ses octets à la ligne restent ceux de
+    /// `File`.
+    #[test]
+    fn le_contenu_d_un_scope_est_borne_a_ses_octets() {
+        let src = "function a(){return 1}function b(){return 2}\n";
+        let a = analyze("/virtual", vec![("bundle.min.js".into(), src.into())]);
+        let contenu = |nom: &str| a.scopes.iter().find(|s| s.name == nom).unwrap_or_else(|| panic!("scope {nom}")).content.clone();
+        assert_eq!(contenu("a"), "function a(){return 1}");
+        assert_eq!(contenu("b"), "function b(){return 2}");
+    }
+
+    /// **Un scope qui occupe ses lignes entières garde son texte** : sur du code ordinaire, le
+    /// contenu ne change pas, et l'adresse de sa version non plus.
+    #[test]
+    fn un_scope_de_lignes_entieres_garde_son_texte() {
+        let src = "fn un() -> u32 {\n    1\n}\n\nfn deux() -> u32 {\n    let x = 2;\n    x\n}\n";
+        let a = analyze("/virtual", vec![("lib.rs".into(), src.into())]);
+        let deux = a.scopes.iter().find(|s| s.name == "deux").expect("deux");
+        assert_eq!(deux.content, "fn deux() -> u32 {\n    let x = 2;\n    x\n}");
+    }
+
     /// **Un scope embarque son texte propre, pas celui de ses enfants.** Un
     /// `impl` à deux méthodes garde ses deux signatures et aucun corps ; une
     /// méthode garde tout son texte, signature comprise ; le module qui
