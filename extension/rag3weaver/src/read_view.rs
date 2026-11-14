@@ -148,6 +148,7 @@ pub struct Forme<'a> {
     pub(crate) conn: &'a Arc<dyn DbConnection>,
     pub(crate) multi_cell: bool,
     /// Les générations de la base, s'il y en a (2a′).
+    #[allow(dead_code)] // lu par les lecteurs un par un, dans le commit qui suit ce rouge
     pub(crate) generations: Option<crate::generations::Visibilite>,
 }
 
