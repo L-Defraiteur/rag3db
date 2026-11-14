@@ -5530,7 +5530,8 @@ mod tests_des_generations {
             .execute(&format!("MATCH (g:{t}) RETURN g.couche, g.rang ORDER BY g.rang", t = crate::generations::TABLE))
             .unwrap();
         assert_eq!(g.rows, vec![vec![CypherValue::String(COUCHE_DU_BACKEND.into()), CypherValue::Int(0)]]);
-        assert_eq!(cat.generations.as_ref().map(|v| (v.couche.as_str(), v.rang)), Some((COUCHE_DU_BACKEND, 0)));
+        // Le rang publié est la génération 0 ; le rang lu sans vue est le rang en attente, au-dessus (2a′-2).
+        assert_eq!(cat.generations.as_ref().map(|v| (v.couche.as_str(), v.rang_publie, v.rang)), Some((COUCHE_DU_BACKEND, 0, 1)));
     }
 }
 
@@ -5618,6 +5619,20 @@ mod tests_de_l_ecrivain {
         r.rows.iter().map(|l| texte(&l[0])).collect()
     }
 
+    /// Les uuid des lignes `Scope` d'un nom visibles au rang lu.
+    fn uuids_visibles(cat: &Catalog, nom: &str) -> Vec<String> {
+        let v = cat.generations.clone().expect("une base à générations");
+        let p = cat.dialect_arc().condition_visible_sur("s", &v.couche, v.rang).unwrap();
+        let r = cat
+            .conn()
+            .execute_with_params(
+                &format!("MATCH (s:Scope) WHERE s.name = $n AND {p} RETURN s._uuid ORDER BY s._uuid"),
+                &[QueryParam::new("n", CypherValue::String(nom.into()))],
+            )
+            .unwrap();
+        r.rows.iter().map(|l| texte(&l[0])).collect()
+    }
+
     fn generations_publiees(cat: &Catalog) -> i64 {
         let r = cat.conn().execute(&format!("MATCH (g:{}) RETURN count(*)", crate::generations::TABLE)).unwrap();
         r.rows[0][0].as_i64().unwrap()
@@ -5660,9 +5675,12 @@ mod tests_de_l_ecrivain {
         let (mut cat, src) = base();
         let n = cat.publier_la_generation("c1", 0).expect("publier");
         assert_eq!(cat.au_rang(n, |c| appelants(c, "f")), vec!["a".to_string()], "le dépôt du témoin relie a à f");
+        let f_avant = cat.au_rang(n, |c| uuids_visibles(c, "f"));
         sauver(&mut cat, &src, "b.rs", F2);
         let m = cat.publier_la_generation("c2", 0).expect("publier");
-        assert_eq!(cat.au_rang(m, |c| appelants(c, "f")), vec!["a".to_string()], "à la génération courante");
+        let f_apres = cat.au_rang(m, |c| uuids_visibles(c, "f"));
+        assert_ne!(f_avant, f_apres, "f changé prend une ligne neuve : {f_avant:?} puis {f_apres:?}");
+        assert_eq!(cat.au_rang(m, |c| appelants(c, "f")), vec!["a".to_string()], "l'arête de a suit la ligne neuve de f");
         assert_eq!(cat.au_rang(n, |c| appelants(c, "f")), vec!["a".to_string()], "à la génération d'avant");
     }
 
@@ -5692,6 +5710,9 @@ mod tests_de_l_ecrivain {
         let n = cat.publier_la_generation("c1", 0).expect("publier");
         let avant = lignes(&cat, "f");
         sauver(&mut cat, &src, "b.rs", F2);
+        let pendant = lignes(&cat, "f");
+        assert_eq!(pendant.len(), 2, "l'édition écrit une ligne en attente à côté de la publiée : {pendant:?}");
+        assert!(pendant.iter().any(|(_, _, depuis, _)| *depuis == n + 1), "la ligne en attente est née au rang n + 1 : {pendant:?}");
         sauver(&mut cat, &src, "b.rs", F1);
         assert_eq!(cat.rang_en_attente(), Some(n + 1), "le rang en attente suit le rang publié");
         assert_eq!(lignes(&cat, "f"), avant, "la couche est revenue à l'identique");
