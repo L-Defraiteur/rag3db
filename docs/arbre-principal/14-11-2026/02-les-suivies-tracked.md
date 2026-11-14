@@ -25,7 +25,9 @@ branche `arbre-principal/suivies`.
 - **`select`**, préfixé : `branch:<nom>`, `refs:<motif for-each-ref>`, `worktree:backend`,
   `worktree:*`, `worktree:<chemin>`, `commit:<rev>`, `tasks`.
 - **`parent`** : `"inferred"` (défaut), `"none"` ou `{"declared": "<branche>"}`.
-- **`history`** : `"tip"` (défaut), `"all"`, `{"last": N}` ou `"cited"`.
+- **`history`** : `"tip"` (défaut), `"all"`, `{"last": N}` ou `"cited"`. **Une source `refs:` prend
+  `"cited"` par défaut** (ED et c7, 14 nov., 23 h 55) : sous `tip`, un motif large sur cent branches
+  coûterait cent écritures à chaque fetch sous 2a′-3. Branche `arbre-principal/refs-cited-pile`.
 - **`work`** : vrai par défaut pour un worktree et pour les tâches, faux sinon ; vrai sur une source
   sans worktree est un refus.
 - **Le défaut sans `tracked`** : `worktree:backend` et `tasks`, avec la racine calculée.
