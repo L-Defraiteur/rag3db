@@ -10354,8 +10354,8 @@ fn read_threads() -> u64 {
     /// **Une ligne invisible existe désormais** (d'une autre couche, retirée ou à venir) : les
     /// lecteurs sans filtre bornent à leur tour (`Visibilite::tout_visible`). L'écrivain d'une
     /// seconde génération l'appelle (2a′-2) ; le témoin de la non-fuite aussi.
-    #[allow(dead_code)] // appelé par le témoin 0 (sous code et rag3db-native), puis par l'écrivain de 2a′-2
-    pub(crate) fn marquer_des_lignes_invisibles(&mut self) {
+    /// Publique pour la sonde de la clause sans filtre (2a′-2), qui mesure l'état d'après sur une copie.
+    pub fn marquer_des_lignes_invisibles(&mut self) {
         if let Some(v) = self.generations.as_mut() {
             v.tout_visible = false;
             self.publish_read_view();
