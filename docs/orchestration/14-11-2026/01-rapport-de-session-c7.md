@@ -237,3 +237,10 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 ## Vers 15 h 0x — la charge de luciepc : borner par une enveloppe CPU, pas baisser les lourds
 
 - Lucie, sur la proposition « lourds-max 3 » : « faut voir si on sait régler pour éviter les rouges malgré le partage ; c'est à cause de lucivy ? on pourrait impl une variante tokio async… ». Réponse : pas lucivy en premier (quatre lourds : 96, embarquement, lucivy, le cœur, chacun -j8 + ses fils de test) ; l'async ne réduit pas un travail de calcul. **Décision : une enveloppe CPU par lourd dans `poste lourd`** (CPUQuota = (cœurs − 2) / lourds-max, et RAYON_NUM_THREADS / CARGO_BUILD_JOBS / RUST_TEST_THREADS dérivés), déclaratif à côté de `lourds-max` ; **mesure d'abord** par `systemd-cgtop` de ce que chaque lourd consomme. Lot à G.
+
+## Vers 15 h 0x — trois verts dans la file
+
+- **tty-6 vert** (cx-tty-6-2, 4583eff8e, sur 0741a940f) : crate 39/39 et 10/10, e2e_tty 4/4, catalogue 12/12, target neuf sans variable ; **706 crates compilés sans un seul openssl-sys** (seul `openssl-probe`, pur Rust, pour les certificats de rustls) — témoin du correctif d'archi.
+- **recherche, surveillant-2 vert** (a36f707dd, au portable) : lib 2364/2364, e2e_lectures, e2e_code, invariant_des_vecteurs 12/12, F8, navigateur 43/43 ; le plafond suit sur la même place.
+- **codeparsers, provenance vert** (51f97a8c1 sur 0741a940f, pointeur e23ed0d ; F8, code:: 42/0, e2e_code 53/53, postgres 36/36) ; le second lot (manifestes, f3def09ce / f413dc6) vert dans ses essais : `src/manifestes.rs` lit Cargo.toml/lock, package.json, pyproject, requirements*, vcpkg.json et les workspaces ; `synchroniser` les note (`manifests_read`) et les passe à codeparsers ; témoin e2e rouge sans, vert avec ; un vrai défaut corrigé (le `]` des extras pyproject perdait PyYAML). Limite admise si dite : un manifeste édité seul n'est relu qu'à la synchro (ticket pour la relecture au changement).
+- **File** : archi (recherche-lit-le-catalogue, thèmes) → codeparsers → lucivy (4.3.7) → tty-6 → recherche (surveillant, plafond) → 96 (ses lots) → cœur (C++, vers 17 h).
