@@ -101,3 +101,38 @@ Environment=RAG3WEAVER_EXEC_THREADS=8
 `~/.config/systemd/user/rag3weaver-daemon.service.d/` contient au portable plus de soixante anciennes copies
 `check-lib.conf.avant-*`, laissées par mes poses (`bascule-pose.sh`). systemd ne les lit pas, puisqu'elles ne
 finissent pas par `.conf`, mais elles encombrent. Elles peuvent partir, au mot de Lucie.
+
+## MALLOC_ARENA_MAX=2, une ligne pour l'environnement de l'hôte (proposition, 14 novembre, 22 h)
+
+**Le chiffre d'ED** (ticket `docs/everything-declarative/tickets/2026-11-14-une-recherche-a-versions-garde-20-gio-de-memoire-residente.md`) :
+50 recherches sans filtre sur une base à versions (la copie migrée de 1b), embarqueur connecté, dans un processus de
+test. La mémoire résidente passe de **20,6 Gio à 9,8 Gio**, en palier plat du 11e au 50e appel ; la médiane passe
+de 2 832 ms à 2 515 ms. Pour le cœur, la pente venait des arènes de glibc : chaque fil de tokio prend la sienne, et la
+mémoire rendue reste dans l'arène du fil d'avant. Le pic d'une analyse (3,6 Gio pour un Cypher de 2,9 Mo) est rendu ;
+c'est sa rétention par arène qui s'empilait.
+
+**La place** : le fichier d'environnement que l'unité lit déjà (`EnvironmentFile=-…/rag3weaver-daemon.env`). Aucune
+unité n'est touchée, et la ligne suit les poses : `bascule-pose.sh` ne réécrit que `RAG3DB_LIBRARY_DIR` (par `sed`).
+Le drop-in de la section précédente n'est pas nécessaire pour elle.
+
+**Avant de la poser**, une mesure sur l'hôte réel (mot de c7) : un second hôte sur un port à part (jamais 7878), sur
+une copie reflink de la même base à versions, avec puis sans la ligne, de vraies requêtes `search_code` par HTTP,
+le VmRSS relevé à chaque appel. La sonde d'ED mesure un processus de test qui cherche ; cette mesure-là dit l'hôte.
+Le chiffre viendra ici.
+
+**La commande pour Lucie**, aux deux postes, quand elle dit oui (redémarre l'hôte : les bases se rouvrent au premier
+appel) :
+
+```sh
+grep -q '^MALLOC_ARENA_MAX=' ~/.config/rag3weaver/rag3weaver-daemon.env \
+  || echo 'MALLOC_ARENA_MAX=2' >> ~/.config/rag3weaver/rag3weaver-daemon.env
+systemctl --user restart rag3weaver-daemon.service
+cat /proc/$(systemctl --user show rag3weaver-daemon -p MainPID --value)/environ | tr '\0' '\n' | grep MALLOC_ARENA_MAX
+```
+
+Pour revenir : retirer la ligne, puis `systemctl --user restart rag3weaver-daemon.service`.
+
+Les services d'embarquement de luciepc (`rag3weaver-embeddings@bge-m3`, `@granite-278m`) sont d'autres unités ;
+aucune mesure ne dit qu'ils ont la même pente. Ils restent hors de la proposition.
+
+**Aujourd'hui, aucune base de Lucie n'est à versions** : rien ne presse avant que 1b ne migre une base servie.
