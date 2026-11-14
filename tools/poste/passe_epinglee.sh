@@ -24,7 +24,13 @@ if [ "$(hostname)" = LuciePC ]; then
   export RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7878,127.0.0.1:7879
   # La base de test de luciepc (rag3weaver-pg), pour e2e_postgres : un lot qui touche un gabarit la joue.
   export RAG3WEAVER_PG=postgres://rag3weaver:rag3weaver@127.0.0.1:5433/rag3weaver_test
+  # Le repli des tests sur place (lot repli-de-l-aide d'embarquement, 15 novembre 2026) : un modèle qu'aucun service
+  # listé ne sert (granite-107m, depuis l'arrêt de 7880) se charge sur l'iGPU de luciepc, card1, l'i915 ARL, qui ne
+  # porte aucun écran (ses quatre sorties sont « disconnected », relevé d'embarquement). Jamais au portable : son seul GPU
+  # porte l'écran de Lucie, et `igpu:0` l'y désignerait.
+  export RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE=igpu:0
 else
+  unset RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE
   export RAG3WEAVER_EMBED_SERVICE=127.0.0.1:7979,127.0.0.1:7980
   export RAG3WEAVER_EMBED_CHAR_BUDGET=4096 RAG3WEAVER_GPU_DUTY=70
 fi

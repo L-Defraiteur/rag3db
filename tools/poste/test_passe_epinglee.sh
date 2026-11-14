@@ -14,7 +14,7 @@ git -C $H/git_workspaces/wt -c user.email=t@t -c user.name=t add -A > /dev/null 
 cat > $W/run_e2e.sh <<'F'
 #!/bin/bash
 s=""; while [ $# -gt 0 ]; do [ "$1" = --test ] && s=$2; shift; done
-echo "$s EMBED=$RAG3WEAVER_EMBED_SERVICE LIB=$RAG3DB_LIB" >> "$FAUX_TRACE"
+echo "$s EMBED=$RAG3WEAVER_EMBED_SERVICE LIB=$RAG3DB_LIB REPLI=${RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE:-absent}" >> "$FAUX_TRACE"
 [ "${FAUX_NON_JOUEES:-}" = "$s" ] && echo "▸ ⚠ 1 suites NON JOUÉES faute de feature"
 [ "${FAUX_ROUGE:-}" = "$s" ] && { echo "test result: FAILED. 0 passed; 1 failed"; exit 101; }
 echo "test result: ok. 1 passed; 0 failed"
@@ -56,4 +56,9 @@ for h in LuciePC lucie-tablette; do
   passe VERT "la passe sur $h" FAUX_HOTE=$h
   grep -qE '7880|7981' $D/trace && { echo "ROUGE  $h cite un service arrêté : $(head -1 $D/trace | grep -o 'EMBED=[^ ]*')"; rouge=1; } || echo "vert   $h ne cite ni 7880 ni 7981 ($(head -1 $D/trace | grep -o 'EMBED=[^ ]*'))"
 done
+# Le repli des tests sur l'iGPU : à luciepc seulement, jamais au portable (son seul GPU porte l'écran), même posé par l'appelant.
+passe VERT "le repli à luciepc" FAUX_HOTE=LuciePC
+grep -q 'REPLI=igpu:0' $D/trace && echo "vert   LuciePC : RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE=igpu:0" || { echo "ROUGE  LuciePC sans repli : $(head -1 $D/trace | grep -o 'REPLI=[^ ]*')"; rouge=1; }
+passe VERT "pas de repli au portable" FAUX_HOTE=lucie-tablette RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE=igpu:0
+grep -q 'REPLI=absent' $D/trace && echo "vert   lucie-tablette : aucun repli, même posé par l'appelant" || { echo "ROUGE  le portable a un repli : $(head -1 $D/trace | grep -o 'REPLI=[^ ]*')"; rouge=1; }
 exit $rouge
