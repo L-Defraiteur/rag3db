@@ -39,5 +39,5 @@ Les deux tables par langue de codeparsers (`declared_dependencies_by_language`,
 sous sa langue, lit `go.mod` (`module`, `require` en bloc et en ligne, `replace` noté) et ne passe que les
 tables par langue. Témoins : `tests/provenance_par_langue.rs` (codeparsers, rouge sous la table neutralisée)
 et `manifestes::tests::l_analyse_compare_aux_manifestes_de_la_langue` (rouge sous l'ancien passage des
-tables de toutes les langues). Le cas Go de bout en bout attend que les imports Go produisent leurs
-bibliothèques : [ticket du même jour](../../codeparsers/tickets/2026-11-14-un-import-go-ne-produit-aucune-bibliotheque.md).
+tables de toutes les langues). Le cas Go de bout en bout (`go_l_analyse_garde_la_casse_du_module_requis`) est venu avec la correction
+des imports Go, dans le même lot : [ticket du même jour](2026-11-14-un-import-go-ne-produit-aucune-bibliotheque.md).
