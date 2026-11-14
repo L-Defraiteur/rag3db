@@ -1064,3 +1064,84 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   en bout (23 h 35 → 23 h 55 : instantané, relevé ancré, jugement, reconstruction, contrôle de G égal, relevé
   ancré après à 0 d'un seul sens sur les trois tables) ; le contrôle de G prend ~20 min par base : compter une
   heure de fenêtre pour les deux bases avec la purge et les bancs. Prêt pour le « posé » de G.
+- **Archi, 23 h 5x** : prochain lot = le juge du rappel coupé sous 400 jetons (hooks, ticket du 8 nov. : Gemini
+  coupe 3 fois sur 10, l'appel est payé et rien n'est rendu) — plafond large par défaut (2 048) réglable par
+  modèle, troncature nommée au journal, rouge sur faux_sse par finish_reason « length ». Puis le test de la
+  lib qui attend un service sans délai, à sa reproduction. **lucivy** : PR #38 clippy corrigé (attend une
+  place) ; hypothèse des générations vérifiée (4 → 1 : −3,1 %) ; le lot de l'hôte (fts_maintenance, routes
+  /backend/fts-live-ids et /backend/maintain) écrit en branche avec un pointeur git rev, **entre au tag 4.3.8**.
+- **G, 23 h 57** : le verdict du binaire fac67a208 refusé par run_e2e.sh avant tout test (« librag3db.so plus
+  vieux que le dernier commit de ses sources », l'IN haché et le pliage sont sur master) ; rejoué sous
+  RAG3WEAVER_MOTEUR_ANCIEN=1 dit, l'hôte posé tournant sous 373b5477b par son env. Pas de bascule de lib ce
+  soir ; la prochaine viendra avec la troncature d'un sens du cœur. Pose vers 0 h 45.
+- Archi : le juge du rappel coupé était déjà corrigé depuis le 8 nov. (52021b977, plafond 2 048, troncature
+  nommée, témoin) — ticket fermé (f1de47fe8). Le plafond par modèle : `max_output_tokens` sur models.llm au
+  lot où le juge s'allume. Archi passe aux rouges de la navigation dans les symboles.
+- Archi, 00 h 0x : conception de la couverture des membres de la navigation (page 02 archi) — les membres d'un
+  type = ses faits indexés + les scopes qu'il contient + ceux des compagnons de même nom (impl T), chacun avec
+  sa provenance ; hors du fichier (récepteur Go, C++ hors classe) par l'appartenance que l'index porte — à
+  demander à codeparsers (fait du parseur, pas de la navigation) ; rien d'inventé ; rouges purs d'abord. Validé.
+- Archi, 00 h 0x : navigation des membres (branche navigation-membres) — les scopes contenus dans la plage du
+  type sont ses membres (provenance range_containment), fusion par nom et ligne avec `provenances`
+  [indexed_declaration, range_containment] ; 14/0 sur symbol_navigation::. Le récepteur Go, le C++ hors classe
+  et `impl T` attendent le relevé de codeparsers.
+- **impl → struct en Rust (codeparsers + archi), 00 h 0x** : forme (A), sans schéma — le bloc `impl` et ses
+  méthodes portent le nom du type sans génériques ni chemin (parent_name « Foo », plus « Foo<U> »), le bloc
+  gagne `target_type` et `target_type_path` quand l'import le donne ; la navigation lit le nom et départage
+  par le chemin. Une arête IMPL_OF (B) reste un ticket souhait ; HAS_PARENT (C) refusé (la struct n'est pas
+  le parent du bloc).
+- **ED, 00 h 1x — l'écrivain de 2a′-2** (branche ecrivain-2a-prime-2) : la publication écrite d'abord
+  (9ef56697f : la ligne `_generation` au rang en attente w avec commit et chemins sales, puis n avance ; la
+  Visibilite porte n, la lecture sans vue lit w = n+1 ; le témoin de 2a′-1 vérifie 0 publié / 1 lu), et les
+  cinq témoins rouges pour la bonne raison (l'ancre garde son passé, aucune ligne publiée ne change, les
+  arêtes entrantes suivent, dix sauvegardes ne publient rien, un retour en arrière s'efface). Suite : l'écrivain
+  dans code_sync et la fin d'instantané.
+- Archi, 00 h 1x : la navigation des membres verte (18/0 : impl Rust séparé, récepteur Go, C++ hors classe ;
+  le bloc impl exclu des membres — vrai défaut trouvé par le rouge ; déclaration et définition fusionnées,
+  surcharges séparées dites par coverage.unpaired_overloads ; la limite affichée : « un autre fichier n'est
+  pas lu »). Attend la pose de codeparsers (parent sans génériques) pour son témoin croisé ; en pile derrière
+  l'équipier.
+- **Codeparsers, 00 h 1x — deux colonnes sur Scope** validées : `parent_path` (le chemin qualifié du
+  propriétaire quand le code l'écrit, jamais deviné) et `extends_type` en colonne ; additives, vides jusqu'à la
+  réindexation ; conditions : une base d'avant s'ouvre sans refus par le même mécanisme d'ajout de colonne que
+  2a′-1 (à voir avec ED), e2e_code qui ouvre une base d'avant. Le genre `method` d'une définition C++ hors
+  classe se décide au rendez-vous de code.rs quand le parent résolu est une classe (voie a).
+- Banc, 00 h 1x : l'équipier sous Gemini rend le contenu 10/10 sans le correctif comme 10/10 avec (page 03 banc,
+  62f8ca647) : le taux ne départage pas, le rouge sûr reste le faux modèle (le correctif couvre le cas où le
+  modèle écrit le texte hors de report). Suite : Laya sur la trace de 96.
+- **Embarquement, 00 h 1x — le repli de l'aide des tests bute sur le poste** : le `Cpu` de burn passe par Vulkan
+  et aucun adaptateur CPU (lavapipe) n'existe aux deux postes (luciepc : les deux R9700 et un GPU intégré Intel
+  ARL ; portable : le Radeon 8060S). Décision : pas de défaut CPU imaginaire — repli seulement sur un
+  périphérique nommé (RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE), sans variable rouge nommé, jamais sauté ; l'iGPU de
+  luciepc à vérifier libre (loginctl seat-status) avant de le nommer dans l'env de passe ; **lavapipe = question
+  à Lucie (sudo)** ; ndarray en ticket souhait. Recherche : sa passe relancée neuve (passe_epinglee.sh remplacé
+  sous elle pendant check_features — un bash réécrit en cours de route n'est pas une preuve), ~15 min.
+- **Les targets au plafond (00 h 1x)** : troisième target de la soirée à passer 32 Go (archi delais-c 35 Go,
+  deux fois ; embarquement target-activation 34 Go) — la lib entière, le navigateur et les e2e sous leurs
+  features s'y accumulent en quelques lots. Décision : `cargo clean -p` des seuls paquets locaux au plafond,
+  à la place de l'effacement entier ; ticket pour G : run_e2e.sh fait ce ménage lui-même et ne refuse que si
+  le target reste au-dessus.
+- **ED, 00 h 2x — l'écrivain par générations vert** (ecrivain-2a-prime-2 745524e56 : la publication, l'écrivain
+  § 11, le correctif du retour en arrière ; 5/5 rouges d'abord, générations 3/3, non-fuite, vue 2/2, code_sync,
+  code_tools 24/24). Défaut moteur trouvé : un NULL en paramètre se type STRING face à une colonne INT64
+  (`_jusqu_a`) → ticket pour le cœur, littéral NULL en contournement. Suite : reingest_files, remove_file,
+  sync_source, File, les arêtes recopiées dans l'état, le cache (témoin 6).
+- Codeparsers, 00 h 2x : les deux colonnes de Scope passent par le chemin additif des champs déclarés
+  (register_entity, alter_add_column sans défaut : NULL sur les lignes d'avant, lu comme vide) — voie (b) ;
+  un défaut typé au chemin additif (a) en ticket pour ED, décision commune du catalogue.
+- **Arbre principal, 00 h 2x — 2a′-3, conception fine** (page 03, ce3a2c993) : l'amortisseur de `tip` (montre
+  sur `.git/refs` et `packed-refs`, écriture à 5 s du dernier mouvement repoussée à chaque mouvement, plafond
+  60 s, une écriture par couche, l'état dit la pointe vue et l'attente) ; le rattrapage paresseux (file de
+  l'indexation vide, ≤ 5 générations ou 30 s par passe, la plus récente d'abord contre sa voisine, `{last: N}`
+  s'arrête à N sauf épinglées et citées, reprise par l'ensemble gardé, une citation passe devant, refus
+  transitoire nommé après 5 s, jamais de réponse partielle). Validée ; les nombres sont des réglages du
+  manifeste ; la montre partage le fil `index-suivi`.
+- **2a′-3, point dur (ED, 00 h 2x)** : l'uuid d'une ligne contient `_depuis` ; écrire g après g+1 (pointe
+  d'abord, rattrapage, citation) change des uuid posés ou double. À mesurer par ED sur la copie migrée,
+  contre les deux colonnes seules : (3a) uuid par empreinte du contenu + table de visibilité par intervalle ;
+  (3a′) deux colonnes pour l'intervalle principal + annexe des réapparitions. Repli : doublon au bord haut,
+  compté. Ordre : l'écrivain de 2a′-2, la mesure (coût du prédicat **et** de l'écriture), la page d'ED.
+- **lucivy 4.3.8, 00 h 2x** : Lucie a dit oui au tag dans la fenêtre de lucivy (« oui go pour le tag », « tu as
+  mon accord pour publication une fois prêt »). Le numéro est sur main (dd04204 : neuf Cargo.toml, sept
+  package.json, pyproject, CHANGELOG du 15 novembre, README) ; tag v4.3.8 à la CI verte, release.yml, registres
+  vérifiés. Le lot de la maintenance par l'hôte passera de `rev` à "4.3.8" puis entrera en pile.

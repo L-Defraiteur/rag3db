@@ -654,3 +654,58 @@ PILE_AVANT=8a2b85f81 ; push-d-un-lot.md le cite par son chemin). La base de rech
 .NET → base par passe → cœur → `cited` par défaut (arbre).
 G, 23 h 5x : tête du troisième lot 0416455b5 (un .md par-dessus 3f159b542 : push-d-un-lot.md cite
 tools/poste/passe_epinglee.sh) ; base donnée à recherche : 0416455b5.
+Codeparsers, 23 h 59 : le 30 quater vert (4a10a5939 : check_features 8/8, lib 2 433/0, e2e_code 55/55,
+e2e_postgres 36/36, MOTEUR_ANCIEN et RETARD_MAX=300 dits) ; dernier pas prêt, attend le « poussé » du dual.
+Alias de résolution côté codeparsers verts (7c2c5aa, 322) ; côté rag3weaver : paths de tsconfig.json et
+`workspace.imports.<langue>.local_prefixes`.
+Banc, 00 h 0x : les orphelins de recherche (ff4ced00a contre 9d90edbb6) verts — l'écart File tombe à 0 au lot
+après le retrait (1 au parent), les 203 d'avant aussi, 30 cas au bit près (page 02 § 4, 87f764243).
+Recherche se posera sur 0416455b5 (G) à son vert.
+Arbre principal, 00 h 0x : le défaut `cited` d'une source `refs:` fait (refs-cited dac27a8e2 : rouge
+122f94a35 sur cinq sources, vert c8d06859c, suivies:: 14/14, check_features 8/8 ; nouveautés des suivies
+ajoutées, page 02 d'orchestration touchée — c7 n'y écrit plus avant l'atterrissage). Place : derrière la base
+par passe de G ; la troncature d'un sens du cœur après. Fin de file : dual → renommages → G ×3 → orphelins →
+équipier → .NET → base par passe → `cited` → cœur.
+Codeparsers, 00 h 0x : les alias de résolution verts (alias-resolution 9857eac19 sur .NET e6c06581e : pointeur
+→ 7c2c5aa, `#` préfixe local JS, tsconfig*/jsconfig lus avec commentaires, `@app/*` → préfixe,
+`workspace.imports.<langue>.local_prefixes` ; 16/16). Trois lots en file pour lui : 30 quater (prêt), puis
+.NET + alias dans un tour. Pour archi : parent_name existe ; manquent le nom qualifié, impl → struct (Rust,
+en premier), définition ↔ déclaration (C++), receiver (Go).
+Recherche, 00 h 0x : orphelins-pile-3 0cf758890 sur 0416455b5 ; rejeu court à luciepc (rustc 1.98.1 rebâtit
+une fois) ; tête à archi au check_features vert. Deux faux rouges ticketés sur ff4ced00a (postgres partagé ;
+le témoin navigateur du chat d'une tâche sous charge, vert 3/3 seul) ; un « descendants laissés après la
+commande » du confineur sur un e2e_code 36/36.
+
+**00 h 08 — trente-huit atterris** : le dual d'un creux à la demande (embarquement, 92b7a09fa : test
+922339c68, code 3bee9e5e3 en « = », docs « ! » tolérée ; passe entière verte ; target-activation à 34 Go
+effacé plutôt que le plafond relevé, e2e du groupe rejoué 2/2 ; repose à la main sur dual-du-creux-pile-2 après
+un conflit sur sa page des règles, PILE_TESTE=870bb4a5e). Codeparsers a le « à toi » (PILE_AVANT=870bb4a5e) ;
+puis G ×3 (PILE_AVANT=4a10a5939, b1990e6e2, 8a2b85f81), recherche (0cf758890), archi, codeparsers ×2, G base
+par passe, arbre `cited`, cœur, embarquement repli de l'aide.
+
+**00 h 10 — trente-neuf atterris** : les renommages Python et `workspace.imports` (codeparsers, e519cfd69,
+2/2 en « = », pointeur 85fe233). G a le « à toi » pour ses trois (chaîne Rust 1.98.1, garde des sous-modules,
+passe_epinglee.sh dans tools/poste/) ; puis recherche (0cf758890 sur 0416455b5), archi (équipier),
+codeparsers (.NET + alias), G (base par passe), arbre (`cited`), cœur (troncature), embarquement (repli).
+Codeparsers : le récepteur Go générique vert (appartenance-des-methodes c6216ea, 324 passés) ; puis C++, puis
+Rust (A).
+
+**00 h 13 — quarante-deux atterris** : les trois de G — la chaîne Rust 1.98.1 (b09ce1760), la garde des
+sous-modules (ac8ef511f : un premier push refusé par des docs de lucivy entre fetch et push, la garde a remis
+le worktree, le même appel est reparti), passe_epinglee.sh dans tools/poste/ (727d6336e + 2146956e6 : rebase de
+la garde buté sur push-d-un-lot.md, reposé à la main, **premier emploi de PILE_TESTE**). passe_epinglee.sh
+recopié au cache des deux postes (5ac96c073b0df69f, 16 vert). Recherche a le « à toi » (PILE_AVANT=0416455b5)
+à son vert ; puis archi (équipier, non reproduit par le banc : le prochain essai de Lucie en tty est le juge),
+codeparsers ×2, G base par passe, arbre `cited`, cœur, embarquement repli.
+Archi, 00 h 1x : equipier-rend-le-contenu-pile 55679c2d6 sur 0cf758890, rejeu court en cours ; le retrait de la
+copie ouverte du ticket de tty prêt pour la minute d'après. Codeparsers se pose dessus.
+Codeparsers, 00 h 2x : .NET (542ab4656) et alias (270b6284d) reposés sur 55679c2d6 ; un seul dernier pas sur
+270b6284d (la passe testée est celle de la tête), PILE_AVANT=55679c2d6 ; passe complète en cours ; le
+contrôle du worktree recopié compte 153 de retard réel, sans RETARD_MAX. G (base par passe) se posera sur
+270b6284d. Appartenance : parent_path et le nom court d'un bloc impl verts côté codeparsers (5885e13, 327).
+
+**00 h 23 — quarante-trois atterris** : les orphelins du plein texte (recherche, 262be6fc4, 4/4 en « = » :
+`deletes_flush` après DeleteRecordNode, l'offset d'une ligne inconnue du cache lu en base ; rejeu complet vert,
+lib 2 435). Archi a le « à toi » à son vert (PILE_AVANT=0cf758890) ; puis codeparsers (PILE_AVANT=55679c2d6),
+G base par passe (sur 270b6284d), arbre `cited`, cœur, embarquement. La sonde d'ED par recherche sous `poste
+mesure` attend la pile vide.
