@@ -48,6 +48,22 @@ se résout en **112,6 ms**. lucivy ne prend, lui, que 6 à 10 ms de filtre par r
 mémoire vient du chemin de la recherche, et vraisemblablement du dense, qui refait le masque et
 filtre les morceaux par `p._uuid IN [72 652]` (`compile_filter_for_vector_in`).
 
+## La cause de la mémoire, départagée (14 novembre 2026, 20 h 34)
+
+- **La base d'avant les versions ne fuit pas** : 10 recherches denses, environ +5 Mio par appel
+  après le premier, 284 ms en médiane. Les hôtes de Lucie d'aujourd'hui ne sont pas touchés.
+- **Sur la base à versions, c'est la projection de graphe du dense filtré.**
+  `PROJECT_GRAPH_CYPHER` sur un Cypher où le filtre des 72 652 versions est écrit en clair (2,9 Mo),
+  puis `DROP_PROJECTED_GRAPH`, retient +3,58 Gio par tour, sans aucune requête vectorielle. C'est une
+  fuite du moteur : ticket `2026-11-14-une-projection-de-graphe-retient-sa-memoire-apres-son-retrait.md`,
+  pour le cœur.
+- **Côté rag3weaver**, deux défauts de forme :
+  - le filtre est écrit en clair dans le Cypher projeté ;
+  - un graphe est projeté puis retiré à chaque recherche.
+
+  La forme à viser est un graphe projeté posé une fois par (couche, rang), à la publication, et
+  cité par son nom. C'est la vue de 2a′-2.
+
 ## Ce qu'on pourrait faire
 
 - **Le cas sans filtre** : le court-circuit d'arbre principal (lot de 1a). Sans filtre ni vue, il
