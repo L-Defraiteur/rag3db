@@ -83,3 +83,39 @@ ED écrira sa page de 2a′-3 après l'écrivain de 2a′-2, en partant de celle
    - Une vue qui cite une génération pas encore écrite la fait passer devant.
 4. **Ce que l'état dit à la place des recopies**, par génération : le nombre de chemins écrits, les
    lignes neuves et retirées, et la durée de l'écriture.
+
+## La conception fine des deux pièces des suivies (15 novembre, 0 h 30, à la demande de c7)
+
+### L'amortisseur de `tip`
+
+- **Ce qui déclenche** : la résolution voit bouger l'empreinte des refs, et une couche dont la source dit
+  `tip` a une pointe neuve. L'empreinte est surveillée par une montre sur `.git/refs` et `packed-refs`,
+  pas seulement à la lecture de l'état.
+- **Le groupement, sans seuil par minute** : l'écriture se prévoit à **5 s** après le dernier mouvement.
+  Chaque mouvement neuf repousse l'échéance, et seule la dernière pointe s'écrit. Un plafond de **60 s**
+  après le premier mouvement écrit quand même, pour qu'une ref qui bouge sans cesse (un rebase
+  interactif, un script) ne repousse pas l'écriture à jamais.
+- **Une seule écriture à la fois par couche**, en tâche de fond de l'hôte. Une pointe qui bouge pendant
+  une écriture se met en attente ; elle remplace la précédente attente, elle ne s'y ajoute pas.
+- **Ce que l'état dit** d'une couche, par couche : `pointe vue`, `génération écrite`, et `en attente
+  depuis <t>, écriture prévue à <t'>`. Une vue sur la couche lit la génération écrite, et elle le dit (« en
+  retard d'une génération sur la pointe »).
+
+### Le rattrapage paresseux de `all` et de `{last: N}`
+
+- **Le budget** : il ne tourne que quand la file de l'indexation courante est vide. Il fait au plus
+  **5 générations ou 30 s par passe**, puis rend la main. Son embarquement des versions neuves passe
+  sous le même régime GPU que l'index (`RAG3WEAVER_GPU_DUTY`), jamais au-dessus.
+- **L'ordre : la plus récente d'abord**, en remontant de la pointe. Une vue a plus de chances de citer
+  une génération récente. Chaque génération s'écrit contre sa voisine plus récente, déjà écrite : le coût
+  suit le diff, comme le veut ED, quel que soit le sens.
+- **`{last: N}`** s'arrête à N générations depuis la pointe. Les plus vieilles ne s'écrivent pas, sauf si
+  une couche enfant les épingle ou si une citation les demande.
+- **L'arrêt et la reprise** : le progrès est l'ensemble des générations écrites, gardé dans la fiche de la
+  couche. Un hôte arrêté reprend, à la passe suivante, sur les générations qui manquent. L'id d'une
+  génération est déterministe, donc une génération réécrite est la même, et rien ne se double.
+- **Une citation d'une génération pas encore écrite** (`view: b@c`, une fiche, une couche) la fait passer
+  devant le rattrapage, juste après l'indexation courante. L'appel qui la cite attend **au plus 5 s**. Au-
+  delà, il répond par un refus transitoire nommé (« génération non écrite, écriture en cours, rang k
+  dans la file ») : l'agent réessaie. Il n'y a jamais de réponse partielle mêlant deux générations. Le
+  plein texte n'est pas servi avant le reste : une génération se publie entière ou pas du tout.
