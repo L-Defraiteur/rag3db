@@ -373,3 +373,21 @@ mod gabarits;
 /// client MCP sur stdio. Le protocole seulement — l'hôte est un `Backend`.
 pub mod mcp;
 mod backend_nodes;
+
+/// **Rien à installer sur le poste pour le TLS** (14 novembre 2026 : openssl 4.1.0 posé par une
+/// mise à jour du système à 13 h 51, que `openssl-sys` 0.9.111 refusait — tout target neuf
+/// cassait). Le TLS passe par rustls, compilé dans le binaire : aucune dépendance, même de
+/// témoin ou optionnelle, ne tire `native-tls` ni `openssl-sys`.
+#[cfg(test)]
+mod le_tls_ne_tire_pas_openssl {
+    #[test]
+    fn the_lockfile_pulls_neither_openssl_nor_native_tls() {
+        let lock = include_str!("../Cargo.lock");
+        for paquet in ["openssl-sys", "openssl", "native-tls"] {
+            assert!(
+                !lock.contains(&format!("name = \"{paquet}\"\n")),
+                "Cargo.lock tire {paquet} : une dépendance garde sa TLS par défaut (cargo tree -i {paquet} --all-features)"
+            );
+        }
+    }
+}
