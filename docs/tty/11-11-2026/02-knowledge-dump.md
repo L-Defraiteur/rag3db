@@ -136,3 +136,40 @@ Cargo, test, service ni bâti nouveau. Ce défaut n'attend plus de décision de
 Lucie. Le crate tty séparé est conservé ; aucun nouveau lot autorisé par cette
 régularisation. Les propositions tty-4, mesures et thèmes restent des pistes
 historiques en attente d'objectif établi, pas des actions démarrées.
+
+## Ce que la semaine du 13 novembre 2026 a appris
+
+### Les thèmes (`56deb90ea`, `87061f03c`)
+
+- **Cinq thèmes**, chacun un fichier de `extension/rag3weaver/templates/themes/` : `daemon`, `foret`, `cyberpunk`, `cyborg`, `alien`. Ils ont tous la même forme : couleurs en hex, trois animations en données (`reflechit` le Cercle, `lit` la Transmutation, `ecrit` le Glitch), `replis`, `ascii` et la palette `code`. Le terminal les embarque par `include_str!` (`tty/src/theme.rs`, `THEMES`), et on les choisit par `--theme <nom>` ou `RAG3WEAVER_TTY_THEME`. L'IDE lit les mêmes fichiers.
+- **La règle de forme** convenue avec archi : on ajoute des champs, on n'en renomme ni n'en retire aucun sans le prévenir, puisque l'IDE les lit par `lib/theme.ts`.
+- **La règle de contraste**, la même pour tous les thèmes (`theme::tests::every_theme_keeps_a_minimal_contrast_against_its_background`, WCAG 2.x contre le fond) : 4,5 au moins pour le texte et le code qui se lit, 3 pour la sourdine, les commentaires, la ponctuation et le cadre. Le halo n'y entre pas. Elle a relevé daemon de `#b45a5a` à `#b85d5d` (attribute, label, module).
+- **Les témoins qui couvrent chaque thème** : le fichier embarqué octet pour octet, une colonne par glyphe après les replis, l'ASCII pur, et les couleurs du Cercle jusqu'aux cellules.
+
+### La boîte de l'équipier (`212893a17`)
+
+- **La logique** vit dans `tty/src/boite.rs`, sans ratatui, pour que le témoin e2e la joue aussi : une `question`, une `approval` (avec sa `command`) ou une `proposal` de l'équipier attend jusqu'à ce qu'une ligne porte `reply_to: <son id>`. La réponse est `{backend, task, kind: "answer", text, reply_to, approved?}`, et l'état de l'équipier se lit dans `GET /ide/teammate/list?supervisor=supervisor`.
+- **Dans la vue** : la ligne d'état dit d'abord ce qui attend ; `o` accorde et `n` refuse une approbation, sans rien taper d'autre ; la saisie répond à une question.
+- **Le témoin par le chemin de l'hôte** : `e2e_tty::le_terminal_accorde_une_commande_que_l_equipier_attend`. Un faux équipier (CallbackLlm) demande l'accord pour `echo accorde-moi` sur la porte des commandes du dépôt de test. Le terminal accorde, l'hôte écrit `granted`, la commande se joue, et la liste dit `ended`.
+- **Le faux vert attrapé par la garde des résidus.** Le journal des runs de l'hôte s'écrit 250 ms après la fin d'un run, sur son fil : un témoin qui rend son dossier trop tôt laisse un résidu dans le TMPDIR, et `run_e2e.sh` rougit. Le remède est d'appeler `host.journal_des_runs().vider()` avant de rendre le dossier, comme `e2e_juge`.
+
+### La mesure à travers ssh (`ec4f7aa6d`, page `docs/tty/13-11-2026/04-la-mesure-a-travers-ssh.md`)
+
+- **Les outils** : `extension/rag3weaver/tty/mesures/faux_hote.py`, un faux hôte qui joue un pas scripté et note les POST, et `mesure.py`, qui lance le terminal sur l'autre poste par `ssh -tt` dans un pseudo-terminal piloté. Les deux n'utilisent que la bibliothèque standard de Python, et les deux sens ont été joués (portable ↔ luciepc).
+- **Les chiffres** : environ 47 ms de l'hôte à l'écran (une image de 33 ms plus un aller-retour), 11 à 20 ms d'écho, 3,1 Ko/s pendant un pas. Le redimensionnement, les touches et les couleurs des cinq thèmes (10/10) sont vérifiés.
+- **Le défaut trouvé : ESC[6n.** En vue inline, ratatui demande la position du curseur ; sans réponse, il paniquait. La vue s'ouvre maintenant par `try_init_with_options`, avant tout envoi à l'hôte, puis passe en `--plain` en le disant. Le harnais doit répondre à `ESC[6n` comme un vrai terminal ; sa séance 0 vérifie le repli.
+- **Les pièges du harnais** : `setsid` rend la main tout de suite, si bien que le pid noté n'est pas celui du faux hôte, qui écrit maintenant le sien ; `script` lit le reste d'un `bash -s` comme des frappes ; à luciepc, le shell de connexion est fish, donc on passe toujours par `bash -s`.
+
+### Les passes et les pushes de la semaine
+
+- **Le repli moteur ancien, toujours dit.** Quand master porte du C++ plus récent que la lib épinglée, `run_e2e.sh` refuse sans `RAG3WEAVER_MOTEUR_ANCIEN=1`. On ne le pose qu'avec l'accord de c7 et en le disant dans le message de push et dans la page (« repli moteur ancien, lot sans effet sur le moteur, lib <id> »). C'est ce qu'a fait tty-5 sur `e93710f36`.
+- **Un rouge identique sur master seul** (même lib, target neuf), avec son ticket, entre dans un push comme rouge nommé, sur le mot de c7. Le script de passe n'accepte alors que cet échec-là, par son nom exact. Tout autre rouge reste rouge. Exemple : `e2e_catalogue_gabarits::la_synchronisation_alimente_la_couche_du_projet`, que hotfixs a corrigé dans le test (`c13c76f72`).
+- **Un service d'embarquement qui se tait** (7879, bge-m3, à luciepc, le 13 nov. vers 23 h 50) fait tomber au démarrage les tests qui l'exigent. On ne touche pas au service : on attend qu'il revienne, puis on rejoue la suite seule sur la même tête, et le premier essai reste dans le journal. Si ça revient, c'est un ticket pour la session « embarquement ».
+- **Rebaser après un ticket déplacé par un autre lot** : `git -c merge.directoryRenames=false rebase origin/master`. Sinon git voit un dossier renommé, et range un ticket ouvert parmi les fermés.
+- **Un worktree neuf à luciepc** doit lui aussi passer par `git submodule update --init extension/rag3weaver/codeparsers`, sinon le bâti de l'e2e échoue sur `codeparsers`.
+
+### Les tickets
+
+- Fermé : `docs/tickets/closed/2026-11-13-un-gabarit-masque-puis-retire-ne-revient-pas-a-la-bibliotheque.md` (hotfixs, `c13c76f72`). C'était le test et non `sync_templates`.
+- Ouvert : `docs/tty/tickets/2026-11-13-le-terminal-sous-windows-et-macos-a-jouer.md`, à jouer quand une machine existe.
+
