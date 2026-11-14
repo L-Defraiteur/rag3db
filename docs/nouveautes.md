@@ -19,6 +19,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **14 nov. — Le plein texte ne perd plus de mots, et une recherche filtrée classe comme sa vue.**
+  lucivy 4.3.5 : une fusion de fond lancée entre deux commits ne fait plus perdre au dictionnaire les
+  mots des segments neufs (un document pouvait sortir des recherches floues, et des exactes pour un
+  mot qu'il était seul à porter). lucivy 4.3.7 : une recherche restreinte à des identifiants
+  (`allowed_ids`) classe ses résultats comme si l'index ne contenait qu'eux, au lieu d'un score
+  faussé par la taille du dépôt. lucivy `v4.3.5`, `v4.3.7`.
 - **14 nov. — Un même contenu ne s'embarque plus qu'une fois.** Une base de code neuve range chaque
   contenu de scope comme une version partagée : une fonction identique dans deux fichiers, ou
   déplacée, n'est embarquée qu'une fois, et chaque occurrence garde ses lignes et ses relations. Une
