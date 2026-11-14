@@ -89,3 +89,29 @@ le mesurera en **porte du rappel** : faut-il rappeler une fiche à ce tour, et l
   (le jeu) et `o_laya.py` (zéro-coup, spécialisation, rejugement, métriques).
 - **À luciepc**, `~/.cache/rag3db-banc-notes/laya/` : le même script, le jeu, `laya-synth.sh`
   (la passe CPU sous `poste lourd`) et les sorties.
+
+## 8. Le jeu synthétique, joué le 14 novembre au soir
+
+En CPU à luciepc, 8 fils, sous `poste lourd` ; 116 cas de test sur 18 fiches, 153 cas de
+spécialisation plus 17 de calibrage ; cinq candidates et `create`, soit six options (le hasard est
+à 0,17).
+
+| | exactitude | rejoindre | créer | rang médian de la bonne réponse | p50 par décision |
+|---|---|---|---|---|---|
+| zéro-coup | 0,09 | 0,19 | 0,00 | 5 | 238 ms |
+| spécialisé (4 époques, 699 s) | 0,58 | 0,24 | 0,91 | 1 | 287 ms |
+
+- **Ce que ça dit** :
+  - la chaîne tourne de bout en bout ;
+  - spécialisé, Laya apprend surtout à dire « créer ». Pour rejoindre, il reste au hasard parmi
+    cinq candidates (0,24) : avec le seul titre d'une section, il ne sait pas faire le
+    rapprochement ;
+  - le vrai jeu porte le texte des sections. C'est lui qui dira s'il sait rejoindre.
+- **Un piège trouvé par ce jeu** : `laya.train` garde une seule définition par question pour tout
+  le jeu (« Conflicting schema detected … keeping first seen definition »). Un premier jeu, où les
+  options portaient le nom des candidates et changeaient donc à chaque ligne, a entraîné le modèle
+  sur les candidates de la première ligne. Sa spécialisation (0,59) ne valait rien. La forme juste :
+  - les candidates dans l'état, numérotées ;
+  - des options aux places fixes (`candidate_1` … `candidate_5`, `create`).
+
+  Le vrai jeu suivra cette forme.
