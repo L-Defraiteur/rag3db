@@ -1,44 +1,58 @@
-//! **Le coût d'une recherche sans filtre quand le drapeau `tout_visible` tombe** (2a′-2, la mesure du
-//! plan accepté par c7 le 14 novembre 2026 ; page
-//! `docs/everything-declarative/14-11-2026/03-le-pas-2a-prime-stocker-les-generations-sans-fuite.md`, § 7).
+//! **Ce que coûte une recherche, étage par étage, avant et après les versions** (2a′-2 ; mot de Lucie
+//! du 14 novembre 2026 : « si on apporte la feature faut faire le max pour qu'elle devienne viable »).
+//! Page `docs/everything-declarative/14-11-2026/04-le-pas-2a-prime-2-l-ancre-immuable.md`, § 2.
 //!
-//! Sur une **copie** d'une base de code à versions (`RAG3WEAVER_SONDE_BASE`) et son manifeste
-//! (`RAG3WEAVER_SONDE_MANIFESTE`), jamais la base en service :
-//! 1. la migration 2a′-1 (`code::migrer_vers_les_generations`), chronométrée : c'est le chemin réel
-//!    d'une base qui monte ;
-//! 2. trois états :
-//!    - **A** : le drapeau tenu, comme toute base de 2a′-1 ;
-//!    - **B** : le drapeau tombé (`marquer_des_lignes_invisibles`), toutes les lignes visibles ;
-//!    - **C** : B, et 1 % des `Scope` retirés au rang lu ;
-//! 3. dans chaque état, trois mesures séparées :
-//!    - **(a)** les racines des occurrences : `select_all` en A (le repli d'`occurrence_roots_for`),
-//!      la clause de visibilité puis `resolve_offsets` en B et C (`admitted_parent_uuids_for`) ;
-//!    - **(b)** le masque des versions : `derived_references` par lots de 5 000 racines ;
-//!    - **(c)** `search_code` de bout en bout, sur 20 requêtes fixes (10 noms, 10 phrases).
+//! Sur une **copie** d'une base de code (`RAG3WEAVER_SONDE_BASE`) et son manifeste
+//! (`RAG3WEAVER_SONDE_MANIFESTE`), jamais la base en service. `RAG3WEAVER_SONDE_ROLE` dit laquelle :
+//! - `reference` : une base de la forme d'avant les versions, telle que les utilisateurs l'ont
+//!   aujourd'hui. Un état, **R** ;
+//! - `versions` : une base à versions, migrée ici par 2a′-1 (`code::migrer_vers_les_generations`,
+//!   chronométrée). Trois états :
+//!   - **A** : le drapeau `tout_visible` tenu ;
+//!   - **B** : le drapeau tombé ;
+//!   - **C** : B, et 1 % des `Scope` retirés au rang lu.
 //!
-//! `RAG3WEAVER_SONDE_CHAUFFE` tours de chauffe (3 par défaut), puis `RAG3WEAVER_SONDE_TOURS` tours (20 par
-//! défaut) : la médiane et le p95, en ms. Sous 20 tours, le « p95 » est le maximum des tours.
-//! Une sonde mesure, elle n'échoue pas.
+//! Chaque requête du jeu (5 noms, les plus appelés, et 5 phrases) se joue sous trois formes :
+//! - **sans filtre** ;
+//! - **filtrée par chemin** : le sous-dossier qui porte la part de scopes la plus proche de 10 % ;
+//! - **filtrée par langage** : le langage dont la part est la plus proche de 10 %.
+//! R et A jouent les trois formes ; B et C la forme sans filtre seule, celle que le drapeau touche.
+//!
+//! **Les étages** : chaque nœud des graphes que `search_code` exécute publie `NodeRun` avec sa durée.
+//! On y trouve la source, le lexical, le dense (l'embarquement de la requête compris), le creux, le
+//! balayage, la fusion, la relecture, la pagination, le surlignage, le parent et le rendu, puis les
+//! nœuds du crochet « après » (links.mmd). La sonde les écoute et en rend la médiane par nœud. Les
+//! nœuds tournent en parallèle : leur somme dépasse la durée de l'appel, qui est donnée à part. Pour
+//! les versions, la sonde chronomètre aussi, hors de l'appel, (a) les racines des occurrences et (b) le
+//! masque des versions.
+//!
+//! `RAG3WEAVER_SONDE_CHAUFFE` tours de chauffe (1 par défaut), puis `RAG3WEAVER_SONDE_TOURS` tours (5 par
+//! défaut). La médiane, et le maximum sur les tours (sous 20 tours, le « p95 » n'en est pas un). Une
+//! sonde mesure, elle n'échoue pas.
 
-use rag3weaver::backend::PreparedBackend;
+use rag3weaver::backend::{Backend, PreparedBackend};
 use rag3weaver::connection::{CypherValue, QueryParam};
+use rag3weaver::events::{topic, Event};
 use rag3weaver::search_backend::SearchBackend;
 use rag3weaver::Rag3dbConnection;
-use serde_json::json;
+use serde_json::{json, Value};
+use std::collections::{BTreeMap, HashSet};
 use std::time::Instant;
 
-fn stats(mut t: Vec<f64>) -> (f64, f64) {
+fn env_n(nom: &str, defaut: usize) -> usize {
+    std::env::var(nom).ok().and_then(|v| v.parse().ok()).unwrap_or(defaut)
+}
+
+fn mediane(mut t: Vec<f64>) -> (f64, f64) {
+    if t.is_empty() {
+        return (f64::NAN, f64::NAN);
+    }
     t.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let p95 = t[((t.len() as f64 * 0.95).ceil() as usize).saturating_sub(1).min(t.len() - 1)];
-    (t[t.len() / 2], p95)
+    (t[t.len() / 2], t[t.len() - 1])
 }
 
-fn chauffe() -> usize {
-    std::env::var("RAG3WEAVER_SONDE_CHAUFFE").ok().and_then(|v| v.parse().ok()).unwrap_or(3)
-}
-
-fn chrono<T>(tours: usize, mut f: impl FnMut() -> T) -> (f64, f64, T) {
-    for _ in 0..chauffe() {
+fn chrono<T>(chauffe: usize, tours: usize, mut f: impl FnMut() -> T) -> (f64, f64, T) {
+    for _ in 0..chauffe {
         f();
     }
     let mut t = Vec::with_capacity(tours);
@@ -48,152 +62,199 @@ fn chrono<T>(tours: usize, mut f: impl FnMut() -> T) -> (f64, f64, T) {
         dernier = Some(f());
         t.push(d.elapsed().as_secs_f64() * 1000.0);
     }
-    let (m, p) = stats(t);
-    (m, p, dernier.unwrap())
+    let (m, x) = mediane(t);
+    (m, x, dernier.unwrap())
+}
+
+/// L'écoute des `NodeRun`, sur les deux sujets où un run d'outil peut les publier.
+struct Ecoute {
+    rx: Vec<async_broadcast::Receiver<Event>>,
+}
+
+impl Ecoute {
+    fn sur(backend: &Backend) -> Self {
+        let bus = backend.catalog.lock().unwrap().event_bus();
+        Ecoute { rx: vec![bus.subscribe(topic::DATAFLOW), bus.subscribe(topic::CATALOG)] }
+    }
+    /// Les durées par nœud depuis le dernier appel, sans doublon (un même run sur deux sujets).
+    fn vider(&mut self) -> Vec<(String, f64)> {
+        let mut vus = HashSet::new();
+        let mut out = Vec::new();
+        for rx in &mut self.rx {
+            while let Ok(e) = rx.try_recv() {
+                if let Event::NodeRun { run, node, node_type, ms, .. } = e {
+                    if vus.insert((run.clone(), node.clone())) {
+                        out.push((format!("{node} ({node_type})"), ms as f64));
+                    }
+                }
+            }
+        }
+        out
+    }
+}
+
+/// Une forme de requête : son nom et ses arguments en plus de `query`.
+fn formes(chemin: &str, langage: &str, toutes: bool) -> Vec<(String, Value)> {
+    let mut f = vec![("sans filtre".to_string(), json!({"options": {}}))];
+    if toutes {
+        f.push((format!("chemin {chemin}"), json!({"options": {}, "scope": chemin})));
+        f.push((format!("langage {langage}"), json!({"options": {}, "language": langage})));
+    }
+    f
+}
+
+/// Joue chaque requête sous une forme ; rend la médiane des appels et les étages.
+fn jouer(backend: &Backend, ecoute: &mut Ecoute, etat: &str, forme: &str, extra: &Value, requetes: &[String], chauffe: usize, tours: usize) -> f64 {
+    let mut appels = Vec::new();
+    let mut etages: BTreeMap<String, Vec<f64>> = BTreeMap::new();
+    let mut resultats = Vec::new();
+    for q in requetes {
+        let mut args = extra.clone();
+        args["query"] = json!(q);
+        for _ in 0..chauffe {
+            backend.call("search_code", args.clone()).unwrap_or_else(|e| panic!("search_code {q} : {e}"));
+        }
+        ecoute.vider();
+        for _ in 0..tours {
+            let d = Instant::now();
+            let r = backend.call("search_code", args.clone()).unwrap_or_else(|e| panic!("search_code {q} : {e}"));
+            appels.push(d.elapsed().as_secs_f64() * 1000.0);
+            for (n, ms) in ecoute.vider() {
+                etages.entry(n).or_default().push(ms);
+            }
+            resultats.push(r["result"].as_array().map_or(0, |a| a.len()));
+        }
+    }
+    let (m, x) = mediane(appels.clone());
+    let (mr, _) = mediane(resultats.iter().map(|n| *n as f64).collect());
+    eprintln!("[sonde] {etat} {forme:<28} appel : médiane {m:>8.1} ms   max {x:>8.1} ms   ({} appels, {mr:.0} résultats en médiane)", appels.len());
+    let mut lignes: Vec<(String, f64, f64, usize)> =
+        etages.into_iter().map(|(n, t)| { let k = t.len(); let (m, x) = mediane(t); (n, m, x, k) }).collect();
+    lignes.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    for (n, m, x, k) in lignes {
+        eprintln!("[sonde] {etat} {forme:<28}   étage {n:<44} médiane {m:>8.1} ms   max {x:>8.1} ms   ({k} passages)");
+    }
+    m
 }
 
 #[test]
 #[ignore]
-fn le_cout_d_une_recherche_sans_filtre() {
+fn le_cout_d_une_recherche_par_etage() {
     let (Some(base), Some(manifeste)) = (std::env::var_os("RAG3WEAVER_SONDE_BASE"), std::env::var_os("RAG3WEAVER_SONDE_MANIFESTE")) else {
-        eprintln!("SAUTÉ le_cout_d_une_recherche_sans_filtre : RAG3WEAVER_SONDE_BASE ou RAG3WEAVER_SONDE_MANIFESTE manque (une copie, jamais la base en service)");
+        eprintln!("SAUTÉ le_cout_d_une_recherche_par_etage : RAG3WEAVER_SONDE_BASE ou RAG3WEAVER_SONDE_MANIFESTE manque (une copie, jamais la base en service)");
         return;
     };
-    let tours: usize = std::env::var("RAG3WEAVER_SONDE_TOURS").ok().and_then(|v| v.parse().ok()).unwrap_or(20);
+    let role = std::env::var("RAG3WEAVER_SONDE_ROLE").unwrap_or_else(|_| "versions".into());
+    let (chauffe, tours) = (env_n("RAG3WEAVER_SONDE_CHAUFFE", 1), env_n("RAG3WEAVER_SONDE_TOURS", 5));
     let prepared = PreparedBackend::load(std::path::Path::new(&manifeste)).expect("le manifeste");
+    let racine = prepared.manifest.workspace.as_ref().map(|w| w.root.to_string_lossy().trim_end_matches('/').to_string()).unwrap_or_default();
     let t0 = Instant::now();
     let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), None).expect("ouvrir le backend");
-    eprintln!("[sonde] ouverture : {:.0} ms ; {} tours de chauffe", t0.elapsed().as_secs_f64() * 1000.0, chauffe());
+    eprintln!("[sonde] rôle {role} ; ouverture {:.0} ms ; {chauffe} chauffe(s), {tours} tours ; racine {racine}", t0.elapsed().as_secs_f64() * 1000.0);
 
-    // 1. La migration.
+    let versions = role == "versions";
     let (conn, dialecte, cible) = {
         let mut cat = backend.catalog.lock().unwrap();
         let forme = rag3weaver::code::scope_form(&cat).unwrap();
         eprintln!("[sonde] forme à l'ouverture : {forme:?}");
-        if forme == rag3weaver::code::ScopeForm::Versions {
+        if versions && forme == rag3weaver::code::ScopeForm::Versions {
             let t = Instant::now();
             rag3weaver::code::migrer_vers_les_generations(&mut cat).expect("la migration");
             eprintln!("[sonde] migration 2a′-1 : {:.0} ms", t.elapsed().as_secs_f64() * 1000.0);
         }
-        assert_eq!(rag3weaver::code::scope_form(&cat).unwrap(), rag3weaver::code::ScopeForm::Generations, "la copie doit être à générations");
+        if versions {
+            assert_eq!(rag3weaver::code::scope_form(&cat).unwrap(), rag3weaver::code::ScopeForm::Generations, "la copie doit être à générations");
+        }
         (cat.conn_arc(), cat.dialect_arc(), cat.resolve_search_target("Scope").expect("la cible Scope"))
     };
-    let projection = cible.occurrence_projection.clone().expect("une base à versions projette ses occurrences");
     let compter = |q: &str| match conn.execute(q).unwrap_or_else(|e| panic!("{q} : {e}")).rows.first().and_then(|l| l.first()) {
         Some(CypherValue::Int(n)) => *n,
         v => panic!("{q} : {v:?}"),
     };
-    eprintln!(
-        "[sonde] {} : {} lignes ; {} : {} ; parent {} ; relation {} ; {tours} tours",
-        projection.entity,
-        compter(&format!("MATCH (s:{}) RETURN count(*)", projection.entity)),
-        cible.parent_table,
-        compter(&format!("MATCH (s:{}) RETURN count(*)", cible.parent_table)),
-        cible.parent_table,
-        projection.relation
-    );
+    let total = compter("MATCH (s:Scope) RETURN count(*)");
+    eprintln!("[sonde] Scope : {total} lignes ; parent {} ; projection {:?}", cible.parent_table, cible.occurrence_projection.as_ref().map(|p| (&p.entity, &p.relation)));
 
-    // Les 20 requêtes : les 10 noms les plus appelés, et 10 phrases.
-    let r = conn
-        .execute("MATCH (a:Scope)-[:CONSUMES]->(b:Scope) RETURN b.name AS n, count(*) AS k ORDER BY k DESC LIMIT 10")
-        .unwrap();
+    // Les filtres : le sous-dossier et le langage dont la part est la plus proche de 10 %.
+    let r = conn.execute("MATCH (s:Scope) RETURN s.file_path, s.language").unwrap();
+    let mut dossiers: BTreeMap<String, i64> = BTreeMap::new();
+    let mut langages: BTreeMap<String, i64> = BTreeMap::new();
+    for l in &r.rows {
+        if let Some(p) = l.first().and_then(|v| v.as_str()) {
+            let rel = p.strip_prefix(&racine).unwrap_or(p).trim_start_matches('/');
+            let morceaux: Vec<&str> = rel.split('/').collect();
+            for k in 1..morceaux.len().min(4) {
+                *dossiers.entry(format!("{}/", morceaux[..k].join("/"))).or_default() += 1;
+            }
+        }
+        if let Some(g) = l.get(1).and_then(|v| v.as_str()) {
+            *langages.entry(g.to_string()).or_default() += 1;
+        }
+    }
+    let proche = |m: &BTreeMap<String, i64>| -> (String, i64) {
+        m.iter().min_by_key(|(_, n)| ((**n as f64 / total as f64 - 0.10).abs() * 1e6) as i64).map(|(k, n)| (k.clone(), *n)).unwrap_or_default()
+    };
+    let (chemin, nc) = proche(&dossiers);
+    let (langage, nl) = proche(&langages);
+    eprintln!("[sonde] filtre par chemin « {chemin} » : {nc} scopes ({:.1} %) ; par langage « {langage} » : {nl} ({:.1} %)", 100.0 * nc as f64 / total as f64, 100.0 * nl as f64 / total as f64);
+
+    // Le jeu : les 5 noms les plus appelés, et 5 phrases.
+    let r = conn.execute("MATCH (a:Scope)-[:CONSUMES]->(b:Scope) RETURN b.name AS n, count(*) AS k ORDER BY k DESC LIMIT 5").unwrap();
     let mut requetes: Vec<String> = r.rows.iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::to_string)).collect();
-    requetes.extend(
-        [
-            "ouvrir une base et enregistrer le schéma",
-            "parse a json manifest",
-            "rebuild the vector index",
-            "lock order of the catalog",
-            "read a file by its path",
-            "tokenize text for full text search",
-            "embedding service client",
-            "transaction rollback",
-            "write ahead log checkpoint",
-            "translate a hop into a query",
-        ]
-        .map(String::from),
-    );
+    requetes.extend(["ouvrir une base et enregistrer le schéma", "parse a json manifest", "rebuild the vector index", "transaction rollback", "translate a hop into a query"].map(String::from));
     eprintln!("[sonde] requêtes : {requetes:?}");
 
+    let mut ecoute = Ecoute::sur(&backend);
+    if !versions {
+        for (forme, extra) in formes(&chemin, &langage, true) {
+            jouer(&backend, &mut ecoute, "R", &forme, &extra, &requetes, chauffe, tours);
+        }
+        return;
+    }
+
+    let projection = cible.occurrence_projection.clone().expect("une base à versions projette ses occurrences");
     let moteur = rag3weaver::rag3db_search_backend::Rag3dbSearchBackend::new(conn.clone());
     let tout = dialecte.select_all(&projection.entity, &["_uuid"], None);
     let masque = dialecte.derived_references(&cible.parent_table, &projection.entity, &projection.relation);
     let clause = dialecte.condition_visible_sur("n", rag3weaver::code::COUCHE_DU_BACKEND, 0).expect("rag3db sait les générations");
     let visibles = dialecte.filter_resolve_offsets(&projection.entity, "n", &[], &clause, None);
-
-    let etat = |nom: &str, drapeau: bool| {
-        // (a) les racines.
-        let (ma, pa, racines): (f64, f64, Vec<String>) = if drapeau {
-            chrono(tours, || {
-                conn.execute(&tout).unwrap().rows.into_iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::to_string)).collect()
-            })
+    let hors_appel = |etat: &str, drapeau: bool| {
+        let (ma, xa, racines): (f64, f64, Vec<String>) = if drapeau {
+            chrono(chauffe, tours, || conn.execute(&tout).unwrap().rows.into_iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::to_string)).collect())
         } else {
-            chrono(tours, || {
-                let mut ids: Vec<u64> = conn
-                    .execute(&visibles)
-                    .unwrap()
-                    .rows
-                    .iter()
-                    .filter_map(|l| l.first().and_then(|v| v.as_i64()).map(|i| i as u64))
-                    .collect();
+            chrono(chauffe, tours, || {
+                let mut ids: Vec<u64> = conn.execute(&visibles).unwrap().rows.iter().filter_map(|l| l.first().and_then(|v| v.as_i64()).map(|i| i as u64)).collect();
                 ids.sort_unstable();
                 ids.dedup();
                 moteur.resolve_offsets(&projection.entity, &ids, &[]).unwrap().into_iter().map(|r| r.uuid).collect()
             })
         };
-        eprintln!("[sonde] {nom} (a) racines   médiane {ma:>8.1} ms   p95 {pa:>8.1} ms   {} racines", racines.len());
-        // (b) le masque des versions.
-        let mut tri = racines.clone();
+        eprintln!("[sonde] {etat} hors appel (a) racines   médiane {ma:>8.1} ms   max {xa:>8.1} ms   {} racines", racines.len());
+        let mut tri = racines;
         tri.sort();
-        let (mb, pb, versions) = chrono(tours, || {
-            let mut n = 0usize;
-            for lot in tri.chunks(5_000) {
+        let (mb, xb, n) = chrono(chauffe, tours, || {
+            tri.chunks(5_000).map(|lot| {
                 let p = QueryParam::new("uuids", CypherValue::List(lot.iter().cloned().map(CypherValue::String).collect()));
-                n += conn.execute_with_params(&masque, &[p]).unwrap().rows.len();
-            }
-            n
+                conn.execute_with_params(&masque, &[p]).unwrap().rows.len()
+            }).sum::<usize>()
         });
-        eprintln!("[sonde] {nom} (b) masque    médiane {mb:>8.1} ms   p95 {pb:>8.1} ms   {versions} références");
-        // (c) search_code de bout en bout.
-        let mut medianes = Vec::new();
-        let mut tous = Vec::new();
-        for q in &requetes {
-            let args = json!({"query": q, "options": {}});
-            for _ in 0..chauffe() {
-                backend.call("search_code", args.clone()).unwrap_or_else(|e| panic!("search_code {q} : {e}"));
-            }
-            let mut t = Vec::with_capacity(tours);
-            for _ in 0..tours {
-                let d = Instant::now();
-                backend.call("search_code", args.clone()).unwrap_or_else(|e| panic!("search_code {q} : {e}"));
-                t.push(d.elapsed().as_secs_f64() * 1000.0);
-            }
-            tous.extend(t.iter().copied());
-            medianes.push(stats(t).0);
-        }
-        let (mc, _) = stats(medianes);
-        let (_, pc) = stats(tous);
-        eprintln!("[sonde] {nom} (c) search_code   médiane des médianes {mc:>8.1} ms   p95 de tous {pc:>8.1} ms   ({} appels)", requetes.len() * tours);
-        (ma + mb, mc)
+        eprintln!("[sonde] {etat} hors appel (b) masque    médiane {mb:>8.1} ms   max {xb:>8.1} ms   {n} références");
     };
 
-    let a = etat("A", true);
+    hors_appel("A", true);
+    let mut a = 0.0;
+    for (forme, extra) in formes(&chemin, &langage, true) {
+        let m = jouer(&backend, &mut ecoute, "A", &forme, &extra, &requetes, chauffe, tours);
+        if forme == "sans filtre" {
+            a = m;
+        }
+    }
     backend.catalog.lock().unwrap().marquer_des_lignes_invisibles();
-    let b = etat("B", false);
-    let retirees = compter(&format!(
-        "MATCH (s:{}) WHERE offset(id(s)) % 100 = 0 SET s._jusqu_a = 0 RETURN count(*)",
-        projection.entity
-    ));
+    hors_appel("B", false);
+    let (_, sans) = formes(&chemin, &langage, false).remove(0);
+    let b = jouer(&backend, &mut ecoute, "B", "sans filtre", &sans, &requetes, chauffe, tours);
+    let retirees = compter(&format!("MATCH (s:{}) WHERE offset(id(s)) % 100 = 0 SET s._jusqu_a = 0 RETURN count(*)", projection.entity));
     eprintln!("[sonde] C : {retirees} lignes retirées au rang 0");
-    let c = etat("C", false);
-    eprintln!(
-        "[sonde] RÉSUMÉ search_code médiane : A {:.1} ms, B {:.1} ms ({:+.1} ms, {:+.0} %), C {:.1} ms ({:+.1} ms, {:+.0} %) ; seuil : +20 % ou +50 ms",
-        a.1,
-        b.1,
-        b.1 - a.1,
-        (b.1 / a.1 - 1.0) * 100.0,
-        c.1,
-        c.1 - a.1,
-        (c.1 / a.1 - 1.0) * 100.0
-    );
+    hors_appel("C", false);
+    let c = jouer(&backend, &mut ecoute, "C", "sans filtre", &sans, &requetes, chauffe, tours);
+    eprintln!("[sonde] RÉSUMÉ sans filtre, médiane d'un appel : A {a:.1} ms, B {b:.1} ms ({:+.0} %), C {c:.1} ms ({:+.0} %)", (b / a - 1.0) * 100.0, (c / a - 1.0) * 100.0);
 }
