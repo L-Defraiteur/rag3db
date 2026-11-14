@@ -884,3 +884,20 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   réduit à un seul segment, ses supprimés y restaient pour toujours ; corrigé, passe en cours. **Archi** :
   le fil `index-suivi` joint à la fin de l'hôte (le SIGSEGV à la sortie expliqué), passe en cours.
   **Codeparsers** : le plan Go validé (tables par langue, `go.mod` lu), C# par la documentation.
+
+## 21 h 5x — vingt-sept atterris, le rouge de l'hôte fermé ; les sources suivies conçues
+
+- **Le crochet en `Weak`** (a76f36a08d) ferme le rouge de l'hôte qui dormait depuis le 13 ; vingt-sept lots
+  par la pile. Recherche pousse la réécriture du `IN` (rouge 1,10 s → vert 0,28 s pour 30 000 uuids), puis le
+  cœur (l'`IN` haché et le pliage des listes, deux pushs), G (garde-pile-3), embarquement (le dense sur
+  `Tenue<C>`, vrai jeu vert sur 7892), ED (le prédicat, parité au bit près 30/30 par banc), G (chaîne Rust).
+- **Les sources suivies** (arbre principal) : conception courte validée — le champ `tracked` (root
+  computed/empty/declared ; sources à sélecteur préfixé branch/refs/worktree/commit/tasks avec parent,
+  history, work), le défaut = le worktree du backend et les tâches, l'ancienne clé lue, la résolution cachée
+  par le hash des refs, le flux multi-env nommé, le dépôt id par le plus vieux commit ; témoins un par ligne
+  du tableau de la page 02. Il déclare, résout et dit ; l'indexation par objets git vient après.
+- **Hotfixs** : les six tables des deux bases de luciepc relevées et jugées (le sens avant est le juste),
+  reconstruction finale sur copies sous le lourd ; les identifiants sont des positions CSR, pas des dates ;
+  un instantané du 13 à 20 h 36 dira depuis quand. **Banc** : la parité du prédicat verte 30/30 ; Laya
+  synthétique rejoué à question fixe (22 % en zéro-coup, hasard 17 %). **96** : la trace d'archive commence
+  (resté au repos après son push, dit tel quel).
