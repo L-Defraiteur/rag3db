@@ -2,8 +2,9 @@
 //! `docs/arbre-principal/tickets/2026-11-14-l-aide-des-tests-panique-quand-aucun-service-ne-sert-le-modele.md`,
 //! décision de c7, 14 novembre 2026). Sous une variable de service qui ne sert pas le
 //! modèle demandé, l'aide le charge **sur place**, sur le périphérique que
-//! `RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE` permet (CPU si rien n'est dit), et le dit ; si
-//! le repli est interdit (`non`), le test est **rouge** et nomme le modèle. Jamais sauté.
+//! `RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE` **nomme** (`gpu:N`, `igpu:N`, `cpu`), et le dit ;
+//! sans périphérique nommé, ou le repli interdit (`non`), le test est **rouge** et nomme le
+//! modèle. Jamais sauté, jamais deviné (décision de c7, 15 novembre 2026).
 //!
 //! Chaque cas se joue dans un processus à lui (le binaire relancé sur la sonde), pour que
 //! la variable et le chargement unique (`LazyLock`) ne débordent pas sur les autres suites.
@@ -36,14 +37,29 @@ fn sonde_sous(repli: Option<&str>) -> (bool, String) {
     (sortie.status.success(), texte)
 }
 
-/// **Aucun service ne sert le modèle : il se charge sur place, sur le CPU, et l'aide le dit.**
+/// **Aucun service ne sert le modèle, un périphérique de repli nommé : il s'y charge sur place,
+/// et l'aide le dit** (A1). À luciepc, `igpu:0` est l'Intel ARL, qui ne porte aucun écran
+/// (relevé du 15 novembre, 00 h 2x : ses quatre sorties « disconnected ») ; jamais card0
+/// (l'affichage de Lucie) ni card2 (les services).
 #[test]
 #[ignore]
-fn sans_service_qui_le_sert_le_modele_se_charge_sur_place_et_le_dit() {
-    let (ok, texte) = sonde_sous(None);
-    assert!(ok, "la sonde passe, le modèle chargé sur place : {texte}");
-    assert!(texte.contains("granite-107m sur place (Cpu)"), "l'aide dit le repli et son périphérique : {texte}");
+fn sans_service_qui_le_sert_le_modele_se_charge_sur_le_peripherique_nomme_et_le_dit() {
+    let (ok, texte) = sonde_sous(Some("igpu:0"));
+    assert!(ok, "la sonde passe, le modèle chargé sur l'iGPU : {texte}");
+    assert!(texte.contains("granite-107m sur place (IntegratedGpu(0))"), "l'aide dit le repli et son périphérique : {texte}");
     assert!(texte.contains("▸ sonde : dim 384 factice false"), "le vrai modèle, pas un factice : {texte}");
+}
+
+/// **Aucun service ne sert le modèle, aucun périphérique de repli nommé : rouge, nommé** (A2,
+/// décision de c7 du 15 novembre : pas de défaut CPU qui n'existe pas — le `Cpu` de burn passe
+/// par Vulkan, et aucun des deux postes n'a d'adaptateur Vulkan CPU).
+#[test]
+#[ignore]
+fn sans_service_ni_peripherique_de_repli_le_test_est_rouge_et_le_dit() {
+    let (ok, texte) = sonde_sous(None);
+    assert!(!ok, "sans repli nommé, la sonde rougit : {texte}");
+    assert!(texte.contains("pas de service pour granite-107m") && texte.contains("aucun périphérique de repli nommé"),
+        "le rouge nomme le modèle et le repli manquant : {texte}");
 }
 
 /// **Le repli interdit : le test est rouge, et nomme le modèle sans service.**
