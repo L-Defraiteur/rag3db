@@ -700,6 +700,7 @@ est au ticket fermé `2026-11-13-un-fournisseur-a-la-demande-ouvert-par-l-hote-n
 - **Suites** : `2026-11-14-un-creux-a-la-demande-n-a-pas-de-dual.md` et
   `2026-11-14-le-dense-a-son-embarqueur-a-cote-de-la-tenue-generique.md`.
 
+**Le vrai jeu du groupe, 14 novembre, 18 h 46 → 19 h 06** : vert. Hôte isolé 7971 (binaire de la branche
 4f43b712d7e61903), fournisseur de groupe à part sur card2, port 7891 (service 12783f97e8dbdd45), à la
 demande (60 s, 30 s) ; le dense, le creux, le relecteur et l'OCR citent l'activation `bge-m3`. L'hôte de
 Lucie n'a jamais été appelé.
