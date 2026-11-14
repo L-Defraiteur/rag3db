@@ -713,3 +713,29 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   rag3weaver. Le dictionnaire sous ASan la nuit (son banc arrêté, qui tenait une place depuis 18 h 22).
 - **Tty** : l'essai de Lucie rejoué avec tty-8, page « l'essai en une minute » (3c9f3fa44) ; cinq défauts
   → tty-9 ; **l'équipier rend des comptes rendus au lieu du contenu** → ticket pour archi (f9fb0b8d2).
+
+## 20 h 2x — le rouge de l'hôte compris ; les hôtes de Lucie ne fuient pas ; deux rouges de base au dernier maillon
+
+- **Le rouge de l'hôte, bissecté par archi et lu par arbre principal** : 1e9bf5089e / 2f6c34643 (raccord
+  physique du 13) font attendre la réouverture sur `Weak<Database>` **et** `Weak<ReopenState>` ; le
+  crochet de test `FailedCheckpointHook` tient un `Arc<ReopenState>` pour toute la durée du test, donc
+  après le point de reprise échoué la réouverture attend 10 s et refuse (« 1 référence tenue »). Aucun
+  chemin produit ; correctif = `Weak` + `upgrade` dans le crochet, en lot à part en bout de chaîne ; la
+  règle du 13 reste. G avait lu la l. 280 comme une perte de donnée validée et suspendu la bascule : la
+  l. 280 est l'assertion de surface, l'aide `fiche()` avale l'erreur ; les jeux croisés avec le jeu
+  instrumenté d'archi sous les deux libs disent le reste ; le verdict de la lib tiendra avec ce rouge nommé.
+- **R est plat** (ED : base d'avant les versions, dense connecté, +5 Mio par appel, 284 ms médiane) : **les
+  hôtes de Lucie ne fuient pas aujourd'hui** ; la fuite (3,7 Gio par appel) est propre au chemin filtré
+  des versions — un Cypher d'un Mo en clair, `PROJECT_GRAPH_CYPHER`, `QUERY_VECTOR_INDEX`, `DROP` ; la
+  sonde isolée (V1 cycle entier, V2 projection + retrait seuls, V3 sans filtre) départage moteur et
+  rag3weaver.
+- **Deux rouges de base d'affilée au dernier maillon** (codeparsers, rang 22, jeu sans-feature) :
+  `exclusion.rs:45` sans `cfg(feature = "code")` (recherche, commit ajouté f63d1bf4e : sans parseur, pas de
+  règle « fichier de code ») puis `catalog.rs:2802` deux méthodes mortes sans feature (1b, 23bf41b2c,
+  commit ajouté en cours). La chaîne au-dessus se repose à chaque fois. **Règle (codeparsers)** : chaque
+  maillon joue check_features avant de donner sa tête. tty-9 (quatre commits, cinq défauts de l'essai)
+  inséré après les exclusions, vert.
+- **Lucivy** : page et deux tickets (5ddd33d51 ; le chemin sans positions, un ulp d'écart en parse) ; PR #35
+  des tests de mesure ; l'API de maintenance (`maintain` : purge d'ids, compactage, rapport ;
+  `live_node_ids`) en cours pour le script de fenêtre. **Le cœur** : (B) l'ensemble haché pour un `IN`
+  sur liste constante, puis (A) le planificateur ; le dictionnaire sous ASan la nuit.
