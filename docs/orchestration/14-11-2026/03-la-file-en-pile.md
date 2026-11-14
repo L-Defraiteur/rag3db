@@ -257,3 +257,9 @@ jouent pas cette suite continuent, le coupable corrige en tête de pile.
 sont hors de cause. Deux jeux croisés tranchent lib contre Rust (2a1f52c21 sous 29a7bc52a ; 4f6f80ef4 sous
 0c41f9fe6). Leçon : le verdict d'une bascule ne jouait pas e2e_demon_hote ; il y entre. La pile reprend ses
 pushs : le rouge n'est à aucun lot de ce soir.
+
+**20 h 0x — la pile se repose d'un cran** : les exclusions (bb0cea68d) cassent `cargo check
+--no-default-features` (`exclusion.rs:45` sans `cfg(feature = "code")`), vu au rang 22 par codeparsers,
+qui ne corrige pas un code qui n'est pas le sien ; recherche ajoute un commit, et la chaîne au-dessus
+(activations → sans-filtre → 1b → fils du moteur → chaîne Rust → pointeur des règles) se repose et rejoue
+son court. Un commit ajouté garde son rang ; ceux derrière paient un court.

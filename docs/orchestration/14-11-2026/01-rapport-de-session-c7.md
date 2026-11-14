@@ -690,3 +690,26 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   d'après »). **Lucivy** : dictionnaire par segment 2 % seulement, les 19/20 sont des égalités à la coupe.
   **ED** : les trois tickets des mesures sur master (127bcae937), le premier dit « 1b n'atterrit sur aucune
   vraie base tant que ce ticket n'est pas fermé ».
+
+## 19 h 5x — la fuite du dense chiffrée ; la pile se repose d'un cran ; le rouge de l'hôte date du 13
+
+- **La fuite du dense** (ED, poste mesure seul) : le dense seul, base à versions, sans filtre : **8,4 Gio au
+  premier appel puis ~3,7 Gio par appel, linéaire**, tué à 33,2 Gio au sixième ; la requête `IN` seule est
+  plate (+20 Mio sur 30 tours) : c'est la recherche vectorielle filtrée (`compile_filter_for_vector_in`,
+  le HNSW sous un filtre de 72 652 uuid) ou ce qui garde son résultat ; ~11 s des 17 s par appel. La forme
+  filtrée la garde aussi : le court-circuit ne la couvre pas. **Prochaine mesure, qui décide de l'urgence :
+  la même série sur R** (base d'avant) — si R fuit, les hôtes de Lucie fuient aujourd'hui. Puis la requête
+  vectorielle seule, N fois ; le cœur prévenu. Le plan de la forme par clé lu : UNWIND → HASH_JOIN sur
+  `_uuid` (au ticket moteur).
+- **La pile se repose d'un cran** : le lot des exclusions de recherche (bb0cea68d) casse le jeu
+  sans-feature (`exclusion.rs:45` appelle codeparsers sans `cfg(feature = "code")`, E0433), vu par
+  codeparsers au rang 22 et non corrigé par lui (pas son code). Recherche ajoute un commit (cfg et repli),
+  embarquement → arbre principal ×2 → G → codeparsers se reposent et rejouent leur court.
+- **Le rouge de l'hôte date du 13** (dernier vert 8 h 01 sous 29a7bc52a) : 96 et recherche hors de cause ;
+  archi départage lib contre Rust par deux jeux croisés ; **e2e_demon_hote entre dans le verdict d'une lib**
+  (procédure de5ab41df, G ; le verdict de 373b5477b = trois suites).
+- **Le cœur** prend l'`IN` sur la clé primaire en deux lots : (B) un ensemble haché pour un `IN` sur liste
+  constante (le N² de LIST_CONTAINS disparaît), puis (A) l'accès par clé au planificateur ; témoin C++ sans
+  rag3weaver. Le dictionnaire sous ASan la nuit (son banc arrêté, qui tenait une place depuis 18 h 22).
+- **Tty** : l'essai de Lucie rejoué avec tty-8, page « l'essai en une minute » (3c9f3fa44) ; cinq défauts
+  → tty-9 ; **l'équipier rend des comptes rendus au lieu du contenu** → ticket pour archi (f9fb0b8d2).
