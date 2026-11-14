@@ -131,3 +131,42 @@ Chaque règle est mesurée seule, sur ce qui est admis aujourd'hui. Parts en oct
 - Un `.js` d'une ligne de 10 000 octets n'est pas indexé, et l'estimation le dit « minifié ».
 - Un `.c` de 1,5 Mio n'est pas indexé ; un `.rs` de 700 Kio l'est.
 - Un fichier sous `third_party/` suit l'option du manifeste.
+
+## La mesure après (14 novembre 2026, 21 h, recherche)
+
+Lucie a retenu les règles 1 (minifié, par le contenu) et 5 (fichier de code au-delà de 1 Mio), sous
+`workspace.index_exclude` (master 1bb929755). La règle 2 (les dossiers d'import) n'est pas retenue. Un
+minifié exclu n'a rien dans l'index : `grep_files` lit le disque et le trouve encore.
+
+**La mesure** : l'arbre de Lucie, indexé deux fois dans deux bases neuves par le code de master, qui
+porte aussi le correctif d'ED (le contenu d'un scope borné à ses octets). Une base sans
+`index_exclude`, une base avec les seuils du gabarit. Les deux ont la forme des bases de Lucie,
+d'avant les versions de scope. Le test est `e2e_code_sync::mesure_ce_que_index_exclude_retire_du_plein_texte`,
+branche `mesure-exclusions`. Ensuite, `index_report` de lucivy (main 5f7e47b) sur une copie de chaque
+`Lucivy_Scope`.
+
+| | base de Lucie, ce matin | index neuf, sans `index_exclude` | index neuf, avec `index_exclude` |
+|---|---|---|---|
+| sur disque | 4,59 Go | 771,3 Mo | 754,1 Mo |
+| texte stocké | 932 Mo | 73,1 Mo | 70,5 Mo |
+| documents | 89 894 | 80 460 | 79 078 |
+| doublons exacts du contenu | 843,7 Mo | 0,8 Mo | 0,8 Mo |
+| plus gros document | 1,9 Mo | 1,94 Mo (`utf8proc_data.h`) | 593 Ko |
+| fichiers écartés par les règles | — | — | 1 minifié (`app.js`), 1 trop gros (`utf8proc_data.h`) |
+
+**Ce que ça dit** :
+
+- **Le gros du gain vient du correctif d'ED et d'un index neuf** : 4,59 Go deviennent 771 Mo, et les
+  doublons de la ligne d'`app.js` (844 Mo) tombent à moins de 1 Mo. Un scope qui ne reçoit que ses
+  octets ne répète plus la ligne de 133 Ko.
+- **Les règles 1 et 5 retirent 17 Mo de plus sur disque (2,2 %)** et 1 382 documents. Elles gardent leur
+  raison : un minifié ou une table générée n'aide aucune recherche de code. Elles bornent aussi le
+  plus gros document (1,94 Mo, puis 593 Ko).
+- **Les bases existantes gardent leurs 4,59 Go** tant qu'elles ne sont pas rebâties : ni le correctif
+  ni les règles ne réécrivent un index déjà écrit, et les orphelins (ticket du 14 novembre) y pèsent
+  aussi. Rebâtir le plein texte de la base du dépôt, c'est au mot de Lucie.
+- **Une question pour lucivy** : le rapport index/texte de l'index neuf est ×10,6, contre ×4,9 ce
+  matin. Le dictionnaire y pèse 52 %, sur 24 segments, dont beaucoup de petits (384 documents).
+  Sur peu de texte, le dictionnaire par shard pèse-t-il plus que son texte, et une fusion le
+  ramènerait-elle ?
+
