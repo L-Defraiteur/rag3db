@@ -16,7 +16,8 @@
 //!    - **(b)** le masque des versions : `derived_references` par lots de 5 000 racines ;
 //!    - **(c)** `search_code` de bout en bout, sur 20 requêtes fixes (10 noms, 10 phrases).
 //!
-//! 3 tours de chauffe, puis `RAG3WEAVER_SONDE_TOURS` tours (20 par défaut) : la médiane et le p95, en ms.
+//! `RAG3WEAVER_SONDE_CHAUFFE` tours de chauffe (3 par défaut), puis `RAG3WEAVER_SONDE_TOURS` tours (20 par
+//! défaut) : la médiane et le p95, en ms. Sous 20 tours, le « p95 » est le maximum des tours.
 //! Une sonde mesure, elle n'échoue pas.
 
 use rag3weaver::backend::PreparedBackend;
@@ -32,8 +33,12 @@ fn stats(mut t: Vec<f64>) -> (f64, f64) {
     (t[t.len() / 2], p95)
 }
 
+fn chauffe() -> usize {
+    std::env::var("RAG3WEAVER_SONDE_CHAUFFE").ok().and_then(|v| v.parse().ok()).unwrap_or(3)
+}
+
 fn chrono<T>(tours: usize, mut f: impl FnMut() -> T) -> (f64, f64, T) {
-    for _ in 0..3 {
+    for _ in 0..chauffe() {
         f();
     }
     let mut t = Vec::with_capacity(tours);
@@ -58,7 +63,7 @@ fn le_cout_d_une_recherche_sans_filtre() {
     let prepared = PreparedBackend::load(std::path::Path::new(&manifeste)).expect("le manifeste");
     let t0 = Instant::now();
     let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), None).expect("ouvrir le backend");
-    eprintln!("[sonde] ouverture : {:.0} ms", t0.elapsed().as_secs_f64() * 1000.0);
+    eprintln!("[sonde] ouverture : {:.0} ms ; {} tours de chauffe", t0.elapsed().as_secs_f64() * 1000.0, chauffe());
 
     // 1. La migration.
     let (conn, dialecte, cible) = {
@@ -154,7 +159,7 @@ fn le_cout_d_une_recherche_sans_filtre() {
         let mut tous = Vec::new();
         for q in &requetes {
             let args = json!({"query": q, "options": {}});
-            for _ in 0..3 {
+            for _ in 0..chauffe() {
                 backend.call("search_code", args.clone()).unwrap_or_else(|e| panic!("search_code {q} : {e}"));
             }
             let mut t = Vec::with_capacity(tours);
@@ -168,7 +173,7 @@ fn le_cout_d_une_recherche_sans_filtre() {
         }
         let (mc, _) = stats(medianes);
         let (_, pc) = stats(tous);
-        eprintln!("[sonde] {nom} (c) search_code   médiane des médianes {mc:>8.1} ms   p95 de tous {pc:>8.1} ms");
+        eprintln!("[sonde] {nom} (c) search_code   médiane des médianes {mc:>8.1} ms   p95 de tous {pc:>8.1} ms   ({} appels)", requetes.len() * tours);
         (ma + mb, mc)
     };
 
