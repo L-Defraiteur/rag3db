@@ -598,6 +598,100 @@ fn une_fermeture_avec_une_raison_tient_jusqu_a_l_ouverture_explicite() {
     let _ = std::fs::remove_dir_all(d);
 }
 
+/// Une heure du jour à `min` minutes d'ici (`18:50`), pour un `until`.
+fn dans_minutes(min: i64) -> String {
+    jiff::Zoned::now().checked_add(jiff::SignedDuration::from_mins(min)).unwrap().strftime("%H:%M").to_string()
+}
+
+/// **Une écriture reçue sous une fermeture qui tient se range en file** (c7, 15 novembre 2026 :
+/// pendant la fenêtre d'une passe, toute écriture était perdue en le disant). Elle est rangée au rang
+/// 1, le refus le dit avec l'heure de fermeture ; une lecture reste refusée ; `/etat` montre la file ;
+/// `/backend/open` la rejoue dans l'ordre : la fiche est en base, une seule fois, et la file est vide.
+#[test]
+#[ignore]
+fn une_ecriture_sous_une_fermeture_se_range_puis_se_rejoue_a_l_ouverture() {
+    let d = dossier("file-des-ecritures");
+    let m = manifeste(&d);
+    let host = DaemonHost::new();
+    let s = host.open_session("témoin", None, vec![], None);
+    ok(&host.open(Some(&s), &m));
+    ok(&put(&host, &s, &m, "put_fiche", "avant"));
+    let (code, r) = route(&host, "/backend/close", &s, json!({"manifest": m, "reason": "passe de l'archiviste", "until": dans_minutes(60)}));
+    assert_eq!(code, 200, "{r}");
+
+    let r = put(&host, &s, &m, "put_fiche", "en-file");
+    let e = r["error"].as_str().unwrap_or_default().to_string();
+    assert!(r["ok"] != json!(true) && r["queued"] == json!(true) && e.contains("en attente") && e.contains("rang 1") && e.contains("depuis"), "l'écriture est rangée au rang 1 : {r}");
+    let r = put(&host, &s, &m, "put_fiche", "en-file-2");
+    assert!(r["queued"] == json!(true) && r["error"].as_str().unwrap_or_default().contains("rang 2"), "la seconde au rang 2 : {r}");
+    let lu = host.call(Some(&s), &m, "get_fiche", json!({"record": {"titre": "avant"}}));
+    assert!(lu["ok"] != json!(true) && lu["queued"].is_null() && lu["error"].as_str().unwrap_or_default().contains("fermé : passe de l'archiviste"), "une lecture reste refusée : {lu}");
+    let etat = host.state();
+    assert_eq!(etat["backends"][0]["write_queue"]["pending"], json!(2), "/etat montre la file : {etat}");
+    assert_eq!(etat["backends"][0]["open"], json!(false));
+
+    let (code, r) = route(&host, "/backend/open", &s, json!({"manifest": m}));
+    assert_eq!(code, 200, "{r}");
+    assert!(fiche(&host, &s, &m, "en-file").is_some() && fiche(&host, &s, &m, "en-file-2").is_some(), "rejouées à l'ouverture");
+    let etat = host.state();
+    assert_eq!(etat["backends"][0]["write_queue"]["pending"], json!(0), "{etat}");
+    assert_eq!(etat["backends"][0]["write_queue"]["replayed"], json!(2), "{etat}");
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}
+
+/// **La file et la fermeture survivent à un redémarrage de l'hôte** (c7) : fermé avec une raison, une
+/// écriture rangée, l'hôte s'arrête ; l'hôte suivant tient encore la fermeture (une lecture refusée)
+/// et rejoue la file à `/backend/open`.
+#[test]
+#[ignore]
+fn la_file_des_ecritures_survit_a_un_redemarrage_de_l_hote() {
+    let d = dossier("file-redemarrage");
+    let m = manifeste(&d);
+    {
+        let host = DaemonHost::new();
+        let s = host.open_session("témoin", None, vec![], None);
+        ok(&host.open(Some(&s), &m));
+        let (code, r) = route(&host, "/backend/close", &s, json!({"manifest": m, "reason": "copie de la base", "until": dans_minutes(60)}));
+        assert_eq!(code, 200, "{r}");
+        let r = put(&host, &s, &m, "put_fiche", "apres-redemarrage");
+        assert_eq!(r["queued"], json!(true), "{r}");
+        host.shutdown();
+    }
+    let host = DaemonHost::new();
+    let s = host.open_session("témoin", None, vec![], None);
+    let lu = host.call(Some(&s), &m, "get_fiche", json!({"record": {"titre": "x"}}));
+    assert!(lu["ok"] != json!(true) && lu["error"].as_str().unwrap_or_default().contains("fermé : copie de la base"), "la fermeture tient après le redémarrage : {lu}");
+    let (code, r) = route(&host, "/backend/open", &s, json!({"manifest": m}));
+    assert_eq!(code, 200, "{r}");
+    assert!(fiche(&host, &s, &m, "apres-redemarrage").is_some(), "rejouée après le redémarrage");
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}
+
+/// **Une écriture trop vieille ne s'applique pas des heures après** (c7) : au-delà de la borne d'âge
+/// de la file (`queue_max_age_s`), le rejeu la refuse en le disant, au journal et dans l'état.
+#[test]
+#[ignore]
+fn une_ecriture_trop_vieille_se_refuse_au_rejeu() {
+    let d = dossier("file-vieille");
+    let m = manifeste(&d);
+    let host = DaemonHost::new();
+    let s = host.open_session("témoin", None, vec![], None);
+    ok(&host.open(Some(&s), &m));
+    let (code, r) = route(&host, "/backend/close", &s, json!({"manifest": m, "reason": "passe longue", "until": dans_minutes(60), "queue_max_age_s": 1}));
+    assert_eq!(code, 200, "{r}");
+    assert_eq!(put(&host, &s, &m, "put_fiche", "vieille")["queued"], json!(true));
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    let (code, r) = route(&host, "/backend/open", &s, json!({"manifest": m}));
+    assert_eq!(code, 200, "{r}");
+    assert!(fiche(&host, &s, &m, "vieille").is_none(), "trop vieille, elle ne s'applique pas");
+    let q = &host.state()["backends"][0]["write_queue"];
+    assert_eq!(q["expired"], json!(1), "le rejeu dit l'écriture trop vieille : {q}");
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}
+
 /// **`code-tree add | remove` par un vrai hôte** (page
 /// `codeparsers/06-code-tree-l-arbre-du-coeur.md`) : un arbre posé depuis un
 /// `--from` (le gabarit `code`), enregistré à l'hôte par `/backend/open`,
