@@ -15,6 +15,7 @@
 //! L'hôte sur une autre machine : `--daemon-cmd "ssh luciepc cat .local/share/rag3weaver/daemon.json"`
 //! et `--adresse 127.0.0.1:17970` derrière un `ssh -L 17970:127.0.0.1:7970 luciepc`.
 
+use rag3weaver_tty::journal::{self, Journal};
 use rag3weaver_tty::{client, endpoint::Endpoint, flux, plain, theme::Theme, tui};
 use serde_json::{json, Value};
 use std::io::Write;
@@ -35,11 +36,13 @@ struct Options {
     plain: bool,
     /// Le thème de la vue (`--theme`, ou `RAG3WEAVER_TTY_THEME`) ; « daemon » sans rien.
     theme: Option<String>,
+    /// Le journal de séance (`--journal <fichier>`, lot tty-7).
+    journal: Option<String>,
 }
 
 fn options() -> Result<Options, String> {
     let mut args = std::env::args().skip(1);
-    let mut o = Options { depot: String::new(), task: String::new(), ancien_nom: false, demande: None, daemon_json: None, daemon_cmd: None, adresse: None, depuis: None, plain: false, theme: std::env::var("RAG3WEAVER_TTY_THEME").ok().filter(|v| !v.is_empty()) };
+    let mut o = Options { depot: String::new(), task: String::new(), ancien_nom: false, demande: None, daemon_json: None, daemon_cmd: None, adresse: None, depuis: None, plain: false, theme: std::env::var("RAG3WEAVER_TTY_THEME").ok().filter(|v| !v.is_empty()), journal: None };
     while let Some(a) = args.next() {
         let mut valeur = || args.next().ok_or_else(|| format!("{a} attend une valeur"));
         match a.as_str() {
@@ -57,6 +60,7 @@ fn options() -> Result<Options, String> {
                 o.ancien_nom = true;
             }
             "--demande" => o.demande = Some(valeur()?),
+            "--journal" => o.journal = Some(valeur()?),
             "--daemon-json" => o.daemon_json = Some(valeur()?),
             "--daemon-cmd" => o.daemon_cmd = Some(valeur()?),
             "--adresse" => o.adresse = Some(valeur()?),
@@ -71,7 +75,7 @@ fn options() -> Result<Options, String> {
     Ok(o)
 }
 
-const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] --depot <nom|chemin> --tache <nom> [--demande \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\"] [--adresse hôte:port] [--depuis <id>]";
+const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] --depot <nom|chemin> --tache <nom> [--demande \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\"] [--adresse hôte:port] [--depuis <id>] [--journal <fichier>]";
 
 fn main() {
     let o = match options() {
@@ -107,26 +111,50 @@ fn lancer(o: Options) -> Result<(), String> {
     // Le dépôt se désigne par son nom ou son chemin ; son id ne sert qu'au JSON.
     let etat = client::lire_brut(&agent, &ep, "/ide/etat")?;
     let depot = client::resoudre_depot(&etat, &o.depot)?;
+    // Le journal de séance : `--journal`, ou de lui-même sous mosh, qui ne garde
+    // aucun historique au-delà de l'écran (lot tty-7). Un journal qui ne s'ouvre
+    // pas de lui-même se dit, et la séance continue.
+    let mosh = journal::sous_mosh();
+    let mut journal = match (&o.journal, mosh) {
+        (Some(c), _) => Some(Journal::ouvrir(std::path::Path::new(c))?),
+        (None, true) => match journal::dossier_d_etat().ok_or_else(|| "aucun dossier d'état (ni XDG_STATE_HOME ni HOME)".to_string()).and_then(|d| Journal::neuf_dans(&d)) {
+            Ok(j) => Some(j),
+            Err(e) => {
+                eprintln!("[tty] sous mosh, l'historique ne se relit pas au défilement, et le journal ne s'ouvre pas : {e}");
+                None
+            }
+        },
+        (None, false) => None,
+    };
     if !o.plain {
         // Le thème se choisit avant d'ouvrir l'écran : un nom inconnu s'y dit.
         let theme = Theme::par_nom(o.theme.as_deref().unwrap_or("daemon"))?;
-        match tui::lancer(ep.clone(), tui::Tache { depot: depot.clone(), task: o.task.clone() }, o.demande.clone(), o.depuis, theme) {
+        match tui::lancer(ep.clone(), tui::Tache { depot: depot.clone(), task: o.task.clone() }, o.demande.clone(), o.depuis, theme, journal.take(), mosh) {
             Ok(()) => return Ok(()),
             Err(tui::Echec::Autre(e)) => return Err(e),
             // La vue ne démarre pas (un terminal qui ne rend pas la position du
             // curseur, un lien trop lent) : on le dit, et le texte brut prend la
             // suite, plutôt que de s'arrêter.
-            Err(tui::Echec::VueIndisponible(e)) => eprintln!("[tty] la vue ne démarre pas ({e}) : je passe en texte brut (--plain)"),
+            Err(tui::Echec::VueIndisponible(e, j)) => {
+                eprintln!("[tty] la vue ne démarre pas ({e}) : je passe en texte brut (--plain)");
+                journal = j;
+            }
         }
     }
+    if let (true, Some(j)) = (mosh, &journal) {
+        eprintln!("[tty] sous mosh, l'historique ne se relit pas au défilement : {}", j.relecture());
+    }
     let backend = depot.id.clone();
-    let sortie = Arc::new(Mutex::new(std::io::stdout()));
+    let sortie = Arc::new(Mutex::new((std::io::stdout(), journal)));
     let ecrire = {
         let sortie = sortie.clone();
         move |t: &str| {
             let mut s = sortie.lock().unwrap_or_else(|p| p.into_inner());
-            let _ = s.write_all(t.as_bytes());
-            let _ = s.flush();
+            let _ = s.0.write_all(t.as_bytes());
+            let _ = s.0.flush();
+            if let Some(j) = s.1.as_mut() {
+                j.ecrire(t);
+            }
         }
     };
     let arret = Arc::new(AtomicBool::new(false));
