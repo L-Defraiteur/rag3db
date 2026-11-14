@@ -121,3 +121,28 @@ d'avant les versions et la base migrée, puis entre chaque optimisation et le co
   - ticket :
     `docs/banc/tickets/2026-11-14-un-symbol-que-plus-rien-ne-relie-reste-apres-le-retrait-de-son-fichier.md`
     (rétention voulue ou fuite, à décider).
+
+## 5. La tête de pile d'everything declarative (3a6bf34cd contre ac8644784)
+
+La pile porte deux résolutions de conflit dans `occurrence_mask_options`, face au court-circuit
+d'arbre principal, et un sens changé : sans filtre, s'il existe des versions orphelines, c'est le
+prédicat qui sert et non la liste. La parité de 959d73513 ne couvrait plus cette tête : elle est
+rejouée.
+
+| cas | verdict au bit près | contre la ligne de base `migree.json` |
+|---|---|---|
+| les 30 cas, copie migrée telle quelle | **VERT**, 30/30 | VERT, 30/30 |
+| les 30 cas, copie à versions orphelines | **VERT**, 30/30 | ROUGE, 16 cas : c'est attendu, voir plus bas |
+
+- **Les formes** : le parent n'a pas le passage aux générations, il lit la base dans sa forme à
+  versions. La tête passe aux générations. Les réponses ne bougent pas.
+- **Les versions orphelines, fabriquées** (relevé sous `RAG3WEAVER_PARITE_ORPHELINES`) :
+  - les graines sont les Scope des trois premiers rangs sans filtre de la ligne de base : 30
+    Scope ;
+  - toutes les occurrences de leurs versions sont effacées de la copie, 30 occurrences ;
+  - les versions sans origine passent de 0 à 30, au parent comme à la tête ;
+  - le parent masque donc par la liste, la tête par le prédicat.
+- **Les orphelines ne sortent plus** : aucune des 30 graines n'est dans les dix premiers, ni au
+  parent ni à la tête. La ligne de base en rendait 30 sans filtre, et 33 toutes formes. Le rouge
+  contre la ligne de base est donc l'effet voulu : il montre que le cas touchait bien les premiers
+  rangs.
