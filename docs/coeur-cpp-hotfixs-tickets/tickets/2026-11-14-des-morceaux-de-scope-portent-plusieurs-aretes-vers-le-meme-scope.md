@@ -1,7 +1,7 @@
 # Des morceaux de Scope portent plusieurs arêtes vers le même Scope
 
-- **État** : ouvert (14 novembre 2026, hotfixs, vu par la sonde des orphelines sur la base migrée par 1b ;
-  arbre principal avait le même compte)
+- **État** : ouvert (14 novembre 2026, hotfixs). Il se fermera par le retrait de l'ancien index, le pas
+  d'arbre principal qui suivra 1b ; sa cause se juge par le témoin `e2e_liens_sous_point_de_reprise`
 - **Famille** : produit
 - **Gravité** : à départager. Ce ne sont pas des orphelines : chaque arête relie un morceau vivant à son
   Scope vivant. Mais un même morceau est rattaché jusqu'à sept fois à son Scope, ce qui fausse tout
@@ -95,9 +95,14 @@ sort de ceux qui existent.
   cette forme : même morceau, même Scope, une arête de plus à chaque passage.
 - Scope_Chunk a aussi 21 287 places vides sous son offset maximal (des morceaux effacés).
 
-## Ce qu'il faut pour le fermer
+## Ce qu'il faut pour le fermer (réponse d'arbre principal, 14 novembre)
 
-1. Trouver le chemin qui ajoute l'arête sans voir celle qui existe.
-2. Un témoin rouge : redécouper un Scope déjà découpé, et compter une arête par morceau.
-3. Le correctif, puis la décision de Lucie sur les bases existantes : dédoublonner, ou laisser la
-   migration vers la forme à versions remplacer cet ancien index.
+- **Les doublons existants partent avec l'ancien index.** Après 1b, `Scope_Chunk`, `Scope_CHUNKED_FROM`
+  et `Lucivy_Scope` restent dans la base pour permettre le retour, mais le produit ne les lit plus. Le
+  pas « retrait de l'ancien index », à part, après la bascule des vraies bases et une validation, les
+  effacera (environ 5 Go par base). Ce ticket se ferme par ce retrait.
+- **La cause se juge par le témoin** `tests/e2e_liens_sous_point_de_reprise.rs` (branche
+  `liens-sous-point-de-reprise`). S'il est rouge sous e93710f36 et vert sous 0c41f9fe6, la lib du 14
+  novembre a mis fin à la production des doublons, et il n'y a rien à changer dans le code qui écrit
+  les liens. Le témoin atterrit alors comme non-régression. S'il reste vert sous e93710f36, l'hypothèse
+  ne tient pas, et la cause est à chercher ailleurs avant ce retrait.
