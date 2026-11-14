@@ -319,10 +319,20 @@ pub fn rapport_des_couches(catalog: &crate::catalog::Catalog, racine: &Path) -> 
     for e in &etats {
         match e {
             EtatDeBranche::Ancre { branche, pointe } => branches.push(json!({"name": branche, "state": "anchor", "head": pointe})),
-            EtatDeBranche::Suivie { branche, pointe, parente } => branches.push(json!({
+            EtatDeBranche::Suivie { branche, pointe, parente } => {
+                if parente.genre != GenreDeParente::Declaree {
+                    if let Some(d) = estampille(catalog, &id, branche)?.filter(|d| d.genre == GenreDeParente::Declaree) {
+                        avertissements.push(format!(
+                            "couche « {branche} » : sa parente déclarée « {} » n'est pas suivie ou n'existe plus — lue sur « {} » ({}), la déclaration reste",
+                            d.branche, parente.branche, genre(&parente.genre)
+                        ));
+                    }
+                }
+                branches.push(json!({
                 "name": branche, "state": "tracked", "head": pointe,
                 "parent": parente.branche, "kind": genre(&parente.genre), "base": parente.base,
-            })),
+                }));
+            }
             EtatDeBranche::Ambigue { branche, pointe, candidates } => {
                 avertissements.push(format!(
                     "couche « {branche} » ambiguë : sa parente est {} — à déclarer à l'ouverture",
@@ -364,13 +374,17 @@ fn resoudre(
         // 1. L'estampille : une déclaration de l'atelier, ou une inférence déjà admise. Elle fixe la
         //    parente et son genre, pas la base, recalculée ici (« le rebase suit », décision 4) ;
         //    une parente qui n'est plus suivie ne reste pas citée (relecture d'ED).
-        if let Some(p) = estampille(catalog, depot, &branche)?.filter(|p| nommees.contains(p.branche.as_str())) {
+        //    Une déclaration écartée ne s'écrase jamais par une inférence (relecture d'ED, 14 nov.) :
+        //    la résolution du moment se dit sans s'estampiller, et le rapport le signale.
+        let marquee = estampille(catalog, depot, &branche)?;
+        if let Some(p) = marquee.clone().filter(|p| nommees.contains(p.branche.as_str())) {
             if let Ok(la) = git(racine, &["rev-parse", &p.branche]) {
                 let base = git(racine, &["merge-base", &pointe, &la])?;
                 resolus.push(EtatDeBranche::Suivie { branche, pointe, parente: Parente { base, ..p } });
                 continue;
             }
         }
+        let ecrire = ecrire && !marquee.is_some_and(|p| p.genre == GenreDeParente::Declaree);
         // 2. Le reflog local, s'il nomme une branche suivie qui ne contient pas déjà celle-ci.
         if let Some(nom) = nee_de(racine, &branche).filter(|n| n != &branche && nommees.contains(n.as_str())) {
             let la = git(racine, &["rev-parse", &nom])?;
