@@ -1,6 +1,6 @@
 # Un poste lancé sous un quota étranger calcule ses parts sur le quota
 
-- **État** : corrigé (14 novembre 2026, branche garde-pile) : `fils_par` lit `nproc --all`.
+- **État** : ouvert (14 novembre 2026) ; corrigé sur la branche garde-pile (`fils_par` lit `nproc --all`), qui le fermera en atterrissant (rang 11 de la pile).
 - **Famille** : produit
 - **Gravité** : coût ; un lourd lancé dans une portée à quota reçoit une part réduite (1 cœur au lieu de 5 à luciepc), et le témoin de l'enveloppe se saute.
 - **Atteignable en service** : oui, un `poste lourd` lancé dans une portée `systemd-run` à `CPUQuota`, hors d'un ancêtre `poste`.
