@@ -61,6 +61,8 @@ fn une_lecture_par_les_mots_n_active_rien_une_lecture_dense_active() {
         hote: None,
         adresse_distante: None,
         ssh: None,
+        nom: None,
+        modele: None,
     });
     let (embarqueur, _) = connect_embedder(&source).expect("embarqueur à la demande");
     assert_eq!(evenements(&journal, "constructeur_demarre"), 0, "ouvrir ne lance rien");
