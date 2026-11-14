@@ -1,6 +1,8 @@
 # Le dictionnaire garde les textes des documents effacés
 
-- **État** : ouvert (14 novembre 2026).
+- **État** : ouvert (14 novembre 2026). Corrigé dans lucivy main (PR #37 et #38, d3b8c4a6a, 15 novembre) : sur
+  `Lucivy_Scope`, le dictionnaire passe de 513,8 à 400,7 Mo après la purge et la compaction. Se ferme quand
+  rag3weaver est en 4.3.8 et que `maintain` a tourné sur les vraies bases.
 - **Gravité** : poids. Les réponses ne changent pas, mais une purge suivie d'une compaction laisse dans le
   dictionnaire du shard les textes de tous les documents effacés : 93,7 Mo sur `Lucivy_Scope` de
   code-rag3db-depot, 7 % de l'index. C'est une part du « cent fois ses sources »

@@ -304,6 +304,22 @@ Mesuré avec `test_dictionary_anatomy` sur l'index neuf de recherche : 771 Mo, d
 
 ### Pièce 2 : la compaction filtrée du dictionnaire
 
-Elle fusionne toutes les générations en une, en ne gardant que les ids que l'union des `.gmap` vivants cite. Aucun
-id n'est renuméroté et aucun segment n'est réécrit. Elle tourne sous le verrou des écrivains, et refuse s'il reste
-des documents non validés ou des paires en attente. En cours.
+PR lucivy #38, fusionnée dans main (d3b8c4a6a), sans tag.
+- Elle fusionne toutes les générations en une, en ne gardant que les ids que l'union des `.gmap` validés cite.
+  Aucun id n'est renuméroté et aucun segment n'est réécrit.
+- Elle tourne dans l'acteur du segment updater. Elle refuse si une fusion ou un repli tourne, si une paire attend,
+  ou si un segment n'est pas validé. `maintain(compact)` l'appelle.
+- Témoin : une fixture de 200 documents sur 400 purgés. Les textes sont exactement ceux d'un index neuf (631 = 631),
+  les octets à +2,25 à +3,65 %, et les hits et scores sont identiques au bit près. La marge vient de la table d'ids
+  des `.termtexts`, qui nomme les ids gardés par plages.
+- **Copie réelle de `Lucivy_Scope`** (instantané `avant-835d5298f`), purge des 8 809 orphelins puis compaction :
+  **dictionnaire 513,8 → 400,7 Mo, index entier 4,27 → 1,16 Go** (1,30 Go avec la pièce 1 seule).
+- Coût : la compaction des 27 segments de la copie du matin prend 53,1 et 43,9 s sur main, 49,9 et 47,6 s sur la
+  branche, dans le bruit. Elle rend en plus 88 Mo de dictionnaire.
+- **Les générations** : sur l'index neuf de recherche, `maintain(compact)` sans purge garde les mêmes textes
+  (6 181 201) et fait passer 4 générations à 1, et le dictionnaire de 403,9 à 391,5 Mo (−3,1 %). Plusieurs
+  générations coûtent donc environ 3 %, d'où les 400,7 Mo d'une table compactée contre 420,1 pour un index neuf.
+
+Pour que les vraies bases en profitent, il faut rag3weaver sur une lucivy qui porte les deux pièces : la 4.3.8, au mot
+de Lucie. Le lot de l'hôte (`POST /backend/fts-live-ids`, `POST /backend/maintain`) attend en branche,
+`lucivy-maintenance-hote`.
