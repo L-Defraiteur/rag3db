@@ -3001,6 +3001,14 @@ fn occurrence_mask_options(
     conn: &Arc<dyn crate::connection::DbConnection>,
 ) -> Result<(SearchOptions, Option<HashSet<String>>), String> {
     let Some(projection) = &target.occurrence_projection else { return Ok((options, None)) };
+    // Le compte des résolutions du masque (2a′-2) : un témoin y lit qu'il ne se refait pas à chaque requête.
+    let visibilite = match vue_de(ctx) {
+        Some(v) => v.visibilite().cloned(),
+        None => ctx.service::<Arc<Mutex<Catalog>>>("catalog").and_then(|c| c.lock().ok().and_then(|c| c.generations.clone())), // L4 : repli sans vue
+    };
+    if let Some(v) = &visibilite {
+        v.ensembles.compter_une_resolution();
+    }
     let roots = occurrence_roots_for(ctx, target, &options, conn)?;
     let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").ok_or("projection : dialecte absent")?;
     // La relation canonique est imposée par le contrat, jamais choisie parmi

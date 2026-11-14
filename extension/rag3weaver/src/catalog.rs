@@ -10315,6 +10315,7 @@ fn read_threads() -> u64 {
             couche: couche.to_string(),
             rang,
             tout_visible: true,
+            ensembles: std::sync::Arc::new(crate::generations::EnsemblesPoses::default()),
         });
         self.publish_read_view();
         Ok(())
@@ -10324,6 +10325,10 @@ fn read_threads() -> u64 {
     /// lecteurs sans filtre bornent à leur tour (`Visibilite::tout_visible`). L'écrivain d'une
     /// seconde génération l'appelle (2a′-2) ; le témoin de la non-fuite aussi.
     /// Publique pour la sonde de la clause sans filtre (2a′-2), qui mesure l'état d'après sur une copie.
+    pub fn resolutions_du_masque(&self) -> Option<usize> {
+        self.generations.as_ref().map(|v| v.ensembles.resolutions())
+    }
+
     pub fn marquer_des_lignes_invisibles(&mut self) {
         if let Some(v) = self.generations.as_mut() {
             v.tout_visible = false;
