@@ -101,3 +101,28 @@ lecture des chaînes.
 **Reste pour fermer** : les témoins alias (`const Alias = require("./outil")` vers `class Outil`) et
 instance (`module.exports = new FS()`) sous l'oracle corrigé ; la ligne agrégée des sites (le complément
 plus haut) ; rejouer l'échantillon de référence TypeScript (les 298 mentions) avec l'oracle corrigé.
+
+## Le 14 novembre : la provenance des 415 liaisons
+
+Les provenances (lot de la provenance des imports, `docs/codeparsers/14-11-2026/01-provenance-des-imports.md`)
+des liaisons de l'arbre jugé (a72acfeef), relevées par une sonde codeparsers en « fichier seul », sans
+index ni base, et jointes aux 415 verdicts par fichier et ligne de la mention. D'abord à l'analyse seule
+(codeparsers c7c4b2b), puis avec les manifestes de l'arbre lus par `rag3weaver::manifestes` (20
+manifestes, 923 dépendances, 9 paquets du dépôt ; codeparsers f413dc6) :
+
+| provenance | à l'analyse seule | avec les manifestes |
+|---|---|---|
+| inconnue | 241 | **0** |
+| dependency | — | 240 |
+| builtin | 77 | 77 |
+| builtin,inconnue (arête fondue) | 31 | — |
+| builtin,dependency (arête fondue) | — | 30 |
+| project | 1 | 2 |
+| builtin,project (arête fondue) | — | 1 |
+| plus de liaison dans le code actuel | 65 | 65 |
+
+Les 241 `inconnue` tombent toutes : 240 deviennent `dependency` (des paquets npm des `package.json` de
+l'arbre), 1 devient `project` (un paquet du dépôt importé par son nom). Aucune liaison de l'échantillon ne
+reste `inconnue`. Les 65 « plus de liaison » comprennent les 4 mots dans une chaîne (ôtés par codeparsers
+b5c91e1). Fichiers : `~/.cache/codeparsers-notes/import-binding/` à luciepc (`provenance.log`,
+`provenance-manifestes.log`, `manifestes-arbre.json`).
