@@ -18,7 +18,6 @@
 
 use rag3weaver::backend::PreparedBackend;
 use rag3weaver::connection::{CypherValue, QueryParam};
-use rag3weaver::embedder::Embedder;
 use rag3weaver::filter::{FilterCondition, FilterValue};
 use rag3weaver::search_backend::SearchBackend;
 use rag3weaver::Rag3dbConnection;
