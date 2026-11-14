@@ -296,7 +296,10 @@ fn reingest_file_retenu(
     // **Sous les générations, l'écrivain de 2a′-2** (page 06, §§ 2 et 11) : retirer au lieu d'effacer,
     // une ligne neuve pour une ligne publiée qui change, la ligne en attente réécrite sur place.
     if catalog.generations.is_some() {
-        let ecriture = ecrire_par_generations(catalog, &analysis, &source_id, &indexed_path)?;
+        catalog.naissances.clear();
+        let scopes: Vec<&crate::code::ScopeRecord> = analysis.scopes.iter().collect();
+        let fichier = analysis.files.iter().find(|f| crate::workspace_path::slash(&f.path) == indexed_path);
+        let ecriture = ecrire_par_generations(catalog, &scopes, fichier, &source_id, &indexed_path)?;
         crate::ingest_profile::add("réindexer · l'écrivain des générations", t);
         oublier_les_aretes_du_fichier(catalog, &source_id, &indexed_path)?;
         let report = catalog.ingest_code_jusqu_a(&analysis, exige).map_err(|e| e.to_string());
@@ -365,8 +368,8 @@ fn reingest_file_retenu(
 struct EcritureParGenerations {
     /// Les noms des scopes retirés ou effacés : un nom a pu redevenir unique.
     noms_retires: Vec<String>,
-    /// (uuid de la ligne publiée retirée, clé) : ses arêtes entrantes suivront la ligne neuve.
-    remplacees: Vec<(String, String)>,
+    /// Les lignes publiées retirées : leurs arêtes entrantes suivront la ligne neuve.
+    remplacees: Vec<Remplacee>,
     effacees: usize,
     retirees: usize,
 }
@@ -393,17 +396,46 @@ fn meme_valeur(a: Option<&CypherValue>, b: Option<&CypherValue>) -> bool {
 /// Une ligne du fichier que l'analyse ne rend plus est effacée si elle est née à w, retirée sinon.
 fn ecrire_par_generations(
     catalog: &mut Catalog,
-    analysis: &crate::code::CodeAnalysis,
+    scopes: &[&crate::code::ScopeRecord],
+    fichier: Option<&crate::code::FileRecord>,
     source_id: &str,
     indexed_path: &str,
 ) -> Result<EcritureParGenerations, String> {
+    let mut e = EcritureParGenerations { noms_retires: Vec::new(), remplacees: Vec::new(), effacees: 0, retirees: 0 };
+    let recs: Vec<(String, String, BTreeMap<String, CypherValue>)> =
+        scopes.iter().map(|sc| (sc.key.clone(), sc.key.clone(), sc.data())).collect();
+    ecrire_la_table(catalog, SCOPE, "file_path", "key", source_id, indexed_path, recs, &mut e)?;
+    // La ligne `File` suit la même règle (page 06, § 11) : sa clé de naissance est préfixée, une clé de
+    // scope et un chemin ne se confondent pas.
+    let recs: Vec<_> = fichier.into_iter().map(|f| (crate::code::cle_de_naissance_du_fichier(&f.path), f.path.clone(), f.data())).collect();
+    ecrire_la_table(catalog, FILE, "path", "path", source_id, indexed_path, recs, &mut e)?;
+    Ok(e)
+}
+
+/// L'écrivain sur une table et le grain d'un fichier. `recs` : (clé de naissance, valeur du champ clé,
+/// rangée analysée). Les lignes lues sont celles de la couche visibles au rang en attente, et celles
+/// retirées à ce rang (un retour à l'identique les rouvre).
+#[allow(clippy::too_many_arguments)]
+fn ecrire_la_table(
+    catalog: &mut Catalog,
+    table: &str,
+    champ_du_chemin: &str,
+    champ_cle: &str,
+    source_id: &str,
+    indexed_path: &str,
+    recs: Vec<(String, String, BTreeMap<String, CypherValue>)>,
+    e: &mut EcritureParGenerations,
+) -> Result<(), String> {
     let v = catalog.generations.clone().ok_or("l'écrivain sans générations")?;
+    if !v.tables.contains(table) {
+        return Ok(());
+    }
     let w = v.rang;
     let visible = catalog.dialect_arc().condition_visible_sur("s", &v.couche, w).ok_or("ce dialecte ne sait pas les générations")?;
     let p = |n: &str, x: CypherValue| crate::connection::QueryParam::new(n, x);
     let lu = catalog
         .execute_raw_with_params(
-            &format!("MATCH (s:{SCOPE}) WHERE s.source = $src AND s.file_path = $path AND s._couche = $couche AND (({visible}) OR s._jusqu_a = $w) RETURN s"),
+            &format!("MATCH (s:`{table}`) WHERE s.source = $src AND s.`{champ_du_chemin}` = $path AND s._couche = $couche AND (({visible}) OR s._jusqu_a = $w) RETURN s"),
             &[
                 p("src", CypherValue::String(source_id.to_string())),
                 p("path", CypherValue::String(indexed_path.to_string())),
@@ -412,13 +444,12 @@ fn ecrire_par_generations(
             ],
         )
         .map_err(|e| e.to_string())?;
-    let champ = |l: &BTreeMap<String, CypherValue>, k: &str| l.get(k).cloned();
     let mut vivantes: BTreeMap<String, BTreeMap<String, CypherValue>> = BTreeMap::new();
     let mut retirees_a_w: BTreeMap<String, BTreeMap<String, CypherValue>> = BTreeMap::new();
     for ligne in lu.rows {
         let Some(CypherValue::Map(l)) = ligne.into_iter().next() else { continue };
-        let Some(cle) = l.get("key").and_then(|x| x.as_str()).map(str::to_string) else { continue };
-        if champ(&l, crate::generations::JUSQU_A).and_then(|x| x.as_i64()) == Some(w) {
+        let Some(cle) = l.get(champ_cle).and_then(|x| x.as_str()).map(str::to_string) else { continue };
+        if l.get(crate::generations::JUSQU_A).and_then(|x| x.as_i64()) == Some(w) {
             retirees_a_w.insert(cle, l);
         } else {
             vivantes.insert(cle, l);
@@ -430,42 +461,41 @@ fn ecrire_par_generations(
     let uuid = |l: &BTreeMap<String, CypherValue>| l.get("_uuid").and_then(|x| x.as_str()).unwrap_or("").to_string();
     let depuis = |l: &BTreeMap<String, CypherValue>| l.get(crate::generations::DEPUIS).and_then(|x| x.as_i64()).unwrap_or(0);
     let nom = |l: &BTreeMap<String, CypherValue>| l.get("name").and_then(|x| x.as_str()).unwrap_or("").to_string();
-    let mut e = EcritureParGenerations { noms_retires: Vec::new(), remplacees: Vec::new(), effacees: 0, retirees: 0 };
     let mut a_effacer: Vec<String> = Vec::new();
     let mut a_retirer: Vec<String> = Vec::new();
     let mut a_rouvrir: Vec<String> = Vec::new();
     let mut vues = std::collections::BTreeSet::new();
-    catalog.naissances.clear();
-    for sc in &analysis.scopes {
-        let rec = sc.data();
-        vues.insert(sc.key.clone());
-        let naissance = match (vivantes.get(&sc.key), retirees_a_w.get(&sc.key)) {
+    for (naissance_de, cle, rec) in &recs {
+        vues.insert(cle.clone());
+        let naissance = match (vivantes.get(cle), retirees_a_w.get(cle)) {
             // Un retour à l'identique de la ligne publiée : l'attente s'efface, la publiée se rouvre.
-            (Some(l), Some(r)) if depuis(l) == w && identique(&rec, r) => {
+            (Some(l), Some(r)) if depuis(l) == w && identique(rec, r) => {
                 a_effacer.push(uuid(l));
                 a_rouvrir.push(uuid(r));
                 depuis(r)
             }
             (Some(l), _) if depuis(l) == w => w,
-            (Some(l), _) if identique(&rec, l) => depuis(l),
+            (Some(l), _) if identique(rec, l) => depuis(l),
             (Some(l), _) => {
                 a_retirer.push(uuid(l));
-                e.remplacees.push((uuid(l), sc.key.clone()));
+                e.remplacees.push(Remplacee { table: table.to_string(), ancien: uuid(l), cle: cle.clone(), source: source_id.to_string() });
                 w
             }
-            (None, Some(r)) if identique(&rec, r) => {
+            (None, Some(r)) if identique(rec, r) => {
                 a_rouvrir.push(uuid(r));
                 depuis(r)
             }
             (None, _) => w,
         };
-        catalog.naissances.insert(sc.key.clone(), naissance);
+        catalog.naissances.insert(naissance_de.clone(), naissance);
     }
     for (cle, l) in &vivantes {
         if vues.contains(cle) {
             continue;
         }
-        e.noms_retires.push(nom(l));
+        if table == SCOPE {
+            e.noms_retires.push(nom(l));
+        }
         if depuis(l) == w { a_effacer.push(uuid(l)) } else { a_retirer.push(uuid(l)) }
     }
     let poser = |catalog: &mut Catalog, uuids: &[String], valeur: CypherValue| -> Result<(), String> {
@@ -473,47 +503,55 @@ fn ecrire_par_generations(
             return Ok(());
         }
         let liste = CypherValue::List(uuids.iter().cloned().map(CypherValue::String).collect());
-        // Un NULL en paramètre se type en STRING côté moteur, et la colonne est INT64 : rouvrir s'écrit
-        // donc en littéral.
-        let (affecte, params) = match valeur {
-            CypherValue::Null => ("NULL".to_string(), vec![p("uuids", liste)]),
-            autre => ("$valeur".to_string(), vec![p("uuids", liste), p("valeur", autre)]),
-        };
         catalog
             .execute_raw_with_params(
-                &format!("UNWIND $uuids AS u MATCH (s:{SCOPE} {{_uuid: u}}) SET s.{} = {affecte}", crate::generations::JUSQU_A),
-                &params,
+                &format!("UNWIND $uuids AS u MATCH (s:`{table}` {{_uuid: u}}) SET s.{} = $valeur", crate::generations::JUSQU_A),
+                &[p("uuids", liste), p("valeur", valeur)],
             )
             .map(|_| ())
             .map_err(|e| e.to_string())
     };
     poser(catalog, &a_retirer, CypherValue::Int(w))?;
-    poser(catalog, &a_rouvrir, CypherValue::Null)?;
+    // Rouvrir pose un NULL **typé** : un NULL nu prend STRING à la conversion (`sans_inconnu`), et le
+    // lieur refuse alors de le changer en INT64 pour `_jusqu_a`.
+    let null_entier = CypherValue::Typed { value: Box::new(CypherValue::Null), field_type: crate::config::FieldType::Int64 };
+    poser(catalog, &a_rouvrir, null_entier)?;
     if !a_retirer.is_empty() {
         catalog.marquer_des_lignes_invisibles();
     }
     for u in &a_effacer {
-        catalog.delete_jusqu_a(SCOPE, u, Disponibilites::TOUT).map_err(|e| e.to_string())?;
+        catalog.delete_jusqu_a(table, u, Disponibilites::TOUT).map_err(|e| e.to_string())?;
     }
-    e.effacees = a_effacer.len();
-    e.retirees = a_retirer.len();
-    Ok(e)
+    if table == SCOPE {
+        e.effacees += a_effacer.len();
+        e.retirees += a_retirer.len();
+    }
+    Ok(())
+}
+
+/// Une ligne publiée retirée par l'écrivain : ses arêtes entrantes suivront la ligne neuve de sa clé.
+struct Remplacee {
+    table: String,
+    ancien: String,
+    cle: String,
+    source: String,
 }
 
 /// **Les arêtes entrantes suivent la ligne neuve** (page 03, § 2 bis, 1) : chaque arête vivante qui
 /// arrive à une ligne publiée retirée se recopie vers la ligne neuve de sa clé. Le nombre de recopies
 /// s'ajoute à `Catalog::recopies_en_attente`, que la publication dit (page 06, § 9).
-fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[(String, String)]) -> Result<(), String> {
+fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[Remplacee]) -> Result<(), String> {
     let Some(v) = catalog.generations.clone() else { return Ok(()) };
     let p = |n: &str, x: CypherValue| crate::connection::QueryParam::new(n, x);
     let mut recopiees = 0usize;
-    for (ancien, cle) in remplacees {
-        let neuf = catalog.entity_uuid(SCOPE, &catalog.donnees_de_cle(SCOPE, cle, "")).map_err(|e| e.to_string())?;
+    for r in remplacees {
+        let (ancien, to) = (&r.ancien, r.table.as_str());
+        let neuf = catalog.entity_uuid(to, &catalog.donnees_de_cle(to, &r.cle, &r.source)).map_err(|e| e.to_string())?;
         if &neuf == ancien {
             continue;
         }
-        for (rel, from, to) in crate::code::RELATIONS {
-            if to != SCOPE {
+        for (rel, from, cible) in crate::code::RELATIONS {
+            if cible != to {
                 continue;
             }
             let props: Vec<String> = catalog.get_relation_def(rel).and_then(|r| r.properties.as_ref()).map(|m| m.keys().cloned().collect()).unwrap_or_default();
@@ -600,6 +638,14 @@ fn oublier_les_aretes_du_fichier(catalog: &mut Catalog, source_id: &str, indexed
 /// pendant de [`reingest_file`] pour un fichier qui n'existe plus.
 pub fn remove_file(catalog: &mut Catalog, source: &dyn FileSource, path: &str, exige: Disponibilites) -> Result<ReingestReport, String> {
     let (source_id, indexed_path) = crate::code_tools::indexed_name(source, path);
+    // Sous les générations (2a′-2) : le fichier qui part est un fichier sans scope, ses lignes publiées
+    // se retirent au rang en attente, celles nées à ce rang s'effacent ; de même sa ligne `File`.
+    if catalog.generations.is_some() {
+        catalog.naissances.clear();
+        let ecriture = ecrire_par_generations(catalog, &[], None, &source_id, &indexed_path)?;
+        catalog.resoudre_les_symboles(&ecriture.noms_retires, exige).map_err(|e| e.to_string())?;
+        return Ok(ReingestReport { scopes_deleted: ecriture.effacees + ecriture.retirees, ..Default::default() });
+    }
     let grain = grain_du_fichier(&source_id, &indexed_path);
     let t = std::time::Instant::now();
     let open = catalog.begin_snapshot(SCOPE, &grain, true).map_err(|e| e.to_string())?;
@@ -704,6 +750,9 @@ fn reingest_files_retenu(
             FichierDuLot { source_id, indexed_path, grain, present: c.is_some() }
         })
         .collect();
+    if catalog.generations.is_some() {
+        return reingest_files_par_generations(catalog, analysis.as_ref(), &fichiers, exige);
+    }
     let mut scopes_par_fichier: HashMap<String, Vec<String>> = HashMap::new();
     if let Some(a) = &analysis {
         for sc in &a.scopes {
@@ -801,6 +850,58 @@ fn reingest_files_retenu(
     crate::ingest_profile::add("réindexer · résoudre les symboles", t);
     rapport.scopes_deleted = deleted;
     rapport.deferred_to = deferred_to;
+    Ok(rapport)
+}
+
+/// **Le lot sous les générations** (2a′-2) : l'écrivain fichier par fichier (les scopes que l'analyse
+/// lui donne, aucun pour un supprimé), puis l'oubli des arêtes des présents, une ingestion, la recopie
+/// des arêtes entrantes, les lignes `File` des supprimés et une résolution — l'ordre de
+/// [`reingest_file`], à l'échelle du lot. Aucune session d'instantané : rien n'est effacé d'une
+/// génération publiée.
+fn reingest_files_par_generations(
+    catalog: &mut Catalog,
+    analysis: Option<&crate::code::CodeAnalysis>,
+    fichiers: &[FichierDuLot],
+    exige: Disponibilites,
+) -> Result<ReingestReport, String> {
+    let t = std::time::Instant::now();
+    catalog.naissances.clear();
+    let mut noms_retires = Vec::new();
+    let mut remplacees = Vec::new();
+    let mut deleted = 0usize;
+    for f in fichiers {
+        let (scopes, fichier): (Vec<&crate::code::ScopeRecord>, _) = match (f.present, analysis) {
+            (true, Some(a)) => (
+                a.scopes.iter().filter(|sc| crate::workspace_path::slash(&sc.file_path) == f.indexed_path).collect(),
+                a.files.iter().find(|x| crate::workspace_path::slash(&x.path) == f.indexed_path),
+            ),
+            _ => (Vec::new(), None),
+        };
+        let e = ecrire_par_generations(catalog, &scopes, fichier, &f.source_id, &f.indexed_path)?;
+        noms_retires.extend(e.noms_retires);
+        remplacees.extend(e.remplacees);
+        deleted += e.effacees + e.retirees;
+    }
+    crate::ingest_profile::add("réindexer · l'écrivain des générations", t);
+    for f in fichiers.iter().filter(|f| f.present) {
+        oublier_les_aretes_du_fichier(catalog, &f.source_id, &f.indexed_path)?;
+    }
+    let mut rapport = ReingestReport::default();
+    if let Some(a) = analysis {
+        let r = catalog.ingest_code_jusqu_a(a, exige).map_err(|e| e.to_string());
+        let recopie = r.as_ref().ok().map(|_| recopier_les_aretes_entrantes(catalog, &remplacees));
+        catalog.naissances.clear();
+        let r = r?;
+        recopie.transpose()?;
+        rapport.scopes_upserted = r.scopes;
+        rapport.relations = r.relations;
+        rapport.failed = r.failed;
+    }
+    catalog.naissances.clear();
+    noms_retires.sort();
+    noms_retires.dedup();
+    catalog.resoudre_les_symboles(&noms_retires, exige).map_err(|e| e.to_string())?;
+    rapport.scopes_deleted = deleted;
     Ok(rapport)
 }
 

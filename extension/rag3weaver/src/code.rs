@@ -2480,8 +2480,10 @@ impl Catalog {
     /// l'écriture en cours. Hors d'une écriture, ou pour une autre entité, c'est `key_data` tel quel.
     pub(crate) fn donnees_de_cle(&self, entity: &str, key: &str, source: &str) -> BTreeMap<String, CypherValue> {
         let mut d = key_data(entity, key, source);
-        if entity == SCOPE {
-            self.poser_la_naissance(key, &mut d);
+        match entity {
+            SCOPE => self.poser_la_naissance(key, &mut d),
+            FILE => self.poser_la_naissance(&cle_de_naissance_du_fichier(key), &mut d),
+            _ => {}
         }
         d
     }
@@ -2492,6 +2494,12 @@ impl Catalog {
         d.insert(crate::generations::COUCHE.into(), CypherValue::String(v.couche.clone()));
         d.insert(crate::generations::DEPUIS.into(), CypherValue::Int(*depuis));
     }
+}
+
+/// La clé de naissance d'une ligne `File` dans `Catalog::naissances` : préfixée, pour qu'un chemin ne se
+/// confonde pas avec une clé de scope.
+pub(crate) fn cle_de_naissance_du_fichier(path: &str) -> String {
+    format!("\u{1}File:{path}")
 }
 
 fn key_data(entity: &str, key: &str, source: &str) -> BTreeMap<String, CypherValue> {
@@ -2588,7 +2596,16 @@ impl Catalog {
         let mut report = CodeIngestReport::default();
         let phase = std::time::Instant::now();
 
-        let files = self.ingest_entities_jusqu_a(FILE, analysis.files.iter().map(FileRecord::data).collect(), exige)?;
+        let files_data = analysis
+            .files
+            .iter()
+            .map(|f| {
+                let mut d = f.data();
+                self.poser_la_naissance(&cle_de_naissance_du_fichier(&f.path), &mut d);
+                d
+            })
+            .collect();
+        let files = self.ingest_entities_jusqu_a(FILE, files_data, exige)?;
         report.files = files.processed;
         report.failed += files.failed;
         // **Les tests par requêtes** déclarés : le relevé du lot, une fois.
@@ -5813,5 +5830,26 @@ mod tests_de_l_ecrivain {
         assert_eq!(apres.len(), 1, "une ligne File visible à m : {apres:?}");
         assert_ne!(apres, avant, "l'empreinte neuve à m");
         assert_eq!(lignes_file(&cat, "b.rs"), 2, "les deux lignes File restent");
+    }
+
+    /// **Témoin 10 : une synchronisation entière suit la règle.** `sync_source` sur une source déjà
+    /// indexée, `b.rs` changé et `a.rs` supprimé : la génération d'avant rend l'ancien `f`, `a` et leurs
+    /// lignes `File` ; la suivante le neuf `f` seul. Aucune ligne publiée n'est effacée par la fin.
+    #[test]
+    fn une_synchronisation_suit_la_regle() {
+        let (mut cat, src) = base();
+        let n = cat.publier_la_generation("c1", 0).expect("publier");
+        src.insert("b.rs", F2);
+        src.remove("a.rs");
+        crate::code_sync::sync_source(&mut cat, &src, &Default::default(), &mut |_| {}).expect("la synchronisation");
+        let m = cat.publier_la_generation("c2", 0).expect("publier");
+        assert_eq!(cat.au_rang(n, |c| fins_visibles(c, "f")), vec![3], "l'ancien f à n");
+        assert_eq!(cat.au_rang(m, |c| fins_visibles(c, "f")), vec![4], "le neuf à m");
+        assert_eq!(cat.au_rang(n, |c| fins_visibles(c, "a")).len(), 1, "a à n");
+        assert!(cat.au_rang(m, |c| fins_visibles(c, "a")).is_empty(), "plus de a à m");
+        assert_eq!(cat.au_rang(n, |c| fichiers_visibles(c, "a.rs")).len(), 1, "la ligne File de a.rs à n");
+        assert!(cat.au_rang(m, |c| fichiers_visibles(c, "a.rs")).is_empty(), "plus à m");
+        assert_eq!(lignes(&cat, "f").len(), 2, "les deux lignes de f restent : {:?}", lignes(&cat, "f"));
+        assert_eq!(lignes(&cat, "a").len(), 1, "la ligne de a est retirée, pas effacée");
     }
 }
