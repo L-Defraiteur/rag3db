@@ -1,7 +1,6 @@
 # Un target neuf ne se bâtit plus sous openssl 4
 
-- **État** : ouvert (14 novembre 2026, relevé par archi) ; le lot `openssl-sys-pour-openssl-4` le
-  ferme
+- **État** : fermé (14 novembre 2026) par le lot `openssl-sys-pour-openssl-4` ; relevé par archi
 - **Famille** : produit
 - **Pour** : archi
 - **Gravité** : bloquant — tout target neuf, ou après un `cargo clean`, échoue à bâtir
@@ -38,3 +37,9 @@ openssl hors du bâti vaut mieux qu'en suivre les versions.
 
 Témoin : `le_tls_ne_tire_pas_openssl::the_lockfile_pulls_neither_openssl_nor_native_tls`, et un
 target neuf qui se bâtit sous openssl 4.1.0 sans variable `OPENSSL_*` ni `PKG_CONFIG_PATH`.
+
+## Ce qui part du lock
+
+Douze paquets, aucune version ne monte : `openssl-sys`, `openssl`, `openssl-macros`, `native-tls`,
+`hyper-tls`, `tokio-native-tls`, `foreign-types`, `foreign-types-shared`, `core-foundation`,
+`system-configuration`, `system-configuration-sys`, `windows-registry`.
