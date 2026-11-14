@@ -4377,23 +4377,31 @@ fn module_designe_fichier(module: &str, fichier: &str) -> bool {
 /// (doc du 6 septembre 2026, 19h57).
 fn own_texts(texte: &str, scopes: &[codeparsers::scope_extraction::types::ScopeInfo]) -> Vec<Option<(String, String)>> {
     let n = scopes.len();
-    let empan_valide = |i: usize| {
+    // **L'empan d'un scope : celui de son nœud** quand codeparsers le donne (`node_start_byte`,
+    // `node_end_byte`), sinon celui de ses lignes (un trou entre déclarations). Borné à ses lignes,
+    // le contenu d'une fonction d'un bundle minifié d'une seule ligne était la ligne entière
+    // (mesure de lucivy, 14 novembre 2026 : 844 Mo, un même morceau de 133 Ko répété 484 fois).
+    let empan = |i: usize| -> (usize, usize) {
         let s = &scopes[i];
-        s.scope_end_byte > s.scope_start_byte
-            && s.scope_end_byte <= texte.len()
-            && texte.is_char_boundary(s.scope_start_byte)
-            && texte.is_char_boundary(s.scope_end_byte)
+        match (s.node_start_byte, s.node_end_byte) {
+            (Some(d), Some(f)) if f > d => (d, f),
+            _ => (s.scope_start_byte, s.scope_end_byte),
+        }
+    };
+    let empan_valide = |i: usize| {
+        let (d, f) = empan(i);
+        f > d && f <= texte.len() && texte.is_char_boundary(d) && texte.is_char_boundary(f)
     };
     // Les empans réels, du plus large au plus étroit à même début.
     let mut ordre: Vec<usize> = (0..n).filter(|&i| empan_valide(i)).collect();
-    ordre.sort_by_key(|&i| (scopes[i].scope_start_byte, std::cmp::Reverse(scopes[i].scope_end_byte)));
+    ordre.sort_by_key(|&i| (empan(i).0, std::cmp::Reverse(empan(i).1)));
     // Le parent direct de chaque scope, par imbrication d'empans.
     let mut enfants: Vec<Vec<usize>> = vec![Vec::new(); n];
     let mut pile: Vec<usize> = Vec::new();
     for &i in &ordre {
-        let (debut, fin) = (scopes[i].scope_start_byte, scopes[i].scope_end_byte);
+        let (debut, fin) = empan(i);
         while let Some(&haut) = pile.last() {
-            if debut >= scopes[haut].scope_start_byte && fin <= scopes[haut].scope_end_byte {
+            if debut >= empan(haut).0 && fin <= empan(haut).1 {
                 break;
             }
             pile.pop();
@@ -4411,16 +4419,16 @@ fn own_texts(texte: &str, scopes: &[codeparsers::scope_extraction::types::ScopeI
             if !empan_valide(i) {
                 return None;
             }
-            let s = &scopes[i];
             let mut propre = String::new();
             // Les replis, au format de `SourceLines::folds` : la ligne du
             // texte propre qui tient lieu d'un enfant de plusieurs lignes, et
             // l'empan de cet enfant dans le fichier.
             let mut replis: Vec<String> = Vec::new();
-            let mut curseur = s.scope_start_byte;
+            let (debut_i, fin_i) = empan(i);
+            let mut curseur = debut_i;
             for &c in &enfants[i] {
-                let (cd, cf) = (scopes[c].scope_start_byte, scopes[c].scope_end_byte);
-                if cd < curseur || cf > s.scope_end_byte {
+                let (cd, cf) = empan(c);
+                if cd < curseur || cf > fin_i {
                     continue;
                 }
                 propre.push_str(&texte[curseur..cd]);
@@ -4433,7 +4441,7 @@ fn own_texts(texte: &str, scopes: &[codeparsers::scope_extraction::types::ScopeI
                 }
                 curseur = cf;
             }
-            propre.push_str(&texte[curseur..s.scope_end_byte]);
+            propre.push_str(&texte[curseur..fin_i]);
             Some((dedent_after_first_line(&propre), replis.join(",")))
         })
         .collect()
