@@ -101,10 +101,11 @@ impl Saisie {
     }
 
     /// Efface jusqu'au début du mot avant le curseur, espaces compris (Ctrl-W,
-    /// comme un shell : un mot y va jusqu'à l'espace).
+    /// comme un shell : un mot y va jusqu'à l'espace), sans passer le début de la ligne.
     pub fn effacer_mot_avant(&mut self) {
-        let j = self.recul(self.curseur, |g| g.chars().all(char::is_whitespace));
-        let j = self.recul(j, |g| !g.chars().all(char::is_whitespace));
+        let blanc = |g: &str| g != "\n" && g.chars().all(char::is_whitespace);
+        let j = self.recul(self.curseur, blanc);
+        let j = self.recul(j, |g| g != "\n" && !blanc(g));
         self.texte.replace_range(j..self.curseur, "");
         self.curseur = j;
     }
