@@ -72,12 +72,12 @@ commande_ = commande
 class Terminal:
     """Le terminal distant, vu d'ici : un pseudo-terminal dont on lit chaque octet, horodaté."""
 
-    def __init__(self, env, theme, colonnes=100, lignes=30, repond_au_curseur=True):
+    def __init__(self, env, theme, colonnes=100, lignes=30, repond_au_curseur=True, extra=""):
         self.repond_au_curseur = repond_au_curseur
         self.lignes = lignes
         self.maitre, esclave = pty.openpty()
         self.taille(colonnes, lignes, signaler=False)
-        commande = f"env {env} {BINAIRE} --theme {theme} --depot faux --tache mesure --daemon-json {DOSSIER}/daemon.json --demande go"
+        commande = f"env {env} {BINAIRE} --theme {theme} --depot faux --tache mesure --daemon-json {DOSSIER}/daemon.json --demande go {extra}"
         self.p = subprocess.Popen(commande_(commande), stdin=esclave, stdout=esclave, stderr=esclave, start_new_session=True, env=dict(os.environ, TERM="xterm-256color", LANG=os.environ.get("LANG", "fr_FR.UTF-8")))
         os.close(esclave)
         self.recu = []  # (t, octets)
@@ -316,6 +316,67 @@ try:
 finally:
     tunnel.terminate()
     hote_arreter()
+
+# 1b. Le journal de séance (tty-7) : `--journal` écrit en texte brut ce qui part dans l'historique du
+#     terminal, sous tous les lanceurs. Sous mosh, qui ne garde aucun historique au-delà de l'écran, la
+#     zone vivante dit la commande qui relit le journal ; sans `--journal`, un journal s'ouvre de lui-même.
+ATTENDUS = {f"mot{i}" for i in range(200)}
+
+
+def verifier_journal(texte, quoi):
+    vus = set(re.findall(r"mot\d+", texte))
+    manquent = sorted(ATTENDUS - vus, key=lambda m: int(m[3:]))
+    code = 'println!("bonjour");' in texte
+    resultats.setdefault("journal", {})[quoi] = {"octets": len(texte), "mots_manquants": len(manquent), "code": code}
+    if manquent or not code:
+        rouge(f"{quoi} : le journal ne porte pas tout l'historique ({len(manquent)} mots manquants, dont {manquent[:3]} ; bloc de code {'présent' if code else 'absent'})")
+
+
+def seance_journal(extra, quoi):
+    hote_demarrer()
+    tunnel = subprocess.Popen(["sleep", "86400"] if LOCAL else ["ssh", "-N", "-o", "BatchMode=yes", "-L", f"{TUNNEL}:127.0.0.1:{PORT}", HOTE])
+    time.sleep(1.5)
+    try:
+        t = Terminal("COLORTERM=truecolor TERM=xterm-256color", "daemon", extra=extra)
+        if t.attendre(b"attend ton accord", borne=40) is None:
+            rouge(f"{quoi} : la demande d'accord ne paraît pas en 40 s")
+        time.sleep(1.0)
+        ecran = t.tout()
+        t.ecrire(b"\x03")
+        time.sleep(0.5)
+        t.arreter()
+        return ecran
+    finally:
+        tunnel.terminate()
+        hote_arreter()
+
+
+chemin = f"{DOSSIER}/seance-journal.txt"
+ssh(f"rm -f {chemin}")
+ecran = seance_journal(f"--journal {chemin}", "journal_explicite")
+dit = f"less {chemin}".encode() in ecran
+resultats["journal_explicite_relecture_dite"] = dit
+if LANCEUR == "mosh" and not dit:
+    rouge(f"sous mosh, la zone vivante ne dit pas « less {chemin} »")
+if LANCEUR != "mosh" and b"sous mosh" in ecran:
+    rouge(f"sous {LANCEUR}, la vue se croit sous mosh")
+verifier_journal(ssh(f"cat {chemin} 2>/dev/null"), "journal_explicite")
+ssh(f"rm -f {chemin}")
+
+if LANCEUR == "mosh":
+    etat_tty = "$HOME/.local/state/rag3weaver/tty"
+    avant = set(ssh(f"ls -1 {etat_tty} 2>/dev/null").split())
+    ecran = seance_journal("", "journal_de_lui_meme")
+    nouveaux = sorted(set(ssh(f"ls -1 {etat_tty} 2>/dev/null").split()) - avant)
+    resultats["journal_de_lui_meme_fichiers"] = nouveaux
+    if b"rag3weaver/tty/seance-" not in ecran or b"less " not in ecran:
+        rouge("sous mosh sans --journal, la zone vivante ne dit pas le journal ouvert")
+    if len(nouveaux) != 1:
+        rouge(f"sous mosh sans --journal : {len(nouveaux)} journaux neufs au lieu d'un ({nouveaux})")
+    else:
+        verifier_journal(ssh(f"cat {etat_tty}/{nouveaux[0]}"), "journal_de_lui_meme")
+    for n in nouveaux:
+        ssh(f"rm -f {etat_tty}/{n}")
 
 # 2. Les couleurs de chaque thème, en couleur vraie puis en 256 couleurs.
 couleurs = []
