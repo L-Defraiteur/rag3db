@@ -755,3 +755,7 @@ Décision : pas de lot vues chez lucivy maintenant ; 2b-B s'appuie sur `allowed_
 
 - **cœur a poussé ReadDuringOpenBatch** (test/ seul, deux cas) : master = c4a8ae32f ; transaction_test entier vert sur 0066dce28 (373 passés, 2 sautés habituels) ; rebase sans rejeu (aucun C++ entre) ; la garde d'âge ne voit que src, la lib 0c41f9fe6 reste bonne.
 - Départage DdlEveryMinute en cours (f41c0ba5b puis 835d5298f). Derrière : **RefusedCommitRollback** (a8c62687d, branche annulation-garde-les-autres), témoin déterministe de la piste — A voit son COMMIT refusé (journal non synchronisé, CutFileSystem), B valide une Note, A annule, la Note de B doit rester.
+
+## Vers 02 h 5x — verdict (1) : la perte de Note est présente avant le verrou
+
+- **cœur, DdlEveryMinute ×10 sur f41c0ba5b (= 0c41f9fe6^, avant le verrou), 9 tours lus** : 2 verts (0 refus du pool), 4 rouges index-creation seul, **2 rouges counts-match-commits** (Note 63620/63622 avec 132 refus ; 64030/64035 avec 159 refus), **1 SIGSEGV** (tour 6, 1084 refus). Avec le verrou : 3 counts-match-commits sur 10 et 0 SIGSEGV ; sans : 2 sur 9 et 1 SIGSEGV. **Pas une régression du correctif de la clé primaire.** Verdict (2) sur 835d5298f (courant) vers 4 h 10 ; si rouge aussi, la pose du matin reste bonne (défaut présent en service, correctif en lot d'après). RefusedCommitRollback suit.
