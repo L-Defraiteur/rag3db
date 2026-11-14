@@ -3562,8 +3562,19 @@ impl Backend {
         }
         if let Some(handle) = self.miroir_reacteur.lock().unwrap_or_else(|e| e.into_inner()).take() {
             errors.extend(handle.errors());
-            if let Err(e) = handle.stop_within(delai) {
-                errors.push(format!("{REACTION_FIGEE} (miroir des fichiers) : {e}"));
+            match handle.stop_within(delai) {
+                // **La base est la vérité, les fichiers suivent, jusqu'à l'arrêt compris** (14 novembre
+                // 2026, la première passe de l'archiviste : deux fiches du dernier document en base sans
+                // fichier, quatre fichiers périmés). Le miroir attend 50 ms après une rafale ; l'arrêter
+                // perd ce qu'il attendait. Les fichiers composés se régénèrent donc ici depuis la base,
+                // comme à l'ouverture, avant que l'arrêt ne rende.
+                Ok(_) => {
+                    if let Err(e) = self.regenerer_les_fichiers_composes() {
+                        errors.push(format!("miroir des fichiers : la régénération à l'arrêt a échoué : {e}"));
+                    }
+                }
+                // Figé : il tient peut-être le catalogue, on n'y touche pas.
+                Err(e) => errors.push(format!("{REACTION_FIGEE} (miroir des fichiers) : {e}")),
             }
         }
         errors
