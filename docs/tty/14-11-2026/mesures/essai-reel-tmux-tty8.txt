@@ -1,0 +1,136 @@
+## apres_la_reponse
+[toi · demande] bonjour, présente-toi en deux lignes
+[hôte · report] tâche ouverte : branche agent/essai-tty depuis d61fe30d7 ; ses déclarations et son code sont c
+eux de ce commit (une modification non commitée du manifeste ou du code n'y est pas)
+[équipier · report] Bonjour ! Je suis votre coéquipier IA sur ce backend déclaré, autonome pour analyser, modi
+fier et maintenir les déclarations et le code. Je réalise vos tâches étape par étape en rendant compte au fil
+de l'eau.
+[équipier · step_done] fait : Présentation effectuée en deux lignes dans la boîte du superviseur.
+[hôte · fini] fait sans plan
+[toi · demande] Présente-toi en quelques lignes : un titre, une liste à puces de trois choses que tu sais fair
+e, et un mot en gras.
+[toi · demande] Présente-toi en quelques lignes : un titre, une liste à puces de trois choses que tu sais fair
+e, et un mot en gras.
+
+⛧ fini : fait sans plan                                             rag3db · agent/essai-tty · tâche essai-tty
+›
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=====
+
+## saisie_editee
+[toi · demande] bonjour, présente-toi en deux lignes
+[hôte · report] tâche ouverte : branche agent/essai-tty depuis d61fe30d7 ; ses déclarations et son code sont c
+eux de ce commit (une modification non commitée du manifeste ou du code n'y est pas)
+[équipier · report] Bonjour ! Je suis votre coéquipier IA sur ce backend déclaré, autonome pour analyser, modi
+fier et maintenir les déclarations et le code. Je réalise vos tâches étape par étape en rendant compte au fil
+de l'eau.
+[équipier · step_done] fait : Présentation effectuée en deux lignes dans la boîte du superviseur.
+[hôte · fini] fait sans plan
+[toi · demande] Présente-toi en quelques lignes : un titre, une liste à puces de trois choses que tu sais fair
+e, et un mot en gras.
+[toi · demande] Présente-toi en quelques lignes : un titre, une liste à puces de trois choses que tu sais fair
+e, et un mot en gras.
+[équipier · report] Présentation fournie au superviseur conformément au format demandé (titre, 3 puces, mot en
+ gras).
+» report
+  fait (0 ms)
+» step_done
+[équipier · step_done] fait : Présentation rédigée avec titre, trois points de compétence et un mot en gras.
+  fait (0 ms)
+[hôte · fini] fait sans plan
+
+⛧ fini : fait sans plan                                             rag3db · agent/essai-tty · tâche essai-tty
+› Merci, c'est clair !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=====
+
+## apres_ctrl_c
+[toi · demande] bonjour, présente-toi en deux lignes
+[hôte · report] tâche ouverte : branche agent/essai-tty depuis d61fe30d7 ; ses déclarations et son code sont c
+eux de ce commit (une modification non commitée du manifeste ou du code n'y est pas)
+[équipier · report] Bonjour ! Je suis votre coéquipier IA sur ce backend déclaré, autonome pour analyser, modi
+fier et maintenir les déclarations et le code. Je réalise vos tâches étape par étape en rendant compte au fil
+de l'eau.
+[équipier · step_done] fait : Présentation effectuée en deux lignes dans la boîte du superviseur.
+[hôte · fini] fait sans plan
+[toi · demande] Présente-toi en quelques lignes : un titre, une liste à puces de trois choses que tu sais fair
+e, et un mot en gras.
+[toi · demande] Présente-toi en quelques lignes : un titre, une liste à puces de trois choses que tu sais fair
+e, et un mot en gras.
+[équipier · report] Présentation fournie au superviseur conformément au format demandé (titre, 3 puces, mot en
+ gras).
+» report
+  fait (0 ms)
+» step_done
+[équipier · step_done] fait : Présentation rédigée avec titre, trois points de compétence et un mot en gras.
+  fait (0 ms)
+[hôte · fini] fait sans plan
+
+⛧ fini : fait sans plan                                             rag3db · agent/essai-tty · tâche essai-tty
+›
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=====
+
+## sortie
