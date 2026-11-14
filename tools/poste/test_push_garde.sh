@@ -193,6 +193,29 @@ else echo "ROUGE  tête reposée à la main, master bougé : rc $rc, master « $
   fi
   echo "ROUGE  push refusé puis rejoué : rc $r1 puis $r2"; echo "$un" | tail -3; echo "$deux" | tail -3; exit 1
 ) || rouge=1
+# **La copie ouverte d'un ticket fermé par le lot** (15 novembre 2026, relevé de c7) : le lot crée
+# docs/tickets/closed/t.md sur une base plus vieille que l'ouverte docs/a/tickets/t.md, arrivée sur master entre-temps.
+# Après le push, master ne doit porter que la fermée.
+(
+  H="$D/homet"; mkdir -p "$H/git_workspaces" "$H/.cache/rag3weaver-build/j"
+  git clone -q --bare "$D" "$D/nut.git" 2>/dev/null; git -C "$D/nut.git" update-ref refs/heads/master "$BASE"
+  git clone -q "$D/nut.git" "$H/git_workspaces/wt" 2>/dev/null
+  cd "$H/git_workspaces/wt" && git config user.email luciedefraiteur@gmail.com && git config user.name t
+  git checkout -q --detach origin/master; mkdir -p docs/tickets/closed; printf '# t\n- **État** : fermé\n' > docs/tickets/closed/t.md
+  echo 'fn lot() {}' > extension/rag3weaver/src/lot_t.rs; git add -A; git commit -qm "lot qui ferme t"
+  printf 'teste %s\nVERT\n' "$(git rev-parse --short HEAD)" > "$H/.cache/rag3weaver-build/j/resume.log"; git rev-parse origin/master > "$H/.cache/rag3weaver-build/j/base"
+  echo "rag3db-build-0123456789012345678901234567890123456789-Release" > "$H/.cache/rag3weaver-build/j/lib.log"
+  # master : l'ouverte arrive après la base du lot (un commit de docs seules)
+  ( git clone -q "$D/nut.git" "$D/autret" 2>/dev/null && cd "$D/autret" && git config user.email t@t && git config user.name t \
+    && mkdir -p docs/a/tickets && printf '# t\n- **État** : ouvert\n' > docs/a/tickets/t.md && git add -A && git commit -qm "ticket t ouvert" && git push -q origin HEAD:master 2>/dev/null )
+  sortie=$(HOME="$H" bash "$GARDE" wt j 2>&1); rc=$?
+  ouverte=$(git -C "$D/nut.git" ls-tree -r --name-only master -- docs/a/tickets/t.md)
+  fermee=$(git -C "$D/nut.git" ls-tree -r --name-only master -- docs/tickets/closed/t.md)
+  if [ $rc = 0 ] && echo "$sortie" | grep -qx POUSSE && [ -z "$ouverte" ] && [ -n "$fermee" ] && echo "$sortie" | grep -q "copies ouvertes retirées dans le même push : docs/a/tickets/t.md"; then
+    echo "vert   un ticket fermé par le lot : la garde retire sa copie ouverte dans le même push"; exit 0
+  fi
+  echo "ROUGE  ticket fermé : rc $rc, ouverte « $ouverte », fermée « $fermee »"; echo "$sortie" | tail -3; exit 1
+) || rouge=1
 # Aucun journal qui nomme une lib : ARRÊT, même si la liste des journaux s'élargit à $J/*.log.
 (
   H="$D/home0"; mkdir -p "$H/git_workspaces" "$H/.cache/rag3weaver-build/j"

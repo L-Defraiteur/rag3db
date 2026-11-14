@@ -203,6 +203,23 @@ else
     git rebase --abort; echo "ARRÊT : le rebase sur $neuf bute"; exit 1
   fi
 fi
+# **La copie ouverte d'un ticket fermé par le lot** (15 novembre 2026, relevé de c7) : un `git mv` vers
+# docs/tickets/closed/ rejoué sur une base de pile plus vieille que le ticket ouvert ne fait que créer la copie fermée ;
+# master en portait deux et check_tickets rougissait la CI. La garde retire l'homonyme ouvert dans le même push, par un
+# commit de docs seules, et le dit.
+retires=""
+while IFS= read -r ferme; do
+  [ -n "$ferme" ] || continue
+  nom=$(basename "$ferme")
+  while IFS= read -r ouvert; do
+    [ -n "$ouvert" ] || continue
+    git rm -q -- "$ouvert" && retires="$retires $ouvert"
+  done < <(git ls-tree -r --name-only HEAD -- docs | awk -v n="$nom" -F/ '$NF == n && $(NF-1) == "tickets" && $0 !~ "^docs/tickets/closed/"')
+done < <(git diff --name-only --diff-filter=A "$neuf" HEAD -- docs/tickets/closed/)
+if [ -n "$retires" ]; then
+  git commit -q -m "docs(tickets): la copie ouverte d'un ticket que le lot ferme est retirée par la garde —$retires" -- $retires || { echo "ARRÊT : le commit qui retire les copies ouvertes a échoué"; revenir; exit 1; }
+  echo "copies ouvertes retirées dans le même push :$retires"
+fi
 git push -q origin HEAD:master || { echo "ARRÊT : push refusé"; revenir; exit 1; }
 git fetch -q origin master
 echo "== trois contrôles"
