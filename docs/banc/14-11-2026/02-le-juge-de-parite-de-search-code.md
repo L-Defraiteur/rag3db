@@ -122,6 +122,23 @@ d'avant les versions et la base migrée, puis entre chaque optimisation et le co
     `docs/banc/tickets/2026-11-14-un-symbol-que-plus-rien-ne-relie-reste-apres-le-retrait-de-son-fichier.md`
     (rétention voulue ou fuite, à décider).
 
+- **Le correctif du File** (`orphelins-pile-2` ff4ced00a contre 9d90edbb6, rejoué le 14 nov. à
+  23 h 34, même montage). Recherche donne la cause : le drain ne validait jamais au plein texte une
+  table qui ne fait que perdre des lignes, faute de `FlushNode` après `DeleteRecordNode` ; la
+  suppression restait en attente puis se perdait à la fermeture.
+
+  | étape | File au parent (documents / lignes) | File au lot |
+  |---|---|---|
+  | après l'index de la source entière | 7 811 / 7 608 (+203) | 7 608 / 7 608 (0) |
+  | après l'index sans `arbre.rs` | 7 608 / 7 607 (+1) | **7 607 / 7 607 (0)** |
+
+  - Scope, Symbol et Library sont inchangés des deux côtés. Les lignes du fichier retiré sont
+    effacées des deux côtés, et les 3 Symbol exclusifs restent (ticket à part) ;
+  - **les 30 cas sont VERTS au bit près** ;
+  - l'écart de 203 après l'index de la source entière disparaît lui aussi au lot. C'étaient les
+    suppressions déjà perdues du même défaut, celles de l'index qui avait fait passer la base de
+    79 662 à 84 211 Scope.
+
 ## 5. La tête de pile d'everything declarative (3a6bf34cd contre ac8644784)
 
 La pile porte deux résolutions de conflit dans `occurrence_mask_options`, face au court-circuit
