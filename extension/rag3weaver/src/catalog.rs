@@ -1391,6 +1391,35 @@ fn read_threads() -> u64 {
         self.fts_handles.get(table).cloned()
     }
 
+    /// Le handle plein texte ouvert d'une table, par le nom de sa table ou de
+    /// son index (`Scope` ou `Lucivy_Scope`).
+    fn fts_handle_nomme(&self, table: &str) -> Result<Arc<lucivy_core::sharded_handle::ShardedHandle>, String> {
+        let nom = table.strip_prefix(crate::fts_handle::INDEX_PREFIX).unwrap_or(table);
+        self.fts_handles.get(nom).cloned().ok_or_else(|| {
+            let mut connues: Vec<&String> = self.fts_handles.keys().collect();
+            connues.sort();
+            format!("pas d'index plein texte ouvert pour « {table} » (ouverts : {connues:?})")
+        })
+    }
+
+    /// Les documents vivants du plein texte d'une table et le jeton du même
+    /// lecteur (`fts_maintenance::live_ids`) : le premier temps d'une
+    /// maintenance, avant la lecture du graphe.
+    pub fn fts_live_ids(&self, table: &str) -> Result<(Vec<u64>, String), String> {
+        crate::fts_maintenance::live_ids(&self.fts_handle_nomme(table)?)
+    }
+
+    /// La purge et la compaction du plein texte d'une table
+    /// (`fts_maintenance::maintain`), refusée dans une transaction ouverte.
+    /// L'appelant tient le slot du backend en écriture : avec ce `&mut self`,
+    /// aucun écrivain de la table ne passe (voir `fts_maintenance`).
+    pub fn fts_maintain(&mut self, table: &str, demande: &crate::fts_maintenance::Demande) -> Result<serde_json::Value, String> {
+        if self.in_transaction {
+            return Err("une transaction est ouverte : la maintenance attend son COMMIT ou son ROLLBACK".into());
+        }
+        crate::fts_maintenance::maintain(&self.fts_handle_nomme(table)?, demande)
+    }
+
     /// Ouvre (ou crée) l'index FTS d'une table, en le mémorisant.
     ///
     /// **Paresseux par conception** : ouvrir un index adossé au BlobStore

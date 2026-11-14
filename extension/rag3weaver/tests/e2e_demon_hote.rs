@@ -898,3 +898,111 @@ fn un_service_revenu_apres_l_ouverture_est_repris() {
     host.shutdown();
     let _ = std::fs::remove_dir_all(d);
 }
+
+// ─── La maintenance du plein texte par l'hôte (14 novembre 2026) ─────────────
+//
+// `POST /backend/fts-live-ids` puis `POST /backend/maintain` (`fts_maintenance`) :
+// la purge d'une liste de `_node_id` et la compaction, refusée si la table a
+// changé depuis le relevé. L'ordre que l'appelant tient : d'abord le relevé (les
+// vivants et le jeton), ensuite la lecture du graphe, puis la maintenance.
+
+/// Le manifeste de `manifeste`, la fiche indexée en plein texte (`bm25`, sans
+/// vecteur : aucun service d'embarquement).
+fn manifeste_plein_texte(dir: &Path) -> PathBuf {
+    let chemin = manifeste(dir);
+    let mut m: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+    m["entities"]["Fiche"]["config"]["signals"] = json!(["bm25"]);
+    std::fs::write(&chemin, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    chemin
+}
+
+fn route(host: &DaemonHost, session: &str, chemin: &str, corps: Value) -> Value {
+    host.handle("POST", chemin, Some(session), &serde_json::to_vec(&corps).unwrap()).1
+}
+
+/// Les vivants et le jeton du plein texte de la fiche.
+fn releve(host: &DaemonHost, session: &str, manifest: &Path) -> (Vec<u64>, String) {
+    let r = route(host, session, "/backend/fts-live-ids", json!({"manifest": manifest, "table": "Fiche"}));
+    let r = ok(&r);
+    let ids = r["ids"].as_array().unwrap().iter().map(|x| x.as_u64().unwrap()).collect();
+    (ids, r["token"].as_str().unwrap().to_string())
+}
+
+fn maintain(host: &DaemonHost, session: &str, manifest: &Path, jeton: &str, purge: &[u64]) -> Value {
+    route(host, session, "/backend/maintain", json!({
+        "manifest": manifest, "table": "Fiche", "token": jeton, "purge_ids": purge, "compact": true, "max_purge_ratio": 1.0,
+    }))
+}
+
+#[test]
+#[ignore]
+fn la_maintenance_du_plein_texte_passe_par_l_hote_dans_l_ordre() {
+    let d = dossier("maintenance");
+    let m = manifeste_plein_texte(&d);
+    let host = DaemonHost::new();
+    let s = host.open_session("témoin", None, vec![], None);
+    ok(&host.open(Some(&s), &m));
+    for titre in ["une", "deux", "trois", "quatre"] {
+        ok(&put(&host, &s, &m, "put_fiche", titre));
+    }
+    let (vivants, jeton) = releve(&host, &s, &m);
+    assert_eq!(vivants.len(), 4, "[check: quatre-documents-vivants] {vivants:?}");
+    let report = maintain(&host, &s, &m, &jeton, &vivants[..2]);
+    let r = ok(&report);
+    assert_eq!((r["live_docs"].as_u64(), r["purged"].as_u64(), r["absent"].as_u64()), (Some(4), Some(2), Some(0)), "[check: purge-de-deux] {r}");
+    assert_eq!(r["after"]["deleted"], json!(0), "[check: la-compaction-rend-les-supprimes] {r}");
+    let (apres, _) = releve(&host, &s, &m);
+    assert_eq!(apres, vivants[2..].to_vec(), "[check: les-autres-restent]");
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
+#[ignore]
+fn un_document_pose_apres_le_releve_fait_refuser_la_maintenance() {
+    // Le cas 1 d'hotfixs : entre le relevé et la maintenance, une fiche neuve
+    // (un document, donc un commit) change le jeton ; rien n'est effacé.
+    let d = dossier("maintenance-refus");
+    let m = manifeste_plein_texte(&d);
+    let host = DaemonHost::new();
+    let s = host.open_session("témoin", None, vec![], None);
+    ok(&host.open(Some(&s), &m));
+    for titre in ["une", "deux"] {
+        ok(&put(&host, &s, &m, "put_fiche", titre));
+    }
+    let (vivants, jeton) = releve(&host, &s, &m);
+    ok(&put(&host, &s, &m, "put_fiche", "posee-apres-le-releve"));
+    let refus = maintain(&host, &s, &m, &jeton, &vivants);
+    assert_eq!(refus["ok"], json!(false), "[check: refusee-si-la-table-a-change] {refus}");
+    let erreur = refus["error"].as_str().unwrap_or("");
+    assert!(erreur.contains("a changé") && erreur.contains("3 documents vivants"), "[check: le-refus-dit-les-vivants] {erreur}");
+    let (apres, _) = releve(&host, &s, &m);
+    assert_eq!(apres.len(), 3, "[check: rien-n-est-efface]");
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
+#[ignore]
+fn le_mauvais_ordre_effacerait_un_vivant_c_est_la_regle_de_l_appelant() {
+    // Le cas 2 d'hotfixs, documenté comme interdit : le graphe lu AVANT le
+    // relevé. Une fiche posée entre les deux a son document parmi les vivants
+    // et sous le jeton ; l'appelant qui la croit orpheline la ferait effacer.
+    // La route ne peut pas le voir (la lecture du graphe ne passe pas par
+    // elle) : ce témoin dit pourquoi l'ordre est une règle.
+    let d = dossier("maintenance-ordre");
+    let m = manifeste_plein_texte(&d);
+    let host = DaemonHost::new();
+    let s = host.open_session("témoin", None, vec![], None);
+    ok(&host.open(Some(&s), &m));
+    ok(&put(&host, &s, &m, "put_fiche", "ancienne"));
+    let (graphe_lu_trop_tot, _) = releve(&host, &s, &m);
+    ok(&put(&host, &s, &m, "put_fiche", "neuve"));
+    let (vivants, jeton) = releve(&host, &s, &m);
+    let crue_orpheline: Vec<u64> = vivants.iter().copied().filter(|id| !graphe_lu_trop_tot.contains(id)).collect();
+    assert_eq!(crue_orpheline.len(), 1);
+    let r = maintain(&host, &s, &m, &jeton, &crue_orpheline);
+    assert_eq!(ok(&r)["purged"], json!(1), "[check: le-mauvais-ordre-efface-un-vivant] {r}");
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}
