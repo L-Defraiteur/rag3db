@@ -28,6 +28,10 @@ départage des comptes de Scope ».
 
 ## Les bases de Lucie (hotfixs, 14 novembre 2026)
 
+**Fait neuf : une seconde table est touchée.** Dans code-rag3db-depot, **124 documents File** n'ont plus
+de fichier dans le graphe. Le même chemin d'effacement oublie donc aussi le plein texte des File, pas
+seulement celui des Scope.
+
 C'est la même sonde, sur les quatre bases, toutes tables indexées. Pour chaque base : une copie
 fidèle neuve de l'instantané `avant-835d5298f`, pris par G hôtes arrêtés le 13 novembre (20 h 06 à
 luciepc, 20 h 07 au portable), avec la base, les extensions et le `.fts` ensemble. Le graphe est lu
