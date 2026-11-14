@@ -817,3 +817,28 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 - **Laya** (banc) : protocole sur master, modèle déjà à luciepc, jeu synthétique de 286 cas, CPU d'abord.
   **Hotfixs** : le pas « retrait de l'ancien index » en préparation sur copie. **ED** : le masque en
   prédicat écrit, trois témoins rouges puis verts, mesures en file.
+
+## 21 h 2x — un écart à luciepc dans la bascule ; les deux index d'une table de relations ne s'accordent plus
+
+- **Le contrôle des deux sens** sur l'instantané de **code-lourd** (état sous 0c41f9fe6) trouve un écart :
+  INHERITS_FROM 650/658 (1 d'un seul côté, 11 vues deux fois, 13 aux bouts différents), QUERIES 20 093
+  (5/6/9), LOCKS 544/546 (0/3/5) ; dix-neuf tables égales ; le portable sans écart. **Décision de c7 :
+  (b)**, la bascule continue sous 373b5477b dès que code-principal est contrôlé — l'écart est antérieur à
+  la lib neuve, petit, et de la famille que le correctif (a) vise ; revenir luciepc seul laisserait deux
+  libs. Nuance écrite dans la procédure : « un écart antérieur, petit, ticketé et de la famille corrigée ne
+  bloque pas ; la base se répare dans la fenêtre suivante ».
+- **La lecture d'hotfixs** change la nature du défaut : des relations d'identifiant 0 « vues deux fois »
+  (des cases à zéro dans un des deux index, souvent depuis le nœud 11:0), des identifiants consécutifs
+  (29:357 → 360) aux sources décalées d'un sens à l'autre — **les deux index d'une table de relations ne
+  s'accordent plus**, un décalage de CSR plutôt qu'une arête perdue. Une réparation par Cypher n'est pas
+  sûre ; hotfixs reconstruit les trois tables **sur copie** (relevé des deux sens, DROP/CREATE au même
+  schéma, repose des arêtes d'accord, les ~24 en désaccord redites par le code, contrôle égal sur 22
+  tables). Ticket moteur pour le cœur, après la fuite de la projection.
+- **G** : son contrôle des deux sens tournait hors du verrou (charge 13 à 17 pendant la mesure d'ED) ;
+  il passe sous `poste lourd` dans la procédure. **ED** : le prédicat ÷6 dense compris, filtré ×1,3 à ×1,74
+  de R, sans-filtre au court-circuit ; mémoire plate à 20 Gio (MALLOC_ARENA_MAX=2 en mesure), B à l'OOM :
+  deux tickets (c3f2ebd6b), rang 30. **Lucivy** : le dictionnaire est le vocabulaire (5,6 M entrées, 46 M
+  clés de suffixes), pas les segments ; les leviers changent ce que `contains` trouve — décision à Lucie,
+  pas ce soir ; la pièce 1 (la fusion lâche les ids morts) écrite. **Hotfixs** : le retrait de l'ancien
+  index répété vert sur copie (4,28 Go rendus, 8/8 identiques ; un DROP ne rend pas ses pages au disque :
+  ticket souhait) ; le piège du manifeste de copie qui pointe hors de la copie, en tête de sa page.
