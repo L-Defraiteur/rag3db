@@ -192,7 +192,8 @@ fn comptes_de_l_index(_hote: &DaemonHost, hosted: &Arc<super::Hosted>) -> (Optio
 /// branche, repris dans l'événement.
 pub(super) fn suivre_le_premier_index(hote: Weak<DaemonHost>, hosted: Arc<super::Hosted>, journal: PathBuf, quoi: Value, bornes: Bornes) {
     let nom = format!("index-suivi:{}", hosted.id);
-    let _ = std::thread::Builder::new().name(nom).spawn(move || {
+    let pour_l_hote = hote.clone();
+    let fil = std::thread::Builder::new().name(nom).spawn(move || {
         let debut = Instant::now();
         // Le plein texte prêt, quand le journal le dit (« plein texte prêt · vecteurs … ») :
         // la recherche par mots répond dès ce moment.
@@ -283,6 +284,12 @@ pub(super) fn suivre_le_premier_index(hote: Weak<DaemonHost>, hosted: Arc<super:
         h.ide_flux().publier("repos", &hosted.manifest.display().to_string(), e);
         h.publier_l_etat_de_l_hote();
     });
+    // Le fil se joint quand l'hôte se défait ; un hôte déjà parti ne garde rien.
+    if let (Ok(fil), Some(h)) = (fil, pour_l_hote.upgrade()) {
+        let mut suivis = h.suivis.lock().unwrap_or_else(|p| p.into_inner());
+        suivis.retain(|f| !f.is_finished());
+        suivis.push(fil);
+    }
 }
 
 /// Le chemin du journal dans le reçu d'`index`, où qu'il soit : la ligne
