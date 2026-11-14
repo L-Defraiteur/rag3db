@@ -150,13 +150,15 @@ static int playConcurrent(const std::string& databasePath, rag3db::main::SystemC
     }
     int lost = 0;
     int refused = 0;
+    int bCommits = 0;
     for (auto round = 0; round < 20; round++) {
         const auto from = 1'000'000 + round * 100'000;
         a.query("BEGIN TRANSACTION;");
         a.query("UNWIND range(" + std::to_string(from) + ", " + std::to_string(from + 59'999) +
                 ") AS i CREATE (:Note {id: i, s: 'a'});");
         b.query("BEGIN TRANSACTION;");
-        b.query("CREATE (:Note {id: " + std::to_string(round) + "00, s: 'b'});");
+        const auto bKey = std::to_string(5'000'000 + round);
+        b.query("CREATE (:Note {id: " + bKey + ", s: 'b'});");
         auto failures = std::make_shared<int>(1);
         CutFileSystem::failSyncOf() = [failures](const std::string& path) {
             return path.ends_with(".wal") && (*failures)-- > 0;
@@ -173,15 +175,17 @@ static int playConcurrent(const std::string& databasePath, rag3db::main::SystemC
         const auto seen = r->isSuccess() && r->hasNext() ?
                               r->getNext()->getValue(0)->getValue<int64_t>() :
                               -1;
-        auto key = b.query("MATCH (n:Note {id: " + std::to_string(round) + "00}) RETURN count(n);");
+        auto key = b.query("MATCH (n:Note {id: " + bKey + "}) RETURN count(n);");
         const auto byKey = key->isSuccess() && key->hasNext() ?
                                key->getNext()->getValue(0)->getValue<int64_t>() :
                                -1;
-        const auto expected = round + 1 - lost;
-        if (bCommitted && (seen != expected || byKey != 1)) {
+        bCommits += bCommitted ? 1 : 0;
+        // Les lignes de B validées jusqu'ici : toutes doivent rester, et celle de ce tour se
+        // retrouver par sa clé.
+        if (bCommitted && (seen != bCommits || byKey != 1)) {
             steps << "ROUND " << round << " A " << (aRefused ? "refused" : "accepted")
-                  << " B committed, B rows by scan " << seen << " (expected " << expected
-                  << "), by key " << byKey << std::endl;
+                  << ", B committed : B rows by scan " << seen << " for " << bCommits
+                  << " committed, this one by key " << byKey << std::endl;
             lost++;
         }
         if (!bCommitted) {
@@ -189,6 +193,7 @@ static int playConcurrent(const std::string& databasePath, rag3db::main::SystemC
         }
     }
     steps << "REFUSED-A " << refused << std::endl;
+    steps << "B-COMMITS " << bCommits << std::endl;
     steps << "LOST " << lost << std::endl;
     return lost;
 }
