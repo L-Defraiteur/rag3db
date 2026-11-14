@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 14 novembre2026 — Sous mosh, qui ne garde aucun historique au-delà de l'écran, le terminal de l'agent ouvre de lui-même un journal de la séance en texte brut, et dit dans sa zone vivante la commande qui le relit (`less <journal>`) ; `--journal <fichier>` fait de même partout. Rien à installer ni à régler ; les journaux de plus de sept jours partent d'eux-mêmes. Rouge puis vert sous mosh par le harnais, la latence inchangée (47 ms).
+
 - 14 novembre2026 — Le terminal de l'agent se tient sous tmux et sous mosh sans rien exiger : affichage de 14 à 48 ms en médiane, écho de 0,3 à 17 ms, couleurs des cinq thèmes justes (tmux les ramène en 256 quand il le faut), position du curseur rendue par le multiplexeur. Seule dégradation corrigée : Échap attend 500 ms sous tmux, Ctrl-G arrête désormais sans délai ; l'historique perdu sous mosh a son ticket.
 
 - 13 novembre2026 — Le terminal de l'agent est mesuré à travers ssh, dans les deux sens entre deux machines : environ 47 ms de l'hôte à l'écran, 11 à 20 ms pour l'écho d'une frappe, 3 Ko/s pendant un pas, le redimensionnement, les touches et les couleurs des cinq thèmes vérifiés. La mesure a trouvé un vrai défaut : sans réponse du terminal à la position du curseur, la vue paniquait ; elle passe maintenant en texte brut en le disant (`ec4f7aa6d`).
