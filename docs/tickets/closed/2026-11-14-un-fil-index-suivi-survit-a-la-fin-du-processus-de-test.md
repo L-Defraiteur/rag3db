@@ -1,6 +1,6 @@
 # Un fil index-suivi survit à la fin du processus de test
 
-- **État** : ouvert (14 novembre 2026, relevé par archi, lu par hotfixs)
+- **État** : corrigé (14 novembre 2026), lot `index-suivi-joint` d'archi ; relevé par archi, lu par hotfixs
 - **Famille** : produit
 - **Gravité** : plantage à la sortie (SIGSEGV du processus de test, une fois que tous ses tests ont
   passé). Un passage vert peut finir en rouge par sa seule fin.
@@ -61,3 +61,11 @@ dont les droits ont été retirés, d'où le `SEGV_ACCERR` sur une adresse hors 
 2. Le correctif : le fil garde son `JoinHandle`, et l'hôte ou le test le joint ou l'arrête avant de se
    défaire (un drapeau d'arrêt lu entre deux lectures du journal). Le fil peut aussi ne tenir qu'un
    `Weak<Hosted>`.
+
+## Ce qui l'a fermé
+
+`suivre_le_premier_index` garde le `JoinHandle` de son fil dans l'hôte (`DaemonHost::suivis`, les
+fils finis élagués à chaque ajout), et le `Drop` de `DaemonHost` les joint : chaque suiveur voit
+l'hôte parti à son tour suivant (250 ms au plus) et rend son backend avant que `drop` ne rende la
+main. Un suiveur qui rend lui-même le dernier `Arc` de l'hôte (en publiant) ne se joint pas lui-même.
+Témoin : `daemon_host::worktrees::tests::the_index_follower_ends_with_its_host`.
