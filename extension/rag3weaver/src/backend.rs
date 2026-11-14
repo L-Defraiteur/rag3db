@@ -6512,12 +6512,14 @@ mod tests {
     /// des deux copies n'est visible ; les outils de lecture rendent donc, au caractère près, ce
     /// qu'ils rendaient avant. Les arêtes elles-mêmes n'ont pas de prédicat avant 2a′-2 : la copie
     /// d'une arête n'est atteinte que par son bout recopié, que le prédicat du nœud écarte.
+    /// `outline` n'y est pas : son plan ne se charge pas dans ce gabarit, qui ne déclare pas `Scope`
+    /// au chargement du manifeste ; il passe par `run_read_plan`, que le témoin 4 tient.
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     #[test]
     fn une_generation_invisible_ne_change_aucune_reponse_des_outils() {
         use crate::connection::{CypherValue, QueryParam};
         let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools");
-        let graphes = ["read.mmd", "list.mmd", "grep.mmd", "usages.mmd", "impact.mmd", "callees.mmd", "outline.mmd", "search_workspace.mmd"];
+        let graphes = ["read.mmd", "list.mmd", "grep.mmd", "usages.mmd", "impact.mmd", "callees.mmd", "search_workspace.mmd"];
         let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
             for (outil, graphe) in [
                 ("list_files", "list.mmd"),
@@ -6525,7 +6527,6 @@ mod tests {
                 ("usages", "usages.mmd"),
                 ("impact", "impact.mmd"),
                 ("callees", "callees.mmd"),
-                ("outline", "outline.mmd"),
                 ("read_file", "read.mmd"),
             ] {
                 m["tools"][outil] = json!({"graph": graphe, "policy": {"read_files": true}});
@@ -6553,7 +6554,6 @@ mod tests {
             ("usages", json!({"name": "depart", "format": "json"})),
             ("impact", json!({"name": "depart", "format": "json"})),
             ("callees", json!({"name": "main", "format": "json"})),
-            ("outline", json!({"path": "outils.rs", "format": "json"})),
             ("search_code", json!({"query": "depart"})),
         ];
         let reponses = || -> Vec<String> {
