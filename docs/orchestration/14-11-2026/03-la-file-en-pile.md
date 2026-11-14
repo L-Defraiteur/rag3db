@@ -180,3 +180,13 @@ la même base avant 1b — et sur A ; B et C sans filtre ; 10 requêtes × 5) ti
   python.toml`, 297 noms de la stdlib 3.14.9, défaut compilé, dossier remplaçable par langue).
 - **Banc** : le juge de parité de `search_code` pour 2a′-2 (jeu commun avec ED, `_uuid`, ordre aux
   10 premiers entre R et la base migrée, au bit près entre la base migrée et chaque optimisation).
+
+## La mesure a parlé (18 h 0x) ; la chaîne de la pile reprend
+
+Lexical ×8 sur une base à versions (874 → 6 928 ms par search_code sans filtre ; par chemin ×8,7, par
+langage ×6 : le filtre réduit sans contourner) ; le drapeau ajouterait 1,2 s ; la piste est le
+`allowed_ids` de 72 652 uuid passé à lucivy à chaque requête — la **vue lucivy nommée** par (couche,
+rang) est le lot. Le poste est libre : la chaîne reprend, chacun dit sa tête au suivant — recherche
+(CI, PILE_AVANT=96f06eb87) → cœur (27cfe33a8, PILE_AVANT=34271fc37, à son juge) → tty-7 (reposé sur
+27cfe33a8) → mineurs → clients (archi) → garde-pile-2 (G) → import pointé (codeparsers) → exclusions
+(recherche) → activations (embarquement) → 1b (arbre principal) → fils du moteur (G).

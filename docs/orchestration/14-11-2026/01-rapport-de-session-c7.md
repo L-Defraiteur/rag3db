@@ -490,3 +490,29 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   (banc) ; le drop-in d'enveloppe pour l'hôte (page 03 d'optimiseur : cinq pools du moteur à 32 fils,
   le poids protège l'écran) ; soixante copies `check-lib.conf.avant-*` à effacer.
 - Faute de c7 : une heure de section écrite sans la lire (« 17 h 5x » à 17 h 44), corrigée.
+
+## 18 h 0x — la mesure a parlé : le lexical fait ×8 sur une base à versions
+
+- **La mesure unique d'ED** (R = la même base avant 1b, A = à versions ; 10 requêtes × 5 tours ;
+  durées par nœud lues sur NodeRun ; arrêtée de l'extérieur à 18 h 03 min 47 s pendant B, cause
+  demandée à G) : sans filtre **965 ms → 7 032 ms**, dont le nœud lexical **874 → 6 928 ms** ; par
+  chemin (12,4 %) 247 → 2 154 ; par langage (8,1 %) 229 → 1 371 : **le filtre réduit sans contourner**.
+  Les autres étages pèsent pareil des deux côtés (resolve ~50 ms, crochet links 30 → 47, fusion ~0).
+  Le drapeau de la clause ajouterait 1,2 s (racines par la clause 1 198 ms contre 19) : la forme de
+  repli par (couche, rang) est acquise. Migration 18 ms. Le dense à 0 ms en R est à vérifier (R n'est
+  référence que pour le lexical).
+- **La piste** : le masque des versions passe à lucivy un `allowed_ids` de 72 652 uuid **à chaque
+  requête**, puis sa résolution en offsets. C'est la question de Lucie du matin (« lucivy elle-même
+  peut pas permettre ces vues filtrées ? ») : **une vue lucivy nommée**, l'ensemble admis posé une
+  fois par (couche, rang) à la publication (bitset côté lucivy), citée par son nom, invalidée à la
+  génération suivante. ED départage l'intérieur du nœud ; lucivy mesure `allowed_ids` à 72 652
+  contre une vue préposée ; banc tient la parité des réponses.
+- **Le poste libéré** : la chaîne de la pile reprend — recherche (CI) → cœur (juge) → tty-7 (sur
+  27cfe33a8) → mineurs → clients (archi) → garde-pile (G) → import pointé (codeparsers) →
+  exclusions (recherche) → activations (embarquement, vrai jeu sur 7971/7891 en parallèle) → 1b
+  (arbre principal) → fils du moteur (G) ; chacun dit sa tête au suivant. La fenêtre de 96 (journal
+  des chantiers) s'ouvre avec G. Hotfixs joue le témoin des arêtes en double au portable.
+- **Décidé** : l'ancien index (`Scope_Chunk`, `Scope_CHUNKED_FROM`, `Lucivy_Scope` 4,0 Gio contre
+  1,2 pour `Lucivy_ScopeContent`) reste après 1b pour le retour, plus lu par le produit ; un pas
+  « retrait » à part, après la bascule et une validation (durée à Lucie), rend ~5 Go par base et
+  emporte les 2 205 arêtes en double. Codeparsers : règles d'import Python en données vertes (302/0).
