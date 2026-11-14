@@ -170,6 +170,12 @@ Preuves : `~/.cache/rag3weaver-build/validations/validation-pvke9lb1`.
   et les vagues sont sept pour onze instantanés d'`app.js` entre le 7 et le 13 novembre. Le reste de la
   chasse demande l'hôte (journaux, drains concurrents, reprises), pas un test de plus sur ce chemin.
 
+## La piste fermée (c7, 14 novembre, 19 h 20)
+
+**Cause non reproduite par le code d'aujourd'hui ; les trois pistes restantes passent par les journaux
+de l'hôte ; sans valeur puisque l'index part.** La chasse s'arrête là : pas de fouille des journaux.
+Le ticket reste ouvert jusqu'au retrait de l'ancien index, qui efface les doublons existants.
+
 ## Ce qu'il faut pour le fermer (réponse d'arbre principal, 14 novembre)
 
 - **Les doublons existants partent avec l'ancien index.** Après 1b, `Scope_Chunk`, `Scope_CHUNKED_FROM`
