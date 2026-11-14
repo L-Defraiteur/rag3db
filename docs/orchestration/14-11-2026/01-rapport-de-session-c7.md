@@ -516,3 +516,29 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   1,2 pour `Lucivy_ScopeContent`) reste après 1b pour le retour, plus lu par le produit ; un pas
   « retrait » à part, après la bascule et une validation (durée à Lucie), rend ~5 Go par base et
   emporte les 2 205 arêtes en double. Codeparsers : règles d'import Python en données vertes (302/0).
+
+## 18 h 2x — douze atterris ; le ×8 départagé ; le correctif (a) sur master, la lib d'après en bâti
+
+- **Atterris par la pile** : la ligne pour la CI (recherche, a646bf215 : `try_update`, la CI se rejoue
+  dessus) et **le correctif (a) de la perte de Note** (cœur, 373b5477b, juge known_red vert à 18 h 17,
+  RefusedCommitRollback 3/3 rouge → 5/5 vert, DdlEveryMinute 3/10 → 0/10 ; SingleWriterCrash n'était pas
+  son témoin et le dit). Douze lots, zéro rejeu au dernier pas. **G bâtit la lib d'après à 373b5477b**
+  (lancé 18 h 20 min 53 s ; ABI déclarée par le cœur : deux membres privés non virtuels de plus dans
+  transaction_manager.h, rien d'autre) et basculera par la procédure sans attendre Lucie, après 96.
+- **Le ×8 de la recherche à versions, départagé** : ED, à l'intérieur du nœud lexical — racines 20 ms,
+  masque 902 ms, **résolution de `_uuid IN [72 652]` en offsets côté moteur 5 001 ms**, lucivy ~1 s ;
+  lucivy, de son côté : son filtre coûte **6 à 10 ms** par requête, mêmes hits (hors de cause, page
+  cebda6144) ; arbre principal, par le binaire du produit sur la copie migrée : 7,5 s en bm25, 25 s en
+  bm25+vector (réponses justes, 21/24 mêmes premiers). Le masque se calcule deux fois par appel
+  (lexical et dense). **Partage** : arbre principal, le court-circuit « sans filtre ni vue, rien à
+  masquer » (lot à part, témoin qui borne les lignes lues, **avant 1b** ; la bascule des vraies bases
+  attend) ; ED, la fuite de RSS et la vue publiée par (couche, rang) pour le cas filtré ou sous vue ;
+  un ticket moteur pour les 5 s de l'`IN` ; banc, la parité ; lucivy, pas de vue maintenant.
+- **Un second défaut** : la mesure d'ED n'a pas été arrêtée par quelqu'un — l'oom-killer de sa portée
+  (`POSTE_MEM_MAX=32G`) a tué la sonde à 33 Gio de RSS après ~250 search_code sur la base à versions
+  (la référence a tenu). Pente par appel à mesurer ; ticket à la courbe ; pas de 40G avant de savoir.
+- **La chaîne** : tty-7 (cce8970af, à toi à son vert) → mineurs (c14a389c4) → clients (a4936c7a3) →
+  garde-pile-2 (40f6b63a5, relue par recherche ; « un dossier de journaux neuf par passe » en
+  procédure) → import pointé (9b4d82175, passe en cours) → exclusions → activations → sans-filtre →
+  1b → fils du moteur (rouge « 24 » lu, vert lu). Mémoire fermée 18 h 20 → ~18 h 50 (96, journal des
+  chantiers, instantané avant-chantiers-14-nov-2).
