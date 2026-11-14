@@ -251,3 +251,9 @@ des fichiers composés à l'arrêt du miroir (96, 27f5c21a1), qui relit la base 
 que l'hôte lâche ; contre-essai avec/sans par 96, bissection par archi (2a1f52c21..42c84cb77, cinq pas).
 Règle tenue : **aucun lot ne pousse avec un rouge qu'on ne comprend pas** ; les lots dont les passes ne
 jouent pas cette suite continuent, le coupable corrige en tête de pile.
+
+**19 h 5x — le rouge date d'avant la pile** : archi a rejoué sa borne, le test est rouge dès 2a1f52c21
+(15 h 12), et le dernier vert archivé est du 13 novembre à 8 h 01 sous la lib 29a7bc52a ; 96 et recherche
+sont hors de cause. Deux jeux croisés tranchent lib contre Rust (2a1f52c21 sous 29a7bc52a ; 4f6f80ef4 sous
+0c41f9fe6). Leçon : le verdict d'une bascule ne jouait pas e2e_demon_hote ; il y entre. La pile reprend ses
+pushs : le rouge n'est à aucun lot de ce soir.
