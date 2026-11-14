@@ -383,3 +383,31 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   tour ; le lot 3 (les about), empilé, suit s'il est vert.
 - **hotfixs** : le témoin du dictionnaire (chaine-au-point-de-reprise-2, 9ded42107) vert en Release
   sur la tête rebasée, en file après 96.
+
+## 16 h 1x — la file passe en pile, et son premier atterrissage
+
+- **Lucie** : « rien de commençable en parallèle, même si invalidable de suite ? si on définit des
+  contrats ça peut se faire non ? ». Oui : la file est devenue une **pile** (page 03 du jour) —
+  chacun rebase son lot sur la tête du lot d'avant, tous rejouent en même temps, les hashes sont
+  figés, et au « à toi » rien ne se rejoue si tout a atterri comme prévu. Dix lots étaient en file ;
+  en vingt minutes, neuf têtes de pile sont publiées (lucivy → tty → recherche → G → embarquement →
+  96 → hotfixs → ED ; archi attend ED), et les rejeux tournent, quatre lourds à luciepc.
+- **La garde ne savait pas la pile** (vu par recherche) : après `rebase --onto`, HEAD ne descend
+  plus du commit testé, et la base du rejeu ferait voir le code des lots d'avant. G écrit le mode
+  `PILE_AVANT` en lot à part (rang 11 ; sa tête de pile était déjà la base d'embarquement), posé
+  d'abord dans la copie du cache, qui fait autorité.
+- **lucivy a poussé 4.3.7 (c99b2f05e)**, premier atterrissage de la pile, contenu identique à la base
+  testée cd6d02907 ; tty peut suivre. Leçon : un push refusé laissait le worktree rebasé.
+- **codeparsers** : la conception « du nom importé au paquet » est sur master (cb74f585c) ; forme
+  validée (TOML pour les fichiers de règles de codeparsers, JSON pour la table déclarée du manifeste
+  rag3weaver ; défaut compilé plus dossier remplaçable par langue entière ; table dans le manifeste
+  du backend, un fichier du dépôt indexé en ticket). Lucie : « et alias aussi non ? » — deux sortes,
+  l'alias du nom lié qui ne change pas la provenance, et l'alias de résolution (tsconfig paths,
+  vite/webpack, go.mod replace, Cargo package=/patch, PSR-4) lu dans les configs du dépôt, avant la
+  règle par le nom. Le lot 1 (import pointé) entre au rang 12 à son vert.
+- **arbre principal** : 1b par lots sur la copie — la dérivation passe (40 lots, 179 s, RSS 2,3 →
+  11,7 Gio puis stable), le transfert meurt au lot 42 000 / 72 652 sur « buffer pool is full » (8 Gio),
+  après 61 transactions validées sans point de reprise explicite : ticket moteur à la relance avec
+  `CHECKPOINT` par lot, qui départage « pages validées non évincées » de « la jointure du transfert ».
+- **hotfixs** : le témoin du dictionnaire ne reproduit pas le plantage (vert 4/4 sous ASAN) ; l'ADD
+  COLUMN sous écriture ouverte en ticket moteur ; le cœur donne son verdict vers 17 h 15.

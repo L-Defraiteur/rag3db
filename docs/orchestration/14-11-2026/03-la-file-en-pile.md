@@ -40,14 +40,14 @@ l'autre, dix fois de suite, même sans rouge.
 
 | rang | session | lot | branche | tête testée |
 |---|---|---|---|---|
-| 1 | lucivy | montée 4.3.7 | lucivy-4-3-7-4 | cd6d02907, rebasée sur aa953c8f6 : la base de la pile (rejeu court en cours à luciepc) |
+| 1 | lucivy | montée 4.3.7 | lucivy-4-3-7-4 | cd6d02907, la base de la pile — **atterri** à 16 h 16, master c99b2f05e, contenu identique |
 | 2 | tty | tty-6 (tmux/mosh mesurés) | cx-tty-6-2 → cx-tty-6-pile | 4583eff8e → pile 7ac2c13d9 sur cd6d02907 |
 | 3 | recherche | surveillant, puis plafond d'instantané | surveillant-2, plafond-d-instantane → recherche-pile | a36f707dd, 9b7ff76e8 → pile 2c3bc3eb7 sur 7ac2c13d9 |
 | 4 | G | cas 6c du poste (trap avant la CI) | tenant-signal → tenant-signal-pile | ab7c44fb5 → pile c93f73f06 sur 2c3bc3eb7 |
 | 5 | embarquement | reprise après plantage | reprise-apres-plantage → reprise-apres-plantage-pile | 17afd3820 → pile 512b5e420 sur c93f73f06 (conflit de docs/nouveautes.md résolu) |
 | 6 | 96 | miroir, nom exact, about | lot-96-pile (miroir 48445fdeb, nomex bff4ea79f, about 84f949d2c) | pile 84f949d2c sur 512b5e420 |
 | 7 | hotfixs | témoin du dictionnaire (C++ test seul) | chaine-au-point-de-reprise-2 → chaine-au-point-de-reprise-pile | 9ded42107 → pile cabcc8640 sur 84f949d2c |
-| 8 | ED | 2a′-1 (générations de l'ancre) | generations-de-l-ancre-3 | 9b0620f66 (check_features corrigé ; passe en cours) |
+| 8 | ED | 2a′-1 (générations de l'ancre) | generations-de-l-ancre-3 → generations-de-l-ancre-pile | 9b0620f66 → pile c22fdbf31 sur cabcc8640 (19 commits) |
 | 9 | archi | jauge du contexte (+ quatre mineurs s'ils sont verts) | jauge-ce-qui-pese-3 | 5ad3c990e |
 | 10 | cœur | correctif (a) perte de Note | annulation-garde-les-autres-2 | 9b0e73c9c, à son juge vert |
 | 11 | G | la garde apprend la pile | garde-pile | à venir (la copie du cache la porte avant master) |
@@ -68,3 +68,12 @@ rebase), un `>` toléré s'il ne touche que des `.md` ; (b) `<avant>` ancêtre d
 recopie au cache des deux postes au mot de c7, avant le dernier pas de tty, le premier de la pile.
 La copie du cache fait autorité et n'attend pas master : entre la recopie et le rang 11, `--derive`
 dit « garde en retard sur le dépôt » sur les pushs de la pile, c'est attendu et ce n'est pas un arrêt.
+
+## Premier atterrissage (16 h 16) et une leçon de la garde
+
+lucivy a poussé c99b2f05e : ses trois commits de cd6d02907 rebasés par la garde sur abe3ff1e7,
+contenu identique, « rien de code » entre la base testée et master. La pile tient : tty rejoue sur
+cd6d02907. Deux aléas au push : un premier essai refusé « fetch first » (master avait bougé entre la
+relecture et le push) a laissé le worktree rebasé, et le second essai s'est arrêté sur « HEAD ne
+descend pas du commit testé » ; remis sur la tête testée par `checkout --detach`, le troisième est
+passé. **À faire dans garde-pile** : un push refusé remet le worktree sur la tête testée.
