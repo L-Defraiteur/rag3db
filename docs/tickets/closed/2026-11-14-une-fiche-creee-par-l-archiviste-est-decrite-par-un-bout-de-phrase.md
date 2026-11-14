@@ -32,7 +32,7 @@ commence par une liste numérotée, une date ou un mot d'accord donnait « 1. »
 `e2e_archiviste::une_fiche_creee_porte_une_phrase_qui_dit_son_sujet` : deux sections créent chacune
 une fiche.
 
-- La première reçoit du modèle une phrase de onze mots, qu'elle prend telle quelle (sans le
+- La première reçoit du modèle une phrase de douze mots, qu’elle prend telle quelle (sans le
   correctif, « 1. »).
 - La seconde reçoit « Accepté par c7. », écarté, et prend la phrase suivante de sa section.
 
