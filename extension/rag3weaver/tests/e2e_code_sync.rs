@@ -107,11 +107,13 @@ fn source_a_trois_fichiers() -> Vec<(String, String)> {
 #[ignore]
 fn les_exclusions_du_manifeste_ecartent_le_minifie_et_le_trop_gros_et_le_disent() {
     let workspace: rag3weaver::backend_code::WorkspaceConfig = serde_json::from_value(serde_json::json!({
+        "source": "snapshot",
+        "root": "workspace",
         "index": "code",
         "index_exclude": {"minified_line_max_bytes": 5000, "code_file_max_bytes": 1048576}
     }))
     .expect("le manifeste déclare ses exclusions sous workspace.index_exclude");
-    let options = SourceSyncOptions { generated: workspace.generated.clone(), ..Default::default() };
+    let options = SourceSyncOptions { generated: workspace.index_gate(), ..Default::default() };
     let mut catalog = catalogue();
     let mut source = source_a_trois_fichiers();
     // Un bundle d'une ligne de 12 000 octets.
