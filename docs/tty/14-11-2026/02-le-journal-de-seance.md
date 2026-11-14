@@ -29,6 +29,7 @@ Le harnais `extension/rag3weaver/tty/mesures/mesure.py` gagne deux séances :
 | `mesures/mosh-rouge-avant-journal.json` | tty-6 (`ce4a3140a`) | ROUGE : `--journal` refusé, aucun journal, rien de dit, aucun journal ouvert de lui-même |
 | `mesures/mosh-journal.json` | tty-7 | VERT : 0 mot manquant dans les deux journaux, la commande dite, un journal neuf |
 | `mesures/ssh-journal.json` (ssh seul) | tty-7 | VERT : journal complet, rien ne parle de mosh |
+| `mesures/mosh-journal-range.json` | tty-7, avec le rangement | VERT ; le dossier d'état de luciepc est vide après la passe |
 
 Les autres séances du harnais (touches, redimensionnement, couleurs des cinq thèmes) restent vertes sous les deux lanceurs.
 
