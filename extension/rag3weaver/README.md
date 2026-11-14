@@ -202,6 +202,11 @@ source, version and date). Dependencies come from the repository's manifests —
 name declared in `package.json` does not make a Python or Rust import a dependency.
 Go module paths keep their case, and `go.mod` `replace` directives are followed
 (a module replaced by a local path belongs to the project).
+A Python distribution whose module has another name (`PyYAML` → `yaml`,
+`scikit-learn` → `sklearn`) is matched through a shipped table; a repository
+declares its own in the manifest, per language, completing or replacing it:
+`workspace.imports: { python: { replace: false, distributions: { "my-package": ["my_module"] } } }`
+(requires `index: "code"`; a language without import rules is refused by name).
 
 ## Shared indexed content
 

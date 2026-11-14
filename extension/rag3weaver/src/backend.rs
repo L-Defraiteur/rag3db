@@ -1136,6 +1136,24 @@ impl PreparedBackend {
             // **Les signaux montés sur le schéma nommé se valident ici, dans
             // les deux sens** : un signal qui demande un modèle refuse sans
             // lui, et un modèle que rien ne lit refuse aussi.
+            if !w.imports.is_empty() {
+                if w.index.as_deref() != Some("code") {
+                    return Err("workspace.imports sans workspace.index = \"code\" : les renommages se lisent \
+                         à l'ingestion du code — une déclaration que rien ne lit"
+                        .to_string());
+                }
+                // Une langue que les règles d'import ne connaissent pas se refuse en la nommant.
+                #[cfg(feature = "code")]
+                {
+                    let connues = codeparsers::import_resolution::regles::Regles::partagees(None).langues();
+                    if let Some(l) = w.imports.keys().find(|l| !connues.contains(l)) {
+                        return Err(format!(
+                            "workspace.imports : langue « {l} » inconnue — les langues qui ont des règles d'import : {}",
+                            connues.join(", ")
+                        ));
+                    }
+                }
+            }
             if !w.locks_via.is_empty() && w.index.as_deref() != Some("code") {
                 return Err("workspace.locks_via sans workspace.index = \"code\" : les fonctions de \
                      verrou se lisent à l'ingestion du code — une déclaration que rien ne lit"
@@ -8366,6 +8384,41 @@ mod tests {
         let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &patch);
         let p = p.expect("déclarées avec le schéma de code");
         assert_eq!(p.manifest.workspace.as_ref().unwrap().locks_via, vec!["acquireLock", "lockRowForWrite"]);
+    }
+
+    /// **Les renommages déclarés** (`workspace.imports`) : sans `index: "code"`, refusés ; une langue sans
+    /// règles d'import, refusée en la nommant ; une langue connue, lue telle quelle.
+    #[cfg(feature = "code")]
+    #[test]
+    fn imports_exige_le_schema_de_code_et_une_langue_connue() {
+        let renommages = json!({ "python": { "distributions": { "mon-paquet": ["mon_module"] } } });
+        let r = renommages.clone();
+        let patch = move |m: &mut Value| {
+            m["workspace"]["imports"] = r.clone();
+        };
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &patch);
+        let e = p.err().unwrap();
+        assert!(e.contains("workspace.imports"), "{e}");
+
+        let patch = |m: &mut Value| {
+            m["workspace"]["index"] = json!("code");
+            m["workspace"]["imports"] = json!({ "cobol": { "distributions": {} } });
+        };
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &patch);
+        let e = p.err().unwrap();
+        assert!(e.contains("« cobol »") && e.contains("python"), "{e}");
+
+        let r = renommages.clone();
+        let patch = move |m: &mut Value| {
+            m["workspace"]["index"] = json!("code");
+            m["workspace"]["imports"] = r.clone();
+        };
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &patch);
+        let p = p.expect("une langue connue se charge");
+        let w = p.manifest.workspace.as_ref().unwrap();
+        assert_eq!(w.imports["python"].distributions["mon-paquet"], vec!["mon_module"]);
+        assert!(!w.imports["python"].replace);
+        assert_eq!(w.index_gate().imports, w.imports, "la porte de l'index les porte jusqu'à la synchronisation");
     }
 
     /// **`models.embed` et `embeddings` disent la même chose** : l'une ou

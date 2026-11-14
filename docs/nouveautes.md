@@ -27,6 +27,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **14 nov. — `import yaml` se reconnaît dans `PyYAML`.** Un nom de distribution Python qui n'est pas celui
+  de son module (PyYAML → yaml, scikit-learn → sklearn, Pillow → PIL, beautifulsoup4 → bs4…) se relie
+  désormais par une table livrée de 1 094 distributions (tirée de pipreqs, sa source et sa date en tête).
+  Un dépôt déclare les siens dans son manifeste (`workspace.imports: { python: { distributions:
+  { "mon-paquet": ["mon_module"] } } }`), qui complètent la table ou la remplacent (`replace: true`) ;
+  une langue sans règles d'import est refusée en la nommant (codeparsers `85fe233`).
 - **14 nov. — Un import se juge aux manifestes de sa langue, et Go garde sa casse.** Chaque manifeste
   range ses noms sous la langue qu'il décrit, et `go.mod` se lit (le module, ses `require`, ses `replace`
   suivis : un module remplacé par `../local` est du projet). Un chemin Go garde sa casse et ses tirets

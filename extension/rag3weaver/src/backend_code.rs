@@ -146,6 +146,12 @@ pub struct WorkspaceConfig {
     /// gabarit de code porte les seuils par défaut.
     #[serde(default)]
     pub index_exclude: crate::exclusion::ExclusionPolicy,
+    /// **Les noms importés d'un dépôt qui ne sont pas ceux de leur distribution**, par langue
+    /// (`imports: { python: { replace: false, distributions: { "mon-paquet": ["mon_module"] } } }`) :
+    /// ils complètent la table livrée de la langue, ou la remplacent si `replace`. Une langue sans
+    /// règles d'import est refusée au chargement. Exige `index: "code"`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub imports: std::collections::BTreeMap<String, crate::manifestes::Renommages>,
     /// **Les fonctions de verrou applicatives de ce dépôt** (le gestionnaire
     /// de verrous d'une transaction : `["acquireLock", "lockRowForWrite"]`) :
     /// un scope qui en appelle une la verrouille — la relation LOCKS vers le
@@ -169,6 +175,7 @@ impl WorkspaceConfig {
     pub fn index_gate(&self) -> crate::generated::GeneratedPolicy {
         let mut porte = self.generated.clone();
         porte.index_exclude = self.index_exclude.clone();
+        porte.imports = self.imports.clone();
         porte
     }
 }
@@ -881,6 +888,7 @@ mod tests {
             index: Some("code".into()),
             generated: Default::default(),
             index_exclude: Default::default(),
+            imports: Default::default(),
             locks_via: Vec::new(),
             queries_via: None,
             scripts: Vec::new(),
