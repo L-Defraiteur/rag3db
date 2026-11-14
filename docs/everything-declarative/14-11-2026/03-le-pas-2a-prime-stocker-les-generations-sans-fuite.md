@@ -269,6 +269,11 @@ n'ajoute pas de clause. La latence de `search_code` sans filtre ne bouge donc pa
 pose une seconde génération appelle `Catalog::marquer_des_lignes_invisibles` (2a′-2), et la clause
 s'impose alors à tous.
 
+**La mesure avant le drapeau** (condition de c7, 14 novembre 2026) : sans filtre, la clause fait
+résoudre tous les offsets visibles de `Scope` à chaque `search_code`. Ce coût **se mesure dans 2a′-2,
+sur la base de code-lourd (une copie), avant** que `marquer_des_lignes_invisibles` impose la clause.
+C'est une mesure du lot, et le lot ne pose pas le drapeau sans elle.
+
 **Les témoins** :
 - 4 (`code::tests_des_generations`) : rouge sur 7072aa733 (`Cannot find property _couche`), vert ;
 - l'entité `Generation` : rouge sur ee8b4aab4 (`Table _generation does not exist`), vert ;
@@ -278,8 +283,11 @@ s'impose alors à tous.
   - **Le rouge** (branche `temoin-0-rouge`, le noyau seul sans les lecteurs un par un) : trois
     réponses changent, `read_file` sur deux fichiers et `search_code`.
   - **Le vert** : avec les lecteurs bornés.
-  - `outline` n'y est pas, parce que son plan ne se charge pas dans ce gabarit. Il passe par
-    `run_read_plan`, que le témoin 4 tient.
+  - **Un lecteur hors du témoin de non-fuite : `outline`.** Son plan
+    (`@builtin:backends/code/plans/outline.json`) ne se charge pas dans le gabarit du témoin 0, qui
+    ne déclare pas `Scope` au chargement du manifeste. Il passe par `run_read_plan`, que le témoin 4
+    tient. 2a′-2 l'ajoute au témoin 0 si son plan ou ce gabarit change, et dans tous les cas le
+    témoin à générations publiées de 2a′-2 le joue.
 
 **La borne des arêtes, pour 2a′-2** (condition de c7) : en 2a′-1, aucune arête ne porte de
 prédicat. C'est juste tant qu'aucune ligne n'est retirée alors que ses deux bouts restent visibles.
@@ -297,4 +305,6 @@ prédicat. C'est juste tant qu'aucune ligne n'est retirée alors que ses deux bo
 - décider, entrée par entrée, pour la maintenance (`code_sync::avant_la_regle`, les `select` internes
   de `catalog.rs`, la chaîne du snapshot dans `catalog/synchronisation.rs`) : une génération, ou
   toutes (§ 3) ;
-- appeler `marquer_des_lignes_invisibles` à la première écriture d'une seconde génération.
+- mesurer la clause sans filtre sur code-lourd, puis appeler `marquer_des_lignes_invisibles` à la
+  première écriture d'une seconde génération ;
+- mettre `outline` dans le témoin de non-fuite, ou dire pourquoi il n'y est toujours pas.
