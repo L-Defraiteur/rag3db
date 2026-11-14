@@ -42,6 +42,17 @@ fn releve_les_reponses_de_search_code() {
         format!("{avant:?} → {:?}", rag3weaver::code::scope_form(&cat).unwrap())
     };
     eprintln!("[parité] base {} ; forme {forme} ; k = {k}", base.to_string_lossy());
+    // Tous les `_uuid` de Scope, à côté du relevé : la clé ne vaut que si R et la base migrée en
+    // partagent l'essentiel (la migration 1b a recopié les lignes).
+    {
+        let conn = backend.catalog.lock().unwrap().conn_arc();
+        let r = conn.execute("MATCH (s:Scope) RETURN s._uuid").expect("les _uuid de Scope");
+        let mut uuids: Vec<String> = r.rows.iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::to_string)).collect();
+        uuids.sort();
+        let chemin = format!("{}.uuids", sortie.to_string_lossy());
+        std::fs::write(&chemin, uuids.join("\n")).expect("écrire les _uuid");
+        eprintln!("[parité] {} _uuid de Scope écrits dans {chemin}", uuids.len());
+    }
     let formes = [
         ("sans filtre".to_string(), json!({"options": {}})),
         (format!("chemin {}", jeu["chemin"].as_str().unwrap_or("")), json!({"options": {}, "scope": jeu["chemin"]})),
