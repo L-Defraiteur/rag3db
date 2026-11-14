@@ -613,3 +613,31 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   reprises ; le raté du cœur vise les clés qu'un point de reprise déplace vers le disque) ; second cas
   en jeu (liens neufs reversés pendant des CHECKPOINT enchaînés), rouge attendu sous e93710f36.
 - **Banc** : les 79 662 `_uuid` de Scope communs à R et à la base migrée ; parité des réponses en cours.
+
+## 19 h 1x — dix-sept atterris ; la recherche à versions revient à 12 s pour 24 requêtes
+
+- **Le court-circuit du masque** (arbre principal, « sans filtre ni vue et sans version orpheline, rien à
+  masquer ») : sur la copie migrée, le jeu de 24 requêtes passe de **406 s à 12 s** (0,3 à 0,8 s par
+  requête en bm25 comme en bm25+vector, contre 7,5 et 25 s), **réponses identiques 24/24**. Piles posées :
+  masque-sans-filtre-pile b0ecb3bb3 puis migration-1b-pile 0ed318ad7 (139 suites), passe complète en file.
+  Reste pour la bascule des vraies bases : la forme filtrée (×8,7 par chemin → la vue par (couche, rang)
+  d'ED) et la fuite de RSS.
+- **Atterris** : les quatre mineurs (d4f0b5a74) et les cinq clients avec délai (69b2f5474) d'archi ;
+  garde-pile-2 (8565a06bf : le mode pile sur master, posé au cache des deux postes, f9521fb3) ;
+  l'import Python pointé (b45056943). Dix-sept lots par la pile, zéro rejeu au dernier pas.
+- **Le groupe à la demande** prouvé en vrai (embarquement, 18 h 46 → 19 h 06, hôte isolé 7971,
+  fournisseur 7891) : rien à l'ouverture, activé pendant l'appel, relecture dans le même processus, baux
+  puis éviction à 60 s, réactivation en 6 s ; **2 Gio de marge au pic sur card2** → seuil 13 Gio libres
+  en mémoire ; l'index 1 à 904 s (bge-m3 dense + creux, carte pleine) à mesurer à part.
+- **Les arêtes en double** : l'hypothèse du raté de la clé primaire **réfutée** par hotfixs (le second
+  témoin vert sous e93710f36 ; le plan de la relecture des paires est SCAN + HASH_JOIN, pas l'index) ;
+  piste déterministe (sept vagues identiques = une arête par réindexation) : réindexer trois fois un
+  fichier inchangé. **Le core d'archi** : un fil `index-suivi` de rag3weaver non joint à la sortie
+  (ticket 7aac92bfb, Pour : archi, lanceur `suivre_le_premier_index`), pas le dictionnaire — faute de c7
+  corrigée.
+- **Banc** : parité R / base migrée à 86 % des dix premiers, scores qui bougent (admis) ; un soupçon
+  « même contenu, autre occurrence » à qualifier par le hash du contenu (ticket pour arbre principal
+  si confirmé). **Archi** : la fermeture qui tient (rouge posé ; une fermeture tient avec une raison,
+  seul `/backend/open` la lève). **Codeparsers** : règles d'import rebasées (308/0), Go en cours.
+- Luciepc saturé (huit lourds pour quatre places) : le verdict de la lib 373b5477b attend sa place, la
+  bascule viendra plus tard dans la soirée.

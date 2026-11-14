@@ -221,3 +221,12 @@ dernier). **Deux défauts de la recherche à versions**, qui tiennent 1b loin de
 de `_uuid IN [72 652]` → offsets côté moteur, ticket moteur ; le court-circuit sans filtre d'arbre
 principal) et **une rétention de ~0,5 Gio par search_code** (deux sondes tuées à 32 Gio par l'oom-killer
 de leur portée ; ED départage moteur seul contre recherche entière ; le cœur entre si c'est le moteur).
+
+## Dix-sept atterris (19 h 1x)
+
+mineurs (d4f0b5a74) · clients (69b2f5474) · garde-pile-2 (8565a06bf, la garde de master posée au cache des
+deux postes, f9521fb3, « garde à jour ») · import pointé (b45056943). La chaîne : tty-8 (696cbf5a3, rejeu)
+→ exclusions (bb0cea68d, passe) → activations (a7d39e4e6, vrai jeu vert, passe courte) → sans-filtre
+(b0ecb3bb3 : 406 s → 12 s sur 24 requêtes, 24/24 identiques) → 1b (0ed318ad7, passe complète en file) →
+fils du moteur (G) → chaîne Rust 1.98.1 (G, d950d8790) → pointeur des règles d'import (codeparsers,
+regles-imports-2 d7d9ce7a2, rang 22).
