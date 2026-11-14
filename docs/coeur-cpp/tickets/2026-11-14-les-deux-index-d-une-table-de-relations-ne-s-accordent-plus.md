@@ -148,3 +148,47 @@ sera le prochain témoin. Tant qu'il manque, la cause du désaccord n'est que pr
 
 **Pour la réparation** : la garde de `373b5477b` empêche la suite, mais ne répare pas ce qui est
 déjà écrit. La reconstruction des trois tables sur copie (hotfixs) reste le remède.
+
+## La forme d'un seul côté, reproduite (15 nov., 0 h 30)
+
+**Le point de faute** : `rel-commit-between-directions` (branche `deux-sens-sous-annulation`,
+`394f2a27d` et `7900e1b7b`). Il fait lever `RelTable::commit` une seule fois, après le versement
+du premier sens et avant le second, comme un tampon plein au second sens.
+
+- Il s'arme par l'environnement (`RAG3DB_TEST_HOOKS=1`, `RAG3DB_TEST_FAIL_AT=…`), comme les
+  points de mort, ou par programme (`TestHooks::armFailPoint`).
+- Il peut attendre un délai sous le verrou avant de lever, pour qu'un autre COMMIT soit en file.
+- Il n'a aucun effet en service.
+
+**Le témoin** : `RefusedCommitRelDirections.ACommitRefusedBetweenItsDirectionsLeavesBothDirectionsWhole`
+(`6fddb1f5c`).
+
+- A verse 5 000 relations du groupe de nœuds 0 vers le groupe 2. Son COMMIT lève entre les deux
+  sens, après 200 ms sous le verrou.
+- B, en file sur ce verrou, valide une relation du groupe 0 vers le groupe 1.
+
+| Base | Verdict |
+|---|---|
+| `f41c0ba5b` + le crochet (avant `373b5477b`) | rouge 2/2 : à presque chaque tour, la relation de B est **perdue par sa source (0) et lisible par sa destination (1)**, et rien de A ne reste |
+| `6fddb1f5c` (master + le crochet + les deux témoins) | vert 3/3, les deux cas |
+
+**La cause, lue et prise au témoin.** Sous une lib d'avant `373b5477b` :
+
+1. un COMMIT de relations lève entre ses deux sens, par exemple sous un tampon plein ;
+2. son enregistrement d'annulation ne couvre que le sens avant, déjà versé ;
+3. le verrou est rendu, et un autre écrivain valide ses relations à la suite, dans le sens avant
+   comme dans le sens arrière ;
+4. l'annulation, hors du verrou, tronque le sens avant à la première ligne refusée, et emporte
+   la relation de l'autre écrivain dans ce sens seulement ;
+5. le sens arrière n'a rien à tronquer, et garde cette relation : **une relation d'un seul côté**.
+
+Les cases « vues deux fois » et les sources décalées sont la même troncature lue sur le CSR, où
+des décalages de lignes réemployées pointent sur d'autres relations. Elles ne sont pas encore
+reproduites une à une.
+
+**Le correctif est sur master depuis `373b5477b`** : l'annulation d'un COMMIT refusé sous le même
+verrou, et la garde dans les annulations d'insertion. Le témoin vert sur master le montre. Les
+bases déjà écrites restent à reconstruire : c'est le travail de hotfixs sur copie.
+
+**Pour G** : le même point de faute fabrique à coup sûr une base où une relation n'est lisible que
+d'un sens. C'est le crochet d'injection que demande son ticket de rangements.
