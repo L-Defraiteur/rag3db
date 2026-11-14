@@ -54,6 +54,7 @@ def commande(base):
     """La commande qui lance le terminal, selon le lanceur."""
     seance[0] += 1
     nom = f"mesure{os.getpid()}-{seance[0]}"
+    seance.append(nom)
     if LANCEUR == "ssh":
         return ["ssh", "-tt", "-o", "BatchMode=yes", HOTE, base]
     if LANCEUR == "tmux-local":
@@ -137,6 +138,10 @@ class Terminal:
         return t
 
     def arreter(self):
+        # Le serveur tmux de la séance et sa socket partent avec elle (rien ne reste sous /tmp/tmux-*).
+        if LANCEUR in ("tmux-local", "tmux-ssh"):
+            nom = seance[-1]
+            ssh(f"tmux -L {nom} kill-server 2>/dev/null; rm -f /tmp/tmux-$(id -u)/{nom}")
         if self.p.poll() is None:
             try:
                 os.killpg(self.p.pid, signal.SIGTERM)
