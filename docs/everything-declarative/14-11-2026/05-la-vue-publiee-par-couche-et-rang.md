@@ -39,12 +39,15 @@ plate.
 
 **Le dense : la projection courte, par prédicat.**
 - Chaque recherche dense filtrée projette le Cypher du § 1, sans liste.
-- **Le graphe projeté posé une fois**, cité par son nom (`_vue_<couche>_<rang>`), est l'étape
-  suivante. Il dépend d'une réponse que personne n'a encore vérifiée : un graphe projeté vit-il
-  au-delà de la connexion qui l'a posé ? Les lectures passent par la connexion de la vue de
-  lecture, et par plusieurs connexions du pool. La question va au cœur avant tout code. Si la
-  réponse est non, la projection courte par requête reste. Elle ne fuit pas, et coûte environ
-  0,25 s sur R filtré.
+- **Pas de graphe posé une fois** (réponse du cœur, lue dans le code, 14 novembre 2026, 21 h) :
+  - le graphe projeté appartient à la **connexion** (`GraphEntrySet`, membre du `ClientContext`) ;
+    posé sur la connexion du catalogue, il est invisible aux connexions de lecture et du pool ;
+  - il ne survit pas à sa connexion, et n'est jamais écrit sur disque ;
+  - son masque se **recalcule à chaque** `QUERY_VECTOR_INDEX` : l'entrée ne garde que le texte du
+    Cypher, que la requête replanifie.
+
+  Le poser une fois n'économiserait donc que l'analyse d'un texte de 150 octets. **La projection
+  courte par requête reste la forme du dense.**
 
 ## 3. Le filtre de l'utilisateur se compose
 
@@ -83,8 +86,8 @@ plate.
 
 ## 6. L'ordre
 
-1. La question de la vie d'un graphe projeté va au cœur.
+1. ~~La question de la vie d'un graphe projeté va au cœur.~~ Répondue : par connexion, recalculé à
+   chaque requête. La projection courte reste.
 2. Les témoins 1, 3 et 5, rouges.
 3. Le masque par prédicat, le dense puis le lexical, et la règle d'`inline_params`.
 4. Les témoins verts, la parité de banc, les sondes 2 sous `poste mesure`.
-5. Le graphe posé une fois, si le cœur dit oui, en lot à part, mesuré.
