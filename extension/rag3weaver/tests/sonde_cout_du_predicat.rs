@@ -88,6 +88,13 @@ fn le_cout_du_predicat_de_visibilite() {
         eprintln!("[sonde] ALTER {t} : {:.0} ms", d.elapsed().as_secs_f64() * 1000.0);
     }
     let avec = jouer("prédicat", jeu(true));
+    // Le prédicat sur les nœuds seuls : une arête visible si ses deux bouts le sont.
+    let pn = |v: &str| p(v);
+    let _ = jouer("nœuds seuls", vec![
+        ("usages (un saut)", format!("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE b.name = '{nom}' AND {} AND {} RETURN a._uuid", pn("a"), pn("b"))),
+        ("impact (1 à 3 sauts)", format!("MATCH (a:Scope)-[:CONSUMES*1..3 (r, n | WHERE {})]->(b:Scope) WHERE b.name = '{nom}' AND {} AND {} RETURN count(DISTINCT a)", pn("n"), pn("a"), pn("b"))),
+        ("usages, arête seule", format!("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) WHERE b.name = '{nom}' AND {} RETURN a._uuid", pn("r"))),
+    ]);
 
     // L'alternative : une table d'appartenance de la génération 0 vers chaque Scope.
     c.execute("CREATE NODE TABLE Generation_sonde(id STRING, PRIMARY KEY(id))").unwrap();
