@@ -1,7 +1,7 @@
 # Un Symbol que plus rien ne relie reste après le retrait de son fichier
 
 - **État** : ouvert ; constat, pas de correctif. Rétention voulue ou fuite, c'est à décider.
-- **Famille** : rag3weaver, schéma de code
+- **Famille** : produit
 - **Gravité** : faible aujourd'hui. Les lignes restent et ne se reprennent jamais.
 - **Atteignable en service** : oui, à chaque fichier supprimé ou renommé, et à chaque nom qui
   disparaît du code.
