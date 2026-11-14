@@ -6508,6 +6508,19 @@ mod tests {
         assert!(e.contains("« absent »") && e.contains("activations"), "le refus nomme le nom et dit où il manque : {e}");
     }
 
+    /// **Un creux qui déclare une autre dimension que le dense se refuse à
+    /// l'ouverture** (garde de c7, 14 novembre 2026) : le dual rendrait des
+    /// vecteurs d'une autre taille que ceux du catalogue.
+    #[cfg(feature = "code")]
+    #[test]
+    fn un_creux_d_une_autre_dimension_que_le_dense_se_refuse_au_chargement() {
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| {
+            m["models"]["sparse"] = json!({"provider": "service", "model": "bge-m3", "address": "127.0.0.1:7891", "dimensions": 384});
+        });
+        let e = p.err().expect("un creux d'une autre dimension que le dense se refuse");
+        assert!(e.contains("models.sparse") && e.contains("384") && e.contains("768"), "le refus dit les deux dimensions : {e}");
+    }
+
     /// Un Backend sans base réelle, comme `search_verbs_…` : le catalogue
     /// répond à vide, la source vient du manifeste — ce qu'on éprouve est la
     /// politique et le chemin des fichiers, pas la persistance.

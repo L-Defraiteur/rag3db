@@ -1230,6 +1230,69 @@ mod tests {
         assert_eq!(identite_du_fournisseur(&f)["relances"], 1);
     }
 
+    /// Un creux du groupe à la demande, déclaré avec `dimensions` (le dual se
+    /// déclare : décision de c7, 14 novembre 2026), sur une fixture qui sait le
+    /// dual ou non, à la dimension `dim_servie`.
+    fn creux_dual(dual: bool, dimensions: u64) -> (Fixture, ModelSource) {
+        let f = Fixture::nouvelle();
+        let d = f.dossier.path();
+        let mut args = vec!["--journal".to_string(), d.join("events.jsonl").display().to_string(), "--generation".into(), "dual".into(),
+            "--modele".into(), "fixture-groupe".into(), "--sparse".into()];
+        if dual { args.push("--dual".into()); }
+        let source: ModelSource = serde_json::from_value(serde_json::json!({
+            "provider": "service", "model": "fixture-groupe", "address": "127.0.0.1:0", "timeout_secs": 2, "dimensions": dimensions,
+            "activation": {
+                "nom": "groupe", "modele": "fixture-groupe",
+                "programme": concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/residence/fournisseur.py"), "args": args,
+                "profil": "fixture-cpu", "peripherique": "cpu",
+                "coordination": d.join("coordination").display().to_string(), "journal": d.join("journaux").display().to_string(),
+                "budget_activation_secs": 5, "budget_attente_secs": 5,
+                "residence": {"a_demande": {"inactivite_secs": 60, "rendre_le_bail_secs": 30}},
+            },
+        })).unwrap_or_else(|e| panic!("la déclaration du creux dual : {e}"));
+        (f, source)
+    }
+
+    /// **Un creux à la demande qui déclare sa dimension rend un dual** (ticket
+    /// `2026-11-14-un-creux-a-la-demande-n-a-pas-de-dual`), et l'ouvrir ne lance rien.
+    #[test]
+    fn dual_un_creux_qui_declare_sa_dimension_rend_un_dual_sans_lancer() {
+        let (f, creux) = creux_dual(true, 384);
+        let (clients, _) = crate::model_source::connect_sparse(&creux).unwrap_or_else(|e| panic!("{e}"));
+        let dual = clients.dual.expect("un creux qui déclare dimensions rend un dual");
+        assert_eq!(dual.dim(), 384, "la dimension déclarée, sans fournisseur");
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        assert_eq!(evenements(&f, "constructeur_demarre"), 0, "ouvrir ne lance rien");
+    }
+
+    /// **Le dual et le creux partagent une tenue** : un lancement, un bail.
+    #[test]
+    fn dual_puis_creux_un_lancement_un_bail() {
+        let (f, creux) = creux_dual(true, 384);
+        let (clients, _) = crate::model_source::connect_sparse(&creux).unwrap_or_else(|e| panic!("{e}"));
+        let dual = clients.dual.expect("le dual");
+        let (dense, creux_v) = dual.embed_dual(&["un texte".into()]).unwrap_or_else(|e| panic!("le dual : {e}"));
+        assert_eq!((dense.len(), dense[0].len(), creux_v.len()), (1, 384, 1));
+        assert_eq!(evenements(&f, "constructeur_demarre"), 1, "le dual a lancé le groupe");
+        assert_eq!(identite_du_fournisseur(&f)["usage"]["baux"], 1, "un bail pour le dual");
+        clients.sparse.embed_sparse(&["un autre".into()]).unwrap_or_else(|e| panic!("le creux : {e}"));
+        assert_eq!(evenements(&f, "constructeur_demarre"), 1, "le creux ne relance pas");
+        assert_eq!(identite_du_fournisseur(&f)["usage"]["baux"], 1, "le creux ne prend pas de second bail : même tenue");
+    }
+
+    /// **Un fournisseur sans le dual, ou d'une autre dimension, se refuse en le disant.**
+    #[test]
+    fn dual_un_fournisseur_sans_dual_ou_d_une_autre_dimension_se_refuse() {
+        let (_f, creux) = creux_dual(false, 384);
+        let (clients, _) = crate::model_source::connect_sparse(&creux).unwrap_or_else(|e| panic!("{e}"));
+        let e = clients.dual.expect("le dual déclaré").embed_dual(&["x".into()]).err().expect("sans dual : refus").to_string();
+        assert!(e.contains("sans le dual"), "le refus le dit : {e}");
+        let (_f, creux) = creux_dual(true, 768);
+        let (clients, _) = crate::model_source::connect_sparse(&creux).unwrap_or_else(|e| panic!("{e}"));
+        let e = clients.dual.expect("le dual déclaré").embed_dual(&["x".into()]).err().expect("autre dimension : refus").to_string();
+        assert!(e.contains("768") && e.contains("384"), "le refus dit les deux dimensions : {e}");
+    }
+
     #[test]
     fn budget_de_sonde_ne_remplace_pas_delai_appel_par_defaut() {
         let mut f = Fixture::nouvelle(); f.source.timeout_secs = None;
