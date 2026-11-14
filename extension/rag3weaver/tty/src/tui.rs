@@ -211,6 +211,9 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
                     let t = match k.code {
                         KeyCode::Char('c') if ctrl => Some(Touche::CtrlC),
                         KeyCode::Char('d') if ctrl => Some(Touche::CtrlD),
+                        KeyCode::Char('g') if ctrl => Some(Touche::CtrlG),
+                        // Une autre combinaison Ctrl + lettre n'entre pas dans la saisie.
+                        KeyCode::Char(_) if ctrl => None,
                         KeyCode::Char(c) => Some(Touche::Car(c)),
                         KeyCode::Enter => Some(Touche::Entree),
                         KeyCode::Backspace => Some(Touche::Retour),
