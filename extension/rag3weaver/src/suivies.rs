@@ -791,6 +791,61 @@ pub fn identifiants_des_couches(
     Ok(out)
 }
 
+/// Ce que l'atelier ajoute aux suivies déclarées d'un dépôt, sous `tracked:<dépôt>` : les branches des
+/// tâches ouvertes, et les parentes qu'elles ont fait entrer.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Ajouts {
+    #[serde(default)]
+    pub taches: Vec<String>,
+    #[serde(default)]
+    pub branches: Vec<String>,
+}
+
+/// Les ajouts de l'atelier pour un dépôt.
+pub fn lire_les_ajouts(catalog: &crate::catalog::Catalog, depot: &str) -> Result<Ajouts, String> {
+    let _ = (catalog, depot);
+    Err("les ajouts ne se lisent pas encore".into())
+}
+
+/// **Le rapport des suivies d'un dépôt**, pour l'état (`index_states.layers`), en lecture seule : la racine,
+/// les sources résolues, chaque couche avec sa parente, son genre et son identifiant (nul tant qu'aucune
+/// écriture ne l'a fait naître), les couches de travail, les flux. `None` hors d'un dépôt git.
+pub fn rapport_des_suivies(
+    catalog: &crate::catalog::Catalog,
+    racine_du_workspace: &std::path::Path,
+    tracked: Option<&Value>,
+) -> Result<Option<(Value, Vec<String>)>, String> {
+    let _ = (catalog, racine_du_workspace, tracked);
+    Err("le rapport des suivies n'existe pas encore".into())
+}
+
+/// **Une tâche de l'atelier entre aux suivies** : sa branche parmi les tâches, sa parente aux suivies si
+/// aucune source ne la prend déjà, la parente estampillée déclarée sur le nom complet, au commit de départ.
+/// Les clés du dépôt migrent d'abord vers son identifiant et le nom complet.
+pub fn ouvrir_une_tache(
+    catalog: &crate::catalog::Catalog,
+    racine_du_workspace: &std::path::Path,
+    tracked: Option<&Value>,
+    branche: &str,
+    parente: &str,
+    depart: &str,
+) -> Result<String, String> {
+    let _ = (catalog, racine_du_workspace, tracked, branche, parente, depart);
+    Err("l'ouverture d'une tâche aux suivies n'existe pas encore".into())
+}
+
+/// **Une tâche de l'atelier sort des suivies** : sa branche quitte les tâches, sa couche est marquée fermée.
+/// Rien n'est effacé (son estampille reste).
+pub fn fermer_une_tache(
+    catalog: &crate::catalog::Catalog,
+    racine_du_workspace: &std::path::Path,
+    tracked: Option<&Value>,
+    branche: &str,
+) -> Result<(), String> {
+    let _ = (catalog, racine_du_workspace, tracked, branche);
+    Err("la fermeture d'une tâche aux suivies n'existe pas encore".into())
+}
+
 /// Les refs du dépôt, chacune sur son commit (une étiquette annotée, déréférencée).
 fn lire_les_refs(racine: &std::path::Path) -> Result<Vec<RefResolue>, String> {
     let sortie = crate::couches::git(racine, &["for-each-ref", "--format=%(refname)%00%(objectname)%00%(*objectname)"])?;
@@ -1357,5 +1412,45 @@ mod tests {
         let avant = vus.len();
         vus.dedup();
         assert_eq!(vus.len(), avant, "deux couches vivantes partagent un identifiant : {apres:?}");
+    }
+
+    /// **Le rapport des suivies, et une tâche qui y entre puis en sort** : sans `tracked`, le dépôt dit ses
+    /// couches par défaut (la racine, le worktree du backend, sa couche de travail) ; une tâche ouverte depuis
+    /// une branche `b` qu'aucune source ne prend fait entrer `b`, et sa couche a `b` pour parente, de genre
+    /// « declaree », en nom complet ; fermée, elle sort des tâches, sa couche est marquée fermée, et son
+    /// estampille reste.
+    #[test]
+    fn le_rapport_des_suivies_et_une_tache_qui_y_entre_et_en_sort() {
+        let (t, d) = vierge();
+        commit(&d, "m1");
+        git(&d, &["switch", "-q", "-c", "b"]);
+        commit(&d, "b1");
+        let depart = git(&d, &["rev-parse", "b"]);
+        git(&d, &["switch", "-q", "main"]);
+        let cat = catalogue();
+        let (avant, _) = rapport_des_suivies(&cat, &d, None).unwrap().expect("un dépôt git a son rapport");
+        assert_eq!(avant["racine"]["nature"], "calculee", "{avant}");
+        assert!(avant["branches"].as_array().unwrap().iter().any(|x| x["ref"] == "refs/heads/main" && x["state"] == "tracked"), "{avant}");
+        assert!(!avant["branches"].as_array().unwrap().iter().any(|x| x["ref"] == "refs/heads/b"), "b n'est pas suivie par défaut : {avant}");
+        assert!(avant["work"].as_array().unwrap().iter().any(|w| w["path"] == reel(&d).display().to_string()), "{avant}");
+        // La tâche, sur sa branche et son worktree, ouverte depuis b.
+        git(&d, &["worktree", "add", "-q", "-b", "agent/relecture", t.path().join("tache").to_str().unwrap(), &depart]);
+        let id = ouvrir_une_tache(&cat, &d, None, "agent/relecture", "b", &depart).unwrap();
+        let ajouts = lire_les_ajouts(&cat, &id).unwrap();
+        assert_eq!(ajouts, Ajouts { taches: vec!["agent/relecture".into()], branches: vec!["b".into()] });
+        assert_eq!(
+            crate::couches::parente_estampillee(&cat, &id, "refs/heads/agent/relecture").unwrap(),
+            Some(crate::couches::Parente { branche: "refs/heads/b".into(), genre: crate::couches::GenreDeParente::Declaree, base: depart.clone() })
+        );
+        let (pendant, _) = rapport_des_suivies(&cat, &d, None).unwrap().unwrap();
+        assert_eq!(pendant["repo"], json!(id), "{pendant}");
+        let tache = pendant["branches"].as_array().unwrap().iter().find(|x| x["ref"] == "refs/heads/agent/relecture").unwrap_or_else(|| panic!("la tâche absente : {pendant}")).clone();
+        assert_eq!((tache["state"].as_str(), tache["parent"].as_str(), tache["kind"].as_str()), (Some("tracked"), Some("refs/heads/b"), Some("declaree")), "{tache}");
+        assert!(pendant["branches"].as_array().unwrap().iter().any(|x| x["ref"] == "refs/heads/b"), "la parente n'est pas suivie : {pendant}");
+        assert!(pendant["work"].as_array().unwrap().iter().any(|w| w["path"] == reel(&t.path().join("tache")).display().to_string()), "la couche de travail de la tâche : {pendant}");
+        fermer_une_tache(&cat, &d, None, "agent/relecture").unwrap();
+        assert!(lire_les_ajouts(&cat, &id).unwrap().taches.is_empty());
+        assert!(crate::couches::couche_fermee(&cat, &id, "refs/heads/agent/relecture").unwrap(), "la couche n'est pas marquée fermée");
+        assert!(crate::couches::parente_estampillee(&cat, &id, "refs/heads/agent/relecture").unwrap().is_some(), "l'estampille a été effacée");
     }
 }
