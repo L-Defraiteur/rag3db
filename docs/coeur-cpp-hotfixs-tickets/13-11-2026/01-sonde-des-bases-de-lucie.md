@@ -348,3 +348,81 @@ La sonde a vu en passant **des arêtes en double** : 1 291 morceaux Scope_Chunk 
 `Scope_CHUNKED_FROM` vers le **même** Scope, soit 2 205 arêtes en trop. Elles étaient déjà là avant la
 migration. Elles ont leur ticket :
 `docs/coeur-cpp-hotfixs-tickets/tickets/2026-11-14-des-morceaux-de-scope-portent-plusieurs-aretes-vers-le-meme-scope.md`.
+
+## La fenêtre de purge des orphelins du plein texte (14 novembre 2026, 20 h 35)
+
+Demandée par c7 : le script pour que G et hotfixs le jouent d'un trait à la fenêtre. Il est répété sur une
+copie. Le ticket est `docs/recherche/tickets/2026-11-14-un-scope-efface-du-graphe-garde-son-document-plein-texte.md`.
+
+**Les outils**, dans `outils/` à côté de cette page :
+- `fenetre-purge.sh` : le script ;
+- `banc_recherche.py` : le banc de recherches par l'outil `search_code`, et la fermeture, la réouverture
+  et la comparaison par l'hôte. Le jeton est lu dans `daemon.token`, jamais affiché ;
+- le binaire du test lucivy `diag_purge_orphelins`, branche lucivy `purge-orphelins-depot` (db2154d),
+  avec ses quatre cas : `node_ids_vivants`, `purge_orphelins`, `compacter`, et le contrôle du banc ;
+- l'outil de requête en lecture seule `requete.cpp` (la lib courante), **bâti sur le poste où il sert**.
+
+**Les trois modes** :
+
+    fenetre-purge.sh compter    <copie/nom.rag3db> -                        # les orphelins à froid, rien d'effacé
+    fenetre-purge.sh repetition <copie/nom.rag3db> <backend.json de la copie>
+    fenetre-purge.sh fenetre    <~/.local/share/rag3weaver/nom.rag3db> <backend.json> "<jusqu'à>"
+
+Les variables à poser :
+- `PURGE_BIN` et `REQUETE` dans tous les modes ;
+- en fenêtre, en plus : `INSTANTANES` (le script `instantanes.sh` de G) et `ETIQUETTE`.
+
+Tout le script se joue sous `poste lourd`.
+
+**Les pas** :
+1. le banc de recherches avant : par l'hôte en fenêtre, par `mcp --standalone` sur une copie ;
+2. en fenêtre seulement :
+   - la fermeture qui tient, par `POST /backend/close` avec `reason` et `until`. Le script refuse si
+     `held_closed` manque dans la réponse : sans le lot d'archi, une fermeture ne tient pas ;
+   - puis l'instantané par `instantanes.sh`, qui refuse si un processus tient un fichier de la base ;
+3. les orphelins recalculés à froid, pour chaque table `Lucivy_<T>` : les offsets du graphe, lus en
+   lecture seule, contre les `_node_id` vivants du `.fts` ;
+4. pour chaque table qui en porte :
+   - la purge, avec le rapport d'index et le banc lucivy avant et après : mêmes hits moins les orphelins,
+     compte qui baisse d'autant, réouverture ;
+   - puis le compact ;
+5. en fenêtre, la réouverture par `POST /backend/open` ;
+6. le banc après, comparé au banc d'avant.
+
+Un pas rouge arrête tout. En fenêtre, la base reste alors fermée, et le retour est le `RETOUR.sh` de
+l'instantané.
+
+**Les gardes**, chacune née d'une répétition :
+- **le graphe doit s'être lu.** À luciepc, l'outil de requête bâti au portable mourait (« CPU ISA level
+  is lower than required »). Il rendait zéro ligne sans erreur visible, et tout le `.fts` de
+  code-principal paraissait orphelin : 66 016 Scope sur 66 016. Une requête sans sa ligne `> MATCH`, ou
+  avec une ligne `ERREUR`, arrête tout ;
+- **une purge n'efface jamais plus de la moitié d'une table** ;
+- **un résultat d'avant ne doit pas disparaître** : chacun se retrouve dans les 100 premiers d'après.
+  Exiger le même top 20 était faux, parce que la purge change les statistiques BM25, donc le classement
+  à la frontière. À la première répétition, 3 à 9 résultats par requête sortaient du top et
+  réapparaissaient du 8ᵉ au 62ᵉ rang. Une curiosité au passage : un résultat 8ᵉ quand on en demande 100
+  peut sortir du top 20 quand on en demande 20. Le classement dépend donc du nombre demandé.
+
+**La répétition**, sur une copie de `avant-0c41f9fe6/code-rag3db-depot` (14 nov., 13 h 40), verte :
+
+| table | orphelins | documents | octets d'index après compact |
+|---|---:|---|---|
+| Scope | 9 701 | 89 918 → 80 217 | 4 586 388 636 → 1 320 308 583 |
+| File | 127 | 7 999 → 7 872 | 7 436 211 → 7 345 857 |
+| Symbol, Library | 0 | — | — |
+
+Le banc par l'outil : 8 requêtes, aucun résultat perdu. La sortie est
+`~/.cache/rag3db-locks/fenetre-purge/sorties/code-rag3db-depot-repetition-20261114-195359`.
+
+**Les comptes à froid des autres bases**, sur une copie du dernier instantané de chacune :
+
+| base | instantané | orphelins |
+|---|---|---|
+| memoire-longue | `avant-journal-14nov-2` (14 nov., 18 h 19) | **0** dans les sept tables : pas de purge |
+| code-principal (luciepc) | `avant-0c41f9fe6` (13 nov., 20 h 36) | **102** Scope, 0 ailleurs |
+| code-lourd (luciepc) | `avant-0c41f9fe6` (13 nov., 20 h 36) | **103** Scope, 0 ailleurs |
+
+**L'ordre de la fenêtre** : code-rag3db-depot (portable), code-principal puis code-lourd (luciepc).
+memoire-longue n'en est pas. Elle attend la fermeture qui tient d'archi sur master : elle n'est encore
+que sur la branche `fermeture-qui-tient`, aaefdc357.
