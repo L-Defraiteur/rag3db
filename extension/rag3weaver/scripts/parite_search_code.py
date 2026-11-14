@@ -77,12 +77,16 @@ def main():
             places_total += len(ka)
             if part < a.ensemble_min:
                 ecarts.append(f"ensemble : {len(communs)} communs sur {len(ka)} ({part:.2f} < {a.ensemble_min})")
+            hb = {y.get("content_hash") for y in rb if y.get("content_hash")}
             for x in ra:
                 if cle(x) not in set(kb):
-                    ecarts.append(f"sorti : {nom(x)} (rang {x['rang']})")
+                    meme = " ; même contenu qu'un résultat de l'autre relevé" if x.get("content_hash") and x.get("content_hash") in hb else ""
+                    ecarts.append(f"sorti : {nom(x)} (rang {x['rang']}){meme}")
+            ha = {x.get("content_hash") for x in ra if x.get("content_hash")}
             for y in rb:
                 if cle(y) not in set(ka):
-                    ecarts.append(f"entré : {nom(y)} (rang {y['rang']})")
+                    meme = " ; même contenu qu'un résultat de l'autre relevé" if y.get("content_hash") and y.get("content_hash") in ha else ""
+                    ecarts.append(f"entré : {nom(y)} (rang {y['rang']}){meme}")
             for x in ra:
                 if cle(x) in set(kb):
                     j = kb.index(cle(x)) + 1

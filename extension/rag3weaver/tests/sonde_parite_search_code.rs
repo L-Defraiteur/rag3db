@@ -79,6 +79,9 @@ fn releve_les_reponses_de_search_code() {
                         "file_path": pris(&["file_path", "path"]),
                         "name": pris(&["name", "qualified_name"]),
                         "start_line": pris(&["start_line", "line"]),
+                        // Le contenu partagé : deux occurrences d'un même contenu (un fichier recopié) ont
+                        // le même hash ; le comparateur sépare ainsi « même contenu, autre occurrence ».
+                        "content_hash": d["_content_hash"],
                         "score": l["score"],
                         "signal": l["signal"],
                         "best_signal": l["bestSignal"],
