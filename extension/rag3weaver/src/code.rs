@@ -3167,7 +3167,7 @@ impl Catalog {
             return Ok(HashMap::new());
         }
         let lire = rag3weaver_ir::Select::by_uuids(SYMBOL, vec![rag3weaver_ir::Column::Node("name".into())]);
-        let requete = self.dialect_arc().select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let requete = crate::read_view::ReadCatalog::traduire_select(self, &lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
         let param = CypherValue::List(uuids.iter().map(|u| CypherValue::String(u.clone())).collect());
         let rows = self
             .conn()
@@ -3210,7 +3210,7 @@ impl Catalog {
             SCOPE,
             ["parent_name", "file_path", "scope_type", "source", "repo", "trait_impl"].map(|f| rag3weaver_ir::Column::Node(f.into())).to_vec(),
         );
-        let requete = self.dialect_arc().select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let requete = crate::read_view::ReadCatalog::traduire_select(self, &lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
         let result = self
             .conn()
             .execute_with_params(&requete, &[crate::connection::QueryParam::new("uuids", param)])
@@ -3265,7 +3265,7 @@ impl Catalog {
         let param = CypherValue::List(froms.iter().map(|u| CypherValue::String(u.clone())).collect());
         // Par le dialecte : l'uuid donné en tête, puis la source et le dépôt.
         let lire = rag3weaver_ir::Select::by_uuids(SCOPE, ["source", "repo"].map(|f| rag3weaver_ir::Column::Node(f.into())).to_vec());
-        let requete = self.dialect_arc().select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let requete = crate::read_view::ReadCatalog::traduire_select(self, &lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
         let result = self
             .conn()
             .execute_with_params(&requete, &[crate::connection::QueryParam::new("uuids", param)])
@@ -3397,7 +3397,7 @@ impl Catalog {
             filtre,
             ["name", "field_types", "return_type", "parent_name", "template_params"].map(|f| Column::Node(f.into())).to_vec(),
         );
-        let requete = self.dialect_arc().select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let requete = crate::read_view::ReadCatalog::traduire_select(self, &lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
         let result = self
             .conn()
             .execute_with_params(
@@ -3502,7 +3502,7 @@ impl Catalog {
             params.push(crate::connection::QueryParam::new("de", CypherValue::List(de.iter().map(|u| CypherValue::String(u.clone())).collect())));
         }
         saut.exclude = exclure;
-        let cypher = self.dialect_arc().hop(&saut).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let cypher = crate::read_view::ReadCatalog::traduire_hop(self, &saut).map_err(|e| CatalogError::DbError(e.to_string()))?;
         let result = self
             .conn()
             .execute_with_params(&cypher, &params)
@@ -3662,7 +3662,7 @@ impl Catalog {
             .filter(|r| self.get_relation_def(r).and_then(|d| d.properties.as_ref()).is_some_and(|p| p.contains_key("resolution")))
             .filter_map(|r| {
                 let compte = Count::EdgesMatching { relation: r.to_string(), filter: Predicate::Equals { field: "resolution".into(), param: "marque".into() } };
-                let q = self.dialect_arc().count(&compte).ok()?;
+                let q = crate::read_view::ReadCatalog::traduire_count(self, &compte).ok()?;
                 let rows = self.execute_read_with_params(&q, &marque).ok()?;
                 rows.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64())
             })
@@ -3868,7 +3868,7 @@ pub fn mentions_sans_definisseur_visible(catalog: &dyn crate::read_view::ReadCat
         .map(|u| CypherValue::String(u.to_string()))
         .collect();
     let lire = rag3weaver_ir::Select::by_uuids(SCOPE, vec![rag3weaver_ir::Column::Node("file_path".into()), rag3weaver_ir::Column::Node("parent_name".into())]);
-    let requete = catalog.dialect_arc().select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
+    let requete = catalog.traduire_select(&lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
     let lignes = catalog.execute_read_with_params(&requete, &[crate::connection::QueryParam::new("uuids", CypherValue::List(uuids))])?;
     let mut fichier: HashMap<String, String> = HashMap::new();
     let mut parent: HashMap<String, String> = HashMap::new();
