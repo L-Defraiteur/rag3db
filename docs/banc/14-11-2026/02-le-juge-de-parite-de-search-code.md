@@ -138,6 +138,8 @@ d'avant les versions et la base migrée, puis entre chaque optimisation et le co
   - l'écart de 203 après l'index de la source entière disparaît lui aussi au lot. C'étaient les
     suppressions déjà perdues du même défaut, celles de l'index qui avait fait passer la base de
     79 662 à 84 211 Scope.
+  - **Sur master** en 262be6fc4, avec le même Rust que ff4ced00a, reposé sur la pile de G (au mot
+    de recherche, 15 nov.).
 
 ## 5. La tête de pile d'everything declarative (3a6bf34cd contre ac8644784)
 
