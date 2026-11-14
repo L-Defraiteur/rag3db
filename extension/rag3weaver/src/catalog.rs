@@ -10268,10 +10268,52 @@ fn read_threads() -> u64 {
                 self.alter_absorbing(table, &self.dialect.alter_add_column_default(table, &colonne, defaut))?;
             }
         }
+        // **L'entité `Generation`** : la génération 0 de la couche, posée par l'estampille du format
+        // (page 03, § 2). Son commit, sa base et sa recette viennent avec l'écrivain (2a′-2).
+        let rang = match (
+            self.dialect.create_generation_table(),
+            self.dialect.merge_generation(),
+            self.dialect.latest_generation_rank(),
+        ) {
+            (Some(table), Some(poser), Some(dernier)) => {
+                self.alter_absorbing(crate::generations::TABLE, &table)?;
+                let texte = |nom: &str, v: &str| QueryParam::new(nom, CypherValue::String(v.to_string()));
+                let lu = self
+                    .conn
+                    .execute_with_params(&dernier, &[texte("couche", couche)])
+                    .map_err(|e| CatalogError::DbError(e.to_string()))?;
+                match lu.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64()) {
+                    Some(rang) => rang,
+                    // Rien n'écrit à l'ouverture d'une base qui a déjà sa génération 0.
+                    None => {
+                        let maintenant = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map_or(0, |d| d.as_millis() as i64);
+                        self.conn
+                            .execute_with_params(
+                                &poser,
+                                &[
+                                    texte("key", &format!("{couche}:0")),
+                                    texte("couche", couche),
+                                    QueryParam::new("rang", CypherValue::Int(0)),
+                                    texte("commit", ""),
+                                    texte("base", ""),
+                                    texte("recette", ""),
+                                    texte("tombstones", "[]"),
+                                    QueryParam::new("publiee_le", CypherValue::Int(maintenant)),
+                                ],
+                            )
+                            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+                        0
+                    }
+                }
+            }
+            _ => 0,
+        };
         self.generations = Some(crate::generations::Visibilite {
             tables: tables.iter().map(|t| t.to_string()).collect(),
             couche: couche.to_string(),
-            rang: 0,
+            rang,
             tout_visible: true,
         });
         self.publish_read_view();
