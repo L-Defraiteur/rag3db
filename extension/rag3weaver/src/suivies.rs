@@ -537,6 +537,31 @@ pub fn resoudre_la_pile(racine: &std::path::Path, declaration: &Declaration, sou
     Ok(Pile { racine: racine_resolue, couches: resolues, flux, avertissements })
 }
 
+/// L'identifiant d'un dépôt : la racine du plus vieux commit parmi les historiques de ses suivies (date
+/// d'auteur ; à égalité, toutes nommées, et la première par hash fait l'identifiant). Stable d'un poste à
+/// l'autre, sans ancre (décision de c7, 14 nov.).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Identifiant {
+    pub id: String,
+    /// Les racines à égalité de date avec `id`, `id` compris, quand il y en a plusieurs.
+    pub egaux: Vec<String>,
+}
+
+/// **L'identifiant du dépôt** depuis les pointes suivies ; `None` sans pointe.
+pub fn identifiant_des_suivies(racine: &std::path::Path, pointes: &[String]) -> Result<Option<Identifiant>, String> {
+    let _ = (racine, pointes);
+    Err("l'identifiant des suivies n'existe pas encore".into())
+}
+
+/// **Migrer les clés d'un dépôt** dans `_catalog_meta` : de l'identifiant `ancien` à `neuf` (ils peuvent être
+/// égaux), et les noms courts de branche (`couche:<dépôt>:<branche>`, `couche_fermee:`) vers le nom complet
+/// (`refs/heads/<branche>`). **Rien ne se perd** : une clé cible déjà posée n'est jamais écrasée, la source
+/// reste alors et le journal le dit. Rend le journal de ce qui a bougé.
+pub fn migrer_les_cles(catalog: &crate::catalog::Catalog, ancien: &str, neuf: &str) -> Result<Vec<String>, String> {
+    let _ = (catalog, ancien, neuf);
+    Err("la migration des clés n'existe pas encore".into())
+}
+
 /// Les refs du dépôt, chacune sur son commit (une étiquette annotée, déréférencée).
 fn lire_les_refs(racine: &std::path::Path) -> Result<Vec<RefResolue>, String> {
     let sortie = crate::couches::git(racine, &["for-each-ref", "--format=%(refname)%00%(objectname)%00%(*objectname)"])?;
@@ -940,5 +965,83 @@ mod tests {
             assert_eq!(parente(&p, b), &ParenteResolue::DansUnFlux, "{b} : {p:?}");
         }
         assert!(p.avertissements.iter().any(|a| a.contains("flux") && a.contains("develop") && a.contains("staging") && a.contains("main")), "{:?}", p.avertissements);
+    }
+
+    /// Un commit daté, pour départager des racines.
+    fn commit_date(d: &std::path::Path, m: &str, date: &str) {
+        let o = std::process::Command::new("git")
+            .arg("-C").arg(d)
+            .args(["-c", "user.name=Témoin", "-c", "user.email=temoin@example.invalid", "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", m])
+            .env("GIT_AUTHOR_DATE", date)
+            .env("GIT_COMMITTER_DATE", date)
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    }
+
+    /// **L'identifiant du dépôt est la racine du plus vieux commit des suivies** : un historique orphelin plus
+    /// récent ne le change pas ; suivi seul, il donne le sien ; deux racines de même date sont nommées toutes
+    /// les deux, et la première par hash fait l'identifiant.
+    #[test]
+    fn l_identifiant_du_depot_est_la_racine_du_plus_vieux_commit() {
+        let (_t, d) = vierge();
+        commit_date(&d, "vieux", "2020-01-01T00:00:00Z");
+        commit_date(&d, "m2", "2021-01-01T00:00:00Z");
+        let vieux = git(&d, &["rev-parse", "main~1"]);
+        git(&d, &["switch", "-q", "--orphan", "neuve"]);
+        commit_date(&d, "neuve", "2024-01-01T00:00:00Z");
+        let neuve = git(&d, &["rev-parse", "neuve"]);
+        git(&d, &["switch", "-q", "--orphan", "jumelle"]);
+        commit_date(&d, "jumelle", "2024-01-01T00:00:00Z");
+        let jumelle = git(&d, &["rev-parse", "jumelle"]);
+        git(&d, &["switch", "-q", "main"]);
+        let id = |b: &[&str]| identifiant_des_suivies(&d, &b.iter().map(|x| git(&d, &["rev-parse", x])).collect::<Vec<_>>()).unwrap().unwrap();
+        assert_eq!(id(&["main", "neuve"]), Identifiant { id: vieux.clone(), egaux: vec![] });
+        assert_eq!(id(&["neuve"]), Identifiant { id: neuve.clone(), egaux: vec![] });
+        let mut egaux = vec![neuve.clone(), jumelle.clone()];
+        egaux.sort();
+        assert_eq!(id(&["neuve", "jumelle"]), Identifiant { id: egaux[0].clone(), egaux: egaux.clone() });
+        assert_eq!(identifiant_des_suivies(&d, &[]).unwrap(), None);
+    }
+
+    fn catalogue() -> crate::Catalog {
+        let conn = crate::Rag3dbConnection::in_memory().unwrap();
+        let mut cat = crate::Catalog::without_embedding_model(Box::new(conn), crate::CatalogConfig::default());
+        cat.initialize().unwrap();
+        cat
+    }
+
+    /// **Les clés migrent sans rien perdre** : d'un identifiant à l'autre, les noms courts en nom complet
+    /// (`a` devient `refs/heads/a`, même si une étiquette `a` existe : une clé courte a toujours nommé une
+    /// branche) ; une clé cible déjà posée n'est jamais écrasée, la source reste et le journal le dit.
+    #[test]
+    fn les_cles_migrent_en_nom_complet_sans_rien_perdre() {
+        let cat = catalogue();
+        let lire = |k: &str| cat.read_meta_key(k).unwrap().filter(|v| !v.is_empty());
+        let poser = |k: &str, v: &str| cat.persist_meta_key(k, v).unwrap();
+        poser("couche:ancien:a", "{\"branche\":\"main\"}");
+        poser("couche_fermee:ancien:a", "fermée");
+        poser("couche:ancien:refs/heads/b", "{\"branche\":\"a\"}");
+        poser("couche:ancien:c", "{\"branche\":\"court\"}");
+        poser("couche:neuf:refs/heads/c", "{\"branche\":\"deja\"}");
+        poser("branches_suivies:ancien", "{\"ancre\":\"main\",\"suivies\":[\"a\"]}");
+        let journal = migrer_les_cles(&cat, "ancien", "neuf").unwrap();
+        assert_eq!(lire("couche:neuf:refs/heads/a").as_deref(), Some("{\"branche\":\"main\"}"));
+        assert_eq!(lire("couche_fermee:neuf:refs/heads/a").as_deref(), Some("fermée"));
+        assert_eq!(lire("couche:neuf:refs/heads/b").as_deref(), Some("{\"branche\":\"a\"}"));
+        assert_eq!(lire("couche:neuf:refs/tags/a"), None, "une clé courte nomme une branche, jamais une étiquette");
+        assert_eq!(lire("branches_suivies:neuf").as_deref(), Some("{\"ancre\":\"main\",\"suivies\":[\"a\"]}"));
+        for vide in ["couche:ancien:a", "couche_fermee:ancien:a", "couche:ancien:refs/heads/b", "branches_suivies:ancien"] {
+            assert_eq!(lire(vide), None, "{vide} reste après sa migration");
+        }
+        // La garde : la cible déjà posée gagne, la source n'est pas effacée, et c'est dit.
+        assert_eq!(lire("couche:neuf:refs/heads/c").as_deref(), Some("{\"branche\":\"deja\"}"));
+        assert_eq!(lire("couche:ancien:c").as_deref(), Some("{\"branche\":\"court\"}"), "la source a été perdue");
+        assert!(journal.iter().any(|l| l.contains("couche:ancien:c") && l.contains("garde")), "{journal:?}");
+        // Le même identifiant : seuls les noms courts se réécrivent.
+        poser("couche:neuf:d", "{\"branche\":\"main\"}");
+        migrer_les_cles(&cat, "neuf", "neuf").unwrap();
+        assert_eq!(lire("couche:neuf:refs/heads/d").as_deref(), Some("{\"branche\":\"main\"}"));
+        assert_eq!(lire("couche:neuf:d"), None);
     }
 }
