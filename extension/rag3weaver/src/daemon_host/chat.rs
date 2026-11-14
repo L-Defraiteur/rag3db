@@ -818,6 +818,11 @@ impl<'a> OutilsDuChat<'a> {
         };
         let path = args["path"].as_str().unwrap_or_default();
         let chemin = super::empreintes::cle_vraie(racine.as_deref(), path);
+        // **Créer un fichier** (ticket d'ED du 13 novembre 2026) : `insert_lines at=1` sur un fichier
+        // absent n'a rien à relire ; l'écriture le crée (et refuse s'il est apparu entre-temps).
+        if call.name == "insert_lines" && n("at") == Some(1) && !chemin.exists() {
+            return None;
+        }
         // Le fichier tel qu'il est maintenant : une lecture d'un autre contenu ne compte pas.
         let maintenant = super::empreintes::empreinte_du_fichier(&chemin).map(|(h, _)| h).unwrap_or_default();
         let empreintes = e.lock().unwrap_or_else(|p| p.into_inner());

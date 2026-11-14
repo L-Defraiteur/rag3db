@@ -173,14 +173,18 @@ impl DaemonHost {
         let racine = canonique(racine);
         let p = crate::backend_code::etendre_tilde(path.trim());
         let chemin = canonique(&if p.is_absolute() { p } else { racine.join(p) });
-        if !chemin.starts_with(&racine) && !self.accorde(&chemin, mode, backend) {
+        // Un worktree attaché (attach_worktree, open_branch) se lit, même hors de la racine ; son
+        // écriture suit la règle des worktrees (`atelier_peut_ecrire`) à l'appel qui écrit
+        // (ticket d'ED du 13 novembre 2026 : le refus conseillait d'attacher un worktree déjà attaché).
+        let worktree = self.worktree_qui_contient(&chemin)?;
+        if !chemin.starts_with(&racine) && worktree.is_none() && !self.accorde(&chemin, mode, backend) {
             return Err(format!(
                 "{} est hors de la racine de l'atelier ({}). Deux suites : déclarer l'espace (attach_worktree ou open_branch sur le worktree qui le contient), ou demander l'accord de l'utilisateur (ask_permission, avec la raison).",
                 chemin.display(),
                 racine.display()
             ));
         }
-        Ok(Resolu { worktree: self.worktree_qui_contient(&chemin)?, chemin })
+        Ok(Resolu { worktree, chemin })
     }
 
     /// Le worktree attaché (un arbre inscrit) dont la racine contient `chemin` : le plus
@@ -601,20 +605,51 @@ fn en_lignes(t: &str) -> String {
     if t.is_empty() || t.ends_with('\n') { t.to_string() } else { format!("{t}\n") }
 }
 
+/// Les positions de départ de `motif` dans `texte`, chevauchements compris (`aa` dans `aaa` : 2) ;
+/// une recherche sans chevauchement (`matches`) en comptait une (ticket d'ED du 13 novembre 2026).
+fn positions(texte: &str, motif: &str) -> usize {
+    let Some(premier) = motif.chars().next() else { return 0 };
+    let (mut n, mut depuis) = (0, 0);
+    while let Some(i) = texte[depuis..].find(motif) {
+        n += 1;
+        depuis += i + premier.len_utf8();
+    }
+    n
+}
+
+/// **La fin de ligne du fichier** : `\r\n` si le fichier en a, sinon `\n` (ticket d'ED du
+/// 13 novembre 2026 : la lecture rend les lignes sans `\r`, les écritures les gardent).
+fn fin_de_ligne(avant: &str) -> &'static str {
+    if avant.contains("\r\n") { "\r\n" } else { "\n" }
+}
+
+/// `t` dans la fin de ligne `fin` (ses `\r\n` et `\n` ramenés à `fin`).
+fn aux_fins(t: &str, fin: &str) -> String {
+    if fin == "\n" { t.to_string() } else { t.replace("\r\n", "\n").replace('\n', fin) }
+}
+
 /// **Le texte après une édition**, ou le refus qui dit pourquoi.
 pub(super) fn texte_apres(avant: &str, edition: &Edition) -> Result<String, String> {
+    let fin = fin_de_ligne(avant);
     match edition {
-        Edition::Texte { ancien, nouveau } => match avant.matches(ancien.as_str()).count() {
-            0 => Err("l'ancien texte n'y est pas : relisez le fichier (read_file) et recopiez-le exactement".into()),
-            1 => Ok(avant.replacen(ancien.as_str(), nouveau, 1)),
-            n => Err(format!("l'ancien texte y est {n} occurrences : donnez plus de contexte pour qu'il soit unique")),
-        },
+        Edition::Texte { ancien, nouveau } => {
+            // L'ancien texte recopié d'une lecture n'a pas les `\r` du fichier : comparé à ses fins.
+            let (ancien, nouveau) = (aux_fins(ancien, fin), aux_fins(nouveau, fin));
+            if ancien.is_empty() {
+                return Err("l'ancien texte est vide : recopiez ce qu'il faut remplacer".into());
+            }
+            match positions(avant, &ancien) {
+                0 => Err("l'ancien texte n'y est pas : relisez le fichier (read_file) et recopiez-le exactement".into()),
+                1 => Ok(avant.replacen(ancien.as_str(), &nouveau, 1)),
+                n => Err(format!("l'ancien texte y est {n} occurrences : donnez plus de contexte pour qu'il soit unique")),
+            }
+        }
         Edition::Lignes { de, a, texte } => {
             let l = lignes(avant);
             if *de < 1 || *a < *de || *a > l.len() {
                 return Err(format!("le fichier a {} lignes : les lignes {de}..{a} n'y sont pas", l.len()));
             }
-            Ok(format!("{}{}{}", l[..de - 1].concat(), en_lignes(texte), l[*a..].concat()))
+            Ok(format!("{}{}{}", l[..de - 1].concat(), aux_fins(&en_lignes(texte), fin), l[*a..].concat()))
         }
         Edition::Insertion { avant: at, texte } => {
             let l = lignes(avant);
@@ -623,8 +658,8 @@ pub(super) fn texte_apres(avant: &str, edition: &Edition) -> Result<String, Stri
             }
             // Un fichier sans retour final : la ligne d'avant reçoit le sien avant l'ajout.
             let tete = l[..at - 1].concat();
-            let tete = if *at - 1 == l.len() { en_lignes(&tete) } else { tete };
-            Ok(format!("{tete}{}{}", en_lignes(texte), l[at - 1..].concat()))
+            let tete = if *at - 1 == l.len() && !tete.is_empty() && !tete.ends_with('\n') { format!("{tete}{fin}") } else { tete };
+            Ok(format!("{tete}{}{}", aux_fins(&en_lignes(texte), fin), l[at - 1..].concat()))
         }
     }
 }
