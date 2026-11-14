@@ -231,6 +231,11 @@ impl Vue {
         self.validees.push(Validee { genre, texte, langue: String::new(), tete: 0 });
     }
 
+    /// Une ligne dont l'en-tête garde l'accent du thème.
+    fn valider_avec_tete(&mut self, genre: Genre, tete: &str, corps: &str) {
+        self.validees.push(Validee { genre, texte: format!("{tete}{corps}"), langue: String::new(), tete: tete.len() });
+    }
+
     /// Une ligne de texte du modèle : elle ouvre ou ferme un bloc de code, y
     /// entre, ou part telle quelle.
     fn valider_texte(&mut self, ligne: String) {
@@ -345,11 +350,14 @@ impl Vue {
     pub fn ligne_de_boite(&mut self, l: &Value) {
         self.boite.ligne(l);
         self.clore();
-        let item = l["item"].as_str().filter(|i| !i.is_empty()).map(|i| format!(" [{i}]")).unwrap_or_default();
-        let tete = format!("[{} · {}{item}] ", l["from"].as_str().unwrap_or("?"), l["kind"].as_str().unwrap_or("?"));
+        let tete = crate::boite::en_tete(l);
         let texte = l["text"].as_str().unwrap_or("");
         for (i, ligne) in texte.split('\n').enumerate() {
-            self.valider(Genre::Boite, if i == 0 { format!("{tete}{ligne}") } else { format!("  {ligne}") });
+            if i == 0 {
+                self.valider_avec_tete(Genre::Boite, &tete, ligne);
+            } else {
+                self.valider(Genre::Boite, format!("  {ligne}"));
+            }
         }
         if l["kind"] == "ended" {
             self.changer(Etat::Fini(texte.to_string()));
@@ -375,7 +383,7 @@ impl Vue {
                 let attente = self.boite.premiere().cloned()?;
                 let oui = matches!(c, 'o' | 'O' | 'y' | 'Y');
                 self.clore();
-                self.valider(Genre::Boite, format!("› {} : {}", if oui { "accordé" } else { "refusé" }, attente.command.clone().unwrap_or_default()));
+                self.valider_avec_tete(Genre::Boite, "› ", &format!("{} : {}", if oui { "accordé" } else { "refusé" }, attente.command.clone().unwrap_or_default()));
                 Some(Action::Repondre { attente, texte: if oui { "oui".into() } else { "non".into() }, accord: Some(oui) })
             }
             Touche::Car(c) => {
@@ -408,13 +416,13 @@ impl Vue {
                 // Ce que l'équipier attend passe avant : la saisie y répond.
                 if let Some(attente) = self.boite.premiere().cloned() {
                     self.clore();
-                    self.valider(Genre::Boite, format!("› {texte}"));
+                    self.valider_avec_tete(Genre::Boite, "› ", &texte);
                     return Some(Action::Repondre { attente, texte, accord: None });
                 }
                 let genre = self.genre_d_envoi();
                 self.demande_posee = true;
                 self.clore();
-                self.valider(Genre::Boite, format!("› {texte}"));
+                self.valider_avec_tete(Genre::Boite, "› ", &texte);
                 Some(Action::Envoyer(texte, genre))
             }
             Touche::Echap => Some(Action::Arreter),
@@ -598,7 +606,7 @@ mod tests {
         v.ligne_de_boite(&json!({ "from": "host", "kind": "ended", "text": "fait sans plan" }));
         assert_eq!(v.etat, Etat::Fini("fait sans plan".into()));
         let lignes: Vec<String> = v.prendre_lignes().into_iter().map(|l| l.texte).collect();
-        assert_eq!(lignes, vec!["salut", "» read_file", "  fait (3 ms)", "[host · ended] fait sans plan"]);
+        assert_eq!(lignes, vec!["salut", "» read_file", "  fait (3 ms)", "[hôte · fini] fait sans plan"]);
     }
 
     #[test]

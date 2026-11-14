@@ -45,16 +45,83 @@ pub fn replier(morceaux: Vec<(String, Style)>, largeur: usize) -> Vec<Line<'stat
     lignes
 }
 
-/// Le texte d'une ligne, son code en ligne teinté (les accents graves gardés,
-/// en sourdine).
-fn texte_avec_code_en_ligne(t: &Theme, cap: Capacites, texte: &str, base: Style) -> Vec<(String, Style)> {
+/// Le gras (`**…**`) et l'italique (`*…*`) d'un morceau sans code : un
+/// astérisque ne compte que s'il entoure un mot (pas `src/*.rs`, pas `2 * 3`).
+fn emphase(texte: &str, base: Style) -> Vec<(String, Style)> {
+    let c: Vec<char> = texte.chars().collect();
+    let n = c.len();
+    let mut out = Vec::new();
+    let mut tampon = String::new();
+    let mut i = 0;
+    let vider = |tampon: &mut String, out: &mut Vec<(String, Style)>| {
+        if !tampon.is_empty() {
+            out.push((std::mem::take(tampon), base));
+        }
+    };
+    while i < n {
+        if c[i] == '*' && c.get(i + 1) == Some(&'*') && c.get(i + 2).is_some_and(|x| !x.is_whitespace()) {
+            if let Some(j) = (i + 3..n.saturating_sub(1)).find(|&j| c[j] == '*' && c[j + 1] == '*' && !c[j - 1].is_whitespace()) {
+                vider(&mut tampon, &mut out);
+                out.push((c[i + 2..j].iter().collect(), base.add_modifier(Modifier::BOLD)));
+                i = j + 2;
+                continue;
+            }
+        }
+        let ouvre = c[i] == '*' && (i == 0 || !c[i - 1].is_alphanumeric()) && c.get(i + 1).is_some_and(|x| !x.is_whitespace() && *x != '*');
+        if ouvre {
+            let ferme = (i + 2..n).find(|&j| c[j] == '*' && !c[j - 1].is_whitespace() && c.get(j + 1).is_none_or(|x| !x.is_alphanumeric() && *x != '*'));
+            if let Some(j) = ferme {
+                vider(&mut tampon, &mut out);
+                out.push((c[i + 1..j].iter().collect(), base.add_modifier(Modifier::ITALIC)));
+                i = j + 1;
+                continue;
+            }
+        }
+        tampon.push(c[i]);
+        i += 1;
+    }
+    vider(&mut tampon, &mut out);
+    out
+}
+
+/// **La prose** (le texte du modèle, le corps d'une ligne de boîte) : le
+/// Markdown courant sans ses marques — un titre `#` en gras dans l'accent, une
+/// puce `-`, `*` ou `+` en `•`, le gras et l'italique, le code en ligne teinté.
+fn prose(t: &Theme, cap: Capacites, texte: &str, base: Style) -> Vec<(String, Style)> {
+    let retrait = texte.len() - texte.trim_start_matches(' ').len();
+    let (tete, reste) = texte.split_at(retrait);
+    let dieses = reste.chars().take_while(|c| *c == '#').count();
+    if (1..=6).contains(&dieses) && reste[dieses..].starts_with(' ') {
+        let accent = couleur(&t.couleurs.texte, cap.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default().add_modifier(Modifier::BOLD);
+        return inline(t, cap, reste[dieses..].trim_start(), accent);
+    }
+    let mut out = Vec::new();
+    let corps = match reste.get(..2) {
+        Some("- " | "* " | "+ ") => {
+            let puce = if cap.glyphes == crate::anim::Glyphes::Ascii { "- " } else { "• " };
+            out.push((format!("{tete}{puce}"), base));
+            &reste[2..]
+        }
+        _ => texte,
+    };
+    out.extend(inline(t, cap, corps, base));
+    out
+}
+
+/// Le code en ligne teinté, et l'emphase entre les accents graves.
+fn inline(t: &Theme, cap: Capacites, texte: &str, base: Style) -> Vec<(String, Style)> {
     let mut out = Vec::new();
     for (i, morceau) in texte.split('`').enumerate() {
         if i > 0 {
             out.push(("`".to_string(), teinte(t, cap, "cadre")));
         }
-        if !morceau.is_empty() {
-            out.push((morceau.to_string(), if i % 2 == 1 { teinte(t, cap, "en_ligne") } else { base }));
+        if morceau.is_empty() {
+            continue;
+        }
+        if i % 2 == 1 {
+            out.push((morceau.to_string(), teinte(t, cap, "en_ligne")));
+        } else {
+            out.extend(emphase(morceau, base));
         }
     }
     out
@@ -65,10 +132,21 @@ fn texte_avec_code_en_ligne(t: &Theme, cap: Capacites, texte: &str, base: Style)
 pub fn lignes(v: &Validee, t: &Theme, cap: Capacites, largeur: usize, coloration: Option<&[Coloration]>) -> Vec<Line<'static>> {
     let rouge = couleur(&t.couleurs.texte, cap.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
     let sourdine = couleur(&t.couleurs.sourdine, cap.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
+    // La prose : la couleur du thème s'il en a une, sinon celle du terminal.
+    let ecrit = t.couleurs.prose.as_deref().and_then(|h| couleur(h, cap.couleurs)).map(|c| Style::default().fg(c)).unwrap_or_default();
     match v.genre {
-        Genre::Texte => replier(texte_avec_code_en_ligne(t, cap, &v.texte, Style::default()), largeur),
+        Genre::Texte => replier(prose(t, cap, &v.texte, ecrit), largeur),
         Genre::Outil => replier(vec![(v.texte.clone(), rouge)], largeur),
-        Genre::Boite => replier(texte_avec_code_en_ligne(t, cap, &v.texte, rouge.add_modifier(Modifier::BOLD)), largeur),
+        Genre::Boite => {
+            let tete = v.tete.min(v.texte.len());
+            let tete = if v.texte.is_char_boundary(tete) { tete } else { 0 };
+            let mut morceaux = Vec::new();
+            if tete > 0 {
+                morceaux.push((v.texte[..tete].to_string(), rouge.add_modifier(Modifier::BOLD)));
+            }
+            morceaux.extend(prose(t, cap, &v.texte[tete..], ecrit));
+            replier(morceaux, largeur)
+        }
         Genre::Note => replier(vec![(v.texte.clone(), sourdine.add_modifier(Modifier::DIM))], largeur),
         Genre::Code => {
             let cadre = teinte(t, cap, "cadre");
