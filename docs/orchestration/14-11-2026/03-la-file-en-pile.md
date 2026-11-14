@@ -40,7 +40,7 @@ l'autre, dix fois de suite, même sans rouge.
 
 | rang | session | lot | branche | tête testée |
 |---|---|---|---|---|
-| 1 | lucivy | montée 4.3.7 | lucivy-4-3-7-2 | d3595e110 (en tour : son rebase sur aa953c8f6 est la base de la pile) |
+| 1 | lucivy | montée 4.3.7 | lucivy-4-3-7-4 | cd6d02907, rebasée sur aa953c8f6 : la base de la pile (rejeu court en cours à luciepc) |
 | 2 | tty | tty-6 (tmux/mosh mesurés) | cx-tty-6-2 | 4583eff8e |
 | 3 | recherche | surveillant, puis plafond d'instantané | surveillant-2, plafond-d-instantane | a36f707dd, 9b7ff76e8 |
 | 4 | G | cas 6c du poste (trap avant la CI) | tenant-signal | ab7c44fb5 |
