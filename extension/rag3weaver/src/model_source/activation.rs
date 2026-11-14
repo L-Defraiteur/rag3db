@@ -132,6 +132,7 @@ fn variables(source: &super::ModelSource, attendue: &crate::daemon::embeddings::
 
 /// Le fichier du compte des relances d'une déclaration, dans son dossier de
 /// coordination (une ligne : le nombre).
+#[cfg(feature = "daemon")]
 fn fichier_des_relances(source: &super::ModelSource) -> Option<std::path::PathBuf> {
     let a = source.activation.as_ref()?;
     let nom: String = source.model.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect();
@@ -139,12 +140,14 @@ fn fichier_des_relances(source: &super::ModelSource) -> Option<std::path::PathBu
 }
 
 /// Les relances après plantage que cette déclaration a déjà eues.
+#[cfg(feature = "daemon")]
 fn relances_notees(source: &super::ModelSource) -> u64 {
     fichier_des_relances(source).and_then(|p| std::fs::read_to_string(p).ok()).and_then(|s| s.trim().parse().ok()).unwrap_or(0)
 }
 
 /// Une relance de plus, notée avant de relancer : le relancé la dit à son
 /// /sante. Écrit puis renommé (aucun lecteur ne voit un fichier à moitié).
+#[cfg(feature = "daemon")]
 fn noter_une_relance(source: &super::ModelSource) {
     let Some(p) = fichier_des_relances(source) else { return };
     let n = relances_notees(source) + 1;
