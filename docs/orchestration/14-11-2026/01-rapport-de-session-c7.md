@@ -566,3 +566,27 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   cœur et instrumente le chemin COPY avant d'élargir. Sous 2a′-1, une édition efface encore (les
   orphelines existent sur une base vivante ; 2a′-2 passe au retrait par `_jusqu_a`) : le court-circuit
   d'arbre principal garde son comptage des orphelines ; on ne retire pas une version à l'édition.
+
+## 18 h 4x — la passe du journal posée ; une fenêtre trouée ; les décisions du soir
+
+- **Le journal des chantiers est dans la mémoire de Lucie** (96, 18 h 20 → 18 h 40, 152 sections, 0 erreur) :
+  57 fiches proposées (20 thématiques, 37 à un chantier), 8 sections rejointes sur 5 fiches existantes,
+  0 refus, miroir 173 = 173 ; posée à 18 h 43, rouverte par G. **La fenêtre a été trouée à 18 h 35** :
+  Lucie essayait le terminal (run agent-1a1db20d720-9091, tâche essai-tty), son juge a écrit par l'hôte
+  7970 (une Source, une fiche, deux réécritures) et **tout appel rouvre un backend fermé**. Rien de
+  perdu : l'état vivant copié dans `ecrit-pendant-la-fenetre-14-nov/`, écrasé par la passe, les
+  écritures du juge rejouées. **Une annonce n'est pas un verrou** : ticket et lot à archi — `/backend/close`
+  avec une raison refuse toute réouverture en la disant jusqu'à `/backend/open`.
+- **Lucie** : la chaîne Rust épinglée à **1.98.1**, posée quand la pile est vide ce soir (G, lot prêt
+  d950d8790 : rust-toolchain.toml + workflow ; luciepc 1.98.0 rebâtira ses 17 targets actifs au
+  premier cargo) ; la montée à 1.100.0 en lot de nuit (ticket 4d85569f5, ~340 Gio rebâtis). Laya : à
+  banc, sur les décisions de l'archiviste et la porte du rappel. Drop-in de l'hôte : pas posé. Les
+  copies : 67 + 63 effacées, l'installeur et bascule-pose sauvegardent hors du dossier d'unités
+  (bc3adc7f3, témoin rouge d'abord, hors pile à bon droit : `--code-apporte` vide) ; un
+  `check-lib.conf.pret` du 25 oct. reste, hors du mot.
+- **tty-8** au mot de Lucie (le terminal « trop prototype ») : prose en couleur par défaut, Markdown en
+  ligne, un éditeur de ligne complet.
+- **Codeparsers** : la passe de l'import pointé rougissait sur l'environnement (la lib 0c41f9fe6 plus
+  vieille que le `src/` de la pile, qui porte le correctif (a) ; postgres arrêté au portable) : rejouée
+  sous `RAG3WEAVER_MOTEUR_ANCIEN=1` dit (le lot ne touche pas le moteur) et `docker start rag3weaver-pg`.
+  La lib d'après (373b5477b) couvrira la pile à sa pose.
