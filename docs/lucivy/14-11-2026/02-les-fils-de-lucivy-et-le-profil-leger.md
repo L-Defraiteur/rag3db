@@ -261,3 +261,49 @@ Cela fait 5 923 des 6 928 ms. Le reste comprend les ~9 ms de lucivy et les deux 
   segment recalculé pour les seuls segments neufs, `update_view(add, remove)`, l'intersection avec un
   `allowed_ids`, et un score égal au bit près à celui d'`allowed_ids`. Elle ne gagnerait que les 6 à 10 ms par
   appel. On y revient si ces millisecondes comptent une fois les 5,9 s retirées.
+
+## 4. Le dictionnaire qui garde les textes des documents effacés
+
+Ticket : `docs/lucivy/tickets/2026-11-14-le-dictionnaire-garde-les-textes-des-documents-effaces.md`. Sur
+`Lucivy_Scope`, après la purge de 8 809 documents et la compaction, le dictionnaire reste à 513,8 Mo, contre
+420,1 Mo pour un index neuf des survivants.
+
+### La cause : deux défauts
+
+- **Le `.gmap` d'un segment fusionné était l'union des `.gmap` d'entrée.** L'id d'un terme dont tous les documents
+  sont supprimés y restait, avec des postings vides, et rien ne savait qu'il était mort.
+- **La compaction ne fusionnait que les groupes d'au moins deux segments.** Un shard réduit à un segment gardait ses
+  supprimés pour toujours. Le test à 4 shards de `maintain` ne le voyait pas, parce que chaque shard y avait
+  plusieurs segments.
+
+### Pièce 1 : la fusion lâche les ids morts
+
+PR lucivy #37. La fusion ne garde que les ids qui ont encore un document vivant, et un segment seul qui porte des
+supprimés est réécrit.
+- Témoin : une fixture à 1 shard, 400 documents, 200 purgés. Sur main, le segment garde ses 200 supprimés et son
+  `.gmap` nomme 1 231 ids. Sur la branche, il en nomme 631, comme un index neuf, avec les mêmes hits et les mêmes
+  scores au bit près.
+- **Le coût ne touche que les fusions de segments qui portent des supprimés** : +12 % sur une compaction de
+  maintenance (55 s contre 49), et l'indexation ne bouge pas (+0,6 à +1,8 %, sous le bruit). Le souhait d'une
+  réduction est un ticket : `2026-11-14-le-pre-passage-des-ids-vivants-relit-les-postings.md`.
+
+### Ce que pèse un dictionnaire
+
+Mesuré avec `test_dictionary_anatomy` sur l'index neuf de recherche : 771 Mo, dont 52 % de dictionnaire.
+- **Il ne pèse pas par le nombre de segments** : il y en a un par shard, et la compaction de 27 à 4 segments l'a
+  laissé à 513,8 Mo.
+- **Il pèse par le vocabulaire.** Le champ `content` compte 5,63 M entrées distinctes : 3,47 M fragments de 8
+  octets au plus, avec le débord sur le token suivant, et 2,16 M mots. Cela fait 45,7 Mo de texte d'entrées pour
+  73 Mo de texte stocké.
+- **Chaque octet d'entrée devient un suffixe** : environ 46 M clés FST avec leurs parents, à 6 octets chacune
+  (`.sfx` 282 Mo), plus environ 14 octets par entrée en `.termtexts` (80 Mo). Les mots longs ne pèsent rien : moins
+  de 4 % des suffixes.
+- Les doublons de la base pleine abaissaient le rapport (×4,9 contre ×10,6 à neuf), sans rien économiser.
+- Les leviers sont la longueur minimale de suffixe, la taille du débord et `DEFAULT_MAX_TOKEN` = 8. Ils changent ce
+  que `contains` trouve : rien sans décision.
+
+### Pièce 2 : la compaction filtrée du dictionnaire
+
+Elle fusionne toutes les générations en une, en ne gardant que les ids que l'union des `.gmap` vivants cite. Aucun
+id n'est renuméroté et aucun segment n'est réécrit. Elle tourne sous le verrou des écrivains, et refuse s'il reste
+des documents non validés ou des paires en attente. En cours.
