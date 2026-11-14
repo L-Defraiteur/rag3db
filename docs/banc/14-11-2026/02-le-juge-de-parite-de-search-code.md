@@ -69,3 +69,49 @@ d'avant les versions et la base migrée, puis entre chaque optimisation et le co
   - le passage aux générations est retiré là où le code ne le porte pas ;
   - le code mort est toléré, pour un parent qui porte une fonction pas encore appelée, sous
     `warnings = "deny"`.
+
+## 4. Le lot des orphelins de recherche (832a5896d contre 9d90edbb6)
+
+- **Le montage** (`parite-orphelins.sh`, à luciepc) :
+  - une copie neuve de la base migrée ;
+  - une source à moi, un worktree détaché au commit de l'instantané (835d5298f) ;
+  - les comptes du plein texte, à l'ouverture, après un index de la source entière, puis après un
+    index sans `extension/rag3weaver/src/arbre.rs` ;
+  - puis les 30 cas de parité sur le lot.
+- **Les 30 cas : VERT au bit près.**
+- **Les comptes sont les mêmes au parent et au lot** :
+
+  | étape | File (documents / lignes) | Scope | Symbol |
+  |---|---|---|---|
+  | après l'index de la source entière | 7 811 / 7 608 | 84 211 / 84 211 | 86 172 / 86 172 |
+  | après l'index sans `arbre.rs` | 7 608 / 7 607 | 84 211 / 84 211 | 86 172 / 86 172 |
+
+  - L'écart de File est l'orphelin que vise le lot. Recherche confirme que son lot ne le prend pas
+    encore.
+  - La source au commit 835d5298f diffère de ce que la base avait indexé : 79 662 Scope deviennent
+    84 211.
+- **Les lignes du fichier retiré, lues une à une** (relevé `orphelins-fichier`, au parent) :
+  - après l'index de la source entière, 7 Scope et 1 File portent le chemin de `arbre.rs`, toutes
+    avec `_absent_since` nul. Le File est `a94367e3-9f4b-0e62-368a-571d3b0198ab`. Les Scope sont
+    `01e86cf0-faac-bd73-ebd2-a371be73bcfa`, `d8ecbcb4-3d88-000e-8747-97c118918764`,
+    `44ba6df7-6eeb-80aa-7a05-583cbf329997`, `527abc47-1e3f-3c2b-8862-8f974bc3ef60`,
+    `7a8b902b-961d-c725-62d5-8456a63ae989`, `a92f4c45-60cc-fb20-5766-254dd2be98a4` et
+    `6547aec7-5499-ac36-ea0d-87cdc20393ae` ;
+  - après l'index sans le fichier, aucune ligne ne reste : ni Scope, ni File, ni ouverte, ni
+    fermée ;
+  - le fichier remis, son File revient.
+- **Ce que ça dit** :
+  - le parent et le lot sont **dans la forme à versions sans générations**
+    (`code-scope-v1/content`). Les colonnes `_couche`, `_depuis` et `_jusqu_a` n'y existent pas :
+    elles viennent avec les générations (2a′, branche d'everything declarative) ;
+  - dans cette forme, la fin d'instantané **efface** les lignes que la source n'a plus. Elle les
+    met de côté le temps de son annulation (`catalog/synchronisation.rs`) et ne pose
+    `_absent_since` que sur une transition de cycle de vie. L'effacement des 7 Scope et du File
+    est donc **le comportement voulu**, pas un contournement de la version ;
+  - **aucun défaut de version ici** : le compte seul trompait. Le seul écart est le document de
+    plein texte de File resté après sa ligne, celui que vise le lot ;
+  - **la question reste entière pour les générations** : là, un retrait doit fermer la ligne
+    (`_jusqu_a`) au lieu de l'effacer. Ce relevé ne le dit pas, faute de générations dans ce code.
+    Il se rejouera sur la branche de 2a′ quand le lot des orphelins y sera posé.
+- **Un trou du relevé** : `Symbol` n'a pas de `file_path`. Son compte par fichier est refusé par
+  le binder, et il est à refaire par la relation au File.
