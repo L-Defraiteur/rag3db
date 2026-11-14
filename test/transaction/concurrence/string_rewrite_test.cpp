@@ -27,6 +27,7 @@ using namespace rag3db::testing;
 namespace {
 
 constexpr int64_t NUM_ROWS = 5000;
+constexpr int64_t NEW_ROWS = 500;
 
 std::string textOf(int64_t id, int64_t round) {
     if (id % 5 == 0) {
@@ -66,7 +67,8 @@ protected:
     int64_t wrongRows(std::string& summary) {
         int64_t wrong = 0;
         std::ostringstream out;
-        auto scan = conn->query("MATCH (n:Chunk) RETURN n._uuid, n._text, n.marker;");
+        auto scan = conn->query(
+            "MATCH (n:Chunk) WHERE n._uuid STARTS WITH 'c-' RETURN n._uuid, n._text, n.marker;");
         int64_t seen = 0;
         while (scan->isSuccess() && scan->hasNext()) {
             auto tuple = scan->getNext();
@@ -202,6 +204,12 @@ TEST_F(StringRewriteAcrossAddColumn, AnOpenWriterCommitsAfterAnAdd) {
         rag3db::main::Connection writer(database.get());
         ASSERT_TRUE(writer.query("BEGIN TRANSACTION;")->isSuccess());
         rewrite(writer, 0, NUM_ROWS);
+        // Des lignes neuves aussi, nées sous l'ancien schéma et validées après l'ADD.
+        auto created = writer.query(stringFormat(
+            "UNWIND range({}, {}) AS i CREATE (:Chunk {_uuid: 'n-' + CAST(i AS STRING), "
+            "_text: 'neuve-' + CAST(i AS STRING), marker: 'neuf'});",
+            0, NEW_ROWS - 1));
+        ASSERT_TRUE(created->isSuccess()) << created->getErrorMessage();
         std::atomic<bool> alterDone{false};
         std::thread alter([&] {
             rag3db::main::Connection other(database.get());
@@ -215,13 +223,13 @@ TEST_F(StringRewriteAcrossAddColumn, AnOpenWriterCommitsAfterAnAdd) {
         // Ce que voit l'écrivain : l'ADD a-t-il abouti avant son COMMIT, et la colonne lui est-elle
         // visible dans sa transaction ? Imprimé pour le ticket de l'isolement du catalogue.
         const bool doneBeforeCommit = alterDone.load();
-        auto seen = writer.query("MATCH (n:Chunk) RETURN count(n.note);");
+        // table_info ne peut pas échouer : une erreur dans la transaction la ferait annuler.
+        auto seen = writer.query("CALL table_info('Chunk') RETURN count(*);");
         std::cout << "[témoin] ADD terminé avant le COMMIT de l'écrivain : "
-                  << (doneBeforeCommit ? "oui" : "non") << " ; note vue dans sa transaction : "
-                  << (seen->isSuccess() ? "oui, " + seen->getNext()->getValue(0)->toString() +
-                                              " valeurs non nulles" :
-                                          "non (" + seen->getErrorMessage().substr(0, 120) + ")")
-                  << std::endl;
+                  << (doneBeforeCommit ? "oui" : "non") << " ; colonnes vues dans sa transaction : "
+                  << (seen->isSuccess() ? seen->getNext()->getValue(0)->toString() :
+                                          seen->getErrorMessage().substr(0, 120))
+                  << " (3 avant l'ADD, 4 après)" << std::endl;
         auto commit = writer.query("COMMIT;");
         alter.join();
         ASSERT_TRUE(commit->isSuccess()) << commit->getErrorMessage();
@@ -230,11 +238,15 @@ TEST_F(StringRewriteAcrossAddColumn, AnOpenWriterCommitsAfterAnAdd) {
               << (alterError.empty() ? "accepté" : "refusé : " + alterError) << std::endl;
     expectAllRight("before-checkpoint");
     {
-        auto result = conn->query("MATCH (n:Chunk) RETURN count(n), count(n.note), "
-                                  "sum(CASE WHEN n.note = 'n-defaut' THEN 1 ELSE 0 END);");
-        if (result->isSuccess()) {
-            std::cout << "[témoin] après le COMMIT, lignes, note non nulles, note = défaut : "
-                      << result->getNext()->toString() << std::endl;
+        for (const auto* which : {"n.marker <> 'neuf'", "n.marker = 'neuf'"}) {
+            auto result = conn->query(std::string("MATCH (n:Chunk) WHERE ") + which +
+                                      " RETURN count(n), count(n.note), "
+                                      "sum(CASE WHEN n.note = 'n-defaut' THEN 1 ELSE 0 END);");
+            if (result->isSuccess()) {
+                std::cout << "[témoin] après le COMMIT, " << which
+                          << " : lignes, note non nulles, note = défaut : "
+                          << result->getNext()->toString() << std::endl;
+            }
         }
     }
     ok("CHECKPOINT;");
