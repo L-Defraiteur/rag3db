@@ -43,6 +43,14 @@ fn env_n(nom: &str, defaut: usize) -> usize {
     std::env::var(nom).ok().and_then(|v| v.parse().ok()).unwrap_or(defaut)
 }
 
+/// La mémoire résidente du processus, en Mio (`VmRSS` de `/proc/self/status`).
+fn rss_mio() -> f64 {
+    std::fs::read_to_string("/proc/self/status")
+        .ok()
+        .and_then(|s| s.lines().find(|l| l.starts_with("VmRSS:")).and_then(|l| l.split_whitespace().nth(1)).and_then(|k| k.parse::<f64>().ok()))
+        .map_or(f64::NAN, |k| k / 1024.0)
+}
+
 fn mediane(mut t: Vec<f64>) -> (f64, f64) {
     if t.is_empty() {
         return (f64::NAN, f64::NAN);
@@ -108,6 +116,8 @@ fn jouer(backend: &Backend, ecoute: &mut Ecoute, etat: &str, forme: &str, extra:
     let mut appels = Vec::new();
     let mut etages: BTreeMap<String, Vec<f64>> = BTreeMap::new();
     let mut resultats = Vec::new();
+    let rss_avant = rss_mio();
+    let mut rss_par_appel = Vec::new();
     for q in requetes {
         let mut args = extra.clone();
         args["query"] = json!(q);
@@ -123,8 +133,16 @@ fn jouer(backend: &Backend, ecoute: &mut Ecoute, etat: &str, forme: &str, extra:
                 etages.entry(n).or_default().push(ms);
             }
             resultats.push(r["result"].as_array().map_or(0, |a| a.len()));
+            rss_par_appel.push(rss_mio());
         }
     }
+    let rss_apres = rss_mio();
+    let n = (requetes.len() * (tours + chauffe)) as f64;
+    eprintln!(
+        "[sonde] {etat} {forme:<28} RSS : avant {rss_avant:.0} Mio, après {rss_apres:.0} Mio, {:+.1} Mio par appel ; au fil des appels mesurés : {:?}",
+        (rss_apres - rss_avant) / n,
+        rss_par_appel.iter().step_by(5).map(|m| m.round() as i64).collect::<Vec<_>>()
+    );
     let (m, x) = mediane(appels.clone());
     let (mr, _) = mediane(resultats.iter().map(|n| *n as f64).collect());
     eprintln!("[sonde] {etat} {forme:<28} appel : médiane {m:>8.1} ms   max {x:>8.1} ms   ({} appels, {mr:.0} résultats en médiane)", appels.len());
@@ -149,7 +167,12 @@ fn le_cout_d_une_recherche_par_etage() {
     let prepared = PreparedBackend::load(std::path::Path::new(&manifeste)).expect("le manifeste");
     let racine = prepared.manifest.workspace.as_ref().map(|w| w.root.to_string_lossy().trim_end_matches('/').to_string()).unwrap_or_default();
     let t0 = Instant::now();
-    let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), None).expect("ouvrir le backend");
+    let backend = {
+        // L'embarqueur du manifeste, comme l'hôte : sans lui, le dense et le creux disent « not available ».
+        let embarqueur = prepared.connect_embedder().map(|(e, _)| e).map_err(|e| eprintln!("[sonde] AVERTISSEMENT embarqueur absent : {e}")).ok();
+        eprintln!("[sonde] embarqueur : {}", if embarqueur.is_some() { "connecté" } else { "ABSENT" });
+        prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), embarqueur).expect("ouvrir le backend")
+    };
     eprintln!("[sonde] rôle {role} ; ouverture {:.0} ms ; {chauffe} chauffe(s), {tours} tours ; racine {racine}", t0.elapsed().as_secs_f64() * 1000.0);
 
     let versions = role == "versions";
@@ -203,6 +226,7 @@ fn le_cout_d_une_recherche_par_etage() {
     requetes.extend(["ouvrir une base et enregistrer le schéma", "parse a json manifest", "rebuild the vector index", "transaction rollback", "translate a hop into a query"].map(String::from));
     eprintln!("[sonde] requêtes : {requetes:?}");
 
+    eprintln!("[sonde] RSS à l'ouverture : {:.0} Mio", rss_mio());
     let mut ecoute = Ecoute::sur(&backend);
     if !versions {
         for (forme, extra) in formes(&chemin, &langage, true) {
@@ -238,9 +262,16 @@ fn le_cout_d_une_recherche_par_etage() {
             }).sum::<usize>()
         });
         eprintln!("[sonde] {etat} hors appel (b) masque    médiane {mb:>8.1} ms   max {xb:>8.1} ms   {n} références");
+        eprintln!("[sonde] {etat} hors appel RSS {:.0} Mio", rss_mio());
     };
 
     hors_appel("A", true);
+    // **La pente du RSS seule** (`RAG3WEAVER_SONDE_SEUL_A=1`) : A sans filtre, puis on s'arrête.
+    if std::env::var("RAG3WEAVER_SONDE_SEUL_A").is_ok() {
+        let (_, sans) = formes(&chemin, &langage, false).remove(0);
+        jouer(&backend, &mut ecoute, "A", "sans filtre", &sans, &requetes, chauffe, tours);
+        return;
+    }
     let mut a = 0.0;
     for (forme, extra) in formes(&chemin, &langage, true) {
         let m = jouer(&backend, &mut ecoute, "A", &forme, &extra, &requetes, chauffe, tours);
