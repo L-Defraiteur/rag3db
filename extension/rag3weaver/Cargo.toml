@@ -121,20 +121,21 @@ hf-hub = { version = "0.4", optional = true, default-features = false, features 
 # comme son sous-ensemble — le lecteur filtré gardait le compte du segment entier
 # et l'IDF mêlait le N du dépôt aux fréquences de la vue (témoin
 # `fts_handle::une_recherche_filtree_classe_comme_sa_vue`). Format inchangé.
-# **En branche seulement** (15 novembre 2026) : main de lucivy par révision, en
-# attendant la 4.3.8 — `maintain` (purge, compaction, rapport avant et après), la
-# fusion qui lâche les ids sans document vivant et la compaction du dictionnaire
-# (513,8 → 400,7 Mo sur Lucivy_Scope après la purge des orphelins). Au tag, ces
-# trois lignes deviennent "4.3.8" : master ne porte que des versions publiées.
-lucivy-core = { git = "https://github.com/L-Defraiteur/lucivy", rev = "d3b8c4a6ae51a4791ae60e3ee1e0e207c3c36d5a" }
+# La 4.3.8 (15 novembre 2026) : `maintain` (purge, compaction, rapport avant et
+# après ; refus au-delà de la moitié des vivants), la fusion qui lâche les ids sans
+# document vivant, un segment seul qui rend ses supprimés, et la compaction du
+# dictionnaire (513,8 → 400,7 Mo sur Lucivy_Scope après la purge des orphelins ;
+# l'index entier 4,27 → 1,16 Go). Format inchangé. C'est ce qu'appelle
+# `POST /backend/maintain` (`fts_maintenance`).
+lucivy-core = "4.3.8"
 # Moteur : nécessaire pour construire les LucivyDocument à l'indexation.
-ld-lucivy = { git = "https://github.com/L-Defraiteur/lucivy", rev = "d3b8c4a6ae51a4791ae60e3ee1e0e207c3c36d5a", default-features = false, features = ["stopwords", "lz4-compression"] }
+ld-lucivy = { version = "4.3.8", default-features = false, features = ["stopwords", "lz4-compression"] }
 
 
 # sparse_vector — crate ami de lucivy (Apache-2.0, dérivé en partie de Qdrant,
-# voir son NOTICE), persistance via lucistore. Aligné sur lucivy en 4.3.7
-# (14 novembre 2026) ; depuis la 4.3.3, close() arrête aussi ses pools après une erreur.
-sparse-vector = { git = "https://github.com/L-Defraiteur/lucivy", rev = "d3b8c4a6ae51a4791ae60e3ee1e0e207c3c36d5a" }
+# voir son NOTICE), persistance via lucistore. Aligné sur lucivy en 4.3.8
+# (15 novembre 2026) ; depuis la 4.3.3, close() arrête aussi ses pools après une erreur.
+sparse-vector = "4.3.8"
 
 # rag3db native (feature flag, pour natif + Node.js)
 rag3db = { path = "../../tools/rust_api", optional = true }
