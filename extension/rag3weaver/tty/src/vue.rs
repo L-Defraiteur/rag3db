@@ -98,6 +98,13 @@ pub enum Genre {
     Code,
 }
 
+/// Un repli dit dans la zone vivante : une phrase, et la commande qui le règle.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Repli {
+    pub phrase: String,
+    pub commande: String,
+}
+
 /// Une ligne validée (ou un bloc de code entier), prête pour l'historique.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Validee {
@@ -139,7 +146,7 @@ pub struct Vue {
     pub entete: String,
     /// Un repli à dire dans la zone vivante, sur la ligne du texte en cours quand
     /// rien n'y passe : sous mosh, la commande qui relit le journal (lot tty-7).
-    pub repli: Option<String>,
+    pub repli: Option<Repli>,
     /// Le bloc de code ouvert (```) : il se valide entier à sa clôture, pour se
     /// colorer d'un coup ; sa ligne en cours reste visible dans la zone vivante.
     bloc: Option<Bloc>,
@@ -519,7 +526,7 @@ impl Vue {
         let haut = match &self.repli {
             Some(r) if en_cours.is_empty() => {
                 let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
-                Line::from(Span::styled(queue(r, largeur), sourdine))
+                Line::from(Span::styled(queue(&format!("{} : {}", r.phrase, r.commande), largeur), sourdine))
             }
             _ => Line::from(en_cours),
         };
@@ -725,6 +732,62 @@ mod tests {
         assert_eq!(vus, vec![("[équipier · réponse] ", "le plan tient"), ("", "  et la suite"), ("[toi · consigne] ", "vas-y"), ("[équipier · inédit] ", "x")]);
     }
 
+    /// **tty-9, vu à l'essai de Lucie** : une ligne de la boîte reçue deux fois
+    /// (par la relecture et par le flux) ne s'écrit qu'une fois.
+    #[test]
+    fn a_mailbox_line_received_twice_is_written_once() {
+        let mut v = Vue::new(80, true);
+        let l = json!({ "id": "d/t:5", "from": "supervisor", "kind": "request", "text": "présente-toi" });
+        v.ligne_de_boite(&l);
+        v.trame(&json!({ "evenement": { "kind": "MailboxLine", "line": l } }));
+        v.ligne_de_boite(&json!({ "id": "d/t:6", "from": "teammate", "kind": "report", "text": "voilà" }));
+        let textes: Vec<String> = v.prendre_lignes().into_iter().map(|l| l.texte).collect();
+        assert_eq!(textes, vec!["[toi · demande] présente-toi", "[équipier · compte rendu] voilà"]);
+    }
+
+    /// **tty-9** : la fin d'un run précédent, rejouée à l'ouverture, ne dit plus
+    /// « fini » quand une demande l'a suivie : l'équipier va repartir.
+    #[test]
+    fn an_earlier_end_followed_by_a_request_is_no_longer_finished() {
+        let mut v = Vue::new(80, true);
+        v.ligne_de_boite(&json!({ "id": "d/t:4", "from": "host", "kind": "ended", "text": "fait sans plan" }));
+        assert!(v.ligne_d_etat().contains("fini"));
+        v.ligne_de_boite(&json!({ "id": "d/t:5", "from": "supervisor", "kind": "request", "text": "encore" }));
+        assert!(!v.ligne_d_etat().contains("fini"), "{}", v.ligne_d_etat());
+    }
+
+    /// **tty-9** : les genres que l'équipier écrit le plus se disent en français.
+    #[test]
+    fn the_teammate_kinds_are_all_in_french() {
+        let mut v = Vue::new(120, true);
+        for (i, k) in ["report", "step_done", "plan", "edit_plan", "error", "started", "note"].iter().enumerate() {
+            v.ligne_de_boite(&json!({ "id": format!("d/t:{i}"), "from": "teammate", "kind": k, "text": "x" }));
+        }
+        let tetes: Vec<String> = v.prendre_lignes().into_iter().map(|l| l.texte[..l.tete].to_string()).collect();
+        assert_eq!(tetes, ["compte rendu", "étape faite", "plan", "plan revu", "erreur", "parti", "note"].iter().map(|k| format!("[équipier · {k}] ")).collect::<Vec<_>>());
+    }
+
+    /// **tty-9** : trop étroit pour la phrase, le repli garde sa commande
+    /// entière plutôt qu'un bout de phrase coupé par le début.
+    #[test]
+    fn too_narrow_for_its_sentence_the_fallback_keeps_its_whole_command() {
+        let mut v = Vue::new(110, true);
+        let commande = "less /home/lucied/.local/state/rag3weaver/tty/seance-1794682347-581121.txt";
+        v.repli = Some(Repli { phrase: "sous mosh, l'historique ne se relit pas au défilement".into(), commande: commande.into() });
+        let mut t = Terminal::with_options(TestBackend::new(110, 6), TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }).unwrap();
+        let instant = v.depuis;
+        let mut zone = None;
+        t.draw(|f| {
+            zone = Some(f.area());
+            v.dessiner_a(f, f.area(), instant)
+        })
+        .unwrap();
+        let (buf, z) = (t.backend().buffer().clone(), zone.unwrap());
+        let haut: String = (0..z.width).map(|x| buf[(z.x + x, z.y)].symbol().to_string()).collect::<String>().trim_end().to_string();
+        assert!(haut.ends_with(commande), "{haut:?}");
+        assert!(haut.starts_with("mosh") || haut.starts_with("less"), "rien de coupé par le début : {haut:?}");
+    }
+
     /// Le repli (sous mosh, la commande qui relit le journal) se dit sur la
     /// ligne du texte en cours quand rien n'y passe, en sourdine, et garde sa fin
     /// (la commande) quand la largeur manque ; le texte en cours passe avant lui.
@@ -743,7 +806,7 @@ mod tests {
             ((0..z.width).map(|x| buf[(z.x + x, z.y)].symbol().to_string()).collect::<String>().trim_end().to_string(), buf[(z.x, z.y)].fg)
         };
         let mut v = Vue::new(100, true);
-        v.repli = Some("sous mosh, l'historique ne se relit pas au défilement : less /h/seance-1.txt".into());
+        v.repli = Some(Repli { phrase: "sous mosh, l'historique ne se relit pas au défilement".into(), commande: "less /h/seance-1.txt".into() });
         let (texte, fg) = ligne0(&v, 100);
         assert_eq!(texte, "sous mosh, l'historique ne se relit pas au défilement : less /h/seance-1.txt");
         let s = rgb(&v.theme.couleurs.sourdine).unwrap();
