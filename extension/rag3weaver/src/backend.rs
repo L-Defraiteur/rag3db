@@ -5386,6 +5386,11 @@ impl Backend {
         if ambigues > 0 {
             etats.insert("ambiguous_edges".to_string(), json!(ambigues));
         }
+        // Les manifestes lus à la dernière synchronisation : d'où vient la provenance `dependency` /
+        // `project` des noms importés (14 novembre 2026). Rien de deviné : les chemins sont dits.
+        if let Some(m) = cat.manifestes_notes() {
+            etats.insert("manifests_read".to_string(), json!(m.lus));
+        }
         for entite in entites {
             if let Ok(state) = cat.index_state_for(entite) {
                 let mut v = serde_json::to_value(state).map_err(|e| e.to_string())?;
