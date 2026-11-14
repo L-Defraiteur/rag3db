@@ -1,12 +1,40 @@
-# Une projection de graphe retient sa mémoire après son retrait
+# Analyser un Cypher à grande liste littérale prend 1 200 fois sa taille en mémoire
+
+> **Reformulé le 14 novembre 2026, 20 h 50**, au verdict du cœur. Le nom du fichier garde le premier
+> constat : « une projection de graphe retient sa mémoire après son retrait ». Ce n'est pas une
+> rétention : la mémoire est rendue. Le défaut est le pic d'analyse.
 
 - **État** : ouvert (14 novembre 2026).
 - **Famille** : moteur
-- **Gravité** : fuite. Chaque `PROJECT_GRAPH_CYPHER` suivi de `DROP_PROJECTED_GRAPH` laisse environ 3,6 Gio que le processus ne rend jamais ; le processus est tué par le noyau en quelques recherches
-- **Atteignable en service** : oui, toute recherche dense filtrée. rag3weaver projette un graphe à chaque recherche vectorielle qui porte un filtre (`Rag3dbSearchBackend::vector_search_filtered`). Sur une base à versions, c'est chaque recherche, puisque le masque des versions est un filtre
-- **Touche rag3weaver** : non pour la fuite. Oui pour la forme de l'appel : une liste écrite en clair dans le Cypher projeté, et une projection par requête (voir le ticket de la recherche à versions)
-- **Pour** : le cœur
-- **Signalé par** : everything declarative, 14 novembre 2026, luciepc, `poste mesure` seul, lib 0c41f9fe6 Release, sonde `extension/rag3weaver/tests/sonde_vecteur_filtre.rs` (branche generations-2a-prime-2, 4efc6d1ff)
+- **Gravité** : pic de mémoire. Analyser et exécuter **une fois** un Cypher de 2,9 Mo, dont 72 652
+  littéraux de liste, prend environ 3,6 Gio, soit environ 50 Kio par élément et 1 200 fois la taille
+  du texte. La mémoire est rendue ensuite : `malloc_trim(0)` fait retomber le RSS. Mais d'un fil à
+  l'autre, les arènes de glibc la gardent, et un processus qui recherche sur plusieurs fils (tokio)
+  la voit monter linéairement : +3,58 Gio par recherche, tué à 33 Gio
+- **Atteignable en service** : oui, toute requête qui écrit une grande liste en clair. Côté
+  rag3weaver, c'est la projection du dense filtré sur une base à versions, retirée par la vue de
+  2a′-2 (`docs/everything-declarative/14-11-2026/05-la-vue-publiee-par-couche-et-rang.md`)
+- **Touche rag3weaver** : non pour le défaut. Oui pour la forme de l'appel (la vue de 2a′-2 et la
+  règle « jamais une grande liste en clair dans un Cypher »)
+- **Pour** : le cœur (la phase qui fait le pic : l'analyse, la liaison ou le plan) ; une piste
+  pour G : `MALLOC_ARENA_MAX` sur l'hôte, à mesurer
+- **Signalé par** : everything declarative, 14 novembre 2026, luciepc, `poste mesure` seul, lib
+  0c41f9fe6 Release, sonde `extension/rag3weaver/tests/sonde_vecteur_filtre.rs` (branche
+  generations-2a-prime-2, 4efc6d1ff) ; le verdict C++ du cœur, cas projection-rend-sa-memoire
+  (3d98a391b)
+
+## Le verdict du cœur (14 novembre 2026, 20 h 45, chaque variante dans son processus, six tours)
+
+| variante | RSS brut | après `malloc_trim(0)` |
+|---|---|---|
+| (p) la liste en paramètre | 155 Mio, plat | |
+| (a) la projection courte | 67 Mio, plat | |
+| (b) la requête longue seule, hors projection | 3 690 Mio à chaque tour | 60 à 70 Mio |
+| (c) la séquence de rag3weaver telle quelle | 3 685 à 3 699 Mio | 78 à 91 Mio |
+
+Le pic vient de la requête longue, pas de la projection. Rien ne grossit d'un tour à l'autre dans un
+même fil. La pente vue côté rag3weaver vient d'un fil neuf à chaque recherche, avec une arène
+glibc par fil.
 
 ## Ce que c'est
 
@@ -50,7 +78,7 @@ tient donc à la taille du Cypher projeté**, et non à la projection elle-même
 ci-dessous plutôt que la (a). Les hôtes d'aujourd'hui, sur des bases d'avant les versions, ne sont
 pas touchés, même par une recherche dense filtrée.
 
-## Ce qu'il reste à trancher
+## Ce qu'il restait à trancher (fait par le cœur, ci-dessus)
 
 Deux variantes, à jouer en C++ :
 - (a) la même projection avec un Cypher court qui rend autant de nœuds (tous les morceaux, sans
