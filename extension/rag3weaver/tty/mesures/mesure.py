@@ -189,6 +189,9 @@ def p(valeurs, q):
     return v[min(len(v) - 1, int(round(q * (len(v) - 1))))]
 
 
+# Sous mosh, chaque séance ouvre un journal de lui-même (tty-7) : le harnais efface à la fin ceux qu'il a fait naître.
+ETAT_TTY = "$HOME/.local/state/rag3weaver/tty"
+JOURNAUX_AVANT = set(ssh(f"ls -1 {ETAT_TTY} 2>/dev/null").split())
 resultats = {"hote": HOTE, "lanceur": LANCEUR, "date": time.strftime("%Y-%m-%d %H:%M"), "rouges": []}
 themes = json.load(open(THEMES))
 
@@ -364,7 +367,7 @@ verifier_journal(ssh(f"cat {chemin} 2>/dev/null"), "journal_explicite")
 ssh(f"rm -f {chemin}")
 
 if LANCEUR == "mosh":
-    etat_tty = "$HOME/.local/state/rag3weaver/tty"
+    etat_tty = ETAT_TTY
     avant = set(ssh(f"ls -1 {etat_tty} 2>/dev/null").split())
     ecran = seance_journal("", "journal_de_lui_meme")
     nouveaux = sorted(set(ssh(f"ls -1 {etat_tty} 2>/dev/null").split()) - avant)
@@ -409,6 +412,8 @@ for nom, th in themes.items():
         finally:
             hote_arreter()
 resultats["couleurs"] = couleurs
+for n in sorted(set(ssh(f"ls -1 {ETAT_TTY} 2>/dev/null").split()) - JOURNAUX_AVANT):
+    ssh(f"rm -f {ETAT_TTY}/{n}")
 resultats["verdict"] = "ROUGE" if resultats["rouges"] else "VERT"
 json.dump(resultats, open(SORTIE, "w"), ensure_ascii=False, indent=2)
 print(json.dumps(resultats, ensure_ascii=False, indent=2))
