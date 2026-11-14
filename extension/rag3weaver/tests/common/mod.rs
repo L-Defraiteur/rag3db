@@ -93,14 +93,17 @@ pub mod burn {
     /// code, multilingue). 428 Mo ; chargé une fois par binaire.
     pub static GRANITE_107M: LazyLock<Arc<dyn Embedder>> = LazyLock::new(|| {
         #[cfg(feature = "daemon")]
-        if let Some(service) = par_le_service("granite-107m") {
-            return Arc::new(service);
-        }
+        let ici = match ou_charger("granite-107m") {
+            OuCharger::Service(service) => return Arc::new(service),
+            OuCharger::Ici(peripherique) => peripherique,
+        };
+        #[cfg(not(feature = "daemon"))]
+        let ici = BurnDevice::default();
         let t0 = std::time::Instant::now();
         let bpk = artifact("RAG3WEAVER_GRANITE_107M_BPK", "granite-107m", "model.bpk");
         let tok = artifact("RAG3WEAVER_GRANITE_107M_TOKENIZER", "granite-107m", "tokenizer.json");
         eprintln!("▸ Loading granite-107m on burn from {}...", bpk.display());
-        let e = rag3weaver::BurnGranite107m::from_files(&bpk, &tok, BurnDevice::default()).expect("build BurnGranite107m");
+        let e = rag3weaver::BurnGranite107m::from_files(&bpk, &tok, ici).expect("build BurnGranite107m");
         eprintln!("  loaded in {:?}", t0.elapsed());
         Arc::new(e)
     });
@@ -108,14 +111,17 @@ pub mod burn {
     /// granite-embedding-278m-multilingual sur burn (768 d, 12 couches). 1,1 Go.
     pub static GRANITE_278M: LazyLock<Arc<dyn Embedder>> = LazyLock::new(|| {
         #[cfg(feature = "daemon")]
-        if let Some(service) = par_le_service("granite-278m") {
-            return Arc::new(service);
-        }
+        let ici = match ou_charger("granite-278m") {
+            OuCharger::Service(service) => return Arc::new(service),
+            OuCharger::Ici(peripherique) => peripherique,
+        };
+        #[cfg(not(feature = "daemon"))]
+        let ici = BurnDevice::default();
         let t0 = std::time::Instant::now();
         let bpk = artifact("RAG3WEAVER_GRANITE_278M_BPK", "granite-278m", "model.bpk");
         let tok = artifact("RAG3WEAVER_GRANITE_278M_TOKENIZER", "granite-278m", "tokenizer.json");
         eprintln!("▸ Loading granite-278m on burn from {}...", bpk.display());
-        let e = rag3weaver::BurnGranite278m::from_files(&bpk, &tok, BurnDevice::default()).expect("build BurnGranite278m");
+        let e = rag3weaver::BurnGranite278m::from_files(&bpk, &tok, ici).expect("build BurnGranite278m");
         eprintln!("  loaded in {:?}", t0.elapsed());
         Arc::new(e)
     });
@@ -232,20 +238,67 @@ pub mod burn {
     /// partagé par toutes les suites. Voir [`Bge`] pour le local/distant.
     pub static BGE_M3: LazyLock<Arc<Bge>> = LazyLock::new(|| Arc::new(bge_m3()));
 
-    /// **Le service d'embarquement de `RAG3WEAVER_EMBED_SERVICE`**, s'il est
-    /// posé : on s'y attache, on ne lance rien ici et on ne l'arrête jamais.
-    /// Posée sans qu'aucune adresse serve `modele`, c'est un échec dit
-    /// clairement — pas un repli sur la carte d'ici, que la variable existe
-    /// justement pour épargner.
+    /// La variable du **repli des tests** : le périphérique où charger sur place un
+    /// modèle qu'aucun service listé ne sert — `gpu:N`, `igpu:N`, ou `cpu` là où un
+    /// adaptateur Vulkan CPU existe. Absente, ou `non` : pas de repli, le test est
+    /// rouge et nomme le modèle. Aucun défaut : le `Cpu` de burn passe par Vulkan, et
+    /// aucun des deux postes n'a d'adaptateur CPU (lavapipe) au 15 novembre 2026.
     #[cfg(feature = "daemon")]
-    fn par_le_service(modele: &str) -> Option<DaemonEmbedder> {
+    pub const REPLI_VARIABLE: &str = "RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE";
+
+    /// Où charger un modèle d'essai : le service qui le sert, ou ici, sur ce périphérique.
+    #[cfg(feature = "daemon")]
+    pub enum OuCharger {
+        Service(DaemonEmbedder),
+        Ici(BurnDevice),
+    }
+
+    /// **Le service d'embarquement de `RAG3WEAVER_SERVICE_EMBED`** (ou de son
+    /// alias), s'il est posé : on s'y attache, on ne lance rien ici et on ne
+    /// l'arrête jamais. Sans variable, ou pour une suite locale, le modèle se
+    /// charge ici comme toujours.
+    ///
+    /// **Posée sans qu'aucune adresse serve `modele`** : le modèle se charge sur
+    /// place, sur le périphérique du repli, et l'aide le dit. Avant le 15 novembre
+    /// 2026, c'était une panique : le commentaire disait « pas un repli sur la
+    /// carte d'ici, que la variable existe justement pour épargner ». C'était
+    /// juste sur la carte et faux sur la suite : à luciepc, le 7880 (granite-107m)
+    /// est arrêté depuis le 12 novembre, et toute passe sous les services rougissait
+    /// sur `e2e_estimate` sans défaut du code (ticket
+    /// `2026-11-14-l-aide-des-tests-panique-quand-aucun-service-ne-sert-le-modele`).
+    /// Décision de c7 (15 novembre) : le repli seulement sur un périphérique **nommé**,
+    /// jamais sur une carte épargnée par défaut ni sur un défaut qui n'existe pas ; sans
+    /// périphérique nommé, rouge et nommé, jamais sauté.
+    #[cfg(feature = "daemon")]
+    pub fn ou_charger(modele: &str) -> OuCharger {
         if suite_locale() {
-            return None;
+            return OuCharger::Ici(BurnDevice::default());
         }
-        let service = DaemonEmbedder::from_service(modele)?;
-        let d = service.unwrap_or_else(|raison| panic!("{raison}"));
-        eprintln!("▸ {modele} par le service d'embarquement ({})", d.identite().executable);
-        Some(d)
+        match DaemonEmbedder::from_service(modele) {
+            None => OuCharger::Ici(BurnDevice::default()),
+            Some(Ok(d)) => {
+                eprintln!("▸ {modele} par le service d'embarquement ({})", d.identite().executable);
+                OuCharger::Service(d)
+            }
+            Some(Err(raison)) => match decider_le_repli(modele, &raison, std::env::var(REPLI_VARIABLE).ok().as_deref()) {
+                Ok(peripherique) => {
+                    eprintln!("▸ {modele} sur place ({peripherique:?}) : {raison}");
+                    OuCharger::Ici(peripherique)
+                }
+                Err(e) => panic!("{e}"),
+            },
+        }
+    }
+
+    /// Le repli d'un modèle qu'aucun service listé ne sert : le périphérique que
+    /// [`REPLI_VARIABLE`] nomme, ou le refus nommé si elle est absente ou dit `non`.
+    #[cfg(feature = "daemon")]
+    pub fn decider_le_repli(modele: &str, raison: &str, repli: Option<&str>) -> Result<BurnDevice, String> {
+        match repli.map(str::trim).filter(|v| !v.is_empty()) {
+            None => Err(format!("pas de service pour {modele} : {raison} ; aucun périphérique de repli nommé ({REPLI_VARIABLE}=gpu:N, igpu:N ou cpu)")),
+            Some("non") => Err(format!("pas de service pour {modele} : {raison} ; le repli sur place est interdit ({REPLI_VARIABLE}=non)")),
+            Some(v) => BurnDevice::parse(v).map_err(|e| format!("pas de service pour {modele} : {raison} ; {REPLI_VARIABLE}={v} ne nomme pas un périphérique ({e})")),
+        }
     }
 
     /// **Les suites qui restent sur la carte d'ici, variable posée ou non** :
@@ -268,11 +321,17 @@ pub mod burn {
 
     fn bge_m3() -> Bge {
         #[cfg(feature = "daemon")]
-        if let Some(d) = par_le_service("bge-m3") {
-            let id = d.identite();
-            assert!(id.dual && id.sparse && id.dim == 1024, "le service bge-m3 ne sert pas dense et creux : {id:?}");
-            return Bge::Distant(d);
-        }
+        let ici = match ou_charger("bge-m3") {
+            OuCharger::Service(d) => {
+                // Un service qui sert le modèle mais pas tout : une vraie panne, nommée.
+                let id = d.identite();
+                assert!(id.dual && id.sparse && id.dim == 1024, "le service bge-m3 ne sert pas dense et creux : {id:?}");
+                return Bge::Distant(d);
+            }
+            OuCharger::Ici(peripherique) => peripherique,
+        };
+        #[cfg(not(feature = "daemon"))]
+        let ici = BurnDevice::default();
         #[cfg(feature = "daemon")]
         if std::env::var_os("RAG3WEAVER_SANS_DEMON").is_none() {
             match bge_m3_par_le_demon() {
@@ -283,16 +342,16 @@ pub mod burn {
                 Err(raison) => eprintln!("▸ démon d'embedding écarté : {raison}"),
             }
         }
-        Bge::Local(bge_m3_ici())
+        Bge::Local(bge_m3_ici(ici))
     }
 
-    fn bge_m3_ici() -> BurnBgeM3Embedder {
+    fn bge_m3_ici(peripherique: BurnDevice) -> BurnBgeM3Embedder {
         let t0 = std::time::Instant::now();
         let bpk = artifact("RAG3WEAVER_BGE_M3_BPK", "bge-m3", "model.bpk");
         let tok = artifact("RAG3WEAVER_BGE_M3_TOKENIZER", "bge-m3", "tokenizer.json");
         eprintln!("▸ Loading BGE-M3 on burn (wgpu) from {}...", bpk.display());
         let bytes = std::fs::read(&bpk).expect("read burnpack");
-        let e = BurnBgeM3Embedder::from_bytes(&bytes, &tok, BurnDevice::default())
+        let e = BurnBgeM3Embedder::from_bytes(&bytes, &tok, peripherique)
             .expect("build BurnBgeM3Embedder");
         eprintln!("  loaded in {:?}", t0.elapsed());
         e
