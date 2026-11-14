@@ -229,7 +229,18 @@ impl Instantane {
 
     /// L'instantané s'est rompu : l'appel doit recommencer sous un neuf.
     pub fn rompu(&self) -> bool {
-        self.conn.as_ref().is_some_and(|c| matches!(*c.etat.lock().unwrap_or_else(|e| e.into_inner()), Phase::Rompu))
+        self.rupture().is_some()
+    }
+
+    /// **La rupture, si elle a eu lieu** : l'erreur d'origine du BEGIN, et si
+    /// la base est à rouvrir. Sur une base à rouvrir, un appel neuf romprait de
+    /// même : il ne recommence pas.
+    pub fn rupture(&self) -> Option<(String, bool)> {
+        let c = self.conn.as_ref()?;
+        match &*c.etat.lock().unwrap_or_else(|e| e.into_inner()) {
+            Phase::Rompu { cause, a_rouvrir } => Some((cause.clone(), *a_rouvrir)),
+            _ => None,
+        }
     }
 }
 
@@ -253,8 +264,10 @@ enum Phase {
     AOuvrir,
     /// La transaction READ ONLY, ouverte : elle tient jusqu'à la fin de l'appel.
     Ouvert,
-    /// L'ouverture a été refusée : les requêtes échouent, l'appel recommence.
-    Rompu,
+    /// L'ouverture a été refusée : les requêtes échouent, et l'appel
+    /// recommence, sauf sur une base à rouvrir. `cause` est l'erreur d'origine
+    /// du BEGIN.
+    Rompu { cause: String, a_rouvrir: bool },
     /// L'appel est fini.
     Fini,
 }
@@ -271,7 +284,6 @@ pub struct ConnDInstantane {
     #[cfg(test)]
     a_rompre: Arc<AtomicU64>,
     #[cfg(test)]
-    #[allow(dead_code)]
     a_rouvrir: Arc<AtomicBool>,
 }
 
@@ -282,18 +294,33 @@ impl ConnDInstantane {
         let mut etat = self.etat.lock().unwrap_or_else(|e| e.into_inner());
         if let Phase::AOuvrir = *etat {
             #[cfg(test)]
-            let refusee = self.a_rompre.try_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1)).is_ok();
+            let refus = self
+                .a_rompre
+                .try_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
+                .is_ok()
+                .then(|| (CAUSE_DU_CROCHET.to_string(), self.a_rouvrir.load(Ordering::SeqCst)));
             #[cfg(not(test))]
-            let refusee = false;
-            *etat = if !refusee && self.inner.begin_read_only().is_ok() {
-                Phase::Ouvert
-            } else {
-                self.rompus.fetch_add(1, Ordering::Relaxed);
-                Phase::Rompu
+            let refus: Option<(String, bool)> = None;
+            // L'erreur d'origine est gardée : remplacée par la seule phrase de
+            // la rupture, une base à rouvrir se lisait comme un refus passager.
+            let refus = refus.or_else(|| {
+                self.inner.begin_read_only().err().map(|e| {
+                    let a_rouvrir = matches!(e, DbError::MustReopen(_)) || self.inner.must_reopen().is_some();
+                    (e.to_string(), a_rouvrir)
+                })
+            });
+            *etat = match refus {
+                None => Phase::Ouvert,
+                Some((cause, a_rouvrir)) => {
+                    self.rompus.fetch_add(1, Ordering::Relaxed);
+                    Phase::Rompu { cause, a_rouvrir }
+                }
             };
         }
-        match *etat {
-            Phase::Rompu => Err(DbError::QueryError(INSTANTANE_ROMPU.into())),
+        // Une base à rouvrir le dit par sa propre connexion (`must_reopen`) :
+        // l'erreur de la requête reste celle de la rupture, avec sa cause.
+        match &*etat {
+            Phase::Rompu { cause, .. } => Err(DbError::QueryError(format!("{INSTANTANE_ROMPU} — {cause}"))),
             _ => Ok(()),
         }
     }
