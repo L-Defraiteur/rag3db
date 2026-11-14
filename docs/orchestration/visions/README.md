@@ -132,3 +132,18 @@ Chrome (Lucie a plusieurs onglets ouverts). Même mécanisme pour **séparer l'I
 une fenêtre, le graphe ou le dépôt dans une autre, sur deux écrans, avec un petit état partagé (dépôt courant,
 sélection, conversation ouverte, cartes d'accord en attente) porté par le worker. Le lot (b) d'ED prépare
 cette forme ; les fenêtres détachées viendront après, à son mot.
+
+## Rien à installer en plus de rag3weaver (Lucie, 14 novembre 2026)
+
+« Les gens, eux, ne vont pas installer de trucs en plus de rag3weaver. » Deux conséquences à tenir
+dans chaque lot qui touche la livraison :
+
+- **l'interface terminal** n'exige ni tmux, ni mosh, ni un terminal particulier : elle se tient dans
+  ce que l'utilisateur a déjà et se dégrade proprement en le disant (le passage en texte brut quand le
+  terminal ne répond pas à la position du curseur, 13 novembre) ; les mesures sous tmux et mosh (tty-5
+  et suite) vérifient cette tenue, elles ne créent pas une exigence ;
+- **la livraison porte sa lib** : aujourd'hui le binaire `rag3weaver-backend` trouve `librag3db.so` et
+  l'extension vector dans le magasin du poste par son RUNPATH ; un utilisateur n'a pas de magasin. Le
+  paquet npm (`rag3weaver@next`) et le futur dépôt séparé devront embarquer la lib et l'extension du
+  même bâti, ou les télécharger à la première exécution avec leur md5. Lié à « séparer rag3weaver de
+  rag3db » ci-dessus.
