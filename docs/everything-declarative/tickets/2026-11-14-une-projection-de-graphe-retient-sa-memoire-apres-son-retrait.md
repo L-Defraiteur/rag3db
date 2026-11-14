@@ -42,6 +42,14 @@ Le RSS monte de +3 580 Mio par tour, exactement linéaire.
   (`MATCH (n:ScopeContent) WHERE n._uuid IN $p RETURN OFFSET(id(n))`), rejoué 30 fois : +20 Mio,
   plat.
 
+**Une projection courte ne fuit pas** (même soir, 20 h 40, base d'avant les versions) : 20 projections
+par requête, avec un Cypher d'environ 150 octets
+(`MATCH (n:Scope_Chunk) MATCH (n)-[:Scope_CHUNKED_FROM]->(p:Scope) WHERE starts_with(p.file_path, "src/include/") RETURN n`),
+chacune suivie du `DROP`. Le RSS est plat, environ +5 Mio par appel sur 10 appels. **La rétention
+tient donc à la taille du Cypher projeté**, et non à la projection elle-même. C'est la variante (b)
+ci-dessous plutôt que la (a). Les hôtes d'aujourd'hui, sur des bases d'avant les versions, ne sont
+pas touchés, même par une recherche dense filtrée.
+
 ## Ce qu'il reste à trancher
 
 Deux variantes, à jouer en C++ :
