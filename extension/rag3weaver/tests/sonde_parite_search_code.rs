@@ -141,7 +141,16 @@ fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
                 Err(e) => format!("refus : {e}"),
             };
             eprintln!("[orphelins] {etape} : {table} du fichier retiré — {v}");
-            out.insert(table.to_string(), json!(v));
+            // Les lignes elles-mêmes, toutes colonnes : sur une base à versions, une ligne retirée se
+            // ferme (colonnes de version) au lieu de disparaître ; c'est elles qu'il faut lire.
+            let lignes = match conn.execute(&format!("MATCH (n:{table}) WHERE n.{champ} ENDS WITH '{nom_retire}' RETURN n LIMIT 20")) {
+                Ok(r) => r.rows.iter().map(|l| format!("{:?}", l.first())).collect::<Vec<_>>(),
+                Err(e) => vec![format!("refus : {e}")],
+            };
+            for l in &lignes {
+                eprintln!("[orphelins] {etape} : {table} ligne {}", &l[..l.len().min(600)]);
+            }
+            out.insert(table.to_string(), json!({"compte": v, "lignes": lignes}));
         }
         Value::Object(out)
     };
