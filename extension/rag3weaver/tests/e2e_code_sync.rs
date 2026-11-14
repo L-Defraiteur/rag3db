@@ -722,3 +722,59 @@ fn les_manifestes_du_depot_disent_la_provenance_des_bibliotheques() {
     let m = catalog.manifestes_notes().expect("les manifestes notés");
     assert_eq!(m.lus, vec!["Cargo.lock", "Cargo.toml", "crates/app/Cargo.toml", "crates/ma-crate/Cargo.toml"], "les chemins lus, dits");
 }
+
+/// **Mesure : ce que `workspace.index_exclude` retire du plein texte** (14 novembre 2026, à la
+/// demande de c7, pour la page `docs/recherche/14-11-2026/01-ce-qu-on-n-indexe-pas.md`). Indexe la
+/// racine `RAG3WEAVER_MESURE_RACINE` (un arbre de travail, jamais une base de Lucie) deux fois, dans
+/// deux bases neuves sous `RAG3WEAVER_MESURE_SORTIE` : sans `index_exclude`, puis avec les seuils
+/// du gabarit de code. Forme d'avant les versions de scope (celle des bases de Lucie : `Scope`
+/// porte son document). Imprime, pour chacune, les fichiers écartés, les Scope, les octets de
+/// leur contenu ; les deux `.fts` restent pour `index_report` de lucivy. Une mesure, pas une
+/// preuve : sans les deux variables, elle le dit et ne mesure rien.
+#[test]
+#[ignore]
+fn mesure_ce_que_index_exclude_retire_du_plein_texte() {
+    let (Ok(racine), Ok(sortie)) = (std::env::var("RAG3WEAVER_MESURE_RACINE"), std::env::var("RAG3WEAVER_MESURE_SORTIE")) else {
+        eprintln!("[mesure exclusions] NON MESURÉ : RAG3WEAVER_MESURE_RACINE et RAG3WEAVER_MESURE_SORTIE absents");
+        return;
+    };
+    let source = rag3weaver::code_tools::WorkingTree::new(&racine);
+    for (nom, exclude) in [
+        ("sans-exclusions", serde_json::json!({})),
+        ("avec-exclusions", serde_json::json!({"minified_line_max_bytes": 5000, "code_file_max_bytes": 1048576})),
+    ] {
+        let workspace: rag3weaver::backend_code::WorkspaceConfig = serde_json::from_value(serde_json::json!({
+            "source": "working_tree", "root": "workspace", "index": "code", "index_exclude": exclude
+        }))
+        .expect("le workspace de la mesure");
+        let dossier = std::path::Path::new(&sortie).join(nom);
+        std::fs::create_dir_all(&dossier).unwrap();
+        let base = dossier.join("base.rag3db");
+        assert!(!base.exists(), "une base neuve par mesure : {} existe déjà", base.display());
+        let conn = Rag3dbConnection::new(&base).expect("la base de la mesure");
+        conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension())).unwrap();
+        let config = CatalogConfig { name: Some(format!("mesure-{nom}")), embedding_dim: 64, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(rag3weaver::embedder::AbsentEmbedder::new("absent", 64)), config);
+        catalog.initialize().unwrap();
+        rag3weaver::code::register_code_schema_sans_versions(&mut catalog, default_scope_chunking()).unwrap();
+        let t = std::time::Instant::now();
+        let options = SourceSyncOptions { generated: workspace.index_gate(), ..Default::default() };
+        let r = sync_source(&mut catalog, &source, &options, &mut |_| {}).expect("l'indexation de la mesure");
+        let ligne = catalog
+            .execute_raw("MATCH (s:Scope) RETURN count(s), sum(size(s.content))")
+            .unwrap()
+            .rows
+            .remove(0);
+        eprintln!(
+            "[mesure exclusions] {nom} : {} fichiers listés, {} ingérés, écartés {:?} ; {} Scope, {} octets de contenu ; {:.0} s ; base {}",
+            r.files_listed,
+            r.files_ingested,
+            r.files_set_aside,
+            ligne[0].as_i64().unwrap_or(-1),
+            ligne[1].as_i64().unwrap_or(-1),
+            t.elapsed().as_secs_f64(),
+            base.display()
+        );
+        drop(catalog);
+    }
+}
