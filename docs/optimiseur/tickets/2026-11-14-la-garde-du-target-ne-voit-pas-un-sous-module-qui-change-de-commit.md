@@ -26,8 +26,21 @@ n'y agit donc pas.
 1. Le marqueur note aussi le commit de chaque sous-module. Quand l'un change, la garde efface d'elle-même les empreintes
    des paquets de ce sous-module (`empreintes_du_paquet`, la fonction de la reprise), puis le dit.
 2. `cargo_magasin.sh` appelle la garde.
-3. Le rouge d'abord, dans `test_garde_target.sh` : bâtir, ramener le sous-module à un commit plus vieux, rebâtir. Sans
-   la correction, l'artefact d'avant est repris ; avec, le paquet est rebâti.
+3. `garde_target.sh --reprendre <target> <arbre>` (suggestion de codeparsers), à appeler avant un `cargo` direct : le même
+   effacement des empreintes des paquets locaux que `RAG3WEAVER_TARGET_REPRENDRE=1` dans les scripts.
+4. Le rouge d'abord, dans `test_garde_target.sh` : bâtir, ramener le sous-module à un commit plus vieux, rebâtir. Sans
+   la correction, l'artefact d'avant est repris ; avec, le paquet est rebâti. Puis un second worktree sur le même
+   target, appelé par `--reprendre`.
+
+**Les deux cas de codeparsers, ce soir**, sur le même target et avec `RAG3WEAVER_TARGET_REPRENDRE=1` :
+- un `cargo test` lancé à la main dans un second worktree a repris l'artefact de codeparsers bâti dans le premier. Le
+  checkout de 85fe233 avait des dates plus vieilles que le bâti de 6ba8478 ;
+- un `cp -a` de restauration gardait les anciennes dates.
+
+**Ce qui reste hors d'atteinte d'une garde** : un `cargo` direct qui n'appelle ni un script ni `--reprendre`, et une
+copie qui garde ses dates. Pour eux, la règle de c7 reste la seule défense : avant un bâti hors script, toucher les
+fichiers que nomme `git diff --name-only <ancien> <neuf>` du sous-module (et les sources rag3weaver changées), ou passer
+par check_features.
 
 Une règle écrite (« reprendre le target après un `git submodule update` ») aurait suffi en principe. Mais elle s'oublie, et
 codeparsers s'y est trompé de bonne foi.
