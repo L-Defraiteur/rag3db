@@ -6697,12 +6697,13 @@ mod tests {
         assert!(plus_long <= 4096, "une projection de {plus_long} octets : une liste s'écrit encore en clair");
     }
 
-    /// **Témoin 3 de la vue : l'ensemble lexical se pose une fois** (2a′-2, page 05, § 5). Deux recherches
-    /// lexicales filtrées sous la même génération ne résolvent le masque des versions qu'une fois au
-    /// plus ; aujourd'hui, chaque recherche le refait.
+    /// **Témoin 3 de la vue : le masque ne se résout plus par liste** (2a′-2, page 05, § 5, au mot de
+    /// c7). Deux recherches lexicales filtrées, sur une base à générations, ne résolvent jamais le masque
+    /// des versions en liste (`derived_references` par lots, puis `_uuid IN [...]`) : le masque est un
+    /// prédicat. Aujourd'hui, chaque recherche le résout en liste.
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     #[test]
-    fn l_ensemble_lexical_se_pose_une_fois_par_generation() {
+    fn le_masque_ne_se_resout_plus_par_liste() {
         let (_dir, backend) = base_de_la_vue();
         let avant = backend.catalog.lock().unwrap().resolutions_du_masque().expect("une base à générations");
         for _ in 0..2 {
@@ -6711,7 +6712,7 @@ mod tests {
                 .expect("search_code");
         }
         let apres = backend.catalog.lock().unwrap().resolutions_du_masque().unwrap();
-        assert!(apres - avant <= 1, "le masque des versions s'est résolu {} fois pour deux recherches", apres - avant);
+        assert_eq!(apres - avant, 0, "le masque des versions s'est résolu {} fois en liste pour deux recherches", apres - avant);
     }
 
     /// **Témoin 0 de 2a′ : la non-fuite** (page 03, § 4). Chaque ligne de `Scope` et de `File` est
