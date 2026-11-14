@@ -55,8 +55,9 @@ struct TestHooks {
     // d'erreur.
     static void armFailPointFromEnvironment();
     // Arme `point` (ou désarme, avec NONE), pour un témoin C++ qui veut faire échouer une écriture
-    // précise, après sa mise en place.
-    RAG3DB_API static void armFailPoint(TestFailPoint point);
+    // précise, après sa mise en place. `delayMs` : le point attend ce délai avant de lever, pour
+    // qu'une autre connexion ait le temps de se mettre en file sur le verrou que l'écriture tient.
+    RAG3DB_API static void armFailPoint(TestFailPoint point, uint32_t delayMs = 0);
     // Lève une RuntimeException si `point` est armé, et le désarme.
     static void failOnceIfArmed(TestFailPoint point);
 };
