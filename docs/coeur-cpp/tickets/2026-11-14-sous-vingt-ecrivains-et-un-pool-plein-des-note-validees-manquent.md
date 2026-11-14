@@ -56,22 +56,52 @@ il ne passe pas par l'index de clé primaire.
   `concurrence_test.known_red` ne joue pas `DdlEveryMinute` : c'est un cas long (`long.txt`), joué
   seulement avec `CONCURRENCE_LONG=1`. D'où une perte que personne n'avait lue.
 
-## Piste (non prouvée)
+- **L'écart des taux** : 1 tour sur 10 sur `835d5298f`, 3 sur 10 sur `f41c0ba5b` comme avec le
+  verrou. On ne conclut pas : les refus du pool varient de 132 à 902 par tour, et dix tours sont
+  trop peu pour dire que le correctif du COMMIT (`2ac8080ca`) aggrave (c7, 14 nov.).
 
-Un COMMIT qui échoue en plein ajout, faute de tampon, est annulé après la sortie du verrou
-public. Son annulation (`ChunkedNodeGroup::rollbackInsert`, qui marque puis **tronque**) part
-de sa première rangée. Elle emporterait les rangées qu'un autre écrivain de Note a validées entre
-l'échec et l'annulation.
+## La fenêtre, lue dans le code et prise au témoin
 
-À vérifier :
+**Le chemin.**
 
-- dans le code, l'ordre « échec du commit → sortie du verrou → annulation » ;
-- au banc, quelles clés manquent. Le `CommitLog` du scénario note chaque validation
-  (`N <itération>`) : comparer aux clés présentes, et dater les manquantes par rapport aux refus
-  du pool.
+1. `TransactionManager::commit` tient `mtxForSerializingPublicFunctionCalls` pendant
+   `transaction->commit`. Celui-ci verse d'abord les lignes locales dans les groupes de nœuds
+   (`localStorage->commit()`, `transaction.cpp` l. 182), puis écrit et synchronise le journal.
+2. Si une étape lève (journal non synchronisé, tampon plein), l'exception sort, et le verrou est
+   rendu. La transaction reste active, ses lignes versées.
+3. `ClientContext::TransactionHelper::runFuncInTransaction` (`client_context.cpp`, le `catch`)
+   l'annule alors : `context.rollback()` → `TransactionManager::rollback`, qui **reprend** le
+   verrou.
+4. Entre 2 et 3, un autre écrivain qui attendait le verrou pour son COMMIT le prend. Il verse
+   ses lignes **à la suite** de celles de A, dans le même groupe, et valide.
+5. L'annulation de A :
+   - `NodeGroup::rollbackInsert` (`node_group.cpp` l. 595) ramène `numRows` et
+     `nextRowToAppend` à la première ligne de A ;
+   - `ChunkedNodeGroup::rollbackInsert` tronque le bloc à cette ligne ;
+   - les lignes validées de B, situées après, partent avec.
+
+   L'index de clé primaire perd aussi la clé de B : la recherche par clé de la ligne de B rend 0.
+
+**Le témoin** : `RefusedCommitRollback.AWriterCommittingWhileARefusedCommitUnwindsKeepsItsRow`
+(`test/transaction/refused_commit_rollback_test.cpp`, branche `annulation-garde-les-autres`,
+`8a4bfe9eb`).
+
+- Chaque tour : A ouvre un bloc de 60 000 lignes, et B un bloc d'une ligne. Le journal refuse
+  une synchronisation (`CutFileSystem::failSyncOf`). Le COMMIT de A part dans un fil, celui de B
+  5 ms après, et B attend le verrou.
+- 20 tours. Rouge 3 fois sur 3 à luciepc (Release, master `0c41f9fe6` + le témoin) : A refusé 20
+  fois, B validé 20 fois, **18 à 20 lignes de B perdues**. La ligne du tour n'est jamais
+  retrouvée par sa clé, et le balayage en perd la plupart.
+- Les deux cas séquentiels du même fichier (B valide après l'annulation de A) sont verts. Ils
+  gardent l'annulation entière d'un COMMIT refusé.
 
 ## Ce qu'il faut pour le fermer
 
-Un témoin déterministe : deux écrivains sur une table, le COMMIT de l'un qui échoue en plein
-ajout (faute injectée), l'autre qui valide entre-temps. Puis le correctif, le témoin vert, et
-`DdlEveryMinute` ×10 sans `counts-match-commits`.
+- Le correctif. Deux formes sont possibles, à choisir :
+  - l'annulation d'un COMMIT refusé se fait **sous le même verrou** que lui, avant de le rendre ;
+  - ou l'annulation ne retire que **ses** lignes : marquées annulées sans troncature quand
+    d'autres ont été versées après.
+- Le témoin concurrent vert.
+- `transaction_test` et `concurrence_test` entiers.
+- `DdlEveryMinute` ×10 sans `counts-match-commits`.
+- La lib d'après.
