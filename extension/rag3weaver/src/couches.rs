@@ -420,7 +420,7 @@ fn estampille(catalog: &crate::catalog::Catalog, depot: &str, branche: &str) -> 
 
 /// La branche d'où `branche` est née, d'après son reflog local (« branch: Created from <nom> »),
 /// quand il en nomme une. `HEAD` ou un hash ne nomment rien.
-fn nee_de(depot: &Path, branche: &str) -> Option<String> {
+pub(crate) fn nee_de(depot: &Path, branche: &str) -> Option<String> {
     let journal = git(depot, &["reflog", "show", "--format=%gs", &format!("refs/heads/{branche}")]).ok()?;
     let creation = journal.lines().last()?;
     let nom = creation.strip_prefix("branch: Created from ")?.trim();
