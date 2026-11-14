@@ -1,6 +1,6 @@
 # Un `using` C# ne produit aucune bibliothèque
 
-- **État** : ouvert (14 novembre 2026) — une question de conception à trancher avant le code
+- **État** : corrigé (14 novembre 2026) — voies 1 et 3 (orchestration, 23 h 2x) ; codeparsers 4194456 (`manifestes-dotnet`) ; témoins `tests/imports_csharp.rs` (codeparsers) et `manifestes::tests::l_analyse_relie_un_using_a_son_paquet_nuget` (rag3weaver), rouges sous 3474cea
 - **Gravité** : manque de rappel : aucun espace de noms importé d'un fichier C# n'a de bibliothèque, donc
   ni provenance ni arête `USES_LIBRARY`, et les manifestes .NET lus depuis ce soir n'ont rien à relier
 - **Atteignable en service** : oui, sur tout dépôt C# indexé
@@ -37,3 +37,12 @@ La voie 1, plus 3 pour les alias, ne devine rien ; c'est la proposition.
 La règle C# (`csharp.toml`, 417 espaces de noms tirés de la doc .NET), le plus long préfixe déclaré
 (`Newtonsoft.Json.Linq` → le paquet `Newtonsoft.Json`, codeparsers `3474cea`), et la lecture des
 manifestes .NET par rag3weaver (`.csproj`, `packages.config`, `Directory.Packages.props`).
+
+## La correction
+
+Voies 1 et 3, pas la 2. Chaque `using_directive` se lit sur l'arbre : `using A.B` et `using static A.B.T`
+donnent une `ImportReference` sans nom lié, portée par le plus petit scope qui contient sa ligne, d'où
+part la bibliothèque avec sa provenance ; `using J = A.B.T` lie `J`. Un `using static` verse des membres,
+pas un nom : il suit la voie 1. De bout en bout : `Newtonsoft.Json.Linq` est une dépendance du `.csproj`
+au plus long préfixe, `System.Text.Json` est builtin, `Mon.Outil.Interne` est du projet par le
+`RootNamespace`.
