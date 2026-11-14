@@ -1328,6 +1328,39 @@ mod tests {
         assert!(!indexes_captes(&flux2).iter().any(|e| e["branche"] == "parti"), "un hôte parti ne publie rien");
     }
 
+    /// **Le suiveur d'un premier index finit avec son hôte** (ticket « un fil index-suivi survit à la
+    /// fin du processus de test », core 2513521 : un SIGSEGV à la sortie d'un binaire de tests, dans le
+    /// fil `index-suivi`, après 89 tests verts). Le fil tenait un `Arc<Hosted>` (le backend et sa base)
+    /// jusqu'à ses bornes, l'hôte parti ; détaché, personne ne le joignait. L'hôte rendu, le fil est
+    /// joint et le backend lâché, avant même que `drop` ne rende la main.
+    #[test]
+    fn the_index_follower_ends_with_its_host() {
+        let d = tempfile::tempdir().unwrap();
+        let depot = petit_depot(d.path());
+        let gabarit = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code");
+        std::fs::create_dir_all(d.path().join("base")).unwrap();
+        let manifeste = crate::gabarits::jouable::manifeste_jouable(&gabarit, &d.path().join("base")).unwrap();
+        let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+        m["workspace"]["root"] = json!(depot.to_string_lossy());
+        std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new(""))) });
+        let host = Arc::new(hote(d.path(), model));
+        let h = host.hosted(&manifeste).unwrap();
+        // Un journal qui avance sans jamais finir, et des bornes longues : seul l'hôte parti l'arrête.
+        let journal = d.path().join("sans-fin.log");
+        std::fs::write(&journal, "plein texte : 0/1 fichiers\n").unwrap();
+        let bornes = super::Bornes { plafond: std::time::Duration::from_secs(60), naissance: std::time::Duration::from_secs(60) };
+        super::suivre_le_premier_index(Arc::downgrade(&host), h.clone(), journal, json!({ "worktree": "/w/sans-fin", "depot": "rag3db-essai", "branche": "sans-fin" }), bornes);
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let backend = Arc::downgrade(&h);
+        drop(h);
+        let t0 = std::time::Instant::now();
+        drop(host);
+        let rendu = t0.elapsed();
+        assert!(backend.upgrade().is_none(), "l'hôte rendu, le fil index-suivi tient encore le backend (et sa base)");
+        assert!(rendu < std::time::Duration::from_secs(5), "rendre l'hôte a attendu le fil {rendu:?}");
+    }
+
     /// **L'avancement se lit dans les lignes du journal**, aux formes que `index_nodes` et
     /// `catalog::progress` écrivent.
     #[test]
