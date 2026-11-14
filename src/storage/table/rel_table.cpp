@@ -6,6 +6,7 @@
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "common/exception/message.h"
 #include "common/exception/runtime.h"
+#include "common/test_hooks.h"
 #include "common/types/types.h"
 #include "main/client_context.h"
 #include "storage/local_storage/local_rel_table.h"
@@ -540,7 +541,12 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
         columnIDsToCommit.push_back(columnID);
     }
     // commit rel table data
+    bool firstDirection = true;
     for (auto& relData : directedRelData) {
+        if (!firstDirection) {
+            common::TestHooks::failOnceIfArmed(common::TestFailPoint::REL_COMMIT_BETWEEN_DIRECTIONS);
+        }
+        firstDirection = false;
         const auto direction = relData->getDirection();
         const auto columnToSkip = (direction == RelDataDirection::FWD) ?
                                       LOCAL_BOUND_NODE_ID_COLUMN_ID :
