@@ -6653,6 +6653,67 @@ mod tests {
         assert!(backend.call("read_file", json!({"path": "outils.rs", "format": "html"})).is_err());
     }
 
+    /// La base des témoins de la vue (2a′-2) : une base à générations, un fichier de 150 fonctions
+    /// distinctes (150 versions), indexé, et l'outil `search_code`.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn base_de_la_vue() -> (tempfile::TempDir, Backend) {
+        let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools");
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["tools"]["search_code"] =
+                json!({"graph": "search_workspace.mmd", "bindings": {"target": "Scope"}, "policy": {"read_files": true}});
+        });
+        drop(p);
+        std::fs::copy(tools.join("search_workspace.mmd"), dir.path().join("search_workspace.mmd")).unwrap();
+        let corps: String = (0..150).map(|i| format!("pub fn fonction_{i}() -> u32 {{\n    {i} * 3 + 1\n}}\n\n")).collect();
+        std::fs::write(dir.path().join("sources/beaucoup.rs"), corps).unwrap();
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
+        let backend = backend_de_code(dir.path(), prepared);
+        {
+            let source = backend.file_source.clone().unwrap();
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("l'index");
+            assert_eq!(crate::code::scope_form(&cat).unwrap(), crate::code::ScopeForm::Generations);
+        }
+        (dir, backend)
+    }
+
+    /// **Témoin 1 de la vue : aucune projection n'écrit de liste** (2a′-2, page 05, § 5). Une recherche
+    /// dense filtrée par chemin, sur une base à générations, projette un Cypher court : moins de 4 Kio,
+    /// quelle que soit la taille de la base. Aujourd'hui, le masque des versions y est écrit en clair.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn une_recherche_dense_filtree_ne_projette_aucune_liste() {
+        use std::sync::atomic::Ordering;
+        let (_dir, backend) = base_de_la_vue();
+        let avant = crate::rag3db_search_backend::PROJECTIONS_POSEES.load(Ordering::Relaxed);
+        let r = backend
+            .call("search_code", json!({"query": "fonction", "options": {"signals": ["vector"]}, "scope": "beaucoup.rs"}))
+            .expect("search_code");
+        assert!(
+            crate::rag3db_search_backend::PROJECTIONS_POSEES.load(Ordering::Relaxed) > avant,
+            "la recherche dense filtrée n'a rien projeté : le témoin ne prouve rien ({r})"
+        );
+        let plus_long = crate::rag3db_search_backend::PLUS_LONG_CYPHER_PROJETE.load(Ordering::Relaxed);
+        assert!(plus_long <= 4096, "une projection de {plus_long} octets : une liste s'écrit encore en clair");
+    }
+
+    /// **Témoin 3 de la vue : l'ensemble lexical se pose une fois** (2a′-2, page 05, § 5). Deux recherches
+    /// lexicales filtrées sous la même génération ne résolvent le masque des versions qu'une fois au
+    /// plus ; aujourd'hui, chaque recherche le refait.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn l_ensemble_lexical_se_pose_une_fois_par_generation() {
+        let (_dir, backend) = base_de_la_vue();
+        let avant = backend.catalog.lock().unwrap().resolutions_du_masque().expect("une base à générations");
+        for _ in 0..2 {
+            backend
+                .call("search_code", json!({"query": "fonction", "options": {"signals": ["bm25"]}, "scope": "beaucoup.rs"}))
+                .expect("search_code");
+        }
+        let apres = backend.catalog.lock().unwrap().resolutions_du_masque().unwrap();
+        assert!(apres - avant <= 1, "le masque des versions s'est résolu {} fois pour deux recherches", apres - avant);
+    }
+
     /// **Témoin 0 de 2a′ : la non-fuite** (page 03, § 4). Chaque ligne de `Scope` et de `File` est
     /// recopiée deux fois, avec ses arêtes : dans une autre couche, et retirée au rang lu. Aucune
     /// des deux copies n'est visible ; les outils de lecture rendent donc, au caractère près, ce

@@ -12,7 +12,9 @@
 
 use rag3weaver_ir::{Count, Form, Hop, Plan, Predicate, Select};
 use crate::connection::CypherValue;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 /// **La table des générations** : une ligne par génération publiée d'une couche (page 03, § 2).
 /// Interne au catalogue, comme `_catalog_meta` : elle n'est pas une entité des outils.
@@ -26,7 +28,35 @@ pub const DEPUIS: &str = "_depuis";
 pub const JUSQU_A: &str = "_jusqu_a";
 
 /// **Ce qu'une lecture voit** : les tables à générations, la couche lue, le rang lu.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// **Les ensembles posés une fois par (couche, rang)** (2a′-2, page
+/// `docs/everything-declarative/14-11-2026/05-la-vue-publiee-par-couche-et-rang.md`) : ce qu'une
+/// recherche admet, calculé à la publication d'une génération et non à chaque requête. Partagés par
+/// le catalogue et ses vues de lecture (la `Visibilite` est copiée, l'`Arc` reste le même).
+#[derive(Default)]
+pub struct EnsemblesPoses {
+    /// Combien de fois le masque des versions a été résolu : un témoin s'y lit.
+    pub(crate) resolutions: AtomicUsize,
+    /// Les offsets admis, par clé de (couche, rang, table).
+    pub(crate) cache: Mutex<HashMap<String, Arc<Vec<u64>>>>,
+}
+
+impl EnsemblesPoses {
+    /// Le nombre de résolutions du masque des versions depuis l'ouverture.
+    pub fn resolutions(&self) -> usize {
+        self.resolutions.load(Ordering::Relaxed)
+    }
+    pub(crate) fn compter_une_resolution(&self) {
+        self.resolutions.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+impl std::fmt::Debug for EnsemblesPoses {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EnsemblesPoses").field("resolutions", &self.resolutions()).finish_non_exhaustive()
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Visibilite {
     pub tables: BTreeSet<String>,
     pub couche: String,
@@ -36,7 +66,16 @@ pub struct Visibilite {
     /// génération ; l'écrivain qui en pose une le défait (2a′-2). Il ne sert qu'à un lecteur sans
     /// filtre, qui rendrait sinon l'ensemble des lignes visibles au lieu de « toutes » (page 03, § 3).
     pub tout_visible: bool,
+    /// Les ensembles posés de cette base ; partagés par toutes les copies de la visibilité.
+    pub ensembles: Arc<EnsemblesPoses>,
 }
+
+impl PartialEq for Visibilite {
+    fn eq(&self, autre: &Self) -> bool {
+        self.tables == autre.tables && self.couche == autre.couche && self.rang == autre.rang && self.tout_visible == autre.tout_visible
+    }
+}
+impl Eq for Visibilite {}
 
 impl Visibilite {
     /// Le prédicat de visibilité d'une table, si elle a des générations.

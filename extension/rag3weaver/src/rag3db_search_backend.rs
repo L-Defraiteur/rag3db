@@ -29,6 +29,12 @@ use crate::search::inline_params;
 /// requêtes lui-même, sans dialecte sous la main : la règle est reprise ici
 /// telle quelle. Les noms passés en chaîne (`QUERY_VECTOR_INDEX('{table}', …)`)
 /// sont des littéraux, ils restent nus.
+/// **La plus longue projection** posée par `vector_search_filtered` depuis le début du processus, en
+/// octets (2a′-2) : un témoin y lit qu'aucune liste n'est plus écrite en clair dans un Cypher.
+pub static PLUS_LONG_CYPHER_PROJETE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+/// Le nombre de projections posées par `vector_search_filtered` depuis le début du processus.
+pub static PROJECTIONS_POSEES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 fn quote(name: &str) -> String {
     crate::dialect::cypher_quote(name)
 }
@@ -105,6 +111,8 @@ impl SearchBackend for Rag3dbSearchBackend {
             &format!("{match_clause}{where_clause} RETURN n"),
             filter_params,
         );
+        PLUS_LONG_CYPHER_PROJETE.fetch_max(filter_cypher.len(), std::sync::atomic::Ordering::Relaxed);
+        PROJECTIONS_POSEES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let escaped = filter_cypher.replace('\\', "\\\\").replace('\'', "\\'");
         if std::env::var_os("RAG3W_VEC_TRACE").is_some() { eprintln!("[vec-trace] {filter_cypher}"); }
 
