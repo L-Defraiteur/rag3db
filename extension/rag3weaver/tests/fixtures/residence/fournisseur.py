@@ -32,6 +32,8 @@ def arguments():
     # Le groupe, comme rag3weaver-embeddings : le creux sur le modèle servi, le
     # relecteur et l'OCR par les variables du service réel.
     p.add_argument('--sparse', action='store_true')
+    # Le dual (dense et creux en un passage), comme bge-m3 au service réel.
+    p.add_argument('--dual', action='store_true')
     a = p.parse_args()
     if a.dim <= 0 or a.budget_pret_ms <= 0:
         p.error('dimension et budget strictement positifs exigés')
@@ -116,6 +118,7 @@ class Fixture(ThreadingHTTPServer):
             identity['activation'] = declared
         identity['usage'] = {'baux': self.baux_actifs(), 'en_cours': self.en_cours}
         identity['sparse'] = bool(self.args.sparse)
+        identity['dual'] = bool(self.args.dual)
         for cle, variable in (('reranker', 'RAG3WEAVER_RERANK_MODEL'), ('ocr', 'RAG3WEAVER_OCR_MODEL')):
             valeur = (os.environ.get(variable) or '').strip()
             if valeur:
@@ -208,7 +211,7 @@ class Handler(BaseHTTPRequestHandler):
                     reponse = (200, {'bail': numero, 'rendu': self.server.baux.pop(numero, None) is not None})
             self.server.derniere = time.monotonic()
             return self.answer(*reponse)
-        if self.path in ('/embed_sparse', '/rerank', '/ocr'):
+        if self.path in ('/embed_sparse', '/embed_dual', '/rerank', '/ocr'):
             return self.groupe()
         if self.path != '/embed':
             self.drain()
@@ -242,6 +245,8 @@ def _groupe(self):
     route = self.path.strip('/')
     if route == 'embed_sparse' and not self.server.args.sparse:
         return self.answer(404, {'error': 'pas de creux'})
+    if route == 'embed_dual' and not self.server.args.dual:
+        return self.answer(404, {'error': 'pas de dual'})
     if route == 'rerank' and not (os.environ.get('RAG3WEAVER_RERANK_MODEL') or '').strip():
         return self.answer(404, {'error': 'pas de relecteur'})
     if route == 'ocr' and not (os.environ.get('RAG3WEAVER_OCR_MODEL') or '').strip():
@@ -249,7 +254,16 @@ def _groupe(self):
     self.server.event(route + '_commence')
     self.server.en_cours += 1
     try:
-        if route == 'embed_sparse':
+        if route == 'embed_dual':
+            textes = corps.get('texts') or []
+            dense, creux = [], []
+            for texte in textes:
+                h = hashlib.sha256(texte.encode()).digest()
+                dense.append([(h[i % len(h)] - 127.5) / 127.5 for i in range(self.server.args.dim)])
+                indices = sorted({int.from_bytes(h[i:i + 2], 'big') % 1000 for i in range(0, 8, 2)})
+                creux.append({'indices': indices, 'values': [1.0] * len(indices)})
+            reponse = {'dense': dense, 'sparse': creux}
+        elif route == 'embed_sparse':
             textes = corps.get('texts') or []
             creux = []
             for texte in textes:
