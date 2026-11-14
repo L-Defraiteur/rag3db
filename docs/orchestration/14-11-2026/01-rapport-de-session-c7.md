@@ -795,3 +795,25 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   inventé), la mesure des 904 s à 3 h, card2 sans autre charge. **Mes propres pushs de docs** ont fait
   refuser un push de pile au dernier instant (c4242ab52) : la garde a remis le worktree, le second essai
   est passé ; je groupe mes docs quand un push est en vol.
+
+## 21 h 1x — le portable réveillé sous 373b5477b ; la chaîne verte jusqu'au rang 24
+
+- **La bascule** : hôtes arrêtés à 20 h 52 aux deux postes, instantanés `avant-373b5477b`, contrôle des
+  deux sens (plus long que les 15 min de la procédure : 20 min par base) ; **le portable est réveillé à
+  21 h 13** sous le binaire 03ab44a0 lié à 373b5477b, cinq backends rouverts sans refus, search_code,
+  recall_fiches et l'IDE répondent ; luciepc suit (code-principal puis code-lourd), puis `courant` aux
+  deux postes ensemble.
+- **La chaîne** : sans-filtre et 1b (arbre principal, passe complète sous 373b5477b en cours) → fils du
+  moteur (G, 1e7926159, check_features après la fenêtre) → pointeur des règles (codeparsers, vert, pas de
+  rejeu : rien de code entre be641a3c5 et 1e7926159) → fermeture qui tient (archi, prêt) → gestes de 96
+  (eeefcc493, rejeu) → crochet en `Weak` (arbre principal, d1578cd56, e2e_demon_hote 14/14 sous
+  373b5477b : le rouge se ferme là) → réécriture du `IN` (recherche, base d1578cd56) → (B) l'`IN` haché
+  (cœur) → garde-pile-3 (G) → dense sur `Tenue<C>` (embarquement, vert sous 373b5477b) → chaîne Rust.
+- **Mesures du plein texte** : un index neuf du dépôt pèse 771 Mo (4,59 Go ce matin) par le correctif des
+  octets d'ED, 754 avec les exclusions ; le dictionnaire garde 94 Mo de textes morts après purge et pèse
+  420 Mo pour 171 de texte même neuf (lucivy : la fusion lâchera les ids sans document vivant, puis une
+  compaction filtrée du dictionnaire ; conception validée). Lucivy main : l'API de maintenance
+  (`maintain`, `live_node_ids`, garde à la moitié), PR #35 et #36 ; **4.3.8 posé à Lucie**.
+- **Laya** (banc) : protocole sur master, modèle déjà à luciepc, jeu synthétique de 286 cas, CPU d'abord.
+  **Hotfixs** : le pas « retrait de l'ancien index » en préparation sur copie. **ED** : le masque en
+  prédicat écrit, trois témoins rouges puis verts, mesures en file.
