@@ -165,7 +165,17 @@ n'atteint que des lignes visibles.
 5. **Les arêtes entrantes suivent** : `A` (`a.rs`) appelle `f` (`b.rs`) ; `f` change ; `usages(f)`
    rend `A` à la génération courante et à celle d'avant.
 6. **La couche de travail de l'ancre** : dix sauvegardes du même fichier ne publient aucune
-   génération ; un commit en publie une.
+   génération ; un commit en publie une. Une lecture **sous une vue** de l'ancre à son rang publié n
+   ne voit pas les sauvegardes en attente : c'est le cas qu'une couche épingle, et c'est lui qui
+   prouve « jamais un rang en attente » (arbre principal).
+
+**La mesure des déplacés, bornée pour trancher** (arbre principal) :
+- **ce qu'elle compte** : sur les 50 derniers commits de master de code-lourd, rejoués sur une copie,
+  le nombre d'arêtes entrantes recopiées par commit, et la part qui vient des seuls déplacés ;
+- **le seuil** : si les déplacés font plus de la moitié des recopies **et** qu'un commit médian
+  dépasse quelques milliers d'arêtes, la position sort de l'identité de la ligne ; sinon, on garde ;
+- dans un fichier modifié, la couche de travail réécrit sur place : seul le commit qui publie paie,
+  une fois par scope déplacé, jamais à chaque sauvegarde.
 
 ## 5. Ce qui se décide avant le code
 
