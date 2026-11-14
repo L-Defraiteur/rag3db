@@ -468,7 +468,11 @@ impl Embedder for Surveillant {
                     std::sync::TryLockError::Poisoned(_) => "empoisonné",
                 };
                 self.refus.lock().unwrap().push(format!("{pourquoi}, {en_vol} appel(s) en vol, fil {:?}", std::thread::current().id()));
-            }
+            };
+            // Le `;` ci-dessus compte : sans lui, le `if let` est l'expression de fin du bloc, et ses
+            // temporaires (la garde d'un `try_lock` réussi) vivent jusqu'après `_une_sonde_a_la_fois`
+            // (édition 2021). La sonde se libérait alors avant le catalogue, et la suivante le voyait
+            // tenu : 334 757 refus sur 800 000 sondes sans lui, 0 avec (14 novembre 2026).
         }
         let rendu = self.interieur.embed(texts);
         self.en_vol.fetch_sub(1, SeqCst);
