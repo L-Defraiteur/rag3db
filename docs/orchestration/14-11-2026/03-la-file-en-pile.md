@@ -48,14 +48,15 @@ l'autre, dix fois de suite, même sans rouge.
 | 5 | embarquement | reprise après plantage | reprise-apres-plantage → reprise-apres-plantage-pile | 512b5e420 sur c93f73f06 — **atterri** à 16 h 39, master 67dabc121, 6/6 en `=` plus le `>` du ticket ; le `!` attendu sur nouveautes.md n'a pas eu lieu, la pile d'avant ayant atterri avec les mêmes lignes de tête |
 | 6 | 96 | miroir, nom exact, about | lot-96-pile (miroir, nomex, about) | 84f949d2c sur 512b5e420 — **atterri** à 16 h 40, master c350dc9c3, trois lots en un push, 3/3 en `=` |
 | 7 | hotfixs | témoin du dictionnaire (C++ test seul) | chaine-au-point-de-reprise-2 → chaine-au-point-de-reprise-pile | cabcc8640 sur 84f949d2c — **atterri** à 16 h 44, master 42c84cb77, pile tenue |
-| 8 | ED | 2a′-1 (générations de l'ancre) | generations-de-l-ancre-3 → generations-de-l-ancre-pile | 9b0620f66 → pile c22fdbf31, puis **e00fd562d** sur cabcc8640 (19 commits + le témoin e2e_scope_versions corrigé ; rang gardé, un commit ajouté) |
-| 9 | archi | jauge du contexte (+ quatre mineurs s'ils sont verts) | jauge-ce-qui-pese-3 → jauge-ce-qui-pese-pile | 5ad3c990e → pile 214e9a99b, puis **67d759962** sur e00fd562d (jauge-ce-qui-pese-pile-2) |
+| 8 | ED | 2a′-1 (générations de l'ancre) | generations-de-l-ancre-pile | e00fd562d sur cabcc8640 — **atterri** à 16 h 46, master 78c8997de, 20/20 en `=` |
+| 9 | archi | jauge du contexte (+ quatre mineurs s'ils sont verts) | jauge-ce-qui-pese-pile-2 | 67d759962 sur e00fd562d — **atterri** à 16 h 47, master cdbd346aa, pile tenue |
 | 10 | cœur | correctif (a) perte de Note | annulation-garde-les-autres-2 → annulation-garde-les-autres-pile | 9b0e73c9c → pile 960eb8e3a, puis **41a7de35a** sur 67d759962 (annulation-garde-les-autres-pile-2) ; juge vers 17 h 15 |
-| 11 | recherche | la CI : `fetch_update` déprécié par la chaîne stable de la CI (read_pool.rs:261), pas par le poste 1.98.1 | ci-try-update-pile | à venir, sur la tête du cœur 41a7de35a |
-| 12 | G | la garde apprend la pile | garde-pile | cd103b619 sur c93f73f06 (garde 2f1914405 : --onto, push refusé remis, 27 témoins ; relue par recherche à 16 h 2x ; **posée au cache des deux postes à 16 h 22**, sha256 c57a3fb1 → a58a649f, l'ancienne en push_garde.sh.avant-garde-pile) |
-| 13 | codeparsers | l'import pointé (lot 1) | à venir | à son vert |
-| 14 | recherche | exclusions 1 et 5 dans le manifeste | à venir | à son vert |
-| 15 | tty | tty-7, le journal de séance et le repli sous mosh | cx-tty-7 dc6d484c6 | rejoue sur 41a7de35a ; rejeu court probable à son tour, accepté |
+| 11 | recherche | la CI : `fetch_update` déprécié par la chaîne stable de la CI (read_pool.rs:261), pas par le poste 1.98.1 | ci-try-update-pile | **passe devant le cœur** (son juge vers 17 h 30) : posée sur master du moment ; le cœur se repose dessus sans rejeu (C++ seul) |
+| 12 | tty | tty-7, le journal de séance et le repli sous mosh | cx-tty-7-pile 132c0248d sur 41a7de35a, vert | juste après le cœur ; rejeu court attendu (la ligne de la CI touche la lib sous sa base) |
+| 13 | G | la garde apprend la pile | garde-pile 24ab270be | cd103b619 sur c93f73f06 (garde 2f1914405 : --onto, push refusé remis, 27 témoins ; relue par recherche à 16 h 2x ; **posée au cache des deux postes à 16 h 22**, sha256 c57a3fb1 → a58a649f, l'ancienne en push_garde.sh.avant-garde-pile) |
+| 14 | codeparsers | l'import pointé (lot 1) | à venir | à son vert |
+| 15 | recherche | exclusions 1 et 5 dans le manifeste | à venir | à son vert |
+| 16 | archi | les quatre mineurs de l'atelier | atelier-quatre-mineurs 8f8c31ec4 | passe complète en cours |
 
 Chaque session dit à c7 et au rang suivant la tête de sa branche de pile dès qu'elle est poussée.
 
