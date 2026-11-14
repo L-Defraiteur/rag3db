@@ -285,3 +285,28 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 - **lucivy** : lucivy-4-3-7-2 (d3595e110) vert sur 0c41f9fe6, target neuf : témoin rouge sous 4.3.5 (« filtré 2,2637, vue seule 0,0465 »), vert sous 4.3.7 ; fts_handle 13/0 ; F8 8/8 ; e2e_code 38/0 ; e2e_lectures 29/0 (un premier 28/1 sans RAG3WEAVER_EMBED_SERVICE, le test exige bge-m3 ; rejoué avec 7878,7879 sans changer le code). En file après archi et codeparsers.
 - **archi a poussé recherche-lit-le-catalogue** : master = 6981de5ec (lock_for_read borné à READ_WAIT, la raison dite au-delà ; rejeu court 37/0 et 43/43, garde à jour). Les thèmes (ide-themes-route-5, 2299e0052, avec la nouveauté openssl) en rejeu court, même tour.
 - **G, le cas 6c diagnostiqué et corrigé** (branche tenant-signal, ab7c44fb5, non poussé) : il parle de `poste push`, pas d'un lourd, et l'attendu est l'inverse de ce que j'avais écrit — un tenant de push qui reçoit TERM **garde** le verrou jusqu'à la fin de sa commande (deux pushes ne se croisent pas). Cause : `poste push` prend le verrou, lit la CI (jusqu'à 20 s, b0c0de81e du 18 oct.) et n'installait son `trap` qu'après : un TERM pendant la lecture tuait le script, verrou rendu, commande jamais lancée, sans un mot (témoin vert avec POSTE_CI=0, rouge avec la CI, prouvé sur master). Correctif : le trap posé dès la prise du verrou, message qui dit le signal ; test_poste.sh 29/29 ; ticket fermé. En file (outillage de passe = code), puis la recopie.
+
+## 15 h 3x — trois lots verts arrivent en file, la provenance des 415 prouvée
+
+- **codeparsers** a rejoué le juge des 415 avec les manifestes de l'arbre jugé (20 manifestes,
+  923 dépendances, 9 paquets du dépôt), sans index ni base : les **241 inconnues tombent à 0**,
+  240 passent `dependency` (les paquets npm des `package.json`), 2 `project`, 77 `builtin` ; les
+  arêtes fondues `builtin,inconnue` (31) deviennent `builtin,dependency` (30) et `builtin,project`
+  (1). Rien ne reste inconnue dans l'échantillon (tout TS/JS ; le cas PyYAML n'y est pas). Chiffres
+  au ticket de l'oracle, master da14106a3.
+- **96** : le lot miroir est VERT au rejeu (master d776ae37d, lib 0c41f9fe6). Le rouge d'abord :
+  une fiche née juste avant l'arrêt n'avait pas de fichier (Debounce 50 ms, `stop_within` cassait
+  la boucle). Le correctif : `Backend::stop_reactors` régénère les fichiers composés depuis la base
+  dès que le miroir est arrêté ; couvre shutdown, `/backend/close` et le rechargement ; règle écrite
+  « la base est la vérité, les fichiers la suivent jusqu'à l'arrêt compris ». e2e_lectures 27/27
+  joué puisque l'arrêt est à tous. Ticket clos.
+- **embarquement** : le lot (1), reprise après plantage, est VERT sur 17afd3820 à luciepc : `Maintenir`
+  se relance une fois, le relancé dit `relances: 1` au `/sante`, le refus dit « parti, relancé une
+  fois, rouvrez » ; le compte vit au dossier de coordination (par déclaration, survit à la
+  réouverture). Deux relances au même instant peuvent compter double : accepté, **au ticket côté
+  docs au push**, pas dans le code (la tête testée ne bouge pas pour un commentaire).
+- **ED** : 2a′-1 en cours sur generations-de-l-ancre, rien ne bloque, témoins 4 et 0 d'abord.
+- **La file**, un seul « à toi » ouvert, celui d'archi (thèmes, rejeu court) : codeparsers
+  (provenance-imports-3, puis son lot des manifestes), lucivy (4.3.7), tty-6, recherche (surveillant,
+  puis plafond), G (cas 6c), embarquement, 96, puis le cœur à son juge vert. À chacun : worktree
+  prêt, rebase et passe courte au mot seulement.
