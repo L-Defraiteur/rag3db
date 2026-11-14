@@ -591,6 +591,7 @@ path = "tests/sonde_identifiants_lucivy.rs"
 [[test]]
 name = "sonde_cout_du_predicat"
 path = "tests/sonde_cout_du_predicat.rs"
+required-features = ["rag3db-native"]
 [[test]]
 name = "sonde_liste_analyse"
 path = "tests/sonde_liste_analyse.rs"
