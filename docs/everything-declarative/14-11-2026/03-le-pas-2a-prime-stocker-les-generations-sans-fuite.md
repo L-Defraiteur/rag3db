@@ -236,3 +236,65 @@ d'appartenance de la génération 0 coûte 646 ms, pour 82 855 arêtes.
 **La décision proposée** : les deux colonnes, confirmées. Avant le code, la sonde de 2a′-1 cherche la
 forme de clause qui rend `usages` à moins de ×1,3 avec le prédicat complet (nœuds et arête). Le
 prédicat récursif d'`impact` (×2,2, quelques ms) est accepté tel quel.
+
+## 7. Ce que 2a′-1 a posé, et ce qui reste à 2a′-2 (14 novembre 2026)
+
+**Ce que 2a′-1 pose** (branche `generations-de-l-ancre-2`) :
+- l'estampille `code-scope-v1/content/generations` sur une base neuve dont le dialecte sait les
+  générations (`SchemaDialect::sait_les_generations` : rag3db seulement, postgres a son ticket) ;
+- les trois colonnes `_couche` (défaut `'backend'`), `_depuis` (0) et `_jusqu_a` (vide) sur `Scope`
+  et `File` ;
+- l'entité `Generation`, en table interne `_generation` (comme `_catalog_meta` : pas une entité des
+  outils, donc aucune réponse de `schema` ne change). La génération 0 de la couche y est posée à la
+  première ouverture, et le rang lu est le dernier publié ;
+- une base d'avant se lit comme avant, et `index_state` la dit « forme sans couches ».
+
+**Où le prédicat entre** (`Visibilite`, `src/generations.rs`) :
+- les plans, par `run_read_plan` (catalogue et vue) ;
+- les sauts, par `graph_walk::run_hop`, bornés au nœud atteint ;
+- les lecteurs qui traduisent l'IR eux-mêmes, par `ReadCatalog::traduire_select`, `traduire_hop` et
+  `traduire_count` : `code.rs` (les noms, les parents, `linked_from_many_where`, le compte des
+  arêtes ambiguës, `mentions_sans_definisseur_visible`), `code_tools::voisins_des_scopes`,
+  `graph_walk::neighbors`, `lock_order`, `links_nodes`, `neighborhood_nodes`, `react_nodes`,
+  `composable_results` ;
+- les recherches, par `resoudre_le_filtre` et le filtre vectoriel (`compile_filter_for_vector_in`).
+  `admitted_parent_uuids_for` y passe, et le repli `select_all` d'`occurrence_roots_for` se ferme
+  avec lui ;
+- `get` et `find_by_field` (catalogue et vue) lisent les trois colonnes et ne gardent que les lignes
+  visibles.
+
+**Le drapeau `tout_visible`** : sans filtre, « aucune clause » veut dire « toutes les lignes ». Tant
+qu'aucune ligne n'est invisible, ce qui est le cas de toute base de 2a′-1, un lecteur sans filtre
+n'ajoute pas de clause. La latence de `search_code` sans filtre ne bouge donc pas. L'écrivain qui
+pose une seconde génération appelle `Catalog::marquer_des_lignes_invisibles` (2a′-2), et la clause
+s'impose alors à tous.
+
+**Les témoins** :
+- 4 (`code::tests_des_generations`) : rouge sur 7072aa733 (`Cannot find property _couche`), vert ;
+- l'entité `Generation` : rouge sur ee8b4aab4 (`Table _generation does not exist`), vert ;
+- 0 (`backend::tests::une_generation_invisible_ne_change_aucune_reponse_des_outils`) : chaque ligne
+  de `Scope` et de `File` est recopiée avec ses arêtes, une fois dans une autre couche et une fois
+  retirée au rang lu.
+  - **Le rouge** (branche `temoin-0-rouge`, le noyau seul sans les lecteurs un par un) : trois
+    réponses changent, `read_file` sur deux fichiers et `search_code`.
+  - **Le vert** : avec les lecteurs bornés.
+  - `outline` n'y est pas, parce que son plan ne se charge pas dans ce gabarit. Il passe par
+    `run_read_plan`, que le témoin 4 tient.
+
+**La borne des arêtes, pour 2a′-2** (condition de c7) : en 2a′-1, aucune arête ne porte de
+prédicat. C'est juste tant qu'aucune ligne n'est retirée alors que ses deux bouts restent visibles.
+2a′-2, qui rend la ligne immuable et recopie les arêtes entrantes, doit :
+- poser les colonnes sur les relations entre lignes à générations (`CONSUMES` et les suivantes, et
+  `File`–`Scope`) ;
+- borner l'arête d'un saut dans la **forme C** du § 6 : le bout filtré dans le `MATCH`, puis l'arête
+  et l'autre bout après un `WITH`. Une clause unique nœuds et arête coûte ×7,3 (ticket
+  `2026-11-14-un-predicat-sur-les-noeuds-et-l-arete-d-un-saut-fait-balayer-toute-la-table`) ;
+- borner `Count::Edges` (le degré), que `borner_count` laisse aujourd'hui tel quel ;
+- borner les sauts à arrivée non typée (`end: None`), que `borner_hop` laisse passer ;
+- donner la vue de la génération en cours aux lectures de l'ingest, qui prennent encore le dialecte
+  nu : `Declarants::charger_par`, `Inclusions::charger_par`, `materialiser_les_symboles`,
+  `parents_et_fichiers` ;
+- décider, entrée par entrée, pour la maintenance (`code_sync::avant_la_regle`, les `select` internes
+  de `catalog.rs`, la chaîne du snapshot dans `catalog/synchronisation.rs`) : une génération, ou
+  toutes (§ 3) ;
+- appeler `marquer_des_lignes_invisibles` à la première écriture d'une seconde génération.
