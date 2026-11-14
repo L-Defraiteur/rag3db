@@ -113,3 +113,8 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 ## Vers 13 h 4x — 1b attend la forme v2 du lot des octets
 
 - **arbre principal** : le lot des octets d'ED change ce que rend `code-scope-v1` (le `content` dans l'empan du nœud) → ED monte la forme à **`code-scope-v2/content`** ; 1b vise la forme du binaire en paramètre et ne promet plus « zéro appel à l'embarqueur » : **seules les versions au texte changé s'embarquent**. Ordre validé : mécanique de 1b sur fixtures maintenant → le lot d'ED atterrit → 1b vers v2 sur la copie réelle (prise : `~/.cache/rag3weaver-build/1b-copie/2026-11-14-depuis-avant-835d5298f/`, reflink de l'instantané de G). Pas de v1 d'abord. Réserve : pas de `git show` (une ancre indexe l'arbre vivant) ; 1b réanalyse le texte que `File` porte, sinon lit l'arbre du poste et le dit.
+
+## Vers 13 h 4x — la fenêtre d'archivage est ouverte ; les données de Lucie sont des données de test
+
+- **G a fermé le backend memoire-longue du portable** à 13 h 45 min 38 s (closed: true, .wal absorbé, fuser vide, relevé de 3 643 fichiers gardé) ; l'hôte sert toujours l'index de code ; « va » à 96. Correction de 96 (éprouvée par G le 25 oct.) : un appel rouvre un backend fermé, l'écriture passe — l'annonce est le seul verrou ; garde-fou au retour : diff de ~/memoire-longue et des comptes contre l'instantané.
+- **Règle de Lucie, 13 h 50** : « même mes données, osef : tout ce qui concerne rag3db, ce sont des données de test au profit du projet, sauf le cas où j'ai vraiment besoin d'une version sur le long terme pour autre chose ». En mémoire : instantané puis on fait, sans lui demander son mot ; un écart au retour s'écrit dans la page, il n'arrête pas la passe. Dit à 96. Vaut pour 1b sur ses bases aussi.
