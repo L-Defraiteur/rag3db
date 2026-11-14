@@ -564,15 +564,27 @@ fn une_fermeture_avec_une_raison_tient_jusqu_a_l_ouverture_explicite() {
     let r = put(&host, &s, &m, "put_fiche", "pendant");
     let e = r["error"].as_str().unwrap_or_default().to_string();
     assert!(r["ok"] != json!(true) && e.contains("fermé : passe de l'archiviste") && e.contains("jusqu'à 18 h 50") && e.contains("/backend/open"), "le put_fiche est refusé en disant la raison : {r}");
+    // Qui a fermé : le client de la session, pour qu'un appelant sache à qui demander (c7).
+    assert!(e.contains("par témoin"), "le refus dit qui a fermé : {e}");
     let etat = host.state();
     assert_eq!(etat["backends"][0]["open"], json!(false), "rien n'a rouvert la base : {etat}");
     assert_eq!(etat["backends"][0]["opened"], json!(1), "{etat}");
     let dit = etat["backends"][0]["held_closed"].as_str().unwrap_or_default().to_string();
     assert!(dit.contains("fermé : passe de l'archiviste") && dit.contains("jusqu'à 18 h 50"), "/etat dit la fermeture : {etat}");
 
+    // « Jusqu'à » n'ouvre pas de lui-même (c7) : passé l'heure annoncée, la fermeture tient encore
+    // et le dit. Une heure déjà passée (il y a une minute) : refusé, « au-delà de l'heure annoncée ».
+    let passee = jiff::Zoned::now().checked_sub(jiff::SignedDuration::from_secs(60)).unwrap().strftime("%H:%M").to_string();
+    let (code, r) = route(&host, "/backend/close", &s, json!({"manifest": m, "reason": "passe en retard", "until": passee}));
+    assert_eq!(code, 200, "{r}");
+    let r = put(&host, &s, &m, "put_fiche", "en-retard");
+    let e = r["error"].as_str().unwrap_or_default().to_string();
+    assert!(r["ok"] != json!(true) && e.contains("fermé : passe en retard") && e.contains("au-delà de l'heure annoncée"), "passé l'heure, elle tient et le dit : {r}");
+    assert_eq!(host.state()["backends"][0]["open"], json!(false));
+
     // L'ancienne route /open, celle d'un client qui s'attache, ne la lève pas.
     let (_, r) = route(&host, "/open", &s, json!({"manifest": m}));
-    assert!(r["ok"] != json!(true) && r["error"].as_str().unwrap_or_default().contains("fermé : passe de l'archiviste"), "/open ne lève pas la fermeture : {r}");
+    assert!(r["ok"] != json!(true) && r["error"].as_str().unwrap_or_default().contains("fermé : passe en retard"), "/open ne lève pas la fermeture : {r}");
     assert_eq!(host.state()["backends"][0]["open"], json!(false));
 
     // /backend/open, explicite, la lève : l'écriture repasse, celle du refus n'a pas eu lieu.
@@ -581,7 +593,7 @@ fn une_fermeture_avec_une_raison_tient_jusqu_a_l_ouverture_explicite() {
     assert_eq!(host.state()["backends"][0]["held_closed"], json!(null), "la fermeture est levée");
     ok(&put(&host, &s, &m, "put_fiche", "apres"));
     assert!(fiche(&host, &s, &m, "avant").is_some() && fiche(&host, &s, &m, "apres").is_some(), "les écritures d'avant et d'après sont là");
-    assert!(fiche(&host, &s, &m, "pendant").is_none(), "l'écriture refusée n'a pas eu lieu");
+    assert!(fiche(&host, &s, &m, "pendant").is_none() && fiche(&host, &s, &m, "en-retard").is_none(), "les écritures refusées n'ont pas eu lieu");
     host.shutdown();
     let _ = std::fs::remove_dir_all(d);
 }
