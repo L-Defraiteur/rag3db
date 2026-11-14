@@ -159,6 +159,9 @@ fn lire_une_source(i: usize, v: &Value) -> Result<Source, String> {
         Some(autre) => return Err(format!("{} : « inferred », « none » ou {{\"declared\": \"<branche>\"}} attendu, pas {autre}", ou("parent"))),
     };
     let history = match objet.get("history") {
+        // Un motif large (`refs:`) prend `cited` par défaut (ED et c7, 14 nov.) : sous `tip`, cent branches
+        // coûteraient cent écritures à chaque fetch. Les autres sources prennent `tip`.
+        None if matches!(select, Selecteur::Refs(_)) => Histoire::Citee,
         None => Histoire::Pointe,
         Some(Value::String(s)) if s == "tip" => Histoire::Pointe,
         Some(Value::String(s)) if s == "all" => Histoire::Tout,
