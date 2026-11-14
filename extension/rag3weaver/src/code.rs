@@ -350,6 +350,13 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
     // nom et type égaux, la méthode propre du type passe avant. Vide sinon.
     fields.insert("trait_impl".into(), field(FieldType::String));
     fields.insert("template_params".into(), field(FieldType::String));
+    // **Le chemin écrit du propriétaire** (codeparsers `parent_path`, 15 novembre 2026) : `kz::Foo` pour
+    // une définition C++ `kz::Foo::qux`, `crate::a::Foo` pour un bloc `impl … for crate::a::Foo` et ses
+    // méthodes ; vide quand le code ne l'écrit pas, jamais deviné. `parent_name` reste le nom court.
+    fields.insert("parent_path".into(), field(FieldType::String));
+    // « oui » : un bloc qui prolonge un type défini ailleurs (un `impl` Rust) — la navigation y lit un
+    // bloc, pas le type lui-même. Vide sinon (une base d'avant le lit `''`, le défaut typé de l'ajout).
+    fields.insert("extends_type".into(), field(FieldType::String));
     fields.insert("start_line".into(), field(FieldType::Integer));
     fields.insert("end_line".into(), field(FieldType::Integer));
     // Les enfants repliés dans `content` : de quoi rendre un extrait avec
@@ -943,6 +950,8 @@ pub struct ScopeRecord {
     /// explicites s'en lit (`ku_dynamic_cast<ProcessorTask*>(t)`).
     #[serde(default)]
     pub template_params: String,
+    /// Le chemin écrit du propriétaire (`kz::Foo`, `crate::a::Foo`) ; vide sinon. Voir [`scope_config`].
+    pub parent_path: String,
     /// **Un bloc qui prolonge un type défini ailleurs** (un `impl` Rust,
     /// modificateur `impl` de codeparsers) : il porte le nom du type sans le
     /// définir — pas de DEFINES vers ce nom, sinon `Marteau` aurait deux
@@ -1431,6 +1440,7 @@ pub fn analyze_in_project_avec(
                     return_type: String::new(),
                     trait_impl: String::new(),
                     template_params: String::new(),
+                    parent_path: String::new(),
                     start_line: g.start_line,
                     end_line: g.end_line,
                     start_byte: debut_de(g.start_line),
@@ -1502,6 +1512,7 @@ pub fn analyze_in_project_avec(
             return_type: String::new(),
             trait_impl: String::new(),
             template_params: String::new(),
+            parent_path: String::new(),
             start_line: sc.scope_start_line,
             end_line: sc.scope_end_line,
             start_byte: sc.scope_start_byte,
@@ -1602,6 +1613,7 @@ pub fn analyze_in_project_avec(
                 return_type: s.return_type.clone().unwrap_or_default(),
                 trait_impl: if s.modifiers.iter().any(|m| m == "trait_impl") { "oui".into() } else { String::new() },
                 template_params: s.generic_parameters.iter().flatten().map(|g| g.name.as_str()).collect::<Vec<_>>().join(","),
+                parent_path: s.parent_path.clone().unwrap_or_default(),
                 start_line: s.scope_start_line,
                 end_line: s.scope_end_line,
                 start_byte: s.scope_start_byte,
@@ -1979,6 +1991,20 @@ pub fn analyze_in_project_avec(
         "PARENT_OF" if r.from_entity == SCOPE => est_conteneur(&r.from_key),
         _ => true,
     });
+    // **Une définition hors de sa classe est une méthode** (15 novembre 2026, voie (a) de l'orchestration) :
+    // `void Foo::f() {}` arrive de codeparsers en `function`, puisque `kz::f()` (une fonction d'un namespace)
+    // a la même forme. Le genre se décide ici, quand le parent résolu dans le fichier est une classe ;
+    // sous un namespace, elle reste une fonction. (Le parent d'un autre fichier, résolu au rendez-vous, ne
+    // change pas le genre d'une ligne publiée : ticket du même jour.)
+    let vers_une_classe: std::collections::HashSet<String> = analysis
+        .relations
+        .iter()
+        .filter(|r| r.rel == "HAS_PARENT" && r.to_entity == SCOPE && genre_du_scope.get(&r.to_key).is_some_and(|g| g == "class"))
+        .map(|r| r.from_key.clone())
+        .collect();
+    for sc in analysis.scopes.iter_mut().filter(|sc| sc.scope_type == "function" && vers_une_classe.contains(&sc.key)) {
+        sc.scope_type = "method".to_string();
+    }
     let deja_parent: std::collections::HashSet<&str> =
         analysis.relations.iter().filter(|r| r.rel == "HAS_PARENT").map(|r| r.from_key.as_str()).collect();
     let parents_d_ailleurs: Vec<(String, String)> = analysis
@@ -2412,6 +2438,8 @@ impl ScopeRecord {
             ("return_type".into(), s(&self.return_type)),
             ("trait_impl".into(), s(&self.trait_impl)),
             ("template_params".into(), s(&self.template_params)),
+            ("parent_path".into(), s(&self.parent_path)),
+            ("extends_type".into(), s(if self.extends_type { "oui" } else { "" })),
             ("start_line".into(), i(self.start_line)),
             ("end_line".into(), i(self.end_line)),
             ("start_byte".into(), i(self.start_byte)),
@@ -4599,6 +4627,27 @@ fn dedent_after_first_line(texte: &str) -> String {
 mod tests {
     use super::*;
 
+    /// **L'appartenance d'une méthode hors du bloc de son type** (15 novembre 2026) : une définition C++
+    /// hors classe est une méthode quand son parent du fichier est une classe, une fonction sous un
+    /// namespace ; un bloc `impl` dit `extends_type = "oui"`, et `parent_path` porte le chemin écrit.
+    #[test]
+    fn une_definition_hors_classe_et_un_bloc_impl_disent_leur_appartenance() {
+        let cpp = "class Foo {\npublic:\n    void f();\n};\nnamespace kz {\nvoid g();\n}\nvoid Foo::f() {}\nvoid kz::g() {}\n";
+        let a = analyze("/virtual", vec![("a.cpp".into(), cpp.into())]);
+        let genre = |nom: &str| a.scopes.iter().find(|s| s.name == nom).map(|s| (s.scope_type.clone(), s.parent_name.clone()));
+        assert_eq!(genre("f"), Some(("method".to_string(), "Foo".to_string())), "{:?}", a.scopes.iter().map(|s| (&s.name, &s.scope_type, &s.parent_name)).collect::<Vec<_>>());
+        assert_eq!(genre("g").map(|g| g.0), Some("function".to_string()), "sous un namespace, une fonction");
+
+        let rs = "pub struct Foo<U> { u: U }\nimpl<U> Foo<U> {\n    pub fn neuf(u: U) -> Self { Foo { u } }\n}\npub mod a { pub struct Barre; }\nimpl crate::a::Barre {\n    pub fn b(&self) {}\n}\n";
+        let a = analyze("/virtual", vec![("lib.rs".into(), rs.into())]);
+        let champ = |nom: &str, f: &str| a.scopes.iter().filter(|s| s.name == nom).map(|s| s.data().get(f).cloned()).collect::<Vec<_>>();
+        assert!(champ("Foo", "extends_type").contains(&Some(s("oui"))), "le bloc impl le dit");
+        assert!(champ("Foo", "extends_type").contains(&Some(s(""))), "la struct ne le dit pas");
+        assert_eq!(champ("neuf", "parent_name"), vec![Some(s("Foo"))], "sans <U>");
+        assert_eq!(champ("b", "parent_path"), vec![Some(s("crate::a::Barre"))]);
+        assert_eq!(champ("neuf", "parent_path"), vec![Some(s(""))], "pas de chemin écrit : vide");
+    }
+
     #[test]
     fn named_schema_preserves_configs_properties_and_plan() {
         let mut chunking = default_scope_chunking();
@@ -5293,6 +5342,43 @@ mod tests_resolution {
         let m = Mention { import_modules: vec!["crate::dataflow".into()], ..mention("CONSUMES", &[], &[]) };
         assert_eq!(choose_target(&m, &definers, &HashMap::new(), &fichiers, &HashMap::new(), &Default::default(), &reexports), Some(("E@runtime".into(), Resolution::Import)));
         assert_eq!(choose_target(&m, &definers, &HashMap::new(), &fichiers, &HashMap::new(), &Default::default(), &[]), None, "sans la réexportation, rien");
+    }
+}
+
+/// **Une base d'avant s'ouvre avec les colonnes neuves de `Scope`** (15 novembre 2026, condition de
+/// l'orchestration au lot de l'appartenance) : `parent_path` et `extends_type` s'ajoutent par la migration
+/// additive des champs déclarés, sans refus. Elle passe par `alter_add_column_default` avec le défaut typé
+/// du dialecte (`''` pour un texte) — le même mécanisme que 2a′-1 : une ligne écrite avant les lit `''`.
+#[cfg(all(test, feature = "rag3db-native"))]
+mod tests_des_colonnes_neuves {
+    use super::*;
+
+    #[test]
+    fn une_base_d_avant_s_ouvre_et_lit_les_colonnes_neuves_vides() {
+        let conn = crate::Rag3dbConnection::in_memory().unwrap();
+        let mut cat = Catalog::new(Box::new(conn), Box::new(crate::embedder::HashEmbedder::new(8)), crate::CatalogConfig {
+            allow_mock_embedder: true, embedding_dim: 8, ..Default::default()
+        });
+        cat.initialize().unwrap();
+        // La base d'avant : le schéma de code sans les deux champs, et une ligne écrite sous lui.
+        let (mut entities, mut relations) = schema_configs(default_scope_chunking());
+        let scope = entities.get_mut(SCOPE).unwrap();
+        assert!(scope.fields.remove("parent_path").is_some() && scope.fields.remove("extends_type").is_some());
+        for name in [FILE, SCOPE, LIBRARY, SYMBOL] {
+            cat.register_entity(name, entities.remove(name).unwrap()).unwrap();
+        }
+        for (name, _, _) in RELATIONS {
+            let relation = relations.remove(name).unwrap();
+            cat.register_relation_with(name, &relation.from, &relation.to, relation.properties.unwrap_or_default()).unwrap();
+        }
+        cat.execute_raw("CREATE (s:Scope {_uuid: 'uuid-avant', key: 'avant', name: 'ancien'})").unwrap();
+        // La réouverture sous le schéma d'aujourd'hui : la migration additive pose les colonnes.
+        register_code_schema_sans_versions(&mut cat, default_scope_chunking()).expect("une base d'avant s'ouvre sans refus");
+        let r = cat.execute_raw("MATCH (s:Scope {key: 'avant'}) RETURN s.parent_path, s.extends_type, s.name").unwrap();
+        assert_eq!(r.rows.len(), 1, "{:?}", r.rows);
+        let ligne = &r.rows[0];
+        assert_eq!(ligne[0], crate::connection::CypherValue::String(String::new()), "parent_path");
+        assert_eq!(ligne[1], crate::connection::CypherValue::String(String::new()), "extends_type");
     }
 }
 
