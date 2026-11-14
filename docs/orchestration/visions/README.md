@@ -147,3 +147,17 @@ dans chaque lot qui touche la livraison :
   paquet npm (`rag3weaver@next`) et le futur dépôt séparé devront embarquer la lib et l'extension du
   même bâti, ou les télécharger à la première exécution avec leur md5. Lié à « séparer rag3weaver de
   rag3db » ci-dessus.
+
+## Des enveloppes de ressources exactes (Lucie, 14 novembre 2026)
+
+« J'envisageais qu'on lance des machines virtuelles avec telle ressource allouée exacte, à part le GPU ;
+cette culture de travail pourrait servir au projet. » Deux étages :
+
+- **pour nos passes** : l'enveloppe est le cgroup de `systemd-run` que `poste lourd` pose déjà pour la
+  mémoire (`MemoryMax`) et qu'il posera pour le CPU (`CPUQuota` = (cœurs − 2) / lourds-max, fils des
+  outils dérivés) et l'entrée-sortie (`IOWeight`) : une machine virtuelle légère, sans mémoire en double,
+  avec le GPU partagé (ce qu'une vraie VM ne sait pas faire) ;
+- **pour le produit** : quand l'atelier exécute une commande pour l'agent, un **bac à sable par tâche**
+  (systemd-nspawn ou bubblewrap : ressources bornées, arbre du worktree seul visible, réseau déclaré),
+  déclaré dans le manifeste de la tâche. Graine ; à ouvrir quand les commandes de l'atelier sortent du
+  « test et relance ».
