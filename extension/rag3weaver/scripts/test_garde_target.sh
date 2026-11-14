@@ -98,4 +98,39 @@ P="$ICI/target-deja-marque"; mkdir -p "$P" && echo "$ICI/neuf" > "$P/.arbre-du-t
 bash "$PROVENANCE_CI" "$P" > /dev/null 2>&1 && [ "$(cat "$P/.arbre-du-target")" = "$ICI/neuf" ]
 cas $? "une provenance déjà dite ne se réécrit pas"
 
+# **Un sous-module ramené à un commit plus vieux** (14 novembre 2026, faux rouge de codeparsers) : le même arbre, mais le
+# checkout du commit d'avant porte des dates plus vieilles que l'artefact, que cargo juge frais. La garde note le commit
+# de chaque sous-module ; un commit changé efface les empreintes de ses paquets.
+G="$ICI/git"; mkdir -p "$G"
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+mkdir -p "$G/sm/src" && (cd "$G/sm" && git init -q && printf '[package]\nname="ir"\nversion="0.1.0"\nedition="2021"\n' > Cargo.toml \
+  && echo 'pub fn valeur() -> &'"'"'static str { "UN" }' > src/lib.rs && git add -A && git commit -qm un \
+  && echo 'pub fn valeur() -> &'"'"'static str { "DEUX" }' > src/lib.rs && git commit -qam deux)
+UN=$(git -C "$G/sm" rev-parse HEAD~1)
+mkdir -p "$G/racine/app/src" && (cd "$G/racine" && git init -q \
+  && git -c protocol.file.allow=always submodule add -q "$G/sm" sm > /dev/null 2>&1 \
+  && printf '[workspace]\nmembers=["sm","app"]\nresolver="2"\n' > Cargo.toml \
+  && printf '[package]\nname="app"\nversion="0.1.0"\nedition="2021"\n[dependencies]\nir={path="../sm"}\n' > app/Cargo.toml \
+  && echo 'fn main() { println!("{}", ir::valeur()); }' > app/src/main.rs && git add -A && git commit -qm racine)
+S="$ICI/target-sm"; export CARGO_TARGET_DIR="$S"
+garder_le_target "$S" "$G/racine" > /dev/null 2>&1
+[ "$(cd "$G/racine" && cargo run -q -p app 2>/dev/null)" = "DEUX" ]
+cas $? "le sous-module à son dernier commit : l'application affiche DEUX"
+# le commit d'avant, ses fichiers datés d'avant l'artefact (le checkout ne date pas, une restauration si)
+git -C "$G/racine/sm" checkout -q "$UN" && touch -d '2020-01-01' $(find "$G/racine/sm" -type f -not -path '*/.git/*') "$G/racine/sm"
+sortie="$(garder_le_target "$S" "$G/racine" 2>&1)"; rc=$?
+[ $rc = 0 ] && echo "$sortie" | grep -q "autre commit du sous-module"
+cas $? "un sous-module à un autre commit : la garde le dit et rend 0"
+[ "$(cd "$G/racine" && cargo run -q -p app 2>/dev/null)" = "UN" ]
+cas $? "après la garde, le paquet du sous-module est rebâti : l'application affiche UN"
+sortie="$(garder_le_target "$S" "$G/racine" 2>&1)"
+[ -z "$sortie" ]
+cas $? "le même commit, la garde ne dit rien et n'efface rien"
+# **--reprendre** (suggestion de codeparsers), avant un cargo direct : efface toujours, même pour l'arbre noté
+echo 'fn main() { println!("TROIS"); }' > "$G/racine/app/src/main.rs"; touch -d '2020-01-01' "$G/racine/app/src/main.rs"
+bash "$GARDE" --reprendre "$S" "$G/racine" > /dev/null 2>&1
+[ $? = 0 ] && [ "$(cd "$G/racine" && cargo run -q -p app 2>/dev/null)" = "TROIS" ]
+cas $? "garde_target.sh --reprendre efface les empreintes locales : un fichier daté d'avant est rebâti"
+unset CARGO_TARGET_DIR
+
 exit $echec
