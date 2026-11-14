@@ -95,3 +95,44 @@ de travail, parente inférée, racine calculée. `main` n'a de place particuliè
   un sélecteur qui ne résout rien se dit, il ne devine pas).
 - Ce que coûte une racine calculée qui avance souvent (une génération par mouvement du merge-base) :
   à mesurer avec 2a′-2.
+
+## Après les relectures d'ED et d'arbre principal (15 h 30)
+
+**Le nom : `tracked`** (arbre principal). Les clés du manifeste sont en anglais ; `source` est déjà pris
+dans le schéma de code (`File.source` = `file` ou `snapshot:…`, dans la clé hashsafe ; `code_sync`
+synchronise « une source »). La clé de `_catalog_meta` devient `tracked:<dépôt>` avec lecture de
+l'ancienne ; en français dans les docs : « les suivies ». Lucie peut dire autrement.
+
+**Précisions tenues** :
+
+1. **`_couche` est l'identifiant d'une suivie**, pas « ancre » : pour les lignes d'aujourd'hui, la suivie
+   qui couvre l'arbre indexé (le worktree du backend, sa couche de travail comprise). Une lecture sans
+   vue est « la suivie courante de la session, à son rang en attente », l'arbre vivant comme avant (ED).
+2. **Une suivie sans worktree s'indexe par les objets git** (`git cat-file --batch`, sans checkout) : la
+   racine calculée, un motif `refs/heads/*`, un `view: b@c`. Capacité neuve, avant ou dans 2a′-3 (ED).
+3. **Une racine vide coûte N fois les occurrences** : les versions et les vecteurs restent partagés, mais
+   les lignes `Scope` et les arêtes sont recopiées une fois par suivie (sur code-lourd : N × 82 855 lignes
+   et 151 744 CONSUMES). Simple à raisonner, chère ; le défaut (racine calculée) l'évite (ED).
+4. **La parente inférée garde l'unicité** : admise seulement si le parent commun le plus récent est
+   unique, sinon « ambiguë », dite (ED, arbre principal).
+5. **Le défaut n'est pas « tous les worktrees présents »** (le dépôt de Lucie en a des dizaines) : c'est
+   **le worktree que le backend indexe, plus les tâches que l'atelier ouvre** ; les autres worktrees
+   restent connus, non indexés, et un sélecteur de worktrees les prend à la demande (arbre principal).
+6. **Une racine calculée suit la suivie la plus vieille** : une branche oubliée dans `refs/heads/*` tire
+   le merge-base des années en arrière et chaque couche grossit. L'état nomme la suivie qui fixe la
+   racine ; le témoin de « tout son arbre git » la montre (arbre principal).
+7. **L'identifiant du dépôt** ne peut plus venir de HEAD ni de l'ancre (racine vide, historiques
+   orphelins) ; `--git-common-dir` n'est stable ni d'un poste à l'autre ni à un déplacement. **Décision
+   c7 : la racine du plus vieux commit parmi toutes les suivies** (date d'auteur ; à égalité, les deux
+   nommées) — stable entre postes, sans ancre. Lucie peut dire autrement.
+8. **Un sélecteur à motif change d'ensemble** sans déclaration : la résolution se met en cache sous
+   l'empreinte des refs (`for-each-ref` en un appel + mtime de `packed-refs` et du dossier `refs`), et ne
+   se refait que si l'empreinte bouge — sinon `/etat` relance des dizaines d'appels git (le ticket
+   O(suivies²)) (arbre principal).
+9. **La parente inférée parmi les suivies est presque là** : la résolution actuelle prend la fourche parmi
+   les branches nommées et l'ancre ; généraliser, c'est retirer l'ancre de l'ensemble quand la racine
+   n'est pas déclarée. Témoin : deux suivies sans ancêtre commun ont la parente « aucune », dite (arbre
+   principal).
+
+Ordre : 2a′-1 et 2a′-2 (ED, rien ne change pour eux) ; 1b (arbre principal, la copie réelle migre) ;
+puis la généralisation de la déclaration (arbre principal, ED relit) ; puis 2a′-3.
