@@ -3697,6 +3697,36 @@ impl Node for DeleteRecordNode {
                 ctx.warn(&format!("{entity_name} with uuid '{uuid}' not found, skipping"));
             }
 
+            // **L'offset des lignes que le cache ne connaît pas**, lu avant
+            // d'effacer : le cache naît vide à l'ouverture, et une ligne écrite
+            // avant le redémarrage laissait son document plein texte vivant,
+            // sans ligne derrière (8 809 orphelins sur la base du dépôt, ticket
+            // du 14 novembre 2026).
+            let indexee = fts_tampon.is_some() || fts_handles.as_ref().is_some_and(|h| h.contains_key(entity_name));
+            let inconnues: Vec<CypherValue> = match node_id_cache.read() {
+                Ok(cache) if indexee => existing
+                    .iter()
+                    .filter(|u| cache.get(u.as_str()).is_none())
+                    .map(|u| CypherValue::String(u.clone()))
+                    .collect(),
+                _ => Vec::new(),
+            };
+            let mut offsets_lus: HashMap<String, u64> = HashMap::new();
+            if !inconnues.is_empty() {
+                let lues = conn
+                    .execute_with_params(
+                        &dialect.select_offsets_by_uuids(entity_name),
+                        &[QueryParam { name: "uuids".into(), value: CypherValue::List(inconnues) }],
+                    )
+                    .map_err(|e| format!("offsets des lignes à effacer de {entity_name} : {e}"))?;
+                for row in &lues.rows {
+                    if let (Some(u), Some(o)) = (row.first().and_then(|v| v.as_str()), row.get(1).and_then(|v| v.as_i64())) {
+                        offsets_lus.insert(u.to_string(), o as u64);
+                    }
+                }
+                ctx.metric("offsets_read_from_db", offsets_lus.len() as f64);
+            }
+
             // Delete entities themselves
             let del_entities = crate::dialect::ecriture(&*dialect, &rag3weaver_ir::Write::Delete { table: entity_name.to_string(), by: "_uuid".into(), cascade: true, count: false });
             oublier_les_prouves(ctx.service::<ProvenPresent>(PROVEN_PRESENT), entity_name, uuids.iter());
@@ -3717,13 +3747,16 @@ impl Node for DeleteRecordNode {
             let mut removed_offsets: Vec<u64> = Vec::new();
             if let Ok(mut cache) = node_id_cache.write() {
                 for uuid in uuids {
-                    let id = cache.remove(uuid.as_str());
-                    if let Some(id) = &id {
-                        removed_offsets.push(id.offset);
+                    let offset = cache.remove(uuid.as_str()).map(|i| i.offset).or_else(|| offsets_lus.get(uuid).copied());
+                    if let Some(o) = offset {
+                        removed_offsets.push(o);
+                    } else if indexee && existing.contains(uuid.as_str()) {
+                        // Une ligne effacée dont le document reste : se dit.
+                        ctx.warn(&format!("{entity_name} « {uuid} » effacé sans offset connu : son document plein texte reste"));
                     }
                     // Dans un lot : le retrait attend le COMMIT.
                     if let Some(tampon) = &fts_tampon {
-                        tampon.retirer(entity_name, uuid, id.map(|i| i.offset));
+                        tampon.retirer(entity_name, uuid, offset);
                     }
                 }
             }
