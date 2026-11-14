@@ -7,14 +7,18 @@
 //! reprise forcé : un texte découpé en plus de 200 morceaux (les liens partent par COPY), réingéré
 //! inchangé, puis modifié sur une ligne (il se redécoupe, ses morceaux gardent leur uuid par rang),
 //! trois fois chacun ; après chaque passe, aucun morceau ne doit porter plus d'une arête. Puis la
-//! même chose sous 200 morceaux (les liens partent par MERGE).
+//! même chose sous 200 morceaux (les liens partent par MERGE). Enfin, le chemin de l'index de code,
+//! sur le fichier qui porte 1 140 des doublons (`templates/ide/app/app.js`, 86 lignes minifiées de
+//! 500 Ko), sous le schéma sans versions, par `ingest_code` puis par le chemin différé.
 //!
 //! Run with: ./run_e2e.sh --test e2e_liens_de_morceaux_reverses
 #![cfg(feature = "rag3db-native")]
 
 use std::collections::{BTreeMap, HashMap};
 
+use rag3weaver::code::{analyze, default_scope_chunking, register_code_schema_sans_versions};
 use rag3weaver::config::{ChunkStrategy, ChunkingConfig, FieldType};
+use rag3weaver::disponibilite::Disponibilites;
 use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::MockEmbedder;
 use rag3weaver::search::SearchSignals;
@@ -111,4 +115,77 @@ fn reindexer_un_texte_de_plus_de_200_morceaux_ne_double_pas_ses_aretes() {
 #[ignore]
 fn reindexer_un_texte_de_moins_de_200_morceaux_ne_double_pas_ses_aretes() {
     jouer("morceaux-par-merge", 50);
+}
+
+/// (morceaux de Scope, arêtes, paires morceau-scope à plus d'une arête)
+fn compte_scope(catalog: &Catalog) -> (i64, i64, i64) {
+    (
+        entier(catalog, "MATCH (c:Scope_Chunk) RETURN count(c)"),
+        entier(catalog, "MATCH ()-[r:Scope_CHUNKED_FROM]->() RETURN count(r)"),
+        entier(
+            catalog,
+            "MATCH (c:Scope_Chunk)-[r:Scope_CHUNKED_FROM]->(p:Scope) WITH c, p, count(r) AS n WHERE n > 1 RETURN count(*)",
+        ),
+    )
+}
+
+fn jouer_le_code(nom: &str, differe: bool) {
+    let racine = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let source = std::fs::read_to_string(format!("{racine}/templates/ide/app/app.js")).expect("app.js");
+    let d = tempfile::tempdir().unwrap();
+    let conn = Rag3dbConnection::new(d.path().join("base.rag3db")).expect("base sur disque");
+    let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
+    boxed.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension())).expect("extension vecteur");
+    let config = CatalogConfig { name: Some(nom.into()), embedding_dim: 4, ..Default::default() };
+    let mut catalog = Catalog::new(boxed, Box::new(MockEmbedder::new(4)), config);
+    catalog.initialize().unwrap();
+    register_code_schema_sans_versions(&mut catalog, default_scope_chunking()).unwrap();
+
+    let mut releve: Vec<String> = Vec::new();
+    let mut rouge: Option<String> = None;
+    let mut passer = |catalog: &mut Catalog, etape: &str, contenu: String| {
+        let analysis = analyze(&racine, vec![("templates/ide/app/app.js".to_string(), contenu)]);
+        let report = if differe {
+            let mut noms = std::collections::BTreeSet::new();
+            let r = catalog.ingest_code_differe(&analysis, Disponibilites::RECHERCHE_TEXTE, &mut noms).unwrap();
+            assert_eq!(r.failed, 0, "{etape}");
+            catalog.finir_les_relations_differees(&noms, Disponibilites::RECHERCHE_TEXTE).unwrap()
+        } else {
+            catalog.ingest_code_jusqu_a(&analysis, Disponibilites::RECHERCHE_TEXTE).unwrap()
+        };
+        assert_eq!(report.failed, 0, "{etape}");
+        let (m, a, doubles) = compte_scope(catalog);
+        releve.push(format!("{etape} : {m} morceaux de Scope, {a} arêtes, {doubles} paires doublées"));
+        if doubles != 0 && rouge.is_none() {
+            rouge = Some(format!("{etape} : {m} morceaux, {a} arêtes, {doubles} paires morceau-scope à plus d'une arête"));
+        }
+        m
+    };
+    let m = passer(&mut catalog, "première ingestion", source.clone());
+    assert!(m >= 200, "[check: assez-de-morceaux] {m} morceaux de Scope pour app.js");
+    for k in 1..=3 {
+        passer(&mut catalog, &format!("réingestion inchangée {k}"), source.clone());
+    }
+    for k in 1..=3 {
+        // Une ligne de tête qui change : tout le fichier se décale, comme à un rebâti de l'IDE.
+        passer(&mut catalog, &format!("réingestion modifiée {k}"), format!("// variante {}\n{source}", "x".repeat(k * 37)));
+    }
+    for r in &releve {
+        println!("[témoin {nom}] {r}");
+    }
+    if let Some(r) = rouge {
+        panic!("[check: une-arete-par-paire] {r}");
+    }
+}
+
+#[test]
+#[ignore]
+fn reindexer_app_js_par_ingest_code_ne_double_pas_ses_aretes() {
+    jouer_le_code("app-js-ingest-code", false);
+}
+
+#[test]
+#[ignore]
+fn reindexer_app_js_par_le_chemin_differe_ne_double_pas_ses_aretes() {
+    jouer_le_code("app-js-differe", true);
 }
