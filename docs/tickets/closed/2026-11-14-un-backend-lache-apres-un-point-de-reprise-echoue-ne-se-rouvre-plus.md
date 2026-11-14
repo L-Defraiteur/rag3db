@@ -1,13 +1,18 @@
 # Un backend lâché après un point de reprise échoué ne se rouvre plus
 
-- **État** : ouvert (14 novembre 2026), relevé par archi sous sa passe de la fermeture qui tient ;
-  le premier commit rouge trouvé par bissection
+- **État** : corrigé (14 novembre 2026, arbre principal, branche `arbre-principal/crochet-faible-pile`) :
+  le crochet de test du point de reprise échoué tient un `Weak<ReopenState>`, et la base se rouvre.
+  Relevé par archi sous sa passe de la fermeture qui tient, le premier commit rouge trouvé par
+  bissection.
 - **Famille** : produit
 - **Gravité** : perte de service — après un point de reprise échoué, l'hôte lâche le backend et le
   prochain appel ne peut plus l'ouvrir : chaque lecture et chaque écriture échoue, jusqu'au
   redémarrage de l'hôte. Les données validées sont en base ; ce n'est pas une perte de données.
-- **Atteignable en service** : oui, à tout point de reprise qui échoue sous un hôte (disque plein,
-  erreur d'E/S) : le chemin « la base doit être rouverte » de l'hôte ne rouvre plus.
+- **Atteignable en service** : non, à la lecture et à l'essai. Ce qui retenait la base était le
+  crochet de test (`FailedCheckpointHook`), qui n'existe qu'en test : avec le seul `Weak`, la base se
+  rouvre (le témoin vert). Le chemin « la base doit être rouverte » de l'hôte n'avait donc pas d'autre
+  référence qui la retienne, sur master du 14 au soir. La réserve sur `1e9bf5089e` seul reste dite
+  plus bas.
 - **Touche rag3weaver** : oui (`src/rag3db_connection.rs`, le registre des écrivains)
 - **Pour** : arbre principal (1e9bf5089e)
 
@@ -61,3 +66,19 @@ vérifier par le même correctif.
 La réouverture qui réussit après un point de reprise échoué ; le témoin
 `une_base_a_rouvrir_ne_lache_que_son_backend` vert ; et `e2e_demon_hote` dans le verdict d'une
 bascule de lib (ce rouge y a dormi depuis le 13, la bascule ne jouant que e2e_code et e2e_lectures).
+
+## Ce qui l'a fermé
+
+- **La cause**, sur master : le crochet `FailedCheckpointHook` tenait un `Arc<ReopenState>`, que le test
+  garde dans sa table pour toute sa durée (`e2e_demon_hote.rs:258-263`). Le registre des écrivains
+  attend que la base **et** son `ReopenState` soient tombés avant de rouvrir.
+- **Le correctif** : le crochet tient un `Weak`, et `after(n)` le relève (rien sur une base fermée).
+  L'attente sur les deux références reste, puisqu'elle dit quand la base est au repos.
+- **Les témoins**, sur master 5ddd33d51, lib `0c41f9fe6` :
+  - `rag3db_connection::tests::un_crochet_garde_n_empeche_pas_la_reouverture`, rouge avec le message
+    exact au bout de 10,02 s ;
+  - `e2e_demon_hote` 13/13, avec `une_base_a_rouvrir_ne_lache_que_son_backend`, rouge avant ;
+  - `e2e_rouvrir` 2/2.
+- **Ce qui n'est pas lu** : à `1e9bf5089e` seul (bissection d'archi), la boucle d'ouverture ne comptait
+  encore que la base, pas le `ReopenState`. Ce qui retenait alors la base n'est ni lu ni rejoué. Le
+  rouge ne se reproduit pas sur master avec le correctif.
