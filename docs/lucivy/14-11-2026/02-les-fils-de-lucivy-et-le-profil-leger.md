@@ -125,7 +125,60 @@ l'archiviste envoie à `Lucivy_Fiche`, et le prompt que le hook envoie à `recal
 
 ### Les chiffres
 
-À venir, sur cette page.
+Luciepc sous `poste lourd` (5 cœurs, `CPUQuota` 500 %), branche lucivy `mesure-profil-leger` (f89e6df). On
+réindexe les **89 894 documents vivants** de la copie, soit 932 Mo de texte. La source telle quelle pèse
+**4,59 Go** (×4,9 le texte) : 27 segments, 11,9 % de documents supprimés pas encore purgés.
+
+| profil | sur disque | ×texte | positions | postings | dictionnaire | texte stocké | indexé en |
+|---|---|---|---|---|---|---|---|
+| `positions` (l'actuel) | 4,39 Go | ×4,7 | 1,65 Go | 1,82 Go | 463 Mo | 461 Mo | 73 à 82 s |
+| `segment_dictionary` (sfx v3) | 4,49 Go | ×4,8 | 1,64 Go | 2,39 Go (dictionnaires compris) | — | 461 Mo | 75 à 95 s |
+| `no_positions` | **1,44 Go** | **×1,5** | 0 | 516 Mo | 464 Mo | 461 Mo | 47 à 57 s |
+
+Requêtes du banc, médiane de cinq, avec un `HighlightSink` :
+
+| requête | `positions` | `segment_dictionary` | `no_positions` |
+|---|---|---|---|
+| 1 mot, contains d1 | 146 à 168 ms | 337 ms | 967 à 975 ms |
+| 1 mot court (`commit`), d1 | 308 à 313 ms | 324 ms | 1 680 à 1 702 ms |
+| 1 mot, d0 | 9 à 10 ms | 13 ms | 612 à 636 ms |
+| 2 mots, contains d1 | 71 à 82 ms | 82 ms | 1 066 à 1 117 ms |
+| 2 mots, parse | 57 à 61 ms | 141 ms | 1 336 à 1 470 ms |
+| 4 mots, contains d1 | 35 ms | 86 ms | **4 398 à 5 478 ms** |
+| 4 mots, parse | 340 à 358 ms | 1 387 ms | 2 663 à 2 818 ms |
+| phrase entre guillemets | 5 à 6 ms | 16 ms | 110 à 117 ms |
+| longue d1 (archiviste) | 176 à 180 ms | 262 ms | **60,1 à 62,9 s** |
+| longue d0 (> 900 caractères) | 340 à 427 ms | 301 ms | 1 561 à 1 675 ms |
+
+Les deux colonnes `positions` et `no_positions` viennent de deux passes ; les fourchettes sont leurs deux
+médianes.
+
+**Les réponses.** Le nombre de hits et de spans est le même dans les trois profils. Deux requêtes rendent 19
+documents communs sur 20 : à la coupe du top 20, deux documents ont **le même score** (12.5362625 pour le mot
+court, 21.706505 pour les 2 mots en `parse`), et l'ordre entre égaux dépend de la disposition des segments. Ce
+n'est pas un défaut. En revanche, **les scores des requêtes `parse` diffèrent d'un ulp** d'un profil à l'autre,
+pour un même document : au plus 1,9e-6, soit 7e-8 en relatif, sur 2 à 4 documents du top 20. La doc de lucivy dit
+pourtant les scores identiques. Ticket : `docs/lucivy/tickets/2026-11-14-un-ulp-d-ecart-de-score-entre-profils-en-parse.md`.
+
+**Les fils sous quota.** L'ordonnanceur part à 5 (`[scheduler] starting with 5 threads
+(available_parallelism)`) : le quota de la portée le borne, comme prévu. Le relevé en voit jusqu'à 9 par
+instants. Le processus a eu au plus 26 fils. Ce que le quota ne compte pas : **jusqu'à 20 fils
+`docstore-compressor-thread`** (`src/store/store_compressor.rs:179`), un par segment en cours d'écriture. Ils sont
+brefs et leur CPU est borné par le quota. On le dit, sans rien corriger.
+
+### Verdict
+
+- **On garde les positions** (décision de c7, 14 nov.). `no_positions` tient le budget (−67 %), mais pas
+  `search_code` : ×5 à ×25 sur les requêtes d’un ou deux mots (×65 en distance 0), ×150 sur quatre mots, 63 s pour la requête de l’archiviste.
+  Lucie acceptait « un poil lent », et ce n'en est pas un. Sans positions, chaque requête relit le texte de ses
+  candidats pour produire les spans que rag3weaver demande toujours. La vérification d'une requête longue et floue
+  sur le texte stocké de tous les candidats est pathologique. Ticket :
+  `docs/lucivy/tickets/2026-11-14-le-chemin-sans-positions-relit-tout-pour-une-requete-longue.md`, pour un jour.
+- **Le dictionnaire partagé ne rapporte que 2 %** sur ce corpus (4,39 contre 4,49 Go), et le dictionnaire par
+  segment ralentit `parse` (×2 à ×4). Le défaut actuel est le bon.
+- **Le budget des 30 Go par dépôt vient d'ailleurs**, et c'est déjà mesuré : les versions partagées de 1b
+  (`Lucivy_ScopeContent` 1,2 Gio contre 4,0 pour `Lucivy_Scope`) et les règles d'exclusion de recherche (les
+  fichiers minifiés portent 92 % des octets, page 01).
 
 ## 3. La vue filtrée : ce que coûte `allowed_ids` dans lucivy
 
@@ -169,9 +222,32 @@ Les parties du filtre :
 
 Médianes de cinq courses. Les nombres de hits sont les mêmes avec et sans filtre.
 
+### Avec les vrais ensembles d'ED
+
+ED a donné les offsets que `allowed_ids_for` passe à lucivy (`ed-mesure-2a2/offsets/`, copiés avant usage).
+Même banc, f89e6df :
+
+| requête | sans filtre | masque sans filtre (72 652, tout l'index) | src/include/ (8 568) |
+|---|---|---|---|
+| 1 mot, contains d1 | 27 à 28 ms | 40,3 ms (+12,1) | 25,9 ms (0 hit) |
+| 1 mot court, d1 | 79 à 80 ms | 90,6 ms (+10,8) | 17,7 ms (−61) |
+| 1 mot, d0 | 4 à 5 ms | 15,4 ms (+10,2) | 6,9 ms (0 hit) |
+| 2 mots, contains d1 | 34 à 38 ms | 45,8 ms (+12,2) | 28,5 ms (0 hit) |
+| 2 mots, parse | 24 à 27 ms | 42,4 ms (+15,5) | 21,0 ms |
+| 4 mots, contains d1 | 12 à 14 ms | 27,0 ms (+13,5) | 14,5 ms (0 hit) |
+| 4 mots, parse | 73 à 80 ms | 77,6 ms | 51,3 ms (−22) |
+| phrase entre guillemets | 4 ms | 13,8 ms (+10,0) | 6,7 ms (0 hit) |
+| longue d1 | 91 à 101 ms | 101,2 ms (+10,5) | 89,1 ms |
+| longue d0 | 384 à 406 ms | 395,0 ms (+11,3) | 381,1 ms |
+
+- Le vrai ensemble complet coûte **10 à 15 ms** par requête. Le partage par shard monte à 8 ms : les offsets sont
+  triés, donc moins bien répartis que le tirage au hasard.
+- L'ensemble de src/include/ coûte moins de 3 ms, et rend la requête **plus rapide** qu'une recherche sans filtre
+  dès qu'il exclut beaucoup de candidats (−61 ms pour le mot court) : le filtre est aussi un préfiltre.
+
 ### Verdict
 
-**Dans lucivy, le filtre coûte 6 à 10 ms par requête.** Le ×8 vient d'ailleurs. La sonde d'ED dans le nœud
+**Dans lucivy, le filtre coûte 6 à 15 ms par requête.** Le ×8 vient d'ailleurs. La sonde d'ED dans le nœud
 lexical (copie migrée, sans filtre) le place ainsi :
 - les racines : 20 ms ;
 - le masque `derived_references` : 902 ms ;
