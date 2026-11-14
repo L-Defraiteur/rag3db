@@ -6844,6 +6844,55 @@ mod tests {
         assert!(!u.contains("Catalogue occupé") && u.contains("main"), "{u}");
     }
 
+    /// **Un catalogue tenu un instant ne fait pas balayer une recherche** (14 novembre 2026,
+    /// trouvé par le témoin des vues de l'IDE) : la recherche en mode auto prenait le catalogue
+    /// par un `try_lock` nu ; tenu le temps d'une lecture d'état (`/ide/etat` à chaque
+    /// chargement de page, par `lock_for_read`), elle disait « occupé ou illisible » et
+    /// répondait par balayage. Tenu 100 ms, elle doit attendre et répondre par l'index, comme
+    /// `usages` ([`a_short_hold_of_the_catalog_does_not_refuse_a_read`]) ; une tenue longue
+    /// (une indexation entière) se balaye toujours, et la réponse le dit.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_short_hold_of_the_catalog_does_not_turn_a_search_into_a_scan() {
+        let gabarits = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+        let (_dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["tools"]["search_code"] = json!({
+                "graph": gabarits.join("tools/search_workspace.mmd").to_string_lossy(),
+                "bindings": { "target": "Scope" },
+                "metadata": [{ "node": "render", "port": "meta" }],
+            });
+        });
+        let p = p.expect("le manifeste avec search_code se charge");
+        let backend = backend_de_code(_dir.path(), p);
+        backend.call("index", json!({ "confirm": true })).expect("l'index du banc");
+        let avant = backend.call("search_code", json!({ "query": "depart" })).map(|v| v.to_string()).unwrap_or_else(|e| e);
+        assert!(!avant.contains("occupé ou illisible"), "catalogue libre, déjà un balayage : {avant}");
+        let catalog = backend.catalog.clone();
+        let (pris, prends) = std::sync::mpsc::channel();
+        let tenu = std::thread::spawn(move || {
+            let _g = catalog.lock().unwrap();
+            pris.send(()).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        });
+        prends.recv().unwrap();
+        let pendant = backend.call("search_code", json!({ "query": "depart" })).map(|v| v.to_string()).unwrap_or_else(|e| e);
+        tenu.join().unwrap();
+        assert!(!pendant.contains("occupé ou illisible") && !pendant.contains("balayage"), "tenu 100 ms, la recherche balaye : {pendant}");
+        // Tenu plus que l'attente d'une lecture (une indexation entière) : le balayage reste,
+        // et la réponse dit pourquoi (c7, 14 novembre 2026).
+        let catalog = backend.catalog.clone();
+        let (pris, prends) = std::sync::mpsc::channel();
+        let tenu = std::thread::spawn(move || {
+            let _g = catalog.lock().unwrap();
+            pris.send(()).unwrap();
+            std::thread::sleep(crate::dataflow::catalog_read::READ_WAIT + std::time::Duration::from_millis(500));
+        });
+        prends.recv().unwrap();
+        let long = backend.call("search_code", json!({ "query": "depart" })).map(|v| v.to_string()).unwrap_or_else(|e| e);
+        tenu.join().unwrap();
+        assert!(long.contains("catalogue tenu plus de 1 s") && long.contains("balayage"), "tenu longtemps, le repli ne se dit pas : {long}");
+    }
+
     /// **Le reçu « occupé » dit encore ce qui se lit sans le catalogue** : une
     /// indexation qui tient le catalogue plus longtemps que l'attente d'une
     /// lecture rend `busy`, mais le coût des montres se lit quand même — un
