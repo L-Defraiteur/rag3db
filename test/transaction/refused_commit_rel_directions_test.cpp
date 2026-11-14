@@ -121,64 +121,6 @@ int play(const std::string& databasePath, rag3db::main::SystemConfig& config, st
     return disagreements;
 }
 
-TEST_F(RefusedCommitRelDirections, ACommitRefusedBetweenItsDirectionsLeavesBothDirectionsWhole) {
-    const auto stepsPath = databasePath + ".steps";
-    std::filesystem::remove(stepsPath);
-    const auto pid = fork();
-    if (pid == 0) {
-        std::ofstream steps(stepsPath);
-        playBetweenDirections(databasePath, *systemConfig, steps);
-        steps.flush();
-        _exit(0);
-    }
-    int status = 0;
-    waitpid(pid, &status, 0);
-    std::string steps;
-    std::ifstream in(stepsPath);
-    for (std::string line; std::getline(in, line);) {
-        steps += line + "\n";
-    }
-    ASSERT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0)
-        << "[check: setup] the child ended with status " << status << "\n"
-        << steps;
-    ASSERT_EQ(steps.find("REFUSED-A 0\n"), std::string::npos)
-        << "[check: setup] A's commit was never refused between its directions\n"
-        << steps;
-    EXPECT_NE(steps.find("WRONG 0\n"), std::string::npos)
-        << "[check: a-commit-refused-between-its-directions-leaves-both-directions-whole]\n"
-        << steps;
-}
-
-TEST_F(RefusedCommitRelDirections, BothDirectionsKeepTheRelationsOfAnotherWriter) {
-    const auto stepsPath = databasePath + ".steps";
-    std::filesystem::remove(stepsPath);
-    const auto pid = fork();
-    if (pid == 0) {
-        VirtualFileSystem::setDefaultFileSystemFactoryForTesting(
-            [](const std::string& home) { return std::make_unique<CutFileSystem>(home); });
-        std::ofstream steps(stepsPath);
-        play(databasePath, *systemConfig, steps);
-        steps.flush();
-        _exit(0);
-    }
-    int status = 0;
-    waitpid(pid, &status, 0);
-    std::string steps;
-    std::ifstream in(stepsPath);
-    for (std::string line; std::getline(in, line);) {
-        steps += line + "\n";
-    }
-    ASSERT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0)
-        << "[check: setup] the child ended with status " << status << "\n"
-        << steps;
-    ASSERT_EQ(steps.find("REFUSED-A 0\n"), std::string::npos)
-        << "[check: setup] A's commit was never refused\n"
-        << steps;
-    EXPECT_NE(steps.find("DISAGREE 0\n"), std::string::npos)
-        << "[check: both-directions-keep-the-relations-of-another-writer]\n"
-        << steps;
-}
-
 // Le second cas : le COMMIT de A lève ENTRE ses deux sens (le point de faute
 // rel-commit-between-directions), comme un tampon plein au second sens. Sous l'ancienne lib,
 // l'enregistrement d'annulation ne couvrait que le premier sens versé, et l'annulation hors du verrou
@@ -247,6 +189,64 @@ int playBetweenDirections(const std::string& databasePath, rag3db::main::SystemC
     steps << "B-COMMITS " << bCommits << std::endl;
     steps << "WRONG " << wrong << std::endl;
     return wrong;
+}
+
+TEST_F(RefusedCommitRelDirections, ACommitRefusedBetweenItsDirectionsLeavesBothDirectionsWhole) {
+    const auto stepsPath = databasePath + ".steps";
+    std::filesystem::remove(stepsPath);
+    const auto pid = fork();
+    if (pid == 0) {
+        std::ofstream steps(stepsPath);
+        playBetweenDirections(databasePath, *systemConfig, steps);
+        steps.flush();
+        _exit(0);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    std::string steps;
+    std::ifstream in(stepsPath);
+    for (std::string line; std::getline(in, line);) {
+        steps += line + "\n";
+    }
+    ASSERT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0)
+        << "[check: setup] the child ended with status " << status << "\n"
+        << steps;
+    ASSERT_EQ(steps.find("REFUSED-A 0\n"), std::string::npos)
+        << "[check: setup] A's commit was never refused between its directions\n"
+        << steps;
+    EXPECT_NE(steps.find("WRONG 0\n"), std::string::npos)
+        << "[check: a-commit-refused-between-its-directions-leaves-both-directions-whole]\n"
+        << steps;
+}
+
+TEST_F(RefusedCommitRelDirections, BothDirectionsKeepTheRelationsOfAnotherWriter) {
+    const auto stepsPath = databasePath + ".steps";
+    std::filesystem::remove(stepsPath);
+    const auto pid = fork();
+    if (pid == 0) {
+        VirtualFileSystem::setDefaultFileSystemFactoryForTesting(
+            [](const std::string& home) { return std::make_unique<CutFileSystem>(home); });
+        std::ofstream steps(stepsPath);
+        play(databasePath, *systemConfig, steps);
+        steps.flush();
+        _exit(0);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    std::string steps;
+    std::ifstream in(stepsPath);
+    for (std::string line; std::getline(in, line);) {
+        steps += line + "\n";
+    }
+    ASSERT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0)
+        << "[check: setup] the child ended with status " << status << "\n"
+        << steps;
+    ASSERT_EQ(steps.find("REFUSED-A 0\n"), std::string::npos)
+        << "[check: setup] A's commit was never refused\n"
+        << steps;
+    EXPECT_NE(steps.find("DISAGREE 0\n"), std::string::npos)
+        << "[check: both-directions-keep-the-relations-of-another-writer]\n"
+        << steps;
 }
 
 } // namespace
