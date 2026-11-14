@@ -165,8 +165,13 @@ branche `mesure-exclusions`. Ensuite, `index_report` de lucivy (main 5f7e47b) su
 - **Les bases existantes gardent leurs 4,59 Go** tant qu'elles ne sont pas rebâties : ni le correctif
   ni les règles ne réécrivent un index déjà écrit, et les orphelins (ticket du 14 novembre) y pèsent
   aussi. Rebâtir le plein texte de la base du dépôt, c'est au mot de Lucie.
-- **Une question pour lucivy** : le rapport index/texte de l'index neuf est ×10,6, contre ×4,9 ce
-  matin. Le dictionnaire y pèse 52 %, sur 24 segments, dont beaucoup de petits (384 documents).
-  Sur peu de texte, le dictionnaire par shard pèse-t-il plus que son texte, et une fusion le
-  ramènerait-elle ?
-
+- **Le rapport index/texte de l'index neuf (×10,6, contre ×4,9 ce matin)** : la réponse de lucivy
+  (14 novembre au soir, outil `test_dictionary_anatomy`, sur la copie sans exclusions). Le dictionnaire
+  (52 % de l'index) suit le **vocabulaire**, pas le volume, ni le nombre de segments. Il y en a un par
+  shard, commun à ses segments, et une fusion ne le réduit pas : elle ne touche que les postings et les
+  positions. Le champ `content` y porte 5,63 millions d'entrées distinctes (3,47 M fragments de 8 octets
+  au plus, débord compris, et 2,16 M mots entiers), soit 45,7 Mo de texte d'entrées pour 73 Mo de texte
+  stocké. Chaque octet d'entrée y devient un suffixe. Les doublons de la base de Lucie ajoutaient du texte
+  stocké sans ajouter d'entrées : d'où le ×4,9. L'index neuf a le vrai rapport du vocabulaire du dépôt.
+  Les leviers (longueur minimale de suffixe, taille du débord) sont dans lucivy, et ils changent ce que
+  trouve la recherche `contains` : rien sans décision.
