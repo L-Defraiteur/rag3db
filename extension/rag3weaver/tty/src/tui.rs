@@ -444,6 +444,9 @@ mod tests {
             (k(KeyCode::Char('é'), rien), Some(Touche::Car('é'))),
             (k(KeyCode::Char('B'), KeyModifiers::SHIFT), Some(Touche::Car('B'))),
             (k(KeyCode::Enter, rien), Some(Touche::Entree)),
+            // AltGr d'un clavier français arrive comme Ctrl+Alt sous Windows : c'est un caractère.
+            (k(KeyCode::Char('@'), ctrl | alt), Some(Touche::Car('@'))),
+            (k(KeyCode::Char('{'), ctrl | alt), Some(Touche::Car('{'))),
         ];
         let faux: Vec<_> = attendus.iter().enumerate().filter(|(_, (vu, attendu))| vu != attendu).map(|(i, (vu, attendu))| format!("#{i} : {vu:?} au lieu de {attendu:?}")).collect();
         assert!(faux.is_empty(), "{faux:#?}");
