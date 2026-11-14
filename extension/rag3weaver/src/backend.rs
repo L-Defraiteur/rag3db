@@ -6421,6 +6421,40 @@ mod tests {
         (dir, p)
     }
 
+    /// **Une activation nommée se cite par son nom** (décision de c7, 14 novembre
+    /// 2026 : « une abstraction, pas trois configs qui divergent ») :
+    /// `activations: { "groupe": {…} }` au niveau du manifeste, et
+    /// `models.<capacité>.activation: "groupe"` ; chaque déclaration reçoit le
+    /// bloc et son nom. Un nom cité qui n'existe pas se refuse au chargement, en
+    /// le nommant.
+    #[cfg(feature = "code")]
+    #[test]
+    fn une_activation_nommee_se_cite_et_un_nom_inconnu_se_refuse() {
+        let bloc = json!({"modele": "bge-m3", "programme": "/bin/false", "profil": "p", "peripherique": "cpu",
+            "coordination": "/tmp/coordination-inutile", "journal": "/tmp/journal-inutile",
+            "budget_activation_secs": 5, "budget_attente_secs": 5,
+            "residence": {"a_demande": {"inactivite_secs": 60, "rendre_le_bail_secs": 30}}});
+        let citer = |nom: &'static str| {
+            let bloc = bloc.clone();
+            move |m: &mut Value| {
+                m["activations"] = json!({"groupe": bloc.clone()});
+                m["models"]["sparse"] = json!({"provider": "service", "model": "bge-m3", "address": "127.0.0.1:7891", "activation": "groupe"});
+                m["models"]["rerank"] = json!({"provider": "service", "model": "bge-reranker-v2-m3", "address": "127.0.0.1:7891", "activation": nom});
+            }
+        };
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &citer("groupe"));
+        let p = p.unwrap_or_else(|e| panic!("le manifeste qui cite « groupe » se charge : {e}"));
+        let modeles = serde_json::to_value(&p.manifest.models).unwrap();
+        for capacite in ["sparse", "rerank"] {
+            let a = &modeles[capacite]["activation"];
+            assert_eq!(a["nom"], "groupe", "{capacite} reçoit le bloc nommé : {a}");
+            assert_eq!(a["modele"], "bge-m3", "{capacite} : le modèle du processus : {a}");
+        }
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &citer("absent"));
+        let e = p.err().expect("un nom cité inconnu se refuse");
+        assert!(e.contains("« absent »") && e.contains("activations"), "le refus nomme le nom et dit où il manque : {e}");
+    }
+
     /// Un Backend sans base réelle, comme `search_verbs_…` : le catalogue
     /// répond à vide, la source vient du manifeste — ce qu'on éprouve est la
     /// politique et le chemin des fichiers, pas la persistance.
