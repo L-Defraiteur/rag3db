@@ -160,12 +160,30 @@ Je propose, à faire trancher par c7 et Lucie :
 Elle suit le plan du 12 novembre (`docs/arbre-principal/12-11-2026/01-plan-de-migration-de-l-ancre.md`)
 et le ticket parent (`docs/arbre-principal/tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md`).
 
-- **Ce qu'elle ne fait pas** : pas d'`index confirm`, pas de réindexation complète, aucun appel à
-  l'embarqueur.
+- **Ce qu'elle ne fait pas** : pas d'`index confirm`, pas de réindexation complète.
+- **Sa promesse (révisée le 14 novembre, c7 et ED)** : **seules les versions au texte changé
+  s'embarquent** ; les autres gardent leurs morceaux et leurs vecteurs. Elle ne promet plus « aucun
+  appel à l'embarqueur », pour deux raisons :
+  - le lot des octets d'un scope (ED) monte la forme à `code-scope-v2/content`. Le `content` y est
+    pris dans l'empan du nœud au lieu de l'empan des lignes. 1b vise la forme du binaire (v2 une
+    fois ce lot atterri), jamais v1 en dur, et il n'y aura pas de migration v1 → v2 de plus ;
+  - `File` ne garde pas le texte du fichier, et `Scope.content` est à l'empan des lignes. 1b relit
+    donc chaque fichier sur le poste, au chemin de `File`, jamais par `git show` : une ancre indexe
+    l'arbre vivant, non commité compris.
+
+  **Le compte attendu** :
+  - le code ordinaire, presque rien : seule change une dernière ligne qui porte autre chose après
+    la fin du nœud (`};`, `} else {`, un second scope sur la même ligne) ;
+  - les minifiés et les fichiers d'une ligne, presque tous. S'ils sortent de l'index par la règle
+    d'exclusion de Lucie, ils ne s'embarquent pas du tout ;
+  - un fichier dont le hash diffère de `content_hash`, ou qui a disparu, était déjà en retard :
+    1b n'invente pas son texte. Il passe en dette d'index, nommé dans le rapport, et la synchro
+    ordinaire le rattrape comme une édition.
 - **Ce qu'elle fait, une base à la fois** :
   - elle ajoute `ScopeContent` et sa relation ;
-  - elle calcule l'adresse de chaque `Scope` à partir de ses champs ;
-  - elle re-rattache les morceaux et les vecteurs existants à la version, sans les recalculer ;
+  - elle calcule l'adresse de chaque `Scope` à partir de son texte relu ;
+  - elle re-rattache à la version les morceaux et les vecteurs dont le texte n'a pas changé, sans
+    les recalculer ;
   - elle laisse les relations de code telles quelles ;
   - elle publie le schéma neuf, avec journal et reprise.
 - **Le profil admis** (décision de c7 du 12) : dense et BM25. Le creux est refusé avant tout effet
