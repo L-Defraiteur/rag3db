@@ -22,14 +22,20 @@ postes.
 | concurrence_test du cœur | 143 % / 298 % | 55 | 7,9 Gio |
 | sonde-bati d'ED | 100 % / 100 % | 12 | 2,5 Gio |
 
-**Portable** (32 cœurs, `lourds-max` 1) : charge de 3,5 à 20,5. Trois portées tournent en même temps malgré une
-seule place : les sous-portées des confineurs et des passes composées ne passent pas par la file.
+**Portable** (32 cœurs, `lourds-max` 1) : charge de 3,5 à 20,5. Trois lourds **l'un après l'autre**, la file à
+une place faisant son travail (première et dernière ligne de chaque portée) :
 
-| lourd | CPU moyen / max | tâches max | mémoire max |
-|---|---|---|---|
-| wt-verrou-passe.sh (la passe de l'IDE) | 716 % / **2852 %** | 186 | 9,3 Gio |
-| deux-passes.sh | 544 % / 800 % | 145 | 16,2 Gio |
-| wt-1b-copie.sh (arbre principal) | 208 % / 1593 % | 117 | **32 Gio, son plafond** |
+| lourd | heures | CPU moyen / max | tâches max | mémoire max |
+|---|---|---|---|---|
+| deux-passes.sh | 15 h 03 min 16 s – 15 h 04 min 16 s | 544 % / 800 % | 145 | 16,2 Gio |
+| wt-1b-copie.sh (arbre principal) | 15 h 04 min 36 s – 15 h 07 min 36 s | 208 % / 1593 % | 117 | **32 Gio, son plafond** |
+| wt-verrou-passe.sh (la passe de l'IDE) | 15 h 07 min 56 s – 15 h 12 min 57 s | 716 % / **2852 %** | 186 | 9,3 Gio |
+
+**Correction (14 nov., 15 h 25)** : la première version de cette page disait « trois portées en même temps malgré
+une seule place ». C'était faux : j'avais résumé chaque portée sur toute la fenêtre sans regarder ses heures.
+Relues par heure, elles se suivent. Dans le dépôt, seul `poste` lance `systemd-run`, et `confiner_validation.py`
+n'en lance pas. Aucune sous-portée hors de la file n'est prouvée ; le ticket ouvert sur ce point est fermé en
+« non reproduit ».
 
 Aucun lourd n'est seul en cause : ce sont les pointes qui s'additionnent, une passe montant à 8 ou 28 cœurs
 pendant que les autres tournent.
@@ -70,5 +76,5 @@ boucles actives pendant 4 s, puis on lit le temps CPU de sa portée.
 
 - `docs/optimiseur/tickets/2026-11-14-un-tenant-qui-recoit-un-signal-ne-garde-pas-le-verrou.md` : le cas 6c
   du témoin, rouge sur master.
-- `docs/optimiseur/tickets/2026-11-14-les-sous-portees-ne-passent-pas-par-la-file-des-lourds.md` : trois portées
-  pour une place au portable.
+- `docs/tickets/closed/2026-11-14-les-sous-portees-ne-passent-pas-par-la-file-des-lourds.md` : **non reproduit**,
+  voir la correction plus haut.

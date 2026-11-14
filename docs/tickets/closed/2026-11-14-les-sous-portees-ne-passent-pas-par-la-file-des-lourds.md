@@ -1,6 +1,6 @@
 # Les sous-portées des passes ne passent pas par la file des lourds
 
-- **État** : ouvert (14 novembre 2026), relevé par G pendant la mesure de l'enveloppe CPU.
+- **État** : non reproduit (14 novembre 2026, 15 h 25) : les trois portées se suivaient, la file à une place a fait son travail.
 - **Famille** : produit
 - **Gravité** : coût ; plusieurs portées lourdes tournent pour une seule place, hors du quota de la place.
 - **Atteignable en service** : oui, au portable (`lourds-max` 1).
@@ -33,3 +33,18 @@ comptent dans la place, sans en prendre une de plus.
 ## Pour le fermer
 
 Le témoin ci-dessus vert, et une mesure au portable qui montre une portée, ou des portées imbriquées, par place.
+
+## Non reproduit (14 novembre 2026, 15 h 25)
+
+Relues **par heure** (première et dernière ligne de chaque portée du relevé), les trois portées du portable se
+suivent : `deux-passes.sh` de 15 h 03 min 16 s à 15 h 04 min 16 s, `wt-1b-copie.sh` de 15 h 04 min 36 s à
+15 h 07 min 36 s, `wt-verrou-passe.sh` de 15 h 07 min 56 s à 15 h 12 min 57 s. La conclusion d'origine venait
+d'un résumé par portée sur toute la fenêtre, sans les heures. Dans le dépôt, seul `extension/rag3weaver/scripts/poste`
+lance `systemd-run`, et `confiner_validation.py` n'en lance pas (il prend le poste ou passe par celui de l'ancêtre).
+
+Pour refaire le relevé par heure :
+```
+awk -F'\t' 'NR>1 {k=$3; if(!(k in a)) a[k]=$1; b[k]=$1; c[k]=substr($7,1,60)} END{for(k in a) print a[k], b[k], k, c[k]}' \
+  ~/.cache/optimiseur-notes/mesure-lourds-14nov.tsv | sort
+```
+Deux portées dont les intervalles se recouvrent, pour une seule place, rouvriraient ce ticket.
