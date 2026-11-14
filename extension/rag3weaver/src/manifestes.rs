@@ -40,6 +40,8 @@ pub fn est_un_manifeste(chemin: &str) -> bool {
     let nom = chemin.rsplit('/').next().unwrap_or(chemin);
     matches!(nom, "Cargo.toml" | "Cargo.lock" | "package.json" | "pyproject.toml" | "vcpkg.json" | "go.mod")
         || (nom.starts_with("requirements") && nom.ends_with(".txt"))
+        // Un dossier `requirements/` (`requirements/base.txt`, `requirements/dev.txt`).
+        || (nom.ends_with(".txt") && chemin.rsplit('/').nth(1) == Some("requirements"))
 }
 
 impl Manifestes {
@@ -265,15 +267,35 @@ fn cle_toml(l: &str) -> Option<String> {
 }
 
 /// Le nom d'une exigence PEP 508 (`requests[socks]>=2.0 ; python_version<"3.8"` → `requests`) ou d'une
-/// ligne de requirements.txt ; `None` pour un commentaire, une option (`-r`, `-e`) ou une URL.
+/// ligne de requirements.txt : une référence directe (`requests @ https://…`) donne le nom avant `@`, une
+/// URL qui porte `#egg=nom` (`-e git+https://…#egg=nom`) donne ce nom. `None` pour un commentaire, une
+/// option (`-r`, `-c`, `--index-url`…) ou une URL sans nom.
 fn nom_pep508(ligne: &str) -> Option<String> {
     let l = ligne.trim();
-    if l.is_empty() || l.starts_with('#') || l.starts_with('-') || l.contains("://") {
+    if l.is_empty() || l.starts_with('#') {
         return None;
     }
-    let fin = l.find(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_' || c == '.')).unwrap_or(l.len());
-    let nom = &l[..fin];
-    (!nom.is_empty()).then(|| nom.to_string())
+    let tete = |s: &str| -> Option<String> {
+        let s = s.trim();
+        let fin = s.find(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_' || c == '.')).unwrap_or(s.len());
+        (fin > 0).then(|| s[..fin].to_string())
+    };
+    if let Some((_, egg)) = l.split_once("#egg=") {
+        return tete(egg);
+    }
+    if l.starts_with('-') {
+        return None;
+    }
+    if l.contains("://") {
+        // `nom[extras] @ url` : le nom est avant le `@`, s'il n'est pas lui-même un morceau d'URL
+        // (`git+ssh://git@github.com/…` n'a pas de nom).
+        let (avant, _) = l.split_once('@')?;
+        if avant.contains("://") || avant.contains('/') {
+            return None;
+        }
+        return tete(avant);
+    }
+    tete(l)
 }
 
 /// La même normalisation que codeparsers (`import_resolution::provenance::normaliser`).
@@ -402,6 +424,22 @@ mod tests {
         let a = crate::code::analyze_in_project_avec("/virtual", vec![("main.go".to_string(), source.to_string())], "", None, Some(&m));
         let p = a.libraries.iter().find(|l| l.name == "github.com/a/local/outils").map(|l| l.provenance.clone());
         assert_ne!(p, Some(Some("dependency".to_string())), "remplacé par ../local, le module est du projet : {:?}", a.libraries);
+    }
+
+    /// Un dossier `requirements/`, une référence directe PEP 508 (`nom @ url`) et un `-e …#egg=nom` disent
+    /// leur nom ; une URL sans nom n'en invente pas (`git+ssh://git@…` ne donne pas « git »).
+    #[test]
+    fn requirements_un_dossier_une_reference_directe_et_un_egg() {
+        let m = lire(&[
+            ("requirements/base.txt", "Django>=4\n"),
+            (
+                "requirements/dev.txt",
+                "-e git+https://github.com/x/outil.git#egg=mon-outil\nrequests @ https://files.example/requests-2.tar.gz\nhttpx[http2] @ git+https://github.com/encode/httpx\ngit+ssh://git@github.com/x/y.git\nhttps://exemple/paquet.tar.gz\n",
+            ),
+        ]);
+        assert_eq!(m.lus, vec!["requirements/base.txt", "requirements/dev.txt"]);
+        let py: Vec<&str> = m.dependances_par_langue["python"].iter().map(String::as_str).collect();
+        assert_eq!(py, vec!["Django", "httpx", "mon-outil", "requests"]);
     }
 
     #[test]
