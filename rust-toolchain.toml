@@ -1,0 +1,6 @@
+# **La chaîne Rust épinglée** (14 novembre 2026, mot de Lucie : « oui épinglons en une version ») : la CI et les
+# deux postes compilent avec la même version. rustup lit ce fichier dans tout le dépôt ; `rag3weaver-workflow.yml`
+# et `paquet-npm.yml` portent la même. Monter, c'est un lot à part :
+# docs/optimiseur/tickets/2026-11-14-monter-la-chaine-rust-a-la-derniere-stable.md
+[toolchain]
+channel = "1.98.1"
