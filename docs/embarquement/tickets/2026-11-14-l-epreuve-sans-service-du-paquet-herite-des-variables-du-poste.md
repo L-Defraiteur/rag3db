@@ -27,3 +27,20 @@ cause que le ticket de la démo, fermé le 14 novembre.
   avoir été jouée.
 - Retirer de l'environnement du binaire **toutes** les variables `RAG3WEAVER_SERVICE_*` et l'alias,
   comme la démo depuis le 14 novembre (`estVariableDeService` de `demo/demo.js`), rouge d'abord.
+
+## Joué (14 novembre 2026, 13 h 50, embarquement)
+
+Binaire posé (`~/.local/bin/rag3weaver-backend`, 012be4a58, lib 0c41f9fe6) au portable, avec
+l'extension vecteur posée à côté par un lien, et les gabarits de master `8e8e6a3b5` :
+
+- **La variable du poste posée** (`RAG3WEAVER_SERVICE_EMBED=127.0.0.1:7979,…`) : **rouge**,
+  « describe sans l'avertissement « pas de service d'embarquement » : undefined ». La lecture du
+  ticket est confirmée.
+- **Sans aucune variable de service** : **rouge ailleurs**. L'avertissement, `list_files` et
+  `grep_files` passent. Puis `search_code "bonjour"` avant tout index rend `results: []` et
+  « index : jamais construit — lancez `index` avant de chercher » au lieu du balayage des fichiers.
+  `adaptive_search_decision` (`src/dataflow/generic_search_nodes.rs`) ne balaie que si
+  `has_file_source` ; pour ce backend (`workspace.index: "code"`, `commands: "off"`), il est faux.
+  La démo d'alpha.1 balayait avant l'index le 14 novembre. **À départager** : écart de l'épreuve
+  ou régression du binaire. Ce n'est pas la cause du ticket, mais l'épreuve ne peut pas verdir sans
+  lui.
