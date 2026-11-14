@@ -150,15 +150,74 @@ impl Saisie {
 
     /// ↑ : la ligne d'au-dessus dans une saisie de plusieurs lignes, sinon
     /// l'envoi d'avant dans l'historique (la saisie en cours est gardée).
-    pub fn monter(&mut self) {}
+    pub fn monter(&mut self) {
+        let debut = self.texte[..self.curseur].rfind('\n').map(|j| j + 1).unwrap_or(0);
+        if debut > 0 {
+            let colonne = self.texte[debut..self.curseur].graphemes(true).count();
+            let haut = self.texte[..debut - 1].rfind('\n').map(|j| j + 1).unwrap_or(0);
+            self.curseur = self.a_la_colonne(haut, debut - 1, colonne);
+            return;
+        }
+        let rang = match self.rang {
+            _ if self.historique.is_empty() => return,
+            None => {
+                self.brouillon = std::mem::take(&mut self.texte);
+                self.historique.len() - 1
+            }
+            Some(0) => return,
+            Some(r) => r - 1,
+        };
+        self.rang = Some(rang);
+        self.texte = self.historique[rang].clone();
+        self.curseur = self.texte.len();
+    }
 
     /// ↓ : la ligne d'en dessous, sinon l'envoi suivant, puis la saisie en cours.
-    pub fn descendre(&mut self) {}
+    pub fn descendre(&mut self) {
+        if let Some(j) = self.texte[self.curseur..].find('\n') {
+            let debut = self.texte[..self.curseur].rfind('\n').map(|k| k + 1).unwrap_or(0);
+            let colonne = self.texte[debut..self.curseur].graphemes(true).count();
+            let bas = self.curseur + j + 1;
+            let fin = self.texte[bas..].find('\n').map(|k| bas + k).unwrap_or(self.texte.len());
+            self.curseur = self.a_la_colonne(bas, fin, colonne);
+            return;
+        }
+        match self.rang {
+            None => return,
+            Some(r) if r + 1 < self.historique.len() => {
+                self.rang = Some(r + 1);
+                self.texte = self.historique[r + 1].clone();
+            }
+            Some(_) => {
+                self.rang = None;
+                self.texte = std::mem::take(&mut self.brouillon);
+            }
+        }
+        self.curseur = self.texte.len();
+    }
 
-    /// Rend le texte et vide la saisie.
+    /// L'octet du `colonne`-ième graphème de la ligne `debut..fin`, ou `fin`.
+    fn a_la_colonne(&self, debut: usize, fin: usize, colonne: usize) -> usize {
+        self.texte[debut..fin].grapheme_indices(true).nth(colonne).map(|(i, _)| debut + i).unwrap_or(fin)
+    }
+
+    /// Rend le texte et vide la saisie ; un envoi non vide entre dans l'historique.
     pub fn prendre(&mut self) -> String {
         self.curseur = 0;
-        std::mem::take(&mut self.texte)
+        self.rang = None;
+        self.brouillon.clear();
+        let texte = std::mem::take(&mut self.texte);
+        if !texte.trim().is_empty() && self.historique.last() != Some(&texte) {
+            self.historique.push(texte.clone());
+        }
+        texte
+    }
+
+    /// Vide la saisie, sans rien envoyer ni garder (Ctrl-C).
+    pub fn vider(&mut self) {
+        self.texte.clear();
+        self.curseur = 0;
+        self.rang = None;
     }
 
     /// Ce qui s'affiche dans `largeur` colonnes, et la colonne du curseur. Un
