@@ -271,3 +271,7 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 ## Vers 15 h 1x — la forme de clause qui tient
 
 - **ED** : `usages` avec le prédicat complet sur la copie de code-lourd — A une clause 38,1 ms ; B WITH avant le saut 25,3 ; **C le bout filtré dans le MATCH, l'arête et l'autre bout après un WITH : 6,2 ms (×1,28)** ; D l'arête dans le motif 35,8. Les plans : en A le filtre de l'arête est poussé dans un SCAN_NODE_TABLE + SEMI_MASKER de toute la table puis HASH_JOIN ; en C il s'applique après la jointure sur les 780 lignes du saut. **Ticket planificateur pour le cœur** (526ed3aad, les quatre formes et les deux plans en fichiers) ; 2a′-1 traduit un Hop sous la forme C ; témoins 4 et 0 rouges d'abord.
+
+## Vers 15 h 1x — l'enveloppe CPU est posée aux deux postes
+
+- **G a poussé 3a654c4d9** : `scripts/poste` (CPUQuota par lourd = (cœurs − coeurs-libres) / lourds-max, POSTE_FILS et les fils des outils ramenés à la part), `test_poste.sh` cas 8 (28 OK, seul 6c rouge préexistant ticketé), la nouveauté, la page `docs/optimiseur/14-11-2026/02-l-enveloppe-cpu-des-lourds.md`, les scripts de mesure, deux tickets (6c ; sous-portées hors file, forme cible `--slice`/`Delegate=`). **`poste` recopié aux deux postes** (md5 f72d9c7a, l'ancien gardé), **`coeurs-libres` = 2** posé ; luciepc : 500 % et 5 fils par lourd ; portable : 3 000 % et 30 fils. Les lourds déjà en cours gardent leur portée sans quota jusqu'à leur fin.
