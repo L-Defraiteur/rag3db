@@ -162,3 +162,36 @@ après le retrait d'un fichier, ses `Symbol` exclusifs restent, sans relation.
 - Un nom qui revient retrouve le même uuid (`hashsafe`), sur une ligne qui n'a jamais été effacée.
 - **Le témoin de plus** : après le retrait d'un fichier et une publication, une recherche `Symbol` sans
   vue ne rend pas ses `Symbol` exclusifs, et une vue au rang d'avant les rend.
+
+## 11. Le plan du code de l'écrivain (15 novembre 2026, 0 h 20)
+
+Les témoins 1 à 5 sont rouges pour la bonne raison sur 9ef56697f (la publication écrite, l'écrivain
+non) : la réindexation réécrit sur place la ligne publiée. Le code, dans l'ordre :
+
+1. **L'identité** (`Catalog::uuid_for_in`) : la couche et le rang de naissance entrent dans le
+   hachage **seulement quand les données les portent** (une couche autre que `backend`, ou un rang de
+   naissance au-delà de 0). Une ligne de la génération 0 garde l'uuid de sa seule clé.
+2. **La naissance de chaque clé**, décidée par l'écrivain avant l'ingestion :
+   - une ligne en attente existe : son rang (elle se réécrit sur place) ;
+   - une ligne publiée vivante, et l'enregistrement identique champ à champ : le rang de la publiée
+     (rien ne change) ;
+   - une ligne publiée vivante, et l'enregistrement différent : le rang en attente w (une ligne neuve) ;
+   - aucune ligne : w.
+
+   La table de ces naissances sert aux **huit calculs d'uuid par clé de l'ingestion** (les bouts des
+   arêtes, `code.rs`), qui passent par elle au lieu de la clé seule. Une clé d'un autre fichier, bout
+   d'une arête, se lit sur sa ligne vivante, en une requête par lot.
+3. **Le retrait, à la place de l'effacement**, pour le grain du fichier :
+   - une ligne publiée qui change ou disparaît reçoit `_jusqu_a = w` ;
+   - une ligne née en attente qui disparaît s'efface ;
+   - un retour à l'identique efface la ligne en attente et rouvre la publiée (`_jusqu_a` à vide).
+4. **Les arêtes** : les arêtes entrantes vivantes d'une ligne retirée se recopient vers la ligne
+   neuve, et leur nombre est compté, puis dit à la publication (§ 9). L'oubli des arêtes du fichier
+   (`oublier_les_aretes_du_fichier`) ne touche plus que les lignes écrites à w, jamais une ligne
+   retirée : son histoire garde ses arêtes sortantes.
+5. **Les chemins**, dans cet ordre : la réindexation d'un fichier (`reingest_file_retenu`, celle des
+   témoins), puis celle d'un lot (`reingest_files`), le retrait (`remove_file`) et l'indexation
+   entière (`sync_source`). `File` suit la même règle après `Scope`.
+6. **Hors de ce lot** : les colonnes de génération sur les arêtes elles-mêmes. Une arête recopiée est
+   une arête neuve vers la ligne neuve ; l'arête de la ligne retirée reste, et sa ligne retirée la rend
+   invisible par le prédicat du nœud atteint.
