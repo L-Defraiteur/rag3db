@@ -10,3 +10,4 @@ target_include_directories(compression_test PRIVATE ${PROJECT_SOURCE_DIR}/third_
 add_rag3db_test(string_finalize_test string_finalize_test.cpp)
 add_rag3db_test(string_split_test string_split_test.cpp)
 add_rag3db_test(column_stats_test column_stats_test.cpp)
+add_rag3db_test(projected_graph_memory_test projected_graph_memory_test.cpp)
