@@ -443,6 +443,32 @@ impl<'a> PreparedNavigation<'a> {
                     out["coverage"]["malformed_member_facts"] = json!(true);
                 }
             }
+            // **Les scopes contenus sont des membres** (couverture étendue, 14 novembre 2026) : une
+            // méthode indexée comme scope dans la plage du type l'est, même sans déclaration. La même
+            // (nom et ligne) vue par les deux n'est qu'un membre, avec ses deux provenances.
+            let racine = root.unwrap();
+            for (j, p) in parents.iter().enumerate() {
+                if *p != Some(racine) {
+                    continue;
+                }
+                let c = selected[j];
+                let (nom, ligne) = (clipped(text(c, "name"), 256), c["start_line"].clone());
+                match members.iter_mut().find(|m| m["name"] == json!(nom) && m["line"] == ligne && m["provenance"] != "range_containment") {
+                    Some(m) => {
+                        m["also"] = json!("range_containment");
+                        m["ref"] = node(c, 1, Some(text(r, "_uuid")))["ref"].clone();
+                    }
+                    None => members.push(json!({"name":nom,"kind":text(c,"scope_type"),"signature":clipped(text(c,"signature"),512),
+                        "line":ligne,"ref":node(c,1,Some(text(r,"_uuid")))["ref"],"owner_ref":node(r,0,None)["ref"],"provenance":"range_containment"})),
+                }
+            }
+            for m in &mut members {
+                let mut provenances = vec![m["provenance"].clone()];
+                if let Some(a) = m.as_object_mut().and_then(|o| o.remove("also")) {
+                    provenances.push(a);
+                }
+                m["provenances"] = json!(provenances);
+            }
         }
         let total_selected = nodes.len() + members.len();
         while nodes.len() + members.len() > q.limit {
