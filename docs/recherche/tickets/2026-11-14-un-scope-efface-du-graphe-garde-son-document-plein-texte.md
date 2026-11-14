@@ -1,7 +1,7 @@
 # Un Scope effacé du graphe garde son document plein texte
 
 - **État** : ouvert (14 novembre 2026, relevé par hotfixs avec la sonde de cohérence demandée par c7)
-- **Pour** : recherche, premier lecteur, car c'est son chemin de réindexation (réattribution par c7)
+- **Pour** : recherche, après sa page des règles d'exclusion. C'est son chemin de réindexation (DETACH DELETE de fin d'index, déplacement d'un Scope, nettoyage des absents) ; réattribution par c7
 - **Famille** : produit
 - **Gravité** : réponse fausse possible. Un document orphelin peut remonter dans une recherche avec un
   `_node_id` qui ne mène à rien, ou, si l'offset est repris plus tard par une nouvelle ligne, qui mène à
