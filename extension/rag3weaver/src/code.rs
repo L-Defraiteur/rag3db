@@ -5640,4 +5640,78 @@ mod tests_de_l_ecrivain {
         assert_eq!(lignes(&cat, "f"), avant, "la couche est revenue à l'identique");
         assert!(lignes(&cat, "f").iter().all(|(_, _, _, fin)| fin.is_none()), "la ligne publiée est vivante");
     }
+
+    /// Les empreintes des lignes `File` d'un chemin visibles au rang lu.
+    fn fichiers_visibles(cat: &Catalog, chemin: &str) -> Vec<String> {
+        let v = cat.generations.clone().expect("une base à générations");
+        let p = cat.dialect_arc().condition_visible_sur("f", &v.couche, v.rang).unwrap();
+        let r = cat
+            .conn()
+            .execute_with_params(
+                &format!("MATCH (f:File) WHERE f.path = $p AND {p} RETURN f.content_hash ORDER BY f.content_hash"),
+                &[QueryParam::new("p", CypherValue::String(chemin.into()))],
+            )
+            .unwrap();
+        r.rows.iter().map(|l| texte(&l[0])).collect()
+    }
+
+    fn lignes_file(cat: &Catalog, chemin: &str) -> usize {
+        let r = cat
+            .conn()
+            .execute_with_params("MATCH (f:File) WHERE f.path = $p RETURN count(*)", &[QueryParam::new("p", CypherValue::String(chemin.into()))])
+            .unwrap();
+        r.rows[0][0].as_i64().unwrap() as usize
+    }
+
+    /// **Témoin 7 : un fichier supprimé garde son passé.** `remove_file` sous les générations retire les
+    /// scopes et la ligne `File` au rang en attente : la génération d'avant les rend encore, la suivante
+    /// non, et aucune ligne publiée n'est effacée.
+    #[test]
+    fn un_fichier_supprime_garde_son_passe() {
+        let (mut cat, src) = base();
+        let n = cat.publier_la_generation("c1", 0).expect("publier");
+        src.remove("b.rs");
+        crate::code_sync::remove_file(&mut cat, &src, "b.rs", crate::disponibilite::Disponibilites::TOUT).expect("retirer");
+        let m = cat.publier_la_generation("c2", 0).expect("publier");
+        assert_eq!(cat.au_rang(n, |c| fins_visibles(c, "f")), vec![3], "la génération d'avant rend encore f");
+        assert_eq!(cat.au_rang(m, |c| fins_visibles(c, "f")), Vec::<i64>::new(), "la suivante ne le rend plus");
+        assert_eq!(cat.au_rang(n, |c| fichiers_visibles(c, "b.rs")).len(), 1, "la ligne File d'avant reste visible à n");
+        assert!(cat.au_rang(m, |c| fichiers_visibles(c, "b.rs")).is_empty(), "et plus à m");
+        assert_eq!(lignes(&cat, "f").len(), 1, "la ligne de f est retirée, pas effacée");
+    }
+
+    /// **Témoin 8 : un lot suit la règle.** `reingest_files` qui change `b.rs` et supprime `a.rs` : la
+    /// génération d'avant rend l'ancien `f` et `a`, la suivante le neuf `f` et plus de `a`.
+    #[test]
+    fn un_lot_suit_la_regle() {
+        let (mut cat, src) = base();
+        let n = cat.publier_la_generation("c1", 0).expect("publier");
+        src.insert("b.rs", F2);
+        src.remove("a.rs");
+        let lot = vec![("b.rs".to_string(), Some(F2.to_string())), ("a.rs".to_string(), None)];
+        crate::code_sync::reingest_files(&mut cat, &src, &lot, crate::disponibilite::Disponibilites::TOUT).expect("le lot");
+        let m = cat.publier_la_generation("c2", 0).expect("publier");
+        assert_eq!(cat.au_rang(n, |c| fins_visibles(c, "f")), vec![3], "l'ancien f à n");
+        assert_eq!(cat.au_rang(m, |c| fins_visibles(c, "f")), vec![4], "le neuf à m");
+        assert_eq!(cat.au_rang(n, |c| fins_visibles(c, "a")).len(), 1, "a à n");
+        assert!(cat.au_rang(m, |c| fins_visibles(c, "a")).is_empty(), "plus de a à m");
+        assert_eq!(lignes(&cat, "f").len(), 2, "les deux lignes de f restent : {:?}", lignes(&cat, "f"));
+    }
+
+    /// **Témoin 9 : la ligne `File` garde son passé.** Le contenu de `b.rs` change : la génération d'avant
+    /// rend l'ancienne empreinte, la suivante la neuve, et les deux lignes restent.
+    #[test]
+    fn la_ligne_file_garde_son_passe() {
+        let (mut cat, src) = base();
+        let n = cat.publier_la_generation("c1", 0).expect("publier");
+        let avant = cat.au_rang(n, |c| fichiers_visibles(c, "b.rs"));
+        assert_eq!(avant.len(), 1, "une ligne File pour b.rs : {avant:?}");
+        sauver(&mut cat, &src, "b.rs", F2);
+        let m = cat.publier_la_generation("c2", 0).expect("publier");
+        let apres = cat.au_rang(m, |c| fichiers_visibles(c, "b.rs"));
+        assert_eq!(cat.au_rang(n, |c| fichiers_visibles(c, "b.rs")), avant, "la génération d'avant rend l'ancienne empreinte");
+        assert_eq!(apres.len(), 1, "une ligne File visible à m : {apres:?}");
+        assert_ne!(apres, avant, "l'empreinte neuve à m");
+        assert_eq!(lignes_file(&cat, "b.rs"), 2, "les deux lignes File restent");
+    }
 }
