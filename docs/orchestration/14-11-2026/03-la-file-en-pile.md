@@ -54,7 +54,7 @@ l'autre, dix fois de suite, même sans rouge.
 | 11 | recherche | la CI : `fetch_update` déprécié par la chaîne stable de la CI (read_pool.rs:261), pas par le poste 1.98.1 | ci-try-update-pile | **passe devant le cœur** (son juge vers 17 h 30) : posée sur master du moment ; le cœur se repose dessus sans rejeu (C++ seul) |
 | 12 | tty | tty-7, le journal de séance et le repli sous mosh | cx-tty-7-pile 132c0248d sur 41a7de35a, vert | juste après le cœur ; rejeu court attendu (la ligne de la CI touche la lib sous sa base) |
 | 13 | G | la garde apprend la pile | garde-pile 24ab270be | cd103b619 sur c93f73f06 (garde 2f1914405 : --onto, push refusé remis, 27 témoins ; relue par recherche à 16 h 2x ; **posée au cache des deux postes à 16 h 22**, sha256 c57a3fb1 → a58a649f, l'ancienne en push_garde.sh.avant-garde-pile) |
-| 14 | codeparsers | l'import pointé (lot 1) | à venir | à son vert |
+| 14 | codeparsers | l'import pointé (lot 1) | codeparsers/import-python-pointe 343ead799 (vert dans codeparsers, 301/0) | passe sur la dernière tête de pile quand une place vient (~19 h) |
 | 15 | recherche | exclusions 1 et 5 dans le manifeste | à venir | à son vert |
 | 16 | archi | les quatre mineurs de l'atelier | atelier-quatre-mineurs 8f8c31ec4 | passe complète en cours |
 
@@ -145,3 +145,15 @@ en rustc 1.98.1 et ne le voit pas ; la CI prend `dtolnay/rust-toolchain@stable`,
 n'est ni un lot cassé ni le poste : c'est deux chaînes. Recherche corrige en une ligne au rang 11 ;
 G ouvre le ticket du fond (épingler la chaîne de la CI à celle du poste par `rust-toolchain.toml`,
 ou laisser flotter et monter le poste), décision à Lucie.
+
+## La mesure d'ED tient le poste (17 h 3x) : la pile attend, au mot de Lucie
+
+La mesure de 2a′-2 a dit son premier chiffre : **un search_code sans filtre coûte environ 6,8 s** sur
+une base à versions de la taille du dépôt (79 662 scopes), dont 0,8 s de masque des versions ; la
+migration vers les générations, 20 ms. Lucie : « faut se concentrer sur optim ça, ça fait partie du
+lot : si on apporte la feature faut faire le max pour qu'elle devienne viable » et « filtré ça prend
+combien ? faudrait voir filtré vs non filtré ». La mesure unique relancée (sonde ca428691b, durées
+par nœud lues sur NodeRun, trois formes sans filtre / par chemin / par langage sur la référence R —
+la même base avant 1b — et sur A ; B et C sans filtre ; 10 requêtes × 5) tient `poste mesure` environ
+1 h 10 dès son départ : les rejeux de la pile (tty-7, les quatre mineurs, codeparsers) attendent vers
+19 h. Les pushs sous `poste push` (recherche pour la CI, le cœur) ne sont pas des lourds et passent.
