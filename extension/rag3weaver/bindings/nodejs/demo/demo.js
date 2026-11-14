@@ -3,13 +3,17 @@
 // ouvrir un backend de code sur un dépôt, l'indexer, et montrer ce qu'on sait
 // faire — en texte lisible, pas en JSON brut. Lancée par demo.sh, deux fois :
 // avec un service d'embarquement (recherche hybride, mots + sens) et sans
-// (plein texte seul, l'avertissement visible).
+// (plein texte seul, l'avertissement visible). Chaque passe dit quel
+// embarqueur a calculé ses vecteurs : le modèle et l'adresse, lus au /sante
+// du service, ou « aucun ».
 //
 //   node demo.js <dossier du dépôt> [sans-service]
 //
-// Les variables : RAG3WEAVER_EMBED_SERVICE pour le service ; DEMO_QUERY,
-// DEMO_SYMBOL pour changer la question et le symbole.
+// Les variables : RAG3WEAVER_SERVICE_EMBED (alias RAG3WEAVER_EMBED_SERVICE)
+// pour le service ; DEMO_QUERY, DEMO_SYMBOL pour changer la question et le
+// symbole.
 const fs = require('node:fs');
+const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const { Backend, binaryPath, vectorExtensionPath, templatesDir, prepareManifest } = require('rag3weaver');
@@ -23,6 +27,57 @@ const gras = (t) => `\x1b[1m${t}\x1b[0m`;
 const gris = (t) => `\x1b[2m${t}\x1b[0m`;
 const titre = (t) => console.log(`\n${gras('━━ ' + t)}\n`);
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Les variables de service que le binaire lit : RAG3WEAVER_SERVICE_<CAPACITÉ>
+// pour chaque capacité (le creux, le relecteur et l'OCR lisent aussi celle de
+// l'embarquement), puis l'alias d'avant, RAG3WEAVER_EMBED_SERVICE. Sans
+// service, la démo les retire TOUTES : le 14 novembre 2026, elle ne retirait
+// que l'alias, et la variable commune posée par le poste embarquait quand même.
+const estVariableDeService = (k) => k.startsWith('RAG3WEAVER_SERVICE_') || k === 'RAG3WEAVER_EMBED_SERVICE';
+const VARIABLES_EMBED = ['RAG3WEAVER_SERVICE_EMBED', 'RAG3WEAVER_EMBED_SERVICE'];
+
+// Les adresses du service, comme le binaire les lit : la première variable
+// posée et non vide, dans l'ordre.
+function adressesDuService() {
+  for (const variable of VARIABLES_EMBED) {
+    const adresses = String(process.env[variable] || '').split(',').map((a) => a.trim()).filter(Boolean);
+    if (adresses.length) return { variable, adresses };
+  }
+  return null;
+}
+
+// L'identité d'un service d'embarquement, par son /sante ; null s'il ne répond pas.
+function sante(adresse) {
+  return new Promise((resolve) => {
+    const req = http.get(`http://${adresse}/sante`, { timeout: 3000 }, (res) => {
+      let corps = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { corps += c; });
+      res.on('end', () => { try { resolve(JSON.parse(corps)); } catch { resolve(null); } });
+    });
+    req.on('timeout', () => req.destroy());
+    req.on('error', () => resolve(null));
+  });
+}
+
+// Quel embarqueur calcule les vecteurs du modèle déclaré : l'adresse que la
+// déclaration donne, sinon celles de la variable, et la première qui sert ce
+// modèle d'après son /sante — la règle du binaire.
+async function embarqueur(embeddings) {
+  const modele = embeddings && embeddings.model;
+  const declare = embeddings && embeddings.address;
+  const s = declare && declare.length
+    ? { variable: 'la déclaration', adresses: [].concat(declare) }
+    : adressesDuService();
+  if (!s) return 'aucun — aucune variable de service n’atteint le binaire : plein texte seul';
+  for (const a of s.adresses) {
+    const id = await sante(a);
+    if (id && id.modele === modele) {
+      return `${modele} servi par ${a} (${s.variable} ; /sante : ${id.service || '?'}, ${id.dim} dim.${id.adresse ? `, adresse ${id.adresse}` : ''})`;
+    }
+  }
+  return `aucun — aucune adresse de ${s.variable} (${s.adresses.join(', ')}) ne sert ${modele} à son /sante`;
+}
 
 // Les vecteurs d'une entité, en un mot : « non déclarés » (Symbol, en BM25
 // seul : ni une panne ni une dette), sinon le niveau et le pourcentage.
@@ -56,9 +111,12 @@ function crochets(backend) {
 }
 
 async function main() {
-  if (sansService) delete process.env.RAG3WEAVER_EMBED_SERVICE;
-  const service = process.env.RAG3WEAVER_EMBED_SERVICE;
-  titre(sansService ? 'Sans service d’embarquement (plein texte seul)' : `Avec le service d’embarquement (${service})`);
+  if (sansService) {
+    for (const k of Object.keys(process.env)) if (estVariableDeService(k)) delete process.env[k];
+  }
+  const service = adressesDuService();
+  titre(sansService ? 'Sans service d’embarquement (plein texte seul)'
+    : `Avec le service d’embarquement (${service ? service.adresses.join(',') : 'aucune variable posée'})`);
   console.log(`dépôt   : ${depot}`);
   console.log(`binaire : ${binaryPath()}`);
 
@@ -128,6 +186,7 @@ async function main() {
   if (Array.isArray(etat.warnings) && etat.warnings.length) {
     console.log(`\n  ${gras('avertissement')} : ${etat.warnings[0]}`);
   }
+  console.log(`\n  ${gras('embarqueur')} : ${await embarqueur(d.embeddings)}`);
 
   // ── La recherche hybride : une question en langue naturelle.
   titre(`search_code — « ${question} »`);
