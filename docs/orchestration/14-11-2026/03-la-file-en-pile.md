@@ -42,7 +42,7 @@ l'autre, dix fois de suite, même sans rouge.
 |---|---|---|---|---|
 | 1 | lucivy | montée 4.3.7 | lucivy-4-3-7-4 | cd6d02907, la base de la pile — **atterri** à 16 h 16, master c99b2f05e, contenu identique |
 | 2 | tty | tty-6 (tmux/mosh mesurés) | cx-tty-6-2 → cx-tty-6-pile | 7ac2c13d9 sur cd6d02907 — **atterri** à 16 h 25, master ce4a3140a, range-diff 5/5 en `=`, premier push en mode pile |
-| 3 | recherche | surveillant, puis plafond d'instantané | surveillant-2, plafond-d-instantane → recherche-pile | a36f707dd, 9b7ff76e8 → pile 2c3bc3eb7 sur 7ac2c13d9 |
+| 3 | recherche | surveillant, puis plafond d'instantané | surveillant-2, plafond-d-instantane → recherche-pile | 2c3bc3eb7 sur 7ac2c13d9 — **atterri** à 16 h 27, master a48b535d1, dix commits en un push, pile tenue |
 | 4 | G | cas 6c du poste (trap avant la CI) | tenant-signal → tenant-signal-pile | ab7c44fb5 → pile c93f73f06 sur 2c3bc3eb7 |
 | 5 | embarquement | reprise après plantage | reprise-apres-plantage → reprise-apres-plantage-pile | 17afd3820 → pile 512b5e420 sur c93f73f06 (conflit de docs/nouveautes.md résolu) |
 | 6 | 96 | miroir, nom exact, about | lot-96-pile (miroir 48445fdeb, nomex bff4ea79f, about 84f949d2c) | pile 84f949d2c sur 512b5e420 |
@@ -52,6 +52,7 @@ l'autre, dix fois de suite, même sans rouge.
 | 10 | cœur | correctif (a) perte de Note | annulation-garde-les-autres-2 → annulation-garde-les-autres-pile | 9b0e73c9c → pile 960eb8e3a, puis **41a7de35a** sur 67d759962 (annulation-garde-les-autres-pile-2) ; juge vers 17 h 15 |
 | 11 | G | la garde apprend la pile | garde-pile | cd103b619 sur c93f73f06 (garde 2f1914405 : --onto, push refusé remis, 27 témoins ; relue par recherche à 16 h 2x ; **posée au cache des deux postes à 16 h 22**, sha256 c57a3fb1 → a58a649f, l'ancienne en push_garde.sh.avant-garde-pile) |
 | 12 | codeparsers | l'import pointé (lot 1) | à venir | à son vert |
+| 13 | recherche | exclusions 1 et 5 dans le manifeste | à venir | à son vert |
 
 Chaque session dit à c7 et au rang suivant la tête de sa branche de pile dès qu'elle est poussée.
 
