@@ -1,0 +1,136 @@
+## apres_la_reponse
+[toi · demande] bonjour, présente-toi en deux lignes
+[hôte · compte rendu] tâche ouverte : branche agent/essai-tty depuis d61fe30d7 ; ses déclarations et son code
+sont ceux de ce commit (une modification non commitée du manifeste ou du code n'y est pas)
+[équipier · compte rendu] Bonjour ! Je suis votre coéquipier IA sur ce backend déclaré, autonome pour
+analyser, modifier et maintenir les déclarations et le code. Je réalise vos tâches étape par étape en rendant
+compte au fil de l'eau.
+[équipier · étape faite] fait : Présentation effectuée en deux lignes dans la boîte du superviseur.
+[hôte · fini] fait sans plan
+[toi · demande] Présente-toi en quelques lignes : un titre, une liste à puces de trois choses que tu sais
+faire, et un mot en gras.
+[équipier · compte rendu] Présentation fournie au superviseur conformément au format demandé (titre, 3 puces,
+mot en gras).
+[équipier · étape faite] fait : Présentation rédigée avec titre, trois points de compétence et un mot en gras.
+[hôte · fini] fait sans plan
+[toi · demande] Écris directement dans ta réponse, pas dans un rapport : un titre Markdown, une liste à puces
+de trois choses que tu sais faire, et un mot en gras.
+[équipier · étape faite] fait : Réponse rédigée directement avec un titre Markdown, une liste à puces de trois
+compétences et un mot en gras.
+[hôte · fini] fait sans plan
+[toi · demande] Dis-moi en une phrase ce que fait le crate extension/rag3weaver/tty, puis termine.
+
+⛧ attend                                                            rag3db · agent/essai-tty · tâche essai-tty
+›
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=====
+
+## saisie_editee
+[toi · demande] bonjour, présente-toi en deux lignes
+[hôte · compte rendu] tâche ouverte : branche agent/essai-tty depuis d61fe30d7 ; ses déclarations et son code
+sont ceux de ce commit (une modification non commitée du manifeste ou du code n'y est pas)
+[équipier · compte rendu] Bonjour ! Je suis votre coéquipier IA sur ce backend déclaré, autonome pour
+analyser, modifier et maintenir les déclarations et le code. Je réalise vos tâches étape par étape en rendant
+compte au fil de l'eau.
+[équipier · étape faite] fait : Présentation effectuée en deux lignes dans la boîte du superviseur.
+[hôte · fini] fait sans plan
+[toi · demande] Présente-toi en quelques lignes : un titre, une liste à puces de trois choses que tu sais
+faire, et un mot en gras.
+[équipier · compte rendu] Présentation fournie au superviseur conformément au format demandé (titre, 3 puces,
+mot en gras).
+[équipier · étape faite] fait : Présentation rédigée avec titre, trois points de compétence et un mot en gras.
+[hôte · fini] fait sans plan
+[toi · demande] Écris directement dans ta réponse, pas dans un rapport : un titre Markdown, une liste à puces
+de trois choses que tu sais faire, et un mot en gras.
+[équipier · étape faite] fait : Réponse rédigée directement avec un titre Markdown, une liste à puces de trois
+compétences et un mot en gras.
+[hôte · fini] fait sans plan
+[toi · demande] Dis-moi en une phrase ce que fait le crate extension/rag3weaver/tty, puis termine.
+» list_files
+  fait (100 ms)
+» read_file
+  fait (200 ms)
+
+⟪ ᛟ᚜⸸ ⛧ ᚛ᚨᛒ ⟫ INVOCATION DU CODE...                                 rag3db · agent/essai-tty · tâche essai-tty
+› Merci, c'est clair !
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=====
+
+## apres_ctrl_c
+[toi · demande] bonjour, présente-toi en deux lignes
+[hôte · compte rendu] tâche ouverte : branche agent/essai-tty depuis d61fe30d7 ; ses déclarations et son code
+sont ceux de ce commit (une modification non commitée du manifeste ou du code n'y est pas)
+[équipier · compte rendu] Bonjour ! Je suis votre coéquipier IA sur ce backend déclaré, autonome pour
+analyser, modifier et maintenir les déclarations et le code. Je réalise vos tâches étape par étape en rendant
+compte au fil de l'eau.
+[équipier · étape faite] fait : Présentation effectuée en deux lignes dans la boîte du superviseur.
+[hôte · fini] fait sans plan
+[toi · demande] Présente-toi en quelques lignes : un titre, une liste à puces de trois choses que tu sais
+faire, et un mot en gras.
+[équipier · compte rendu] Présentation fournie au superviseur conformément au format demandé (titre, 3 puces,
+mot en gras).
+[équipier · étape faite] fait : Présentation rédigée avec titre, trois points de compétence et un mot en gras.
+[hôte · fini] fait sans plan
+[toi · demande] Écris directement dans ta réponse, pas dans un rapport : un titre Markdown, une liste à puces
+de trois choses que tu sais faire, et un mot en gras.
+[équipier · étape faite] fait : Réponse rédigée directement avec un titre Markdown, une liste à puces de trois
+compétences et un mot en gras.
+[hôte · fini] fait sans plan
+[toi · demande] Dis-moi en une phrase ce que fait le crate extension/rag3weaver/tty, puis termine.
+» list_files
+  fait (100 ms)
+» read_file
+  fait (200 ms)
+
+⟪ ᛟ᚜⸸ ⛧ ᚛ᚨᛒ ⟫ INVOCATION DU CODE...                                 rag3db · agent/essai-tty · tâche essai-tty
+›
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=====
+
+## sortie
