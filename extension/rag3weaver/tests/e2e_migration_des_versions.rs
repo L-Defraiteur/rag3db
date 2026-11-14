@@ -1,0 +1,133 @@
+//! **La migration 1b** : une base de code de la forme d'avant passe à la forme à versions, sans
+//! réembarquer ce dont le texte n'a pas changé. Fixtures synthétiques seulement ; aucune base de
+//! service n'est lue.
+#![cfg(all(feature = "rag3db-native", feature = "code"))]
+
+use std::path::Path;
+use std::sync::{Arc, Mutex};
+
+use rag3weaver::code::{analyze_source, default_scope_chunking, register_code_schema, register_code_schema_sans_versions, scope_form, ScopeForm};
+use rag3weaver::code_tools::Snapshot;
+use rag3weaver::connection::DbConnection;
+use rag3weaver::embedder::{EmbedError, Embedder, HashEmbedder};
+use rag3weaver::migration_des_versions::migrer_vers_les_versions;
+use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
+
+struct Compteur {
+    inner: HashEmbedder,
+    texts: Arc<Mutex<Vec<String>>>,
+}
+
+impl Embedder for Compteur {
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+        self.texts.lock().unwrap().extend(texts.iter().cloned());
+        self.inner.embed(texts)
+    }
+    fn dim(&self) -> usize { self.inner.dim() }
+    fn is_mock(&self) -> bool { true }
+    fn name(&self) -> &str { self.inner.name() }
+}
+
+/// Un catalogue sur une base et un plein texte en fichiers, l'embarqueur compté.
+fn ouvrir(dir: &Path) -> (Catalog, Arc<Mutex<Vec<String>>>) {
+    let conn = Rag3dbConnection::new(dir.join("code.rag3db")).unwrap();
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension())).unwrap();
+    let texts = Arc::new(Mutex::new(Vec::new()));
+    let mut cat = Catalog::new(Box::new(conn), Box::new(Compteur { inner: HashEmbedder::new(8), texts: texts.clone() }), CatalogConfig {
+        allow_mock_embedder: true, embedding_dim: 8, ..Default::default()
+    });
+    cat.set_fts_storage(rag3weaver::fts_handle::FtsStorage::Files { base_path: dir.join("code.rag3db.fts").to_string_lossy().into_owned() });
+    cat.initialize().unwrap();
+    (cat, texts)
+}
+
+fn compte(cat: &Catalog, cypher: &str) -> i64 {
+    cat.execute_raw(cypher).unwrap_or_else(|e| panic!("{cypher} : {e}")).rows[0][0].as_i64().unwrap()
+}
+
+const PARTAGEE: &str = "pub fn partagee() {\n    let marque_contenu_partage = 41;\n    let _ = marque_contenu_partage + 1;\n}\n";
+const SEULE: &str = "pub fn seule() {\n    let marque_seule = 7;\n    let _ = marque_seule * 2;\n}\n";
+
+/// Les occurrences d'une base, telles qu'un lecteur les voit : uuid, fichier, lignes.
+fn occurrences(cat: &Catalog) -> Vec<(String, String, i64, i64)> {
+    cat.execute_raw("MATCH (s:Scope) RETURN s._uuid, s.file_path, s.start_line, s.end_line ORDER BY s._uuid")
+        .unwrap()
+        .rows
+        .iter()
+        .map(|r| (r[0].as_str().unwrap().to_string(), r[1].as_str().unwrap_or("").to_string(), r[2].as_i64().unwrap_or(-1), r[3].as_i64().unwrap_or(-1)))
+        .collect()
+}
+
+/// **Une base d'avant migre vers les versions sans appeler le modèle** (T3, T5 du plan du 12) :
+/// la même fonction dans `a.rs` et `b.rs` donne une version, une autre fonction la sienne ; les
+/// occurrences gardent leur uuid et leurs lignes, chacune rattachée à une seule version ; chaque
+/// morceau neuf a son vecteur, repris d'un morceau d'avant au texte identique, et aucun texte ne
+/// passe par l'embarqueur. Le plein texte compte une ligne par document. Rouverte par le schéma
+/// de production, la base est à versions, et une occurrence de plus ne réembarque rien.
+#[test]
+#[ignore]
+fn une_base_d_avant_migre_vers_les_versions_sans_appel_au_modele() {
+    let dir = tempfile::tempdir().unwrap();
+    let avant = {
+        let (mut cat, _) = ouvrir(dir.path());
+        register_code_schema_sans_versions(&mut cat, default_scope_chunking()).unwrap();
+        let source = Snapshot::new("ancre", [
+            ("a.rs".to_string(), PARTAGEE.to_string()),
+            ("b.rs".to_string(), format!("\n\n{PARTAGEE}")),
+            ("c.rs".to_string(), SEULE.to_string()),
+        ]);
+        assert_eq!(cat.ingest_code(&analyze_source(&source).unwrap()).unwrap().failed, 0);
+        assert_eq!(scope_form(&cat).unwrap(), ScopeForm::SansVersions, "le décor : une base d'avant");
+        let col = cat.vector_storage("Scope_Chunk").unwrap().column;
+        assert!(compte(&cat, &format!("MATCH (c:Scope_Chunk) WHERE c.{col} IS NOT NULL RETURN count(c)")) > 0, "le décor : des vecteurs d'avant");
+        occurrences(&cat)
+    };
+    let (mut cat, texts) = ouvrir(dir.path());
+    register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+    assert_eq!(scope_form(&cat).unwrap(), ScopeForm::SansVersions, "la base d'avant se rouvre comme avant");
+    texts.lock().unwrap().clear();
+    let bilan = migrer_vers_les_versions(&mut cat, default_scope_chunking()).unwrap_or_else(|e| panic!("la migration refuse : {e}"));
+    assert_eq!(texts.lock().unwrap().len(), 0, "la migration a appelé le modèle : {:?}", texts.lock().unwrap());
+    assert_eq!(scope_form(&cat).unwrap(), ScopeForm::Versions, "l'estampille n'est pas posée");
+    assert_eq!(occurrences(&cat), avant, "les occurrences ont changé (uuid, fichier ou lignes)");
+    assert_eq!(compte(&cat, "MATCH (v:ScopeContent) WHERE v.name = 'partagee' RETURN count(v)"), 1, "deux occurrences identiques, une version");
+    let scopes = compte(&cat, "MATCH (s:Scope) RETURN count(s)");
+    assert_eq!(compte(&cat, "MATCH (:ScopeContent)-[:ScopeContent_DERIVED_FROM]->(s:Scope) RETURN count(DISTINCT s)"), scopes, "une occurrence sans version");
+    assert_eq!(compte(&cat, "MATCH (:ScopeContent)-[r:ScopeContent_DERIVED_FROM]->(:Scope) RETURN count(r)"), scopes, "une occurrence à deux versions");
+    let stockage = cat.vector_storage("ScopeContent_Chunk").unwrap();
+    let morceaux = compte(&cat, "MATCH (c:ScopeContent_Chunk) RETURN count(c)");
+    assert!(morceaux > 0, "aucun morceau de version");
+    assert_eq!(
+        compte(&cat, &format!("MATCH (c:ScopeContent_Chunk) WHERE c.{} IS NOT NULL AND c.{} = c._text_hash RETURN count(c)", stockage.column, stockage.marker)),
+        morceaux,
+        "un morceau de version sans son vecteur repris"
+    );
+    assert_eq!(bilan.versions as i64, compte(&cat, "MATCH (v:ScopeContent) RETURN count(v)"), "{bilan:?}");
+    assert_eq!(bilan.occurrences as i64, scopes, "{bilan:?}");
+    assert!(bilan.morceaux_en_dette.values().all(|n| *n == 0), "{bilan:?}");
+    for (entite, documents, lignes) in cat.comptes_du_plein_texte() {
+        assert_eq!(documents, lignes, "« {entite} » : {documents} documents pour {lignes} lignes");
+    }
+    drop(cat);
+    let (mut cat, texts) = ouvrir(dir.path());
+    register_code_schema(&mut cat, default_scope_chunking()).unwrap_or_else(|e| panic!("la base migrée ne se rouvre pas : {e}"));
+    assert_eq!(scope_form(&cat).unwrap(), ScopeForm::Versions);
+    let source = Snapshot::new("ancre", [("d.rs".to_string(), format!("\n{PARTAGEE}"))]);
+    assert_eq!(cat.ingest_code(&analyze_source(&source).unwrap()).unwrap().failed, 0);
+    assert!(!texts.lock().unwrap().iter().any(|t| t.contains("marque_contenu_partage")), "une occurrence de plus réembarque une version migrée");
+}
+
+/// **Une base déjà à versions refuse la migration, sans rien changer.**
+#[test]
+#[ignore]
+fn une_base_a_versions_refuse_la_migration() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut cat, _) = ouvrir(dir.path());
+    register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+    let source = Snapshot::new("ancre", [("a.rs".to_string(), PARTAGEE.to_string())]);
+    assert_eq!(cat.ingest_code(&analyze_source(&source).unwrap()).unwrap().failed, 0);
+    let versions = compte(&cat, "MATCH (v:ScopeContent) RETURN count(v)");
+    let refus = migrer_vers_les_versions(&mut cat, default_scope_chunking()).expect_err("une base à versions migre encore");
+    assert!(refus.contains("forme"), "le refus ne nomme pas la forme : {refus}");
+    assert_eq!(compte(&cat, "MATCH (v:ScopeContent) RETURN count(v)"), versions);
+}
