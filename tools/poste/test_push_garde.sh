@@ -61,7 +61,7 @@ pile() { # pile <attendu: tenue|arret> <description> : juge la pile préparée d
 preparer_pile() { # le master d'origine, P1 sur lui, P2 sur P1 (le commit testé)
   git checkout -q -B m0 "$BASE"; M0=$(git rev-parse HEAD)
   git checkout -q -B p1 "$M0"; echo 'fn p1() {}' > extension/rag3weaver/src/p1.rs; git add -A; git commit -qm p1; P1=$(git rev-parse HEAD)
-  git checkout -q -B p2 "$P1"; echo 'fn p2() {}' > extension/rag3weaver/src/p2.rs; echo '- p2' >> extension/rag3weaver/docs/nouveautes.md; git add -A; git commit -qm p2; P2T=$(git rev-parse HEAD)
+  git checkout -q -B p2 "$P1"; echo 'fn p2() {}' > extension/rag3weaver/src/p2.rs; mkdir -p extension/rag3weaver/docs; echo '- p2' >> extension/rag3weaver/docs/nouveautes.md; git add -A; git commit -qm p2; P2T=$(git rev-parse HEAD)
 }
 # 1. Le cas vert : P1 atterri tel quel sur master, P2 reposé dessus.
 preparer_pile
@@ -81,9 +81,10 @@ pile tenue "un commit de .md ajouté après le rejeu"
 echo 'fn tard() {}' > extension/rag3weaver/src/tard.rs; git add -A; git commit -qm "code tardif"; TETE=$(git rev-parse HEAD)
 pile arret "un commit de code ajouté après le rejeu"
 # 5. Un conflit de nouveautes.md résolu au rebase (un `!` qui ne diffère que par des .md) : toléré.
-git checkout -q -B maitre "$P1"; echo '- autre lot' >> extension/rag3weaver/docs/nouveautes.md; git add -A; git commit -qm "nouveauté d'un autre"; M=$(git rev-parse HEAD)
+git checkout -q -B maitre "$P1"; mkdir -p extension/rag3weaver/docs; echo '- autre lot' >> extension/rag3weaver/docs/nouveautes.md; git add -A; git commit -qm "nouveauté d'un autre"; M=$(git rev-parse HEAD)
 git checkout -q -B p2b "$P2T"; git rebase -q --onto "$M" "$P1" >/dev/null 2>&1 || { printf -- '- autre lot\n- p2\n' > extension/rag3weaver/docs/nouveautes.md; git add -A; GIT_EDITOR=true git rebase --continue >/dev/null 2>&1; }
 TETE=$(git rev-parse HEAD)
+git range-diff --no-color --creation-factor=100 "$P1..$P2T" "$M..$TETE" | grep -q ' ! ' || { echo "ROUGE  le cas 5 n'a pas produit de « ! » : il ne prouve rien"; rouge=1; }
 pile tenue "un conflit de nouveautes.md résolu au rebase (! sur des .md seuls)"
 # 6. Un commit du lot changé hors .md au rebase : refusé.
 git checkout -q -B p2b "$P2T"; git rebase -q --onto "$M" "$P1" >/dev/null 2>&1 || { printf -- '- autre lot\n- p2\n' > extension/rag3weaver/docs/nouveautes.md; git add -A; GIT_EDITOR=true git rebase --continue >/dev/null 2>&1; }
@@ -95,6 +96,53 @@ git checkout -q -B p2b "$P2T"; git rebase -q --onto "$M" "$P1" >/dev/null 2>&1; 
 git checkout -q -B ailleurs "$M0"; echo '# ailleurs' > extension/rag3weaver/docs/ailleurs.md; git add -A; git commit -qm ailleurs
 P1_VRAI=$P1; P1=$(git rev-parse HEAD); pile arret "la tête d'avant n'est pas un ancêtre du commit testé"; P1=$P1_VRAI
 git checkout -q "$BASE" 2>/dev/null
+# 8. Le chemin de push complet en mode pile (relecture de recherche, 14 novembre 2026) : HEAD est encore la
+# branche de pile (P1 puis P2) ; P1 a atterri sur master après un conflit de nouveautes.md, donc sous un autre
+# hash et avec un autre patch. La garde doit pousser P2 seul. Rouge avec un rebase simple, vert avec `--onto`.
+(
+  H="$D/home8"; mkdir -p "$H/git_workspaces" "$H/.cache/rag3weaver-build/j"
+  git clone -q --bare "$D" "$D/nu8.git" 2>/dev/null; git -C "$D/nu8.git" update-ref refs/heads/master "$BASE"
+  git clone -q "$D/nu8.git" "$H/git_workspaces/wt" 2>/dev/null
+  cd "$H/git_workspaces/wt" && git config user.email luciedefraiteur@gmail.com && git config user.name t
+  git checkout -q -B pile origin/master
+  echo 'fn p1() {}' > extension/rag3weaver/src/p1.rs; mkdir -p extension/rag3weaver/docs; echo '- p1' >> extension/rag3weaver/docs/nouveautes.md; git add -A; git commit -qm p1; P1=$(git rev-parse HEAD)
+  echo 'fn p2() {}' > extension/rag3weaver/src/p2.rs; git add -A; git commit -qm p2; TESTE=$(git rev-parse --short HEAD)
+  # master : la nouveauté d'un autre, puis P1 atterri dessus avec le conflit de nouveautes.md résolu.
+  git checkout -q -B atterrissage origin/master; mkdir -p extension/rag3weaver/docs; echo '- autre' >> extension/rag3weaver/docs/nouveautes.md; git add -A; git commit -qm autre
+  git cherry-pick "$P1" > /dev/null 2>&1 || { printf -- '- autre\n- p1\n' > extension/rag3weaver/docs/nouveautes.md; git add -A; GIT_EDITOR=true git cherry-pick --continue > /dev/null 2>&1; }
+  git push -q origin HEAD:master 2>/dev/null; git checkout -q pile
+  printf 'teste %s\nVERT\n' "$TESTE" > "$H/.cache/rag3weaver-build/j/resume.log"; echo "$P1" > "$H/.cache/rag3weaver-build/j/base"
+  echo "rag3db-build-0123456789012345678901234567890123456789-Release" > "$H/.cache/rag3weaver-build/j/lib.log"
+  sortie=$(HOME="$H" PILE_AVANT="$P1" bash "$GARDE" wt j 2>&1); rc=$?
+  sujets=$(git -C "$D/nu8.git" log --format=%s master | tr '\n' ' ')
+  if [ $rc = 0 ] && echo "$sortie" | grep -qx POUSSE && [ "$sujets" = "p2 p1 autre base " ]; then
+    echo "vert   pile, chemin de push : P1 atterri après un conflit, P2 seul poussé ($sujets)"; exit 0
+  fi
+  echo "ROUGE  pile, chemin de push : rc $rc, master « $sujets »"; echo "$sortie" | tail -4; exit 1
+) || rouge=1
+# Un push refusé une fois, puis le même appel rejoué, doit pousser sans geste à la main (relevé de lucivy,
+# 14 novembre 2026) : la garde remet le worktree sur sa tête d'avant le rebase. Un HOME jetable porte le
+# worktree, le dossier des journaux et un dépôt nu dont le crochet refuse le premier push.
+(
+  H="$D/home"; mkdir -p "$H/git_workspaces" "$H/.cache/rag3weaver-build/j"
+  git clone -q --bare "$D" "$D/nu.git" 2>/dev/null
+  git -C "$D/nu.git" symbolic-ref HEAD refs/heads/master 2>/dev/null
+  git -C "$D/nu.git" update-ref refs/heads/master "$BASE"
+  printf '#!/bin/sh\n[ -e "%s/refus-fait" ] && exit 0\ntouch "%s/refus-fait"; echo "refusé une fois" >&2; exit 1\n' "$D" "$D" > "$D/nu.git/hooks/pre-receive"; chmod +x "$D/nu.git/hooks/pre-receive"
+  git clone -q "$D/nu.git" "$H/git_workspaces/wt" 2>/dev/null
+  cd "$H/git_workspaces/wt" && git config user.email luciedefraiteur@gmail.com && git config user.name t
+  git checkout -q --detach origin/master; echo 'fn lot() {}' > extension/rag3weaver/src/lot.rs; git add -A; git commit -qm lot
+  TESTE=$(git rev-parse --short HEAD)
+  printf 'teste %s\nVERT\n' "$TESTE" > "$H/.cache/rag3weaver-build/j/resume.log"
+  git rev-parse origin/master > "$H/.cache/rag3weaver-build/j/base"
+  echo "rag3db-build-0123456789012345678901234567890123456789-Release" > "$H/.cache/rag3weaver-build/j/lib.log"
+  un=$(HOME="$H" bash "$GARDE" wt j 2>&1); r1=$?
+  deux=$(HOME="$H" bash "$GARDE" wt j 2>&1); r2=$?
+  if [ $r1 != 0 ] && echo "$un" | grep -q "push refusé" && echo "$un" | grep -q "worktree remis sur" && [ $r2 = 0 ] && echo "$deux" | grep -qx POUSSE; then
+    echo "vert   push refusé une fois, puis le même appel pousse (worktree remis sur la tête testée)"; exit 0
+  fi
+  echo "ROUGE  push refusé puis rejoué : rc $r1 puis $r2"; echo "$un" | tail -3; echo "$deux" | tail -3; exit 1
+) || rouge=1
 # La dérive : la garde exécutée et celle du dépôt, identiques puis différentes ; jamais un refus.
 git checkout -q "$BASE" 2>/dev/null
 mkdir -p tools/poste && cp "$GARDE" tools/poste/push_garde.sh

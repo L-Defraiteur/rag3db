@@ -72,6 +72,8 @@ verifier_pile() {
   apporte=$(code_apporte "$avant" "$maitre")
   [ -z "$apporte" ] || { echo "ARRÊT : la pile a changé — master a du code que la tête d'avant n'avait pas :"; echo "$apporte"; return 1; }
   local ancien signe nouveau
+  # --creation-factor=100 : un petit commit dont seule une ligne de .md a changé (un fichier créé devenu un fichier
+  # modifié par un conflit résolu) serait sinon vu « < » puis « > », deux commits sans rapport.
   while IFS= read -r ligne; do
     [ -n "$ligne" ] || continue
     # Une ligne d'en-tête : « 1:  <ancien> <signe> 1:  <nouveau> <sujet> » ; les lignes de diff qui suivent un `!`
@@ -84,12 +86,12 @@ verifier_pile() {
         [ -z "$(git diff --name-only "$nouveau^" "$nouveau" -- . ':!*.md')" ] || { echo "ARRÊT : un commit ajouté après le rejeu touche autre chose que de la doc : $ligne"; return 1; } ;;
       '!')
         # Toléré si les deux versions du commit ne diffèrent que par des .md : le même diff hors .md.
-        if [ "$(git diff --no-color "$ancien^!" -- . ':!*.md' | grep -v '^index ')" != "$(git diff --no-color "$nouveau^!" -- . ':!*.md' | grep -v '^index ')" ]; then
+        if [ "$(git diff --no-color "$ancien^!" -- . ':!*.md' | grep -vE '^(index |@@)')" != "$(git diff --no-color "$nouveau^!" -- . ':!*.md' | grep -vE '^(index |@@)')" ]; then
           echo "ARRÊT : un commit du lot a changé hors des .md depuis le rejeu : $ligne"; return 1
         fi ;;
       *) echo "ARRÊT : le lot n'est plus celui qui a été testé : $ligne"; return 1 ;;
     esac
-  done < <(git range-diff --no-color "$avant..$teste" "$maitre..$tete")
+  done < <(git range-diff --no-color --creation-factor=100 "$avant..$teste" "$maitre..$tete")
   echo "pile tenue : les commits du lot sont ceux du rejeu, et la pile d'avant est sur master"
 }
 if [ "${1:-}" = "--pile" ]; then verifier_pile "$2" "$3" "$4" "$5"; exit $?; fi
@@ -135,13 +137,22 @@ git fetch -q origin master || exit 1
 neuf=$(git rev-parse FETCH_HEAD)
 # Le C++ du moteur (src/, test/) n'est pas lié par la lib épinglée : il se rebase sans rejeu
 # (docs/procedures/push-d-un-lot.md).
+# **Revenir sur la tête d'avant le rebase** (14 novembre 2026, relevé de lucivy) : un push refusé (master a
+# bougé entre le fetch et le push) ou un ARRÊT après le rebase laissait le worktree rebasé, sur des copies des
+# commits testés ; le passage suivant s'arrêtait sur « HEAD ne descend pas du commit testé ». La garde remet le
+# worktree où il était avant son rebase, et le dit : le même appel, rejoué, repart du commit testé.
+avant_rebase=$(git rev-parse HEAD)
+revenir() { git reset -q --keep "$avant_rebase" 2>/dev/null || git checkout -q --detach "$avant_rebase"; echo "worktree remis sur $(git rev-parse --short "$avant_rebase"), la tête d'avant le rebase : rejouer le même appel"; }
 if [ -n "${PILE_AVANT:-}" ]; then
   echo "mode pile : tête d'avant $(git rev-parse --short "$PILE_AVANT"), commit testé $teste"
-  git rebase $neuf > /dev/null 2>&1
+  # `--onto` (relecture de recherche) : HEAD est encore la branche de pile, avec les commits des lots d'avant sous
+  # leurs anciens hashes ; un lot d'avant qui a résolu un conflit en atterrissant a un autre patch, et un rebase
+  # simple le rejouerait. Seuls les commits du lot se reposent.
+  git rebase --onto $neuf "$PILE_AVANT" > /dev/null 2>&1
   if [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ] || git status --short | grep -q '^UU'; then
     git rebase --abort; echo "ARRÊT : le rebase sur $neuf bute"; exit 1
   fi
-  verifier_pile "$PILE_AVANT" "$teste" "$neuf" HEAD || exit 1
+  verifier_pile "$PILE_AVANT" "$teste" "$neuf" HEAD || { revenir; exit 1; }
 else
   apporte=$(code_apporte $base $neuf)
   if [ -n "$apporte" ]; then echo "ARRÊT : master a apporté du code depuis la base testée"; echo "$apporte"; exit 1; fi
@@ -151,7 +162,7 @@ else
     git rebase --abort; echo "ARRÊT : le rebase sur $neuf bute"; exit 1
   fi
 fi
-git push -q origin HEAD:master || { echo "ARRÊT : push refusé"; exit 1; }
+git push -q origin HEAD:master || { echo "ARRÊT : push refusé"; revenir; exit 1; }
 git fetch -q origin master
 echo "== trois contrôles"
 echo "status : [$(git status --porcelain)]"
