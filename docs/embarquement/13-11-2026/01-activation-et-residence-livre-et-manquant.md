@@ -239,3 +239,13 @@ une dimension du creux différente de celle du dense est refusée au chargement 
   +29,6 s ; éviction à +59,8 s ; réactivation en 6 s au second index.
 - **La mémoire** : card2 au plus 26 504 Mio (6,1 Gio libres au pire), le fournisseur au plus 5,7 Gio,
   card0 à 88 Mio. Le dense porté se comporte en vrai comme l'embarqueur d'avant.
+
+## Le target d'une session gonfle (15 novembre)
+
+Le 14 novembre à 23 h 56, `run_e2e.sh` a refusé l'e2e du groupe : `target-activation` pesait **34 Go**,
+au-delà du plafond de 32 (`RAG3WEAVER_TARGET_MAX_GO`). Une soirée de rejeux sous plusieurs jeux de
+features, sur plusieurs worktrees repris (`RAG3WEAVER_TARGET_REPRENDRE`), suffit à le faire gonfler.
+**Le plafond ne s'est pas relevé** : un seuil ne se relâche pas sans preuve. Le target, à moi et sans
+aucun processus dessus (vérifié par `/proc/<pid>/exe`), a été effacé, puis l'e2e rejoué sur la même
+tête, vert. Règle : **le ménage du target avant une passe entière**, quand il approche du plafond
+(`du -sh`), plutôt qu'à son refus.
