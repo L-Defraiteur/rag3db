@@ -360,6 +360,43 @@ mod tests {
         assert_eq!(p.occupation().0, 1, "la connexion rendue sert de nouveau");
     }
 
+    /// **Un instantané tient tout l'appel, même au-delà d'une seconde** (décision
+    /// de Lucie du 14 novembre 2026 : un appel ne mêle jamais deux instantanés).
+    /// Le plafond de 1 s validait l'instantané en cours d'appel, et la suite
+    /// lisait hors de lui, sans le dire : la lecture pendant un lot réindexé voyait
+    /// le lot à moitié (ticket recherche du 13 novembre). Une vraie attente, au-delà
+    /// du plafond d'avant.
+    #[test]
+    fn un_instantane_tient_tout_l_appel_meme_au_dela_d_une_seconde() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ecrivain, p) = pool(dir.path(), 2);
+        ecrivain.execute("CREATE (:T {id: 1})").unwrap();
+        let i = p.instantane(ATTENTE).expect("un instantané");
+        let c = i.conn();
+        assert_eq!(compte(&c), 1);
+        ecrivain.execute("CREATE (:T {id: 2})").unwrap();
+        std::thread::sleep(Duration::from_millis(1_200));
+        assert_eq!(compte(&c), 1, "la seconde requête de l'appel, 1,2 s plus tard, voit encore l'état de la première");
+    }
+
+    /// **Pool plein, un appel attend la connexion rendue** au lieu de lire sans
+    /// instantané (décision de Lucie du 14 novembre 2026). Une connexion rendue
+    /// 300 ms plus tard sert l'appel qui attendait.
+    #[test]
+    fn pool_plein_un_appel_attend_la_connexion_rendue() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_ecrivain, p) = pool(dir.path(), 1);
+        let a = p.instantane(ATTENTE).expect("la seule connexion");
+        let rendue = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            drop(a);
+        });
+        let b = p.instantane(ATTENTE);
+        rendue.join().unwrap();
+        assert!(b.is_some(), "l'appel a attendu la connexion rendue, il ne lit pas sans instantané");
+        assert_eq!(p.sans_instantane(), 0, "aucun appel n'est passé sans instantané");
+    }
+
     /// **La durée plafonnée** : passé le plafond, la requête suivante valide
     /// l'instantané et voit ce que l'écrivain a validé depuis ; c'est compté.
     /// Un instantané tenu ne retient donc pas un point de reprise forcé (qui
