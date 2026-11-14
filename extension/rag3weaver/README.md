@@ -806,9 +806,10 @@ without a fixed service address. Set `RAG3WEAVER_SERVICE_EMBED` for the host or 
 (the legacy `RAG3WEAVER_EMBED_SERVICE` is the fallback variable). An address explicitly
 written in a manifest takes priority. Existing user copies are not migrated automatically.
 
-`models.embed.activation` can explicitly start a dense provider through
-the shared `Serveur` acquisition. It checks the provider's model, dimensions and recipe,
-and isolates each caller's cancellation. Warm-up facts are reported separately from
+`models.<capability>.activation` can explicitly start a provider through the shared
+`Serveur` acquisition, for the dense, sparse, reranker and OCR capabilities. It checks the
+provider's identity for that capability (the dense model and dimensions, the sparse model, the
+reranker, the OCR) and its recipe, and isolates each caller's cancellation. Warm-up facts are reported separately from
 availability. Existing sources without `activation` keep connecting to their configured
 provider.
 
@@ -826,9 +827,19 @@ provider.
   by an activation also says in `/sante` how many crash restarts its declaration has had
   (`relances`, counted in the declaration's coordination folder), so a provider that keeps dying
   shows without reading a log.
+- **Named activations.** One provider process can serve several capabilities (bge-m3 with its
+  sparse vectors, the bge-reranker-v2-m3 reranker and the ppocrv6-tiny OCR, for example). Declare
+  it once at the top of the manifest, `activations: { "bge-m3": { "modele": "bge-m3", … } }`,
+  and cite it by name from each declaration: `"activation": "bge-m3"`. `modele` is the model the
+  process loads; the reranker and OCR it adds go in its `env` (`RAG3WEAVER_RERANK_MODEL`,
+  `RAG3WEAVER_OCR_MODEL`). Declarations that cite the same name share one process, one
+  coordination folder and one eviction: each capability holds its own lease, and the provider
+  unloads when none is held. A cited name that is not declared is refused when the manifest
+  loads. An activation block written inside a declaration is a named activation too, named after
+  its `model`. The recipe the provider attests is a hash of the name and the block.
 - **Remote activation.** `hote` (an ssh target) and `adresse_distante` start the provider on
   another machine. The activation runs `ssh <host> systemd-run --user
-  --unit=rag3weaver-fournisseur-<model>-<port> --collect --property=Restart=on-failure …` there,
+  --unit=rag3weaver-fournisseur-<name>-<port> --collect --property=Restart=on-failure …` there,
   reaches it through an `ssh -N -L` tunnel held by the client, and probes its identity through the
   tunnel. A failing ssh is refused at once, by name. Units named `rag3weaver-embeddings@…` are
   never touched.
