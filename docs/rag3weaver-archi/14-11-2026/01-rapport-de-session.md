@@ -36,7 +36,16 @@ En attente de la pile : **l'équipier rend le contenu demandé** (`equipier-rend
 - **Un `git mv` suivi d'un commit sans `-a`** n'emporte que le déplacement : le contenu édité reste
   hors du commit (le ticket openssl, rattrapé).
 - **Un vrai modèle ne se rougit pas à la demande** : le cas Gemini de l'équipier était vert une fois
-  sans le correctif ; le rouge sûr est le faux modèle. Banc mesure un taux (dix tirages avec, dix sans).
+  sans le correctif ; le rouge sûr est le faux modèle.
+  Banc, 14 nov. 23 h 58 – 0 h 10, luciepc, Vertex : la demande du ticket jouée dix fois sans le
+  correctif (47b1955de moins ba2994a97) et dix fois avec (47b1955de), jugée par
+  `l_equipier_rend_le_texte_demande_et_non_un_compte_rendu` — le contenu dans la boîte 10/10 sans,
+  10/10 avec (`docs/banc/14-11-2026/03-l-equipier-sous-gemini.md`). Des deux côtés le contenu est en
+  `report` et la phrase de compte rendu en `step_done`. **Le banc ne reproduit donc pas le défaut** de
+  la séance de tty : sa tâche (un dépôt de test, sans l'historique ni les déclarations de la vraie
+  tâche `essai-tty`) n'est pas la séance du ticket. Ce que le correctif garantit est ce que le faux
+  modèle prouve (un texte écrit dans le pas arrive ; la consigne dit où va un texte demandé), pas un
+  taux de Gemini.
 
 ## Reprendre
 
