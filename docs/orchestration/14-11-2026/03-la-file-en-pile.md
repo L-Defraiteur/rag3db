@@ -313,3 +313,12 @@ pointeur des règles (codeparsers, passe) → fermeture qui tient (archi, 7c0cb6
 96** (rang 24, sur 7c0cb6f6c) → **crochet en `Weak`** (arbre principal, 25) → **réécriture du `IN`**
 (recherche, 26) → (B) l'`IN` haché (cœur, 27, C++) → garde-pile-3 (G, 28) → chaîne Rust 1.98.1 (G). La
 bascule de la lib 373b5477b est partie à 20 h 52 (hôtes arrêtés, réveil vers 21 h 10 et 21 h 25).
+
+**21 h 0x — le bout de chaîne** : … fermeture qui tient (archi, rejeu) → gestes de 96 (eeefcc493, check_features
+8/8, rejeu) → crochet en `Weak` (arbre principal, vert sur master, à poser sur 96) → réécriture du `IN`
+(recherche, à poser) → (B) l'`IN` haché (cœur, C++) → garde-pile-3 (G) → **dense sur `Tenue<C>`**
+(embarquement, 4905e56e3, vert sous 373b5477b, rang 29) → chaîne Rust 1.98.1 (G, dernière). Le rang 22
+(codeparsers) est vert hors un rouge d'environnement nommé (le crash physique, vert seul 3/3).
+Les mesures : un index plein texte neuf du dépôt pèse 771 Mo (4,59 Go ce matin) par le correctif des
+octets d'ED ; les exclusions en ôtent 17 de plus ; le dictionnaire garde 94 Mo de textes morts après purge
+(lucivy : la fusion lâchera les ids sans document vivant, puis une compaction filtrée du dictionnaire).
