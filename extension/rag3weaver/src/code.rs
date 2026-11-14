@@ -187,6 +187,9 @@ pub fn admission(path: &str, content: Option<&str>, generated: &crate::generated
         if let Some(raison) = generated.reason(path, contenu) {
             return Err(raison);
         }
+        if let Some(raison) = generated.index_exclude.reason(path, contenu) {
+            return Err(raison);
+        }
     }
     Ok(())
 }

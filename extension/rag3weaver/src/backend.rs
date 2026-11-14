@@ -3430,7 +3430,7 @@ impl Backend {
                     lag.clone(),
                     cell.clone(),
                     indexed.clone(),
-                    workspace.generated.clone(),
+                    workspace.index_gate(),
                 )?);
                 mounted.push(name.clone());
             }
@@ -4525,7 +4525,7 @@ impl Backend {
                 if let Some(w) = &prepared.manifest.workspace {
                     services.register(
                         crate::generated::GENERATED_POLICY_SERVICE,
-                        w.generated.clone(),
+                        w.index_gate(),
                     );
                 }
             }

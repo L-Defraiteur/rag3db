@@ -180,6 +180,7 @@ pub mod openai_llm;
 pub mod anthropic_llm;
 pub mod events;
 pub mod filter;
+pub mod exclusion;
 pub mod generated;
 pub mod workspace_path;
 pub mod fts_handle;
