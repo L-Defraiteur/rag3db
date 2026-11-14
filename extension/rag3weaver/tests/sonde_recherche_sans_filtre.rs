@@ -20,7 +20,7 @@
 //! Une sonde mesure, elle n'échoue pas.
 
 use rag3weaver::backend::PreparedBackend;
-use rag3weaver::connection::{CypherValue, DbConnection, QueryParam};
+use rag3weaver::connection::{CypherValue, QueryParam};
 use rag3weaver::search_backend::SearchBackend;
 use rag3weaver::Rag3dbConnection;
 use serde_json::json;
