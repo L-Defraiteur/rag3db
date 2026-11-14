@@ -1524,15 +1524,34 @@ pub fn resolve_vector_chunks_admitted(
 
 /// Redéploie les versions indexées vers les seules occurrences admises, avant
 /// fusion et pagination. La même connexion sert au masque et à l'enrichissement.
+/// **Les occurrences qu'un signal admet**, pour la remontée version → occurrences.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Admission {
+    /// Rien ne filtre et aucune version n'est orpheline : toute occurrence d'un résultat est admise,
+    /// sans masque (le court-circuit du ticket du 14 novembre).
+    Toutes,
+    /// Seulement celles-ci : un filtre, une cellule ou des versions orphelines restreignent.
+    Parmi(std::collections::HashSet<String>),
+}
+
+impl Admission {
+    fn admet(&self, occurrence: &str) -> bool {
+        match self {
+            Admission::Toutes => true,
+            Admission::Parmi(ids) => ids.contains(occurrence),
+        }
+    }
+}
+
 pub fn project_occurrence_results(
     conn: &dyn DbConnection,
     dialect: &dyn crate::dialect::SchemaDialect,
     target: &SearchTarget,
     results: Vec<SearchResult>,
-    admitted: &std::collections::HashSet<String>,
+    admitted: &Admission,
 ) -> Result<Vec<SearchResult>, CatalogError> {
     let Some(projection) = &target.occurrence_projection else { return Ok(results) };
-    if results.is_empty() || admitted.is_empty() { return Ok(Vec::new()); }
+    if results.is_empty() || matches!(admitted, Admission::Parmi(ids) if ids.is_empty()) { return Ok(Vec::new()); }
     let query = dialect.kb_gather_content(&target.parent_table, &projection.relation, &projection.entity, true,
         &std::iter::once("_uuid").chain(projection.fields.iter().map(String::as_str)).collect::<Vec<_>>());
     let mut roots: HashMap<String, BTreeMap<String, BTreeMap<String, CypherValue>>> = HashMap::new();
@@ -1544,7 +1563,7 @@ pub fn project_occurrence_results(
         for row in read.rows {
             let Some(version) = row.first().and_then(|v| v.as_str()) else { continue };
             let Some(root) = row.get(1).and_then(|v| v.as_str()) else { continue };
-            if !admitted.contains(root) { continue; }
+            if !admitted.admet(root) { continue; }
             let data = projection.fields.iter().enumerate().filter_map(|(i, field)| row.get(i + 2).map(|v| (field.clone(), v.clone()))).collect();
             roots.entry(version.to_string()).or_default().insert(root.to_string(), data);
         }

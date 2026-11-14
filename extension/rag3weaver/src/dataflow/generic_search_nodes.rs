@@ -2976,11 +2976,12 @@ fn moteur_de_recherche(ctx: &NodeContext, conn: &Arc<dyn crate::connection::DbCo
         .unwrap_or_else(|| Arc::new(crate::rag3db_search_backend::Rag3dbSearchBackend::new(conn.clone())))
 }
 
-/// Résout les occurrences publiques dans la même Forme/L6 que les candidats.
+/// Résout les occurrences publiques dans la même Forme/L6 que les candidats : `None` quand ni
+/// filtre ni cellule ne les restreint.
 fn occurrence_roots_for(
     ctx: &NodeContext, target: &SearchTarget, options: &SearchOptions,
     conn: &Arc<dyn crate::connection::DbConnection>,
-) -> Result<HashSet<String>, String> {
+) -> Result<Option<HashSet<String>>, String> {
     let projection = target.occurrence_projection.as_ref().ok_or("projection absente")?;
     if vue_de(ctx).is_none() && ctx.service::<Arc<Mutex<Catalog>>>("catalog").is_none() {
         return Err("projection : Forme de lecture absente".into());
@@ -2989,20 +2990,43 @@ fn occurrence_roots_for(
     public.parent_table = projection.entity.clone();
     public.filter_indirection = None;
     public.occurrence_projection = None;
-    if let Some(ids) = admitted_parent_uuids_for(ctx, &public, options, conn)? { return Ok(ids); }
-    let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").ok_or("projection : dialecte absent")?;
-    let query = dialect.select_all(&projection.entity, &["_uuid"], None);
-    let rows = conn.execute(&query).map_err(|e| format!("projection : origines non résolues : {e}"))?;
-    Ok(rows.rows.into_iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).collect())
+    admitted_parent_uuids_for(ctx, &public, options, conn)
 }
 
+/// **Le masque des versions** d'un signal sur une cible à occurrences : les versions des occurrences
+/// admises, passées en filtre `_uuid`, et les occurrences admises pour la remontée.
+///
+/// **Sans filtre ni cellule qui restreigne, et sans version orpheline, rien ne se masque** (ticket
+/// `2026-11-14-la-recherche-a-versions-masque-toutes-les-occurrences-sans-filtre`) : toute version a
+/// alors au moins une occurrence, et toute occurrence est admise. Le masque d'avant lisait toutes les
+/// occurrences, puis passait `_uuid IN [toutes les versions]` à chaque signal : 7,5 s par recherche sur
+/// la copie migrée de `code-rag3db-depot`. Une version orpheline, elle, entrerait dans le top-k sans
+/// occurrence à rendre : avec des orphelines, le masque reste.
 fn occurrence_mask_options(
     ctx: &NodeContext, target: &SearchTarget, mut options: SearchOptions,
     conn: &Arc<dyn crate::connection::DbConnection>,
-) -> Result<(SearchOptions, Option<HashSet<String>>), String> {
+) -> Result<(SearchOptions, Option<crate::search::Admission>), String> {
     let Some(projection) = &target.occurrence_projection else { return Ok((options, None)) };
-    let roots = occurrence_roots_for(ctx, target, &options, conn)?;
     let dialect = ctx.service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect").ok_or("projection : dialecte absent")?;
+    let roots = match occurrence_roots_for(ctx, target, &options, conn)? {
+        Some(roots) => roots,
+        None => {
+            let orphelines = conn
+                .execute(&dialect.count_derived_without_reference(&target.parent_table, &projection.entity, &projection.relation))
+                .map_err(|e| format!("projection : versions orphelines non comptées : {e}"))?
+                .rows
+                .first()
+                .and_then(|r| r.first())
+                .and_then(|v| v.as_i64())
+                .ok_or("projection : compte des versions orphelines illisible")?;
+            if orphelines == 0 {
+                return Ok((options, Some(crate::search::Admission::Toutes)));
+            }
+            let query = dialect.select_all(&projection.entity, &["_uuid"], None);
+            let rows = conn.execute(&query).map_err(|e| format!("projection : origines non résolues : {e}"))?;
+            rows.rows.into_iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).collect()
+        }
+    };
     // La relation canonique est imposée par le contrat, jamais choisie parmi
     // d'autres liens entre les mêmes entités (ticket des occurrences partagées).
     let query = dialect.derived_references(&target.parent_table, &projection.entity, &projection.relation);
@@ -3021,7 +3045,7 @@ fn occurrence_mask_options(
         key: "_uuid".into(),
         value: crate::filter::FilterValue::List(ids.into_iter().map(crate::connection::CypherValue::String).collect()),
     });
-    Ok((options, Some(roots)))
+    Ok((options, Some(crate::search::Admission::Parmi(roots))))
 }
 
 /// Les parents admis dans la forme et la cellule de l'appel. Le préfiltre des
@@ -3217,7 +3241,7 @@ fn finish_signal(
     target: &SearchTarget,
     results: Vec<SearchResult>,
     result_mode: ResultMode,
-    admitted_occurrences: Option<&HashSet<String>>,
+    admitted_occurrences: Option<&crate::search::Admission>,
     label: &str,
 ) -> Result<Vec<UnifiedResult>, String> {
     let results = if target.occurrence_projection.is_some() {
