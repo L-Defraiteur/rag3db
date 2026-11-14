@@ -72,24 +72,37 @@ L'IDE n'a aujourd'hui qu'une route fixe pour `daemon.json`. Archi a dit qu'il aj
 
 ## Reprendre
 
-**Aucun worktree n'a de travail inachevé**, ni sur le portable ni à luciepc. Tous les lots de la session sont sur master, et leurs worktrees et targets ont été effacés après chaque push (vérifié le 11 nov. : `git worktree list` ne montre aucun `rag3db-tty`, ni ici ni à luciepc). Le prochain travail repart donc de master.
+**Mise à jour du 14 novembre 2026.** Aucun worktree n'a de travail inachevé, ni sur le portable ni à luciepc. Les lots de la semaine sont sur master, et leurs worktrees et targets ont été effacés après chaque push, par `git cherry` puis par `garde_worktree.py` pour le dernier :
 
-Pour commencer tty-4 :
+| Lot | Commit |
+|---|---|
+| forêt | `56deb90ea` |
+| cyberpunk, cyborg et alien | `87061f03c` |
+| tty-4, la boîte de l'équipier | `212893a17` |
+| tty-5, la mesure à travers ssh et le repli en texte brut | `ec4f7aa6d` |
+| les docs qui les accompagnent | jusqu'à `d7a8245c9` |
+
+Le worktree de la passation Codex, `~/git_workspaces/cx-docs-tty-features`, est retiré le 14 nov., avec l'accord de Lucie. Son administration est archivée sous `~/.cache/rag3weaver-build/archives/tty-cx-docs-tty-features-14nov/`, avec le rapport VERT de la garde. Les branches distantes `cx-tty-*` et `tty-*` restent.
+
+**Ce qui attend :**
+- **tmux et mosh** : leur installation demande le mot de Lucie (c7 le lui demande). Le harnais `extension/rag3weaver/tty/mesures/mesure.py` les mesurera tel quel.
+- **Windows et macOS** : le ticket `docs/tty/tickets/2026-11-13-le-terminal-sous-windows-et-macos-a-jouer.md` attend une machine. Le plan est dans `docs/tty/13-11-2026/04-la-mesure-a-travers-ssh.md`.
+
+**Pour reprendre un lot**, partir de master avec un worktree neuf préfixé `cx-` :
 
 ```bash
 cd ~/git_workspaces/rag3db && git fetch -q origin master
-git worktree add ../rag3db-tty -b tty-4 origin/master
-cd ../rag3db-tty && git submodule update --init extension/rag3weaver/codeparsers
+git worktree add ../cx-tty-<lot> -b cx-tty-<lot> origin/master
+cd ../cx-tty-<lot> && git submodule update --init extension/rag3weaver/codeparsers
 cd extension/rag3weaver/tty
-CARGO_TARGET_DIR=~/.cache/rag3weaver-build/target-tty ~/.cache/rag3weaver-build/poste lourd timeout 1800 \
+CARGO_TARGET_DIR=~/.cache/rag3weaver-build/target-cx-tty-<lot> POSTE_MEM_MAX=32G ~/.cache/rag3weaver-build/poste lourd timeout 1800 \
   bash -c 'cargo test -j 8 && cargo test -j 8 --no-default-features'
 ```
 
-Le target `~/.cache/rag3weaver-build/target-tty` n'existe plus : le premier bâti du crate le recrée, en une à deux minutes. La passe et le push suivent le § 5 du knowledge dump (`02-knowledge-dump.md`) :
-- **la passe**, à luciepc ou ici :
-  - `cargo test` avec et sans la vue, puis `RAG3DB_LIB=<lib du moment> [RAG3WEAVER_MOTEUR_ANCIEN=1] ./run_e2e.sh --features openai-llm,anthropic-llm --test e2e_tty e2e_tty` dans `extension/rag3weaver` ;
-  - plus `e2e_catalogue_gabarits` si `templates/` bouge, et la passe entière si l'hôte ou `src/` bougent ;
-- **le push** : sous `~/.cache/rag3weaver-build/poste push <session> -- <script>`, le script lisant le verdict et le refusant s'il n'est pas `VERT`, puis les trois contrôles et le hash à c7.
+Ensuite :
+- **La passe** : le crate avec et sans la vue, puis, dans `extension/rag3weaver`, `RAG3DB_LIB=<lib du moment> ./run_e2e.sh --features openai-llm,anthropic-llm --test e2e_tty e2e_tty`. Les e2e se jouent sur un target à eux, neuf : `run_e2e.sh` refuse un target non vide sans provenance. On ajoute `e2e_catalogue_gabarits` si `templates/` bouge, et la passe entière si l'hôte ou `src/` bougent. La lib du moment est à demander à c7 (`0c41f9fe6` depuis le 14 nov.).
+- **Le dernier pas**, seul sous `poste push` : `~/.cache/rag3weaver-build/push_garde.sh --code-apporte <parent du premier commit du lot> origin/master` décide du rejeu, puis `--derive "$PWD"` après le rebase. On pousse seulement si le verdict est exactement `VERT`, puis on lit les trois contrôles, et le hash part à c7.
+- **Le ménage**, après le push : `git cherry` à 0, l'arbre propre, aucun processus, puis le worktree et le target effacés. Les branches distantes restent.
 
 ## Ce qui est bloqué, et sur quoi
 
