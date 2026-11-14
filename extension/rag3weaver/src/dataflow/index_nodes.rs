@@ -1015,6 +1015,21 @@ mod tests {
     #[cfg(all(feature = "rag3db-native", feature = "code"))]
     #[test]
     fn un_scope_efface_apres_un_redemarrage_emporte_son_document() {
+        un_scope_efface_emporte_son_document(true);
+    }
+
+    /// **Le même effacement, sans redémarrage** : le cache connaît l'offset.
+    /// Rouge lui aussi avant le correctif, ce qui a montré que le cache n'était
+    /// pas la seule cause : la suppression lucivy n'était jamais validée, aucun
+    /// nœud du drain ne commitait une table qui ne fait que perdre des lignes.
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    #[test]
+    fn un_scope_efface_sans_redemarrage_emporte_son_document() {
+        un_scope_efface_emporte_son_document(false);
+    }
+
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    fn un_scope_efface_emporte_son_document(redemarrage: bool) {
         let fichiers: Vec<(String, String)> = (0..6).map(|i| (format!("src/f{i}.rs"), format!("pub fn f{i}() -> u32 {{ {i} }}\n"))).collect();
         let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
         let config = crate::CatalogConfig { name: Some("orphelins".into()), embedding_dim: 4, ..Default::default() };
@@ -1037,7 +1052,9 @@ mod tests {
         let (_, docs, lignes) = comptes();
         assert_eq!(docs, lignes, "après le premier index, un document par Scope");
         // Le redémarrage de l'hôte : le cache de la session est vide.
-        catalog.lock().unwrap().node_id_cache().write().unwrap().clear();
+        if redemarrage {
+            catalog.lock().unwrap().node_id_cache().write().unwrap().clear();
+        }
         indexer(fichiers[..5].to_vec());
         let (_, docs_apres, lignes_apres) = comptes();
         assert!(lignes_apres < lignes, "les Scope du fichier retiré sont partis du graphe ({lignes} → {lignes_apres})");

@@ -3715,13 +3715,19 @@ impl Node for DeleteRecordNode {
             if !inconnues.is_empty() {
                 let lues = conn
                     .execute_with_params(
-                        &dialect.select_offsets_by_uuids(entity_name),
+                        &dialect.select_node_ids(entity_name),
                         &[QueryParam { name: "uuids".into(), value: CypherValue::List(inconnues) }],
                     )
                     .map_err(|e| format!("offsets des lignes à effacer de {entity_name} : {e}"))?;
                 for row in &lues.rows {
-                    if let (Some(u), Some(o)) = (row.first().and_then(|v| v.as_str()), row.get(1).and_then(|v| v.as_i64())) {
-                        offsets_lus.insert(u.to_string(), o as u64);
+                    // `table:offset` en natif, `_row_id` en SQL (comme le tampon du lot).
+                    let offset = row.get(1).and_then(|id| {
+                        id.as_i64()
+                            .and_then(|n| u64::try_from(n).ok())
+                            .or_else(|| id.as_str().and_then(crate::node_id_cache::InternalNodeId::parse).map(|id| id.offset))
+                    });
+                    if let (Some(u), Some(o)) = (row.first().and_then(|v| v.as_str()), offset) {
+                        offsets_lus.insert(u.to_string(), o);
                     }
                 }
                 ctx.metric("offsets_read_from_db", offsets_lus.len() as f64);
