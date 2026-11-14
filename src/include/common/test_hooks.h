@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "common/api.h"
+
 namespace rag3db {
 namespace common {
 
@@ -29,6 +31,18 @@ enum class TestDiePoint : uint8_t {
     CHECKPOINT_LOGGED = 1,
 };
 
+// Les points de faute : RAG3DB_TEST_HOOKS=1 et RAG3DB_TEST_FAIL_AT=<point>, lus à l'ouverture de
+// chaque base comme les points de mort. Armé, le moteur lève une RuntimeException la PREMIÈRE fois
+// qu'il passe par ce point, puis le point se désarme : un témoin fait échouer une écriture, et les
+// suivantes passent.
+//  - rel-commit-between-directions : dans RelTable::commit, après le versement du premier sens
+//    d'une table de relations et avant le second (le ticket des deux index d'une table de
+//    relations qui ne s'accordent plus, 14 novembre 2026).
+enum class TestFailPoint : uint8_t {
+    NONE = 0,
+    REL_COMMIT_BETWEEN_DIRECTIONS = 1,
+};
+
 struct TestHooks {
     static constexpr int DIE_EXIT_CODE = 137;
 
@@ -36,6 +50,15 @@ struct TestHooks {
     static TestDiePoint readFromEnvironment();
     // Meurt par _Exit(DIE_EXIT_CODE) si `armed` est `point`.
     static void dieIfAt(TestDiePoint armed, TestDiePoint point);
+
+    // Arme le point de faute que disent les deux variables (ou aucun), et le dit sur la sortie
+    // d'erreur.
+    static void armFailPointFromEnvironment();
+    // Arme `point` (ou désarme, avec NONE), pour un témoin C++ qui veut faire échouer une écriture
+    // précise, après sa mise en place.
+    RAG3DB_API static void armFailPoint(TestFailPoint point);
+    // Lève une RuntimeException si `point` est armé, et le désarme.
+    static void failOnceIfArmed(TestFailPoint point);
 };
 
 } // namespace common

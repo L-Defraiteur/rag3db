@@ -119,6 +119,7 @@ Database::Database(std::string_view databasePath, SystemConfig systemConfig,
     construct_bm_func_t constructBMFunc)
     : dbConfig(systemConfig) {
     dbConfig.testDiePoint = TestHooks::readFromEnvironment();
+    TestHooks::armFailPointFromEnvironment();
     initMembers(databasePath, constructBMFunc);
 }
 
