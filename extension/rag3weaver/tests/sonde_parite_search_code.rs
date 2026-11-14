@@ -69,21 +69,26 @@ fn releve_les_reponses_de_search_code() {
                 .iter()
                 .enumerate()
                 .map(|(i, l)| {
+                    // Une ligne de search_code : `uuid`, `score`, `signal` et `bestSignal` au premier niveau,
+                    // la fiche du Scope sous `data`.
+                    let d = &l["data"];
+                    let pris = |cles: &[&str]| cles.iter().map(|c| &d[*c]).find(|v| !v.is_null()).cloned().unwrap_or(Value::Null);
                     json!({
                         "rang": i + 1,
-                        "_uuid": l["_uuid"],
-                        "file_path": l["file_path"],
-                        "name": l["name"],
-                        "start_line": l["start_line"],
-                        // Le score s'appelle `score` ou `_score` selon le rendu.
-                        "score": if l["score"].is_null() { l["_score"].clone() } else { l["score"].clone() },
+                        "_uuid": if l["uuid"].is_null() { d["_uuid"].clone() } else { l["uuid"].clone() },
+                        "file_path": pris(&["file_path", "path"]),
+                        "name": pris(&["name", "qualified_name"]),
+                        "start_line": pris(&["start_line", "line"]),
+                        "score": l["score"],
+                        "signal": l["signal"],
+                        "best_signal": l["bestSignal"],
                     })
                 })
                 .collect();
             if let Some(l) = lignes.first() {
-                // Les champs d'une ligne, pour vérifier que la clé (_uuid, ou le repli) y est.
-                let champs: Vec<&String> = l.as_object().map(|o| o.keys().collect()).unwrap_or_default();
-                eprintln!("[parité] {q} · {nom} : {} résultats ; champs {champs:?}", resultats.len());
+                // Les champs de `data`, pour vérifier que le repli (file_path, name, start_line) y est.
+                let champs: Vec<&String> = l["data"].as_object().map(|o| o.keys().collect()).unwrap_or_default();
+                eprintln!("[parité] {q} · {nom} : {} résultats ; premier {} ; champs de data {champs:?}", resultats.len(), resultats[0]["_uuid"]);
             } else {
                 eprintln!("[parité] {q} · {nom} : aucun résultat");
             }
