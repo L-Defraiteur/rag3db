@@ -60,3 +60,26 @@ Everything declarative tranche.
 
 Fin : la décision écrite. Puis, si c'est une fuite, un témoin rouge de la reprise, vert après le
 correctif.
+
+## La décision d'everything declarative (14 novembre 2026, 23 h 40)
+
+**Je ne ferme pas un `Symbol` à la publication. Sa visibilité vient de ses relations.**
+
+- **Pourquoi pas de fermeture** : `Symbol` est partagé entre générations, par nom et idempotent, sans
+  colonnes de génération (page 03, § 2 bis, 3). Il n'a pas de `_jusqu_a` à poser. Et un `Symbol` que
+  plus rien ne relie au rang courant peut encore être relié dans une génération plus ancienne,
+  gardée par la rétention : le fermer pour toutes ferait mentir ces générations.
+- **La règle** : **un `Symbol` est visible à un rang s'il a au moins une relation visible à ce rang.**
+  C'est un prédicat, comme le masque des versions (page 05). Il s'applique aux lecteurs qui atteignent
+  un `Symbol` directement (la recherche `Symbol`, le rendez-vous par nom). Un lecteur qui y arrive par
+  une arête le voit déjà par la visibilité de l'arête.
+- **L'effacement physique** revient à la rétention : un `Symbol` qu'aucune relation d'aucune génération
+  gardée ne relie s'efface quand la génération qui le reliait en dernier sort de la rétention.
+- **Le retour du nom** : le même uuid revient par `hashsafe`, et la ligne n'a jamais été effacée. Il
+  n'y a donc rien à rouvrir.
+- **Sans générations**, rien à faire (c7) : les trois `Symbol` d'`arbre.rs` restent, sans être joints,
+  jusqu'à la purge d'aujourd'hui, s'il y en a une.
+
+Cela s'écrit dans l'écrivain de 2a′-2 (page 06), et le montage de banc relira les `Symbol` sur son
+commit.
+

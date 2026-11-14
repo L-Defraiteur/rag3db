@@ -148,3 +148,17 @@ conditions :
   des déplacés ;
 - **on redécide au-delà de 20 000 recopies sur un commit réel.** La position sort alors de
   l'identité, vers un petit enregistrement par génération (page 03, § 2 bis).
+
+## 10. Le `Symbol` délié (14 novembre 2026, 23 h 40)
+
+Le ticket de banc `docs/banc/tickets/2026-11-14-un-symbol-que-plus-rien-ne-relie-reste-apres-le-retrait-de-son-fichier.md` :
+après le retrait d'un fichier, ses `Symbol` exclusifs restent, sans relation.
+- `Symbol` reste partagé, sans colonnes de génération (page 03, § 2 bis, 3). Il n'est **pas fermé à la
+  publication** : une génération plus ancienne peut encore le relier.
+- **Un `Symbol` est visible à un rang s'il a au moins une relation visible à ce rang.** C'est un
+  prédicat pour les lecteurs qui l'atteignent directement (la recherche `Symbol`, le rendez-vous par
+  nom), comme le masque des versions.
+- **Son effacement physique revient à la rétention**, quand plus aucune génération gardée ne le relie.
+- Un nom qui revient retrouve le même uuid (`hashsafe`), sur une ligne qui n'a jamais été effacée.
+- **Le témoin de plus** : après le retrait d'un fichier et une publication, une recherche `Symbol` sans
+  vue ne rend pas ses `Symbol` exclusifs, et une vue au rang d'avant les rend.
