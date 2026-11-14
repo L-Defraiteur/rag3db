@@ -442,6 +442,10 @@ pub struct BackendRelation {
 /// (`HashMap<String, BackendRelation>`), pour les nœuds qui posent des liens.
 pub const RELATION_POLICIES_SERVICE: &str = "backend_relation_policies";
 
+/// Combien de fois un appel de lecture recommence sous un instantané neuf quand le
+/// sien s'est rompu, avant de refuser en le disant.
+pub const RENOUVELLEMENTS_MAX: u32 = 2;
+
 impl std::ops::Deref for BackendRelation {
     type Target = RelationDef;
     fn deref(&self) -> &RelationDef {
@@ -4432,24 +4436,27 @@ impl Backend {
     /// validé entre deux d'entre elles ne se voit pas à moitié. `"conn"`,
     /// `"texte_natif"` et la vue de l'appel passent sur cette connexion ; la
     /// garde tombe avec les services de l'appel, qui valide et rend la
-    /// connexion. Pool plein au-delà de l'attente : l'appel lit comme avant, et
-    /// le dit.
-    fn poser_l_instantane(&self, prepared: &PreparedBackend, def: &GraphDefinition, services: &mut ServiceRegistry) {
+    /// connexion. **Pool plein au-delà de l'attente : l'appel est refusé**, en
+    /// le disant ; il ne lit jamais sans instantané (décision de Lucie, 14
+    /// novembre 2026). Rend l'instantané de l'appel, pour que l'appelant sache
+    /// s'il s'est rompu.
+    fn poser_l_instantane(
+        &self,
+        prepared: &PreparedBackend,
+        def: &GraphDefinition,
+        services: &mut ServiceRegistry,
+    ) -> Result<Option<Arc<crate::read_pool::Instantane>>, String> {
         if !prepared.nodes.snapshot_safe(def) {
-            return;
+            return Ok(None);
         }
-        let Some(vue) = self.read_view.current() else { return };
+        let Some(vue) = self.read_view.current() else { return Ok(None) };
         let cell = CELL_OF_CALL.with(|c| c.borrow().clone());
         if cell.as_ref().is_some_and(|c| *c != vue.scope) {
-            return;
+            return Ok(None);
         }
-        let Some(pool) = vue.pool.clone() else { return };
+        let Some(pool) = vue.pool.clone() else { return Ok(None) };
         let Some(instantane) = pool.instantane(crate::read_pool::ATTENTE) else {
-            services.register(
-                crate::read_view::READ_VIEW_SERVICE,
-                Arc::new(crate::read_view::ReadViewCell::avec(vue.sans_instantane())),
-            );
-            return;
+            return Err(crate::read_pool::refus_pool_plein(pool.occupation().1));
         };
         let conn = instantane.conn();
         let appel = vue.sur_connexion(conn.clone());
@@ -4460,7 +4467,9 @@ impl Backend {
             services.register("texte_natif", natif);
         }
         services.register(crate::read_view::READ_VIEW_SERVICE, Arc::new(crate::read_view::ReadViewCell::avec(appel)));
-        services.register(crate::read_pool::SERVICE, Arc::new(instantane));
+        let instantane = Arc::new(instantane);
+        services.register(crate::read_pool::SERVICE, instantane.clone());
+        Ok(Some(instantane))
     }
 
     fn build_services(&self, prepared: &PreparedBackend) -> ServiceRegistry {
@@ -5120,6 +5129,11 @@ impl Backend {
     /// [`Self::execute_plan`], et, si `restauration`, le service qui permet
     /// l'action `restore` d'`EntityRecordNode` : la reconstruction depuis les
     /// fichiers seulement (lot M3), jamais un outil.
+    ///
+    /// **Un appel ne mêle jamais deux instantanés** (décision de Lucie, 14
+    /// novembre 2026) : si l'instantané d'un appel s'est rompu (son ouverture
+    /// refusée), l'appel recommence entier sous un neuf, au plus
+    /// [`RENOUVELLEMENTS_MAX`] fois, et la réponse le dit (`instantane_renouvele`).
     #[allow(clippy::too_many_arguments)]
     fn execute_plan_avec(
         &self,
@@ -5130,6 +5144,45 @@ impl Backend {
         policy: &NodeTypePolicy,
         target: Option<GraphTarget>,
         restauration: bool,
+    ) -> Result<Value, String> {
+        let mut renouvele = 0u32;
+        loop {
+            let mut instantane = None;
+            let issue = self.execute_plan_une_fois(
+                prepared, result_port, def, metadata_ports, policy, target.clone(), restauration, &mut instantane,
+            );
+            let rompu = instantane.as_ref().is_some_and(|i| i.rompu());
+            drop(instantane);
+            if !rompu {
+                return issue.map(|mut reponse| {
+                    if renouvele > 0 {
+                        reponse["instantane_renouvele"] = json!(renouvele);
+                    }
+                    reponse
+                });
+            }
+            if renouvele >= RENOUVELLEMENTS_MAX {
+                return Err(format!(
+                    "l'instantané de lecture de cet appel s'est rompu {} fois : la réponse n'est pas lue hors d'un instantané. Réessayez.",
+                    renouvele + 1
+                ));
+            }
+            renouvele += 1;
+        }
+    }
+
+    /// Un essai de [`Self::execute_plan_avec`] ; `instantane` reçoit celui de l'appel.
+    #[allow(clippy::too_many_arguments)]
+    fn execute_plan_une_fois(
+        &self,
+        prepared: &PreparedBackend,
+        result_port: (&str, &str),
+        def: &GraphDefinition,
+        metadata_ports: &[OutputPort],
+        policy: &NodeTypePolicy,
+        target: Option<GraphTarget>,
+        restauration: bool,
+        instantane: &mut Option<Arc<crate::read_pool::Instantane>>,
     ) -> Result<Value, String> {
         let mut graph =
             build_definition(def, &prepared.nodes, policy).map_err(|e| e.to_string())?;
@@ -5150,7 +5203,7 @@ impl Backend {
         if restauration {
             services.register(crate::backend_nodes::SERVICE_RESTAURATION, true);
         }
-        self.poser_l_instantane(prepared, def, &mut services);
+        *instantane = self.poser_l_instantane(prepared, def, &mut services)?;
         // **Le run se publie** (`RunStarted`, `NodeRun`, `RunFinished`) sur
         // `dataflow`, dans la cellule de l'appel : ce qu'un appel exécute se
         // voit (la trace, le DAG vivant de l'IDE). Sans `run_topic`, chaque
@@ -5349,7 +5402,7 @@ impl Backend {
         // plafond, et les appels passés sans (pool plein). Hors du catalogue.
         let lectures = self.read_view.current().and_then(|v| v.pool.clone()).map(|p| {
             let (ouvertes, plafond) = p.occupation();
-            json!({"connections": ouvertes, "max": plafond, "without_snapshot": p.sans_instantane(), "shortened_snapshots": p.ecourtes()})
+            json!({"connections": ouvertes, "max": plafond, "refused_full": p.sans_instantane(), "broken_snapshots": p.rompus()})
         });
         // Un verrou court (la réindexation d'un fichier) s'attend ; seule une
         // tenue longue rend « busy ».
@@ -7407,6 +7460,29 @@ mod tests {
             let u = usages_de(&backend, "depart");
             assert!(!u.contains("Catalogue occupé"), "une lecture refusée pendant la réaction : {}", &u[..u.len().min(300)]);
         }
+        assert!(backend.stop_reactions().is_empty());
+    }
+
+    /// **Un appel dont l'instantané se rompt recommence entier, et le dit**
+    /// (décision de Lucie, 14 novembre 2026 : un appel ne mêle jamais deux
+    /// instantanés). Une ouverture refusée rompt l'instantané : l'appel ne lit pas
+    /// hors de lui, il recommence sous un neuf, et la réponse porte
+    /// `instantane_renouvele`. Au-delà de `RENOUVELLEMENTS_MAX`, il est refusé.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn un_appel_dont_l_instantane_se_rompt_recommence_entier_et_le_dit() {
+        let (_dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        attendre_les_usages(&backend, "depart", |u| u.contains("outils.rs"));
+        let pool = backend.read_view.current().and_then(|v| v.pool.clone()).expect("un pool d'instantanés");
+        pool.rompre_les_prochaines(1);
+        let u = usages_de(&backend, "depart");
+        assert!(u.contains("outils.rs"), "la réponse est lue, sous un instantané neuf : {u}");
+        assert!(u.contains("\"instantane_renouvele\":1"), "elle dit qu'elle a changé d'instantané : {u}");
+        pool.rompre_les_prochaines(RENOUVELLEMENTS_MAX as u64 + 1);
+        let u = usages_de(&backend, "depart");
+        assert!(u.contains(&format!("s'est rompu {} fois", RENOUVELLEMENTS_MAX + 1)), "refusé en le disant : {u}");
+        assert!(!u.contains("outils.rs"), "rien n'est lu hors d'un instantané : {u}");
         assert!(backend.stop_reactions().is_empty());
     }
 
