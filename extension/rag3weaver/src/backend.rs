@@ -7786,10 +7786,14 @@ mod tests {
         });
         r.unwrap();
         assert!(etapes.iter().any(|(e, _)| *e == "drain · suppressions"), "pas de suppression du drain dans les étapes : {etapes:?}");
-        // Ce qui courait sans nom : la fin d'instantané et les symboles.
-        for attendue in [
-            "instantané · mettre de côté",
-            "instantané · noter la fin",
+        // Ce qui courait sans nom : la fin d'instantané (ou, sous les générations, l'écrivain qui la
+        // remplace : rien ne s'efface d'une génération publiée) et les symboles.
+        let fin: &[&str] = if cat.generations.is_some() {
+            &["réindexer · l'écrivain des générations"]
+        } else {
+            &["instantané · mettre de côté", "instantané · noter la fin"]
+        };
+        for attendue in fin.iter().copied().chain([
             "symboles · mise en file DEFINES/MENTIONS",
             "drain · construction du graphe",
             // Ce que la relecture des arêtes fait, instruction par instruction.
@@ -7797,7 +7801,7 @@ mod tests {
             "symboles · lire les MENTIONS",
             "symboles · parents et fichiers",
             "symboles · choisir et lier",
-        ] {
+        ]) {
             assert!(etapes.iter().any(|(e, _)| *e == attendue), "« {attendue} » manque aux étapes : {etapes:?}");
         }
     }
@@ -7915,6 +7919,8 @@ mod tests {
         for f in &mut analyse.files {
             f.cursor = cursor.clone();
         }
+        // Sous les générations, l'ingestion directe suit le pas de l'écrivain, comme tout chemin d'écriture.
+        crate::code_sync::preparer_par_generations(&mut cat, source.as_ref(), &analyse).unwrap();
         let rapport = cat.ingest_code_jusqu_a(&analyse, crate::disponibilite::Disponibilites::TOUT).unwrap();
         assert!(rapport.mentions_read <= 3, "la résolution a relu {} mentions pour un fichier : {rapport:?}", rapport.mentions_read);
         // Et l'arête de f0 vers commun est là, comme celles des autres.
