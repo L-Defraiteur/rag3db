@@ -145,6 +145,31 @@ points de reprise.
   départagerait par le journal d'ingestion du dépôt : deux drains du même fichier entre deux
   ouvertures de l'hôte.
 
+## Le test le plus simple, demandé par c7 : vert sur tous les chemins (14 novembre, 19 h 11)
+
+`tests/e2e_liens_de_morceaux_reverses.rs`, branche `liens-sous-point-de-reprise` (b42dd353b), sous la
+lib courante 0c41f9fe6, sans concurrence ni point de reprise forcé. Chaque cas fait une ingestion, trois
+réingestions inchangées, puis trois réingestions modifiées, et compte après chaque passe les paires
+morceau-parent à plus d'une arête :
+
+| cas | morceaux | chemin des liens | paires doublées |
+|---|---|---|---|
+| texte de 300 lignes, ligne changée | 299 | COPY, 299 « déjà là » à chaque reversement | 0 |
+| texte de 50 lignes, ligne changée | 49 | MERGE | 0 |
+| `templates/ide/app/app.js` (86 lignes, 500 Ko), schéma sans versions, `ingest_code`, ligne de tête qui décale tout | 1 466 | COPY, 1 466 « déjà là » | 0 |
+| le même, chemin différé (`ingest_code_differe` puis `finir_les_relations_differees`) | 1 466 | COPY, 1 466 « déjà là » | 0 |
+
+Preuves : `~/.cache/rag3weaver-build/validations/validation-pvke9lb1`.
+
+- **`existing_links` et ce qu'on lui passe sont hors de cause** : les uuid de départ sont ceux des
+  morceaux, la relation et la direction sont les bonnes (`Scope_Chunk` → `Scope`), et la lecture voit
+  toutes les paires à chaque reversement, y compris sur le fichier qui porte 1 140 des doublons.
+- **Le code d'aujourd'hui ne produit pas le doublon dans un seul processus.** Restent les deux pistes
+  ci-dessus (un lot repris après un plantage, deux drains d'une même session), et une troisième : un
+  code plus ancien, au moment où les vagues ont été écrites. Les doublons datent d'avant la migration,
+  et les vagues sont sept pour onze instantanés d'`app.js` entre le 7 et le 13 novembre. Le reste de la
+  chasse demande l'hôte (journaux, drains concurrents, reprises), pas un test de plus sur ce chemin.
+
 ## Ce qu'il faut pour le fermer (réponse d'arbre principal, 14 novembre)
 
 - **Les doublons existants partent avec l'ancien index.** Après 1b, `Scope_Chunk`, `Scope_CHUNKED_FROM`
