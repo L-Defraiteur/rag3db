@@ -226,4 +226,31 @@ rm -f "$POSTE_LOCK_DIR/lourds-max"
 [ -z "$(ls -A "$POSTE_LOCK_DIR/fiches" 2>/dev/null)" ] && [ -z "$(ls -A "$POSTE_LOCK_DIR/file" 2>/dev/null)" ]
 cas $? "à la fin, aucune fiche ni aucun billet ne reste"
 
+# ── 8. L'enveloppe CPU : quatre lourds qui saturent ne dépassent pas les cœurs utiles ──
+# (14 novembre 2026, luciepc à 33 de charge sur 24 cœurs.) Pour rester léger, le témoin ne laisse que quatre
+# cœurs utiles (coeurs-libres = cœurs − 4) et quatre places : un cœur par lourd. Chaque lourd lance huit
+# boucles actives pendant 4 s ; on lit le temps CPU de sa portée (cpu.stat) : la somme des quatre ne doit pas
+# dépasser 4 cœurs × 4 s, à 15 % près. Les nombres de fils dits aux outils valent 1.
+if systemd-run --user --scope -q -- true 2>/dev/null; then
+  n=$(nproc)
+  if [ "$n" -ge 6 ]; then
+    echo 4 > "$POSTE_LOCK_DIR/lourds-max"; echo $((n - 4)) > "$POSTE_LOCK_DIR/coeurs-libres"
+    sature='g=$(cut -d: -f3 /proc/self/cgroup); echo "$POSTE_FILS $RAYON_NUM_THREADS $CARGO_BUILD_JOBS $RUST_TEST_THREADS" > "$1.fils";
+      for i in 1 2 3 4 5 6 7 8; do timeout 4 sh -c "while :; do :; done" & done; wait;
+      awk "/^usage_usec/{print \$2}" "/sys/fs/cgroup$g/cpu.stat" > "$1.cpu"'
+    for k in 1 2 3 4; do "$POSTE" lourd bash -c "$sature" _ "$ICI/s$k" > /dev/null 2>&1 & done
+    wait
+    total=0; for k in 1 2 3 4; do total=$(( total + $(cat "$ICI/s$k.cpu" 2>/dev/null || echo 999999999) )); done
+    [ "$total" -le $(( 4 * 4 * 1150000 )) ]
+    cas $? "quatre lourds saturants : $((total / 1000)) ms de CPU en 4 s, au plus $((4 * 4 * 1150)) (4 cœurs utiles)"
+    [ "$(cat "$ICI/s1.fils")" = "1 1 1 1" ]
+    cas $? "les fils dits aux outils valent la part d'un lourd (lu : $(cat "$ICI/s1.fils"))"
+    rm -f "$POSTE_LOCK_DIR/lourds-max" "$POSTE_LOCK_DIR/coeurs-libres"
+  else
+    echo "SAUTÉ  l'enveloppe CPU : moins de 6 cœurs ici"
+  fi
+else
+  echo "SAUTÉ  l'enveloppe CPU : systemd-run --user indisponible"
+fi
+
 exit $echec

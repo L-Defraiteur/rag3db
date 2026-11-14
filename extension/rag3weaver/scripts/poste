@@ -30,6 +30,14 @@
 # lourds tiennent la place en même temps ; les suivants attendent dans l'ordre
 # d'arrivée. N se lit à chaque tour dans le fichier `lourds-max` du dossier des
 # verrous (une ligne, un nombre ; 2 s'il manque), POSTE_LOURDS_MAX l'emporte.
+# L'enveloppe CPU (14 novembre 2026, luciepc à 33 de charge sur 24 cœurs avec quatre lourds, deux rouges
+# d'environnement en découlant) : chaque commande tourne avec un quota CPU à côté de son plafond de mémoire.
+# Les cœurs utiles sont les cœurs du poste moins `coeurs-libres` (fichier du dossier des verrous, à côté de
+# `lourds-max` ; 2 s'il manque ; POSTE_COEURS_LIBRES l'emporte). Un lourd reçoit utiles / lourds-max cœurs, une
+# mesure les reçoit tous : CPUQuota = cœurs × 100 %. Le même nombre est dit aux outils, dans l'enveloppe :
+# POSTE_FILS, et RAYON_NUM_THREADS, CARGO_BUILD_JOBS, RUST_TEST_THREADS ramenés à lui s'ils sont absents ou
+# plus grands. Le quota est la borne ; les nombres de fils évitent qu'un outil se batte contre elle.
+#   POSTE_CPU_QUOTA   un autre quota pour cette commande (ex. 300%), en le sachant
 D="$HOME/.cache/rag3weaver-build"
 # POSTE_LOCK_DIR : un autre dossier pour les verrous du poste (porte, poste) — pour
 # les témoins, qui ne doivent jamais prendre les verrous réels.
@@ -295,6 +303,28 @@ places() {
   [ "$_n" -ge 1 ] || _n=1
   echo "$_n"
 }
+coeurs_libres() {
+  _l="${POSTE_COEURS_LIBRES:-$(cat "$V/coeurs-libres" 2>/dev/null)}"
+  case "$_l" in ''|*[!0-9]*) _l=2 ;; esac
+  echo "$_l"
+}
+# fils_par <mode> : les cœurs d'une commande de ce mode, au moins 1.
+fils_par() {
+  _u=$(( $(nproc 2>/dev/null || echo 1) - $(coeurs_libres) ))
+  [ "$_u" -ge 1 ] || _u=1
+  if [ "$1" = lourd ]; then _u=$(( _u / $(places) )); fi
+  [ "$_u" -ge 1 ] || _u=1
+  echo "$_u"
+}
+# borner_fils <n> : une variable de fils absente ou plus grande que n est ramenée à n.
+borner_fils() {
+  POSTE_FILS=$1; export POSTE_FILS
+  for _v in RAYON_NUM_THREADS CARGO_BUILD_JOBS RUST_TEST_THREADS; do
+    eval "_x=\${$_v:-}"
+    case "$_x" in ''|*[!0-9]*) eval "$_v=$1" ;; *) [ "$_x" -gt "$1" ] && eval "$_v=$1" ;; esac
+    export "$_v"
+  done
+}
 lourds_tenus() {
   _k=0
   for _f in "$F"/*; do
@@ -397,8 +427,11 @@ trap 'rm -f "$fiche"' EXIT
 attente=""
 prendre() { flock "$@" & attente=$!; wait "$attente"; r=$?; attente=""; [ "$r" = 0 ] || exit 75; }
 trap '[ -n "$attente" ] && kill "$attente" 2>/dev/null; exit 143' TERM INT HUP
+FILS=$(fils_par "$mode")
+borner_fils "$FILS"
+QUOTA="${POSTE_CPU_QUOTA:-$((FILS * 100))%}"
 if [ "$borne" = 1 ]; then
-  set -- systemd-run --user --scope -q -p MemoryMax="$MEM" -p MemorySwapMax="$SWAP" -- "$@"
+  set -- systemd-run --user --scope -q -p MemoryMax="$MEM" -p MemorySwapMax="$SWAP" -p CPUQuota="$QUOTA" -- "$@"
 fi
 dire attend
 case "$mode" in

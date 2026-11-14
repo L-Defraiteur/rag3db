@@ -19,6 +19,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **14 nov. — Chaque lourd a sa part de CPU, le poste garde ses cœurs libres.** `poste lourd` donne à chaque travail un quota CPU (les cœurs
+  du poste moins deux, partagés entre les places) et le même nombre de fils aux outils (`CARGO_BUILD_JOBS`,
+  `RAYON_NUM_THREADS`, `RUST_TEST_THREADS`) : quatre lourds qui saturent ne débordent plus des cœurs utiles,
+  sans baisser le nombre de lourds.
+
 - **14 nov. — Un modèle déclaré à la demande ne prend la carte que quand on s'en sert.**
   Un modèle déclaré `a_demande` ne démarre qu'au premier calcul : ouvrir le backend ne lance rien, une
   recherche par les mots seuls non plus. Il rend la carte après `rendre_le_bail_secs` sans appel,
