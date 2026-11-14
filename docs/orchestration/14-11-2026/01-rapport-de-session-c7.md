@@ -469,3 +469,24 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   seuil 20 % ou 50 ms avant tout drapeau.
 - **Archi** sans lot jusqu'à sa base : « aucun client HTTP sans délai » (cinq clients de production, et
   le test de la lib qui parle au service s'il partage le mécanisme ; un délai nommé, réglable).
+
+## 17 h 4x — la mesure de 2a′-2 tient le poste ; 1b vert ; ce qui attend Lucie
+
+- **Lucie** : « qu'est-ce qui prend si longtemps par recherche ? faut se concentrer sur optim ça, ça fait
+  partie du lot : si on apporte la feature faut faire le max pour qu'elle devienne viable » ; « et
+  filtré ça prend combien ? faudrait voir filtré vs non filtré ». La mesure unique d'ED (partie à
+  17 h 42, seule sur le poste, ~1 h 10) : référence R = la même base avant 1b, A/B/C à versions, durées
+  par nœud lues sur NodeRun, trois formes (sans filtre, par chemin, par langage) sur R et A, 10 × 5.
+  Premier chiffre : **6,8 s par search_code sans filtre** sur la base à versions, dont 0,8 s de masque ;
+  migration 20 ms. 2a′-2 commence par rendre la recherche viable ; banc prépare le juge de parité.
+- **1b vert sur la copie réelle** (page 03 de la pile) ; 0 orpheline (hotfixs) ; 1 291 morceaux à
+  arêtes multiples, antérieur, ticket ; le sort de `Scope_Chunk` après 1b demandé.
+- **La pile** : dix atterris ; la ligne pour la CI (recherche, passe de 25 min faute d'un journal
+  court, son script apprend `SUITES=`) vers 18 h 10 ; le cœur en file derrière la mesure (26 essais
+  sans correctif à compter : un rouge suffit) ; tty-7, les mineurs, garde-pile, codeparsers (import
+  pointé vert), les exclusions, embarquement (activations nommées vertes), 1b, DB_THREADS, les clients
+  sans délai : après la mesure. Toutes les sessions ont un lot.
+- **Ce qui attend Lucie** : la chaîne Rust (épingler ou flotter) ; le classeur Laya dans le rappel
+  (banc) ; le drop-in d'enveloppe pour l'hôte (page 03 d'optimiseur : cinq pools du moteur à 32 fils,
+  le poids protège l'écran) ; soixante copies `check-lib.conf.avant-*` à effacer.
+- Faute de c7 : une heure de section écrite sans la lire (« 17 h 5x » à 17 h 44), corrigée.
