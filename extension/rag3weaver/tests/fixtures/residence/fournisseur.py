@@ -29,6 +29,9 @@ def arguments():
     p.add_argument('--liberer-chauffe', type=Path)
     p.add_argument('--budget-pret-ms', type=int, default=10000)
     p.add_argument('--echec-chauffe')
+    # Le groupe, comme rag3weaver-embeddings : le creux sur le modèle servi, le
+    # relecteur et l'OCR par les variables du service réel.
+    p.add_argument('--sparse', action='store_true')
     a = p.parse_args()
     if a.dim <= 0 or a.budget_pret_ms <= 0:
         p.error('dimension et budget strictement positifs exigés')
@@ -112,6 +115,11 @@ class Fixture(ThreadingHTTPServer):
         if all(value is not None for value in declared.values()):
             identity['activation'] = declared
         identity['usage'] = {'baux': self.baux_actifs(), 'en_cours': self.en_cours}
+        identity['sparse'] = bool(self.args.sparse)
+        for cle, variable in (('reranker', 'RAG3WEAVER_RERANK_MODEL'), ('ocr', 'RAG3WEAVER_OCR_MODEL')):
+            valeur = (os.environ.get(variable) or '').strip()
+            if valeur:
+                identity[cle] = valeur
         # Les relances après plantage que l'activation lui a dites (src/daemon/embeddings.rs).
         relances = os.environ.get('RAG3WEAVER_ACTIVATION_RELANCES')
         if relances is not None and relances.strip().isdigit():
@@ -200,6 +208,8 @@ class Handler(BaseHTTPRequestHandler):
                     reponse = (200, {'bail': numero, 'rendu': self.server.baux.pop(numero, None) is not None})
             self.server.derniere = time.monotonic()
             return self.answer(*reponse)
+        if self.path in ('/embed_sparse', '/rerank', '/ocr'):
+            return self.groupe()
         if self.path != '/embed':
             self.drain()
             return self.answer(404, {'error': 'route absente'})
@@ -223,6 +233,54 @@ class Handler(BaseHTTPRequestHandler):
         self.server.derniere = time.monotonic()
         self.answer(200, {'vectors': vectors})
         self.server.event('embed_termine', textes=len(texts))
+
+
+def _groupe(self):
+    """Le creux, le relecteur et l'OCR du groupe : déterministes, sur CPU, aux
+    formes de src/daemon/embeddings.rs (repondre_a)."""
+    corps = self.corps_json()
+    route = self.path.strip('/')
+    if route == 'embed_sparse' and not self.server.args.sparse:
+        return self.answer(404, {'error': 'pas de creux'})
+    if route == 'rerank' and not (os.environ.get('RAG3WEAVER_RERANK_MODEL') or '').strip():
+        return self.answer(404, {'error': 'pas de relecteur'})
+    if route == 'ocr' and not (os.environ.get('RAG3WEAVER_OCR_MODEL') or '').strip():
+        return self.answer(404, {'error': 'pas d OCR'})
+    self.server.event(route + '_commence')
+    self.server.en_cours += 1
+    try:
+        if route == 'embed_sparse':
+            textes = corps.get('texts') or []
+            creux = []
+            for texte in textes:
+                h = hashlib.sha256(texte.encode()).digest()
+                indices = sorted({int.from_bytes(h[i:i + 2], 'big') % 1000 for i in range(0, 8, 2)})
+                creux.append({'indices': indices, 'values': [1.0] * len(indices)})
+            reponse = {'sparse': creux}
+            if corps.get('spans'):
+                reponse['spans'] = [[[0, len(t.encode()), 1.0]] for t in textes]
+        elif route == 'rerank':
+            mots = set(str(corps.get('query', '')).lower().split())
+            reponse = {'scores': [float(len(mots & set(str(p).lower().split()))) for p in corps.get('passages') or []]}
+        else:
+            import base64
+            w, h = int(corps.get('width', 0)), int(corps.get('height', 0))
+            try:
+                rgb = base64.b64decode(corps.get('rgb', ''), validate=True)
+            except ValueError:
+                return self.answer(400, {'error': 'image illisible'})
+            if w <= 0 or h <= 0 or len(rgb) != w * h * 3:
+                return self.answer(400, {'error': 'image de taille fausse'})
+            reponse = {'width': w, 'height': h, 'lines': [{'text': 'fixture', 'confidence': 1.0,
+                       'quad': [[0.0, 0.0], [float(w), 0.0], [float(w), float(h)], [0.0, float(h)]]}]}
+    finally:
+        self.server.en_cours -= 1
+        self.server.derniere = time.monotonic()
+    self.answer(200, reponse)
+    self.server.event(route + '_termine')
+
+
+Handler.groupe = _groupe
 
 
 def main():

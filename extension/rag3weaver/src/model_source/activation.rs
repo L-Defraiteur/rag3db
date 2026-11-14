@@ -966,6 +966,95 @@ mod tests {
         assert_eq!(evenements(&f, "constructeur_demarre"), 2, "une seule relance");
     }
 
+    /// **Le groupe** (décision de c7, 14 novembre 2026 : une activation nommée,
+    /// citée par chaque déclaration) : le creux, le relecteur et l'OCR servis
+    /// par un même fournisseur, déclaré une fois sous le nom « groupe », chacun
+    /// à son modèle, à la même adresse et la même coordination.
+    fn groupe(inactivite: u64, rendre: u64) -> (Fixture, ModelSource, ModelSource, ModelSource) {
+        let f = Fixture::nouvelle();
+        let d = f.dossier.path();
+        let bloc = serde_json::json!({
+            "nom": "groupe", "modele": "fixture-groupe",
+            "programme": concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/residence/fournisseur.py"),
+            "args": ["--journal", d.join("events.jsonl").display().to_string(), "--generation", "groupe", "--modele", "fixture-groupe", "--sparse"],
+            "env": {"RAG3WEAVER_RERANK_MODEL": "fixture-relecteur", "RAG3WEAVER_OCR_MODEL": "fixture-ocr"},
+            "profil": "fixture-cpu", "peripherique": "cpu",
+            "coordination": d.join("coordination").display().to_string(), "journal": d.join("journaux").display().to_string(),
+            "budget_activation_secs": 5, "budget_attente_secs": 5,
+            "residence": {"a_demande": {"inactivite_secs": inactivite, "rendre_le_bail_secs": rendre}},
+        });
+        let source = |modele: &str| -> ModelSource {
+            serde_json::from_value(serde_json::json!({
+                "provider": "service", "model": modele, "address": "127.0.0.1:0", "timeout_secs": 2, "activation": bloc.clone(),
+            })).unwrap_or_else(|e| panic!("la déclaration du groupe ({modele}) : {e}"))
+        };
+        let (creux, relecteur, ocr) = (source("fixture-groupe"), source("fixture-relecteur"), source("fixture-ocr"));
+        (f, creux, relecteur, ocr)
+    }
+
+    fn une_image() -> crate::ocr::OcrImage {
+        crate::ocr::OcrImage::from_rgb(2, 2, vec![255; 12]).unwrap()
+    }
+
+    /// **Ouvrir le groupe ne lance rien** : trois capacités déclarées à la
+    /// demande rendent leurs clients sans fournisseur.
+    #[test]
+    fn groupe_ouvrir_trois_capacites_ne_lance_rien() {
+        let (f, creux, relecteur, ocr) = groupe(2, 1);
+        crate::model_source::connect_sparse(&creux).unwrap_or_else(|e| panic!("le creux à la demande : {e}"));
+        crate::model_source::connect_reranker(&relecteur).unwrap_or_else(|e| panic!("le relecteur à la demande : {e}"));
+        crate::model_source::connect_ocr(&ocr).unwrap_or_else(|e| panic!("l'OCR à la demande : {e}"));
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        assert_eq!(evenements(&f, "constructeur_demarre"), 0, "ouvrir le groupe ne lance pas le fournisseur");
+    }
+
+    /// **Un relecteur lance le groupe, l'OCR ne le relance pas** : un seul
+    /// fournisseur, deux baux, chacun le sien.
+    #[test]
+    fn groupe_un_relecteur_lance_l_ocr_ne_relance_pas() {
+        let (f, _, relecteur, ocr) = groupe(60, 30);
+        let (r, _) = crate::model_source::connect_reranker(&relecteur).unwrap_or_else(|e| panic!("{e}"));
+        let (o, _) = crate::model_source::connect_ocr(&ocr).unwrap_or_else(|e| panic!("{e}"));
+        let scores = r.rerank("chat noir", &["un chat noir".into(), "une voiture".into()]).unwrap_or_else(|e| panic!("relire : {e}"));
+        assert_eq!(scores.len(), 2);
+        assert!(scores[0] > scores[1], "le relecteur de la fixture classe par mots communs : {scores:?}");
+        assert_eq!(evenements(&f, "constructeur_demarre"), 1, "le relecteur a lancé le groupe");
+        let lu = o.recognize(&une_image()).unwrap_or_else(|e| panic!("lire l'image : {e}"));
+        assert_eq!(lu.lines.len(), 1);
+        assert_eq!(evenements(&f, "constructeur_demarre"), 1, "l'OCR s'attache au même fournisseur");
+        assert_eq!(identite_du_fournisseur(&f)["usage"]["baux"], 2, "deux baux, un par capacité");
+    }
+
+    /// **Le groupe s'évince quand plus aucun bail ne le tient**, puis **un
+    /// appel d'après l'éviction le relance**.
+    #[test]
+    fn groupe_s_evince_quand_plus_aucun_bail_puis_se_relance() {
+        let (f, creux, relecteur, _) = groupe(2, 1);
+        let (r, _) = crate::model_source::connect_reranker(&relecteur).unwrap_or_else(|e| panic!("{e}"));
+        let (c, _) = crate::model_source::connect_sparse(&creux).unwrap_or_else(|e| panic!("{e}"));
+        r.rerank("a", &["a".into()]).unwrap_or_else(|e| panic!("relire : {e}"));
+        c.sparse.embed_sparse(&["un texte".into()]).unwrap_or_else(|e| panic!("le creux : {e}"));
+        assert_eq!(evenements(&f, "constructeur_demarre"), 1);
+        assert!(attendre_l_evenement(&f, "evince", 1, std::time::Duration::from_secs(15)), "évincé quand plus aucun bail");
+        assert!(attendre_l_evenement(&f, "arrete", 1, std::time::Duration::from_secs(5)));
+        let v = c.sparse.embed_sparse(&["après".into()]).unwrap_or_else(|e| panic!("le creux après l'éviction : {e}"));
+        assert_eq!(v.len(), 1);
+        assert_eq!(evenements(&f, "constructeur_demarre"), 2, "relancé une fois");
+    }
+
+    /// **Le groupe planté sous bail se relance une fois** et le dit au /sante.
+    #[test]
+    fn groupe_plante_sous_bail_se_relance_une_fois() {
+        let (f, _, relecteur, _) = groupe(60, 30);
+        let (r, _) = crate::model_source::connect_reranker(&relecteur).unwrap_or_else(|e| panic!("{e}"));
+        r.rerank("a", &["a".into()]).unwrap_or_else(|e| panic!("relire : {e}"));
+        planter(pid_demarre(&f, 0));
+        let scores = r.rerank("a", &["a".into(), "b".into()]).unwrap_or_else(|e| panic!("relire après le plantage : {e}"));
+        assert_eq!(scores.len(), 2);
+        assert_eq!(evenements(&f, "constructeur_demarre"), 2, "relancé une fois");
+        assert_eq!(identite_du_fournisseur(&f)["relances"], 1);
+    }
+
     #[test]
     fn budget_de_sonde_ne_remplace_pas_delai_appel_par_defaut() {
         let mut f = Fixture::nouvelle(); f.source.timeout_secs = None;
