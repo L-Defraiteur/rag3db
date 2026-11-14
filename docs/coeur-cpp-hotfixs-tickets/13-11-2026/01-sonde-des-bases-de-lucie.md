@@ -3,6 +3,18 @@
 Session hotfixs, à la demande de c7 (l'orchestration) et du cœur (la première session du cœur C++).
 Le texte suppose qu'on n'a rien suivi.
 
+> **Toute copie de mesure retire `bilans`, et toute cible qui pointe hors de la copie.** Le manifeste d'une
+> copie de base (`backend.json`) peut désigner d'autres bases par un chemin absolu. Le manifeste d'arbre
+> principal pour la copie migrée par 1b gardait `bilans.memoire` vers
+> `~/.config/rag3weaver/memoire-longue/backends/memory/backend.json`, c'est-à-dire la **vraie** mémoire
+> longue de Lucie. Une copie ouverte avec ce manifeste peut lire ou écrire la vraie base. Avant d'ouvrir
+> une copie :
+> - retirer `bilans`, et toute clé dont un chemin sort de la copie ;
+> - retirer `reactions` et `watches`, qui réindexent ;
+> - mettre `database` sur la copie ;
+> - garder `workspace.read_only`.
+> (hotfixs, 14 novembre 2026, répétition du retrait de l'ancien index.)
+
 ## Pourquoi
 
 Le cœur a reproduit en C++ un défaut grave du moteur, en trois temps :
