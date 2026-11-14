@@ -141,6 +141,11 @@ pub struct WorkspaceConfig {
     /// n'est pas du code.
     #[serde(default)]
     pub generated: crate::generated::GeneratedPolicy,
+    /// **Ce que l'index de code n'indexe pas** ([`crate::exclusion`]) : un fichier de code
+    /// minifié, un fichier de code trop gros. Absent : rien de plus n'est écarté ; le
+    /// gabarit de code porte les seuils par défaut.
+    #[serde(default)]
+    pub index_exclude: crate::exclusion::ExclusionPolicy,
     /// **Les fonctions de verrou applicatives de ce dépôt** (le gestionnaire
     /// de verrous d'une transaction : `["acquireLock", "lockRowForWrite"]`) :
     /// un scope qui en appelle une la verrouille — la relation LOCKS vers le
@@ -156,6 +161,16 @@ pub struct WorkspaceConfig {
     /// `index: "code"`.
     #[serde(default)]
     pub queries_via: Option<QueriesVia>,
+}
+
+impl WorkspaceConfig {
+    /// **La porte de l'index de ce workspace** : la politique des générés, avec les seuils
+    /// d'`index_exclude` posés dedans. Ce qu'admettent l'index, la montre et l'estimation.
+    pub fn index_gate(&self) -> crate::generated::GeneratedPolicy {
+        let mut porte = self.generated.clone();
+        porte.index_exclude = self.index_exclude.clone();
+        porte
+    }
 }
 
 /// **Ce qu'un dépôt déclare pour relier ses tests par requêtes au code**
@@ -801,7 +816,7 @@ mod monte {
         };
         // La porte de l'index lit la politique des générés de cette source,
         // quel que soit l'appelant de la réingestion.
-        crate::code_sync::declare_generated_policy(source.as_ref(), config.generated.clone());
+        crate::code_sync::declare_generated_policy(source.as_ref(), config.index_gate());
         Ok(source)
     }
 
@@ -865,6 +880,7 @@ mod tests {
             sandbox: SandboxConfig::default(),
             index: Some("code".into()),
             generated: Default::default(),
+            index_exclude: Default::default(),
             locks_via: Vec::new(),
             queries_via: None,
             scripts: Vec::new(),
