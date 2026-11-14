@@ -334,8 +334,8 @@ mod tests {
 
     /// De bout en bout, par l'analyse : un import se compare aux manifestes de **sa** langue. Un nom que
     /// seul `package.json` déclare ne fait pas d'un import Rust une dépendance (les tables de toutes les
-    /// langues le faisaient) ; le même nom dans le Cargo.lock, si. (Un import Go ne produit encore aucune
-    /// bibliothèque : ticket du 14 novembre, la casse Go se juge dans codeparsers, `provenance_par_langue`.)
+    /// langues le faisaient) ; le même nom dans le Cargo.lock, si. Le cas Go :
+    /// `go_l_analyse_garde_la_casse_du_module_requis`.
     #[cfg(feature = "code")]
     #[test]
     fn l_analyse_compare_aux_manifestes_de_la_langue() {
@@ -348,6 +348,20 @@ mod tests {
         assert_eq!(provenance(&npm), Some(Some("inconnue".to_string())), "un paquet npm n'est pas une crate");
         let cargo = lire(&[("Cargo.lock", "[[package]]\nname = \"serde-json\"\n")]);
         assert_eq!(provenance(&cargo), Some(Some("dependency".to_string())), "la crate du Cargo.lock, tiret compris");
+    }
+
+    /// De bout en bout, par l'analyse : un module Go requis par `go.mod` sous sa casse est `dependency`,
+    /// le même chemin sous une autre casse est `inconnue`, et `fmt` est builtin.
+    #[cfg(feature = "code")]
+    #[test]
+    fn go_l_analyse_garde_la_casse_du_module_requis() {
+        let m = lire(&[("go.mod", "module example.com/moi/outil\n\nrequire github.com/Azure/azure-sdk-for-go/sdk/azcore v1.11.0\n")]);
+        let source = "package main\n\nimport (\n\t\"fmt\"\n\t\"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy\"\n\taz \"github.com/azure/azure-sdk-for-go/sdk/azcore\"\n)\n\nfunc lancer() {\n\tfmt.Println(\"a\")\n\tpolicy.Lancer()\n\taz.Autre()\n}\n";
+        let a = crate::code::analyze_in_project_avec("/virtual", vec![("main.go".to_string(), source.to_string())], "", None, Some(&m));
+        let provenance = |nom: &str| a.libraries.iter().find(|l| l.name == nom).map(|l| l.provenance.clone());
+        assert_eq!(provenance("fmt"), Some(Some("builtin".to_string())), "{:?}", a.libraries);
+        assert_eq!(provenance("github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"), Some(Some("dependency".to_string())), "{:?}", a.libraries);
+        assert_eq!(provenance("github.com/azure/azure-sdk-for-go/sdk/azcore"), Some(Some("inconnue".to_string())), "{:?}", a.libraries);
     }
 
     #[test]
