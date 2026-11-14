@@ -192,3 +192,38 @@ de card2 ne part qu'avec 13 Gio libres, ou le 7879 arrêté.
 **L'index 1 a pris 904 s** (bge-m3 dense et creux, carte presque pleine, deux lourds à côté). La cause
 n'est pas tirée. À faire : une mesure à part, card2 calme, pour départager le modèle et la carte pleine.
 Scripts et journaux à luciepc : `~/.cache/rag3weaver-build/groupe-vrai-jeu/`.
+
+## Le dual d'un creux à la demande : conception (14 novembre au soir)
+
+*Ticket `2026-11-14-un-creux-a-la-demande-n-a-pas-de-dual.md`. À relire avant le code.*
+
+**Ce qui est.** Ouvert sur un service posé, `connect_sparse` lit l'identité du fournisseur (`/sante`,
+`dual`) et rend le dual s'il le sait. Le backend l'attache au catalogue si le modèle du creux est
+celui du dense (`backend.rs`, `set_dual_embedder`). Un creux activé ne connaît pas cette identité
+avant son premier appel : `connecter_creux` rend `dual: None`. Une requête dense et creuse sur le
+groupe bge-m3 part alors en deux appels (`/embed`, puis `/embed_sparse`) au lieu d'un (`/embed_dual`).
+Il en va de même pour l'ingestion.
+
+**La règle proposée : le dual se déclare.**
+- **Quand.** Un creux activé rend un dual quand sa déclaration dit sa dimension
+  (`models.sparse.dimensions`). C'est la dimension du dense que le dual rend, la seule chose qu'un
+  dual doit savoir sans fournisseur (`DualEmbedder::dim`). Sans `dimensions`, pas de dual, comme
+  aujourd'hui.
+- **Une seule tenue.** Le creux et le dual partagent la même `Tenue<C>` : un seul bail pour les
+  deux, une seule activation, une seule éviction. Le dual n'ajoute pas d'usager.
+- **L'identité, à l'activation.** Avec un dual déclaré, le fournisseur doit dire `dual: true` et
+  une `dim` égale à la dimension déclarée. Sinon, refus nommé : « le fournisseur sert bge-m3 sans
+  le dual », ou « en 768 au lieu de 1024 ». Rien n'est deviné.
+- **Rien d'autre ne bouge.** Le backend attache le dual comme aujourd'hui, si le modèle du creux
+  est celui du dense. Un groupe où le dense et le creux citent la même activation (`bge-m3`)
+  embarque alors en un appel. Un dense d'un autre modèle (granite) garde son embarqueur, et le
+  creux reste seul.
+
+**Les témoins, rouges d'abord**, sur la fixture : `--dual` lui fait servir `/embed_dual` et dire
+`dual: true`.
+1. Un creux à la demande qui déclare `dimensions` rend un dual, et l'ouvrir ne lance rien.
+2. Un appel au dual lance le groupe une fois (un seul `constructeur_demarre`, **un bail**). Un appel
+   au creux ensuite ne relance pas et ne prend pas de second bail.
+3. Un fournisseur sans dual, ou d'une autre dimension, se refuse en le disant.
+4. Par le catalogue : une recherche dense et creuse sur ce groupe fait **un** appel `/embed_dual`, et
+   aucun `/embed` ni `/embed_sparse` séparé.
