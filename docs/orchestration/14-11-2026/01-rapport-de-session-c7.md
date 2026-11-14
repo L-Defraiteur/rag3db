@@ -590,3 +590,26 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   vieille que le `src/` de la pile, qui porte le correctif (a) ; postgres arrêté au portable) : rejouée
   sous `RAG3WEAVER_MOTEUR_ANCIEN=1` dit (le lot ne touche pas le moteur) et `docker start rag3weaver-pg`.
   La lib d'après (373b5477b) couvrira la pile à sa pose.
+
+## 19 h 0x — la chaîne complète jusqu'au rang 18 ; un core mal rattaché
+
+- **La chaîne** après tty-7 : mineurs (archi, c14a389c4 ; un SIGSEGV à la sortie du binaire de lib après
+  89/0, rejoué vert seul deux fois ; navigateur en fond, pushs à son vert) → clients (a4936c7a3) →
+  garde-pile-2 (40f6b63a5, vert) → import pointé (9b4d82175, vert, MOTEUR_ANCIEN dit) → **tty-8**
+  (696cbf5a3, quinze commits : éditeur de ligne, prose en couleur du terminal, Markdown, l'AltGr perdu
+  depuis tty-6 ; rejeu en cours) → exclusions (bb0cea68d, `workspace.index_exclude`, passe en cours)
+  → activations (a7d39e4e6 ; vrai jeu parti 18 h 46 sur 7971/7891) → sans-filtre (arbre principal) →
+  1b → fils du moteur → chaîne Rust 1.98.1. Codeparsers : règles Rust en données (305/0), en-têtes de
+  provenance, 18 Go rendus, un seul target.
+- **Faute de c7** : j'ai rattaché le core d'archi (2513521) au core du dictionnaire du cœur sur la seule
+  signature SEGV_ACCERR ; hotfixs l'a lu : le fil mort est `index-suivi:56b`, un fil **rag3weaver** non
+  joint à la sortie du processus. Ticket à part (produit, Pour : archi), l'occurrence sortie du ticket
+  du dictionnaire. Règle en mémoire : le fil, le module, le moment, pas le signal.
+- **96** : les gestes du survol conçus (confirmer par la transition `accept`, scinder avec apports
+  déplacés et l'ancienne retirée, rejoindre avec une Ref `alias` ; pas de champ neuf), rouge de (1) en
+  cours ; M8 chez Lucie après ce lot, par fenêtre et instantané, une fois le verrou de fenêtre de l'hôte
+  atterri (ticket docs/memoire/tickets/2026-11-14-un-backend-ferme-par-l-hote-se-rouvre…, Pour : archi).
+- **Hotfixs** : le premier témoin des arêtes en double était hors de la fenêtre du raté (les clés déjà
+  reprises ; le raté du cœur vise les clés qu'un point de reprise déplace vers le disque) ; second cas
+  en jeu (liens neufs reversés pendant des CHECKPOINT enchaînés), rouge attendu sous e93710f36.
+- **Banc** : les 79 662 `_uuid` de Scope communs à R et à la base migrée ; parité des réponses en cours.
