@@ -9,6 +9,7 @@ use crate::anim::Capacites;
 use crate::client::{self, Depot};
 use crate::endpoint::Endpoint;
 use crate::flux;
+use crate::journal::Journal;
 use crate::vue::{Action, Touche, Validee, Vue, HAUTEUR};
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::widgets::{Paragraph, Widget};
@@ -61,20 +62,23 @@ fn connaitre(agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, filtre: &Mutex<O
 pub enum Echec {
     /// La vue inline n'a pas pu démarrer (le terminal ne rend pas la position du
     /// curseur, par exemple) : rien n'est encore parti à l'hôte, `--plain` peut
-    /// prendre la suite.
-    VueIndisponible(String),
+    /// prendre la suite ; le journal lui est rendu.
+    VueIndisponible(String, Option<Journal>),
     /// Une erreur pendant la séance.
     Autre(String),
 }
 
-pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Option<u64>, theme: crate::theme::Theme) -> Result<(), Echec> {
+/// `journal` reçoit en texte brut ce qui part dans l'historique ; `mosh` dit que
+/// cet historique ne se relira pas, et la zone vivante donne alors la commande
+/// qui relit le journal (lot tty-7).
+pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Option<u64>, theme: crate::theme::Theme, mut journal: Option<Journal>, mosh: bool) -> Result<(), Echec> {
     // La vue d'abord : si elle ne démarre pas, rien n'est parti à l'hôte (ni la
     // demande, ni un abonnement), et `--plain` prend la suite sans doublon.
     let mut terminal = match ratatui::try_init_with_options(TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }) {
         Ok(t) => t,
         Err(e) => {
             let _ = ratatui::try_restore();
-            return Err(Echec::VueIndisponible(e.to_string()));
+            return Err(Echec::VueIndisponible(e.to_string(), journal));
         }
     };
     let agent = client::agent();
@@ -158,8 +162,11 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     let mut vue = Vue::new(largeur, demande.is_some());
     vue.capacites = Capacites::du_terminal();
     vue.theme = theme;
+    if let (true, Some(j)) = (mosh, &journal) {
+        vue.repli = Some(format!("sous mosh, l'historique ne se relit pas au défilement : {}", j.relecture()));
+    }
     vue.graine = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1) | 1;
-    let rendu = boucle(&mut terminal, &mut vue, &rx, &agent, &ep, &tache);
+    let rendu = boucle(&mut terminal, &mut vue, &rx, &agent, &ep, &tache, &mut journal);
     arret.store(true, Ordering::SeqCst);
     // La zone vivante reste à l'écran telle quelle ; le curseur passe dessous.
     let _ = terminal.draw(|f| vue.dessiner(f, f.area()));
@@ -169,7 +176,7 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     rendu.map_err(Echec::Autre)
 }
 
-fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Receiver<Msg>, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache) -> Result<(), String> {
+fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Receiver<Msg>, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, journal: &mut Option<Journal>) -> Result<(), String> {
     let mut sale = true;
     let mut derniere = Instant::now() - IMAGE;
     let mut image_vue = u64::MAX;
@@ -196,7 +203,7 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
         }
         if sale && derniere.elapsed() >= IMAGE {
             let colorer = |texte: &str, langue: &str| if langue.is_empty() { None } else { client::surligner(agent, ep, texte, langue) };
-            dessiner(terminal, vue, &colorer)?;
+            dessiner(terminal, vue, &colorer, journal.as_mut())?;
             sale = false;
             derniere = Instant::now();
         }
@@ -259,8 +266,9 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
 pub type Colorer<'a> = &'a dyn Fn(&str, &str) -> Option<Vec<crate::client::Span>>;
 
 /// Les lignes validées dans l'historique (repliées, les blocs de code colorés
-/// par `colorer`), puis la zone vivante.
-pub fn dessiner<B: ratatui::backend::Backend>(terminal: &mut ratatui::Terminal<B>, vue: &mut Vue, colorer: Colorer) -> Result<(), String> {
+/// par `colorer`), puis la zone vivante. Les mêmes lignes, sans leurs couleurs,
+/// vont au `journal` s'il y en a un.
+pub fn dessiner<B: ratatui::backend::Backend>(terminal: &mut ratatui::Terminal<B>, vue: &mut Vue, colorer: Colorer, journal: Option<&mut Journal>) -> Result<(), String> {
     let validees: Vec<Validee> = vue.prendre_lignes();
     if !validees.is_empty() {
         let largeur = terminal.size().map(|s| s.width).unwrap_or(80) as usize;
@@ -268,6 +276,10 @@ pub fn dessiner<B: ratatui::backend::Backend>(terminal: &mut ratatui::Terminal<B
         for v in &validees {
             let spans = if v.genre == crate::vue::Genre::Code { colorer(&v.texte, &v.langue) } else { None };
             lignes.extend(crate::code::lignes(v, &vue.theme, vue.capacites, largeur, spans.as_deref()));
+        }
+        if let Some(j) = journal {
+            let brutes: Vec<String> = lignes.iter().map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect()).collect();
+            j.lignes(brutes.iter().map(String::as_str));
         }
         terminal
             .insert_before(lignes.len() as u16, |buf| {
@@ -356,11 +368,36 @@ mod tests {
         for i in 0..n {
             vue.trame(&json!({ "evenement": { "kind": "Token", "text": format!(" mot{i}") } }));
             if (i + 1) % par_image == 0 {
-                dessiner(&mut t, &mut vue, &|_, _| None).unwrap();
+                dessiner(&mut t, &mut vue, &|_, _| None, None).unwrap();
             }
         }
-        dessiner(&mut t, &mut vue, &|_, _| None).unwrap();
+        dessiner(&mut t, &mut vue, &|_, _| None, None).unwrap();
         compte.load(Ordering::SeqCst)
+    }
+
+    /// Le journal reçoit, en texte brut, chaque ligne envoyée dans l'historique,
+    /// dans l'ordre : le texte replié à la largeur et le bloc de code entier.
+    #[test]
+    fn the_journal_receives_every_line_sent_to_the_history_without_colours() {
+        let d = std::env::temp_dir().join(format!("tty-dessin-journal-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let mut j = Journal::ouvrir(&d.join("j.txt")).unwrap();
+        let backend = Compte { inner: CrosstermBackend::new(Compteur(Arc::new(AtomicUsize::new(0)))), taille: Size::new(40, 24) };
+        let mut t = Terminal::with_options(backend, TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }).unwrap();
+        let mut vue = Vue::new(40, true);
+        for i in 0..30 {
+            vue.trame(&json!({ "evenement": { "kind": "Token", "text": format!(" mot{i}") } }));
+            dessiner(&mut t, &mut vue, &|_, _| None, Some(&mut j)).unwrap();
+        }
+        vue.trame(&json!({ "evenement": { "kind": "Token", "text": "\n```rust\nfn main() {}\n```\n" } }));
+        dessiner(&mut t, &mut vue, &|_, _| None, Some(&mut j)).unwrap();
+        let texte = std::fs::read_to_string(j.chemin()).unwrap();
+        let mots: Vec<String> = texte.split_whitespace().filter(|m| m.starts_with("mot")).map(String::from).collect();
+        assert_eq!(mots, (0..30).map(|i| format!("mot{i}")).collect::<Vec<_>>(), "{texte}");
+        assert!(texte.contains("fn main() {}"), "{texte}");
+        assert!(!texte.contains('\x1b'), "aucune séquence de couleur : {texte:?}");
+        assert!(texte.lines().all(|l| l.chars().count() <= 40), "replié à la largeur : {texte}");
+        std::fs::remove_dir_all(&d).unwrap();
     }
 
     /// Les octets émis pour `n` images d'une animation, la vue en `etat`.
@@ -372,7 +409,7 @@ mod tests {
         vue.politiques(&json!({ "tools": [{ "name": "edit_file", "policy": { "write_files": true } }] }));
         vue.entete = "rag3db · tty-3 · tâche parle".into();
         vue.trame(&evenement);
-        dessiner(&mut t, &mut vue, &|_, _| None).unwrap();
+        dessiner(&mut t, &mut vue, &|_, _| None, None).unwrap();
         let debut = std::time::Instant::now();
         compte.store(0, Ordering::SeqCst);
         let ms = vue.quelle().unwrap().de(&vue.theme).ms;
