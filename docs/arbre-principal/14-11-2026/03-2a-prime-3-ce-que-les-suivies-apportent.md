@@ -130,3 +130,26 @@ ED écrira sa page de 2a′-3 après l'écrivain de 2a′-2, en partant de celle
   n'a pas ce fil, l'état le dit, au lieu d'en ouvrir un second.
 
 Rien ne se code avant la page de 2a′-3 d'ED.
+
+## L'ordre du rattrapage contre l'identité des lignes (ED et arbre principal, 15 novembre, 0 h 45)
+
+**Le point dur (ED)** : l'uuid d'une ligne est `hash(clé, couche, _depuis)`, et une ligne inchangée de g à
+g+1 est une seule ligne, née au plus ancien rang. Si g+1 est écrite avant g, comme pour la pointe d'abord,
+le rattrapage et la citation qui passe devant, il n'y a que deux issues : descendre `_depuis` (l'uuid change
+et les arêtes perdent leur cible), ou poser un doublon né à g et retiré à g+1.
+
+**Écarté** : (1), l'ordre chronologique dans le trou. Avec « la pointe d'abord », chaque génération
+rattrapée tombe sur le bord haut, quel que soit l'ordre.
+
+**À mesurer** (ED, avec la sonde de la clause sur la copie migrée), contre les deux colonnes seules :
+- **(3a)**, l'uuid par l'empreinte du contenu, `hash(clé, couche, contenu)`, et une table de
+  visibilité, une rangée par intervalle (une ligne qui revient à l'identique, A → B → A, a deux
+  intervalles disjoints) ;
+- **(3a′)**, la même chose, mais les deux colonnes portent l'intervalle principal, et une annexe ne porte
+  que les réapparitions. Le prédicat devient « colonnes visibles OR EXISTS dans l'annexe » ; l'élagage de
+  l'annexe vide est à prouver par le plan. Elle se mesure annexe vide et annexe à 1 % des lignes.
+
+**Le repli, si les deux coûtent trop** : (2), le doublon au seul bord haut d'un trou, compté dans l'état.
+
+**L'ordre (ED)** : l'écrivain de 2a′-2 sur tous les chemins d'écriture, puis la mesure, puis la page de
+2a′-3 avec les chiffres.
