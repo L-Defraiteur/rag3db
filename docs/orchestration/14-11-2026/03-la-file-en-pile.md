@@ -162,7 +162,7 @@ la même base avant 1b — et sur A ; B et C sans filtre ; 10 requêtes × 5) ti
 1 h 10 dès son départ : les rejeux de la pile (tty-7, les quatre mineurs, codeparsers) attendent vers
 19 h. Les pushs sous `poste push` (recherche pour la CI, le cœur) ne sont pas des lourds et passent.
 
-## Ce que l'après-midi a appris (17 h 5x)
+## Ce que l'après-midi a appris (17 h 4x)
 
 - **1b est vert sur la copie réelle** (arbre principal, 861 s, 119 887 vecteurs repris sans un appel au
   modèle, RSS 18 Gio, deux sens égaux sur 21 tables, couverture sans trou, comptes identiques). Le
