@@ -54,7 +54,8 @@ pub struct Renommages {
 /// Un nom de fichier de manifeste reconnu.
 pub fn est_un_manifeste(chemin: &str) -> bool {
     let nom = chemin.rsplit('/').next().unwrap_or(chemin);
-    matches!(nom, "Cargo.toml" | "Cargo.lock" | "package.json" | "pyproject.toml" | "vcpkg.json" | "go.mod")
+    matches!(nom, "Cargo.toml" | "Cargo.lock" | "package.json" | "pyproject.toml" | "vcpkg.json" | "go.mod" | "packages.config" | "Directory.Packages.props")
+        || nom.ends_with(".csproj")
         || (nom.starts_with("requirements") && nom.ends_with(".txt"))
         // Un dossier `requirements/` (`requirements/base.txt`, `requirements/dev.txt`).
         || (nom.ends_with(".txt") && chemin.rsplit('/').nth(1) == Some("requirements"))
@@ -78,6 +79,8 @@ impl Manifestes {
                 "pyproject.toml" => { un.lire_pyproject(&texte); &["python"] }
                 "vcpkg.json" => { un.lire_vcpkg(&texte); &["c", "cpp"] }
                 "go.mod" => { un.lire_go_mod(&texte); &["go"] }
+                "packages.config" | "Directory.Packages.props" => { un.lire_dotnet(&texte, None); &["csharp"] }
+                n if n.ends_with(".csproj") => { un.lire_dotnet(&texte, n.strip_suffix(".csproj")); &["csharp"] }
                 _ => { un.dependances.extend(texte.lines().filter_map(nom_pep508)); &["python"] }
             };
             for langue in langues {
@@ -127,6 +130,37 @@ impl Manifestes {
                 bloc = Some(directive.to_string());
             } else {
                 self.directive_go(directive, reste);
+            }
+        }
+    }
+
+    /// .NET : les `PackageReference` et `PackageVersion` (`Include="X"`) et les `<package id="X">` de
+    /// packages.config sont des dépendances ; un `.csproj` est du projet par son nom de fichier, et par
+    /// son `RootNamespace`, son `AssemblyName` ou son `PackageId` s'il les déclare. Sans parseur XML :
+    /// des balises et des attributs, comme le reste de ce module.
+    fn lire_dotnet(&mut self, texte: &str, projet: Option<&str>) {
+        if let Some(p) = projet.filter(|p| !p.is_empty()) {
+            self.paquets_du_projet.insert(p.to_string());
+        }
+        for balise in ["RootNamespace", "AssemblyName", "PackageId"] {
+            let ouvre = format!("<{balise}>");
+            let ferme = format!("</{balise}>");
+            for morceau in texte.split(&ouvre).skip(1) {
+                if let Some((v, _)) = morceau.split_once(&ferme) {
+                    let v = v.trim();
+                    // `$(MSBuildProjectName)` : une propriété, pas un nom.
+                    if !v.is_empty() && !v.contains("$(") {
+                        self.paquets_du_projet.insert(v.to_string());
+                    }
+                }
+            }
+        }
+        for (element, attribut) in [("<PackageReference", "Include"), ("<PackageVersion", "Include"), ("<package ", "id")] {
+            for morceau in texte.split(element).skip(1) {
+                let balise = morceau.split('>').next().unwrap_or("");
+                if let Some(v) = valeur_d_attribut(balise, attribut) {
+                    self.dependances.insert(v);
+                }
             }
         }
     }
@@ -248,6 +282,26 @@ impl Manifestes {
             }
         }
     }
+}
+
+/// La valeur d'un attribut XML (`Include="Newtonsoft.Json"`) dans le texte d'une balise.
+fn valeur_d_attribut(balise: &str, attribut: &str) -> Option<String> {
+    let motif = format!("{attribut}=");
+    let mut reste = balise;
+    while let Some(i) = reste.find(&motif) {
+        // Le nom entier : `Include=` mais pas `ExcludeInclude=`.
+        let avant_ok = i == 0 || reste[..i].ends_with(|c: char| c.is_whitespace());
+        let apres = &reste[i + motif.len()..];
+        if avant_ok {
+            let guillemet = apres.chars().next()?;
+            if guillemet == '"' || guillemet == '\'' {
+                let v = apres[1..].split(guillemet).next()?.trim();
+                return (!v.is_empty()).then(|| v.to_string());
+            }
+        }
+        reste = apres;
+    }
+    None
 }
 
 /// Les valeurs `name = "…"` des sections que `garder` retient.
@@ -473,6 +527,25 @@ mod tests {
         let provenance = |nom: &str| a.libraries.iter().find(|l| l.name == nom).map(|l| l.provenance.clone());
         assert_eq!(provenance("yaml"), Some(Some("dependency".to_string())), "PyYAML, par la table livrée : {:?}", a.libraries);
         assert_eq!(provenance("mon_module"), Some(Some("dependency".to_string())), "mon-paquet, par workspace.imports : {:?}", a.libraries);
+    }
+
+    /// .NET : les `PackageReference` d'un `.csproj` (en attribut ou en élément), les `PackageVersion` de
+    /// `Directory.Packages.props`, les `<package id>` de `packages.config` sont des dépendances ; le nom du
+    /// `.csproj` et son `RootNamespace` sont du projet.
+    #[test]
+    fn dotnet_csproj_packages_config_et_versions_centrales() {
+        let m = lire(&[
+            (
+                "src/Mon.Outil/Mon.Outil.csproj",
+                "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <RootNamespace>Mon.Outil.Core</RootNamespace>\n  </PropertyGroup>\n  <ItemGroup>\n    <PackageReference Include=\"Newtonsoft.Json\" Version=\"13.0.3\" />\n    <PackageReference Include=\"Serilog\">\n      <Version>3.1.1</Version>\n    </PackageReference>\n    <ProjectReference Include=\"..\\Autre\\Autre.csproj\" />\n  </ItemGroup>\n</Project>\n",
+            ),
+            ("packages.config", "<?xml version=\"1.0\"?>\n<packages>\n  <package id=\"NUnit\" version=\"3.13.0\" targetFramework=\"net48\" />\n</packages>\n"),
+            ("Directory.Packages.props", "<Project>\n  <ItemGroup>\n    <PackageVersion Include=\"xunit\" Version=\"2.6.0\" />\n  </ItemGroup>\n</Project>\n"),
+        ]);
+        let cs: Vec<&str> = m.dependances_par_langue["csharp"].iter().map(String::as_str).collect();
+        assert_eq!(cs, vec!["NUnit", "Newtonsoft.Json", "Serilog", "xunit"]);
+        let projet: Vec<&str> = m.paquets_par_langue["csharp"].iter().map(String::as_str).collect();
+        assert_eq!(projet, vec!["Mon.Outil", "Mon.Outil.Core"]);
     }
 
     #[test]
