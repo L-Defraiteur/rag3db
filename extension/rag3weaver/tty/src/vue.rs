@@ -105,6 +105,9 @@ pub struct Validee {
     pub texte: String,
     /// La langue d'un bloc de code (`rust`, `ts`…), vide si la clôture n'en dit pas.
     pub langue: String,
+    /// La longueur, en octets, de l'en-tête de la ligne (`[équipier · réponse] `
+    /// d'une ligne de boîte) : il garde l'accent du thème, la suite est de la prose.
+    pub tete: usize,
 }
 
 /// Un bloc de code en cours de réception.
@@ -225,7 +228,7 @@ impl Vue {
     }
 
     fn valider(&mut self, genre: Genre, texte: String) {
-        self.validees.push(Validee { genre, texte, langue: String::new() });
+        self.validees.push(Validee { genre, texte, langue: String::new(), tete: 0 });
     }
 
     /// Une ligne de texte du modèle : elle ouvre ou ferme un bloc de code, y
@@ -246,7 +249,7 @@ impl Vue {
     /// Valide le bloc ouvert, fermé ou non.
     fn fermer_bloc(&mut self) {
         if let Some(b) = self.bloc.take() {
-            self.validees.push(Validee { genre: Genre::Code, texte: b.lignes.join("\n"), langue: b.langue });
+            self.validees.push(Validee { genre: Genre::Code, texte: b.lignes.join("\n"), langue: b.langue, tete: 0 });
         }
     }
 
@@ -699,6 +702,19 @@ mod tests {
         let z = zone.unwrap();
         let pos = t.get_cursor_position().unwrap();
         assert_eq!((pos.x - z.x, pos.y - z.y), (2 + 5, 2), "deux idéogrammes (4 colonnes), a, et le curseur avant b");
+    }
+
+    /// Une ligne de la boîte s'annonce en français, `[équipier · réponse]`, et
+    /// son en-tête est marqué pour garder l'accent du thème.
+    #[test]
+    fn a_mailbox_line_is_announced_in_french_with_its_header_marked() {
+        let mut v = Vue::new(80, true);
+        v.ligne_de_boite(&json!({ "from": "teammate", "kind": "answer", "text": "le plan tient\net la suite" }));
+        v.ligne_de_boite(&json!({ "from": "supervisor", "kind": "instruction", "text": "vas-y" }));
+        v.ligne_de_boite(&json!({ "from": "teammate", "kind": "inédit", "text": "x" }));
+        let l = v.prendre_lignes();
+        let vus: Vec<(&str, &str)> = l.iter().map(|l| (&l.texte[..l.tete], &l.texte[l.tete..])).collect();
+        assert_eq!(vus, vec![("[équipier · réponse] ", "le plan tient"), ("", "  et la suite"), ("[toi · consigne] ", "vas-y"), ("[équipier · inédit] ", "x")]);
     }
 
     /// Le repli (sous mosh, la commande qui relit le journal) se dit sur la

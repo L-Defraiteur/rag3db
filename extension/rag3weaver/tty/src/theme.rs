@@ -30,6 +30,10 @@ pub struct Couleurs {
     /// Le halo, du plus vif au plus sombre.
     pub halo: Vec<String>,
     pub sourdine: String,
+    /// La couleur de la prose (le texte du modèle, le corps de la boîte), si le
+    /// thème en veut une ; absente, c'est celle du terminal (lot tty-8).
+    #[serde(default)]
+    pub prose: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
