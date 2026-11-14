@@ -707,6 +707,13 @@ impl DaemonHost {
                 let id = crate::couches::identifiant_du_depot(v.depot)?;
                 let extraite = git(v.depot, &["rev-parse", "--abbrev-ref", "HEAD"])?;
                 let parente = if extraite.is_empty() || extraite == "HEAD" { crate::couches::ancre_du_depot(v.depot)? } else { extraite };
+                // La parente aussi entre aux suivies (relecture d'ED, 14 nov.) : sans elle, la
+                // résolution écarterait l'estampille et réinférerait la tâche sur l'ancre. Déjà
+                // suivie ou ancre, rien ne change (sa fermeture éventuelle n'est pas levée).
+                let deja = crate::couches::branches_suivies(&cat, &id)?.is_some_and(|d| d.ancre == parente || d.suivies.contains(&parente));
+                if !deja {
+                    crate::couches::ajouter_une_branche_suivie(&cat, &id, v.depot, &parente)?;
+                }
                 crate::couches::ajouter_une_branche_suivie(&cat, &id, v.depot, &tache.branche)?;
                 crate::couches::declarer_la_parente(&cat, &id, &tache.branche, &parente, v.depart)?;
             }
