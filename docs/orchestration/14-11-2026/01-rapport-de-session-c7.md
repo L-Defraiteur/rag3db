@@ -667,3 +667,26 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   d'un même contenu dans les dix premiers (29 places sur 289 sur la base migrée) ; parité au bit près du
   court-circuit en file. **Codeparsers** : toutes les règles d'import en données (311/0). **96** : la trace
   d'archive pour Laya après confirmer_fiche.
+
+## 19 h 5x — la chaîne complète jusqu'au rang 22 ; le goulot de luciepc levé ; le terminal à réessayer
+
+- **La chaîne est posée de bout en bout** : exclusions (bb0cea68d) → activations (a7d39e4e6) →
+  sans-filtre (b0ecb3bb3) → 1b (0ed318ad7) → fils du moteur (9b26b27cb) → chaîne Rust 1.98.1 (G) →
+  pointeur des règles d'import (codeparsers, 28ed5f4b3 : toutes les langues en données, `toml` au lock,
+  ticket de la casse Go). Chaque passe en file ou en cours ; les pushs à leur vert, dans l'ordre.
+- **Le goulot** : le concurrence_test DdlEveryMinute **sous ASan** du cœur (sa chasse du dictionnaire,
+  lancé 18 h 22, 40 min pour un tour) tenait une place et la mesure du dense d'ED attendait derrière en
+  bloquant la pile ; arrêté par le cœur à ma demande (le dictionnaire sous ASan la nuit, poste libre).
+  **La lib 373b5477b** : e2e_code vert sous elle (36/36), e2e_lectures en cours, bascule ensuite.
+- **Le rouge de l'hôte** : toujours à départager — 96 (contre-essai avec/sans régénération) et la
+  bissection d'archi (2a1f52c21..42c84cb77) ; recherche hors de cause par lecture (Surveillant en tests
+  seuls, plafond sans copie) ; le message exact : « 1 référence à l'instance précédente tenue après 10 s ».
+- **tty** a rejoué l'essai de Lucie contre l'hôte 7970 avec tty-8 : couleurs, saisie, repli sous mosh
+  marchent ; page pour elle `docs/tty/14-11-2026/04-l-essai-en-une-minute.md`. Cinq défauts du terminal
+  → tty-9. **Un défaut de l'équipier** : à « un titre, une liste, un mot en gras », il répond par des
+  comptes rendus et des step_done, jamais par le contenu → ticket pour archi.
+- **Hotfixs** : le script de la fenêtre de purge passe sur copie (9 701 Scope orphelins dans l'instantané
+  de 13 h 40, 4,59 → 1,32 Go) avec le contrôle de rang corrigé (« les 20 premiers d'avant dans les 100
+  d'après »). **Lucivy** : dictionnaire par segment 2 % seulement, les 19/20 sont des égalités à la coupe.
+  **ED** : les trois tickets des mesures sur master (127bcae937), le premier dit « 1b n'atterrit sur aucune
+  vraie base tant que ce ticket n'est pas fermé ».
