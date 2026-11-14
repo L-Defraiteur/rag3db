@@ -263,3 +263,10 @@ pushs : le rouge n'est à aucun lot de ce soir.
 qui ne corrige pas un code qui n'est pas le sien ; recherche ajoute un commit, et la chaîne au-dessus
 (activations → sans-filtre → 1b → fils du moteur → chaîne Rust → pointeur des règles) se repose et rejoue
 son court. Un commit ajouté garde son rang ; ceux derrière paient un court.
+
+**20 h 0x — l'ordre après la repose** : exclusions (recherche, + le commit du `cfg`) → **tty-9** (cx-tty-9
+63021448d, cinq défauts de l'essai, s'insère) → activations (embarquement) → sans-filtre → 1b (arbre
+principal) → fils du moteur (G) → chaîne Rust 1.98.1 (G) → pointeur des règles d'import (codeparsers).
+Chacun dit sa tête au suivant ; rejeux courts à la repose. Le rouge de l'hôte est **du Rust du 13**
+(vert à 4f6f80ef4 sous 0c41f9fe6, rouge à 2a1f52c21 sous 29a7bc52a) ; bissection d'archi entre ces
+bornes jouées ; la lib 373b5477b a e2e_code 36/36 et e2e_lectures 27/27, e2e_demon_hote en cours.
