@@ -19,6 +19,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **14 nov. — Une fonction d'un fichier minifié n'embarque plus la ligne entière.**
+  Le contenu d'un scope est borné aux octets de son nœud (codeparsers les donne désormais), et non à
+  ses lignes : dans un bundle d'une seule ligne, chaque fonction portait la ligne entière, 844 Mo de
+  trop dans l'index mesuré par lucivy. Le code ordinaire garde ses versions ; les fichiers concernés
+  changent de versions à leur réindexation, jamais en silence.
+
 - **14 nov. — Un même contenu ne s'embarque plus qu'une fois.** Une base de code neuve range chaque
   contenu de scope comme une version partagée : une fonction identique dans deux fichiers, ou
   déplacée, n'est embarquée qu'une fois, et chaque occurrence garde ses lignes et ses relations. Une
