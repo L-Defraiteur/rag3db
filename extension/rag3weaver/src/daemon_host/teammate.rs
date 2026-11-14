@@ -55,7 +55,8 @@ You are a teammate: you carry out tasks on your own, step by step, and talk to a
 - Out of plan: when you see a direction the request did not ask for, write a short proposal to the supervisor (suggest: « voudrais-tu qu'on pousse dans ce sens ? », with the item it would open), then keep working on the current plan. Do not open that direction without the supervisor's word; the answer arrives at a later step, like an answer to a blocker.
 - Each step starts with the mailbox (answers, new requests) and your plans. Read them before acting.
 - At most 12 tool calls per step; after that, only step_done is accepted.
-- When nothing is left, report what was done (report), close the active plan as accomplished, and call step_done.
+- A request for a text (an introduction, an explanation, a summary, a list): the text itself is the answer. Write it, as it is meant to be read (titles, lists and bold kept), in report or in your reply — never a sentence about it (« présentation fournie conformément au format » is not an answer). step_done's `done` says the work; it never stands for the answer.
+- When nothing is left after work done with tools, report what was done (report), close the active plan as accomplished, and call step_done.
 - Write plans, reports and step_done texts in French.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -773,7 +774,7 @@ impl Step {
             },
             ToolDef {
                 name: REPORT.into(),
-                description: "Rend compte au superviseur, dans sa boîte : ce qui a été fait, ce qui attend, ce que tu as décidé.".into(),
+                description: "Écrit au superviseur, dans sa boîte. À une demande de texte (une présentation, une explication, un résumé), c'est le texte lui-même, tel qu'il est à lire, jamais une phrase qui le décrit ; après un travail d'outils, ce qui a été fait, ce qui attend, ce que tu as décidé.".into(),
                 parameters: json!({ "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"] }),
             },
         ]
@@ -908,7 +909,7 @@ fn frontier_message(step: usize, news: &[Value], plans: &Plans, last: bool, requ
         (Some(_), false, true) => m.push_str("Il ne reste rien de faisable ni de bloqué : rends compte (report), clos le plan comme accompli (edit_plan close), puis appelle step_done.\n"),
         (Some(_), false, false) => m.push_str("Travaille un élément (le premier faisable seul, ou celui que la boîte débloque), puis step_done.\n"),
         (None, _, _) if !paused.is_empty() && !new_request => m.push_str("Aucun plan actif : reprends un plan en pause (resume) ou clos-le, puis travaille, puis step_done.\n"),
-        (None, _, _) => m.push_str("Réponds ou agis. Un mini-plan (edit_plan) seulement si la demande demande une analyse ou se découpe en plusieurs éléments ; sinon fais, puis step_done.\n"),
+        (None, _, _) => m.push_str("Réponds ou agis : une demande de texte se répond par le texte lui-même (dans report ou dans ta réponse), pas par une phrase sur lui. Un mini-plan (edit_plan) seulement si la demande demande une analyse ou se découpe en plusieurs éléments ; sinon fais, puis step_done.\n"),
     }
     m
 }
@@ -1438,6 +1439,31 @@ impl DaemonHost {
             };
             let declared = step.declared();
             let run = r["run"].as_str().unwrap_or_default().to_string();
+            // **Le texte écrit dans un pas qui finit par step_done** (ticket de tty, 14 novembre
+            // 2026) : c'est souvent la réponse elle-même (un texte demandé) ; il va dans la boîte en
+            // `report`, sauf si un report de ce pas le porte déjà (le report l'emporte, c7).
+            if declared.is_some() && r["stopped_by"].is_null() {
+                // Les textes de l'assistant depuis le message du pas (sa frontière) : `r["text"]` ne
+                // garde que celui du dernier appel, souvent vide après step_done.
+                let tours = self.chat_state(&t.id).map(|e| e["turns"].as_array().cloned().unwrap_or_default()).unwrap_or_default();
+                let depuis = tours.iter().rposition(|t| t["role"] == "user").map_or(0, |i| i + 1);
+                let textes: Vec<String> = tours[depuis..]
+                    .iter()
+                    .filter(|t| t["role"] == "assistant")
+                    .filter_map(|t| t["content"].as_str().map(str::trim).filter(|c| !c.is_empty()).map(str::to_string))
+                    .collect();
+                let texte = textes.join("\n\n");
+                let texte = texte.trim();
+                let deja = files
+                    .mailbox()
+                    .iter()
+                    .skip(avant)
+                    .any(|l| l["from"] == "teammate" && l["kind"] == "report" && l["text"].as_str().is_some_and(|t| t.contains(texte)));
+                if !texte.is_empty() && !deja {
+                    let line = files.append("teammate", "report", None, texte)?;
+                    publish(bus.as_ref(), task, &line);
+                }
+            }
             // **Un pas ne finit jamais en silence** (c7, premier essai réel) : sans
             // `step_done`, la réponse finale du modèle va dans la boîte en `report`,
             // pour que le superviseur la voie (pending) au lieu d'un équipier qui
