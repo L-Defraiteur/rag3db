@@ -10488,6 +10488,9 @@ fn read_threads() -> u64 {
         if self.dialect.create_generation_table().is_some() {
             let colonne = ColumnDef { name: "chemins_sales".into(), col_type: ColumnType::Int64 };
             self.alter_absorbing(crate::generations::TABLE, &self.dialect.alter_add_column_default(crate::generations::TABLE, &colonne, "0"))?;
+            // Les arêtes entrantes recopiées vers des lignes neuves pendant la génération (page 06, § 9).
+            let colonne = ColumnDef { name: "aretes_recopiees".into(), col_type: ColumnType::Int64 };
+            self.alter_absorbing(crate::generations::TABLE, &self.dialect.alter_add_column_default(crate::generations::TABLE, &colonne, "0"))?;
         }
         // Le rang lu sans vue est le rang en attente, au-dessus du dernier publié (page 06, § 1).
         self.generations = Some(crate::generations::Visibilite {
@@ -10567,10 +10570,17 @@ fn read_threads() -> u64 {
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
         self.conn
             .execute_with_params(
-                &format!("MATCH (g:{} {{_key: $key}}) SET g.chemins_sales = $sales", crate::generations::TABLE),
-                &[texte("key", &cle), QueryParam::new("sales", CypherValue::Int(chemins_sales as i64))],
+                &format!("MATCH (g:{} {{_key: $key}}) SET g.chemins_sales = $sales, g.aretes_recopiees = $recopiees", crate::generations::TABLE),
+                &[
+                    texte("key", &cle),
+                    QueryParam::new("sales", CypherValue::Int(chemins_sales as i64)),
+                    QueryParam::new("recopiees", CypherValue::Int(self.recopies_en_attente as i64)),
+                ],
             )
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        // Le compte est celui de la génération publiée ; il repart de zéro. Il vit en mémoire : un
+        // processus qui redémarre avant la publication dit les recopies faites depuis son ouverture.
+        self.recopies_en_attente = 0;
         if let Some(v) = self.generations.as_mut() {
             v.rang_publie = w;
             v.rang = w + 1;
