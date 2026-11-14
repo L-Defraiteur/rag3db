@@ -187,40 +187,80 @@ fn compter(catalog: &Catalog, cypher: &str) -> Result<i64, String> {
 }
 
 /// Les vecteurs d'un modèle pour un lot de versions, des morceaux d'avant vers les morceaux neufs.
-/// Rend le nombre de vecteurs repris et le nombre de lignes lues.
+/// Rend le nombre de vecteurs repris et le plus grand nombre de lignes lues en une requête.
+///
+/// **Un représentant par version** : toutes les occurrences d'une version ont le même contenu, donc
+/// les mêmes morceaux ; on lit ceux d'une seule (la première par uuid). Joindre chaque morceau neuf
+/// aux morceaux de **toutes** les occurrences, vecteurs compris, puis trier, faisait exploser la
+/// requête sur une version partagée par des milliers d'occurrences : la copie de
+/// `code-rag3db-depot` (14 novembre) a rempli le tampon de 8 Gio du moteur au lot 42 000 / 72 652,
+/// avec ou sans point de reprise par lot. Trois lectures bornées par le lot, l'appariement en Rust.
 fn transferer_les_vecteurs(catalog: &Catalog, modele: &crate::embedding_storage::EmbeddingModelEntry, versions: &[String]) -> Result<(usize, usize), String> {
+    use std::collections::HashMap;
     use crate::connection::{CypherValue, QueryParam};
     use crate::embedding_storage::VectorStorage;
     let avant = VectorStorage::resolve("Scope_Chunk", modele);
     let neuf = VectorStorage::resolve("ScopeContent_Chunk", modele);
-    // Le premier morceau d'avant compatible, par uuid d'occurrence : un choix déterministe quand
-    // deux occurrences au même texte ont chacune leur vecteur.
-    let cypher = format!(
-        "MATCH (n:ScopeContent_Chunk)-[:ScopeContent_CHUNKED_FROM]->(v:ScopeContent)-[:ScopeContent_DERIVED_FROM]->(s:Scope)<-[:Scope_CHUNKED_FROM]-(o:Scope_Chunk) \
-         WHERE v._uuid IN $versions AND o._parent_field = n._parent_field AND o._index = n._index AND o._text_hash = n._text_hash \
-           AND coalesce(o._title, '') = coalesce(n._title, '') \
-           AND o.{col} IS NOT NULL AND o.{marque} = o._text_hash \
-         RETURN n._uuid, n._text_hash, o.{col} ORDER BY n._uuid, s._uuid",
-        col = avant.column,
-        marque = avant.marker,
-    );
-    let liste = CypherValue::List(versions.iter().map(|v| CypherValue::String(v.clone())).collect());
-    let lu = catalog
-        .execute_raw_with_params(&cypher, &[QueryParam::new("versions", liste)])
-        .map_err(|e| format!("les vecteurs d'avant de « {} » : {e}", modele.slug()))?;
-    let lignes = lu.rows.len();
-    let mut items = Vec::new();
-    let mut dernier: Option<&str> = None;
-    for r in &lu.rows {
-        let Some(uuid) = r.first().and_then(|v| v.as_str()) else { continue };
-        if dernier == Some(uuid) {
-            continue;
+    let liste = |v: &[String]| CypherValue::List(v.iter().map(|u| CypherValue::String(u.clone())).collect());
+    let lire = |cypher: &str, nom: &str, valeurs: &[String]| {
+        catalog
+            .execute_raw_with_params(cypher, &[QueryParam::new(nom, liste(valeurs))])
+            .map_err(|e| format!("le transfert de « {} » : {cypher} : {e}", modele.slug()))
+    };
+    let texte = |v: Option<&CypherValue>| v.and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let rang = |v: Option<&CypherValue>| v.and_then(|v| v.as_i64()).unwrap_or(-1);
+
+    // 1. Le représentant de chaque version.
+    let paires = lire(
+        "MATCH (v:ScopeContent)-[:ScopeContent_DERIVED_FROM]->(s:Scope) WHERE v._uuid IN $versions RETURN v._uuid, s._uuid",
+        "versions",
+        versions,
+    )?;
+    let mut representant: HashMap<String, String> = HashMap::new();
+    for r in &paires.rows {
+        let (v, s) = (texte(r.first()), texte(r.get(1)));
+        representant.entry(v).and_modify(|x| if s < *x { *x = s.clone() }).or_insert(s);
+    }
+    let representants: Vec<String> = representant.values().cloned().collect();
+
+    // 2. Les morceaux neufs du lot.
+    let neufs = lire(
+        "MATCH (n:ScopeContent_Chunk)-[:ScopeContent_CHUNKED_FROM]->(v:ScopeContent) WHERE v._uuid IN $versions \
+         RETURN v._uuid, n._uuid, n._parent_field, n._index, n._text_hash, coalesce(n._title, '')",
+        "versions",
+        versions,
+    )?;
+
+    // 3. Les morceaux d'avant des seuls représentants, avec leur vecteur calculé sur leur texte.
+    let anciens = lire(
+        &format!(
+            "MATCH (o:Scope_Chunk)-[:Scope_CHUNKED_FROM]->(s:Scope) WHERE s._uuid IN $representants \
+               AND o.{col} IS NOT NULL AND o.{marque} = o._text_hash \
+             RETURN s._uuid, o._parent_field, o._index, o._text_hash, coalesce(o._title, ''), o.{col}",
+            col = avant.column,
+            marque = avant.marker,
+        ),
+        "representants",
+        &representants,
+    )?;
+    let lignes = paires.rows.len().max(neufs.rows.len()).max(anciens.rows.len());
+    let mut vecteurs: HashMap<(String, String, i64, String, String), CypherValue> = HashMap::new();
+    for r in &anciens.rows {
+        let cle = (texte(r.first()), texte(r.get(1)), rang(r.get(2)), texte(r.get(3)), texte(r.get(4)));
+        if let Some(v) = r.get(5) {
+            vecteurs.entry(cle).or_insert_with(|| v.clone());
         }
-        dernier = Some(uuid);
+    }
+    let mut items = Vec::new();
+    for r in &neufs.rows {
+        let Some(rep) = representant.get(&texte(r.first())) else { continue };
+        let hash = texte(r.get(4));
+        let cle = (rep.clone(), texte(r.get(2)), rang(r.get(3)), hash.clone(), texte(r.get(5)));
+        let Some(vecteur) = vecteurs.get(&cle) else { continue };
         let mut item = std::collections::BTreeMap::new();
-        item.insert("uuid".to_string(), CypherValue::String(uuid.to_string()));
-        item.insert("hash".to_string(), r.get(1).cloned().unwrap_or(CypherValue::Null));
-        item.insert("emb".to_string(), r.get(2).cloned().unwrap_or(CypherValue::Null));
+        item.insert("uuid".to_string(), CypherValue::String(texte(r.get(1))));
+        item.insert("hash".to_string(), CypherValue::String(hash));
+        item.insert("emb".to_string(), vecteur.clone());
         items.push(CypherValue::Map(item));
     }
     let repris = items.len();
