@@ -390,6 +390,12 @@ pub struct Catalog {
     /// **Les générations** (2a′) : les tables qui en portent, et ce que lisent les lectures sans
     /// vue. `None` pour une base de la forme d'avant, qui se lit comme avant.
     pub(crate) generations: Option<crate::generations::Visibilite>,
+    /// **La naissance des clés de `Scope` de l'écriture en cours** (2a′-2) : clé → rang de naissance de
+    /// la ligne à écrire, décidé par l'écrivain avant l'ingestion. Les calculs d'uuid par clé de
+    /// l'ingestion la lisent ; vide hors d'une écriture.
+    pub(crate) naissances: std::collections::HashMap<String, i64>,
+    /// Les arêtes entrantes recopiées depuis la dernière publication (page 06, § 9).
+    pub(crate) recopies_en_attente: usize,
     initialized: bool,
     embedding_cache: HashMap<String, Vec<f32>>,
     /// Cache mapping entity UUIDs to rag3db internal node IDs.
@@ -764,6 +770,8 @@ fn read_threads() -> u64 {
             parked_sparse: HashMap::new(),
             multi_cell: false,
             generations: None,
+            naissances: std::collections::HashMap::new(),
+            recopies_en_attente: 0,
             initialized: false,
             embedding_cache: HashMap::new(),
             node_id_cache: Arc::new(RwLock::new(NodeIdCache::new())),
@@ -2280,6 +2288,15 @@ fn read_threads() -> u64 {
         };
         if !cell.is_default() {
             field_values.insert(0, format!("_cellule={}/{}", cell.org, cell.project));
+        }
+        // **La naissance d'une ligne à générations** (2a′-2, page 06, § 11) : une ligne née à un rang
+        // au-delà de 0, ou dans une autre couche que celle du backend, porte sa couche et son rang dans
+        // son identité. Une ligne de la génération 0 du backend garde l'uuid de sa seule clé.
+        let depuis = data.get(crate::generations::DEPUIS).and_then(|v| v.as_i64()).unwrap_or(0);
+        let couche = data.get(crate::generations::COUCHE).and_then(|v| v.as_str()).unwrap_or(crate::code::COUCHE_DU_BACKEND);
+        if depuis > 0 || couche != crate::code::COUCHE_DU_BACKEND {
+            field_values.push(format!("{}={couche}", crate::generations::COUCHE));
+            field_values.push(format!("{}={depuis}", crate::generations::DEPUIS));
         }
         let refs: Vec<&str> = field_values.iter().map(|s| s.as_str()).collect();
         hashsafe_uuid(entity_name, &refs)

@@ -2432,6 +2432,26 @@ impl LibraryRecord {
 /// n'ont jamais rien perdu — l'ajout de `source` à l'identité d'un fichier
 /// avait cassé la seule relation qui vise un fichier, sans faire échouer un
 /// seul test.
+impl Catalog {
+    /// **Les données d'identité d'une clé, avec sa naissance** (2a′-2, page 06, § 11) : celles de
+    /// `key_data`, plus la couche et le rang de naissance d'un `Scope` que l'écrivain a décidés pour
+    /// l'écriture en cours. Hors d'une écriture, ou pour une autre entité, c'est `key_data` tel quel.
+    pub(crate) fn donnees_de_cle(&self, entity: &str, key: &str, source: &str) -> BTreeMap<String, CypherValue> {
+        let mut d = key_data(entity, key, source);
+        if entity == SCOPE {
+            self.poser_la_naissance(key, &mut d);
+        }
+        d
+    }
+
+    /// Pose dans `d` la couche et le rang de naissance d'une clé de `Scope`, s'il y en a un de décidé.
+    pub(crate) fn poser_la_naissance(&self, key: &str, d: &mut BTreeMap<String, CypherValue>) {
+        let (Some(v), Some(depuis)) = (self.generations.as_ref(), self.naissances.get(key)) else { return };
+        d.insert(crate::generations::COUCHE.into(), CypherValue::String(v.couche.clone()));
+        d.insert(crate::generations::DEPUIS.into(), CypherValue::Int(*depuis));
+    }
+}
+
 fn key_data(entity: &str, key: &str, source: &str) -> BTreeMap<String, CypherValue> {
     match entity {
         FILE => BTreeMap::from([
@@ -2538,6 +2558,8 @@ impl Catalog {
             .iter()
             .map(|sc| {
                 let mut d = sc.data();
+                // La naissance décidée par l'écrivain (2a′-2) : la ligne s'écrit à ce rang, et son uuid le porte.
+                self.poser_la_naissance(&sc.key, &mut d);
                 if let Some(nom) = requetes.marks.get(&sc.key) {
                     d.insert("test_role".into(), s(crate::queries_via::ROLE_SUITE));
                     d.insert("test_certainty".into(), s(crate::queries_via::CERTAINTY_DECLARED));
@@ -2572,8 +2594,8 @@ impl Catalog {
         for r in &analysis.relations {
             let from_src = source_of.get(r.from_key.as_str()).copied().unwrap_or(source_commune);
             let to_src = source_of.get(r.to_key.as_str()).copied().unwrap_or(source_commune);
-            let from = self.entity_uuid(&r.from_entity, &key_data(&r.from_entity, &r.from_key, from_src))?;
-            let to = self.entity_uuid(&r.to_entity, &key_data(&r.to_entity, &r.to_key, to_src))?;
+            let from = self.entity_uuid(&r.from_entity, &self.donnees_de_cle(&r.from_entity, &r.from_key, from_src))?;
+            let to = self.entity_uuid(&r.to_entity, &self.donnees_de_cle(&r.to_entity, &r.to_key, to_src))?;
             let props = if USAGE_RELATIONS.contains(&r.rel.as_str()) {
                 let mut p = usage_properties(&r.sites);
                 // L'analyseur résout dans le fichier ; une bibliothèque, par
@@ -2705,21 +2727,21 @@ impl Catalog {
         let mut definitions: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::with_capacity(analysis.scopes.len());
         let mut mentions: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::with_capacity(analysis.pending.len());
         for sc in analysis.scopes.iter().filter(|sc| !sc.extends_type) {
-            let from = self.entity_uuid(SCOPE, &key_data(SCOPE, &sc.key, ""))?;
+            let from = self.entity_uuid(SCOPE, &self.donnees_de_cle(SCOPE, &sc.key, ""))?;
             let to = symbol_uuid(self, &sc.name)?;
             definitions.push((from, to, BTreeMap::new()));
         }
         for (key, name) in &analysis.default_exports {
-            let from = self.entity_uuid(SCOPE, &key_data(SCOPE, key, ""))?;
+            let from = self.entity_uuid(SCOPE, &self.donnees_de_cle(SCOPE, key, ""))?;
             definitions.push((from, symbol_uuid(self, name)?, BTreeMap::new()));
         }
         for (i, champ) in &champs_definis {
-            let from = self.entity_uuid(SCOPE, &key_data(SCOPE, &analysis.scopes[*i].key, ""))?;
+            let from = self.entity_uuid(SCOPE, &self.donnees_de_cle(SCOPE, &analysis.scopes[*i].key, ""))?;
             definitions.push((from, symbol_uuid(self, champ)?, BTreeMap::new()));
         }
         let mut verrous: Vec<(String, String, BTreeMap<String, CypherValue>)> = Vec::with_capacity(analysis.pending_locks.len());
         for (scope_key, symbole, sites) in &analysis.pending_locks {
-            let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
+            let from = self.entity_uuid(SCOPE, &self.donnees_de_cle(SCOPE, scope_key, ""))?;
             let mut props = usage_properties(sites);
             props.insert("via".to_string(), s("champ"));
             verrous.push((from, symbol_uuid(self, symbole)?, props));
@@ -2749,7 +2771,7 @@ impl Catalog {
                 if sites.is_empty() {
                     continue;
                 }
-                let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
+                let from = self.entity_uuid(SCOPE, &self.donnees_de_cle(SCOPE, scope_key, ""))?;
                 let mut props = usage_properties(&sites);
                 props.insert("via".to_string(), s("appel"));
                 verrous.push((from, symbol_uuid(self, nom)?, props));
@@ -2761,7 +2783,7 @@ impl Catalog {
         if !requetes.queries.is_empty() || !requetes.registers.is_empty() {
             let mut demandes = Vec::with_capacity(requetes.queries.len());
             for (scope_key, symbole, via) in &requetes.queries {
-                let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
+                let from = self.entity_uuid(SCOPE, &self.donnees_de_cle(SCOPE, scope_key, ""))?;
                 demandes.push((from, symbol_uuid(self, symbole)?, [("via".to_string(), s(via))].into_iter().collect()));
             }
             self.mettre_en_file_les_liens("QUERIES", demandes)?;
@@ -2772,7 +2794,7 @@ impl Catalog {
             }
             let mut enregistres = Vec::with_capacity(requetes.registers.len());
             for (scope_key, nom) in &requetes.registers {
-                let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
+                let from = self.entity_uuid(SCOPE, &self.donnees_de_cle(SCOPE, scope_key, ""))?;
                 enregistres.push((from, symbol_uuid(self, nom)?, BTreeMap::new()));
             }
             self.mettre_en_file_les_liens("REGISTERS", enregistres)?;
@@ -2797,7 +2819,7 @@ impl Catalog {
         let defaults: HashMap<(&str, &str), &str> = analysis.pending_defaults.iter()
             .map(|(key, name, symbol)| ((key.as_str(), name.as_str()), symbol.as_str())).collect();
         for (scope_key, name, kind) in &analysis.pending {
-            let from = self.entity_uuid(SCOPE, &key_data(SCOPE, scope_key, ""))?;
+            let from = self.entity_uuid(SCOPE, &self.donnees_de_cle(SCOPE, scope_key, ""))?;
             let to = symbol_uuid(self, defaults.get(&(scope_key.as_str(), name.as_str())).copied().unwrap_or(name))?;
             // Le genre voyage avec le rendez-vous : c'est lui qui décide de
             // l'arête à poser quand la cible arrivera ; l'usage aussi, que
