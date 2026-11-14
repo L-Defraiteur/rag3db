@@ -1274,8 +1274,11 @@ pub fn analyze_in_project_avec(
             include_child_refs: Some(false),
             resolve_cross_file: Some(false),
             project_files: project_files.map(<[String]>::to_vec),
-            declared_dependencies: manifestes.map(|m| m.dependances.iter().cloned().collect()),
-            project_packages: manifestes.map(|m| m.paquets_du_projet.iter().cloned().collect()),
+            // Par langue seulement (14 novembre 2026) : un import ne se compare qu'aux manifestes de sa
+            // langue, et un chemin de module Go garde sa casse. Les tables de toutes les langues
+            // (`declared_dependencies`) mettraient le Go en minuscules.
+            declared_dependencies_by_language: manifestes.map(|m| m.dependances_par_langue.iter().map(|(l, n)| (l.clone(), n.iter().cloned().collect())).collect()),
+            project_packages_by_language: manifestes.map(|m| m.paquets_par_langue.iter().map(|(l, n)| (l.clone(), n.iter().cloned().collect())).collect()),
             ..Default::default()
         }),
     });
