@@ -383,7 +383,20 @@ impl Vue {
                 self.saisie.effacer_avant();
                 None
             }
-            Touche::Gauche | Touche::Droite | Touche::Debut | Touche::Fin | Touche::Suppr | Touche::MotGauche | Touche::MotDroite | Touche::EffacerMot | Touche::EffacerDebut | Touche::EffacerFin | Touche::Haut | Touche::Bas | Touche::Saut | Touche::Coller(_) => None,
+            Touche::Gauche => self.edite(crate::saisie::Saisie::gauche),
+            Touche::Droite => self.edite(crate::saisie::Saisie::droite),
+            Touche::Debut => self.edite(crate::saisie::Saisie::debut),
+            Touche::Fin => self.edite(crate::saisie::Saisie::fin),
+            Touche::Suppr => self.edite(crate::saisie::Saisie::effacer_apres),
+            Touche::MotGauche => self.edite(crate::saisie::Saisie::mot_gauche),
+            Touche::MotDroite => self.edite(crate::saisie::Saisie::mot_droite),
+            Touche::EffacerMot => self.edite(crate::saisie::Saisie::effacer_mot_avant),
+            Touche::EffacerDebut => self.edite(crate::saisie::Saisie::effacer_debut),
+            Touche::EffacerFin => self.edite(crate::saisie::Saisie::effacer_fin),
+            Touche::Haut => self.edite(crate::saisie::Saisie::monter),
+            Touche::Bas => self.edite(crate::saisie::Saisie::descendre),
+            Touche::Saut => self.edite(|s| s.inserer("\n")),
+            Touche::Coller(texte) => self.edite(|s| s.inserer(&texte)),
             Touche::Entree => {
                 let texte = self.saisie.prendre();
                 if texte.trim().is_empty() {
@@ -402,11 +415,19 @@ impl Vue {
                 Some(Action::Envoyer(texte, genre))
             }
             Touche::Echap => Some(Action::Arreter),
+            // Une saisie en cours se vide d'abord, comme dans un shell.
+            Touche::CtrlC if !self.saisie.est_vide() => self.edite(crate::saisie::Saisie::vider),
             Touche::CtrlC => Some(Action::Quitter),
             Touche::CtrlG => Some(Action::Arreter),
             Touche::CtrlD if self.saisie.est_vide() => Some(Action::Quitter),
             Touche::CtrlD => None,
         }
+    }
+
+    /// Une édition de la saisie : aucune action.
+    fn edite(&mut self, f: impl FnOnce(&mut crate::saisie::Saisie)) -> Option<Action> {
+        f(&mut self.saisie);
+        None
     }
 
     /// Le genre de ligne de boîte qu'une saisie envoie.
@@ -482,7 +503,8 @@ impl Vue {
         let largeur = zone.width as usize;
         // La fin de la ligne en cours, si elle déborde (elle ne déborde pas : `couper`).
         let en_cours = queue(&self.en_cours, largeur);
-        let saisie = queue(&format!("› {}", self.saisie.texte()), largeur.saturating_sub(1));
+        let (vu, col) = self.saisie.affichage(largeur.saturating_sub(2));
+        let saisie = format!("› {vu}");
         let haut = match &self.repli {
             Some(r) if en_cours.is_empty() => {
                 let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
@@ -492,7 +514,7 @@ impl Vue {
         };
         let lignes = vec![haut, self.ligne_vivante(largeur, maintenant), Line::from(saisie.clone())];
         f.render_widget(Paragraph::new(lignes), zone);
-        let x = zone.x + (colonnes(&saisie) as u16).min(zone.width.saturating_sub(1));
+        let x = zone.x + ((2 + col) as u16).min(zone.width.saturating_sub(1));
         f.set_cursor_position((x, zone.y + 2));
     }
 }

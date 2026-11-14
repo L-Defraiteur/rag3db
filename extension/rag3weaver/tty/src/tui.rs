@@ -11,7 +11,7 @@ use crate::endpoint::Endpoint;
 use crate::flux;
 use crate::journal::Journal;
 use crate::vue::{Action, Touche, Validee, Vue, HAUTEUR};
-use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::widgets::{Paragraph, Widget};
 use ratatui::{TerminalOptions, Viewport};
 use serde_json::{json, Value};
@@ -214,21 +214,8 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
         if event::poll(attente).map_err(|e| e.to_string())? {
             let action = match event::read().map_err(|e| e.to_string())? {
                 Event::Key(k) if k.kind == KeyEventKind::Press => {
-                    let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
-                    let t = match k.code {
-                        KeyCode::Char('c') if ctrl => Some(Touche::CtrlC),
-                        KeyCode::Char('d') if ctrl => Some(Touche::CtrlD),
-                        KeyCode::Char('g') if ctrl => Some(Touche::CtrlG),
-                        // Une autre combinaison Ctrl + lettre n'entre pas dans la saisie.
-                        KeyCode::Char(_) if ctrl => None,
-                        KeyCode::Char(c) => Some(Touche::Car(c)),
-                        KeyCode::Enter => Some(Touche::Entree),
-                        KeyCode::Backspace => Some(Touche::Retour),
-                        KeyCode::Esc => Some(Touche::Echap),
-                        _ => None,
-                    };
                     sale = true;
-                    t.and_then(|t| vue.touche(t))
+                    touche_de(k).and_then(|t| vue.touche(t))
                 }
                 Event::Resize(l, _) => {
                     vue.redimensionner(l);
@@ -259,6 +246,23 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
                 None => {}
             }
         }
+    }
+}
+
+/// La touche de la vue pour une touche du terminal, ou rien.
+pub fn touche_de(k: KeyEvent) -> Option<Touche> {
+    let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
+    match k.code {
+        KeyCode::Char('c') if ctrl => Some(Touche::CtrlC),
+        KeyCode::Char('d') if ctrl => Some(Touche::CtrlD),
+        KeyCode::Char('g') if ctrl => Some(Touche::CtrlG),
+        // Une autre combinaison Ctrl + lettre n'entre pas dans la saisie.
+        KeyCode::Char(_) if ctrl => None,
+        KeyCode::Char(c) => Some(Touche::Car(c)),
+        KeyCode::Enter => Some(Touche::Entree),
+        KeyCode::Backspace => Some(Touche::Retour),
+        KeyCode::Esc => Some(Touche::Echap),
+        _ => None,
     }
 }
 
@@ -373,6 +377,45 @@ mod tests {
         }
         dessiner(&mut t, &mut vue, &|_, _| None, None).unwrap();
         compte.load(Ordering::SeqCst)
+    }
+
+    /// Les touches du terminal deviennent celles de l'éditeur : flèches, Début et
+    /// Fin, Suppr, les raccourcis Ctrl et Alt d'un shell, Alt-Entrée.
+    #[test]
+    fn terminal_keys_map_to_the_line_editor() {
+        let k = |code, m| touche_de(KeyEvent::new(code, m));
+        let (rien, ctrl, alt) = (KeyModifiers::NONE, KeyModifiers::CONTROL, KeyModifiers::ALT);
+        let attendus = [
+            (k(KeyCode::Left, rien), Some(Touche::Gauche)),
+            (k(KeyCode::Right, rien), Some(Touche::Droite)),
+            (k(KeyCode::Home, rien), Some(Touche::Debut)),
+            (k(KeyCode::End, rien), Some(Touche::Fin)),
+            (k(KeyCode::Delete, rien), Some(Touche::Suppr)),
+            (k(KeyCode::Up, rien), Some(Touche::Haut)),
+            (k(KeyCode::Down, rien), Some(Touche::Bas)),
+            (k(KeyCode::Left, ctrl), Some(Touche::MotGauche)),
+            (k(KeyCode::Right, ctrl), Some(Touche::MotDroite)),
+            (k(KeyCode::Left, alt), Some(Touche::MotGauche)),
+            (k(KeyCode::Right, alt), Some(Touche::MotDroite)),
+            (k(KeyCode::Char('b'), alt), Some(Touche::MotGauche)),
+            (k(KeyCode::Char('f'), alt), Some(Touche::MotDroite)),
+            (k(KeyCode::Char('a'), ctrl), Some(Touche::Debut)),
+            (k(KeyCode::Char('e'), ctrl), Some(Touche::Fin)),
+            (k(KeyCode::Char('w'), ctrl), Some(Touche::EffacerMot)),
+            (k(KeyCode::Backspace, alt), Some(Touche::EffacerMot)),
+            (k(KeyCode::Char('u'), ctrl), Some(Touche::EffacerDebut)),
+            (k(KeyCode::Char('k'), ctrl), Some(Touche::EffacerFin)),
+            (k(KeyCode::Enter, alt), Some(Touche::Saut)),
+            (k(KeyCode::Enter, KeyModifiers::SHIFT), Some(Touche::Saut)),
+            (k(KeyCode::Char('c'), ctrl), Some(Touche::CtrlC)),
+            (k(KeyCode::Char('g'), ctrl), Some(Touche::CtrlG)),
+            (k(KeyCode::Char('x'), ctrl), None),
+            (k(KeyCode::Char('é'), rien), Some(Touche::Car('é'))),
+            (k(KeyCode::Char('B'), KeyModifiers::SHIFT), Some(Touche::Car('B'))),
+            (k(KeyCode::Enter, rien), Some(Touche::Entree)),
+        ];
+        let faux: Vec<_> = attendus.iter().enumerate().filter(|(_, (vu, attendu))| vu != attendu).map(|(i, (vu, attendu))| format!("#{i} : {vu:?} au lieu de {attendu:?}")).collect();
+        assert!(faux.is_empty(), "{faux:#?}");
     }
 
     /// Le journal reçoit, en texte brut, chaque ligne envoyée dans l'historique,
