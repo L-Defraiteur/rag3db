@@ -19,6 +19,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **14 nov. — Une recherche par clé ne manque plus une ligne validée pendant un point de reprise.**
+  Un lecteur admis pendant l'écriture d'un point de reprise pouvait chercher une clé déjà validée
+  et ne pas la trouver ; la recherche par clé attend maintenant, quelques millisecondes au plus, que
+  l'index ait recopié ses pages et publié son nouvel état (`0c41f9fe6`, posé le 14 nov.).
 - **14 nov. — Une fonction d'un fichier minifié n'embarque plus la ligne entière.**
   Le contenu d'un scope est borné aux octets de son nœud (codeparsers les donne désormais), et non à
   ses lignes : dans un bundle d'une seule ligne, chaque fonction portait la ligne entière, 844 Mo de
