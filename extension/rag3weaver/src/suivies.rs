@@ -803,8 +803,72 @@ pub struct Ajouts {
 
 /// Les ajouts de l'atelier pour un dépôt.
 pub fn lire_les_ajouts(catalog: &crate::catalog::Catalog, depot: &str) -> Result<Ajouts, String> {
-    let _ = (catalog, depot);
-    Err("les ajouts ne se lisent pas encore".into())
+    match catalog.read_meta_key(&format!("tracked:{depot}")).map_err(|e| e.to_string())? {
+        Some(v) if !v.is_empty() => serde_json::from_str(&v).map_err(|e| format!("tracked:{depot} illisible : {e}")),
+        _ => Ok(Ajouts::default()),
+    }
+}
+
+fn ecrire_les_ajouts(catalog: &crate::catalog::Catalog, depot: &str, ajouts: &Ajouts) -> Result<(), String> {
+    let v = serde_json::to_string(ajouts).map_err(|e| e.to_string())?;
+    catalog.persist_meta_key(&format!("tracked:{depot}"), &v).map_err(|e| e.to_string())
+}
+
+/// Un résolveur par dépôt (son dossier de premier niveau), pour que le cache tienne d'un appel à l'autre.
+fn resolveur_de(depot: &std::path::Path) -> std::sync::Arc<Resolveur> {
+    static RESOLVEURS: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<std::path::PathBuf, std::sync::Arc<Resolveur>>>> =
+        std::sync::LazyLock::new(Default::default);
+    RESOLVEURS.lock().unwrap_or_else(|p| p.into_inner()).entry(depot.to_path_buf()).or_default().clone()
+}
+
+fn nom_complet(branche: &str) -> String {
+    if branche.starts_with("refs/") { branche.to_string() } else { format!("refs/heads/{branche}") }
+}
+
+fn nom_court(r: &str) -> &str {
+    r.strip_prefix("refs/heads/").unwrap_or(r)
+}
+
+/// Ce qu'il faut pour lire ou écrire les suivies d'un dépôt.
+struct Contexte {
+    depot: std::path::PathBuf,
+    backend: std::path::PathBuf,
+    id: String,
+    ancien: String,
+    egaux: Vec<String>,
+    resolution: Resolution,
+}
+
+fn contexte(catalog: &crate::catalog::Catalog, racine: &std::path::Path, tracked: Option<&Value>) -> Result<Option<Contexte>, String> {
+    let Ok(depot) = crate::couches::git(racine, &["rev-parse", "--show-toplevel"]) else { return Ok(None) };
+    let depot = std::path::PathBuf::from(depot);
+    let backend = racine.canonicalize().unwrap_or_else(|_| racine.to_path_buf());
+    let declaration = declaration_du_manifeste(tracked)?;
+    let resolveur = resolveur_de(&depot);
+    let premiere = resolveur.resoudre(&depot, &backend, &[], &declaration)?;
+    let ancien = crate::couches::identifiant_du_depot(&depot).unwrap_or_default();
+    let (id, egaux) = match premiere.identifiant {
+        Some(i) => (i.id, i.egaux),
+        None => (ancien.clone(), Vec::new()),
+    };
+    // Les ajouts de l'atelier, et l'ancienne clé (lue, plus écrite) sous l'identifiant neuf ou l'ancien.
+    let mut ajouts = lire_les_ajouts(catalog, &id)?;
+    for cle in [&id, &ancien] {
+        if let Some(b) = crate::couches::branches_suivies(catalog, cle)? {
+            for n in b.suivies {
+                let liste = if n.starts_with("agent/") { &mut ajouts.taches } else { &mut ajouts.branches };
+                if !liste.contains(&n) {
+                    liste.push(n);
+                }
+            }
+        }
+    }
+    let mut avec = declaration.clone();
+    for b in &ajouts.branches {
+        avec.sources.push(Source { select: Selecteur::Branche(b.clone()), parent: Parente::Inferee, history: Histoire::Pointe, work: false });
+    }
+    let resolution = resolveur.resoudre(&depot, &backend, &ajouts.taches, &avec)?;
+    Ok(Some(Contexte { depot, backend, id, ancien, egaux, resolution }))
 }
 
 /// **Le rapport des suivies d'un dépôt**, pour l'état (`index_states.layers`), en lecture seule : la racine,
@@ -815,13 +879,99 @@ pub fn rapport_des_suivies(
     racine_du_workspace: &std::path::Path,
     tracked: Option<&Value>,
 ) -> Result<Option<(Value, Vec<String>)>, String> {
-    let _ = (catalog, racine_du_workspace, tracked);
-    Err("le rapport des suivies n'existe pas encore".into())
+    use serde_json::json;
+    let Some(c) = contexte(catalog, racine_du_workspace, tracked)? else { return Ok(None) };
+    let e = |e: crate::catalog::CatalogError| e.to_string();
+    let id_de = |nom: &str| -> Result<Value, String> {
+        Ok(catalog.read_meta_key(&format!("couche_nom:{}:{nom}", c.id)).map_err(e)?.filter(|v| !v.is_empty()).map(Value::String).unwrap_or(Value::Null))
+    };
+    let mut avertissements = c.resolution.pile.avertissements.clone();
+    if !c.egaux.is_empty() {
+        avertissements.push(format!("identifiant du dépôt : plusieurs racines de même date ({}), {} retenue", c.egaux.join(", "), c.id));
+    }
+    let racine = match &c.resolution.pile.racine {
+        RacineResolue::Calculee { commit, fixee_par } => json!({"nature": "calculee", "commit": commit, "fixed_by": fixee_par}),
+        RacineResolue::SansAncetreCommun => json!({"nature": "sans_ancetre_commun"}),
+        RacineResolue::Vide => json!({"nature": "vide"}),
+        RacineResolue::Declaree { rev, commit } => json!({"nature": "declaree", "rev": rev, "commit": commit}),
+        RacineResolue::Introuvable(rev) => json!({"nature": "introuvable", "rev": rev}),
+    };
+    let mut branches = Vec::new();
+    for couche in &c.resolution.pile.couches {
+        let court = nom_court(&couche.nom).to_string();
+        // L'estampille déclarée (une tâche de l'atelier) prime : sous le nom complet, ou court d'avant la
+        // migration, sous l'identifiant neuf ou l'ancien.
+        let mut estampille = None;
+        for depot in [&c.id, &c.ancien] {
+            for nom in [couche.nom.as_str(), court.as_str()] {
+                if estampille.is_none() {
+                    estampille = crate::couches::parente_estampillee(catalog, depot, nom)?.filter(|p| p.genre == crate::couches::GenreDeParente::Declaree);
+                }
+            }
+        }
+        let (parent, kind, base, candidates): (Option<String>, &str, Option<String>, Vec<String>) = if let Some(p) = estampille {
+            let parente = nom_complet(&p.branche);
+            let base = crate::couches::git(&c.depot, &["merge-base", &couche.pointe, &parente]).ok().filter(|b| !b.is_empty()).unwrap_or(p.base);
+            (Some(parente), "declaree", Some(base), Vec::new())
+        } else {
+            match &couche.parente {
+                ParenteResolue::Aucune => (None, "aucune", None, Vec::new()),
+                ParenteResolue::Declaree(p) => {
+                    let base = crate::couches::git(&c.depot, &["merge-base", &couche.pointe, p]).ok().filter(|b| !b.is_empty());
+                    (Some(p.clone()), "declaree", base, Vec::new())
+                }
+                ParenteResolue::Inferee { parente, base } => (Some(parente.clone()), "inferee", Some(base.clone()), Vec::new()),
+                ParenteResolue::Egales(l) => (None, "egales", None, l.clone()),
+                ParenteResolue::DansUnFlux => (None, "flux", None, Vec::new()),
+                // Le reflog local départage une ambiguïté (page 30), quand il nomme une des candidates.
+                ParenteResolue::Ambigue(l) => match crate::couches::nee_de(&c.depot, &court).map(|n| nom_complet(&n)).filter(|n| l.contains(n)) {
+                    Some(n) => {
+                        let base = crate::couches::git(&c.depot, &["merge-base", &couche.pointe, &n]).ok().filter(|b| !b.is_empty());
+                        (Some(n), "inferee-par-reflog", base, Vec::new())
+                    }
+                    None => (None, "ambigue", None, l.clone()),
+                },
+            }
+        };
+        branches.push(json!({
+            "name": court, "ref": couche.nom, "id": id_de(&couche.nom)?, "state": "tracked", "head": couche.pointe,
+            "parent": parent, "kind": kind, "base": base, "candidates": candidates,
+            "closed": crate::couches::couche_fermee(catalog, &c.id, &couche.nom)?,
+        }));
+    }
+    let mut travail: Vec<Value> = Vec::new();
+    let mut chemins = std::collections::BTreeSet::new();
+    for s in &c.resolution.sources {
+        for t in &s.travail {
+            let chemin = t.chemin.display().to_string();
+            if chemins.insert(chemin.clone()) {
+                travail.push(json!({"path": chemin, "branch": t.branche, "head": t.commit, "id": id_de(&format!("worktree:{chemin}"))?}));
+            }
+        }
+    }
+    let sources: Vec<Value> = c
+        .resolution
+        .sources
+        .iter()
+        .map(|s| json!({
+            "select": format!("{:?}", s.source.select),
+            "refs": s.refs.iter().map(|r| r.nom.clone()).collect::<Vec<_>>(),
+            "work": s.travail.iter().map(|t| t.chemin.display().to_string()).collect::<Vec<_>>(),
+            "empty": s.vide,
+        }))
+        .collect();
+    Ok(Some((
+        json!({
+            "repo": c.id, "root": c.depot.display().to_string(), "racine": racine, "sources": sources,
+            "branches": branches, "work": travail, "flux": c.resolution.pile.flux, "backend": c.backend.display().to_string(),
+        }),
+        avertissements,
+    )))
 }
 
 /// **Une tâche de l'atelier entre aux suivies** : sa branche parmi les tâches, sa parente aux suivies si
 /// aucune source ne la prend déjà, la parente estampillée déclarée sur le nom complet, au commit de départ.
-/// Les clés du dépôt migrent d'abord vers son identifiant et le nom complet.
+/// Les clés du dépôt migrent d'abord vers son identifiant et le nom complet. Rend l'identifiant du dépôt.
 pub fn ouvrir_une_tache(
     catalog: &crate::catalog::Catalog,
     racine_du_workspace: &std::path::Path,
@@ -830,8 +980,29 @@ pub fn ouvrir_une_tache(
     parente: &str,
     depart: &str,
 ) -> Result<String, String> {
-    let _ = (catalog, racine_du_workspace, tracked, branche, parente, depart);
-    Err("l'ouverture d'une tâche aux suivies n'existe pas encore".into())
+    let c = contexte(catalog, racine_du_workspace, tracked)?.ok_or_else(|| format!("{} n'est dans aucun dépôt git", racine_du_workspace.display()))?;
+    let e = |e: crate::catalog::CatalogError| e.to_string();
+    for (de, vers) in [(&c.ancien, &c.id), (&c.id, &c.id)] {
+        for ligne in migrer_les_cles(catalog, de, vers)? {
+            eprintln!("[rag3weaver] suivies : {ligne}");
+        }
+    }
+    let mut ajouts = lire_les_ajouts(catalog, &c.id)?;
+    if !ajouts.taches.iter().any(|t| t == branche) {
+        ajouts.taches.push(branche.to_string());
+    }
+    let suivie = c.resolution.pile.couches.iter().any(|x| x.nom == nom_complet(parente));
+    if !suivie && !ajouts.branches.iter().any(|b| b == parente) {
+        ajouts.branches.push(parente.to_string());
+    }
+    ecrire_les_ajouts(catalog, &c.id, &ajouts)?;
+    crate::couches::declarer_la_parente(catalog, &c.id, &nom_complet(branche), &nom_complet(parente), depart)?;
+    catalog.persist_meta_key(&format!("couche_fermee:{}:{}", c.id, nom_complet(branche)), "").map_err(e)?;
+    // Les identifiants des couches naissent ici, sur la résolution qui comprend la tâche.
+    if let Some(apres) = contexte(catalog, racine_du_workspace, tracked)? {
+        identifiants_des_couches(catalog, &apres.id, &apres.backend, &apres.resolution)?;
+    }
+    Ok(c.id)
 }
 
 /// **Une tâche de l'atelier sort des suivies** : sa branche quitte les tâches, sa couche est marquée fermée.
@@ -842,8 +1013,11 @@ pub fn fermer_une_tache(
     tracked: Option<&Value>,
     branche: &str,
 ) -> Result<(), String> {
-    let _ = (catalog, racine_du_workspace, tracked, branche);
-    Err("la fermeture d'une tâche aux suivies n'existe pas encore".into())
+    let c = contexte(catalog, racine_du_workspace, tracked)?.ok_or_else(|| format!("{} n'est dans aucun dépôt git", racine_du_workspace.display()))?;
+    let mut ajouts = lire_les_ajouts(catalog, &c.id)?;
+    ajouts.taches.retain(|t| t != branche);
+    ecrire_les_ajouts(catalog, &c.id, &ajouts)?;
+    catalog.persist_meta_key(&format!("couche_fermee:{}:{}", c.id, nom_complet(branche)), "fermée").map_err(|e| e.to_string())
 }
 
 /// Les refs du dépôt, chacune sur son commit (une étiquette annotée, déréférencée).
