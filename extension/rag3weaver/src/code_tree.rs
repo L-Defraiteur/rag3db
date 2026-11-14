@@ -383,9 +383,9 @@ pub fn host_state(address: &str) -> Option<Value> {
 
 /// [`host_state`], la sonde bornée à `delai`.
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
-pub(crate) fn host_state_avec(address: &str, _delai: std::time::Duration) -> Option<Value> {
+pub(crate) fn host_state_avec(address: &str, delai: std::time::Duration) -> Option<Value> {
     let endpoint = crate::daemon_client::Endpoint::forced(address);
-    let mut requete = crate::daemon::agent().get(format!("{}/etat", crate::daemon::base_url(address)));
+    let mut requete = crate::daemon::agent_borne(delai).get(format!("{}/etat", crate::daemon::base_url(address)));
     if let Some(t) = endpoint.token {
         requete = requete.header("Authorization", &format!("Bearer {t}"));
     }

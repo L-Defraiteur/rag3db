@@ -140,6 +140,8 @@ pub struct DaemonClient {
     session: Mutex<String>,
     name: String,
     version: u32,
+    /// Le délai de l'agent gardé ([`crate::daemon::Delais::reponse`]), que disent ses refus.
+    delai: std::time::Duration,
 }
 
 impl DaemonClient {
@@ -184,11 +186,11 @@ impl DaemonClient {
         manifest: PathBuf,
         client: &str,
         keys: Vec<String>,
-        _delai: std::time::Duration,
+        delai: std::time::Duration,
     ) -> Result<Self, String> {
-        let agent = crate::daemon::agent();
+        let agent = crate::daemon::agent_borne(delai);
         let base = crate::daemon::base_url(&endpoint.address);
-        let session = open_session(&agent, &base, endpoint.token.as_deref(), client, &keys)?;
+        let session = open_session(&agent, &base, endpoint.token.as_deref(), client, &keys, delai)?;
         let mut me = Self {
             agent,
             endpoint: Mutex::new((base, endpoint.token)),
@@ -200,6 +202,7 @@ impl DaemonClient {
             session: Mutex::new(session),
             name: String::new(),
             version: 0,
+            delai,
         };
         let ouvert = me
             .op("/open", json!({ "manifest": me.manifest }))
@@ -234,7 +237,7 @@ impl DaemonClient {
         let refus = |e: String| OpError { error: format!("jeton local refusé par l'hôte {}, relu dans {} : {e}", self.base(), d.source), transient: false };
         let endpoint = d.endpoint().map_err(refus)?;
         let base = crate::daemon::base_url(&endpoint.address);
-        let session = open_session(&self.agent, &base, endpoint.token.as_deref(), &self.client, &self.keys).map_err(refus)?;
+        let session = open_session(&self.agent, &base, endpoint.token.as_deref(), &self.client, &self.keys, self.delai).map_err(refus)?;
         eprintln!("[mcp] l'hôte désigné a refusé le jeton : relu dans {}, une session neuve", d.source);
         *self.endpoint.lock().unwrap_or_else(|p| p.into_inner()) = (base, endpoint.token);
         *self.session.lock().unwrap_or_else(|p| p.into_inner()) = session;
@@ -346,7 +349,7 @@ impl DaemonClient {
             _ => premier,
         };
         let reponse = if premier["unknownSession"] == json!(true) {
-            let nouvelle = open_session(&self.agent, &self.base(), self.token().as_deref(), &self.client, &self.keys)
+            let nouvelle = open_session(&self.agent, &self.base(), self.token().as_deref(), &self.client, &self.keys, self.delai)
                 .map_err(|e| OpError { error: e, transient: false })?;
             eprintln!(
                 "[mcp] l'hôte ne connaissait plus la session ({}) : une autre est ouverte, et le \
@@ -376,7 +379,7 @@ impl DaemonClient {
             .map_err(|m| OpError { error: format!("l'hôte {} : {}", m.state(), m.reason()), transient: false })?;
         let endpoint = Endpoint::from(fiche);
         let base = crate::daemon::base_url(&endpoint.address);
-        let session = open_session(&self.agent, &base, endpoint.token.as_deref(), &self.client, &self.keys)
+        let session = open_session(&self.agent, &base, endpoint.token.as_deref(), &self.client, &self.keys, self.delai)
             .map_err(|e| OpError { error: e, transient: false })?;
         *self.endpoint.lock().unwrap_or_else(|p| p.into_inner()) = (base, endpoint.token);
         *self.session.lock().unwrap_or_else(|p| p.into_inner()) = session;
@@ -453,6 +456,7 @@ fn open_session(
     token: Option<&str>,
     client: &str,
     keys: &[String],
+    delai: std::time::Duration,
 ) -> Result<String, String> {
     // Le pid, pour que l'hôte ferme la session si ce client meurt sans la
     // fermer (tué, ou abandonné par la sonde de `claude mcp get`).
@@ -463,7 +467,10 @@ fn open_session(
     }
     let mut reponse = requete
         .send(corps)
-        .map_err(|e| format!("pas de session auprès de l'hôte {base} : {base} ne répond pas : {e}"))?;
+        .map_err(|e| match e {
+            ureq::Error::Timeout(_) => format!("pas de session auprès de l'hôte {base} : {}", crate::daemon::ne_repond_pas(&format!("{base}/session"), delai)),
+            e => format!("pas de session auprès de l'hôte {base} : {base} ne répond pas : {e}"),
+        })?;
     let statut = reponse.status().as_u16();
     let texte = reponse.body_mut().read_to_string().map_err(|e| e.to_string())?;
     if statut != 200 {
