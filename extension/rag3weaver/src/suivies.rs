@@ -1469,6 +1469,7 @@ mod tests {
         assert_eq!(identifiant_des_suivies(&d, &[]).unwrap(), None);
     }
 
+    #[cfg(feature = "rag3db-native")]
     fn catalogue() -> crate::Catalog {
         let conn = crate::Rag3dbConnection::in_memory().unwrap();
         let mut cat = crate::Catalog::without_embedding_model(Box::new(conn), crate::CatalogConfig::default());
@@ -1479,6 +1480,7 @@ mod tests {
     /// **Les clés migrent sans rien perdre** : d'un identifiant à l'autre, les noms courts en nom complet
     /// (`a` devient `refs/heads/a`, même si une étiquette `a` existe : une clé courte a toujours nommé une
     /// branche) ; une clé cible déjà posée n'est jamais écrasée, la source reste et le journal le dit.
+    #[cfg(feature = "rag3db-native")]
     #[test]
     fn les_cles_migrent_en_nom_complet_sans_rien_perdre() {
         let cat = catalogue();
@@ -1544,6 +1546,7 @@ mod tests {
     /// **Une couche a un identifiant stable, distinct de son nom** : le même d'une résolution à l'autre ; un
     /// renommage de branche le garde ; une branche effacée puis recréée ailleurs sous le même nom en reçoit un
     /// neuf, et l'ancienne fiche garde sa fin ; la couche de travail du worktree du backend reçoit `backend`.
+    #[cfg(feature = "rag3db-native")]
     #[test]
     fn une_couche_a_un_identifiant_stable_distinct_de_son_nom() {
         let (_t, d) = vierge();
@@ -1600,6 +1603,7 @@ mod tests {
     /// une branche `b` qu'aucune source ne prend fait entrer `b`, et sa couche a `b` pour parente, de genre
     /// « declaree », en nom complet ; fermée, elle sort des tâches, sa couche est marquée fermée, et son
     /// estampille reste.
+    #[cfg(feature = "rag3db-native")]
     #[test]
     fn le_rapport_des_suivies_et_une_tache_qui_y_entre_et_en_sort() {
         let (t, d) = vierge();
@@ -1639,6 +1643,7 @@ mod tests {
     /// des trucs pas prévus doivent marcher ») : tout l'arbre, plusieurs worktrees, des worktrees sur une
     /// branche racine déclarée, les agents, une revue de deux branches sans lien, et le cas non prévu
     /// (`agent/*` à la pointe, main en entier). Chacune se lit par le rapport de l'état.
+    #[cfg(feature = "rag3db-native")]
     #[test]
     fn chaque_ligne_du_tableau_est_une_declaration_du_meme_objet() {
         let (t, d) = vierge();
