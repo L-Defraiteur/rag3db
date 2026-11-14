@@ -1,6 +1,6 @@
 # Deux passes concurrentes effacent le schéma postgres l'une de l'autre
 
-- **État** : ouvert (14 novembre 2026).
+- **État** : fermé le 14 novembre 2026, doublon de `docs/recherche/tickets/2026-11-14-deux-passes-concurrentes-partagent-la-base-postgres-de-test.md` (recherche, 88d2c84fc0), ouvert pour la même collision quelques minutes avant ; la trace et les sept panics y sont reportés
 - **Famille** : produit
 - **Gravité** : faux rouges. Une passe qui joue `e2e_postgres` pendant qu'une autre le joue aussi voit ses tests échouer sur un schéma effacé sous elle, sans rapport avec son code. Plusieurs lots du soir rejouent cette suite en même temps : ça reviendra
 - **Atteignable en service** : non (outillage de passe)

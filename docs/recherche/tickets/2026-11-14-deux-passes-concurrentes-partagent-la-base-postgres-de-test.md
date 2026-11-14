@@ -33,3 +33,22 @@ créé au départ et effacé à la fin. La garde de `run_e2e.sh` fait déjà la 
 `TMPDIR`. À défaut, un verrou consultatif Postgres (`pg_advisory_lock`) pris pour toute la suite.
 Aujourd'hui, un rouge d'e2e_postgres pendant la passe d'une autre session se lit d'abord par
 `ps` : qui joue `e2e_postgres` à ce moment-là.
+
+## Une seconde occurrence, côté everything declarative (14 novembre 2026, 23 h 24)
+
+C'était l'autre passe de la même collision. La passe courte de `vue-publiee-pile` (23101838b, lib
+373b5477b, à luciepc) a vu 7 tests d'`e2e_postgres` sur 36 échouer, tous dans le schéma partagé, aucun
+dans une réponse :
+- six fois : `initialize sur postgres : 42704: referenced schema was concurrently dropped`, sur
+  `CREATE EXTENSION IF NOT EXISTS pg_trgm|vector SCHEMA rag3weaver` (`l_ingestion_ecrit_des_lignes`,
+  `l_hybride_fusionne`, `la_marque_de_confiance_nomme_son_signal`, `la_marque_deau_traverse_la_frontiere`,
+  `la_reprise_apres_incident_tient_sur_postgres`, `le_chainage_une_chaine`) ;
+- une fois : `42P01: relation "rag3weaver._dataflow_node_state" does not exist`
+  (`deux_rattrapages_ne_reclament_pas_les_memes_chunks`).
+
+La trace est à luciepc : `~/.cache/rag3weaver-build/ed-generations-2/pile/e2e_postgres-schema-partage.log`.
+La même suite, rejouée seule sur le même commit, est le verdict de la passe (c7).
+
+**La forme attendue** (c7) : un schéma par passe, pas un verrou. Il serait nommé par le worktree, ou
+par un `RAG3WEAVER_PG_SCHEMA` posé par défaut et dérivé de la passe, et effacé à la fin.
+
