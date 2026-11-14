@@ -10420,6 +10420,37 @@ fn read_threads() -> u64 {
         self.generations.as_ref().map(|v| v.ensembles.resolutions())
     }
 
+    /// **Lire à un rang** (2a′-2) : le temps de `f`, les lectures du catalogue voient la couche au rang
+    /// `rang`, puis la visibilité d'avant revient. Sans générations, `f` lit comme d'habitude.
+    pub fn au_rang<T>(&mut self, rang: i64, f: impl FnOnce(&mut Self) -> T) -> T {
+        let avant = self.generations.as_ref().map(|v| v.rang);
+        if let Some(v) = self.generations.as_mut() {
+            v.rang = rang;
+        }
+        let rendu = f(self);
+        if let (Some(v), Some(r)) = (self.generations.as_mut(), avant) {
+            v.rang = r;
+        }
+        rendu
+    }
+
+    /// **Le dernier rang publié de la couche** (2a′-2, page 06, § 1). Pas encore : l'écrivain le tiendra.
+    pub fn rang_publie(&self) -> Option<i64> {
+        None
+    }
+
+    /// **Le rang en attente de la couche**, la couche de travail (2a′-2, page 06, § 1). Pas encore.
+    pub fn rang_en_attente(&self) -> Option<i64> {
+        None
+    }
+
+    /// **Publier la génération en attente** au commit de la source suivie (2a′-2, page 06, § 3) :
+    /// la ligne `_generation`, puis le rang en attente devient le rang publié. Pas encore écrite.
+    pub fn publier_la_generation(&mut self, commit: &str, chemins_sales: usize) -> Result<i64, CatalogError> {
+        let _ = (commit, chemins_sales);
+        Err(CatalogError::DbError("la publication d'une génération n'est pas encore écrite".into()))
+    }
+
     pub fn marquer_des_lignes_invisibles(&mut self) {
         if let Some(v) = self.generations.as_mut() {
             v.tout_visible = false;
