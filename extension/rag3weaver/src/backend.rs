@@ -236,6 +236,11 @@ pub struct BackendManifest {
     /// de code ne peut lire ni écrire — le défaut sûr.
     #[serde(default)]
     pub workspace: Option<crate::backend_code::WorkspaceConfig>,
+    /// **Les suivies** (`crate::suivies`) : ce que le dépôt de ce backend indexe en couches, une racine et
+    /// des sources à sélecteur git (`branch:`, `refs:`, `worktree:`, `commit:`, `tasks`). Absentes : le
+    /// worktree que le backend indexe et les tâches de l'atelier, la racine calculée.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tracked: Option<serde_json::Value>,
     /// **Les montres de fichiers** : chacune balaie la source du workspace et
     /// publie un `FileChanged` par fichier créé, modifié ou supprimé, sur le
     /// sujet `files` — de quoi réagir à une édition faite hors de nos outils.
@@ -5550,9 +5555,9 @@ impl Backend {
         if !entites.is_empty() && crate::code_sync::avant_la_regle(&cat).unwrap_or(false) {
             avertissements.push(crate::code_sync::AVANT_LA_REGLE.to_string());
         }
-        // **Les couches des dépôts** (liaison branche → couche) : l'ancre, les branches suivies sur
-        // leur parente et son genre, les ambiguës à déclarer. Lu sans rien estampiller ; rien
-        // n'est dit d'un dépôt sans branches suivies déclarées.
+        // **Les couches des dépôts** (les suivies, `crate::suivies`) : la racine dans sa nature, chaque
+        // couche sur sa parente et son genre, les couches de travail, les flux ; sans déclaration, le
+        // défaut (le worktree du backend et les tâches). Lu sans rien écrire.
         if !entites.is_empty() {
             let mut racines: Vec<std::path::PathBuf> = vec![self.prepared().directory.clone()];
             if let Some(w) = self.prepared().manifest.workspace.as_ref() {
@@ -5561,7 +5566,7 @@ impl Backend {
             let mut couches = Vec::new();
             let mut vus = std::collections::BTreeSet::new();
             for r in &racines {
-                match crate::couches::rapport_des_couches(&cat, r) {
+                match crate::suivies::rapport_des_suivies(&cat, r, self.prepared().manifest.tracked.as_ref()) {
                     Ok(Some((rapport, avert))) => {
                         if vus.insert(rapport["repo"].to_string()) {
                             couches.push(rapport);

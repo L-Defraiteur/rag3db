@@ -518,11 +518,11 @@ fn une_copie_qui_echoue_ne_laisse_pas_son_temporaire() {
     assert_eq!(std::fs::read_to_string(&vers).unwrap(), "ancien\n", "la cible n'est pas touchée");
 }
 
-/// **Une tâche entre aux branches suivies avec sa parente, et en sort à sa fermeture** (la
-/// liaison branche → couche, décision de Lucie du 13 novembre : « tout ce que touche l'agent, ça
-/// reste indexé »). Ouverte depuis la branche extraite du dépôt, `agent/<nom>` est suivie, sa
-/// parente déclarée et estampillée, sa base au commit de départ. Fermée, elle sort des suivies, sa
-/// couche est marquée fermée, et rien n'est effacé (l'estampille reste).
+/// **Une tâche entre aux suivies avec sa parente, et en sort à sa fermeture** (la liaison branche →
+/// couche, décision de Lucie du 13 novembre : « tout ce que touche l'agent, ça reste indexé » ; les
+/// suivies, `crate::suivies`). Ouverte depuis la branche extraite du dépôt, `agent/<nom>` est parmi les
+/// tâches suivies, sa parente déclarée et estampillée en nom complet, sa base au commit de départ. Fermée,
+/// elle sort des tâches, sa couche est marquée fermée, et rien n'est effacé (l'estampille reste).
 #[cfg(feature = "rag3db-native")]
 #[test]
 fn une_tache_entre_aux_suivies_avec_sa_parente_et_en_sort_a_sa_fermeture() {
@@ -536,11 +536,11 @@ fn une_tache_entre_aux_suivies_avec_sa_parente_et_en_sort_a_sa_fermeture() {
     let h = host.hosted(&manifeste).unwrap();
     host.with_backend(&h, |b| {
         let cat = b.catalog.lock().unwrap();
-        let suivies = couches::branches_suivies(&cat, &id).unwrap().expect("les branches suivies du dépôt");
-        assert!(suivies.suivies.contains(&"agent/relecture".to_string()), "{suivies:?}");
+        let ajouts = crate::suivies::lire_les_ajouts(&cat, &id).unwrap();
+        assert!(ajouts.taches.contains(&"agent/relecture".to_string()), "{ajouts:?}");
         assert_eq!(
-            couches::parente_estampillee(&cat, &id, "agent/relecture").unwrap(),
-            Some(Parente { branche: extraite.clone(), genre: GenreDeParente::Declaree, base: tache.depart.clone() })
+            couches::parente_estampillee(&cat, &id, "refs/heads/agent/relecture").unwrap(),
+            Some(Parente { branche: format!("refs/heads/{extraite}"), genre: GenreDeParente::Declaree, base: tache.depart.clone() })
         );
         drop(cat);
         // **L'état le dit** (index_states, donc /etat et l'IDE) : la couche suivie, sa parente et son genre.
@@ -549,25 +549,24 @@ fn une_tache_entre_aux_suivies_avec_sa_parente_et_en_sort_a_sa_fermeture() {
         let d = couches.iter().find(|c| c["repo"] == serde_json::json!(id)).unwrap_or_else(|| panic!("le dépôt absent : {etat}"));
         let agent = d["branches"].as_array().unwrap().iter().find(|x| x["name"] == "agent/relecture").unwrap_or_else(|| panic!("la tâche absente : {d}"));
         assert_eq!(agent["state"], "tracked", "{agent}");
-        assert_eq!(agent["parent"], serde_json::json!(extraite), "{agent}");
+        assert_eq!(agent["parent"], serde_json::json!(format!("refs/heads/{extraite}")), "{agent}");
         assert_eq!(agent["kind"], "declaree", "{agent}");
     })
     .unwrap();
     host.fermer_une_tache(&parent, "relecture").unwrap();
     host.with_backend(&h, |b| {
         let cat = b.catalog.lock().unwrap();
-        let suivies = couches::branches_suivies(&cat, &id).unwrap().expect("la déclaration reste");
-        assert!(!suivies.suivies.contains(&"agent/relecture".to_string()), "{suivies:?}");
-        assert!(couches::couche_fermee(&cat, &id, "agent/relecture").unwrap(), "la couche n'est pas marquée fermée");
-        assert!(couches::parente_estampillee(&cat, &id, "agent/relecture").unwrap().is_some(), "l'estampille a été effacée");
+        let ajouts = crate::suivies::lire_les_ajouts(&cat, &id).unwrap();
+        assert!(!ajouts.taches.contains(&"agent/relecture".to_string()), "{ajouts:?}");
+        assert!(couches::couche_fermee(&cat, &id, "refs/heads/agent/relecture").unwrap(), "la couche n'est pas marquée fermée");
+        assert!(couches::parente_estampillee(&cat, &id, "refs/heads/agent/relecture").unwrap().is_some(), "l'estampille a été effacée");
     })
     .unwrap();
 }
 
-/// **La parente déclarée d'une tâche entre aux suivies avec elle** (relecture d'ED, 14 nov. :
-/// « tout ce que touche l'agent reste indexé ») : une tâche ouverte depuis une branche `b` que rien
-/// ne déclarait a `b` pour parente, de genre « declaree », et `b` est suivie. Une résolution qui
-/// écrit (l'état) ne la réinfère pas sur l'ancre.
+/// **La parente déclarée d'une tâche est suivie avec elle** (relecture d'ED, 14 nov. : « tout ce que
+/// touche l'agent reste indexé ») : une tâche ouverte depuis une branche `b` a `b` pour parente, de genre
+/// « declaree », et `b` est une couche suivie de l'état. Rien ne la réinfère sur une autre branche.
 #[cfg(feature = "rag3db-native")]
 #[test]
 fn la_parente_d_une_tache_entre_aux_suivies_et_reste_declaree() {
@@ -577,18 +576,19 @@ fn la_parente_d_une_tache_entre_aux_suivies_et_reste_declaree() {
     let id = couches::identifiant_du_depot(&depot).unwrap();
     git(&depot, &["switch", "-q", "-c", "b"]).unwrap();
     git(&depot, &["-c", "user.name=Personne Test", "-c", "user.email=personne@example.org", "commit", "-q", "--allow-empty", "-m", "b1"]).unwrap();
-    let ancre = couches::ancre_du_depot(&depot).unwrap();
-    assert_ne!(ancre, "b", "le décor : b n'est pas l'ancre");
     host.ouvrir_une_tache(&parent, "depuis-b").unwrap();
     let h = host.hosted(&manifeste).unwrap();
     host.with_backend(&h, |b| {
         let cat = b.catalog.lock().unwrap();
-        let suivies = couches::branches_suivies(&cat, &id).unwrap().expect("les branches suivies du dépôt");
-        assert!(suivies.suivies.contains(&"b".to_string()), "la parente n'est pas suivie : {suivies:?}");
-        let ancre = suivies.ancre.clone();
-        couches::couches_du_depot(&cat, &id, &depot, &ancre).unwrap();
-        let p = couches::parente_estampillee(&cat, &id, "agent/depuis-b").unwrap();
-        assert_eq!(p.as_ref().map(|p| (p.branche.as_str(), &p.genre)), Some(("b", &GenreDeParente::Declaree)), "{p:?}");
+        let p = couches::parente_estampillee(&cat, &id, "refs/heads/agent/depuis-b").unwrap();
+        assert_eq!(p.as_ref().map(|p| (p.branche.as_str(), &p.genre)), Some(("refs/heads/b", &GenreDeParente::Declaree)), "{p:?}");
+        drop(cat);
+        let etat = b.index_states().unwrap();
+        let d = etat["layers"].as_array().unwrap().iter().find(|c| c["repo"] == serde_json::json!(id)).unwrap_or_else(|| panic!("{etat}")).clone();
+        let branches = d["branches"].as_array().unwrap();
+        assert!(branches.iter().any(|x| x["ref"] == "refs/heads/b"), "la parente n'est pas suivie : {d}");
+        let tache = branches.iter().find(|x| x["ref"] == "refs/heads/agent/depuis-b").unwrap_or_else(|| panic!("{d}"));
+        assert_eq!((tache["parent"].as_str(), tache["kind"].as_str()), (Some("refs/heads/b"), Some("declaree")), "{tache}");
     })
     .unwrap();
     host.fermer_une_tache(&parent, "depuis-b").unwrap();
