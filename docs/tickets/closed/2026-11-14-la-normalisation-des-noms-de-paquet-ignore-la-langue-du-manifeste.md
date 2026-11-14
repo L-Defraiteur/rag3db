@@ -1,6 +1,6 @@
 # La normalisation des noms de paquet est la même pour toutes les langues côté manifestes
 
-- **État** : ouvert (14 novembre 2026)
+- **État** : corrigé (14 novembre 2026) — codeparsers `provenance-par-langue` (cf90e1c) : `declared_dependencies_by_language`, chaque nom normalisé par les variantes de sa langue, `go.toml` sans variantes ; rag3weaver : `manifestes.rs` range par langue et lit `go.mod`, `code.rs` ne passe que les tables par langue
 - **Gravité** : imprécision latente (aucune dépendance Go n'arrive encore : rag3weaver ne lit pas go.mod)
 - **Atteignable en service** : non tant que go.mod n'est pas lu
 - **Touche rag3weaver** : oui (`manifestes.rs` devra passer les dépendances par langue)
@@ -30,3 +30,14 @@ Go pourrait alors ne garder aucune variante.
 rag3weaver ne lit pas encore go.mod (`manifestes.rs` : Cargo.lock, package.json, pyproject.toml,
 requirements.txt, vcpkg.json) : aucune dépendance Go n'arrive aujourd'hui, la collision de casse ne peut pas
 se produire. Le ticket se ferme avec la lecture de go.mod.
+
+## La fermeture
+
+Les deux tables par langue de codeparsers (`declared_dependencies_by_language`,
+`project_packages_by_language`) normalisent chaque nom par les variantes de sa langue ; Go n'en a plus
+(`github.com/Azure/azure-sdk-for-go` n'est plus `github.com/azure/…`). rag3weaver range chaque manifeste
+sous sa langue, lit `go.mod` (`module`, `require` en bloc et en ligne, `replace` noté) et ne passe que les
+tables par langue. Témoins : `tests/provenance_par_langue.rs` (codeparsers, rouge sous la table neutralisée)
+et `manifestes::tests::l_analyse_compare_aux_manifestes_de_la_langue` (rouge sous l'ancien passage des
+tables de toutes les langues). Le cas Go de bout en bout attend que les imports Go produisent leurs
+bibliothèques : [ticket du même jour](../../codeparsers/tickets/2026-11-14-un-import-go-ne-produit-aucune-bibliotheque.md).
