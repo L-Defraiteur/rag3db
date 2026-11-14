@@ -300,3 +300,9 @@ jusqu'au verdict commun de G et archi (jeux croisés + jeu instrumenté sous les
 avec : `workspace.index_exclude`, minifié par contenu et fichiers de plus de 1 Mio, défauts dans les
 gabarits). tty-9 a le « à toi » ; puis activations, sans-filtre, 1b, fils du moteur, pointeur des règles,
 la fermeture qui tient, le crochet en `Weak`, la réécriture du `IN` (recherche, rang 25), la chaîne Rust.
+
+**20 h 5x** : activations prêt (8105b7f02 reposé à la main après un conflit de nouveautes.md ; la garde
+apprend `PILE_TESTE`, garde-pile-3 posée au cache d9a6c083) → sans-filtre → 1b → fils du moteur (vert) →
+pointeur des règles → fermeture qui tient (7c0cb6f6c) → crochet en `Weak` (arbre principal) → réécriture
+du `IN` (recherche) → gestes de 96 → (B) l'`IN` haché (cœur, ab26b045d, C++) → garde-pile-3 (52f674ad7) →
+chaîne Rust 1.98.1. La bascule de la lib 373b5477b part après la recopie ; les passes épinglent la lib.

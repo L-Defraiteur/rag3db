@@ -739,3 +739,30 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   des tests de mesure ; l'API de maintenance (`maintain` : purge d'ids, compactage, rapport ;
   `live_node_ids`) en cours pour le script de fenêtre. **Le cœur** : (B) l'ensemble haché pour un `IN`
   sur liste constante, puis (A) le planificateur ; le dictionnaire sous ASan la nuit.
+
+## 20 h 4x — le verdict de la lib tient, la bascule part ; la fuite tient à la taille du Cypher ; dix-neuf atterris
+
+- **373b5477b** : e2e_code 36/36, e2e_lectures 27/27, e2e_demon_hote 12/13 avec le seul rouge connu (le
+  jeu instrumenté d'archi dit mot pour mot le même texte sous les deux libs : Rust du 13, ticket). ABI
+  sans symbole changé, lib aux deux postes, binaire 4b43c3afc prêt. **Fenêtre de bascule donnée à G**
+  après la recopie de la garde : annonce, instantanés, deux sens, binaire, `courant` et `lib-des-passes`
+  aux deux postes, réveil, témoins ; la lib épinglée des passes devient 373b5477b au prochain lot.
+- **La fuite tient à la taille du Cypher projeté** (ED) : R filtré par chemin ou langage projette aussi
+  un graphe par requête (un Cypher court) et **ne fuit pas** (+5 Mio par appel) ; **les hôtes de Lucie ne
+  sont pas touchés aujourd'hui, même en dense filtré**. La projection d'un Cypher de 2,9 Mo (72 652 uuid
+  en clair) puis son retrait fuit 3,58 Gio par tour sans requête : variante (b) du cœur, l'analyse ou un
+  cache de la requête. Règle rag3weaver en mémoire : jamais une grande liste en clair dans un Cypher ;
+  la forme = un graphe projeté posé une fois par (couche, rang) et cité par nom (la vue de 2a′-2).
+- **Le cœur** : (B) vert — un ensemble haché pour un `IN` sur liste constante, le rapport IN/UNWIND de
+  97 à 0,69 (2 010 → 15 ms), 73 e2e verts, rang 27 ; il attaque la fuite de la projection (cas C++ à
+  quatre variantes).
+- **La garde** : garde-pile-3 (G, relue par recherche, 33 verts) ajoute `PILE_TESTE` — une tête déjà
+  reposée à la main après un conflit de `docs/nouveautes.md` (tout le monde écrit en tête du même
+  fichier : à repenser), posée au cache des deux postes (f9521fb3 → d9a6c083), rang 28 pour master.
+  Embarquement pousse avec, depuis 8105b7f02.
+- **La pile** : dix-neuf atterris (tty-9 373794303 : la garde a remis le worktree au premier refus, en
+  vrai). Chaîne : activations (prêt) → sans-filtre → 1b → fils du moteur (vert) → pointeur des règles →
+  fermeture qui tient (7c0cb6f6c, check_features 8/8 avant la tête) → crochet en `Weak` → réécriture du
+  `IN` → gestes de 96 (confirmer_fiche vert) → (B) du cœur → garde-pile-3 → chaîne Rust.
+- **Tty** : README du crate (96e41c072) ; **96** : confirmer_fiche vert, un ticket sur les ForEachNode
+  imbriqués ; **lucivy** : PR #35, l'API de maintenance en cours.
