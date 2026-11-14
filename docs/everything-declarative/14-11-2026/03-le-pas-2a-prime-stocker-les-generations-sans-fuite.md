@@ -331,3 +331,27 @@ Décidé avec arbre principal (voie (b)). Le détail est dans
   pointe vue en dernier, et qu'aucune autre ref vivante ne la porte. Sinon, c'est une fin et une
   naissance.
 - Sous 2a′-3, l'écrivain lit l'identifiant par la suivie résolue, jamais par le nom de la ref.
+
+## 9. La position sortira de l'identité avec 2a′-3 (14 novembre 2026, 22 h 55)
+
+**La décision** (c7, avec arbre principal) : la position d'un scope reste dans l'identité de sa ligne
+pour 2a′-2, et **en sort avec 2a′-3**, en une seule migration.
+
+**Pourquoi pas maintenant** : ce n'est pas le coût. La recopie des arêtes entrantes se paie au commit,
+quelques centaines de ms. Mais sortir la position de l'identité change les uuid de toutes les lignes
+posées, donc une migration de plus, alors que 2a′-3 (les générations par les objets git, où la
+génération devient l'arbre du commit) en impose déjà une. Les deux se font ensemble.
+
+**La justification, écrite dès maintenant** : la mesure bornée des déplacés (page 06, § 9 ; sonde
+`tests/sonde_deplaces.rs`, branche mesure-deplaces, 03f6fc2c9). Sur les 50 derniers commits de
+master, 44 849 arêtes entrantes seraient recopiées, **dont 86 % par des scopes seulement déplacés**,
+qui n'achètent qu'un numéro de ligne. Le commit de code médian recopie 1 500 arêtes, le pire 12 444.
+
+**Ses deux réserves, qui vont avec la décision** :
+1. les arêtes entrantes sont lues sur une seule base (la base d'avant les versions), et non à chaque
+   commit : c'est un ordre de grandeur ;
+2. un fichier `.md` compte comme un fichier de code, avec ses scopes de texte, mais sans arête : il ne
+   pèse pas dans les recopies.
+
+**D'ici 2a′-3** : l'écrivain de 2a′-2 dit à chaque publication le compte des recopies et la part des
+déplacés, et un commit réel au-delà de 20 000 recopies rouvre la question.
