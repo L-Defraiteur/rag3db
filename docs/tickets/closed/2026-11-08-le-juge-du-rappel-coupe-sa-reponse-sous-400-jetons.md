@@ -1,6 +1,6 @@
 # Le juge du rappel des hooks coupe sa réponse sous un plafond de 400 jetons : la réflexion de Gemini les prend
 
-- **État** : ouvert (8 novembre 2026), pour archi (les hooks de Claude Code).
+- **État** : corrigé (8 novembre 2026) par `52021b977` — le ticket était resté ouvert ; fermé le 14 novembre par archi en relisant le code.
 - **Gravité** : coût, et réponse perdue. Le juge paie l'appel et ne rend rien : sa réponse coupée
   est illisible, donc aucune fiche n'est rendue.
 - **Atteignable en service** : oui, dès que le juge différé est allumé avec Gemini 3.8 Flash (le
@@ -53,3 +53,10 @@ ni l'autre.
 
 Un plafond qui laisse la place à la réflexion (celui de `Decide`, ou une réflexion bornée par la
 requête), la troncature nommée dans le journal du fond, et le témoin.
+
+## Ce qui l'a fermé
+
+`52021b977` (8 novembre 2026, 3 ter (g)) : le juge a le plafond de `Decide` (`PLAFOND_DU_JUGE`,
+2 048 jetons), et une réponse arrêtée sur `finish_reason: length` se dit « réponse coupée après N
+jetons (raison length, plafond 2048, dont M de réflexion) » au lieu de « réponse illisible ».
+Témoin : `claude_code_hook::tests::une_reponse_coupee_du_juge_se_dit_coupee_et_le_plafond_est_celui_de_decide`.
