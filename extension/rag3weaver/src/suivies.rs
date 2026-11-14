@@ -222,17 +222,147 @@ pub struct SourceResolue {
 }
 
 /// **Résoudre les sources** d'une déclaration dans le dépôt de `racine` : un `git for-each-ref` et un
-/// `git worktree list --porcelain`, rien de plus. `worktree_du_backend` est le worktree que le backend indexe ;
-/// `taches`, les branches des tâches que l'atelier a ouvertes (`agent/<nom>`). Une source qui ne résout rien
-/// se dit dans `vide`, elle ne fait pas échouer la résolution.
+/// `git worktree list --porcelain` pour toutes les sources, plus un `git rev-parse` par sélecteur
+/// `commit:`. `worktree_du_backend` est le worktree que le backend indexe ; `taches`, les branches des tâches
+/// que l'atelier a ouvertes (`agent/<nom>`). Une source qui ne résout rien se dit dans `vide`, elle ne fait
+/// pas échouer la résolution.
 pub fn resoudre_les_sources(
     racine: &std::path::Path,
     worktree_du_backend: &std::path::Path,
     taches: &[String],
     declaration: &Declaration,
 ) -> Result<Vec<SourceResolue>, String> {
-    let _ = (racine, worktree_du_backend, taches, declaration);
-    Err("la résolution des sources n'existe pas encore".into())
+    let refs = lire_les_refs(racine)?;
+    let worktrees = lire_les_worktrees(racine)?;
+    let du_backend = worktree_du_backend.canonicalize().ok();
+    Ok(declaration
+        .sources
+        .iter()
+        .map(|source| {
+            let (refs_de_la_source, wts, vide): (Vec<RefResolue>, Vec<&CoucheDeTravail>, Option<String>) = match &source.select {
+                Selecteur::Branche(nom) => {
+                    let complet = format!("refs/heads/{nom}");
+                    let trouvees: Vec<RefResolue> = refs.iter().filter(|r| r.nom == complet).cloned().collect();
+                    let vide = trouvees.is_empty().then(|| format!("branch:{nom} : aucune branche de ce nom"));
+                    (trouvees, Vec::new(), vide)
+                }
+                Selecteur::Refs(motif) => {
+                    let trouvees: Vec<RefResolue> = refs.iter().filter(|r| ref_correspond(motif, &r.nom)).cloned().collect();
+                    let vide = trouvees.is_empty().then(|| format!("refs:{motif} : aucune ref ne correspond"));
+                    (trouvees, Vec::new(), vide)
+                }
+                Selecteur::Commit(rev) => match crate::couches::git(racine, &["rev-parse", "--verify", "--quiet", &format!("{rev}^{{commit}}")]) {
+                    Ok(sha) if !sha.is_empty() => (vec![RefResolue { nom: sha.clone(), pointe: sha }], Vec::new(), None),
+                    _ => (Vec::new(), Vec::new(), Some(format!("commit:{rev} : aucun commit de ce nom"))),
+                },
+                Selecteur::Worktree(quel) => {
+                    let choisis: Vec<&CoucheDeTravail> = match quel {
+                        Worktree::Tous => worktrees.iter().collect(),
+                        Worktree::DuBackend => du_backend
+                            .as_ref()
+                            .and_then(|b| worktrees.iter().filter(|w| b.starts_with(&w.chemin)).max_by_key(|w| w.chemin.as_os_str().len()))
+                            .into_iter()
+                            .collect(),
+                        Worktree::Chemin(c) => {
+                            let voulu = std::path::Path::new(c).canonicalize().ok();
+                            worktrees.iter().filter(|w| voulu.as_ref() == Some(&w.chemin)).collect()
+                        }
+                    };
+                    let vide = choisis.is_empty().then(|| match quel {
+                        Worktree::DuBackend => format!("worktree:backend : {} n'est dans aucun worktree du dépôt", worktree_du_backend.display()),
+                        Worktree::Tous => "worktree:* : le dépôt n'a aucun worktree".to_string(),
+                        Worktree::Chemin(c) => format!("worktree:{c} : aucun worktree du dépôt à ce chemin"),
+                    });
+                    (refs_des_worktrees(&refs, &choisis), choisis, vide)
+                }
+                Selecteur::Taches => {
+                    let noms: Vec<String> = taches.iter().map(|t| format!("refs/heads/{t}")).collect();
+                    let trouvees: Vec<RefResolue> = refs.iter().filter(|r| noms.contains(&r.nom)).cloned().collect();
+                    let wts: Vec<&CoucheDeTravail> = worktrees.iter().filter(|w| w.branche.as_ref().is_some_and(|b| noms.contains(b))).collect();
+                    let vide = trouvees.is_empty().then(|| "tasks : aucune tâche ouverte par l'atelier".to_string());
+                    (trouvees, wts, vide)
+                }
+            };
+            SourceResolue {
+                source: source.clone(),
+                refs: refs_de_la_source,
+                travail: if source.work { wts.into_iter().cloned().collect() } else { Vec::new() },
+                vide,
+            }
+        })
+        .collect())
+}
+
+/// Les refs du dépôt, chacune sur son commit (une étiquette annotée, déréférencée).
+fn lire_les_refs(racine: &std::path::Path) -> Result<Vec<RefResolue>, String> {
+    let sortie = crate::couches::git(racine, &["for-each-ref", "--format=%(refname)%00%(objectname)%00%(*objectname)"])?;
+    Ok(sortie
+        .lines()
+        .filter_map(|l| {
+            let mut c = l.split('\0');
+            let (nom, objet, deref) = (c.next()?, c.next()?, c.next().unwrap_or(""));
+            Some(RefResolue { nom: nom.to_string(), pointe: if deref.is_empty() { objet } else { deref }.to_string() })
+        })
+        .collect())
+}
+
+/// Les worktrees du dépôt, dans l'ordre de git : chemin résolu, branche extraite (nom complet) ou détaché.
+fn lire_les_worktrees(racine: &std::path::Path) -> Result<Vec<CoucheDeTravail>, String> {
+    let sortie = crate::couches::git(racine, &["worktree", "list", "--porcelain"])?;
+    let mut out = Vec::new();
+    for bloc in sortie.split("\n\n") {
+        let (mut chemin, mut commit, mut branche) = (None, None, None);
+        for l in bloc.lines() {
+            if let Some(p) = l.strip_prefix("worktree ") {
+                chemin = Some(std::path::PathBuf::from(p));
+            } else if let Some(h) = l.strip_prefix("HEAD ") {
+                commit = Some(h.to_string());
+            } else if let Some(b) = l.strip_prefix("branch ") {
+                branche = Some(b.to_string());
+            }
+        }
+        if let (Some(chemin), Some(commit)) = (chemin, commit) {
+            out.push(CoucheDeTravail { chemin: chemin.canonicalize().unwrap_or(chemin), branche, commit });
+        }
+    }
+    Ok(out)
+}
+
+/// Les refs des branches que des worktrees ont extraites, sans doublon (un worktree détaché n'en apporte pas).
+fn refs_des_worktrees(refs: &[RefResolue], worktrees: &[&CoucheDeTravail]) -> Vec<RefResolue> {
+    let mut out: Vec<RefResolue> = Vec::new();
+    for w in worktrees {
+        if let Some(b) = &w.branche {
+            if let Some(r) = refs.iter().find(|r| &r.nom == b) {
+                if !out.contains(r) {
+                    out.push(r.clone());
+                }
+            }
+        }
+    }
+    out
+}
+
+/// **Une ref correspond-elle au motif**, comme pour `git for-each-ref <motif>` : avec un joker (`*`, `?`),
+/// une correspondance de chemin où le joker ne franchit pas `/` ; sans joker, la ref elle-même ou ce qui est
+/// sous elle (`refs/heads/release` prend `refs/heads/release/1`).
+fn ref_correspond(motif: &str, nom: &str) -> bool {
+    if motif.contains(['*', '?']) {
+        joker(motif.as_bytes(), nom.as_bytes())
+    } else {
+        let m = motif.trim_end_matches('/');
+        nom == m || nom.strip_prefix(m).is_some_and(|reste| reste.starts_with('/'))
+    }
+}
+
+fn joker(m: &[u8], n: &[u8]) -> bool {
+    match (m.first(), n.first()) {
+        (None, None) => true,
+        (Some(b'*'), _) => joker(&m[1..], n) || (!n.is_empty() && n[0] != b'/' && joker(m, &n[1..])),
+        (Some(b'?'), Some(&c)) => c != b'/' && joker(&m[1..], &n[1..]),
+        (Some(&a), Some(&b)) => a == b && joker(&m[1..], &n[1..]),
+        _ => false,
+    }
 }
 
 #[cfg(test)]
