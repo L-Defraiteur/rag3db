@@ -4,8 +4,13 @@
 //! ```text
 //! rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] --depot <nom|chemin> --tache <nom> [--demande "<texte>"]
 //!                [--daemon-json <chemin> | --daemon-cmd "<commande>"] [--adresse hôte:port]
-//!                [--depuis <id>]
+//!                [--depuis <id>] [--journal <fichier>]
 //! ```
+//!
+//! `--journal` écrit en texte brut ce qui part dans l'historique du terminal (lot
+//! tty-7). Sous mosh, qui ne garde aucun historique au-delà de l'écran, un journal
+//! s'ouvre de lui-même dans `~/.local/state/rag3weaver/tty/`, et la vue dit la
+//! commande qui le relit.
 //!
 //! Écrit au fil de l'eau ce que fait l'équipier de la tâche : les tokens du
 //! modèle, ses outils, sa boîte. Une `--demande` lance l'équipier (une
