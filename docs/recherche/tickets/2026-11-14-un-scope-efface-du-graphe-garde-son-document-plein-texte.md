@@ -74,6 +74,63 @@ Le script est `sonde-coherence-tables.sh` (au portable dans `~/.cache/rag3db-loc
 dans code-principal, rien dans memoire-longue. Ce sont les chiffres de ces copies du 13 novembre ;
 les bases vivantes ont pu bouger depuis.
 
+## La purge sur une copie (hotfixs, 14 novembre 2026, 19 h 20)
+
+Demandée par c7. C'est une copie reflink neuve du `.fts` de l'instantané `avant-835d5298f/code-rag3db-depot`
+(hôte arrêté), et rien n'a touché une base de Lucie. Les listes viennent de la sonde ci-dessus :
+8 809 `_node_id` Scope et 124 File. L'outil est le test lucivy `diag_purge_orphelins`, sur la branche
+lucivy `purge-orphelins-depot` (2a23619, sur main fdf20d4). Ce n'est pas le repli conçu par recherche,
+qui corrige `DeleteRecordNode` pour l'avenir : c'est une purge en lot.
+
+Le test fait, dans l'ordre :
+1. `index_report` avant ;
+2. un banc de requêtes `contains` qui relève **tous** les `_node_id` touchés (recherche non tronquée) ;
+3. `delete_by_node_id` de chaque orphelin, la validation et la fin des fusions ;
+4. `index_report` après, et le banc rejoué ;
+5. la réouverture de la table.
+
+| table | documents avant → après (rouvert) | orphelins effacés | touchés par le banc | supprimés en segments | octets d'index | temps |
+|---|---|---:|---:|---|---|---:|
+| Lucivy_Scope | 88 471 → 79 662 (79 662) | 8 809 | 8 770 | 11 879 → 20 688 | 4 274 396 483 → 4 274 397 771 | 921 ms |
+| Lucivy_File | 7 927 → 7 803 (7 803) | 124 | 124 | 9 → 133 | 7 315 005 → 7 315 257 | 811 ms |
+
+Après la purge, les documents égalent les lignes du graphe (79 662 Scope, 7 803 File).
+
+**Le banc** : sur chaque requête, les hits d'après sont exactement ceux d'avant moins les orphelins, ni un
+de plus ni un de moins.
+
+| Scope, `content` | hits avant | dont orphelins | après |
+|---|---:|---:|---:|
+| return | 33 930 | 8 412 | 25 518 |
+| fn | 28 245 | 8 099 | 20 146 |
+| test | 21 767 | 8 198 | 13 569 |
+| self | 16 576 | 6 665 | 9 911 |
+| index | 15 220 | 7 968 | 7 252 |
+| impl | 11 987 | 5 980 | 6 007 |
+| commit | 8 651 | 5 822 | 2 829 |
+| catalog | 6 182 | 1 598 | 4 584 |
+| scope | 5 579 | 2 312 | 3 267 |
+| async | 5 088 | 3 004 | 2 084 |
+| mutex | 1 983 | 154 | 1 829 |
+| lucivy | 1 115 | 244 | 871 |
+
+File, champ `path` : dix requêtes, de 0 à 122 orphelins chacune (`docs` 2 395 → 2 273, `md`
+1 859 → 1 737), toutes identiques au reste près.
+
+**Ce que ça dit.**
+- **Question 1 répondue : oui, les recherches rendent les orphelins, et en masse.** Sur `commit`, deux
+  hits sur trois sont des orphelins ; sur `index`, plus de la moitié. Le plafond de résultats de
+  rag3weaver les classe avec les autres. Un hit orphelin ne mène à aucun Scope, et il peut chasser du
+  top-k un Scope vivant. La gravité « réponse fausse possible » est donc vraie en service.
+- **La purge ne libère pas l'espace par elle-même.** Les documents passent en supprimés dans leurs
+  segments, aucune fusion ne s'est déclenchée, et les octets d'index sont restés au même chiffre. Le
+  gain se lira après une fusion ou un `compact`.
+- **La purge est sûre et rapide** : moins d'une seconde par table, survit à la réouverture, ne touche
+  aucun document vivant.
+
+Reste la décision de Lucie pour les bases existantes. Sur la base vivante, il faudrait recalculer les
+listes, hôte arrêté, avant d'effacer : les chiffres ci-dessus sont ceux de la copie du 13 novembre.
+
 ## Les deux questions ouvertes
 
 1. **Les recherches rendent-elles ces orphelins ?** Si oui, que fait l'appelant d'un `_node_id` qui ne
