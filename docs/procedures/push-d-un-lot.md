@@ -51,6 +51,8 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
 
 **Journaux (c7, 13 nov. 2026)** : après le push, les journaux de la passe **s'archivent** (sous `~/.cache/rag3weaver-build/archives/<lot>-<date>/`), ils ne s'effacent pas ; seuls le worktree et les targets s'effacent. Un rouge vu pendant la passe reste lisible après coup : un journal effacé a privé everything declarative de la vue d'un rouge du navigateur.
 
+**Le rejeu court d'un lot d'une ligne (c7 et recherche, 14 nov. 2026)** : un lot qui ne touche ni l'arrêt, ni le bus, ni le code indexé (une ligne de lib, un crochet de test) n'a pas à rejouer `e2e_lectures` et `e2e_code`. Le script de passe de recherche (`~/.cache/rag3weaver-build/passe_epinglee.sh`) prend `SUITES=<liste>` (séparée par des virgules), qui remplace la liste des suites e2e, ou `SUITES=-`, qui n'en joue aucune. Le témoin, check_features avec sa preuve, la lib entière et le témoin navigateur restent. **Un journal de passe se produit par la passe, jamais à la main** : la garde le lit comme preuve, et un journal composé, même des seuls vrais résultats, la contourne (le 14 novembre, la ligne `try_update` a refait sa passe entière pour cette raison).
+
 ### Portée commune des validations Linux
 
 `run_e2e.sh` et `scripts/temoins_navigateur.sh` entrent désormais par
