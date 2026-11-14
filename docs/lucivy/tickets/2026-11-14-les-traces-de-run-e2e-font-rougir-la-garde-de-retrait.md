@@ -1,7 +1,8 @@
 # Les traces de run_e2e.sh font rougir la garde de retrait
 
 - **État** : ouvert (14 novembre 2026). Rencontré deux fois en retirant les worktrees de la montée de
-  lucivy 4.3.7 ; contourné à la main, voir plus bas.
+  lucivy 4.3.7, puis une troisième au retrait du worktree de 2a′-1 (everything declarative), avec
+  `node_modules` en second artefact ; contourné à la main, voir plus bas.
 - **Gravité** : gêne de procédure. Aucune donnée perdue, mais chaque retrait d'un worktree qui a
   porté une passe s'arrête.
 - **Atteignable en service** : non (outillage de passe et de ménage).
@@ -33,6 +34,32 @@ premier coup. 52 Ko par worktree.
 
 Archives de ce cas : `~/.cache/rag3weaver-build/archives-worktrees/20261114-161730-lucivy/` à luciepc
 (les copies `*-ignores`), et `20261114-161801-lucivy/` pour les rapports verts.
+
+## Troisième occurrence, et un second artefact : `node_modules` (everything declarative)
+
+Le 14 novembre 2026 à luciepc, au retrait de `rag3db-ed-navigateur` (le worktree des passes de
+2a′-1), la garde a rendu ROUGE avec deux refus :
+- les deux traces de `run_e2e.sh` ci-dessus (52 Ko) ;
+- **`extension/rag3weaver/ui/ide/node_modules`** (142 Mo), posé par `npm ci` pour le témoin du
+  navigateur (`temoins_navigateur.sh`). Ses liens `node_modules/.bin/*` (`esbuild`, `tsc`,
+  `tailwindcss`…) sortent en « lien source non suivi ou ambigu ». Il se refait par `npm ci` depuis
+  `package-lock.json`, qui est suivi.
+
+Le contournement suivi, au mot de c7 :
+1. les deux traces sont déplacées dans le dossier des journaux de la session
+   (`~/.cache/rag3weaver-build/ed-navigateur/target-du-worktree/`) ;
+2. `node_modules` est effacé ;
+3. la garde est rejouée avec un rapport neuf ;
+4. `worktree remove --force` sur VERT seulement.
+
+**Un piège de plus dans le contournement** : la copie de l'administration (`cp -a
+.git/worktrees/<nom>`) doit se faire **juste avant** la garde. Une commande git dans le worktree
+entre les deux, ici un `git status --ignored` pour relever les ignorés, récrit l'index. La garde rend
+alors « archive diffère de l'administration », alors même que `diff -r` ne voit aucune différence.
+Recopiée juste avant, la garde sort VERT. Les rapports sont dans `ed-navigateur/garde-worktree-rapport-{,2,3}.json`.
+
+Ce qu'on pourrait faire, en plus : les dépendances npm du témoin du navigateur pourraient vivre hors
+du worktree, comme le target cargo, par exemple dans un cache de session par lien.
 
 ## Ce qu'on pourrait faire
 
