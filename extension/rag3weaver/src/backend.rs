@@ -6630,9 +6630,9 @@ mod tests {
         }
 
         let apres = reponses();
-        for (a, b) in avant.iter().zip(&apres) {
-            assert!(a == b, "une génération invisible a changé une réponse :\navant : {a}\naprès : {b}");
-        }
+        let changees: Vec<String> =
+            avant.iter().zip(&apres).filter(|(a, b)| a != b).map(|(a, b)| format!("avant : {a}\naprès : {b}")).collect();
+        assert!(changees.is_empty(), "une génération invisible a changé {} réponse(s) :\n{}", changees.len(), changees.join("\n\n"));
     }
 
     /// **Chaque nœud atteint dit d'où il vient** (`from`, l'IDE, lot A5) :
