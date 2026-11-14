@@ -1,6 +1,6 @@
 # L'atelier perd les fins de ligne CRLF
 
-- **État** : ouvert (13 novembre 2026), pour archi.
+- **État** : corrigé (14 novembre 2026), lot `atelier-quatre-mineurs` d'archi
 - **Famille** : produit
 - **Gravité** : réponse fausse — un remplacement sur plusieurs lignes ne trouve jamais son texte ; une écriture mélange les fins de ligne ; le diff peut dire « aucun changement »
 - **Atteignable en service** : oui, sur tout fichier en CRLF (dépôts venus de Windows, fichiers `.bat`, certains CSV)
