@@ -10401,10 +10401,17 @@ fn read_threads() -> u64 {
             }
             _ => 0,
         };
+        // Le nombre de chemins sales d'une génération publiée (page 06, § 3) : `arbre_propre` en découle.
+        if self.dialect.create_generation_table().is_some() {
+            let colonne = ColumnDef { name: "chemins_sales".into(), col_type: ColumnType::Int64 };
+            self.alter_absorbing(crate::generations::TABLE, &self.dialect.alter_add_column_default(crate::generations::TABLE, &colonne, "0"))?;
+        }
+        // Le rang lu sans vue est le rang en attente, au-dessus du dernier publié (page 06, § 1).
         self.generations = Some(crate::generations::Visibilite {
             tables: tables.iter().map(|t| t.to_string()).collect(),
             couche: couche.to_string(),
-            rang,
+            rang: rang + 1,
+            rang_publie: rang,
             tout_visible: true,
             ensembles: std::sync::Arc::new(crate::generations::EnsemblesPoses::default()),
         });
@@ -10434,21 +10441,59 @@ fn read_threads() -> u64 {
         rendu
     }
 
-    /// **Le dernier rang publié de la couche** (2a′-2, page 06, § 1). Pas encore : l'écrivain le tiendra.
+    /// **Le dernier rang publié de la couche** (2a′-2, page 06, § 1).
     pub fn rang_publie(&self) -> Option<i64> {
-        None
+        self.generations.as_ref().map(|v| v.rang_publie)
     }
 
-    /// **Le rang en attente de la couche**, la couche de travail (2a′-2, page 06, § 1). Pas encore.
+    /// **Le rang en attente de la couche**, la couche de travail, lu sans vue (2a′-2, page 06, § 1).
     pub fn rang_en_attente(&self) -> Option<i64> {
-        None
+        self.generations.as_ref().map(|v| v.rang)
     }
 
-    /// **Publier la génération en attente** au commit de la source suivie (2a′-2, page 06, § 3) :
-    /// la ligne `_generation`, puis le rang en attente devient le rang publié. Pas encore écrite.
+    /// **Publier la génération en attente** au commit de la source suivie (2a′-2, page 06, § 3) : la
+    /// ligne `_generation` au rang en attente w, avec son commit et le nombre de chemins sales (un arbre
+    /// propre en a 0), puis w devient le rang publié et w + 1 le rang en attente. Aucune ligne de
+    /// `Scope` ni de `File` n'est réécrite : les lignes nées à w deviennent publiées par le seul rang.
     pub fn publier_la_generation(&mut self, commit: &str, chemins_sales: usize) -> Result<i64, CatalogError> {
-        let _ = (commit, chemins_sales);
-        Err(CatalogError::DbError("la publication d'une génération n'est pas encore écrite".into()))
+        let Some(v) = self.generations.as_ref() else {
+            return Err(CatalogError::DbError("publier une génération : cette base n'a pas de générations".into()));
+        };
+        let (couche, w) = (v.couche.clone(), v.rang);
+        let poser = self
+            .dialect
+            .merge_generation()
+            .ok_or_else(|| CatalogError::DbError("publier une génération : ce dialecte ne les sait pas".into()))?;
+        let texte = |nom: &str, val: &str| QueryParam::new(nom, CypherValue::String(val.to_string()));
+        let cle = format!("{couche}:{w}");
+        let maintenant = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
+        self.conn
+            .execute_with_params(
+                &poser,
+                &[
+                    texte("key", &cle),
+                    texte("couche", &couche),
+                    QueryParam::new("rang", CypherValue::Int(w)),
+                    texte("commit", commit),
+                    texte("base", ""),
+                    texte("recette", ""),
+                    texte("tombstones", "[]"),
+                    QueryParam::new("publiee_le", CypherValue::Int(maintenant)),
+                ],
+            )
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        self.conn
+            .execute_with_params(
+                &format!("MATCH (g:{} {{_key: $key}}) SET g.chemins_sales = $sales", crate::generations::TABLE),
+                &[texte("key", &cle), QueryParam::new("sales", CypherValue::Int(chemins_sales as i64))],
+            )
+            .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        if let Some(v) = self.generations.as_mut() {
+            v.rang_publie = w;
+            v.rang = w + 1;
+        }
+        self.publish_read_view();
+        Ok(w)
     }
 
     pub fn marquer_des_lignes_invisibles(&mut self) {

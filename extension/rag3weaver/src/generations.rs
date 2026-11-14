@@ -65,13 +65,16 @@ pub struct Visibilite {
     /// génération ; l'écrivain qui en pose une le défait (2a′-2). Il ne sert qu'à un lecteur sans
     /// filtre, qui rendrait sinon l'ensemble des lignes visibles au lieu de « toutes » (page 03, § 3).
     pub tout_visible: bool,
+    /// **Le dernier rang publié** de la couche (2a′-2, page 06, § 1). `rang`, le rang lu sans vue, est le
+    /// rang en attente : `rang_publie + 1`.
+    pub rang_publie: i64,
     /// Les ensembles posés de cette base ; partagés par toutes les copies de la visibilité.
     pub ensembles: Arc<EnsemblesPoses>,
 }
 
 impl PartialEq for Visibilite {
     fn eq(&self, autre: &Self) -> bool {
-        self.tables == autre.tables && self.couche == autre.couche && self.rang == autre.rang && self.tout_visible == autre.tout_visible
+        self.tables == autre.tables && self.couche == autre.couche && self.rang == autre.rang && self.tout_visible == autre.tout_visible && self.rang_publie == autre.rang_publie
     }
 }
 impl Eq for Visibilite {}
