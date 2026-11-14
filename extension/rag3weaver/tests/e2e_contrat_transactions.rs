@@ -17,10 +17,10 @@ use rag3weaver::dialect::{ColumnDef, ColumnType, PostgresDialect, SchemaDialect}
 use rag3weaver::postgres_connection::PostgresConnection;
 use rag3weaver_ir::{Count, Write};
 
+/// L'adresse de la base de CE processus : une base par passe sur le service de `RAG3WEAVER_PG`, créée au premier
+/// appel et effacée à la sortie (`tests/common/base_pg.rs`, 14 novembre 2026 : deux passes partageaient la base).
 fn conn_str() -> String {
-    std::env::var("RAG3WEAVER_PG").unwrap_or_else(|_| {
-        "host=localhost port=5433 user=rag3weaver password=rag3weaver dbname=rag3weaver_test".to_string()
-    })
+    crate::common::base_pg::conn_str()
 }
 
 fn lignes(uuids: &[&str]) -> QueryParam {
