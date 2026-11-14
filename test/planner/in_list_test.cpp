@@ -111,7 +111,7 @@ TEST_F(InListTest, AListThatChangesWithTheRowIsReadForEachRow) {
     auto r = conn->query("MATCH (n:T) WHERE n.k IN [n.k, 'absente', 'key-1'] RETURN count(*);");
     ASSERT_TRUE(r->isSuccess()) << r->getErrorMessage();
     EXPECT_EQ(r->getNext()->getValue(0)->getValue<int64_t>(), 3000);
-    auto s = conn->query("MATCH (n:T) WHERE 'key-' + CAST(n.i + 1 AS STRING) IN "
+    auto s = conn->query("MATCH (n:T) WHERE ('key-' + CAST(n.i + 1 AS STRING)) IN "
                          "['key-' + CAST(n.i AS STRING), 'key-0'] RETURN count(*);");
     ASSERT_TRUE(s->isSuccess()) << s->getErrorMessage();
     EXPECT_EQ(s->getNext()->getValue(0)->getValue<int64_t>(), 0);
