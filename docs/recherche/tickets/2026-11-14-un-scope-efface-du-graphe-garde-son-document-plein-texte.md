@@ -128,6 +128,33 @@ File, champ `path` : dix requêtes, de 0 à 122 orphelins chacune (`docs` 2 395 
 - **La purge est sûre et rapide** : moins d'une seconde par table, survit à la réouverture, ne touche
   aucun document vivant.
 
+### Le gain après compactage (19 h 34)
+
+L'outil est le test `compacter` du même fichier (35b525f) : `compact` puis la fin des fusions, sur la copie
+purgée, puis sur une copie neuve **non purgée** prise comme témoin. Le témoin sépare le gain de la purge
+de celui des documents supprimés qui étaient déjà dans les segments. Le banc (4 requêtes sur Scope, 3 sur
+File) rend les mêmes `_node_id` avant et après la fusion, dans les quatre cas.
+
+| table | copie | documents | segments (supprimés) avant → après | octets d'index avant → après | index / texte stocké |
+|---|---|---:|---|---|---|
+| Lucivy_Scope | purgée | 79 662 | 21 (20 688) → 4 (0) | 4 274 397 771 → **1 301 350 311** | 24,92 → 7,59 |
+| Lucivy_Scope | témoin non purgé | 88 471 | 21 (11 879) → 4 (0) | 4 274 396 483 → 4 076 884 835 | 5,00 → 4,77 |
+| Lucivy_File | purgée | 7 803 | 15 (133) → 4 (0) | 7 315 257 → 7 228 744 | 13,70 → 13,53 |
+| Lucivy_File | témoin non purgé | 7 927 | 15 (9) → 4 (0) | 7 315 005 → 7 293 365 | 13,39 → 13,35 |
+
+La fusion a pris 15 s sur la copie purgée et 41 s sur le témoin.
+
+**Ce que ça dit.**
+- **Les 8 809 orphelins pèsent 2,78 Go sur 4,08** : 68 % de Lucivy_Scope compacté, pour 10 % des
+  documents. Le compactage seul n'en rend que 0,2 Go.
+- **Ce sont de très gros documents.** D'après les rapports index / texte stocké, le texte stocké vaut
+  environ 171 Mo après la purge et 855 Mo dans le témoin. Les orphelins portent donc environ 684 Mo de
+  texte, 80 % du texte de la table : environ 78 Ko par orphelin, contre environ 2 Ko par Scope vivant.
+  C'est une bonne part de ce que mesure le ticket lucivy
+  `2026-11-13-le-plein-texte-du-depot-pese-cent-fois-ses-sources`. Ce sont probablement les Scope de
+  fichiers générés et minifiés, réindexés à chaque rebâti ; ce n'est pas vérifié ici.
+- File ne gagne rien d'utile : 124 petits documents.
+
 Reste la décision de Lucie pour les bases existantes. Sur la base vivante, il faudrait recalculer les
 listes, hôte arrêté, avant d'effacer : les chiffres ci-dessus sont ceux de la copie du 13 novembre.
 
