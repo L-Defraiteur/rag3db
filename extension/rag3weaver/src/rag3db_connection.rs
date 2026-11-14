@@ -291,7 +291,7 @@ impl Rag3dbConnection {
     }
 
     fn config_with_buffer_pool(choice: BufferPoolChoice) -> rag3db::SystemConfig {
-        let mut config = rag3db::SystemConfig::default();
+        let mut config = rag3db::SystemConfig::default().max_num_threads(db_threads());
         if let Some(v) = std::env::var("RAG3DB_MAX_DB_SIZE").ok().and_then(|s| s.parse::<u64>().ok()) {
             config = config.max_db_size(v);
         }
@@ -1057,6 +1057,20 @@ pub(crate) fn registered_writer(path: &Path) -> Option<HeldWriter> {
     Some(HeldWriter(w.database.upgrade()?, w.state.upgrade()?))
 }
 
+/// **Les fils du moteur d'une base** (`RAG3WEAVER_DB_THREADS`, 14 novembre 2026, page
+/// `docs/optimiseur/14-11-2026/03-une-enveloppe-pour-l-hote.md`) : la taille du pool de fils que le moteur crée à
+/// l'ouverture de chaque base. Sans elle, `SystemConfig::max_num_threads` valait 0 et le moteur prenait
+/// `hardware_concurrency`, tous les cœurs de la machine, quota ou pas : 32 fils par base au portable, 160 pour
+/// cinq bases. Défaut : `available_parallelism`, qui suit le quota du cgroup (`cpu.max`), la même règle que
+/// lucivy ; sans enveloppe, tous les cœurs comme avant. Au moins 1.
+pub fn db_threads() -> u64 {
+    db_threads_from(std::env::var("RAG3WEAVER_DB_THREADS").ok().as_deref(), std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1))
+}
+
+fn db_threads_from(var: Option<&str>, parallelism: usize) -> u64 {
+    var.and_then(|v| v.trim().parse::<u64>().ok()).filter(|&n| n >= 1).unwrap_or(parallelism.max(1) as u64)
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -1299,6 +1313,24 @@ mod tests {
         let cypher_val = CypherValue::Null;
         let rag3db_val = cypher_to_rag3db_value(&cypher_val);
         assert_eq!(rag3db_val, rag3db::Value::Null(rag3db::LogicalType::String));
+    }
+
+    /// **Les fils du moteur d'une base suivent `RAG3WEAVER_DB_THREADS`** (14 novembre 2026) : la base ouverte
+    /// sous la variable dit au moteur ce nombre de fils (`current_setting('threads')`, la taille du pool que le
+    /// moteur crée à l'ouverture), et sans elle `available_parallelism`, qui suit le quota du cgroup. Rouge
+    /// sur master : le moteur y prenait `hardware_concurrency`, quoi que dise l'environnement.
+    #[test]
+    fn les_fils_du_moteur_suivent_rag3weaver_db_threads() {
+        assert_eq!(db_threads_from(Some("3"), 32), 3);
+        assert_eq!(db_threads_from(None, 5), 5);
+        assert_eq!(db_threads_from(Some("0"), 7), 7, "0 n'est pas une borne : le défaut");
+        assert_eq!(db_threads_from(Some("trois"), 7), 7, "illisible : le défaut");
+        std::env::set_var("RAG3WEAVER_DB_THREADS", "3");
+        let conn = Rag3dbConnection::in_memory();
+        std::env::remove_var("RAG3WEAVER_DB_THREADS");
+        let conn = conn.unwrap();
+        let r = conn.execute("CALL current_setting('threads') RETURN *;").unwrap();
+        assert_eq!(r.rows[0][0], CypherValue::String("3".into()), "le moteur doit dire 3 fils : {:?}", r.rows);
     }
 
     // ── Integration tests (require rag3db build) ───────────────────────
