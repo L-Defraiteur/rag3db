@@ -5303,6 +5303,52 @@ mod tests_des_generations {
         match v { CypherValue::String(s) => s.clone(), autre => format!("{autre:?}") }
     }
 
+    /// **Une base à versions monte aux générations** (2a′-2, la migration de la page 03, § 5) : une
+    /// base de la forme `code-scope-v1/content`, peuplée, reçoit les trois colonnes et la génération 0,
+    /// puis l'estampille. Toutes ses lignes sont de la génération 0 de la couche du backend, aucun
+    /// uuid ne change, et elle se rouvre dans la forme à générations.
+    #[test]
+    fn une_base_a_versions_monte_aux_generations() {
+        let conn = crate::Rag3dbConnection::in_memory().unwrap();
+        let mut cat = Catalog::new(Box::new(conn), Box::new(crate::embedder::HashEmbedder::new(8)), crate::CatalogConfig {
+            allow_mock_embedder: true, embedding_dim: 8, ..Default::default()
+        });
+        cat.initialize().unwrap();
+        // Une base à versions, comme celles d'avant 2a′-1.
+        cat.persist_meta_key(SCOPE_FORM_KEY, SCOPE_FORM_VERSIONS).unwrap();
+        register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+        assert_eq!(scope_form(&cat).unwrap(), ScopeForm::Versions);
+        let a = analyze("/virtual", vec![("lib.rs".into(), "fn un() -> u32 {\n    deux()\n}\n\nfn deux() -> u32 {\n    2\n}\n".into())]);
+        cat.ingest_code(&a).unwrap();
+        let uuids = |cat: &Catalog| -> Vec<String> {
+            let r = cat.conn().execute("MATCH (s:Scope) RETURN s._uuid ORDER BY s._uuid").unwrap();
+            r.rows.iter().map(|l| texte(&l[0])).collect()
+        };
+        let avant = uuids(&cat);
+        assert!(!avant.is_empty());
+
+        migrer_vers_les_generations(&mut cat).expect("la migration");
+        assert_eq!(scope_form(&cat).unwrap(), ScopeForm::Generations);
+        assert_eq!(uuids(&cat), avant, "aucun uuid ne change");
+        let r = cat
+            .conn()
+            .execute("MATCH (s:Scope) RETURN s._couche, s._depuis, s._jusqu_a IS NULL, count(*)")
+            .unwrap();
+        assert_eq!(
+            r.rows,
+            vec![vec![CypherValue::String(COUCHE_DU_BACKEND.into()), CypherValue::Int(0), CypherValue::Bool(true), CypherValue::Int(avant.len() as i64)]],
+            "toutes les lignes sont de la génération 0 de la couche du backend"
+        );
+        let g = cat.conn().execute(&format!("MATCH (g:{}) RETURN g.couche, g.rang", crate::generations::TABLE)).unwrap();
+        assert_eq!(g.rows, vec![vec![CypherValue::String(COUCHE_DU_BACKEND.into()), CypherValue::Int(0)]]);
+        assert!(cat.generations.is_some(), "la visibilité est posée sans rouvrir");
+        // Rouverte, elle reste à générations : un second enregistrement du schéma ne réécrit rien.
+        register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+        assert_eq!(scope_form(&cat).unwrap(), ScopeForm::Generations);
+        // Une base déjà à générations, ou sans versions, n'est pas migrée par cette voie.
+        assert!(migrer_vers_les_generations(&mut cat).is_err());
+    }
+
     /// **Témoin 4, le prédicat** : une ligne d'une autre couche, et une ligne retirée au rang 0, ne
     /// sont vues ni par une sélection, ni par un compte, ni au bout d'un saut.
     #[test]
