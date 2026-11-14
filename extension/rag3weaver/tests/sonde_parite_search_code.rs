@@ -129,6 +129,22 @@ fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
     let fichier = racine.join(&retirer);
     let contenu = std::fs::read(&fichier).unwrap_or_else(|e| panic!("le fichier à retirer {} : {e}", fichier.display()));
     let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), None).expect("ouvrir le backend");
+    // Les lignes du fichier retiré lui-même, par table : un fichier effacé ne doit plus rien porter.
+    let nom_retire = retirer.to_string_lossy().to_string();
+    let du_fichier = |etape: &str| -> Value {
+        let conn = backend.catalog.lock().unwrap().conn_arc();
+        let mut out = serde_json::Map::new();
+        for (table, champ) in [("Scope", "file_path"), ("File", "path"), ("Symbol", "file_path")] {
+            let q = format!("MATCH (n:{table}) WHERE n.{champ} ENDS WITH '{nom_retire}' RETURN count(*)");
+            let v = match conn.execute(&q) {
+                Ok(r) => r.rows.first().and_then(|l| l.first()).map(|v| format!("{v:?}")).unwrap_or_default(),
+                Err(e) => format!("refus : {e}"),
+            };
+            eprintln!("[orphelins] {etape} : {table} du fichier retiré — {v}");
+            out.insert(table.to_string(), json!(v));
+        }
+        Value::Object(out)
+    };
     let comptes = |etape: &str| -> Value {
         let c = backend.catalog.lock().unwrap().comptes_du_plein_texte();
         for (e, d, l) in &c {
@@ -160,13 +176,15 @@ fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
     let ouverture = comptes("ouverture");
     let fin1 = indexer("source entière");
     let entiere = comptes("après l'index de la source entière");
+    let fichier_avant = du_fichier("après l'index de la source entière");
     std::fs::remove_file(&fichier).expect("retirer le fichier");
     let fin2 = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| indexer("sans le fichier")));
     std::fs::write(&fichier, &contenu).expect("remettre le fichier");
     let fin2 = fin2.unwrap_or_else(|e| std::panic::resume_unwind(e));
     let sans = comptes("après l'index sans le fichier");
+    let fichier_apres = du_fichier("après l'index sans le fichier");
     let doc = json!({"base": base.to_string_lossy(), "racine": racine, "retire": retirer.to_string_lossy(),
-                     "ouverture": ouverture, "apres_source_entiere": entiere, "apres_effacement": sans,
+                     "ouverture": ouverture, "apres_source_entiere": entiere, "apres_effacement": sans, "fichier_retire_avant": fichier_avant, "fichier_retire_apres": fichier_apres,
                      "fin_index_source_entiere": fin1, "fin_index_effacement": fin2});
     std::fs::write(&sortie, serde_json::to_string_pretty(&doc).unwrap()).expect("écrire le relevé");
     eprintln!("[orphelins] relevé écrit : {}", sortie.to_string_lossy());
