@@ -334,3 +334,22 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   trois cas dans string_rewrite_test.cpp (chaine-au-point-de-reprise, c1a8f8171), sous ASAN dans le
   build du cœur. Appris en passant : un ADD COLUMN d'une autre connexion est accepté pendant une
   transaction d'écriture ouverte — ticket moteur demandé si c'est un défaut d'isolement.
+
+## 15 h 4x — la provenance des imports sur master, second mot à codeparsers
+
+- **codeparsers a poussé 8b3aa1041** : le nœud `Library` dit d'où vient la bibliothèque (builtin,
+  dependency, project, inconnue) et l'arête de liaison porte `provenances`. Pointeur du sous-module
+  e23ed0d6e, en avance rapide depuis b9029dc d'ED, vérifié sur master. Rebase 51f97a8c1 → 2209f2fa0
+  (provenance-imports-4) ; `--code-apporte` depuis la base testée donnait 14 chemins de code, d'où
+  le rejeu court sous le verrou (lib 0c41f9fe6 : check_features 8/8, `code::` 42/0, e2e_code 53/53,
+  e2e_postgres 36/36) ; au dernier pas master avait encore bougé (85e46fd74, docs), rien de code,
+  rebase sans rejeu, garde à jour, trois contrôles lus.
+- **hotfixs a poussé 85e46fd74** hors file (docs seules) : lecture du core 3980144, témoin réduit
+  vert 4/4 sous ASAN (le plantage n'est pas dans ces formes), et le ticket neuf « un ADD COLUMN
+  passe sous une transaction d'écriture ouverte » : l'ALTER d'une connexion B aboutit avant le
+  COMMIT de A, A garde son catalogue à trois colonnes, valide, et ses lignes prennent le défaut ;
+  PostgreSQL ferait attendre l'ALTER (ACCESS EXCLUSIVE). Gravité au cœur. Le témoin
+  (chaine-au-point-de-reprise) atterrit en non-régression, en file après 96, avec un commentaire
+  qui dit ce qu'il chassait sans le trouver.
+- **Second « à toi » à codeparsers** : le lot des manifestes. Puis lucivy, tty-6, recherche, G,
+  embarquement, 96, hotfixs (le témoin), le cœur.
