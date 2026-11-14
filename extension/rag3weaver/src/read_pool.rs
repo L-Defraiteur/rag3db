@@ -180,7 +180,7 @@ impl ReadPool {
     }
 
     /// Pour les témoins : les `n` prochaines ouvertures d'instantané sont refusées.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "rag3db-native"))]
     pub(crate) fn rompre_les_prochaines(&self, n: u64) {
         self.a_rompre.store(n, Ordering::SeqCst);
     }
