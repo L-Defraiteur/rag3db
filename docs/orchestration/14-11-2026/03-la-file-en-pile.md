@@ -341,3 +341,10 @@ bascule continue, la base se répare dans la fenêtre d'hotfixs (reconstruction 
 
 **21 h 3x — vingt-deux atterris** : le court-circuit et 1b (194a4e572, 11/11, un push). G a le « à toi »
 pour les fils du moteur après le réveil de luciepc (code-principal diverge aussi, décision (b) tenue).
+
+**21 h 3x — vingt-quatre atterris** : les fils du moteur (77b9e5f18, sous 373b5477b) et le pointeur des règles
+d'import (7215d18ad0, sept langues en données). **La lib 373b5477b est courante aux deux postes depuis
+21 h 33**, hôtes réveillés, bases rouvertes sans refus ; les deux écarts de luciepc (code-lourd,
+code-principal) en un ticket pour hotfixs, reconstruction des six tables sur copie. Archi a le « à toi »
+(fermeture qui tient) ; puis 96, le crochet, le `IN`, (B), garde-pile-3, le dense, le prédicat, la chaîne
+Rust.
