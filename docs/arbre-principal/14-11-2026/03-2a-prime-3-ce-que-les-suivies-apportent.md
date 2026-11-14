@@ -149,7 +149,12 @@ rattrapée tombe sur le bord haut, quel que soit l'ordre.
   que les réapparitions. Le prédicat devient « colonnes visibles OR EXISTS dans l'annexe » ; l'élagage de
   l'annexe vide est à prouver par le plan. Elle se mesure annexe vide et annexe à 1 % des lignes.
 
-**Le repli, si les deux coûtent trop** : (2), le doublon au seul bord haut d'un trou, compté dans l'état.
+**Le défaut, tant que la mesure n'a pas parlé** (c7) : (2), le doublon au seul bord haut d'un trou,
+compté dans l'état. Il est honnête : il coûte des lignes, jamais une identité.
+
+**La mesure de (3a) se juge aussi à l'écriture** (c7) : une table d'intervalles, c'est une rangée de plus par
+réapparition. Combien de réapparitions sur 50 commits de code-lourd ? Le nombre est à mettre à côté du
+coût du prédicat.
 
 **L'ordre (ED)** : l'écrivain de 2a′-2 sur tous les chemins d'écriture, puis la mesure, puis la page de
 2a′-3 avec les chiffres.
