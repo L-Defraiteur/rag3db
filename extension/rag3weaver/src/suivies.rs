@@ -194,6 +194,47 @@ pub fn declaration_de_l_ancienne_cle(ancienne: &BranchesSuivies) -> Declaration 
     }
 }
 
+/// Une ref résolue : une couche d'histoire, nommée par son nom **complet** (`refs/heads/<x>`, `refs/tags/<x>`),
+/// ou par le hash pour un `commit:`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefResolue {
+    pub nom: String,
+    pub pointe: String,
+}
+
+/// Une couche de travail : le non-commité d'**un worktree** (nommée par son chemin), sur la branche qu'il a
+/// extraite, ou détachée sur un commit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoucheDeTravail {
+    pub chemin: std::path::PathBuf,
+    pub branche: Option<String>,
+    pub commit: String,
+}
+
+/// Une source, résolue : ses refs et ses couches de travail, ou ce qui l'a laissée vide.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceResolue {
+    pub source: Source,
+    pub refs: Vec<RefResolue>,
+    pub travail: Vec<CoucheDeTravail>,
+    /// Pourquoi la source ne résout rien (« branch:x : aucune branche de ce nom »), dit dans l'état.
+    pub vide: Option<String>,
+}
+
+/// **Résoudre les sources** d'une déclaration dans le dépôt de `racine` : un `git for-each-ref` et un
+/// `git worktree list --porcelain`, rien de plus. `worktree_du_backend` est le worktree que le backend indexe ;
+/// `taches`, les branches des tâches que l'atelier a ouvertes (`agent/<nom>`). Une source qui ne résout rien
+/// se dit dans `vide`, elle ne fait pas échouer la résolution.
+pub fn resoudre_les_sources(
+    racine: &std::path::Path,
+    worktree_du_backend: &std::path::Path,
+    taches: &[String],
+    declaration: &Declaration,
+) -> Result<Vec<SourceResolue>, String> {
+    let _ = (racine, worktree_du_backend, taches, declaration);
+    Err("la résolution des sources n'existe pas encore".into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,5 +318,94 @@ mod tests {
                 ],
             }
         );
+    }
+
+    fn git(dir: &std::path::Path, args: &[&str]) -> String {
+        let o = std::process::Command::new("git")
+            .arg("-C").arg(dir)
+            .args(["-c", "user.name=Témoin", "-c", "user.email=temoin@example.invalid", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "git {args:?} : {}", String::from_utf8_lossy(&o.stderr));
+        String::from_utf8_lossy(&o.stdout).trim().to_string()
+    }
+
+    /// Le décor : main (m1, m2) ; les branches `a`, `release/1`, `release/2`, `release/x/y`, `agent/t1` ; une
+    /// étiquette `v1` ; un worktree `wt-a` sur `a`, un worktree détaché `wt-d` sur m1, et celui de la tâche
+    /// `wt-t1` sur `agent/t1`.
+    fn depot() -> (tempfile::TempDir, std::path::PathBuf) {
+        let t = tempfile::tempdir().unwrap();
+        let d = t.path().join("depot");
+        std::fs::create_dir_all(&d).unwrap();
+        git(&d, &["init", "-q"]);
+        git(&d, &["commit", "-q", "--allow-empty", "-m", "m1"]);
+        git(&d, &["commit", "-q", "--allow-empty", "-m", "m2"]);
+        for b in ["a", "release/1", "release/2", "release/x/y", "agent/t1"] {
+            git(&d, &["branch", b]);
+        }
+        git(&d, &["tag", "v1", "HEAD~1"]);
+        git(&d, &["worktree", "add", "-q", t.path().join("wt-a").to_str().unwrap(), "a"]);
+        git(&d, &["worktree", "add", "-q", "--detach", t.path().join("wt-d").to_str().unwrap(), "HEAD~1"]);
+        git(&d, &["worktree", "add", "-q", t.path().join("wt-t1").to_str().unwrap(), "agent/t1"]);
+        (t, d)
+    }
+
+    fn une(select: Selecteur, work: bool) -> Declaration {
+        Declaration { root: Racine::Calculee, sources: vec![source(select, Parente::Inferee, Histoire::Pointe, work)] }
+    }
+
+    fn reel(p: &std::path::Path) -> std::path::PathBuf {
+        p.canonicalize().unwrap()
+    }
+
+    /// **Chaque sélecteur résout ce que git nomme**, par son nom complet, et un sélecteur qui ne résout
+    /// rien se dit sans faire échouer la résolution.
+    #[test]
+    fn chaque_selecteur_resout_ce_que_git_nomme() {
+        let (t, d) = depot();
+        let resoudre = |decl: &Declaration| resoudre_les_sources(&d, &d, &["agent/t1".to_string()], decl).unwrap().remove(0);
+        let pointe = |r: &str| git(&d, &["rev-parse", r]);
+
+        let a = resoudre(&une(Selecteur::Branche("a".into()), false));
+        assert_eq!(a.refs, vec![RefResolue { nom: "refs/heads/a".into(), pointe: pointe("a") }]);
+        assert_eq!((a.travail.len(), &a.vide), (0, &None));
+
+        let absente = resoudre(&une(Selecteur::Branche("absente".into()), false));
+        assert!(absente.refs.is_empty());
+        assert!(absente.vide.as_deref().is_some_and(|v| v.contains("absente")), "{absente:?}");
+
+        // Le motif : exactement ce que `git for-each-ref <motif>` rend.
+        for motif in ["refs/heads/release/*", "refs/heads/release", "refs/tags/*", "refs/heads/*"] {
+            let attendu: Vec<String> = git(&d, &["for-each-ref", "--format=%(refname)", motif]).lines().map(str::to_string).collect();
+            let r = resoudre(&une(Selecteur::Refs(motif.into()), false));
+            let noms: Vec<String> = r.refs.iter().map(|x| x.nom.clone()).collect();
+            assert_eq!(noms, attendu, "le motif {motif}");
+        }
+        let etiquette = resoudre(&une(Selecteur::Refs("refs/tags/v1".into()), false));
+        assert_eq!(etiquette.refs, vec![RefResolue { nom: "refs/tags/v1".into(), pointe: pointe("v1^{commit}") }], "une étiquette pointe sur son commit");
+
+        let commit = resoudre(&une(Selecteur::Commit("HEAD~1".into()), false));
+        assert_eq!(commit.refs, vec![RefResolue { nom: pointe("HEAD~1"), pointe: pointe("HEAD~1") }]);
+
+        // Les worktrees : une couche de travail chacun, nommée par son chemin, sur sa branche ou détachée.
+        let wa = resoudre_les_sources(&d, &t.path().join("wt-a"), &[], &une(Selecteur::Worktree(Worktree::DuBackend), true)).unwrap().remove(0);
+        assert_eq!(wa.refs, vec![RefResolue { nom: "refs/heads/a".into(), pointe: pointe("a") }]);
+        assert_eq!(wa.travail, vec![CoucheDeTravail { chemin: reel(&t.path().join("wt-a")), branche: Some("refs/heads/a".into()), commit: pointe("a") }]);
+        let tous = resoudre(&une(Selecteur::Worktree(Worktree::Tous), true));
+        let chemins: Vec<std::path::PathBuf> = tous.travail.iter().map(|c| c.chemin.clone()).collect();
+        assert_eq!(chemins, vec![reel(&d), reel(&t.path().join("wt-a")), reel(&t.path().join("wt-d")), reel(&t.path().join("wt-t1"))]);
+        let detache = tous.travail.iter().find(|c| c.chemin == reel(&t.path().join("wt-d"))).unwrap();
+        assert_eq!((detache.branche.as_deref(), detache.commit.as_str()), (None, pointe("HEAD~1").as_str()), "le worktree détaché");
+        assert!(!tous.refs.iter().any(|r| r.nom.is_empty()), "un worktree détaché n'apporte pas de ref : {:?}", tous.refs);
+        let sans_travail = resoudre(&une(Selecteur::Worktree(Worktree::Chemin(t.path().join("wt-a").to_string_lossy().into_owned())), false));
+        assert_eq!((sans_travail.refs.len(), sans_travail.travail.len()), (1, 0), "work: false ne garde que l'histoire");
+        let ailleurs = resoudre(&une(Selecteur::Worktree(Worktree::Chemin("/nulle/part".into())), true));
+        assert!(ailleurs.vide.as_deref().is_some_and(|v| v.contains("/nulle/part")), "{ailleurs:?}");
+
+        // Les tâches : leur branche et la couche de travail de leur worktree.
+        let taches = resoudre(&une(Selecteur::Taches, true));
+        assert_eq!(taches.refs, vec![RefResolue { nom: "refs/heads/agent/t1".into(), pointe: pointe("agent/t1") }]);
+        assert_eq!(taches.travail.iter().map(|c| c.chemin.clone()).collect::<Vec<_>>(), vec![reel(&t.path().join("wt-t1"))]);
     }
 }
