@@ -14,12 +14,14 @@
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
 #include "common/types/value/value.h"
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
+#include "parser/parser.h"
 
 using namespace rag3db::common;
 using namespace rag3db::main;
@@ -28,6 +30,10 @@ namespace rag3db {
 namespace testing {
 
 namespace {
+
+int64_t heldMib() {
+    return static_cast<int64_t>(mallinfo2().uordblks / (1024 * 1024));
+}
 
 int64_t rssMib() {
     std::ifstream status("/proc/self/status");
@@ -151,6 +157,60 @@ TEST_F(ProjectedGraphMemory, ALongProjectionGivesBackItsMemory) {
                   }),
         MAX_GROWTH_MIB)
         << "[check: a-long-projection-gives-back-its-memory]";
+}
+
+// (t) La requête longue, chaque tour sur un fil neuf, comme un hôte qui passe d'un fil à l'autre :
+// chaque fil a son arène de malloc, et la mémoire rendue dans l'arène d'un fil mort n'est pas
+// réemployée par le suivant. Le RSS brut dit la pente que voyait rag3weaver ; après malloc_trim, ce
+// qui est vraiment tenu.
+TEST_F(ProjectedGraphMemory, TheLongQueryOnFreshThreadsGivesBackItsMemory) {
+    const auto query = unescaped("MATCH (n:C) MATCH (n)-[:C_FROM]->(p:P) WHERE p._uuid IN [" +
+                                 quotedList + "] RETURN count(n);");
+    EXPECT_LT(growth("(t) requête longue, un fil neuf par tour",
+                  [&] {
+                      std::thread worker([&] {
+                          auto r = conn->query(query);
+                          EXPECT_TRUE(r->isSuccess()) << r->getErrorMessage();
+                      });
+                      worker.join();
+                  }),
+        MAX_GROWTH_MIB)
+        << "[check: the-long-query-on-fresh-threads-gives-back-its-memory]";
+}
+
+// La phase qui fait le pic : la mémoire tenue (mallinfo2) quand l'analyse, puis la préparation
+// (analyse, liaison, plan), sont gardées vivantes, et après l'exécution. Puis la même liste dans un
+// simple RETURN size([...]).
+TEST_F(ProjectedGraphMemory, WhereTheLongQueryTakesItsMemory) {
+    const auto join = unescaped("MATCH (n:C) MATCH (n)-[:C_FROM]->(p:P) WHERE p._uuid IN [" +
+                                quotedList + "] RETURN count(n);");
+    const auto size = unescaped("RETURN size([" + quotedList + "]);");
+    for (const auto& [name, query] : {std::pair<std::string, std::string>{"jointure", join},
+             std::pair<std::string, std::string>{"RETURN size", size}}) {
+        malloc_trim(0);
+        const auto base = heldMib();
+        int64_t parsed = 0, prepared = 0;
+        {
+            auto statements = parser::Parser::parseQuery(query);
+            parsed = heldMib() - base;
+        }
+        {
+            auto statement = conn->prepare(query);
+            ASSERT_TRUE(statement->isSuccess()) << statement->getErrorMessage();
+            prepared = heldMib() - base;
+        }
+        auto r = conn->query(query);
+        ASSERT_TRUE(r->isSuccess()) << r->getErrorMessage();
+        const auto withResult = heldMib() - base;
+        r.reset();
+        malloc_trim(0);
+        fprintf(stderr,
+            "[mémoire] phases (%s, %zu octets) : analyse tenue %ld Mio, préparation tenue %ld "
+            "Mio, résultat tenu %ld Mio, après %ld Mio ; RSS de pointe %ld Mio\n",
+            name.c_str(), query.size(), static_cast<long>(parsed), static_cast<long>(prepared),
+            static_cast<long>(withResult), static_cast<long>(heldMib() - base),
+            static_cast<long>(rssMib()));
+    }
 }
 
 TEST_F(ProjectedGraphMemory, TheFilterWithAParameterListGivesBackItsMemory) {
