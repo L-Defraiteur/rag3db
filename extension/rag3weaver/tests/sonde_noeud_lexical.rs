@@ -139,12 +139,24 @@ fn l_interieur_du_noeud_lexical() {
     }
     let par_cle = format!("UNWIND $ids AS u MATCH (n:{} {{_uuid: u}}) RETURN OFFSET(id(n))", cible.parent_table);
     let liste = QueryParam::new("ids", CypherValue::List(versions.iter().cloned().map(CypherValue::String).collect()));
+    match conn.execute_with_params(&format!("EXPLAIN {par_cle}"), std::slice::from_ref(&liste)) {
+        Ok(r) => {
+            for l in &r.rows {
+                for v in l {
+                    for ligne in format!("{}", v.as_str().unwrap_or(&format!("{v:?}"))).lines() {
+                        eprintln!("[sonde] EXPLAIN par clé | {ligne}");
+                    }
+                }
+            }
+        }
+        Err(e) => eprintln!("[sonde] EXPLAIN par clé refusé : {e}"),
+    }
     let (m4, x4, n4) = chrono(chauffe, tours, || conn.execute_with_params(&par_cle, std::slice::from_ref(&liste)).unwrap().rows.len());
     eprintln!("[sonde] 4 même ensemble par UNWIND et clé primaire   médiane {m4:>8.1} ms   max {x4:>8.1} ms   {n4} offsets");
     eprintln!("[sonde] RSS {:.0} Mio", rss_mio());
     // **La mémoire, sans search_code** (`RAG3WEAVER_SONDE_REPETITIONS`, 30 par défaut) : l'étape 3 rejouée,
     // le RSS après chaque tour. Une pente ici, c'est le moteur qui garde, et pas le flux de la recherche.
-    let repetitions = env_n("RAG3WEAVER_SONDE_REPETITIONS", 30);
+    let repetitions = env_n("RAG3WEAVER_SONDE_REPETITIONS", 0);
     let depart = rss_mio();
     for i in 1..=repetitions {
         cat.resolve_filter_to_ids(&cible.parent_table, &filtre, &cible).unwrap();
@@ -172,7 +184,10 @@ fn l_interieur_du_noeud_lexical() {
         };
         ecrire("sans-filtre.ids", &versions);
         let racine = std::env::var("RAG3WEAVER_SONDE_RACINE").unwrap_or_else(|_| "/home/lucied/git_workspaces/rag3db".into());
-        let prefixe = format!("{racine}/src/include/");
+        // `file_path` est relatif à la racine du workspace (la mesure par étage l'a vu) : le préfixe
+        // se pose sans elle ; `racine` ne sert qu'au message.
+        let _ = &racine;
+        let prefixe = "src/include/".to_string();
         let r = conn
             .execute_with_params(
                 &format!("MATCH (s:{}) WHERE s.file_path STARTS WITH $p RETURN s._uuid", projection.entity),

@@ -103,10 +103,16 @@ impl Ecoute {
 
 /// Une forme de requête : son nom et ses arguments en plus de `query`.
 fn formes(chemin: &str, langage: &str, toutes: bool) -> Vec<(String, Value)> {
-    let mut f = vec![("sans filtre".to_string(), json!({"options": {}}))];
+    // `RAG3WEAVER_SONDE_SIGNAUX=vector` (ou `bm25`, `bm25,vector`…) : les seuls signaux joués, pour
+    // départager la mémoire et la durée d'un signal.
+    let options = match std::env::var("RAG3WEAVER_SONDE_SIGNAUX") {
+        Ok(s) => json!({"signals": s.split(',').map(str::trim).collect::<Vec<_>>()}),
+        Err(_) => json!({}),
+    };
+    let mut f = vec![("sans filtre".to_string(), json!({"options": options.clone()}))];
     if toutes {
-        f.push((format!("chemin {chemin}"), json!({"options": {}, "scope": chemin})));
-        f.push((format!("langage {langage}"), json!({"options": {}, "language": langage})));
+        f.push((format!("chemin {chemin}"), json!({"options": options.clone(), "scope": chemin})));
+        f.push((format!("langage {langage}"), json!({"options": options, "language": langage})));
     }
     f
 }
