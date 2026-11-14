@@ -1070,10 +1070,20 @@ fn main() {
     }
 }
 
-/// Explicit metadata-only entry point. No write connection or model is created.
+/// Explicit migration entry points. `inspect` and `plan` read metadata only, with no write
+/// connection or model; `versions` (1b) migrates a base by its path, on a copy, under an embedder
+/// that refuses every call.
 fn inspecter_migration(args: &[String]) -> Result<(), String> {
-    const USAGE: &str = "usage: rag3weaver-backend migration inspect --manifest <backend.json>\n       rag3weaver-backend migration plan --manifest <backend.json> --dir <migrations> [--var key=value]";
+    const USAGE: &str = "usage: rag3weaver-backend migration inspect --manifest <backend.json>\n       rag3weaver-backend migration plan --manifest <backend.json> --dir <migrations> [--var key=value]\n       rag3weaver-backend migration versions --base <chemin.rag3db>";
     let Some(action) = args.first() else { return Err(USAGE.into()) };
+    // **La migration 1b**, sur une base par son chemin : à jouer sur une copie, sans autre ouvreur.
+    if action == "versions" {
+        let [_, option, base] = args else { return Err(USAGE.into()) };
+        if option != "--base" { return Err(USAGE.into()); }
+        let bilan = rag3weaver::migration_des_versions::migrer_la_base(Path::new(base))?;
+        println!("{bilan:#?}");
+        return Ok(());
+    }
     if action == "apply" { return Err("migration transfer and publication are not available".into()); }
     if action != "inspect" && action != "plan" { return Err(USAGE.into()); }
     let mut manifest = None;
