@@ -1153,6 +1153,14 @@ mod tests {
                 source(Selecteur::Worktree(Worktree::Chemin("/chemin/du/worktree".into())), Parente::Inferee, Histoire::Citee, false),
             ]
         );
+        // **Une source `refs:` (un motif large) prend `cited` par défaut** (ED et c7, 14 nov.) : sous `tip`,
+        // cent branches coûteraient cent écritures à chaque fetch. Les autres sources gardent `tip`.
+        let defauts = declaration_du_manifeste(Some(&json!({"sources": [{"select": "refs:refs/heads"}, {"select": "branch:a"}, {"select": "worktree:*"}, {"select": "commit:abc"}, {"select": "tasks"}]}))).unwrap();
+        assert_eq!(
+            defauts.sources.iter().map(|s| s.history.clone()).collect::<Vec<_>>(),
+            vec![Histoire::Citee, Histoire::Pointe, Histoire::Pointe, Histoire::Pointe, Histoire::Pointe],
+            "{defauts:?}"
+        );
         assert_eq!(declaration_du_manifeste(Some(&json!({"root": "empty", "sources": []}))).unwrap().root, Racine::Vide);
         assert_eq!(declaration_du_manifeste(Some(&json!({"sources": [{"select": "worktree:*"}]}))).unwrap().root, Racine::Calculee);
         for (mauvais, mot) in [
