@@ -38,6 +38,7 @@ mod tests {
         assert_eq!(t(json!({ "kind": "ToolCallStarted", "tool": "read_file" })).as_deref(), Some("\n» read_file\n"));
         assert_eq!(t(json!({ "kind": "ToolCallFinished", "ok": false, "error_kind": "policy" })).as_deref(), Some("  refusé (policy)\n"));
         assert_eq!(t(json!({ "kind": "LlmCall" })), None);
-        assert_eq!(ligne_de_boite(&json!({ "from": "teammate", "kind": "inédit", "text": "salut" })), "\n[teammate · inédit] salut\n");
+        assert_eq!(ligne_de_boite(&json!({ "from": "supervisor", "kind": "answer", "text": "oui" })), "\n[toi · réponse] oui\n");
+        assert_eq!(ligne_de_boite(&json!({ "from": "teammate", "kind": "inédit", "text": "salut" })), "\n[équipier · inédit] salut\n");
     }
 }
