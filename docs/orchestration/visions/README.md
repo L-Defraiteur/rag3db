@@ -184,3 +184,10 @@ mais managé par rag3weaver. »
 Le GPU reste partagé par les services d'embarquement : les modèles servent à tous, aucune tâche ne
 les emporte dans sa boîte. Graine ; pas de lot avant que l'atelier exécute des commandes au-delà de
 « teste et relance » et que le Manquant 7 soit posé.
+
+Ajout de Lucie (16 h 35) : **un copilote par environnement, builtin** — comme le copilote de Qovery :
+pour chaque infra managée (dev, staging, prod, une tâche), un équipier qui répond sur ses journaux,
+son état, ses déploiements (« pourquoi le worker est tombé à 14 h ? », « qu'est-ce qui a changé depuis
+le dernier déploiement ? »), parce que rag3weaver indexe déjà les journaux des services qu'il tient, les
+lie au code et aux versions des couches, et porte la mémoire longue des incidents. Le même équipier que
+l'atelier, avec la vue de l'environnement au lieu de celle du worktree.
