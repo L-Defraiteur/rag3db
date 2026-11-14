@@ -168,3 +168,35 @@ fn une_base_se_migre_par_son_chemin_hors_hote() {
     }
     assert_eq!(texts.lock().unwrap().len(), 0, "la réouverture a embarqué : {:?}", texts.lock().unwrap());
 }
+
+/// **La migration se fait par lots bornés, au même résultat** : des lots d'une seule occurrence
+/// donnent les mêmes versions, les mêmes liens et un vecteur repris par morceau, sans appel au modèle.
+#[test]
+#[ignore]
+fn une_migration_par_lots_d_une_occurrence_donne_le_meme_resultat() {
+    let dir = tempfile::tempdir().unwrap();
+    {
+        let (mut cat, _) = ouvrir(dir.path());
+        register_code_schema_sans_versions(&mut cat, default_scope_chunking()).unwrap();
+        let source = Snapshot::new("ancre", [
+            ("a.rs".to_string(), PARTAGEE.to_string()),
+            ("b.rs".to_string(), format!("\n\n{PARTAGEE}")),
+            ("c.rs".to_string(), SEULE.to_string()),
+        ]);
+        assert_eq!(cat.ingest_code(&analyze_source(&source).unwrap()).unwrap().failed, 0);
+    }
+    let (mut cat, texts) = ouvrir(dir.path());
+    register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+    texts.lock().unwrap().clear();
+    let bilan = rag3weaver::migration_des_versions::migrer_vers_les_versions_par_lots(&mut cat, default_scope_chunking(), 1)
+        .unwrap_or_else(|e| panic!("la migration par lots refuse : {e}"));
+    assert_eq!(texts.lock().unwrap().len(), 0, "la migration a appelé le modèle");
+    let scopes = compte(&cat, "MATCH (s:Scope) RETURN count(s)");
+    assert!(scopes >= 3);
+    assert_eq!(compte(&cat, "MATCH (:ScopeContent)-[r:ScopeContent_DERIVED_FROM]->(:Scope) RETURN count(r)"), scopes);
+    assert_eq!(compte(&cat, "MATCH (v:ScopeContent) WHERE v.name = 'partagee' RETURN count(v)"), 1);
+    let stockage = cat.vector_storage("ScopeContent_Chunk").unwrap();
+    let morceaux = compte(&cat, "MATCH (c:ScopeContent_Chunk) RETURN count(c)");
+    assert_eq!(compte(&cat, &format!("MATCH (c:ScopeContent_Chunk) WHERE c.{} = c._text_hash RETURN count(c)", stockage.marker)), morceaux);
+    assert_eq!(bilan.vecteurs_repris.values().sum::<usize>() as i64, morceaux, "{bilan:?}");
+}
