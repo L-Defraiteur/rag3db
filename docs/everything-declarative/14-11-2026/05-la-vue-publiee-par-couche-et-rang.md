@@ -162,3 +162,20 @@ de banc a mis `dead_code = "allow"` le temps de ses deux étapes, sans rien comm
 lot, `inline_params_borne` est appelée par `Rag3dbSearchBackend::vector_search_filtered`. La passe
 entière le vérifie par `check_features`, ses huit jeux hors tests compris. Un rouge de `dead_code` à
 cet endroit, sur la tête, serait un défaut du lot, et non un reste du commit rouge.
+
+## 9. Sur la pile : la composition avec le court-circuit d'arbre principal (14 novembre 2026, 23 h 10)
+
+vue-publiee est reposée sur dense-sur-tenue-pile (ac8644784), qui porte le court-circuit d'arbre
+principal. La pile est `vue-publiee-pile`, 3a6bf34cd. `occurrence_mask_options` compose les deux dans
+cet ordre :
+1. **sans filtre ni vue, et sans version orpheline** : le court-circuit d'arbre principal, tel quel.
+   `Admission::Toutes`, aucun masque ;
+2. **sinon, le prédicat** de ce lot, avec `Admission::Parmi(racines)` ;
+3. **la liste en repli**, comptée, seulement pour une forme que le prédicat ne sait pas dire.
+
+**Un changement de sens, sans filtre et avec des versions orphelines.** Le court-circuit seul y
+calculait encore la liste : toutes les racines, puis leurs versions. Sur la pile, c'est le prédicat qui
+sert. Sa jointure version → occurrence n'admet qu'une version qui a une occurrence ; une orpheline
+n'est donc pas admise, comme avant, mais par une autre requête. La parité de banc sur 959d73513 ne
+couvre pas ce cas. banc la rejoue sur 3a6bf34cd contre ac8644784, sur les 30 cas et une base avec des
+versions orphelines, sans filtre (c7).
