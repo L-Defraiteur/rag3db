@@ -10,6 +10,7 @@
 // - (p) le même filtre, la liste en paramètre (le témoin plat d'ED).
 // Le RSS après malloc_trim dit ce qui est tenu ; l'écart avec le RSS brut, ce que l'allocateur garde.
 #include <malloc.h>
+#include <sys/resource.h>
 
 #include <cstdio>
 #include <fstream>
@@ -30,6 +31,12 @@ namespace rag3db {
 namespace testing {
 
 namespace {
+
+int64_t peakMib() {
+    rusage usage{};
+    getrusage(RUSAGE_SELF, &usage);
+    return usage.ru_maxrss / 1024;
+}
 
 int64_t heldMib() {
     return static_cast<int64_t>(mallinfo2().uordblks / (1024 * 1024));
@@ -211,6 +218,55 @@ TEST_F(ProjectedGraphMemory, WhereTheLongQueryTakesItsMemory) {
             static_cast<long>(withResult), static_cast<long>(heldMib() - base),
             static_cast<long>(rssMib()));
     }
+}
+
+// La pointe de chaque phase : ru_maxrss ne fait que monter, et chaque phase joue sur le fil
+// principal, dans un processus à elle (une phase par cas, par --gtest_filter) ; la montée de la
+// pointe pendant la phase, c'est son pic.
+class LongQueryPeak : public ProjectedGraphMemory {
+protected:
+    std::string joinQuery() const {
+        return unescaped("MATCH (n:C) MATCH (n)-[:C_FROM]->(p:P) WHERE p._uuid IN [" + quotedList +
+                         "] RETURN count(n);");
+    }
+    template<typename F>
+    void peakOf(const std::string& phase, F f) {
+        malloc_trim(0);
+        const auto before = peakMib();
+        f();
+        fprintf(stderr, "[pointe] %s : pointe du RSS %ld -> %ld Mio (+%ld)\n", phase.c_str(),
+            static_cast<long>(before), static_cast<long>(peakMib()),
+            static_cast<long>(peakMib() - before));
+    }
+};
+
+TEST_F(LongQueryPeak, Parse) {
+    const auto q = joinQuery();
+    peakOf("analyse", [&] { auto statements = parser::Parser::parseQuery(q); });
+}
+
+TEST_F(LongQueryPeak, Prepare) {
+    const auto q = joinQuery();
+    peakOf("préparation (analyse, liaison, plan)", [&] {
+        auto statement = conn->prepare(q);
+        ASSERT_TRUE(statement->isSuccess()) << statement->getErrorMessage();
+    });
+}
+
+TEST_F(LongQueryPeak, Query) {
+    const auto q = joinQuery();
+    peakOf("requête entière", [&] {
+        auto r = conn->query(q);
+        ASSERT_TRUE(r->isSuccess()) << r->getErrorMessage();
+    });
+}
+
+TEST_F(LongQueryPeak, ReturnSize) {
+    const auto q = unescaped("RETURN size([" + quotedList + "]);");
+    peakOf("RETURN size(liste) entière", [&] {
+        auto r = conn->query(q);
+        ASSERT_TRUE(r->isSuccess()) << r->getErrorMessage();
+    });
 }
 
 TEST_F(ProjectedGraphMemory, TheFilterWithAParameterListGivesBackItsMemory) {
