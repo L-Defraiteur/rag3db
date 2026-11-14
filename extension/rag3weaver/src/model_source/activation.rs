@@ -109,6 +109,7 @@ pub fn demander(source: &super::ModelSource) -> Result<crate::serveur::activatio
 
 /// [`demander`], pour une capacité : le creux, le relecteur et l'OCR n'ont pas
 /// de dimension à déclarer.
+#[cfg(feature = "daemon")]
 pub fn demander_pour(source: &super::ModelSource, capacite: super::Capability) -> Result<crate::serveur::activation::Demande, String> {
     use super::{Capability, Fallback, Provider};
     let a = source.activation.as_ref().ok_or("activation absente")?;
