@@ -812,7 +812,9 @@ and isolates each caller's cancellation. Warm-up facts are reported separately f
 availability. Existing sources without `activation` keep connecting to their configured
 provider.
 
-- **Residence.** With `residence: "maintenir"`, the provider is kept running. With
+- **Residence.** With `residence: "maintenir"`, the provider is kept running: a call that finds it
+  crashed starts it again, once, with its identity re-checked, and a failed restart is refused by
+  name (declared `maintenir`, gone, restarted once, no answer: reopen or fix the declaration). With
   `residence: { "a_demande": { "inactivite_secs": N, "rendre_le_bail_secs": M } }`, it only
   starts on the first computation: opening the backend starts nothing, and neither does a
   full-text-only search. The client returns its usage lease after M seconds without a call. The
@@ -820,7 +822,10 @@ provider.
   than N). The next index or dense search starts it again, once, with its identity re-checked.
 - **Leases.** Each process that uses a provider holds a lease, renewed while it is in use. The
   provider counts its leases and calls in flight in `/sante` (`usage`), and says its eviction delay
-  there (`eviction`). Providers started by hand never get an eviction delay.
+  there (`eviction`). Providers started by hand never get an eviction delay. A provider started
+  by an activation also says in `/sante` how many crash restarts its declaration has had
+  (`relances`, counted in the declaration's coordination folder), so a provider that keeps dying
+  shows without reading a log.
 - **Remote activation.** `hote` (an ssh target) and `adresse_distante` start the provider on
   another machine. The activation runs `ssh <host> systemd-run --user
   --unit=rag3weaver-fournisseur-<model>-<port> --collect --property=Restart=on-failure …` there,

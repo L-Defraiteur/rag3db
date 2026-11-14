@@ -674,3 +674,15 @@ est au ticket fermé `2026-11-13-un-fournisseur-a-la-demande-ouvert-par-l-hote-n
 - **Le second index** réactive, avec la même identité, puis bail et éviction se répètent.
 - **La mémoire** : card2 culmine à 26 087 Mio, le fournisseur tenant au plus 5,7 Gio, puis revient
   à sa valeur de départ ; card0 reste à 88 Mio d'un bout à l'autre.
+
+**La reprise après plantage, 14 novembre** (« Manquant » 6 de la page des règles, branche
+`reprise-apres-plantage`) :
+- **À la demande** : un fournisseur tué sous bail entre deux calculs se relançait déjà une fois ; le
+  témoin le tient, vert avant tout code. Une relance qui échoue se refuse maintenant en disant les
+  deux temps (rouge puis vert).
+- **`Maintenir`** : la même relance unique (décision de c7), puis un refus dit (« déclaré maintenir
+  … rouvrez ou corrigez »).
+- **Le compte** : chaque relance après plantage se note au dossier de coordination de la
+  déclaration, et le relancé la dit à son `/sante` (`relances`).
+- **Hors de ce lot** : le refus « est mort avant de répondre » nomme le type de service, pas le
+  programme (ticket `2026-11-14-le-refus-est-mort-avant-de-repondre-nomme-le-type-de-service.md`).
