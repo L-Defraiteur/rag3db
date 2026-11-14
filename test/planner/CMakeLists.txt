@@ -1,1 +1,1 @@
-add_rag3db_test(planner_tests cardinality_test.cpp)
+add_rag3db_test(planner_tests cardinality_test.cpp in_list_test.cpp)
