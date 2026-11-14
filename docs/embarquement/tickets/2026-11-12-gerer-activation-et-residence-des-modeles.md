@@ -691,3 +691,11 @@ est au ticket fermé `2026-11-13-un-fournisseur-a-la-demande-ouvert-par-l-hote-n
   verrou), alors qu'un seul lance et que l'autre s'y attache. `relances` peut donc compter plus que
   les lancements réels. Le compte sert à voir un fournisseur qui meurt en boucle, pas à compter
   exactement ; il n'est pas corrigé dans le code.
+
+**Les activations nommées et le groupe, 14 novembre** (« Manquant » 5, branche `activations-nommees`) :
+- **Le manifeste** déclare `activations: { <nom>: {…} }`, et chaque capacité la cite par son nom.
+  Un bloc inline est une activation nommée d'après son `model`. La recette est `hash(nom, bloc)`.
+- **Le groupe** : le creux, le relecteur et l'OCR, à la demande ou maintenus. Un processus, un bail
+  par capacité, l'éviction quand plus aucun bail, la relance unique.
+- **Suites** : `2026-11-14-un-creux-a-la-demande-n-a-pas-de-dual.md` et
+  `2026-11-14-le-dense-a-son-embarqueur-a-cote-de-la-tenue-generique.md`.

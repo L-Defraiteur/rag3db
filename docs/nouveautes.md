@@ -27,6 +27,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **14 nov. — Un fournisseur se déclare une fois, et chaque capacité le cite.** Le manifeste déclare
+  ses activations par leur nom (`activations: { "bge-m3": {…} }`), et le creux, le relecteur et
+  l'OCR d'un même processus le citent (`"activation": "bge-m3"`). Ils partagent un seul processus et
+  une seule éviction : chacun tient son bail, et le groupe s'arrête quand plus aucun ne le tient.
+  Déclaré à la demande, le groupe ne démarre qu'au premier appel d'une de ses capacités. Un nom cité
+  qui n'existe pas est refusé au chargement.
 - **14 nov. — Une écriture validée ne disparaît plus quand un autre COMMIT échoue.**
   Sous plusieurs écrivains, un COMMIT refusé (tampon plein, journal non synchronisé) était annulé
   après avoir rendu la main ; un autre écrivain qui validait juste à ce moment pouvait perdre ses
