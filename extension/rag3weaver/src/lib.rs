@@ -164,6 +164,7 @@ pub mod postgres_search_backend;
 pub mod chunker;
 pub mod config;
 pub mod connection;
+pub mod generations;
 pub mod dialect;
 pub mod embedder;
 #[cfg(feature = "daemon")]

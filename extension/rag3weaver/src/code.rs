@@ -666,6 +666,11 @@ pub const SANS_VERSIONS: &str = "base de code sans versions de scope (forme d'av
     chaque occurrence garde ses morceaux et ses vecteurs, et un contenu identique dans deux fichiers \
     s'embarque deux fois — à migrer (1b, une migration à part, sur une copie d'abord)";
 
+/// **Ce que dit une base à versions sans générations** (2a′) : elle se lit comme avant, sans
+/// couches ; ses générations viendront par la migration (1b).
+pub const SANS_COUCHES: &str = "base de code sans couches (forme d'avant les générations du 14 novembre 2026) : \
+    elle se lit comme avant, une seule couche et aucune vue ; ses générations viendront par la migration (1b)";
+
 /// La forme du schéma de code d'une base.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScopeForm {
@@ -684,8 +689,10 @@ pub enum ScopeForm {
 /// **La forme se lit sur l'estampille, jamais sur le contenu de la base** (ED,
 /// relecture du 13 novembre) : une base vidée ne bascule pas en silence.
 pub fn scope_form(catalog: &Catalog) -> Result<ScopeForm, CatalogError> {
-    if catalog.read_meta_key(SCOPE_FORM_KEY)?.as_deref() == Some(SCOPE_FORM_VERSIONS) {
-        return Ok(ScopeForm::Versions);
+    match catalog.read_meta_key(SCOPE_FORM_KEY)?.as_deref() {
+        Some(SCOPE_FORM_GENERATIONS) => return Ok(ScopeForm::Generations),
+        Some(SCOPE_FORM_VERSIONS) => return Ok(ScopeForm::Versions),
+        _ => {}
     }
     let mut select = rag3weaver_ir::Select::all(SCOPE, vec![rag3weaver_ir::Column::Node("_uuid".into())]);
     select.limit = Some(rag3weaver_ir::Limit::Literal(1));
@@ -793,8 +800,15 @@ pub const ENTITES_EN_MASSE: [&str; 4] = [FILE, SCOPE, LIBRARY, SCOPE_CONTENT];
 /// se dit [`SANS_VERSIONS`] (`index_state`). Aucune base ne change de forme ici.
 pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfig) -> Result<(), CatalogError> {
     let form = scope_form(catalog)?;
+    // **Une base neuve reçoit les générations** (2a′) si son dialecte les sait ; une base de la
+    // forme d'avant garde la sienne, et se lit comme avant (« forme sans couches »).
+    let generations = match form {
+        ScopeForm::Neuve => catalog.dialect_arc().sait_les_generations(),
+        ScopeForm::Generations => true,
+        ScopeForm::Versions | ScopeForm::SansVersions => false,
+    };
     if form == ScopeForm::Neuve {
-        catalog.persist_meta_key(SCOPE_FORM_KEY, SCOPE_FORM_VERSIONS)?;
+        catalog.persist_meta_key(SCOPE_FORM_KEY, if generations { SCOPE_FORM_GENERATIONS } else { SCOPE_FORM_VERSIONS })?;
     }
     let versions = form != ScopeForm::SansVersions;
     let (mut entities, mut relations) = schema_configs(scope_chunking.clone());
@@ -811,6 +825,9 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
     for (name, _, _) in RELATIONS {
         let relation = relations.remove(name).expect("relation du schéma code");
         catalog.register_relation_with(name, &relation.from, &relation.to, relation.properties.unwrap_or_default())?;
+    }
+    if generations {
+        catalog.poser_les_generations(&[FILE, SCOPE], COUCHE_DU_BACKEND)?;
     }
     Ok(())
 }
@@ -5249,19 +5266,28 @@ mod tests_des_generations {
         ] {
             cat.execute_raw_with_params(&q, &[]).unwrap_or_else(|e| panic!("{q} : {e}"));
         }
-        let d = cat.dialect_arc();
-        let fichier_p = [QueryParam::new("f", CypherValue::String(fichier.clone()))];
+        // Par les chemins de lecture : un plan (outline, la navigation des symboles) et un saut
+        // (usages, impact).
         let filtre = Predicate::Equals { field: "file_path".into(), param: "f".into() };
-        let noms: Vec<String> = cat
-            .execute_raw_with_params(&d.select(&Select::filtered(SCOPE, filtre.clone(), vec![Column::Node("name".into())])).unwrap(), &fichier_p)
-            .unwrap().rows.iter().map(|l| texte(&l[0])).collect();
+        let mut plan = rag3weaver_ir::Plan::new();
+        plan.nodes.push(rag3weaver_ir::PlanNode {
+            id: "lignes".into(),
+            form: rag3weaver_ir::Form::Select(Select::filtered(SCOPE, filtre.clone(), vec![Column::Node("name".into())])),
+            params: vec![rag3weaver_ir::QueryParam::new("f", rag3weaver_ir::Value::String(fichier.clone()))],
+        });
+        plan.nodes.push(rag3weaver_ir::PlanNode {
+            id: "compte".into(),
+            form: rag3weaver_ir::Form::Count(Count::Matching { table: SCOPE.into(), filter: Some(filtre) }),
+            params: vec![rag3weaver_ir::QueryParam::new("f", rag3weaver_ir::Value::String(fichier.clone()))],
+        });
+        plan.outputs = vec!["lignes".into(), "compte".into()];
+        let rapport = crate::read_view::ReadCatalog::run_read_plan(&cat, &plan, Default::default()).unwrap();
+        let noms: Vec<String> = rapport.outputs["lignes"].rows.iter().map(|l| texte(&l[0])).collect();
         assert!(!noms.iter().any(|n| n == "fantome" || n == "retire"), "une sélection voit une ligne invisible : {noms:?}");
         assert!(noms.contains(&"un".to_string()) && noms.contains(&"deux".to_string()), "{noms:?}");
-        let compte = cat.execute_raw_with_params(&d.count(&Count::Matching { table: SCOPE.into(), filter: Some(filtre) }).unwrap(), &fichier_p).unwrap();
-        assert_eq!(texte(&compte.rows[0][0]), format!("{:?}", CypherValue::Int(noms.len() as i64)), "le compte voit une ligne invisible");
+        assert_eq!(texte(&rapport.outputs["compte"].rows[0][0]), format!("{:?}", CypherValue::Int(noms.len() as i64)), "le compte voit une ligne invisible");
         let saut = Hop { returns: vec![Column::Node("name".into())], ..Hop::new(SCOPE, "CONSUMES", SCOPE, Direction::Outgoing) };
-        let atteints: Vec<String> = cat
-            .execute_raw_with_params(&d.hop(&saut).unwrap(), &[QueryParam::new("uuids", CypherValue::List(vec![CypherValue::String(un)]))])
+        let atteints: Vec<String> = crate::dataflow::graph_walk::run_hop(&cat, &saut, &[QueryParam::new("uuids", CypherValue::List(vec![CypherValue::String(un)]))])
             .unwrap().rows.iter().map(|l| texte(&l[0])).collect();
         assert!(!atteints.iter().any(|n| n == "fantome" || n == "retire"), "un saut atteint une ligne invisible : {atteints:?}");
     }

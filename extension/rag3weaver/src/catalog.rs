@@ -382,6 +382,9 @@ pub struct Catalog {
     /// filtre vectoriel par colonnes de scope n'est ajouté que dans ce cas —
     /// le mono-tenant garde le chemin HNSW sans projection.
     multi_cell: bool,
+    /// **Les générations** (2a′) : les tables qui en portent, et ce que lisent les lectures sans
+    /// vue. `None` pour une base de la forme d'avant, qui se lit comme avant.
+    pub(crate) generations: Option<crate::generations::Visibilite>,
     initialized: bool,
     embedding_cache: HashMap<String, Vec<f32>>,
     /// Cache mapping entity UUIDs to rag3db internal node IDs.
@@ -754,6 +757,7 @@ fn read_threads() -> u64 {
             parked_fts: HashMap::new(),
             parked_sparse: HashMap::new(),
             multi_cell: false,
+            generations: None,
             initialized: false,
             embedding_cache: HashMap::new(),
             node_id_cache: Arc::new(RwLock::new(NodeIdCache::new())),
@@ -10236,7 +10240,35 @@ fn read_threads() -> u64 {
         }
         options.no_transaction = true;
         let conn = self.read_conn_arc();
-        crate::plan::run_plan(self.dialect.as_ref(), conn.as_ref(), plan, options)
+        // Les lectures d'une base à générations ne voient que les lignes visibles (2a′).
+        let borne = self.generations.as_ref().map(|v| v.borner_plan(plan));
+        crate::plan::run_plan(self.dialect.as_ref(), conn.as_ref(), borne.as_ref().unwrap_or(plan), options)
+    }
+
+    /// **Poser les générations** (2a′) sur des tables de cette base : `_couche`, `_depuis` et
+    /// `_jusqu_a`, avec pour défauts la couche `couche`, le rang 0 et « vivante » — toute ligne
+    /// écrite sans en parler est dans cette couche, au rang 0. Les lectures s'y bornent ensuite.
+    /// Une colonne déjà là n'est pas reposée.
+    pub fn poser_les_generations(&mut self, tables: &[&str], couche: &str) -> Result<(), CatalogError> {
+        use crate::dialect::{ColumnDef, ColumnType};
+        let litteral = format!("'{}'", couche.replace('\'', "''"));
+        for table in tables {
+            for (nom, type_, defaut) in [
+                (crate::generations::COUCHE, ColumnType::Text, litteral.as_str()),
+                (crate::generations::DEPUIS, ColumnType::Int64, "0"),
+                (crate::generations::JUSQU_A, ColumnType::Int64, "NULL"),
+            ] {
+                let colonne = ColumnDef { name: nom.into(), col_type: type_ };
+                self.alter_absorbing(table, &self.dialect.alter_add_column_default(table, &colonne, defaut))?;
+            }
+        }
+        self.generations = Some(crate::generations::Visibilite {
+            tables: tables.iter().map(|t| t.to_string()).collect(),
+            couche: couche.to_string(),
+            rang: 0,
+        });
+        self.publish_read_view();
+        Ok(())
     }
 
     /// **Lever (ou baisser) la fusion des éventails pour ce montage**, quoi
@@ -10317,6 +10349,7 @@ fn read_threads() -> u64 {
             fanout: self.fanout,
             two_step_hops: self.two_step_hops(),
             multi_cell: self.multi_cell,
+            generations: self.generations.clone(),
             search_backend_externe: if self.search_backend_par_defaut { None } else { self.search_backend.clone() },
             event_bus: self.event_bus.clone(),
             search_services: Arc::new(search),
@@ -10334,6 +10367,7 @@ fn read_threads() -> u64 {
             dialect: &self.dialect,
             conn: &self.conn,
             multi_cell: self.multi_cell,
+            generations: self.generations.clone(),
         }
     }
 
