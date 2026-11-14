@@ -1,6 +1,6 @@
 # L'équipier rend un compte rendu au lieu du contenu demandé
 
-- **État** : ouvert. Constaté par la session tty le 14 nov. 2026, en rejouant l'essai du terminal de Lucie contre l'hôte du portable.
+- **État** : corrigé (14 novembre 2026), lot `equipier-rend-le-contenu` d'archi ; constaté par la session tty le 14 nov. 2026, en rejouant l'essai du terminal de Lucie contre l'hôte du portable.
 - **Famille** : produit
 - **Pour** : archi
 - **Gravité** : réponse fausse. L'équipier dit avoir fait ce qu'on lui demande (« Présentation fournie au superviseur conformément au format demandé »), et ne l'a pas fait : le contenu n'est nulle part.
@@ -46,3 +46,23 @@ Ou le même `POST /ide/teammate/mailbox {backend, task, kind: "request", text}`.
 ## Pourquoi le terminal ne le montre pas autrement
 
 Le terminal (lot tty-8) rend le Markdown de la boîte et du texte du modèle. Ici, il n'y a rien à rendre : il affiche fidèlement les deux comptes rendus.
+
+## Ce qui l'a fermé
+
+Une réponse en texte n'avait aucun lieu : `report` se décrivait « rend compte de ce qui a été fait »,
+l'invite disait « report what was done », et le texte que le modèle écrit dans un pas qui finit par
+`step_done` n'arrivait nulle part. Désormais :
+
+- l'invite, la description de `report` et la frontière d'un pas sans plan disent qu'à une demande de
+  texte, `report` (ou la réponse) porte le texte lui-même, tel qu'il est à lire, jamais une phrase
+  sur lui ; `step_done.done` dit le travail et ne tient pas lieu de réponse ;
+- le texte que le modèle écrit dans un pas qui finit par `step_done` va dans la boîte en `report`,
+  sauf si un report de ce pas le porte déjà (le report l'emporte).
+
+Pas d'heuristique sur les mots pour reconnaître un compte rendu (c7). Témoins :
+`daemon_host::teammate_tests::the_text_a_teammate_writes_in_its_step_reaches_the_mailbox` (rouge
+d'abord), `a_text_both_written_and_reported_is_in_the_mailbox_once` (la garde), et le cas du banc sur
+un vrai modèle, `e2e_equipier::l_equipier_rend_le_texte_demande_et_non_un_compte_rendu` (un titre,
+trois puces, un gras dans la boîte). Ce cas, joué une fois sans le correctif, était vert : Gemini a
+cette fois mis le contenu dans `report` ; un vrai modèle ne se rougit pas à la demande, le rouge sûr
+est le témoin sur faux modèle.
