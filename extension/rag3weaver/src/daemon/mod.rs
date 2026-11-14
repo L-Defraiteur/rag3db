@@ -359,6 +359,56 @@ pub fn sonde(nom: &str) -> Sonde {
     }
 }
 
+/// **Les délais des clients de l'hôte** (ticket « cinq clients de production attendent sans
+/// délai », tranché par c7 le 14 novembre 2026) : un seul réglage, deux valeurs, lues dans
+/// `daemon.json` que tous lisent. `reponse` borne les agents gardés pour tous leurs appels (le
+/// client MCP de l'hôte, le client du démon de base) ; `sonde`, les trois sondes (`/etat`,
+/// `/sante`, le réveil de l'unité), pour qu'un hôte muet se dise « ne répond pas » vite. Chaque
+/// délai borne la connexion, l'envoi et l'attente des en-têtes ; le corps reste libre (un flux).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Delais {
+    pub reponse: std::time::Duration,
+    pub sonde: std::time::Duration,
+}
+
+impl Delais {
+    /// `reponse_s` absent de `daemon.json`.
+    pub const REPONSE_PAR_DEFAUT_S: u64 = 120;
+    /// `sonde_s` absent de `daemon.json`.
+    pub const SONDE_PAR_DEFAUT_S: u64 = 5;
+
+    /// Les délais de ces deux valeurs (en secondes), les défauts pour une absente.
+    pub fn de(reponse_s: Option<u64>, sonde_s: Option<u64>) -> Self {
+        let s = std::time::Duration::from_secs;
+        Self { reponse: s(reponse_s.unwrap_or(Self::REPONSE_PAR_DEFAUT_S)), sonde: s(sonde_s.unwrap_or(Self::SONDE_PAR_DEFAUT_S)) }
+    }
+
+    /// Les délais de `daemon.json` s'il se lit, sinon les défauts.
+    pub fn lus() -> Self {
+        crate::daemon_lifecycle::read().map(|f| f.delais()).unwrap_or_else(|| Self::de(None, None))
+    }
+}
+
+/// **L'agent borné** : connexion, envoi et attente des en-têtes de la réponse bornés à `delai` ; la
+/// lecture du corps ne l'est pas. Les statuts sont rendus, comme [`agent`].
+pub fn agent_borne(delai: std::time::Duration) -> ureq::Agent {
+    let d = Some(delai);
+    ureq::Agent::new_with_config(
+        ureq::Agent::config_builder()
+            .http_status_as_error(false)
+            .timeout_connect(d)
+            .timeout_send_request(d)
+            .timeout_send_body(d)
+            .timeout_recv_response(d)
+            .build(),
+    )
+}
+
+/// La phrase d'un délai dépassé, la même partout : « <route> : ne répond pas après <n> s ».
+pub fn ne_repond_pas(route: &str, delai: std::time::Duration) -> String {
+    format!("{route} : ne répond pas après {} s", delai.as_secs())
+}
+
 /// Un client HTTP qui rend les statuts plutôt que de les transformer en
 /// erreurs : c'est le corps qui porte le message utile.
 pub fn agent() -> ureq::Agent {

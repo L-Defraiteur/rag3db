@@ -496,7 +496,12 @@ fn servir_le_demon(args: &[String]) -> Result<(), String> {
     // entrée quand l'hôte se rendort et se réveille.
     let jeton = cycle::stable_token()?;
     let pid = std::process::id();
+    // Les délais des clients (`reponse_s`, `sonde_s`) : réglés à la main dans daemon.json, gardés
+    // d'un démarrage à l'autre.
+    let regles = cycle::read();
     let fiche = cycle::DaemonFile {
+        reponse_s: regles.as_ref().and_then(|f| f.reponse_s),
+        sonde_s: regles.as_ref().and_then(|f| f.sonde_s),
         address: servie.clone(),
         pid,
         token: jeton.clone(),
