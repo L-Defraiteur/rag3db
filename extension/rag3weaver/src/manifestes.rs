@@ -113,7 +113,11 @@ impl Manifestes {
                         self.dependances.insert(n);
                     }
                 }
-                dans_une_liste = !fragment.contains(']');
+                // La liste se ferme sur un `]` seul ou juste après une chaîne (`"x"]`) — pas sur le `]` des
+                // extras d'une exigence (`"requests[socks]>=2.0",`).
+                let fin = fragment.trim().trim_end_matches(',').trim_end();
+                let fermee = fin == "]" || fin.ends_with("\"]") || fin.ends_with("']");
+                dans_une_liste = !fermee;
                 continue;
             }
             // Poetry : `[tool.poetry.dependencies] requests = "^2"` ; `python` n'est pas un paquet.
