@@ -141,6 +141,14 @@ pub struct BackendManifest {
     /// (`crate::model_source::ModelSource`).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub models: BTreeMap<crate::model_source::Capability, crate::model_source::ModelSource>,
+    /// **Les activations nommées** (décision de c7, 14 novembre 2026 : « une
+    /// abstraction, pas trois configs qui divergent ») : un fournisseur déclaré
+    /// une fois, que chaque déclaration de `models` cite par son nom
+    /// (`"activation": "<nom>"`). Les déclarations qui citent le même nom
+    /// partagent son processus, sa coordination et son éviction. Résolues au
+    /// chargement ([`resoudre_les_activations`]) ; un nom cité absent est un refus.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub activations: BTreeMap<String, crate::model_source::activation::Activation>,
     /// **L'extension vectorielle** : un **nom** (`vector`, le défaut) veut
     /// dire « celle du bâti », trouvée par [`PreparedBackend::vector_extension_path`] ;
     /// un **chemin** (un séparateur, ou le nom de fichier entier) est un
@@ -1086,9 +1094,16 @@ impl PreparedBackend {
         // `crate::builtin_templates`) : résolus vers le gabarit extrait du binaire
         // avant toute lecture. Sans `builtin:`, la lecture directe garde la ligne
         // et la colonne de ses erreurs.
-        let manifest: BackendManifest = if brut.windows(crate::builtin_templates::PREFIX.len()).any(|w| w == crate::builtin_templates::PREFIX.as_bytes()) {
+        // Un manifeste qui déclare ou cite une activation passe par la valeur JSON :
+        // les noms cités s'y résolvent avant la lecture typée.
+        let builtin = brut.windows(crate::builtin_templates::PREFIX.len()).any(|w| w == crate::builtin_templates::PREFIX.as_bytes());
+        let active = brut.windows(b"\"activation".len()).any(|w| w == b"\"activation");
+        let manifest: BackendManifest = if builtin || active {
             let mut v: serde_json::Value = serde_json::from_slice(&brut).map_err(|e| e.to_string())?;
-            crate::builtin_templates::resolve_avec(&mut v, &mut |nom| lecteur.chemin_builtin(nom))?;
+            if builtin {
+                crate::builtin_templates::resolve_avec(&mut v, &mut |nom| lecteur.chemin_builtin(nom))?;
+            }
+            resoudre_les_activations(&mut v)?;
             serde_json::from_value(v).map_err(|e| champ_inconnu_dit(e.to_string()))?
         } else {
             serde_json::from_slice(&brut).map_err(|e| champ_inconnu_dit(e.to_string()))?
@@ -2589,6 +2604,38 @@ impl PreparedBackend {
 /// l'ouverture de la base — nommé par sa clé de manifeste. Les entités sont
 /// comparées après fusion de leur schéma JSON (un champ ajouté au schéma est
 /// un changement d'entité), sans leur description.
+/// **Résoudre les activations citées par leur nom** : chaque
+/// `models.<capacité>.activation` qui est une chaîne reçoit le bloc de
+/// `activations.<nom>`, avec son `nom`. Un bloc écrit dans la déclaration reste
+/// tel quel ; son nom est son `model`. Une activation nommée dit le `modele`
+/// que son processus charge.
+pub(crate) fn resoudre_les_activations(v: &mut Value) -> Result<(), String> {
+    let table = v.get("activations").and_then(Value::as_object).cloned().unwrap_or_default();
+    for (nom, bloc) in &table {
+        if !bloc.is_object() {
+            return Err(format!("activations.{nom} : un bloc d'activation attendu"));
+        }
+        if bloc.get("modele").and_then(Value::as_str).is_none_or(|m| m.trim().is_empty()) {
+            return Err(format!("activations.{nom} : l'activation nommée doit dire le `modele` que son processus charge"));
+        }
+    }
+    let Some(modeles) = v.get_mut("models").and_then(Value::as_object_mut) else { return Ok(()) };
+    for (capacite, declaration) in modeles.iter_mut() {
+        let Some(cite) = declaration.get("activation").and_then(Value::as_str).map(str::to_string) else { continue };
+        let Some(bloc) = table.get(&cite) else {
+            let connues: Vec<&str> = table.keys().map(String::as_str).collect();
+            return Err(format!(
+                "models.{capacite}.activation cite « {cite} », absente de `activations` (déclarées : {})",
+                if connues.is_empty() { "aucune".to_string() } else { connues.join(", ") }
+            ));
+        };
+        let mut bloc = bloc.clone();
+        bloc["nom"] = Value::String(cite);
+        declaration["activation"] = bloc;
+    }
+    Ok(())
+}
+
 pub(crate) fn opening_changes(old: &PreparedBackend, new: &PreparedBackend) -> Vec<String> {
     fn value<T: Serialize>(v: &T) -> Value {
         serde_json::to_value(v).unwrap_or(Value::Null)
@@ -2610,6 +2657,7 @@ pub(crate) fn opening_changes(old: &PreparedBackend, new: &PreparedBackend) -> V
         ("database", value(&a.database), value(&b.database)),
         ("embeddings", value(&a.embeddings), value(&b.embeddings)),
         ("models", value(&a.models), value(&b.models)),
+        ("activations", value(&a.activations), value(&b.activations)),
         ("vector_extension", value(&a.vector_extension), value(&b.vector_extension)),
         ("workspace", value(&a.workspace), value(&b.workspace)),
         ("fts_positions", value(&a.fts_positions), value(&b.fts_positions)),
