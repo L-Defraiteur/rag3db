@@ -199,3 +199,7 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 ## Vers 14 h 2x — la reprise après plantage d'un fournisseur
 
 - **embarquement, `reprise-apres-plantage`** (12374929d test, cecbf8853 fix) : A — un fournisseur à la demande tué sous bail entre deux calculs : **vert avant tout code** (la relance unique d'hier), témoin gardé et dit ainsi ; B — la relance qui échoue : **rouge** (le refus ne disait ni le départ ni la relance) → vert, le refus dit les deux temps ; C — une déclaration `Maintenir` dont le fournisseur plante ne relançait rien jusqu'à la réouverture : **décision (a)**, Maintenir relance une fois comme a_demande, refus dit si elle échoue, `relances: n` au /sante. Défaut en ticket : le refus nomme le type de service (« rag3weaver-embeddings »), pas le programme lancé. Passe à luciepc (target-activation repris, 0c41f9fe6).
+
+## Vers 14 h 2x — openssl : le lot d'archi est vert, « à toi »
+
+- **archi, openssl-sys-pour-openssl-4 (c1798ff67)** : passe complète sur un **target neuf sans aucune variable OPENSSL ni PKG_CONFIG_PATH** (unset) sous openssl 4.1.0 : check_features 8/8 (toutes les combinaisons compilées de zéro — le témoin qui compte), script vert, lib 2365/1 (le seul rouge : L3 nommé, rejoué vert seul), navigateur 43/43, e2e_hooks. Douze paquets partis du Cargo.lock, ticket fermé. **« À toi »**, puis recherche-lit-le-catalogue et les thèmes dans le même tour ; après : codeparsers, lucivy, tty-6.
