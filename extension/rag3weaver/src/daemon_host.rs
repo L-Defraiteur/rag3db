@@ -86,6 +86,50 @@ pub struct Session {
 }
 
 /// Un backend hébergé. `None` : pas encore ouvert, ou lâché pour être rouvert.
+/// **Une fermeture qui tient** ([`Hosted::held_closed`]) : sa raison, l'heure annoncée (le texte, et
+/// l'instant quand il se lit), et qui l'a posée.
+#[derive(Clone)]
+struct Fermeture {
+    raison: String,
+    jusqu_a: Option<String>,
+    jusqu_a_instant: Option<jiff::Timestamp>,
+    par: String,
+}
+
+impl Fermeture {
+    /// « fermé : <raison>[, jusqu'à <quand>[ — au-delà de l'heure annoncée]], par <qui> » : l'heure
+    /// annoncée n'ouvre rien d'elle-même, une passe en retard garde sa base fermée.
+    fn dire(&self) -> String {
+        let mut dit = format!("fermé : {}", self.raison);
+        if let Some(j) = &self.jusqu_a {
+            dit.push_str(&format!(", jusqu'à {j}"));
+            if self.jusqu_a_instant.is_some_and(|t| jiff::Timestamp::now() > t) {
+                dit.push_str(" — au-delà de l'heure annoncée, la fermeture tient encore");
+            }
+        }
+        dit.push_str(&format!(", par {}", self.par));
+        dit
+    }
+}
+
+/// L'instant d'un « jusqu'à » : un horodatage (`2026-11-14T18:50:00+01:00`), une date et heure
+/// locales (`2026-11-14 18:50`), ou une heure du jour (`18:50`, `18 h 50`) ; sinon `None`, le
+/// texte se dit seul.
+fn instant_annonce(texte: &str) -> Option<jiff::Timestamp> {
+    let t = texte.trim();
+    if let Ok(ts) = t.parse::<jiff::Timestamp>() {
+        return Some(ts);
+    }
+    let zone = jiff::tz::TimeZone::system();
+    if let Ok(dt) = t.replace(' ', "T").parse::<jiff::civil::DateTime>() {
+        return dt.to_zoned(zone).ok().map(|z| z.timestamp());
+    }
+    let heure = t.replace(" h ", ":").replace("h", ":").replace(' ', "");
+    let heure = if heure.ends_with(':') { format!("{heure}00") } else { heure };
+    let h = heure.parse::<jiff::civil::Time>().ok()?;
+    jiff::Zoned::now().with_time_zone(zone).date().to_datetime(h).to_zoned(jiff::tz::TimeZone::system()).ok().map(|z| z.timestamp())
+}
+
 struct Hosted {
     id: String,
     manifest: PathBuf,
@@ -105,6 +149,11 @@ struct Hosted {
     opened: std::sync::atomic::AtomicUsize,
     /// Combien de fois il a été fermé par `POST /backend/close`.
     closed: std::sync::atomic::AtomicUsize,
+    /// **Une fermeture qui tient** (14 novembre 2026) : posée par `POST /backend/close` avec une
+    /// raison, « fermé : <raison>[, jusqu'à <quand>] ». Tant qu'elle tient, rien ne rouvre le
+    /// backend (un appel d'outil, un hook, un juge, l'ancienne route `/open`) ; seul
+    /// `POST /backend/open` la lève.
+    held_closed: Mutex<Option<Fermeture>>,
     /// L'empreinte du manifeste lu à la dernière ouverture : un manifeste
     /// modifié depuis se voit, se dit dans les réponses, et se relit à
     /// `POST /backend/open`.
@@ -458,6 +507,7 @@ impl DaemonHost {
                     rattrapage: Default::default(),
                     opened: Default::default(),
                     closed: Default::default(),
+                    held_closed: Default::default(),
                     print: Mutex::new(None),
                     refused: Mutex::new(None),
                 })
@@ -559,6 +609,9 @@ impl DaemonHost {
     /// l'empreinte du manifeste lu.
     fn open_slot(&self, hosted: &Hosted, slot: &mut Option<Backend>) -> Result<(), String> {
         if slot.is_none() {
+            if let Some(f) = hosted.held_closed.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+                return Err(format!("{} : {} — rien ne le rouvre avant un POST /backend/open explicite", hosted.manifest.display(), f.dire()));
+            }
             // **Le gabarit livré suit le binaire** (Lucie, 8 novembre 2026, 16 h 12) : un
             // manifeste posé d'après un gabarit livré et resté tel quel prend celui de ce
             // binaire avant d'être lu ; un manifeste modifié à la main est gardé. Une
@@ -716,11 +769,20 @@ impl DaemonHost {
     /// modifié »). Refus nommés : le manifeste absent, une indexation qui
     /// tient le backend à relire.
     pub fn open(&self, session: Option<&str>, manifest: &Path) -> Value {
+        self.open_avec(session, manifest, true)
+    }
+
+    /// [`Self::open`] ; `explicite` (la route `/backend/open`) lève une fermeture qui tient,
+    /// l'ancienne route `/open` (qu'un client prend en s'attachant) non.
+    fn open_avec(&self, session: Option<&str>, manifest: &Path, explicite: bool) -> Value {
         let result = self.check_session(session).and_then(|_| {
             if !manifest.is_file() {
                 return Err(format!("{MANIFEST_MISSING} : {}", manifest.display()));
             }
             let hosted = self.hosted(manifest)?;
+            if explicite && hosted.held_closed.lock().unwrap_or_else(|p| p.into_inner()).take().is_some() {
+                eprintln!("[démon] {} : la fermeture est levée par POST /backend/open", hosted.manifest.display());
+            }
             let relu = {
                 let mut slot = self.ecrire_le_slot(&hosted)?;
                 let relu = slot.is_some() && self.manifest_changed(&hosted);
@@ -749,13 +811,34 @@ impl DaemonHost {
     /// backend jamais hébergé est un refus nommé ; un backend déjà fermé
     /// rend `closed: false`.
     pub fn close(&self, session: Option<&str>, manifest: &Path) -> Value {
+        self.close_avec(session, manifest, None, None)
+    }
+
+    /// [`Self::close`] ; une `raison` (et un `jusqu_a` facultatif) fait tenir la fermeture
+    /// jusqu'à un `POST /backend/open` explicite (c7, 14 novembre 2026 : « l'annonce n'est pas un
+    /// verrou »). Sans raison, le prochain appel rouvre, comme avant.
+    pub fn close_avec(&self, session: Option<&str>, manifest: &Path, raison: Option<&str>, jusqu_a: Option<&str>) -> Value {
         let result = self.check_session(session).and_then(|_| {
             let hosted = self
                 .hosted_existing(manifest)
                 .ok_or_else(|| format!("{NOT_HOSTED} : {}", manifest.display()))?;
             let mut slot = self.ecrire_le_slot(&hosted)?;
+            // La fermeture tient avant même que le slot soit rendu : rien ne s'y glisse entre deux.
+            let par = session
+                .and_then(|id| self.sessions.lock().unwrap_or_else(|p| p.into_inner()).get(id).map(|s| format!("{} (session {id})", s.client)))
+                .unwrap_or_else(|| "un appel sans session".to_string());
+            let tenue = raison.map(str::trim).filter(|r| !r.is_empty()).map(|r| {
+                let jusqu_a = jusqu_a.map(str::trim).filter(|j| !j.is_empty()).map(str::to_string);
+                Fermeture { raison: r.to_string(), jusqu_a_instant: jusqu_a.as_deref().and_then(instant_annonce), jusqu_a, par }
+            });
+            let tenue = tenue.map(|f| {
+                let dit = f.dire();
+                *hosted.held_closed.lock().unwrap_or_else(|p| p.into_inner()) = Some(f);
+                eprintln!("[démon] {} : {dit}", hosted.manifest.display());
+                dit
+            });
             let ferme = self.close_slot(&hosted, &mut slot)?;
-            Ok(json!({ "id": hosted.id, "manifest": hosted.manifest, "closed": ferme }))
+            Ok(json!({ "id": hosted.id, "manifest": hosted.manifest, "closed": ferme, "held_closed": tenue }))
         });
         op_response(result)
     }
@@ -1092,6 +1175,7 @@ impl DaemonHost {
                     "template_drift": derive,
                     "opened": h.opened.load(std::sync::atomic::Ordering::SeqCst),
                     "closed": h.closed.load(std::sync::atomic::Ordering::SeqCst),
+                    "held_closed": h.held_closed.lock().unwrap_or_else(|p| p.into_inner()).as_ref().map(Fermeture::dire),
                     "manifest_changed": self.manifest_changed(h),
                     "refused": *h.refused.lock().unwrap_or_else(|p| p.into_inner()),
                     "tache": self.tache_de(&h.manifest),
@@ -1352,7 +1436,7 @@ impl DaemonHost {
     /// | `POST /session` | `{client, cell?, keys?}` | `{session}` |
     /// | `DELETE /session` | | `{closed}` |
     /// | `POST /backend/open` (ou `/open`) | `{manifest}` | `{ok, result: {id, reread, describe, reactions}}` ; un manifeste modifié est relu |
-    /// | `POST /backend/close` | `{manifest}` | `{ok, result: {id, closed}}` ; la base est lâchée |
+    /// | `POST /backend/close` | `{manifest, reason?, until?}` | `{ok, result: {id, closed, held_closed}}` ; la base est lâchée ; avec une raison, la fermeture tient jusqu'à `POST /backend/open` |
     /// | `POST /describe` | `{manifest}` | `{ok, result}` |
     /// | `POST /call` | `{manifest, name, arguments}` | `{ok, result}` ou `{ok: false, error}` |
     pub fn handle(&self, method: &str, path: &str, session: Option<&str>, body: &[u8]) -> (u16, Value) {
@@ -1425,8 +1509,9 @@ impl DaemonHost {
                 };
                 let (v, m) = v;
                 let mut reponse = match path {
-                    "/open" | "/backend/open" => self.open(session, &m),
-                    "/backend/close" => self.close(session, &m),
+                    "/open" => self.open_avec(session, &m, false),
+                    "/backend/open" => self.open(session, &m),
+                    "/backend/close" => self.close_avec(session, &m, v["reason"].as_str(), v["until"].as_str()),
                     "/describe" => self.describe(session, &m),
                     _ => match v["name"].as_str() {
                         Some(name) => self.call_with_deadline(session, &m, name, v.get("arguments").cloned().unwrap_or(json!({})), v["deadline_ms"].as_u64()),
