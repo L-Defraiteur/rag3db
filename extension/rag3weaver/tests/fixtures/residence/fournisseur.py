@@ -112,6 +112,10 @@ class Fixture(ThreadingHTTPServer):
         if all(value is not None for value in declared.values()):
             identity['activation'] = declared
         identity['usage'] = {'baux': self.baux_actifs(), 'en_cours': self.en_cours}
+        # Les relances après plantage que l'activation lui a dites (src/daemon/embeddings.rs).
+        relances = os.environ.get('RAG3WEAVER_ACTIVATION_RELANCES')
+        if relances is not None and relances.strip().isdigit():
+            identity['relances'] = int(relances)
         if self.eviction is not None:
             inactif = self.inactif_depuis()
             identity['eviction'] = {'inactivite_s': self.eviction, 'inactif_depuis_ms': int((inactif or 0) * 1000)}
