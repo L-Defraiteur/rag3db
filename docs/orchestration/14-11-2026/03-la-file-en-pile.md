@@ -20,13 +20,14 @@ l'autre, dix fois de suite, même sans rouge.
 3. **Le rejeu court sur la pile vaut rejeu du lot** : ce que le lot touche, plus la lib entière et
    check_features pour du Rust, comme aujourd'hui ; `e2e_lectures` si le lot touche l'arrêt ou le bus,
    `e2e_postgres` si code.rs, l'IR ou un gabarit.
-4. **Au « à toi », rien ne se rejoue si tout a atterri comme prévu.** Le dernier pas :
-   `git rebase --onto origin/master <tête du lot d'avant>` (ses commits seuls),
-   `push_garde.sh --code-apporte <tête du lot d'avant> origin/master` : s'il ne voit que des docs
-   (les lots d'avant ont atterri avec le contenu testé, à des hashes qui peuvent différer), le push
-   part sans rejeu, sous `poste push`, dans `if grep -qx VERT`, `--derive` « garde à jour », trois
-   contrôles lus. S'il voit du code — un lot devant a changé ou a été retiré —, rejeu court sur la
-   nouvelle pile, à son tour.
+4. **Au « à toi », rien ne se rejoue si tout a atterri comme prévu.** Le dernier pas, **sans rebase à
+   la main** (appris aux trois premiers pushs : rebaser avant déplace HEAD et la garde ne retrouve
+   plus l'intervalle testé) : le worktree reste sur la tête testée, les commits de docs ajoutés
+   (un ticket) se posent par-dessus, et `PILE_AVANT=<tête du lot d'avant> poste push … push_garde.sh`
+   fait lui-même `rebase --onto master <tête d'avant>` après avoir vérifié que la pile d'avant est
+   sur master avec le contenu testé (§ « Le dernier pas en mode pile »). Le push part sous `poste
+   push`, dans `if grep -qx VERT`, trois contrôles lus. Si la pile a changé — un lot devant a changé
+   ou a été retiré —, « ARRÊT : la pile a changé », et c'est un rejeu court sur la nouvelle pile.
 5. **Le « à toi » reste le seul mot de push**, un à la fois ; il ne porte plus le rejeu. Les docs
    seules passent hors file comme avant.
 6. **Un rouge sur la pile se lit d'abord contre son propre lot** : avant d'accuser un lot d'avant,
@@ -43,7 +44,7 @@ l'autre, dix fois de suite, même sans rouge.
 | 1 | lucivy | montée 4.3.7 | lucivy-4-3-7-4 | cd6d02907, la base de la pile — **atterri** à 16 h 16, master c99b2f05e, contenu identique |
 | 2 | tty | tty-6 (tmux/mosh mesurés) | cx-tty-6-2 → cx-tty-6-pile | 7ac2c13d9 sur cd6d02907 — **atterri** à 16 h 25, master ce4a3140a, range-diff 5/5 en `=`, premier push en mode pile |
 | 3 | recherche | surveillant, puis plafond d'instantané | surveillant-2, plafond-d-instantane → recherche-pile | 2c3bc3eb7 sur 7ac2c13d9 — **atterri** à 16 h 27, master a48b535d1, dix commits en un push, pile tenue |
-| 4 | G | cas 6c du poste (trap avant la CI) | tenant-signal → tenant-signal-pile | ab7c44fb5 → pile c93f73f06 sur 2c3bc3eb7 |
+| 4 | G | cas 6c du poste (trap avant la CI) | tenant-signal → tenant-signal-pile | c93f73f06 sur 2c3bc3eb7 — **atterri** à 16 h 30, master 89f46c87d, pile tenue ; cas 6c clos |
 | 5 | embarquement | reprise après plantage | reprise-apres-plantage → reprise-apres-plantage-pile | 17afd3820 → pile 512b5e420 sur c93f73f06 (conflit de docs/nouveautes.md résolu) |
 | 6 | 96 | miroir, nom exact, about | lot-96-pile (miroir 48445fdeb, nomex bff4ea79f, about 84f949d2c) | pile 84f949d2c sur 512b5e420 |
 | 7 | hotfixs | témoin du dictionnaire (C++ test seul) | chaine-au-point-de-reprise-2 → chaine-au-point-de-reprise-pile | 9ded42107 → pile cabcc8640 sur 84f949d2c |
@@ -81,8 +82,8 @@ passé. **À faire dans garde-pile** : un push refusé remet le worktree sur la 
 
 ## Le dernier pas en mode pile (dès que la copie du cache a garde-pile)
 
-L'appelant pose la variable : `PILE_AVANT=<tête du lot d'avant> poste push <session> -- push_garde.sh
-<worktree> <journaux>`. La garde remplace alors « HEAD descend du testé » et « code depuis la base »
+L'appelant pose la variable, **sans avoir rebasé** : `PILE_AVANT=<tête du lot d'avant> poste push <session>
+-- push_garde.sh <worktree> <journaux>`, le worktree sur la tête testée. La garde remplace alors « HEAD descend du testé » et « code depuis la base »
 par `verifier_pile` : (b) la tête d'avant est un ancêtre du commit testé ; (c) `code_apporte(avant,
 master)` vide, sinon « ARRÊT : la pile a changé » ; (a) `git range-diff avant..testé master..HEAD` à
 `=`, `!` toléré si les deux versions du commit ont le même diff hors `.md`, `>` toléré s'il ne touche
@@ -116,3 +117,9 @@ fichier », sans effet) ; la liste des journaux où la garde cherche la lib ne c
 courte (tty a copié `e2e_tty.log` en `temoins.log`) — à élargir à `*.log`, une seule lib, zéro journal
 reste un arrêt. Et la lecture de `nproc` sous un lourd (G) : le quota du cgroup rend 5, pas 24 ;
 `nproc --all` dans `fils_par` et le cas 8 du témoin, dans garde-pile, avec un ticket.
+
+## Trois pushs de pile en cinq minutes (16 h 25 → 16 h 30)
+
+tty (ce4a3140a), recherche (a48b535d1, dix commits en un push), G (89f46c87d) : trois « pile tenue »,
+zéro rejeu. Deux défauts de forme de plus pour garde-pile, vus par G : `--derive` fait `realpath "$0"`
+après le `cd` et imprime une empreinte vide quand `$0` est relatif ; et le `cat base` déjà dit.
