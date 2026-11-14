@@ -27,6 +27,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **14 nov. — `~/lib/b` et `#utils/a` sont du projet, plus des paquets inconnus.** Les `paths` d'un
+  `tsconfig.json` (commentaires et virgules finales compris) sont lus comme alias du dépôt, et les imports
+  internes `#…` de Node sont toujours du projet ; un alias que les manifestes ne disent pas (celui de vite)
+  se déclare : `workspace.imports: { javascript: { local_prefixes: ["@/"] } }` (codeparsers `7c2c5aa`).
 - **14 nov. — Un `using` C# trouve son paquet NuGet.** Les `using` se lisent enfin (le parseur C# n'en
   trouvait aucun) et chacun a sa bibliothèque et sa provenance, sans rien deviner : `using
   Newtonsoft.Json.Linq` est une dépendance du `.csproj` (le paquet `Newtonsoft.Json`, au plus long

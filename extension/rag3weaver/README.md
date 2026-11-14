@@ -208,6 +208,9 @@ A Python distribution whose module has another name (`PyYAML` → `yaml`,
 declares its own in the manifest, per language, completing or replacing it:
 `workspace.imports: { python: { replace: false, distributions: { "my-package": ["my_module"] } } }`
 (requires `index: "code"`; a language without import rules is refused by name).
+A module alias is project code, not a package: Node's internal `#…` imports always,
+the `paths` of `tsconfig.json`/`jsconfig.json`, and the prefixes declared under
+`workspace.imports.<language>.local_prefixes` (for aliases no manifest states, such as vite's).
 
 ## Shared indexed content
 
