@@ -76,13 +76,21 @@ const TRANSACTION_ABORTED: &str = "The transaction was rolled back because a sta
 /// vraie panne est éprouvée par les tests C++ du moteur.
 #[doc(hidden)]
 #[derive(Clone)]
-pub struct FailedCheckpointHook(Arc<ReopenState>);
+///
+/// **Il ne retient pas la base** : il tient l'état « à rouvrir » par un `Weak`. Le registre des
+/// écrivains attend que la base **et** cet état soient tombés avant de rouvrir (une base n'est au
+/// repos qu'après son destructeur) ; un crochet gardé par un test au-delà de la fermeture faisait
+/// attendre la réouverture 10 s, puis la refusait (`e2e_demon_hote::une_base_a_rouvrir_ne_lache_que_son_backend`,
+/// rouge depuis le 13 novembre).
+pub struct FailedCheckpointHook(std::sync::Weak<ReopenState>);
 
 impl FailedCheckpointHook {
     /// Servir encore `n` instructions, puis répondre à la suivante par le
-    /// refus du moteur.
+    /// refus du moteur. Sur une base déjà fermée, rien.
     pub fn after(&self, n: usize) {
-        self.0.inject_after.store(n as i64, std::sync::atomic::Ordering::SeqCst);
+        if let Some(etat) = self.0.upgrade() {
+            etat.inject_after.store(n as i64, std::sync::atomic::Ordering::SeqCst);
+        }
     }
 }
 
@@ -554,7 +562,7 @@ impl Rag3dbConnection {
     /// catalogue : voir [`FailedCheckpointHook`].
     #[doc(hidden)]
     pub fn failed_checkpoint_hook(&self) -> FailedCheckpointHook {
-        FailedCheckpointHook(self.reopen.clone())
+        FailedCheckpointHook(Arc::downgrade(&self.reopen))
     }
 
     /// Execute a raw Cypher query (sync, used internally).
