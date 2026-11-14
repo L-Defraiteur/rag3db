@@ -6554,7 +6554,7 @@ mod tests {
             ("usages", json!({"name": "depart", "format": "json"})),
             ("impact", json!({"name": "depart", "format": "json"})),
             ("callees", json!({"name": "main", "format": "json"})),
-            ("search_code", json!({"query": "depart"})),
+            ("search_code", json!({"query": "depart", "options": {}})),
         ];
         let reponses = || -> Vec<String> {
             appels
