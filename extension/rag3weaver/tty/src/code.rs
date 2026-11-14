@@ -133,7 +133,7 @@ mod tests {
         let t = Theme::daemon();
         let texte = "fn main() {\n    // é\n}";
         let spans = vec![(0, 2, "keyword".to_string()), (3, 7, "function".to_string()), (16, 22, "comment".to_string())];
-        let v = Validee { genre: Genre::Code, texte: texte.into(), langue: "rust".into() };
+        let v = Validee { genre: Genre::Code, texte: texte.into(), langue: "rust".into(), tete: 0 };
         let l = lignes(&v, &t, cap(), 80, Some(&spans));
         let rendu: Vec<String> = l.iter().map(|l| l.spans.iter().map(|s| s.content.to_string()).collect()).collect();
         assert_eq!(rendu, vec!["── rust", "fn main() {", "    // é", "}", "──"]);
@@ -147,7 +147,7 @@ mod tests {
     fn without_spans_a_block_is_written_whole_and_long_lines_fold_without_losing_a_char() {
         let t = Theme::daemon();
         let code = "let une_variable_au_nom_bien_trop_long = 42;";
-        let v = Validee { genre: Genre::Code, texte: code.into(), langue: String::new() };
+        let v = Validee { genre: Genre::Code, texte: code.into(), langue: String::new(), tete: 0 };
         let l = lignes(&v, &t, cap(), 20, None);
         assert_eq!(l.first().map(|l| l.spans[0].content.to_string()), Some("── code".into()));
         let corps: String = l[1..l.len() - 1].iter().map(|l| l.spans.iter().map(|s| s.content.to_string()).collect::<String>()).collect();
@@ -155,10 +155,66 @@ mod tests {
         assert!(l.iter().all(|x| largeur_de(x) <= 20));
     }
 
+    fn accent(t: &Theme) -> Color {
+        let (r, g, b) = rgb(&t.couleurs.texte).unwrap();
+        Color::Rgb(r, g, b)
+    }
+
+    fn ligne(t: &Theme, genre: Genre, texte: &str, tete: usize) -> Vec<(String, Style)> {
+        let v = Validee { genre, texte: texte.into(), langue: String::new(), tete };
+        lignes(&v, t, cap(), 100, None).remove(0).spans.into_iter().map(|s| (s.content.to_string(), s.style)).collect()
+    }
+
+    /// **Plus de rouge uni** : l'en-tête d'une ligne de boîte garde l'accent du
+    /// thème, sa prose prend la couleur du terminal (ou `couleurs.prose`).
+    #[test]
+    fn a_mailbox_line_keeps_the_accent_on_its_header_and_the_prose_colour_on_its_body() {
+        let mut t = Theme::daemon();
+        let texte = "[équipier · réponse] le plan tient";
+        let l = ligne(&t, Genre::Boite, texte, "[équipier · réponse] ".len());
+        assert_eq!(l[0].0, "[équipier · réponse] ");
+        assert_eq!(l[0].1.fg, Some(accent(&t)), "l'en-tête dans l'accent");
+        let corps: Vec<_> = l[1..].iter().map(|(c, s)| (c.as_str(), s.fg)).collect();
+        assert_eq!(corps, vec![("le plan tient", None)], "la prose dans la couleur du terminal");
+        t.couleurs.prose = Some("#d8d0c8".into());
+        let l = ligne(&t, Genre::Boite, texte, "[équipier · réponse] ".len());
+        assert_eq!(l[1].1.fg, Some(Color::Rgb(0xd8, 0xd0, 0xc8)), "ou la couleur de prose du thème");
+        let l = ligne(&t, Genre::Texte, "le texte du modèle", 0);
+        assert_eq!(l[0].1.fg, Some(Color::Rgb(0xd8, 0xd0, 0xc8)), "le texte du modèle aussi");
+    }
+
+    /// **Le Markdown courant** se rend sans ses marques : titres, listes, gras,
+    /// italique ; un astérisque qui n'entoure pas un mot reste tel quel.
+    #[test]
+    fn markdown_titles_lists_bold_and_italic_render_without_their_marks() {
+        let t = Theme::daemon();
+        let texte = |l: &[(String, Style)]| l.iter().map(|(c, _)| c.as_str()).collect::<String>();
+        let style = |l: &[(String, Style)], c: &str| l.iter().find(|(x, _)| x == c).unwrap_or_else(|| panic!("pas de {c:?} dans {l:?}")).1;
+
+        let titre = ligne(&t, Genre::Texte, "## Le plan", 0);
+        assert_eq!(texte(&titre), "Le plan");
+        assert!(style(&titre, "Le plan").add_modifier.contains(Modifier::BOLD));
+        assert_eq!(style(&titre, "Le plan").fg, Some(accent(&t)), "un titre dans l'accent");
+
+        let point = ligne(&t, Genre::Texte, "- un **gras** et *doux* `x`", 0);
+        assert_eq!(texte(&point), "• un gras et doux `x`");
+        assert!(style(&point, "gras").add_modifier.contains(Modifier::BOLD));
+        assert!(style(&point, "doux").add_modifier.contains(Modifier::ITALIC));
+        assert_eq!(style(&point, "x").fg, Some(rgb_de(&t, "en_ligne")), "le code en ligne reste teinté");
+
+        assert_eq!(texte(&ligne(&t, Genre::Texte, "  * sous-point", 0)), "  • sous-point");
+        assert_eq!(texte(&ligne(&t, Genre::Texte, "1. premier", 0)), "1. premier");
+        let glob = ligne(&t, Genre::Texte, "lis src/*.rs et 2 * 3 * 4", 0);
+        assert_eq!(texte(&glob), "lis src/*.rs et 2 * 3 * 4");
+        assert!(glob.iter().all(|(_, s)| !s.add_modifier.contains(Modifier::ITALIC)), "{glob:?}");
+        let boite = ligne(&t, Genre::Boite, "[équipier · réponse] **fait**", "[équipier · réponse] ".len());
+        assert_eq!(texte(&boite), "[équipier · réponse] fait", "le Markdown vaut aussi dans la boîte");
+    }
+
     #[test]
     fn inline_code_is_tinted_and_the_backticks_stay() {
         let t = Theme::daemon();
-        let v = Validee { genre: Genre::Texte, texte: "voir `src/main.rs` ici".into(), langue: String::new() };
+        let v = Validee { genre: Genre::Texte, texte: "voir `src/main.rs` ici".into(), langue: String::new(), tete: 0 };
         let l = lignes(&v, &t, cap(), 80, None);
         let s = l[0].spans.iter().find(|s| s.content == "src/main.rs").unwrap();
         assert_eq!(s.style.fg, Some(rgb_de(&t, "en_ligne")));
