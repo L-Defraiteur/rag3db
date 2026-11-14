@@ -55,3 +55,31 @@ Aucun code avant la conception commune ; pas de poste lourd tant que la pile n'e
   dire qui la lit au moment d'écrire.
 - **Le compte des recopies** dit à chaque publication (la règle de 22 h 55) disparaît avec la position
   hors de l'identité. Que dit l'état à la place ? Je propose le nombre de chemins écrits par génération.
+
+## Les réponses d'ED (14 novembre, 23 h 55)
+
+ED écrira sa page de 2a′-3 après l'écrivain de 2a′-2, en partant de celle-ci. Ses réponses :
+
+1. **Une seule bascule : oui**, sous trois conditions :
+   - elle se répète d'abord sur les copies (code-lourd, code-rag3db-depot), avec la parité de banc au
+     régime « migration » et la mesure par étage ;
+   - son retour arrière est l'instantané lui-même, gardé jusqu'au mot de Lucie ;
+   - elle n'a lieu qu'une fois fermé le ticket « une recherche à versions prend des Gio », qui tient déjà
+     1b.
+2. **Qui écrit une couche d'histoire : c'est `history` qui décide**, et non un choix global.
+   - `tip` : l'hôte écrit la pointe à chaque mouvement de la ref, avec un amortisseur (une écriture par
+     couche et par fenêtre de quelques secondes ; la dernière gagne).
+   - `all` et `{last: N}` : la pointe tout de suite, puis le rattrapage en tâche de fond.
+   - `cited` : rien tant qu'aucune vue, fiche ou couche ne la cite ; la citation déclenche l'écriture.
+   - **Une source `refs:` (un motif large) prend `cited` par défaut**, et non `tip`. Sinon, cent
+     branches coûteraient cent écritures à chaque fetch. **C'est un changement du défaut des suivies
+     livrées** (aujourd'hui `tip` pour toute source) : il se fera rouge d'abord, en petit lot, quand la
+     pile sera vide.
+3. **Une suivie sans worktree qui avance de cent commits, sous `all`** : la pointe d'abord, puis un
+   rattrapage paresseux.
+   - Les générations intermédiaires s'écrivent en tâche de fond, à faible priorité, bornées par passe,
+     chacune contre sa prédécesseure : le coût suit le diff, pas le commit.
+   - L'état dit « k générations à rattraper ».
+   - Une vue qui cite une génération pas encore écrite la fait passer devant.
+4. **Ce que l'état dit à la place des recopies**, par génération : le nombre de chemins écrits, les
+   lignes neuves et retirées, et la durée de l'écriture.
