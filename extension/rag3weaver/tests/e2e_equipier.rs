@@ -194,3 +194,56 @@ fn l_equipier_ecrit_la_doc_d_un_depot_de_test_par_pas_juges() {
     let erreurs = host.shutdown();
     assert!(erreurs.is_empty(), "l'arrêt de l'hôte : {erreurs:?}");
 }
+
+/// **L'équipier rend le texte demandé, pas un compte rendu** (ticket de tty, 14 novembre 2026 :
+/// à « présente-toi : un titre, une liste, un mot en gras », Gemini rendait « Présentation fournie au
+/// superviseur conformément au format demandé », et le contenu n'était nulle part). Le juge est un
+/// vrai modèle, pas une heuristique sur les mots (c7) : la boîte doit porter, de l'équipier, un
+/// titre Markdown, trois puces et un mot en gras.
+#[test]
+#[ignore]
+fn l_equipier_rend_le_texte_demande_et_non_un_compte_rendu() {
+    const TEMOIN: &str = "l_equipier_rend_le_texte_demande_et_non_un_compte_rendu";
+    let projet = std::env::var("GOOGLE_CLOUD_PROJECT").ok().filter(|p| !p.is_empty());
+    let cles = std::env::var_os("GOOGLE_APPLICATION_CREDENTIALS").map(PathBuf::from).filter(|p| p.is_file());
+    if projet.is_none() || cles.is_none() {
+        let raison = "GOOGLE_CLOUD_PROJECT ou GOOGLE_APPLICATION_CREDENTIALS manque";
+        if std::env::var("RAG3WEAVER_EXIGER_GEMINI").as_deref() == Ok("1") {
+            panic!("{TEMOIN} : {raison}, et RAG3WEAVER_EXIGER_GEMINI=1");
+        }
+        eprintln!("SAUTÉ {TEMOIN} : {raison}");
+        return;
+    }
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste, _memoire) = depot_de_test(d.path());
+    let host = Arc::new(
+        DaemonHost::new()
+            .with_runs_root(d.path().join("runs"))
+            .with_chats_root(d.path().join("chats"))
+            .with_racine_des_taches(d.path().join("taches")),
+    );
+    let id = heberger(&host, &manifeste);
+    let demande = "Présente-toi en quelques lignes : un titre, une liste à puces de trois choses que tu sais faire, et un mot en gras.";
+    let r = host.post_to_teammate(&id, "presentation", "c7", "request", None, demande, &Value::Null).expect("la demande lance l'équipier");
+    assert_eq!(r["started"], true, "{r}");
+    let fin = Instant::now() + Duration::from_secs(300);
+    while host.teammate_running(&id, "presentation") {
+        assert!(Instant::now() < fin, "l'équipier tourne encore après 5 min");
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    let boite = host.teammate_files(&id, "presentation").unwrap().mailbox();
+    for l in &boite {
+        eprintln!("boîte : {} {} : {}", l["from"].as_str().unwrap_or(""), l["kind"].as_str().unwrap_or(""), l["text"].as_str().unwrap_or("").replace('\n', " ⏎ ").chars().take(400).collect::<String>());
+    }
+    let de_lui: Vec<String> = boite.iter().filter(|l| l["from"] == "teammate" && l["kind"] != "step_done").filter_map(|l| l["text"].as_str().map(str::to_string)).collect();
+    let porte = de_lui.iter().any(|t| {
+        let lignes: Vec<&str> = t.lines().map(str::trim).collect();
+        let titre = lignes.iter().any(|l| l.starts_with('#'));
+        let puces = lignes.iter().filter(|l| l.starts_with("- ") || l.starts_with("* ")).count() >= 3;
+        let gras = t.contains("**");
+        titre && puces && gras
+    });
+    assert!(porte, "la boîte porte, de l'équipier, un titre, trois puces et un gras : {de_lui:#?}");
+    let erreurs = host.shutdown();
+    assert!(erreurs.is_empty(), "l'arrêt de l'hôte : {erreurs:?}");
+}
