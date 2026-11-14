@@ -17,39 +17,74 @@
 - **La relecture de la page 30** et de la liaison (`0672d624f`) ; le défaut de la parente non suivie,
   corrigé par arbre principal (`912ea2084`).
 
+- **2a′-1, la visibilité des générations** (78c8997de) :
+  - l'estampille `code-scope-v1/content/generations`, sur une base neuve seulement, et sur rag3db
+    seulement : postgres a son ticket ;
+  - les trois colonnes sur `Scope` et `File`, et la table interne `_generation` ;
+  - le prédicat appliqué aux plans, aux sauts, aux traductions, aux filtres de recherche, à `get` et à
+    `find_by_field` ;
+  - les témoins 0 et 4, et l'entité `Generation`, rouges puis verts.
+- **2a′-2, la vue publiée** (e89cdb8e6, rang 30 de la pile, sur dense-sur-tenue-pile) :
+  - la migration d'une base à versions vers les générations, un trou de 2a′-1 comblé ;
+  - le masque des versions en prédicat et non en liste (une version est admise si une de ses
+    occurrences, reliée par la relation canonique, est visible, de la cellule et passe le filtre) ;
+  - `inline_params_borne` refuse une liste de plus de 1 000 éléments ;
+  - le sans-filtre reste au court-circuit d'arbre principal ;
+  - trois témoins rouges puis verts ; la parité de banc au bit près, 30 cas et une base à orphelines ;
+  - la recherche à versions est de 2 à 6 fois plus rapide.
+- **Les pages de la soirée** :
+  - 04, la mesure par étage et ses chiffres (sur master par la pile) ;
+  - 05, la vue publiée ;
+  - 06, l'écrivain et le cache par rang, avec la décision des déplacés (§ 9) et du `Symbol` délié
+    (§ 10) ;
+  - 03, § 8 (l'identifiant stable de couche, avec arbre principal) et § 9 (la position sort de
+    l'identité avec 2a′-3).
+- **Les tickets de la soirée**, sur master :
+  - fermé, par le cœur : la liaison d'une grande liste littérale (1d5580d74) ;
+  - ouverts : la recherche à versions qui prend des Gio (1b n'atterrit sur aucune vraie base avant
+    sa fermeture) ; l'`IN` sur la clé qui balaie la table, pour le cœur ; la mémoire résidente à
+    versions (le filtré, à mesurer sur l'hôte réel par G) ; la visibilité dans le prédicat (l'état B,
+    à fermer par le cache par rang) ; la recherche sans filtre qui paie le masque entier ;
+  - le doublon du schéma postgres partagé, fermé dans celui de recherche.
+
 ## Ce qui est en cours
 
-- **2a′-1** (branche `generations-de-l-ancre`, worktree `~/.cache/rag3weaver-build/wt-generations`) :
-  la visibilité sans changer aucun comportement. Le feu vert de c7 est donné, avec l'estampille
-  `code-scope-v1/content/generations` et `_couche` = l'identifiant de la suivie du backend (`tracked`).
-  - Une base existante se lit comme avant, et `/etat` dit « forme sans couches ».
-  - Les témoins 4 (le prédicat) et 0 (la non-fuite) sont à poser rouges d'abord.
-  - Avant le code, la sonde (`tests/sonde_cout_du_predicat.rs`) cherche la forme de clause d'un saut
-    qui tient ×1,3. La conjonction nœuds et arête dans une même clause coûte ×7,3 ; à défaut d'une
-    forme qui tienne, c'est un ticket pour le cœur, avec l'EXPLAIN.
-- **Ensuite** : 2a′-2 (l'ancre immuable, et la mesure bornée des déplacés sur 50 commits de
-  code-lourd), puis 2a′-3 (l'écriture d'une suivie, après la généralisation des sources suivies de
-  `docs/orchestration/14-11-2026/02-les-sources-suivies-une-abstraction-pour-les-couches.md`),
+- **La mesure du cas filtré sur l'hôte réel** : G, demain matin. Avant et après vue-publiee
+  (fac67a208 contre master ≥ e89cdb8e6), par chemin et par langage, avec le VmRSS par appel. Elle
+  ferme le ticket de la mémoire résidente.
+- **L'écrivain de 2a′-2** (page 06), dans l'ordre accepté par c7 :
+  1. les témoins 1 à 6, rouges ;
+  2. l'écrivain et la publication ;
+  3. l'époque et le cache par (couche, rang) ;
+  4. le post-filtre du dense, en dernier et mesuré, avec le rappel en chiffres.
+  Le compte des recopies à chaque publication est dit dans l'état. L'arbre sale porte
+  `arbre_propre: false` et le nombre de chemins sales.
+- **Ensuite** : 2a′-3, l'écriture d'une suivie par les objets git, où la position sort de l'identité,
   puis 2b′.
 
 ## Reprendre
 
-- **La copie de mesure** : `~/.cache/rag3weaver-build/ed-mesure-2a/code-lourd/` à luciepc. C'est un
-  reflink de l'instantané de G, `~/.local/share/rag3weaver/instantanes/avant-0c41f9fe6/code-lourd/`,
-  qu'on n'ouvre jamais en place. Son `.extensions` est repointé sur la lib 0c41f9fe6.
-- **Les scripts** sont à luciepc, sous `~/.cache/rag3weaver-build/ed-navigateur/` : `sonde-bati.sh`
-  (sous `poste lourd`), `sonde-mesure.sh` (sous `poste mesure`), et `octets-passe.sh` comme modèle de
-  passe. La lib s'exporte par `exporter_la_lib`, avec `RAG3DB_LIB` explicite.
-- **Le target** : `target-ed-navigateur`, sur le worktree `~/git_workspaces/rag3db-ed-navigateur`
-  à luciepc. Pas de target neuf avant le vert d'archi (openssl).
-- **Avant chaque push** : `push_garde.sh --code-apporte <parent du premier commit du lot>
-  origin/master` décide du rejeu ; puis `--derive "$PWD"` après le rebase, le dernier pas seul sous
-  `poste push` et dans `if grep -qx VERT`, et les trois contrôles.
+- **Le worktree du portable** : `~/.cache/rag3weaver-build/wt-generations`. Les branches poussées :
+  `vue-publiee-pile` (atterrie), `mesure-deplaces` (la sonde des déplacés), `sonde-in-par-cle` (la
+  sonde autonome de l'`IN`, pour recherche), `ed-mesure-court-circuit` (une fusion de mesure, jamais
+  vers master).
+- **À luciepc** :
+  - le worktree `~/git_workspaces/rag3db-ed-generations-2` et le target `target-ed-navigateur` ;
+  - les scripts dans `~/.cache/rag3weaver-build/ed-generations-2/` (`serie.sh` pour une série de
+    mesure, `pile-passe.sh` comme modèle de passe sur une pile) ;
+  - les copies de mesure dans `~/.cache/rag3weaver-build/ed-mesure-2a2/` (`base`, `ref`, `ref-source`,
+    les manifestes et les offsets) ;
+  - la lib des passes est 373b5477b ; les services d'embarquement sont 7878 et 7879 (7880 est arrêté).
+- **Les sondes de mesure** (master) : `sonde_recherche_sans_filtre` (par étage, R contre A/B/C, le RSS
+  par appel), `sonde_noeud_lexical`, `sonde_vecteur_filtre`, `sonde_clause_sans_filtre`.
 
 ## À effacer au mot de c7
 
 - **Sur le portable** : les worktrees `wt-installeur`, `wt-equipier-fin`, `wt-premier-appel`,
-  `wt-flux-partage`, `wt-octets`, `wt-codeparsers-empan` et `~/git_workspaces/rag3db-ed-navigateur`,
-  et le target `target-codeparsers-empan`.
-- **À luciepc** : `rag3db-ed-installeur`, `rag3db-ed-equipier` et leurs targets, et la copie de mesure
-  une fois 2a′-2 mesuré.
+  `wt-flux-partage`, `wt-octets`, `wt-codeparsers-empan`, et le target `target-codeparsers-empan`.
+- **À luciepc** :
+  - `rag3db-ed-installeur`, `rag3db-ed-equipier` et leurs targets ;
+  - les copies de mesure `ed-mesure-2a/` (code-lourd), puis `ed-mesure-2a2/` une fois la mesure de G
+    faite ;
+  - les dossiers `ed-pile-journaux` et `ed-pile-vue-journaux` une fois leurs lots atterris.
+- Le worktree `rag3db-ed-navigateur` de luciepc est déjà retiré (par la garde, 14 novembre).
