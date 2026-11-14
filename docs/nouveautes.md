@@ -19,6 +19,19 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **14 nov. — Un modèle déclaré à la demande ne prend la carte que quand on s'en sert.**
+  Un modèle déclaré `a_demande` ne démarre qu'au premier calcul : ouvrir le backend ne lance rien, une
+  recherche par les mots seuls non plus. Il rend la carte après `rendre_le_bail_secs` sans appel,
+  puis s'arrête après `inactivite_secs` sans usage, et revient seul au prochain index ou à la
+  prochaine recherche dense, identité revérifiée. Joué en vrai par l'hôte de luciepc sur granite-107m
+  (card2) : démarré pendant le premier index, la carte rendue 30 s plus tard puis libérée à 60 s,
+  revenu en 4 s au second index (`2ed42a6cd`, `5286273ef`).
+- **13 nov. — Un fournisseur peut tourner sur l'autre poste.** Le manifeste déclare l'hôte distant
+  (`hote`, `adresse_distante`) : l'activation lance le modèle là-bas par ssh, dans une unité
+  `systemd --user` à son nom (`rag3weaver-fournisseur-<modèle>-<port>`), le joint par un tunnel ssh
+  et vérifie son identité. Un ssh en échec se refuse net, sans attente. Lucie voit et arrête ces
+  unités d'une commande, et les services posés à la main ne sont jamais touchés. Joué en vrai du
+  portable vers luciepc (`6eff62969`).
 - **14 nov. — Une recherche par clé ne manque plus une ligne validée pendant un point de reprise.**
   Un lecteur admis pendant l'écriture d'un point de reprise pouvait chercher une clé déjà validée
   et ne pas la trouver ; la recherche par clé attend maintenant, quelques millisecondes au plus, que
