@@ -495,6 +495,60 @@ mod tests {
     /// n'est pas un merge, donc ré-indexer en ne passant que le champ modifié
     /// ferait disparaître l'autre. Ce test échouerait si `UpdateRecordNode`
     /// relisait `rec.data` au lieu de relire la ligne entière.
+    /// Une recherche filtrée par `allowed_ids` classe comme le sous-ensemble
+    /// indexé seul (lucivy 4.3.7) : N est la taille de la vue et les fréquences
+    /// sont comptées dans la vue. Jusqu'à la 4.3.6, le lecteur filtré gardait le
+    /// compte de tout le segment, et l'IDF mêlait le N du dépôt aux fréquences
+    /// de la vue (2,26 contre 0,047 ici). Documents de même longueur : la
+    /// longueur moyenne, gardée exprès sur le corpus, n'entre pas en jeu.
+    #[test]
+    fn une_recherche_filtree_classe_comme_sa_vue() {
+        use lucivy_core::blob_store::MemBlobStore;
+        use lucivy_core::sharded_handle::{BlobShardStorage, ShardedHandle};
+
+        let tmp = std::env::temp_dir().join(format!("rag3weaver_fts_vue_{}", std::process::id()));
+        let cfg = build_schema_config(&["content".to_string()], &[], 2).unwrap();
+        let ouvrir = |nom: &str| {
+            let storage = BlobShardStorage::new(Arc::new(MemBlobStore::new()), fts_index_name(nom), &tmp.join(nom));
+            ShardedHandle::create_with_storage(Box::new(storage), &cfg).expect("création")
+        };
+        let complet = ouvrir("VueComplet");
+        let seul = ouvrir("VueSeul");
+        for offset in 0..100_u64 {
+            let tete = if offset < 50 { "alpha" } else { "beta" };
+            let texte = format!("{tete} item{offset} gamma delta");
+            index_document(&complet, &[("content".into(), texte.clone())], offset).unwrap();
+            if offset < 10 {
+                index_document(&seul, &[("content".into(), texte)], offset).unwrap();
+            }
+        }
+        complet.commit().unwrap();
+        seul.commit().unwrap();
+
+        let q: lucivy_core::query::QueryConfig = serde_json::from_value(serde_json::json!({
+            "type": "contains", "field": "content", "value": "alpha"
+        }))
+        .unwrap();
+        let vue: Vec<u64> = (0..10).collect();
+        let scores = |hits: Vec<(u64, f64, std::collections::HashMap<String, Vec<(usize, usize)>>)>| {
+            hits.into_iter().map(|(o, s, _)| (o, s)).collect::<std::collections::BTreeMap<u64, f64>>()
+        };
+        let filtre = scores(search_hits(&complet, &q, 100, Some(&vue)).expect("recherche filtrée"));
+        let reduit = scores(search_hits(&seul, &q, 100, None).expect("recherche sur la vue seule"));
+        assert_eq!(filtre.keys().collect::<Vec<_>>(), reduit.keys().collect::<Vec<_>>(), "mêmes documents");
+        for (offset, attendu) in &reduit {
+            let obtenu = filtre[offset];
+            assert!(
+                (obtenu - attendu).abs() <= 1e-4 * attendu.abs().max(1.0),
+                "document {offset} : filtré {obtenu}, vue seule {attendu} — la recherche filtrée ne classe pas comme sa vue"
+            );
+        }
+
+        complet.close().ok();
+        seul.close().ok();
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
     #[test]
     fn positionless_reopened_index_keeps_hits_highlights_and_filters() {
         use lucivy_core::blob_store::MemBlobStore;
