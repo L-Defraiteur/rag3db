@@ -158,3 +158,14 @@ fn transferer_les_vecteurs(catalog: &Catalog, modele: &crate::embedding_storage:
     let reste = compter(catalog, &format!("MATCH (c:ScopeContent_Chunk) WHERE c.{} IS NULL OR c.{} IS NULL OR c.{} <> c._text_hash RETURN count(c)", neuf.column, neuf.marker, neuf.marker))?;
     Ok((repris, reste as usize))
 }
+
+/// **Migrer une base par son chemin**, hors hôte : la base (`<nom>.rag3db`), son plein texte en
+/// fichiers à côté (`<nom>.rag3db.fts`), l'extension vectorielle du processus. Le catalogue s'ouvre
+/// avec un embarqueur qui **refuse tout appel**, au nom et à la dimension du premier modèle
+/// enregistré dans la base : une migration qui voudrait embarquer échoue au lieu de calculer.
+/// À jouer sur une copie, sans autre ouvreur.
+#[cfg(feature = "rag3db-native")]
+pub fn migrer_la_base(chemin: &std::path::Path) -> Result<Bilan, String> {
+    let _ = chemin;
+    Err("la migration d'une base par son chemin n'existe pas encore".into())
+}

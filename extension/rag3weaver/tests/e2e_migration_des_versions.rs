@@ -131,3 +131,40 @@ fn une_base_a_versions_refuse_la_migration() {
     assert!(refus.contains("forme"), "le refus ne nomme pas la forme : {refus}");
     assert_eq!(compte(&cat, "MATCH (v:ScopeContent) RETURN count(v)"), versions);
 }
+
+/// **Une base se migre par son chemin, hors hôte** (l'entrée de la copie réelle) : le catalogue
+/// fermé, `migrer_la_base` ouvre la base et son plein texte en fichiers, et migre sans embarqueur
+/// réel (le sien refuse tout appel). Rouverte par le schéma de production, la base est à versions,
+/// ses occurrences intactes, chaque morceau avec son vecteur.
+#[test]
+#[ignore]
+fn une_base_se_migre_par_son_chemin_hors_hote() {
+    let dir = tempfile::tempdir().unwrap();
+    let avant = {
+        let (mut cat, _) = ouvrir(dir.path());
+        register_code_schema_sans_versions(&mut cat, default_scope_chunking()).unwrap();
+        let source = Snapshot::new("ancre", [
+            ("a.rs".to_string(), PARTAGEE.to_string()),
+            ("b.rs".to_string(), format!("\n\n{PARTAGEE}")),
+            ("c.rs".to_string(), SEULE.to_string()),
+        ]);
+        assert_eq!(cat.ingest_code(&analyze_source(&source).unwrap()).unwrap().failed, 0);
+        occurrences(&cat)
+    };
+    let bilan = rag3weaver::migration_des_versions::migrer_la_base(&dir.path().join("code.rag3db"))
+        .unwrap_or_else(|e| panic!("la migration par le chemin refuse : {e}"));
+    assert!(bilan.vecteurs_repris.values().sum::<usize>() > 0, "{bilan:?}");
+    assert!(bilan.morceaux_en_dette.values().all(|n| *n == 0), "{bilan:?}");
+    let (mut cat, texts) = ouvrir(dir.path());
+    register_code_schema(&mut cat, default_scope_chunking()).unwrap_or_else(|e| panic!("la base migrée ne se rouvre pas : {e}"));
+    assert_eq!(scope_form(&cat).unwrap(), ScopeForm::Versions);
+    assert_eq!(occurrences(&cat), avant, "les occurrences ont changé");
+    let stockage = cat.vector_storage("ScopeContent_Chunk").unwrap();
+    let morceaux = compte(&cat, "MATCH (c:ScopeContent_Chunk) RETURN count(c)");
+    assert!(morceaux > 0);
+    assert_eq!(compte(&cat, &format!("MATCH (c:ScopeContent_Chunk) WHERE c.{} = c._text_hash RETURN count(c)", stockage.marker)), morceaux);
+    for (entite, documents, lignes) in cat.comptes_du_plein_texte() {
+        assert_eq!(documents, lignes, "« {entite} » : {documents} documents pour {lignes} lignes");
+    }
+    assert_eq!(texts.lock().unwrap().len(), 0, "la réouverture a embarqué : {:?}", texts.lock().unwrap());
+}
