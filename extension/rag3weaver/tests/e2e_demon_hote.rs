@@ -916,20 +916,20 @@ fn manifeste_plein_texte(dir: &Path) -> PathBuf {
     chemin
 }
 
-fn route(host: &DaemonHost, session: &str, chemin: &str, corps: Value) -> Value {
+fn route_maintenance(host: &DaemonHost, session: &str, chemin: &str, corps: Value) -> Value {
     host.handle("POST", chemin, Some(session), &serde_json::to_vec(&corps).unwrap()).1
 }
 
 /// Les vivants et le jeton du plein texte de la fiche.
 fn releve(host: &DaemonHost, session: &str, manifest: &Path) -> (Vec<u64>, String) {
-    let r = route(host, session, "/backend/fts-live-ids", json!({"manifest": manifest, "table": "Fiche"}));
+    let r = route_maintenance(host, session, "/backend/fts-live-ids", json!({"manifest": manifest, "table": "Fiche"}));
     let r = ok(&r);
     let ids = r["ids"].as_array().unwrap().iter().map(|x| x.as_u64().unwrap()).collect();
     (ids, r["token"].as_str().unwrap().to_string())
 }
 
 fn maintain(host: &DaemonHost, session: &str, manifest: &Path, jeton: &str, purge: &[u64]) -> Value {
-    route(host, session, "/backend/maintain", json!({
+    route_maintenance(host, session, "/backend/maintain", json!({
         "manifest": manifest, "table": "Fiche", "token": jeton, "purge_ids": purge, "compact": true, "max_purge_ratio": 1.0,
     }))
 }
