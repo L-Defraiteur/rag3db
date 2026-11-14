@@ -5246,19 +5246,25 @@ impl Backend {
             let issue = self.execute_plan_une_fois(
                 prepared, result_port, def, metadata_ports, policy, target.clone(), restauration, &mut instantane,
             );
-            let rompu = instantane.as_ref().is_some_and(|i| i.rompu());
+            let rupture = instantane.as_ref().and_then(|i| i.rupture());
             drop(instantane);
-            if !rompu {
+            let Some((cause, a_rouvrir)) = rupture else {
                 return issue.map(|mut reponse| {
                     if renouvele > 0 {
                         reponse["instantane_renouvele"] = json!(renouvele);
                     }
                     reponse
                 });
+            };
+            // Une base à rouvrir romprait chaque essai : l'appel ne recommence pas.
+            if a_rouvrir {
+                return Err(format!(
+                    "l'instantané de lecture de cet appel s'est rompu sur une base à rouvrir : la réponse n'est pas lue hors d'un instantané. Cause : {cause}"
+                ));
             }
             if renouvele >= RENOUVELLEMENTS_MAX {
                 return Err(format!(
-                    "l'instantané de lecture de cet appel s'est rompu {} fois : la réponse n'est pas lue hors d'un instantané. Réessayez.",
+                    "l'instantané de lecture de cet appel s'est rompu {} fois : la réponse n'est pas lue hors d'un instantané. Réessayez. Dernière cause : {cause}",
                     renouvele + 1
                 ));
             }
