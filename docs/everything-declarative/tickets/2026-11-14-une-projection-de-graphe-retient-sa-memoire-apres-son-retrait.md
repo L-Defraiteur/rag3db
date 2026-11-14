@@ -36,6 +36,30 @@ Le pic vient de la requête longue, pas de la projection. Rien ne grossit d'un t
 même fil. La pente vue côté rag3weaver vient d'un fil neuf à chaque recherche, avec une arène
 glibc par fil.
 
+## La cause (le cœur, 14 novembre 2026, 21 h 10)
+
+**Un pic de 3,5 Gio à la liaison d'une longue liste littérale, rendu aussitôt, que les arènes de
+glibc changent en pente d'un fil à l'autre.**
+
+`ru_maxrss` par phase, chaque phase dans son processus, sur la forme à 72 652 chaînes en clair :
+
+| phase | pointe |
+|---|---|
+| l'analyse seule | +197 Mio |
+| la préparation (analyse, liaison, plan) | +3 524 Mio |
+| la requête entière | +3 560 Mio |
+| `RETURN size([la même liste])` seul | +3 525 Mio |
+
+C'est donc la liaison. Ni la jointure, ni l'`IN`, ni la projection n'y sont pour rien. Le binder plie
+la liste constante (`ExpressionBinder::foldExpression`, puis `evaluateConstantExpression`). Il monte
+un évaluateur par élément, et chaque `LiteralExpressionEvaluator` alloue un `ValueVector` de 2 048
+places pour une seule valeur (`literal_evaluator.cpp` l. 31) : environ 50 Kio par élément.
+
+**Le correctif du cœur**, branche `projection-rend-sa-memoire` : une liste dont chaque enfant est un
+littéral du type de l'élément se plie directement depuis leurs valeurs, sans évaluateurs. Son
+témoin : la pointe de la préparation, de la requête et du `RETURN size` reste sous 512 Mio, et
+e2e_test passe en entier, puisque ce pliage touche toute liste littérale.
+
 ## Ce que c'est
 
 Les tables : `ScopeContent` (72 652 lignes, clé `_uuid` STRING) et `ScopeContent_Chunk` (119 887
