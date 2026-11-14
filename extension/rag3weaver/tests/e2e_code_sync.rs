@@ -102,15 +102,15 @@ fn source_a_trois_fichiers() -> Vec<(String, String)> {
 /// fichier de code minifié (une ligne au-delà de `minified_line_max_bytes`) et un
 /// fichier de code au-delà de `code_file_max_bytes` ne sont pas indexés, et le
 /// rapport les compte sous leur raison ; un fichier de 700 Ko écrit à la main
-/// l'est. Les seuils viennent du manifeste (`workspace.exclude`), pas de constantes.
+/// l'est. Les seuils viennent du manifeste (`workspace.index_exclude`), pas de constantes.
 #[test]
 #[ignore]
 fn les_exclusions_du_manifeste_ecartent_le_minifie_et_le_trop_gros_et_le_disent() {
     let workspace: rag3weaver::backend_code::WorkspaceConfig = serde_json::from_value(serde_json::json!({
         "index": "code",
-        "exclude": {"minified_line_max_bytes": 5000, "code_file_max_bytes": 1048576}
+        "index_exclude": {"minified_line_max_bytes": 5000, "code_file_max_bytes": 1048576}
     }))
-    .expect("le manifeste déclare ses exclusions sous workspace.exclude");
+    .expect("le manifeste déclare ses exclusions sous workspace.index_exclude");
     let options = SourceSyncOptions { generated: workspace.generated.clone(), ..Default::default() };
     let mut catalog = catalogue();
     let mut source = source_a_trois_fichiers();
