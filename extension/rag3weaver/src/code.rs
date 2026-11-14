@@ -839,6 +839,12 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
     Ok(())
 }
 
+/// **Monter une base à versions aux générations** (2a′-2, la migration de la page 03, § 5).
+pub fn migrer_vers_les_generations(catalog: &mut Catalog) -> Result<(), CatalogError> {
+    let _ = catalog;
+    Err(CatalogError::DbError("la migration vers les générations n'est pas encore écrite".into()))
+}
+
 // ─── Analyse ─────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
