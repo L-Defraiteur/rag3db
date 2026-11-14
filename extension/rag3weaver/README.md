@@ -849,7 +849,9 @@ provider.
   coordination folder and one eviction: each capability holds its own lease, and the provider
   unloads when none is held. A cited name that is not declared is refused when the manifest
   loads. An activation block written inside a declaration is a named activation too, named after
-  its `model`. The recipe the provider attests is a hash of the name and the block.
+  its `model`. A sparse declaration that states `dimensions` also yields a dual (dense and sparse
+  in one call) on the same lease; the provider must then say `dual` at that dimension, and a
+  sparse dimension that differs from the dense one is refused when the manifest loads. The recipe the provider attests is a hash of the name and the block.
 - **Remote activation.** `hote` (an ssh target) and `adresse_distante` start the provider on
   another machine. The activation runs `ssh <host> systemd-run --user
   --unit=rag3weaver-fournisseur-<name>-<port> --collect --property=Restart=on-failure …` there,
