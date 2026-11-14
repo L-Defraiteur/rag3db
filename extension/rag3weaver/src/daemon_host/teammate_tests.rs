@@ -1188,6 +1188,84 @@ fn a_step_done_that_says_what_remains_is_not_the_end() {
     assert!(f[1].contains("Soumettre les ajouts un par un"), "le pas 2 voit ce qui restait : {}", f[1]);
 }
 
+/// La présentation que demande le ticket de tty (14 novembre 2026), telle qu'à lire.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+const PRESENTATION: &str = "# L'équipier\n\n- je lis le code\n- j'écris des correctifs\n- je joue les tests\n\nUn mot en **gras**.";
+
+/// Un équipier qui fait ce que `pas` dit à son premier pas, puis s'arrête ; il note ce qu'il voit
+/// (la frontière, le message système, la description de `report`).
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+fn un_pas(pas: fn(&[Turn], &crate::llm::GenOptions, &mut dyn crate::llm::TokenSink) -> Result<(crate::llm::Finish, crate::llm::Usage), crate::llm::LlmError>, vu: Arc<Mutex<Vec<String>>>) -> ChatModel {
+    Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        let vu = vu.clone();
+        Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+            if tool_results(turns).is_empty() {
+                let systeme = turns.iter().filter(|t| t.role == "system").map(|t| t.content.clone()).collect::<Vec<_>>().join("\n");
+                let report = opts.tools.iter().find(|d| d.name == "report").map(|d| d.description.clone()).unwrap_or_default();
+                vu.lock().unwrap().push(format!("{systeme}\n--- report : {report}\n--- frontière : {}", last_user(turns)));
+                pas(turns, opts, sink)
+            } else {
+                answer(turns, opts, sink, "", Vec::new())
+            }
+        })))
+    })
+}
+
+/// **Le contenu demandé arrive dans la boîte** (ticket de tty, 14 novembre 2026 : à « présente-toi :
+/// un titre, une liste, un mot en gras », l'équipier a rendu « Présentation fournie au superviseur
+/// conformément au format demandé », et le contenu n'était nulle part). Un équipier qui écrit le
+/// contenu dans sa réponse puis appelle `step_done` : la boîte le porte. Et ce que le modèle reçoit
+/// dit où va un texte demandé : `report` porte le texte lui-même, jamais une phrase sur lui.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn the_text_a_teammate_writes_in_its_step_reaches_the_mailbox() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let vu = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model = un_pas(
+        |turns, opts, sink| answer(turns, opts, sink, PRESENTATION, calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "présentation écrite", "remaining": "" }))])),
+        vu.clone(),
+    );
+    let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    files.append("supervisor", "request", None, "Présente-toi : un titre, une liste à puces de trois choses que tu sais faire, et un mot en gras.").unwrap();
+    let o = host.run_teammate(&h.id, "doc").unwrap();
+    let boite = files.mailbox();
+    let portee: Vec<&Value> = boite.iter().filter(|l| l["from"] == "teammate" && l["text"].as_str().is_some_and(|t| t.contains("# L'équipier") && t.contains("**gras**"))).collect();
+    assert_eq!(portee.len(), 1, "le contenu écrit dans le pas arrive une fois dans la boîte ({o:?}) : {boite:#?}");
+    let vu = vu.lock().unwrap();
+    assert!(vu[0].contains("le texte lui-même"), "le message système et l'outil report disent où va un texte demandé : {}", vu[0]);
+}
+
+/// **Écrit et rapporté, le contenu n'est qu'une fois dans la boîte** (la garde de c7 sur le
+/// correctif) : le modèle écrit la présentation dans sa réponse et la passe aussi à `report` ;
+/// le `report` l'emporte, le texte du pas ne la double pas.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_text_both_written_and_reported_is_in_the_mailbox_once() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let model = un_pas(
+        |turns, opts, sink| {
+            answer(turns, opts, sink, PRESENTATION, calls(&[("report", json!({ "text": PRESENTATION })), ("step_done", json!({ "item": "", "succeeded": true, "done": "présentation écrite", "remaining": "" }))]))
+        },
+        Arc::default(),
+    );
+    let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    files.append("supervisor", "request", None, "Présente-toi : un titre, une liste à puces de trois choses que tu sais faire, et un mot en gras.").unwrap();
+    host.run_teammate(&h.id, "doc").unwrap();
+    let boite = files.mailbox();
+    let portee = boite.iter().filter(|l| l["from"] == "teammate" && l["text"].as_str().is_some_and(|t| t.contains("# L'équipier"))).count();
+    assert_eq!(portee, 1, "le contenu une seule fois, celui du report : {boite:#?}");
+}
+
 /// **Une request qui exige un report ne se clôt pas sans lui** (`expects: "report"`, déclaré
 /// par le superviseur) : un `step_done` sans `report` dit « fait sans le livrable demandé » et
 /// l'équipier attend la boîte sans appeler le modèle ; une ligne du superviseur le relance, le
