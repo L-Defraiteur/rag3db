@@ -395,10 +395,23 @@ impl crate::embedder::Embedder for ALaDemande {
         let mut r = g.as_ref().unwrap().0.embed(textes);
         if let Err(e) = &r {
             if Self::parti(e) {
-                // Une fois : le fournisseur parti se relance, l'identité revérifiée.
+                // Une fois : le fournisseur parti (évincé, planté) se relance,
+                // l'identité revérifiée. Un refus dit les deux temps : le départ,
+                // puis ce qu'a fait la relance unique — sans eux, l'appelant ne
+                // lisait qu'« est mort avant de répondre » et ne savait pas qu'un
+                // premier fournisseur avait servi puis planté (14 novembre 2026).
+                let depart = e.to_string();
                 *g = None;
-                *g = Some((self.activer()?, std::time::Instant::now()));
+                let relance = self.activer().map_err(|e| crate::embedder::EmbedError::ProviderError(format!(
+                    "le fournisseur {} est parti ({depart}) ; relancé une fois, il n'a pas répondu : {e}", self.source.model)))?;
+                *g = Some((relance, std::time::Instant::now()));
                 r = g.as_ref().unwrap().0.embed(textes);
+                if let Err(e) = &r {
+                    if Self::parti(e) {
+                        r = Err(crate::embedder::EmbedError::ProviderError(format!(
+                            "le fournisseur {} est parti ({depart}) ; relancé une fois, il est reparti : {e}", self.source.model)));
+                    }
+                }
             }
         }
         if let Some((_, dernier)) = g.as_mut() {
