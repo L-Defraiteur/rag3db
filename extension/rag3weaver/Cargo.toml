@@ -605,6 +605,10 @@ name = "sonde_noeud_lexical"
 path = "tests/sonde_noeud_lexical.rs"
 required-features = ["rag3db-native", "code"]
 [[test]]
+name = "sonde_vecteur_filtre"
+path = "tests/sonde_vecteur_filtre.rs"
+required-features = ["rag3db-native", "code"]
+[[test]]
 name = "sonde_liste_analyse"
 path = "tests/sonde_liste_analyse.rs"
 [[test]]
