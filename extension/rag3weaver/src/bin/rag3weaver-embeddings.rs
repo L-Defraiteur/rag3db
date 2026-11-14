@@ -109,7 +109,8 @@ fn servir() -> Result<(), String> {
             EmbedDaemon::new(modele)
         }
     }
-    .expose(expose).avec_activation(activation);
+    .expose(expose).avec_activation(activation)
+    .avec_relances(std::env::var(rag3weaver::daemon::embeddings::RELANCES_VARIABLE).ok().and_then(|v| v.trim().parse::<u64>().ok()));
     // La seule carte du poste porte l'affichage : des rafales courtes, un
     // trou entre deux (`rag3weaver::burst`). Dit au journal, parce qu'un
     // débit plus bas sans explication se prend pour une panne.
