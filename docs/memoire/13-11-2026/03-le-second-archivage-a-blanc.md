@@ -117,9 +117,9 @@ identique à 835d5298f. L'essai s'est joué à luciepc, sous `poste lourd`, au r
 - **Les journaux ne font plus une fiche par jour, mais une par moment.** « Relance du 7 novembre
   2026 » (14 sections), « Matinée du 8 novembre 2026 » (14), « Nuit du 7 au 8 novembre 2026 » (13)
   et « Après-midi du 8 novembre 2026 » (10) prennent la place de « Journal du 7 » (20) et « Journal
-  du 8 » (30). Ce sont toujours des fiches de provenance plutôt que de sujet. Le choix (une fiche par
-  jour, ou une par chantier) est à faire avec Lucie : ticket ouvert
-  `docs/memoire/tickets/2026-11-13-un-document-journal-fait-une-fiche-trop-large.md`.
+  du 8 » (30). Ce sont toujours des fiches de provenance plutôt que de sujet. Lucie a tranché le 14
+  novembre : une fiche par chantier. Le ticket
+  `docs/tickets/closed/2026-11-13-un-document-journal-fait-une-fiche-trop-large.md` dit le correctif.
 
 La liste des fiches du troisième essai n'a pas d'annexe : elle se relit dans
 `~/.cache/rag3weaver-build/blanc-96-3/apports.json`, à luciepc.

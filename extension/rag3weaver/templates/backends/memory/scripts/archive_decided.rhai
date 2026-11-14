@@ -18,6 +18,20 @@ fn sujet_mots(nom) {
     }
     mots
 }
+// **Un nom daté** : un mois (ou un jour de la semaine) et un nombre (« Matinée du 8 novembre 2026 »,
+// « Relance du 7 novembre 2026 »). Une fiche neuve n'est pas nommée par un moment : un journal donne
+// une fiche par chantier (Lucie, 14 novembre 2026). Une fiche déjà là reste joignable.
+fn nom_date(nom) {
+    let mois = ["janvier", "février", "fevrier", "mars", "avril", "mai", "juin", "juillet", "août", "aout", "septembre", "octobre", "novembre", "décembre", "decembre", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+    let mots = sujet_mots(nom);
+    let a_mois = false;
+    let a_nombre = false;
+    for m in mots {
+        if mois.contains(m) { a_mois = true; }
+        if m.len() > 0 && "0123456789".contains(m.sub_string(0, 1)) { a_nombre = true; }
+    }
+    a_mois && a_nombre
+}
 fn sujets_voisins(a, b) {
     if type_of(a) != "string" || type_of(b) != "string" { return false; }
     let ma = sujet_mots(a);
@@ -77,6 +91,9 @@ if kind == "fiche" {
     if a_rejoint { kind = "create"; }
 }
 let fiche = if a_rejoint { resolved_name } else if kind == "create" { if sujet != "" { sujet } else { s.title } } else if kind == "fiche" { resolved_name } else { "" };
+if kind == "create" && !a_rejoint && nom_date(fiche) {
+    throw `archive : le sujet « ${fiche} » est une date ou un moment, pas un chantier — un journal donne une fiche par chantier`;
+}
 let texte = s.text;
 let about = texte;
 let point = about.index_of(". ");

@@ -64,5 +64,5 @@ même sujet, et un nom proposé n'était comparé aux candidates qu'à l'identiq
 - **Le voisinage ne voit que les mots.** « Classeur local du rappel » et « Classeur de rappel » se
   rejoignent. Deux formulations sans mots communs, ou un nom au pluriel face au singulier, ne se
   rejoignent pas. Le troisième archivage à blanc (blanc-96-3) dira combien de doublons il reste.
-- **Une fiche « Journal du jour » est trop large** : c'est un ticket ouvert à part,
-  [un document journal fait une fiche trop large](../../memoire/tickets/2026-11-13-un-document-journal-fait-une-fiche-trop-large.md).
+- **Une fiche « Journal du jour » est trop large** : ticket à part, clos le 14 novembre,
+  [un document journal fait une fiche trop large](2026-11-13-un-document-journal-fait-une-fiche-trop-large.md).

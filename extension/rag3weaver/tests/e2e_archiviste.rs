@@ -345,3 +345,55 @@ fn un_sujet_voisin_d_une_fiche_proposee_plus_haut_la_rejoint() {
     assert_eq!(apports_de(&b, "Hooks").len(), 1, "un seul mot ne rejoint pas une fiche plus longue");
 }
 
+/// **Un document journal donne une fiche par chantier, pas par moment** (14 novembre 2026, Lucie, sur
+/// le troisième archivage à blanc : « Relance du 7 novembre 2026 », « Matinée du 8 novembre 2026 »,
+/// « Nuit du 7 au 8 novembre 2026 »). L'instruction dit au modèle de nommer le chantier ; un nom de
+/// fiche neuve qui porte une date (un mois et un nombre) est refusé, et le refus se dit dans le rapport.
+/// Une fiche déjà là reste joignable quel que soit son nom.
+#[test]
+#[ignore]
+fn un_journal_donne_une_fiche_par_chantier_pas_par_moment() {
+    let serveur = FakeServer::start_sequence(vec![
+        etiquette_nommee("create", "Matinée du 8 novembre 2026"),
+        etiquette_nommee("create", "Bascule au format 43"),
+    ]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    const JOURNAL: &str = "# Journal du 8 novembre 2026\n\n## 9 h 10\n\nLe banc a repris ses mesures après la nuit.\n\n## 11 h 40\n\nLa bascule au format 43 passe les témoins du cœur.\n";
+    let r = appel(&b, "archive", json!({"titre": "Journal du 8 novembre 2026", "contenu": JOURNAL, "jour": "2026-11-08", "allow_create": true}));
+    let request: Value = serde_json::from_str(&serveur.request.recv().unwrap()).unwrap();
+    assert!(request["messages"].to_string().contains("chantier"), "l'instruction demande le chantier : {}", request["messages"]);
+    assert_eq!(r["result"]["ok"], json!(1), "{r}");
+    let erreurs = r["result"]["errors"].to_string();
+    assert!(erreurs.contains("Matinée du 8 novembre 2026") && erreurs.contains("date"), "le refus se dit : {r}");
+    assert!(apports_de(&b, "Matinée du 8 novembre 2026").is_empty(), "aucune fiche nommée par un moment");
+    assert_eq!(apports_de(&b, "Bascule au format 43").len(), 1, "le chantier fait sa fiche");
+    let f = appel(&b, "get_fiche", json!({"record": {"name": "Bascule au format 43"}}));
+    assert_eq!(f["result"]["data"]["state"], json!("proposed"), "une fiche créée reste proposée : {f}");
+}
+
+/// **Une fiche courante qu'une section rejoint reste courante** (14 novembre 2026, le premier garde-fou
+/// de la voie 3 : l'archiviste crée en `proposed`, et rien d'autre que la relecture de Lucie — la
+/// transition `accept` — ne fait une fiche `current`). La section répond create avec le nom exact d'une
+/// fiche `current` qu'aucune candidate ne présente : elle la rejoint, et l'état ne bouge pas.
+#[test]
+#[ignore]
+fn une_fiche_courante_rejointe_reste_courante() {
+    let serveur = FakeServer::start_sequence(vec![etiquette_nommee("create", FICHE)]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    appel(&b, "put_fiche", json!({"record": {"name": FICHE, "about": "Comment le moteur rejoue son journal à l'ouverture.", "state": "current"}}));
+    const NOTE: &str = "# Note\n\n## Le rejeu\n\nLe journal se rejoue en entier à l'ouverture.\n";
+    let r = appel(&b, "archive", json!({"titre": "Note", "contenu": NOTE, "jour": "2026-11-14", "allow_create": true, "candidates": 0}));
+    assert_eq!(r["result"]["errors"], json!([]), "{r}");
+    assert_eq!(apports_de(&b, FICHE).len(), 1, "la section rejoint la fiche");
+    let f = appel(&b, "get_fiche", json!({"record": {"name": FICHE}}));
+    assert_eq!(f["result"]["data"]["state"], json!("current"), "{f}");
+}
+
