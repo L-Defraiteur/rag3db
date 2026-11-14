@@ -75,6 +75,7 @@ verifier_pile() {
   apporte=$(code_apporte "$avant" "$maitre")
   [ -z "$apporte" ] || { echo "ARRÊT : la pile a changé — master a du code que la tête d'avant n'avait pas :"; echo "$apporte"; return 1; }
   local ancien signe nouveau
+  echo "range-diff jugé ($(git rev-parse --short "$avant")..$(git rev-parse --short "$teste") contre $(git rev-parse --short "$maitre")..$(git rev-parse --short "$tete")) :"
   # --creation-factor=100 : un petit commit dont seule une ligne de .md a changé (un fichier créé devenu un fichier
   # modifié par un conflit résolu) serait sinon vu « < » puis « > », deux commits sans rapport.
   while IFS= read -r ligne; do
@@ -84,14 +85,16 @@ verifier_pile() {
     case "$ligne" in [0-9-]*:*) ;; *) continue ;; esac
     ancien=$(echo "$ligne" | awk '{print $2}'); signe=$(echo "$ligne" | awk '{print $3}'); nouveau=$(echo "$ligne" | awk '{print $5}')
     case "$signe" in
-      =) ;;
+      =) echo "  = égal : $ligne" ;;
       '>')
-        [ -z "$(git diff --name-only "$nouveau^" "$nouveau" -- . ':!*.md')" ] || { echo "ARRÊT : un commit ajouté après le rejeu touche autre chose que de la doc : $ligne"; return 1; } ;;
+        [ -z "$(git diff --name-only "$nouveau^" "$nouveau" -- . ':!*.md')" ] || { echo "ARRÊT : un commit ajouté après le rejeu touche autre chose que de la doc : $ligne"; return 1; }
+        echo "  > toléré, .md seuls : $ligne" ;;
       '!')
         # Toléré si les deux versions du commit ne diffèrent que par des .md : le même diff hors .md.
         if [ "$(git diff --no-color "$ancien^!" -- . ':!*.md' | grep -vE '^(index |@@)')" != "$(git diff --no-color "$nouveau^!" -- . ':!*.md' | grep -vE '^(index |@@)')" ]; then
           echo "ARRÊT : un commit du lot a changé hors des .md depuis le rejeu : $ligne"; return 1
-        fi ;;
+        fi
+        echo "  ! toléré, ne diffère que par des .md : $ligne" ;;
       *) echo "ARRÊT : le lot n'est plus celui qui a été testé : $ligne"; return 1 ;;
     esac
   done < <(git range-diff --no-color --creation-factor=100 "$avant..$teste" "$maitre..$tete")
@@ -111,7 +114,21 @@ derive() {
     depot="absente"
   fi
   echo "garde exécutée $moi, garde du dépôt $depot"
-  if [ "$moi" = "$depot" ]; then echo "garde à jour"; else echo "garde en retard sur le dépôt (la copie exécutée fait autorité ; recopie après relecture et mot de l'orchestration)"; fi
+  if [ "$moi" = "$depot" ]; then echo "garde à jour"; return 0; fi
+  # Le sens (14 novembre 2026, relevé de c7) : la copie exécutée est-elle une version passée de la garde du dépôt
+  # (le dépôt l'a changée depuis) ou une version qu'il n'a pas encore (une branche relue, posée avant d'atterrir) ?
+  local blob c passe=0
+  blob=$(git hash-object "$MOI" 2>/dev/null)
+  if [ -n "$blob" ] && git -C "$1" rev-parse -q --verify HEAD > /dev/null 2>&1; then
+    for c in $(git -C "$1" rev-list HEAD -- tools/poste/push_garde.sh 2>/dev/null); do
+      [ "$(git -C "$1" rev-parse -q "$c:tools/poste/push_garde.sh" 2>/dev/null)" = "$blob" ] && { passe=1; break; }
+    done
+  fi
+  if [ "$passe" = 1 ]; then
+    echo "garde différente : le dépôt a changé la garde depuis la copie exécutée — copie à relire et à recopier (la copie exécutée fait autorité jusque-là)"
+  else
+    echo "garde différente : la copie exécutée porte ce que le dépôt n'a pas encore (la copie exécutée fait autorité)"
+  fi
 }
 if [ "${1:-}" = "--derive" ]; then derive "$2"; exit 0; fi
 # Master tenu pour une autre session (fenêtre de c7) : pas de push tant que le fichier existe.
