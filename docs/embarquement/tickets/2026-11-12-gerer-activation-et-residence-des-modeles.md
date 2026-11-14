@@ -686,3 +686,8 @@ est au ticket fermé `2026-11-13-un-fournisseur-a-la-demande-ouvert-par-l-hote-n
   déclaration, et le relancé la dit à son `/sante` (`relances`).
 - **Hors de ce lot** : le refus « est mort avant de répondre » nomme le type de service, pas le
   programme (ticket `2026-11-14-le-refus-est-mort-avant-de-repondre-nomme-le-type-de-service.md`).
+- **Le double compte, accepté** (c7, 14 novembre) : deux clients qui trouvent le même fournisseur planté
+  au même instant notent chacun une relance (`noter_une_relance` lit, ajoute un et renomme, sans
+  verrou), alors qu'un seul lance et que l'autre s'y attache. `relances` peut donc compter plus que
+  les lancements réels. Le compte sert à voir un fournisseur qui meurt en boucle, pas à compter
+  exactement ; il n'est pas corrigé dans le code.
