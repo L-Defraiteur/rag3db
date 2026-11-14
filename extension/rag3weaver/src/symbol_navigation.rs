@@ -795,6 +795,34 @@ mod tests {
         assert!(rendered.contains("Parent non déterminable"));
         assert!(rendered.contains("Faits de membres invalides"));
     }
+    /// **Les méthodes contenues sont des membres** (couverture étendue du ticket « exposer la
+    /// navigation dans les symboles », 14 novembre 2026) : une classe Python dont `declarations` est
+    /// vide a pourtant ses méthodes, scopes contenus dans sa plage ; elles sont ses membres, avec leur
+    /// provenance `range_containment` et leur vraie référence.
+    #[test]
+    fn contained_method_scopes_are_members_with_their_provenance() {
+        let (src, rows) = fixture();
+        let v = call(&src, &rows, "members", "a", 1, 80);
+        let membres = v["members"].as_array().unwrap();
+        let run: Vec<&Value> = membres.iter().filter(|m| m["name"] == "run").collect();
+        assert_eq!(run.len(), 1, "la méthode contenue est un membre : {v}");
+        assert_eq!(run[0]["provenances"], json!(["range_containment"]), "{v}");
+        assert_eq!(run[0]["ref"]["uuid"], "ar", "sa référence est celle du scope réel : {v}");
+    }
+
+    /// **Déclarée et contenue, une méthode n'est qu'un membre** (la garde de c7) : la même méthode
+    /// (même nom, même ligne) vue par les déclarations indexées et par la contenance n'apparaît
+    /// qu'une fois, avec ses deux provenances.
+    #[test]
+    fn a_method_both_declared_and_contained_is_one_member_with_two_provenances() {
+        let (src, mut rows) = fixture();
+        rows[0]["declarations"] = json!(r#"[{"name":"run","line":2,"signature":"run(self)","kind":"method"}]"#);
+        let v = call(&src, &rows, "members", "a", 1, 80);
+        let run: Vec<&Value> = v["members"].as_array().unwrap().iter().filter(|m| m["name"] == "run").collect();
+        assert_eq!(run.len(), 1, "une seule fois : {v}");
+        assert_eq!(run[0]["provenances"], json!(["indexed_declaration", "range_containment"]), "{v}");
+    }
+
     #[test]
     fn member_facts_are_partial_without_fabricated_ids_or_positions() {
         let (src, mut rows) = fixture();
