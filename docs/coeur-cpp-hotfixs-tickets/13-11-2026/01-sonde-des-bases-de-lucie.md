@@ -426,3 +426,83 @@ Le banc par l'outil : 8 requêtes, aucun résultat perdu. La sortie est
 **L'ordre de la fenêtre** : code-rag3db-depot (portable), code-principal puis code-lourd (luciepc).
 memoire-longue n'en est pas. Elle attend la fermeture qui tient d'archi sur master : elle n'est encore
 que sur la branche `fermeture-qui-tient`, aaefdc357.
+
+## Le retrait de l'ancien index après 1b, répété sur copie (14 novembre 2026, 21 h 20)
+
+Demandé par c7. C'est le pas qu'arbre principal décrit pour après la bascule de 1b
+(`docs/arbre-principal/14-11-2026/01-1b-sur-la-copie-de-code-rag3db-depot.md`, « Après la bascule »).
+Il ne se jouera sur une vraie base qu'après la bascule de 1b et une validation dont Lucie dit la durée.
+Il est joué ici sur deux copies reflink neuves de `~/.cache/rag3weaver-build/1b-copie/migree-20261114-1641`,
+la preuve d'arbre principal, jamais ouverte elle-même. Lib 0c41f9fe6, celle de la migration.
+
+**Les outils**, dans `outils/` :
+- `retrait-ancien-index.sh` : le script, en mode `repetition` ou `fenetre` ;
+- `comparer_jeu.py` : la comparaison des deux passages du jeu ;
+- `retrait-jeu.jsonl` : le jeu de 8 requêtes (variable `JEU`) ;
+- `ecrire.cpp` : `requete.cpp` en écriture, qui s'arrête au premier ordre refusé.
+
+Le binaire est un `rag3weaver-backend` qui connaît la forme à versions. En répétition, c'est le binaire
+de débogage de `arbre-principal/masque-sans-filtre-pile-3` (e1857b85b), en mode local : un manifeste, et
+les requêtes en JSONL sur l'entrée standard. Le manifeste de la copie retire `bilans`, qui désignait la
+vraie mémoire longue de Lucie, ainsi que `reactions` et `watches`.
+
+**Les pas** :
+0. **Les préalables**, lus en lecture seule. Le script refuse sinon :
+   - `code_scope_form = code-scope-v1/content` ;
+   - `entity_config:Scope` routé par `ScopeContent`, avec `"signals":[]` ;
+   - des morceaux `ScopeContent_Chunk` ;
+   - pas encore d'estampille `code_scope_retour`.
+1. En fenêtre, la fermeture qui tient. Puis personne ne doit tenir la base (`fuser`).
+2. **Le jeu avant**, 8 requêtes :
+   - `search_code` deux fois en bm25 et deux fois en bm25+vector ;
+   - `read_file` deux fois, en json ;
+   - `usages` deux fois, en json.
+3. **L'instantané** par `instantanes.sh`, avec sa recette `RETOUR.sh`. En répétition, c'est une variante
+   qui écrit sous `INSTANTANES_DIR`.
+4. **Le DDL**, dans l'ordre :
+   - `CALL DROP_VECTOR_INDEX('Scope_Chunk', 'Scope_Chunk_vec__granite_278m')`. L'index HNSW est encore
+     là, même si une clé `vector_index_dropped:` le dit retiré ;
+   - `DROP TABLE Scope_CHUNKED_FROM`, puis `DROP TABLE Scope_Chunk` ;
+   - l'effacement des clés de méta `fts_generation:Lucivy_Scope` et `vector_index_dropped:Scope_Chunk:*` ;
+   - l'estampille `code_scope_retour` = « impossible : ancien index (…) retiré le <date> sur <poste>,
+     instantané <étiquette> » ;
+   - `CHECKPOINT`.
+5. **L'effacement du dossier `Lucivy_Scope`.**
+6. **Le contrôle** : les tables, le dossier et l'estampille.
+7. **Le jeu après**, comparé au jeu d'avant. Les réponses doivent être identiques hors `/result/run`,
+   l'identifiant du passage. C'est le seul champ qui change entre deux passages sur la même base,
+   vérifié avant.
+8. **Rien n'est recréé** par l'ouverture du binaire.
+9. **Les octets.**
+10. En fenêtre, la réouverture.
+
+**Les deux répétitions sont vertes**, au chiffre près (21 h 15 et 21 h 19) :
+
+| | |
+|---|---|
+| retiré | Scope_Chunk 127 195 morceaux, Scope_CHUNKED_FROM 129 400 arêtes (dont les 2 205 en double), Lucivy_Scope |
+| gardé | ScopeContent_Chunk 119 887 |
+| le jeu | 8 réponses sur 8 identiques avant et après |
+| recréé à l'ouverture | rien |
+| durée | 37 s, dont 15 pour l'instantané ; le DDL en 1 à 3 s |
+| **octets rendus** | **4 276 156 895** : `Lucivy_Scope` (4 282 812 895), moins les 6,6 Mo que la première ouverture ajoute à la base |
+
+**Le retour** est essayé sur la seconde copie. Après `RETOUR.sh`, on retrouve Scope_Chunk à 127 195,
+Scope_CHUNKED_FROM à 129 400, Lucivy_Scope à 4,0 Gio, et plus d'estampille.
+
+**Deux écarts avec ce qu'on attendait.**
+- **4,3 Go rendus, pas ~5.** Le fichier de la base ne rétrécit pas : 3 962 748 928 octets avant et après
+  le DDL. Les pages de Scope_Chunk et de ses vecteurs, environ 1 Go, deviennent libres dans le fichier.
+  La base les réutilise, mais le disque ne les récupère pas. Les rendre demanderait de réécrire la base,
+  par EXPORT puis IMPORT ou un compactage du moteur ; ce n'est pas dans ce pas.
+- **L'estampille n'est lue par aucun code.** 1b n'a pas de commande de retour : le retour passe par
+  l'instantané (plan du 12 novembre). `code_scope_retour` est donc un écriteau pour qui ouvre la base.
+  Si un retour par commande naît un jour, il devra la lire et refuser.
+
+**Ce qu'il faut à la vraie fenêtre.**
+- Le binaire posé, s'il porte 1b.
+- `REQUETE` et `ECRIRE` bâtis contre la lib de la base sur le poste, comme pour la purge (la garde
+  « CPU ISA » de luciepc).
+- Les lecteurs en dur de `Scope_Chunk` hors produit, passés par `code::scope_chunks` avant le retrait
+  (ticket `2026-11-13-les-sondes-bancs-et-mesures-du-code-lisent-scope-chunk-en-dur`). Ma propre sonde
+  des doublons lit `Scope_Chunk` en dur : elle n'aura plus d'objet, ses doublons partent avec la table.

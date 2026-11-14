@@ -1,0 +1,8 @@
+{"op": "call", "name": "search_code", "arguments": {"query": "chunk_uuid parent field index", "mode": "indexed", "options": {"limit": 8, "signals": ["bm25"]}}}
+{"op": "call", "name": "search_code", "arguments": {"query": "buffer pool is full", "mode": "indexed", "options": {"limit": 8, "signals": ["bm25"]}}}
+{"op": "call", "name": "search_code", "arguments": {"query": "fermer un backend avec une raison", "mode": "indexed", "options": {"limit": 8, "signals": ["bm25", "vector"]}}}
+{"op": "call", "name": "search_code", "arguments": {"query": "les liens par COPY écartent les paires déjà posées", "mode": "indexed", "options": {"limit": 8, "signals": ["bm25", "vector"]}}}
+{"op": "call", "name": "read_file", "arguments": {"path": "extension/rag3weaver/src/uuid.rs", "format": "json", "limit": 60}}
+{"op": "call", "name": "read_file", "arguments": {"path": "src/storage/table/node_table.cpp", "format": "json", "offset": 800, "limit": 80}}
+{"op": "call", "name": "usages", "arguments": {"name": "chunk_uuid", "format": "json"}}
+{"op": "call", "name": "usages", "arguments": {"name": "copier_les_liens", "format": "json"}}
