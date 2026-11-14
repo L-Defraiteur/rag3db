@@ -480,6 +480,69 @@ impl Embedder for Surveillant {
     }
 }
 
+/// Un Surveillant sur un catalogue neuf, et ce qu'il relève.
+fn surveillant_sur_un_catalogue() -> (
+    Surveillant,
+    std::sync::Arc<std::sync::Mutex<Catalog>>,
+    std::sync::Arc<std::sync::atomic::AtomicBool>,
+    std::sync::Arc<std::sync::atomic::AtomicUsize>,
+) {
+    let cellule = std::sync::Arc::new(std::sync::OnceLock::new());
+    let tenu = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let max_en_vol = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let surveillant = Surveillant {
+        catalogue: cellule.clone(),
+        tenu: tenu.clone(),
+        appels: Default::default(),
+        interieur: HashEmbedder::new(DIM),
+        en_vol: Default::default(),
+        max_en_vol: max_en_vol.clone(),
+        refus: Default::default(),
+    };
+    let catalogue = std::sync::Arc::new(std::sync::Mutex::new(monter(Rag3dbConnection::in_memory().expect("base en mémoire"), "hachage")));
+    cellule.set(catalogue.clone()).ok();
+    (surveillant, catalogue, tenu, max_en_vol)
+}
+
+/// **Deux appels en vol ne se dénoncent pas l'un l'autre** (ticket recherche du 8 novembre) : le
+/// nœud d'embarquement appelle le service depuis deux fils (`RAG3WEAVER_EMBED_THREADS`, 2 par
+/// défaut). La sonde réussie de l'un tient le verrou un instant, et celle de l'autre, au même
+/// instant, échouait : « appelé sous le verrou », alors que personne ne le tenait. Mesuré à luciepc
+/// sur disque calme le 14 novembre : 4 rouges sur 10 à deux fils, 0 sur 10 à un fil.
+#[test]
+fn deux_appels_en_vol_ne_se_denoncent_pas_l_un_l_autre() {
+    let (surveillant, catalogue, tenu, max_en_vol) = surveillant_sur_un_catalogue();
+    let textes = vec!["un texte".to_string()];
+    std::thread::scope(|s| {
+        for _ in 0..4 {
+            s.spawn(|| {
+                for _ in 0..2_000 {
+                    surveillant.embed(&textes).expect("embarquement");
+                }
+            });
+        }
+    });
+    assert!(max_en_vol.load(std::sync::atomic::Ordering::SeqCst) > 1, "les appels ont bien été en vol ensemble");
+    assert!(
+        !tenu.load(std::sync::atomic::Ordering::SeqCst),
+        "le catalogue n'était tenu par personne, et le Surveillant l'a dit tenu : {:?}",
+        surveillant.refus.lock().unwrap().first()
+    );
+    drop(catalogue);
+}
+
+/// Le témoin du témoin : un verrou **vraiment tenu** par un autre fil pendant l'appel se voit.
+#[test]
+fn le_surveillant_voit_un_verrou_tenu_par_un_autre() {
+    let (surveillant, catalogue, tenu, _) = surveillant_sur_un_catalogue();
+    let garde = catalogue.lock().unwrap();
+    std::thread::scope(|s| {
+        s.spawn(|| surveillant.embed(&["un texte".to_string()]).expect("embarquement"));
+    });
+    drop(garde);
+    assert!(tenu.load(std::sync::atomic::Ordering::SeqCst), "un appel sous un verrou tenu se voit");
+}
+
 /// **L'appel au service se fait hors du verrou du catalogue** : une réaction de
 /// la montre tenait le catalogue pendant tout l'embarquement de son lot, et les
 /// lectures attendaient le modèle. La dette se réclame et s'écrit sous le
