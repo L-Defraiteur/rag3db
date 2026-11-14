@@ -137,8 +137,8 @@ impl<'a> PreparedNavigation<'a> {
         "truncated":false,"provenance":{"relation":"range_containment","position_precision":"line_ranges",
         "freshness":"unverified","not_relations":["declared_membership","inheritance"]},
         "coverage":{"complete":false,"limits":["Scopes indexés seulement ; lambdas repliées et membres non extraits peuvent manquer.",
-        "Inclusion de plages à granularité ligne, pas parent AST garanti ; méthodes hors classe non rattachées par ce parcours.",
-        "Membres : scopes directs de plages, déclarations méthode/fonction et propriétés typées ; faits séparés, aucun inventaire exhaustif."]}});
+        "Inclusion de plages à granularité ligne, pas parent AST garanti.",
+        "Membres : faits indexés (déclarations, propriétés typées), scopes contenus et scopes de ce fichier dont le parent déclaré nomme le type (bloc impl, récepteur Go, définition C++ hors classe) ; ceux d'un autre fichier ne sont pas lus ; aucun inventaire exhaustif."]}});
         // Une tranche de scopes ne permet pas de décider les racines/parents.
         if total > MAX_INPUT || rows.len() < total {
             out["status"] = json!("input_truncated");
@@ -427,7 +427,8 @@ impl<'a> PreparedNavigation<'a> {
         }
         let mut members = Vec::new();
         if q.mode == "members" && q.depth > 0 {
-            let r = selected[root.unwrap()];
+            let racine = root.unwrap();
+            let r = selected[racine];
             for (field, origin) in [
                 ("declarations", "indexed_declaration"),
                 ("field_types", "indexed_typed_property"),
@@ -437,37 +438,77 @@ impl<'a> PreparedNavigation<'a> {
                         // Identité de graphe et position absentes ne sont jamais fabriquées.
                         members.push(json!({"name":clipped(text(&fact,"name"),256),"kind":if field=="field_types"{"property"}else{text(&fact,"kind")},
                         "signature":clipped(text(&fact,"signature"),512),"type":fact["type"],"line":fact["line"],
-                        "owner_ref":node(r,0,None)["ref"],"provenance":origin}));
+                        "owner_ref":node(r,0,None)["ref"],"provenance":origin,"provenances":[origin]}));
                     }
                 } else if !text(r, field).is_empty() {
                     out["coverage"]["malformed_member_facts"] = json!(true);
                 }
             }
+            let membre = |c: &Value, provenance: &str| {
+                json!({"name":clipped(text(c,"name"),256),"kind":text(c,"scope_type"),"signature":clipped(text(c,"signature"),512),
+                "line":c["start_line"],"ref":node(c,1,Some(text(r,"_uuid")))["ref"],"owner_ref":node(r,0,None)["ref"],
+                "provenance":provenance,"provenances":[provenance]})
+            };
+            let ajouter = |m: &mut Value, provenance: &str| {
+                if let Some(a) = m["provenances"].as_array_mut() {
+                    if !a.iter().any(|p| p == provenance) {
+                        a.push(json!(provenance));
+                    }
+                }
+            };
             // **Les scopes contenus sont des membres** (couverture étendue, 14 novembre 2026) : une
             // méthode indexée comme scope dans la plage du type l'est, même sans déclaration. La même
             // (nom et ligne) vue par les deux n'est qu'un membre, avec ses deux provenances.
-            let racine = root.unwrap();
             for (j, p) in parents.iter().enumerate() {
                 if *p != Some(racine) {
                     continue;
                 }
                 let c = selected[j];
-                let (nom, ligne) = (clipped(text(c, "name"), 256), c["start_line"].clone());
-                match members.iter_mut().find(|m| m["name"] == json!(nom) && m["line"] == ligne && m["provenance"] != "range_containment") {
+                let (nom, ligne) = (json!(clipped(text(c, "name"), 256)), c["start_line"].clone());
+                match members.iter_mut().find(|m| m["name"] == nom && m["line"] == ligne && m["ref"].is_null()) {
                     Some(m) => {
-                        m["also"] = json!("range_containment");
-                        m["ref"] = node(c, 1, Some(text(r, "_uuid")))["ref"].clone();
+                        ajouter(m, "range_containment");
+                        m["ref"] = membre(c, "range_containment")["ref"].clone();
                     }
-                    None => members.push(json!({"name":nom,"kind":text(c,"scope_type"),"signature":clipped(text(c,"signature"),512),
-                        "line":ligne,"ref":node(c,1,Some(text(r,"_uuid")))["ref"],"owner_ref":node(r,0,None)["ref"],"provenance":"range_containment"})),
+                    None => members.push(membre(c, "range_containment")),
                 }
             }
-            for m in &mut members {
-                let mut provenances = vec![m["provenance"].clone()];
-                if let Some(a) = m.as_object_mut().and_then(|o| o.remove("also")) {
-                    provenances.push(a);
+            // **Les scopes dont le parent déclaré nomme le type** (codeparsers, 15 novembre 2026 :
+            // `parent_name`, partout) : les méthodes d'un bloc `impl` Rust, une méthode Go à récepteur,
+            // une définition C++ hors classe, dans ce fichier. Génériques retirés (« Foo<U> » → « Foo »).
+            // Une déclaration et une définition seules de leur nom fusionnent ; des surcharges restent
+            // séparées, et la couverture le dit.
+            let sans_generiques = |n: &str| n.split('<').next().unwrap_or(n).trim().to_string();
+            let nom_du_type = sans_generiques(text(r, "name"));
+            let declares: Vec<usize> = (0..selected.len())
+                .filter(|&j| j != racine && !nom_du_type.is_empty() && sans_generiques(text(selected[j], "parent_name")) == nom_du_type)
+                // Un bloc `impl` porte le nom du type sans en être un membre : ses méthodes le sont.
+                .filter(|&j| text(selected[j], "target_type").is_empty() && !text(selected[j], "signature").trim_start().starts_with("impl"))
+                .collect();
+            let mut surcharges = std::collections::BTreeSet::new();
+            for &j in &declares {
+                let c = selected[j];
+                let uuid = text(c, "_uuid");
+                if let Some(m) = members.iter_mut().find(|m| m["ref"]["uuid"] == json!(uuid)) {
+                    ajouter(m, "declared_parent");
+                    continue;
                 }
-                m["provenances"] = json!(provenances);
+                let nom = clipped(text(c, "name"), 256);
+                let memes_definitions = declares.iter().filter(|&&k| text(selected[k], "name") == text(c, "name")).count();
+                let memes_faits: Vec<usize> = members.iter().enumerate().filter(|(_, m)| m["name"] == json!(nom) && m["ref"].is_null()).map(|(k, _)| k).collect();
+                if memes_definitions == 1 && memes_faits.len() == 1 {
+                    let m = &mut members[memes_faits[0]];
+                    ajouter(m, "declared_parent");
+                    m["ref"] = membre(c, "declared_parent")["ref"].clone();
+                } else {
+                    if memes_definitions > 1 || memes_faits.len() > 1 {
+                        surcharges.insert(nom.clone());
+                    }
+                    members.push(membre(c, "declared_parent"));
+                }
+            }
+            if !surcharges.is_empty() {
+                out["coverage"]["unpaired_overloads"] = json!(surcharges.into_iter().collect::<Vec<_>>());
             }
         }
         let total_selected = nodes.len() + members.len();
@@ -890,6 +931,23 @@ mod tests {
         let new = v["members"].as_array().unwrap().iter().find(|m| m["name"] == "new").unwrap();
         assert_eq!(new["provenances"], json!(["declared_parent"]), "{v}");
         assert_eq!(new["ref"]["uuid"], "n", "{v}");
+    }
+
+    /// **Rust, la forme tranchée le 15 novembre** (c7 et codeparsers) : le bloc `impl` et ses méthodes
+    /// portent `parent_name` = « Foo », sans génériques ni chemin, et le bloc `target_type` = « Foo ».
+    #[test]
+    fn rust_impl_methods_read_with_the_agreed_parent_name() {
+        let c = "struct Foo<U> {\n    x: U,\n}\n\nimpl<U> Foo<U> {\n    fn new(x: U) -> Self {\n        Foo { x }\n    }\n}\n";
+        let (src, mut rows) = lignes("lib.rs", c, &[
+            ("s", "Foo", "class", 1, 3, "", "struct Foo<U>"),
+            ("i", "Foo<U>", "class", 5, 9, "Foo", "impl<U> Foo<U>"),
+            ("n", "new", "method", 6, 8, "Foo", "fn new(x: U) -> Self"),
+        ]);
+        rows[1]["target_type"] = json!("Foo");
+        let v = membres_de(&src, &rows, "lib.rs", "s");
+        let n = noms(&v);
+        assert!(n.contains(&"new".to_string()), "la méthode de l'impl : {v}");
+        assert!(!n.contains(&"Foo<U>".to_string()), "le bloc impl lui-même n'est pas un membre : {v}");
     }
 
     /// **Go : une méthode à récepteur est un membre de son type** (`parent_name` = « T »), hors de la
