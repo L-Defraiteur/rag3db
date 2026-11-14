@@ -1181,6 +1181,11 @@ fn synchroniser_la_source(
     source_id: &str,
 ) -> Result<(SourceSyncReport, SourceSyncProgress), String> {
     let source_id = source_id.to_string();
+    // **Sous les générations (2a′-2), une source déjà indexée se synchronise par l'écrivain** : la fin
+    // d'instantané effacerait ce qu'aucun paquet n'a marqué, lignes publiées retirées comprises.
+    if catalog.generations.is_some() && !options.plan_only && source_deja_indexee(catalog, &source_id)? {
+        return synchroniser_par_generations(catalog, source, options, progress, source_id);
+    }
     let grain = BTreeMap::from([("source".to_string(), CypherValue::String(source_id.clone()))]);
     let s_scopes = catalog.begin_snapshot(SCOPE, &grain, options.takeover).map_err(|e| e.to_string())?.session;
     let s_files = match catalog.begin_snapshot(FILE, &grain, options.takeover) {
@@ -1247,6 +1252,74 @@ fn synchroniser_la_source(
         let _ = catalog.abort_snapshot(FILE, &grain, &s_files);
     }
     resultat
+}
+
+/// **La synchronisation d'une source déjà indexée, sous les générations** : les fichiers retenus par
+/// paquets, puis ceux que la couche voit encore au rang en attente et que la source ne liste plus, tous
+/// par [`reingest_files_par_generations`] — l'écrivain décide, rien n'est effacé d'une génération
+/// publiée. Les relations par paquet, sans session d'instantané.
+fn synchroniser_par_generations(
+    catalog: &mut Catalog,
+    source: &dyn FileSource,
+    options: &SourceSyncOptions,
+    progress: &mut dyn FnMut(SourceSyncProgress),
+    source_id: String,
+) -> Result<(SourceSyncReport, SourceSyncProgress), String> {
+    let listed = source.list()?;
+    let manifestes = crate::manifestes::Manifestes::lire(&listed, |c| source.read(c).ok().flatten());
+    catalog.note_manifestes(&manifestes).map_err(|e| e.to_string())?;
+    let retenus: Vec<String> = listed.iter().filter(|p| crate::code::admission(p, None, &options.generated).is_ok()).cloned().collect();
+    let v = catalog.generations.clone().ok_or("sans générations")?;
+    let visible = catalog.dialect_arc().condition_visible_sur("f", &v.couche, v.rang).ok_or("ce dialecte ne sait pas les générations")?;
+    let lu = catalog
+        .execute_raw_with_params(
+            &format!("MATCH (f:{FILE}) WHERE f.source = $src AND f._couche = $couche AND {visible} RETURN f.path"),
+            &[
+                crate::connection::QueryParam::new("src", CypherValue::String(source_id.clone())),
+                crate::connection::QueryParam::new("couche", CypherValue::String(v.couche.clone())),
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    let indexes: BTreeSet<String> = lu.rows.iter().filter_map(|l| l.first().and_then(|x| x.as_str()).map(str::to_string)).collect();
+    let presents: BTreeSet<String> = retenus.iter().map(|p| crate::code_tools::indexed_name(source, p).1).collect();
+    let partis: Vec<String> = indexes.into_iter().filter(|p| !presents.contains(p)).collect();
+    let mut report = SourceSyncReport {
+        source: source_id,
+        files_listed: listed.len(),
+        relations_mode: Some(RelationsMode::PerBatch),
+        buffer_pool: catalog.conn().buffer_pool().map(crate::connection::describe_buffer_pool),
+        ..Default::default()
+    };
+    let mut avancement = SourceSyncProgress { files_total: retenus.len() + partis.len(), ..Default::default() };
+    let par_paquet = catalog.file_batch_size().unwrap_or(options.batch_files).max(1);
+    for paquet in retenus.chunks(par_paquet) {
+        let mut lot = Vec::with_capacity(paquet.len());
+        for path in paquet {
+            let contenu = source.read(path)?;
+            if let Some(c) = &contenu {
+                if let Err(raison) = crate::code::admission(path, Some(c), &options.generated) {
+                    *report.files_set_aside.entry(raison.to_string()).or_default() += 1;
+                }
+            }
+            lot.push((path.clone(), contenu));
+        }
+        let r = catalog.avec_retenue(|c| reingest_files_retenu(c, source, &lot, options.exige))?;
+        report.files_ingested += lot.iter().filter(|(_, c)| c.is_some()).count();
+        report.scopes_written += r.scopes_upserted;
+        report.relations += r.relations;
+        report.failed += r.failed;
+        avancement.files_done += paquet.len();
+        avancement.scopes_written = report.scopes_written;
+        progress(avancement);
+    }
+    if !partis.is_empty() {
+        let lot: Vec<(String, Option<String>)> = partis.iter().map(|p| (p.clone(), None)).collect();
+        let r = catalog.avec_retenue(|c| reingest_files_retenu(c, source, &lot, options.exige))?;
+        report.failed += r.failed;
+        avancement.files_done += partis.len();
+        progress(avancement);
+    }
+    Ok((report, avancement))
 }
 
 /// L'arrêt est-il demandé après ce paquet ? Le drapeau des options, ou le
