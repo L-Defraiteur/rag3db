@@ -95,6 +95,38 @@ sort de ceux qui existent.
   cette forme : même morceau, même Scope, une arête de plus à chaque passage.
 - Scope_Chunk a aussi 21 287 places vides sous son offset maximal (des morceaux effacés).
 
+## Le premier témoin : vert sous les deux libs (14 novembre, soir)
+
+`tests/e2e_liens_sous_point_de_reprise.rs`, branche `liens-sous-point-de-reprise` (87f592202), au
+portable. 600 paires sont posées une fois puis reprises par un point de reprise. Elles sont ensuite
+reversées quarante fois, en écriture automatique, pendant qu'une seconde connexion insère et force des
+points de reprise.
+- **Sous e93710f36** (garde d'âge levée en le sachant : le seul C++ qui manque à cette lib est
+  0c41f9fe6) : **vert**. 143 points de reprise, et 600 arêtes à la fin. Sous 0c41f9fe6 : vert de même.
+- **L'instrumentation** (`RAG3WEAVER_INGEST_PROFILE=1`) prouve le chemin. Le premier versement part par
+  COPY (« Lien : 600 arêtes, 0 déjà là »). Chacun des 40 reversements lit
+  « Lien : 0 arêtes, 600 déjà là ou en double » : la lecture des paires déjà là les a toutes trouvées,
+  à chaque tour.
+- **Pourquoi c'est vert, d'après le ticket du cœur** : les clés ratées par la recherche par clé primaire
+  sont **celles qu'un point de reprise est en train de déplacer de la mémoire de l'index vers le
+  disque**, c'est-à-dire des clés validées depuis le point de reprise précédent. Le témoin du cœur les
+  rate aux seuils exacts du point de reprise (500, puis 1 000). Seul un lecteur READ ONLY est touché.
+  Les clés de ce témoin (g0 à g599) étaient au disque, reprises avant les reversements, donc hors de la
+  fenêtre. Dans le vrai cas, le morceau inchangé peut avoir été écrit dans la même session hôte, depuis
+  le dernier point de reprise.
+- **La forme suivante** : à chaque tour, des morceaux neufs et leurs liens posés, puis reversés pendant
+  le point de reprise qui les fait passer de la mémoire au disque.
+
+## Les deux autres pistes, et ce qui les départagerait
+
+- **Un lot repris après un plantage de l'hôte**, le 13 au soir par exemple. On le départagerait par les
+  dates des arêtes en double, comparées à l'heure du plantage. Une arête n'a pas de date : on prendrait
+  l'ordre de ses offsets (les sept vagues) comparé aux instantanés du Scope (`_snapshot`, onze pour
+  `app.js` entre le 7 et le 13 novembre) et aux journaux de l'hôte.
+- **Deux drains du même fichier dans une même session**, le second relisant un « déjà là » faux. On le
+  départagerait par le journal d'ingestion du dépôt : deux drains du même fichier entre deux
+  ouvertures de l'hôte.
+
 ## Ce qu'il faut pour le fermer (réponse d'arbre principal, 14 novembre)
 
 - **Les doublons existants partent avec l'ancien index.** Après 1b, `Scope_Chunk`, `Scope_CHUNKED_FROM`
