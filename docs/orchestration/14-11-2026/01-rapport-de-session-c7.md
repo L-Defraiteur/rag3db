@@ -766,3 +766,32 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   `IN` → gestes de 96 (confirmer_fiche vert) → (B) du cœur → garde-pile-3 → chaîne Rust.
 - **Tty** : README du crate (96e41c072) ; **96** : confirmer_fiche vert, un ticket sur les ForEachNode
   imbriqués ; **lucivy** : PR #35, l'API de maintenance en cours.
+
+## 20 h 5x — la bascule en cours ; vingt atterris ; la vue en prédicat, sans cache
+
+- **La bascule vers 373b5477b est partie à 20 h 52** (G) : hôtes arrêtés aux deux postes, instantanés,
+  contrôle des deux sens, binaire 4b43c3afc, `courant` et `lib-des-passes` ; réveil annoncé vers 21 h 10
+  (portable) et 21 h 25 (luciepc). Les passes épinglent leur lib par son nom ; les prochains lots
+  épinglent 373b5477b (mémoire à jour).
+- **Vingt atterris** : les activations nommées et le groupe à la demande (441f28e08), poussés avec
+  `PILE_TESTE` après un conflit de `docs/nouveautes.md` reposé à la main — garde-pile-3 (G, relue par
+  recherche, 33 verts) posée au cache des deux postes (d9a6c083) en douze minutes ; le fichier des
+  nouveautés, où tout le monde écrit en tête, est à repenser. Chaîne : sans-filtre et 1b (arbre principal,
+  reposés sur 441f28e08, passe sous 373b5477b) → fils du moteur (vert) → pointeur des règles → fermeture
+  qui tient (rejeu) → gestes de 96 (vert, rang 24) → crochet en `Weak` (vert sur master, e2e_demon_hote
+  13/13, rang 25) → réécriture du `IN` (26) → (B) du cœur (27, vert, le rapport IN/UNWIND de 97 à 0,69)
+  → garde-pile-3 (28) → chaîne Rust 1.98.1.
+- **La vue de 2a′-2** (ED, page 05) : le masque devient un **prédicat** de quelques centaines d'octets
+  (une version est admise si une de ses occurrences est visible), pas une liste — et ED a vu avant
+  d'écrire qu'un ensemble posé une fois par (couche, rang) mentirait sous 2a′-1, le rang ne bougeant pas
+  pendant l'ingest : **sans cache pour ce lot**, une requête courte par recherche (lexical et dense), le
+  cache viendra avec l'écrivain de 2a′-2 ; témoins : plus de résolution par liste, aucune projection de
+  plus de 4 Kio, `inline_params` qui refuse une grande liste ; parité de banc, RSS plat.
+- **Le cœur** sur le pic de 3,6 Gio : pas une rétention — la liaison d'une liste littérale est copiée
+  par évaluateur, le pic est rendu, la pente d'un appel à l'autre vient des arènes glibc ; ticket
+  reformulé et gardé ; G mesurera `MALLOC_ARENA_MAX` sur un hôte isolé. **Banc** : parité du
+  court-circuit verte au bit près (30/30), et le passage aux générations ne change aucune réponse.
+- **Embarquement** : le dense porté sur `Tenue<C>` (remaniement à comportement égal, dit sans rouge
+  inventé), la mesure des 904 s à 3 h, card2 sans autre charge. **Mes propres pushs de docs** ont fait
+  refuser un push de pile au dernier instant (c4242ab52) : la garde a remis le worktree, le second essai
+  est passé ; je groupe mes docs quand un push est en vol.
