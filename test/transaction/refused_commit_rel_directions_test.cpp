@@ -26,6 +26,7 @@
 #include <thread>
 
 #include "common/file_system/virtual_file_system.h"
+#include "common/test_hooks.h"
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
 #include "main/database.h"
@@ -120,6 +121,34 @@ int play(const std::string& databasePath, rag3db::main::SystemConfig& config, st
     return disagreements;
 }
 
+TEST_F(RefusedCommitRelDirections, ACommitRefusedBetweenItsDirectionsLeavesBothDirectionsWhole) {
+    const auto stepsPath = databasePath + ".steps";
+    std::filesystem::remove(stepsPath);
+    const auto pid = fork();
+    if (pid == 0) {
+        std::ofstream steps(stepsPath);
+        playBetweenDirections(databasePath, *systemConfig, steps);
+        steps.flush();
+        _exit(0);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    std::string steps;
+    std::ifstream in(stepsPath);
+    for (std::string line; std::getline(in, line);) {
+        steps += line + "\n";
+    }
+    ASSERT_TRUE(WIFEXITED(status) && WEXITSTATUS(status) == 0)
+        << "[check: setup] the child ended with status " << status << "\n"
+        << steps;
+    ASSERT_EQ(steps.find("REFUSED-A 0\n"), std::string::npos)
+        << "[check: setup] A's commit was never refused between its directions\n"
+        << steps;
+    EXPECT_NE(steps.find("WRONG 0\n"), std::string::npos)
+        << "[check: a-commit-refused-between-its-directions-leaves-both-directions-whole]\n"
+        << steps;
+}
+
 TEST_F(RefusedCommitRelDirections, BothDirectionsKeepTheRelationsOfAnotherWriter) {
     const auto stepsPath = databasePath + ".steps";
     std::filesystem::remove(stepsPath);
@@ -148,6 +177,76 @@ TEST_F(RefusedCommitRelDirections, BothDirectionsKeepTheRelationsOfAnotherWriter
     EXPECT_NE(steps.find("DISAGREE 0\n"), std::string::npos)
         << "[check: both-directions-keep-the-relations-of-another-writer]\n"
         << steps;
+}
+
+// Le second cas : le COMMIT de A lève ENTRE ses deux sens (le point de faute
+// rel-commit-between-directions), comme un tampon plein au second sens. Sous l'ancienne lib,
+// l'enregistrement d'annulation ne couvrait que le premier sens versé, et l'annulation hors du verrou
+// tronquait ce sens, avec la relation de B versée à la suite ; l'autre sens gardait B : une relation
+// d'un seul côté, la forme de code-lourd. Sur master, l'annulation sous le verrou rend les deux sens
+// à leur état d'avant : la relation de B lisible des deux côtés, et rien de A d'aucun côté.
+int playBetweenDirections(const std::string& databasePath, rag3db::main::SystemConfig& config,
+    std::ofstream& steps) {
+    Database database(databasePath, config);
+    Connection a(&database);
+    Connection b(&database);
+    for (const auto* q : {"CREATE NODE TABLE N(id INT64, PRIMARY KEY(id));",
+             "CREATE REL TABLE R(FROM N TO N, line INT64);",
+             "UNWIND range(0, 5999) AS i CREATE (:N {id: i});",
+             "UNWIND range(0, 2999) AS i MATCH (x:N {id: i}), (y:N {id: 5999 - i}) CREATE "
+             "(x)-[:R {line: -1}]->(y);"}) {
+        if (!a.query(q)->isSuccess()) {
+            _exit(11);
+        }
+    }
+    int wrong = 0, refused = 0, bCommits = 0;
+    for (auto round = 0; round < 8; round++) {
+        a.query("BEGIN TRANSACTION;");
+        a.query("UNWIND range(0, 4999) AS i MATCH (x:N {id: i % 2048}), (y:N {id: 4096 + i % 1900}) "
+                "CREATE (x)-[:R {line: 100000 + i}]->(y);");
+        const auto src = (round * 37) % 2048, dst = 2048 + round;
+        const auto line = 1000 + round;
+        b.query("BEGIN TRANSACTION;");
+        b.query("MATCH (x:N {id: " + std::to_string(src) + "}), (y:N {id: " + std::to_string(dst) +
+                "}) CREATE (x)-[:R {line: " + std::to_string(line) + "}]->(y);");
+        TestHooks::armFailPoint(TestFailPoint::REL_COMMIT_BETWEEN_DIRECTIONS);
+        bool aRefused = false;
+        std::thread ta([&] { aRefused = !a.query("COMMIT;")->isSuccess(); });
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        const bool bCommitted = b.query("COMMIT;")->isSuccess();
+        ta.join();
+        TestHooks::armFailPoint(TestFailPoint::NONE);
+        if (!aRefused || !bCommitted) {
+            // Le point a pris B au lieu de A : le tour ne dit rien.
+            steps << "ROUND " << round << " skipped : A " << (aRefused ? "refused" : "committed")
+                  << ", B " << (bCommitted ? "committed" : "refused") << std::endl;
+            continue;
+        }
+        refused++;
+        bCommits++;
+        const auto l = std::to_string(line);
+        const auto forward = countOf(b, "MATCH (x:N {id: " + std::to_string(src) +
+                                            "})-[r:R]->(y:N) WHERE r.line = " + l +
+                                            " RETURN count(*);");
+        const auto backward = countOf(b, "MATCH (x:N)-[r:R]->(y:N {id: " + std::to_string(dst) +
+                                             "}) WHERE r.line = " + l + " RETURN count(*);");
+        // Rien de A d'aucun côté : par une source du groupe 0 (sens avant), par une destination du
+        // groupe 2 (sens arrière).
+        const auto aForward = countOf(b,
+            "MATCH (x:N {id: 5})-[r:R]->(y:N) WHERE r.line >= 100000 RETURN count(*);");
+        const auto aBackward = countOf(b,
+            "MATCH (x:N)-[r:R]->(y:N {id: 4100}) WHERE r.line >= 100000 RETURN count(*);");
+        if (forward != 1 || backward != 1 || aForward != 0 || aBackward != 0) {
+            steps << "ROUND " << round << " : B's relation by its source " << forward
+                  << ", by its destination " << backward << " ; A's relations left by a source "
+                  << aForward << ", by a destination " << aBackward << std::endl;
+            wrong++;
+        }
+    }
+    steps << "REFUSED-A " << refused << std::endl;
+    steps << "B-COMMITS " << bCommits << std::endl;
+    steps << "WRONG " << wrong << std::endl;
+    return wrong;
 }
 
 } // namespace
