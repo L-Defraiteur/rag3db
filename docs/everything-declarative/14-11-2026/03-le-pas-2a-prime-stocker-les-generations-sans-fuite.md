@@ -192,3 +192,47 @@ n'atteint que des lignes visibles.
   occurrences) au lieu des deux colonnes. C'est plus général (une génération y est un ensemble
   quelconque), mais une jointure de plus à chaque lecture. Je recommande les deux colonnes : une
   chaîne est un ordre total, et ce prédicat suffit à l'exprimer.
+
+## 6. La mesure du coût du prédicat (14 novembre 2026, sur une copie de code-lourd)
+
+**Le banc.**
+- La copie reflink de l'instantané de G (`instantanes/avant-0c41f9fe6/code-lourd`, pris hôte arrêté le
+  14 novembre à 13 h 37), son `.extensions` repointé sur la lib 0c41f9fe6. La base en service n'est
+  jamais ouverte.
+- Le contenu : 82 855 `Scope`, 7 278 `File`, 151 744 `CONSUMES`, conforme au relevé de G du
+  8 novembre.
+- La sonde `tests/sonde_cout_du_predicat.rs` (branche `generations-de-l-ancre`), seule sous
+  `poste mesure`, à luciepc ; la médiane de 20 jeux, en ms. Les colonnes sont ajoutées par `ALTER`
+  sur la copie seulement, avec leurs valeurs par défaut (toutes les lignes au rang 0, vivantes).
+
+**Les chiffres** (deux jeux ; les écarts entre jeux sont de quelques pour cent) :
+
+| requête | sans | avec le prédicat | nœuds seuls | arête seule | par appartenance |
+|---|---|---|---|---|---|
+| outline (un fichier, 1 275 lignes) | 7,0 | 7,4 (×1,05) | — | — | 9,0 (×1,28) |
+| usages (un saut, 780 lignes) | 4,8 | 35,2 (×7,3) | 5,9 (×1,24) | 4,6 (×0,95) | 6,1 (×1,35) |
+| impact (1 à 3 sauts) | 7,4 | 16,5 (×2,2) | 16,3 (×2,2) | — | — |
+| racines d'une source (82 855) | 15,7 | 17,4 (×1,11) | — | — | 18,8 (×1,20) |
+| compte des scopes | 0,18 | 1,9 (×10) | — | — | 0,45 (×2,4) |
+| fichiers d'une source (7 278) | 1,4 | 1,7 (×1,20) | — | — | — |
+
+Les `ALTER` coûtent 6 ms (`Scope`), 2 ms (`File`) et 17 ms (`CONSUMES`). Peupler la table
+d'appartenance de la génération 0 coûte 646 ms, pour 82 855 arêtes.
+
+**Ce que ça dit.**
+- **Sur les nœuds, le prédicat ne coûte presque rien** : de 5 à 20 %.
+- **Sur un saut, le surcoût n'est pas celui de l'arête.** L'arête seule est gratuite (×0,95), et les
+  nœuds seuls coûtent ×1,24. C'est **leur conjonction dans une même clause** qui fait déraper le
+  plan (×7,3). La traduction IR doit donc écrire la clause de l'arête à part de celle des nœuds, sous
+  une forme que le planificateur ne combine pas mal, et la sonde le vérifiera dans 2a′-1. Si aucune
+  forme ne l'évite, c'est un ticket pour le cœur (le planificateur de rag3db).
+- **Le parcours récursif** (`impact`, filtre sur chaque nœud traversé) coûte ×2,2, soit 9 ms de plus
+  en valeur absolue.
+- **La table d'appartenance** coûte moins sur les sauts (×1,35) mais autant sur les nœuds (×1,2 à
+  ×1,3). Elle demande une arête par occurrence et par génération : 82 855 de plus, et 646 ms, à
+  chaque génération publiée. Une génération est un ordre total sur sa chaîne : les deux colonnes
+  l'expriment sans ce coût.
+
+**La décision proposée** : les deux colonnes, confirmées. Avant le code, la sonde de 2a′-1 cherche la
+forme de clause qui rend `usages` à moins de ×1,3 avec le prédicat complet (nœuds et arête). Le
+prédicat récursif d'`impact` (×2,2, quelques ms) est accepté tel quel.
