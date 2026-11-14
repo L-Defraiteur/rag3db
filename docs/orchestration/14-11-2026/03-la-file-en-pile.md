@@ -270,3 +270,19 @@ principal) → fils du moteur (G) → chaîne Rust 1.98.1 (G) → pointeur des r
 Chacun dit sa tête au suivant ; rejeux courts à la repose. Le rouge de l'hôte est **du Rust du 13**
 (vert à 4f6f80ef4 sous 0c41f9fe6, rouge à 2a1f52c21 sous 29a7bc52a) ; bissection d'archi entre ces
 bornes jouées ; la lib 373b5477b a e2e_code 36/36 et e2e_lectures 27/27, e2e_demon_hote en cours.
+
+## Deux rouges de base d'affilée au rang 22 (20 h 1x) : une règle de plus
+
+Le dernier maillon (codeparsers) a vu deux fois le jeu sans-feature de check_features rougir sur du code
+d'un lot sous lui : `exclusion.rs:45` sans `cfg(feature = "code")` (recherche, corrigé par un commit
+ajouté, f63d1bf4e), puis `catalog.rs:2802` deux méthodes jamais utilisées sans feature (1b d'arbre
+principal, 23bf41b2c, commit ajouté en cours). Chaque fois, la chaîne au-dessus se repose et rejoue son
+court. **Règle (suggestion de codeparsers) : chaque maillon joue check_features — les huit jeux — avant
+de donner sa tête au suivant.** Le rejeu court d'un lot de la pile, c'est au moins check_features.
+
+**Le rouge de l'hôte, bissecté** : 1e9bf5089e / 2f6c34643 (arbre principal, raccord physique du 13) —
+le registre des écrivains attend que `Weak<Database>` et `Weak<ReopenState>` tombent ; or le crochet de
+test `FailedCheckpointHook` tient un `Arc<ReopenState>` pour toute la durée du test, donc la
+réouverture attend 10 s puis refuse. Aucun chemin produit ; correctif = `Weak` + `upgrade` dans le
+crochet, en lot à part en bout de chaîne (base = la tête de codeparsers), rouge = le test puis un témoin
+court. La règle du 13 (attendre les deux références) reste.
