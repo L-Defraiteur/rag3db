@@ -144,3 +144,21 @@ l'est pas.
     par `MALLOC_ARENA_MAX=2` ;
   - `2026-11-14-la-visibilite-dans-le-predicat-du-masque-coute-et-mene-a-l-oom.md` : l'état B,
     5 à 8 s puis l'OOM, à fermer par le cache par rang. Le drapeau ne tombe pas avant.
+
+## 8. La parité, et une note pour la passe entière (14 novembre 2026, 21 h 55)
+
+**La parité de banc est verte au bit près.** 959d73513 a été joué contre son parent 3e3a07f9d, chacun
+sur une copie neuve de la base migrée passée aux générations, lib 373b5477b, sur le jeu commun
+(10 requêtes × 3 formes, k = 10). Les 30 cas sont identiques : même `_uuid`, même ordre, même score,
+sans filtre comme sous filtre. Le prédicat admet exactement l'ensemble qu'admettait la liste. Les
+relevés sont à luciepc, dans `~/.cache/rag3weaver-build/banc-parite/sorties/vue-publiee/`.
+
+L'indication de durée de banc, un appel par requête et par forme sans chauffe, est de 1 021 ms sans
+filtre, 1 421 par chemin et 1 081 par langage.
+
+**À relire par la passe entière, sur la tête du lot** : le commit rouge 3e3a07f9d ne compile pas hors
+des tests sous `deny(warnings)`, parce que `inline_params_borne` n'y a pas encore d'appelant. Le juge
+de banc a mis `dead_code = "allow"` le temps de ses deux étapes, sans rien commiter. Sur la tête du
+lot, `inline_params_borne` est appelée par `Rag3dbSearchBackend::vector_search_filtered`. La passe
+entière le vérifie par `check_features`, ses huit jeux hors tests compris. Un rouge de `dead_code` à
+cet endroit, sur la tête, serait un défaut du lot, et non un reste du commit rouge.
