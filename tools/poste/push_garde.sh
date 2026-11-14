@@ -69,6 +69,11 @@ if [ "${1:-}" = "--code-apporte" ]; then code_apporte "$2" "$3"; exit 0; fi
 #       versions ne diffèrent que par des `.md` (un conflit de nouveautes.md résolu au rebase) ; un `>` (commit
 #       ajouté) toléré s'il ne touche que des `.md` ; un `<` (commit perdu) refusé.
 # Mode `--pile <avant> <testé> <master> <tête>`, joué par le témoin : rend 0 et « pile tenue », ou 1 et la raison.
+# **La tête déjà reposée à la main** (14 novembre 2026, c7, relevé d'embarquement) : quand le `rebase --onto` de la
+# garde bute (un conflit de nouveautes.md, où chaque lot ajoute sa ligne en tête), la session repose son lot à la
+# main sur une branche à part, sur master, résout le conflit, puis donne PILE_AVANT=<avant> et PILE_TESTE=<commit
+# testé>. La garde ne rebase pas : HEAD doit déjà être posé sur le master qu'elle relit (sinon ARRÊT, à reposer de
+# nouveau), PILE_TESTE doit être le commit testé du résumé, et les mêmes vérifications (b), (c), (a) jugent.
 verifier_pile() {
   local avant=$1 teste=$2 maitre=$3 tete=$4 apporte ligne c
   git merge-base --is-ancestor "$avant" "$teste" || { echo "ARRÊT : la tête d'avant ($avant) n'est pas un ancêtre du commit testé ($teste)"; return 1; }
@@ -139,6 +144,10 @@ derive "$PWD"
 gd=$(git rev-parse --git-dir)
 tail -1 $J/resume.log | grep -qx VERT || { echo "ARRÊT : la passe n'est pas VERTE"; exit 1; }
 teste=$(head -1 $J/resume.log | awk '{print $2}')
+if [ -n "${PILE_TESTE:-}" ]; then
+  [ -n "${PILE_AVANT:-}" ] || { echo "ARRÊT : PILE_TESTE sans PILE_AVANT (la tête du lot d'avant)"; exit 1; }
+  [ "$(git rev-parse -q --verify "$PILE_TESTE^{commit}")" = "$(git rev-parse -q --verify "$teste^{commit}")" ] || { echo "ARRÊT : PILE_TESTE ($PILE_TESTE) n'est pas le commit testé du résumé ($teste)"; exit 1; }
+fi
 # HEAD est le commit testé, ou en descend par des commits de doc seuls (des .md). En mode pile, c'est
 # verifier_pile qui juge, plus bas, une fois master relu.
 if [ -z "${PILE_AVANT:-}" ] && [ "$(git rev-parse --short HEAD)" != "$teste" ]; then
@@ -169,14 +178,18 @@ neuf=$(git rev-parse FETCH_HEAD)
 # worktree où il était avant son rebase, et le dit : le même appel, rejoué, repart du commit testé.
 avant_rebase=$(git rev-parse HEAD)
 revenir() { git reset -q --keep "$avant_rebase" 2>/dev/null || git checkout -q --detach "$avant_rebase"; echo "worktree remis sur $(git rev-parse --short "$avant_rebase"), la tête d'avant le rebase : rejouer le même appel"; }
-if [ -n "${PILE_AVANT:-}" ]; then
+if [ -n "${PILE_TESTE:-}" ]; then
+  echo "mode pile, tête reposée à la main, sans rebase par la garde : tête d'avant $(git rev-parse --short "$PILE_AVANT"), commit testé $teste, HEAD $(git rev-parse --short HEAD)"
+  git merge-base --is-ancestor "$neuf" HEAD || { echo "ARRÊT : la tête reposée à la main n'est pas posée sur master ($(git rev-parse --short "$neuf")) : master a bougé depuis, la reposer de nouveau"; exit 1; }
+  verifier_pile "$PILE_AVANT" "$teste" "$neuf" HEAD || exit 1
+elif [ -n "${PILE_AVANT:-}" ]; then
   echo "mode pile : tête d'avant $(git rev-parse --short "$PILE_AVANT"), commit testé $teste"
   # `--onto` (relecture de recherche) : HEAD est encore la branche de pile, avec les commits des lots d'avant sous
   # leurs anciens hashes ; un lot d'avant qui a résolu un conflit en atterrissant a un autre patch, et un rebase
   # simple le rejouerait. Seuls les commits du lot se reposent.
   git rebase --onto $neuf "$PILE_AVANT" > /dev/null 2>&1
   if [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ] || git status --short | grep -q '^UU'; then
-    git rebase --abort; echo "ARRÊT : le rebase sur $neuf bute"; exit 1
+    git rebase --abort; echo "ARRÊT : le rebase sur $neuf bute — reposer le lot à la main sur une branche à part (rebase --onto origin/master $PILE_AVANT), résoudre, puis rejouer la garde depuis elle avec PILE_TESTE=$teste"; exit 1
   fi
   verifier_pile "$PILE_AVANT" "$teste" "$neuf" HEAD || { revenir; exit 1; }
 else

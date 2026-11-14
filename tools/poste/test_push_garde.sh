@@ -123,6 +123,50 @@ git checkout -q "$BASE" 2>/dev/null
   fi
   echo "ROUGE  pile, chemin de push : rc $rc, master « $sujets »"; echo "$sortie" | tail -4; exit 1
 ) || rouge=1
+# 9 à 11. La tête déjà reposée à la main (c7, 14 novembre 2026, relevé d'embarquement) : le `rebase --onto` de la
+# garde bute sur un conflit de nouveautes.md (chaque lot y ajoute sa ligne en tête) ; la session le résout à la main
+# sur une branche à part, déjà posée sur master, et la donne avec PILE_TESTE=<commit testé>. Mêmes vérifications
+# qu'en mode pile, **sans rebase par la garde**, puis le push. Un HOME jetable, un dépôt nu.
+tete_a_la_main() { # tete_a_la_main <n> <ajout: rien|code|master-bouge> ; écrit dans $D/res-<n> : rc, sortie, sujets, tête avant/après
+  local n=$1 ajout=$2
+  (
+    H="$D/homem$n"; mkdir -p "$H/git_workspaces" "$H/.cache/rag3weaver-build/j"
+    git clone -q --bare "$D" "$D/num$n.git" 2>/dev/null; git -C "$D/num$n.git" update-ref refs/heads/master "$BASE"
+    git clone -q "$D/num$n.git" "$H/git_workspaces/wt" 2>/dev/null
+    cd "$H/git_workspaces/wt" && git config user.email luciedefraiteur@gmail.com && git config user.name t
+    # la pile : P1 puis P2 (le commit testé), chacun avec sa ligne de nouveautes.md
+    git checkout -q -B pile origin/master; mkdir -p extension/rag3weaver/docs
+    echo 'fn p1() {}' > extension/rag3weaver/src/p1.rs; echo '- p1' >> extension/rag3weaver/docs/nouveautes.md; git add -A; git commit -qm p1; P1=$(git rev-parse HEAD)
+    echo 'fn p2() {}' > extension/rag3weaver/src/p2.rs; echo '- p2' >> extension/rag3weaver/docs/nouveautes.md; git add -A; git commit -qm p2; TESTE=$(git rev-parse --short HEAD)
+    # master : P1 atterri tel quel, puis la nouveauté du cœur : P2 ne se repose plus sans conflit
+    git checkout -q -B atterri origin/master; git cherry-pick "$P1" > /dev/null 2>&1
+    printf -- '- p1\n- coeur\n' > extension/rag3weaver/docs/nouveautes.md; git add -A; git commit -qm coeur; git push -q origin HEAD:master 2>/dev/null
+    # la tête reposée à la main : P2 sur master, le conflit résolu (les deux lignes)
+    git checkout -q -B a-la-main origin/master
+    git cherry-pick "$TESTE" > /dev/null 2>&1 || { printf -- '- p1\n- coeur\n- p2\n' > extension/rag3weaver/docs/nouveautes.md; git add -A; GIT_EDITOR=true git cherry-pick --continue > /dev/null 2>&1; }
+    case $ajout in
+      code) echo 'fn glisse() {}' > extension/rag3weaver/src/glisse.rs; git add -A; git commit -qm "code glissé" ;;
+      master-bouge) ( cd "$D" && git clone -q "$D/num$n.git" "$D/autre$n" 2>/dev/null && cd "$D/autre$n" && git config user.email t@t && git config user.name t && echo '# autre' > autre.md && git add -A && git commit -qm "un autre lot" && git push -q origin HEAD:master 2>/dev/null ) ;;
+    esac
+    printf 'teste %s\nVERT\n' "$TESTE" > "$H/.cache/rag3weaver-build/j/resume.log"
+    echo "rag3db-build-0123456789012345678901234567890123456789-Release" > "$H/.cache/rag3weaver-build/j/lib.log"
+    avant=$(git rev-parse HEAD)
+    sortie=$(HOME="$H" PILE_AVANT="$P1" PILE_TESTE="$TESTE" bash "$GARDE" wt j 2>&1); rc=$?
+    { echo "$rc"; echo "$avant"; git rev-parse HEAD; git -C "$D/num$n.git" log --format=%s master | tr '\n' ' '; echo; echo "$sortie"; } > "$D/res-$n"
+  )
+}
+tete_a_la_main 9 rien; { read -r rc; read -r avant; read -r apres; read -r sujets; sortie=$(cat); } < "$D/res-9"
+if [ "$rc" = 0 ] && echo "$sortie" | grep -qx POUSSE && [ "$sujets" = "p2 coeur p1 base" ] && [ "$avant" = "$apres" ] && echo "$sortie" | grep -q "sans rebase par la garde" && echo "$sortie" | grep -q "  ! toléré"; then
+  echo "vert   tête reposée à la main : conflit de nouveautes.md résolu, pile tenue sans rebase par la garde, P2 poussé ($sujets)"
+else echo "ROUGE  tête reposée à la main : rc $rc, master « $sujets », tête $avant → $apres"; echo "$sortie" | tail -4; rouge=1; fi
+tete_a_la_main 10 code; { read -r rc; read -r avant; read -r apres; read -r sujets; sortie=$(cat); } < "$D/res-10"
+if [ "$rc" != 0 ] && echo "$sortie" | grep -q "un commit ajouté après le rejeu touche autre chose" && [ "$sujets" = "coeur p1 base" ]; then
+  echo "vert   tête reposée à la main qui porte du code de plus : ARRÊT, rien poussé"
+else echo "ROUGE  tête reposée à la main, code de plus : rc $rc, master « $sujets »"; echo "$sortie" | tail -3; rouge=1; fi
+tete_a_la_main 11 master-bouge; { read -r rc; read -r avant; read -r apres; read -r sujets; sortie=$(cat); } < "$D/res-11"
+if [ "$rc" != 0 ] && echo "$sortie" | grep -q "n'est pas posée sur master" && [ "$sujets" = "un autre lot coeur p1 base" ] && [ "$avant" = "$apres" ]; then
+  echo "vert   tête reposée à la main, master a bougé depuis : ARRÊT sans rebase par la garde"
+else echo "ROUGE  tête reposée à la main, master bougé : rc $rc, master « $sujets », tête $avant → $apres"; echo "$sortie" | tail -3; rouge=1; fi
 # Un push refusé une fois, puis le même appel rejoué, doit pousser sans geste à la main (relevé de lucivy,
 # 14 novembre 2026) : la garde remet le worktree sur sa tête d'avant le rebase. Un HOME jetable porte le
 # worktree, le dossier des journaux et un dépôt nu dont le crochet refuse le premier push.
