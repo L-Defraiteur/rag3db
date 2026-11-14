@@ -42,7 +42,7 @@ pub struct ExclusionPolicy {
 impl ExclusionPolicy {
     /// Pourquoi ce fichier de code n'est pas indexé, ou `None`.
     pub fn reason(&self, path: &str, content: &str) -> Option<&'static str> {
-        if !codeparsers::parallel::project_parser::is_code_parser_supported(path) {
+        if !est_un_fichier_de_code(path) {
             return None;
         }
         if self.code_file_max_bytes.is_some_and(|max| content.len() > max) {
@@ -57,14 +57,29 @@ impl ExclusionPolicy {
     }
 }
 
+/// Un fichier qu'une grammaire de codeparsers découpe en scopes.
+#[cfg(feature = "code")]
+fn est_un_fichier_de_code(path: &str) -> bool {
+    codeparsers::parallel::project_parser::is_code_parser_supported(path)
+}
+
+/// **Sans la feature `code`, rien n'est découpé en scopes** : il n'y a pas de minifié qui
+/// répète sa ligne, et la règle ne s'applique à aucun fichier.
+#[cfg(not(feature = "code"))]
+fn est_un_fichier_de_code(_path: &str) -> bool {
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    #[cfg(feature = "code")]
     fn regles() -> ExclusionPolicy {
         ExclusionPolicy { minified_line_max_bytes: Some(5000), code_file_max_bytes: Some(1 << 20) }
     }
 
+    #[cfg(feature = "code")]
     #[test]
     fn un_minifie_et_un_trop_gros_sont_ecartes_et_un_gros_fichier_ecrit_a_la_main_ne_l_est_pas() {
         let p = regles();
