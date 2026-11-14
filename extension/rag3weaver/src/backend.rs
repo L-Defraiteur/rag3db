@@ -5390,6 +5390,12 @@ impl Backend {
         // `project` des noms importés (14 novembre 2026). Rien de deviné : les chemins sont dits.
         if let Some(m) = cat.manifestes_notes() {
             etats.insert("manifests_read".to_string(), json!(m.lus));
+            // La limite admise (14 novembre 2026, ticket « relire les manifestes quand l'un d'eux change ») :
+            // dite à côté, pas tue.
+            etats.insert(
+                "manifests_refresh".to_string(),
+                json!("relus à chaque synchronisation de la source ; un manifeste édité seul n'est relu qu'à la synchronisation suivante"),
+            );
         }
         for entite in entites {
             if let Ok(state) = cat.index_state_for(entite) {
