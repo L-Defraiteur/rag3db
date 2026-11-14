@@ -322,3 +322,11 @@ bascule de la lib 373b5477b est partie à 20 h 52 (hôtes arrêtés, réveil ver
 Les mesures : un index plein texte neuf du dépôt pèse 771 Mo (4,59 Go ce matin) par le correctif des
 octets d'ED ; les exclusions en ôtent 17 de plus ; le dictionnaire garde 94 Mo de textes morts après purge
 (lucivy : la fusion lâchera les ids sans document vivant, puis une compaction filtrée du dictionnaire).
+
+**21 h 2x — rang 30 : le masque en prédicat** (ED, vue-publiee 959d73513, sous 373b5477b) : le lexical et le
+dense passent chacun par une requête courte (une version est admise si une de ses occurrences est visible)
+au lieu d'une liste de 72 652 uuid — sans filtre 7 032 → 2 832 ms (le court-circuit d'arbre principal
+reste meilleur et garde le sans-filtre), par chemin 2 154 → 1 299, par langage 1 371 → 1 020 (×1,3 à ×1,74
+de la base d'avant) ; plus de projection de 2,9 Mo ; mémoire plate à 20 Gio au filtré (MALLOC_ARENA_MAX=2 à
+mesurer), B (le drapeau tombé) à l'OOM : deux tickets. Après le dense d'embarquement (29), avant la chaîne
+Rust. Le fils du moteur de G est vert sur sa pile sous 373b5477b ; luciepc contrôle encore ses deux bases.
