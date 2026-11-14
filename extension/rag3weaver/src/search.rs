@@ -3739,7 +3739,7 @@ mod tests_des_littéraux_bornés {
         assert!(r.is_err(), "une liste de 10 000 éléments s'est écrite en clair : {} octets", r.map(|s| s.len()).unwrap_or(0));
         let petite = CypherValue::List((0..10).map(|i| CypherValue::String(format!("u{i}"))).collect());
         let r = inline_params_borne(requete, &[QueryParam::new("p", petite)]).expect("une petite liste passe");
-        assert!(r.contains("'u9'"), "{r}");
+        assert!(r.contains(r#""u9""#), "{r}");
     }
 }
 
