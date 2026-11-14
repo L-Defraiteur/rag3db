@@ -70,7 +70,15 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
    (`…/instantanes/<étiquette>-controle/`), jamais l'instantané, qui reste le retour. Compter
    **environ 15 minutes par base de code** (la version ancrée, 339cbb5dc ; quelques secondes pour
    une mémoire). Un écart arrête la bascule (`courant` ne bouge pas) et s'écrit en ticket avec ses
-   tables et leurs relations : la base se réparera ou se réindexera avant toute lib neuve. Aucun
+   tables et leurs relations : la base se réparera ou se réindexera avant toute lib neuve.
+   **La nuance du 14 novembre 2026** (c7, à la bascule vers 373b5477b, sur les écarts de code-lourd et de code-principal, ticket docs/optimiseur/tickets/2026-11-14-code-lourd-et-code-principal-divergent-entre-leurs-deux-rangements.md) : un écart
+   antérieur à la lib neuve (lu sur l'instantané pris sous l'ancienne), petit et ticketé, de la famille que la lib
+   neuve corrige, ne bloque pas la bascule. La base se répare dans la fenêtre suivante, sur instantané. Revenir en
+   arrière à un seul poste laisserait les deux postes sur deux libs, ce qui est pire. Un écart d'une autre famille,
+   ou plus grand, arrête toujours la bascule.
+   **L'outil tourne sous `poste lourd`** (14 novembre, relevé d'ED) : il prend 250 à 370 % de CPU pendant 15 à
+   30 minutes par base de code. Lancé hors du verrou, il a faussé une mesure d'ED à luciepc et échappé au compte
+   des lourds. Le script l'appelle par `~/.cache/rag3weaver-build/poste lourd`, la borne dans le lourd. Aucun
    écart ne prouve pas qu'une table est saine. Un contrôle qui ne trouve aucune base à lire est
    rouge (code 7), jamais « aucun écart » : le script compte les bases contrôlées (hotfixs,
    7 novembre). Référence connue : l'instantané

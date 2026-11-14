@@ -48,7 +48,9 @@ for sous in "$I"/*/; do
   [ -e "$base" ] || continue
   mkdir -p "$C/$nom"
   cp -a --reflink=always "$sous"/. "$C/$nom/" || { echo "ÉCHEC : copie reflink de $sous" >&2; exit 5; }
-  "$OUTIL" "$C/$nom/$nom.rag3db" > "$C/$nom.log" 2>&1
+  # Sous `poste lourd` (14 novembre 2026, relevé d'ED) : 250 à 370 % de CPU pendant 15 à 30 minutes par base de
+  # code, compté parmi les lourds et borné dans le lourd ; le journal de l'outil ne reçoit que sa propre sortie.
+  "${POSTE:-$HOME/.cache/rag3weaver-build/poste}" lourd timeout 2h bash -c 'exec "$0" "$1" > "$2" 2>&1' "$OUTIL" "$C/$nom/$nom.rag3db" "$C/$nom.log"
   rc=$?
   controlees=$((controlees + 1))
   echo "$nom : rc=$rc — $(tail -1 "$C/$nom.log" | cut -c1-160)"
