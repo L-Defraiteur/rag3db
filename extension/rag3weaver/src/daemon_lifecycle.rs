@@ -41,6 +41,20 @@ pub struct DaemonFile {
     /// Millisecondes UTC.
     #[serde(default)]
     pub started_at: u64,
+    /// Le délai des agents gardés des clients, en secondes ([`crate::daemon::Delais`]) ; absent,
+    /// le défaut. L'hôte le garde d'un démarrage à l'autre.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reponse_s: Option<u64>,
+    /// Le délai des sondes des clients, en secondes ; absent, le défaut.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sonde_s: Option<u64>,
+}
+
+impl DaemonFile {
+    /// Les délais que ce fichier règle ([`crate::daemon::Delais`]).
+    pub fn delais(&self) -> crate::daemon::Delais {
+        crate::daemon::Delais::de(self.reponse_s, self.sonde_s)
+    }
 }
 
 fn forced_dir() -> Option<PathBuf> {
@@ -473,6 +487,7 @@ pub fn answers(file: &DaemonFile) -> bool {
     if pid_state(file.pid) == Some(false) {
         return false;
     }
+    let _delai = file.delais().sonde;
     let agent = crate::daemon::agent();
     let Ok(mut r) = agent.get(format!("{}/sante", crate::daemon::base_url(&file.address))).call() else {
         return false;
@@ -606,12 +621,18 @@ pub fn binaire_perime(installe: &Path) -> Option<String> {
     }
 }
 
+/// **La sonde qui réveille l'unité** : une connexion `/sante` sur sa socket (systemd lance le
+/// service à la connexion) ; sa réponse n'importe pas, la boucle d'attente juge.
+pub(crate) fn reveiller_l_unite(adresse: &str, _delai: Duration) {
+    let agent = crate::daemon::agent();
+    let _ = agent.get(format!("{}/sante", crate::daemon::base_url(adresse))).call();
+}
+
 /// **Réveiller l'unité et attendre son hôte** : une sonde `/sante` sur la socket
 /// (systemd lance le service à la connexion), puis `daemon.json` qui répond, au plus
 /// [`LAUNCH_WAIT`]. Rien n'est lancé d'ici.
 fn attendre_l_unite(u: &Unite) -> Result<DaemonFile, Missing> {
-    let agent = crate::daemon::agent();
-    let _ = agent.get(format!("{}/sante", crate::daemon::base_url(&u.adresse))).call();
+    reveiller_l_unite(&u.adresse, crate::daemon::Delais::lus().sonde);
     let debut = Instant::now();
     loop {
         if let Some(f) = read().filter(answers) {
