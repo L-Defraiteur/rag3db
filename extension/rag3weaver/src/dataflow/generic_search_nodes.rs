@@ -3003,7 +3003,7 @@ fn occurrence_mask_options(
     let Some(projection) = &target.occurrence_projection else { return Ok((options, None)) };
     // Le compte des résolutions du masque (2a′-2) : un témoin y lit qu'il ne se refait pas à chaque requête.
     let visibilite = match vue_de(ctx) {
-        Some(v) => v.visibilite().cloned(),
+        Some(v) => crate::read_view::ReadCatalog::visibilite(v.as_ref()).cloned(),
         None => ctx.service::<Arc<Mutex<Catalog>>>("catalog").and_then(|c| c.lock().ok().and_then(|c| c.generations.clone())), // L4 : repli sans vue
     };
     if let Some(v) = &visibilite {
