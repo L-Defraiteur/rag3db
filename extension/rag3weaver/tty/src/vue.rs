@@ -147,6 +147,9 @@ pub struct Vue {
     /// Un repli à dire dans la zone vivante, sur la ligne du texte en cours quand
     /// rien n'y passe : sous mosh, la commande qui relit le journal (lot tty-7).
     pub repli: Option<Repli>,
+    /// Les lignes de boîte déjà écrites, par leur `id` : la relecture et le flux
+    /// peuvent rendre la même (tty-9, vu à l'essai sous tmux).
+    vues_de_boite: std::collections::HashSet<String>,
     /// Le bloc de code ouvert (```) : il se valide entier à sa clôture, pour se
     /// colorer d'un coup ; sa ligne en cours reste visible dans la zone vivante.
     bloc: Option<Bloc>,
@@ -177,6 +180,7 @@ impl Vue {
             depuis: Instant::now(),
             entete: String::new(),
             repli: None,
+            vues_de_boite: std::collections::HashSet::new(),
             bloc: None,
             boite: crate::boite::Boite::default(),
             etat_hote: None,
@@ -355,7 +359,16 @@ impl Vue {
 
     /// Une ligne de la boîte de l'équipier.
     pub fn ligne_de_boite(&mut self, l: &Value) {
+        if let Some(id) = l["id"].as_str() {
+            if !self.vues_de_boite.insert(id.to_string()) {
+                return;
+            }
+        }
         self.boite.ligne(l);
+        // Une demande après la fin d'un run : l'équipier va repartir, ce n'est plus fini.
+        if matches!(self.etat, Etat::Fini(_)) && l["from"] == "supervisor" && matches!(l["kind"].as_str(), Some("request" | "instruction" | "answer")) {
+            self.changer(Etat::Attend);
+        }
         self.clore();
         let tete = crate::boite::en_tete(l);
         let texte = l["text"].as_str().unwrap_or("");
@@ -526,7 +539,10 @@ impl Vue {
         let haut = match &self.repli {
             Some(r) if en_cours.is_empty() => {
                 let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
-                Line::from(Span::styled(queue(&format!("{} : {}", r.phrase, r.commande), largeur), sourdine))
+                // La phrase et la commande ; trop étroit, la commande seule, entière.
+                let tout = format!("{} : {}", r.phrase, r.commande);
+                let dit = if colonnes(&tout) <= largeur { tout } else { queue(&r.commande, largeur) };
+                Line::from(Span::styled(dit, sourdine))
             }
             _ => Line::from(en_cours),
         };

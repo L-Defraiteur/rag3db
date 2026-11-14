@@ -45,6 +45,67 @@ pub fn replier(morceaux: Vec<(String, Style)>, largeur: usize) -> Vec<Line<'stat
     lignes
 }
 
+/// Replie de la prose à `largeur` colonnes **entre deux mots** : l'espace de
+/// la coupure tombe, et seul un mot plus long que la largeur se coupe (tty-9).
+pub fn replier_mots(morceaux: Vec<(String, Style)>, largeur: usize) -> Vec<Line<'static>> {
+    let largeur = largeur.max(1);
+    let mut lignes: Vec<Vec<(char, Style)>> = Vec::new();
+    let mut courante: Vec<(char, Style)> = Vec::new();
+    let mut l = 0usize;
+    let mut espace: Option<usize> = None;
+    let largeur_de_cellules = |c: &[(char, Style)]| c.iter().map(|(x, _)| x.width().unwrap_or(0)).sum::<usize>();
+    for (texte, style) in morceaux {
+        for c in texte.chars() {
+            let w = c.width().unwrap_or(0);
+            if l + w > largeur && l > 0 {
+                if c == ' ' {
+                    lignes.push(std::mem::take(&mut courante));
+                    l = 0;
+                    espace = None;
+                    continue;
+                }
+                match espace.take() {
+                    Some(i) => {
+                        let reste = courante.split_off(i + 1);
+                        courante.pop();
+                        lignes.push(std::mem::replace(&mut courante, reste));
+                        l = largeur_de_cellules(&courante);
+                    }
+                    None => {
+                        lignes.push(std::mem::take(&mut courante));
+                        l = 0;
+                    }
+                }
+            }
+            if c == ' ' {
+                espace = Some(courante.len());
+            }
+            courante.push((c, style));
+            l += w;
+        }
+    }
+    lignes.push(courante);
+    lignes
+        .into_iter()
+        .map(|cellules| {
+            let mut spans: Vec<Span<'static>> = Vec::new();
+            let mut tampon = String::new();
+            let mut style_courant: Option<Style> = None;
+            for (c, st) in cellules {
+                if style_courant.is_some_and(|s| s != st) {
+                    spans.push(Span::styled(std::mem::take(&mut tampon), style_courant.unwrap_or_default()));
+                }
+                style_courant = Some(st);
+                tampon.push(c);
+            }
+            if !tampon.is_empty() {
+                spans.push(Span::styled(tampon, style_courant.unwrap_or_default()));
+            }
+            Line::from(spans)
+        })
+        .collect()
+}
+
 /// Le gras (`**…**`) et l'italique (`*…*`) d'un morceau sans code : un
 /// astérisque ne compte que s'il entoure un mot (pas `src/*.rs`, pas `2 * 3`).
 fn emphase(texte: &str, base: Style) -> Vec<(String, Style)> {
@@ -135,8 +196,8 @@ pub fn lignes(v: &Validee, t: &Theme, cap: Capacites, largeur: usize, coloration
     // La prose : la couleur du thème s'il en a une, sinon celle du terminal.
     let ecrit = t.couleurs.prose.as_deref().and_then(|h| couleur(h, cap.couleurs)).map(|c| Style::default().fg(c)).unwrap_or_default();
     match v.genre {
-        Genre::Texte => replier(prose(t, cap, &v.texte, ecrit), largeur),
-        Genre::Outil => replier(vec![(v.texte.clone(), rouge)], largeur),
+        Genre::Texte => replier_mots(prose(t, cap, &v.texte, ecrit), largeur),
+        Genre::Outil => replier_mots(vec![(v.texte.clone(), rouge)], largeur),
         Genre::Boite => {
             let tete = v.tete.min(v.texte.len());
             let tete = if v.texte.is_char_boundary(tete) { tete } else { 0 };
@@ -145,9 +206,9 @@ pub fn lignes(v: &Validee, t: &Theme, cap: Capacites, largeur: usize, coloration
                 morceaux.push((v.texte[..tete].to_string(), rouge.add_modifier(Modifier::BOLD)));
             }
             morceaux.extend(prose(t, cap, &v.texte[tete..], ecrit));
-            replier(morceaux, largeur)
+            replier_mots(morceaux, largeur)
         }
-        Genre::Note => replier(vec![(v.texte.clone(), sourdine.add_modifier(Modifier::DIM))], largeur),
+        Genre::Note => replier_mots(vec![(v.texte.clone(), sourdine.add_modifier(Modifier::DIM))], largeur),
         Genre::Code => {
             let cadre = teinte(t, cap, "cadre");
             let titre = if v.langue.is_empty() { "── code".to_string() } else { format!("── {}", v.langue) };
