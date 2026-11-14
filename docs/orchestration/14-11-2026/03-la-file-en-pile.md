@@ -52,9 +52,9 @@ l'autre, dix fois de suite, même sans rouge.
 | 9 | archi | jauge du contexte (+ quatre mineurs s'ils sont verts) | jauge-ce-qui-pese-pile-2 | 67d759962 sur e00fd562d — **atterri** à 16 h 47, master cdbd346aa, pile tenue |
 | 10 | cœur | correctif (a) perte de Note | annulation-garde-les-autres-pile-3 27cfe33a8 | **atterri** à 18 h 20, master 373b5477b, pile tenue, juge vert 18 h 17 ; **la lib d'après se bâtit à 373b5477b** (G) |
 | 11 | recherche | la CI : `fetch_update` déprécié par la chaîne stable de la CI (read_pool.rs:261), pas par le poste 1.98.1 | ci-try-update-pile 34271fc37 | **atterri** à 18 h 17, master a646bf215, pile tenue ; la CI se rejoue dessus |
-| 12 | tty | tty-7, le journal de séance et le repli sous mosh | cx-tty-7-pile-2 **cce8970af** sur 27cfe33a8 (8 commits, 6 `=` 2 `!` docs) | rejeu court en cours à luciepc |
+| 12 | tty | tty-7, le journal de séance et le repli sous mosh | cx-tty-7-pile-2 cce8970af sur 27cfe33a8 | **atterri** à 18 h 29, master 0de3884b9, 8/8 en `=` |
 | 13 | G | la garde apprend la pile (six corrections depuis cd103b619, ticket du quota fermé) | garde-pile-2 **40f6b63a5** sur a4936c7a3 ; relecture d'ensemble par recherche ; recopie au cache à l'atterrissage | cd103b619 sur c93f73f06 (garde 2f1914405 : --onto, push refusé remis, 27 témoins ; relue par recherche à 16 h 2x ; **posée au cache des deux postes à 16 h 22**, sha256 c57a3fb1 → a58a649f, l'ancienne en push_garde.sh.avant-garde-pile) |
-| 14 | codeparsers | l'import pointé (lot 1) | codeparsers/import-python-pointe 343ead799 (vert dans codeparsers, 301/0) | passe sur la dernière tête de pile quand une place vient (~19 h) |
+| 14 | codeparsers | l'import pointé (lot 1) | import-python-pointe-pile 9b4d82175 sur 40f6b63a5 | **vert** (lib 2390/0, e2e_code 54/54, e2e_postgres 36/36, MOTEUR_ANCIEN dit) ; attend garde-pile-2 |
 | 15 | recherche | exclusions 1 et 5 dans le manifeste | à venir | à son vert |
 | 16 → 13 bis | archi | les quatre mineurs de l'atelier | atelier-quatre-mineurs-pile **c14a389c4** sur cce8970af | rejeu court sur delais-c |
 | 17 | embarquement | activations nommées au manifeste, le groupe bge-m3/relecteur/OCR à la demande | activations-nommees 7074130e7 + docs 73262341b (vert, luciepc) | vrai jeu par hôte isolé 7971 / fournisseur 7891 après la mesure d'ED |
@@ -208,3 +208,16 @@ passe de 96 (mémoire fermée 18 h 20 → ~18 h 50). La chaîne : tty-7 (à toi 
 clients → garde-pile-2 → import pointé → exclusions → activations → 1b → fils du moteur ; devant 1b, le
 lot d'arbre principal « sans filtre ni vue, pas de masque » (le ×8 de la recherche à versions, 5,0 s de
 `_uuid IN [72 652]` → offsets côté moteur, ticket moteur ; lucivy mesurée hors de cause, 6 à 10 ms).
+
+## Treize atterris (18 h 5x) ; la lib d'après bâtie ; deux défauts de la recherche à versions
+
+tty-7 atterri (0de3884b9). La lib d'après **373b5477b** est bâtie à luciepc (ABI : aucun symbole exporté
+ajouté ni retiré ; md5 librag3db 4fa330b5, libvector ce6b2db4), verdict e2e_code/e2e_lectures en cours,
+bascule annoncée ensuite. En file : archi (mineurs, un SIGSEGV à la sortie rejoué vert seul, SEGV_ACCERR
+comme le core du dictionnaire ; puis les clients) → garde-pile-2 (vert, cas 8 joué dans le lourd) →
+import pointé (vert) → exclusions → activations (vrai jeu parti 18 h 46 sur 7971/7891) → sans-filtre
+(arbre principal, rouge posé, code en jeu) → 1b → fils du moteur → chaîne Rust 1.98.1 (G, d950d8790,
+dernier). **Deux défauts de la recherche à versions**, qui tiennent 1b loin des vraies bases : le ×8 (5,0 s
+de `_uuid IN [72 652]` → offsets côté moteur, ticket moteur ; le court-circuit sans filtre d'arbre
+principal) et **une rétention de ~0,5 Gio par search_code** (deux sondes tuées à 32 Gio par l'oom-killer
+de leur portée ; ED départage moteur seul contre recherche entière ; le cœur entre si c'est le moteur).
