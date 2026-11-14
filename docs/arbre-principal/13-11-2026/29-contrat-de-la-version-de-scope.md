@@ -172,6 +172,12 @@ et le ticket parent (`docs/arbre-principal/tickets/2026-11-12-migrer-les-ancres-
     ordinaire, rien ne change. Pour un minifié, ses versions changent et s'embarquent, comme une
     édition, et les anciennes deviennent orphelines, à la charge de la rétention.
   - 1b vise la forme du binaire, en paramètre, jamais une forme en dur.
+- **Rien ne tient en mémoire plus qu'un lot** (règle de c7 du 14 novembre, pour toute passe de
+  masse), et le bilan le dit. La première migration de la copie de `code-rag3db-depot` mettait les
+  68 600 occurrences en file pour un seul drain, et transférait tous les vecteurs en une requête.
+  Elle a été tuée par le noyau à 32,4 Gio, au bout de 3 min 21 s. Elle travaille désormais par
+  lots de 2 000 occurrences, puis de 2 000 versions. Une ligne de journal par lot porte la mémoire
+  résidente, et le bilan rend le plus gros lot tenu.
 - **Ce qu'elle fait, une base à la fois** :
   - elle ajoute `ScopeContent` et sa relation ;
   - elle calcule l'adresse de chaque `Scope` à partir de ses champs ;
