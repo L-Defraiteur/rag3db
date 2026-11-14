@@ -134,6 +134,12 @@ pub struct Identite {
     /// Absent : il reste résident (les services posés à la main).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub eviction: Option<Eviction>,
+    /// **Combien de fois l'activation a relancé ce fournisseur après un
+    /// plantage**, d'après le dossier de coordination de sa déclaration : un
+    /// fournisseur qui meurt en boucle se voit sans lire un journal. Absent :
+    /// pas lancé par une activation (les services posés à la main).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relances: Option<u64>,
 }
 
 /// La politique de déchargement d'un fournisseur, telle qu'il la déclare.
@@ -148,6 +154,10 @@ pub struct Eviction {
 /// La variable par laquelle l'activation déclare le délai de déchargement
 /// d'un fournisseur qu'elle lance (`Residence::ADemande`). Absente : résident.
 pub const EVICTION_VARIABLE: &str = "RAG3WEAVER_EVICTION_INACTIVITE_S";
+
+/// La variable par laquelle l'activation dit au fournisseur qu'elle lance
+/// combien de relances après plantage sa déclaration a déjà eues.
+pub const RELANCES_VARIABLE: &str = "RAG3WEAVER_ACTIVATION_RELANCES";
 
 /// Ce que fait un fournisseur évincable quand son délai est passé : le binaire
 /// sort (code 0) après l'avoir dit ; un test observe.
@@ -279,6 +289,7 @@ pub struct EmbedDaemon {
     derniere_activite: Mutex<std::time::Instant>,
     /// Le délai d'éviction et ce qu'il fait quand il passe ; `None` : résident.
     eviction: Option<(std::time::Duration, QuandEvince)>,
+    relances: Option<u64>,
 }
 
 impl EmbedDaemon {
@@ -306,6 +317,7 @@ impl EmbedDaemon {
             en_cours: std::sync::atomic::AtomicUsize::new(0),
             derniere_activite: Mutex::new(std::time::Instant::now()),
             eviction: None,
+            relances: None,
         }
     }
 
@@ -347,6 +359,13 @@ impl EmbedDaemon {
                 }
             }
         });
+    }
+
+    /// Le compte des relances que l'activation lui a dit (voir
+    /// [`RELANCES_VARIABLE`]).
+    pub fn avec_relances(mut self, relances: Option<u64>) -> Self {
+        self.relances = relances;
+        self
     }
 
     pub fn avec_activation(mut self, activation: Option<IdentiteActivation>) -> Self {
@@ -554,6 +573,7 @@ impl EmbedDaemon {
                 inactivite_s: delai.as_secs(),
                 inactif_depuis_ms: self.inactif_depuis().map_or(0, |d| d.as_millis() as u64),
             }),
+            relances: self.relances,
         }
     }
 

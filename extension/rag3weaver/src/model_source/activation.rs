@@ -120,13 +120,39 @@ fn variables(source: &super::ModelSource, attendue: &crate::daemon::embeddings::
         }
         v.push((crate::daemon::embeddings::EVICTION_VARIABLE.to_string(), inactivite_secs.to_string()));
     }
+    v.push((crate::daemon::embeddings::RELANCES_VARIABLE.to_string(), relances_notees(source).to_string()));
     for (cle, valeur) in &a.env {
-        if matches!(cle.as_str(), "RAG3WEAVER_EMBED_MODEL" | "RAG3WEAVER_ACTIVATION_PROFIL" | "RAG3WEAVER_ACTIVATION_PERIPHERIQUE" | "RAG3WEAVER_ACTIVATION_IDENTITE" | crate::daemon::embeddings::EVICTION_VARIABLE) {
+        if matches!(cle.as_str(), "RAG3WEAVER_EMBED_MODEL" | "RAG3WEAVER_ACTIVATION_PROFIL" | "RAG3WEAVER_ACTIVATION_PERIPHERIQUE" | "RAG3WEAVER_ACTIVATION_IDENTITE" | crate::daemon::embeddings::EVICTION_VARIABLE | crate::daemon::embeddings::RELANCES_VARIABLE) {
             return Err(format!("activation : {cle} est déterminé par l'identité déclarée"));
         }
         v.push((cle.clone(), valeur.clone()));
     }
     Ok(v)
+}
+
+/// Le fichier du compte des relances d'une déclaration, dans son dossier de
+/// coordination (une ligne : le nombre).
+fn fichier_des_relances(source: &super::ModelSource) -> Option<std::path::PathBuf> {
+    let a = source.activation.as_ref()?;
+    let nom: String = source.model.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect();
+    Some(a.coordination.join(format!("{nom}.relances")))
+}
+
+/// Les relances après plantage que cette déclaration a déjà eues.
+fn relances_notees(source: &super::ModelSource) -> u64 {
+    fichier_des_relances(source).and_then(|p| std::fs::read_to_string(p).ok()).and_then(|s| s.trim().parse().ok()).unwrap_or(0)
+}
+
+/// Une relance de plus, notée avant de relancer : le relancé la dit à son
+/// /sante. Écrit puis renommé (aucun lecteur ne voit un fichier à moitié).
+fn noter_une_relance(source: &super::ModelSource) {
+    let Some(p) = fichier_des_relances(source) else { return };
+    let n = relances_notees(source) + 1;
+    if let Some(dossier) = p.parent() { let _ = std::fs::create_dir_all(dossier); }
+    let provisoire = p.with_extension(format!("relances.{}", std::process::id()));
+    if std::fs::write(&provisoire, format!("{n}\n")).is_ok() {
+        let _ = std::fs::rename(&provisoire, &p);
+    }
 }
 
 #[cfg(feature = "daemon")]
@@ -304,7 +330,10 @@ pub(super) fn connecter_ou_attendre(source: &super::ModelSource, annule: &std::s
     -> Result<(Box<dyn crate::embedder::Embedder>, super::Origin), String> {
     let a = source.activation.as_ref().ok_or("activation absente")?;
     let Residence::ADemande { inactivite_secs, rendre_le_bail_secs } = a.residence else {
-        return connecter(source, annule);
+        // Maintenir : lancé maintenant, tenu debout — un plantage se relance
+        // une fois (décision de c7, 14 novembre 2026).
+        let (client, origine) = connecter(source, annule)?;
+        return Ok((Box::new(Maintenu { source: source.clone(), client: std::sync::Mutex::new(client) }), origine));
     };
     if inactivite_secs == 0 || rendre_le_bail_secs == 0 || rendre_le_bail_secs >= inactivite_secs {
         return Err(format!(
@@ -402,6 +431,7 @@ impl crate::embedder::Embedder for ALaDemande {
                 // premier fournisseur avait servi puis planté (14 novembre 2026).
                 let depart = e.to_string();
                 *g = None;
+                noter_une_relance(&self.source);
                 let relance = self.activer().map_err(|e| crate::embedder::EmbedError::ProviderError(format!(
                     "le fournisseur {} est parti ({depart}) ; relancé une fois, il n'a pas répondu : {e}", self.source.model)))?;
                 *g = Some((relance, std::time::Instant::now()));
@@ -429,6 +459,43 @@ impl crate::embedder::Embedder for ALaDemande {
         Some(self.source.timeout_secs.filter(|s| *s > 0).map(std::time::Duration::from_secs)
             .unwrap_or_else(crate::daemon::embeddings::default_embed_timeout))
     }
+}
+
+/// **Le fournisseur déclaré `Maintenir`, tenu debout** : le client géré, et
+/// une relance unique quand un calcul le trouve parti (planté) ; si elle
+/// échoue, le refus dit la déclaration, le départ, la relance et quoi faire.
+#[cfg(feature = "daemon")]
+struct Maintenu {
+    source: super::ModelSource,
+    client: std::sync::Mutex<Box<dyn crate::embedder::Embedder>>,
+}
+
+#[cfg(feature = "daemon")]
+impl crate::embedder::Embedder for Maintenu {
+    fn embed(&self, textes: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+        let mut c = self.client.lock().unwrap_or_else(|e| e.into_inner());
+        let r = c.embed(textes);
+        let Err(e) = &r else { return r };
+        if !ALaDemande::parti(e) { return r; }
+        let depart = e.to_string();
+        let modele = &self.source.model;
+        noter_une_relance(&self.source);
+        let (relance, _) = connecter(&self.source, &std::sync::atomic::AtomicBool::new(false)).map_err(|e| crate::embedder::EmbedError::ProviderError(format!(
+            "le fournisseur {modele} déclaré maintenir est parti ({depart}) ; relancé une fois, il n'a pas répondu : {e} — rouvrez le backend ou corrigez la déclaration")))?;
+        *c = relance;
+        c.embed(textes).map_err(|e| if ALaDemande::parti(&e) {
+            crate::embedder::EmbedError::ProviderError(format!(
+                "le fournisseur {modele} déclaré maintenir est parti ({depart}) ; relancé une fois, il est reparti : {e} — rouvrez le backend ou corrigez la déclaration"))
+        } else { e })
+    }
+    fn dim(&self) -> usize { self.client.lock().unwrap_or_else(|e| e.into_inner()).dim() }
+    fn name(&self) -> &str { &self.source.model }
+    fn is_mock(&self) -> bool { self.client.lock().unwrap_or_else(|e| e.into_inner()).is_mock() }
+    fn is_absent(&self) -> bool { self.client.lock().unwrap_or_else(|e| e.into_inner()).is_absent() }
+    fn distant(&self) -> bool { self.client.lock().unwrap_or_else(|e| e.into_inner()).distant() }
+    fn budget_conseille(&self) -> Option<(usize, usize)> { self.client.lock().unwrap_or_else(|e| e.into_inner()).budget_conseille() }
+    fn troncatures(&self) -> Option<(usize, usize)> { self.client.lock().unwrap_or_else(|e| e.into_inner()).troncatures() }
+    fn timeout(&self) -> Option<std::time::Duration> { self.client.lock().unwrap_or_else(|e| e.into_inner()).timeout() }
 }
 
 #[cfg(feature = "daemon")]
