@@ -113,5 +113,11 @@ d'avant les versions et la base migrée, puis entre chaque optimisation et le co
   - **la question reste entière pour les générations** : là, un retrait doit fermer la ligne
     (`_jusqu_a`) au lieu de l'effacer. Ce relevé ne le dit pas, faute de générations dans ce code.
     Il se rejouera sur la branche de 2a′ quand le lot des orphelins y sera posé.
-- **Un trou du relevé** : `Symbol` n'a pas de `file_path`. Son compte par fichier est refusé par
-  le binder, et il est à refaire par la relation au File.
+- **Les Symbol, par la relation** (`Symbol` n'a pas de chemin ; relevé `orphelins-symboles`) :
+  - avant le retrait, 20 Symbol sont reliés aux Scope de `arbre.rs`. Trois ne sont reliés par
+    aucun autre fichier (`relation_label` et les deux noms de ses tests) ;
+  - après le retrait, ces trois restent, **sans aucune relation**. Un Symbol est un rendez-vous par
+    nom, sans session d'instantané, et rien ne le reprend ;
+  - ticket :
+    `docs/banc/tickets/2026-11-14-un-symbol-que-plus-rien-ne-relie-reste-apres-le-retrait-de-son-fichier.md`
+    (rétention voulue ou fuite, à décider).
