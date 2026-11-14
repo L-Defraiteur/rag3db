@@ -1,7 +1,7 @@
 # Une recherche qui croise une lecture d'état répond par balayage
 
-- **État** : ouvert (14 novembre 2026, relevé par archi, lot à part sur le mot de c7) ; le lot
-  `recherche-lit-le-catalogue` le ferme
+- **État** : fermé (14 novembre 2026) par le lot `recherche-lit-le-catalogue` ; relevé par archi,
+  lot à part sur le mot de c7
 - **Famille** : produit
 - **Gravité** : faux résultat — une recherche faite pendant qu'une lecture d'état tient le
   catalogue quelques millisecondes répond par le balayage des fichiers (mots exacts, sans score
