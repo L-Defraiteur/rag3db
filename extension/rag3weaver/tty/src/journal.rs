@@ -2,7 +2,7 @@
 //! l'historique, écrit aussi en texte brut dans un fichier.
 //!
 //! mosh ne synchronise que l'écran : les lignes qui en sortent ne se relisent
-//! pas par le défilement (`docs/tty/tickets/2026-11-14-sous-mosh-l-historique-du-terminal-se-perd.md`).
+//! pas par le défilement (`docs/tickets/closed/2026-11-14-sous-mosh-l-historique-du-terminal-se-perd.md`).
 //! On ne demande rien à installer : sous mosh, la vue ouvre d'elle-même un
 //! journal (sauf `--journal`), et dit la commande qui le relit. `--journal
 //! <fichier>` marche partout, sous ssh, tmux ou un terminal local.
@@ -30,7 +30,10 @@ impl Journal {
     }
 
     /// Un journal neuf dans le dossier d'état (`seance-<secondes>-<pid>.txt`).
+    /// Chaque séance sous mosh en ouvre un : ceux de plus de [`GARDE`] partent
+    /// d'abord, pour que le dossier ne grossisse pas sans fin.
     pub fn neuf_dans(dossier: &Path) -> Result<Self, String> {
+        ranger(dossier, std::time::SystemTime::now(), GARDE);
         let s = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
         Self::ouvrir(&dossier.join(format!("seance-{s}-{}.txt", std::process::id())))
     }
@@ -58,6 +61,25 @@ impl Journal {
     /// La commande qui relit le journal, le chemin cité s'il le faut.
     pub fn relecture(&self) -> String {
         format!("less {}", citer(&self.chemin.to_string_lossy()))
+    }
+}
+
+/// Combien de temps un journal ouvert de lui-même est gardé : sept jours.
+pub const GARDE: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 3600);
+
+/// Efface les journaux ouverts d'eux-mêmes (`seance-*.txt`, et rien d'autre)
+/// modifiés depuis plus de `garde`. Une erreur ne coupe rien.
+fn ranger(dossier: &Path, maintenant: std::time::SystemTime, garde: std::time::Duration) {
+    let Ok(entrees) = std::fs::read_dir(dossier) else { return };
+    for e in entrees.flatten() {
+        let nom = e.file_name().to_string_lossy().into_owned();
+        if !(nom.starts_with("seance-") && nom.ends_with(".txt")) {
+            continue;
+        }
+        let vieux = e.metadata().and_then(|m| m.modified()).ok().and_then(|m| maintenant.duration_since(m).ok()).is_some_and(|age| age > garde);
+        if vieux {
+            let _ = std::fs::remove_file(e.path());
+        }
     }
 }
 
@@ -139,6 +161,28 @@ mod tests {
         assert!(!ancetre_nomme(99, "mosh-server", lire), "un processus illisible ne dit rien");
         let boucle = |p: u32| Some(("x".to_string(), if p == 5 { 6 } else { 5 }));
         assert!(!ancetre_nomme(5, "mosh-server", boucle), "un cycle s'arrête au bout de 64 pas");
+    }
+
+    /// Seuls les journaux ouverts d'eux-mêmes, et seulement les vieux, partent.
+    #[test]
+    fn opening_a_journal_by_itself_removes_only_the_old_session_journals() {
+        let d = std::env::temp_dir().join(format!("tty-ranger-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let huit_jours = std::time::SystemTime::now() - std::time::Duration::from_secs(8 * 24 * 3600);
+        for nom in ["seance-1-1.txt", "autre.txt", "seance-2-2.txt"] {
+            std::fs::write(d.join(nom), "x").unwrap();
+        }
+        for nom in ["seance-1-1.txt", "autre.txt"] {
+            std::fs::File::options().write(true).open(d.join(nom)).unwrap().set_modified(huit_jours).unwrap();
+        }
+        let neuf = Journal::neuf_dans(&d).unwrap();
+        let mut restent: Vec<String> = std::fs::read_dir(&d).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        restent.sort();
+        let mut attendus = vec!["autre.txt".to_string(), "seance-2-2.txt".to_string(), neuf.chemin().file_name().unwrap().to_string_lossy().into_owned()];
+        attendus.sort();
+        assert_eq!(restent, attendus, "le vieux seance-1-1 part ; un vieux fichier d'un autre nom et un journal récent restent");
+        std::fs::remove_dir_all(&d).unwrap();
     }
 
     #[test]
