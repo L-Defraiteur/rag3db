@@ -196,21 +196,24 @@ TEST_F(StringRewriteAcrossAddColumn, RewriteThenAddThenCheckpoint) {
 // pendant ce temps ; la transaction valide ; puis le point de reprise.
 TEST_F(StringRewriteAcrossAddColumn, AnOpenWriterCommitsAfterAnAdd) {
     load();
-    rag3db::main::Connection writer(database.get());
-    ASSERT_TRUE(writer.query("BEGIN TRANSACTION;")->isSuccess());
-    rewrite(writer, 0, NUM_ROWS);
     std::string alterError;
-    std::thread alter([&] {
-        rag3db::main::Connection other(database.get());
-        auto result = other.query("ALTER TABLE Chunk ADD note STRING DEFAULT 'n-defaut';");
-        if (!result->isSuccess()) {
-            alterError = result->getErrorMessage();
-        }
-    });
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    auto commit = writer.query("COMMIT;");
-    alter.join();
-    ASSERT_TRUE(commit->isSuccess()) << commit->getErrorMessage();
+    {
+        // La connexion de l'écrivain et ses résultats meurent avant la réouverture de la base.
+        rag3db::main::Connection writer(database.get());
+        ASSERT_TRUE(writer.query("BEGIN TRANSACTION;")->isSuccess());
+        rewrite(writer, 0, NUM_ROWS);
+        std::thread alter([&] {
+            rag3db::main::Connection other(database.get());
+            auto result = other.query("ALTER TABLE Chunk ADD note STRING DEFAULT 'n-defaut';");
+            if (!result->isSuccess()) {
+                alterError = result->getErrorMessage();
+            }
+        });
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        auto commit = writer.query("COMMIT;");
+        alter.join();
+        ASSERT_TRUE(commit->isSuccess()) << commit->getErrorMessage();
+    }
     std::cout << "[témoin] ADD pendant la transaction : "
               << (alterError.empty() ? "accepté" : "refusé : " + alterError) << std::endl;
     expectAllRight("before-checkpoint");
