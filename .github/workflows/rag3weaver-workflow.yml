@@ -59,7 +59,11 @@ jobs:
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           git submodule update --init --depth 1 extension/rag3weaver/codeparsers
 
+      # La version de rust-toolchain.toml (14 novembre 2026) : `@stable` sans version prenait la dernière
+      # stable, plus récente que les postes, et la CI rougissait sur ses dépréciations sans lot fautif.
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
 
       - uses: Swatinem/rust-cache@v2
         with:
