@@ -37,19 +37,24 @@ sur dix dans un bloc `BEGIN … COMMIT`. Le journal ne compte une écriture comm
 `transact` n'a rendu aucune erreur. Le compte est `MATCH (n:Note) RETURN count(n)`, par balayage :
 il ne passe pas par l'index de clé primaire.
 
-## Neuf ou masqué
+## Neuf ou masqué : présent en service (départage du 14 nov.)
 
-À établir.
+`DdlEveryMinute` ×10 par base, à luciepc, en série, même arbre, même bâti (avec
+`rag3db_vector_extension`). Journaux : `~/.cache/rag3db-moteur-notes/pk-sous-reprise/dep-<base>-<tour>.log`.
 
-- Le scénario n'a pas changé depuis le 18 octobre (`a4fd353e4`).
-- Le ticket `2026-11-13-sous-vingt-ecrivains-le-pool-sature-et-ne-se-vide-plus.md` note que,
-  sous saturation, une exception sans étiquette (« Cannot find property b ») arrêtait le
-  scénario avant ses comptes. La perte pouvait donc être là sans être lue.
-- Le juge `concurrence_test.known_red` ne joue pas `DdlEveryMinute`. C'est un cas long
-  (`long.txt`), joué seulement avec `CONCURRENCE_LONG=1`.
+| Base | Verts | `counts-match-commits` (Note perdues) | SIGSEGV |
+|---|---|---|---|
+| `0066dce28` (moteur de master `0c41f9fe6`, avec le verrou de la clé primaire) | 2 | 3 (5, 21, 20) | 0 |
+| `f41c0ba5b` (`0c41f9fe6^`, avant le verrou) | 2 | 3 (2, 5, 30) | 1 |
+| `835d5298f` (la lib en service) | 3 | 1 (61) | 0 |
 
-Départage prévu : `DdlEveryMinute` ×10 sur le moteur d'avant le verrou de la clé primaire
-(`0c41f9fe6^`), même poste, même bâti.
+- La perte est présente sur les trois bases : **défaut en service, pas une régression** du
+  verrou de la clé primaire.
+- Toutes les pertes sont sous pool saturé : 132 à 902 « BEGIN refusé : Buffer manager
+  exception » par tour. Aucun tour sans refus n'en perd.
+- Le scénario n'a pas changé depuis le 18 octobre (`a4fd353e4`). Le juge
+  `concurrence_test.known_red` ne joue pas `DdlEveryMinute` : c'est un cas long (`long.txt`), joué
+  seulement avec `CONCURRENCE_LONG=1`. D'où une perte que personne n'avait lue.
 
 ## Piste (non prouvée)
 
