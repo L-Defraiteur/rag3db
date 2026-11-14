@@ -116,6 +116,9 @@ pub mod code;
 /// Les gabarits (graphes, backends, composants, nœuds scriptés) indexés comme du code.
 #[cfg(feature = "code")]
 pub mod code_gabarits;
+/// La migration 1b : une base de code de la forme d'avant vers la forme à versions.
+#[cfg(feature = "code")]
+pub mod migration_des_versions;
 /// Les tests par requêtes (`workspace.queries_via`) : le relevé d'un lot.
 #[cfg(feature = "code")]
 pub mod queries_via;
