@@ -119,3 +119,14 @@ ED écrira sa page de 2a′-3 après l'écrivain de 2a′-2, en partant de celle
   delà, il répond par un refus transitoire nommé (« génération non écrite, écriture en cours, rang k
   dans la file ») : l'agent réessaie. Il n'y a jamais de réponse partielle mêlant deux générations. Le
   plein texte n'est pas servi avant le reste : une génération se publie entière ou pas du tout.
+
+**Les deux gardes de c7 (0 h 2x)** :
+- **Les nombres sont des réglages du manifeste**, avec ces valeurs pour défaut, et non des constantes
+  (« tout doit être paramétrable ») : sous `tracked`, une clé `writes` (`{"settle_s": 5, "ceiling_s": 60,
+  "catch_up": {"generations": 5, "seconds": 30}, "cited_wait_s": 5}`), relue comme les autres clés,
+  avec un refus qui nomme toute clé inconnue.
+- **Un seul fil de montre** : la montre des refs ne s'ouvre pas à côté du fil `index-suivi` de ce
+  soir, qui regarde déjà le dépôt ; c'est ce même fil qui voit `.git/refs` et `packed-refs`. Si un dépôt
+  n'a pas ce fil, l'état le dit, au lieu d'en ouvrir un second.
+
+Rien ne se code avant la page de 2a′-3 d'ED.
