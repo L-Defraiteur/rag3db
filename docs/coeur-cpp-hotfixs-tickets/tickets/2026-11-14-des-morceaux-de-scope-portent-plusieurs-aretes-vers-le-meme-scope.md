@@ -60,7 +60,7 @@ qui écarte les fichiers minifiés et générés, en retire la plus grande part.
 édités restent concernés : `backend.rs`, `catalog.rs`, `daemon/embeddings.rs`, `daemon_host.rs`,
 `search.rs`…
 
-## Le chemin d'écriture et une hypothèse (non prouvée)
+## Le chemin d'écriture et une hypothèse (réfutée le soir même, voir plus bas)
 
 L'arête vient de `LinkRecordNode` (« chunk_link », `src/catalog.rs` vers la ligne 6684). Au-delà de
 200 arêtes par relation (`COPY_SEUIL`), le lot part par COPY : `copier_les_liens`, dans
@@ -116,6 +116,24 @@ points de reprise.
   le dernier point de reprise.
 - **La forme suivante** : à chaque tour, des morceaux neufs et leurs liens posés, puis reversés pendant
   le point de reprise qui les fait passer de la mémoire au disque.
+
+## Le second témoin, puis l'hypothèse réfutée par le plan (14 novembre, soir)
+
+- **Le second cas** du même e2e (fa4b64e64), à la forme du raté : 30 tours de 300 morceaux neufs, posés
+  par COPY puis reversés cinq fois pendant qu'une seconde connexion enchaîne les CHECKPOINT. **Vert sous
+  e93710f36**, avec 10 125 points de reprise croisés et 9 000 arêtes pour 9 000 paires. Vert de même
+  sous 0c41f9fe6.
+- **Le plan de la lecture des paires déjà là**, lu sur la copie migrée (lib 0c41f9fe6) :
+  `EXPLAIN UNWIND [...] AS f MATCH (a:Scope_Chunk {_uuid: f})-[r:Scope_CHUNKED_FROM]->(b:Scope) …`
+  rend `SCAN_NODE_TABLE` sur Scope_Chunk, filtré par un `SEMI_MASKER` et joint par hachage (`HASH_JOIN`).
+  **Ce n'est pas une recherche par clé primaire.** Seule une clé littérale,
+  `MATCH (a:Scope_Chunk {_uuid: 'x'})`, prend `PRIMARY_KEY_SCAN_NODE_TABLE`.
+- **L'hypothèse du raté de la clé primaire est donc réfutée.** La lecture d'`existing_links` ne passe pas
+  par l'index de clé : le défaut prouvé par le cœur ne peut pas la tromper. Les deux verts sous
+  e93710f36 s'expliquent ainsi. La cause des arêtes en double est à chercher dans les deux autres
+  pistes ci-dessous, ou dans le chemin par lots (moins de 200 arêtes, `MERGE`), qui reste à lire.
+- **Le témoin** reste une garde du chemin COPY des liens sous des points de reprise. Il ne dit rien de
+  la cause. Son atterrissage est à la décision de c7.
 
 ## Les deux autres pistes, et ce qui les départagerait
 
