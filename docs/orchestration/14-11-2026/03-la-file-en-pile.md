@@ -338,3 +338,6 @@ relit à l'heure) a testé la tête de 1b ; PILE_AVANT=8105b7f02. Puis G (fils, 
 La bascule : le portable réveillé sous 373b5477b ; **un écart sur code-lourd** à luciepc (24 relations,
 les deux index d'une table de relations en désaccord, antérieur à la lib neuve) ; décision c7 : la
 bascule continue, la base se répare dans la fenêtre d'hotfixs (reconstruction des trois tables sur copie).
+
+**21 h 3x — vingt-deux atterris** : le court-circuit et 1b (194a4e572, 11/11, un push). G a le « à toi »
+pour les fils du moteur après le réveil de luciepc (code-principal diverge aussi, décision (b) tenue).

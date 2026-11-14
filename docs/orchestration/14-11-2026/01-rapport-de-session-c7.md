@@ -842,3 +842,22 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   pas ce soir ; la pièce 1 (la fusion lâche les ids morts) écrite. **Hotfixs** : le retrait de l'ancien
   index répété vert sur copie (4,28 Go rendus, 8/8 identiques ; un DROP ne rend pas ses pages au disque :
   ticket souhait) ; le piège du manifeste de copie qui pointe hors de la copie, en tête de sa page.
+
+## 21 h 3x — 1b et le court-circuit sur master ; code-principal diverge aussi, la bascule continue
+
+- **Arbre principal a poussé 194a4e572** : le court-circuit du masque (sans filtre ni vue ni orpheline, la
+  recherche à versions ne lit que les k résultats ; 406 s → 12 s sur 24 requêtes) **et 1b**, la migration
+  par lots bornés avec un représentant par version, `rag3weaver-backend migration versions --base
+  <chemin>` hors hôte sous un embarqueur qui refuse tout appel — 11 commits, un seul push, 11/11 en `=`,
+  passe complète sous 373b5477b (lib 2398/0, dix suites e2e sans sauté). Vingt-deux lots par la pile.
+  La bascule des vraies bases vers les versions attend encore : la mémoire du dense à versions (le
+  prédicat d'ED, rang 30) et les deux défauts de la vue.
+- **La bascule de la lib** : code-principal diverge aussi au contrôle des deux sens (QUERIES 7/8, IMPLEMENTS
+  3/8/9 et 6 `line` à deux valeurs selon le sens, LOCKS 0/12/9 et 16 `line`), même date que code-lourd
+  (14 h 25, sous 0c41f9fe6). Décision (b) maintenue pour les deux : `courant` et `lib-des-passes` aux deux
+  postes ensemble, réveil de luciepc sous 373b5477b ; un seul ticket, deux bases, Pour : hotfixs, qui
+  reconstruit les six tables sur copie (relevé des deux sens, DROP/CREATE, repose des arêtes d'accord, le
+  reste redit par le code). La piste du cœur : sous l'ancienne lib, l'annulation d'un COMMIT refusé
+  tronquait chaque index séparément — la famille que 373b5477b ferme.
+- **La chaîne** : G (fils du moteur) → codeparsers → archi (fermeture) → 96 (gestes) → crochet → `IN` →
+  (B) → garde-pile-3 → dense sur `Tenue<C>` → prédicat → chaîne Rust 1.98.1.
