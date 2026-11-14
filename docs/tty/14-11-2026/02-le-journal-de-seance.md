@@ -47,3 +47,9 @@ La première passe verte sous mosh donnait 80,7 ms de médiane d'affichage, cont
 | tty-7 | 47,7 / 49,5 ms | 16,8 ms |
 
 Le journal ne coûte rien de visible. L'écart de la première passe venait du poste : la charge de luciepc était de près de 10 pendant cette passe, et d'environ 3 au rejeu (`mesures/mosh-latence-*.json`).
+
+## Le rejeu de pile
+
+tty-7 passe dans la pile juste après le cœur. Ses commits sont reposés seuls (`git rebase --onto <tête du cœur> <base de mes commits>`) : un rebase simple emportait aussi les commits de docs de master absents de la branche du cœur. Le premier rejeu, sur `41a7de35a` en `132c0248d`, est vert : crate 45/45 et 14/14, `e2e_tty` 4/4, `e2e_catalogue_gabarits` 12/12. Les journaux sont à luciepc, dans `~/.cache/rag3weaver-build/cx-tty7-pile`, et `temoins.log` y est une copie de `e2e_tty.log`, pour la même raison qu'à tty-6.
+
+**La lib liée est `0c41f9fe6`, sous `RAG3WEAVER_MOTEUR_ANCIEN=1`, et ce choix est voulu.** Le magasin n'a aucune lib bâtie sur le cœur, qui touche au moteur (l'annulation d'un COMMIT refusé), alors que ce lot ne touche que le crate `tty`. Le rejeu prouve donc le terminal et ses témoins de l'hôte, pas le moteur du cœur : ce dernier se prouve dans le lot du cœur. c7 l'a admis le 14 nov.
