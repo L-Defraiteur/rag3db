@@ -124,3 +124,9 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 
 - **96 : fenêtre ouverte**, passe partie à 13 h 47 à luciepc, fin vers 14 h 55. Instantané au portable `~/.local/share/rag3weaver/instantanes/avant-archivage-14-nov/` (13 h 46, backend fermé) : 113 Mo, 3 713 fichiers, 19 fiches ; base, .extensions, .fts, .readers, .checkpoints et ~/memoire-longue ; ni .wal ni .ecrivain ; sha256 à côté, chaque pièce comparée à l'original ; gardé après le succès. La passe sur une copie à luciepc (sommes vérifiées), binaire de master 91c9f43d0, lib 0c41f9fe6, poste lourd, GPU_DUTY 70, budget 4096, 32G ; deux premiers documents 7/7 et 9/9. Un raté dit : un premier lancement parti sans la base (commande distante tombée sur fish), tué par ses pids à la seconde, base vide effacée dans son dossier, rien au portable.
 - Lucie demande ce que sont tmux et mosh : expliqué (multiplexeur qui traduit tout ce qui passe ; shell résilient qui ne laisse pas tout passer) ; recommandation tmux oui, mosh si elle s'en sert ; installation à son sudo sur les deux postes.
+
+## Vers 13 h 5x — tmux et mosh installés ; la règle « rien à installer en plus »
+
+- Lucie a installé tmux et mosh sur les deux postes (après un `-Syu` des deux côtés, miroirs trop datés ; pas de redémarrage pour l'instant, à voir si instabilité). tty mesure dessous. **Règle produit de Lucie** : « les gens n'installeront rien en plus de rag3weaver » → le terminal se tient dans ce que l'utilisateur a et se dégrade en le disant ; la livraison devra porter sa lib (vision mise à jour, a35d75a81).
+- codeparsers : en attendant son tour, commence le second lot de la provenance (dependency par les manifestes, workspace → project, côté origin.rs).
+- Précaution dite à Lucie pour un redémarrage : luciepc après le « fenêtre fermée » de 96 ; le portable termine toutes les sessions, cinq minutes de préavis pour pousser le vert et écrire les points de reprise.
