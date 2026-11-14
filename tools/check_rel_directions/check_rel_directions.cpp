@@ -25,8 +25,21 @@
 // écriture. Travailler sur une copie (reflink), jamais sur une base en service. Bâtir, contre une
 // bibliothèque du moteur et son en-tête unique :
 //   g++ -std=c++20 -O2 -I <build>/src check_rel_directions.cpp -L <build>/src -lrag3db
-// Usage : check_rel_directions <base> [table…]   — toutes les tables de relations sans argument ;
+// **Les bouts se parcourent par tranches ancrées** (14 novembre 2026, relevé d'hotfixs) : l'outil tirait ses sources
+// et ses destinations d'une seule lecture non ancrée, `MATCH (a)-[r:T]->(b)`, que le planificateur joue dans un seul
+// sens ; une source perdue par ce sens n'était jamais ancrée, et sa relation n'était relue par aucun sens, même par
+// celui qui l'avait encore (LOCKS de code-principal, lockIndexForWrite → acquireLock à la ligne 1173). Chaque nœud de
+// chaque étiquette de bout (`show_connection`) est désormais ancré, par tranches de 500 offsets : le sens avant
+// depuis les étiquettes sources, le sens arrière depuis les étiquettes destinations. `CHECK_REL_PLANS=1` imprime, pour chaque
+// étiquette et chaque sens, le plan d'une tranche (EXPLAIN) : il prouve le sens joué.
+//
+// **Quatre comptes par table** : les relations lues au sens avant, au sens arrière (identifiants distincts), leur
+// union, et celles perdues d'un seul sens. « égales » juge la cohérence des deux rangements, pas leur complétude ;
+// ces comptes, comparés à ceux d'avant une opération, montrent ce qui manque.
+//
+// Usage : [CHECK_REL_PLANS=1] check_rel_directions <base> [table…]   — toutes les tables de relations sans argument ;
 // code de sortie 1 si un écart est trouvé, 2 sur une erreur.
+#include <cstdlib>
 #include <iostream>
 #include <map>
 #include <set>
@@ -61,6 +74,8 @@ std::vector<std::vector<std::string>> rows(Connection& conn, const std::string& 
 using Reading = std::vector<std::string>;
 
 // Le relevé d'une table ; vrai si elle diverge.
+bool showPlans = false;
+
 bool check(Connection& conn, const std::string& name) {
     std::vector<std::string> properties;
     std::string projection = "id(a), id(b)";
@@ -68,28 +83,56 @@ bool check(Connection& conn, const std::string& name) {
         properties.push_back(property[0]);
         projection += ", r.`" + property[0] + "`";
     }
-    // Les bouts : chaque source et chaque destination, avec son étiquette.
-    std::set<std::pair<std::string, std::string>> sources, destinations;
-    for (auto& row : rows(conn, "MATCH (a)-[r:`" + name +
-                                    "`]->(b) RETURN label(a), "
-                                    "offset(id(a)), label(b), offset(id(b));")) {
-        sources.insert({row[0], row[1]});
-        destinations.insert({row[2], row[3]});
+    // Les étiquettes des bouts, puis chaque nœud de chacune, ancré par tranches de 500 offsets.
+    std::set<std::string> fromLabels, toLabels;
+    for (auto& row : rows(conn, "CALL show_connection('" + name + "') RETURN *;")) {
+        fromLabels.insert(row[0]);
+        toLabels.insert(row[1]);
     }
+    constexpr uint64_t slice = 500;
+    auto sliceQuery = [&](const std::string& label, bool forwardSide, uint64_t from) {
+        const std::string node = forwardSide ? "a" : "b";
+        return "MATCH (" + node + ":`" + label + "`) WHERE offset(id(" + node + ")) >= " + std::to_string(from) +
+               " AND offset(id(" + node + ")) < " + std::to_string(from + slice) + " MATCH (a)-[r:`" + name +
+               "`]->(b) RETURN id(r), " + projection + ";";
+    };
+    auto read = [&](const std::set<std::string>& labels, bool forwardSide, std::multimap<std::string, Reading>& out) {
+        for (auto& label : labels) {
+            const std::string node = forwardSide ? "a" : "b";
+            // Le compte d'abord : sur une étiquette vide, max(offset) est NULL (relevé d'hotfixs) ; zéro tranche.
+            auto top = rows(conn, "MATCH (" + node + ":`" + label + "`) RETURN count(*), max(offset(id(" + node + ")));");
+            if (top.empty() || top[0][0] == "0") {
+                continue;
+            }
+            if (showPlans) {
+                std::cout << "    plan " << (forwardSide ? "avant" : "arrière") << " depuis " << label << " :\n";
+                for (auto& line : rows(conn, "EXPLAIN " + sliceQuery(label, forwardSide, 0))) {
+                    std::cout << "      " << line[0] << "\n";
+                }
+            }
+            const uint64_t end = std::stoull(top[0][1]) + 1;
+            for (uint64_t from = 0; from < end; from += slice) {
+                for (auto& row : rows(conn, sliceQuery(label, forwardSide, from))) {
+                    out.emplace(row[0], Reading(row.begin() + 1, row.end()));
+                }
+            }
+        }
+    };
     std::multimap<std::string, Reading> forward, backward;
-    for (auto& [label, offset] : sources) {
-        for (auto& row : rows(conn, "MATCH (a:`" + label + "`)-[r:`" + name +
-                                        "`]->(b) WHERE offset(id(a)) = " + offset +
-                                        " RETURN id(r), " + projection + ";")) {
-            forward.emplace(row[0], Reading(row.begin() + 1, row.end()));
-        }
+    read(fromLabels, true, forward);
+    read(toLabels, false, backward);
+    std::set<std::string> forwardIds, backwardIds, unionIds;
+    for (auto& [rel, reading] : forward) {
+        forwardIds.insert(rel);
+        unionIds.insert(rel);
     }
-    for (auto& [label, offset] : destinations) {
-        for (auto& row : rows(conn, "MATCH (a)-[r:`" + name + "`]->(b:`" + label +
-                                        "`) WHERE offset(id(b)) = " + offset + " RETURN id(r), " +
-                                        projection + ";")) {
-            backward.emplace(row[0], Reading(row.begin() + 1, row.end()));
-        }
+    for (auto& [rel, reading] : backward) {
+        backwardIds.insert(rel);
+        unionIds.insert(rel);
+    }
+    uint64_t lost = 0;
+    for (auto& rel : unionIds) {
+        lost += forwardIds.count(rel) == 0 || backwardIds.count(rel) == 0;
     }
     uint64_t oneSide = 0, twice = 0, ends = 0;
     std::vector<uint64_t> gaps(properties.size(), 0);
@@ -137,9 +180,11 @@ bool check(Connection& conn, const std::string& name) {
     for (auto g : gaps) {
         gap = gap || g > 0;
     }
-    std::cout << name << " : " << sources.size() << " sources, " << destinations.size()
-              << " destinations ; sens avant " << forward.size() << ", sens arrière "
-              << backward.size() << (gap ? " — ÉCART" : " — égales") << "\n";
+    std::cout << name << " : " << fromLabels.size() << " étiquettes sources, " << toLabels.size()
+              << " destinations ; lectures avant " << forward.size() << ", arrière " << backward.size()
+              << (gap ? " — ÉCART" : " — égales") << "\n";
+    std::cout << "    comptes : avant " << forwardIds.size() << ", arrière " << backwardIds.size() << ", union "
+              << unionIds.size() << ", perdues d'un seul sens " << lost << "\n";
     if (oneSide > 0) {
         std::cout << "    " << oneSide << " relations d'un seul côté\n";
     }
@@ -164,6 +209,9 @@ bool check(Connection& conn, const std::string& name) {
 } // namespace
 
 int main(int argc, char** argv) {
+    if (const char* plans = std::getenv("CHECK_REL_PLANS"); plans && std::string(plans) == "1") {
+        showPlans = true;
+    }
     if (argc < 2) {
         std::cerr << "usage : check_rel_directions <base> [table…]\n";
         return 2;
