@@ -330,3 +330,11 @@ reste meilleur et garde le sans-filtre), par chemin 2 154 → 1 299, par langage
 de la base d'avant) ; plus de projection de 2,9 Mo ; mémoire plate à 20 Gio au filtré (MALLOC_ARENA_MAX=2 à
 mesurer), B (le drapeau tombé) à l'OOM : deux tickets. Après le dense d'embarquement (29), avant la chaîne
 Rust. Le fils du moteur de G est vert sur sa pile sous 373b5477b ; luciepc contrôle encore ses deux bases.
+
+**21 h 3x — arbre principal a le « à toi »** : ses deux lots (sans-filtre e1857b85b + 1b c9a86e006, 11
+commits) en **un seul push**, puisque la passe (verte à 21 h 09, lue à 21 h 35 : une passe détachée se
+relit à l'heure) a testé la tête de 1b ; PILE_AVANT=8105b7f02. Puis G (fils, sur c9a86e006), codeparsers
+(sans rejeu), archi, 96, le crochet, le `IN`, (B), garde-pile-3, le dense, le prédicat, la chaîne Rust.
+La bascule : le portable réveillé sous 373b5477b ; **un écart sur code-lourd** à luciepc (24 relations,
+les deux index d'une table de relations en désaccord, antérieur à la lib neuve) ; décision c7 : la
+bascule continue, la base se répare dans la fenêtre d'hotfixs (reconstruction des trois tables sur copie).
