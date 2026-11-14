@@ -1026,6 +1026,13 @@ fn cypher_value_to_literal(value: &CypherValue) -> String {
     }
 }
 
+/// **Les paramètres en littéraux, bornés** (2a′-2) : jamais une grande liste en clair dans un Cypher,
+/// dont l'analyse coûte environ 50 Kio par élément (ticket du 14 novembre 2026). Pas encore bornée :
+/// le témoin `une_grande_liste_ne_s_ecrit_pas_en_clair` la voit rouge.
+pub(crate) fn inline_params_borne(query: &str, params: &[QueryParam]) -> Result<String, String> {
+    Ok(inline_params(query, params))
+}
+
 /// Replace `$param_name` placeholders with literal values in a Cypher query string.
 pub(crate) fn inline_params(query: &str, params: &[QueryParam]) -> String {
     // One pass: inserted string contents must never become parameter placeholders.
@@ -3696,3 +3703,23 @@ mod tests_requete_longue {
         assert!(bound_word_terms(&"Mot mot MOT ".repeat(100)).is_none());
     }
 }
+
+#[cfg(test)]
+mod tests_des_littéraux_bornés {
+    use super::*;
+
+    /// **Jamais une grande liste en clair dans un Cypher** (2a′-2, page 05, § 4) : analyser un Cypher
+    /// à 72 652 littéraux prend 3,6 Gio (ticket du 14 novembre 2026). Une liste de 10 000 éléments est
+    /// refusée par une erreur qui le dit ; une petite liste passe.
+    #[test]
+    fn une_grande_liste_ne_s_ecrit_pas_en_clair() {
+        let requete = "MATCH (n) WHERE n._uuid IN $p RETURN n";
+        let grande = CypherValue::List((0..10_000).map(|i| CypherValue::String(format!("u{i}"))).collect());
+        let r = inline_params_borne(requete, &[QueryParam::new("p", grande)]);
+        assert!(r.is_err(), "une liste de 10 000 éléments s'est écrite en clair : {} octets", r.map(|s| s.len()).unwrap_or(0));
+        let petite = CypherValue::List((0..10).map(|i| CypherValue::String(format!("u{i}"))).collect());
+        let r = inline_params_borne(requete, &[QueryParam::new("p", petite)]).expect("une petite liste passe");
+        assert!(r.contains("'u9'"), "{r}");
+    }
+}
+

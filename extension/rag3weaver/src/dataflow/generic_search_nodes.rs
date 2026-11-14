@@ -3027,6 +3027,14 @@ fn occurrence_mask_options(
             rows.rows.into_iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).collect()
         }
     };
+    // Le compte des résolutions du masque en liste (2a′-2) : un témoin y lit qu'il ne sert plus.
+    let visibilite = match vue_de(ctx) {
+        Some(v) => crate::read_view::ReadCatalog::visibilite(v.as_ref()).cloned(),
+        None => ctx.service::<Arc<Mutex<Catalog>>>("catalog").and_then(|c| c.lock().ok().and_then(|c| c.generations.clone())), // L4 : repli sans vue
+    };
+    if let Some(v) = &visibilite {
+        v.ensembles.compter_une_resolution();
+    }
     // La relation canonique est imposée par le contrat, jamais choisie parmi
     // d'autres liens entre les mêmes entités (ticket des occurrences partagées).
     let query = dialect.derived_references(&target.parent_table, &projection.entity, &projection.relation);
