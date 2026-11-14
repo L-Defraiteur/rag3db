@@ -105,3 +105,21 @@ il ne passe pas par l'index de clé primaire.
 - `transaction_test` et `concurrence_test` entiers.
 - `DdlEveryMinute` ×10 sans `counts-match-commits`.
 - La lib d'après.
+
+## Correctif retenu (c7, 14 nov., 4 h 30 ; Lucie tranche autrement si elle veut)
+
+- **(a)** Le COMMIT refusé s'annule **sous le même verrou**, avant de le rendre. La fenêtre
+  disparaît, et le témoin concurrent en est la preuve. Le coût est le temps d'une annulation sous
+  le verrou : il est borné, et se mesure comme l'exclusif de la clé primaire.
+- **Une garde** dans `NodeGroup::rollbackInsert` : elle refuse de tronquer au-delà de la dernière
+  ligne versée par la transaction qui annule (`KU_ASSERT` en debug, erreur en Release). Si une
+  autre voie rouvre la fenêtre, elle rougit au lieu de perdre des lignes.
+- **(b)**, ne retirer que ses lignes sans tronquer, reste la forme d'après, si (a) coûte trop
+  sous charge.
+
+Après la pose du matin :
+
+1. `RefusedCommitRollback` rouge puis vert 20 sur 20 ;
+2. `transaction_test` et `concurrence_test` entiers ;
+3. `DdlEveryMinute` ×10, `counts-match-commits` vert partout ;
+4. la lib d'après, à ce hash.
