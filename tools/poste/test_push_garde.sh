@@ -57,7 +57,7 @@ pile() { # pile <attendu: tenue|arret> <description> [motif] : juge la pile pré
   local sortie rc motif=${3:-}
   sortie=$(bash "$GARDE" --pile "$P1" "$P2T" "$M" "$TETE" 2>&1); rc=$?;
   if [ "$1" = arret ] && [ -z "$motif" ]; then echo "ROUGE  pile arret sans motif attendu : $2"; rouge=1; return; fi
-  if { [ "$1" = tenue ] && [ $rc = 0 ]; } || { [ "$1" = arret ] && [ $rc != 0 ] && echo "$sortie" | grep -qF -- "$motif"; }; then echo "vert   pile $1 : $2"
+  if { [ "$1" = tenue ] && [ $rc = 0 ] && { [ -z "$motif" ] || echo "$sortie" | grep -qF -- "$motif"; }; } || { [ "$1" = arret ] && [ $rc != 0 ] && echo "$sortie" | grep -qF -- "$motif"; }; then echo "vert   pile $1 : $2"
   else echo "ROUGE  pile, attendu $1 (rc $rc) : $2 — $sortie"; rouge=1; fi
 }
 preparer_pile() { # le master d'origine, P1 sur lui, P2 sur P1 (le commit testé)
@@ -69,7 +69,7 @@ preparer_pile() { # le master d'origine, P1 sur lui, P2 sur P1 (le commit testé
 preparer_pile
 git checkout -q -B maitre "$P1"; M=$(git rev-parse HEAD)
 git checkout -q -B p2b "$P2T"; git rebase -q --onto "$M" "$P1" >/dev/null 2>&1; TETE=$(git rev-parse HEAD)
-pile tenue "P1 atterri tel quel, P2 reposé dessus"
+pile tenue "P1 atterri tel quel, P2 reposé dessus (le range-diff jugé imprimé)" "  = égal :"
 # 2. La pile a changé : P1 a atterri avec un autre code que celui sur lequel P2 a été rejoué.
 git checkout -q -B maitre "$M0"; echo 'fn p1() { autre(); }' > extension/rag3weaver/src/p1.rs; git add -A; git commit -qm "p1 changé"; M=$(git rev-parse HEAD)
 git checkout -q -B p2b "$P2T"; git rebase -q --onto "$M" "$P1" >/dev/null 2>&1; TETE=$(git rev-parse HEAD)
@@ -78,7 +78,7 @@ pile arret "P1 a atterri avec un autre code : la pile a changé" "la pile a chan
 git checkout -q -B maitre "$P1"; M=$(git rev-parse HEAD)
 git checkout -q -B p2b "$P2T"; git rebase -q --onto "$M" "$P1" >/dev/null 2>&1
 echo '# ticket' > extension/rag3weaver/docs/ticket.md; git add -A; git commit -qm "ticket"; TETE=$(git rev-parse HEAD)
-pile tenue "un commit de .md ajouté après le rejeu"
+pile tenue "un commit de .md ajouté après le rejeu" "  > toléré, .md seuls :"
 # 4. Du code ajouté après le rejeu : refusé.
 echo 'fn tard() {}' > extension/rag3weaver/src/tard.rs; git add -A; git commit -qm "code tardif"; TETE=$(git rev-parse HEAD)
 pile arret "un commit de code ajouté après le rejeu" "un commit ajouté après le rejeu touche autre chose"
@@ -87,7 +87,7 @@ git checkout -q -B maitre "$P1"; mkdir -p extension/rag3weaver/docs; echo '- aut
 git checkout -q -B p2b "$P2T"; git rebase -q --onto "$M" "$P1" >/dev/null 2>&1 || { printf -- '- autre lot\n- p2\n' > extension/rag3weaver/docs/nouveautes.md; git add -A; GIT_EDITOR=true git rebase --continue >/dev/null 2>&1; }
 TETE=$(git rev-parse HEAD)
 git range-diff --no-color --creation-factor=100 "$P1..$P2T" "$M..$TETE" | grep -q ' ! ' || { echo "ROUGE  le cas 5 n'a pas produit de « ! » : il ne prouve rien"; rouge=1; }
-pile tenue "un conflit de nouveautes.md résolu au rebase (! sur des .md seuls)"
+pile tenue "un conflit de nouveautes.md résolu au rebase (! sur des .md seuls)" "  ! toléré, ne diffère que par des .md :"
 # 6. Un commit du lot changé hors .md au rebase : refusé.
 git checkout -q -B p2b "$P2T"; git rebase -q --onto "$M" "$P1" >/dev/null 2>&1 || { printf -- '- autre lot\n- p2\n' > extension/rag3weaver/docs/nouveautes.md; git add -A; GIT_EDITOR=true git rebase --continue >/dev/null 2>&1; }
 echo 'fn p2() { change(); }' > extension/rag3weaver/src/p2.rs; git add -A; git commit -q --amend --no-edit; TETE=$(git rev-parse HEAD)
@@ -169,6 +169,12 @@ d=$(bash "$GARDE" --derive "$D"); rc=$?
 if [ $rc = 0 ] && echo "$d" | grep -qx "garde à jour"; then echo "vert   dérive : garde identique, « garde à jour »"; else echo "ROUGE  dérive identique : $d"; rouge=1; fi
 echo "# une ligne de plus" >> tools/poste/push_garde.sh
 d=$(bash "$GARDE" --derive "$D"); rc=$?
-if [ $rc = 0 ] && echo "$d" | grep -q "^garde en retard sur le dépôt"; then echo "vert   dérive : garde différente, « garde en retard », sans refus"; else echo "ROUGE  dérive différente : $d"; rouge=1; fi
+if [ $rc = 0 ] && echo "$d" | grep -q "la copie exécutée porte ce que le dépôt n'a pas encore"; then echo "vert   dérive : la copie exécutée en avance sur le dépôt, dit dans ce sens, sans refus"; else echo "ROUGE  dérive, copie en avance : $d"; rouge=1; fi
+# le dépôt a changé la garde depuis la copie : la copie exécutée est une version passée de son historique
+cp "$GARDE" tools/poste/push_garde.sh; git add tools/poste/push_garde.sh; git commit -qm "garde v1"
+echo "# le dépôt change la garde" >> tools/poste/push_garde.sh; git add tools/poste/push_garde.sh; git commit -qm "garde v2"
+d=$(bash "$GARDE" --derive "$D"); rc=$?
+if [ $rc = 0 ] && echo "$d" | grep -q "le dépôt a changé la garde depuis la copie exécutée"; then echo "vert   dérive : le dépôt en avance sur la copie, dit dans ce sens, sans refus"; else echo "ROUGE  dérive, dépôt en avance : $d"; rouge=1; fi
+git checkout -q "$BASE" 2>/dev/null
 rm -f tools/poste/push_garde.sh
 exit $rouge
