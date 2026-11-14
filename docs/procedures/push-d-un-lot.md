@@ -182,6 +182,11 @@ se jouent par `python3 scripts/test_confiner_validation.py`, sans Cargo/bus rée
   autorité** : un lot ne peut pas affaiblir la garde qui le juge. Elle dit à chaque push son hash et celui
   du dépôt, et « garde en retard sur le dépôt » quand ils diffèrent, sans refuser. **La recopie au cache des
   deux postes se fait après la relecture du changement et sur le mot de l'orchestration, jamais au push.**
+  **Un dossier de journaux neuf par passe** (14 novembre 2026, relecture de recherche sur garde-pile) : la garde
+  cherche la lib de la passe dans tous les `*.log` de ce dossier, et ne sait pas quel journal est de quelle
+  passe. Un vieux journal qui nomme la même lib masquerait une passe dont aucun journal n'en nomme. Une passe
+  écrit donc dans un dossier vide (le renommer en `<dossier>.vieux` avant de relancer), et `resume.log` y est
+  le dernier fichier écrit.
 - **Le garde du rebase en conflit**, juste après le rebase et avant toute lecture de HEAD :
 
   ```bash
