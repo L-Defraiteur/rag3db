@@ -1528,6 +1528,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "toml",
  "tree-sitter",
  "tree-sitter-bash",
  "tree-sitter-c",
