@@ -140,3 +140,59 @@ Aucun pour l'instant. Il faudrait :
   (l'arrêt de l'hôte écrit les journaux en attente et attend leurs fils, ticket fermé
   `closed/2026-11-09-le-journal-des-runs-ecrit-apres-l-arret-de-son-hote.md`). Restent les cinq
   suites de dette fixe et e2e_tx_par_paquet_arret en rouge connu (le CSV d'un COPY tué).
+
+## Le 14 novembre 2026, vers 14 h : ce qui reste dans /tmp aux deux postes (hotfixs, lecture seule)
+
+Inventaire par motif de nom, avec la taille réelle (blocs), le nombre d'entrées et l'âge de la plus
+vieille. On ouvre un dossier anonyme pour lire ce qu'il contient, sans rien effacer. Au portable,
+`/tmp` est un tmpfs de 61 Gio, rempli à 16 Gio. **À luciepc, `/tmp` est sur le disque** (ext4 sur le
+NVMe), et non en mémoire.
+
+**Portable : 14,9 Gio au total, dont 1,9 Gio de plus de 24 h, en 14 236 entrées.**
+
+| groupe | taille | entrées | dont > 24 h | depuis | à qui, d'après le nom ou le contenu |
+|---|---:|---:|---:|---|---|
+| `claude-1000/` | 7,0 Gio | 1 | 0 | 13/11 | dossiers des sessions Claude Code : sairen 3,0 Gio, rag3db 2,0 Gio (dont la session `25b7ff4b…` 1,7 Gio), `~` 1,9 Gio. Ce ne sont pas des tests. |
+| `jest_rs/` | 5,6 Gio | 1 | 0 | 13/11 | cache de jest (haste-map) du dépôt sairen, hors de rag3db |
+| `tmpxxxxxxxx` Python, à `outils/` | 961 Mio | 1 150 | 775 Mio | 09/11 | Sairen, hors de rag3db |
+| `tmpxxxxxxxx` Python, à `secrets/` | 43 Mio | 1 025 | 39 Mio | 09/11 | Sairen, tests de la voix ; **ils contiennent des clés LiveKit (`LIVEKIT_API_SECRET`) en clair dans `/tmp`** |
+| `tmpxxxxxxxx` Python, audio et texte | 18 Mio | 2 481 | 2 Mio | 09/11 | Sairen, cache de la synthèse vocale (`.pcm`, « Maison Aurèle, bonsoir. ») |
+| `.tmpXXXXXX`, profils Chrome | 327 Mio | 2 233 | 251 Mio | 07/11 | `src/daemon_host/navigateur.rs` (`user_data_dir`) |
+| `com.google.Chrome…url_fetcher…` | 253 Mio | 5 497 | 162 Mio | 06/11 | Chrome, lancé par les mêmes tests ou par l'utilisatrice |
+| `.tmpXXXXXX`, tests rag3weaver | ≈ 455 Mio | ≈ 380 | ≈ 340 Mio | 07/11 | dossiers à `config`, `data`, `petit-depot`, `code`, `depot`, `taches`, `chats` ou `runs` : `src/daemon_host/` (`ide_sur_un_depot`, `teammate_tests`, `chat_qui_code`, `mes_recherches`, `worktrees`, `ide_par_le_flux`) et `tests/e2e_equipier.rs` |
+| `rag3weaver-cibles-de-test-*` | ┐ | 268 | | | `src/commande.rs` |
+| `rag3weaver-hook-temoins-*` | ├ 167 Mio | 165 | 131 Mio | 07/11 | `src/claude_code_hook.rs` |
+| `rag3weaver-etat-des-temoins-*` | ┘ | 86 | | | `src/builtin_templates.rs` |
+| `rag3weaver_cache/` | 129 Mio | 1 | 129 Mio | 09/11 | l'ancien cache par défaut de `Catalog`, que le lot du 8 novembre a sorti de `/tmp` : un reste d'un binaire plus ancien |
+| `lucivy-demo-index*` | 75 Mio | 3 | 0 | 11/11 | lucivy |
+
+**luciepc : 6,3 Gio au total, dont 3,2 Gio de plus de 24 h, en 14 353 entrées.**
+
+| groupe | taille | entrées | dont > 24 h | depuis | à qui |
+|---|---:|---:|---:|---|---|
+| `.tmpXXXXXX`, profils Chrome | 2,9 Gio | 2 298 | 1,9 Gio | 07/11 | `src/daemon_host/navigateur.rs` |
+| `org.chromium…url_fetcher…` et autres `org.chromium…` | 0,55 Gio | 9 208 | 0,28 Gio | 07/11 | Chromium des mêmes tests |
+| `test_rag3db_clone` | 574 Mio | 1 | 574 Mio | 07/11 | lucivy (`lucivy_core/tests/test_fuzzy_monotonicity.rs`, `test_playground_repro.rs`) |
+| `test_monotonicity_segments`, `test_playground_repro`, `test_merge_contains_with` et `_without`, `test_fuzzy_ground_truth`, `test_regex_ground_truth` | 1,17 Gio | 6 | 0 | 14/11 | lucivy, tests du jour (`lucivy_core/tests/`), sous des noms fixes |
+| `.tmpXXXXXX`, tests rag3weaver | 478 Mio | 840 | 212 Mio | 07/11 | `src/daemon_host/…`, comme au portable |
+| `rag3weaver-bulk*` | 283 Mio | 40 | 196 Mio | 07/11 | `tests/e2e_code.rs` |
+| `rag3weaver_cache/` | 101 Mio | 1 | 101 Mio | 11/11 | l'ancien cache par défaut de `Catalog` |
+| `rag3weaver-etat-des-temoins-*` | 52 Mio | 213 | 13 Mio | 09/11 | `src/builtin_templates.rs` |
+| `rag3weaver-cibles-de-test-*` | 14 Mio | 623 | 14 Mio | 08/11 | `src/commande.rs` |
+
+**Les suites qui récidivent** (elles laissent encore des dossiers datés d'après le 8 novembre) :
+
+1. `src/daemon_host/navigateur.rs`, par ses profils Chrome : la plus lourde, 2,9 Gio à luciepc et
+   0,3 Gio au portable.
+2. Les tests de `src/daemon_host/` et `tests/e2e_equipier.rs` (`.tmpXXXXXX` à `taches`, `chats`,
+   `petit-depot`…).
+3. `src/commande.rs` (`rag3weaver-cibles-de-test-*`), `src/claude_code_hook.rs`
+   (`rag3weaver-hook-temoins-*`), `src/builtin_templates.rs` (`rag3weaver-etat-des-temoins-*`).
+4. `tests/e2e_code.rs` (`rag3weaver-bulk*`).
+5. Hors de rag3weaver : les tests de `lucivy_core`, sous des noms fixes ; Sairen, ses tests Python et
+   son cache jest.
+
+**Rien n'a été effacé.** Ce qui est à une session se dit à elle. À luciepc, les tests du jour de
+lucivy tournent peut-être encore. Les orphelins de plus de 24 h sont à lister pour le mot de Lucie :
+1,9 Gio au portable et 3,2 Gio à luciepc, surtout des profils Chrome et des dossiers de tests
+rag3weaver. Les deux restes de `rag3weaver_cache` ne servent plus.
