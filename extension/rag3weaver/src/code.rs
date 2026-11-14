@@ -5299,5 +5299,13 @@ mod tests_des_generations {
         let cat = base_neuve();
         assert_eq!(cat.read_meta_key(SCOPE_FORM_KEY).unwrap().as_deref(), Some(SCOPE_FORM_GENERATIONS));
         assert_eq!(scope_form(&cat).unwrap(), ScopeForm::Generations);
+        // **L'entité `Generation`** (page 03, § 2) : la génération 0 de la couche du backend est
+        // enregistrée, et c'est elle que les lectures voient.
+        let g = cat
+            .conn()
+            .execute(&format!("MATCH (g:{t}) RETURN g.couche, g.rang ORDER BY g.rang", t = crate::generations::TABLE))
+            .unwrap();
+        assert_eq!(g.rows, vec![vec![CypherValue::String(COUCHE_DU_BACKEND.into()), CypherValue::Int(0)]]);
+        assert_eq!(cat.generations.as_ref().map(|v| (v.couche.as_str(), v.rang)), Some((COUCHE_DU_BACKEND, 0)));
     }
 }
