@@ -31,7 +31,7 @@
 //! instantané neuf (`Backend::execute_plan_avec`), en le disant
 //! (`instantane_renouvele`). Les ruptures sont comptées ([`ReadPool::rompus`]).
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
@@ -58,6 +58,10 @@ pub fn refus_pool_plein(plafond: usize) -> String {
 /// L'erreur d'une requête dont l'instantané s'est rompu.
 pub const INSTANTANE_ROMPU: &str = "instantané de lecture rompu (ouverture refusée) : la requête n'est pas lue hors de lui";
 
+/// Pour les témoins : l'erreur d'origine d'une ouverture refusée par le crochet.
+#[cfg(test)]
+pub(crate) const CAUSE_DU_CROCHET: &str = "BEGIN READ ONLY refusé par le crochet de test";
+
 /// Le plafond du pool : `RAG3WEAVER_READ_POOL`, 8 par défaut. **0 coupe les
 /// instantanés** : pas de pool, les lectures partent requête par requête comme
 /// avant L6 (un interrupteur d'exploitation, et la mesure à binaire égal).
@@ -83,6 +87,10 @@ pub struct ReadPool {
     /// Pour les témoins : tant d'ouvertures d'instantané à refuser.
     #[cfg(test)]
     a_rompre: Arc<AtomicU64>,
+    /// Pour les témoins : les ouvertures refusées le sont sur une base à rouvrir.
+    #[cfg(test)]
+    #[allow(dead_code)]
+    a_rouvrir: Arc<AtomicBool>,
 }
 
 impl ReadPool {
@@ -104,6 +112,8 @@ impl ReadPool {
             rompus: Arc::new(AtomicU64::new(0)),
             #[cfg(test)]
             a_rompre: Arc::new(AtomicU64::new(0)),
+            #[cfg(test)]
+            a_rouvrir: Arc::new(AtomicBool::new(false)),
         }))
     }
 
@@ -121,6 +131,8 @@ impl ReadPool {
             rompus: self.rompus.clone(),
             #[cfg(test)]
             a_rompre: self.a_rompre.clone(),
+            #[cfg(test)]
+            a_rouvrir: self.a_rouvrir.clone(),
         });
         Some(Instantane { conn: Some(conn), pool: self.clone() })
     }
@@ -182,6 +194,15 @@ impl ReadPool {
     /// Pour les témoins : les `n` prochaines ouvertures d'instantané sont refusées.
     #[cfg(all(test, feature = "rag3db-native"))]
     pub(crate) fn rompre_les_prochaines(&self, n: u64) {
+        self.a_rouvrir.store(false, Ordering::SeqCst);
+        self.a_rompre.store(n, Ordering::SeqCst);
+    }
+
+    /// Pour les témoins : les `n` prochaines ouvertures refusées, la base dite à
+    /// rouvrir (ce que `must_reopen` dirait d'une base empoisonnée).
+    #[cfg(all(test, feature = "rag3db-native"))]
+    pub(crate) fn rompre_sur_une_base_a_rouvrir(&self, n: u64) {
+        self.a_rouvrir.store(true, Ordering::SeqCst);
         self.a_rompre.store(n, Ordering::SeqCst);
     }
 
@@ -249,6 +270,9 @@ pub struct ConnDInstantane {
     rompus: Arc<AtomicU64>,
     #[cfg(test)]
     a_rompre: Arc<AtomicU64>,
+    #[cfg(test)]
+    #[allow(dead_code)]
+    a_rouvrir: Arc<AtomicBool>,
 }
 
 impl ConnDInstantane {
@@ -407,6 +431,21 @@ mod tests {
         rendue.join().unwrap();
         assert!(b.is_some(), "l'appel a attendu la connexion rendue, il ne lit pas sans instantané");
         assert_eq!(p.sans_instantane(), 0, "aucun appel n'est passé sans instantané");
+    }
+
+    /// **Une ouverture refusée dit son erreur d'origine** : la requête échoue
+    /// sous l'instantané rompu, et la cause du refus du BEGIN reste lisible.
+    /// Avant, elle était remplacée par la seule phrase de la rupture, et une base
+    /// à rouvrir se lisait comme un refus passager.
+    #[test]
+    fn une_ouverture_refusee_dit_son_erreur_d_origine() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_ecrivain, p) = pool(dir.path(), 2);
+        p.rompre_les_prochaines(1);
+        let i = p.instantane(ATTENTE).expect("un instantané");
+        let e = i.conn().execute("MATCH (t:T) RETURN count(t)").expect_err("rompu, la requête échoue");
+        assert!(e.to_string().contains(INSTANTANE_ROMPU), "{e}");
+        assert!(e.to_string().contains(CAUSE_DU_CROCHET), "l'erreur d'origine du BEGIN reste lisible : {e}");
     }
 
     /// **Une ouverture refusée rompt l'instantané** : ses requêtes échouent, et
