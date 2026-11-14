@@ -402,14 +402,36 @@ pub fn resoudre_la_pile(racine: &std::path::Path, declaration: &Declaration, sou
     let lignes: Vec<std::collections::HashSet<String>> = couches.iter().map(|(r, _)| ligne(&r.pointe, false).into_iter().collect()).collect();
     let n = couches.len();
     let mut arete = vec![vec![false; n]; n];
+    // La plus récente fusion de Y qui apporte la ligne de X (la ligne de premier parent est rendue de la
+    // pointe vers le passé : la première trouvée).
+    let mut fusion_de: Vec<Vec<Option<String>>> = vec![vec![None; n]; n];
     for (y, (ry, _)) in couches.iter().enumerate() {
         for fusion in ligne(&ry.pointe, true) {
-            for apporte in fusion.split_whitespace().skip(2) {
+            let mut mots = fusion.split_whitespace();
+            let Some(m) = mots.next() else { continue };
+            for apporte in mots.skip(1) {
                 for x in (0..n).filter(|&x| x != y) {
                     if lignes[x].contains(apporte) {
                         arete[x][y] = true;
+                        fusion_de[x][y].get_or_insert_with(|| m.to_string());
                     }
                 }
+            }
+        }
+    }
+    // Une couche **contenue** dans une autre (sa pointe est un ancêtre strict de l'autre pointe) ne compte
+    // dans aucun flux (décision de c7, 14 nov.) ; **finie** dans une autre quand celle-ci l'a fusionnée.
+    let contenue_dans = |i: usize, j: usize| -> bool {
+        i != j && couches[i].0.pointe != couches[j].0.pointe && est_ancetre(&couches[i].0.pointe, &couches[j].0.pointe)
+    };
+    let contenue: Vec<bool> = (0..n).map(|i| (0..n).any(|j| contenue_dans(i, j))).collect();
+    let finie: Vec<Vec<bool>> = (0..n).map(|i| (0..n).map(|j| arete[i][j] && contenue_dans(i, j)).collect()).collect();
+    let finie_dans = |i: usize, j: usize| -> bool { finie[i][j] };
+    for i in 0..n {
+        if contenue[i] {
+            for j in 0..n {
+                arete[i][j] = false;
+                arete[j][i] = false;
             }
         }
     }
@@ -455,13 +477,31 @@ pub fn resoudre_la_pile(racine: &std::path::Path, declaration: &Declaration, sou
             Parente::Aucune => ParenteResolue::Aucune,
             Parente::Declaree(p) => ParenteResolue::Declaree(nom_complet(p)),
             Parente::Inferee if dans_un_flux[i] => ParenteResolue::DansUnFlux,
+            // Une couche finie : sa parente est la suivie qui l'a fusionnée, sa base la fourche avec ce que
+            // celle-ci était avant la fusion.
+            Parente::Inferee if (0..n).any(|j| finie_dans(i, j)) => {
+                let dans: Vec<usize> = (0..n).filter(|&j| finie_dans(i, j)).collect();
+                match dans.as_slice() {
+                    [j] => {
+                        let avant = fusion_de[i][*j].as_deref().map(|m| format!("{m}^1")).unwrap_or_else(|| couches[*j].0.pointe.clone());
+                        let base = merge_base(&r.pointe, &avant).unwrap_or_else(|| r.pointe.clone());
+                        ParenteResolue::Inferee { parente: couches[*j].0.nom.clone(), base }
+                    }
+                    plusieurs => {
+                        let mut noms: Vec<String> = plusieurs.iter().map(|&j| couches[j].0.nom.clone()).collect();
+                        noms.sort();
+                        avertissements.push(format!("couche « {} » ambiguë : fusionnée dans {} — à déclarer", r.nom, noms.join(" et ")));
+                        ParenteResolue::Ambigue(noms)
+                    }
+                }
+            }
             Parente::Inferee => {
                 // Les candidates : les autres suivies dont la fourche avec celle-ci n'est pas sa propre pointe
                 // (une suivie qui la contient est une enfant, pas une parente).
                 let candidates: Vec<(String, String)> = couches
                     .iter()
                     .enumerate()
-                    .filter(|(j, _)| *j != i)
+                    .filter(|(j, _)| *j != i && !finie_dans(*j, i))
                     .filter_map(|(_, (p, _))| merge_base(&r.pointe, &p.pointe).filter(|b| *b != r.pointe).map(|b| (p.nom.clone(), b)))
                     .collect();
                 let plus_recentes: Vec<&(String, String)> = candidates
@@ -474,8 +514,14 @@ pub fn resoudre_la_pile(racine: &std::path::Path, declaration: &Declaration, sou
                     plusieurs => {
                         let mut noms: Vec<String> = plusieurs.iter().map(|(p, _)| p.clone()).collect();
                         noms.sort();
-                        avertissements.push(format!("couche « {} » ambiguë : sa parente est {} — à déclarer", r.nom, noms.join(" ou ")));
-                        ParenteResolue::Ambigue(noms)
+                        let pointe_de = |nom: &str| couches.iter().find(|(c, _)| c.nom == nom).map(|(c, _)| c.pointe.clone());
+                        let premiere = pointe_de(&noms[0]);
+                        if noms.iter().all(|n| pointe_de(n) == premiere) {
+                            ParenteResolue::Egales(noms)
+                        } else {
+                            avertissements.push(format!("couche « {} » ambiguë : sa parente est {} — à déclarer", r.nom, noms.join(" ou ")));
+                            ParenteResolue::Ambigue(noms)
+                        }
                     }
                 }
             }
