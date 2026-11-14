@@ -661,6 +661,13 @@ pub const SCOPE_CONTENT_FORMAT: &str = "code-scope-v1";
 pub const SCOPE_FORM_KEY: &str = "code_scope_form";
 /// L'estampille d'une base à versions de scope.
 pub const SCOPE_FORM_VERSIONS: &str = "code-scope-v1/content";
+/// **L'estampille d'une base à versions et à générations** (2a′) : `Scope` et `File` portent
+/// `_couche`, `_depuis` et `_jusqu_a`, et une ligne n'est visible que dans sa couche, à un rang où
+/// elle est vivante.
+pub const SCOPE_FORM_GENERATIONS: &str = "code-scope-v1/content/generations";
+/// **La couche des lignes d'aujourd'hui** : la suivie (`tracked`) qui couvre l'arbre que le backend
+/// indexe, sa couche de travail comprise.
+pub const COUCHE_DU_BACKEND: &str = "backend";
 /// Ce que dit une base de code d'avant les versions de scope.
 pub const SANS_VERSIONS: &str = "base de code sans versions de scope (forme d'avant le 13 novembre 2026) : \
     chaque occurrence garde ses morceaux et ses vecteurs, et un contenu identique dans deux fichiers \
@@ -677,6 +684,8 @@ pub enum ScopeForm {
     SansVersions,
     /// Aucune table `Scope` : une base neuve, qui recevra l'estampille.
     Neuve,
+    /// Estampillée [`SCOPE_FORM_GENERATIONS`] : des versions, et des générations par couche.
+    Generations,
 }
 
 /// **La forme se lit sur l'estampille, jamais sur le contenu de la base** (ED,
@@ -765,7 +774,7 @@ pub fn scope_chunks(catalog: &Catalog) -> Result<ScopeChunks, CatalogError> {
             chunked_from: format!("{SCOPE}_CHUNKED_FROM"),
             to_scope: format!("(c:{SCOPE}_Chunk)-[:{SCOPE}_CHUNKED_FROM]->(s:{SCOPE})"),
         },
-        ScopeForm::Versions | ScopeForm::Neuve => ScopeChunks {
+        ScopeForm::Versions | ScopeForm::Neuve | ScopeForm::Generations => ScopeChunks {
             table: format!("{SCOPE_CONTENT}_Chunk"),
             parent: SCOPE_CONTENT.to_string(),
             chunked_from: format!("{SCOPE_CONTENT}_CHUNKED_FROM"),
@@ -5247,5 +5256,73 @@ mod tests_du_chemin_de_masse {
         cat.ensure_embedding_model().unwrap();
         let tables: Vec<String> = cat.vector_indexes_of(&ENTITES_EN_MASSE).into_iter().map(|(t, _, _)| t).collect();
         assert!(tables.contains(&format!("{SCOPE_CONTENT}_Chunk")), "{tables:?}");
+    }
+}
+
+/// **Les générations de l'ancre, 2a′-1 : la visibilité** (14 novembre 2026, page
+/// `docs/everything-declarative/14-11-2026/03-le-pas-2a-prime-stocker-les-generations-sans-fuite.md`).
+/// Une base neuve porte `_couche`, `_depuis` et `_jusqu_a` sur `Scope` et `File` ; une ligne n'est
+/// visible que dans sa couche, à un rang où elle est vivante. Toutes les lignes écrites aujourd'hui
+/// sont dans la couche du backend au rang 0 : le prédicat est toujours vrai pour elles.
+#[cfg(all(test, feature = "rag3db-native"))]
+mod tests_des_generations {
+    use super::*;
+    use crate::connection::{CypherValue, QueryParam};
+    use rag3weaver_ir::{Column, Count, Direction, Hop, Predicate, Select};
+
+    fn base_neuve() -> Catalog {
+        let conn = crate::Rag3dbConnection::in_memory().unwrap();
+        let mut cat = Catalog::new(Box::new(conn), Box::new(crate::embedder::HashEmbedder::new(8)), crate::CatalogConfig {
+            allow_mock_embedder: true, embedding_dim: 8, ..Default::default()
+        });
+        cat.initialize().unwrap();
+        register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+        let a = analyze("/virtual", vec![("lib.rs".into(), "fn un() -> u32 {\n    deux()\n}\n\nfn deux() -> u32 {\n    2\n}\n".into())]);
+        cat.ingest_code(&a).unwrap();
+        cat
+    }
+
+    fn texte(v: &CypherValue) -> String {
+        match v { CypherValue::String(s) => s.clone(), autre => format!("{autre:?}") }
+    }
+
+    /// **Témoin 4, le prédicat** : une ligne d'une autre couche, et une ligne retirée au rang 0, ne
+    /// sont vues ni par une sélection, ni par un compte, ni au bout d'un saut.
+    #[test]
+    fn une_ligne_d_une_autre_couche_ou_retiree_n_est_pas_vue() {
+        let cat = base_neuve();
+        let r = cat.execute_raw_with_params("MATCH (s:Scope) WHERE s.name = 'un' RETURN s.file_path, s._uuid", &[]).unwrap();
+        let (fichier, un) = (texte(&r.rows[0][0]), texte(&r.rows[0][1]));
+        for q in [
+            format!("CREATE (:Scope {{_uuid: 'fantome-de-couche', name: 'fantome', file_path: '{fichier}', _couche: 'une-autre-suivie', _depuis: 0}})"),
+            format!("CREATE (:Scope {{_uuid: 'fantome-retire', name: 'retire', file_path: '{fichier}', _couche: '{COUCHE_DU_BACKEND}', _depuis: 0, _jusqu_a: 0}})"),
+            format!("MATCH (a:Scope {{_uuid: '{un}'}}), (b:Scope) WHERE b._uuid IN ['fantome-de-couche', 'fantome-retire'] CREATE (a)-[:CONSUMES]->(b)"),
+        ] {
+            cat.execute_raw_with_params(&q, &[]).unwrap_or_else(|e| panic!("{q} : {e}"));
+        }
+        let d = cat.dialect_arc();
+        let fichier_p = [QueryParam::new("f", CypherValue::String(fichier.clone()))];
+        let filtre = Predicate::Equals { field: "file_path".into(), param: "f".into() };
+        let noms: Vec<String> = cat
+            .execute_raw_with_params(&d.select(&Select::filtered(SCOPE, filtre.clone(), vec![Column::Node("name".into())])).unwrap(), &fichier_p)
+            .unwrap().rows.iter().map(|l| texte(&l[0])).collect();
+        assert!(!noms.iter().any(|n| n == "fantome" || n == "retire"), "une sélection voit une ligne invisible : {noms:?}");
+        assert!(noms.contains(&"un".to_string()) && noms.contains(&"deux".to_string()), "{noms:?}");
+        let compte = cat.execute_raw_with_params(&d.count(&Count::Matching { table: SCOPE.into(), filter: Some(filtre) }).unwrap(), &fichier_p).unwrap();
+        assert_eq!(texte(&compte.rows[0][0]), format!("{:?}", CypherValue::Int(noms.len() as i64)), "le compte voit une ligne invisible");
+        let saut = Hop { returns: vec![Column::Node("name".into())], ..Hop::new(SCOPE, "CONSUMES", SCOPE, Direction::Outgoing) };
+        let atteints: Vec<String> = cat
+            .execute_raw_with_params(&d.hop(&saut).unwrap(), &[QueryParam::new("uuids", CypherValue::List(vec![CypherValue::String(un)]))])
+            .unwrap().rows.iter().map(|l| texte(&l[0])).collect();
+        assert!(!atteints.iter().any(|n| n == "fantome" || n == "retire"), "un saut atteint une ligne invisible : {atteints:?}");
+    }
+
+    /// **Une base neuve porte l'estampille des générations**, et une base de la forme d'avant ne
+    /// gagne pas les colonnes en silence : elle se lit comme avant.
+    #[test]
+    fn une_base_neuve_porte_l_estampille_des_generations() {
+        let cat = base_neuve();
+        assert_eq!(cat.read_meta_key(SCOPE_FORM_KEY).unwrap().as_deref(), Some(SCOPE_FORM_GENERATIONS));
+        assert_eq!(scope_form(&cat).unwrap(), ScopeForm::Generations);
     }
 }
