@@ -83,20 +83,64 @@ impl Saisie {
 
     /// Au début du mot avant le curseur (Ctrl-←, Alt-B) : un mot est une suite
     /// de lettres et de chiffres.
-    pub fn mot_gauche(&mut self) {}
+    pub fn mot_gauche(&mut self) {
+        self.curseur = self.recul(self.curseur, |g| !de_mot(g));
+        self.curseur = self.recul(self.curseur, de_mot);
+    }
 
     /// À la fin du mot après le curseur (Ctrl-→, Alt-F).
-    pub fn mot_droite(&mut self) {}
+    pub fn mot_droite(&mut self) {
+        self.curseur = self.avance(self.curseur, |g| !de_mot(g));
+        self.curseur = self.avance(self.curseur, de_mot);
+    }
 
     /// Efface jusqu'au début du mot avant le curseur, espaces compris (Ctrl-W,
     /// comme un shell : un mot y va jusqu'à l'espace).
-    pub fn effacer_mot_avant(&mut self) {}
+    pub fn effacer_mot_avant(&mut self) {
+        let j = self.recul(self.curseur, |g| g.chars().all(char::is_whitespace));
+        let j = self.recul(j, |g| !g.chars().all(char::is_whitespace));
+        self.texte.replace_range(j..self.curseur, "");
+        self.curseur = j;
+    }
 
     /// Efface jusqu'au début de la ligne (Ctrl-U).
-    pub fn effacer_debut(&mut self) {}
+    pub fn effacer_debut(&mut self) {
+        let fin = self.curseur;
+        self.debut();
+        self.texte.replace_range(self.curseur..fin, "");
+    }
 
     /// Efface jusqu'à la fin de la ligne (Ctrl-K).
-    pub fn effacer_fin(&mut self) {}
+    pub fn effacer_fin(&mut self) {
+        let debut = self.curseur;
+        self.fin();
+        self.texte.replace_range(debut..self.curseur, "");
+        self.curseur = debut;
+    }
+
+    /// Recule depuis `i` tant que le graphème d'avant est `tant_que`.
+    fn recul(&self, mut i: usize, tant_que: impl Fn(&str) -> bool) -> usize {
+        while i > 0 {
+            let j = self.precedent(i);
+            if !tant_que(&self.texte[j..i]) {
+                break;
+            }
+            i = j;
+        }
+        i
+    }
+
+    /// Avance depuis `i` tant que le graphème suivant est `tant_que`.
+    fn avance(&self, mut i: usize, tant_que: impl Fn(&str) -> bool) -> usize {
+        while i < self.texte.len() {
+            let j = self.suivant(i);
+            if !tant_que(&self.texte[i..j]) {
+                break;
+            }
+            i = j;
+        }
+        i
+    }
 
     /// Rend le texte et vide la saisie.
     pub fn prendre(&mut self) -> String {
@@ -152,6 +196,11 @@ impl Saisie {
         }
         (out, col_curseur)
     }
+}
+
+/// Un graphème de mot : il commence par une lettre ou un chiffre.
+fn de_mot(g: &str) -> bool {
+    g.chars().next().is_some_and(char::is_alphanumeric)
 }
 
 #[cfg(test)]
