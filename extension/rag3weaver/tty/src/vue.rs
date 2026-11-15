@@ -538,8 +538,9 @@ impl Vue {
 
     /// La hauteur que veut la zone vivante à `largeur` colonnes : le texte en
     /// cours, la ligne d'état, et la saisie sur au plus [`SAISIE_MAX`] lignes.
-    pub fn hauteur_voulue(&self, _largeur: u16) -> u16 {
-        HAUTEUR
+    pub fn hauteur_voulue(&self, largeur: u16) -> u16 {
+        let n = self.saisie.lignes_affichees((largeur as usize).saturating_sub(2), SAISIE_MAX).lignes.len();
+        2 + n as u16
     }
 
     /// Dessine la zone vivante telle qu'elle est à `maintenant`.
@@ -547,8 +548,28 @@ impl Vue {
         let largeur = zone.width as usize;
         // La fin de la ligne en cours, si elle déborde (elle ne déborde pas : `couper`).
         let en_cours = queue(&self.en_cours, largeur);
-        let (vu, col) = self.saisie.affichage(largeur.saturating_sub(2));
-        let saisie = format!("› {vu}");
+        // La saisie sur les lignes qui restent (au plus SAISIE_MAX) ; vide, elle
+        // dit comment passer à la ligne.
+        let place = (zone.height as usize).saturating_sub(2).clamp(1, SAISIE_MAX);
+        let a = self.saisie.lignes_affichees(largeur.saturating_sub(2), place);
+        let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
+        let mut saisie: Vec<Line> = Vec::new();
+        if self.saisie.est_vide() {
+            let aide = if self.maj_entree { "Maj-Entrée : à la ligne" } else { "Alt-Entrée : à la ligne" };
+            saisie.push(Line::from(vec![Span::raw("› "), Span::styled(queue(aide, largeur.saturating_sub(3)), sourdine)]));
+        } else {
+            let n = a.lignes.len();
+            for (i, l) in a.lignes.iter().enumerate() {
+                let tete = if i == 0 && a.cachees_avant > 0 || i + 1 == n && a.cachees_apres > 0 && i > 0 {
+                    "… "
+                } else if i == 0 {
+                    "› "
+                } else {
+                    "  "
+                };
+                saisie.push(Line::from(format!("{tete}{l}")));
+            }
+        }
         let haut = match &self.repli {
             Some(r) if en_cours.is_empty() => {
                 let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
@@ -559,10 +580,12 @@ impl Vue {
             }
             _ => Line::from(en_cours),
         };
-        let lignes = vec![haut, self.ligne_vivante(largeur, maintenant), Line::from(saisie.clone())];
+        let mut lignes = vec![haut, self.ligne_vivante(largeur, maintenant)];
+        lignes.extend(saisie);
         f.render_widget(Paragraph::new(lignes), zone);
-        let x = zone.x + ((2 + col) as u16).min(zone.width.saturating_sub(1));
-        f.set_cursor_position((x, zone.y + 2));
+        let x = zone.x + ((2 + a.colonne) as u16).min(zone.width.saturating_sub(1));
+        let y = zone.y + (2 + a.ligne as u16).min(zone.height.saturating_sub(1));
+        f.set_cursor_position((x, y));
     }
 }
 

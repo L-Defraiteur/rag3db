@@ -225,8 +225,41 @@ impl Saisie {
     /// repliée à `largeur` colonnes, au plus `max` lignes d'écran autour du
     /// curseur. Rend les lignes montrées, la ligne et la colonne du curseur parmi
     /// elles, et combien de lignes sont cachées au-dessus et au-dessous.
-    pub fn lignes_affichees(&self, _largeur: usize, _max: usize) -> Affichage {
-        Affichage::default()
+    pub fn lignes_affichees(&self, largeur: usize, max: usize) -> Affichage {
+        let (largeur, max) = (largeur.max(2), max.max(1));
+        let mut lignes = vec![String::new()];
+        let mut w = 0;
+        let mut pos = None;
+        for (i, g) in self.texte.grapheme_indices(true) {
+            if g == "\n" {
+                if i == self.curseur {
+                    pos = Some((lignes.len() - 1, w));
+                }
+                lignes.push(String::new());
+                w = 0;
+                continue;
+            }
+            let gw = g.width();
+            if w + gw > largeur {
+                lignes.push(String::new());
+                w = 0;
+            }
+            if i == self.curseur {
+                pos = Some((lignes.len() - 1, w));
+            }
+            lignes.last_mut().map(|l| l.push_str(g));
+            w += gw;
+        }
+        let (ligne, colonne) = pos.unwrap_or_else(|| {
+            // Le curseur au bout : une ligne pleine le pousse à la suivante.
+            if w >= largeur {
+                lignes.push(String::new());
+            }
+            (lignes.len() - 1, if w >= largeur { 0 } else { w })
+        });
+        let debut = (ligne + 1).saturating_sub(max);
+        let fin = (debut + max).min(lignes.len());
+        Affichage { cachees_avant: debut, cachees_apres: lignes.len() - fin, lignes: lignes[debut..fin].to_vec(), ligne: ligne - debut, colonne }
     }
 
     /// Ce qui s'affiche dans `largeur` colonnes, et la colonne du curseur. Un
