@@ -594,6 +594,11 @@ impl Vue {
         self.etat_hote = etat;
     }
 
+    /// Le dernier nom de l'agent vu sur ses lignes.
+    pub fn nom_de_l_agent(&self) -> Option<&str> {
+        None
+    }
+
     /// Une note du terminal lui-même (une coupure du flux, un refus).
     pub fn note(&mut self, t: &str) {
         self.clore();
@@ -1651,6 +1656,17 @@ mod tests {
         assert_eq!(ecrites(&mut v), vec!["[équipier · compte rendu] Autre chose.".to_string()]);
         v.ligne_de_boite(&json!({ "id": "d/t:5", "from": "teammate", "kind": "report", "text": "le pas 4 s'est terminé sans step_done ni réponse" }));
         assert_eq!(ecrites(&mut v), Vec::<String>::new(), "un mot d'hôte seul ne s'écrit pas");
+    }
+
+    /// La vue retient le dernier nom de l'agent vu sur ses lignes (`/nom` seul le dit).
+    #[test]
+    fn the_view_keeps_the_last_agent_name_seen() {
+        let mut v = Vue::new(120, true);
+        assert_eq!(v.nom_de_l_agent(), None);
+        v.ligne_de_boite(&json!({ "id": "d/t:1", "from": "teammate", "kind": "report", "text": "x", "name": "Algareth" }));
+        assert_eq!(v.nom_de_l_agent(), Some("Algareth"));
+        v.ligne_de_boite(&json!({ "id": "d/t:2", "from": "supervisor", "kind": "request", "text": "y", "name": "Lucie" }));
+        assert_eq!(v.nom_de_l_agent(), Some("Algareth"), "seules les lignes de l'agent le nomment");
     }
 
     fn ligne_b(n: usize, from: &str, kind: &str, extra: Value) -> Value {

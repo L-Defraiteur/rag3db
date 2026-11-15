@@ -121,6 +121,16 @@ mod tests {
         l
     }
 
+    /// **L'agent a un nom** (c7, 15 nov.) : une ligne de l'équipier qui porte `name` se dit par lui,
+    /// `[Algareth · compte rendu]` ; sans `name`, « équipier » ; les autres auteurs gardent le leur.
+    #[test]
+    fn a_teammate_line_with_a_name_is_headed_by_that_name() {
+        assert_eq!(en_tete(&ligne(1, "teammate", "report", json!({ "name": "Algareth" }))), "[Algareth · compte rendu] ");
+        assert_eq!(en_tete(&ligne(2, "teammate", "report", json!({ "name": "" }))), "[équipier · compte rendu] ");
+        assert_eq!(en_tete(&ligne(3, "teammate", "report", json!({}))), "[équipier · compte rendu] ");
+        assert_eq!(en_tete(&ligne(4, "supervisor", "request", json!({ "name": "Algareth" }))), "[toi · demande] ", "le nom est celui de l'agent, pas de toi");
+    }
+
     #[test]
     fn what_the_teammate_asks_waits_until_a_line_replies_to_it() {
         let mut b = Boite::default();
