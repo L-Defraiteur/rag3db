@@ -147,6 +147,10 @@ class Gestion(http.server.BaseHTTPRequestHandler):
             self.json({"tools": [{"name": "edit_file", "policy": {"write_files": True}}, {"name": "read_file", "policy": {"read_files": True}}]})
         elif self.path == "/highlight":
             self.json({"ok": True, "language": None, "spans": None})
+        elif self.path == "/faux/ligne":
+            # Une ligne de boîte venue d'ailleurs que la saisie (tty-13) : l'équipier qui écrit « !… ».
+            ligne(corps.get("kind", "report"), corps.get("text", ""), de=corps.get("from", "teammate"))
+            self.json({"ok": True, "result": {}})
         elif self.path == "/faux/marque":
             publier("tokens", {"kind": "Token", "run": "r1", "node": "chat", "seq": 5000, "text": corps.get("texte", ""), "count": 1})
             self.json({"ok": True, "result": {}})
