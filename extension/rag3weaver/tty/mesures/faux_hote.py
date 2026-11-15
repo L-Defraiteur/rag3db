@@ -54,7 +54,12 @@ def pas_scripte():
         time.sleep(0.005)
     for t in ["\n```rust\n", "fn main() {\n", "    println!(\"bonjour\");\n", "}\n", "```\n"]:
         publier("tokens", {"kind": "Token", "run": "r1", "node": "chat", "seq": 999, "text": t, "count": 1})
-    publier("agent", {"kind": "ToolCallStarted", "run": "r1", "agent": "chat", "call_id": "c1", "tool": "edit_file", "arguments": "{}"})
+    # Une lecture longue (tty-11) : un extrait coupé à 4 Ko sur 16, comme l'hôte le rend.
+    corps = "".join(f"{i:05}| let x{i} = {i}; // une ligne assez longue\n" for i in range(1, 401))
+    resultat = json.dumps({"delivery": {"ok": True}, "result": f"**src/demo.rs** — lines 1-400 of 400\nScopes: x\n```\n{corps}```"})
+    publier("agent", {"kind": "ToolCallStarted", "run": "r1", "agent": "chat", "call_id": "c0", "tool": "read_file", "arguments": json.dumps({"path": "src/demo.rs"})})
+    publier("agent", {"kind": "ToolCallFinished", "run": "r1", "agent": "chat", "call_id": "c0", "tool": "read_file", "ok": True, "error_kind": None, "ms": 5, "bytes": 16000, "result_excerpt": resultat[:4096], "truncated": True})
+    publier("agent", {"kind": "ToolCallStarted", "run": "r1", "agent": "chat", "call_id": "c1", "tool": "edit_file", "arguments": json.dumps({"path": "src/demo.rs", "old": "let a = 1;", "new": "let a = 2;"})})
     time.sleep(1.0)  # le Glitch tourne
     publier("agent", {"kind": "ToolCallFinished", "run": "r1", "agent": "chat", "call_id": "c1", "tool": "edit_file", "ok": True, "error_kind": None, "ms": 1000, "bytes": 10})
     publier("agent", {"kind": "RunFinished", "run": "r1", "run_kind": "agent", "ms": 4000, "ok": True})
