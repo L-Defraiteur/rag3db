@@ -64,8 +64,16 @@ fn une_lecture_fautive_ne_defait_pas_la_transaction_de_l_ecrivain() {
 /// **Le témoin de bout en bout** (lot L2) : un écrivain tient le mutex du
 /// catalogue 2 s, avec une transaction ouverte qui retire la définition de
 /// `update`. Pendant ce temps, l'outil `usages` (son gabarit réel, avec la
-/// vue de lecture parmi ses services) répond en moins de 100 ms, avec l'état
+/// vue de lecture parmi ses services) répond sans l'attendre, avec l'état
 /// d'avant (la définition est là), et dit qu'une écriture est en cours.
+///
+/// **Les deux bornes** (ticket recherche du 15 novembre 2026 : 107 ms pour
+/// 100 sous une charge moyenne de 5, vert seul juste après). Attendre
+/// l'écrivain coûterait au moins le reste de ses 2 000 ms, et la garde
+/// absolue est donc de 500 ms. La vitesse se juge contre `usages` sans
+/// écrivain, mesuré dans ce même témoin et sous la même charge : au plus
+/// 4 fois cette référence, jamais moins que les 100 ms d'avant. Sur une
+/// machine au repos, la borne reste donc 100 ms.
 #[cfg(feature = "code")]
 #[test]
 #[ignore]
@@ -91,6 +99,20 @@ fn usages_repond_pendant_qu_un_ecrivain_tient_le_catalogue() {
     let vue = cat.read_view_cell();
     let catalog = Arc::new(Mutex::new(cat));
 
+    let mut registry = NodeRegistry::new();
+    register_builtins(&mut registry);
+    let tool = GraphTool::from_mermaid(include_str!("../templates/tools/usages.mmd")).unwrap().bind(&registry).unwrap();
+    let mut services = ServiceRegistry::new();
+    services.register("catalog", catalog.clone());
+    services.register(rag3weaver::read_view::READ_VIEW_SERVICE, vue);
+    let services = Arc::new(services);
+    let usages = || tool.execute(&registry, services.clone(), &serde_json::json!({"name": "update"})).unwrap().to_string();
+    // La référence : `usages` sans écrivain, après un premier appel qui chauffe.
+    usages();
+    let t = std::time::Instant::now();
+    usages();
+    let reference = t.elapsed().as_millis();
+
     // L'écrivain : le mutex, une transaction qui retire `update`, 2 s.
     let (pret, attendre) = std::sync::mpsc::channel();
     let ecrivain = {
@@ -107,18 +129,14 @@ fn usages_repond_pendant_qu_un_ecrivain_tient_le_catalogue() {
     };
     attendre.recv().unwrap();
 
-    let mut registry = NodeRegistry::new();
-    register_builtins(&mut registry);
-    let tool = GraphTool::from_mermaid(include_str!("../templates/tools/usages.mmd")).unwrap().bind(&registry).unwrap();
-    let mut services = ServiceRegistry::new();
-    services.register("catalog", catalog.clone());
-    services.register(rag3weaver::read_view::READ_VIEW_SERVICE, vue);
     let t = std::time::Instant::now();
-    let out = tool.execute(&registry, Arc::new(services), &serde_json::json!({"name": "update"})).unwrap().to_string();
+    let out = usages();
     let ms = t.elapsed().as_millis();
-    eprintln!("[lecture] usages pendant l'écriture : {ms} ms\n{out}");
+    let borne = (reference * 4).max(100);
+    eprintln!("[lecture] usages pendant l'écriture : {ms} ms (sans écrivain : {reference} ms, borne {borne} ms)\n{out}");
     ecrivain.join().unwrap();
-    assert!(ms < 100, "usages n'attend pas l'écrivain : {ms} ms");
+    assert!(ms < 500, "usages n'attend pas l'écrivain, qui tient 2 000 ms : {ms} ms");
+    assert!(ms <= borne, "usages pendant l'écrivain, au plus 4 fois usages sans lui ({reference} ms) : {ms} ms");
     assert!(out.contains("table.rs"), "l'état d'avant : la définition est là : {out}");
     assert!(out.contains("écriture de l'index est en cours"), "la réponse le dit : {out}");
 }
