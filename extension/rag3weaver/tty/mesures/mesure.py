@@ -487,6 +487,56 @@ for kitty in (True, False):
         tunnel.terminate()
         hote_arreter()
 
+# 1f. Les appels d'outil qu'on lit (tty-11) : numérotés, l'extrait coupé qui le dit, et Ctrl-O qui ouvre la
+#     visionneuse dans un écran alterné ; ← l'appel d'avant, Fin, Échap. Sous tmux, l'écran principal capturé
+#     avant et après doit être le même : la visionneuse ne l'a pas touché.
+def ecran_tmux():
+    if not LANCEUR.startswith("tmux"):
+        return None
+    nom = seance[-1]
+    cmd = f"tmux -L {nom} capture-pane -p -t {nom}"
+    if LANCEUR == "tmux-local":
+        return subprocess.run(cmd.split(), capture_output=True, text=True).stdout
+    return ssh(cmd)
+
+
+hote_demarrer()
+tunnel = subprocess.Popen(["sleep", "86400"] if LOCAL else ["ssh", "-N", "-o", "BatchMode=yes", "-L", f"{TUNNEL}:127.0.0.1:{PORT}", HOTE])
+time.sleep(1.5)
+try:
+    t = Terminal("COLORTERM=truecolor TERM=xterm-256color", "daemon")
+    if t.attendre(b"attend ton accord", borne=40) is None:
+        rouge("outils : la demande d'accord ne paraît pas en 40 s")
+    time.sleep(0.5)
+    tout = t.tout()
+    numeros = "» read_file src/demo.rs  ⟨1⟩".encode() in tout and "» edit_file src/demo.rs  ⟨2⟩".encode() in tout
+    coupe = "extrait, 4 Ko sur 16 Ko".encode() in tout
+    avant = ecran_tmux()
+    t0 = t.ecrire(b"\x0f")
+    entre = t.attendre(b"\x1b[?1049h", apres=t0, borne=5) is not None
+    deux = t.attendre("⟨2/2⟩".encode(), apres=t0, borne=5) is not None
+    t0 = t.ecrire(b"\x1b[D")
+    un = t.attendre("⟨1/2⟩".encode(), apres=t0, borne=5) is not None
+    t0 = t.ecrire(b"\x1b[F")
+    fin_vue = t.attendre("extrait, 4 Ko sur 16 Ko".encode(), apres=t0, borne=5) is not None
+    time.sleep(0.6)
+    t0 = t.ecrire(b"\x1b")
+    sort = t.attendre(b"\x1b[?1049l", apres=t0, borne=5) is not None
+    time.sleep(1.0)
+    apres = ecran_tmux()
+    resultats["outils"] = {"numerotes": numeros, "extrait_coupe_dit": coupe, "ecran_alterne_ouvert": entre, "dernier_appel": deux, "appel_d_avant": un, "fin_dit_l_extrait": fin_vue, "ecran_alterne_ferme": sort, "ecran_principal_intact": None if avant is None else avant == apres}
+    for cle, vu in resultats["outils"].items():
+        if vu is False:
+            rouge(f"outils : {cle}")
+    if avant is not None and avant != apres:
+        resultats["outils"]["ecran_avant"], resultats["outils"]["ecran_apres"] = avant, apres
+    t.ecrire(b"\x03")
+    time.sleep(0.5)
+    t.arreter()
+finally:
+    tunnel.terminate()
+    hote_arreter()
+
 # 2. Les couleurs de chaque thème, en couleur vraie puis en 256 couleurs.
 couleurs = []
 for nom, th in themes.items():
