@@ -487,7 +487,7 @@ const BASE_NODES: &[&str] = &[
 const READ_NODES: &[&str] = &["ReadFileNode", "GrepNode", "ListFilesNode", "ScanFilesNode", "LireFichierNode", "SymbolNavigationNode"];
 const WRITE_NODES: &[&str] = &["EditFileNode", "EcrireFichierNode"];
 const RUN_NODES: &[&str] = &["RunCommandNode"];
-const MODEL_NODES: &[&str] = &["Decide", "LlmNode"];
+const MODEL_NODES: &[&str] = &["Decide"];
 const WORKTREE_NODES: &[&str] = &["WorktreeNode"];
 
 /// **Les deux nœuds réservés aux graphes réactifs.** Un outil est appelé par
@@ -692,12 +692,31 @@ pub fn capacite_pour(node_type: &str) -> Option<&'static str> {
 /// que le manifeste porte ce qu'elle exige — chaque refus dit quoi faire.
 pub fn validate_tool_policy(
     tool_name: &str,
-    node_types: impl IntoIterator<Item = String>,
+    nodes: impl IntoIterator<Item = (String, serde_json::Value)>,
     policy: &ToolPolicy,
     workspace: Option<&WorkspaceConfig>,
 ) -> Result<(), String> {
     let permis = allowed_nodes(policy);
-    for node_type in node_types {
+    for (node_type, config) in nodes {
+        // **LlmNode, borné par son schéma** (15 novembre 2026, la garde de M4 complétée) : `call_models`
+        // dit « cet outil demande une décision bornée à un modèle ». Decide est borné par ses
+        // candidates ; un LlmNode l'est par son `response_schema`, et sans lui il générerait du texte
+        // libre (un coût sans borne, une porte à injection) : il n'est permis dans aucun outil.
+        if node_type == "LlmNode" {
+            if config.get("response_schema").map_or(true, serde_json::Value::is_null) {
+                return Err(format!(
+                    "l'outil « {tool_name} » contient LlmNode sans response_schema : un outil ne génère pas de texte libre — \
+                     déclarez response_schema (la forme JSON de la réponse) sur le nœud, et \"policy\": {{\"call_models\": true}}"
+                ));
+            }
+            if !policy.call_models {
+                return Err(format!(
+                    "l'outil « {tool_name} » contient LlmNode mais sa politique ne déclare pas call_models : \
+                     ajoutez \"policy\": {{\"call_models\": true}} à son attachement, ou retirez le nœud"
+                ));
+            }
+            continue;
+        }
         if permis.contains(&node_type.as_str()) {
             continue;
         }
@@ -859,13 +878,15 @@ mod tests {
     /// avec, il passe. `Route` et `SplitSections` passent sans rien déclarer.
     #[test]
     fn decide_demande_call_models_et_le_refus_dit_la_ligne() {
-        let types = || vec!["RhaiNode".to_string(), "SplitSections".to_string(), "Decide".to_string(), "Route".to_string()];
+        let types = || ["RhaiNode", "SplitSections", "Decide", "Route"].map(|t| (t.to_string(), serde_json::Value::Null));
         let e = validate_tool_policy("archive", types(), &ToolPolicy::default(), None).expect_err("Decide sans call_models");
         assert!(e.contains("Decide") && e.contains("\"policy\": {\"call_models\": true}"), "{e}");
         let avec = ToolPolicy { call_models: true, ..ToolPolicy::default() };
         validate_tool_policy("archive", types(), &avec, None).expect("Decide avec call_models");
-        assert!(!allowed_nodes(&avec).contains(&"LlmNode"), "LlmNode reste hors de toute politique");
-        validate_tool_policy("t", vec!["Route".to_string(), "SplitSections".to_string()], &ToolPolicy::default(), None)
+        // LlmNode n'est dans aucune liste : sans schéma il reste hors de toute politique, avec son
+        // schéma il passe sous call_models (backend_opening_tests, un_llm_node_d_outil_exige…).
+        assert!(!allowed_nodes(&avec).contains(&"LlmNode"), "LlmNode n'est permis par aucune liste de nœuds");
+        validate_tool_policy("t", ["Route", "SplitSections"].map(|t| (t.to_string(), serde_json::Value::Null)), &ToolPolicy::default(), None)
             .expect("Route et SplitSections sont de la base");
     }
     use super::*;

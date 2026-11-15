@@ -1581,7 +1581,7 @@ impl PreparedBackend {
         };
         let mut after_hooks = BTreeMap::new();
         let mut tools = BTreeMap::new();
-        let mut types_des_sous_graphes: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let mut types_des_sous_graphes: BTreeMap<String, Vec<(String, Value)>> = BTreeMap::new();
         let mut tool_schemas = BTreeMap::new();
         let mut tool_validators = HashMap::new();
         for (name, attachment) in &manifest.tools {
@@ -1768,7 +1768,7 @@ impl PreparedBackend {
                         .nodes
                         .iter()
                         .map(|n| n.node_type.as_str())
-                        .chain(types_des_sous_graphes.get(*name).into_iter().flatten().map(String::as_str))
+                        .chain(types_des_sous_graphes.get(*name).into_iter().flatten().map(|(t, _)| t.as_str()))
                         .any(|t| types.contains(&t))
                 })
                 .map(|(name, _)| name.clone())
@@ -1787,9 +1787,9 @@ impl PreparedBackend {
                     tool.template()
                         .nodes
                         .iter()
-                        .map(|n| n.node_type.clone())
+                        .map(|n| (n.node_type.clone(), n.config.clone()))
                         .chain(types_des_sous_graphes.get(name).into_iter().flatten().cloned())
-                        .filter(|t| !scripted_types.contains(t)),
+                        .filter(|(t, _)| !scripted_types.contains(t)),
                     &attachment.policy,
                     manifest.workspace.as_ref(),
                 )?;
