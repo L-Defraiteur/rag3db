@@ -277,3 +277,24 @@ Chaque côté a écrit ses deux relevés de 30 cas.
   savoir pour la bascule des bases de Lucie.
 - **Un détail du juge** : la ligne `_generation` porte le commit « banc-835d5298f » dans les deux
   parités. C'est le nom codé en dur par la sonde ; dans (1), la source est 1de1f86d88.
+
+## 8. Le témoin 0 de 2b′ : la vue dans search_code (15 novembre, 16 h 54)
+
+Pour recherche : la tête 2b-C (`vues-2b-c-2` 97b8c8d7d) contre son parent 77cd6b049 (2b′ d'arbre
+principal). Chaque relevé part d'une copie neuve de la base migrée, passée aux générations par le
+juge. Lib 373b5477b, `RAG3WEAVER_MOTEUR_ANCIEN=1`. Chaque côté a joué ses 30 cas.
+
+| | verdict |
+|---|---|
+| (a) les 30 cas sans `view`, parent contre lot | **VERT** au bit près |
+| (b) les 30 cas avec `"view": {"layer": "backend"}` au lot, contre le lot sans | **VERT** au bit près |
+| le champ `view` de la réponse | `{"layer": "backend", "rank": 0, "depth": 1}` sur les 30 cas avec vue ; absent sur les 30 sans |
+
+- **Le lot ne change rien quand on ne s'en sert pas**, et la vue de la couche du backend rend les
+  mêmes réponses que sans vue.
+- **Le rang vaut 0** : la base migrée n'a publié aucune génération.
+- **Le juge** : `RAG3WEAVER_PARITE_ARGS` fusionne des arguments dans chaque appel de search_code, et le
+  champ `view` est relevé à part, hors des résultats comparés (`banc-parite-search-code` 3986590d44).
+  Le script `parite-vue.sh` ne lance que le relevé des réponses (`--exact`). L'ancien `parite-opti.sh`
+  lançait tous les tests ignorés du binaire, ce qui, depuis le relevé avec réindexation, aurait
+  réindexé la même copie.
