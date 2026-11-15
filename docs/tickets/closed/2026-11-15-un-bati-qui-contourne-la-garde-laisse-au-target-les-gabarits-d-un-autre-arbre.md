@@ -1,6 +1,6 @@
 # Un bâti qui contourne la garde laisse au target les gabarits d'un autre arbre
 
-- **État** : ouvert (15 novembre 2026) — le remède est à G, en lot après celui du confineur, rouge d'abord
+- **État** : fait (15 novembre 2026, 86545785c) : la garde lit les sorties des build scripts et efface les empreintes quand un rerun-if-changed vise un autre worktree, même sous le bon marqueur ; sept cas neufs au témoin, rouges d abord ; delais-c trouvé pris, archi prévenu
 - **Famille** : produit (outillage : `scripts/garde_target.sh`)
 - **Gravité** : faux rouge, ou faux vert. Une passe tourne sur les gabarits d'un autre worktree sans le dire.
 - **Atteignable en service** : non (les targets partagés des passes)
