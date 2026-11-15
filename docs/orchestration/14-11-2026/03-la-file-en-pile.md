@@ -1607,3 +1607,7 @@ Archi, 18 h 01 : la forme du nom — l'invite « You are <name> », présentatio
 (1) la clé au manifeste chez ED, (4) le libellé de la fiche agent:<clé> chez 96, (5) l'affichage chez tty. tty : binaire d'essai
 reposé 18 h 00 — un compte rendu égal au texte streamé ne se réaffiche pas, le préfixe « le pas N s'est terminé sans step_done »
 jamais ; le binaire d'essai n'a plus « fini : » (l'écran de Lucie venait d'un binaire d'avant 17 h 54).
+ED, 18 h 03 : le nom de l'agent, part (1), pris tout de suite (nom-de-l-agent sur bf187d9e6 ; `agent: {name}` au manifeste, défaut
+« équipier », refus nommé si vide ou multiligne ; la tâche surcharge par le registre ; PreparedBackend::nom_de_l_agent()) ; la
+création nommée d'une tâche (POST /ide/taches {agent_name}) dans le même lot. Place après 96, avant l'écrivain. `agent` ne se pose
+dans le manifeste de Lucie qu'après l'atterrissage (deny_unknown_fields avant).
