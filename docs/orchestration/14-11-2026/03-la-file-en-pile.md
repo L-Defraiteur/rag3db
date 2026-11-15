@@ -1746,3 +1746,8 @@ Lucie ; la pose suivante avec 96 ; tty-17, ED (ouverture sans feature), repli-ac
 ED, 19 h 58 : la mesure de 2a′-3 (page 01 du 15) : 0 réapparition sur 50 commits (2 423 clés, 702 changements) ; (3a) ×1,9 à ×2,5 sur outline,
 usages, impact, racines et ×9,9 sur le compte ; (3a′) ×1,3 à ×2,1 (le moteur n'élague pas l'annexe vide). **Tranché : (2) le doublon
 au bord haut reste le défaut** ; la variante § 5 (uuid par le contenu sans annexe) en ticket à prouver. Arbre code 2a′-3 sur (2).
+G, 20 h 02 : l'hôte bâti sur 23dc8efd47 (md5 f8ce107c), vert en essai aux deux postes ; verdict des trois suites à luciepc depuis 20 h 01.
+L'ordre de la pose d'après les « va » : l'hôte aux deux postes vers 20 h 40 (ne coupe pas les services) ; 7879 au « va » du banc vers
+20 h 50 (sa parité lit 7878 et 7879) ; 7878 au mot d'arbre vers 21 h (sa répétition embarque par 7878) et au « va » du banc. Arbre ne
+lance la vraie bascule qu'après le « fini » de G. 96 : rejeu vert à 20 h 01, pile reposée (b2a031f2e), rejeu court en cours, pour la
+pose suivante.
