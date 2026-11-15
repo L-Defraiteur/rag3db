@@ -349,6 +349,11 @@ required-features = ["daemon", "burn-embedder"]
 name = "rag3db-check-lib"
 path = "src/bin/rag3db-check-lib.rs"
 
+# Le relai du pont navigateur, que Chrome lance par Native Messaging (15 novembre 2026).
+[[bin]]
+name = "rag3weaver-pont-navigateur"
+path = "src/bin/rag3weaver-pont-navigateur.rs"
+
 [[bin]]
 name = "rag3daemon"
 path = "src/bin/rag3daemon.rs"
