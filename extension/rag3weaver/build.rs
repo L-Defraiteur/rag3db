@@ -50,6 +50,18 @@ fn git_du_bati() {
         println!("cargo:rerun-if-changed={dossier}/HEAD");
         println!("cargo:rerun-if-changed={dossier}/logs/HEAD");
     }
+    // **Le commit du parseur lié** (le sous-module codeparsers) : la version de l'analyse en dépend
+    // (`code::version_de_l_analyse`, page 06, § 13). Rebâti quand le pointeur bouge.
+    let parseur = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("codeparsers");
+    let git_parseur = |args: &[&str]| {
+        std::process::Command::new("git").args(args).current_dir(&parseur).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    };
+    if let Some(dossier) = git_parseur(&["rev-parse", "--absolute-git-dir"]) {
+        println!("cargo:rerun-if-changed={dossier}/HEAD");
+    }
+    if let Some(c) = git_parseur(&["rev-parse", "HEAD"]) {
+        println!("cargo:rustc-env=RAG3WEAVER_CODEPARSERS_COMMIT={c}");
+    }
     if let Some(h) = git(&["rev-parse", "--short=9", "HEAD"]) {
         let sale = git(&["status", "--porcelain", "--untracked-files=no", "--", "."]).is_some_and(|s| !s.is_empty());
         println!("cargo:rustc-env=RAG3WEAVER_GIT_HASH={h}{}", if sale { "+" } else { "" });
