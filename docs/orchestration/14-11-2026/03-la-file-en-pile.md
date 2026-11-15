@@ -1472,3 +1472,8 @@ dit la vraie cause, sans POST /ide/taches ; (b) le bac git lit info/ du dossier 
 vraie cause du 128 : ~/.config/git/ignore illisible sous le bac) ; l'invite d'un backend de code commence par celle d'agent de
 code ; l'équipier répond à l'utilisateur une fois par tour ; run_command dit git status/diff/log nus ; le déclaratif était déjà
 en bas. En pile sur (B), même « à toi ».
+Codeparsers, 17 h 19 : `new` + fmt/format.h sur master à **6c8546763** (pointeur codeparsers 5f7c837 ; e2e_code 55/55, check_features 8/8 ;
+gmail, 0 attribution ; le banc de l'arbre entier relancé sur un worktree à lui). « À toi » à ED pour les primitives du socle
+(8ef56dd5e) sur 50ed5a677. ED : les deux défauts de l'écrivain lus (la recopie des arêtes entrantes copie vers le File neuf ce que
+l'ingestion repose déjà ; une cible née au rang en attente a un uuid à couche et rang, l'uuid nu ne vise rien) ; témoins rouges,
+correctif, banc de nouveau ; pas ce soir.
