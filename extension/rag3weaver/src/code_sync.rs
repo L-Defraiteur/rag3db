@@ -1296,14 +1296,26 @@ fn synchroniser_par_generations(
     let visible = catalog.dialect_arc().condition_visible_sur("f", &v.couche, v.rang).ok_or("ce dialecte ne sait pas les générations")?;
     let lu = catalog
         .execute_raw_with_params(
-            &format!("MATCH (f:{FILE}) WHERE f.source = $src AND f._couche = $couche AND {visible} RETURN f.path"),
+            &format!("MATCH (f:{FILE}) WHERE f.source = $src AND f._couche = $couche AND {visible} RETURN f.path, f.content_hash"),
             &[
                 crate::connection::QueryParam::new("src", CypherValue::String(source_id.clone())),
                 crate::connection::QueryParam::new("couche", CypherValue::String(v.couche.clone())),
             ],
         )
         .map_err(|e| e.to_string())?;
-    let indexes: BTreeSet<String> = lu.rows.iter().filter_map(|l| l.first().and_then(|x| x.as_str()).map(str::to_string)).collect();
+    // Le chemin et l'empreinte de chaque fichier que la couche voit au rang en attente.
+    let empreintes: BTreeMap<String, String> = lu
+        .rows
+        .iter()
+        .filter_map(|l| Some((l.first()?.as_str()?.to_string(), l.get(1).and_then(|x| x.as_str()).unwrap_or("").to_string())))
+        .collect();
+    let indexes: BTreeSet<String> = empreintes.keys().cloned().collect();
+    // **Un fichier inchangé ne se réécrit pas** : sous l'écrivain, son empreinte égale à celle du disque
+    // ne changerait aucune ligne, et la passe coûte le diff, pas la source (un rattrapage à l'ouverture
+    // réécrivait tout en un paquet, et la fermeture l'attendait). Sauf après une passe en masse
+    // interrompue : ses liens manquent, il faut tout repasser.
+    let marque = format!("relations_pending:{}/{}:{}", catalog.scope().org, catalog.scope().project, source_id);
+    let tout_repasser = catalog.read_meta_key(&marque).map_err(|e| e.to_string())?.is_some_and(|v| !v.is_empty());
     let presents: BTreeSet<String> = retenus.iter().map(|p| crate::code_tools::indexed_name(source, p).1).collect();
     let partis: Vec<String> = indexes.into_iter().filter(|p| !presents.contains(p)).collect();
     let mut report = SourceSyncReport {
@@ -1327,11 +1339,15 @@ fn synchroniser_par_generations(
             if let Some(c) = &contenu {
                 if let Err(raison) = crate::code::admission(path, Some(c), &options.generated) {
                     *report.files_set_aside.entry(raison.to_string()).or_default() += 1;
+                } else if !tout_repasser
+                    && empreintes.get(&crate::code_tools::indexed_name(source, path).1).is_some_and(|h| *h == crate::hash::content_hash(c))
+                {
+                    continue;
                 }
             }
             lot.push((path.clone(), contenu));
         }
-        let r = catalog.avec_retenue(|c| reingest_files_retenu(c, source, &lot, options.exige))?;
+        let r = if lot.is_empty() { ReingestReport::default() } else { catalog.avec_retenue(|c| reingest_files_retenu(c, source, &lot, options.exige))? };
         report.files_ingested += lot.iter().filter(|(_, c)| c.is_some()).count();
         report.scopes_written += r.scopes_upserted;
         report.relations += r.relations;
