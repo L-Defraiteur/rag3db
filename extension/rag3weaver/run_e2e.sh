@@ -1142,7 +1142,14 @@ PLAFOND_TARGET_GO="${RAG3WEAVER_TARGET_MAX_GO:-32}"
 if [ -d "$TARGET_DE_LA_PASSE" ]; then
   POIDS_TARGET_GO=$(du -xs --block-size=1G "$TARGET_DE_LA_PASSE" 2>/dev/null | cut -f1)
   if [ "${POIDS_TARGET_GO:-0}" -gt "$PLAFOND_TARGET_GO" ]; then
-    echo "✗ le target $TARGET_DE_LA_PASSE pèse ${POIDS_TARGET_GO} Go, au-delà du plafond de ${PLAFOND_TARGET_GO} Go"
+    # D'abord le ménage des paquets locaux (garde_target.sh) : les dépendances tierces restent.
+    . "$WEAVER/scripts/garde_target.sh"
+    if menager_au_plafond "$TARGET_DE_LA_PASSE" "$WEAVER" $(( PLAFOND_TARGET_GO * 1024 )); then
+      POIDS_TARGET_GO=$(du -xs --block-size=1G "$TARGET_DE_LA_PASSE" 2>/dev/null | cut -f1)
+    fi
+  fi
+  if [ "${POIDS_TARGET_GO:-0}" -gt "$PLAFOND_TARGET_GO" ]; then
+    echo "✗ le target $TARGET_DE_LA_PASSE pèse ${POIDS_TARGET_GO} Go, au-delà du plafond de ${PLAFOND_TARGET_GO} Go, même après le ménage des paquets locaux"
     echo "  (RAG3WEAVER_TARGET_MAX_GO ; une passe complète sous le jeu large pèse 19 à 26 Go). Pour repartir d'un target propre (5,5 Go au rebâti) :"
     echo "    rm -rf $TARGET_DE_LA_PASSE"
     exit 2

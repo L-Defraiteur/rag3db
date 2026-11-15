@@ -133,4 +133,25 @@ bash "$GARDE" --reprendre "$S" "$G/racine" > /dev/null 2>&1
 cas $? "garde_target.sh --reprendre efface les empreintes locales : un fichier daté d'avant est rebâti"
 unset CARGO_TARGET_DIR
 
+# **Le ménage au plafond** (15 novembre 2026, ticket d'archi) : `cargo clean -p` des paquets locaux, hôte et triplet, au
+# lieu d'effacer tout le target ; un artefact tiers reste ; un target qui reste au-dessus rend 1.
+P="$ICI/target-plafond"; export CARGO_TARGET_DIR="$P"
+(cd "$ICI/neuf" && cargo build -q -p app && cargo build -q -p app --target "$TRIPLET") 2>/dev/null
+mkdir -p "$P/debug/deps"; head -c 3145728 /dev/zero > "$P/debug/deps/libtiers-0123456789abcdef.rlib"
+sortie="$(menager_au_plafond "$P" "$ICI/neuf" 1 2>&1)"; rc=$?
+[ $rc = 1 ] && echo "$sortie" | grep -q "ménage des paquets locaux" && [ -f "$P/debug/deps/libtiers-0123456789abcdef.rlib" ]
+cas $? "au plafond, le ménage garde l'artefact tiers, et rend 1 si le target reste au-dessus"
+[ -z "$(empreintes_locales "$P")" ] && [ -z "$(find "$P" -path '*/incremental/*' -name 'app-*' -o -path '*/incremental/*' -name 'ir-*' 2>/dev/null)" ]
+cas $? "le ménage efface les paquets locaux, incrémental compris, à l'hôte comme au triplet"
+rm -f "$P/debug/deps/libtiers-0123456789abcdef.rlib"
+(cd "$ICI/neuf" && cargo build -q -p app && cargo build -q -p app --target "$TRIPLET") 2>/dev/null
+avant=$(du -xsm "$P" | cut -f1)
+sortie="$(menager_au_plafond "$P" "$ICI/neuf" 1 2>&1)"; rc=$?
+[ "$avant" -gt 1 ] && [ $rc = 0 ] && echo "$sortie" | grep -q "Mio →"
+cas $? "un target local au-dessus du plafond redescend sous lui après le ménage, et le dit (avant ${avant} Mio)"
+sortie="$(menager_au_plafond "$P" "$ICI/neuf" 1000 2>&1)"; rc=$?
+[ $rc = 0 ] && [ -z "$sortie" ]
+cas $? "sous le plafond, le ménage ne fait rien et ne dit rien"
+export CARGO_TARGET_DIR="$T"
+
 exit $echec

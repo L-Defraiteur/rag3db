@@ -106,6 +106,45 @@ suivre_les_sous_modules() { # <target> <arbre> [restrictions…] : efface ce qui
   echo "$actuels" > "$fichier"
 }
 
+# **Le ménage au plafond** (15 novembre 2026, ticket d'archi) : au-delà du plafond, run_e2e.sh effaçait tout le target, et
+# rebâtissait les dépendances tierces avec. Au plafond, ce sont les paquets locaux qui pèsent (archi, delais-c, 36 Go :
+# 24 Go d'incrémental de rag3weaver, 7,3 Go d'artefacts locaux, 4,9 Go de tiers ; `cargo clean -p rag3weaver` en rend 32,9).
+# `menager_au_plafond <target> <arbre> <plafond en Mio>` fait `cargo clean -p` des paquets locaux pour chaque profil
+# (debug, release) et chaque triplet présents, le dit avec le poids avant et après, et rend 1 si le target reste au-dessus.
+menager_au_plafond() {
+  local target="$1" arbre="$2" plafond="$3" avant apres paquets d nom prof args
+  [ -d "$target" ] || return 0
+  avant=$(du -xsm "$target" 2>/dev/null | cut -f1)
+  [ "${avant:-0}" -gt "$plafond" ] || return 0
+  paquets="$(cd "$arbre" && cargo metadata --format-version 1 --all-features 2>/dev/null | python3 -c '
+import json, sys
+m = json.load(sys.stdin)
+print(" ".join(sorted({p["name"] for p in m["packages"] if p["source"] is None})))
+' 2>/dev/null)"
+  [ -n "$paquets" ] || { echo "✗ ménage au plafond : la liste des paquets locaux est vide (cargo metadata dans $arbre)"; return 1; }
+  echo "▸ le target $target pèse ${avant} Mio, au-delà du plafond de ${plafond} Mio : ménage des paquets locaux ($paquets)"
+  args=""; for p in $paquets; do args="$args -p $p"; done
+  for d in "$target" "$target"/*/; do
+    d="${d%/}"; nom=$(basename "$d")
+    if [ "$d" != "$target" ]; then
+      case "$nom" in debug|release|doc|tmp|package|build|incremental|deps|.*) continue ;; esac
+      [ -d "$d/debug" ] || [ -d "$d/release" ] || continue
+    fi
+    for prof in debug release; do
+      [ -d "$d/$prof" ] || continue
+      if [ "$d" = "$target" ]; then
+        (cd "$arbre" && cargo clean -q --target-dir "$target" $([ $prof = release ] && echo --release) $args) || return 1
+      else
+        (cd "$arbre" && cargo clean -q --target-dir "$target" --target "$nom" $([ $prof = release ] && echo --release) $args) || return 1
+      fi
+    done
+  done
+  apres=$(du -xsm "$target" 2>/dev/null | cut -f1)
+  echo "▸ ménage au plafond : ${avant} Mio → ${apres} Mio (les dépendances tierces gardées)"
+  [ "${apres:-0}" -gt "$plafond" ] && return 1
+  return 0
+}
+
 garder_le_target() {
   local target="$1" arbre="$2" marque note paquets restes p
   shift 2
