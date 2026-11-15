@@ -45,3 +45,23 @@ pas, et le service meurt au lieu de refuser cette seule demande.
 
 Témoin, rouge d'abord : une carte factice, ou un plafond de mémoire de calcul, et un lot trop gros. Le service
 répond une erreur nommée et reste à l'écoute ; le lot suivant, plus petit, passe.
+
+## La cause des tailles : l'attention d'un seul texte long (15 novembre, 15 h 3x)
+
+Le banc l'a expliqué. Ses passes N, F et F 25 % rangent les mêmes 244 tours dans le même ordre, par l'outil
+`archive` de la mémoire, et embarquent la Source (le tour entier), ses L1 et les fiches. Les tours sont longs :
+le plus long fait 43 137 caractères, 21 dépassent 16 000 et 2 dépassent 32 000.
+
+Les tailles refusées sont celles de la matrice d'attention d'**un seul** texte : 4 102 146 304 octets font
+exactement 16 têtes × 4 octets × 8 006². C'est un texte de 8 006 jetons, au plafond de bge-m3 (8 192). Les
+autres tailles (2,4 à 3,8 Go) sont celles de textes de 6 000 à 7 700 jetons. La mémoire de l'attention croît
+comme le carré de la longueur.
+
+`RAG3WEAVER_EMBED_CHAR_BUDGET` n'y peut rien. Il range les textes en lots, mais un texte plus long que le budget
+part seul, entier (`embedder.rs`, « le plancher est un chunk »).
+
+Ce qu'il faudrait, en plus du refus nommé :
+- **côté écriture** : le gabarit memory découpe une Source longue avant de l'embarquer, comme le code découpe
+  ses scopes ;
+- **côté service** : un plafond de jetons par texte, déclaré dans l'identité, avec la troncature comptée et
+  dite (`troncatures`), plutôt qu'un plafond qui n'existe que dans le modèle.
