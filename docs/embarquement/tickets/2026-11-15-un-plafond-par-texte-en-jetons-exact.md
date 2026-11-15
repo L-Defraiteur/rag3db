@@ -23,3 +23,10 @@ caractères. Un texte dense en jetons (du code, des symboles) peut donc dépasse
 
 À faire si un modèle à jetons courts ou un corpus de symboles le demande. Témoin : un texte sous le plafond en
 caractères, mais au-dessus en jetons, est refusé et nommé.
+
+## La conception, en une ligne (c7, 15 novembre au soir)
+
+Chaque embarqueur burn (bge-m3, granite, minilm, multilingual) tient déjà un `tokenizer: Mutex<Tokenizer>`, réglé
+**avec sa troncature** (`TruncationParams`). `count_tokens` doit donc compter **avant** la troncature : encoder sans
+elle (une copie du tokenizer, `with_truncation(None)`), ou lire `Encoding::get_overflowing()` d'un encodage tronqué
+(non vide : le texte dépasse). Un `encode(…).len()` simple rendrait le plafond du modèle, jamais plus.
