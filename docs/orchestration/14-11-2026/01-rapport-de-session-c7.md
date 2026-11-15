@@ -1542,3 +1542,7 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   boîte, extrait de read_file coloré par extension, .md en prose, les écritures en ajouts/retraits, appels
   numérotés, Ctrl-O ouvre un appel en grand dans un écran alterné) ; tty-12 = les palettes ; tty-13 = « ! » et
   « / ». Rien côté hôte ; le résultat entier au-delà de 4 Ko sera une route plus tard.
+- **12 h 1x — le fork du pont navigateur existe** : https://github.com/L-Defraiteur/BrowserMCP (archi, par gh repo
+  fork sous L-Defraiteur, confirmé par Lucie dans sa session ; clone à lui, remote amont jackwener ; révision 5
+  inchangée par l'amont). Le nom reste BrowserMCP sans mot de Lucie. Archi commence l'extension rouge d'abord
+  (handoff gardé, passe-partout fermés, cookies retiré), puis répond à 96 (compaction) et ED (/model).
