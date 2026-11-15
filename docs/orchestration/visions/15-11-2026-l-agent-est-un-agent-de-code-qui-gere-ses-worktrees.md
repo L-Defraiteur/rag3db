@@ -55,3 +55,9 @@ qu'il faut en synchrone ».
    complète, sans un mot ; au-dessus, elle répond tout de suite « index pas prêt » avec l'estimation, et une
    seule notification vient quand l'index est prêt. L'estimation se mesure sur le journal d'index (lignes
    restantes, débit observé), pas sur une constante.
+
+   Précision de Lucie (21 h 1x) : « traduire par un bench d'avance à quoi correspondent 6 secondes, vs combien
+   de lots à embarquer ». Le seuil se dit en secondes à l'utilisateur, en lots au moteur : un banc joué à
+   l'avance sur le poste, pour son service d'embarquement (local ou distant, carte ou CPU), mesure le débit
+   (lots par seconde, caractères par seconde) et l'inscrit ; l'hôte convertit le reste à indexer en secondes
+   par ce débit, et le corrige au fil du débit observé. Pas de constante écrite à la main.
