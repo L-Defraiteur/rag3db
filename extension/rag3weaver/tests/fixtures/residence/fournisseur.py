@@ -34,6 +34,8 @@ def arguments():
     p.add_argument('--sparse', action='store_true')
     # Le dual (dense et creux en un passage), comme bge-m3 au service réel.
     p.add_argument('--dual', action='store_true')
+    # Un fournisseur lent (le débit sous le seuil d'un repli) : chaque /embed attend.
+    p.add_argument('--lent-ms', type=int, default=0)
     a = p.parse_args()
     if a.dim <= 0 or a.budget_pret_ms <= 0:
         p.error('dimension et budget strictement positifs exigés')
@@ -228,6 +230,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.answer(400, {'error': 'JSON invalide'})
         self.server.event('embed_commence', textes=len(texts))
         self.server.en_cours += 1
+        if self.server.args.lent_ms > 0:
+            time.sleep(self.server.args.lent_ms / 1000)
         vectors = []
         for text in texts:
             h = hashlib.sha256(text.encode()).digest()

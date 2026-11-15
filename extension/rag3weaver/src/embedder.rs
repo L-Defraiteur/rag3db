@@ -127,6 +127,28 @@ pub trait Embedder: Send + Sync {
     fn timeout(&self) -> Option<std::time::Duration> {
         None
     }
+
+    /// **D'où sont venus les vecteurs rendus depuis la dernière lecture** : par
+    /// provenance (« carte card2 », « service 127.0.0.1:7879 »), le nombre de
+    /// textes embarqués. Lue et vidée par l'indexation après chaque passe, pour
+    /// le journal d'index (lot du repli quand la carte est pleine, 15 novembre
+    /// 2026). Vide : l'embarqueur ne le sait pas.
+    fn provenance_counts(&self) -> Vec<(String, usize)> {
+        Vec::new()
+    }
+
+    /// Les changements de provenance à dire (un repli, un retour, une carte
+    /// pleine sans repli), lus et vidés comme [`Self::provenance_counts`].
+    fn provenance_events(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Ce que l'état d'index doit dire de l'embarquement : replié (et si la
+    /// recette du repli n'est pas vérifiée), ou carte pleine sans repli
+    /// déclaré. `None` : rien à dire.
+    fn provenance_state(&self) -> Option<String> {
+        None
+    }
 }
 
 /// **Un embedder partagé en est un.**

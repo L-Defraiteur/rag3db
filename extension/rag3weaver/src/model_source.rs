@@ -92,12 +92,17 @@ pub enum Provider {
 }
 
 /// Quoi faire quand le service ne répond pas.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Fallback {
     #[default]
     Refuse,
     Local,
+    /// **Un service de repli** (`{"service": "127.0.0.1:7879"}`), pour une
+    /// activation : quand la carte qu'elle nomme est pleine (mesurée), ou que
+    /// son débit tombe sous le seuil déclaré, l'embarqueur sert par ce service,
+    /// modèle et dimension vérifiés, et le dit. Sans activation, il vaut refus.
+    Service(String),
 }
 
 /// Une adresse, ou plusieurs — au manifeste, une chaîne ou une liste.
@@ -480,9 +485,9 @@ pub fn resolve<T>(
             }
         }
     };
-    match (remote, source.fallback) {
+    match (remote, &source.fallback) {
         (Ok(found), _) => Ok(found),
-        (Err(e), Fallback::Refuse) => Err(format!("{what} : {e}")),
+        (Err(e), Fallback::Refuse | Fallback::Service(_)) => Err(format!("{what} : {e}")),
         // Le repli n'arrive que parce qu'on l'a écrit, et il se dit.
         (Err(e), Fallback::Local) => {
             eprintln!("[rag3weaver] {what} : {e} — repli sur le modèle local, comme déclaré (`fallback: local`)");
@@ -974,7 +979,7 @@ mod tests {
     fn gabarits_bge_choisissent_le_modele_dans_les_adresses_du_poste() {
         for nom in ["notebook", "validated-result"] {
             let source = source_gabarit_bge(nom);
-            assert_eq!((source.provider, source.model.as_str(), source.dimensions, source.fallback),
+            assert_eq!((source.provider, source.model.as_str(), source.dimensions, source.fallback.clone()),
                 (Provider::Service, "bge-m3", Some(1024), Fallback::Refuse));
             assert!(source.address.is_empty(), "{nom} ne doit pas imposer le port d'un autre poste : {:?}", source.address);
             let env = |k: &str| (k == "RAG3WEAVER_SERVICE_EMBED").then(|| "a:1,b:1".to_string());
@@ -1027,12 +1032,12 @@ mod tests {
     #[test]
     fn la_declaration_se_lit_et_garde_le_nom_d_avant() {
         let s: ModelSource = serde_json::from_str(r#"{"model":"granite-278m"}"#).unwrap();
-        assert_eq!((s.provider, s.fallback, s.address.is_empty()), (Provider::Service, Fallback::Refuse, true));
+        assert_eq!((s.provider, s.fallback.clone(), s.address.is_empty()), (Provider::Service, Fallback::Refuse, true));
         // `daemon` est le nom d'avant du fournisseur `service`.
         let s: ModelSource = serde_json::from_str(r#"{"provider":"daemon","model":"bge-m3","address":"a:1, b:1"}"#).unwrap();
         assert_eq!((s.provider, s.address.0.len()), (Provider::Service, 2));
         let s: ModelSource = serde_json::from_str(r#"{"provider":"compatible","protocol":"llama_server","model":"jevk5-4b","address":["http://x:7982"],"fallback":"local"}"#).unwrap();
-        assert_eq!((s.provider, s.fallback, s.protocol.as_deref()), (Provider::Compatible, Fallback::Local, Some("llama_server")));
+        assert_eq!((s.provider, s.fallback.clone(), s.protocol.as_deref()), (Provider::Compatible, Fallback::Local, Some("llama_server")));
         // Un champ inconnu est une erreur : une faute de frappe ne passe pas en silence.
         assert!(serde_json::from_str::<ModelSource>(r#"{"model":"x","adress":"a:1"}"#).is_err());
     }
