@@ -48,7 +48,8 @@ void ListLambdaEvaluator::init(const ResultSet& resultSet, ClientContext* client
     params.push_back(children[0]->resultVector);
     params.push_back(lambdaRootEvaluator->resultVector);
     auto paramIndices = getParamIndices();
-    bindData = ListLambdaBindData{lambdaParamEvaluators, paramIndices, lambdaRootEvaluator.get()};
+    bindData = ListLambdaBindData{lambdaParamEvaluators, paramIndices, lambdaRootEvaluator.get(),
+        nullptr /* sliceInfo */, {} /* quantifierCounts */};
 }
 
 void ListLambdaEvaluator::evaluateInternal() {
