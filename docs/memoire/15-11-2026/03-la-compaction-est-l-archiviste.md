@@ -70,12 +70,49 @@ relit ce qu'il a déjà rangé.
 l'intelligence, c'est tout le but de notre recherche » (Lucie) : quoi ranger, où, et quoi
 relire se mesurent au banc, avec Laya et Gemini, avant d'être tenus pour bons.
 
-## À trancher avec archi
+## Le branchement dans l'hôte, tranché avec archi
 
-- (a) Où l'hôte tient la trace d'un run, et qui la donne à l'archiviste.
-- (b) Le déclencheur : `ContextOverflow` seul, ou un seuil avant, par exemple une part de la
-  fenêtre.
-- (c) Le `/compact` de tty : un appel à l'hôte, ou un message dans le run.
-- (e) Le rangement au fil de l'eau : à chaque section close (fin d'échange, plan clos), en fond, ou par lots de N tours.
-- (d) La passe en synchrone (le run attend), ou en fond, le run repartant d'abord sur les
-  renvois seuls.
+archi a répondu à 12 h 1x, après lecture du code de l'hôte. Le code de cette partie est à
+archi : le déclencheur, la route, le découpage, l'appel de l'archiviste et la reprise du
+contexte. La mémoire tient le gabarit de l'archiviste et le témoin.
+
+- **(a) Où est la trace d'un run.** Un pas de l'équipier est un tour du chat de sa tâche.
+  - Les tours sont persistés dans le `ChatFile` du backend (`src/daemon_host/chat.rs` : turns,
+    `last_call` et la jauge), sous `RAG3WEAVER_CHATS_DIR` ou `~/.local/share/rag3weaver/chats`.
+  - Les appels d'outils et leurs rendus entiers sont dans le journal des runs, un fichier par
+    run (`journaliser_l_appel`).
+  - **L'hôte** lit les deux et passe le markdown par sections à l'archiviste, qui ne lit pas le
+    disque de l'hôte.
+- **(b) Le déclencheur.**
+  - Un seuil d'abord : la jauge a `used` et `max` par appel, et quand `used` dépasse 80 % de
+    `max`, la compaction se lance avant l'appel suivant.
+  - `ContextOverflow` reste le filet.
+  - Si `max` est inconnu, seul le dépassement déclenche, et `absorb_under` garde son rôle
+    d'aujourd'hui.
+- **(c) Le `/compact` de tty.** C'est un appel à l'hôte,
+  `POST /ide/chat/compact?backend=<backend de la tâche>`, qui rend la passe faite (fiches
+  touchées, L1 `compaction`). Ce n'est pas un message dans le run : celui-ci passerait par le
+  modèle et coûterait un tour au moment où le contexte est plein. La commande est refusée
+  pendant un tour en vol, comme `POST /ide/chat`.
+- **(d) Synchrone, avec une borne.** Au seuil ou sur la commande, le run attend la passe : il
+  ne peut pas repartir au-dessus du plafond.
+  - Au-delà de la borne (réglable, 120 s pour commencer), l'hôte retombe sur `absorb_under`
+    (les renvois) pour ce tour.
+  - La passe finit en fond, et le contexte se refait depuis les fiches au tour suivant. Le
+    journal le dit.
+- **(e) Le rangement au fil de l'eau** se fait en fond, à chaque section close.
+  - Deux points ferment une section : la fin d'un tour de chat (l'échange utilisateur →
+    réponse, avec ses appels d'outils) et la clôture d'un plan de l'équipier.
+  - L'hôte découpe à ces deux points, puisqu'il tient les deux, et note dans le `ChatFile`
+    « rangé jusqu'au tour N ».
+  - La compaction ne range que ce qui reste depuis N : elle est courte.
+
+Le témoin de la ligne 4 prend un cas de plus : **un échange déjà rangé ne se range pas deux
+fois**. Il n'y a pas de seconde passe du Decide sur les tours déjà couverts par « rangé jusqu'au
+tour N ».
+
+## Ce qui suit
+
+1. Le mot de c7 sur cette page, puis Lucie, à qui c7 la montre.
+2. Le témoin d'abord, rouge sur master, puis le code d'archi et le gabarit de la mémoire.
+3. Le jugement (quoi ranger, quoi relire) se mesure au banc avant d'être tenu pour bon.
