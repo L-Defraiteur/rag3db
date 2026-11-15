@@ -865,3 +865,62 @@ fn un_nom_qualifie_rend_le_nom_seul_dans_son_conteneur() {
     let texte = rien.markdown("all", 20);
     assert!(texte.contains("aucune définition dans ce conteneur"), "{texte}");
 }
+
+
+/// Le compte des arêtes CONSUMES de `de` vers un scope `vers`, et leurs marques.
+fn marques_vers(cat: &Catalog, de: &str, vers: &str) -> Vec<String> {
+    let r = cat
+        .execute_raw(&format!("MATCH (a:Scope {{name: '{de}'}})-[c:CONSUMES]->(b:Scope {{name: '{vers}'}}) RETURN c.resolution"))
+        .unwrap();
+    r.rows.iter().map(|x| x[0].as_str().unwrap_or("").to_string()).collect()
+}
+
+/// **Un appel de méthode standard ne se relie pas par le nom à un homonyme** (ticket du 7 novembre,
+/// cas `rag3db_connection.rs:338`) : `reste` vient d'une constante `Duration` par
+/// `saturating_sub` ; `reste.is_zero()` est `Duration::is_zero`, pas le seul `is_zero` du projet.
+#[test]
+#[ignore]
+fn un_appel_std_sur_une_duration_ne_va_pas_a_un_homonyme() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/ouvre.rs".to_string(), "use std::time::{Duration, Instant};\nconst WAIT: Duration = Duration::from_secs(1);\npub fn ouvre() {\n    let debut = Instant::now();\n    let reste = WAIT.saturating_sub(debut.elapsed());\n    if !reste.is_zero() {}\n}\n".to_string()),
+        ("src/raw.rs".to_string(), "pub struct Raw;\nimpl Raw {\n    pub fn is_zero(&self) -> bool { true }\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(marques_vers(&cat, "ouvre", "is_zero"), Vec::<String>::new(), "Duration::is_zero n'est pas Raw::is_zero");
+}
+
+/// **Une méthode de `Vec` au bout d'une chaîne ne va pas à un homonyme** (ticket du 7 novembre, cas
+/// `generic_search_nodes.rs:2091`) : `results` vient de `ctx.take_input(…).and_then(…).ok_or(…)?`,
+/// un `Vec` ; `results.split_off(3)` n'est pas `OwnedBytes::split_off`.
+#[test]
+#[ignore]
+fn une_methode_de_vec_au_bout_d_une_chaine_ne_va_pas_a_un_homonyme() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/ctx.rs".to_string(), "pub struct PortValue;\npub struct NodeContext;\nimpl NodeContext {\n    pub fn take_input(&mut self, n: &str) -> Option<PortValue> { None }\n}\npub fn take_or_clone<T>(p: PortValue) -> Option<T> { None }\n".to_string()),
+        ("src/rerank.rs".to_string(), "use crate::ctx::{take_or_clone, NodeContext};\npub fn execute(ctx: &mut NodeContext) -> Result<(), String> {\n    let mut results = ctx.take_input(\"results\")\n        .and_then(|pv| take_or_clone::<Vec<u32>>(pv))\n        .ok_or(\"x\")?;\n    let tail = results.split_off(3);\n    Ok(())\n}\n".to_string()),
+        ("src/bytes.rs".to_string(), "pub struct OwnedBytes;\nimpl OwnedBytes {\n    pub fn split_off(&mut self, n: usize) -> Self { OwnedBytes }\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(marques_vers(&cat, "execute", "split_off"), Vec::<String>::new(), "Vec::split_off n'est pas OwnedBytes::split_off");
+}
+
+/// **Une variante d'enum ne va pas à un homonyme** (ticket du 7 novembre, cas `record_nodes.rs:746`) :
+/// `Value::Float(f) =>` nomme la variante de `Value`, qui n'est pas un scope ; le `Float` d'un autre
+/// fichier n'est pas la cible.
+#[test]
+#[ignore]
+fn une_variante_d_enum_ne_va_pas_a_un_homonyme() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/value.rs".to_string(), "pub enum Value {\n    Float(f64),\n    Int(i64),\n}\n".to_string()),
+        ("src/rec.rs".to_string(), "use crate::value::Value;\npub fn cellule(v: &Value) -> String {\n    match v {\n        Value::Float(f) => f.to_string(),\n        _ => String::new(),\n    }\n}\n".to_string()),
+        ("src/wand.rs".to_string(), "pub struct Float(pub f32);\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(marques_vers(&cat, "cellule", "Float"), Vec::<String>::new(), "la variante Value::Float n'est pas le struct Float");
+}
