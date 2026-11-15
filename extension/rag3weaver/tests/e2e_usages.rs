@@ -1057,7 +1057,7 @@ fn un_chemin_de_module_ne_prend_pas_le_type_d_une_locale_homonyme() {
 /// pas en petit : le témoin est le vrai fichier).
 #[test]
 #[ignore]
-fn un_prototype_de_l_api_c_se_voit_par_les_includes_d_une_source_c() {
+fn c_api_prototype_is_visible_through_the_includes_of_a_c_source() {
     let depot = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
     let fichiers: Vec<(String, String)> = ["examples/c/main.c", "src/include/c_api/rag3db.h", "src/c_api/connection.cpp"]
         .iter()
