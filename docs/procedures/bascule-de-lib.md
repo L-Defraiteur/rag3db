@@ -15,6 +15,10 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
 - **Les binaires sont liés à une lib, pas à `courant`.** Les hôtes suivent leur lib par
   `RAG3DB_LIBRARY_DIR` (RUNPATH) ; une ABI qui change (une vtable, un membre de classe) exige de les
   rebâtir contre la lib neuve.
+- **`run_e2e.sh` ne pose plus `courant`** (15 novembre 2026) : un `--build` ou un `--build-only` publie sa lib au magasin
+  et la joue par son identifiant ; `rag3db_libs.py publier` ne pose `courant` que sous `--poser-courant`. Seule la
+  bascule (`courant-bascule.sh`) pose le lien d'un poste. Un `--build-only` dans un worktree de pile l'avait déplacé de
+  0 h 53 à 4 h 15 à luciepc (ticket `docs/optimiseur/tickets/2026-11-15-un-bati-du-moteur-par-run-e2e-deplace-courant-d-un-poste-partage.md`).
 - **Des passes d'autres sessions lisent `courant` à chaque appel cargo.** Le poser pendant leur passe
   mélange deux libs dans une même passe.
 
