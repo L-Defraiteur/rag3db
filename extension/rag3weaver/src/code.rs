@@ -2501,9 +2501,6 @@ impl LibraryRecord {
 /// avait cassé la seule relation qui vise un fichier, sans faire échouer un
 /// seul test.
 impl Catalog {
-    /// **Les données d'identité d'une clé, avec sa naissance** (2a′-2, page 06, § 11) : celles de
-    /// `key_data`, plus la couche et le rang de naissance d'un `Scope` que l'écrivain a décidés pour
-    /// l'écriture en cours. Hors d'une écriture, ou pour une autre entité, c'est `key_data` tel quel.
     /// La rangée `File` d'un fichier analysé, avec la version de l'analyse qui l'écrit.
     pub(crate) fn donnees_du_fichier(&self, f: &FileRecord) -> BTreeMap<String, CypherValue> {
         let mut d = f.data();
@@ -2511,6 +2508,9 @@ impl Catalog {
         d
     }
 
+    /// **Les données d'identité d'une clé, avec sa naissance** (2a′-2, page 06, § 11) : celles de
+    /// `key_data`, plus la couche et le rang de naissance d'un `Scope` ou d'un `File` que l'écrivain a
+    /// décidés pour l'écriture en cours. Hors d'une écriture, c'est `key_data` tel quel.
     pub(crate) fn donnees_de_cle(&self, entity: &str, key: &str, source: &str) -> BTreeMap<String, CypherValue> {
         let mut d = key_data(entity, key, source);
         match entity {
@@ -5929,5 +5929,36 @@ mod tests_de_l_ecrivain {
         assert_eq!(cat.au_rang(n, |c| fins_visibles(c, "f")), vec![3], "et à la génération d'avant");
         let r = crate::code_sync::sync_source(&mut cat, &src, &Default::default(), &mut |_| {}).expect("la synchronisation");
         assert_eq!(r.files_ingested, 0, "repassés une fois, sautés ensuite ({r:?})");
+    }
+
+    /// Les noms des `Scope` visibles au rang lu qui n'ont aucun `DEFINED_IN` vers un `File` visible.
+    fn scopes_sans_fichier_visible(cat: &Catalog) -> Vec<String> {
+        let v = cat.generations.clone().expect("une base à générations");
+        let d = cat.dialect_arc();
+        let (ps, pf) = (d.condition_visible_sur("s", &v.couche, v.rang).unwrap(), d.condition_visible_sur("f", &v.couche, v.rang).unwrap());
+        let tous = cat.conn().execute(&format!("MATCH (s:Scope) WHERE {ps} RETURN s.name ORDER BY s.name")).unwrap();
+        let relies = cat
+            .conn()
+            .execute(&format!("MATCH (s:Scope)-[:DEFINED_IN]->(f:File) WHERE {ps} AND {pf} RETURN DISTINCT s.name ORDER BY s.name"))
+            .unwrap();
+        let relies: std::collections::BTreeSet<String> = relies.rows.iter().map(|l| texte(&l[0])).collect();
+        tous.rows.iter().map(|l| texte(&l[0])).filter(|n| !relies.contains(n)).collect()
+    }
+
+    /// **Témoin 13 : un scope inchangé mène à son fichier visible** (les relevés de banc du 15 novembre :
+    /// 73 335 `DEFINED_IN` restés vers les `File` fermés, 542 vers les neufs). Après un repassage qui ne
+    /// change que les lignes `File`, puis une publication, chaque `Scope` visible a un `DEFINED_IN` vers un
+    /// `File` visible, au rang courant comme au rang d'avant.
+    #[test]
+    fn un_scope_inchange_mene_a_son_fichier_visible() {
+        let (mut cat, src) = base();
+        let n = cat.publier_la_generation("c1", 0).expect("publier");
+        assert_eq!(cat.au_rang(n, scopes_sans_fichier_visible), Vec::<String>::new(), "avant : chaque scope a son fichier");
+        cat.version_de_l_analyse = format!("{}-autre", cat.version_de_l_analyse);
+        crate::code_sync::sync_source(&mut cat, &src, &Default::default(), &mut |_| {}).expect("la synchronisation");
+        let m = cat.publier_la_generation("c2", 0).expect("publier");
+        assert_eq!(lignes_file(&cat, "b.rs"), 2, "la ligne File de b.rs est retirée et renaît");
+        assert_eq!(cat.au_rang(m, scopes_sans_fichier_visible), Vec::<String>::new(), "au rang courant, chaque scope mène à son fichier visible");
+        assert_eq!(cat.au_rang(n, scopes_sans_fichier_visible), Vec::<String>::new(), "et au rang d'avant, au fichier d'avant");
     }
 }
