@@ -1558,3 +1558,118 @@ fn a_task_reads_its_write_right_from_its_parent_at_each_opening() {
     ecrire(true, true);
     assert_eq!(droit(), Some(true), "le parent déclare task_writes : la tâche écrit à sa prochaine ouverture");
 }
+
+/// Le manifeste du parent comme celui de Lucie au matin du 15 novembre : `task_writes`, mais aucun
+/// outil d'écriture déclaré.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+fn parent_sans_outil_d_ecriture(manifeste: &std::path::Path, read_only: bool, task_writes: bool) {
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(manifeste).unwrap()).unwrap();
+    m["workspace"]["read_only"] = json!(read_only);
+    m["workspace"]["task_writes"] = json!(task_writes);
+    if let Some(outils) = m["tools"].as_object_mut() {
+        outils.retain(|_, o| o["policy"]["write_files"] != json!(true));
+    }
+    std::fs::write(manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    // Dans les déclarations commitées : la tâche part de leur copie git.
+    let declarations = manifeste.parent().unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "un parent sans outil d'écriture"]] {
+        assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
+    }
+}
+
+/// **Toute tâche reçoit le socle d'un agent de code, quel que soit son manifeste** (vision du 15
+/// novembre 2026 ; page 09) : sur un parent sans outil d'écriture, la tâche a `replace_text`,
+/// `write` et `glob` ; un outil que le backend déclare garde le sien (l'homonyme gagne).
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn every_task_gets_the_code_agent_base_and_the_backend_homonym_wins() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    parent_sans_outil_d_ecriture(&manifeste, false, true);
+    let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Err("pas de modèle ici".into()) });
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    let t = host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let (outils, graphe_de_read) = host
+        .with_backend_id(&t.id, |b| {
+            let m = &b.prepared().manifest;
+            (m.tools.keys().cloned().collect::<Vec<_>>(), m.tools.get("read_file").map(|a| a.graph.display().to_string()))
+        })
+        .expect("la tâche s'ouvre comme backend");
+    for o in ["replace_text", "replace_lines", "insert_lines", "write", "glob"] {
+        assert!(outils.iter().any(|n| n == o), "le socle donne {o} : {outils:?}");
+    }
+    let principal: Vec<String> = host.with_backend(&h, |b| b.prepared().manifest.tools.keys().cloned().collect()).unwrap();
+    assert!(!principal.iter().any(|n| n == "replace_text"), "le principal n'est pas une tâche : rien ne s'y greffe : {principal:?}");
+    assert!(graphe_de_read.is_some_and(|g| !g.contains("atelier")), "read_file reste celui du backend : {:?}", host.with_backend_id(&t.id, |b| b.prepared().manifest.tools.get("read_file").map(|a| a.graph.clone())));
+}
+
+/// **Une tâche sans droit d'écrire ne reçoit que la lecture du socle** : `glob`, sans aucun outil
+/// d'écriture (aucune écriture greffée ne contourne le droit de la tâche).
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_task_without_the_right_to_write_gets_only_the_reading_half_of_the_base() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    parent_sans_outil_d_ecriture(&manifeste, true, false);
+    let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Err("pas de modèle ici".into()) });
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    let t = host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let outils: Vec<String> = host.with_backend_id(&t.id, |b| b.prepared().manifest.tools.keys().cloned().collect()).expect("la tâche s'ouvre");
+    assert!(outils.iter().any(|n| n == "glob"), "la lecture du socle : {outils:?}");
+    for o in ["replace_text", "replace_lines", "insert_lines", "write"] {
+        assert!(!outils.iter().any(|n| n == o), "pas d'écriture greffée sans droit d'écrire ({o}) : {outils:?}");
+    }
+}
+
+/// **De bout en bout, sur le manifeste de Lucie** : un équipier édite par `replace_text` dans sa
+/// tâche, le diff est au rendu et le fichier change dans le worktree de la tâche ; un
+/// `replace_lines` sans lecture récente est refusé sans rien écrire ; un `write` sur un fichier qui
+/// existe est refusé.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_teammate_edits_through_the_base_on_a_manifest_without_write_tools() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    parent_sans_outil_d_ecriture(&manifeste, false, true);
+    let rendus = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let rendus = rendus.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let rendus = rendus.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                if let Some(r) = results.last() {
+                    rendus.lock().unwrap().push(r.clone());
+                }
+                match results.len() {
+                    0 => answer(turns, opts, sink, "", calls(&[("replace_lines", json!({ "path": "src/lib.rs", "from": 1, "to": 1, "text": "x" }))])),
+                    1 => answer(turns, opts, sink, "", calls(&[("write", json!({ "path": "README.md", "text": "écrasé" }))])),
+                    2 => answer(turns, opts, sink, "", calls(&[("replace_text", json!({ "path": "src/lib.rs", "old": "\"bonjour\"", "new": "\"salut\"" }))])),
+                    _ => answer(turns, opts, sink, "J'ai remplacé bonjour par salut.", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "salut", "remaining": "" }))])),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    // Comme le service au démarrage : les backends ouverts ensuite reçoivent l'hôte des worktrees.
+    host.se_connaitre();
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "lucie", "request", None, "Remplace bonjour par salut dans src/lib.rs.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let boite = attendre_dans(&files, "la fin", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    let t = host.tache(&h.id, "doc").expect("la tâche");
+    let racine = t.workspace.as_ref().map(|w| w.racine.clone()).expect("la racine de la tâche");
+    let rendus = rendus.lock().unwrap().clone();
+    assert!(rendus.len() >= 3, "trois rendus d'outil : {rendus:?} — {boite:#?}");
+    assert!(rendus[0].contains("relis") || rendus[0].contains("lecture") || rendus[0].contains("lu "), "replace_lines sans lecture récente est refusé : {}", rendus[0]);
+    assert!(rendus[1].contains("existe"), "write refuse d'écraser : {}", rendus[1]);
+    assert!(rendus[2].contains("+") && rendus[2].contains("salut"), "replace_text rend son diff : {}", rendus[2]);
+    let lib = std::fs::read_to_string(racine.join("src/lib.rs")).unwrap();
+    assert!(lib.contains("\"salut\"") && !lib.contains("\"bonjour\""), "le fichier de la tâche a changé : {lib}");
+    assert_eq!(std::fs::read_to_string(racine.join("README.md")).unwrap(), "# Petit dépôt\n", "write n'a rien écrasé");
+}

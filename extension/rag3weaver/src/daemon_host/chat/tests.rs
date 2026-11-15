@@ -1972,6 +1972,8 @@ fn a_code_backend_speaks_first_as_a_code_agent() {
     let code = super::system_prompt_du_backend(Some(BackendKind::Code), ModeDeclarations::Auto, true);
     assert!(code.starts_with("Tu es un agent de code"), "l'agent de code d'abord : {code}");
     assert!(code.contains("declare"), "les déclarations restent dites, après : {code}");
+    // « par offset » (Lucie, 15 novembre) : les deux façons de modifier, dites.
+    assert!(code.contains("replace_text") && code.contains("replace_lines") && code.contains("insert_lines"), "un texte unique ou les lignes a à b : {code}");
     let projet = super::system_prompt_du_backend(Some(BackendKind::Project), ModeDeclarations::Auto, true);
     assert!(projet.starts_with("You work on a declared backend"), "{projet}");
 }
