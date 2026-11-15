@@ -310,7 +310,7 @@ fn reingest_file_retenu(
         catalog.resoudre_les_symboles(&ecriture.noms_retires, exige).map_err(|e| e.to_string())?;
         return Ok(ReingestReport {
             scopes_upserted: report.scopes,
-            scopes_deleted: ecriture.effacees + ecriture.retirees,
+            scopes_deleted: ecriture.disparues,
             relations: report.relations,
             failed: report.failed,
             deferred_to: None,
@@ -370,8 +370,8 @@ struct EcritureParGenerations {
     noms_retires: Vec<String>,
     /// Les lignes publiées retirées : leurs arêtes entrantes suivront la ligne neuve.
     remplacees: Vec<Remplacee>,
-    effacees: usize,
-    retirees: usize,
+    /// Les clés de scope que l'analyse ne rend plus : effacées (nées à w) ou retirées.
+    disparues: usize,
 }
 
 /// Deux valeurs d'un champ sont-elles la même pour l'écrivain ? Un NULL et une chaîne vide le sont : une
@@ -401,7 +401,7 @@ fn ecrire_par_generations(
     source_id: &str,
     indexed_path: &str,
 ) -> Result<EcritureParGenerations, String> {
-    let mut e = EcritureParGenerations { noms_retires: Vec::new(), remplacees: Vec::new(), effacees: 0, retirees: 0 };
+    let mut e = EcritureParGenerations { noms_retires: Vec::new(), remplacees: Vec::new(), disparues: 0 };
     let recs: Vec<(String, String, BTreeMap<String, CypherValue>)> =
         scopes.iter().map(|sc| (sc.key.clone(), sc.key.clone(), sc.data())).collect();
     ecrire_la_table(catalog, SCOPE, "file_path", "key", source_id, indexed_path, recs, &mut e)?;
@@ -465,6 +465,7 @@ fn ecrire_la_table(
     let mut a_retirer: Vec<String> = Vec::new();
     let mut a_rouvrir: Vec<String> = Vec::new();
     let mut vues = std::collections::BTreeSet::new();
+    let mut disparues = 0usize;
     for (naissance_de, cle, rec) in &recs {
         vues.insert(cle.clone());
         let naissance = match (vivantes.get(cle), retirees_a_w.get(cle)) {
@@ -495,6 +496,7 @@ fn ecrire_la_table(
         }
         if table == SCOPE {
             e.noms_retires.push(nom(l));
+            disparues += 1;
         }
         if depuis(l) == w { a_effacer.push(uuid(l)) } else { a_retirer.push(uuid(l)) }
     }
@@ -522,9 +524,10 @@ fn ecrire_la_table(
     for u in &a_effacer {
         catalog.delete_jusqu_a(table, u, Disponibilites::TOUT).map_err(|e| e.to_string())?;
     }
+    // Le rapport dit les identités disparues, comme sans générations : une ligne publiée retirée parce que
+    // son contenu change, ou une attente effacée par un retour à l'identique, n'en est pas une.
     if table == SCOPE {
-        e.effacees += a_effacer.len();
-        e.retirees += a_retirer.len();
+        e.disparues += disparues;
     }
     Ok(())
 }
@@ -571,6 +574,26 @@ fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[Remplacee]
                     &[p("ancien", CypherValue::String(ancien.clone())), p("neuf", CypherValue::String(neuf.clone()))],
                 )
                 .map_err(|e| format!("recopier les arêtes {rel} : {e}"))?;
+            recopiees += lu.rows.first().and_then(|l| l.first()).and_then(|x| x.as_i64()).unwrap_or(0) as usize;
+        }
+        // **Le miroir `CONSUMED_BY`** va de l'appelé vers l'appelant : sur la ligne retirée, c'est une
+        // arête sortante, mais elle double le `CONSUMES` d'un autre fichier, que l'ingestion de celui-ci ne
+        // repose pas (l'oubli ne défait que les `CONSUMED_BY` qui arrivent aux scopes du fichier). Elle
+        // suit la ligne neuve comme une entrante.
+        if to == SCOPE {
+            let props: Vec<String> = catalog.get_relation_def("CONSUMED_BY").and_then(|r| r.properties.as_ref()).map(|m| m.keys().cloned().collect()).unwrap_or_default();
+            let copie = if props.is_empty() {
+                String::new()
+            } else {
+                format!(" {{{}}}", props.iter().map(|k| format!("`{k}`: r.`{k}`")).collect::<Vec<_>>().join(", "))
+            };
+            let visible = catalog.dialect_arc().condition_visible_sur("x", &v.couche, v.rang).map(|c| format!(" WHERE {c}")).unwrap_or_default();
+            let lu = catalog
+                .execute_raw_with_params(
+                    &format!("MATCH (o:`{SCOPE}` {{_uuid: $ancien}})-[r:CONSUMED_BY]->(x:`{SCOPE}`){visible} MATCH (n:`{SCOPE}` {{_uuid: $neuf}}) CREATE (n)-[:CONSUMED_BY{copie}]->(x) RETURN count(*)"),
+                    &[p("ancien", CypherValue::String(ancien.clone())), p("neuf", CypherValue::String(neuf.clone()))],
+                )
+                .map_err(|e| format!("recopier le miroir CONSUMED_BY : {e}"))?;
             recopiees += lu.rows.first().and_then(|l| l.first()).and_then(|x| x.as_i64()).unwrap_or(0) as usize;
         }
     }
@@ -644,7 +667,7 @@ pub fn remove_file(catalog: &mut Catalog, source: &dyn FileSource, path: &str, e
         catalog.naissances.clear();
         let ecriture = ecrire_par_generations(catalog, &[], None, &source_id, &indexed_path)?;
         catalog.resoudre_les_symboles(&ecriture.noms_retires, exige).map_err(|e| e.to_string())?;
-        return Ok(ReingestReport { scopes_deleted: ecriture.effacees + ecriture.retirees, ..Default::default() });
+        return Ok(ReingestReport { scopes_deleted: ecriture.disparues, ..Default::default() });
     }
     let grain = grain_du_fichier(&source_id, &indexed_path);
     let t = std::time::Instant::now();
@@ -880,7 +903,7 @@ fn reingest_files_par_generations(
         let e = ecrire_par_generations(catalog, &scopes, fichier, &f.source_id, &f.indexed_path)?;
         noms_retires.extend(e.noms_retires);
         remplacees.extend(e.remplacees);
-        deleted += e.effacees + e.retirees;
+        deleted += e.disparues;
     }
     crate::ingest_profile::add("réindexer · l'écrivain des générations", t);
     for f in fichiers.iter().filter(|f| f.present) {
