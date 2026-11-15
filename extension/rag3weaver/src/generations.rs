@@ -22,6 +22,9 @@ pub const TABLE: &str = "_generation";
 
 /// La colonne de la couche d'une ligne.
 pub const COUCHE: &str = "_couche";
+/// La couche des lignes indexées depuis le backend lui-même (ni branche suivie, ni vue) : ses lignes de la
+/// génération 0 gardent l'uuid de leur seule clé. Ici et non dans `code`, que l'identité lit sans sa feature.
+pub const COUCHE_DU_BACKEND: &str = "backend";
 /// La colonne du rang qui a posé la ligne.
 pub const DEPUIS: &str = "_depuis";
 /// La colonne du rang qui l'a retirée (vide : vivante).
