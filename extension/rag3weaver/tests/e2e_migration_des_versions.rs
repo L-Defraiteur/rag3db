@@ -202,3 +202,60 @@ fn une_migration_par_lots_d_une_occurrence_donne_le_meme_resultat() {
     // **Rien ne tient en mémoire plus qu'un lot** : la borne se lit dans le bilan.
     assert_eq!(bilan.plus_gros_lot, 1, "un lot de plus d'une unité a été tenu en mémoire : {bilan:?}");
 }
+
+/// **Une base migrée par 1b monte aux générations par son chemin** (la bascule des bases de Lucie,
+/// `migration generations --base`) : la forme passe de « versions » à « generations », la génération
+/// 0 de `backend` est posée, les occurrences restent les mêmes, et la base se rouvre par le schéma de
+/// production à la forme des générations.
+#[test]
+#[ignore]
+fn une_base_a_versions_monte_aux_generations_par_son_chemin() {
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().join("code.rag3db");
+    let avant = {
+        let (mut cat, _) = ouvrir(dir.path());
+        register_code_schema_sans_versions(&mut cat, default_scope_chunking()).unwrap();
+        let source = Snapshot::new("ancre", [("a.rs".to_string(), PARTAGEE.to_string()), ("c.rs".to_string(), SEULE.to_string())]);
+        assert_eq!(cat.ingest_code(&analyze_source(&source).unwrap()).unwrap().failed, 0);
+        occurrences(&cat)
+    };
+    let refus = rag3weaver::migration_des_versions::migrer_la_base_aux_generations(&base).expect_err("une base d'avant monte aux générations");
+    assert!(refus.contains("forme"), "le refus d'une base d'avant ne nomme pas la forme : {refus}");
+    rag3weaver::migration_des_versions::migrer_la_base(&base).unwrap_or_else(|e| panic!("1b refuse : {e}"));
+    let bilan = rag3weaver::migration_des_versions::migrer_la_base_aux_generations(&base).unwrap_or_else(|e| panic!("la montée refuse : {e}"));
+    assert_eq!(
+        bilan,
+        rag3weaver::migration_des_versions::BilanDesGenerations {
+            forme_avant: "versions".into(),
+            forme_apres: "generations".into(),
+            generation: Some(("backend".into(), 0)),
+        }
+    );
+    let (mut cat, texts) = ouvrir(dir.path());
+    register_code_schema(&mut cat, default_scope_chunking()).unwrap_or_else(|e| panic!("la base montée ne se rouvre pas : {e}"));
+    assert_eq!(scope_form(&cat).unwrap(), ScopeForm::Generations);
+    assert_eq!(occurrences(&cat), avant, "les occurrences ont changé");
+    assert_eq!(texts.lock().unwrap().len(), 0, "la réouverture a embarqué");
+    drop(cat);
+    let refus = rag3weaver::migration_des_versions::migrer_la_base_aux_generations(&base).expect_err("une base aux générations remonte");
+    assert!(refus.contains("forme"), "le second passage ne nomme pas la forme : {refus}");
+}
+
+/// **Une base tenue par un autre écrivain vivant ne monte pas** : sa marque `<base>.ecrivain` (ici,
+/// celle du processus parent, vivant) vaut un refus qui dit qui la tient, avant toute ouverture.
+#[test]
+#[ignore]
+fn une_base_tenue_par_un_autre_ne_monte_pas_aux_generations() {
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().join("code.rag3db");
+    {
+        let (mut cat, _) = ouvrir(dir.path());
+        register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+    }
+    let marque = serde_json::json!({
+        "pid": std::os::unix::process::parent_id(), "started": null, "role": "hote", "outil": "un hôte de test", "depuis_ms": 0
+    });
+    std::fs::write(rag3weaver::marque_d_ecrivain::chemin(&base), marque.to_string()).unwrap();
+    let refus = rag3weaver::migration_des_versions::migrer_la_base_aux_generations(&base).expect_err("une base tenue monte");
+    assert!(refus.contains("tenue"), "le refus ne dit pas que la base est tenue : {refus}");
+}
