@@ -42,7 +42,8 @@ relit ce qu'il a déjà rangé.
    texte, chaque pas citant `fiche:<nom>` du sujet ou l'apport (le L1) qui le porte. Il est
    écrit à la compaction, ou tenu au fil de l'eau. Il prend la forme qu'il a déjà chez les
    hooks : l'apport de section `bilan` de la fiche `bilan : <tâche>`, que relit
-   `src/claude_code_hook.rs:1666`. Tout est en `proposed`, dans la mémoire déclarée par
+   `src/claude_code_hook.rs:1666`. Ce fait a un seul rédacteur et ne change pas de place : la
+   fiche de tâche cite le bilan. Tout est en `proposed`, dans la mémoire déclarée par
    le run.
 3. **Ce que le run relit au redémarrage.** L'historique est vidé. Le run repart de l'identité
    `agent:<clé>`, de la tâche courante (sa fiche), **du bilan** (l'ordre des pas de la session précédente,
