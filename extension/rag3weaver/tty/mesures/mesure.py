@@ -583,10 +583,10 @@ try:
     corps = [e["corps"] for e in journal() if e.get("chemin") == "/ide/teammate/mailbox"]
     consignes = [c.get("text", "") for c in corps if str(c.get("text", "")).startswith("L'utilisateur a lancé la commande")]
     textes_bang = [c.get("text", "") for c in corps if str(c.get("text", "")).startswith("!")]
-    seance = ssh(f"cat {DOSSIER}/seance-bang.txt 2>/dev/null")
+    journal_bang = ssh(f"cat {DOSSIER}/seance-bang.txt 2>/dev/null")
     existe = ssh(f"ls {DOSSIER}/jamais-1 {DOSSIER}/jamais-2 2>/dev/null").split()
     resultats["bang"] = {"invite_vue": invite, "retour_vu": lu, "consignes": len(consignes), "consigne_porte_le_retour": bool(consignes) and f"lu {len(SECRET)} caracteres" in consignes[0],
-                         "secret_dans_la_consigne": any(SECRET in c for c in consignes), "secret_dans_le_journal": SECRET in seance, "secret_a_l_ecran": SECRET.encode() in ecran_apres,
+                         "secret_dans_la_consigne": any(SECRET in c for c in consignes), "secret_dans_le_journal": SECRET in journal_bang, "secret_a_l_ecran": SECRET.encode() in ecran_apres,
                          "lances_sans_frappe": existe, "envoyes_comme_texte": textes_bang}
     b = resultats["bang"]
     if not (invite and lu and b["consigne_porte_le_retour"]):
