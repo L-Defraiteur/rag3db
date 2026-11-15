@@ -1,6 +1,6 @@
 # Étudier un pont navigateur ouvert par MCP
 
-- **État** : ouvert ; Chrome visible avec extension et passage de main humain, cœur composable en Rust ; transcription ciblée du pont à étudier avant un portage complet, aucun prototype lancé.
+- **État** : ouvert ; étude des sources faite le 15 novembre ([la page d'archi](../15-11-2026/03-etude-pont-navigateur.md) : forker jackwener/browsermcp, cœur Rust en bibliothèque) ; décision du socle à Lucie, aucun prototype lancé.
 - **Famille** : produit
 - **Gravité** : planification ; permettre aux agents d'utiliser le navigateur depuis l'atelier.
 - **Atteignable en service** : non pour ce raccordement ; aucune capacité livrée par cette note.

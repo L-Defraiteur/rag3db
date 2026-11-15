@@ -51,8 +51,8 @@ sous une fermeture avec une raison, une écriture n'est plus refusée et perdue.
 - **La navigation des membres** : branche `navigation-membres`, tête `49d547a07`, cinq commits sur
   `87f764243`, verte. Elle attend le travail d'appartenance de codeparsers, puis la pile. Plus
   tard : lire `extends_type` et `parent_path` quand codeparsers les posera (proposés à c7).
-- **Le pont navigateur par MCP** : étude de conception seule, dans cette page ou la suivante, sans
-  passe lourde (c7, 15 nov. 01 h 3x).
+- **Le pont navigateur par MCP** : l'étude est faite ([page 03](03-etude-pont-navigateur.md)) ; la
+  recommandation est de forker jackwener/browsermcp. Le choix du socle revient à Lucie.
 - **Le plafond du juge** (forme (a), `max_output_tokens`) : remis à l'allumage du juge.
 - **Au prochain plafond du target** : le relevé `du` pour G (deps `.rlib` locales contre tierces,
   incremental) avant `cargo clean -p`. `delais-c` pèse 30 Go à 01 h 3x, pour un plafond de 32.
