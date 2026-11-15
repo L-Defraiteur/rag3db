@@ -6113,6 +6113,45 @@ mod tests_de_l_ecrivain {
         }
     }
 
+    /// Un catalogue de code sur une base **sur disque** : un second catalogue la rouvre comme un autre hôte.
+    fn sur_disque(chemin: &std::path::Path) -> Catalog {
+        let conn = crate::Rag3dbConnection::new(chemin).expect("la base sur disque");
+        let mut cat = Catalog::new(Box::new(conn), Box::new(crate::embedder::HashEmbedder::new(8)), crate::CatalogConfig {
+            allow_mock_embedder: true, embedding_dim: 8, ..Default::default()
+        });
+        cat.initialize().unwrap();
+        register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+        cat
+    }
+
+    /// **Témoin 21 : une base rouverte sait qu'elle a une histoire** (le juge de banc contre l'index neuf,
+    /// 16 novembre : la copie du lot, rouverte, cherchait sans masque sur les 136 181 morceaux). L'écrivain
+    /// ferme une ligne dans un premier catalogue ; un second, neuf, rouvre la base : un lecteur sans filtre y
+    /// porte la clause de visibilité. Une base rouverte sans histoire garde le raccourci « tout visible ».
+    #[test]
+    fn une_base_rouverte_sait_qu_elle_a_une_histoire() {
+        let d = tempfile::tempdir().unwrap();
+        let chemin = d.path().join("histoire.rag3db");
+        {
+            let mut cat = sur_disque(&chemin);
+            let src = Snapshot::new("ancre", [("a.rs".to_string(), A.to_string()), ("b.rs".to_string(), F1.to_string())]);
+            cat.ingest_code(&analyze_source(&src).unwrap()).unwrap();
+            cat.publier_la_generation("c1", 0).expect("publier");
+            let rouverte = sur_disque(&d.path().join("sans-histoire.rag3db"));
+            drop(rouverte);
+            let rouverte = sur_disque(&d.path().join("sans-histoire.rag3db"));
+            assert!(rouverte.generations.as_ref().unwrap().tout_visible, "sans histoire, le raccourci reste");
+            sauver(&mut cat, &src, "b.rs", F2);
+            cat.publier_la_generation("c2", 0).expect("publier");
+            assert!(lignes(&cat, "f").iter().any(|l| l.3.is_some()), "une ligne de f est fermée : {:?}", lignes(&cat, "f"));
+        }
+        let cat = sur_disque(&chemin);
+        let v = cat.generations.clone().expect("une base à générations");
+        assert!(!v.tout_visible, "la base rouverte a une ligne fermée : elle n'est pas « tout visible »");
+        let (clause, _, _) = cat.compile_filter_for_vector(SCOPE, None).unwrap();
+        assert!(clause.as_deref().is_some_and(|c| c.contains(crate::generations::JUSQU_A)), "un lecteur sans filtre porte la visibilité : {clause:?}");
+    }
+
     /// Les arêtes visibles d'un côté sans leur miroir de l'autre : `CONSUMED_BY (b → a)` sans
     /// `CONSUMES (a → b)`, puis l'inverse, les deux bouts sous la visibilité.
     fn miroirs_manquants(cat: &Catalog) -> (Vec<(String, String)>, Vec<(String, String)>) {
