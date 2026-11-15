@@ -24,6 +24,24 @@ repassé P0-3 vers cette source.
   Le dessin le prévoyait : « le plein texte indexe `ScopeContent`, partagé : il reste commun, et sa visibilité vient du
   masque » (page 03 de 2a′, du 14 novembre). La page 05 passe ce masque à lucivy en `allowed_ids`.
 
+## La cause première : une base rouverte se croyait « tout visible » (ED, 16 novembre, 0 h 15)
+
+`Visibilite::tout_visible` était posé à vrai à toute ouverture d'une base à générations (`catalog.rs`, à la pose
+des générations). Seuls l'écrivain, dans son processus, et un témoin le baissaient. Une base qui a de l'histoire,
+rouverte par un autre hôte, partait donc **sans masque** pour tout lecteur sans filtre (`read_view.rs`,
+`compile_filter_for_vector_in` et `parser_le_filtre`). C'est le cas du juge de banc, qui rouvre la copie du lot après
+l'index : sa recherche « sans filtre » cherchait sur les 136 181 morceaux, avec N, les fréquences et la longueur moyenne
+de toute l'histoire, et les versions fermées pour candidates.
+
+C'est un défaut de la lecture sale sous versions : un lecteur sans masque sur une base à histoire. Il est corrigé dans
+le lot de l'écrivain (`ecrivain-2a-prime-2-pile-3`, 5081d2281) : « tout visible » se lit sur la base à l'ouverture.
+Une ligne retirée, d'une autre couche ou posée après le rang lu le rend faux. Le témoin 21
+(`code::tests_de_l_ecrivain::une_base_rouverte_sait_qu_elle_a_une_histoire`) est rouge sur 6b3579115 et vert sur
+5081d2281.
+
+**Ce qui reste à juger** : banc rejoue ses 30 cas sur la tête corrigée. Si les rangs reviennent, ce ticket ne garde que
+la longueur moyenne du champ, et peut-être rien ; lucivy attend ce rejeu avant de dessiner (c7).
+
 ## Ce que le code fait déjà, et ce qui reste
 
 - **Le masque est un pré-filtre, pas un filtre après coup.** `search_filtered` de lucivy 4.3.7 prend les k premiers
@@ -34,8 +52,7 @@ repassé P0-3 vers cette source.
   exprès sur le corpus, n'entre pas en jeu »). Avec l'histoire, le corpus compte les morceaux des versions fermées, et la
   normalisation de longueur de BM25 change pour tous. C'est la cause la plus probable des rangs déplacés, à prouver.
 - **Le masque sans filtre** n'est imposé que si une ligne de la table n'est pas visible (`parser_le_filtre`,
-  `Visibilite::tout_visible`). Il reste à vérifier sur la copie du lot, rouverte par un hôte neuf, que ce drapeau est
-  bien faux : sinon la recherche partirait sans masque.
+  `Visibilite::tout_visible`). Ce drapeau était vrai à toute ouverture : c'est la cause première, ci-dessus.
 - **La remontée version → occurrences** (`Admission`) n'ôte après coup que si un filtre, une cellule ou des versions
   orphelines restreignent. Il reste à vérifier qu'une version dont toutes les occurrences sont fermées est ôtée **par
   le masque d'avant**, et pas par cette remontée. Sinon elle prendrait une place dans les k premiers puis tomberait :
