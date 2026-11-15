@@ -45,8 +45,11 @@ pub type ChatModel = Arc<dyn Fn(&crate::backend::PreparedBackend) -> Result<Arc<
 pub(super) fn liste_des_modeles(modeles: &crate::model_source::Modeles, choix: Option<&str>) -> Value {
     use crate::model_source::Modeles;
     let tous = modeles.modeles_de_langage();
-    let defaut = tous.iter().find(|s| s.default).or(tous.first()).map(|s| Modeles::nom(s).to_string());
+    // Le défaut : la lecture de `Modeles` en garantit un seul, et `.get(&Llm)` est lui (ED).
+    let defaut = modeles.get(&crate::model_source::Capability::Llm).map(|s| Modeles::nom(s).to_string());
     let courant = choix.map(str::to_string).or(defaut.clone());
+    // Un choix qui ne désigne plus aucun modèle déclaré se rend quand même, marqué inconnu (ED).
+    let inconnu = courant.as_deref().is_some_and(|c| !tous.iter().any(|s| Modeles::nom(s) == c));
     let liste: Vec<Value> = tous
         .iter()
         .map(|s| {
@@ -54,7 +57,7 @@ pub(super) fn liste_des_modeles(modeles: &crate::model_source::Modeles, choix: O
             json!({ "name": n, "model": s.model, "provider": s.provider, "protocol": s.protocol, "default": defaut.as_deref() == Some(n), "current": courant.as_deref() == Some(n) })
         })
         .collect();
-    json!({ "models": liste, "current": courant, "default": defaut })
+    json!({ "models": liste, "current": courant, "current_unknown": inconnu, "default": defaut })
 }
 
 /// **Un modèle de langage déclaré, connecté** (lot tty-14) : celui qu'une tâche a choisi par son nom.
@@ -223,7 +226,7 @@ impl DaemonHost {
         let choix = self.taches.lock().unwrap_or_else(|p| p.into_inner()).get(manifest).and_then(|t| t.modele.clone());
         match choix {
             Some(nom) => {
-                let source = prepared.manifest.models.modele_de_langage(&nom)?.clone();
+                let source = prepared.manifest.models.modele_de_langage(&nom).map_err(|e| format!("le modèle choisi pour la tâche : {e} ; choisissez un modèle par /model"))?.clone();
                 (self.modele_nomme)(&source)
             }
             None => (self.chat_model)(prepared),
