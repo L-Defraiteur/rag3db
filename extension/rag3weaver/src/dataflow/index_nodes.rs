@@ -1073,4 +1073,58 @@ mod tests {
         let _ = std::fs::remove_file(&journal);
         assert!(IndexNodeFactory.create("i", &serde_json::json!({"confirm": true})).is_ok());
     }
+
+    /// **La provenance des vecteurs, au journal d'index** (lot du repli quand
+    /// la carte est pleine, 15 novembre 2026) : après chaque passe, d'où sont
+    /// venus les vecteurs ; et ce que l'embarqueur a dit (un repli), une fois.
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    #[test]
+    fn le_journal_d_index_dit_la_provenance_des_vecteurs_et_le_repli() {
+        const REPLI: &str = "replié vers 127.0.0.1:9 à 10 h 00, cause : card-t7 à 1000 Mio libres, 11500 requis + 2048 de marge";
+        #[derive(Default)]
+        struct Provenant { dit: std::sync::atomic::AtomicBool, comptes: Mutex<Vec<(String, usize)>>, dits: Mutex<Vec<String>> }
+        impl crate::embedder::Embedder for Provenant {
+            fn embed(&self, textes: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+                if !self.dit.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                    self.dits.lock().unwrap().push(REPLI.into());
+                }
+                self.comptes.lock().unwrap().push(("service 127.0.0.1:9".into(), textes.len()));
+                Ok(vec![vec![0.5; 4]; textes.len()])
+            }
+            fn dim(&self) -> usize { 4 }
+            fn name(&self) -> &str { "provenant" }
+            fn distant(&self) -> bool { true }
+            fn provenance_counts(&self) -> Vec<(String, usize)> {
+                let mut total = std::collections::BTreeMap::<String, usize>::new();
+                for (p, n) in std::mem::take(&mut *self.comptes.lock().unwrap()) {
+                    *total.entry(p).or_default() += n;
+                }
+                total.into_iter().collect()
+            }
+            fn provenance_events(&self) -> Vec<String> {
+                std::mem::take(&mut *self.dits.lock().unwrap())
+            }
+        }
+        let fichiers: Vec<(String, String)> = (0..6).map(|i| (format!("src/f{i}.rs"), format!("pub fn f{i}() -> u32 {{ {i} }}\n"))).collect();
+        let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", fichiers));
+        let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
+        let ext = crate::backend::vector_extension_of_this_process().unwrap_or_else(|e| panic!("{e}"));
+        crate::connection::DbConnection::execute(&conn, &format!("LOAD EXTENSION {}", crate::connection::cypher_path_literal(&ext))).expect("extension vecteur");
+        let config = crate::CatalogConfig { name: Some("provenance".into()), embedding_dim: 4, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(Provenant::default()), config);
+        catalog.initialize().unwrap();
+        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        let catalog = Arc::new(Mutex::new(catalog));
+        let journal = new_index_journal().expect("journal");
+        spawn_index(catalog.clone(), source, journal.clone(), 0, Default::default()).join().expect("le fil d'indexation");
+        let lignes: Vec<String> = std::fs::read_to_string(&journal).unwrap().lines().map(String::from).collect();
+        let _ = std::fs::remove_file(&journal);
+        assert_eq!(lignes.iter().filter(|l| l.as_str() == REPLI).count(), 1, "le repli se dit une fois : {lignes:?}");
+        const PREFIXE: &str = "provenance des vecteurs : service 127.0.0.1:9 : ";
+        let embarques: usize = lignes.iter().filter_map(|l| l.strip_prefix(PREFIXE))
+            .map(|r| r.strip_suffix(" morceau(x)").and_then(|n| n.parse::<usize>().ok()).unwrap_or_else(|| panic!("ligne de provenance mal formée : {r}")))
+            .sum();
+        assert_eq!(embarques, 12, "chaque morceau embarqué a sa provenance au journal : {lignes:?}");
+        assert!(lignes.last().is_some_and(|l| l.starts_with(DONE_LINE)), "la dernière ligne reste le contrat : {lignes:?}");
+    }
 }
