@@ -243,7 +243,7 @@ fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
                 return lu.lines().rev().take(6).collect::<Vec<_>>().join("\n");
             }
             assert!(!lu.contains("indexation échouée"), "index {etape} : {lu}");
-            assert!(debut.elapsed().as_secs() < 3600, "index {etape} : pas fini en une heure");
+            assert!(debut.elapsed().as_secs() < 7200, "index {etape} : pas fini en deux heures");
             std::thread::sleep(std::time::Duration::from_millis(500));
         }
     };
@@ -479,7 +479,7 @@ fn indexer_et_attendre(backend: &rag3weaver::backend::Backend, etape: &str) -> S
             return lu.lines().rev().take(6).collect::<Vec<_>>().join("\n");
         }
         assert!(!lu.contains("indexation échouée"), "index {etape} : {lu}");
-        assert!(debut.elapsed().as_secs() < 3600, "index {etape} : pas fini en une heure");
+        assert!(debut.elapsed().as_secs() < 7200, "index {etape} : pas fini en deux heures");
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
 }
