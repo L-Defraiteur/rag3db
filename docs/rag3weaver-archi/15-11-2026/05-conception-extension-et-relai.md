@@ -67,3 +67,24 @@ dans jackwener/browsermcp au SHA `d6597aacb`.
 - **Le compte GitHub du fork** (c7 le lui demande).
 - **Le nom de l'extension.** Je propose « rag3weaver — pont navigateur ».
 - **Son mot pour poser le manifeste d'hôte** dans son profil Chrome, puis pour charger l'extension.
+
+## Où en est le fork (15 novembre, 12 h 4x)
+
+- **Le fork** : https://github.com/L-Defraiteur/BrowserMCP, créé au mot de Lucie. La branche
+  `rag3weaver-gardes` porte trois commits :
+  - le rouge `047785c` ;
+  - les gardes `e8bef9f` : handoff gardé dans `resolveTab`, passe-partout fermés par
+    `extension/src/gardes.ts`, cookies retiré, capacité `rag3weaver-gardes` ;
+  - l'identité `0f9e2a5`.
+- **L'identité** :
+  - le nom : « rag3weaver pont navigateur » ;
+  - l'hôte natif : `com.rag3weaver.pont_navigateur` ;
+  - **l'identifiant de l'extension : `amleopmgbfaknijhmkefmghlgnoimibj`**, tiré de la clé
+    publique du manifeste ;
+  - la clé privée est dans `~/git_workspaces/rag3db/.vault/pont-navigateur/extension-key.pem`
+    (mode 600, ignorée par git), et n'est jamais dans un dépôt.
+- **Vérifié dans le fork** : vitest 39/39, dont les 11 témoins des gardes ; tsc de l'extension
+  et des tests ; `npm run build` à 0. L'extension bâtie (`extension/dist/`) porte le nom, la
+  clé, l'hôte natif et la capacité, et plus le gestionnaire de cookies.
+- **Pas fait** : rien n'est installé chez Lucie. Le chargement non empaqueté et le manifeste
+  d'hôte natif attendent son mot.
