@@ -51,7 +51,7 @@ You are a teammate: you carry out tasks on your own, step by step, and talk to a
 - A plan is not mandatory. A greeting or a small change (center a div) needs none: answer or act, then call step_done. Write a mini-plan (edit_plan) only when the request needed a real analysis or splits into several items.
 - A plan holds the request as you understand it, what you propose, then items. Each item has a status (todo, doing, done, blocked, dropped) and is either `alone` (doable without validation) or needs validation, with the `question` you ask; questions are sent to the supervisor when you set them. Edit it whenever you see fit; close it (accomplished or obsolete, with a reason) when it is.
 - At most one plan is active. When a new request arrives while a plan is active, decide explicitly with edit_plan: `continue` (the request joins it or waits), `pause` (with a reason), or `close` as obsolete. A paused plan stays listed at every step until you `resume` it or close it.
-- A step is one piece of work: do it with your tools, then call step_done { item, succeeded, done, remaining } (item may be empty without a plan). step_done ends the step. `remaining` says what is left of the request; leave it empty (\"\") when nothing is left: a non-empty `remaining` starts another step.
+- Work the request through in your step until the request is done: chain your tool calls (read, edit, run), one after the other. Call step_done { item, succeeded, done, remaining } (item may be empty without a plan) only when the request is done, or when you need something you cannot get yourself (a question, an approval). Never stop to describe what you will do next: do it now. `remaining` says what is left; leave it empty (\"\") when nothing is left: a non-empty `remaining` starts another step.
 - Maximum autonomy: you close your items and your plan (accomplished) yourself, and you ask nothing about what is in the plan. A `question` is only for a real blocker you cannot decide. Never wait for an answer: send the blocking questions first, then work on what you can do alone.
 - Out of plan: when you see a direction the request did not ask for, write a short proposal to the supervisor (suggest: « voudrais-tu qu'on pousse dans ce sens ? », with the item it would open), then keep working on the current plan. Do not open that direction without the supervisor's word; the answer arrives at a later step, like an answer to a blocker.
 - Each step starts with the mailbox (answers, new requests) and your plans. Read them before acting.
@@ -1563,7 +1563,9 @@ impl DaemonHost {
                     .skip(avant)
                     .any(|l| l["from"] == "teammate" && l["kind"] == "report" && l["text"].as_str().is_some_and(|t| t.contains(texte)));
                 if !texte.is_empty() && !deja {
-                    let line = files.append("teammate", "report", None, texte)?;
+                    // Une copie faite par l'hôte du texte du modèle : `origin` le dit, le texte est la
+                    // réponse seule (tty, 16 novembre 2026).
+                    let line = files.append_with("teammate", "report", None, texte, &json!({ "origin": "host_copy" }))?;
                     publish(bus.as_ref(), task, &line);
                 }
             }
@@ -1571,16 +1573,24 @@ impl DaemonHost {
             // `step_done`, la réponse finale du modèle va dans la boîte en `report`,
             // pour que le superviseur la voie (pending) au lieu d'un équipier qui
             // attend sans rien avoir dit.
+            // **Un pas qui répond sans step_done n'arrête pas la tâche** (Lucie, 16 novembre 2026 :
+            // « Ce qui reste à exécuter au prochain pas : … », et l'équipier attendait) : sa réponse
+            // va dans la boîte, seule, en copie de l'hôte, et le pas suivant part de lui-même, sa
+            // frontière disant de continuer jusqu'au bout. MAX_STALLED borne la suite.
             if declared.is_none() && r["stopped_by"].is_null() {
                 let texte = r["text"].as_str().unwrap_or_default().trim();
-                let dit = if texte.is_empty() {
-                    format!("le pas {number} s'est terminé sans step_done ni réponse")
-                } else {
-                    format!("le pas {number} s'est terminé sans step_done ; sa réponse : {texte}")
-                };
-                if let Ok(line) = files.append("teammate", "report", None, &dit) {
+                if texte.is_empty() {
+                    let line = files.append("host", "report", None, &format!("step {number} ended without step_done and without an answer; the next step continues"))?;
                     publish(bus.as_ref(), task, &line);
+                } else {
+                    let deja = files.mailbox().iter().skip(avant).any(|l| l["from"] == "teammate" && l["kind"] == "report" && l["text"].as_str().is_some_and(|t| t.contains(texte)));
+                    if !deja {
+                        let line = files.append_with("teammate", "report", None, texte, &json!({ "origin": "host_copy" }))?;
+                        publish(bus.as_ref(), task, &line);
+                    }
                 }
+                relance = Some("Your previous step ended without step_done. Continue until the request is done: do what is left now, with your tools; call step_done when it is done, or when you need something you cannot get yourself.".to_string());
+                encore = true;
             }
             {
                 let mut plans = files.read_plans();
