@@ -2,7 +2,7 @@
 
 - **État** : ouvert (15 novembre 2026, embarquement ; décision de c7)
 - **Pour** : embarquement
-- **Famille** : mesure
+- **Famille** : produit (une mesure à jouer, pas de code)
 - **Gravité** : manque de preuve. Le mécanisme est prouvé, le cas réel ne l'est pas.
 - **Atteignable en service** : oui
 - **Touche rag3weaver** : non (une mesure)
