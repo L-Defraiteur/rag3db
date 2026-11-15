@@ -19,6 +19,8 @@ pub enum Commande {
     Effacer,
     EffacerHistorique,
     Contexte,
+    /// `/model` : les modèles de la tâche, ou en choisir un par son nom (tty-14).
+    Modele(Option<String>),
     /// `!…` : une commande lancée là où tourne le terminal.
     Shell(String),
     Inconnue(String),
@@ -32,6 +34,7 @@ pub const COMMANDES: &[(&str, &str)] = &[
     ("depot", "<nom> : passe à un autre dépôt"),
     ("effacer", "efface l'écran visible ; « /effacer historique » efface l'historique des envois"),
     ("journal", "où relire la séance"),
+    ("model", "<nom> : change le modèle de la tâche ; seul, les modèles déclarés"),
     ("quitter", "quitte le terminal"),
     ("tache", "<nom> : passe à une autre tâche"),
     ("theme", "<nom> : change de thème"),
@@ -103,6 +106,8 @@ pub struct Sources {
     pub themes: Vec<String>,
     pub taches: Vec<String>,
     pub depots: Vec<String>,
+    /// Les noms des modèles déclarés pour la tâche (`/model`).
+    pub modeles: Vec<String>,
     /// Les exécutables du `PATH`, pour le premier mot d'un `!`.
     pub executables: Vec<String>,
     /// Les chemins du dossier courant qui commencent par un préfixe donné.
@@ -179,6 +184,8 @@ mod tests {
         assert_eq!(c("/effacer"), Some(Commande::Effacer));
         assert_eq!(c("/effacer historique"), Some(Commande::EffacerHistorique));
         assert_eq!(c("/context"), Some(Commande::Contexte));
+        assert_eq!(c("/model"), Some(Commande::Modele(None)));
+        assert_eq!(c("/model rapide"), Some(Commande::Modele(Some("rapide".into()))));
         assert_eq!(c("/arreter"), Some(Commande::Arreter));
         assert_eq!(c("/journal"), Some(Commande::Journal));
         assert_eq!(c("/nimporte"), Some(Commande::Inconnue("nimporte".into())));
@@ -200,6 +207,9 @@ mod tests {
         assert_eq!(completer("/tache essai-", &s), Some(Completion { texte: "/tache essai-".into(), candidats: vec!["essai-ide".into(), "essai-tty".into()] }));
         assert_eq!(completer("/e", &s).map(|c| c.candidats), Some(Vec::<String>::new()), "une seule commande en e : complétée, sans candidats");
         assert_eq!(completer("/e", &s).map(|c| c.texte), Some("/effacer ".into()));
+        let m = Sources { modeles: vec!["rapide".into(), "fin".into()], ..Default::default() };
+        assert_eq!(completer("/model r", &m), Some(Completion { texte: "/model rapide".into(), candidats: vec![] }));
+        assert_eq!(completer("/mo", &m), Some(Completion { texte: "/model ".into(), candidats: vec![] }));
         assert_eq!(completer("/zz", &s), None, "rien à proposer");
         assert_eq!(completer("bonjour", &s), None, "un envoi ne se complète pas");
     }
