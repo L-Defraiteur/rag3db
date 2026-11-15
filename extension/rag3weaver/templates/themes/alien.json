@@ -156,6 +156,28 @@
         "❬{a}{b} {coeur} {c}❭ ...LA RUCHE ÉCRIT...",
         " {a} ⸢{coeur}⸣ {b}  ...PONTE DANS LE NOYAU..."
       ]
+    },
+    "repos": {
+      "forme": "transmutation",
+      "ms": 260,
+      "glyphes": [
+        "·",
+        "∘",
+        "○",
+        "◌",
+        "◍",
+        "◎",
+        "●",
+        "◎",
+        "◍",
+        "◌",
+        "○",
+        "∘"
+      ],
+      "coeur": "◬",
+      "gabarits": [
+        "⁅ {s} ⁆ {coeur} ⁅ {s} ⁆ À TOI DE TRANSMETTRE..."
+      ]
     }
   },
   "replis": {},
@@ -180,7 +202,8 @@
       "Ê": "E",
       "É": "E",
       "È": "E",
-      "Ç": "C"
+      "Ç": "C",
+      "À": "A"
     }
   },
   "code": {

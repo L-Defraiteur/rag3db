@@ -139,6 +139,28 @@
         "❬{a}{b} {coeur} {c}❭ ...LES FEUILLES ÉCRIVENT...",
         " {a} ⸢{coeur}⸣ {b}  ...L'ÉCORCE SE GRAVE..."
       ]
+    },
+    "repos": {
+      "forme": "transmutation",
+      "ms": 260,
+      "glyphes": [
+        "☽",
+        "◐",
+        "◓",
+        "◑",
+        "◒",
+        "☾",
+        "●",
+        "☾",
+        "◒",
+        "◑",
+        "◓",
+        "◐"
+      ],
+      "coeur": "⸙",
+      "gabarits": [
+        "⁅ {s} ⁆ {coeur} ⁅ {s} ⁆ LA CLAIRIÈRE T'ÉCOUTE..."
+      ]
     }
   },
   "replis": {},
@@ -163,7 +185,8 @@
       "❦": "&",
       "Ê": "E",
       "É": "E",
-      "È": "E"
+      "È": "E",
+      "À": "A"
     }
   },
   "code": {

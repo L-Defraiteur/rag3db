@@ -150,6 +150,28 @@
         "❬{a}{b} {coeur} {c}❭ ...SERVOMOTEURS ENGAGÉS...",
         " {a} ⸢{coeur}⸣ {b}  ...SOUDURE DU CODE..."
       ]
+    },
+    "repos": {
+      "forme": "transmutation",
+      "ms": 260,
+      "glyphes": [
+        "▁",
+        "▂",
+        "▃",
+        "▄",
+        "▅",
+        "▆",
+        "▇",
+        "▆",
+        "▅",
+        "▄",
+        "▃",
+        "▂"
+      ],
+      "coeur": "⏣",
+      "gabarits": [
+        "⁅ {s} ⁆ {coeur} ⁅ {s} ⁆ EN VEILLE : À TOI..."
+      ]
     }
   },
   "replis": {},
@@ -174,7 +196,8 @@
       "Ê": "E",
       "É": "E",
       "È": "E",
-      "Ç": "C"
+      "Ç": "C",
+      "À": "A"
     }
   },
   "code": {
