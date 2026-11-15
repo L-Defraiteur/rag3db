@@ -1396,3 +1396,8 @@ essai-tty/arbre). La cause : `workspace.ecrit` d'une tâche est calculé **une f
 parent du moment) et figé au registre ; essai-tty est née le 14 à 18 h 34 sans task_writes, donc ecrit = false, donc
 read_only. Fait : une tâche neuve **atelier** (POST /ide/taches, branche agent/atelier, backend 2fb80390ed75, ecrit = true) pour
 Lucie. Pour le socle : (d) ecrit recalculé à chaque ouverture ; (b) le bac lit le .git commun ; (c) le message de ReadOnly.
+G, 16 h 20 : défaut de plafond-menage — `cargo clean -p` refuse un target sans CACHEDIR.TAG (les nôtres naissent de la garde), et le
+ménage échouait en silence : les targets grossissaient (33 Go chez archi). Correctif plafond-cachedir 78789cd89 (la garde pose
+l'étiquette, un clean qui échoue le dit ; 22 677 → 4 209 Mio sur un vrai target), rouge d'abord. Place : juste après
+embarquement, avant le lot CI de hotfixs. Ordre : embarquement → G (cachedir) → CI → format → lucivy → codeparsers → archi (B) →
+tty-14/15/16 → ED (1) → G (hashes, known_red) → arbre.
