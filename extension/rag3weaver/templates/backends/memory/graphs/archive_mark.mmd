@@ -1,7 +1,7 @@
 %% tool: archive_mark
-%% description: Marque une section longue pour le découpage (archive, param segment_over) : la section telle quelle, avec `long` vrai si son texte dépasse segment_over caractères (0 : jamais).
-%% param: element json! -- La section.
-%% param: segment_over int = 0 -- Le seuil en caractères ; 0 : éteint.
+%% description: Marks a long section for splitting (archive, param segment_over): the section as is, with `long` true when its text is longer than segment_over characters (0: never).
+%% param: element json! -- The section.
+%% param: segment_over int = 0 -- The threshold in characters; 0: off.
 %% result: mark.result
 
 graph LR

@@ -7,8 +7,8 @@ for p in s.text.split("\n\n") { let t = p; t.trim(); if t != "" { paragraphs.pus
 let body = "";
 let i = 1;
 for p in paragraphs { body += "[" + i + "] " + p + "\n\n"; i += 1; }
-`Découpe cette section en sujets. Un sujet est un chantier, une chose ou une règle ; des paragraphes voisins sur le même sujet vont ensemble. Rends chaque sujet par son titre en quelques mots (title) et par l’intervalle de ses paragraphes (from, to, numéros inclus), dans l’ordre, chaque paragraphe dans un seul sujet.
+`Split this section into topics. A topic is a piece of work, a thing or a rule; neighbouring paragraphs on the same topic go together. Return each topic by its title in a few words (title) and by the range of its paragraphs (from, to, numbers included), in order, each paragraph in exactly one topic.
 
-Section « ${s.title} », en ${paragraphs.len()} paragraphes :
+Section « ${s.title} », in ${paragraphs.len()} paragraphs:
 
 ${body}`

@@ -1,7 +1,7 @@
 %% tool: archive_segment
-%% description: Découpe une section longue en sujets (archive, param segment_over) : ses paragraphes numérotés vont au modèle, qui rend ses sujets sous un schéma ({topics: [{title, from, to}]}) ; chaque sujet devient une sous-section de titre « <titre> §from-to » et de texte ses paragraphes. Un modèle qui ne rend pas ce JSON fait échouer l’envoi en nommant response_schema : rien n’est deviné. Aucun sujet rendu : la section reste entière.
-%% param: element json! -- La section longue.
-%% param: schema json = {"type": "object", "properties": {"topics": {"type": "array", "items": {"type": "object", "properties": {"title": {"type": "string"}, "from": {"type": "integer"}, "to": {"type": "integer"}}, "required": ["title", "from", "to"], "additionalProperties": false}}}, "required": ["topics"], "additionalProperties": false} -- La forme de la réponse du modèle.
+%% description: Splits a long section into topics (archive, param segment_over): its numbered paragraphs go to the model, which returns its topics under a schema ({topics: [{title, from, to}]}); each topic becomes a sub-section titled « <title> §from-to » whose text is its paragraphs. A model that does not return this JSON makes the call fail, naming response_schema: nothing is guessed. No topic returned: the section stays whole.
+%% param: element json! -- The long section.
+%% param: schema json = {"type": "object", "properties": {"topics": {"type": "array", "items": {"type": "object", "properties": {"title": {"type": "string"}, "from": {"type": "integer"}, "to": {"type": "integer"}}, "required": ["title", "from", "to"], "additionalProperties": false}}}, "required": ["topics"], "additionalProperties": false} -- The shape of the model reply.
 %% result: build.result
 
 graph LR
