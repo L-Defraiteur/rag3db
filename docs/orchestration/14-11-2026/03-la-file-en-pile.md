@@ -1654,3 +1654,7 @@ pu être chargée (perte d'index, atteignable), après le verdict du cœur.
 ED, 18 h 34 : le nom et la persona de l'agent verts (nom-de-l-agent 911ef78ee ; passe épinglée verte ; deux témoins) ; réserve dite : leurs
 rouges n'étaient que de compilation — demandé : les faire rougir sur une méthode faussée avant le push. Embarquement : l'adresse du
 repli dans le bloc d'activation (`address`), jamais card0 dans un exemple.
+Hotfixs, 18 h 35 : l'extension non chargée — les .extensions des bases vivantes visent déjà 373b5477b, mais à chaque bascule de lib la
+première ouverture refuse l'extension de la lib d'avant (extension_error de SHOW_INDEXES, jamais lu par rag3weaver), l'index est
+détaché et rebâti en entier en silence, attribué à tort à un arrêt brutal, rien au reçu ni à l'état. Correctif en Rust (lire
+extension_error, avertissement nommé au reçu et à l'état, vraie cause du rebâti), témoin rouge d'abord ; après les lots du soir.
