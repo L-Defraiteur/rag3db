@@ -1580,3 +1580,8 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   20 rejoués, accord ≥ 0,8). Ajouts c7 : lecture à 20 tours, M5 l'ordre (le bilan), le temps de passe. Règle :
   ARCH ne gagne qu'à budget égal sans perdre en M2. **Le cœur** reposé sur 850a0b617 (8d3a78fe1), rejeu 40 min,
   file tenue.
+- **Lucie, 12 h 4x, « vraiment important »** : extraire une conversation Claude Code entière, appels d'outils et
+  retours compris, jusqu'à sa compaction (~900 k jetons) comme corpus de vrai long contexte ; mesurer jusqu'où
+  l'archiviste voit sans dérailler et quels contournements tiennent (rangement au fil de l'eau, fenêtres
+  chevauchées, bilan courant). Première mesure du banc, confiée à banc avec 96, sur le segment d'une frontière
+  de mon transcript.

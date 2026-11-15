@@ -960,3 +960,6 @@ le cœur (ALTER, rejeu sur 36ee817a7, ~12 h 30), puis tty-11 et tty-12 à leur v
 **12 h 3x — la file est tenue pour le cœur** : son lot C++ (l'ALTER qui attend) se repose sur master et rejoue
 40 min ; personne n'atterrit d'ici son « poussé ». La voie de la garde qui transférerait des suites C++ quand
 seul du Rust a atterri est au ticket de G.
+G, 12 h 4x : garde-cpp-transferable 660586fab prêt (hors pile : si le lot ne touche que src/, test/,
+extension/vector/, tools/rust_api/ et que `git diff base..master` est vide sous ces chemins, la garde accepte
+en le disant ; en pile, (b) reste un arrêt ; rouge sur la garde de master, 39 vert). Push après le cœur.
