@@ -13,9 +13,13 @@ nomme chaque écart. Deux régimes, choisis par --regime :
   sous --ensemble-min (0,9 par défaut), ou si un résultat bouge de plus de --rang-max rangs (3 par
   défaut).
 
+- `reponses` : deux générations d'une même base (l'écrivain des générations, 15 novembre). Une ligne
+  qui change naît sous un autre `_uuid` : l'identité est la réponse elle-même, (file_path, name,
+  start_line, content_hash), et la parité est au bit près sur l'ordre et le score.
+
 L'identité d'un résultat est son `_uuid`, et à défaut (file_path, name, start_line).
 
-Usage : parite_search_code.py AVANT.json APRES.json [--regime optimisation|migration]
+Usage : parite_search_code.py AVANT.json APRES.json [--regime optimisation|migration|reponses]
         [--ensemble-min 0.9] [--rang-max 3]
 La dernière ligne est VERT ou ROUGE ; le code de sortie est 0 ou 1.
 """
@@ -30,6 +34,10 @@ def cle(r):
     return ("repli", r.get("file_path"), r.get("name"), r.get("start_line"))
 
 
+def reponse(r):
+    return ("reponse", r.get("file_path"), r.get("name"), r.get("start_line"), r.get("content_hash"))
+
+
 def nom(r):
     return f"{r.get('name')} ({r.get('file_path')}:{r.get('start_line')})"
 
@@ -38,7 +46,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("avant")
     p.add_argument("apres")
-    p.add_argument("--regime", choices=["optimisation", "migration"], default="optimisation")
+    p.add_argument("--regime", choices=["optimisation", "migration", "reponses"], default="optimisation")
     p.add_argument("--ensemble-min", type=float, default=0.9)
     p.add_argument("--rang-max", type=int, default=3)
     a = p.parse_args()
@@ -60,13 +68,14 @@ def main():
             rouges += 1
             continue
         ra, rb = xa["resultats"], xb["resultats"]
-        ka, kb = [cle(r) for r in ra], [cle(r) for r in rb]
+        ident = reponse if a.regime == "reponses" else cle
+        ka, kb = [ident(r) for r in ra], [ident(r) for r in rb]
         ecarts = []
-        if a.regime == "optimisation":
+        if a.regime in ("optimisation", "reponses"):
             if len(ra) != len(rb):
                 ecarts.append(f"{len(ra)} résultats avant, {len(rb)} après")
             for i, (x, y) in enumerate(zip(ra, rb), 1):
-                if cle(x) != cle(y):
+                if ident(x) != ident(y):
                     ecarts.append(f"rang {i} : {nom(x)} devient {nom(y)}")
                 elif x.get("score") != y.get("score"):
                     ecarts.append(f"rang {i} : {nom(x)}, score {x.get('score')} devient {y.get('score')}")

@@ -80,55 +80,7 @@ fn releve_les_reponses_de_search_code() {
         std::fs::write(&chemin, uuids.join("\n")).expect("écrire les _uuid");
         eprintln!("[parité] {} _uuid de Scope écrits dans {chemin}", uuids.len());
     }
-    let formes = [
-        ("sans filtre".to_string(), json!({"options": {}})),
-        (format!("chemin {}", jeu["chemin"].as_str().unwrap_or("")), json!({"options": {}, "scope": jeu["chemin"]})),
-        (format!("langage {}", jeu["langage"].as_str().unwrap_or("")), json!({"options": {}, "language": jeu["langage"]})),
-    ];
-    let mut releve = Vec::new();
-    for q in jeu["requetes"].as_array().expect("requetes") {
-        for (nom, extra) in &formes {
-            let mut args = extra.clone();
-            args["query"] = q.clone();
-            // Le temps d'un seul appel, à titre indicatif : pas de chauffe ni de répétition, ce n'est
-            // pas une mesure (la sonde de la recherche en est une).
-            let debut = std::time::Instant::now();
-            let r = backend.call("search_code", args).unwrap_or_else(|e| panic!("search_code {q} ({nom}) : {e}"));
-            let ms = debut.elapsed().as_secs_f64() * 1000.0;
-            let lignes: Vec<Value> = r["result"].as_array().map(|a| a.iter().take(k).cloned().collect()).unwrap_or_default();
-            let resultats: Vec<Value> = lignes
-                .iter()
-                .enumerate()
-                .map(|(i, l)| {
-                    // Une ligne de search_code : `uuid`, `score`, `signal` et `bestSignal` au premier niveau,
-                    // la fiche du Scope sous `data`.
-                    let d = &l["data"];
-                    let pris = |cles: &[&str]| cles.iter().map(|c| &d[*c]).find(|v| !v.is_null()).cloned().unwrap_or(Value::Null);
-                    json!({
-                        "rang": i + 1,
-                        "_uuid": if l["uuid"].is_null() { d["_uuid"].clone() } else { l["uuid"].clone() },
-                        "file_path": pris(&["file_path", "path"]),
-                        "name": pris(&["name", "qualified_name"]),
-                        "start_line": pris(&["start_line", "line"]),
-                        // Le contenu partagé : deux occurrences d'un même contenu (un fichier recopié) ont
-                        // le même hash ; le comparateur sépare ainsi « même contenu, autre occurrence ».
-                        "content_hash": d["_content_hash"],
-                        "score": l["score"],
-                        "signal": l["signal"],
-                        "best_signal": l["bestSignal"],
-                    })
-                })
-                .collect();
-            if let Some(l) = lignes.first() {
-                // Les champs de `data`, pour vérifier que le repli (file_path, name, start_line) y est.
-                let champs: Vec<&String> = l["data"].as_object().map(|o| o.keys().collect()).unwrap_or_default();
-                eprintln!("[parité] {q} · {nom} : {} résultats ; premier {} ; champs de data {champs:?}", resultats.len(), resultats[0]["_uuid"]);
-            } else {
-                eprintln!("[parité] {q} · {nom} : aucun résultat");
-            }
-            releve.push(json!({"requete": q, "forme": nom, "ms": ms, "resultats": resultats}));
-        }
-    }
+    let releve = releve_du_jeu(&backend, &jeu, k);
     let doc = json!({"base": base.to_string_lossy(), "manifeste": manifeste.to_string_lossy(), "forme_de_la_base": forme, "orphelines": orphelines, "k": k, "jeu": jeu, "releve": releve});
     std::fs::write(&sortie, serde_json::to_string_pretty(&doc).unwrap()).expect("écrire le relevé");
     eprintln!("[parité] relevé écrit : {}", sortie.to_string_lossy());
@@ -156,6 +108,27 @@ fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
     let fichier = racine.join(&retirer);
     let contenu = std::fs::read(&fichier).unwrap_or_else(|e| panic!("le fichier à retirer {} : {e}", fichier.display()));
     let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), None).expect("ouvrir le backend");
+    // **Sous `RAG3WEAVER_PARITE_GENERATIONS=1`** (l'écrivain de 2a′-2) : la copie passe aux générations,
+    // et chaque index est suivi d'une publication là où le code sait publier.
+    let generations = std::env::var("RAG3WEAVER_PARITE_GENERATIONS").as_deref() == Ok("1");
+    if generations {
+        let mut cat = backend.catalog.lock().unwrap();
+        if rag3weaver::code::scope_form(&cat).unwrap() == rag3weaver::code::ScopeForm::Versions {
+            rag3weaver::code::migrer_vers_les_generations(&mut cat).expect("la migration vers les générations");
+        }
+        eprintln!("[orphelins] forme {:?}", rag3weaver::code::scope_form(&cat).unwrap());
+    }
+    // <publication>
+    let publier = |etape: &str| -> Value {
+        if !generations {
+            return Value::Null;
+        }
+        let mut cat = backend.catalog.lock().unwrap();
+        let r = cat.publier_la_generation(&format!("banc-{etape}"), 0);
+        eprintln!("[orphelins] publication après {etape} : {r:?} ; rang publié {:?}, en attente {:?}", cat.rang_publie(), cat.rang_en_attente());
+        json!(format!("{r:?}"))
+    };
+    // </publication>
     // Les lignes du fichier retiré lui-même, par table : un fichier effacé ne doit plus rien porter.
     let nom_retire = retirer.to_string_lossy().to_string();
     let du_fichier = |etape: &str| -> Value {
@@ -177,7 +150,14 @@ fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
             for l in &lignes {
                 eprintln!("[orphelins] {etape} : {table} ligne {}", &l[..l.len().min(600)]);
             }
-            out.insert(table.to_string(), json!({"compte": v, "lignes": lignes}));
+            let versions = match conn.execute(&format!("MATCH (n:{table}) WHERE n.{champ} ENDS WITH '{nom_retire}' RETURN n._uuid, n._couche, n._depuis, n._jusqu_a LIMIT 20")) {
+                Ok(r) => r.rows.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>(),
+                Err(e) => vec![format!("refus : {e}")],
+            };
+            for v in &versions {
+                eprintln!("[orphelins] {etape} : {table} version {v}");
+            }
+            out.insert(table.to_string(), json!({"compte": v, "lignes": lignes, "versions": versions}));
         }
         Value::Object(out)
     };
@@ -249,6 +229,7 @@ fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
     };
     let ouverture = comptes("ouverture");
     let fin1 = indexer("source entière");
+    let pub1 = publier("source entière");
     let entiere = comptes("après l'index de la source entière");
     let fichier_avant = du_fichier("après l'index de la source entière");
     let symb_avant = symboles_avant();
@@ -257,13 +238,155 @@ fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
     let fin2 = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| indexer("sans le fichier")));
     std::fs::write(&fichier, &contenu).expect("remettre le fichier");
     let fin2 = fin2.unwrap_or_else(|e| std::panic::resume_unwind(e));
+    let pub2 = publier("sans le fichier");
     let sans = comptes("après l'index sans le fichier");
     let fichier_apres = du_fichier("après l'index sans le fichier");
     let symb_apres = symboles_apres(&exclusifs);
     let doc = json!({"base": base.to_string_lossy(), "racine": racine, "retire": retirer.to_string_lossy(),
                      "ouverture": ouverture, "apres_source_entiere": entiere, "apres_effacement": sans, "fichier_retire_avant": fichier_avant, "fichier_retire_apres": fichier_apres,
-                     "symboles_avant": symb_avant, "symboles_apres": symb_apres,
+                     "symboles_avant": symb_avant, "symboles_apres": symb_apres, "publications": [pub1, pub2],
                      "fin_index_source_entiere": fin1, "fin_index_effacement": fin2});
     std::fs::write(&sortie, serde_json::to_string_pretty(&doc).unwrap()).expect("écrire le relevé");
     eprintln!("[orphelins] relevé écrit : {}", sortie.to_string_lossy());
+}
+
+/// **Le relevé du jeu** : pour chaque requête et chaque forme (sans filtre, chemin, langage), les k
+/// premiers de search_code et le temps de l'appel.
+fn releve_du_jeu(backend: &rag3weaver::backend::Backend, jeu: &Value, k: usize) -> Vec<Value> {
+    let formes = [
+        ("sans filtre".to_string(), json!({"options": {}})),
+        (format!("chemin {}", jeu["chemin"].as_str().unwrap_or("")), json!({"options": {}, "scope": jeu["chemin"]})),
+        (format!("langage {}", jeu["langage"].as_str().unwrap_or("")), json!({"options": {}, "language": jeu["langage"]})),
+    ];
+    let mut releve = Vec::new();
+    for q in jeu["requetes"].as_array().expect("requetes") {
+        for (nom, extra) in &formes {
+            let mut args = extra.clone();
+            args["query"] = q.clone();
+            // Le temps d'un seul appel, à titre indicatif : pas de chauffe ni de répétition, ce n'est
+            // pas une mesure (la sonde de la recherche en est une).
+            let debut = std::time::Instant::now();
+            let r = backend.call("search_code", args).unwrap_or_else(|e| panic!("search_code {q} ({nom}) : {e}"));
+            let ms = debut.elapsed().as_secs_f64() * 1000.0;
+            let lignes: Vec<Value> = r["result"].as_array().map(|a| a.iter().take(k).cloned().collect()).unwrap_or_default();
+            let resultats: Vec<Value> = lignes
+                .iter()
+                .enumerate()
+                .map(|(i, l)| {
+                    // Une ligne de search_code : `uuid`, `score`, `signal` et `bestSignal` au premier niveau,
+                    // la fiche du Scope sous `data`.
+                    let d = &l["data"];
+                    let pris = |cles: &[&str]| cles.iter().map(|c| &d[*c]).find(|v| !v.is_null()).cloned().unwrap_or(Value::Null);
+                    json!({
+                        "rang": i + 1,
+                        "_uuid": if l["uuid"].is_null() { d["_uuid"].clone() } else { l["uuid"].clone() },
+                        "file_path": pris(&["file_path", "path"]),
+                        "name": pris(&["name", "qualified_name"]),
+                        "start_line": pris(&["start_line", "line"]),
+                        // Le contenu partagé : deux occurrences d'un même contenu (un fichier recopié) ont
+                        // le même hash ; le comparateur sépare ainsi « même contenu, autre occurrence ».
+                        "content_hash": d["_content_hash"],
+                        "score": l["score"],
+                        "signal": l["signal"],
+                        "best_signal": l["bestSignal"],
+                    })
+                })
+                .collect();
+            if let Some(l) = lignes.first() {
+                // Les champs de `data`, pour vérifier que le repli (file_path, name, start_line) y est.
+                let champs: Vec<&String> = l["data"].as_object().map(|o| o.keys().collect()).unwrap_or_default();
+                eprintln!("[parité] {q} · {nom} : {} résultats ; premier {} ; champs de data {champs:?}", resultats.len(), resultats[0]["_uuid"]);
+            } else {
+                eprintln!("[parité] {q} · {nom} : aucun résultat");
+            }
+            releve.push(json!({"requete": q, "forme": nom, "ms": ms, "resultats": resultats}));
+        }
+    }
+    releve
+}
+
+/// **Un index de la source, attendu jusqu'à sa dernière ligne** : « indexation terminée » dans le
+/// journal que l'appel désigne. Rend les dernières lignes du journal.
+fn indexer_et_attendre(backend: &rag3weaver::backend::Backend, etape: &str) -> String {
+    let lance = backend.call("index", json!({"confirm": true})).unwrap_or_else(|e| panic!("index ({etape}) : {e}"));
+    let mut r = &lance;
+    while let Some(i) = r.get("result") {
+        r = i;
+    }
+    let journal = r.get("journal").and_then(Value::as_str).map(str::to_string)
+        .or_else(|| r.as_str().and_then(|t| t.lines().find_map(|l| l.strip_prefix("journal : ").map(str::to_string))))
+        .unwrap_or_else(|| panic!("le journal de l'index ({etape}) : {lance}"));
+    let debut = std::time::Instant::now();
+    loop {
+        let lu = std::fs::read_to_string(&journal).unwrap_or_default();
+        if lu.contains("indexation terminée") {
+            eprintln!("[parité] index {etape} fini en {:.0} s", debut.elapsed().as_secs_f64());
+            return lu.lines().rev().take(6).collect::<Vec<_>>().join("\n");
+        }
+        assert!(!lu.contains("indexation échouée"), "index {etape} : {lu}");
+        assert!(debut.elapsed().as_secs() < 3600, "index {etape} : pas fini en une heure");
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+}
+
+/// **La parité de l'écrivain des générations** (2a′-2, demande d'everything declarative, 15 nov.) :
+/// une copie à générations, réindexée sur une source (le manifeste repointé sur un worktree à soi),
+/// puis publiée là où le code sait publier, rend-elle les mêmes réponses qu'avant le lot ? Deux
+/// relevés : avant l'index (`<sortie>.avant.json`) et après la publication (`<sortie>`), au rang
+/// courant ; et les lignes `_generation`, dont `aretes_recopiees`. Les `_uuid` changent d'une
+/// génération à l'autre : le comparateur juge les réponses (régime `reponses`).
+#[test]
+#[ignore]
+fn releve_les_reponses_apres_une_reindexation_publiee() {
+    let var = |n: &str| std::env::var_os(n);
+    let (Some(base), Some(manifeste), Some(requetes), Some(sortie)) =
+        (var("RAG3WEAVER_PARITE_BASE"), var("RAG3WEAVER_PARITE_MANIFESTE"), var("RAG3WEAVER_PARITE_REQUETES"), var("RAG3WEAVER_PARITE_SORTIE"))
+    else {
+        eprintln!("SAUTÉ releve_les_reponses_apres_une_reindexation_publiee : RAG3WEAVER_PARITE_BASE, _MANIFESTE, _REQUETES ou _SORTIE manque");
+        return;
+    };
+    let k: usize = std::env::var("RAG3WEAVER_PARITE_K").ok().and_then(|v| v.parse().ok()).unwrap_or(10);
+    let jeu: Value = serde_json::from_str(&std::fs::read_to_string(&requetes).expect("le jeu")).expect("le jeu en JSON");
+    let prepared = PreparedBackend::load(std::path::Path::new(&manifeste)).expect("le manifeste");
+    let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), None).expect("ouvrir le backend");
+    let forme = {
+        let mut cat = backend.catalog.lock().unwrap();
+        let avant = rag3weaver::code::scope_form(&cat).unwrap();
+        if avant == rag3weaver::code::ScopeForm::Versions {
+            rag3weaver::code::migrer_vers_les_generations(&mut cat).expect("la migration vers les générations");
+        }
+        format!("{avant:?} → {:?}", rag3weaver::code::scope_form(&cat).unwrap())
+    };
+    eprintln!("[parité] base {} ; forme {forme} ; k = {k}", base.to_string_lossy());
+    let ecrire = |chemin: &str, releve: &[Value], extra: Value| {
+        let mut doc = json!({"base": base.to_string_lossy(), "manifeste": manifeste.to_string_lossy(), "forme_de_la_base": forme, "k": k, "jeu": jeu, "releve": releve});
+        if let (Some(d), Some(e)) = (doc.as_object_mut(), extra.as_object()) {
+            d.extend(e.clone());
+        }
+        std::fs::write(chemin, serde_json::to_string_pretty(&doc).unwrap()).expect("écrire le relevé");
+        eprintln!("[parité] relevé écrit : {chemin}");
+    };
+    let avant = releve_du_jeu(&backend, &jeu, k);
+    ecrire(&format!("{}.avant.json", sortie.to_string_lossy()), &avant, json!({}));
+    let fin_index = indexer_et_attendre(&backend, "source entière");
+    // <publication>
+    let publication = {
+        let mut cat = backend.catalog.lock().unwrap();
+        let r = cat.publier_la_generation("banc-835d5298f", 0);
+        eprintln!("[parité] publication : {r:?} ; rang publié {:?}, en attente {:?}", cat.rang_publie(), cat.rang_en_attente());
+        json!(format!("{r:?}"))
+    };
+    // </publication>
+    let generations: Vec<String> = {
+        let conn = backend.catalog.lock().unwrap().conn_arc();
+        match conn.execute("MATCH (g:_generation) RETURN g ORDER BY g.rang") {
+            Ok(r) => r.rows.iter().map(|l| format!("{:?}", l.first())).collect(),
+            Err(e) => vec![format!("refus : {e}")],
+        }
+    };
+    for g in &generations {
+        eprintln!("[parité] génération {g}");
+    }
+    let apres = releve_du_jeu(&backend, &jeu, k);
+    ecrire(&sortie.to_string_lossy(), &apres, json!({"publication": publication, "generations": generations, "fin_index": fin_index}));
 }
