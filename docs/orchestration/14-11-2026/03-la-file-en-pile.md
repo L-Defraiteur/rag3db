@@ -1416,3 +1416,7 @@ Embarquement, 16 h 30 : la pile repli + plafond sur master à **73aa05511** (15 
 verte : embarqueur à la demande, lectures 27, code 36, features 8/8, lib 2 495, navigateur 45 ; un premier rouge de check_features
 sur une famille de ticket « mesure » hors vocabulaire, corrigée et passe rejouée). « À toi » à G pour plafond-cachedir. 96 : query_chars
 rouge vu (aveu : le rouge a envoyé 40 000 caractères au vrai 7879, qui a tenu ; règle écrite), correctif cfa6d22fb en vert.
+G, 16 h 33 : plafond-cachedir sur master à **2e11d5345** (2 commits, gmail, 0 attribution ; garde_target.sh n'a pas de copie au cache :
+run_e2e.sh le source depuis l'arbre de chaque passe, les passes sur une base ≥ 2e11d5345 ont le ménage corrigé). « À toi » à
+hotfixs pour le lot CI (b940cefb8). Cœur : la sonde ne tranche pas (les quatre cas courts passent) ; contrôle de schéma
+instrumenté sur stderr, DdlEveryMinute jusqu'au premier tour bloqué (~1 h).
