@@ -1371,3 +1371,8 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   procédure de bascule ; vu par preparer-binaire, remis sur 373b5477b (md5 4fa330b5). L'hôte et toute passe qui
   nomme sa lib n'ont rien vu ; les sessions relisent leurs passes de la fenêtre ; G vérifie qu'aucune base
   vivante n'a été ouverte par l'autre lib. Ticket et lot : publication `--sans-courant` par défaut.
+- **G, 04 h 3x** : aucune base vivante de luciepc ouverte par 9d90edbb6 (hôte et outils d'hotfixs par RUNPATH
+  373b5477b, le cœur et 96 par leurs binaires, ED épinglée ; aucun processus ne chargeait l'autre lib à 4 h 20) ;
+  lot publier-sans-courant 047eca57f (rag3db_libs.py ne pose `courant` que sous `--poser-courant`, run_e2e.sh
+  joue la lib bâtie par son identifiant ; 2 FAIL sur l'outil de master, 8 OK) : « à toi » à son vert, base =
+  master. Le binaire du matin se bâtit.

@@ -924,3 +924,6 @@ contournés au ticket) ; la file étant vide, base = master 811f287103, « à to
 
 **04 h 0x — soixante-trois atterris** : scinder_fiche et rejoindre_fiches (96, 1f5d007b8, tout déclaratif). La
 file est vide.
+
+**04 h 3x — un lot d'outillage avant le matin** : publier-sans-courant (G, 047eca57f : la publication ne pose
+plus `courant` sans `--poser-courant`), base = master, « à toi » à son vert.
