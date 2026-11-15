@@ -228,3 +228,38 @@ que chaque décision voit en contexte.
 - **Les sorties**, à luciepc, dans `~/.cache/rag3db-banc-notes/compaction/long/` :
   `ref-N-20261115-1351/`, `F50-ov10-20261115-1422/`, `juge-F50-contre-N.json`,
   `juge-N-contre-N.json`.
+
+## 7. La mesure arrêtée : chaque Source longue fait tomber le 7879 (15 novembre, 15 h 22)
+
+- **La cause** (embarquement) : un tour rangé entier en Source, au-delà d'environ 6 000 jetons, demande
+  à bge-m3 la matrice d'attention d'un seul texte. 4 102 146 304 octets font exactement 16 têtes ×
+  4 octets × 8 006², au plafond de bge-m3. La réservation est refusée sur card2, le service panique et
+  sort, puis systemd le relance en une vingtaine de secondes. Le tunnel du portable tombe avec lui :
+  les hôtes de Lucie le perdent aussi.
+  - Ce n'est pas un lot trop gros : `RAG3WEAVER_EMBED_CHAR_BUDGET` n'y peut rien, puisqu'un texte plus
+    long que le budget part seul.
+  - Le corpus a 21 tours de plus de 16 000 caractères, dont 2 de plus de 32 000 ; le plus long en
+    fait 43 137.
+  - Les trois passes rangent les mêmes tours dans le même ordre, d'où la même suite de douze tailles,
+    rejouée à chaque passe.
+- **Les pannes, lues dans le journal du 7879** (`failed to reserve`, heure de Paris), passe par passe :
+
+  | passe | réservations refusées |
+  |---|---|
+  | N (13 h 51 – 14 h 22) | 24 |
+  | F à 50 k (14 h 22 – 15 h 05) | 24 |
+  | F à 50 k, 25 % (15 h 05 – 15 h 21) | 14 |
+
+  Il y en a 62 dans la journée, toutes pendant ces passes, et systemd compte 26 redémarrages : une
+  panne écrit plusieurs refus. **C'est une réserve sur les temps par décision** de N et de F : à
+  chaque panne, environ 20 s de service absent. Aucune décision n'est en erreur, mais des vecteurs ont
+  pu manquer à l'écriture. C'est à compter sur les copies.
+- **L'arrêt** (au mot de c7, les hôtes de Lucie passent devant la mesure) :
+  - F à 50 k avec 25 % de chevauchement s'est arrêtée à 105 tours sur 244, juste avant 15 h 21, sans
+    message. C'est peut-être le dépassement de mémoire de sa portée, ce n'est pas vérifié ;
+  - S à 50 k est partie à 15 h 21, et je l'ai coupée à 15 h 22, avant sa première décision ;
+  - aucun processus de la mesure ne reste. Le dernier redémarrage du 7879 date de 15 h 20 min 51 s.
+- **Pas de contournement dans le banc** : tronquer la Source changerait la mesure sans le dire. La
+  mesure reprend quand le lot de la session mémoire découpera la Source longue dans le gabarit
+  memory (`query_chars`, en pile derrière `usage`), sur le même corpus et avec les mêmes variantes :
+  F à 25 %, puis S, puis 300 k.
