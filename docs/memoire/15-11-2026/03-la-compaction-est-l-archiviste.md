@@ -111,6 +111,12 @@ Le témoin de la ligne 4 prend un cas de plus : **un échange déjà rangé ne s
 fois**. Il n'y a pas de seconde passe du Decide sur les tours déjà couverts par « rangé jusqu'au
 tour N ».
 
+## La référence à battre
+
+Le mot de Lucie (par c7, à 12 h 3x) : le but est de **faire mieux que la compaction de Claude
+Code**. C'est la référence à battre dans le banc : à budget égal, l'équipier compacté par
+l'archiviste reprend sa tâche mieux qu'après le résumé de Claude Code.
+
 ## Le budget du contexte d'après
 
 Une borne de Lucie (par c7, à 12 h 3x) : le contexte qui repart après la compaction vise
@@ -123,7 +129,9 @@ compression, et moins pour un modèle local.
   1. l'identité ;
   2. la fiche de tâche ;
   3. le bilan ordonné ;
-  4. les L1 de la session, les siens en entier ;
+  4. les L1 de la session, les siens en entier, **dans l'ordre où ils ont été pris** (l'ordre
+     des intervalles de tours), pas groupés par fiche ; la fiche de chaque L1 se dit en marge.
+     Le bilan et les L1 racontent donc la même séance deux fois, à deux grains ;
   5. les L1 des autres sur les mêmes sujets, les plus récents d'abord.
 
   Ce qui ne tient pas reste au rappel.
