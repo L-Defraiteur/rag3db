@@ -24,6 +24,8 @@ pub mod anim;
 #[cfg(feature = "vue")]
 pub mod code;
 #[cfg(feature = "vue")]
+pub mod coquille;
+#[cfg(feature = "vue")]
 pub mod outils;
 #[cfg(feature = "vue")]
 pub mod saisie;
