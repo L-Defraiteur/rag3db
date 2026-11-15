@@ -153,6 +153,9 @@ pub struct Vue {
     /// Le terminal distingue Maj-Entrée d'Entrée (protocole clavier de kitty,
     /// tty-10) : la saisie vide le dit, sinon elle dit Alt-Entrée.
     pub maj_entree: bool,
+    /// Sous tmux (variable `TMUX`), dont la configuration par défaut fait de
+    /// Maj-Entrée une Entrée simple : la saisie vide le dit (tty-10).
+    pub sous_tmux: bool,
     /// Les lignes de boîte déjà écrites, par leur `id` : la relecture et le flux
     /// peuvent rendre la même (tty-9, vu à l'essai sous tmux).
     vues_de_boite: std::collections::HashSet<String>,
@@ -187,6 +190,7 @@ impl Vue {
             entete: String::new(),
             repli: None,
             maj_entree: false,
+            sous_tmux: false,
             vues_de_boite: std::collections::HashSet::new(),
             bloc: None,
             boite: crate::boite::Boite::default(),
@@ -890,6 +894,9 @@ mod tests {
         assert_eq!(dessin(&v, 60, 3).0[2], "› Maj-Entrée : à la ligne");
         v.touche(Touche::Car('x'));
         assert_eq!(dessin(&v, 60, 3).0[2], "› x", "l'indication part dès qu'on tape");
+        let mut t = Vue::new(60, true);
+        t.sous_tmux = true;
+        assert_eq!(dessin(&t, 60, 3).0[2], "› sous tmux, Maj-Entrée envoie : Alt-Entrée pour la ligne", "sous tmux, Maj-Entrée devient Entrée : le dire");
     }
 
     /// Le repli (sous mosh, la commande qui relit le journal) se dit sur la
