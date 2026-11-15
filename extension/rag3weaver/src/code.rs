@@ -5975,4 +5975,51 @@ mod tests_de_l_ecrivain {
         crate::code_sync::sync_source(&mut cat, &src, &Default::default(), &mut |p| vus.push(p.repasses_pour_l_analyse)).expect("la synchronisation");
         assert!(vus.contains(&2), "la version a changé : les deux fichiers repassent, et l'avancement le dit ({vus:?})");
     }
+    /// Les arêtes entre deux lignes visibles au rang lu, par étiquette (les bouts sans générations comptent
+    /// toujours).
+    fn aretes_visibles_par_etiquette(cat: &Catalog) -> BTreeMap<String, i64> {
+        let v = cat.generations.clone().expect("une base à générations");
+        let d = cat.dialect_arc();
+        let mut compte = BTreeMap::new();
+        for (rel, from, to) in RELATIONS {
+            let cond = |alias: &str, table: &str| if v.tables.contains(table) { d.condition_visible_sur(alias, &v.couche, v.rang) } else { None };
+            let clauses: Vec<String> = [cond("a", from), cond("b", to)].into_iter().flatten().collect();
+            let filtre = if clauses.is_empty() { String::new() } else { format!(" WHERE {}", clauses.join(" AND ")) };
+            let r = cat.conn().execute(&format!("MATCH (a:`{from}`)-[r:`{rel}`]->(b:`{to}`){filtre} RETURN count(r)")).unwrap();
+            let n = r.rows[0][0].as_i64().unwrap_or(0);
+            if n > 0 {
+                compte.insert(rel.to_string(), n);
+            }
+        }
+        compte
+    }
+
+    /// **Témoin 16 : un repassage ne change pas le graphe visible** (c7, le juge étendu de banc du
+    /// 15 novembre : DEFINED_IN en double, CONSUMES perdus). Les arêtes entre lignes visibles, par
+    /// étiquette, sont les mêmes avant et après un repassage de la seule version de l'analyse.
+    #[test]
+    fn un_repassage_ne_change_pas_le_graphe_visible() {
+        let (mut cat, src) = base();
+        let n = cat.publier_la_generation("c1", 0).expect("publier");
+        let avant = cat.au_rang(n, |c| aretes_visibles_par_etiquette(c));
+        assert!(avant.get("CONSUMES").copied().unwrap_or(0) >= 1 && avant.get("DEFINED_IN").copied().unwrap_or(0) >= 2, "le dépôt du témoin a ses arêtes : {avant:?}");
+        cat.version_de_l_analyse = format!("{}-autre", cat.version_de_l_analyse);
+        crate::code_sync::sync_source(&mut cat, &src, &Default::default(), &mut |_| {}).expect("la synchronisation");
+        let m = cat.publier_la_generation("c2", 0).expect("publier");
+        assert_eq!(cat.au_rang(m, |c| aretes_visibles_par_etiquette(c)), avant, "au rang courant, le même graphe");
+        assert_eq!(cat.au_rang(n, |c| aretes_visibles_par_etiquette(c)), avant, "au rang d'avant, le même graphe");
+    }
+
+    /// **Témoin 17 : une arête vers une ligne née au rang en attente** (le même juge : CONSUMES perdus).
+    /// `f` change, puis `a`, qui l'appelle, change à son tour : la ligne neuve de `a` appelle la ligne
+    /// neuve de `f`.
+    #[test]
+    fn une_arete_vers_une_ligne_nee_au_rang_en_attente_se_pose() {
+        let (mut cat, src) = base();
+        cat.publier_la_generation("c1", 0).expect("publier");
+        sauver(&mut cat, &src, "b.rs", F2);
+        assert_eq!(appelants(&cat, "f"), vec!["a".to_string()], "après f changé, a l'appelle toujours");
+        sauver(&mut cat, &src, "a.rs", "pub fn a() -> u32 {\n    f() + 1\n}\n");
+        assert_eq!(appelants(&cat, "f"), vec!["a".to_string()], "a changé à son tour appelle le f neuf");
+    }
 }
