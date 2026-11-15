@@ -10499,13 +10499,29 @@ fn read_threads() -> u64 {
             let colonne = ColumnDef { name: "aretes_recopiees".into(), col_type: ColumnType::Int64 };
             self.alter_absorbing(crate::generations::TABLE, &self.dialect.alter_add_column_default(crate::generations::TABLE, &colonne, "0"))?;
         }
+        // **« Tout visible » se lit sur la base** (témoin 21) : une base qui a déjà une histoire — une ligne
+        // retirée, d'une autre couche, ou posée après le rang lu — n'est pas « tout visible ». Posé vrai à
+        // toute ouverture, il laissait un lecteur sans filtre d'une base rouverte (la recherche sans masque,
+        // la copie du lot de banc le 16 novembre) lire les lignes fermées.
+        let mut tout_visible = true;
+        for table in tables {
+            let Some(visible) = self.dialect.condition_visible_sur("s", couche, rang + 1) else { continue };
+            let lu = self
+                .conn
+                .execute(&format!("MATCH (s:`{table}`) WHERE NOT ({visible}) RETURN s._uuid LIMIT 1"))
+                .map_err(|e| CatalogError::DbError(format!("la visibilité de {table} à l'ouverture : {e}")))?;
+            if !lu.rows.is_empty() {
+                tout_visible = false;
+                break;
+            }
+        }
         // Le rang lu sans vue est le rang en attente, au-dessus du dernier publié (page 06, § 1).
         self.generations = Some(crate::generations::Visibilite {
             tables: tables.iter().map(|t| t.to_string()).collect(),
             couche: couche.to_string(),
             rang: rang + 1,
             rang_publie: rang,
-            tout_visible: true,
+            tout_visible,
             ensembles: std::sync::Arc::new(crate::generations::EnsemblesPoses::default()),
         });
         self.publish_read_view();
