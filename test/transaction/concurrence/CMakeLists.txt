@@ -52,8 +52,9 @@ foreach (line IN LISTS KNOWN_RED_LINES)
 endforeach()
 file(STRINGS ${PROBABILISTIC_FILE} PROBABILISTIC ENCODING UTF-8 REGEX "^[^#]")
 file(STRINGS ${LONG_FILE} LONG ENCODING UTF-8 REGEX "^[^#]")
-# Un cas long n'est découvert que dans son groupe, même s'il est rouge connu.
+# Un cas long n'est découvert que dans son groupe, même s'il est rouge connu ou probabiliste.
 list(REMOVE_ITEM KNOWN_RED ${LONG})
+list(REMOVE_ITEM PROBABILISTIC ${LONG})
 list(JOIN KNOWN_RED ":" KNOWN_RED_FILTER)
 list(JOIN PROBABILISTIC ":" PROBABILISTIC_FILTER)
 list(JOIN LONG ":" LONG_FILTER)
