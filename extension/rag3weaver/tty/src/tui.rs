@@ -185,6 +185,7 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     vue.capacites = Capacites::du_terminal();
     vue.theme = theme;
     vue.maj_entree = maj_entree;
+    vue.montrer_etapes = std::env::var("RAG3WEAVER_TTY_ETAPES").is_ok_and(|v| !v.is_empty() && v != "0");
     // L'historique des envois d'une séance à l'autre (tty-13).
     if let Some(h) = crate::historique::chemin() {
         vue.reprendre_historique(crate::historique::charger(&h));
@@ -488,6 +489,10 @@ fn executer(c: crate::commandes::Commande, terminal: &mut ratatui::DefaultTermin
             }
             Err(e) => vue.note(&format!("/model {n} : {e}")),
         },
+        Commande::Etapes => {
+            vue.montrer_etapes = !vue.montrer_etapes;
+            vue.note(if vue.montrer_etapes { "les étapes de l'équipier s'écrivent dans l'historique (/etapes les cache)" } else { "les étapes de l'équipier défilent dans la zone vivante (/etapes les montre)" });
+        }
         Commande::Shell(cmd) => lancer_une_commande(&cmd, terminal, vue, agent, ep, tache, journal)?,
         Commande::Inconnue(n) => vue.note(&format!("commande inconnue : /{n} — /aide les liste")),
     }
