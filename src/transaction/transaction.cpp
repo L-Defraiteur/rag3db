@@ -142,7 +142,7 @@ void Transaction::throwIfSchemaChangedAfterSnapshot(common::table_id_t tableID) 
     const auto name =
         catalog::Catalog::Get(*clientContext)->tableChangedAfterSnapshotOf(this, tableID);
     if (!name.empty()) {
-        throw TransactionManagerException(common::stringFormat(
+        throw common::TransactionManagerException(common::stringFormat(
             "{} the schema of table {} changed after this transaction started (an ALTER or a DROP "
             "it waited for, or that committed meanwhile); retry the transaction.",
             SCHEMA_CHANGED_RETRY, name));
