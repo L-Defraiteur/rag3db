@@ -7194,10 +7194,17 @@ mod tests {
             crate::code_tools::reingest_file(&mut cat, source.as_ref(), "outils.rs", &texte).expect("la réindexation");
             cat.publier_la_generation(rang, 0).expect("publier");
         }
+        {
+            let cat = backend.catalog.lock().unwrap();
+            let morceaux = cat.conn().execute("MATCH (c:ScopeContent_Chunk) WHERE c.content CONTAINS 'zorglub' RETURN count(*)").map(|r| format!("{:?}", r.rows)).unwrap_or_else(|e| e.to_string());
+            let fermees = cat.conn().execute("MATCH (s:Scope) WHERE s.name = 'depart' RETURN s._depuis, s._jusqu_a").map(|r| format!("{:?}", r.rows)).unwrap_or_else(|e| e.to_string());
+            eprintln!("[témoin lexical] morceaux « zorglub » : {morceaux} ; lignes de depart : {fermees} ; tout visible : {:?}", cat.generations.as_ref().map(|v| v.tout_visible));
+        }
         let r = backend
-            .call("search_code", json!({"query": "zorglub", "options": {"signals": ["bm25"], "limit": 1}}))
+            .call("search_code", json!({"query": "zorglub", "options": {"signals": ["bm25"], "limit": 1, "diagnostics": true}}))
             .expect("search_code");
         let rendu = r.to_string();
+        eprintln!("[témoin lexical] réponse : {rendu}");
         assert!(rendu.contains("allongent"), "la recherche sans filtre rend la ligne ouverte de depart : {rendu}");
     }
 
