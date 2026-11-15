@@ -1005,3 +1005,7 @@ ticket 392e63cd7). Lot C++ seul : la lib reste 373b5477b. Note d'ABI pour la pro
 mutex, un ensemble de tables et un booléen ; LockResource gagne TABLE ; Catalog/CatalogSet des méthodes ;
 Transaction::SCHEMA_CHANGED_RETRY. Le refus est au milieu du message (après « Transaction manager exception: ») : contains.
 « À toi » à tty pour tty-11 (67323f97e), mode simple sur 101ff50a6. Ensuite ED (2), G, archi (relai), 96, ED (1).
+tty, 13 h 31 : tty-11 sur master à **abfe6f92e** (13 commits, 412a940a0 → abfe6f92e, gmail, 0 attribution ; le crate à 79 tests).
+« À toi » à ED pour models.llm (2b3340520), mode simple sur abfe6f92e. Ensuite G, archi (relai), 96, ED (1).
+Ticket du vocabulaire des modèles (provider/protocol → access/provider) chez ED, 5291bba8e ; le mot et l'échéance des
+alias posés à Lucie.
