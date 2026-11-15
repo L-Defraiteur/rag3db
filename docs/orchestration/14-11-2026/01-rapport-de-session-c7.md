@@ -1444,3 +1444,10 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   plus la version de l'entrée (b7251cb77 ; deux témoins rouges d'abord : un COMMENT ON TABLE et un
   CREATE_VECTOR_INDEX validés pendant une écriture ouverte ne font pas recommencer) ; DdlEveryMinute ×3 avec le
   binaire gardé à côté du core ; ticket du core de 9 h 33 (f3a9fb84a). Passe alter7 lancée à 9 h 52, ~1 h 15.
+- **Le cœur, 10 h 56 — pas de push, le SIGSEGV est revenu** (DdlEveryMinute tour 2/3 sur b7251cb77, binaire
+  gardé, pile lue : ScanNodeTable → NodeGroup::scan → ColumnChunk::scan → Column::scanSegment →
+  readCompressedValuesToVector → memcpy, un balayage filtré sous un count dans les relectures d'après la passe,
+  sur les colonnes ajoutées ; même adresse libc qu'à 9 h 33 ; pas le dictionnaire). Départage : trois tours sur
+  master a2f9c9b65, binaire gardé. Verts : transaction_test 385, le témoin du COMMENT, le témoin d'index ;
+  deux rouges à lire (ChangesCommittedDuringACreateAreSeen 1/12 connu, create-rel-table-holds-writers tour 1).
+  Recommencements 20 à 60 par passe, venus des ADD ; ADD 14 à 152 ms sous la borne.
