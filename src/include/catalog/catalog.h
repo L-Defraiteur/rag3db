@@ -136,6 +136,10 @@ public:
     // voie : elle n'a pas encore validé, ou elle a validé après son début.
     bool isIndexChangedAfterSnapshotOf(const transaction::Transaction* transaction,
         common::table_id_t tableID, const std::string& indexName) const;
+    // Le nom de la table (ou du groupe de relations) qui porte `tableID`, si une autre transaction
+    // en a changé le schéma sans que l'instantané de `transaction` le voie ; vide sinon.
+    std::string tableChangedAfterSnapshotOf(const transaction::Transaction* transaction,
+        common::table_id_t tableID) const;
     // Check if index exists for given table and property
     bool containsIndex(const transaction::Transaction* transaction, common::table_id_t tableID,
         common::property_id_t propertyID) const;
