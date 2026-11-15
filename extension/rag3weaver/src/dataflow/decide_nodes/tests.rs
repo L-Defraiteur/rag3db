@@ -174,10 +174,10 @@ fn decide_by_llm_asks_a_schema_and_labels_the_element() {
         &[],
     );
     let (out, _) = run(&def, with_llm(llm)).unwrap();
-    assert_eq!(
-        json_at(&out, "node", "element"),
-        Some(json!({"from": "ami", "content": "comment indexer ?", "label": "question"}))
-    );
+    let (element, usage) = sans_usage(json_at(&out, "node", "element"));
+    assert_eq!(element, Some(json!({"from": "ami", "content": "comment indexer ?", "label": "question"})));
+    // L'usage de l'appel est posé sur l'élément (15 novembre 2026) : le faux modèle compte son invite.
+    assert!(usage.as_ref().is_some_and(|u| u["prompt_tokens"].as_u64().is_some_and(|n| n > 0) && u["ms"].is_u64()), "{usage:?}");
     let (text, format) = asked.lock().unwrap().clone().unwrap();
     assert_eq!(text, "comment indexer ?");
     match format {
@@ -188,6 +188,17 @@ fn decide_by_llm_asks_a_schema_and_labels_the_element() {
     }
 }
 
+/// L'élément sans son `usage`, et l'usage à part : les témoins de l'étiquette restent ceux d'avant.
+fn sans_usage(e: Option<Value>) -> (Option<Value>, Option<Value>) {
+    match e {
+        Some(Value::Object(mut m)) => {
+            let u = m.remove("usage");
+            (Some(Value::Object(m)), u)
+        }
+        autre => (autre, None),
+    }
+}
+
 /// Un modèle qui ignore la sortie structurée et rend l'étiquette nue est lu ;
 /// une étiquette hors liste fait échouer le nœud en la nommant.
 #[test]
@@ -195,7 +206,7 @@ fn decide_by_llm_reads_a_bare_label_and_refuses_one_off_the_list() {
     let def = graph(json!("lol"), "Decide", json!({"labels": ["question", "bavardage"]}), &[]);
     let bare = CallbackLlm::new("nu", 4096, |t, o, s| MockLlm::new("bavardage").generate(t, o, s));
     let (out, _) = run(&def, with_llm(bare)).unwrap();
-    assert_eq!(json_at(&out, "node", "element"), Some(json!({"value": "lol", "label": "bavardage"})));
+    assert_eq!(sans_usage(json_at(&out, "node", "element")).0, Some(json!({"value": "lol", "label": "bavardage"})));
 
     let off = CallbackLlm::new("hors", 4096, |t, o, s| MockLlm::new(r#"{"label": "insulte"}"#).generate(t, o, s));
     let err = run(&def, with_llm(off)).unwrap_err();
