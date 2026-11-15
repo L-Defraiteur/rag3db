@@ -197,5 +197,52 @@ TEST_F(InListTest, NullsInTheListMatchNothing) {
     EXPECT_EQ(countWith(IN_FORM, std::move(list)), 2);
 }
 
+// L'ordre des lignes d'un IN sur la clé est celui de la liste : un contrat de l'accès par la clé,
+// que rag3weaver peut employer (c7, 15 nov.).
+TEST_F(InListTest, InOnTheKeyReturnsTheRowsInTheOrderOfTheList) {
+    fill(1000);
+    auto r = conn->query("MATCH (n:T) WHERE n.k IN ['key-5', 'key-1', 'key-3', 'key-900', 'key-2'] "
+                         "RETURN n.i;");
+    ASSERT_TRUE(r->isSuccess()) << r->getErrorMessage();
+    std::string order;
+    while (r->hasNext()) {
+        order += std::to_string(r->getNext()->getValue(0)->getValue<int64_t>()) + " ";
+    }
+    EXPECT_EQ(order, "5 1 3 900 2 ") << "[check: in-on-the-key-keeps-the-order-of-the-list]";
+}
+
+TEST_F(InListTest, AbsentKeysAndDuplicatesOnTheKey) {
+    fill(1000);
+    // Seulement des clés absentes : rien, et pas de ligne à NULL.
+    auto absent = conn->query("MATCH (n:T) WHERE n.k IN ['absente-1', 'absente-2', 'key-1000'] "
+                              "RETURN n.i;");
+    ASSERT_TRUE(absent->isSuccess()) << absent->getErrorMessage();
+    EXPECT_EQ(absent->getNumTuples(), 0u) << "[check: absent-keys-return-nothing]";
+    // Une clé répétée : une ligne.
+    auto twice = conn->query("MATCH (n:T) WHERE n.k IN ['key-7', 'key-8', 'key-7', 'key-7'] "
+                             "RETURN n.i ORDER BY n.i;");
+    ASSERT_TRUE(twice->isSuccess()) << twice->getErrorMessage();
+    std::string rows;
+    while (twice->hasNext()) {
+        rows += std::to_string(twice->getNext()->getValue(0)->getValue<int64_t>()) + " ";
+    }
+    EXPECT_EQ(rows, "7 8 ") << "[check: a-repeated-key-returns-one-row]";
+}
+
+// Une liste d'un autre type que la clé garde le chemin d'avant (le FILTER), sans erreur neuve : la
+// même réponse qu'un balayage, quelle qu'elle soit.
+TEST_F(InListTest, AListOfAnotherTypeThanTheKeyKeepsTheFilter) {
+    fill(1000);
+    auto r = conn->query("MATCH (n:T) WHERE n.k IN [1, 2, 3] RETURN count(*);");
+    auto scan = conn->query(
+        "MATCH (n:T) WITH n, n.k AS k WHERE k IN [1, 2, 3] RETURN count(*);");
+    ASSERT_EQ(r->isSuccess(), scan->isSuccess())
+        << r->getErrorMessage() << " / " << scan->getErrorMessage();
+    if (r->isSuccess()) {
+        EXPECT_EQ(r->getNext()->toString(), scan->getNext()->toString())
+            << "[check: a-list-of-another-type-keeps-the-filter]";
+    }
+}
+
 } // namespace testing
 } // namespace rag3db
