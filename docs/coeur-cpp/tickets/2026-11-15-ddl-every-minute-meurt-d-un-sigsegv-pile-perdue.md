@@ -58,11 +58,39 @@ ou de `rang` hors de leur défaut, deux colonnes ajoutées sous écrivains (minu
 Le défaut est donc sur master, le lot ne le crée pas. Le core de 09:33 avait la même adresse dans
 la libc : c'est très probablement le même plantage.
 
-## La piste
+## La cause (15 novembre)
 
-La lecture d'un segment d'une colonne ajoutée, dont la taille ne vaut pas celle de son groupe de
-nœuds. Un ADD COLUMN posé pendant qu'un écrivain remplit un groupe, sans que le défaut de la
-colonne neuve soit étendu au groupe en cours (lecture de c7, 15 novembre).
+**Le fait.** Dans les quatre tours morts de `DdlEveryMinute` (alter5 t3, alter7 t2, ddl-base t1 et
+t2), et eux seuls, « 2 ADD rang DEFAULT 0 » a été refusé par le pool plein (`Buffer manager
+exception: Unable to allocate memory!`). Dans les deux tours sains, il a passé.
+
+**Le mécanisme**, lu dans le code. `NodeTable::addColumn` pose la colonne dans `columns`, puis la
+pose groupe par groupe (`NodeGroupCollection::addColumn` → `NodeGroup::addColumn` →
+`ChunkedNodeGroup::addColumn`), et n'inscrit son annulation (`pushAddColumn`) qu'à la fin. Un refus
+à mi-chemin laisse donc la colonne au stockage : dans `columns` et dans les groupes déjà faits.
+Le catalogue, lui, l'annule. L'ADD suivant (b, minute 6) se range un cran trop loin dans les groupes
+qui portent la morte, et sa relecture tombe dans le morceau de `rang`, un INT64 lu comme une chaîne :
+c'est le `memcpy` de `readCompressedValuesToVector`. Le même trou existe pour une table de
+relations, entre les deux sens.
+
+**Le premier témoin, sans le pool plein, est vert.** `AddColumnAfterRollback` (la minute 6 seule,
+sous huit écrivains, six tours) est vert 5 fois sur 5 : ce n'était ni l'annulation de l'ADD a ni
+les écrivains. C'est ce qui a orienté vers l'ADD refusé.
+
+**Le point de faute** `add-column-between-chunked-groups` (`TestFailPoint::ADD_COLUMN_BETWEEN_CHUNKED_GROUPS`,
+dans `NodeGroup::addColumn`, après le premier groupe de lignes) refuse l'ADD à mi-chemin, comme le
+pool plein.
+
+**Le témoin** `AddColumnRefusedMidway` (`test/transaction/add_column_refused_midway_test.cpp`) : un
+ADD refusé à mi-chemin, puis un ADD b avec défaut, qui doit se relire, se modifier et survivre à
+un point de reprise et à une réouverture, pour une table de nœuds et une table de relations.
+
+**Le correctif** : tout ou rien à chaque niveau. Le groupe de lignes ne pose la colonne qu'une fois
+remplie. Le groupe de nœuds, la collection, la table et les deux sens d'une relation retirent ce
+qu'ils ont posé avant de remonter.
+
+Branche `colonne-ajoutee-se-relit` : point de faute `e444ee491`, témoin `db7eed64c`, correctif
+`6d557d826`.
 
 ## Pour fermer
 
