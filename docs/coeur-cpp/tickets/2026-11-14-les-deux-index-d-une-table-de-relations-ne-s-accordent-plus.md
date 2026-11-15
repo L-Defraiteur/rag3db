@@ -1,11 +1,13 @@
 # Les deux index d'une table de relations ne s'accordent plus
 
-- **État** : ouvert (14 novembre 2026, hotfixs)
+- **État** : ouvert — **confort** depuis le 15 novembre 2026 (hotfixs, à la demande de c7). La cause est couverte
+  par 373b5477b et son témoin, l'existant est réparé, et le portable est sain. Reste à expliquer la perte « des deux
+  côtés », localisée par le cœur. Voir « Le relevé du 15 novembre » en fin de page.
 - **Famille** : moteur
-- **Gravité** : donnée fausse. Une même relation rend d'autres bouts, ou une autre `line`, selon qu'on la lit
-  depuis sa source ou depuis sa destination. Des cases à zéro (relation 0, nœud 0) se lisent comme de vraies
-  relations.
-- **Atteignable en service** : oui. code-lourd et code-principal à luciepc, dans l'état laissé par 0c41f9fe6.
+- **Gravité** : confort aujourd'hui. C'était une donnée fausse : une même relation rendait d'autres bouts, ou une
+  autre `line`, selon le sens de lecture, et des cases à zéro se lisaient comme de vraies relations.
+- **Atteignable en service** : plus par la cause connue depuis 373b5477b, posée aux deux postes le 14 au soir. Les
+  bases touchées, code-lourd et code-principal, ont été réparées le 15 entre 0 h 27 et 1 h 12.
 - **Touche rag3weaver** : par le moteur. `usages` et `impact` lisent l'un ou l'autre sens, selon le plan.
 - **Signalé par** : G (le contrôle des deux sens de la bascule vers 373b5477b), lu par hotfixs avec c7
 - **Pour** : cœur c++. La réparation des deux bases est chez hotfixs (ticket de G
@@ -310,3 +312,21 @@ partout). Le témoin `BothDirectionsKeepTheRelationsOfAnotherWriter` le garde. I
 instrumenter l'ancienne lib, si l'on veut le mécanisme exact.
 
 **Statut de la perte des deux côtés** (c7, 15 nov.) : localisé, non expliqué, couvert par `373b5477b`, gardé par `BothDirectionsKeepTheRelationsOfAnotherWriter`. Le mécanisme exact, dans une lib qu'on ne livre plus, ne se cherche pas.
+
+
+## Le relevé du 15 novembre (hotfixs) : pourquoi « confort »
+
+| base | relevé ancré, après le 15 nov. | état |
+|---|---|---|
+| code-lourd (luciepc) | INHERITS_FROM 658, QUERIES 20 093, LOCKS 546 : 0 d'un seul sens | réparée (fenêtre de 0 h 27) |
+| code-principal (luciepc) | QUERIES 20 210, IMPLEMENTS 331, LOCKS 436 : 0 d'un seul sens | réparée (fenêtre de 0 h 51) |
+| code-rag3db-depot (portable) | les 19 tables égales et complètes | sain, rien à réparer |
+| memoire-longue (portable) | les 18 tables égales | saine |
+
+- **La cause** : l'annulation d'un COMMIT refusé tronquait les deux groupes CSR séparément, sous 0c41f9fe6. Elle est
+  corrigée dans 373b5477b (sous le même verrou, avant tout autre écrivain), avec son témoin
+  `RefusedCommitRelDirections`. Cette lib est posée aux deux postes depuis le 14 au soir.
+- **Ce qui reste ouvert** : la perte « des deux côtés », localisée par le cœur (la fenêtre de l'annulation, la table
+  de relations partagée) mais pas expliquée. Elle est couverte par le même correctif et son témoin.
+- **Pour fermer** : l'explication de la perte des deux côtés par le cœur, ou un relevé ancré des quatre bases resté à
+  0 d'un seul sens une semaine après la pose de 373b5477b. L'outil ancré est dans `tools/check_rel_directions`.
