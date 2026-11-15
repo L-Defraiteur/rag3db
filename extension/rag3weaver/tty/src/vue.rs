@@ -38,6 +38,8 @@ pub enum Etat {
 /// Ce qu'une touche demande à la boucle.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
+    /// Ouvrir la visionneuse des appels d'outil, sur le dernier (Ctrl-O).
+    Ouvrir,
     /// Écrire à l'équipier : le texte, et son genre (une `request` la première
     /// fois, qui ouvre la tâche ; une `instruction` ensuite).
     Envoyer(String, &'static str),
@@ -84,6 +86,11 @@ pub enum Touche {
     /// (tmux attend 500 ms par défaut avant de rendre un Échap seul, mesuré au
     /// lot tty-6).
     CtrlG,
+    /// Ctrl-O : ouvrir un appel d'outil en grand (tty-11).
+    CtrlO,
+    /// Page précédente et Page suivante (la visionneuse).
+    PageHaut,
+    PageBas,
 }
 
 /// Au plus tant de lignes d'écran pour la saisie ; au-delà, elle défile.
@@ -156,6 +163,8 @@ pub struct Vue {
     /// Sous tmux (variable `TMUX`), dont la configuration par défaut fait de
     /// Maj-Entrée une Entrée simple : la saisie vide le dit (tty-10).
     pub sous_tmux: bool,
+    /// Les appels d'outil de la séance, dans l'ordre (tty-11).
+    pub appels: Vec<crate::outils::Appel>,
     /// Les lignes de boîte déjà écrites, par leur `id` : la relecture et le flux
     /// peuvent rendre la même (tty-9, vu à l'essai sous tmux).
     vues_de_boite: std::collections::HashSet<String>,
@@ -191,6 +200,7 @@ impl Vue {
             repli: None,
             maj_entree: false,
             sous_tmux: false,
+            appels: Vec::new(),
             vues_de_boite: std::collections::HashSet::new(),
             bloc: None,
             boite: crate::boite::Boite::default(),
@@ -460,6 +470,7 @@ impl Vue {
             // Une saisie en cours se vide d'abord, comme dans un shell.
             Touche::CtrlC if !self.saisie.est_vide() => self.edite(crate::saisie::Saisie::vider),
             Touche::CtrlC => Some(Action::Quitter),
+            Touche::CtrlO | Touche::PageHaut | Touche::PageBas => None,
             Touche::CtrlG => Some(Action::Arreter),
             Touche::CtrlD if self.saisie.est_vide() => Some(Action::Quitter),
             Touche::CtrlD => None,
@@ -690,7 +701,7 @@ mod tests {
         v.ligne_de_boite(&json!({ "from": "host", "kind": "ended", "text": "fait sans plan" }));
         assert_eq!(v.etat, Etat::Fini("fait sans plan".into()));
         let lignes: Vec<String> = v.prendre_lignes().into_iter().map(|l| l.texte).collect();
-        assert_eq!(lignes, vec!["salut", "» read_file", "  fait (3 ms)", "[hôte · fini] fait sans plan"]);
+        assert_eq!(lignes, vec!["salut", "» read_file  ⟨1⟩", "  fait (3 ms)", "[hôte · fini] fait sans plan"]);
     }
 
     #[test]
@@ -901,6 +912,40 @@ mod tests {
         let mut t = Vue::new(60, true);
         t.sous_tmux = true;
         assert_eq!(dessin(&t, 60, 3).0[2], "› sous tmux, Maj-Entrée envoie : Alt-Entrée pour la ligne", "sous tmux, Maj-Entrée devient Entrée : le dire");
+    }
+
+    /// **tty-11** : un appel d'outil se numérote, garde ce qu'il a fait, et son
+    /// aperçu suit sa fin dans l'historique.
+    #[test]
+    fn a_tool_call_is_numbered_kept_and_previewed() {
+        let mut v = Vue::new(100, true);
+        let result = "**src/a.rs** — lines 1-1 of 1\nScopes: x\n```\n00001| fn main() {}\n```";
+        v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "read_file", "call_id": "c1", "arguments": "{\"path\":\"src/a.rs\"}" } }));
+        v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "tool": "read_file", "call_id": "c1", "ok": true, "ms": 3, "bytes": 90, "result_excerpt": json!({ "result": result }).to_string() } }));
+        let l = v.prendre_lignes();
+        let vus: Vec<(Genre, &str, &str)> = l.iter().map(|l| (l.genre, l.langue.as_str(), l.texte.as_str())).collect();
+        assert_eq!(vus, vec![(Genre::Outil, "", "» read_file src/a.rs  ⟨1⟩"), (Genre::Outil, "", "  fait (3 ms)"), (Genre::Code, "rs", "fn main() {}")]);
+        assert_eq!((v.appels.len(), v.appels[0].ok, v.appels[0].octets), (1, Some(true), Some(90)));
+        assert_eq!(v.touche(Touche::CtrlO), Some(Action::Ouvrir));
+        assert_eq!(Vue::new(80, true).touche(Touche::CtrlO), None, "sans appel, rien à ouvrir");
+    }
+
+    /// **tty-11, au mot de Lucie** : un bloc de code dans la boîte devient un bloc
+    /// de code de sa langue, comme dans le texte du modèle.
+    #[test]
+    fn a_fenced_block_in_the_mailbox_is_a_code_block_of_its_language() {
+        let mut v = Vue::new(100, true);
+        v.ligne_de_boite(&json!({ "id": "d/t:1", "from": "teammate", "kind": "report", "text": "Voici :\n```typescript\nclass SomeClass {}\n```\nfin" }));
+        v.ligne_de_boite(&json!({ "id": "d/t:2", "from": "teammate", "kind": "report", "text": "```rust\nfn a() {}\n```" }));
+        let l = v.prendre_lignes();
+        let vus: Vec<(Genre, &str, &str)> = l.iter().map(|l| (l.genre, l.langue.as_str(), l.texte.as_str())).collect();
+        assert_eq!(vus, vec![
+            (Genre::Boite, "", "[équipier · compte rendu] Voici :"),
+            (Genre::Code, "typescript", "class SomeClass {}"),
+            (Genre::Boite, "", "  fin"),
+            (Genre::Boite, "", "[équipier · compte rendu] "),
+            (Genre::Code, "rust", "fn a() {}"),
+        ]);
     }
 
     /// Le repli (sous mosh, la commande qui relit le journal) se dit sur la

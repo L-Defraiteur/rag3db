@@ -254,6 +254,7 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
             };
             match action {
                 Some(Action::Quitter) => return Ok(()),
+                Some(Action::Ouvrir) => {}
                 Some(Action::Envoyer(texte, kind)) => {
                     if let Err(e) = client::poster(agent, ep, "/ide/teammate/mailbox", &json!({ "backend": tache.depot.id, "task": tache.task, "kind": kind, "text": texte })) {
                         vue.note(&format!("refusé : {e}"));
