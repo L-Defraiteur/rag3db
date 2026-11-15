@@ -39,56 +39,65 @@ Cette page dit le corpus, puis ce qu'on mesure et comment, avant tout appel.
 Jusqu'où l'archiviste range un vrai long contexte sans dérailler : où il perd des sujets, où il les
 duplique, où il oublie. Et quels contournements tiennent.
 
-L'outil `archive` découpe son contenu par ses titres, puis décide **section par section**. « Voir
-N tours » veut donc dire ranger une section qui porte N tours d'un bloc (`## turns a-(a+N-1)`).
-**La variable, c'est la taille de la section en tours.**
+**La forme de Lucie, à mesurer d'abord** (par c7, 12 h 4x) : « comme s'il y avait trois
+conversations de 300 k au lieu d'une de 900 ». L'archiviste range la conversation fenêtre par
+fenêtre. Chaque fenêtre lui arrive avec deux choses :
+- **les résumés déjà extraits des fenêtres d'avant** : leurs L1 et le bilan courant, rendus par le
+  composeur de la session mémoire dans la forme que la fenêtre suivante relit ;
+- **un bout du texte qui précède** : le chevauchement, les derniers tours de la fenêtre d'avant.
 
-## 3. Le protocole
+Puis on recommence avec la fenêtre suivante.
 
-- **Les niveaux** : N = 1, 2, 5, 10, 20, 50, 100, puis 244 (le segment entier). Chaque niveau range
-  tout le corpus, en sections de N tours, en paquets d'environ 20 sections, avec une source par
-  paquet.
-- **Les copies** : chaque niveau a sa propre copie neuve du gabarit memory, vide, sans la mémoire
-  de Lucie. Une copie de son instantané rendrait les candidates réalistes, mais c'est une base
-  durable : seulement sur son mot.
-- **La référence** : le niveau N = 1, le rangement au fil de l'eau par sections closes. Ses
+L'outil `archive` décide section par section. Une fenêtre lui est donc donnée comme **une seule
+section** de tous ses tours (`## turns a-b`). Les résumés et le chevauchement lui arrivent **en
+contexte**, non comme contenu à ranger. C'est l'argument à demander à la session mémoire (§ 5).
+
+## 3. Les variantes
+
+Les tailles sont comptées en jetons du corpus, par tours entiers. Le corpus en fait 880 233.
+
+| variante | fenêtre | chevauchement | résumés d'avant |
+|---|---|---|---|
+| **F, la forme de Lucie** | 300 k (trois fenêtres) | 10 % puis 25 % | oui |
+| F, à d'autres tailles | 50 k, 100 k, 200 k | 10 % et 25 % | oui |
+| **U, la fenêtre unique** | 880 k (le segment entier) | aucun | aucun |
+| **S, sans chevauchement** | aux mêmes tailles que F | 0 | oui |
+| **N, nues** | aux mêmes tailles que F | 0 | non |
+
+- **La référence** : le rangement au fil de l'eau, une section par tour (244 sections closes). Ses
   sujets, c'est-à-dire les fiches qui reçoivent au moins un L1, sont la liste de référence des
-  sujets du corpus. Cette liste est relue à la main avant de servir de juge (§ 5).
+  sujets du corpus. Cette liste est relue à la main avant de servir de juge (§ 5). Elle dit aussi
+  le coût du rangement le plus fin.
+- **Les copies** : chaque variante, à chaque taille, a sa propre copie neuve du gabarit memory,
+  vide, sans la mémoire de Lucie. Une copie de son instantané rendrait les candidates réalistes,
+  mais c'est une base durable : seulement sur son mot.
+- **L'ordre** : F à 300 k d'abord, avec ses deux chevauchements, puis U, puis S et N à 300 k. Les
+  autres tailles viennent ensuite, si F à 300 k tient ou pour trouver où il casse.
+
+## 4. Les métriques, par variante et par taille
+
+- **P1, le rappel des sujets** : la part des sujets de la référence qui reçoivent un L1. Gemini
+  apparie les sujets, aveugle à la variante : il propose des couples, puis les confirme.
+- **P2, les doublons** : les fiches créées qui en doublent une autre de la même variante, surtout
+  d'une fenêtre à l'autre. C'est ce que les résumés d'avant doivent empêcher.
+- **P3, l'oubli par position** : pour chaque fenêtre, quels tours sont représentés dans ses L1 (un
+  tirage de tours, jugé par Gemini), selon leur position dans la fenêtre : début, milieu, fin.
+  C'est le « perdu au milieu », et le bord que le chevauchement doit couvrir.
+- **P4, les erreurs** : les fenêtres sans décision, les troncatures (le plafond de Decide) et les
+  refus.
+- **P5, le coût** : le temps de passe, les appels au modèle et les jetons d'entrée envoyés, résumés
+  et chevauchement compris.
 - **La casse** se lit à trois signes :
-  1. **une erreur** : la réponse tronquée au plafond de Decide, un refus, une section sans
-     décision ;
-  2. **la perte** : le rappel des sujets de la référence tombe sous 0,8 ;
-  3. **la duplication** : une fiche neuve qui double une fiche du même niveau devient plus d'une
-     sur dix.
+  1. une erreur ;
+  2. P1 sous 0,8 ;
+  3. plus d'une fiche neuve sur dix en double.
 
-## 4. Les métriques, par niveau N
+  On en tire **la plus grande fenêtre qui tient**, à chaque chevauchement.
 
-- **P1, le rappel des sujets** : la part des sujets de la référence qui reçoivent un L1 au niveau
-  N. Gemini apparie les sujets des deux niveaux, aveugle au niveau, avec une liste de couples
-  proposés puis confirmés.
-- **P2, les doublons** : les fiches créées au niveau N qui en doublent une autre du même niveau.
-  Gemini juge les couples proches par le nom et le résumé.
-- **P3, l'oubli par position** : pour chaque section de N tours, quels tours sont représentés dans
-  ses L1 (un tirage de tours, jugé par Gemini). On en tire la courbe de la représentation selon la
-  position dans la section : début, milieu, fin. C'est le « perdu au milieu ».
-- **P4, les erreurs** : les sections sans décision, les troncatures et les refus, comptés par
-  niveau.
-- **P5, le coût** : le temps de passe, les appels au modèle et les jetons d'entrée envoyés, par
-  niveau.
-- **La casse** : le plus petit N où l'un des trois signes du § 3 apparaît.
+**La question de Lucie y répond ainsi** : jusqu'où l'archiviste voit, c'est la casse de N et de U.
+Avec quelle fenêtre et quel chevauchement il tient, c'est F contre S et N, à la même taille.
 
-## 5. Les contournements, joués au niveau de la casse et au-dessus
-
-1. **Au fil de l'eau par sections closes** : c'est N = 1, la référence. Son prix, c'est P5.
-2. **Des fenêtres chevauchées** : des sections de N tours qui avancent de N/2. Chaque tour est vu
-   deux fois. On mesure si le chevauchement rend les sujets du bord et ce qu'il coûte en doublons.
-3. **Un bilan courant relu avant chaque fenêtre** : avant chaque section, l'archiviste reçoit le
-   bilan ordonné des fenêtres déjà rangées, en contexte et non comme contenu à ranger. Il faut
-   pour ça un argument de l'outil archive qui ne crée rien, à demander à la session mémoire.
-
-Chaque contournement est jugé par P1 à P5 contre la référence et contre le niveau nu.
-
-## 6. La validation et les bornes
+## 5. La validation et les bornes
 
 - **Le juge** : avant de publier un chiffre, je relis à la main 30 appariements de sujets, 30
   doublons et 30 représentations de tours. Sous 0,8 d'accord, rien n'est publié.
@@ -97,9 +106,16 @@ Chaque contournement est jugé par P1 à P5 contre la référence et contre le n
   - les appels du juge en série, avec une attente doublée à partir de 60 s sur un quota ;
   - les secrets sont masqués avant tout envoi.
 - **Le coût prévu** :
-  - le niveau N = 1 fait 244 décisions ;
-  - l'ensemble des niveaux en fait environ 460, sur à peu près 7 millions de jetons d'entrée ;
-  - plus les contournements et le juge.
-- **Rien n'est lancé** avant que l'orchestration ait validé, et avant les deux réponses de la
-  session mémoire : l'entrée de l'archive qui reçoit un contexte sans le ranger, et sa limite de
-  taille par section.
+  - la référence fait 244 décisions, sur environ 880 000 jetons d'entrée ;
+  - chaque variante à chaque taille fait 880 000 jetons d'entrée, plus ses résumés et son
+    chevauchement ;
+  - les quatre variantes à 300 k font peu de décisions (trois ou quatre fenêtres chacune), mais
+    environ 4 millions de jetons d'entrée ;
+  - plus le juge.
+- **Ce qu'il faut de la session mémoire** :
+  - le composeur qui rend les résumés d'une fenêtre dans la forme que la suivante relit ;
+  - l'entrée de l'archive qui reçoit ce contexte, et le chevauchement, sans les ranger ;
+  - la limite de taille d'une section. Une fenêtre de 300 k tient dans le million de Gemini, mais
+    sa sortie est plafonnée à 4 096 jetons par décision : une fenêtre de 300 k ne peut rendre que
+    ce qui tient dans ce plafond. C'est peut-être là que U casse.
+- **Rien n'est lancé** avant que l'orchestration ait validé, et avant ces trois réponses.
