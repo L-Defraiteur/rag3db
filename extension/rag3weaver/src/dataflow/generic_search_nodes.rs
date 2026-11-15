@@ -1488,7 +1488,7 @@ impl Node for BM25SearchNode {
         // haut : le chemin natif est déjà parti avec son propre filtre, et
         // résoudre pour rien ferait un aller de base par recherche.
         let allowed = allowed_ids_for(ctx, "BM25SearchNode", &target, &options)?;
-        eprintln!("[sonde masque] BM25SearchNode : filtre {:?}, allowed {:?}", options.filter_condition.is_some(), allowed.as_ref().map(|a| a.len()));
+        eprintln!("[sonde masque] BM25SearchNode : filtre {:?}, portée {:?}, allowed {:?}", options.filter_condition, options.portee.is_empty(), allowed.as_ref().map(|a| a.len()));
 
         let dialect = ctx
             .service::<Arc<dyn crate::dialect::SchemaDialect>>("dialect")
