@@ -594,6 +594,15 @@ fn run_index(
             say(progress.line(rate, chars_per_chunk));
         }
     }
+    // **Un arrêt pendant une passe** : ses appels coupés rendent zéro, et la boucle sort comme sur une
+    // dette soldée. L'arrêt se dit quand même, à la dernière ligne, au lieu d'un « non embarqués » qui
+    // ferait croire à une passe allée au bout (le rattrapage à l'ouverture, 15 novembre 2026 : une
+    // synchronisation devenue rapide laissait la fermeture tomber dans l'embarquement).
+    if stop.load(std::sync::atomic::Ordering::SeqCst) {
+        return Err(format!(
+            "{STOPPED_PREFIX} pendant une passe de vecteurs : le plein texte est prêt, relancer index embarque le reste"
+        ));
+    }
     // Ce que cette indexation a mesuré en vrai, écritures comprises : la
     // prochaine estimation prévoira mieux que la sonde.
     if let Some(measured) = Rate::from_sample(embedded * chars_per_chunk, t.elapsed()) {
