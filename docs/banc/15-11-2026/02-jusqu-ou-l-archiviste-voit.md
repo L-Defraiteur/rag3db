@@ -151,9 +151,11 @@ que chaque décision voit en contexte.
     (`archive_candidates.rhai`, un plafond ancien). Le L1 garde la section entière, et le contexte
     n'est pas coupé. Ici, un tour fait en médiane 4 132 caractères (p90 15 236), et 130 tours sur 245 dépassent
     4 000. Sans contexte (N), la décision ne voit que le début de ces tours ; avec contexte (F, S, U), elle voit en entier les tours d'avant,
-    mais son propre tour en partie. Le biais n'est pas le même d'une variante à l'autre : à
-    trancher avant de lancer. Soit le plafond est levé pour la mesure, soit chaque section est
-    coupée à 4 000 caractères aussi dans le contexte ;
+    mais son propre tour en partie. **Tranché par l'orchestration** (12 h 4x) : chaque tour est
+    coupé à 4 000 caractères aussi dans le contexte, pour que toutes les variantes voient les tours
+    de la même façon. On mesure l'archiviste tel qu'il est. Le plafond levé viendra ensuite comme
+    variante, avec son coût. Le plafond lui-même est un défaut du produit, en ticket chez la
+    session mémoire ; son remède naturel, l'étape `segment`, sera mesuré après ;
   - **le cache** : aucun cache explicite n'est demandé à l'appel (API compatible OpenAI). Seul le
     cache implicite de Vertex joue, sur un préfixe identique. L'instruction vient d'abord, puis le
     contexte : ce qui ne change pas dans la fenêtre d'abord, le bout en cours à la fin. La part
