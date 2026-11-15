@@ -459,6 +459,7 @@ fn executer(c: crate::commandes::Commande, terminal: &mut ratatui::DefaultTermin
             Some(Err(e)) => vue.note(&format!("le contexte ne se lit pas : {e}")),
             None => vue.note("la tâche n'a pas encore de worktree : pas de contexte"),
         },
+        Commande::Modele(_) => vue.note("/model : pas encore"),
         Commande::Shell(cmd) => lancer_une_commande(&cmd, terminal, vue, agent, ep, tache, journal)?,
         Commande::Inconnue(n) => vue.note(&format!("commande inconnue : /{n} — /aide les liste")),
     }
@@ -505,6 +506,11 @@ fn lancer_une_commande(cmd: &str, terminal: &mut ratatui::DefaultTerminal, vue: 
         Err(e) => vue.note(&format!("!{cmd} : {e}")),
     }
     Ok(())
+}
+
+/// Les lignes de `/model` : les modèles déclarés, le nom et le modèle d'abord.
+pub fn modeles_dits(_v: &Value) -> Vec<String> {
+    Vec::new()
 }
 
 /// « contexte : 12 345 / 1 048 576 jetons (1,2 %) — historique 60 %, outils 25 % ».
@@ -791,6 +797,22 @@ mod tests {
         ];
         let faux: Vec<_> = attendus.iter().enumerate().filter(|(_, (vu, attendu))| vu != attendu).map(|(i, (vu, attendu))| format!("#{i} : {vu:?} au lieu de {attendu:?}")).collect();
         assert!(faux.is_empty(), "{faux:#?}");
+    }
+
+    /// `/model` dit les modèles déclarés : le nom et le modèle d'abord, la manière d'y
+    /// accéder ensuite, le défaut et celui de la tâche marqués.
+    #[test]
+    fn model_lists_names_and_models_marking_the_default_and_the_current() {
+        let v = json!({ "models": [
+            { "name": "rapide", "model": "gemini-3.8-flash", "provider": "compatible", "protocol": "vertex", "default": false, "current": true },
+            { "name": "fin", "model": "claude-opus-5-5", "provider": "compatible", "protocol": "anthropic", "default": true, "current": false }
+        ], "current": "rapide", "default": "fin" });
+        assert_eq!(modeles_dits(&v), vec![
+            "les modèles de la tâche (/model <nom> en change) :".to_string(),
+            "  ▸ rapide — gemini-3.8-flash (compatible, vertex) · celui de la tâche".to_string(),
+            "    fin — claude-opus-5-5 (compatible, anthropic) · par défaut".to_string(),
+        ]);
+        assert_eq!(modeles_dits(&json!({ "models": [] })), vec!["le manifeste de la tâche ne déclare aucun modèle de langage (models.llm)".to_string()]);
     }
 
     /// `/context` dit le remplissage du contexte du modèle, en jetons et en
