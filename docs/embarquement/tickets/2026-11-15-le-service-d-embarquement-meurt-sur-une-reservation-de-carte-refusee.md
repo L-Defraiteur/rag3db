@@ -60,8 +60,18 @@ comme le carré de la longueur.
 `RAG3WEAVER_EMBED_CHAR_BUDGET` n'y peut rien. Il range les textes en lots, mais un texte plus long que le budget
 part seul, entier (`embedder.rs`, « le plancher est un chunk »).
 
+**Correction de 96 (15 h 4x) : le texte long est une requête, pas une écriture.** Les écritures sont déjà
+découpées en morceaux de 1 500 caractères. Mais `archive_decide` cherche ses fiches candidates avec, pour
+requête, la section entière. `embed_query` (`src/search.rs:968`) embarque cette requête en un seul texte, sans
+la couper. 96 borne désormais la requête de l'archiviste à 4 000 caractères dans son gabarit. Toute autre
+recherche à requête longue refera le même coup : un agent qui colle un fichier dans `recall`, par exemple.
+
 Ce qu'il faudrait, en plus du refus nommé :
-- **côté écriture** : le gabarit memory découpe une Source longue avant de l'embarquer, comme le code découpe
-  ses scopes ;
+- **dans `embed_query`** : un plafond de longueur de la requête embarquée (de l'ordre du budget, 8 192
+  caractères, soit environ 2 048 jetons), dit dans les avertissements de la recherche quand il coupe. Le plein
+  texte garde la requête entière ;
 - **côté service** : un plafond de jetons par texte, déclaré dans l'identité, avec la troncature comptée et
   dite (`troncatures`), plutôt qu'un plafond qui n'existe que dans le modèle.
+
+Témoin de `embed_query`, rouge d'abord : une requête de 40 000 caractères arrive à l'embarqueur bornée, et la
+recherche le dit.
