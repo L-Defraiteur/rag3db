@@ -2179,6 +2179,9 @@ pub struct EmbedWatch {
     pub errors: Mutex<Vec<String>>,
     /// Les morceaux reçus sans texte, sautés sans être embarqués.
     pub empty: std::sync::atomic::AtomicUsize,
+    /// Ce que l'embarqueur dit de sa provenance (replié, carte pleine sans
+    /// repli), noté après chaque passe : lu par l'état d'index hors du verrou.
+    pub provenance_state: Mutex<Option<String>>,
 }
 
 impl EmbedWatch {

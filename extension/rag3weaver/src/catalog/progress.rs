@@ -547,6 +547,18 @@ impl Catalog {
         self.embedder.as_ref().is_some_and(|embedder| embedder.distant())
     }
 
+    /// **La provenance de l'embarqueur depuis la dernière lecture** (lue et
+    /// vidée) : les morceaux par provenance, et ce qu'il a dit (un repli, un
+    /// retour, une carte pleine sans repli).
+    pub fn embedder_provenance(&self) -> (Vec<(String, usize)>, Vec<String>) {
+        self.embedder.as_ref().map(|e| (e.provenance_counts(), e.provenance_events())).unwrap_or_default()
+    }
+
+    /// Ce que l'état d'index dit de l'embarquement : replié, ou carte pleine sans repli.
+    pub fn embedder_provenance_state(&self) -> Option<String> {
+        self.embedder.as_ref().and_then(|e| e.provenance_state())
+    }
+
     fn embedder_origin(embedder: &dyn crate::embedder::Embedder) -> &'static str {
         if embedder.distant() { "service" } else { "local" }
     }

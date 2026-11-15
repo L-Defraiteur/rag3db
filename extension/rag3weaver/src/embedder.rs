@@ -190,6 +190,15 @@ impl<T: Embedder + ?Sized> Embedder for std::sync::Arc<T> {
     fn timeout(&self) -> Option<std::time::Duration> {
         (**self).timeout()
     }
+    fn provenance_counts(&self) -> Vec<(String, usize)> {
+        (**self).provenance_counts()
+    }
+    fn provenance_events(&self) -> Vec<String> {
+        (**self).provenance_events()
+    }
+    fn provenance_state(&self) -> Option<String> {
+        (**self).provenance_state()
+    }
 }
 
 // ─── AbsentEmbedder ──────────────────────────────────────────────────────────
