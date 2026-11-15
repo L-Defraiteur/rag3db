@@ -137,6 +137,35 @@ fn les_exclusions_du_manifeste_ecartent_le_minifie_et_le_trop_gros_et_le_disent(
     assert_eq!(scopes_nommes(&catalog, "gros"), 1, "un fichier de 700 Ko écrit à la main reste indexé");
 }
 
+/// **Une exclusion posée sur un index déjà fait retire ce qu'elle écarte**
+/// (15 novembre 2026, avant la fenêtre d'arbre principal qui pose
+/// `index_exclude` sur les bases de Lucie) : le minifié indexé sans règle part
+/// à la réindexation sous la règle, et ses documents du plein texte avec lui.
+/// Après, autant de documents que de lignes.
+#[test]
+#[ignore]
+fn une_exclusion_posee_apres_coup_retire_le_minifie_et_ses_documents() {
+    let mut catalog = catalogue();
+    let mut source = source_a_trois_fichiers();
+    source.push(("app.js".to_string(), format!("function minifie(){{{}}}\n", "var a=1;".repeat(1500))));
+    sync_source(&mut catalog, &Snapshot::new("depot", source.clone()), &SourceSyncOptions::default(), &mut |_| {}).unwrap();
+    assert_eq!(scopes_nommes(&catalog, "minifie"), 1, "sans règle, le minifié est indexé");
+    let workspace: rag3weaver::backend_code::WorkspaceConfig = serde_json::from_value(serde_json::json!({
+        "source": "snapshot",
+        "root": "workspace",
+        "index": "code",
+        "index_exclude": {"minified_line_max_bytes": 5000, "code_file_max_bytes": 1048576}
+    }))
+    .unwrap();
+    let options = SourceSyncOptions { generated: workspace.index_gate(), ..Default::default() };
+    let r = sync_source(&mut catalog, &Snapshot::new("depot", source), &options, &mut |_| {}).unwrap();
+    assert_eq!(r.files_set_aside.get("minifié — une ligne au-delà du seuil du manifeste"), Some(&1), "{r:?}");
+    assert_eq!(scopes_nommes(&catalog, "minifie"), 0, "la règle posée, le minifié indexé avant part");
+    for (entite, documents, lignes) in catalog.comptes_du_plein_texte() {
+        assert_eq!(documents, lignes, "{entite} : {documents} documents pour {lignes} lignes, ses documents partent avec lui");
+    }
+}
+
 /// **Un fichier généré n'est pas indexé, et le rapport le compte** ; la règle
 /// levée, il l'est ; la règle remise, ce qu'il avait laissé est retiré.
 #[test]
