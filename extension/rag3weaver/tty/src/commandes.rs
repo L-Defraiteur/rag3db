@@ -40,6 +40,7 @@ pub const COMMANDES: &[(&str, &str)] = &[
     ("etapes", "montre ou cache dans l'historique les appels d'outil et les étapes de l'équipier"),
     ("journal", "où relire la séance"),
     ("model", "<nom> : change le modèle de la tâche ; seul, les modèles déclarés"),
+    ("nom", "<x> : nomme l'agent de la tâche ; seul, son nom ; « /nom - » reprend celui du dépôt"),
     ("quitter", "quitte le terminal"),
     ("tache", "<nom> : passe à une autre tâche"),
     ("theme", "<nom> : change de thème"),
@@ -70,6 +71,7 @@ pub fn lire(texte: &str) -> (Option<Commande>, Option<String>) {
             "context" | "contexte" => Commande::Contexte,
             "etapes" => Commande::Etapes,
             "model" | "modele" => Commande::Modele(arg),
+            "nom" => Commande::Nom(arg),
             autre => Commande::Inconnue(autre.to_string()),
         };
         return (Some(c), None);
