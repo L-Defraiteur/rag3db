@@ -288,16 +288,32 @@ fn servir_serveur(
         })
     };
 
+    // **Une requête prise a toujours sa réponse** (le 7879 de luciepc, 15 novembre 2026 : un calcul
+    // qui paniquait tuait son fil sans répondre, puis les autres, et `servir` rendait `Ok(())`). Les
+    // requêtes prises et pas encore répondues se comptent : un arrêt demandé attend qu'elles aient
+    // toutes leur réponse.
+    let en_vol = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let fini = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let mut poignees = Vec::new();
     for i in 0..fils.max(1) {
         let ecoute = ecoute.clone();
         let service = service.clone();
         let identite = identite.clone();
+        let (en_vol, fini) = (en_vol.clone(), fini.clone());
         poignees.push(
             std::thread::Builder::new()
                 .name(format!("{}-{i}", service.nom()))
                 .spawn(move || {
-                    while let Ok(mut req) = ecoute.recv() {
+                    loop {
+                        if fini.load(std::sync::atomic::Ordering::SeqCst) {
+                            break;
+                        }
+                        let mut req = match ecoute.recv_timeout(std::time::Duration::from_millis(200)) {
+                            Ok(Some(req)) => req,
+                            Ok(None) => continue,
+                            Err(_) => break,
+                        };
+                        en_vol.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                         let methode = req.method().as_str().to_string();
                         let route = chemin(req.url());
                         let (statut, corps) = if methode == "GET" && route == SANTE {
@@ -317,7 +333,14 @@ fn servir_serveur(
                                 (200, "{\"quitte\":true}".to_string())
                             }
                         } else {
-                            service.repondre(&methode, &route, &mut req)
+                            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| service.repondre(&methode, &route, &mut req))) {
+                                Ok(reponse) => reponse,
+                                Err(panique) => {
+                                    let message = message_de_panique(panique.as_ref());
+                                    service.apres_panique(&message);
+                                    (503, erreur(&format!("calcul en panique sur la carte : {message}")))
+                                }
+                            }
                         };
                         let _ = req.respond(
                             tiny_http::Response::from_string(corps)
@@ -330,6 +353,10 @@ fn servir_serveur(
                                     .expect("en-tête littéral"),
                                 ),
                         );
+                        let restant = en_vol.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) - 1;
+                        if restant == 0 && service.arret_demande().is_some() {
+                            fini.store(true, std::sync::atomic::Ordering::SeqCst);
+                        }
                     }
                 })
                 .map_err(|e| DaemonError::Ecoute {
@@ -341,7 +368,20 @@ fn servir_serveur(
     for p in poignees {
         let _ = p.join();
     }
-    Ok(())
+    // **Jamais `Ok(())`** : un service ne cesse de servir que pour une raison, et la dit.
+    Err(match service.arret_demande() {
+        Some((code, cause)) => DaemonError::Arret { code, cause },
+        None => DaemonError::Arret { code: 1, cause: "tous les fils de service sont partis sans cause dite".into() },
+    })
+}
+
+/// Le message d'une panique, quelle que soit sa charge.
+pub(crate) fn message_de_panique(charge: &(dyn std::any::Any + Send)) -> String {
+    charge
+        .downcast_ref::<&str>()
+        .map(|s| s.to_string())
+        .or_else(|| charge.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "panique sans message".to_string())
 }
 
 /// Le chemin d'une URL, sans sa requête.
