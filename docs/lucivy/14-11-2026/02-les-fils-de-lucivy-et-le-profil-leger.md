@@ -320,6 +320,15 @@ PR lucivy #38, fusionnée dans main (d3b8c4a6a), sans tag.
   (6 181 201) et fait passer 4 générations à 1, et le dictionnaire de 403,9 à 391,5 Mo (−3,1 %). Plusieurs
   générations coûtent donc environ 3 %, d'où les 400,7 Mo d'une table compactée contre 420,1 pour un index neuf.
 
-Pour que les vraies bases en profitent, il faut rag3weaver sur une lucivy qui porte les deux pièces : la 4.3.8, au mot
-de Lucie. Le lot de l'hôte (`POST /backend/fts-live-ids`, `POST /backend/maintain`) attend en branche,
-`lucivy-maintenance-hote`.
+### Les chiffres finaux (15 novembre 2026)
+
+- **lucivy 4.3.8 publiée** le 15 novembre vers 1 h (tag `v4.3.8`, main `dd04204`) : les deux pièces, `maintain` et
+  `index_report`. rag3weaver est en 4.3.8 sur master (e95a1b8c6), avec `POST /backend/fts-live-ids` et
+  `POST /backend/maintain`.
+- **Sur une copie** de `Lucivy_Scope` (instantané `avant-835d5298f`, purge des 8 809 orphelins et compaction par
+  `maintain`) : **4,27 → 1,16 Go**, dont un dictionnaire de 513,8 à 400,7 Mo.
+- **Sur la vraie base code-rag3db-depot, par hotfixs** dans sa fenêtre du 15 novembre (relayé par c7) :
+  **4,93 → 1,35 Go**.
+- Le coût d'une compaction de maintenance : +12 % pour le pré-passage des ids vivants (les fusions qui portent des
+  supprimés seulement), puis la compaction du dictionnaire, dans le bruit. La réduction (a) est un ticket souhait :
+  `docs/lucivy/tickets/2026-11-14-le-pre-passage-des-ids-vivants-relit-les-postings.md`.
