@@ -69,6 +69,8 @@ pub fn est_un_manifeste(chemin: &str) -> bool {
         || nom.ends_with(".csproj")
         // C/C++ : les dépendances de conan et celles que CMake va chercher.
         || matches!(nom, "conanfile.txt" | "conanfile.py" | "CMakeLists.txt")
+        // Python au-delà de pyproject.
+        || matches!(nom, "setup.cfg" | "setup.py" | "Pipfile")
         // `tsconfig.json`, `jsconfig.json`, `tsconfig.base.json` : leurs `paths` sont des alias du dépôt.
         || nom == "jsconfig.json"
         || (nom.starts_with("tsconfig") && nom.ends_with(".json"))
@@ -99,6 +101,14 @@ impl Manifestes {
                 "go.mod" | "go.work" => { un.lire_go_mod(&texte); &["go"] }
                 "conanfile.txt" | "conanfile.py" => { un.dependances.extend(dependances_conan(&texte)); &["c", "cpp"] }
                 "CMakeLists.txt" => { un.dependances.extend(dependances_cmake(&texte)); &["c", "cpp"] }
+                "setup.cfg" => { un.lire_setup_cfg(&texte); &["python"] }
+                "setup.py" => { un.lire_setup_py(&texte); &["python"] }
+                "Pipfile" => {
+                    for section in ["[packages]", "[dev-packages]"] {
+                        un.dependances.extend(cles_de_section(&texte, section));
+                    }
+                    &["python"]
+                }
                 "packages.config" | "Directory.Packages.props" => { un.lire_dotnet(&texte, None); &["csharp"] }
                 n if n.ends_with(".csproj") => { un.lire_dotnet(&texte, n.strip_suffix(".csproj")); &["csharp"] }
                 n if n.ends_with(".json") && (n == "jsconfig.json" || n.starts_with("tsconfig")) => {
@@ -262,6 +272,12 @@ impl Manifestes {
                 self.dependances.extend(o.keys().cloned());
             }
         }
+        // Les dépendances livrées dans le paquet : une liste de noms, sous l'un ou l'autre nom du champ.
+        for champ in ["bundledDependencies", "bundleDependencies"] {
+            for n in v.get(champ).and_then(|a| a.as_array()).into_iter().flatten().filter_map(|n| n.as_str()) {
+                self.dependances.insert(n.to_string());
+            }
+        }
     }
 
     fn lire_pyproject(&mut self, texte: &str) {
@@ -276,8 +292,9 @@ impl Manifestes {
             }
             // `[project] dependencies = ["requests>=2", …]`, sur une ou plusieurs lignes ;
             // `[project.optional-dependencies] groupe = [ … ]`.
+            // PEP 735 : `[dependency-groups] test = ["pytest", {include-group = "lint"}]` a la forme des extras.
             let liste_ouverte = (section == "[project]" && cle_toml(l).as_deref() == Some("dependencies"))
-                || (section == "[project.optional-dependencies]" && cle_toml(l).is_some());
+                || ((section == "[project.optional-dependencies]" || section == "[dependency-groups]") && cle_toml(l).is_some());
             if liste_ouverte || dans_une_liste {
                 let fragment = if liste_ouverte { l.split_once('=').map(|(_, v)| v).unwrap_or("") } else { l };
                 for chaine in fragment.split(',') {
@@ -297,6 +314,65 @@ impl Manifestes {
             if section == "[tool.poetry.dependencies]" || section == "[tool.poetry.dev-dependencies]" || (section.starts_with("[tool.poetry.group.") && section.ends_with(".dependencies]")) {
                 if let Some(cle) = cle_toml(l).filter(|c| c != "python") {
                     self.dependances.insert(cle);
+                }
+            }
+        }
+    }
+
+    /// `setup.cfg` : `[metadata] name`, et les exigences de `[options] install_requires` et de
+    /// `[options.extras_require]`, sur la ligne de la clé ou en lignes de continuation indentées.
+    fn lire_setup_cfg(&mut self, texte: &str) {
+        let mut section = String::new();
+        let mut dans_la_liste = false;
+        for ligne in texte.lines() {
+            let indentee = ligne.starts_with(char::is_whitespace);
+            let l = ligne.split(" #").next().unwrap_or("").trim();
+            if l.starts_with('[') {
+                section = l.to_string();
+                dans_la_liste = false;
+                continue;
+            }
+            if indentee && dans_la_liste {
+                self.dependances.extend(nom_pep508(l));
+                continue;
+            }
+            dans_la_liste = false;
+            let Some((cle, valeur)) = l.split_once('=') else { continue };
+            let (cle, valeur) = (cle.trim(), valeur.trim());
+            if section == "[metadata]" && cle == "name" && !valeur.is_empty() {
+                self.paquets_du_projet.insert(valeur.to_string());
+            }
+            if (section == "[options]" && cle == "install_requires") || section == "[options.extras_require]" {
+                self.dependances.extend(valeur.split(';').next().and_then(|v| nom_pep508(v.trim_matches(',').trim())));
+                dans_la_liste = true;
+            }
+        }
+    }
+
+    /// `setup.py` : `name="…"`, et les chaînes de la liste `install_requires=[…]` (sur une ou plusieurs
+    /// lignes). Le reste du script ne s'exécute pas : ce qui n'est pas écrit en littéral ne se lit pas.
+    fn lire_setup_py(&mut self, texte: &str) {
+        let chaine_apres = |motif: &str| -> Option<String> {
+            let i = texte.find(motif)? + motif.len();
+            let reste = texte[i..].trim_start().strip_prefix('=')?.trim_start();
+            let guillemet = reste.chars().next().filter(|c| *c == '"' || *c == '\'')?;
+            Some(reste[1..].split(guillemet).next()?.to_string())
+        };
+        if let Some(n) = chaine_apres("name").filter(|n| !n.is_empty()) {
+            self.paquets_du_projet.insert(n);
+        }
+        if let Some(i) = texte.find("install_requires") {
+            let reste = &texte[i..];
+            if let (Some(a), Some(b)) = (reste.find('['), reste.find(']')) {
+                if a < b {
+                    let mut liste = &reste[a + 1..b];
+                    while let Some(j) = liste.find(|c| c == '"' || c == '\'') {
+                        let guillemet = liste[j..].chars().next().unwrap();
+                        let apres = &liste[j + 1..];
+                        let Some(fin) = apres.find(guillemet) else { break };
+                        self.dependances.extend(nom_pep508(&apres[..fin]));
+                        liste = &apres[fin + 1..];
+                    }
                 }
             }
         }
@@ -458,6 +534,23 @@ fn valeur_d_attribut(balise: &str, attribut: &str) -> Option<String> {
         reste = apres;
     }
     None
+}
+
+/// Les clés d'une section TOML (`[packages]` d'un Pipfile : `flask = "*"` donne `flask`).
+fn cles_de_section(texte: &str, section: &str) -> Vec<String> {
+    let mut dedans = false;
+    let mut cles = Vec::new();
+    for ligne in texte.lines() {
+        let l = ligne.trim();
+        if l.starts_with('[') {
+            dedans = l == section;
+            continue;
+        }
+        if dedans {
+            cles.extend(cle_toml(l));
+        }
+    }
+    cles
 }
 
 /// Les valeurs `name = "…"` des sections que `garder` retient.
@@ -779,6 +872,30 @@ mod tests {
         assert_eq!(cpp, vec!["OpenSSL", "Threads", "boost", "fmt", "googletest", "openssl", "spdlog", "zlib"]);
         assert_eq!(m.dependances_par_langue["c"], m.dependances_par_langue["cpp"]);
         assert!(!cpp.contains(&"Faux"), "my_find_package n'est pas find_package");
+    }
+
+    /// Python au-delà de pyproject : `install_requires` de setup.cfg (en continuation) et de setup.py (une
+    /// liste sur plusieurs lignes), les `[packages]` et `[dev-packages]` d'un Pipfile, les groupes
+    /// `[dependency-groups]` de PEP 735 (un `include-group` n'est pas un paquet) ; le nom du projet.
+    #[test]
+    fn python_setup_cfg_setup_py_pipfile_et_groupes() {
+        let m = lire(&[
+            ("a/setup.cfg", "[metadata]\nname = mon-outil\n\n[options]\npackages = find:\ninstall_requires =\n    requests>=2.0\n    click\n\n[options.extras_require]\nyaml = PyYAML\n"),
+            ("b/setup.py", "from setuptools import setup\nsetup(\n    name=\"autre-outil\",\n    install_requires=[\n        \"numpy>=1.20\",\n        'pandas',\n    ],\n)\n"),
+            ("c/Pipfile", "[[source]]\nurl = \"https://pypi.org/simple\"\n\n[packages]\nflask = \"*\"\n\n[dev-packages]\npytest = \">=8\"\n\n[requires]\npython_version = \"3.12\"\n"),
+            ("d/pyproject.toml", "[project]\nname = \"groupes\"\n\n[dependency-groups]\ntest = [\"hypothesis>=6\", {include-group = \"lint\"}]\nlint = [\"ruff\"]\n"),
+        ]);
+        let py: Vec<&str> = m.dependances_par_langue["python"].iter().map(String::as_str).collect();
+        assert_eq!(py, vec!["PyYAML", "click", "flask", "hypothesis", "numpy", "pandas", "pytest", "requests", "ruff"]);
+        let projet: Vec<&str> = m.paquets_par_langue["python"].iter().map(String::as_str).collect();
+        assert_eq!(projet, vec!["autre-outil", "groupes", "mon-outil"]);
+    }
+
+    /// Node : les `bundledDependencies` (ou `bundleDependencies`) sont des dépendances.
+    #[test]
+    fn node_bundled_dependencies() {
+        let m = lire(&[("package.json", r#"{"name": "app", "dependencies": {"lodash": "4"}, "bundledDependencies": ["mon-module-livre"]}"#)]);
+        assert!(m.dependances_par_langue["javascript"].contains("mon-module-livre"), "{:?}", m.dependances_par_langue);
     }
 
     #[test]

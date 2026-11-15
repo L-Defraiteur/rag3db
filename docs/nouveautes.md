@@ -29,6 +29,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **15 nov. — Les dépendances d'un vieux projet Python se lisent aussi.** `setup.cfg` (`install_requires`
+  en lignes de continuation, `extras_require`), `setup.py` (la liste `install_requires=[…]` écrite en
+  littéral), le `Pipfile` (`[packages]`, `[dev-packages]`) et les groupes de PEP 735
+  (`[dependency-groups]`, un `include-group` n'étant pas un paquet) ; côté Node, les `bundledDependencies`.
 - **15 nov. — Les dépendances de conan, de CMake et d'un workspace Go se lisent.** Les `[requires]` d'un
   `conanfile.txt`, les `requires` d'un `conanfile.py`, les `find_package` et `FetchContent_Declare` d'un
   `CMakeLists.txt` deviennent des dépendances de C et C++ ; `go.work` se lit comme `go.mod` (ses `use`
