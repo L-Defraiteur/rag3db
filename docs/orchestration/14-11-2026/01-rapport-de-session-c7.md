@@ -1259,3 +1259,17 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   produit encore 970 orphelins par douze heures : le correctif des orphelins de recherche (262be6fc4, sur
   master) ferme la source — un binaire qui le porte reste à poser. Archi refusé au range-diff (« < » d'un
   commit de docs déjà sur master) : reprise sur e95a1b8c6 ; quatrième forme du même trou, en mémoire.
+- **G, 01 h 3x** : la paire rouge de la base par passe jouée sur 270b6284d (la base d'avant le lot) à 1 h 00 :
+  34/36 et 31/36 échoués, 90 « concurrently dropped », 20 « does not exist » — la preuve reproductible du
+  ticket fermé ; rapport de session de G avec « Reprendre » (452e42211 : dix lots atterris, poses, worktrees,
+  targets, binaires et .avant, copies du cache et sha, instantanés) ; push-d-un-lot.md dit la recopie par
+  `install -m 755`. Attend sa base (la tête de codeparsers).
+- Embarquement, 01 h 3x : rapport de session avec « Reprendre » (d4a60f6f2 : neuf lots, trois vrais jeux, les
+  règles apprises, aucun worktree vivant, la mesure de 03 h et son rappel, la question lavapipe).
+- **Archi, 01 h 5x** : rapport de session (66b5a9bd3 : « Reprendre » avec wt-nav vert qui attend codeparsers,
+  target delais-c 30 Go) ; **l'étude du pont navigateur** (page 03, 05273610c + ae28ad773) : Playwright et
+  BrowserMCP sont des relais CDP minces ; jackwener/browsermcp porte observation (ARIA), actions et JavaScript
+  dans l'extension par Native Messaging, hôte à transcrire en 800 à 1 200 lignes de Rust avec claim/release/
+  handoff ; recommandation : forker jackwener avec la politique CDP et l'appairage signé de BrowserMCP, une
+  bibliothèque `navigateur` reliée à l'hôte rag3weaver du poste, chaque action un outil de l'atelier sous
+  accords, le passage de main un pas du run. **Le choix du socle et le fork reviennent à Lucie** (ticket ouvert).

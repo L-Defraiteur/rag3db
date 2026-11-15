@@ -847,3 +847,28 @@ dessus et passe devant ED ; ED sur 96 ; codeparsers sur ED ; G sur codeparsers.
 Codeparsers, 01 h 3x : les manifestes Python manquants verts (python-manifestes sur go-work-2 : setup.cfg,
 setup.py littéral, Pipfile, PEP 735 dependency-groups, bundledDependencies ; 20/20) ; les deux lots passent
 ensemble derrière ED (une passe sur la tête, un dernier pas), sans e2e_postgres dit au journal.
+96, 01 h 3x : la pile de recherche (4595fcdb5e) est **rouge au jeu sans feature** (« unused import:
+AtomicBool », read_pool.rs:34, -D warnings) ; le lot de 96 ne touche pas read_pool.rs ; 96 n'a pas donné sa
+tête. Recherche corrige par un commit ajouté et rejoue check_features 8 jeux avant de redonner sa tête
+(troisième fois ce soir qu'un maillon donne sa tête sans check_features : la règle 6 tient).
+Recherche, 01 h 4x : tête corrigée 766e5bff2 (AtomicBool sous cfg(test), commit ajouté) ; passe entière dessus.
+96 : lot-96-foreach-imbrique-pile-2 1bc2b8488 sur 766e5bff2, check_features 8/8, tête donnée à ED ; la pile
+sur la tête rouge abandonnée (reste en place sans servir).
+
+**01 h 5x — l'écrivain d'ED passe dernier** : ses quatre suites vertes sur e58d13c91 (36, 27, 14, 36) après sept
+défauts de son lot trouvés et corrigés (le miroir CONSUMED_BY, scopes_deleted, l'empreinte par la clé nue, deux
+aides d'e2e_code au rang lu, une constante et un champ sans feature, l'arrêt entre paquets de la
+synchronisation — 89 s d'attente d'une fermeture) ; tête 3094b695c en passe courte, banc juge depuis 1 h 22 ;
+tête de pile vers 2 h 30. Codeparsers (go.work + Python) passe devant, sur 96 (1bc2b8488) ; G sur codeparsers ;
+ED sur G. Ordre final : recherche → 96 → codeparsers → G → ED.
+
+**01 h 54 — cinquante-cinq atterris** : le BEGIN de read_pool (recherche, 68b1454d8, 4/4 en « = » : Phase::Rompu
+porte la cause d'origine et a_rouvrir, une base à rouvrir ne recommence pas ; AtomicBool sous cfg(test) ;
+passe entière verte, lib 2 447). 96 a le « à toi » à son vert (PILE_AVANT=766e5bff2) ; puis codeparsers
+(1bc2b8488), G (sur codeparsers), ED (sur G).
+Codeparsers, 01 h 5x : python-manifestes-2 ffe6efee8 sur 1bc2b8488 (deux commits : go.work/conan/CMake, puis
+setup/Pipfile/PEP 735/bundled) ; passe en file ; tête à G au check_features vert.
+
+**02 h 01 — cinquante-huit atterris** : les ForEachNode imbriqués, leur ticket et le plafond déclaré du
+Decide (96, 0130904a5, 3/3 en « = »). Codeparsers a le « à toi » à son vert (PILE_AVANT=1bc2b8488) ; puis G
+(sur ffe6efee8), ED (sur G). 96 : scinder et rejoindre, rouge d'abord.
