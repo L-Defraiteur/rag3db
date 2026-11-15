@@ -6072,6 +6072,7 @@ mod tests_de_l_ecrivain {
             .unwrap()
             .rows;
         assert_eq!(appelants(&cat, "f"), vec!["a".to_string()], "a changé à son tour appelle le f neuf ; les CONSUMES bruts : {brutes:?}");
+    }
 
     /// Les instructions qu'un repassage complet (la version de l'analyse changée) de `n` fichiers envoie.
     fn instructions_d_un_repassage(n: usize) -> usize {
