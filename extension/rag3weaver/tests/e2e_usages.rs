@@ -1046,3 +1046,42 @@ fn un_chemin_de_module_ne_prend_pas_le_type_d_une_locale_homonyme() {
     assert_eq!(marques.len(), 1, "facts::digest est relié : {marques:?}");
 }
 
+/// **Un prototype de l'API C se voit par les includes d'une source C** (ticket « un appel C vers une
+/// fonction C++ à définisseur unique n'est pas résolu », ED, 15 novembre 2026). Les vrais fichiers du
+/// dépôt : `examples/c/main.c` inclut `rag3db.h`, qui déclare `RAG3DB_C_API rag3db_state
+/// rag3db_connection_init(…);` ; la définition est dans `src/c_api/connection.cpp`, d'un autre nom de base.
+/// La déclaration doit compter : `main` appelle `rag3db_connection_init`. Deux causes, chacune vue rouge
+/// ici : la source C ne relevait pas ses `#include` (sa fermeture se réduisait à elle-même), et la garde
+/// `#ifdef __cplusplus` / `extern "C" {` / `#endif` de rag3db.h, avec un `#if` dans le corps d'une struct
+/// plus loin, faisait perdre à tree-sitter les 167 prototypes de l'en-tête (codeparsers ne la reproduit
+/// pas en petit : le témoin est le vrai fichier).
+#[test]
+#[ignore]
+fn un_prototype_de_l_api_c_se_voit_par_les_includes_d_une_source_c() {
+    let depot = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let fichiers: Vec<(String, String)> = ["examples/c/main.c", "src/include/c_api/rag3db.h", "src/c_api/connection.cpp"]
+        .iter()
+        .map(|p| (p.to_string(), std::fs::read_to_string(format!("{depot}/{p}")).unwrap_or_else(|e| panic!("{p} : {e}"))))
+        .collect();
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    let rapport = cat.ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let r = cat
+        .execute_raw("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope {name: 'rag3db_connection_init'}) RETURN a.name, a.file_path, b.file_path, r.visibility ORDER BY a.name")
+        .unwrap();
+    let appelants: Vec<String> = r.rows.iter().map(|x| x.iter().map(|v| v.as_str().unwrap_or("∅").to_string()).collect::<Vec<_>>().join(" ")).collect();
+    eprintln!("{appelants:#?}\n{rapport:?}");
+    let lire = |q: &str| cat.execute_raw(q).map(|r| format!("{:?}", r.rows)).unwrap_or_else(|e| e.to_string());
+    eprintln!(
+        "fichiers {}\ndéfinisseurs {}\nmentions {}\ndéclarations de l'en-tête {}",
+        lire("MATCH (f:File) RETURN f.path, f.includes"),
+        lire("MATCH (s:Scope)-[:DEFINES]->(y:Symbol {name: 'rag3db_connection_init'}) RETURN s.file_path, s.name, s.scope_type, s.parent_name"),
+        lire("MATCH (s:Scope)-[m:MENTIONS]->(y:Symbol {name: 'rag3db_connection_init'}) RETURN s.file_path, s.name, m.kind"),
+        lire("MATCH (s:Scope) WHERE s.file_path = 'src/include/c_api/rag3db.h' AND s.scope_type = 'module' RETURN s.name, size(s.declarations), s.declarations CONTAINS 'rag3db_connection_init'"),
+    );
+    assert!(
+        appelants.iter().any(|a| a.starts_with("main examples/c/main.c src/c_api/connection.cpp")),
+        "main → rag3db_connection_init, par la déclaration de rag3db.h : {appelants:#?}"
+    );
+}
+
