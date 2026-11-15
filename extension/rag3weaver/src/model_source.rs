@@ -220,6 +220,10 @@ impl ModelSource {
             default: false,
         }
     }
+    /// Le budget du contexte qui repart après une compaction (à venir).
+    pub fn budget_de_reprise(&self) -> usize {
+        0
+    }
     pub fn service(model: impl Into<String>) -> Self {
         Self { provider: Provider::Service, ..Self::local(model) }
     }
@@ -893,6 +897,24 @@ mod tests {
             let m = lire(r#"{"llm": [{"name": "a", "model": "m1", "default": true}, {"name": "b", "model": "m2"}]}"#).unwrap();
             let e = m.modele_de_langage("c").expect_err("inconnu");
             assert!(e.contains("« c »") && e.contains("a, b"), "{e}");
+        }
+
+        /// **Le budget du contexte d'après une compaction** (96, `docs/memoire/15-11-2026/03-la-compaction-est-l-archiviste.md`) :
+        /// déclaré, il est pris ; absent, 100 000 jetons pour un modèle cloud, la moitié de sa fenêtre
+        /// (au plus 100 000) pour un modèle local.
+        #[test]
+        fn le_budget_de_reprise_suit_le_modele() {
+            let m = lire(r#"{"llm": [
+                {"name": "cloud", "provider": "compatible", "protocol": "vertex", "model": "gemini-2.5-pro", "default": true},
+                {"name": "regle", "provider": "compatible", "protocol": "anthropic", "model": "claude", "restart_budget_tokens": 50000},
+                {"name": "local", "provider": "compatible", "protocol": "llama_server", "model": "qwen", "context_tokens": 32768}
+            ]}"#)
+            .expect("trois modèles");
+            assert_eq!(m.modele_de_langage("cloud").unwrap().budget_de_reprise(), 100_000);
+            assert_eq!(m.modele_de_langage("regle").unwrap().budget_de_reprise(), 50_000);
+            assert_eq!(m.modele_de_langage("local").unwrap().budget_de_reprise(), 16_384);
+            let seul = lire(r#"{"llm": {"provider": "compatible", "protocol": "vertex", "model": "g", "restart_budget_tokens": 80000}}"#).expect("l'objet unique le porte aussi");
+            assert_eq!(seul.get(&Capability::Llm).unwrap().budget_de_reprise(), 80_000);
         }
 
         #[test]
