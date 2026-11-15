@@ -1423,7 +1423,7 @@ fn read_threads() -> u64 {
                     .ok_or_else(|| format!("décalage illisible dans les lignes de {nom}")))
                 .collect()
         };
-        crate::fts_maintenance::releve_a_blanc(&handle, lignes)
+        crate::fts_maintenance::releve_a_blanc(&handle, nom, lignes)
     }
 
     /// La purge et la compaction du plein texte d'une table
