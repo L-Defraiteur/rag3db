@@ -29,4 +29,4 @@ Ce qui a été vu rouge, et les faux pas du chemin :
 - un push rejeté par GitHub (« remote rejected (failed) ») a fait rejouer luciepc sur un ancien jeu d'essai. La branche distante est vérifiée avant chaque passe depuis ;
 - les deux méthodes de l'hôte ont été vues rouges contre leur version faussée dans le worktree de luciepc (sans commit), le choix inconnu sur le commit qui ne portait que son test. Puis tout est vert.
 
-La lib entière de rag3weaver sous `rag3db-native,code,daemon,openai-llm` : 2426 tests verts, 72 ignorés, aucun rouge (sur `c2fa35406`) ; `check_features` 8/8. Le crate tty passe à 98 tests avec la vue, et en garde 19 sans elle.
+La lib entière de rag3weaver sous `rag3db-native,code,daemon,openai-llm` : 2426 tests verts, 72 ignorés, aucun rouge (sur `c2fa35406`) ; `check_features` 8/8. Le crate tty passe à 97 tests avec la vue, et en garde 19 sans elle.
