@@ -322,6 +322,8 @@ pub struct DaemonHost {
     chats_root: PathBuf,
     /// Ce qui donne le modèle d'un backend.
     chat_model: chat::ChatModel,
+    /// Le modèle de langage nommé qu'une tâche a choisi, connecté (lot tty-14).
+    modele_nomme: chat::ModeleNomme,
     /// Ce que les chats ont consommé, par run et par slug.
     chat_meter: Arc<crate::meter::Meter>,
     /// Le journal des runs (`RAG3WEAVER_RUNS_DIR`) : un fichier par run racine.
@@ -450,6 +452,7 @@ impl DaemonHost {
             accords: Mutex::new(Default::default()),
             chats_root: chat::default_chats_root(),
             chat_model: chat::default_chat_model(),
+            modele_nomme: chat::default_modele_nomme(),
             chat_meter: Arc::new(crate::meter::Meter::new()),
             journal: journal_des_runs::JournalDesRuns::par_defaut(),
             suivis: Default::default(),
@@ -2234,6 +2237,9 @@ impl Drop for DaemonHost {
         }
     }
 }
+
+/// Le modèle de langage d'une tâche (`/model` du terminal).
+mod modele_de_tache;
 
 /// Le témoin de la page rendue dans un vrai navigateur.
 #[cfg(all(test, unix))]

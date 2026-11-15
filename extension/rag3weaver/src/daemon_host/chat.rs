@@ -40,6 +40,14 @@ const LIGNES_MONTREES_PAR_READ_SCOPE: usize = usize::MAX;
 /// (page 07-novembre-2026-everything-declarative/01, § 1).
 pub type ChatModel = Arc<dyn Fn(&crate::backend::PreparedBackend) -> Result<Arc<dyn crate::llm::Llm>, String> + Send + Sync>;
 
+/// **Un modèle de langage déclaré, connecté** (lot tty-14) : celui qu'une tâche a choisi par son nom.
+pub type ModeleNomme = Arc<dyn Fn(&crate::model_source::ModelSource) -> Result<Arc<dyn crate::llm::Llm>, String> + Send + Sync>;
+
+/// Le modèle nommé, connecté par sa déclaration.
+pub(super) fn default_modele_nomme() -> ModeleNomme {
+    Arc::new(|_source: &crate::model_source::ModelSource| Err("pas encore".to_string()))
+}
+
 /// La session d'un backend, et si un tour est en cours.
 pub(super) struct ChatEntry {
     manifest: PathBuf,
@@ -146,6 +154,22 @@ impl DaemonHost {
     pub fn with_chat_model(mut self, model: ChatModel) -> Self {
         self.chat_model = model;
         self
+    }
+
+    /// Le modèle nommé qu'emploie le chat d'une tâche qui en a choisi un (les témoins).
+    pub fn with_modele_nomme(mut self, f: ModeleNomme) -> Self {
+        self.modele_nomme = f;
+        self
+    }
+
+    /// Les modèles de langage que déclare le manifeste d'une tâche, le défaut et le sien marqués.
+    pub fn modeles_de_tache(&self, _parent: &str, _nom: &str) -> Result<Value, String> {
+        Err("pas encore".into())
+    }
+
+    /// Choisit le modèle d'une tâche par son nom ; un nom inconnu se refuse en nommant la liste.
+    pub fn choisir_le_modele(&self, _parent: &str, _nom: &str, _modele: &str) -> Result<Value, String> {
+        Err("pas encore".into())
     }
 
     fn chat_path(&self, backend_id: &str) -> PathBuf {
