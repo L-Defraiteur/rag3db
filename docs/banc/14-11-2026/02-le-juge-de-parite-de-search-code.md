@@ -249,3 +249,31 @@ Avant tout écart, on compte les relevés et les cas de chaque côté.
 - avant tout juge, `joue` vérifie que chaque côté a écrit ses deux relevés, avant et après l'index,
   et dit leur nombre de cas. Un côté qui manque rend la passe ROUGE, sans juger ;
 - la parité du parent et la parité propre sont rejouées, sur une vraie P0, à partir de 13 h 49.
+
+**Le verdict du correctif (A)**, rejoué à 13 h 49 avec la garde, et rendu à 14 h 48. Le parent est
+e95a1b8c60, la base de la pile ; le lot est d087e02c7 ; le codeparsers est le même des deux côtés.
+Chaque côté a écrit ses deux relevés de 30 cas.
+
+| | (1) la parité propre : P0 indexée par le parent, puis 1de1f86d88 | (2) l'actuelle : la base migrée, puis 835d5298f |
+|---|---|---|
+| les 30 cas avant l'index | **VERT** au bit près | **VERT** au bit près |
+| les 30 cas après l'index et la publication (`reponses`) | **VERT**, 30/30 | 7 cas rouges sur 30 |
+| les usages des cinq noms | **VERT** | **VERT** |
+| `aretes_recopiees` à la génération 1 | 227 | 16 543 |
+| l'index de la source, parent → lot | 254 s → 2 656 s | 282 s → 2 971 s |
+
+- **(1) est le jugement net** : sur une base indexée par le parent lui-même, le lot rend les mêmes
+  réponses, au même rang, au même score.
+- **Les 7 rouges de (2) ne changent pas les réponses** :
+  - des ex aequo qui échangent leur rang : des `namespace rag3db`, à la ligne 5 de fichiers
+    différents, à score égal ;
+  - des scores qui diffèrent au septième chiffre, sur les mêmes résultats au même rang (23,918436
+    contre 23,918438).
+
+  C'est l'attendu d'everything declarative : les 14 201 versions orphelines du parent pèsent sur
+  ses seules statistiques BM25.
+- **Le temps du lot** : il repasse tout une fois, puisque la colonne `analyse` est vide sur une base
+  d'avant. Ce repassage prend dix fois le temps du parent, environ 45 minutes sur ce dépôt. C'est à
+  savoir pour la bascule des bases de Lucie.
+- **Un détail du juge** : la ligne `_generation` porte le commit « banc-835d5298f » dans les deux
+  parités. C'est le nom codé en dur par la sonde ; dans (1), la source est 1de1f86d88.
