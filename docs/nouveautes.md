@@ -27,6 +27,7 @@
   Le repli tient au moins `fallback_hold_secs`, puis revient à la carte quand elle a la place. Le
   journal d'index dit d'où vient chaque passe de vecteurs, et chaque repli ou retour avec sa cause.
   L'état d'index le porte aussi.
+- 15 novembre2026 — `/model` dans le terminal de l'agent : la liste des modèles de langage que déclare le manifeste de la tâche (le défaut et celui de la tâche marqués), et `/model <nom>` pour en changer ; l'hôte garde le choix avec la tâche et son chat le suit (`GET /ide/teammate/models`, `POST /ide/teammate/model`) ; un choix devenu inconnu se voit, et le chat refuse alors en disant de choisir.
 
 - 15 novembre2026 — Le terminal de l'agent a ses commandes : `/aide`, `/theme`, `/tache`, `/depot`, `/journal`, `/effacer`, `/context` (le remplissage du contexte du modèle) et les autres ; `!<commande>` la lance là où tourne le terminal, dans un pseudo-terminal où `sudo` demande son mot de passe, et sa sortie part à l'équipier, sans jamais le mot de passe ; Tab complète les commandes, leurs arguments, les exécutables et les fichiers ; l'historique des envois survit à la séance.
 
