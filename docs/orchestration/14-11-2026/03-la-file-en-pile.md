@@ -1595,3 +1595,6 @@ le même bilan ; et « fini : plus rien à faire » encore sur la ligne d'état.
 G, 17 h 57 : quatrième lot prêt, ticket-gabarits-autre-arbre 4085128d4 (la garde lit les sorties des build scripts et retire une sortie
 qui vise un autre worktree ; 8 cas neufs, test_garde_target 35 OK, 34 ms sur un target de 32 Go ; ferme le ticket d'archi). Sa file :
 hashes entiers → known-red-cas-longs → confineur-enveloppe → gabarits-autre-arbre, scripts seuls, après la pose du soir.
+Lucivy, 17 h 58 : lot suivant — la maintenance périodique par l'hôte (`fts.maintenance {at: "03:30", max_purge_ratio: 0,05, compact,
+enabled}`, relevé à blanc puis maintain sur chaque base ouverte hors de toute passe, refus nommé au-delà du ratio ou sous écriture
+continue, résultat à l'état d'index et au journal ; rouge d'abord sur e2e_demon_hote avec une horloge injectable). Tranché 0,05.
