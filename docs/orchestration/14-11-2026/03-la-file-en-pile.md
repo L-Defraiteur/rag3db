@@ -1494,3 +1494,7 @@ Codeparsers et G, 17 h 26 : le ticket des trois SIGTERM (16 h 53, 16 h 59, 17 h 
 Recherche, 17 h 30 : l'exclusion après coup prouvée (771eb216b : app.js indexé sans règle, réindexé sous index_exclude → 0 scope et
 autant de documents que de lignes) ; une garde, pas un correctif, en fin de file avec 2b-C. La fenêtre d'arbre peut compter sur
 le retrait.
+G, 17 h 31 : la cause des trois SIGTERM **confirmée** sur une vraie portée (systemd-run --scope -p MemoryMax, DefaultOOMPolicy=stop :
+le noyau tue l'enfant par SIGKILL, systemd arrête la portée par TERM, journal muet). Lot confineur-enveloppe 541d282e5 : au
+signal, le confineur lit memory.peak et memory.events et dit « enveloppe mémoire crevée (pic, plafond, oom_kill) » ; 3 rouges
+vus ; ticket de codeparsers fermé dans le lot. En pile derrière les hashes et known_red.
