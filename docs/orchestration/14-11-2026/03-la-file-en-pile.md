@@ -1535,3 +1535,8 @@ budget_de_reprise reconnaît le local par le protocole « llama_server » que co
 boucle). Archi : le branchement greffe dans toute tâche read, list, grep, glob, replace_text, **replace_lines**, insert_lines,
 write (si droit d'écrire) et run_command (si porte ouverte) ; l'invite dit « un texte unique, ou les lignes a à b après les avoir
 lues » (Lucie : « aussi par offset ») ; deux témoins sur trois verts, le bout en bout rejoué derrière la pile.
+Lucie, 17 h 41 : « il ne sait pas lancer de sous-agent ni leur parler en temps réel » (test de son harnais : « tu sais lancer un
+sous-agent qui rajoute des lignes à ton md ? » → l'équipier dit, à raison, qu'il n'a aucune primitive de délégation). Pour archi,
+après le branchement : un outil `delegate {nom, demande, expects}` (sous-tâche parent_task, worktree et branche forkés, un
+équipier lancé, dialogue en temps réel par la boîte : reports et questions du sous-agent chez le parent, `reply`, `stop`, `wait`,
+fusion ou proposition à la fin) ; dans tty, les sous-agents en zone vivante. Page avant le code.
