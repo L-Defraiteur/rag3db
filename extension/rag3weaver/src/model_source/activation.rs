@@ -862,7 +862,10 @@ impl<C: Send + 'static> Tenue<C> {
         let mut r = f(&g.as_ref().unwrap().0.client);
         if let Err(e) = &r {
             if parti(e) {
-                let depart = e.to_string();
+                // « Arrêté : <cause> » plutôt qu'« injoignable », quand son journal la dit.
+                let depart = cause_d_arret(&self.source)
+                    .map(|c| format!("service d'embarquement arrêté : {c}"))
+                    .unwrap_or_else(|| e.to_string());
                 let modele = &self.source.model;
                 let (declare, quoi) = if self.maintenir {
                     (" déclaré maintenir", " — rouvrez le backend ou corrigez la déclaration")
@@ -898,6 +901,20 @@ impl<C: Send + 'static> Drop for Tenue<C> {
     fn drop(&mut self) {
         self.arret.store(true, std::sync::atomic::Ordering::Release);
     }
+}
+
+/// **La cause d'arrêt d'un fournisseur activé**, lue à la dernière ligne de son
+/// journal (`<journal>/rag3weaver-embeddings.log`) quand elle commence par
+/// « ✗ arrêt : » ; `None` sinon, et pour une activation distante (son journal
+/// est à l'autre poste). Lue avant la relance, qui écrit à la suite.
+#[cfg(feature = "daemon")]
+fn cause_d_arret(source: &super::ModelSource) -> Option<String> {
+    let a = source.activation.as_ref().filter(|a| a.hote.is_none())?;
+    let journal = a.journal.join(format!("{}.log", crate::daemon::embeddings::SERVICE));
+    let texte = std::fs::read_to_string(journal).ok()?;
+    let ligne = texte.lines().rev().find(|l| !l.trim().is_empty())?.trim();
+    let cause = ligne.strip_prefix("✗ arrêt : ")?;
+    Some(cause.split(" (code ").next().unwrap_or(cause).to_string())
 }
 
 /// Le fournisseur n'est plus là : le message d'un appel qui n'a trouvé personne.
