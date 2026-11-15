@@ -8350,6 +8350,75 @@ mod tests {
         assert_eq!(backend.describe()["warnings"], json!(avertissements), "le reçu de describe porte l'avertissement");
     }
 
+    /// **Une extension notée qui ne se charge pas se dit à l'ouverture** (ticket
+    /// `docs/coeur-cpp-hotfixs-tickets/tickets/2026-10-10-ouverture-sans-une-extension-dont-une-table-depend.md`,
+    /// 15 novembre 2026). À chaque bascule de lib, la première ouverture lit dans `<base>.extensions`
+    /// l'extension vecteur de la lib d'avant, que le moteur refuse ; il le range dans `extension_error`
+    /// de SHOW_INDEXES, et l'index qui en dépend peut se retrouver détaché puis rebâti par
+    /// `ensure_vector_index`. Ici, le fichier noté désigne un chemin absent : l'ouverture réussit, et
+    /// son reçu (`avertissements`, `describe()["warnings"]`) doit nommer l'extension, son chemin et la
+    /// cause — stderr n'est lu par personne quand le backend tourne en service.
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn une_extension_notee_qui_ne_se_charge_pas_se_dit_a_l_ouverture() {
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/notebook");
+        let dir = tempfile::tempdir().unwrap();
+        fn copier(src: &Path, dst: &Path) {
+            std::fs::create_dir_all(dst).unwrap();
+            for entry in std::fs::read_dir(src).unwrap() {
+                let entry = entry.unwrap();
+                let cible = dst.join(entry.file_name());
+                if entry.file_type().unwrap().is_dir() {
+                    copier(&entry.path(), &cible);
+                } else {
+                    std::fs::copy(entry.path(), &cible).unwrap();
+                }
+            }
+        }
+        copier(&src, dir.path());
+        std::fs::copy(src.join("../../tools/search_structured.mmd"), dir.path().join("search_structured.mmd")).unwrap();
+        let chemin = dir.path().join("backend.json");
+        let mut manifest: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+        manifest["tools"]["search_notes"]["graph"] = json!("search_structured.mmd");
+        manifest["vector_extension"] = json!(extension_vector_de_test());
+        let dim = manifest["embeddings"]["dimensions"].as_u64().unwrap() as usize;
+        std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+        let base = dir.path().join("notes.rag3db");
+        let ouvrir = || -> Backend {
+            let prepared = PreparedBackend::load(&chemin).unwrap();
+            let conn = crate::Rag3dbConnection::new(&base).expect("base sur disque");
+            prepared.open(Box::new(conn), Some(Box::new(crate::embedder::HashEmbedder::new(dim)))).expect("le notebook s'ouvre")
+        };
+        {
+            let backend = ouvrir();
+            assert!(backend.avertissements().is_empty(), "première ouverture saine : {:?}", backend.avertissements());
+            for (cle, texte) in [("k1", "le four ne chauffe plus"), ("k2", "la porte du four grince"), ("k3", "acheter du pain")] {
+                let r = backend
+                    .call_tool("put_note", json!({"record": {"key": cle, "text": texte, "labels": [], "stage": "working"}}))
+                    .unwrap();
+                assert!(r.get("ok").map(|v| v != false).unwrap_or(true), "{r}");
+            }
+        }
+        // Le fichier noté à côté de la base : l'extension vecteur, chargée par l'ouverture.
+        let notees = PathBuf::from(format!("{}.extensions", base.display()));
+        let avant = std::fs::read_to_string(&notees).expect("l'ouverture note l'extension chargée");
+        assert!(avant.contains("VECTOR"), "{avant}");
+        let absent = dir.path().join("lib-d-avant/libvector.rag3db_extension");
+        std::fs::write(&notees, format!("VECTOR\t{}\n", absent.display())).unwrap();
+
+        let backend = ouvrir();
+        let recherche = backend.call_tool("search_notes", json!({"query": "four", "options": {"signals": ["vector"]}}));
+        println!("[témoin] la recherche vectorielle après l'ouverture : {recherche:?}");
+        let avertissements = backend.avertissements();
+        println!("[témoin] les avertissements du reçu : {avertissements:?}");
+        let dit = avertissements.iter().find(|a| a.contains(&absent.display().to_string()));
+        assert!(
+            dit.is_some_and(|a| a.to_lowercase().contains("vector")),
+            "[check: extension-notee-dite] le reçu doit nommer l'extension notée qui ne s'est pas chargée et son chemin : {avertissements:?}"
+        );
+        assert_eq!(backend.describe()["warnings"], json!(avertissements), "describe porte les mêmes avertissements");
+    }
+
     /// **Un gabarit copié hors de l'arbre trouve l'extension du bâti** (ticket
     /// « un gabarit livré cherche l'extension vector relativement à
     /// lui-même ») : le notebook copié ailleurs, comme un paquet installé ou
