@@ -277,6 +277,15 @@ fn transferer_les_vecteurs(catalog: &Catalog, modele: &crate::embedding_storage:
 /// À jouer sur une copie, sans autre ouvreur.
 #[cfg(feature = "rag3db-native")]
 pub fn migrer_la_base(chemin: &std::path::Path) -> Result<Bilan, String> {
+    let mut catalog = ouvrir_par_le_chemin(chemin)?;
+    migrer_vers_les_versions(&mut catalog, crate::code::default_scope_chunking())
+}
+
+/// **Une base de code ouverte par son chemin**, pour une migration : sa connexion avec l'extension
+/// vectorielle, son plein texte en fichiers, un embarqueur qui refuse tout appel au nom de son modèle,
+/// et le schéma de code enregistré (une base garde alors sa forme).
+#[cfg(feature = "rag3db-native")]
+fn ouvrir_par_le_chemin(chemin: &std::path::Path) -> Result<Catalog, String> {
     use crate::connection::DbConnection;
     use crate::{CatalogConfig, Rag3dbConnection};
     let ouvrir = || -> Result<Rag3dbConnection, String> {
@@ -297,7 +306,7 @@ pub fn migrer_la_base(chemin: &std::path::Path) -> Result<Bilan, String> {
     catalog.set_fts_storage(fts);
     catalog.initialize().map_err(|e| format!("l'ouverture du catalogue : {e}"))?;
     crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).map_err(|e| format!("le schéma de code : {e}"))?;
-    migrer_vers_les_versions(&mut catalog, crate::code::default_scope_chunking())
+    Ok(catalog)
 }
 
 /// Ce que la montée aux générations a fait, pour le rapport.
@@ -317,8 +326,32 @@ pub struct BilanDesGenerations {
 /// (sa marque `<base>.ecrivain`) et une base qui n'est pas à versions, en nommant la forme.
 #[cfg(feature = "rag3db-native")]
 pub fn migrer_la_base_aux_generations(chemin: &std::path::Path) -> Result<BilanDesGenerations, String> {
-    let _ = chemin;
-    Err("la montée aux générations par le chemin n'existe pas encore".into())
+    use crate::code::ScopeForm;
+    if let Some(m) = crate::marque_d_ecrivain::lire(chemin).filter(|m| m.pid != std::process::id()) {
+        #[cfg(feature = "daemon")]
+        let vivant = crate::daemon_lifecycle::pid_state(m.pid) != Some(false);
+        #[cfg(not(feature = "daemon"))]
+        let vivant = true;
+        if vivant {
+            return Err(format!(
+                "{} : la montée aux générations ne s'y joue pas — {}",
+                chemin.display(),
+                crate::marque_d_ecrivain::qui_tient(chemin).unwrap_or_else(|| format!("tenue par le pid {}", m.pid))
+            ));
+        }
+    }
+    let mut catalog = ouvrir_par_le_chemin(chemin)?;
+    let nom = |f: ScopeForm| match f {
+        ScopeForm::Generations => "generations",
+        ScopeForm::Versions => "versions",
+        ScopeForm::SansVersions => "sans versions",
+        ScopeForm::Neuve => "neuve",
+    };
+    let forme_avant = nom(crate::code::scope_form(&catalog).map_err(|e| format!("la forme : {e}"))?).to_string();
+    crate::code::migrer_vers_les_generations(&mut catalog).map_err(|e| e.to_string())?;
+    let forme_apres = nom(crate::code::scope_form(&catalog).map_err(|e| format!("la forme : {e}"))?).to_string();
+    let generation = catalog.generations.as_ref().map(|v| (v.couche.clone(), v.rang));
+    Ok(BilanDesGenerations { forme_avant, forme_apres, generation })
 }
 
 /// L'embarqueur d'une migration : le nom et la dimension d'un modèle de la base, et un refus à
