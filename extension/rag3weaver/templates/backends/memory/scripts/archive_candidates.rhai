@@ -47,7 +47,8 @@ let choix = if input.allow_create { "none, ou create si le sujet est net et qu'a
 let texte = section.text;
 if texte.len() > 4000 { texte = texte.sub_string(0, 4000) + "…"; }
 let liste = if presentation == "" { "(aucune)\n" } else { presentation };
-let contexte = if input.context == () || input.context == "" { "" } else { `Ce qui précède (déjà rangé, ne pas ranger) :\n${input.context}\n\n` };
+let titre_contexte = if input.context_title == () || input.context_title == "" { "Ce qui précède (déjà rangé, ne pas ranger) :" } else { input.context_title };
+let contexte = if input.context == () || input.context == "" { "" } else { `${titre_contexte}\n${input.context}\n\n` };
 let prompt = contexte + `Section « ${section.title} » :\n${texte}\n\nFiches candidates :\n${liste}\nRéponds par l’identifiant court d’une candidate, ou ${choix}.`;
 let out = section;
 out.candidates = aliases;
