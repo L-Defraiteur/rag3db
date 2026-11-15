@@ -186,6 +186,49 @@ mod tests {
         assert!((contraste("#ffffff", "#000000") - 21.0).abs() < 1e-9 && (contraste("#777777", "#777777") - 1.0).abs() < 1e-9);
     }
 
+    /// **tty-12, au mot de Lucie** : chaque thème est une palette de couleurs
+    /// nommées, en OKLCH, dans un mode (sombre ou clair), et ses couleurs et son
+    /// code en sont dérivés par un seul rédacteur, qui le dit.
+    #[test]
+    fn every_theme_carries_its_named_palette_its_mode_and_says_its_colours_are_derived() {
+        for (nom, source) in THEMES {
+            let v: serde_json::Value = serde_json::from_str(source).unwrap();
+            let palette = v["palette"].as_object().unwrap_or_else(|| panic!("{nom} : pas de palette"));
+            assert!(palette.len() >= 6, "{nom} : {} couleurs nommées", palette.len());
+            for (n, c) in palette {
+                let oklch = c["oklch"].as_array().unwrap_or_else(|| panic!("{nom}.{n} : pas d'oklch canonique"));
+                assert_eq!(oklch.len(), 3, "{nom}.{n}");
+                assert!(c["role"].as_str().is_some(), "{nom}.{n} : pas de rôle");
+            }
+            assert!(matches!(v["mode"].as_str(), Some("sombre" | "clair")), "{nom} : mode");
+            assert!(v["derive"].as_str().is_some_and(|d| d.contains("ne pas")), "{nom} : la mention dérivée");
+        }
+    }
+
+    /// **Un seul rédacteur, et une garde contre la dérive** (archi) : le script
+    /// rejoue la dérivation et rougit si un thème en diffère ; ses propres essais
+    /// (OKLCH aller-retour, la gamme, le contraste, le mode clair) passent.
+    #[test]
+    fn the_palette_script_finds_every_theme_up_to_date_and_passes_its_own_checks() {
+        let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../scripts/themes_palettes.py");
+        for mode in ["--essais", "--check"] {
+            let sortie = std::process::Command::new("python3").arg("-I").arg(&script).arg(mode).output().expect("python3");
+            assert!(sortie.status.success(), "{mode} : {}{}", String::from_utf8_lossy(&sortie.stdout), String::from_utf8_lossy(&sortie.stderr));
+        }
+    }
+
+    /// **Un thème ancien se lit encore** (c7) : sans palette, sans mode ni
+    /// mention dérivée, ses couleurs et son code suffisent.
+    #[test]
+    fn an_old_theme_without_a_palette_still_loads() {
+        let mut v: serde_json::Value = serde_json::from_str(SOURCE).unwrap();
+        for cle in ["palette", "mode", "derive", "roles"] {
+            v.as_object_mut().unwrap().remove(cle);
+        }
+        let t: Theme = serde_json::from_value(v).unwrap();
+        assert_eq!(t.couleurs.texte, Theme::daemon().couleurs.texte);
+    }
+
     /// **Cyberpunk, cyborg, alien** (Lucie, 13 nov. 2026, 22 h).
     #[test]
     fn the_cyberpunk_cyborg_and_alien_themes_are_there() {
