@@ -1246,3 +1246,13 @@ pose de G, qui a attendu le tunnel — à G : la garde dit, elle ne retient pas 
 15 h 13 : correction — la garde du réveil de G (`bascule-reveil.sh`) est **voulue** : elle évite qu'un hôte se rouvre en plein texte seul
 et pose 0 vecteur sans bruit (ticket du 25 octobre) ; elle a attendu le 7879 et réveillé à son retour. Rien à changer chez G
 ni chez l'hôte ; les 55 s sont le temps de redémarrage du 7879 (ticket 565715be0).
+15 h 14 : codeparsers — lot `new` monté (codeparsers/new-rust f1172dac5, un commit : pointeur 5885e13 → 87126e4, Cargo.lock inchangé,
+ticket fermé + ticket basse, nouveauté ; check_tickets --lot VERT) ; rejeu check_features + e2e_code au mot ; passe à fmt/format.h.
+G — garde du réveil inchangée (modification annulée, worktree propre) ; sur le juge known_red ; le lot des hashes courts
+(garde-hash-entier 1e5902a83) prend place après embarquement, avant arbre.
+Embarquement et banc, 15 h 15 : **la cause du 7879** : un seul texte trop long — le gabarit memory embarque la Source entière (un tour,
+jusqu'à 43 137 caractères) ; 4 102 146 304 octets = 16 têtes × 4 octets × 8 006², la matrice d'attention d'un texte de 8 006 jetons.
+Le budget de caractères ne coupe jamais un texte. Décision : **F 25 % coupée**, S non lancée (les hôtes de Lucie passent devant la
+mesure : le tunnel du portable tombe avec le 7879) ; lot chez 96, après `usage` et avant la variante : découper la Source longue
+à l'écriture (`source_chunk_chars`, chevauchement, rappel par le meilleur morceau) ; plafond de jetons côté service chez
+embarquement (ticket a4b9de029). Reprise du banc sur ce lot.
