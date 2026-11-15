@@ -1620,3 +1620,7 @@ passe verte ; G bâtit le binaire du service sur f85977d09e. Restent avant le ha
 Lucie, 18 h 06 : la persona « peut contenir des motivations, "tu as goût aux abstractions" ; utile ou technique sur les bords, "tu as goût
 aux beaux paradigmes et abstractions" » — un personnage avec ses motivations et ses goûts techniques, présenté ainsi dans l'invite
 après les règles du socle, qui peut peser sur les choix de conception sans primer sur la demande ni une règle.
+Archi, 18 h 06 : le branchement n'est pas vert — un cas d'e2e_equipier sous Gemini (l'équipier rend le README dans un report au lieu
+d'écrire README.md), qui passait sur (B) + pas : la liste d'outils plus longue ou la phrase de l'invite ; rejoué deux fois pour
+départager ; « write your answer as text » et son témoin encore à poser ; repose sur f85977d09e ensuite. Les autres passent devant :
+« à toi » à tty pour tty-14, puis 15 et 16 à la suite, sans second mot.
