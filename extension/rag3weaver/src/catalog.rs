@@ -2782,7 +2782,8 @@ fn read_threads() -> u64 {
             .unwrap_or(-1);
         let dit = format!(
             "index vectoriel « {index} » rebâti : il était détaché de « {table} » \
-             après un arrêt brutal — {lignes} lignes, {duree_ms} ms"
+             (un arrêt brutal, ou une extension notée qui ne s'est pas chargée à l'ouverture) — \
+             {lignes} lignes, {duree_ms} ms"
         );
         eprintln!("[rag3weaver] {dit}");
         self.emit_event(CatalogEvent::Warning {
