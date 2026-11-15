@@ -173,9 +173,9 @@ que chaque décision voit en contexte.
 - **Rien n'est lancé** avant le composeur vu vert et l'entrée de contexte de l'archive. La conception
   est validée par l'orchestration (15 nov., 12 h 5x).
 
-## 6. Les premiers chiffres, provisoires (15 novembre, 15 h)
+## 6. Les premiers chiffres (15 novembre, 15 h)
 
-**Provisoires** : le juge n'est pas encore relu à la main (§ 5). Rien n'est conclu avant.
+**Le juge est relu** (voir plus bas) : accord de 0,90 sur les appariements, 10 sur 10 sur les doublons.
 
 | variante | décisions : créer, rejoindre, rien | fiches | P1, rappel des sujets de N | P2, doublons | s par décision (p50, p90) | passe | envoyé au modèle |
 |---|---|---|---|---|---|---|---|
@@ -194,8 +194,35 @@ que chaque décision voit en contexte.
   dans la console du projet.
 - **Une réserve sur les temps** : F à 50 k a tourné en partie pendant les parités de l'écrivain, à
   côté d'un index qui chargeait 7879.
+- **Les 72 « rien » de F à 50 k, contre ce que N a fait des mêmes tours** (au mot de c7 : le contexte
+  aide-t-il ou endort-il ?) :
+
+  | cas | tours |
+  |---|---|
+  | **le contexte aide** : N a rangé le tour sous un sujet que F couvre ailleurs | **34** |
+  | **le contexte endort** : N l'a rangé sous un sujet que F ne couvre nulle part | **22** |
+  | accord : N dit « rien » aussi | 16 |
+
+  - **Les tours endormis perdent des sujets entiers**, au moins neuf. Par exemple : « Bissection
+    des hotfixs rag3db », « File d'atterrissage sur master », « Indexation des worktrees dans
+    rag3weaver », « Intégration de la pile archi », « Licences des modèles locaux » ;
+  - le contexte aide plus souvent qu'il n'endort, mais il endort près d'une fois sur trois ;
+  - « aide » ne veut pas dire que rien n'est perdu : le sujet existe dans F, mais ce tour n'y est
+    pas rangé.
+- **La relecture du juge** (par moi, à la main) :
+  - **30 appariements tirés au sort** (graine 7) : 27 justes, 1 faux (« Libération d'espace
+    disque » apparié à « Charge système et ressources de luciepc »), 2 douteux (« Vision produit et
+    positionnement commercial » pour « Présentation et synthèse du projet » ; « Surveillance et
+    santé » pour « Utilisation des GPU »). Accord : 0,90 ;
+  - **les 10 doublons relevés** (9 dans N, 1 dans F) sont tous de vrais doublons : deux fiches
+    « Identité Git », deux « seat1 », deux « TRIM NVMe », etc. Les doublons manqués ne sont pas
+    mesurés ;
+  - **le juge est indulgent** : une fiche large de F (« Atelier rag3weaver ») couvre pour lui
+    plusieurs fiches précises de N (les tests de la pile, l'intégration, le backend de l'atelier).
+    P1 compte un sujet absorbé comme couvert. La précision perdue par cette absorption n'est pas
+    mesurée.
 - **La suite** :
-  1. relire le juge à la main, puis les tours « rien » de F ;
+  1. fait : le juge relu, et les tours « rien » de F départagés ;
   2. F à 50 k avec 25 % de chevauchement, et S à 50 k ;
   3. 300 k quand le lot `usage` de la session mémoire sera posé.
 - **Les sorties**, à luciepc, dans `~/.cache/rag3db-banc-notes/compaction/long/` :
