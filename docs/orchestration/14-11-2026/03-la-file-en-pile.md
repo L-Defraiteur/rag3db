@@ -952,3 +952,7 @@ d'archi en chemin : MOTEUR_ANCIEN oublié ; target à 36 Go ramené à 5 Go par 
 target au plafond (G, 2bd2c136b : run_e2e.sh fait d'abord `cargo clean -p` des paquets locaux, reposé sur
 master après le Rust d'archi, 25 OK). Embarquement a le « à toi » à son vert (A3, le repli cpu, mode simple) ;
 le cœur rejoue son ALTER sur 36ee817a7 et pousse ensuite.
+
+**12 h 0x — soixante-huit atterris** : tty-10, la saisie multiligne (tty, d187aec6a, mode simple ; crate 66/66 et
+14/14, check_features 8/8). A3 d'embarquement est sorti (course du fil de calcul sous llvmpipe, ticket). Reste :
+le cœur (ALTER, rejeu sur 36ee817a7, ~12 h 30), puis tty-11 et tty-12 à leur vert.

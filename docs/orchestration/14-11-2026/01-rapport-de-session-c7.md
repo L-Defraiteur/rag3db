@@ -1534,3 +1534,7 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   retraite pas ce qui est rangé, seuls les tours non couverts passent par le Decide, et le contexte repart des
   L1 (identité, tâche, les sujets de la session, les siens en entier, ceux des autres bornés). « Ensuite faut
   trouver l'intelligence, c'est tout le but de notre recherche. » Conception à 96 et archi.
+- Lucie, 12 h 0x : en plus des L1 par sujet, le contexte d'après porte un résumé très court de l'ordre des pas,
+  avec références (la section `bilan` de la fiche de tâche, une ligne par pas) ; dit à 96 et archi. **tty-10**
+  prêt (97d9cde75 : saisie multiligne jusqu'à huit lignes, Maj-Entrée sous kitty, Alt-Entrée en repli, la garde
+  CSI u prouvée, dégradation sous tmux dite et ticketée ; 66/66, 14/14) : « à toi » en mode simple.
