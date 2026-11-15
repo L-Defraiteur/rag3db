@@ -1129,6 +1129,7 @@ fn le_releve_a_blanc_compte_un_orphelin_sans_le_purger() {
     assert_eq!(r["orphans"], json!([ORPHELIN]), "[check: l-orphelin-est-compte] {r}");
     assert!(r["dictionary_texts"].as_u64().is_some_and(|n| n > 0), "[check: les-textes-du-dictionnaire] {r}");
     assert!(r["token"].as_str().is_some_and(|t| !t.is_empty()), "[check: le-jeton-du-releve] {r}");
+    assert_eq!(r["retries"], json!(0), "[check: aucune-reprise-sans-ecriture] {r}");
     assert_eq!(r.get("purged"), None, "[check: rien-n-est-purge] {r}");
     let (vivants, _) = releve(&host, &s, &m);
     assert!(vivants.contains(&ORPHELIN) && vivants.len() == 4, "[check: l-orphelin-reste] {vivants:?}");

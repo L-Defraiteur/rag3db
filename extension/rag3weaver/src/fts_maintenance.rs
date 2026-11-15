@@ -166,8 +166,11 @@ pub fn dictionary_texts(handle: &Handle) -> u64 {
 /// viennent du même lecteur, et le jeton est relu après la lecture des lignes :
 /// une écriture entre les deux recommence le relevé. Le jeton rendu sert à la
 /// purge qui suit (`maintain`).
-pub fn releve_a_blanc(handle: &Handle, lignes: impl Fn() -> Result<Vec<u64>, String>) -> Result<serde_json::Value, String> {
-    for _ in 0..5 {
+/// Les lectures qu'un relevé à blanc tente avant de refuser.
+pub const RELEVE_LECTURES: usize = 5;
+
+pub fn releve_a_blanc(handle: &Handle, table: &str, lignes: impl Fn() -> Result<Vec<u64>, String>) -> Result<serde_json::Value, String> {
+    for reprise in 0..RELEVE_LECTURES {
         let (vivants, jeton) = live_ids(handle)?;
         let mut graphe = lignes()?;
         graphe.sort_unstable();
@@ -182,9 +185,13 @@ pub fn releve_a_blanc(handle: &Handle, lignes: impl Fn() -> Result<Vec<u64>, Str
             "orphans": orphelins,
             "dictionary_texts": dictionary_texts(handle),
             "token": jeton,
+            "retries": reprise,
         }));
     }
-    Err("la table change sans cesse pendant le relevé : réessayer dans une fenêtre calme".into())
+    Err(format!(
+        "table {table} : base en écriture continue, relevé impossible à cet instant (le plein texte a changé \
+         pendant chacune des {RELEVE_LECTURES} lectures) ; ce n'est pas une panne : réessayer quand l'écriture se calme"
+    ))
 }
 
 /// Les documents vivants que dit un jeton (somme des `max_doc − supprimés`).
@@ -256,13 +263,43 @@ mod tests {
             handle.add_document_json(i, &serde_json::json!({ "content": format!("doc {i}") })).unwrap();
         }
         handle.commit().unwrap();
-        let r = releve_a_blanc(&handle, || Ok(vec![3, 1, 2])).unwrap();
+        let r = releve_a_blanc(&handle, "Essai", || Ok(vec![3, 1, 2])).unwrap();
+        assert_eq!(r["retries"], 0, "[check: sans-ecriture-aucune-reprise]");
         assert_eq!(r["live_docs"], 4);
         assert_eq!(r["graph_docs"], 3);
         assert_eq!(r["orphans"], serde_json::json!([7]), "[check: l-orphelin-compte]");
         assert!(r["dictionary_texts"].as_u64().unwrap() > 0, "[check: les-textes-du-dictionnaire]");
         assert_eq!(handle.num_docs(), 4, "[check: rien-n-est-efface]");
         assert_eq!(r["token"].as_str().unwrap(), token(&handle).unwrap(), "[check: le-jeton-du-meme-lecteur]");
+    }
+
+    /// Sous une écriture continue (un commit à chaque lecture des lignes), le relevé refuse après
+    /// ses cinq lectures, en nommant la table et en disant que ce n'est pas une panne.
+    #[test]
+    fn le_releve_a_blanc_refuse_sous_une_ecriture_continue() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = index(dir.path());
+        handle.add_document_json(1, &serde_json::json!({ "content": "un" })).unwrap();
+        handle.commit().unwrap();
+        let suivant = std::sync::atomic::AtomicU64::new(100);
+        let refus = releve_a_blanc(&handle, "Scope", || {
+            let id = suivant.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            handle.add_document_json(id, &serde_json::json!({ "content": "écrit pendant le relevé" })).unwrap();
+            handle.commit().unwrap();
+            Ok(vec![1])
+        }).unwrap_err();
+        assert!(refus.contains("table Scope") && refus.contains("base en écriture continue, relevé impossible à cet instant"),
+            "[check: le-refus-nomme-la-table-et-n-est-pas-une-panne] {refus}");
+        // Une seule écriture : le relevé reprend une fois, et le dit.
+        let une_fois = std::sync::atomic::AtomicBool::new(true);
+        let r = releve_a_blanc(&handle, "Scope", || {
+            if une_fois.swap(false, std::sync::atomic::Ordering::Relaxed) {
+                handle.add_document_json(999, &serde_json::json!({ "content": "une écriture" })).unwrap();
+                handle.commit().unwrap();
+            }
+            Ok(vec![1])
+        }).unwrap();
+        assert_eq!(r["retries"], 1, "[check: une-reprise-dite] {r}");
     }
 
     /// Le jeton change quand la table change, et pas autrement.
