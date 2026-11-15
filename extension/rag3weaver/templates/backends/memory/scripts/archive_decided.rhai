@@ -158,4 +158,6 @@ let out = #{
 };
 // L'usage de l'appel du Decide, pour la trace (absent : le Decide n'en a pas posé).
 if s.usage != () { out.usage = s.usage; }
+// La longueur de la requête de la recherche des candidates, pour la trace.
+if s.query_chars != () { out.query_chars = s.query_chars; }
 out

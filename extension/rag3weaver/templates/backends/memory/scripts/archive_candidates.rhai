@@ -6,6 +6,13 @@
 let section = input.section;
 let found = input.value;
 if found == () { found = []; }
+// Par archive_recall (la requête bornée) : [#{results, query_chars}], un élément.
+let query_chars = ();
+if type_of(found) == "array" && found.len() == 1 && type_of(found[0]) == "map" && found[0].results != () {
+    query_chars = found[0].query_chars;
+    found = found[0].results;
+    if found == () { found = []; }
+}
 let names = [];
 let presentation = "";
 let aliases = [];
@@ -46,4 +53,5 @@ let out = section;
 out.candidates = aliases;
 out.candidate_names = candidate_names;
 out.prompt = prompt;
+if query_chars != () { out.query_chars = query_chars; }
 out
