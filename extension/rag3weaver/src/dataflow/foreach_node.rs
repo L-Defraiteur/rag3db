@@ -473,8 +473,8 @@ impl NodeFactory for ForEachNodeFactory {
                 param("parallelism", ConfigParamType::Int, false, Some(json!(1)), "appels en même temps, au plus (1 : l'un après l'autre) ; l'ordre des résultats est celui des éléments", None),
                 param("carry", ConfigParamType::String, false, None, "un paramètre du graphe cité porté d'un élément au suivant : chaque appel le reçoit, le champ du même nom de son résultat le remplace pour le suivant (parallelism = 1)", None),
                 param("report_results", ConfigParamType::Bool, false, Some(json!(false)), "le rapport porte aussi `results` : ce que chaque élément a rendu, dans l'ordre, l'échec en {index, error, element} (une trace)", None),
-                param("when", ConfigParamType::String, false, None, "un champ booléen de l'élément : le graphe cité n'est joué que là où il est vrai ; les autres éléments passent tels quels, à leur place ; un élément sans ce champ passe aussi, et le rapport le dit (when_missing)", None),
-                param("flatten", ConfigParamType::Bool, false, Some(json!(false)), "un résultat qui est une liste est épissé dans le flux, l'ordre gardé ; un autre reste à sa place ; une liste vide retire l'élément, et le rapport le dit (dropped)", None),
+                param("when", ConfigParamType::String, false, None, "a boolean field of the element: the cited graph runs only where it is true; other elements pass as they are, in their place; an element without this field passes too, and the report says so (when_missing)", None),
+                param("flatten", ConfigParamType::Bool, false, Some(json!(false)), "a result that is a list is spliced into the stream, order kept; any other result stays in its place; an empty list removes the element, and the report says so (dropped)", None),
             ],
         }
     }
