@@ -444,6 +444,10 @@ impl Vue {
                 }
             }
             "MailboxLine" => self.ligne_de_boite(&e["line"]),
+            "PropositionChanged" => {
+                let backend = enveloppe["backend"].as_str().unwrap_or_default().to_string();
+                self.proposition(&backend, e);
+            }
             _ => {}
         }
     }
@@ -538,6 +542,14 @@ impl Vue {
                 self.valider_avec_tete(Genre::Boite, "› ", &format!("{} : {}", if oui { "accordé" } else { "refusé" }, attente.command.clone().unwrap_or_default()));
                 Some(Action::Repondre { attente, texte: if oui { "oui".into() } else { "non".into() }, accord: Some(oui) })
             }
+            // Une proposition de déclarations, rien d'autre n'attendant et rien de tapé : o l'applique, n la rejette.
+            Touche::Car(c @ ('o' | 'O' | 'y' | 'Y' | 'n' | 'N')) if self.saisie.est_vide() && self.boite.premiere().is_none() && !self.propositions_en_attente.is_empty() => {
+                let p = self.propositions_en_attente.remove(0);
+                let oui = matches!(c, 'o' | 'O' | 'y' | 'Y');
+                self.clore();
+                self.valider_avec_tete(Genre::Boite, "› ", &format!("proposition ⟨{}⟩ : {}", p.id, if oui { "appliquer" } else { "rejeter" }));
+                Some(Action::Proposition { backend: p.backend, id: p.id, appliquer: oui })
+            }
             Touche::Car(c) => {
                 self.saisie.inserer(c.encode_utf8(&mut [0; 4]));
                 None
@@ -609,7 +621,18 @@ impl Vue {
 
     /// **Une proposition de déclarations** (`PropositionChanged`, sujet `declarations`, tty-16) :
     /// `proposed` la met en attente, `applied` ou `rejected` l'en retire.
-    pub fn proposition(&mut self, _backend: &str, _e: &Value) {}
+    pub fn proposition(&mut self, backend: &str, e: &Value) {
+        let Some(id) = e["id"].as_u64() else { return };
+        match e["change"].as_str() {
+            Some("proposed") => {
+                if !self.propositions_en_attente.iter().any(|p| p.backend == backend && p.id == id) {
+                    let chemins = e["paths"].as_array().into_iter().flatten().filter_map(|c| c.as_str().map(str::to_string)).collect();
+                    self.propositions_en_attente.push(PropositionEnAttente { backend: backend.to_string(), id, chemins, acceptee: e["accepted"] != false });
+                }
+            }
+            _ => self.propositions_en_attente.retain(|p| !(p.backend == backend && p.id == id)),
+        }
+    }
 
     /// Reprend les envois des séances d'avant (tty-13).
     pub fn reprendre_historique(&mut self, historique: Vec<String>) {
@@ -658,6 +681,15 @@ impl Vue {
                     _ => format!("{c} attend ta réponse : {}{reste}", a.text.lines().next().unwrap_or_default()),
                 };
             }
+        }
+        // Puis une proposition de déclarations qui attend (tty-16).
+        if let Some(p) = self.propositions_en_attente.first() {
+            let reste = match self.propositions_en_attente.len() {
+                1 => String::new(),
+                n => format!(" (+{})", n - 1),
+            };
+            let refus = if p.acceptee { "" } else { " — refusée par la validation" };
+            return format!("{c} attend ton accord : proposition ⟨{}⟩ ({}){refus} — o / n{reste}", p.id, p.chemins.join(", "));
         }
         match &self.etat {
             Etat::Attend if self.etat_hote.as_deref() == Some("waiting") => format!("{c} attend la boîte"),
@@ -1240,6 +1272,9 @@ mod tests {
         v.proposition("principal", &ev("applied", 9));
         assert!(v.propositions_en_attente.is_empty(), "appliquée ailleurs, elle ne s'attend plus");
         assert_eq!(Vue::new(80, true).touche(Touche::Car('o')), None, "sans rien qui attende, o est une lettre");
+        let mut f = Vue::new(120, true);
+        f.trame(&json!({ "backend": "principal", "evenement": ev("proposed", 3) }));
+        assert_eq!(f.propositions_en_attente.first().map(|p| (p.backend.as_str(), p.id)), Some(("principal", 3)), "par le flux, avec le backend de l'enveloppe");
     }
 
     /// Le repli (sous mosh, la commande qui relit le journal) se dit sur la
