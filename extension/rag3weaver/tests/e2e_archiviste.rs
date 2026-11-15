@@ -522,3 +522,23 @@ fn la_trace_rend_par_section_les_candidates_et_l_etiquette_brute() {
     assert!(sans["result"].get("results").is_none(), "sans trace, le rapport ne change pas : {sans}");
 }
 
+/// **Le plafond de jetons du Decide de l'archiviste est déclaré dans son graphe** (15 novembre 2026, les
+/// rejeux avec trace : 1 section sur 432 et 1 sur 152 tronquées au plafond par défaut de 2048, depuis
+/// que la réponse porte un nom et une phrase, et que Gemini y compte sa réflexion). La requête envoyée
+/// au modèle porte `max_tokens: 4096`, celui qu'`archive_decide.mmd` déclare.
+#[test]
+#[ignore]
+fn le_decide_de_l_archiviste_demande_le_plafond_declare() {
+    let serveur = FakeServer::start_sequence(vec![etiquette("none")]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    const NOTE: &str = "# Note\n\n## Une section\n\nUne section de plus, sans rapport avec aucune fiche existante.\n";
+    let r = appel(&b, "archive", json!({"titre": "Note", "contenu": NOTE, "jour": "2026-11-15", "allow_create": true}));
+    assert_eq!(r["result"]["errors"], json!([]), "{r}");
+    let request: Value = serde_json::from_str(&serveur.request.recv().unwrap()).unwrap();
+    assert_eq!(request["max_tokens"], json!(4096), "le plafond déclaré par archive_decide.mmd : {}", request["max_tokens"]);
+}
+
