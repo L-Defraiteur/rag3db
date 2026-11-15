@@ -234,3 +234,21 @@ bases déjà écrites restent à reconstruire : c'est le travail de hotfixs sur 
 
 **Pour G** : le même point de faute fabrique à coup sûr une base où une relation n'est lisible que
 d'un sens. C'est le crochet d'injection que demande son ticket de rangements.
+
+## La base témoin « un seul sens » (15 nov., 1 h 30)
+
+Fabriquée pour le témoin `test_check_rel_directions.sh` de G : à luciepc,
+`~/.cache/rag3weaver-build/bases-temoins/un-seul-sens/` (base.kz et ATTENDU.txt). Elle a été écrite
+par `f41c0ba5b` avec le point de faute, puis fermée après un CHECKPOINT. L'outil de G, sous
+`373b5477b`, et le cœur, sous la lib d'écriture par des requêtes ancrées, lisent la même chose :
+avant 10, arrière 12, union 12, perdues d'un sens 2 (1:60 et 1:111).
+
+Deux observations sous l'ancienne lib, à garder :
+
+- **La troncature remonte au-delà de la fenêtre.** 1:60, validée au tour 0, était lisible des deux
+  sens juste après. Le tour 1 l'a emportée du sens avant, alors qu'elle était versée **avant** les
+  lignes de A de ce tour. Le correctif de `373b5477b` la couvre aussi : il n'y a plus de troncature
+  hors du verrou.
+- **Un balayage non ancré qui lit mal.** Sous `f41c0ba5b`, `MATCH ()-[r:R]->() RETURN r.line
+  ORDER BY r.line` ne rend qu'une ligne (line 0) sur cette base. Ce n'est pas expliqué. À rejouer
+  sous `373b5477b` ; si le défaut y reste, il faut lui ouvrir un ticket à part.
