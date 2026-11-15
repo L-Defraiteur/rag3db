@@ -189,7 +189,16 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     if let Some(h) = crate::historique::chemin() {
         vue.reprendre_historique(crate::historique::charger(&h));
     }
-    vue.sous_tmux = std::env::var_os("TMUX").is_some_and(|v| !v.is_empty());
+    // Sous tmux : Maj-Entrée s'ouvre si tmux permet les touches étendues en CSI u (le mode 1 de
+    // modifyOtherKeys, demandé ici et rendu à la sortie) ; sinon, l'indication dit le réglage.
+    let tmux_ouvert = std::env::var_os("TMUX").is_some_and(|v| !v.is_empty()) && clavier_sous_tmux(&tmux) == ClavierTmux::Ouvert;
+    vue.sous_tmux = std::env::var_os("TMUX").is_some_and(|v| !v.is_empty()) && !tmux_ouvert;
+    if tmux_ouvert {
+        use std::io::Write;
+        let _ = write!(std::io::stdout(), "\x1b[>4;1m");
+        let _ = std::io::stdout().flush();
+        vue.maj_entree = true;
+    }
     if let (true, Some(j)) = (mosh, &journal) {
         vue.repli = Some(crate::vue::Repli { phrase: "sous mosh, l'historique ne se relit pas au défilement".into(), commande: j.relecture() });
     }
@@ -204,6 +213,10 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     let _ = terminal.draw(|f| vue.dessiner(f, f.area()));
     if maj_entree {
         let _ = ratatui::crossterm::execute!(std::io::stdout(), PopKeyboardEnhancementFlags);
+    }
+    if tmux_ouvert {
+        use std::io::Write;
+        let _ = write!(std::io::stdout(), "\x1b[>4;0m");
     }
     let _ = ratatui::crossterm::execute!(std::io::stdout(), DisableBracketedPaste);
     ratatui::restore();
@@ -651,8 +664,20 @@ pub enum ClavierTmux {
 }
 
 /// Ce que permet tmux, d'après `lire(["show", "-gv", <option>])` (la sortie de la commande tmux).
-pub fn clavier_sous_tmux(_lire: &dyn Fn(&[&str]) -> Option<String>) -> ClavierTmux {
-    ClavierTmux::Ferme
+pub fn clavier_sous_tmux(lire: &dyn Fn(&[&str]) -> Option<String>) -> ClavierTmux {
+    let option = |nom: &str| lire(&["show", "-gv", nom]).map(|v| v.trim().to_string());
+    let permis = matches!(option("extended-keys").as_deref(), Some("on" | "always"));
+    if permis && option("extended-keys-format").as_deref() == Some("csi-u") {
+        ClavierTmux::Ouvert
+    } else {
+        ClavierTmux::Ferme
+    }
+}
+
+/// Lance `tmux <args>` et rend sa sortie, ou rien.
+fn tmux(args: &[&str]) -> Option<String> {
+    let o = std::process::Command::new("tmux").args(args).output().ok()?;
+    o.status.success().then(|| String::from_utf8_lossy(&o.stdout).into_owned())
 }
 
 /// La touche de la vue pour une touche du terminal, ou rien.
