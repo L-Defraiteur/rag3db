@@ -82,9 +82,17 @@ lots, un appel par bras et par lot.
 - **M3, le coût** : les jetons du contexte, et M1 à budget égal (ARCH= contre CC).
 - **M4, les redécouvertes évitables** : la part des redécouvertes de W dont l'information était
   dans le contexte du bras.
+- **M5, l'ordre** (ajouté par c7) : un besoin qui est une question d'ordre (« qu'a-t-on fait avant
+  quoi », « quel lot vient après lequel ») est marqué à l'extraction et compté à part. C'est là
+  que se juge le bilan ordonné de l'archiviste.
+- **Le coût de l'archiviste en temps** (ajouté par c7) : le temps de passe de l'archiviste et du
+  composeur par frontière, à côté du coût en jetons.
+- **Deux horizons** (au mot de c7) : chaque métrique est lue sur W à 60 tours, et à 20 tours. La
+  décroissance des besoins entre les deux dit si le contexte sert surtout au redémarrage.
 
 **La règle de lecture** : ARCH bat CC s'il gagne en M1 à budget égal (ARCH=) sans perdre en M2.
-ARCH à 100 000 jetons seul ne suffit pas.
+ARCH à 100 000 jetons seul ne suffit pas. **CC+ARCH contre CC** dit ce que l'archiviste ajoute au
+résumé ; c'est la forme du produit si la mémoire complète le résumé au lieu de le remplacer.
 
 ## 6. La validation du juge
 
@@ -107,4 +115,6 @@ ARCH à 100 000 jetons seul ne suffit pas.
   service d'embarquement. Ce qui reste à recevoir d'elle :
   - le point d'entrée qui range une suite de tours en sections ;
   - le composeur au budget de 100 000 jetons.
-- **Rien n'est lancé** avant que l'orchestration ait validé la métrique.
+- **Validé par l'orchestration** (c7, 15 nov. 12 h 4x), avec ses ajouts : W à 60 tours, lu aussi à
+  20 tours ; CC+ARCH gardé ; M5 et le temps de passe. Les 8 frontières de `99bc8451-…` sont au
+  banc. **Rien ne se lance** avant le composeur de la session mémoire et le code de l'archiviste.
