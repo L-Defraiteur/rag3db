@@ -121,7 +121,11 @@ fn servir() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     .expose(expose).avec_activation(activation)
-    .avec_relances(std::env::var(rag3weaver::daemon::embeddings::RELANCES_VARIABLE).ok().and_then(|v| v.trim().parse::<u64>().ok()));
+    .avec_relances(std::env::var(rag3weaver::daemon::embeddings::RELANCES_VARIABLE).ok().and_then(|v| v.trim().parse::<u64>().ok()))
+    // Le plafond d'un texte : un réglage mal écrit refuse le démarrage, nommé.
+    .max_chars_per_text(rag3weaver::daemon::embeddings::max_chars_depuis(
+        std::env::var(rag3weaver::daemon::embeddings::MAX_CHARS_VARIABLE).ok().as_deref(),
+    )?);
     // La seule carte du poste porte l'affichage : des rafales courtes, un
     // trou entre deux (`rag3weaver::burst`). Dit au journal, parce qu'un
     // débit plus bas sans explication se prend pour une panne.
