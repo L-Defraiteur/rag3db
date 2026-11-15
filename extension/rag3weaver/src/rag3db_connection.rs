@@ -1657,7 +1657,8 @@ pub(crate) mod instructions_du_fil {
     pub(crate) fn compter() {
         COMPTE.with(|c| c.set(c.get() + 1));
     }
-    /// Le nombre d'instructions que `f` a envoyées depuis ce fil.
+    /// Le nombre d'instructions que `f` a envoyées depuis ce fil. Lu par les témoins du code seuls.
+    #[cfg_attr(not(feature = "code"), allow(dead_code))]
     pub(crate) fn pendant<T>(f: impl FnOnce() -> T) -> (T, usize) {
         let avant = COMPTE.with(|c| c.get());
         let r = f();
