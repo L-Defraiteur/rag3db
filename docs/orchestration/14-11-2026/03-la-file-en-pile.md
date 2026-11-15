@@ -1043,3 +1043,15 @@ Banc, 13 h 49 : les parités de l'écrivain sont à refaire en partie — la son
 parent : le parent n'a compilé dans aucune passe, la P0 copiée était la base intacte (leçon : une parité prouve d'abord
 que les deux côtés ont bâti et joué). N quasi bloquée par le quota Vertex (11 tours sur 244 en 30 min). Décision (b) :
 les parités tout de suite sous poste lourd (~1 h 20, verdict vers 15 h 10), N à côté sur son quota.
+hotfixs, 13 h 52 : la CI de master — le vert vu par tty est le workflow `rag3weaver` ; le « CI Workflow » ne rend rien
+depuis le 14 à 15 h 27 : le run 43610263500 attend pour toujours des machines `rag3db-self-hosted-testing` absentes et
+tient le groupe de concurrence (cancel-in-progress faux), chaque run suivant est annulé à zéro job. Avant de se bloquer :
+sanity checks vert (cassert clos), code format rouge, shell test rouge (Build). Mon `gh run cancel` des cinq runs en file
+a été **refusé** par ma garde (vérifié : toujours queued) — à Lucie. Lot pour hotfixs : `if: vars.RAG3DB_SELF_HOSTED`
+sur les jobs self-hosted, puis lire les deux rouges.
+hotfixs, 13 h 52 : page des tickets moteur que Lucie peut rencontrer (1e3a4bb28) : 3 à fermer (corrigés dans 373b5477b :
+COMMIT sous index vectoriel, clé primaire sous point de reprise ; les Note restent ouvertes faute des ×10, fe9337a7a) ;
+atteignables : SIGSEGV optimisticRead, lecture hors colonne du CREATE concurrent, dictionnaire, colonne ajoutée ;
+durabilité sur coupure, extension non chargée ; les deux index de relations (à dégrader), rang déplacé, plein texte après
+arrêt brutal ; **et surtout les orphelins du plein texte qui reviennent (970 en 12 h)** — demandé à recherche si son
+correctif est dans le binaire des hôtes.
