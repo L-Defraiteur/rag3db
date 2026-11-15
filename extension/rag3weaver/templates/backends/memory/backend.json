@@ -689,6 +689,7 @@
     "cited_by_params": "scripts/cited_by_params.rhai",
     "whois_params": "scripts/whois_params.rhai",
     "whois": "scripts/whois.rhai",
+    "archive_rapport": "scripts/archive_rapport.rhai",
     "archive_params": "scripts/archive_params.rhai",
     "archive_candidates": "scripts/archive_candidates.rhai",
     "archive_decided": "scripts/archive_decided.rhai",
