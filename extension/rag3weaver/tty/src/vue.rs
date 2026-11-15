@@ -656,7 +656,7 @@ impl Vue {
         let mut saisie: Vec<Line> = Vec::new();
         if self.saisie.est_vide() {
             let aide = match (self.sous_tmux, self.maj_entree) {
-                (true, _) => "sous tmux, Maj-Entrée envoie : Alt-Entrée pour la ligne",
+                (true, _) => "sous tmux, Maj-Entrée envoie : Alt-Entrée pour la ligne (ou, dans tmux : set -g extended-keys on ; set -g extended-keys-format csi-u)",
                 (false, true) => "Maj-Entrée : à la ligne",
                 (false, false) => "Alt-Entrée : à la ligne",
             };
