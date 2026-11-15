@@ -22,35 +22,61 @@ Tailles relevées le 15 novembre à 14 h 50.
    `code-rag3db-depot`). Il tient le backend en écriture environ 20 s par grande table.
 3. **L'instantané** : base, wal, extensions et `.fts` ensemble, avec le manifeste de copie. C'est le
    retour arrière.
-4. **1b**, la migration des versions (`rag3weaver-backend migration versions --base …`), par lots de 2 000.
-5. **Le repassage de l'écrivain des générations** (rang 0 et position) sur la base migrée.
-6. **La vérification** : les requêtes de la copie, identiques avant et après ; le backend rouvert par
-   l'hôte.
+4. **Le contrôle des deux sens** des tables de relations (check_rel_directions de G). Une base qui y rougit
+   attend la réparation de hotfixs.
+5. **1b**, la migration des versions (`rag3weaver-backend migration versions --base …`), par lots de 2 000.
+6. **La montée aux générations** (`rag3weaver-backend migration generations --base …`). Son bilan dit :
+   versions → generations, `backend:0` publiée, rang lu 1.
+7. **La réouverture par l'hôte**, puis **le repassage de l'écrivain**, base ouverte : l'outil `index` avec
+   `confirm=true`, attendu jusqu'à la dernière ligne de son journal (« indexation terminée »).
+8. **La vérification** : les comptes visibles par table, avec CONSUMES = CONSUMED_BY, et le banc de recherche
+   d'avant retrouvé dans celui d'après.
 
-## Les durées
+## Les durées, mesurées par la répétition du 15 novembre
 
-Mesurées sur `code-rag3db-depot` :
-- **1b : 861 s**, sur la copie du 14 novembre (page `14-11-2026/01`) ;
-- **le repassage par l'écrivain : environ 45 min**, dix fois le chemin d'avant (2 656 s contre 254 s au
-  banc). Le ticket est
-  `everything-declarative/tickets/2026-11-15-le-repassage-d-une-base-par-l-ecrivain-coute-dix-fois-le-parent.md`.
+La répétition s'est jouée à luciepc, sur des copies des instantanés de la nuit (`avant-fenetre-code-lourd-20261115-0027`,
+`avant-fenetre-code-principal-20261115-0051`), les deux bases en parallèle, sous `poste lourd`. Elle a pris le binaire
+4b28027c8 : l'écrivain d'ED c5ec47cc4, plus `migration generations --base`, sur la lib 373b5477b. Le script est
+`~/.cache/rag3weaver-build/bascule/repetition-bascule.sh` à luciepc, avec un journal par base à côté.
 
-Pour les deux bases de luciepc, j'extrapole **au prorata de la taille du fichier de base**. C'est une
-approximation : le coût suit le nombre d'occurrences et de versions, pas les octets, et luciepc n'est pas
-le portable. J'y ajoute une marge de moitié.
+| pas | code-lourd | code-principal |
+|---|---|---|
+| comptes et banc de recherche avant | 6 s | 4 s |
+| réparation des deux index (copie seulement : l'instantané est d'avant celle de hotfixs) | 1 719 s | 1 402 s |
+| orphelins du plein texte : relevé, purge, compact | 9 s (103 Scope) | 9 s (102 Scope) |
+| 1b | **683 s** (82 855 occurrences, 76 920 versions) | **623 s** (65 914 occurrences, 61 224 versions) |
+| montée aux générations | 2 s | 1 s |
+| **repassage de l'écrivain**, avec les vecteurs | **3 661 s** (7 278 fichiers, 4 paquets) | **2 956 s** (6 314 fichiers) |
+| comptes et banc après | 18 s, VERT | 17 s, VERT |
 
-| base | 1b | repassage | maintain + copie + vérification | **fenêtre, marge comprise** |
-|---|---|---|---|---|
-| `code-rag3db-depot` | 15 min (mesuré) | 45 min (mesuré) | ~10 min | **~1 h 30** |
-| `code-lourd` | ~6 min | ~17 min | ~5 min | **~45 min** |
-| `code-principal` | ~5 min | ~14 min | ~5 min | **~35 min** |
+- **La part fermée de la vraie fenêtre** est l'instantané, la purge (~10 s), 1b (10 à 12 min) et la montée
+  (2 s) : environ **15 min par base**, les trois bases en parallèle. Les bases vivantes ont eu leur réparation :
+  un contrôle des deux sens (check_rel_directions) la garde avant 1b, et une base qui y rougit attend.
+- **Le repassage se fait base ouverte** (ED) : 50 à 60 min par base, vecteurs compris, à 0,3 s par fichier
+  ou plus sous charge. Les lectures voient le rang en attente, et seules les lignes File d'un paquet manquent
+  un instant. L'outil `index` y demande `confirm=true`, parce qu'il estime plus de 5 min de vecteurs.
+- **Les comptes bruts doublent** pour File et ses arêtes : les lignes retirées restent. On juge sur les lignes
+  visibles (`_jusqu_a` nul). Après le repassage, File visibles 7 275 et Scope visibles 82 768 à code-lourd,
+  File 6 313 et Scope 65 814 à code-principal, comme le dit le journal de l'index.
+- **Le dépôt au portable** : 1b a pris 861 s le 14 novembre et le repassage ~45 min (banc). Il n'a pas été
+  répété.
 
-Les deux bases de luciepc peuvent passer l'une après l'autre dans la même fenêtre (environ 1 h 20), ou
-en parallèle du dépôt, qui est sur l'autre poste. Si le ticket du repassage est corrigé avant la bascule,
-la fenêtre se raccourcit d'autant : l'écrivain retomberait vers 5 min sur le dépôt.
+## Ce que la répétition a trouvé, et la décision de c7
 
-**Le chiffre de luciepc se mesure avant la vraie fenêtre**, par la répétition sur copie (la première
-des trois conditions). La table ci-dessus en sera corrigée.
+- **Un défaut de graphe de l'écrivain** : après le repassage, des CONSUMED_BY visibles n'ont plus leur
+  CONSUMES, **2 241 à code-lourd et 1 947 à code-principal**. Il n'y en avait aucun avant, et aucun CONSUMES
+  n'a perdu son miroir. Le consommateur est chaque fois réécrit, et sa résolution neuve ne consomme plus la
+  cible. Mais la boucle générique de recopie des arêtes entrantes (`recopier_les_aretes_entrantes`) avait
+  recopié le CONSUMED_BY sur lui. Effet : `impact` et les appelants sont faux sur ~2 % de ces arêtes.
+- **ED l'a corrigé** en 5ed5d1fc9, avec un témoin 18 vu rouge d'abord : la boucle saute CONSUMED_BY.
+- **La décision de c7, à 20 h 15 : la vraie bascule attend.** Pas ce soir avec un défaut connu du graphe,
+  parce qu'un correctif après coup coûterait un second repassage par base, et parce que l'écrivain n'est pas
+  encore sur master. L'ordre est donc :
+  1. le correctif d'ED, jugé par le banc (CONSUMES = CONSUMED_BY au juge) ;
+  2. l'atterrissage de l'écrivain, avec `migration generations --base` en pile ;
+  3. une pose qui porte les deux ;
+  4. une dernière répétition sur copie ;
+  5. la bascule.
 
 ## La politique (Lucie dit oui, c7 la fixe, 15 novembre)
 
@@ -84,6 +110,7 @@ Lucie : « mes bases sont là pour ça » ; elle laisse la politique à c7.
 
 ## Ce qui attend encore
 
-- la répétition sur copie, avec les vrais chiffres de luciepc (vers 17 h, le 15 novembre) ;
-- le ticket « une recherche à versions prend des Gio » fermé ;
-- l'écrivain d'ED (bff6c7409) sur master.
+- le correctif du miroir d'ED (5ed5d1fc9), vert au banc ;
+- l'écrivain et `migration generations --base` sur master, en pile, puis une pose qui les porte ;
+- la dernière répétition sur copie, puis la bascule ;
+- le ticket « une recherche à versions prend des Gio » fermé.
