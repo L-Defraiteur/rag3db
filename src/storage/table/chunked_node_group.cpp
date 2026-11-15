@@ -423,15 +423,18 @@ bool ChunkedNodeGroup::delete_(const Transaction* transaction, row_idx_t rowIdxI
 void ChunkedNodeGroup::addColumn(MemoryManager& mm, const TableAddColumnState& addColumnState,
     bool enableCompression, PageAllocator* pageAllocator, ColumnStats* newColumnStats) {
     auto& dataType = addColumnState.propertyDefinition.getType();
-    chunks.push_back(std::make_unique<ColumnChunk>(mm, dataType.copy(), capacity, enableCompression,
-        ResidencyState::IN_MEMORY));
-    auto numExistingRows = getNumRows();
-    chunks.back()->populateWithDefaultVal(addColumnState.defaultEvaluator, numExistingRows,
-        newColumnStats);
+    // Tout ou rien : la colonne n'entre dans le groupe qu'une fois remplie (et écrite, pour un
+    // groupe sur disque). Un refus en route (un pool plein) ne laisse pas une colonne à moitié
+    // posée, que la colonne suivante prendrait pour la sienne (ticket du SIGSEGV de DdlEveryMinute,
+    // 15 novembre 2026).
+    auto chunk = std::make_unique<ColumnChunk>(mm, dataType.copy(), capacity, enableCompression,
+        ResidencyState::IN_MEMORY);
+    chunk->populateWithDefaultVal(addColumnState.defaultEvaluator, getNumRows(), newColumnStats);
     if (residencyState == ResidencyState::ON_DISK) {
         KU_ASSERT(pageAllocator);
-        chunks.back()->flush(*pageAllocator);
+        chunk->flush(*pageAllocator);
     }
+    chunks.push_back(std::move(chunk));
 }
 
 void ChunkedNodeGroup::removeLastColumn(PageAllocator* pageAllocator) {

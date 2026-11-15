@@ -578,10 +578,23 @@ void NodeGroup::addColumn(TableAddColumnState& addColumnState, PageAllocator* pa
     ColumnStats* newColumnStats) {
     dataTypes.push_back(addColumnState.propertyDefinition.getType().copy());
     const auto lock = chunkedGroups.lock();
-    for (auto& chunkedGroup : chunkedGroups.getAllGroups(lock)) {
-        chunkedGroup->addColumn(mm, addColumnState, enableCompression, pageAllocator,
-            newColumnStats);
-        TestHooks::failOnceIfArmed(TestFailPoint::ADD_COLUMN_BETWEEN_CHUNKED_GROUPS);
+    const auto& groups = chunkedGroups.getAllGroups(lock);
+    // Tout ou rien : un refus en route (un pool plein) retire la colonne des groupes qui l'ont
+    // déjà reçue, puis remonte. Le catalogue annule la colonne ; le stockage ne doit pas la garder.
+    size_t numDone = 0;
+    try {
+        for (auto& chunkedGroup : groups) {
+            chunkedGroup->addColumn(mm, addColumnState, enableCompression, pageAllocator,
+                newColumnStats);
+            ++numDone;
+            TestHooks::failOnceIfArmed(TestFailPoint::ADD_COLUMN_BETWEEN_CHUNKED_GROUPS);
+        }
+    } catch (...) {
+        for (size_t i = 0; i < numDone; ++i) {
+            groups[i]->removeLastColumn(pageAllocator);
+        }
+        dataTypes.pop_back();
+        throw;
     }
 }
 
