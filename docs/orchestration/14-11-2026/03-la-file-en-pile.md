@@ -1688,3 +1688,7 @@ témoins, rejeu court, push au vert vers 19 h 20. 96 et archi poussent dans la m
 Cœur, 19 h 05 : colonne-ajoutee-se-relit reposée (colonne-ajoutee-se-relit-2, 5 commits « = » + un commit de format pur 68769674f après
 le contrôle à blanc de clang-format-18) ; rejeu complet après la sonde (~19 h 25, 45 min) ; « à toi » après le hash. Procédure :
 le contrôle à blanc par l'image docker rag3db-clang-format-18.
+Archi, 19 h 11 : **le branchement du socle sur master à b5de98d3b** (5 commits : le socle greffé dans toute tâche, l'empreinte du pas, l'invite
+d'agent de code, une demande de fichier s'écrit dans le fichier et la réponse est du texte ; gmail, 0 attribution ; Gemini 4/4). La
+tâche de Lucie aura write, glob, replace_lines, insert_lines, replace_text dès la pose. « À toi » à ED (nom + persona) ; 96 pousse
+en parallèle ; lucivy au « poussé » d'ED ; puis le hash.
