@@ -1220,3 +1220,17 @@ l'apport du tour est perdu : la section n'est pas rangée), 22 **endort** (sujet
 perdus), 16 d'accord. Juge relu à la main : 0,90 sur 30, indulgent. Pour 96, variante de consigne : « rien » seulement si la
 section n'apporte rien, sinon rejoindre le sujet montré ; « le contexte montre ce qui existe, pas ce qui est rangé de cette
 section ». F 25 % et S 50 tournent depuis 15 h 06.
+ED, 15 h 09 : le témoin 13 trouve un vrai défaut, **dans l'histoire** : au rang d'avant, un scope inchangé ne mène plus à son File d'avant —
+l'oubli des arêtes défaisait le DEFINED_IN du scope partagé vers la ligne File fermée (« Scope ouvert → File fermé : 0 » là où
+l'histoire en attend ~73 000). Correctif : l'oubli ne défait pas une arête dont l'autre bout est une ligne fermée (CONSUMES
+aussi). L'état du rattrapage (témoin 14) dans le même envoi. Témoins, passe épinglée, tête ; le banc rejoue le relevé par paire
+de fermeture sur une copie neuve.
+G, 15 h 10 : l'hôte du portable relancé (pid 788162 → 2474552), binaire **5b8f8994f** (md5 f7133291) sur 373b5477b, /sante répond : les deux
+hôtes portent le même binaire sur la même lib.
+Archi, 15 h 10 : la forme (B) touche encore cinq témoins d'avant (le motif du relevé de tty par construction) : ils déclarent
+`expects: "none"`, une ligne chacun ; et la trace de (B) (fichier écrit, commande, plan clos) devient durable (fichier d'état à côté
+du curseur) pour ne pas relancer à tort après un redémarrage de l'hôte — dans le lot. Tranché oui aux deux.
+G, 15 h 11 : pose au portable faite (5b8f8994f, f7133291 ; 26a091474 en .avant), mais **un accroc** : le réveil de l'hôte a refusé à 15 h 09 m 10 s,
+le tunnel 7980 → 7879 de luciepc étant injoignable — **le 7879 est tombé et a redémarré (NRestarts 21 depuis 11 h 39)**, l'hôte
+coupé 55 s au lieu de 15. Deux tickets chez embarquement : pourquoi le 7879 meurt (journal muet) ; un hôte ne doit jamais
+refuser de démarrer parce qu'un service d'embarquement distant est injoignable (dire, servir le lexical, retenter).
