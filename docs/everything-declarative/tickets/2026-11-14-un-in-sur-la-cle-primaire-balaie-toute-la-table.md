@@ -1,6 +1,6 @@
 # Un `IN` sur la clé primaire balaie toute la table au lieu de prendre la clé
 
-- **État** : ouvert (14 novembre 2026).
+- **État** : ouvert (14 novembre 2026). Contournement rag3weaver sur master en 9fd946ec3 : 5 008 → 113,6 ms (sonde `sonde_in_par_cle`, recherche, 15 novembre 2026, lib 373b5477b, mêmes 72 652 offsets). Reste le planificateur : fermeture sur le lot du cœur, avec son EXPLAIN.
 - **Famille** : moteur
 - **Gravité** : lenteur. ×44 sur une résolution de 72 652 clés : 5 008 ms au lieu de 113 ms
 - **Atteignable en service** : oui. C'est le filtre `_uuid IN [...]` que rag3weaver passe à chaque recherche sur une base à versions (le masque des versions), et toute requête d'utilisateur qui filtre sur une liste d'identifiants
