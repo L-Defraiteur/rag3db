@@ -1,0 +1,10 @@
+%% tool: archive_recall
+%% description: La recherche des fiches candidates d'une section, sur sa requête bornée (archive_query) : rend les résultats et la longueur de la requête envoyée. Appelé une fois par section par archive_decide, par un ForEachNode d'un seul élément : un graphe cité ne reçoit ses arguments que par sa configuration, et la requête est calculée.
+%% param: element json! -- {query, query_chars} : la requête bornée et sa longueur.
+%% param: search_options json! -- Les options de la recherche de candidates.
+%% result: emballer.result
+
+graph LR
+    recall["GraphNode(graph='@builtin:tools/search_structured.mmd', target='Fiche', query=$element.query, options=$search_options)"]
+    emballer["RhaiNode(script='#{results: input.value, query_chars: input.query_chars}', inputs='query_chars', query_chars=$element.query_chars)"]
+    recall -->|result:value| emballer
