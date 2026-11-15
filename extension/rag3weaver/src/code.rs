@@ -6073,6 +6073,44 @@ mod tests_de_l_ecrivain {
         }
     }
 
+    /// Les noms que mentionnent les lignes visibles d'un scope nommé.
+    fn mentions_visibles(cat: &Catalog, nom: &str) -> Vec<String> {
+        let v = cat.generations.clone().expect("une base à générations");
+        let p = cat.dialect_arc().condition_visible_sur("s", &v.couche, v.rang).unwrap();
+        let r = cat
+            .conn()
+            .execute_with_params(
+                &format!("MATCH (s:Scope)-[:MENTIONS]->(y:Symbol) WHERE s.name = $n AND {p} RETURN y.name ORDER BY y.name"),
+                &[QueryParam::new("n", CypherValue::String(nom.into()))],
+            )
+            .unwrap();
+        r.rows.iter().map(|l| texte(&l[0])).collect()
+    }
+
+    /// **Témoin 20 : une ligne renée porte ses MENTIONS** (la sonde des arêtes perdues, base du dépôt :
+    /// 985 MENTIONS perdues, 938 de lignes renées ; elles restent sur la ligne fermée, la neuve n'en a pas).
+    /// `a` se déplace de deux lignes sans changer : sa ligne neuve mentionne toujours `f`. Par la sauvegarde,
+    /// puis par un repassage de la version.
+    #[test]
+    fn une_ligne_renee_porte_ses_mentions() {
+        for par_repassage in [false, true] {
+            let (mut cat, src) = base();
+            cat.publier_la_generation("c1", 0).expect("publier");
+            let avant = mentions_visibles(&cat, "a");
+            assert!(avant.contains(&"f".to_string()), "la base : a mentionne f ({avant:?})");
+            let deplace = format!("\n\n{A}");
+            if par_repassage {
+                src.insert("a.rs", &deplace);
+                cat.version_de_l_analyse = format!("{}-autre", cat.version_de_l_analyse);
+                crate::code_sync::sync_source(&mut cat, &src, &Default::default(), &mut |_| {}).expect("le repassage");
+            } else {
+                sauver(&mut cat, &src, "a.rs", &deplace);
+            }
+            let lignes_a = lignes(&cat, "a");
+            assert_eq!(mentions_visibles(&cat, "a"), avant, "a déplacé mentionne les mêmes noms (repassage : {par_repassage}) ; ses lignes : {lignes_a:?}");
+        }
+    }
+
     /// Les arêtes visibles d'un côté sans leur miroir de l'autre : `CONSUMED_BY (b → a)` sans
     /// `CONSUMES (a → b)`, puis l'inverse, les deux bouts sous la visibilité.
     fn miroirs_manquants(cat: &Catalog) -> (Vec<(String, String)>, Vec<(String, String)>) {
