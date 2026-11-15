@@ -59,12 +59,12 @@ pub struct LlmNode {
 /// schéma (`type`), avec ses clés `required` si c'est un objet. Un modèle qui
 /// n'honore pas `response_format` (un local, un faux serveur) rend du texte :
 /// l'erreur le dit, on ne devine pas un JSON dans une phrase.
-fn lire_sous_le_schema(texte: &str, schema: &serde_json::Value) -> Result<serde_json::Value, String> {
-    let debut: String = texte.trim().chars().take(200).collect();
+fn read_under_schema(texte: &str, schema: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let head: String = texte.trim().chars().take(200).collect();
     let v: serde_json::Value = serde_json::from_str(texte.trim())
-        .map_err(|e| format!("la réponse n'est pas du JSON ({e}) alors qu'un response_schema est déclaré : « {debut} »"))?;
-    let attendu = schema.get("type").and_then(serde_json::Value::as_str);
-    let ok = match attendu {
+        .map_err(|e| format!("la réponse n'est pas du JSON ({e}) alors qu'un response_schema est déclaré : « {head} »"))?;
+    let expected = schema.get("type").and_then(serde_json::Value::as_str);
+    let ok = match expected {
         Some("object") => v.is_object(),
         Some("array") => v.is_array(),
         Some("string") => v.is_string(),
@@ -74,12 +74,12 @@ fn lire_sous_le_schema(texte: &str, schema: &serde_json::Value) -> Result<serde_
         _ => true,
     };
     if !ok {
-        return Err(format!("la réponse n'a pas la forme du response_schema (type {}) : « {debut} »", attendu.unwrap_or("?")));
+        return Err(format!("la réponse n'a pas la forme du response_schema (type {}) : « {head} »", expected.unwrap_or("?")));
     }
     if let (Some(obj), Some(req)) = (v.as_object(), schema.get("required").and_then(serde_json::Value::as_array)) {
-        let manque: Vec<&str> = req.iter().filter_map(serde_json::Value::as_str).filter(|k| !obj.contains_key(*k)).collect();
-        if !manque.is_empty() {
-            return Err(format!("la réponse n'a pas les clés requises du response_schema ({}) : « {debut} »", manque.join(", ")));
+        let missing: Vec<&str> = req.iter().filter_map(serde_json::Value::as_str).filter(|k| !obj.contains_key(*k)).collect();
+        if !missing.is_empty() {
+            return Err(format!("la réponse n'a pas les clés requises du response_schema ({}) : « {head} »", missing.join(", ")));
         }
     }
     Ok(v)
@@ -227,7 +227,7 @@ impl Node for LlmNode {
         // conforme est une erreur, et aucun port ne sort à moitié.
         let json = match &self.response_schema {
             Some(schema) => Some(
-                lire_sous_le_schema(&text, schema).map_err(|e| format!("LlmNode ({}) : {e}", llm.name()))?,
+                read_under_schema(&text, schema).map_err(|e| format!("LlmNode ({}) : {e}", llm.name()))?,
             ),
             None => None,
         };
@@ -422,10 +422,10 @@ mod tests {
     }
 
     /// Un modèle qui rend un texte fixe et note le `response_format` reçu.
-    fn repond(texte: &'static str, vu: Arc<std::sync::Mutex<Option<crate::llm::ResponseFormat>>>) -> Arc<dyn Llm> {
+    fn replies_with(text: &'static str, seen: Arc<std::sync::Mutex<Option<crate::llm::ResponseFormat>>>) -> Arc<dyn Llm> {
         Arc::new(crate::llm::CallbackLlm::new("spy", 4096, move |_t, opts, sink| {
-            *vu.lock().unwrap() = opts.response_format.clone();
-            for f in crate::llm::fragments(texte) {
+            *seen.lock().unwrap() = opts.response_format.clone();
+            for f in crate::llm::fragments(text) {
                 sink.on_token(&f);
             }
             sink.on_finish(&Finish::eos());
@@ -433,13 +433,13 @@ mod tests {
         }))
     }
 
-    fn sujets() -> serde_json::Value {
+    fn topics_schema() -> serde_json::Value {
         serde_json::json!({
             "type": "object",
-            "properties": {"sujets": {"type": "array", "items": {"type": "object",
-                "properties": {"titre": {"type": "string"}, "de": {"type": "integer"}, "a": {"type": "integer"}},
-                "required": ["titre", "de", "a"], "additionalProperties": false}}},
-            "required": ["sujets"], "additionalProperties": false
+            "properties": {"topics": {"type": "array", "items": {"type": "object",
+                "properties": {"title": {"type": "string"}, "from": {"type": "integer"}, "to": {"type": "integer"}},
+                "required": ["title", "from", "to"], "additionalProperties": false}}},
+            "required": ["topics"], "additionalProperties": false
         })
     }
 
@@ -447,23 +447,23 @@ mod tests {
     /// réponse, du JSON, sort sur le port `json` (le texte reste sur `text`).
     #[test]
     fn response_schema_reaches_the_model_and_the_json_comes_out() {
-        let vu = Arc::new(std::sync::Mutex::new(None));
-        let rendu = r#"{"sujets": [{"titre": "la reprise", "de": 1, "a": 3}]}"#;
-        let mut node = LlmNodeFactory.create("seg", &serde_json::json!({"response_schema": sujets()})).unwrap();
-        let mut ctx = ctx_with(repond(rendu, vu.clone()));
+        let seen = Arc::new(std::sync::Mutex::new(None));
+        let reply = r#"{"topics": [{"title": "la reprise", "from": 1, "to": 3}]}"#;
+        let mut node = LlmNodeFactory.create("seg", &serde_json::json!({"response_schema": topics_schema()})).unwrap();
+        let mut ctx = ctx_with(replies_with(reply, seen.clone()));
         ctx.set_input("prompt", PortValue::new("découpe".to_string()));
         node.execute(&mut ctx).unwrap();
-        match vu.lock().unwrap().clone() {
+        match seen.lock().unwrap().clone() {
             Some(crate::llm::ResponseFormat::JsonSchema { schema, strict, .. }) => {
                 assert!(strict, "le format est strict");
-                assert_eq!(schema, sujets());
+                assert_eq!(schema, topics_schema());
             }
             autre => panic!("le schéma n'a pas atteint le modèle : {autre:?}"),
         }
         let mut out = ctx.drain_outputs();
         let json = out.remove("json").and_then(take_or_clone::<serde_json::Value>).expect("le port json");
-        assert_eq!(json["sujets"][0]["titre"], "la reprise");
-        assert_eq!(out.remove("text").and_then(take_or_clone::<String>).as_deref(), Some(rendu));
+        assert_eq!(json["topics"][0]["title"], "la reprise");
+        assert_eq!(out.remove("text").and_then(take_or_clone::<String>).as_deref(), Some(reply));
         assert!(LlmNodeFactory.schema().outputs.iter().any(|p| p.name == "json"), "le port json est déclaré");
     }
 
@@ -471,10 +471,10 @@ mod tests {
     /// dit par une erreur nommée, et le port `json` reste vide ; il ne devine pas.
     #[test]
     fn a_reply_that_is_not_json_is_refused_by_name() {
-        for rendu in ["Voici les sujets : la reprise, la météo.", r#"{"autre": 1}"#] {
-            let vu = Arc::new(std::sync::Mutex::new(None));
-            let mut node = LlmNodeFactory.create("seg", &serde_json::json!({"response_schema": sujets()})).unwrap();
-            let mut ctx = ctx_with(repond(rendu, vu));
+        for reply in ["Voici les sujets : la reprise, la météo.", r#"{"autre": 1}"#] {
+            let seen = Arc::new(std::sync::Mutex::new(None));
+            let mut node = LlmNodeFactory.create("seg", &serde_json::json!({"response_schema": topics_schema()})).unwrap();
+            let mut ctx = ctx_with(replies_with(reply, seen));
             ctx.set_input("prompt", PortValue::new("découpe".to_string()));
             let e = node.execute(&mut ctx).unwrap_err();
             assert!(e.contains("response_schema"), "l'erreur nomme response_schema : {e}");
@@ -485,7 +485,7 @@ mod tests {
     /// Un `response_schema` qui n'est pas un objet est refusé à la création.
     #[test]
     fn a_response_schema_that_is_not_an_object_is_refused() {
-        let e = LlmNodeFactory.create("seg", &serde_json::json!({"response_schema": "sujets"})).err().expect("refusé");
+        let e = LlmNodeFactory.create("seg", &serde_json::json!({"response_schema": "topics"})).err().expect("refusé");
         assert!(e.contains("response_schema"), "{e}");
     }
 

@@ -884,7 +884,7 @@ mod tests {
         let avec = ToolPolicy { call_models: true, ..ToolPolicy::default() };
         validate_tool_policy("archive", types(), &avec, None).expect("Decide avec call_models");
         // LlmNode n'est dans aucune liste : sans schéma il reste hors de toute politique, avec son
-        // schéma il passe sous call_models (backend_opening_tests, un_llm_node_d_outil_exige…).
+        // schéma il passe sous call_models (backend_opening_tests, a_tool_llm_node_needs_its_schema_and_call_models).
         assert!(!allowed_nodes(&avec).contains(&"LlmNode"), "LlmNode n'est permis par aucune liste de nœuds");
         validate_tool_policy("t", ["Route", "SplitSections"].map(|t| (t.to_string(), serde_json::Value::Null)), &ToolPolicy::default(), None)
             .expect("Route et SplitSections sont de la base");
