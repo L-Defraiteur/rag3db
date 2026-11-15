@@ -28,6 +28,8 @@ mosh luciepc -- bash -c "ssh -N -L 17970:127.0.0.1:7970 lucie-tablette & ~/.cach
 
   **À relire à ton prochain essai** (note du 15 nov., vers minuit) : archi a corrigé l'équipier. Désormais, `report` ou sa réponse porte le texte lui-même, et le texte d'un pas arrive dans la boîte. Le banc ne reproduisait pas ta séance (10/10 avec et sans le correctif) : le juge, c'est ton prochain essai dans le terminal, sur un hôte qui porte le correctif (il atterrit dans la nuit du 14 au 15). Demande-lui un titre, une liste à puces et un mot en gras : tu dois les voir rendus, et non plus « Présentation fournie au superviseur… ». Si le compte rendu revient à la place du contenu, le ticket de l'équipier se rouvre, avec ta séance.
 
+  **Rejoué le 15 nov. à 11 h 40**, par la session tty, sur l'hôte qui porte le correctif (binaire `26a091474`), avec la même demande qu'à 19 h 46. La boîte reçoit le contenu lui-même : un `report` qui porte `### Présentation`, « Voici trois choses que je sais faire : », et trois puces, dont une avec `**autonomie**`. Le terminal le rend comme il faut : le titre en gras dans l'accent, les puces en `•`, *autonomie* en gras. L'écran, sans ses couleurs, est dans `mesures/essai-reel-tmux-correctif-equipier.txt`. Ton propre essai reste le juge final.
+
 ## Les défauts vus à l'essai, corrigés au lot tty-9 (`05-les-defauts-de-l-essai.md`)
 
 - Sous tmux, ta demande s'est affichée **deux fois**, alors que la boîte de l'hôte n'en a qu'une : le terminal la reçoit par deux chemins.
