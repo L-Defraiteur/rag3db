@@ -1314,3 +1314,9 @@ d'abord (862 puis 1 622 instructions pour 40 et 80 fichiers, ~19 par fichier), v
 fois plus de fichiers) ; passe épinglée verte. En file derrière l'écrivain, au vert du banc et après sa mesure du temps de
 repassage (cible : au plus deux fois le parent). Arbre : le produit n'appelait pas migrer_vers_les_generations — une CLI
 `migration generations --base` en petit lot sur la pile d'ED. La transaction par paquet derrière la bascule.
+Arbre, 15 h 49 : la fenêtre de la bascule change — (1) il manquait la montée aux générations (`migrer_vers_les_generations` n'était
+appelée que par des tests) : lot `migration generations --base` (arbre-principal/migration-generations df983fd49, sur la pile
+d'ED), refus nommé si la base est tenue ou pas à versions, rouge en cours ; (2) le repassage se fait base ouverte (un « non
+indexé » d'un instant sur les File d'un paquet) : la fenêtre fermée = maintain, instantané, 1b, montée ; (3) chiffres réels :
+code-lourd 7 278 fichiers / ~42 min de repassage, code-principal 6 314 / ~37 min, dépôt ~45 min. Répétition vers 17 h 30 sur les
+instantanés de cette nuit (aucune base vivante fermée), script repetition-bascule.sh à luciepc.
