@@ -1424,3 +1424,7 @@ Embarquement, 16 h 34 : la sortie muette du 7879 — une panique de calcul (rés
 la carte reste empoisonné, les quatre fils meurent tour à tour, `servir` rend Ok et main sort par SUCCESS. Lot du 503 nommé :
 catch_unwind → 503 nommé ; après une panique, arrêt dit avec le code 70 (après avoir répondu aux requêtes en vol) ; plafond par
 texte en caractères (`max_chars_per_text`, défaut 12 000 ≈ 4 000 jetons, 413 nommé), (b) en jetons en ticket. Tranché (a).
+Hotfixs, 16 h 35 : le lot CI sur master à **fa15e5fa3** (13 commits dont 11 du lot, gmail, 0 attribution ; PR 2 fermée). Ménage des runs,
+avec l'autorisation de Lucie : 43724738336 annulé, les quatre du 11 novembre « completed » à l'API (zombies de la liste) ;
+**le run 43730682329 (a6d49b99b) est en cours — le premier run de master qui joue depuis le 14 à 15 h 27**. « À toi » à hotfixs
+pour la fenêtre de formatage (cherry-pick -n 644d1d8c5, commit gmail, bâti + un test par cible).
