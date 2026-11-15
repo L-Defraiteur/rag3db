@@ -1,6 +1,6 @@
 # Un cas known_red qui passe une fois par effet d'ordre rougit le juge
 
-- **État** : ouvert (15 novembre 2026, cœur c++, au mot de c7)
+- **État** : ouvert (15 novembre 2026, cœur c++, au mot de c7) — à G, dans sa file après ses quatre lots
 - **Famille** : moteur (le juge des tests du moteur)
 - **Gravité** : gêne (un lot vert se lit rouge ; sans le mot de c7, il ne pousse pas)
 - **Atteignable en service** : non
@@ -25,7 +25,15 @@ Un cas known_red qui passe une fois ne rougit pas le juge. Le juge le dit, comme
 ligne qu'après N passes vertes consécutives du cas joué seul. N et la forme de la ligne sont à
 écrire.
 
+## Ce que le juge ne peut pas faire seul (G)
+
+Le juge ne garde aucun état d'un tour à l'autre, et le banc complet ne dit rien d'un cas seul : il ne peut donc pas
+compter « N passes vertes consécutives seules ». Il faut un rejeu à part du cas seul, N fois
+(`--gtest_filter=<nom> --gtest_repeat=N`, ou N processus neufs si l'état du processus compte). Le juge, ou un script
+à côté, ne demande « corrigé : retirer la ligne » que si les N passes sont vertes. N est réglable, 3 par défaut. Le
+même défaut était aussi ouvert chez G (599239704) : ce ticket-ci les réunit, déplacé chez G qui porte le juge.
+
 ## Pour fermer
 
 La règle dans le juge et dans son témoin (`test_compare_known_red.sh`) : un faux banc où un cas
-connu rouge passe une fois rend vert, avec la ligne « intermittent ».
+connu rouge passe une fois rend vert, avec la ligne « intermittent » ; un cas vert N fois seul rend la demande de retrait ; un connu rouge resté rouge reste muet.
