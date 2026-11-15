@@ -1014,3 +1014,35 @@ fn une_locale_liee_a_un_appel_par_chemin_lit_son_type() {
     assert_eq!(cibles_vers(&cat, "aller_retour", "description"), vec![("GraphTool".to_string(), "type".to_string())], "unwrap()");
 }
 
+/// **Un retour qui nomme un paramètre de gabarit ne type pas la chaîne** : `let apres =
+/// self.with_backend(|b| b.prepared())?` rend le `R` de `with_backend<R>`, pas un type à lui ;
+/// `apres.recharger()` garde son lien par le nom vers la seule `recharger` du projet.
+#[test]
+#[ignore]
+fn un_retour_generique_ne_type_pas_la_chaine() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/hote.rs".to_string(), "pub struct Hote;\nimpl Hote {\n    fn with_backend<R>(&self, f: impl Fn(&u8) -> R) -> Result<R, String> { Ok(f(&0)) }\n    pub fn relecture(&self) -> Result<(), String> {\n        let apres = self.with_backend(|b| ailleurs::prepare(b))?;\n        apres.recharger();\n        Ok(())\n    }\n}\n".to_string()),
+        ("src/backend.rs".to_string(), "pub struct Prepared;\nimpl Prepared {\n    pub fn recharger(&self) {}\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(cibles_vers(&cat, "relecture", "recharger"), vec![("Prepared".to_string(), "nom".to_string())]);
+}
+
+/// **Un chemin de module ne prend pas le type d'une locale homonyme** : `facts::digest(&facts)`
+/// après `let facts = self.faits();` vise la fonction `digest` du module `facts`.
+#[test]
+#[ignore]
+fn un_chemin_de_module_ne_prend_pas_le_type_d_une_locale_homonyme() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/facts.rs".to_string(), "pub struct Faits;\npub fn digest(f: &Faits) -> u8 { 0 }\n".to_string()),
+        ("src/publication.rs".to_string(), "use crate::facts::{self, Faits};\npub struct Pub;\nimpl Pub {\n    fn faits(&self) -> Faits { Faits }\n    pub fn publier(&self) -> u8 {\n        let facts = self.faits();\n        facts::digest(&facts)\n    }\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    let marques: Vec<String> = cibles_vers(&cat, "publier", "digest").into_iter().map(|(_, m)| m).collect();
+    assert_eq!(marques.len(), 1, "facts::digest est relié : {marques:?}");
+}
+
