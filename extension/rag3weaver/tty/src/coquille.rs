@@ -26,8 +26,126 @@ pub struct Resultat {
 /// `colonnes` × `lignes` ; relaie ce qui arrive sur le descripteur `entree` vers
 /// elle, et sa sortie vers `ecran`, jusqu'à sa fin.
 #[cfg(unix)]
-pub fn lancer(_cmd: &str, _dossier: &Path, _colonnes: u16, _lignes: u16, _entree: i32, _ecran: &mut dyn Write) -> Result<Resultat, String> {
-    Err("pas encore".into())
+pub fn lancer(cmd: &str, dossier: &Path, colonnes: u16, lignes: u16, entree: i32, ecran: &mut dyn Write) -> Result<Resultat, String> {
+    use std::io::Read;
+    use std::os::unix::io::FromRawFd;
+    use std::os::unix::process::CommandExt;
+    let maitre = unsafe { pty::posix_openpt(pty::O_RDWR | pty::O_NOCTTY) };
+    if maitre < 0 || unsafe { pty::grantpt(maitre) } != 0 || unsafe { pty::unlockpt(maitre) } != 0 {
+        return Err(format!("le pseudo-terminal ne s'ouvre pas : {}", std::io::Error::last_os_error()));
+    }
+    let nom = unsafe { std::ffi::CStr::from_ptr(pty::ptsname(maitre)) }.to_string_lossy().into_owned();
+    let taille = pty::Taille { lignes, colonnes, x: 0, y: 0 };
+    unsafe { pty::ioctl(maitre, pty::TIOCSWINSZ, &taille as *const pty::Taille) };
+    let esclave = std::fs::OpenOptions::new().read(true).write(true).open(&nom).map_err(|e| format!("{nom} : {e}"))?;
+    let mut fils = unsafe {
+        std::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg(cmd)
+            .current_dir(dossier)
+            .stdin(esclave.try_clone().map_err(|e| e.to_string())?)
+            .stdout(esclave.try_clone().map_err(|e| e.to_string())?)
+            .stderr(esclave)
+            // Une session à elle, dont le pseudo-terminal est le terminal de contrôle :
+            // c'est lui que sudo ouvre pour lire le mot de passe.
+            .pre_exec(|| {
+                if pty::setsid() < 0 || pty::ioctl(0, pty::TIOCSCTTY, 0usize) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            })
+            .spawn()
+            .map_err(|e| format!("la commande ne part pas : {e}"))?
+    };
+    let mut m = unsafe { std::fs::File::from_raw_fd(maitre) };
+    let mut sortie = Vec::new();
+    let mut tampon = [0u8; 8192];
+    let mut code = None;
+    let mut fini = false;
+    loop {
+        let mut fds = [pty::PollFd { fd: entree, events: pty::POLLIN, revents: 0 }, pty::PollFd { fd: maitre, events: pty::POLLIN, revents: 0 }];
+        let n = unsafe { pty::poll(fds.as_mut_ptr(), 2, if fini { 50 } else { 100 }) };
+        if n > 0 && fds[1].revents & pty::POLLIN != 0 {
+            match m.read(&mut tampon) {
+                Ok(0) | Err(_) => {
+                    if fini {
+                        break;
+                    }
+                }
+                Ok(k) => {
+                    sortie.extend_from_slice(&tampon[..k]);
+                    let _ = ecran.write_all(&tampon[..k]);
+                    let _ = ecran.flush();
+                    continue;
+                }
+            }
+        }
+        if n > 0 && fds[0].revents & pty::POLLIN != 0 {
+            let k = unsafe { pty::read(entree, tampon.as_mut_ptr(), tampon.len()) };
+            if k > 0 {
+                let _ = m.write_all(&tampon[..k as usize]);
+            }
+        }
+        if fini && (n == 0 || fds[1].revents & (pty::POLLHUP | pty::POLLERR) != 0) {
+            break;
+        }
+        if !fini {
+            if let Some(statut) = fils.try_wait().map_err(|e| e.to_string())? {
+                code = statut.code();
+                fini = true;
+            }
+        }
+    }
+    Ok(Resultat { code, sortie })
+}
+
+/// Les appels de la libc : le pseudo-terminal, la session, l'attente.
+#[cfg(unix)]
+mod pty {
+    use std::os::raw::{c_char, c_int, c_short, c_ulong};
+
+    #[repr(C)]
+    pub struct Taille {
+        pub lignes: u16,
+        pub colonnes: u16,
+        pub x: u16,
+        pub y: u16,
+    }
+
+    #[repr(C)]
+    pub struct PollFd {
+        pub fd: c_int,
+        pub events: c_short,
+        pub revents: c_short,
+    }
+
+    pub const O_RDWR: c_int = 2;
+    #[cfg(target_os = "linux")]
+    pub const O_NOCTTY: c_int = 0o400;
+    #[cfg(not(target_os = "linux"))]
+    pub const O_NOCTTY: c_int = 0x20000;
+    #[cfg(target_os = "linux")]
+    pub const TIOCSWINSZ: c_ulong = 0x5414;
+    #[cfg(not(target_os = "linux"))]
+    pub const TIOCSWINSZ: c_ulong = 0x8008_7467;
+    #[cfg(target_os = "linux")]
+    pub const TIOCSCTTY: c_ulong = 0x540E;
+    #[cfg(not(target_os = "linux"))]
+    pub const TIOCSCTTY: c_ulong = 0x2000_7461;
+    pub const POLLIN: c_short = 0x1;
+    pub const POLLERR: c_short = 0x8;
+    pub const POLLHUP: c_short = 0x10;
+
+    extern "C" {
+        pub fn posix_openpt(flags: c_int) -> c_int;
+        pub fn grantpt(fd: c_int) -> c_int;
+        pub fn unlockpt(fd: c_int) -> c_int;
+        pub fn ptsname(fd: c_int) -> *mut c_char;
+        pub fn ioctl(fd: c_int, requete: c_ulong, ...) -> c_int;
+        pub fn setsid() -> c_int;
+        pub fn poll(fds: *mut PollFd, n: c_ulong, attente: c_int) -> c_int;
+        pub fn read(fd: c_int, tampon: *mut u8, n: usize) -> isize;
+    }
 }
 
 #[cfg(not(unix))]
@@ -38,8 +156,50 @@ pub fn lancer(_cmd: &str, _dossier: &Path, _colonnes: u16, _lignes: u16, _entree
 /// **La sortie pour l'équipier** : sans les séquences du terminal (couleurs,
 /// curseur, titres) ni les retours chariot, au plus `max` octets, son début et sa
 /// fin gardés quand elle est plus longue.
-pub fn nettoyer(_sortie: &[u8], _max: usize) -> String {
-    String::new()
+pub fn nettoyer(sortie: &[u8], max: usize) -> String {
+    let texte = String::from_utf8_lossy(sortie);
+    let mut out = String::new();
+    let mut c = texte.chars().peekable();
+    while let Some(x) = c.next() {
+        match x {
+            // CSI (ESC [ … lettre), OSC (ESC ] … BEL ou ESC \), et les autres ESC à un caractère.
+            '\x1b' => match c.next() {
+                Some('[') => {
+                    for y in c.by_ref() {
+                        if ('@'..='~').contains(&y) {
+                            break;
+                        }
+                    }
+                }
+                Some(']') => {
+                    while let Some(y) = c.next() {
+                        if y == '\x07' || (y == '\x1b' && c.peek() == Some(&'\\')) {
+                            if y == '\x1b' {
+                                c.next();
+                            }
+                            break;
+                        }
+                    }
+                }
+                _ => {}
+            },
+            '\r' | '\x07' => {}
+            autre => out.push(autre),
+        }
+    }
+    let out = out.trim_end().to_string();
+    if out.len() <= max {
+        return out;
+    }
+    let mut debut = max / 2;
+    while !out.is_char_boundary(debut) {
+        debut -= 1;
+    }
+    let mut fin = out.len() - max / 2;
+    while !out.is_char_boundary(fin) {
+        fin += 1;
+    }
+    format!("{}\n… ({} octets coupés) …\n{}", &out[..debut], fin - debut, &out[fin..])
 }
 
 /// La consigne qui part à l'équipier : ce que Lucie a lancé, où, et ce qu'en a dit la commande.
@@ -57,13 +217,17 @@ mod tests {
         fn close(fd: i32) -> i32;
     }
 
-    /// Un tube dont on écrit `entree` d'avance : le bout lu sert d'entrée.
-    fn tube(entree: &[u8]) -> i32 {
+    /// Un tube dont on écrit `entree` après `apres` millisecondes, comme une
+    /// frappe venue après l'invite : le bout lu sert d'entrée.
+    fn tube(entree: &[u8], apres: u64) -> i32 {
         let mut fds = [0i32; 2];
         assert_eq!(unsafe { pipe(fds.as_mut_ptr()) }, 0);
         let mut w = unsafe { <std::fs::File as std::os::unix::io::FromRawFd>::from_raw_fd(fds[1]) };
-        w.write_all(entree).unwrap();
-        drop(w);
+        let entree = entree.to_vec();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(apres));
+            w.write_all(&entree).unwrap();
+        });
         fds[0]
     }
 
@@ -74,7 +238,7 @@ mod tests {
         let d = std::env::temp_dir().join(format!("tty-coquille-{}", std::process::id()));
         std::fs::create_dir_all(&d).unwrap();
         let mut ecran = Vec::new();
-        let e = tube(b"");
+        let e = tube(b"", 0);
         let r = lancer("pwd; printf 'deux\nlignes\n'; exit 3", &d, 80, 24, e, &mut ecran).unwrap();
         unsafe { close(e) };
         let vu = String::from_utf8_lossy(&r.sortie);
@@ -91,7 +255,9 @@ mod tests {
     fn a_password_read_with_echo_off_never_reaches_the_kept_output() {
         let faux_sudo = "stty -echo; printf 'Mot de passe : '; read p; stty echo; echo; echo \"lu ${#p} caractères\"";
         let mut ecran = Vec::new();
-        let e = tube(b"s3cr3t-tres-long\n");
+        // La frappe vient après l'invite, quand l'écho est coupé (une frappe tapée
+        // d'avance, avant l'invite, serait renvoyée à l'écran, comme par tout terminal).
+        let e = tube(b"s3cr3t-tres-long\n", 500);
         let r = lancer(faux_sudo, Path::new("/"), 80, 24, e, &mut ecran).unwrap();
         unsafe { close(e) };
         let vu = String::from_utf8_lossy(&r.sortie);
