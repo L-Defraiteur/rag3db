@@ -484,8 +484,18 @@ void RelTable::addColumn(Transaction* transaction, TableAddColumnState& addColum
     if (localTable) {
         localTable->addColumn(addColumnState);
     }
-    for (auto& directedRelData : directedRelData) {
-        directedRelData->addColumn(addColumnState, pageAllocator);
+    // Tout ou rien entre les deux sens : refusé dans le second, l'ADD retire sa colonne du premier.
+    size_t numDone = 0;
+    try {
+        for (auto& directedRelData : directedRelData) {
+            directedRelData->addColumn(addColumnState, pageAllocator);
+            ++numDone;
+        }
+    } catch (...) {
+        for (size_t i = 0; i < numDone; ++i) {
+            directedRelData[i]->rollbackAddColumn(pageAllocator);
+        }
+        throw;
     }
     hasChanges = true;
     transaction->pushAddColumn(*this);

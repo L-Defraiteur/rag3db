@@ -654,7 +654,15 @@ void CSRNodeGroup::addColumn(TableAddColumnState& addColumnState, PageAllocator*
         persistentChunkGroup->addColumn(mm, addColumnState, enableCompression, pageAllocator,
             newColumnStats);
     }
-    NodeGroup::addColumn(addColumnState, pageAllocator, newColumnStats);
+    try {
+        NodeGroup::addColumn(addColumnState, pageAllocator, newColumnStats);
+    } catch (...) {
+        // Tout ou rien, comme NodeGroup::addColumn : le groupe persistant rend sa colonne.
+        if (persistentChunkGroup) {
+            persistentChunkGroup->removeLastColumn(pageAllocator);
+        }
+        throw;
+    }
 }
 
 void CSRNodeGroup::removeLastColumn(PageAllocator* pageAllocator) {

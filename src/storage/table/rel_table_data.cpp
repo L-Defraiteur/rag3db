@@ -218,7 +218,12 @@ void RelTableData::addColumn(TableAddColumnState& addColumnState, PageAllocator&
     auto& definition = addColumnState.propertyDefinition;
     columns.push_back(ColumnFactory::createColumn(definition.getName(), definition.getType().copy(),
         pageAllocator.getDataFH(), mm, shadowFile, enableCompression));
-    nodeGroups->addColumn(addColumnState, &pageAllocator);
+    try {
+        nodeGroups->addColumn(addColumnState, &pageAllocator);
+    } catch (...) {
+        columns.pop_back();
+        throw;
+    }
 }
 
 void RelTableData::rollbackAddColumn(PageAllocator& pageAllocator) {
