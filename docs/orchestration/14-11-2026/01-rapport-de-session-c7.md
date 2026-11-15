@@ -1145,3 +1145,111 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   mon accord pour publication une fois prêt »). Le numéro est sur main (dd04204 : neuf Cargo.toml, sept
   package.json, pyproject, CHANGELOG du 15 novembre, README) ; tag v4.3.8 à la CI verte, release.yml, registres
   vérifiés. Le lot de la maintenance par l'hôte passera de `rev` à "4.3.8" puis entrera en pile.
+- ED, 00 h 2x : le NULL typé STRING n'est pas un défaut du moteur (le lieur ne recaste qu'un paramètre ANY ;
+  c'est rag3weaver qui donne STRING au NULL nu, voulu par `sans_inconnu`) : la réouverture pose un NULL typé
+  INT64 (CypherValue::Typed), pas de ticket pour le cœur — ma lecture d'il y a dix minutes est retirée.
+  L'écrivain couvre remove_file et reingest_files, File suit la règle, générique par table ; témoins 7 à 9
+  joués rouges d'abord ; reste sync_source et le compte des recopies.
+- **G, 00 h 25 — binaire fac67a208 sur 373b5477b posé à l'hôte de luciepc** (md5 158a306a, 4 s sans hôte,
+  fils_du_moteur 24 = available_parallelism, code-lourd et code-principal ok) ; verdict d'avant la pose
+  36/36, 27/27, 14/14 sous MOTEUR_ANCIEN dit. **La fenêtre d'hotfixs est ouverte.** Le portable (4b43c3afc) se
+  pose après la fenêtre de luciepc verte, annoncé, puis la purge de code-rag3db-depot.
+- **00 h 3x — la fenêtre de luciepc commence** (hotfixs, sous poste lourd, à la première place libre) :
+  code-lourd puis code-principal, chacune — banc par l'hôte, fermeture qui tient jusqu'à 1 h 45 (raison dite),
+  instantané avant-fenetre-<base>-<date>, réparation des trois tables, relevé ancré après, purge et compact,
+  réouverture, banc après. Un pas rouge laisse la base fermée avec RETOUR.sh. Sessions prévenues (ED, banc,
+  recherche, arbre principal).
+- **Embarquement, 00 h 3x — le repli de l'aide des tests vert** (8f9c5ec92 : périphérique nommé seulement,
+  rouge nommé sans variable ; e2e_estimate sous les services avec `igpu:0` 5/5, le cas du ticket ; ticket
+  souhait pour un repli CPU sans Vulkan). **Fait du poste** : seat1 n'existe plus à luciepc, les trois cartes
+  sur seat0 ; card1 = l'Intel intégré sans écran, libre ; les écrans sur card0 et card2. G pose
+  `RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE=igpu:0` dans passe_epinglee.sh pour luciepc (un lot). En pile derrière
+  `cited`.
+- **Le cœur, 00 h 3x — la forme d'un seul côté reproduite, cause établie** : le point de faute
+  rel-commit-between-directions fait lever le COMMIT de A entre ses deux sens, B en file valide une relation
+  0 → 1 ; sur f41c0ba5b rouge 2/2 (la relation de B perdue par sa source, lisible par sa destination, rien
+  de A : la forme de code-lourd), sur master vert 3/3. Cause : l'annulation hors du verrou n'avait
+  d'enregistrement que pour le sens avant et le tronquait avec la relation de l'autre écrivain. Correctif déjà
+  dans 373b5477b. Lot deux-sens-sous-annulation 6fddb1f5c (crochet sans effet en service, deux témoins) :
+  derrière `cited`, C++ seul. Le crochet fabrique la base à un seul sens que G souhaitait.
+- **00 h 4x — un quatrième trou d'outillage trouvé par la pile** : un lot qui ferme un ticket posé après sa
+  base de pile laisse deux copies une minute sur master (archi ×2, embarquement) ; la garde doit retirer la
+  copie ouverte dans le même push (ticket pour G, derrière igpu:0). La chaîne est reposée jusqu'au repli
+  d'embarquement (03e89ca18) ; G pousse la base par passe au vert de ses deux preuves.
+- Codeparsers, 00 h 4x — correction : le chemin additif des champs déclarés pose déjà le défaut typé du
+  dialecte ('' texte, 0 entier, false booléen, rag3db et postgres) : **un seul mécanisme**, le même que
+  2a′-1 ; une base d'avant lit '' dès l'ouverture (témoin de compatibilité
+  `une_base_d_avant_s_ouvre_et_lit_les_colonnes_neuves_vides`, 63/63). Le ticket (a) tombe ; ma voie (b) de
+  00 h 2x reposait sur un NULL qui n'existe pas — le témoin demandé l'a montré.
+- **Archi, 00 h 4x — la file des écritures sous fermeture** (page 01 du 15-11) : un drapeau « écrit » dans le
+  schéma du nœud posé par sa fabrique ; file bornée en nombre et durée avec `until` pour horizon, le refus dit
+  la raison, l'heure et le rang ; rejeu dans l'ordre à /backend/open, chaque sort au journal ; persistance
+  dans un fichier à côté de l'état avec une borne d'âge ; le rejeu respecte la visibilité de la réception
+  (le rang w de la couche, à voir avec ED). Validé, rouges par e2e_demon_hote.
+- **96, 00 h 5x** : les deux corpus rejoués sur copie avec la trace (432 sections 23 h 35 → 0 h 29 ; 152 sections
+  0 h 29 → 0 h 48 ; étiquettes brutes candidate_N 292/85, create 110/61, none 29/5), banc a ses fichiers pour
+  Laya. Une section par corpus en erreur « réponse tronquée au plafond de 2 048 jetons » (ticket 8c5265139) :
+  petit lot, le plafond par `max_output_tokens` de la source de modèle (forme (a)), pas un 4 096 en dur. Un
+  RefType en base sans fichier sous genres/ sur la mémoire de Lucie, antérieur aux passes : ticket, rien ne se
+  touche sans Lucie. Prochain : les ForEachNode imbriqués, puis scinder et rejoindre.
+- **00 h 51 — code-lourd réparé et rouvert, au vert** (fenêtre 0 h 28 → 0 h 51) : INHERITS_FROM 658 arêtes
+  (636 en accord + 22 plausibles), QUERIES 20 093 (20 080 + 13), LOCKS 546 (541 + 5) ; contrôle des deux sens
+  égal, relevé ancré après à 0 d'un seul sens ; purge de 103 Scope orphelins (.fts 82 958 → 82 855 documents =
+  les Scope du graphe), compact 710,7 → 695,5 Mo ; banc par l'hôte identique avant et après (acquireLock 47,
+  FileSource 20). Instantané de retour avant-fenetre-code-lourd-20261115-0027. **code-principal fermé depuis
+  0 h 51**, réouverture vers 1 h 15.
+- **lucivy 4.3.8 publiée, 00 h 5x** : tag v4.3.8 sur dd04204, release.yml vert du premier coup, crates.io
+  (ld-lucivy, lucivy-core, sparse-vector, lucistore, luciole), npm (lucivy, lucivy-wasm), PyPI (lucivy). La
+  branche de la maintenance par l'hôte porte "4.3.8" (plus aucune ligne git dans le lock), passe complète
+  verte sous la révision ; dernière de la file du soir, base = la tête de codeparsers 8ef45a3af. Banc : le vrai
+  jeu de Laya (316 cas de mise au point, 198 de test) part sur CPU dès une place libre.
+- Archi, 00 h 5x : les trois rouges de la file des écritures joués (rangée puis rejouée ; survit au
+  redémarrage ; trop vieille refusée au rejeu). Décision : pas de drapeau « écrit » à part — une écriture pour
+  la file = un outil dont le graphe n'est pas `snapshot_safe` (le registre porte déjà ce fait, prouvé par le
+  test de L6) : un seul rédacteur. ED : une écriture rejouée prend le rang en attente courant de sa couche,
+  seul l'ordre compte (FIFO unique).
+- Codeparsers, 01 h 1x : go.work (ses `use` notés, ses `replace` suivis) et C/C++ (conanfile.txt/.py,
+  find_package, FetchContent_Declare) écrits, à bâtir après son push ; le tiret des ports vcpkg : table en
+  données tirée du registre microsoft/vcpkg (ports/<port>/usage) par un script livré, source et date en tête,
+  seulement les ports dont le dossier d'en-têtes diffère du nom ; jamais couper au tiret.
+- **01 h 11 — la fenêtre de luciepc est verte sur les deux bases** (hotfixs, tickets et page des sondes
+  3c4f8d499). code-principal (0 h 51 → 1 h 11) : QUERIES 20 210 (20 203 + 7), IMPLEMENTS 331 (315 + 16), LOCKS 436
+  (400 + 36), contrôle égal, relevé ancré à 0 ; purge de 102 Scope orphelins (.fts 66 016 → 65 914 = les Scope du
+  graphe), index 600,9 → 591,0 Mo ; banc 0 perdu (deux déplacements BM25 au banc large). Instantanés de retour
+  avant-fenetre-code-lourd-20261115-0027 et avant-fenetre-code-principal-20261115-0051. Reste
+  code-rag3db-depot au portable (9 701 Scope, 127 File orphelins) : G pose le binaire sur 7970, hotfixs suit s'il
+  veille, sinon demain matin.
+- Codeparsers, 01 h 1x : le registre vcpkg ne dit pas le dossier d'en-têtes d'un port (les `usage` donnent le
+  paquet CMake, nlohmann-json → nlohmann_json) : (c) un port garde son nom, ticket « source à trouver » ; (a′)
+  le rapprochement vcpkg ↔ find_package en ticket souhait. G pose le portable à 1 h 15 (droit d'exécution
+  rendu à instantanes.sh aux deux postes). Arbre principal : rapport et « Reprendre » à jour (9856a2ebc).
+- **ED, 01 h 1x — l'écrivain couvre tous les chemins** (cd3f1e978 : remove_file, reingest_files, File par
+  l'écrivain générique par table ; sync_source par paquets sans fin d'instantané ; `aretes_recopiees` sur la
+  ligne `_generation`, en mémoire depuis l'ouverture ; trois rouges de la lib entière corrigés — le retard des
+  fichiers lus, le profil sans étapes d'instantané, l'ingestion directe par l'écrivain ; témoins 1-5 et 7-11
+  10/10 rouges d'abord ; lib 1 974/0). Banc juge la parité et le compte des recopies ; les trois suites et
+  e2e_postgres partent maintenant ; place en pile derrière la file des écritures d'archi.
+
+## 01 h 1x — quarante-huit atterris ; la fenêtre de luciepc verte ; le portable se pose
+
+- **Depuis minuit** : les renommages Python, les trois de G (chaîne Rust, garde des sous-modules,
+  passe_epinglee.sh), les orphelins (recherche), l'équipier (archi), .NET + using C# + alias (codeparsers), la
+  base postgres par passe (G), `cited` (arbre), les deux sens sous annulation (le cœur). Tous « = », « pile
+  tenue », gmail, 0 attribution. **Reposés, en rejeu ou prêts** : le repli de l'aide (embarquement, « à toi »),
+  igpu:0 et garde-tickets (G), l'appartenance (codeparsers), la maintenance par l'hôte avec lucivy 4.3.8
+  (lucivy), la file des écritures (archi), l'écrivain de 2a′-2 (ED, suites en cours).
+- **La fenêtre de luciepc** (hotfixs, 0 h 27 → 1 h 11) : les six tables des deux bases d'accord (0 d'un seul
+  sens), 103 + 102 orphelins du plein texte purgés, bancs identiques ; instantanés de retour gardés. G pose
+  le binaire sur l'hôte du portable à 1 h 15 ; hotfixs purge code-rag3db-depot ensuite (9 701 Scope,
+  127 File).
+- **Trouvé cette nuit** : la cause établie des relations d'un seul côté (le cœur) ; seat1 n'existe plus à
+  luciepc, card1 = l'Intel sans écran (embarquement) ; le chemin additif pose déjà le défaut typé
+  (codeparsers) ; le point dur de 2a′-3 (l'uuid porte `_depuis`, à mesurer par ED) ; quatre trous
+  d'outillage corrigés ou en pile (garde du target, compte du retard, base postgres, copies de tickets).
+- **Mots de Lucie** : oui au tag 4.3.8 (publié). En attente : lavapipe (sudo).
+- **01 h 16 — binaire fac67a208 sur 373b5477b posé à l'hôte du portable** (20 s d'arrêt propre, cinq bases
+  rouvertes ok, services 7979/7980 répondent, fils_du_moteur 32). Les deux postes ont le même binaire avec la
+  fermeture qui tient. Hotfixs enchaîne la purge de code-rag3db-depot.
+- Recherche, 01 h 2x : le lot du BEGIN écrit (begin-erreur-d-origine : Phase::Rompu porte la cause d'origine et
+  a_rouvrir, une base à rouvrir ne recommence pas) ; rouge puis vert sous un lourd maintenant ; en pile à son
+  vert derrière l'écrivain d'ED.

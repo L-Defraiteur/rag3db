@@ -709,3 +709,101 @@ contrôle du worktree recopié compte 153 de retard réel, sans RETARD_MAX. G (b
 lib 2 435). Archi a le « à toi » à son vert (PILE_AVANT=0cf758890) ; puis codeparsers (PILE_AVANT=55679c2d6),
 G base par passe (sur 270b6284d), arbre `cited`, cœur, embarquement. La sonde d'ED par recherche sous `poste
 mesure` attend la pile vide.
+Le cœur, 00 h 3x : deux-sens-sous-annulation 6fddb1f5c (crochet rel-commit-between-directions + deux témoins ;
+rouge 2/2 sur f41c0ba5b, vert 3/3 sur master ; transaction_test entier en cours), derrière `cited`, devant le
+repli d'embarquement. Fin de file : archi → codeparsers ×2 → G base par passe → arbre `cited` → cœur →
+embarquement repli → G igpu:0 dans passe_epinglee → lucivy maintenance (au tag).
+Codeparsers, 00 h 3x : .NET + alias verts sur 270b6284d (check_features 8/8, lib 2 441/0, e2e_code 55/55,
+e2e_postgres 36/36) ; dernier pas prêt au « poussé » d'archi. Appartenance côté rag3weaver écrite selon (b) ;
+le genre `method` d'un autre fichier ne se réécrit pas hors de l'écrivain d'ED (ticket pour ED et archi).
+
+**00 h 34 — quarante-quatre atterris** : l'équipier rend le contenu demandé (archi, b1a21a176, 4/4 en « = » ;
+e2e_equipier d'abord sautée sans les identifiants Vertex, rejouée avec — un saut n'est pas vert ; copie du
+ticket de tty retirée dans la minute, check_tickets VERT 523). Codeparsers a le « à toi » (.NET + alias,
+PILE_AVANT=55679c2d6) ; puis G (base par passe), arbre (`cited`), cœur (deux sens), embarquement (repli),
+G (igpu:0), lucivy (maintenance, au tag).
+
+**00 h 35 — quarante-cinq atterris** : les manifestes .NET, les `using` C# et les alias de résolution
+(codeparsers, 75492be97a, 3/3 en « = », pointeur 7c2c5aa). G a le « à toi » à son vert (base par passe,
+PILE_AVANT=270b6284d) ; puis arbre (`cited`), cœur (deux sens), embarquement (repli), G (igpu:0), lucivy
+(maintenance, au tag), codeparsers (appartenance : parent_path, extends_type, 62/62).
+G, 00 h 39 : pg-base-par-passe-pile 7950c4789 sur 270b6284d, check_features 8/8 ; preuve rouge (deux
+e2e_postgres en parallèle sur master) puis verte (sur la tête de pile) en cours à luciepc. Arbre principal a sa
+base (7950c4789).
+Arbre principal, 00 h 4x : refs-cited-pile-2 25d888148 sur 7950c4789 ; sa page 02 retirée du lot (la base de
+pile ne porte pas le commit qui l'a créée : « supprimé dans HEAD » au rebase), sa correction poussée seule
+(5f3bc7dc6) ; le lot ne touche plus que nouveautes.md et la page 02 d'orchestration (c7 n'y écrit pas).
+Règle complétée : les docs d'une page restent dans le lot, sauf quand la base de pile n'a pas la page — à dire
+avant de pousser. Une branche refs-cited-pile poussée pendant un rebase en conflit reste en place sans servir.
+Le cœur, 00 h 4x : deux-sens-sous-annulation-pile c133ff976 sur 25d888148 (7 commits) ; sa file réordonnée au
+mot de c7 : le rejeu de la pile d'abord, le transaction_test sur l'ancienne tête ne sert plus, la base à un
+seul sens pour G après le push. Embarquement se pose sur c133ff976.
+Embarquement, 00 h 4x : repli-de-l-aide-pile 03e89ca18 sur c133ff976 (« = » témoins et code, « ! » docs : le
+ticket d'arbre n'est pas dans la base de pile) ; rejeu court à luciepc ; la copie ouverte du ticket à retirer
+dans la minute du push (troisième fois ce soir : un lot qui ferme un ticket posé après la base de pile).
+G, 00 h 4x : passe-ep-igpu 275ea1fe6 sur 03e89ca18 (igpu:0 posé dans la seule branche luciepc de
+passe_epinglee.sh, ôté au portable même si l'appelant le pose ; 20 vert, 2 ROUGE sur la base). Push au
+« poussé » d'embarquement, PILE_AVANT=03e89ca18, puis recopie au cache. Fin de file : G base par passe (en
+preuve) → arbre `cited` → cœur deux sens → embarquement repli → G igpu → lucivy maintenance (au tag) →
+codeparsers appartenance → G garde des tickets déplacés.
+Arbre principal, 00 h 4x : refs-cited-pile-2 25d888148 vert (check_features 8/8, taches 11/11, suivies 14/14) ;
+push au « poussé » de G, PILE_AVANT=7950c4789. Archi : le ticket de 96 (un backend fermé se rouvrait au
+premier appel) fermé par la fermeture qui tient (6ac4750fb) ; prochain lot : une écriture refusée sous
+fermeture se range en file bornée et se rejoue à l'ouverture.
+G, 00 h 5x : garde-tickets 06bffb23c sur 275ea1fe6 (au dernier pas, les fichiers créés sous
+docs/tickets/closed/ dont un homonyme exact vit encore sous docs/*/tickets/ sont retirés par un commit de docs
+dans le même push, dit au journal ; rouge sur la garde d'avant, 34 vert). PILE_AVANT=275ea1fe6, derrière igpu.
+Lucivy (maintenance) et codeparsers (appartenance) se poseront sur 06bffb23c.
+Codeparsers, 00 h 5x : l'appartenance verte (94a580b59 sur master : check_features 8/8, lib 2 443/0, e2e_code
+55/55, e2e_postgres 36/36) ; passe devant lucivy (tag non publié), repose sur 06bffb23c ; lucivy se posera sur
+sa tête. Fin de file : G base par passe → arbre → cœur → embarquement → G igpu → G garde-tickets →
+codeparsers appartenance → lucivy maintenance (au tag).
+G, 00 h 55 : la preuve rouge de la base par passe ne valait pas (target-G/pile vide à luciepc, les deux
+run_e2e.sh partis sur un target neuf : le second refusé « target non vide sans provenance », le premier a
+bâti seul) ; corrigée (bâti du binaire e2e avant les deux passes). Décision : push au vert de la paire verte —
+le rouge réel est aux tickets d'ED (7/36) et de recherche (9/36) avec leurs traces —, la paire rouge rejouée
+ensuite pour la page.
+Codeparsers, 00 h 5x : appartenance-des-methodes-3 8ef45a3af sur 06bffb23c (pointeur 7c2c5aa → 5885e13),
+rejeu court en file ; lucivy se posera sur 8ef45a3af.
+
+**00 h 57 — quarante-six atterris** : la base postgres par passe (G, 552299bec, « = » : chaque run_e2e.sh crée
+`rag3weaver_test_<poste>_<pid>` sur 5433, l'efface au trap, ménage des orphelines ; paire verte 39/39 ×2 en
+parallèle, aucune base restante ; le rouge d'abord est celui d'ED 7/36 et de recherche 9/36, cités au résumé).
+Arbre principal a le « à toi » (`cited`, PILE_AVANT=7950c4789) ; puis cœur (PILE_AVANT=25d888148),
+embarquement (c133ff976), G igpu (03e89ca18), G garde-tickets (275ea1fe6), codeparsers (06bffb23c), lucivy
+(8ef45a3af).
+
+**00 h 58 — quarante-sept atterris** : le défaut `cited` d'une source `refs:` (arbre principal, 4eb274033, 3/3
+en « = », nouveautés des suivies comprises). Le cœur a le « à toi » à son vert (deux sens sous annulation,
+PILE_AVANT=25d888148) ; puis embarquement (c133ff976), G igpu (03e89ca18), G garde-tickets (275ea1fe6),
+codeparsers (06bffb23c), lucivy (8ef45a3af).
+Archi, 01 h 1x : la file des écritures sous fermeture verte (file-des-ecritures 7bdeb8541 : écriture = appel
+que reads_only ne prouve pas en lecture ; refus rangé avec rang, raison, heures ; fermeture et file sur disque ;
+rejeu FIFO à /backend/open, âge 24 h, borne 1 000, /etat write_queue ; e2e_demon_hote 17/0, e2e_lectures 27/0,
+lib 2 441/0). Place : derrière lucivy, base = sa tête.
+
+**01 h 14 — quarante-huit atterris** : les deux sens sous annulation (le cœur, e8472e053, 7/7 en « = » : le
+point de faute rel-commit-between-directions avec un délai, les deux témoins RefusedCommitRelDirections ;
+transaction_test 378 vert, C++ seul). Embarquement a le « à toi » (repli de l'aide, PILE_AVANT=c133ff976) ;
+puis G igpu (03e89ca18), G garde-tickets (275ea1fe6), codeparsers (06bffb23c), lucivy (8ef45a3af), archi file
+des écritures (sur lucivy), ED écrivain (sur archi).
+Lucivy, 01 h 1x : lucivy-maintenance-hote-2 c3b2e4dba sur 8ef45a3af (fts_maintenance 2/2, check_features 8/8,
+e2e_demon_hote 19/19 ; 4.3.8 dans Cargo.toml et le lock) ; archi a sa base (c3b2e4dba).
+
+**01 h 15 — quarante-neuf atterris** : le repli de l'aide des tests (embarquement, 8cba8638e, 4/4 en « = »,
+docs comprises ; copie ouverte du ticket retirée 27 s après en f315a1563, check_tickets VERT 528). G a le
+« à toi » pour igpu (PILE_AVANT=03e89ca18) puis garde-tickets (PILE_AVANT=275ea1fe6) ; puis codeparsers
+(06bffb23c), lucivy (8ef45a3af), archi (c3b2e4dba), ED (sur archi). L'hôte 7970 reposé à 1 h 15 ;
+code-rag3db-depot fermé par hotfixs de 1 h 18 à ~1 h 30 (purge).
+
+**01 h 18 — cinquante et un atterris** : igpu:0 dans passe_epinglee.sh (G, cf3fdd6a6) et la garde qui retire
+la copie ouverte d'un ticket fermé (G, 2fb7fdcec) ; les deux scripts recopiés au cache des deux postes
+(passe_epinglee.sh be664721bbceaff7, push_garde.sh cb7331214b34d9c3, témoins 20 et 34 verts). Codeparsers a le
+« à toi » (appartenance, PILE_AVANT=06bffb23c) ; puis lucivy (8ef45a3af), archi (c3b2e4dba), ED (sur archi),
+recherche BEGIN (sur ED).
+
+**01 h 19 — cinquante-deux atterris** : l'appartenance d'une méthode hors du bloc de son type (codeparsers,
+f257b531b, « = » : parent_path, extends_type, le genre method au rendez-vous). Lucivy a le « à toi »
+(maintenance par l'hôte avec lucivy 4.3.8, PILE_AVANT=8ef45a3af) ; puis archi (c3b2e4dba), ED (sur archi),
+recherche BEGIN (sur ED). Rappel écrit : le « à toi » ne se relaie pas (G l'a relayé à codeparsers ; rien de
+cassé, un seul mot d'une seule bouche).
