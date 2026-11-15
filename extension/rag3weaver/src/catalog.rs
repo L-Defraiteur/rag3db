@@ -10481,8 +10481,8 @@ fn read_threads() -> u64 {
                                     texte("base", ""),
                                     texte("recette", ""),
                                     // La génération 0 d'une couche est sa racine : aucune parente (2b′).
-                                    QueryParam::new("parente_couche", CypherValue::Null),
-                                    QueryParam::new("parente_rang", CypherValue::Null),
+                                    texte("parente_couche", ""),
+                                    QueryParam::new("parente_rang", CypherValue::Int(-1)),
                                     texte("tombstones", "[]"),
                                     QueryParam::new("publiee_le", CypherValue::Int(maintenant)),
                                 ],
@@ -10526,9 +10526,20 @@ fn read_threads() -> u64 {
             rang_publie: rang,
             tout_visible,
             ensembles: std::sync::Arc::new(crate::generations::EnsemblesPoses::default()),
+            parentes: Vec::new(),
+            colonnes_de_fichier: Default::default(),
         });
         self.publish_read_view();
         Ok(())
+    }
+
+    /// **Les colonnes de fichier** des tables à générations (2b′) : où un tombstone de fichier
+    /// se lit. Sans elles, une pile ne masque que par uuid.
+    pub fn dire_les_colonnes_de_fichier(&mut self, colonnes: &[(&str, &str)]) {
+        if let Some(v) = self.generations.as_mut() {
+            v.colonnes_de_fichier = colonnes.iter().map(|(t, c)| (t.to_string(), c.to_string())).collect();
+        }
+        self.publish_read_view();
     }
 
     /// **Une ligne invisible existe désormais** (d'une autre couche, retirée ou à venir) : les
@@ -11253,7 +11264,7 @@ impl Catalog {
 
     // ── Private helpers ────────────────────────────────────────────────
 
-    fn check_reopen(&self) -> Result<(), CatalogError> {
+    pub(crate) fn check_reopen(&self) -> Result<(), CatalogError> {
         match self.must_reopen() {
             Some(reason) => Err(CatalogError::MustReopen(reason)),
             None => Ok(()),
