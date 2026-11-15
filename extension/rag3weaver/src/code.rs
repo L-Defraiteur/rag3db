@@ -6036,6 +6036,39 @@ mod tests_de_l_ecrivain {
         assert_eq!(appelants(&cat, "f"), vec!["a".to_string()], "a changé à son tour appelle le f neuf ; les CONSUMES bruts : {brutes:?}");
     }
 
+    /// **Témoin 19 : un repassage paquet par paquet garde les CONSUMES** (banc, le juge étendu sur la base
+    /// du dépôt : 2 533 CONSUMES perdus entre deux scopes inchangés, vers un nom unique, la MENTIONS et le
+    /// DEFINES présents ; `examples/c/main.c` → `src/c_api/connection.cpp`). Le même repassage de la version,
+    /// en un paquet puis un fichier par paquet, en Rust et en C.
+    #[test]
+    fn un_repassage_paquet_par_paquet_garde_les_consumes() {
+        for par_paquet in [2_048usize, 1] {
+            let conn = crate::Rag3dbConnection::in_memory().unwrap();
+            let mut cat = Catalog::new(Box::new(conn), Box::new(crate::embedder::HashEmbedder::new(8)), crate::CatalogConfig {
+                allow_mock_embedder: true, embedding_dim: 8, ..Default::default()
+            });
+            cat.initialize().unwrap();
+            register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+            let src = Snapshot::new("ancre", [
+                ("a.rs".to_string(), A.to_string()),
+                ("b.rs".to_string(), F1.to_string()),
+                ("examples/c/main.c".to_string(), "int main(void) {\n    return connexion_ouvrir() + connexion_fermer();\n}\n".to_string()),
+                ("src/c_api/connection.cpp".to_string(), "int connexion_ouvrir() {\n    return 1;\n}\nint connexion_fermer() {\n    return 2;\n}\n".to_string()),
+            ]);
+            crate::code_sync::sync_source(&mut cat, &src, &Default::default(), &mut |_| {}).expect("la première synchronisation");
+            let n = cat.publier_la_generation("c1", 0).expect("publier");
+            let avant = cat.au_rang(n, |c| aretes_visibles_par_etiquette(c));
+            assert!(appelants(&cat, "connexion_ouvrir") == vec!["main".to_string()], "la base du témoin : main appelle connexion_ouvrir ({avant:?})");
+            cat.version_de_l_analyse = format!("{}-autre", cat.version_de_l_analyse);
+            let options = crate::code_sync::SourceSyncOptions { batch_files: par_paquet, ..Default::default() };
+            crate::code_sync::sync_source(&mut cat, &src, &options, &mut |_| {}).expect("le repassage");
+            assert_eq!(appelants(&cat, "connexion_ouvrir"), vec!["main".to_string()], "main appelle toujours connexion_ouvrir ({par_paquet} fichiers par paquet)");
+            assert_eq!(appelants(&cat, "f"), vec!["a".to_string()], "a appelle toujours f ({par_paquet} fichiers par paquet)");
+            let m = cat.publier_la_generation("c2", 0).expect("publier");
+            assert_eq!(cat.au_rang(m, |c| aretes_visibles_par_etiquette(c)), avant, "le même graphe ({par_paquet} fichiers par paquet)");
+        }
+    }
+
     /// Les arêtes visibles d'un côté sans leur miroir de l'autre : `CONSUMED_BY (b → a)` sans
     /// `CONSUMES (a → b)`, puis l'inverse, les deux bouts sous la visibilité.
     fn miroirs_manquants(cat: &Catalog) -> (Vec<(String, String)>, Vec<(String, String)>) {
