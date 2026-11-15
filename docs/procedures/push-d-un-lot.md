@@ -57,6 +57,9 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
 `tools/poste/test_passe_epinglee.sh`. Les postes l'appellent par sa copie `~/.cache/rag3weaver-build/passe_epinglee.sh`,
 recopiée depuis master au mot de c7 (sha256 avant et après, l'ancienne gardée), comme `push_garde.sh`. Une copie du cache
 qui diffère du dépôt se corrige dans le dépôt, puis se recopie : jamais à la main dans le cache.
+**La recopie elle-même** (15 nov. 2026, relevé de recherche) : `install -m 755 <copie de master> <cible>`. `git show` ne
+porte pas le mode, et un `cp` par-dessus réécrit l'inode qu'une passe en cours lit peut-être encore. L'ancienne se garde
+par `cp -p` en `.avant-<lot>`. Ensuite, relire le sha256 et le mode, puis jouer le témoin du script contre la copie posée.
 
 ### Portée commune des validations Linux
 
