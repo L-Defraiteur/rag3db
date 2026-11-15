@@ -1,6 +1,6 @@
 # Après un CHECKPOINT, les écrivains d'une table sont refusés « Schema changed, retry: » sans fin
 
-- **État** : ouvert (15 novembre 2026, cœur c++) — vu une fois en 27 tours, non reproduit depuis
+- **État** : ouvert (15 novembre 2026, cœur c++) — vu une fois en 30 tours, non reproduit depuis
 - **Famille** : moteur
 - **Gravité** : blocage (les écritures d'une table et ses ALTER refusés jusqu'à la réouverture)
 - **Atteignable en service** : à établir. Vu sous vingt écrivains et un pool plein. Les hôtes de
@@ -40,8 +40,8 @@ property b ».
 - Quatre suites courtes : un ADD refusé par le point de faute `add-column-between-chunked-groups` ;
   un CREATE_VECTOR_INDEX ; un ADD refusé et un CREATE REL TABLE ; un ADD réussi. Chacune est suivie
   d'un CHECKPOINT puis d'écritures : tout passe.
-- 17 tours de `DdlEveryMinute` sous un binaire sonde, hors dépôt, où le contrôle dit sur stderr
-  la tête et l'instantané quand il refuse : aucun tour bloqué. Dans les 9 derniers, la sonde
+- 20 tours de `DdlEveryMinute` sous un binaire sonde, hors dépôt, où le contrôle dit sur stderr
+  la tête et l'instantané quand il refuse : aucun tour bloqué. Dans les 12 derniers, la sonde
   n'écrit que les têtes non validées : aucune vue. Journaux :
   `~/.cache/rag3db-moteur-notes/sonde-diag/`.
 

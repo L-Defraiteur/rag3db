@@ -1,6 +1,6 @@
 # DdlEveryMinute meurt d'un SIGSEGV en relisant une colonne ajoutée sous écrivains (master)
 
-- **État** : ouvert (15 novembre 2026, cœur c++)
+- **État** : corrigé sur master `2c11a7995f` (15 novembre 2026, cœur c++) : le témoin `AddColumnRefusedMidway` rouge puis vert, `DdlEveryMinute` ×10 sans SIGSEGV (4 sur 12 avant)
 - **Famille** : moteur
 - **Gravité** : plantage (SIGSEGV du processus entier)
 - **Atteignable en service** : à établir
@@ -96,3 +96,12 @@ Branche `colonne-ajoutee-se-relit` : point de faute `e444ee491`, témoin `db7eed
 
 Un témoin qui reproduit la lecture courte hors du scénario, puis le correctif. DdlEveryMinute,
 dix tours sans SIGSEGV de cette pile.
+
+## Fermé (15 novembre 2026)
+
+Sur master `2c11a7995f` (de `d59a56e9e` à `2c11a7995`, voie des suites C++ transférables). Rejeu
+de la tête `68769674f` : le témoin 2/2, `transaction_test` entier (387), `e2e_test` (1 867 verts,
+`DropNodeTableReclaim` seul, sous ticket). `DdlEveryMinute` ×10 sur `ee598e074` (même moteur) :
+aucun SIGSEGV. Les tours qui s'arrêtent encore le font sur le pool plein (ticket du pool qui
+sature), et un tour sur un refus sans fin (ticket
+`2026-11-15-apres-un-checkpoint-les-ecrivains-sont-refuses-schema-changed-sans-fin.md`).
