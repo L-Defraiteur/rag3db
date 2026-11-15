@@ -57,6 +57,15 @@ fn connaitre(agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, filtre: &Mutex<O
     }
 }
 
+/// Comment la vue a fini (tty-13).
+#[derive(Debug)]
+pub enum Fin {
+    Quitter,
+    /// `/tache` ou `/depot` : la vue repart sur une autre tâche ou un autre
+    /// dépôt, avec le journal et le thème de la séance.
+    Changer { depot: Option<String>, tache: Option<String>, journal: Option<Journal>, theme: crate::theme::Theme },
+}
+
 /// Pourquoi la vue s'est arrêtée.
 #[derive(Debug)]
 pub enum Echec {
@@ -71,7 +80,7 @@ pub enum Echec {
 /// `journal` reçoit en texte brut ce qui part dans l'historique ; `mosh` dit que
 /// cet historique ne se relira pas, et la zone vivante donne alors la commande
 /// qui relit le journal (lot tty-7).
-pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Option<u64>, theme: crate::theme::Theme, mut journal: Option<Journal>, mosh: bool) -> Result<(), Echec> {
+pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Option<u64>, theme: crate::theme::Theme, mut journal: Option<Journal>, mosh: bool) -> Result<Fin, Echec> {
     // La vue d'abord : si elle ne démarre pas, rien n'est parti à l'hôte (ni la
     // demande, ni un abonnement), et `--plain` prend la suite sans doublon.
     let mut terminal = match ratatui::try_init_with_options(TerminalOptions { viewport: Viewport::Inline(HAUTEUR) }) {
@@ -184,6 +193,10 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     }
     vue.graine = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1) | 1;
     let rendu = boucle(&mut terminal, &mut vue, &rx, &agent, &ep, &tache, &mut journal);
+    let rendu = rendu.map(|f| match f {
+        Fin::Changer { depot, tache, .. } => Fin::Changer { depot, tache, journal: journal.take(), theme: vue.theme.clone() },
+        autre => autre,
+    });
     arret.store(true, Ordering::SeqCst);
     // La zone vivante reste à l'écran telle quelle ; le curseur passe dessous.
     let _ = terminal.draw(|f| vue.dessiner(f, f.area()));
@@ -197,7 +210,7 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     rendu.map_err(Echec::Autre)
 }
 
-fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Receiver<Msg>, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, journal: &mut Option<Journal>) -> Result<(), String> {
+fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Receiver<Msg>, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, journal: &mut Option<Journal>) -> Result<Fin, String> {
     let mut sale = true;
     let mut derniere = Instant::now() - IMAGE;
     let mut image_vue = u64::MAX;
@@ -257,8 +270,21 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
                 _ => None,
             };
             match action {
-                Some(Action::Quitter) => return Ok(()),
-                Some(Action::Commande(_)) | Some(Action::Completer(_)) => {}
+                Some(Action::Quitter) => return Ok(Fin::Quitter),
+                Some(Action::Commande(c)) => {
+                    if let Some(fin) = executer(c, terminal, vue, agent, ep, tache, journal)? {
+                        return Ok(fin);
+                    }
+                    sale = true;
+                }
+                Some(Action::Completer(debut)) => {
+                    let sources = sources_de(&debut, agent, ep, tache);
+                    match crate::commandes::completer(&debut, &sources) {
+                        Some(c) => vue.appliquer_completion(c),
+                        None => vue.propositions = Some("rien à compléter".into()),
+                    }
+                    sale = true;
+                }
                 Some(Action::Ouvrir) => {
                     let colorer = |texte: &str, langue: &str| if langue.is_empty() { None } else { client::surligner(agent, ep, texte, langue) };
                     visionner(vue, &colorer)?;
@@ -290,6 +316,181 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
             }
         }
     }
+}
+
+/// L'identifiant du backend de la tâche (son worktree), d'après `/ide/etat`.
+fn backend_de_tache(agent: &ureq::Agent, ep: &Endpoint, tache: &Tache) -> Option<String> {
+    let etat = client::lire_brut(agent, ep, "/ide/etat").ok()?;
+    let backends = etat["backends"].as_array().cloned().unwrap_or_default();
+    backends.iter().find(|b| b["tache"]["nom"].as_str() == Some(tache.task.as_str()) && b["tache"]["parent"].as_str() == Some(tache.depot.id.as_str())).and_then(|b| b["id"].as_str().map(str::to_string))
+}
+
+/// Le dossier où tourne une commande `!` : le worktree de la tâche s'il est sur
+/// cette machine (un ancêtre du manifeste de la tâche qui porte `arbre/`), sinon
+/// le dossier courant.
+pub fn dossier_de_commande(manifeste: Option<&str>) -> std::path::PathBuf {
+    let courant = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let Some(m) = manifeste else { return courant };
+    std::path::Path::new(m).ancestors().map(|a| a.join("arbre")).find(|a| a.is_dir()).unwrap_or(courant)
+}
+
+/// Ce que Tab peut proposer pour `debut`.
+fn sources_de(debut: &str, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache) -> crate::commandes::Sources {
+    let mut s = crate::commandes::Sources { themes: crate::theme::THEMES.iter().map(|(n, _)| n.to_string()).collect(), ..Default::default() };
+    if debut.starts_with("/tache") || debut.starts_with("/depot") {
+        if let Ok(etat) = client::lire_brut(agent, ep, "/ide/etat") {
+            for b in etat["backends"].as_array().cloned().unwrap_or_default() {
+                match b["tache"]["nom"].as_str() {
+                    Some(t) if b["tache"]["parent"].as_str() == Some(tache.depot.id.as_str()) => s.taches.push(t.to_string()),
+                    None => s.depots.extend(b["repo"].as_str().map(str::to_string)),
+                    _ => {}
+                }
+            }
+        }
+    }
+    if let Some(reste) = debut.strip_prefix('!') {
+        match crate::commandes::mot_de_fichier(debut) {
+            None if !reste.contains(char::is_whitespace) => s.executables = executables(reste),
+            Some(mot) => s.fichiers = fichiers(&dossier_de_commande(manifeste_de_tache(agent, ep, tache).as_deref()), mot),
+            None => {}
+        }
+    }
+    s
+}
+
+/// Le manifeste du worktree de la tâche, d'après `/ide/teammate`.
+fn manifeste_de_tache(agent: &ureq::Agent, ep: &Endpoint, tache: &Tache) -> Option<String> {
+    let chemin = format!("/ide/teammate?backend={}&task={}", client::encoder(&tache.depot.id), client::encoder(&tache.task));
+    client::lire(agent, ep, &chemin).ok().and_then(|v| v["backend"].as_str().map(str::to_string))
+}
+
+/// Les exécutables du `PATH` qui commencent par `prefixe` (au plus 200).
+fn executables(prefixe: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for d in std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()) {
+        let Ok(entrees) = std::fs::read_dir(&d) else { continue };
+        for e in entrees.flatten() {
+            let nom = e.file_name().to_string_lossy().into_owned();
+            if nom.starts_with(prefixe) && e.metadata().is_ok_and(|m| m.is_file()) {
+                out.push(nom);
+            }
+        }
+        if out.len() > 200 {
+            break;
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// Les chemins sous `dossier` qui commencent par `mot` (un dossier finit par `/`).
+fn fichiers(dossier: &std::path::Path, mot: &str) -> Vec<String> {
+    let (partie, prefixe) = match mot.rfind('/') {
+        Some(i) => (&mot[..=i], &mot[i + 1..]),
+        None => ("", mot),
+    };
+    let base = if partie.starts_with('/') { std::path::PathBuf::from(partie) } else if let Some(r) = partie.strip_prefix("~/") { std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(r)).unwrap_or_default() } else { dossier.join(partie) };
+    let Ok(entrees) = std::fs::read_dir(&base) else { return Vec::new() };
+    let mut out: Vec<String> = entrees
+        .flatten()
+        .filter_map(|e| {
+            let nom = e.file_name().to_string_lossy().into_owned();
+            (nom.starts_with(prefixe) && (prefixe.starts_with('.') || !nom.starts_with('.'))).then(|| format!("{partie}{nom}{}", if e.metadata().is_ok_and(|m| m.is_dir()) { "/" } else { "" }))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// **Une commande du terminal** : rend une fin quand elle quitte ou change de cible.
+fn executer(c: crate::commandes::Commande, terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, journal: &mut Option<Journal>) -> Result<Option<Fin>, String> {
+    use crate::commandes::{Commande, COMMANDES};
+    match c {
+        Commande::Aide => {
+            vue.note("les commandes (Tab les complète) :");
+            for (n, aide) in COMMANDES {
+                vue.note(&format!("  /{n} — {aide}"));
+            }
+            vue.note("  !<commande> — la lance ici ; sa sortie part à l'équipier");
+            vue.note("  //… — envoie un texte qui commence par /");
+            vue.note("les touches : Entrée envoie, Maj- ou Alt-Entrée va à la ligne, ↑ ↓ l'historique, Ctrl-O un appel d'outil, o / n un accord, Échap ou Ctrl-G arrête, Ctrl-C vide puis quitte");
+        }
+        Commande::Quitter => return Ok(Some(Fin::Quitter)),
+        Commande::Arreter => {
+            match client::poster(agent, ep, "/ide/teammate/mailbox", &json!({ "backend": tache.depot.id, "task": tache.task, "kind": "stop", "text": "" })) {
+                Ok(_) => vue.note("arrêt demandé"),
+                Err(e) => vue.note(&format!("l'arrêt est refusé : {e}")),
+            }
+        }
+        Commande::Theme(None) => vue.note(&format!("thèmes : {} (actuel : {})", crate::theme::THEMES.iter().map(|(n, _)| *n).collect::<Vec<_>>().join(", "), vue.theme.nom)),
+        Commande::Theme(Some(n)) => match crate::theme::Theme::par_nom(&n) {
+            Ok(t) => {
+                vue.theme = t;
+                vue.note(&format!("thème : {n}"));
+            }
+            Err(e) => vue.note(&e),
+        },
+        Commande::Tache(None) | Commande::Depot(None) => vue.note("donne un nom (Tab complète) : /tache <nom>, /depot <nom>"),
+        Commande::Tache(Some(t)) => return Ok(Some(Fin::Changer { depot: None, tache: Some(t), journal: None, theme: vue.theme.clone() })),
+        Commande::Depot(Some(d)) => return Ok(Some(Fin::Changer { depot: Some(d), tache: None, journal: None, theme: vue.theme.clone() })),
+        Commande::Journal => match journal {
+            Some(j) => vue.note(&format!("la séance s'écrit dans {} : {}", j.chemin().display(), j.relecture())),
+            None => vue.note("aucun journal pour cette séance : relancer avec --journal <fichier>"),
+        },
+        Commande::Effacer => {
+            use ratatui::crossterm::{cursor::MoveTo, terminal::{Clear, ClearType}};
+            let hauteur = terminal.get_frame().area().height;
+            ratatui::crossterm::execute!(std::io::stdout(), Clear(ClearType::All), MoveTo(0, 0)).map_err(|e| e.to_string())?;
+            *terminal = ratatui::Terminal::with_options(ratatui::backend::CrosstermBackend::new(std::io::stdout()), TerminalOptions { viewport: Viewport::Inline(hauteur) }).map_err(|e| e.to_string())?;
+        }
+        Commande::EffacerHistorique => match crate::historique::chemin().map(|h| crate::historique::effacer(&h)) {
+            Some(Ok(())) => {
+                vue.reprendre_historique(Vec::new());
+                vue.note("l'historique des envois est effacé");
+            }
+            Some(Err(e)) => vue.note(&e),
+            None => vue.note("aucun dossier d'état : pas d'historique gardé"),
+        },
+        Commande::Contexte => match backend_de_tache(agent, ep, tache).map(|b| client::lire(agent, ep, &format!("/ide/chat?backend={}", client::encoder(&b)))) {
+            Some(Ok(v)) => vue.note(&contexte_dit(&v["context"])),
+            Some(Err(e)) => vue.note(&format!("le contexte ne se lit pas : {e}")),
+            None => vue.note("la tâche n'a pas encore de worktree : pas de contexte"),
+        },
+        Commande::Shell(cmd) => vue.note(&format!("!{cmd} : pas encore lancé")),
+        Commande::Inconnue(n) => vue.note(&format!("commande inconnue : /{n} — /aide les liste")),
+    }
+    Ok(None)
+}
+
+/// « contexte : 12 345 / 1 048 576 jetons (1,2 %) — historique 60 %, outils 25 % ».
+pub fn contexte_dit(c: &Value) -> String {
+    let milliers = |n: u64| {
+        let s = n.to_string();
+        let mut out = String::new();
+        for (i, ch) in s.chars().enumerate() {
+            if i > 0 && (s.len() - i) % 3 == 0 {
+                out.push('\u{202f}');
+            }
+            out.push(ch);
+        }
+        out
+    };
+    let Some(used) = c["used"].as_u64() else { return "le contexte n'est pas encore connu : aucun appel au modèle".into() };
+    let mut dit = match c["max"].as_u64().filter(|m| *m > 0) {
+        Some(m) => format!("contexte : {} / {} jetons ({:.1} %)", milliers(used), milliers(m), used as f64 * 100.0 / m as f64).replace('.', ","),
+        None => format!("contexte : {} jetons (fenêtre du modèle inconnue)", milliers(used)),
+    };
+    if let Some(parts) = c["parts"].as_object() {
+        let total: f64 = parts.values().filter_map(Value::as_f64).sum();
+        if total > 0.0 {
+            let mut p: Vec<(&String, f64)> = parts.iter().filter_map(|(k, v)| v.as_f64().map(|x| (k, x))).collect();
+            p.sort_by(|a, b| b.1.total_cmp(&a.1));
+            let t: Vec<String> = p.iter().map(|(k, x)| format!("{k} {:.0} %", x * 100.0 / total)).collect();
+            dit.push_str(&format!(" — {}", t.join(", ")));
+        }
+    }
+    dit
 }
 
 /// Ajoute un envoi à l'historique gardé ; une erreur ne coupe pas la séance.
@@ -379,6 +580,7 @@ pub fn touche_de(k: KeyEvent) -> Option<Touche> {
         KeyCode::Home => Some(Touche::Debut),
         KeyCode::End => Some(Touche::Fin),
         KeyCode::Delete => Some(Touche::Suppr),
+        KeyCode::Tab => Some(Touche::Tab),
         KeyCode::Up => Some(Touche::Haut),
         KeyCode::PageUp => Some(Touche::PageHaut),
         KeyCode::PageDown => Some(Touche::PageBas),
@@ -537,6 +739,7 @@ mod tests {
             (k(KeyCode::Enter, rien), Some(Touche::Entree)),
             // AltGr d'un clavier français arrive comme Ctrl+Alt sous Windows : c'est un caractère.
             (k(KeyCode::Char('o'), ctrl), Some(Touche::CtrlO)),
+            (k(KeyCode::Tab, rien), Some(Touche::Tab)),
             (k(KeyCode::PageUp, rien), Some(Touche::PageHaut)),
             (k(KeyCode::PageDown, rien), Some(Touche::PageBas)),
             (k(KeyCode::Char('@'), ctrl | alt), Some(Touche::Car('@'))),
@@ -544,6 +747,31 @@ mod tests {
         ];
         let faux: Vec<_> = attendus.iter().enumerate().filter(|(_, (vu, attendu))| vu != attendu).map(|(i, (vu, attendu))| format!("#{i} : {vu:?} au lieu de {attendu:?}")).collect();
         assert!(faux.is_empty(), "{faux:#?}");
+    }
+
+    /// `/context` dit le remplissage du contexte du modèle, en jetons et en
+    /// pour cent, et ce qui pèse, du plus lourd au plus léger.
+    #[test]
+    fn the_context_says_its_fill_and_what_weighs() {
+        let c = json!({ "used": 12345, "max": 1048576, "parts": { "outils": 0.25, "historique": 0.6, "instructions": 0.15 } });
+        assert_eq!(contexte_dit(&c), "contexte : 12\u{202f}345 / 1\u{202f}048\u{202f}576 jetons (1,2 %) — historique 60 %, outils 25 %, instructions 15 %");
+        assert_eq!(contexte_dit(&json!({ "used": 900, "max": null })), "contexte : 900 jetons (fenêtre du modèle inconnue)");
+        assert_eq!(contexte_dit(&json!({})), "le contexte n'est pas encore connu : aucun appel au modèle");
+    }
+
+    /// Une commande `!` tourne dans le worktree de la tâche s'il est sur cette
+    /// machine (un ancêtre du manifeste porte `arbre/`), sinon dans le dossier courant.
+    #[test]
+    fn a_bang_command_runs_in_the_task_worktree_when_it_is_here() {
+        let d = std::env::temp_dir().join(format!("tty-cwd-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("tache/arbre")).unwrap();
+        std::fs::create_dir_all(d.join("tache/declarations/backends/code")).unwrap();
+        let m = d.join("tache/declarations/backends/code/x.json");
+        assert_eq!(dossier_de_commande(Some(m.to_str().unwrap())), d.join("tache/arbre"));
+        assert_eq!(dossier_de_commande(Some("/nulle/part/x.json")), std::env::current_dir().unwrap());
+        assert_eq!(dossier_de_commande(None), std::env::current_dir().unwrap());
+        std::fs::remove_dir_all(&d).unwrap();
     }
 
     /// Le journal reçoit, en texte brut, chaque ligne envoyée dans l'historique,
