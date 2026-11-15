@@ -1163,3 +1163,15 @@ Banc, 14 h 52 : **l'écrivain d'ED (A) est VERT** (d087e02c7 contre e95a1b8c6 ; 
 parité propre 30/30 au bit près avant et après l'index, usages verts ; base migrée : 7 écarts sans réponse changée, ex aequo
 du parent). Repasser le lot sur une base d'avant = 10 × le parent (~45 min au dépôt) : chiffre pour la bascule. ED repose
 (1) sur master, place après lucivy. Embarquement peut jouer son vrai jeu sur card2 (créneau avec le banc). N puis F 50 k.
+ED, 14 h 53 : le repassage d'une base d'avant par l'écrivain coûte 10 × le parent (2 656 s contre 254 s ; grain du fichier contre
+réécriture sur place) : première synchronisation de chaque base de Lucie après l'atterrissage, puis à chaque montée de
+REGLES_DE_L_ANALYSE. Ticket ouvert. Tranché **(a)** : l'écrivain atterrit tel quel ; l'état dit le rattrapage long quand il
+joue ; nouveautés avec le chiffre ; le grain du paquet = lot suivant de l'écrivain, parité rejouée par le banc.
+Arbre, 14 h 55 : la fenêtre de la bascule (1e1a7edae) : par base maintain → instantané → 1b → repassage → vérification ; dépôt ~1 h 30,
+code-lourd ~45 min, code-principal ~35 min (extrapolés) ; la question des créneaux et de la semaine de garde transmise à Lucie.
+2b′ : rouges 4/4 (5f64d1aeb), le vert en cours.
+ED, 14 h 55 : **l'écrivain (1) retenu** — défaut vu dans les relevés du banc : après repassage, DEFINED_IN va aux File fermés (73 335)
+et presque pas aux neufs (542) ; un scope inchangé ne mène plus à son fichier visible ; la parité ne le voit pas (search_code
+et usages n'y passent pas). Témoin 13 rouge d'abord (chaque Scope visible a un DEFINED_IN vers un File visible), correctif,
+rejeu. La parité du banc s'élargit : outline, fichier d'un scope, parent_path, compte des arêtes par étiquette vers le visible.
+Extrapolation : 0,35 s par fichier, vecteurs non recalculés ; code-lourd 45 à 50 min.
