@@ -198,7 +198,8 @@ Every imported library carries a provenance: `builtin`, `dependency`, `project` 
 from data files in codeparsers (`data/imports/<language>.toml`, each naming its
 source, version and date). Dependencies come from the repository's manifests —
 `Cargo.toml`/`Cargo.lock`, `package.json`, `pyproject.toml`, `requirements*.txt`,
-`vcpkg.json`, `go.mod`, `*.csproj`, `packages.config`, `Directory.Packages.props` — and each
+`vcpkg.json`, `go.mod`, `go.work`, `*.csproj`, `packages.config`, `Directory.Packages.props`,
+`conanfile.txt`/`conanfile.py`, `CMakeLists.txt` (`find_package`, `FetchContent_Declare`) — and each
 manifest only speaks for its own language: a
 name declared in `package.json` does not make a Python or Rust import a dependency.
 Go module paths keep their case, and `go.mod` `replace` directives are followed
