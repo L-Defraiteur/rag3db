@@ -52,8 +52,10 @@ calls, steps done, the end of a step and the host's own words scroll on the mute
 zone instead, replaced as they come; Ctrl-O and the journal keep them. `--etapes`
 (`RAG3WEAVER_TTY_ETAPES=1`, or `/etapes` during the session) writes them all to the history.
 
-An approval request is live state: it is said on the status line, not written to the history.
-`o` or `n`, with an empty input, answers it; the answer, from the terminal or from the IDE, leaves
+An approval request is live state: it is said on the status line, not written to the history,
+and still said once the teammate's step has ended. It shows two buttons, `[ Oui ]` chosen in
+advance and `Non`: ← → change the choice (the chosen one in reverse video), Enter validates it,
+and `o` or `n` answer at once, with an empty input; the answer, from the terminal or from the IDE, leaves
 one line, `› accordé : <command>` or `› refusé : <command>`. A declarations proposal of the main
 repository (the `declarations` stream) waits the same way after the mailbox: `o` applies it, `n`
 rejects it (`POST /ide/propositions/appliquer`, `/rejeter`).
