@@ -1340,7 +1340,13 @@ fn synchroniser_par_generations(
         buffer_pool: catalog.conn().buffer_pool().map(crate::connection::describe_buffer_pool),
         ..Default::default()
     };
-    let mut avancement = SourceSyncProgress { files_total: retenus.len() + partis.len(), ..Default::default() };
+    // Les fichiers déjà indexés dont la version de l'analyse n'est pas la courante : ils repassent tous,
+    // et l'avancement le dit (page 06, § 13 ; la condition de c7 à l'atterrissage).
+    let repasses_pour_l_analyse = retenus
+        .iter()
+        .filter(|p| empreintes.get(&crate::code_tools::indexed_name(source, p).1).is_some_and(|(_, a)| *a != version))
+        .count();
+    let mut avancement = SourceSyncProgress { files_total: retenus.len() + partis.len(), repasses_pour_l_analyse, ..Default::default() };
     let par_paquet = catalog.file_batch_size().unwrap_or(options.batch_files).max(1);
     let nombre_de_paquets = retenus.chunks(par_paquet).len();
     for (rang_du_paquet, paquet) in retenus.chunks(par_paquet).enumerate() {
