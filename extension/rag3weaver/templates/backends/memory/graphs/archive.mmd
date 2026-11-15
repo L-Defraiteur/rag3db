@@ -30,7 +30,7 @@ graph LR
     sourcer["RhaiNode(script_id=archive_params, inputs='titre,contenu,chemin,origine,jour', titre=$titre, contenu=$contenu, chemin=$chemin, origine=$origine, jour=$jour)"]
     genre -->|report:value| params
     params -->|result:text| split
-    rapport["RhaiNode(script='input')"]
+    rapport["RhaiNode(script_id=archive_rapport)"]
     decide -->|report:value| rapport
     decide -->|report:value| sourcer
     sourcer -->|result:record| source
