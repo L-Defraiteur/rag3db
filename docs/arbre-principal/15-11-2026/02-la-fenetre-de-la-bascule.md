@@ -78,6 +78,23 @@ La répétition s'est jouée à luciepc, sur des copies des instantanés de la n
   4. une dernière répétition sur copie ;
   5. la bascule.
 
+## La dernière répétition, sur l'écrivain corrigé (15 novembre, 20 h 46 → 22 h 28)
+
+Sur l'écrivain d'ED 794b14232, qui porte le correctif du miroir 5ed5d1fc9, avec `migration generations --base`
+par-dessus (binaire a57557040). Copies neuves des mêmes instantanés, réparées comme les bases vivantes. Le juge
+exige désormais CONSUMES = CONSUMED_BY sur les lignes visibles.
+
+| pas | code-lourd | code-principal |
+|---|---|---|
+| 1b | 649 s | 575 s |
+| montée aux générations | 1 s | 0 s |
+| repassage, vecteurs compris | 3 632 s | 2 657 s |
+| miroir CONSUMES / CONSUMED_BY | **0 / 0** | **0 / 0** |
+| banc de recherche d'avant retrouvé après | VERT | VERT |
+
+Plus rien, côté répétition, ne retient la bascule. Elle attend l'écrivain et la montée sur master, puis une pose
+qui les porte.
+
 ## La politique (Lucie dit oui, c7 la fixe, 15 novembre)
 
 Lucie : « mes bases sont là pour ça » ; elle laisse la politique à c7.
@@ -110,7 +127,7 @@ Lucie : « mes bases sont là pour ça » ; elle laisse la politique à c7.
 
 ## Ce qui attend encore
 
-- le correctif du miroir d'ED (5ed5d1fc9), vert au banc ;
+- ~~le correctif du miroir d'ED~~ : fait (794b14232), répété VERT le 15 novembre à 22 h 28 ;
 - l'écrivain et `migration generations --base` sur master, en pile, puis une pose qui les porte ;
 - la dernière répétition sur copie, puis la bascule ;
 - le ticket « une recherche à versions prend des Gio » fermé.
