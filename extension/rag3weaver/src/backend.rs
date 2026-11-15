@@ -2613,10 +2613,17 @@ impl PreparedBackend {
         if let Some(source) = self.manifest.models.get(&crate::model_source::Capability::Llm) {
             cat.set_llm(crate::model_source::connect_llm(source)?.0);
         }
+        // **Sans le fournisseur compilé, le backend s'ouvre quand même** (décision de c7, 15 novembre 2026) :
+        // comme un backend sans service d'embarquement s'ouvre en plein texte seul. L'avertissement le dit,
+        // et c'est le tour de chat qui refuse ; un refus à l'ouverture ne vaut que pour un manifeste mal écrit.
         #[cfg(not(feature = "openai-llm"))]
-        if self.manifest.models.contains_key(&crate::model_source::Capability::Llm) {
-            return Err("models.llm est déclaré, mais ce bâti n'a pas la feature `openai-llm` : le modèle ne peut pas se joindre".into());
-        }
+        let avertissement_du_modele = self
+            .manifest
+            .models
+            .get(&crate::model_source::Capability::Llm)
+            .map(|source| crate::model_source::modele_de_langage_sans_sa_feature(crate::model_source::Modeles::nom(source)));
+        #[cfg(feature = "openai-llm")]
+        let avertissement_du_modele: Option<String> = None;
         let veut_le_creux = self.entities.values().any(|config| config.signals.sparse())
             || self
                 .manifest
@@ -2778,6 +2785,7 @@ impl PreparedBackend {
             llm,
             avertissement_sans_service,
             avertissement_du_creux,
+            avertissement_du_modele,
             embarqueur_a_retenter,
             prepared: std::sync::RwLock::new(Arc::new(self)),
             version: std::sync::atomic::AtomicU64::new(0),
@@ -3462,6 +3470,9 @@ pub struct Backend {
     /// Le creux déclaré pour des outils seuls, pas joint à l'ouverture : ils
     /// se replient, et la phrase le redit comme l'avertissement d'au-dessus.
     avertissement_du_creux: Option<String>,
+    /// Le modèle de langage déclaré dont le fournisseur n'est pas compilé dans ce binaire : le backend
+    /// s'ouvre, le tour de chat refuse, et la phrase le dit.
+    avertissement_du_modele: Option<String>,
     /// **Le service était déclaré mais pas joint à l'ouverture** : il se
     /// retente (au plus une fois par intervalle), et l'avertissement dit le
     /// dernier essai. Ticket du 11 octobre 2026, « un service injoignable à
@@ -3494,7 +3505,7 @@ impl Backend {
     /// tout ce qui est déclaré est servi.
     pub fn avertissements(&self) -> Vec<String> {
         let Some(retente) = &self.embarqueur_a_retenter else {
-            return self.avertissement_sans_service.iter().chain(&self.avertissement_du_creux).cloned().collect();
+            return self.avertissement_sans_service.iter().chain(&self.avertissement_du_creux).chain(&self.avertissement_du_modele).cloned().collect();
         };
         // L'état dit ce qui est vrai maintenant : chaque lecture des
         // avertissements retente (au plus une fois par intervalle).
@@ -3509,6 +3520,7 @@ impl Backend {
             format!("{} — {}", PreparedBackend::AVERTISSEMENT_SANS_SERVICE, r.raison)
         }];
         dits.extend(self.avertissement_du_creux.iter().cloned());
+        dits.extend(self.avertissement_du_modele.iter().cloned());
         dits
     }
     /// **Le service d'embarquement manquant à l'ouverture répond-il
@@ -6599,6 +6611,7 @@ mod tests {
             llm: None,
             avertissement_sans_service: None,
             avertissement_du_creux: None,
+            avertissement_du_modele: None,
             embarqueur_a_retenter: None,
             prepared: std::sync::RwLock::new(Arc::new(prepared)),
             version: std::sync::atomic::AtomicU64::new(0),
@@ -6919,6 +6932,7 @@ mod tests {
             llm: None,
             avertissement_sans_service: None,
             avertissement_du_creux: None,
+            avertissement_du_modele: None,
             embarqueur_a_retenter: None,
             prepared: std::sync::RwLock::new(Arc::new(prepared)),
             version: std::sync::atomic::AtomicU64::new(0),

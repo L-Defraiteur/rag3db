@@ -72,8 +72,7 @@ pub(super) fn default_modele_nomme() -> ModeleNomme {
         }
         #[cfg(not(feature = "openai-llm"))]
         {
-            let _ = source;
-            Err("cet hôte est bâti sans la feature `openai-llm` : le chat est éteint".to_string())
+            Err(crate::model_source::modele_de_langage_sans_sa_feature(crate::model_source::Modeles::nom(source)))
         }
     })
 }
@@ -132,8 +131,11 @@ pub(super) fn default_chat_model() -> ChatModel {
         }
         #[cfg(not(feature = "openai-llm"))]
         {
-            let _ = prepared;
-            Err("cet hôte est bâti sans la feature `openai-llm` : le chat est éteint".to_string())
+            // Le tour de chat refuse, avec la cause que l'état dit déjà (le backend s'est ouvert).
+            match prepared.manifest.models.get(&crate::model_source::Capability::Llm) {
+                Some(source) => Err(crate::model_source::modele_de_langage_sans_sa_feature(crate::model_source::Modeles::nom(source))),
+                None => Err("cet hôte est bâti sans la feature `openai-llm` : le chat est éteint".to_string()),
+            }
         }
     })
 }
