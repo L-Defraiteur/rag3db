@@ -58,6 +58,10 @@ pub struct Tache {
     /// déclaré) : la boîte le dit.
     #[serde(default)]
     pub git_init_fait: bool,
+    /// **Le modèle de langage choisi pour la tâche** (`/model`, lot tty-14) : un `name` de
+    /// `models.llm` ; absent, la tâche suit le défaut de son manifeste.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modele: Option<String>,
 }
 
 /// **Le workspace d'une tâche** (marche 3) : la racine du principal est
@@ -696,6 +700,7 @@ impl DaemonHost {
             declarations_hors_depot,
             sans_depot,
             git_init_fait,
+            modele: None,
         };
         // **La tâche devient une couche** (liaison branche → couche, décision de Lucie du
         // 13 novembre : « tout ce que touche l'agent, ça reste indexé » ; généralisée par les suivies,

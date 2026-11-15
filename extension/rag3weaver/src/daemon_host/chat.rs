@@ -40,12 +40,39 @@ const LIGNES_MONTREES_PAR_READ_SCOPE: usize = usize::MAX;
 /// (page 07-novembre-2026-everything-declarative/01, § 1).
 pub type ChatModel = Arc<dyn Fn(&crate::backend::PreparedBackend) -> Result<Arc<dyn crate::llm::Llm>, String> + Send + Sync>;
 
+/// **La liste des modèles de langage déclarés** (`/model`) : chacun avec son `name`, son `model`, la
+/// manière d'y accéder (`provider`, `protocol`), le défaut et celui de la tâche (`current`) marqués.
+pub(super) fn liste_des_modeles(modeles: &crate::model_source::Modeles, choix: Option<&str>) -> Value {
+    use crate::model_source::Modeles;
+    let tous = modeles.modeles_de_langage();
+    let defaut = tous.iter().find(|s| s.default).or(tous.first()).map(|s| Modeles::nom(s).to_string());
+    let courant = choix.map(str::to_string).or(defaut.clone());
+    let liste: Vec<Value> = tous
+        .iter()
+        .map(|s| {
+            let n = Modeles::nom(s);
+            json!({ "name": n, "model": s.model, "provider": s.provider, "protocol": s.protocol, "default": defaut.as_deref() == Some(n), "current": courant.as_deref() == Some(n) })
+        })
+        .collect();
+    json!({ "models": liste, "current": courant, "default": defaut })
+}
+
 /// **Un modèle de langage déclaré, connecté** (lot tty-14) : celui qu'une tâche a choisi par son nom.
 pub type ModeleNomme = Arc<dyn Fn(&crate::model_source::ModelSource) -> Result<Arc<dyn crate::llm::Llm>, String> + Send + Sync>;
 
 /// Le modèle nommé, connecté par sa déclaration.
 pub(super) fn default_modele_nomme() -> ModeleNomme {
-    Arc::new(|_source: &crate::model_source::ModelSource| Err("pas encore".to_string()))
+    Arc::new(|source: &crate::model_source::ModelSource| -> Result<Arc<dyn crate::llm::Llm>, String> {
+        #[cfg(feature = "openai-llm")]
+        {
+            crate::model_source::connect_llm(source).map(|(llm, _)| llm)
+        }
+        #[cfg(not(feature = "openai-llm"))]
+        {
+            let _ = source;
+            Err("cet hôte est bâti sans la feature `openai-llm` : le chat est éteint".to_string())
+        }
+    })
 }
 
 /// La session d'un backend, et si un tour est en cours.
@@ -163,13 +190,41 @@ impl DaemonHost {
     }
 
     /// Les modèles de langage que déclare le manifeste d'une tâche, le défaut et le sien marqués.
-    pub fn modeles_de_tache(&self, _parent: &str, _nom: &str) -> Result<Value, String> {
-        Err("pas encore".into())
+    pub fn modeles_de_tache(&self, parent: &str, nom: &str) -> Result<Value, String> {
+        let (t, modeles) = self.modeles_declares(parent, nom)?;
+        Ok(liste_des_modeles(&modeles, t.modele.as_deref()))
+    }
+
+    /// La tâche ouverte, et les modèles que déclare son manifeste.
+    fn modeles_declares(&self, parent: &str, nom: &str) -> Result<(super::taches::Tache, crate::model_source::Modeles), String> {
+        let t = self.tache(parent, nom).ok_or_else(|| format!("la tâche « {nom} » de {parent} n'est pas ouverte"))?;
+        let hosted = self.hosted(&t.manifest)?;
+        let modeles = self.with_backend(&hosted, |b| b.prepared().manifest.models.clone())?;
+        Ok((t, modeles))
+    }
+
+    /// **Le modèle de langage du chat d'un backend** : celui qu'a choisi sa tâche, s'il est une tâche
+    /// qui en a choisi un (lot tty-14), sinon le modèle par défaut.
+    fn llm_du_chat(&self, manifest: &Path, prepared: &crate::backend::PreparedBackend) -> Result<Arc<dyn crate::llm::Llm>, String> {
+        let choix = self.taches.lock().unwrap_or_else(|p| p.into_inner()).get(manifest).and_then(|t| t.modele.clone());
+        match choix {
+            Some(nom) => {
+                let source = prepared.manifest.models.modele_de_langage(&nom)?.clone();
+                (self.modele_nomme)(&source)
+            }
+            None => (self.chat_model)(prepared),
+        }
     }
 
     /// Choisit le modèle d'une tâche par son nom ; un nom inconnu se refuse en nommant la liste.
-    pub fn choisir_le_modele(&self, _parent: &str, _nom: &str, _modele: &str) -> Result<Value, String> {
-        Err("pas encore".into())
+    pub fn choisir_le_modele(&self, parent: &str, nom: &str, modele: &str) -> Result<Value, String> {
+        let (t, modeles) = self.modeles_declares(parent, nom)?;
+        modeles.modele_de_langage(modele)?;
+        if let Some(gardee) = self.taches.lock().unwrap_or_else(|p| p.into_inner()).get_mut(&t.manifest) {
+            gardee.modele = Some(modele.to_string());
+        }
+        self.ecrire_le_registre()?;
+        Ok(liste_des_modeles(&modeles, Some(modele)))
     }
 
     fn chat_path(&self, backend_id: &str) -> PathBuf {
@@ -255,7 +310,7 @@ impl DaemonHost {
     /// sessions orphelines.
     pub fn chat_state(&self, backend_id: &str) -> Result<Value, String> {
         let hosted = self.hote_par_id(backend_id)?;
-        let llm = self.with_backend(&hosted, |b| (self.chat_model)(&b.prepared()).map(|llm| (llm.name().to_string(), llm.context_len())))?;
+        let llm = self.with_backend(&hosted, |b| self.llm_du_chat(&hosted.manifest, &b.prepared()).map(|llm| (llm.name().to_string(), llm.context_len())))?;
         let modele = llm.as_ref().map(|(nom, _)| nom.clone()).map_err(Clone::clone);
         let chats = self.chats.lock().unwrap_or_else(|p| p.into_inner());
         let (fil, en_cours, dernier) = match chats.get(backend_id) {
@@ -610,7 +665,7 @@ impl DaemonHost {
         arrete_par: Arc<Mutex<Option<String>>>,
         step: Option<&super::teammate::Step>,
     ) -> Result<Value, String> {
-        let llm = (self.chat_model)(&tour.prepared).map_err(|why| format!("le chat est éteint : {why}"))?;
+        let llm = self.llm_du_chat(manifest, &tour.prepared).map_err(|why| format!("le chat est éteint : {why}"))?;
         let dans_une_tache = tour.dans_une_tache;
         let mut prompt = system_prompt(tour.mode, dans_une_tache);
         // **La consigne déclarée du chat** (`chat_instructions`) : celle de l'atelier dit

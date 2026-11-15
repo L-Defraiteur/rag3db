@@ -24,6 +24,8 @@
 //! | `POST /ide/teammate/mailbox` | écrire à l'équipier `{backend, task, kind, item?, text, from?, to?, reply_to?, approved?, expects?}` (`expects` : `report` ou `approval`, sur une `request`) : une `request` ouvre la tâche et le lance, un `stop` arrête le pas |
 //! | `GET /ide/teammate/pending?for=<clé>` | ce qui attend la clé dans toutes les boîtes, en lecture pure : `{for, items: [{id, task, parent, kind, item?, text, at}]}` |
 //! | `POST /ide/teammate/seen` | `{for, ids}` : un compte rendu, une fin, une livraison sortent de `pending` pour la clé |
+//! | `GET /ide/teammate/models?backend=<id>&task=<nom>` | les modèles de langage que déclare le manifeste d'une tâche : `{models: [{name, model, provider, protocol, default, current}], current, default}` |
+//! | `POST /ide/teammate/model` | `{backend, task, name}` : la tâche emploie ce modèle déclaré, gardé avec elle ; un nom inconnu est refusé en nommant la liste |
 //! | `GET /ide/teammate/list?supervisor=<clé>` | les équipiers de ce superviseur : `{supervisor, teammates: [{task, parent, state, last_kind, at}]}` |
 //! | `GET /ide/recherches?backend=<id>&qui=&limite=&avant=` | mes recherches : les appels journalisés des outils de recherche (IDE et agents), du plus récent, avec leurs clics |
 //! | `POST /ide/recherches/clic` | un clic `{backend, run, uuid, rang}` sur un résultat d'une recherche : rangé dans son run, ou refusé en disant pourquoi |
@@ -848,6 +850,28 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
             // lecture pure, un rejeu ou une sonde ne consomment rien.
             let who = param("for").unwrap_or_default();
             let v = if who.is_empty() { json!({ "ok": false, "error": "for manque : la clé du destinataire" }) } else { json!({ "ok": true, "result": host.teammate_pending(&who) }) };
+            let _ = request.respond(json_(200, &v));
+        }
+        ("GET", "/ide/teammate/models") => {
+            // **Les modèles d'une tâche** (`/model`, lot tty-14) : ceux que déclare son manifeste,
+            // le défaut et celui de la tâche marqués.
+            let v = match host.modeles_de_tache(&param("backend").unwrap_or_default(), &param("task").unwrap_or_default()) {
+                Ok(v) => json!({ "ok": true, "result": v }),
+                Err(e) => json!({ "ok": false, "error": e }),
+            };
+            let _ = request.respond(json_(200, &v));
+        }
+        ("POST", "/ide/teammate/model") => {
+            // **Choisir le modèle d'une tâche** : `{backend, task, name}` ; un nom inconnu se refuse en
+            // nommant les modèles déclarés.
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
+                Ok(c) => match host.choisir_le_modele(c["backend"].as_str().unwrap_or_default(), c["task"].as_str().unwrap_or_default(), c["name"].as_str().unwrap_or_default()) {
+                    Ok(v) => json!({ "ok": true, "result": v }),
+                    Err(e) => json!({ "ok": false, "error": e }),
+                },
+            };
             let _ = request.respond(json_(200, &v));
         }
         ("GET", "/ide/teammate/list") => {
