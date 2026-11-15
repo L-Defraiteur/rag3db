@@ -674,8 +674,12 @@ pub const MAX_CHARS_VARIABLE: &str = "RAG3WEAVER_EMBED_MAX_CHARS";
 /// défaut ; un entier positif, lui ; autre chose, un refus nommé au démarrage
 /// (un réglage mal écrit ne retombe pas en silence sur le défaut).
 pub fn max_chars_depuis(valeur: Option<&str>) -> Result<usize, String> {
-    let _ = valeur;
-    Ok(MAX_CHARS_PAR_TEXTE)
+    match valeur.map(str::trim).filter(|v| !v.is_empty()) {
+        None => Ok(MAX_CHARS_PAR_TEXTE),
+        Some(v) => v.parse::<usize>().ok().filter(|n| *n > 0).ok_or_else(|| {
+            format!("{MAX_CHARS_VARIABLE}={v} : un entier positif de caractères attendu (défaut {MAX_CHARS_PAR_TEXTE})")
+        }),
+    }
 }
 
 #[derive(Deserialize)]
