@@ -31,7 +31,7 @@ pub struct ChatConfig {
     /// manifeste de backend (`crate::model_source::ModelSource`). Le chat
     /// lit `models.llm`.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
-    pub models: std::collections::BTreeMap<crate::model_source::Capability, crate::model_source::ModelSource>,
+    pub models: crate::model_source::Modeles,
     /// An independently running JSON-lines backend host, not a shell command.
     #[serde(default)]
     pub backend_command: Vec<String>,
