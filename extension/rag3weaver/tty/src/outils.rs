@@ -339,6 +339,7 @@ mod tests {
         assert_eq!(chaine_json(r#"{"result":"coupé au mil"#, "result").as_deref(), Some("coupé au mil"));
         assert_eq!(chaine_json(r#"{"result":"fin\"#, "result").as_deref(), Some("fin"), "un échappement coupé tombe");
         assert_eq!(chaine_json(r#"{"autre":"x"}"#, "result"), None);
+        assert_eq!(chaine_json(r#"{"result" :  "avec des espaces"}"#, "result").as_deref(), Some("avec des espaces"), "le JSON admet des blancs autour des deux-points");
     }
 
     /// Le Markdown en blocs : la prose ligne à ligne, un bloc clos dans sa
