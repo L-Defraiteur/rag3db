@@ -559,7 +559,11 @@ impl Vue {
         let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
         let mut saisie: Vec<Line> = Vec::new();
         if self.saisie.est_vide() {
-            let aide = if self.maj_entree { "Maj-Entrée : à la ligne" } else { "Alt-Entrée : à la ligne" };
+            let aide = match (self.sous_tmux, self.maj_entree) {
+                (true, _) => "sous tmux, Maj-Entrée envoie : Alt-Entrée pour la ligne",
+                (false, true) => "Maj-Entrée : à la ligne",
+                (false, false) => "Alt-Entrée : à la ligne",
+            };
             saisie.push(Line::from(vec![Span::raw("› "), Span::styled(queue(aide, largeur.saturating_sub(3)), sourdine)]));
         } else {
             let n = a.lignes.len();
