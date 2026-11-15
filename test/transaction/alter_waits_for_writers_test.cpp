@@ -118,6 +118,7 @@ TEST_F(AlterWaitsForWriters, AWriterArrivingDuringTheAlterWaitsForIt) {
     run(*conn, "MATCH (n:T) WHERE n.id = 1 SET n.s = 'a';");
     const auto start = Clock::now();
     double ddlDone = -1, cDone = -1;
+    std::string cResult;
     std::thread tb([&] {
         b.query("ALTER TABLE T ADD note STRING DEFAULT 'n';");
         ddlDone = millisSince(start);
@@ -125,8 +126,9 @@ TEST_F(AlterWaitsForWriters, AWriterArrivingDuringTheAlterWaitsForIt) {
     // L'ALTER est en file derrière A ; C arrive ensuite.
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
     std::thread tc([&] {
-        c.query("MATCH (n:T) WHERE n.id = 2 SET n.s = 'c';");
+        auto r = c.query("MATCH (n:T) WHERE n.id = 2 SET n.s = 'c';");
         cDone = millisSince(start);
+        cResult = r->isSuccess() ? "OK" : r->getErrorMessage();
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
     run(*conn, "COMMIT;");
@@ -137,6 +139,13 @@ TEST_F(AlterWaitsForWriters, AWriterArrivingDuringTheAlterWaitsForIt) {
     EXPECT_GE(cDone, ddlDone)
         << "[check: a-writer-arriving-during-the-alter-waits-for-it] C ended at " << cDone
         << " ms, the ALTER at " << ddlDone << " ms";
+    // Liée avant la validation de l'ALTER, l'écriture de C est refusée sous le préfixe stable ;
+    // le client la recommence, et elle passe sur le nouveau schéma.
+    if (cResult != "OK") {
+        EXPECT_NE(cResult.find("Schema changed, retry:"), std::string::npos)
+            << "[check: a-writer-of-the-old-schema-passes-or-is-refused-by-name] " << cResult;
+        run(c, "MATCH (n:T) WHERE n.id = 2 SET n.s = 'c';");
+    }
     EXPECT_EQ(one(*conn, "MATCH (n:T) WHERE n.id = 2 RETURN n.s, n.note;"), "c|n\n");
 }
 
