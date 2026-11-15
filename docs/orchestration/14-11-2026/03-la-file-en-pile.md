@@ -1592,3 +1592,6 @@ trouvé deux restrictions, toutes deux connues (git status refusé sur ~/.config
 socle sur master, pas encore posé ; echo soumis à l'accord : la porte en approbation). Défaut d'affichage : la réponse streamée,
 puis sa copie par l'hôte (« le pas 2 s'est terminé sans step_done ; sa réponse : … »), puis un second compte rendu : trois fois
 le même bilan ; et « fini : plus rien à faire » encore sur la ligne d'état. Pour tty et archi.
+G, 17 h 57 : quatrième lot prêt, ticket-gabarits-autre-arbre 4085128d4 (la garde lit les sorties des build scripts et retire une sortie
+qui vise un autre worktree ; 8 cas neufs, test_garde_target 35 OK, 34 ms sur un target de 32 Go ; ferme le ticket d'archi). Sa file :
+hashes entiers → known-red-cas-longs → confineur-enveloppe → gabarits-autre-arbre, scripts seuls, après la pose du soir.
