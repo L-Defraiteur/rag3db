@@ -195,6 +195,9 @@ pub struct ModelSource {
     /// **Le plafond de sortie** d'un modèle de langage, en jetons (la forme (a) du plafond du juge).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_output_tokens: Option<usize>,
+    /// **Le budget du contexte d'après une compaction**, en jetons ([`Self::budget_de_reprise`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restart_budget_tokens: Option<usize>,
     /// **Le modèle de langage par défaut** d'une liste `models.llm` : un seul l'est.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub default: bool,
@@ -217,12 +220,24 @@ impl ModelSource {
             reasoning: None,
             name: None,
             max_output_tokens: None,
+            restart_budget_tokens: None,
             default: false,
         }
     }
-    /// Le budget du contexte qui repart après une compaction (à venir).
+    /// **Le budget du contexte qui repart après une compaction** par l'archiviste (96, conception
+    /// `docs/memoire/15-11-2026/03-la-compaction-est-l-archiviste.md`) : `restart_budget_tokens` s'il
+    /// est déclaré ; sinon 100 000 jetons pour un modèle cloud, et pour un modèle local (servi ici, par
+    /// un service à nous ou par `llama_server`) la moitié de sa fenêtre, au plus 100 000.
     pub fn budget_de_reprise(&self) -> usize {
-        0
+        const CLOUD: usize = 100_000;
+        if let Some(b) = self.restart_budget_tokens {
+            return b;
+        }
+        let local = matches!(self.provider, Provider::Local | Provider::Service) || self.protocol.as_deref() == Some("llama_server");
+        if !local {
+            return CLOUD;
+        }
+        self.context_tokens.map_or(CLOUD, |c| (c / 2).min(CLOUD))
     }
     pub fn service(model: impl Into<String>) -> Self {
         Self { provider: Provider::Service, ..Self::local(model) }
