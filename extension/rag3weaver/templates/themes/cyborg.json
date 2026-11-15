@@ -1,5 +1,90 @@
 {
   "nom": "cyborg",
+  "mode": "sombre",
+  "palette": {
+    "acier": {
+      "role": "fond",
+      "oklch": [
+        0.23833,
+        0.01059,
+        260.689
+      ]
+    },
+    "gris": {
+      "role": "neutre",
+      "oklch": [
+        0.66247,
+        0.01814,
+        250.922
+      ]
+    },
+    "chrome": {
+      "role": "accent",
+      "oklch": [
+        0.89529,
+        0.01274,
+        255.511
+      ]
+    },
+    "ambre": {
+      "role": "halo",
+      "oklch": [
+        0.81242,
+        0.17038,
+        76.391
+      ]
+    },
+    "ardoise": {
+      "role": "halo2",
+      "oklch": [
+        0.49432,
+        0.02452,
+        261.695
+      ]
+    },
+    "ciel": {
+      "role": "teinte",
+      "oklch": [
+        0.77631,
+        0.04425,
+        244.077
+      ]
+    },
+    "lime": {
+      "role": "teinte",
+      "oklch": [
+        0.84216,
+        0.06587,
+        115.367
+      ]
+    },
+    "or": {
+      "role": "teinte",
+      "oklch": [
+        0.87068,
+        0.13252,
+        82.737
+      ]
+    }
+  },
+  "roles": {
+    "code": {
+      "keyword": {
+        "depuis": "halo"
+      },
+      "type": {
+        "teinte": 240
+      },
+      "function": {
+        "teinte": 300,
+        "clarte": 0.92,
+        "chroma": 0.25
+      },
+      "operator": {
+        "depuis": "halo"
+      }
+    }
+  },
   "couleurs": {
     "fond": "#1c1f24",
     "texte": "#d7dde5",
@@ -94,21 +179,22 @@
   },
   "code": {
     "keyword": "#ffb000",
-    "type": "#9fbad1",
-    "function": "#e6edf3",
-    "string": "#c9d1a0",
-    "comment": "#858d98",
-    "number": "#ffcc66",
-    "constant": "#ffcc66",
-    "variable": "#d7dde5",
-    "property": "#aeb9c5",
+    "type": "#9ebad1",
+    "function": "#e1e5ec",
+    "string": "#c2d2ae",
+    "comment": "#8b949e",
+    "number": "#ffcc6a",
+    "constant": "#ffcc6a",
+    "variable": "#dee5ee",
+    "property": "#b2b8c1",
     "operator": "#ffb000",
-    "punctuation": "#8b949e",
-    "attribute": "#93a8bd",
-    "label": "#93a8bd",
-    "module": "#93a8bd",
-    "other": "#c5ccd4",
-    "en_ligne": "#ffcc66",
+    "punctuation": "#7e8791",
+    "attribute": "#8da8bf",
+    "label": "#8da8bf",
+    "module": "#8da8bf",
+    "other": "#cfd9e3",
+    "en_ligne": "#fcce65",
     "cadre": "#8b949e"
-  }
+  },
+  "derive": "couleurs et code sont dérivés de palette par scripts/themes_palettes.py (rôles : templates/theme-roles.json) : ne pas les éditer à la main"
 }

@@ -1,5 +1,79 @@
 {
   "nom": "cyberpunk",
+  "mode": "sombre",
+  "palette": {
+    "nuit": {
+      "role": "fond",
+      "oklch": [
+        0.14183,
+        0.06619,
+        295.805
+      ]
+    },
+    "brume": {
+      "role": "neutre",
+      "oklch": [
+        0.62463,
+        0.07373,
+        294.467
+      ]
+    },
+    "neon": {
+      "role": "accent",
+      "oklch": [
+        0.69077,
+        0.28232,
+        338.073
+      ]
+    },
+    "cyan": {
+      "role": "halo",
+      "oklch": [
+        0.87005,
+        0.14814,
+        202.875
+      ]
+    },
+    "violet": {
+      "role": "halo2",
+      "oklch": [
+        0.44228,
+        0.20769,
+        301.235
+      ]
+    },
+    "jaune": {
+      "role": "teinte",
+      "oklch": [
+        0.9542,
+        0.1562,
+        108.636
+      ]
+    },
+    "menthe": {
+      "role": "teinte",
+      "oklch": [
+        0.91163,
+        0.13847,
+        165.069
+      ]
+    },
+    "orange": {
+      "role": "teinte",
+      "oklch": [
+        0.83379,
+        0.12487,
+        66.878
+      ]
+    }
+  },
+  "roles": {
+    "code": {
+      "en_ligne": {
+        "teinte": 170
+      }
+    }
+  },
   "couleurs": {
     "fond": "#0d0221",
     "texte": "#ff2bd6",
@@ -95,20 +169,21 @@
   "code": {
     "keyword": "#ff2bd6",
     "type": "#00f0ff",
-    "function": "#f9f871",
-    "string": "#7cffcb",
-    "comment": "#8577ad",
-    "number": "#ffb86b",
-    "constant": "#ffb86b",
-    "variable": "#e8e1ff",
-    "property": "#b39dff",
-    "operator": "#ff6ec7",
-    "punctuation": "#8a7fb0",
-    "attribute": "#00c2d1",
-    "label": "#00c2d1",
-    "module": "#00c2d1",
-    "other": "#d6cfff",
-    "en_ligne": "#7cffcb",
+    "function": "#fff66e",
+    "string": "#9ef9c8",
+    "comment": "#8a7fb0",
+    "number": "#fbba68",
+    "constant": "#fbba68",
+    "variable": "#e6e0ff",
+    "property": "#c5a4fa",
+    "operator": "#ee54cb",
+    "punctuation": "#897eaf",
+    "attribute": "#00b8d7",
+    "label": "#00b8d7",
+    "module": "#00b8d7",
+    "other": "#dad0ff",
+    "en_ligne": "#7affce",
     "cadre": "#8a7fb0"
-  }
+  },
+  "derive": "couleurs et code sont dérivés de palette par scripts/themes_palettes.py (rôles : templates/theme-roles.json) : ne pas les éditer à la main"
 }
