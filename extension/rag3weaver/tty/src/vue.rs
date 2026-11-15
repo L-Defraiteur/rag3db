@@ -1003,6 +1003,10 @@ mod tests {
         let mut t = Vue::new(140, true);
         t.sous_tmux = true;
         assert_eq!(dessin(&t, 140, 3).0[2], "› sous tmux, Maj-Entrée envoie : Alt-Entrée pour la ligne (ou, dans tmux : set -g extended-keys on ; set -g extended-keys-format csi-u)", "sous tmux, le dire, et dire le réglage qui l'ouvre");
+        let mut e = Vue::new(60, true);
+        e.sous_tmux = true;
+        let etroit = dessin(&e, 60, 3).0[2].clone();
+        assert!(etroit.starts_with("› sous tmux, Maj-Entrée envoie : Alt-Entrée") && etroit.ends_with('…'), "trop étroite, l'indication garde son début : {etroit:?}");
     }
 
     /// **tty-11** : un appel d'outil se numérote, garde ce qu'il a fait, et son
