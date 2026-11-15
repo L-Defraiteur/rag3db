@@ -987,6 +987,14 @@ impl DaemonHost {
     pub fn fts_maintain(&self, session: Option<&str>, manifest: &Path, v: &Value) -> Value {
         let result = self.check_session(session).and_then(|_| {
             let table = v["table"].as_str().ok_or("« table » manque : la table du plein texte (Scope, ou Lucivy_Scope)")?;
+            if v["dry_run"].as_bool().unwrap_or(false) {
+                // Le relevé à blanc lit sans écrire : le slot en lecture, puis le catalogue (aucun fil
+                // de fond n'écrit pendant la lecture des lignes) ; le jeton relu juge le reste.
+                let hosted = self.hosted_existing(manifest).ok_or_else(|| format!("{NOT_HOSTED} : {}", manifest.display()))?;
+                let slot = hosted.backend.read().unwrap_or_else(|p| p.into_inner());
+                let backend = slot.as_ref().ok_or_else(|| format!("le backend {} est fermé : l'ouvrir d'abord", hosted.id))?;
+                return backend.catalog.lock().unwrap_or_else(|p| p.into_inner()).fts_releve_a_blanc(table);
+            }
             let jeton = v["token"].as_str().ok_or("« token » manque : celui que rend /backend/fts-live-ids, pris avant la lecture du graphe")?;
             let purge: Vec<u64> = match v.get("purge_ids") {
                 None | Some(Value::Null) => Vec::new(),
@@ -1736,6 +1744,7 @@ impl DaemonHost {
     /// | `POST /backend/open` (ou `/open`) | `{manifest}` | `{ok, result: {id, reread, describe, reactions}}` ; un manifeste modifié est relu |
     /// | `POST /backend/close` | `{manifest, reason?, until?}` | `{ok, result: {id, closed, held_closed}}` ; la base est lâchée ; avec une raison, la fermeture tient jusqu'à `POST /backend/open` |
     /// | `POST /backend/fts-live-ids` | `{manifest, table}` | `{ok, result: {table, count, ids, token}}` ; les vivants du plein texte et le jeton du même lecteur ; **d'abord ce relevé, ensuite la lecture du graphe, puis maintain** |
+    /// | `POST /backend/maintain` avec `dry_run: true` | `{manifest, table, dry_run}` | `{ok, result: {live_docs, graph_docs, orphans, dictionary_texts, token}}` ; le relevé à blanc : la route lit les lignes de la table, rend les orphelins et ne purge rien ; son jeton sert à la purge qui suit |
     /// | `POST /backend/maintain` | `{manifest, table, token, purge_ids?, compact?, max_purge_ratio?}` | `{ok, result: {live_docs, requested, purged, absent, merge_rounds, dictionary_texts, before, after, summary}}` ; refusé si la table a changé depuis le relevé, ou si la purge dépasse `max_purge_ratio` (0,5) des vivants ; ordre des verrous : slot, puis catalogue |
     /// | `POST /describe` | `{manifest}` | `{ok, result}` |
     /// | `POST /call` | `{manifest, name, arguments}` | `{ok, result}` ou `{ok: false, error}` |
