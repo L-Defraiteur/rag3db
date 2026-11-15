@@ -930,9 +930,9 @@ mod tests {
     fn a_listed_run_always_reads_while_it_is_written() {
         let d = tempfile::tempdir().unwrap();
         let j = JournalDesRuns::avec_bornes(d.path().join("runs"), 1 << 40, 90, 1 << 26);
-        // ~1 MiB of pseudo-random hex per run : zstd leaves it big, and the write takes time.
+        // ~4 MiB of pseudo-random hex per run : zstd leaves it big, and the write takes time.
         let mut x: u64 = 0x9e37_79b9_7f4a_7c15;
-        let lourd: String = (0..131_072)
+        let lourd: String = (0..524_288)
             .map(|_| {
                 x ^= x << 13;
                 x ^= x >> 7;
@@ -944,11 +944,18 @@ mod tests {
         let lecteur = {
             let (j, fini) = (j.clone(), fini.clone());
             std::thread::spawn(move || {
-                let (mut relus, mut manques) = (0usize, Vec::new());
+                // Only the runs not yet seen whole are reread : the reader spins on the newest file.
+                let (mut relus, mut manques, mut entiers) = (0usize, Vec::new(), std::collections::HashSet::new());
                 while !fini.load(std::sync::atomic::Ordering::SeqCst) {
                     for run in j.runs_de("b") {
+                        if entiers.contains(&run) {
+                            continue;
+                        }
                         match j.lire("b", &run) {
-                            Some(_) => relus += 1,
+                            Some(_) => {
+                                relus += 1;
+                                entiers.insert(run);
+                            }
                             None => manques.push(run),
                         }
                     }
@@ -956,7 +963,7 @@ mod tests {
                 (relus, manques)
             })
         };
-        for i in 0..40 {
+        for i in 0..60 {
             j.deposer("b", &format!("r{i}"), json!({ "lourd": lourd, "i": i })).unwrap();
         }
         fini.store(true, std::sync::atomic::Ordering::SeqCst);
