@@ -158,4 +158,13 @@ if (problems)
     message(FATAL_ERROR "the bench disagrees with known_red.txt "
         "(${num_red} red, ${num_passed} green):\n  ${text}")
 endif()
-message(STATUS "bench matches known_red.txt: ${num_red} red, ${num_passed} green")
+# **Un vert sans les cas longs le dit** (15 novembre 2026, c7) : la perte de Note dormait dans DdlEveryMinute, un cas long
+# hors du juge par défaut, et « bench matches » se lisait comme un vert complet. La ligne finale nomme ce qui n'a pas joué.
+if (long)
+    list(LENGTH long num_long)
+    list(JOIN long ", " long_names)
+    message(STATUS "bench matches known_red.txt: ${num_red} red, ${num_passed} green — INCOMPLETE: ${num_long} long "
+        "cases not run (CONCURRENCE_LONG=1 to run them): ${long_names}")
+else()
+    message(STATUS "bench matches known_red.txt: ${num_red} red, ${num_passed} green — long cases run")
+endif()
