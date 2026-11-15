@@ -7292,10 +7292,13 @@ mod tests {
     fn un_modele_de_langage_sans_sa_feature_n_empeche_pas_l_ouverture() {
         let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
             m["models"]["llm"] = json!({"name": "m-fin", "provider": "compatible", "protocol": "openai", "model": "m-fin", "address": "http://127.0.0.1:1/v1"});
+            m["vector_extension"] = json!(extension_vector_de_test());
         });
+        let _garde = dir;
         let prepared = p.expect("le manifeste se charge");
-        let ouvert = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| backend_de_code(dir.path(), prepared)));
-        let backend = ouvert.expect("le backend s'ouvre sans la feature du fournisseur");
+        // Par le vrai chemin d'ouverture (`open`), pas par le bâti de test, qui construit le backend à la main.
+        let conn = crate::Rag3dbConnection::in_memory().unwrap();
+        let backend = prepared.open(Box::new(conn), None).expect("le backend s'ouvre sans la feature du fournisseur");
         let avertissements = backend.avertissements();
         assert!(
             avertissements.iter().any(|a| a.contains("m-fin") && a.contains("indisponible") && a.contains("openai-llm")),
