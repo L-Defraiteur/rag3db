@@ -1096,3 +1096,12 @@ GCC -Werror=missing-field-initializers sur ListLambdaBindData (quantifierCounts,
 mourait avant le format, « cargo-fmt is not installed for the toolchain 1.98.1 » (rustfmt ajouté avant cargo fmt) — le
 verdict du format C++ n'avait jamais joué. Python lint annulé à la seconde : macos-14 non accordé (dépôt privé) → sur
 ubuntu-24.04, même lot. Le binaire de luciepc : G le pose, hotfixs vérifie les ancêtres.
+tty, 14 h 07 : tty-13 (« ! » et « / », cx-tty-13 28b2424e9, 16 commits, crate 93/93 ; gardes prouvées par le harnais : une ligne
+« !touch » de l'équipier ne lance rien, le mot de passe d'un faux sudo n'est ni dans la consigne ni dans le journal) prêt,
+placé juste derrière tty-12, en pile sur sa tête. Ordre : G → CI (hotfixs) → tty-12 → tty-13 → archi → 96 → ED (1) → lucivy → arbre.
+Embarquement, 14 h 09 : la recette porte le périphérique, donc incomparable à un repli ; tranché : ce lot livre `fallback:
+{service}` seul (modèle + dimension vérifiés, « repli sans recette vérifiée » dit), `{activation}` en lot suivant avec
+ticket ; sept témoins dont la provenance des vecteurs au journal (carte / service, en morceaux).
+Codeparsers, 14 h 12 : cause de « new mot vide en Rust » : RUST_STOP_WORDS est une copie de la liste JavaScript ; `new` est
+dans six listes, juste en C++, C#, Go (mot-clé ou intégrée), à retirer de Rust, Python, C. Va, rien d'autre dans le lot ;
+ticket basse pour la liste Rust copiée ; compte des références avant/après sur rag3weaver.
