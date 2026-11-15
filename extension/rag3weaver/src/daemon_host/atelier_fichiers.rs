@@ -1326,13 +1326,17 @@ pub(super) mod tests {
     }
 
     /// **Le socle : une écriture laisse son run** (c7, avant l'atterrissage du socle) : un `write` passé
-    /// par l'hôte se garde au journal des runs du backend, et ce run porte le diff rendu.
+    /// par les appels de l'hôte se garde au journal des runs du backend, et ce run porte le diff rendu.
+    /// Un appel direct au backend (`with_backend`, les témoins) ne passe pas par là : son run n'a que
+    /// ses événements.
     #[test]
     fn a_workshop_write_leaves_a_run_with_its_diff() {
         let d = tempfile::tempdir().unwrap();
         let a = atelier(d.path());
         let avant: std::collections::BTreeSet<String> = a.host.journal.runs_de(&a.h.id).into_iter().collect();
-        a.appeler("write", json!({ "path": "trace.txt", "text": "ligne tracée" })).expect("write");
+        // Par le chemin des appels de l'hôte (celui d'un client, de l'IDE, du chat), qui journalise le rendu.
+        let r = a.host.call(None, &a.h.manifest, "write", json!({ "path": "trace.txt", "text": "ligne tracée" }));
+        assert_ne!(r["ok"], false, "write : {r}");
         let debut = std::time::Instant::now();
         let neufs = loop {
             let neufs: Vec<String> = a.host.journal.runs_de(&a.h.id).into_iter().filter(|x| !avant.contains(x)).collect();
