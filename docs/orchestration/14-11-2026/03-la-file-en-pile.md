@@ -1138,3 +1138,16 @@ G, 14 h 33 : garde-cpp-transferable sur master à **5b8f8994f** (2 commits : les
 « À toi » à tty pour tty-12 (900ce167f) puis tty-13 en pile sans second mot ; le lot CI de hotfixs (pas prêt : l'étape du bot
 à retirer, les agrégats) passe après eux, puis la fenêtre de formatage. Embarquement : repli complet (215e4b989 tenue,
 9df6c6cd9 docs ; lib entière 2 353 verts), base testée 09bb33e64, en file après ED (1).
+Cœur, 14 h 33 : cause du SIGSEGV de la colonne ajoutée : NodeTable::addColumn pose la colonne puis la remplit groupe par groupe
+et n'inscrit son annulation qu'à la fin ; un refus à mi-chemin (le pool plein, dans les quatre tours morts et eux seuls) laisse
+la colonne au stockage quand le catalogue l'annule ; l'ADD suivant se range un cran trop loin, sa relecture tombe dans le
+morceau d'à côté (memcpy de readCompressedValuesToVector). Branche colonne-ajoutee-se-relit : point de faute e444ee491,
+témoin AddColumnRefusedMidway db7eed64c, correctif tout-ou-rien à chaque niveau 6d557d826 ; passe à luciepc en cours ;
+puis DdlEveryMinute ×10 pour fermer aussi les Note perdues.
+G, 14 h 33 : « poussé » reçu ; écart dit sans effet (base écrite ee3b5c901 au lieu de 42a916f08, lue sur origin/master partagé
+après le rebase ; aucun code entre les deux ; passe_epinglee.sh écrit désormais la base par merge-base au --onto). Garde à jour
+aux deux postes : push_garde.sh **bf891500**, passe_epinglee.sh **73333766** (témoins 39 et 21 verts, anciennes en .avant-cpp-transferable).
+Binaire de luciepc depuis 5b8f8994f en essai, pose vers 14 h 55.
+G et hotfixs, 14 h 40 : l'hôte de luciepc porte **5b8f8994f** sur 373b5477b depuis 14 h 40 m 14 s (ancêtres 262be6fc4, 26a091474 vérifiés ;
+md5 f7133291 ; lié à rag3db-build-373b5477b ; /sante répond). code-lourd et code-principal ne fabriquent plus d'orphelins par
+ce chemin. Les deux postes : portable 26a091474, luciepc 5b8f8994f, lib 373b5477b partout.
