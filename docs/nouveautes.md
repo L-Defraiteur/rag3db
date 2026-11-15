@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 15 novembre2026 — Sous tmux, Maj-Entrée passe à la ligne dans le terminal de l'agent si tmux est réglé pour les touches étendues en CSI u (`set -g extended-keys on`, `set -g extended-keys-format csi-u`) ; le terminal lit le réglage et le dit quand il manque. Le tmux par défaut garde son repli dit, Alt-Entrée.
+
 - 15 novembre2026 — Le terminal de l'agent a ses commandes : `/aide`, `/theme`, `/tache`, `/depot`, `/journal`, `/effacer`, `/context` (le remplissage du contexte du modèle) et les autres ; `!<commande>` la lance là où tourne le terminal, dans un pseudo-terminal où `sudo` demande son mot de passe, et sa sortie part à l'équipier, sans jamais le mot de passe ; Tab complète les commandes, leurs arguments, les exécutables et les fichiers ; l'historique des envois survit à la séance.
 
 - 15 novembre2026 — Les thèmes du terminal et de l'IDE deviennent des palettes nommées en OKLCH (huit couleurs par thème, un mode sombre ou clair) : leurs couleurs et leur coloration syntaxique en sont dérivées par un seul script, qui part de la couleur de palette la plus proche de la teinte voulue, tient le contraste WCAG ou refuse, et rougit si un thème a été retouché à la main. Les cinq thèmes sont convertis au plus près : écart moyen du code de 0,013 à 0,029 en OKLab, fond, texte et halo inchangés.

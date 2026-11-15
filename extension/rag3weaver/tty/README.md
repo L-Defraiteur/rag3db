@@ -135,7 +135,9 @@ host and a pty), both ways between two machines:
 
 - **tmux** waits 500 ms by default before passing a lone Esc: use Ctrl-G to stop the teammate at
   once. With its default settings it also turns Shift-Enter into a plain Enter, which sends: under
-  tmux (`TMUX`), the empty input says so, and Alt-Enter breaks the line. tmux may bring true colour down to 256 colours; the nearest colours of every theme stay right.
+  tmux (`TMUX`), the empty input says so, and Alt-Enter breaks the line. A tmux set with
+  `extended-keys on` and `extended-keys-format csi-u` lets Shift-Enter through: the terminal reads these
+  settings, asks for modifyOtherKeys mode 1 and gives it back on exit; the empty input names them. tmux may bring true colour down to 256 colours; the nearest colours of every theme stay right.
 - **mosh** keeps no scrollback beyond the screen. Under mosh, which the terminal detects through a
   `mosh-server` ancestor (Linux, `/proc`), a session journal opens by itself and the top line of the
   live zone gives the command that reads it back: `less <journal>`. When the sentence does not fit,
