@@ -1732,3 +1732,5 @@ open rend ok: false. tty garde le témoin par la feature (lot court) ; décision
 modèle indisponible et la feature absente, le tour de chat est refusé avec la cause ; ticket 095cb0ac0f. Un aveu de méthode :
 tty a cherché 30 min un rouge que personne ne reproduisait, faute d'avoir eu dès le début la commande exacte et le jeu de features
 du rouge — un rouge se rapporte avec sa commande, son jeu et son environnement.
+Lucivy, 19 h 55 : **la maintenance nocturne sur master à f4131ed400** (gmail, 0 attribution ; rejeu vert) : avec un hôte ≥ f4131ed400, chaque
+base ouverte a sa maintenance à 03 h 30, l'état la dit demain. Il ne manque que la pile de 96 pour le hash (attendue jusqu'à 20 h 15).
