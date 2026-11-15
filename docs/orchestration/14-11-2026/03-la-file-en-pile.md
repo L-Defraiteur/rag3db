@@ -1551,3 +1551,7 @@ au-delà de 5 min de vecteurs estimés, ~10 annoncées — à vérifier contre E
 Lucie, 17 h 45 : « pourquoi ça m'écrit "attend", c'est horrible, on doit jamais voir "attend" comme ça : que des animations de
 chargement ou bien des trucs vivants ». Règle pour tty : jamais un mot d'état nu sur la ligne d'état ; animation du thème au
 travail, invite vivante au repos ; un équipier fini sans réponse = une phrase à Lucie, pas un mot machine.
+ED, 17 h 46 : l'estimation de l'outil index compte la source entière fois le rythme (estimate_of), sans regarder ce qui est embarqué —
+défaut d'avant son lot, visible à toute réindexation, ticket à ED (lire la dette réelle) ; le repassage réembarque peu : scopes
+identiques sans vecteur neuf, ~7 600 petits morceaux de File (File_CHUNKED_FROM 7 608 → 15 218), quelques dizaines de secondes —
+un coût de son lot, à faire tomber (un File garde son morceau quand seule son analyse change). confirm=true est juste.
