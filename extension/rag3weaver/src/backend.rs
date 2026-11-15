@@ -170,6 +170,10 @@ pub struct BackendManifest {
     pub relations: HashMap<String, BackendRelation>,
     /// Only these attachments become tools. Bindings cannot be overridden by callers.
     pub tools: BTreeMap<String, ToolAttachment>,
+    /// **L'agent du backend** : son nom, que la boucle de l'équipier dit (« Algareth »). Absent : « équipier ».
+    /// Une tâche le surcharge (`Surcharges::nom_de_l_agent`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<AgentDuBackend>,
     /// **Les graphes réactifs, à côté des outils et jamais parmi eux.** Un
     /// outil est appelé par l'agent, une réaction par un événement du bus ;
     /// le moteur fait déjà respecter la distinction, et c'est lui qui me l'a
@@ -897,6 +901,25 @@ pub struct OutputPort {
 /// dans le worktree de la tâche, écrivable ou non). Le manifeste n'est pas réécrit
 /// — c'est une déclaration suivie, et une fusion l'emporterait ; chaque
 /// rechargement réapplique les surcharges ([`PreparedBackend::recharger`]).
+/// **L'agent d'un backend** (`agent` du manifeste).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgentDuBackend {
+    /// Le nom de l'agent, une ligne, non vide.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+/// Le nom de l'agent quand rien ne le déclare.
+pub const NOM_DE_L_AGENT_PAR_DEFAUT: &str = "équipier";
+
+/// **Le nom de l'agent d'un backend** : la surcharge de la tâche, sinon `agent.name` du manifeste, sinon
+/// « équipier ».
+pub fn nom_de_l_agent(manifest: &BackendManifest, surcharges: &Surcharges) -> String {
+    let _ = (manifest, surcharges);
+    NOM_DE_L_AGENT_PAR_DEFAUT.to_string()
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Surcharges {
     pub database: Option<PathBuf>,
@@ -921,6 +944,8 @@ pub struct Surcharges {
     /// La racine du code dans l'arbre principal : son nom nomme le target
     /// partagé du dépôt (`{repo_target}`), le même pour toutes ses tâches.
     pub racine_principale: Option<PathBuf>,
+    /// Le nom de l'agent pour cette tâche, à la place de `agent.name` du manifeste.
+    pub nom_de_l_agent: Option<String>,
 }
 
 /// **Un champ inconnu dit quel binaire le lit** (8 novembre 2026 : un hôte rendu
@@ -8655,6 +8680,30 @@ mod tests {
 
     /// **`models.embed` et `embeddings` disent la même chose** : l'une ou
     /// l'autre, jamais les deux, et l'absence des deux se dit au chargement.
+    /// **Le nom de l'agent** (c7, 15 novembre, le nom des agents (1)) : « équipier » sans déclaration,
+    /// `agent.name` du manifeste sinon, la surcharge de la tâche avant tout ; un nom vide ou de plusieurs
+    /// lignes est refusé à la lecture, en le nommant. Le gabarit de code livré n'en impose aucun.
+    #[test]
+    fn le_nom_de_l_agent_se_declare_et_se_surcharge() {
+        let chemin = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code/backend.json");
+        let base: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+        assert!(base.get("agent").is_none(), "le gabarit de code livré n'impose pas de nom");
+        let sans: BackendManifest = serde_json::from_value(base.clone()).unwrap();
+        assert_eq!(nom_de_l_agent(&sans, &Surcharges::default()), "équipier");
+        let mut nomme = base.clone();
+        nomme["agent"] = json!({"name": "Algareth"});
+        let nomme: BackendManifest = serde_json::from_value(nomme).unwrap();
+        assert_eq!(nom_de_l_agent(&nomme, &Surcharges::default()), "Algareth");
+        let tache = Surcharges { nom_de_l_agent: Some("Ombre".into()), ..Default::default() };
+        assert_eq!(nom_de_l_agent(&nomme, &tache), "Ombre", "la tâche surcharge le manifeste");
+        for faux in [json!(""), json!("   "), json!("deux\nlignes")] {
+            let mut m = base.clone();
+            m["agent"] = json!({"name": faux});
+            let e = serde_json::from_value::<BackendManifest>(m).expect_err("un nom vide ou de plusieurs lignes est refusé").to_string();
+            assert!(e.contains("agent.name"), "le refus nomme le champ : {e}");
+        }
+    }
+
     #[test]
     fn l_embarquement_se_declare_par_models_embed_ou_par_embeddings() {
         use crate::model_source::{Capability, Provider};
