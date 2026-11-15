@@ -1546,3 +1546,13 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   fork sous L-Defraiteur, confirmé par Lucie dans sa session ; clone à lui, remote amont jackwener ; révision 5
   inchangée par l'amont). Le nom reste BrowserMCP sans mot de Lucie. Archi commence l'extension rouge d'abord
   (handoff gardé, passe-partout fermés, cookies retiré), puis répond à 96 (compaction) et ED (/model).
+- Archi, 12 h 3x : l'extension du fork porte les deux gardes (branche rag3weaver-gardes : resolveTab refuse un
+  bail en handoff, refusePassThrough ferme cdp/chrome-call/cookies/network-capture/stream-watch/extension-logs,
+  le gestionnaire de cookies retiré ; rouge 8/11 puis vert, vitest 39/39, tsc 0). Identité à part : nom
+  « rag3weaver pont navigateur », com.rag3weaver.pont_navigateur, clé RSA neuve dont le privé va sous
+  ~/.vault/pont-navigateur/ ; l'installation chez Lucie attend son mot. Puis le relai Rust.
+- **12 h 3x — la compaction par l'archiviste, branchement tranché** (page 03 de 96, 40eb8f1a6) : trace = ChatFile
+  + journal des runs ; seuil 80 % (réglage) avec ContextOverflow en filet ; /compact = POST
+  /ide/chat/compact?backend=…, refusé pendant un tour en vol ; passe synchrone ≤ 120 s (réglage) avec repli ;
+  rangement en fond à chaque section close, « rangé jusqu'au tour N » dans le ChatFile ; un échange rangé ne se
+  range pas deux fois. Va : témoin rouge d'abord, gabarit et témoin à 96, hôte à archi.
