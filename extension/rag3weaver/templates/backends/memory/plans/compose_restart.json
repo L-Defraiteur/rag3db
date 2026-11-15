@@ -1,0 +1,26 @@
+{
+  "let": {
+    "de_la_session": {"in": {"field": "source", "param": "sources"}}
+  },
+  "forms": {
+    "apports": {"select": {
+      "table": "Apport",
+      "filter": {"any_of": [
+        {"let": "de_la_session"},
+        {"optional": {"through": {"relation": "A_POUR_APPORT", "direction": "incoming", "end": "Fiche",
+                                  "filter": {"in": {"field": "name", "param": "names"}}}}},
+        {"through": {"relation": "A_POUR_APPORT", "direction": "incoming", "end": "Fiche",
+                     "filter": {"through": {"relation": "A_POUR_APPORT", "direction": "outgoing", "end": "Apport",
+                                            "filter": {"let": "de_la_session"}}}}}
+      ]},
+      "returns": [
+        "_uuid", "section", "source", "texte", "state", "created_at",
+        {"collect": {"as": "fiches", "relation": "A_POUR_APPORT", "direction": "incoming", "end": "Fiche",
+                     "fields": ["name", "about", "state"]}}
+      ],
+      "order_by": [{"field": "created_at", "desc": true}, {"field": "_uuid"}],
+      "limit": {"param": "limit", "max": 2000}
+    }}
+  },
+  "outputs": {"rows": "apports"}
+}

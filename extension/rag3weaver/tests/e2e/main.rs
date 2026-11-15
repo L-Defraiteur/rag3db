@@ -104,6 +104,10 @@ mod e2e_cloud_schema_probe;
 mod e2e_code;
 #[path = "../e2e_code_sync.rs"]
 mod e2e_code_sync;
+#[path = "../e2e_compaction_archiviste.rs"]
+mod e2e_compaction_archiviste;
+#[path = "../e2e_compose_restart.rs"]
+mod e2e_compose_restart;
 #[path = "../e2e_contrat_transactions.rs"]
 mod e2e_contrat_transactions;
 #[path = "../e2e_conversation_a_plusieurs.rs"]
