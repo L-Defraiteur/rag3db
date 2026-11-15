@@ -66,7 +66,7 @@ Un ticket moteur demande que le planificateur fasse cette réécriture de lui-m�
 
   Les formes filtrées gagnent environ deux fois ; la forme sans filtre ne bouge pas sur ce jeu.
 - **La sonde d'ED** (`tests/sonde_in_par_cle.rs`, branche `sonde-in-par-cle` 5b02d83ad, reprise
-  sans commit dans le worktree du lot). Jouée le 15 novembre vers 2 h 52, sous `poste mesure`, à
+  sans commit dans le worktree du lot). Jouée le 15 novembre vers 3 h 37, sous `poste mesure` (lancée à 2 h 51, la place de mesure attendue jusque-là), à
   luciepc, lib 373b5477b, code de 9fd946ec3. Base : une copie neuve par reflink de
   `1b-copie/migree-20261114-1641` (forme à versions : 79 662 racines, 72 652 versions dans
   ScopeContent). Cinq tours après une chauffe :
