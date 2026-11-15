@@ -975,3 +975,10 @@ Archi, 13 h 0x : le relai du pont navigateur vert (pont-navigateur-relai 5c1035b
 socket Unix seulement, adresses réseau refusées ; ecoute.rs un Pont par browserId, dossier 0700, socket 0600,
 pas encore démarrée par l'hôte ; hote_natif.rs compose le manifeste d'hôte natif sans l'écrire dans le profil
 de Chrome — geste de Lucie ; 21/0, lib 2 474/0, hooks 45/0). En file après ED (2) et G.
+96, 13 h 0x : la compaction — compose_restart (2/2) et l'archiviste avec `context` (e2e_archiviste 20/20)
+verts sur f67c8b535 ; e2e_compaction_archiviste rouge 4/4 par conception (attend le code de l'hôte). Décision :
+pas de known_red pour une attente — 96 pousse le vert, le témoin de compaction part dans le lot d'archi comme
+son rouge d'abord. Place de 96 : après archi (relai).
+96, 13 h 08 : scindé — cx-memoire-compose-restart c733b81dd (compose_restart, `context`, leurs témoins, le gabarit ;
+arbre de f67c8b535 moins le témoin de compaction, 0 ligne d'écart ailleurs) ; le témoin seul sur
+cx-memoire-compaction-temoin-archi 3d30f16ee (rouge 4/4, pour archi, posé sur c733b81dd).
