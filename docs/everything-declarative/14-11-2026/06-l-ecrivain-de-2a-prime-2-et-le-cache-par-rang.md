@@ -162,3 +162,28 @@ après le retrait d'un fichier, ses `Symbol` exclusifs restent, sans relation.
 - Un nom qui revient retrouve le même uuid (`hashsafe`), sur une ligne qui n'a jamais été effacée.
 - **Le témoin de plus** : après le retrait d'un fichier et une publication, une recherche `Symbol` sans
   vue ne rend pas ses `Symbol` exclusifs, et une vue au rang d'avant les rend.
+
+## 11. L'écrivain sur tous les chemins d'écriture (15 novembre 2026, 1 h 20)
+
+Branche `ecrivain-2a-prime-2`, tête `cd3f1e978` ; lib entière verte (1974 passés, 0 échec, 16 ignorés).
+
+- **Les chemins** : `reingest_file`, `reingest_files`, `remove_file` et `sync_source` d'une source déjà
+  indexée passent tous par l'écrivain, générique par table : `Scope` et `File` suivent les mêmes
+  règles (§ 2). `sync_source` ne finit plus par une fin d'instantané, qui effaçait ce qu'aucun paquet
+  n'avait marqué, lignes publiées retirées comprises : il réécrit la source par paquets, puis retire
+  les fichiers que la couche voit encore et que la source ne liste plus. Une première indexation garde
+  le chemin d'instantané : rien n'y est publié.
+- **Le compte des recopies** : chaque publication pose `aretes_recopiees` sur sa ligne `_generation`,
+  puis le compte repart de zéro. **Limite dite** (c7, 15 novembre, 1 h 1x) : ce compte vit en mémoire
+  jusqu'à la publication, il compte donc **depuis l'ouverture** du processus. Un redémarrage entre deux
+  publications perd les recopies faites avant lui. Pas de persistance ce soir. **La part des
+  déplacés** (§ 9) n'est pas encore comptée à part : c'est le total seul.
+- **Une ingestion directe** (`Catalog::ingest_code_jusqu_a` appelé hors des chemins ci-dessus) ne
+  décide aucune naissance : sous les générations, une ligne née au rang en attente et sa clé nue s'y
+  doubleraient. Seuls les témoins l'appellent ainsi, et ils passent d'abord par le pas de l'écrivain
+  (`code_sync::preparer_par_generations`).
+- **Rouvrir une ligne** pose `_jusqu_a` à un NULL typé INT64 : un NULL nu prend STRING à la conversion
+  vers le moteur (`sans_inconnu`, voulu), et le lieur refuse alors de le changer en INT64. Ce n'est pas
+  un défaut du moteur.
+- **Les témoins** 1 à 5 et 7 à 11 (`code::tests_de_l_ecrivain`), chacun vu rouge d'abord ; le 6 vient
+  avec le cache. La parité et le compte des recopies attendent le jugement de banc.
