@@ -1256,3 +1256,8 @@ Le budget de caractères ne coupe jamais un texte. Décision : **F 25 % coupée*
 mesure : le tunnel du portable tombe avec le 7879) ; lot chez 96, après `usage` et avant la variante : découper la Source longue
 à l'écriture (`source_chunk_chars`, chevauchement, rappel par le meilleur morceau) ; plafond de jetons côté service chez
 embarquement (ticket a4b9de029). Reprise du banc sur ce lot.
+96, 15 h 19 : correction — la Source n'est pas embarquée (bm25 seul) et les textes écrits sont déjà découpés (1 500/200) ; la vraie
+cause est **`embed_query`** (search.rs:968) : la recherche des candidates d'archive_decide embarque la section entière comme
+requête, en un seul texte sans plafond. Deux lots : 96, `query_chars = 4000` (titre + début de section, trace de la longueur) ;
+embarquement, le plafond défensif `query_max_chars` dans embed_query (dérivé de context_tokens, coupe dite), car toute requête
+longue d'un outil tue le 7879 pareil. Le 503 côté service à part.
