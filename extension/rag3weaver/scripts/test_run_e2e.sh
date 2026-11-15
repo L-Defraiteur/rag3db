@@ -105,5 +105,20 @@ grep -q "e2e_banc_fiches_classees NON JOUÉE (banc à services, il se joue seul"
 cas $? "l'e2e entier écarte le banc même sa variable posée, en le disant (rendu $code)"
 [ ! -e "$T/cargo-appele" ]
 cas $? "les gardes des bancs n'appellent pas cargo"
+# **Un test de la lib comme témoin** (15 novembre 2026, ticket d'hotfixs) : `--lib <filtre>` joue `cargo test --lib`
+# sous la même lib et la même garde, sans les e2e ; la lib est une suite demandée, comptée par sa ligne de cargo.
+rm -f "$T/cargo-appele"
+RAG3WEAVER_VERROU_TENU=1 RAG3WEAVER_E2E_VERIFIER_SEULEMENT=1 \
+  PATH="$T/bin:$PATH" CARGO_TARGET_DIR="$T/target" RAG3WEAVER_MOTEUR_ANCIEN=1 timeout 120 bash "$SCRIPT" --lib un_test_de_la_lib \
+  > "$T/sortie-lib" 2>&1
+code=$?
+[ "$code" = 0 ] && grep -qE -- "^▸ lib : cargo test --features [^ ]+ --lib -- --nocapture un_test_de_la_lib$" "$T/sortie-lib" \
+  && ! grep -q "NON JOUÉE" "$T/sortie-lib" && [ ! -e "$T/cargo-appele" ]
+cas $? "--lib <filtre> : la garde dit la commande de la lib, aucun e2e n'est demandé, cargo n'est pas appelé (rendu $code)"
+printf '     Running unittests src/lib.rs (target/debug/deps/rag3weaver-0123)\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5300 filtered out\n' > "$T/journal-lib"
+compte "$T/journal-lib" --lib un_test_de_la_lib > "$T/sortie-compte-lib"; grep -q "Suites jouées : 1 sur 1 demandées." "$T/sortie-compte-lib"
+cas $? "--lib, journal de cargo (Running unittests src/lib.rs) : 1 sur 1"
+compte "$T/journal-script" --lib un_test_de_la_lib > "$T/sortie-compte-lib2"; grep -q "Suites jouées : 0 sur 1 demandées." "$T/sortie-compte-lib2" && grep -q "manquantes : lib" "$T/sortie-compte-lib2"
+cas $? "--lib sans la ligne de la lib : 0 sur 1, la lib nommée manquante"
 [ $echec = 0 ] || { echo "--- sortie"; tail -15 "$T/sortie"; tail -15 "$T/sortie-features" 2>/dev/null; tail -15 "$T/sortie-defaut" 2>/dev/null; tail -5 "$T"/sortie-compte* "$T"/sortie-banc* 2>/dev/null; }
 exit $echec

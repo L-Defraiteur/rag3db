@@ -60,7 +60,12 @@ rouge() { echo "ROUGE $1" >> $R; exit 1; }
 [ -n "${RAG3WEAVER_MOTEUR_ANCIEN:-}" ] && echo "RAG3WEAVER_MOTEUR_ANCIEN=$RAG3WEAVER_MOTEUR_ANCIEN : le C++ du lot est plus neuf que la lib ${RAG3DB_LIB:13:9}" >> $R
 
 echo "== témoin" >> $R
-timeout 3600 ./run_e2e.sh --features openai-llm,anthropic-llm --test ${SUITE_DU_TEMOIN:-e2e_lectures} "$FILTRE" > $J/temoins.log 2>&1; c=$?
+# SUITE_DU_TEMOIN=lib (15 novembre 2026, ticket d'hotfixs) : le témoin est un test de la lib, joué par `run_e2e.sh --lib`.
+if [ "${SUITE_DU_TEMOIN:-}" = lib ]; then
+  timeout 3600 ./run_e2e.sh --features openai-llm,anthropic-llm --lib "$FILTRE" > $J/temoins.log 2>&1; c=$?
+else
+  timeout 3600 ./run_e2e.sh --features openai-llm,anthropic-llm --test ${SUITE_DU_TEMOIN:-e2e_lectures} "$FILTRE" > $J/temoins.log 2>&1; c=$?
+fi
 grep -E '^test result|panicked at' $J/temoins.log >> $R
 [ "$SEUL" = temoins ] && { echo "TEMOINS code=$c" >> $R; exit $c; }
 [ $c = 0 ] || rouge "témoin (code=$c)"
@@ -73,7 +78,8 @@ if [ -n "${SUITES:-}" ]; then
   LISTE_DES_SUITES=$(echo "$SUITES" | tr "," " " | sed 's/^-$//')
   echo "suites réduites : ${LISTE_DES_SUITES:-aucune} (SUITES=$SUITES)" >> $R
 else
-  LISTE_DES_SUITES="e2e_lectures e2e_code ${SUITE_DU_TEMOIN:-} ${SUITES_EN_PLUS:-}"
+  # La lib n'est pas une suite e2e : elle se rejoue entière à l'étape « lib ».
+  LISTE_DES_SUITES="e2e_lectures e2e_code $([ "${SUITE_DU_TEMOIN:-}" = lib ] || echo "${SUITE_DU_TEMOIN:-}") ${SUITES_EN_PLUS:-}"
 fi
 for suite in $(echo $LISTE_DES_SUITES | tr " " "\n" | awk 'NF && !vu[$0]++'); do
   echo "== $suite" >> $R
