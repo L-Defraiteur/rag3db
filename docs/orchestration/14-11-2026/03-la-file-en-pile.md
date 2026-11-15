@@ -1708,3 +1708,7 @@ Arbre, 19 h 32 : la répétition réparée a fini sa part fermée sur les deux c
 montée 2 s** ; code-principal : 1 402 s, 9 s, **623 s, 1 s**) ; repassage en cours (paquet 1 sur 4, plus lent que prévu sous deux
 autres lourds : 35 à 45 min par base). Pour la vraie fenêtre : instantané + ~10 s + 1b 10 à 12 min + montée 2 s, par base, en parallèle ;
 le contrôle des deux sens en garde avant.
+Archi, 19 h 33 : la conception de delegate sur master (695a9c19f, page 10) : delegate/reply/stop/wait, sous-tâche parent_task sur
+`agent/<parent>--<nom>` forkée du parent, dialogue recopié chez le parent en from: subagent, merge par défaut ou proposition,
+bornes teammate.delegation {max_depth 2, max_children 3, wait_s 1800}, enfants en zone vivante. Deux points à vérifier avant le
+premier rouge (une tâche sur le backend d'une tâche ; parent_task exposé par la liste).
