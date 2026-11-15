@@ -6049,20 +6049,23 @@ mod tests_de_l_ecrivain {
             });
             cat.initialize().unwrap();
             register_code_schema(&mut cat, default_scope_chunking()).unwrap();
+            // Les vrais fichiers du dépôt : l'exemple C, l'API C et son en-tête.
+            let lire = |chemin: &str| std::fs::read_to_string(format!("{}/../../{chemin}", env!("CARGO_MANIFEST_DIR"))).expect(chemin);
             let src = Snapshot::new("ancre", [
                 ("a.rs".to_string(), A.to_string()),
                 ("b.rs".to_string(), F1.to_string()),
-                ("examples/c/main.c".to_string(), "int main(void) {\n    return connexion_ouvrir() + connexion_fermer();\n}\n".to_string()),
-                ("src/c_api/connection.cpp".to_string(), "int connexion_ouvrir() {\n    return 1;\n}\nint connexion_fermer() {\n    return 2;\n}\n".to_string()),
+                ("examples/c/main.c".to_string(), lire("examples/c/main.c")),
+                ("src/c_api/connection.cpp".to_string(), lire("src/c_api/connection.cpp")),
+                ("src/include/c_api/rag3db.h".to_string(), lire("src/include/c_api/rag3db.h")),
             ]);
             crate::code_sync::sync_source(&mut cat, &src, &Default::default(), &mut |_| {}).expect("la première synchronisation");
             let n = cat.publier_la_generation("c1", 0).expect("publier");
             let avant = cat.au_rang(n, |c| aretes_visibles_par_etiquette(c));
-            assert!(appelants(&cat, "connexion_ouvrir") == vec!["main".to_string()], "la base du témoin : main appelle connexion_ouvrir ({avant:?})");
+            assert!(appelants(&cat, "rag3db_connection_init") == vec!["main".to_string()], "la base du témoin : main appelle rag3db_connection_init ({avant:?})");
             cat.version_de_l_analyse = format!("{}-autre", cat.version_de_l_analyse);
             let options = crate::code_sync::SourceSyncOptions { batch_files: par_paquet, ..Default::default() };
             crate::code_sync::sync_source(&mut cat, &src, &options, &mut |_| {}).expect("le repassage");
-            assert_eq!(appelants(&cat, "connexion_ouvrir"), vec!["main".to_string()], "main appelle toujours connexion_ouvrir ({par_paquet} fichiers par paquet)");
+            assert_eq!(appelants(&cat, "rag3db_connection_init"), vec!["main".to_string()], "main appelle toujours rag3db_connection_init ({par_paquet} fichiers par paquet)");
             assert_eq!(appelants(&cat, "f"), vec!["a".to_string()], "a appelle toujours f ({par_paquet} fichiers par paquet)");
             let m = cat.publier_la_generation("c2", 0).expect("publier");
             assert_eq!(cat.au_rang(m, |c| aretes_visibles_par_etiquette(c)), avant, "le même graphe ({par_paquet} fichiers par paquet)");
