@@ -1369,3 +1369,14 @@ Lucie, 16 h 10 : « auto par défaut, presque jamais me demander si c'est dans c
 (ajout à la page de vision). Pour le socle : auto par défaut avec Landlock, un décideur modèle (demande + plan + action →
 passe / demander), le doute vers « passe », la sentinelle pour privilèges, hors-bac, réseau ; métrique = demandes inutiles.
 Archi : `auto` passe par Landlock et ne peut s'en passer (sûr à poser) ; en auto, ce qui ne touche ni écriture ni réseau passe.
+Codeparsers, 16 h 12 : cause des scopes sans DEFINED_IN — l'uuid d'un scope = blake3(fichier:nom:genre:hash(parent+signature)) ; les
+constructeurs de JsonMutWrapper ont la même signature reconstruite (« void JsonMutWrapper() », paramètres perdus, void inventé)
+donc le même uuid ; rag3weaver (code.rs:1494) garde la dernière clé par uuid, toutes les arêtes des homonymes se rabattent sur
+elle. Correctifs (a) rang d'apparition dans l'uuid à partir du second homonyme, (b) la signature d'un constructeur C++ garde
+ses paramètres. Accordé ; la version de l'analyse monte ; compte avant/après sur rag3weaver et la copie de code-lourd.
+Embarquement, 16 h 12 : pile reposée (pile-embarquement-r1 e69c84e63, 14 commits), rejeu depuis 16 h 09 sous timeout 7200 ; push au
+vert. Hotfixs **prêt** (b940cefb8, 11 commits ; shell test vert) : à lui au « poussé » d'embarquement, puis la fenêtre de formatage.
+tty-16 : trois commits (l'accord vivant 2504c33e4 : l'animation recouvrait « attend ton accord ») ; binaire d'essai reposé 16 h 09.
+Lucie, 16 h 12 : « insupportable, j'ai dû faire 15 fois oui » — l'équipier croit edit_file inactif et écrit par printf | tee, cp,
+git diff --no-index, python3 -c, chaque commande à la porte. Archi lit le run (edit_file dans les defs ? pourquoi ces commandes
+demandent ? correctif minimal aujourd'hui).
