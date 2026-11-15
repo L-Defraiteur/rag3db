@@ -5,6 +5,8 @@
 #     fenetre-purge.sh repetition <copie/nom.rag3db> <backend.json de la copie>
 #   compte à froid seul, sur une copie (les pas 3, rien n'est effacé) :
 #     fenetre-purge.sh compter <copie/nom.rag3db> -
+#   dedans, sur une base déjà fermée et instantanée par le pilote (ni banc, ni fermeture, ni instantané, ni réouverture) :
+#     fenetre-purge.sh dedans <nom.rag3db> -
 #   fenêtre, sur une base de l'hôte (la fermeture qui tient d'archi requise) :
 #     fenetre-purge.sh fenetre <~/.local/share/rag3weaver/nom.rag3db> <backend.json> "<jusqu'à>"
 #
@@ -27,14 +29,14 @@ O=$H/sorties/$NOM-$MODE-$(date +%Y%m%d-%H%M%S); mkdir -p "$O"
 exec > >(tee -a "$O/fenetre.log") 2>&1
 REQUETES=(commit "index du plein texte" "point de reprise" mutex "fermer un backend" "chunk_uuid" "les liens par COPY" "test e2e")
 dit() { echo "== $(date +%H:%M:%S) $*"; }
-rouge() { echo "ROUGE : $*"; [ "$MODE" = fenetre ] && echo "La base reste fermée. Retour : ${RETOUR:-aucun instantané}"; exit 1; }
+rouge() { echo "ROUGE : $*"; [ "$MODE" = fenetre ] || [ "$MODE" = dedans ] && echo "La base reste fermée. Retour : ${RETOUR:-aucun instantané}"; exit 1; }
 banc() { if [ "$MODE" = fenetre ]; then python3 -I "$B" hote "$MANIFESTE" "$1" "${REQUETES[@]}"; else python3 -I "$B" autonome "$MANIFESTE" "$1" "${REQUETES[@]}"; fi; }
 mots_de() { case $1 in Scope|ScopeContent) echo "content:fn,commit,index,return,self,test" ;; File) echo "path:docs,md,rs,src" ;; *) echo ":" ;; esac; }
 
 dit "$MODE $BASE ; sorties $O"
 [ -d "$FTS" ] || rouge "$FTS n'existe pas"
 
-if [ "$MODE" != compter ]; then
+if [ "$MODE" != compter ] && [ "$MODE" != dedans ]; then
   dit "1. banc de recherche avant"
   banc "$O/banc-avant.json" || rouge "banc d'avant"
 fi
@@ -43,7 +45,7 @@ if [ "$MODE" = fenetre ]; then
   : "${INSTANTANES:?}" "${ETIQUETTE:?}"
   dit "2. fermeture qui tient, puis instantané $ETIQUETTE"
   python3 -I "$B" fermer "$MANIFESTE" "purge des orphelins du plein texte (hotfixs et G)" "$JUSQU_A" || rouge "fermeture"
-  "$INSTANTANES" "$ETIQUETTE" "$BASE" || rouge "instantané (la fermeture tient ; rouvrir par : python3 $B ouvrir $MANIFESTE)"
+  bash "$INSTANTANES" "$ETIQUETTE" "$BASE" || rouge "instantané (la fermeture tient ; rouvrir par : python3 $B ouvrir $MANIFESTE)"
   RETOUR=~/.local/share/rag3weaver/instantanes/$ETIQUETTE/RETOUR.sh
 else
   [ -z "$(fuser "$BASE" 2>/dev/null)" ] || rouge "la copie est ouverte"
@@ -89,6 +91,7 @@ if [ "$MODE" = fenetre ]; then
   python3 -I "$B" ouvrir "$MANIFESTE" || rouge "réouverture"
 fi
 
+if [ "$MODE" = dedans ]; then dit "VERT (dedans) ; sorties $O"; exit 0; fi
 dit "6. banc de recherche après"
 banc "$O/banc-apres.json" || rouge "banc d'après"
 BANC_LIMITE=100 banc "$O/banc-apres-large.json" || rouge "banc large d'après"

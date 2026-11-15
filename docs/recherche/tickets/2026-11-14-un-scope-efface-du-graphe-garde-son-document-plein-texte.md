@@ -158,6 +158,23 @@ La fusion a pris 15 s sur la copie purgée et 41 s sur le témoin.
 Reste la décision de Lucie pour les bases existantes. Sur la base vivante, il faudrait recalculer les
 listes, hôte arrêté, avant d'effacer : les chiffres ci-dessus sont ceux de la copie du 13 novembre.
 
+## La purge des bases de luciepc (fenêtre du 15 novembre 2026, 0 h 51 et 1 h 11)
+
+Dans la fenêtre de la réparation des deux index de relations (ticket du cœur
+`2026-11-14-les-deux-index-d-une-table-de-relations-ne-s-accordent-plus`), sous la même fermeture qui tient et
+le même instantané. Les orphelins sont recomptés à froid sur la base fermée et déjà réparée :
+
+| base | table | lignes du graphe | documents avant → après | orphelins effacés | octets d'index après compact |
+|---|---|---:|---|---:|---|
+| code-lourd | Scope | 82 855 | 82 958 → 82 855 | 103 | 710 744 829 → 695 544 954 |
+| code-principal | Scope | 65 914 | 66 016 → 65 914 | 102 | 600 875 379 → 591 009 441 |
+
+File, Library et Symbol n'ont aucun orphelin dans les deux bases. Le banc lucivy rend, sur chaque requête,
+les mêmes documents moins les orphelins. Le banc par l'hôte ne perd aucun résultat.
+
+**Reste code-rag3db-depot** (portable, 9 701 Scope et 127 File dans l'instantané du 14 à 13 h 40). Sa fenêtre
+attend un binaire qui porte la fermeture qui tient sur l'hôte du portable.
+
 ## Les deux questions ouvertes
 
 1. **Les recherches rendent-elles ces orphelins ?** Si oui, que fait l'appelant d'un `_node_id` qui ne

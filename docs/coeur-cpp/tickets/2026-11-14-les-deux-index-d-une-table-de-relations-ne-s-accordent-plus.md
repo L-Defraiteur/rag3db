@@ -97,6 +97,42 @@ corrections que le code confirme :
 Les deux réparations sont prêtes pour la fenêtre. Les outils sont à luciepc, dans
 `~/.cache/rag3db-locks/` : `chaine-complete.sh`, `reconstruire.sh`, `releve_sens2`, et les scripts de jugement.
 
+## Les deux bases réparées (fenêtre de luciepc, 15 novembre 2026, 0 h 27 – 1 h 12)
+
+hotfixs, avec G (binaire fac67a208 posé à 0 h 26, avec la fermeture qui tient). Une seule fermeture et un seul
+instantané par base pour deux gestes : la réparation des deux index, puis la purge des orphelins du plein texte.
+Pilote `fenetre-luciepc.sh` (outils de la page des sondes de hotfixs). Pour chaque base, dans l'ordre :
+1. le banc de 10 requêtes par l'hôte ;
+2. `POST /backend/close` avec raison et `until` (fermeture qui tient) ;
+3. l'instantané `avant-fenetre-<base>-<date>` par `instantanes.sh` de G ;
+4. la réparation : relevé ancré, jugement, `DROP` / `CREATE` / `COPY`, contrôle des deux sens, relevé ancré
+   après ; s'il reste un identifiant d'un seul sens, tout s'arrête avant la purge ;
+5. la purge et le compact ;
+6. `POST /backend/open` ;
+7. le banc après, normal et large, comparé au banc d'avant.
+
+| base | fermée | table | arêtes reposées (accord + plausibles) | lectures fausses écartées (dont cases à zéro) | après : avant / arrière / d'un seul sens |
+|---|---|---|---|---|---|
+| code-lourd | 0 h 27 m 57 s → 0 h 51 m 35 s | INHERITS_FROM | 658 (636 + 22) | 22 (9) | 658 / 658 / 0 |
+| | | QUERIES | 20 093 (20 080 + 13) | 13 (5) | 20 093 / 20 093 / 0 |
+| | | LOCKS | 546 (541 + 5) | 5 (3) | 546 / 546 / 0 |
+| code-principal | 0 h 51 m 40 s → 1 h 11 m 41 s | QUERIES | 20 210 (20 203 + 7) | 7 (7) | 20 210 / 20 210 / 0 |
+| | | IMPLEMENTS | 331 (315 + 16) | 19 (6) | 331 / 331 / 0 |
+| | | LOCKS | 436 (400 + 36) | 36 (11) | 436 / 436 / 0 |
+
+Le contrôle des deux sens de G est égal sur les trois tables de chaque base. **Le banc par l'hôte** ne perd
+aucun résultat :
+- code-lourd : 10 requêtes sur 10 identiques ;
+- code-principal : deux requêtes voient chacune un résultat sortir du top et réapparaître au 24ᵉ et au 54ᵉ rang
+  du banc large. C'est le déplacement BM25 de la purge (`acquireLock` 47 → 47, `FileSource` 21 → 21).
+
+Retour : `~/.local/share/rag3weaver/instantanes/avant-fenetre-code-lourd-20261115-0027/RETOUR.sh` et
+`…/avant-fenetre-code-principal-20261115-0051/RETOUR.sh`, à luciepc.
+
+Un faux départ à 0 h 27 : à luciepc, `instantanes.sh` n'a pas le droit d'exécution, et le pilote s'est arrêté
+au refus de l'instantané. Rien n'avait été copié ni écrit. code-lourd a été rouverte aussitôt ; le pilote appelle
+maintenant le script par `bash`.
+
 ## La piste (cœur, relayée par c7)
 
 Sous 0c41f9fe6, l'annulation d'un COMMIT refusé tronquait le groupe CSR sens par sens

@@ -518,3 +518,29 @@ Scope_CHUNKED_FROM à 129 400, Lucivy_Scope à 4,0 Gio, et plus d'estampille.
 - Les lecteurs en dur de `Scope_Chunk` hors produit, passés par `code::scope_chunks` avant le retrait
   (ticket `2026-11-13-les-sondes-bancs-et-mesures-du-code-lisent-scope-chunk-en-dur`). Ma propre sonde
   des doublons lit `Scope_Chunk` en dur : elle n'aura plus d'objet, ses doublons partent avec la table.
+
+## La fenêtre de luciepc : réparation des deux index et purge (15 novembre 2026, 0 h 27 – 1 h 12)
+
+Jouée verte sur code-lourd puis code-principal. Les chiffres sont au ticket du cœur
+`docs/coeur-cpp/tickets/2026-11-14-les-deux-index-d-une-table-de-relations-ne-s-accordent-plus.md` et au ticket
+des orphelins de recherche.
+
+**Les outils**, dans `outils/` :
+- `fenetre-luciepc.sh` : le pilote d'une base, une fermeture et un instantané pour les deux gestes ;
+- `reparer-les-deux-sens.sh` : la réparation, en mode `repetition`, `dedans` ou `fenetre` ;
+- `releve_sens.cpp` : le relevé ancré par tranches de 500 offsets sur chaque étiquette, le sens prouvé par `EXPLAIN` ;
+- `disputes.py`, `cibles_plausibles.py`, `paires_doubles.py` et `final.py` : le jugement ;
+- `reconstruire.sh` : `DROP`, `CREATE` au même schéma, `COPY`, `CHECKPOINT` et le contrôle des deux sens ;
+- `fenetre-purge.sh` : la purge, avec son mode `dedans` ;
+- `analyse_sens.py` : la comparaison des deux sens par contenu.
+
+**Ce que la soirée a appris**, en plus des gardes de la purge :
+- **un « aucun écart » de `check_rel_directions` ne prouve pas qu'il ne manque rien.** Sa lecture non ancrée des
+  bouts est jouée dans un seul sens. Une relation vraie, `lockIndexForWrite` → `acquireLock`, a été perdue sous
+  « égales » par une première reconstruction. On relève donc par tranches ancrées, et on compte les identifiants
+  d'un seul sens ;
+- **le jugement d'une lecture en désaccord** : ses deux bouts hors de l'offset 0, sa ligne dans les lignes de son
+  Scope source, et le nom de sa cible, sans tenir compte de la casse, dans le texte de la source. Le sens avant
+  s'est montré juste, à ses cases à zéro près ;
+- **une seule arête par paire** source-cible : trois lectures en trop d'IMPLEMENTS étaient des copies exactes ;
+- **un script d'un autre se lance par `bash`** : il peut ne pas avoir le droit d'exécution sur l'autre poste.
