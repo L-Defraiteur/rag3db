@@ -1431,3 +1431,7 @@ pour la fenêtre de formatage (cherry-pick -n 644d1d8c5, commit gmail, bâti + u
 Recherche, 16 h 38 : sa part de 2b-C verte (vues-2b-c-2 97b8c8d7d, sur 2b′ 77cd6b049 ; `view = {layer, rank?}` sur tout outil qui lit,
 composé dans l'instantané de l'appel ; passe entière verte sous MOTEUR_ANCIEN dit). En pile derrière 2b′, en fin de file ; le
 témoin 0 au bit près du banc sur sa tête conditionne le « à toi ».
+Codeparsers, 16 h 49 : (a) vert (defined-in-homonymes d024118) : sur rag3weaver/src, **scopes sans DEFINED_IN 65 → 0**, 16 222 scopes
+inchangés ; l'arbre entier (code-lourd, third_party compris) en passe confinée par lots de 300. REGLES_DE_L_ANALYSE n'est pas
+encore sur master (elle arrive avec l'écrivain d'ED) : le pointeur DEFINED_IN fait un troisième lot après ED (1), avec la montée.
+96, 16 h 49 : pile du second tour prête (cbe5ba25c : usage, query_chars, variante context_title, description de trace), après tty-16.
