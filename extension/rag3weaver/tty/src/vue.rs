@@ -177,6 +177,8 @@ pub struct Vue {
     attente_depuis: Instant,
     /// Le modèle du dernier appel, tel que l'hôte le nomme.
     modele: Option<String>,
+    /// Le texte streamé depuis le départ du run : la réponse, déjà à l'écran.
+    texte_coule: String,
     /// « dépôt · branche · tâche », jamais l'id d'un backend.
     pub entete: String,
     /// Un repli à dire dans la zone vivante, sur la ligne du texte en cours quand
@@ -237,6 +239,7 @@ impl Vue {
             depuis: Instant::now(),
             attente_depuis: Instant::now(),
             modele: None,
+            texte_coule: String::new(),
             entete: String::new(),
             repli: None,
             maj_entree: false,
@@ -411,6 +414,9 @@ impl Vue {
             "RunStarted" | "LlmCall" => {
                 // Un appel au modèle part : au départ du run, ou au retour du précédent.
                 self.attente_depuis = Instant::now();
+                if e["kind"] == "RunStarted" {
+                    self.texte_coule.clear();
+                }
                 if let Some(m) = e["model"].as_str() {
                     self.modele = Some(m.rsplit('/').next().unwrap_or(m).to_string());
                 }
@@ -419,6 +425,7 @@ impl Vue {
             "Token" => {
                 self.changer(Etat::Ecrit);
                 if let Some(t) = e["text"].as_str() {
+                    self.texte_coule.push_str(t);
                     self.texte(t);
                 }
             }
@@ -506,6 +513,7 @@ impl Vue {
             (Some("teammate"), Some("report" | "answer" | "question" | "approval" | "proposal" | "message")) => self.repondu = true,
             _ => {}
         }
+        let mut corps_seul: Option<String> = None;
         // **La plomberie de l'équipier** (Lucie, 15 nov.) : une étape faite et la fin du pas ne
         // s'écrivent pas ; l'étape se dit en sourdine sur la ligne du haut, la fin change l'état.
         if !self.montrer_etapes {
@@ -517,6 +525,17 @@ impl Vue {
             if l["from"] == "teammate" && matches!(l["kind"].as_str(), Some("plan" | "edit_plan" | "started")) {
                 self.discret = Some(format!("équipier : {}", texte.lines().next().unwrap_or_default()));
                 return;
+            }
+            // **La réponse s'affiche une fois** (essai de Lucie, 15 nov.) : les copies que l'hôte
+            // pose à la fin du pas ne redisent pas le texte streamé, et son préfixe ne s'affiche pas.
+            if l["from"] == "teammate" && l["kind"] == "report" {
+                let corps = sans_mot_d_hote(texte);
+                if corps.trim().is_empty() || meme_texte(corps, &self.texte_coule) {
+                    return;
+                }
+                if corps.len() != texte.len() {
+                    corps_seul = Some(corps.to_string());
+                }
             }
             if l["from"] == "teammate" && l["kind"] == "step_done" {
                 return;
@@ -542,7 +561,7 @@ impl Vue {
         }
         self.clore();
         let tete = crate::boite::en_tete(l);
-        let texte = l["text"].as_str().unwrap_or("");
+        let texte = corps_seul.as_deref().unwrap_or_else(|| l["text"].as_str().unwrap_or(""));
         // La sortie d'une commande ! revient par la boîte : elle est déjà à l'écran,
         // on n'en dit que la première ligne (tty-13).
         if l["from"] == "supervisor" && texte.starts_with("L'utilisateur a lancé la commande") {
@@ -910,6 +929,22 @@ impl Vue {
         let y = zone.y + (2 + a.ligne as u16).min(zone.height.saturating_sub(1));
         f.set_cursor_position((x, y));
     }
+}
+
+/// Un compte rendu sans le mot que l'hôte met devant la réponse d'un pas fini sans `step_done`
+/// (« le pas N s'est terminé sans step_done ; sa réponse : … ») ; vide s'il n'y a que ce mot.
+fn sans_mot_d_hote(t: &str) -> &str {
+    let Some(reste) = t.strip_prefix("le pas ") else { return t };
+    let Some(i) = reste.find(" s'est terminé sans step_done") else { return t };
+    match reste[i..].split_once(" ; sa réponse : ") {
+        Some((_, corps)) => corps,
+        None => "",
+    }
+}
+
+/// Deux textes égaux aux blancs près.
+fn meme_texte(a: &str, b: &str) -> bool {
+    a.split_whitespace().eq(b.split_whitespace())
 }
 
 /// Le début de `s` qui tient dans `max` colonnes, `…` en bout quand il est coupé : une
@@ -1590,6 +1625,32 @@ mod tests {
         assert!(a(&v, 40).ends_with(" run_command cargo check travaille… (40 s)"), "{}", a(&v, 40));
         v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "tool": "run_command", "ok": true, "ms": 40_000 } }));
         assert!(a(&v, 3).ends_with(" le modèle répond… (gemini-3.8-flash, 3 s)"), "{}", a(&v, 3));
+    }
+
+    /// **La réponse s'affiche une fois** (essai de Lucie sur l'atelier, 15 nov. : trois fois le même
+    /// bilan) : le texte streamé est la réponse ; les copies que l'hôte pose dans la boîte à la fin
+    /// du pas (le texte nu, puis « le pas N s'est terminé sans step_done ; sa réponse : … ») ne se
+    /// réaffichent pas quand elles sont identiques ; ce préfixe est un mot d'hôte, jamais à l'écran.
+    #[test]
+    fn the_answer_streamed_is_not_shown_again_by_the_copies_of_the_end_of_the_step() {
+        let mut v = Vue::new(120, true);
+        let ecrites = |v: &mut Vue| v.prendre_lignes().into_iter().map(|l| l.texte).collect::<Vec<_>>();
+        v.ligne_de_boite(&json!({ "id": "d/t:1", "from": "supervisor", "kind": "request", "text": "essaie tes outils" }));
+        v.trame(&json!({ "evenement": { "kind": "RunStarted" } }));
+        for t in ["Bilan du test", " des outils :\n", "tout passe.\n"] {
+            v.trame(&json!({ "evenement": { "kind": "Token", "text": t } }));
+        }
+        v.trame(&json!({ "evenement": { "kind": "RunFinished" } }));
+        ecrites(&mut v);
+        v.ligne_de_boite(&json!({ "id": "d/t:2", "from": "teammate", "kind": "report", "text": "Bilan du test des outils :\ntout passe." }));
+        v.ligne_de_boite(&json!({ "id": "d/t:3", "from": "teammate", "kind": "report", "text": "le pas 2 s'est terminé sans step_done ; sa réponse : Bilan du test des outils :\ntout passe." }));
+        assert_eq!(ecrites(&mut v), Vec::<String>::new(), "la réponse est déjà à l'écran");
+        assert_eq!(v.quelle(), Some(Quelle::Repos), "il a répondu");
+        // Une réponse que le texte n'a pas dite s'écrit, sans le mot de l'hôte.
+        v.ligne_de_boite(&json!({ "id": "d/t:4", "from": "teammate", "kind": "report", "text": "le pas 3 s'est terminé sans step_done ; sa réponse : Autre chose." }));
+        assert_eq!(ecrites(&mut v), vec!["[équipier · compte rendu] Autre chose.".to_string()]);
+        v.ligne_de_boite(&json!({ "id": "d/t:5", "from": "teammate", "kind": "report", "text": "le pas 4 s'est terminé sans step_done ni réponse" }));
+        assert_eq!(ecrites(&mut v), Vec::<String>::new(), "un mot d'hôte seul ne s'écrit pas");
     }
 
     fn ligne_b(n: usize, from: &str, kind: &str, extra: Value) -> Value {
