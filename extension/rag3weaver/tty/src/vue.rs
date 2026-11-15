@@ -460,6 +460,10 @@ impl Vue {
 
     /// Une touche : rend l'action qu'elle demande.
     pub fn touche(&mut self, t: Touche) -> Option<Action> {
+        // Les candidats d'une complétion se disent jusqu'à la touche suivante.
+        if t != Touche::Tab {
+            self.propositions = None;
+        }
         match t {
             // Une approbation en attente et rien de tapé : `o` accorde, `n` refuse.
             Touche::Car(c @ ('o' | 'O' | 'y' | 'Y' | 'n' | 'N')) if self.saisie.est_vide() && self.boite.premiere().is_some_and(|a| a.kind == "approval") => {
@@ -496,6 +500,11 @@ impl Vue {
                 if texte.trim().is_empty() {
                     return None;
                 }
+                // Une commande du terminal (`/…`, `!…`) n'est jamais envoyée à l'équipier (tty-13).
+                let texte = match crate::commandes::lire(&texte) {
+                    (Some(c), _) => return Some(Action::Commande(c)),
+                    (None, envoi) => envoi.unwrap_or(texte),
+                };
                 // Ce que l'équipier attend passe avant : la saisie y répond.
                 if let Some(attente) = self.boite.premiere().cloned() {
                     self.clore();
@@ -518,7 +527,8 @@ impl Vue {
                 None
             }
             Touche::PageHaut | Touche::PageBas => None,
-            Touche::Tab => None,
+            Touche::Tab if self.saisie.est_vide() => None,
+            Touche::Tab => Some(Action::Completer(self.saisie.texte()[..self.saisie.curseur()].to_string())),
             Touche::CtrlG => Some(Action::Arreter),
             Touche::CtrlD if self.saisie.est_vide() => Some(Action::Quitter),
             Touche::CtrlD => None,
@@ -527,7 +537,10 @@ impl Vue {
 
     /// Applique une complétion : le début de la saisie jusqu'au curseur est
     /// remplacé, et les candidats se disent sur la ligne du haut.
-    pub fn appliquer_completion(&mut self, _c: crate::commandes::Completion) {}
+    pub fn appliquer_completion(&mut self, c: crate::commandes::Completion) {
+        self.saisie.remplacer_debut(&c.texte);
+        self.propositions = (!c.candidats.is_empty()).then(|| c.candidats.join("  "));
+    }
 
     /// Reprend les envois des séances d'avant (tty-13).
     pub fn reprendre_historique(&mut self, historique: Vec<String>) {
@@ -646,8 +659,12 @@ impl Vue {
                 saisie.push(Line::from(format!("{tete}{l}")));
             }
         }
-        let haut = match &self.repli {
-            Some(r) if en_cours.is_empty() => {
+        let haut = match (&self.propositions, &self.repli) {
+            (Some(p), _) if en_cours.is_empty() => {
+                let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
+                Line::from(Span::styled(queue(p, largeur), sourdine))
+            }
+            (None, Some(r)) if en_cours.is_empty() => {
                 let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
                 // La phrase et la commande ; trop étroit, la commande seule, entière.
                 let tout = format!("{} : {}", r.phrase, r.commande);
