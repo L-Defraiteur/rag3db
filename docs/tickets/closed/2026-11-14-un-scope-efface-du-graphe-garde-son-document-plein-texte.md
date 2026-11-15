@@ -1,6 +1,7 @@
 # Un Scope effacé du graphe garde son document plein texte
 
-- **État** : ouvert (14 novembre 2026, relevé par hotfixs avec la sonde de cohérence demandée par c7)
+- **État** : fermé (15 novembre 2026, recherche) : la cause est trouvée, le correctif est sur master en 262be6fc4 et dans les hôtes des deux postes, et deux comptes en service, à une heure d'écart, ne voient naître aucun orphelin. Restent 32 orphelins Scope et 4 File au dépôt, nés sous fac67a208, à purger ; ce n'est plus le défaut.
+- **Ouvert le** : 14 novembre 2026, relevé par hotfixs avec la sonde de cohérence demandée par c7
 - **Pour** : recherche, après sa page des règles d'exclusion. C'est son chemin de réindexation (DETACH DELETE de fin d'index, déplacement d'un Scope, nettoyage des absents) ; réattribution par c7
 - **Famille** : produit
 - **Gravité** : réponse fausse possible. Un document orphelin peut remonter dans une recherche avec un
@@ -189,6 +190,61 @@ le 97ᵉ rang. Retour : `~/.local/share/rag3weaver/instantanes/avant-fenetre-cod
 
 **Les trois bases servies sont purgées** : code-lourd, code-principal et code-rag3db-depot. memoire-longue n'avait
 aucun orphelin.
+
+## La cause, le correctif et la mesure en service (recherche, 14 et 15 novembre 2026)
+
+**La cause.** Ce n'était pas d'abord le cache uuid → offset, contrairement à ma première lecture. Une trace
+l'a montré : le témoin rougissait aussi avec le cache plein. **Le drain ne validait jamais au plein texte une
+table qui ne fait que perdre des lignes** : aucun `FlushNode` ne suivait `DeleteRecordNode`. Le
+`delete_by_node_id` n'était donc vu qu'au commit suivant de la poignée lucivy, puis il se perdait à la
+fermeture. Une fin d'instantané qui ne fait que retirer (un fichier supprimé, des Scope partis) laissait
+ainsi ses documents vivants. Le cache vide après un redémarrage est la seconde moitié du défaut : sans
+offset connu, il n'y avait même rien à retirer.
+
+**Le correctif**, sur master en **262be6fc4** :
+- un `FlushNode` « deletes_flush » suit `DeleteRecordNode` dans le drain ;
+- l'offset d'une ligne que le cache ne connaît pas se lit dans la base, par `select_node_ids`, avant
+  d'effacer ;
+- une ligne effacée sans offset connu se dit par un avertissement.
+
+Deux témoins de lib, `dataflow::index_nodes::tests::un_scope_efface_{apres_un,sans}_redemarrage_emporte_son_document`,
+ont été rouges puis verts. Banc a jugé le lot au bit près sur la base migrée : l'écart File passe de 1 à 0
+après un effacement, l'index entier reprend 203 suppressions perdues, et les 30 cas sont identiques.
+
+**Les hôtes.** Le portable joue 26a091474 depuis le 15 à 11 h 35, et luciepc 5b8f8994f depuis le 15 à
+14 h 40 ; les deux contiennent 262be6fc4. Avant, fac67a208 ne le contenait pas : c'était le binaire du
+portable de 1 h 16 à 11 h 35, et celui de luciepc de 0 h 25 à 14 h 40.
+
+**Les 970 de hotfixs** (9 701 → 10 671) sont nés du 14 à 13 h 40 au 15 à 1 h 21, sous un binaire sans le
+correctif.
+
+**La mesure en service** au dépôt (code-rag3db, portable), sous 26a091474. Deux comptes à froid, au mot
+de c7 :
+- la fermeture qui tient, environ 20 s, puis l'instantané et la réouverture ;
+- `fenetre-purge.sh compter` de hotfixs sur une copie par reflink de l'instantané ;
+- le zéro est celui de la purge du 15 à 1 h 22 (Scope 81 181 pour 81 181, File 8 041 pour 8 041).
+
+| compte | instantané | table | lignes | documents vivants | orphelins | lignes sans document |
+|---|---|---|---:|---:|---:|---:|
+| 14 h 00 | `recherche-compte-orphelins-1-20261115-1400` | Scope | 81 674 | 81 706 | 32 | 0 |
+| | | File | 8 126 | 8 130 | 4 | 0 |
+| 15 h 00 | `recherche-compte-orphelins-2-20261115-1500` | Scope | 81 812 | 81 844 | 32 | 0 |
+| | | File | 8 142 | 8 146 | 4 | 0 |
+
+Library et Symbol n'ont aucun orphelin aux deux comptes.
+
+- **Entre les deux comptes, 18 lignes Scope ont été effacées du graphe et 156 sont nées, sans un orphelin
+  de plus.** Les listes des orphelins sont identiques, `_node_id` par `_node_id`. Le correctif tient
+  donc en service pour Scope.
+- **Aucun File n'a été effacé dans l'heure** : la mesure ne dit rien de File en service. File est couvert
+  par le témoin et par le jugement de banc.
+- **Les 32 Scope et les 4 File restants** sont nés entre la purge (1 h 22) et 14 h 00, sans doute sous
+  fac67a208 (jusqu'à 11 h 35). Les listes sont dans
+  `~/.cache/rag3weaver-build/recherche-orphelins/{Scope,File}-orphelins-{1,2}.txt`, au portable, et
+  `POST /backend/maintain` peut les purger.
+
+Le ticket `2026-11-15-l-etat-d-index-ne-voit-pas-les-orphelins-du-plein-texte.md` dit pourquoi l'état
+d'index ne les voyait pas.
 
 ## Les deux questions ouvertes
 
