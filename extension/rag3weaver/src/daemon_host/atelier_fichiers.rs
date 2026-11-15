@@ -1335,7 +1335,8 @@ pub(super) mod tests {
         let a = atelier(d.path());
         let avant: std::collections::BTreeSet<String> = a.host.journal.runs_de(&a.h.id).into_iter().collect();
         // Par le chemin des appels de l'hôte (celui d'un client, de l'IDE, du chat), qui journalise le rendu.
-        let r = a.host.call(None, &a.h.manifest, "write", json!({ "path": "trace.txt", "text": "ligne tracée" }));
+        let session = a.host.open_session("le témoin", None, Vec::new(), None);
+        let r = a.host.call(Some(&session), &a.h.manifest, "write", json!({ "path": "trace.txt", "text": "ligne tracée" }));
         assert_ne!(r["ok"], false, "write : {r}");
         let debut = std::time::Instant::now();
         let neufs = loop {
