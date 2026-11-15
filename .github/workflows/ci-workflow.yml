@@ -956,16 +956,11 @@ jobs:
           rustup component add rustfmt
           cargo fmt --all
 
-      - name: Fail if any change is detected on the master branch
-        if: github.ref == 'refs/heads/master'
+      # **Aucun commit d'un robot dans le dépôt** (15 nov. 2026, c7) : sur une branche, l'ancienne étape
+      # EndBug/add-and-commit poussait « ci: auto code format » sous l'auteur CI Bot, et la branche divergeait sous
+      # son auteur. Un écart de format se refuse partout, comme sur master.
+      - name: Fail if any change is detected
         run: git diff --exit-code
-
-      - name: Commit changes on non-master branches
-        uses: EndBug/add-and-commit@v9
-        if: github.ref != 'refs/heads/master'
-        with:
-          author_name: "CI Bot"
-          message: "ci: auto code format"
 
   python-lint-check:
     name: python lint check
