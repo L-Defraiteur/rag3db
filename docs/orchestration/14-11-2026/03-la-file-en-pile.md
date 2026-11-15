@@ -1761,3 +1761,7 @@ Embarquement, 20 h 03 : la mesure « carte réellement pleine » prête (nuit.sh
 bâti de l'hôte sur master, marge 2048, fragment de résultat) ; card2 est réellement pleine ce soir (11 844 Mio libres à 20 h 03, la
 parité et la répétition tournent). Mot de c7 : après le « fini » de la pose de G (~21 h 05), au « va » du banc, pas pendant la pose.
 Ticket (b) : compter les jetons avant la troncature du tokenizer.
+ED, 20 h 08 : le miroir corrigé (5ed5d1fc9 ; témoin 18 rouge d'abord : `recopier_les_aretes_entrantes` traitait CONSUMED_BY comme une
+entrante, alors que c'est le miroir d'un CONSUMES sortant que l'ingestion repose ; la boucle le saute). Passe épinglée puis le banc
+rejuge. Banc : sa sonde de structure contrôle désormais les miroirs directement (0 et 0 attendus) ; « va » à G vers 20 h 50, va-du-banc
+à embarquement après le « fini » de G vers 21 h 05.
