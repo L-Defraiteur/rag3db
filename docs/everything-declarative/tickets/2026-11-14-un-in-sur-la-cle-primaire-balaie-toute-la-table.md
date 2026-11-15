@@ -1,6 +1,6 @@
 # Un `IN` sur la clé primaire balaie toute la table au lieu de prendre la clé
 
-- **État** : ouvert (14 novembre 2026). Contournement rag3weaver sur master en 9fd946ec3 : 5 008 → 113,6 ms (sonde `sonde_in_par_cle`, recherche, 15 novembre 2026, lib 373b5477b, mêmes 72 652 offsets). Reste le planificateur : fermeture sur le lot du cœur, avec son EXPLAIN.
+- **État** : ouvert (14 novembre 2026). Contournement rag3weaver sur master en 9fd946ec3 : 5 008 → 113,6 ms (sonde `sonde_in_par_cle`, recherche, 15 novembre 2026, lib 373b5477b, mêmes 72 652 offsets). Les deux correctifs du cœur sont sur master (15 novembre 2026, 4 h 2x) : (B) l'IN haché, e5e626803, sans N² sur une liste constante ; (A) 7897f2453, où `n.pk IN <liste littérale ou paramètre du type de la clé>` sur une seule table se planifie en PRIMARY_KEY_SCAN, sans balayage ni FILTER (10 clés sur 200 000 lignes : 10,4 → 0,16 ms ; 40 000 sur 40 000 : 1,12 × la forme UNWIND ; l'ordre de la liste, chaque nœud une fois, NULL sans résultat). Reste à fermer : la sonde `sonde_in_par_cle` et l'EXPLAIN de `MATCH (n:ScopeContent) WHERE n._uuid IN $filter_p0 RETURN OFFSET(id(n))` sur la lib qui portera 7897f2453, pas encore posée.
 - **Famille** : moteur
 - **Gravité** : lenteur. ×44 sur une résolution de 72 652 clés : 5 008 ms au lieu de 113 ms
 - **Atteignable en service** : oui. C'est le filtre `_uuid IN [...]` que rag3weaver passe à chaque recherche sur une base à versions (le masque des versions), et toute requête d'utilisateur qui filtre sur une liste d'identifiants
