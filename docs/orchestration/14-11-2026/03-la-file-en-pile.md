@@ -1354,3 +1354,7 @@ un agent de code d'abord, qui gère ses worktrees, dont les recherches sont en p
 est prêt, qui parle à l'utilisateur. tty, 16 h 02 : la forme des étapes faite en premier morceau de tty-16 (cx-tty-16 27d76c1a0 :
 l'historique garde demande et réponse, le reste défile en sourdine sur la ligne du haut de la zone vivante ; --etapes /
 /etapes pour tout voir ; crate 99/99) ; un binaire d'essai pour Lucie (`rag3weaver-tty-essai`, bâti sur cx-tty-16, avec /model).
+Lucie, 16 h 06 : essai sur le binaire tty-16 — l'accord d'une commande a marché, mais « les accords demandés, je dois pas les voir
+défiler comme ça, ça doit être vivant et pas rester dans les lignes de mon terminal » : une demande d'accord est un état de la
+zone vivante (commande, o / n), qui disparaît une fois répondue ; l'historique n'en garde qu'une ligne de résultat au plus.
+Pour tty, dans tty-16 ; `git status` sur la liste sûre.
