@@ -2322,8 +2322,8 @@ fn read_threads() -> u64 {
         // au-delà de 0, ou dans une autre couche que celle du backend, porte sa couche et son rang dans
         // son identité. Une ligne de la génération 0 du backend garde l'uuid de sa seule clé.
         let depuis = data.get(crate::generations::DEPUIS).and_then(|v| v.as_i64()).unwrap_or(0);
-        let couche = data.get(crate::generations::COUCHE).and_then(|v| v.as_str()).unwrap_or(crate::code::COUCHE_DU_BACKEND);
-        if depuis > 0 || couche != crate::code::COUCHE_DU_BACKEND {
+        let couche = data.get(crate::generations::COUCHE).and_then(|v| v.as_str()).unwrap_or(crate::generations::COUCHE_DU_BACKEND);
+        if depuis > 0 || couche != crate::generations::COUCHE_DU_BACKEND {
             field_values.push(format!("{}={couche}", crate::generations::COUCHE));
             field_values.push(format!("{}={depuis}", crate::generations::DEPUIS));
         }

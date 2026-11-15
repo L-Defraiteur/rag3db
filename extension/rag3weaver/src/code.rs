@@ -677,7 +677,7 @@ pub const SCOPE_FORM_VERSIONS: &str = "code-scope-v1/content";
 pub const SCOPE_FORM_GENERATIONS: &str = "code-scope-v1/content/generations";
 /// **La couche des lignes d'aujourd'hui** : la suivie (`tracked`) qui couvre l'arbre que le backend
 /// indexe, sa couche de travail comprise.
-pub const COUCHE_DU_BACKEND: &str = "backend";
+pub use crate::generations::COUCHE_DU_BACKEND;
 /// Ce que dit une base de code d'avant les versions de scope.
 pub const SANS_VERSIONS: &str = "base de code sans versions de scope (forme d'avant le 13 novembre 2026) : \
     chaque occurrence garde ses morceaux et ses vecteurs, et un contenu identique dans deux fichiers \
