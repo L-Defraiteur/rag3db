@@ -1125,3 +1125,11 @@ Archi, 14 h 28 : place rendue à 14 h 27 (pid tué, aucun reste). Cause : son lo
 ligne » fait attendre sans borne les témoins d'avant de l'équipier (3 FAILED, d'autres suspendus). Le lot n'est pas vert ;
 archi relit chaque témoin (expects "none" ou une ligne) et borne la prochaine passe ; le produit lui-même doit borner l'attente
 d'une ligne (délai réglé, échec nommé). Le relai reste à sa place. Procédure : toute passe lourde part sous `timeout` dans `poste`.
+Archi, 14 h 29 : la garde de l'équipier a une portée large (une vingtaine de témoins d'avant postent du travail sans report) ;
+tranché **(B)** : la relance ne joue que si l'équipier n'a rien laissé du tout (ni ligne, ni fichier, ni plan clos), puis l'attente
+du superviseur bornée par le délai réglé, échec nommé.
+Hotfixs, 14 h 29 : run de la PR sur 83fccc0b6 : lint, format, sanity verts, shell test rouge (un second agrégat incomplet,
+DatabaseHeader::writerBuildID ; GCC syntaxe seule sur tout src/ pour tous les corriger, à luciepc). Le vert du format est
+trompeur : sur une branche hors master, le job **pousse un commit « CI Bot »** (644d1d8c5, 25 fichiers = la dette de format
+réelle). Tranché : aucun commit d'un bot dans le dépôt — l'étape disparaît du lot, « Fail if any change » joue partout ; le
+format pur des 25 fichiers en un commit gmail juste après le lot CI (fenêtre), rien de C++ ne pousse d'ici là.
