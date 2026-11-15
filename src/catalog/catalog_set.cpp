@@ -76,6 +76,11 @@ std::string CatalogSet::nameChangedAfterSnapshotOf(const Transaction* transactio
     return "";
 }
 
+CatalogEntry* CatalogSet::getHeadEntry(const std::string& name) {
+    std::shared_lock lck{mtx};
+    return entries.contains(name) ? entries.at(name).get() : nullptr;
+}
+
 CatalogEntry* CatalogSet::getEntry(const Transaction* transaction, const std::string& name) {
     std::shared_lock lck{mtx};
     return getEntryNoLock(transaction, name);
