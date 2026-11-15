@@ -1412,3 +1412,11 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   contrat changé — un second ALTER de la même table attend le premier au lieu d'être refusé ; contrôle
   ddl-waits-at-most-the-longest-packet (un ADD ≤ plus longue transaction d'écrivain + 50 ms : ADD 11 à 104 ms
   pour des écrivains de 35 à 321 ms). La forme des paquets d'ED lui vient d'ED, pas de moi.
+- **Le cœur, 07 h 5x — un trou dans l'attente de l'ALTER** : un écrivain est lié et planifié avant de prendre
+  le verrou de table (pris à l'exécution) ; celui qui attend un ADD peut écrire une ligne sur l'ancien nombre
+  de colonnes (témoin rouge AWriterCreatingDuringTheAlterWritesNoRowOfTheOldSchema). Décision : (b) un refus
+  nommé à l'acquisition si le catalogue a changé pendant l'attente, dans ce lot ; (a) le verrou pris au bind
+  comme PostgreSQL, sous ticket. **Fait pour Lucie** : sous l'attente, un ALTER lancé pendant une indexation en
+  masse attend le paquet en cours (2 048 fichiers, ou le COPY final des relations — des minutes), et les
+  écrivains neufs attendent derrière lui ; en service l'hôte n'ALTER qu'à l'ouverture ou à une montée de
+  schéma, CREATE INDEX reste en partagé : le cas est rare, il se dit dans les nouveautés.
