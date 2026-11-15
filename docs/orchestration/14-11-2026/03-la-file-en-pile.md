@@ -1283,3 +1283,20 @@ a3bb9db72) : lib 2472/0, archiviste 20/20… ; compose_restart 1/2 et cited_by 0
 épinglée entière VERTE (e2e_code 36, lectures 27, demon_hote 20, postgres 39, lib 2485, navigateur 45), avec le correctif
 d'histoire (témoin 13), l'état du repassage (témoin 14) et la nouveauté chiffrée ; le banc rejuge depuis 15 h 11 (~2 h) ; le grain
 du paquet (témoin 15) sur une branche à part, lot suivant.
+Embarquement, 15 h 33 : le plafond `query_max_chars` vert (plafond-requete, 4 commits sur le repli ; six témoins rouges d'abord ; lib
+2 360 ; défaut 6 000, refus au chargement d'un nul ou > context_tokens × 3, état {value, source}). La pile repli + plafond
+avance juste après 96 (elle protège les hôtes et le banc) ; rejeu e2e_code + e2e_lectures sur la tête reposée. Ordre : archi →
+96 → embarquement → lucivy → codeparsers → tty-14 → ED (1) → G → arbre ; CI + format de hotfixs à son « prêt ».
+
+## 15 h 38 — Lucie répond : autorisation explicite, oui à la bascule, oui aux mots, « choisis une politique »
+
+Lucie, 15 h 38 : « je t'autorise explicitement » (les runs CI), « oui pour basculer », « oui pour le reste », « mes bases on s'en fout
+c'est là pour ça », « choisis une politique relevante ». Appliqué :
+- **CI** : le run 43610263500 annulé (completed/cancelled) ; un run neuf de master (43724738336) tient le groupe à son tour ; les
+  quatre du 11 novembre « completed » à l'API, « queued » à la liste. Au « poussé » du lot CI de hotfixs : annuler tout run plus
+  ancien en file pour que le sien joue.
+- **Mots des modèles** : `access` + `provider`, alias deux semaines (fin le 29 novembre), chez ED après la page 2a′-3.
+- **Bascule** : ce soir dès la file vidée (l'écrivain atterri), les trois bases en parallèle après maintain, répétition sur copie
+  aujourd'hui ; **retour arrière 72 h** (instantané + ancien index), puis retrait base par base à mon mot sans redemander ;
+  journal de bascule par base, état « basculée le … ».
+- tty-15 (les deux pistes tmux, cacfd9223) en pile derrière tty-14.
