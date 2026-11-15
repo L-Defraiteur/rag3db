@@ -567,3 +567,78 @@ fn un_apport_recopie_sort_des_rappels_par_defaut() {
     assert!(tout.contains(&"Vivant".to_string()) && tout.contains(&"Recopié".to_string()), "le filtre ôté, il se voit : {tout:?}");
 }
 
+/// Une fiche proposée et ses apports, une section chacun, sous la source CHEMIN. Rend l'uuid de la fiche.
+fn fiche_et_apports(b: &Backend, nom: &str, sections: &[&str]) -> String {
+    let f = appel(b, "put_fiche", json!({"record": {"name": nom, "about": format!("Le sujet {nom}, et tout ce que ses sections en disent."), "state": "proposed"}}));
+    for s in sections {
+        let texte = format!("La section {s} du sujet {nom}, assez longue pour être une phrase.");
+        appel(b, "put_apport", json!({"record": {"fiche": nom, "source": CHEMIN, "section": s, "texte": texte, "niveau": "L1", "state": "current"}}));
+        appel(b, "relier_apport", json!({"links": [{"from": {"name": nom}, "to": {"fiche": nom, "source": CHEMIN, "section": s}}]}));
+    }
+    f["result"]["uuid"].as_str().expect("l'uuid").to_string()
+}
+
+/// Les sections que le rappel des apports rend, pour une requête, avec les options données.
+fn sections_rappelees(b: &Backend, options: Value) -> Vec<String> {
+    let r = appel(b, "recall_apports", json!({"query": "section sujet phrase", "options": options}));
+    r["result"].as_array().cloned().unwrap_or_default().iter().filter_map(|x| x["data"]["section"].as_str().map(str::to_string)).collect()
+}
+
+/// Les noms des fiches que `cited_by` rend pour une valeur.
+fn fiches_qui_citent(b: &Backend, valeur: &str) -> Vec<String> {
+    let c = appel(b, "cited_by", json!({"value": valeur, "format": "json"}));
+    let fiches: Vec<Value> = serde_json::from_str(c["result"].as_str().unwrap_or("[]")).unwrap_or_default();
+    fiches.iter().filter_map(|f| f["data"]["name"].as_str().map(str::to_string)).collect()
+}
+
+/// **Scinder une fiche, d'un appel** (15 novembre 2026, les gestes de Lucie au survol). Chaque groupe
+/// de sections devient une fiche proposée, avec sa phrase et les copies de ses apports (l'identité d'un
+/// apport porte le nom de sa fiche : il se recopie, il ne se déplace pas). L'ancienne est retirée, ses
+/// apports passent `recopied` (provenance, hors des rappels par défaut), et chaque fiche neuve porte une
+/// Ref `derived_from` vers l'ancienne. Une section oubliée dans les groupes est refusée.
+#[test]
+#[ignore]
+fn une_fiche_se_scinde_par_groupes_de_sections() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |_| {});
+    let uuid = fiche_et_apports(&b, "Le thème large", &["Un", "Deux", "Trois"]);
+    let e = b.call("scinder_fiche", json!({"uuid": uuid, "groupes": [{"name": "Le premier thème", "about": "Ce que les deux premières sections disent du thème.", "sections": ["Un", "Deux"]}]})).err().expect("une section oubliée est refusée");
+    assert!(e.contains("Trois"), "le refus nomme la section oubliée : {e}");
+    let r = appel(&b, "scinder_fiche", json!({"uuid": uuid, "groupes": [
+        {"name": "Le premier thème", "about": "Ce que les deux premières sections disent du thème.", "sections": ["Un", "Deux"]},
+        {"name": "Le second thème", "about": "Ce que la troisième section dit du thème, à part.", "sections": ["Trois"]}]}));
+    assert!(r["ok"] != json!(false), "{r}");
+    let etat = |nom: &str| appel(&b, "get_fiche", json!({"record": {"name": nom}}))["result"]["data"]["state"].clone();
+    assert_eq!(etat("Le thème large"), json!("retired"));
+    assert_eq!(etat("Le premier thème"), json!("proposed"));
+    assert_eq!(etat("Le second thème"), json!("proposed"));
+    assert_eq!(apports_de(&b, "Le premier thème").len(), 2, "les copies sous la fiche issue");
+    assert_eq!(apports_de(&b, "Le second thème").len(), 1);
+    let defaut = sections_rappelees(&b, json!({"limit": 20, "consistency": "strict"}));
+    assert_eq!(defaut.iter().filter(|s| *s == "Un").count(), 1, "par défaut, un seul exemplaire : {defaut:?}");
+    let tout = sections_rappelees(&b, json!({"limit": 20, "consistency": "strict", "filter_condition": {}}));
+    assert_eq!(tout.iter().filter(|s| *s == "Un").count(), 2, "le filtre ôté, l'exemplaire d'origine se voit : {tout:?}");
+    let issues = fiches_qui_citent(&b, "Le thème large");
+    assert!(issues.contains(&"Le premier thème".to_string()) && issues.contains(&"Le second thème".to_string()), "la Ref derived_from : {issues:?}");
+}
+
+/// **Rejoindre deux fiches, d'un appel** : les apports de A passent sur B (recopiés), A est retirée, et B
+/// porte une Ref `alias` qui garde le nom de A.
+#[test]
+#[ignore]
+fn deux_fiches_se_rejoignent_et_le_nom_de_l_une_devient_alias() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |_| {});
+    let a = fiche_et_apports(&b, "Hooks de rag3weaver", &["Le binaire"]);
+    let cible = fiche_et_apports(&b, "hooks Claude Code de rag3weaver", &["Le rappel"]);
+    let r = appel(&b, "rejoindre_fiches", json!({"uuid_a": a, "uuid_b": cible}));
+    assert!(r["ok"] != json!(false), "{r}");
+    let etat = |nom: &str| appel(&b, "get_fiche", json!({"record": {"name": nom}}))["result"]["data"]["state"].clone();
+    assert_eq!(etat("Hooks de rag3weaver"), json!("retired"));
+    assert_eq!(etat("hooks Claude Code de rag3weaver"), json!("proposed"));
+    assert_eq!(apports_de(&b, "hooks Claude Code de rag3weaver").len(), 2, "ses apports et la copie de ceux de A");
+    let defaut = sections_rappelees(&b, json!({"limit": 20, "consistency": "strict"}));
+    assert_eq!(defaut.iter().filter(|s| *s == "Le binaire").count(), 1, "{defaut:?}");
+    assert!(fiches_qui_citent(&b, "Hooks de rag3weaver").contains(&"hooks Claude Code de rag3weaver".to_string()), "la Ref alias");
+}
+

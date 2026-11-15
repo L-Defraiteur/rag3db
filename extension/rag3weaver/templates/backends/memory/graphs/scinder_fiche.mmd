@@ -1,0 +1,13 @@
+%% tool: scinder_fiche
+%% description: Scinde une fiche, par son uuid, en groupes de sections : chaque groupe devient une fiche proposée (son nom, une phrase d'au moins six mots, les copies de ses apports), l'ancienne est retirée et ses apports passent recopied (la provenance, hors des rappels par défaut). Chaque fiche neuve, et chaque copie, porte une Ref derived_from vers l'ancienne. Une section qui n'est dans aucun groupe, ou dans deux, est refusée ; un nom de groupe qui nomme une fiche existante aussi.
+%% param: uuid string! -- L'uuid de la fiche à scinder (le nom de son fichier sous fiches/).
+%% param: groupes json = [] -- Les fiches neuves (une liste, au moins un groupe) : [{name, about, sections: [titres de section]}], chaque section de la fiche dans un groupe et un seul.
+%% param: tout json = {} -- Réservé : le filtre vide de la sélection des fiches (le mermaid n'écrit pas d'objet littéral).
+%% result: geste.list
+
+graph LR
+    fiches["GraphNode(graph='@builtin:tools/select_structured.mmd', entity='Fiche', filter=$tout, limit=0)"]
+    trouver["RhaiNode(script_id=gestes_scinder, inputs='uuid,groupes', uuid=$uuid, groupes=$groupes)"]
+    geste["ForEachNode(graph='@builtin:backends/memory/graphs/gestes_un.mmd')"]
+    fiches -->|result:value| trouver
+    trouver -->|result:elements| geste

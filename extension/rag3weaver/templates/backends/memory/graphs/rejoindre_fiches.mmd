@@ -1,0 +1,13 @@
+%% tool: rejoindre_fiches
+%% description: Rejoint la fiche A à la fiche B, par leurs uuid : les apports de A sont recopiés sous B (les originaux passent recopied, la provenance, hors des rappels par défaut), A est retirée, et B porte une Ref alias qui garde le nom de A. Chaque copie porte une Ref derived_from vers A.
+%% param: uuid_a string! -- L'uuid de la fiche qui rejoint l'autre (elle est retirée).
+%% param: uuid_b string! -- L'uuid de la fiche qui reste.
+%% param: tout json = {} -- Réservé : le filtre vide de la sélection des fiches.
+%% result: geste.list
+
+graph LR
+    fiches["GraphNode(graph='@builtin:tools/select_structured.mmd', entity='Fiche', filter=$tout, limit=0)"]
+    trouver["RhaiNode(script_id=gestes_rejoindre, inputs='uuid_a,uuid_b', uuid_a=$uuid_a, uuid_b=$uuid_b)"]
+    geste["ForEachNode(graph='@builtin:backends/memory/graphs/gestes_un.mmd')"]
+    fiches -->|result:value| trouver
+    trouver -->|result:elements| geste

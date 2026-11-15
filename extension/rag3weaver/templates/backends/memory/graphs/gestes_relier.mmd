@@ -1,0 +1,14 @@
+%% tool: gestes_relier
+%% description: Un groupe d'un geste, ses écritures faites : les copies reliées à leur fiche (A_POUR_APPORT), la fiche ancrée à une Ref de son genre (derived_from ou alias) qui porte l'ancien nom, et chaque copie qui cite l'apport d'origine (derived_from) et sa section (doc). Rend le groupe.
+%% param: groupe json! -- Un groupe du plan, création faite.
+%% result: out.result
+
+graph LR
+    link["RelationBatchNode(relation='A_POUR_APPORT', links=$groupe.links)"]
+    ancrer["AddRefNode(genre=$groupe.genre, valeur=$groupe.ancien, fiche=$groupe.fiche_id, refs_entity='Ref', types_entity='RefType', from_entity='Fiche', relation='ANCRE')"]
+    lc["RhaiNode(script='input.groupe.citations', inputs='groupe', groupe=$groupe)"]
+    citer["ForEachNode(graph='@builtin:backends/memory/graphs/gestes_citer.mmd', element='ligne')"]
+    out["RhaiNode(script='input.groupe', inputs='groupe', groupe=$groupe)"]
+    link -->|report:value| lc
+    lc -->|result:elements| citer
+    citer -->|list:value| out

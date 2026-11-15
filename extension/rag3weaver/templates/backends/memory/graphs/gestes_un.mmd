@@ -1,0 +1,23 @@
+%% tool: gestes_un
+%% description: Un geste sur une fiche (scinder, rejoindre) : ses apports, le plan (gestes_plan), puis dans l'ordre la création des fiches et des copies, les liens et les Ref, les originaux recopiés, et l'ancienne fiche retirée. Rend le compte du geste.
+%% param: element json! -- {ancienne, filtre_apports, groupes, genre, mode} (gestes_scinder, gestes_rejoindre).
+%% result: rendu.result
+
+graph LR
+    apports["GraphNode(graph='@builtin:tools/select_structured.mmd', entity='Apport', filter=$element.filtre_apports, limit=0)"]
+    plan["RhaiNode(script_id=gestes_plan, inputs='element', element=$element)"]
+    creer["ForEachNode(graph='@builtin:backends/memory/graphs/gestes_creer.mmd', element='groupe')"]
+    relier["ForEachNode(graph='@builtin:backends/memory/graphs/gestes_relier.mmd', element='groupe')"]
+    recopier["ForEachNode(graph='@builtin:backends/memory/graphs/gestes_recopier.mmd', element='groupe')"]
+    fin["RhaiNode(script_id=gestes_fin)"]
+    lignes["RhaiNode(script='input.lignes')"]
+    retirer["ForEachNode(graph='@builtin:backends/memory/graphs/ecrire_fiche.mmd', element='ligne')"]
+    rendu["RhaiNode(script='input.rendu')"]
+    apports -->|result:value| plan
+    plan -->|result:elements| creer
+    creer -->|results:elements| relier
+    relier -->|results:elements| recopier
+    recopier -->|list:value| fin
+    fin -->|result:value| lignes
+    fin -->|result:value| rendu
+    lignes -->|result:elements| retirer

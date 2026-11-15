@@ -696,7 +696,11 @@
     "archive_pass": "scripts/archive_pass.rhai",
     "archive_linked": "scripts/archive_linked.rhai",
     "archive_summary": "scripts/archive_summary.rhai",
-    "gestes_confirmer": "scripts/gestes_confirmer.rhai"
+    "gestes_confirmer": "scripts/gestes_confirmer.rhai",
+    "gestes_scinder": "scripts/gestes_scinder.rhai",
+    "gestes_rejoindre": "scripts/gestes_rejoindre.rhai",
+    "gestes_plan": "scripts/gestes_plan.rhai",
+    "gestes_fin": "scripts/gestes_fin.rhai"
   },
   "tools": {
     "put_memory": {
@@ -929,6 +933,12 @@
     },
     "confirmer_fiche": {
       "graph": "graphs/confirmer_fiche.mmd"
+    },
+    "scinder_fiche": {
+      "graph": "graphs/scinder_fiche.mmd"
+    },
+    "rejoindre_fiches": {
+      "graph": "graphs/rejoindre_fiches.mmd"
     },
     "archive": {
       "graph": "graphs/archive.mmd",

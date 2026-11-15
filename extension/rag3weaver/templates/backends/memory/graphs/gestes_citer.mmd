@@ -1,0 +1,8 @@
+%% tool: gestes_citer
+%% description: Une copie d'apport : elle cite l'apport d'origine (Ref derived_from) et sa section (Ref doc).
+%% param: ligne json! -- {apport_key, issue_valeur, doc_valeur}.
+%% result: doc.report
+
+graph LR
+    issue["AddRefNode(genre='derived_from', valeur=$ligne.issue_valeur, fiche=$ligne.apport_key, refs_entity='Ref', types_entity='RefType', from_entity='Apport', relation='APPORT_CITE')"]
+    doc["AddRefNode(genre='doc', valeur=$ligne.doc_valeur, fiche=$ligne.apport_key, refs_entity='Ref', types_entity='RefType', from_entity='Apport', relation='APPORT_CITE')"]

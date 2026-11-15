@@ -1,0 +1,17 @@
+%% tool: gestes_creer
+%% description: Un groupe d'un geste : les deux genres de Ref déclarés (derived_from, alias), la fiche neuve (s'il y en a une), puis les copies de ses apports. Rend le groupe pour l'étage suivant.
+%% param: groupe json! -- Un groupe du plan (gestes_plan) : genre, fiches, copies…
+%% result: out.result
+
+graph LR
+    issue["CreateRefTypeNode(name='derived_from', description='Ce dont une fiche ou un apport est issu : la fiche scindée ou rejointe, et la section recopiée.', forme='<ancienne fiche> ou <ancienne fiche> — <source>#<section>', confirm=true, types_entity='RefType')"]
+    alias["CreateRefTypeNode(name='alias', description='Un autre nom d&#39;une fiche : celui d&#39;une fiche qui l&#39;a rejointe.', forme='<nom d&#39;une fiche rejointe>', confirm=true, types_entity='RefType')"]
+    lf["RhaiNode(script='input.groupe.fiches', inputs='groupe', groupe=$groupe)"]
+    fiches["ForEachNode(graph='@builtin:backends/memory/graphs/ecrire_fiche.mmd', element='ligne')"]
+    lc["RhaiNode(script='input.groupe.copies', inputs='groupe', groupe=$groupe)"]
+    copies["ForEachNode(graph='@builtin:backends/memory/graphs/ecrire_apport.mmd', element='ligne')"]
+    out["RhaiNode(script='input.groupe', inputs='groupe', groupe=$groupe)"]
+    lf -->|result:elements| fiches
+    fiches -->|list:value| lc
+    lc -->|result:elements| copies
+    copies -->|list:value| out
