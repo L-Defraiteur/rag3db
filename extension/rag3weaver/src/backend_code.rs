@@ -40,8 +40,14 @@ impl GitIdentity {
 /// **Le refus d'écrire d'une source en lecture seule.** `task_writes` : les écritures se font
 /// dans les tâches ; `dans_une_tache` : ce backend EST une tâche (sa surcharge), et le refus ne
 /// lui conseille donc pas d'en ouvrir une.
-pub fn refus_d_ecriture(path: &str, cursor: &str, task_writes: bool, _dans_une_tache: bool) -> String {
-    if task_writes {
+pub fn refus_d_ecriture(path: &str, cursor: &str, task_writes: bool, dans_une_tache: bool) -> String {
+    if dans_une_tache {
+        format!(
+            "{path} : cette tâche n'a pas le droit d'écrire, parce que son backend parent ne le permet pas \
+             (workspace.read_only sans task_writes) ; lis, cherche, et dis à l'utilisateur ce qu'il faudrait \
+             changer ou de poser task_writes"
+        )
+    } else if task_writes {
         format!(
             "{path} : l'arbre principal est en lecture seule ; l'agent écrit dans une tâche \
              (POST /ide/taches : sa branche agent/<nom>, relue puis fusionnée)"
@@ -181,6 +187,10 @@ pub struct WorkspaceConfig {
     /// `index: "code"`.
     #[serde(default)]
     pub queries_via: Option<QueriesVia>,
+    /// **Ce backend est une tâche** (posé par sa surcharge, jamais déclaré) : le refus d'écrire le
+    /// dit sans conseiller d'ouvrir une tâche.
+    #[serde(skip)]
+    pub dans_une_tache: bool,
 }
 
 impl WorkspaceConfig {
@@ -638,6 +648,15 @@ pub fn avec_lecture_git(
             bac = bac.avec_env(cle, valeur);
         }
     }
+    // **Le fichier d'exclusion personnel** (`~/.config/git/ignore`, lu par défaut quand
+    // `core.excludesFile` n'est pas réglé) est hors domaine : le bac le refuse, et `git status`
+    // s'arrête (« impossible d'utiliser … comme fichier d'exclusion », 15 novembre 2026). Une
+    // configuration déclarée par le manifeste reste la sienne.
+    if !bac.env.iter().any(|(k, _)| k == "GIT_CONFIG_COUNT") {
+        for (cle, valeur) in [("GIT_CONFIG_COUNT", "1"), ("GIT_CONFIG_KEY_0", "core.excludesFile"), ("GIT_CONFIG_VALUE_0", "/dev/null")] {
+            bac = bac.avec_env(cle, valeur);
+        }
+    }
     let Some((admin, commun)) = administration(racine) else { return bac };
     let Some((_, principal_commun)) = administration(principale) else { return bac };
     if commun != principal_commun { return bac; }
@@ -646,7 +665,8 @@ pub fn avec_lecture_git(
     }
     // Ne pas accorder le dossier commun entier : il contient les autres
     // worktrees. Aucun alias, même interne, ne nomme une racine nouvelle.
-    for nom in ["objects", "refs", "HEAD", "config", "packed-refs", "shallow"] {
+    // `info/` : `git status` y lit `info/exclude` (et `info/attributes`).
+    for nom in ["objects", "refs", "HEAD", "config", "packed-refs", "shallow", "info"] {
         let chemin = commun.join(nom);
         if let Ok(reel) = chemin.canonicalize() {
             if reel == chemin { bac = bac.lire_en_plus(reel); }
@@ -776,22 +796,14 @@ mod monte {
     /// laisse au trait son `write` par défaut — `Err("… is read-only")`.
     /// Une source en lecture seule ; le booléen : les écritures se font
     /// dans les tâches (`task_writes`), et le refus le dit.
-    struct ReadOnly(Arc<dyn FileSource>, bool);
+    struct ReadOnly(Arc<dyn FileSource>, bool, bool);
 
     impl FileSource for ReadOnly {
         fn cursor(&self) -> String {
             self.0.cursor()
         }
         fn write(&self, path: &str, _content: &str) -> Result<(), String> {
-            Err(if self.1 {
-                format!(
-                    "{} : l'arbre principal est en lecture seule ; l'agent écrit dans une tâche \
-                     (POST /ide/taches : sa branche agent/<nom>, relue puis fusionnée)",
-                    path
-                )
-            } else {
-                format!("{} is read-only", self.0.cursor())
-            })
+            Err(super::refus_d_ecriture(path, &self.0.cursor(), self.1, self.2))
         }
         fn list(&self) -> Result<Vec<String>, String> {
             self.0.list()
@@ -831,7 +843,7 @@ mod monte {
             }
         };
         let source = if config.read_only {
-            Arc::new(ReadOnly(source, config.task_writes))
+            Arc::new(ReadOnly(source, config.task_writes, config.dans_une_tache))
         } else {
             source
         };
@@ -960,6 +972,7 @@ mod tests {
             locks_via: Vec::new(),
             queries_via: None,
             scripts: Vec::new(),
+            dans_une_tache: false,
         }
     }
 
