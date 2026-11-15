@@ -1469,3 +1469,10 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   y existe ; **le socle du pont navigateur est tranché : fork de jackwener/browsermcp, hôte Node remplacé par du
   Rust** (archi commence la bibliothèque `navigateur`, rouge d'abord sur un faux pont ; le fork distant et
   l'extension attendent son mot sur le compte). En mémoire.
+- **11 h 37 — M8 montée sur la mémoire de Lucie** (96, 35 s) : fermeture avec raison, instantané
+  ~/.local/share/rag3weaver/instantanes/avant-m8-15-nov/ (base identique octet à octet, SHA256SUMS), montée avec
+  les templates/ de 26a091474 (7 outils ajoutés : archive, confirmer_fiche, rejoindre_fiches, scinder_fiche,
+  select_apports, select_sources, whois ; aucun retiré), ancienne config gardée, RETOUR.sh prêt ; réouverture
+  « 0 fichiers changés », template_drift [], 27 outils, recall_fiches répond. Les clients MCP ouverts voient
+  les outils neufs à leur reconnexion ; **les trois gestes sont à Lucie**. Le binaire 26a091474 posé au
+  portable à 11 h 35 ; le 7879 arrêté à luciepc pour la mesure d'embarquement.
