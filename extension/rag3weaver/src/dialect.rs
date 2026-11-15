@@ -354,13 +354,20 @@ pub trait SchemaDialect: Send + Sync {
     }
 
     /// Enregistrer une génération, sans toucher une ligne déjà posée. Paramètres `$key`, `$couche`,
-    /// `$rang`, `$commit`, `$base`, `$recette`, `$tombstones`, `$publiee_le`.
+    /// `$rang`, `$commit`, `$base`, `$recette`, `$parente_couche`, `$parente_rang` (nuls pour une
+    /// racine), `$tombstones`, `$publiee_le`.
     fn merge_generation(&self) -> Option<String> {
         None
     }
 
     /// Le dernier rang publié d'une couche (`$couche`) : une ligne, une colonne, vide sans génération.
     fn latest_generation_rank(&self) -> Option<String> {
+        None
+    }
+
+    /// **Une génération** (`$couche`, `$rang`) pour le chargeur des vues (2b′) : une ligne
+    /// `parente_couche, parente_rang, tombstones`, vide si elle n'est pas publiée.
+    fn read_generation(&self) -> Option<String> {
         None
     }
 
@@ -1638,13 +1645,21 @@ impl SchemaDialect for Rag3dbDialect {
     fn merge_generation(&self) -> Option<String> {
         Some(format!(
             "MERGE (g:{} {{_key: $key}}) ON CREATE SET g.couche = $couche, g.rang = $rang, g.commit = $commit, \
-             g.base = $base, g.recette = $recette, g.tombstones = $tombstones, g.publiee_le = $publiee_le",
+             g.base = $base, g.recette = $recette, g.parente_couche = $parente_couche, g.parente_rang = $parente_rang, \
+             g.tombstones = $tombstones, g.publiee_le = $publiee_le",
             crate::generations::TABLE
         ))
     }
 
     fn latest_generation_rank(&self) -> Option<String> {
         Some(format!("MATCH (g:{}) WHERE g.couche = $couche RETURN max(g.rang)", crate::generations::TABLE))
+    }
+
+    fn read_generation(&self) -> Option<String> {
+        Some(format!(
+            "MATCH (g:{}) WHERE g.couche = $couche AND g.rang = $rang RETURN g.parente_couche, g.parente_rang, g.tombstones",
+            crate::generations::TABLE
+        ))
     }
 
     /// Par uuids : `UNWIND $uuids AS u MATCH (m:T {_uuid: u}) RETURN u, …` ;
