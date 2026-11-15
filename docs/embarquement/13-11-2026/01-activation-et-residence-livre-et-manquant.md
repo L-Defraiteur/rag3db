@@ -273,3 +273,35 @@ la carte pleine) reste non tirée.
 
 Vu en passant : à 02 h 57 comme à 04 h 03, **card0** (l'affichage de Lucie) était occupée à 100 %, sans
 lourd de nos sessions dessus. c7 l'a noté pour Lucie.
+
+## La mesure des 904 s : la séquence de la fenêtre du matin (décision de c7, 15 novembre, 04 h)
+
+Le 7879 est arrêté le temps de la mesure, une quinzaine de minutes, par G qui tient les services. La
+règle de Lucie du 14 le permet : relancer un service quand le lot le demande, en l'annonçant. L'heure est
+donnée par c7, avec la pose du binaire du matin.
+
+**Ce qui est prêt à luciepc**, dans `~/.cache/rag3weaver-build/groupe-vrai-jeu/`, à l'identique du jeu du
+14 à 18 h 46 pour que la comparaison tienne :
+- les mêmes binaires : hôte isolé `4f43b712d7e61903`, service `12783f97e8dbdd45` ;
+- les gabarits du commit d'alors (`gabarits-904/`, de 73262341b) ;
+- le même dépôt (`depot-904/`, codeparsers/src au pointeur f413dc63, 80 fichiers) ;
+- `mesure-904.sh` : base neuve, seuil de **13 Gio libres** dans le script, **index 1 seul** puis son
+  éviction, `timeout 900`.
+
+**La séquence** :
+1. **T−1 min** : je l'annonce aux sessions. Je vérifie à luciepc qu'aucun index ne tourne et que personne
+   ne parle au 7879 (`ss -tnp` sur 7879, `poste --qui`). Sinon on ne commence pas.
+2. **T0** : G arrête le 7879 (`systemctl --user stop rag3weaver-embeddings@bge-m3`). Je relève card2 :
+   `mem_info_vram_used`, environ 20 Gio libres attendus, et `gpu_busy_percent` à 0.
+3. **T0 + 1 min** : `poste lourd bash mesure-904.sh` : l'hôte isolé 7971, le fournisseur de groupe à
+   part 7891, l'index 1 du même dépôt, puis le bail rendu et l'éviction. La mémoire est relevée toutes les
+   2 s.
+4. **Fin de la mesure**, au plus quinze minutes : l'hôte isolé arrêté, aucun processus restant, card2
+   relevée.
+5. **G relance le 7879** (`systemctl --user start …`) et le vérifie : `/sante` (bge-m3, 1024, dual, creux,
+   relecteur, OCR) et un embed d'essai. Je relève card2, revenue à environ 12,2 Gio libres. Puis
+   l'annonce « relancé » aux sessions.
+
+**Ce que la mesure départage** : un index 1 bien plus court que 904 s, sur une carte calme, désignerait
+la carte pleine ; un index 1 voisin de 904 s désignerait le modèle. L'écart est dit tel quel, sans cause
+tirée au-delà.
