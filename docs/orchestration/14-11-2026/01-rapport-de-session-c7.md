@@ -1496,3 +1496,8 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   OKLCH : couleurs nommées déroulées en nuances, carte des rôles commune, coloration par la couleur la plus
   proche décalée au contraste ; le format des thèmes change pour l'IDE, mot d'archi d'abord). Validés, rouges
   d'abord, en pile à leur vert.
+- tty, 11 h 4x : tty-11 d'accord avec archi (roles.json hors des thèmes, un rédacteur avec --check, gamme OKLCH,
+  rôles par mode, contraste WCAG 2) ; **tty-12** au mot de Lucie : commandes « ! » sur la machine du terminal
+  (l'écran passé pour un sudo, la sortie en consigne), commandes « / », Tab, l'historique d'une séance à l'autre.
+  Gardes : « ! » ne vient que des touches de Lucie (rouge du harnais) ; rien de ce que sudo lit ne va dans la
+  consigne ni le journal.
