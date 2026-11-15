@@ -50,6 +50,5 @@ En attente de la pile : **l'équipier rend le contenu demandé** (`equipier-rend
 
 ## Reprendre
 
-Rien en cours hors de la pile. L'équipier attend sa base (derrière la chaîne Rust de G et les
-orphelins de recherche) ; worktree `~/.cache/rag3weaver-build/wt-equipier`, target `delais-c`,
-journaux `equipier-complete/` (resume.log et base écrits).
+L'équipier a atterri (`9009f3a3b`) ; la suite est dans le
+[rapport de la nuit du 14 au 15](../15-11-2026/02-rapport-de-session.md#reprendre).
