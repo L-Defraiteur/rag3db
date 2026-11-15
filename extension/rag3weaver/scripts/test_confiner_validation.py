@@ -224,6 +224,66 @@ class Montage(unittest.TestCase):
         self.assertEqual(json.loads((evidence / 'autorite.json').read_text())['etat'], 'termine')
         return rc, verdict
 
+    def portee_jouet(self, oom_kill):
+        # Une portée jouet sous un faux /sys/fs/cgroup : le plafond (100 Mio) sur le parent de la
+        # portée du témoin, comme le MemoryMax de poste sur sa portée systemd-run.
+        cg = Path('/proc/self/cgroup').read_text().split('0::', 1)[1].strip()
+        racine = self.p / 'cgroups'
+        ici = racine / cg.lstrip('/')
+        ici.mkdir(parents=True)
+        p = ici
+        while p != racine:
+            (p / 'memory.max').write_text('max\n')
+            p = p.parent
+        (ici.parent / 'memory.max').write_text(str(100 * 1024**2) + '\n')
+        (ici.parent / 'memory.peak').write_text(str(100 * 1024**2) + '\n')
+        (ici.parent / 'memory.events').write_text(f'low 0\nhigh 0\nmax 22\noom 1\noom_kill {oom_kill}\noom_group_kill 0\n')
+        return racine, '/' + str(ici.parent.relative_to(racine))
+
+    def test_signal_apres_oom_kill_dit_l_enveloppe_crevee(self):
+        # Les trois SIGTERM des passes confinées du 15 nov. 2026 (16 h 53, 16 h 59, 17 h 23) : sous
+        # DefaultOOMPolicy=stop, systemd arrête la portée après l'oom_kill d'un enfant.
+        racine, porteur = self.portee_jouet(1)
+        with patch.object(v, 'CGROUPS', racine, create=True):
+            rc, verdict = self.cas_processus(f'import os,time\nos.kill({os.getpid()},15)\ntime.sleep(60)\n')
+        self.assertEqual(rc, 1)
+        self.assertIn('enveloppe mémoire crevée (0.1 Gio, plafond 0.1 Gio', verdict['erreur'])
+        self.assertNotIn('signal reçu : 15', verdict['erreur'])
+        self.assertEqual(verdict.get('enveloppe'), dict(cgroup=porteur, plafond=100 * 1024**2, pic=100 * 1024**2, oom_kill=1, max=22))
+
+    def test_signal_sans_oom_kill_reste_un_signal_avec_son_pic(self):
+        racine, porteur = self.portee_jouet(0)
+        with patch.object(v, 'CGROUPS', racine, create=True):
+            rc, verdict = self.cas_processus(f'import os,time\nos.kill({os.getpid()},15)\ntime.sleep(60)\n')
+        self.assertEqual(rc, 1)
+        self.assertIn('signal reçu : 15 (pic 0.1 Gio, plafond 0.1 Gio, aucun oom_kill)', verdict['erreur'])
+        self.assertEqual(verdict.get('enveloppe', {}).get('oom_kill'), 0)
+
+    def test_vraie_portee_systemd_crevee_dit_l_enveloppe(self):
+        # La vraie portée : systemd-run --user --scope -p MemoryMax=100M, un enfant qui en demande 400.
+        # Pas de saut : sans systemd-run --user, le témoin est rouge.
+        r = subprocess.run(['systemd-run', '--user', '--scope', '-q', '--', 'true'], capture_output=True)
+        self.assertEqual(r.returncode, 0, 'systemd-run --user --scope indisponible : ' + r.stderr.decode())
+        helper = self.p / 'bus-factice'
+        helper.write_text('#!' + sys.executable + '\nimport sys,subprocess\ni=sys.argv.index("--")\nsys.exit(subprocess.call(sys.argv[i+1:]))\n')
+        helper.chmod(0o700)
+        preuves = self.p / 'preuves-portee'
+        pilote = self.p / 'pilote.py'
+        pilote.write_text(
+            'import importlib.util,sys\nfrom unittest.mock import patch\n'
+            f'spec=importlib.util.spec_from_file_location("validation",{str(ICI / "confiner_validation.py")!r})\n'
+            'v=importlib.util.module_from_spec(spec);spec.loader.exec_module(v)\n'
+            f'with patch.object(v,"poste_tenu",return_value=1),patch.object(v.shutil,"which",return_value={str(helper)!r}):\n'
+            f'    sys.exit(v.superviser([sys.executable,"-c","b=[bytearray(10**6) for _ in range(400)]"],30,{str(preuves)!r}))\n')
+        r = subprocess.run(['systemd-run', '--user', '--scope', '-q', '-p', 'MemoryMax=100M', '-p', 'MemorySwapMax=0',
+                            '--', sys.executable, str(pilote)], capture_output=True, timeout=60)
+        dossier, = preuves.iterdir()
+        verdict = json.loads((dossier / 'verdict.json').read_text())
+        self.assertEqual(r.returncode, 1, r.stderr)
+        self.assertIn('enveloppe mémoire crevée', verdict['erreur'] or '')
+        self.assertGreaterEqual(verdict.get('enveloppe', {}).get('oom_kill', 0), 1)
+        self.assertEqual(verdict['restes'], [])
+
     def test_ecart_de_confinement_arrete_aussi_les_descendants(self):
         appels = 0
         def limite(*args):
