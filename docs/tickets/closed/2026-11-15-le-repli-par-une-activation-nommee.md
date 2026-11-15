@@ -1,6 +1,6 @@
 # Le repli par une activation nommée
 
-- **État** : ouvert (15 novembre 2026, embarquement ; décision de c7)
+- **État** : corrigé (15 novembre 2026, embarquement, branche `repli-activation`)
 - **Pour** : embarquement
 - **Famille** : produit
 - **Gravité** : manque. Le repli quand la carte est pleine existe pour un service posé
@@ -42,3 +42,27 @@ retombe sous le seuil dans la fenêtre suivante, et alterne ainsi.
 Ce qu'il faudrait, dans ce lot-ci : un repli pris pour le débit qui revient puis retombe dans la fenêtre
 suivante **double sa tenue**. Témoin : deux retombées de suite, et la deuxième tenue est le double de la
 première.
+
+## Livré (15 novembre, branche `repli-activation`)
+
+Conception relue par c7. Ses décisions :
+- **le placement**, c'est `peripherique`, `address` et les variables de carte de l'env (`RAG3WEAVER_BURN_DEVICE_*`,
+  `*_VISIBLE_DEVICES`), rien d'autre ;
+- **la carte du repli se mesure aussi**. Si les deux cartes sont pleines, l'activation principale se fait, et l'état
+  dit les deux mesures ;
+- **le plafond du doublement est un réglage**, `fallback_hold_max_factor`, 16 par défaut ;
+- **l'adresse du repli** est la clé `address` du bloc d'activation, exigée quand le bloc est cité en repli. Le port 0
+  est admis.
+
+Ce que fait le code :
+- **au chargement**, `fallback: {"activation": "<nom>"}` se résout en son bloc nommé, et un nom inconnu se refuse
+  avec les noms déclarés. `ecart_hors_placement` refuse, nommé, un repli qui diffère hors placement (`modele`,
+  `programme`, `args`, `profil`, une variable qui n'est pas de carte) ou qui n'a pas d'`address` ;
+- **au repli**, l'activation de repli est lancée ou rejointe sur sa source, avec son bail. Sa recette complète est
+  attestée, et l'état dit « replié vers l'activation <nom> (recette vérifiée) ». Au retour, elle rend son bail, et
+  son éviction fait le reste ;
+- **le doublement de la tenue** : la première fenêtre mesurée après un retour, si elle retombe sous le débit après
+  un repli pris pour le débit, double la tenue et le dit (« retombé sous le débit dans la fenêtre suivante : tenue
+  doublée à N s »). Une fenêtre qui tient remet la tenue à sa base.
+
+Sept témoins, rouges d'abord (9d5e6750bf), verts ensuite (646556c267).
