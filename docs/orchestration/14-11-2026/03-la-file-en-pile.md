@@ -1573,3 +1573,7 @@ son texte par l'appel d'outil `report` (arguments entiers), et ni teammate.rs ni
 (le texte libre du modèle streamé vers la boîte par `partial`) et tty (affichage mot à mot), après le branchement. Archi : le
 branchement vert (68/0, bout en bout compris ; le pas de l'équipier a maintenant l'empreinte de lecture, un replace_lines sans
 lecture écrivait), reposé sur master, passe complète ; place après hotfixs et embarquement.
+Hotfixs, 17 h 51 : ci-docs-sans-run sur master à **6c59d5c78** (un commit, gmail, 0 attribution ; le bandeau de poste push dit CI Workflow
+et rag3weaver verts). La preuve du filtre : ce push de docs-ci ne doit lancer aucun run. « À toi » à embarquement (service-503).
+Ordre restant : embarquement → archi (branchement) → tty-14/15/16 → 96 → ED (écrivain, au vert du banc) + arbre (migration) → G
+(hashes, known_red, confineur) → arbre 2b′ + recherche 2b-C + exclusion → codeparsers (pointeurs).
