@@ -1643,3 +1643,38 @@ Le détail horodaté de l'après-midi est tenu sur `03-la-file-en-pile.md` (une 
   (a) l'écrivain atterrit malgré le repassage à 10 × ; (1) LlmNode générique.
 - **Tickets** : 195 ouverts / 354 fermés au relevé de 13 h 40 ; vocabulaire des modèles (provider/protocol) chez ED.
 - **À Lucie** : annuler les cinq runs CI, la fenêtre de bascule et la semaine de garde, `access` et deux semaines d'alias.
+
+## 15 h 3x – 19 h 03 (15 novembre) : Lucie à son terminal — le socle d'agent de code, la CI, la pose du soir
+
+La chronologie reste sur la page 03. L'essentiel :
+- **Lucie a répondu** (15 h 3x) : autorisation explicite pour les runs CI ; oui à la bascule de ses bases (politique de c7 :
+  ce soir après l'écrivain, trois bases en parallèle, retour arrière 72 h puis retrait à mon mot) ; `access` + `provider`,
+  alias deux semaines (fin le 29 novembre).
+- **Lucie a essayé son terminal** et dit la vision, gardée en page (`docs/orchestration/visions/15-11-2026-l-agent-est-un-
+  agent-de-code-qui-gere-ses-worktrees.md`) : un agent de code d'abord, qui gère ses worktrees, dont les recherches sont en
+  phase avec le worktree, qui sait quand l'index est prêt, qui lui répond une fois par tour ; auto par défaut, un modèle qui
+  décide, pas trop strict ; les étapes et les accords vivants dans la zone vivante, jamais un mot d'état nu ni un verdict de
+  l'hôte ; les réponses streamées ; les agents ont un nom et une persona — le premier s'appelle **Algareth**.
+- **Ses quinze « oui »** expliqués : le droit d'écrire d'une tâche était figé à sa création (essai-tty née sans task_writes) ;
+  une tâche neuve `atelier` ouverte ; le bac ne lisait pas le .git commun ; `edit_file` et `run_command` déclarés dans son
+  manifeste, `task_writes`, porte en approbation ; `models.llm` posé pour `/model` ; `index_exclude` posé (app.js = 57,6 %
+  du plein texte).
+- **Atterris** : relevé à blanc (lucivy), new + fmt (codeparsers), les primitives du socle (ED : write, glob, replace_text,
+  replace_lines, insert_lines, read 200 lignes), (B) l'équipier muet relancé puis borné + le côté pas du socle (archi), le lot
+  CI (hotfixs : self-hosted hors du chemin, cinq défauts GCC, tests périmés, plus de commit de robot) et **la fenêtre de
+  formatage close** (25 fichiers, 9ea2e2408), ci-docs-sans-run, le repli carte pleine + le plafond de requête + le 503 nommé du
+  service (embarquement), tty-14 /model, tty-15 tmux, tty-16 (historique = demande et réponse, étapes en sourdine, accord
+  vivant, animation de repos), le composeur de compaction (96), plafond-cachedir (G).
+- **La CI de master est verte** (premier CI Workflow tout vert depuis le 18 octobre) et rend un verdict à chaque push de code.
+- **Le 7879** : 26 pannes en une après-midi — une requête d'embarquement sans plafond (la section entière de l'archiviste,
+  embed_query) ; la mesure de compaction arrêtée ; query_chars (96), query_max_chars (embarquement), 503 nommé et arrêt dit.
+- **Le cœur** : SIGSEGV de la colonne ajoutée corrigé (un ADD refusé à mi-chemin laissait la colonne au stockage) ; bissection
+  du CREATE lent (f42d90d13) ; alerte « Schema changed sans fin » : 1 tour sur 27, cause non lue, ticket, la lib peut basculer.
+- **Vues par couche** : 2b′ (arbre) et la part 2b-C de recherche vertes, témoin 0 au bit près ; l'écrivain d'ED rouge au juge
+  étendu du banc (DEFINED_IN en double, CONSUMES perdus), trois correctifs, rejugé vers 20 h 50 ; la répétition de la bascule :
+  part fermée 731 s et 569 s, repassage rejoué.
+- **Défauts des outils de mesure**, dits et corrigés : un parent qui ne compilait pas (deux fois), un target partagé entre
+  worktrees, un pilote qui lisait « 429 » dans le texte, une attente qui ne lisait que la ligne de fin, un SIGTERM d'enveloppe
+  mémoire sans cause dite.
+- **La pose du soir** (G) : hash vers 19 h 35 après 96, ED (nom + persona), lucivy (maintenance nocturne), archi (branchement) ;
+  hôte aux deux postes et services 7878/7879, lib 373b5477b, vers 20 h 30.
