@@ -1651,3 +1651,6 @@ Hotfixs, 18 h 32 : le ticket « un push de docs annule le run de code » fermé 
 sur les quatre jobs, dix commits de docs derrière sans lancer un run ; GitHub juge le filtre sur tout le push. **La CI de master est
 verte et rend un verdict à chaque push de code.** Lot suivant pour hotfixs : une base qui s'ouvre sans dire qu'une extension n'a pas
 pu être chargée (perte d'index, atteignable), après le verdict du cœur.
+ED, 18 h 34 : le nom et la persona de l'agent verts (nom-de-l-agent 911ef78ee ; passe épinglée verte ; deux témoins) ; réserve dite : leurs
+rouges n'étaient que de compilation — demandé : les faire rougir sur une méthode faussée avant le push. Embarquement : l'adresse du
+repli dans le bloc d'activation (`address`), jamais card0 dans un exemple.
