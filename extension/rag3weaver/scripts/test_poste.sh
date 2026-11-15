@@ -285,7 +285,7 @@ cas $? "sous POSTE_MEM_MAX=32G, la validation joue (code $rc)"
 "$POSTE" lourd sh -c "touch $V/joue-autre" > /dev/null 2>&1; rc=$?
 [ $rc = 0 ] && [ -e "$V/joue-autre" ]
 cas $? "un lourd qui n'est pas une validation garde le défaut de 40G et joue (code $rc)"
-seuil_poste=$(sed -n 's/^PLAFOND_DES_VALIDATIONS=\([0-9]*\).*/\1/p' "$POSTE")
+seuil_poste=$(sed -n 's/^VALIDATION_MEMORY_MAX=\([0-9]*\).*/\1/p' "$POSTE")
 seuil_confineur=$(python3 -c "import re,sys; m=re.search(r'^MAX_MEMOIRE = (\d+) \* 1024\*\*3', open(sys.argv[1]).read(), re.M); print(int(m.group(1))*1024**3)" "$(dirname "$POSTE")/confiner_validation.py" 2>/dev/null)
 [ -n "$seuil_poste" ] && [ "$seuil_poste" = "$seuil_confineur" ]
 cas $? "le seuil de poste est celui du confineur (poste ${seuil_poste:-absent}, confiner_validation.py ${seuil_confineur:-absent})"
