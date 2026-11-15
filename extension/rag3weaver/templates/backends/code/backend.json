@@ -122,7 +122,7 @@
     },
     "run_command": {
       "graph": "../../tools/run.mmd",
-      "description": "Lancer une commande dans le workspace, derrière la porte : la liste sûre passe, le reste demande à l'humain.",
+      "description": "Lancer une commande dans le workspace, derrière la porte : la liste sûre passe, le reste demande à l'humain. Lance `git status`, `git diff` ou `git log` nus : n'invente pas d'option pour contourner une erreur (`git -c …`), dis-la.",
       "policy": {
         "run_commands": true
       }

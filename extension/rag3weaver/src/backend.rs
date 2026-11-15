@@ -2048,6 +2048,7 @@ impl PreparedBackend {
         if let (Some((racine, ecrit)), Some(w)) = (&surcharges.workspace, self.manifest.workspace.as_mut()) {
             w.root = racine.clone();
             w.read_only = !ecrit;
+            w.dans_une_tache = true;
         }
         self.surcharges = surcharges;
         self
