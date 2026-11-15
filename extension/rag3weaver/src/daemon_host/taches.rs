@@ -52,6 +52,9 @@ pub struct Tache {
     /// manifeste, sinon « équipier »).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nom_de_l_agent: Option<String>,
+    /// **La persona de l'agent de la tâche**, à la place de `agent.persona` du manifeste.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub persona_de_l_agent: Option<String>,
     /// **Aucun dépôt** (ni les déclarations ni la racine) : pas de worktree ni
     /// de branche ; `arbre` est l'espace copié, `depot`, `branche` et `depart`
     /// sont vides de sens. Ses changements se relisent par différence de
@@ -500,6 +503,7 @@ impl DaemonHost {
             dossier_de_tache: t.arbre.parent().map(Path::to_path_buf),
             racine_principale: t.workspace.as_ref().map(|w| w.racine_principale.clone()),
             nom_de_l_agent: t.nom_de_l_agent.clone(),
+            persona_de_l_agent: t.persona_de_l_agent.clone(),
         })
     }
 
@@ -536,15 +540,16 @@ impl DaemonHost {
     /// écrivains, puis la seconde instance du backend, ouverte par l'hôte avec
     /// ses surcharges. Tout ce qui a été fait est défait si une étape échoue.
     pub fn ouvrir_une_tache(&self, parent: &str, nom: &str) -> Result<Tache, String> {
-        self.ouvrir_une_tache_nommee(parent, nom, None)
+        self.ouvrir_une_tache_nommee(parent, nom, None, None)
     }
 
     /// **Ouvrir une tâche dont l'agent porte un nom** (`agent_name` de `POST /ide/taches`) : le nom est
     /// validé avant toute ouverture, puis gardé au registre (`Tache::nom_de_l_agent`), et le backend de la
     /// tâche le lit par ses surcharges. Sans nom, celui du backend.
-    pub fn ouvrir_une_tache_nommee(&self, parent: &str, nom: &str, nom_de_l_agent: Option<&str>) -> Result<Tache, String> {
+    pub fn ouvrir_une_tache_nommee(&self, parent: &str, nom: &str, nom_de_l_agent: Option<&str>, persona: Option<&str>) -> Result<Tache, String> {
         nom_valide(nom)?;
         let nom_de_l_agent = nom_de_l_agent.map(crate::backend::valider_le_nom_de_l_agent).transpose()?;
+        let persona_de_l_agent = persona.map(crate::backend::valider_la_persona_de_l_agent).transpose()?.flatten();
         if self.tache(parent, nom).is_some() {
             return Err(format!("la tâche « {nom} » est déjà ouverte"));
         }
@@ -728,6 +733,7 @@ impl DaemonHost {
             git_init_fait,
             modele: None,
             nom_de_l_agent,
+            persona_de_l_agent,
         };
         // **La tâche devient une couche** (liaison branche → couche, décision de Lucie du
         // 13 novembre : « tout ce que touche l'agent, ça reste indexé » ; généralisée par les suivies,

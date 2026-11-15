@@ -929,7 +929,7 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                     let id = c["backend"].as_str().unwrap_or_default();
                     let nom = c["nom"].as_str().unwrap_or_default();
                     let r = match path.as_str() {
-                        "/ide/taches" => host.ouvrir_une_tache_nommee(id, nom, c["agent_name"].as_str()).map(|t| json!(t)),
+                        "/ide/taches" => host.ouvrir_une_tache_nommee(id, nom, c["agent_name"].as_str(), c["agent_persona"].as_str()).map(|t| json!(t)),
                         "/ide/taches/fusionner" => host.fusionner_une_tache(id, nom, c["message"].as_str().unwrap_or_default()),
                         _ => host.rejeter_une_tache(id, nom, c["why"].as_str().unwrap_or_default()),
                     };
