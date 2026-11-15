@@ -1488,3 +1488,6 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 - **Le cœur, 11 h 41** : rows-moved-during-create 25/96 sur master contre 27/96 sur le lot — même niveau, le lot
   n'aggrave pas ; le défaut de master est une fois sur quatre, le cas seul (ticket d'hotfixs mis à jour,
   5050d0cbe). Passe finale sur d5f5325f0 (~35 min), puis push en mode simple ; nouveautés dans le lot.
+- Embarquement, 11 h 4x : la mesure écrite (74492dc4b) ; le témoin A3 du repli `cpu` vert à luciepc avec llvmpipe
+  (repli-cpu-a3 6f6519b10, 11 lignes de test, e2e 5/5) — il rougirait au portable sans le paquet : il entre
+  dans la pile quand Lucie aura posé vulkan-swrast au portable, derrière le lot ALTER du cœur.
