@@ -24,30 +24,22 @@ mod tests {
     #[test]
     fn a_task_lists_its_declared_models_chooses_one_by_name_and_its_chat_follows() {
         let d = tempfile::tempdir().unwrap();
-        let (depot, manifeste) = depot_inscrit(d.path(), true);
-        // Deux modèles déclarés, le second par défaut, commités : la tâche part du commit du dépôt, une
-        // modification non commitée du manifeste n'y entre pas.
+        let (_depot, manifeste) = depot_inscrit(d.path(), true);
         let modeles = json!([
             { "name": "rapide", "provider": "compatible", "protocol": "openai", "address": "http://127.0.0.1:9", "model": "m-rapide", "context_tokens": 1000 },
             { "name": "fin", "provider": "compatible", "protocol": "openai", "address": "http://127.0.0.1:9", "model": "m-fin", "context_tokens": 2000, "default": true }
         ]);
-        // Le principal lit sa copie du dossier de configuration ; la tâche part du manifeste du
-        // dépôt, au commit d'où part sa branche : les deux portent les modèles, celui du dépôt commité.
-        let du_depot = depot.join("templates/backends/code/backend.json");
-        assert!(du_depot.is_file(), "le manifeste du dépôt : {}", du_depot.display());
-        for f in [&manifeste, &du_depot] {
-            let mut m: Value = serde_json::from_str(&std::fs::read_to_string(f).unwrap()).unwrap();
-            m["models"]["llm"] = modeles.clone();
-            std::fs::write(f, serde_json::to_string_pretty(&m).unwrap()).unwrap();
-        }
-        for args in [&["add", "-A"][..], &["commit", "-q", "-m", "deux modèles déclarés"]] {
-            let o = std::process::Command::new("git").current_dir(&depot).args(args).output().unwrap();
-            assert!(o.status.success(), "git {args:?} : {}{} (manifeste {})", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr), manifeste.display());
-        }
         let host = hote(d.path(), defaut()).with_modele_nomme(nomme());
         let h = host.hosted(&manifeste).unwrap();
         host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
         let t = host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+        // Deux modèles déclarés dans le manifeste de la tâche, le second par défaut ; l'hôte relit un
+        // manifeste changé à sa réouverture (le principal a les siens par sa propre copie).
+        let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&t.manifest).unwrap()).unwrap();
+        m["models"]["llm"] = modeles;
+        std::fs::write(&t.manifest, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+        let session = host.ide_session();
+        assert_eq!(host.open(Some(&session), &t.manifest)["ok"], true, "la tâche se rouvre sur son manifeste changé");
 
         let liste = host.modeles_de_tache(&h.id, "doc").expect("la liste des modèles");
         let vus: Vec<(String, String, bool, bool)> = liste["models"].as_array().unwrap().iter().map(|x| (x["name"].as_str().unwrap().into(), x["model"].as_str().unwrap().into(), x["default"] == true, x["current"] == true)).collect();
