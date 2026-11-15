@@ -1159,3 +1159,7 @@ changé » — master avait du code (backend.rs, chat.rs, model_source.rs) que c
 sur la tête atterrie. tty-13 reposé seul sur 87795452d (cx-tty-13-2), rejeu court, mode simple.
 tty, 14 h 48 : tty-13 sur master à **ccfa7efea** (17 commits, e7363428b → ccfa7efea, gmail, 0 attribution). La file : CI (hotfixs,
 au « prêt »), fenêtre de formatage, archi (relai), 96, lucivy, ED (1), embarquement, arbre.
+Banc, 14 h 52 : **l'écrivain d'ED (A) est VERT** (d087e02c7 contre e95a1b8c6 ; garde « les deux côtés ont écrit leurs 30 cas » passée ;
+parité propre 30/30 au bit près avant et après l'index, usages verts ; base migrée : 7 écarts sans réponse changée, ex aequo
+du parent). Repasser le lot sur une base d'avant = 10 × le parent (~45 min au dépôt) : chiffre pour la bascule. ED repose
+(1) sur master, place après lucivy. Embarquement peut jouer son vrai jeu sur card2 (créneau avec le banc). N puis F 50 k.
