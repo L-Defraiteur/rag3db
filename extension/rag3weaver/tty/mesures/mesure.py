@@ -38,7 +38,9 @@ import urllib.request
 HOTE, BINAIRE, FAUX, DOSSIER, THEMES, SORTIE = sys.argv[1:7]
 LANCEUR = sys.argv[7] if len(sys.argv) > 7 else "ssh"
 LOCAL = HOTE == "local"
-MULTIPLEXEUR = LANCEUR in ("tmux-local", "tmux-ssh", "mosh")
+MULTIPLEXEUR = LANCEUR in ("tmux-local", "tmux-local-ouvert", "tmux-ssh", "mosh")
+# `tmux-local-ouvert` (tty-15) : tmux sur ce poste, réglé pour passer les touches étendues en CSI u.
+TMUX_OUVERT = "set -g extended-keys on\nset -g extended-keys-format csi-u\nset -as terminal-features 'xterm*:extkeys'\n"
 PORT = 17990
 TUNNEL = PORT if LOCAL else 17991
 seance = [0]
@@ -59,6 +61,10 @@ def commande(base):
         return ["ssh", "-tt", "-o", "BatchMode=yes", HOTE, base]
     if LANCEUR == "tmux-local":
         return ["tmux", "-L", nom, "-f", "/dev/null", "new-session", "-s", nom, base]
+    if LANCEUR == "tmux-local-ouvert":
+        conf = os.path.join(DOSSIER, "tmux-ouvert.conf")
+        open(conf, "w").write(TMUX_OUVERT)
+        return ["tmux", "-L", nom, "-f", conf, "new-session", "-s", nom, base]
     if LANCEUR == "tmux-ssh":
         return ["ssh", "-tt", "-o", "BatchMode=yes", HOTE, f"tmux -L {nom} -f /dev/null new-session -s {nom} '{base}'"]
     if LANCEUR == "mosh":
@@ -147,7 +153,7 @@ class Terminal:
 
     def arreter(self):
         # Le serveur tmux de la séance et sa socket partent avec elle (rien ne reste sous /tmp/tmux-*).
-        if LANCEUR in ("tmux-local", "tmux-ssh"):
+        if LANCEUR in ("tmux-local", "tmux-local-ouvert", "tmux-ssh"):
             nom = seance[-1]
             ssh(f"tmux -L {nom} kill-server 2>/dev/null; rm -f /tmp/tmux-$(id -u)/{nom}")
         if self.p.poll() is None:
@@ -467,7 +473,9 @@ for kitty in (True, False):
         resultats[quoi] = {"demande_kitty": demande_kitty, "aide_maj_entree": aide_maj, "aide_alt_entree": aide_alt, "textes_recus": textes}
         aide_tmux = "sous tmux, Maj-Entrée envoie".encode() in tout
         resultats[quoi]["aide_tmux"] = aide_tmux
-        if LANCEUR.startswith("tmux") and textes[:2] == ["un", "deux\ntrois"] and aide_tmux:
+        if LANCEUR == "tmux-local-ouvert" and not (aide_maj and textes[:1] == ["un\ndeux\ntrois"]):
+            rouge(f"{quoi} : sous un tmux ouvert, Maj-Entrée doit passer à la ligne et l'indication le dire : {resultats[quoi]}")
+        elif LANCEUR.startswith("tmux") and LANCEUR != "tmux-local-ouvert" and textes[:2] == ["un", "deux\ntrois"] and aide_tmux:
             # tmux, configuré par défaut, fait de Maj-Entrée une Entrée simple : le repli est dit
             # (ticket 2026-11-15-sous-tmux-maj-entree-envoie-au-lieu-d-aller-a-la-ligne).
             resultats[quoi]["repli_tmux"] = True
@@ -495,7 +503,7 @@ def ecran_tmux():
         return None
     nom = seance[-1]
     cmd = f"tmux -L {nom} capture-pane -p -t {nom}"
-    if LANCEUR == "tmux-local":
+    if LANCEUR in ("tmux-local", "tmux-local-ouvert"):
         return subprocess.run(cmd.split(), capture_output=True, text=True).stdout
     return ssh(cmd)
 
