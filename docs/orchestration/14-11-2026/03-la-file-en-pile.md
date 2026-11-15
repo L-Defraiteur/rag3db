@@ -1790,3 +1790,7 @@ Banc, 20 h 24 : le juge étendu sur c5ec47cc4 (dépôt migré) : DEFINED_IN rép
 restent**, 163 CONSUMED_BY sans miroir (la sonde du miroir voit l'écart : pas de trou du juge) ; réponses non jugées (le repassage a
 dépassé l'heure du relevé ; plafond relevé à deux heures). À ED : la cause des CONSUMES encore perdus avant de rejuger 5ed5d1fc9.
 Parité finie ; G a le « va » du banc pour 7879 depuis 20 h 23.
+20 h 24 : la pile de 96 a perdu deux courses (le socle d'archi, puis le témoin de tty-17 : « master a apporté du code ») ; reposée sur
+658a613e0 (8c34a3b07), rejeu relancé 20 h 24, vert vers 20 h 45. **Le code de master est tenu jusqu'à son « poussé »** : archi (nom), cœur
+(SIGSEGV), ED (llm-sans-feature, écrivain), hotfixs (extension dite) attendent. G coupe les services après le « va » d'ED (sa passe
+les lit) et le rejeu de 96 (qui lit 7879), vers 21 h.
