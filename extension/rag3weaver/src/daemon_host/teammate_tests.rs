@@ -1776,3 +1776,45 @@ fn an_unnamed_teammate_is_not_told_the_default_name() {
     let invite = invites.lock().unwrap().first().cloned().unwrap_or_default();
     assert!(!invite.contains("Your name is"), "aucun nom n'est choisi : rien à dire : {invite}");
 }
+
+/// **Un pas qui répond sans step_done n'arrête pas la tâche** (Lucie, 16 novembre 2026 : Algareth
+/// a lu la fonction et les tests, puis rendu la main avec « Ce qui reste à exécuter au prochain
+/// pas : … »). Le pas suivant part de lui-même, sa frontière dit de continuer jusqu'au bout, et la
+/// tâche finit sans attendre le superviseur. La copie de la réponse est la réponse seule, marquée
+/// `origin: "host_copy"`, sans préfixe.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_step_that_answers_without_step_done_is_continued_without_waiting() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let frontieres = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let frontieres = frontieres.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let frontieres = frontieres.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                if results.is_empty() {
+                    frontieres.lock().unwrap().push(last_user(turns));
+                }
+                match (step_of(turns), results.len()) {
+                    (1, 0) => answer(turns, opts, sink, "", calls(&[("read_file", json!({ "path": "src/lib.rs" }))])),
+                    // Le défaut de Lucie : une réponse qui annonce la suite, sans step_done.
+                    (1, _) => answer(turns, opts, sink, "Next I will write the test, then run it.", vec![]),
+                    _ => answer(turns, opts, sink, "The test is written and passes.", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "test written", "remaining": "" }))])),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "lucie", "request", None, "Write a test for bonjour and run it.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let boite = attendre_dans(&files, "la fin", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    assert_eq!(boite.iter().find(|l| l["kind"] == "ended").unwrap()["text"], "fait sans plan", "la tâche finit d'elle-même : {boite:#?}");
+    assert!(frontieres.lock().unwrap().iter().skip(1).any(|f| f.contains("until the request is done")), "le pas suivant est relancé jusqu'au bout : {:?}", frontieres.lock().unwrap());
+    assert!(!boite.iter().any(|l| l["text"].as_str().is_some_and(|t| t.contains("s'est terminé sans step_done"))), "plus de préfixe dans la copie : {boite:#?}");
+    let copie = boite.iter().find(|l| l["text"] == "Next I will write the test, then run it.").expect("la réponse du pas, seule");
+    assert_eq!((&copie["from"], &copie["origin"]), (&json!("teammate"), &json!("host_copy")), "{copie}");
+}
