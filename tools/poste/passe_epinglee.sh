@@ -69,7 +69,12 @@ if [ -x $W/tools/poste/required_suites.sh ] && [ -s $J/base ]; then
 fi
 EXIGEES_NOMS=$(echo "$EXIGEES" | awk 'NF {print $1}' | tr '\n' ' ')
 echo "== témoin" >> $R
-timeout 3600 ./run_e2e.sh --features openai-llm,anthropic-llm --test ${SUITE_DU_TEMOIN:-e2e_lectures} "$FILTRE" > $J/temoins.log 2>&1; c=$?
+# SUITE_DU_TEMOIN=lib (15 novembre 2026, ticket d'hotfixs) : le témoin est un test de la lib, joué par `run_e2e.sh --lib`.
+if [ "${SUITE_DU_TEMOIN:-}" = lib ]; then
+  timeout 3600 ./run_e2e.sh --features openai-llm,anthropic-llm --lib "$FILTRE" > $J/temoins.log 2>&1; c=$?
+else
+  timeout 3600 ./run_e2e.sh --features openai-llm,anthropic-llm --test ${SUITE_DU_TEMOIN:-e2e_lectures} "$FILTRE" > $J/temoins.log 2>&1; c=$?
+fi
 grep -E '^test result|panicked at' $J/temoins.log >> $R
 [ "$SEUL" = temoins ] && { echo "TEMOINS code=$c" >> $R; exit $c; }
 [ $c = 0 ] || rouge "témoin (code=$c)"
@@ -83,7 +88,8 @@ if [ -n "${SUITES:-}" ]; then
   echo "suites réduites : ${LISTE_DES_SUITES:-aucune} (SUITES=$SUITES)" >> $R
   LISTE_DES_SUITES="$LISTE_DES_SUITES $EXIGEES_NOMS"
 else
-  LISTE_DES_SUITES="$EXIGEES_NOMS e2e_lectures e2e_code ${SUITE_DU_TEMOIN:-} ${SUITES_EN_PLUS:-}"
+  # La lib n'est pas une suite e2e : elle se rejoue entière à l'étape « lib ».
+  LISTE_DES_SUITES="$EXIGEES_NOMS e2e_lectures e2e_code $([ "${SUITE_DU_TEMOIN:-}" = lib ] || echo "${SUITE_DU_TEMOIN:-}") ${SUITES_EN_PLUS:-}"
 fi
 JOUEES=""
 for suite in $(echo $LISTE_DES_SUITES | tr " " "\n" | awk 'NF && !vu[$0]++'); do
