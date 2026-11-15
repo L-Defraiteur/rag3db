@@ -62,6 +62,17 @@ fn sans_service_ni_peripherique_de_repli_le_test_est_rouge_et_le_dit() {
         "le rouge nomme le modèle et le repli manquant : {texte}");
 }
 
+/// **Le repli sur le CPU, là où un adaptateur Vulkan CPU existe** (A3) : à luciepc depuis le
+/// 15 novembre (vulkan-swrast installé par Lucie, llvmpipe), `cpu` charge le vrai modèle sur place.
+/// Le portable n'a pas encore le paquet : la sonde y rougirait sur « No CPU device found ».
+#[test]
+#[ignore]
+fn sans_service_qui_le_sert_le_modele_se_charge_sur_le_cpu_ou_il_existe() {
+    let (ok, texte) = sonde_sous(Some("cpu"));
+    assert!(ok, "la sonde passe, le modèle chargé sur le CPU : {texte}");
+    assert!(texte.contains("granite-107m sur place (Cpu)") && texte.contains("▸ sonde : dim 384 factice false"), "{texte}");
+}
+
 /// **Le repli interdit : le test est rouge, et nomme le modèle sans service.**
 #[test]
 #[ignore]
