@@ -64,3 +64,57 @@ plus par le nom entre fichiers ([la marque « nom »](../../tickets/closed/2026-
 Une méthode du projet homonyme d'une méthode std y perd son lien : une vingtaine sur rag3weaver/src
 (`catalog.drain()`, `files.append(…)`, `outil.bind(…)`). Lire le type de ces locales les rend : c'est
 la prochaine mesure de ce ticket. La sonde `tests/sonde_marque_nom.rs` en donne les TSV.
+
+## Fait le 15 novembre 2026 : les chaînes de méthodes du projet
+
+Codeparsers `65b1a93`, rag3db `cee48f2d9`. Une locale liée à une chaîne qui passe par des **méthodes du
+projet**, sur une racine de type connu, lit son type :
+
+- `self.teammate_files()?` dans un `impl Host` : la racine est le type englobant ;
+- `ctx.cancellation()` avec `ctx: &Ctx` : la racine est un paramètre typé ;
+- `GraphTool::from_mermaid(t).map_err(…)?` ou `.unwrap()`, `Self::f()` : la racine est un chemin sur un type.
+
+`DeferredType::OfType { ty, peel }` le dit. Le pelage (`receveur::peel_complet`) lit un maillon que la
+table std ignore par le retour écrit de la méthode du type courant (`Self` y vaut le type) ; la table std
+apprend `map_err`, `or_else`, `ok_or`, `ok_or_else` et `ok`. Le rendez-vous de rag3weaver charge
+`(type, méthode) → retour` comme les champs. `OfType` est **une lecture au mieux** : non lu, l'appel suit
+la règle d'avant, sans devenir un receveur non typé. Deux gardes : une méthode dont le retour nomme un de
+ses paramètres de gabarit (`fn with_backend<R>(…) -> Result<R, _>`) ne type rien (les fonctions Rust
+relèvent désormais leurs `generic_parameters`) ; un chemin de module (`facts::digest`) ne prend pas le
+type d'une locale homonyme.
+
+Témoins : `tests/e2e_usages.rs` (`une_locale_liee_a_*_lit_son_type`, `un_retour_generique_ne_type_pas_la_chaine`,
+`un_chemin_de_module_ne_prend_pas_le_type_d_une_locale_homonyme`), vus rouges puis verts ;
+`codeparsers/tests/chaines_du_projet.rs`.
+
+La sonde (`tests/sonde_marque_nom.rs`, corpus figé de rag3db-garde 343ead799 ; avant = le lot de la marque
+« nom », codeparsers `fad1b6f`) :
+
+| corpus | marque | avant | après |
+|---|---|---|---|
+| rag3weaver/src | type | 7 116 | 9 070 |
+| | nom | 10 114 | 9 048 |
+| | fichier | 18 934 | 18 954 |
+| | rendez-vous non typés | 9 918 | 9 476 |
+| src/ du moteur | type | 10 214 | 10 345 |
+| | nom | 2 705 | 2 654 |
+
+Par couple (mentionneur, cible), sur rag3weaver/src : 864 « nom » deviennent « type », 1 071 couples
+naissent (1 049 « type »), 178 partent. Ceux qui partent sont presque tous des méthodes std reliées à tort à
+un homonyme : `collect` 123 (vers un `collect` d'openai_llm.rs), `join` 16, `keys` 9, `position` 6. Trois
+`to_mermaid` changent de cible pour la bonne (`GraphTool::to_mermaid`). Six sont des agrégats au niveau de
+la classe (`Catalog → admet`), par un paramètre de fermeture. Sur le moteur, un seul couple part
+(`isPrimary`, un accès de champ).
+
+**Le prix de la marque « nom » est rendu en partie** : `files.append` (2), les `c.wait_timeout` des tests
+(12), `back.description()`.
+
+## Reste
+
+- **Un motif de tuple** : `let (mut catalog, _store) = make_catalog_with_mock_checkpoint();` puis
+  `catalog.drain()` (trois liens de la marque « nom »).
+- **Une locale redéclarée** : `let mut outil = GraphTool::from_mermaid(…)?; let outil = outil.bind(…)?;`.
+  Les liaisons différées ne savent pas où chacune vaut (les liaisons typées le savent, `Bindings::at`), et
+  deux valeurs différentes s'annulent.
+- Les paramètres de fermeture, l'élément d'un itérateur (`Iterator<T>`), C++ `for (auto& x : v)`.
+

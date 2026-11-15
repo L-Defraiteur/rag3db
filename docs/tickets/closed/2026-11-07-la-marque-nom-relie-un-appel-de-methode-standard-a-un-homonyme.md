@@ -104,3 +104,8 @@ fichier quand c'est le rendez-vous qui le posait. Sur les 273, une vingtaine au 
 `wait_timeout` (le `Condvar::wait_timeout` est std, celui de `node.rs` non). Le ticket
 [des receveurs restent sans type](../../codeparsers/tickets/2026-10-04-des-receveurs-restent-sans-type.md)
 les rend en lisant le type de la locale.
+
+Le 15 novembre au soir, le ticket des receveurs (codeparsers `65b1a93`) en a rendu une partie : `files.append`
+(2), les `c.wait_timeout` des tests, `back.description()`. Restent `catalog.drain()` (un motif de tuple) et
+`outil.bind(…)` (une locale redéclarée), écrits dans ce ticket.
+
