@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 15 novembre2026 — **Le socle d'agent de code s'agrandit** : `write` crée un fichier neuf en entier et rend son diff (un fichier qui existe est refusé, sauf `force`), et `glob` rend les chemins d'un motif (`**/*.rs`) sans ce que `.gitignore` écarte. Avec `read_file` (200 lignes numérotées, « lignes a-b sur N »), `replace_text`, `replace_lines`, `insert_lines` (qui exigent une lecture récente des lignes visées), `grep_files` et `list_files`, c'est le jeu de fichier qu'une tâche reçoit pour travailler comme un agent de code ordinaire.
+
 - 15 novembre2026 — Le terminal de l'agent a ses commandes : `/aide`, `/theme`, `/tache`, `/depot`, `/journal`, `/effacer`, `/context` (le remplissage du contexte du modèle) et les autres ; `!<commande>` la lance là où tourne le terminal, dans un pseudo-terminal où `sudo` demande son mot de passe, et sa sortie part à l'équipier, sans jamais le mot de passe ; Tab complète les commandes, leurs arguments, les exécutables et les fichiers ; l'historique des envois survit à la séance.
 
 - 15 novembre2026 — Les thèmes du terminal et de l'IDE deviennent des palettes nommées en OKLCH (huit couleurs par thème, un mode sombre ou clair) : leurs couleurs et leur coloration syntaxique en sont dérivées par un seul script, qui part de la couleur de palette la plus proche de la teinte voulue, tient le contraste WCAG ou refuse, et rougit si un thème a été retouché à la main. Les cinq thèmes sont convertis au plus près : écart moyen du code de 0,013 à 0,029 en OKLab, fond, texte et halo inchangés.
