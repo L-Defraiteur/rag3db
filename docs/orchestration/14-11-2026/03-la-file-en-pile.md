@@ -908,3 +908,8 @@ pour sa sonde sous mesure.
 et remise publiés ; **après l'index et la publication, 15 cas sur 30 rendent une autre liste dans leurs dix
 premiers**. Piste : le plein texte voit encore les versions fermées. Cause à établir sur les deux copies
 gardées ; témoin rouge puis correctif demain. **La file de la nuit est vide : soixante-deux atterris.**
+ED, 03 h 1x : deux causes candidates — (A) le saut des fichiers inchangés (dd729317a) fige l'analyse d'avant
+(la base migrée indexée par un code plus vieux : le parent réanalyse tout, le lot non ; un changement de
+parseur ne s'appliquerait jamais à un fichier inchangé) ; (B) les documents des lignes fermées encore dans
+lucivy. Départage par trois relevés de banc demain ; correctif (A) : la version de l'analyse entre dans
+l'empreinte indexée.

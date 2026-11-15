@@ -1320,3 +1320,14 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   lot B de 96 (scinder, rejoindre) en rouges.
 - **Pour Lucie au réveil** : lavapipe (sudo) ; le socle du pont navigateur ; la fin de session (targets gardés,
   7 à 31 Go chacun) ; card0 à 100 % à 3 h sans aucun lourd à nous.
+- **Recherche, 03 h 2x — la sonde d'ED jouée sous mesure (4 s)** : resolve_filter_to_ids sur `_uuid IN
+  [72 652 versions]` médiane 113,6 ms, max 120,2 ms, contre 5 008 ms avant ; le UNWIND écrit à la main fait
+  107,2 ms. Copie neuve de la base migrée, lib 373b5477b, code 9fd946ec3 (page 02 recherche, 5eca5d428). La
+  recherche à versions ne prend plus des secondes sur le filtre.
+- **Banc, 03 h 2x — Laya, les deux passes** : rejoindre 0,18 dans l'ordre présenté, 0,08 mélangé (il avait
+  appris la place, pas le sens) ; créer 0,77 / 0,85 ; jamais « rien ». **Pas branchable pour cette décision**
+  (page 01 § 9, 147a1aa83) ; la porte du rappel non mesurée. Le départage (A)/(B) de l'écrivain tourne, verdict
+  vers 3 h 30.
+- Recherche, 03 h 4x : rapport de session avec « Reprendre » (bf843245b), copies effacées ; la sonde a tourné à
+  3 h 37, après 46 min d'attente d'une place de mesure (ma faute : un « va » de mesure se donne sur une place
+  libre). Seule la branche de mesure mesure-exclusions reste ouverte ; targets (47 Go à luciepc) gardés.
