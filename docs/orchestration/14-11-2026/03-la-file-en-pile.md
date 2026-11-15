@@ -1391,3 +1391,8 @@ commun ; le refus de ReadOnly dans une tâche ne conseille plus POST /ide/taches
 Archi : le lot (B) de l'équipier **vert** (une-demande-attend-une-ligne a1a74f661 ; 35 témoins, lib 2470, hooks 45, e2e_equipier
 sous Vertex 2/2) ; place après codeparsers, avant tty-14. Codeparsers : (a) seul dans le lot DEFINED_IN ; (b) les paramètres par
 pointeur/référence perdus pour toute fonction C++, lot à part avec banc, ticket.
+Archi, 16 h 15 : correction — mon fermer-rouvrir n'y est pour rien (/backend/open passe par open_slot, la surcharge tient : root =
+essai-tty/arbre). La cause : `workspace.ecrit` d'une tâche est calculé **une fois à sa création** (taches.rs:526, sur le manifeste
+parent du moment) et figé au registre ; essai-tty est née le 14 à 18 h 34 sans task_writes, donc ecrit = false, donc
+read_only. Fait : une tâche neuve **atelier** (POST /ide/taches, branche agent/atelier, backend 2fb80390ed75, ecrit = true) pour
+Lucie. Pour le socle : (d) ecrit recalculé à chaque ouverture ; (b) le bac lit le .git commun ; (c) le message de ReadOnly.
