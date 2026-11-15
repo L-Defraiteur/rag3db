@@ -622,6 +622,30 @@ fn l_usage_du_modele_se_lit_par_section_et_au_total_de_la_passe() {
     assert!(t["ms"].is_u64(), "{t}");
 }
 
+/// **La requête de la recherche des candidates est bornée** (15 novembre 2026 : une section de 43 000
+/// caractères, embarquée entière comme requête, a tué le service bge-m3) : le titre et le début de la
+/// section, coupés à `query_chars` caractères (4 000 par défaut) sur une frontière de mot. La trace dit
+/// la longueur envoyée (`query_chars`). Le témoin ne passe pas par l'embarqueur pour la mesurer.
+#[test]
+#[ignore]
+fn la_requete_des_candidates_est_bornee_et_la_trace_dit_sa_longueur() {
+    let longue = format!("# Un tour long\n\n## Le tour\n\n{}\n", "le journal se rejoue en entier avant toute écriture ".repeat(800));
+    assert!(longue.chars().count() > 40_000);
+    let serveur = FakeServer::start_sequence(vec![etiquette("none"), etiquette("none")]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    let r = appel(&b, "archive", json!({"titre": "Un tour long", "contenu": longue, "jour": "2026-11-15", "trace": true}));
+    assert_eq!(r["result"]["errors"], json!([]), "{r}");
+    let n = r["result"]["results"][0]["query_chars"].as_u64().unwrap_or_else(|| panic!("la trace dit la longueur de la requête : {}", r["result"]["results"][0]));
+    assert!(n <= 4_000 && n > 3_000, "la requête est bornée à 4 000 caractères par défaut : {n}");
+    let r = appel(&b, "archive", json!({"titre": "Un tour long, encore", "contenu": longue, "jour": "2026-11-15", "trace": true, "query_chars": 1000}));
+    let n = r["result"]["results"][0]["query_chars"].as_u64().unwrap_or(u64::MAX);
+    assert!(n <= 1_000 && n > 500, "la borne déclarée : {n}");
+}
+
 /// **Un apport recopié sort des rappels par défaut, et se voit en ôtant le filtre** (15 novembre 2026,
 /// les gestes de Lucie : scinder ou rejoindre une fiche recopie ses apports sous la fiche issue, et
 /// l'exemplaire d'origine reste comme provenance). L'état `recopied` (la transition `recopy` du cycle
