@@ -434,7 +434,20 @@ impl NodeFactory for ForEachNodeFactory {
             Some(Value::Bool(b)) => *b,
             Some(v) => return Err(format!("{qui} : report_results est un booléen, pas {v}")),
         };
-        Ok(Box::new(ForEachNode { name: name.to_string(), cite, outil, element, args, resultat, on_error, parallelism, carry, report_results, registre }))
+        // **`when` et `flatten`** (15 novembre 2026, le segment de l'archiviste) : jouer le graphe cité
+        // pour les seuls éléments marqués, les autres passant tels quels à leur place ; épisser dans le
+        // flux un résultat qui est une liste. L'ordre du flux est celui des éléments, toujours.
+        let when = match config.get("when") {
+            None | Some(Value::Null) => None,
+            Some(Value::String(w)) if !w.is_empty() => Some(w.clone()),
+            Some(v) => return Err(format!("{qui} : when est le nom d'un champ booléen de l'élément, pas {v}")),
+        };
+        let flatten = match config.get("flatten") {
+            None | Some(Value::Null) => false,
+            Some(Value::Bool(b)) => *b,
+            Some(v) => return Err(format!("{qui} : flatten est un booléen, pas {v}")),
+        };
+        Ok(Box::new(ForEachNode { name: name.to_string(), cite, outil, element, args, resultat, on_error, parallelism, carry, report_results, when, flatten, registre }))
     }
 
     fn node_type(&self) -> &str {
@@ -455,6 +468,8 @@ impl NodeFactory for ForEachNodeFactory {
                 param("parallelism", ConfigParamType::Int, false, Some(json!(1)), "appels en même temps, au plus (1 : l'un après l'autre) ; l'ordre des résultats est celui des éléments", None),
                 param("carry", ConfigParamType::String, false, None, "un paramètre du graphe cité porté d'un élément au suivant : chaque appel le reçoit, le champ du même nom de son résultat le remplace pour le suivant (parallelism = 1)", None),
                 param("report_results", ConfigParamType::Bool, false, Some(json!(false)), "le rapport porte aussi `results` : ce que chaque élément a rendu, dans l'ordre, l'échec en {index, error, element} (une trace)", None),
+                param("when", ConfigParamType::String, false, None, "un champ booléen de l'élément : le graphe cité n'est joué que là où il est vrai ; les autres éléments passent tels quels, à leur place ; un élément sans ce champ passe aussi, et le rapport le dit (when_missing)", None),
+                param("flatten", ConfigParamType::Bool, false, Some(json!(false)), "un résultat qui est une liste est épissé dans le flux, l'ordre gardé ; un autre reste à sa place ; une liste vide retire l'élément, et le rapport le dit (dropped)", None),
             ],
         }
     }
@@ -485,6 +500,8 @@ struct ForEachNode {
     parallelism: usize,
     carry: Option<String>,
     report_results: bool,
+    when: Option<String>,
+    flatten: bool,
     registre: Arc<NodeRegistry>,
 }
 
@@ -516,7 +533,30 @@ impl Node for ForEachNode {
         let annulation = ctx.cancellation();
         let (rn, rp) = (self.resultat.0.as_str(), self.resultat.1.as_str());
         let porte = std::sync::Mutex::new(self.carry.as_ref().map(|c| self.args.get(c).cloned().unwrap_or(Value::Null)));
+        // `when` : qui est joué, qui passe tel quel, qui n'a pas le champ (dit au rapport).
+        let mut when_missing: Vec<usize> = Vec::new();
+        let joue: Vec<bool> = elements
+            .iter()
+            .enumerate()
+            .map(|(i, e)| match &self.when {
+                None => true,
+                Some(w) => match e.get(w) {
+                    Some(Value::Bool(b)) => *b,
+                    None => {
+                        when_missing.push(i);
+                        false
+                    }
+                    Some(_) => false,
+                },
+            })
+            .collect();
+        if !when_missing.is_empty() {
+            ctx.info(&format!("{qui} : {} élément(s) sans le champ « {} » passent tels quels : {:?}", when_missing.len(), self.when.as_deref().unwrap_or(""), when_missing));
+        }
         let appel = |i: usize, e: &Value| -> Result<PortValue, String> {
+            if !joue[i] {
+                return Ok(PortValue::new(e.clone()));
+            }
             if let Some(m) = champs_manquants(&self.outil, &self.element, e) {
                 return Err(format!("l'élément {i} n'a pas {m}"));
             }
@@ -554,7 +594,26 @@ impl Node for ForEachNode {
         }
         let mut erreurs = Vec::new();
         let mut rendus: Vec<Value> = Vec::new();
+        let mut dropped: Vec<usize> = Vec::new();
         for (i, r) in sorties.into_iter().enumerate() {
+            // `flatten` : une liste rendue est épissée, à la place de l'élément ; vide, l'élément sort.
+            if self.flatten {
+                if let Ok(v) = &r {
+                    if let Ok(Value::Array(items)) = en_json(v) {
+                        if items.is_empty() {
+                            dropped.push(i);
+                        }
+                        for item in items {
+                            rendus.push(item.clone());
+                            match ctx.emit("results", PortValue::new(item)) {
+                                Ok(()) | Err(super::node::Stopped::NoReader) => {}
+                                Err(e) => return Err(e.into()),
+                            }
+                        }
+                        continue;
+                    }
+                }
+            }
             {
                 rendus.push(match &r {
                     Ok(v) => en_json(v).unwrap_or(Value::Null),
@@ -578,7 +637,16 @@ impl Node for ForEachNode {
             }
         }
         let n = elements.len();
+        if !dropped.is_empty() {
+            ctx.info(&format!("{qui} : {} élément(s) retiré(s) du flux, leur graphe cité ayant rendu une liste vide : {:?}", dropped.len(), dropped));
+        }
         let mut rapport = json!({"elements": n, "ok": n - erreurs.len(), "errors": erreurs});
+        if self.when.is_some() {
+            rapport["when_missing"] = json!(when_missing);
+        }
+        if self.flatten {
+            rapport["dropped"] = json!(dropped);
+        }
         if self.report_results {
             rapport["results"] = Value::Array(rendus.clone());
         }

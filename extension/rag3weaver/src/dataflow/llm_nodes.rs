@@ -50,6 +50,39 @@ pub struct LlmNode {
     opts: GenOptions,
     with_tools: bool,
     stop_when_unread: bool,
+    /// La forme imposée à la réponse (`response_schema`) : envoyée en format
+    /// strict, et la réponse lue en JSON sur le port `json`.
+    response_schema: Option<serde_json::Value>,
+}
+
+/// **La réponse lue sous son schéma** : du JSON, de la forme de la racine du
+/// schéma (`type`), avec ses clés `required` si c'est un objet. Un modèle qui
+/// n'honore pas `response_format` (un local, un faux serveur) rend du texte :
+/// l'erreur le dit, on ne devine pas un JSON dans une phrase.
+fn lire_sous_le_schema(texte: &str, schema: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let debut: String = texte.trim().chars().take(200).collect();
+    let v: serde_json::Value = serde_json::from_str(texte.trim())
+        .map_err(|e| format!("la réponse n'est pas du JSON ({e}) alors qu'un response_schema est déclaré : « {debut} »"))?;
+    let attendu = schema.get("type").and_then(serde_json::Value::as_str);
+    let ok = match attendu {
+        Some("object") => v.is_object(),
+        Some("array") => v.is_array(),
+        Some("string") => v.is_string(),
+        Some("integer") => v.is_i64() || v.is_u64(),
+        Some("number") => v.is_number(),
+        Some("boolean") => v.is_boolean(),
+        _ => true,
+    };
+    if !ok {
+        return Err(format!("la réponse n'a pas la forme du response_schema (type {}) : « {debut} »", attendu.unwrap_or("?")));
+    }
+    if let (Some(obj), Some(req)) = (v.as_object(), schema.get("required").and_then(serde_json::Value::as_array)) {
+        let manque: Vec<&str> = req.iter().filter_map(serde_json::Value::as_str).filter(|k| !obj.contains_key(*k)).collect();
+        if !manque.is_empty() {
+            return Err(format!("la réponse n'a pas les clés requises du response_schema ({}) : « {debut} »", manque.join(", ")));
+        }
+    }
+    Ok(v)
 }
 
 /// **Le puits double** : chaque fragment part sur `tokens` et s'accumule pour
@@ -73,7 +106,13 @@ impl TokenSink for AnswerSink<'_> {
 
 impl LlmNode {
     pub fn new(name: &str) -> Self {
-        Self { node_name: name.to_string(), opts: GenOptions::default(), with_tools: false, stop_when_unread: false }
+        Self { node_name: name.to_string(), opts: GenOptions::default(), with_tools: false, stop_when_unread: false, response_schema: None }
+    }
+
+    /// Impose une forme JSON à la réponse ; elle sort aussi sur `json`.
+    pub fn with_response_schema(mut self, schema: serde_json::Value) -> Self {
+        self.response_schema = Some(schema);
+        self
     }
 
     /// Arrêter la génération quand plus personne ne lit `tokens`.
@@ -101,6 +140,10 @@ impl LlmNode {
                 return take_or_clone::<Vec<Turn>>(pv)
                     .ok_or_else(|| "LlmNode: bad Vec<Turn> payload".to_string());
             }
+        }
+        // Un texte rendu par un RhaiNode arrive en JSON (`Value::String`) : c'est un prompt.
+        if let Some(serde_json::Value::String(s)) = pv.downcast::<serde_json::Value>() {
+            return Ok(vec![Turn::user(s.clone())]);
         }
         let text = take_or_clone::<String>(pv)
             .ok_or("LlmNode: 'prompt' must carry String or Vec<Turn>")?;
@@ -137,6 +180,9 @@ impl Node for LlmNode {
                 .ok_or("LlmNode: 'with_tools' is set but the 'node_registry' service is missing")?;
             opts.tools = tool_defs(registry);
         }
+        if let Some(schema) = &self.response_schema {
+            opts = opts.with_response_format(crate::llm::ResponseFormat::strict_schema("response", schema.clone()));
+        }
 
         // Chaque fragment sur `tokens`, et le tout pour `text`.
         let (finish, usage, text) = {
@@ -169,7 +215,18 @@ impl Node for LlmNode {
             ctx.warn(&format!("LlmNode ({}): incomplete answer ({finish:?})", llm.name()));
         }
 
+        // Sous un schéma, la réponse se lit avant tout envoi : une réponse non
+        // conforme est une erreur, et aucun port ne sort à moitié.
+        let json = match &self.response_schema {
+            Some(schema) => Some(
+                lire_sous_le_schema(&text, schema).map_err(|e| format!("LlmNode ({}) : {e}", llm.name()))?,
+            ),
+            None => None,
+        };
         let out = LlmOutput { text, finish, usage };
+        if let Some(v) = json {
+            ctx.set_output("json", PortValue::new(v));
+        }
         ctx.set_output("text", PortValue::new(out.text.clone()));
         ctx.set_output("llm", PortValue::new(out));
         Ok(())
@@ -224,14 +281,21 @@ impl NodeFactory for LlmNodeFactory {
             Some(v) => v.as_bool().ok_or("LlmNode: 'stop_when_unread' must be a boolean")?,
         };
 
+        let response_schema = match config.get("response_schema") {
+            None | Some(serde_json::Value::Null) => None,
+            Some(v @ serde_json::Value::Object(m)) if !m.is_empty() => Some(v.clone()),
+            Some(_) => return Err("LlmNode: 'response_schema' must be a non-empty JSON Schema object".into()),
+        };
         let opts = GenOptions::default()
             .with_max_tokens(max_tokens)
             .with_temperature(temperature)
             .with_top_p(top_p)
             .with_stop(stop);
-        Ok(Box::new(
-            LlmNode::new(name).with_options(opts).with_tools(with_tools).with_stop_when_unread(stop_when_unread),
-        ))
+        let node = LlmNode::new(name).with_options(opts).with_tools(with_tools).with_stop_when_unread(stop_when_unread);
+        Ok(Box::new(match response_schema {
+            Some(schema) => node.with_response_schema(schema),
+            None => node,
+        }))
     }
 
     fn node_type(&self) -> &'static str {
@@ -242,11 +306,13 @@ impl NodeFactory for LlmNodeFactory {
         NodeSchema {
             node_type: "LlmNode".into(),
             description: "Generates text from a prompt via the 'llm' service (streaming-capable)".into(),
-            inputs: vec![PortDef::value("prompt", PortType::Text, true)],
+            // `Any` : un texte, une conversation, ou un texte rendu en JSON par un RhaiNode.
+            inputs: vec![PortDef::value("prompt", PortType::Any, true)],
             outputs: vec![
                 PortDef::value("text", PortType::Text, false),
                 PortDef::value("llm", PortType::Llm, false),
                 PortDef::value("tokens", PortType::Text, false).stream(super::port::PortKind::Finite),
+                PortDef::value("json", PortType::Map, false),
             ],
             config_params: vec![
                 ConfigParam {
@@ -291,6 +357,15 @@ impl NodeFactory for LlmNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(false)),
                     description: "Expose every registered node type to the model as a tool".into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "response_schema".into(),
+                    param_type: ConfigParamType::Json,
+                    required: false,
+                    default: None,
+                    description: "A JSON Schema the reply must follow, sent as a strict response_format; the reply is then read as JSON onto the 'json' port, and a reply that is not JSON of that shape is an error naming response_schema (a model that ignores response_format is not guessed)".into(),
                     choices: None,
                     json_schema: None,
                 },
