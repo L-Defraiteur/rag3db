@@ -22,6 +22,8 @@ Deux règles s'appliquent ensuite :
 - **La gamme.** Une couleur hors de sRGB perd de la chroma, à teinte et clarté constantes, jusqu'à y rentrer. Elle n'est jamais coupée canal par canal (le troisième point d'archi).
 - **Le contraste**, en WCAG 2 et en luminance relative sRGB (le cinquième point). Il vaut au moins 4,5 contre le fond, et 3 pour la sourdine, les commentaires, la ponctuation et le cadre : la règle même du test Rust. La clarté s'éloigne du fond d'un centième à la fois jusqu'au seuil. Si aucune ne l'atteint, le script s'arrête et le dit, sans jamais rendre une couleur fausse.
 
+**Un thème retouché à la main est refusé, jamais réécrit en silence.** Chaque JSON rédigé porte la clé `derive` (« couleurs et code sont dérivés de palette par scripts/themes_palettes.py … : ne pas les éditer à la main »). La CI de rag3weaver (`.github/workflows/rag3weaver-workflow.yml`, étape « Les thèmes dérivés de leur palette ») joue `--essais` puis `--check` à chaque push, sans bâti. Le test du crate tty fait de même sur les postes. Une couleur changée à la main, ou une palette changée sans relancer le script, y rougit. Le geste juste est de changer la palette, ou une règle, puis de relancer le script.
+
 Ses trois usages :
 - `scripts/themes_palettes.py` réécrit les thèmes ;
 - `--check` rougit si un thème diffère de ce que dérive sa palette : c'est la garde contre une retouche à la main ;

@@ -98,6 +98,11 @@ jobs:
       - name: Les filets CPU de provenance du bâti vectoriel
         run: python3 scripts/test_bati_vector_ci.py -v
 
+      # Les thèmes dérivés de leur palette (lot tty-12) : un thème retouché à la main, sans repasser
+      # par le script, est refusé ici plutôt que réécrit en silence.
+      - name: Les thèmes dérivés de leur palette
+        run: python3 -I scripts/themes_palettes.py --essais && python3 -I scripts/themes_palettes.py --check
+
       - name: Bâti des tests unitaires
         run: |
           set -euo pipefail
