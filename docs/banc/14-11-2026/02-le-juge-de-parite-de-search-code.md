@@ -228,3 +228,24 @@ générations réindexée.
 **Les noms des usages** (LB, NS, UP, a, absent) ont été choisis parmi les scopes dont le hash
 change à l'index. Sur cette base, c'est surtout le bruit du hash recalculé. Le vert des usages
 vaut pour ces noms.
+
+## 7. Le correctif (A) de l'écrivain, et une leçon de banc (15 novembre)
+
+**La leçon** (au mot de c7) : **une parité prouve d'abord que les deux côtés ont bâti et joué.**
+Avant tout écart, on compte les relevés et les cas de chaque côté.
+
+**Ce qui l'a appris** : la première passe du correctif (d087e02c7 contre sa base e95a1b8c60, à
+11 h 53) a perdu son parent sans le dire au juge.
+- La sonde Cypher de la nuit, ajoutée au même fichier de test, appelle `rang_publie`. Le parent ne
+  porte pas cette méthode : il n'a compilé dans aucune des deux parités, et n'a écrit aucun relevé.
+- La copie de base du parent, faite avant la compilation, est restée la base migrée intacte. La
+  base propre P0, copiée d'elle, n'était donc pas indexée par le parent.
+- Seul le lot de la parité actuelle reste valable : `aretes_recopiees` vaut 16 543 à la
+  génération 1, et l'index du lot a pris 2 971 s, puisque tout repasse une fois quand la colonne
+  `analyse` est vide.
+
+**Ce qui est changé** :
+- le script retire la sonde Cypher du test là où le code n'a pas `rang_publie` ;
+- avant tout juge, `joue` vérifie que chaque côté a écrit ses deux relevés, avant et après l'index,
+  et dit leur nombre de cas. Un côté qui manque rend la passe ROUGE, sans juger ;
+- la parité du parent et la parité propre sont rejouées, sur une vraie P0, à partir de 13 h 49.

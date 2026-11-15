@@ -161,5 +161,13 @@ que chaque décision voit en contexte.
     contexte : ce qui ne change pas dans la fenêtre d'abord, le bout en cours à la fin. La part
     servie par le cache se lit dans l'usage de chaque appel (`cached_prompt_tokens`), à mesurer sur
     la première fenêtre avant d'extrapoler le coût.
+- **Le quota de Vertex** (relevé le 15 nov. à 13 h 50) : la référence N a rencontré 5 quotas en
+  30 minutes, avec une attente qui double (60, 120, 240 s…), soit 11 tours sur 244 faits. Pendant
+  ce temps, sur les deux postes, aucun autre processus de Lucie n'a d'identifiants Vertex dans son
+  environnement, sauf l'hôte démon du portable. Son journal dit son dernier appel à
+  gemini-3.8-flash à 12 h 46 (le chat de l'IDE, un équipier, le juge des bilans), plus rien
+  après. Deux processus d'un autre utilisateur ne sont pas lisibles. Ce que ça dit : le quota
+  semble celui du projet seul, une limite par minute sur ce modèle, à une décision toutes les
+  8 secondes environ. Ce n'est pas prouvé : la console du projet le dirait.
 - **Rien n'est lancé** avant le composeur vu vert et l'entrée de contexte de l'archive. La conception
   est validée par l'orchestration (15 nov., 12 h 5x).
