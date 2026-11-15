@@ -502,7 +502,14 @@ private:
                 break;
             }
             const auto started = now();
-            const auto error = transact(connection, statements, block);
+            auto error = transact(connection, statements, block);
+            // Sous le verrou de schéma (15 novembre 2026), une écriture ouverte avant un ALTER
+            // validé est refusée sous ce nom et se recommence, comme le fera rag3weaver : ce
+            // n'est pas une erreur, et sa latence compte tous les essais.
+            while (!stop && error.find("Schema changed, retry:") != std::string::npos) {
+                retries++;
+                error = transact(connection, statements, block);
+            }
             const auto ended = now();
             if (error.empty()) {
                 journal.samples.push_back({started, ended, -1});
@@ -523,6 +530,7 @@ private:
         }
     }
 
+    std::atomic<int64_t> retries{0};
     rag3db::main::Database& database;
     std::chrono::milliseconds period;
     CommitLog* commitLog;
@@ -801,6 +809,8 @@ protected:
         }
         Scenario scenario(*database, period);
         scenario.run(6);
+        std::cerr << "  [scénario] écritures recommencées après un changement de schéma : "
+                  << scenario.retries.load() << "\n";
 
         // Le pic du tampon : sur toute la passe, puis entre chaque début de DDL et le suivant.
         const auto peak = [&](double from, double to) {
