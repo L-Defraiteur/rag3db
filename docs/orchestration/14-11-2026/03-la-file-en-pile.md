@@ -1516,3 +1516,6 @@ Codeparsers, 17 h 33 : réserve de (b) levée — sur src/ du moteur, 22 213 ré
 Arbre, 17 h 33 : répétition relancée à 17 h 32 (la première avait rougi à 0 s sur des chemins relatifs du manifeste copié, non vu
 par son attente ; corrigé, attente qui guette tout rouge) : par base, banc d'avant 8-9 s, purge (103 et 102 orphelins) + compact 8 s,
 1b en cours.
+Codeparsers, 17 h 35 : lot homonymes + paramètres C++ monté (d1c7961c7 : pointeur 5f7c837 → ff82d22, deux tickets fermés, nouveauté « toutes
+les bases repassent une fois ») ; tranché (i) : pas de montée de REGLES_DE_L_ANALYSE sans règle changée (le pointeur entre déjà
+dans la version). Après l'écrivain d'ED, passe complète au rejeu. Ensuite la famille de la résolution d'arêtes.
