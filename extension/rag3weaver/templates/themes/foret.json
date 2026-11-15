@@ -1,5 +1,79 @@
 {
   "nom": "foret",
+  "mode": "sombre",
+  "palette": {
+    "sous-bois": {
+      "role": "fond",
+      "oklch": [
+        0.17206,
+        0.02443,
+        154.494
+      ]
+    },
+    "lichen": {
+      "role": "neutre",
+      "oklch": [
+        0.51913,
+        0.03834,
+        135.716
+      ]
+    },
+    "feuille": {
+      "role": "accent",
+      "oklch": [
+        0.79317,
+        0.15143,
+        135.381
+      ]
+    },
+    "pousse": {
+      "role": "halo",
+      "oklch": [
+        0.89984,
+        0.15335,
+        125.845
+      ]
+    },
+    "mousse": {
+      "role": "halo2",
+      "oklch": [
+        0.43213,
+        0.0946,
+        141.816
+      ]
+    },
+    "miel": {
+      "role": "teinte",
+      "oklch": [
+        0.82826,
+        0.11143,
+        92.583
+      ]
+    },
+    "ecorce": {
+      "role": "teinte",
+      "oklch": [
+        0.72155,
+        0.06026,
+        82.257
+      ]
+    },
+    "ambre": {
+      "role": "teinte",
+      "oklch": [
+        0.75932,
+        0.11078,
+        76.224
+      ]
+    }
+  },
+  "roles": {
+    "code": {
+      "string": {
+        "teinte": 80
+      }
+    }
+  },
   "couleurs": {
     "fond": "#07130b",
     "texte": "#8fd16a",
@@ -95,20 +169,21 @@
   "code": {
     "keyword": "#8fd16a",
     "type": "#c5f07a",
-    "function": "#e0c56e",
+    "function": "#ddc66e",
     "string": "#b8a27a",
     "comment": "#5f6e58",
-    "number": "#d9a75b",
-    "constant": "#d9a75b",
-    "variable": "#d8e6cf",
-    "property": "#a9c8a0",
-    "operator": "#6fbf5a",
-    "punctuation": "#7d8a76",
-    "attribute": "#7fa86a",
-    "label": "#7fa86a",
-    "module": "#7fa86a",
-    "other": "#cfdcc6",
-    "en_ligne": "#d9a75b",
+    "number": "#b8a27a",
+    "constant": "#b8a27a",
+    "variable": "#dcead5",
+    "property": "#a4c1a0",
+    "operator": "#99cd7d",
+    "punctuation": "#7c8c75",
+    "attribute": "#6ab792",
+    "label": "#6ab792",
+    "module": "#6ab792",
+    "other": "#cddec5",
+    "en_ligne": "#e1c56e",
     "cadre": "#5f6e58"
-  }
+  },
+  "derive": "couleurs et code sont dérivés de palette par scripts/themes_palettes.py (rôles : templates/theme-roles.json) : ne pas les éditer à la main"
 }
