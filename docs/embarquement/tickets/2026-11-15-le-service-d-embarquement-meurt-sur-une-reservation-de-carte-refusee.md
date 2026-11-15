@@ -75,3 +75,23 @@ Ce qu'il faudrait, en plus du refus nommé :
 
 Témoin de `embed_query`, rouge d'abord : une requête de 40 000 caractères arrive à l'embarqueur bornée, et la
 recherche le dit.
+
+## Livré : le plafond de la requête embarquée (15 novembre, branche `plafond-requete`)
+
+Conception relue par c7 :
+- **le réglage** : `models.embed.query_max_chars`, 6 000 caractères par défaut, soit environ 2 000 jetons et
+  260 Mo d'attention pour bge-m3. Le défaut ne se dérive pas de `context_tokens` : le contexte dit ce que le
+  modèle accepte, pas ce que la carte tient ;
+- **le plafond haut** : `context_tokens × 3`. Un plafond déclaré au-dessus est refusé au chargement, tout
+  comme un plafond nul ;
+- **la coupe** : une seule fonction, `search::query_for_embedding`, avant les trois chemins (dense, dual,
+  creux) dans `Catalog::embarquer_la_requete`, et dans les deux nœuds de recherche. Elle coupe sur une
+  frontière de mot, et la recherche le dit : « requête coupée de N à M caractères pour l'embarquement
+  (query_max_chars …) ; le plein texte garde la requête entière » ;
+- **l'état** : `query_max_chars`, sa valeur et sa source (« déclaré » ou « défaut »).
+
+Six témoins, rouges d'abord (773e7726a), verts ensuite (c3f907272). Le faux embarqueur qui note les tailles
+(dense, dual, creux) est dans `tests/common` et dans `src/embedder.rs`, pour la mémoire aussi.
+
+**Reste ouvert ici** : le refus nommé côté service (503) au lieu de mourir, et le plafond de jetons déclaré
+dans son identité. C'est un lot à part, après celui-ci.
