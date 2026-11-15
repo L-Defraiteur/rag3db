@@ -1820,3 +1820,8 @@ part au va-du-banc ; le banc reprend F 25 % sur 0653a6aeff ensuite.
 Embarquement, 20 h 38 : la mesure de la carte pleine n'est pas partie — la garde a lu 20 332 Mio libres (la carte n'était pleine que par la
 parité et la répétition, arrêtées pour elle). Tranché : la mesure part pendant la dernière répétition d'arbre (qui charge card2 par
 7878), avec un va-du-banc frais ; le banc note la minute de 7879 dans ses temps.
+ED, 20 h 40 : les CONSUMES perdus (−4 080) ne sont **pas** l'écrivain : le lot refait la résolution sous la règle actuelle, le parent garde des
+arêtes d'un index plus ancien (1 547 sur un nom ambigu — la règle s'abstient ; 2 533 sur un nom unique que la règle actuelle refuse
+aussi à un index neuf : témoin 19, C → C++ `main` → `rag3db_connection_init`). Décision : le banc juge contre un **index neuf** du même
+arbre ; le C → C++ refusé en ticket chez codeparsers. Les MENTIONS −985 : défaut probable de l'écrivain (les mentions restent sur la ligne
+fermée quand le scope renaît), témoin 20 en cours ; 5ed5d1fc9 n'est pas donné au banc avant.
