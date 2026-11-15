@@ -1,5 +1,106 @@
 {
   "nom": "daemon",
+  "mode": "sombre",
+  "palette": {
+    "nuit": {
+      "role": "fond",
+      "oklch": [
+        0.11492,
+        0.0,
+        89.876
+      ]
+    },
+    "cendre": {
+      "role": "neutre",
+      "oklch": [
+        0.51028,
+        0.0,
+        89.876
+      ]
+    },
+    "sang": {
+      "role": "accent",
+      "oklch": [
+        0.64887,
+        0.23697,
+        26.973
+      ]
+    },
+    "ecarlate": {
+      "role": "halo",
+      "oklch": [
+        0.62796,
+        0.25768,
+        29.234
+      ]
+    },
+    "caillot": {
+      "role": "halo2",
+      "oklch": [
+        0.39986,
+        0.16408,
+        29.234
+      ]
+    },
+    "braise": {
+      "role": "teinte",
+      "oklch": [
+        0.72659,
+        0.17572,
+        41.204
+      ]
+    },
+    "soufre": {
+      "role": "teinte",
+      "oklch": [
+        0.82083,
+        0.14859,
+        72.105
+      ]
+    },
+    "ocre": {
+      "role": "teinte",
+      "oklch": [
+        0.74336,
+        0.08705,
+        79.86
+      ]
+    }
+  },
+  "roles": {
+    "code": {
+      "type": {
+        "teinte": 40
+      },
+      "function": {
+        "teinte": 70
+      },
+      "number": {
+        "teinte": 50,
+        "clarte": 0.78
+      },
+      "constant": {
+        "teinte": 50,
+        "clarte": 0.78
+      },
+      "attribute": {
+        "depuis": "halo2",
+        "chroma": 0.8
+      },
+      "label": {
+        "depuis": "halo2",
+        "chroma": 0.8
+      },
+      "module": {
+        "depuis": "halo2",
+        "chroma": 0.8
+      },
+      "en_ligne": {
+        "teinte": 50,
+        "clarte": 0.78
+      }
+    }
+  },
   "couleurs": {
     "fond": "#050505",
     "texte": "#ff3333",
@@ -94,21 +195,22 @@
   },
   "code": {
     "keyword": "#ff3333",
-    "type": "#ff7a45",
-    "function": "#ffb347",
-    "string": "#c9a66b",
-    "comment": "#6b5a5a",
-    "number": "#ff9e64",
-    "constant": "#ff9e64",
-    "variable": "#e8d5d5",
-    "property": "#d9a0a0",
-    "operator": "#ff5555",
-    "punctuation": "#8a7a7a",
-    "attribute": "#b85d5d",
-    "label": "#b85d5d",
-    "module": "#b85d5d",
-    "other": "#d8c8c8",
-    "en_ligne": "#ff9e64",
+    "type": "#ff7a46",
+    "function": "#ffb34a",
+    "string": "#b6ad7a",
+    "comment": "#666666",
+    "number": "#ff996c",
+    "constant": "#ff996c",
+    "variable": "#e4e4e4",
+    "property": "#f09f93",
+    "operator": "#ec544b",
+    "punctuation": "#868686",
+    "attribute": "#bf5b4e",
+    "label": "#bf5b4e",
+    "module": "#bf5b4e",
+    "other": "#d7d7d7",
+    "en_ligne": "#ff996c",
     "cadre": "#666666"
-  }
+  },
+  "derive": "couleurs et code sont dérivés de palette par scripts/themes_palettes.py (rôles : templates/theme-roles.json) : ne pas les éditer à la main"
 }

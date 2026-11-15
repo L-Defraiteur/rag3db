@@ -1,0 +1,160 @@
+{
+  "_": "Les rôles communs des thèmes du terminal et de l'IDE (lot tty-12) : quelle couleur de la palette prend chaque rôle, et comment se dérive chaque sorte de code, par mode. Un thème peut les surcharger par sa clé roles. Lu par scripts/themes_palettes.py, seul rédacteur des champs dérivés. Hors de templates/themes/ : l'hôte y prend tout *.json pour un thème.",
+  "nuances": [
+    0.22,
+    0.3,
+    0.38,
+    0.46,
+    0.54,
+    0.62,
+    0.7,
+    0.78,
+    0.86
+  ],
+  "sombre": {
+    "fond": "fond",
+    "texte": "accent",
+    "sourdine": "neutre",
+    "halo": [
+      "halo",
+      "halo2"
+    ],
+    "code": {
+      "keyword": {
+        "depuis": "accent"
+      },
+      "type": {
+        "depuis": "halo"
+      },
+      "function": {
+        "teinte": 100
+      },
+      "string": {
+        "teinte": 150,
+        "chroma": 0.8
+      },
+      "comment": {
+        "depuis": "neutre"
+      },
+      "number": {
+        "teinte": 80
+      },
+      "constant": {
+        "teinte": 80
+      },
+      "variable": {
+        "depuis": "neutre",
+        "clarte": 0.92,
+        "chroma": 0.8
+      },
+      "property": {
+        "depuis": "halo2",
+        "clarte": 0.78,
+        "chroma": 0.6
+      },
+      "operator": {
+        "depuis": "accent",
+        "chroma": 0.8
+      },
+      "punctuation": {
+        "depuis": "neutre",
+        "clarte": 0.62
+      },
+      "attribute": {
+        "teinte": 240,
+        "clarte": 0.72
+      },
+      "label": {
+        "teinte": 240,
+        "clarte": 0.72
+      },
+      "module": {
+        "teinte": 240,
+        "clarte": 0.72
+      },
+      "other": {
+        "depuis": "neutre",
+        "clarte": 0.88
+      },
+      "en_ligne": {
+        "teinte": 90
+      },
+      "cadre": {
+        "depuis": "neutre"
+      }
+    }
+  },
+  "clair": {
+    "fond": "fond",
+    "texte": "accent",
+    "sourdine": "neutre",
+    "halo": [
+      "halo",
+      "halo2"
+    ],
+    "code": {
+      "keyword": {
+        "depuis": "accent"
+      },
+      "type": {
+        "depuis": "halo"
+      },
+      "function": {
+        "teinte": 100
+      },
+      "string": {
+        "teinte": 150,
+        "chroma": 0.8
+      },
+      "comment": {
+        "depuis": "neutre"
+      },
+      "number": {
+        "teinte": 80
+      },
+      "constant": {
+        "teinte": 80
+      },
+      "variable": {
+        "depuis": "neutre",
+        "clarte": 0.18,
+        "chroma": 0.8
+      },
+      "property": {
+        "depuis": "halo2",
+        "clarte": 0.32,
+        "chroma": 0.6
+      },
+      "operator": {
+        "depuis": "accent",
+        "chroma": 0.8
+      },
+      "punctuation": {
+        "depuis": "neutre",
+        "clarte": 0.48
+      },
+      "attribute": {
+        "teinte": 240,
+        "clarte": 0.38
+      },
+      "label": {
+        "teinte": 240,
+        "clarte": 0.38
+      },
+      "module": {
+        "teinte": 240,
+        "clarte": 0.38
+      },
+      "other": {
+        "depuis": "neutre",
+        "clarte": 0.22
+      },
+      "en_ligne": {
+        "teinte": 90
+      },
+      "cadre": {
+        "depuis": "neutre"
+      }
+    }
+  }
+}
