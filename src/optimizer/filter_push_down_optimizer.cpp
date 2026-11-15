@@ -5,6 +5,7 @@
 #include "binder/expression/scalar_function_expression.h"
 #include "binder/expression/variable_expression.h"
 #include "common/index_search_types.h"
+#include "function/list/vector_list_functions.h"
 #include "main/client_context.h"
 #include "planner/operator/extend/logical_extend.h"
 #include "planner/operator/logical_empty_result.h"
@@ -221,6 +222,17 @@ std::shared_ptr<LogicalOperator> FilterPushDownOptimizer::visitScanNodeTableRepl
             predicateSet.addPredicate(primaryKeyEqualityComparison);
         }
     }
+    // **Un IN sur la clé primaire** (ticket docs/everything-declarative/tickets/2026-11-14-un-in-sur-la-
+    // cle-primaire-balaie-toute-la-table.md) : `n.pk IN <liste constante>` devient, comme
+    // `n.pk = <constante>`, un accès par la clé, ici une liste de clés, au lieu d'un balayage de la
+    // table puis d'un FILTER. Les lignes viennent dans l'ordre de la liste, chaque nœud une fois.
+    if (scan.getScanType() == LogicalScanNodeTableType::SCAN && tableIDs.size() == 1) {
+        if (auto inList = predicateSet.popNodePKInListComparison(*nodeID)) {
+            scan.setScanType(LogicalScanNodeTableType::PRIMARY_KEY_SCAN);
+            scan.setExtraInfo(std::make_unique<PrimaryKeyScanInfo>(inList->getChild(0), true));
+            scan.computeFlatSchema();
+        }
+    }
     // Try index scan rewrite (only if still a regular SCAN and single table).
     if (scan.getScanType() == LogicalScanNodeTableType::SCAN && tableIDs.size() == 1) {
         auto searchPredicate = predicateSet.popSearchPredicate();
@@ -338,6 +350,35 @@ static bool isNodePrimaryKey(const Expression& expression, const Expression& nod
         return false;
     }
     return property.isPrimaryKey();
+}
+
+std::shared_ptr<Expression> PredicateSet::popNodePKInListComparison(const Expression& nodeID) {
+    for (auto i = 0u; i < nonEqualityPredicates.size(); ++i) {
+        const auto& predicate = nonEqualityPredicates[i];
+        if (predicate->expressionType != ExpressionType::FUNCTION ||
+            predicate->getNumChildren() != 2) {
+            continue;
+        }
+        const auto& func = predicate->constCast<ScalarFunctionExpression>();
+        if (func.getFunction().name != function::ListContainsFunction::name) {
+            continue;
+        }
+        const auto list = predicate->getChild(0);
+        const auto key = predicate->getChild(1);
+        // La liste constante seulement : un littéral ou un paramètre lié, jamais une sous-requête
+        // ni une expression de la ligne. Du type de la clé : sinon le FILTER garde le chemin d'avant.
+        if ((list->expressionType != ExpressionType::LITERAL &&
+                list->expressionType != ExpressionType::PARAMETER) ||
+            list->dataType.getLogicalTypeID() != LogicalTypeID::LIST ||
+            !isNodePrimaryKey(*key, nodeID) ||
+            ListType::getChildType(list->dataType) != key->dataType) {
+            continue;
+        }
+        auto result = predicate;
+        nonEqualityPredicates.erase(nonEqualityPredicates.begin() + i);
+        return result;
+    }
+    return nullptr;
 }
 
 std::shared_ptr<Expression> PredicateSet::popNodePKEqualityComparison(const Expression& nodeID) {

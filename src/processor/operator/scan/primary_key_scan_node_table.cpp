@@ -36,9 +36,69 @@ void PrimaryKeyScanNodeTable::initLocalStateInternal(ResultSet* resultSet,
     scanState = std::make_unique<NodeTableScanState>(nodeIDVector, std::vector<ValueVector*>{},
         nodeIDVector->state);
     indexEvaluator->init(*resultSet, context->clientContext);
+    listStarted = false;
+    listVector = nullptr;
+    listCursor = 0;
+    listSeen.clear();
+}
+
+bool PrimaryKeyScanNodeTable::getNextTupleFromList(ExecutionContext* context) {
+    auto transaction = transaction::Transaction::Get(*context->clientContext);
+    if (!listStarted) {
+        listStarted = true;
+        listTableIdx = sharedState->getTableIdx();
+        if (listTableIdx >= tableInfos.size()) {
+            return false;
+        }
+        indexEvaluator->evaluate();
+        listVector = indexEvaluator->resultVector.get();
+        const auto pos = listVector->state->getSelVector().getSelectedPositions()[0];
+        if (listVector->isNull(pos)) {
+            listVector = nullptr;
+            return false;
+        }
+        listEntry = listVector->getValue<list_entry_t>(pos);
+        listCursor = 0;
+    }
+    if (listVector == nullptr || listTableIdx >= tableInfos.size()) {
+        return false;
+    }
+    auto& tableInfo = tableInfos[listTableIdx];
+    auto& table = tableInfo.table->cast<NodeTable>();
+    auto* keys = ListVector::getDataVector(listVector);
+    while (listCursor < listEntry.size) {
+        const auto keyPos = listEntry.offset + listCursor++;
+        // Un élément NULL ne trouve rien, comme `x IN [..., NULL]` sous un FILTER.
+        if (keys->isNull(keyPos)) {
+            continue;
+        }
+        offset_t nodeOffset = 0;
+        if (!table.lookupPK(transaction, keys, keyPos, nodeOffset)) {
+            continue;
+        }
+        // Une clé répétée dans la liste ne rend pas deux fois le nœud.
+        if (!listSeen.insert(nodeOffset).second) {
+            continue;
+        }
+        const auto nodeID = nodeID_t{nodeOffset, table.getTableID()};
+        const auto outPos = scanState->nodeIDVector->state->getSelVector().getSelectedPositions()[0];
+        scanState->nodeIDVector->setValue<nodeID_t>(outPos, nodeID);
+        tableInfo.initScanState(*scanState, outVectors, context->clientContext);
+        table.initScanState(transaction, *scanState, nodeID.tableID, nodeOffset);
+        const auto succeeded = table.lookup(transaction, *scanState);
+        tableInfo.castColumns();
+        if (succeeded) {
+            metrics->numOutputTuple.incrementByOne();
+            return true;
+        }
+    }
+    return false;
 }
 
 bool PrimaryKeyScanNodeTable::getNextTuplesInternal(ExecutionContext* context) {
+    if (isList) {
+        return getNextTupleFromList(context);
+    }
     auto transaction = transaction::Transaction::Get(*context->clientContext);
     auto tableIdx = sharedState->getTableIdx();
     if (tableIdx >= tableInfos.size()) {

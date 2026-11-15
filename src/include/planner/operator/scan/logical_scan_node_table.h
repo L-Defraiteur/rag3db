@@ -26,11 +26,15 @@ struct ExtraScanNodeTableInfo {
 
 struct PrimaryKeyScanInfo final : ExtraScanNodeTableInfo {
     std::shared_ptr<binder::Expression> key;
+    // La clé est une liste de clés (un IN sur la clé primaire) : une ligne par clé trouvée, dans
+    // l'ordre de la liste, chaque nœud une fois.
+    bool isList;
 
-    explicit PrimaryKeyScanInfo(std::shared_ptr<binder::Expression> key) : key{std::move(key)} {}
+    explicit PrimaryKeyScanInfo(std::shared_ptr<binder::Expression> key, bool isList = false)
+        : key{std::move(key)}, isList{isList} {}
 
     std::unique_ptr<ExtraScanNodeTableInfo> copy() const override {
-        return std::make_unique<PrimaryKeyScanInfo>(key);
+        return std::make_unique<PrimaryKeyScanInfo>(key, isList);
     }
 };
 
