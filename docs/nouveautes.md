@@ -29,6 +29,11 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **15 nov. — Les dépendances de conan, de CMake et d'un workspace Go se lisent.** Les `[requires]` d'un
+  `conanfile.txt`, les `requires` d'un `conanfile.py`, les `find_package` et `FetchContent_Declare` d'un
+  `CMakeLists.txt` deviennent des dépendances de C et C++ ; `go.work` se lit comme `go.mod` (ses `use`
+  notés, ses `replace` suivis). Un port vcpkg garde son nom tel quel : le dossier de ses en-têtes n'est
+  écrit nulle part dans le registre (ticket « source à trouver »).
 - **15 nov. — Une méthode se retrouve sous son type, même hors de son bloc.** Un récepteur Go générique
   (`func (p *Pile[K])`) nomme son type `Pile` (deux de ses méthodes n'en avaient aucun) ; un bloc `impl`
   Rust porte le nom court du type (`impl<U> Foo<U>` → `Foo`) et le dit (`extends_type`) ; le chemin écrit
