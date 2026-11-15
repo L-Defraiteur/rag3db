@@ -996,3 +996,12 @@ total par passe ; champs absents quand le modèle n'en rend pas. Derrière c733b
 banc, 13 h 17 : l'essai de l'archiviste sur Vertex (Gemini 3.8 Flash, 4 à 12 s par décision) vert ; N (244 tours,
 sans contexte) tourne à luciepc depuis 13 h 16. Décision : F à 50 k ensuite (plafond ~6 M de jetons, compté par
 caractères envoyés, pas estimé), 300 k seulement au cache lu par le lot `usage`.
+
+## 13 h 18 — le cœur a poussé, la file repart
+
+Cœur, 13 h 18 : alter-attend-les-ecrivains-3 sur master à **101ff50a6** (18 commits, cf62f6dbd → 101ff50a6 ; testé 8d3a78fe1,
+docs seules au-dessus ; transaction_test 385 verts, known_red vert, e2e_test 1 867 verts et DropNodeTableReclaim seul,
+ticket 392e63cd7). Lot C++ seul : la lib reste 373b5477b. Note d'ABI pour la prochaine bascule : Transaction gagne un
+mutex, un ensemble de tables et un booléen ; LockResource gagne TABLE ; Catalog/CatalogSet des méthodes ;
+Transaction::SCHEMA_CHANGED_RETRY. Le refus est au milieu du message (après « Transaction manager exception: ») : contains.
+« À toi » à tty pour tty-11 (67323f97e), mode simple sur 101ff50a6. Ensuite ED (2), G, archi (relai), 96, ED (1).
