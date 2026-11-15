@@ -6035,4 +6035,44 @@ mod tests_de_l_ecrivain {
             .rows;
         assert_eq!(appelants(&cat, "f"), vec!["a".to_string()], "a changé à son tour appelle le f neuf ; les CONSUMES bruts : {brutes:?}");
     }
+
+    /// Les arêtes visibles d'un côté sans leur miroir de l'autre : `CONSUMED_BY (b → a)` sans
+    /// `CONSUMES (a → b)`, puis l'inverse, les deux bouts sous la visibilité.
+    fn miroirs_manquants(cat: &Catalog) -> (Vec<(String, String)>, Vec<(String, String)>) {
+        let v = cat.generations.clone().expect("une base à générations");
+        let d = cat.dialect_arc();
+        let (pa, pb) = (d.condition_visible_sur("a", &v.couche, v.rang).unwrap(), d.condition_visible_sur("b", &v.couche, v.rang).unwrap());
+        let lire = |q: String| -> Vec<(String, String)> {
+            cat.conn().execute(&q).unwrap().rows.iter().map(|l| (texte(&l[0]), texte(&l[1]))).collect()
+        };
+        let sans_consumes = lire(format!(
+            "MATCH (b:Scope)-[:CONSUMED_BY]->(a:Scope) WHERE {pa} AND {pb} AND NOT EXISTS {{ MATCH (a)-[:CONSUMES]->(b) }} RETURN b.name, a.name ORDER BY b.name, a.name"
+        ));
+        let sans_miroir = lire(format!(
+            "MATCH (a:Scope)-[:CONSUMES]->(b:Scope) WHERE {pa} AND {pb} AND NOT EXISTS {{ MATCH (b)-[:CONSUMED_BY]->(a) }} RETURN b.name, a.name ORDER BY b.name, a.name"
+        ));
+        (sans_consumes, sans_miroir)
+    }
+
+    /// **Témoin 18 : CONSUMES et CONSUMED_BY restent miroirs** (arbre principal, la répétition sur
+    /// code-principal du 15 novembre : 1 947 `CONSUMED_BY` visibles sans leur `CONSUMES`). `a` renaît et
+    /// ne consomme plus `f` : le `CONSUMED_BY` de `f` vers l'ancien `a` ne suit pas la ligne neuve. Deux
+    /// cas : `f` inchangé (né à 0), puis `f` réécrit avant `a` dans la même couche (né au rang en attente).
+    #[test]
+    fn consumes_et_consumed_by_restent_miroirs() {
+        for f_change_d_abord in [false, true] {
+            let (mut cat, src) = base();
+            cat.publier_la_generation("c1", 0).expect("publier");
+            assert_eq!(miroirs_manquants(&cat), (vec![], vec![]), "la base du témoin est en miroir");
+            if f_change_d_abord {
+                sauver(&mut cat, &src, "b.rs", F2);
+                assert_eq!(miroirs_manquants(&cat), (vec![], vec![]), "f réécrit : toujours en miroir");
+            }
+            sauver(&mut cat, &src, "a.rs", "pub fn a() -> u32 {\n    2\n}\n");
+            assert_eq!(appelants(&cat, "f"), Vec::<String>::new(), "a ne consomme plus f (f réécrit d'abord : {f_change_d_abord})");
+            assert_eq!(miroirs_manquants(&cat), (vec![], vec![]), "CONSUMES et CONSUMED_BY visibles en miroir (f réécrit d'abord : {f_change_d_abord})");
+            let m = cat.publier_la_generation("c2", 0).expect("publier");
+            assert_eq!(cat.au_rang(m, |c| miroirs_manquants(c)), (vec![], vec![]), "au rang publié aussi (f réécrit d'abord : {f_change_d_abord})");
+        }
+    }
 }
