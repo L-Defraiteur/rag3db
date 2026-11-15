@@ -39,3 +39,16 @@ Les nœuds de l'atelier (`LireFichierNode`, `EcrireFichierNode`, `WorktreeHost`)
 services que seul le backend atelier monte (ses worktrees attachés) ? Si oui, le greffage monte
 aussi ces services pour une tâche, sur sa seule racine, ou passe par le repli `FileTools` étendu
 aux mêmes primitives. Je le lis dans le code d'ED avant d'écrire le premier rouge.
+
+**Réponse, lue dans le code d'ED (`8ef56dd5e`)** :
+- Les nœuds de fichiers de l'atelier (`fichier_nodes.rs`) lisent leur racine par
+  `FILE_SOURCE_SERVICE`, que monte tout backend à workspace. Ils écrivent par
+  `WORKTREE_HOST_SERVICE`, que l'hôte pose sur **tout** backend qu'il ouvre (`daemon_host.rs`,
+  `poser_l_hote_des_worktrees`), tâches comprises. Aucun service de plus n'est à monter.
+- **Le greffage suit le droit d'écrire.** Sous une tâche sans droit d'écrire, seuls les outils de
+  lecture se greffent (`read_file`, `glob`, `grep_files`, `list_files`). Sinon,
+  `validate_tool_policy` refuserait le chargement de la tâche entière : un outil `write_files` sous
+  `read_only` sans `task_writes` est un refus au chargement.
+- **Les écritures du socle passent par `WorktreeHost`, pas par la source `ReadOnly`.** Le témoin
+  de bout en bout prouve donc aussi qu'aucune écriture greffée ne contourne le droit de la tâche :
+  une tâche sans droit d'écrire n'a pas d'outil d'écriture, et un appel par son nom est refusé.
