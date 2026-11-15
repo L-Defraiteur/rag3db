@@ -1439,3 +1439,6 @@ Hotfixs, 16 h 55 : **la fenêtre de formatage est close** — un commit pur sous
 deux fois ; bâti Release vert et une suite par cible touchée, toutes vertes. Le run de master 43730682329 (a6d49b99b) a rendu
 l'attendu : sanity, python lint, shell test verts, format rouge ; le run de 9ea2e2408 doit être le premier tout vert, et le
 ticket de la CI (ouvert depuis le 25 octobre) se fermera dessus. « À toi » à lucivy pour le relevé à blanc.
+Banc, 16 h 57 : **le témoin 0 de 2b′/2b-C est vert au bit près** (97b8c8d7d contre 77cd6b049) : sans `view`, mêmes réponses que le
+parent ; avec `view: {layer: backend}`, mêmes réponses et `view = {backend, 0, 1}` rendu. La condition du « à toi » d'arbre et de
+recherche est remplie ; en fin de file.
