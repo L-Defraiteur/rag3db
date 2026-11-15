@@ -756,6 +756,106 @@ mod tests {
         (lignes, rapport)
     }
 
+    /// Joue `ForEachNode` sur `elements` avec un graphe cité donné ; rend le journal, le rapport, ou l'échec.
+    fn jouer_le(mermaid: &str, elements: Vec<Value>, config: Value) -> (Vec<String>, Result<Value, String>) {
+        let reg = registre();
+        let sous = RegistreDesSousGraphes::default();
+        sous.poser(&reg);
+        let mut config = config;
+        config["graph"] = json!({"cite": "@graphs/g.mmd", "mermaid": mermaid, "sous": {}});
+        let journal: Journal = Arc::default();
+        let mut services = ServiceRegistry::new();
+        services.register("journal", journal.clone());
+        let mut g = DataflowGraph::new();
+        g.add_node(Box::new(Sections { name: "sections".into(), elements })).unwrap();
+        let chaque = match (ForEachNodeFactory { registre: sous }).create("chaque", &config) {
+            Ok(n) => n,
+            Err(e) => return (Vec::new(), Err(e)),
+        };
+        g.add_node(chaque).unwrap();
+        g.add_node(Box::new(Recueil { name: "recueil".into() })).unwrap();
+        g.connect("sections", "out", "chaque", "elements").unwrap();
+        g.connect("chaque", "results", "recueil", "in").unwrap();
+        let r = DataflowRuntime::with_services(100, services).execute(&mut g);
+        let rapport = r.map(|o| {
+            let mut rapport = o.get("chaque", "report").and_then(|v| v.downcast::<Value>().cloned()).unwrap_or(Value::Null);
+            rapport["_list"] = o.get("chaque", "list").and_then(|v| v.downcast::<Value>().cloned()).unwrap_or(Value::Null);
+            rapport
+        });
+        let lignes = journal.lock().unwrap().clone();
+        (lignes, rapport)
+    }
+
+    fn recus(journal: &[String]) -> Vec<String> {
+        journal.iter().filter_map(|l| l.strip_prefix("reçu ").map(str::to_string)).collect()
+    }
+
+    /// **`when='<champ>'`** (15 novembre 2026, le segment de l'archiviste) : le graphe cité n'est
+    /// joué que pour les éléments où le champ est vrai ; les autres passent tels quels, **à leur
+    /// place**. Un élément sans le champ passe aussi, et le rapport le dit (`when_missing`) : pas
+    /// d'erreur, pas de saut silencieux.
+    #[test]
+    fn when_ne_joue_que_les_elements_marques_et_laisse_les_autres_a_leur_place() {
+        let elements = vec![
+            json!({"title": "a", "echoue": false, "long": true}),
+            json!({"title": "b", "echoue": false, "long": false}),
+            json!({"title": "c", "echoue": false}),
+            json!({"title": "d", "echoue": false, "long": true}),
+        ];
+        let (journal, rapport) = jouer_le(SECTION, elements.clone(), json!({"when": "long"}));
+        let rapport = rapport.unwrap();
+        let ecrits: Vec<&String> = journal.iter().filter(|l| l.starts_with("écrit")).collect();
+        assert_eq!(ecrits, ["écrit a", "écrit d"], "seuls les marqués sont joués : {journal:?}");
+        assert_eq!(recus(&journal), vec!["rendu a".to_string(), elements[1].to_string(), elements[2].to_string(), "rendu d".to_string()],
+            "les autres passent tels quels, à leur place");
+        assert_eq!(rapport["when_missing"], json!([2]), "l'élément sans le champ est dit : {rapport}");
+        assert_eq!((rapport["elements"].as_u64(), rapport["ok"].as_u64()), (Some(4), Some(4)), "{rapport}");
+    }
+
+    const LISTE: &str = "%% tool: liste\n%% description: une liste par élément\n%% param: element json! -- l'élément\n%% result: r.result\n\ngraph LR\n    r[\"RhaiNode(script='if input.element.vide { [] } else if input.element.seul { input.element.title } else { [input.element.title + `-a`, input.element.title + `-b`] }', inputs='element', element=$element)\"]\n";
+
+    /// **`flatten=true`** : un résultat qui est une liste est épissé dans le flux, l'ordre gardé ; un
+    /// résultat qui n'en est pas une reste à sa place ; une liste vide retire l'élément, et le rapport
+    /// le dit (`dropped`) : c'est le seul cas où le flux rétrécit. `list` est le flux tel qu'émis.
+    #[test]
+    fn flatten_episse_les_listes_dans_l_ordre_et_dit_ce_qui_est_retire() {
+        let elements = vec![
+            json!({"title": "x", "vide": false, "seul": false}),
+            json!({"title": "y", "vide": false, "seul": true}),
+            json!({"title": "z", "vide": true, "seul": false}),
+            json!({"title": "w", "vide": false, "seul": false}),
+        ];
+        let (journal, rapport) = jouer_le(LISTE, elements, json!({"flatten": true}));
+        let rapport = rapport.unwrap();
+        let attendu = vec!["\"x-a\"", "\"x-b\"", "\"y\"", "\"w-a\"", "\"w-b\""];
+        assert_eq!(recus(&journal), attendu, "l'ordre des éléments, chaque liste épissée à sa place");
+        assert_eq!(rapport["dropped"], json!([2]), "la liste vide retire l'élément, dit : {rapport}");
+        assert_eq!(rapport["_list"], json!(["x-a", "x-b", "y", "w-a", "w-b"]), "list est le flux émis : {rapport}");
+    }
+
+    /// `when` et `flatten` ensemble, le cas du segment : les marqués sont découpés et épissés, les
+    /// autres passent entiers, et l'ordre du document est gardé.
+    #[test]
+    fn when_et_flatten_ensemble_gardent_l_ordre_du_document() {
+        let elements = vec![
+            json!({"title": "p", "vide": false, "seul": false, "long": false}),
+            json!({"title": "q", "vide": false, "seul": false, "long": true}),
+            json!({"title": "r", "vide": false, "seul": false, "long": false}),
+        ];
+        let (journal, rapport) = jouer_le(LISTE, elements.clone(), json!({"when": "long", "flatten": true}));
+        rapport.unwrap();
+        assert_eq!(recus(&journal), vec![elements[0].to_string(), "\"q-a\"".into(), "\"q-b\"".into(), elements[2].to_string()]);
+    }
+
+    /// `when` et `flatten` mal typés sont refusés à la création, en les nommant.
+    #[test]
+    fn when_et_flatten_mal_types_sont_refuses() {
+        let (_, r) = jouer_le(SECTION, vec![], json!({"when": 3}));
+        assert!(r.unwrap_err().contains("when"));
+        let (_, r) = jouer_le(SECTION, vec![], json!({"flatten": "oui"}));
+        assert!(r.unwrap_err().contains("flatten"));
+    }
+
     /// **N éléments, N appels et N écritures, dans l'ordre** ; le rapport les compte.
     #[test]
     fn chaque_element_appelle_le_sous_graphe_et_ecrit_dans_l_ordre() {
