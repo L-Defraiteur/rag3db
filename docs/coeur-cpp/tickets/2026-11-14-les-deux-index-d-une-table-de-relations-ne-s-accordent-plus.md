@@ -308,3 +308,5 @@ hors du verrou de A défait après le COMMIT de B. Les suspects, lus mais pas pr
 **Cause localisée, pas expliquée.** Sur master, l'annulation sous le verrou couvre ce cas (vert
 partout). Le témoin `BothDirectionsKeepTheRelationsOfAnotherWriter` le garde. Il reste à
 instrumenter l'ancienne lib, si l'on veut le mécanisme exact.
+
+**Statut de la perte des deux côtés** (c7, 15 nov.) : localisé, non expliqué, couvert par `373b5477b`, gardé par `BothDirectionsKeepTheRelationsOfAnotherWriter`. Le mécanisme exact, dans une lib qu'on ne livre plus, ne se cherche pas.
