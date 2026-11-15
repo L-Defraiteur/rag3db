@@ -1376,3 +1376,6 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   lot publier-sans-courant 047eca57f (rag3db_libs.py ne pose `courant` que sous `--poser-courant`, run_e2e.sh
   joue la lib bâtie par son identifiant ; 2 FAIL sur l'outil de master, 8 OK) : « à toi » à son vert, base =
   master. Le binaire du matin se bâtit.
+- **04 h 26 — soixante-quatre atterris** : publier-sans-courant (G, 7fd2300f9). La file est vide. Le binaire du
+  matin (26a091474 sur 373b5477b) est prêt et essayé ; il attend l'heure de Lucie avec la fenêtre M8 et la
+  mesure des 904 s.

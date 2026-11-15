@@ -927,3 +927,9 @@ file est vide.
 
 **04 h 3x — un lot d'outillage avant le matin** : publier-sans-courant (G, 047eca57f : la publication ne pose
 plus `courant` sans `--poser-courant`), base = master, « à toi » à son vert.
+
+**04 h 26 — soixante-quatre atterris** : publier-sans-courant (G, 7fd2300f9 : rag3db_libs.py ne pose `courant`
+que sous `--poser-courant`, run_e2e.sh joue la lib qu'il bâtit par son identifiant ; § 1 de la bascule à jour ;
+8 OK / 2 FAIL d'avant). rag3db_libs.py du cache de luciepc était une vieille copie du dépôt, recopiée
+(e2e73d283ad9441f) ; il ne reste que lib_seule.sh sans dépôt. Le binaire du matin 26a091474 sur 373b5477b
+(md5 56e3fd3f) est prêt, verdict 36/27/20. **La file est vide.**
