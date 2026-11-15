@@ -8644,17 +8644,25 @@ mod tests {
         let mut manifest: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
         manifest["tools"]["search_notes"]["graph"] = json!("search_structured.mmd");
         manifest["vector_extension"] = json!(extension_vector_de_test());
-        let dim = manifest["embeddings"]["dimensions"].as_u64().unwrap() as usize;
         std::fs::write(&chemin, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
         let base = dir.path().join("notes.rag3db");
         let ouvrir = || -> Backend {
             let prepared = PreparedBackend::load(&chemin).unwrap();
             let conn = crate::Rag3dbConnection::new(&base).expect("base sur disque");
-            prepared.open(Box::new(conn), Some(Box::new(crate::embedder::HashEmbedder::new(dim)))).expect("le notebook s'ouvre")
+            // Sans embarqueur : l'ouverture refuse un embarqueur factice, et un notebook vectoriel sans
+            // service démarre en le disant (`un_backend_en_mots_seuls_demarre_sans_service`). Les vecteurs ne
+            // sont pas le sujet : l'index vectoriel et son extension le sont.
+            prepared
+                .open_with_reason(Box::new(conn), None, Some("pas de service : témoin de l'extension notée".into()))
+                .expect("le notebook s'ouvre")
         };
         {
             let backend = ouvrir();
-            assert!(backend.avertissements().is_empty(), "première ouverture saine : {:?}", backend.avertissements());
+            assert!(
+                !backend.avertissements().iter().any(|a| a.contains(".rag3db_extension")),
+                "première ouverture : aucune extension dite manquante : {:?}",
+                backend.avertissements()
+            );
             for (cle, texte) in [("k1", "le four ne chauffe plus"), ("k2", "la porte du four grince"), ("k3", "acheter du pain")] {
                 let r = backend
                     .call_tool("put_note", json!({"record": {"key": cle, "text": texte, "labels": [], "stage": "working"}}))
