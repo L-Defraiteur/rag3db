@@ -1716,3 +1716,8 @@ Codeparsers, 19 h 36 : la marque « nom » montée (codeparsers/marque-nom 7d2ef
 par des listes std générées (rustc 1.98.1 : 1 266 noms ; clang 23 sur libstdc++ : 193 ; Python 3.14) ; rag3weaver/src « nom »
 10 702 → 10 114 (646 ôtées : 373 chemins par un type, 273 méthodes std ; prix : ~20 liens justes homonymes d'une std, au ticket 2) ;
 src/ du moteur 5 092 → 2 705, toutes fausses. Touche code.rs : montée de la constante quand la garde la demandera. Ticket 2 ensuite.
+19 h 41 : **décision** — master n'est pas rouge sous la passe épinglée (le témoin du modèle d'une tâche y est vert chez tty, 96 et ED,
+avec RAG3WEAVER_EMBED_SERVICE posé) ; il rougit en jeu isolé sans service, sans doute sous burn-embedder (tty : vert au portable sans
+burn-embedder, avec ou sans service). Les pushes repartent : ED (nom + persona, vert sur 5f0472603, repose sur b5de98d3b), 96 (pile du
+second tour), lucivy, puis le hash. tty rend le témoin indépendant de l'environnement en lot à part, et le produit si une réouverture
+échoue sans service sous burn-embedder. Hotfixs : extension-non-chargee-dite rouge puis vert, passe en file.
