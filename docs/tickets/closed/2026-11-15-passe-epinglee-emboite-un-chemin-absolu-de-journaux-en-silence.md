@@ -1,6 +1,6 @@
 # `passe_epinglee.sh` emboîte en silence un chemin absolu de journaux
 
-- **État** : ouvert (15 novembre 2026, hotfixs)
+- **État** : fait (15 novembre 2026, branche passe-chemin-absolu) : un chemin absolu en 2e argument est refusé (code 2, une ligne qui le nomme, aucun dossier créé), et la passe dit « journaux : <chemin> » à son premier pas ; deux cas neufs au témoin, rouges d abord, 23 vert
 - **Famille** : produit
 - **Gravité** : une passe qui rend son verdict là où personne ne le lit. Le lot paraît mort et sa session cherche une
   cause qui n'existe pas : une soirée perdue le 15 nov., et un faux ticket, fermé depuis
