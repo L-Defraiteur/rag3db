@@ -398,6 +398,10 @@ pub struct Catalog {
     pub(crate) naissances: std::collections::HashMap<String, i64>,
     /// Les arêtes entrantes recopiées depuis la dernière publication (page 06, § 9).
     pub(crate) recopies_en_attente: usize,
+    /// **La version de l'analyse** (page 06, § 13) : le parseur, les règles de rag3weaver et le gabarit
+    /// du code, hachés. Posée par l'enregistrement du schéma du code ; vide sans lui.
+    #[cfg_attr(not(feature = "code"), allow(dead_code))]
+    pub(crate) version_de_l_analyse: String,
     initialized: bool,
     embedding_cache: HashMap<String, Vec<f32>>,
     /// Cache mapping entity UUIDs to rag3db internal node IDs.
@@ -774,6 +778,7 @@ fn read_threads() -> u64 {
             generations: None,
             naissances: std::collections::HashMap::new(),
             recopies_en_attente: 0,
+            version_de_l_analyse: String::new(),
             initialized: false,
             embedding_cache: HashMap::new(),
             node_id_cache: Arc::new(RwLock::new(NodeIdCache::new())),
