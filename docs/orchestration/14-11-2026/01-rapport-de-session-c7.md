@@ -1476,3 +1476,9 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   « 0 fichiers changés », template_drift [], 27 outils, recall_fiches répond. Les clients MCP ouverts voient
   les outils neufs à leur reconnexion ; **les trois gestes sont à Lucie**. Le binaire 26a091474 posé au
   portable à 11 h 35 ; le 7879 arrêté à luciepc pour la mesure d'embarquement.
+- **11 h 36 — les 904 s départagées** (embarquement) : le même index 1 (80 fichiers, 2 219 morceaux, bge-m3 dense
+  et creux, mêmes binaires et gabarits du 14) en **33,3 s** sur card2 calme (le 7879 arrêté de 11 h 35 min 41 s
+  à 11 h 38 min 49 s par G, 23 Gio libres) contre 904 s le 14 au soir sur la carte pleine. **Ce n'est pas le
+  modèle, c'est la carte pleine** ; une seule mesure ne sépare pas mémoire et concurrence. Le 7879 relancé et
+  vérifié (embed 1024 norme 1, embed_dual). Embarquement : page, ticket de la résidence, puis le témoin A3 du
+  repli cpu avec llvmpipe.
