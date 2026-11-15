@@ -54,3 +54,21 @@ modes ». Cette page est un relevé, pas une conception. Le lot vient après la 
 
 En attendant, c7 déclare `edit_file` et `run_command` dans le manifeste de Lucie, pour qu'elle
 travaille aujourd'hui.
+
+## Ce que le second essai de Lucie ajoute (c7, 16 h 3x)
+
+Lucie a refait l'essai sur son terminal. L'équipier a bien rendu son `report`, mais l'a signé
+« Réponse apportée au superviseur ». Viennent ensuite deux lignes de plomberie : « étape faite :
+fait : … », écrite par l'équipier, puis « fait sans plan », écrite par l'hôte. Le modèle croit parler
+à un chef. Deux points de plus pour le socle :
+
+6. **L'invite dit à qui il parle.** Dans une tâche ouverte par le terminal ou le chat, le
+   « superviseur » est l'utilisateur. L'équipier lui répond directement, une fois par tour, en
+   texte, sans se citer ni dire « rapport fait ». Le mot « superviseur » reste pour une tâche qu'un
+   autre agent a ouverte (une demande par la boîte, depuis Claude Code par exemple).
+7. **Le résumé de `step_done` est une ligne d'état** pour l'hôte et le journal, jamais rendue comme
+   un message de l'équipier. Elle reste dans la boîte avec son genre (`step_done`), pour que le juge
+   et la garde de la demande la lisent.
+
+Pour tty : « étape faite » et « fait sans plan » se replient en une ligne d'état discrète, ou passent
+derrière un réglage ; la prose à l'écran est la seule réponse.
