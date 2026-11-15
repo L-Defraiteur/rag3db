@@ -1408,3 +1408,7 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   promesse du 26 octobre (« créer l'index vectoriel ne fige plus les écritures ») et le témoin
   NoWriterWaitsLongDuringTheCreate ; comme CREATE INDEX CONCURRENTLY, il attend un ALTER en cours et fait
   attendre le suivant, jamais les écrivains. Le cœur me l'a fait voir.
+- **Le cœur, 07 h 5x — l'ALTER qui attend** (alter-attend-les-ecrivains 518625e0c, passe complète à luciepc) :
+  contrat changé — un second ALTER de la même table attend le premier au lieu d'être refusé ; contrôle
+  ddl-waits-at-most-the-longest-packet (un ADD ≤ plus longue transaction d'écrivain + 50 ms : ADD 11 à 104 ms
+  pour des écrivains de 35 à 321 ms). La forme des paquets d'ED lui vient d'ED, pas de moi.
