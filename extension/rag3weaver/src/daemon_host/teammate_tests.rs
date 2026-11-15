@@ -1673,3 +1673,76 @@ fn a_teammate_edits_through_the_base_on_a_manifest_without_write_tools() {
     assert!(lib.contains("\"salut\"") && !lib.contains("\"bonjour\""), "le fichier de la tâche a changé : {lib}");
     assert_eq!(std::fs::read_to_string(racine.join("README.md")).unwrap(), "# Petit dépôt\n", "write n'a rien écrasé");
 }
+
+/// **Algareth** (Lucie, 15 novembre 2026 : « ce premier-là je voudrais qu'il s'appelle Algareth ») :
+/// une tâche ouverte avec un nom et une persona. L'invite du pas dit le nom et la persona ; les
+/// lignes de l'équipier portent `name` à côté de `from: "teammate"` ; la garde de la demande (la
+/// relance) lit toujours le rôle.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_named_teammate_says_its_name_and_its_lines_carry_it_beside_the_role() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let invites = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let invites = invites.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let invites = invites.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                if let Some(t) = turns.iter().find(|t| t.role == "system") {
+                    invites.lock().unwrap().push(t.content.clone());
+                }
+                match (step_of(turns), tool_results(turns).len()) {
+                    // Le premier pas finit sans rien laisser : la garde le relance.
+                    (1, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fait", "remaining": "" }))])),
+                    _ => answer(turns, opts, sink, "Je suis Algareth ; voici la réponse.", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "répondu", "remaining": "" }))])),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.ouvrir_une_tache_nommee(&h.id, "doc", Some("Algareth"), Some("Calme et précis.")).expect("la tâche nommée s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "lucie", "request", None, "Présente-toi.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let boite = attendre_dans(&files, "la fin", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    let invite = invites.lock().unwrap().first().cloned().unwrap_or_default();
+    assert!(invite.contains("Your name is Algareth"), "l'invite dit le nom : {invite}");
+    assert!(invite.contains("Calme et précis."), "et la persona : {invite}");
+    let siennes: Vec<&Value> = boite.iter().filter(|l| l["from"] == "teammate").collect();
+    assert!(!siennes.is_empty(), "{boite:#?}");
+    assert!(siennes.iter().all(|l| l["name"] == "Algareth"), "chaque ligne de l'équipier porte son nom, le rôle reste teammate : {boite:#?}");
+    assert!(boite.iter().filter(|l| l["from"] != "teammate").all(|l| l["name"].is_null()), "les autres lignes n'ont pas de nom d'agent : {boite:#?}");
+    assert!(dit_par_l_hote(&boite, "relance"), "la garde de la demande lit toujours le rôle : {boite:#?}");
+}
+
+/// **Sans persona, l'invite n'ajoute rien de plus que le nom.**
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn without_a_persona_the_prompt_adds_only_the_name() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let invites = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let invites = invites.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let invites = invites.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                if let Some(t) = turns.iter().find(|t| t.role == "system") {
+                    invites.lock().unwrap().push(t.content.clone());
+                }
+                answer(turns, opts, sink, "Bonjour.", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "salué", "remaining": "" }))]))
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.ouvrir_une_tache_nommee(&h.id, "doc", Some("Algareth"), None).expect("la tâche nommée s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "lucie", "request", None, "Bonjour.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    attendre_dans(&files, "la fin", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    let invite = invites.lock().unwrap().first().cloned().unwrap_or_default();
+    assert!(invite.contains("Your name is Algareth") && !invite.contains("persona"), "le nom seul : {invite}");
+}
