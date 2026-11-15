@@ -1253,3 +1253,9 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 - Recherche, 01 h 2x : le lot du BEGIN écrit (begin-erreur-d-origine : Phase::Rompu porte la cause d'origine et
   a_rouvrir, une base à rouvrir ne recommence pas) ; rouge puis vert sous un lourd maintenant ; en pile à son
   vert derrière l'écrivain d'ED.
+- **01 h 22 — code-rag3db-depot purgé et rouvert au portable** (hotfixs, 53 s fermé) : 10 671 Scope et 144 File
+  orphelins, .fts 91 852 → 81 181 documents (= les Scope du graphe), **Lucivy_Scope 4,93 → 1,35 Go**, banc 0 perdu
+  après correction de la clé du banc (les lignes 📍 seules). Les trois bases servies sont purgées. Le défaut
+  produit encore 970 orphelins par douze heures : le correctif des orphelins de recherche (262be6fc4, sur
+  master) ferme la source — un binaire qui le porte reste à poser. Archi refusé au range-diff (« < » d'un
+  commit de docs déjà sur master) : reprise sur e95a1b8c6 ; quatrième forme du même trou, en mémoire.

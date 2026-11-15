@@ -807,3 +807,43 @@ f257b531b, « = » : parent_path, extends_type, le genre method au rendez-vous).
 (maintenance par l'hôte avec lucivy 4.3.8, PILE_AVANT=8ef45a3af) ; puis archi (c3b2e4dba), ED (sur archi),
 recherche BEGIN (sur ED). Rappel écrit : le « à toi » ne se relaie pas (G l'a relayé à codeparsers ; rien de
 cassé, un seul mot d'une seule bouche).
+96, 01 h 2x : les ForEachNode imbriqués verts (lot-96-foreach-imbrique : champs_manquants saute la clé graph
+d'un GraphNode/ForEachNode, le ForEachNode rend une sortie list ; deux rouges du ticket mot pour mot ; 40/40,
+e2e_archiviste 15/15 ; ticket clos). Place : derrière le BEGIN de recherche. Le plafond du Decide (4 096
+déclaré dans le graphe) rejoint le lot s'il est vert avant la base.
+Archi, 01 h 21 : file-des-ecritures-2 c6464e06a sur c3b2e4dba (« = », la conception reprise avec le lot), rejeu
+court vert (e2e_demon_hote 20/0, e2e_lectures 27/0). ED a sa base (c6464e06a).
+
+**01 h 22 — cinquante-trois atterris** : la maintenance du plein texte par l'hôte avec lucivy 4.3.8 (lucivy,
+e95a1b8c6, 3/3 en « = » ; résumé écrit par la passe elle-même). Archi a le « à toi » (file des écritures,
+PILE_AVANT=c3b2e4dba) ; puis ED (c6464e06a), recherche BEGIN (sur ED), 96 foreach (sur recherche).
+
+**01 h 2x — archi refusé au range-diff** : la conception (ec69e7be7 = 8c3f766b1) reprise dans le lot parce que
+la base de pile n'avait pas le document, mais déjà sur master : le rebase la laisse tomber, « < », la garde
+refuse (worktree remis, master intact). Reprise : file-des-ecritures-3 = test + fix sur e95a1b8c6 (la tête de
+lucivy atterrie), PILE_AVANT=e95a1b8c6 ; ED repart de la nouvelle tête. Ticket pour G : tolérer un « < » dont
+`git cherry` dit le patch déjà sur master. **Hotfixs, 01 h 22** : code-rag3db-depot purgé et rouvert (53 s
+fermé) — 10 671 Scope et 144 File orphelins, .fts 91 852 → 81 181 = les Scope du graphe, Lucivy_Scope
+4,93 → 1,35 Go ; le défaut produit encore 970 orphelins par douze heures (le correctif de recherche ferme la
+source) ; un faux rouge du banc corrigé (la clé ne lit plus que les lignes 📍) ; instantané
+avant-fenetre-code-rag3db-depot-20261115-0121. Fin de sa fenêtre.
+Codeparsers, 01 h 3x : go.work + C/C++ verts (go-work-2 1fe0a9582 : use notés et replace suivis ; conanfile
+.txt/.py ; find_package et FetchContent_Declare ; 65/65 ; deux tickets vcpkg) ; place derrière le foreach de
+96, sans e2e_postgres (code.rs intact). Fin de file : archi (sur e95a1b8c6) → ED → recherche BEGIN → 96 foreach
+→ codeparsers go.work. Ensuite pour codeparsers : setup.py/setup.cfg, Pipfile, PEP 735, bundledDependencies.
+G, 01 h 2x : garde-deja-sur-master b3a540346 (un « < » que `git cherry` dit déjà sur master est toléré et dit,
+sinon arrêt nommé ; 2 ROUGE sur la garde d'avant, 36 vert) : derrière go.work de codeparsers. Le cœur fabrique
+le miroir (relation au sens avant, absente du sens arrière) pour le témoin de check_rel.
+96, 01 h 2x : le plafond du Decide (4 096 déclaré dans archive_decide.mmd, rouge d'abord, e2e_archiviste 16/16)
+rejoint le lot foreach (trois commits, deux tickets clos) ; attend la tête de recherche.
+
+**01 h 28 — cinquante-quatre atterris** : la file des écritures sous une fermeture qui tient (archi,
+95c643a20, 2/2 en « = » ; reste du ticket de 96 fermé). Recherche (BEGIN, 9/9 rouge puis vert) passe devant
+l'écrivain d'ED dont les suites tournent : repose sur 1f39da047, « à toi » à son vert (PILE_AVANT=1f39da047) ;
+puis ED (sur recherche), 96 foreach (sur ED), codeparsers go.work (sur 96), G garde-deja-sur-master (sur
+codeparsers).
+Recherche, 01 h 3x : begin-erreur-d-origine-pile 4595fcdb5e sur 1f39da047, rejeu court en cours. 96 se pose
+dessus et passe devant ED ; ED sur 96 ; codeparsers sur ED ; G sur codeparsers.
+Codeparsers, 01 h 3x : les manifestes Python manquants verts (python-manifestes sur go-work-2 : setup.cfg,
+setup.py littéral, Pipfile, PEP 735 dependency-groups, bundledDependencies ; 20/20) ; les deux lots passent
+ensemble derrière ED (une passe sur la tête, un dernier pas), sans e2e_postgres dit au journal.
