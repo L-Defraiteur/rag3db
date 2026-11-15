@@ -1587,3 +1587,8 @@ G, 17 h 52 : copies d'essai de la pose du soir faites — l'hôte (b82af880a, 37
 panique sur un tampon de 384 Mo ; card2 interdite aux essais) : la preuve se fera en place, 7878 puis 7879, vecteur témoin au bit
 près, retour automatique à l'ancien si rouge ; coupure 10 à 30 s par service ; le défaut 12 000 de max_chars vaudra. Un ticket
 d'archi (gabarits d'un autre arbre au target quand build.rs n'est pas rejoué), remède chez G plus tard.
+Lucie, 17 h 56 : « essaie chacun de tes outils » — l'équipier a testé lecture, recherche, graphe, déclarations, run_command, et
+trouvé deux restrictions, toutes deux connues (git status refusé sur ~/.config/git/ignore sous le bac : corrigé par le pas du
+socle sur master, pas encore posé ; echo soumis à l'accord : la porte en approbation). Défaut d'affichage : la réponse streamée,
+puis sa copie par l'hôte (« le pas 2 s'est terminé sans step_done ; sa réponse : … »), puis un second compte rendu : trois fois
+le même bilan ; et « fini : plus rien à faire » encore sur la ligne d'état. Pour tty et archi.
