@@ -516,7 +516,9 @@ try:
     entre = t.attendre(b"\x1b[?1049h", apres=t0, borne=5) is not None
     deux = t.attendre("⟨2/2⟩".encode(), apres=t0, borne=5) is not None
     t0 = t.ecrire(b"\x1b[D")
-    un = t.attendre("⟨1/2⟩".encode(), apres=t0, borne=5) is not None
+    # ratatui ne réécrit que les cellules qui changent : « ⟨1/2⟩ » ne part pas entier ; une ligne que
+    # seule la lecture porte, si.
+    un = t.attendre(b"let x1 = 1;", apres=t0, borne=5) is not None
     t0 = t.ecrire(b"\x1b[F")
     fin_vue = t.attendre("extrait, 4 Ko sur 16 Ko".encode(), apres=t0, borne=5) is not None
     time.sleep(0.6)
@@ -524,6 +526,10 @@ try:
     sort = t.attendre(b"\x1b[?1049l", apres=t0, borne=5) is not None
     time.sleep(1.0)
     apres = ecran_tmux()
+    if MULTIPLEXEUR:
+        # tmux et mosh traduisent l'écran alterné : ses séquences ne se guettent pas (sous tmux, la
+        # comparaison des écrans juge).
+        entre = sort = None
     resultats["outils"] = {"numerotes": numeros, "extrait_coupe_dit": coupe, "ecran_alterne_ouvert": entre, "dernier_appel": deux, "appel_d_avant": un, "fin_dit_l_extrait": fin_vue, "ecran_alterne_ferme": sort, "ecran_principal_intact": None if avant is None else avant == apres}
     for cle, vu in resultats["outils"].items():
         if vu is False:
