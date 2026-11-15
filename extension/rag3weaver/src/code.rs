@@ -1863,7 +1863,11 @@ pub fn analyze_in_project_avec(
                     _ => *englobants = None,
                 }
                 let non_type = non_types_lus.entry(id.to_string()).or_insert(true);
-                *non_type &= r.untyped_receiver && r.qualifier_type.is_none();
+                // Une locale dont aucun type ne se lit, même ailleurs
+                // (`receiver_type_unread`) : son lien par le nom reste dans le
+                // fichier, jamais entre fichiers — `reste.is_zero()` n'est pas
+                // l'`is_zero` d'un autre fichier.
+                *non_type &= (r.untyped_receiver || r.receiver_type_unread) && r.qualifier_type.is_none();
                 let differes = differes_lus.entry(id.to_string()).or_insert_with(|| Some(Vec::new()));
                 if r.qualifier_type.is_none() {
                     match (differes.as_mut(), r.qualifier_deferred.as_ref().and_then(|d| serde_json::to_string(d).ok())) {
