@@ -1,7 +1,8 @@
 # Sous vingt écrivains et un pool plein, des Note validées manquent
 
-- **État** : ouvert (14 novembre 2026, cœur c++) — corrigé sur master `373b5477b`, à poser
-  (se ferme quand la lib bâtie à ce hash est posée)
+- **État** : ouvert (14 novembre 2026, cœur c++) — corrigé sur master `373b5477b`, lib posée à ce
+  hash ; reste ouvert faute des ×10 de `DdlEveryMinute` comptes cités (le relevé du 15 novembre,
+  en fin de ticket)
 - **Famille** : moteur
 - **Gravité** : perte de données validées (une écriture dite validée est absente, avant le point
   de reprise comme après la réouverture)
@@ -142,3 +143,22 @@ identique à `9b0e73c9c`.
 - `SingleWriterCrash.DeathDuringDeletesAndVectorSearchKeepsTheIndexExact` n'est pas une preuve
   de ce correctif. Il départageait le rouge d'extension du premier juge : 0/36 avec, 0/26 sans.
   Voir `docs/coeur-cpp/14-11-2026/01-rapport-de-session.md`.
+
+## Le 15 novembre : pourquoi il reste ouvert
+
+La lib `373b5477b` est posée (la lib courante), mais la preuve demandée manque encore : les ×10
+de `DdlEveryMinute` avec `counts-match-commits` vert, comptes cités. Relevé de douze tours joués à
+luciepc le 15 novembre, tous sur un moteur de master qui porte `373b5477b` (`08f350e8e`,
+`ed2b6ffe6`, `b7251cb77`, `a2f9c9b65`), journaux `~/.cache/rag3db-moteur-notes/{alter,alter5,alter7,ddl-base}/ddl-<tour>.log` :
+
+| Fin du tour | Tours | Comptes |
+|---|---|---|
+| jusqu'aux comptes d'après la réouverture | 2 | justes : Note 69 527/69 527 (alter5 t1), 69 301/69 301 (alter7 t3) |
+| SIGSEGV dans la relecture d'une colonne ajoutée | 4 | aucun (ticket `2026-11-15-ddl-every-minute-meurt-d-un-sigsegv-pile-perdue.md`) |
+| le pool plein : ADD b refusé, « Cannot find property b » | 4 | aucun |
+| le pool plein : ADD rang refusé, « Cannot find property rang » | 1 | aucun |
+| le pool plein : le count des Link refusé | 1 | aucun |
+
+Aucun `counts-match-commits` rouge sur les douze, mais dix tours s'arrêtent avant de compter.
+Deux tours justes ne valent pas les ×10. Il se ferme avec les ×10 de `DdlEveryMinute`, comptes
+cités, une fois le SIGSEGV corrigé (c7, 15 novembre).
