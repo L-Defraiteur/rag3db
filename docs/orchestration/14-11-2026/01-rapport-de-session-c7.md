@@ -1404,3 +1404,7 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   d'instantané garde son catalogue ; CREATE INDEX dans le même genre ; le refus de l'ALTER nomme l'écrivain
   attendu ; DdlEveryMinute remesuré avec les paquets bornés de l'écrivain. Décision de conception du moteur
   prise à sa place, **Lucie peut la retourner**.
+- Correction (06 h 5x) : **CREATE INDEX prend TABLE en partagé**, pas en exclusif — ma garde contredisait la
+  promesse du 26 octobre (« créer l'index vectoriel ne fige plus les écritures ») et le témoin
+  NoWriterWaitsLongDuringTheCreate ; comme CREATE INDEX CONCURRENTLY, il attend un ALTER en cours et fait
+  attendre le suivant, jamais les écrivains. Le cœur me l'a fait voir.
