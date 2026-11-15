@@ -74,6 +74,15 @@ static std::unique_ptr<TableFuncBindData> createInMemHNSWBindFunc(main::ClientCo
 static std::unique_ptr<TableFuncSharedState> initCreateInMemHNSWSharedState(
     const TableFuncInitSharedStateInput& input) {
     const auto bindData = input.bindData->constPtrCast<CreateHNSWIndexBindData>();
+    // Le verrou de schéma de la table, en PARTAGÉ, comme un écrivain (CREATE INDEX CONCURRENTLY de
+    // PostgreSQL) : la construction attend un ALTER en cours et fait attendre l'ALTER suivant, mais
+    // jamais les écrivains — la promesse du 26 octobre 2026, la création de l'index ne fige plus
+    // les écritures. Pris à l'exécution, pas à la liaison : une instruction préparée et jamais
+    // jouée ne tient rien.
+    if (!bindData->skipAfterBind && bindData->tableEntry != nullptr) {
+        transaction::Transaction::Get(*bindData->context)
+            ->lockTableForWrite(bindData->tableEntry->getTableID());
+    }
     return std::make_unique<CreateInMemHNSWSharedState>(*bindData);
 }
 
