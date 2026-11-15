@@ -30,12 +30,23 @@ fn main() -> std::process::ExitCode {
     // collecteur, ça n'existe pas. `RUST_LOG=cubecl_wgpu=debug,cubecl_runtime=info`
     // pour les tailles CMMA vues et chaque autotune ; `warn` par défaut.
     let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).try_init();
+    // **La dernière ligne dit pourquoi, et le code n'est jamais 0** (lot du 503, 15 novembre
+    // 2026) : un service d'embarquement ne cesse de servir que pour une raison.
     match servir() {
-        Ok(()) => std::process::ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("✗ {e}");
+        Ok(()) => {
+            eprintln!("✗ arrêt : le service a cessé de servir sans cause dite (code 1)");
             std::process::ExitCode::FAILURE
         }
+        Err(e) => match e.downcast_ref() {
+            Some(rag3weaver::daemon::DaemonError::Arret { code, cause }) => {
+                eprintln!("✗ arrêt : {cause} (code {code})");
+                std::process::ExitCode::from(*code)
+            }
+            _ => {
+                eprintln!("✗ {e}");
+                std::process::ExitCode::FAILURE
+            }
+        },
     }
 }
 
@@ -43,7 +54,7 @@ fn main() -> std::process::ExitCode {
 /// Lucie, 7 septembre 2026, sur le banc de qualité).
 pub const MODELE_PAR_DEFAUT: &str = "granite-278m";
 
-fn servir() -> Result<(), String> {
+fn servir() -> Result<(), Box<dyn std::error::Error>> {
     let (adresse, expose) = adresse()?;
     let activation = rag3weaver::daemon::embeddings::IdentiteActivation::depuis_environnement()?;
     // **Le modèle servi se choisit par `RAG3WEAVER_EMBED_MODEL`** (6 septembre
@@ -63,7 +74,7 @@ fn servir() -> Result<(), String> {
         "bge-m3" => ("bge-m3", "RAG3WEAVER_BGE_M3"),
         "granite-107m" => ("granite-107m", "RAG3WEAVER_GRANITE_107M"),
         "granite-278m" => ("granite-278m", "RAG3WEAVER_GRANITE_278M"),
-        autre => return Err(format!("RAG3WEAVER_EMBED_MODEL={autre} : granite-278m (défaut), granite-107m ou bge-m3")),
+        autre => return Err(format!("RAG3WEAVER_EMBED_MODEL={autre} : granite-278m (défaut), granite-107m ou bge-m3").into()),
     };
     let bpk = artefact(&format!("{prefixe}_BPK"), dossier, "model.bpk")?;
     let tokenizer = artefact(&format!("{prefixe}_TOKENIZER"), dossier, "tokenizer.json")?;
@@ -160,7 +171,7 @@ fn servir() -> Result<(), String> {
     // **Refuser avant d'annoncer.** Sinon le journal dit « à l'écoute sur
     // 0.0.0.0 » juste avant d'échouer, et c'est la ligne qu'on croira.
     if !expose && !rag3weaver::daemon::est_local(&adresse) {
-        return Err(rag3weaver::daemon::DaemonError::Exposition { adresse }.to_string());
+        return Err(rag3weaver::daemon::DaemonError::Exposition { adresse }.into());
     }
     // **Chauffer avant de servir.** Le cache d'autotune est global et chaud,
     // mais chaque processus recompile ses noyaux (SPIR-V, puis le pipeline
@@ -176,8 +187,8 @@ fn servir() -> Result<(), String> {
     eprintln!("▸ à l'écoute sur {adresse} — {:?}", demon.identite());
     // Un port nul : se lier ici et dire l'adresse prise (pour le lanceur).
     match rag3weaver::daemon::ecouter_si_port_nul(&adresse).map_err(|e| e.to_string())? {
-        Some(ecoute) => demon.servir_lie(ecoute).map_err(|e| e.to_string()),
-        None => demon.servir(&adresse).map_err(|e| e.to_string()),
+        Some(ecoute) => demon.servir_lie(ecoute).map_err(|e| Box::new(e) as Box<dyn std::error::Error>),
+        None => demon.servir(&adresse).map_err(|e| Box::new(e) as Box<dyn std::error::Error>),
     }
 }
 

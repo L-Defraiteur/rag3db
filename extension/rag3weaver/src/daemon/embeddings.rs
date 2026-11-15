@@ -299,6 +299,12 @@ pub struct EmbedDaemon {
     /// Le délai d'éviction et ce qu'il fait quand il passe ; `None` : résident.
     eviction: Option<(std::time::Duration, QuandEvince)>,
     relances: Option<u64>,
+    /// **Le serveur de la carte empoisonné** : le message de la panique de calcul
+    /// qui l'a empoisonné. Le service rend un 503 nommé à tout calcul, puis
+    /// s'arrête avec le code 70 une fois ses requêtes en vol répondues.
+    empoisonne: Mutex<Option<String>>,
+    /// Le plafond d'un texte, en caractères.
+    max_chars: usize,
 }
 
 impl EmbedDaemon {
@@ -327,6 +333,8 @@ impl EmbedDaemon {
             derniere_activite: Mutex::new(std::time::Instant::now()),
             eviction: None,
             relances: None,
+            empoisonne: Mutex::new(None),
+            max_chars: MAX_CHARS_PAR_TEXTE,
         }
     }
 
@@ -487,6 +495,23 @@ impl EmbedDaemon {
         textes: &[String],
         embarquer: impl Fn(&[String]) -> Result<Vec<T>, EmbedError>,
     ) -> Result<Vec<T>, EmbedError> {
+        // Une requête qui attendait la passe pendant qu'un calcul empoisonnait la
+        // carte ne calcule pas : elle est refusée, nommée.
+        // La panique d'un calcul empoisonne **avant** que la passe ne se relâche :
+        // notée après le déroulement, une requête qui attendait la passe la
+        // prendrait et calculerait sur la carte empoisonnée.
+        let embarquer = |lot: &[String]| -> Result<Vec<T>, EmbedError> {
+            if let Some(cause) = self.poison() {
+                return Err(EmbedError::ProviderError(Self::refus_empoisonne(&cause)));
+            }
+            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| embarquer(lot))) {
+                Ok(r) => r,
+                Err(panique) => {
+                    self.apres_panique(&super::message_de_panique(panique.as_ref()));
+                    std::panic::resume_unwind(panique)
+                }
+            }
+        };
         // **Par longueur**, comme le client : un lot homogène rembourre peu.
         // Les résultats reviennent dans l'ordre reçu.
         let mut ordre: Vec<usize> = (0..textes.len()).collect();
@@ -583,14 +608,36 @@ impl EmbedDaemon {
                 inactif_depuis_ms: self.inactif_depuis().map_or(0, |d| d.as_millis() as u64),
             }),
             relances: self.relances,
-            max_chars_per_text: None,
-            chars_per_token: None,
+            max_chars_per_text: Some(self.max_chars),
+            chars_per_token: Some(CARACTERES_PAR_JETON),
         }
     }
 
     /// Le plafond d'un texte, en caractères (`RAG3WEAVER_EMBED_MAX_CHARS` au binaire).
-    pub fn max_chars_per_text(self, _n: usize) -> Self {
+    pub fn max_chars_per_text(mut self, n: usize) -> Self {
+        self.max_chars = n.max(1);
         self
+    }
+
+    /// Ce qui a empoisonné le serveur de la carte, s'il l'est.
+    fn poison(&self) -> Option<String> {
+        self.empoisonne.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    /// Le refus d'un calcul sur une carte empoisonnée.
+    fn refus_empoisonne(cause: &str) -> String {
+        format!("serveur de la carte empoisonné ({cause}) : le service s'arrête")
+    }
+
+    /// Le premier texte au-dessus du plafond, dit ; `None` si tous passent.
+    fn trop_long<'a>(&self, textes: impl IntoIterator<Item = &'a String>) -> Option<String> {
+        textes.into_iter().enumerate().find_map(|(i, t)| {
+            let n = t.chars().count();
+            (n > self.max_chars).then(|| format!(
+                "texte {i} : {n} caractères, plafond {} (RAG3WEAVER_EMBED_MAX_CHARS, environ {CARACTERES_PAR_JETON} caractères par jeton) : refusé sans calcul",
+                self.max_chars
+            ))
+        })
     }
 
     /// **Écoute, et ne rend jamais la main** (sauf erreur d'écoute).
@@ -610,6 +657,15 @@ impl EmbedDaemon {
         super::servir_lie(demon, ecoute, fils, expose)
     }
 }
+
+/// **Le plafond par défaut d'un texte**, en caractères : environ 4 000 jetons, soit
+/// environ 1 Go d'attention pour bge-m3. Les écritures se découpent à 1 500
+/// caractères et les requêtes à 6 000 (`search::DEFAULT_QUERY_MAX_CHARS`) : il
+/// ne refuse rien de normal.
+pub const MAX_CHARS_PAR_TEXTE: usize = 12_000;
+
+/// Le ratio dit avec ce plafond : environ trois caractères par jeton.
+pub const CARACTERES_PAR_JETON: usize = 3;
 
 #[derive(Deserialize)]
 struct Textes {
@@ -661,9 +717,28 @@ impl Service for EmbedDaemon {
         // Toute demande compte comme activité, à son arrivée et à sa fin : le
         // délai d'éviction part de la dernière.
         self.toucher();
-        let reponse = self.repondre_a(methode, chemin, req);
+        let calcul = matches!(chemin, "/embed" | "/embed_dual" | "/embed_sparse" | "/rerank" | "/ocr");
+        if let (true, Some(cause)) = (calcul, self.poison()) {
+            return (503, erreur(&Self::refus_empoisonne(&cause)));
+        }
+        let mut reponse = self.repondre_a(methode, chemin, req);
+        // Empoisonnée pendant l'attente de la passe : le refus est un 503.
+        if let (true, Some(cause), false) = (calcul, self.poison(), reponse.0 == 200) {
+            reponse = (503, erreur(&Self::refus_empoisonne(&cause)));
+        }
         self.toucher();
         reponse
+    }
+
+    fn apres_panique(&self, message: &str) {
+        let mut p = self.empoisonne.lock().unwrap_or_else(|e| e.into_inner());
+        if p.is_none() {
+            *p = Some(message.to_string());
+        }
+    }
+
+    fn arret_demande(&self) -> Option<(u8, String)> {
+        self.poison().map(|m| (70, format!("le calcul a paniqué ({m}) : serveur de la carte empoisonné")))
     }
 }
 
@@ -698,6 +773,7 @@ impl EmbedDaemon {
             },
             ("POST", "/embed") => match lire_json::<Textes>(req) {
                 Err(e) => (400, erreur(&e)),
+                Ok(t) if self.trop_long(&t.texts).is_some() => (413, erreur(&self.trop_long(&t.texts).unwrap_or_default())),
                 Ok(t) => match self.par_lots(&t.texts, |lot| self.embedder.embed(lot)) {
                     Ok(v) => (200, serde_json::json!({ "vectors": v }).to_string()),
                     Err(e) => (500, erreur(&e.to_string())),
@@ -706,6 +782,7 @@ impl EmbedDaemon {
             ("POST", "/embed_dual") => match (&self.dual, lire_json::<Textes>(req)) {
                 (None, _) => (404, erreur("ce démon ne sert pas le creux")),
                 (Some(_), Err(e)) => (400, erreur(&e)),
+                (Some(_), Ok(t)) if self.trop_long(&t.texts).is_some() => (413, erreur(&self.trop_long(&t.texts).unwrap_or_default())),
                 // Les deux moitiés voyagent appariées : on découpe une fois,
                 // et chaque lot rend ses paires, qu'on sépare à la fin.
                 (Some(d), Ok(t)) => match self.par_lots(&t.texts, |lot| {
@@ -729,6 +806,7 @@ impl EmbedDaemon {
             ("POST", "/embed_sparse") => match (&self.sparse, lire_json::<Textes>(req)) {
                 (None, _) => (404, erreur("ce démon ne sert pas le creux seul")),
                 (Some(_), Err(e)) => (400, erreur(&e)),
+                (Some(_), Ok(t)) if self.trop_long(&t.texts).is_some() => (413, erreur(&self.trop_long(&t.texts).unwrap_or_default())),
                 (Some(sp), Ok(t)) if t.spans => match self.par_lots(&t.texts, |lot| sp.embed_sparse_spans(lot)) {
                     Ok(lignes) => (
                         200,
@@ -756,6 +834,9 @@ impl EmbedDaemon {
             ("POST", "/rerank") => match (&self.reranker, lire_json::<Relecture>(req)) {
                 (None, _) => (404, erreur("ce démon ne sert pas de relecteur")),
                 (Some(_), Err(e)) => (400, erreur(&e)),
+                (Some(_), Ok(d)) if self.trop_long(std::iter::once(&d.query).chain(&d.passages)).is_some() => {
+                    (413, erreur(&self.trop_long(std::iter::once(&d.query).chain(&d.passages)).unwrap_or_default()))
+                }
                 (Some((_, r)), Ok(d)) => {
                     let debut = std::time::Instant::now();
                     let scores = {
@@ -1522,6 +1603,10 @@ mod tests {
 
     impl Embedder for CarteRefusee {
         fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+            if texts.iter().any(|t| t == "boum-lent") {
+                std::thread::sleep(std::time::Duration::from_millis(600));
+                panic!("failed to reserve 4102146304 bytes of device memory: can't allocate buffer of size: 4102146304");
+            }
             if texts.iter().any(|t| t == "boum") {
                 panic!("failed to reserve 4102146304 bytes of device memory: can't allocate buffer of size: 4102146304");
             }
@@ -1554,10 +1639,12 @@ mod tests {
         }
     }
 
-    /// **2. L'arrêt attend d'avoir répondu aux requêtes en vol** : « lent » tient
-    /// la passe, « boum » et « après » l'attendent ; « boum » panique ; « après »
-    /// reçoit un 503 qui dit le serveur empoisonné, et seulement ensuite le
-    /// service s'arrête.
+    /// **2. L'arrêt attend d'avoir répondu aux requêtes en vol** : « boum-lent »
+    /// tient la passe 600 ms puis panique ; « après », arrivée pendant ce temps,
+    /// attend la passe : elle est en vol à la panique, et reçoit un 503 qui dit
+    /// le serveur empoisonné ; seulement ensuite le service s'arrête. (Réécrit
+    /// après le vert : la première forme comptait sur l'ordre du verrou de la
+    /// passe, qui n'est pas premier arrivé, premier servi.)
     #[test]
     fn l_arret_attend_d_avoir_repondu_aux_requetes_en_vol() {
         let (adresse, fin) = demon_et_sa_fin(EmbedDaemon::new(Arc::new(CarteRefusee)));
@@ -1569,10 +1656,8 @@ mod tests {
                 c.embed(&[texte.to_string()]).map(|_| ()).map_err(|e| e.to_string())
             })
         };
-        let lent = envoyer("lent", 0);
-        let boum = envoyer("boum", 150);
-        let apres = envoyer("après", 300);
-        assert!(lent.join().unwrap().is_ok(), "la requête lente, d'avant la panique, répond");
+        let boum = envoyer("boum-lent", 0);
+        let apres = envoyer("après", 200);
         let b = boum.join().unwrap().expect_err("boum");
         assert!(b.contains("(503)") && b.contains("calcul en panique"), "{b}");
         let a = apres.join().unwrap().expect_err("après la panique : refusée");
