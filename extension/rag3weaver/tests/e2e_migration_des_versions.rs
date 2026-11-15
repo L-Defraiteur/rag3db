@@ -206,7 +206,8 @@ fn une_migration_par_lots_d_une_occurrence_donne_le_meme_resultat() {
 /// **Une base migrée par 1b monte aux générations par son chemin** (la bascule des bases de Lucie,
 /// `migration generations --base`) : la forme passe de « versions » à « generations », la génération
 /// 0 de `backend` est posée, les occurrences restent les mêmes, et la base se rouvre par le schéma de
-/// production à la forme des générations.
+/// production à la forme des générations. Les lectures voient ensuite le rang en attente (1), que le
+/// repassage de l'écrivain écrit.
 #[test]
 #[ignore]
 fn une_base_a_versions_monte_aux_generations_par_son_chemin() {
@@ -229,6 +230,7 @@ fn une_base_a_versions_monte_aux_generations_par_son_chemin() {
             forme_avant: "versions".into(),
             forme_apres: "generations".into(),
             generation: Some(("backend".into(), 0)),
+            rang_lu: Some(1),
         }
     );
     let (mut cat, texts) = ouvrir(dir.path());

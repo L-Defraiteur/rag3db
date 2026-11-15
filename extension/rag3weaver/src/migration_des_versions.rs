@@ -316,8 +316,10 @@ pub struct BilanDesGenerations {
     pub forme_avant: String,
     /// La forme après (`generations`).
     pub forme_apres: String,
-    /// La couche et le rang de la génération posée (`backend`, 0).
+    /// La couche et le rang de la dernière génération publiée, lus dans `_generation` (`backend`, 0).
     pub generation: Option<(String, i64)>,
+    /// Le rang que les lectures voient ensuite : celui en attente (1), que le repassage écrit.
+    pub rang_lu: Option<i64>,
 }
 
 /// **Monter une base à versions aux générations par son chemin** (la bascule des bases, après 1b) :
@@ -350,8 +352,18 @@ pub fn migrer_la_base_aux_generations(chemin: &std::path::Path) -> Result<BilanD
     let forme_avant = nom(crate::code::scope_form(&catalog).map_err(|e| format!("la forme : {e}"))?).to_string();
     crate::code::migrer_vers_les_generations(&mut catalog).map_err(|e| e.to_string())?;
     let forme_apres = nom(crate::code::scope_form(&catalog).map_err(|e| format!("la forme : {e}"))?).to_string();
-    let generation = catalog.generations.as_ref().map(|v| (v.couche.clone(), v.rang));
-    Ok(BilanDesGenerations { forme_avant, forme_apres, generation })
+    let rang_lu = catalog.generations.as_ref().map(|v| v.rang);
+    let couche = crate::code::COUCHE_DU_BACKEND;
+    let generation = match catalog.dialect_arc().latest_generation_rank() {
+        Some(q) => {
+            let lu = catalog
+                .execute_raw_with_params(&q, &[crate::connection::QueryParam::new("couche", crate::connection::CypherValue::String(couche.to_string()))])
+                .map_err(|e| format!("la génération publiée : {e}"))?;
+            lu.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64()).map(|r| (couche.to_string(), r))
+        }
+        None => None,
+    };
+    Ok(BilanDesGenerations { forme_avant, forme_apres, generation, rang_lu })
 }
 
 /// L'embarqueur d'une migration : le nom et la dimension d'un modèle de la base, et un refus à
