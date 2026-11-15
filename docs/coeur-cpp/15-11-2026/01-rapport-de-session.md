@@ -65,7 +65,41 @@ Je recommande l'attente.
 
 ## Reprendre
 
-- Le worktree : `~/git_workspaces/rag3db-csr` (portable). L'arbre de bâti : `~/git_workspaces/rag3db-colonnes/build/moteur` (luciepc), sous `poste lourd`, `-j 8`, avec `rag3db_vector_extension` dans toute cible de test.
-- Atterri cette nuit : l'IN haché `e5e626803`, le pliage des listes `1d5580d74`, le point de faute et les témoins des deux sens `e8472e053`. La lib suivante les portera ; la lib posée est `373b5477b`.
-- En cours : le planificateur (A), branche à ouvrir depuis master.
-- À faire : le dictionnaire sous ASan, la nuit prochaine, en fenêtre (ticket `2026-11-14-un-point-de-reprise-automatique-meurt-dans-le-dictionnaire-d-une-colonne-de-chaines.md`, core 3980144). L'ADD COLUMN sous une écriture ouverte, ticket de hotfixs. Le planificateur des sauts, ticket d'ED. `DropNodeTableReclaim`, rouge sur master (`392e63cd7`).
+- **Le worktree** : `~/git_workspaces/rag3db-csr` (portable). **L'arbre de bâti** :
+  `~/git_workspaces/rag3db-colonnes/build/moteur` (luciepc), sous `poste lourd`, `-j 8`, avec
+  `rag3db_vector_extension` dans toute cible de test.
+- **Atterri cette nuit** : l'IN haché `e5e626803`, le pliage des listes `1d5580d74`, le point de
+  faute et les témoins des deux sens `e8472e053`, l'IN sur la clé `7897f2453`.
+- **En cours : le lot du verrou de schéma**, branche `alter-attend-les-ecrivains`, tête
+  `d5f5325f0`, base `a2f9c9b65` (master n'a pas bougé en code depuis).
+  - Ce qu'il fait : un genre TABLE au gestionnaire de verrous. Les écrivains le prennent en
+    partagé à leur première écriture dans une table, un CREATE_VECTOR_INDEX aussi ; ALTER et DROP
+    TABLE le prennent en exclusif et attendent. Une écriture dont la table a changé de
+    disposition de colonnes depuis le départ de sa transaction est refusée sous le préfixe stable
+    `Schema changed, retry:` (`Transaction::SCHEMA_CHANGED_RETRY`) et se recommence.
+  - Changement de contrat : de deux ALTER d'une même table, le second attend le premier, est
+    refusé sous ce nom, puis passe relancé. Il était refusé tout de suite avant. La ligne va aux
+    nouveautés avec le push.
+  - Ce qui est vert sur `b7251cb77` : transaction_test entier (385), le témoin du commentaire
+    (rouge avant), le témoin d'index (une garde, verte avant aussi). Dans DdlEveryMinute, les ADD
+    durent 14 à 152 ms, sous la borne du paquet.
+  - **Ce qui bloque le push** (c7, 10 h 5x) :
+    - SIGSEGV dans DdlEveryMinute (core 2034048, pile lue : `readCompressedValuesToVector` sous un
+      balayage filtré, dans les relectures des colonnes ajoutées). Départage en cours : trois tours
+      sur master `a2f9c9b65`, binaire gardé (`~/.cache/rag3db-moteur-notes/ddl-base/`). Si master
+      plante aussi : ticket avec la pile, le lot pousse. Sinon : lire le chemin de l'ADD COLUMN
+      sous écrivain.
+    - `ChangesCommittedDuringACreateAreSeen` rouge une fois : 24 tours sur master et sur le lot
+      (`~/.cache/rag3db-moteur-notes/moved/`).
+    - `create-rel-table-holds-writers-at-most-its-duration`, 5 ms au-dessus de sa borne au tour 1 :
+      à lire.
+  - Le push : mode simple, base `a2f9c9b65`, sous `poste push`, au « à toi » de c7. Note d'ABI
+    pour la bascule de G : la disposition de `Transaction` change (un mutex, un ensemble et un
+    booléen de plus), `LockResource` gagne le genre `TABLE`.
+- **Ensuite, dans l'ordre** :
+  - la bissection du CREATE_VECTOR_INDEX à quatre minutes (ticket
+    `2026-11-15-un-create-vector-index-sous-quarante-ecrivains-dure-quatre-minutes.md`) ;
+  - le dictionnaire sous ASan, en fenêtre ;
+  - le verrou pris à la liaison (ticket
+    `2026-11-15-une-ecriture-se-lie-avant-de-prendre-le-verrou-de-sa-table.md`) ;
+  - `DropNodeTableReclaim`, rouge sur master (`392e63cd7`).
