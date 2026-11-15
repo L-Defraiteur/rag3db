@@ -50,6 +50,8 @@ fn fiche(b: &Backend, nom: &str, about: &str) {
 
 fn apport(b: &Backend, fiche: &str, source: &str, section: &str, texte: &str) {
     appel(b, "put_apport", json!({"record": {"fiche": fiche, "source": source, "section": section, "texte": texte, "niveau": "L1", "state": "current"}}));
+    // Comme l'archiviste, le hook et l'équipier : l'apport relié à sa fiche.
+    appel(b, "relier_apport", json!({"links": [{"from": {"name": fiche}, "to": {"fiche": fiche, "source": source, "section": section}}]}));
 }
 
 const S1: &str = "sources/2026-11-15-chat-turns-1-2.md";
@@ -64,6 +66,7 @@ fn le_contexte_d_apres_se_compose_par_priorite_dans_le_budget() {
     fiche(&b, "agent:96", "La session mémoire, qui tient l'archiviste.");
     apport(&b, "agent:96", "sources/identite.md", "identity", "IDENTITEMARQUE je suis la session mémoire, clé 96.");
     fiche(&b, "bilan : la compaction", "TACHEMARQUE écrire le composeur du contexte d'après.");
+    apport(&b, "bilan : la compaction", "sources/2026-11-15-plan.md", "plan", "TACHEPLAN 1. le composeur ; 2. son témoin.");
     fiche(&b, "le journal de reprise", "Comment le moteur rejoue son journal.");
     fiche(&b, "le compositeur", "Le compositeur de l'écran du portable.");
     // Posés dans le désordre : l'ordre rendu est celui des tours, pas celui des écritures.
@@ -88,7 +91,7 @@ fn le_contexte_d_apres_se_compose_par_priorite_dans_le_budget() {
     // La priorité : identité, tâche, bilan, puis les L1 de la session.
     let ou = |m: &str| texte.find(m).unwrap_or_else(|| panic!("« {m} » manque au texte composé"));
     assert!(texte.contains("agent:96"), "l'identité se nomme");
-    assert!(ou("IDENTITEMARQUE") < ou("TACHEMARQUE") && ou("TACHEMARQUE") < ou("turns 1-1 → ") && ou("turns 1-1 → ") < ou("UNMARQUE"),
+    assert!(ou("IDENTITEMARQUE") < ou("TACHEMARQUE") && ou("TACHEMARQUE") < ou("TACHEPLAN") && ou("TACHEPLAN") < ou("turns 1-1 → ") && ou("turns 1-1 → ") < ou("UNMARQUE"),
         "identité, tâche, bilan, puis les L1");
     // Les L1 dans l'ordre des tours, la fiche en marge de chacun.
     assert!(ou("UNMARQUE") < ou("DEUXMARQUE"), "l'ordre des tours, pas celui des écritures");

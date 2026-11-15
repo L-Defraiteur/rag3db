@@ -14,7 +14,9 @@ fn premier_tour(section) {
 }
 fn noms(a) {
     let out = [];
-    for f in a.fiches { out.push(f.name); }
+    if a.fiches != () { for f in a.fiches { out.push(f.name); } }
+    // Un apport posé sans relier_apport n'a que son champ `fiche`.
+    if out.len() == 0 && a.fiche != () && a.fiche != "" { out.push(a.fiche); }
     out
 }
 let p = input;

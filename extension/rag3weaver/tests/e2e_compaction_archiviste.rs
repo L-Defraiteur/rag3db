@@ -297,7 +297,7 @@ fn sans_bilans_la_compaction_par_l_archiviste_est_absente_et_dite() {
 }
 
 /// **Un réglage hors bornes est refusé à la lecture** : un ratio hors de ]0, 1[,
-/// un `timeout_s` nul ; le refus nomme le champ.
+/// un `timeout_s` nul ; le refus nomme le champ (`compaction.ratio`, `compaction.timeout_s`).
 #[test]
 #[ignore]
 fn un_reglage_de_compaction_hors_bornes_est_refuse_a_la_lecture() {
@@ -309,7 +309,11 @@ fn un_reglage_de_compaction_hors_bornes_est_refuse_a_la_lecture() {
     ].into_iter().enumerate() {
         match banc_ou_refus(&d.path().join(format!("cas-{i}")), Some(bloc.clone()), None, true) {
             Ok(_) => panic!("le bloc {bloc} est accepté ; il doit être refusé à la lecture"),
-            Err(refus) => assert!(refus.to_string().contains(champ), "le refus de {bloc} nomme {champ} : {refus}"),
+            Err(refus) => {
+                let texte = refus.to_string();
+                assert!(texte.contains(&format!("compaction.{champ}")) && !texte.contains("unknown field"),
+                    "le refus de {bloc} nomme compaction.{champ}, le bloc étant connu : {refus}");
+            }
         }
     }
 }
