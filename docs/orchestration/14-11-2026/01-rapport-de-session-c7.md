@@ -1602,3 +1602,8 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   résumés d'avant, le chevauchement, « fenêtre n/N ») ; une étape `segment` optionnelle, éteinte par défaut, pour
   la section qui dépasse une taille (sujets [{titre, turns}] puis un Decide chacun), jamais pour faire d'une
   fenêtre une section. compose_restart et les deux témoins poussés en branche (bc93dc781), jeu en cours.
+- Banc, 12 h 4x : la page 02 porte les deux précisions (la fenêtre = le budget de ce que voit chaque décision, sa
+  place dite ; les 244 tours restent une section chacun dans toutes les variantes ; `segment` inutile pour ce
+  banc). **Coût à savoir** : F à 300 k ≈ 37 M jetons d'entrée sans cache (244 décisions × ~150 k), U ≈ 107 M ;
+  le cache de préfixe de Vertex devrait en prendre l'essentiel — vérifié sur N puis sur la première fenêtre de F
+  avant de lancer le reste, coût réel dit.
