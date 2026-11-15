@@ -1528,3 +1528,10 @@ Codeparsers, 17 h 36 : l'ordre de la résolution d'arêtes, par ce qu'une répon
 nom (un appel de méthode standard relié à un homonyme d'une autre crate ; 1 949 receveurs « nom » sur 3 026 visent un nom std ;
 règle : un type lu mais hors de l'index s'abstient et le dit), 2 receveurs sans type, 3 définition liée à l'en-tête C++, 4 membre
 platform JS ; 5 import ES externe (réponse incomplète, +6,5 à +9,2 % de scopes) à porter à Lucie. Accepté ; 1 commencé en rouge.
+ED et c7, 17 h 39 : `models.llm` posé dans le manifeste du dépôt de Lucie et la copie de sa tâche atelier (gemini-3.8-flash par Vertex,
+compatible/vertex, location global, restart_budget_tokens 100 000, défaut ; sans context_tokens, non vérifié pour la 3.8 ;
+VERTEX_MODEL absent de l'hôte), backends rouverts : `/model` aura sa liste à la pose du soir. Défaut du lot models.llm trouvé :
+budget_de_reprise reconnaît le local par le protocole « llama_server » que connect_llm refuse — ticket (le local par l'adresse de
+boucle). Archi : le branchement greffe dans toute tâche read, list, grep, glob, replace_text, **replace_lines**, insert_lines,
+write (si droit d'écrire) et run_command (si porte ouverte) ; l'invite dit « un texte unique, ou les lignes a à b après les avoir
+lues » (Lucie : « aussi par offset ») ; deux témoins sur trois verts, le bout en bout rejoué derrière la pile.
