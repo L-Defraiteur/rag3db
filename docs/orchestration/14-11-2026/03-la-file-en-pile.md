@@ -1428,3 +1428,6 @@ Hotfixs, 16 h 35 : le lot CI sur master à **fa15e5fa3** (13 commits dont 11 du 
 avec l'autorisation de Lucie : 43724738336 annulé, les quatre du 11 novembre « completed » à l'API (zombies de la liste) ;
 **le run 43730682329 (a6d49b99b) est en cours — le premier run de master qui joue depuis le 14 à 15 h 27**. « À toi » à hotfixs
 pour la fenêtre de formatage (cherry-pick -n 644d1d8c5, commit gmail, bâti + un test par cible).
+Recherche, 16 h 38 : sa part de 2b-C verte (vues-2b-c-2 97b8c8d7d, sur 2b′ 77cd6b049 ; `view = {layer, rank?}` sur tout outil qui lit,
+composé dans l'instantané de l'appel ; passe entière verte sous MOTEUR_ANCIEN dit). En pile derrière 2b′, en fin de file ; le
+témoin 0 au bit près du banc sur sa tête conditionne le « à toi ».
