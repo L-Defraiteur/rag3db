@@ -123,6 +123,55 @@ impl BilansDeclares {
     }
 }
 
+
+/// `fts` du manifeste : ce que l'hôte fait du plein texte de ce backend.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct FtsPolicy {
+    /// La maintenance nocturne ; absente, celle par défaut.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub maintenance: Option<FtsMaintenancePolicy>,
+}
+
+/// **La maintenance nocturne du plein texte** (15 novembre 2026, c7) : chaque nuit à `at` (heure
+/// locale), sur chaque table plein texte du backend ouvert, le relevé à blanc puis la purge des
+/// orphelins si leur part des vivants ne dépasse pas `max_purge_ratio`, puis la compaction (segments
+/// et dictionnaire) si `compact`. Au-delà du ratio, rien n'est purgé et l'état le dit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FtsMaintenancePolicy {
+    #[serde(default = "FtsMaintenancePolicy::oui")]
+    pub enabled: bool,
+    /// `HH:MM`, heure locale.
+    #[serde(default = "FtsMaintenancePolicy::trois_heures_trente")]
+    pub at: String,
+    #[serde(default = "FtsMaintenancePolicy::cinq_centiemes")]
+    pub max_purge_ratio: f64,
+    #[serde(default = "FtsMaintenancePolicy::oui")]
+    pub compact: bool,
+}
+
+impl FtsMaintenancePolicy {
+    fn oui() -> bool { true }
+    fn trois_heures_trente() -> String { "03:30".into() }
+    fn cinq_centiemes() -> f64 { 0.05 }
+    /// L'heure `at`, lue.
+    pub fn heure(&self) -> Result<jiff::civil::Time, String> {
+        format!("{}:00", self.at).parse().map_err(|e| format!("fts.maintenance.at « {} » : {e} (HH:MM attendu)", self.at))
+    }
+}
+
+impl Default for FtsMaintenancePolicy {
+    fn default() -> Self {
+        Self { enabled: true, at: Self::trois_heures_trente(), max_purge_ratio: Self::cinq_centiemes(), compact: true }
+    }
+}
+
+impl BackendManifest {
+    /// La maintenance nocturne de ce backend : celle du manifeste, ou celle par défaut.
+    pub fn fts_maintenance(&self) -> FtsMaintenancePolicy {
+        self.fts.as_ref().and_then(|f| f.maintenance.clone()).unwrap_or_default()
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct BackendManifest {
@@ -245,6 +294,10 @@ pub struct BackendManifest {
     /// Creation-time Lucivy option; existing indexes retain their persisted setting.
     #[serde(default)]
     pub fts_positions: Option<bool>,
+    /// **Le plein texte entretenu par l'hôte** (15 novembre 2026) : `fts.maintenance`, la maintenance
+    /// nocturne (`fts_maintenance`). Absent : active, à 03:30, ratio 0,05, compaction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fts: Option<FtsPolicy>,
     /// La surface de code (3 octobre 2026) : quelle source de fichiers, sous
     /// quelle racine, avec quelle porte de commandes. Absente : aucun outil
     /// de code ne peut lire ni écrire — le défaut sûr.
@@ -2897,6 +2950,7 @@ pub(crate) fn opening_changes(old: &PreparedBackend, new: &PreparedBackend) -> V
         ("vector_extension", value(&a.vector_extension), value(&b.vector_extension)),
         ("workspace", value(&a.workspace), value(&b.workspace)),
         ("fts_positions", value(&a.fts_positions), value(&b.fts_positions)),
+        ("fts", value(&a.fts), value(&b.fts)),
         ("buffer_pool", value(&a.buffer_pool), value(&b.buffer_pool)),
         ("relations", value(&old.relation_defs), value(&new.relation_defs)),
         ("entities", entities(old), entities(new)),
@@ -5618,6 +5672,13 @@ impl Backend {
                 None => (crate::search::DEFAULT_QUERY_MAX_CHARS, "défaut"),
             };
             o.insert("query_max_chars".into(), json!({"value": valeur, "source": source}));
+        }
+        // **La dernière maintenance nocturne du plein texte** : lue si le catalogue est libre (une
+        // passe qui le tient ne fait pas attendre l'état).
+        if let (Some(o), Ok(cat)) = (etats.as_object_mut(), self.catalog.try_lock()) {
+            if let Some(note) = cat.derniere_maintenance_fts() {
+                o.insert("fts_maintenance".into(), note);
+            }
         }
         if let Some(fichiers) = self.ecarts_des_fichiers.lock().unwrap_or_else(|e| e.into_inner()).clone() {
             if let Some(o) = etats.as_object_mut() {

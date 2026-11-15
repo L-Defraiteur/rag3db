@@ -1139,3 +1139,106 @@ fn le_releve_a_blanc_compte_un_orphelin_sans_le_purger() {
     host.shutdown();
     let _ = std::fs::remove_dir_all(d);
 }
+
+// ─── La maintenance nocturne du plein texte (15 novembre 2026) ───────────────
+//
+// `DaemonHost::maintenance_periodique(maintenant)` : l'heure est passée par l'appelant (le fil de
+// relevé de l'hôte lui passe l'heure locale), c'est l'horloge injectable de ces témoins.
+
+fn a(heure: &str) -> jiff::civil::DateTime {
+    format!("2026-11-16T{heure}:00").parse().unwrap()
+}
+
+fn orphelins(host: &DaemonHost, id: &str, ids: std::ops::Range<u64>) {
+    host.with_backend_id(id, |b| {
+        let catalog = b.catalog.lock().unwrap();
+        let handle = catalog.fts_handle("Fiche").expect("le plein texte de la fiche");
+        for i in ids {
+            handle.add_document_json(i, &json!({"titre": format!("orpheline {i}"), "corps": "sans ligne"})).unwrap();
+        }
+        handle.commit().unwrap();
+    }).unwrap();
+}
+
+fn etat_maintenance(host: &DaemonHost, id: &str) -> Value {
+    host.with_backend_id(id, |b| b.index_states().unwrap()["fts_maintenance"].clone()).unwrap()
+}
+
+#[test]
+#[ignore]
+fn la_maintenance_nocturne_purge_les_orphelins_une_fois_par_nuit() {
+    let d = dossier("maintenance-nocturne");
+    let m = manifeste_plein_texte(&d);
+    let host = DaemonHost::new();
+    let s = host.open_session("témoin", None, vec![], None);
+    let id = ok(&host.open(Some(&s), &m))["id"].as_str().unwrap().to_string();
+    for i in 0..30 {
+        ok(&put(&host, &s, &m, "put_fiche", &format!("fiche {i}")));
+    }
+    orphelins(&host, &id, 900_000..900_001);
+    // Avant l'heure (03:30 par défaut) : rien.
+    assert!(host.maintenance_periodique(a("03:29")).is_empty(), "[check: rien-avant-l-heure]");
+    let (vivants, _) = releve(&host, &s, &m);
+    assert_eq!(vivants.len(), 31);
+    // À l'heure : le relevé, la purge de l'orphelin, la compaction ; dit au journal et à l'état.
+    let faits = host.maintenance_periodique(a("03:31"));
+    assert_eq!(faits.len(), 1, "[check: une-base-maintenue] {faits:?}");
+    assert!(faits[0].contains("1 orphelin"), "[check: le-journal-dit-la-purge] {faits:?}");
+    let (vivants, _) = releve(&host, &s, &m);
+    assert_eq!(vivants.len(), 30, "[check: l-orphelin-est-purge]");
+    let etat = etat_maintenance(&host, &id);
+    assert!(etat["summary"].as_str().is_some_and(|t| t.contains("dernière maintenance") && t.contains("1 orphelin")),
+        "[check: l-etat-dit-la-derniere-maintenance] {etat}");
+    // Une seule fois par nuit : un orphelin posé après ne part pas avant la nuit suivante.
+    orphelins(&host, &id, 900_001..900_002);
+    assert!(host.maintenance_periodique(a("04:10")).is_empty(), "[check: une-fois-par-nuit]");
+    assert_eq!(releve(&host, &s, &m).0.len(), 31);
+    let lendemain: jiff::civil::DateTime = "2026-11-17T03:31:00".parse().unwrap();
+    assert_eq!(host.maintenance_periodique(lendemain).len(), 1, "[check: la-nuit-suivante]");
+    assert_eq!(releve(&host, &s, &m).0.len(), 30);
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
+#[ignore]
+fn la_maintenance_nocturne_refuse_une_purge_suspecte_et_le_dit() {
+    // Plus de 5 % d'orphelins (défaut) : relevé suspect ; rien n'est purgé, l'état le dit.
+    let d = dossier("maintenance-nocturne-refus");
+    let m = manifeste_plein_texte(&d);
+    let host = DaemonHost::new();
+    let s = host.open_session("témoin", None, vec![], None);
+    let id = ok(&host.open(Some(&s), &m))["id"].as_str().unwrap().to_string();
+    for i in 0..10 {
+        ok(&put(&host, &s, &m, "put_fiche", &format!("fiche {i}")));
+    }
+    orphelins(&host, &id, 900_000..900_003);
+    let faits = host.maintenance_periodique(a("03:31"));
+    assert!(faits.len() == 1 && faits[0].contains("maintenance refusée"), "[check: le-journal-dit-le-refus] {faits:?}");
+    assert_eq!(releve(&host, &s, &m).0.len(), 13, "[check: rien-n-est-purge]");
+    let etat = etat_maintenance(&host, &id);
+    let texte = etat["summary"].as_str().unwrap_or("");
+    assert!(texte.contains("maintenance refusée : 3 orphelins sur 13 vivants") && texte.contains("relevé à la main"),
+        "[check: l-etat-dit-le-refus] {etat}");
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
+#[ignore]
+fn la_maintenance_nocturne_se_desactive_au_manifeste() {
+    let d = dossier("maintenance-nocturne-off");
+    let m = manifeste_plein_texte(&d);
+    let mut v: Value = serde_json::from_slice(&std::fs::read(&m).unwrap()).unwrap();
+    v["fts"] = json!({"maintenance": {"enabled": false}});
+    std::fs::write(&m, serde_json::to_vec_pretty(&v).unwrap()).unwrap();
+    let host = DaemonHost::new();
+    let s = host.open_session("témoin", None, vec![], None);
+    let id = ok(&host.open(Some(&s), &m))["id"].as_str().unwrap().to_string();
+    ok(&put(&host, &s, &m, "put_fiche", "une"));
+    orphelins(&host, &id, 900_000..900_001);
+    assert!(host.maintenance_periodique(a("03:31")).is_empty(), "[check: desactivee]");
+    assert_eq!(releve(&host, &s, &m).0.len(), 2);
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}
