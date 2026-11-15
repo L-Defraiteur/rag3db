@@ -134,16 +134,24 @@ impl LlmNode {
 
     /// Lit le port `prompt` sous ses deux formes acceptées.
     fn take_turns(ctx: &mut NodeContext) -> Result<Vec<Turn>, String> {
-        let pv = ctx.take_input("prompt").ok_or("LlmNode: missing 'prompt' input")?;
+        let pv = match ctx.take_input("prompt") {
+            Some(pv) => pv,
+            None => {
+                let v = ctx.take_input("value").ok_or("LlmNode: missing 'prompt' input")?;
+                return match v.downcast::<serde_json::Value>() {
+                    Some(serde_json::Value::String(s)) => Ok(vec![Turn::user(s.clone())]),
+                    Some(serde_json::Value::Object(m)) if m.get("prompt").and_then(serde_json::Value::as_str).is_some() => {
+                        Ok(vec![Turn::user(m["prompt"].as_str().unwrap_or_default().to_string())])
+                    }
+                    _ => Err("LlmNode: 'value' must carry a text, or {prompt}".into()),
+                };
+            }
+        };
         if let PortValue::Data(ref arc) = pv {
             if arc.is::<Vec<Turn>>() {
                 return take_or_clone::<Vec<Turn>>(pv)
                     .ok_or_else(|| "LlmNode: bad Vec<Turn> payload".to_string());
             }
-        }
-        // Un texte rendu par un RhaiNode arrive en JSON (`Value::String`) : c'est un prompt.
-        if let Some(serde_json::Value::String(s)) = pv.downcast::<serde_json::Value>() {
-            return Ok(vec![Turn::user(s.clone())]);
         }
         let text = take_or_clone::<String>(pv)
             .ok_or("LlmNode: 'prompt' must carry String or Vec<Turn>")?;
@@ -306,8 +314,9 @@ impl NodeFactory for LlmNodeFactory {
         NodeSchema {
             node_type: "LlmNode".into(),
             description: "Generates text from a prompt via the 'llm' service (streaming-capable)".into(),
-            // `Any` : un texte, une conversation, ou un texte rendu en JSON par un RhaiNode.
-            inputs: vec![PortDef::value("prompt", PortType::Any, true)],
+            // `prompt` (Text) : un texte ou une conversation ; `value` (Map) : un texte rendu en JSON par
+            // un RhaiNode, ou {prompt}. L'un des deux, au moment de jouer.
+            inputs: vec![PortDef::value("prompt", PortType::Text, false), PortDef::value("value", PortType::Map, false)],
             outputs: vec![
                 PortDef::value("text", PortType::Text, false),
                 PortDef::value("llm", PortType::Llm, false),
@@ -626,9 +635,10 @@ mod tests {
         let schema = f.schema();
         assert_eq!(schema.node_type, "LlmNode");
         assert_eq!(schema.inputs[0].port_type, PortType::Text);
-        // text, llm, et le flux tokens ; stop_when_unread s'ajoute aux cinq réglages.
-        assert_eq!(schema.outputs.len(), 3);
-        assert_eq!(schema.config_params.len(), 6);
+        // text, llm, le flux tokens, et json (la réponse sous response_schema) ; stop_when_unread et
+        // response_schema s'ajoutent aux cinq réglages.
+        assert_eq!(schema.outputs.len(), 4);
+        assert_eq!(schema.config_params.len(), 7);
     }
 
     #[test]

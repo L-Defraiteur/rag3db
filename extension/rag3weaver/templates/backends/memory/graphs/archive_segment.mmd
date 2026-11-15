@@ -8,5 +8,5 @@ graph LR
     preparer["RhaiNode(script_id=archive_segment_prompt, inputs='section', section=$element)"]
     modele["LlmNode(response_schema=$schema, max_tokens=2048, temperature=0)"]
     construire["RhaiNode(script_id=archive_segment_build, inputs='section', section=$element)"]
-    preparer -->|result:prompt| modele
+    preparer -->|result:value| modele
     modele -->|json:value| construire
