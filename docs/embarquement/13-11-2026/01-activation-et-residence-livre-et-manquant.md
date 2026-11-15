@@ -325,3 +325,64 @@ la concurrence pour le moteur.
 
 L'arrêt du 7879 a duré 3 min 19 s. Sondes et journaux à luciepc : `~/.cache/rag3weaver-build/groupe-vrai-jeu/`
 (`mesure-904.out`, `sondes-904.log`).
+
+## Le repli vers un service quand la carte est pleine : conception (15 novembre)
+
+*À relire par c7 avant le code. La cause vient de la mesure des 904 s (33,3 s sur carte calme).*
+
+**Ce qui s'est passé le 14.** Le fournisseur de groupe bge-m3 a été lancé sur card2, qui portait déjà le
+7879. Celui-ci sert ce même modèle, et la carte avait 2 Gio libres au pic : l'index a été vingt-sept fois
+plus lent. Le bon geste aurait été de **s'attacher au service qui sert déjà le modèle**, au lieu de
+charger une seconde copie sur une carte pleine.
+
+**Le bon endroit : `fallback` de la déclaration.** Il dit déjà « quoi faire quand le service ne répond
+pas » (`refuse`, `local`). Une activation n'accepte aujourd'hui que `refuse`. Il gagne une troisième
+forme :
+```json
+"fallback": { "service": "127.0.0.1:7879" }        ou        "fallback": { "activation": "<nom>" }
+```
+C'est un service déclaré, posé ou activé. **Sans cette déclaration, le repli n'existe pas** (garde 3).
+Un seul champ couvre les deux replis : le fournisseur qui ne répond pas, et la carte pleine.
+
+**« Carte pleine » se mesure, jamais ne se devine** (garde 1). Deux mesures, réglées au manifeste avec
+leurs défauts, dans le bloc d'activation :
+- **avant d'activer**, la VRAM libre lue sur la carte que l'activation nomme (`peripherique`, un nom
+  drm comme `card2`, lu dans `/sys/class/drm/<peripherique>/device/mem_info_vram_*`) contre
+  `memoire_requise_mio + marge_mio`. `marge_mio` vaut 2048 par défaut ; sans `memoire_requise_mio`,
+  pas de mesure, et l'activation se fait comme aujourd'hui. Un `peripherique` qui ne nomme pas une
+  carte lisible (`cpu`, un nom inconnu) n'est jamais mesuré, et c'est dit ;
+- **pendant l'index**, le débit observé (textes par seconde des appels du fournisseur) sous
+  `debit_min` pendant `fenetre_secs` (défaut : 60 s), une fois l'activation chauffée. Sans
+  `debit_min`, pas de mesure de débit.
+
+**Le repli se dit, et revient** (garde 2) :
+- **le repli** : l'embarqueur passe au service de repli, identité vérifiée (modèle et dimension ; pas de
+  recette, puisque c'est un service posé à la main ou une autre activation). Il le dit dans l'état
+  d'index et dans le journal d'index : « replié vers 127.0.0.1:7879 à 18 h 47, cause : card2 à
+  2 051 Mio libres, 11 500 requis + 2 048 de marge » (ou « débit 0,4 texte/s sous 5 pendant 60 s »).
+  Le fournisseur activé, s'il l'était, rend son bail ; l'éviction fait le reste ;
+- **le retour** : tant qu'il est replié, l'embarqueur remesure la carte (la VRAM libre, toutes les
+  `fenetre_secs`). Quand elle a la place, il réactive le fournisseur déclaré et le dit : « revenu à la
+  carte card2 à 19 h 02, 20 Gio libres ». Un index commencé replié ne reste pas lent toute la nuit ;
+- **sans repli déclaré**, rien ne change : l'activation se fait, et l'état dit « carte pleine (card2 :
+  2 051 Mio libres, 13 548 requis), pas de repli déclaré ». C'est tout.
+
+**Ce qu'il ne fait jamais** : deviner une carte (seule la carte nommée par `peripherique` est lue) ;
+lancer sur une autre carte de son propre chef ; toucher card0 ou un service posé à la main autrement
+qu'en client.
+
+**Les témoins, rouges d'abord**, sur la fixture. Une carte factice est un dossier `mem_info_vram_*`
+donné par une variable de test, `RAG3WEAVER_DRM_RACINE`, défaut `/sys/class/drm` :
+1. **la carte a la place** : le fournisseur se lance, comme aujourd'hui ;
+2. **la carte est pleine, avec un repli déclaré** : rien n'est lancé ; l'embarqueur sert par le repli,
+   et l'état et le journal disent le repli et sa cause ;
+3. **elle se libère** : au calcul suivant après la fenêtre, le fournisseur est activé, et le retour est
+   dit ;
+4. **la carte est pleine, sans repli** : l'activation se fait, et l'état dit « pas de repli déclaré » ;
+5. **un repli qui ne sert pas le modèle** : refus nommé à l'activation ;
+6. **le débit sous le seuil** pendant la fenêtre (la fixture ralentie par `--lent-ms`) : repli, et sa
+   cause dite.
+
+**Le vrai jeu**, après le vert : le jeu du groupe du 14, avec `memoire_requise_mio: 11500` et
+`fallback: { "service": "127.0.0.1:7879" }`, sur card2 et ses 12,2 Gio libres. Le repli doit se dire, et
+l'index doit tourner au débit du 7879, jamais 904 s.
