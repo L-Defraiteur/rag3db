@@ -130,7 +130,7 @@ if kind == "create" && !a_rejoint && about == "" {
 let key = #{ fiche: fiche, source: s.chemin, section: s.title };
 let fiche_record = if a_rejoint { rejoint } else { #{ name: fiche, about: about, state: "proposed", via: "archiviste" } };
 if kind == "create" && !a_rejoint { proposed.push(fiche_record); }
-#{
+let out = #{
     // Le filtre d'archive (Route sur stage) : seuls les éléments décidés passent à l'étage du sujet ; les
     // échecs du Decide ({error, element, index}) restent dans son rapport.
     stage: "decided",
@@ -155,4 +155,7 @@ if kind == "create" && !a_rejoint { proposed.push(fiche_record); }
     doc_value: `${s.chemin}#${s.title}`,
     // Ce que l'étage archive_subject cherche parmi les fiches validées : le nom de la fiche, sinon le titre.
     subject_query: if fiche != "" { fiche } else if s.title != "" { s.title } else { s.chemin }
-}
+};
+// L'usage de l'appel du Decide, pour la trace (absent : le Decide n'en a pas posé).
+if s.usage != () { out.usage = s.usage; }
+out
