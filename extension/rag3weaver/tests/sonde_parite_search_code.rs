@@ -504,3 +504,49 @@ fn releve_les_reponses_apres_une_reindexation_publiee() {
     }
     ecrire(&sortie.to_string_lossy(), &apres, json!({"publication": publication, "generations": generations, "fin_index": fin_index, "usages": usages}));
 }
+
+/// **Une sonde de lecture sur une copie** (le départage de l'écrivain, 15 nov.) : sans rien indexer,
+/// les comptes du plein texte (si `RAG3WEAVER_PARITE_MANIFESTE` est donné, par le backend), puis
+/// chaque requête Cypher du fichier `RAG3WEAVER_PARITE_CYPHER` (une par ligne ; `#` commente), ses
+/// lignes écrites dans `RAG3WEAVER_PARITE_SORTIE`.
+#[test]
+#[ignore]
+fn releve_des_lignes_par_cypher() {
+    let var = |n: &str| std::env::var_os(n);
+    let (Some(base), Some(requetes), Some(sortie)) = (var("RAG3WEAVER_PARITE_BASE"), var("RAG3WEAVER_PARITE_CYPHER"), var("RAG3WEAVER_PARITE_SORTIE")) else {
+        eprintln!("SAUTÉ releve_des_lignes_par_cypher : RAG3WEAVER_PARITE_BASE, _CYPHER ou _SORTIE manque");
+        return;
+    };
+    let mut doc = serde_json::Map::new();
+    let conn: std::sync::Arc<dyn rag3weaver::connection::DbConnection> = if let Some(manifeste) = var("RAG3WEAVER_PARITE_MANIFESTE") {
+        let prepared = PreparedBackend::load(std::path::Path::new(&manifeste)).expect("le manifeste");
+        let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), None).expect("ouvrir le backend");
+        let cat = backend.catalog.lock().unwrap();
+        let c = cat.comptes_du_plein_texte();
+        for (e, d, l) in &c {
+            eprintln!("[cypher] plein texte {e} : {d} documents, {l} lignes");
+        }
+        doc.insert("plein_texte".into(), json!(c.iter().map(|(e, d, l)| json!({"entite": e, "documents": d, "lignes": l})).collect::<Vec<_>>()));
+        doc.insert("rang_publie".into(), json!(cat.rang_publie()));
+        doc.insert("rang_en_attente".into(), json!(cat.rang_en_attente()));
+        eprintln!("[cypher] rang publié {:?}, en attente {:?}", cat.rang_publie(), cat.rang_en_attente());
+        cat.conn_arc()
+    } else {
+        std::sync::Arc::new(Rag3dbConnection::new(&base).expect("ouvrir la copie"))
+    };
+    let mut sorties = Vec::new();
+    for q in std::fs::read_to_string(&requetes).expect("les requêtes").lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
+        let lignes = match conn.execute(q) {
+            Ok(r) => r.rows.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>(),
+            Err(e) => vec![format!("refus : {e}")],
+        };
+        eprintln!("[cypher] {} → {} ligne(s)", &q[..q.len().min(160)], lignes.len());
+        for l in lignes.iter().take(5) {
+            eprintln!("[cypher]    {}", &l[..l.len().min(300)]);
+        }
+        sorties.push(json!({"requete": q, "lignes": lignes}));
+    }
+    doc.insert("requetes".into(), json!(sorties));
+    std::fs::write(&sortie, serde_json::to_string_pretty(&Value::Object(doc)).unwrap()).expect("écrire le relevé");
+    eprintln!("[cypher] relevé écrit : {}", sortie.to_string_lossy());
+}
