@@ -322,6 +322,7 @@ fn releve_du_jeu(backend: &rag3weaver::backend::Backend, jeu: &Value, k: usize) 
                         // Le contenu partagé : deux occurrences d'un même contenu (un fichier recopié) ont
                         // le même hash ; le comparateur sépare ainsi « même contenu, autre occurrence ».
                         "content_hash": d["_content_hash"],
+                        "parent_path": pris(&["parent_path", "parent_name"]),
                         "score": l["score"],
                         "signal": l["signal"],
                         "best_signal": l["bestSignal"],
@@ -382,6 +383,43 @@ fn hash_des_scopes(backend: &rag3weaver::backend::Backend) -> std::collections::
         m.entry((t(0), t(1))).or_default().insert(t(2));
     }
     m
+}
+
+/// **La structure d'une base, au-delà des réponses** (c7, 15 nov. : un défaut de DEFINED_IN que
+/// search_code et usages ne voyaient pas). Les arêtes par étiquette vers les lignes ouvertes de File et
+/// de Scope (`_jusqu_a` nul), et vers les autres tables ; puis l'outline de fichiers donnés, en liste
+/// triée (nom, ligne, parent).
+fn structure_de(backend: &rag3weaver::backend::Backend, fichiers: &[String]) -> Value {
+    let conn = backend.catalog.lock().unwrap().conn_arc();
+    let mut aretes = serde_json::Map::new();
+    for (cible, filtre) in [("File", "n._jusqu_a IS NULL"), ("Scope", "n._jusqu_a IS NULL"), ("Symbol", "true"), ("Library", "true"), ("ScopeContent", "true")] {
+        let q = format!("MATCH ()-[r]->(n:{cible}) WHERE {filtre} RETURN label(r), count(*)");
+        match conn.execute(&q) {
+            Ok(r) => {
+                for l in &r.rows {
+                    let e = l.first().and_then(|v| v.as_str()).unwrap_or("?").to_string();
+                    let c = l.get(1).and_then(|v| v.as_i64()).unwrap_or(-1);
+                    aretes.insert(format!("{e} → {cible}"), json!(c));
+                }
+            }
+            Err(e) => {
+                aretes.insert(format!("refus → {cible}"), json!(e.to_string()));
+            }
+        }
+    }
+    drop(conn);
+    let mut outlines = serde_json::Map::new();
+    for f in fichiers {
+        let r = backend.call("outline", json!({"path": f, "format": "json", "limit": 2000})).unwrap_or_else(|e| json!({"refus": e}));
+        let mut x = &r;
+        while let Some(i) = x.get("result") {
+            x = i;
+        }
+        let mut lignes: Vec<String> = x["rows"].as_array().map(|a| a.iter().map(|l| format!("{} @{} ← {}", l["name"].as_str().unwrap_or(""), l["start_line"], l["parent_path"].as_str().or(l["parent_name"].as_str()).unwrap_or(""))).collect()).unwrap_or_default();
+        lignes.sort();
+        outlines.insert(f.clone(), json!({"total": x["total"], "lignes": lignes}));
+    }
+    json!({"aretes": aretes, "outlines": outlines})
 }
 
 /// **Un index de la source, attendu jusqu'à sa dernière ligne** : « indexation terminée » dans le
@@ -446,7 +484,19 @@ fn releve_les_reponses_apres_une_reindexation_publiee() {
         eprintln!("[parité] relevé écrit : {chemin}");
     };
     let avant = releve_du_jeu(&backend, &jeu, k);
-    ecrire(&format!("{}.avant.json", sortie.to_string_lossy()), &avant, json!({}));
+    // Les fichiers des trois premiers de chaque cas, au plus 30 : ceux dont on relira l'outline.
+    let mut fichiers: Vec<String> = Vec::new();
+    for c in &avant {
+        for r in c["resultats"].as_array().into_iter().flatten().take(3) {
+            if let Some(f) = r["file_path"].as_str() {
+                if !fichiers.iter().any(|x| x == f) && fichiers.len() < 30 {
+                    fichiers.push(f.to_string());
+                }
+            }
+        }
+    }
+    let structure_avant = structure_de(&backend, &fichiers);
+    ecrire(&format!("{}.avant.json", sortie.to_string_lossy()), &avant, json!({"structure": structure_avant}));
     let hash_avant = hash_des_scopes(&backend);
     let fin_index = indexer_et_attendre(&backend, "source entière");
     // <publication>
@@ -502,7 +552,8 @@ fn releve_les_reponses_apres_une_reindexation_publiee() {
         eprintln!("[parité] usages de {n} : {} appelants", liste.len());
         usages.insert(n.clone(), json!({"liste": liste, "brut": brut}));
     }
-    ecrire(&sortie.to_string_lossy(), &apres, json!({"publication": publication, "generations": generations, "fin_index": fin_index, "usages": usages}));
+    let structure_apres = structure_de(&backend, &fichiers);
+    ecrire(&sortie.to_string_lossy(), &apres, json!({"publication": publication, "generations": generations, "fin_index": fin_index, "usages": usages, "structure": structure_apres}));
 }
 
 /// **Une sonde de lecture sur une copie** (le départage de l'écrivain, 15 nov.) : sans rien indexer,
