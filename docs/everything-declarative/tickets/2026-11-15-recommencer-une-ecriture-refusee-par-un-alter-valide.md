@@ -18,6 +18,11 @@ qu'un ALTER soit validé sur sa table. Le refus est nommé : « The schema of ta
 transaction started …; retry the transaction ». L'écrivain et `sync_source` doivent **recommencer** sur
 ce refus, qu'ils reconnaissent à son préfixe, au lieu de perdre l'écriture ou de la dire perdue.
 
+**La reconnaissance** (c7, 15 novembre, 13 h) : le refus « Schema changed, retry: » est au milieu du
+message, après « Transaction manager exception: ». Il se reconnaît donc par un `contains`, pas par un
+préfixe. Côté C++, la constante est `Transaction::SCHEMA_CHANGED_RETRY`. Le lot du cœur est sur
+master (101ff50a6) ; la lib qui le porte n'est pas encore posée (toujours 373b5477b).
+
 ## Les deux grains
 
 - **La transaction par paquet** (chemin d'instantané, en mode masse) : le paquet entier se recommence,
