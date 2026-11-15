@@ -59,3 +59,19 @@ Sept anciens tests décrivaient les mots d'état ou les verdicts de l'hôte. Ils
 Le harnais attend, après `o`, l'invite de repos ou la phrase de fin sans réponse, au lieu du mot « fini ». Son `themes.json` est refait depuis les thèmes de la branche.
 
 Le crate passe 105 tests, clippy `-D warnings` ne signale rien, et le harnais entier est vert sous tmux local ouvert.
+
+## La réponse s'affiche une fois
+
+Essai de Lucie sur l'atelier, « essaie chacun de tes outils ». La même réponse est arrivée trois fois à l'écran :
+
+1. le texte streamé de l'équipier ;
+2. une première copie, le même texte nu. L'hôte la pose dans la boîte à la fin du pas, dans `teammate.rs`, quand aucun compte rendu ne le contient ;
+3. une seconde copie, préfixée « le pas 2 s'est terminé sans step_done ; sa réponse : … ».
+
+Côté terminal :
+- un compte rendu égal, aux blancs près, au texte streamé depuis le départ du run ne se réaffiche pas ;
+- le préfixe de l'hôte ne s'affiche jamais : une réponse différente s'écrit sans lui, et le préfixe seul (« … sans step_done ni réponse ») ne s'écrit pas.
+
+`--etapes` remontre tout. Côté hôte, chez archi : un pas qui a répondu en texte n'a pas à être relancé pour un second compte rendu.
+
+Témoin : `the_answer_streamed_is_not_shown_again_by_the_copies_of_the_end_of_the_step`. Il a été vu rouge : les deux copies s'écrivaient. Le crate passe 106 tests.
