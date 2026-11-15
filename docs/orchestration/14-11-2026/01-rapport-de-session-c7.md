@@ -1420,3 +1420,9 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   masse attend le paquet en cours (2 048 fichiers, ou le COPY final des relations — des minutes), et les
   écrivains neufs attendent derrière lui ; en service l'hôte n'ALTER qu'à l'ouverture ou à une montée de
   schéma, CREATE INDEX reste en partagé : le cas est rare, il se dit dans les nouveautés.
+- **Le cœur, 08 h 1x** : témoin rouge 3/3 (l'écrivain accepté pendant l'ADD écrit 100 lignes sur l'ancien
+  schéma, 0/100 lisent la colonne) ; correctif (b) 3e0b04102 : Transaction::throwIfSchemaChangedAfterSnapshot
+  à la première prise du verrou de table, refus nommé « The schema of table T changed after this transaction
+  started …; retry » ; TwoAlters attend, est refusé par ce nom, repasse relancé ; transaction_test 382. Garde
+  demandée : un préfixe stable pour que rag3weaver recommence ; **ED : l'écrivain et sync_source recommencent
+  sur ce refus** (petit lot, après la prochaine bascule).
