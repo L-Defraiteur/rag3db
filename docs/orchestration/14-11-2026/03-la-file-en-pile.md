@@ -1751,3 +1751,9 @@ L'ordre de la pose d'après les « va » : l'hôte aux deux postes vers 20 h 40 
 20 h 50 (sa parité lit 7878 et 7879) ; 7878 au mot d'arbre vers 21 h (sa répétition embarque par 7878) et au « va » du banc. Arbre ne
 lance la vraie bascule qu'après le « fini » de G. 96 : rejeu vert à 20 h 01, pile reposée (b2a031f2e), rejeu court en cours, pour la
 pose suivante.
+Arbre, 20 h 03 : code-principal répété en entier (réparation 1 402 s ; purge 9 s ; 1b 623 s ; montée 1 s ; **repassage complet 2 956 s**,
+4 paquets puis ~20 000 morceaux neufs à embarquer), vert au banc de recherche, mais un défaut de graphe : **1 947 CONSUMED_BY visibles
+sans leur CONSUMES** (0 avant ; le CONSUMED_BY entrant recopié sur le scope renaissant même quand la résolution neuve ne consomme
+plus la cible) ; impact et appelants faux sur ~2 %. **Décision : la vraie bascule attend** le correctif d'ED (témoin 18) et
+l'atterrissage de l'écrivain ; pas ce soir avec un défaut connu (un second repassage coûterait 45 min par base). code-lourd au
+paquet 2/4, finit vers 21 h ; 7878 ne se coupe qu'à son mot.
