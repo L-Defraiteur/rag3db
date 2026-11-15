@@ -1830,3 +1830,7 @@ known_red, rouge dans le sens vert : SameVectorForEveryRow…ZeroRowsFirstCopy p
 (1 222/1 402). Tranché (a) : VERT au journal avec ce rouge dit, la ligne known_red inchangée, push ; ticket chez G : un known_red qui
 verdit une fois (ordre, graine) ne rougit pas un lot — « passé cette fois (intermittent) », retrait de la ligne après N verts seuls.
 Recherche : lot de gardes vert (ba6963b45), après hotfixs.
+Cœur, 20 h 44 : **le SIGSEGV de la colonne ajoutée sur master à 2c11a7995f** (6 commits, d59a56e9e → 2c11a7995 ; gmail, 0 attribution), poussé
+par la voie des suites C++ transférables de G (base aa9a7b72a, rien de code du moteur entre les deux) : la voie marche. Suivant chez le
+cœur : le pool qui sature sous vingt écrivains. ED : le témoin 20 vert (une ligne renée garde ses MENTIONS) ; les MENTIONS absentes
+sont, comme les CONSUMES, des arêtes que le parent garde de l'ancien contenu ; tête 794b14232 proposée au banc (index neuf en référence).
