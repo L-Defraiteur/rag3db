@@ -625,7 +625,11 @@ fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[Remplacee]
             continue;
         }
         for (rel, from, cible) in crate::code::RELATIONS {
-            if cible != to {
+            // **`CONSUMED_BY` n'est pas une entrante** (témoin 18) : celui qui arrive à la ligne retirée
+            // est le miroir d'un `CONSUMES` sortant d'elle, que l'ingestion de son fichier repose, ou non si
+            // la résolution neuve ne consomme plus la cible. Le recopier ici laissait un `CONSUMED_BY` sans
+            // son `CONSUMES` (1 947 sur la répétition de code-principal du 15 novembre).
+            if cible != to || rel == "CONSUMED_BY" {
                 continue;
             }
             let props: Vec<String> = catalog.get_relation_def(rel).and_then(|r| r.properties.as_ref()).map(|m| m.keys().cloned().collect()).unwrap_or_default();
