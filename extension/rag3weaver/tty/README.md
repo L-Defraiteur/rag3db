@@ -137,12 +137,17 @@ keeps to ASCII.
 
 Five themes ship with it: `daemon` (the default), `foret`, `cyberpunk`, `cyborg` and `alien`, chosen
 by `--theme` or `RAG3WEAVER_TTY_THEME`. They are rag3weaver's theme files (`templates/themes/` of
-rag3weaver), compiled into the binary and read by rag3weaver's IDE as well. Each gives its colours
-(background, accent text, halo, muted), its three animations, a code palette and an ASCII set, and
-each is held to the same minimal contrast against its background: 4.5 for text and readable code,
-3 for what goes with it. The optional field `couleurs.prose` gives the prose a colour of its own;
-absent, the prose is in the terminal's colour, which is the case for all five themes. Fields are
-added to the theme schema, never renamed or removed, so the IDE keeps reading them.
+rag3weaver), compiled into the binary and read by rag3weaver's IDE as well. Each theme is a named
+palette in OKLCH (eight colours for each of the five: background, neutral, accent, two halo colours
+and hues) with a mode, dark or light. Its colours and its code palette are derived from it by one
+writer, rag3weaver's `scripts/themes_palettes.py`, from roles shared by every theme
+(`templates/theme-roles.json`) and the theme's own overrides. A code kind starts from the palette
+colour nearest its target hue and shifts toward it; a colour out of sRGB loses chroma at constant
+hue and lightness; every pair is held to WCAG 2 contrast against the background (4.5 for text and
+readable code, 3 for what goes with it), or the script refuses. `--check` turns red when a theme no
+longer matches its palette. The optional field `couleurs.prose` gives the prose a colour of its own;
+absent, the prose is in the terminal's colour. Fields are added to the theme schema, never renamed or
+removed, so the IDE keeps reading them.
 
 ## What it reads from the host
 
