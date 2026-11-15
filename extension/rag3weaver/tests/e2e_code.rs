@@ -980,8 +980,14 @@ fn a_new_file_added_alone_finds_what_the_folder_already_defined() {
 /// Les arêtes d'un type donné, en (nom source, nom cible), triées et dédupées.
 fn edges(cat: &mut rag3weaver::Catalog, rel: &str) -> Vec<(String, String)> {
     use rag3weaver::connection::CypherValue;
+    // Sous les générations, les deux bouts au rang lu : les lignes retirées gardent leurs arêtes, c'est
+    // leur histoire, et une lecture brute la verrait.
+    let visible = match (cat.condition_visible("a"), cat.condition_visible("b")) {
+        (Some(a), Some(b)) => format!(" WHERE {a} AND {b}"),
+        _ => String::new(),
+    };
     let rows = cat
-        .execute_raw(&format!("MATCH (a:Scope)-[:{rel}]->(b:Scope) RETURN a.name, b.name"))
+        .execute_raw(&format!("MATCH (a:Scope)-[:{rel}]->(b:Scope){visible} RETURN a.name, b.name"))
         .unwrap();
     let mut out: Vec<(String, String)> = rows
         .rows
