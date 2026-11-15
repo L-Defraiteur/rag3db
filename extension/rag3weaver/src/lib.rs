@@ -239,6 +239,8 @@ pub mod claude_code_hook;
 pub mod claude_code_transcript;
 // La requête du rappel des hooks, tirée du prompt sans modèle (3 ter).
 pub mod rappel_du_prompt;
+// Le pont navigateur : l'hôte Rust de l'extension Chrome (fork de jackwener/browsermcp, 15 nov. 2026).
+pub mod pont_navigateur;
 // La boîte de l'hôte vue d'un agent : `mail send|reply|pending|seen` et la
 // lecture du hook (docs/07-novembre-2026-hooks-claude-code/07).
 #[cfg(feature = "daemon")]
