@@ -950,7 +950,11 @@ jobs:
 
       - name: Format Rust API
         working-directory: tools/rust_api
-        run: cargo fmt --all
+        # La chaîne épinglée (rust-toolchain.toml) s'installe sans rustfmt : « 'cargo-fmt' is not installed for the
+        # toolchain '1.98.1' » (15 nov. 2026, run 43716213065).
+        run: |
+          rustup component add rustfmt
+          cargo fmt --all
 
       - name: Fail if any change is detected on the master branch
         if: github.ref == 'refs/heads/master'
