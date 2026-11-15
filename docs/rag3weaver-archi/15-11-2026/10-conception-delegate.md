@@ -58,8 +58,12 @@ atterri.
      - une ligne de sous-agent ne satisfait pas la garde de la demande du parent ;
      - un conflit rend une proposition, sans rien fusionner.
 
-## À vérifier avant le premier rouge
+## Vérifié avant le premier rouge (c7 a lu la page : d'accord)
 
-- `ouvrir_une_tache` sur le backend d'une tâche (une tâche de tâche) : le dépôt et la base de départ
-  doivent être ceux du worktree du parent, pas ceux du dépôt principal.
-- Le registre et `/ide/teammate/list` exposent `parent_task`, pour que tty trouve les enfants.
+- **Une tâche sur le backend d'une tâche** : `ouvrir_une_tache` prend tout backend hébergé pour
+  parent, donc une tâche aussi. Le dépôt et la base de départ se lisent sur ce backend : son worktree,
+  dont `git worktree add` partage le dépôt. Deux corrections, chacune avec son témoin :
+  - la branche est `agent/{nom}` (`taches.rs:634`) : une sous-tâche prend `agent/<parent>--<nom>` ;
+  - le cas n'a pas encore de témoin.
+- **`parent_task`** est écrit en dur à `null` (`daemon_host.rs:1645`) : il se tire du registre (la
+  tâche parente d'une sous-tâche), pour que tty trouve les enfants.
