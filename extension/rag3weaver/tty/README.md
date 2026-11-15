@@ -65,7 +65,8 @@ repository (the `declarations` stream) waits the same way after the mailbox: `o`
 rejects it (`POST /ide/propositions/appliquer`, `/rejeter`).
 
 Mailbox lines start with a header in the theme's accent, in French: `[équipier · réponse]`,
-`[toi · consigne]`, `[équipier · compte rendu]`, `[hôte · fini]`…
+`[toi · consigne]`, `[équipier · compte rendu]`, `[hôte · fini]`… A teammate line that carries the
+agent's `name` is headed by it: `[Algareth · compte rendu]`.
 A line received twice (once by re-reading the mailbox, once from the stream) is written once.
 The text after the header, like the model's own text, is prose: in the terminal's colour, folded
 between words, with common Markdown rendered without its marks (`#` titles in bold accent, `-`/`*`/`+`
@@ -110,7 +111,9 @@ text starting with one `/`): `/aide`, `/quitter`, `/arreter`, `/theme <name>`, `
 and theme), `/journal`, `/effacer` (clears the visible screen) and `/effacer historique`, and
 `/context` (how full the teammate's model context is, from the host's `GET /ide/chat`), and
 `/model` (the language models the task's manifest declares, the default and the task's own marked;
-`/model <name>` makes the task use one, kept with the task by the host).
+`/model <name>` makes the task use one, kept with the task by the host), and `/nom <x>` (names the
+task's agent through the host's `POST /ide/teammate/name`; `/nom -` gives it back its repository's
+name; `/nom` alone says the last name the agent's lines carried).
 
 `!<command>` runs it with `/bin/sh -c` where the terminal runs, in the task's worktree when it is on
 this machine. The screen goes to the command, on a pseudo-terminal of its own (`posix_openpt`, through

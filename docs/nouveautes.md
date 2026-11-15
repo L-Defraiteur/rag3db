@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 15 novembre2026 — `/nom <x>` dans le terminal de l'agent nomme l'agent de la tâche (`/nom -` lui rend le nom de son dépôt), et chaque ligne de l'agent porte son nom : `[Algareth · compte rendu]` au lieu de `[équipier · compte rendu]`. La route de l'hôte qui renomme une tâche ouverte arrive chez ED ; d'ici là, le terminal dit que l'hôte ne sait pas encore le faire.
+
 - 15 novembre2026 — **L'agent d'un dépôt a un nom et un personnage** : `agent: {name, persona}` au manifeste du backend. Le nom (« équipier » par défaut) est celui que l'équipier dit ; la persona est un personnage bref, ses motivations et ses goûts, techniques compris, par exemple « Tu as goût aux beaux paradigmes et aux abstractions ; tu préfères une interface claire à une astuce. » (600 caractères au plus). Elle colore le ton et peut peser sur un choix de conception, sans jamais primer sur la demande ni sur une règle. Une tâche surcharge les deux, et peut les recevoir à sa création (`POST /ide/taches {…, agent_name, agent_persona}`). Un nom vide ou sur plusieurs lignes, une persona trop longue : refusés à la lecture, en le disant.
 
 - 15 novembre2026 — Toute tâche reçoit le socle d'un agent de code, quel que soit le manifeste de son backend : lire par 200 lignes, remplacer un texte unique ou les lignes a à b, insérer, écrire un fichier neuf, chercher par motif, lancer une commande derrière la porte ; l'outil que le backend déclare sous le même nom gagne, et une tâche sans droit d'écrire n'en reçoit que la lecture.
