@@ -6020,6 +6020,11 @@ mod tests_de_l_ecrivain {
         sauver(&mut cat, &src, "b.rs", F2);
         assert_eq!(appelants(&cat, "f"), vec!["a".to_string()], "après f changé, a l'appelle toujours");
         sauver(&mut cat, &src, "a.rs", "pub fn a() -> u32 {\n    f() + 1\n}\n");
-        assert_eq!(appelants(&cat, "f"), vec!["a".to_string()], "a changé à son tour appelle le f neuf");
+        let brutes = cat
+            .conn()
+            .execute("MATCH (a:Scope)-[r:CONSUMES]->(f:Scope) RETURN a.name, a._depuis, a._jusqu_a, f.name, f._depuis, f._jusqu_a")
+            .unwrap()
+            .rows;
+        assert_eq!(appelants(&cat, "f"), vec!["a".to_string()], "a changé à son tour appelle le f neuf ; les CONSUMES bruts : {brutes:?}");
     }
 }
