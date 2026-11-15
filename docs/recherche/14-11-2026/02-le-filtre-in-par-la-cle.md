@@ -65,5 +65,18 @@ Un ticket moteur demande que le planificateur fasse cette réécriture de lui-m�
   | langage python | 1 508 ms | 910 ms |
 
   Les formes filtrées gagnent environ deux fois ; la forme sans filtre ne bouge pas sur ce jeu.
-- **La sonde d'ED** (`tests/sonde_in_par_cle.rs`, l'étape 3 attendue sous 200 ms) : sur une copie de
-  la base migrée de 1b, à jouer sous `poste mesure`. Son résultat sera ajouté ici.
+- **La sonde d'ED** (`tests/sonde_in_par_cle.rs`, branche `sonde-in-par-cle` 5b02d83ad, reprise
+  sans commit dans le worktree du lot). Jouée le 15 novembre vers 2 h 52, sous `poste mesure`, à
+  luciepc, lib 373b5477b, code de 9fd946ec3. Base : une copie neuve par reflink de
+  `1b-copie/migree-20261114-1641` (forme à versions : 79 662 racines, 72 652 versions dans
+  ScopeContent). Cinq tours après une chauffe :
+
+  | étape 3 : `_uuid IN [72 652 versions]` en offsets | médiane | max |
+  |---|---|---|
+  | avant, sur master (mesure d'ED, 14 nov.) | 5 008 ms | — |
+  | `resolve_filter_to_ids`, après le lot | **113,6 ms** | 120,2 ms |
+  | témoin : UNWIND et clé, écrits à la main | 107,2 ms | 107,7 ms |
+
+  **Verdict de la sonde : sous 200 ms.** Les deux formes rendent les mêmes 72 652 offsets. Le chemin
+  du lot coûte environ 6 ms de plus que la forme écrite à la main : c'est l'extraction du filtre et
+  sa traduction.
