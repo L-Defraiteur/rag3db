@@ -1511,3 +1511,8 @@ Hotfixs : le run 43733500502 (sur 6e94ff627, le premier run fini qui contient le
 format et shell test, les self-hosted sautés : **le premier « CI Workflow » tout vert sur master depuis le 18 octobre**. Le
 ticket de la CI, ouvert le 25 octobre, est fermé (9db8474e9). Reste le lot ci-docs-sans-run (un push de docs annule le run en
 attente), après archi.
+Codeparsers, 17 h 33 : réserve de (b) levée — sur src/ du moteur, 22 213 références perdues dont 22 177 noms de paramètres du même scope
+(voulu) et 36 accès à un membre via une variable locale ; aucune vraie référence ne part ; 696 types de paramètres gagnés.
+Arbre, 17 h 33 : répétition relancée à 17 h 32 (la première avait rougi à 0 s sur des chemins relatifs du manifeste copié, non vu
+par son attente ; corrigé, attente qui guette tout rouge) : par base, banc d'avant 8-9 s, purge (103 et 102 orphelins) + compact 8 s,
+1b en cours.
