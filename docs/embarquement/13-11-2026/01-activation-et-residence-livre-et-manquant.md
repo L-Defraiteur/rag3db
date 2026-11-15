@@ -418,3 +418,31 @@ Les témoins, tous rouges d'abord puis verts à luciepc, sous la lib 373b5477b :
 
 **Limite connue, au ticket.** Une carte qui a la place en VRAM mais calcule lentement alterne d'une
 tenue à l'autre. Le doublement de la tenue est renvoyé au lot `{activation}`.
+
+### Le vrai jeu sur card2 (15 novembre, 15 h 03, après le verdict du banc)
+
+Le jeu du groupe du 14 :
+- le gabarit de code de 73262341b, et le dépôt de 80 fichiers au pointeur f413dc63a ;
+- l'activation nommée `bge-m3` sur card2, port 7891, avec `required_mib: 11500` ;
+- `fallback: {"service": "127.0.0.1:7879"}` sur les quatre capacités ;
+- l'hôte isolé de la branche (00828f25, lib 373b5477b), sur le port 7972.
+
+Les scripts sont à luciepc, dans `~/.cache/rag3weaver-build/groupe-repli-jeu/` (`manifeste.py`,
+`mesure.py`, `mesure.out`, `journal-index.txt`).
+
+**Un écart à la demande, dit.** Quand le banc a rendu la carte, card2 avait 15 190 Mio libres, plus que les
+13 548 du réglage par défaut. Le cas joué aurait alors été celui de la carte libre, avec une seconde copie de
+bge-m3 à côté du 7879. Pour jouer la carte pleine, la marge a été relevée à `margin_mib: 4096`, soit 15 596
+requis. C'est un réglage du manifeste, le code n'a pas changé.
+
+**Résultat : VERT.**
+- **Rien de lancé sur card2** : aucun processus du fournisseur, et le 7891 ne répond jamais ;
+- **l'index en 34,1 s**, « indexation terminée ». C'est le 33,3 s de la carte calme, au lieu des 904 s du 14 ;
+- **au journal d'index** : « replié vers 127.0.0.1:7879 à 15 h 03, cause : card2 à 15190 Mio libres, 11500
+  requis + 4096 de marge ». Viennent ensuite cinq lignes de provenance, soit 2 284 morceaux par le 7879, et
+  aucun par card2 ;
+- **l'état d'index** porte `embedding.fallback` : « replié vers 127.0.0.1:7879 depuis 15 h 03, jusqu'à
+  15 h 07 au plus tôt (cause : …) — repli sans recette vérifiée ».
+
+Le créneau a été pris au « à toi » du banc, et le « fini » lui a été rendu à 15 h 04.
+
