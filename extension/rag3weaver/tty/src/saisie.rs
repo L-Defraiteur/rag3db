@@ -247,7 +247,9 @@ impl Saisie {
             if i == self.curseur {
                 pos = Some((lignes.len() - 1, w));
             }
-            lignes.last_mut().map(|l| l.push_str(g));
+            if let Some(l) = lignes.last_mut() {
+                l.push_str(g);
+            }
             w += gw;
         }
         let (ligne, colonne) = pos.unwrap_or_else(|| {

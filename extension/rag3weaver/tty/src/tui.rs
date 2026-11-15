@@ -11,7 +11,7 @@ use crate::endpoint::Endpoint;
 use crate::flux;
 use crate::journal::Journal;
 use crate::vue::{Action, Touche, Validee, Vue, HAUTEUR};
-use ratatui::crossterm::event::{self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags};
 use ratatui::widgets::{Paragraph, Widget};
 use ratatui::{TerminalOptions, Viewport};
 use serde_json::{json, Value};
@@ -85,6 +85,13 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     // sauts de ligne ne valent pas Entrée. Un terminal qui ne le connaît pas
     // ignore la demande.
     let _ = ratatui::crossterm::execute!(std::io::stdout(), EnableBracketedPaste);
+    // Maj-Entrée (tty-10) : le protocole clavier de kitty, demandé seulement à
+    // un terminal qui l'annonce. Ailleurs, rien n'est demandé, et Alt-Entrée
+    // reste le saut de ligne.
+    let maj_entree = matches!(ratatui::crossterm::terminal::supports_keyboard_enhancement(), Ok(true));
+    if maj_entree {
+        let _ = ratatui::crossterm::execute!(std::io::stdout(), PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES));
+    }
     let agent = client::agent();
     let (tx, rx) = mpsc::channel::<Msg>();
     let arret = Arc::new(AtomicBool::new(false));
@@ -166,6 +173,7 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     let mut vue = Vue::new(largeur, demande.is_some());
     vue.capacites = Capacites::du_terminal();
     vue.theme = theme;
+    vue.maj_entree = maj_entree;
     if let (true, Some(j)) = (mosh, &journal) {
         vue.repli = Some(crate::vue::Repli { phrase: "sous mosh, l'historique ne se relit pas au défilement".into(), commande: j.relecture() });
     }
@@ -174,6 +182,9 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     arret.store(true, Ordering::SeqCst);
     // La zone vivante reste à l'écran telle quelle ; le curseur passe dessous.
     let _ = terminal.draw(|f| vue.dessiner(f, f.area()));
+    if maj_entree {
+        let _ = ratatui::crossterm::execute!(std::io::stdout(), PopKeyboardEnhancementFlags);
+    }
     let _ = ratatui::crossterm::execute!(std::io::stdout(), DisableBracketedPaste);
     ratatui::restore();
     println!();
@@ -208,6 +219,12 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
         }
         if sale && derniere.elapsed() >= IMAGE {
             let colorer = |texte: &str, langue: &str| if langue.is_empty() { None } else { client::surligner(agent, ep, texte, langue) };
+            // La zone vivante à la hauteur que veut la saisie (tty-10).
+            let largeur = terminal.size().map(|s| s.width).unwrap_or(80);
+            let voulue = vue.hauteur_voulue(largeur);
+            if voulue != terminal.get_frame().area().height {
+                retailler(terminal, voulue)?;
+            }
             dessiner(terminal, vue, &colorer, journal.as_mut())?;
             sale = false;
             derniere = Instant::now();
@@ -257,6 +274,19 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
             }
         }
     }
+}
+
+/// **Change la hauteur de la zone vivante** : ratatui ne sait pas la changer
+/// une fois ouverte, alors la zone s'efface, le curseur revient à son début, et
+/// un terminal neuf s'ouvre là, à la hauteur voulue (il fait défiler l'écran
+/// s'il manque de place en bas, comme à l'ouverture).
+fn retailler(terminal: &mut ratatui::DefaultTerminal, hauteur: u16) -> Result<(), String> {
+    let zone = terminal.get_frame().area();
+    terminal.clear().map_err(|e| e.to_string())?;
+    terminal.set_cursor_position((0, zone.y)).map_err(|e| e.to_string())?;
+    let neuf = ratatui::Terminal::with_options(ratatui::backend::CrosstermBackend::new(std::io::stdout()), TerminalOptions { viewport: Viewport::Inline(hauteur) }).map_err(|e| e.to_string())?;
+    *terminal = neuf;
+    Ok(())
 }
 
 /// La touche de la vue pour une touche du terminal, ou rien.
