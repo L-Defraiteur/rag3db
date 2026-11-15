@@ -1337,3 +1337,12 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   fermée, l'histoire ne fuit pas. Ordre : le correctif (la version de l'analyse dans l'empreinte) puis une
   parité propre (base indexée par le parent lui-même, réindexation des deux côtés), copies à noms distincts
   (la copie du lot a été réécrite par le rejeu du retrait : même nom). Rien au poste avant le matin.
+- **ED, 03 h 4x — la version de l'analyse** (page 06 § 13, à coder le matin) : hash de trois parties (le commit
+  de codeparsers par build.rs ; une constante REGLES_DE_L_ANALYSE montée à la main et gardée par check_features
+  — un diff de code.rs/manifestes.rs/queries_via.rs sans montée est refusé sauf « sans effet sur l'analyse » ;
+  le gabarit de Scope et File) dans une colonne `analyse` de File ('' par défaut : une base d'avant repasse
+  une fois) ; le saut compare (content_hash, analyse). Tranché : la constante gardée, pas un hash des fichiers
+  (qui ferait repasser toutes les bases à chaque retouche) ; sa montée se dit dans les nouveautés.
+- Banc, 03 h 4x : page 02 § 6 (la copie réécrite, la règle des noms de copie par rôle, relevé et date) ; ticket
+  des 14 201 ScopeContent orphelins du chemin d'avant (pour ED : la bascule aux générations les efface de
+  fait). Rien ne tourne plus à luciepc avant le matin, hors la mesure d'embarquement à 04 h.
