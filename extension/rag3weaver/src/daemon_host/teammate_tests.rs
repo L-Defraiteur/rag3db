@@ -1387,12 +1387,18 @@ fn a_request_without_expects_waits_for_a_line_and_the_lying_step_done_is_relaunc
     assert!(!boite.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.contains("raté"))), "la relance n'est pas un pas raté : {boite:#?}");
 }
 
-/// **Toujours rien après la relance** : l'équipier attend le superviseur, sans rappeler le modèle.
+/// **Toujours rien après la relance** : l'équipier attend le superviseur, sans rappeler le modèle,
+/// au plus `teammate.reply_wait_s` ; au-delà, la demande se dit sans réponse de l'équipier et la
+/// tâche finit en échec nommé (c7, 15 novembre 2026 : un équipier muet ne suspend pas son
+/// superviseur pour toujours).
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
 #[test]
-fn still_nothing_after_the_relaunch_waits_for_the_supervisor() {
+fn still_nothing_after_the_relaunch_waits_for_the_supervisor_then_fails_by_name() {
     let d = tempfile::tempdir().unwrap();
     let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+    m["teammate"] = json!({ "reply_wait_s": 6 });
+    std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
     let appels = Arc::new(Mutex::new(0usize));
     let model: ChatModel = {
         let appels = appels.clone();
@@ -1415,6 +1421,33 @@ fn still_nothing_after_the_relaunch_waits_for_the_supervisor() {
     let vus = *appels.lock().unwrap();
     std::thread::sleep(std::time::Duration::from_secs(3));
     assert_eq!(*appels.lock().unwrap(), vus, "aucun appel au modèle pendant l'attente");
+    let boite = attendre_dans(&files, "l'échec nommé après le délai", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    let fin = boite.iter().find(|l| l["kind"] == "ended").unwrap();
+    assert!(fin["text"].as_str().unwrap_or_default().starts_with("sans réponse de l'équipier"), "l'échec est nommé : {fin}");
+    assert!(fin["text"].as_str().unwrap_or_default().contains("teammate.reply_wait_s"), "il dit le réglage : {fin}");
+}
+
+/// **Une tâche qui a écrit un fichier finit comme avant** : le travail est dans les fichiers, pas
+/// dans la boîte ; ni relance ni attente (forme B de c7, 15 novembre 2026).
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_request_whose_teammate_wrote_a_file_ends_as_before() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| match tool_results(turns).len() {
+            0 => answer(turns, opts, sink, "", calls(&[("edit_file", json!({ "path": "src/lib.rs", "old": "\"bonjour\"", "new": "\"salut\"" }))])),
+            _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "salut écrit", "remaining": "" }))])),
+        })))
+    });
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Remplace bonjour par salut.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let boite = attendre_dans(&files, "la fin", &|b| b.iter().any(|l| l["kind"] == "ended") || dit_par_l_hote(b, "relance"));
+    assert!(!dit_par_l_hote(&boite, "relance"), "un fichier écrit : pas de relance : {boite:#?}");
+    assert_eq!(boite.iter().find(|l| l["kind"] == "ended").unwrap()["text"], "fait sans plan", "{boite:#?}");
 }
 
 /// **`expects: "none"`** : une demande explicitement silencieuse finit sans ligne et sans relance.
