@@ -1009,3 +1009,21 @@ tty, 13 h 31 : tty-11 sur master à **abfe6f92e** (13 commits, 412a940a0 → abf
 « À toi » à ED pour models.llm (2b3340520), mode simple sur abfe6f92e. Ensuite G, archi (relai), 96, ED (1).
 Ticket du vocabulaire des modèles (provider/protocol → access/provider) chez ED, 5291bba8e ; le mot et l'échéance des
 alias posés à Lucie.
+tty, 13 h 39 : tty-12 (les palettes, cx-tty-12 948e28111, 3 commits ; les cinq points d'archi ; crate 82/82) prêt, placé
+après G et avant archi : ED (2) → G → tty-12 → archi (relai) → 96 → ED (1).
+
+## 13 h 46 — Lucie tranche les priorités : les défauts du cœur, et terminer les vues par couche
+
+Lucie, 13 h 46 : « les défauts du cœur restent prio, en parallèle de terminer les vues par couche ». Appliqué :
+- **cœur et hotfixs** : par gravité — perte (Note sous pool plein, COMMIT sous index vectoriel, durabilité sur faute),
+  plantage (quatre SIGSEGV), réponse fausse (index de relations, clé primaire au point de reprise, HNSW), blocages,
+  lenteur ; la bissection du CREATE 237 s continue. 55 tickets moteur ouverts au relevé de 13 h 46 (5 pertes,
+  5 plantages, 9 réponses fausses, 6 blocages, ~30 lenteur/estimation/mémoire).
+- **vues par couche** (état d'arbre : aucune recherche ne compose encore la pile ; une seule couche, `backend`) :
+  banc joue les deux parités de l'écrivain d'ED devant F 50 k ; ED : écrivain (1), puis mesure (3a)/(3a′) contre (2),
+  puis page 2a′-3 ; arbre : 2b′ (chargeur de la pile, point de composition) tout de suite sur `backend` seule, puis
+  2b-C (paramètre `view` des outils, vue courante par le contexte) avec recherche ; la bascule des bases de Lucie
+  se prépare en parallèle (copies, Gio, durée de validation à lui demander). Le vocabulaire des modèles et segment
+  passent derrière.
+- lucivy : 7 tickets ouverts, dont « une recherche filtrée ne classe pas comme sa vue » sans doute clos par 4.3.8 —
+  à fermer ; hotfixs : le ticket « CI rouge depuis le 18 octobre » périmé, la CI est verte — à fermer.
