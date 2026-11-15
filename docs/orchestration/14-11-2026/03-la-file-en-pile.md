@@ -1401,3 +1401,9 @@ ménage échouait en silence : les targets grossissaient (33 Go chez archi). Cor
 l'étiquette, un clean qui échoue le dit ; 22 677 → 4 209 Mio sur un vrai target), rouge d'abord. Place : juste après
 embarquement, avant le lot CI de hotfixs. Ordre : embarquement → G (cachedir) → CI → format → lucivy → codeparsers → archi (B) →
 tty-14/15/16 → ED (1) → G (hashes, known_red) → arbre.
+Cœur, 16 h 20 : les ×10 de DdlEveryMinute sur ee598e074 : **0 SIGSEGV sur 10** (4 sur 12 avant), 2 tours jusqu'aux comptes justes, 8
+arrêtés par le pool plein (« Cannot find property ») — les Note attendent le ticket du pool. **ALERTE** : tour 7, après un
+CHECKPOINT réussi qui suit des DDL refusés par le pool, les 20 écrivains reçoivent « Schema changed, retry: » sans fin (75 s
+jusqu'à l'arrêt) : un état du catalogue pris pour « changé » à jamais, possiblement le lot du verrou de schéma (101ff50a6, sur
+master). Sonde hors dépôt (P1–P4) en cours, verdict dans 20 min ; si c'est le lot, correctif devant la fenêtre de formatage.
+Les hôtes de Lucie sont sur 373b5477b : non exposés.
