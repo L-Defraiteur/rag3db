@@ -626,6 +626,9 @@ path = "tests/sonde_liste_analyse.rs"
 name = "sonde_marques"
 path = "tests/sonde_marques.rs"
 [[test]]
+name = "sonde_marque_nom"
+path = "tests/sonde_marque_nom.rs"
+[[test]]
 name = "sonde_morceaux_vides"
 path = "tests/sonde_morceaux_vides.rs"
 [[test]]

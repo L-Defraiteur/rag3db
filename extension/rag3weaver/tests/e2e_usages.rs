@@ -872,7 +872,15 @@ fn marques_vers(cat: &Catalog, de: &str, vers: &str) -> Vec<String> {
     let r = cat
         .execute_raw(&format!("MATCH (a:Scope {{name: '{de}'}})-[c:CONSUMES]->(b:Scope {{name: '{vers}'}}) RETURN c.resolution"))
         .unwrap();
-    r.rows.iter().map(|x| x[0].as_str().unwrap_or("").to_string()).collect()
+    let marques: Vec<String> = r.rows.iter().map(|x| x[0].as_str().unwrap_or("").to_string()).collect();
+    if !marques.is_empty() {
+        // Ce que le rendez-vous portait : de quoi lire pourquoi le nom seul a conclu.
+        let m = cat
+            .execute_raw(&format!("MATCH (a:Scope {{name: '{de}'}})-[m:MENTIONS]->(s:Symbol {{name: '{vers}'}}) RETURN m.qualifier_types, m.import_modules, m.self_types, m.deferred, m.untyped_receiver"))
+            .unwrap();
+        eprintln!("rendez-vous {de} → {vers} : {:?}", m.rows);
+    }
+    marques
 }
 
 /// **Un appel de méthode standard ne se relie pas par le nom à un homonyme** (ticket du 7 novembre,
