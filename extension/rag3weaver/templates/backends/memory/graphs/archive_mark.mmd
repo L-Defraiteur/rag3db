@@ -2,7 +2,7 @@
 %% description: Marque une section longue pour le découpage (archive, param segment_over) : la section telle quelle, avec `long` vrai si son texte dépasse segment_over caractères (0 : jamais).
 %% param: element json! -- La section.
 %% param: segment_over int = 0 -- Le seuil en caractères ; 0 : éteint.
-%% result: marque.result
+%% result: mark.result
 
 graph LR
-    marque["RhaiNode(script='let s = input.section; s.long = input.segment_over > 0 && s.text != () && s.text.len() > input.segment_over; s', inputs='section,segment_over', section=$element, segment_over=$segment_over)"]
+    mark["RhaiNode(script='let s = input.section; s.long = input.segment_over > 0 && s.text != () && s.text.len() > input.segment_over; s', inputs='section,segment_over', section=$element, segment_over=$segment_over)"]

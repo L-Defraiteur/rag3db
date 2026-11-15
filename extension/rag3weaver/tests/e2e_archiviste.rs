@@ -673,16 +673,16 @@ fn le_titre_du_contexte_se_regle_et_son_defaut_ne_change_pas() {
 }
 
 /// Une réponse texte du faux serveur (un modèle qui rend du contenu libre, JSON ou non).
-fn texte_rendu(contenu: &str) -> Reply {
+fn text_reply(content: &str) -> Reply {
     Reply::Sse {
         frames: vec![
-            json!({"id": "a1", "choices": [{"index": 0, "delta": {"role": "assistant", "content": contenu}, "finish_reason": null}]}).to_string(),
+            json!({"id": "a1", "choices": [{"index": 0, "delta": {"role": "assistant", "content": content}, "finish_reason": null}]}).to_string(),
             r#"{"id":"a1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#.into(),
         ],
     }
 }
 
-const TOUR_LONG: &str = "# Un tour\n\n## turns 5-5\n\nPARAUN la reprise du journal relit chaque enregistrement.\n\nPARADEUX le WAL se rejoue avant toute écriture.\n\nPARATROIS le compositeur figeait à cent pour cent.\n\nPARAQUATRE à soixante-dix pour cent l’écran reste utilisable.\n\nPARACINQ le banc mesure le cache de Vertex.\n\nPARASIX la première fenêtre se lit avant de dépenser.\n";
+const LONG_TURN: &str = "# Un tour\n\n## turns 5-5\n\nPARAUN la reprise du journal relit chaque enregistrement.\n\nPARADEUX le WAL se rejoue avant toute écriture.\n\nPARATROIS le compositeur figeait à cent pour cent.\n\nPARAQUATRE à soixante-dix pour cent l’écran reste utilisable.\n\nPARACINQ le banc mesure le cache de Vertex.\n\nPARASIX la première fenêtre se lit avant de dépenser.\n";
 
 /// **Une section longue est découpée en sujets avant le Decide** (`segment_over`, 15 novembre 2026) :
 /// le modèle rend ses sujets par paragraphes numérotés (`response_schema`), chaque sujet devient une
@@ -690,9 +690,9 @@ const TOUR_LONG: &str = "# Un tour\n\n## turns 5-5\n\nPARAUN la reprise du journ
 /// défaut (`segment_over` 0) : les autres témoins de cette suite le gardent.
 #[test]
 #[ignore]
-fn une_section_longue_est_decoupee_en_sujets_puis_rangee_sujet_par_sujet() {
+fn a_long_section_is_split_into_topics_then_filed_topic_by_topic() {
     let serveur = FakeServer::start_sequence(vec![
-        texte_rendu(r#"{"sujets": [{"titre": "la reprise", "de": 1, "a": 2}, {"titre": "le compositeur", "de": 3, "a": 4}, {"titre": "le cache", "de": 5, "a": 6}]}"#),
+        text_reply(r#"{"topics": [{"title": "la reprise", "from": 1, "to": 2}, {"title": "le compositeur", "from": 3, "to": 4}, {"title": "le cache", "from": 5, "to": 6}]}"#),
         etiquette_decrite("create", "La reprise du journal", "Comment le moteur rejoue son journal à l’ouverture."),
         etiquette_decrite("create", "Le compositeur du portable", "Le compositeur de l’écran du portable et son rapport cyclique."),
         etiquette_decrite("create", "Le cache de Vertex", "Ce que le cache de Vertex sert sur une fenêtre du banc."),
@@ -702,11 +702,11 @@ fn une_section_longue_est_decoupee_en_sujets_puis_rangee_sujet_par_sujet() {
     let b = ouvrir(dir.path(), |m| {
         m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
     });
-    let r = appel(&b, "archive", json!({"titre": "Un tour", "contenu": TOUR_LONG, "jour": "2026-11-15", "allow_create": true, "segment_over": 200}));
+    let r = appel(&b, "archive", json!({"titre": "Un tour", "contenu": LONG_TURN, "jour": "2026-11-15", "allow_create": true, "segment_over": 200}));
     assert_eq!(r["result"]["errors"], json!([]), "{r}");
     // Le découpage a demandé ses sujets sous un schéma, sur les paragraphes numérotés.
     let premiere: Value = serde_json::from_str(&serveur.request.recv().unwrap()).unwrap();
-    assert!(premiere["response_format"]["json_schema"]["schema"]["properties"]["sujets"].is_object(), "le découpage demande un schéma : {}", premiere["response_format"]);
+    assert!(premiere["response_format"]["json_schema"]["schema"]["properties"]["topics"].is_object(), "le découpage demande un schéma : {}", premiere["response_format"]);
     assert!(premiere["messages"].to_string().contains("[3]"), "les paragraphes sont numérotés : {}", premiere["messages"]);
     for (fiche, section, dedans, dehors) in [
         ("La reprise du journal", "turns 5-5 §1-2", "PARADEUX", "PARATROIS"),
@@ -725,14 +725,14 @@ fn une_section_longue_est_decoupee_en_sujets_puis_rangee_sujet_par_sujet() {
 /// l'erreur nomme response_schema ; l'archiviste ne devine pas des sujets dans une phrase.
 #[test]
 #[ignore]
-fn un_decoupage_qui_n_est_pas_du_json_est_refuse_en_le_nommant() {
-    let serveur = FakeServer::start_sequence(vec![texte_rendu("Voici les sujets : la reprise, le compositeur, le cache.")]);
+fn a_split_that_is_not_json_is_refused_by_name() {
+    let serveur = FakeServer::start_sequence(vec![text_reply("Voici les sujets : la reprise, le compositeur, le cache.")]);
     let adresse = serveur.url.clone();
     let dir = tempfile::tempdir().expect("dossier");
     let b = ouvrir(dir.path(), |m| {
         m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
     });
-    let r = b.call("archive", json!({"titre": "Un tour", "contenu": TOUR_LONG, "jour": "2026-11-15", "allow_create": true, "segment_over": 200}));
+    let r = b.call("archive", json!({"titre": "Un tour", "contenu": LONG_TURN, "jour": "2026-11-15", "allow_create": true, "segment_over": 200}));
     let dit = match r { Ok(v) => v.to_string(), Err(e) => e.to_string() };
     assert!(dit.contains("response_schema"), "le refus nomme response_schema : {dit}");
     assert!(apports_de(&b, "la reprise").is_empty(), "rien n'est rangé");

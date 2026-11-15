@@ -540,7 +540,7 @@ impl Node for ForEachNode {
         let porte = std::sync::Mutex::new(self.carry.as_ref().map(|c| self.args.get(c).cloned().unwrap_or(Value::Null)));
         // `when` : qui est joué, qui passe tel quel, qui n'a pas le champ (dit au rapport).
         let mut when_missing: Vec<usize> = Vec::new();
-        let joue: Vec<bool> = elements
+        let played: Vec<bool> = elements
             .iter()
             .enumerate()
             .map(|(i, e)| match &self.when {
@@ -559,7 +559,7 @@ impl Node for ForEachNode {
             ctx.info(&format!("{qui} : {} élément(s) sans le champ « {} » passent tels quels : {:?}", when_missing.len(), self.when.as_deref().unwrap_or(""), when_missing));
         }
         let appel = |i: usize, e: &Value| -> Result<PortValue, String> {
-            if !joue[i] {
+            if !played[i] {
                 return Ok(PortValue::new(e.clone()));
             }
             if let Some(m) = champs_manquants(&self.outil, &self.element, e) {
@@ -830,7 +830,7 @@ mod tests {
     }
 
     /// Joue `ForEachNode` sur `elements` avec un graphe cité donné ; rend le journal, le rapport, ou l'échec.
-    fn jouer_le(mermaid: &str, elements: Vec<Value>, config: Value) -> (Vec<String>, Result<Value, String>) {
+    fn run_with_graph(mermaid: &str, elements: Vec<Value>, config: Value) -> (Vec<String>, Result<Value, String>) {
         let reg = registre();
         let sous = RegistreDesSousGraphes::default();
         sous.poser(&reg);
@@ -859,7 +859,7 @@ mod tests {
         (lignes, rapport)
     }
 
-    fn recus(journal: &[String]) -> Vec<String> {
+    fn received(journal: &[String]) -> Vec<String> {
         journal.iter().filter_map(|l| l.strip_prefix("reçu ").map(str::to_string)).collect()
     }
 
@@ -868,40 +868,40 @@ mod tests {
     /// place**. Un élément sans le champ passe aussi, et le rapport le dit (`when_missing`) : pas
     /// d'erreur, pas de saut silencieux.
     #[test]
-    fn when_ne_joue_que_les_elements_marques_et_laisse_les_autres_a_leur_place() {
+    fn when_runs_only_marked_elements_and_keeps_the_others_in_place() {
         let elements = vec![
             json!({"title": "a", "echoue": false, "long": true}),
             json!({"title": "b", "echoue": false, "long": false}),
             json!({"title": "c", "echoue": false}),
             json!({"title": "d", "echoue": false, "long": true}),
         ];
-        let (journal, rapport) = jouer_le(SECTION, elements.clone(), json!({"when": "long"}));
+        let (journal, rapport) = run_with_graph(SECTION, elements.clone(), json!({"when": "long"}));
         let rapport = rapport.unwrap();
         let ecrits: Vec<&String> = journal.iter().filter(|l| l.starts_with("écrit")).collect();
         assert_eq!(ecrits, ["écrit a", "écrit d"], "seuls les marqués sont joués : {journal:?}");
-        assert_eq!(recus(&journal), vec!["rendu a".to_string(), elements[1].to_string(), elements[2].to_string(), "rendu d".to_string()],
+        assert_eq!(received(&journal), vec!["rendu a".to_string(), elements[1].to_string(), elements[2].to_string(), "rendu d".to_string()],
             "les autres passent tels quels, à leur place");
         assert_eq!(rapport["when_missing"], json!([2]), "l'élément sans le champ est dit : {rapport}");
         assert_eq!((rapport["elements"].as_u64(), rapport["ok"].as_u64()), (Some(4), Some(4)), "{rapport}");
     }
 
-    const LISTE: &str = "%% tool: liste\n%% description: une liste par élément\n%% param: element json! -- l'élément\n%% result: r.result\n\ngraph LR\n    r[\"RhaiNode(script='if input.element.vide { [] } else if input.element.seul { input.element.title } else { [input.element.title + `-a`, input.element.title + `-b`] }', inputs='element', element=$element)\"]\n";
+    const LIST_GRAPH: &str = "%% tool: liste\n%% description: une liste par élément\n%% param: element json! -- l'élément\n%% result: r.result\n\ngraph LR\n    r[\"RhaiNode(script='if input.element.vide { [] } else if input.element.seul { input.element.title } else { [input.element.title + `-a`, input.element.title + `-b`] }', inputs='element', element=$element)\"]\n";
 
     /// **`flatten=true`** : un résultat qui est une liste est épissé dans le flux, l'ordre gardé ; un
     /// résultat qui n'en est pas une reste à sa place ; une liste vide retire l'élément, et le rapport
     /// le dit (`dropped`) : c'est le seul cas où le flux rétrécit. `list` est le flux tel qu'émis.
     #[test]
-    fn flatten_episse_les_listes_dans_l_ordre_et_dit_ce_qui_est_retire() {
+    fn flatten_splices_lists_in_order_and_reports_what_is_dropped() {
         let elements = vec![
             json!({"title": "x", "vide": false, "seul": false}),
             json!({"title": "y", "vide": false, "seul": true}),
             json!({"title": "z", "vide": true, "seul": false}),
             json!({"title": "w", "vide": false, "seul": false}),
         ];
-        let (journal, rapport) = jouer_le(LISTE, elements, json!({"flatten": true}));
+        let (journal, rapport) = run_with_graph(LIST_GRAPH, elements, json!({"flatten": true}));
         let rapport = rapport.unwrap();
         let attendu = vec!["\"x-a\"", "\"x-b\"", "\"y\"", "\"w-a\"", "\"w-b\""];
-        assert_eq!(recus(&journal), attendu, "l'ordre des éléments, chaque liste épissée à sa place");
+        assert_eq!(received(&journal), attendu, "l'ordre des éléments, chaque liste épissée à sa place");
         assert_eq!(rapport["dropped"], json!([2]), "la liste vide retire l'élément, dit : {rapport}");
         assert_eq!(rapport["_list"], json!(["x-a", "x-b", "y", "w-a", "w-b"]), "list est le flux émis : {rapport}");
     }
@@ -909,23 +909,23 @@ mod tests {
     /// `when` et `flatten` ensemble, le cas du segment : les marqués sont découpés et épissés, les
     /// autres passent entiers, et l'ordre du document est gardé.
     #[test]
-    fn when_et_flatten_ensemble_gardent_l_ordre_du_document() {
+    fn when_and_flatten_together_keep_the_document_order() {
         let elements = vec![
             json!({"title": "p", "vide": false, "seul": false, "long": false}),
             json!({"title": "q", "vide": false, "seul": false, "long": true}),
             json!({"title": "r", "vide": false, "seul": false, "long": false}),
         ];
-        let (journal, rapport) = jouer_le(LISTE, elements.clone(), json!({"when": "long", "flatten": true}));
+        let (journal, rapport) = run_with_graph(LIST_GRAPH, elements.clone(), json!({"when": "long", "flatten": true}));
         rapport.unwrap();
-        assert_eq!(recus(&journal), vec![elements[0].to_string(), "\"q-a\"".into(), "\"q-b\"".into(), elements[2].to_string()]);
+        assert_eq!(received(&journal), vec![elements[0].to_string(), "\"q-a\"".into(), "\"q-b\"".into(), elements[2].to_string()]);
     }
 
     /// `when` et `flatten` mal typés sont refusés à la création, en les nommant.
     #[test]
-    fn when_et_flatten_mal_types_sont_refuses() {
-        let (_, r) = jouer_le(SECTION, vec![], json!({"when": 3}));
+    fn when_and_flatten_of_the_wrong_type_are_refused() {
+        let (_, r) = run_with_graph(SECTION, vec![], json!({"when": 3}));
         assert!(r.unwrap_err().contains("when"));
-        let (_, r) = jouer_le(SECTION, vec![], json!({"flatten": "oui"}));
+        let (_, r) = run_with_graph(SECTION, vec![], json!({"flatten": "oui"}));
         assert!(r.unwrap_err().contains("flatten"));
     }
 
