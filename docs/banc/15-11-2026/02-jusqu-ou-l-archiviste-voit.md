@@ -263,3 +263,37 @@ que chaque décision voit en contexte.
   mesure reprend quand le lot de la session mémoire découpera la Source longue dans le gabarit
   memory (`query_chars`, en pile derrière `usage`), sur le même corpus et avec les mêmes variantes :
   F à 25 %, puis S, puis 300 k.
+
+## 8. La reprise sur 0653a6aeff, et ses trois faux départs (15 et 16 novembre)
+
+**La cause de l'arrêt est levée** (session mémoire et embarquement) : la Source n'est pas embarquée
+(`signals: ["bm25"]`), et les L1 sont découpés à l'écriture (1 500 caractères, 200 de
+chevauchement). Le texte de 8 006 jetons était la requête de la recherche des candidates, la section
+entière. Trois plafonds sont maintenant posés :
+- `query_chars`, 4 000 caractères, dans le gabarit memory ;
+- `query_max_chars`, 6 000 caractères, sur toute requête embarquée, dans l'hôte ;
+- dans le service lui-même : un texte de plus de 12 000 caractères y est refusé par un 413 nommé.
+
+La reprise tourne sous un veilleur, qui arrête tout au premier refus de réservation ou au premier
+redémarrage du 7879.
+
+**Trois faux départs, tous de mon fait** :
+1. **20 h 38** : dans la boucle qui somme l'usage, j'ai réutilisé le nom `k`, celui de l'indice de
+   fenêtre. Chaque passe a planté dès sa première décision (`TypeError`), et le script a enchaîné les
+   quatre passes sans rien faire en 26 secondes, puis il a écrit « FIN-REPRISE ».
+2. **20 h 49** : la garde ajoutée pour l'éviter (une passe sans ses 244 décisions arrête la reprise)
+   lisait le nom de la passe dans le mauvais argument. Je l'ai vu en relisant, et la reprise a été
+   arrêtée et relancée avant toute décision.
+3. **20 h 49 à 0 h 04** : `rsync` a recopié le script sans son droit d'exécution, puisqu'il venait
+   d'un fichier en 644 du portable. `poste lourd` l'a refusé (« Failed to execute: Permission
+   denied »). Rien n'a tourné pendant trois heures et quart, et je ne l'ai pas vu : je n'avais pas
+   relu le journal après le lancement.
+
+**Ce qui est changé** :
+- le pilote ne réutilise plus de nom de la boucle principale ;
+- la garde de la reprise compte les décisions de chaque passe ;
+- **la règle** : un lancement se relit dans la minute, journal compris, avant d'annoncer qu'il
+  tourne. Un `rsync` qui copie un script se fait suivre d'un `chmod +x`.
+
+La reprise est partie à 0 h 04 min 54 s : F 25 % par défaut, puis avec la variante de consigne, puis
+S 50, puis 300 k.
