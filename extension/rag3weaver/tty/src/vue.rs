@@ -176,6 +176,12 @@ pub struct Vue {
     pub appels: Vec<crate::outils::Appel>,
     /// Les candidats d'une complétion, dits sur la ligne du haut jusqu'à la touche suivante.
     pub propositions: Option<String>,
+    /// Montrer la plomberie de l'équipier dans l'historique (`--etapes`) : ses étapes faites, la fin
+    /// de son pas, ses appels `report`, `step_done` et `suggest`. Sinon, elle se dit en sourdine sur
+    /// la ligne du haut, et la prose à l'écran est la réponse seule (Lucie, 15 nov.).
+    pub montrer_etapes: bool,
+    /// La dernière ligne de plomberie, dite en sourdine sur la ligne du haut.
+    pub discret: Option<String>,
     /// Les lignes de boîte déjà écrites, par leur `id` : la relecture et le flux
     /// peuvent rendre la même (tty-9, vu à l'essai sous tmux).
     vues_de_boite: std::collections::HashSet<String>,
@@ -213,6 +219,8 @@ impl Vue {
             sous_tmux: false,
             appels: Vec::new(),
             propositions: None,
+            montrer_etapes: false,
+            discret: None,
             vues_de_boite: std::collections::HashSet::new(),
             bloc: None,
             boite: crate::boite::Boite::default(),
@@ -1110,6 +1118,37 @@ mod tests {
         v.ligne_de_boite(&json!({ "id": "d/t:1", "from": "supervisor", "kind": "instruction", "text": c }));
         let l: Vec<String> = v.prendre_lignes().into_iter().map(|l| l.texte).collect();
         assert_eq!(l, vec!["[toi · consigne] L'utilisateur a lancé la commande `ls` dans /tmp ; voici le retour (code 0) (la sortie, ci-dessus)"]);
+    }
+
+    /// **La prose à l'écran est la réponse seule** (Lucie, second essai du 15 nov.) : une étape
+    /// faite, la fin du pas et les appels de plomberie (`report`, `step_done`, `suggest`) ne
+    /// s'écrivent pas dans l'historique ; la dernière se dit en sourdine sur la ligne du haut. Le
+    /// compte rendu garde sa place, l'état « fini » aussi, et `--etapes` remontre tout.
+    #[test]
+    fn the_teammate_plumbing_stays_out_of_the_history_unless_asked() {
+        let fil = |v: &mut Vue| {
+            v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "report", "call_id": "c1", "arguments": "{\"text\":\"x\"}" } }));
+            v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "tool": "report", "call_id": "c1", "ok": true, "ms": 0 } }));
+            v.ligne_de_boite(&json!({ "id": "d/t:1", "from": "teammate", "kind": "report", "text": "Voici la réponse." }));
+            v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "step_done", "call_id": "c2", "arguments": "{}" } }));
+            v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "tool": "step_done", "call_id": "c2", "ok": true, "ms": 0 } }));
+            v.ligne_de_boite(&json!({ "id": "d/t:2", "from": "teammate", "kind": "step_done", "text": "fait : rapport fait au superviseur" }));
+            v.ligne_de_boite(&json!({ "id": "d/t:3", "from": "host", "kind": "ended", "text": "fait sans plan" }));
+        };
+        let mut v = Vue::new(100, true);
+        fil(&mut v);
+        let l: Vec<String> = v.prendre_lignes().into_iter().map(|l| l.texte).collect();
+        assert_eq!(l, vec!["[équipier · compte rendu] Voici la réponse."], "la réponse seule");
+        assert_eq!(v.ligne_d_etat(), "⛧ fini : fait sans plan");
+        assert_eq!(v.discret.as_deref(), Some("étape faite : rapport fait au superviseur"));
+        assert_eq!(v.appels.len(), 2, "les appels restent à Ctrl-O");
+        assert_eq!(dessin(&v, 100, 3).0[0], "étape faite : rapport fait au superviseur", "en sourdine, sur la ligne du haut");
+
+        let mut e = Vue::new(100, true);
+        e.montrer_etapes = true;
+        fil(&mut e);
+        let l: Vec<String> = e.prendre_lignes().into_iter().map(|l| l.texte).collect();
+        assert!(l.iter().any(|x| x.starts_with("» report")) && l.iter().any(|x| x.starts_with("[équipier · étape faite]")) && l.iter().any(|x| x.starts_with("[hôte · fini]")), "--etapes remontre tout : {l:?}");
     }
 
     /// Le repli (sous mosh, la commande qui relit le journal) se dit sur la
