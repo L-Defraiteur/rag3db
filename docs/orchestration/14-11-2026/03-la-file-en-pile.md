@@ -1420,3 +1420,7 @@ G, 16 h 33 : plafond-cachedir sur master à **2e11d5345** (2 commits, gmail, 0 a
 run_e2e.sh le source depuis l'arbre de chaque passe, les passes sur une base ≥ 2e11d5345 ont le ménage corrigé). « À toi » à
 hotfixs pour le lot CI (b940cefb8). Cœur : la sonde ne tranche pas (les quatre cas courts passent) ; contrôle de schéma
 instrumenté sur stderr, DdlEveryMinute jusqu'au premier tour bloqué (~1 h).
+Embarquement, 16 h 34 : la sortie muette du 7879 — une panique de calcul (réservation refusée) tue un fil sans réponse, le serveur de
+la carte reste empoisonné, les quatre fils meurent tour à tour, `servir` rend Ok et main sort par SUCCESS. Lot du 503 nommé :
+catch_unwind → 503 nommé ; après une panique, arrêt dit avec le code 70 (après avoir répondu aux requêtes en vol) ; plafond par
+texte en caractères (`max_chars_per_text`, défaut 12 000 ≈ 4 000 jetons, 413 nommé), (b) en jetons en ticket. Tranché (a).
