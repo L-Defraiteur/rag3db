@@ -254,7 +254,11 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
             };
             match action {
                 Some(Action::Quitter) => return Ok(()),
-                Some(Action::Ouvrir) => {}
+                Some(Action::Ouvrir) => {
+                    let colorer = |texte: &str, langue: &str| if langue.is_empty() { None } else { client::surligner(agent, ep, texte, langue) };
+                    visionner(vue, &colorer)?;
+                    sale = true;
+                }
                 Some(Action::Envoyer(texte, kind)) => {
                     if let Err(e) = client::poster(agent, ep, "/ide/teammate/mailbox", &json!({ "backend": tache.depot.id, "task": tache.task, "kind": kind, "text": texte })) {
                         vue.note(&format!("refusé : {e}"));
@@ -276,6 +280,39 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
             }
         }
     }
+}
+
+/// **La visionneuse, dans un écran alterné** (tty-11) : l'écran principal, son
+/// défilement et son historique restent intacts derrière, et reviennent tels
+/// quels à la fermeture. Les lignes de chaque appel se calculent une fois (la
+/// coloration passe par l'hôte).
+fn visionner(vue: &Vue, colorer: Colorer) -> Result<(), String> {
+    use ratatui::crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+    ratatui::crossterm::execute!(std::io::stdout(), EnterAlternateScreen).map_err(|e| e.to_string())?;
+    let rendu = (|| -> Result<(), String> {
+        let mut t = ratatui::Terminal::new(ratatui::backend::CrosstermBackend::new(std::io::stdout())).map_err(|e| e.to_string())?;
+        let mut v = crate::visionneuse::Visionneuse::sur_le_dernier(vue.appels.len());
+        let mut cache: std::collections::HashMap<(usize, u16), Vec<ratatui::text::Line<'static>>> = std::collections::HashMap::new();
+        loop {
+            let taille = t.size().map_err(|e| e.to_string())?;
+            let lignes = cache.entry((v.index, taille.width)).or_insert_with(|| crate::visionneuse::lignes(&vue.appels[v.index], &vue.theme, vue.capacites, taille.width as usize, colorer)).clone();
+            t.draw(|f| crate::visionneuse::dessiner(f, &v, vue.appels.len(), &lignes, &vue.theme, vue.capacites)).map_err(|e| e.to_string())?;
+            match event::read().map_err(|e| e.to_string())? {
+                Event::Key(k) if k.kind == KeyEventKind::Press => {
+                    if let Some(touche) = touche_de(k) {
+                        if !v.touche(&touche, vue.appels.len(), lignes.len(), taille.height as usize) {
+                            return Ok(());
+                        }
+                    }
+                }
+                Event::Resize(..) => t.autoresize().map_err(|e| e.to_string())?,
+                _ => {}
+            }
+        }
+    })();
+    // L'écran principal revient, quoi qu'il soit arrivé dans la visionneuse.
+    let _ = ratatui::crossterm::execute!(std::io::stdout(), LeaveAlternateScreen);
+    rendu
 }
 
 /// **Change la hauteur de la zone vivante** : ratatui ne sait pas la changer
@@ -301,6 +338,7 @@ pub fn touche_de(k: KeyEvent) -> Option<Touche> {
         KeyCode::Char('c') if ctrl => Some(Touche::CtrlC),
         KeyCode::Char('d') if ctrl => Some(Touche::CtrlD),
         KeyCode::Char('g') if ctrl => Some(Touche::CtrlG),
+        KeyCode::Char('o') if ctrl => Some(Touche::CtrlO),
         KeyCode::Char('a') if ctrl => Some(Touche::Debut),
         KeyCode::Char('e') if ctrl => Some(Touche::Fin),
         KeyCode::Char('w') if ctrl => Some(Touche::EffacerMot),
@@ -325,6 +363,8 @@ pub fn touche_de(k: KeyEvent) -> Option<Touche> {
         KeyCode::End => Some(Touche::Fin),
         KeyCode::Delete => Some(Touche::Suppr),
         KeyCode::Up => Some(Touche::Haut),
+        KeyCode::PageUp => Some(Touche::PageHaut),
+        KeyCode::PageDown => Some(Touche::PageBas),
         KeyCode::Down => Some(Touche::Bas),
         KeyCode::Esc => Some(Touche::Echap),
         _ => None,
