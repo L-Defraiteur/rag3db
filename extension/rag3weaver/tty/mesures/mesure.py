@@ -512,7 +512,8 @@ hote_demarrer()
 tunnel = subprocess.Popen(["sleep", "86400"] if LOCAL else ["ssh", "-N", "-o", "BatchMode=yes", "-L", f"{TUNNEL}:127.0.0.1:{PORT}", HOTE])
 time.sleep(1.5)
 try:
-    t = Terminal("COLORTERM=truecolor TERM=xterm-256color", "daemon")
+    # Les aperçus s'écrivent dans l'historique sous --etapes (tty-16 : sinon ils défilent dans la zone vivante).
+    t = Terminal("COLORTERM=truecolor TERM=xterm-256color", "daemon", extra="--etapes")
     if t.attendre(b"attend ton accord", borne=40) is None:
         rouge("outils : la demande d'accord ne paraît pas en 40 s")
     time.sleep(0.5)
