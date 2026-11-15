@@ -1261,3 +1261,10 @@ cause est **`embed_query`** (search.rs:968) : la recherche des candidates d'arch
 requête, en un seul texte sans plafond. Deux lots : 96, `query_chars = 4000` (titre + début de section, trace de la longueur) ;
 embarquement, le plafond défensif `query_max_chars` dans embed_query (dérivé de context_tokens, coupe dite), car toute requête
 longue d'un outil tue le 7879 pareil. Le 503 côté service à part.
+96, 15 h 19 : la passe d'`usage` a un rouge d'environnement (put_fiche : « 7980 ne répond pas », 15 h 1x = la chute du 7879 au début de
+F 25 %, ticket 531fd4639) ; rejoué seul à la fin de la passe, dit au journal. Le faux embarqueur qui note les tailles : chez
+embarquement, dans son lot du plafond d'embed_query.
+Embarquement, 15 h 20 : conception du plafond `query_max_chars` relue et acceptée : défaut fixe 6 000 caractères (~2 000 jetons, ~260 Mo
+d'attention), `context_tokens × 3` en plafond haut (un déclaré au-dessus est refusé au chargement ; le contexte dit ce que le
+modèle accepte, pas ce que la carte tient) ; une fonction avant les trois chemins (dense, dual, creux) et dans les deux nœuds,
+coupe sur un mot, avertissement dit, le plein texte garde la requête entière ; champ de `models.embed` ; six témoins rouges.
