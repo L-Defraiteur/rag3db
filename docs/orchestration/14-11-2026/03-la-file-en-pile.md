@@ -1195,3 +1195,16 @@ Banc, 15 h 02 : F à 50 k finie (244 décisions) : 14 788 793 caractères de con
 console ; temps par décision sous réserve (la passe a tourné à côté de l'index des parités sur 7879). Jugement P1/P2 de F 50
 contre N en cours, par Gemini seul. card2 donnée à embarquement. Scopes sans DEFINED_IN : 3 931 avant les versions, 3 814 après,
 parent comme écrivain — l'ingestion (constructeurs de JsonMutWrapper : seul le dernier a son lien), ticket codeparsers complété.
+Recherche, 15 h 02 : second compte (fermé 20 s) : Scope 32, File 4 — **les mêmes _node_id** ; entre les deux, 18 Scope effacés et 156 nés
+sans un orphelin de plus : **le correctif tient en service**. Ticket fermé (8b8e14ef0). Les 36 restants (nés sous fac67a208) :
+purge par /backend/maintain base ouverte, à recherche ; copies effacées, instantanés gardés jusqu'au soir. Recherche passe à 2b-C.
+Hotfixs, 15 h 03 : troisième rouge de shell test corrigé (fonction static morte, -Werror=unused-function, d65af3792) ; compile tout
+src/ sous les options exactes de la CI avec témoin avant de dire « prêt ». La purge des 36 : par la route base ouverte chez
+recherche (la route refuse si la table a bougé), pas de fenêtre ni de compact.
+Recherche, 15 h 03 : la purge des 36 attend le relevé à blanc de lucivy — le jeton de maintain ne couvre pas l'intervalle entre un graphe
+lu à 15 h et le relevé ; une place réemployée ferait une ligne sans document, la panne inverse. Le relevé à blanc lit le graphe
+sous le même jeton puis maintain purge : sans trou, base ouverte. Recherche sur 2b-C.
+Banc, 15 h 05 : F 50 k contre N, provisoire (58645ea33) : N = 78 fiches dont 9 doublons (0,115, casse), 6,2 s/décision ; F 50 k = 30 fiches,
+1 doublon (0,033), P1 0,81 (63/78 sujets, au seuil), 7,9 s/décision, 3,88 M de jetons au plafond. Le contexte ôte les doublons
+mais double les « rien » (72 contre 38) : à départager en relisant ces tours (aide ou endort). Suite : relecture du juge et des
+« rien », F 25 % et S 50, 300 k au lot usage.
