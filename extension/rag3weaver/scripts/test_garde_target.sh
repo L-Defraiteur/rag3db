@@ -154,4 +154,16 @@ sortie="$(menager_au_plafond "$P" "$ICI/neuf" 1000 2>&1)"; rc=$?
 cas $? "sous le plafond, le ménage ne fait rien et ne dit rien"
 export CARGO_TARGET_DIR="$T"
 
+# **Un target né de la garde, sans CACHEDIR.TAG** (15 novembre 2026, relevé d'archi) : cargo refusait de le nettoyer, et le
+# ménage tombait en silence. Le target naît de `garder_le_target` (mkdir puis le marqueur), comme ceux des passes.
+Q="$ICI/target-ne-de-la-garde"; export CARGO_TARGET_DIR="$Q"
+garder_le_target "$Q" "$ICI/neuf" > /dev/null 2>&1
+(cd "$ICI/neuf" && cargo build -q -p app) 2>/dev/null
+[ ! -f "$Q/CACHEDIR.TAG" ]
+cas $? "le piège existe : un target né de la garde n'a pas de CACHEDIR.TAG"
+sortie="$(menager_au_plafond "$Q" "$ICI/neuf" 1 2>&1)"; rc=$?
+[ $rc = 0 ] && echo "$sortie" | grep -q "Mio →" && [ -z "$(empreintes_locales "$Q")" ]
+cas $? "le ménage nettoie un target né de la garde (l'étiquette du cache posée), et le dit"
+export CARGO_TARGET_DIR="$T"
+
 exit $echec
