@@ -129,14 +129,18 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
                 }
             };
             let tx3 = tx.clone();
-            let r = flux::suivre_sans_fin(&ep, &["agent", "tokens", "mailbox"], depuis, &arret, &mut ouvert, |p| {
+            let principal = tache.depot.id.clone();
+            let r = flux::suivre_sans_fin(&ep, &["agent", "tokens", "mailbox", "declarations"], depuis, &arret, &mut ouvert, |p| {
                 let _ = tx3.send(Msg::Note(format!("flux coupé ({p}) : je reprends")));
             }, |t| {
                 if t.event == "lacune" {
                     let _ = tx.send(Msg::Note("lacune : le tampon de l'hôte a perdu des événements".into()));
                 } else if let Ok(v) = serde_json::from_str::<Value>(&t.data) {
+                    // Une proposition de déclarations du dépôt principal passe aussi (tty-16) : c'est
+                    // sur lui que les déclarations attendent un accord.
+                    let du_principal = v["evenement"]["kind"] == "PropositionChanged" && v["backend"].as_str() == Some(principal.as_str());
                     if let Some(f) = filtre.lock().unwrap_or_else(|p| p.into_inner()).as_deref() {
-                        if v["backend"].as_str() != Some(f) {
+                        if v["backend"].as_str() != Some(f) && !du_principal {
                             return flux::Suite::Continuer;
                         }
                     }
@@ -287,7 +291,13 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
             };
             match action {
                 Some(Action::Quitter) => return Ok(Fin::Quitter),
-                Some(Action::Proposition { .. }) => {}
+                Some(Action::Proposition { backend, id, appliquer }) => {
+                    let (route, corps) = if appliquer { ("/ide/propositions/appliquer", json!({ "backend": backend, "id": id })) } else { ("/ide/propositions/rejeter", json!({ "backend": backend, "id": id, "why": "rejetée depuis le terminal" })) };
+                    match client::poster(agent, ep, route, &corps) {
+                        Ok(_) => vue.note(&format!("proposition ⟨{id}⟩ {}", if appliquer { "appliquée" } else { "rejetée" })),
+                        Err(e) => vue.note(&format!("proposition ⟨{id}⟩ : {e}")),
+                    }
+                }
                 Some(Action::Commande(c)) => {
                     if let Some(fin) = executer(c, terminal, vue, agent, ep, tache, journal)? {
                         return Ok(fin);
