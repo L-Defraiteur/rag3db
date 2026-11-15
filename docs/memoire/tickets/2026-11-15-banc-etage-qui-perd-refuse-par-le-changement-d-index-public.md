@@ -1,8 +1,8 @@
 # `banc_etage_qui_perd` tombe à son installation : changement d'index public refusé
 
 - **État** : ouvert, le 15 novembre 2026.
-- **Famille** : témoin (banc e2e). Ce n'est pas un défaut du produit : c'est la règle du catalogue qui
-  a raison, et le banc qui ne la suit pas.
+- **Famille** : produit. Le défaut est dans un banc e2e du crate, pas dans le catalogue : c'est la
+  règle du catalogue qui a raison, et le banc qui ne la suit pas.
 - **Gravité** : un banc de la batterie est rouge sur master à chaque passe qui le joue. Il est rouge
   depuis le 11 novembre 2026 au plus tard.
 - **Atteignable en service** : non. Le banc réenregistre lui-même une entité peuplée avec d'autres
