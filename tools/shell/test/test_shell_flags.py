@@ -427,7 +427,7 @@ def test_mode(temp_db, flag) -> None:
         .statement('RETURN "Databases Rule" AS a, "rag3db is cool" AS b;')
     )
     result = test.run()
-    result.check_stdout("| a              | b            |")
+    result.check_stdout("| a              | b              |")
     result.check_stdout("| Databases Rule | rag3db is cool |")
 
     # test table mode
@@ -439,7 +439,7 @@ def test_mode(temp_db, flag) -> None:
         .statement('RETURN "Databases Rule" AS a, "rag3db is cool" AS b;')
     )
     result = test.run()
-    result.check_stdout("| a              | b            |")
+    result.check_stdout("| a              | b              |")
     result.check_stdout("| Databases Rule | rag3db is cool |")
 
     # test tsv mode
