@@ -933,3 +933,11 @@ que sous `--poser-courant`, run_e2e.sh joue la lib qu'il bâtit par son identifi
 8 OK / 2 FAIL d'avant). rag3db_libs.py du cache de luciepc était une vieille copie du dépôt, recopiée
 (e2e73d283ad9441f) ; il ne reste que lib_seule.sh sans dépôt. Le binaire du matin 26a091474 sur 373b5477b
 (md5 56e3fd3f) est prêt, verdict 36/27/20. **La file est vide.**
+
+**06 h 5x — un lot du cœur avant le matin** : le planificateur (A) de l'IN (in-cle-planifiee 0ebcd9e2e : un IN
+sur la clé primaire, liste littérale ou paramètre, devient PRIMARY_KEY_SCAN sans FILTER ; ordre de la liste
+rendu tel quel ; 10 clés sur 200 000 lignes 10,4 → 0,16 ms ; planner_tests 12, e2e_test 1 867 verts) ; base =
+master, « à toi ». ABI : membres de classes internes, à la prochaine bascule.
+
+**06 h 5x — soixante-cinq atterris** : le planificateur (A) de l'IN (le cœur, 7897f2453, mode simple sur master,
+C++ seul). La lib suivante portera l'IN haché, le pliage, le point de faute des deux sens et l'IN planifié.

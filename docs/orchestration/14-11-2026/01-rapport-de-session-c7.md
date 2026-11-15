@@ -1384,3 +1384,16 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   partagé » ne vaut que pour le refus entre les deux sens ; mécanisme à lire (rollbackGroupCollectionInsert,
   updateRelOffsets), ticket 244e2551e ; master vert. Suite : ce mécanisme, puis le planificateur (A) de l'IN ;
   le dictionnaire sous ASan la nuit prochaine.
+- Le cœur, 06 h 4x : la perte des deux côtés **localisée** (sonde à cinq cas sous f41c0ba5b : perdue avec ou
+  sans groupe partagé, lisible si B valide après l'annulation, dans une autre table, ou crée un nœud) — un état
+  commun à la table de relations partagée, défait par l'annulation hors du verrou après le COMMIT de B ;
+  suspects reserveRelOffsets/nextRelOffset et rollbackGroupCollectionInsert, non prouvés ; master couvre,
+  témoin BothDirectionsKeepTheRelationsOfAnotherWriter. Arrêt là, au planificateur (A).
+- Le cœur, 06 h 4x : conception du planificateur (A) de l'IN (page 01 du 15-11 du cœur) — LIST_CONTAINS(liste
+  constante, n.pk) sur une table devient un PRIMARY_KEY_SCAN à clé liste ; une évaluation de la liste, NULL
+  sautés, un nœud au plus une fois dans l'ordre de la liste ; témoin : le plan sans FILTER, 10 clés sur
+  200 000 lignes ≤ 3 × UNWIND. Gardes : pk et liste constante seulement, type différent → FILTER gardé ; clé
+  absente et doublons au témoin. Validé.
+- **06 h 45 — soixante-cinq atterris** : le planificateur (A) de l'IN (le cœur, 7897f2453). Le cœur passe à
+  l'ADD COLUMN sous une écriture ouverte (ticket d'hotfixs), conception d'abord ; le dictionnaire sous ASan la
+  nuit prochaine.
