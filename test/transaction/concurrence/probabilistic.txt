@@ -104,3 +104,12 @@ VectorIndexCreateInMemory.ChangesCommittedDuringACreateAreSeen
 # 2026-11-08-un-temoin-de-temps-du-banc-rougit-sous-charge (une horloge injectée, ou une borne qui
 # tient compte de la charge) ; le banc entier rejoué sous charge basse le fermera ou non.
 LockBench.AutoCheckpointIsNotPostponedForeverUnderWritersWithoutAGap
+#
+# Le scénario des vingt écrivains, la passe de six minutes (cas long, long.txt). Rouge connu pour
+# le pool qui saturait jusqu'au 15 novembre 2026 (une version de mise à jour née à 2 048 lignes
+# pour une seule changée) ; corrigé, il est vert 9 tours sur 10 (comptes justes 10 sur 10, pic du
+# pool de 2 000 à 331-445 Mio). Le dixième rougit sur create-rel-table-holds-writers-at-most-its-
+# duration, un intermittent d'avant (5 journaux sur 50 du 15 novembre ; ticket
+# docs/coeur-cpp/tickets/2026-11-16-un-create-rel-table-retient-un-ecrivain-au-dela-de-sa-duree.md).
+# Il revient à la comparaison quand ce ticket est fermé.
+TwentyWriters.DdlEveryMinute
