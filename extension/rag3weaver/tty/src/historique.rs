@@ -17,19 +17,72 @@ pub fn chemin() -> Option<PathBuf> {
 }
 
 /// Les envois gardés, du plus ancien au plus récent ; rien si le fichier manque.
-pub fn charger(_chemin: &Path) -> Vec<String> {
-    Vec::new()
+pub fn charger(chemin: &Path) -> Vec<String> {
+    let Ok(texte) = std::fs::read_to_string(chemin) else { return Vec::new() };
+    let tout: Vec<String> = texte.lines().filter_map(|l| serde_json::from_str::<String>(l).ok()).collect();
+    let debut = tout.len().saturating_sub(GARDE);
+    tout[debut..].to_vec()
 }
 
 /// Ajoute un envoi (un envoi vide ou pareil au dernier ne s'ajoute pas), et
 /// réécrit le fichier quand il dépasse deux fois [`GARDE`].
-pub fn ajouter(_chemin: &Path, _envoi: &str) -> Result<(), String> {
-    Ok(())
+pub fn ajouter(chemin: &Path, envoi: &str) -> Result<(), String> {
+    use std::io::Write;
+    if envoi.trim().is_empty() {
+        return Ok(());
+    }
+    let lignes = std::fs::read_to_string(chemin).unwrap_or_default();
+    if lignes.lines().last().and_then(|l| serde_json::from_str::<String>(l).ok()).as_deref() == Some(envoi) {
+        return Ok(());
+    }
+    if let Some(d) = chemin.parent().filter(|d| !d.as_os_str().is_empty()) {
+        std::fs::create_dir_all(d).map_err(|e| format!("le dossier de l'historique {} : {e}", d.display()))?;
+    }
+    let ligne = serde_json::to_string(envoi).map_err(|e| e.to_string())?;
+    if lignes.lines().count() >= 2 * GARDE {
+        let mut garde = charger(chemin);
+        garde.push(envoi.to_string());
+        let debut = garde.len().saturating_sub(GARDE);
+        let tout: String = garde[debut..].iter().filter_map(|e| serde_json::to_string(e).ok()).map(|l| l + "\n").collect();
+        ecrire_a_soi(chemin, tout.as_bytes(), false)
+    } else {
+        ecrire_a_soi(chemin, format!("{ligne}\n").as_bytes(), true)
+    }
+    .and_then(|mut f| f.flush().map_err(|e| e.to_string()))
+}
+
+/// Ouvre le fichier en écriture (en ajout ou en le vidant), lisible par soi seul sous Unix.
+fn ecrire_a_soi(chemin: &Path, octets: &[u8], ajout: bool) -> Result<std::fs::File, String> {
+    use std::io::Write;
+    let mut o = std::fs::OpenOptions::new();
+    o.create(true).write(true);
+    if ajout {
+        o.append(true);
+    } else {
+        o.truncate(true);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        o.mode(0o600);
+    }
+    let mut f = o.open(chemin).map_err(|e| format!("l'historique {} : {e}", chemin.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(chemin, std::fs::Permissions::from_mode(0o600));
+    }
+    f.write_all(octets).map_err(|e| e.to_string())?;
+    Ok(f)
 }
 
 /// Supprime l'historique.
-pub fn effacer(_chemin: &Path) -> Result<(), String> {
-    Ok(())
+pub fn effacer(chemin: &Path) -> Result<(), String> {
+    match std::fs::remove_file(chemin) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("l'historique {} : {e}", chemin.display())),
+    }
 }
 
 #[cfg(test)]
