@@ -126,9 +126,29 @@ fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
         let mut cat = backend.catalog.lock().unwrap();
         let r = cat.publier_la_generation(&format!("banc-{etape}"), 0);
         eprintln!("[orphelins] publication après {etape} : {r:?} ; rang publié {:?}, en attente {:?}", cat.rang_publie(), cat.rang_en_attente());
-        json!(format!("{r:?}"))
+        json!({"resultat": format!("{r:?}"), "rang": r.as_ref().ok()})
     };
     // </publication>
+    // <au_rang>
+    // **Les Symbol visibles au rang n** (la lecture d'everything declarative, 15 nov.) : un Symbol n'a
+    // pas de colonnes de visibilité ; il est visible à n s'il a une relation vers un Scope visible à
+    // n. La condition porte sur le Scope, sous `au_rang`, par le catalogue (aucun appel d'outil ne lit
+    // un rang aujourd'hui).
+    let visibles_au_rang = |n: i64, uuids: &[String]| -> Value {
+        let liste = uuids.iter().map(|u| format!("'{u}'")).collect::<Vec<_>>().join(", ");
+        let mut cat = backend.catalog.lock().unwrap();
+        cat.au_rang(n, |c| {
+            let Some(p) = c.dialect_arc().condition_visible_sur("s", rag3weaver::code::COUCHE_DU_BACKEND, n) else {
+                return json!("refus : pas de condition de visibilité");
+            };
+            let q = format!("MATCH (s:Symbol)<-[r]-(x:Scope) WHERE s._uuid IN [{liste}] AND {} RETURN s.name, type(r), x.file_path, x.start_line", p.replace("s.", "x."));
+            match c.conn().execute(&q) {
+                Ok(r) => json!(r.rows.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>()),
+                Err(e) => json!(format!("refus : {e} ; requête {q}")),
+            }
+        })
+    };
+    // </au_rang>
     // Les lignes du fichier retiré lui-même, par table : un fichier effacé ne doit plus rien porter.
     let nom_retire = retirer.to_string_lossy().to_string();
     let du_fichier = |etape: &str| -> Value {
@@ -242,9 +262,25 @@ fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
     let sans = comptes("après l'index sans le fichier");
     let fichier_apres = du_fichier("après l'index sans le fichier");
     let symb_apres = symboles_apres(&exclusifs);
+    let (remise, visibilites) = if generations {
+        let fin3 = indexer("après la remise");
+        let pub3 = publier("après la remise");
+        let fichier_remis = du_fichier("après la remise");
+        let mut vis = serde_json::Map::new();
+        for (nom, p) in [("avant le retrait", &pub1), ("au retrait", &pub2), ("après la remise", &pub3)] {
+            if let Some(n) = p["rang"].as_i64() {
+                let v = visibles_au_rang(n, &exclusifs);
+                eprintln!("[orphelins] Symbol exclusifs visibles au rang {n} ({nom}) : {v}");
+                vis.insert(nom.to_string(), json!({"rang": n, "relations": v}));
+            }
+        }
+        (json!({"fin_index": fin3, "publication": pub3, "fichier": fichier_remis}), Value::Object(vis))
+    } else {
+        (Value::Null, Value::Null)
+    };
     let doc = json!({"base": base.to_string_lossy(), "racine": racine, "retire": retirer.to_string_lossy(),
                      "ouverture": ouverture, "apres_source_entiere": entiere, "apres_effacement": sans, "fichier_retire_avant": fichier_avant, "fichier_retire_apres": fichier_apres,
-                     "symboles_avant": symb_avant, "symboles_apres": symb_apres, "publications": [pub1, pub2],
+                     "symboles_avant": symb_avant, "symboles_apres": symb_apres, "publications": [pub1, pub2], "remise": remise, "visibilites_des_symboles": visibilites,
                      "fin_index_source_entiere": fin1, "fin_index_effacement": fin2});
     std::fs::write(&sortie, serde_json::to_string_pretty(&doc).unwrap()).expect("écrire le relevé");
     eprintln!("[orphelins] relevé écrit : {}", sortie.to_string_lossy());
