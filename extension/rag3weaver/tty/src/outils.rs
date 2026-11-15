@@ -45,7 +45,10 @@ impl Appel {
 
     /// Le fichier (ou le motif) que vise l'appel.
     pub fn cible(&self) -> Option<String> {
-        ["path", "file_path", "pattern", "query", "path_prefix"].iter().find_map(|k| self.arguments[k].as_str().filter(|v| !v.is_empty()).map(str::to_string))
+        // `command` : la ligne d'un run_command, sur sa première ligne ; `name` : le symbole d'usages, impact, callees.
+        ["path", "file_path", "pattern", "query", "path_prefix", "command", "name"]
+            .iter()
+            .find_map(|k| self.arguments[k].as_str().map(|v| v.lines().next().unwrap_or_default().trim()).filter(|v| !v.is_empty()).map(str::to_string))
     }
 
     /// La ligne d'historique de son début : `» read_file src/vue.rs  ⟨3⟩`.
@@ -282,6 +285,9 @@ mod tests {
         assert_eq!(a.ligne(), "» read_file src/vue.rs  ⟨3⟩");
         let g = Appel::debut(4, "grep_files", r#"{"pattern":"fn main"}"#);
         assert_eq!(g.ligne(), "» grep_files fn main  ⟨4⟩");
+        // Lucie, 15 nov. : « run command faut que je voie quelle commande ».
+        assert_eq!(Appel::debut(7, "run_command", r#"{"command":"git status","timeout_s":60}"#).ligne(), "» run_command git status  ⟨7⟩");
+        assert_eq!(Appel::debut(8, "usages", r#"{"name":"Vue::trame"}"#).ligne(), "» usages Vue::trame  ⟨8⟩");
         assert_eq!(Appel::debut(5, "step_done", "{}").ligne(), "» step_done  ⟨5⟩");
         assert_eq!(Appel::debut(6, "x", "pas du json").ligne(), "» x  ⟨6⟩", "des arguments illisibles ne cassent rien");
     }
