@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <mutex>
 #include <shared_mutex>
 
@@ -35,6 +36,10 @@ public:
     // validée après le début de `transaction`.
     bool hasChangeAfterSnapshotOf(const transaction::Transaction* transaction,
         const std::string& name);
+    // Le nom de l'entrée dont une version vérifie `matches`, quand la tête de sa chaîne est une
+    // version que l'instantané de `transaction` ne voit pas ; vide sinon.
+    std::string nameChangedAfterSnapshotOf(const transaction::Transaction* transaction,
+        const std::function<bool(const CatalogEntry&)>& matches);
     common::oid_t createEntry(transaction::Transaction* transaction,
         std::unique_ptr<CatalogEntry> entry);
     void dropEntry(transaction::Transaction* transaction, const std::string& name,

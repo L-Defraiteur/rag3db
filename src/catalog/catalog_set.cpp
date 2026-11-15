@@ -57,6 +57,25 @@ bool CatalogSet::hasChangeAfterSnapshotOf(const Transaction* transaction, const 
     return timestamp != transaction->getID() && timestamp > transaction->getStartTS();
 }
 
+std::string CatalogSet::nameChangedAfterSnapshotOf(const Transaction* transaction,
+    const std::function<bool(const CatalogEntry&)>& matches) {
+    std::shared_lock lck{mtx};
+    for (auto& [name, head] : entries) {
+        auto found = false;
+        for (const CatalogEntry* version = head.get(); version != nullptr && !found;
+             version = version->getPrev()) {
+            found = matches(*version);
+        }
+        if (!found) {
+            continue;
+        }
+        const auto timestamp = head->getTimestamp();
+        return timestamp != transaction->getID() && timestamp > transaction->getStartTS() ? name :
+                                                                                            "";
+    }
+    return "";
+}
+
 CatalogEntry* CatalogSet::getEntry(const Transaction* transaction, const std::string& name) {
     std::shared_lock lck{mtx};
     return getEntryNoLock(transaction, name);

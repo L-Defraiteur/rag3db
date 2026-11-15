@@ -337,6 +337,24 @@ std::vector<IndexCatalogEntry*> Catalog::getIndexEntries(const Transaction* tran
     return result;
 }
 
+std::string Catalog::tableChangedAfterSnapshotOf(const Transaction* transaction,
+    table_id_t tableID) const {
+    return tables->nameChangedAfterSnapshotOf(transaction, [tableID](const CatalogEntry& entry) {
+        if (entry.getOID() == tableID) {
+            return true;
+        }
+        if (entry.getType() != CatalogEntryType::REL_GROUP_ENTRY) {
+            return false;
+        }
+        for (const auto& info : entry.constCast<RelGroupCatalogEntry>().getRelEntryInfos()) {
+            if (info.oid == tableID) {
+                return true;
+            }
+        }
+        return false;
+    });
+}
+
 bool Catalog::isIndexChangedAfterSnapshotOf(const Transaction* transaction, table_id_t tableID,
     const std::string& indexName) const {
     return indexes->hasChangeAfterSnapshotOf(transaction,
