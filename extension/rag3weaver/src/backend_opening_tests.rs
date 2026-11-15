@@ -411,8 +411,11 @@ fn un_llm_node_d_outil_exige_son_schema_et_call_models() {
         let (dir, mut m) = manifest();
         std::fs::create_dir_all(dir.path().join("graphs")).unwrap();
         let noeud = if schema { "LlmNode(response_schema=$schema, max_tokens=8)" } else { "LlmNode(max_tokens=8)" };
+        // Le paramètre `schema` n'est déclaré que là où un nœud le cite : un paramètre inutilisé est
+        // refusé par la fiche d'outil, et ce n'est pas ce qu'on teste.
+        let param = if schema { "%% param: schema json = {\"type\": \"object\"} -- la forme\n" } else { "" };
         std::fs::write(dir.path().join("graphs/generer.mmd"), format!(
-            "%% tool: generer\n%% description: un essai de génération\n%% param: schema json = {{\"type\": \"object\"}} -- la forme\n%% result: m.text\n\ngraph LR\n    m[\"{noeud}\"]\n"
+            "%% tool: generer\n%% description: un essai de génération\n{param}%% result: m.text\n\ngraph LR\n    m[\"{noeud}\"]\n"
         )).unwrap();
         let mut attache = json!({"graph": "graphs/generer.mmd"});
         if call_models {
