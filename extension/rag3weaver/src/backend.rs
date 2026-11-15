@@ -1054,6 +1054,29 @@ fn lire_texte(lecteur: &dyn crate::lecteur::Lecteur, chemin: &Path) -> Result<St
 }
 
 impl PreparedBackend {
+    /// **Cet appel ne fait que lire** (c7, 15 novembre 2026 : la file des écritures sous une
+    /// fermeture qui tient) : son graphe, instancié avec ses liaisons, est `snapshot_safe` (L6), son
+    /// crochet après aussi, il n'écrit ni ne lance rien de sa politique et n'a pas de harnais. Le
+    /// défaut est prudent : un outil inconnu, un graphe qui ne s'instancie pas ou un nœud non
+    /// marqué est une écriture (rangée, jamais perdue ni appliquée à tort comme lecture).
+    pub fn reads_only(&self, operation: &str, arguments: &Value) -> bool {
+        let (Some(tool), Some(attachment)) = (self.tools.get(operation), self.manifest.tools.get(operation)) else { return false };
+        let policy = attachment.policy;
+        if policy.write_files || policy.run_commands || policy.call_models || policy.attach_worktrees {
+            return false;
+        }
+        if !attachment.harness.before.is_empty() || !attachment.harness.after.is_empty() || !attachment.harness.on_accept.is_empty() {
+            return false;
+        }
+        let mut resolved = arguments.as_object().cloned().unwrap_or_default();
+        resolved.extend(attachment.bindings.clone());
+        let Ok(definition) = tool.instantiate(&Value::Object(resolved)) else { return false };
+        if !self.nodes.snapshot_safe(&definition) {
+            return false;
+        }
+        self.after_hooks.get(operation).is_none_or(|hook| self.nodes.snapshot_safe(hook.template()))
+    }
+
     /// Compile transport-independent search verbs without opening or querying a DB.
     pub fn compile_search_program(
         &self,

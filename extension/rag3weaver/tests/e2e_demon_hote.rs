@@ -587,13 +587,14 @@ fn une_fermeture_avec_une_raison_tient_jusqu_a_l_ouverture_explicite() {
     assert!(r["ok"] != json!(true) && r["error"].as_str().unwrap_or_default().contains("fermé : passe en retard"), "/open ne lève pas la fermeture : {r}");
     assert_eq!(host.state()["backends"][0]["open"], json!(false));
 
-    // /backend/open, explicite, la lève : l'écriture repasse, celle du refus n'a pas eu lieu.
+    // /backend/open, explicite, la lève : l'écriture repasse ; celles reçues pendant la fermeture
+    // étaient rangées en file (15 novembre 2026), et se rejouent à l'ouverture.
     let (code, r) = route(&host, "/backend/open", &s, json!({"manifest": m}));
     assert_eq!(code, 200, "{r}");
     assert_eq!(host.state()["backends"][0]["held_closed"], json!(null), "la fermeture est levée");
     ok(&put(&host, &s, &m, "put_fiche", "apres"));
     assert!(fiche(&host, &s, &m, "avant").is_some() && fiche(&host, &s, &m, "apres").is_some(), "les écritures d'avant et d'après sont là");
-    assert!(fiche(&host, &s, &m, "pendant").is_none() && fiche(&host, &s, &m, "en-retard").is_none(), "les écritures refusées n'ont pas eu lieu");
+    assert!(fiche(&host, &s, &m, "pendant").is_some() && fiche(&host, &s, &m, "en-retard").is_some(), "les écritures rangées pendant la fermeture sont rejouées");
     host.shutdown();
     let _ = std::fs::remove_dir_all(d);
 }
