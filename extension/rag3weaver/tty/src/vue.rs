@@ -38,6 +38,8 @@ pub enum Etat {
 /// Ce qu'une touche demande à la boucle.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
+    /// Appliquer (`o`) ou rejeter (`n`) une proposition de déclarations (tty-16).
+    Proposition { backend: String, id: u64, appliquer: bool },
     /// Une commande du terminal (`/…` ou `!…`), jamais envoyée à l'équipier (tty-13).
     Commande(crate::commandes::Commande),
     /// Tab : compléter la saisie jusqu'au curseur.
@@ -124,6 +126,16 @@ pub struct Repli {
     pub commande: String,
 }
 
+/// Une proposition de déclarations qui attend un accord.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PropositionEnAttente {
+    pub backend: String,
+    pub id: u64,
+    pub chemins: Vec<String>,
+    /// La validation l'a acceptée (sinon l'appliquer sera refusé, et elle le dit).
+    pub acceptee: bool,
+}
+
 /// Une ligne validée (ou un bloc de code entier), prête pour l'historique.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Validee {
@@ -182,6 +194,8 @@ pub struct Vue {
     pub montrer_etapes: bool,
     /// La dernière ligne de plomberie, dite en sourdine sur la ligne du haut.
     pub discret: Option<String>,
+    /// Les propositions de déclarations qui attendent un accord, par leur backend et leur id (tty-16).
+    pub propositions_en_attente: Vec<PropositionEnAttente>,
     /// Les lignes de boîte déjà écrites, par leur `id` : la relecture et le flux
     /// peuvent rendre la même (tty-9, vu à l'essai sous tmux).
     vues_de_boite: std::collections::HashSet<String>,
@@ -221,6 +235,7 @@ impl Vue {
             propositions: None,
             montrer_etapes: false,
             discret: None,
+            propositions_en_attente: Vec::new(),
             vues_de_boite: std::collections::HashSet::new(),
             bloc: None,
             boite: crate::boite::Boite::default(),
@@ -591,6 +606,10 @@ impl Vue {
         self.saisie.remplacer_debut(&c.texte);
         self.propositions = (!c.candidats.is_empty()).then(|| c.candidats.join("  "));
     }
+
+    /// **Une proposition de déclarations** (`PropositionChanged`, sujet `declarations`, tty-16) :
+    /// `proposed` la met en attente, `applied` ou `rejected` l'en retire.
+    pub fn proposition(&mut self, _backend: &str, _e: &Value) {}
 
     /// Reprend les envois des séances d'avant (tty-13).
     pub fn reprendre_historique(&mut self, historique: Vec<String>) {
@@ -1199,6 +1218,28 @@ mod tests {
         fil(&mut e);
         let l: Vec<String> = e.prendre_lignes().into_iter().map(|l| l.texte).collect();
         assert!(l.iter().any(|x| x.starts_with("» read_file")) && l.iter().any(|x| x == "fn main() {}") && l.iter().any(|x| x.starts_with("» report")) && l.iter().any(|x| x.starts_with("[équipier · étape faite]")) && l.iter().any(|x| x.starts_with("[hôte · fini]")) && l.iter().any(|x| x.starts_with("[hôte · compte rendu]")), "--etapes remontre tout : {l:?}");
+    }
+
+    /// **tty-16** : une proposition de déclarations attend un accord sur la ligne d'état ; `o`
+    /// l'applique, `n` la rejette (la route de l'IDE) ; une demande d'accord de la boîte passe avant ;
+    /// une proposition appliquée ou rejetée ailleurs (l'IDE) ne s'attend plus.
+    #[test]
+    fn a_declarations_proposal_waits_on_the_status_line_and_o_or_n_answers_it() {
+        let mut v = Vue::new(120, true);
+        let ev = |change: &str, id: u64| json!({ "kind": "PropositionChanged", "id": id, "change": change, "paths": ["backends/code/backend.json", "nodes/n.js"], "accepted": true });
+        v.proposition("principal", &ev("proposed", 7));
+        assert_eq!(v.ligne_d_etat(), "⛧ attend ton accord : proposition ⟨7⟩ (backends/code/backend.json, nodes/n.js) — o / n");
+        assert_eq!(v.touche(Touche::Car('o')), Some(Action::Proposition { backend: "principal".into(), id: 7, appliquer: true }));
+        assert!(v.propositions_en_attente.is_empty(), "répondue, elle ne s'attend plus");
+        v.proposition("principal", &ev("proposed", 8));
+        assert_eq!(v.touche(Touche::Car('n')), Some(Action::Proposition { backend: "principal".into(), id: 8, appliquer: false }));
+
+        v.proposition("principal", &ev("proposed", 9));
+        v.ligne_de_boite(&json!({ "id": "d/t:1", "from": "teammate", "kind": "approval", "text": "commande en attente", "command": "cargo build" }));
+        assert!(v.ligne_d_etat().contains("cargo build"), "une commande qui attend passe avant : {}", v.ligne_d_etat());
+        v.proposition("principal", &ev("applied", 9));
+        assert!(v.propositions_en_attente.is_empty(), "appliquée ailleurs, elle ne s'attend plus");
+        assert_eq!(Vue::new(80, true).touche(Touche::Car('o')), None, "sans rien qui attende, o est une lettre");
     }
 
     /// Le repli (sous mosh, la commande qui relit le journal) se dit sur la
