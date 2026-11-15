@@ -165,3 +165,45 @@ rejouée.
   parent ni à la tête. La ligne de base en rendait 30 sans filtre, et 33 toutes formes. Le rouge
   contre la ligne de base est donc l'effet voulu : il montre que le cas touchait bien les premiers
   rangs.
+
+## 6. L'écrivain des générations de 2a′-2 (7ddedb026 contre 1105a2590b), la nuit du 15 novembre
+
+**Le montage** (`parite-ecrivain.sh`, à luciepc) :
+- des deux côtés, une copie neuve de la base migrée, passée aux générations ;
+- un index de ma source (835d5298f), puis la publication de la génération au lot. Le juge
+  appelle `publier_la_generation` : rien d'autre ne publie à ce jour ;
+- les 30 cas avant l'index (au bit près) et après la publication. Ce dernier relevé est jugé au
+  régime `reponses` : une ligne qui change naît sous un autre uuid, donc l'identité est (chemin,
+  nom, ligne, hash) ;
+- les usages de cinq noms, choisis par le parent et relus au lot ;
+- le retrait et la remise d'`arbre.rs`, chaque index publié ;
+- le parseur est le même des deux côtés (codeparsers 6ba8478b03).
+
+| | verdict |
+|---|---|
+| les 30 cas avant l'index | **VERT** au bit près |
+| les usages des cinq noms | **VERT**, mêmes listes (fichier, appelant) |
+| `aretes_recopiees` à la génération 1 | 2 844 |
+| le retrait et la remise | conformes : Scope et File fermés à 2 au retrait, des lignes neuves nées à 3 à la remise ; les 3 Symbol exclusifs visibles aux rangs 1 et 3, invisibles au rang 2, leurs lignes physiques gardées |
+| les 30 cas après l'index et la publication | **ROUGE** : 15 cas rendent une autre liste dans leurs dix premiers |
+
+**Le départage** (une sonde Cypher sur les copies gardées, sans rien réindexer) :
+- **pas une ligne fermée qui sort** : aucun des 128 résultats du lot n'a de `_jusqu_a` ;
+- **le saut des fichiers inchangés** (le lot, dd729317a) : un fichier sauté garde l'analyse du code
+  plus vieux qui avait indexé la base. Le parent réanalyse tout. Le lexical classe donc sur deux
+  ensembles de contenus : 84 211 ScopeContent au parent, dont 14 201 orphelins que son chemin
+  laisse, et 74 274 au lot. Everything declarative le tient pour un défaut de son lot : sans
+  version de l'analyse, un parseur changé ne s'appliquerait jamais à un fichier inchangé ;
+- **la parité est mal posée sur cette base** : elle a été indexée par un code plus vieux que les
+  deux côtés. Une parité propre part d'une base indexée par le parent lui-même.
+
+**Trois défauts du juge**, trouvés et corrigés en route :
+- la réponse json de `usages` range l'appelant sous `user` (`path`, `title`) ;
+- rag3db n'a pas `type(r)`, mais `label(r)` ;
+- le relevé du retrait et celui de la parité prenaient la même copie de base : le premier a
+  réécrit le second. Chaque relevé a désormais la sienne. Les comptes du lot de la sonde sont donc
+  ceux de l'état du retrait.
+
+**Les noms des usages** (LB, NS, UP, a, absent) ont été choisis parmi les scopes dont le hash
+change à l'index. Sur cette base, c'est surtout le bruit du hash recalculé. Le vert des usages
+vaut pour ces noms.
