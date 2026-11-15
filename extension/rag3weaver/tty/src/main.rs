@@ -66,6 +66,8 @@ fn options() -> Result<Options, String> {
             }
             "--demande" => o.demande = Some(valeur()?),
             "--journal" => o.journal = Some(valeur()?),
+            // Les étapes de l'équipier dans l'historique (sinon, elles défilent dans la zone vivante).
+            "--etapes" => std::env::set_var("RAG3WEAVER_TTY_ETAPES", "1"),
             "--daemon-json" => o.daemon_json = Some(valeur()?),
             "--daemon-cmd" => o.daemon_cmd = Some(valeur()?),
             "--adresse" => o.adresse = Some(valeur()?),
@@ -80,7 +82,7 @@ fn options() -> Result<Options, String> {
     Ok(o)
 }
 
-const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] --depot <nom|chemin> --tache <nom> [--demande \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\"] [--adresse hôte:port] [--depuis <id>] [--journal <fichier>]";
+const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] --depot <nom|chemin> --tache <nom> [--demande \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\"] [--adresse hôte:port] [--depuis <id>] [--journal <fichier>] [--etapes]";
 
 fn main() {
     let o = match options() {

@@ -386,14 +386,25 @@ impl Vue {
                 };
                 let mut appel = crate::outils::Appel::debut(self.appels.len() + 1, &outil, &arguments);
                 appel.id = e["call_id"].as_str().unwrap_or_default().to_string();
-                self.valider(Genre::Outil, appel.ligne());
+                // Sans --etapes, l'appel défile dans la zone vivante (Lucie, 15 nov.) : l'historique ne
+                // garde que la demande et la réponse ; Ctrl-O et le journal gardent le reste.
+                if self.montrer_etapes {
+                    self.valider(Genre::Outil, appel.ligne());
+                } else {
+                    self.discret = Some(appel.ligne());
+                }
                 self.appels.push(appel);
                 self.changer(Etat::Agit(outil));
             }
             "ToolCallFinished" => {
                 let ok = e["ok"] == true;
                 let dit = if ok { format!("  fait ({} ms)", e["ms"].as_u64().unwrap_or(0)) } else { format!("  refusé ({})", e["error_kind"].as_str().unwrap_or("erreur")) };
-                self.valider(Genre::Outil, dit);
+                if self.montrer_etapes {
+                    self.valider(Genre::Outil, dit);
+                } else {
+                    let tete = self.discret.take().unwrap_or_default();
+                    self.discret = Some(format!("{tete} ·{}", dit.trim_start_matches(' ').replacen("", " ", 1)));
+                }
                 // L'appel par son identifiant, sinon le dernier qui tourne encore.
                 let id = e["call_id"].as_str().unwrap_or_default();
                 let i = self.appels.iter().rposition(|a| !id.is_empty() && a.id == id).or_else(|| self.appels.iter().rposition(|a| a.ok.is_none()));
@@ -404,8 +415,10 @@ impl Vue {
                     a.extrait = e["result_excerpt"].as_str().map(str::to_string);
                     a.tronque = e["truncated"] == true;
                     a.octets = e["bytes"].as_u64();
-                    let apercu = a.apercu(APERCU);
-                    self.validees.extend(apercu);
+                    if self.montrer_etapes {
+                        let apercu = a.apercu(APERCU);
+                        self.validees.extend(apercu);
+                    }
                 }
                 self.changer(Etat::Reflechit);
             }
@@ -428,6 +441,28 @@ impl Vue {
             }
         }
         self.boite.ligne(l);
+        // **La plomberie de l'équipier** (Lucie, 15 nov.) : une étape faite et la fin du pas ne
+        // s'écrivent pas ; l'étape se dit en sourdine sur la ligne du haut, la fin change l'état.
+        if !self.montrer_etapes {
+            let texte = l["text"].as_str().unwrap_or("");
+            // L'hôte ne parle qu'au fil de la tâche (« tâche ouverte : … ») : en sourdine.
+            if l["from"] == "host" && l["kind"] != "ended" {
+                self.discret = Some(format!("hôte : {}", texte.lines().next().unwrap_or_default()));
+                return;
+            }
+            if l["from"] == "teammate" && matches!(l["kind"].as_str(), Some("plan" | "edit_plan" | "started")) {
+                self.discret = Some(format!("équipier : {}", texte.lines().next().unwrap_or_default()));
+                return;
+            }
+            if l["from"] == "teammate" && l["kind"] == "step_done" {
+                self.discret = Some(format!("étape faite : {}", texte.strip_prefix("fait : ").unwrap_or(texte)));
+                return;
+            }
+            if l["from"] == "host" && l["kind"] == "ended" {
+                self.changer(Etat::Fini(texte.to_string()));
+                return;
+            }
+        }
         // Une demande après la fin d'un run : l'équipier va repartir, ce n'est plus fini.
         if matches!(self.etat, Etat::Fini(_)) && l["from"] == "supervisor" && matches!(l["kind"].as_str(), Some("request" | "instruction" | "answer")) {
             self.changer(Etat::Attend);
@@ -683,6 +718,10 @@ impl Vue {
             }
         }
         let haut = match (&self.propositions, &self.repli) {
+            (None, _) if en_cours.is_empty() && self.discret.is_some() => {
+                let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
+                Line::from(Span::styled(debut(self.discret.as_deref().unwrap_or_default(), largeur), sourdine))
+            }
             (Some(p), _) if en_cours.is_empty() => {
                 let sourdine = anim::couleur(&self.theme.couleurs.sourdine, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
                 Line::from(Span::styled(queue(p, largeur), sourdine))
@@ -807,6 +846,7 @@ mod tests {
     #[test]
     fn the_states_follow_the_events_and_the_mailbox_ends() {
         let mut v = Vue::new(80, false);
+        v.montrer_etapes = true; // l'historique entier, comme sous --etapes
         assert_eq!(v.genre_d_envoi(), "request");
         v.trame(&json!({ "evenement": { "kind": "LlmCall" } }));
         assert_eq!(v.etat, Etat::Reflechit);
@@ -965,6 +1005,7 @@ mod tests {
     #[test]
     fn the_teammate_kinds_are_all_in_french() {
         let mut v = Vue::new(120, true);
+        v.montrer_etapes = true; // l'historique entier, comme sous --etapes
         for (i, k) in ["report", "step_done", "plan", "edit_plan", "error", "started", "note"].iter().enumerate() {
             v.ligne_de_boite(&json!({ "id": format!("d/t:{i}"), "from": "teammate", "kind": k, "text": "x" }));
         }
@@ -1042,6 +1083,7 @@ mod tests {
     #[test]
     fn a_tool_call_is_numbered_kept_and_previewed() {
         let mut v = Vue::new(100, true);
+        v.montrer_etapes = true; // l'historique entier, comme sous --etapes
         let result = "**src/a.rs** — lines 1-1 of 1\nScopes: x\n```\n00001| fn main() {}\n```";
         v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "read_file", "call_id": "c1", "arguments": "{\"path\":\"src/a.rs\"}" } }));
         v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "tool": "read_file", "call_id": "c1", "ok": true, "ms": 3, "bytes": 90, "result_excerpt": json!({ "result": result }).to_string() } }));
@@ -1127,6 +1169,14 @@ mod tests {
     #[test]
     fn the_teammate_plumbing_stays_out_of_the_history_unless_asked() {
         let fil = |v: &mut Vue| {
+            v.ligne_de_boite(&json!({ "id": "d/t:0", "from": "supervisor", "kind": "request", "text": "lis a.rs" }));
+            v.ligne_de_boite(&json!({ "id": "d/t:0b", "from": "host", "kind": "report", "text": "tâche ouverte : branche agent/x" }));
+            let result = "**src/a.rs** — lines 1-1 of 1\nScopes: x\n```\n00001| fn main() {}\n```";
+            v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "read_file", "call_id": "c0", "arguments": "{\"path\":\"src/a.rs\"}" } }));
+            if !v.montrer_etapes {
+                assert_eq!(v.discret.as_deref(), Some("» read_file src/a.rs  ⟨1⟩"), "l'appel défile dans la zone vivante");
+            }
+            v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "tool": "read_file", "call_id": "c0", "ok": true, "ms": 3, "bytes": 90, "result_excerpt": json!({ "result": result }).to_string() } }));
             v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "report", "call_id": "c1", "arguments": "{\"text\":\"x\"}" } }));
             v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "tool": "report", "call_id": "c1", "ok": true, "ms": 0 } }));
             v.ligne_de_boite(&json!({ "id": "d/t:1", "from": "teammate", "kind": "report", "text": "Voici la réponse." }));
@@ -1138,17 +1188,17 @@ mod tests {
         let mut v = Vue::new(100, true);
         fil(&mut v);
         let l: Vec<String> = v.prendre_lignes().into_iter().map(|l| l.texte).collect();
-        assert_eq!(l, vec!["[équipier · compte rendu] Voici la réponse."], "la réponse seule");
+        assert_eq!(l, vec!["[toi · demande] lis a.rs", "[équipier · compte rendu] Voici la réponse."], "la demande et la réponse seules (Lucie)");
         assert_eq!(v.ligne_d_etat(), "⛧ fini : fait sans plan");
         assert_eq!(v.discret.as_deref(), Some("étape faite : rapport fait au superviseur"));
-        assert_eq!(v.appels.len(), 2, "les appels restent à Ctrl-O");
+        assert_eq!(v.appels.len(), 3, "les appels restent à Ctrl-O");
         assert_eq!(dessin(&v, 100, 3).0[0], "étape faite : rapport fait au superviseur", "en sourdine, sur la ligne du haut");
 
         let mut e = Vue::new(100, true);
         e.montrer_etapes = true;
         fil(&mut e);
         let l: Vec<String> = e.prendre_lignes().into_iter().map(|l| l.texte).collect();
-        assert!(l.iter().any(|x| x.starts_with("» report")) && l.iter().any(|x| x.starts_with("[équipier · étape faite]")) && l.iter().any(|x| x.starts_with("[hôte · fini]")), "--etapes remontre tout : {l:?}");
+        assert!(l.iter().any(|x| x.starts_with("» read_file")) && l.iter().any(|x| x == "fn main() {}") && l.iter().any(|x| x.starts_with("» report")) && l.iter().any(|x| x.starts_with("[équipier · étape faite]")) && l.iter().any(|x| x.starts_with("[hôte · fini]")) && l.iter().any(|x| x.starts_with("[hôte · compte rendu]")), "--etapes remontre tout : {l:?}");
     }
 
     /// Le repli (sous mosh, la commande qui relit le journal) se dit sur la
