@@ -1397,3 +1397,10 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 - **06 h 45 — soixante-cinq atterris** : le planificateur (A) de l'IN (le cœur, 7897f2453). Le cœur passe à
   l'ADD COLUMN sous une écriture ouverte (ticket d'hotfixs), conception d'abord ; le dictionnaire sous ASan la
   nuit prochaine.
+- **Le cœur, 06 h 4x — l'ADD COLUMN sous une écriture ouverte** (conception dans sa page du 15) : aujourd'hui un
+  ALTER ne prend rien et change le catalogue versionné sous l'écrivain ouvert. Tranché : **l'attente, comme
+  PostgreSQL** — un genre de ressource TABLE (l'écrivain en partagé à sa première écriture, l'ALTER et le
+  DROP en exclusif, borné par le délai de verrou, interblocages par le graphe existant) ; le lecteur
+  d'instantané garde son catalogue ; CREATE INDEX dans le même genre ; le refus de l'ALTER nomme l'écrivain
+  attendu ; DdlEveryMinute remesuré avec les paquets bornés de l'écrivain. Décision de conception du moteur
+  prise à sa place, **Lucie peut la retourner**.
