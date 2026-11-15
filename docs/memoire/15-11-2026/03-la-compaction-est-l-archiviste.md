@@ -125,6 +125,14 @@ compression, et moins pour un modèle local.
 
 - **Le réglage** est par modèle, dans le manifeste : `models.llm.restart_budget_tokens`, avec un
   défaut de 100 000 pour un modèle cloud.
+- **La lecture** est faite par ED, dans son lot « models.llm en liste » (`ModelSource::budget_de_reprise()`) :
+  - le champ s'il est déclaré, sur l'élément de liste comme sur l'objet unique ;
+  - sinon 100 000 pour un modèle cloud ;
+  - sinon, pour un modèle local, la moitié de sa fenêtre (`context_tokens / 2`), au plus
+    100 000. Est local un modèle de provider `local`, de service à nous, ou de protocole
+    `llama_server`.
+
+  Le budget suit le modèle choisi par `/model`.
 - **La composition**, par priorité, jusqu'au budget :
   1. l'identité ;
   2. la fiche de tâche ;
