@@ -33,6 +33,9 @@
 //   duration, index-creation-holds-writers-at-most-its-duration : la latence d'un écrivain qui
 //   chevauche le DDL dépasse le p99 hors DDL de la même passe d'au plus la durée du DDL + 50 ms ;
 // - index-creation-refuses-no-reader : aucune lecture refusée pendant CREATE_VECTOR_INDEX ;
+// - ddl-waits-at-most-the-longest-packet : un ADD COLUMN de Doc (minutes 1, 2 et 6), qui attend
+//   les écrivains de Doc ouverts sous le verrou de schéma de la table, ne dure pas plus que la plus
+//   longue transaction d'écrivain de Doc de la passe + 50 ms (garde de c7, 15 novembre 2026) ;
 // - failed-migration-is-refused-by-name, failed-migration-leaves-nothing,
 //   failed-migration-disturbs-no-one : le second ADD a refusé sous un nom, pas de a au catalogue,
 //   aucun acteur ne reçoit pendant la minute 6 une erreur jamais vue hors DDL ;
@@ -40,8 +43,9 @@
 // - counts-match-commits : Doc, Link et Note égaux aux écritures validées, avant et après la
 //   réouverture ;
 // - catalog-as-expected, added-column-survives-reopen : après la réouverture.
-// Les ADD COLUMN (minutes 1 et 2) n'ont pas de borne promise : leur durée et l'attente des
-// écrivains de Doc et de Note sont imprimées (E1). Le p99 hors DDL est mesuré, pas promis.
+// Les ADD COLUMN (minutes 1 et 2) n'ont pas de borne promise pour les écrivains qu'ils retiennent :
+// leur attente est imprimée (E1) ; leur propre durée est bornée par le paquet le plus long (plus
+// haut). Le p99 hors DDL est mesuré, pas promis.
 //
 // - TwentyWriters.DdlEveryFifteenSeconds : la version courte (environ 2 min avec le chargement) ;
 // - TwentyWriters.DdlEveryMinute : la passe de six minutes ;
@@ -683,6 +687,37 @@ protected:
         }
     }
 
+    // Un ALTER de Doc attend les écrivains de Doc ouverts à son départ (le verrou de schéma de la
+    // table, 15 novembre 2026, comme PostgreSQL) ; les écrivains écrivent par paquets bornés, et
+    // la borne (garde de c7, même jour) : un DDL n'attend pas plus que le paquet le plus long de la
+    // passe. La durée du DDL (son attente et son travail) ne dépasse pas la plus longue transaction
+    // d'écrivain de Doc + 50 ms.
+    void expectWaitsAtMostTheLongestPacket(const Scenario& scenario, const std::string& prefix) {
+        const auto* ddl = ddlNamed(scenario, prefix);
+        if (!ddl) {
+            return;
+        }
+        double longest = 0, openAtStart = 0;
+        for (const auto& journal : scenario.journals) {
+            if (journal.actor != Actor::DocWriter) {
+                continue;
+            }
+            for (const auto& sample : journal.samples) {
+                longest = std::max(longest, sample.end - sample.start);
+                if (sample.start < ddl->start && sample.end > ddl->start) {
+                    openAtStart = std::max(openAtStart, sample.end - ddl->start);
+                }
+            }
+        }
+        const auto duration = ddl->end - ddl->start;
+        std::cerr << "  [scénario] attente de « " << ddl->name << " » : durée " << duration
+                  << " ms, paquet le plus long " << longest
+                  << " ms, reste du plus long paquet ouvert à son départ " << openAtStart << " ms\n";
+        EXPECT_LE(duration, longest + SLACK_MS)
+            << "[check: ddl-waits-at-most-the-longest-packet] « " << ddl->name << " » lasted "
+            << duration << " ms, the longest Doc writer packet " << longest << " ms";
+    }
+
     struct Expected {
         int64_t docs;
         int64_t links;
@@ -868,6 +903,9 @@ protected:
             "index-creation-holds-writers-at-most-its-duration");
         expectHeldAtMostItsDuration(scenario, "5 ",
             "checkpoint-holds-writers-at-most-its-duration");
+        expectWaitsAtMostTheLongestPacket(scenario, "1 ");
+        expectWaitsAtMostTheLongestPacket(scenario, "2 ");
+        expectWaitsAtMostTheLongestPacket(scenario, "6 ADD b");
         if (const auto* index = ddlNamed(scenario, "4 ")) {
             int64_t refused = 0;
             for (const auto& [error, count] : errorsOf(scenario, index, Actor::Reader)) {
