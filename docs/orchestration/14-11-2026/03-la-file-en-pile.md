@@ -1340,3 +1340,7 @@ fait : … » et « fait sans plan » : « faut toujours une réponse à l'user 
 parle (dans une tâche du terminal ou du chat, le superviseur est l'utilisateur), une réponse par tour, le résumé de step_done
 reste une ligne d'état ; pour tty : replier étape faite / fini en une ligne discrète. La porte des commandes est déjà dans le
 terminal (o/n) ; edit_file écrit dans le worktree de la tâche sans porte (voulu) ; tty-16 = o/n sur une proposition.
+Lucie, 15 h 57 : « les étapes faites, je les vois défiler de manière stylée à côté du truc comme quoi ça travaille, plutôt que
+l'historique dans mon terminal ; pour un utilisateur comme moi j'ai pas besoin des logs de chaque étape ». Pour tty : les
+étapes défilent dans la zone vivante, remplacées à mesure ; l'historique garde la demande et la réponse (et les `!`) ; le
+détail à la demande par Ctrl-O et /journal ; réglage show_steps.
