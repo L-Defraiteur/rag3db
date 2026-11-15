@@ -949,3 +949,66 @@ fn une_methode_du_projet_sur_une_locale_sans_type_garde_son_lien_par_le_nom() {
     let cat = catalog.lock().unwrap();
     assert_eq!(marques_vers(&cat, "parcours", "aller"), vec!["nom".to_string()], "aller : méthode du projet, liée par le nom");
 }
+
+/// Les cibles CONSUMES de `de` vers un scope `vers` : (parent de la cible, marque).
+fn cibles_vers(cat: &Catalog, de: &str, vers: &str) -> Vec<(String, String)> {
+    let r = cat
+        .execute_raw(&format!("MATCH (a:Scope {{name: '{de}'}})-[c:CONSUMES]->(b:Scope {{name: '{vers}'}}) RETURN b.parent_name, c.resolution"))
+        .unwrap();
+    let mut v: Vec<(String, String)> = r.rows.iter().map(|x| (x[0].as_str().unwrap_or("").to_string(), x[1].as_str().unwrap_or("").to_string())).collect();
+    v.sort();
+    v
+}
+
+/// **Une locale liée au retour d'une méthode par `self`** (ticket des receveurs sans type, le prix
+/// de la marque « nom ») : `let files = self.teammate_files()?; files.append()` vise `Files::append`,
+/// par le type — pas le `Journal::append` d'un autre fichier, et plus l'abstention.
+#[test]
+#[ignore]
+fn une_locale_liee_a_une_methode_par_self_lit_son_type() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/host.rs".to_string(), "use crate::files::Files;\npub struct Host;\nimpl Host {\n    fn teammate_files(&self) -> Result<Files, String> { Ok(Files) }\n    pub fn post(&self) -> Result<(), String> {\n        let files = self.teammate_files()?;\n        files.append();\n        Ok(())\n    }\n}\n".to_string()),
+        ("src/files.rs".to_string(), "pub struct Files;\nimpl Files {\n    pub fn append(&self) {}\n}\n".to_string()),
+        ("src/journal.rs".to_string(), "pub struct Journal;\nimpl Journal {\n    pub fn append(&self) {}\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(cibles_vers(&cat, "post", "append"), vec![("Files".to_string(), "type".to_string())]);
+}
+
+/// **Une locale liée au retour d'une méthode d'un paramètre typé** : `let c = ctx.cancellation();
+/// c.wait_timeout(…)` vise `Cancel::wait_timeout`, pas l'homonyme d'un autre type.
+#[test]
+#[ignore]
+fn une_locale_liee_a_une_methode_d_un_parametre_lit_son_type() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/ctx.rs".to_string(), "use crate::cancel::Cancel;\npub struct Ctx;\nimpl Ctx {\n    pub fn cancellation(&self) -> Cancel { Cancel }\n}\n".to_string()),
+        ("src/cancel.rs".to_string(), "pub struct Cancel;\nimpl Cancel {\n    pub fn wait_timeout(&self, ms: u64) -> bool { true }\n}\n".to_string()),
+        ("src/veille.rs".to_string(), "pub struct Veille;\nimpl Veille {\n    pub fn wait_timeout(&self, ms: u64) -> bool { false }\n}\n".to_string()),
+        ("src/run.rs".to_string(), "use crate::ctx::Ctx;\npub fn run(ctx: &Ctx) {\n    let c = ctx.cancellation();\n    while !c.wait_timeout(20) {}\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(cibles_vers(&cat, "run", "wait_timeout"), vec![("Cancel".to_string(), "type".to_string())]);
+}
+
+/// **Une locale liée à `Type::f(…)` suivi de `map_err(…)?` ou de `unwrap()`** : `let outil =
+/// GraphTool::from_mermaid(t).map_err(…)?; outil.bind()` et `let back =
+/// GraphTool::from_mermaid(t).unwrap(); back.description()` visent les méthodes de `GraphTool`.
+#[test]
+#[ignore]
+fn une_locale_liee_a_un_appel_par_chemin_lit_son_type() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/graph.rs".to_string(), "pub struct GraphTool;\nimpl GraphTool {\n    pub fn from_mermaid(t: &str) -> Result<Self, String> { Ok(GraphTool) }\n    pub fn bind(self) -> Result<Self, String> { Ok(self) }\n    pub fn description(&self) -> u8 { 0 }\n}\n".to_string()),
+        ("src/registre.rs".to_string(), "pub struct Registre;\nimpl Registre {\n    pub fn bind(self) -> Result<Self, String> { Ok(self) }\n    pub fn description(&self) -> u8 { 1 }\n}\n".to_string()),
+        ("src/foreach.rs".to_string(), "use crate::graph::GraphTool;\npub fn materialiser(t: &str) -> Result<(), String> {\n    let outil = GraphTool::from_mermaid(t).map_err(|e| e.to_string())?;\n    let _lie = outil.bind()?;\n    Ok(())\n}\npub fn aller_retour(t: &str) -> u8 {\n    let back = GraphTool::from_mermaid(t).unwrap();\n    back.description()\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(cibles_vers(&cat, "materialiser", "bind"), vec![("GraphTool".to_string(), "type".to_string())], "map_err(…)?");
+    assert_eq!(cibles_vers(&cat, "aller_retour", "description"), vec![("GraphTool".to_string(), "type".to_string())], "unwrap()");
+}
+
