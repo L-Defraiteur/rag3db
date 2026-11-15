@@ -76,23 +76,28 @@ pub fn resoudre_les_sous_graphes(
     lire: &dyn Fn(&str) -> Result<String, String>,
     nodes: &NodeRegistry,
 ) -> Result<Vec<String>, String> {
-    resoudre_les_sous_graphes_avec(outil, &|chemin| {
+    Ok(resoudre_les_sous_graphes_avec(outil, &|chemin| {
         match chemin.strip_prefix(crate::builtin_templates::PREFIX) {
             Some(nom) => crate::builtin_templates::get(nom)
                 .map(|b| String::from_utf8_lossy(b).into_owned())
                 .ok_or_else(|| format!("aucun graphe livré « {nom} »")),
             None => lire(chemin),
         }
-    }, nodes)
+    }, nodes)?
+    .into_iter()
+    .map(|(t, _)| t)
+    .collect())
 }
 
 /// Le résolveur fourni possède toutes les références, y compris les builtin.
-/// Aucun repli sur le contenu du binaire n'est ajouté ici.
+/// Aucun repli sur le contenu du binaire n'est ajouté ici. Rend chaque nœud des sous-graphes par son
+/// type **et sa configuration** : la politique d'un outil lit la configuration de certains nœuds
+/// (un LlmNode n'y passe qu'avec son `response_schema`, 15 novembre 2026).
 pub fn resoudre_les_sous_graphes_avec(
     outil: &mut GraphTool,
     lire: &dyn Fn(&str) -> Result<String, String>,
     nodes: &NodeRegistry,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<(String, Value)>, String> {
     let mut types = Vec::new();
     let cites: Vec<(String, String, Value)> = outil
         .template()
@@ -115,7 +120,7 @@ fn lire_un_sous_graphe(
     par_element: bool,
     lire: &dyn Fn(&str) -> Result<String, String>,
     nodes: &NodeRegistry,
-    types: &mut Vec<String>,
+    types: &mut Vec<(String, Value)>,
     profondeur: usize,
 ) -> Result<Value, String> {
     if profondeur > PROFONDEUR_MAX {
@@ -142,7 +147,7 @@ fn lire_un_sous_graphe(
     }
     let mut sous = Map::new();
     for n in &outil.template().nodes {
-        types.push(n.node_type.clone());
+        types.push((n.node_type.clone(), n.config.clone()));
         if n.node_type == GRAPH_NODE || n.node_type == FOREACH_NODE {
             if let Some(c) = n.config.get("graph").and_then(Value::as_str) {
                 let arbre = lire_un_sous_graphe(c, &n.config, n.node_type == FOREACH_NODE, lire, nodes, types, profondeur + 1).map_err(|e| format!("{chemin}, le nœud « {} » : {e}", n.name))?;
