@@ -1627,3 +1627,8 @@ départager ; « write your answer as text » et son témoin encore à poser ; r
 tty, 18 h 19 : **tty-14 (/model) sur master à e9e47391a** (14 commits, ece931354 → e9e47391a : GET /ide/teammate/models, POST
 /ide/teammate/model, le registre écrit du chat, un choix qui ne désigne plus rien se voit ; gmail, 0 attribution). tty-15 puis
 tty-16 suivent sans second mot. G : le binaire du service bâti sur f85977d09e (sha a70f1e46…), non posé.
+Lucivy, 18 h 21 : la maintenance nocturne verte (59dfa40b4 : `fts.maintenance` au manifeste, un fil demon-entretien à la minute, par
+backend ouvert et dû ; relevé à blanc, purge si ≤ 0,05 sinon refus dit, compaction ; note aux métas et à l'état d'index ; rouges
+sur bouchon, e2e_demon_hote 26/26). Place après ED (nom + persona), avant le hash de la pose : première maintenance cette nuit.
+Ordre restant : tty-15 → tty-16 → 96 → ED (nom) → lucivy → **hash** → archi (branchement, à son vert) → ED (écrivain) + arbre →
+G ×4 → arbre 2b′ + recherche → codeparsers.
