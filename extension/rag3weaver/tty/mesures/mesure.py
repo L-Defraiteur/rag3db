@@ -72,8 +72,11 @@ commande_ = commande
 class Terminal:
     """Le terminal distant, vu d'ici : un pseudo-terminal dont on lit chaque octet, horodaté."""
 
-    def __init__(self, env, theme, colonnes=100, lignes=30, repond_au_curseur=True, extra=""):
+    def __init__(self, env, theme, colonnes=100, lignes=30, repond_au_curseur=True, extra="", kitty=False):
         self.repond_au_curseur = repond_au_curseur
+        # Un terminal qui annonce le protocole clavier de kitty (tty-10) répond à ESC[?u ; tout
+        # terminal répond à la demande d'attributs ESC[c.
+        self.kitty = kitty
         self.lignes = lignes
         self.maitre, esclave = pty.openpty()
         self.taille(colonnes, lignes, signaler=False)
@@ -106,6 +109,11 @@ class Terminal:
                     if self.repond_au_curseur:
                         for _ in range(o.count(b"\x1b[6n")):
                             os.write(self.maitre, f"\x1b[{self.lignes};1R".encode())
+                    if self.kitty:
+                        for _ in range(o.count(b"\x1b[?u")):
+                            os.write(self.maitre, b"\x1b[?0u")
+                    for _ in range(o.count(b"\x1b[c")):
+                        os.write(self.maitre, b"\x1b[?62;22c")
                 elif self.p.poll() is not None:
                     break
             except OSError:
@@ -432,6 +440,46 @@ try:
 finally:
     tunnel.terminate()
     hote_arreter()
+
+# 1e. La saisie sur plusieurs lignes (tty-10) : « un », Maj-Entrée en CSI u (ESC[13;2u), « deux »,
+#     Alt-Entrée, « trois », Entrée. Un terminal qui annonce le protocole de kitty reçoit la demande et
+#     l'indication « Maj-Entrée » ; un terminal qui ne l'annonce pas ne la reçoit pas, garde « Alt-Entrée »,
+#     et un CSI u qu'il enverrait quand même n'entre jamais comme texte. Sous un multiplexeur, c'est lui qui
+#     répond à la demande : on note ce qui arrive.
+for kitty in (True, False):
+    quoi = "multiligne_kitty" if kitty else "multiligne_sans_kitty"
+    hote_demarrer()
+    tunnel = subprocess.Popen(["sleep", "86400"] if LOCAL else ["ssh", "-N", "-o", "BatchMode=yes", "-L", f"{TUNNEL}:127.0.0.1:{PORT}", HOTE])
+    time.sleep(1.5)
+    try:
+        t = Terminal("COLORTERM=truecolor TERM=xterm-256color", "daemon", kitty=kitty)
+        if t.attendre(b"attend ton accord", borne=40) is None:
+            rouge(f"{quoi} : la demande d'accord ne paraît pas en 40 s")
+        tout = t.tout()
+        demande_kitty = b"\x1b[>1u" in tout
+        aide_maj = "Maj-Entrée : à la ligne".encode() in tout
+        aide_alt = "Alt-Entrée : à la ligne".encode() in tout
+        for morceau in (b"un", b"\x1b[13;2u", b"deux", b"\x1b\r", b"trois", b"\r"):
+            t.ecrire(morceau)
+            time.sleep(0.2)
+        time.sleep(1.5)
+        textes = [e["corps"].get("text") for e in journal() if e["corps"].get("kind") in ("answer", "instruction", "request") and e["corps"].get("text") not in (None, "go")]
+        resultats[quoi] = {"demande_kitty": demande_kitty, "aide_maj_entree": aide_maj, "aide_alt_entree": aide_alt, "textes_recus": textes}
+        if textes[:1] != ["un\ndeux\ntrois"]:
+            rouge(f"{quoi} : la boîte a reçu {textes!r} au lieu de ['un\\ndeux\\ntrois']")
+        if any("13;2u" in (x or "") or "[13" in (x or "") for x in textes):
+            rouge(f"{quoi} : un CSI u est entré comme texte : {textes!r}")
+        if not MULTIPLEXEUR:
+            if kitty and not (demande_kitty and aide_maj):
+                rouge(f"{quoi} : le terminal annonce kitty, mais la demande ({demande_kitty}) ou l'indication Maj-Entrée ({aide_maj}) manque")
+            if not kitty and (demande_kitty or not aide_alt):
+                rouge(f"{quoi} : le terminal n'annonce pas kitty, mais la demande part ({demande_kitty}) ou l'indication Alt-Entrée manque ({aide_alt})")
+        t.ecrire(b"\x03")
+        time.sleep(0.5)
+        t.arreter()
+    finally:
+        tunnel.terminate()
+        hote_arreter()
 
 # 2. Les couleurs de chaque thème, en couleur vraie puis en 256 couleurs.
 couleurs = []
