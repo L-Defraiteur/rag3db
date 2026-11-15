@@ -239,6 +239,15 @@ impl TeammateFiles {
     pub fn read_cursor(&self) -> usize {
         std::fs::read_to_string(self.dir.join("mailbox.read")).ok().and_then(|s| s.trim().parse().ok()).unwrap_or(0)
     }
+    /// **La trace de la demande** (forme B de c7, 15 novembre 2026) : le rang de la demande dont
+    /// l'équipier a laissé quelque chose hors de la boîte (un fichier écrit, une commande, un plan
+    /// clos). Sur disque, à côté du curseur : un redémarrage de l'hôte ne la perd pas.
+    pub fn read_trace(&self) -> Option<usize> {
+        std::fs::read_to_string(self.dir.join("request.trace")).ok().and_then(|s| s.trim().parse().ok())
+    }
+    pub fn write_trace(&self, demande: usize) {
+        let _ = std::fs::write(self.dir.join("request.trace"), demande.to_string());
+    }
     pub fn write_cursor(&self, n: usize) {
         let _ = std::fs::write(self.dir.join("mailbox.read"), n.to_string());
     }
@@ -432,7 +441,33 @@ pub(crate) fn missing_deliverable(lignes: &[Value]) -> Option<&'static str> {
 }
 
 /// Les valeurs permises de `expects` sur une request.
-pub const EXPECTS: [&str; 2] = ["report", "approval"];
+pub const EXPECTS: [&str; 3] = ["report", "approval", "none"];
+
+/// **Une demande sans `expects` attend au moins une ligne de l'équipier** (ticket rouvert le 15
+/// novembre 2026) : un `report`, une `question` ou une `approval` dans la boîte depuis elle (le
+/// texte d'un pas, acheminé, arrive en `report`). Rend le rang de la demande quand rien n'y est ;
+/// `None` quand une ligne y est, ou quand la demande déclare `expects` (sa garde est la sienne,
+/// `none` compris). La boucle ne relance que si l'équipier n'a rien laissé d'autre non plus : ni
+/// fichier écrit, ni commande, ni plan clos (forme B de c7).
+pub(crate) fn request_without_a_line(lignes: &[Value]) -> Option<usize> {
+    let n = lignes.iter().rposition(|l| l["kind"] == "request" && l["from"] != "teammate" && l["from"] != "host")?;
+    if !lignes[n]["expects"].is_null() {
+        return None;
+    }
+    let ligne = lignes[n + 1..].iter().any(|l| l["from"] == "teammate" && matches!(l["kind"].as_str(), Some("report" | "question" | "approval")));
+    (!ligne).then_some(n)
+}
+
+/// **Un outil qui laisse une trace** hors de la boîte : il écrit les fichiers, lance une commande
+/// ou attache un worktree, d'après la politique que son manifeste déclare. Un outil inconnu du
+/// manifeste compte comme une trace : on ne relance pas sur un doute.
+pub(crate) fn tool_leaves_a_trace(prepared: Option<&crate::backend::PreparedBackend>, name: &str) -> bool {
+    let Some(p) = prepared else { return true };
+    match p.manifest.tools.get(name) {
+        Some(a) => a.policy.write_files || a.policy.run_commands || a.policy.attach_worktrees,
+        None => true,
+    }
+}
 
 pub(crate) fn unread_news(files: &TeammateFiles) -> bool {
     files
@@ -466,6 +501,8 @@ pub struct Step {
     decided: Mutex<Option<String>>,
     /// Par où l'équipier s'est réveillé avant ce pas (`bus`, `fichier`), pour le journal.
     pub woke_by: Option<String>,
+    /// Les outils de travail aboutis pendant ce pas (sans erreur), par leur nom.
+    succeeded_tools: Mutex<Vec<String>>,
 }
 
 impl Step {
@@ -481,7 +518,22 @@ impl Step {
             closed: Mutex::new(Vec::new()),
             decided: Mutex::new(None),
             woke_by: None,
+            succeeded_tools: Mutex::new(Vec::new()),
         }
+    }
+
+    /// Note un outil de travail abouti : son rendu n'est pas une erreur.
+    fn note_tool(&self, call: &ToolCall, turn: &Turn) {
+        let v: Value = serde_json::from_str(&turn.content).unwrap_or(Value::Null);
+        let echec = v["ok"] == false || !v["error"].is_null();
+        if !echec {
+            self.succeeded_tools.lock().unwrap_or_else(|p| p.into_inner()).push(call.name.clone());
+        }
+    }
+
+    /// Les outils de travail aboutis pendant ce pas.
+    pub fn succeeded_tools(&self) -> Vec<String> {
+        self.succeeded_tools.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
     pub fn system_prompt(&self) -> &'static str {
         SYSTEM_PROMPT
@@ -818,15 +870,23 @@ impl StepTools<'_> {
     }
 }
 
+impl StepTools<'_> {
+    /// Le rendu d'un outil de travail, noté au pas (aboutis seulement).
+    fn noted(&self, call: &ToolCall, turn: Turn) -> Turn {
+        self.step.note_tool(call, &turn);
+        turn
+    }
+}
+
 impl crate::agent::ToolBox for StepTools<'_> {
     fn call(&self, call: &ToolCall) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.after(call, self.inner.call(call)))
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.inner.call(call))))
     }
     fn call_in(&self, call: &ToolCall, run: &str) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.after(call, self.inner.call_in(call, run)))
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.inner.call_in(call, run))))
     }
     fn call_with(&self, call: &ToolCall, run: &str, inv: &crate::agent::ToolInvocation) -> Turn {
-        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.after(call, self.inner.call_with(call, run, inv)))
+        self.step.ours(call).or_else(|| self.step.gate(call)).unwrap_or_else(|| self.noted(call, self.after(call, self.inner.call_with(call, run, inv))))
     }
     fn tool_defs(&self) -> Vec<ToolDef> {
         // Les nôtres gagnent sur un homonyme du backend : un fournisseur refuse
@@ -1087,7 +1147,7 @@ impl DaemonHost {
             None => {}
             Some(_) if kind != "request" => return Err(format!("expects se déclare sur une request, pas sur un {kind}")),
             Some(e) if e.as_str().is_some_and(|e| EXPECTS.contains(&e)) => {}
-            Some(e) => return Err(format!("expects vaut report ou approval, pas {e}")),
+            Some(e) => return Err(format!("expects vaut report, approval ou none, pas {e}")),
         }
         let ouverte = self.tache(parent, task).is_none();
         if ouverte {
@@ -1293,6 +1353,16 @@ impl DaemonHost {
         let mut plan_seen = false;
         // **Un pas a dit ce qui reste** (sans plan vivant) : le suivant part sans attendre la boîte.
         let mut encore = false;
+        // **La garde d'une demande sans ligne** (forme B de c7, 15 novembre 2026) : la demande
+        // suivie, ce que l'équipier a laissé hors de la boîte depuis elle (un fichier écrit, une
+        // commande, un plan clos), la demande déjà relancée (une fois), le texte de la relance
+        // pour la frontière suivante, et l'échéance de l'attente du superviseur.
+        let pour_les_traces = crate::backend::PreparedBackend::load(&t.manifest).ok();
+        let mut demande_suivie: Option<usize> = None;
+        let mut trace = false;
+        let mut relancee: Option<usize> = None;
+        let mut relance: Option<String> = None;
+        let mut attente_bornee: Option<std::time::Instant> = None;
         let request = files.mailbox().iter().find(|l| l["kind"] == "request").and_then(|l| l["text"].as_str()).unwrap_or_default().to_string();
         // `number` numérote les pas joués ; `counted` ne compte pas ceux qui
         // finissent en attente du superviseur : MAX_STEPS borne le travail, pas
@@ -1345,6 +1415,13 @@ impl DaemonHost {
                     }
                     tour += 1;
                     if tour % 10 == 0 {
+                        if attente_bornee.is_some_and(|fin| std::time::Instant::now() >= fin) {
+                            let why = format!("sans réponse de l'équipier : la demande est restée sans ligne de lui après sa relance, et le superviseur n'a rien écrit en {} s (teammate.reply_wait_s)", policy.reply_wait_s);
+                            let line = files.append("host", "report", None, &why)?;
+                            publish(bus.as_ref(), task, &line);
+                            outcome.ended = why;
+                            return Ok(outcome);
+                        }
                         if self.tache(parent, task).is_none() {
                             outcome.ended = "la tâche s'est fermée pendant l'attente".into();
                             return Ok(outcome);
@@ -1364,12 +1441,20 @@ impl DaemonHost {
             // relit pas l'ancienne).
             let derniere = lines.iter().rposition(|l| l["kind"] == "request" && l["from"] != "teammate" && l["from"] != "host");
             let consigne = derniere.and_then(|n| lines[n]["text"].as_str()).unwrap_or_default().to_string();
+            if derniere != demande_suivie {
+                demande_suivie = derniere;
+                trace = derniere.is_some() && files.read_trace() == derniere;
+            }
+            attente_bornee = None;
             let faits: Vec<Value> = lines.iter().skip(derniere.map_or(0, |n| n + 1)).filter(|l| l["from"] == "teammate" && l["kind"] == "step_done").cloned().collect();
             let mut message = frontier_message(number, &news, &plans, last, &consigne, &faits);
             match expected_deliverable(&lines).map(|(_, e)| e) {
                 Some(e) if e == "report" => message.push_str("\nLa demande exige un report (outil report) avant la fin : sans lui, la tâche attend le superviseur.\n"),
                 Some(e) if e == "approval" => message.push_str("\nLa demande exige l'accord du superviseur avant la fin : propose (report, question), puis attends sa réponse.\n"),
                 _ => {}
+            }
+            if let Some(r) = relance.take() {
+                message.push_str(&format!("\n{r}\n"));
             }
             let mut step = Step::new(files.clone(), task, &request, bus.clone(), number);
             step.woke_by = woke_by.take();
@@ -1501,6 +1586,12 @@ impl DaemonHost {
                 }
             }
             outcome.steps.push(json!({ "step": number, "run": run, "step_done": declared, "tool_calls": step.tool_calls(), "decision": step.decision() }));
+            if !trace && (!step.closed_plans().is_empty() || step.succeeded_tools().iter().any(|n| tool_leaves_a_trace(pour_les_traces.as_ref(), n))) {
+                trace = true;
+                if let Some(n) = demande_suivie {
+                    files.write_trace(n);
+                }
+            }
             if !r["stopped_by"].is_null() {
                 outcome.ended = format!("arrêté par {}", r["stopped_by"]);
                 return Ok(outcome);
@@ -1538,6 +1629,24 @@ impl DaemonHost {
                     // appeler le modèle ; une ligne du superviseur le relance.
                     let line = files.append("host", "report", None, &format!("fait sans le livrable demandé ({manque}) : j'attends le superviseur"))?;
                     publish(bus.as_ref(), task, &line);
+                    continue;
+                } else if let Some(demande) = (!trace).then(|| request_without_a_line(&files.mailbox())).flatten() {
+                    if relancee != Some(demande) {
+                        // **Relancé une fois** : le `step_done` qui finirait la demande sans rien
+                        // laissé est cité, et le pas suivant part avec la relance. Ce n'est ni un
+                        // pas raté ni un pas sans suite.
+                        relancee = Some(demande);
+                        let dit = declared.as_ref().and_then(|d| d["done"].as_str()).map(str::trim).filter(|d| !d.is_empty()).unwrap_or("fait");
+                        let texte = format!("relance : ta demande attend une réponse dans la boîte ; ton step_done dit « {dit} », et rien n'y est arrivé ; écris le contenu demandé (report) ou dis pourquoi (question)");
+                        let line = files.append("host", "report", None, &texte)?;
+                        publish(bus.as_ref(), task, &line);
+                        relance = Some(texte);
+                        encore = true;
+                        continue;
+                    }
+                    let line = files.append("host", "report", None, "fait sans le livrable demandé (une ligne de l'équipier dans la boîte) : j'attends le superviseur")?;
+                    publish(bus.as_ref(), task, &line);
+                    attente_bornee = Some(std::time::Instant::now() + std::time::Duration::from_secs(policy.reply_wait_s));
                     continue;
                 } else {
                     outcome.ended = if plan_seen { "plus rien à faire : compte rendu".into() } else { "fait sans plan".into() };
