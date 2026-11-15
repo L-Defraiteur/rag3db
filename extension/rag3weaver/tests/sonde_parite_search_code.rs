@@ -350,7 +350,8 @@ fn usages_de(backend: &rag3weaver::backend::Backend, nom: &str) -> (Vec<(String,
             Value::Object(o) => {
                 if sous_usages {
                     let chemin = ["path", "file_path", "repo_path"].iter().find_map(|k| o.get(*k).and_then(Value::as_str));
-                    let qui = ["name", "caller", "qualified_name"].iter().find_map(|k| o.get(*k).and_then(Value::as_str));
+                    // Un usage est {user: {uuid, title, kind, path, line}, usage, …} (UsagesReport).
+                    let qui = ["title", "name", "caller", "qualified_name"].iter().find_map(|k| o.get(*k).and_then(Value::as_str));
                     if let (Some(c), Some(n)) = (chemin, qui) {
                         out.push((c.to_string(), n.to_string()));
                     }
