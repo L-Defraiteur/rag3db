@@ -31,3 +31,14 @@ Témoins, rouges d'abord :
   ne dit plus « sans recette vérifiée » ;
 - une recette étrangère hors placement : refus nommé ;
 - carte pleine, repli par activation : l'activation nommée est lancée, et elle seule.
+
+## L'alternance d'un repli pris pour le débit (décision de c7, 15 novembre)
+
+Le lot du 15 novembre pose une tenue : `fallback_hold_secs` (défaut 4 × `window_secs`). Un repli ne revient
+pas à la carte avant elle, et l'état le dit : « replié … jusqu'à <heure> au plus tôt ». Il reste un cas : une
+carte qui a la place en VRAM mais calcule lentement. Le repli pris pour le débit revient à la fin de sa tenue,
+retombe sous le seuil dans la fenêtre suivante, et alterne ainsi.
+
+Ce qu'il faudrait, dans ce lot-ci : un repli pris pour le débit qui revient puis retombe dans la fenêtre
+suivante **double sa tenue**. Témoin : deux retombées de suite, et la deuxième tenue est le double de la
+première.
