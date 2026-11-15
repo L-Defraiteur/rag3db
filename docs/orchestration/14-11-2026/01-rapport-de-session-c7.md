@@ -1482,3 +1482,6 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   modèle, c'est la carte pleine** ; une seule mesure ne sépare pas mémoire et concurrence. Le 7879 relancé et
   vérifié (embed 1024 norme 1, embed_dual). Embarquement : page, ticket de la résidence, puis le témoin A3 du
   repli cpu avec llvmpipe.
+- **tty, 11 h 4x** : l'essai de 19 h 46 rejoué sur l'hôte 7970 au binaire 26a091474 — le report porte la
+  présentation elle-même (titre, trois puces, « autonomie » en gras), rendue à l'écran avec son Markdown : le
+  correctif de l'équipier tient sur le cas réel (écran gardé dans la page de Lucie). Son essai reste le juge.
