@@ -169,7 +169,7 @@ Les relevés sont au portable, dans `~/.cache/rag3db-locks/sonde-coherence/` (`n
 - **FAUX tant que ce n'est pas corrigé** : je l'avais lu ainsi dans le code (`bm25_global.rs:58-64`,
   `with_subset_docs` l. 75, posé par `search_dag.rs:451`). Le témoin du soir montre l'inverse : sous
   `allowed_ids`, le score mélange N de l'index entier et df de la vue, pour tous les types de requête.
-  Ticket : `2026-11-13-une-recherche-filtree-ne-classe-pas-comme-sa-vue.md`. La page 30 ne peut pas
+  Ticket (fermé, corrigé en 4.3.7) : `closed/2026-11-13-une-recherche-filtree-ne-classe-pas-comme-sa-vue.md`. La page 30 ne peut pas
   dire « classé dans la vue » avant le correctif.
 - **Témoin fait, rouge (voir le ticket ci-dessus)**, plus large que prévu. Le soupçon de départ :
   `doc_freq(term)`

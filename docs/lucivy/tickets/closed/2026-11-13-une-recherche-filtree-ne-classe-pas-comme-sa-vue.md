@@ -1,7 +1,12 @@
 # Une recherche filtrée ne classe pas comme sa vue
 
-- **État** : ouvert (13 novembre 2026, au soir). Le témoin est rouge ; le correctif se fait le 14,
-  avant la mesure du plein texte. Version 4.3.7 sans tag, publication à la décision de Lucie.
+- **État** : corrigé (14 novembre 2026) par lucivy 4.3.7 (tag `v4.3.7`) : `set_alive_bitset` met à jour le
+  compte de documents du lecteur filtré. Le témoin lucivy est `test_filtered_scores_match_the_subset` (1 et 2
+  shards). rag3weaver est en 4.3.7 sur master depuis c99b2f05e (témoin
+  `fts_handle::une_recherche_filtree_classe_comme_sa_vue`, rouge sous 4.3.5, vert sous 4.3.7), puis en 4.3.8
+  (e95a1b8c6). Aucun cas restant : la mesure du 14 novembre sur les vrais ensembles d'ED (page
+  `docs/lucivy/14-11-2026/02-les-fils-de-lucivy-et-le-profil-leger.md`, partie 3) rend les mêmes hits avec et
+  sans filtre, pour 6 à 15 ms de plus par requête.
 - **Gravité** : classement faux. Les bons documents sont trouvés, mais dans un mauvais ordre de score.
 - **Atteignable en service** : oui. Toute recherche lucivy filtrée par `allowed_ids`, ce que feront les
   vues par génération (page 30 d'arbre principal).
