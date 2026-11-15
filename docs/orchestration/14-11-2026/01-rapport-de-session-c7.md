@@ -1379,3 +1379,8 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 - **04 h 26 — soixante-quatre atterris** : publier-sans-courant (G, 7fd2300f9). La file est vide. Le binaire du
   matin (26a091474 sur 373b5477b) est prêt et essayé ; il attend l'heure de Lucie avec la fenêtre M8 et la
   mesure des 904 s.
+- **Le cœur, 06 h 3x** : pas de base miroir — sous f41c0ba5b, un refus en fin de COMMIT perd la relation de B
+  des deux côtés en 10 tours sur 10, même seule dans son groupe : la règle « la troncature emporte le groupe
+  partagé » ne vaut que pour le refus entre les deux sens ; mécanisme à lire (rollbackGroupCollectionInsert,
+  updateRelOffsets), ticket 244e2551e ; master vert. Suite : ce mécanisme, puis le planificateur (A) de l'IN ;
+  le dictionnaire sous ASan la nuit prochaine.
