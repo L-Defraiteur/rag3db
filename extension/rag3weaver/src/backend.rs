@@ -5508,6 +5508,9 @@ impl Backend {
             if echecs > 0 {
                 v["failed_passes"] = json!(echecs);
             }
+            if let Some(etat) = w.provenance_state.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+                v["fallback"] = json!(etat);
+            }
             v
         }).filter(|v| v.as_object().is_some_and(|o| !o.is_empty()));
         // Ce que coûtent les montres, par phase : où passe le temps au repos.
@@ -5556,6 +5559,15 @@ impl Backend {
             return Ok(occupe);
         };
         let mut etats = serde_json::Map::new();
+        // Hors d'un index, l'embarqueur dit lui-même son repli.
+        let embarquement = match (embarquement, cat.embedder_provenance_state()) {
+            (Some(mut e), Some(etat)) if e.get("fallback").is_none() => {
+                e["fallback"] = json!(etat);
+                Some(e)
+            }
+            (None, Some(etat)) => Some(json!({"fallback": etat})),
+            (e, _) => e,
+        };
         if let Some(e) = embarquement {
             etats.insert("embedding".to_string(), e);
         }

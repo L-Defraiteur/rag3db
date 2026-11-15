@@ -310,6 +310,21 @@ pub fn new_index_journal() -> std::io::Result<std::path::PathBuf> {
     Ok(path)
 }
 
+/// **D'où sont venus les vecteurs de la passe**, au journal : ce que
+/// l'embarqueur a dit d'abord (un repli, un retour), puis les morceaux par
+/// provenance. L'état du repli est noté au suivi, pour l'état d'index.
+fn dire_la_provenance(catalog: &Catalog, journal: &std::path::Path, watch: &EmbedWatch) {
+    let (comptes, dits) = catalog.embedder_provenance();
+    for dit in dits {
+        log(journal, &dit);
+    }
+    if !comptes.is_empty() {
+        let parts: Vec<String> = comptes.iter().map(|(p, n)| format!("{p} : {n} morceau(x)")).collect();
+        log(journal, &format!("provenance des vecteurs : {}", parts.join(" ; ")));
+    }
+    *watch.provenance_state.lock().unwrap_or_else(|p| p.into_inner()) = catalog.embedder_provenance_state();
+}
+
 fn log(journal: &std::path::Path, line: &str) {
     use std::io::Write;
     if let Ok(mut f) = std::fs::OpenOptions::new().append(true).create(true).open(journal) {
@@ -564,6 +579,7 @@ fn run_index(
             let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
             let dus_avant = guard.index_progress().map(|p| dette(&p)).unwrap_or(usize::MAX);
             let n = guard.embarquer_le_retard_suivi(Disponibilites::TOUT, 512, None, Some(watch)).map_err(|e| e.to_string())?;
+            dire_la_provenance(&guard, journal, watch);
             // Chaque passe rafraîchit les états : « en cours » reste cru tant
             // que quelqu'un travaille.
             let progress = guard.refresh_index_states(&ENTITIES, rate, chars_per_chunk, n > 0).map_err(|e| e.to_string())?;
