@@ -584,6 +584,16 @@ fn completer_les_naissances(catalog: &mut Catalog, analysis: &crate::code::CodeA
     Ok(())
 }
 
+/// La clause d'une recopie (`filtre` : « » ou « WHERE … »), qui ne recrée pas une arête que l'ingestion
+/// a déjà posée vers la ligne neuve (la résolution des symboles d'un définisseur du lot, témoins 3 et 17).
+fn sans_doublon(filtre: &str, motif: &str) -> String {
+    let existe = format!("NOT EXISTS {{ MATCH {motif} }}");
+    match filtre.strip_prefix(" WHERE ") {
+        Some(c) => format!(" WHERE {c} AND {existe}"),
+        None => format!(" WHERE {existe}"),
+    }
+}
+
 fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[Remplacee], lot: &[(String, String)]) -> Result<(), String> {
     let Some(v) = catalog.generations.clone() else { return Ok(()) };
     let p = |n: &str, x: CypherValue| crate::connection::QueryParam::new(n, x);
@@ -632,7 +642,7 @@ fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[Remplacee]
             }
             let lu = catalog
                 .execute_raw_with_params(
-                    &format!("MATCH (x:`{from}`)-[r:`{rel}`]->(o:`{to}` {{_uuid: $ancien}}){filtre} MATCH (n:`{to}` {{_uuid: $neuf}}) CREATE (x)-[:`{rel}`{copie}]->(n) RETURN count(*)"),
+                    &format!("MATCH (x:`{from}`)-[r:`{rel}`]->(o:`{to}` {{_uuid: $ancien}}), (n:`{to}` {{_uuid: $neuf}}){} CREATE (x)-[:`{rel}`{copie}]->(n) RETURN count(*)", sans_doublon(&filtre, &format!("(x)-[:`{rel}`]->(n)"))),
                     &params,
                 )
                 .map_err(|e| format!("recopier les arêtes {rel} : {e}"))?;
@@ -654,7 +664,7 @@ fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[Remplacee]
             params.extend(params_du_lot.iter().cloned());
             let lu = catalog
                 .execute_raw_with_params(
-                    &format!("MATCH (o:`{SCOPE}` {{_uuid: $ancien}})-[r:CONSUMED_BY]->(x:`{SCOPE}`){filtre} MATCH (n:`{SCOPE}` {{_uuid: $neuf}}) CREATE (n)-[:CONSUMED_BY{copie}]->(x) RETURN count(*)"),
+                    &format!("MATCH (o:`{SCOPE}` {{_uuid: $ancien}})-[r:CONSUMED_BY]->(x:`{SCOPE}`), (n:`{SCOPE}` {{_uuid: $neuf}}){} CREATE (n)-[:CONSUMED_BY{copie}]->(x) RETURN count(*)", sans_doublon(&filtre, "(n)-[:CONSUMED_BY]->(x)")),
                     &params,
                 )
                 .map_err(|e| format!("recopier le miroir CONSUMED_BY : {e}"))?;
