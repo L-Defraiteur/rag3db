@@ -1658,3 +1658,6 @@ Hotfixs, 18 h 35 : l'extension non chargée — les .extensions des bases vivant
 première ouverture refuse l'extension de la lib d'avant (extension_error de SHOW_INDEXES, jamais lu par rag3weaver), l'index est
 détaché et rebâti en entier en silence, attribué à tort à un arrêt brutal, rien au reçu ni à l'état. Correctif en Rust (lire
 extension_error, avertissement nommé au reçu et à l'état, vraie cause du rebâti), témoin rouge d'abord ; après les lots du soir.
+tty, 18 h 40 : **tty-16 sur master à 96a05586b** (13 commits : l'historique ne garde que la demande et la réponse, les étapes en sourdine,
+l'accord vivant avec boutons, o/n sur une proposition, jamais un mot d'état nu ni un verdict de l'hôte, animation dès le départ et de
+repos, la réponse affichée une fois ; gmail, 0 attribution). « À toi » à 96 pour la pile du second tour sur 96a05586b.
