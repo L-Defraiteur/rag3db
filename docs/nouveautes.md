@@ -28,8 +28,6 @@
   journal d'index dit d'où vient chaque passe de vecteurs, et chaque repli ou retour avec sa cause.
   L'état d'index le porte aussi.
 
-- 15 novembre2026 — Dans le terminal de l'agent, une demande d'accord vit dans la zone vivante, le temps qu'on y réponde : la ligne d'état la dit même quand l'équipier s'anime, `o` ou `n` y répond, et l'historique n'en garde qu'une ligne, « accordé : … » ou « refusé : … », que la réponse vienne du terminal ou de l'IDE. Une proposition de déclarations du dépôt principal attend de même : `o` l'applique, `n` la rejette.
-
 - 15 novembre2026 — Le terminal de l'agent ne montre plus de mot d'état nu ni de verdict de l'hôte (« attend », « fini : fait sans plan », « étape faite ») : l'animation du thème tourne dès que l'équipier part, avec à côté ce qu'il attend (« le modèle répond… (gemini-3.8-flash, 12 s) », « run_command cargo check travaille… (40 s) ») ; quand c'est ton tour, chaque thème a son animation de repos ; une phrase dit seulement ce qui change quelque chose pour toi : une fin sans réponse, une erreur.
 
 - 15 novembre2026 — Dans le terminal de l'agent, une demande d'accord vit dans la zone vivante, le temps qu'on y réponde : la ligne d'état la dit même quand l'équipier s'anime, `o` ou `n` y répond, et l'historique n'en garde qu'une ligne, « accordé : … » ou « refusé : … », que la réponse vienne du terminal ou de l'IDE. Deux boutons, Oui choisi d'avance et Non, se choisissent par ← → et se valident par Entrée ; la demande se dit encore une fois le pas fini. Une proposition de déclarations du dépôt principal attend de même : `o` l'applique, `n` la rejette.
