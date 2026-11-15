@@ -1810,3 +1810,10 @@ de la CI sur 76f1d44ed est un test instable du shell (ticket b2580a56b), le run 
 le Rust arrivé → **la voie des suites C++ transférables de G** doit le couvrir sans rejeu (à confirmer par G) ; ED, hotfixs et recherche
 passent devant lui, il pousse à 21 h 15. tty : tty-18 (/nom par POST /ide/teammate/name, convenu avec ED ; `[Algareth · …]` sur les
 lignes qui portent name) en branche, attend la route d'ED et le name d'archi.
+
+## 20 h 37 — la pose du soir est complète
+
+G : les services f85977d09e posés en place à luciepc (7879 bge-m3 à 20 h 36 m 00 s, 14 s de coupure, vecteur témoin écart 0,0, 413 nommé
+sur 13 000 caractères ; 7878 granite à 20 h 36 m 15 s, 5 s, mêmes preuves ; NRestarts 0 ; les tunnels du portable rendent le neuf) ;
+l'hôte 23dc8efd47 aux deux postes depuis 20 h 13 ; Algareth au manifeste, check-manifests vert. La mesure d'embarquement sur card2
+part au va-du-banc ; le banc reprend F 25 % sur 0653a6aeff ensuite.
