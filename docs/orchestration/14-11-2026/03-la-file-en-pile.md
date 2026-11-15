@@ -1349,3 +1349,8 @@ tree-sitter-cpp comme une function_definition sans function_declarator, prise po
 correctif : une telle définition n'est plus un scope, son contenu prend le namespace de sa tête pour parent ; témoin sur le
 vrai fichier (MIT gardée) ; format.h : scopes 455 → 481, AnonymousFunction 4 → 0, dessous 45 → 0. Limite (grammaire) : class
 format_error sous FMT_CLASS_API sans scope, en ticket basse. Un seul lot rag3db avec `new` (rebase sous un nom neuf).
+Lucie, 16 h 02 : la vision dite et gardée (`docs/orchestration/visions/15-11-2026-l-agent-est-un-agent-de-code-qui-gere-ses-worktrees.md`) :
+un agent de code d'abord, qui gère ses worktrees, dont les recherches sont en phase avec le worktree, qui sait quand l'index
+est prêt, qui parle à l'utilisateur. tty, 16 h 02 : la forme des étapes faite en premier morceau de tty-16 (cx-tty-16 27d76c1a0 :
+l'historique garde demande et réponse, le reste défile en sourdine sur la ligne du haut de la zone vivante ; --etapes /
+/etapes pour tout voir ; crate 99/99) ; un binaire d'essai pour Lucie (`rag3weaver-tty-essai`, bâti sur cx-tty-16, avec /model).
