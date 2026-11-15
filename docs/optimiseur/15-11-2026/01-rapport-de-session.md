@@ -70,6 +70,13 @@ check-lib eaa1d460.
 
 ## Ce qui reste
 
+- **À la prochaine lib**, si elle porte le lot du planificateur du cœur (`in-cle-planifiee`, 0ebcd9e2e, l'IN sur la clé) :
+  deux classes internes changent de disposition. `PrimaryKeyScanInfo` gagne un `bool isList`. `PrimaryKeyScanNodeTable`
+  gagne l'état du mode liste, et son constructeur un paramètre par défaut. Elles ne sont pas dans l'API publique, et
+  l'extension vector ne les emploie pas, d'après le cœur. Mais le relevé des symboles de `batir-lib.sh` ne voit pas une
+  disposition : l'extension et les binaires se rebâtissent du même bâti, et la bascule le dit (« disposition interne
+  changée, API publique inchangée »).
+
 - **Le plafond des targets** (ticket d'archi du 15) : archi fournit un second compte au prochain plafond. Le premier
   donne 11 Go, dont 4,0 en `incremental/`.
 - **La mesure du cas filtré**, sur une base à versions, avant et après `vue-publiee` (ticket d'ED) : fac67a208 contre un
