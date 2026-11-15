@@ -93,6 +93,9 @@ pub enum Touche {
     PageBas,
 }
 
+/// Au plus tant de lignes dans l'aperçu d'un appel d'outil ; le reste par Ctrl-O.
+pub const APERCU: usize = 12;
+
 /// Au plus tant de lignes d'écran pour la saisie ; au-delà, elle défile.
 pub const SAISIE_MAX: usize = 8;
 
@@ -359,12 +362,34 @@ impl Vue {
             "ToolCallStarted" => {
                 self.clore();
                 let outil = e["tool"].as_str().unwrap_or("?").to_string();
-                self.valider(Genre::Outil, format!("» {outil}"));
+                let arguments = match &e["arguments"] {
+                    Value::String(a) => a.clone(),
+                    Value::Null => String::new(),
+                    autre => autre.to_string(),
+                };
+                let mut appel = crate::outils::Appel::debut(self.appels.len() + 1, &outil, &arguments);
+                appel.id = e["call_id"].as_str().unwrap_or_default().to_string();
+                self.valider(Genre::Outil, appel.ligne());
+                self.appels.push(appel);
                 self.changer(Etat::Agit(outil));
             }
             "ToolCallFinished" => {
-                let dit = if e["ok"] == true { format!("  fait ({} ms)", e["ms"].as_u64().unwrap_or(0)) } else { format!("  refusé ({})", e["error_kind"].as_str().unwrap_or("erreur")) };
+                let ok = e["ok"] == true;
+                let dit = if ok { format!("  fait ({} ms)", e["ms"].as_u64().unwrap_or(0)) } else { format!("  refusé ({})", e["error_kind"].as_str().unwrap_or("erreur")) };
                 self.valider(Genre::Outil, dit);
+                // L'appel par son identifiant, sinon le dernier qui tourne encore.
+                let id = e["call_id"].as_str().unwrap_or_default();
+                let i = self.appels.iter().rposition(|a| !id.is_empty() && a.id == id).or_else(|| self.appels.iter().rposition(|a| a.ok.is_none()));
+                if let Some(a) = i.and_then(|i| self.appels.get_mut(i)) {
+                    a.ok = Some(ok);
+                    a.ms = e["ms"].as_u64().unwrap_or(0);
+                    a.erreur = e["error_kind"].as_str().map(str::to_string);
+                    a.extrait = e["result_excerpt"].as_str().map(str::to_string);
+                    a.tronque = e["truncated"] == true;
+                    a.octets = e["bytes"].as_u64();
+                    let apercu = a.apercu(APERCU);
+                    self.validees.extend(apercu);
+                }
                 self.changer(Etat::Reflechit);
             }
             "RunFinished" => {
@@ -393,12 +418,20 @@ impl Vue {
         self.clore();
         let tete = crate::boite::en_tete(l);
         let texte = l["text"].as_str().unwrap_or("");
-        for (i, ligne) in texte.split('\n').enumerate() {
-            if i == 0 {
-                self.valider_avec_tete(Genre::Boite, &tete, ligne);
-            } else {
-                self.valider(Genre::Boite, format!("  {ligne}"));
+        // Le texte de la boîte comme du Markdown : un bloc de code y est un bloc de
+        // sa langue (tty-11), et l'en-tête va sur la première ligne.
+        let mut premiere = true;
+        for b in crate::outils::blocs(texte, Genre::Boite) {
+            match (b.genre, premiere) {
+                (Genre::Code, true) => {
+                    self.valider_avec_tete(Genre::Boite, &tete, "");
+                    self.validees.push(b);
+                }
+                (Genre::Code, false) => self.validees.push(b),
+                (_, true) => self.valider_avec_tete(Genre::Boite, &tete, &b.texte),
+                (_, false) => self.valider(Genre::Boite, format!("  {}", b.texte)),
             }
+            premiere = false;
         }
         if l["kind"] == "ended" {
             self.changer(Etat::Fini(texte.to_string()));
@@ -470,7 +503,12 @@ impl Vue {
             // Une saisie en cours se vide d'abord, comme dans un shell.
             Touche::CtrlC if !self.saisie.est_vide() => self.edite(crate::saisie::Saisie::vider),
             Touche::CtrlC => Some(Action::Quitter),
-            Touche::CtrlO | Touche::PageHaut | Touche::PageBas => None,
+            Touche::CtrlO if !self.appels.is_empty() => Some(Action::Ouvrir),
+            Touche::CtrlO => {
+                self.note("aucun appel d'outil à ouvrir");
+                None
+            }
+            Touche::PageHaut | Touche::PageBas => None,
             Touche::CtrlG => Some(Action::Arreter),
             Touche::CtrlD if self.saisie.est_vide() => Some(Action::Quitter),
             Touche::CtrlD => None,
