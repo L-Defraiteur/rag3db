@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 15 novembre2026 — Sous tmux, Maj-Entrée passe à la ligne dans le terminal de l'agent si tmux est réglé pour les touches étendues en CSI u (`set -g extended-keys on`, `set -g extended-keys-format csi-u`) ; le terminal lit le réglage et le dit quand il manque. Le tmux par défaut garde son repli dit, Alt-Entrée.
+
 - 15 novembre2026 — `/model` dans le terminal de l'agent : la liste des modèles de langage que déclare le manifeste de la tâche (le défaut et celui de la tâche marqués), et `/model <nom>` pour en changer ; l'hôte garde le choix avec la tâche et son chat le suit (`GET /ide/teammate/models`, `POST /ide/teammate/model`) ; un choix devenu inconnu se voit, et le chat refuse alors en disant de choisir.
 
 - 15 novembre2026 — Le terminal de l'agent a ses commandes : `/aide`, `/theme`, `/tache`, `/depot`, `/journal`, `/effacer`, `/context` (le remplissage du contexte du modèle) et les autres ; `!<commande>` la lance là où tourne le terminal, dans un pseudo-terminal où `sudo` demande son mot de passe, et sa sortie part à l'équipier, sans jamais le mot de passe ; Tab complète les commandes, leurs arguments, les exécutables et les fichiers ; l'historique des envois survit à la séance.

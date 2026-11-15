@@ -1,6 +1,6 @@
 # Sous tmux, Maj-Entrée envoie au lieu d'aller à la ligne
 
-- **État** : ouvert. Constaté par la session tty le 15 nov. 2026 (lot tty-10), par le harnais sous tmux ; repli dit, non résolu.
+- **État** : ouvert pour le tmux par défaut, résolu pour un tmux réglé (lot tty-15). Constaté par la session tty le 15 nov. 2026 (lot tty-10), par le harnais sous tmux.
 - **Famille** : produit
 - **Gravité** : gêne. Une saisie qu'on voulait sur plusieurs lignes part à moitié : « un », Maj-Entrée, envoie « un » à l'équipier.
 - **Atteignable en service** : oui, pour qui lance le terminal sous tmux, dans un émulateur qui distingue Maj-Entrée (kitty, WezTerm, foot, Ghostty).
@@ -18,7 +18,16 @@ Sous tmux (variable `TMUX`), la saisie vide affiche : « sous tmux, Maj-Entrée 
 
 `extension/rag3weaver/tty/mesures/mesure.py`, séance 1e, lanceur `tmux-ssh` : la boîte reçoit `["un", "deux\ntrois"]` au lieu de `["un\ndeux\ntrois"]`. Le harnais l'admet seulement si l'indication de tmux est à l'écran (`repli_tmux` dans `docs/tty/15-11-2026/mesures/`).
 
-## Ce qu'il faudrait pour le fermer
+## Ce que tty-15 a fait des deux pistes
+
+- **Demander `modifyOtherKeys`** : un tmux par défaut (`extended-keys off`) l'ignore, sa page le dit (« when set to off, this feature is disabled »). Avec `extended-keys on` (ou `always`), il honore le mode 1. Il rend alors Maj-Entrée dans son format `extended-keys-format` : en `xterm` (le défaut, `ESC[27;2;13~`), que crossterm ne lit pas, de sorte que la demander y perdrait Maj-Entrée tout à fait ; en `csi-u` (`ESC[13;2u`), que crossterm lit.
+- **Lire le réglage** : le terminal lit `tmux show -gv extended-keys` et `extended-keys-format`.
+  - Si les deux sont ouverts, il demande le mode 1 (`CSI > 4 ; 1 m`), le rend à la sortie, et Maj-Entrée passe à la ligne sous tmux.
+  - Sinon, rien n'est demandé, et l'indication dit les deux réglages : « sous tmux, Maj-Entrée envoie : Alt-Entrée pour la ligne (ou, dans tmux : set -g extended-keys on ; set -g extended-keys-format csi-u) ». Trop étroite, elle garde son début.
+
+Le harnais le joue sous `tmux-local-ouvert` : un tmux réglé avec ces deux options et `terminal-features 'xterm*:extkeys'`, rouge contre tty-13, vert contre tty-15. Sous `tmux-local`, le tmux par défaut, le repli reste dit, et vert (`docs/tty/15-11-2026/mesures/tmux-*.json`).
+
+## Ce qui reste ouvert
 
 Que tmux passe Maj-Entrée à l'application : `set -g extended-keys on`, plus, selon l'émulateur, `terminal-features` avec `extkeys`. Ce sont des réglages de l'utilisateur, alors que rien ne doit être à installer ni à configurer en plus de rag3weaver. Deux pistes restent à essayer avant de le dire impossible :
 - demander à tmux le mode `modifyOtherKeys` (`CSI > 4;1 m`), qu'un tmux réglé en `extended-keys on` honore, et voir ce que fait un tmux par défaut ;
