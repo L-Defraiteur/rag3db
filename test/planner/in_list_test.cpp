@@ -27,8 +27,8 @@ protected:
         createDBAndConn();
     }
     void fill(int64_t n) {
-        ASSERT_TRUE(conn->query("CREATE NODE TABLE T(k STRING, i INT64, PRIMARY KEY(k));")
-                        ->isSuccess());
+        ASSERT_TRUE(
+            conn->query("CREATE NODE TABLE T(k STRING, i INT64, PRIMARY KEY(k));")->isSuccess());
         ASSERT_TRUE(conn->query("COPY T FROM (UNWIND range(0, " + std::to_string(n - 1) +
                                 ") AS x RETURN 'key-' + CAST(x AS STRING), x);")
                         ->isSuccess());
@@ -48,7 +48,8 @@ protected:
         for (const auto item : items) {
             children.push_back(std::make_unique<Value>(item));
         }
-        return std::make_unique<Value>(LogicalType::LIST(LogicalType::INT64()), std::move(children));
+        return std::make_unique<Value>(LogicalType::LIST(LogicalType::INT64()),
+            std::move(children));
     }
     // Le nombre de lignes rendues par `query` sous le paramètre $l.
     int64_t countWith(const std::string& query, std::unique_ptr<Value> list) {
@@ -77,8 +78,7 @@ protected:
         return out;
     }
     static constexpr const char* IN_FORM = "MATCH (n:T) WHERE n.k IN $l RETURN count(*);";
-    static constexpr const char* KEY_FORM =
-        "UNWIND $l AS u MATCH (n:T {k: u}) RETURN count(*);";
+    static constexpr const char* KEY_FORM = "UNWIND $l AS u MATCH (n:T {k: u}) RETURN count(*);";
 };
 
 TEST_F(InListTest, InOnAConstantListMatchesTheKeyForm) {
@@ -137,9 +137,9 @@ TEST_F(InListTest, InOnAConstantListIsNotQuadratic) {
                           << " ms against the key form " << key[1] << " ms";
 }
 
-// **Le planificateur (A)** : un IN sur la clé primaire, la liste constante, se planifie en accès par
-// la clé (PRIMARY_KEY_SCAN), comme n.k = <constante>, et non en balayage puis FILTER. Conception :
-// docs/coeur-cpp/15-11-2026/01-rapport-de-session.md.
+// **Le planificateur (A)** : un IN sur la clé primaire, la liste constante, se planifie en accès
+// par la clé (PRIMARY_KEY_SCAN), comme n.k = <constante>, et non en balayage puis FILTER.
+// Conception : docs/coeur-cpp/15-11-2026/01-rapport-de-session.md.
 TEST_F(InListTest, InOnTheKeyIsPlannedAsAKeyScan) {
     fill(1000);
     auto prepared = conn->prepare("EXPLAIN MATCH (n:T) WHERE n.k IN $l RETURN n.i;");
@@ -193,7 +193,8 @@ TEST_F(InListTest, NullsInTheListMatchNothing) {
     children.push_back(std::make_unique<Value>(Value::createNullValue(LogicalType::STRING())));
     children.push_back(std::make_unique<Value>(std::string("key-4")));
     children.push_back(std::make_unique<Value>(std::string("key-3")));
-    auto list = std::make_unique<Value>(LogicalType::LIST(LogicalType::STRING()), std::move(children));
+    auto list =
+        std::make_unique<Value>(LogicalType::LIST(LogicalType::STRING()), std::move(children));
     EXPECT_EQ(countWith(IN_FORM, std::move(list)), 2);
 }
 
@@ -234,8 +235,7 @@ TEST_F(InListTest, AbsentKeysAndDuplicatesOnTheKey) {
 TEST_F(InListTest, AListOfAnotherTypeThanTheKeyKeepsTheFilter) {
     fill(1000);
     auto r = conn->query("MATCH (n:T) WHERE n.k IN [1, 2, 3] RETURN count(*);");
-    auto scan = conn->query(
-        "MATCH (n:T) WITH n, n.k AS k WHERE k IN [1, 2, 3] RETURN count(*);");
+    auto scan = conn->query("MATCH (n:T) WITH n, n.k AS k WHERE k IN [1, 2, 3] RETURN count(*);");
     ASSERT_EQ(r->isSuccess(), scan->isSuccess())
         << r->getErrorMessage() << " / " << scan->getErrorMessage();
     if (r->isSuccess()) {

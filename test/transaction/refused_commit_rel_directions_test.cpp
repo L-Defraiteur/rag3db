@@ -2,19 +2,20 @@
 // docs/optimiseur/tickets/2026-11-14-code-lourd-et-code-principal-divergent-entre-leurs-deux-rangements.md).
 // Sur code-lourd et code-principal, sous la lib 0c41f9fe6, trois tables de relations rendaient des
 // relations d'un seul côté, vues deux fois, ou aux bouts différents selon le sens lu. La piste : la
-// fenêtre corrigée en 373b5477b. Un COMMIT refusé s'annulait hors du verrou, et l'annulation tronquait
-// chaque sens de la table à sa première ligne, emportant les lignes qu'un autre écrivain avait versées
-// entre-temps — sens par sens, chacun à ses propres positions.
+// fenêtre corrigée en 373b5477b. Un COMMIT refusé s'annulait hors du verrou, et l'annulation
+// tronquait chaque sens de la table à sa première ligne, emportant les lignes qu'un autre écrivain
+// avait versées entre-temps — sens par sens, chacun à ses propres positions.
 //
 // A verse un lot de relations, son COMMIT est refusé (le journal ne se synchronise pas,
-// CutFileSystem) ; B valide une relation pendant que A se déroule ; puis chaque relation validée de B
-// est lue par sa source (sens avant) et par sa destination (sens arrière). Les deux comptes doivent
-// valoir 1, et l'ensemble des deux sens être le même.
+// CutFileSystem) ; B valide une relation pendant que A se déroule ; puis chaque relation validée de
+// B est lue par sa source (sens avant) et par sa destination (sens arrière). Les deux comptes
+// doivent valoir 1, et l'ensemble des deux sens être le même.
 //
-// Les bouts sont dans des groupes de nœuds différents (2 048 nœuds par groupe), comme dans une vraie
-// base : les relations de A vont du groupe 0 au groupe 2, celle de B du groupe 0 au groupe 1. Au sens
-// avant, A et B partagent le groupe CSR 0, et la troncature de A emportait B ; au sens arrière, B est
-// seule dans le groupe 1 et survivait : une relation d'un seul côté, la forme de code-lourd.
+// Les bouts sont dans des groupes de nœuds différents (2 048 nœuds par groupe), comme dans une
+// vraie base : les relations de A vont du groupe 0 au groupe 2, celle de B du groupe 0 au groupe 1.
+// Au sens avant, A et B partagent le groupe CSR 0, et la troncature de A emportait B ; au sens
+// arrière, B est seule dans le groupe 1 et survivait : une relation d'un seul côté, la forme de
+// code-lourd.
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -54,17 +55,18 @@ int64_t countOf(Connection& c, const std::string& q) {
     return r->isSuccess() && r->hasNext() ? r->getNext()->getValue(0)->getValue<int64_t>() : -1;
 }
 
-// Le cas joué dans un fils sur CutFileSystem ; écrit ses pas et rend le nombre de relations de B dont
-// les deux sens ne s'accordent pas.
-int play(const std::string& databasePath, rag3db::main::SystemConfig& config, std::ofstream& steps) {
+// Le cas joué dans un fils sur CutFileSystem ; écrit ses pas et rend le nombre de relations de B
+// dont les deux sens ne s'accordent pas.
+int play(const std::string& databasePath, rag3db::main::SystemConfig& config,
+    std::ofstream& steps) {
     Database database(databasePath, config);
     Connection a(&database);
     Connection b(&database);
     for (const auto* q : {"CREATE NODE TABLE N(id INT64, PRIMARY KEY(id));",
              "CREATE REL TABLE R(FROM N TO N, line INT64);",
              "UNWIND range(0, 5999) AS i CREATE (:N {id: i});",
-             // Des relations validées avant, dans les trois groupes : des groupes CSR déjà là, que les
-             // lots prolongent.
+             // Des relations validées avant, dans les trois groupes : des groupes CSR déjà là, que
+             // les lots prolongent.
              "UNWIND range(0, 2999) AS i MATCH (x:N {id: i}), (y:N {id: 5999 - i}) CREATE "
              "(x)-[:R {line: -1}]->(y);"}) {
         if (!a.query(q)->isSuccess()) {
@@ -74,8 +76,9 @@ int play(const std::string& databasePath, rag3db::main::SystemConfig& config, st
     int disagreements = 0, refused = 0, bCommits = 0;
     for (auto round = 0; round < 8; round++) {
         a.query("BEGIN TRANSACTION;");
-        a.query("UNWIND range(0, 4999) AS i MATCH (x:N {id: i % 2048}), (y:N {id: 4096 + i % 1900}) "
-                "CREATE (x)-[:R {line: 100000 + i}]->(y);");
+        a.query(
+            "UNWIND range(0, 4999) AS i MATCH (x:N {id: i % 2048}), (y:N {id: 4096 + i % 1900}) "
+            "CREATE (x)-[:R {line: 100000 + i}]->(y);");
         const auto src = (round * 37) % 2048, dst = 2048 + round;
         const auto line = 1000 + round;
         b.query("BEGIN TRANSACTION;");
@@ -98,9 +101,9 @@ int play(const std::string& databasePath, rag3db::main::SystemConfig& config, st
         }
         const auto l = std::to_string(line);
         // Par la source : le sens avant ; par la destination : le sens arrière.
-        const auto forward = countOf(b, "MATCH (x:N {id: " + std::to_string(src) +
-                                            "})-[r:R]->(y:N) WHERE r.line = " + l +
-                                            " RETURN count(*);");
+        const auto forward =
+            countOf(b, "MATCH (x:N {id: " + std::to_string(src) +
+                           "})-[r:R]->(y:N) WHERE r.line = " + l + " RETURN count(*);");
         const auto backward = countOf(b, "MATCH (x:N)-[r:R]->(y:N {id: " + std::to_string(dst) +
                                              "}) WHERE r.line = " + l + " RETURN count(*);");
         if (forward != 1 || backward != 1) {
@@ -123,10 +126,11 @@ int play(const std::string& databasePath, rag3db::main::SystemConfig& config, st
 
 // Le second cas : le COMMIT de A lève ENTRE ses deux sens (le point de faute
 // rel-commit-between-directions), comme un tampon plein au second sens. Sous l'ancienne lib,
-// l'enregistrement d'annulation ne couvrait que le premier sens versé, et l'annulation hors du verrou
-// tronquait ce sens, avec la relation de B versée à la suite ; l'autre sens gardait B : une relation
-// d'un seul côté, la forme de code-lourd. Sur master, l'annulation sous le verrou rend les deux sens
-// à leur état d'avant : la relation de B lisible des deux côtés, et rien de A d'aucun côté.
+// l'enregistrement d'annulation ne couvrait que le premier sens versé, et l'annulation hors du
+// verrou tronquait ce sens, avec la relation de B versée à la suite ; l'autre sens gardait B : une
+// relation d'un seul côté, la forme de code-lourd. Sur master, l'annulation sous le verrou rend les
+// deux sens à leur état d'avant : la relation de B lisible des deux côtés, et rien de A d'aucun
+// côté.
 int playBetweenDirections(const std::string& databasePath, rag3db::main::SystemConfig& config,
     std::ofstream& steps) {
     Database database(databasePath, config);
@@ -144,15 +148,16 @@ int playBetweenDirections(const std::string& databasePath, rag3db::main::SystemC
     int wrong = 0, refused = 0, bCommits = 0;
     for (auto round = 0; round < 8; round++) {
         a.query("BEGIN TRANSACTION;");
-        a.query("UNWIND range(0, 4999) AS i MATCH (x:N {id: i % 2048}), (y:N {id: 4096 + i % 1900}) "
-                "CREATE (x)-[:R {line: 100000 + i}]->(y);");
+        a.query(
+            "UNWIND range(0, 4999) AS i MATCH (x:N {id: i % 2048}), (y:N {id: 4096 + i % 1900}) "
+            "CREATE (x)-[:R {line: 100000 + i}]->(y);");
         const auto src = (round * 37) % 2048, dst = 2048 + round;
         const auto line = 1000 + round;
         b.query("BEGIN TRANSACTION;");
         b.query("MATCH (x:N {id: " + std::to_string(src) + "}), (y:N {id: " + std::to_string(dst) +
                 "}) CREATE (x)-[:R {line: " + std::to_string(line) + "}]->(y);");
-        // Le point attend 200 ms sous le verrou avant de lever : B, lancé 5 ms après A, est alors en
-        // file sur ce verrou, comme un écrivain de plus sous un pool plein.
+        // Le point attend 200 ms sous le verrou avant de lever : B, lancé 5 ms après A, est alors
+        // en file sur ce verrou, comme un écrivain de plus sous un pool plein.
         TestHooks::armFailPoint(TestFailPoint::REL_COMMIT_BETWEEN_DIRECTIONS, 200);
         bool aRefused = false;
         std::thread ta([&] { aRefused = !a.query("COMMIT;")->isSuccess(); });
@@ -169,15 +174,15 @@ int playBetweenDirections(const std::string& databasePath, rag3db::main::SystemC
         refused++;
         bCommits++;
         const auto l = std::to_string(line);
-        const auto forward = countOf(b, "MATCH (x:N {id: " + std::to_string(src) +
-                                            "})-[r:R]->(y:N) WHERE r.line = " + l +
-                                            " RETURN count(*);");
+        const auto forward =
+            countOf(b, "MATCH (x:N {id: " + std::to_string(src) +
+                           "})-[r:R]->(y:N) WHERE r.line = " + l + " RETURN count(*);");
         const auto backward = countOf(b, "MATCH (x:N)-[r:R]->(y:N {id: " + std::to_string(dst) +
                                              "}) WHERE r.line = " + l + " RETURN count(*);");
         // Rien de A d'aucun côté : par une source du groupe 0 (sens avant), par une destination du
         // groupe 2 (sens arrière).
-        const auto aForward = countOf(b,
-            "MATCH (x:N {id: 5})-[r:R]->(y:N) WHERE r.line >= 100000 RETURN count(*);");
+        const auto aForward =
+            countOf(b, "MATCH (x:N {id: 5})-[r:R]->(y:N) WHERE r.line >= 100000 RETURN count(*);");
         const auto aBackward = countOf(b,
             "MATCH (x:N)-[r:R]->(y:N {id: 4100}) WHERE r.line >= 100000 RETURN count(*);");
         if (forward != 1 || backward != 1 || aForward != 0 || aBackward != 0) {

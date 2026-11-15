@@ -222,7 +222,8 @@ std::shared_ptr<LogicalOperator> FilterPushDownOptimizer::visitScanNodeTableRepl
             predicateSet.addPredicate(primaryKeyEqualityComparison);
         }
     }
-    // **Un IN sur la clé primaire** (ticket docs/everything-declarative/tickets/2026-11-14-un-in-sur-la-
+    // **Un IN sur la clé primaire** (ticket
+    // docs/everything-declarative/tickets/2026-11-14-un-in-sur-la-
     // cle-primaire-balaie-toute-la-table.md) : `n.pk IN <liste constante>` devient, comme
     // `n.pk = <constante>`, un accès par la clé, ici une liste de clés, au lieu d'un balayage de la
     // table puis d'un FILTER. Les lignes viennent dans l'ordre de la liste, chaque nœud une fois.
@@ -366,7 +367,8 @@ std::shared_ptr<Expression> PredicateSet::popNodePKInListComparison(const Expres
         const auto list = predicate->getChild(0);
         const auto key = predicate->getChild(1);
         // La liste constante seulement : un littéral ou un paramètre lié, jamais une sous-requête
-        // ni une expression de la ligne. Du type de la clé : sinon le FILTER garde le chemin d'avant.
+        // ni une expression de la ligne. Du type de la clé : sinon le FILTER garde le chemin
+        // d'avant.
         if ((list->expressionType != ExpressionType::LITERAL &&
                 list->expressionType != ExpressionType::PARAMETER) ||
             list->dataType.getLogicalTypeID() != LogicalTypeID::LIST ||

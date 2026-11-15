@@ -1,7 +1,7 @@
 // Une lecture pendant un lot d'écriture voit le lot entier ou rien (ticket de recherche du
 // 13 novembre 2026, docs/recherche/tickets/2026-11-13-une-lecture-pendant-un-lot-reindexe-voit-le-
-// lot-a-moitie-sous-la-lib-entiere.md). Dans rag3weaver, sous charge, une transaction READ ONLY a vu
-// l'arête MENTIONS d'un lot pas encore validé, sans son arête DEFINES.
+// lot-a-moitie-sous-la-lib-entiere.md). Dans rag3weaver, sous charge, une transaction READ ONLY a
+// vu l'arête MENTIONS d'un lot pas encore validé, sans son arête DEFINES.
 //
 // La forme est celle que la capture du test Rust a relevée (LD_PRELOAD sur Connection::query et
 // executeWithParams, 13 novembre). L'écrivain, dans une seule transaction, crée par MERGE :
@@ -124,14 +124,15 @@ protected:
                                     "'})<-[r:MENTIONS]-(m:Scope) RETURN count(r);",
                                 ok);
                             const auto callers = count(reader,
-                                "MATCH (m:Scope) WHERE m.name = 'h" + ks + "' RETURN count(m);", ok);
+                                "MATCH (m:Scope) WHERE m.name = 'h" + ks + "' RETURN count(m);",
+                                ok);
                             reader.query("COMMIT;");
                             reads++;
                             if (!ok) {
                                 continue;
                             }
-                            const bool whole = defs == mentions && mentions == callers &&
-                                               (defs == 0 || defs == 1);
+                            const bool whole =
+                                defs == mentions && mentions == callers && (defs == 0 || defs == 1);
                             const bool lost = k < upTo && defs != 1;
                             if ((!whole || lost) && wrong++ < 10) {
                                 fprintf(stderr,
@@ -148,11 +149,12 @@ protected:
                     inFlight.store(k);
                     const std::vector<std::string> batch = {"BEGIN TRANSACTION;",
                         "UNWIND ['d" + ks + "', 'c" + ks +
-                            "'] AS u MERGE (n:Scope {uuid: u}) SET n.name = CASE WHEN u = 'd" +
-                            ks + "' THEN 'def" + ks + "' ELSE 'h" + ks +
+                            "'] AS u MERGE (n:Scope {uuid: u}) SET n.name = CASE WHEN u = 'd" + ks +
+                            "' THEN 'def" + ks + "' ELSE 'h" + ks +
                             "' END, n.declarations = '\"arrivee" + ks + "\"';",
-                        "UNWIND ['y" + ks + "'] AS u MERGE (n:Symbol {uuid: u}) SET n.name = "
-                                            "'arrivee" +
+                        "UNWIND ['y" + ks +
+                            "'] AS u MERGE (n:Symbol {uuid: u}) SET n.name = "
+                            "'arrivee" +
                             ks + "';",
                         "UNWIND [{f: 'd" + ks + "', t: 'y" + ks +
                             "'}] AS item MATCH (a:Scope {uuid: item.f}), (b:Symbol {uuid: "

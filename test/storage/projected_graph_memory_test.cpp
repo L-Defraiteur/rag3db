@@ -8,8 +8,8 @@
 // - (b) le même Cypher long, exécuté seul, hors de toute projection ;
 // - (c) la séquence de rag3weaver telle quelle ;
 // - (p) le même filtre, la liste en paramètre (le témoin plat d'ED).
-// Le RSS après malloc_trim dit ce qui est tenu ; l'écart avec le RSS brut, ce que l'allocateur garde.
-#include <malloc.h>
+// Le RSS après malloc_trim dit ce qui est tenu ; l'écart avec le RSS brut, ce que l'allocateur
+// garde.
 #include <sys/resource.h>
 
 #include <cstdio>
@@ -23,6 +23,7 @@
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
 #include "parser/parser.h"
+#include <malloc.h>
 
 using namespace rag3db::common;
 using namespace rag3db::main;
@@ -120,7 +121,8 @@ protected:
             }
             last = trimmed;
         }
-        fprintf(stderr, "[mémoire] %s : départ %ld Mio, croissance du tour 1 au tour %d : %ld Mio\n",
+        fprintf(stderr,
+            "[mémoire] %s : départ %ld Mio, croissance du tour 1 au tour %d : %ld Mio\n",
             name.c_str(), static_cast<long>(start), ROUNDS, static_cast<long>(last - first));
         return last - first;
     }

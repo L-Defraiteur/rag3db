@@ -65,8 +65,8 @@ public:
     }
 
 private:
-    // Le mode liste (un IN sur la clé primaire) : la liste évaluée une fois, parcourue d'un appel au
-    // suivant, une ligne par clé trouvée, chaque nœud une fois.
+    // Le mode liste (un IN sur la clé primaire) : la liste évaluée une fois, parcourue d'un appel
+    // au suivant, une ligne par clé trouvée, chaque nœud une fois.
     bool getNextTupleFromList(ExecutionContext* context);
 
     std::unique_ptr<storage::NodeTableScanState> scanState;
