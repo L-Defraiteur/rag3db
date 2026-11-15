@@ -1155,6 +1155,18 @@ impl PreparedBackend {
             return Err("unsupported backend manifest version".into());
         }
         let embed = manifest.embed_source()?;
+        // **Le repli par activation est le même fournisseur, au placement près** (décision
+        // de c7) : un écart hors placement se refuse au chargement, nommé.
+        for (capacite, source) in manifest.models.iter() {
+            if let (Some(principale), crate::model_source::Fallback::Activation(repli)) = (&source.activation, &source.fallback) {
+                if let Some(ecart) = crate::model_source::activation::ecart_hors_placement(principale, repli.as_ref()) {
+                    return Err(format!(
+                        "models.{}.fallback : le repli « {} » diffère de « {} » hors placement : {ecart}",
+                        capacite.name(), repli.nom_pour(source), principale.nom_pour(source)
+                    ));
+                }
+            }
+        }
         // Un creux qui déclare sa dimension déclare son dual : elle est celle du
         // dense, sinon le dual rendrait des vecteurs d'une autre taille que ceux
         // du catalogue (garde de c7, 14 novembre 2026). Dit au chargement, pas à
@@ -2711,13 +2723,29 @@ pub(crate) fn resoudre_les_activations(v: &mut Value) -> Result<(), String> {
         }
     }
     let Some(modeles) = v.get_mut("models").and_then(Value::as_object_mut) else { return Ok(()) };
+    let connues = || -> String {
+        let noms: Vec<&str> = table.keys().map(String::as_str).collect();
+        if noms.is_empty() { "aucune".to_string() } else { noms.join(", ") }
+    };
     for (capacite, declaration) in modeles.iter_mut() {
+        // **Le repli par activation** (décision de c7, 15 novembre 2026) : le nom cité
+        // devient son bloc, nommé ; un nom inconnu se refuse, avec les noms déclarés.
+        if let Some(cite) = declaration.pointer("/fallback/activation").and_then(Value::as_str).map(str::to_string) {
+            let Some(bloc) = table.get(&cite) else {
+                return Err(format!(
+                    "models.{capacite}.fallback.activation cite « {cite} », absente de `activations` (déclarées : {})",
+                    connues()
+                ));
+            };
+            let mut bloc = bloc.clone();
+            bloc["nom"] = Value::String(cite);
+            declaration["fallback"]["activation"] = bloc;
+        }
         let Some(cite) = declaration.get("activation").and_then(Value::as_str).map(str::to_string) else { continue };
         let Some(bloc) = table.get(&cite) else {
-            let connues: Vec<&str> = table.keys().map(String::as_str).collect();
             return Err(format!(
                 "models.{capacite}.activation cite « {cite} », absente de `activations` (déclarées : {})",
-                if connues.is_empty() { "aucune".to_string() } else { connues.join(", ") }
+                connues()
             ));
         };
         let mut bloc = bloc.clone();
