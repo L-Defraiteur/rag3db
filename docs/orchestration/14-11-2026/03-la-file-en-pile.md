@@ -1704,3 +1704,7 @@ rien ne pousse avant le correctif.
 témoin **vert** dans sa lib entière (18 h 45) avec RAG3WEAVER_EMBED_SERVICE posé : le rouge « seul » est sans doute joué sans service
 — un témoin ne dépend d'aucun service, et une tâche doit se rouvrir sans service d'embarquement (plein texte seul, dit). Le refus
 exact du diagnostic de tty tranche ; correctif en lot court devant tout.
+Arbre, 19 h 32 : la répétition réparée a fini sa part fermée sur les deux copies (code-lourd : réparation 1 719 s VERT, purge 9 s, **1b 683 s,
+montée 2 s** ; code-principal : 1 402 s, 9 s, **623 s, 1 s**) ; repassage en cours (paquet 1 sur 4, plus lent que prévu sous deux
+autres lourds : 35 à 45 min par base). Pour la vraie fenêtre : instantané + ~10 s + 1b 10 à 12 min + montée 2 s, par base, en parallèle ;
+le contrôle des deux sens en garde avant.
