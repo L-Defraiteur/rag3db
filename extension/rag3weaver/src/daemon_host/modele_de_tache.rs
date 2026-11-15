@@ -34,8 +34,8 @@ mod tests {
         ]);
         std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
         for args in [&["add", "-A"][..], &["commit", "-q", "-m", "deux modèles déclarés"]] {
-            let ok = std::process::Command::new("git").current_dir(&depot).args(args).status().unwrap().success();
-            assert!(ok, "git {args:?}");
+            let o = std::process::Command::new("git").current_dir(&depot).args(args).output().unwrap();
+            assert!(o.status.success(), "git {args:?} : {}{} (manifeste {})", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr), manifeste.display());
         }
         let host = hote(d.path(), defaut()).with_modele_nomme(nomme());
         let h = host.hosted(&manifeste).unwrap();
