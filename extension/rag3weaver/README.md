@@ -875,6 +875,13 @@ provider.
   reaches it through an `ssh -N -L` tunnel held by the client, and probes its identity through the
   tunnel. A failing ssh is refused at once, by name. Units named `rag3weaver-embeddings@…` are
   never touched.
+- **A service that stops says why.** If a computation panics on the card (a refused memory
+  reservation, for example), the embedding service answers a named 503 instead of dropping the
+  connection. It then answers every request still in flight, and exits with code 70; its last log
+  line says « ✗ arrêt : <cause> (code 70) ». It never exits 0 silently. A text longer than
+  `max_chars_per_text` (12000 by default, `RAG3WEAVER_EMBED_MAX_CHARS`, reported in `/sante` with
+  `chars_per_token`) is refused with a named 413, before any computation. A provider started by an
+  activation that stopped this way is reported as « service d'embarquement arrêté : <cause> ».
 - **Query length cap.** Before it is embedded (dense, dual or sparse), a search query is cut to
   `models.embed.query_max_chars` characters (6000 by default), on a word boundary. The search says
   so in its warnings, and full-text search keeps the whole query. A query of 8000 tokens asks the
