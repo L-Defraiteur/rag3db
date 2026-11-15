@@ -137,5 +137,65 @@ TEST_F(InListTest, InOnAConstantListIsNotQuadratic) {
                           << " ms against the key form " << key[1] << " ms";
 }
 
+// **Le planificateur (A)** : un IN sur la clé primaire, la liste constante, se planifie en accès par
+// la clé (PRIMARY_KEY_SCAN), comme n.k = <constante>, et non en balayage puis FILTER. Conception :
+// docs/coeur-cpp/15-11-2026/01-rapport-de-session.md.
+TEST_F(InListTest, InOnTheKeyIsPlannedAsAKeyScan) {
+    fill(1000);
+    auto prepared = conn->prepare("EXPLAIN MATCH (n:T) WHERE n.k IN $l RETURN n.i;");
+    ASSERT_TRUE(prepared->isSuccess()) << prepared->getErrorMessage();
+    std::unordered_map<std::string, std::unique_ptr<Value>> params;
+    params.emplace("l", stringList(keys(0, 20)));
+    auto withParameter = conn->executeWithParams(prepared.get(), std::move(params));
+    ASSERT_TRUE(withParameter->isSuccess()) << withParameter->getErrorMessage();
+    const auto parameterPlan = withParameter->toString();
+    auto withLiteral = conn->query("EXPLAIN MATCH (n:T) WHERE n.k IN ['key-1', 'key-2', 'key-3'] "
+                                   "RETURN n.i;");
+    ASSERT_TRUE(withLiteral->isSuccess()) << withLiteral->getErrorMessage();
+    const auto literalPlan = withLiteral->toString();
+    for (const auto& plan : {parameterPlan, literalPlan}) {
+        EXPECT_NE(plan.find("PRIMARY_KEY_SCAN_NODE_TABLE"), std::string::npos)
+            << "[check: in-on-the-key-is-a-key-scan]\n"
+            << plan;
+        EXPECT_EQ(plan.find("FILTER"), std::string::npos)
+            << "[check: in-on-the-key-is-a-key-scan] no filter left\n"
+            << plan;
+    }
+}
+
+TEST_F(InListTest, AFewKeysOnALargeTableCostAsMuchAsTheKeyForm) {
+    constexpr int64_t n = 200000;
+    fill(n);
+    std::vector<std::string> few;
+    for (int64_t x = 0; x < 10; x++) {
+        few.push_back("key-" + std::to_string(x * 19997));
+    }
+    millisWith(IN_FORM, few, 10);
+    millisWith(KEY_FORM, few, 10);
+    std::vector<double> in, key;
+    for (auto i = 0; i < 5; i++) {
+        in.push_back(millisWith(IN_FORM, few, 10));
+        key.push_back(millisWith(KEY_FORM, few, 10));
+    }
+    std::sort(in.begin(), in.end());
+    std::sort(key.begin(), key.end());
+    const auto ratio = in[2] / std::max(key[2], 0.5);
+    std::cerr << "[témoin] 10 clés sur " << n << " lignes : IN " << in[2] << " ms, UNWIND et clé "
+              << key[2] << " ms, rapport " << ratio << "\n";
+    EXPECT_LT(ratio, 3.0) << "[check: a-few-keys-cost-as-much-as-the-key-form] IN " << in[2]
+                          << " ms against the key form " << key[2] << " ms";
+}
+
+TEST_F(InListTest, NullsInTheListMatchNothing) {
+    fill(1000);
+    std::vector<std::unique_ptr<Value>> children;
+    children.push_back(std::make_unique<Value>(std::string("key-3")));
+    children.push_back(std::make_unique<Value>(Value::createNullValue(LogicalType::STRING())));
+    children.push_back(std::make_unique<Value>(std::string("key-4")));
+    children.push_back(std::make_unique<Value>(std::string("key-3")));
+    auto list = std::make_unique<Value>(LogicalType::LIST(LogicalType::STRING()), std::move(children));
+    EXPECT_EQ(countWith(IN_FORM, std::move(list)), 2);
+}
+
 } // namespace testing
 } // namespace rag3db
