@@ -1661,3 +1661,9 @@ extension_error, avertissement nommé au reçu et à l'état, vraie cause du reb
 tty, 18 h 40 : **tty-16 sur master à 96a05586b** (13 commits : l'historique ne garde que la demande et la réponse, les étapes en sourdine,
 l'accord vivant avec boutons, o/n sur une proposition, jamais un mot d'état nu ni un verdict de l'hôte, animation dès le départ et de
 repos, la réponse affichée une fois ; gmail, 0 attribution). « À toi » à 96 pour la pile du second tour sur 96a05586b.
+Codeparsers, 18 h 48 : marque « nom » — rouge sur trois cas, deux règles : (a) un chemin sur un type hors appel lit son type et s'abstient
+(2 326 arêtes fausses ôtées sur src/ du moteur, « nom » 5 092 → 2 705) ; (b) une locale sans type lisible ne se relie pas entre
+fichiers — tel quel, elle perdrait ~950 liens justes sur rag3weaver (méthodes du projet sur une locale) ; tranché **(b) étroit** :
+seules les méthodes de la bibliothèque standard du langage (liste en données par langue) s'abstiennent, abstention dite ; le reste
+au ticket 2 (lire le type de la locale). ED : les témoins du nom vus rouges sur une méthode faussée, puis verts. 96 : pile du second
+tour reposée (447bb495b), rejeu sous 90 min.
