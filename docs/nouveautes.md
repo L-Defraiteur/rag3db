@@ -226,10 +226,12 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
   les administrations voisines ni ajouter d’écriture au principal.
   [Preuves et recette](everything-declarative/12-11-2026/04-parcours-agent-ide-vertex.md).
 
+
 - **12 nov. — Explorer les symboles sans leurs corps.** `navigate_symbols` expose dans le
   dépôt et le relais contextuel de l'atelier l'arbre d'un fichier, les parents/enfants
   par plages et les membres partiels réellement indexés. Homonymes, limites, plages
   ambiguës et index périmés sont nommés ; aucune exhaustivité AST ou d'héritage promise.
+
 
 - **12 nov. — Le diagnostic observe aussi les relations persistées.** Les
   configurations, définitions de relations et le journal sont lus dans le même
