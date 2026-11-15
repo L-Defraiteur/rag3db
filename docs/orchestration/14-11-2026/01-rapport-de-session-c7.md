@@ -1426,3 +1426,6 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   started …; retry » ; TwoAlters attend, est refusé par ce nom, repasse relancé ; transaction_test 382. Garde
   demandée : un préfixe stable pour que rag3weaver recommence ; **ED : l'écrivain et sync_source recommencent
   sur ce refus** (petit lot, après la prochaine bascule).
+- Le cœur, 08 h 2x : préfixe stable du refus « Schema changed, retry: » (constante
+  Transaction::SCHEMA_CHANGED_RETRY, au milieu du message : `contains` côté Rust) ; le scénario des vingt
+  écrivains recommence sur ce refus et compte ses recommencements. Passe complète de c743a89f0 lancée à 8 h 17.
