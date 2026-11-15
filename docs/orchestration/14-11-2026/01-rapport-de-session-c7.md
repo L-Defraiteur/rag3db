@@ -1429,3 +1429,8 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 - Le cœur, 08 h 2x : préfixe stable du refus « Schema changed, retry: » (constante
   Transaction::SCHEMA_CHANGED_RETRY, au milieu du message : `contains` côté Rust) ; le scénario des vingt
   écrivains recommence sur ce refus et compte ses recommencements. Passe complète de c743a89f0 lancée à 8 h 17.
+- **Le cœur, 09 h 27 — pas vert** : sur ed2b6ffe6, NoWriterWaitsLongDuringTheCreate 3/3 rouge — CREATE vectoriel
+  sous 40 écrivains en 229 à 260 s (known_red : 13 à 15 s), l'écrivain le plus long attend 223 à 253 s ; même
+  mal dans DdlEveryMinute (une instruction de 261 s). Régression d'un ordre de grandeur, très probablement du
+  lot (le verrou de table du CREATE, ou le contrôle de schéma qui recommence les écrivains). Départage sur
+  trois commits, un tour chacun ; rien ne pousse avant le retour à la ligne known_red.
