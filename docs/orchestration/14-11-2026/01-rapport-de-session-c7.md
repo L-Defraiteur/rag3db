@@ -1304,3 +1304,19 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   « créer » et « la sixième place », pas le rapprochement. La variante mélangée finit vers 3 h 20 ; rien ne
   laisse attendre un Laya branchable sur ce jeu. L'écrivain d'ED : parité et usages rejoués pour les trois
   rôles après correction de la lecture des usages.
+- **Embarquement, 02 h 57** : la mesure des 904 s n'est pas lancée — card2 à 12 228 Mio libres (seuil 13 Gio),
+  une mesure en attente (rag3db-filtre de recherche) et trois lourds tenus ; rappel à 04 h 00 aux mêmes
+  conditions, sinon report à une nuit sans file. **card0 (l'affichage de Lucie) à 100 % à 3 h** : aucun lourd
+  à nous ne la touche ; à dire à Lucie.
+
+## 03 h 0x — la file de la nuit est vide : soixante-deux atterris
+
+- **L'écrivain de 2a′-2 (ED) sort de la file** : banc le dit rouge après l'index et la publication — 15 cas sur
+  30 rendent une autre liste dans leurs dix premiers (30/30 au bit près avant l'index, usages 5/5, recopies
+  comptées). Piste : le plein texte voit encore les versions fermées. Cause à établir demain sur les deux
+  copies gardées, témoin rouge, correctif ; rien ne presse, rien n'attendait derrière.
+- **Encore en cours** : la variante mélangée de Laya (3 h 20), la sonde de recherche sous mesure, la mesure
+  d'embarquement reportée à 04 h (card2 sous le seuil), le miroir du cœur pour le témoin de check_rel, le
+  lot B de 96 (scinder, rejoindre) en rouges.
+- **Pour Lucie au réveil** : lavapipe (sudo) ; le socle du pont navigateur ; la fin de session (targets gardés,
+  7 à 31 Go chacun) ; card0 à 100 % à 3 h sans aucun lourd à nous.

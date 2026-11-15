@@ -902,3 +902,9 @@ Banc, 02 h 51 : le verdict de l'écrivain (parent 1105a2590 contre 7ddedb026, m�
 3 h 45 — deux passes en parallèle à luciepc : A le parent (parité + usages), B la tête (retrait et remise
 d'arbre.rs avec la visibilité des Symbol au rang, parité, usages, aretes_recopiees). Recherche a le « va »
 pour sa sonde sous mesure.
+
+**03 h 1x — l'écrivain d'ED sort de la file, rouge à la parité après publication** (banc, 7ddedb026 contre
+1105a2590b) : avant l'index 30/30 au bit près, usages 5/5, aretes_recopiees 2 844 à la génération 1, retrait
+et remise publiés ; **après l'index et la publication, 15 cas sur 30 rendent une autre liste dans leurs dix
+premiers**. Piste : le plein texte voit encore les versions fermées. Cause à établir sur les deux copies
+gardées ; témoin rouge puis correctif demain. **La file de la nuit est vide : soixante-deux atterris.**
