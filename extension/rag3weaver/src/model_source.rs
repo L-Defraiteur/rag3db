@@ -188,6 +188,16 @@ pub struct ModelSource {
     /// Un appel qui fixe le sien (`GenOptions::reasoning`) l'emporte.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<crate::llm::ReasoningEffort>,
+    /// **Le nom d'un modèle de langage déclaré** (`models.llm` en liste) : la clé stable que la tâche
+    /// retient et que `/model` affiche. Obligatoire dans une liste ; absent, le nom est `model`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// **Le plafond de sortie** d'un modèle de langage, en jetons (la forme (a) du plafond du juge).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<usize>,
+    /// **Le modèle de langage par défaut** d'une liste `models.llm` : un seul l'est.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub default: bool,
 }
 
 impl ModelSource {
@@ -205,6 +215,9 @@ impl ModelSource {
             params: Default::default(),
             timeout_secs: None,
             reasoning: None,
+            name: None,
+            max_output_tokens: None,
+            default: false,
         }
     }
     pub fn service(model: impl Into<String>) -> Self {
@@ -219,6 +232,81 @@ impl ModelSource {
             return self.address.0.clone();
         }
         capability.variables().iter().find_map(|v| env(v).map(|s| Addresses::parse(&s)).filter(|a| !a.is_empty())).map(|a| a.0).unwrap_or_default()
+    }
+}
+
+/// **Les modèles déclarés d'un manifeste**, par capacité (`models` d'un manifeste de backend ou d'un
+/// chat). Il se lit comme la carte d'avant : `models.get(&Capability::Llm)` rend le modèle de langage
+/// **par défaut**. `models.llm` peut aussi être une liste de modèles nommés
+/// ([`Self::modeles_de_langage`]), dont un seul est le défaut ; l'objet unique d'avant se lit comme une
+/// liste à un élément, par défaut, au nom de son `name`, sinon de son `model`.
+///
+/// Ce nom replié n'est pas stable : il change si un `name` s'ajoute ou si `model` change. Une surcharge
+/// de tâche qui le retenait reçoit alors le refus « nom inconnu », jamais le défaut en silence.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Modeles {
+    par_capacite: std::collections::BTreeMap<Capability, ModelSource>,
+    /// La liste déclarée de `models.llm`, quand c'en est une ; vide pour l'objet unique.
+    langage: Vec<ModelSource>,
+}
+
+impl std::ops::Deref for Modeles {
+    type Target = std::collections::BTreeMap<Capability, ModelSource>;
+    fn deref(&self) -> &Self::Target {
+        &self.par_capacite
+    }
+}
+
+impl std::ops::DerefMut for Modeles {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.par_capacite
+    }
+}
+
+impl From<std::collections::BTreeMap<Capability, ModelSource>> for Modeles {
+    fn from(par_capacite: std::collections::BTreeMap<Capability, ModelSource>) -> Self {
+        Self { par_capacite, langage: Vec::new() }
+    }
+}
+
+impl Modeles {
+    /// Le nom sous lequel un modèle de langage se déclare et s'affiche.
+    pub fn nom(source: &ModelSource) -> &str {
+        source.name.as_deref().unwrap_or(&source.model)
+    }
+
+    /// Les modèles de langage déclarés, dans l'ordre du manifeste : la liste, ou l'objet unique.
+    pub fn modeles_de_langage(&self) -> Vec<&ModelSource> {
+        if self.langage.is_empty() {
+            self.par_capacite.get(&Capability::Llm).into_iter().collect()
+        } else {
+            self.langage.iter().collect()
+        }
+    }
+
+    /// Le modèle de langage de ce nom ; un nom inconnu est refusé, en listant les noms déclarés.
+    pub fn modele_de_langage(&self, nom: &str) -> Result<&ModelSource, String> {
+        let tous = self.modeles_de_langage();
+        tous.iter().copied().find(|s| Self::nom(s) == nom).ok_or_else(|| {
+            let noms: Vec<&str> = tous.iter().map(|s| Self::nom(s)).collect();
+            if noms.is_empty() {
+                format!("modèle de langage « {nom} » inconnu : le manifeste n'en déclare aucun (`models.llm`)")
+            } else {
+                format!("modèle de langage « {nom} » inconnu ; les modèles déclarés : {}", noms.join(", "))
+            }
+        })
+    }
+}
+
+impl Serialize for Modeles {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.par_capacite.serialize(s)
+    }
+}
+
+impl<'de> Deserialize<'de> for Modeles {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Ok(std::collections::BTreeMap::<Capability, ModelSource>::deserialize(d)?.into())
     }
 }
 
@@ -687,6 +775,76 @@ pub(crate) fn local_artifact(folder: &str, prefix: &str, suffix: &str, file: &st
 
 #[cfg(test)]
 mod tests {
+
+    /// **`models.llm` en liste** (ticket `2026-11-15-models-llm-devient-une-liste-de-modeles-declares`).
+    mod modeles_de_langage {
+        use super::super::*;
+
+        fn lire(json: &str) -> Result<Modeles, String> {
+            serde_json::from_str::<Modeles>(json).map_err(|e| e.to_string())
+        }
+
+        #[test]
+        fn l_objet_unique_se_lit_comme_une_liste_a_un_element_par_defaut() {
+            let m = lire(r#"{"llm": {"provider": "compatible", "protocol": "vertex", "model": "gemini-2.5-pro"}}"#).unwrap();
+            let noms: Vec<&str> = m.modeles_de_langage().iter().map(|s| Modeles::nom(s)).collect();
+            assert_eq!(noms, ["gemini-2.5-pro"], "un élément, au nom de son modèle");
+            assert_eq!(m.get(&Capability::Llm).map(|s| s.model.as_str()), Some("gemini-2.5-pro"), "le défaut");
+            assert!(m.modele_de_langage("gemini-2.5-pro").is_ok());
+        }
+
+        #[test]
+        fn une_liste_rend_son_defaut_et_chacun_par_son_nom() {
+            let m = lire(r#"{"llm": [
+                {"name": "rapide", "provider": "compatible", "protocol": "vertex", "model": "gemini-2.5-flash", "context_tokens": 1000000},
+                {"name": "juge", "provider": "compatible", "protocol": "vertex", "model": "gemini-2.5-pro", "max_output_tokens": 8192, "default": true}
+            ]}"#)
+            .expect("une liste de deux modèles se lit");
+            assert_eq!(m.get(&Capability::Llm).and_then(|s| s.name.as_deref()), Some("juge"), "le défaut est le second");
+            let noms: Vec<&str> = m.modeles_de_langage().iter().map(|s| Modeles::nom(s)).collect();
+            assert_eq!(noms, ["rapide", "juge"], "dans l'ordre du manifeste");
+            assert_eq!(m.modele_de_langage("rapide").unwrap().context_tokens, Some(1_000_000));
+            assert_eq!(m.modele_de_langage("juge").unwrap().max_output_tokens, Some(8192));
+            let relu: Modeles = serde_json::from_value(serde_json::to_value(&m).unwrap()).expect("relu");
+            assert_eq!(relu, m, "la liste survit à l'écriture");
+        }
+
+        #[test]
+        fn deux_defauts_sont_refuses_en_les_nommant() {
+            let e = lire(r#"{"llm": [
+                {"name": "a", "model": "m1", "default": true},
+                {"name": "b", "model": "m2", "default": true}
+            ]}"#)
+            .expect_err("deux défauts");
+            assert!(e.contains("a") && e.contains("b") && e.contains("défaut"), "{e}");
+        }
+
+        #[test]
+        fn une_liste_sans_defaut_ni_nom_est_refusee() {
+            let e = lire(r#"{"llm": [{"name": "a", "model": "m1"}, {"name": "b", "model": "m2"}]}"#).expect_err("aucun défaut");
+            assert!(e.contains("défaut"), "{e}");
+            let e = lire(r#"{"llm": [{"model": "m1", "default": true}, {"name": "b", "model": "m2"}]}"#).expect_err("un élément sans nom");
+            assert!(e.contains("name"), "{e}");
+            let e = lire(r#"{"llm": [{"name": "a", "model": "m1", "default": true}, {"name": "a", "model": "m2"}]}"#).expect_err("deux noms égaux");
+            assert!(e.contains("« a »"), "{e}");
+            let seul = lire(r#"{"llm": [{"name": "seul", "model": "m1"}]}"#).expect("une liste d'un seul élément le prend pour défaut");
+            assert_eq!(seul.get(&Capability::Llm).map(|s| s.model.as_str()), Some("m1"));
+        }
+
+        #[test]
+        fn un_nom_inconnu_est_refuse_en_listant_les_noms() {
+            let m = lire(r#"{"llm": [{"name": "a", "model": "m1", "default": true}, {"name": "b", "model": "m2"}]}"#).unwrap();
+            let e = m.modele_de_langage("c").expect_err("inconnu");
+            assert!(e.contains("« c »") && e.contains("a, b"), "{e}");
+        }
+
+        #[test]
+        fn seul_models_llm_se_declare_en_liste() {
+            let e = lire(r#"{"embed": [{"name": "a", "model": "m1", "default": true}]}"#).expect_err("embed en liste");
+            assert!(e.contains("embed"), "{e}");
+        }
+    }
+
     use super::*;
 
     fn no_env(_: &str) -> Option<String> {
