@@ -1113,6 +1113,10 @@ pub struct PreparedBackend {
     manifest_path: PathBuf,
     /// Ce que l'hôte impose par-dessus le manifeste ([`Surcharges`]).
     surcharges: Surcharges,
+    /// **Le nom de l'agent de la tâche, vivant** (tty-18, `POST /ide/teammate/name`) : posé par
+    /// [`Self::avec_surcharges`] depuis `Surcharges::nom_de_l_agent`, changé en place par
+    /// [`Self::renommer_l_agent`] sans rouvrir ni recharger ; un rechargement le garde.
+    nom_de_la_tache: std::sync::RwLock<Option<String>>,
     /// Les copies locales de gabarits livrés qui en diffèrent
     /// ([`crate::builtin_templates::drift`]).
     template_drift: Vec<crate::builtin_templates::Drift>,
@@ -2138,6 +2142,7 @@ impl PreparedBackend {
             template_drift,
             manifest_path: lecteur.identite(path).map_err(|e| e.to_string())?,
             surcharges: Surcharges::default(),
+            nom_de_la_tache: std::sync::RwLock::new(None),
             scripted_types,
             components,
             routes,
@@ -2236,6 +2241,7 @@ impl PreparedBackend {
             w.read_only = !ecrit;
             w.dans_une_tache = true;
         }
+        self.nom_de_la_tache = std::sync::RwLock::new(surcharges.nom_de_l_agent.clone());
         self.surcharges = surcharges;
         self
     }
@@ -2248,7 +2254,21 @@ impl PreparedBackend {
     /// **Le nom de l'agent de ce backend** : la surcharge de la tâche, sinon `agent.name`, sinon
     /// « équipier ». La boucle de l'équipier le lit.
     pub fn nom_de_l_agent(&self) -> String {
-        nom_de_l_agent(&self.manifest, &self.surcharges)
+        nom_de_l_agent(&self.manifest, &self.surcharges_vivantes())
+    }
+
+    /// Les surcharges, le nom de l'agent pris tel qu'il vit maintenant (renommé depuis l'ouverture).
+    fn surcharges_vivantes(&self) -> Surcharges {
+        let mut s = self.surcharges.clone();
+        s.nom_de_l_agent = self.nom_de_la_tache.read().unwrap_or_else(|p| p.into_inner()).clone();
+        s
+    }
+
+    /// **Renomme l'agent en place** (tty-18) : `None` rend celui du manifeste, sinon « équipier ». Le tour
+    /// de chat suivant le lit ([`Self::nom_de_l_agent`]) ; rien ne se rouvre. Le nom est validé par
+    /// l'appelant ([`valider_le_nom_de_l_agent`]).
+    pub fn renommer_l_agent(&self, nom: Option<String>) {
+        *self.nom_de_la_tache.write().unwrap_or_else(|p| p.into_inner()) = nom;
     }
 
     /// **La persona de l'agent de ce backend** : celle de la tâche, sinon `agent.persona`. L'invite la dit
@@ -2272,7 +2292,7 @@ impl PreparedBackend {
     /// surcharges : ce que font le rechargement (le disque) et la validation
     /// d'une proposition (un recouvrement).
     pub fn recharger(&self, lecteur: &dyn crate::lecteur::Lecteur) -> Result<PreparedBackend, String> {
-        Ok(Self::load_avec(&self.manifest_path, lecteur)?.avec_surcharges(self.surcharges.clone()))
+        Ok(Self::load_avec(&self.manifest_path, lecteur)?.avec_surcharges(self.surcharges_vivantes()))
     }
 
     /// **Le fichier de l'extension vectorielle à charger.** Un chemin déclaré

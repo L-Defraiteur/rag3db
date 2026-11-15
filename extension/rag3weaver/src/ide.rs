@@ -26,6 +26,7 @@
 //! | `POST /ide/teammate/seen` | `{for, ids}` : un compte rendu, une fin, une livraison sortent de `pending` pour la clé |
 //! | `GET /ide/teammate/models?backend=<id>&task=<nom>` | les modèles de langage que déclare le manifeste d'une tâche : `{models: [{name, model, provider, protocol, default, current}], current, default}` |
 //! | `POST /ide/teammate/model` | `{backend, task, name}` : la tâche emploie ce modèle déclaré, gardé avec elle ; un nom inconnu est refusé en nommant la liste |
+//! | `POST /ide/teammate/name` | `{backend, task, agent_name}` : l'agent de la tâche ouverte porte ce nom, gardé au registre et lu au tour suivant, sans rouvrir la tâche ; `""` rend celui du backend ; `{agent_name}` rendu ; un nom vide d'espaces ou de plusieurs lignes est refusé en nommant `agent_name` |
 //! | `GET /ide/teammate/list?supervisor=<clé>` | les équipiers de ce superviseur : `{supervisor, teammates: [{task, parent, state, last_kind, at}]}` |
 //! | `GET /ide/recherches?backend=<id>&qui=&limite=&avant=` | mes recherches : les appels journalisés des outils de recherche (IDE et agents), du plus récent, avec leurs clics |
 //! | `POST /ide/recherches/clic` | un clic `{backend, run, uuid, rang}` sur un résultat d'une recherche : rangé dans son run, ou refusé en disant pourquoi |
@@ -870,6 +871,22 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                 Ok(c) => match host.choisir_le_modele(c["backend"].as_str().unwrap_or_default(), c["task"].as_str().unwrap_or_default(), c["name"].as_str().unwrap_or_default()) {
                     Ok(v) => json!({ "ok": true, "result": v }),
                     Err(e) => json!({ "ok": false, "error": e }),
+                },
+            };
+            let _ = request.respond(json_(200, &v));
+        }
+        ("POST", "/ide/teammate/name") => {
+            // **Renommer l'agent d'une tâche ouverte** (tty-18, `/nom <x>`) : `{backend, task, agent_name}` ;
+            // `""` rend le nom du backend ; un refus nomme `agent_name`.
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
+                Ok(c) => match c["agent_name"].as_str() {
+                    None => json!({ "ok": false, "error": "agent_name manque : le nom de l'agent, ou \"\" pour celui du backend" }),
+                    Some(nom) => match host.renommer_l_agent_d_une_tache(c["backend"].as_str().unwrap_or_default(), c["task"].as_str().unwrap_or_default(), nom) {
+                        Ok(v) => json!({ "ok": true, "result": v }),
+                        Err(e) => json!({ "ok": false, "error": e }),
+                    },
                 },
             };
             let _ = request.respond(json_(200, &v));

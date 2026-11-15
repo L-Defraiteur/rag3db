@@ -543,9 +543,27 @@ impl DaemonHost {
         self.ouvrir_une_tache_nommee(parent, nom, None, None)
     }
 
-    /// **Renomme l'agent d'une tâche ouverte** (tty-18) : bouchon du témoin, qui refuse.
-    pub fn renommer_l_agent_d_une_tache(&self, _parent: &str, _nom: &str, _agent_name: &str) -> Result<Value, String> {
-        Err("pas encore".into())
+    /// **Renomme l'agent d'une tâche ouverte** (tty-18, `POST /ide/teammate/name`, `/nom <x>` du terminal) :
+    /// le nom, validé comme à la création, va au registre (`Tache::nom_de_l_agent`) et au backend ouvert de
+    /// la tâche ([`crate::backend::PreparedBackend::renommer_l_agent`]), que le tour suivant lit ; rien ne se
+    /// rouvre. Un nom vide rend celui du backend. Rend `{agent_name}`, le nom que l'agent porte désormais.
+    pub fn renommer_l_agent_d_une_tache(&self, parent: &str, nom: &str, agent_name: &str) -> Result<Value, String> {
+        let neuf = if agent_name.is_empty() {
+            None
+        } else {
+            Some(crate::backend::valider_le_nom_de_l_agent(agent_name).map_err(|e| format!("agent_name : {e}"))?)
+        };
+        let t = self.tache(parent, nom).ok_or_else(|| format!("la tâche « {nom} » de {parent} n'est pas ouverte"))?;
+        if let Some(gardee) = self.taches.lock().unwrap_or_else(|p| p.into_inner()).get_mut(&t.manifest) {
+            gardee.nom_de_l_agent = neuf.clone();
+        }
+        self.ecrire_le_registre()?;
+        let hosted = self.hosted(&t.manifest)?;
+        let porte = self.with_backend(&hosted, |b| {
+            b.prepared().renommer_l_agent(neuf.clone());
+            b.prepared().nom_de_l_agent()
+        })?;
+        Ok(json!({ "agent_name": porte }))
     }
 
     /// **Ouvrir une tâche dont l'agent porte un nom** (`agent_name` de `POST /ide/taches`) : le nom est
