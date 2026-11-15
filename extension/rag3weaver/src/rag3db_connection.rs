@@ -653,6 +653,8 @@ impl DbConnection for Rag3dbConnection {
     }
 
     fn execute(&self, cypher: &str) -> Result<QueryResult, DbError> {
+        #[cfg(test)]
+        instructions_du_fil::compter();
         self.query_sync(cypher)
     }
 
@@ -661,6 +663,8 @@ impl DbConnection for Rag3dbConnection {
         cypher: &str,
         params: &[QueryParam],
     ) -> Result<QueryResult, DbError> {
+        #[cfg(test)]
+        instructions_du_fil::compter();
         self.query_with_params_sync(cypher, params)
     }
 
@@ -1639,5 +1643,24 @@ pub mod phases {
             moteur_compile_us: MOTEUR_COMPILE_US.load(Ordering::Relaxed),
             moteur_execute_us: MOTEUR_EXECUTE_US.load(Ordering::Relaxed),
         }
+    }
+}
+
+/// **Les instructions envoyées au moteur par ce fil**, pour les témoins seulement : le coût d'une
+/// écriture se compte en instructions, et un témoin dit s'il suit le nombre de paquets ou de fichiers
+/// (ticket « le repassage d'une base par l'écrivain coûte dix fois le parent »).
+#[cfg(test)]
+pub(crate) mod instructions_du_fil {
+    thread_local! {
+        static COMPTE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+    pub(crate) fn compter() {
+        COMPTE.with(|c| c.set(c.get() + 1));
+    }
+    /// Le nombre d'instructions que `f` a envoyées depuis ce fil.
+    pub(crate) fn pendant<T>(f: impl FnOnce() -> T) -> (T, usize) {
+        let avant = COMPTE.with(|c| c.get());
+        let r = f();
+        (r, COMPTE.with(|c| c.get()) - avant)
     }
 }
