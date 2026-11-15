@@ -22,7 +22,7 @@ Ce qui est vert à côté :
 - `aretes_recopiees` (2 844 à la génération 1) ;
 - le montage de retrait (rangs 1 à 3).
 
-## Deux causes candidates, non départagées
+## Deux causes candidates
 
 - **(A) Le saut des fichiers inchangés** (dd729317a). Un fichier dont l'empreinte indexée égale celle
   du disque est sauté : il garde tout ce que l'analyse d'avant en avait dérivé, c'est-à-dire le
@@ -41,6 +41,24 @@ Ce qui est vert à côté :
    au rang courant désigne (B), visibilité absente.
 2. Pour les résultats qui diffèrent, le fichier sauté et le hash de scope d'avant l'index : (A).
 3. Les comptes Scope total et visibles, ScopeContent et documents du plein texte de chaque côté.
+
+## Le départage (banc, 15 novembre 2026, vers 3 h 40) : c'est (A)
+
+- **(B) écarté.** Aucun des 128 uuid du top 10 du lot dans les 15 cas rouges n'est fermé : tous sont à
+  `_depuis` 0 et `_jusqu_a` NULL. La requête des non visibles au rang courant ne rend aucune ligne.
+- **(A) confirmé.** À uuid égal, le lot garde le hash de l'analyse d'avant, et le parent en calcule
+  un neuf. Exemple, la fonction `index` de `experiments/mtga/scripts/*_variant.py` : le parent rend un
+  seul hash (afaba06…) pour les trois variantes au contenu identique ; le lot en rend trois, ceux de la
+  base migrée.
+- **Les comptes.** Au parent : Scope 77 149 ; ScopeContent 84 211, dont **14 201 orphelins** laissés
+  par le chemin d'avant. Au lot, dans l'état du retrait : Scope 81 919, dont 77 239 visibles et 4 673
+  fermés ; ScopeContent 74 274, aucun orphelin.
+- **La parité est mal posée sur une base migrée** indexée par un code plus vieux. La parité propre
+  part d'une base indexée par le code du parent lui-même, copiée, puis réindexée des deux côtés sur
+  une source qui diffère de quelques fichiers. Banc la jouera après le correctif. L'actuelle sera
+  rejouée elle aussi, sur une copie neuve, et devra passer aux orphelins du parent près.
+- **Les orphelins du parent** sont un défaut du chemin d'avant, pas de ce lot ; ils faussent le BM25
+  de toute base réindexée par lui. Un ticket à part, chez banc ou ici.
 
 ## Les témoins à écrire, rouges d'abord
 
