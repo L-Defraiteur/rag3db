@@ -1504,3 +1504,10 @@ le pas en pile sur 7b2f019e0. L'écrivain : témoins 16 et 17 rouges d'abord, de
 résolution des symboles bornée aux définisseurs visibles — une ligne fermée gardait son DEFINES et rendait le nom ambigu),
 rejeu puis banc. Codeparsers : (b) vert (parametres-cpp ff82d22 sur d024118) : paramètres 6 998 → 16 934, références −11,7 %,
 37 % des signatures C++ changent ; réserve à lever (aucune vraie référence perdue) ; les deux pointeurs montent ensemble.
+
+## 17 h 33 — la CI de master est verte
+
+Hotfixs : le run 43733500502 (sur 6e94ff627, le premier run fini qui contient le format) passe sanity checks, python lint, code
+format et shell test, les self-hosted sautés : **le premier « CI Workflow » tout vert sur master depuis le 18 octobre**. Le
+ticket de la CI, ouvert le 25 octobre, est fermé (9db8474e9). Reste le lot ci-docs-sans-run (un push de docs annule le run en
+attente), après archi.
