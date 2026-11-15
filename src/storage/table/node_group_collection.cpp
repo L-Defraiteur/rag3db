@@ -219,8 +219,21 @@ void NodeGroupCollection::addColumn(TableAddColumnState& addColumnState,
     KU_ASSERT((pageAllocator == nullptr) == (residency == ResidencyState::IN_MEMORY));
     const auto lock = nodeGroups.lock();
     auto& newColumnStats = stats.addNewColumn(addColumnState.propertyDefinition.getType());
-    for (const auto& nodeGroup : nodeGroups.getAllGroups(lock)) {
-        nodeGroup->addColumn(addColumnState, pageAllocator, &newColumnStats);
+    const auto& groups = nodeGroups.getAllGroups(lock);
+    // Tout ou rien : un refus en route retire la colonne des groupes de nœuds qui l'ont reçue
+    // (chacun est déjà tout ou rien), et des statistiques.
+    size_t numDone = 0;
+    try {
+        for (const auto& nodeGroup : groups) {
+            nodeGroup->addColumn(addColumnState, pageAllocator, &newColumnStats);
+            ++numDone;
+        }
+    } catch (...) {
+        for (size_t i = 0; i < numDone; ++i) {
+            groups[i]->removeLastColumn(pageAllocator);
+        }
+        stats.removeLastColumn();
+        throw;
     }
     types.push_back(addColumnState.propertyDefinition.getType().copy());
 }

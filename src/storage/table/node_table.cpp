@@ -837,7 +837,14 @@ void NodeTable::addColumn(Transaction* transaction, TableAddColumnState& addColu
     if (localTable) {
         localTable->addColumn(addColumnState);
     }
-    nodeGroups->addColumn(addColumnState, &pageAllocator);
+    // Refusé en route, l'ADD n'a rien inscrit pour son annulation : il retire sa colonne lui-même
+    // (les groupes l'ont déjà fait). Le stockage local est jeté avec la transaction.
+    try {
+        nodeGroups->addColumn(addColumnState, &pageAllocator);
+    } catch (...) {
+        columns.pop_back();
+        throw;
+    }
     hasChanges = true;
     transaction->pushAddColumn(*this);
 }
