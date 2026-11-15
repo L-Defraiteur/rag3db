@@ -1,0 +1,11 @@
+%% tool: gestes_recopier
+%% description: Un groupe d'un geste, liens posés : ses apports d'origine passent recopied (la transition recopy), sous l'ancienne fiche. Rend le groupe.
+%% param: groupe json! -- Un groupe du plan.
+%% result: out.result
+
+graph LR
+    lr["RhaiNode(script='input.groupe.recopies', inputs='groupe', groupe=$groupe)"]
+    rec["ForEachNode(graph='@builtin:backends/memory/graphs/ecrire_apport.mmd', element='ligne')"]
+    out["RhaiNode(script='input.groupe', inputs='groupe', groupe=$groupe)"]
+    lr -->|result:elements| rec
+    rec -->|list:value| out

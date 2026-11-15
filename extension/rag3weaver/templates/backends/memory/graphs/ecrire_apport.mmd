@@ -1,0 +1,7 @@
+%% tool: ecrire_apport
+%% description: Écrit un apport (la ligne : {record, expected_revision}) sous la politique de l'entité, cycle de vie compris. Appelé par les gestes sur les fiches.
+%% param: ligne json! -- {record, expected_revision}.
+%% result: write.record
+
+graph LR
+    write["EntityRecordNode(entity='Apport', action='put', record=$ligne.record, expected_revision=$ligne.expected_revision)"]

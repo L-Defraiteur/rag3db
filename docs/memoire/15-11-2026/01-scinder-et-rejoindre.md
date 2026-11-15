@@ -9,10 +9,10 @@ que l'archiviste propose. `confirmer_fiche` est sur master depuis `10b7a0edb`.*
    une phrase de six mots au moins et les apports de ses sections. Une section qui n'est citée dans
    aucun groupe est un refus.
 2. **L'ancienne fiche est retirée** (`reject` si `proposed`, `retire` si `current`). Chaque fiche neuve
-   est ancrée à une Ref de genre `issue-de` qui porte l'ancien nom.
+   est ancrée à une Ref de genre `derived_from` qui porte l'ancien nom.
 3. **`rejoindre_fiches(uuid_a, uuid_b)`** : les apports de A passent sur B, A est retirée, et B est
    ancrée à une Ref de genre `alias` qui porte le nom de A.
-4. **Les genres `issue-de` et `alias` sont déclarés** (`create_ref_type`). Ni champ ni relation de plus.
+4. **Les genres `derived_from` et `alias` sont déclarés** (`create_ref_type`). Ni champ ni relation de plus.
 
 ## Ce que la lecture du code a changé : un apport ne se déplace pas, il se recopie
 
@@ -34,3 +34,16 @@ une fiche retirée, que le rappel écarte par l'état de sa fiche.
 
 L'autre voie serait d'exposer la déliaison (`retirer: true` dans les liens de `link`) et d'accepter un
 champ `fiche` qui ment. Je ne la recommande pas.
+
+## Ce que l'orchestration a tranché, et ce que le code a posé
+
+- **La copie** (c7, 15 novembre, 2 h). Chaque copie cite l'apport d'origine par une Ref `derived_from`
+  (« <ancienne fiche> — <source>#<section> ») et sa section par une Ref `doc`.
+- **L'exemplaire d'origine passe `recopied`** (la transition `recopy`, `f553c2b2a`). `recall_apports`
+  l'écarte par défaut, et un `filter_condition` explicite, même `{}`, le rend.
+- **Le genre s'appelle `derived_from`**, pas `issue-de` : les identifiants sont en anglais, et un
+  genre à trait d'union ne se posait pas sans le dire (ticket
+  `docs/memoire/tickets/2026-11-15-un-genre-de-ref-a-trait-d-union-ne-se-pose-pas-sans-le-dire.md`).
+- **L'ordre des étages** : les fiches neuves et les copies, puis les liens et les Ref, puis les
+  originaux recopiés, puis l'ancienne fiche retirée. Chaque étage rend son groupe au suivant, et la
+  sortie `list` d'un `ForEachNode` imbriqué (`0130904a5`) fait remonter le compte rendu.
