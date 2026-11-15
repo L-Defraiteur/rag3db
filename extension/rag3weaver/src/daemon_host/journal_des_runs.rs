@@ -922,6 +922,54 @@ mod tests {
         assert_eq!(v["fin"]["kind"], "RunFinished", "la fin est gardée");
     }
 
+    /// **A listed run always reads, even while it is being written** (CI `rag3weaver` red on 15 Nov. 2026,
+    /// `a_workshop_write_leaves_a_run_with_its_diff` : « le run se relit »). `runs_de` lists a run as soon as its
+    /// file has a journal name ; the file must then be whole, never empty nor cut. A reader lists and rereads while
+    /// a writer lays heavy, hardly compressible runs.
+    #[test]
+    fn a_listed_run_always_reads_while_it_is_written() {
+        let d = tempfile::tempdir().unwrap();
+        let j = JournalDesRuns::avec_bornes(d.path().join("runs"), 1 << 40, 90, 1 << 26);
+        // ~1 MiB of pseudo-random hex per run : zstd leaves it big, and the write takes time.
+        let mut x: u64 = 0x9e37_79b9_7f4a_7c15;
+        let lourd: String = (0..131_072)
+            .map(|_| {
+                x ^= x << 13;
+                x ^= x >> 7;
+                x ^= x << 17;
+                format!("{:08x}", x as u32)
+            })
+            .collect();
+        let fini = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let lecteur = {
+            let (j, fini) = (j.clone(), fini.clone());
+            std::thread::spawn(move || {
+                let (mut relus, mut manques) = (0usize, Vec::new());
+                while !fini.load(std::sync::atomic::Ordering::SeqCst) {
+                    for run in j.runs_de("b") {
+                        match j.lire("b", &run) {
+                            Some(_) => relus += 1,
+                            None => manques.push(run),
+                        }
+                    }
+                }
+                (relus, manques)
+            })
+        };
+        for i in 0..40 {
+            j.deposer("b", &format!("r{i}"), json!({ "lourd": lourd, "i": i })).unwrap();
+        }
+        fini.store(true, std::sync::atomic::Ordering::SeqCst);
+        let (relus, manques) = lecteur.join().unwrap();
+        assert!(relus > 0, "the reader read nothing : the witness proves nothing");
+        assert!(
+            manques.is_empty(),
+            "[check: run-journal-atomic] {} listed runs did not read (seen while being written) : {:?}",
+            manques.len(),
+            &manques[..manques.len().min(5)]
+        );
+    }
+
     #[test]
     fn un_run_venu_de_dehors_se_depose_se_relit_et_se_compte() {
         let d = std::env::temp_dir().join(format!("runs-externes-{}", std::process::id()));
