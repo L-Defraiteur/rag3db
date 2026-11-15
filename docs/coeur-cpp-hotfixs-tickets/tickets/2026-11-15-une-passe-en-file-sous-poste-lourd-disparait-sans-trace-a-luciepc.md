@@ -39,6 +39,20 @@ systemd-run --user --unit hotfixs-extension-dite --working-directory=$HOME/.cach
 
 C'est déjà la façon d'archi (`systemd-run --user --unit archi-…`).
 
+## La piste de logind, écartée (15 nov., 21 h 52)
+
+c7 soupçonnait logind (KillUserProcesses). Relevé à luciepc :
+
+- `loginctl show-user lucied -p Linger` : `Linger=yes` ;
+- `KillUserProcesses` : aucun réglage dans `/etc/systemd/logind.conf` ni `logind.conf.d/`. Avec systemd 262 sous Arch,
+  le défaut vaut `no` ;
+- `journalctl -b` de 21 h 05 à 21 h 55 : des dizaines de sessions tty « New session cNNN » puis « Removed session »
+  (une par ssh). Aucun scope arrêté, aucun processus tué, aucun OOM noyau ; `journalctl --user` est muet à 21 h 12 et
+  à 21 h 49.
+
+logind ne tue donc pas les processus d'une session fermée, et la cause reste ouverte. La règle de l'unité
+`systemd-run --user` reste en vigueur.
+
 ## Pour fermer
 
 1. La cause : qui tue un `poste lourd` en attente (le SIGHUP, la garde des worktrees, un ménage de la file), lue sur
