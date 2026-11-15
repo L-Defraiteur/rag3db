@@ -10456,8 +10456,8 @@ fn read_threads() -> u64 {
                                     texte("base", ""),
                                     texte("recette", ""),
                                     // La génération 0 d'une couche est sa racine : aucune parente (2b′).
-                                    QueryParam::new("parente_couche", CypherValue::Null),
-                                    QueryParam::new("parente_rang", CypherValue::Null),
+                                    texte("parente_couche", ""),
+                                    QueryParam::new("parente_rang", CypherValue::Int(-1)),
                                     texte("tombstones", "[]"),
                                     QueryParam::new("publiee_le", CypherValue::Int(maintenant)),
                                 ],
@@ -10475,7 +10475,27 @@ fn read_threads() -> u64 {
             rang,
             tout_visible: true,
             ensembles: std::sync::Arc::new(crate::generations::EnsemblesPoses::default()),
+            parentes: Vec::new(),
+            colonnes_de_fichier: Default::default(),
         });
+        self.publish_read_view();
+        Ok(())
+    }
+
+    /// **Les colonnes de fichier** des tables à générations (2b′) : où un tombstone de fichier
+    /// se lit. Sans elles, une pile ne masque que par uuid.
+    pub fn dire_les_colonnes_de_fichier(&mut self, colonnes: &[(&str, &str)]) {
+        if let Some(v) = self.generations.as_mut() {
+            v.colonnes_de_fichier = colonnes.iter().map(|(t, c)| (t.to_string(), c.to_string())).collect();
+        }
+        self.publish_read_view();
+    }
+
+    /// **Lire une vue** (2b′) : la pile chargée par [`crate::vues::charger_la_pile`] devient la
+    /// visibilité des lectures. Refusée sur une base sans générations.
+    pub fn poser_la_vue(&mut self, pile: &crate::vues::PileDeLecture) -> Result<(), CatalogError> {
+        let v = self.generations.as_ref().ok_or_else(|| CatalogError::DbError("vue : cette base n'a pas de générations".into()))?;
+        self.generations = Some(v.avec_la_pile(pile));
         self.publish_read_view();
         Ok(())
     }
@@ -11118,7 +11138,7 @@ impl Catalog {
 
     // ── Private helpers ────────────────────────────────────────────────
 
-    fn check_reopen(&self) -> Result<(), CatalogError> {
+    pub(crate) fn check_reopen(&self) -> Result<(), CatalogError> {
         match self.must_reopen() {
             Some(reason) => Err(CatalogError::MustReopen(reason)),
             None => Ok(()),
