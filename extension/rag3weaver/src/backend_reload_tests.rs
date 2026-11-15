@@ -55,6 +55,7 @@ fn toy() -> (tempfile::TempDir, Backend) {
         read_view: catalog.read_view_cell(),
         avertissement_sans_service: None,
         avertissement_du_creux: None,
+        avertissement_d_extension: None,
         embarqueur_a_retenter: None,
         decider: None,
         #[cfg(feature = "code")]
