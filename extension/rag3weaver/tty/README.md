@@ -68,7 +68,7 @@ The input is a line editor, like a shell's.
 | Ctrl-W, Alt-Backspace | the word before, up to a space, not past the start of the line |
 | Ctrl-U, Ctrl-K | up to the start, up to the end, of the line |
 | ↑ ↓ | the line above or below in a multi-line input, otherwise what was sent (no duplicates); the draft comes back |
-| Alt-Enter, Shift-Enter | a new line without sending (Shift-Enter where the terminal tells it apart) |
+| Shift-Enter, Alt-Enter | a new line without sending: Shift-Enter where the emulator announces kitty's keyboard protocol (requested from that emulator only, given back on exit), Alt-Enter everywhere |
 | a paste | arrives whole (bracketed paste): its newlines stay in the input, nothing is sent before Enter |
 | Enter | answers what the teammate waits for, otherwise opens the task, then talks to it |
 | `o` / `n`, empty input | grants or refuses the command the teammate waits for |
@@ -77,8 +77,10 @@ The input is a line editor, like a shell's.
 | Ctrl-D, empty input | quits |
 | AltGr | its character (on Windows AltGr comes as Ctrl+Alt, and is kept) |
 
-A long input scrolls around the cursor, and each cut end shows `…`. Wide characters count for two
-columns, and a newline shows as `↵`. The terminal's cursor sits where the input's cursor is.
+The input spans several lines: each folds to the width, and the live zone grows with it up to eight
+input lines, then a window follows the cursor, a cut edge showing `… `. Wide characters count for two
+columns. The terminal's cursor sits where the input's cursor is. An empty input says, muted, how to
+break a line: Shift-Enter, Alt-Enter, or under tmux that Shift-Enter sends.
 
 ## Over ssh, tmux and mosh
 
@@ -94,7 +96,8 @@ host and a pty), both ways between two machines:
 | mosh | ~47 ms | ~17 ms |
 
 - **tmux** waits 500 ms by default before passing a lone Esc: use Ctrl-G to stop the teammate at
-  once. tmux may bring true colour down to 256 colours; the nearest colours of every theme stay right.
+  once. With its default settings it also turns Shift-Enter into a plain Enter, which sends: under
+  tmux (`TMUX`), the empty input says so, and Alt-Enter breaks the line. tmux may bring true colour down to 256 colours; the nearest colours of every theme stay right.
 - **mosh** keeps no scrollback beyond the screen. Under mosh, which the terminal detects through a
   `mosh-server` ancestor (Linux, `/proc`), a session journal opens by itself and the top line of the
   live zone gives the command that reads it back: `less <journal>`. When the sentence does not fit,

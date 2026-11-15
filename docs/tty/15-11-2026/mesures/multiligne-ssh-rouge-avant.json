@@ -1,0 +1,168 @@
+{
+  "hote": "luciepc",
+  "lanceur": "ssh",
+  "date": "2026-11-15 11:51",
+  "rouges": [
+    "multiligne_kitty : le terminal annonce kitty, mais la demande (False) ou l'indication Maj-Entrée (False) manque",
+    "multiligne_sans_kitty : le terminal n'annonce pas kitty, mais la demande part (False) ou l'indication Alt-Entrée manque (False)"
+  ],
+  "sans_position_du_curseur": {
+    "repli_dit": true,
+    "texte_brut_suit": true,
+    "panique": false
+  },
+  "scenario": {
+    "secondes": 3.86,
+    "octets": 11468,
+    "octets_par_seconde": 2970
+  },
+  "latence_affichage_ms": {
+    "n": 20,
+    "mediane": 47.4,
+    "p95": 50.2,
+    "max": 57.0
+  },
+  "echo_frappe_ms": {
+    "n": 20,
+    "mediane": 20.8,
+    "p95": 24.2,
+    "max": 24.3
+  },
+  "redimensionnement": [
+    {
+      "colonnes": 60,
+      "octets_apres": 320,
+      "colonne_max_visee": 3
+    },
+    {
+      "colonnes": 100,
+      "octets_apres": 271,
+      "colonne_max_visee": 61
+    }
+  ],
+  "ctrl_c_sortie_ms": 251,
+  "curseur_rendu_a_la_sortie": true,
+  "touches": {
+    "ctrl_g_stop": 1,
+    "echap_stop": 1,
+    "o_accord": 1,
+    "reply_to": "faux/mesure:1",
+    "ctrl_g_vers_stop_ms": 27,
+    "echap_vers_stop_ms": 14
+  },
+  "journal_explicite_relecture_dite": false,
+  "journal": {
+    "journal_explicite": {
+      "octets": 1460,
+      "mots_manquants": 0,
+      "code": true
+    }
+  },
+  "clavier": {
+    "textes_recus": [
+      "Lis src/vue.Rs\npuis\nrésume tout",
+      "Lis src/vue.Rs\npuis\nrésume tout !"
+    ],
+    "ctrl_c_vide_d_abord": true,
+    "ctrl_c_quitte_ensuite": true
+  },
+  "multiligne_kitty": {
+    "demande_kitty": false,
+    "aide_maj_entree": false,
+    "aide_alt_entree": false,
+    "textes_recus": [
+      "un\ndeux\ntrois"
+    ]
+  },
+  "multiligne_sans_kitty": {
+    "demande_kitty": false,
+    "aide_maj_entree": false,
+    "aide_alt_entree": false,
+    "textes_recus": [
+      "un\ndeux\ntrois"
+    ]
+  },
+  "couleurs": [
+    {
+      "theme": "alien",
+      "mode": "vraie",
+      "sgr_texte": "38;2;57;255;20",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "alien",
+      "mode": "256",
+      "sgr_texte": "38;5;82",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "cyberpunk",
+      "mode": "vraie",
+      "sgr_texte": "38;2;255;43;214",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "cyberpunk",
+      "mode": "256",
+      "sgr_texte": "38;5;200",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "cyborg",
+      "mode": "vraie",
+      "sgr_texte": "38;2;215;221;229",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "cyborg",
+      "mode": "256",
+      "sgr_texte": "38;5;253",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "daemon",
+      "mode": "vraie",
+      "sgr_texte": "38;2;255;51;51",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "daemon",
+      "mode": "256",
+      "sgr_texte": "38;5;203",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "foret",
+      "mode": "vraie",
+      "sgr_texte": "38;2;143;209;106",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "foret",
+      "mode": "256",
+      "sgr_texte": "38;5;113",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    }
+  ],
+  "verdict": "ROUGE"
+}
