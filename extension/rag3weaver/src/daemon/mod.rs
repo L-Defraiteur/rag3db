@@ -88,6 +88,10 @@ pub enum DaemonError {
     Reponse(String),
     /// Le lancement lui-même a échoué.
     Lancement(crate::serveur::ServeurError),
+    /// **Le service s'arrête en le disant** : un calcul a paniqué et le serveur
+    /// de la carte est empoisonné, ou ses fils sont partis. Le binaire sort
+    /// avec `code`, et sa dernière ligne dit la cause.
+    Arret { code: u8, cause: String },
 }
 
 impl std::fmt::Display for DaemonError {
@@ -109,6 +113,7 @@ impl std::fmt::Display for DaemonError {
             Self::Refus { statut, corps } => write!(f, "le démon a refusé ({statut}) : {corps}"),
             Self::Reponse(d) => write!(f, "réponse illisible : {d}"),
             Self::Lancement(e) => write!(f, "{e}"),
+            Self::Arret { code, cause } => write!(f, "service arrêté (code {code}) : {cause}"),
         }
     }
 }
@@ -140,6 +145,16 @@ pub trait Service: Send + Sync + 'static {
         chemin: &str,
         req: &mut tiny_http::Request,
     ) -> (u16, String);
+
+    /// Un calcul a paniqué pendant [`Self::repondre`] : le service le note (un
+    /// serveur de carte empoisonné ne se rétablit pas). Rien par défaut.
+    fn apres_panique(&self, _message: &str) {}
+
+    /// **L'arrêt demandé** : `(code, cause)`. Le serveur répond aux requêtes en
+    /// vol, puis rend [`DaemonError::Arret`]. `None` par défaut.
+    fn arret_demande(&self) -> Option<(u8, String)> {
+        None
+    }
 }
 
 /// **Sert-on hors de la boucle locale ?**

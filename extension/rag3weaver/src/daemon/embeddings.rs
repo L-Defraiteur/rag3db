@@ -140,6 +140,15 @@ pub struct Identite {
     /// pas lancé par une activation (les services posés à la main).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub relances: Option<u64>,
+    /// **Le plafond d'un texte**, en caractères : au-delà, le texte est refusé
+    /// (413 nommé) sans calcul. Une requête de 8 000 jetons demandait 4 Go
+    /// d'attention à la carte (le 7879, 15 novembre 2026). Absent : un
+    /// fournisseur d'avant ce plafond.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_chars_per_text: Option<usize>,
+    /// Le ratio qui traduit ce plafond en jetons, dit avec lui (environ).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chars_per_token: Option<usize>,
 }
 
 /// La politique de déchargement d'un fournisseur, telle qu'il la déclare.
@@ -574,7 +583,14 @@ impl EmbedDaemon {
                 inactif_depuis_ms: self.inactif_depuis().map_or(0, |d| d.as_millis() as u64),
             }),
             relances: self.relances,
+            max_chars_per_text: None,
+            chars_per_token: None,
         }
+    }
+
+    /// Le plafond d'un texte, en caractères (`RAG3WEAVER_EMBED_MAX_CHARS` au binaire).
+    pub fn max_chars_per_text(self, _n: usize) -> Self {
+        self
     }
 
     /// **Écoute, et ne rend jamais la main** (sauf erreur d'écoute).
@@ -1469,6 +1485,135 @@ mod tests {
         assert!(matches!(r, Err(EmbedError::Timeout)), "{r:?}");
         let dit = attente.lock().unwrap().clone().unwrap_or_default();
         assert!(dit.starts_with(&format!("l'embarquement de la requête par {adresse} : ")) && dit.ends_with(" ms"), "{dit:?}");
+    }
+
+    // ─── Le 503 nommé, et l'arrêt dit (15 novembre 2026, conception relue par c7) ───
+    // Le 7879 de luciepc mourait sur une réservation refusée : le fil paniquait
+    // sans répondre, puis les autres, et `servir` rendait Ok(()) : code 0 muet.
+
+    /// Un démon servi dans un fil, son adresse, et la fin de `servir_lie`.
+    fn demon_et_sa_fin(d: EmbedDaemon) -> (String, std::thread::JoinHandle<Result<(), DaemonError>>) {
+        let (ecoute, adresse) = ecoute_libre();
+        let fin = std::thread::spawn(move || d.servir_lie(ecoute));
+        for _ in 0..1000 {
+            if DaemonEmbedder::joindre(&adresse).is_ok() {
+                return (adresse, fin);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("le démon n'a pas répondu");
+    }
+
+    fn attendre_la_fin(fin: std::thread::JoinHandle<Result<(), DaemonError>>, secondes: u64) -> Option<Result<(), DaemonError>> {
+        let debut = std::time::Instant::now();
+        while debut.elapsed() < std::time::Duration::from_secs(secondes) {
+            if fin.is_finished() {
+                return Some(fin.join().expect("le fil du démon"));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        None
+    }
+
+    /// Une carte qui refuse sa réservation sur « boum », comme cubecl le
+    /// 15 novembre ; « lent » tient la passe 600 ms.
+    #[derive(Debug)]
+    struct CarteRefusee;
+
+    impl Embedder for CarteRefusee {
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+            if texts.iter().any(|t| t == "boum") {
+                panic!("failed to reserve 4102146304 bytes of device memory: can't allocate buffer of size: 4102146304");
+            }
+            if texts.iter().any(|t| t == "lent") {
+                std::thread::sleep(std::time::Duration::from_millis(600));
+            }
+            Ok(texts.iter().map(|_| vec![0.0; 4]).collect())
+        }
+        fn dim(&self) -> usize {
+            4
+        }
+        fn name(&self) -> &str {
+            "carte-refusee"
+        }
+    }
+
+    /// **1. Une panique de calcul rend un 503 nommé**, et le service s'arrête en
+    /// le disant, avec le code 70 : jamais une connexion coupée, jamais `Ok(())`.
+    #[test]
+    fn une_panique_de_calcul_rend_un_503_nomme_et_arrete_le_service_avec_le_code_70() {
+        let (adresse, fin) = demon_et_sa_fin(EmbedDaemon::new(Arc::new(CarteRefusee)));
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+        let e = c.embed(&["boum".to_string()]).err().expect("un calcul en panique est refusé").to_string();
+        assert!(e.contains("(503)") && e.contains("calcul en panique") && e.contains("failed to reserve 4102146304"), "{e}");
+        match attendre_la_fin(fin, 10) {
+            Some(Err(DaemonError::Arret { code: 70, cause })) => {
+                assert!(cause.contains("failed to reserve 4102146304") && cause.contains("empoisonné"), "{cause}")
+            }
+            autre => panic!("le service doit s'arrêter avec le code 70, en le disant : {autre:?}"),
+        }
+    }
+
+    /// **2. L'arrêt attend d'avoir répondu aux requêtes en vol** : « lent » tient
+    /// la passe, « boum » et « après » l'attendent ; « boum » panique ; « après »
+    /// reçoit un 503 qui dit le serveur empoisonné, et seulement ensuite le
+    /// service s'arrête.
+    #[test]
+    fn l_arret_attend_d_avoir_repondu_aux_requetes_en_vol() {
+        let (adresse, fin) = demon_et_sa_fin(EmbedDaemon::new(Arc::new(CarteRefusee)));
+        let envoyer = |texte: &'static str, delai_ms: u64| {
+            let a = adresse.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(delai_ms));
+                let c = DaemonEmbedder::joindre(&a).expect("joindre");
+                c.embed(&[texte.to_string()]).map(|_| ()).map_err(|e| e.to_string())
+            })
+        };
+        let lent = envoyer("lent", 0);
+        let boum = envoyer("boum", 150);
+        let apres = envoyer("après", 300);
+        assert!(lent.join().unwrap().is_ok(), "la requête lente, d'avant la panique, répond");
+        let b = boum.join().unwrap().expect_err("boum");
+        assert!(b.contains("(503)") && b.contains("calcul en panique"), "{b}");
+        let a = apres.join().unwrap().expect_err("après la panique : refusée");
+        assert!(a.contains("(503)") && a.contains("serveur de la carte empoisonné"), "la requête en vol reçoit un 503 nommé : {a}");
+        assert!(matches!(attendre_la_fin(fin, 10), Some(Err(DaemonError::Arret { code: 70, .. }))), "puis le service s'arrête");
+    }
+
+    /// Un embarqueur qui compte ses appels.
+    #[derive(Debug, Default)]
+    struct Compteur(std::sync::atomic::AtomicUsize);
+
+    impl Embedder for Compteur {
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(texts.iter().map(|_| vec![0.0; 4]).collect())
+        }
+        fn dim(&self) -> usize {
+            4
+        }
+        fn name(&self) -> &str {
+            "compteur"
+        }
+    }
+
+    /// **3. Un texte au-dessus du plafond est refusé nommé, sans calcul**, et
+    /// l'identité dit le plafond et son ratio (12 000 caractères par défaut,
+    /// environ 3 par jeton).
+    #[test]
+    fn un_texte_au_dessus_du_plafond_est_refuse_nomme_sans_calcul() {
+        let compteur = Arc::new(Compteur::default());
+        let adresse = demon(EmbedDaemon::new(compteur.clone()));
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+        assert_eq!((c.identite().max_chars_per_text, c.identite().chars_per_token), (Some(12_000), Some(3)));
+        let e = c.embed(&["court".to_string(), "x".repeat(13_000)]).err().expect("un texte trop long est refusé").to_string();
+        assert!(e.contains("(413)") && e.contains("texte 1 : 13000 caractères, plafond 12000"), "{e}");
+        assert_eq!(compteur.0.load(std::sync::atomic::Ordering::SeqCst), 0, "rien n'a été calculé");
+        let adresse = demon(EmbedDaemon::new(compteur.clone()).max_chars_per_text(100));
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+        assert_eq!(c.identite().max_chars_per_text, Some(100));
+        assert!(c.embed(&["y".repeat(101)]).err().expect("plafond réglé").to_string().contains("plafond 100"));
+        assert!(c.embed(&["y".repeat(100)]).is_ok(), "au plafond, il passe");
     }
 
     #[test]
