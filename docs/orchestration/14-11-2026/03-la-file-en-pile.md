@@ -1305,3 +1305,12 @@ rejeu court vert 15 h 41 ; un premier rejeu tué par son propre timeout pendant 
 désormais). « À toi » à 96 pour sa pile (c733b81dd, + usage si vert) sur 5ff5bdfb2. Puis embarquement, lucivy, codeparsers,
 tty-14 (+ tty-15), ED (1), G, arbre ; CI + format de hotfixs à son « prêt ». Arbre : répétition de la bascule vers 17 h à luciepc
 sur copies ; 2b′ a trouvé un vrai défaut (NULL typé STRING dans merge_generation cassait la génération 0), corrigé avec témoin.
+Lucie, 15 h 46 : premier essai du terminal neuf (tty-11/12/13) sur essai-tty : « qu'est-ce qu'on sait sur les orphelins du plein
+texte ? » — 12 appels d'outil (les bons : ticket lucivy, catalog.rs), puis `step_done` « Synthèse documentaire détaillée… » sans
+un mot dans la boîte, « fait sans plan ». Le défaut de l'équipier muet vu par Lucie elle-même ; relevé passé à archi pour son
+lot (B), qui passe en tête de sa file après le relai.
+ED, 15 h 48 : le grain du paquet vert en lot à part (ecrivain-grain-du-paquet d57b28c80, sur l'écrivain bff6c7409) : témoin 15 rouge
+d'abord (862 puis 1 622 instructions pour 40 et 80 fichiers, ~19 par fichier), vert ensuite (au plus un quart de plus pour deux
+fois plus de fichiers) ; passe épinglée verte. En file derrière l'écrivain, au vert du banc et après sa mesure du temps de
+repassage (cible : au plus deux fois le parent). Arbre : le produit n'appelait pas migrer_vers_les_generations — une CLI
+`migration generations --base` en petit lot sur la pile d'ED. La transaction par paquet derrière la bascule.
