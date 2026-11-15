@@ -26,7 +26,7 @@ Chaque morceau a été vu rouge avant son code :
 - la visionneuse (`src/visionneuse.rs`) : ses touches, son écran ;
 - la teinte d'un remplacement, et la traduction de Ctrl-O et des pages.
 
-Le crate passe de 66 à 80 tests avec la vue, et en garde 14 sans elle.
+Le crate passe de 66 à 79 tests avec la vue, et en garde 14 sans elle.
 
 Un trou dans l'historique de la branche : le premier commit rouge (`84257c530`) déclarait le module `outils` sans le fichier, qui n'était pas suivi. `git commit -- <chemins>` ne prend pas un fichier non suivi. Ce commit ne compile donc pas seul ; le suivant (`c3100d5a3`) ajoute le fichier. L'historique poussé n'a pas été réécrit.
 
