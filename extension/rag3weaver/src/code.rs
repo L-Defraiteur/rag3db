@@ -5953,13 +5953,13 @@ mod tests_de_l_ecrivain {
     fn un_scope_inchange_mene_a_son_fichier_visible() {
         let (mut cat, src) = base();
         let n = cat.publier_la_generation("c1", 0).expect("publier");
-        assert_eq!(cat.au_rang(n, scopes_sans_fichier_visible), Vec::<String>::new(), "avant : chaque scope a son fichier");
+        assert_eq!(cat.au_rang(n, |c| scopes_sans_fichier_visible(c)), Vec::<String>::new(), "avant : chaque scope a son fichier");
         cat.version_de_l_analyse = format!("{}-autre", cat.version_de_l_analyse);
         crate::code_sync::sync_source(&mut cat, &src, &Default::default(), &mut |_| {}).expect("la synchronisation");
         let m = cat.publier_la_generation("c2", 0).expect("publier");
         assert_eq!(lignes_file(&cat, "b.rs"), 2, "la ligne File de b.rs est retirée et renaît");
-        assert_eq!(cat.au_rang(m, scopes_sans_fichier_visible), Vec::<String>::new(), "au rang courant, chaque scope mène à son fichier visible");
-        assert_eq!(cat.au_rang(n, scopes_sans_fichier_visible), Vec::<String>::new(), "et au rang d'avant, au fichier d'avant");
+        assert_eq!(cat.au_rang(m, |c| scopes_sans_fichier_visible(c)), Vec::<String>::new(), "au rang courant, chaque scope mène à son fichier visible");
+        assert_eq!(cat.au_rang(n, |c| scopes_sans_fichier_visible(c)), Vec::<String>::new(), "et au rang d'avant, au fichier d'avant");
     }
     /// **Témoin 14 : le rattrapage se dit** (c7, condition de l'atterrissage) : une synchronisation qui
     /// repasse des fichiers pour la version de l'analyse le dit dans son avancement, avec leur nombre.
