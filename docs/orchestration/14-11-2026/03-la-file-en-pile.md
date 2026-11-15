@@ -1183,3 +1183,15 @@ ED, 14 h 58 : lecture retirée (une soustraction de deux totaux, pas un relevé 
 vers des File fermés : attendus légitimes (Scope fermés avec leur File d'avant, leur histoire ; le parent efface, d'où son 0) ;
 chiffre demandé au banc : Scope fermé → File fermé = 537, Scope ouvert → File fermé = 0. L'écrivain repart en file tel quel
 dès son rejeu, avec l'état du rattrapage ; le témoin 13 gardé comme filet.
+Cœur, 14 h 59 : SIGSEGV rouge (db7eed64c : SIGSEGV, et le défaut de la colonne ajoutée lu sur 100 lignes au lieu de 3 100) puis vert
+(ee598e074 : AddColumnRefusedMidway nœuds et relations, AddColumnRollback, AlterWaitsForWriters, transaction_test 387). Les ×10
+de DdlEveryMinute tournent (~65 min) ; le pool plein n'est pas réglé par ce lot.
+15 h 01 : 96 repose c733b81dd sur ccfa7efea maintenant (rejeu sans push) ; le lot `usage` (cx-memoire-usage 1c85fa06e : Decide pose
+usage, archive_rapport.rhai fait usage_total ; signe d'absence = prompt_tokens == 0 ; le vert en cours sur six suites puis la
+lib) en pile dessus, même « à toi » s'il est vert avant. Archi repose le relai sur ccfa7efea. G pose 5b8f8994f au portable
+après 15 h 05, puis le ticket des hashes courts.
+Banc, 15 h 02 : F à 50 k finie (244 décisions) : 14 788 793 caractères de contexte + 722 399 de sections envoyés, soit un plafond de
+**3,88 M de jetons** (à 4 caractères, sans cache, instruction et candidates en plus) — chiffre pour Lucie, à côté du réel de sa
+console ; temps par décision sous réserve (la passe a tourné à côté de l'index des parités sur 7879). Jugement P1/P2 de F 50
+contre N en cours, par Gemini seul. card2 donnée à embarquement. Scopes sans DEFINED_IN : 3 931 avant les versions, 3 814 après,
+parent comme écrivain — l'ingestion (constructeurs de JsonMutWrapper : seul le dernier a son lien), ticket codeparsers complété.
