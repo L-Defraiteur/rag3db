@@ -259,3 +259,59 @@ non) : la réindexation réécrit sur place la ligne publiée. Le code, dans l'o
 6. **Hors de ce lot** : les colonnes de génération sur les arêtes elles-mêmes. Une arête recopiée est
    une arête neuve vers la ligne neuve ; l'arête de la ligne retirée reste, et sa ligne retirée la rend
    invisible par le prédicat du nœud atteint.
+
+## 13. La version de l'analyse dans l'empreinte indexée (15 novembre 2026, 3 h 50 ; à coder le matin)
+
+**Le défaut** (banc, départage du rouge de parité, ticket
+`docs/everything-declarative/tickets/2026-11-15-l-ecrivain-de-2a-prime-2-rougit-a-la-parite-lexicale.md`) :
+le saut des fichiers inchangés (§ 11, défaut 8) gardait, sur chaque fichier sauté, ce que l'analyse
+d'un code plus vieux en avait dérivé : contenu des scopes, morceaux, plein texte. Un changement de
+parseur ou de règles ne s'appliquait donc jamais aux fichiers inchangés. Par exemple, le passage de
+`function` à `method` de codeparsers ne serait jamais arrivé sur une base à générations sans réindexer
+à la main. L'histoire gardée n'y est pour rien : aucune ligne fermée ne sort (128 résultats relevés).
+
+**La règle (c7, 3 h 1x)** : la version de l'analyse entre dans l'empreinte indexée d'un fichier. Un
+fichier n'est « inchangé », donc sauté, que si son contenu **et** cette version coïncident ; sinon il
+repasse par l'écrivain, qui décide ligne à ligne (§ 2). Une ligne que la nouvelle analyse rend
+identique ne change pas ; une ligne qu'elle change est retirée et renaît.
+
+**La version de l'analyse**, un hash calculé au bâti et à l'ouverture, de trois parties :
+- **le parseur** : le commit de codeparsers lié (le sous-module, lu par `build.rs` comme
+  `RAG3WEAVER_GIT_HASH` l'est déjà), pas la version du paquet ;
+- **les règles de rag3weaver** qui font une ligne à partir de l'analyse (clés, imports, appartenance,
+  provenance des manifestes) : une constante `REGLES_DE_L_ANALYSE` dans `code.rs`, montée à la main
+  par tout lot qui les change. Une garde de `check_features` la fera monter : elle refuse un diff de
+  `code.rs`, `manifestes.rs` ou `queries_via.rs` sans montée de la constante, sauf mention
+  « sans effet sur l'analyse » dans le message. Le commit entier de rag3weaver serait trop large : la
+  moindre ligne de l'IDE ferait tout repasser ;
+- **le gabarit** : le découpage des scopes (`ChunkingConfig`) et les champs déclarés de `Scope` et de
+  `File`, hachés tels que le catalogue les a enregistrés.
+
+**Où elle vit** : une colonne `analyse` de `File`, texte, posée par le chemin additif (défaut `''`). Une
+base d'avant n'a donc aucune version, et tout y repasse une fois, ce qu'il faut. `content_hash` reste
+le hash du seul contenu : la fraîcheur de `read_file` le compare au disque et ne doit pas dire
+« périmé » à chaque montée de version.
+
+**Le saut** (`synchroniser_par_generations`) compare la paire (`content_hash`, `analyse`) de la ligne
+`File` visible au rang en attente à la paire (hash du disque, version courante). Une passe en masse
+interrompue fait toujours tout repasser.
+
+**Le témoin, rouge d'abord, en deux branches** (`code::tests_de_l_ecrivain`) :
+- la version change et le contenu ne change pas : la synchronisation réanalyse le fichier. Le témoin
+  pose une `analyse` d'avant sur la ligne `File`, ou force la version par un crochet de test, et
+  attend `files_ingested` = 1 ;
+- la version ne change pas et le contenu non plus : le fichier est sauté (`files_ingested` = 0).
+Rouge attendu sur la tête d'aujourd'hui : la première branche, puisque le fichier est sauté.
+
+**Puis la parité propre** (banc) :
+- une base indexée d'abord par le code du parent lui-même, copiée ;
+- les deux côtés réindexent une source qui diffère de quelques fichiers, sur des copies à **noms
+  distincts portant leur rôle** ;
+- l'actuelle se rejoue aussi, sur une copie neuve de la base migrée : elle doit passer, aux 14 201
+  ScopeContent orphelins du parent près. Ces orphelins sont un défaut du chemin d'avant, ticket à
+  part.
+
+**Note du jugement** : le rejeu du montage de retrait par banc a réécrit la copie du lot de la parité
+(`banc-parite/ecr-base-lot2`, le même nom de copie). Le relevé du départage s'est donc fait sur l'état
+du retrait (rangs 1 à 3), pas sur celui de la parité ; il est resté lisible, les 128 uuid relevés étant
+nés à 0. Depuis, les noms de copie portent leur rôle (parité, retrait), une copie par rôle.
