@@ -45,6 +45,8 @@ export RAG3WEAVER_TARGET_MAX_GO=32
 [ -f $HOME/.cache/rag3weaver-build/paquets-react/react-refresh/package.json ] && export RAG3WEAVER_PAQUETS_REACT=$HOME/.cache/rag3weaver-build/paquets-react
 FEAT=rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm
 R=$J/resume.log
+# La base testée, pour la garde hors pile (15 nov. 2026, note d'ED) : le dernier commit de master sous la tête.
+git -C $W merge-base HEAD origin/master > $J/base 2>/dev/null || rm -f $J/base
 echo "commit $(git -C $W rev-parse --short HEAD) — $(date '+%d/%m %H:%M') — lib ${RAG3DB_LIB:13:9}" > $R
 rouge() { echo "ROUGE $1" >> $R; exit 1; }
 # La règle 7 : un C++ du lot plus neuf que la lib épinglée se joue sous RAG3WEAVER_MOTEUR_ANCIEN=1, dit ici.
