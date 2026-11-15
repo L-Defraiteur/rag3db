@@ -56,6 +56,7 @@ fn toy() -> (tempfile::TempDir, Backend) {
         avertissement_sans_service: None,
         avertissement_du_creux: None,
         avertissement_du_modele: None,
+        avertissement_d_extension: None,
         embarqueur_a_retenter: None,
         decider: None,
         #[cfg(feature = "code")]
