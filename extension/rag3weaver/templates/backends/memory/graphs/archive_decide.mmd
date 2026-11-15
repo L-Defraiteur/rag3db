@@ -8,6 +8,7 @@
 %% param: instruction string! -- Ce que l'étiquette veut dire, pour le modèle ; sans apostrophe droite (substituée entre apostrophes dans la configuration du Decide ; la typographique ’ passe).
 %% param: search_options json! -- Les options de la recherche de candidates (limit…).
 %% param: context string = "" -- Ce qui précède, montré au modèle avant la section, jamais rangé (archive, param context).
+%% param: context_title string = "Ce qui précède (déjà rangé, ne pas ranger) :" -- Le titre posé devant le contexte (archive, param context_title).
 %% param: query_chars int = 4000 -- La borne de la requête de la recherche des candidates (archive, param query_chars).
 %% param: proposed json = [] -- Les fiches proposées par les sections précédentes du même document ({name, about, state, via}), portées par le ForEachNode d'archive (carry) : elles ne sont pas encore cherchables, la transaction de l'outil ne les a pas validées.
 %% result: decided.result
@@ -15,7 +16,7 @@
 graph LR
     requete["RhaiNode(script_id=archive_query, inputs='section,query_chars', section=$element, query_chars=$query_chars)"]
     recall["ForEachNode(graph='@builtin:backends/memory/graphs/archive_recall.mmd', search_options=$search_options)"]
-    prepare["RhaiNode(script_id=archive_candidates, inputs='section,candidates,allow_create,proposed,context', section=$element, candidates=$candidates, allow_create=$allow_create, proposed=$proposed, context=$context)"]
+    prepare["RhaiNode(script_id=archive_candidates, inputs='section,candidates,allow_create,proposed,context,context_title', section=$element, candidates=$candidates, allow_create=$allow_create, proposed=$proposed, context=$context, context_title=$context_title)"]
     decide["Decide(via='llm', labels_from='candidates', labels='none|create', field='prompt', as='verdict', name_as='subject', about_as='subject_about', max_tokens=4096, instruction='$instruction')"]
     decided["RhaiNode(script_id=archive_decided, inputs='allow_create,proposed', allow_create=$allow_create, proposed=$proposed)"]
     requete -->|result:elements| recall
