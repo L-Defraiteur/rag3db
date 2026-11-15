@@ -901,6 +901,18 @@ provider.
     After that, it goes back to the card once the card has room, and says so.
   - **Without a fallback.** The activation runs anyway, and the state says « carte pleine, pas de
     repli déclaré ».
+  - **With `fallback: {"activation": "<name>"}`.** The fallback is another named activation, on its
+    own card, at its own `address` (required, port 0 allowed). It must be the same provider up to
+    placement: only `peripherique`, `address` and the card variables of `env`
+    (`RAG3WEAVER_BURN_DEVICE_*`, `*_VISIBLE_DEVICES`) may differ. Any other difference is refused
+    when the manifest loads, by name. Its full recipe is attested when it starts, and the state says
+    « recette vérifiée ». Its card is measured too, with its own `required_mib` (the primary's by
+    default). If both cards are full, the primary activation runs, and the state reports both
+    measurements. For example, a fallback on the integrated GPU sets `"peripherique": "card1"` and
+    `"RAG3WEAVER_BURN_DEVICE_EMBEDDER": "igpu:0"`.
+  - **Doubling the hold.** A fallback taken for throughput that comes back to the card, then drops
+    below the threshold again in the next window, doubles its hold, up to
+    `fallback_hold_max_factor` times (16 by default).
 
   Where this shows:
   - **The index journal**, after each pass, says where the vectors came from (« provenance des

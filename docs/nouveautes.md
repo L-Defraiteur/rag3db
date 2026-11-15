@@ -1,5 +1,13 @@
 # Nouveautés
 
+- 15 novembre2026 — **Le repli d'une carte pleine peut aller vers une autre activation.** Avec
+  `fallback: {"activation": "<nom>"}`, l'embarqueur d'une carte pleine (ou trop lente) lance ou rejoint une activation
+  déclarée, sur sa propre carte et à sa propre `address`, au lieu d'un service posé à la main. Le repli doit être le
+  même fournisseur, au placement près : seuls le périphérique, l'adresse et les variables de carte peuvent différer,
+  et tout autre écart est refusé au chargement, nommé. Sa recette est attestée, et l'état le dit. Sa carte se mesure
+  aussi : si les deux sont pleines, l'activation principale se fait, et l'état dit les deux mesures. Un repli pris pour
+  le débit qui retombe juste après son retour double sa tenue, jusqu'à `fallback_hold_max_factor` (16 par défaut).
+
 - 15 novembre2026 — **Le service d'embarquement ne meurt plus en silence.** Un calcul qui panique sur la carte (une
   réservation de mémoire refusée) rend un 503 nommé au client, au lieu d'une connexion coupée. Le service répond
   ensuite à toutes ses requêtes en vol, puis s'arrête avec le code 70 en disant sa cause en dernière ligne de son
