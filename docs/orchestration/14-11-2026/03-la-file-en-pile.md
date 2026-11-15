@@ -1611,3 +1611,6 @@ ED, 18 h 03 : le nom de l'agent, part (1), pris tout de suite (nom-de-l-agent su
 « équipier », refus nommé si vide ou multiligne ; la tâche surcharge par le registre ; PreparedBackend::nom_de_l_agent()) ; la
 création nommée d'une tâche (POST /ide/taches {agent_name}) dans le même lot. Place après 96, avant l'écrivain. `agent` ne se pose
 dans le manifeste de Lucie qu'après l'atterrissage (deny_unknown_fields avant).
+Lucie, 18 h 04 : « et une persona, un personnage assez bref à incarner, comme un ton de réponse ? » — `agent.persona` à côté de
+`agent.name` (texte court, plafond réglé, défaut vide, surcharge par tâche) ; dans l'invite après le nom, après les règles du socle,
+pour colorer le ton sans défaire une règle. Même lot, chez ED et archi.
