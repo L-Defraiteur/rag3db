@@ -72,3 +72,16 @@ Ce qu'elle a sous les yeux, et qu'elle veut retrouver dans le terminal d'Algaret
 Le nom d'un agent accepte un blanc (« Om bre » passe `valider_le_nom_de_l_agent`, backend.rs:995, vu par tty
 à l'essai réel de /nom). Témoin rouge d'abord, puis le refus nommé ; `cargo test` du seul témoin ; pas de push,
 « prêt » et c7 relit. Cadrée pour tenir dans un pas, avec les primitives du socle.
+
+## Relevé du 16 nov., 0 h 5x – 1 h 1x : le bus est un registre
+
+Une socket témoin posée dans `/run/user/1000/cc-socks/` n'est ni listée ni sondée. Les sessions se découvrent par
+`~/.claude/sessions/<pid>.json` (pid, sessionId, cwd, startedAt, procStart, version, peerProtocol 1, peerFeatures,
+kind, entrypoint, pidDomain, messagingSocketPath, name, nameSource, nameSince, status, updatedAt) ; la socket
+ne sert qu'au transport. Être un pair = une entrée dans ce registre, vraie (nom, origine « rag3weaver », pid et
+procStart de l'hôte, état réel), et une socket au protocole 1.
+
+Lucie, 1 h 1x : « oui au registre, non aux canaux car ça voudrait dire tous vous redémarrer ; mais faudra le
+préparer quand même pour qu'on le fasse plus tard ». Suite : une entrée témoin le temps de relever la trame
+(archi), puis le mode `pair` de l'hôte ; les canaux Claude Code en page de préparation pour une prochaine relance
+des sessions.
