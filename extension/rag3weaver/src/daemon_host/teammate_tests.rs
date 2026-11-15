@@ -1343,16 +1343,111 @@ fn a_request_that_expects_approval_does_not_end_without_it() {
     assert_eq!(boite.iter().find(|l| l["kind"] == "ended").unwrap()["text"], "fait sans plan", "{boite:#?}");
 }
 
-/// **`expects` se déclare sur une request, et seulement `report` ou `approval`.**
+/// **Une demande sans `expects` attend au moins une ligne de l'équipier** (relevé de tty, 15
+/// novembre 2026, run `agent-1a1df060b51-346` : deux `read_file` refusés, puis un `step_done`
+/// « exemple TypeScript fourni » sans rien dans la boîte). Le `step_done` qui la finirait sans
+/// rien est relancé une fois : la boîte le dit et cite le `step_done` ; le pas suivant voit la
+/// relance, son texte arrive dans la boîte, la tâche finit « fait sans plan », sans pas raté.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
 #[test]
-fn expects_is_a_request_field_with_two_values() {
+fn a_request_without_expects_waits_for_a_line_and_the_lying_step_done_is_relaunched_once() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let frontieres = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let frontieres = frontieres.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let frontieres = frontieres.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                if results.is_empty() {
+                    frontieres.lock().unwrap().push(last_user(turns));
+                }
+                let menteur = calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "exemple TypeScript fourni", "remaining": "" }))]);
+                match (step_of(turns), results.len()) {
+                    (1, 0) => answer(turns, opts, sink, "", calls(&[("read_file", json!({ "path": "absent/saisie.rs" })), ("read_file", json!({ "path": "absent/README.md" }))])),
+                    (1, _) => answer(turns, opts, sink, "", menteur),
+                    _ => answer(turns, opts, sink, "```typescript\nclass Exemple {}\n```", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "exemple écrit", "remaining": "" }))])),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "tty", "request", None, "Lis deux fichiers, puis réponds avec un exemple de classe TypeScript.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let boite = attendre_dans(&files, "la fin", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    assert!(dit_par_l_hote(&boite, "relance : ta demande attend une réponse dans la boîte"), "la relance est dite : {boite:#?}");
+    let relance = boite.iter().find(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.starts_with("relance"))).unwrap();
+    assert!(relance["text"].as_str().unwrap().contains("exemple TypeScript fourni"), "elle cite le step_done : {relance}");
+    assert!(frontieres.lock().unwrap().iter().skip(1).any(|f| f.contains("relance")), "le pas suivant voit la relance : {:?}", frontieres.lock().unwrap());
+    assert!(boite.iter().any(|l| l["from"] == "teammate" && l["text"].as_str().is_some_and(|t| t.contains("class Exemple"))), "le contenu arrive : {boite:#?}");
+    assert_eq!(boite.iter().find(|l| l["kind"] == "ended").unwrap()["text"], "fait sans plan", "{boite:#?}");
+    assert!(!boite.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.contains("raté"))), "la relance n'est pas un pas raté : {boite:#?}");
+}
+
+/// **Toujours rien après la relance** : l'équipier attend le superviseur, sans rappeler le modèle.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn still_nothing_after_the_relaunch_waits_for_the_supervisor() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let appels = Arc::new(Mutex::new(0usize));
+    let model: ChatModel = {
+        let appels = appels.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let appels = appels.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                *appels.lock().unwrap() += 1;
+                answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fait", "remaining": "" }))]))
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "tty", "request", None, "Réponds-moi.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let boite = attendre_dans(&files, "l'attente", &|b| dit_par_l_hote(b, "fait sans le livrable demandé") || b.iter().any(|l| l["kind"] == "ended"));
+    assert!(!boite.iter().any(|l| l["kind"] == "ended"), "pas de fin sans rien : {boite:#?}");
+    assert!(dit_par_l_hote(&boite, "fait sans le livrable demandé (une ligne de l'équipier dans la boîte) : j'attends le superviseur"), "{boite:#?}");
+    let vus = *appels.lock().unwrap();
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    assert_eq!(*appels.lock().unwrap(), vus, "aucun appel au modèle pendant l'attente");
+}
+
+/// **`expects: "none"`** : une demande explicitement silencieuse finit sans ligne et sans relance.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_request_that_expects_none_ends_without_a_line() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+            answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "rangé", "remaining": "" }))]))
+        })))
+    });
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Range le dossier.", &json!({ "expects": "none" })).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let boite = attendre_dans(&files, "la fin", &|b| b.iter().any(|l| l["kind"] == "ended") || dit_par_l_hote(b, "relance") || dit_par_l_hote(b, "fait sans le livrable demandé"));
+    assert_eq!(boite.iter().find(|l| l["kind"] == "ended").map(|l| l["text"].clone()), Some(json!("fait sans plan")), "{boite:#?}");
+    assert!(!dit_par_l_hote(&boite, "relance"), "{boite:#?}");
+}
+
+/// **`expects` se déclare sur une request, et seulement `report`, `approval` ou `none`.**
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn expects_is_a_request_field_with_three_values() {
     let d = tempfile::tempdir().unwrap();
     let (_depot, manifeste) = depot_inscrit(d.path(), true);
     let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Err("pas de modèle ici".into()) });
     let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
     let h = host.hosted(&manifeste).unwrap();
     let e = host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Fais-le.", &json!({ "expects": "un roman" })).unwrap_err();
-    assert!(e.contains("expects") && e.contains("report") && e.contains("approval"), "{e}");
+    assert!(e.contains("expects") && e.contains("report") && e.contains("approval") && e.contains("none"), "{e}");
     assert!(host.tache(&h.id, "doc").is_none(), "une request refusée n'ouvre pas de tâche");
 }
