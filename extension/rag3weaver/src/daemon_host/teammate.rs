@@ -161,6 +161,9 @@ pub struct TeammateFiles {
     pub dir: PathBuf,
     pub key: String,
     pub relay: Option<MailboxRelay>,
+    /// **Le nom de l'agent** (Algareth, 15 novembre 2026) : écrit en `name` sur chaque ligne du rôle
+    /// `teammate`, à côté du rôle, que les gardes de la boucle lisent seul.
+    pub nom: Option<String>,
 }
 
 /// **Le relais d'une boîte** vers le flux de l'IDE (sujet `mailbox`) : appelé
@@ -188,7 +191,7 @@ const AWAITS_SEEN: [&str; 5] = ["report", "ended", "delivery", "message", "answe
 
 impl TeammateFiles {
     pub fn new(dir: PathBuf, key: impl Into<String>) -> Self {
-        TeammateFiles { dir, key: key.into(), relay: None }
+        TeammateFiles { dir, key: key.into(), relay: None, nom: None }
     }
     pub fn plan_path(&self) -> PathBuf {
         self.dir.join("plan.json")
@@ -284,6 +287,11 @@ impl TeammateFiles {
         let mut line = json!({ "id": format!("{}:{rang}", self.key), "at": now_ms(), "from": from, "kind": kind, "text": text });
         if let Some(i) = item {
             line["item"] = json!(i);
+        }
+        if from == "teammate" {
+            if let Some(nom) = &self.nom {
+                line["name"] = json!(nom);
+            }
         }
         if let Some(extra) = extra.as_object() {
             for (k, v) in extra {
@@ -988,6 +996,15 @@ impl DaemonHost {
         let t = self.tache(parent, task).ok_or_else(|| format!("pas de tâche « {task} » ouverte sur {parent}"))?;
         let dir = t.arbre.parent().map(Path::to_path_buf).ok_or("la tâche n'a pas de dossier")?;
         let mut files = TeammateFiles::new(dir, format!("{parent}/{task}"));
+        // Le nom de l'agent : celui de la tâche au registre, sinon `agent.name` de son manifeste, sinon
+        // « équipier » (le défaut d'ED).
+        files.nom = Some(t.nom_de_l_agent.clone().unwrap_or_else(|| {
+            std::fs::read(&t.manifest)
+                .ok()
+                .and_then(|o| serde_json::from_slice::<Value>(&o).ok())
+                .and_then(|m| m["agent"]["name"].as_str().map(str::to_string))
+                .unwrap_or_else(|| "équipier".to_string())
+        }));
         // Chaque ligne écrite part aussi au flux de l'IDE (sujet `mailbox`), en
         // objet : l'IDE, le terminal et le hook la voient sans sonder la boîte.
         // Le `backend` de la trame est le manifeste de la tâche (son worktree), comme
