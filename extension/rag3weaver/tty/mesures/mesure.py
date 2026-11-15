@@ -543,6 +543,62 @@ finally:
     tunnel.terminate()
     hote_arreter()
 
+# 1g. Les commandes ! (tty-13), avec les deux gardes de c7. Une commande ! ne vient que de la frappe : une
+#     ligne de l'équipier « !touch … » et un « !touch … » collé puis effacé par Ctrl-C ne lancent rien. Un
+#     faux sudo demande un mot de passe sans écho : la consigne reçue par la boîte porte le retour de la
+#     commande, jamais le mot de passe, et le journal de séance non plus.
+SECRET = "s3cr3t-du-harnais"
+ssh(f"rm -f {DOSSIER}/jamais-1 {DOSSIER}/jamais-2 {DOSSIER}/seance-bang.txt; printf '%s\\n' 'stty -echo; printf \"Mot de passe : \"; read p; stty echo; echo; echo \"lu ${{#p}} caracteres\"' > {DOSSIER}/faux_sudo.sh")
+
+
+def ligne_d_ailleurs(texte):
+    req = urllib.request.Request(f"http://127.0.0.1:{TUNNEL}/faux/ligne", data=json.dumps({"text": texte, "from": "teammate", "kind": "report"}).encode(), headers={"Authorization": "Bearer jeton-de-mesure", "Content-Type": "application/json"}, method="POST")
+    return urllib.request.urlopen(req, timeout=10).read()
+
+
+hote_demarrer()
+tunnel = subprocess.Popen(["sleep", "86400"] if LOCAL else ["ssh", "-N", "-o", "BatchMode=yes", "-L", f"{TUNNEL}:127.0.0.1:{PORT}", HOTE])
+time.sleep(1.5)
+try:
+    t = Terminal("COLORTERM=truecolor TERM=xterm-256color", "daemon", extra=f"--journal {DOSSIER}/seance-bang.txt")
+    if t.attendre(b"attend ton accord", borne=40) is None:
+        rouge("bang : la demande d'accord ne paraît pas en 40 s")
+    ligne_d_ailleurs(f"!touch {DOSSIER}/jamais-1")
+    time.sleep(2.5)
+    t.ecrire(f"\x1b[200~!touch {DOSSIER}/jamais-2\x1b[201~".encode())
+    time.sleep(0.5)
+    t.ecrire(b"\x03")
+    time.sleep(0.5)
+    t0 = t.ecrire(f"!sh {DOSSIER}/faux_sudo.sh\r".encode())
+    invite = t.attendre("Mot de passe :".encode(), apres=t0, borne=10) is not None
+    time.sleep(0.5)
+    t0 = t.ecrire(f"{SECRET}\r".encode())
+    lu = t.attendre(f"lu {len(SECRET)} caracteres".encode(), apres=t0, borne=10) is not None
+    time.sleep(2.5)
+    ecran_apres = t.tout()
+    t.ecrire(b"\x03")
+    time.sleep(0.5)
+    t.arreter()
+    corps = [e["corps"] for e in journal()]
+    consignes = [c.get("text", "") for c in corps if str(c.get("text", "")).startswith("L'utilisateur a lancé la commande")]
+    textes_bang = [c.get("text", "") for c in corps if str(c.get("text", "")).startswith("!")]
+    seance = ssh(f"cat {DOSSIER}/seance-bang.txt 2>/dev/null")
+    existe = ssh(f"ls {DOSSIER}/jamais-1 {DOSSIER}/jamais-2 2>/dev/null").split()
+    resultats["bang"] = {"invite_vue": invite, "retour_vu": lu, "consignes": len(consignes), "consigne_porte_le_retour": bool(consignes) and f"lu {len(SECRET)} caracteres" in consignes[0],
+                         "secret_dans_la_consigne": any(SECRET in c for c in consignes), "secret_dans_le_journal": SECRET in seance, "secret_a_l_ecran": SECRET.encode() in ecran_apres,
+                         "lances_sans_frappe": existe, "envoyes_comme_texte": textes_bang}
+    b = resultats["bang"]
+    if not (invite and lu and b["consigne_porte_le_retour"]):
+        rouge(f"bang : la commande ou sa consigne manque : {b}")
+    if b["secret_dans_la_consigne"] or b["secret_dans_le_journal"] or b["secret_a_l_ecran"]:
+        rouge(f"bang : le mot de passe est sorti : {b}")
+    if existe or textes_bang:
+        rouge(f"bang : une commande ! est partie sans la frappe, ou comme du texte : {b}")
+finally:
+    tunnel.terminate()
+    hote_arreter()
+    ssh(f"rm -f {DOSSIER}/jamais-1 {DOSSIER}/jamais-2")
+
 # 2. Les couleurs de chaque thème, en couleur vraie puis en 256 couleurs.
 couleurs = []
 for nom, th in themes.items():
