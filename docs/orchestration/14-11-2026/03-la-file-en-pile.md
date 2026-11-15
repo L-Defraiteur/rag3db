@@ -1447,3 +1447,7 @@ ED, 17 h 02 : **les primitives du socle sont vertes** (socle-agent-de-code 7d43f
 et insert_lines (empreinte exigée), grep, list ; diff unifié et réindexation à chaque écriture. Réserves : le run par écriture
 à vérifier ; l'empreinte tenue par le chat, non affichée. Place : après codeparsers, avant archi (B). Ordre : lucivy →
 codeparsers → ED (socle) → archi (B) → archi (branchement) → tty-14/15/16 → 96 → ED (écrivain) → G → arbre + recherche.
+Lucivy, 17 h 02 : le relevé à blanc sur master à **a8b3b25bb** (gmail, 0 attribution ; rejeu vert sous timeout). « À toi » à codeparsers.
+CI de master : chaque push annule le run en attente d'avant (un seul en attente par groupe) ; avec un push de docs toutes les
+quelques minutes, un run de 20 min ne joue que dans un creux — lot pour hotfixs : `paths-ignore` des docs sur le déclencheur
+de master (un push de docs seules ne déclenche pas le CI Workflow).
