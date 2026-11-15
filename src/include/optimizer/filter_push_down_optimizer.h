@@ -24,6 +24,9 @@ struct PredicateSet {
     void addPredicate(std::shared_ptr<binder::Expression> predicate);
     std::shared_ptr<binder::Expression> popNodePKEqualityComparison(
         const binder::Expression& nodeID);
+    // Un IN sur la clé primaire du nœud, la liste littérale ou en paramètre, et du type de la clé :
+    // LIST_CONTAINS(<liste constante>, n.pk). Rendu (et retiré) s'il y en a un.
+    std::shared_ptr<binder::Expression> popNodePKInListComparison(const binder::Expression& nodeID);
     std::shared_ptr<binder::Expression> popSearchPredicate();
     binder::expression_vector getAllPredicates();
 
