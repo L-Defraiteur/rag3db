@@ -1712,3 +1712,7 @@ Archi, 19 h 33 : la conception de delegate sur master (695a9c19f, page 10) : del
 `agent/<parent>--<nom>` forkée du parent, dialogue recopié chez le parent en from: subagent, merge par défaut ou proposition,
 bornes teammate.delegation {max_depth 2, max_children 3, wait_s 1800}, enfants en zone vivante. Deux points à vérifier avant le
 premier rouge (une tâche sur le backend d'une tâche ; parent_task exposé par la liste).
+Codeparsers, 19 h 36 : la marque « nom » montée (codeparsers/marque-nom 7d2ef159a, en pile sur homonymes + paramètres) : (a) tel quel, (b) étroit
+par des listes std générées (rustc 1.98.1 : 1 266 noms ; clang 23 sur libstdc++ : 193 ; Python 3.14) ; rag3weaver/src « nom »
+10 702 → 10 114 (646 ôtées : 373 chemins par un type, 273 méthodes std ; prix : ~20 liens justes homonymes d'une std, au ticket 2) ;
+src/ du moteur 5 092 → 2 705, toutes fausses. Touche code.rs : montée de la constante quand la garde la demandera. Ticket 2 ensuite.
