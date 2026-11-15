@@ -28,6 +28,8 @@
   journal d'index dit d'où vient chaque passe de vecteurs, et chaque repli ou retour avec sa cause.
   L'état d'index le porte aussi.
 
+- 15 novembre2026 — Sous tmux, Maj-Entrée passe à la ligne dans le terminal de l'agent si tmux est réglé pour les touches étendues en CSI u (`set -g extended-keys on`, `set -g extended-keys-format csi-u`) ; le terminal lit le réglage et le dit quand il manque. Le tmux par défaut garde son repli dit, Alt-Entrée.
+
 - 15 novembre2026 — `/model` dans le terminal de l'agent : la liste des modèles de langage que déclare le manifeste de la tâche (le défaut et celui de la tâche marqués), et `/model <nom>` pour en changer ; l'hôte garde le choix avec la tâche et son chat le suit (`GET /ide/teammate/models`, `POST /ide/teammate/model`) ; un choix devenu inconnu se voit, et le chat refuse alors en disant de choisir.
 
 - 15 novembre2026 — Le terminal de l'agent a ses commandes : `/aide`, `/theme`, `/tache`, `/depot`, `/journal`, `/effacer`, `/context` (le remplissage du contexte du modèle) et les autres ; `!<commande>` la lance là où tourne le terminal, dans un pseudo-terminal où `sudo` demande son mot de passe, et sa sortie part à l'équipier, sans jamais le mot de passe ; Tab complète les commandes, leurs arguments, les exécutables et les fichiers ; l'historique des envois survit à la séance.
@@ -224,12 +226,10 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
   les administrations voisines ni ajouter d’écriture au principal.
   [Preuves et recette](everything-declarative/12-11-2026/04-parcours-agent-ide-vertex.md).
 
-
 - **12 nov. — Explorer les symboles sans leurs corps.** `navigate_symbols` expose dans le
   dépôt et le relais contextuel de l'atelier l'arbre d'un fichier, les parents/enfants
   par plages et les membres partiels réellement indexés. Homonymes, limites, plages
   ambiguës et index périmés sont nommés ; aucune exhaustivité AST ou d'héritage promise.
-
 
 - **12 nov. — Le diagnostic observe aussi les relations persistées.** Les
   configurations, définitions de relations et le journal sont lus dans le même
