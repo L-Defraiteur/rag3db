@@ -103,3 +103,27 @@ Sur le `ls` de Lucie : `ls` est dans la liste de lecture (`LECTURE_SEULE`, `comm
 une commande de lecture seule y est accordée, porte en approbation comprise (le fondement
 `Configuration`). Pourquoi la sienne a demandé (un shell, un chemin hors du domaine, une ligne à
 plusieurs commandes ?) reste à lire dans son run.
+
+## Les quinze « oui » de Lucie (run `agent-1a1dfc253c7-789`, 16 h 5x)
+
+- **`edit_file` était proposé, et le modèle l'a appelé.** L'outil a refusé : « l'arbre principal est
+  en lecture seule ; l'agent écrit dans une tâche (POST /ide/taches…) ». Le modèle a répété ce
+  refus, puis il est passé par les commandes (`python3 -c`, `printf … ; tee`, `cp`…). Seules
+  celles qui écrivent ont demandé.
+- **La cause** : le registre des tâches (`taches/registre.json`) porte `workspace.ecrit = false`
+  pour `essai-tty`. Ce droit est calculé une seule fois, à la création de la tâche (`taches.rs:526`,
+  sur le manifeste parent du moment), puis figé. La tâche est née le 14 à 18 h 34, avant que le
+  manifeste ne déclare `task_writes`. La surcharge pose donc `read_only = !ecrit = vrai`.
+- **Contourné aujourd'hui par c7** : une tâche neuve, `atelier` (backend `2fb80390ed75`,
+  `ecrit = true`). `essai-tty` reste telle quelle jusqu'au correctif (d).
+
+Les trois correctifs qui entrent dans le lot du socle :
+
+- **(b) Le bac Landlock d'une tâche lit le dossier git commun du dépôt de code.** Aujourd'hui,
+  `git status` y rend 128 (« impossible d'accéder à …/.git/info/exclude »), et l'équipier invente
+  `git -c core.excludesFile=/dev/null`.
+- **(c) Dans une tâche, le refus de `ReadOnly` ne conseille jamais `POST /ide/taches`**, sinon le
+  modèle croit qu'il n'est pas dans une tâche. Il dit à la place que cette tâche n'a pas le droit
+  d'écrire, et pourquoi.
+- **(d) `ecrit` se recalcule à chaque ouverture de la tâche**, sur le manifeste parent, au lieu
+  d'être figé dans le registre à sa création.
