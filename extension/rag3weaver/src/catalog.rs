@@ -10455,6 +10455,9 @@ fn read_threads() -> u64 {
                                     texte("commit", ""),
                                     texte("base", ""),
                                     texte("recette", ""),
+                                    // La génération 0 d'une couche est sa racine : aucune parente (2b′).
+                                    QueryParam::new("parente_couche", CypherValue::Null),
+                                    QueryParam::new("parente_rang", CypherValue::Null),
                                     texte("tombstones", "[]"),
                                     QueryParam::new("publiee_le", CypherValue::Int(maintenant)),
                                 ],
