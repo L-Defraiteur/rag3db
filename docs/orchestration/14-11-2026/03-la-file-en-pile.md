@@ -1672,3 +1672,7 @@ témoin de M4 (« LlmNode reste hors de toute politique ») : LlmNode mis sous c
 **voie 2** : LlmNode admis sous call_models seulement avec `response_schema` déclaré (borné par son schéma, comme Decide par ses
 candidates) ; validate_tool_policy lit la configuration du nœud. Aveu de 96 : les deux e2e de segment commités sans avoir été vus
 rouges ; rejoués rouges sur 1224f80a6 avant tout push.
+Archi, 18 h 55 : le rouge du branchement est un effet du lot (2 sur 4 sous Gemini contre 3/3 avant : le modèle rend le README dans un
+report et dit « rédigé ») ; correctif dans l'invite (« une demande de fichier s'écrit dans le fichier, la réponse dit ce qui est
+écrit ») vu rouge ; 4 tirages Gemini puis repose sur f85977d09, vert vers 19 h 30. Décision : **la pose du soir attend le branchement
+jusqu'à 19 h 35** (c'est lui qui met le socle dans la tâche de Lucie) ; sinon elle part sans lui.
