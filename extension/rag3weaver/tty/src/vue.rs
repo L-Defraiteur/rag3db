@@ -427,6 +427,13 @@ impl Vue {
         self.clore();
         let tete = crate::boite::en_tete(l);
         let texte = l["text"].as_str().unwrap_or("");
+        // La sortie d'une commande ! revient par la boîte : elle est déjà à l'écran,
+        // on n'en dit que la première ligne (tty-13).
+        if l["from"] == "supervisor" && texte.starts_with("L'utilisateur a lancé la commande") {
+            let premiere = texte.lines().next().unwrap_or_default().trim_end_matches(" :");
+            self.valider_avec_tete(Genre::Boite, &tete, &format!("{premiere} (la sortie, ci-dessus)"));
+            return;
+        }
         // Le texte de la boîte comme du Markdown : un bloc de code y est un bloc de
         // sa langue (tty-11), et l'en-tête va sur la première ligne.
         let mut premiere = true;
@@ -551,6 +558,14 @@ impl Vue {
     fn edite(&mut self, f: impl FnOnce(&mut crate::saisie::Saisie)) -> Option<Action> {
         f(&mut self.saisie);
         None
+    }
+
+    /// Le genre d'un envoi que fait le terminal lui-même (la sortie d'une
+    /// commande `!`) : une demande s'il ouvre la tâche, une consigne ensuite.
+    pub fn genre_d_un_envoi_du_terminal(&mut self) -> &'static str {
+        let g = self.genre_d_envoi();
+        self.demande_posee = true;
+        g
     }
 
     /// Le genre de ligne de boîte qu'une saisie envoie.
@@ -1058,6 +1073,17 @@ mod tests {
         v.touche(Touche::Car('o'));
         assert_eq!(v.propositions, None, "la touche suivante les efface");
         assert_eq!(Vue::new(80, true).touche(Touche::Tab), None, "rien à compléter dans une saisie vide");
+    }
+
+    /// La sortie d'une commande `!`, revenue par la boîte en consigne, ne
+    /// s'affiche pas une seconde fois : sa première ligne seule.
+    #[test]
+    fn the_output_of_a_bang_command_coming_back_by_the_mailbox_is_said_in_one_line() {
+        let mut v = Vue::new(120, true);
+        let c = crate::coquille::consigne("ls", std::path::Path::new("/tmp"), &crate::coquille::Resultat { code: Some(0), sortie: b"a\r\nb\r\n".to_vec() });
+        v.ligne_de_boite(&json!({ "id": "d/t:1", "from": "supervisor", "kind": "instruction", "text": c }));
+        let l: Vec<String> = v.prendre_lignes().into_iter().map(|l| l.texte).collect();
+        assert_eq!(l, vec!["[toi · consigne] L'utilisateur a lancé la commande `ls` dans /tmp ; voici le retour (code 0) (la sortie, ci-dessus)"]);
     }
 
     /// Le repli (sous mosh, la commande qui relit le journal) se dit sur la
