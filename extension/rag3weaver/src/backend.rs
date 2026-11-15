@@ -910,19 +910,22 @@ pub struct AgentDuBackend {
     pub name: Option<String>,
 }
 
+/// **Un nom d'agent valide** : une ligne, non vide ; rendu sans ses blancs de bord. Le refus nomme le
+/// champ (`agent.name` au manifeste, `agent_name` à la création d'une tâche).
+pub fn valider_le_nom_de_l_agent(nom: &str) -> Result<String, String> {
+    if nom.trim().is_empty() {
+        return Err("agent.name est vide : donnez un nom à l'agent, ou retirez le champ (« équipier » par défaut)".into());
+    }
+    if nom.contains('\n') || nom.contains('\r') {
+        return Err(format!("agent.name tient sur une ligne : « {} »", nom.replace('\n', "⏎")));
+    }
+    Ok(nom.trim().to_string())
+}
+
 /// Le nom d'un agent se refuse à la lecture du manifeste s'il est vide ou tient sur plusieurs lignes.
 fn lire_le_nom_de_l_agent<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
     use serde::de::Error;
-    let nom = Option::<String>::deserialize(d)?;
-    if let Some(n) = &nom {
-        if n.trim().is_empty() {
-            return Err(D::Error::custom("agent.name est vide : donnez un nom à l'agent, ou retirez le champ (« équipier » par défaut)"));
-        }
-        if n.contains('\n') || n.contains('\r') {
-            return Err(D::Error::custom(format!("agent.name tient sur une ligne : « {} »", n.replace('\n', "⏎"))));
-        }
-    }
-    Ok(nom.map(|n| n.trim().to_string()))
+    Option::<String>::deserialize(d)?.map(|n| valider_le_nom_de_l_agent(&n).map_err(D::Error::custom)).transpose()
 }
 
 /// Le nom de l'agent quand rien ne le déclare.
