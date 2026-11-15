@@ -24,14 +24,19 @@ mod tests {
     #[test]
     fn a_task_lists_its_declared_models_chooses_one_by_name_and_its_chat_follows() {
         let d = tempfile::tempdir().unwrap();
-        let (_depot, manifeste) = depot_inscrit(d.path(), true);
-        // Deux modèles déclarés, le second par défaut : la tâche en copie les déclarations à son ouverture.
+        let (depot, manifeste) = depot_inscrit(d.path(), true);
+        // Deux modèles déclarés, le second par défaut, commités : la tâche part du commit du dépôt, une
+        // modification non commitée du manifeste n'y entre pas.
         let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
         m["models"]["llm"] = json!([
             { "name": "rapide", "provider": "compatible", "protocol": "openai", "address": "http://127.0.0.1:9", "model": "m-rapide", "context_tokens": 1000 },
             { "name": "fin", "provider": "compatible", "protocol": "openai", "address": "http://127.0.0.1:9", "model": "m-fin", "context_tokens": 2000, "default": true }
         ]);
         std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+        for args in [&["add", "-A"][..], &["commit", "-q", "-m", "deux modèles déclarés"]] {
+            let ok = std::process::Command::new("git").current_dir(&depot).args(args).status().unwrap().success();
+            assert!(ok, "git {args:?}");
+        }
         let host = hote(d.path(), defaut()).with_modele_nomme(nomme());
         let h = host.hosted(&manifeste).unwrap();
         host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
