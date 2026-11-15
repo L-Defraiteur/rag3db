@@ -287,6 +287,13 @@ identique ne change pas ; une ligne qu'elle change est retirée et renaît.
 - **le gabarit** : le découpage des scopes (`ChunkingConfig`) et les champs déclarés de `Scope` et de
   `File`, hachés tels que le catalogue les a enregistrés.
 
+**Tranché par c7 (3 h 4x)** : la constante montée à la main, avec sa garde. Un hash des fichiers au
+bâti est écarté : une retouche sans effet de `code.rs` ferait repasser toutes les bases de Lucie, une
+réindexation complète pour rien. La garde refuse l'oubli, et « sans effet sur l'analyse » se dit dans
+le message du commit. **Une montée de la constante fait repasser toutes les bases** à leur prochaine
+synchronisation : les nouveautés du lot qui la monte le disent, pour que Lucie sache pourquoi son hôte
+réindexe.
+
 **Où elle vit** : une colonne `analyse` de `File`, texte, posée par le chemin additif (défaut `''`). Une
 base d'avant n'a donc aucune version, et tout y repasse une fois, ce qu'il faut. `content_hash` reste
 le hash du seul contenu : la fraîcheur de `read_file` le compare au disque et ne doit pas dire
