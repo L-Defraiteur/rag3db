@@ -46,6 +46,11 @@ While the model thinks, or a tool reads or writes, the status line plays an anim
 the tool is allowed to do. On the right, in muted colour, it shows the repository, the branch and the
 task, when they fit.
 
+The history keeps what was asked and what was answered (and a `!` command with its output). Tool
+calls, steps done, the end of a step and the host's own words scroll on the muted top line of the live
+zone instead, replaced as they come; Ctrl-O and the journal keep them. `--etapes`
+(`RAG3WEAVER_TTY_ETAPES=1`, or `/etapes` during the session) writes them all to the history.
+
 Mailbox lines start with a header in the theme's accent, in French: `[équipier · réponse]`,
 `[toi · consigne]`, `[équipier · compte rendu]`, `[équipier · accord demandé]`, `[hôte · fini]`…
 A line received twice (once by re-reading the mailbox, once from the stream) is written once.
