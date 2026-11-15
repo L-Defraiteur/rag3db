@@ -1113,3 +1113,15 @@ transactions) : 36 s avant, 165 s après, six pas à charge 6. Piste (non mesur�
 et chaque écrivain prend le verrou INDEX en exclusif pendant tout le bâti de T_B, alors qu'aucun n'écrit dans l'index. Mesure
 d'où attend l'écrivain le plus long avant le correctif (un holder sans écritures ne fait pas prendre le verrou). Ticket
 f96509f31. Après le SIGSEGV (témoin en cours depuis 14 h 3x).
+Embarquement, 14 h 25 : repli carte pleine vert (repli-carte-pleine : b25c373af sept rouges, f26dc306d correctif ; mesure de la VRAM,
+repli par `fallback {service}`, retour dit, « pas de repli déclaré » dit, provenance au journal, `embedding.fallback` dans l'état).
+Garde ajoutée : `fallback_hold_secs` (défaut 4 × window_secs) contre l'alternance ; le doublement dans le ticket `{activation}`.
+Place après ED (1), avant arbre.
+14 h 27 : G en attente d'une place, pas bloqué (reposé 4f48b2d94, test_push_garde 39 vert ; check_features relancé à luciepc,
+push vers 14 h 35) ; il pose ensuite le binaire de luciepc. Au portable, `wt-livrable-passe.sh` (archi, cargo test --lib)
+tient la seule place lourde depuis 13 h 07 à charge 1,7 — un test qui attend, probablement ; quatre passes en file derrière
+(96, arbre, codeparsers, un gcc-tous). Archi prié de regarder tout de suite.
+Archi, 14 h 28 : place rendue à 14 h 27 (pid tué, aucun reste). Cause : son lot — le défaut « une demande sans expects attend une
+ligne » fait attendre sans borne les témoins d'avant de l'équipier (3 FAILED, d'autres suspendus). Le lot n'est pas vert ;
+archi relit chaque témoin (expects "none" ou une ligne) et borne la prochaine passe ; le produit lui-même doit borner l'attente
+d'une ligne (délai réglé, échec nommé). Le relai reste à sa place. Procédure : toute passe lourde part sous `timeout` dans `poste`.

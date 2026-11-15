@@ -47,6 +47,8 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
 
 ## La passe (à luciepc, sous `poste lourd`)
 
+**Toute passe lourde part sous `timeout`, dans `poste` (c7, 15 nov. 2026, rappel de la règle du 10 octobre)** : `poste lourd timeout <N> <commande>`, aux deux postes, lib comme batterie. Le 15 novembre, un `cargo test --lib` sans borne a tenu la seule place lourde du portable 80 minutes à 1,7 de charge : des témoins attendaient un superviseur sans délai, et quatre passes attendaient derrière. Une attente sans borne dans un test est un défaut du produit à écrire (le produit a un délai réglé et le dit), pas une raison de laisser la place.
+
 **Mémoire (c7, 13 nov. 2026)** : **32 Gio pour toute validation**, l'invariant de `scripts/confiner_validation.py`. `poste` garde son défaut de **40 Gio pour les bâtis**. Donc `run_e2e.sh` se lance seul (il prend `poste` avec 32G), ou bien `POSTE_MEM_MAX=32G poste lourd … run_e2e.sh` : sous un `poste lourd` sans cette variable, la portée existe déjà à 40 Gio et le confineur refuse la passe.
 
 **Journaux (c7, 13 nov. 2026)** : après le push, les journaux de la passe **s'archivent** (sous `~/.cache/rag3weaver-build/archives/<lot>-<date>/`), ils ne s'effacent pas ; seuls le worktree et les targets s'effacent. Un rouge vu pendant la passe reste lisible après coup : un journal effacé a privé everything declarative de la vue d'un rouge du navigateur.
