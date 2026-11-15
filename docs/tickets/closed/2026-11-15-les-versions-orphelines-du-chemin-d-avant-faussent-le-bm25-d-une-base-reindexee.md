@@ -1,6 +1,6 @@
 # Les versions orphelines du chemin d'avant faussent le BM25 d'une base réindexée
 
-- **État** : ouvert ; constat, pas de correctif.
+- **État** : fermé (doublon, 15 novembre 2026) : repris avec sa cause et sa preuve dans `docs/everything-declarative/tickets/2026-11-15-une-reindexation-par-le-chemin-d-avant-laisse-des-scopecontent-orphelins.md`, ouvert à la même heure et attribué à everything declarative par c7.
 - **Famille** : produit
 - **Gravité** : moyenne. Les réponses lexicales de toute base à versions sans générations
   réindexée sont classées sur des statistiques gonflées.
