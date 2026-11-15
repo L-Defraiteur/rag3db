@@ -1863,6 +1863,14 @@ mod tests {
     /// **L'équipier sait à qui il parle** (second essai de Lucie, 15 novembre 2026 : un report
     /// signé « Réponse apportée au superviseur ») : dans une tâche ouverte par le terminal ou le
     /// chat, le superviseur est l'utilisateur ; il lui répond directement, une fois par tour.
+    /// **Le pas va au bout de la demande** (16 novembre 2026) : l'invite ne présente plus le pas
+    /// comme une unité de compte rendu.
+    #[test]
+    fn the_teammate_prompt_says_to_work_the_request_to_its_end() {
+        assert!(SYSTEM_PROMPT.contains("until the request is done"), "{SYSTEM_PROMPT}");
+        assert!(!SYSTEM_PROMPT.contains("A step is one piece of work"), "{SYSTEM_PROMPT}");
+    }
+
     #[test]
     fn the_teammate_prompt_says_the_supervisor_is_the_user() {
         assert!(SYSTEM_PROMPT.contains("the supervisor is the user"), "{SYSTEM_PROMPT}");
