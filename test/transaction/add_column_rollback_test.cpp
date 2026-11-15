@@ -7,7 +7,8 @@
 // suivant, rangé en N + 1, se lisait et s'écrivait dans la colonne morte — sa valeur par défaut,
 // son type. Le point de reprise gardait la morte et jetait la vraie. Désormais l'ADD laisse un
 // enregistrement dans le tampon d'annulation et le ROLLBACK retire la colonne du stockage ; et
-// deux ALTER d'une même table ne se chevauchent plus (conflit écrivain-écrivain, comme un CREATE).
+// deux ALTER d'une même table ne se chevauchent plus (le second attend le premier, sous le verrou
+// de schéma de la table depuis le 15 novembre 2026 ; il était refusé avant).
 //
 // Le banc joue la même chose à vingt clients (minute 6 du scénario des migrations) : ses
 // contrôles `added-column-reads-its-default` et `added-column-reads-what-was-set`.
