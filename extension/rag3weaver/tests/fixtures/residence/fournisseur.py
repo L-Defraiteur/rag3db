@@ -36,11 +36,18 @@ def arguments():
     p.add_argument('--dual', action='store_true')
     # Un fournisseur lent (le débit sous le seuil d'un repli) : chaque /embed attend.
     p.add_argument('--lent-ms', type=int, default=0)
+    # Le service réel quand un calcul panique (lot du 503, 15 novembre 2026) : le premier /embed rend
+    # un 503 nommé, écrit la ligne d'arrêt, puis sort avec le code 70 ; un redémarrage qui trouve le
+    # marqueur sort aussitôt, comme une carte qui reste refusée.
+    p.add_argument('--arret-nomme', type=Path)
     a = p.parse_args()
     if a.dim <= 0 or a.budget_pret_ms <= 0:
         p.error('dimension et budget strictement positifs exigés')
     if not a.adresse.startswith('127.0.0.1:'):
         p.error('fixture privée sur 127.0.0.1 uniquement')
+    if a.arret_nomme is not None and a.arret_nomme.exists():
+        print('✗ arrêt : la carte refuse toujours la réservation (code 70)', file=sys.stderr, flush=True)
+        sys.exit(70)
     return a
 
 
@@ -229,6 +236,12 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, UnicodeError):
             return self.answer(400, {'error': 'JSON invalide'})
         self.server.event('embed_commence', textes=len(texts))
+        if self.server.args.arret_nomme is not None:
+            self.server.args.arret_nomme.write_text('mort')
+            self.answer(503, {'error': 'calcul en panique sur la carte : failed to reserve 4102146304 bytes'})
+            print('✗ arrêt : le calcul a paniqué (failed to reserve 4102146304 bytes) : serveur de la carte empoisonné (code 70)', file=sys.stderr, flush=True)
+            threading.Timer(0.2, lambda: os._exit(70)).start()
+            return
         self.server.en_cours += 1
         if self.server.args.lent_ms > 0:
             time.sleep(self.server.args.lent_ms / 1000)
