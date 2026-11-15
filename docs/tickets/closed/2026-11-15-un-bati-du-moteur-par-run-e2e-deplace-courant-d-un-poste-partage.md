@@ -1,6 +1,6 @@
 # Un bâti du moteur par run_e2e.sh déplace `courant` d'un poste partagé
 
-- **État** : ouvert (15 novembre 2026, 4 h 30) ; corrigé sur la branche `publier-sans-courant`, en pile derrière ED.
+- **État** : fait (15 novembre 2026, sur master par le lot `publier-sans-courant`, 7fd2300f9) : `publier` ne pose `courant` que sous `--poser-courant`, et `run_e2e.sh --build` joue sa propre lib par son id.
 - **Famille** : produit
 - **Gravité** : une passe qui lit `courant` joue une autre lib que celle du poste, sans le savoir.
 - **Atteignable en service** : non pour l'hôte (son binaire nomme sa lib par RUNPATH) ; oui pour toute passe sans `RAG3DB_LIB`.

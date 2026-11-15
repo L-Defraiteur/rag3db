@@ -1,6 +1,6 @@
 # La garde compare des hashes courts de longueurs différentes
 
-- **État** : ouvert (15 novembre 2026, 14 h 35), vu par G à son push de garde-cpp-transferable.
+- **État** : fait (15 novembre 2026, master d68dbe3cb6) : la tête et le commit testé se comparent entiers (`rev-parse ^{commit}`) ; test_push_garde 42 vert, 2 ROUGE sur la garde d avant ; la garde recopiée au cache des deux postes (sha256 ad0be1f36ff12ea5). Vu par G à son push de garde-cpp-transferable.
 - **Famille** : produit
 - **Gravité** : un message faux au journal, sans effet sur le verdict ; une base qui le serait, elle, passerait.
 - **Atteignable en service** : non, c'est l'outillage du push.

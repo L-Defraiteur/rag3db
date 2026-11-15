@@ -83,3 +83,26 @@ check-lib eaa1d460.
   binaire ≥ e89cdb8e6.
 - **lib_seule.sh et rag3db_libs.py** dans `tools/poste/`, un lot chacun (ticket du contrôle du worktree).
 - **La base un-seul-sens du cœur** à ajouter au témoin de `check_rel_directions`, comme cas exact des comptes.
+
+## Le soir du 15 novembre
+
+- **La pose du soir** (au mot de c7) : l'hôte 23dc8efd47 aux deux postes à 20 h 13 (binaire f8ce107c, lib 373b5477b ;
+  verdict e2e_code 36/36, e2e_lectures 27/27, e2e_demon_hote 24/24 sous MOTEUR_ANCIEN dit ; portable coupé 18 s).
+  Puis le service d'embarquement f85977d09e (sha256 a70f1e462bd9df95) à luciepc à 20 h 36, en place : 7879 (14 s), puis
+  7878 (5 s) ; vecteur témoin égal au bit près, `/sante` 12000 et 3, 413 nommé. Ancien en `.avant-f85977d09e`.
+- **Pas d'essai à côté pour le service** : sur CPU, burn refuse un tampon de 384 Mo (Vulkan(Cpu), ticket d'embarquement
+  `2026-11-15-un-repli-cpu-des-tests-sans-vulkan`). card0 est celle de seat1, card2 celle des services (règle du 25 oct.).
+  La preuve se fait donc en place : `scripts/preparer-embarquement.sh <hash>` (bâti, champs neufs lus dans le binaire),
+  puis `scripts/poser-embarquement.sh <hash> <instance>…` (vecteur témoin, recette, retour automatique si rouge).
+- **Avant de couper un service** : relire ses clients (`ss` sur 7878, 7879) en plus des « va ». Une passe de push d'ED y
+  tenait des connexions à 20 h 23, après les « va » du banc et d'arbre.
+- **Quatre lots sur master** (22 h 03 à 22 h 05, en pile sur 6e493fd5db) : la garde au hash entier (d68dbe3cb6), la
+  ligne INCOMPLETE du juge known_red (0274c53f14), l'enveloppe mémoire du confineur (042030cc9f ; cause des SIGTERM :
+  DefaultOOMPolicy=stop après un oom_kill), la garde du target qui voit un build.rs d'un autre arbre (e692fa3a58).
+
+## Ce qui reste (soir)
+
+- Les trois tickets d'outillage de hotfixs (`docs/coeur-cpp-hotfixs-tickets/tickets/2026-11-15-*`) : passe_epinglee.sh
+  et un chemin absolu de journaux ; le 40G de `poste lourd` contre les 32G du confineur ; run_e2e.sh et un témoin de lib.
+- Le juge known_red intermittent (`docs/optimiseur/tickets/2026-11-15-un-cas-known-red-qui-passe-une-fois-rougit-le-juge.md`).
+- Demain matin : la bascule de la lib avec le cœur, quand son pool est vert.
