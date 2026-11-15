@@ -7167,6 +7167,32 @@ mod tests {
         assert_eq!(apres - avant, 0, "le masque des versions s'est résolu {} fois en liste pour deux recherches", apres - avant);
     }
 
+    /// **Une recherche lexicale sans filtre ne perd pas la ligne visible au profit de l'histoire** (ED,
+    /// 16 novembre : `allowed_ids_in` ne passait aucun ensemble à lucivy sans filtre de l'utilisateur, et la
+    /// visibilité ôtait ensuite, après le top-k, les parents fermés). `depart` mentionne d'abord « zorglub »
+    /// quatre fois, en un corps court ; une génération publiée plus tard, il le mentionne une fois dans un
+    /// long corps. La version fermée classe mieux ; la recherche lexicale sans filtre à un résultat rend la
+    /// ligne ouverte, pas zéro.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn une_recherche_lexicale_sans_filtre_ne_perd_pas_la_ligne_visible() {
+        let (dir, backend) = base_de_la_vue();
+        let source = backend.file_source.clone().unwrap();
+        let ancien = "pub fn depart() {\n    // zorglub zorglub zorglub zorglub\n}\n";
+        let neuf = format!("pub fn depart() {{\n    // zorglub, puis {}\n}}\n", "beaucoup d'autres mots qui allongent le corps ".repeat(12));
+        for (rang, texte) in [("c1", ancien.to_string()), ("c2", neuf.clone())] {
+            std::fs::write(dir.path().join("sources/outils.rs"), &texte).unwrap();
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_tools::reingest_file(&mut cat, source.as_ref(), "outils.rs", &texte).expect("la réindexation");
+            cat.publier_la_generation(rang, 0).expect("publier");
+        }
+        let r = backend
+            .call("search_code", json!({"query": "zorglub", "options": {"signals": ["bm25"], "limit": 1}}))
+            .expect("search_code");
+        let rendu = r.to_string();
+        assert!(rendu.contains("beaucoup"), "la recherche sans filtre rend la ligne ouverte de depart : {rendu}");
+    }
+
     /// **Témoin 0 de 2a′ : la non-fuite** (page 03, § 4). Chaque ligne de `Scope` et de `File` est
     /// recopiée deux fois, avec ses arêtes : dans une autre couche, et retirée au rang lu. Aucune
     /// des deux copies n'est visible ; les outils de lecture rendent donc, au caractère près, ce
