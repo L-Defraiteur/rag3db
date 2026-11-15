@@ -1743,3 +1743,6 @@ suites, puis pose hôte + services dans une même fenêtre (annonce, « va » du
 le socle (primitives + branchement), (B), nom + persona, /model, tty-15/16, plafond de requête, relevé à blanc, maintenance nocturne,
 service 503 ; lib 373b5477b. « À toi » au cœur pour le SIGSEGV au vert de son rejeu. Après la pose : Algareth dans le manifeste de
 Lucie ; la pose suivante avec 96 ; tty-17, ED (ouverture sans feature), repli-activation, G ×4, arbre + recherche, codeparsers.
+ED, 19 h 58 : la mesure de 2a′-3 (page 01 du 15) : 0 réapparition sur 50 commits (2 423 clés, 702 changements) ; (3a) ×1,9 à ×2,5 sur outline,
+usages, impact, racines et ×9,9 sur le compte ; (3a′) ×1,3 à ×2,1 (le moteur n'élague pas l'annexe vide). **Tranché : (2) le doublon
+au bord haut reste le défaut** ; la variante § 5 (uuid par le contenu sans annexe) en ticket à prouver. Arbre code 2a′-3 sur (2).
