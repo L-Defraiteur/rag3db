@@ -371,6 +371,28 @@ if [ "$mode" = "--qui" ]; then
   exit 0
 fi
 case "$mode" in mesure|lourd) ;; *) usage ;; esac
+# **Une validation au-dessus du plafond du confineur est refusée avant la file** (15 novembre 2026, ticket d'hotfixs,
+# mot de c7) : `scripts/confiner_validation.py` exige un plafond effectif d'au plus 32 Gio, et refusait en 0,18 s une
+# passe qui avait attendu sa place sous le défaut de 40G (5 min 23 s à luciepc). Une commande qui nomme une entrée de
+# validation est jugée ici, avant la file ; le défaut de 40G reste celui des autres lourds (un bâti, un banc).
+# PLAFOND_DES_VALIDATIONS est MAX_MEMOIRE de confiner_validation.py, en octets : le témoin (test_poste.sh) les compare.
+PLAFOND_DES_VALIDATIONS=34359738368
+octets() { # 40G, 32768M, 512K, 34359738368 → des octets ; vide si la valeur ne se lit pas
+  echo "$1" | awk '/^[0-9]+[KMGTkmgt]?$/ { u = toupper(substr($0, length($0))); n = $0; m = 1
+    if (u ~ /[KMGT]/) { n = substr(n, 1, length(n) - 1); m = (u == "K") ? 1024 : (u == "M") ? 1048576 : (u == "G") ? 1073741824 : 1099511627776 }
+    printf "%.0f\n", n * m }'
+}
+for _a in "$@"; do
+  case "$_a" in
+    *run_e2e.sh*|*temoins_navigateur.sh*|*passe_epinglee.sh*|*confiner_validation.py*)
+      _o=$(octets "$MEM")
+      if [ -n "$_o" ] && [ "$_o" -gt "$PLAFOND_DES_VALIDATIONS" ]; then
+        echo "poste: refusé avant la file : une validation ($(basename "${_a%% *}")) sous un plafond de $MEM, au-dessus des 32 Gio du confineur — lancer sous POSTE_MEM_MAX=32G" >&2
+        exit 2
+      fi
+      break ;;
+  esac
+done
 [ $# -eq 0 ] && usage
 
 if command -v systemd-run >/dev/null 2>&1 && systemd-run --user --scope -q -- true 2>/dev/null; then

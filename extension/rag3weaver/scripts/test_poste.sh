@@ -268,4 +268,26 @@ else
   echo "SAUTÉ  le quota étranger : systemd-run --user indisponible ou moins de 10 cœurs"
 fi
 
+# **Une validation au-dessus du plafond du confineur est refusée avant la file** (15 novembre 2026, ticket d'hotfixs) :
+# sous le défaut de 40G, une passe attendait sa place (5 min 23 s à luciepc), puis le confineur la refusait en 0,18 s
+# (« aucun plafond effectif <= 32 Gio »). Le défaut ne change pas pour les autres lourds (mot de c7).
+V="$ICI/validation"; mkdir -p "$V"
+for e in run_e2e.sh passe_epinglee.sh temoins_navigateur.sh; do printf '#!/bin/sh\ntouch "%s/joue-$(basename "$0")"\n' "$V" > "$V/$e"; chmod +x "$V/$e"; done
+sortie=$("$POSTE" lourd bash "$V/passe_epinglee.sh" 2>&1); rc=$?
+[ $rc = 2 ] && [ ! -e "$V/joue-passe_epinglee.sh" ] && echo "$sortie" | grep -q 'POSTE_MEM_MAX=32G'
+cas $? "sous le défaut (40G), une passe épinglée est refusée avant la file, sans jouer, et le refus dit POSTE_MEM_MAX=32G (code $rc)"
+sortie=$(POSTE_MEM_MAX=48G "$POSTE" lourd bash -c "cd $V && ./run_e2e.sh --test e2e_x" 2>&1); rc=$?
+[ $rc = 2 ] && [ ! -e "$V/joue-run_e2e.sh" ]
+cas $? "un run_e2e.sh nommé dans un bash -c, sous 48G, est refusé lui aussi (code $rc)"
+POSTE_MEM_MAX=32G "$POSTE" lourd "$V/temoins_navigateur.sh" > /dev/null 2>&1; rc=$?
+[ $rc = 0 ] && [ -e "$V/joue-temoins_navigateur.sh" ]
+cas $? "sous POSTE_MEM_MAX=32G, la validation joue (code $rc)"
+"$POSTE" lourd sh -c "touch $V/joue-autre" > /dev/null 2>&1; rc=$?
+[ $rc = 0 ] && [ -e "$V/joue-autre" ]
+cas $? "un lourd qui n'est pas une validation garde le défaut de 40G et joue (code $rc)"
+seuil_poste=$(sed -n 's/^PLAFOND_DES_VALIDATIONS=\([0-9]*\).*/\1/p' "$POSTE")
+seuil_confineur=$(python3 -c "import re,sys; m=re.search(r'^MAX_MEMOIRE = (\d+) \* 1024\*\*3', open(sys.argv[1]).read(), re.M); print(int(m.group(1))*1024**3)" "$(dirname "$POSTE")/confiner_validation.py" 2>/dev/null)
+[ -n "$seuil_poste" ] && [ "$seuil_poste" = "$seuil_confineur" ]
+cas $? "le seuil de poste est celui du confineur (poste ${seuil_poste:-absent}, confiner_validation.py ${seuil_confineur:-absent})"
+
 exit $echec
