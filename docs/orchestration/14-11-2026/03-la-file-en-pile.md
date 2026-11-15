@@ -1685,3 +1685,6 @@ cause. La lib peut basculer. Le lot du SIGSEGV (ee598e074, vert : transaction_te
 (le format est atterri) ; « à toi » après le hash de la pose.
 Archi, 19 h 03 : le correctif de l'invite tient (Gemini 4/4, le report dit ce qui est écrit) ; repose sur master sous socle-branchement-3,
 témoins, rejeu court, push au vert vers 19 h 20. 96 et archi poussent dans la même fenêtre, sérialisés par poste push.
+Cœur, 19 h 05 : colonne-ajoutee-se-relit reposée (colonne-ajoutee-se-relit-2, 5 commits « = » + un commit de format pur 68769674f après
+le contrôle à blanc de clang-format-18) ; rejeu complet après la sonde (~19 h 25, 45 min) ; « à toi » après le hash. Procédure :
+le contrôle à blanc par l'image docker rag3db-clang-format-18.

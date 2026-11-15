@@ -174,6 +174,8 @@ se jouent par `python3 scripts/test_confiner_validation.py`, sans Cargo/bus rée
 
 ## Le push (sous `poste push`, dans le worktree de push)
 
+**Le format C++ se contrôle à blanc avant le push (cœur, 15 nov. 2026)** : la CI juge avec clang-format-18, et le job de format joue de nouveau depuis le 15 novembre. Sur les fichiers du lot : `docker run --entrypoint sh rag3db-clang-format-18 -c "clang-format-18 --dry-run -Werror <fichiers>"` (l'image n'a pas de `clang-format` nu) ; un écart se corrige par un commit de format pur dans le lot.
+
 - **Le verrou `poste push` ne couvre que le dernier pas** : fetch, rebase, push et les trois contrôles,
   une trentaine de secondes. La passe, et tout rejeu qu'un rebase imposerait, se jouent **hors verrou**,
   avant de le prendre. Si le rebase sous le verrou apporte du code, le script **s'arrête et rend le verrou**
