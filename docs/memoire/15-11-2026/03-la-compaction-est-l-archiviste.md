@@ -37,10 +37,17 @@ relit ce qu'il a déjà rangé.
    Chaque L1 posé dit **quel bout de conversation il couvre** : sa source est la transcription
    du run, sa section l'intervalle de tours. C'est déjà la forme de l'identité d'un Apport
    `{fiche, source, section}`, donc aucun champ neuf. S'y ajoutent un L1 `compaction` qui cite
-   le run, et un L1 `plan` par plan clos. Tout est en `proposed`, dans la mémoire déclarée par
+   le run, un L1 `plan` par plan clos, et **le bilan** : un résumé très court de l'ordre dans
+   lequel les choses ont été faites. C'est une liste ordonnée de pas, une ligne par pas, sans
+   texte, chaque pas citant `fiche:<nom>` du sujet ou l'apport (le L1) qui le porte. Il est
+   écrit à la compaction, ou tenu au fil de l'eau. Il prend la forme qu'il a déjà chez les
+   hooks : l'apport de section `bilan` de la fiche `bilan : <tâche>`, que relit
+   `src/claude_code_hook.rs:1666`. Tout est en `proposed`, dans la mémoire déclarée par
    le run.
 3. **Ce que le run relit au redémarrage.** L'historique est vidé. Le run repart de l'identité
-   `agent:<clé>`, de la tâche courante (sa fiche) et des **L1 déjà posés, pas du texte**. Deux
+   `agent:<clé>`, de la tâche courante (sa fiche), **du bilan** (l'ordre des pas de la session précédente,
+   chaque pas avec ses références, pour que l'agent se rappelle l'ordre, pas seulement les
+   sujets) et des **L1 déjà posés, pas du texte**. Deux
    bornes tiennent :
    - **quels sujets rouvrir** : ceux où ses L1 viennent d'être posés ;
    - **combien de L1** : les siens en entier, ceux des autres bornés.
@@ -48,11 +55,13 @@ relit ce qu'il a déjà rangé.
    Les tours restés non couverts (le dernier échange en cours) suivent en entier. Les renvois
    `#outil-n` restent résolubles par la `Session`.
 4. **Le témoin, rouge d'abord.** Un e2e joue sur le faux modèle (`tests/common`, `fake_sse`)
-   avec une fenêtre petite. Il attend quatre choses :
+   avec une fenêtre petite. Il attend cinq choses :
    - des L1 posés pendant le run, avant le plafond, avec leur section = l'intervalle de tours ;
    - au plafond, le Decide n'a reçu que les tours non couverts ;
    - l'invite qui suit est sous le plafond et porte l'identité et ces L1 ;
-   - le L1 `compaction` est écrit.
+   - le L1 `compaction` est écrit ;
+   - le bilan liste les pas dans l'ordre du run, une ligne chacun, chacun citant sa fiche ou
+     son apport, et l'invite d'après le porte.
 
    Il doit être rouge sur master, où seule la réduction aux renvois a lieu.
 
