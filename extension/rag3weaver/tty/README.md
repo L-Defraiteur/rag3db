@@ -38,8 +38,9 @@ The agent's text scrolls into the terminal's own history: the scrollback, copy a
 terminal's. Three lines at the bottom are redrawn, at most 30 times per second:
 
 - the line being streamed, or a fallback note when nothing streams (see *mosh* below);
-- the status line: what the teammate waits for comes first (an approval with its command, a
-  question), otherwise its state (`attend`, `réfléchit…`, `agit : <tool>`, `fini : …`);
+- the status line: what waits for you comes first, and is never covered by an animation (an
+  approval with its command, a question, then a declarations proposal with its paths), otherwise
+  the teammate's state (`attend`, `réfléchit…`, `agit : <tool>`, `fini : …`);
 - the input line.
 
 While the model thinks, or a tool reads or writes, the status line plays an animation chosen by what
@@ -51,8 +52,14 @@ calls, steps done, the end of a step and the host's own words scroll on the mute
 zone instead, replaced as they come; Ctrl-O and the journal keep them. `--etapes`
 (`RAG3WEAVER_TTY_ETAPES=1`, or `/etapes` during the session) writes them all to the history.
 
+An approval request is live state: it is said on the status line, not written to the history.
+`o` or `n`, with an empty input, answers it; the answer, from the terminal or from the IDE, leaves
+one line, `› accordé : <command>` or `› refusé : <command>`. A declarations proposal of the main
+repository (the `declarations` stream) waits the same way after the mailbox: `o` applies it, `n`
+rejects it (`POST /ide/propositions/appliquer`, `/rejeter`).
+
 Mailbox lines start with a header in the theme's accent, in French: `[équipier · réponse]`,
-`[toi · consigne]`, `[équipier · compte rendu]`, `[équipier · accord demandé]`, `[hôte · fini]`…
+`[toi · consigne]`, `[équipier · compte rendu]`, `[hôte · fini]`…
 A line received twice (once by re-reading the mailbox, once from the stream) is written once.
 The text after the header, like the model's own text, is prose: in the terminal's colour, folded
 between words, with common Markdown rendered without its marks (`#` titles in bold accent, `-`/`*`/`+`
