@@ -1466,3 +1466,9 @@ sur 72 798 couples ouverts (146 138 contre 73 340 au parent), CONSUMES −4 084,
 Le cas visé : réponses égales, graphe différent. Retenu ; témoin 16 (comptes par étiquette vers le visible = parent) rouge
 d'abord ; le grain (d57b28c80) rejugé sur la même base. Repassage : parent 243 s, bff6c7409 2 476 s. La répétition d'arbre mesure
 la part fermée seule en attendant.
+Archi, 17 h 13 : **le côté « pas » du socle est vert** (socle-le-pas d2e10d6e1, sur (B) ; 6 rouges vus deux fois ; témoins 65/0, lib 2 476,
+hooks et navigateur 45, e2e_equipier Vertex 2/0) : (d) ecrit relu sur le parent à chaque ouverture ; (c) le refus dans une tâche
+dit la vraie cause, sans POST /ide/taches ; (b) le bac git lit info/ du dossier commun et pose core.excludesFile=/dev/null (la
+vraie cause du 128 : ~/.config/git/ignore illisible sous le bac) ; l'invite d'un backend de code commence par celle d'agent de
+code ; l'équipier répond à l'utilisateur une fois par tour ; run_command dit git status/diff/log nus ; le déclaratif était déjà
+en bas. En pile sur (B), même « à toi ».
