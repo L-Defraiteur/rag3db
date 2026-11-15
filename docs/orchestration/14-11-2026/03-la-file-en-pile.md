@@ -1700,3 +1700,7 @@ tty, 19 h 14 : le témoin était vert dans son rejeu de lib à e9e47391a (journa
 celui d'embarquement (f85977d09e). Piste de c7 : la garde `query_max_chars` au chargement avec un `models.embed` sans
 `context_tokens` (plafond haut 0 → 6 000 refusé). tty rend le refus exact ; embarquement vérifie sa garde ; ED, 96, G prévenus :
 rien ne pousse avant le correctif.
+19 h 15 : tty écarte la piste f85977d09e (déjà dans la base de son rejeu vert ; entre vert et rouge, rien de l'hôte n'a changé) ; 96 a le
+témoin **vert** dans sa lib entière (18 h 45) avec RAG3WEAVER_EMBED_SERVICE posé : le rouge « seul » est sans doute joué sans service
+— un témoin ne dépend d'aucun service, et une tâche doit se rouvrir sans service d'embarquement (plein texte seul, dit). Le refus
+exact du diagnostic de tty tranche ; correctif en lot court devant tout.
