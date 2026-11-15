@@ -1,6 +1,6 @@
 # L'équipier rend un compte rendu au lieu du contenu demandé
 
-- **État** : corrigé (14 novembre 2026), lot `equipier-rend-le-contenu` d'archi ; constaté par la session tty le 14 nov. 2026, en rejouant l'essai du terminal de Lucie contre l'hôte du portable.
+- **État** : ouvert, rouvert le 15 novembre 2026 par archi sur le relevé de tty : le correctif du 14 (`9009f3a3b`) achemine un texte écrit dans le pas, mais rien ne garde la demande quand le modèle n'écrit aucun texte et se dit réussi ; suite à concevoir avec c7.
 - **Famille** : produit
 - **Pour** : archi
 - **Gravité** : réponse fausse. L'équipier dit avoir fait ce qu'on lui demande (« Présentation fournie au superviseur conformément au format demandé »), et ne l'a pas fait : le contenu n'est nulle part.
@@ -66,3 +66,33 @@ un vrai modèle, `e2e_equipier::l_equipier_rend_le_texte_demande_et_non_un_compt
 trois puces, un gras dans la boîte). Ce cas, joué une fois sans le correctif, était vert : Gemini a
 cette fois mis le contenu dans `report` ; un vrai modèle ne se rougit pas à la demande, le rouge sûr
 est le témoin sur faux modèle.
+
+## Rouvert le 15 novembre 2026
+
+**Le relevé (tty)** : hôte 7970 du portable, binaire 26a091474, qui porte le correctif du 14. Tâche
+essai-tty, run `agent-1a1df060b51-346` (`~/.local/share/rag3weaver/runs/3ab508104e74/`).
+
+- **La demande** : lire deux fichiers par `read_file`, puis « réponds-moi, dans ta réponse, avec un
+  court exemple de classe TypeScript dans un bloc de code typescript ».
+- **Les deux lectures sont refusées** : le worktree de la tâche part de `d61fe30d7`, où ces fichiers
+  n'existent pas.
+- Ensuite viennent huit explorations (`list_files`, `grep_files`, `list_declarations`), puis un
+  dernier appel au modèle de 75 jetons, fini par un appel d'outil. Il ne porte qu'un `step_done`
+  (« Lecture … tentée (fichiers absents du dépôt) et exemple TypeScript fourni. »,
+  `succeeded: true`), avec un contenu vide.
+- **Vérifié par archi dans le run décompressé** : aucun `report`, aucun bloc ` ```typescript `,
+  aucune classe. Le contenu demandé n'est nulle part, et l'équipier se dit réussi.
+
+**Pourquoi c'est le même défaut** : la boîte ne porte pas le contenu demandé, seulement un compte
+rendu. Le chemin est autre : le correctif du 14 achemine dans la boîte un texte que le modèle a
+écrit, et ici il n'en a écrit aucun. La garde du livrable manquant (`missing_deliverable`,
+`teammate.rs`) ne joue que si la demande déclare `expects: "report"`, ce que celle-ci ne fait pas.
+
+**La piste** (à trancher avec c7 avant tout code) : une demande sans `expects` attend au moins une
+ligne de l'équipier dans la boîte depuis elle (un `report`, une `question`, ou le texte d'un pas
+acheminé). Un `step_done` réussi qui finirait la demande sans rien dans la boîte est refusé une
+fois, avec ce qui manque, comme `missing_deliverable` le fait pour `expects: "report"`. Le rouge se
+joue sur le faux modèle (`fake_sse`) : deux outils refusés, puis un `step_done` sans texte.
+
+**À part** : le worktree de la tâche parti de `d61fe30d7` (des fichiers d'aujourd'hui absents) est
+le choix de base de la tâche essai-tty, pas l'équipier.
