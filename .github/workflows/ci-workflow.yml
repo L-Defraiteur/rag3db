@@ -7,6 +7,14 @@ on:
   push:
     branches:
       - master
+    # Un push de docs seules ne déclenche rien (15 nov. 2026, c7) : GitHub ne garde qu'un run en attente par groupe,
+    # et chaque push de docs annulait le run de code en attente ; un run de 20 min ne jouait que dans un creux.
+    # Seulement des dossiers de docs : des .md de templates/ sont compilés (include_str!), ils restent du code.
+    paths-ignore:
+      - 'docs/**'
+      - 'extension/rag3weaver/docs/**'
+      - 'extension/rag3weaver/visions/**'
+      - '*.md'
   workflow_dispatch:
     inputs:
       auto_checkpoint:

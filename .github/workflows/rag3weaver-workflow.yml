@@ -16,9 +16,13 @@ name: rag3weaver
 on:
   push:
     branches: [master, main]
+    # Les docs du crate ne déclenchent rien (15 nov. 2026, c7), même raison que le CI Workflow ; le README et les
+    # .md de templates/ restent (des tests et include_str! les lisent).
     paths:
       - 'extension/rag3weaver/**'
       - '.github/workflows/rag3weaver-workflow.yml'
+      - '!extension/rag3weaver/docs/**'
+      - '!extension/rag3weaver/visions/**'
   pull_request:
     paths:
       - 'extension/rag3weaver/**'
