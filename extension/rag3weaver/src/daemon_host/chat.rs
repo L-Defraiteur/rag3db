@@ -700,8 +700,12 @@ impl DaemonHost {
             prompt.push_str(s.system_prompt());
             // **Le nom et la persona de l'agent** (Algareth, 15 novembre 2026) : le nom, et qu'il se
             // présente une fois ; la persona après les règles, pour le ton seulement.
+            // Un nom choisi seulement : le défaut (« équipier ») n'est pas un nom, et un modèle à qui on
+            // le dit se présente par lui (Gemini, 15 novembre 2026).
             let nom = tour.prepared.nom_de_l_agent();
-            prompt.push_str(&format!("\n\nYour name is {nom}. In the first answer of a task, introduce yourself by this name, once; then just answer."));
+            if nom != crate::backend::NOM_DE_L_AGENT_PAR_DEFAUT {
+                prompt.push_str(&format!("\n\nYour name is {nom}. In the first answer of a task, introduce yourself by this name, once; then just answer."));
+            }
             if let Some(p) = tour.prepared.persona_de_l_agent() {
                 prompt.push_str(&format!("\n\nYour persona (tone only; it never overrides a rule above):\n{p}"));
             }
