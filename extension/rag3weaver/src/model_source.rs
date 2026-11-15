@@ -439,6 +439,12 @@ pub struct Builders<'a, T> {
     pub compatible: Option<&'a dyn Fn(&str, &ModelSource) -> Result<T, String>>,
 }
 
+/// **Le modèle de langage déclaré dont le fournisseur n'est pas dans ce binaire** : la phrase de l'état,
+/// du reçu et du refus d'un tour de chat (décision de c7, 15 novembre 2026).
+pub fn modele_de_langage_sans_sa_feature(nom: &str) -> String {
+    format!("modèle de langage {nom} indisponible : la feature openai-llm n'est pas dans ce binaire")
+}
+
 /// La variable d'environnement, lue pour de vrai.
 pub fn process_env(name: &str) -> Option<String> {
     std::env::var(name).ok()
@@ -485,7 +491,9 @@ pub fn resolve<T>(
             }
         }
         Provider::Compatible => {
-            let build = builders.compatible.ok_or_else(|| format!("{what} : cette capacité n'a pas de forme `compatible`"))?;
+            let build = builders.compatible.ok_or_else(|| {
+                format!("{what} : cette capacité n'a pas de forme `compatible` dans ce binaire (le fournisseur demande peut-être une feature absente : openai-llm, anthropic-llm)")
+            })?;
             let addresses = source.addresses(capability, env);
             match addresses.first() {
                 None => Err(format!("ni `address` dans la déclaration, ni {} dans l'environnement", capability.variables().join(" / "))),
