@@ -1,9 +1,10 @@
 // Une colonne ajoutée sous écrivains, juste après un ADD annulé, se relit sans mourir (ticket
-// docs/coeur-cpp/tickets/2026-11-15-ddl-every-minute-meurt-d-un-sigsegv-pile-perdue.md). Le scénario
-// des vingt écrivains meurt d'un SIGSEGV dans DefaultColumnReadWriter::readCompressedValuesToVector,
-// sous le count qui relit la colonne b (minute 6 : BEGIN ; ADD a ; ADD a refusé ; ROLLBACK ; puis
-// ADD b DEFAULT), sur master comme avec le verrou de schéma. Ce témoin rejoue cette minute seule,
-// tour après tour, sous des écrivains qui fusionnent des lignes neuves et anciennes.
+// docs/coeur-cpp/tickets/2026-11-15-ddl-every-minute-meurt-d-un-sigsegv-pile-perdue.md). Le
+// scénario des vingt écrivains meurt d'un SIGSEGV dans
+// DefaultColumnReadWriter::readCompressedValuesToVector, sous le count qui relit la colonne b
+// (minute 6 : BEGIN ; ADD a ; ADD a refusé ; ROLLBACK ; puis ADD b DEFAULT), sur master comme avec
+// le verrou de schéma. Ce témoin rejoue cette minute seule, tour après tour, sous des écrivains qui
+// fusionnent des lignes neuves et anciennes.
 #ifndef __SINGLE_THREADED__
 
 #include <atomic>
@@ -59,8 +60,8 @@ TEST_F(AddColumnAfterRollback, AColumnAddedUnderWritersAfterARolledBackAddReadsB
     mustRun(*conn, "CALL auto_checkpoint=false;");
     for (auto round = 0; round < NUM_ROUNDS; ++round) {
         const auto table = stringFormat("D{}", round);
-        mustRun(*conn, stringFormat("CREATE NODE TABLE {}(id INT64 PRIMARY KEY, titre STRING);",
-                           table));
+        mustRun(*conn,
+            stringFormat("CREATE NODE TABLE {}(id INT64 PRIMARY KEY, titre STRING);", table));
         mustRun(*conn, stringFormat("COPY {} FROM (UNWIND range(0, {}) AS i RETURN i, 'titre ' + "
                                     "CAST(i AS STRING));",
                            table, NUM_ROWS - 1));
@@ -73,9 +74,9 @@ TEST_F(AddColumnAfterRollback, AColumnAddedUnderWritersAfterARolledBackAddReadsB
                 std::mt19937 engine(static_cast<uint32_t>(1000 * round + w));
                 std::uniform_int_distribution<int64_t> key(0, KEY_RANGE - 1);
                 for (int64_t i = 0; !stop.load(); ++i) {
-                    const auto query = stringFormat(
-                        "MERGE (d:{} {id: {}}) SET d.titre = 'titre {} {}';", table, key(engine),
-                        w, i);
+                    const auto query =
+                        stringFormat("MERGE (d:{} {id: {}}) SET d.titre = 'titre {} {}';", table,
+                            key(engine), w, i);
                     // Un refus de schéma changé se recommence, comme le fera rag3weaver.
                     for (auto tries = 0; tries < 100; ++tries) {
                         auto result = connection.query(query);
@@ -96,8 +97,8 @@ TEST_F(AddColumnAfterRollback, AColumnAddedUnderWritersAfterARolledBackAddReadsB
             auto second = migration.query(stringFormat("ALTER TABLE {} ADD a STRING;", table));
             EXPECT_FALSE(second->isSuccess()) << "[check: setup] the second ADD a passed";
             migration.query("ROLLBACK;");
-            mustRun(migration, stringFormat("ALTER TABLE {} ADD b STRING DEFAULT 'b-defaut';",
-                                   table));
+            mustRun(migration,
+                stringFormat("ALTER TABLE {} ADD b STRING DEFAULT 'b-defaut';", table));
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(400));
         stop = true;
