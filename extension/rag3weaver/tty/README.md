@@ -90,7 +90,9 @@ An input starting with `/` is a command of the terminal, never sent to the teamm
 text starting with one `/`): `/aide`, `/quitter`, `/arreter`, `/theme <name>`, `/tache <name>` and
 `/depot <name>` (the view starts again on another task or repository, keeping the session journal
 and theme), `/journal`, `/effacer` (clears the visible screen) and `/effacer historique`, and
-`/context` (how full the teammate's model context is, from the host's `GET /ide/chat`).
+`/context` (how full the teammate's model context is, from the host's `GET /ide/chat`), and
+`/model` (the language models the task's manifest declares, the default and the task's own marked;
+`/model <name>` makes the task use one, kept with the task by the host).
 
 `!<command>` runs it with `/bin/sh -c` where the terminal runs, in the task's worktree when it is on
 this machine. The screen goes to the command, on a pseudo-terminal of its own (`posix_openpt`, through
