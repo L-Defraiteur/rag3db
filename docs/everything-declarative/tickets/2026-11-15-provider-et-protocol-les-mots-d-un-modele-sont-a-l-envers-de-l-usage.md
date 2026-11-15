@@ -8,6 +8,21 @@
 - **Pour** : everything declarative
 - **Signalé par** : c7 (orchestration), sur la question de Lucie du 15 novembre 2026 (page `docs/orchestration/14-11-2026/03-la-file-en-pile.md`).
 
+
+## Tranché par Lucie (15 novembre 2026, par c7)
+
+- **`access`** pour la manière d'accéder : `local`, `service`, `compatible`.
+- **`provider`** pour le fournisseur : `openai`, `llama_server`, `vertex`, `anthropic`…
+- **Les alias** : les anciens mots restent lus **deux semaines**, jusqu'au **29 novembre 2026**, date dite
+  dans la ligne de nouveautés. Le retrait se fait en lot à part.
+- La transition, conçue avec c7 :
+  - un `provider` qui vaut `local`, `service` ou `compatible` se lit avec l'ancien sens ;
+  - `protocol` est l'alias du nouveau `provider` ;
+  - un mélange des deux formes dans un même modèle est refusé, en le nommant.
+- Un seul vocabulaire pour tous les `models.*` (embed, sparse, rerank, ocr, decide, llm), et les
+  gabarits livrés réécrits dans la forme neuve.
+- **Sa place** : après l'écrivain de 2a′-2, la mesure (3a)/(3a′) et la page de 2a′-3.
+
 ## Ce que c'est
 
 Un modèle déclaré dit trois choses : **la manière d'accéder** (notre moteur dans le processus, un démon à nous, un service tiers), **le fournisseur tiers** (OpenAI, llama-server, Vertex, Anthropic) et **le nom du modèle**. Dans `ModelSource`, la manière d'accéder s'appelle `provider` (`local`, `service`, `compatible`) et le fournisseur tiers s'appelle `protocol` (`openai`, `llama_server`, `vertex`, `anthropic`). Partout ailleurs, « provider » désigne le fournisseur. Qui lit `provider: compatible` croit lire un fournisseur, et cherche le vrai sous un mot qui promet un protocole réseau.
