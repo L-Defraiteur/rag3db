@@ -191,7 +191,7 @@ Branche `ecrivain-2a-prime-2`, tête `cd3f1e978` ; lib entière verte (1974 pass
 ### Ce que les suites ont trouvé (15 novembre 2026, 1 h 15 à 1 h 50)
 
 La lib entière sous `rag3db-native,code` était verte (1974/0/16) ; e2e_code, `check_features` et la
-lib sous le jeu le plus large ont trouvé sept défauts de plus, tous du lot, tous corrigés sur
+lib sous le jeu le plus large ont trouvé huit défauts de plus, tous du lot, tous corrigés sur
 `ecrivain-2a-prime-2` :
 
 1. **Le miroir `CONSUMED_BY`** va de l'appelé vers l'appelant : sur une ligne retirée, c'est une arête
@@ -214,6 +214,14 @@ lib sous le jeu le plus large ont trouvé sept défauts de plus, tous du lot, to
    fermeture attendait la fin d'un rattrapage à l'ouverture (89 s,
    `owed_vectors_are_caught_up_on_open_when_the_manifest_declares_it`). Elle s'arrête à la même
    frontière que celle d'instantané, avec le même message de suspension.
+
+8. **Un rattrapage à l'ouverture réécrivait toute la source** (trouvé par la lib sous le jeu le plus
+   large, le même témoin qu'en 7, encore rouge après lui : 75 s contre 20 s au parent). La
+   synchronisation par générations réécrivait chaque fichier, inchangé compris, en un seul paquet ; la
+   demande d'arrêt ne se lisait jamais. Sous l'écrivain, un fichier dont l'empreinte indexée (sa ligne
+   `File` visible au rang en attente) égale celle du disque ne changerait aucune ligne : il est sauté.
+   Sauf après une passe en masse interrompue (sa marque `relations_pending` posée) : ses liens
+   manquent, tout se repasse. La passe coûte le diff, pas la source.
 
 Leçon : la lib sous un seul jeu de features ne suffit pas à un lot qui touche l'identité ou
 `sync_source` ; la passe épinglée entière (le témoin, les suites, `check_features`, la lib sous le
