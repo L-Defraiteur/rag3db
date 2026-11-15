@@ -216,8 +216,19 @@ pub fn blocs(texte: &str, genre_de_prose: Genre) -> Vec<Validee> {
 /// La valeur de la chaîne JSON `"cle":"…"` dans `json`, même coupé au milieu :
 /// l'extrait de l'hôte s'arrête à 4 Ko, au milieu d'une chaîne s'il le faut.
 pub fn chaine_json(json: &str, cle: &str) -> Option<String> {
-    let motif = format!("\"{cle}\":\"");
-    let debut = json.find(&motif)? + motif.len();
+    // La clé, puis des blancs, les deux-points, des blancs et le guillemet ouvrant.
+    let motif = format!("\"{cle}\"");
+    let mut depart = 0;
+    let debut = loop {
+        let i = depart + json[depart..].find(&motif)? + motif.len();
+        let reste = json[i..].trim_start();
+        if let Some(r) = reste.strip_prefix(':') {
+            if let Some(r) = r.trim_start().strip_prefix('"') {
+                break json.len() - r.len();
+            }
+        }
+        depart = i;
+    };
     let mut out = String::new();
     let mut c = json[debut..].chars();
     while let Some(x) = c.next() {
