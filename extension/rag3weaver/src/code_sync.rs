@@ -622,9 +622,20 @@ fn oublier_les_aretes_du_fichier(catalog: &mut Catalog, source_id: &str, indexed
     // Les paires défaites, rendues par la déliaison elle-même : elle
     // s'annonce (`RelationsChanged.removed`), en état net avec ce que
     // l'ingestion repose ensuite (la fenêtre de `reingest_file`).
-    let mut defaire = |relation: &str, side: Direction| -> Result<(), String> {
+    // **Une arête vers une ligne fermée est de l'histoire** (témoin 13) : un scope partagé par deux
+    // générations garde son arête vers la ligne d'avant, que l'écrivain vient de retirer ; l'oubli ne
+    // défait que celles dont l'autre bout est visible au rang en attente, et l'ingestion pose les neuves.
+    let visibilite = catalog.generations.clone();
+    let mut defaire = |relation: &str, side: Direction, autre: &str| -> Result<(), String> {
         let dialecte = catalog.dialect_arc();
-        let Some(requete) = dialecte.detach_edges_returning(relation, SCOPE, side, &filtre) else {
+        let autre_visible = visibilite
+            .as_ref()
+            .filter(|v| v.tables.contains(autre))
+            .and_then(|v| dialecte.condition_visible_sur("o", &v.couche, v.rang));
+        let Some(requete) = dialecte.detach_edges_returning(relation, SCOPE, side, &filtre).map(|q| match &autre_visible {
+            Some(c) => q.replacen(" DELETE r", &format!(" AND ({c}) DELETE r"), 1),
+            None => q,
+        }) else {
             let ecrire = Write::Detach { relation: relation.into(), table: SCOPE.into(), side, filter: filtre.clone() };
             let requete = dialecte.write(&ecrire).map_err(|e| e.to_string())?;
             catalog.execute_raw_with_params(&requete, &params).map_err(|e| e.to_string())?;
@@ -647,12 +658,12 @@ fn oublier_les_aretes_du_fichier(catalog: &mut Catalog, source_id: &str, indexed
         }
         Ok(())
     };
-    for (rel, from, _) in crate::code::RELATIONS {
+    for (rel, from, to) in crate::code::RELATIONS {
         if from == SCOPE && rel != "CONSUMED_BY" {
-            defaire(rel, Direction::Outgoing)?;
+            defaire(rel, Direction::Outgoing, to)?;
         }
     }
-    defaire("CONSUMED_BY", Direction::Incoming)?;
+    defaire("CONSUMED_BY", Direction::Incoming, SCOPE)?;
     Ok(())
 }
 
