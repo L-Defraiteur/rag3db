@@ -1017,7 +1017,7 @@ après G et avant archi : ED (2) → G → tty-12 → archi (relai) → 96 → E
 Lucie, 13 h 46 : « les défauts du cœur restent prio, en parallèle de terminer les vues par couche ». Appliqué :
 - **cœur et hotfixs** : par gravité — perte (Note sous pool plein, COMMIT sous index vectoriel, durabilité sur faute),
   plantage (quatre SIGSEGV), réponse fausse (index de relations, clé primaire au point de reprise, HNSW), blocages,
-  lenteur ; la bissection du CREATE 237 s continue. 55 tickets moteur ouverts au relevé de 13 h 46 (5 pertes,
+  lenteur ; la bissection du CREATE 237 s continue (ce n est pas une régression du lot ALTER : master d avant le lot donne 237 s ; le commit du 19 octobre fait 64 s aujourd hui à charge 6, une part d environnement et un facteur 4 réel ; seuil 150 s, sept pas). 55 tickets moteur ouverts au relevé de 13 h 46 (5 pertes,
   5 plantages, 9 réponses fausses, 6 blocages, ~30 lenteur/estimation/mémoire).
 - **vues par couche** (état d'arbre : aucune recherche ne compose encore la pile ; une seule couche, `backend`) :
   banc joue les deux parités de l'écrivain d'ED devant F 50 k ; ED : écrivain (1), puis mesure (3a)/(3a′) contre (2),
@@ -1027,3 +1027,11 @@ Lucie, 13 h 46 : « les défauts du cœur restent prio, en parallèle de termine
   passent derrière.
 - lucivy : 7 tickets ouverts, dont « une recherche filtrée ne classe pas comme sa vue » sans doute clos par 4.3.8 —
   à fermer ; hotfixs : le ticket « CI rouge depuis le 18 octobre » périmé, la CI est verte — à fermer.
+ED, 13 h 48 : models.llm en liste sur master à **f9e894f36** (5 commits, b060f6203 → f9e894f36, gmail, 0 attribution ; ticket fait
+2716a1c41). Note d'ED : la garde hors pile lit la base testée dans <journaux>/base, que passe_epinglee.sh n'écrit pas
+(posée à la main) — pour G. « À toi » à G pour garde-cpp-transferable (660586fab) sur 2716a1c41. Ensuite tty-12, archi (relai), 96, ED (1).
+lucivy, 13 h 48 : ticket « classe comme sa vue » fermé (e52a3bc92) ; sur les six autres, deux comptent pour Lucie (le poids du
+plein texte, cent fois ses sources — exclusions chez recherche ; le dictionnaire des effacés, corrigé en 4.3.8, à fermer après
+maintain par l'hôte), un pour les sessions (traces de run_e2e.sh → hotfixs), trois souhaits.
+Arbre, 13 h 48 : question à Lucie — combien de temps garder le retour arrière après la bascule de ses bases (instantané +
+ancien index, ~5 Go par base dont 4 de plein texte) ; proposition une semaine puis retrait base par base à son mot.
