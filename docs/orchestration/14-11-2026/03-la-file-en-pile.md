@@ -1577,3 +1577,8 @@ Hotfixs, 17 h 51 : ci-docs-sans-run sur master à **6c59d5c78** (un commit, gmai
 et rag3weaver verts). La preuve du filtre : ce push de docs-ci ne doit lancer aucun run. « À toi » à embarquement (service-503).
 Ordre restant : embarquement → archi (branchement) → tty-14/15/16 → 96 → ED (écrivain, au vert du banc) + arbre (migration) → G
 (hashes, known_red, confineur) → arbre 2b′ + recherche 2b-C + exclusion → codeparsers (pointeurs).
+17 h 52 : **le filtre des docs est prouvé** — mon push de docs 3b4ba3cb7 n'a lancé aucun run ; les runs de 6c59d5c78 jouent, celui de
+7b2f019e0 (rag3weaver) n'a pas été annulé. Archi : le texte libre du modèle **est** streamé (Event::Token sur `tokens`, run du pas,
+tty abonné) ; seul l'argument de `report` arrive entier → validé : la réponse de l'équipier en texte libre, `report` pour la
+boîte seulement ; phrase d'invite + témoin dans le branchement ; tty affiche mot à mot. Arbre : la montée reposée sur l'écrivain
+corrigé (migration-generations-2 4b28027c8) ; répétition complète relancée sur c5ec47cc4 avec des copies neuves.
