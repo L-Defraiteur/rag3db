@@ -1133,3 +1133,8 @@ DatabaseHeader::writerBuildID ; GCC syntaxe seule sur tout src/ pour tous les co
 trompeur : sur une branche hors master, le job **pousse un commit « CI Bot »** (644d1d8c5, 25 fichiers = la dette de format
 réelle). Tranché : aucun commit d'un bot dans le dépôt — l'étape disparaît du lot, « Fail if any change » joue partout ; le
 format pur des 25 fichiers en un commit gmail juste après le lot CI (fenêtre), rien de C++ ne pousse d'ici là.
+G, 14 h 33 : garde-cpp-transferable sur master à **5b8f8994f** (2 commits : les suites C++ transférables 72f5e1ffe, passe_epinglee.sh
+écrit la base testée 5b8f8994f ; gmail, 0 attribution). G pose maintenant le binaire de luciepc depuis la tête de master.
+« À toi » à tty pour tty-12 (900ce167f) puis tty-13 en pile sans second mot ; le lot CI de hotfixs (pas prêt : l'étape du bot
+à retirer, les agrégats) passe après eux, puis la fenêtre de formatage. Embarquement : repli complet (215e4b989 tenue,
+9df6c6cd9 docs ; lib entière 2 353 verts), base testée 09bb33e64, en file après ED (1).
