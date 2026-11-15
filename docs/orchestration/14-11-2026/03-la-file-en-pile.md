@@ -1082,3 +1082,17 @@ code format rouge (connu), shell test en cours, python lint annulé (à lire). R
 vers un service déclaré quand la carte est pleine (mesuré, dit, réversible ; réglages au manifeste). Lucivy : le relevé à
 blanc (`/backend/maintain` dry_run, lit le graphe lui-même, reprend si le jeton bouge) prêt sur lucivy-releve-a-blanc
 7a684087d7, en file après ED (1). Le run de la PR 1 complet : sanity vert, code format et shell test rouges (hotfixs lit).
+Recherche, 14 h 01 : premier compte des orphelins au dépôt (fermé 21 s, instantané recherche-compte-orphelins-1-20261115-1400,
+copie reflink, méthode de hotfixs) : Scope 81 674 lignes / 81 706 vivants = **32 orphelins** ; File 8 126 / 8 130 = **4** ;
+aucune ligne sans document. Tous nés depuis le zéro de 1 h 22 ; les _node_id gardés pour comparer les listes au second
+compte de 15 h 00. Si 32 et 4 tiennent, le correctif tient en service.
+Embarquement, 14 h 01 : conception du repli posée (44f80a9d2) : `fallback` gagne {service} ou {activation} ; carte pleine
+mesurée (VRAM libre avant activation contre mémoire requise + marge ; débit sous seuil pendant une fenêtre) ; dit, et
+retour à la carte quand elle a la place ; sans déclaration, pas de repli. Tranché : modèle + dimension obligatoires,
+recette comparée si le service la dit, sinon « repli sans recette vérifiée » et provenance de chaque lot au journal ;
+clés du manifeste en anglais ; le vrai jeu sur card2 après le verdict du banc.
+Hotfixs, 14 h 02 : les deux rouges du run de la PR 1 étaient d'une ligne chacun, corrigés dans le lot (892363395) : shell test =
+GCC -Werror=missing-field-initializers sur ListLambdaBindData (quantifierCounts, ajouté par 9edf6f3b4) ; code format
+mourait avant le format, « cargo-fmt is not installed for the toolchain 1.98.1 » (rustfmt ajouté avant cargo fmt) — le
+verdict du format C++ n'avait jamais joué. Python lint annulé à la seconde : macos-14 non accordé (dépôt privé) → sur
+ubuntu-24.04, même lot. Le binaire de luciepc : G le pose, hotfixs vérifie les ancêtres.
