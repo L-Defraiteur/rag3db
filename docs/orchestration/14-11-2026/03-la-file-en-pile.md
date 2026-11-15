@@ -1276,3 +1276,10 @@ Hotfixs, 15 h 28 : shell test bâtit sous le GCC 13 de la CI ; il reste trois ca
 mode box), corrigés (2f6143617) ; « prêt » glisse à ~16 h. Archi et 96 passent devant : « à toi » à archi pour le relai dès sa
 tête verte ; 96 suit en pile (c733b81dd → usage → query_chars, ce qui est vert). Puis CI + format, lucivy, codeparsers, tty-14,
 ED (1), embarquement, G, arbre.
+15 h 30 : archi — relai reposé (pont-navigateur-relai-2 76b7d757b, témoins verts), rejeu court derrière sa double passe de l'équipier
+(place lourde jusqu'à ~15 h 40), vert attendu ~15 h 55, push au vert sans second mot. 96 — c733b81dd reposé (lot-96-compose-pile
+a3bb9db72) : lib 2472/0, archiviste 20/20… ; compose_restart 1/2 et cited_by 0/3 = 7879 tombé (environnement), rejoués seuls ;
+`usage` peut-être vert à 15 h 45 ; `query_chars` au second tour. ED — l'écrivain (1) bff6c7409 (ecrivain-2a-prime-2-pile-2) : passe
+épinglée entière VERTE (e2e_code 36, lectures 27, demon_hote 20, postgres 39, lib 2485, navigateur 45), avec le correctif
+d'histoire (témoin 13), l'état du repassage (témoin 14) et la nouveauté chiffrée ; le banc rejuge depuis 15 h 11 (~2 h) ; le grain
+du paquet (témoin 15) sur une branche à part, lot suivant.
