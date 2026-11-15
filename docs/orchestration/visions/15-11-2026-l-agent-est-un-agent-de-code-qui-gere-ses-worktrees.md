@@ -61,3 +61,7 @@ qu'il faut en synchrone ».
    l'avance sur le poste, pour son service d'embarquement (local ou distant, carte ou CPU), mesure le débit
    (lots par seconde, caractères par seconde) et l'inscrit ; l'hôte convertit le reste à indexer en secondes
    par ce débit, et le corrige au fil du débit observé. Pas de constante écrite à la main.
+
+   Conception du pas : [page 12 d'archi](../../rag3weaver-archi/15-11-2026/12-conception-l-attente-d-index-du-pas.md)
+   (a2b64a5c1). Son contrat vers l'arbre et recherche : une estimation lisible par l'hôte pour l'index d'une
+   tâche (reste et débit observé, tirés du journal d'index) et une attente bornée (« prêt, ou au plus N s »).
