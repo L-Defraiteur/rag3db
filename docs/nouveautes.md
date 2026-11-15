@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 15 novembre2026 — **Plusieurs modèles de langage dans un manifeste** : `models.llm` peut être une liste de modèles nommés, chacun avec son fournisseur, sa fenêtre (`context_tokens`) et son plafond de sortie (`max_output_tokens`), un seul `default: true` ; la tâche retiendra un nom, `/model` les montrera. Un manifeste d'aujourd'hui, avec un seul objet, se lit comme une liste d'un modèle par défaut, nommé d'après son modèle : rien à changer. Les erreurs se disent à la lecture : nom manquant ou en double, aucun ou plusieurs défauts, une liste ailleurs que sous `llm`, un nom inconnu avec la liste des noms déclarés.
+
 - 15 novembre2026 — La saisie du terminal de l'agent s'écrit sur plusieurs lignes : la zone du bas grandit avec elle jusqu'à huit lignes, puis défile autour du curseur ; Maj-Entrée passe à la ligne là où l'émulateur sait la distinguer (kitty, WezTerm, foot, Ghostty), Alt-Entrée partout, et la saisie vide dit lequel. Sous tmux, qui fait de Maj-Entrée une Entrée, le terminal le dit ; ticket ouvert.
 
 - 15 novembre2026 — Le cœur Rust du pont navigateur : le protocole de l'extension Chrome (révision 5 du fork de jackwener/browsermcp), les baux d'onglet et deux gardes avant tout envoi, un onglet rendu à l'humain ne se reprenant que par un nouvel emprunt et les passe-partout restant fermés par défaut — sans extension ni route encore.
