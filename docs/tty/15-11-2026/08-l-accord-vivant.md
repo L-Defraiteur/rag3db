@@ -31,3 +31,20 @@ Témoin : `an_approval_request_lives_in_the_live_zone_and_leaves_one_result_line
 - dire à l'équipier de lancer `git status` nu.
 
 Je recommande la seconde.
+
+## Des boutons d'accord au clavier
+
+Lucie, juste après : « faut pouvoir avoir "boutons" de validation qu'on peut accéder aux flèches du clavier, avec pré-sélectionné oui quand y a un choix ».
+
+- Un accord qui attend montre deux boutons sur la ligne d'état : « [ Oui ]   Non    ← → Entrée, ou o / n ».
+  - Oui est choisi d'avance, et chaque nouvelle demande repart sur Oui.
+  - ← choisit Oui, → choisit Non, Entrée valide.
+  - Le bouton choisi est en vidéo inverse.
+  - `o` et `n` répondent toujours d'une touche.
+- Une proposition de déclarations a les mêmes boutons.
+- Les flèches et Entrée ne servent aux boutons que la saisie vide : une saisie commencée garde ses flèches.
+- Une demande d'accord encore en attente se dit aussi une fois le pas fini. Avant, la ligne d'état disait « fini : … » et la cachait, alors que `o` y répondait.
+
+Témoin : `approval_buttons_answer_with_the_arrows_and_enter_yes_preselected`. Il a été vu rouge avant le code ; son assertion du pas fini a été vue rouge par mutation. Le crate passe 102 tests, clippy ne signale rien, et le harnais entier est vert sous tmux local ouvert.
+
+Chez archi (page du socle, § la porte selon Lucie) : l'accord dans le tour, un modèle qui décide de ce qui est dans la demande (`cp`, `tee`), et `ls` qui n'a rien à demander.

@@ -1,6 +1,6 @@
 # Nouveautés
 
-- 15 novembre2026 — Dans le terminal de l'agent, une demande d'accord vit dans la zone vivante, le temps qu'on y réponde : la ligne d'état la dit même quand l'équipier s'anime, `o` ou `n` y répond, et l'historique n'en garde qu'une ligne, « accordé : … » ou « refusé : … », que la réponse vienne du terminal ou de l'IDE. Une proposition de déclarations du dépôt principal attend de même : `o` l'applique, `n` la rejette.
+- 15 novembre2026 — Dans le terminal de l'agent, une demande d'accord vit dans la zone vivante, le temps qu'on y réponde : la ligne d'état la dit même quand l'équipier s'anime, `o` ou `n` y répond, et l'historique n'en garde qu'une ligne, « accordé : … » ou « refusé : … », que la réponse vienne du terminal ou de l'IDE. Deux boutons, Oui choisi d'avance et Non, se choisissent par ← → et se valident par Entrée ; la demande se dit encore une fois le pas fini. Une proposition de déclarations du dépôt principal attend de même : `o` l'applique, `n` la rejette.
 
 - 15 novembre2026 — Le terminal de l'agent ne garde dans l'historique que la demande et la réponse : les appels d'outil, les étapes faites et les mots de l'hôte défilent sur une ligne discrète de la zone vivante, et restent lisibles par Ctrl-O et le journal ; `--etapes` ou `/etapes` remontrent tout.
 
