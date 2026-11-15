@@ -163,6 +163,43 @@ fn une_tache_ouverte_se_renomme_sans_se_rouvrir() {
     assert_eq!(host.tache(&parent, "ombre").unwrap().nom_de_l_agent, None, "le registre l'oublie");
 }
 
+/// **La route du renommage** (`POST /ide/teammate/name`, tty-18), par l'hôte : `{ok, result: {agent_name}}`,
+/// `""` rend le nom du backend, un refus en `{ok: false, error: "agent_name : …"}`.
+#[cfg(feature = "rag3db-native")]
+#[test]
+fn la_route_renomme_l_agent_d_une_tache() {
+    let (d, manifeste) = depot_du_banc();
+    let manifeste = manifeste.canonicalize().unwrap();
+    let r = d.path().join("taches");
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racine_des_taches(r));
+    let racine = format!("http://{adresse}");
+    let appeler = |route: &str, corps: Value| -> Value {
+        let mut r = crate::daemon::agent_de_temoin()
+            .post(format!("{racine}{route}"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(corps.to_string())
+            .unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    assert_eq!(appeler("/ide/describe", json!({ "manifest": manifeste }))["ok"], true);
+    let parent = blake3::hash(manifeste.to_string_lossy().as_bytes()).to_hex()[..12].to_string();
+    let t = appeler("/ide/taches", json!({ "backend": parent, "nom": "ombre", "agent_name": "Ombre" }));
+    assert_eq!(t["ok"], true, "{t}");
+    let r = appeler("/ide/teammate/name", json!({ "backend": parent, "task": "ombre", "agent_name": "Lune" }));
+    assert_eq!((r["ok"].clone(), r["result"]["agent_name"].clone()), (json!(true), json!("Lune")), "{r}");
+    let r = appeler("/ide/teammate/name", json!({ "backend": parent, "task": "ombre", "agent_name": "deux\nlignes" }));
+    assert_eq!(r["ok"], false, "{r}");
+    assert!(r["error"].as_str().unwrap_or_default().starts_with("agent_name"), "le refus nomme le champ : {r}");
+    let r = appeler("/ide/teammate/name", json!({ "backend": parent, "task": "ombre" }));
+    assert!(r["ok"] == false && r["error"].as_str().unwrap_or_default().starts_with("agent_name"), "agent_name manque : {r}");
+    let r = appeler("/ide/teammate/name", json!({ "backend": parent, "task": "ombre", "agent_name": "" }));
+    assert_eq!((r["ok"].clone(), r["result"]["agent_name"].clone()), (json!(true), json!("équipier")), "{r}");
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
 #[test]
 fn une_declaration_dans_la_tache_commite_sur_sa_branche() {
     let (d, host, manifeste, parent) = banc();
