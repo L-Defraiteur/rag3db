@@ -1055,3 +1055,12 @@ atteignables : SIGSEGV optimisticRead, lecture hors colonne du CREATE concurrent
 durabilité sur coupure, extension non chargée ; les deux index de relations (à dégrader), rang déplacé, plein texte après
 arrêt brutal ; **et surtout les orphelins du plein texte qui reviennent (970 en 12 h)** — demandé à recherche si son
 correctif est dans le binaire des hôtes.
+Banc, 13 h 53 : pas de quota Vertex — le pilote lisait « 429 » dans le texte rangé des tours (un identifiant, une phrase
+sur les quotas) et a attendu 31 min pour rien ; corrigé (il ne lit plus que l'erreur de l'appel). N relancée 13 h 51 ;
+parités depuis 13 h 49, verdict vers 15 h 10.
+Recherche, 13 h 53 : le correctif des orphelins (262be6fc4, 00 h 22) est dans 26a091474 (portable depuis 11 h 35) mais pas dans
+fac67a208 (luciepc depuis 0 h 25, portable de 1 h 15 à 11 h 35) : les 970 du dépôt sont nés sous un binaire sans le
+correctif. Hotfixs rebâtit l'hôte de luciepc depuis la tête de master et le repose ; recherche relève l'écart documents −
+lignes au dépôt maintenant et dans une heure.
+Hotfixs, 13 h 53 : lot CI prêt (ci-self-hosted-hors-de-master 809eb7ac9) : `if: vars.RAG3DB_SELF_HOSTED == 'true'` sur les
+18 jobs self-hosted (benchmark sauté avec eux) ; une PR pour le jouer dans son propre groupe ; place après G, avant tty-12.
