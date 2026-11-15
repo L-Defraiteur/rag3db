@@ -888,3 +888,9 @@ signalée par relations_pending). Passe épinglée entière jusqu'à ~2 h 35, --
 bdeac0b86, « = », check_features 8/8 joué) ; garde du cache bc7d367eb3252d4d aux deux postes. **Il ne reste
 qu'ED** (l'écrivain de 2a′-2, sur 24d513d98, tête vers 3 h, banc au jugement) : rien derrière lui. La file
 du soir aura porté trente-quatre pushs depuis 21 h 58 sans un rejeu du dernier pas.
+96, 02 h 1x : le lot A vert (lifecycle recopy, `default_filter` du SearchSourceNode, recall_apports must_not
+recopied ; 137/137, e2e_archiviste 17/17) : passe devant ED, sur 24d513d98 ; « à toi » à son vert ; ED sur sa
+tête. B (scinder, rejoindre) sur A ensuite.
+
+**02 h 3x — soixante-deux atterris** : le filtre par défaut et l'état recopied (96, f553c2b2a). Il ne reste
+qu'ED (sur fd33c5f06), tête vers 3 h.

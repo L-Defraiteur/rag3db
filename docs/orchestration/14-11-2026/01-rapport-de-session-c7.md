@@ -1298,3 +1298,9 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   embarquement, lucivy, archi, arbre principal, codeparsers) ; **rien ne s'efface avant le mot de Lucie**.
 - **Pour Lucie** : lavapipe (sudo, deux postes) ; le socle du pont navigateur (étude d'archi) ; la fin de
   session (targets de 7 à 31 Go gardés).
+- **Banc, 02 h 3x — Laya sur le vrai jeu** (CPU, 198 cas de test sur 83 groupes, 285 de mise au point) :
+  zéro-coup 0,04 ; spécialisé (4 époques, 68 min) 0,36 — rejoindre 0,18, créer 0,77, rien 0,00 ; les rejointes
+  d'une fiche rendue par la recherche 1 sur 49 ; ses choix : create 130 fois, candidate_6 45 fois. Il a appris
+  « créer » et « la sixième place », pas le rapprochement. La variante mélangée finit vers 3 h 20 ; rien ne
+  laisse attendre un Laya branchable sur ce jeu. L'écrivain d'ED : parité et usages rejoués pour les trois
+  rôles après correction de la lecture des usages.
