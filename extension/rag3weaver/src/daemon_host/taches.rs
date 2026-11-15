@@ -398,7 +398,7 @@ impl DaemonHost {
     /// Écrit le registre (un fichier neuf, puis renommé : jamais à moitié
     /// écrit). Une tâche qui ne s'inscrit pas sur le disque ne survivrait pas
     /// à l'hôte : l'appelant le dit.
-    fn ecrire_le_registre(&self) -> Result<(), String> {
+    pub(super) fn ecrire_le_registre(&self) -> Result<(), String> {
         let registre = Registre {
             ouvertes: self.taches.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect(),
             fermees: self.taches_fermees.lock().unwrap_or_else(|p| p.into_inner()).clone(),
