@@ -1,7 +1,7 @@
 # Un fournisseur dont la feature manque est refusé par un message qui dit de le déclarer
 
 - **État** : ouvert (15 novembre 2026, embarquement ; relevé par tty)
-- **Pour** : embarquement
+- **Pour** : everything declarative (ED), la lecture de `models.llm` et son refus ; décision de c7
 - **Famille** : produit
 - **Gravité** : défaut. Le refus envoie sur une fausse piste : il dit de déclarer ce qui est déjà déclaré.
 - **Atteignable en service** : oui (un binaire bâti sans `openai-llm`, ou sans une autre feature de fournisseur)
@@ -23,3 +23,14 @@ Le message actuel ne resterait que pour une capacité qui n'a réellement aucun 
 
 Témoin, rouge d'abord : sans la feature, une déclaration `compatible`/`openai` est refusée par un message qui nomme
 `openai-llm`, et pas par « déclarer `compatible` ».
+
+## Décision de c7 (15 novembre 2026, au soir)
+
+Une tâche, ou un backend, dont le fournisseur de modèle de langage n'est pas compilé dans le binaire **se rouvre
+quand même**, comme un backend sans service d'embarquement s'ouvre en plein texte seul. Le reçu et l'état disent
+« modèle de langage <name> indisponible : la feature openai-llm n'est pas dans ce binaire ». C'est le **tour de chat**
+qui est refusé, avec cette cause, et non l'ouverture. Le message actuel nomme la feature à la place de « déclarer
+`local` ou `compatible` ».
+
+Témoins, rouges d'abord : sans `openai-llm`, la tâche du témoin `modele_de_tache` se rouvre (`ok: true`), et son
+reçu dit la feature absente ; un tour de chat sur ce modèle est refusé en nommant la feature.
