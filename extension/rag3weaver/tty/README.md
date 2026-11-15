@@ -73,6 +73,7 @@ The input is a line editor, like a shell's.
 | Enter | answers what the teammate waits for, otherwise opens the task, then talks to it |
 | `o` / `n`, empty input | grants or refuses the command the teammate waits for |
 | Esc, Ctrl-G | stops the teammate (Ctrl-G without the escape delay of a multiplexer) |
+| Ctrl-O | opens a tool call full size, in an alternate screen (see *Tool calls*) |
 | Ctrl-C | clears a non-empty input, otherwise quits |
 | Ctrl-D, empty input | quits |
 | AltGr | its character (on Windows AltGr comes as Ctrl+Alt, and is kept) |
@@ -81,6 +82,20 @@ The input spans several lines: each folds to the width, and the live zone grows 
 input lines, then a window follows the cursor, a cut edge showing `… `. Wide characters count for two
 columns. The terminal's cursor sits where the input's cursor is. An empty input says, muted, how to
 break a line: Shift-Enter, Alt-Enter, or under tmux that Shift-Enter sends.
+
+## Tool calls
+
+Each tool call is numbered and says what it targets: `» read_file src/vue.rs  ⟨3⟩`. A read shows a
+preview, the first 12 lines in the file's language, coloured by the host's grammars, then what is
+left. A `.md` file renders as prose, its fenced blocks coloured in their language. An `edit_file`
+shows its replacement as removed and added lines, or the beginning of the content it writes. A
+fenced block in the mailbox is a code block of its language too. The host sends the first 4 KB of a
+result and its full size: a cut excerpt says so (`extrait, 4 Ko sur 16 Ko`) and never looks whole.
+
+Ctrl-O opens the last call full size, with its arguments, in an alternate screen, like `less`. ↑ ↓
+scroll, Page Up and Page Down (or Space) move by a page, Home and End go to the ends, ← → go to the
+previous or next call, and Esc, `q`, Ctrl-O or Ctrl-C close it. The main screen, its scrollback and
+the terminal's history are left untouched and come back as they were.
 
 ## Over ssh, tmux and mosh
 
