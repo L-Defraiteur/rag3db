@@ -44,6 +44,7 @@ impl DaemonHost {
         annule: Arc<AtomicBool>,
         arrete_par: Arc<Mutex<Option<String>>>,
         step: &Step,
+        empreinte: (Arc<Mutex<super::empreintes::Empreintes>>, usize),
     ) -> Result<Value, String> {
         let ouvert = self.with_backend(hosted, |b| {
             let declares = crate::declare::DeclarationTools { backend: b, inner: &crate::backend_tools::BackendTools { backend: b } };
@@ -62,7 +63,7 @@ impl DaemonHost {
             }
         };
         let notice = prepared.manifest.teammate.clone().unwrap_or_default().tool_wait_notice_s;
-        let etanche = Etanche { host: self, hosted: hosted.clone(), defs, files, hors_ligne, notice: Duration::from_secs(notice), boite: step.files.clone(), repli: Mutex::new(Vec::new()) };
+        let etanche = Etanche { host: self, hosted: hosted.clone(), defs, files, hors_ligne, notice: Duration::from_secs(notice), boite: step.files.clone(), repli: Mutex::new(Vec::new()), empreinte };
         let tour = Tour { prepared, mode, dans_une_tache: true, bus, boite: &etanche, ecrivent: &ecrivent, repli: Some(&etanche.repli) };
         self.run_chat_turn(tour, backend_id, &hosted.manifest, run_id, session, message, annule, arrete_par, Some(step))
     }
@@ -81,6 +82,10 @@ pub(super) struct Etanche<'a> {
     boite: TeammateFiles,
     /// Les replis de ce pas, pour le journal du run.
     pub repli: Mutex<Vec<String>>,
+    /// **L'empreinte de lecture de la conversation et le numéro du tour** : un pas d'équipier
+    /// garde la même garde qu'un tour du chat (replace_lines exige d'avoir lu, une empreinte
+    /// périmée refuse). Sans elle, un `replace_lines` sans lecture écrivait (15 novembre 2026).
+    empreinte: (Arc<Mutex<super::empreintes::Empreintes>>, usize),
 }
 
 impl Etanche<'_> {
@@ -110,7 +115,7 @@ impl Etanche<'_> {
             let r = self.host.with_backend(&self.hosted, |b| {
                 let outils = crate::backend_tools::BackendTools { backend: b };
                 let declares = crate::declare::DeclarationTools { backend: b, inner: &outils };
-                let du_chat = OutilsDuChat::de(b, &declares, true);
+                let du_chat = OutilsDuChat::de(b, &declares, true).avec_empreinte(self.empreinte.0.clone(), self.empreinte.1, b.prepared().workspace_root());
                 f(&du_chat)
             });
             fini.store(true, Ordering::SeqCst);

@@ -1064,6 +1064,41 @@ fn sans_prefixe_verbatim(chemin: PathBuf) -> PathBuf {
 fn lire_octets(lecteur: &dyn crate::lecteur::Lecteur, chemin: &Path) -> Result<Vec<u8>, String> {
     lecteur.lire(chemin).map_err(|e| format!("{} : {e}", chemin.display()))
 }
+/// **Le socle d'un agent de code** : les outils que toute tâche reçoit, dans l'ordre, déclarés une
+/// fois par le gabarit atelier (lot d'ED du 15 novembre 2026).
+pub const SOCLE: [&str; 9] = ["read_file", "list_files", "grep_files", "glob", "replace_text", "replace_lines", "insert_lines", "write", "run_command"];
+
+/// **Greffe le socle dans le manifeste d'une tâche** (sa valeur JSON, avant la lecture typée) :
+/// chaque outil de [`SOCLE`] que le manifeste ne déclare pas y prend l'attachement du gabarit
+/// atelier, son graphe désigné par `builtin:` (le gabarit extrait du binaire). Sous le même nom,
+/// l'outil du backend gagne. Une écriture ne se greffe que si `ecrit` ; `run_command`, que si la
+/// porte des commandes est ouverte. Un manifeste sans `workspace` ne reçoit rien.
+pub fn greffer_le_socle(v: &mut serde_json::Value, ecrit: bool) -> Result<(), String> {
+    let Some(workspace) = v.get("workspace").filter(|w| w.is_object()).cloned() else { return Ok(()) };
+    let porte = workspace.get("commands").and_then(|c| c.as_str()).is_some_and(|c| c != "off");
+    let atelier: serde_json::Value = crate::builtin_templates::get("backends/atelier/backend.json")
+        .ok_or("le gabarit atelier livré manque : pas de socle")
+        .and_then(|o| serde_json::from_slice(o).map_err(|_| "le gabarit atelier livré ne se lit pas"))?;
+    if !v.get("tools").is_some_and(|t| t.is_object()) {
+        v["tools"] = serde_json::json!({});
+    }
+    for nom in SOCLE {
+        if v["tools"].get(nom).is_some() {
+            continue;
+        }
+        let Some(mut a) = atelier["tools"].get(nom).cloned() else { continue };
+        let ecrit_les_fichiers = a["policy"]["write_files"] == serde_json::json!(true);
+        let lance = a["policy"]["run_commands"] == serde_json::json!(true);
+        if (ecrit_les_fichiers && !ecrit) || (lance && !porte) {
+            continue;
+        }
+        let graphe = a["graph"].as_str().unwrap_or_default().trim_start_matches("../").to_string();
+        a["graph"] = serde_json::Value::String(format!("{}{graphe}", crate::builtin_templates::PREFIX));
+        v["tools"][nom] = a;
+    }
+    Ok(())
+}
+
 fn lire_texte(lecteur: &dyn crate::lecteur::Lecteur, chemin: &Path) -> Result<String, String> {
     lecteur.lire_texte(chemin).map_err(|e| format!("{} : {e}", chemin.display()))
 }
@@ -1127,12 +1162,28 @@ impl PreparedBackend {
         Self::load_avec(path, &crate::lecteur::Disque)
     }
 
+    /// **Le chargement d'une tâche, avec le socle d'un agent de code** (page 09 du 15 novembre
+    /// 2026) : les outils du socle que le manifeste ne déclare pas y sont greffés avant tout, les
+    /// écritures seulement si la tâche a le droit d'écrire (`ecrit`). Voir [`greffer_le_socle`].
+    pub fn load_pour_une_tache(path: &Path, ecrit: bool) -> Result<Self, String> {
+        Self::load_avec_socle(path, &crate::lecteur::Disque, Some(ecrit))
+    }
+
     /// **Le chargement par un lecteur** : le disque ([`crate::lecteur::Disque`]), ou
     /// le disque sous une proposition en mémoire ([`crate::lecteur::Recouvrement`]).
     /// Toute déclaration se lit par lui : c'est ce qui rend vrai « valider sans
     /// écrire » (`Backend::valider_sur`).
     pub fn load_avec(path: &Path, lecteur: &dyn crate::lecteur::Lecteur) -> Result<Self, String> {
-        let brut = lire_octets(lecteur, path)?;
+        Self::load_avec_socle(path, lecteur, None)
+    }
+
+    fn load_avec_socle(path: &Path, lecteur: &dyn crate::lecteur::Lecteur, socle: Option<bool>) -> Result<Self, String> {
+        let mut brut = lire_octets(lecteur, path)?;
+        if let Some(ecrit) = socle {
+            let mut v: serde_json::Value = serde_json::from_slice(&brut).map_err(|e| e.to_string())?;
+            greffer_le_socle(&mut v, ecrit)?;
+            brut = serde_json::to_vec(&v).map_err(|e| e.to_string())?;
+        }
         // **Les gabarits livrés désignés par leur nom** (`builtin:tools/list.mmd`,
         // `crate::builtin_templates`) : résolus vers le gabarit extrait du binaire
         // avant toute lecture. Sans `builtin:`, la lecture directe garde la ligne
