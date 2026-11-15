@@ -1,7 +1,6 @@
 # Des scopes sans `DEFINED_IN` dans une réindexation à neuf : 3 825 sur 82 808 dans code-lourd
 
-- **État** : ouvert (18 octobre 2026, codeparsers, à la demande de l'orchestration). Structurel,
-  à regarder : vu en mesurant les pertes du COPY de liens, sans lien avec elles.
+- **État** : corrigé (15 novembre 2026) — codeparsers d024118 (`defined-in-homonymes`) : un uuid par scope, même entre homonymes ; témoin `tests/defined_in_homonymes.rs`, rouge sur le code d'avant
 - **Gravité** : réponse incomplète. Un scope sans `DEFINED_IN` ne se rattache pas à son fichier par
   cette arête ; les outils qui passent par elle (la fin d'un fichier, ce qu'un fichier définit) ne
   le voient pas. Rien n'est perdu au stockage : le scope garde son `file_path`.
@@ -83,3 +82,28 @@ exemples. Un témoin sur le fichier de la recette reste à écrire.
 
 Trouver où `DEFINED_IN` se pose et pourquoi ces scopes y échappent ; le témoin de la recette à 0 ;
 la sonde à 0 sur une réindexation à neuf de `code-lourd`.
+
+## La correction
+
+**La cause**, lue avec la recette du banc (les constructeurs de `JsonMutWrapper` dans `json_utils.h`) : le
+parseur C++ reconstruit la même signature pour des surcharges (« void JsonMutWrapper() » pour les quatre), et
+l'uuid d'un scope en dépend (`blake3(fichier : nom : genre : hash(parent + signature))`,
+`relationship_resolver.rs`). Quatre homonymes, un seul uuid : 2 uuids distincts pour 5 scopes. Chez
+rag3weaver, la table uuid → clé (`code.rs`, `identity`) gardait le dernier, et les arêtes des trois autres se
+rabattaient sur lui — `#3` seul avec son `DEFINED_IN`, comme l'a vu le banc. Le même mécanisme valait pour les
+autres exemples (deux `impl Coerce for …`, des `TEST` de gtest, des lambdas de compréhension) et pour **toutes**
+les arêtes d'un homonyme, pas seulement `DEFINED_IN`.
+
+**Le correctif** : `build_global_scope_mapping` calcule l'uuid de chaque scope une fois, par sa position ; le
+premier de mêmes entrées garde son uuid d'aujourd'hui, les suivants ajoutent leur rang d'apparition. Les clés
+des scopes de rag3weaver ne changent pas (elles ont leur propre règle, `stable_scope_keys`) : seules les arêtes
+manquantes s'ajoutent.
+
+**Le compte**, par l'analyse de rag3weaver sur `extension/rag3weaver/src` (290 fichiers) : scopes sans
+`DEFINED_IN` **65 → 0**, pour 16 222 scopes, en nombre inchangé. Sur les bases (`code-rag3db-depot`, 3 814
+avant, et `code-lourd`), le banc mesure après la pose, par `releve_des_lignes_par_cypher` : la réponse
+s'ajoutera ici. (L'analyse de l'arbre entier en mémoire crevait l'enveloppe de 32 Gio : ticket fermé du
+15 novembre, « une passe confinée reçoit un SIGTERM sans cause dite ».)
+
+La signature fausse des surcharges, elle, avait sa cause propre (les paramètres par pointeur ou par
+référence perdus) : [ticket du même jour](2026-11-15-un-parametre-cpp-par-pointeur-ou-reference-perd-son-nom.md).
