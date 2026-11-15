@@ -221,6 +221,14 @@ impl Saisie {
         self.rang = None;
     }
 
+    /// **La saisie sur plusieurs lignes** (tty-10) : chaque ligne de la saisie,
+    /// repliée à `largeur` colonnes, au plus `max` lignes d'écran autour du
+    /// curseur. Rend les lignes montrées, la ligne et la colonne du curseur parmi
+    /// elles, et combien de lignes sont cachées au-dessus et au-dessous.
+    pub fn lignes_affichees(&self, _largeur: usize, _max: usize) -> Affichage {
+        Affichage::default()
+    }
+
     /// Ce qui s'affiche dans `largeur` colonnes, et la colonne du curseur. Un
     /// saut de ligne se montre `↵`. Trop longue, la saisie défile pour garder
     /// le curseur visible, et chaque bout coupé se dit par `…`.
@@ -269,6 +277,16 @@ impl Saisie {
         }
         (out, col_curseur)
     }
+}
+
+/// La saisie à l'écran, sur plusieurs lignes.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Affichage {
+    pub lignes: Vec<String>,
+    pub ligne: usize,
+    pub colonne: usize,
+    pub cachees_avant: usize,
+    pub cachees_apres: usize,
 }
 
 /// Un graphème de mot : il commence par une lettre ou un chiffre.
@@ -437,6 +455,36 @@ mod tests {
         s.monter();
         s.monter();
         assert_eq!(s.texte(), "ancien", "depuis la première ligne, ↑ va à l'historique");
+    }
+
+    /// **Plusieurs lignes** : chaque ligne de la saisie se replie à la largeur,
+    /// le curseur y a sa ligne et sa colonne, et au-delà de `max` lignes la
+    /// fenêtre suit le curseur en disant ce qu'elle cache.
+    #[test]
+    fn several_lines_fold_to_the_width_and_the_window_follows_the_cursor() {
+        let mut s = Saisie::default();
+        s.inserer("un\ndeux trois quatre");
+        let a = s.lignes_affichees(8, 8);
+        assert_eq!(a.lignes, vec!["un", "deux tro", "is quatr", "e"]);
+        assert_eq!((a.ligne, a.colonne, a.cachees_avant, a.cachees_apres), (3, 1, 0, 0));
+        let a = s.lignes_affichees(8, 2);
+        assert_eq!(a.lignes, vec!["is quatr", "e"]);
+        assert_eq!((a.ligne, a.colonne, a.cachees_avant, a.cachees_apres), (1, 1, 2, 0));
+        s.debut();
+        s.monter();
+        let a = s.lignes_affichees(8, 2);
+        assert_eq!(a.lignes, vec!["un", "deux tro"], "le curseur remonté, la fenêtre le suit");
+        assert_eq!((a.ligne, a.colonne, a.cachees_avant, a.cachees_apres), (0, 0, 0, 2));
+
+        let mut l = Saisie::default();
+        l.inserer("漢字漢字漢");
+        assert_eq!(l.lignes_affichees(4, 8).lignes, vec!["漢字", "漢字", "漢"], "un idéogramme prend deux colonnes");
+        let mut p = Saisie::default();
+        p.inserer("abcd");
+        let a = p.lignes_affichees(4, 8);
+        assert_eq!((a.lignes.clone(), a.ligne, a.colonne), (vec!["abcd".to_string(), String::new()], 1, 0), "une ligne pleine : le curseur passe à la suivante");
+        let vide = Saisie::default().lignes_affichees(10, 8);
+        assert_eq!((vide.lignes, vide.ligne, vide.colonne), (vec![String::new()], 0, 0));
     }
 
     /// L'affichage tient dans la largeur : les caractères larges comptent deux

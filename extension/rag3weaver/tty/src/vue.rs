@@ -86,6 +86,9 @@ pub enum Touche {
     CtrlG,
 }
 
+/// Au plus tant de lignes d'écran pour la saisie ; au-delà, elle défile.
+pub const SAISIE_MAX: usize = 8;
+
 /// Le style d'une ligne validée.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Genre {
@@ -147,6 +150,9 @@ pub struct Vue {
     /// Un repli à dire dans la zone vivante, sur la ligne du texte en cours quand
     /// rien n'y passe : sous mosh, la commande qui relit le journal (lot tty-7).
     pub repli: Option<Repli>,
+    /// Le terminal distingue Maj-Entrée d'Entrée (protocole clavier de kitty,
+    /// tty-10) : la saisie vide le dit, sinon elle dit Alt-Entrée.
+    pub maj_entree: bool,
     /// Les lignes de boîte déjà écrites, par leur `id` : la relecture et le flux
     /// peuvent rendre la même (tty-9, vu à l'essai sous tmux).
     vues_de_boite: std::collections::HashSet<String>,
@@ -180,6 +186,7 @@ impl Vue {
             depuis: Instant::now(),
             entete: String::new(),
             repli: None,
+            maj_entree: false,
             vues_de_boite: std::collections::HashSet::new(),
             bloc: None,
             boite: crate::boite::Boite::default(),
@@ -529,6 +536,12 @@ impl Vue {
         self.dessiner_a(f, zone, Instant::now())
     }
 
+    /// La hauteur que veut la zone vivante à `largeur` colonnes : le texte en
+    /// cours, la ligne d'état, et la saisie sur au plus [`SAISIE_MAX`] lignes.
+    pub fn hauteur_voulue(&self, _largeur: u16) -> u16 {
+        HAUTEUR
+    }
+
     /// Dessine la zone vivante telle qu'elle est à `maintenant`.
     pub fn dessiner_a(&self, f: &mut Frame, zone: Rect, maintenant: Instant) {
         let largeur = zone.width as usize;
@@ -576,6 +589,23 @@ mod tests {
     use ratatui::style::Color;
     use ratatui::{Terminal, TerminalOptions, Viewport};
     use serde_json::json;
+
+    /// Le texte de chaque ligne de la zone vivante et la position du curseur,
+    /// relative à la zone, pour une zone de `hauteur` lignes.
+    fn dessin(v: &Vue, largeur: u16, hauteur: u16) -> (Vec<String>, (u16, u16)) {
+        let mut t = Terminal::with_options(TestBackend::new(largeur, hauteur + 3), TerminalOptions { viewport: Viewport::Inline(hauteur) }).unwrap();
+        let instant = v.depuis;
+        let mut zone = None;
+        t.draw(|f| {
+            zone = Some(f.area());
+            v.dessiner_a(f, f.area(), instant)
+        })
+        .unwrap();
+        let (buf, z) = (t.backend().buffer().clone(), zone.unwrap());
+        let lignes = (0..z.height).map(|y| (0..z.width).map(|x| buf[(z.x + x, z.y + y)].symbol().to_string()).collect::<String>().trim_end().to_string()).collect();
+        let p = t.get_cursor_position().unwrap();
+        (lignes, (p.x - z.x, p.y - z.y))
+    }
 
     fn tok(t: &str) -> Value {
         json!({ "evenement": { "kind": "Token", "text": t } })
@@ -802,6 +832,41 @@ mod tests {
         let haut: String = (0..z.width).map(|x| buf[(z.x + x, z.y)].symbol().to_string()).collect::<String>().trim_end().to_string();
         assert!(haut.ends_with(commande), "{haut:?}");
         assert!(haut.starts_with("mosh") || haut.starts_with("less"), "rien de coupé par le début : {haut:?}");
+    }
+
+    /// **tty-10, au mot de Lucie** : la saisie s'écrit sur plusieurs lignes, la
+    /// zone grandit avec elle, et le curseur de l'écran est sur la bonne ligne.
+    #[test]
+    fn a_multi_line_input_grows_the_live_zone_and_puts_the_cursor_on_its_line() {
+        let mut v = Vue::new(40, true);
+        assert_eq!(v.hauteur_voulue(40), 3, "vide : une ligne de saisie");
+        "un".chars().for_each(|c| assert_eq!(v.touche(Touche::Car(c)), None));
+        v.touche(Touche::Saut);
+        "deux".chars().for_each(|c| assert_eq!(v.touche(Touche::Car(c)), None));
+        assert_eq!(v.hauteur_voulue(40), 4);
+        let (lignes, curseur) = dessin(&v, 40, 4);
+        assert_eq!(&lignes[2..], &["› un".to_string(), "  deux".to_string()]);
+        assert_eq!(curseur, (2 + 4, 3));
+        for _ in 0..20 {
+            v.touche(Touche::Saut);
+        }
+        assert_eq!(v.hauteur_voulue(40), 2 + SAISIE_MAX as u16, "au plus huit lignes de saisie");
+        assert_eq!(v.touche(Touche::Entree), Some(Action::Envoyer(format!("un\ndeux{}", "\n".repeat(20)), "instruction")));
+        assert_eq!(v.hauteur_voulue(40), 3, "après l'envoi, la zone redescend");
+    }
+
+    /// La saisie vide dit, en sourdine, comment passer à la ligne : Maj-Entrée
+    /// là où le terminal la distingue, Alt-Entrée sinon. Le curseur reste au début.
+    #[test]
+    fn the_empty_input_says_how_to_break_a_line() {
+        let mut v = Vue::new(60, true);
+        let (lignes, curseur) = dessin(&v, 60, 3);
+        assert_eq!(lignes[2], "› Alt-Entrée : à la ligne");
+        assert_eq!(curseur, (2, 2));
+        v.maj_entree = true;
+        assert_eq!(dessin(&v, 60, 3).0[2], "› Maj-Entrée : à la ligne");
+        v.touche(Touche::Car('x'));
+        assert_eq!(dessin(&v, 60, 3).0[2], "› x", "l'indication part dès qu'on tape");
     }
 
     /// Le repli (sous mosh, la commande qui relit le journal) se dit sur la
