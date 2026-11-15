@@ -1358,3 +1358,10 @@ Lucie, 16 h 06 : essai sur le binaire tty-16 — l'accord d'une commande a march
 défiler comme ça, ça doit être vivant et pas rester dans les lignes de mon terminal » : une demande d'accord est un état de la
 zone vivante (commande, o / n), qui disparaît une fois répondue ; l'historique n'en garde qu'une ligne de résultat au plus.
 Pour tty, dans tty-16 ; `git status` sur la liste sûre.
+96, 16 h 08 : le composeur sur master à **39ce7c1ae** (1 commit, compose_restart + context d'archive, 11 fichiers, gmail, 0 attribution ;
+rouge d'environnement du 7879 rejoué vert seul). `usage` au second tour (deux rouges à lire : banc_etage_qui_perd, banc_fiches_classees
+rc=1). « À toi » à embarquement (repli + plafond) sur 39ce7c1ae. Codeparsers : lot complet (f1172dac5 new + e8289254e fmt, tête
+e8289254e), après lucivy.
+Lucie, 16 h 08 : « rien qu'un `ls` me demande permission, et je dois attendre qu'il ait rendu son tour pour accepter » : deux défauts
+du produit pour le socle — l'accord dans le tour (l'appel attend, borné), liste sûre large. Mon passage de sa porte en `auto`
+a été refusé par ma garde : elle reste en `approval` ; à Lucie si elle le veut.
