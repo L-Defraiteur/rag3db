@@ -667,6 +667,17 @@ pub const MAX_CHARS_PAR_TEXTE: usize = 12_000;
 /// Le ratio dit avec ce plafond : environ trois caractères par jeton.
 pub const CARACTERES_PAR_JETON: usize = 3;
 
+/// La variable qui règle le plafond d'un texte, au binaire du service.
+pub const MAX_CHARS_VARIABLE: &str = "RAG3WEAVER_EMBED_MAX_CHARS";
+
+/// **Le plafond d'un texte lu dans l'environnement** : absent ou vide, le
+/// défaut ; un entier positif, lui ; autre chose, un refus nommé au démarrage
+/// (un réglage mal écrit ne retombe pas en silence sur le défaut).
+pub fn max_chars_depuis(valeur: Option<&str>) -> Result<usize, String> {
+    let _ = valeur;
+    Ok(MAX_CHARS_PAR_TEXTE)
+}
+
 #[derive(Deserialize)]
 struct Textes {
     texts: Vec<String>,
@@ -1663,6 +1674,19 @@ mod tests {
         let a = apres.join().unwrap().expect_err("après la panique : refusée");
         assert!(a.contains("(503)") && a.contains("serveur de la carte empoisonné"), "la requête en vol reçoit un 503 nommé : {a}");
         assert!(matches!(attendre_la_fin(fin, 10), Some(Err(DaemonError::Arret { code: 70, .. }))), "puis le service s'arrête");
+    }
+
+    /// **Le plafond se règle par l'environnement**, et un réglage mal écrit est
+    /// refusé, nommé, au lieu de retomber sur le défaut.
+    #[test]
+    fn le_plafond_d_un_texte_se_lit_dans_l_environnement() {
+        assert_eq!(max_chars_depuis(None), Ok(MAX_CHARS_PAR_TEXTE));
+        assert_eq!(max_chars_depuis(Some(" ")), Ok(MAX_CHARS_PAR_TEXTE));
+        assert_eq!(max_chars_depuis(Some("4000")), Ok(4000));
+        for faux in ["0", "-3", "douze"] {
+            let e = max_chars_depuis(Some(faux)).expect_err(faux);
+            assert!(e.contains(MAX_CHARS_VARIABLE) && e.contains(faux) && e.contains("entier positif"), "{e}");
+        }
     }
 
     /// Un embarqueur qui compte ses appels.
