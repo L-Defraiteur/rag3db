@@ -848,8 +848,10 @@ fn editing_a_signature_destroys_nothing_and_keeps_the_incoming_edges() {
     cat.ingest_code(&analyze_source(&snapshot).unwrap()).unwrap();
 
     let key_of = |cat: &mut rag3weaver::Catalog, name: &str| -> Vec<String> {
+        // Au rang lu : sous les générations, la ligne retirée garde la même clé.
+        let visible = cat.condition_visible("s").map(|c| format!(" WHERE {c}")).unwrap_or_default();
         let rows = cat
-            .execute_raw(&format!("MATCH (s:Scope {{name: '{name}'}}) RETURN s.key"))
+            .execute_raw(&format!("MATCH (s:Scope {{name: '{name}'}}){visible} RETURN s.key"))
             .unwrap();
         rows.rows.iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(String::from)).collect()
     };
