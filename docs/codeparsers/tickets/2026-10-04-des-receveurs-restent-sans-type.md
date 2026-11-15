@@ -56,3 +56,11 @@ Ce n'est pas un défaut à fermer d'un coup : chaque pas se mesure à la sonde d
 marques (part de « nom ») et au banc des relations, et ne garde que des règles
 à sémantique certaine (une règle fausse fait perdre une arête, jamais en
 inventer).
+
+## Le prix de la marque « nom » (15 novembre 2026)
+
+Depuis codeparsers `fad1b6f`, un appel de méthode **standard** sur une locale sans type lu ne se relie
+plus par le nom entre fichiers ([la marque « nom »](../../tickets/closed/2026-11-07-la-marque-nom-relie-un-appel-de-methode-standard-a-un-homonyme.md)).
+Une méthode du projet homonyme d'une méthode std y perd son lien : une vingtaine sur rag3weaver/src
+(`catalog.drain()`, `files.append(…)`, `outil.bind(…)`). Lire le type de ces locales les rend : c'est
+la prochaine mesure de ce ticket. La sonde `tests/sonde_marque_nom.rs` en donne les TSV.
