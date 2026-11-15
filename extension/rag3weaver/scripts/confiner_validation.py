@@ -62,7 +62,7 @@ def plafond(cgroup, racine=Path('/sys/fs/cgroup')):
         p = p.parent
     effectif = min(limites) if limites else None
     if effectif is None or effectif <= 0 or effectif > MAX_MEMOIRE:
-        raise Refus('aucun plafond effectif <= 32 Gio')
+        raise Refus('aucun plafond effectif <= 32 Gio (lancer sous POSTE_MEM_MAX=32G)')
     return dict(direct=direct, effectif=effectif)
 
 
