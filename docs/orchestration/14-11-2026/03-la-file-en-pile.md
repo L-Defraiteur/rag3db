@@ -1451,3 +1451,7 @@ Lucivy, 17 h 02 : le relevé à blanc sur master à **a8b3b25bb** (gmail, 0 attr
 CI de master : chaque push annule le run en attente d'avant (un seul en attente par groupe) ; avec un push de docs toutes les
 quelques minutes, un run de 20 min ne joue que dans un creux — lot pour hotfixs : `paths-ignore` des docs sur le déclencheur
 de master (un push de docs seules ne déclenche pas le CI Workflow).
+Hotfixs, 17 h 04 : lot ci-docs-sans-run prêt (94e3a484f) : paths-ignore des dossiers de docs et des .md de la racine sur le push de
+master (pas '**/*.md' : des .md de templates/ sont compilés dans le binaire par include_str!) ; le workflow rag3weaver reçoit
+des exclusions dans ses paths ; ticket qui se ferme au premier run de code qui joue jusqu'au bout malgré des pushes de docs.
+Place après ED (socle).
