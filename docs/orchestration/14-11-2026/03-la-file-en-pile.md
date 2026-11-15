@@ -1344,3 +1344,8 @@ Lucie, 15 h 57 : « les étapes faites, je les vois défiler de manière stylée
 l'historique dans mon terminal ; pour un utilisateur comme moi j'ai pas besoin des logs de chaque étape ». Pour tty : les
 étapes défilent dans la zone vivante, remplacées à mesure ; l'historique garde la demande et la réponse (et les `!`) ; le
 détail à la demande par Ctrl-O et /journal ; réglage show_steps.
+Codeparsers, 16 h 01 : fmt/format.h corrigé (macro-format-h 8a68915) — cause : `FMT_BEGIN_NAMESPACE namespace detail {…}` lu par
+tree-sitter-cpp comme une function_definition sans function_declarator, prise pour un AnonymousFunction parent de tout ;
+correctif : une telle définition n'est plus un scope, son contenu prend le namespace de sa tête pour parent ; témoin sur le
+vrai fichier (MIT gardée) ; format.h : scopes 455 → 481, AnonymousFunction 4 → 0, dessous 45 → 0. Limite (grammaire) : class
+format_error sous FMT_CLASS_API sans scope, en ticket basse. Un seul lot rag3db avec `new` (rebase sous un nom neuf).
