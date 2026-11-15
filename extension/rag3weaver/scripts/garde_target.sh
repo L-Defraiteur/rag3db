@@ -154,6 +154,59 @@ print(" ".join(sorted({p["name"] for p in m["packages"] if p["source"] is None})
   return 0
 }
 
+# **Un build.rs qui vise un autre arbre** (15 novembre 2026, ticket d'archi) : `build.rs` embarque des fichiers par
+# chemins absolus (les gabarits, par `include_bytes!`) et dit `rerun-if-changed` sur ces chemins. Cargo ne met pas le
+# chemin d'un paquet local dans son hachage : deux worktrees partagent le même `OUT_DIR`. Un bâti hors garde depuis un
+# autre worktree rejoue build.rs pour lui, et le marqueur garde l'arbre d'avant ; au retour, cargo juge build.rs à jour,
+# puisque les chemins qu'il surveille sont ceux de l'autre arbre, qui n'ont pas bougé. `build_rs_d_un_autre_arbre
+# <target> <arbre>` lit les sorties des build scripts du target (`<profil>/build/…/output`, à l'hôte et sous chaque
+# triplet) et écrit le premier chemin `rerun-if-changed` qui est sous un autre worktree du dépôt, ou sous le dossier git
+# d'un autre worktree ; elle rend 0 si elle en trouve un, 1 sinon (et 1 hors d'un dépôt git).
+build_rs_d_un_autre_arbre() {
+  local target="$1" arbre="$2" haut propre commun
+  haut="$(git -C "$arbre" rev-parse --show-toplevel 2>/dev/null)" || return 1
+  propre="$(git -C "$arbre" rev-parse --absolute-git-dir 2>/dev/null)" || return 1
+  commun="$(cd "$arbre" && cd "$(git rev-parse --git-common-dir)" && pwd -P)" || return 1
+  python3 - "$target" "$haut" "$propre" "$commun" "$(git -C "$arbre" worktree list --porcelain | sed -n 's/^worktree //p')" <<'PY'
+import os, re, sys
+target, haut, propre, commun, liste = sys.argv[1:6]
+haut, propre = os.path.realpath(haut), os.path.realpath(propre)
+autres = [os.path.realpath(w) for w in liste.splitlines() if w and os.path.realpath(w) != haut]
+sous = lambda p, r: p == r or p.startswith(r.rstrip('/') + '/')
+racines = []
+for base in [target] + [os.path.join(target, d) for d in os.listdir(target) if os.path.isdir(os.path.join(target, d))]:
+    for prof in ('debug', 'release'):
+        b = os.path.join(base, prof, 'build')
+        if os.path.isdir(b):
+            racines.append(b)
+for b in racines:
+    for dossier, _, fichiers in os.walk(b):
+        if 'output' not in fichiers:
+            continue
+        try:
+            lignes = open(os.path.join(dossier, 'output'), errors='replace').read().splitlines()
+        except OSError:
+            continue
+        for l in lignes:
+            m = re.match(r'cargo::?rerun-if-changed=(/.*)', l)
+            if not m:
+                continue
+            p = os.path.normpath(m.group(1))
+            # Le dossier git d'abord : il est sous l'arbre principal, qui est aussi « un autre worktree ».
+            if sous(p, propre):
+                continue
+            if sous(p, commun):
+                if sous(p, os.path.join(commun, 'worktrees')):
+                    print(p)
+                    sys.exit(0)
+                continue
+            if any(sous(p, a) for a in autres):
+                print(p)
+                sys.exit(0)
+sys.exit(1)
+PY
+}
+
 garder_le_target() {
   local target="$1" arbre="$2" marque note paquets restes p
   shift 2
@@ -189,6 +242,10 @@ garder_le_target() {
     return 2
   fi
   if [ "$note" = "$arbre" ]; then
+    local vise
+    if vise="$(build_rs_d_un_autre_arbre "$target" "$arbre")"; then
+      effacer_empreintes_locales "$target" "$arbre" "noté pour cet arbre, mais un build.rs vise un autre arbre ($vise : un bâti hors garde)" "" "${restrictions[@]}" || return 2
+    fi
     suivre_les_sous_modules "$target" "$arbre" "${restrictions[@]}"
     return
   fi
