@@ -1778,3 +1778,6 @@ G, 20 h 15 : check-manifests vert après l'écriture (6 manifestes, 0 refusé ; 
 l'agent, parts (2) et (3), vert (le-nom-de-l-agent f089a74e9 : « Your name is Algareth » dans l'invite, présentation une fois, la
 persona pour le ton ; `name` sur chaque ligne teammate ; un rouge vu : « je m'appelle équipier » quand aucun nom n'est choisi, corrigé) ;
 « à toi » dessus. L'hôte posé ce soir a le nom au manifeste mais pas l'invite : Algareth se présentera à la pose suivante.
+tty, 20 h 21 : tty-17 sur master à a8907ac57d (le témoin du modèle d'une tâche gardé par openai-llm ; gmail, 0 attribution ; lib 2 495 sous le
+jeu le plus large). CI Workflow rouge sur 76f1d44ed : shell test du moteur, test_prev_history_multiline, un pexpect TIMEOUT (1/245),
+instabilité probable — hotfixs relance et ticket.
