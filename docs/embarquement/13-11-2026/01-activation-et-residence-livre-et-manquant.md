@@ -452,3 +452,37 @@ est prise : ticket `2026-11-15-mesurer-le-repli-sur-une-carte-reellement-pleine`
 
 Le créneau a été pris au « à toi » du banc, et le « fini » lui a été rendu à 15 h 04.
 
+## Les réglages de l'embarquement, en un seul endroit (15 novembre 2026, au soir)
+
+Tous se règlent au manifeste, ou par l'environnement du binaire du service. Aucun n'est une constante cachée.
+
+**Dans un bloc d'activation** (`activations.<nom>`, ou le bloc écrit dans une déclaration) :
+
+| clé | défaut | rôle |
+|---|---|---|
+| `required_mib` | absent : la carte n'est pas mesurée | la mémoire que le fournisseur prend sur sa carte |
+| `margin_mib` | 2048 | la marge exigée en plus de `required_mib` |
+| `min_throughput` | absent : le débit n'est pas mesuré | le débit, en textes par seconde, sous lequel l'embarqueur se replie |
+| `window_secs` | 60 | la fenêtre du débit, et l'intervalle des remesures pendant un repli |
+| `fallback_hold_secs` | 4 × `window_secs` | le temps minimal avant qu'un repli ne revienne à la carte |
+| `fallback_hold_max_factor` | 16 | le plafond du doublement de la tenue après une rechute |
+| `address` | absent | l'adresse du fournisseur quand le bloc est cité en repli : exigée alors, port 0 admis |
+
+**Dans une déclaration** (`models.<capacité>`) :
+
+| clé | défaut | rôle |
+|---|---|---|
+| `fallback` | `refuse` | `{"service": "<adresse>"}`, ou `{"activation": "<nom>"}` |
+| `query_max_chars` (sur `models.embed`) | 6000 | le plafond d'une requête embarquée, au plus `context_tokens × 3` |
+
+**Dans l'environnement du binaire du service** :
+
+| variable | défaut | rôle |
+|---|---|---|
+| `RAG3WEAVER_EMBED_MAX_CHARS` | 12000 | le plafond d'un texte (413 nommé au-dessus) ; une valeur mal écrite refuse le démarrage |
+
+**Pour les témoins et la mesure** : `RAG3WEAVER_DRM_RACINE` (défaut `/sys/class/drm`), la racine où se lisent les
+cartes.
+
+Les constantes qui restent sont des ratios ou des plafonds dits, pas des réglages : `chars_per_token: 3` (dit dans
+l'identité du service), et le code de sortie 70 d'un arrêt sur un serveur de carte empoisonné.
