@@ -1786,3 +1786,7 @@ fichiers, vecteurs compris), banc vert ; code-principal 623 s, 1 s, **2 956 s**,
 CONSUMED_BY sans CONSUMES), correctif d'ED en 5ed5d1fc9. Vraie fenêtre : ~15 min fermée par base (contrôle des deux sens en garde),
 repassage 50 à 60 min base ouverte avec confirm=true. Dernière répétition sur copies neuves au vert d'ED (juge : CONSUMES = CONSUMED_BY).
 G a le « va » pour 7878 depuis 20 h 20.
+Banc, 20 h 24 : le juge étendu sur c5ec47cc4 (dépôt migré) : DEFINED_IN réparé ; **CONSUMES −4 080, CONSUMED_BY −3 917, MENTIONS −984
+restent**, 163 CONSUMED_BY sans miroir (la sonde du miroir voit l'écart : pas de trou du juge) ; réponses non jugées (le repassage a
+dépassé l'heure du relevé ; plafond relevé à deux heures). À ED : la cause des CONSUMES encore perdus avant de rejuger 5ed5d1fc9.
+Parité finie ; G a le « va » du banc pour 7879 depuis 20 h 23.
