@@ -941,3 +941,14 @@ master, « à toi ». ABI : membres de classes internes, à la prochaine bascule
 
 **06 h 5x — soixante-cinq atterris** : le planificateur (A) de l'IN (le cœur, 7897f2453, mode simple sur master,
 C++ seul). La lib suivante portera l'IN haché, le pliage, le point de faute des deux sens et l'IN planifié.
+
+**11 h 51 — deux lots en file ce matin** : le cœur Rust du pont navigateur (archi, pont-navigateur-coeur
+62d7ae4fc : cadrage Native Messaging, protocole révision 5, baux claim/mark/release/handoff, gardes fermées
+par défaut ; 12 témoins sur une fausse extension ; lib 2 465/0, hooks 45/0) — « à toi » en mode simple sur
+master ; puis le lot ALTER du cœur (passe finale, C++ seul) après son « poussé ». Deux rouges d'environnement
+d'archi en chemin : MOTEUR_ANCIEN oublié ; target à 36 Go ramené à 5 Go par cargo clean -p (G prévenu).
+
+**11 h 58 — soixante-sept atterris** : le cœur Rust du pont navigateur (archi, 36ee817a7) et le ménage du
+target au plafond (G, 2bd2c136b : run_e2e.sh fait d'abord `cargo clean -p` des paquets locaux, reposé sur
+master après le Rust d'archi, 25 OK). Embarquement a le « à toi » à son vert (A3, le repli cpu, mode simple) ;
+le cœur rejoue son ALTER sur 36ee817a7 et pousse ensuite.

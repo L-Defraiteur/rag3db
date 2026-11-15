@@ -1501,3 +1501,25 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   (l'écran passé pour un sudo, la sortie en consigne), commandes « / », Tab, l'historique d'une séance à l'autre.
   Gardes : « ! » ne vient que des touches de Lucie (rouge du harnais) ; rien de ce que sudo lit ne va dans la
   consigne ni le journal.
+- **ED, 11 h 5x — le correctif (A) de l'écrivain** (ecrivain-2a-prime-2-pile f3e2a6f54) : témoin 12 rouge pour la
+  bonne raison (version changée → 0 fichier réingéré au lieu de 2) ; la colonne `analyse` de File posée à
+  l'écriture et comparée par le saut, une base d'avant repasse une fois ; passe épinglée entière verte
+  (e2e_code 36, e2e_lectures 27, e2e_demon_hote 20, e2e_postgres 39, lib 2 464/0) ; la garde de check_features
+  (check_regles_de_l_analyse.py, 4/4 rouge sans elle) juge merge-base(HEAD, origin/master)..HEAD — un lot sur une
+  pile compte aussi le code.rs des lots d'en dessous (à savoir pour la file) ; nouveautés et README. Banc
+  rejoue ses deux parités avant toute place en pile.
+- **11 h 5x — Lucie** : vulkan-swrast posé au portable aussi (llvmpipe vu) → A3 d'embarquement entre ; **oui au
+  fork** jackwener/browsermcp, sous L-Defraiteur (archi le crée) ; la décision de l'ALTER lui va pour le moment,
+  elle veut la comparaison PostgreSQL / Neo4j / autres (étude confiée à hotfixs). **Archi** : le cœur Rust du
+  pont navigateur sur master (36ee817a7, trois commits). **G** : plafond-menage (run_e2e.sh fait le ménage des
+  paquets locaux au plafond ; 4 ÉCHEC → 25 OK) a le « à toi » en mode simple ; le cœur rejoue son ALTER sur
+  36ee817a7 (35 min) — un trou de la garde relevé (un lot C++ joué avant un lot Rust atterri ne passe pas
+  sans rejeu), ticket pour G. Le compte gh actif était retombé sur le pro : rebasculé, G prévenu.
+- **11 h 5x — Lucie, les commandes de tty-12** : /compact = un pas du modèle déclaré dans le gabarit (forme ED,
+  branchement archi) ; /model = choisir parmi `models.llm` (plusieurs modèles, un défaut, `max_output_tokens`,
+  déclarés par ED) ; /fork-agent = un clone avec son propre worktree **et sa propre branche** depuis le même
+  commit (git refuse la même branche dans deux worktrees), héritant du contexte — la couche de travail par
+  worktree des suivies. **Hotfixs** : la comparaison des six moteurs sur l'ALTER sous écritures (5630be07b) ;
+  rag3db fait mieux que PostgreSQL sur le lecteur d'instantané ; cinq pistes « plus cool » par rendement
+  (verrou à la liaison, recommencement dans le moteur, délai court du DDL, deux versions de schéma, index
+  peuplé en fond).
