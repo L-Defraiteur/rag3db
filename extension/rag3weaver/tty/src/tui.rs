@@ -287,6 +287,7 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
             };
             match action {
                 Some(Action::Quitter) => return Ok(Fin::Quitter),
+                Some(Action::Proposition { .. }) => {}
                 Some(Action::Commande(c)) => {
                     if let Some(fin) = executer(c, terminal, vue, agent, ep, tache, journal)? {
                         return Ok(fin);
