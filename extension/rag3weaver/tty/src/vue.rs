@@ -179,8 +179,11 @@ pub struct Vue {
     modele: Option<String>,
     /// Le texte streamé depuis le départ du run : la réponse, déjà à l'écran.
     texte_coule: String,
-    /// Le dernier nom de l'agent vu sur ses lignes (`name`).
+    /// Le dernier nom de l'agent vu sur ses lignes (`name`), ou gardé par l'hôte après `/nom`.
     nom_agent: Option<String>,
+    /// Ce que tu as envoyé d'ici et que la boîte n'a pas encore rendu : déjà écrit, sa copie ne se
+    /// réécrit pas.
+    envoyes: Vec<String>,
     /// « dépôt · branche · tâche », jamais l'id d'un backend.
     pub entete: String,
     /// Un repli à dire dans la zone vivante, sur la ligne du texte en cours quand
@@ -243,6 +246,7 @@ impl Vue {
             modele: None,
             texte_coule: String::new(),
             nom_agent: None,
+            envoyes: Vec::new(),
             entete: String::new(),
             repli: None,
             maj_entree: false,
@@ -565,6 +569,15 @@ impl Vue {
             self.valider_avec_tete(Genre::Boite, "› ", &r);
             return;
         }
+        // **Une demande s'écrit une fois** (essai réel de /nom, 16 nov.) : ce que tu as envoyé d'ici
+        // est déjà écrit ; la ligne que la boîte en rend ne se réécrit pas.
+        if l["from"] == "supervisor" && matches!(l["kind"].as_str(), Some("request" | "instruction" | "answer")) {
+            let t = l["text"].as_str().unwrap_or("");
+            if let Some(i) = self.envoyes.iter().position(|e| meme_texte(e, t)) {
+                self.envoyes.remove(i);
+                return;
+            }
+        }
         self.clore();
         let tete = crate::boite::en_tete(l);
         let texte = corps_seul.as_deref().unwrap_or_else(|| l["text"].as_str().unwrap_or(""));
@@ -598,6 +611,19 @@ impl Vue {
     /// L'état de l'équipier selon `GET /ide/teammate/list`.
     pub fn etat_de_l_hote(&mut self, etat: Option<String>) {
         self.etat_hote = etat;
+    }
+
+    /// Un envoi d'ici, déjà écrit : la boîte le rendra (on en garde les 32 derniers).
+    fn retenir_l_envoi(&mut self, texte: &str) {
+        self.envoyes.push(texte.to_string());
+        if self.envoyes.len() > 32 {
+            self.envoyes.remove(0);
+        }
+    }
+
+    /// Le nom que l'hôte a gardé pour l'agent (`/nom`).
+    pub fn nommer(&mut self, nom: &str) {
+        self.nom_agent = Some(nom.to_string());
     }
 
     /// Le dernier nom de l'agent vu sur ses lignes.
@@ -669,12 +695,14 @@ impl Vue {
                 if let Some(attente) = self.boite.premiere().cloned() {
                     self.clore();
                     self.valider_avec_tete(Genre::Boite, "› ", &texte);
+                    self.retenir_l_envoi(&texte);
                     return Some(Action::Repondre { attente, texte, accord: None });
                 }
                 let genre = self.genre_d_envoi();
                 self.demande_posee = true;
                 self.clore();
                 self.valider_avec_tete(Genre::Boite, "› ", &texte);
+                self.retenir_l_envoi(&texte);
                 Some(Action::Envoyer(texte, genre))
             }
             Touche::Echap => Some(Action::Arreter),
