@@ -574,7 +574,7 @@ fn un_appel_sur_une_locale_non_typee_est_visible_et_jamais_relie() {
 }
 
 /// **Un lien posé par le nom seul dans le fichier se marque « nom »**
-/// (décision du 11 octobre 2026) : `let prepared = self.prepared();
+/// (décision du 11 octobre 2026) : `let prepared = Inconnu::prepared();
 /// prepared.describe()` — receveur non typé, relié par l'analyseur à la
 /// seule méthode `describe` du fichier. Le lien reste ; sa marque n'est plus
 /// « fichier » (sûr pour impact) mais « nom », et `usages` le dit.
@@ -582,7 +582,9 @@ fn un_appel_sur_une_locale_non_typee_est_visible_et_jamais_relie() {
 #[ignore]
 fn un_lien_par_le_nom_dans_le_fichier_se_marque_nom() {
     let catalog = setup();
-    let source = "pub struct Prepared;\nimpl Prepared {\n    pub fn describe(&self) -> u8 { 0 }\n}\npub struct Backend;\nimpl Backend {\n    fn prepared(&self) -> Prepared { Prepared }\n    pub fn cles(&self) -> u8 {\n        let prepared = self.prepared();\n        prepared.describe()\n    }\n}\n";
+    // `self.prepared()` lit son type depuis le 15 novembre 2026 (une chaîne de méthodes du projet) :
+    // le receveur non typé est ici le retour d'une fonction d'un type que rien ne déclare.
+    let source = "pub struct Prepared;\nimpl Prepared {\n    pub fn describe(&self) -> u8 { 0 }\n}\npub struct Backend;\nimpl Backend {\n    pub fn cles(&self) -> u8 {\n        let prepared = Inconnu::prepared();\n        prepared.describe()\n    }\n}\n";
     catalog.lock().unwrap().ingest_code(&analyze("/projet", vec![("backend.rs".to_string(), source.to_string())])).unwrap();
     {
         let cat = catalog.lock().unwrap();
