@@ -1325,6 +1325,27 @@ pub(super) mod tests {
         assert_eq!(std::fs::read_to_string(a.racine.join("neuf/notes.txt")).unwrap(), "trois\n");
     }
 
+    /// **Le socle : une écriture laisse son run** (c7, avant l'atterrissage du socle) : un `write` passé
+    /// par l'hôte se garde au journal des runs du backend, et ce run porte le diff rendu.
+    #[test]
+    fn a_workshop_write_leaves_a_run_with_its_diff() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let avant: std::collections::BTreeSet<String> = a.host.journal.runs_de(&a.h.id).into_iter().collect();
+        a.appeler("write", json!({ "path": "trace.txt", "text": "ligne tracée" })).expect("write");
+        let debut = std::time::Instant::now();
+        let neufs = loop {
+            let neufs: Vec<String> = a.host.journal.runs_de(&a.h.id).into_iter().filter(|x| !avant.contains(x)).collect();
+            if !neufs.is_empty() || debut.elapsed() > std::time::Duration::from_secs(10) {
+                break neufs;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        };
+        assert_eq!(neufs.len(), 1, "un run neuf pour l'écriture : {neufs:?}");
+        let run = a.host.journal.lire(&a.h.id, &neufs[0]).expect("le run se relit").to_string();
+        assert!(run.contains("write") && run.contains("+ligne tracée"), "le run dit l'outil et porte le diff : {run}");
+    }
+
     /// **Le socle : `glob`** rend les chemins sous la racine qui répondent à un motif, triés, sans ce
     /// que les règles d'exclusion écartent (`.gitignore`).
     #[test]
