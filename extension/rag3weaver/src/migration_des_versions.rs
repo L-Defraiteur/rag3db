@@ -300,6 +300,27 @@ pub fn migrer_la_base(chemin: &std::path::Path) -> Result<Bilan, String> {
     migrer_vers_les_versions(&mut catalog, crate::code::default_scope_chunking())
 }
 
+/// Ce que la montée aux générations a fait, pour le rapport.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BilanDesGenerations {
+    /// La forme de la base avant (`versions` attendue).
+    pub forme_avant: String,
+    /// La forme après (`generations`).
+    pub forme_apres: String,
+    /// La couche et le rang de la génération posée (`backend`, 0).
+    pub generation: Option<(String, i64)>,
+}
+
+/// **Monter une base à versions aux générations par son chemin** (la bascule des bases, après 1b) :
+/// la base ouverte comme pour [`migrer_la_base`], sans autre ouvreur, puis
+/// [`crate::code::migrer_vers_les_generations`]. Refuse une base tenue par un autre écrivain vivant
+/// (sa marque `<base>.ecrivain`) et une base qui n'est pas à versions, en nommant la forme.
+#[cfg(feature = "rag3db-native")]
+pub fn migrer_la_base_aux_generations(chemin: &std::path::Path) -> Result<BilanDesGenerations, String> {
+    let _ = chemin;
+    Err("la montée aux générations par le chemin n'existe pas encore".into())
+}
+
 /// L'embarqueur d'une migration : le nom et la dimension d'un modèle de la base, et un refus à
 /// chaque appel. La migration ne calcule rien ; un appel serait un défaut, qu'il faut voir.
 #[cfg(feature = "rag3db-native")]
