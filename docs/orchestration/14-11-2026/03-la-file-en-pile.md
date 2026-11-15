@@ -1442,3 +1442,8 @@ ticket de la CI (ouvert depuis le 25 octobre) se fermera dessus. « À toi » à
 Banc, 16 h 57 : **le témoin 0 de 2b′/2b-C est vert au bit près** (97b8c8d7d contre 77cd6b049) : sans `view`, mêmes réponses que le
 parent ; avec `view: {layer: backend}`, mêmes réponses et `view = {backend, 0, 1}` rendu. La condition du « à toi » d'arbre et de
 recherche est remplie ; en fin de file.
+ED, 17 h 02 : **les primitives du socle sont vertes** (socle-agent-de-code 7d43f06cf, sur e0b3725ee, indépendante de l'écrivain ; passe
+épinglée verte) : write et glob neufs (rouges « unexposed tool »), read_file 200 lignes, replace_text (old unique), replace_lines
+et insert_lines (empreinte exigée), grep, list ; diff unifié et réindexation à chaque écriture. Réserves : le run par écriture
+à vérifier ; l'empreinte tenue par le chat, non affichée. Place : après codeparsers, avant archi (B). Ordre : lucivy →
+codeparsers → ED (socle) → archi (B) → archi (branchement) → tty-14/15/16 → 96 → ED (écrivain) → G → arbre + recherche.
