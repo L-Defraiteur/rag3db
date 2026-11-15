@@ -1519,3 +1519,8 @@ par son attente ; corrigé, attente qui guette tout rouge) : par base, banc d'av
 Codeparsers, 17 h 35 : lot homonymes + paramètres C++ monté (d1c7961c7 : pointeur 5f7c837 → ff82d22, deux tickets fermés, nouveauté « toutes
 les bases repassent une fois ») ; tranché (i) : pas de montée de REGLES_DE_L_ANALYSE sans règle changée (le pointeur entre déjà
 dans la version). Après l'écrivain d'ED, passe complète au rejeu. Ensuite la famille de la résolution d'arêtes.
+G, 17 h 36 : la pose du soir en préparation (copie d'essai de l'hôte sur b82af880a, lib 373b5477b ; l'essai du service d'embarquement dès
+service-503 sur master). Ce que la chaîne attend : le hash de master à l'atterrissage des quatre lots (~19 h ; bâti 15 min, verdict
+des trois suites 40 min : pose vers 20 h) ; une fenêtre sans passe qui lit les services (7878/7879 : 10 à 30 s par service, l'hôte
+~1 min par poste), « va » du banc et d'arbre avant ; lib inchangée sauf verdict du cœur. Trou pour `/model` : le manifeste du
+dépôt de Lucie n'a pas de `models.llm` (models: {sparse} seul) — ED donne le bloc, je le pose, G vérifie par check-manifests.
