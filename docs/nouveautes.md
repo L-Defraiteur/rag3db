@@ -1,5 +1,13 @@
 # Nouveautés
 
+- 15 novembre2026 — **Le repli d'une carte pleine peut aller vers une autre activation.** Avec
+  `fallback: {"activation": "<nom>"}`, l'embarqueur d'une carte pleine (ou trop lente) lance ou rejoint une activation
+  déclarée, sur sa propre carte et à sa propre `address`, au lieu d'un service posé à la main. Le repli doit être le
+  même fournisseur, au placement près : seuls le périphérique, l'adresse et les variables de carte peuvent différer,
+  et tout autre écart est refusé au chargement, nommé. Sa recette est attestée, et l'état le dit. Sa carte se mesure
+  aussi : si les deux sont pleines, l'activation principale se fait, et l'état dit les deux mesures. Un repli pris pour
+  le débit qui retombe juste après son retour double sa tenue, jusqu'à `fallback_hold_max_factor` (16 par défaut).
+
 - 16 novembre2026 — **La synchronisation d'une base à générations retrouve ses garde-fous.** Une source tronquée (plus de fichiers disparus que `maxMissingRatio`) ou vide est de nouveau refusée sans `force` ou `allow_empty`, et rien n'est retiré ; le rapport dit les fichiers et les scopes qui partent ; le plan seul ne retire rien ; un fichier écarté à la lecture (généré, minifié) quitte l'index ; et `files_unchanged` compte les fichiers que l'écrivain n'a pas réécrits parce qu'ils n'avaient pas changé.
 
 - 16 novembre2026 — `rag3weaver-tty --plain --demande …` reste attaché jusqu'à la fin de sa demande, et son journal porte les appels d'outil : un script peut le lancer puis lire le journal. Il rendait la main en 3 s quand une demande précédente de la même tâche avait laissé sa fin dans la boîte ; il ne suit plus que le flux de sa tâche.
