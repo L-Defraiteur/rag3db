@@ -1548,3 +1548,6 @@ parallèle) : code-lourd — purge + compact 8 s, 1b 700 s (82 855 occurrences �
 1 s : ~12 min ; code-principal — 8 s, 532 s (65 914 → 61 224), 1 s : ~9 min ; mémoire 4,6 et 8,7 Gio. Le dépôt : 861 s de 1b le 14.
 La fenêtre fermée de ce soir : ~15 min par base, en parallèle. Le repassage a rougi en 1 s (l'outil index exige confirm=true
 au-delà de 5 min de vecteurs estimés, ~10 annoncées — à vérifier contre ED : les vecteurs ne se recalculent pas) ; repris avec confirm.
+Lucie, 17 h 45 : « pourquoi ça m'écrit "attend", c'est horrible, on doit jamais voir "attend" comme ça : que des animations de
+chargement ou bien des trucs vivants ». Règle pour tty : jamais un mot d'état nu sur la ligne d'état ; animation du thème au
+travail, invite vivante au repos ; un équipier fini sans réponse = une phrase à Lucie, pas un mot machine.
