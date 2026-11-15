@@ -33,6 +33,41 @@ Le motif qui saute aux yeux, sans preuve : des scopes **de même nom dans un mê
 (clés à suffixe `#N`, ou leur premier de série). Le lien `DEFINED_IN` se pose peut-être par une clé
 qui ne tient pas compte du suffixe.
 
+## Revu par le banc, le 15 novembre 2026
+
+Vu en jugeant l'écrivain des générations (everything declarative) : sa sonde de structure, « les
+Scope visibles sans `DEFINED_IN` vers un File visible », ne valait pas 0, et valait autant au
+parent qu'au lot. Ce n'est pas l'écrivain : c'est ce ticket.
+
+| base (copie de `code-rag3db-depot`) | Scope | sans `DEFINED_IN` | avec une ligne File au même chemin |
+|---|---|---|---|
+| R, d'avant les versions de scope | 79 662 | **3 931** | 3 931 |
+| migrée par 1b, puis réindexée sur 835d5298f (le parent e95a1b8c60) | 77 154 visibles | **3 814** | 3 814 |
+| la même, réindexée par l'écrivain (d087e02c7) | 77 154 visibles | **3 814** | 3 814 |
+
+- **Le défaut est antérieur à la migration 1b** : la base R l'a déjà. Il vient de l'ingestion, et
+  l'écrivain n'y change rien.
+- **Aucun de ces Scope n'a d'arête `DEFINED_IN`**, ni vers un File ouvert ni vers un fermé. Leur
+  fichier, lui, est bien là : une ligne File au même chemin pour chacun.
+- **Par genre**, sur R : function 2 489, method 966, class 336, namespace 50, variable 39, et
+  deux genres de plus que l'affichage a coupés. Sur la base réindexée : function 2 489,
+  method 865, class 334, namespace 50, lambda 34, et deux de plus.
+- **Le motif, avec un cas précis** : dans `extension/json/src/include/json_utils.h`, les
+  constructeurs de `JsonMutWrapper` (clés `…#JsonMutWrapper.JsonMutWrapper:method`, `#1`, `#2`, `#3`).
+  Seul `#3`, le dernier de la série, a son `DEFINED_IN` ; la classe aussi. Les trois premiers ne
+  l'ont pas. Ça appuie l'hypothèse d'une clé qui ignore le suffixe `#N` au moment de poser le
+  lien : le dernier de même nom l'emporterait.
+- **D'autres exemples sur la base réindexée** : `extension/geo/test/geo_test.cpp` `TEST`
+  (l. 171 et 193), `extension/duckdb/src/connector/duckdb_result_converter.cpp`
+  `convertDuckDBVectorToVector` (l. 12), `experiments/mtga/scripts/research_ultimatum_colors.py`
+  `list_comprehension` (l. 25).
+- **La recette** : `json_utils.h` seul, indexé, et ses quatre constructeurs devraient avoir chacun
+  un `DEFINED_IN`.
+- **La preuve** : la sonde Cypher `releve_des_lignes_par_cypher`
+  (`extension/rag3weaver/tests/sonde_parite_search_code.rs`, branche `banc-parite-search-code`),
+  et ses relevés à luciepc, dans `banc-parite/sorties/` : `sans-defined-in-r.json` et
+  `ecrivain-propre/qui-3814.json`.
+
 ## Recette
 
 À écrire : un fichier de deux `impl Coerce for …` (Rust) ou de deux `TEST(...)` (C++), indexé seul,
