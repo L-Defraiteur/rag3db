@@ -1,8 +1,9 @@
 # La CI de master est rouge depuis le 18 octobre : un `<cassert>` dans geo et le format clang
 
-- **État** : ouvert — point 1 fait (sur master depuis le 25 octobre, 9bf7aca5c), point 2 à la
-  fenêtre de formatage que l'orchestration ouvre la nuit du 8 novembre. Relevé par l'orchestration le
-  25 octobre 2026
+- **État** : ouvert (relu par hotfixs le 15 novembre 2026, 13 h). Le point 1 est fait et vert. Le point 2
+  reste rouge, et un troisième job est rouge, `shell test`. Surtout, **le « CI Workflow » de master ne rend
+  plus aucun verdict depuis le 14 novembre, 15 h 27** : voir « L'état au 15 novembre » en fin de page.
+  Relevé par l'orchestration le 25 octobre 2026
 - **Gravité** : aucun run vert du « CI Workflow » dans l'historique récent : les autres jobs ne
   disent plus rien de master tant que ces deux-là rougissent.
 - **Atteignable en service** : non (contrôle de CI).
@@ -126,3 +127,33 @@ Second staging : quatre cibles bâties, mais transaction_test incomplet à sa bo
 [Recette concrète de réutilisation pour revue](../../coeur-cpp/12-11-2026/26-ci-format18-recette-reutilisation-pour-revue.md) : scripts/SHA publiés, sans rebuild ;1480+10stop/1470contrôleur/1440suite. Ambiguïté échéance initiale vs cumul explicite delta02 exposée, pas de GO03 déduit. Après BancMESURE et revue seulement ; aucun staging/runtime/réservation effectué.
 
 [Étape corrective distincte03 verte, preuves et quiescence](../../coeur-cpp/12-11-2026/27-ci-format18-reutilisation-verte-et-poste-rendu.md) : paquetpublic74ad sans rebuild,357passés/2outils sautés attendus/1disabled,0failure/error ; suite1069,769s, castimedout completed567,327s. Unité1071,981s/cumul1965,781s, poste rendu/MainPID0. Aucun GOmaster/libposée ; ticket ouvert avant CI future réellement verte.
+
+## L'état au 15 novembre (hotfixs, 13 h)
+
+Le vert que tty a vu sur master est celui du workflow **`rag3weaver`** : ses runs de master sont `success`
+le 15 à 1 h 24, 2 h 59, 3 h 24, 10 h 52 et 11 h 13. **Le « CI Workflow » ne dit rien de master depuis le 14
+novembre à 15 h 27**, pour trois raisons :
+
+- **Un run reste en file pour toujours et tient le groupe de concurrence.** Le run 43610263500
+  (`a48b535d1`, 14 nov. 15 h 27) attend des machines `rag3db-self-hosted-testing` : `rust build & test` et
+  `clang tidy & clangd diagnostics check` sont `queued`. Aucune machine de ce nom ne répond, et le run ne
+  finit pas. Sur master, `cancel-in-progress` est faux (9c045f684), et GitHub ne garde qu'un run en attente
+  par groupe. Chaque run suivant passe donc « en attente », puis est annulé par le push d'après, sans
+  avoir joué un seul job : les cent derniers runs terminés de master sont tous `cancelled`, à zéro job.
+  Quatre runs plus anciens sont restés en file de la même façon (11 novembre, 20 h 23 à 20 h 53).
+- **Ce que ce run a rendu avant de rester en file** :
+  - `sanity checks` : **vert**, le contrôle du `<cassert>` compris. Le point 1 est clos ;
+  - `code format` : **rouge**, à l'étape « Fail if any change is detected on the master branch ». Le
+    point 2 reste ouvert ;
+  - `shell test` : **rouge**, à l'étape « Build ». C'est nouveau, la cause reste à lire ;
+  - `python lint check` (`macos-14`) : annulé.
+- **Les journaux de ces deux rouges sont illisibles** tant que le run est ouvert (« run … is still in
+  progress; logs will be available when it is complete »).
+
+**Ce qu'il faudrait, à la décision de l'orchestration** :
+1. Annuler les runs restés en file (43610263500 et les quatre du 11 novembre). Le groupe se libère, et le
+   prochain run de master joue ses jobs.
+2. Mettre les jobs `rag3db-self-hosted-testing` hors du chemin de master tant qu'aucune machine de ce nom
+   n'existe : un `if:`, ou une machine GitHub. Sinon, chaque run de master se bloque de nouveau au premier
+   de ces jobs.
+3. Lire ensuite les deux rouges du premier run complet, `code format` et `shell test` (Build).
