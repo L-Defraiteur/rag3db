@@ -7055,6 +7055,73 @@ mod tests {
         assert!(e.contains("« absent »") && e.contains("activations"), "le refus nomme le nom et dit où il manque : {e}");
     }
 
+    /// Un bloc d'activation de chargement (rien ne se lance au chargement).
+    #[cfg(feature = "code")]
+    fn bloc_d_activation(peripherique: &str) -> Value {
+        json!({"modele": "bge-m3", "programme": "/bin/false", "profil": "p", "peripherique": peripherique,
+            "coordination": "/tmp/coordination-inutile", "journal": "/tmp/journal-inutile",
+            "budget_activation_secs": 5, "budget_attente_secs": 5,
+            "residence": {"a_demande": {"inactivite_secs": 60, "rendre_le_bail_secs": 30}}})
+    }
+
+    /// `models.embed` sur l'activation `principale`, repli par l'activation citée.
+    #[cfg(feature = "code")]
+    fn repli_declare(m: &mut Value, repli: Value, cite: &str) {
+        m["activations"] = json!({"principale": bloc_d_activation("carte-a"), "repli": repli});
+        embed_declare(m, json!({"activation": "principale", "fallback": {"activation": cite}}));
+    }
+
+    /// **Repli par activation, 4. Un nom de repli inconnu se refuse au
+    /// chargement**, avec les noms déclarés.
+    #[cfg(feature = "code")]
+    #[test]
+    fn repli_par_activation_un_nom_inconnu_se_refuse_au_chargement() {
+        let mut repli = bloc_d_activation("carte-b");
+        repli["address"] = json!("127.0.0.1:0");
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| repli_declare(m, repli.clone(), "absente"));
+        let e = p.err().expect("un repli cité inconnu se refuse");
+        assert!(e.contains("models.embed.fallback.activation cite « absente »") && e.contains("principale") && e.contains("repli"), "{e}");
+    }
+
+    /// **Repli par activation, 3. Un repli qui ne diffère que par le placement
+    /// est accepté** : `peripherique`, les variables de carte de l'env, et
+    /// `address` ; il est résolu en son bloc, nommé.
+    #[cfg(feature = "code")]
+    #[test]
+    fn repli_par_activation_au_placement_pres_est_accepte() {
+        let mut repli = bloc_d_activation("carte-b");
+        repli["address"] = json!("127.0.0.1:7893");
+        repli["env"] = json!({"RAG3WEAVER_BURN_DEVICE_EMBEDDER": "igpu:0", "HIP_VISIBLE_DEVICES": "1"});
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| repli_declare(m, repli.clone(), "repli"));
+        let p = p.unwrap_or_else(|e| panic!("un repli au placement près se charge : {e}"));
+        let embed = serde_json::to_value(&p.manifest.models).unwrap()["embed"].clone();
+        assert_eq!(embed["fallback"]["activation"]["nom"], "repli", "{embed}");
+        assert_eq!(embed["fallback"]["activation"]["address"], "127.0.0.1:7893", "{embed}");
+    }
+
+    /// **Repli par activation, 2. Un repli qui diffère hors placement se refuse
+    /// au chargement**, en nommant ce qui diffère (un arg, une variable qui
+    /// n'est pas de carte, le modèle) ; un repli sans `address` aussi.
+    #[cfg(feature = "code")]
+    #[test]
+    fn repli_par_activation_hors_placement_se_refuse_au_chargement() {
+        for (ecart, attendu) in [
+            (json!({"args": ["--autre"]}), "args"),
+            (json!({"env": {"RAG3WEAVER_REGIME": "doux"}}), "env.RAG3WEAVER_REGIME"),
+            (json!({"modele": "granite-278m"}), "modele"),
+            (json!({"address": null}), "address"),
+        ] {
+            let mut repli = bloc_d_activation("carte-b");
+            repli["address"] = json!("127.0.0.1:7893");
+            for (k, v) in ecart.as_object().unwrap() {
+                if v.is_null() { repli.as_object_mut().unwrap().remove(k); } else { repli[k] = v.clone(); }
+            }
+            let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| repli_declare(m, repli.clone(), "repli"));
+            let e = p.err().unwrap_or_else(|| panic!("un repli qui diffère par {attendu} se refuse"));
+            assert!(e.contains("le repli « repli »") && e.contains(attendu), "le refus nomme l'écart {attendu} : {e}");
+        }
+    }
+
     /// `models.embed` à la place du bloc `embeddings` du gabarit, avec `extra`.
     #[cfg(feature = "code")]
     fn embed_declare(m: &mut Value, extra: Value) {

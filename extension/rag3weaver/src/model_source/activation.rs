@@ -62,6 +62,16 @@ pub struct Activation {
     /// alterner (décision de c7, 15 novembre 2026).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fallback_hold_secs: Option<u64>,
+    /// **Le plafond du doublement de la tenue** : un repli pris pour le débit
+    /// qui revient puis retombe dans la fenêtre suivante double sa tenue, au
+    /// plus `fallback_hold_max_factor` fois sa base (défaut 16).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_hold_max_factor: Option<u32>,
+    /// **L'adresse de ce fournisseur quand le bloc est cité en repli**
+    /// (`fallback: {"activation": "<nom>"}`) : exigée alors, port 0 admis. Du
+    /// placement : elle n'entre pas dans la comparaison hors placement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
 }
 
 // La racine drm des cartes factices d'un témoin, par fil (les témoins
@@ -143,7 +153,7 @@ pub fn demander_pour(source: &super::ModelSource, capacite: super::Capability) -
     use super::{Capability, Fallback, Provider};
     let a = source.activation.as_ref().ok_or("activation absente")?;
     let attendue = identite(source)?;
-    if source.provider != Provider::Service || !matches!(source.fallback, Fallback::Refuse | Fallback::Service(_)) {
+    if source.provider != Provider::Service || !matches!(source.fallback, Fallback::Refuse | Fallback::Service(_) | Fallback::Activation(_)) {
         return Err("activation gérée : service sans repli requis".into());
     }
     let adresses = source.addresses(Capability::Embed, &super::process_env);
@@ -335,7 +345,7 @@ fn activer_distant(source: &super::ModelSource, capacite: super::Capability, ann
     if hote.is_empty() || !hote.chars().all(|c| c.is_ascii_alphanumeric() || "-._@".contains(c)) {
         return Err(format!("activation distante : hôte ssh invalide « {hote} »"));
     }
-    if source.provider != Provider::Service || !matches!(source.fallback, Fallback::Refuse | Fallback::Service(_)) {
+    if source.provider != Provider::Service || !matches!(source.fallback, Fallback::Refuse | Fallback::Service(_) | Fallback::Activation(_)) {
         return Err("activation gérée : service sans repli requis".into());
     }
     let adresses = source.addresses(Capability::Embed, &super::process_env);
@@ -1098,7 +1108,7 @@ mod tests {
                 env: Default::default(), profil: "fixture-cpu".into(), peripherique: "cpu".into(),
                 coordination: dossier.path().join("coordination"), journal: dossier.path().join("journaux"),
                 budget_activation_secs: 5, budget_attente_secs: 5, residence: Residence::Maintenir,
-                hote: None, adresse_distante: None, ssh: None, nom: None, modele: None, required_mib: None, margin_mib: None, min_throughput: None, window_secs: None, fallback_hold_secs: None,
+                hote: None, adresse_distante: None, ssh: None, nom: None, modele: None, required_mib: None, margin_mib: None, min_throughput: None, window_secs: None, fallback_hold_secs: None, fallback_hold_max_factor: None, address: None,
             });
             // Même chemin que le manifeste : la déclaration traverse serde.
             let source = serde_json::from_str(&serde_json::to_string(&source).unwrap()).unwrap();
@@ -1277,7 +1287,7 @@ mod tests {
             coordination: dossier.path().join("coordination"), journal: dossier.path().join("journaux"),
             budget_activation_secs: 180, budget_attente_secs: 180,
             residence: Residence::ADemande { inactivite_secs: inactivite, rendre_le_bail_secs: RENDRE_LE_BAIL_PAR_DEFAUT_SECS.min(inactivite.saturating_sub(1).max(1)) },
-            hote: Some(hote.clone()), adresse_distante: Some(format!("127.0.0.1:{port_distant}")), ssh: None, nom: None, modele: None, required_mib: None, margin_mib: None, min_throughput: None, window_secs: None, fallback_hold_secs: None,
+            hote: Some(hote.clone()), adresse_distante: Some(format!("127.0.0.1:{port_distant}")), ssh: None, nom: None, modele: None, required_mib: None, margin_mib: None, min_throughput: None, window_secs: None, fallback_hold_secs: None, fallback_hold_max_factor: None, address: None,
         });
         let unite = format!("{PREFIXE_UNITE}{modele}-{port_distant}");
         let ssh = |cmd: &str| {
@@ -1896,5 +1906,117 @@ mod tests {
         let dits = client.provenance_events();
         assert!(dits.iter().any(|e| e.contains(&format!("replié vers {}", pose.adresse)) && e.contains("débit")
             && e.contains("sous 20")), "{dits:?}");
+    }
+
+
+    // ─── Le repli par activation nommée (15 novembre 2026, conception relue par c7) ───
+
+    const CARTE_REPLI: &str = "carte-repli";
+
+    fn ecrire_une_carte(f: &Fixture, carte: &str, libres_mio: u64) {
+        let device = f.dossier.path().join("drm").join(carte).join("device");
+        std::fs::create_dir_all(&device).unwrap();
+        std::fs::write(device.join("mem_info_vram_total"), format!("{}\n", TOTAL_MIO << 20)).unwrap();
+        std::fs::write(device.join("mem_info_vram_used"), format!("{}\n", (TOTAL_MIO - libres_mio) << 20)).unwrap();
+    }
+
+    /// Les événements d'une génération de la fixture (« appelant-reel » pour la
+    /// principale, « repli » pour l'activation de repli), au même journal.
+    fn evenements_de(f: &Fixture, nom: &str, generation: &str) -> usize {
+        std::fs::read_to_string(f.dossier.path().join("events.jsonl")).unwrap_or_default().lines()
+            .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+            .filter(|v| v["event"] == nom && v["generation"] == generation).count()
+    }
+
+    /// **L'activation de repli** : le même bloc que la principale, au placement
+    /// près (sa carte, son adresse, sa coordination et son journal à elle), et
+    /// sa génération dans les événements.
+    fn replier_par_activation(f: &mut Fixture, libres_repli: u64) {
+        ecrire_une_carte(f, CARTE_REPLI, libres_repli);
+        let mut r = f.source.activation.clone().unwrap();
+        r.nom = Some("repli-de-test".into());
+        r.peripherique = CARTE_REPLI.into();
+        r.coordination = f.dossier.path().join("coordination-repli");
+        r.journal = f.dossier.path().join("journaux-repli");
+        r.args = vec!["--journal".into(), f.dossier.path().join("events.jsonl").display().to_string(), "--generation".into(), "repli".into()];
+        r.address = Some("127.0.0.1:0".into());
+        f.source.fallback = super::super::Fallback::Activation(Box::new(r));
+    }
+
+    /// **Repli par activation, 1. La carte pleine : l'activation de repli est
+    /// lancée, la principale non**, sa recette est vérifiée et l'état le dit.
+    #[test]
+    fn repli_par_activation_carte_pleine_lance_le_repli_et_verifie_sa_recette() {
+        let mut f = sur_carte(1_000);
+        replier_par_activation(&mut f, 20_000);
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        assert_eq!(client.embed(&["par le repli".into()]).unwrap()[0].len(), 384);
+        assert_eq!(evenements_de(&f, "constructeur_demarre", "appelant-reel"), 0, "la principale ne se lance pas");
+        assert_eq!(evenements_de(&f, "constructeur_demarre", "repli"), 1, "l'activation de repli se lance");
+        assert_eq!(client.provenance_counts(), vec![("activation repli-de-test".to_string(), 1)]);
+        let etat = client.provenance_state().expect("l'état dit le repli");
+        assert!(etat.contains("replié vers l'activation repli-de-test (recette vérifiée)") && !etat.contains("sans recette"), "{etat}");
+        let dits = client.provenance_events();
+        assert!(dits.iter().any(|e| e.contains("replié vers l'activation repli-de-test") && e.contains("carte-factice à 1000 Mio libres")), "{dits:?}");
+    }
+
+    /// **Repli par activation, la carte du repli se mesure aussi** (décision de
+    /// c7) : les deux pleines, l'activation principale se fait, et l'état dit
+    /// les deux mesures.
+    #[test]
+    fn repli_par_activation_les_deux_cartes_pleines_activent_la_principale_et_le_disent() {
+        let mut f = sur_carte(1_000);
+        replier_par_activation(&mut f, 1_000);
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        assert_eq!(client.embed(&["deux pleines".into()]).unwrap()[0].len(), 384);
+        assert_eq!(evenements_de(&f, "constructeur_demarre", "appelant-reel"), 1, "la principale se fait");
+        assert_eq!(evenements_de(&f, "constructeur_demarre", "repli"), 0, "un repli vers une carte pleine ne vaut rien");
+        let etat = client.provenance_state().expect("l'état dit les deux mesures");
+        assert!(etat.contains("carte pleine (carte-factice : 1000 Mio libres, 13548 requis)")
+            && etat.contains("carte du repli pleine aussi (carte-repli : 1000 Mio libres, 13548 requis)"), "{etat}");
+    }
+
+    /// **Repli par activation, 5. Le retour** : la carte libérée après la tenue,
+    /// la principale est activée, et le repli rend son bail (son éviction suit).
+    #[test]
+    fn repli_par_activation_le_retour_active_la_principale_et_le_repli_rend_son_bail() {
+        let mut f = sur_carte(1_000);
+        f.source.activation.as_mut().unwrap().fallback_hold_secs = Some(1);
+        replier_par_activation(&mut f, 20_000);
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        client.embed(&["replié".into()]).unwrap();
+        assert_eq!(evenements_de(&f, "constructeur_demarre", "repli"), 1);
+        ecrire_la_carte(&f, 20_000);
+        std::thread::sleep(std::time::Duration::from_millis(1_300));
+        client.embed(&["revenu".into()]).unwrap();
+        assert_eq!(evenements_de(&f, "constructeur_demarre", "appelant-reel"), 1, "la principale revient");
+        let debut = std::time::Instant::now();
+        while evenements_de(&f, "evince", "repli") == 0 && debut.elapsed() < std::time::Duration::from_secs(15) {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        assert_eq!(evenements_de(&f, "evince", "repli"), 1, "le repli a rendu son bail : il s'évince");
+    }
+
+    /// **Repli par activation, 6. Le doublement de la tenue** : un repli pris pour
+    /// le débit, revenu à la carte après sa tenue d'une seconde, qui retombe
+    /// dans la fenêtre suivante, double sa tenue, et le dit.
+    #[test]
+    fn repli_pour_le_debit_qui_retombe_double_sa_tenue_et_le_dit() {
+        let mut f = sur_carte(20_000);
+        let pose = poser_un_service(&f, "fixture-residence-384");
+        replier_vers(&mut f, &pose);
+        let a = f.source.activation.as_mut().unwrap();
+        a.args.extend(["--lent-ms".to_string(), "400".to_string()]);
+        a.min_throughput = Some(20);
+        a.fallback_hold_secs = Some(1);
+        a.fallback_hold_max_factor = Some(16);
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        let debut = std::time::Instant::now();
+        let mut dits: Vec<String> = Vec::new();
+        while debut.elapsed() < std::time::Duration::from_secs(20) && !dits.iter().any(|e| e.contains("tenue doublée")) {
+            client.embed(&["lent".into()]).unwrap();
+            dits.extend(client.provenance_events());
+        }
+        assert!(dits.iter().any(|e| e.contains("retombé sous le débit dans la fenêtre suivante : tenue doublée à 2 s")), "{dits:?}");
     }
 }
