@@ -554,6 +554,8 @@ struct Suivi {
     etat: Option<String>,
     /// Replié : depuis la dernière mesure de la carte (remesurée après la fenêtre).
     replie: Option<std::time::Instant>,
+    /// Replié : pas de retour à la carte avant cet instant (la tenue).
+    tenu_jusqu_a: Option<std::time::Instant>,
     /// Le débit de la carte : le début de la fenêtre et les textes calculés depuis.
     fenetre: Option<(std::time::Instant, usize)>,
     illisible_dit: bool,
@@ -642,6 +644,11 @@ impl<C: Send + 'static> Tenue<C> {
         std::time::Duration::from_secs(self.source.activation.as_ref().and_then(|a| a.window_secs).filter(|s| *s > 0).unwrap_or(FENETRE_PAR_DEFAUT_SECS))
     }
 
+    /// La tenue d'un repli : `fallback_hold_secs`, sinon quatre fenêtres.
+    fn tenue_du_repli(&self) -> std::time::Duration {
+        self.source.activation.as_ref().and_then(|a| a.fallback_hold_secs).map(std::time::Duration::from_secs).unwrap_or(4 * self.fenetre())
+    }
+
     /// La provenance du fournisseur activé : sa carte, quand elle se lit ;
     /// sinon l'activation et son périphérique déclaré (`cpu`, une carte
     /// d'un poste distant).
@@ -693,8 +700,14 @@ impl<C: Send + 'static> Tenue<C> {
         let mut s = self.suivi();
         if s.replie.is_none() {
             let h = heure();
+            let tenue = self.tenue_du_repli();
+            let jusqu_a = jiff::SignedDuration::try_from(tenue).ok().and_then(|d| jiff::Zoned::now().checked_add(d).ok())
+                .map(|z| z.strftime("%H h %M").to_string()).unwrap_or_else(|| format!("{} s", tenue.as_secs()));
             s.dits.push(format!("replié vers {adresse} à {h}, cause : {cause}"));
-            s.etat = Some(format!("replié vers {adresse} depuis {h} (cause : {cause}) — repli sans recette vérifiée"));
+            s.etat = Some(format!(
+                "replié vers {adresse} depuis {h}, jusqu'à {jusqu_a} au plus tôt (cause : {cause}) — repli sans recette vérifiée"
+            ));
+            s.tenu_jusqu_a = Some(std::time::Instant::now() + tenue);
         }
         s.replie = Some(std::time::Instant::now());
         s.fenetre = None;
@@ -738,7 +751,11 @@ impl<C: Send + 'static> Tenue<C> {
     /// carte se remesure ; libre, le fournisseur déclaré est activé, et le
     /// retour se dit.
     fn peut_etre_revenir(&self, g: &mut Option<(Prise<C>, std::time::Instant)>) {
-        let due = self.suivi().replie.is_some_and(|t| t.elapsed() >= self.fenetre());
+        let due = {
+            let s = self.suivi();
+            s.replie.is_some_and(|t| t.elapsed() >= self.fenetre())
+                && s.tenu_jusqu_a.is_none_or(|t| std::time::Instant::now() >= t)
+        };
         if !due {
             return;
         }
@@ -753,6 +770,7 @@ impl<C: Send + 'static> Tenue<C> {
                         s.dits.push(format!("revenu à la carte {} à {}, {} Mio libres", m.carte, heure(), m.libres));
                         s.etat = None;
                         s.replie = None;
+                        s.tenu_jusqu_a = None;
                         s.fenetre = None;
                     }
                     Err(e) => {
