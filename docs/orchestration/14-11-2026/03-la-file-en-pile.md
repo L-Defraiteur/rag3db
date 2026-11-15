@@ -872,3 +872,19 @@ setup/Pipfile/PEP 735/bundled) ; passe en file ; tête à G au check_features ve
 **02 h 01 — cinquante-huit atterris** : les ForEachNode imbriqués, leur ticket et le plafond déclaré du
 Decide (96, 0130904a5, 3/3 en « = »). Codeparsers a le « à toi » à son vert (PILE_AVANT=1bc2b8488) ; puis G
 (sur ffe6efee8), ED (sur G). 96 : scinder et rejoindre, rouge d'abord.
+
+**02 h 02 — soixante atterris** : go.work + conan + CMake, puis setup.cfg/setup.py/Pipfile/PEP 735/
+bundledDependencies (codeparsers, fc206cba6, 2/2 en « = », lib 2 453/0, sans e2e_postgres dit). G a le « à toi »
+(garde-deja-sur-master sur ffe6efee8) ; ED dernier (sur G). 96 : scinder et rejoindre — un apport ne se déplace
+pas, il se recopie (son identité porte le nom de la fiche) ; Ref issue-de vers l'apport d'origine.
+G, 02 h 04 : garde-deja-sur-master-pile 24d513d98 sur ffe6efee8 (36 vert) ; « à toi », PILE_AVANT=ffe6efee8 ;
+ED se pose sur 24d513d98.
+ED, 02 h 1x : un huitième défaut de l'écrivain trouvé par la lib large (owed_vectors_are_caught_up_on_open
+75 s contre 20 s au parent : la synchronisation par générations réécrivait toute la source inchangée en un
+paquet) ; correctif dd729317a (un fichier à empreinte égale est sauté, sauf passe en masse interrompue
+signalée par relations_pending). Passe épinglée entière jusqu'à ~2 h 35, --onto sur 24d513d98, tête vers 3 h.
+
+**02 h 07 — soixante et un atterris** : la garde tolère un « < » que `git cherry` dit déjà sur master (G,
+bdeac0b86, « = », check_features 8/8 joué) ; garde du cache bc7d367eb3252d4d aux deux postes. **Il ne reste
+qu'ED** (l'écrivain de 2a′-2, sur 24d513d98, tête vers 3 h, banc au jugement) : rien derrière lui. La file
+du soir aura porté trente-quatre pushs depuis 21 h 58 sans un rejeu du dernier pas.

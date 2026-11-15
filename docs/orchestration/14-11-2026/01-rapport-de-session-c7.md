@@ -1273,3 +1273,28 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   handoff ; recommandation : forker jackwener avec la politique CDP et l'appairage signé de BrowserMCP, une
   bibliothèque `navigateur` reliée à l'hôte rag3weaver du poste, chaque action un outil de l'atelier sous
   accords, le passage de main un pas du run. **Le choix du socle et le fork reviennent à Lucie** (ticket ouvert).
+- **96, 02 h 0x — scinder et rejoindre** : un apport ne se déplace pas (son identité {fiche, source, section}
+  porte le nom de la fiche, un L1 ne change plus) : copie sous la fiche issue avec une Ref issue-de vers
+  l'apport d'origine ; une transition d'état déclarée dans le gabarit (current → recopied) et un filtre par
+  défaut de recall_apports (must_not state recopied) que l'appelant peut ôter, dit dans la description de
+  l'outil. Identifiants en anglais. Rouge d'abord.
+- 96, 02 h 0x : lot A (`default_filter` sur SearchSourceNode, vide par défaut, ôté par un filter_condition
+  explicite, fixé pour recall_apports par le manifeste ; transition recopy dans le lifecycle d'Apport) puis
+  lot B (scinder_fiche, rejoindre_fiches). Validé ; en pile derrière l'écrivain d'ED.
+
+## 02 h 0x — soixante et un atterris ; il ne reste qu'ED
+
+- **Depuis 1 h 15** : le repli de l'aide (embarquement), igpu:0 et la garde des tickets (G), l'appartenance
+  (codeparsers), la maintenance par l'hôte avec lucivy 4.3.8 (lucivy), la file des écritures (archi), le BEGIN
+  (recherche), les ForEachNode imbriqués + le plafond (96), go.work + Python (codeparsers), la garde du « < »
+  (G). **Soixante et un lots** par la pile depuis 21 h 58 d'hier, aucun rejeu du dernier pas ; master vert.
+- **La nuit a fermé** : les trois bases servies réparées et purgées (hotfixs ; code-rag3db-depot
+  4,93 → 1,35 Go) ; les deux hôtes sur le même binaire avec la fermeture qui tient ; lucivy 4.3.8 publiée et
+  pointée ; la file des écritures sous fermeture ; quatre trous de la garde corrigés sur master (sous-modules,
+  retard par contenu, copies de tickets, « < » déjà sur master) ; passe_epinglee.sh et le contrôle du worktree
+  dans le dépôt ; la cause établie des relations d'un seul côté avec son crochet.
+- **Reste** : ED (vers 3 h, dernier) ; les sondes de recherche sous mesure après ; la mesure de 904 s
+  d'embarquement à 03 h ; Laya sur CPU (banc). Les rapports de session avec « Reprendre » sont posés (G,
+  embarquement, lucivy, archi, arbre principal, codeparsers) ; **rien ne s'efface avant le mot de Lucie**.
+- **Pour Lucie** : lavapipe (sudo, deux postes) ; le socle du pont navigateur (étude d'archi) ; la fin de
+  session (targets de 7 à 31 Go gardés).
