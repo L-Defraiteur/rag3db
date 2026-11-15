@@ -1,0 +1,9 @@
+%% tool: write
+%% description: Écrire un fichier neuf, en entier. Un fichier qui existe est refusé : l'éditer par replace_text, replace_lines ou insert_lines, ou passer force=true pour l'écraser. Rend le diff unifié ; dans un worktree attaché, son index suit.
+%% param: path string! -- Le chemin, relatif à la racine de l'atelier ou absolu.
+%% param: text string! -- Le contenu entier du fichier.
+%% param: force bool = false -- Écraser un fichier qui existe.
+%% result: ecrire.result
+
+graph LR
+    ecrire["EcrireFichierNode(action='write', path=$path, text=$text, force=$force)"]

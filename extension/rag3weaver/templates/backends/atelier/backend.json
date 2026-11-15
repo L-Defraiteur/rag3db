@@ -83,6 +83,20 @@
         "write_files": true
       }
     },
+    "write": {
+      "graph": "../../tools/atelier_write.mmd",
+      "description": "Écrire un fichier neuf (force : écraser) ; le diff unifié rendu.",
+      "policy": {
+        "write_files": true
+      }
+    },
+    "glob": {
+      "graph": "../../tools/atelier_glob.mmd",
+      "description": "Les chemins d'un motif sous la racine de l'atelier, sans les exclus.",
+      "policy": {
+        "read_files": true
+      }
+    },
     "read_scope": {
       "graph": "../../tools/atelier_read_scope.mmd",
       "description": "Lire un scope de l'index d'un worktree attaché, par son nom : son texte et ses bornes.",
