@@ -537,11 +537,17 @@ impl DaemonHost {
                 let h = crate::hash::content_hash(&t);
                 (t, Some(h))
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound && matches!(edition, Edition::Insertion { avant: 1, .. }) => (String::new(), None),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound && matches!(edition, Edition::Insertion { avant: 1, .. } | Edition::Fichier { .. }) => (String::new(), None),
             Err(e) => return Err(format!("{} : {e}", r.chemin.display())),
         };
         #[cfg(test)]
         tests::apres_lecture(&r.chemin);
+        if let (Edition::Fichier { force: false, .. }, Some(_)) = (&edition, &lu) {
+            return Err(format!(
+                "{} existe déjà : write ne crée qu'un fichier neuf ; éditez-le par replace_text, replace_lines ou insert_lines, ou passez force=true pour l'écraser",
+                r.chemin.display()
+            ));
+        }
         let apres = texte_apres(&avant, &edition).map_err(|e| format!("{} : {e}", r.chemin.display()))?;
         let mut dit = Vec::new();
         if let Some(w) = &r.worktree {
@@ -661,7 +667,39 @@ pub(super) fn texte_apres(avant: &str, edition: &Edition) -> Result<String, Stri
             let tete = if *at - 1 == l.len() && !tete.is_empty() && !tete.ends_with('\n') { format!("{tete}{fin}") } else { tete };
             Ok(format!("{tete}{}{}", aux_fins(&en_lignes(texte), fin), l[at - 1..].concat()))
         }
+        // Un fichier entier : ses lignes, chacune avec sa fin, aux fins du fichier qu'il remplace.
+        Edition::Fichier { texte, .. } => Ok(aux_fins(&en_lignes(texte), fin)),
     }
+}
+
+/// **Les chemins d'un motif sous la racine de l'atelier** (`glob`, le socle d'agent de code) : triés,
+/// relatifs à la racine, sans ce que les règles d'exclusion écartent (`.gitignore`, fichiers cachés),
+/// `limit` au plus, le total dit.
+pub(super) fn glob_sous(racine: Option<&Path>, pattern: &str, limit: usize) -> Result<String, String> {
+    let racine = racine.ok_or("glob : l'atelier n'a pas de racine")?;
+    let mut motif = ignore::overrides::OverrideBuilder::new(racine);
+    motif.add(pattern).map_err(|e| format!("glob : motif « {pattern} » illisible : {e}"))?;
+    let motif = motif.build().map_err(|e| format!("glob : motif « {pattern} » illisible : {e}"))?;
+    let mut chemins: Vec<String> = ignore::WalkBuilder::new(racine)
+        .require_git(false)
+        .build()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
+        .filter_map(|e| e.path().strip_prefix(racine).ok().map(|p| p.to_path_buf()))
+        .filter(|p| motif.matched(p, false).is_whitelist())
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .collect();
+    chemins.sort();
+    let total = chemins.len();
+    let mut out = format!("{total} chemin(s) pour « {pattern} »");
+    if total > limit {
+        out.push_str(&format!(" ({limit} rendus ; resserrez le motif)"));
+    }
+    out.push('\n');
+    for c in chemins.into_iter().take(limit) {
+        out.push_str(&format!("- {c}\n"));
+    }
+    Ok(out)
 }
 
 /// **Écrire un fichier d'un coup** : un voisin au nom unique, écrit et rendu durable

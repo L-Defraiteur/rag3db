@@ -64,6 +64,11 @@ pub trait WorktreeHost: Send + Sync {
         let _ = (racine, path, mode, reason);
         Err("demander un accord passe par l'hôte de rag3weaver".into())
     }
+    /// **Les chemins d'un motif** (`glob`) sous `racine`, sans ce que les règles d'exclusion écartent.
+    fn glob(&self, racine: Option<&std::path::Path>, pattern: &str, limit: usize) -> Result<WorktreeAnswer, String> {
+        let _ = (racine, pattern, limit);
+        Err("chercher des chemins passe par l'hôte de rag3weaver".into())
+    }
     /// **Écrire un fichier** : le diff unifié rendu, le worktree attaché réindexé.
     fn edit(&self, racine: Option<&std::path::Path>, path: &str, edition: crate::dataflow::fichier_nodes::Edition) -> Result<WorktreeAnswer, String> {
         let _ = (racine, path, edition);

@@ -731,6 +731,10 @@ impl WorktreeHost for HoteDesWorktrees {
         self.hote()?.atelier_demander(racine, path, mode, reason, Some(&self.backend))
     }
 
+    fn glob(&self, racine: Option<&Path>, pattern: &str, limit: usize) -> Result<WorktreeAnswer, String> {
+        super::atelier_fichiers::glob_sous(racine, pattern, limit).map(WorktreeAnswer::from)
+    }
+
     fn edit(&self, racine: Option<&Path>, path: &str, edition: crate::dataflow::fichier_nodes::Edition) -> Result<WorktreeAnswer, String> {
         self.hote()?.atelier_ecrire(racine, path, edition, Some(&self.backend)).map(WorktreeAnswer::from)
     }

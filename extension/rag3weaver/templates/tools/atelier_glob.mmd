@@ -1,0 +1,8 @@
+%% tool: glob
+%% description: Les chemins d'un motif sous la racine de l'atelier (`**/*.rs`, `src/*.toml`), triés, sans ce que les règles d'exclusion écartent (.gitignore, fichiers cachés). Pour s'orienter avant de lire.
+%% param: pattern string! -- Le motif.
+%% param: limit int = 200 -- Chemins rendus (plafond 2000) ; tous sont comptés.
+%% result: lire.result
+
+graph LR
+    lire["LireFichierNode(action='glob', pattern=$pattern, length=$limit)"]
