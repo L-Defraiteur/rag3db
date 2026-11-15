@@ -1498,3 +1498,9 @@ G, 17 h 31 : la cause des trois SIGTERM **confirmée** sur une vraie portée (sy
 le noyau tue l'enfant par SIGKILL, systemd arrête la portée par TERM, journal muet). Lot confineur-enveloppe 541d282e5 : au
 signal, le confineur lit memory.peak et memory.events et dit « enveloppe mémoire crevée (pic, plafond, oom_kill) » ; 3 rouges
 vus ; ticket de codeparsers fermé dans le lot. En pile derrière les hashes et known_red.
+ED, 17 h 32 : **le socle d'agent de code (les primitives) sur master à 7b2f019e0** (6 commits, 20cda3bc5 → 7b2f019e0 : write et glob
+neufs, le run d'une écriture vérifié, nouveauté ; gmail, 0 attribution ; rejeu vert sur e4a14c555). « À toi » à archi pour (B) +
+le pas en pile sur 7b2f019e0. L'écrivain : témoins 16 et 17 rouges d'abord, deux correctifs posés (la recopie hors du lot ; la
+résolution des symboles bornée aux définisseurs visibles — une ligne fermée gardait son DEFINES et rendait le nom ambigu),
+rejeu puis banc. Codeparsers : (b) vert (parametres-cpp ff82d22 sur d024118) : paramètres 6 998 → 16 934, références −11,7 %,
+37 % des signatures C++ changent ; réserve à lever (aucune vraie référence perdue) ; les deux pointeurs montent ensemble.
