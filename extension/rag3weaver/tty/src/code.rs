@@ -233,6 +233,13 @@ pub fn lignes(v: &Validee, t: &Theme, cap: Capacites, largeur: usize, coloration
                 if i < fin && v.texte.is_char_boundary(i) {
                     morceaux.push((v.texte[i..fin].to_string(), Style::default()));
                 }
+                // Un remplacement : les lignes retirées et ajoutées se teintent (tty-11).
+                if v.langue == "diff" && coloration.is_none() {
+                    let cle = if ligne.starts_with('-') { Some("comment") } else if ligne.starts_with('+') { Some("string") } else { None };
+                    if let Some(cle) = cle {
+                        morceaux = vec![(ligne.to_string(), teinte(t, cap, cle))];
+                    }
+                }
                 if morceaux.is_empty() {
                     out.push(Line::from(""));
                 } else {
