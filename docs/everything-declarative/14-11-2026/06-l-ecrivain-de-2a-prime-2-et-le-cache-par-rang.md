@@ -187,3 +187,34 @@ Branche `ecrivain-2a-prime-2`, tête `cd3f1e978` ; lib entière verte (1974 pass
   un défaut du moteur.
 - **Les témoins** 1 à 5 et 7 à 11 (`code::tests_de_l_ecrivain`), chacun vu rouge d'abord ; le 6 vient
   avec le cache. La parité et le compte des recopies attendent le jugement de banc.
+
+### Ce que les suites ont trouvé (15 novembre 2026, 1 h 15 à 1 h 50)
+
+La lib entière sous `rag3db-native,code` était verte (1974/0/16) ; e2e_code, `check_features` et la
+lib sous le jeu le plus large ont trouvé sept défauts de plus, tous du lot, tous corrigés sur
+`ecrivain-2a-prime-2` :
+
+1. **Le miroir `CONSUMED_BY`** va de l'appelé vers l'appelant : sur une ligne retirée, c'est une arête
+   sortante, que l'oubli ne défait pas et que l'ingestion du fichier ne repose pas. Il ne suivait pas
+   la ligne neuve ; il suit maintenant, compté dans les recopies. (`usages` ne le lit pas : banc l'a
+   vérifié, la parité ne l'aurait pas vu.)
+2. **`scopes_deleted`** comptait les lignes publiées retirées pour un remplacement : il ne compte plus
+   que les clés disparues, comme sans générations.
+3. **L'empreinte indexée d'un fichier** (la fraîcheur de `read_file`) se lisait par l'uuid de sa clé
+   nue : une ligne `File` née après la première porte sa couche et son rang (`uuid_for_in`), la
+   lecture ne la trouvait pas. Elle se lit par ses champs, sous la visibilité (`find_by_field`). C'est
+   le seul lecteur qui dérivait un uuid d'une clé.
+4. **Deux aides d'e2e_code** (`edges`, `key_of`) lisaient l'histoire brute, lignes retirées et leurs
+   arêtes comprises : elles lisent au rang lu, par `Catalog::condition_visible(alias)`, public.
+5. **`COUCHE_DU_BACKEND`** vivait dans `code`, que l'identité (`uuid_for_in`, catalogue) lit sans sa
+   feature : il vit dans `generations`.
+6. **`Catalog::naissances`** n'est lu qu'avec la feature `code` : mort sans elle, refusé sous
+   `-D warnings`.
+7. **La synchronisation par générations ignorait la demande d'arrêt** entre deux paquets : une
+   fermeture attendait la fin d'un rattrapage à l'ouverture (89 s,
+   `owed_vectors_are_caught_up_on_open_when_the_manifest_declares_it`). Elle s'arrête à la même
+   frontière que celle d'instantané, avec le même message de suspension.
+
+Leçon : la lib sous un seul jeu de features ne suffit pas à un lot qui touche l'identité ou
+`sync_source` ; la passe épinglée entière (le témoin, les suites, `check_features`, la lib sous le
+jeu le plus large) est le minimum.
