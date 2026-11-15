@@ -420,6 +420,31 @@ fn structure_de(backend: &rag3weaver::backend::Backend, fichiers: &[String]) -> 
             }
         }
     }
+    // **Les arêtes à deux bouts ouverts** (le juge des correctifs de l'écrivain, au mot d'ED, 15 nov.) :
+    // la source Scope ouverte, et la cible ouverte quand elle a des colonnes de version ; plus les
+    // couples (source, cible) dont l'arête est en double.
+    let mut deux_bouts = serde_json::Map::new();
+    for (cible, filtre) in [("Scope", "AND n._jusqu_a IS NULL"), ("File", "AND n._jusqu_a IS NULL"), ("Symbol", ""), ("Library", "")] {
+        let q = format!("MATCH (a:Scope)-[r]->(n:{cible}) WHERE a._jusqu_a IS NULL {filtre} RETURN label(r), count(*)");
+        match conn.execute(&q) {
+            Ok(r) => {
+                for l in &r.rows {
+                    let e = l.first().and_then(|v| v.as_str()).unwrap_or("?").to_string();
+                    deux_bouts.insert(format!("{e} → {cible}"), json!(l.get(1).and_then(|v| v.as_i64()).unwrap_or(-1)));
+                }
+            }
+            Err(e) => {
+                deux_bouts.insert(format!("refus → {cible}"), json!(e.to_string()));
+            }
+        }
+        let q = format!("MATCH (a:Scope)-[r]->(n:{cible}) WHERE a._jusqu_a IS NULL {filtre} WITH a, n, label(r) AS e, count(r) AS c WHERE c > 1 RETURN e, count(*)");
+        if let Ok(r) = conn.execute(&q) {
+            for l in &r.rows {
+                let e = l.first().and_then(|v| v.as_str()).unwrap_or("?").to_string();
+                deux_bouts.insert(format!("doublons {e} → {cible}"), json!(l.get(1).and_then(|v| v.as_i64()).unwrap_or(-1)));
+            }
+        }
+    }
     drop(conn);
     let mut outlines = serde_json::Map::new();
     for f in fichiers {
@@ -432,7 +457,7 @@ fn structure_de(backend: &rag3weaver::backend::Backend, fichiers: &[String]) -> 
         lignes.sort();
         outlines.insert(f.clone(), json!({"total": x["total"], "lignes": lignes}));
     }
-    json!({"aretes": aretes, "outlines": outlines})
+    json!({"aretes": aretes, "aretes_deux_bouts": deux_bouts, "outlines": outlines})
 }
 
 /// **Un index de la source, attendu jusqu'à sa dernière ligne** : « indexation terminée » dans le
