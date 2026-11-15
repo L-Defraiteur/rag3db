@@ -1,6 +1,6 @@
 # code-lourd et code-principal divergent entre leurs deux rangements
 
-- **État** : ouvert (14 novembre 2026, 21 h 26) ; la bascule de luciepc à 373b5477b s'est faite quand même, au mot de c7.
+- **État** : corrigé (15 novembre 2026, 1 h 12) : les six tables réparées par hotfixs dans la fenêtre de luciepc, contrôle des deux sens égal et relevé ancré à 0 d'un seul sens ; voir « Réparées ».
 - **Famille** : produit
 - **Gravité** : donnée ; une lecture par un sens et par l'autre ne rendent pas les mêmes relations.
 - **Atteignable en service** : oui, les deux bases sont servies par l'hôte de luciepc.
