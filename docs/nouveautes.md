@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 15 novembre2026 — Dans le terminal de l'agent, une demande d'accord vit dans la zone vivante, le temps qu'on y réponde : la ligne d'état la dit même quand l'équipier s'anime, `o` ou `n` y répond, et l'historique n'en garde qu'une ligne, « accordé : … » ou « refusé : … », que la réponse vienne du terminal ou de l'IDE. Une proposition de déclarations du dépôt principal attend de même : `o` l'applique, `n` la rejette.
+
 - 15 novembre2026 — Le terminal de l'agent ne garde dans l'historique que la demande et la réponse : les appels d'outil, les étapes faites et les mots de l'hôte défilent sur une ligne discrète de la zone vivante, et restent lisibles par Ctrl-O et le journal ; `--etapes` ou `/etapes` remontrent tout.
 
 - 15 novembre2026 — Sous tmux, Maj-Entrée passe à la ligne dans le terminal de l'agent si tmux est réglé pour les touches étendues en CSI u (`set -g extended-keys on`, `set -g extended-keys-format csi-u`) ; le terminal lit le réglage et le dit quand il manque. Le tmux par défaut garde son repli dit, Alt-Entrée.
