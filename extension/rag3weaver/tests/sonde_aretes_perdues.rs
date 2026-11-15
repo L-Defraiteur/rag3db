@@ -146,6 +146,14 @@ fn les_hypotheses_des_aretes_perdues() {
         eprintln!("[sonde]   perdue vers un nom unique au lot « {nom} »");
         eprintln!("[sonde]     a lot : {}", etat_scope(&l, a));
         eprintln!("[sonde]     b lot : {}", etat_scope(&l, b));
+        let (ae, be, ne) = (a.replace('\'', "\\'"), b.replace('\'', "\\'"), nom.replace('\'', "\\'"));
+        for (c, quoi) in [(&p, "parent"), (&l, "lot")] {
+            let m = lignes(c, &format!("MATCH (s:Scope)-[r:MENTIONS]->(y:Symbol) WHERE s.key = '{ae}' AND y.name = '{ne}' RETURN s._depuis, s._jusqu_a, r.kind, r.deferred, r.untyped_receiver, r.import_modules, r.qualifier_types"));
+            let d = lignes(c, &format!("MATCH (s:Scope)-[:DEFINES]->(y:Symbol) WHERE y.name = '{ne}' RETURN s.file_path, s._depuis, s._jusqu_a"));
+            let cb = lignes(c, &format!("MATCH (x:Scope)-[:CONSUMED_BY]->(y:Scope) WHERE x.key = '{be}' AND y.key = '{ae}' RETURN x._depuis, y._depuis"));
+            let sy = lignes(c, &format!("MATCH (y:Symbol) WHERE y.name = '{ne}' RETURN count(*)"));
+            eprintln!("[sonde]     {quoi} : MENTIONS a→nom {m:?} ; DEFINES →nom {d:?} ; CONSUMED_BY b→a {cb:?} ; Symbol {sy:?}");
+        }
     }
     // (2) Les lignes ouvertes renées (née à 1) sans aucune MENTIONS, dont la clé en a au parent.
     let mentions = |c: &Rag3dbConnection, filtre: &str| -> BTreeMap<String, usize> {
