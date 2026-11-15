@@ -197,7 +197,7 @@ def test_mode(temp_db, flag) -> None:
         .statement('RETURN "Databases Rule" AS a, "rag3db is cool" AS b;')
     )
     result = test.run()
-    result.check_stdout("\u2502 a              \u2502 b            \u2502")
+    result.check_stdout("\u2502 a              \u2502 b              \u2502")
     result.check_stdout("\u2502 Databases Rule \u2502 rag3db is cool \u2502")
 
     # test column mode
@@ -246,7 +246,7 @@ def test_mode(temp_db, flag) -> None:
         .statement('RETURN "Databases Rule" AS a, "rag3db is cool" AS b;')
     )
     result = test.run()
-    result.check_stdout("\u2502 a              \u2502 b            \u2502")
+    result.check_stdout("\u2502 a              \u2502 b              \u2502")
     result.check_stdout("\u2502 Databases Rule \u2502 rag3db is cool \u2502")
 
     # test html mode
