@@ -1624,3 +1624,6 @@ Archi, 18 h 06 : le branchement n'est pas vert — un cas d'e2e_equipier sous Ge
 d'écrire README.md), qui passait sur (B) + pas : la liste d'outils plus longue ou la phrase de l'invite ; rejoué deux fois pour
 départager ; « write your answer as text » et son témoin encore à poser ; repose sur f85977d09e ensuite. Les autres passent devant :
 « à toi » à tty pour tty-14, puis 15 et 16 à la suite, sans second mot.
+tty, 18 h 19 : **tty-14 (/model) sur master à e9e47391a** (14 commits, ece931354 → e9e47391a : GET /ide/teammate/models, POST
+/ide/teammate/model, le registre écrit du chat, un choix qui ne désigne plus rien se voit ; gmail, 0 attribution). tty-15 puis
+tty-16 suivent sans second mot. G : le binaire du service bâti sur f85977d09e (sha a70f1e46…), non posé.
