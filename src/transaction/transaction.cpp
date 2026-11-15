@@ -2,6 +2,7 @@
 
 #include "common/exception/runtime.h"
 #include "common/exception/transaction_manager.h"
+#include "common/string_format.h"
 #include "common/task_system/task_scheduler.h"
 #include "main/client_context.h"
 #include "main/db_config.h"
@@ -85,7 +86,21 @@ void Transaction::acquireLocks(std::span<const LockRequest> requests) const {
         outcome = lockManager.acquire(ID, requests, deadline, interrupted, &failedOn);
     }
     if (outcome != LockOutcome::ACQUIRED) {
-        throw common::TransactionManagerException(LockManager::describe(outcome, failedOn));
+        auto message = LockManager::describe(outcome, failedOn);
+        // Un verrou de table refusé dit qui le tient : l'hôte sait quelle écriture fermer.
+        if (failedOn.kind == LockResourceKind::TABLE) {
+            std::string holders;
+            for (const auto holder : lockManager.getHolders(failedOn)) {
+                if (holder != ID) {
+                    holders += (holders.empty() ? "" : ", ") + std::to_string(holder);
+                }
+            }
+            if (!holders.empty()) {
+                message += common::stringFormat(" It waited for writer {} for {} ms.", holders,
+                    clientContext->getClientConfig()->lockTimeoutInMS);
+            }
+        }
+        throw common::TransactionManagerException(message);
     }
 }
 
@@ -96,6 +111,28 @@ bool Transaction::hasWritten() const {
 void Transaction::acquireLock(const LockResource& resource, LockMode mode) const {
     const LockRequest request{resource, mode};
     acquireLocks(std::span<const LockRequest>{&request, 1});
+}
+
+void Transaction::lockTableForWrite(common::table_id_t tableID) const {
+    if (!usesLocks() || committing.load()) {
+        return;
+    }
+    {
+        std::unique_lock lck{tableLocksMtx};
+        if (tablesLockedForWrite.contains(tableID)) {
+            return;
+        }
+    }
+    acquireLock(LockResource::table(tableID), LockMode::SHARED);
+    std::unique_lock lck{tableLocksMtx};
+    tablesLockedForWrite.insert(tableID);
+}
+
+void Transaction::lockTableForSchemaChange(common::table_id_t tableID) const {
+    if (!usesLocks()) {
+        return;
+    }
+    acquireLock(LockResource::table(tableID), LockMode::EXCLUSIVE);
 }
 
 bool Transaction::shouldLogToWAL() const {
@@ -173,6 +210,9 @@ static void printJournalWeights(storage::LocalWAL& localWAL, main::ClientContext
 }
 
 void Transaction::commit(storage::WAL* wal) {
+    // Sous le verrou public du gestionnaire : plus aucune prise de verrou de table (les insertions
+    // que fait la validation elle-même, celles d'un index vectoriel, n'en prennent pas).
+    committing = true;
     // Jouées une fois : une validation qui échoue après elles est annulée, pas reprise.
     auto actions = std::move(preCommitActions);
     preCommitActions.clear();

@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <functional>
+#include <unordered_set>
 #include <mutex>
 #include <vector>
 
@@ -203,6 +204,13 @@ public:
     // la transaction est annulée par là, et rend tout ce qu'elle tient.
     void acquireLocks(std::span<const LockRequest> requests) const;
     void acquireLock(const LockResource& resource, LockMode mode) const;
+    // Le verrou de schéma d'une table (ticket de l'ADD COLUMN sous une écriture ouverte). Un
+    // écrivain tient en partagé chaque table qu'il écrit, de sa première écriture à sa fin, une
+    // seule prise par table ; pendant sa validation, il ne prend plus rien (il tient le verrou
+    // public du gestionnaire, et attendre là un ALTER qui veut valider serait un interblocage que
+    // le graphe d'attente ne voit pas). Un changement de schéma la prend en exclusif, et attend.
+    void lockTableForWrite(common::table_id_t tableID) const;
+    void lockTableForSchemaChange(common::table_id_t tableID) const;
     // Marche V2, l'annonce en tête (CALL acquire_locks) : la transaction a-t-elle déjà écrit
     // (une ligne, une version, le catalogue) ? a-t-elle déjà annoncé ?
     bool hasWritten() const;
@@ -264,6 +272,12 @@ private:
     bool locksAnnounced = false;
     bool failed = false;
     bool halfDoneRollback = false;
+    // Les tables déjà tenues en partagé pour l'écriture : une seule prise par table. Les fils
+    // d'une même transaction écrivent en parallèle, d'où le mutex.
+    mutable std::mutex tableLocksMtx;
+    mutable std::unordered_set<common::table_id_t> tablesLockedForWrite;
+    // Posé pendant commit() : plus aucune prise de verrou de table (voir lockTableForWrite).
+    std::atomic<bool> committing{false};
 };
 
 // TODO(bmwinger): These shouldn't need to be exported
