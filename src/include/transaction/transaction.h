@@ -211,6 +211,7 @@ public:
     // le graphe d'attente ne voit pas). Un changement de schéma la prend en exclusif, et attend.
     void lockTableForWrite(common::table_id_t tableID) const;
     void lockTableForSchemaChange(common::table_id_t tableID) const;
+    void throwIfSchemaChangedAfterSnapshot(common::table_id_t tableID) const;
     // Marche V2, l'annonce en tête (CALL acquire_locks) : la transaction a-t-elle déjà écrit
     // (une ligne, une version, le catalogue) ? a-t-elle déjà annoncé ?
     bool hasWritten() const;
