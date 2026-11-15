@@ -22,3 +22,18 @@ défaut (2048), au créneau du banc :
 - `groupe-repli-jeu/mesure.sh` à luciepc, après avoir rendu la marge du manifeste à 2048 ;
 - attendu : rien de lancé sur card2, le repli dit au journal avec la VRAM réelle, tous les morceaux servis par
   le 7879, et un index proche des 34 s, jamais des 904 s.
+
+## Le soir du 15 novembre : prête, sans fenêtre
+
+La mesure est prête à luciepc : `~/.cache/rag3weaver-build/groupe-repli-jeu/nuit.sh`, sous `poste lourd`. Elle n'a qu'une
+garde, avant tout bâti puis avant la mesure : card2 sous 13 548 Mio libres (lus), un `va-du-banc` de moins de deux
+heures, et le 7879 sur le binaire neuf (`max_chars_per_text` dans `/sante`). L'hôte est bâti d'avance, sans GPU
+(`BATI_SEUL=1`). Le guetteur `guetter.sh` lit card2 toutes les 15 s et la lance une fois. Sa marge est celle par
+défaut, 2048.
+
+Ce soir, au mot de c7, elle devait partir pendant la répétition d'arbre. card2 n'est jamais passée sous le seuil :
+16 966 Mio libres à 21 h 41, 16 901 à 22 h 06 (après les vecteurs de code-principal), 16 773 à 22 h 28 (après ceux de
+code-lourd). Les vecteurs d'arbre passent par le 7878 (granite), qui ne remplit pas la carte. À 20 h 03, elle était à
+11 844 Mio libres, sous la parité du banc et une étape plus ancienne de la répétition. Le cas réel demande donc une
+passe qui occupe card2 **en mémoire** (un modèle résident en plus, un gros travail GPU), avec le « va » de son
+propriétaire.
