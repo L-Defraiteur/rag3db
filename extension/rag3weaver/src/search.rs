@@ -968,9 +968,30 @@ pub const DEFAULT_QUERY_MAX_CHARS: usize = 6_000;
 /// **La requête à embarquer** : entière sous `max` caractères ; sinon coupée sur
 /// la dernière frontière de mot avant `max`, avec l'avertissement qui le dit.
 pub fn query_for_embedding(query: &str, max: usize) -> (std::borrow::Cow<'_, str>, Option<String>) {
-    let _ = max;
-    (std::borrow::Cow::Borrowed(query), None)
+    let n = query.chars().count();
+    if n <= max {
+        return (std::borrow::Cow::Borrowed(query), None);
+    }
+    let fin = query.char_indices().nth(max).map(|(i, _)| i).unwrap_or(query.len());
+    let tete = &query[..fin];
+    // Le mot coupé est retiré, sauf si la coupe tombe sur un blanc ; un seul
+    // mot plus long que le plafond se coupe où il faut.
+    let coupe = if query[fin..].starts_with(char::is_whitespace) {
+        tete.trim_end()
+    } else {
+        tete.rfind(char::is_whitespace).map(|i| tete[..i].trim_end()).filter(|s| !s.is_empty()).unwrap_or(tete)
+    };
+    let m = coupe.chars().count();
+    (
+        std::borrow::Cow::Owned(coupe.to_string()),
+        Some(format!(
+            "requête coupée de {n} à {m} caractères pour l'embarquement (query_max_chars {max}) ; le plein texte garde la requête entière"
+        )),
+    )
 }
+
+/// Le service qui porte le plafond d'une requête embarquée aux nœuds de recherche.
+pub const QUERY_MAX_CHARS_SERVICE: &str = "query_max_chars";
 pub(crate) const EMBEDDING_CACHE_MAX: usize = 100;
 
 // ─── Free functions ──────────────────────────────────────────────────────────

@@ -204,7 +204,7 @@ impl<T: Embedder + ?Sized> Embedder for std::sync::Arc<T> {
 /// **Un embarqueur qui note la taille de chaque texte reçu**, en caractères
 /// (lot du plafond de la requête, 15 novembre 2026 ; partagé avec la mémoire) :
 /// des vecteurs constants de `dim`, et les tailles dans l'ordre d'arrivée.
-#[cfg(test)]
+#[cfg(all(test, feature = "rag3db-native"))]
 pub(crate) fn embarqueur_qui_note(dim: usize) -> (CallbackEmbedder, std::sync::Arc<std::sync::Mutex<Vec<usize>>>) {
     let tailles = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let t = tailles.clone();
@@ -216,7 +216,7 @@ pub(crate) fn embarqueur_qui_note(dim: usize) -> (CallbackEmbedder, std::sync::A
 }
 
 /// [`embarqueur_qui_note`], en dual (dense et creux en un appel).
-#[cfg(test)]
+#[cfg(all(test, feature = "rag3db-native"))]
 pub(crate) fn dual_qui_note(dim: usize) -> (CallbackDualEmbedder, std::sync::Arc<std::sync::Mutex<Vec<usize>>>) {
     let tailles = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let t = tailles.clone();
@@ -228,7 +228,7 @@ pub(crate) fn dual_qui_note(dim: usize) -> (CallbackDualEmbedder, std::sync::Arc
 }
 
 /// [`embarqueur_qui_note`], en creux seul.
-#[cfg(test)]
+#[cfg(all(test, feature = "rag3db-native"))]
 pub(crate) fn creux_qui_note() -> (CallbackSparseEmbedder, std::sync::Arc<std::sync::Mutex<Vec<usize>>>) {
     let tailles = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let t = tailles.clone();

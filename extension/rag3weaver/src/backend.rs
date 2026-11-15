@@ -1158,6 +1158,21 @@ impl PreparedBackend {
                 }
             }
         }
+        // **Le plafond d'une requête embarquée** ne dépasse pas ce que le modèle
+        // accepte (décision de c7, 15 novembre 2026) : environ trois caractères
+        // par jeton de `context_tokens`.
+        if let Some(q) = embed.query_max_chars {
+            if q == 0 {
+                return Err("models.embed.query_max_chars doit être positif".into());
+            }
+            if let Some(haut) = embed.context_tokens.map(|c| c * 3) {
+                if q > haut {
+                    return Err(format!(
+                        "models.embed.query_max_chars ({q}) dépasse context_tokens × 3 ({haut}) : le modèle n'accepte pas une requête aussi longue"
+                    ));
+                }
+            }
+        }
         if manifest.database.as_os_str().is_empty()
             || manifest.database.to_string_lossy() == ":memoire:"
         {
@@ -2355,6 +2370,7 @@ impl PreparedBackend {
             CatalogConfig {
                 name: Some(self.manifest.name.clone()),
                 embedding_dim: self.embed_dimensions(),
+                query_max_chars: self.embed.query_max_chars,
                 checkpoint_dir: Some(
                     self.path(&self.manifest.database)
                         .with_extension("checkpoints"),
@@ -5439,6 +5455,14 @@ impl Backend {
     /// « dossier ≠ base : N écarts » rejoint les avertissements.
     pub fn index_states(&self) -> Result<Value, String> {
         let mut etats = self.index_states_du_code()?;
+        // Le plafond d'une requête embarquée, et d'où il vient.
+        if let Some(o) = etats.as_object_mut() {
+            let (valeur, source) = match self.prepared().embed_source().query_max_chars {
+                Some(v) => (v, "déclaré"),
+                None => (crate::search::DEFAULT_QUERY_MAX_CHARS, "défaut"),
+            };
+            o.insert("query_max_chars".into(), json!({"value": valeur, "source": source}));
+        }
         if let Some(fichiers) = self.ecarts_des_fichiers.lock().unwrap_or_else(|e| e.into_inner()).clone() {
             if let Some(o) = etats.as_object_mut() {
                 let ecarts = fichiers["gaps"].as_u64().unwrap_or(0);
