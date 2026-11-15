@@ -660,7 +660,7 @@ impl Vue {
                 (false, true) => "Maj-Entrée : à la ligne",
                 (false, false) => "Alt-Entrée : à la ligne",
             };
-            saisie.push(Line::from(vec![Span::raw("› "), Span::styled(queue(aide, largeur.saturating_sub(3)), sourdine)]));
+            saisie.push(Line::from(vec![Span::raw("› "), Span::styled(debut(aide, largeur.saturating_sub(3)), sourdine)]));
         } else {
             let n = a.lignes.len();
             for (i, l) in a.lignes.iter().enumerate() {
@@ -695,6 +695,26 @@ impl Vue {
         let y = zone.y + (2 + a.ligne as u16).min(zone.height.saturating_sub(1));
         f.set_cursor_position((x, y));
     }
+}
+
+/// Le début de `s` qui tient dans `max` colonnes, `…` en bout quand il est coupé : une
+/// indication se lit par son début.
+fn debut(s: &str, max: usize) -> String {
+    if colonnes(s) <= max {
+        return s.to_string();
+    }
+    let mut l = 0;
+    let mut out = String::new();
+    for c in s.chars() {
+        let w = c.width().unwrap_or(0);
+        if l + w + 1 > max {
+            break;
+        }
+        l += w;
+        out.push(c);
+    }
+    out.push('…');
+    out
 }
 
 /// La fin de `s` qui tient dans `max` colonnes.
