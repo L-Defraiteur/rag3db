@@ -1,5 +1,13 @@
 # Nouveautés
 
+- 15 novembre2026 — **Le service d'embarquement ne meurt plus en silence.** Un calcul qui panique sur la carte (une
+  réservation de mémoire refusée) rend un 503 nommé au client, au lieu d'une connexion coupée. Le service répond
+  ensuite à toutes ses requêtes en vol, puis s'arrête avec le code 70 en disant sa cause en dernière ligne de son
+  journal. Il ne sort plus jamais avec un 0 muet que systemd relançait sans rien dire, vingt et une fois en une
+  après-midi pour le bge-m3 de luciepc. Un texte de plus de 12 000 caractères (`RAG3WEAVER_EMBED_MAX_CHARS`, dit dans
+  l'identité) est refusé par un 413 nommé, sans calcul. Un fournisseur lancé par une activation, arrêté ainsi, est
+  dit « service d'embarquement arrêté : <cause> ».
+
 - 15 novembre2026 — L'équipier ne se dit plus « fait » sans rien rendre : une demande où il n'a rien laissé (ni ligne dans la boîte, ni fichier écrit, ni plan clos) est relancée une fois en citant son step_done, puis attend l'utilisateur au plus teammate.reply_wait_s avant un échec nommé ; `expects: "none"` garde une demande silencieuse. Dans une tâche, il parle comme un agent de code et à l'utilisateur, son droit d'écrire se relit à chaque ouverture, et `git status` marche sous le bac.
 
 - 15 novembre2026 — **Le socle d'agent de code s'agrandit** : `write` crée un fichier neuf en entier et rend son diff (un fichier qui existe est refusé, sauf `force`), et `glob` rend les chemins d'un motif (`**/*.rs`) sans ce que `.gitignore` écarte. Avec `read_file` (200 lignes numérotées, « lignes a-b sur N »), `replace_text`, `replace_lines`, `insert_lines` (qui exigent une lecture récente des lignes visées), `grep_files` et `list_files`, c'est le jeu de fichier qu'une tâche reçoit pour travailler comme un agent de code ordinaire.

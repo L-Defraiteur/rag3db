@@ -1,6 +1,6 @@
 # Le service d'embarquement meurt sur une réservation de carte refusée, sans le dire
 
-- **État** : ouvert (15 novembre 2026, embarquement ; relevé par G, ticket demandé par c7)
+- **État** : corrigé (15 novembre 2026, embarquement : le plafond de la requête, puis le 503 nommé ; restent deux tickets, nommés en fin)
 - **Pour** : embarquement
 - **Famille** : produit
 - **Gravité** : défaut. Le bge-m3 de luciepc (`rag3weaver-embeddings@bge-m3`, 7879) a redémarré 21 fois
@@ -95,3 +95,29 @@ Six témoins, rouges d'abord (773e7726a), verts ensuite (c3f907272). Le faux emb
 
 **Reste ouvert ici** : le refus nommé côté service (503) au lieu de mourir, et le plafond de jetons déclaré
 dans son identité. C'est un lot à part, après celui-ci.
+
+## Livré : le 503 nommé, et l'arrêt dit (15 novembre, branche `service-503`)
+
+Conception relue par c7 :
+- **une panique ne tue plus un fil sans réponse** : les fils du service l'attrapent (`catch_unwind`) et répondent
+  503 « calcul en panique sur la carte : <message> ». C'était la cause de la sortie muette : chaque panique tuait
+  un fil sans répondre, et quand les quatre étaient morts, `servir` rendait `Ok(())`, d'où le code 0 que systemd
+  relançait sans rien dire ;
+- **le poison est noté sous le verrou de la passe**, au moment même de la panique. Une requête qui attendait la
+  passe reçoit alors 503 « serveur de la carte empoisonné (…) : le service s'arrête » ;
+- **l'arrêt attend les requêtes en vol** : le serveur compte les requêtes prises, pas encore répondues. Une fois
+  toutes répondues, il rend `DaemonError::Arret { code: 70, cause }`, et jamais plus `Ok(())`. Le binaire sort
+  avec ce code, et sa dernière ligne dit « ✗ arrêt : <cause> (code 70) ». Le `StartLimitBurst=3` de l'unité arrête
+  la boucle ;
+- **le plafond d'un texte** : 12 000 caractères par défaut (`RAG3WEAVER_EMBED_MAX_CHARS`), dit dans l'identité
+  (`max_chars_per_text`, `chars_per_token: 3`). Au-dessus, le texte reçoit un 413 nommé, sans calcul ;
+- **l'activation dit la cause** : elle lit la dernière ligne du journal du fournisseur avant la relance, et dit
+  « service d'embarquement arrêté : <cause> » au lieu de « ne répond pas ».
+
+Quatre témoins, rouges d'abord (e9874c1f8), verts ensuite (20487cfb7). Le témoin 2 a été réécrit : il comptait sur
+l'ordre du verrou de la passe. Vu rouge sur e9874c1f8, il a trouvé la course que corrige le poison noté sous la
+passe.
+
+**Reste en tickets** : le plafond exact en jetons (`2026-11-15-un-plafond-par-texte-en-jetons-exact`), et la cause
+d'arrêt d'un service posé à la main (`2026-11-15-la-cause-d-arret-d-un-service-pose-a-la-main-n-est-pas-dite-par-l-hote`).
+**À poser au 7879 et au 7878** : le binaire neuf, par G, avec son annonce.
