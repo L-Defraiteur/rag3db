@@ -258,6 +258,7 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
             };
             match action {
                 Some(Action::Quitter) => return Ok(()),
+                Some(Action::Commande(_)) | Some(Action::Completer(_)) => {}
                 Some(Action::Ouvrir) => {
                     let colorer = |texte: &str, langue: &str| if langue.is_empty() { None } else { client::surligner(agent, ep, texte, langue) };
                     visionner(vue, &colorer)?;

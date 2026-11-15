@@ -38,6 +38,10 @@ pub enum Etat {
 /// Ce qu'une touche demande à la boucle.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
+    /// Une commande du terminal (`/…` ou `!…`), jamais envoyée à l'équipier (tty-13).
+    Commande(crate::commandes::Commande),
+    /// Tab : compléter la saisie jusqu'au curseur.
+    Completer(String),
     /// Ouvrir la visionneuse des appels d'outil, sur le dernier (Ctrl-O).
     Ouvrir,
     /// Écrire à l'équipier : le texte, et son genre (une `request` la première
@@ -88,6 +92,8 @@ pub enum Touche {
     CtrlG,
     /// Ctrl-O : ouvrir un appel d'outil en grand (tty-11).
     CtrlO,
+    /// Tab : compléter une commande `/` ou `!` (tty-13).
+    Tab,
     /// Page précédente et Page suivante (la visionneuse).
     PageHaut,
     PageBas,
@@ -168,6 +174,8 @@ pub struct Vue {
     pub sous_tmux: bool,
     /// Les appels d'outil de la séance, dans l'ordre (tty-11).
     pub appels: Vec<crate::outils::Appel>,
+    /// Les candidats d'une complétion, dits sur la ligne du haut jusqu'à la touche suivante.
+    pub propositions: Option<String>,
     /// Les lignes de boîte déjà écrites, par leur `id` : la relecture et le flux
     /// peuvent rendre la même (tty-9, vu à l'essai sous tmux).
     vues_de_boite: std::collections::HashSet<String>,
@@ -204,6 +212,7 @@ impl Vue {
             maj_entree: false,
             sous_tmux: false,
             appels: Vec::new(),
+            propositions: None,
             vues_de_boite: std::collections::HashSet::new(),
             bloc: None,
             boite: crate::boite::Boite::default(),
@@ -509,11 +518,16 @@ impl Vue {
                 None
             }
             Touche::PageHaut | Touche::PageBas => None,
+            Touche::Tab => None,
             Touche::CtrlG => Some(Action::Arreter),
             Touche::CtrlD if self.saisie.est_vide() => Some(Action::Quitter),
             Touche::CtrlD => None,
         }
     }
+
+    /// Applique une complétion : le début de la saisie jusqu'au curseur est
+    /// remplacé, et les candidats se disent sur la ligne du haut.
+    pub fn appliquer_completion(&mut self, _c: crate::commandes::Completion) {}
 
     /// Reprend les envois des séances d'avant (tty-13).
     pub fn reprendre_historique(&mut self, historique: Vec<String>) {
@@ -989,6 +1003,44 @@ mod tests {
             (Genre::Boite, "", "[équipier · compte rendu] "),
             (Genre::Code, "rust", "fn a() {}"),
         ]);
+    }
+
+    /// **tty-13** : Entrée sur une commande `/` ou `!` la rend à la boucle,
+    /// sans rien envoyer à l'équipier ; `//` part en texte, avec un seul `/`.
+    #[test]
+    fn enter_on_a_command_returns_it_and_sends_nothing() {
+        use crate::commandes::Commande;
+        let mut v = Vue::new(80, true);
+        let tape = |v: &mut Vue, t: &str| t.chars().for_each(|c| { v.touche(Touche::Car(c)); });
+        tape(&mut v, "/theme foret");
+        assert_eq!(v.touche(Touche::Entree), Some(Action::Commande(Commande::Theme(Some("foret".into())))));
+        assert!(v.saisie.est_vide());
+        tape(&mut v, "!ls -la");
+        assert_eq!(v.touche(Touche::Entree), Some(Action::Commande(Commande::Shell("ls -la".into()))));
+        tape(&mut v, "//etc/hosts");
+        assert_eq!(v.touche(Touche::Entree), Some(Action::Envoyer("/etc/hosts".into(), "instruction")));
+        assert!(v.prendre_lignes().iter().all(|l| !l.texte.contains("theme foret") && !l.texte.contains("ls -la")), "une commande ne s'écrit pas comme un envoi");
+    }
+
+    /// Tab demande la complétion de la saisie jusqu'au curseur ; la complétion
+    /// remplace ce début, garde la suite, et ses candidats se disent sur la ligne
+    /// du haut jusqu'à la touche suivante.
+    #[test]
+    fn tab_asks_a_completion_which_replaces_the_start_and_lists_its_candidates() {
+        let mut v = Vue::new(80, true);
+        "/theme cy suite".chars().for_each(|c| { v.touche(Touche::Car(c)); });
+        for _ in 0.." suite".len() {
+            v.touche(Touche::Gauche);
+        }
+        assert_eq!(v.touche(Touche::Tab), Some(Action::Completer("/theme cy".into())));
+        v.appliquer_completion(crate::commandes::Completion { texte: "/theme cyb".into(), candidats: vec!["cyberpunk".into(), "cyborg".into()] });
+        assert_eq!(v.saisie.texte(), "/theme cyb suite");
+        assert_eq!(v.saisie.curseur(), "/theme cyb".len());
+        assert_eq!(v.propositions.as_deref(), Some("cyberpunk  cyborg"));
+        assert_eq!(dessin(&v, 80, 3).0[0], "cyberpunk  cyborg", "sur la ligne du haut");
+        v.touche(Touche::Car('o'));
+        assert_eq!(v.propositions, None, "la touche suivante les efface");
+        assert_eq!(Vue::new(80, true).touche(Touche::Tab), None, "rien à compléter dans une saisie vide");
     }
 
     /// Le repli (sous mosh, la commande qui relit le journal) se dit sur la
