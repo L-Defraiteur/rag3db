@@ -12,8 +12,10 @@
 // Le banc joue la même chose à vingt clients (minute 6 du scénario des migrations) : ses
 // contrôles `added-column-reads-its-default` et `added-column-reads-what-was-set`.
 
+#include <chrono>
 #include <memory>
 #include <string>
+#include <thread>
 
 #include "catalog/catalog.h"
 #include "graph_test/private_graph_test.h"
@@ -146,11 +148,19 @@ TEST_F(AddColumnRollback, TwoAltersOfOneTableDoNotOverlap) {
     auto other = std::make_unique<Connection>(database.get());
     ok("BEGIN TRANSACTION;");
     ok("ALTER TABLE T ADD b INT64 DEFAULT 1;");
-    // L'autre ne voit pas b, mais prendrait son indice : refusé par un nom, comme un CREATE.
-    const auto refused = error(*other, "ALTER TABLE T ADD c INT64 DEFAULT 3;");
-    EXPECT_NE(refused.find("Write-write conflict"), std::string::npos) << refused;
+    // Depuis le verrou de schéma (le ticket de l'ADD COLUMN sous une écriture ouverte, 15 novembre
+    // 2026), le second ALTER n'est plus refusé : il ATTEND que le premier ait validé, comme sous
+    // PostgreSQL, puis passe sur le schéma qui porte b. Les deux ne se chevauchent toujours pas.
+    std::string secondResult;
+    std::thread second([&] {
+        auto r = other->query("ALTER TABLE T ADD c INT64 DEFAULT 3;");
+        secondResult = r->isSuccess() ? "OK" : r->getErrorMessage();
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    EXPECT_TRUE(secondResult.empty()) << "the second ALTER did not wait: " << secondResult;
     ok("COMMIT;");
-    ok(*other, "ALTER TABLE T ADD c INT64 DEFAULT 3;");
+    second.join();
+    EXPECT_EQ(secondResult, "OK");
     EXPECT_EQ(first("MATCH (t:T) RETURN t.b + t.c;"), "4");
     other.reset();
 }
