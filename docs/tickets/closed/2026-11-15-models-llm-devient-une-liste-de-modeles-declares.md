@@ -1,6 +1,6 @@
 # `models.llm` devient une liste de modèles déclarés (pour `/model`)
 
-- **État** : ouvert (15 novembre 2026). Pas pressé : après le fork du pont
+- **État** : fait (15 novembre 2026, master f9e894f36) : `Modeles` et la liste de `models.llm` (b060f6203, cb17affd7), `restart_budget_tokens` et `budget_de_reprise()` (4b5865eb6, a1aa1f4bd), les nouveautés (f9e894f36) ; 7 témoins rouges d'abord ; rejeu court vert sur 85ab3b886. La surcharge de tâche par `/model` est à archi.
 - **Famille** : produit
 - **Gravité** : planification. Capacité attendue par les commandes « / » du terminal (`/model`)
 - **Atteignable en service** : non, c'est une capacité neuve
