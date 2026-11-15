@@ -1268,3 +1268,11 @@ Embarquement, 15 h 20 : conception du plafond `query_max_chars` relue et accept�
 d'attention), `context_tokens × 3` en plafond haut (un déclaré au-dessus est refusé au chargement ; le contexte dit ce que le
 modèle accepte, pas ce que la carte tient) ; une fonction avant les trois chemins (dense, dual, creux) et dans les deux nœuds,
 coupe sur un mot, avertissement dit, le plein texte garde la requête entière ; champ de `models.embed` ; six témoins rouges.
+tty, 15 h 24 : tty-14 (/model, cx-tty-14, 14 commits ; hôte : Tache.modele, GET /ide/teammate/models, POST /ide/teammate/model, refus nommé ;
+terminal : liste, choix, Tab ; relu par ED ; lib 2 426 verts sur c2fa35406, avant les ajouts d'ED) prêt, placé après codeparsers,
+avant ED (1) ; lib entière au rejeu sur la tête reposée. Ordre : CI → format → archi → 96 → lucivy → codeparsers → tty-14 → ED (1)
+→ embarquement → G → arbre.
+Hotfixs, 15 h 28 : shell test bâtit sous le GCC 13 de la CI ; il reste trois cas périmés par le renommage kuzu → rag3db (largeur du
+mode box), corrigés (2f6143617) ; « prêt » glisse à ~16 h. Archi et 96 passent devant : « à toi » à archi pour le relai dès sa
+tête verte ; 96 suit en pile (c733b81dd → usage → query_chars, ce qui est vert). Puis CI + format, lucivy, codeparsers, tty-14,
+ED (1), embarquement, G, arbre.
