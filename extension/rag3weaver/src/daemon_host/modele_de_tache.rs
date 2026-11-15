@@ -27,12 +27,19 @@ mod tests {
         let (depot, manifeste) = depot_inscrit(d.path(), true);
         // Deux modèles déclarés, le second par défaut, commités : la tâche part du commit du dépôt, une
         // modification non commitée du manifeste n'y entre pas.
-        let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
-        m["models"]["llm"] = json!([
+        let modeles = json!([
             { "name": "rapide", "provider": "compatible", "protocol": "openai", "address": "http://127.0.0.1:9", "model": "m-rapide", "context_tokens": 1000 },
             { "name": "fin", "provider": "compatible", "protocol": "openai", "address": "http://127.0.0.1:9", "model": "m-fin", "context_tokens": 2000, "default": true }
         ]);
-        std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+        // Le principal lit sa copie du dossier de configuration ; la tâche part du manifeste du
+        // dépôt, au commit d'où part sa branche : les deux portent les modèles, celui du dépôt commité.
+        let du_depot = depot.join("templates/backends/code/backend.json");
+        assert!(du_depot.is_file(), "le manifeste du dépôt : {}", du_depot.display());
+        for f in [&manifeste, &du_depot] {
+            let mut m: Value = serde_json::from_str(&std::fs::read_to_string(f).unwrap()).unwrap();
+            m["models"]["llm"] = modeles.clone();
+            std::fs::write(f, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+        }
         for args in [&["add", "-A"][..], &["commit", "-q", "-m", "deux modèles déclarés"]] {
             let o = std::process::Command::new("git").current_dir(&depot).args(args).output().unwrap();
             assert!(o.status.success(), "git {args:?} : {}{} (manifeste {})", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr), manifeste.display());
