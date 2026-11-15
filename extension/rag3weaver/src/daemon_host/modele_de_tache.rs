@@ -3,7 +3,9 @@
 //! par son `name`, gardé dans le registre des tâches et suivi par le chat de la tâche ; un nom inconnu
 //! refusé en nommant les modèles déclarés.
 
-#[cfg(all(test, feature = "code", feature = "rag3db-native"))]
+// Les modèles du témoin sont `compatible` (protocole openai) : sans `openai-llm`, l'hôte refuse à bon droit
+// de rouvrir la tâche (« ce bâti n'a pas la feature `openai-llm` ») — vu rouge sous rag3db-native,code,daemon.
+#[cfg(all(test, feature = "code", feature = "rag3db-native", feature = "openai-llm"))]
 mod tests {
     use super::super::chat::ChatModel;
     use super::super::chat_qui_code::{depot_inscrit, hote};
