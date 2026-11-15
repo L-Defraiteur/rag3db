@@ -1563,3 +1563,8 @@ Lucie, 17 h 49 : « les étapes "attend" : je veux voir l'animation et comprendr
 soit, l'indication à côté de l'animation — voire que ça fasse partie de l'animation, des glitchs ou selon le thème) ». Pour tty :
 l'animation + la cause nommée dans le style du thème ; pour archi et ED : chaque attente de la boucle dite dans la boîte
 (`waiting {cause, since, retry_in?}` : modèle, quota et réessai, outil, index, accord), effacée quand ça repart.
+Archi, 17 h 50 : **(B) + le côté pas du socle sur master à a50ea65c35** (6 commits, b4c7b88a8 → a50ea65c35 : une demande où l'équipier n'a
+rien laissé est relancée une fois puis attend le superviseur au plus teammate.reply_wait_s, échec nommé ; le droit d'écrire relu,
+le bac lit le .git commun, le refus dit sa cause, l'invite parle à l'utilisateur ; gmail, 0 attribution). « À toi » à hotfixs
+pour ci-docs-sans-run. ED : l'écrivain corrigé vert à la passe entière (c5ec47cc4 : recopie hors du lot, résolution bornée aux
+lignes visibles — la vraie cause des CONSUMES perdus —, pas de recopie d'une arête déjà posée) ; le banc rejuge sur une P0 neuve.
