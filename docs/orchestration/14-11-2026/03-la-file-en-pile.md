@@ -1804,3 +1804,9 @@ codeparsers (3 lots) → embarquement (repli-activation) ; l'écrivain au vert d
 prompt_tokens == 0, query_chars 4 000, context_title et l'instruction de la variante, la trace ; gmail, 0 attribution). « À toi » à archi
 (nom), puis le cœur, ED, hotfixs, recherche, G ×4 à la suite. G pose les services (tous les « va » donnés). Le banc reprend F 25 % sur
 0653a6aeff après la mesure d'embarquement.
+20 h 36 : G coupe et repose les services à luciepc à 20 h 36 (7879 puis 7878, f85977d09e, preuve en place, retour automatique). Banc : la
+réserve sur la Source levée (bm25 seul, textes découpés, trois plafonds en place) ; reprise après les deux « fini ». Hotfixs : le rouge
+de la CI sur 76f1d44ed est un test instable du shell (ticket b2580a56b), le run suivant vert. Cœur : la garde arrêterait son push sur
+le Rust arrivé → **la voie des suites C++ transférables de G** doit le couvrir sans rejeu (à confirmer par G) ; ED, hotfixs et recherche
+passent devant lui, il pousse à 21 h 15. tty : tty-18 (/nom par POST /ide/teammate/name, convenu avec ED ; `[Algareth · …]` sur les
+lignes qui portent name) en branche, attend la route d'ED et le name d'archi.
