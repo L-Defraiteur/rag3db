@@ -1781,3 +1781,8 @@ persona pour le ton ; `name` sur chaque ligne teammate ; un rouge vu : « je m'a
 tty, 20 h 21 : tty-17 sur master à a8907ac57d (le témoin du modèle d'une tâche gardé par openai-llm ; gmail, 0 attribution ; lib 2 495 sous le
 jeu le plus large). CI Workflow rouge sur 76f1d44ed : shell test du moteur, test_prev_history_multiline, un pexpect TIMEOUT (1/245),
 instabilité probable — hotfixs relance et ticket.
+Arbre, 20 h 22 : la répétition finie sur les deux copies (page 02, 70012da2b) : code-lourd 1b 683 s, montée 2 s, **repassage 3 661 s** (7 278
+fichiers, vecteurs compris), banc vert ; code-principal 623 s, 1 s, **2 956 s**, banc vert ; le miroir faux aux deux (2 241 et 1 947
+CONSUMED_BY sans CONSUMES), correctif d'ED en 5ed5d1fc9. Vraie fenêtre : ~15 min fermée par base (contrôle des deux sens en garde),
+repassage 50 à 60 min base ouverte avec confirm=true. Dernière répétition sur copies neuves au vert d'ED (juge : CONSUMES = CONSUMED_BY).
+G a le « va » pour 7878 depuis 20 h 20.
