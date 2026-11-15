@@ -1105,3 +1105,11 @@ ticket ; sept témoins dont la provenance des vecteurs au journal (carte / servi
 Codeparsers, 14 h 12 : cause de « new mot vide en Rust » : RUST_STOP_WORDS est une copie de la liste JavaScript ; `new` est
 dans six listes, juste en C++, C#, Go (mot-clé ou intégrée), à retirer de Rust, Python, C. Va, rien d'autre dans le lot ;
 ticket basse pour la liste Rust copiée ; compte des références avant/après sur rag3weaver.
+Lucivy, 14 h 19 : relevé à blanc vert (7d7788e57e ; rouge d'abord vu sur d8d80452c2 ; fts_maintenance 4/4, check_features 8/8,
+e2e_demon_hote 23/23 ; `retries` rendu, refus nommé « base en écriture continue » au-delà de cinq lectures). Avancé devant
+ED (1) : G → CI → tty-12 → tty-13 → archi → 96 → lucivy → ED (1) → arbre.
+Cœur, 14 h 24 : bissection finie — le CREATE_VECTOR_INDEX lent sous écrivains vient de **f42d90d13** (25 oct., le CREATE en deux
+transactions) : 36 s avant, 165 s après, six pas à charge 6. Piste (non mesurée) : dès T_A validée, le holder NOTED est visible
+et chaque écrivain prend le verrou INDEX en exclusif pendant tout le bâti de T_B, alors qu'aucun n'écrit dans l'index. Mesure
+d'où attend l'écrivain le plus long avant le correctif (un holder sans écritures ne fait pas prendre le verrou). Ticket
+f96509f31. Après le SIGSEGV (témoin en cours depuis 14 h 3x).
