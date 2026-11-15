@@ -1346,3 +1346,7 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 - Banc, 03 h 4x : page 02 § 6 (la copie réécrite, la règle des noms de copie par rôle, relevé et date) ; ticket
   des 14 201 ScopeContent orphelins du chemin d'avant (pour ED : la bascule aux générations les efface de
   fait). Rien ne tourne plus à luciepc avant le matin, hors la mesure d'embarquement à 04 h.
+- **04 h 00 — soixante-trois atterris** : scinder_fiche et rejoindre_fiches (96, 1f5d007b8), tout déclaratif ;
+  les trois gestes de Lucie (confirmer, scinder, rejoindre) sont sur master sur le socle recopied +
+  default_filter. Ils ne lui arrivent qu'avec la montée M8 de son gabarit : répétée sur copie cette nuit, posée
+  le matin dans une fenêtre annoncée (fermeture qui tient, instantané, montée, réouverture).

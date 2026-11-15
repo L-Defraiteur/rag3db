@@ -917,3 +917,10 @@ Banc, 03 h 4x : la cause est (A), le saut des fichiers inchangés (aucun résult
 fermée) ; la parité était mal posée (base migrée indexée par un code plus vieux ; le parent laisse 14 201
 ScopeContent orphelins, ticket chez ED). Demain : le correctif (version de l'analyse dans l'empreinte), puis
 deux parités (propre et actuelle sur copie neuve, aux orphelins du parent près).
+
+**03 h 5x — un lot de plus avant le matin** : scinder_fiche et rejoindre_fiches (96, lot-96-scinder, tout
+déclaratif : graphes et Rhai du gabarit memory ; e2e_archiviste 19/19 ; genre `derived_from` ; deux défauts
+contournés au ticket) ; la file étant vide, base = master 811f287103, « à toi » à son vert.
+
+**04 h 0x — soixante-trois atterris** : scinder_fiche et rejoindre_fiches (96, 1f5d007b8, tout déclaratif). La
+file est vide.
