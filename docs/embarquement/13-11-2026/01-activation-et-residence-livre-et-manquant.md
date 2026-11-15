@@ -249,3 +249,27 @@ features, sur plusieurs worktrees repris (`RAG3WEAVER_TARGET_REPRENDRE`), suffit
 aucun processus dessus (vérifié par `/proc/<pid>/exe`), a été effacé, puis l'e2e rejoué sur la même
 tête, vert. Règle : **le ménage du target avant une passe entière**, quand il approche du plafond
 (`du -sh`), plutôt qu'à son refus.
+
+## La mesure des 904 s, reportée (15 novembre, 02 h 57 et 04 h 03)
+
+La mesure à part du premier index du groupe bge-m3 (904 s le 14 à 18 h 47) n'a pas été lancée. Deux
+relevés de luciepc, avec les quatre conditions de c7 : card2 à au moins 13 Gio libres, card2 à 0 %,
+aucune mesure tenue ni en attente, une place lourde libre.
+
+| Heure | card2 libres | card2 occupée | `poste --qui` |
+|---|---|---|---|
+| 02 h 57 | 12 228 Mio | 0 % | trois lourds, une mesure en attente |
+| 04 h 03 | 12 228 Mio | 0 % | deux lourds (dont `e2e_code`) |
+
+**12 228 Mio est l'état de repos de card2**, avec les deux services résidents chargés (7878 granite-278m,
+7879 bge-m3, environ 20,4 Gio tenus). Le seuil de 13 Gio, fixé pour un groupe de 11,4 Gio à côté
+d'eux, ne peut donc jamais être atteint tant qu'ils tournent. Reporter à « une nuit sans file » ne
+suffit pas.
+
+**Ce qu'il faut** : le 7879 arrêté le temps de la mesure (un service de Lucie, donc son mot), ou un
+seuil relevé, à prouver d'abord. Avec le 7879 arrêté, card2 aurait environ 20 Gio libres et la
+comparaison serait propre : le même jeu, une carte calme. Sans cela, la cause des 904 s (le modèle ou
+la carte pleine) reste non tirée.
+
+Vu en passant : à 02 h 57 comme à 04 h 03, **card0** (l'affichage de Lucie) était occupée à 100 %, sans
+lourd de nos sessions dessus. c7 l'a noté pour Lucie.
