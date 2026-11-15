@@ -3633,7 +3633,7 @@ impl Catalog {
             // réindexé — un `index` complet le règle, sans rien casser avant.
             let params: Vec<String> = texte(4).split(',').map(str::trim).filter(|p| !p.is_empty()).map(String::from).collect();
             if !retour.trim().is_empty() && !params.is_empty() {
-                let g = (retour.clone(), params);
+                let g = (retour.clone(), params.clone());
                 gabarits
                     .entry(nom.clone())
                     .and_modify(|o| {
@@ -3644,8 +3644,10 @@ impl Catalog {
                     .or_insert(Some(g));
             }
             if !retour.trim().is_empty() {
-                // Par type : `Ctx::cancellation`, distinct d'un homonyme d'un autre type.
-                if let Some(parent) = codeparsers::scope_extraction::usage::base_type_name(&texte(3)) {
+                // Par type : `Ctx::cancellation`, distinct d'un homonyme d'un autre type. Un retour
+                // qui nomme un paramètre de gabarit de la méthode (`-> Result<R, _>`) ne dit rien.
+                let generique = codeparsers::scope_extraction::receveur::nomme_un_parametre(&retour, &params);
+                if let Some(parent) = codeparsers::scope_extraction::usage::base_type_name(&texte(3)).filter(|_| !generique) {
                     methodes
                         .entry((parent, nom.clone()))
                         .and_modify(|o| {
