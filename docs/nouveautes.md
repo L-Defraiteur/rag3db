@@ -1,5 +1,13 @@
 # Nouveautés
 
+- 15 novembre2026 — **Le repli d'une carte pleine peut aller vers une autre activation.** Avec
+  `fallback: {"activation": "<nom>"}`, l'embarqueur d'une carte pleine (ou trop lente) lance ou rejoint une activation
+  déclarée, sur sa propre carte et à sa propre `address`, au lieu d'un service posé à la main. Le repli doit être le
+  même fournisseur, au placement près : seuls le périphérique, l'adresse et les variables de carte peuvent différer,
+  et tout autre écart est refusé au chargement, nommé. Sa recette est attestée, et l'état le dit. Sa carte se mesure
+  aussi : si les deux sont pleines, l'activation principale se fait, et l'état dit les deux mesures. Un repli pris pour
+  le débit qui retombe juste après son retour double sa tenue, jusqu'à `fallback_hold_max_factor` (16 par défaut).
+
 - 16 novembre2026 — **La synchronisation d'une base à générations retrouve ses garde-fous.** Une source tronquée (plus de fichiers disparus que `maxMissingRatio`) ou vide est de nouveau refusée sans `force` ou `allow_empty`, et rien n'est retiré ; le rapport dit les fichiers et les scopes qui partent ; le plan seul ne retire rien ; un fichier écarté à la lecture (généré, minifié) quitte l'index ; et `files_unchanged` compte les fichiers que l'écrivain n'a pas réécrits parce qu'ils n'avaient pas changé.
 
 - 16 novembre2026 — **Un appel C vers l'API C se voit.** `examples/c/main.c` appelait `rag3db_connection_init` et les autres fonctions de `src/c_api/` sans qu'aucune arête ne se pose : une source `.c` ne relevait pas ses `#include`, et `rag3db.h` perdait ses prototypes derrière sa garde `extern "C"`. Les appelants C de l'API, et ceux qui la voient par l'en-tête, sont maintenant dans `usages` et `impact`. **Toutes les bases repassent une fois** : `REGLES_DE_L_ANALYSE` monte à 2, pour toute la pile de la résolution d'arêtes de codeparsers (homonymes, marque « nom », receveurs, appels C).
