@@ -1572,3 +1572,11 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   **Le cœur** : passe sur c69603859 verte sauf e2e_test en cours, mais la garde refusera (tty-10 et les scripts
   de G ont atterri) ; décision (b) : repose sur master et rejeu de 40 min, **la file est tenue** jusqu'à son
   « poussé » ; DdlEveryMinute ne se rejoue pas (son SIGSEGV est de master).
+- **Banc, 12 h 4x — le protocole « l'archiviste contre la compaction »** (page 01 banc du 15, 850a0b617) : une
+  unité = une frontière de compaction d'un transcript (8 jugeables dans le mien) ; quatre bras (CC, ARCH à
+  100 k, ARCH coupé à la taille de CC, CC+ARCH) ; la vérité de terrain = les besoins des 60 tours d'après
+  (fait atomique utilisé dans W, établi avant b, non redit), extraits par Gemini sans contexte puis vérifiés ;
+  M1 rappel apparié, M2 contradictions, M3 coût, M4 redécouvertes évitables ; juge validé à la main (30 + 30,
+  20 rejoués, accord ≥ 0,8). Ajouts c7 : lecture à 20 tours, M5 l'ordre (le bilan), le temps de passe. Règle :
+  ARCH ne gagne qu'à budget égal sans perdre en M2. **Le cœur** reposé sur 850a0b617 (8d3a78fe1), rejeu 40 min,
+  file tenue.
