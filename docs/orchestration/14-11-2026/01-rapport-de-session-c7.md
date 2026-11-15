@@ -1591,3 +1591,14 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   segment de tout transcript. **Lucie** : la forme à mesurer d'abord est **les fenêtres chevauchantes** — un bout
   de conversation, les résumés déjà extraits des fenêtres d'avant, plus un bout du texte qui précède, « comme
   trois conversations de 300 k au lieu d'une de 900 ». Banc écrit la conception, 96 fournit le composeur.
+- **12 h 5x — « jusqu'où l'archiviste voit », conception validée** (banc, page 02 du 15, 8cafb5d82) : variante F de
+  Lucie (fenêtres de 300 k chevauchées 10 puis 25 %, les résumés d'avant et les derniers tours relus) contre U
+  (880 k d'un coup), S (sans chevauchement), N (nues) ; puis F à 50, 100, 200 k ; référence = le rangement au
+  fil de l'eau ; P1 rappel des sujets, P2 doublons, P3 oubli par position, P4 erreurs, P5 coût ; casse = erreur,
+  P1 < 0,8 ou > 1 doublon sur 10. Précisions : **l'archiviste sait qu'il est en passe n/N** (Lucie) ; la fenêtre
+  est le budget vu, les sections restent par tour dedans (le plafond de sortie de 4 096 ne doit pas casser U et
+  F pour une mauvaise raison).
+- 96, 12 h 5x : deux formes de plus pour l'archiviste, validées — `context` montré au Decide et jamais rangé (les
+  résumés d'avant, le chevauchement, « fenêtre n/N ») ; une étape `segment` optionnelle, éteinte par défaut, pour
+  la section qui dépasse une taille (sujets [{titre, turns}] puis un Decide chacun), jamais pour faire d'une
+  fenêtre une section. compose_restart et les deux témoins poussés en branche (bc93dc781), jeu en cours.
