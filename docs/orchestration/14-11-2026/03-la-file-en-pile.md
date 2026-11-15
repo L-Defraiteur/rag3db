@@ -1726,3 +1726,9 @@ manifeste, défaut « équipier », surcharge par tâche, création nommée d'un
 gmail, 0 attribution). `agent: {name: "Algareth"}` se pose dans le manifeste de Lucie **après la pose de l'hôte** (le binaire en
 place refuse un champ inconnu). tty : diagnostic vert à luciepc aussi sans service sous le jeu courant ; reste la piste des
 features (burn-embedder), en cours au portable. Restent 96 et lucivy, puis le hash.
+Embarquement, 19 h 51 : **le rouge départagé : la feature `openai-llm`** — les six rouges étaient joués sans elle (rag3db-native,code,daemon) ;
+le témoin déclare deux modèles compatible/openai, l'hôte les refuse sans la feature (« déclarer local ou compatible », trompeur),
+open rend ok: false. tty garde le témoin par la feature (lot court) ; décision produit chez ED : l'ouverture passe, le reçu dit le
+modèle indisponible et la feature absente, le tour de chat est refusé avec la cause ; ticket 095cb0ac0f. Un aveu de méthode :
+tty a cherché 30 min un rouge que personne ne reproduisait, faute d'avoir eu dès le début la commande exacte et le jeu de features
+du rouge — un rouge se rapporte avec sa commande, son jeu et son environnement.
