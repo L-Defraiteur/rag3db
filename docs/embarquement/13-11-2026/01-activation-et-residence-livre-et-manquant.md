@@ -305,3 +305,23 @@ donnée par c7, avec la pose du binaire du matin.
 **Ce que la mesure départage** : un index 1 bien plus court que 904 s, sur une carte calme, désignerait
 la carte pleine ; un index 1 voisin de 904 s désignerait le modèle. L'écart est dit tel quel, sans cause
 tirée au-delà.
+
+## La mesure des 904 s, faite (15 novembre, 11 h 35 → 11 h 39)
+
+**L'index 1 du groupe bge-m3 prend 33,3 s sur card2 calme, contre 904 s le 14 à 18 h 47.** Le même jeu :
+les mêmes binaires (hôte 4f43b712d7e61903, service 12783f97e8dbdd45), les gabarits de 73262341b, le même
+dépôt (80 fichiers, 2219 morceaux, bge-m3 dense et creux), une base neuve. **Ce n'est donc pas le
+modèle** : les 904 s venaient de la carte pleine et chargée du 14 au soir, avec 2 Gio libres au pic, à
+côté du 7879 et de deux autres lourds. Une seule mesure ne sépare pas la part de la mémoire de celle de
+la concurrence pour le moteur.
+
+| Pas | Mesuré |
+|---|---|
+| Avant (11 h 33) | card2 12 228 Mio libres, 0 % ; cinq connexions au repos sur 7879 (les tunnels du portable) ; annonce aux onze sessions |
+| Le 7879 arrêté par G (11 h 35 min 41 s) | card2 à 23 043 Mio libres, 0 % |
+| La mesure (11 h 36) | ouverture sans rien lancer ; activation pendant l'index 1, même identité qu'au 14 ; **index et vecteurs en 33,3 s** ; le fournisseur au plus 11,3 Gio ; card2 au pire 11,7 Gio libres |
+| Bail, éviction | rendu à +29,4 s, évincé à +59,5 s ; l'hôte isolé arrêté, rien ne reste |
+| Le 7879 relancé par G (11 h 38 min 49 s) | répond à 11 h 39 ; /sante complet, un embed et un embed_dual d'essai ; « relancé » aux sessions |
+
+L'arrêt du 7879 a duré 3 min 19 s. Sondes et journaux à luciepc : `~/.cache/rag3weaver-build/groupe-vrai-jeu/`
+(`mesure-904.out`, `sondes-904.log`).
