@@ -583,3 +583,18 @@ pub extern "C" fn poser_l_etat_des_temoins() {
         std::env::set_var("RAG3WEAVER_STATE_DIR", d);
     }
 }
+
+
+/// **Un embarqueur qui note la taille de chaque texte reçu**, en caractères
+/// (lot du plafond de la requête, 15 novembre 2026 ; partagé avec la mémoire) :
+/// des vecteurs constants de `dim`, et les tailles dans l'ordre d'arrivée.
+#[allow(dead_code)]
+pub fn embarqueur_qui_note(dim: usize) -> (rag3weaver::embedder::CallbackEmbedder, std::sync::Arc<std::sync::Mutex<Vec<usize>>>) {
+    let tailles = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let t = tailles.clone();
+    let e = rag3weaver::embedder::CallbackEmbedder::new(dim, move |textes: &[String]| {
+        t.lock().unwrap().extend(textes.iter().map(|x| x.chars().count()));
+        Ok(textes.iter().map(|_| vec![0.5; dim]).collect())
+    });
+    (e, tailles)
+}

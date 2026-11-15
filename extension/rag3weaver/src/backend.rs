@@ -300,6 +300,7 @@ impl EmbeddingService {
             fallback: Fallback::Refuse,
             dimensions: Some(self.dimensions),
             context_tokens: None,
+            query_max_chars: None,
             params: Default::default(),
             timeout_secs: self.timeout_secs,
             reasoning: None,
@@ -6582,6 +6583,45 @@ mod tests {
         let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &citer("absent"));
         let e = p.err().expect("un nom cité inconnu se refuse");
         assert!(e.contains("« absent »") && e.contains("activations"), "le refus nomme le nom et dit où il manque : {e}");
+    }
+
+    /// `models.embed` à la place du bloc `embeddings` du gabarit, avec `extra`.
+    #[cfg(feature = "code")]
+    fn embed_declare(m: &mut Value, extra: Value) {
+        m.as_object_mut().unwrap().remove("embeddings");
+        let mut e = json!({"provider": "service", "model": "bge-m3", "address": "127.0.0.1:7891", "dimensions": 1024});
+        for (k, v) in extra.as_object().unwrap() {
+            e[k] = v.clone();
+        }
+        m["models"]["embed"] = e;
+    }
+
+    /// **5. Un `query_max_chars` au-dessus de `context_tokens × 3` se refuse au
+    /// chargement** (décision de c7, 15 novembre 2026), en disant les deux.
+    #[cfg(feature = "code")]
+    #[test]
+    fn plafond_de_requete_au_dessus_du_contexte_se_refuse_au_chargement() {
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| {
+            embed_declare(m, json!({"context_tokens": 8192, "query_max_chars": 30000}));
+        });
+        let e = p.err().expect("un plafond au-dessus du contexte se refuse");
+        assert!(e.contains("query_max_chars (30000)") && e.contains("24576"), "le refus dit les deux : {e}");
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| {
+            embed_declare(m, json!({"context_tokens": 8192, "query_max_chars": 20000}));
+        });
+        assert!(p.is_ok(), "sous le plafond haut, il passe : {:?}", p.err());
+    }
+
+    /// **6. L'état dit le plafond de la requête et sa source.**
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn plafond_de_requete_dit_dans_l_etat_avec_sa_source() {
+        let (d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| embed_declare(m, json!({"query_max_chars": 4000})));
+        let b = backend_de_code(d.path(), p.unwrap());
+        assert_eq!(b.index_states().unwrap()["query_max_chars"], json!({"value": 4000, "source": "déclaré"}));
+        let (d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| embed_declare(m, json!({})));
+        let b = backend_de_code(d.path(), p.unwrap());
+        assert_eq!(b.index_states().unwrap()["query_max_chars"], json!({"value": crate::search::DEFAULT_QUERY_MAX_CHARS, "source": "défaut"}));
     }
 
     /// **Un creux qui déclare une autre dimension que le dense se refuse à
