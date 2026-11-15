@@ -337,6 +337,74 @@ mod tests {
         NodeContext::with_services(Arc::new(services_with(llm)))
     }
 
+    /// Un modèle qui rend un texte fixe et note le `response_format` reçu.
+    fn repond(texte: &'static str, vu: Arc<std::sync::Mutex<Option<crate::llm::ResponseFormat>>>) -> Arc<dyn Llm> {
+        Arc::new(crate::llm::CallbackLlm::new("spy", 4096, move |_t, opts, sink| {
+            *vu.lock().unwrap() = opts.response_format.clone();
+            for f in crate::llm::fragments(texte) {
+                sink.on_token(&f);
+            }
+            sink.on_finish(&Finish::eos());
+            Ok((Finish::eos(), crate::llm::Usage::default()))
+        }))
+    }
+
+    fn sujets() -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {"sujets": {"type": "array", "items": {"type": "object",
+                "properties": {"titre": {"type": "string"}, "de": {"type": "integer"}, "a": {"type": "integer"}},
+                "required": ["titre", "de", "a"], "additionalProperties": false}}},
+            "required": ["sujets"], "additionalProperties": false
+        })
+    }
+
+    /// **`response_schema`** : le schéma va au modèle en format strict, et la
+    /// réponse, du JSON, sort sur le port `json` (le texte reste sur `text`).
+    #[test]
+    fn response_schema_reaches_the_model_and_the_json_comes_out() {
+        let vu = Arc::new(std::sync::Mutex::new(None));
+        let rendu = r#"{"sujets": [{"titre": "la reprise", "de": 1, "a": 3}]}"#;
+        let mut node = LlmNodeFactory.create("seg", &serde_json::json!({"response_schema": sujets()})).unwrap();
+        let mut ctx = ctx_with(repond(rendu, vu.clone()));
+        ctx.set_input("prompt", PortValue::new("découpe".to_string()));
+        node.execute(&mut ctx).unwrap();
+        match vu.lock().unwrap().clone() {
+            Some(crate::llm::ResponseFormat::JsonSchema { schema, strict, .. }) => {
+                assert!(strict, "le format est strict");
+                assert_eq!(schema, sujets());
+            }
+            autre => panic!("le schéma n'a pas atteint le modèle : {autre:?}"),
+        }
+        let mut out = ctx.drain_outputs();
+        let json = out.remove("json").and_then(take_or_clone::<serde_json::Value>).expect("le port json");
+        assert_eq!(json["sujets"][0]["titre"], "la reprise");
+        assert_eq!(out.remove("text").and_then(take_or_clone::<String>).as_deref(), Some(rendu));
+        assert!(LlmNodeFactory.schema().outputs.iter().any(|p| p.name == "json"), "le port json est déclaré");
+    }
+
+    /// **Un modèle qui n'honore pas le format** (local, faux serveur) : le nœud le
+    /// dit par une erreur nommée, et le port `json` reste vide ; il ne devine pas.
+    #[test]
+    fn a_reply_that_is_not_json_is_refused_by_name() {
+        for rendu in ["Voici les sujets : la reprise, la météo.", r#"{"autre": 1}"#] {
+            let vu = Arc::new(std::sync::Mutex::new(None));
+            let mut node = LlmNodeFactory.create("seg", &serde_json::json!({"response_schema": sujets()})).unwrap();
+            let mut ctx = ctx_with(repond(rendu, vu));
+            ctx.set_input("prompt", PortValue::new("découpe".to_string()));
+            let e = node.execute(&mut ctx).unwrap_err();
+            assert!(e.contains("response_schema"), "l'erreur nomme response_schema : {e}");
+            assert!(ctx.drain_outputs().remove("json").is_none(), "le port json reste vide");
+        }
+    }
+
+    /// Un `response_schema` qui n'est pas un objet est refusé à la création.
+    #[test]
+    fn a_response_schema_that_is_not_an_object_is_refused() {
+        let e = LlmNodeFactory.create("seg", &serde_json::json!({"response_schema": "sujets"})).err().expect("refusé");
+        assert!(e.contains("response_schema"), "{e}");
+    }
+
     #[test]
     fn string_prompt_in_text_out() {
         let mut node = LlmNode::new("llm");
