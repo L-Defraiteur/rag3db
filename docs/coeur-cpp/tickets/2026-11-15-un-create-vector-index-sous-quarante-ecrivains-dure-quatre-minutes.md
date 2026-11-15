@@ -34,6 +34,40 @@ plein deux fois sur trois), il dure 270 s, et une instruction d'écrivain de Doc
 Trouver le commit de master entre le 19 octobre et `a2f9c9b65` où le CREATE passe de 15 s à
 quatre minutes, par bissection, une tête par tour de ce témoin (environ 5 min par tour).
 
+## La bissection (15 novembre)
+
+Sur les 67 commits du moteur (`src/`, `extension/vector/`, `test/transaction/concurrence/`) entre
+`8ed386ca2` et `a2f9c9b65`, un tour du témoin par pas, à luciepc sous `poste lourd`, charge 6.
+Seuil : bon sous 150 s. Le bout ancien, `8ed386ca2` lui-même, fait aujourd'hui **64 s** (et non les
+13 à 15 s de sa ligne known_red) : une part de l'écart vient de l'environnement du jour.
+
+| commit | date | CREATE | instruction la plus longue |
+|---|---|---|---|
+| `8ed386ca2` | 19 oct. | 64 s | 58 s |
+| `c4e213ca5` | 8 nov. | 216 s | 210 s |
+| `34538a328` | 25 oct. | 212 s | 206 s |
+| `e526cc4b6` | 7 nov. | 174 s | 167 s |
+| `1636f6607` | 25 oct. | 151 s | 142 s |
+| `36542684f` | 25 oct. | **36 s** | 29 s |
+| `f42d90d13` | 25 oct. | **165 s** | 158 s |
+
+(L'ordre des commits est celui de `git rev-list --reverse` sur ces chemins, pas celui des dates.)
+
+**Le premier commit lent : `f42d90d13`**, « le CREATE_VECTOR_INDEX en deux transactions — T_A pose
+l'entrée et un holder NOTED, l'attente des écrivains d'avant T_A, T_B bâtit puis passe l'index à
+READY ». Son parent du moteur, `36542684f`, fait 36 s ; lui et tous les commits d'après dépassent
+150 s. `1636f6607`, à 151 s, est au bord du seuil mais d'après `f42d90d13`.
+
+## La piste (à mesurer)
+
+Dès la validation de T_A, le holder NOTED est visible et chargé : `NodeTable::lockIndexForWrite`
+fait prendre le verrou INDEX de la table **en exclusif** à chaque écrivain (le convoi E11), pendant
+tout le bâti de T_B, alors qu'aucun d'eux n'écrit dans l'index (`receivesWrites()` faux tant qu'il
+est NOTED). Avant `f42d90d13`, l'index n'était visible qu'à la validation : pas de convoi pendant le
+bâti. Ce qui reste à mesurer : où l'écrivain le plus long attend (le verrou INDEX, le mutex de
+validation pendant le rattrapage de T_B, ou l'attente de T_B). La forme probable du correctif : un
+holder qui ne reçoit pas d'écritures ne fait pas prendre le verrou INDEX.
+
 ## Pour fermer
 
 Le témoin revient au niveau de sa ligne known_red (un CREATE de l'ordre de 15 s), ou plus bas.
