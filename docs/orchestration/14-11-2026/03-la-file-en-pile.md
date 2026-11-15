@@ -1568,3 +1568,8 @@ rien laissé est relancée une fois puis attend le superviseur au plus teammate.
 le bac lit le .git commun, le refus dit sa cause, l'invite parle à l'utilisateur ; gmail, 0 attribution). « À toi » à hotfixs
 pour ci-docs-sans-run. ED : l'écrivain corrigé vert à la passe entière (c5ec47cc4 : recopie hors du lot, résolution bornée aux
 lignes visibles — la vraie cause des CONSUMES perdus —, pas de recopie d'une arête déjà posée) ; le banc rejuge sur une P0 neuve.
+Lucie, 17 h 50 : « les réponses du modèle, on les a bien en streaming et pas d'un seul coup ? » — non : la boucle de l'équipier rend
+son texte par l'appel d'outil `report` (arguments entiers), et ni teammate.rs ni le crate tty ne traitent de deltas. Lot pour archi
+(le texte libre du modèle streamé vers la boîte par `partial`) et tty (affichage mot à mot), après le branchement. Archi : le
+branchement vert (68/0, bout en bout compris ; le pas de l'équipier a maintenant l'empreinte de lecture, un replace_lines sans
+lecture écrivait), reposé sur master, passe complète ; place après hotfixs et embarquement.
