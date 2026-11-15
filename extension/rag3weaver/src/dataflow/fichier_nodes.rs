@@ -25,6 +25,9 @@ pub enum Edition {
     Lignes { de: usize, a: usize, texte: String },
     /// `texte` inséré avant la ligne `avant` (1-based ; le nombre de lignes + 1 : à la fin).
     Insertion { avant: usize, texte: String },
+    /// **Un fichier entier** (`write`, le socle d'agent de code) : un fichier neuf ; un fichier qui
+    /// existe est refusé sans `force`, écrasé avec.
+    Fichier { texte: String, force: bool },
 }
 
 /// La racine du travail du backend qui appelle (celle de l'atelier).
@@ -81,6 +84,7 @@ pub struct LireFichierNode {
     name: String,
     mode: String,
     reason: String,
+    pattern: String,
 }
 
 impl Node for LireFichierNode {
@@ -119,7 +123,14 @@ impl Node for LireFichierNode {
                 }
                 hote.read_scope(racine.as_deref(), self.name.trim(), self.path.trim())?
             }
-            autre => return Err(format!("LireFichierNode : action inconnue « {autre} » (read, scope, ask)")),
+            "glob" => {
+                if self.pattern.trim().is_empty() {
+                    return Err("glob : donnez le motif (`pattern`, par exemple `**/*.rs`)".into());
+                }
+                let limite = if self.length == 0 { LIGNES_MAX } else { self.length.min(2000) };
+                hote.glob(racine.as_deref(), self.pattern.trim(), limite)?
+            }
+            autre => return Err(format!("LireFichierNode : action inconnue « {autre} » (read, scope, ask, glob)")),
         };
         rendre(ctx, r);
         Ok(())
@@ -131,8 +142,8 @@ pub struct LireFichierNodeFactory;
 impl NodeFactory for LireFichierNodeFactory {
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         let action = config.get("action").and_then(|v| v.as_str()).ok_or("LireFichierNode : 'action' est obligatoire (read, scope)")?;
-        if !matches!(action, "read" | "scope" | "ask") {
-            return Err(format!("LireFichierNode : action inconnue « {action} » (read, scope, ask)"));
+        if !matches!(action, "read" | "scope" | "ask" | "glob") {
+            return Err(format!("LireFichierNode : action inconnue « {action} » (read, scope, ask, glob)"));
         }
         Ok(Box::new(LireFichierNode {
             node_name: name.to_string(),
@@ -143,6 +154,7 @@ impl NodeFactory for LireFichierNodeFactory {
             name: texte(config, "name"),
             mode: texte(config, "mode"),
             reason: texte(config, "reason"),
+            pattern: texte(config, "pattern"),
         }))
     }
     fn node_type(&self) -> &'static str {
@@ -155,13 +167,14 @@ impl NodeFactory for LireFichierNodeFactory {
             inputs: vec![],
             outputs: vec![PortDef::value("result", PortType::Map, false), PortDef::value("ui", PortType::Any, false)],
             config_params: vec![
-                action(&["read", "scope", "ask"], "read : un fichier par fenêtre ; scope : le texte et les bornes d'un scope de l'index ; ask : demander l'accord de l'utilisatrice (hors de la racine, ou sur un arbre qu'elle tient)."),
+                action(&["read", "scope", "ask", "glob"], "read : un fichier par fenêtre ; scope : le texte et les bornes d'un scope de l'index ; ask : demander l'accord de l'utilisatrice (hors de la racine, ou sur un arbre qu'elle tient) ; glob : les chemins d'un motif sous la racine."),
                 param("path", ConfigParamType::String, serde_json::json!(""), "Le chemin (relatif à la racine de l'atelier, ou absolu ; `~/` s'étend)."),
                 param("offset", ConfigParamType::Int, serde_json::json!(1), "La première ligne lue (1-based)."),
                 param("length", ConfigParamType::Int, serde_json::json!(LIGNES_MAX), "Le nombre de lignes (200 au plus)."),
                 param("name", ConfigParamType::String, serde_json::json!(""), "Le nom du scope, pour scope."),
                 param("mode", ConfigParamType::String, serde_json::json!("read"), "read ou write, pour ask."),
                 param("reason", ConfigParamType::String, serde_json::json!(""), "La raison dite à l'utilisatrice, pour ask."),
+                param("pattern", ConfigParamType::String, serde_json::json!(""), "Le motif, pour glob (`**/*.rs`, `src/*.toml`)."),
             ],
         }
     }
@@ -179,6 +192,7 @@ pub struct EcrireFichierNode {
     to: usize,
     at: usize,
     text: String,
+    force: bool,
 }
 
 impl Node for EcrireFichierNode {
@@ -219,7 +233,8 @@ impl Node for EcrireFichierNode {
                 }
                 Edition::Insertion { avant: self.at, texte: self.text.clone() }
             }
-            autre => return Err(format!("EcrireFichierNode : action inconnue « {autre} » (replace_text, replace_lines, insert_lines)")),
+            "write" => Edition::Fichier { texte: self.text.clone(), force: self.force },
+            autre => return Err(format!("EcrireFichierNode : action inconnue « {autre} » (replace_text, replace_lines, insert_lines, write)")),
         };
         let r = hote.edit(racine.as_deref(), self.path.trim(), edition)?;
         rendre(ctx, r);
@@ -232,8 +247,8 @@ pub struct EcrireFichierNodeFactory;
 impl NodeFactory for EcrireFichierNodeFactory {
     fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
         let action = config.get("action").and_then(|v| v.as_str()).ok_or("EcrireFichierNode : 'action' est obligatoire")?;
-        if !matches!(action, "replace_text" | "replace_lines" | "insert_lines") {
-            return Err(format!("EcrireFichierNode : action inconnue « {action} » (replace_text, replace_lines, insert_lines)"));
+        if !matches!(action, "replace_text" | "replace_lines" | "insert_lines" | "write") {
+            return Err(format!("EcrireFichierNode : action inconnue « {action} » (replace_text, replace_lines, insert_lines, write)"));
         }
         Ok(Box::new(EcrireFichierNode {
             node_name: name.to_string(),
@@ -245,6 +260,7 @@ impl NodeFactory for EcrireFichierNodeFactory {
             to: entier(config, "to"),
             at: entier(config, "at"),
             text: texte(config, "text"),
+            force: config.get("force").is_some_and(|v| v.as_bool().unwrap_or_else(|| v.as_str().is_some_and(|s| s.trim() == "true"))),
         }))
     }
     fn node_type(&self) -> &'static str {
@@ -257,14 +273,15 @@ impl NodeFactory for EcrireFichierNodeFactory {
             inputs: vec![],
             outputs: vec![PortDef::value("result", PortType::Map, false), PortDef::value("ui", PortType::Any, false)],
             config_params: vec![
-                action(&["replace_text", "replace_lines", "insert_lines"], "replace_text : old → new (old unique) ; replace_lines : les lignes from..to ; insert_lines : avant la ligne at."),
+                action(&["replace_text", "replace_lines", "insert_lines", "write"], "replace_text : old → new (old unique) ; replace_lines : les lignes from..to ; insert_lines : avant la ligne at ; write : un fichier neuf (force : écraser)."),
                 param("path", ConfigParamType::String, serde_json::json!(""), "Le chemin (relatif à la racine de l'atelier, ou absolu)."),
                 param("old", ConfigParamType::String, serde_json::json!(""), "L'ancien texte (replace_text), unique dans le fichier."),
                 param("new", ConfigParamType::String, serde_json::json!(""), "Le nouveau texte (replace_text)."),
                 param("from", ConfigParamType::Int, serde_json::json!(0), "La première ligne remplacée (replace_lines, 1-based)."),
                 param("to", ConfigParamType::Int, serde_json::json!(0), "La dernière ligne remplacée (replace_lines, incluse)."),
                 param("at", ConfigParamType::Int, serde_json::json!(0), "La ligne avant laquelle insérer (insert_lines, 1-based)."),
-                param("text", ConfigParamType::String, serde_json::json!(""), "Le texte écrit (replace_lines, insert_lines)."),
+                param("text", ConfigParamType::String, serde_json::json!(""), "Le texte écrit (replace_lines, insert_lines, write)."),
+                param("force", ConfigParamType::Bool, serde_json::json!(false), "write : écraser un fichier qui existe."),
             ],
         }
     }
