@@ -1300,3 +1300,8 @@ c'est là pour ça », « choisis une politique relevante ». Appliqué :
   aujourd'hui ; **retour arrière 72 h** (instantané + ancien index), puis retrait base par base à mon mot sans redemander ;
   journal de bascule par base, état « basculée le … ».
 - tty-15 (les deux pistes tmux, cacfd9223) en pile derrière tty-14.
+Archi, 15 h 43 : le relai du pont navigateur sur master à **5ff5bdfb2** (2 commits, 35863e1d9 test → 5ff5bdfb2 feat, gmail, 0 attribution ;
+rejeu court vert 15 h 41 ; un premier rejeu tué par son propre timeout pendant l'attente de la place — la borne couvre l'attente
+désormais). « À toi » à 96 pour sa pile (c733b81dd, + usage si vert) sur 5ff5bdfb2. Puis embarquement, lucivy, codeparsers,
+tty-14 (+ tty-15), ED (1), G, arbre ; CI + format de hotfixs à son « prêt ». Arbre : répétition de la bascule vers 17 h à luciepc
+sur copies ; 2b′ a trouvé un vrai défaut (NULL typé STRING dans merge_generation cassait la génération 0), corrigé avec témoin.
