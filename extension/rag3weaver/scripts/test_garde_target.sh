@@ -188,6 +188,9 @@ cas $? "un bâti hors garde depuis le second worktree lit le sien"
 sortie="$(garder_le_target "$B" "$G/gab" 2>&1)"
 echo "$sortie" | grep -q "build.rs vise un autre arbre"
 cas $? "au retour du premier arbre, la garde voit le build.rs du second, et le dit"
+sortie="$(garder_le_target "$B" "$G/gab" 2>&1)"
+[ -z "$sortie" ]
+cas $? "la sortie périmée est retirée : un second appel, sans bâti entre les deux, ne réefface rien (pas de rebâti à chaque passe)"
 [ "$(cd "$G/gab" && cargo run -q 2>/dev/null)" = PREMIER ]
 cas $? "après la garde, le premier arbre relit son gabarit (build.rs rejoué)"
 sortie="$(garder_le_target "$B" "$G/gab" 2>&1)"
