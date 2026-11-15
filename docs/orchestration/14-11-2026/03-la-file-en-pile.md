@@ -1477,3 +1477,9 @@ gmail, 0 attribution ; le banc de l'arbre entier relancé sur un worktree à lui
 (8ef56dd5e) sur 50ed5a677. ED : les deux défauts de l'écrivain lus (la recopie des arêtes entrantes copie vers le File neuf ce que
 l'ingestion repose déjà ; une cible née au rang en attente a un uuid à couche et rang, l'uuid nu ne vise rien) ; témoins rouges,
 correctif, banc de nouveau ; pas ce soir.
+Recherche et lucivy, 17 h 20 : le poids du plein texte du dépôt — **un seul fichier fait 57,6 % du texte**, le bundle de l'IDE
+(templates/ide/app/app.js, une ligne de 133 Ko : 1 581 documents, 98 Mo de doublons, chaque scope recevant la ligne entière) ;
+l'index ferait 0,76 Go au lieu de 1,39 sans lui. Le manifeste de Lucie n'avait pas `index_exclude`. Fait : `index_exclude
+{minified_line_max_bytes: 5000, code_file_max_bytes: 1048576}` posé sur les trois manifestes (dépôt, code-lourd, code-principal ;
+sauvegardes), backend du dépôt rouvert ; réindexation et compact dans la fenêtre d'arbre. Ticket codeparsers : le contenu d'un
+scope doit être sa portion de ligne.
