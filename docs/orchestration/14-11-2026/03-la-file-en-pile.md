@@ -1617,3 +1617,6 @@ pour colorer le ton sans défaire une règle. Même lot, chez ED et archi.
 Embarquement, 18 h 06 : **le 503 nommé du service sur master à f85977d09e** (5 commits, gmail, 0 attribution ; passe sur 2dfcdad5f :
 embarqueur à la demande, lectures 27, code 36, features 8/8, lib 2 516, navigateur 45). « À toi » à archi pour le branchement dès sa
 passe verte ; G bâtit le binaire du service sur f85977d09e. Restent avant le hash de l'hôte : tty-14/15/16, 96, ED (nom + persona).
+Lucie, 18 h 06 : la persona « peut contenir des motivations, "tu as goût aux abstractions" ; utile ou technique sur les bords, "tu as goût
+aux beaux paradigmes et abstractions" » — un personnage avec ses motivations et ses goûts techniques, présenté ainsi dans l'invite
+après les règles du socle, qui peut peser sur les choix de conception sans primer sur la demande ni une règle.
