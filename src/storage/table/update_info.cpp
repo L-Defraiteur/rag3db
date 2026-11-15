@@ -1,5 +1,6 @@
 #include "storage/table/update_info.h"
 
+#include <algorithm>
 #include <bitset>
 
 #include "common/exception/runtime.h"
@@ -66,6 +67,10 @@ VectorUpdateInfo& UpdateInfo::update(MemoryManager& memoryManager, const Transac
         vecUpdateInfo->data->write(&values, values.state->getSelVector()[0], idxInUpdateData);
     } else {
         // Append new value and update `rowsInVector`.
+        if (vecUpdateInfo->numRowsUpdated >= vecUpdateInfo->data->getCapacity()) {
+            vecUpdateInfo->data->resize(std::min<uint64_t>(2 * vecUpdateInfo->data->getCapacity(),
+                DEFAULT_VECTOR_CAPACITY));
+        }
         vecUpdateInfo->rowsInVector[vecUpdateInfo->numRowsUpdated] = rowIdxInVector;
         vecUpdateInfo->data->write(&values, values.state->getSelVector()[0],
             vecUpdateInfo->numRowsUpdated++);
