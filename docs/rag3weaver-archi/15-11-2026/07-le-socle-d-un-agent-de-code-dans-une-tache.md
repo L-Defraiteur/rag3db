@@ -5,7 +5,7 @@ pas d'outils pour éditer du code comme un agent standard ; j'aimerais vraiment 
 l'expérience d'un agent de code standard tout en gardant toutes ces fonctionnalités, là ça parle un
 peu trop de gabarits » (c7). La direction est la sienne : le 7 novembre, « se comporte comme un
 Claude Code normal » ; le 8 novembre, « capable de tout, porte en approbation, 200 lignes, trois
-modes ». Cette page est un relevé, pas une conception. Le lot vient après la garde de l'équipier
+modes ». La page de référence est la [vision du 15 novembre](../../orchestration/visions/15-11-2026-l-agent-est-un-agent-de-code-qui-gere-ses-worktrees.md) (« l'agent est un agent de code, sauf qu'il gère builtin des worktrees et ça les indexe automatiquement »). Cette page est un relevé, pas une conception. Le lot vient après la garde de l'équipier
 (forme B).
 
 ## Ce qui existe
