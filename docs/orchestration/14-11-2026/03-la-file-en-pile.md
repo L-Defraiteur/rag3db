@@ -1825,3 +1825,8 @@ arêtes d'un index plus ancien (1 547 sur un nom ambigu — la règle s'abstient
 aussi à un index neuf : témoin 19, C → C++ `main` → `rag3db_connection_init`). Décision : le banc juge contre un **index neuf** du même
 arbre ; le C → C++ refusé en ticket chez codeparsers. Les MENTIONS −985 : défaut probable de l'écrivain (les mentions restent sur la ligne
 fermée quand le scope renaît), témoin 20 en cours ; 5ed5d1fc9 n'est pas donné au banc avant.
+Cœur, 20 h 43 : rejeu du SIGSEGV vert (témoin 2/2, cibles 16, transaction_test 387, e2e_test 1 867 et DropNodeTableReclaim seul) sauf le juge
+known_red, rouge dans le sens vert : SameVectorForEveryRow…ZeroRowsFirstCopy passé une fois dans le banc complet, rouge 10/10 seul
+(1 222/1 402). Tranché (a) : VERT au journal avec ce rouge dit, la ligne known_red inchangée, push ; ticket chez G : un known_red qui
+verdit une fois (ordre, graine) ne rougit pas un lot — « passé cette fois (intermittent) », retrait de la ligne après N verts seuls.
+Recherche : lot de gardes vert (ba6963b45), après hotfixs.
