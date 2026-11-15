@@ -97,6 +97,19 @@ git checkout -q -B maitre "$P1"; M=$(git rev-parse HEAD)
 git checkout -q -B p2b "$P2T"; git rebase -q --onto "$M" "$P1" >/dev/null 2>&1; TETE=$(git rev-parse HEAD)
 git checkout -q -B ailleurs "$M0"; mkdir -p extension/rag3weaver/docs; echo '# ailleurs' > extension/rag3weaver/docs/ailleurs.md; git add -A; git commit -qm ailleurs
 P1_VRAI=$P1; P1=$(git rev-parse HEAD); pile arret "la tête d'avant n'est pas un ancêtre du commit testé" "n'est pas un ancêtre"; P1=$P1_VRAI
+# 7 bis. Un commit du lot déjà sur master par un autre push (15 novembre 2026, relevé de c7) : P2 porte un commit de
+# docs que master a déjà ; au rebase, son patch tombe, le range-diff le dit « < ». Toléré et dit ; un commit perdu dont
+# le patch manque à master reste un refus.
+git checkout -q -B p2d "$P1"; echo 'fn p2() {}' > extension/rag3weaver/src/p2.rs; git add -A; git commit -qm p2
+mkdir -p docs; echo '# doc partagé' > docs/partage.md; git add -A; git commit -qm "doc partagé"; DOC=$(git rev-parse HEAD); P2T_SAUF=$P2T; P2T=$(git rev-parse HEAD)
+git checkout -q -B maitre "$P1"; git cherry-pick "$DOC" > /dev/null 2>&1; M=$(git rev-parse HEAD)
+git checkout -q -B p2db "$P2T"; git rebase -q --onto "$M" "$P1" >/dev/null 2>&1; TETE=$(git rev-parse HEAD)
+git range-diff --no-color --creation-factor=100 "$P1..$P2T" "$M..$TETE" | grep -q ' < ' || { echo "ROUGE  le cas 7 bis n'a pas produit de « < » : il ne prouve rien"; rouge=1; }
+pile tenue "un commit du lot déjà sur master par un autre push (« < » toléré)" "  < toléré, déjà sur master :"
+# le même lot, mais le commit perdu n'est pas sur master : refus
+git checkout -q -B p2dc "$P2T"; git rebase -q --onto "$P1" "$P1" >/dev/null 2>&1; git reset -q --hard HEAD~1; TETE=$(git rev-parse HEAD); M=$P1
+pile arret "un commit du lot perdu dont le patch n'est pas sur master" "son patch n'est pas sur master"
+P2T=$P2T_SAUF
 git checkout -q "$BASE" 2>/dev/null
 # 8. Le chemin de push complet en mode pile (relecture de recherche, 14 novembre 2026) : HEAD est encore la
 # branche de pile (P1 puis P2) ; P1 a atterri sur master après un conflit de nouveautes.md, donc sous un autre
