@@ -573,6 +573,55 @@ fn le_contexte_d_un_envoi_est_montre_au_decide_et_jamais_range() {
     assert!(apports.iter().all(|a| !a.to_string().contains("CONTEXTEMARQUE")), "le contexte n'est dans aucun L1 : {apports:?}");
 }
 
+/// Une réponse du faux serveur suivie du bloc `usage` du protocole OpenAI (le dernier fragment).
+fn avec_usage(r: Reply, prompt: u64, cached: u64, completion: u64) -> Reply {
+    match r {
+        Reply::Sse { mut frames } => {
+            frames.push(format!(r#"{{"id":"a1","choices":[],"usage":{{"prompt_tokens":{prompt},"completion_tokens":{completion},"prompt_tokens_details":{{"cached_tokens":{cached}}}}}}}"#));
+            Reply::Sse { frames }
+        }
+        autre => autre,
+    }
+}
+
+/// **L'usage du modèle se lit dans la trace** (15 novembre 2026 : le banc doit lire le cache de Vertex
+/// avant de dépenser) : sous `trace: true`, chaque section porte `usage {prompt_tokens,
+/// cached_prompt_tokens, completion_tokens, ms}` tel que le fournisseur l'a rendu, et le rapport porte
+/// le total de la passe (`usage_total`). Un modèle qui ne rend pas de bloc usage (un local) laisse les
+/// compteurs **absents**, pas à zéro, et le total le compte à part.
+#[test]
+#[ignore]
+fn l_usage_du_modele_se_lit_par_section_et_au_total_de_la_passe() {
+    let serveur = FakeServer::start_sequence(vec![
+        avec_usage(etiquette_decrite("create", "La reprise du journal", "Comment le moteur rejoue son journal à l’ouverture."), 120, 100, 7),
+        etiquette("none"),
+        avec_usage(etiquette("none"), 80, 0, 3),
+    ]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    let r = appel(&b, "archive", json!({"titre": "Journal du 26", "contenu": DOCUMENT, "jour": "2026-10-26", "allow_create": true, "trace": true}));
+    assert_eq!(r["result"]["errors"], json!([]), "{r}");
+    let results = r["result"]["results"].as_array().unwrap_or_else(|| panic!("la trace : {r}"));
+    assert_eq!(results.len(), 3, "{r}");
+    let u0 = &results[0]["usage"];
+    assert_eq!((u0["prompt_tokens"].as_u64(), u0["cached_prompt_tokens"].as_u64(), u0["completion_tokens"].as_u64()), (Some(120), Some(100), Some(7)), "la section 1 : {u0}");
+    assert!(u0["ms"].is_u64(), "la durée de l'appel : {u0}");
+    let u1 = &results[1]["usage"];
+    for champ in ["prompt_tokens", "cached_prompt_tokens", "completion_tokens"] {
+        assert!(u1.get(champ).is_none(), "sans bloc usage, « {champ} » est absent, pas à zéro : {u1}");
+    }
+    let u2 = &results[2]["usage"];
+    assert_eq!((u2["prompt_tokens"].as_u64(), u2["cached_prompt_tokens"].as_u64()), (Some(80), Some(0)), "un cache vide rendu est un zéro rendu : {u2}");
+    let t = &r["result"]["usage_total"];
+    assert_eq!(t["calls"], json!(3), "{t}");
+    assert_eq!(t["without_usage"], json!(1), "{t}");
+    assert_eq!((t["prompt_tokens"].as_u64(), t["cached_prompt_tokens"].as_u64(), t["completion_tokens"].as_u64()), (Some(200), Some(100), Some(10)), "{t}");
+    assert!(t["ms"].is_u64(), "{t}");
+}
+
 /// **Un apport recopié sort des rappels par défaut, et se voit en ôtant le filtre** (15 novembre 2026,
 /// les gestes de Lucie : scinder ou rejoindre une fiche recopie ses apports sous la fiche issue, et
 /// l'exemplaire d'origine reste comme provenance). L'état `recopied` (la transition `recopy` du cycle
