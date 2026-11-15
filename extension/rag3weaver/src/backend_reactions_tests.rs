@@ -104,6 +104,7 @@ fn reactif_sur(conn: CallbackConnection) -> (tempfile::TempDir, Backend) {
         avertissement_sans_service: None,
         avertissement_du_creux: None,
         avertissement_du_modele: None,
+        avertissement_d_extension: None,
         embarqueur_a_retenter: None,
         reactions: Mutex::new(None),
         cell_reactions: Mutex::new(std::collections::HashMap::new()),

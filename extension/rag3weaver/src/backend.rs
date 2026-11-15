@@ -2681,6 +2681,34 @@ impl PreparedBackend {
         // Le chemin cité pour Cypher (barres obliques inverses et apostrophes
         // échappées) : un `D:\a\…` nu cassait la requête sous Windows.
         let ext = self.vector_extension_path()?;
+        // **Une extension notée qui ne s'est pas chargée se dit dans le reçu** (ticket
+        // `2026-10-10-ouverture-sans-une-extension-dont-une-table-depend`, 15 novembre 2026). À l'ouverture,
+        // le moteur charge les extensions notées dans `<base>.extensions` ; un échec (un chemin absent,
+        // l'extension de la lib d'avant à chaque bascule de lib) ne refuse pas la base, il se lit dans
+        // `extension_error` de SHOW_INDEXES, pour chaque index dont l'extension n'est pas chargée. Il se
+        // lit donc **avant** notre LOAD EXTENSION, qui le ferait taire : l'index qui en dépendait a pu
+        // être détaché, et `ensure_vector_index` le rebâtit plus bas — le reçu en dit la cause.
+        let avertissement_d_extension = cat
+            .execute_raw("CALL SHOW_INDEXES() RETURN extension_error")
+            .ok()
+            .and_then(|r| {
+                let echecs: BTreeSet<String> = r
+                    .rows
+                    .iter()
+                    .filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::trim).filter(|t| !t.is_empty()).map(String::from))
+                    .collect();
+                (!echecs.is_empty()).then(|| {
+                    format!(
+                        "une extension notée à côté de la base n'a pas pu être chargée à l'ouverture — {} ; ce backend \
+                         charge la sienne ({}), et un index qui en dépendait est rebâti à l'ouverture",
+                        echecs.into_iter().collect::<Vec<_>>().join(" ; "),
+                        ext.display()
+                    )
+                })
+            });
+        if let Some(texte) = &avertissement_d_extension {
+            eprintln!("[backend] {texte}");
+        }
         cat.execute_raw(&format!(
             "LOAD EXTENSION {}",
             crate::connection::cypher_path_literal(&ext)
@@ -2786,6 +2814,7 @@ impl PreparedBackend {
             avertissement_sans_service,
             avertissement_du_creux,
             avertissement_du_modele,
+            avertissement_d_extension,
             embarqueur_a_retenter,
             prepared: std::sync::RwLock::new(Arc::new(self)),
             version: std::sync::atomic::AtomicU64::new(0),
@@ -3473,6 +3502,9 @@ pub struct Backend {
     /// Le modèle de langage déclaré dont le fournisseur n'est pas compilé dans ce binaire : le backend
     /// s'ouvre, le tour de chat refuse, et la phrase le dit.
     avertissement_du_modele: Option<String>,
+    /// Une extension notée à côté de la base que l'ouverture n'a pas pu charger, lue dans
+    /// `extension_error` de SHOW_INDEXES avant notre LOAD EXTENSION.
+    avertissement_d_extension: Option<String>,
     /// **Le service était déclaré mais pas joint à l'ouverture** : il se
     /// retente (au plus une fois par intervalle), et l'avertissement dit le
     /// dernier essai. Ticket du 11 octobre 2026, « un service injoignable à
@@ -3505,7 +3537,14 @@ impl Backend {
     /// tout ce qui est déclaré est servi.
     pub fn avertissements(&self) -> Vec<String> {
         let Some(retente) = &self.embarqueur_a_retenter else {
-            return self.avertissement_sans_service.iter().chain(&self.avertissement_du_creux).chain(&self.avertissement_du_modele).cloned().collect();
+            return self
+                .avertissement_sans_service
+                .iter()
+                .chain(&self.avertissement_du_creux)
+                .chain(&self.avertissement_du_modele)
+                .chain(&self.avertissement_d_extension)
+                .cloned()
+                .collect();
         };
         // L'état dit ce qui est vrai maintenant : chaque lecture des
         // avertissements retente (au plus une fois par intervalle).
@@ -3521,6 +3560,7 @@ impl Backend {
         }];
         dits.extend(self.avertissement_du_creux.iter().cloned());
         dits.extend(self.avertissement_du_modele.iter().cloned());
+        dits.extend(self.avertissement_d_extension.iter().cloned());
         dits
     }
     /// **Le service d'embarquement manquant à l'ouverture répond-il
@@ -6612,6 +6652,7 @@ mod tests {
             avertissement_sans_service: None,
             avertissement_du_creux: None,
             avertissement_du_modele: None,
+            avertissement_d_extension: None,
             embarqueur_a_retenter: None,
             prepared: std::sync::RwLock::new(Arc::new(prepared)),
             version: std::sync::atomic::AtomicU64::new(0),
@@ -6933,6 +6974,7 @@ mod tests {
             avertissement_sans_service: None,
             avertissement_du_creux: None,
             avertissement_du_modele: None,
+            avertissement_d_extension: None,
             embarqueur_a_retenter: None,
             prepared: std::sync::RwLock::new(Arc::new(prepared)),
             version: std::sync::atomic::AtomicU64::new(0),
