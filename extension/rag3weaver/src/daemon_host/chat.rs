@@ -106,8 +106,16 @@ pub(super) fn default_chat_model() -> ChatModel {
 /// n'écrit jamais hors d'une tâche (page 03 du 25 octobre 2026).
 /// **L'invite d'un tour selon la sorte du backend** (le socle, 15 novembre 2026) : un backend de
 /// code parle d'abord comme un agent de code ; un backend déclaratif garde la sienne.
-pub fn system_prompt_du_backend(_kind: Option<crate::backend::BackendKind>, mode: ModeDeclarations, dans_une_tache: bool) -> String {
-    system_prompt(mode, dans_une_tache)
+pub fn system_prompt_du_backend(kind: Option<crate::backend::BackendKind>, mode: ModeDeclarations, dans_une_tache: bool) -> String {
+    let declare = system_prompt(mode, dans_une_tache);
+    if kind != Some(crate::backend::BackendKind::Code) {
+        return declare;
+    }
+    let agent = crate::builtin_templates::get("apps/code/chat.json")
+        .and_then(|o| serde_json::from_slice::<Value>(o).ok())
+        .and_then(|v| v["system_prompt"].as_str().map(str::to_string))
+        .unwrap_or_else(|| "Tu es un agent de code sur un dépôt indexé.".to_string());
+    format!("{agent}\n\n{declare}")
 }
 
 pub fn system_prompt(mode: ModeDeclarations, dans_une_tache: bool) -> String {
@@ -594,7 +602,7 @@ impl DaemonHost {
     ) -> Result<Value, String> {
         let llm = (self.chat_model)(&tour.prepared).map_err(|why| format!("le chat est éteint : {why}"))?;
         let dans_une_tache = tour.dans_une_tache;
-        let mut prompt = system_prompt(tour.mode, dans_une_tache);
+        let mut prompt = system_prompt_du_backend(tour.prepared.manifest.kind, tour.mode, dans_une_tache);
         // **La consigne déclarée du chat** (`chat_instructions`) : celle de l'atelier dit
         // l'ordre de ses outils.
         if let Some(c) = tour.prepared.manifest.chat_instructions.as_deref().filter(|c| !c.trim().is_empty()) {

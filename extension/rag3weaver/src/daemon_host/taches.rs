@@ -60,6 +60,15 @@ pub struct Tache {
     pub git_init_fait: bool,
 }
 
+/// **Le droit d'écrire d'une tâche, lu sur le manifeste de son parent** : `!read_only ||
+/// task_writes`, comme à sa création. `None` quand le manifeste ne se lit pas ou n'a pas de
+/// `workspace`.
+fn ecrit_du_parent(parent: &Path) -> Option<bool> {
+    let m: serde_json::Value = serde_json::from_slice(&std::fs::read(parent).ok()?).ok()?;
+    let w = m.get("workspace")?;
+    Some(!w["read_only"].as_bool().unwrap_or(false) || w["task_writes"].as_bool().unwrap_or(false))
+}
+
 /// **Le workspace d'une tâche** (marche 3) : la racine du principal est
 /// dans un dépôt git, la tâche a la sienne dans un worktree — celui du
 /// backend quand le code est dans le même dépôt, un second (`code`) sinon,
@@ -468,13 +477,17 @@ impl DaemonHost {
     }
 
     /// Les surcharges d'un backend hébergé, s'il est une tâche.
+    /// Les surcharges d'un backend hébergé, s'il est une tâche. **Le droit d'écrire se relit**
+    /// sur le manifeste parent à chaque ouverture (les quinze « oui » de Lucie, 15 novembre 2026 :
+    /// figé à la création, il survivait à un `task_writes` posé ensuite) ; le registre n'en garde
+    /// que la valeur d'origine, prise quand le parent ne se lit pas.
     pub(super) fn surcharges_de(&self, manifest: &Path) -> Option<Surcharges> {
         self.taches.lock().unwrap_or_else(|p| p.into_inner()).get(manifest).map(|t| Surcharges {
             database: Some(t.copie.base.clone()),
             files_root: None,
             sans_reactions: false,
             declarations: Some(crate::propositions::ModeDeclarations::Auto),
-            workspace: t.workspace.as_ref().map(|w| (w.racine.clone(), w.ecrit)),
+            workspace: t.workspace.as_ref().map(|w| (w.racine.clone(), ecrit_du_parent(&t.parent_manifest).unwrap_or(w.ecrit))),
             declarations_hors_depot: t.declarations_hors_depot,
             dossier_de_tache: t.arbre.parent().map(Path::to_path_buf),
             racine_principale: t.workspace.as_ref().map(|w| w.racine_principale.clone()),
