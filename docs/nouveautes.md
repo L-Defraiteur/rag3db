@@ -1,5 +1,14 @@
 # Nouveautés
 
+- 15 novembre2026 — **Carte pleine, l'embarqueur se replie vers un service déclaré.** Une activation
+  peut déclarer la mémoire qu'elle prend sur sa carte (`required_mib`, plus `margin_mib`) et un débit
+  minimal (`min_throughput`, sur `window_secs`). Avec `fallback: {"service": "127.0.0.1:7879"}`, une
+  carte pleine ou trop lente fait servir l'index par ce service, modèle et dimension vérifiés, au lieu
+  de charger une seconde copie du modèle sur une carte déjà prise (l'index de 904 s du 14 novembre).
+  Le repli tient au moins `fallback_hold_secs`, puis revient à la carte quand elle a la place. Le
+  journal d'index dit d'où vient chaque passe de vecteurs, et chaque repli ou retour avec sa cause.
+  L'état d'index le porte aussi.
+
 - 15 novembre2026 — Le terminal de l'agent a ses commandes : `/aide`, `/theme`, `/tache`, `/depot`, `/journal`, `/effacer`, `/context` (le remplissage du contexte du modèle) et les autres ; `!<commande>` la lance là où tourne le terminal, dans un pseudo-terminal où `sudo` demande son mot de passe, et sa sortie part à l'équipier, sans jamais le mot de passe ; Tab complète les commandes, leurs arguments, les exécutables et les fichiers ; l'historique des envois survit à la séance.
 
 - 15 novembre2026 — Les thèmes du terminal et de l'IDE deviennent des palettes nommées en OKLCH (huit couleurs par thème, un mode sombre ou clair) : leurs couleurs et leur coloration syntaxique en sont dérivées par un seul script, qui part de la couleur de palette la plus proche de la teinte voulue, tient le contraste WCAG ou refuse, et rougit si un thème a été retouché à la main. Les cinq thèmes sont convertis au plus près : écart moyen du code de 0,013 à 0,029 en OKLab, fond, texte et halo inchangés.
