@@ -1035,3 +1035,11 @@ plein texte, cent fois ses sources — exclusions chez recherche ; le dictionnai
 maintain par l'hôte), un pour les sessions (traces de run_e2e.sh → hotfixs), trois souhaits.
 Arbre, 13 h 48 : question à Lucie — combien de temps garder le retour arrière après la bascule de ses bases (instantané +
 ancien index, ~5 Go par base dont 4 de plein texte) ; proposition une semaine puis retrait base par base à son mot.
+Arbre, 13 h 49 : page 2b′ posée (f8bbb0924) : vue nommée (couche, rang), chargeur qui lit la chaîne dans `_generation`,
+composition en prédicat aux trois points, témoin 0 = une pile d'un étage identique au bit près (jugé par le banc),
+deux étages à la main rouge d'abord, parente écrite à la publication ; `tracked.views {max_depth: 16, load_timeout_ms: 2000}` ;
+rien d'autre que `backend` avant 2a′-3 ; la découpe de 2b-C pour recherche à la fin de la page. Va pour les rouges.
+Banc, 13 h 49 : les parités de l'écrivain sont à refaire en partie — la sonde Cypher appelait rang_publie, absent du
+parent : le parent n'a compilé dans aucune passe, la P0 copiée était la base intacte (leçon : une parité prouve d'abord
+que les deux côtés ont bâti et joué). N quasi bloquée par le quota Vertex (11 tours sur 244 en 30 min). Décision (b) :
+les parités tout de suite sous poste lourd (~1 h 20, verdict vers 15 h 10), N à côté sur son quota.
