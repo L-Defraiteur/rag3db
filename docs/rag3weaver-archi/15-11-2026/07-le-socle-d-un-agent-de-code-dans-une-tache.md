@@ -72,3 +72,34 @@ fait : … », écrite par l'équipier, puis « fait sans plan », écrite par l
 
 Pour tty : « étape faite » et « fait sans plan » se replient en une ligne d'état discrète, ou passent
 derrière un réglage ; la prose à l'écran est la seule réponse.
+
+## La porte des commandes et des écritures (Lucie, 16 h 4x, par c7)
+
+Ses mots : « faut pas déconner, rien qu'un `ls` ça me demande permission, et je dois attendre qu'il
+ait rendu son tour pour accepter en plus de ça », puis « il faut le mode auto par défaut, et presque
+jamais me demander si c'est déjà dans ce que j'ai dit ; il faut qu'un modèle décide, et soit pas trop
+strict ».
+
+8. **L'accord se donne dans le tour.** L'appel d'outil attend la réponse, borné par un délai réglé :
+   l'utilisateur répond dans la zone vivante, la commande part, et le modèle continue dans le même
+   tour. Aujourd'hui, le pas continue sans la commande, et l'accord ne vaut que pour la suite.
+9. **`commands: auto` par défaut** dans le gabarit de code livré. Ce mode refuse déjà de s'armer
+   sans bac Landlock (`backend.rs`, « auto exige un bac à sable »), et le bac s'applique à toute
+   commande, quel que soit le mode.
+10. **Un modèle décide**, pas la seule sentinelle à règles.
+    - Il reçoit la demande de l'utilisateur, le plan et l'action (la commande, l'écriture, le
+      chemin), et répond : dans la demande, l'action passe ; hors de la demande, il demande. Une
+      action que la demande couvre ne demande rien, même si elle écrit ou lance un bâti.
+    - La sentinelle à règles ne garde que l'élévation de privilèges, le hors-bac et le réseau non
+      déclaré.
+    - Le doute penche vers « passe » tant que Landlock tient.
+    - Le modèle est celui de la tâche (`models.llm`, par un `Decide` court), ou un modèle local
+      déclaré. Le choix se mesure au banc sur un jeu d'actions, et la métrique est le taux de
+      demandes inutiles, pas le taux de refus.
+    - Le journal des passes et des refus nourrit le réglage. C'est la graine Laya du 7 novembre ;
+      Lucie tranche : le modèle décide, il n'est plus seulement un renvoi à l'utilisateur.
+
+Sur le `ls` de Lucie : `ls` est dans la liste de lecture (`LECTURE_SEULE`, `commande.rs:118`), et
+une commande de lecture seule y est accordée, porte en approbation comprise (le fondement
+`Configuration`). Pourquoi la sienne a demandé (un shell, un chemin hors du domaine, une ligne à
+plusieurs commandes ?) reste à lire dans son run.
