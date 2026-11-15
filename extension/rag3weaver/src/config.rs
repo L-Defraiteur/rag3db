@@ -1357,6 +1357,13 @@ pub struct CatalogConfig {
     #[serde(alias = "embedding_dim")]
     pub embedding_dim: usize,
 
+    /// **Le plafond d'une requête embarquée**, en caractères (`models.embed.query_max_chars`) :
+    /// au-delà, la requête est coupée sur une frontière de mot avant l'embarqueur
+    /// (dense, dual ou creux), et la recherche le dit ; le plein texte garde la
+    /// requête entière. `None` : [`crate::search::DEFAULT_QUERY_MAX_CHARS`].
+    #[serde(default)]
+    pub query_max_chars: Option<usize>,
+
     pub embedding: Option<EmbeddingConfig>,
 
     pub flush: FlushConfig,
@@ -1395,6 +1402,7 @@ impl Default for CatalogConfig {
             relations: HashMap::new(),
             knowledge_bases: HashMap::new(),
             embedding_dim: 384,
+            query_max_chars: None,
             embedding: None,
             flush: FlushConfig::default(),
             // Le défaut refuse : un montage qui veut vraiment le factice le dit.

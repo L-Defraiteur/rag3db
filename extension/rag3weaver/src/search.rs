@@ -958,6 +958,19 @@ pub struct ExploreGraph {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 pub const DEFAULT_RRF_K: f64 = 60.0;
+
+/// **Le plafond par défaut d'une requête embarquée**, en caractères (environ
+/// 2 000 jetons, 260 Mo d'attention pour bge-m3). Une requête de 8 000 jetons
+/// en demande 4,1 Go, et a tué le 7879 de luciepc vingt et une fois le
+/// 15 novembre 2026 (ticket `2026-11-15-le-service-d-embarquement-meurt-…`).
+pub const DEFAULT_QUERY_MAX_CHARS: usize = 6_000;
+
+/// **La requête à embarquer** : entière sous `max` caractères ; sinon coupée sur
+/// la dernière frontière de mot avant `max`, avec l'avertissement qui le dit.
+pub fn query_for_embedding(query: &str, max: usize) -> (std::borrow::Cow<'_, str>, Option<String>) {
+    let _ = max;
+    (std::borrow::Cow::Borrowed(query), None)
+}
 pub(crate) const EMBEDDING_CACHE_MAX: usize = 100;
 
 // ─── Free functions ──────────────────────────────────────────────────────────

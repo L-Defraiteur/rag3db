@@ -705,7 +705,7 @@ impl Node for SearchSourceNode {
             // demandés, avec le cache du catalogue — B6. Un échec ne casse pas
             // la recherche : les nœuds savent embarquer eux-mêmes, et ça se dit.
             let (embedding, sparse) = if signaux.vector() || signaux.sparse() {
-                match cat.embarquer_la_requete(&self.query, signaux.vector(), signaux.sparse()) {
+                match cat.embarquer_la_requete(&self.query, signaux.vector(), signaux.sparse(), &mut w) {
                     Ok((e, s)) => ((!e.is_empty()).then_some(e), s),
                     Err(e) => {
                         w.push(format!(

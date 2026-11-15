@@ -201,6 +201,44 @@ impl<T: Embedder + ?Sized> Embedder for std::sync::Arc<T> {
     }
 }
 
+/// **Un embarqueur qui note la taille de chaque texte reçu**, en caractères
+/// (lot du plafond de la requête, 15 novembre 2026 ; partagé avec la mémoire) :
+/// des vecteurs constants de `dim`, et les tailles dans l'ordre d'arrivée.
+#[cfg(test)]
+pub(crate) fn embarqueur_qui_note(dim: usize) -> (CallbackEmbedder, std::sync::Arc<std::sync::Mutex<Vec<usize>>>) {
+    let tailles = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let t = tailles.clone();
+    let e = CallbackEmbedder::new(dim, move |textes: &[String]| {
+        t.lock().unwrap().extend(textes.iter().map(|x| x.chars().count()));
+        Ok(textes.iter().map(|_| vec![0.5; dim]).collect())
+    });
+    (e, tailles)
+}
+
+/// [`embarqueur_qui_note`], en dual (dense et creux en un appel).
+#[cfg(test)]
+pub(crate) fn dual_qui_note(dim: usize) -> (CallbackDualEmbedder, std::sync::Arc<std::sync::Mutex<Vec<usize>>>) {
+    let tailles = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let t = tailles.clone();
+    let e = CallbackDualEmbedder::new(dim, move |textes: &[String]| {
+        t.lock().unwrap().extend(textes.iter().map(|x| x.chars().count()));
+        Ok((textes.iter().map(|_| vec![0.5; dim]).collect(), textes.iter().map(|_| SparseVector::new(vec![1], vec![0.5])).collect()))
+    });
+    (e, tailles)
+}
+
+/// [`embarqueur_qui_note`], en creux seul.
+#[cfg(test)]
+pub(crate) fn creux_qui_note() -> (CallbackSparseEmbedder, std::sync::Arc<std::sync::Mutex<Vec<usize>>>) {
+    let tailles = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let t = tailles.clone();
+    let e = CallbackSparseEmbedder::new(move |textes: &[String]| {
+        t.lock().unwrap().extend(textes.iter().map(|x| x.chars().count()));
+        Ok(textes.iter().map(|_| SparseVector::new(vec![1], vec![0.5])).collect())
+    });
+    (e, tailles)
+}
+
 // ─── AbsentEmbedder ──────────────────────────────────────────────────────────
 
 /// Ce qui précède le message de refus d'un embarqueur absent, et l'avertissement
