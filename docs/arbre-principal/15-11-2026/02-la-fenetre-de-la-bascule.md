@@ -52,24 +52,38 @@ la fenêtre se raccourcit d'autant : l'écrivain retomberait vers 5 min sur le d
 **Le chiffre de luciepc se mesure avant la vraie fenêtre**, par la répétition sur copie (la première
 des trois conditions). La table ci-dessus en sera corrigée.
 
+## La politique (Lucie dit oui, c7 la fixe, 15 novembre)
+
+Lucie : « mes bases sont là pour ça » ; elle laisse la politique à c7.
+- **Quand** : ce soir, dès que la file du jour est vidée et que l'écrivain d'ED a atterri (bff6c7409,
+  c'est lui que le repassage demande). Le dépôt au portable et les deux bases de luciepc **en
+  parallèle**, chacune par son script, sous `poste lourd timeout`, après le `maintain` de lucivy. Les
+  hôtes des deux postes sont rebâtis au-delà de e95a1b8c6.
+- **La répétition sur copie d'abord**, aujourd'hui, pour les vrais chiffres de luciepc. Si elle casse,
+  la bascule attend le correctif, pas Lucie.
+- **Chaque base a son journal de bascule** : les heures, les comptes avant et après par table, le relevé
+  à blanc de lucivy avant et après. Son état d'index dit « basculée le … ». Chaque fermeture est
+  annoncée aux sessions avant.
+- **Le repassage** est la première synchronisation d'un hôte qui porte l'écrivain, sur une base passée
+  aux générations (`migrer_vers_les_generations`, après 1b). Le journal de l'index dit « première
+  synchronisation par l'écrivain : N fichiers à repasser ». Compter environ 0,35 s par fichier (ED,
+  d'après banc), hors vecteurs, qui ne se recalculent pas.
+- **Les orphelins de lucivy se relèvent au moment de la bascule** : les listes de hotfixs de la nuit ne
+  servent plus. La recette est celle de hotfixs (`docs/coeur-cpp-hotfixs-tickets/13-11-2026/outils/`,
+  `fenetre-purge.sh compter`) : les vivants du `.fts`, moins les offsets de la table du graphe, sur
+  Scope et File. Base ouverte, l'ordre fait la sûreté : le jeton d'abord, le graphe ensuite, puis
+  `maintain` avec `max_purge_ratio` à 0,01.
+
 ## Le retour arrière
 
 - **Pendant la fenêtre**, si une étape échoue ou si la vérification diffère : on remet l'instantané de
   l'étape 3 (quelques minutes, le temps de la copie) et on rouvre.
-- **Après**, sans réponse de Lucie : on garde l'instantané **une semaine**, puis on retire l'ancien
-  index base par base, à son mot (c7, 15 novembre). Le retrait rend environ 5 Go par base.
-
-## La question à Lucie
-
-> La bascule de tes trois bases demande une fenêtre d'environ 1 h 30 pour `code-rag3db-depot` (le
-> portable) et d'environ 1 h 20 pour `code-lourd` puis `code-principal` (luciepc). Pendant ce temps, la
-> base basculée ne répond pas. On garde ensuite l'ancienne une semaine pour revenir en arrière, puis on la
-> retire base par base à ton mot (environ 5 Go chacune). Quand ces fenêtres te gênent-elles le moins, et
-> la semaine de garde te va-t-elle ?
+- **Après** : l'instantané et l'ancien index sont gardés **72 heures**, puis retirés base par base au mot
+  de c7, sans redemander à Lucie. Une base que Lucie a fait rouvrir sans plainte en 72 h est acquise. Le
+  retrait rend environ 5 Go par base.
 
 ## Ce qui attend encore
 
-- la répétition sur copie, avec les vrais chiffres de luciepc ;
+- la répétition sur copie, avec les vrais chiffres de luciepc (vers 17 h, le 15 novembre) ;
 - le ticket « une recherche à versions prend des Gio » fermé ;
-- un hôte rebâti qui porte les routes de `maintain` (à vérifier avec G) ;
-- la réponse de Lucie, et le mot de c7 pour la fenêtre.
+- l'écrivain d'ED (bff6c7409) sur master.
