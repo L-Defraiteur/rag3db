@@ -536,7 +536,15 @@ impl DaemonHost {
     /// écrivains, puis la seconde instance du backend, ouverte par l'hôte avec
     /// ses surcharges. Tout ce qui a été fait est défait si une étape échoue.
     pub fn ouvrir_une_tache(&self, parent: &str, nom: &str) -> Result<Tache, String> {
+        self.ouvrir_une_tache_nommee(parent, nom, None)
+    }
+
+    /// **Ouvrir une tâche dont l'agent porte un nom** (`agent_name` de `POST /ide/taches`) : le nom est
+    /// validé avant toute ouverture, puis gardé au registre (`Tache::nom_de_l_agent`), et le backend de la
+    /// tâche le lit par ses surcharges. Sans nom, celui du backend.
+    pub fn ouvrir_une_tache_nommee(&self, parent: &str, nom: &str, nom_de_l_agent: Option<&str>) -> Result<Tache, String> {
         nom_valide(nom)?;
+        let nom_de_l_agent = nom_de_l_agent.map(crate::backend::valider_le_nom_de_l_agent).transpose()?;
         if self.tache(parent, nom).is_some() {
             return Err(format!("la tâche « {nom} » est déjà ouverte"));
         }
@@ -719,7 +727,7 @@ impl DaemonHost {
             sans_depot,
             git_init_fait,
             modele: None,
-            nom_de_l_agent: None,
+            nom_de_l_agent,
         };
         // **La tâche devient une couche** (liaison branche → couche, décision de Lucie du
         // 13 novembre : « tout ce que touche l'agent, ça reste indexé » ; généralisée par les suivies,
