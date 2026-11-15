@@ -1543,3 +1543,8 @@ fusion ou proposition à la fin) ; dans tty, les sous-agents en zone vivante. Pa
 Lucie, 17 h 44 : sur le binaire d'essai, tâche atelier : « et j'ai plus la petite animation de chargement :/ » — tty garde l'animation
 du thème à côté de la dernière étape en sourdine. Embarquement : deux commits de plus sur service-503 (le binaire ne lisait pas
 RAG3WEAVER_EMBED_MAX_CHARS ; rouge d'abord, corrigé, refus nommé d'une valeur invalide).
+Arbre, 17 h 45 : **la part fermée de la répétition est verte** sur les deux copies (luciepc, binaire b2635b1b0, lib 373b5477b, en
+parallèle) : code-lourd — purge + compact 8 s, 1b 700 s (82 855 occurrences → 76 920 versions, 123 957 morceaux, dette 0), montée
+1 s : ~12 min ; code-principal — 8 s, 532 s (65 914 → 61 224), 1 s : ~9 min ; mémoire 4,6 et 8,7 Gio. Le dépôt : 861 s de 1b le 14.
+La fenêtre fermée de ce soir : ~15 min par base, en parallèle. Le repassage a rougi en 1 s (l'outil index exige confirm=true
+au-delà de 5 min de vecteurs estimés, ~10 annoncées — à vérifier contre ED : les vecteurs ne se recalculent pas) ; repris avec confirm.
