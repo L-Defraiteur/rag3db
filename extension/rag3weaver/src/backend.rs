@@ -8231,6 +8231,50 @@ mod tests {
     /// instantanés). Une ouverture refusée rompt l'instantané : l'appel ne lit pas
     /// hors de lui, il recommence sous un neuf, et la réponse porte
     /// `instantane_renouvele`. Au-delà de `RENOUVELLEMENTS_MAX`, il est refusé.
+    /// **`view` sur la vue du backend ne change rien, et la réponse dit la vue
+    /// lue** (2b-C, part de recherche, page 01 d'arbre principal du 15 novembre
+    /// 2026). Une pile d'un étage (`backend`) rend la même réponse, au bit près,
+    /// que l'appel sans `view`. La réponse dit la couche, le rang et la
+    /// profondeur de la pile lue.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn une_vue_du_backend_rend_la_meme_reponse_et_dit_la_vue_lue() {
+        let (_dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        attendre_les_usages(&backend, "depart", |u| u.contains("outils.rs"));
+        let sans = backend.call("usages", json!({"name": "depart"})).expect("usages sans vue");
+        let avec = backend
+            .call("usages", json!({"name": "depart", "view": {"layer": "backend"}}))
+            .unwrap_or_else(|e| panic!("usages sous la vue du backend : {e}"));
+        assert_eq!(sans["result"], avec["result"], "une pile d'un étage ne change rien");
+        assert_eq!(avec["view"]["layer"], "backend", "la couche lue est dite : {avec}");
+        assert!(avec["view"]["rank"].is_i64(), "le rang lu est dit : {avec}");
+        assert_eq!(avec["view"]["depth"], 1, "la profondeur de la pile est dite : {avec}");
+        assert!(sans.get("view").is_none(), "sans `view`, la réponse ne s'invente pas de vue : {sans}");
+        assert!(backend.stop_reactions().is_empty());
+    }
+
+    /// **Une vue inconnue est refusée avant toute lecture** (page 28 d'arbre,
+    /// contre-exemple de la vue inconnue) : le refus la nomme, et rien n'est lu
+    /// sous une autre vue, ni l'ancre ni le disque.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn une_vue_inconnue_est_refusee_avant_toute_lecture() {
+        let (_dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        attendre_les_usages(&backend, "depart", |u| u.contains("outils.rs"));
+        let e = backend
+            .call("usages", json!({"name": "depart", "view": {"layer": "nulle-part"}}))
+            .expect_err("une vue inconnue se refuse");
+        assert!(e.contains("nulle-part") && e.contains("couche inconnue"), "le refus nomme la vue : {e}");
+        assert!(!e.contains("outils.rs"), "rien n'est lu : {e}");
+        let e = backend
+            .call("usages", json!({"name": "depart", "view": {"rank": 0}}))
+            .expect_err("une vue sans couche se refuse");
+        assert!(e.contains("view") && e.contains("layer"), "le refus dit ce qui manque : {e}");
+        assert!(backend.stop_reactions().is_empty());
+    }
+
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     #[test]
     fn un_appel_dont_l_instantane_se_rompt_recommence_entier_et_le_dit() {
