@@ -1,0 +1,12 @@
+%% tool: archive_segment
+%% description: Découpe une section longue en sujets (archive, param segment_over) : ses paragraphes numérotés vont au modèle, qui rend ses sujets sous un schéma ({sujets: [{titre, de, a}]}) ; chaque sujet devient une sous-section de titre « <titre> §de-a » et de texte ses paragraphes. Un modèle qui ne rend pas ce JSON fait échouer l’envoi en nommant response_schema : rien n’est deviné. Aucun sujet rendu : la section reste entière.
+%% param: element json! -- La section longue.
+%% param: schema json = {"type": "object", "properties": {"sujets": {"type": "array", "items": {"type": "object", "properties": {"titre": {"type": "string"}, "de": {"type": "integer"}, "a": {"type": "integer"}}, "required": ["titre", "de", "a"], "additionalProperties": false}}}, "required": ["sujets"], "additionalProperties": false} -- La forme de la réponse du modèle.
+%% result: construire.result
+
+graph LR
+    preparer["RhaiNode(script_id=archive_segment_prompt, inputs='section', section=$element)"]
+    modele["LlmNode(response_schema=$schema, max_tokens=2048, temperature=0)"]
+    construire["RhaiNode(script_id=archive_segment_build, inputs='section', section=$element)"]
+    preparer -->|result:prompt| modele
+    modele -->|json:value| construire
