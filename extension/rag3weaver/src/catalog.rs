@@ -3905,6 +3905,7 @@ fn read_threads() -> u64 {
             services.register("embedder", embedder.clone());
             services.register("embedding_dim", embedder.dim());
         }
+        services.register::<usize>(crate::search::QUERY_MAX_CHARS_SERVICE, self.query_max_chars());
         if let Some(ref ocr) = self.ocr {
             services.register(crate::dataflow::OCR_SERVICE, ocr.clone());
         }
@@ -10053,6 +10054,7 @@ fn read_threads() -> u64 {
         if let Some(embedder) = &self.embedder {
             services.register::<Arc<dyn Embedder>>("embedder", embedder.clone());
         }
+        services.register::<usize>(crate::search::QUERY_MAX_CHARS_SERVICE, self.query_max_chars());
         services.register("embedding_models", self.registered_embedding_models().unwrap_or_default());
         if let Some(slug) = self.current_embedding_slug() {
             services.register("embedding_slug", slug);
@@ -10953,6 +10955,11 @@ fn fondre_les_metas(mut a: search::SearchMeta, b: search::SearchMeta) -> search:
 
 impl Catalog {
 
+    /// Le plafond d'une requête embarquée : déclaré, sinon le défaut.
+    pub fn query_max_chars(&self) -> usize {
+        self.config.query_max_chars.filter(|n| *n > 0).unwrap_or(search::DEFAULT_QUERY_MAX_CHARS)
+    }
+
     /// **Embarque une requête, une seule fois**, selon les signaux demandés :
     /// une passe avant sur l'embarqueur dual quand dense et sparse sont
     /// voulus ensemble, le cache d'embarquement sinon. Extrait du monolithe le
@@ -10964,9 +10971,19 @@ impl Catalog {
         query: &str,
         need_dense: bool,
         need_sparse: bool,
-        _avertissements: &mut Vec<String>,
+        avertissements: &mut Vec<String>,
     ) -> Result<(Vec<f32>, Option<crate::sparse_index::SparseVector>), CatalogError> {
         self.check_model_capabilities()?;
+        // **Bornée avant les trois chemins** (dense, dual, creux) : une requête
+        // de 8 000 jetons demande 4 Go d'attention à la carte (le 7879, 15
+        // novembre 2026). Seul l'embarquement la voit coupée.
+        let (requete, coupe) = if need_dense || need_sparse {
+            search::query_for_embedding(query, self.query_max_chars())
+        } else {
+            (std::borrow::Cow::Borrowed(query), None)
+        };
+        avertissements.extend(coupe);
+        let query: &str = &requete;
         if (need_dense || need_sparse) && self.embedder.is_none() {
             return Err(CatalogError::EmbeddingModelUnavailable("catalogue lexical : dense/sparse non configuré".into()));
         }
