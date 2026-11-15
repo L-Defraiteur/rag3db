@@ -166,4 +166,45 @@ sortie="$(menager_au_plafond "$Q" "$ICI/neuf" 1 2>&1)"; rc=$?
 cas $? "le ménage nettoie un target né de la garde (l'étiquette du cache posée), et le dit"
 export CARGO_TARGET_DIR="$T"
 
+# **Un build.rs qui vise un autre arbre** (15 novembre 2026, ticket d'archi) : un bâti hors garde depuis un autre worktree
+# rejoue build.rs, qui embarque par chemins absolus ; le marqueur garde l'arbre d'avant. Au retour, la garde voyait
+# « même arbre », cargo jugeait build.rs à jour (son rerun-if-changed vise l'autre arbre), et l'arbre lisait les
+# gabarits de l'autre. Un vrai dépôt git et un second worktree, comme les worktrees des sessions.
+G="$ICI/depot"; mkdir -p "$G/gab/src" "$G/gab/templates"
+printf '[package]\nname="gab"\nversion="0.1.0"\nedition="2021"\n' > "$G/gab/Cargo.toml"
+printf 'fn main() {\n    let t = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");\n    println!("cargo:rerun-if-changed={}", t.display());\n    let o = std::path::Path::new(&std::env::var("OUT_DIR").unwrap()).join("gabarit.rs");\n    std::fs::write(o, format!("pub const GABARIT: &[u8] = include_bytes!({:?});\\n", t.join("x.txt").display().to_string())).unwrap();\n}\n' > "$G/gab/build.rs"
+printf 'include!(concat!(env!("OUT_DIR"), "/gabarit.rs"));\nfn main() { print!("{}", String::from_utf8_lossy(GABARIT)); }\n' > "$G/gab/src/main.rs"
+printf 'PREMIER' > "$G/gab/templates/x.txt"
+(cd "$G" && git init -q && git add . && git -c user.email=t@t -c user.name=t commit -qm jouet && git worktree add -q "$ICI/second" 2>/dev/null)
+touch -d '2020-01-01' $(find "$G/gab" -type f)
+printf 'SECOND' > "$ICI/second/gab/templates/x.txt"
+B="$ICI/target-build-rs"; export CARGO_TARGET_DIR="$B"
+garder_le_target "$B" "$G/gab" > /dev/null 2>&1
+[ "$(cd "$G/gab" && cargo run -q 2>/dev/null)" = PREMIER ]
+cas $? "le premier arbre, par la garde, lit son gabarit"
+touch $(find "$ICI/second/gab" -type f)  # le second worktree change après le premier bâti
+[ "$(cd "$ICI/second/gab" && cargo run -q 2>/dev/null)" = SECOND ]
+cas $? "un bâti hors garde depuis le second worktree lit le sien"
+sortie="$(garder_le_target "$B" "$G/gab" 2>&1)"
+echo "$sortie" | grep -q "build.rs vise un autre arbre"
+cas $? "au retour du premier arbre, la garde voit le build.rs du second, et le dit"
+[ "$(cd "$G/gab" && cargo run -q 2>/dev/null)" = PREMIER ]
+cas $? "après la garde, le premier arbre relit son gabarit (build.rs rejoué)"
+sortie="$(garder_le_target "$B" "$G/gab" 2>&1)"
+[ -z "$sortie" ]
+cas $? "sur un target sain, la garde ne dit rien et n'efface rien"
+# Le dossier git d'un worktree est sous l'arbre principal (`<principal>/.git/worktrees/<nom>`) : un build.rs qui surveille
+# son propre HEAD (celui de rag3weaver le fait) n'est pas « un autre arbre ». Faux positif vu sur target-rust-G.
+printf 'fn main() {\n    let d = std::process::Command::new("git").args(["rev-parse", "--absolute-git-dir"]).output().unwrap();\n    println!("cargo:rerun-if-changed={}/HEAD", String::from_utf8_lossy(&d.stdout).trim());\n}\n' > "$ICI/second/gab/build.rs"
+printf 'fn main() {}\n' > "$ICI/second/gab/src/main.rs"
+H="$ICI/target-head"; export CARGO_TARGET_DIR="$H"
+garder_le_target "$H" "$ICI/second/gab" > /dev/null 2>&1
+(cd "$ICI/second/gab" && cargo build -q 2>/dev/null)
+grep -rqs "worktrees/second/HEAD" "$H"/debug/build/*/output
+cas $? "le build.rs du second worktree surveille son propre HEAD, sous le dossier git de l'arbre principal"
+sortie="$(garder_le_target "$H" "$ICI/second/gab" 2>&1)"
+[ -z "$sortie" ]
+cas $? "son propre dossier git n'est pas un autre arbre : la garde ne dit rien"
+export CARGO_TARGET_DIR="$T"
+
 exit $echec
