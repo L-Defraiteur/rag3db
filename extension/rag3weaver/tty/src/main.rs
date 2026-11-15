@@ -131,18 +131,40 @@ fn lancer(o: Options) -> Result<(), String> {
         },
         (None, false) => None,
     };
+    let mut depot = depot;
+    let mut o = o;
     if !o.plain {
         // Le thème se choisit avant d'ouvrir l'écran : un nom inconnu s'y dit.
-        let theme = Theme::par_nom(o.theme.as_deref().unwrap_or("daemon"))?;
-        match tui::lancer(ep.clone(), tui::Tache { depot: depot.clone(), task: o.task.clone() }, o.demande.clone(), o.depuis, theme, journal.take(), mosh) {
-            Ok(()) => return Ok(()),
-            Err(tui::Echec::Autre(e)) => return Err(e),
-            // La vue ne démarre pas (un terminal qui ne rend pas la position du
-            // curseur, un lien trop lent) : on le dit, et le texte brut prend la
-            // suite, plutôt que de s'arrêter.
-            Err(tui::Echec::VueIndisponible(e, j)) => {
-                eprintln!("[tty] la vue ne démarre pas ({e}) : je passe en texte brut (--plain)");
-                journal = j;
+        let mut theme = Theme::par_nom(o.theme.as_deref().unwrap_or("daemon"))?;
+        loop {
+            match tui::lancer(ep.clone(), tui::Tache { depot: depot.clone(), task: o.task.clone() }, o.demande.clone(), o.depuis, theme, journal.take(), mosh) {
+                Ok(tui::Fin::Quitter) => return Ok(()),
+                // `/tache` ou `/depot` (tty-13) : la vue repart sur l'autre cible, sans
+                // redemander quoi que ce soit à l'équipier.
+                Ok(tui::Fin::Changer { depot: d, tache: t, journal: j, theme: th }) => {
+                    if let Some(d) = d {
+                        match client::lire_brut(&agent, &ep, "/ide/etat").and_then(|etat| client::resoudre_depot(&etat, &d)) {
+                            Ok(neuf) => depot = neuf,
+                            Err(e) => eprintln!("[tty] /depot {d} : {e}"),
+                        }
+                    }
+                    if let Some(t) = t {
+                        o.task = t;
+                    }
+                    o.demande = None;
+                    o.depuis = None;
+                    journal = j;
+                    theme = th;
+                }
+                Err(tui::Echec::Autre(e)) => return Err(e),
+                // La vue ne démarre pas (un terminal qui ne rend pas la position du
+                // curseur, un lien trop lent) : on le dit, et le texte brut prend la
+                // suite, plutôt que de s'arrêter.
+                Err(tui::Echec::VueIndisponible(e, j)) => {
+                    eprintln!("[tty] la vue ne démarre pas ({e}) : je passe en texte brut (--plain)");
+                    journal = j;
+                    break;
+                }
             }
         }
     }
