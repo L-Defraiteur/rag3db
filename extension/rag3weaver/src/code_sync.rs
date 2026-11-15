@@ -1074,6 +1074,10 @@ pub struct SourceSyncProgress {
     pub files_to_resume: usize,
     pub files_resumed: usize,
     pub phase: SyncPhase,
+    /// **Les fichiers que la synchronisation repasse parce que la version de l'analyse a changé**
+    /// (page 06, § 13) : une base d'avant, ou une montée de `REGLES_DE_L_ANALYSE`. L'index le dit
+    /// pendant qu'il joue, pour qu'un rattrapage long ne ressemble pas à une panne.
+    pub repasses_pour_l_analyse: usize,
 }
 
 /// Ce qu'une synchronisation de source a fait.

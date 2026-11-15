@@ -5961,4 +5961,18 @@ mod tests_de_l_ecrivain {
         assert_eq!(cat.au_rang(m, scopes_sans_fichier_visible), Vec::<String>::new(), "au rang courant, chaque scope mène à son fichier visible");
         assert_eq!(cat.au_rang(n, scopes_sans_fichier_visible), Vec::<String>::new(), "et au rang d'avant, au fichier d'avant");
     }
+    /// **Témoin 14 : le rattrapage se dit** (c7, condition de l'atterrissage) : une synchronisation qui
+    /// repasse des fichiers pour la version de l'analyse le dit dans son avancement, avec leur nombre.
+    #[test]
+    fn le_repassage_pour_la_version_se_dit_dans_l_avancement() {
+        let (mut cat, src) = base();
+        cat.publier_la_generation("c1", 0).expect("publier");
+        let mut vus = Vec::new();
+        crate::code_sync::sync_source(&mut cat, &src, &Default::default(), &mut |p| vus.push(p.repasses_pour_l_analyse)).expect("la synchronisation");
+        assert!(vus.iter().all(|n| *n == 0), "version égale : rien à dire ({vus:?})");
+        cat.version_de_l_analyse = format!("{}-autre", cat.version_de_l_analyse);
+        let mut vus = Vec::new();
+        crate::code_sync::sync_source(&mut cat, &src, &Default::default(), &mut |p| vus.push(p.repasses_pour_l_analyse)).expect("la synchronisation");
+        assert!(vus.contains(&2), "la version a changé : les deux fichiers repassent, et l'avancement le dit ({vus:?})");
+    }
 }
