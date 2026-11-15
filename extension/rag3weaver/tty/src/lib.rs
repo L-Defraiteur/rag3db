@@ -12,6 +12,7 @@
 
 pub mod boite;
 pub mod client;
+pub mod commandes;
 pub mod endpoint;
 pub mod flux;
 pub mod historique;
