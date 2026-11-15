@@ -10964,6 +10964,7 @@ impl Catalog {
         query: &str,
         need_dense: bool,
         need_sparse: bool,
+        _avertissements: &mut Vec<String>,
     ) -> Result<(Vec<f32>, Option<crate::sparse_index::SparseVector>), CatalogError> {
         self.check_model_capabilities()?;
         if (need_dense || need_sparse) && self.embedder.is_none() {
@@ -11822,9 +11823,9 @@ mod tests {
         catalog.noter_la_dette_du_modele_courant();
         assert!(!catalog.peut_devoir_un_embarquement);
         assert!(catalog.vector_storage("Document_Chunk").is_err());
-        assert!(catalog.embarquer_la_requete("dense", true, false).is_err());
-        assert!(catalog.embarquer_la_requete("sparse", false, true).is_err());
-        assert_eq!(catalog.embarquer_la_requete("lexical", false, false).unwrap(), (vec![], None));
+        assert!(catalog.embarquer_la_requete("dense", true, false, &mut Vec::new()).is_err());
+        assert!(catalog.embarquer_la_requete("sparse", false, true, &mut Vec::new()).is_err());
+        assert_eq!(catalog.embarquer_la_requete("lexical", false, false, &mut Vec::new()).unwrap(), (vec![], None));
     }
 
     #[test]
@@ -11919,13 +11920,107 @@ mod tests {
         assert_eq!(calls.load(Ordering::SeqCst),1,"shutdown and final buffer Drop must not retry");
     }
 
+    // ─── Le plafond de la requête embarquée (query_max_chars, 15 novembre 2026) ───
+    // Conception relue par c7 : un défaut fixe de 6 000 caractères, une seule
+    // fonction avant les trois chemins (dense, dual, creux), coupée sur un mot,
+    // dite ; le plein texte garde la requête entière.
+
+    #[cfg(feature = "rag3db-native")]
+    fn catalogue_qui_note(regler: impl FnOnce(&mut Catalog)) -> (Catalog, Arc<std::sync::Mutex<Vec<usize>>>) {
+        let (dense, tailles) = crate::embedder::embarqueur_qui_note(4);
+        let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
+        let ext = crate::backend::vector_extension_of_this_process().unwrap_or_else(|e| panic!("{e}"));
+        crate::connection::DbConnection::execute(&conn, &format!("LOAD EXTENSION {}", crate::connection::cypher_path_literal(&ext))).expect("extension vecteur");
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(dense), CatalogConfig { name: Some("plafond".into()), embedding_dim: 4, ..Default::default() });
+        regler(&mut catalog);
+        catalog.initialize().unwrap();
+        (catalog, tailles)
+    }
+
+    /// 40 000 caractères, des mots de sept lettres.
+    #[cfg(feature = "rag3db-native")]
+    fn longue_requete() -> String {
+        "requête ".repeat(5_000)
+    }
+
+    #[cfg(feature = "rag3db-native")]
+    fn coupe_dite(w: &[String]) -> bool {
+        w.iter().any(|a| a.contains("requête coupée de 40000 à") && a.contains("le plein texte garde la requête entière"))
+    }
+
+    /// **1. Une requête longue arrive bornée au dense**, coupée sur un mot, et
+    /// la recherche le dit.
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn plafond_une_requete_longue_arrive_bornee_au_dense_et_c_est_dit() {
+        let (mut catalog, tailles) = catalogue_qui_note(|_| {});
+        let mut w = Vec::new();
+        catalog.embarquer_la_requete(&longue_requete(), true, false, &mut w).unwrap();
+        let t = tailles.lock().unwrap().clone();
+        assert_eq!(t.len(), 1, "un seul texte embarqué : {t:?}");
+        assert!(t[0] <= crate::search::DEFAULT_QUERY_MAX_CHARS && t[0] > 5_900, "bornée au défaut, sur un mot : {t:?}");
+        assert!(coupe_dite(&w), "la coupe se dit : {w:?}");
+        let (coupee, dit) = crate::search::query_for_embedding("alpha beta gamma", 12);
+        assert_eq!(coupee, "alpha beta", "coupée sur la dernière frontière de mot");
+        assert!(dit.is_some_and(|d| d.contains("requête coupée de 16 à 10 caractères")));
+    }
+
+    /// **2. Par le dual** (dense et creux en un appel, le chemin du 7879).
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn plafond_une_requete_longue_arrive_bornee_au_dual() {
+        let (dual, tailles_dual) = crate::embedder::dual_qui_note(4);
+        let (creux, tailles_creux) = crate::embedder::creux_qui_note();
+        let (mut catalog, tailles_dense) = catalogue_qui_note(|c| {
+            c.set_sparse_embedder(Arc::new(creux));
+            c.set_dual_embedder(Arc::new(dual));
+        });
+        let mut w = Vec::new();
+        catalog.embarquer_la_requete(&longue_requete(), true, true, &mut w).unwrap();
+        let t = tailles_dual.lock().unwrap().clone();
+        assert_eq!(t.len(), 1, "le dual embarque la requête : {t:?}");
+        assert!(t[0] <= crate::search::DEFAULT_QUERY_MAX_CHARS, "bornée : {t:?}");
+        assert!(tailles_dense.lock().unwrap().is_empty() && tailles_creux.lock().unwrap().is_empty(), "une seule passe, par le dual");
+        assert!(coupe_dite(&w), "{w:?}");
+    }
+
+    /// **3. Par le creux seul.**
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn plafond_une_requete_longue_arrive_bornee_au_creux() {
+        let (creux, tailles) = crate::embedder::creux_qui_note();
+        let (mut catalog, _) = catalogue_qui_note(|c| c.set_sparse_embedder(Arc::new(creux)));
+        let mut w = Vec::new();
+        catalog.embarquer_la_requete(&longue_requete(), false, true, &mut w).unwrap();
+        let t = tailles.lock().unwrap().clone();
+        assert_eq!(t.len(), 1, "{t:?}");
+        assert!(t[0] <= crate::search::DEFAULT_QUERY_MAX_CHARS, "bornée : {t:?}");
+        assert!(coupe_dite(&w), "{w:?}");
+    }
+
+    /// **4. Une requête courte passe intacte**, sans avertissement ; un plafond
+    /// déclaré au catalogue vaut à la place du défaut.
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn plafond_une_requete_courte_passe_intacte_et_le_plafond_declare_vaut() {
+        let (mut catalog, tailles) = catalogue_qui_note(|_| {});
+        let mut w = Vec::new();
+        catalog.embarquer_la_requete("fonction courte", true, false, &mut w).unwrap();
+        assert_eq!(*tailles.lock().unwrap(), vec![15]);
+        assert!(w.is_empty(), "rien à dire : {w:?}");
+        let (mut declare, tailles) = catalogue_qui_note(|c| c.config.query_max_chars = Some(100));
+        declare.embarquer_la_requete(&longue_requete(), true, false, &mut w).unwrap();
+        let t = tailles.lock().unwrap().clone();
+        assert!(t[0] <= 100 && t[0] > 90, "le plafond déclaré : {t:?}");
+    }
+
     #[test]
     fn lexical_catalog_refuses_sparse_provider_before_initialization_effects() {
         let mut catalog = Catalog::without_embedding_model(Box::new(MockConnection::new()), CatalogConfig::default());
         catalog.set_sparse_embedder(Arc::new(crate::embedder::MockSparseEmbedder::new()));
         assert!(matches!(catalog.initialize(), Err(CatalogError::EmbeddingModelUnavailable(_))));
         assert!(!catalog.initialized);
-        assert!(catalog.embarquer_la_requete("sparse", false, true).is_err());
+        assert!(catalog.embarquer_la_requete("sparse", false, true, &mut Vec::new()).is_err());
     }
 
     fn inject_blob_failure(cat: &mut Catalog) -> Arc<BufferedBlobStore<CypherBlobStore>> {

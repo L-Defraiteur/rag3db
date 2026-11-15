@@ -175,6 +175,13 @@ pub struct ModelSource {
     /// comme `dimensions` l'est d'un embarqueur.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context_tokens: Option<usize>,
+    /// **Le plafond d'une requête embarquée**, en caractères, pour un modèle
+    /// d'embarquement (décision de c7, 15 novembre 2026) : ce que la carte
+    /// tient, pas ce que le modèle accepte. Absent :
+    /// [`crate::search::DEFAULT_QUERY_MAX_CHARS`] ; jamais au-dessus de
+    /// `context_tokens × 3` (refusé au chargement).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_max_chars: Option<usize>,
     /// Ce qu'un protocole demande en plus et que la déclaration commune n'a
     /// pas à connaître : `project` et `location` pour `vertex`. La frontière
     /// passe ici — un paramètre que deux capacités partagent devient un champ.
@@ -220,6 +227,7 @@ impl ModelSource {
             fallback: Fallback::Refuse,
             dimensions: None,
             context_tokens: None,
+            query_max_chars: None,
             params: Default::default(),
             timeout_secs: None,
             reasoning: None,
