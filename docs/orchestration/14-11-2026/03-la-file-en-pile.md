@@ -1602,3 +1602,8 @@ Lucie, 17 h 59 : « je veux qu'on puisse donner des noms aux agents, et ce premi
 (un hommage à une période à elle, où elle avait les mêmes ambitions d'agents de code sans encore connaître le sujet). Pour le
 socle : `agent.name` déclaré (backend, surchargeable par tâche), l'invite qui dit son nom à l'équipier, la boîte et le journal au
 nom, la fiche d'identité `agent:<clé>` qui le porte, tty qui l'affiche et `/nom`. Dès que la clé existe, posée dans son manifeste.
+Archi, 18 h 01 : la forme du nom — l'invite « You are <name> », présentation une fois au premier pas ; dans la boîte le rôle reste
+`from: teammate` (toutes les gardes le lisent), le nom s'ajoute en `name` sur chaque ligne de l'équipier et au journal du run ;
+(1) la clé au manifeste chez ED, (4) le libellé de la fiche agent:<clé> chez 96, (5) l'affichage chez tty. tty : binaire d'essai
+reposé 18 h 00 — un compte rendu égal au texte streamé ne se réaffiche pas, le préfixe « le pas N s'est terminé sans step_done »
+jamais ; le binaire d'essai n'a plus « fini : » (l'écran de Lucie venait d'un binaire d'avant 17 h 54).
