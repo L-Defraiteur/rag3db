@@ -565,6 +565,10 @@ path = "tests/e2e/main.rs"
 
 # Les autres tests restent chacun leur binaire (sondes, rendus, client LLM).
 [[test]]
+name = "sonde_aretes_perdues"
+path = "tests/sonde_aretes_perdues.rs"
+required-features = ["rag3db-native", "code"]
+[[test]]
 name = "impact_rendu"
 path = "tests/impact_rendu.rs"
 [[test]]
