@@ -1,6 +1,6 @@
 # `poste lourd` pose par défaut un MemoryMax de 40G que la validation refuse
 
-- **État** : ouvert (15 novembre 2026, hotfixs)
+- **État** : fait (15 novembre 2026, branche poste-plafond-validation, voie 2 au mot de c7) : poste refuse avant la file, code 2, une validation sous un plafond au-dessus des 32 Gio du confineur, et dit « lancer sous POSTE_MEM_MAX=32G » ; le défaut de 40G ne descendra (voie 1) qu après le relevé du pic d un bâti de la lib à -j8 et d un banc, avec le cœur
 - **Famille** : produit
 - **Gravité** : une passe attend sa place, parfois longtemps, puis rougit en une seconde sur une règle d'outillage,
   sans avoir joué un seul test. Le même soir, deux sessions (archi et hotfixs) sont tombées dans ce piège.
