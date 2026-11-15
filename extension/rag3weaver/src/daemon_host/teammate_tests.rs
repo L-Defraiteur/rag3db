@@ -557,7 +557,7 @@ fn a_failed_step_does_not_end_the_teammate_until_the_declared_count() {
         host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
         host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
         let files = host.teammate_files(&h.id, "doc").unwrap();
-        files.append("supervisor", "request", None, "Une petite chose.").unwrap();
+        files.append_with("supervisor", "request", None, "Une petite chose.", &json!({ "expects": "none" })).unwrap();
         // Une fin en erreur se rend comme telle (et s'écrit `ended` dans la boîte) :
         // l'équipier s'arrête en le disant, il ne plante pas.
         let ended = match host.run_teammate(&h.id, "doc") {
@@ -635,7 +635,7 @@ fn a_backend_closes_between_two_tool_calls_of_a_step() {
         serde_json::from_str(&x.body_mut().read_to_string().unwrap()).unwrap()
     };
     assert_eq!(post("/ide/describe", json!({ "manifest": manifeste }))["ok"], true);
-    let v = post("/ide/teammate/mailbox", json!({ "backend": id, "task": "doc", "from": "supervisor", "kind": "request", "text": "Lis deux fichiers." }));
+    let v = post("/ide/teammate/mailbox", json!({ "backend": id, "task": "doc", "from": "supervisor", "kind": "request", "text": "Lis deux fichiers.", "expects": "none" }));
     assert_eq!(v["ok"], true, "{v}");
     let borne = Instant::now() + Duration::from_secs(60);
     loop {
@@ -686,7 +686,7 @@ fn a_teammate_resumes_after_the_host_restarts() {
         for nom in ["coupee", "finie"] {
             host.ouvrir_une_tache(&h.id, nom).expect("la tâche s'ouvre");
             let files = host.teammate_files(&h.id, nom).unwrap();
-            files.append("supervisor", "request", None, "Écris une ligne dans le README.").unwrap();
+            files.append_with("supervisor", "request", None, "Écris une ligne dans le README.", &json!({ "expects": "none" })).unwrap();
             files.append("teammate", "step_done", None, "fait : la moitié").unwrap();
             if nom == "finie" {
                 files.append("host", "ended", None, "fait sans plan").unwrap();
@@ -1110,7 +1110,7 @@ fn a_provider_refusal_waits_a_window_and_does_not_fail_the_step() {
     let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
     let h = host.hosted(&manifeste).unwrap();
     host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
-    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Fais le travail.", &Value::Null).expect("la request");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Fais le travail.", &json!({ "expects": "none" })).expect("la request");
     let files = host.teammate_files(&h.id, "doc").unwrap();
     let borne = Instant::now() + Duration::from_secs(90);
     let boite = loop {
@@ -1179,7 +1179,7 @@ fn a_step_done_that_says_what_remains_is_not_the_end() {
     host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
     host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
     let files = host.teammate_files(&h.id, "doc").unwrap();
-    files.append("supervisor", "request", None, "Établis les verdicts, puis soumets chaque ajout.").unwrap();
+    files.append_with("supervisor", "request", None, "Établis les verdicts, puis soumets chaque ajout.", &json!({ "expects": "none" })).unwrap();
     let o = host.run_teammate(&h.id, "doc").unwrap();
     let boite = files.mailbox();
     assert_eq!((o.steps.len(), o.ended.as_str()), (2, "fait sans plan"), "{o:?} — {boite:#?}");
@@ -1399,6 +1399,11 @@ fn still_nothing_after_the_relaunch_waits_for_the_supervisor_then_fails_by_name(
     let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
     m["teammate"] = json!({ "reply_wait_s": 6 });
     std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    // Dans les déclarations commitées : le manifeste de la tâche est celui de son worktree.
+    let declarations = manifeste.parent().unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "une attente courte"]] {
+        assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
+    }
     let appels = Arc::new(Mutex::new(0usize));
     let model: ChatModel = {
         let appels = appels.clone();
@@ -1448,6 +1453,44 @@ fn a_request_whose_teammate_wrote_a_file_ends_as_before() {
     let boite = attendre_dans(&files, "la fin", &|b| b.iter().any(|l| l["kind"] == "ended") || dit_par_l_hote(b, "relance"));
     assert!(!dit_par_l_hote(&boite, "relance"), "un fichier écrit : pas de relance : {boite:#?}");
     assert_eq!(boite.iter().find(|l| l["kind"] == "ended").unwrap()["text"], "fait sans plan", "{boite:#?}");
+    let demande = boite.iter().position(|l| l["kind"] == "request").unwrap();
+    assert_eq!(files.read_trace(), Some(demande), "la trace de la demande est sur disque");
+}
+
+/// **La trace survit à un redémarrage** : une demande dont l'équipier a écrit un fichier avant
+/// l'arrêt de l'hôte (sa trace sur disque) ne se relance pas au pas de la reprise, qui finit sans
+/// rien de plus (forme B de c7, 15 novembre 2026 : c'est le cas d'un redémarrage pendant le travail).
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_trace_left_before_a_restart_spares_the_request_its_relaunch() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+            answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "repris et fini", "remaining": "" }))]))
+        })))
+    });
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    // L'hôte d'avant : la demande, un pas qui a écrit (sa trace), puis l'arrêt.
+    files.append("supervisor", "request", None, "Écris une ligne dans le README.").unwrap();
+    let demande = files.mailbox().iter().position(|l| l["kind"] == "request").unwrap();
+    files.write_trace(demande);
+    files.append("teammate", "step_done", None, "fait : la moitié").unwrap();
+    // La reprise, bornée : relancée à tort, elle attendrait le superviseur, et le témoin le dit.
+    let (tx, rx) = std::sync::mpsc::channel();
+    let (hote_de_la_reprise, parent) = (host.clone(), h.id.clone());
+    std::thread::spawn(move || {
+        let _ = tx.send(hote_de_la_reprise.run_teammate(&parent, "doc"));
+    });
+    let reprise = rx.recv_timeout(std::time::Duration::from_secs(60));
+    let boite = files.mailbox();
+    assert!(!dit_par_l_hote(&boite, "relance"), "la trace d'avant l'arrêt compte : {boite:#?}");
+    let o = reprise.expect("la reprise finit en 60 s").expect("la reprise");
+    assert_eq!(o.ended, "fait sans plan", "{boite:#?}");
 }
 
 /// **`expects: "none"`** : une demande explicitement silencieuse finit sans ligne et sans relance.
