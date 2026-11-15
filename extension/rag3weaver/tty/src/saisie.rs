@@ -23,6 +23,11 @@ pub struct Saisie {
 }
 
 impl Saisie {
+    /// Une saisie qui reprend les envois des séances d'avant (tty-13).
+    pub fn avec_historique(_historique: Vec<String>) -> Self {
+        Self::default()
+    }
+
     pub fn texte(&self) -> &str {
         &self.texte
     }
@@ -520,6 +525,17 @@ mod tests {
         assert_eq!((a.lignes.clone(), a.ligne, a.colonne), (vec!["abcd".to_string(), String::new()], 1, 0), "une ligne pleine : le curseur passe à la suivante");
         let vide = Saisie::default().lignes_affichees(10, 8);
         assert_eq!((vide.lignes, vide.ligne, vide.colonne), (vec![String::new()], 0, 0));
+    }
+
+    /// ↑ retrouve les envois des séances d'avant.
+    #[test]
+    fn up_finds_the_lines_sent_in_earlier_sessions() {
+        let mut s = Saisie::avec_historique(vec!["hier".into(), "avant-hier\nsur deux lignes".into()]);
+        s.monter();
+        assert_eq!(s.texte(), "avant-hier\nsur deux lignes");
+        s.monter();
+        s.monter();
+        assert_eq!(s.texte(), "hier");
     }
 
     /// L'affichage tient dans la largeur : les caractères larges comptent deux
