@@ -300,13 +300,70 @@ impl Modeles {
 
 impl Serialize for Modeles {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        self.par_capacite.serialize(s)
+        use serde::ser::SerializeMap;
+        let mut m = s.serialize_map(Some(self.par_capacite.len()))?;
+        for (capacite, source) in &self.par_capacite {
+            if *capacite == Capability::Llm && !self.langage.is_empty() {
+                m.serialize_entry(capacite, &self.langage)?;
+            } else {
+                m.serialize_entry(capacite, source)?;
+            }
+        }
+        m.end()
     }
 }
 
 impl<'de> Deserialize<'de> for Modeles {
+    /// Chaque capacité porte un objet ; `llm` peut porter une liste, lue et vérifiée ici : chaque
+    /// élément nommé, aucun nom en double, un seul défaut (pris d'office par une liste d'un élément).
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        Ok(std::collections::BTreeMap::<Capability, ModelSource>::deserialize(d)?.into())
+        use serde::de::Error;
+        let brut = std::collections::BTreeMap::<Capability, serde_json::Value>::deserialize(d)?;
+        let mut modeles = Modeles::default();
+        for (capacite, valeur) in brut {
+            let lire = |v: serde_json::Value, ou: String| serde_json::from_value::<ModelSource>(v).map_err(|e| D::Error::custom(format!("{ou} : {e}")));
+            let serde_json::Value::Array(elements) = valeur else {
+                modeles.par_capacite.insert(capacite, lire(valeur, format!("models.{}", capacite.name()))?);
+                continue;
+            };
+            if capacite != Capability::Llm {
+                return Err(D::Error::custom(format!(
+                    "models.{} : seul `models.llm` se déclare en liste ; `models.{}` prend un objet",
+                    capacite.name(),
+                    capacite.name()
+                )));
+            }
+            let mut liste = Vec::with_capacity(elements.len());
+            for (i, v) in elements.into_iter().enumerate() {
+                let source = lire(v, format!("models.llm[{i}]"))?;
+                if source.name.as_deref().is_none_or(str::is_empty) {
+                    return Err(D::Error::custom(format!("models.llm[{i}] : `name` est obligatoire dans une liste (le nom que la tâche retient et que /model affiche)")));
+                }
+                if liste.iter().any(|s: &ModelSource| s.name == source.name) {
+                    return Err(D::Error::custom(format!("models.llm : le nom « {} » est déclaré deux fois", source.name.as_deref().unwrap_or_default())));
+                }
+                liste.push(source);
+            }
+            if liste.len() == 1 {
+                liste[0].default = true;
+            }
+            let defauts: Vec<&str> = liste.iter().filter(|s| s.default).map(|s| Modeles::nom(s)).collect();
+            match defauts.len() {
+                1 => {}
+                0 => {
+                    let noms: Vec<&str> = liste.iter().map(|s| Modeles::nom(s)).collect();
+                    return Err(D::Error::custom(format!("models.llm : aucun modèle par défaut parmi {} ; posez `default: true` sur l'un d'eux", noms.join(", "))));
+                }
+                _ => {
+                    return Err(D::Error::custom(format!("models.llm : un seul modèle par défaut, et {} le sont ({})", defauts.len(), defauts.join(", "))));
+                }
+            }
+            if let Some(defaut) = liste.iter().find(|s| s.default) {
+                modeles.par_capacite.insert(Capability::Llm, defaut.clone());
+            }
+            modeles.langage = liste;
+        }
+        Ok(modeles)
     }
 }
 
