@@ -140,7 +140,7 @@ pub struct BackendManifest {
     /// un tiers : la même déclaration pour toutes
     /// (`crate::model_source::ModelSource`).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub models: BTreeMap<crate::model_source::Capability, crate::model_source::ModelSource>,
+    pub models: crate::model_source::Modeles,
     /// **Les activations nommées** (décision de c7, 14 novembre 2026 : « une
     /// abstraction, pas trois configs qui divergent ») : un fournisseur déclaré
     /// une fois, que chaque déclaration de `models` cite par son nom
@@ -303,6 +303,9 @@ impl EmbeddingService {
             params: Default::default(),
             timeout_secs: self.timeout_secs,
             reasoning: None,
+            name: None,
+            max_output_tokens: None,
+            default: false,
         }
     }
 }
