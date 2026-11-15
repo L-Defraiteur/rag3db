@@ -115,7 +115,7 @@ fn rendre_le_bail_par_defaut() -> u64 {
 }
 
 /// **Une variable d'environnement de placement** : celles qui choisissent la carte.
-fn variable_de_placement(cle: &str) -> bool {
+fn placement_variable(cle: &str) -> bool {
     cle.starts_with("RAG3WEAVER_BURN_DEVICE_") || cle.ends_with("_VISIBLE_DEVICES")
 }
 
@@ -124,7 +124,7 @@ fn variable_de_placement(cle: &str) -> bool {
 /// `address` et les variables de carte de l'env ; tout autre écart (`modele`,
 /// `programme`, `args`, `profil`, une variable qui n'est pas de carte) se
 /// refuse. Un repli sans `address` aussi. `None` : le même fournisseur.
-pub fn ecart_hors_placement(principale: &Activation, repli: &Activation) -> Option<String> {
+pub fn difference_outside_placement(principale: &Activation, repli: &Activation) -> Option<String> {
     if repli.address.as_deref().is_none_or(|a| a.trim().is_empty()) {
         return Some("address absente : un repli par activation dit l'adresse où son fournisseur écoute".into());
     }
@@ -143,7 +143,7 @@ pub fn ecart_hors_placement(principale: &Activation, repli: &Activation) -> Opti
         ecarts.push(format!("profil ({} ≠ {})", principale.profil, repli.profil));
     }
     let cles: std::collections::BTreeSet<&String> = principale.env.keys().chain(repli.env.keys()).collect();
-    for cle in cles.into_iter().filter(|c| !variable_de_placement(c)) {
+    for cle in cles.into_iter().filter(|c| !placement_variable(c)) {
         let (a, b) = (principale.env.get(cle), repli.env.get(cle));
         if a != b {
             let d = |v: Option<&String>| v.cloned().unwrap_or_else(|| "absente".into());
@@ -530,7 +530,7 @@ struct Prise<C> {
     /// « service 127.0.0.1:7879 » (le repli).
     provenance: String,
     /// La prise est-elle un repli (service ou activation) ?
-    repli: bool,
+    is_fallback: bool,
     _usage: Option<crate::daemon::embeddings::BailDistant>,
     _tenue: Box<dyn std::any::Any + Send + Sync>,
 }
@@ -611,11 +611,11 @@ struct Suivi {
     fenetre: Option<(std::time::Instant, usize)>,
     illisible_dit: bool,
     /// Le multiplicateur de la tenue (1 au départ), doublé par une rechute.
-    facteur: u32,
+    hold_factor: u32,
     /// Revenu à la carte, et la première fenêtre d'après pas encore mesurée.
-    apres_retour: bool,
+    after_return: bool,
     /// Le dernier repli a-t-il été pris pour le débit ?
-    repli_pour_le_debit: bool,
+    fallback_for_throughput: bool,
 }
 
 #[cfg(feature = "daemon")]
@@ -690,7 +690,7 @@ impl<C: Send + 'static> Tenue<C> {
     fn activer_annulable(&self, annule: &std::sync::atomic::AtomicBool) -> Result<Prise<C>, String> {
         let actif = activer(&self.source, self.capacite, annule)?;
         let client = (self.joindre)(&self.source, &actif.adresse)?;
-        Ok(Prise { client, adresse: actif.adresse, provenance: self.provenance_activee(), repli: false, _usage: actif.usage, _tenue: actif.tenue })
+        Ok(Prise { client, adresse: actif.adresse, provenance: self.provenance_activee(), is_fallback: false, _usage: actif.usage, _tenue: actif.tenue })
     }
 
     fn suivi(&self) -> std::sync::MutexGuard<'_, Suivi> {
@@ -704,17 +704,17 @@ impl<C: Send + 'static> Tenue<C> {
     /// La tenue d'un repli : `fallback_hold_secs`, sinon quatre fenêtres.
     fn tenue_du_repli(&self) -> std::time::Duration {
         let base = self.source.activation.as_ref().and_then(|a| a.fallback_hold_secs).map(std::time::Duration::from_secs).unwrap_or(4 * self.fenetre());
-        base * self.suivi().facteur.max(1)
+        base * self.suivi().hold_factor.max(1)
     }
 
     /// Le plafond du doublement de la tenue : `fallback_hold_max_factor`, sinon 16.
-    fn facteur_max(&self) -> u32 {
+    fn max_hold_factor(&self) -> u32 {
         self.source.activation.as_ref().and_then(|a| a.fallback_hold_max_factor).filter(|f| *f > 0).unwrap_or(16)
     }
 
     /// **La source de l'activation de repli** : la déclaration, avec le bloc du
     /// repli, son adresse et sans repli à son tour.
-    fn source_du_repli(&self) -> Option<super::ModelSource> {
+    fn fallback_source(&self) -> Option<super::ModelSource> {
         let super::Fallback::Activation(repli) = &self.source.fallback else { return None };
         let mut source = self.source.clone();
         source.address = super::Addresses::parse(repli.address.as_deref()?);
@@ -725,7 +725,7 @@ impl<C: Send + 'static> Tenue<C> {
 
     /// **La carte du repli, mesurée aussi** (décision de c7) : ses propres
     /// `required_mib` et `margin_mib`, sinon ceux de la principale.
-    fn mesurer_le_repli(&self) -> Option<Mesure> {
+    fn measure_fallback_card(&self) -> Option<Mesure> {
         let super::Fallback::Activation(repli) = &self.source.fallback else { return None };
         let principale = self.source.activation.as_ref()?;
         let requis = repli.required_mib.or(principale.required_mib)?;
@@ -781,18 +781,18 @@ impl<C: Send + 'static> Tenue<C> {
                     .map_err(|e| format!("repli {adresse} injoignable : {e}"))?;
                 sert(&self.source, self.capacite, &sonde).map_err(|e| format!("repli {adresse} refusé : {e}"))?;
                 let client = (self.joindre)(&self.source, adresse).map_err(|e| format!("repli {adresse} : {e}"))?;
-                let prise = Prise { client, adresse: adresse.to_string(), provenance: format!("service {adresse}"), repli: true, _usage: None, _tenue: Box::new(()) };
+                let prise = Prise { client, adresse: adresse.to_string(), provenance: format!("service {adresse}"), is_fallback: true, _usage: None, _tenue: Box::new(()) };
                 Ok((prise, adresse.clone(), false))
             }
             // **L'activation de repli** : lancée ou rejointe, son bail pris, sa
             // recette complète attestée (`activer` la vérifie pour sa source).
             super::Fallback::Activation(repli) => {
-                let source = self.source_du_repli().ok_or("repli par activation sans address")?;
+                let source = self.fallback_source().ok_or("repli par activation sans address")?;
                 let nom = repli.nom_pour(&self.source).to_string();
                 let actif = activer(&source, self.capacite, &std::sync::atomic::AtomicBool::new(false))
                     .map_err(|e| format!("repli par l'activation {nom} : {e}"))?;
                 let client = (self.joindre)(&source, &actif.adresse).map_err(|e| format!("repli par l'activation {nom} : {e}"))?;
-                let prise = Prise { client, adresse: actif.adresse, provenance: format!("activation {nom}"), repli: true, _usage: actif.usage, _tenue: actif.tenue };
+                let prise = Prise { client, adresse: actif.adresse, provenance: format!("activation {nom}"), is_fallback: true, _usage: actif.usage, _tenue: actif.tenue };
                 Ok((prise, format!("l'activation {nom}"), true))
             }
             _ => Err("aucun repli déclaré".into()),
@@ -827,7 +827,7 @@ impl<C: Send + 'static> Tenue<C> {
         match (mesure.as_ref().filter(|m| m.pleine()), &self.source.fallback) {
             (Some(m), super::Fallback::Service(_) | super::Fallback::Activation(_)) => {
                 // La carte du repli pleine aussi : la principale quand même, et les deux mesures dites.
-                if let Some(r) = self.mesurer_le_repli().filter(|r| r.pleine()) {
+                if let Some(r) = self.measure_fallback_card().filter(|r| r.pleine()) {
                     let dit = format!(
                         "carte pleine ({} : {} Mio libres, {} requis) et carte du repli pleine aussi ({} : {} Mio libres, {} requis) : activation principale",
                         m.carte, m.libres, m.requis + m.marge, r.carte, r.libres, r.requis + r.marge
@@ -842,7 +842,7 @@ impl<C: Send + 'static> Tenue<C> {
                     return self.activer_annulable(annule);
                 }
                 let (prise, cible, verifiee) = self.joindre_le_repli()?;
-                self.suivi().repli_pour_le_debit = false;
+                self.suivi().fallback_for_throughput = false;
                 self.dire_le_repli(&cible, verifiee, &format!("{} à {} Mio libres, {} requis + {} de marge", m.carte, m.libres, m.requis, m.marge));
                 Ok(prise)
             }
@@ -894,7 +894,7 @@ impl<C: Send + 'static> Tenue<C> {
                         s.replie = None;
                         s.tenu_jusqu_a = None;
                         s.fenetre = None;
-                        s.apres_retour = true;
+                        s.after_return = true;
                     }
                     Err(e) => {
                         let mut s = self.suivi();
@@ -911,7 +911,7 @@ impl<C: Send + 'static> Tenue<C> {
     /// mesuré par fenêtre (la première fenêtre s'ouvre après le premier appel :
     /// l'activation chauffée), et le repli pris s'il tombe sous le seuil.
     fn compter(&self, g: &mut Option<(Prise<C>, std::time::Instant)>, textes: usize) {
-        let Some((provenance, sur_le_repli)) = g.as_ref().map(|(prise, _)| (prise.provenance.clone(), prise.repli)) else { return };
+        let Some((provenance, sur_le_repli)) = g.as_ref().map(|(prise, _)| (prise.provenance.clone(), prise.is_fallback)) else { return };
         let mut s = self.suivi();
         *s.comptes.entry(provenance).or_default() += textes;
         let Some(min) = self.source.activation.as_ref().and_then(|a| a.min_throughput).filter(|m| *m > 0) else { return };
@@ -938,19 +938,19 @@ impl<C: Send + 'static> Tenue<C> {
         let debit = faits as f64 / ecoule.as_secs_f64();
         s.fenetre = Some((std::time::Instant::now(), 0));
         // La première fenêtre mesurée après un retour : une rechute y double la tenue.
-        let rechute = std::mem::take(&mut s.apres_retour) && s.repli_pour_le_debit;
+        let rechute = std::mem::take(&mut s.after_return) && s.fallback_for_throughput;
         if debit >= min as f64 {
             // Un retour qui tient sa fenêtre remet la tenue à sa base.
-            s.facteur = 1;
+            s.hold_factor = 1;
             return;
         }
         if rechute {
             let base = self.source.activation.as_ref().and_then(|a| a.fallback_hold_secs).map(std::time::Duration::from_secs).unwrap_or(4 * fenetre);
-            s.facteur = (s.facteur.max(1) * 2).min(self.facteur_max());
-            let doublee = base * s.facteur;
+            s.hold_factor = (s.hold_factor.max(1) * 2).min(self.max_hold_factor());
+            let doublee = base * s.hold_factor;
             s.dits.push(format!("retombé sous le débit dans la fenêtre suivante : tenue doublée à {} s", doublee.as_secs()));
         } else {
-            s.facteur = 1;
+            s.hold_factor = 1;
         }
         drop(s);
         let cause = format!("débit {} textes/s sous {min} pendant {} s", format!("{debit:.1}").replace('.', ","), fenetre.as_secs());
@@ -958,7 +958,7 @@ impl<C: Send + 'static> Tenue<C> {
             Ok((repli, cible, verifiee)) => {
                 // Le fournisseur de la carte lâché : son bail rendu, l'éviction fait le reste.
                 *g = Some((repli, std::time::Instant::now()));
-                self.suivi().repli_pour_le_debit = true;
+                self.suivi().fallback_for_throughput = true;
                 self.dire_le_repli(&cible, verifiee, &cause);
             }
             Err(e) => self.suivi().dits.push(format!("{cause} : {e} ; la carte reste")),
@@ -2038,9 +2038,9 @@ mod tests {
 
     // ─── Le repli par activation nommée (15 novembre 2026, conception relue par c7) ───
 
-    const CARTE_REPLI: &str = "carte-repli";
+    const FALLBACK_CARD: &str = "carte-repli";
 
-    fn ecrire_une_carte(f: &Fixture, carte: &str, libres_mio: u64) {
+    fn write_card(f: &Fixture, carte: &str, libres_mio: u64) {
         let device = f.dossier.path().join("drm").join(carte).join("device");
         std::fs::create_dir_all(&device).unwrap();
         std::fs::write(device.join("mem_info_vram_total"), format!("{}\n", TOTAL_MIO << 20)).unwrap();
@@ -2049,7 +2049,7 @@ mod tests {
 
     /// Les événements d'une génération de la fixture (« appelant-reel » pour la
     /// principale, « repli » pour l'activation de repli), au même journal.
-    fn evenements_de(f: &Fixture, nom: &str, generation: &str) -> usize {
+    fn events_of(f: &Fixture, nom: &str, generation: &str) -> usize {
         std::fs::read_to_string(f.dossier.path().join("events.jsonl")).unwrap_or_default().lines()
             .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
             .filter(|v| v["event"] == nom && v["generation"] == generation).count()
@@ -2058,11 +2058,11 @@ mod tests {
     /// **L'activation de repli** : le même bloc que la principale, au placement
     /// près (sa carte, son adresse, sa coordination et son journal à elle), et
     /// sa génération dans les événements.
-    fn replier_par_activation(f: &mut Fixture, libres_repli: u64) {
-        ecrire_une_carte(f, CARTE_REPLI, libres_repli);
+    fn fall_back_by_activation(f: &mut Fixture, libres_repli: u64) {
+        write_card(f, FALLBACK_CARD, libres_repli);
         let mut r = f.source.activation.clone().unwrap();
         r.nom = Some("repli-de-test".into());
-        r.peripherique = CARTE_REPLI.into();
+        r.peripherique = FALLBACK_CARD.into();
         r.coordination = f.dossier.path().join("coordination-repli");
         r.journal = f.dossier.path().join("journaux-repli");
         r.args = vec!["--journal".into(), f.dossier.path().join("events.jsonl").display().to_string(), "--generation".into(), "repli".into()];
@@ -2073,13 +2073,13 @@ mod tests {
     /// **Repli par activation, 1. La carte pleine : l'activation de repli est
     /// lancée, la principale non**, sa recette est vérifiée et l'état le dit.
     #[test]
-    fn repli_par_activation_carte_pleine_lance_le_repli_et_verifie_sa_recette() {
+    fn fallback_by_activation_full_card_starts_the_fallback_and_checks_its_recipe() {
         let mut f = sur_carte(1_000);
-        replier_par_activation(&mut f, 20_000);
+        fall_back_by_activation(&mut f, 20_000);
         let (client, _) = connect_embedder(&f.source).unwrap();
         assert_eq!(client.embed(&["par le repli".into()]).unwrap()[0].len(), 384);
-        assert_eq!(evenements_de(&f, "constructeur_demarre", "appelant-reel"), 0, "la principale ne se lance pas");
-        assert_eq!(evenements_de(&f, "constructeur_demarre", "repli"), 1, "l'activation de repli se lance");
+        assert_eq!(events_of(&f, "constructeur_demarre", "appelant-reel"), 0, "la principale ne se lance pas");
+        assert_eq!(events_of(&f, "constructeur_demarre", "repli"), 1, "l'activation de repli se lance");
         assert_eq!(client.provenance_counts(), vec![("activation repli-de-test".to_string(), 1)]);
         let etat = client.provenance_state().expect("l'état dit le repli");
         assert!(etat.contains("replié vers l'activation repli-de-test (recette vérifiée)") && !etat.contains("sans recette"), "{etat}");
@@ -2091,13 +2091,13 @@ mod tests {
     /// c7) : les deux pleines, l'activation principale se fait, et l'état dit
     /// les deux mesures.
     #[test]
-    fn repli_par_activation_les_deux_cartes_pleines_activent_la_principale_et_le_disent() {
+    fn fallback_by_activation_both_cards_full_activates_the_primary_and_says_so() {
         let mut f = sur_carte(1_000);
-        replier_par_activation(&mut f, 1_000);
+        fall_back_by_activation(&mut f, 1_000);
         let (client, _) = connect_embedder(&f.source).unwrap();
         assert_eq!(client.embed(&["deux pleines".into()]).unwrap()[0].len(), 384);
-        assert_eq!(evenements_de(&f, "constructeur_demarre", "appelant-reel"), 1, "la principale se fait");
-        assert_eq!(evenements_de(&f, "constructeur_demarre", "repli"), 0, "un repli vers une carte pleine ne vaut rien");
+        assert_eq!(events_of(&f, "constructeur_demarre", "appelant-reel"), 1, "la principale se fait");
+        assert_eq!(events_of(&f, "constructeur_demarre", "repli"), 0, "un repli vers une carte pleine ne vaut rien");
         let etat = client.provenance_state().expect("l'état dit les deux mesures");
         assert!(etat.contains("carte pleine (carte-factice : 1000 Mio libres, 13548 requis)")
             && etat.contains("carte du repli pleine aussi (carte-repli : 1000 Mio libres, 13548 requis)"), "{etat}");
@@ -2106,29 +2106,29 @@ mod tests {
     /// **Repli par activation, 5. Le retour** : la carte libérée après la tenue,
     /// la principale est activée, et le repli rend son bail (son éviction suit).
     #[test]
-    fn repli_par_activation_le_retour_active_la_principale_et_le_repli_rend_son_bail() {
+    fn fallback_by_activation_return_activates_the_primary_and_releases_the_fallback_lease() {
         let mut f = sur_carte(1_000);
         f.source.activation.as_mut().unwrap().fallback_hold_secs = Some(1);
-        replier_par_activation(&mut f, 20_000);
+        fall_back_by_activation(&mut f, 20_000);
         let (client, _) = connect_embedder(&f.source).unwrap();
         client.embed(&["replié".into()]).unwrap();
-        assert_eq!(evenements_de(&f, "constructeur_demarre", "repli"), 1);
+        assert_eq!(events_of(&f, "constructeur_demarre", "repli"), 1);
         ecrire_la_carte(&f, 20_000);
         std::thread::sleep(std::time::Duration::from_millis(1_300));
         client.embed(&["revenu".into()]).unwrap();
-        assert_eq!(evenements_de(&f, "constructeur_demarre", "appelant-reel"), 1, "la principale revient");
+        assert_eq!(events_of(&f, "constructeur_demarre", "appelant-reel"), 1, "la principale revient");
         let debut = std::time::Instant::now();
-        while evenements_de(&f, "evince", "repli") == 0 && debut.elapsed() < std::time::Duration::from_secs(15) {
+        while events_of(&f, "evince", "repli") == 0 && debut.elapsed() < std::time::Duration::from_secs(15) {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
-        assert_eq!(evenements_de(&f, "evince", "repli"), 1, "le repli a rendu son bail : il s'évince");
+        assert_eq!(events_of(&f, "evince", "repli"), 1, "le repli a rendu son bail : il s'évince");
     }
 
     /// **Repli par activation, 6. Le doublement de la tenue** : un repli pris pour
     /// le débit, revenu à la carte après sa tenue d'une seconde, qui retombe
     /// dans la fenêtre suivante, double sa tenue, et le dit.
     #[test]
-    fn repli_pour_le_debit_qui_retombe_double_sa_tenue_et_le_dit() {
+    fn throughput_fallback_relapse_doubles_the_hold_and_says_so() {
         let mut f = sur_carte(20_000);
         let pose = poser_un_service(&f, "fixture-residence-384");
         replier_vers(&mut f, &pose);
