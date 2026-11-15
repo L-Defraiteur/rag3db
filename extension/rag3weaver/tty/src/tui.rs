@@ -507,6 +507,9 @@ fn executer(c: crate::commandes::Commande, terminal: &mut ratatui::DefaultTermin
         Commande::Nom(Some(n)) => {
             let n = if n == "-" { String::new() } else { n };
             let r = client::poster(agent, ep, "/ide/teammate/name", &json!({ "backend": tache.depot.id, "task": tache.task, "agent_name": n }));
+            if let Some(g) = nom_garde(&n, &r) {
+                vue.nommer(&g);
+            }
             vue.note(&nom_dit(&n, r));
         }
         Commande::Etapes => {
@@ -563,8 +566,10 @@ fn lancer_une_commande(cmd: &str, terminal: &mut ratatui::DefaultTerminal, vue: 
 
 /// Les lignes de `/model` : les modèles déclarés, le nom et le modèle d'abord.
 /// Le nom que l'hôte a gardé pour l'agent, selon sa réponse à `/nom <n>`.
-pub fn nom_garde(_n: &str, _r: &Result<Value, String>) -> Option<String> {
-    None
+pub fn nom_garde(n: &str, r: &Result<Value, String>) -> Option<String> {
+    let v = r.as_ref().ok()?;
+    let nom = v["agent_name"].as_str().unwrap_or(n);
+    (!nom.is_empty()).then(|| nom.to_string())
 }
 
 /// Ce que `/nom <n>` dit, selon la réponse de l'hôte (`POST /ide/teammate/name`, chez ED) : le nom
