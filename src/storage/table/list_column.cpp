@@ -296,15 +296,5 @@ ListOffsetSizeInfo ListColumn::getListOffsetSizeInfo(const SegmentState& state,
     return {numValuesScan, std::move(offsetColumnChunk), std::move(sizeColumnChunk)};
 }
 
-static void appendDataCheckpointState(
-    std::vector<SegmentCheckpointState>& listDataChunkCheckpointStates, ColumnChunkData& dataChunk,
-    offset_t inputOffset, offset_t& outputOffset, offset_t numRows) {
-    if (numRows > 0) {
-        listDataChunkCheckpointStates.push_back(
-            SegmentCheckpointState{dataChunk, inputOffset, outputOffset, numRows});
-        outputOffset += numRows;
-    }
-}
-
 } // namespace storage
 } // namespace rag3db
