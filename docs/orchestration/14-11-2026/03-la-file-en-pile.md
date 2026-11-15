@@ -1491,3 +1491,6 @@ Codeparsers et G, 17 h 26 : le ticket des trois SIGTERM (16 h 53, 16 h 59, 17 h 
 `systemd-run --scope -p MemoryMax` de poste lourd, ni confirmée ni infirmée (journal systemd muet). Lot court à G : le confineur
 écrit memory.peak et memory.events de sa portée quand il reçoit un signal, et dit « enveloppe mémoire crevée » au lieu de
 « signal reçu : 15 ».
+Recherche, 17 h 30 : l'exclusion après coup prouvée (771eb216b : app.js indexé sans règle, réindexé sous index_exclude → 0 scope et
+autant de documents que de lignes) ; une garde, pas un correctif, en fin de file avec 2b-C. La fenêtre d'arbre peut compter sur
+le retrait.
