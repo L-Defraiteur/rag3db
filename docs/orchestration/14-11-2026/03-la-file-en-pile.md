@@ -1774,3 +1774,7 @@ G : verdict vert (e2e_code 36, lectures 27, demon_hote 24), hôte posé à lucie
 (sauvegardes .avant-algareth-*), backends rouverts par l'hôte (session neuve, l'ancienne fermée par la relance). 96 : segment vert au
 portable (voie 2 : LlmNode admis dans un outil seulement avec response_schema sous call_models ; un rouge de charge Text file busy en
 ticket), en pile derrière le second tour pour la pose d'après.
+G, 20 h 15 : check-manifests vert après l'écriture (6 manifestes, 0 refusé ; `agent.name` Algareth, un seul models.llm). Archi : le nom de
+l'agent, parts (2) et (3), vert (le-nom-de-l-agent f089a74e9 : « Your name is Algareth » dans l'invite, présentation une fois, la
+persona pour le ton ; `name` sur chaque ligne teammate ; un rouge vu : « je m'appelle équipier » quand aucun nom n'est choisi, corrigé) ;
+« à toi » dessus. L'hôte posé ce soir a le nom au manifeste mais pas l'invite : Algareth se présentera à la pose suivante.
