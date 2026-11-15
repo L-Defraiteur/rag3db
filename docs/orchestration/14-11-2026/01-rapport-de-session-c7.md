@@ -1485,3 +1485,6 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 - **tty, 11 h 4x** : l'essai de 19 h 46 rejoué sur l'hôte 7970 au binaire 26a091474 — le report porte la
   présentation elle-même (titre, trois puces, « autonomie » en gras), rendue à l'écran avec son Markdown : le
   correctif de l'équipier tient sur le cas réel (écran gardé dans la page de Lucie). Son essai reste le juge.
+- **Le cœur, 11 h 41** : rows-moved-during-create 25/96 sur master contre 27/96 sur le lot — même niveau, le lot
+  n'aggrave pas ; le défaut de master est une fois sur quatre, le cas seul (ticket d'hotfixs mis à jour,
+  5050d0cbe). Passe finale sur d5f5325f0 (~35 min), puis push en mode simple ; nouveautés dans le lot.
