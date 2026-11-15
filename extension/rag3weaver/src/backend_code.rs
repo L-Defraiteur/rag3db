@@ -487,7 +487,7 @@ const BASE_NODES: &[&str] = &[
 const READ_NODES: &[&str] = &["ReadFileNode", "GrepNode", "ListFilesNode", "ScanFilesNode", "LireFichierNode", "SymbolNavigationNode"];
 const WRITE_NODES: &[&str] = &["EditFileNode", "EcrireFichierNode"];
 const RUN_NODES: &[&str] = &["RunCommandNode"];
-const MODEL_NODES: &[&str] = &["Decide"];
+const MODEL_NODES: &[&str] = &["Decide", "LlmNode"];
 const WORKTREE_NODES: &[&str] = &["WorktreeNode"];
 
 /// **Les deux nœuds réservés aux graphes réactifs.** Un outil est appelé par
