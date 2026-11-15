@@ -1563,3 +1563,7 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   reprise de Claude Code), moins pour un local — réglage par modèle, défaut 100 k ; l'archiviste compose dans le
   budget par priorité (identité, tâche, bilan, L1 de la session, L1 des autres les plus récents), le reste au
   rappel ; le témoin mesure. Dit à 96 et archi.
+- **Lucie, 12 h 3x — un banc de compaction sur nos vraies conversations** : les transcripts Claude Code du projet
+  portent chaque frontière de compaction et le résumé de Claude Code ; à chaque frontière, l'archiviste compose
+  le contexte dans 100 k et se juge contre ce résumé sur les tours qui suivent (vérité de terrain). Confié à
+  banc avec 96, conception d'abord.
