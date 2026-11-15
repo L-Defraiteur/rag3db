@@ -24,8 +24,8 @@ pub struct Saisie {
 
 impl Saisie {
     /// Une saisie qui reprend les envois des séances d'avant (tty-13).
-    pub fn avec_historique(_historique: Vec<String>) -> Self {
-        Self::default()
+    pub fn avec_historique(historique: Vec<String>) -> Self {
+        Self { historique, ..Self::default() }
     }
 
     pub fn texte(&self) -> &str {
