@@ -465,7 +465,13 @@ for kitty in (True, False):
         time.sleep(1.5)
         textes = [e["corps"].get("text") for e in journal() if e["corps"].get("kind") in ("answer", "instruction", "request") and e["corps"].get("text") not in (None, "go")]
         resultats[quoi] = {"demande_kitty": demande_kitty, "aide_maj_entree": aide_maj, "aide_alt_entree": aide_alt, "textes_recus": textes}
-        if textes[:1] != ["un\ndeux\ntrois"]:
+        aide_tmux = "sous tmux, Maj-Entrée envoie".encode() in tout
+        resultats[quoi]["aide_tmux"] = aide_tmux
+        if LANCEUR.startswith("tmux") and textes[:2] == ["un", "deux\ntrois"] and aide_tmux:
+            # tmux, configuré par défaut, fait de Maj-Entrée une Entrée simple : le repli est dit
+            # (ticket 2026-11-15-sous-tmux-maj-entree-envoie-au-lieu-d-aller-a-la-ligne).
+            resultats[quoi]["repli_tmux"] = True
+        elif textes[:1] != ["un\ndeux\ntrois"]:
             rouge(f"{quoi} : la boîte a reçu {textes!r} au lieu de ['un\\ndeux\\ntrois']")
         if any("13;2u" in (x or "") or "[13" in (x or "") for x in textes):
             rouge(f"{quoi} : un CSI u est entré comme texte : {textes!r}")

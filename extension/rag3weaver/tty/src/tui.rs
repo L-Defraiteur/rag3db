@@ -174,6 +174,7 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     vue.capacites = Capacites::du_terminal();
     vue.theme = theme;
     vue.maj_entree = maj_entree;
+    vue.sous_tmux = std::env::var_os("TMUX").is_some_and(|v| !v.is_empty());
     if let (true, Some(j)) = (mosh, &journal) {
         vue.repli = Some(crate::vue::Repli { phrase: "sous mosh, l'historique ne se relit pas au défilement".into(), commande: j.relecture() });
     }
