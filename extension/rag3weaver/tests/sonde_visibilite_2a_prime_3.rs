@@ -97,7 +97,7 @@ fn le_cout_des_formes_de_la_visibilite() {
     };
     // (3a′) les colonnes, ou une réapparition de l'annexe.
     let annexe = |v: &str| {
-        format!("({} OR EXISTS {{ MATCH (a:Reapparition_sonde)-[:REAPPARITION_DE]->({v}) WHERE a.couche = 'backend' AND a.depuis <= 0 AND (a.jusqu_a IS NULL OR a.jusqu_a > 0) }})", col(v))
+        format!("({} OR EXISTS {{ MATCH (ra:Reapparition_sonde)-[:REAPPARITION_DE]->({v}) WHERE ra.couche = 'backend' AND ra.depuis <= 0 AND (ra.jusqu_a IS NULL OR ra.jusqu_a > 0) }})", col(v))
     };
     let jeu = |p: &dyn Fn(&str) -> String| -> Vec<(&'static str, String)> {
         vec![
