@@ -588,6 +588,8 @@ pub const EMBEDDING_CHOICE_KEY: &str = "embedding_choice";
 pub const CHUNKS_SANS_TEXTE_KEY: &str = "chunks_without_text";
 /// La méta des comptes du plein texte relevés à la fin du dernier index.
 pub const COMPTES_DU_PLEIN_TEXTE_KEY: &str = "fts_counts_at_index_end";
+/// La note de la dernière maintenance nocturne du plein texte (`Catalog::fts_maintenance_nocturne`).
+pub const FTS_MAINTENANCE_KEY: &str = "fts_maintenance_last";
 
 /// Ce que `embedding_choice` porte : le modèle, la phrase qui l'a décidé, et
 /// quand. Pour qui se demandera dans six mois pourquoi cet index est en 107m.
@@ -1424,6 +1426,50 @@ fn read_threads() -> u64 {
                 .collect()
         };
         crate::fts_maintenance::releve_a_blanc(&handle, nom, lignes)
+    }
+
+    /// **La maintenance nocturne** du plein texte de ce catalogue (`fts_maintenance::maintenance_nocturne`),
+    /// table par table, notée dans ses métas (`FTS_MAINTENANCE_KEY`) avec la date de la nuit : l'hôte ne
+    /// la rejoue pas la même nuit, et l'état d'index la lit. `None` : aucune table au plein texte.
+    pub fn fts_maintenance_nocturne(&mut self, maintenant: jiff::civil::DateTime, max_purge_ratio: f64, compact: bool) -> Option<serde_json::Value> {
+        let mut tables: Vec<String> = self.fts_handles.keys().cloned().collect();
+        if tables.is_empty() {
+            return None;
+        }
+        tables.sort();
+        let quand = maintenant.strftime("%Y-%m-%d %H:%M").to_string();
+        let rendus: Vec<serde_json::Value> = if self.in_transaction {
+            vec![serde_json::json!({"table": "*", "error": "une transaction est ouverte : retentée la nuit suivante"})]
+        } else {
+            tables.iter().map(|table| {
+                let handle = self.fts_handles[table].clone();
+                let decalage = self.dialect.node_offset_expr("n");
+                let lignes = || -> Result<Vec<u64>, String> {
+                    let rendu = self.conn.execute(&format!("MATCH (n:{table}) RETURN {decalage}")).map_err(|e| e.to_string())?;
+                    rendu.rows.iter()
+                        .map(|r| r.first().and_then(|v| v.as_i64()).and_then(|n| u64::try_from(n).ok())
+                            .ok_or_else(|| format!("décalage illisible dans les lignes de {table}")))
+                        .collect()
+                };
+                crate::fts_maintenance::maintenance_nocturne(&handle, table, lignes, max_purge_ratio, compact)
+                    .unwrap_or_else(|e| serde_json::json!({"table": table, "error": e}))
+            }).collect()
+        };
+        let note = serde_json::json!({
+            "date": maintenant.date().to_string(),
+            "at": quand,
+            "tables": rendus,
+            "summary": crate::fts_maintenance::phrase_de_la_nuit(&quand, &rendus),
+        });
+        if let Err(e) = self.persist_meta_key(FTS_MAINTENANCE_KEY, &note.to_string()) {
+            eprintln!("[rag3weaver] maintenance nocturne : la note ne s'écrit pas ({e})");
+        }
+        Some(note)
+    }
+
+    /// La note de la dernière maintenance nocturne, s'il y en a eu une.
+    pub fn derniere_maintenance_fts(&self) -> Option<serde_json::Value> {
+        self.read_meta_key(FTS_MAINTENANCE_KEY).ok().flatten().and_then(|t| serde_json::from_str(&t).ok())
     }
 
     /// La purge et la compaction du plein texte d'une table

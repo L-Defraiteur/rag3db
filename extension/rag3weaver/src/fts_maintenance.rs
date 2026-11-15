@@ -194,6 +194,71 @@ pub fn releve_a_blanc(handle: &Handle, table: &str, lignes: impl Fn() -> Result<
     ))
 }
 
+/// **La maintenance nocturne d'une table** (15 novembre 2026, c7) : le relevé à blanc, puis la purge
+/// des orphelins si leur part des vivants ne dépasse pas `max_purge_ratio`, puis la compaction si
+/// `compact` — jouée aussi quand la purge est refusée. L'appelant tient ce qui exclut les écrivains
+/// (le slot en écriture et le catalogue) : le relevé et la purge voient la même table.
+pub fn maintenance_nocturne(
+    handle: &Handle,
+    table: &str,
+    lignes: impl Fn() -> Result<Vec<u64>, String>,
+    max_purge_ratio: f64,
+    compact: bool,
+) -> Result<serde_json::Value, String> {
+    let releve = releve_a_blanc(handle, table, lignes)?;
+    let vivants = releve["live_docs"].as_u64().unwrap_or(0);
+    let orphelins: Vec<u64> = releve["orphans"].as_array().map(|a| a.iter().filter_map(|v| v.as_u64()).collect()).unwrap_or_default();
+    let ratio = if vivants == 0 { 0.0 } else { orphelins.len() as f64 / vivants as f64 };
+    let refus = (!orphelins.is_empty() && ratio > max_purge_ratio).then(|| format!(
+        "maintenance refusée : {} orphelins sur {vivants} vivants (ratio {ratio:.3} > {max_purge_ratio}) : relevé à la main",
+        orphelins.len()
+    ));
+    let request = lucivy_core::maintenance::MaintenanceRequest {
+        purge_node_ids: if refus.is_some() { Vec::new() } else { orphelins.clone() },
+        compact,
+        // Le ratio vient d'être jugé ici, sur le même relevé.
+        max_purge_ratio: 1.0,
+        ..Default::default()
+    };
+    let report = handle.maintain(&request)?;
+    let dictionnaire = |r: &lucivy_core::index_report::IndexReport| *r.bytes_by_kind.get("dictionary").unwrap_or(&0);
+    Ok(serde_json::json!({
+        "table": table,
+        "live_docs": vivants,
+        "graph_docs": releve["graph_docs"],
+        "orphans_found": orphelins.len(),
+        "purged": report.purged,
+        "refused": refus,
+        "dictionary_bytes": [dictionnaire(&report.before), dictionnaire(&report.after)],
+        "index_bytes": [report.before.index_bytes, report.after.index_bytes],
+        "dictionary_texts": [report.dictionary_texts.0, report.dictionary_texts.1],
+        "retries": releve["retries"],
+    }))
+}
+
+/// La phrase de l'état pour les tables d'une nuit : « dernière maintenance : <quand>, N orphelins
+/// purgés, dictionnaire X → Y Mo », puis chaque refus.
+pub fn phrase_de_la_nuit(quand: &str, tables: &[serde_json::Value]) -> String {
+    let purges: u64 = tables.iter().filter_map(|t| t["purged"].as_u64()).sum();
+    let (avant, apres): (u64, u64) = tables.iter().fold((0, 0), |(a, b), t| {
+        (a + t["dictionary_bytes"][0].as_u64().unwrap_or(0), b + t["dictionary_bytes"][1].as_u64().unwrap_or(0))
+    });
+    let mo = |o: u64| format!("{:.1}", o as f64 / 1e6);
+    let mut phrase = format!(
+        "dernière maintenance : {quand}, {purges} orphelin{} purgé{}, dictionnaire {} → {} Mo",
+        if purges > 1 { "s" } else { "" }, if purges > 1 { "s" } else { "" }, mo(avant), mo(apres)
+    );
+    for t in tables {
+        if let Some(refus) = t["refused"].as_str() {
+            phrase.push_str(&format!(" ; {} : {refus}", t["table"].as_str().unwrap_or("?")));
+        }
+        if let Some(erreur) = t["error"].as_str() {
+            phrase.push_str(&format!(" ; {} : {erreur}", t["table"].as_str().unwrap_or("?")));
+        }
+    }
+    phrase
+}
+
 /// Les documents vivants que dit un jeton (somme des `max_doc − supprimés`).
 pub fn live_count_of(jeton: &str) -> u64 {
     jeton.split(['|', ','])
@@ -300,6 +365,31 @@ mod tests {
             Ok(vec![1])
         }).unwrap();
         assert_eq!(r["retries"], 1, "[check: une-reprise-dite] {r}");
+    }
+
+    /// La maintenance nocturne : sous le ratio, l'orphelin part ; au-dessus, rien ne part et le refus
+    /// dit les comptes ; la compaction joue dans les deux cas.
+    #[test]
+    fn la_maintenance_nocturne_purge_sous_le_ratio_et_refuse_au_dessus() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = index(dir.path());
+        for i in 0..40u64 {
+            handle.add_document_json(i, &serde_json::json!({ "content": format!("doc {i}") })).unwrap();
+        }
+        handle.commit().unwrap();
+        let lignes: Vec<u64> = (0..39).collect();
+        let r = maintenance_nocturne(&handle, "Essai", || Ok(lignes.clone()), 0.05, true).unwrap();
+        assert_eq!((r["orphans_found"].as_u64(), r["purged"].as_u64()), (Some(1), Some(1)), "[check: purge-sous-le-ratio] {r}");
+        assert!(r["refused"].is_null());
+        assert_eq!(handle.num_docs(), 39);
+        let r = maintenance_nocturne(&handle, "Essai", || Ok((0..30).collect()), 0.05, true).unwrap();
+        assert_eq!(r["purged"].as_u64(), Some(0), "[check: rien-au-dessus-du-ratio] {r}");
+        assert!(r["refused"].as_str().is_some_and(|t| t.contains("9 orphelins sur 39 vivants") && t.contains("relevé à la main")),
+            "[check: le-refus-dit-les-comptes] {r}");
+        assert_eq!(handle.num_docs(), 39, "[check: rien-n-est-efface]");
+        let phrase = phrase_de_la_nuit("2026-11-16 03:31", &[r]);
+        assert!(phrase.starts_with("dernière maintenance : 2026-11-16 03:31, 0 orphelin purgé, dictionnaire")
+            && phrase.contains("Essai : maintenance refusée"), "[check: la-phrase-de-l-etat] {phrase}");
     }
 
     /// Le jeton change quand la table change, et pas autrement.

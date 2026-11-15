@@ -387,6 +387,51 @@ impl DaemonHost {
     /// chose : un run en fond vivant, un appel en cours sur un backend (son verrou
     /// tenu), ou le travail d'un backend ([`Backend::travail_en_cours`] : index,
     /// montre). Ne bloque jamais.
+    /// **La maintenance nocturne du plein texte** (15 novembre 2026, c7) : pour chaque backend ouvert
+    /// dont la politique (`fts.maintenance` du manifeste, active à 03:30 par défaut) est due — l'heure
+    /// passée, pas encore jouée cette nuit —, le slot en écriture puis le catalogue, s'il est libre (une
+    /// passe qui le tient la remet au pas suivant), puis `Catalog::fts_maintenance_nocturne`. Rend une
+    /// ligne par backend maintenu, aussi écrite au journal. `maintenant` est l'heure locale : le fil
+    /// `demon-entretien` la donne, un témoin l'injecte.
+    pub fn maintenance_periodique(&self, maintenant: jiff::civil::DateTime) -> Vec<String> {
+        let mut faits = Vec::new();
+        let hosted: Vec<Arc<Hosted>> = self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
+        for h in hosted {
+            let politique = {
+                let slot = h.backend.read().unwrap_or_else(|p| p.into_inner());
+                let Some(b) = slot.as_ref() else { continue };
+                let politique = b.prepared().manifest.fts_maintenance();
+                if !politique.enabled {
+                    continue;
+                }
+                let heure = match politique.heure() {
+                    Ok(t) => t,
+                    Err(e) => {
+                        eprintln!("[démon] maintenance nocturne de {} : {e}", h.manifest.display());
+                        continue;
+                    }
+                };
+                if maintenant.time() < heure {
+                    continue;
+                }
+                // Déjà jouée cette nuit ? Un catalogue tenu : au pas suivant.
+                let Ok(cat) = b.catalog.try_lock() else { continue };
+                if cat.derniere_maintenance_fts().is_some_and(|n| n["date"] == json!(maintenant.date().to_string())) {
+                    continue;
+                }
+                politique
+            };
+            let Ok(slot) = self.ecrire_le_slot(&h) else { continue };
+            let Some(b) = slot.as_ref() else { continue };
+            let Ok(mut cat) = b.catalog.try_lock() else { continue };
+            let Some(note) = cat.fts_maintenance_nocturne(maintenant, politique.max_purge_ratio, politique.compact) else { continue };
+            let ligne = format!("{} : {}", h.manifest.display(), note["summary"].as_str().unwrap_or(""));
+            eprintln!("[démon] maintenance nocturne du plein texte — {ligne}");
+            faits.push(ligne);
+        }
+        faits
+    }
+
     pub fn travail_en_cours(&self) -> Option<String> {
         let vivants = self.background.alive();
         if !vivants.is_empty() {
@@ -2132,6 +2177,25 @@ impl DaemonServer {
                     }
                 })
                 .expect("le fil du relevé")
+        };
+        // **La maintenance nocturne du plein texte**, dans un fil à elle : une compaction de grande
+        // table ne retarde pas le relevé des sessions.
+        let _entretien = {
+            let (host, stopping) = (host.clone(), self.stopping.clone());
+            std::thread::Builder::new()
+                .name("demon-entretien".into())
+                .spawn(move || {
+                    let mut ecoule = std::time::Duration::ZERO;
+                    while !stopping.load(Ordering::SeqCst) {
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+                        ecoule += std::time::Duration::from_millis(500);
+                        if ecoule >= std::time::Duration::from_secs(60) {
+                            ecoule = std::time::Duration::ZERO;
+                            host.maintenance_periodique(jiff::Zoned::now().datetime());
+                        }
+                    }
+                })
+                .expect("le fil de l'entretien")
         };
         let workers: Vec<_> = (0..self.threads)
             .map(|i| {
