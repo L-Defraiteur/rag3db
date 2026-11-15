@@ -288,6 +288,8 @@ FORCE_BUILD=false
 NO_CUDA=false
 SUMMARY=false
 TEST_FILES=()
+# `--lib` (15 November 2026, hotfixs ticket): the crate's unit tests, `cargo test --lib`, as a suite of the pass.
+RUN_LIB_TESTS=false
 EXTRA_FEATURES=""
 TEST_FILTER=""
 EXTRA_ARGS=()
@@ -304,6 +306,7 @@ while [[ $# -gt 0 ]]; do
     # demandé — la même famille que le `--no-fail-fast` ci-dessous, un total
     # partiel qui ressemble à un total complet (18 septembre 2026).
     --test)       shift; TEST_FILES+=("$1"); shift ;;
+    --lib)        RUN_LIB_TESTS=true; shift ;;
     --features)   shift; EXTRA_FEATURES="$1"; shift ;;
     -*)           EXTRA_ARGS+=("$1"); shift ;;
     *)            TEST_FILTER="$1"; shift ;;
@@ -587,6 +590,9 @@ if [ ${#TEST_FILES[@]} -gt 0 ]; then
     fi
     CARGO_ARGS+=(--test "$nom")
   done
+elif [ "$RUN_LIB_TESTS" = true ]; then
+  # `--lib` alone: the unit tests of the crate, no e2e suite.
+  :
 else
   # Run ALL e2e test files
   for f in "$WEAVER"/tests/e2e_*.rs; do
@@ -657,7 +663,14 @@ if [ ${#ABSENTES[@]} -gt 0 ]; then
   echo "  Ajoutez-la (--features <nom>), ou ne demandez pas la suite."
   exit 1
 fi
+# The command of the lib tests (`--lib`), said by the guard and played by jouer_les_suites.
+lib_test_args() {
+  LIB_TEST_ARGS=(--features "$FEATURES" --lib -- --nocapture)
+  [ -n "$TEST_FILTER" ] && LIB_TEST_ARGS+=("$TEST_FILTER")
+  LIB_TEST_ARGS+=("${EXTRA_ARGS[@]}")
+}
 if [ "${RAG3WEAVER_E2E_VERIFIER_SEULEMENT:-}" = 1 ]; then
+  if [ "$RUN_LIB_TESTS" = true ]; then lib_test_args; echo "▸ lib : cargo test ${LIB_TEST_ARGS[*]}"; fi
   echo "▸ features : chaque suite demandée a les siennes ($FEATURES) — rien n'est bâti ni joué"
   exit 0
 fi
@@ -701,13 +714,16 @@ for ((i = 0; i < ${#CARGO_ARGS[@]}; i++)); do
     SUITES_DEMANDEES+=("$nom"); SUITES_BINAIRE+=("")
   fi
 done
+# The lib tests (`--lib`) are a requested suite too, counted by cargo's line `Running unittests src/lib.rs`.
+if [ "$RUN_LIB_TESTS" = true ]; then SUITES_DEMANDEES+=("lib"); SUITES_BINAIRE+=(""); fi
 compter_les_suites() {
   ATTENDUES=0; JOUEES=0; MANQUANTES=()
   local i nom binaire
   for ((i = 0; i < ${#SUITES_DEMANDEES[@]}; i++)); do
     nom="${SUITES_DEMANDEES[$i]}"; binaire="${SUITES_BINAIRE[$i]}"
     ATTENDUES=$((ATTENDUES + 1))
-    if grep -qF "Running tests/$nom.rs" "$1" \
+    if { [ "$nom" = lib ] && grep -qF "Running unittests src/lib.rs" "$1"; } \
+       || grep -qF "Running tests/$nom.rs" "$1" \
        || { [ -n "$binaire" ] && grep -qF "Running tests/$binaire/main.rs" "$1"; }; then
       JOUEES=$((JOUEES + 1))
     else
@@ -904,6 +920,8 @@ jouer_les_suites() {
   local cibles=()
   [ ${#e2e[@]} -gt 0 ] && cibles+=(--test e2e)
   for nom in "${autres[@]}"; do cibles+=(--test "$nom"); done
+  # `--lib` alone: no e2e binary to build; the lib tests build in step 5.
+  if [ ${#cibles[@]} -gt 0 ]; then
   echo "▸ Bâti : cargo test --no-run --features $FEATURES ${cibles[*]}"
   local json
   json="$(mktemp)"
@@ -940,6 +958,8 @@ for ligne in open(sys.argv[1]):
       echo "▸ ⚠ le binaire e2e pèse ${mo} Mo, plus de 1,5 fois sa référence (${ref} Mo,"
       echo "    tests/e2e/poids-reference.txt) : une dérive à expliquer, ou une référence à remesurer"
     fi
+  fi
+
   fi
 
   # 2. Les filets du binaire lui-même (une suite montée, aucune relance par un
@@ -1028,6 +1048,13 @@ for ligne in open(sys.argv[1]):
     [ -n "$TEST_FILTER" ] && args+=("$TEST_FILTER")
     args+=("${EXTRA_ARGS[@]}")
     confined python3 -B "$WEAVER/scripts/cargo_garde.py" test "${args[@]}" || code=101
+  fi
+
+  # 5. The lib tests (`--lib`): under the same lib and the same guard. A filter that plays no test is red (suites_vides).
+  if [ "$RUN_LIB_TESTS" = true ]; then
+    lib_test_args
+    echo "▸ lib : cargo test ${LIB_TEST_ARGS[*]}"
+    confined python3 -B "$WEAVER/scripts/cargo_garde.py" test "${LIB_TEST_ARGS[@]}" || code=101
   fi
   return "$code"
 }

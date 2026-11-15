@@ -16,7 +16,7 @@ echo '// lot' >> $W/src/lib.rs; git -C $H/git_workspaces/wt -c user.email=t@t -c
 # FAUX_CHECK=rouge rend check_features sans sa dernière ligne verte ; FAUX_PREUVE=muette ne recompile rien.
 cat > $W/run_e2e.sh <<'F'
 #!/bin/bash
-s=""; while [ $# -gt 0 ]; do [ "$1" = --test ] && s=$2; shift; done
+s=""; while [ $# -gt 0 ]; do [ "$1" = --test ] && s=$2; [ "$1" = --lib ] && s=lib; shift; done
 echo "$s EMBED=$RAG3WEAVER_EMBED_SERVICE LIB=$RAG3DB_LIB REPLI=${RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE:-absent}" >> "$FAUX_TRACE"
 [ "${FAUX_NON_JOUEES:-}" = "$s" ] && echo "▸ ⚠ 1 suites NON JOUÉES faute de feature"
 [ "${FAUX_ROUGE:-}" = "$s" ] && { echo "test result: FAILED. 0 passed; 1 failed"; exit 101; }
@@ -65,4 +65,8 @@ passe VERT "le repli à luciepc" FAUX_HOTE=LuciePC
 grep -q 'REPLI=igpu:0' $D/trace && echo "vert   LuciePC : RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE=igpu:0" || { echo "ROUGE  LuciePC sans repli : $(head -1 $D/trace | grep -o 'REPLI=[^ ]*')"; rouge=1; }
 passe VERT "pas de repli au portable" FAUX_HOTE=lucie-tablette RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE=igpu:0
 grep -q 'REPLI=absent' $D/trace && echo "vert   lucie-tablette : aucun repli, même posé par l'appelant" || { echo "ROUGE  le portable a un repli : $(head -1 $D/trace | grep -o 'REPLI=[^ ]*')"; rouge=1; }
+# **Un test de la lib comme témoin** (15 novembre 2026, ticket d'hotfixs) : SUITE_DU_TEMOIN=lib joue le témoin par
+# `run_e2e.sh --lib <filtre>`, et la lib n'est pas rejouée comme une suite e2e ensuite.
+passe VERT "SUITE_DU_TEMOIN=lib" SUITE_DU_TEMOIN=lib
+[ "$(cut -d' ' -f1 $D/trace | tr '\n' ' ')" = "lib e2e_lectures e2e_code " ] && echo "vert   SUITE_DU_TEMOIN=lib : le témoin par --lib, puis e2e_lectures et e2e_code" || { echo "ROUGE  SUITE_DU_TEMOIN=lib, suites jouées : $(cut -d' ' -f1 $D/trace | tr '\n' ' ')"; rouge=1; }
 exit $rouge
