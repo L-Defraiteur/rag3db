@@ -8,7 +8,7 @@
 - **Atteignable en service** : non (outillage de passe et de ménage).
 - **Touche rag3weaver** : oui (`extension/rag3weaver/run_e2e.sh`, `scripts/garde_worktree.py`).
 - **Famille** : produit
-- **Pour** : hotfixs (il tient la garde de retrait)
+- **Pour** : hotfixs (il tient la garde de retrait ; déplacé de `docs/lucivy/tickets/` le 15 novembre 2026, au mot de c7)
 
 ## Ce qui se passe
 
@@ -69,3 +69,41 @@ du worktree, comme le target cargo, par exemple dans un cache de session par lie
   garde, avec son archive. La garde, elle, garde son refus.
 
 Rien n'est décidé. C'est à hotfixs de choisir, puisqu'il tient la garde.
+
+## Quatrième occurrence (15 novembre 2026, lucivy)
+
+Au retrait de `rag3db-lucivy-maintenance` à luciepc (le lot de la maintenance par l'hôte, après ses passes
+`run_e2e.sh`), la garde a rendu ROUGE pour les deux mêmes traces (32 Ko). Le contournement a été appliqué tel
+quel, et la garde est ressortie VERT. Archives : `~/.cache/rag3weaver-build/archives-worktrees/20261115-012246-lucivy/`
+(la copie `rag3db-lucivy-maintenance-ignores`), puis `20261115-012305-lucivy/` (le rapport vert). Au portable, le
+même worktree est sorti VERT du premier coup : `run_e2e.sh` n'y avait pas tourné.
+
+## La recette (préserver, retirer, rejouer)
+
+Les commandes jouées le 15 novembre. `<nom>` est le worktree sous `~/git_workspaces/`, `<archives>` le dossier
+d'archives que le premier passage de la garde a créé (il est dit dans sa sortie).
+
+```bash
+W=~/git_workspaces/<nom>
+A=~/.cache/rag3weaver-build/archives-worktrees/<archives>
+# 0. Ce que la garde refuse : seulement les deux traces ? (sinon, ne pas appliquer cette recette)
+git -C $W status --short --ignored --ignore-submodules=none   # attendu : « !! extension/rag3weaver/target/ » seul
+find $W/extension/rag3weaver/target -maxdepth 1               # attendu : charge-last.tsv et e2e-last.log
+# 1. Préserver, et prouver la copie fidèle
+cp -a $W/extension/rag3weaver/target $A/<nom>-ignores && diff -rq $W/extension/rag3weaver/target $A/<nom>-ignores
+# 2. Retirer
+rm -r $W/extension/rag3weaver/target
+# 3. Rejouer la garde avec un rapport neuf : la copie de l'administration se refait juste avant elle (piège
+#    ci-dessus), puis `git worktree remove --force` sur VERT seulement.
+```
+
+Le dernier pas est celui du script de retrait d'une session : il copie `.git/worktrees/<nom>` par `cp -a`, joue
+`garde_worktree.py --depot … --worktree … --rapport <neuf> --archive <admin> <copie>`, puis fait
+`git worktree remove --force` sur VERT. Le script de lucivy, `retrait-garde.sh`, est dans le cache des deux
+postes (`~/.cache/rag3weaver-build/retrait-garde.sh <nom>…`).
+
+## Ce qui le réglerait
+
+Que `run_e2e.sh` écrive ses deux traces hors du worktree, dans le dossier de journaux de la passe ou sous
+`CARGO_TARGET_DIR`, qui est déjà hors de l'arbre. Ou que le script de ménage préserve d'office les ignorés de
+`extension/rag3weaver/target/` avant la garde. La garde, elle, garde son refus.

@@ -66,7 +66,7 @@ Tous sous `docs/lucivy/tickets/`, famille produit.
 |---|---|---|
 | `2026-11-13-le-plein-texte-du-depot-pese-cent-fois-ses-sources.md` | ouvert ; les exclusions sont chez recherche, le dictionnaire mort est corrigé en 4.3.8 | recherche |
 | `closed/2026-11-13-une-recherche-filtree-ne-classe-pas-comme-sa-vue.md` | corrigé en 4.3.7, fermé le 15 novembre | lucivy |
-| `2026-11-14-les-traces-de-run-e2e-font-rougir-la-garde-de-retrait.md` | ouvert ; rencontré encore cette nuit à luciepc et contourné (préserver, retirer, rejouer) | hotfixs |
+| `docs/coeur-cpp-hotfixs-tickets/tickets/2026-11-14-les-traces-de-run-e2e-font-rougir-la-garde-de-retrait.md` (déplacé chez hotfixs, avec la recette) | ouvert ; rencontré encore cette nuit à luciepc et contourné (préserver, retirer, rejouer) | hotfixs |
 | `2026-11-14-le-chemin-sans-positions-relit-tout-pour-une-requete-longue.md` | ouvert, pour un jour | lucivy |
 | `2026-11-14-un-ulp-d-ecart-de-score-entre-profils-en-parse.md` | ouvert | lucivy |
 | `2026-11-14-le-dictionnaire-garde-les-textes-des-documents-effaces.md` | corrigé en 4.3.8 ; se ferme quand `maintain` a tourné sur les vraies bases | lucivy |
