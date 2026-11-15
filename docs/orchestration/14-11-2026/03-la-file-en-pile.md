@@ -1834,3 +1834,7 @@ Cœur, 20 h 44 : **le SIGSEGV de la colonne ajoutée sur master à 2c11a7995f** 
 par la voie des suites C++ transférables de G (base aa9a7b72a, rien de code du moteur entre les deux) : la voie marche. Suivant chez le
 cœur : le pool qui sature sous vingt écrivains. ED : le témoin 20 vert (une ligne renée garde ses MENTIONS) ; les MENTIONS absentes
 sont, comme les CONSUMES, des arêtes que le parent garde de l'ancien contenu ; tête 794b14232 proposée au banc (index neuf en référence).
+Cœur, 20 h 45 : tickets posés (1a8d226f3) — le SIGSEGV fermé ; le refus sans fin à 1 tour sur 30 sous la sonde ; le ticket du juge
+intermittent ouvert (en double avec celui de G dans sa branche : un seul, celui de master, déplacé chez G dans son lot). Le cœur prend
+le pool qui sature. Archi : son script de repose et push du nom attendait la place du portable (tenue depuis 20 h 29) ; luciepc a deux
+places libres, il y passe.
