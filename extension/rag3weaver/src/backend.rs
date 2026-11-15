@@ -905,6 +905,61 @@ fn statuts_non_cables(outil: &str, def: &crate::dataflow::GraphDefinition) -> Ve
 /// `jsonschema` recopie la valeur fautive entière : 2 Mo de JSON pour 20 000
 /// `records`, avant « has more than 512 items ». Au-delà de 200 caractères, la
 /// valeur cède la place à sa forme : « un tableau de 20000 éléments ».
+/// **La pile de la vue d'un appel**, lue sur la connexion de son instantané :
+/// `layer` comme un id de couche d'abord ; inconnu sous cet id, comme un nom,
+/// par l'index `couche_nom:<dépôt>:<nom>` des suivies, lu dans le même
+/// instantané. L'id du dépôt se calcule alors seulement, depuis la racine du
+/// workspace et les `tracked` du manifeste de cet appel (un manifeste rechargé
+/// est donc pris en compte). Un nom sans couche vivante garde le refus du
+/// chargeur, qui nomme la vue.
+fn charger_la_pile_de_l_appel(
+    prepared: &PreparedBackend,
+    conn: &dyn crate::connection::DbConnection,
+    dialecte: &dyn crate::dialect::SchemaDialect,
+    demandee: &crate::vues::VueDemandee,
+    reglages: &crate::vues::ReglagesDesVues,
+) -> Result<crate::vues::PileDeLecture, String> {
+    let refus = match crate::vues::charger_la_pile_sur(conn, dialecte, demandee, reglages) {
+        Ok(pile) => return Ok(pile),
+        Err(e) if e.contains("couche inconnue") => e,
+        Err(e) => return Err(e),
+    };
+    let Some(racine) = prepared.workspace_root() else { return Err(refus) };
+    let Some(depot) = crate::suivies::id_du_depot(&racine, prepared.manifest.tracked.as_ref())? else { return Err(refus) };
+    let lire_meta = |cle: &str| -> Result<Option<String>, String> {
+        let q = dialecte.load_meta_by_prefix("prefixe");
+        let lu = conn
+            .execute_with_params(&q, &[crate::connection::QueryParam::new("prefixe", crate::connection::CypherValue::String(cle.to_string()))])
+            .map_err(|e| format!("`view` : lecture de _catalog_meta : {e}"))?;
+        Ok(lu.rows.iter().find(|r| r.first().and_then(|k| k.as_str()) == Some(cle)).and_then(|r| r.get(1)).and_then(|v| v.as_str()).map(str::to_string))
+    };
+    match crate::suivies::id_de_la_couche_par_son_nom(&lire_meta, &depot, &demandee.couche)? {
+        Some(id) => crate::vues::charger_la_pile_sur(conn, dialecte, &crate::vues::VueDemandee { couche: id, rang: demandee.rang }, reglages),
+        None => Err(refus),
+    }
+}
+
+/// **`view` d'un appel d'outil** : `{"layer": <id de couche>, "rank"?: <génération>}`.
+/// Le rang omis vaut la dernière génération publiée de la couche. Toute autre
+/// clé, une couche absente ou vide, un rang qui n'est pas un entier : un refus
+/// qui les nomme.
+fn lire_la_vue(v: &Value) -> Result<crate::vues::VueDemandee, String> {
+    let o = v.as_object().ok_or_else(|| format!("`view` doit être un objet {{\"layer\", \"rank\"?}}, pas {v}"))?;
+    if let Some(k) = o.keys().find(|k| *k != "layer" && *k != "rank") {
+        return Err(format!("`view` : clé inconnue « {k} » (attendues : layer, rank)"));
+    }
+    let couche = match o.get("layer") {
+        Some(Value::String(c)) if !c.is_empty() => c.clone(),
+        Some(x) => return Err(format!("`view.layer` doit être l'id d'une couche, pas {x}")),
+        None => return Err("`view` : `layer` manque (l'id de la couche à lire)".into()),
+    };
+    let rang = match o.get("rank") {
+        None | Some(Value::Null) => None,
+        Some(r) => Some(r.as_i64().ok_or_else(|| format!("`view.rank` doit être un entier, pas {r}"))?),
+    };
+    Ok(crate::vues::VueDemandee { couche, rang })
+}
+
 fn schema_refusal(e: &jsonschema::ValidationError<'_>) -> String {
     let message = e.to_string();
     let instance = e.instance().to_string();
@@ -1976,6 +2031,21 @@ impl PreparedBackend {
                 name.clone(),
                 jsonschema::validator_for(&input).map_err(|e| e.to_string())?,
             );
+            // **`view`, annoncé** (2b-C) : commun à tous les outils qui lisent, jamais
+            // un paramètre de leur graphe ; retiré des arguments avant le validateur
+            // ci-dessus. Un outil qui écrit ou lance une commande ne l'annonce pas,
+            // et le refuse en se nommant s'il le reçoit.
+            if !attachment.policy.write_files && !attachment.policy.run_commands {
+                if let Some(props) = input["properties"].as_object_mut() {
+                    props.insert("view".into(), json!({
+                        "type": "object",
+                        "description": "La vue lue : {layer: id ou nom de couche, rank?: génération}. Absente : la vue courante. Une vue inconnue se refuse avant toute lecture ; la réponse dit la vue lue (view.layer, view.rank, view.depth).",
+                        "properties": {"layer": {"type": "string", "minLength": 1}, "rank": {"type": "integer"}},
+                        "required": ["layer"],
+                        "additionalProperties": false
+                    }));
+                }
+            }
             tool_schemas.insert(name.clone(), input);
             tools.insert(name.clone(), tool);
         }
@@ -3380,6 +3450,14 @@ thread_local! {
     /// se publie sur un bus à lui, que ni le journal des runs ni le flux de l'IDE ne
     /// suivent (une lecture faite pour un rendu, pas un geste à garder).
     static APPEL_DISCRET: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// **La vue demandée par l'appel en cours** (`view`, 2b-C), posée par
+    /// `call_tool_on` le temps de l'appel, dans ce fil. `poser_l_instantane` la
+    /// lit et charge sa pile dans l'instantané de l'appel : la vue et ses lignes
+    /// viennent de la même lecture.
+    static VUE_DE_L_APPEL: std::cell::RefCell<Option<crate::vues::VueDemandee>> = const { std::cell::RefCell::new(None) };
+    /// La vue lue par l'appel en cours (couche, rang, profondeur), que la
+    /// réponse rend.
+    static VUE_LUE: std::cell::RefCell<Option<Value>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Pose le drapeau de l'appel discret et le remet à sa valeur d'avant.
@@ -4468,6 +4546,12 @@ impl Backend {
             .as_object()
             .ok_or("arguments must be an object")?
             .clone();
+        // `view` est commun à tous les outils (page 28 d'arbre principal, l. 45) :
+        // lu ici une fois, jamais un paramètre de graphe.
+        let vue = match args.remove("view") {
+            None | Some(Value::Null) => None,
+            Some(v) => Some(lire_la_vue(&v)?),
+        };
         for key in args.keys() {
             if attachment.bindings.contains_key(key) {
                 return Err(format!("cannot override binding {key}"));
@@ -4503,6 +4587,14 @@ impl Backend {
         let def = tool
             .instantiate(&Value::Object(args))
             .map_err(|e| e.to_string())?;
+        // Un outil qui ne lit pas dans un instantané (il écrit, ou un de ses nœuds
+        // n'est pas sûr sous instantané) ne lit pas la pile : `view` se refuse en
+        // le nommant, avant toute exécution, au lieu d'être ignoré.
+        if vue.is_some() && !prepared.nodes.snapshot_safe(&def) {
+            return Err(format!(
+                "`view` : l'outil {name} ne lit pas sous une vue (il écrit, ou lit hors d'un instantané de lecture) ; appelez-le sans `view`"
+            ));
+        }
         // La politique **déclarée** de l'outil — vérifiée au chargement, elle
         // tient ici le runtime : la base déclarative, plus ce que l'outil a
         // déclaré (fichiers, commandes).
@@ -4516,7 +4608,25 @@ impl Backend {
                 metadata_ports.push(port.clone());
             }
         }
+        struct Remettre(Option<crate::vues::VueDemandee>);
+        impl Drop for Remettre {
+            fn drop(&mut self) {
+                VUE_DE_L_APPEL.with(|v| *v.borrow_mut() = self.0.take());
+                VUE_LUE.with(|v| *v.borrow_mut() = None);
+            }
+        }
+        let avant = VUE_DE_L_APPEL.with(|v| v.replace(vue.clone()));
+        VUE_LUE.with(|v| *v.borrow_mut() = None);
+        let _remettre = Remettre(avant);
         let mut response = self.execute_graph(prepared, tool, &def, &metadata_ports, &policy, Some(GraphTarget::Tool(name.to_string())))?;
+        if vue.is_some() {
+            // La vue lue se dit dans la réponse ; un appel qui n'a pas posé de vue
+            // (aucun instantané de lecture sur ce backend) ne rend rien de lu hors d'elle.
+            let lue = VUE_LUE.with(|v| v.borrow_mut().take()).ok_or_else(|| {
+                format!("`view` : l'outil {name} n'a lu sous aucune vue (ce backend n'a pas d'instantané de lecture) ; la réponse n'est pas rendue")
+            })?;
+            response["view"] = lue;
+        }
         context["result"] = response["result"].clone();
         let mut report = self.validate_hooks(prepared, &harness.after, &context);
         report.warnings.extend(before.warnings);
@@ -4840,7 +4950,21 @@ impl Backend {
             return Err(crate::read_pool::refus_pool_plein(pool.occupation().1));
         };
         let conn = instantane.conn();
-        let appel = vue.sur_connexion(conn.clone());
+        let mut appel = vue.sur_connexion(conn.clone());
+        // **La vue de l'appel** (`view`, 2b-C) : sa pile se charge dans cet
+        // instantané, et compose la visibilité de la vue de l'appel. Une vue
+        // inconnue se refuse ici, avant que le graphe ne lise.
+        if let Some(demandee) = VUE_DE_L_APPEL.with(|v| v.borrow().clone()) {
+            let reglages = crate::vues::reglages_des_vues(prepared.manifest.tracked.as_ref())?;
+            let pile = charger_la_pile_de_l_appel(prepared, conn.as_ref(), vue.forme().dialect.as_ref(), &demandee, &reglages)?;
+            let visibilite = appel.generations.as_ref().ok_or_else(|| {
+                "`view` : cette base n'a pas de générations (forme d'avant les versions de scope, à migrer)".to_string()
+            })?;
+            appel.generations = Some(visibilite.avec_la_pile(&pile));
+            let tete = pile.etages.first().ok_or("`view` : pile vide")?;
+            let lue = json!({"layer": tete.couche, "rank": tete.rang, "depth": pile.etages.len()});
+            VUE_LUE.with(|v| *v.borrow_mut() = Some(lue));
+        }
         services.register("conn", crate::dataflow::services::ConnService(conn.clone()));
         if vue.texte_natif {
             let natif: Arc<dyn crate::search_backend::SearchBackend> =
