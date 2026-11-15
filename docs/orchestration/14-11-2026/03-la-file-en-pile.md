@@ -1817,3 +1817,6 @@ G : les services f85977d09e posés en place à luciepc (7879 bge-m3 à 20 h 36 m
 sur 13 000 caractères ; 7878 granite à 20 h 36 m 15 s, 5 s, mêmes preuves ; NRestarts 0 ; les tunnels du portable rendent le neuf) ;
 l'hôte 23dc8efd47 aux deux postes depuis 20 h 13 ; Algareth au manifeste, check-manifests vert. La mesure d'embarquement sur card2
 part au va-du-banc ; le banc reprend F 25 % sur 0653a6aeff ensuite.
+Embarquement, 20 h 38 : la mesure de la carte pleine n'est pas partie — la garde a lu 20 332 Mio libres (la carte n'était pleine que par la
+parité et la répétition, arrêtées pour elle). Tranché : la mesure part pendant la dernière répétition d'arbre (qui charge card2 par
+7878), avec un va-du-banc frais ; le banc note la minute de 7879 dans ses temps.
