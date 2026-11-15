@@ -242,6 +242,11 @@ Library et Symbol n'ont aucun orphelin aux deux comptes.
   fac67a208 (jusqu'à 11 h 35). Les listes sont dans
   `~/.cache/rag3weaver-build/recherche-orphelins/{Scope,File}-orphelins-{1,2}.txt`, au portable, et
   `POST /backend/maintain` peut les purger.
+- **La purge attend le relevé à blanc de lucivy** (c7, 15 novembre). Une purge par mes listes de 15 h 00
+  laisserait un trou entre la lecture du graphe et le jeton de `fts-live-ids`. Une ligne née dans ce trou
+  sur l'un de ces offsets perdrait son document, sans que rien ne le refuse. Le relevé à blanc lit le graphe
+  sous le même jeton, puis `maintain` purge avec ce jeton, base ouverte : c'est le chemin que Lucie aura.
+  36 orphelins ne pèsent rien d'ici là.
 
 Le ticket `2026-11-15-l-etat-d-index-ne-voit-pas-les-orphelins-du-plein-texte.md` dit pourquoi l'état
 d'index ne les voyait pas.
