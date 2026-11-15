@@ -1365,3 +1365,7 @@ e8289254e), après lucivy.
 Lucie, 16 h 08 : « rien qu'un `ls` me demande permission, et je dois attendre qu'il ait rendu son tour pour accepter » : deux défauts
 du produit pour le socle — l'accord dans le tour (l'appel attend, borné), liste sûre large. Mon passage de sa porte en `auto`
 a été refusé par ma garde : elle reste en `approval` ; à Lucie si elle le veut.
+Lucie, 16 h 10 : « auto par défaut, presque jamais me demander si c'est dans ce que j'ai dit, un modèle décide, pas trop strict »
+(ajout à la page de vision). Pour le socle : auto par défaut avec Landlock, un décideur modèle (demande + plan + action →
+passe / demander), le doute vers « passe », la sentinelle pour privilèges, hors-bac, réseau ; métrique = demandes inutiles.
+Archi : `auto` passe par Landlock et ne peut s'en passer (sûr à poser) ; en auto, ce qui ne touche ni écriture ni réseau passe.

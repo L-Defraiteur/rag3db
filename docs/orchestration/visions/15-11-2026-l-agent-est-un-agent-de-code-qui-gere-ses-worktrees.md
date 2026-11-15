@@ -30,3 +30,14 @@ l'utilisateur » ; « les étapes, je les vois défiler à côté de "ça travai
 - Le socle (archi : le pas, l'invite, la porte ; ED : les primitives) après le lot (B) de l'équipier muet.
 - Les vues par couche (arbre 2b′, recherche + arbre 2b-C, ED l'écrivain et 2a′-3).
 - Le terminal (tty : étapes dans la zone vivante, /model, o/n sur une proposition).
+
+## Ajout de 16 h 10 : la porte
+
+Lucie : « il faut le mode auto par défaut, et presque jamais me demander si c'est déjà dans ce que j'ai dit ;
+il faut qu'un modèle décide, et soit pas trop strict ».
+
+6. **Auto par défaut, et un modèle qui décide.** Le bac à sable (Landlock) est la garde dure ; dedans, une
+   action que la demande de l'utilisateur couvre passe sans question, écriture ou bâti compris ; seule une
+   action hors de la demande, hors du bac ou vers le réseau non déclaré demande. Le décideur est un
+   modèle qui lit la demande, le plan et l'action, et penche vers « passe » dans le doute ; le journal
+   des passes et des refus le règle. La métrique : le taux de demandes inutiles, pas le taux de refus.
