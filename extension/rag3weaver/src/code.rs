@@ -3667,6 +3667,11 @@ impl Catalog {
         // est de table quelconque. Le saut est dit par le dialecte.
         let mut saut = rag3weaver_ir::Hop::untyped(rel, rag3weaver_ir::Direction::Incoming);
         saut.start = Some(SYMBOL.to_string());
+        // **L'arrivée est un `Scope`** (DEFINES et MENTIONS n'arrivent que de lui), nommée : le saut se
+        // borne alors aux lignes visibles (`Visibilite::borner_hop`). Sans elle, une ligne fermée qui
+        // garde son DEFINES (son histoire) comptait comme un second définisseur, et le nom passait pour
+        // ambigu (témoin 17 : la ligne neuve de `a` n'appelait plus `f`).
+        saut.end = Some(SCOPE.to_string());
         if with_kind {
             saut.returns.extend(
                 ["kind", "usage", "usages", "line", "qualifier_types", "import_modules", "self_types", "deferred", "untyped_receiver", "reexport_from"].map(|f| rag3weaver_ir::Column::Edge(f.into())),
