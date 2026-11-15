@@ -2150,6 +2150,26 @@ TEST_F(VectorIndexCreateUnderManyWriters, NoWriterWaitsLongDuringTheCreate) {
                                  << " ms (CREATE " << createMs << " ms)";
 }
 
+// Un index ne change pas la disposition des lignes : une écriture ouverte avant un CREATE et qui
+// écrit la table après sa validation finit sans recommencer (garde du lot du verrou de schéma,
+// 15 novembre 2026 : un paquet de 2 048 fichiers ne se rejoue pas pour un index).
+TEST_F(VectorIndexCreateUnderManyWriters, AWriterOpenDuringACreateFinishesWithoutRetrying) {
+    table = "C";
+    mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY, vec FLOAT[16]);");
+    mustRun("UNWIND range(0, 999) AS i CREATE (:C {id: i, vec: [i % 17, i % 23, i % 29, i % 31, "
+            "i % 37, i % 41, i % 43, i % 47, i % 53, i % 59, i % 61, i % 67, i % 71, i % 73, "
+            "i % 79, i / 1000.0]});");
+    rag3db::main::Connection writer(database.get());
+    ASSERT_TRUE(writer.query("BEGIN TRANSACTION;")->isSuccess());
+    ASSERT_TRUE(writer.query("MATCH (n:C) RETURN count(*);")->isSuccess());
+    mustRun("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
+    auto r = writer.query(
+        stringFormat("MATCH (n:C {id: 5}) SET n.vec = {};", movedRowVector(5)));
+    EXPECT_TRUE(r->isSuccess()) << "[check: an-index-retries-no-writer] " << r->getErrorMessage();
+    auto commit = writer.query("COMMIT;");
+    EXPECT_TRUE(commit->isSuccess()) << commit->getErrorMessage();
+}
+
 TEST_F(VectorIndexCreateInMemory, ChangesCommittedDuringACreateAreSeen) {
     const auto writes = createIndexUnderWrites(20000, true /*withChanges*/);
     if (HasFailure()) {

@@ -187,6 +187,20 @@ TEST_F(AlterWaitsForWriters, AWriterCreatingDuringTheAlterWritesNoRowOfTheOldSch
     EXPECT_EQ(one(*conn, "MATCH (n:T) RETURN count(*);"), cResult == "OK" ? "1100\n" : "1000\n");
 }
 
+// Un changement du catalogue qui ne touche pas aux colonnes (un commentaire, un index) ne change
+// pas la disposition des lignes : une écriture ouverte avant lui finit sans recommencer.
+TEST_F(AlterWaitsForWriters, AWriterOpenBeforeACommentFinishesWithoutRetrying) {
+    Connection b(database.get());
+    run(*conn, "BEGIN TRANSACTION;");
+    EXPECT_EQ(one(*conn, "MATCH (n:T) RETURN count(*);"), "1000\n");
+    run(b, "COMMENT ON TABLE T IS 'une table';");
+    auto r = conn->query("MATCH (n:T) WHERE n.id = 3 SET n.s = 'après le commentaire';");
+    EXPECT_TRUE(r->isSuccess())
+        << "[check: a-change-that-keeps-the-columns-retries-no-writer] " << r->getErrorMessage();
+    run(*conn, "COMMIT;");
+    EXPECT_EQ(one(*conn, "MATCH (n:T) WHERE n.id = 3 RETURN n.s;"), "après le commentaire\n");
+}
+
 TEST_F(AlterWaitsForWriters, AnAlterThatWaitsTooLongSaysWhichWriterItWaitedFor) {
     Connection b(database.get());
     run(b, "CALL lock_timeout=300;");
