@@ -1320,3 +1320,12 @@ d'ED), refus nommé si la base est tenue ou pas à versions, rouge en cours ; (2
 indexé » d'un instant sur les File d'un paquet) : la fenêtre fermée = maintain, instantané, 1b, montée ; (3) chiffres réels :
 code-lourd 7 278 fichiers / ~42 min de repassage, code-principal 6 314 / ~37 min, dépôt ~45 min. Répétition vers 17 h 30 sur les
 instantanés de cette nuit (aucune base vivante fermée), script repetition-bascule.sh à luciepc.
+Lucie, 15 h 54 : « il n'a toujours pas d'outils pour éditer du code comme un agent standard ; j'aimerais retrouver l'expérience
+d'un agent de code standard tout en gardant toutes ces fonctionnalités, là ça parle un peu trop de gabarits ». Fait : l'équipier
+d'une tâche n'a que les outils que le manifeste du backend déclare, et celui du dépôt de Lucie (rag3db.json) n'avait ni
+edit_file ni run_command (le gabarit code les a). Direction donnée à archi (copie ED, tty) : socle d'agent de code standard
+dans toute tâche (read, edit, write, run_command derrière la porte, grep, glob), le backend n'ajoute que ses outils, prompt
+d'agent de code, déclaratif en bas ; page dans l'heure, lot après (B). Pour aujourd'hui : edit_file et run_command déclarés
+dans son manifeste et dans la copie de la tâche essai-tty (sauvegardes .avant-edit-file-*), `read_only` → `task_writes`
+(son arbre reste intouchable, la tâche écrit dans son worktree), `commands: standard` (liste sûre, le reste refusé en le
+disant) ; backends fermés et rouverts par l'hôte (session s-8b7c3d669ca1e3fd).
