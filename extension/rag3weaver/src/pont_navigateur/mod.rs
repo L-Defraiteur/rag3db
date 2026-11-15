@@ -14,8 +14,13 @@
 
 pub mod baux;
 pub mod cadrage;
+pub mod ecoute;
+pub mod hote_natif;
 pub mod pont;
 pub mod protocole;
+pub mod relai;
 
 #[cfg(test)]
 mod temoins;
+#[cfg(test)]
+mod temoins_relai;
