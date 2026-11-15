@@ -5,6 +5,7 @@
 #include <shared_mutex>
 
 #include "common/assert.h"
+#include "common/test_hooks.h"
 #include "common/types/types.h"
 #include "common/uniq_lock.h"
 #include "storage/buffer_manager/memory_manager.h"
@@ -580,6 +581,7 @@ void NodeGroup::addColumn(TableAddColumnState& addColumnState, PageAllocator* pa
     for (auto& chunkedGroup : chunkedGroups.getAllGroups(lock)) {
         chunkedGroup->addColumn(mm, addColumnState, enableCompression, pageAllocator,
             newColumnStats);
+        TestHooks::failOnceIfArmed(TestFailPoint::ADD_COLUMN_BETWEEN_CHUNKED_GROUPS);
     }
 }
 

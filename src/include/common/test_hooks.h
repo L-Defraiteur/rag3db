@@ -38,9 +38,13 @@ enum class TestDiePoint : uint8_t {
 //  - rel-commit-between-directions : dans RelTable::commit, après le versement du premier sens
 //    d'une table de relations et avant le second (le ticket des deux index d'une table de
 //    relations qui ne s'accordent plus, 14 novembre 2026).
+//  - add-column-between-chunked-groups : dans NodeGroup::addColumn, après la colonne neuve posée
+//    sur le premier groupe de lignes d'un groupe de nœuds : un ADD COLUMN refusé à mi-chemin,
+//    comme par un pool plein (le ticket du SIGSEGV de DdlEveryMinute, 15 novembre 2026).
 enum class TestFailPoint : uint8_t {
     NONE = 0,
     REL_COMMIT_BETWEEN_DIRECTIONS = 1,
+    ADD_COLUMN_BETWEEN_CHUNKED_GROUPS = 2,
 };
 
 struct TestHooks {
