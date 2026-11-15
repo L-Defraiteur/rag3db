@@ -165,7 +165,7 @@ TEST_F(AlterWaitsForWriters, AWriterCreatingDuringTheAlterWritesNoRowOfTheOldSch
     tc.join();
     EXPECT_EQ(ddlResult, "OK");
     const auto expected = cResult == "OK" ? "100\n" : "0\n";
-    EXPECT_TRUE(cResult == "OK" || cResult.find("schema") != std::string::npos)
+    EXPECT_TRUE(cResult == "OK" || cResult.find("Schema changed, retry:") != std::string::npos)
         << "[check: a-writer-of-the-old-schema-passes-or-is-refused-by-name] " << cResult;
     EXPECT_EQ(one(*conn, "MATCH (n:T) WHERE n.id >= 5000 AND n.note = 'n' RETURN count(*);"),
         expected)
