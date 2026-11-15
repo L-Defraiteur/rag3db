@@ -473,6 +473,11 @@
               "name": "consolidate",
               "from": "current",
               "to": "consolidated"
+            },
+            {
+              "name": "recopy",
+              "from": "current",
+              "to": "recopied"
             }
           ]
         }
@@ -884,8 +889,10 @@
     },
     "recall_apports": {
       "graph": "../../tools/search_structured.mmd",
+      "description": "Recherche structurée dans les apports (L1) : lucivy et dense local, filtres appliqués par chaque signal avant fusion et pagination. Par défaut, les apports recopiés (state recopied : l'exemplaire d'origine laissé sous une fiche scindée ou rejointe) sont écartés ; un filter_condition explicite, même {}, ôte ce filtre et les rend.",
       "bindings": {
-        "target": "Apport"
+        "target": "Apport",
+        "default_filter": {"must_not": [{"field": {"key": "state", "value": ["recopied"]}}]}
       },
       "metadata": [
         {

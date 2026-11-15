@@ -542,3 +542,28 @@ fn le_decide_de_l_archiviste_demande_le_plafond_declare() {
     assert_eq!(request["max_tokens"], json!(4096), "le plafond déclaré par archive_decide.mmd : {}", request["max_tokens"]);
 }
 
+/// **Un apport recopié sort des rappels par défaut, et se voit en ôtant le filtre** (15 novembre 2026,
+/// les gestes de Lucie : scinder ou rejoindre une fiche recopie ses apports sous la fiche issue, et
+/// l'exemplaire d'origine reste comme provenance). L'état `recopied` (la transition `recopy` du cycle
+/// de vie d'Apport) est écarté par le filtre par défaut de `recall_apports` ; un `filter_condition`
+/// explicite, même vide, l'ôte.
+#[test]
+#[ignore]
+fn un_apport_recopie_sort_des_rappels_par_defaut() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |_| {});
+    appel(&b, "put_fiche", json!({"record": {"name": FICHE, "about": "Comment le moteur rejoue son journal à l'ouverture.", "state": "current"}}));
+    for (section, texte) in [("Vivant", "Le journal se rejoue en entier à l'ouverture, section vivante."), ("Recopié", "Le journal se rejoue en entier à l'ouverture, section recopiée.")] {
+        appel(&b, "put_apport", json!({"record": {"fiche": FICHE, "source": CHEMIN, "section": section, "texte": texte, "niveau": "L1", "state": "current"}}));
+    }
+    appel(&b, "put_apport", json!({"record": {"fiche": FICHE, "source": CHEMIN, "section": "Recopié", "texte": "Le journal se rejoue en entier à l'ouverture, section recopiée.", "niveau": "L1", "state": "recopied"}, "expected_revision": 1}));
+    let sections = |options: Value| -> Vec<String> {
+        let r = appel(&b, "recall_apports", json!({"query": "journal rejoue ouverture", "options": options}));
+        r["result"].as_array().cloned().unwrap_or_default().iter().filter_map(|x| x["data"]["section"].as_str().map(str::to_string)).collect()
+    };
+    let par_defaut = sections(json!({"limit": 20, "consistency": "strict"}));
+    assert!(par_defaut.contains(&"Vivant".to_string()) && !par_defaut.contains(&"Recopié".to_string()), "par défaut, l'exemplaire recopié est écarté : {par_defaut:?}");
+    let tout = sections(json!({"limit": 20, "consistency": "strict", "filter_condition": {}}));
+    assert!(tout.contains(&"Vivant".to_string()) && tout.contains(&"Recopié".to_string()), "le filtre ôté, il se voit : {tout:?}");
+}
+

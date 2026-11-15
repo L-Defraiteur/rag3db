@@ -696,6 +696,18 @@ impl NodeFactory for SearchSourceNodeFactory {
         } else {
             crate::search::SearchOptions::default()
         };
+        // **Le filtre par défaut d'un outil** (15 novembre 2026, `recall_apports` qui écarte les apports
+        // recopiés) : posé par la liaison du manifeste, il ne vaut que si l'appelant ne donne pas de
+        // `filter_condition` ; un `filter_condition` explicite, même `{}`, le remplace.
+        let appelant_filtre = config.get("options").and_then(|o| o.get("filter_condition")).is_some();
+        if !appelant_filtre {
+            if let Some(defaut) = config.get("default_filter").filter(|v| v.as_object().is_some_and(|o| !o.is_empty())) {
+                options.filter_condition = Some(
+                    serde_json::from_value(defaut.clone())
+                        .map_err(|e| format!("SearchSourceNode: invalid 'default_filter': {e}"))?,
+                );
+            }
+        }
         // `consistency` à part de `options` : un gabarit substitue des valeurs
         // scalaires, pas des morceaux de JSON. Un nom inconnu est refusé —
         // retomber en silence sur le défaut ferait croire à une attente qui
@@ -764,6 +776,15 @@ impl NodeFactory for SearchSourceNodeFactory {
                 PortDef::value("meta", PortType::Meta, false),
             ],
             config_params: vec![
+                ConfigParam {
+                    name: "default_filter".into(),
+                    param_type: ConfigParamType::Json,
+                    required: false,
+                    default: Some(serde_json::json!({})),
+                    description: "Un filtre (FilterCondition) qui ne vaut que si les options de l'appel n'ont pas de filter_condition ; un filter_condition explicite, même {}, le remplace".into(),
+                    choices: None,
+                    json_schema: None,
+                },
                 ConfigParam {
                     name: "consistency".into(),
                     param_type: ConfigParamType::String,
