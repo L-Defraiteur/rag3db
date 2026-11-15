@@ -435,7 +435,13 @@ Les scripts sont à luciepc, dans `~/.cache/rag3weaver-build/groupe-repli-jeu/` 
 bge-m3 à côté du 7879. Pour jouer la carte pleine, la marge a été relevée à `margin_mib: 4096`, soit 15 596
 requis. C'est un réglage du manifeste, le code n'a pas changé.
 
-**Résultat : VERT.**
+**Ce que ce jeu prouve, et ce qu'il ne prouve pas** (c7, 15 h 10). Avec card2 à 15 190 Mio libres et la
+marge montée à 4096 pour forcer le repli, le jeu prouve **le mécanisme** : le repli est dit, les 2 284
+morceaux passent par le 7879, l'index dure 34 s, et rien ne se lance sur card2. Il ne prouve **pas** le cas
+d'une carte réellement pleine. Ce vrai cas, le 7891 chargé à côté du 7879, se jouera une nuit où la carte
+est prise : ticket `2026-11-15-mesurer-le-repli-sur-une-carte-reellement-pleine`.
+
+**Résultat du mécanisme : VERT.**
 - **Rien de lancé sur card2** : aucun processus du fournisseur, et le 7891 ne répond jamais ;
 - **l'index en 34,1 s**, « indexation terminée ». C'est le 33,3 s de la carte calme, au lieu des 904 s du 14 ;
 - **au journal d'index** : « replié vers 127.0.0.1:7879 à 15 h 03, cause : card2 à 15190 Mio libres, 11500
