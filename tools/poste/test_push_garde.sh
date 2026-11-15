@@ -229,6 +229,38 @@ else echo "ROUGE  tête reposée à la main, master bougé : rc $rc, master « $
   fi
   echo "ROUGE  ticket fermé : rc $rc, ouverte « $ouverte », fermée « $fermee »"; echo "$sortie" | tail -3; exit 1
 ) || rouge=1
+# **Les suites C++ transférables** (15 novembre 2026, relevé du cœur) : un lot qui ne touche que le moteur, quand seul du
+# Rust a atterri, pousse sans rejouer ; du C++ atterri aussi, ou un lot qui touche du Rust : arrêt.
+cpp_cas() { # cpp_cas <n> <fichier du lot…> -- <fichier de master…> : écrit rc, sortie et sujets de master dans $D/cpp-<n>
+  local n=$1; shift; local lot=() maitre=() dans=lot f
+  for f in "$@"; do [ "$f" = -- ] && { dans=maitre; continue; }; [ $dans = lot ] && lot+=("$f") || maitre+=("$f"); done
+  (
+    H="$D/homec$n"; mkdir -p "$H/git_workspaces" "$H/.cache/rag3weaver-build/j"
+    git clone -q --bare "$D" "$D/nuc$n.git" 2>/dev/null; git -C "$D/nuc$n.git" update-ref refs/heads/master "$BASE"
+    git clone -q "$D/nuc$n.git" "$H/git_workspaces/wt" 2>/dev/null
+    cd "$H/git_workspaces/wt" && git config user.email luciedefraiteur@gmail.com && git config user.name t
+    git checkout -q --detach origin/master
+    for f in "${lot[@]}"; do mkdir -p "$(dirname "$f")"; echo "// lot $n" >> "$f"; done; git add -A; git commit -qm "lot C++ $n"
+    printf 'teste %s\nVERT\n' "$(git rev-parse --short HEAD)" > "$H/.cache/rag3weaver-build/j/resume.log"; git rev-parse origin/master > "$H/.cache/rag3weaver-build/j/base"
+    echo "rag3db-build-0123456789012345678901234567890123456789-Release" > "$H/.cache/rag3weaver-build/j/suites-cpp.log"
+    ( git clone -q "$D/nuc$n.git" "$D/autrec$n" 2>/dev/null && cd "$D/autrec$n" && git config user.email t@t && git config user.name t \
+      && for f in "${maitre[@]}"; do mkdir -p "$(dirname "$f")"; echo "// master $n" >> "$f"; done && git add -A && git commit -qm "master $n" && git push -q origin HEAD:master 2>/dev/null )
+    sortie=$(HOME="$H" bash "$GARDE" wt j 2>&1); rc=$?
+    { echo "$rc"; echo "$sortie"; } > "$D/cpp-$n"
+  )
+}
+cpp_cas 1 src/moteur.cpp -- extension/rag3weaver/src/pont.rs
+{ read -r rc; sortie=$(cat); } < "$D/cpp-1"
+[ "$rc" = 0 ] && echo "$sortie" | grep -qx POUSSE && echo "$sortie" | grep -q "suites C++ transférables" \
+  && echo "vert   un lot C++ seul, du Rust atterri : suites C++ transférables, poussé" || { echo "ROUGE  lot C++ seul, Rust atterri : rc $rc — $(echo "$sortie" | tail -2 | tr '\n' ' ')"; rouge=1; }
+cpp_cas 2 src/moteur.cpp -- extension/rag3weaver/src/pont.rs src/autre.cpp
+{ read -r rc; sortie=$(cat); } < "$D/cpp-2"
+[ "$rc" != 0 ] && echo "$sortie" | grep -q "master a apporté du code" \
+  && echo "vert   du C++ atterri aussi : arrêt, rien de transférable" || { echo "ROUGE  C++ atterri aussi : rc $rc — $(echo "$sortie" | tail -2 | tr '\n' ' ')"; rouge=1; }
+cpp_cas 3 src/moteur.cpp extension/rag3weaver/src/lot.rs -- extension/rag3weaver/src/pont.rs
+{ read -r rc; sortie=$(cat); } < "$D/cpp-3"
+[ "$rc" != 0 ] && echo "$sortie" | grep -q "master a apporté du code" \
+  && echo "vert   un lot qui touche aussi du Rust : arrêt" || { echo "ROUGE  lot avec du Rust : rc $rc — $(echo "$sortie" | tail -2 | tr '\n' ' ')"; rouge=1; }
 # Aucun journal qui nomme une lib : ARRÊT, même si la liste des journaux s'élargit à $J/*.log.
 (
   H="$D/home0"; mkdir -p "$H/git_workspaces" "$H/.cache/rag3weaver-build/j"

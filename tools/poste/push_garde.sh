@@ -59,6 +59,20 @@ code_apporte() {
   done
 }
 if [ "${1:-}" = "--code-apporte" ]; then code_apporte "$2" "$3"; exit 0; fi
+# **Les suites C++ transférables** (15 novembre 2026, relevé du cœur) : un lot qui ne touche que le moteur, testé sur une
+# base, n'a pas à rejouer ses suites C++ (35 minutes) parce que du Rust a atterri : elles ne lient pas le Rust. Vrai si
+# le lot (base..tête) ne touche que les chemins du moteur, plus des .md, et si master n'a rien changé sous ces chemins
+# depuis la base. Le symétrique (un lot Rust quand seul du C++ a atterri) passe déjà : `code_apporte` ne regarde pas src/.
+CHEMINS_MOTEUR="src/ test/ extension/vector/ tools/rust_api/"
+cpp_transferable() { # <base> <master> <tête du lot>
+  local base=$1 maitre=$2 tete=$3 f hors=""
+  [ -z "$(git diff --name-only "$base" "$maitre" -- $CHEMINS_MOTEUR)" ] || return 1
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    case "$f" in *.md|src/*|test/*|extension/vector/*|tools/rust_api/*) ;; *) hors="$hors $f" ;; esac
+  done < <(git diff --name-only "$base" "$tete")
+  [ -z "$hors" ]
+}
 # **Le mode pile** (14 novembre 2026, la file en pile, demande de c7 et relevé de recherche) : un lot rejoué
 # sur la pile de ceux devant lui, puis posé au dernier pas par `rebase --onto origin/master <avant>`, ne descend
 # plus du commit testé. PILE_AVANT=<tête du lot d'avant> remplace alors deux contrôles :
@@ -204,6 +218,11 @@ else
   # La base du rejeu ne sert que hors du mode pile (relevé de tty : lue avant, elle faisait « cat: …/base ») .
   base=$(cat "$J/base") || { echo "ARRÊT : pas de base de rejeu ($J/base)"; exit 1; }
   apporte=$(code_apporte $base $neuf)
+  if [ -n "$apporte" ] && cpp_transferable "$base" "$neuf" HEAD; then
+    echo "suites C++ transférables : le lot ne touche que le moteur ($CHEMINS_MOTEUR), et master n'y a rien changé depuis la base testée ; le code apporté est hors du moteur :"
+    echo "$apporte" | sed 's/^/  /'
+    apporte=""
+  fi
   if [ -n "$apporte" ]; then echo "ARRÊT : master a apporté du code depuis la base testée"; echo "$apporte"; exit 1; fi
   echo "master $(git rev-parse --short $neuf), base testée $(git rev-parse --short $base) : rien de code entre les deux"
   git rebase $neuf > /dev/null 2>&1
