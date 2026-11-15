@@ -912,30 +912,30 @@ fn statuts_non_cables(outil: &str, def: &crate::dataflow::GraphDefinition) -> Ve
 /// workspace et les `tracked` du manifeste de cet appel (un manifeste rechargé
 /// est donc pris en compte). Un nom sans couche vivante garde le refus du
 /// chargeur, qui nomme la vue.
-fn charger_la_pile_de_l_appel(
+fn load_call_view_stack(
     prepared: &PreparedBackend,
     conn: &dyn crate::connection::DbConnection,
-    dialecte: &dyn crate::dialect::SchemaDialect,
-    demandee: &crate::vues::VueDemandee,
-    reglages: &crate::vues::ReglagesDesVues,
+    dialect: &dyn crate::dialect::SchemaDialect,
+    requested: &crate::vues::VueDemandee,
+    settings: &crate::vues::ReglagesDesVues,
 ) -> Result<crate::vues::PileDeLecture, String> {
-    let refus = match crate::vues::charger_la_pile_sur(conn, dialecte, demandee, reglages) {
+    let refusal = match crate::vues::charger_la_pile_sur(conn, dialect, requested, settings) {
         Ok(pile) => return Ok(pile),
         Err(e) if e.contains("couche inconnue") => e,
         Err(e) => return Err(e),
     };
-    let Some(racine) = prepared.workspace_root() else { return Err(refus) };
-    let Some(depot) = crate::suivies::id_du_depot(&racine, prepared.manifest.tracked.as_ref())? else { return Err(refus) };
-    let lire_meta = |cle: &str| -> Result<Option<String>, String> {
-        let q = dialecte.load_meta_by_prefix("prefixe");
-        let lu = conn
-            .execute_with_params(&q, &[crate::connection::QueryParam::new("prefixe", crate::connection::CypherValue::String(cle.to_string()))])
+    let Some(root) = prepared.workspace_root() else { return Err(refusal) };
+    let Some(repo) = crate::suivies::id_du_depot(&root, prepared.manifest.tracked.as_ref())? else { return Err(refusal) };
+    let read_meta = |key: &str| -> Result<Option<String>, String> {
+        let q = dialect.load_meta_by_prefix("prefix");
+        let rows = conn
+            .execute_with_params(&q, &[crate::connection::QueryParam::new("prefix", crate::connection::CypherValue::String(key.to_string()))])
             .map_err(|e| format!("`view` : lecture de _catalog_meta : {e}"))?;
-        Ok(lu.rows.iter().find(|r| r.first().and_then(|k| k.as_str()) == Some(cle)).and_then(|r| r.get(1)).and_then(|v| v.as_str()).map(str::to_string))
+        Ok(rows.rows.iter().find(|r| r.first().and_then(|k| k.as_str()) == Some(key)).and_then(|r| r.get(1)).and_then(|v| v.as_str()).map(str::to_string))
     };
-    match crate::suivies::id_de_la_couche_par_son_nom(&lire_meta, &depot, &demandee.couche)? {
-        Some(id) => crate::vues::charger_la_pile_sur(conn, dialecte, &crate::vues::VueDemandee { couche: id, rang: demandee.rang }, reglages),
-        None => Err(refus),
+    match crate::suivies::id_de_la_couche_par_son_nom(&read_meta, &repo, &requested.couche)? {
+        Some(id) => crate::vues::charger_la_pile_sur(conn, dialect, &crate::vues::VueDemandee { couche: id, rang: requested.rang }, settings),
+        None => Err(refusal),
     }
 }
 
@@ -943,21 +943,21 @@ fn charger_la_pile_de_l_appel(
 /// Le rang omis vaut la dernière génération publiée de la couche. Toute autre
 /// clé, une couche absente ou vide, un rang qui n'est pas un entier : un refus
 /// qui les nomme.
-fn lire_la_vue(v: &Value) -> Result<crate::vues::VueDemandee, String> {
+fn parse_view(v: &Value) -> Result<crate::vues::VueDemandee, String> {
     let o = v.as_object().ok_or_else(|| format!("`view` doit être un objet {{\"layer\", \"rank\"?}}, pas {v}"))?;
     if let Some(k) = o.keys().find(|k| *k != "layer" && *k != "rank") {
         return Err(format!("`view` : clé inconnue « {k} » (attendues : layer, rank)"));
     }
-    let couche = match o.get("layer") {
+    let layer = match o.get("layer") {
         Some(Value::String(c)) if !c.is_empty() => c.clone(),
         Some(x) => return Err(format!("`view.layer` doit être l'id d'une couche, pas {x}")),
         None => return Err("`view` : `layer` manque (l'id de la couche à lire)".into()),
     };
-    let rang = match o.get("rank") {
+    let rank = match o.get("rank") {
         None | Some(Value::Null) => None,
         Some(r) => Some(r.as_i64().ok_or_else(|| format!("`view.rank` doit être un entier, pas {r}"))?),
     };
-    Ok(crate::vues::VueDemandee { couche, rang })
+    Ok(crate::vues::VueDemandee { couche: layer, rang: rank })
 }
 
 fn schema_refusal(e: &jsonschema::ValidationError<'_>) -> String {
@@ -3454,10 +3454,10 @@ thread_local! {
     /// `call_tool_on` le temps de l'appel, dans ce fil. `poser_l_instantane` la
     /// lit et charge sa pile dans l'instantané de l'appel : la vue et ses lignes
     /// viennent de la même lecture.
-    static VUE_DE_L_APPEL: std::cell::RefCell<Option<crate::vues::VueDemandee>> = const { std::cell::RefCell::new(None) };
+    static CALL_VIEW: std::cell::RefCell<Option<crate::vues::VueDemandee>> = const { std::cell::RefCell::new(None) };
     /// La vue lue par l'appel en cours (couche, rang, profondeur), que la
     /// réponse rend.
-    static VUE_LUE: std::cell::RefCell<Option<Value>> = const { std::cell::RefCell::new(None) };
+    static VIEW_READ: std::cell::RefCell<Option<Value>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Pose le drapeau de l'appel discret et le remet à sa valeur d'avant.
@@ -4548,9 +4548,9 @@ impl Backend {
             .clone();
         // `view` est commun à tous les outils (page 28 d'arbre principal, l. 45) :
         // lu ici une fois, jamais un paramètre de graphe.
-        let vue = match args.remove("view") {
+        let view = match args.remove("view") {
             None | Some(Value::Null) => None,
-            Some(v) => Some(lire_la_vue(&v)?),
+            Some(v) => Some(parse_view(&v)?),
         };
         for key in args.keys() {
             if attachment.bindings.contains_key(key) {
@@ -4590,7 +4590,7 @@ impl Backend {
         // Un outil qui ne lit pas dans un instantané (il écrit, ou un de ses nœuds
         // n'est pas sûr sous instantané) ne lit pas la pile : `view` se refuse en
         // le nommant, avant toute exécution, au lieu d'être ignoré.
-        if vue.is_some() && !prepared.nodes.snapshot_safe(&def) {
+        if view.is_some() && !prepared.nodes.snapshot_safe(&def) {
             return Err(format!(
                 "`view` : l'outil {name} ne lit pas sous une vue (il écrit, ou lit hors d'un instantané de lecture) ; appelez-le sans `view`"
             ));
@@ -4608,24 +4608,24 @@ impl Backend {
                 metadata_ports.push(port.clone());
             }
         }
-        struct Remettre(Option<crate::vues::VueDemandee>);
-        impl Drop for Remettre {
+        struct RestoreView(Option<crate::vues::VueDemandee>);
+        impl Drop for RestoreView {
             fn drop(&mut self) {
-                VUE_DE_L_APPEL.with(|v| *v.borrow_mut() = self.0.take());
-                VUE_LUE.with(|v| *v.borrow_mut() = None);
+                CALL_VIEW.with(|v| *v.borrow_mut() = self.0.take());
+                VIEW_READ.with(|v| *v.borrow_mut() = None);
             }
         }
-        let avant = VUE_DE_L_APPEL.with(|v| v.replace(vue.clone()));
-        VUE_LUE.with(|v| *v.borrow_mut() = None);
-        let _remettre = Remettre(avant);
+        let previous = CALL_VIEW.with(|v| v.replace(view.clone()));
+        VIEW_READ.with(|v| *v.borrow_mut() = None);
+        let _restore = RestoreView(previous);
         let mut response = self.execute_graph(prepared, tool, &def, &metadata_ports, &policy, Some(GraphTarget::Tool(name.to_string())))?;
-        if vue.is_some() {
+        if view.is_some() {
             // La vue lue se dit dans la réponse ; un appel qui n'a pas posé de vue
             // (aucun instantané de lecture sur ce backend) ne rend rien de lu hors d'elle.
-            let lue = VUE_LUE.with(|v| v.borrow_mut().take()).ok_or_else(|| {
+            let read = VIEW_READ.with(|v| v.borrow_mut().take()).ok_or_else(|| {
                 format!("`view` : l'outil {name} n'a lu sous aucune vue (ce backend n'a pas d'instantané de lecture) ; la réponse n'est pas rendue")
             })?;
-            response["view"] = lue;
+            response["view"] = read;
         }
         context["result"] = response["result"].clone();
         let mut report = self.validate_hooks(prepared, &harness.after, &context);
@@ -4954,16 +4954,16 @@ impl Backend {
         // **La vue de l'appel** (`view`, 2b-C) : sa pile se charge dans cet
         // instantané, et compose la visibilité de la vue de l'appel. Une vue
         // inconnue se refuse ici, avant que le graphe ne lise.
-        if let Some(demandee) = VUE_DE_L_APPEL.with(|v| v.borrow().clone()) {
-            let reglages = crate::vues::reglages_des_vues(prepared.manifest.tracked.as_ref())?;
-            let pile = charger_la_pile_de_l_appel(prepared, conn.as_ref(), vue.forme().dialect.as_ref(), &demandee, &reglages)?;
-            let visibilite = appel.generations.as_ref().ok_or_else(|| {
+        if let Some(requested) = CALL_VIEW.with(|v| v.borrow().clone()) {
+            let settings = crate::vues::reglages_des_vues(prepared.manifest.tracked.as_ref())?;
+            let pile = load_call_view_stack(prepared, conn.as_ref(), vue.forme().dialect.as_ref(), &requested, &settings)?;
+            let visibility = appel.generations.as_ref().ok_or_else(|| {
                 "`view` : cette base n'a pas de générations (forme d'avant les versions de scope, à migrer)".to_string()
             })?;
-            appel.generations = Some(visibilite.avec_la_pile(&pile));
-            let tete = pile.etages.first().ok_or("`view` : pile vide")?;
-            let lue = json!({"layer": tete.couche, "rank": tete.rang, "depth": pile.etages.len()});
-            VUE_LUE.with(|v| *v.borrow_mut() = Some(lue));
+            appel.generations = Some(visibility.avec_la_pile(&pile));
+            let top = pile.etages.first().ok_or("`view` : pile vide")?;
+            let read = json!({"layer": top.couche, "rank": top.rang, "depth": pile.etages.len()});
+            VIEW_READ.with(|v| *v.borrow_mut() = Some(read));
         }
         services.register("conn", crate::dataflow::services::ConnService(conn.clone()));
         if vue.texte_natif {
@@ -8320,19 +8320,19 @@ mod tests {
     /// profondeur de la pile lue.
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     #[test]
-    fn une_vue_du_backend_rend_la_meme_reponse_et_dit_la_vue_lue() {
+    fn a_backend_view_gives_the_same_answer_and_reports_the_view_read() {
         let (_dir, backend) = backend_qui_surveille();
         backend.mount_reactions().unwrap();
         attendre_les_usages(&backend, "depart", |u| u.contains("outils.rs"));
-        let sans = backend.call("usages", json!({"name": "depart"})).expect("usages sans vue");
-        let avec = backend
+        let without = backend.call("usages", json!({"name": "depart"})).expect("usages sans vue");
+        let with_view = backend
             .call("usages", json!({"name": "depart", "view": {"layer": "backend"}}))
             .unwrap_or_else(|e| panic!("usages sous la vue du backend : {e}"));
-        assert_eq!(sans["result"], avec["result"], "une pile d'un étage ne change rien");
-        assert_eq!(avec["view"]["layer"], "backend", "la couche lue est dite : {avec}");
-        assert!(avec["view"]["rank"].is_i64(), "le rang lu est dit : {avec}");
-        assert_eq!(avec["view"]["depth"], 1, "la profondeur de la pile est dite : {avec}");
-        assert!(sans.get("view").is_none(), "sans `view`, la réponse ne s'invente pas de vue : {sans}");
+        assert_eq!(without["result"], with_view["result"], "une pile d'un étage ne change rien");
+        assert_eq!(with_view["view"]["layer"], "backend", "la couche lue est dite : {with_view}");
+        assert!(with_view["view"]["rank"].is_i64(), "le rang lu est dit : {with_view}");
+        assert_eq!(with_view["view"]["depth"], 1, "la profondeur de la pile est dite : {with_view}");
+        assert!(without.get("view").is_none(), "sans `view`, la réponse ne s'invente pas de vue : {without}");
         assert!(backend.stop_reactions().is_empty());
     }
 
@@ -8343,28 +8343,28 @@ mod tests {
     /// porte, et la réponse dit une pile de deux étages. Sans vue, rien ne change.
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     #[test]
-    fn une_vue_de_deux_etages_masque_ce_que_l_enfant_retire() {
+    fn a_two_layer_view_hides_what_the_child_removes() {
         let (_dir, backend) = backend_qui_surveille();
         backend.mount_reactions().unwrap();
         attendre_les_usages(&backend, "depart", |u| u.contains("outils.rs"));
-        let sous_backend = backend.call("usages", json!({"name": "depart", "view": {"layer": "backend"}})).expect("la vue du backend");
-        let rang = sous_backend["view"]["rank"].as_i64().expect("le rang du backend");
+        let under_backend = backend.call("usages", json!({"name": "depart", "view": {"layer": "backend"}})).expect("la vue du backend");
+        let rank = under_backend["view"]["rank"].as_i64().expect("le rang du backend");
         backend
             .catalog
             .lock()
             .unwrap()
             .execute_raw(&format!(
                 "CREATE (:_generation {{_key: 'enfant:1', couche: 'enfant', rang: 1, commit: '', base: '', recette: '', \
-                 parente_couche: 'backend', parente_rang: {rang}, tombstones: '{{\"keys\": [], \"files\": [\"outils.rs\"]}}', publiee_le: 0}})"
+                 parente_couche: 'backend', parente_rang: {rank}, tombstones: '{{\"keys\": [], \"files\": [\"outils.rs\"]}}', publiee_le: 0}})"
             ))
             .expect("la génération de l'enfant");
-        let sous_enfant = backend
+        let under_child = backend
             .call("usages", json!({"name": "depart", "view": {"layer": "enfant"}}))
             .unwrap_or_else(|e| panic!("usages sous la vue de l'enfant : {e}"));
-        assert_eq!(sous_enfant["view"], json!({"layer": "enfant", "rank": 1, "depth": 2}), "la pile lue est dite : {sous_enfant}");
-        assert!(!sous_enfant["result"].to_string().contains("outils.rs"), "le fichier que l'enfant retire ne se voit plus : {sous_enfant}");
-        let sans = backend.call("usages", json!({"name": "depart"})).expect("usages sans vue");
-        assert!(sans["result"].to_string().contains("outils.rs"), "sans vue, la vue courante reste celle du backend : {sans}");
+        assert_eq!(under_child["view"], json!({"layer": "enfant", "rank": 1, "depth": 2}), "la pile lue est dite : {under_child}");
+        assert!(!under_child["result"].to_string().contains("outils.rs"), "le fichier que l'enfant retire ne se voit plus : {under_child}");
+        let without = backend.call("usages", json!({"name": "depart"})).expect("usages sans vue");
+        assert!(without["result"].to_string().contains("outils.rs"), "sans vue, la vue courante reste celle du backend : {without}");
         assert!(backend.stop_reactions().is_empty());
     }
 
@@ -8373,7 +8373,7 @@ mod tests {
     /// sous une autre vue, ni l'ancre ni le disque.
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     #[test]
-    fn une_vue_inconnue_est_refusee_avant_toute_lecture() {
+    fn an_unknown_view_is_refused_before_any_read() {
         let (_dir, backend) = backend_qui_surveille();
         backend.mount_reactions().unwrap();
         attendre_les_usages(&backend, "depart", |u| u.contains("outils.rs"));
