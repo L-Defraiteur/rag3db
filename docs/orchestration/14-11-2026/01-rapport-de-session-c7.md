@@ -1585,3 +1585,9 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   l'archiviste voit sans dérailler et quels contournements tiennent (rangement au fil de l'eau, fenêtres
   chevauchées, bilan courant). Première mesure du banc, confiée à banc avec 96, sur le segment d'une frontière
   de mon transcript.
+- **12 h 4x — le corpus de vrai long contexte est extrait** (banc, hors dépôt) : le segment f5 de mon transcript,
+  244 tours, 3 235 éléments dont 540 appels d'outils et leurs résultats, 880 233 jetons tels que Claude les a vus
+  (médiane 2 935 par tour, max 24 551), 1 891 600 caractères, deux secrets masqués ; x_corpus.py rejoue tout
+  segment de tout transcript. **Lucie** : la forme à mesurer d'abord est **les fenêtres chevauchantes** — un bout
+  de conversation, les résumés déjà extraits des fenêtres d'avant, plus un bout du texte qui précède, « comme
+  trois conversations de 300 k au lieu d'une de 900 ». Banc écrit la conception, 96 fournit le composeur.
