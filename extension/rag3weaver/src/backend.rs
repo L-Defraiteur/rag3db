@@ -8336,6 +8336,38 @@ mod tests {
         assert!(backend.stop_reactions().is_empty());
     }
 
+    /// **Une vue de deux étages se compose par `view`** (2b-C sur la
+    /// composition de 2b′) : une couche « enfant » posée à la main sur la
+    /// génération courante de `backend`, qui retire le fichier `outils.rs`. Sous
+    /// `view: enfant`, `usages` ne trouve plus la définition de `depart` qu'il
+    /// porte, et la réponse dit une pile de deux étages. Sans vue, rien ne change.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn une_vue_de_deux_etages_masque_ce_que_l_enfant_retire() {
+        let (_dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        attendre_les_usages(&backend, "depart", |u| u.contains("outils.rs"));
+        let sous_backend = backend.call("usages", json!({"name": "depart", "view": {"layer": "backend"}})).expect("la vue du backend");
+        let rang = sous_backend["view"]["rank"].as_i64().expect("le rang du backend");
+        backend
+            .catalog
+            .lock()
+            .unwrap()
+            .execute_raw(&format!(
+                "CREATE (:_generation {{_key: 'enfant:1', couche: 'enfant', rang: 1, commit: '', base: '', recette: '', \
+                 parente_couche: 'backend', parente_rang: {rang}, tombstones: '{{\"keys\": [], \"files\": [\"outils.rs\"]}}', publiee_le: 0}})"
+            ))
+            .expect("la génération de l'enfant");
+        let sous_enfant = backend
+            .call("usages", json!({"name": "depart", "view": {"layer": "enfant"}}))
+            .unwrap_or_else(|e| panic!("usages sous la vue de l'enfant : {e}"));
+        assert_eq!(sous_enfant["view"], json!({"layer": "enfant", "rank": 1, "depth": 2}), "la pile lue est dite : {sous_enfant}");
+        assert!(!sous_enfant["result"].to_string().contains("outils.rs"), "le fichier que l'enfant retire ne se voit plus : {sous_enfant}");
+        let sans = backend.call("usages", json!({"name": "depart"})).expect("usages sans vue");
+        assert!(sans["result"].to_string().contains("outils.rs"), "sans vue, la vue courante reste celle du backend : {sans}");
+        assert!(backend.stop_reactions().is_empty());
+    }
+
     /// **Une vue inconnue est refusée avant toute lecture** (page 28 d'arbre,
     /// contre-exemple de la vue inconnue) : le refus la nomme, et rien n'est lu
     /// sous une autre vue, ni l'ancre ni le disque.
