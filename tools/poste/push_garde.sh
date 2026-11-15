@@ -172,7 +172,9 @@ if [ -n "${PILE_TESTE:-}" ]; then
 fi
 # HEAD est le commit testé, ou en descend par des commits de doc seuls (des .md). En mode pile, c'est
 # verifier_pile qui juge, plus bas, une fois master relu.
-if [ -z "${PILE_AVANT:-}" ] && [ "$(git rev-parse --short HEAD)" != "$teste" ]; then
+# Les commits entiers, jamais deux formes courtes (15 novembre 2026) : `--short` rend la longueur qu'exige le dépôt (10 ici),
+# le résumé en écrit souvent 9, et la garde disait « de la doc seule » d'une tête égale au testé.
+if [ -z "${PILE_AVANT:-}" ] && [ "$(git rev-parse HEAD)" != "$(git rev-parse -q --verify "$teste^{commit}")" ]; then
   git merge-base --is-ancestor "$teste" HEAD || { echo "ARRÊT : HEAD ne descend pas du commit testé ($teste)"; exit 1; }
   ajoute=$(git diff --name-only "$teste" HEAD -- . ':!*.md')
   [ -z "$ajoute" ] || { echo "ARRÊT : HEAD ajoute autre chose que de la doc au commit testé ($teste) :"; echo "$ajoute"; exit 1; }

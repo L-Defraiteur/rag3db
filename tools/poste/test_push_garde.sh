@@ -261,6 +261,22 @@ cpp_cas 3 src/moteur.cpp extension/rag3weaver/src/lot.rs -- extension/rag3weaver
 { read -r rc; sortie=$(cat); } < "$D/cpp-3"
 [ "$rc" != 0 ] && echo "$sortie" | grep -q "master a apporté du code" \
   && echo "vert   un lot qui touche aussi du Rust : arrêt" || { echo "ROUGE  lot avec du Rust : rc $rc — $(echo "$sortie" | tail -2 | tr '\n' ' ')"; rouge=1; }
+# **Le commit testé en forme courte** (15 novembre 2026) : un résumé qui l'écrit en 7, 9 ou 12 caractères, et une tête égale
+# au testé, ne font jamais dire « de la doc seule ».
+for l in 7 9 12; do
+  (
+    H="$D/homeh$l"; mkdir -p "$H/git_workspaces" "$H/.cache/rag3weaver-build/j"
+    git clone -q --bare "$D" "$D/nuh$l.git" 2>/dev/null; git -C "$D/nuh$l.git" update-ref refs/heads/master "$BASE"
+    git clone -q "$D/nuh$l.git" "$H/git_workspaces/wt" 2>/dev/null
+    cd "$H/git_workspaces/wt" && git config user.email luciedefraiteur@gmail.com && git config user.name t
+    git checkout -q --detach origin/master; echo 'fn h() {}' > extension/rag3weaver/src/h.rs; git add -A; git commit -qm "lot h"
+    printf 'teste %s\nVERT\n' "$(git rev-parse HEAD | cut -c1-$l)" > "$H/.cache/rag3weaver-build/j/resume.log"; git rev-parse origin/master > "$H/.cache/rag3weaver-build/j/base"
+    echo "rag3db-build-0123456789012345678901234567890123456789-Release" > "$H/.cache/rag3weaver-build/j/lib.log"
+    sortie=$(HOME="$H" bash "$GARDE" wt j 2>&1); rc=$?
+    if [ $rc = 0 ] && echo "$sortie" | grep -qx POUSSE && ! echo "$sortie" | grep -q "de la doc seule"; then echo "vert   le testé écrit en $l caractères : poussé, sans « de la doc seule »"; exit 0; fi
+    echo "ROUGE  le testé écrit en $l caractères : rc $rc — $(echo "$sortie" | grep -E 'doc seule|ARRÊT' | head -1)"; exit 1
+  ) || rouge=1
+done
 # Aucun journal qui nomme une lib : ARRÊT, même si la liste des journaux s'élargit à $J/*.log.
 (
   H="$D/home0"; mkdir -p "$H/git_workspaces" "$H/.cache/rag3weaver-build/j"
