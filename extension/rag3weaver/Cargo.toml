@@ -604,6 +604,10 @@ name = "sonde_cout_du_predicat"
 path = "tests/sonde_cout_du_predicat.rs"
 required-features = ["rag3db-native"]
 [[test]]
+name = "sonde_visibilite_2a_prime_3"
+path = "tests/sonde_visibilite_2a_prime_3.rs"
+required-features = ["rag3db-native", "code"]
+[[test]]
 name = "sonde_clause_sans_filtre"
 path = "tests/sonde_clause_sans_filtre.rs"
 required-features = ["rag3db-native"]
