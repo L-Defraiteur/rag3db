@@ -1434,3 +1434,13 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   mal dans DdlEveryMinute (une instruction de 261 s). Régression d'un ordre de grandeur, très probablement du
   lot (le verrou de table du CREATE, ou le contrôle de schéma qui recommence les écrivains). Départage sur
   trois commits, un tour chacun ; rien ne pousse avant le retour à la ligne known_red.
+- **Le cœur, 09 h 50 — la régression du CREATE est de master** : a2f9c9b65 (avant le lot) donne 237 s / 231 s ;
+  les trois têtes du lot 177 à 260 s ; la ligne known_red (13 à 15 s, 19 octobre) dépassée d'un ordre de
+  grandeur sur master depuis une date inconnue (ticket df306435c, bissection = prochain lot du cœur, avant
+  ASan). Le lot n'aggrave rien. Deux conditions avant le push : le contrôle de schéma ne se déclenche pas sur un
+  CREATE INDEX (58 recommencements, dont 18 à 20 par CREATE : un paquet de 2 048 fichiers rejoué pour rien) ;
+  DdlEveryMinute trois tours sans SIGSEGV sur la tête finale (un core à 9 h 33, pile perdue par le rebâti).
+- Le cœur, 09 h 55 : le contrôle de schéma compare la disposition des colonnes (nombre, noms, types, numéros),
+  plus la version de l'entrée (b7251cb77 ; deux témoins rouges d'abord : un COMMENT ON TABLE et un
+  CREATE_VECTOR_INDEX validés pendant une écriture ouverte ne font pas recommencer) ; DdlEveryMinute ×3 avec le
+  binaire gardé à côté du core ; ticket du core de 9 h 33 (f3a9fb84a). Passe alter7 lancée à 9 h 52, ~1 h 15.
