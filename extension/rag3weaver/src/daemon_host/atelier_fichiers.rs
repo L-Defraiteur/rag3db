@@ -1270,6 +1270,41 @@ pub(super) mod tests {
     /// **`replace_text`** : un ancien texte unique, sinon un refus qui dit le nombre
     /// d'occurrences ; le diff unifié rendu ; dans un worktree attaché, l'index suit (le
     /// nom neuf se trouve par `usages`).
+    /// **Le socle : `write` crée un fichier neuf** (ticket d'ED du 15 novembre, le socle d'agent de code) :
+    /// il rend le diff, refuse un fichier qui existe sans `force`, et l'écrase avec `force`.
+    #[test]
+    fn the_workshop_writes_a_new_file_and_refuses_to_overwrite_it() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let r = a.appeler("write", json!({ "path": "neuf/notes.txt", "text": "une\ndeux" })).expect("write crée");
+        assert!(Atelier::texte(&r).contains("+une") && Atelier::texte(&r).contains("+deux"), "la création rend son diff : {}", Atelier::texte(&r));
+        assert_eq!(std::fs::read_to_string(a.racine.join("neuf/notes.txt")).unwrap(), "une\ndeux\n");
+        let refus = a.appeler("write", json!({ "path": "neuf/notes.txt", "text": "par-dessus" })).unwrap_err();
+        assert!(refus.contains("existe déjà") && refus.contains("force"), "sans force, un fichier existant est refusé : {refus}");
+        assert_eq!(std::fs::read_to_string(a.racine.join("neuf/notes.txt")).unwrap(), "une\ndeux\n", "rien n'est écrit");
+        let r = a.appeler("write", json!({ "path": "neuf/notes.txt", "text": "trois", "force": true })).expect("write force");
+        assert!(Atelier::texte(&r).contains("-une") && Atelier::texte(&r).contains("+trois"), "l'écrasement rend son diff : {}", Atelier::texte(&r));
+        assert_eq!(std::fs::read_to_string(a.racine.join("neuf/notes.txt")).unwrap(), "trois\n");
+    }
+
+    /// **Le socle : `glob`** rend les chemins sous la racine qui répondent à un motif, triés, sans ce
+    /// que les règles d'exclusion écartent (`.gitignore`).
+    #[test]
+    fn the_workshop_globs_paths() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        for (p, t) in [("a.rs", "fn a() {}\n"), ("b/c.rs", "fn c() {}\n"), ("d.txt", "d\n"), ("cible/x.rs", "fn x() {}\n")] {
+            std::fs::create_dir_all(a.racine.join(p).parent().unwrap()).unwrap();
+            std::fs::write(a.racine.join(p), t).unwrap();
+        }
+        std::fs::write(a.racine.join(".gitignore"), "cible/\n").unwrap();
+        let r = a.appeler("glob", json!({ "pattern": "**/*.rs" })).expect("glob");
+        let t = Atelier::texte(&r);
+        assert!(t.contains("a.rs") && t.contains("b/c.rs"), "les .rs : {t}");
+        assert!(!t.contains("d.txt"), "pas le .txt : {t}");
+        assert!(!t.contains("cible/x.rs"), "pas ce que .gitignore écarte : {t}");
+    }
+
     #[test]
     fn the_workshop_replaces_a_unique_text_and_says_the_diff() {
         let d = tempfile::tempdir().unwrap();
