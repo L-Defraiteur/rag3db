@@ -461,7 +461,11 @@ impl DecideNode {
         Ok((labels[i].clone(), Some(*p)))
     }
 
-    fn by_llm(&self, llm: &dyn Llm, text: &str, labels: &[String], ctx: &mut NodeContext) -> Result<(String, Option<f64>, Option<String>, Option<String>), String> {
+    /// Rend l'étiquette, le nom et la phrase demandés, et **l'usage de l'appel** (15 novembre 2026 :
+    /// le banc lit le cache du fournisseur avant de dépenser) : `{ms}` toujours, et les compteurs
+    /// `prompt_tokens`, `cached_prompt_tokens`, `completion_tokens` seulement si le fournisseur en a
+    /// rendu — un modèle sans bloc usage laisse les champs absents, pas à zéro.
+    fn by_llm(&self, llm: &dyn Llm, text: &str, labels: &[String], ctx: &mut NodeContext) -> Result<(String, Option<f64>, Option<String>, Option<String>, Option<Value>), String> {
         let cancel = ctx.cancellation();
         // Le schéma : l'étiquette, puis le nom et la phrase quand ils sont demandés.
         let mut properties = serde_json::Map::new();
@@ -504,13 +508,22 @@ impl DecideNode {
             .cloned()
             .map(|bus| (bus, format!("Decide {} (run {})", self.name, ctx.run_id())));
         let mut sink = CancellableSink { text: String::new(), cancel, alerte, reprises: Vec::new() };
+        let debut = std::time::Instant::now();
         let rendu = llm.generate(&turns, &opts, &mut sink);
         for r in std::mem::take(&mut sink.reprises) {
             ctx.warn(&r);
         }
         // Une indisponibilité (quota, panne) se dit telle quelle : ce n'est
         // pas une mauvaise étiquette, ni un défaut du graphe.
-        let (finish, _) = rendu.map_err(|e| format!("Decide ({}) : {e}", llm.name()))?;
+        let (finish, u) = rendu.map_err(|e| format!("Decide ({}) : {e}", llm.name()))?;
+        let mut usage = json!({"ms": if u.ms > 0 { u.ms } else { debut.elapsed().as_millis() as u64 }});
+        // Un appel qui a rendu une étiquette a au moins un jeton de sortie : deux compteurs à zéro
+        // disent un fournisseur qui n'a pas envoyé de bloc usage, pas un appel gratuit.
+        if u.prompt_tokens > 0 || u.completion_tokens > 0 {
+            usage["prompt_tokens"] = json!(u.prompt_tokens);
+            usage["cached_prompt_tokens"] = json!(u.cached_prompt_tokens);
+            usage["completion_tokens"] = json!(u.completion_tokens);
+        }
         // **Coupée par le plafond**, la réponse se dit tronquée — pas « hors
         // liste » : `{"label": "no` n'est pas une mauvaise étiquette, c'est une
         // étiquette pas finie.
@@ -540,7 +553,7 @@ impl DecideNode {
                 labels.join(", ")
             ));
         }
-        Ok((label, None, name, about))
+        Ok((label, None, name, about, Some(usage)))
     }
 }
 
@@ -608,10 +621,10 @@ impl DecideNode {
     fn label(&self, ctx: &mut NodeContext, element: Value, decider: Option<&dyn Decider>, llm: Option<&dyn Llm>) -> Result<Value, String> {
         let text = self.text_of(&element);
         let labels = self.labels_for(&element)?;
-        let (label, probability, name, about) = match (self.via, decider, llm) {
+        let (label, probability, name, about, usage) = match (self.via, decider, llm) {
             (Via::Auto | Via::Decider, Some(d), _) => {
                 let (l, p) = self.by_decider(d, &text, &labels)?;
-                (l, p, None, None)
+                (l, p, None, None, None)
             }
             (Via::Decider, None, _) => return Err("Decide : via='decider' mais aucun 'decider' n'est servi".into()),
             (Via::Auto | Via::Llm, _, Some(l)) => self.by_llm(l, &text, &labels, ctx)?,
@@ -633,6 +646,9 @@ impl DecideNode {
         }
         if let Some(p) = probability {
             out[format!("{}_probability", self.target).as_str()] = json!(p);
+        }
+        if let Some(u) = usage {
+            out["usage"] = u;
         }
         Ok(out)
     }
