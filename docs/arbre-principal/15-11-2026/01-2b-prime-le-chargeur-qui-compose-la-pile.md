@@ -44,12 +44,20 @@ suive sans attendre l'histoire de 2a′-3. Il est rouge d'abord, et hors push ju
 6. **La publication écrit la parente** d'une génération quand les suivies la connaissent : la couche
    parente (son id), à son dernier rang au moment de la publication. Avec `backend` seul, elle reste
    vide.
+7. **Une génération déjà écrite sans parente se relit comme racine** de sa chaîne. Ce n'est pas un refus,
+   et l'état le dit (« pile d'un étage : aucune parente écrite »). Aujourd'hui, seule `backend:0` est
+   dans ce cas, et elle est racine par construction. Une génération à venir d'une couche dont les suivies
+   connaissent la parente se publie avec elle ; si elle s'écrivait sans (un chemin oublié), l'état le
+   dirait aussi, et le témoin de la publication rougirait.
 
 ## Les réglages (dans le manifeste, sous `tracked`)
 
 `"views": {"max_depth": 16, "load_timeout_ms": 2000}`. C'est la profondeur au-delà de laquelle une pile se
 refuse, et le temps qu'un chargement attend la table `_generation` sous une lecture. Toute clé inconnue est
-un refus nommé, comme le reste de `tracked`.
+un refus qui la nomme, comme pour `writes`.
+
+**Le retour arrière de la bascule des bases de Lucie** se prépare, sans sa réponse, sur « une semaine, puis
+retrait de l'ancien index base par base, à son mot » (c7, 15 novembre).
 
 ## Ce que 2b′ ne promet pas tant que 2a′-3 n'est pas là
 
