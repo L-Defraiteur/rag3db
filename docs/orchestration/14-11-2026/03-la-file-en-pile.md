@@ -1208,3 +1208,15 @@ Banc, 15 h 05 : F 50 k contre N, provisoire (58645ea33) : N = 78 fiches dont 9 d
 1 doublon (0,033), P1 0,81 (63/78 sujets, au seuil), 7,9 s/décision, 3,88 M de jetons au plafond. Le contexte ôte les doublons
 mais double les « rien » (72 contre 38) : à départager en relisant ces tours (aide ou endort). Suite : relecture du juge et des
 « rien », F 25 % et S 50, 300 k au lot usage.
+Embarquement, 15 h 06 : jeu sur card2 (15 h 03, hôte isolé 00828f25) : repli dit, 2 284 morceaux par 7879, index 34,1 s (904 s le 14),
+rien sur card2 — mais la carte avait 15 190 Mio libres et la marge a été montée à 4096 pour forcer le repli : le jeu prouve le
+mécanisme, pas la carte pleine (dit dans la page ; le vrai cas en ticket mesure). Lot prêt (6 commits, base 09bb33e64).
+G, 15 h 06 : la pose du portable attend : trois clients sur 7970, dont `rag3weaver-tty --tache essai-tty` (pid 814707, 3 h 22, un essai de
+tty) ; G lui demande. Lot des hashes courts prêt (garde-hash-entier 1e5902a83, 2 rouges vus sur la garde de master).
+tty, 15 h 07 : le pid 814707 n'est pas un essai de tty, c'est **le terminal de Lucie** (fish du terminal intégré de VSCodium, 11 h 44) — on
+ne le coupe pas ; il reprend son flux seul après une coupure de l'hôte (Last-Event-ID). G pose au portable sans attendre.
+Banc, 15 h 08 : les 72 « rien » de F 50 k relus contre N (73278ea4c) : 34 **aide** (N l'a rangé sous un sujet que F couvre ailleurs — mais
+l'apport du tour est perdu : la section n'est pas rangée), 22 **endort** (sujets que F ne couvre nulle part, neuf sujets entiers
+perdus), 16 d'accord. Juge relu à la main : 0,90 sur 30, indulgent. Pour 96, variante de consigne : « rien » seulement si la
+section n'apporte rien, sinon rejoindre le sujet montré ; « le contexte montre ce qui existe, pas ce qui est rangé de cette
+section ». F 25 % et S 50 tournent depuis 15 h 06.
