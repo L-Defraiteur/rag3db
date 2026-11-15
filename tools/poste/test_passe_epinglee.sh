@@ -65,4 +65,16 @@ passe VERT "le repli à luciepc" FAUX_HOTE=LuciePC
 grep -q 'REPLI=igpu:0' $D/trace && echo "vert   LuciePC : RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE=igpu:0" || { echo "ROUGE  LuciePC sans repli : $(head -1 $D/trace | grep -o 'REPLI=[^ ]*')"; rouge=1; }
 passe VERT "pas de repli au portable" FAUX_HOTE=lucie-tablette RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE=igpu:0
 grep -q 'REPLI=absent' $D/trace && echo "vert   lucie-tablette : aucun repli, même posé par l'appelant" || { echo "ROUGE  le portable a un repli : $(head -1 $D/trace | grep -o 'REPLI=[^ ]*')"; rouge=1; }
+# **Un chemin absolu de journaux** (15 novembre 2026, ticket d'hotfixs) : `J=$HOME/.cache/rag3weaver-build/$2` l'emboîtait
+# en silence ; le verdict s'écrivait là où personne (ni la garde du push) ne le lisait. Il est refusé, et la passe dit
+# où elle écrit dès son premier pas.
+A=$D/ailleurs/journaux-x
+sortie=$(HOME=$H PATH=$D/bin:$PATH FAUX_TRACE=$D/trace bash "$X" wt "$A" filtre 2>&1); rc=$?
+[ $rc != 0 ] && [ ! -e "$A" ] && [ ! -e "$H/.cache/rag3weaver-build$A" ] && echo "$sortie" | grep -q 'chemin absolu' \
+  && echo "vert   un chemin absolu de journaux est refusé, nommé, sans dossier créé ni emboîté (code $rc)" \
+  || { echo "ROUGE  chemin absolu : code $rc, emboîté $([ -e "$H/.cache/rag3weaver-build$A" ] && echo oui || echo non), sortie « $(echo "$sortie" | head -2 | tr '\n' ' ') »"; rouge=1; }
+sortie=$(HOME=$H PATH=$D/bin:$PATH FAUX_TRACE=$D/trace bash "$X" wt j filtre temoins 2>&1)
+[ "$(echo "$sortie" | head -1)" = "journaux : $H/.cache/rag3weaver-build/j" ] \
+  && echo "vert   la passe dit où elle écrit dès son premier pas" \
+  || { echo "ROUGE  premier pas : « $(echo "$sortie" | head -1) »"; rouge=1; }
 exit $rouge
