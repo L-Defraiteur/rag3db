@@ -19,6 +19,8 @@ pub enum Commande {
     Effacer,
     EffacerHistorique,
     Contexte,
+    /// `/etapes` : montrer ou cacher dans l'historique les étapes de l'équipier.
+    Etapes,
     /// `/model` : les modèles de la tâche, ou en choisir un par son nom (tty-14).
     Modele(Option<String>),
     /// `!…` : une commande lancée là où tourne le terminal.
@@ -33,6 +35,7 @@ pub const COMMANDES: &[(&str, &str)] = &[
     ("context", "le remplissage du contexte du modèle de l'équipier"),
     ("depot", "<nom> : passe à un autre dépôt"),
     ("effacer", "efface l'écran visible ; « /effacer historique » efface l'historique des envois"),
+    ("etapes", "montre ou cache dans l'historique les appels d'outil et les étapes de l'équipier"),
     ("journal", "où relire la séance"),
     ("model", "<nom> : change le modèle de la tâche ; seul, les modèles déclarés"),
     ("quitter", "quitte le terminal"),
@@ -63,6 +66,7 @@ pub fn lire(texte: &str) -> (Option<Commande>, Option<String>) {
             "effacer" if arg.as_deref() == Some("historique") => Commande::EffacerHistorique,
             "effacer" => Commande::Effacer,
             "context" | "contexte" => Commande::Contexte,
+            "etapes" => Commande::Etapes,
             "model" | "modele" => Commande::Modele(arg),
             autre => Commande::Inconnue(autre.to_string()),
         };
@@ -186,6 +190,7 @@ mod tests {
         assert_eq!(c("/effacer"), Some(Commande::Effacer));
         assert_eq!(c("/effacer historique"), Some(Commande::EffacerHistorique));
         assert_eq!(c("/context"), Some(Commande::Contexte));
+        assert_eq!(c("/etapes"), Some(Commande::Etapes));
         assert_eq!(c("/model"), Some(Commande::Modele(None)));
         assert_eq!(c("/model rapide"), Some(Commande::Modele(Some("rapide".into()))));
         assert_eq!(c("/arreter"), Some(Commande::Arreter));
@@ -207,8 +212,8 @@ mod tests {
         assert_eq!(completer("/theme cy", &s), Some(Completion { texte: "/theme cyb".into(), candidats: vec!["cyberpunk".into(), "cyborg".into()] }));
         assert_eq!(completer("/theme f", &s), Some(Completion { texte: "/theme foret".into(), candidats: vec![] }));
         assert_eq!(completer("/tache essai-", &s), Some(Completion { texte: "/tache essai-".into(), candidats: vec!["essai-ide".into(), "essai-tty".into()] }));
-        assert_eq!(completer("/e", &s).map(|c| c.candidats), Some(Vec::<String>::new()), "une seule commande en e : complétée, sans candidats");
-        assert_eq!(completer("/e", &s).map(|c| c.texte), Some("/effacer ".into()));
+        assert_eq!(completer("/e", &s), Some(Completion { texte: "/e".into(), candidats: vec!["effacer".into(), "etapes".into()] }), "deux commandes en e : leurs noms");
+        assert_eq!(completer("/ef", &s).map(|c| c.texte), Some("/effacer ".into()));
         let m = Sources { modeles: vec!["rapide".into(), "fin".into()], ..Default::default() };
         assert_eq!(completer("/model r", &m), Some(Completion { texte: "/model rapide".into(), candidats: vec![] }));
         assert_eq!(completer("/mo", &m), Some(Completion { texte: "/model ".into(), candidats: vec![] }));
