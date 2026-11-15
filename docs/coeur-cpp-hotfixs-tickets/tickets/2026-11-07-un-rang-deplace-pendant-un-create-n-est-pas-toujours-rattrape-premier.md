@@ -40,6 +40,20 @@ ddb856e21) :
 Un rouge sur trois passes sous charge, aucun seul : l'entrelacement des écrivains avec le bâti
 décide.
 
+### Le 15 novembre : une fois sur quatre, le cas seul
+
+Mesuré par cœur c++ à luciepc, bâti Release de `rag3db-colonnes/build/moteur` sous `poste lourd`,
+le cas seul répété (`--gtest_repeat=96`) :
+
+| tête | ce qu'elle porte | rouges |
+|---|---|---|
+| `a2f9c9b65` | master | 25 sur 96 (2 sur 24 au premier relevé) |
+| `d5f5325f0` | master + le lot du verrou de schéma (`alter-attend-les-ecrivains`) | 27 sur 96 (6 sur 24) |
+
+Le défaut se joue désormais sans charge autour, environ une fois sur quatre, sur master comme
+avec le lot du verrou de schéma : celui-ci ne l'aggrave pas. long.txt le dit encore « rouge
+environ une fois sur douze », à reprendre avec ce chiffre.
+
 ## Pour avancer
 
 1. Lire pourquoi le rang n'est rendu qu'au troisième rang : son nouveau vecteur est-il dans le
