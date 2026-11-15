@@ -1315,7 +1315,8 @@ fn synchroniser_par_generations(
     };
     let mut avancement = SourceSyncProgress { files_total: retenus.len() + partis.len(), ..Default::default() };
     let par_paquet = catalog.file_batch_size().unwrap_or(options.batch_files).max(1);
-    for paquet in retenus.chunks(par_paquet) {
+    let nombre_de_paquets = retenus.chunks(par_paquet).len();
+    for (rang_du_paquet, paquet) in retenus.chunks(par_paquet).enumerate() {
         // Lus, avant de les lire, et le retard qui tombe après l'écriture : comme la synchronisation
         // d'instantané (`a_sync_clears_the_lag_of_the_files_it_reads`).
         marquer_lus(&registry_key(source), paquet);
@@ -1342,6 +1343,18 @@ fn synchroniser_par_generations(
         avancement.files_done += paquet.len();
         avancement.scopes_written = report.scopes_written;
         progress(avancement);
+        // **L'arrêt propre**, à la même frontière que la synchronisation d'instantané : un paquet écrit,
+        // et pas le dernier. Rien n'est à suspendre (aucune session) : la reprise relit la source, et
+        // l'écrivain ne réécrit rien de ce qui n'a pas changé. Les partis attendent la reprise.
+        if rang_du_paquet + 1 < nombre_de_paquets && arret_demande(catalog, options, rang_du_paquet) {
+            return Err(format!(
+                "{SYNC_SUSPENDED} : {} fichiers sur {} faits, au paquet {} sur {} ; relancer reprend là",
+                avancement.files_done,
+                retenus.len(),
+                rang_du_paquet + 1,
+                nombre_de_paquets
+            ));
+        }
     }
     if !partis.is_empty() {
         let lot: Vec<(String, Option<String>)> = partis.iter().map(|p| (p.clone(), None)).collect();
