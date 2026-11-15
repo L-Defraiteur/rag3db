@@ -1430,7 +1430,7 @@ impl PreparedBackend {
         // de c7) : un écart hors placement se refuse au chargement, nommé.
         for (capacite, source) in manifest.models.iter() {
             if let (Some(principale), crate::model_source::Fallback::Activation(repli)) = (&source.activation, &source.fallback) {
-                if let Some(ecart) = crate::model_source::activation::ecart_hors_placement(principale, repli.as_ref()) {
+                if let Some(ecart) = crate::model_source::activation::difference_outside_placement(principale, repli.as_ref()) {
                     return Err(format!(
                         "models.{}.fallback : le repli « {} » diffère de « {} » hors placement : {ecart}",
                         capacite.name(), repli.nom_pour(source), principale.nom_pour(source)
@@ -7085,7 +7085,7 @@ mod tests {
 
     /// Un bloc d'activation de chargement (rien ne se lance au chargement).
     #[cfg(feature = "code")]
-    fn bloc_d_activation(peripherique: &str) -> Value {
+    fn activation_block(peripherique: &str) -> Value {
         json!({"modele": "bge-m3", "programme": "/bin/false", "profil": "p", "peripherique": peripherique,
             "coordination": "/tmp/coordination-inutile", "journal": "/tmp/journal-inutile",
             "budget_activation_secs": 5, "budget_attente_secs": 5,
@@ -7094,8 +7094,8 @@ mod tests {
 
     /// `models.embed` sur l'activation `principale`, repli par l'activation citée.
     #[cfg(feature = "code")]
-    fn repli_declare(m: &mut Value, repli: Value, cite: &str) {
-        m["activations"] = json!({"principale": bloc_d_activation("carte-a"), "repli": repli});
+    fn declare_fallback(m: &mut Value, repli: Value, cite: &str) {
+        m["activations"] = json!({"principale": activation_block("carte-a"), "repli": repli});
         embed_declare(m, json!({"activation": "principale", "fallback": {"activation": cite}}));
     }
 
@@ -7103,10 +7103,10 @@ mod tests {
     /// chargement**, avec les noms déclarés.
     #[cfg(feature = "code")]
     #[test]
-    fn repli_par_activation_un_nom_inconnu_se_refuse_au_chargement() {
-        let mut repli = bloc_d_activation("carte-b");
+    fn fallback_by_activation_unknown_name_is_refused_at_load() {
+        let mut repli = activation_block("carte-b");
         repli["address"] = json!("127.0.0.1:0");
-        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| repli_declare(m, repli.clone(), "absente"));
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| declare_fallback(m, repli.clone(), "absente"));
         let e = p.err().expect("un repli cité inconnu se refuse");
         assert!(e.contains("models.embed.fallback.activation cite « absente »") && e.contains("principale") && e.contains("repli"), "{e}");
     }
@@ -7116,11 +7116,11 @@ mod tests {
     /// `address` ; il est résolu en son bloc, nommé.
     #[cfg(feature = "code")]
     #[test]
-    fn repli_par_activation_au_placement_pres_est_accepte() {
-        let mut repli = bloc_d_activation("carte-b");
+    fn fallback_by_activation_differing_only_by_placement_is_accepted() {
+        let mut repli = activation_block("carte-b");
         repli["address"] = json!("127.0.0.1:7893");
         repli["env"] = json!({"RAG3WEAVER_BURN_DEVICE_EMBEDDER": "igpu:0", "HIP_VISIBLE_DEVICES": "1"});
-        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| repli_declare(m, repli.clone(), "repli"));
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| declare_fallback(m, repli.clone(), "repli"));
         let p = p.unwrap_or_else(|e| panic!("un repli au placement près se charge : {e}"));
         let embed = serde_json::to_value(&p.manifest.models).unwrap()["embed"].clone();
         assert_eq!(embed["fallback"]["activation"]["nom"], "repli", "{embed}");
@@ -7132,19 +7132,19 @@ mod tests {
     /// n'est pas de carte, le modèle) ; un repli sans `address` aussi.
     #[cfg(feature = "code")]
     #[test]
-    fn repli_par_activation_hors_placement_se_refuse_au_chargement() {
+    fn fallback_by_activation_differing_outside_placement_is_refused_at_load() {
         for (ecart, attendu) in [
             (json!({"args": ["--autre"]}), "args"),
             (json!({"env": {"RAG3WEAVER_REGIME": "doux"}}), "env.RAG3WEAVER_REGIME"),
             (json!({"modele": "granite-278m"}), "modele"),
             (json!({"address": null}), "address"),
         ] {
-            let mut repli = bloc_d_activation("carte-b");
+            let mut repli = activation_block("carte-b");
             repli["address"] = json!("127.0.0.1:7893");
             for (k, v) in ecart.as_object().unwrap() {
                 if v.is_null() { repli.as_object_mut().unwrap().remove(k); } else { repli[k] = v.clone(); }
             }
-            let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| repli_declare(m, repli.clone(), "repli"));
+            let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| declare_fallback(m, repli.clone(), "repli"));
             let e = p.err().unwrap_or_else(|| panic!("un repli qui diffère par {attendu} se refuse"));
             assert!(e.contains("le repli « repli »") && e.contains(attendu), "le refus nomme l'écart {attendu} : {e}");
         }
