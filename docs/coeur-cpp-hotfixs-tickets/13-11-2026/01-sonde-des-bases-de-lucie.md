@@ -544,3 +544,10 @@ des orphelins de recherche.
   s'est montré juste, à ses cases à zéro près ;
 - **une seule arête par paire** source-cible : trois lectures en trop d'IMPLEMENTS étaient des copies exactes ;
 - **un script d'un autre se lance par `bash`** : il peut ne pas avoir le droit d'exécution sur l'autre poste.
+
+**La clé du banc de recherche** (`banc_recherche.py`, corrigée le 15 novembre à 1 h 25). Un résultat se reconnaît
+désormais à sa seule ligne « 📍 `chemin:lignes` » de la présentation. La première clé prenait tout « chemin:ligne »
+du texte, y compris le panneau « Liens », qui cite des voisins « hors résultats ». À la fenêtre du dépôt, deux de
+ces voisins ont changé avec les résultats et ont été lus comme deux résultats « perdus » : un faux rouge. La
+comparaison relit les clés depuis le texte gardé. Les trois fenêtres, recomparées avec la clé corrigée, sont
+vertes, sans aucune perte.

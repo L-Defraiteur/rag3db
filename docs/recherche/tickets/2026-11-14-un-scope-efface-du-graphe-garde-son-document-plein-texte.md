@@ -172,8 +172,23 @@ le même instantané. Les orphelins sont recomptés à froid sur la base fermée
 File, Library et Symbol n'ont aucun orphelin dans les deux bases. Le banc lucivy rend, sur chaque requête,
 les mêmes documents moins les orphelins. Le banc par l'hôte ne perd aucun résultat.
 
-**Reste code-rag3db-depot** (portable, 9 701 Scope et 127 File dans l'instantané du 14 à 13 h 40). Sa fenêtre
-attend un binaire qui porte la fermeture qui tient sur l'hôte du portable.
+**code-rag3db-depot**, au portable, le 15 novembre de 1 h 21 à 1 h 22. Le binaire fac67a208 a été posé par G à
+1 h 16. La fenêtre a joué la purge seule : le relevé ancré dit les deux index du portable d'accord.
+
+| table | lignes du graphe | documents avant → après | orphelins effacés | octets d'index après compact |
+|---|---:|---|---:|---|
+| Scope | 81 181 | 91 852 → 81 181 | 10 671 | 4 927 458 696 → **1 347 119 904** |
+| File | 8 041 | 8 185 → 8 041 | 144 | 7 696 958 → 7 619 160 |
+
+**Le défaut produit toujours des orphelins en service** : 9 701 Scope dans l'instantané du 14 à 13 h 40, 10 671 à
+1 h 21, soit 970 de plus en moins de douze heures. Le correctif de `DeleteRecordNode` (recherche) fermera la
+source ; la purge seule ne fait que solder.
+
+Le banc par l'hôte, 10 requêtes, ne perd aucun résultat. Ceux qui sortent du top 20 se retrouvent entre le 8ᵉ et
+le 97ᵉ rang. Retour : `~/.local/share/rag3weaver/instantanes/avant-fenetre-code-rag3db-depot-20261115-0121/RETOUR.sh`.
+
+**Les trois bases servies sont purgées** : code-lourd, code-principal et code-rag3db-depot. memoire-longue n'avait
+aucun orphelin.
 
 ## Les deux questions ouvertes
 

@@ -27,7 +27,7 @@ H=$(cd "$(dirname "$0")" && pwd); B=$H/banc_recherche.py
 NOM=$(basename "$BASE" .rag3db); FTS=$BASE.fts
 O=$H/sorties/$NOM-$MODE-$(date +%Y%m%d-%H%M%S); mkdir -p "$O"
 exec > >(tee -a "$O/fenetre.log") 2>&1
-REQUETES=(commit "index du plein texte" "point de reprise" mutex "fermer un backend" "chunk_uuid" "les liens par COPY" "test e2e")
+REQUETES=(commit "index du plein texte" "point de reprise" mutex "fermer un backend" "chunk_uuid" "les liens par COPY" "test e2e" acquireLock FileSource)
 dit() { echo "== $(date +%H:%M:%S) $*"; }
 rouge() { echo "ROUGE : $*"; [ "$MODE" = fenetre ] || [ "$MODE" = dedans ] && echo "La base reste fermée. Retour : ${RETOUR:-aucun instantané}"; exit 1; }
 banc() { if [ "$MODE" = fenetre ]; then python3 -I "$B" hote "$MANIFESTE" "$1" "${REQUETES[@]}"; else python3 -I "$B" autonome "$MANIFESTE" "$1" "${REQUETES[@]}"; fi; }

@@ -21,9 +21,17 @@ BIN = os.path.expanduser("~/.local/bin/rag3weaver-backend")
 LIMITE = int(os.environ.get("BANC_LIMITE", "20"))
 
 def cles(texte):
-    # Un résultat se reconnaît à son « chemin:ligne » ; l'ordre est gardé.
+    # **Un résultat, c'est sa ligne « 📍 `chemin:lignes` » de la présentation**, et seulement elle : le panneau
+    # « Liens » (`after`) cite aussi des chemins, « hors résultats », qui changent avec les résultats (deux faux
+    # « perdus » à la fenêtre du dépôt, 15 nov. 2026). L'ordre est gardé.
+    try:
+        d = json.loads(texte)
+        if isinstance(d, dict) and isinstance(d.get("presentation"), str):
+            texte = d["presentation"]
+    except (ValueError, TypeError):
+        pass
     vues, out = set(), []
-    for m in re.finditer(r"([\w./+-]+\.\w+):(\d+)", texte):
+    for m in re.finditer(r"📍 `([^`:]+):(\d+)", texte):
         k = f"{m.group(1)}:{m.group(2)}"
         if k not in vues:
             vues.add(k); out.append(k)
@@ -97,6 +105,8 @@ def ouvrir(manifeste):
 def comparer(avant, apres, large=None):
     a, b = json.load(open(avant)), json.load(open(apres))
     c = json.load(open(large)) if large else b
+    for x in (a, b, c):  # les clés se relisent du texte, par la règle du jour
+        for v in x.values(): v["cles"] = cles(v["texte"])
     perdus_total = 0
     for q in a:
         pa, pb, pc = a[q]["cles"], b.get(q, {}).get("cles", []), c.get(q, {}).get("cles", [])
