@@ -1643,3 +1643,7 @@ code-lourd arrêté après 1 paquet sur 4) et code-principal a échoué sur un i
 sont d'avant la réparation de hotfixs). Rejouée depuis 18 h 28 : copies neuves réparées avant 1b, attente sur la dernière ligne du
 journal. Part fermée confirmée : 731 s et 569 s. Garde pour la vraie fenêtre : check_rel_directions avant 1b sur chaque base.
 Repassage complet ~35 min à code-lourd.
+Embarquement, 18 h 31 : conception du repli par activation nommée — recette comparée au chargement moins le placement (périphérique,
+variables de carte ; aucun arg), recette complète attestée à l'activation du repli ; tranché : la carte du repli se mesure aussi
+(required_mib propres, défaut ceux de la principale), les deux pleines = principale quand même et l'état le dit ; le plafond du
+doublement de la tenue est un réglage (défaut 16). Six témoins rouges.
