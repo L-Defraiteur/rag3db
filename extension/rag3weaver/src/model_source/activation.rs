@@ -258,6 +258,19 @@ fn activer(source: &super::ModelSource, capacite: super::Capability, annule: &st
 /// l'attestation de recette/profil/périphérique.
 #[cfg(feature = "daemon")]
 fn verifier_pour(source: &super::ModelSource, capacite: super::Capability, client: &crate::daemon::DaemonEmbedder) -> Result<(), String> {
+    sert(source, capacite, client).map_err(|e| format!("identité d'activation refusée : {e}"))?;
+    if client.identite().activation.as_ref() != Some(&identite(source)?) {
+        return Err("identité d'activation refusée : recette/profil du fournisseur différent ou non attesté".into());
+    }
+    Ok(())
+}
+
+/// **Le fournisseur sert-il la capacité déclarée** : modèle et dimension
+/// (le dual et sa dimension pour un creux qui la déclare). Ce que le repli
+/// vérifie aussi ; la recette, elle, ne vaut que pour le fournisseur activé
+/// (elle porte le périphérique : un repli ne peut pas l'avoir).
+#[cfg(feature = "daemon")]
+fn sert(source: &super::ModelSource, capacite: super::Capability, client: &crate::daemon::DaemonEmbedder) -> Result<(), String> {
     use crate::embedder::Embedder;
     use super::Capability;
     let id = client.identite();
@@ -270,7 +283,7 @@ fn verifier_pour(source: &super::ModelSource, capacite: super::Capability, clien
     };
     if !sert {
         return Err(format!(
-            "identité d'activation refusée : {} {} attendu, le fournisseur sert {}/{} (creux {}, relecteur {:?}, OCR {:?})",
+            "{} {} attendu, le fournisseur sert {}/{} (creux {}, relecteur {:?}, OCR {:?})",
             capacite.name(), source.model, id.modele, id.dim, id.sparse, id.reranker, id.ocr
         ));
     }
@@ -279,15 +292,12 @@ fn verifier_pour(source: &super::ModelSource, capacite: super::Capability, clien
     if capacite == Capability::Sparse {
         if let Some(d) = source.dimensions.filter(|d| *d > 0) {
             if !id.dual {
-                return Err(format!("identité d'activation refusée : le fournisseur sert {} sans le dual (models.sparse déclare dimensions {d})", id.modele));
+                return Err(format!("le fournisseur sert {} sans le dual (models.sparse déclare dimensions {d})", id.modele));
             }
             if id.dim != d {
-                return Err(format!("identité d'activation refusée : le fournisseur sert {} en {} au lieu de {d} (models.sparse.dimensions)", id.modele, id.dim));
+                return Err(format!("le fournisseur sert {} en {} au lieu de {d} (models.sparse.dimensions)", id.modele, id.dim));
             }
         }
-    }
-    if client.identite().activation.as_ref() != Some(&identite(source)?) {
-        return Err("identité d'activation refusée : recette/profil du fournisseur différent ou non attesté".into());
     }
     Ok(())
 }
@@ -461,8 +471,86 @@ pub(super) fn connecter_ou_attendre(source: &super::ModelSource, annule: &std::s
 struct Prise<C> {
     client: C,
     adresse: String,
+    /// D'où viennent ses calculs : « carte card2 » (le fournisseur activé), ou
+    /// « service 127.0.0.1:7879 » (le repli).
+    provenance: String,
     _usage: Option<crate::daemon::embeddings::BailDistant>,
     _tenue: Box<dyn std::any::Any + Send + Sync>,
+}
+
+/// La marge par défaut exigée en plus de `required_mib`.
+#[cfg(feature = "daemon")]
+pub const MARGE_PAR_DEFAUT_MIO: u64 = 2048;
+
+/// La fenêtre par défaut du débit, et des remesures pendant un repli.
+#[cfg(feature = "daemon")]
+pub const FENETRE_PAR_DEFAUT_SECS: u64 = 60;
+
+/// Où se lisent les cartes : `RAG3WEAVER_DRM_RACINE`, sinon `/sys/class/drm`
+/// (un témoin donne la sienne à son fil).
+#[cfg(feature = "daemon")]
+fn racine_drm() -> std::path::PathBuf {
+    #[cfg(test)]
+    if let Some(r) = RACINE_DRM_DU_FIL.with(|r| r.borrow().clone()) {
+        return r;
+    }
+    std::env::var_os("RAG3WEAVER_DRM_RACINE").map(Into::into).unwrap_or_else(|| "/sys/class/drm".into())
+}
+
+/// **La VRAM libre d'une carte nommée**, en Mio, lue dans
+/// `<racine>/<carte>/device/mem_info_vram_{total,used}` (amdgpu). `Err` dit
+/// pourquoi elle ne se lit pas : jamais une carte devinée.
+#[cfg(feature = "daemon")]
+fn vram_libre_mio(carte: &str) -> Result<u64, String> {
+    if carte.is_empty() || carte.contains('/') || carte == "." || carte == ".." {
+        return Err(format!("« {carte} » ne nomme pas une carte drm"));
+    }
+    let device = racine_drm().join(carte).join("device");
+    let lire = |nom: &str| {
+        let chemin = device.join(nom);
+        std::fs::read_to_string(&chemin).map_err(|e| format!("{} : {e}", chemin.display()))
+            .and_then(|t| t.trim().parse::<u64>().map_err(|e| format!("{} : {e}", chemin.display())))
+    };
+    let (total, prise) = (lire("mem_info_vram_total")?, lire("mem_info_vram_used")?);
+    Ok(total.saturating_sub(prise) >> 20)
+}
+
+/// Une carte mesurée contre ce que l'activation exige.
+#[cfg(feature = "daemon")]
+struct Mesure {
+    carte: String,
+    libres: u64,
+    requis: u64,
+    marge: u64,
+}
+
+#[cfg(feature = "daemon")]
+impl Mesure {
+    fn pleine(&self) -> bool {
+        self.libres < self.requis + self.marge
+    }
+}
+
+/// L'heure d'un repli ou d'un retour, à dire.
+#[cfg(feature = "daemon")]
+fn heure() -> String {
+    jiff::Zoned::now().strftime("%H h %M").to_string()
+}
+
+/// **Ce que la tenue dit de sa provenance** : les textes calculés par
+/// provenance depuis la dernière lecture, les changements à dire, l'état, et
+/// ce qu'il faut pour décider (le repli en cours, la fenêtre du débit).
+#[cfg(feature = "daemon")]
+#[derive(Default)]
+struct Suivi {
+    comptes: std::collections::BTreeMap<String, usize>,
+    dits: Vec<String>,
+    etat: Option<String>,
+    /// Replié : depuis la dernière mesure de la carte (remesurée après la fenêtre).
+    replie: Option<std::time::Instant>,
+    /// Le débit de la carte : le début de la fenêtre et les textes calculés depuis.
+    fenetre: Option<(std::time::Instant, usize)>,
+    illisible_dit: bool,
 }
 
 #[cfg(feature = "daemon")]
@@ -487,6 +575,7 @@ struct Tenue<C: Send + 'static> {
     etat: EtatPrise<C>,
     arret: std::sync::Arc<std::sync::atomic::AtomicBool>,
     maintenir: bool,
+    suivi: std::sync::Mutex<Suivi>,
 }
 
 #[cfg(feature = "daemon")]
@@ -521,9 +610,9 @@ impl<C: Send + 'static> Tenue<C> {
                 false
             }
         };
-        let t = Self { source: source.clone(), capacite, joindre, etat, arret, maintenir };
+        let t = Self { source: source.clone(), capacite, joindre, etat, arret, maintenir, suivi: Default::default() };
         if maintenir {
-            let tenu = t.activer_annulable(annule)?;
+            let tenu = t.prendre(annule)?;
             *t.etat.lock().unwrap_or_else(|e| e.into_inner()) = Some((tenu, std::time::Instant::now()));
         }
         Ok(t)
@@ -536,7 +625,195 @@ impl<C: Send + 'static> Tenue<C> {
     fn activer_annulable(&self, annule: &std::sync::atomic::AtomicBool) -> Result<Prise<C>, String> {
         let actif = activer(&self.source, self.capacite, annule)?;
         let client = (self.joindre)(&self.source, &actif.adresse)?;
-        Ok(Prise { client, adresse: actif.adresse, _usage: actif.usage, _tenue: actif.tenue })
+        Ok(Prise { client, adresse: actif.adresse, provenance: self.provenance_activee(), _usage: actif.usage, _tenue: actif.tenue })
+    }
+
+    fn suivi(&self) -> std::sync::MutexGuard<'_, Suivi> {
+        self.suivi.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn fenetre(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(self.source.activation.as_ref().and_then(|a| a.window_secs).filter(|s| *s > 0).unwrap_or(FENETRE_PAR_DEFAUT_SECS))
+    }
+
+    /// La provenance du fournisseur activé : sa carte, quand elle se lit ;
+    /// sinon l'activation et son périphérique déclaré (`cpu`, une carte
+    /// d'un poste distant).
+    fn provenance_activee(&self) -> String {
+        let a = self.source.activation.as_ref().expect("une tenue porte une activation");
+        match (&a.hote, vram_libre_mio(&a.peripherique)) {
+            (None, Ok(_)) => format!("carte {}", a.peripherique),
+            (Some(hote), _) => format!("activation {} ({} de {hote})", a.nom_pour(&self.source), a.peripherique),
+            (None, Err(_)) => format!("activation {} ({})", a.nom_pour(&self.source), a.peripherique),
+        }
+    }
+
+    /// **La carte que l'activation nomme, mesurée** — `None` sans
+    /// `required_mib`, pour une activation distante (sa carte est à son poste),
+    /// ou une carte qui ne se lit pas (dit une fois).
+    fn mesurer(&self) -> Option<Mesure> {
+        let a = self.source.activation.as_ref()?;
+        let requis = a.required_mib?;
+        if a.hote.is_some() {
+            return None;
+        }
+        match vram_libre_mio(&a.peripherique) {
+            Ok(libres) => Some(Mesure { carte: a.peripherique.clone(), libres, requis, marge: a.margin_mib.unwrap_or(MARGE_PAR_DEFAUT_MIO) }),
+            Err(e) => {
+                let mut s = self.suivi();
+                if !s.illisible_dit {
+                    s.illisible_dit = true;
+                    s.dits.push(format!("carte {} non mesurée ({e}) : activée sans mesure", a.peripherique));
+                }
+                None
+            }
+        }
+    }
+
+    /// **Le service de repli, joint** : il doit servir la capacité déclarée
+    /// (modèle et dimension) ; sa recette n'est pas vérifiée, et l'état le dit.
+    /// Aucun bail n'y est pris : ce n'est pas un fournisseur que l'on gère.
+    fn joindre_le_repli(&self, adresse: &str) -> Result<Prise<C>, String> {
+        let sonde = crate::daemon::DaemonEmbedder::joindre(adresse)
+            .map(|d| d.with_timeout(delai_appel(&self.source)))
+            .map_err(|e| format!("repli {adresse} injoignable : {e}"))?;
+        sert(&self.source, self.capacite, &sonde).map_err(|e| format!("repli {adresse} refusé : {e}"))?;
+        let client = (self.joindre)(&self.source, adresse).map_err(|e| format!("repli {adresse} : {e}"))?;
+        Ok(Prise { client, adresse: adresse.to_string(), provenance: format!("service {adresse}"), _usage: None, _tenue: Box::new(()) })
+    }
+
+    /// Le repli, dit une fois (un repli rendu puis repris par le bail ne se redit pas).
+    fn dire_le_repli(&self, adresse: &str, cause: &str) {
+        let mut s = self.suivi();
+        if s.replie.is_none() {
+            let h = heure();
+            s.dits.push(format!("replié vers {adresse} à {h}, cause : {cause}"));
+            s.etat = Some(format!("replié vers {adresse} depuis {h} (cause : {cause}) — repli sans recette vérifiée"));
+        }
+        s.replie = Some(std::time::Instant::now());
+        s.fenetre = None;
+    }
+
+    /// **Une prise neuve** : le fournisseur activé si sa carte a la place (ou
+    /// n'est pas mesurée) ; carte pleine, le repli déclaré ; sans repli,
+    /// l'activation quand même, et l'état le dit.
+    fn prendre(&self, annule: &std::sync::atomic::AtomicBool) -> Result<Prise<C>, String> {
+        let mesure = self.mesurer();
+        match (mesure.as_ref().filter(|m| m.pleine()), &self.source.fallback) {
+            (Some(m), super::Fallback::Service(adresse)) => {
+                let prise = self.joindre_le_repli(adresse)?;
+                self.dire_le_repli(adresse, &format!("{} à {} Mio libres, {} requis + {} de marge", m.carte, m.libres, m.requis, m.marge));
+                Ok(prise)
+            }
+            (Some(m), _) => {
+                let dit = format!("carte pleine ({} : {} Mio libres, {} requis), pas de repli déclaré", m.carte, m.libres, m.requis + m.marge);
+                {
+                    let mut s = self.suivi();
+                    if s.etat.as_deref() != Some(dit.as_str()) {
+                        s.dits.push(dit.clone());
+                    }
+                    s.etat = Some(dit);
+                }
+                self.activer_annulable(annule)
+            }
+            (None, _) => {
+                {
+                    let mut s = self.suivi();
+                    if mesure.is_some() && s.etat.as_deref().is_some_and(|e| e.starts_with("carte pleine")) {
+                        s.etat = None;
+                    }
+                }
+                self.activer_annulable(annule)
+            }
+        }
+    }
+
+    /// **Replié, revenir quand la carte a la place** : après la fenêtre, la
+    /// carte se remesure ; libre, le fournisseur déclaré est activé, et le
+    /// retour se dit.
+    fn peut_etre_revenir(&self, g: &mut Option<(Prise<C>, std::time::Instant)>) {
+        let due = self.suivi().replie.is_some_and(|t| t.elapsed() >= self.fenetre());
+        if !due {
+            return;
+        }
+        match self.mesurer() {
+            Some(m) if !m.pleine() => {
+                // Le repli lâché avant d'activer.
+                *g = None;
+                match self.activer() {
+                    Ok(prise) => {
+                        *g = Some((prise, std::time::Instant::now()));
+                        let mut s = self.suivi();
+                        s.dits.push(format!("revenu à la carte {} à {}, {} Mio libres", m.carte, heure(), m.libres));
+                        s.etat = None;
+                        s.replie = None;
+                        s.fenetre = None;
+                    }
+                    Err(e) => {
+                        let mut s = self.suivi();
+                        s.dits.push(format!("retour à la carte {} en échec ({e}) : le repli reste", m.carte));
+                        s.replie = Some(std::time::Instant::now());
+                    }
+                }
+            }
+            _ => self.suivi().replie = Some(std::time::Instant::now()),
+        }
+    }
+
+    /// **Un appel réussi, compté** par provenance ; sur la carte, son débit
+    /// mesuré par fenêtre (la première fenêtre s'ouvre après le premier appel :
+    /// l'activation chauffée), et le repli pris s'il tombe sous le seuil.
+    fn compter(&self, g: &mut Option<(Prise<C>, std::time::Instant)>, textes: usize) {
+        let Some(provenance) = g.as_ref().map(|(prise, _)| prise.provenance.clone()) else { return };
+        let sur_le_repli = provenance.starts_with("service ");
+        let mut s = self.suivi();
+        *s.comptes.entry(provenance).or_default() += textes;
+        let Some(min) = self.source.activation.as_ref().and_then(|a| a.min_throughput).filter(|m| *m > 0) else { return };
+        let super::Fallback::Service(adresse) = &self.source.fallback else { return };
+        if sur_le_repli {
+            s.fenetre = None;
+            return;
+        }
+        let fenetre = self.fenetre();
+        if s.fenetre.is_none() {
+            s.fenetre = Some((std::time::Instant::now(), 0));
+            return;
+        }
+        let (ecoule, faits) = {
+            let (debut, faits) = s.fenetre.as_mut().expect("la fenêtre ouverte");
+            *faits += textes;
+            (debut.elapsed(), *faits)
+        };
+        if ecoule < fenetre {
+            return;
+        }
+        let debit = faits as f64 / ecoule.as_secs_f64();
+        s.fenetre = Some((std::time::Instant::now(), 0));
+        if debit >= min as f64 {
+            return;
+        }
+        drop(s);
+        let cause = format!("débit {} textes/s sous {min} pendant {} s", format!("{debit:.1}").replace('.', ","), fenetre.as_secs());
+        match self.joindre_le_repli(adresse) {
+            Ok(repli) => {
+                // Le fournisseur de la carte lâché : son bail rendu, l'éviction fait le reste.
+                *g = Some((repli, std::time::Instant::now()));
+                self.dire_le_repli(adresse, &cause);
+            }
+            Err(e) => self.suivi().dits.push(format!("{cause} : {e} ; la carte reste")),
+        }
+    }
+
+    fn lire_les_comptes(&self) -> Vec<(String, usize)> {
+        std::mem::take(&mut self.suivi().comptes).into_iter().collect()
+    }
+
+    fn lire_les_dits(&self) -> Vec<String> {
+        std::mem::take(&mut self.suivi().dits)
+    }
+
+    fn etat_du_repli(&self) -> Option<String> {
+        self.suivi().etat.clone()
     }
 
     /// Un regard sur le client tenu, s'il l'est (ce qu'un maintenu dit de lui).
@@ -551,10 +828,11 @@ impl<C: Send + 'static> Tenue<C> {
 
     /// Un appel au fournisseur tenu : l'activer s'il ne l'est pas ; s'il est
     /// parti, le relancer une fois.
-    fn appeler<R, E: std::fmt::Display>(&self, f: impl Fn(&C) -> Result<R, E>, parti: impl Fn(&E) -> bool, erreur: impl Fn(String) -> E) -> Result<R, E> {
+    fn appeler<R, E: std::fmt::Display>(&self, textes: usize, f: impl Fn(&C) -> Result<R, E>, parti: impl Fn(&E) -> bool, erreur: impl Fn(String) -> E) -> Result<R, E> {
         let mut g = self.etat.lock().unwrap_or_else(|e| e.into_inner());
+        self.peut_etre_revenir(&mut g);
         if g.is_none() {
-            let tenu = self.activer().map_err(|e| erreur(format!("activation à la demande : {e}")))?;
+            let tenu = self.prendre(&std::sync::atomic::AtomicBool::new(false)).map_err(|e| erreur(format!("activation à la demande : {e}")))?;
             *g = Some((tenu, std::time::Instant::now()));
         }
         let mut r = f(&g.as_ref().unwrap().0.client);
@@ -569,7 +847,7 @@ impl<C: Send + 'static> Tenue<C> {
                 };
                 *g = None;
                 noter_une_relance(&self.source);
-                let relance = self.activer().map_err(|e| erreur(format!(
+                let relance = self.prendre(&std::sync::atomic::AtomicBool::new(false)).map_err(|e| erreur(format!(
                     "le fournisseur {modele}{declare} est parti ({depart}) ; relancé une fois, il n'a pas répondu : {e}{quoi}")))?;
                 *g = Some((relance, std::time::Instant::now()));
                 r = f(&g.as_ref().unwrap().0.client);
@@ -583,6 +861,9 @@ impl<C: Send + 'static> Tenue<C> {
         }
         if let Some((_, dernier)) = g.as_mut() {
             *dernier = std::time::Instant::now();
+        }
+        if r.is_ok() && textes > 0 {
+            self.compter(&mut g, textes);
         }
         r
     }
@@ -641,7 +922,7 @@ struct DenseTenu {
 #[cfg(feature = "daemon")]
 impl crate::embedder::Embedder for DenseTenu {
     fn embed(&self, textes: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
-        self.tenue.appeler(|c| {
+        self.tenue.appeler(textes.len(), |c| {
             let r = c.embed(textes);
             if r.is_ok() {
                 *self.vu.lock().unwrap_or_else(|e| e.into_inner()) = Some((c.is_mock(), c.budget_conseille(), c.troncatures()));
@@ -657,6 +938,9 @@ impl crate::embedder::Embedder for DenseTenu {
     fn budget_conseille(&self) -> Option<(usize, usize)> { self.vu.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|(_, b, _)| *b) }
     fn troncatures(&self) -> Option<(usize, usize)> { self.vu.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|(_, _, t)| *t) }
     fn timeout(&self) -> Option<std::time::Duration> { Some(delai_appel(&self.tenue.source)) }
+    fn provenance_counts(&self) -> Vec<(String, usize)> { self.tenue.lire_les_comptes() }
+    fn provenance_events(&self) -> Vec<String> { self.tenue.lire_les_dits() }
+    fn provenance_state(&self) -> Option<String> { self.tenue.etat_du_repli() }
 }
 
 /// **Le creux d'une activation** (le groupe bge-m3) : un embarqueur creux
@@ -673,7 +957,7 @@ struct DualTenu { tenue: std::sync::Arc<Tenue<crate::daemon::DaemonEmbedder>>, d
 #[cfg(feature = "daemon")]
 impl crate::embedder::DualEmbedder for DualTenu {
     fn embed_dual(&self, textes: &[String]) -> Result<(Vec<Vec<f32>>, Vec<crate::sparse_index::SparseVector>), crate::embedder::EmbedError> {
-        self.tenue.appeler(|c| c.embed_dual(textes), parti_calcul, crate::embedder::EmbedError::ProviderError)
+        self.tenue.appeler(0, |c| c.embed_dual(textes), parti_calcul, crate::embedder::EmbedError::ProviderError)
     }
     fn dim(&self) -> usize { self.dim }
     fn distant(&self) -> bool { true }
@@ -682,10 +966,10 @@ impl crate::embedder::DualEmbedder for DualTenu {
 #[cfg(feature = "daemon")]
 impl crate::embedder::SparseEmbedder for CreuxTenu {
     fn embed_sparse(&self, textes: &[String]) -> Result<Vec<crate::sparse_index::SparseVector>, crate::embedder::EmbedError> {
-        self.0.appeler(|c| c.embed_sparse(textes), parti_calcul, crate::embedder::EmbedError::ProviderError)
+        self.0.appeler(0, |c| c.embed_sparse(textes), parti_calcul, crate::embedder::EmbedError::ProviderError)
     }
     fn embed_sparse_spans(&self, textes: &[String]) -> Result<Vec<(crate::sparse_index::SparseVector, Vec<crate::sparse_index::SparseSpan>)>, crate::embedder::EmbedError> {
-        self.0.appeler(|c| c.embed_sparse_spans(textes), parti_calcul, crate::embedder::EmbedError::ProviderError)
+        self.0.appeler(0, |c| c.embed_sparse_spans(textes), parti_calcul, crate::embedder::EmbedError::ProviderError)
     }
     fn distant(&self) -> bool { true }
 }
@@ -697,7 +981,7 @@ struct RelecteurTenu { tenue: Tenue<crate::daemon::embeddings::DaemonReranker>, 
 #[cfg(feature = "daemon")]
 impl crate::reranker::Reranker for RelecteurTenu {
     fn rerank(&self, requete: &str, passages: &[String]) -> Result<Vec<f32>, crate::embedder::EmbedError> {
-        self.tenue.appeler(|c| c.rerank(requete, passages), parti_calcul, crate::embedder::EmbedError::ProviderError)
+        self.tenue.appeler(0, |c| c.rerank(requete, passages), parti_calcul, crate::embedder::EmbedError::ProviderError)
     }
     fn name(&self) -> &str { &self.nom }
 }
@@ -709,7 +993,7 @@ struct OcrTenu { tenue: Tenue<crate::daemon::embeddings::DaemonOcr>, nom: String
 #[cfg(feature = "daemon")]
 impl crate::ocr::Ocr for OcrTenu {
     fn recognize(&self, image: &crate::ocr::OcrImage) -> Result<crate::ocr::OcrOutput, crate::ocr::OcrError> {
-        self.tenue.appeler(|c| c.recognize(image), parti_ocr, crate::ocr::OcrError::Model)
+        self.tenue.appeler(0, |c| c.recognize(image), parti_ocr, crate::ocr::OcrError::Model)
     }
     fn name(&self) -> &str { &self.nom }
 }
