@@ -913,3 +913,7 @@ ED, 03 h 1x : deux causes candidates — (A) le saut des fichiers inchangés (dd
 parseur ne s'appliquerait jamais à un fichier inchangé) ; (B) les documents des lignes fermées encore dans
 lucivy. Départage par trois relevés de banc demain ; correctif (A) : la version de l'analyse entre dans
 l'empreinte indexée.
+Banc, 03 h 4x : la cause est (A), le saut des fichiers inchangés (aucun résultat du lot n'est une ligne
+fermée) ; la parité était mal posée (base migrée indexée par un code plus vieux ; le parent laisse 14 201
+ScopeContent orphelins, ticket chez ED). Demain : le correctif (version de l'analyse dans l'empreinte), puis
+deux parités (propre et actuelle sur copie neuve, aux orphelins du parent près).

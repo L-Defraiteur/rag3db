@@ -1331,3 +1331,9 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 - Recherche, 03 h 4x : rapport de session avec « Reprendre » (bf843245b), copies effacées ; la sonde a tourné à
   3 h 37, après 46 min d'attente d'une place de mesure (ma faute : un « va » de mesure se donne sur une place
   libre). Seule la branche de mesure mesure-exclusions reste ouverte ; targets (47 Go à luciepc) gardés.
+- **Banc, 03 h 4x — la cause du rouge de l'écrivain est (A)** : le lot garde sur chaque fichier sauté l'analyse
+  et les hash de l'ancien code qui avait indexé la base migrée, le parent réanalyse tout (84 211 ScopeContent
+  dont 14 201 orphelins au parent ; 74 274 sans orphelin au lot) ; aucun résultat du lot n'est une ligne
+  fermée, l'histoire ne fuit pas. Ordre : le correctif (la version de l'analyse dans l'empreinte) puis une
+  parité propre (base indexée par le parent lui-même, réindexation des deux côtés), copies à noms distincts
+  (la copie du lot a été réécrite par le rejeu du retrait : même nom). Rien au poste avant le matin.
