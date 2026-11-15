@@ -1555,3 +1555,7 @@ ED, 17 h 46 : l'estimation de l'outil index compte la source entière fois le ry
 défaut d'avant son lot, visible à toute réindexation, ticket à ED (lire la dette réelle) ; le repassage réembarque peu : scopes
 identiques sans vecteur neuf, ~7 600 petits morceaux de File (File_CHUNKED_FROM 7 608 → 15 218), quelques dizaines de secondes —
 un coût de son lot, à faire tomber (un File garde son morceau quand seule son analyse change). confirm=true est juste.
+Lucie, 17 h 48 : « "fait sans plan" veut rien dire pour l'user, il s'en cale » — aucun verdict de l'hôte à l'écran (fait sans plan,
+fini, étape faite, comptes de pas) ; la réponse et une zone vivante qui respire ; les mots de l'hôte vont au journal et à Ctrl-O.
+Pour tty, même morceau. Son essai de 17 h 4x : l'équipier a cherché, lu et répondu juste (teammate.rs, declare.rs, teammate_tools.rs,
+le manifeste) — deux comptes rendus pour une question, à ramener à un par l'invite du socle.
