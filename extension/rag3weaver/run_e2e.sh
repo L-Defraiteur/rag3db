@@ -346,11 +346,16 @@ if [ "$NEED_BUILD" = true ]; then
   JOBS=$(( $(nproc) > 2 ? $(nproc) - 2 : 1 ))
   confined cmake --build "$BUILD" -j"$JOBS"
   echo "▸ Build done."
-  # La lib neuve au magasin, si elle porte son identifiant (refus dit sinon) ;
-  # `courant` la désigne désormais.
-  if python3 "$WEAVER/scripts/rag3db_libs.py" publier "$BUILD" --racine "$ROOT"; then
-    if [ "$MAGASIN" = true ] && [ "${RAG3DB_LIB:-courant}" = courant ]; then
-      LIBDIR="$(lib_du_magasin courant)" || exit 2
+  # La lib neuve au magasin, si elle porte son identifiant (refus dit sinon). **`courant` ne bouge pas** (15 novembre
+  # 2026) : le lien est celui de tout le poste, et seule la bascule le pose (courant-bascule.sh). Un `--build-only` dans un
+  # worktree de pile l'avait déplacé trois heures à luciepc. Cette passe-ci joue la lib qu'elle vient de bâtir, par son
+  # identifiant.
+  if PUBLIE=$(python3 "$WEAVER/scripts/rag3db_libs.py" publier "$BUILD" --racine "$ROOT"); then
+    echo "$PUBLIE"
+    NEUVE=$(basename "$(echo "$PUBLIE" | sed -nE 's/^(déjà publié|publié) : //p' | tail -1)")
+    if [ "$MAGASIN" = true ] && [ "${RAG3DB_LIB:-courant}" = courant ] && [ -n "$NEUVE" ]; then
+      LIBDIR="$(lib_du_magasin "$NEUVE")" || exit 2
+      echo "▸ la passe joue la lib qu'elle vient de bâtir ($NEUVE) ; courant reste $(basename "$(readlink -f "$(dirname "$LIBDIR")/courant" 2>/dev/null)")"
     fi
   else
     echo "▸ lib non publiée au magasin (voir ci-dessus) ; la passe garde $LIBDIR"

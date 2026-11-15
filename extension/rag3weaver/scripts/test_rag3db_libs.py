@@ -139,9 +139,19 @@ class Magasin(unittest.TestCase):
             self.assertEqual(r.returncode, 0, f"{cible} : {r.stderr}")
             self.assertIn("planchers tenus", r.stderr.strip().splitlines()[-1])
 
+    def test_publier_sans_option_ne_deplace_pas_courant(self):
+        # 15 novembre 2026 : une publication ne pose plus `courant` d'elle-même.
+        publier(self.magasin, faux_bati(self.racine, "a", "rag3db-build-A"), "--poser-courant")
+        r = publier(self.magasin, faux_bati(self.racine, "b", "rag3db-build-B"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue((self.magasin / "rag3db-build-B/BUILD_ID").exists())
+        self.assertEqual(os.path.realpath(self.magasin / "courant"), str((self.magasin / "rag3db-build-A").resolve()),
+                         "une publication sans --poser-courant a déplacé courant")
+        self.assertNotIn("courant ->", r.stdout)
+
     def test_publier_pose_un_dossier_immuable_et_courant(self):
         bati = faux_bati(self.racine, "a", "rag3db-build-A")
-        r = publier(self.magasin, bati)
+        r = publier(self.magasin, bati, "--poser-courant")
         self.assertEqual(r.returncode, 0, r.stderr)
         d = self.magasin / "rag3db-build-A"
         for f in ["librag3db.so", "rag3db.hpp", "include/common/build_id.h", "libvector.rag3db_extension", "BUILD_ID", "MANIFESTE"]:
