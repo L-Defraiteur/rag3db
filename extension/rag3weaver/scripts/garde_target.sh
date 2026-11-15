@@ -160,8 +160,10 @@ print(" ".join(sorted({p["name"] for p in m["packages"] if p["source"] is None})
 # autre worktree rejoue build.rs pour lui, et le marqueur garde l'arbre d'avant ; au retour, cargo juge build.rs à jour,
 # puisque les chemins qu'il surveille sont ceux de l'autre arbre, qui n'ont pas bougé. `build_rs_d_un_autre_arbre
 # <target> <arbre>` lit les sorties des build scripts du target (`<profil>/build/…/output`, à l'hôte et sous chaque
-# triplet) et écrit le premier chemin `rerun-if-changed` qui est sous un autre worktree du dépôt, ou sous le dossier git
-# d'un autre worktree ; elle rend 0 si elle en trouve un, 1 sinon (et 1 hors d'un dépôt git).
+# triplet). Pour chaque sortie dont un chemin `rerun-if-changed` est sous un autre worktree du dépôt, ou sous le dossier
+# git d'un autre worktree, elle écrit « <dossier de la sortie><tab><chemin> » ; elle rend 0 si elle en trouve une, 1
+# sinon (et 1 hors d'un dépôt git). La garde retire ces dossiers : une sortie périmée d'un jeu de features que personne
+# ne rebâtit ferait sinon effacer les empreintes à chaque passe.
 build_rs_d_un_autre_arbre() {
   local target="$1" arbre="$2" haut propre commun
   haut="$(git -C "$arbre" rev-parse --show-toplevel 2>/dev/null)" || return 1
@@ -179,6 +181,7 @@ for base in [target] + [os.path.join(target, d) for d in os.listdir(target) if o
         b = os.path.join(base, prof, 'build')
         if os.path.isdir(b):
             racines.append(b)
+trouve = False
 for b in racines:
     for dossier, _, fichiers in os.walk(b):
         if 'output' not in fichiers:
@@ -197,13 +200,11 @@ for b in racines:
                 continue
             if sous(p, commun):
                 if sous(p, os.path.join(commun, 'worktrees')):
-                    print(p)
-                    sys.exit(0)
+                    print(dossier + '\t' + p); trouve = True; break
                 continue
             if any(sous(p, a) for a in autres):
-                print(p)
-                sys.exit(0)
-sys.exit(1)
+                print(dossier + '\t' + p); trouve = True; break
+sys.exit(0 if trouve else 1)
 PY
 }
 
@@ -242,9 +243,12 @@ garder_le_target() {
     return 2
   fi
   if [ "$note" = "$arbre" ]; then
-    local vise
-    if vise="$(build_rs_d_un_autre_arbre "$target" "$arbre")"; then
-      effacer_empreintes_locales "$target" "$arbre" "noté pour cet arbre, mais un build.rs vise un autre arbre ($vise : un bâti hors garde)" "" "${restrictions[@]}" || return 2
+    local perimes d
+    if perimes="$(build_rs_d_un_autre_arbre "$target" "$arbre")"; then
+      effacer_empreintes_locales "$target" "$arbre" "noté pour cet arbre, mais un build.rs vise un autre arbre ($(echo "$perimes" | head -1 | cut -f2) : un bâti hors garde ; $(echo "$perimes" | wc -l) sortie(s) retirée(s))" "" "${restrictions[@]}" || return 2
+      echo "$perimes" | cut -f1 | while IFS= read -r d; do
+        case "$d" in "$target"/*) rm -rf -- "$d" ;; esac
+      done
     fi
     suivre_les_sous_modules "$target" "$arbre" "${restrictions[@]}"
     return
