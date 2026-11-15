@@ -95,3 +95,80 @@ fn les_aretes_perdues_d_un_repassage() {
         }
     }
 }
+
+/// **Les deux hypothèses** : (1) un CONSUMES perdu va vers un nom que plusieurs lignes ouvertes définissent
+/// au parent même (une résolution ancienne, posée quand le nom était unique, que le repassage du lot refait
+/// sous la règle d'ambiguïté) ; (2) une MENTIONS perdue part d'une ligne renée qui n'a pas reçu les mentions
+/// de son analyse.
+#[test]
+#[ignore]
+fn les_hypotheses_des_aretes_perdues() {
+    let (Some(parent), Some(lot)) = (std::env::var_os("RAG3WEAVER_SONDE_PARENT"), std::env::var_os("RAG3WEAVER_SONDE_LOT")) else {
+        eprintln!("SAUTÉ : RAG3WEAVER_SONDE_PARENT et RAG3WEAVER_SONDE_LOT manquent");
+        return;
+    };
+    let p = Rag3dbConnection::new(&parent).expect("ouvrir la copie du parent");
+    let l = Rag3dbConnection::new(&lot).expect("ouvrir la copie du lot");
+    // (1) Par nom de cible : combien de lignes ouvertes portent ce nom, au parent et au lot.
+    let par_nom = |c: &Rag3dbConnection| -> BTreeMap<String, usize> {
+        lignes(c, "MATCH (s:Scope) WHERE s._jusqu_a IS NULL RETURN s.name, count(*)").into_iter().map(|r| (r[0].clone(), r[1].parse().unwrap_or(0))).collect()
+    };
+    let nom_de = |c: &Rag3dbConnection| -> BTreeMap<String, String> {
+        lignes(c, "MATCH (s:Scope) WHERE s._jusqu_a IS NULL RETURN s.key, s.name").into_iter().map(|r| (r[0].clone(), r[1].clone())).collect()
+    };
+    let (np, nl, noms) = (par_nom(&p), par_nom(&l), nom_de(&p));
+    let (ap, al) = (aretes(&p, "CONSUMES", "Scope", "key"), aretes(&l, "CONSUMES", "Scope", "key"));
+    let mut repartition: BTreeMap<String, usize> = BTreeMap::new();
+    let mut uniques = Vec::new();
+    for (a, b) in ap.difference(&al) {
+        let nom = noms.get(b).cloned().unwrap_or_default();
+        let (cp, cl) = (np.get(&nom).copied().unwrap_or(0), nl.get(&nom).copied().unwrap_or(0));
+        let classe = match (cp > 1, cl > 1) {
+            (true, true) => "ambigu au parent et au lot",
+            (false, true) => "unique au parent, ambigu au lot",
+            (true, false) => "ambigu au parent, unique au lot",
+            (false, false) => "unique au parent et au lot",
+        };
+        *repartition.entry(classe.into()).or_default() += 1;
+        if cl <= 1 && uniques.len() < 8 {
+            uniques.push((a.clone(), b.clone(), nom));
+        }
+    }
+    for (c, n) in &repartition {
+        eprintln!("[sonde] CONSUMES perdue, cible {c} : {n}");
+    }
+    // Et les CONSUMES gardés au lot vers un nom ambigu : la règle les refuse-t-elle partout ?
+    let gardes_ambigus = al.iter().filter(|(_, b)| noms.get(b).and_then(|n| nl.get(n)).copied().unwrap_or(0) > 1).count();
+    eprintln!("[sonde] CONSUMES du lot vers un nom ambigu au lot : {gardes_ambigus} sur {}", al.len());
+    let gardes_ambigus_p = ap.iter().filter(|(_, b)| noms.get(b).and_then(|n| np.get(n)).copied().unwrap_or(0) > 1).count();
+    eprintln!("[sonde] CONSUMES du parent vers un nom ambigu au parent : {gardes_ambigus_p} sur {}", ap.len());
+    for (a, b, nom) in &uniques {
+        eprintln!("[sonde]   perdue vers un nom unique au lot « {nom} »");
+        eprintln!("[sonde]     a lot : {}", etat_scope(&l, a));
+        eprintln!("[sonde]     b lot : {}", etat_scope(&l, b));
+    }
+    // (2) Les lignes ouvertes renées (née à 1) sans aucune MENTIONS, dont la clé en a au parent.
+    let mentions = |c: &Rag3dbConnection, filtre: &str| -> BTreeMap<String, usize> {
+        lignes(c, &format!("MATCH (s:Scope) WHERE s._jusqu_a IS NULL{filtre} OPTIONAL MATCH (s)-[m:MENTIONS]->(:Symbol) RETURN s.key, count(m)"))
+            .into_iter().map(|r| (r[0].clone(), r[1].parse().unwrap_or(0))).collect()
+    };
+    let (mp, ml) = (mentions(&p, ""), mentions(&l, " AND s._depuis > 0"));
+    let (mut renees, mut vides, mut moins) = (0usize, 0usize, 0usize);
+    let mut exemples = Vec::new();
+    for (k, n) in &ml {
+        renees += 1;
+        let avant = mp.get(k).copied().unwrap_or(0);
+        if *n == 0 && avant > 0 {
+            vides += 1;
+            if exemples.len() < 5 { exemples.push(k.clone()); }
+        } else if *n < avant {
+            moins += 1;
+        }
+    }
+    eprintln!("[sonde] lignes renées au lot : {renees} ; sans aucune MENTIONS alors que le parent en a : {vides} ; avec moins : {moins}");
+    for k in &exemples {
+        eprintln!("[sonde]   renée sans mention : {}", etat_scope(&l, k));
+        let r = lignes(&l, &format!("MATCH (s:Scope)-[:MENTIONS]->(m:Symbol) WHERE s.key = '{}' RETURN s._depuis, count(m)", k.replace('\'', "\\'")));
+        eprintln!("[sonde]     MENTIONS par ligne au lot (_depuis, nombre) : {r:?} ; au parent : {}", mp.get(k).copied().unwrap_or(0));
+    }
+}
