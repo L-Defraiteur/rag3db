@@ -1559,3 +1559,7 @@ Lucie, 17 h 48 : « "fait sans plan" veut rien dire pour l'user, il s'en cale »
 fini, étape faite, comptes de pas) ; la réponse et une zone vivante qui respire ; les mots de l'hôte vont au journal et à Ctrl-O.
 Pour tty, même morceau. Son essai de 17 h 4x : l'équipier a cherché, lu et répondu juste (teammate.rs, declare.rs, teammate_tools.rs,
 le manifeste) — deux comptes rendus pour une question, à ramener à un par l'invite du socle.
+Lucie, 17 h 49 : « les étapes "attend" : je veux voir l'animation et comprendre ce qu'il attend exactement (quota ou quoi que ce
+soit, l'indication à côté de l'animation — voire que ça fasse partie de l'animation, des glitchs ou selon le thème) ». Pour tty :
+l'animation + la cause nommée dans le style du thème ; pour archi et ED : chaque attente de la boucle dite dans la boîte
+(`waiting {cause, since, retry_in?}` : modèle, quota et réessai, outil, index, accord), effacée quand ça repart.
