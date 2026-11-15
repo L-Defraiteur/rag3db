@@ -267,7 +267,18 @@ fn champs_manquants(outil: &GraphTool, element: &str, valeur: &Value) -> Option<
     let mut manquants = Vec::new();
     for n in &outil.template().nodes {
         let mut chaines = Vec::new();
-        collecter(&n.config, &mut chaines);
+        // **Le graphe qu'un nœud cite n'est pas lu ici** (14 novembre 2026) : ses `$element.x` sont ceux
+        // de son propre élément, d'un niveau plus bas. Ses paramètres, eux, restent lus.
+        if n.node_type == GRAPH_NODE || n.node_type == FOREACH_NODE {
+            if let Value::Object(o) = &n.config {
+                for (k, v) in o.iter().filter(|(k, _)| k.as_str() != "graph") {
+                    let _ = k;
+                    collecter(v, &mut chaines);
+                }
+            }
+        } else {
+            collecter(&n.config, &mut chaines);
+        }
         for s in chaines {
             let mut reste = s.as_str();
             while let Some(i) = reste.find(&marque) {
@@ -454,7 +465,13 @@ fn ports_d_entree() -> Vec<PortDef> {
 }
 
 fn ports_de_sortie() -> Vec<PortDef> {
-    vec![PortDef::value("results", PortType::Any, false).stream(PortKind::Finite), PortDef::value("report", PortType::Map, false)]
+    // `list` : les mêmes résultats en une liste, posée à la fin — ce qu'un graphe cité peut rendre à son
+    // parent (un flux ne remonte pas d'un graphe cité ; 14 novembre 2026).
+    vec![
+        PortDef::value("results", PortType::Any, false).stream(PortKind::Finite),
+        PortDef::value("report", PortType::Map, false),
+        PortDef::value("list", PortType::Any, false),
+    ]
 }
 
 struct ForEachNode {
@@ -538,7 +555,7 @@ impl Node for ForEachNode {
         let mut erreurs = Vec::new();
         let mut rendus: Vec<Value> = Vec::new();
         for (i, r) in sorties.into_iter().enumerate() {
-            if self.report_results {
+            {
                 rendus.push(match &r {
                     Ok(v) => en_json(v).unwrap_or(Value::Null),
                     Err(e) => json!({"index": i, "error": e, "element": elements[i]}),
@@ -563,9 +580,10 @@ impl Node for ForEachNode {
         let n = elements.len();
         let mut rapport = json!({"elements": n, "ok": n - erreurs.len(), "errors": erreurs});
         if self.report_results {
-            rapport["results"] = Value::Array(rendus);
+            rapport["results"] = Value::Array(rendus.clone());
         }
         ctx.set_output("report", PortValue::new(rapport));
+        ctx.set_output("list", PortValue::new(Value::Array(rendus)));
         Ok(())
     }
 }
@@ -887,6 +905,62 @@ mod tests {
         decide.remplacer_config("cherche", "graph", json!({"cite": "@graphs/cherche.mmd", "mermaid": CHERCHE, "sous": {}}));
         let vus = super::super::graph_tool::template_vars(decide.template());
         assert_eq!(vus.into_iter().collect::<Vec<_>>(), ["element"], "seuls les $x du graphe lui-même");
+    }
+
+    /// Un parent qui cite `milieu`, qui cite lui-même `bas` par un ForEachNode : deux niveaux d'éléments.
+    /// `bas` note `$<element>.v` ; le milieu rend `resultat`. Rend le journal et le rapport du parent
+    /// (avec `report_results`).
+    fn jouer_imbrique(resultat: &str, element_du_bas: &str) -> Result<(Vec<String>, Value), String> {
+        let bas = format!("%% tool: bas\n%% description: d\n%% param: {element_du_bas} json! -- x\n%% result: note.text\n\ngraph LR\n    note[\"NoterNode(valeur='${element_du_bas}.v')\"]\n");
+        let element_opt = if element_du_bas == "element" { String::new() } else { format!(", element='{element_du_bas}'") };
+        let milieu = format!("%% tool: milieu\n%% description: d\n%% param: element json! -- x\n%% result: {resultat}\n\ngraph LR\n    lignes[\"RhaiNode(script='[ #{{v: `x`}}, #{{v: `y`}} ]', value=0)\"]\n    bas[\"ForEachNode(graph='@graphs/bas.mmd'{element_opt})\"]\n    note[\"NoterNode(valeur='milieu $element.a')\"]\n    lignes -->|result:elements| bas\n");
+        let mut parent = GraphTool::from_mermaid(
+            "%% tool: parent\n%% description: d\n%% result: chaque.report\n\ngraph LR\n    elements[\"RhaiNode(script='[ #{a: 1} ]', value=0)\"]\n    chaque[\"ForEachNode(graph='@graphs/milieu.mmd', report_results=true)\"]\n    elements -->|result:elements| chaque\n",
+        )
+        .unwrap();
+        let sous = RegistreDesSousGraphes::default();
+        let mut r = NodeRegistry::new();
+        register_builtins(&mut r);
+        r.register(Box::new(NoterFactory));
+        r.register(Box::new(ForEachNodeFactory { registre: sous.clone() }));
+        let reg = Arc::new(r);
+        sous.poser(&reg);
+        let lire = |chemin: &str| -> Result<String, String> {
+            match chemin {
+                "graphs/milieu.mmd" => Ok(milieu.clone()),
+                "graphs/bas.mmd" => Ok(bas.clone()),
+                autre => Err(format!("fichier introuvable : {autre}")),
+            }
+        };
+        resoudre_les_sous_graphes(&mut parent, &lire, &reg)?;
+        let def = parent.instantiate(&json!({})).map_err(|e| e.to_string())?;
+        let mut g = build_definition(&def, &reg, &NodeTypePolicy::All).map_err(|e| e.to_string())?;
+        let journal: Journal = Arc::default();
+        let mut services = ServiceRegistry::new();
+        services.register("journal", journal.clone());
+        let sortie = DataflowRuntime::with_services(100, services).execute(&mut g)?;
+        let rapport = sortie.get("chaque", "report").and_then(|v| v.downcast::<Value>().cloned()).unwrap_or(Value::Null);
+        let lignes = journal.lock().unwrap().clone();
+        Ok((lignes, rapport))
+    }
+
+    /// **Le contrôle des champs ne lit pas l'élément d'un niveau plus bas** (14 novembre 2026,
+    /// `confirmer_fiche`) : le milieu cite `bas`, dont le graphe lit `$element.v` — l'élément de `bas`,
+    /// pas celui du milieu. L'élément du milieu (`{a: 1}`) n'a pas de `v`, et c'est juste.
+    #[test]
+    fn le_controle_des_champs_ne_lit_pas_l_element_d_un_niveau_plus_bas() {
+        let (journal, rapport) = jouer_imbrique("bas.report", "element").unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(rapport["ok"], json!(1), "{rapport}");
+        assert!(journal.contains(&"écrit x".to_string()) && journal.contains(&"écrit y".to_string()), "{journal:?}");
+    }
+
+    /// **Un niveau imbriqué rend ce que ses éléments ont rendu** (14 novembre 2026) : le milieu rend
+    /// `bas.list`, la liste des résultats de `bas` (le flux `results` ne remonte pas d'un graphe cité).
+    #[test]
+    fn un_niveau_imbrique_rend_la_liste_de_ses_resultats() {
+        let (_, rapport) = jouer_imbrique("bas.list", "ligne").unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(rapport["ok"], json!(1), "{rapport}");
+        assert_eq!(rapport["results"][0], json!(["rendu x", "rendu y"]), "{rapport}");
     }
 
     /// **Un manifeste qui cite un sous-graphe absent ou faux se refuse à son
