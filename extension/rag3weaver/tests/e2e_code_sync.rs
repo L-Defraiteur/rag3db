@@ -161,7 +161,9 @@ fn une_exclusion_posee_apres_coup_retire_le_minifie_et_ses_documents() {
     let r = sync_source(&mut catalog, &Snapshot::new("depot", source), &options, &mut |_| {}).unwrap();
     assert_eq!(r.files_set_aside.get("minifié — une ligne au-delà du seuil du manifeste"), Some(&1), "{r:?}");
     assert_eq!(scopes_nommes(&catalog, "minifie"), 0, "la règle posée, le minifié indexé avant part");
-    for (entite, documents, lignes) in catalog.comptes_du_plein_texte() {
+    let comptes = catalog.comptes_du_plein_texte();
+    assert!(comptes.iter().any(|(e, _, _)| e == "Scope"), "le plein texte de Scope est compté : {comptes:?}");
+    for (entite, documents, lignes) in comptes {
         assert_eq!(documents, lignes, "{entite} : {documents} documents pour {lignes} lignes, ses documents partent avec lui");
     }
 }
