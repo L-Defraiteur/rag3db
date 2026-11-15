@@ -493,6 +493,14 @@ indexes by batches, marks what it has proven, and on restart redoes only what is
 incomplete. Tools built on it: `usages`, `impact` (what depends on this), links
 rendered as a tree.
 
+On a base with generations, a re-index keeps the history: a published row that changes is
+closed, not rewritten, and its new row is born at the pending rank with the edges that pointed
+to it; a removed file is retired, not erased. A file is skipped when both its content and the
+analysis version (parser commit, `REGLES_DE_L_ANALYSE`, the code template) are unchanged, so a
+re-index costs the diff. Raising `REGLES_DE_L_ANALYSE` makes every base re-analyse all its files
+once at its next sync; `scripts/check_features.sh` refuses a change to the analysis that does not
+raise it or say "sans effet sur l'analyse".
+
 ## The agent
 
 rag3weaver is not a library an agent calls; it is where the agent runs.
