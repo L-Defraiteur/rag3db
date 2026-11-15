@@ -2150,8 +2150,9 @@ TEST_F(VectorIndexCreateUnderManyWriters, NoWriterWaitsLongDuringTheCreate) {
                                  << " ms (CREATE " << createMs << " ms)";
 }
 
-// Un index ne change pas la disposition des lignes : une écriture ouverte avant un CREATE et qui
-// écrit la table après sa validation finit sans recommencer (garde du lot du verrou de schéma,
+// Un index ne change pas la disposition des lignes : une écriture ouverte avant un CREATE, et qui
+// écrit la table pendant qu'il l'attend (la validation d'un CREATE attend les écritures ouvertes
+// avant lui), finit sans recommencer ; puis le CREATE passe (garde du lot du verrou de schéma,
 // 15 novembre 2026 : un paquet de 2 048 fichiers ne se rejoue pas pour un index).
 TEST_F(VectorIndexCreateUnderManyWriters, AWriterOpenDuringACreateFinishesWithoutRetrying) {
     table = "C";
@@ -2162,12 +2163,21 @@ TEST_F(VectorIndexCreateUnderManyWriters, AWriterOpenDuringACreateFinishesWithou
     rag3db::main::Connection writer(database.get());
     ASSERT_TRUE(writer.query("BEGIN TRANSACTION;")->isSuccess());
     ASSERT_TRUE(writer.query("MATCH (n:C) RETURN count(*);")->isSuccess());
-    mustRun("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
+    std::string created;
+    std::thread creator([&] {
+        rag3db::main::Connection connection(database.get());
+        auto result =
+            connection.query("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
+        created = result->isSuccess() ? "OK" : result->getErrorMessage();
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     auto r = writer.query(
         stringFormat("MATCH (n:C {id: 5}) SET n.vec = {};", movedRowVector(5)));
     EXPECT_TRUE(r->isSuccess()) << "[check: an-index-retries-no-writer] " << r->getErrorMessage();
     auto commit = writer.query("COMMIT;");
     EXPECT_TRUE(commit->isSuccess()) << commit->getErrorMessage();
+    creator.join();
+    EXPECT_EQ(created, "OK") << "[check: the-create-passes-after-the-writer]";
 }
 
 TEST_F(VectorIndexCreateInMemory, ChangesCommittedDuringACreateAreSeen) {
