@@ -646,6 +646,32 @@ fn la_requete_des_candidates_est_bornee_et_la_trace_dit_sa_longueur() {
     assert!(n <= 1_000 && n > 500, "la borne déclarée : {n}");
 }
 
+/// **Le titre du contexte se règle** (15 novembre 2026, le relevé du banc : sous « déjà rangé, ne pas
+/// ranger », le modèle a lu que la section elle-même était rangée, et 22 sections ont perdu leur sujet).
+/// `context_title` remplace le titre par défaut devant le contexte ; sans lui, le titre d'avant reste.
+#[test]
+#[ignore]
+fn le_titre_du_contexte_se_regle_et_son_defaut_ne_change_pas() {
+    const TITRE: &str = "TITREMARQUE ce qui existe déjà dans la mémoire, et ce qui précède ; la section ci-dessous n’est pas encore rangée :";
+    let serveur = FakeServer::start_sequence(vec![etiquette("none"), etiquette("none"), etiquette("none"), etiquette("none"), etiquette("none"), etiquette("none")]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    appel(&b, "archive", json!({"titre": "Journal du 26", "contenu": DOCUMENT, "jour": "2026-10-26", "context": "CONTEXTEMARQUE", "context_title": TITRE}));
+    for i in 0..3 {
+        let messages = serde_json::from_str::<Value>(&serveur.request.recv().unwrap()).unwrap()["messages"].to_string();
+        let (t, c, s) = (messages.find("TITREMARQUE"), messages.find("CONTEXTEMARQUE"), messages.find("Section «"));
+        assert!(t.is_some() && t < c && c < s, "Decide {i} : le titre réglé, puis le contexte, puis la section : {messages}");
+        assert!(!messages.contains("déjà rangé, ne pas ranger"), "Decide {i} : le titre par défaut est remplacé");
+    }
+    // Sans context_title, le défaut d'avant : la F d'aujourd'hui ne bouge pas.
+    appel(&b, "archive", json!({"titre": "Journal du 27", "contenu": DOCUMENT, "jour": "2026-10-27", "context": "CONTEXTEMARQUE"}));
+    let messages = serde_json::from_str::<Value>(&serveur.request.recv().unwrap()).unwrap()["messages"].to_string();
+    assert!(messages.contains("Ce qui précède (déjà rangé, ne pas ranger)"), "le titre par défaut reste : {messages}");
+}
+
 /// **Un apport recopié sort des rappels par défaut, et se voit en ôtant le filtre** (15 novembre 2026,
 /// les gestes de Lucie : scinder ou rejoindre une fiche recopie ses apports sous la fiche issue, et
 /// l'exemplaire d'origine reste comme provenance). L'état `recopied` (la transition `recopy` du cycle
