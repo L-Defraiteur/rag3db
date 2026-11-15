@@ -638,6 +638,23 @@ fn retailler(terminal: &mut ratatui::DefaultTerminal, hauteur: u16) -> Result<()
     Ok(())
 }
 
+/// **Le clavier sous tmux** (ticket « sous tmux, Maj-Entrée envoie ») : ce que permet le
+/// réglage de tmux, lu par `tmux show -gv`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClavierTmux {
+    /// `extended-keys` est à `on` ou `always` et `extended-keys-format` à `csi-u` : le terminal
+    /// demande le mode 1 (`CSI > 4 ; 1 m`), et Maj-Entrée lui arrive en CSI u.
+    Ouvert,
+    /// Autre chose (le défaut de tmux, `off`, ou le format `xterm`, que crossterm ne lit pas) :
+    /// rien n'est demandé, Maj-Entrée reste une Entrée, et l'indication dit les deux réglages.
+    Ferme,
+}
+
+/// Ce que permet tmux, d'après `lire(["show", "-gv", <option>])` (la sortie de la commande tmux).
+pub fn clavier_sous_tmux(_lire: &dyn Fn(&[&str]) -> Option<String>) -> ClavierTmux {
+    ClavierTmux::Ferme
+}
+
 /// La touche de la vue pour une touche du terminal, ou rien.
 pub fn touche_de(k: KeyEvent) -> Option<Touche> {
     let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
@@ -857,6 +874,29 @@ mod tests {
         assert_eq!(modeles_dits(&json!({ "models": [] })), vec!["le manifeste de la tâche ne déclare aucun modèle de langage (models.llm)".to_string()]);
         let inconnu = json!({ "models": [{ "name": "vite", "model": "m", "default": true, "current": false }], "current": "rapide", "current_unknown": true });
         assert_eq!(modeles_dits(&inconnu)[1], "  ▸ rapide (inconnu) — le choix de la tâche ne désigne plus aucun modèle déclaré", "le choix inconnu se dit (ED)");
+    }
+
+    /// **Sous tmux** : les touches étendues ne se demandent que si tmux les permet ET les rend en
+    /// CSI u ; le format `xterm` de tmux (`ESC[27;2;13~`) n'est pas lu par crossterm, et le
+    /// demander perdrait Maj-Entrée tout à fait.
+    #[test]
+    fn under_tmux_extended_keys_are_asked_only_when_tmux_allows_them_in_csi_u() {
+        let reglage = |ek: Option<&'static str>, format: Option<&'static str>| {
+            move |args: &[&str]| -> Option<String> {
+                match args {
+                    ["show", "-gv", "extended-keys"] => ek.map(str::to_string),
+                    ["show", "-gv", "extended-keys-format"] => format.map(str::to_string),
+                    _ => None,
+                }
+            }
+        };
+        assert_eq!(clavier_sous_tmux(&reglage(Some("off"), Some("xterm"))), ClavierTmux::Ferme, "le défaut de tmux");
+        assert_eq!(clavier_sous_tmux(&reglage(Some("on"), Some("xterm"))), ClavierTmux::Ferme, "le format xterm, que crossterm ne lit pas");
+        assert_eq!(clavier_sous_tmux(&reglage(Some("on"), Some("csi-u"))), ClavierTmux::Ouvert);
+        assert_eq!(clavier_sous_tmux(&reglage(Some("always"), Some("csi-u"))), ClavierTmux::Ouvert);
+        assert_eq!(clavier_sous_tmux(&reglage(Some("on\n"), Some("csi-u\n"))), ClavierTmux::Ouvert, "la fin de ligne de tmux");
+        assert_eq!(clavier_sous_tmux(&reglage(None, None)), ClavierTmux::Ferme, "un tmux qui ne répond pas");
+        assert_eq!(clavier_sous_tmux(&reglage(Some("on"), None)), ClavierTmux::Ferme, "un tmux trop vieux pour le format");
     }
 
     /// `/context` dit le remplissage du contexte du modèle, en jetons et en
