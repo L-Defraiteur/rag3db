@@ -400,3 +400,30 @@ fn opening_public_content_manifest_refuses_invalid_associations_before_database(
     assert_eq!(constructions.load(Ordering::SeqCst),0);
     assert!(!database.exists(),"la façade ne crée pas une base pour un plan invalide");
 }
+
+/// **LlmNode dans un outil** (15 novembre 2026, la garde de M4 complétée par c7) : `call_models` veut
+/// dire « cet outil demande une décision bornée à un modèle », pas « il génère du texte libre ».
+/// Un LlmNode sans `response_schema` reste hors de toute politique ; avec son schéma, il passe sous
+/// `call_models` comme Decide, et sans `call_models` il est refusé en nommant la ligne à ajouter.
+#[test]
+fn un_llm_node_d_outil_exige_son_schema_et_call_models() {
+    let essai = |schema: bool, call_models: bool| -> Result<PreparedBackend, String> {
+        let (dir, mut m) = manifest();
+        std::fs::create_dir_all(dir.path().join("graphs")).unwrap();
+        let noeud = if schema { "LlmNode(response_schema=$schema, max_tokens=8)" } else { "LlmNode(max_tokens=8)" };
+        std::fs::write(dir.path().join("graphs/generer.mmd"), format!(
+            "%% tool: generer\n%% description: un essai de génération\n%% param: schema json = {{\"type\": \"object\"}} -- la forme\n%% result: m.text\n\ngraph LR\n    m[\"{noeud}\"]\n"
+        )).unwrap();
+        let mut attache = json!({"graph": "graphs/generer.mmd"});
+        if call_models {
+            attache["policy"] = json!({"call_models": true});
+        }
+        m["tools"]["generer"] = attache;
+        prepare(dir.path(), &m)
+    };
+    let e = essai(false, true).err().expect("un LlmNode sans response_schema est refusé, même sous call_models");
+    assert!(e.contains("LlmNode") && e.contains("response_schema"), "le refus nomme response_schema : {e}");
+    essai(true, true).unwrap_or_else(|e| panic!("un LlmNode avec response_schema passe sous call_models : {e}"));
+    let e = essai(true, false).err().expect("sans call_models, refusé");
+    assert!(e.contains("call_models"), "le refus dit la ligne à ajouter : {e}");
+}
