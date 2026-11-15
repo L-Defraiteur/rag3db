@@ -322,3 +322,14 @@ Rouge attendu sur la tête d'aujourd'hui : la première branche, puisque le fich
 (`banc-parite/ecr-base-lot2`, le même nom de copie). Le relevé du départage s'est donc fait sur l'état
 du retrait (rangs 1 à 3), pas sur celui de la parité ; il est resté lisible, les 128 uuid relevés étant
 nés à 0. Depuis, les noms de copie portent leur rôle (parité, retrait), une copie par rôle.
+
+## 14. Une écriture refusée par un ALTER se recommence (15 novembre 2026, 8 h 1x ; pas codé)
+
+Le lot du cœur (l'ALTER qui attend les écrivains ouverts de sa table) refuse à sa première prise de
+verrou une transaction d'écriture ouverte avant un ALTER validé sur sa table. Le refus est nommé :
+« … changed after this transaction started …; retry the transaction ». L'écrivain et `sync_source`
+doivent la recommencer sur ce refus, reconnu à son préfixe, et ne pas la perdre. Le grain : le
+paquet sous transaction en mode masse, l'instruction seule sous l'écrivain. Les reprises sont
+bornées et dites. Le témoin : un ADD COLUMN pendant un paquet, et le paquet se recommence et finit.
+À faire après l'atterrissage du cœur et la bascule de lib : ticket
+`docs/everything-declarative/tickets/2026-11-15-recommencer-une-ecriture-refusee-par-un-alter-valide.md`.
