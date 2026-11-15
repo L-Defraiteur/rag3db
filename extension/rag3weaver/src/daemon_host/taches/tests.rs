@@ -107,6 +107,26 @@ fn la_base_principale_n_est_jamais_ecrite_par_la_tache() {
 /// `HEAD` du dépôt ne bouge pas. `/etat` la dit tâche ; la fermer retire le
 /// worktree, la branche et la copie, et l'oublie.
 #[cfg(feature = "rag3db-native")]
+/// **Une tâche se nomme à sa création** (c7, le nom des agents) : `agent_name` posé à l'ouverture devient
+/// le nom de l'agent de la tâche, gardé au registre ; un nom vide ou de plusieurs lignes est refusé avant
+/// toute ouverture ; sans lui, la tâche garde celui du backend.
+#[test]
+fn une_tache_se_nomme_a_sa_creation() {
+    let (_d, host, _manifeste, parent) = banc();
+    let tache = host.ouvrir_une_tache_nommee(&parent, "ombre", Some("Ombre")).expect("la tâche s'ouvre nommée");
+    assert_eq!(tache.nom_de_l_agent.as_deref(), Some("Ombre"), "gardé au registre");
+    let h = host.hosted(&tache.manifest).unwrap();
+    assert_eq!(host.with_backend(&h, |b| b.prepared().nom_de_l_agent()).unwrap(), "Ombre", "lu par le backend de la tâche");
+    for faux in ["", "  ", "deux\nlignes"] {
+        let e = host.ouvrir_une_tache_nommee(&parent, "faux", Some(faux)).expect_err("refusé");
+        assert!(e.contains("agent.name") || e.contains("agent_name"), "le refus nomme le champ : {e}");
+        assert!(host.tache(&parent, "faux").is_none(), "rien n'est ouvert");
+    }
+    let simple = host.ouvrir_une_tache(&parent, "simple").unwrap();
+    let h = host.hosted(&simple.manifest).unwrap();
+    assert_eq!(host.with_backend(&h, |b| b.prepared().nom_de_l_agent()).unwrap(), "équipier", "sans nom, celui du backend");
+}
+
 #[test]
 fn une_declaration_dans_la_tache_commite_sur_sa_branche() {
     let (d, host, manifeste, parent) = banc();
