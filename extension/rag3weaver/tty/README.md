@@ -74,6 +74,7 @@ The input is a line editor, like a shell's.
 | `o` / `n`, empty input | grants or refuses the command the teammate waits for |
 | Esc, Ctrl-G | stops the teammate (Ctrl-G without the escape delay of a multiplexer) |
 | Ctrl-O | opens a tool call full size, in an alternate screen (see *Tool calls*) |
+| Tab | completes a `/` command or a `!` command (see *Commands*) |
 | Ctrl-C | clears a non-empty input, otherwise quits |
 | Ctrl-D, empty input | quits |
 | AltGr | its character (on Windows AltGr comes as Ctrl+Alt, and is kept) |
@@ -82,6 +83,28 @@ The input spans several lines: each folds to the width, and the live zone grows 
 input lines, then a window follows the cursor, a cut edge showing `… `. Wide characters count for two
 columns. The terminal's cursor sits where the input's cursor is. An empty input says, muted, how to
 break a line: Shift-Enter, Alt-Enter, or under tmux that Shift-Enter sends.
+
+## Commands
+
+An input starting with `/` is a command of the terminal, never sent to the teammate (`//` sends a
+text starting with one `/`): `/aide`, `/quitter`, `/arreter`, `/theme <name>`, `/tache <name>` and
+`/depot <name>` (the view starts again on another task or repository, keeping the session journal
+and theme), `/journal`, `/effacer` (clears the visible screen) and `/effacer historique`, and
+`/context` (how full the teammate's model context is, from the host's `GET /ide/chat`).
+
+`!<command>` runs it with `/bin/sh -c` where the terminal runs, in the task's worktree when it is on
+this machine. The screen goes to the command, on a pseudo-terminal of its own (`posix_openpt`, through
+the libc the standard library already links), so `sudo` can ask for its password and an interactive
+tool can be answered. Only what the command writes is kept, never what is typed: a password read with
+echo off reaches neither the kept output, nor the teammate, nor the session journal. Then the output
+goes to the teammate as an instruction (« L'utilisateur a lancé la commande … ; voici le retour »),
+without terminal sequences, cut in the middle beyond 8 KB. A `!` command only comes from what is typed
+and sent with Enter: a mailbox line or a paste never runs one. Unix only for now.
+
+Tab completes command names and their arguments (themes, tasks and repositories from the host), and,
+after `!`, executables from the `PATH` and then files; the candidates show, muted, on the top line.
+The history of what was sent survives the session in `<state folder>/historique.txt`, readable by its
+owner only, the last thousand entries.
 
 ## Tool calls
 
