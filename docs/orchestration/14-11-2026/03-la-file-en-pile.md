@@ -1540,3 +1540,6 @@ sous-agent qui rajoute des lignes à ton md ? » → l'équipier dit, à raison,
 après le branchement : un outil `delegate {nom, demande, expects}` (sous-tâche parent_task, worktree et branche forkés, un
 équipier lancé, dialogue en temps réel par la boîte : reports et questions du sous-agent chez le parent, `reply`, `stop`, `wait`,
 fusion ou proposition à la fin) ; dans tty, les sous-agents en zone vivante. Page avant le code.
+Lucie, 17 h 44 : sur le binaire d'essai, tâche atelier : « et j'ai plus la petite animation de chargement :/ » — tty garde l'animation
+du thème à côté de la dernière étape en sourdine. Embarquement : deux commits de plus sur service-503 (le binaire ne lisait pas
+RAG3WEAVER_EMBED_MAX_CHARS ; rouge d'abord, corrigé, refus nommé d'une valeur invalide).
