@@ -407,7 +407,7 @@ fn ecrire_par_generations(
     ecrire_la_table(catalog, SCOPE, "file_path", "key", source_id, indexed_path, recs, &mut e)?;
     // La ligne `File` suit la même règle (page 06, § 11) : sa clé de naissance est préfixée, une clé de
     // scope et un chemin ne se confondent pas.
-    let recs: Vec<_> = fichier.into_iter().map(|f| (crate::code::cle_de_naissance_du_fichier(&f.path), f.path.clone(), f.data())).collect();
+    let recs: Vec<_> = fichier.into_iter().map(|f| (crate::code::cle_de_naissance_du_fichier(&f.path), f.path.clone(), catalog.donnees_du_fichier(f))).collect();
     ecrire_la_table(catalog, FILE, "path", "path", source_id, indexed_path, recs, &mut e)?;
     Ok(e)
 }
@@ -1296,19 +1296,19 @@ fn synchroniser_par_generations(
     let visible = catalog.dialect_arc().condition_visible_sur("f", &v.couche, v.rang).ok_or("ce dialecte ne sait pas les générations")?;
     let lu = catalog
         .execute_raw_with_params(
-            &format!("MATCH (f:{FILE}) WHERE f.source = $src AND f._couche = $couche AND {visible} RETURN f.path, f.content_hash"),
+            &format!("MATCH (f:{FILE}) WHERE f.source = $src AND f._couche = $couche AND {visible} RETURN f.path, f.content_hash, f.analyse"),
             &[
                 crate::connection::QueryParam::new("src", CypherValue::String(source_id.clone())),
                 crate::connection::QueryParam::new("couche", CypherValue::String(v.couche.clone())),
             ],
         )
         .map_err(|e| e.to_string())?;
-    // Le chemin et l'empreinte de chaque fichier que la couche voit au rang en attente.
-    let empreintes: BTreeMap<String, String> = lu
-        .rows
-        .iter()
-        .filter_map(|l| Some((l.first()?.as_str()?.to_string(), l.get(1).and_then(|x| x.as_str()).unwrap_or("").to_string())))
-        .collect();
+    // Le chemin et l'empreinte indexée de chaque fichier que la couche voit au rang en attente : son
+    // contenu, et la version de l'analyse qui l'a écrit (page 06, § 13).
+    let texte = |l: &Vec<CypherValue>, i: usize| l.get(i).and_then(|x| x.as_str()).unwrap_or("").to_string();
+    let empreintes: BTreeMap<String, (String, String)> =
+        lu.rows.iter().filter_map(|l| Some((l.first()?.as_str()?.to_string(), (texte(l, 1), texte(l, 2))))).collect();
+    let version = catalog.version_de_l_analyse.clone();
     let indexes: BTreeSet<String> = empreintes.keys().cloned().collect();
     // **Un fichier inchangé ne se réécrit pas** : sous l'écrivain, son empreinte égale à celle du disque
     // ne changerait aucune ligne, et la passe coûte le diff, pas la source (un rattrapage à l'ouverture
@@ -1340,7 +1340,9 @@ fn synchroniser_par_generations(
                 if let Err(raison) = crate::code::admission(path, Some(c), &options.generated) {
                     *report.files_set_aside.entry(raison.to_string()).or_default() += 1;
                 } else if !tout_repasser
-                    && empreintes.get(&crate::code_tools::indexed_name(source, path).1).is_some_and(|h| *h == crate::hash::content_hash(c))
+                    && empreintes
+                        .get(&crate::code_tools::indexed_name(source, path).1)
+                        .is_some_and(|(h, a)| *h == crate::hash::content_hash(c) && *a == version)
                 {
                     continue;
                 }
