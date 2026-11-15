@@ -982,3 +982,17 @@ son rouge d'abord. Place de 96 : après archi (relai).
 96, 13 h 08 : scindé — cx-memoire-compose-restart c733b81dd (compose_restart, `context`, leurs témoins, le gabarit ;
 arbre de f67c8b535 moins le témoin de compaction, 0 ligne d'écart ailleurs) ; le témoin seul sur
 cx-memoire-compaction-temoin-archi 3d30f16ee (rouge 4/4, pour archi, posé sur c733b81dd).
+96, 13 h 09 : le pas `segment` — choix (1) : LlmNode prend `response_schema` et rend `json` sur un port de plus
+(générique), plutôt qu'un `items_as` de plus sur Decide. Gardes : un modèle qui ne rend pas le JSON demandé → le
+nœud le dit, port vide ; `segment_over` 0 = éteint, dit au manifeste. Lot à part après c733b81dd.
+96, 13 h 12 : segment a besoin de rejoindre deux branches en ordre ; décision : `when='<champ>'` et `flatten=true`
+sur ForEachNode (les éléments non concernés passent à leur place, une liste rendue est épissée), rouge d'abord ;
+pas de fan-in JSON sans ordre défini. Gardes : champ absent = passe tel quel (trace), résultat non-liste = à sa place,
+liste vide = élément retiré (trace).
+96, 13 h 17 : le banc ne peut pas lire le cache Vertex — Decide jette l'Usage, LlmCall n'est émis que par la
+boucle d'agent. Décision : lot `usage` **avant** segment (bloquant pour le banc et la borne de dépense) : Decide pose
+usage {prompt_tokens, cached_prompt_tokens, completion_tokens, ms} sur l'élément, rendu par section sous trace et
+total par passe ; champs absents quand le modèle n'en rend pas. Derrière c733b81dd.
+banc, 13 h 17 : l'essai de l'archiviste sur Vertex (Gemini 3.8 Flash, 4 à 12 s par décision) vert ; N (244 tours,
+sans contexte) tourne à luciepc depuis 13 h 16. Décision : F à 50 k ensuite (plafond ~6 M de jetons, compté par
+caractères envoyés, pas estimé), 300 k seulement au cache lu par le lot `usage`.
