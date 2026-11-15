@@ -1329,3 +1329,9 @@ d'agent de code, déclaratif en bas ; page dans l'heure, lot après (B). Pour au
 dans son manifeste et dans la copie de la tâche essai-tty (sauvegardes .avant-edit-file-*), `read_only` → `task_writes`
 (son arbre reste intouchable, la tâche écrit dans son worktree), `commands: standard` (liste sûre, le reste refusé en le
 disant) ; backends fermés et rouverts par l'hôte (session s-8b7c3d669ca1e3fd).
+Archi, 15 h 55 : page du socle (f0e29b3dc) ; découpe : ED = le jeu de primitives déclaré une fois (read_file 200 lignes + empreinte,
+replace_text, replace_lines, insert_lines, write, glob, list, grep ; diff, réindexation, run) ; archi = le pas (socle dans toute
+tâche quel que soit le manifeste, homonyme du backend qui gagne, déclaratif en bas, invite d'agent de code, porte des écritures
+sur le modèle de run_command, Landlock) ; un témoin commun sur un manifeste sans outil d'écriture. Ordre : primitives d'ED
+**devant la mesure 2a′-3** (Lucie l'a demandé), branchement d'archi après (B). Porte des commandes de Lucie passée en
+`approval` (o/n dans tty), backends rouverts 15 h 55.
