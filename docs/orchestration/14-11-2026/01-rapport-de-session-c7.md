@@ -1607,3 +1607,8 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   banc). **Coût à savoir** : F à 300 k ≈ 37 M jetons d'entrée sans cache (244 décisions × ~150 k), U ≈ 107 M ;
   le cache de préfixe de Vertex devrait en prendre l'essentiel — vérifié sur N puis sur la première fenêtre de F
   avant de lancer le reste, coût réel dit.
+- Banc, 12 h 4x : la section est coupée à 4 000 caractères dans la décision (plafond ancien d'archive_candidates
+  .rhai ; 130 tours sur 245 dépassent, médiane 4 132, p90 15 236) ; décision (b) : toutes les variantes voient
+  les tours coupés de même pour cette mesure, (a) le plafond levé en variante ensuite ; le plafond lui-même
+  est un défaut du produit (ticket chez 96, remède = l'étape `segment`). Cache : cached_prompt_tokens mesuré
+  sur la première fenêtre avant d'extrapoler.
