@@ -84,7 +84,7 @@ TEST_F(AlterWaitsForWriters, AnAddWaitsForTheOpenWriter) {
         << "[check: an-add-waits-for-the-open-writer] the ADD ended at " << t.ddlDone
         << " ms, the writer committed at " << t.commitDone << " ms";
     EXPECT_EQ(one(*conn, "MATCH (n:T) WHERE n.s = 'réécrite' AND n.note = 'n' RETURN count(*);"),
-        "500");
+        "500\n");
 }
 
 TEST_F(AlterWaitsForWriters, ADropOfAColumnTheOpenWriterWroteWaits) {
@@ -94,7 +94,7 @@ TEST_F(AlterWaitsForWriters, ADropOfAColumnTheOpenWriterWroteWaits) {
     EXPECT_GT(t.ddlDone, t.commitDone)
         << "[check: a-drop-of-a-written-column-waits] the DROP ended at " << t.ddlDone
         << " ms, the writer committed at " << t.commitDone << " ms";
-    EXPECT_EQ(one(*conn, "MATCH (n:T) RETURN count(*);"), "1000");
+    EXPECT_EQ(one(*conn, "MATCH (n:T) RETURN count(*);"), "1000\n");
 }
 
 TEST_F(AlterWaitsForWriters, AnAddWithAnOpenWriterKeepsTheDataAcrossACheckpointAndAReopening) {
@@ -106,9 +106,9 @@ TEST_F(AlterWaitsForWriters, AnAddWithAnOpenWriterKeepsTheDataAcrossACheckpointA
     run(*conn, "CHECKPOINT;");
     createDBAndConn();
     EXPECT_EQ(one(*conn, "MATCH (n:T) WHERE n.s = 'neuve' AND n.note = 'n' RETURN count(*);"),
-        "500")
+        "500\n")
         << "[check: an-add-with-an-open-writer-keeps-the-data]";
-    EXPECT_EQ(one(*conn, "MATCH (n:T) RETURN count(*);"), "1500");
+    EXPECT_EQ(one(*conn, "MATCH (n:T) RETURN count(*);"), "1500\n");
 }
 
 TEST_F(AlterWaitsForWriters, AWriterArrivingDuringTheAlterWaitsForIt) {
@@ -137,7 +137,7 @@ TEST_F(AlterWaitsForWriters, AWriterArrivingDuringTheAlterWaitsForIt) {
     EXPECT_GE(cDone, ddlDone)
         << "[check: a-writer-arriving-during-the-alter-waits-for-it] C ended at " << cDone
         << " ms, the ALTER at " << ddlDone << " ms";
-    EXPECT_EQ(one(*conn, "MATCH (n:T) WHERE n.id = 2 RETURN n.s, n.note;"), "c|n");
+    EXPECT_EQ(one(*conn, "MATCH (n:T) WHERE n.id = 2 RETURN n.s, n.note;"), "c|n\n");
 }
 
 TEST_F(AlterWaitsForWriters, AnAlterThatWaitsTooLongSaysWhichWriterItWaitedFor) {
