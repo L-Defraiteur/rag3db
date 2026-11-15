@@ -9,7 +9,14 @@
 #   sous le jeu le plus large. Dernière ligne du résumé : VERT, ou ROUGE et l'étape.
 set -u
 W=$HOME/git_workspaces/$1
+# **Le dossier des journaux est un nom**, sous ~/.cache/rag3weaver-build/ (15 novembre 2026, ticket d'hotfixs) : un chemin
+# absolu s'y emboîtait en silence, et le verdict s'écrivait là où ni sa session ni la garde du push (qui lit
+# ~/.cache/rag3weaver-build/<journaux>) ne le lisaient. Il est refusé, nommé ; la passe dit ensuite où elle écrit.
+case "$2" in
+  /*) echo "ROUGE passe épinglée : « $2 » est un chemin absolu ; le dossier des journaux est un nom sous $HOME/.cache/rag3weaver-build/ (la garde du push l'y lit)" >&2; exit 2 ;;
+esac
 J=$HOME/.cache/rag3weaver-build/$2
+echo "journaux : $J"
 FILTRE=$3
 SEUL=${4:-}
 [ "$SEUL" = - ] && SEUL=
