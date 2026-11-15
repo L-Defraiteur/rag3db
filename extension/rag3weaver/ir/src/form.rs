@@ -432,7 +432,29 @@ pub enum Predicate {
     /// rang)`. Posée par l'exécution sur les tables à générations, jamais déclarée ; elle ne se
     /// désérialise pas.
     #[serde(skip)]
-    Visible { couche: String, rang: i64 },
+    Visible {
+        couche: String,
+        rang: i64,
+        /// Ce que les étages plus proches de la pile retirent de celui-ci (2b′) ; vide pour une
+        /// pile d'un étage, dont la condition reste alors exactement celle d'avant.
+        masque: Masque,
+    },
+}
+
+/// **Le masque d'un étage de pile** (2b′) : les lignes que des étages plus proches ont retirées,
+/// par leur uuid ou par leur fichier.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Masque {
+    /// Les uuids retirés (tombstones d'occurrence).
+    pub cles: Vec<String>,
+    /// La colonne du fichier dans la table lue, et les fichiers retirés.
+    pub fichiers: Option<(String, Vec<String>)>,
+}
+
+impl Masque {
+    pub fn est_vide(&self) -> bool {
+        self.cles.is_empty() && self.fichiers.as_ref().is_none_or(|(_, f)| f.is_empty())
+    }
 }
 
 impl Predicate {
