@@ -687,6 +687,19 @@ impl Resolveur {
 /// (`COUCHE_DU_BACKEND`), posé tel quel et jamais dérivé, pour que rien de posé ne bouge.
 pub const ID_DE_LA_COUCHE_DU_BACKEND: &str = "backend";
 
+/// **L'id d'une couche par son nom** (`couche_nom:<dépôt>:<nom>`), seulement si sa fiche est vivante
+/// (sans `fin`). `lire_meta` lit une clé de `_catalog_meta` : celle du catalogue, ou celle de
+/// l'instantané d'un appel d'outil.
+pub fn id_de_la_couche_par_son_nom(
+    lire_meta: &dyn Fn(&str) -> Result<Option<String>, String>,
+    depot: &str,
+    nom: &str,
+) -> Result<Option<String>, String> {
+    let Some(id) = lire_meta(&format!("couche_nom:{depot}:{nom}"))?.filter(|v| !v.is_empty()) else { return Ok(None) };
+    let fiche: Option<Value> = lire_meta(&format!("fiche_couche:{depot}:{id}"))?.and_then(|v| serde_json::from_str(&v).ok());
+    Ok(fiche.filter(|f| f.get("fin").is_none()).map(|_| id))
+}
+
 /// **Les identifiants stables des couches** d'une résolution (décision d'ED et d'arbre principal, 14 nov.,
 /// page `docs/arbre-principal/14-11-2026/02-les-suivies-tracked.md`) : un id par couche, distinct de son nom,
 /// dérivé de sa naissance (le dépôt, le nom complet et la pointe à la première vue) et gardé dans
@@ -848,6 +861,21 @@ struct Contexte {
     ancien: String,
     egaux: Vec<String>,
     resolution: Resolution,
+}
+
+/// **L'id du dépôt** d'une racine, sans catalogue : celui de la résolution git des suivies (sinon
+/// l'ancien, `couches::identifiant_du_depot`). C'est le `<dépôt>` des clés `couche_nom:` et
+/// `fiche_couche:` ; `None` hors d'un dépôt git. Il ne change pas tant que le dépôt ne change pas.
+pub fn id_du_depot(racine: &std::path::Path, tracked: Option<&Value>) -> Result<Option<String>, String> {
+    let Ok(depot) = crate::couches::git(racine, &["rev-parse", "--show-toplevel"]) else { return Ok(None) };
+    let depot = std::path::PathBuf::from(depot);
+    let backend = racine.canonicalize().unwrap_or_else(|_| racine.to_path_buf());
+    let declaration = declaration_du_manifeste(tracked)?;
+    let premiere = resolveur_de(&depot).resoudre(&depot, &backend, &[], &declaration)?;
+    Ok(Some(match premiere.identifiant {
+        Some(i) => i.id,
+        None => crate::couches::identifiant_du_depot(&depot).unwrap_or_default(),
+    }))
 }
 
 fn contexte(catalog: &crate::catalog::Catalog, racine: &std::path::Path, tracked: Option<&Value>) -> Result<Option<Contexte>, String> {
@@ -1587,9 +1615,14 @@ mod tests {
         let renomme = ids(&r);
         assert_eq!(renomme.get("refs/heads/b"), Some(&a), "le renommage a changé l'identifiant : {renomme:?}");
         assert!(!renomme.contains_key("refs/heads/a"), "{renomme:?}");
+        // Le nom mène à l'id vivant (la vue d'un outil, 2b-C) ; un nom inconnu à rien.
+        let lire = |cle: &str| cat.read_meta_key(cle).map_err(|e| e.to_string());
+        assert_eq!(id_de_la_couche_par_son_nom(&lire, "depot", "refs/heads/b").unwrap(), Some(a.clone()));
+        assert_eq!(id_de_la_couche_par_son_nom(&lire, "depot", "refs/heads/inconnue").unwrap(), None);
         // Effacée, puis recréée ailleurs sous le même nom : un identifiant neuf, l'ancien garde sa fin.
         git(&d, &["branch", "-D", "b"]);
         ids(&r);
+        assert_eq!(id_de_la_couche_par_son_nom(&lire, "depot", "refs/heads/b").unwrap(), None, "le nom d'une couche finie mène encore à son id");
         let fiche = cat.read_meta_key(&format!("fiche_couche:depot:{a}")).unwrap().unwrap_or_default();
         assert!(fiche.contains("fin"), "la fiche de la couche effacée n'a pas sa fin : {fiche}");
         git(&d, &["branch", "b", "main"]);
@@ -1626,6 +1659,11 @@ mod tests {
         git(&d, &["switch", "-q", "main"]);
         let cat = catalogue();
         let (avant, _) = rapport_des_suivies(&cat, &d, None).unwrap().expect("un dépôt git a son rapport");
+        // L'id du dépôt sans catalogue (2b-C) est celui du rapport ; hors d'un dépôt, aucun.
+        let id = id_du_depot(&d, None).unwrap();
+        assert!(id.is_some(), "un dépôt git a son id");
+        assert_eq!(id.as_deref(), avant["repo"].as_str(), "{avant}");
+        assert_eq!(id_du_depot(t.path(), None).unwrap(), None, "hors d'un dépôt git, un id");
         assert_eq!(avant["racine"]["nature"], "calculee", "{avant}");
         assert!(avant["branches"].as_array().unwrap().iter().any(|x| x["ref"] == "refs/heads/main" && x["state"] == "tracked"), "{avant}");
         assert!(!avant["branches"].as_array().unwrap().iter().any(|x| x["ref"] == "refs/heads/b"), "b n'est pas suivie par défaut : {avant}");

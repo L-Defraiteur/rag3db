@@ -89,14 +89,25 @@ fn lire_les_tombstones(couche: &str, rang: i64, texte: &str) -> Result<(BTreeSet
 /// **Charger la pile d'une vue** depuis `_generation`. Refus nommés : couche inconnue, rang absent, parente
 /// manquante, cycle, profondeur au-delà du réglage.
 pub fn charger_la_pile(catalog: &crate::catalog::Catalog, vue: &VueDemandee, reglages: &ReglagesDesVues) -> Result<PileDeLecture, String> {
+    catalog.check_reopen().map_err(|e| format!("vues : {e}"))?;
+    charger_la_pile_sur(catalog.conn(), catalog.dialect_arc().as_ref(), vue, reglages)
+}
+
+/// **Le chargeur sur une connexion** : celle de l'instantané d'un appel d'outil, pour que la vue et
+/// ses lignes viennent de la même lecture, sans le mutex du catalogue.
+pub fn charger_la_pile_sur(
+    conn: &dyn crate::connection::DbConnection,
+    dialecte: &dyn crate::dialect::SchemaDialect,
+    vue: &VueDemandee,
+    reglages: &ReglagesDesVues,
+) -> Result<PileDeLecture, String> {
     use crate::connection::{CypherValue, QueryParam};
-    let dialecte = catalog.dialect_arc();
     let (Some(lire), Some(dernier)) = (dialecte.read_generation(), dialecte.latest_generation_rank()) else {
         return Err("vues : ce dialecte n'a pas de générations".into());
     };
     let debut = std::time::Instant::now();
     let texte = |nom: &str, v: &str| QueryParam::new(nom, CypherValue::String(v.to_string()));
-    let executer = |cypher: &str, params: &[QueryParam]| catalog.execute_raw_with_params(cypher, params).map_err(|e| format!("vues : lecture de _generation : {e}"));
+    let executer = |cypher: &str, params: &[QueryParam]| conn.execute_with_params(cypher, params).map_err(|e| format!("vues : lecture de _generation : {e}"));
     let rang = match vue.rang {
         Some(r) => r,
         None => {
@@ -213,6 +224,33 @@ mod tests {
         let p1 = charger_la_pile(&cat, &vue("enfant", Some(1)), &ReglagesDesVues::default()).unwrap();
         assert_eq!(p1.etages[0], etage("enfant", 1, &["k-f"], &["src/vieux.rs"]));
         assert_eq!(p1.etages[1], etage("backend", 0, &[], &[]), "la parente reste épinglée à son rang, pas au dernier");
+    }
+
+    /// **La publication écrit une racine sans parente** (promesse 6, `backend` seul) : la génération 0
+    /// posée par `poser_les_generations`, par le vrai `merge_generation`, se relit comme racine.
+    #[test]
+    fn la_generation_0_publiee_se_relit_comme_racine() {
+        let conn = crate::Rag3dbConnection::in_memory().unwrap();
+        let mut cat = crate::Catalog::without_embedding_model(Box::new(conn), crate::CatalogConfig::default());
+        cat.initialize().unwrap();
+        cat.poser_les_generations(&[], "backend").unwrap();
+        let p = charger_la_pile(&cat, &vue("backend", None), &ReglagesDesVues::default()).unwrap();
+        assert_eq!(p, PileDeLecture { etages: vec![etage("backend", 0, &[], &[])], racine_sans_parente: true });
+        let lu = cat.execute_raw("MATCH (g:_generation) RETURN g.parente_couche IS NULL, g.parente_rang IS NULL").unwrap();
+        assert_eq!(lu.rows.len(), 1);
+        assert!(lu.rows[0].iter().all(|v| matches!(v, crate::connection::CypherValue::Bool(true))), "la racine porte une parente : {:?}", lu.rows);
+    }
+
+    /// **Le chargeur sur connexion** rend la même pile que par le catalogue (l'instantané d'un appel).
+    #[test]
+    fn le_chargeur_sur_connexion_rend_la_meme_pile() {
+        let cat = catalogue();
+        poser(&cat, "backend", 0, None, "[]");
+        poser(&cat, "enfant", 1, Some(("backend", 0)), r#"{"keys": ["k"], "files": []}"#);
+        let r = ReglagesDesVues::default();
+        let par_le_catalogue = charger_la_pile(&cat, &vue("enfant", None), &r).unwrap();
+        let sur_connexion = charger_la_pile_sur(cat.conn(), cat.dialect_arc().as_ref(), &vue("enfant", None), &r).unwrap();
+        assert_eq!(sur_connexion, par_le_catalogue);
     }
 
     /// **Les refus nommés** : une couche inconnue, un rang absent, une parente manquante, un cycle, une

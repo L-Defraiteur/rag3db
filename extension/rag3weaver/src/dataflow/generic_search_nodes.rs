@@ -3135,12 +3135,8 @@ fn masque_en_predicat(
         conditions.push(champ(crate::scope::PROJECT_COLUMN, FilterValue::Direct(CypherValue::String(cell.project.clone()))));
     }
     if let Some(v) = forme.generations.as_ref().filter(|v| !v.tout_visible && v.tables.contains(e)) {
-        conditions.push(champ(crate::generations::COUCHE, FilterValue::Direct(CypherValue::String(v.couche.clone()))));
-        conditions.push(champ(crate::generations::DEPUIS, FilterValue::Ops(vec![FilterOp::Lte(CypherValue::Int(v.rang))])));
-        conditions.push(FilterCondition::Should(vec![
-            champ(crate::generations::JUSQU_A, FilterValue::Ops(vec![FilterOp::IsNull])),
-            champ(crate::generations::JUSQU_A, FilterValue::Ops(vec![FilterOp::Gt(CypherValue::Int(v.rang))])),
-        ]));
+        // La pile de la vue (2b′) : un étage seul donne les trois conditions d'avant.
+        conditions.extend(v.conditions_de_filtre(e, e));
     }
     // Sans autre condition, la jointure seule dit « a au moins une occurrence » : une version orpheline
     // n'est pas admise.
