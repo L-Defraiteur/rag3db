@@ -44,6 +44,9 @@ pub struct Animations {
     pub lit: Animation,
     /// Un outil qui écrit ou exécute.
     pub ecrit: Animation,
+    /// Le tour est à l'utilisatrice : l'invite qui respire (Lucie, 15 nov. : « que des animations
+    /// de chargement ou bien des trucs vivants »).
+    pub repos: Animation,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -262,7 +265,7 @@ mod tests {
             for s in sortes {
                 assert!(t.code.get(s).and_then(|c| rgb(c)).is_some(), "{nom} : la couleur de code « {s} »");
             }
-            for a in [&t.animations.reflechit, &t.animations.lit, &t.animations.ecrit] {
+            for a in [&t.animations.reflechit, &t.animations.lit, &t.animations.ecrit, &t.animations.repos] {
                 assert!(a.ms >= 100, "{nom} : pas plus de 10 images/s");
                 assert!(!a.glyphes.is_empty() && !a.gabarits.is_empty(), "{nom}");
                 for g in a.glyphes.iter().chain(std::iter::once(&a.coeur)) {
@@ -281,7 +284,7 @@ mod tests {
             assert!(rgb(c).is_some(), "couleur en hex : {c}");
         }
         assert_eq!(rgb("#ff3333"), Some((255, 51, 51)));
-        for a in [&t.animations.reflechit, &t.animations.lit, &t.animations.ecrit] {
+        for a in [&t.animations.reflechit, &t.animations.lit, &t.animations.ecrit, &t.animations.repos] {
             assert!(a.ms >= 100, "pas plus de 10 images/s : {} ms", a.ms);
             assert!(!a.glyphes.is_empty() && !a.gabarits.is_empty());
         }

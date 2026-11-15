@@ -39,17 +39,21 @@ terminal's. Three lines at the bottom are redrawn, at most 30 times per second:
 
 - the line being streamed, or a fallback note when nothing streams (see *mosh* below);
 - the status line: what waits for you comes first, and is never covered by an animation (an
-  approval with its command, a question, then a declarations proposal with its paths), otherwise
-  the teammate's state (`attend`, `réfléchit…`, `agit : <tool>`, `fini : …`);
+  approval with its command, a question, then a declarations proposal with its paths). Otherwise it
+  is never a bare state word: the theme's animation while the teammate works, with what it waits
+  for named beside it (`le modèle répond… (gemini-3.8-flash, 12 s)`, `run_command cargo check
+  travaille… (40 s)`); the theme's `repos` animation when it is your turn; a sentence when it
+  stopped on an error or ended without answering;
 - the input line.
 
 While the model thinks, or a tool reads or writes, the status line plays an animation chosen by what
 the tool is allowed to do. On the right, in muted colour, it shows the repository, the branch and the
 task, when they fit.
 
-The history keeps what was asked and what was answered (and a `!` command with its output). Tool
-calls, steps done, the end of a step and the host's own words scroll on the muted top line of the live
-zone instead, replaced as they come; Ctrl-O and the journal keep them. `--etapes`
+The history keeps what was asked and what was answered (and a `!` command with its output). The
+last working tool call scrolls on the muted top line of the live zone instead, without a verdict
+(a refusal is said); the step's plumbing (`step_done`, `report`, `edit_plan`), steps done and the
+host's own words are not shown; Ctrl-O and the journal keep them all. `--etapes`
 (`RAG3WEAVER_TTY_ETAPES=1`, or `/etapes` during the session) writes them all to the history.
 
 An approval request is live state: it is said on the status line, not written to the history,

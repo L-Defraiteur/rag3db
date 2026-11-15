@@ -139,6 +139,22 @@
         "❬{a}{b} {coeur} {c}❭ ...HACKING THE MAINFRAME...",
         " {a} ⸢{coeur}⸣ {b}  ...WRITING TO THE NET..."
       ]
+    },
+    "repos": {
+      "forme": "transmutation",
+      "ms": 260,
+      "glyphes": [
+        "░",
+        "▒",
+        "▓",
+        "█",
+        "▓",
+        "▒"
+      ],
+      "coeur": "◉",
+      "gabarits": [
+        "⁅ {s} ⁆ {coeur} ⁅ {s} ⁆ YOUR MOVE, CHOOM..."
+      ]
     }
   },
   "replis": {},
@@ -163,7 +179,8 @@
       "Ê": "E",
       "É": "E",
       "È": "E",
-      "Ç": "C"
+      "Ç": "C",
+      "À": "A"
     }
   },
   "code": {

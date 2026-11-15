@@ -67,6 +67,7 @@ pub enum Quelle {
     Reflechit,
     Lit,
     Ecrit,
+    Repos,
 }
 
 impl Quelle {
@@ -75,6 +76,7 @@ impl Quelle {
             Quelle::Reflechit => &t.animations.reflechit,
             Quelle::Lit => &t.animations.lit,
             Quelle::Ecrit => &t.animations.ecrit,
+            Quelle::Repos => &t.animations.repos,
         }
     }
 }
@@ -305,7 +307,7 @@ mod tests {
     #[test]
     fn ascii_mode_is_pure_ascii_for_the_three_animations() {
         let t = Theme::daemon();
-        for q in [Quelle::Reflechit, Quelle::Lit, Quelle::Ecrit] {
+        for q in [Quelle::Reflechit, Quelle::Lit, Quelle::Ecrit, Quelle::Repos] {
             for n in 0..20 {
                 let s = texte(&t, q, n, 7, cap(Niveau::Aucune, Glyphes::Ascii));
                 assert!(s.is_ascii(), "{q:?} {n} : {s}");
@@ -353,7 +355,7 @@ mod tests_de_tous_les_themes {
     fn ascii_mode_is_pure_ascii_for_every_theme() {
         for (nom, _) in THEMES {
             let t = Theme::par_nom(nom).unwrap();
-            for q in [Quelle::Reflechit, Quelle::Lit, Quelle::Ecrit] {
+            for q in [Quelle::Reflechit, Quelle::Lit, Quelle::Ecrit, Quelle::Repos] {
                 for n in 0..30 {
                     let s = texte(&t, q, n, 11, Capacites { couleurs: Niveau::Aucune, glyphes: Glyphes::Ascii });
                     assert!(s.is_ascii(), "{nom} {q:?} {n} : {s}");

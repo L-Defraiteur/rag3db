@@ -173,6 +173,10 @@ pub struct Vue {
     politiques: HashMap<String, Quelle>,
     /// Depuis quand l'animation en cours tourne.
     depuis: Instant,
+    /// Depuis quand on attend ce qui est en cours (l'appel au modèle, l'outil).
+    attente_depuis: Instant,
+    /// Le modèle du dernier appel, tel que l'hôte le nomme.
+    modele: Option<String>,
     /// « dépôt · branche · tâche », jamais l'id d'un backend.
     pub entete: String,
     /// Un repli à dire dans la zone vivante, sur la ligne du texte en cours quand
@@ -192,6 +196,8 @@ pub struct Vue {
     /// de son pas, ses appels `report`, `step_done` et `suggest`. Sinon, elle se dit en sourdine sur
     /// la ligne du haut, et la prose à l'écran est la réponse seule (Lucie, 15 nov.).
     pub montrer_etapes: bool,
+    /// L'équipier a répondu depuis la dernière demande : sa fin n'a rien à dire.
+    repondu: bool,
     /// La dernière ligne de plomberie, dite en sourdine sur la ligne du haut.
     pub discret: Option<String>,
     /// Les propositions de déclarations qui attendent un accord, par leur backend et leur id (tty-16).
@@ -229,6 +235,8 @@ impl Vue {
             graine: 0x5eed,
             politiques: HashMap::new(),
             depuis: Instant::now(),
+            attente_depuis: Instant::now(),
+            modele: None,
             entete: String::new(),
             repli: None,
             maj_entree: false,
@@ -236,6 +244,7 @@ impl Vue {
             appels: Vec::new(),
             propositions: None,
             montrer_etapes: false,
+            repondu: true,
             discret: None,
             propositions_en_attente: Vec::new(),
             non_pour: None,
@@ -267,21 +276,32 @@ impl Vue {
 
     /// L'animation de l'état, s'il en a une.
     pub fn quelle(&self) -> Option<Quelle> {
+        // **Jamais un mot d'état nu** (Lucie, 15 nov.) : au travail l'animation du thème, au repos
+        // celle qui respire ; seuls une erreur et une fin sans réponse se disent par une phrase.
         match &self.etat {
-            Etat::Reflechit => Some(Quelle::Reflechit),
+            Etat::Reflechit | Etat::Ecrit => Some(Quelle::Reflechit),
             Etat::Agit(o) => Some(*self.politiques.get(o).unwrap_or(&Quelle::Lit)),
-            _ => None,
+            _ if self.etat_hote.as_deref() == Some("error") => None,
+            Etat::Fini(_) if !self.repondu => None,
+            _ => Some(Quelle::Repos),
         }
     }
 
     /// Le numéro de l'image à `maintenant`.
     pub fn image(&self, maintenant: Instant) -> u64 {
+        // Le texte qui coule est le mouvement : l'animation se fige (le coût par token, tty-2).
+        if self.etat == Etat::Ecrit {
+            return 0;
+        }
         let ms = self.quelle().map(|q| q.de(&self.theme).ms).unwrap_or(1).max(1);
         (maintenant.saturating_duration_since(self.depuis).as_millis() as u64) / ms
     }
 
     /// Le temps jusqu'à l'image suivante, s'il y a une animation.
     pub fn prochaine_image(&self, maintenant: Instant) -> Option<Duration> {
+        if self.etat == Etat::Ecrit {
+            return None;
+        }
         let ms = self.quelle()?.de(&self.theme).ms.max(1);
         let ecoule = maintenant.saturating_duration_since(self.depuis).as_millis() as u64;
         Some(Duration::from_millis(ms - ecoule % ms))
@@ -387,7 +407,15 @@ impl Vue {
     pub fn trame(&mut self, enveloppe: &Value) {
         let e = &enveloppe["evenement"];
         match e["kind"].as_str().unwrap_or_default() {
-            "LlmCall" => self.changer(Etat::Reflechit),
+            // L'hôte ne dit `LlmCall` qu'au retour du modèle : dès qu'un run part, l'équipier réfléchit.
+            "RunStarted" | "LlmCall" => {
+                // Un appel au modèle part : au départ du run, ou au retour du précédent.
+                self.attente_depuis = Instant::now();
+                if let Some(m) = e["model"].as_str() {
+                    self.modele = Some(m.rsplit('/').next().unwrap_or(m).to_string());
+                }
+                self.changer(Etat::Reflechit);
+            }
             "Token" => {
                 self.changer(Etat::Ecrit);
                 if let Some(t) = e["text"].as_str() {
@@ -396,6 +424,7 @@ impl Vue {
             }
             "ToolCallStarted" => {
                 self.clore();
+                self.attente_depuis = Instant::now();
                 let outil = e["tool"].as_str().unwrap_or("?").to_string();
                 let arguments = match &e["arguments"] {
                     Value::String(a) => a.clone(),
@@ -408,18 +437,22 @@ impl Vue {
                 // garde que la demande et la réponse ; Ctrl-O et le journal gardent le reste.
                 if self.montrer_etapes {
                     self.valider(Genre::Outil, appel.ligne());
-                } else {
+                } else if !matches!(outil.as_str(), "step_done" | "report" | "edit_plan") {
+                    // La plomberie du pas (step_done, report, edit_plan) ne défile pas : elle n'est pas
+                    // un travail que Lucie regarde ; Ctrl-O la garde.
                     self.discret = Some(appel.ligne());
                 }
                 self.appels.push(appel);
                 self.changer(Etat::Agit(outil));
             }
             "ToolCallFinished" => {
+                self.attente_depuis = Instant::now();
                 let ok = e["ok"] == true;
                 let dit = if ok { format!("  fait ({} ms)", e["ms"].as_u64().unwrap_or(0)) } else { format!("  refusé ({})", e["error_kind"].as_str().unwrap_or("erreur")) };
                 if self.montrer_etapes {
                     self.valider(Genre::Outil, dit);
-                } else {
+                } else if !ok {
+                    // Réussi, l'appel garde sa ligne, sans verdict ; refusé, il le dit.
                     let tete = self.discret.take().unwrap_or_default();
                     self.discret = Some(format!("{tete} ·{}", dit.trim_start_matches(' ').replacen("", " ", 1)));
                 }
@@ -468,13 +501,17 @@ impl Vue {
             _ => None,
         };
         self.boite.ligne(l);
+        match (l["from"].as_str(), l["kind"].as_str()) {
+            (Some("supervisor"), Some("request" | "instruction")) => self.repondu = false,
+            (Some("teammate"), Some("report" | "answer" | "question" | "approval" | "proposal" | "message")) => self.repondu = true,
+            _ => {}
+        }
         // **La plomberie de l'équipier** (Lucie, 15 nov.) : une étape faite et la fin du pas ne
         // s'écrivent pas ; l'étape se dit en sourdine sur la ligne du haut, la fin change l'état.
         if !self.montrer_etapes {
             let texte = l["text"].as_str().unwrap_or("");
             // L'hôte ne parle qu'au fil de la tâche (« tâche ouverte : … ») : en sourdine.
             if l["from"] == "host" && l["kind"] != "ended" {
-                self.discret = Some(format!("hôte : {}", texte.lines().next().unwrap_or_default()));
                 return;
             }
             if l["from"] == "teammate" && matches!(l["kind"].as_str(), Some("plan" | "edit_plan" | "started")) {
@@ -482,7 +519,6 @@ impl Vue {
                 return;
             }
             if l["from"] == "teammate" && l["kind"] == "step_done" {
-                self.discret = Some(format!("étape faite : {}", texte.strip_prefix("fait : ").unwrap_or(texte)));
                 return;
             }
             if l["from"] == "host" && l["kind"] == "ended" {
@@ -747,13 +783,11 @@ impl Vue {
             return format!("{c} attend ton accord : proposition ⟨{}⟩ ({}){refus}  {}  ← → Entrée, ou o / n{reste}", p.id, p.chemins.join(", "), self.boutons());
         }
         match &self.etat {
-            Etat::Attend if self.etat_hote.as_deref() == Some("waiting") => format!("{c} attend la boîte"),
-            Etat::Attend if self.etat_hote.as_deref() == Some("error") => format!("{c} en erreur"),
-            Etat::Attend => format!("{c} attend"),
-            Etat::Reflechit => format!("{c} réfléchit…"),
-            Etat::Ecrit => format!("{c} écrit"),
+            Etat::Reflechit | Etat::Ecrit => format!("{c} réfléchit…"),
             Etat::Agit(o) => format!("{c} agit : {o}"),
-            Etat::Fini(pourquoi) => format!("{c} fini : {pourquoi}"),
+            _ if self.etat_hote.as_deref() == Some("error") => format!("{c} l'équipier s'est arrêté sur une erreur : Ctrl-O ou /journal pour voir"),
+            Etat::Fini(_) if !self.repondu => format!("{c} il a fini sans répondre : redemande-lui, ou Ctrl-O pour voir ce qu'il a fait"),
+            Etat::Attend | Etat::Fini(_) => format!("{c} à toi"),
         }
     }
 
@@ -761,8 +795,28 @@ impl Vue {
     /// l'en-tête en sourdine à droite s'il tient.
     pub fn ligne_vivante(&self, largeur: usize, maintenant: Instant) -> Line<'static> {
         let mut ligne = match self.quelle().filter(|_| !self.attend_de_toi()) {
+            // Le texte coule : il est le mouvement ; la ligne d'état n'en dit que le cœur. L'image
+            // entière, figée, redite à chaque ligne qui monte, passait le plafond d'octets par
+            // token (36,7 Ko pour 1 000, plafond 35 ; tty-2).
+            Some(_) if self.etat == Etat::Ecrit => {
+                let texte = anim::couleur(&self.theme.couleurs.texte, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default().add_modifier(Modifier::BOLD);
+                Line::from(Span::styled(format!("{} …", self.coeur()), texte))
+            }
             Some(q) => {
-                let suite = if let Etat::Agit(o) = &self.etat { o.clone() } else { String::new() };
+                // Ce qu'on attend, nommé à côté de l'animation (Lucie, 15 nov.).
+                let n = maintenant.saturating_duration_since(self.attente_depuis).as_secs();
+                let suite = match &self.etat {
+                    Etat::Agit(o) if matches!(o.as_str(), "step_done" | "report" | "edit_plan") => String::new(),
+                    Etat::Agit(o) => {
+                        let cible = self.appels.last().and_then(|a| a.cible()).map(|c| format!(" {c}")).unwrap_or_default();
+                        format!("{o}{cible} travaille… ({n} s)")
+                    }
+                    Etat::Reflechit => match &self.modele {
+                        Some(m) => format!("le modèle répond… ({m}, {n} s)"),
+                        None => format!("le modèle répond… ({n} s)"),
+                    },
+                    _ => String::new(),
+                };
                 anim::ligne(&self.theme, q, self.image(maintenant), self.graine, self.capacites, &suite)
             }
             None => {
@@ -985,8 +1039,8 @@ mod tests {
         ] }));
         let t0 = Instant::now();
         let ligne = |v: &Vue, ms: u64| v.ligne_vivante(120, v.depuis + Duration::from_millis(ms)).spans.iter().map(|s| s.content.to_string()).collect::<String>();
-        assert_eq!(v.quelle(), None);
-        assert!(ligne(&v, 0).starts_with("⛧ attend"));
+        assert_eq!(v.quelle(), Some(Quelle::Repos), "au repos, l'invite respire");
+        assert!(ligne(&v, 0).starts_with("⁅ · ⁆ ⛧ ⁅ · ⁆ LE CERCLE T'ÉCOUTE..."), "{}", ligne(&v, 0));
         v.trame(&json!({ "evenement": { "kind": "LlmCall" } }));
         assert_eq!(v.quelle(), Some(Quelle::Reflechit));
         assert!(ligne(&v, 0).starts_with("⟪ ᚛ᚨᛒ ⛧ ᚜⸸‡ ⟫ INVOCATION DU CODE..."));
@@ -998,8 +1052,9 @@ mod tests {
             assert!(ligne(&v, 0).ends_with(outil) || ligne(&v, 0).contains(&format!(" {outil}")), "le nom de l'outil suit l'animation : {}", ligne(&v, 0));
         }
         v.trame(&json!({ "evenement": { "kind": "Token", "text": "x" } }));
-        assert_eq!(v.quelle(), None, "les tokens coulent : pas d'animation");
-        assert_eq!(v.prochaine_image(t0), None);
+        assert_eq!(v.quelle(), Some(Quelle::Reflechit), "les tokens coulent : l'animation reste, figée");
+        assert_eq!(v.prochaine_image(t0), None, "figée : aucune image de plus pendant que le texte coule");
+        assert_eq!(ligne(&v, 0), ligne(&v, 900));
     }
 
     /// **Les couleurs du thème s'appliquent aux cellules** quand l'agent
@@ -1110,9 +1165,9 @@ mod tests {
     fn an_earlier_end_followed_by_a_request_is_no_longer_finished() {
         let mut v = Vue::new(80, true);
         v.ligne_de_boite(&json!({ "id": "d/t:4", "from": "host", "kind": "ended", "text": "fait sans plan" }));
-        assert!(v.ligne_d_etat().contains("fini"));
+        assert!(matches!(v.etat, Etat::Fini(_)));
         v.ligne_de_boite(&json!({ "id": "d/t:5", "from": "supervisor", "kind": "request", "text": "encore" }));
-        assert!(!v.ligne_d_etat().contains("fini"), "{}", v.ligne_d_etat());
+        assert!(!matches!(v.etat, Etat::Fini(_)), "{}", v.ligne_d_etat());
     }
 
     /// **tty-9** : les genres que l'équipier écrit le plus se disent en français.
@@ -1278,8 +1333,9 @@ mod tests {
 
     /// **La prose à l'écran est la réponse seule** (Lucie, second essai du 15 nov.) : une étape
     /// faite, la fin du pas et les appels de plomberie (`report`, `step_done`, `suggest`) ne
-    /// s'écrivent pas dans l'historique ; la dernière se dit en sourdine sur la ligne du haut. Le
-    /// compte rendu garde sa place, l'état « fini » aussi, et `--etapes` remontre tout.
+    /// s'écrivent pas dans l'historique ; le dernier appel de travail se dit en sourdine sur la ligne
+    /// du haut, sans verdict (Lucie : « "fait sans plan" veut rien dire pour l'user »). Le compte
+    /// rendu garde sa place, et `--etapes` remontre tout.
     #[test]
     fn the_teammate_plumbing_stays_out_of_the_history_unless_asked() {
         let fil = |v: &mut Vue| {
@@ -1303,10 +1359,10 @@ mod tests {
         fil(&mut v);
         let l: Vec<String> = v.prendre_lignes().into_iter().map(|l| l.texte).collect();
         assert_eq!(l, vec!["[toi · demande] lis a.rs", "[équipier · compte rendu] Voici la réponse."], "la demande et la réponse seules (Lucie)");
-        assert_eq!(v.ligne_d_etat(), "⛧ fini : fait sans plan");
-        assert_eq!(v.discret.as_deref(), Some("étape faite : rapport fait au superviseur"));
+        assert_eq!(v.quelle(), Some(Quelle::Repos), "il a répondu : aucun verdict de l'hôte, l'invite respire");
+        assert_eq!(v.discret.as_deref(), Some("» read_file src/a.rs  ⟨1⟩"), "le dernier travail, sans verdict ; la plomberie ne défile pas");
         assert_eq!(v.appels.len(), 3, "les appels restent à Ctrl-O");
-        assert_eq!(dessin(&v, 100, 3).0[0], "étape faite : rapport fait au superviseur", "en sourdine, sur la ligne du haut");
+        assert_eq!(dessin(&v, 100, 3).0[0], "» read_file src/a.rs  ⟨1⟩", "en sourdine, sur la ligne du haut");
 
         let mut e = Vue::new(100, true);
         e.montrer_etapes = true;
@@ -1395,13 +1451,13 @@ mod tests {
 
     #[test]
     fn the_header_says_repo_branch_and_task_on_the_right_when_it_fits() {
-        let mut v = Vue::new(60, true);
+        let mut v = Vue::new(80, true);
         v.entete = "rag3db · tty-3 · tâche parle".into();
         let texte = |v: &Vue, l: usize| v.ligne_vivante(l, v.depuis).spans.iter().map(|s| s.content.to_string()).collect::<String>();
-        let large = texte(&v, 60);
-        assert!(large.starts_with("⛧ attend") && large.ends_with("rag3db · tty-3 · tâche parle"), "{large}");
-        assert_eq!(colonnes(&large), 60);
-        assert_eq!(texte(&v, 20), "⛧ attend", "trop étroit : l'en-tête se tait");
+        let large = texte(&v, 80);
+        assert!(large.starts_with("⁅ · ⁆ ⛧") && large.ends_with("rag3db · tty-3 · tâche parle"), "{large}");
+        assert_eq!(colonnes(&large), 80);
+        assert!(!texte(&v, 20).contains("rag3db"), "trop étroit : l'en-tête se tait");
         assert!(!large.contains("backend"));
     }
 
@@ -1469,6 +1525,73 @@ mod tests {
         assert_eq!(v.touche(Touche::Entree), None);
     }
 
+    /// **L'animation dès que l'équipier part** (Lucie, 15 nov. : « j'ai plus la petite animation de
+    /// chargement ») : l'hôte n'émet `LlmCall` qu'au retour du modèle (il porte `ms` et `finish`) ;
+    /// entre `RunStarted` et lui, l'équipier réfléchit déjà. Relu sur le flux de sa tâche atelier :
+    /// une consigne après la fin du pas, `RunStarted`, puis rien pendant tout le premier appel.
+    #[test]
+    fn a_run_that_starts_plays_the_thinking_animation_until_its_first_model_answer() {
+        let mut v = Vue::new(120, true);
+        v.ligne_de_boite(&json!({ "id": "d/t:1", "from": "host", "kind": "ended", "text": "fait sans plan" }));
+        v.ligne_de_boite(&json!({ "id": "d/t:2", "from": "supervisor", "kind": "instruction", "text": "encore" }));
+        assert_eq!(v.quelle(), Some(Quelle::Repos), "la consigne seule : l'équipier n'est pas encore parti");
+        v.trame(&json!({ "evenement": { "kind": "RunStarted", "name": "chat:x" } }));
+        assert_eq!(v.quelle(), Some(Quelle::Reflechit), "parti, il réfléchit : {}", v.ligne_d_etat());
+        v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "step_done" } }));
+        v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "tool": "step_done", "ok": true } }));
+        v.trame(&json!({ "evenement": { "kind": "RunFinished" } }));
+        assert_eq!(v.quelle(), Some(Quelle::Repos), "le run fini, l'invite au repos : {}", v.ligne_d_etat());
+    }
+
+    /// **Jamais un mot d'état nu** (Lucie, 15 nov. : « pourquoi ça m'écrit "attend", c'est
+    /// horrible, on doit jamais voir "attend" comme ça : que des animations de chargement ou bien
+    /// des trucs vivants ») : quand l'équipier travaille, l'animation du thème ; quand le tour est à
+    /// elle, l'animation de repos ; s'il a fini sans répondre, une phrase qui lui dit quoi faire.
+    #[test]
+    fn the_status_line_never_shows_a_bare_state_word() {
+        let mut v = Vue::new(120, true);
+        let vivante = |v: &Vue| v.ligne_vivante(120, v.depuis).spans.iter().map(|s| s.content.to_string()).collect::<String>();
+        let nu = |t: &str| ["attend", "fini", "fait sans plan", "écrit", "réfléchit"].iter().any(|m| t.contains(m));
+        assert_eq!(v.quelle(), Some(Quelle::Repos), "au départ, l'invite respire : {}", vivante(&v));
+        assert!(vivante(&v).contains("LE CERCLE T'ÉCOUTE") && !nu(&vivante(&v)), "{}", vivante(&v));
+        v.ligne_de_boite(&json!({ "id": "d/t:1", "from": "supervisor", "kind": "request", "text": "lis a.rs" }));
+        v.trame(&json!({ "evenement": { "kind": "RunStarted" } }));
+        v.trame(&json!({ "evenement": { "kind": "Token", "text": "Je " } }));
+        assert_eq!(v.quelle(), Some(Quelle::Reflechit), "le modèle qui écrit s'anime aussi : {}", vivante(&v));
+        v.ligne_de_boite(&json!({ "id": "d/t:2", "from": "teammate", "kind": "report", "text": "Voici." }));
+        v.trame(&json!({ "evenement": { "kind": "RunFinished" } }));
+        v.ligne_de_boite(&json!({ "id": "d/t:3", "from": "host", "kind": "ended", "text": "fait sans plan" }));
+        assert_eq!(v.quelle(), Some(Quelle::Repos), "il a répondu : le tour est à elle, l'invite respire : {}", vivante(&v));
+        assert!(!nu(&vivante(&v)), "{}", vivante(&v));
+        // Fini sans rien dire : une phrase à elle, pas un mot machine.
+        v.ligne_de_boite(&json!({ "id": "d/t:4", "from": "supervisor", "kind": "instruction", "text": "encore" }));
+        v.trame(&json!({ "evenement": { "kind": "RunStarted" } }));
+        v.trame(&json!({ "evenement": { "kind": "RunFinished" } }));
+        v.ligne_de_boite(&json!({ "id": "d/t:5", "from": "host", "kind": "ended", "text": "fait sans plan" }));
+        assert_eq!(v.quelle(), None);
+        assert_eq!(vivante(&v), "⛧ il a fini sans répondre : redemande-lui, ou Ctrl-O pour voir ce qu'il a fait");
+        // En erreur : une phrase aussi.
+        let mut e = Vue::new(120, true);
+        e.etat_de_l_hote(Some("error".into()));
+        assert_eq!(vivante(&e), "⛧ l'équipier s'est arrêté sur une erreur : Ctrl-O ou /journal pour voir");
+    }
+
+    /// **Ce qu'on attend, nommé à côté de l'animation** (Lucie, 15 nov. : « je veux voir
+    /// l'animation et comprendre ce qu'il attend exactement ») : le modèle qui répond, avec son nom
+    /// et le temps écoulé ; l'outil qui travaille, avec sa cible et son temps.
+    #[test]
+    fn what_is_awaited_is_named_beside_the_animation() {
+        let mut v = Vue::new(160, true);
+        let a = |v: &Vue, s: u64| v.ligne_vivante(160, v.attente_depuis + Duration::from_secs(s)).spans.iter().map(|s| s.content.to_string()).collect::<String>();
+        v.trame(&json!({ "evenement": { "kind": "RunStarted" } }));
+        assert!(a(&v, 12).ends_with(" le modèle répond… (12 s)"), "{}", a(&v, 12));
+        v.trame(&json!({ "evenement": { "kind": "LlmCall", "model": "google/gemini-3.8-flash", "ms": 2457 } }));
+        v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "run_command", "arguments": "{\"command\":\"cargo check\"}" } }));
+        assert!(a(&v, 40).ends_with(" run_command cargo check travaille… (40 s)"), "{}", a(&v, 40));
+        v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "tool": "run_command", "ok": true, "ms": 40_000 } }));
+        assert!(a(&v, 3).ends_with(" le modèle répond… (gemini-3.8-flash, 3 s)"), "{}", a(&v, 3));
+    }
+
     fn ligne_b(n: usize, from: &str, kind: &str, extra: Value) -> Value {
         let mut l = json!({ "id": format!("a1/doc:{n}"), "from": from, "kind": kind, "text": format!("texte {n}") });
         if let (Some(o), Some(e)) = (l.as_object_mut(), extra.as_object()) {
@@ -1503,7 +1626,7 @@ mod tests {
         assert_eq!((attente.id.as_str(), texte.as_str(), accord), ("a1/doc:2", "Petit dépôt", None));
         v.ligne_de_boite(&ligne_b(4, "supervisor", "answer", json!({ "reply_to": "a1/doc:2" })));
         v.etat_de_l_hote(Some("waiting".into()));
-        assert_eq!(v.ligne_d_etat(), "⛧ attend la boîte", "plus rien n'attend de toi : l'hôte dit qu'il attend la boîte");
+        assert_eq!(v.quelle(), Some(Quelle::Repos), "plus rien n'attend de toi : l'invite respire");
         v.ligne_de_boite(&ligne_b(5, "teammate", "approval", json!({ "command": "rm -rf build" })));
         let Some(Action::Repondre { accord, .. }) = v.touche(Touche::Car('n')) else { panic!("n refuse") };
         assert_eq!(accord, Some(false));

@@ -166,6 +166,22 @@
         "❬{a}{b} {coeur} {c}❭ ...SUMMONING COMPILER...",
         " {a} ⸢{coeur}⸣ {b}  ...PARSING SOULS..."
       ]
+    },
+    "repos": {
+      "forme": "transmutation",
+      "ms": 260,
+      "glyphes": [
+        "·",
+        "∘",
+        "○",
+        "◯",
+        "○",
+        "∘"
+      ],
+      "coeur": "⛧",
+      "gabarits": [
+        "⁅ {s} ⁆ {coeur} ⁅ {s} ⁆ LE CERCLE T'ÉCOUTE..."
+      ]
     }
   },
   "replis": {
@@ -190,7 +206,10 @@
       "⸣": "]",
       "❬": "<",
       "❭": ">",
-      "⸸": "+"
+      "⸸": "+",
+      "À": "A",
+      "É": "E",
+      "È": "E"
     }
   },
   "code": {
