@@ -7,12 +7,13 @@
 %% param: allow_create bool = false -- create permis (éteint par défaut, comme archive).
 %% param: instruction string! -- Ce que l'étiquette veut dire, pour le modèle ; sans apostrophe droite (substituée entre apostrophes dans la configuration du Decide ; la typographique ’ passe).
 %% param: search_options json! -- Les options de la recherche de candidates (limit…).
+%% param: context string = "" -- Ce qui précède, montré au modèle avant la section, jamais rangé (archive, param context).
 %% param: proposed json = [] -- Les fiches proposées par les sections précédentes du même document ({name, about, state, via}), portées par le ForEachNode d'archive (carry) : elles ne sont pas encore cherchables, la transaction de l'outil ne les a pas validées.
 %% result: decided.result
 
 graph LR
     recall["GraphNode(graph='@builtin:tools/search_structured.mmd', target='Fiche', query=$element.text, options=$search_options)"]
-    prepare["RhaiNode(script_id=archive_candidates, inputs='section,candidates,allow_create,proposed', section=$element, candidates=$candidates, allow_create=$allow_create, proposed=$proposed)"]
+    prepare["RhaiNode(script_id=archive_candidates, inputs='section,candidates,allow_create,proposed,context', section=$element, candidates=$candidates, allow_create=$allow_create, proposed=$proposed, context=$context)"]
     decide["Decide(via='llm', labels_from='candidates', labels='none|create', field='prompt', as='verdict', name_as='subject', about_as='subject_about', max_tokens=4096, instruction='$instruction')"]
     decided["RhaiNode(script_id=archive_decided, inputs='allow_create,proposed', allow_create=$allow_create, proposed=$proposed)"]
     recall -->|result:value| prepare

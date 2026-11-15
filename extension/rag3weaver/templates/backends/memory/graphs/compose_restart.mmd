@@ -1,0 +1,14 @@
+%% tool: compose_restart
+%% description: Compose le contexte qui repart après une compaction (page du 15 novembre 2026, « la compaction est l'archiviste »), dans un budget en jetons, par priorité : l'identité (le dernier apport identity de sa fiche), la fiche de tâche (sa phrase, son dernier plan), le bilan (une ligne par L1 de la session, dans l'ordre des tours : `turns a-b → fiche:<nom>`), les L1 de la session dans l'ordre où ils ont été pris (la fiche en marge), puis les L1 des autres sur les mêmes fiches, les plus récents d'abord. Un L1 entre en entier ou reste au rappel (left_to_recall), jamais coupé. Les jetons sont estimés (ceil(caractères / 4), rendu dans estimate). Lecture seule : rien n'est écrit, le bilan rendu s'écrit par put_apport s'il le faut. Les 2000 apports les plus récents des fiches touchées sont lus.
+%% param: sources json = [] -- Les chemins des L0 de la session (sources/…), une liste non vide : leurs L1 sont ceux de la session.
+%% param: identity string = "" -- La fiche d'identité de l'agent (agent:<clé>) ; vide, pas de section identité.
+%% param: task_fiche string = "" -- La fiche de la tâche courante ; vide, pas de section tâche.
+%% param: budget_tokens int = 100000 -- Le budget du contexte rendu, en jetons estimés.
+%% result: rendre.result
+
+graph LR
+    params["RhaiNode(script_id=compose_restart_params, inputs='sources,identity,task_fiche,budget_tokens', sources=$sources, identity=$identity, task_fiche=$task_fiche, budget_tokens=$budget_tokens)"]
+    plan["PlanNode(plan='@builtin:backends/memory/plans/compose_restart.json')"]
+    rendre["RhaiNode(script_id=compose_restart, inputs='sources,identity,task_fiche,budget_tokens', sources=$sources, identity=$identity, task_fiche=$task_fiche, budget_tokens=$budget_tokens)"]
+    params -->|result:params| plan
+    plan -->|rows:value| rendre

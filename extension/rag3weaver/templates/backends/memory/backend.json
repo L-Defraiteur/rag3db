@@ -700,7 +700,9 @@
     "gestes_scinder": "scripts/gestes_scinder.rhai",
     "gestes_rejoindre": "scripts/gestes_rejoindre.rhai",
     "gestes_plan": "scripts/gestes_plan.rhai",
-    "gestes_fin": "scripts/gestes_fin.rhai"
+    "gestes_fin": "scripts/gestes_fin.rhai",
+    "compose_restart_params": "scripts/compose_restart_params.rhai",
+    "compose_restart": "scripts/compose_restart.rhai"
   },
   "tools": {
     "put_memory": {
@@ -930,6 +932,9 @@
     },
     "whois": {
       "graph": "graphs/whois.mmd"
+    },
+    "compose_restart": {
+      "graph": "graphs/compose_restart.mmd"
     },
     "confirmer_fiche": {
       "graph": "graphs/confirmer_fiche.mmd"

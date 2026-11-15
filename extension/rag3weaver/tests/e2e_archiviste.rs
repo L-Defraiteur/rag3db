@@ -542,6 +542,37 @@ fn le_decide_de_l_archiviste_demande_le_plafond_declare() {
     assert_eq!(request["max_tokens"], json!(4096), "le plafond déclaré par archive_decide.mmd : {}", request["max_tokens"]);
 }
 
+/// **Le contexte d'un envoi est montré au modèle et jamais rangé** (15 novembre 2026, le banc
+/// des fenêtres longues) : `context` porte ce qui précède (les résumés des fenêtres d'avant, le
+/// chevauchement, « fenêtre n/N ») ; il est dans le prompt de chaque Decide, avant la section, et
+/// n'est écrit ni dans le L0 ni dans aucun L1.
+#[test]
+#[ignore]
+fn le_contexte_d_un_envoi_est_montre_au_decide_et_jamais_range() {
+    const CONTEXTE: &str = "fenêtre 2 sur 3, tours 40-79 ; CONTEXTEMARQUE la fenêtre d'avant a rangé la reprise du journal.";
+    let serveur = FakeServer::start_sequence(vec![etiquette_decrite("create", "La reprise du journal", "Comment le moteur rejoue son journal à l’ouverture."), etiquette("none"), etiquette("none")]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    let r = appel(&b, "archive", json!({"titre": "Journal du 26", "contenu": DOCUMENT, "jour": "2026-10-26", "allow_create": true, "context": CONTEXTE}));
+    assert_eq!(r["result"]["errors"], json!([]), "{r}");
+    // Dans chaque Decide, avant la section.
+    for i in 0..3 {
+        let messages = serde_json::from_str::<Value>(&serveur.request.recv().unwrap()).unwrap()["messages"].to_string();
+        let (c, s) = (messages.find("CONTEXTEMARQUE"), messages.find("Section «"));
+        assert!(c.is_some() && s.is_some() && c < s, "Decide {i} : le contexte est dans le prompt, avant la section : {messages}");
+    }
+    // Ni dans le L0, ni dans un L1.
+    let source = dir.path().join("templates/backends/memory/fichiers").join(CHEMIN);
+    let l0 = std::fs::read_to_string(&source).unwrap_or_else(|e| panic!("{} : {e}", source.display()));
+    assert!(!l0.contains("CONTEXTEMARQUE"), "le contexte n'est pas dans le L0 : {l0}");
+    let apports = apports_de(&b, "La reprise du journal");
+    assert_eq!(apports.len(), 1, "{apports:?}");
+    assert!(apports.iter().all(|a| !a.to_string().contains("CONTEXTEMARQUE")), "le contexte n'est dans aucun L1 : {apports:?}");
+}
+
 /// **Un apport recopié sort des rappels par défaut, et se voit en ôtant le filtre** (15 novembre 2026,
 /// les gestes de Lucie : scinder ou rejoindre une fiche recopie ses apports sous la fiche issue, et
 /// l'exemplaire d'origine reste comme provenance). L'état `recopied` (la transition `recopy` du cycle
