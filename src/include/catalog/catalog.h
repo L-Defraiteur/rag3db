@@ -137,8 +137,14 @@ public:
     bool isIndexChangedAfterSnapshotOf(const transaction::Transaction* transaction,
         common::table_id_t tableID, const std::string& indexName) const;
     // Le nom de la table (ou du groupe de relations) qui porte `tableID`, si une autre transaction
-    // en a changé le schéma sans que l'instantané de `transaction` le voie ; vide sinon.
+    // en a changé la disposition des colonnes (ou l'a retirée) sans que l'instantané de
+    // `transaction` le voie ; vide sinon, et vide pour un changement qui garde les colonnes (un
+    // commentaire, un index).
     std::string tableChangedAfterSnapshotOf(const transaction::Transaction* transaction,
+        common::table_id_t tableID) const;
+    // Le nom de l'entrée qui porte `tableID`, si sa tête est une version que l'instantané de
+    // `transaction` ne voit pas, quel que soit le changement ; vide sinon.
+    std::string changedTableEntryAfterSnapshotOf(const transaction::Transaction* transaction,
         common::table_id_t tableID) const;
     // Check if index exists for given table and property
     bool containsIndex(const transaction::Transaction* transaction, common::table_id_t tableID,

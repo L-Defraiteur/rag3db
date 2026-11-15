@@ -40,6 +40,8 @@ public:
     // version que l'instantané de `transaction` ne voit pas ; vide sinon.
     std::string nameChangedAfterSnapshotOf(const transaction::Transaction* transaction,
         const std::function<bool(const CatalogEntry&)>& matches);
+    // La tête de la chaîne de cette entrée, quelle que soit la transaction ; nul si aucune.
+    CatalogEntry* getHeadEntry(const std::string& name);
     common::oid_t createEntry(transaction::Transaction* transaction,
         std::unique_ptr<CatalogEntry> entry);
     void dropEntry(transaction::Transaction* transaction, const std::string& name,

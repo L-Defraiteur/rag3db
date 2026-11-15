@@ -337,7 +337,44 @@ std::vector<IndexCatalogEntry*> Catalog::getIndexEntries(const Transaction* tran
     return result;
 }
 
+// Les colonnes de deux versions d'une table sont disposées pareil : mêmes propriétés, dans le
+// même ordre, de même type, aux mêmes numéros de colonne. Un commentaire ou un index ne change que
+// l'entrée, pas les lignes.
+static bool sameColumnLayout(const TableCatalogEntry& a, const TableCatalogEntry& b) {
+    if (a.getNumProperties() != b.getNumProperties()) {
+        return false;
+    }
+    for (idx_t i = 0; i < a.getNumProperties(); ++i) {
+        const auto& left = a.getProperty(i);
+        const auto& right = b.getProperty(i);
+        if (left.getName() != right.getName() || left.getType() != right.getType() ||
+            a.getColumnID(i) != b.getColumnID(i)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 std::string Catalog::tableChangedAfterSnapshotOf(const Transaction* transaction,
+    table_id_t tableID) const {
+    const auto name = changedTableEntryAfterSnapshotOf(transaction, tableID);
+    if (name.empty()) {
+        return name;
+    }
+    const auto* head = tables->getHeadEntry(name);
+    if (head == nullptr || head->isDeleted() || !tables->containsEntry(transaction, name)) {
+        return name;
+    }
+    const auto* seen = tables->getEntry(transaction, name);
+    if (head->getType() != seen->getType() ||
+        !sameColumnLayout(head->constCast<TableCatalogEntry>(),
+            seen->constCast<TableCatalogEntry>())) {
+        return name;
+    }
+    return "";
+}
+
+std::string Catalog::changedTableEntryAfterSnapshotOf(const Transaction* transaction,
     table_id_t tableID) const {
     return tables->nameChangedAfterSnapshotOf(transaction, [tableID](const CatalogEntry& entry) {
         if (entry.getOID() == tableID) {
