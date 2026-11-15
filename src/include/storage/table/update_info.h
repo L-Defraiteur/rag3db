@@ -33,11 +33,17 @@ struct VectorUpdateInfo {
     VectorUpdateInfo()
         : version{common::INVALID_TRANSACTION}, rowsInVector{}, numRowsUpdated(0), prev(nullptr),
           next{nullptr}, data{nullptr} {}
+    // Le tampon d'une version naît à quelques lignes et double à la demande, jusqu'au vecteur
+    // entier (UpdateInfo::update) : créé à pleine capacité, il gardait 2 048 lignes de pool pour
+    // une seule changée, jusqu'au point de reprise (ticket du pool qui sature sous vingt
+    // écrivains).
+    static constexpr uint64_t INITIAL_CAPACITY = 4;
+
     VectorUpdateInfo(MemoryManager& memoryManager, const common::transaction_t transactionID,
         common::LogicalType dataType)
         : version{transactionID}, rowsInVector{}, numRowsUpdated{0}, prev{nullptr}, next{nullptr} {
         data = ColumnChunkFactory::createColumnChunkData(memoryManager, std::move(dataType), false,
-            common::DEFAULT_VECTOR_CAPACITY, ResidencyState::IN_MEMORY);
+            INITIAL_CAPACITY, ResidencyState::IN_MEMORY);
     }
 
     std::unique_ptr<VectorUpdateInfo> movePrev() { return std::move(prev); }
