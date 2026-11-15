@@ -459,10 +459,52 @@ fn executer(c: crate::commandes::Commande, terminal: &mut ratatui::DefaultTermin
             Some(Err(e)) => vue.note(&format!("le contexte ne se lit pas : {e}")),
             None => vue.note("la tâche n'a pas encore de worktree : pas de contexte"),
         },
-        Commande::Shell(cmd) => vue.note(&format!("!{cmd} : pas encore lancé")),
+        Commande::Shell(cmd) => lancer_une_commande(&cmd, terminal, vue, agent, ep, tache, journal)?,
         Commande::Inconnue(n) => vue.note(&format!("commande inconnue : /{n} — /aide les liste")),
     }
     Ok(None)
+}
+
+/// **Une commande `!`** (tty-13) : l'écran lui passe, dans un pseudo-terminal à
+/// elle (un sudo y lit son mot de passe, sans écho) ; puis la zone vivante
+/// revient, et sa sortie part à l'équipier en consigne.
+fn lancer_une_commande(cmd: &str, terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, journal: &mut Option<Journal>) -> Result<(), String> {
+    use std::io::Write;
+    let dossier = dossier_de_commande(manifeste_de_tache(agent, ep, tache).as_deref());
+    vue.note(&format!("» !{cmd}  (dans {})", dossier.display()));
+    dessiner(terminal, vue, &|_, _| None, journal.as_mut())?;
+    // L'écran à la commande : la zone vivante s'efface, le curseur va à son début,
+    // le collage en bloc et le protocole clavier de kitty se rendent le temps qu'elle tourne.
+    let zone = terminal.get_frame().area();
+    terminal.clear().map_err(|e| e.to_string())?;
+    terminal.set_cursor_position((0, zone.y)).map_err(|e| e.to_string())?;
+    terminal.show_cursor().map_err(|e| e.to_string())?;
+    let _ = ratatui::crossterm::execute!(std::io::stdout(), DisableBracketedPaste);
+    if vue.maj_entree {
+        let _ = ratatui::crossterm::execute!(std::io::stdout(), PopKeyboardEnhancementFlags);
+    }
+    let taille = terminal.size().map_err(|e| e.to_string())?;
+    let mut ecran = std::io::stdout();
+    let resultat = crate::coquille::lancer(cmd, &dossier, taille.width, taille.height, 0, &mut ecran);
+    let _ = write!(ecran, "\r\n");
+    let _ = ecran.flush();
+    let _ = ratatui::crossterm::execute!(std::io::stdout(), EnableBracketedPaste);
+    if vue.maj_entree {
+        let _ = ratatui::crossterm::execute!(std::io::stdout(), PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES));
+    }
+    *terminal = ratatui::Terminal::with_options(ratatui::backend::CrosstermBackend::new(std::io::stdout()), TerminalOptions { viewport: Viewport::Inline(zone.height) }).map_err(|e| e.to_string())?;
+    match resultat {
+        Ok(r) => {
+            let code = r.code.map(|c| format!("code {c}")).unwrap_or_else(|| "arrêtée par un signal".into());
+            vue.note(&format!("!{cmd} : {code} ; la sortie part à l'équipier"));
+            let genre = vue.genre_d_un_envoi_du_terminal();
+            if let Err(e) = client::poster(agent, ep, "/ide/teammate/mailbox", &json!({ "backend": tache.depot.id, "task": tache.task, "kind": genre, "text": crate::coquille::consigne(cmd, &dossier, &r) })) {
+                vue.note(&format!("la sortie est refusée : {e}"));
+            }
+        }
+        Err(e) => vue.note(&format!("!{cmd} : {e}")),
+    }
+    Ok(())
 }
 
 /// « contexte : 12 345 / 1 048 576 jetons (1,2 %) — historique 60 %, outils 25 % ».
