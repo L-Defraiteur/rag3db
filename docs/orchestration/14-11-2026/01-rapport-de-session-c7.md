@@ -1451,3 +1451,9 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   master a2f9c9b65, binaire gardé. Verts : transaction_test 385, le témoin du COMMENT, le témoin d'index ;
   deux rouges à lire (ChangesCommittedDuringACreateAreSeen 1/12 connu, create-rel-table-holds-writers tour 1).
   Recommencements 20 à 60 par passe, venus des ADD ; ADD 14 à 152 ms sous la borne.
+- **Le cœur, 11 h 2x — le SIGSEGV est de master** : sur a2f9c9b65 sans le lot, tour 1 le SIGSEGV du
+  dictionnaire au point de reprise (ticket du 14), tour 2 la même pile que sur le lot (readCompressedValues
+  ToVector sous NodeGroup::scan), tour 3 fini. Ticket réécrit avec les deux piles et la piste (f5c38776c) : à
+  la file du cœur après la bissection du CREATE. (a) create-rel-table-holds-writers 103,5 ms contre 98,2, un
+  tour sur six : bruit de borne. (b) rows-moved-during-create-found 2/24 master contre 6/24 lot : 96 tours de
+  chaque en cours ; le lot ne pousse pas avant ce chiffre.
