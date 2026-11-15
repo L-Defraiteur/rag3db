@@ -1794,3 +1794,9 @@ Parité finie ; G a le « va » du banc pour 7879 depuis 20 h 23.
 658a613e0 (8c34a3b07), rejeu relancé 20 h 24, vert vers 20 h 45. **Le code de master est tenu jusqu'à son « poussé »** : archi (nom), cœur
 (SIGSEGV), ED (llm-sans-feature, écrivain), hotfixs (extension dite) attendent. G coupe les services après le « va » d'ED (sa passe
 les lit) et le rejeu de 96 (qui lit 7879), vers 21 h.
+20 h 32 : ED a donné son « va » à G à 20 h 27 (passe finie 20 h 25) ; sa passe épinglée sur 5ed5d1fc9 est verte, la tête n'est pas encore
+au banc : les CONSUMES perdus (−4 080, dont 2 634 entre deux scopes non réécrits, cibles à noms communs) se lisent par une sonde
+bout à bout après le « fini » de G. Archi : un témoin de temps rougi sous charge (usages pendant un écrivain) → ticket chez recherche,
+tranché en rapport (≤ 4 × sans écrivain, garde 500 ms) dans son lot de gardes (ba6963b45), après le nom d'archi. tty : lot /nom et
+l'affichage de name. Chaîne post-96 : archi (nom) → cœur → ED (llm) → hotfixs → recherche → G ×4 → arbre 2b′ + recherche 2b-C →
+codeparsers (3 lots) → embarquement (repli-activation) ; l'écrivain au vert du banc ; segment de 96 au troisième tour.
