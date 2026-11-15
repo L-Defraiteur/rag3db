@@ -1457,3 +1457,15 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   la file du cœur après la bissection du CREATE. (a) create-rel-table-holds-writers 103,5 ms contre 98,2, un
   tour sur six : bruit de borne. (b) rows-moved-during-create-found 2/24 master contre 6/24 lot : 96 tours de
   chaque en cours ; le lot ne pousse pas avant ce chiffre.
+
+## 11 h 3x — le mot de Lucie : on ne l'attend plus ; la fenêtre du matin part
+
+- **Lucie, 11 h 3x** : « une fois pour toutes, pas hésiter » — tuer et relancer l'hôte, la mémoire, les services
+  autant qu'il faut, sans attendre son heure ; seul ce qui demande sudo reste à elle. En mémoire. La fenêtre
+  part : G pose le binaire 26a091474 sur 373b5477b au portable, 96 monte M8 sur sa mémoire (instantané et
+  RETOUR.sh d'abord, les gestes à Lucie), embarquement mesure ses 904 s pendant que G arrête le 7879.
+- Elle demande la commande lavapipe et les arguments du choix de jackwener/browsermcp (étude d'archi).
+- **Lucie, 11 h 3x** : lavapipe posé à luciepc (`vulkan-swrast`, llvmpipe LLVM 23.1.4) — le repli `cpu` des tests
+  y existe ; **le socle du pont navigateur est tranché : fork de jackwener/browsermcp, hôte Node remplacé par du
+  Rust** (archi commence la bibliothèque `navigateur`, rouge d'abord sur un faux pont ; le fork distant et
+  l'extension attendent son mot sur le compte). En mémoire.
