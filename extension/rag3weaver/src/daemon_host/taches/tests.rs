@@ -113,12 +113,13 @@ fn la_base_principale_n_est_jamais_ecrite_par_la_tache() {
 #[test]
 fn une_tache_se_nomme_a_sa_creation() {
     let (_d, host, _manifeste, parent) = banc();
-    let tache = host.ouvrir_une_tache_nommee(&parent, "ombre", Some("Ombre")).expect("la tâche s'ouvre nommée");
+    let tache = host.ouvrir_une_tache_nommee(&parent, "ombre", Some("Ombre"), Some("Laconique.")).expect("la tâche s'ouvre nommée");
     assert_eq!(tache.nom_de_l_agent.as_deref(), Some("Ombre"), "gardé au registre");
     let h = host.hosted(&tache.manifest).unwrap();
     assert_eq!(host.with_backend(&h, |b| b.prepared().nom_de_l_agent()).unwrap(), "Ombre", "lu par le backend de la tâche");
+    assert_eq!(host.with_backend(&h, |b| b.prepared().persona_de_l_agent()).unwrap().as_deref(), Some("Laconique."), "la persona de la tâche, lue par son backend");
     for faux in ["", "  ", "deux\nlignes"] {
-        let e = host.ouvrir_une_tache_nommee(&parent, "faux", Some(faux)).expect_err("refusé");
+        let e = host.ouvrir_une_tache_nommee(&parent, "faux", Some(faux), None).expect_err("refusé");
         assert!(e.contains("agent.name") || e.contains("agent_name"), "le refus nomme le champ : {e}");
         assert!(host.tache(&parent, "faux").is_none(), "rien n'est ouvert");
     }
