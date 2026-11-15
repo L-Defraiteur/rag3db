@@ -1638,3 +1638,8 @@ entière et check_features dans leur target ; master rejoué dans un target à l
 maintenant un target par worktree et rougit si le crate n'a pas été compilé depuis l'arbre du lot ; tty-15 rejoué ainsi.
 tty, 18 h 26 : **tty-15 sur master à 677d361ad** (7 commits : sous un tmux qui permet les touches étendues en CSI u, le terminal demande
 le mode 1 ; l'indication garde son début ; les nouveautés retrouvent leurs lignes vides ; gmail, 0 attribution). tty-16 suit.
+Arbre, 18 h 30 : la répétition sur c5ec47cc4 verte au banc, mais le repassage n'a pas tout joué (le pilote lisait `busy` comme une fin :
+code-lourd arrêté après 1 paquet sur 4) et code-principal a échoué sur un index arrière faux de LOCKS (les instantanés de la nuit
+sont d'avant la réparation de hotfixs). Rejouée depuis 18 h 28 : copies neuves réparées avant 1b, attente sur la dernière ligne du
+journal. Part fermée confirmée : 731 s et 569 s. Garde pour la vraie fenêtre : check_rel_directions avant 1b sur chaque base.
+Repassage complet ~35 min à code-lourd.
