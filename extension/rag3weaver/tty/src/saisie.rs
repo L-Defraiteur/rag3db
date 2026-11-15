@@ -59,6 +59,13 @@ impl Saisie {
         self.texte[i..].graphemes(true).next().map(|g| i + g.len()).unwrap_or(i)
     }
 
+    /// Remplace le début de la saisie, jusqu'au curseur, par `debut` ; le
+    /// curseur passe après lui, la suite reste (une complétion, tty-13).
+    pub fn remplacer_debut(&mut self, debut: &str) {
+        self.texte = format!("{debut}{}", &self.texte[self.curseur..]);
+        self.curseur = debut.len();
+    }
+
     /// Un graphème vers la gauche.
     pub fn gauche(&mut self) {
         self.curseur = self.precedent(self.curseur);
