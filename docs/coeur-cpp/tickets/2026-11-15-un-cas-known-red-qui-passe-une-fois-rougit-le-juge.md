@@ -1,7 +1,7 @@
 # Un cas known_red qui passe une fois par effet d'ordre rougit le juge
 
 - **État** : ouvert (15 novembre 2026, cœur c++, au mot de c7)
-- **Famille** : outillage des tests
+- **Famille** : moteur (le juge des tests du moteur)
 - **Gravité** : gêne (un lot vert se lit rouge ; sans le mot de c7, il ne pousse pas)
 - **Atteignable en service** : non
 - **Touche rag3weaver** : non
