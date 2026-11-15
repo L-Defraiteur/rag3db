@@ -1151,3 +1151,11 @@ Binaire de luciepc depuis 5b8f8994f en essai, pose vers 14 h 55.
 G et hotfixs, 14 h 40 : l'hôte de luciepc porte **5b8f8994f** sur 373b5477b depuis 14 h 40 m 14 s (ancêtres 262be6fc4, 26a091474 vérifiés ;
 md5 f7133291 ; lié à rag3db-build-373b5477b ; /sante répond). code-lourd et code-principal ne fabriquent plus d'orphelins par
 ce chemin. Les deux postes : portable 26a091474, luciepc 5b8f8994f, lib 373b5477b partout.
+tty, 14 h 45 : tty-12 sur master à **87795452d** (4 commits, 471e2314f → 87795452d, gmail, 0 attribution ; la CI de rag3weaver joue
+le --check des palettes). tty-13 suit en pile (PILE_AVANT=87795452d). Ensuite : CI (hotfixs, au « prêt »), fenêtre de
+formatage, archi (relai), 96, lucivy, ED (1), embarquement, arbre.
+tty, 14 h 45 : tty-13 en pile avec PILE_AVANT=900ce167f (la tête de tty-12 **avant** repose) : la garde a dit ARRÊT, « la pile a
+changé » — master avait du code (backend.rs, chat.rs, model_source.rs) que cette tête n'avait pas. Juste : la pile se rebâtit
+sur la tête atterrie. tty-13 reposé seul sur 87795452d (cx-tty-13-2), rejeu court, mode simple.
+tty, 14 h 48 : tty-13 sur master à **ccfa7efea** (17 commits, e7363428b → ccfa7efea, gmail, 0 attribution). La file : CI (hotfixs,
+au « prêt »), fenêtre de formatage, archi (relai), 96, lucivy, ED (1), embarquement, arbre.
