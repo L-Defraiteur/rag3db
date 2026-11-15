@@ -42,6 +42,18 @@ Il compte, sur le repassage d'une source de N fichiers, les instructions envoyé
 doivent croître avec le nombre de paquets, pas avec N. Rouge attendu sur la tête du lot. Puis la
 mesure de banc rejouée, avec pour cible un facteur au plus deux sur le parent.
 
+## Où en est le lot (15 novembre 2026, 16 h)
+
+- Branche `ecrivain-grain-du-paquet`, posée sur l'écrivain bff6c7409, pas encore en file.
+  - Le témoin 15 a été vu rouge sur d0f236b48 : 862 instructions pour 40 fichiers, 1 622 pour 80, environ
+    19 par fichier.
+  - Il est vert sur 7865db933 : une lecture par table et par source pour le lot, les décisions en mémoire,
+    un UNWIND par table, l'oubli des arêtes par paquet et la recopie par relation.
+- **Derrière, pas pour la bascule** (arbre principal, 15 novembre) : l'écriture d'un paquet sous une
+  transaction. Pendant un repassage base ouverte, les lignes `File` d'un paquet manquent un instant entre
+  leur retrait et leur ingestion, et `read_file` peut dire « non indexé ». La transaction supprime ce
+  clignement.
+
 ## Ce qu'il faut pour le fermer
 
 Le témoin rouge puis vert, et la mesure de banc rejouée sous la cible.
