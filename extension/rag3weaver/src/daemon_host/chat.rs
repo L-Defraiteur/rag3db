@@ -117,7 +117,8 @@ pub fn system_prompt_du_backend(kind: Option<crate::backend::BackendKind>, mode:
         .unwrap_or_else(|| "Tu es un agent de code sur un dépôt indexé.".to_string());
     // « par offset » (Lucie, 15 novembre 2026) : les deux façons de modifier un fichier.
     let modifier = "Pour modifier un fichier : un texte unique (edit_file, replace_text), ou les lignes a à b \
-                    (replace_lines, insert_lines) après les avoir lues ; un fichier neuf : write.";
+                    (replace_lines, insert_lines) après les avoir lues ; un fichier neuf : write. Une demande de \
+                    fichier s'écrit dans le fichier : ta réponse dit ce que tu as écrit, elle ne le remplace pas.";
     format!("{agent} {modifier}\n\n{declare}")
 }
 
