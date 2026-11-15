@@ -141,7 +141,8 @@ pub fn completer(texte: &str, s: &Sources) -> Option<Completion> {
             let (m, c) = completer_mot(mot, &liste, false)?;
             (format!("{avant}{m}"), c)
         }
-    } else if let Some(reste) = texte.strip_prefix('!') {
+    } else {
+        let reste = texte.strip_prefix('!')?;
         if !reste.contains(char::is_whitespace) {
             let (m, c) = completer_mot(reste, &s.executables, true)?;
             (format!("!{m}"), c)
@@ -149,8 +150,6 @@ pub fn completer(texte: &str, s: &Sources) -> Option<Completion> {
             let (m, c) = completer_mot(mot, &s.fichiers, true)?;
             (format!("{avant}{m}"), c)
         }
-    } else {
-        return None;
     };
     Some(Completion { texte: remplace, candidats })
 }
@@ -199,7 +198,7 @@ mod tests {
         assert_eq!(completer("/theme cy", &s), Some(Completion { texte: "/theme cyb".into(), candidats: vec!["cyberpunk".into(), "cyborg".into()] }));
         assert_eq!(completer("/theme f", &s), Some(Completion { texte: "/theme foret".into(), candidats: vec![] }));
         assert_eq!(completer("/tache essai-", &s), Some(Completion { texte: "/tache essai-".into(), candidats: vec!["essai-ide".into(), "essai-tty".into()] }));
-        assert_eq!(completer("/e", &s).map(|c| c.candidats), Some(vec!["effacer".into()]).filter(|_| false).or(Some(vec![])), "une seule commande en e : complétée");
+        assert_eq!(completer("/e", &s).map(|c| c.candidats), Some(Vec::<String>::new()), "une seule commande en e : complétée, sans candidats");
         assert_eq!(completer("/e", &s).map(|c| c.texte), Some("/effacer ".into()));
         assert_eq!(completer("/zz", &s), None, "rien à proposer");
         assert_eq!(completer("bonjour", &s), None, "un envoi ne se complète pas");

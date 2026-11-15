@@ -57,8 +57,10 @@ fn connaitre(agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, filtre: &Mutex<O
     }
 }
 
-/// Comment la vue a fini (tty-13).
+/// Comment la vue a fini (tty-13). Une seule fin par séance : la taille du
+/// thème dans `Changer` ne pèse sur rien.
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum Fin {
     Quitter,
     /// `/tache` ou `/depot` : la vue repart sur une autre tâche ou un autre
@@ -469,7 +471,7 @@ pub fn contexte_dit(c: &Value) -> String {
         let s = n.to_string();
         let mut out = String::new();
         for (i, ch) in s.chars().enumerate() {
-            if i > 0 && (s.len() - i) % 3 == 0 {
+            if i > 0 && (s.len() - i).is_multiple_of(3) {
                 out.push('\u{202f}');
             }
             out.push(ch);
