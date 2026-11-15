@@ -1,9 +1,8 @@
 # La CI de master est rouge depuis le 18 octobre : un `<cassert>` dans geo et le format clang
 
-- **État** : ouvert (relu par hotfixs le 15 novembre 2026, 13 h). Le point 1 est fait et vert. Le point 2
-  reste rouge, et un troisième job est rouge, `shell test`. Surtout, **le « CI Workflow » de master ne rend
-  plus aucun verdict depuis le 14 novembre, 15 h 27** : voir « L'état au 15 novembre » en fin de page.
-  Relevé par l'orchestration le 25 octobre 2026
+- **État** : fermé (15 novembre 2026, 17 h 31, hotfixs) — le premier run tout vert du « CI Workflow » sur master
+  depuis le 18 octobre : 43733500502, sur 6e94ff627 (voir « La fermeture » en fin de page). Relevé par
+  l'orchestration le 25 octobre 2026
 - **Gravité** : aucun run vert du « CI Workflow » dans l'historique récent : les autres jobs ne
   disent plus rien de master tant que ces deux-là rougissent.
 - **Atteignable en service** : non (contrôle de CI).
@@ -157,3 +156,24 @@ novembre à 15 h 27**, pour trois raisons :
    n'existe : un `if:`, ou une machine GitHub. Sinon, chaque run de master se bloque de nouveau au premier
    de ces jobs.
 3. Lire ensuite les deux rouges du premier run complet, `code format` et `shell test` (Build).
+
+## La fermeture (hotfixs, 15 novembre 2026, 17 h 31)
+
+**Le run 43733500502 sur 6e94ff627 est vert** : sanity checks, python lint check, code format et shell test, les
+jobs self-hosted sautés tant que `RAG3DB_SELF_HOSTED` n'est pas posée. Deux lots y ont mené :
+- **le lot CI, fa15e5fa3, 11 commits** :
+  - les 18 jobs self-hosted derrière `vars.RAG3DB_SELF_HOSTED` ;
+  - python lint sur `ubuntu-24.04` (sur `macos-14`, un dépôt privé sans minutes macOS annulait le job) ;
+  - `rustup component add rustfmt` avant `cargo fmt` : la chaîne épinglée 1.98.1 s'installe sans rustfmt, et le job
+    de format mourait avant de juger ;
+  - plus de commit de format poussé par la CI sur une branche (EndBug retiré, « Fail if any change » partout) ;
+  - cinq défauts que GCC refusait sous `-Werror` : les agrégats `ListLambdaBindData` et `DatabaseHeader`, la
+    fonction morte de `list_column.cpp`, le paramètre `tableEntry`, le `<cstdint>` d'`in_mem_overflow_buffer.h`.
+    Ils ont été trouvés par une compilation complète de `src/` sous les options de la CI, avec un témoin ;
+  - huit en-têtes attendus des tests du shell, élargis à « rag3db is cool », un reste du renommage ;
+- **le format, 9ea2e2408** : 25 fichiers seulement, pas 300. Le job ne jouait pas depuis le 18 octobre à cause de
+  rustfmt. Le diff de la 18 et de cargo fmt a été repris en un commit pur, prouvé format pur, avec un rejeu (bâti et
+  une suite par cible touchée).
+
+La suite est au ticket `2026-11-15-un-push-de-docs-annule-le-run-de-code-en-attente.md` : un push de docs remplaçait
+le run de code en attente. Le run sur le format lui-même a été annulé ainsi ; le verdict est venu d'un run plus récent.
