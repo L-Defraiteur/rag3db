@@ -1064,3 +1064,13 @@ correctif. Hotfixs rebâtit l'hôte de luciepc depuis la tête de master et le r
 lignes au dépôt maintenant et dans une heure.
 Hotfixs, 13 h 53 : lot CI prêt (ci-self-hosted-hors-de-master 809eb7ac9) : `if: vars.RAG3DB_SELF_HOSTED == 'true'` sur les
 18 jobs self-hosted (benchmark sauté avec eux) ; une PR pour le jouer dans son propre groupe ; place après G, avant tty-12.
+Recherche, 13 h 54 : les 970 orphelins sont nés entre 13 h 40 le 14 et 1 h 21 le 15, sous un hôte sans le correctif ; après la
+purge (1 h 22, Scope 81 181/81 181, File 8 041/8 041), le portable a joué fac67a208 (sans correctif) jusqu'à 11 h 35. Pour prouver
+que le correctif tient en service : deux comptes sous 26a091474 à une heure d'écart par `POST /backend/fts-live-ids`
+(l'hôte du portable porte déjà les routes de lucivy, e95a1b8c6 est son ancêtre), sans fermer le backend.
+Recherche, 13 h 56 : premier relevé par la route au dépôt : Lucivy_Scope 81 706 vivants, Lucivy_File 8 130 (zéro de 1 h 22 : 81 181 et
+8 041) — sans les lignes du graphe, pas d'écart. L'hôte n'a pas de route Cypher ; la lecture du graphe que suppose
+`fts-live-ids` est à l'appelant, non écrit. Décision : aujourd'hui la copie par la fermeture qui tient, deux fois ;
+et un petit lot chez lucivy : `/backend/maintain` en `dry_run` qui lit le graphe lui-même et rend l'écart.
+Hotfixs, 13 h 56 : PR L-Defraiteur/rag3db#1 ouverte (gmail, sans mention), run 43716213065 en cours dans son groupe ; la pose
+du binaire de luciepc attend la place de G (sa chaîne preparer/poser-binaire, sa cible).
