@@ -6,8 +6,11 @@
 - **Atteignable en service** : oui, rarement. Il faut un écrivain qui écrit une table pendant
   qu'un ALTER ou un DROP TABLE l'attend, ou qui a commencé sa transaction avant que l'un d'eux
   valide. En service, l'hôte ne fait un ALTER qu'à l'ouverture ou à une montée de schéma.
-- **Touche rag3weaver** : par le moteur. Un écrivain reçoit « The schema of table <T> changed
-  after this transaction started … ; retry the transaction. » et doit recommencer.
+- **Touche rag3weaver** : par le moteur. Une écriture ouverte avant un ALTER validé reçoit ce
+  refus et se recommence. Le message commence par le préfixe stable `Schema changed, retry:`
+  (`Transaction::SCHEMA_CHANGED_RETRY`) ; read_pool et l'écrivain le reconnaissent pour
+  recommencer la transaction au lieu de la perdre. Ce recommencement côté Rust est un petit lot
+  d'ED et d'archi, après l'atterrissage du lot C++.
 - **Signalé par** : cœur c++. Le lot du verrou de schéma (branche `alter-attend-les-ecrivains`),
   témoins `AlterWaitsForWriters.AWriterCreatingDuringTheAlterWritesNoRowOfTheOldSchema` et
   `AddColumnRollback.TwoAltersOfOneTableDoNotOverlap`.
@@ -21,7 +24,8 @@ Le verrou de schéma d'une table (genre TABLE du gestionnaire de verrous) se pre
 catalogue de l'instantané. Un écrivain qui a attendu un ALTER écrirait donc sur le schéma
 d'avant. Le même cas existe sans attente, pour une transaction ouverte avant un ALTER validé.
 
-Le lot le ferme par un refus nommé, `Transaction::throwIfSchemaChangedAfterSnapshot`. À la
+Le lot le ferme par un refus nommé, `Transaction::throwIfSchemaChangedAfterSnapshot`, dont le
+message commence par `Schema changed, retry:`. À la
 première prise du verrou d'une table, la transaction est refusée si la tête de l'entrée du
 catalogue est une version que son instantané ne voit pas. Elle recommence, et se lie sur le
 nouveau schéma. Deux ALTER d'une même table suivent la même règle : le second attend le premier,
