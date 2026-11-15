@@ -58,5 +58,17 @@ mod tests {
         assert!(refus.contains("inconnu") && refus.contains("rapide, fin"), "un nom inconnu se refuse en nommant la liste : {refus}");
         assert_eq!(host.modeles_de_tache(&h.id, "doc").unwrap()["current"], "rapide", "un refus ne change rien");
         assert!(host.modeles_de_tache(&h.id, "absente").is_err(), "une tâche absente se refuse");
+
+        // **Un choix qui ne désigne plus rien** (ED) : le manifeste renomme « rapide » en « vite ». La
+        // liste dit l'ancien choix, inconnu ; le chat refuse le tour en disant quoi faire.
+        let texte = std::fs::read_to_string(&t.manifest).unwrap().replace("\"rapide\"", "\"vite\"");
+        std::fs::write(&t.manifest, texte).unwrap();
+        assert_eq!(host.open(Some(&session), &t.manifest)["ok"], true);
+        let liste = host.modeles_de_tache(&h.id, "doc").unwrap();
+        assert_eq!((liste["current"].clone(), liste["current_unknown"].clone()), (json!("rapide"), json!(true)), "{liste}");
+        let etat = host.chat_state(&t.id).unwrap();
+        assert_eq!(etat["on"], false);
+        let pourquoi = etat["why"].as_str().unwrap_or_default();
+        assert!(pourquoi.contains("vite, fin") && pourquoi.contains("choisissez un modèle par /model"), "{pourquoi}");
     }
 }
