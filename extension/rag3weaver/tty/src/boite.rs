@@ -74,7 +74,10 @@ pub fn reponse(backend: &str, task: &str, a: &Attente, texte: &str, accord: Opti
 /// L'en-tête d'une ligne de boîte, en français : `[équipier · réponse] `
 /// (lot tty-8). Un genre ou un auteur inconnu s'écrit tel quel.
 pub fn en_tete(l: &Value) -> String {
+    // L'agent a un nom (c7, 15 nov.) : ses lignes le portent dans `name`.
+    let nom = l["name"].as_str().filter(|n| !n.trim().is_empty() && l["from"] == "teammate");
     let de = match l["from"].as_str().unwrap_or("?") {
+        "teammate" if nom.is_some() => nom.unwrap_or_default(),
         "teammate" => "équipier",
         "supervisor" => "toi",
         "host" => "hôte",

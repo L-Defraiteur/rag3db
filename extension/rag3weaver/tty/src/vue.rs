@@ -179,6 +179,8 @@ pub struct Vue {
     modele: Option<String>,
     /// Le texte streamé depuis le départ du run : la réponse, déjà à l'écran.
     texte_coule: String,
+    /// Le dernier nom de l'agent vu sur ses lignes (`name`).
+    nom_agent: Option<String>,
     /// « dépôt · branche · tâche », jamais l'id d'un backend.
     pub entete: String,
     /// Un repli à dire dans la zone vivante, sur la ligne du texte en cours quand
@@ -240,6 +242,7 @@ impl Vue {
             attente_depuis: Instant::now(),
             modele: None,
             texte_coule: String::new(),
+            nom_agent: None,
             entete: String::new(),
             repli: None,
             maj_entree: false,
@@ -508,6 +511,9 @@ impl Vue {
             _ => None,
         };
         self.boite.ligne(l);
+        if let Some(n) = l["name"].as_str().filter(|n| !n.trim().is_empty() && l["from"] == "teammate") {
+            self.nom_agent = Some(n.to_string());
+        }
         match (l["from"].as_str(), l["kind"].as_str()) {
             (Some("supervisor"), Some("request" | "instruction")) => self.repondu = false,
             (Some("teammate"), Some("report" | "answer" | "question" | "approval" | "proposal" | "message")) => self.repondu = true,
@@ -596,7 +602,7 @@ impl Vue {
 
     /// Le dernier nom de l'agent vu sur ses lignes.
     pub fn nom_de_l_agent(&self) -> Option<&str> {
-        None
+        self.nom_agent.as_deref()
     }
 
     /// Une note du terminal lui-même (une coupure du flux, un refus).

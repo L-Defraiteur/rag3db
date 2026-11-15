@@ -500,7 +500,15 @@ fn executer(c: crate::commandes::Commande, terminal: &mut ratatui::DefaultTermin
             }
             Err(e) => vue.note(&format!("/model {n} : {e}")),
         },
-        Commande::Nom(_) => vue.note("/nom : pas encore"),
+        Commande::Nom(None) => vue.note(&match vue.nom_de_l_agent() {
+            Some(n) => format!("l'agent de la tâche s'appelle « {n} » (/nom <x> le renomme)"),
+            None => "l'agent n'a pas encore dit son nom (/nom <x> le nomme)".to_string(),
+        }),
+        Commande::Nom(Some(n)) => {
+            let n = if n == "-" { String::new() } else { n };
+            let r = client::poster(agent, ep, "/ide/teammate/name", &json!({ "backend": tache.depot.id, "task": tache.task, "agent_name": n }));
+            vue.note(&nom_dit(&n, r));
+        }
         Commande::Etapes => {
             vue.montrer_etapes = !vue.montrer_etapes;
             vue.note(if vue.montrer_etapes { "les étapes de l'équipier s'écrivent dans l'historique (/etapes les cache)" } else { "les étapes de l'équipier défilent dans la zone vivante (/etapes les montre)" });
@@ -554,9 +562,21 @@ fn lancer_une_commande(cmd: &str, terminal: &mut ratatui::DefaultTerminal, vue: 
 }
 
 /// Les lignes de `/model` : les modèles déclarés, le nom et le modèle d'abord.
-/// Ce que `/nom <n>` dit, selon la réponse de l'hôte.
-pub fn nom_dit(_n: &str, _r: Result<Value, String>) -> String {
-    String::new()
+/// Ce que `/nom <n>` dit, selon la réponse de l'hôte (`POST /ide/teammate/name`, chez ED) : le nom
+/// gardé, celui du dépôt pour un nom vide, un refus tel quel, et un hôte qui n'a pas encore la route.
+pub fn nom_dit(n: &str, r: Result<Value, String>) -> String {
+    match r {
+        Ok(v) => {
+            let nom = v["agent_name"].as_str().unwrap_or(n);
+            if n.is_empty() {
+                format!("l'agent de la tâche reprend le nom de son dépôt : « {nom} »")
+            } else {
+                format!("l'agent de la tâche s'appelle maintenant « {nom} »")
+            }
+        }
+        Err(e) if e.contains("route inconnue") => "cet hôte ne sait pas encore renommer l'agent (POST /ide/teammate/name arrive chez ED)".to_string(),
+        Err(e) => format!("/nom {n} : {e}"),
+    }
 }
 
 pub fn modeles_dits(v: &Value) -> Vec<String> {
@@ -912,7 +932,8 @@ mod tests {
         assert_eq!(nom_dit("Ombre", Ok(json!({ "agent_name": "Ombre" }))), "l'agent de la tâche s'appelle maintenant « Ombre »");
         assert_eq!(nom_dit("", Ok(json!({ "agent_name": "Algareth" }))), "l'agent de la tâche reprend le nom de son dépôt : « Algareth »");
         assert_eq!(nom_dit("Om bre", Err("POST /ide/teammate/name : agent_name : un nom sans blanc (400)".into())), "/nom Om bre : POST /ide/teammate/name : agent_name : un nom sans blanc (400)");
-        assert_eq!(nom_dit("Ombre", Err("POST /ide/teammate/name : réponse illisible (404, expected value) : Not Found".into())), "cet hôte ne sait pas encore renommer l'agent (POST /ide/teammate/name arrive chez ED)");
+        assert_eq!(nom_dit("Ombre", Err("POST /ide/teammate/name : route inconnue : POST /ide/teammate/name (404)".into())), "cet hôte ne sait pas encore renommer l'agent (POST /ide/teammate/name arrive chez ED)");
+        assert_eq!(nom_dit("Ombre", Err("POST /ide/teammate/name : tâche inconnue : doc (404)".into())), "/nom Ombre : POST /ide/teammate/name : tâche inconnue : doc (404)", "un autre 404 se dit tel quel");
     }
 
     /// `/model` dit les modèles déclarés : le nom et le modèle d'abord, la manière d'y
