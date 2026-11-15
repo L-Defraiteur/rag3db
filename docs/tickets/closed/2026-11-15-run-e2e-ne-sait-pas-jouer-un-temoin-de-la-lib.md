@@ -1,6 +1,6 @@
 # `run_e2e.sh` ne sait pas jouer un test de la lib comme témoin
 
-- **État** : ouvert (15 novembre 2026, hotfixs)
+- **État** : fait (16 novembre 2026, branche run-e2e-temoin-lib) : `run_e2e.sh --lib <filtre>` joue `cargo test --lib -- <filtre>` sous la même lib et la même garde, sans e2e ; la lib est une suite demandée, comptée par `Running unittests src/lib.rs` ; un filtre qui ne joue aucun test est rouge (suites_vides) ; `SUITE_DU_TEMOIN=lib` dans passe_epinglee.sh ; quatre cas neufs aux témoins, rouges d abord
 - **Famille** : produit
 - **Gravité** : petite. Un lot dont le témoin est un test unitaire de la lib (`cargo test --lib`) ne peut pas le
   désigner à l'étape « témoin » de `passe_epinglee.sh`. Cette étape se remplit alors d'un e2e voisin, et le vrai témoin
