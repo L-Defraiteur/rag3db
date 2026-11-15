@@ -3482,6 +3482,8 @@ impl Catalog {
                 noms.insert(match d {
                     D::FieldOf { owner, .. } => owner.clone(),
                     D::ReturnOf { function, .. } | D::TemplateReturnOf { function, .. } => function.clone(),
+                    // Le premier maillon d'une chaîne sur un type connu : la méthode de ce type.
+                    D::OfType { ty, peel } => peel.first().cloned().unwrap_or_else(|| ty.clone()),
                 });
             }
         }
@@ -3495,27 +3497,32 @@ impl Catalog {
         // Gabarit → (retour écrit, paramètres) : sans le parent, puisque la
         // même méthode gabarit (`constCast`) est déclarée par plusieurs classes.
         let mut gabarits: HashMap<String, Option<(String, Vec<String>)>> = HashMap::new();
+        // (type, méthode) → retour écrit : les maillons d'une chaîne de méthodes du projet.
+        let mut methodes: HashMap<(String, String), Option<String>> = HashMap::new();
         let mut charges: BTreeSet<String> = BTreeSet::new();
-        let nom_du_type = |ecrit: &str, peel: &[String], champ: &dyn Fn(&str, &str) -> Option<String>| -> Option<String> {
+        type Lecteur<'a> = &'a dyn Fn(&str, &str) -> Option<String>;
+        let nom_du_type = |ecrit: &str, peel: &[String], champ: Lecteur, retour: Lecteur| -> Option<String> {
             if peel.is_empty() {
                 codeparsers::scope_extraction::usage::base_type_name(ecrit)
             } else {
-                codeparsers::scope_extraction::receveur::peel_avec(ecrit, peel, champ).and_then(|t| codeparsers::scope_extraction::receveur::type_name(&t))
+                codeparsers::scope_extraction::receveur::peel_complet(ecrit, peel, champ, retour).and_then(|t| codeparsers::scope_extraction::receveur::type_name(&t))
             }
         };
         type Gabarits = HashMap<String, Option<(String, Vec<String>)>>;
-        let resoudre = |d: &D, champs: &HashMap<(String, String), Option<String>>, retours: &HashMap<String, Option<(String, String)>>, gabarits: &Gabarits, champ: &dyn Fn(&str, &str) -> Option<String>| -> Option<String> {
+        let resoudre = |d: &D, champs: &HashMap<(String, String), Option<String>>, retours: &HashMap<String, Option<(String, String)>>, gabarits: &Gabarits, champ: Lecteur, retour: Lecteur| -> Option<String> {
             match d {
                 D::TemplateReturnOf { function, args, peel, .. } => gabarits.get(function).cloned().flatten().and_then(|(t, params)| {
-                    nom_du_type(&codeparsers::scope_extraction::usage::substitute_template(&t, &params, args), peel, champ)
+                    nom_du_type(&codeparsers::scope_extraction::usage::substitute_template(&t, &params, args), peel, champ, retour)
                 }),
-                D::FieldOf { owner, field, peel } => champs.get(&(owner.clone(), field.clone())).cloned().flatten().and_then(|t| nom_du_type(&t, peel, champ)),
+                D::FieldOf { owner, field, peel } => champs.get(&(owner.clone(), field.clone())).cloned().flatten().and_then(|t| nom_du_type(&t, peel, champ, retour)),
                 D::ReturnOf { function, unwrap, peel } => retours.get(function).cloned().flatten().and_then(|(t, parent)| {
                     // `f()?` : le `Result` ou l'`Option` se déballe d'abord.
                     let chaine: Vec<String> = unwrap.then(|| "?".to_string()).into_iter().chain(peel.iter().cloned()).collect();
-                    let lu = nom_du_type(&t, &chaine, champ)?;
+                    let lu = nom_du_type(&t, &chaine, champ, retour)?;
                     if lu == "Self" { Some(parent).filter(|p| !p.is_empty()) } else { Some(lu) }
                 }),
+                // Un type connu (`self`, un paramètre typé, `Type::f(…)`), puis sa chaîne.
+                D::OfType { ty, peel } => nom_du_type(ty, peel, champ, retour),
             }
         };
         let mut tours = 0;
@@ -3525,9 +3532,10 @@ impl Catalog {
                 break;
             }
             tours += 1;
-            self.charger_les_types_ecrits(&a_charger, source, &mut champs, &mut retours, &mut gabarits)?;
+            self.charger_les_types_ecrits(&a_charger, source, &mut champs, &mut retours, &mut gabarits, &mut methodes)?;
             charges.extend(a_charger);
-            // Les classes qu'un pas de champ demande, pas encore chargées.
+            // Les classes qu'un pas de champ demande, et les méthodes qu'un
+            // maillon de chaîne demande, pas encore chargées.
             let demandes = std::cell::RefCell::new(BTreeSet::new());
             let champ = |classe: &str, f: &str| -> Option<String> {
                 if !charges.contains(classe) {
@@ -3535,16 +3543,23 @@ impl Catalog {
                 }
                 champs.get(&(classe.to_string(), f.to_string())).cloned().flatten()
             };
+            let retour = |classe: &str, m: &str| -> Option<String> {
+                if !charges.contains(m) {
+                    demandes.borrow_mut().insert(m.to_string());
+                }
+                methodes.get(&(classe.to_string(), m.to_string())).cloned().flatten()
+            };
             for m in mentions.values().flatten().filter(|m| m.qualifier_types.is_empty() && de_la_source(m)) {
                 for d in &m.deferred {
-                    let _ = resoudre(d, &champs, &retours, &gabarits, &champ);
+                    let _ = resoudre(d, &champs, &retours, &gabarits, &champ, &retour);
                 }
             }
             noms.extend(demandes.into_inner());
         }
         let champ = |classe: &str, f: &str| champs.get(&(classe.to_string(), f.to_string())).cloned().flatten();
+        let retour = |classe: &str, m: &str| methodes.get(&(classe.to_string(), m.to_string())).cloned().flatten();
         for m in mentions.values_mut().flatten().filter(|m| m.qualifier_types.is_empty() && !m.deferred.is_empty() && de_la_source(m)) {
-            let lus: Option<Vec<String>> = m.deferred.iter().map(|d| resoudre(d, &champs, &retours, &gabarits, &champ)).collect();
+            let lus: Option<Vec<String>> = m.deferred.iter().map(|d| resoudre(d, &champs, &retours, &gabarits, &champ, &retour)).collect();
             if let Some(mut v) = lus {
                 v.sort();
                 v.dedup();
@@ -3567,6 +3582,7 @@ impl Catalog {
         champs: &mut std::collections::HashMap<(String, String), Option<String>>,
         retours: &mut std::collections::HashMap<String, Option<(String, String)>>,
         gabarits: &mut std::collections::HashMap<String, Option<(String, Vec<String>)>>,
+        methodes: &mut std::collections::HashMap<(String, String), Option<String>>,
     ) -> Result<(), CatalogError> {
         let param = CypherValue::List(noms.iter().map(|n| CypherValue::String(n.clone())).collect());
         // Par le dialecte : les scopes dont le nom est dans la liste, de cette
@@ -3628,6 +3644,17 @@ impl Catalog {
                     .or_insert(Some(g));
             }
             if !retour.trim().is_empty() {
+                // Par type : `Ctx::cancellation`, distinct d'un homonyme d'un autre type.
+                if let Some(parent) = codeparsers::scope_extraction::usage::base_type_name(&texte(3)) {
+                    methodes
+                        .entry((parent, nom.clone()))
+                        .and_modify(|o| {
+                            if o.as_deref() != Some(retour.as_str()) {
+                                *o = None;
+                            }
+                        })
+                        .or_insert_with(|| Some(retour.clone()));
+                }
                 let v = (retour, texte(3));
                 retours
                     .entry(nom)
