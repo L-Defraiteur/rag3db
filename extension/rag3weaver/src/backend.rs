@@ -908,6 +908,33 @@ pub struct AgentDuBackend {
     /// Le nom de l'agent, une ligne, non vide.
     #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "lire_le_nom_de_l_agent")]
     pub name: Option<String>,
+    /// **La persona de l'agent** (Lucie, 15 novembre : « un personnage assez bref à incarner, comme un
+    /// ton de réponse ») : un texte court, plusieurs lignes permises, [`PERSONA_MAX`] caractères au plus.
+    /// Vide ou absente : rien.
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "lire_la_persona_de_l_agent")]
+    pub persona: Option<String>,
+}
+
+/// Le plafond d'une persona, en caractères.
+pub const PERSONA_MAX: usize = 600;
+
+/// **Une persona valide** : au plus [`PERSONA_MAX`] caractères ; vide ou blanche, aucune (`None`). Le refus
+/// nomme le champ et le plafond.
+pub fn valider_la_persona_de_l_agent(persona: &str) -> Result<Option<String>, String> {
+    let p = persona.trim();
+    if p.is_empty() {
+        return Ok(None);
+    }
+    let n = p.chars().count();
+    if n > PERSONA_MAX {
+        return Err(format!("agent.persona fait {n} caractères : {PERSONA_MAX} au plus, un personnage bref"));
+    }
+    Ok(Some(p.to_string()))
+}
+
+fn lire_la_persona_de_l_agent<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    use serde::de::Error;
+    Ok(Option::<String>::deserialize(d)?.map(|p| valider_la_persona_de_l_agent(&p).map_err(D::Error::custom)).transpose()?.flatten())
 }
 
 /// **Un nom d'agent valide** : une ligne, non vide ; rendu sans ses blancs de bord. Le refus nomme le
@@ -932,10 +959,9 @@ fn lire_le_nom_de_l_agent<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Opti
 pub const NOM_DE_L_AGENT_PAR_DEFAUT: &str = "équipier";
 
 impl BackendManifest {
-    /// La persona de l'agent (à venir).
+    /// **La persona de l'agent** : celle de la tâche, sinon `agent.persona` ; aucune si ni l'une ni l'autre.
     pub fn persona_de_l_agent(&self, surcharges: &Surcharges) -> Option<String> {
-        let _ = surcharges;
-        None
+        surcharges.persona_de_l_agent.clone().filter(|p| !p.trim().is_empty()).or_else(|| self.agent.as_ref().and_then(|a| a.persona.clone()))
     }
 }
 
@@ -2170,6 +2196,12 @@ impl PreparedBackend {
     /// « équipier ». La boucle de l'équipier le lit.
     pub fn nom_de_l_agent(&self) -> String {
         nom_de_l_agent(&self.manifest, &self.surcharges)
+    }
+
+    /// **La persona de l'agent de ce backend** : celle de la tâche, sinon `agent.persona`. L'invite la dit
+    /// après les règles du socle, pour qu'elle colore le ton sans défaire une règle.
+    pub fn persona_de_l_agent(&self) -> Option<String> {
+        self.manifest.persona_de_l_agent(&self.surcharges)
     }
 
     /// La racine absolue du workspace, si ce backend en déclare un.
