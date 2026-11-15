@@ -112,10 +112,22 @@ Avec quelle fenêtre et quel chevauchement il tient, c'est F contre S et N, à l
   - les quatre variantes à 300 k font peu de décisions (trois ou quatre fenêtres chacune), mais
     environ 4 millions de jetons d'entrée ;
   - plus le juge.
-- **Ce qu'il faut de la session mémoire** :
-  - le composeur qui rend les résumés d'une fenêtre dans la forme que la suivante relit ;
-  - l'entrée de l'archive qui reçoit ce contexte, et le chevauchement, sans les ranger ;
-  - la limite de taille d'une section. Une fenêtre de 300 k tient dans le million de Gemini, mais
-    sa sortie est plafonnée à 4 096 jetons par décision : une fenêtre de 300 k ne peut rendre que
-    ce qui tient dans ce plafond. C'est peut-être là que U casse.
+- **Ce que dit la session mémoire** (96, 15 nov.) :
+  - **le composeur** est `compose_restart` (sources = les fenêtres d'avant, un budget). Il rend le
+    bilan, une ligne par L1 dans l'ordre des tours, puis les L1, jusqu'au budget. Il est sur la
+    branche `cx-memoire-compaction-temoin` (bc93dc781), pas encore vu vert ;
+  - **l'entrée de contexte n'existe pas**. 96 propose `context`, montré au modèle avant la section
+    sous « Ce qui précède (déjà rangé, ne pas ranger) », jamais écrit en L0 ni en L1 ;
+  - **une section ne va qu'à une fiche**, et c'est structurel : l'identité d'un L1 est {fiche,
+    source, section}. Une fenêtre donnée en une section serait réduite à un sujet. La forme juste
+    est **un découpage avant la décision** : une étape `segment`, éteinte par défaut, où le modèle
+    lit la fenêtre (avec son contexte) et rend la liste de ses sujets en sous-sections
+    (`[{titre, turns: "a-b"}]`, quelques centaines de jetons). Chaque sous-section passe ensuite par
+    la décision d'aujourd'hui.
+  - **Ces deux ajouts changent la conception de l'archiviste** : 96 ne les pose qu'au mot de
+    l'orchestration, après le composeur.
+- **Ce que la mesure juge donc** : la question « jusqu'où l'archiviste voit » est d'abord celle de
+  l'étape `segment`. À quelle taille de fenêtre, avec quel chevauchement et quels résumés, le
+  modèle rend-il encore les sujets de sa fenêtre sans en perdre, sans en doubler, sans oublier le
+  milieu ? La décision par sujet, elle, ne change pas.
 - **Rien n'est lancé** avant que l'orchestration ait validé, et avant ces trois réponses.
