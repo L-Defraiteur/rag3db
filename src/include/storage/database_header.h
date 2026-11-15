@@ -29,7 +29,7 @@ struct DatabaseHeader {
     // qui l'a écrite (vide avant la version 41). Un en-tête neuf porte la version et le bâti de
     // ce moteur.
     uint64_t storageVersion = 0;
-    std::string writerBuildID;
+    std::string writerBuildID{};
 
     void updateCatalogPageRange(PageManager& pageManager, PageRange newPageRange);
     void freeMetadataPageRange(PageManager& pageManager) const;
