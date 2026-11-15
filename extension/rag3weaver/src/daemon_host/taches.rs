@@ -48,6 +48,10 @@ pub struct Tache {
     /// une copie dans son dossier (`declarations/`), non versionnée.
     #[serde(default)]
     pub declarations_hors_depot: bool,
+    /// **Le nom de l'agent de la tâche**, à la place de `agent.name` du manifeste (`None` : celui du
+    /// manifeste, sinon « équipier »).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nom_de_l_agent: Option<String>,
     /// **Aucun dépôt** (ni les déclarations ni la racine) : pas de worktree ni
     /// de branche ; `arbre` est l'espace copié, `depot`, `branche` et `depart`
     /// sont vides de sens. Ses changements se relisent par différence de
@@ -495,6 +499,7 @@ impl DaemonHost {
             declarations_hors_depot: t.declarations_hors_depot,
             dossier_de_tache: t.arbre.parent().map(Path::to_path_buf),
             racine_principale: t.workspace.as_ref().map(|w| w.racine_principale.clone()),
+            nom_de_l_agent: t.nom_de_l_agent.clone(),
         })
     }
 
@@ -714,6 +719,7 @@ impl DaemonHost {
             sans_depot,
             git_init_fait,
             modele: None,
+            nom_de_l_agent: None,
         };
         // **La tâche devient une couche** (liaison branche → couche, décision de Lucie du
         // 13 novembre : « tout ce que touche l'agent, ça reste indexé » ; généralisée par les suivies,

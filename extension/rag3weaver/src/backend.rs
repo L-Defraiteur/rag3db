@@ -906,8 +906,23 @@ pub struct OutputPort {
 #[serde(deny_unknown_fields)]
 pub struct AgentDuBackend {
     /// Le nom de l'agent, une ligne, non vide.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "lire_le_nom_de_l_agent")]
     pub name: Option<String>,
+}
+
+/// Le nom d'un agent se refuse à la lecture du manifeste s'il est vide ou tient sur plusieurs lignes.
+fn lire_le_nom_de_l_agent<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    use serde::de::Error;
+    let nom = Option::<String>::deserialize(d)?;
+    if let Some(n) = &nom {
+        if n.trim().is_empty() {
+            return Err(D::Error::custom("agent.name est vide : donnez un nom à l'agent, ou retirez le champ (« équipier » par défaut)"));
+        }
+        if n.contains('\n') || n.contains('\r') {
+            return Err(D::Error::custom(format!("agent.name tient sur une ligne : « {} »", n.replace('\n', "⏎"))));
+        }
+    }
+    Ok(nom.map(|n| n.trim().to_string()))
 }
 
 /// Le nom de l'agent quand rien ne le déclare.
@@ -916,8 +931,11 @@ pub const NOM_DE_L_AGENT_PAR_DEFAUT: &str = "équipier";
 /// **Le nom de l'agent d'un backend** : la surcharge de la tâche, sinon `agent.name` du manifeste, sinon
 /// « équipier ».
 pub fn nom_de_l_agent(manifest: &BackendManifest, surcharges: &Surcharges) -> String {
-    let _ = (manifest, surcharges);
-    NOM_DE_L_AGENT_PAR_DEFAUT.to_string()
+    surcharges
+        .nom_de_l_agent
+        .clone()
+        .or_else(|| manifest.agent.as_ref().and_then(|a| a.name.clone()))
+        .unwrap_or_else(|| NOM_DE_L_AGENT_PAR_DEFAUT.to_string())
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -2133,6 +2151,12 @@ impl PreparedBackend {
     /// Les surcharges imposées à ce backend.
     pub fn surcharges(&self) -> &Surcharges {
         &self.surcharges
+    }
+
+    /// **Le nom de l'agent de ce backend** : la surcharge de la tâche, sinon `agent.name`, sinon
+    /// « équipier ». La boucle de l'équipier le lit.
+    pub fn nom_de_l_agent(&self) -> String {
+        nom_de_l_agent(&self.manifest, &self.surcharges)
     }
 
     /// La racine absolue du workspace, si ce backend en déclare un.
