@@ -406,27 +406,27 @@ fn opening_public_content_manifest_refuses_invalid_associations_before_database(
 /// Un LlmNode sans `response_schema` reste hors de toute politique ; avec son schéma, il passe sous
 /// `call_models` comme Decide, et sans `call_models` il est refusé en nommant la ligne à ajouter.
 #[test]
-fn un_llm_node_d_outil_exige_son_schema_et_call_models() {
-    let essai = |schema: bool, call_models: bool| -> Result<PreparedBackend, String> {
+fn a_tool_llm_node_needs_its_schema_and_call_models() {
+    let attempt = |schema: bool, call_models: bool| -> Result<PreparedBackend, String> {
         let (dir, mut m) = manifest();
         std::fs::create_dir_all(dir.path().join("graphs")).unwrap();
-        let noeud = if schema { "LlmNode(response_schema=$schema, max_tokens=8)" } else { "LlmNode(max_tokens=8)" };
+        let node_decl = if schema { "LlmNode(response_schema=$schema, max_tokens=8)" } else { "LlmNode(max_tokens=8)" };
         // Le paramètre `schema` n'est déclaré que là où un nœud le cite : un paramètre inutilisé est
         // refusé par la fiche d'outil, et ce n'est pas ce qu'on teste.
-        let param = if schema { "%% param: schema json = {\"type\": \"object\"} -- la forme\n" } else { "" };
+        let schema_param = if schema { "%% param: schema json = {\"type\": \"object\"} -- la forme\n" } else { "" };
         std::fs::write(dir.path().join("graphs/generer.mmd"), format!(
-            "%% tool: generer\n%% description: un essai de génération\n{param}%% result: m.text\n\ngraph LR\n    m[\"{noeud}\"]\n"
+            "%% tool: generer\n%% description: un essai de génération\n{schema_param}%% result: m.text\n\ngraph LR\n    m[\"{node_decl}\"]\n"
         )).unwrap();
-        let mut attache = json!({"graph": "graphs/generer.mmd"});
+        let mut attachment = json!({"graph": "graphs/generer.mmd"});
         if call_models {
-            attache["policy"] = json!({"call_models": true});
+            attachment["policy"] = json!({"call_models": true});
         }
-        m["tools"]["generer"] = attache;
+        m["tools"]["generer"] = attachment;
         prepare(dir.path(), &m)
     };
-    let e = essai(false, true).err().expect("un LlmNode sans response_schema est refusé, même sous call_models");
+    let e = attempt(false, true).err().expect("un LlmNode sans response_schema est refusé, même sous call_models");
     assert!(e.contains("LlmNode") && e.contains("response_schema"), "le refus nomme response_schema : {e}");
-    essai(true, true).unwrap_or_else(|e| panic!("un LlmNode avec response_schema passe sous call_models : {e}"));
-    let e = essai(true, false).err().expect("sans call_models, refusé");
+    attempt(true, true).unwrap_or_else(|e| panic!("un LlmNode avec response_schema passe sous call_models : {e}"));
+    let e = attempt(true, false).err().expect("sans call_models, refusé");
     assert!(e.contains("call_models"), "le refus dit la ligne à ajouter : {e}");
 }
