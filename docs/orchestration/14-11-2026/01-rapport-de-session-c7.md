@@ -1360,3 +1360,14 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   repos à côté de 7878 et 7879 (20,4 Gio tenus), le seuil de 13 Gio ne sera jamais atteint. Décision : (a) le
   7879 arrêté le temps de la mesure, dans la fenêtre du matin, par G, annoncé, relancé et vérifié ; pas de
   seuil relevé. Page des règles 6d6b4821c ; card0 à 100 % relevé aux deux heures.
+- **96, 04 h 1x — M8 répétée sur copie, verte** (page 02 du 15-11, 81cb00b57) : copie de avant-chantiers-14-nov-2
+  (116 fiches), binaire 26a091474 ; pilote monter-m8.sh (le livré posé à côté, database et files_root gardés,
+  manifeste chargé avant la bascule, RETOUR.sh), aussi au portable ; 20 → 27 outils, aucun retiré ; les trois
+  gestes joués (confirmer, rejoindre 4 apports, scinder 15 apports) : 118 fiches. **La fenêtre du matin** :
+  binaire ≥ 1f5d007b8 (G), fermeture avec raison, instantané, pilote, réouverture, compte, puis Lucie fait ses
+  gestes.
+- **G, 04 h 17 — `courant` déplacé à luciepc de 0 h 53 à 4 h 15** : un `run_e2e.sh --build-only` dans un worktree
+  de pile a publié la lib du moteur 9d90edbb6 et l'a posée en `courant` (run_e2e.sh l. 349-355), contre la
+  procédure de bascule ; vu par preparer-binaire, remis sur 373b5477b (md5 4fa330b5). L'hôte et toute passe qui
+  nomme sa lib n'ont rien vu ; les sessions relisent leurs passes de la fenêtre ; G vérifie qu'aucune base
+  vivante n'a été ouverte par l'autre lib. Ticket et lot : publication `--sans-courant` par défaut.
