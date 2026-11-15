@@ -1647,3 +1647,7 @@ Embarquement, 18 h 31 : conception du repli par activation nommée — recette c
 variables de carte ; aucun arg), recette complète attestée à l'activation du repli ; tranché : la carte du repli se mesure aussi
 (required_mib propres, défaut ceux de la principale), les deux pleines = principale quand même et l'état le dit ; le plafond du
 doublement de la tenue est un réglage (défaut 16). Six témoins rouges.
+Hotfixs, 18 h 32 : le ticket « un push de docs annule le run de code » fermé (4ad76536e) : le run de f85977d09 est allé au bout, vert
+sur les quatre jobs, dix commits de docs derrière sans lancer un run ; GitHub juge le filtre sur tout le push. **La CI de master est
+verte et rend un verdict à chaque push de code.** Lot suivant pour hotfixs : une base qui s'ouvre sans dire qu'une extension n'a pas
+pu être chargée (perte d'index, atteignable), après le verdict du cœur.
