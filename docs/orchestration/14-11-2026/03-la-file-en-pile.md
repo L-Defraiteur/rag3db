@@ -1632,3 +1632,7 @@ backend ouvert et dû ; relevé à blanc, purge si ≤ 0,05 sinon refus dit, com
 sur bouchon, e2e_demon_hote 26/26). Place après ED (nom + persona), avant le hash de la pose : première maintenance cette nuit.
 Ordre restant : tty-15 → tty-16 → 96 → ED (nom) → lucivy → **hash** → archi (branchement, à son vert) → ED (écrivain) + arbre →
 G ×4 → arbre 2b′ + recherche → codeparsers.
+tty, 18 h 24 : correction sur tty-14 — son rejeu du crate partageait un target entre worktrees (target-cx-tty-6) : cargo a rejoué un
+binaire de test bâti depuis l'arbre de tty-15 (un test de tty-15 au journal de tty-14, aucune ligne Compiling). Tiennent : la lib
+entière et check_features dans leur target ; master rejoué dans un target à lui : crate 97 + 19 vert. Le script de rejeu a
+maintenant un target par worktree et rougit si le crate n'a pas été compilé depuis l'arbre du lot ; tty-15 rejoué ainsi.
