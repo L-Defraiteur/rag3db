@@ -39,8 +39,62 @@ pub const COMMANDES: &[(&str, &str)] = &[
 
 /// Ce que la saisie demande : une commande, ou `None` pour un envoi à
 /// l'équipier (le texte à envoyer, un `//` de tête ramené à `/`, en second).
-pub fn lire(_texte: &str) -> (Option<Commande>, Option<String>) {
-    (None, None)
+pub fn lire(texte: &str) -> (Option<Commande>, Option<String>) {
+    let t = texte.trim_start();
+    if let Some(reste) = t.strip_prefix("//") {
+        return (None, Some(format!("/{reste}")));
+    }
+    if let Some(reste) = t.strip_prefix('/') {
+        let mut mots = reste.split_whitespace();
+        let nom = mots.next().unwrap_or_default();
+        let arg: Vec<&str> = mots.collect();
+        let arg = (!arg.is_empty()).then(|| arg.join(" "));
+        let c = match nom {
+            "aide" => Commande::Aide,
+            "quitter" => Commande::Quitter,
+            "arreter" => Commande::Arreter,
+            "theme" => Commande::Theme(arg),
+            "tache" => Commande::Tache(arg),
+            "depot" => Commande::Depot(arg),
+            "journal" => Commande::Journal,
+            "effacer" if arg.as_deref() == Some("historique") => Commande::EffacerHistorique,
+            "effacer" => Commande::Effacer,
+            "context" | "contexte" => Commande::Contexte,
+            autre => Commande::Inconnue(autre.to_string()),
+        };
+        return (Some(c), None);
+    }
+    if let Some(reste) = t.strip_prefix('!') {
+        let cmd = reste.trim();
+        return (Some(if cmd.is_empty() { Commande::Inconnue("!".into()) } else { Commande::Shell(cmd.to_string()) }), None);
+    }
+    (None, Some(texte.to_string()))
+}
+
+/// Le plus long préfixe commun de `mots`.
+fn prefixe_commun(mots: &[&str]) -> String {
+    let Some(premier) = mots.first() else { return String::new() };
+    let mut n = premier.chars().count();
+    for m in &mots[1..] {
+        n = n.min(premier.chars().zip(m.chars()).take_while(|(a, b)| a == b).count());
+    }
+    premier.chars().take(n).collect()
+}
+
+/// Complète `mot` parmi `candidats` : le texte qui le remplace (suivi d'une
+/// espace quand un seul candidat convient, sauf un dossier), et les candidats.
+fn completer_mot(mot: &str, candidats: &[String], espace: bool) -> Option<(String, Vec<String>)> {
+    let mut ok: Vec<&str> = candidats.iter().map(String::as_str).filter(|c| c.starts_with(mot)).collect();
+    ok.sort();
+    ok.dedup();
+    match ok.len() {
+        0 => None,
+        1 => {
+            let fin = if espace && !ok[0].ends_with('/') { " " } else { "" };
+            Some((format!("{}{fin}", ok[0]), Vec::new()))
+        }
+        _ => Some((prefixe_commun(&ok), ok.iter().map(|c| c.to_string()).collect())),
+    }
 }
 
 /// Ce que Tab peut proposer.
@@ -65,13 +119,47 @@ pub struct Completion {
 
 /// **Tab** : complète le dernier mot de `texte` (la saisie jusqu'au curseur)
 /// par ce que proposent les `sources`, jusqu'au plus long préfixe commun.
-pub fn completer(_texte: &str, _s: &Sources) -> Option<Completion> {
-    None
+pub fn completer(texte: &str, s: &Sources) -> Option<Completion> {
+    let (avant, mot) = match texte.rfind(char::is_whitespace) {
+        Some(i) => texte.split_at(i + 1),
+        None => ("", texte),
+    };
+    let (remplace, candidats) = if let Some(reste) = texte.strip_prefix('/') {
+        if !reste.contains(char::is_whitespace) {
+            let noms: Vec<String> = COMMANDES.iter().map(|(n, _)| n.to_string()).collect();
+            let (m, c) = completer_mot(reste, &noms, true)?;
+            (format!("/{m}"), c)
+        } else {
+            let nom = reste.split_whitespace().next().unwrap_or_default();
+            let liste = match nom {
+                "theme" => s.themes.clone(),
+                "tache" => s.taches.clone(),
+                "depot" => s.depots.clone(),
+                "effacer" => vec!["historique".to_string()],
+                _ => return None,
+            };
+            let (m, c) = completer_mot(mot, &liste, false)?;
+            (format!("{avant}{m}"), c)
+        }
+    } else if let Some(reste) = texte.strip_prefix('!') {
+        if !reste.contains(char::is_whitespace) {
+            let (m, c) = completer_mot(reste, &s.executables, true)?;
+            (format!("!{m}"), c)
+        } else {
+            let (m, c) = completer_mot(mot, &s.fichiers, true)?;
+            (format!("{avant}{m}"), c)
+        }
+    } else {
+        return None;
+    };
+    Some(Completion { texte: remplace, candidats })
 }
 
 /// Le dernier mot de `texte` sert-il un chemin de fichier (`!` après la commande) ?
-pub fn mot_de_fichier(_texte: &str) -> Option<&str> {
-    None
+pub fn mot_de_fichier(texte: &str) -> Option<&str> {
+    let reste = texte.strip_prefix('!')?;
+    let i = reste.rfind(char::is_whitespace)?;
+    Some(&reste[i + 1..])
 }
 
 #[cfg(test)]
