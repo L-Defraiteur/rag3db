@@ -345,6 +345,13 @@ pub trait SchemaDialect: Send + Sync {
         None
     }
 
+    /// **Une condition de visibilité déjà faite** (la pile d'une vue, 2b′) dans la langue de ce
+    /// dialecte, sur l'alias `alias`. Aucune pour un dialecte sans générations.
+    fn condition_sur_predicat(&self, alias: &str, predicat: &rag3weaver_ir::Predicate) -> Option<String> {
+        let _ = (alias, predicat);
+        None
+    }
+
     /// **La table des générations** (`_generation`, 2a′) : une ligne par génération publiée d'une
     /// couche, clé `{couche}:{rang}`. Elle porte l'identité de la page 30 (le commit, la base,
     /// l'empreinte de la recette), sa parente épinglée et ses tombstones de fichier (JSON). Aucune
@@ -354,8 +361,8 @@ pub trait SchemaDialect: Send + Sync {
     }
 
     /// Enregistrer une génération, sans toucher une ligne déjà posée. Paramètres `$key`, `$couche`,
-    /// `$rang`, `$commit`, `$base`, `$recette`, `$parente_couche`, `$parente_rang` (nuls pour une
-    /// racine), `$tombstones`, `$publiee_le`.
+    /// `$rang`, `$commit`, `$base`, `$recette`, `$parente_couche`, `$parente_rang` (`''` et `-1` pour
+    /// une racine, écrits nuls : un paramètre nul se type mal), `$tombstones`, `$publiee_le`.
     fn merge_generation(&self) -> Option<String> {
         None
     }
@@ -1464,10 +1471,22 @@ fn postgres_condition_sur(d: &PostgresDialect, p: &rag3weaver_ir::Predicate, a: 
         // Un Plan lié n'en porte plus : la validation les a refusées avant.
         Predicate::Optional(_) | Predicate::Let(_) => "FALSE".to_string(),
         Predicate::Compiled(c) => c.clone(),
-        Predicate::Visible { couche, rang } => format!(
-            "({a}.\"_couche\" = '{}' AND {a}.\"_depuis\" <= {rang} AND ({a}.\"_jusqu_a\" IS NULL OR {a}.\"_jusqu_a\" > {rang}))",
-            couche.replace('\'', "''")
-        ),
+        Predicate::Visible { couche, rang, masque } => {
+            let texte = |v: &str| format!("'{}'", v.replace('\'', "''"));
+            let liste = |v: &[String]| v.iter().map(|x| texte(x)).collect::<Vec<_>>().join(", ");
+            let mut sortie = format!(
+                "({a}.\"_couche\" = {} AND {a}.\"_depuis\" <= {rang} AND ({a}.\"_jusqu_a\" IS NULL OR {a}.\"_jusqu_a\" > {rang})",
+                texte(couche)
+            );
+            if !masque.cles.is_empty() {
+                sortie.push_str(&format!(" AND {a}.\"_uuid\" NOT IN ({})", liste(&masque.cles)));
+            }
+            if let Some((colonne, fichiers)) = masque.fichiers.as_ref().filter(|(_, f)| !f.is_empty()) {
+                sortie.push_str(&format!(" AND {a}.{} NOT IN ({})", d.quote(colonne), liste(fichiers)));
+            }
+            sortie.push(')');
+            sortie
+        }
     }
 }
 
@@ -1575,10 +1594,22 @@ fn rag3db_condition_sur(p: &rag3weaver_ir::Predicate, a: &str, n: &mut usize) ->
         // Un Plan lié n'en porte plus : la validation les a refusées avant.
         Predicate::Optional(_) | Predicate::Let(_) => "false".to_string(),
         Predicate::Compiled(c) => c.clone(),
-        Predicate::Visible { couche, rang } => format!(
-            "({a}._couche = '{}' AND {a}._depuis <= {rang} AND ({a}._jusqu_a IS NULL OR {a}._jusqu_a > {rang}))",
-            couche.replace('\\', "\\\\").replace('\'', "\\'")
-        ),
+        Predicate::Visible { couche, rang, masque } => {
+            let texte = |v: &str| format!("'{}'", v.replace('\\', "\\\\").replace('\'', "\\'"));
+            let liste = |v: &[String]| v.iter().map(|x| texte(x)).collect::<Vec<_>>().join(", ");
+            let mut sortie = format!(
+                "({a}._couche = {} AND {a}._depuis <= {rang} AND ({a}._jusqu_a IS NULL OR {a}._jusqu_a > {rang})",
+                texte(couche)
+            );
+            if !masque.cles.is_empty() {
+                sortie.push_str(&format!(" AND NOT {a}._uuid IN [{}]", liste(&masque.cles)));
+            }
+            if let Some((colonne, fichiers)) = masque.fichiers.as_ref().filter(|(_, f)| !f.is_empty()) {
+                sortie.push_str(&format!(" AND NOT {a}.{} IN [{}]", cypher_quote(colonne), liste(fichiers)));
+            }
+            sortie.push(')');
+            sortie
+        }
     }
 }
 
@@ -1620,8 +1651,12 @@ impl SchemaDialect for Rag3dbDialect {
     }
 
     fn condition_visible_sur(&self, alias: &str, couche: &str, rang: i64) -> Option<String> {
-        let p = rag3weaver_ir::Predicate::Visible { couche: couche.to_string(), rang };
+        let p = rag3weaver_ir::Predicate::Visible { couche: couche.to_string(), rang, masque: Default::default() };
         Some(rag3db_condition_sur(&p, alias, &mut 0))
+    }
+
+    fn condition_sur_predicat(&self, alias: &str, predicat: &rag3weaver_ir::Predicate) -> Option<String> {
+        Some(rag3db_condition_sur(predicat, alias, &mut 0))
     }
 
     fn create_generation_table(&self) -> Option<String> {
@@ -1645,7 +1680,8 @@ impl SchemaDialect for Rag3dbDialect {
     fn merge_generation(&self) -> Option<String> {
         Some(format!(
             "MERGE (g:{} {{_key: $key}}) ON CREATE SET g.couche = $couche, g.rang = $rang, g.commit = $commit, \
-             g.base = $base, g.recette = $recette, g.parente_couche = $parente_couche, g.parente_rang = $parente_rang, \
+             g.base = $base, g.recette = $recette, g.parente_couche = CASE WHEN $parente_couche = '' THEN NULL ELSE $parente_couche END, \
+             g.parente_rang = CASE WHEN $parente_rang < 0 THEN NULL ELSE $parente_rang END, \
              g.tombstones = $tombstones, g.publiee_le = $publiee_le",
             crate::generations::TABLE
         ))
