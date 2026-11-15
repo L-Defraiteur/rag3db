@@ -47,9 +47,52 @@ le code se ferme avec ce rapport.
 - **La règle du faux rouge par artefact repris** tient toujours (page du 14) ; le contrôle du worktree
   compte maintenant le retard par `--cherry-pick` (G).
 
+## Le soir du 15 et la nuit du 16 : la pile de la résolution d'arêtes
+
+L'orchestration a rangé la famille de la résolution d'arêtes par ce qu'une réponse fausse coûte à
+l'usage de Lucie. Quatre lots en pile, chacun rouge d'abord, sondés avant/après par
+`tests/sonde_marque_nom.rs` (en mémoire, sur le corpus figé de rag3db-garde). Rien n'est sur master : la
+pile passe en une fois, au « à toi » de c7.
+
+| lot | branche rag3db, tête | codeparsers | ce qu'il fait |
+|---|---|---|---|
+| homonymes + paramètres C++ | `codeparsers/homonymes-et-parametres`, d1c7961c7 | ff82d22 | un uuid par homonyme ; un paramètre C++ par pointeur ou référence garde son nom |
+| la marque « nom » | `codeparsers/marque-nom`, 7d2ef159a | fad1b6f | une variante lit son type par le chemin ; une méthode std sur une locale sans type lu ne se relie pas par le nom entre fichiers (listes `data/std_methods`, générées depuis le poste) |
+| les receveurs sans type | `codeparsers/receveurs-chaines`, f1bae1e34 | 65b1a93 | une chaîne de méthodes du projet sur un type connu se lit (`DeferredType::OfType`) |
+| l'appel C vers l'API C | `codeparsers/prototype-macro`, d7dffe335 | 7702f03 | une source `.c` relève ses `#include` ; la garde `extern "C"` de rag3db.h ne perd plus ses 167 prototypes |
+
+Les chiffres sont dans les tickets : [la marque « nom »](../../tickets/closed/2026-11-07-la-marque-nom-relie-un-appel-de-methode-standard-a-un-homonyme.md)
+(moteur : 2 329 fausses arêtes ôtées ; rag3weaver : 646, dont une vingtaine de justes, le prix) ;
+[les receveurs sans type](../tickets/2026-10-04-des-receveurs-restent-sans-type.md) (rag3weaver : 864
+« nom » → « type », 1 071 couples nés, 178 partis, presque tous des `collect` std reliés à tort) ;
+l'appel C (src, examples et test : 27 couples nés, 0 partis).
+
+Ce qui s'apprend :
+
+- **Une règle se mesure sous sa forme large avant de se rétrécir** : « toute locale sans type lu
+  s'abstient » ôtait 959 liens justes de plus sur rag3weaver ; la forme étroite (méthodes std seules) a
+  été choisie sur ce chiffre.
+- **Une cause annoncée se vérifie avant la correction** : le ticket d'ED a d'abord été attribué à la
+  macro d'export (déjà masquée) ; une trace temporaire de la visibilité a montré `main.c` sans aucun
+  include, puis l'en-tête sans aucun prototype.
+- **Une lecture neuve est « au mieux »** : `OfType`, non lu, doit laisser l'appel à la règle d'avant ; en
+  faire un receveur non typé ôtait des liens « nom » justes (le témoin de `n.aller()` l'a vu).
+- **Une sonde en mémoire a l'enveloppe pour plafond** : l'arbre entier de rag3db-garde en un lot a été
+  tué par l'OOM à 32 Go ; une racine de liens symboliques (src, examples, test) suffit à la mesure.
+- **Identifiants en anglais** pour ce qui vient (Lucie, 16 novembre, 1 h) ; la prose reste en français.
+
 ## Reprendre
 
-- **Aucun lot en attente** : la file de codeparsers est vide.
+- **La pile de quatre lots attend le « à toi » de c7**, après le cœur, l'écrivain d'ED, le lot court
+  d'archi, 2b′ et 2b-C. Au mot : rebase sous un nom neuf sur la base donnée, réécriture et fermeture du
+  ticket d'ED (`2026-11-15-un-appel-c-vers-une-fonction-cpp-a-definisseur-unique-n-est-pas-resolu.md`,
+  cause : les includes d'une source C et la garde `extern "C"`), montée de REGLES_DE_L_ANALYSE, passe
+  complète (check_features, lib entière, e2e_code, e2e_postgres), dernier pas par la garde en mode pile.
+  Les worktrees : `wt-homonymes`, `wt-marque-nom`, `wt-receveurs`, `wt-proto` sous
+  `~/.cache/rag3weaver-build/`, propres.
+- **Après la pose** : dire à banc que le pointeur est sur master (ses chiffres DEFINED_IN des bases à
+  ajouter au ticket fermé) ; la suite du ticket des receveurs (motif de tuple, locale redéclarée) ; la
+  définition liée à l'en-tête ; le membre platform.
 - **Le target** `~/.cache/rag3weaver-build/target-import-pointe-pile` (31 Go) se garde jusqu'au mot de
   Lucie sur la fin de session ; c'est le seul de la session.
 - **Les journaux** de chaque passe sont sous `~/.cache/rag3weaver-build/archives/codeparsers-*-14-nov` et
