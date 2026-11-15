@@ -1175,3 +1175,11 @@ et presque pas aux neufs (542) ; un scope inchangé ne mène plus à son fichier
 et usages n'y passent pas). Témoin 13 rouge d'abord (chaque Scope visible a un DEFINED_IN vers un File visible), correctif,
 rejeu. La parité du banc s'élargit : outline, fichier d'un scope, parent_path, compte des arêtes par étiquette vers le visible.
 Extrapolation : 0,35 s par fichier, vecteurs non recalculés ; code-lourd 45 à 50 min.
+Banc, 14 h 57 : **ne confirme pas** le défaut DEFINED_IN : après repassage, 73 340 arêtes vers des File ouverts (autant qu'au
+parent), 537 vers des fermés ; les 3 814 Scope sans File visible sont des deux côtés (la base : ticket des scopes sans
+DEFINED_IN chez codeparsers). La lecture d'ED inversait sans doute le total de P0 et le reste. ED départage avec les sorties ;
+seule question : les 537 vers des fermés. Le juge étendu reste pour la prochaine parité.
+ED, 14 h 58 : lecture retirée (une soustraction de deux totaux, pas un relevé par fermeture) ; l'écrivain n'a pas ce défaut. Les 537
+vers des File fermés : attendus légitimes (Scope fermés avec leur File d'avant, leur histoire ; le parent efface, d'où son 0) ;
+chiffre demandé au banc : Scope fermé → File fermé = 537, Scope ouvert → File fermé = 0. L'écrivain repart en file tel quel
+dès son rejeu, avec l'état du rattrapage ; le témoin 13 gardé comme filet.
