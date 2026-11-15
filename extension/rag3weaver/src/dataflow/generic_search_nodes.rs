@@ -654,9 +654,12 @@ impl Node for SearchSourceNode {
             // l'aurait tenu ouvert, et un point de reprise forcé avec lui.
             let signaux = options.signals.unwrap_or(target.default_signals);
             let embedding = if signaux.vector() {
+                let plafond = ctx.service::<usize>(crate::search::QUERY_MAX_CHARS_SERVICE).copied().unwrap_or(crate::search::DEFAULT_QUERY_MAX_CHARS);
+                let (requete, coupe) = crate::search::query_for_embedding(&self.query, plafond);
+                w.extend(coupe);
                 ctx.service::<Arc<dyn Embedder>>("embedder")
                     .filter(|e| !e.is_absent())
-                    .and_then(|e| crate::search::embed_query(&**e, &self.query, &mut HashMap::new()).ok())
+                    .and_then(|e| crate::search::embed_query(&**e, &requete, &mut HashMap::new()).ok())
                     .filter(|e| !e.is_empty())
             } else {
                 None
@@ -969,7 +972,12 @@ impl Node for VectorSearchNode {
             Some(e) => e,
             None => {
                 let mut cache = HashMap::new();
-                match embed_query(&*embedder, &query_str, &mut cache) {
+                let plafond = ctx.service::<usize>(crate::search::QUERY_MAX_CHARS_SERVICE).copied().unwrap_or(crate::search::DEFAULT_QUERY_MAX_CHARS);
+                let (requete, coupe) = crate::search::query_for_embedding(&query_str, plafond);
+                if let Some(c) = coupe {
+                    ctx.warn(&c);
+                }
+                match embed_query(&*embedder, &requete, &mut cache) {
                     Ok(e) => e,
                     Err(e) => {
                         return replier_la_branche(
