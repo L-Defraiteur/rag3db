@@ -1524,3 +1524,7 @@ service-503 sur master). Ce que la chaîne attend : le hash de master à l'atter
 des trois suites 40 min : pose vers 20 h) ; une fenêtre sans passe qui lit les services (7878/7879 : 10 à 30 s par service, l'hôte
 ~1 min par poste), « va » du banc et d'arbre avant ; lib inchangée sauf verdict du cœur. Trou pour `/model` : le manifeste du
 dépôt de Lucie n'a pas de `models.llm` (models: {sparse} seul) — ED donne le bloc, je le pose, G vérifie par check-manifests.
+Codeparsers, 17 h 36 : l'ordre de la résolution d'arêtes, par ce qu'une réponse fausse coûte à Lucie (Rust et C++ du moteur) : 1 marque
+nom (un appel de méthode standard relié à un homonyme d'une autre crate ; 1 949 receveurs « nom » sur 3 026 visent un nom std ;
+règle : un type lu mais hors de l'index s'abstient et le dit), 2 receveurs sans type, 3 définition liée à l'en-tête C++, 4 membre
+platform JS ; 5 import ES externe (réponse incomplète, +6,5 à +9,2 % de scopes) à porter à Lucie. Accepté ; 1 commencé en rouge.
