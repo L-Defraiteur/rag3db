@@ -1455,3 +1455,9 @@ Hotfixs, 17 h 04 : lot ci-docs-sans-run prêt (94e3a484f) : paths-ignore des dos
 master (pas '**/*.md' : des .md de templates/ sont compilés dans le binaire par include_str!) ; le workflow rag3weaver reçoit
 des exclusions dans ses paths ; ticket qui se ferme au premier run de code qui joue jusqu'au bout malgré des pushes de docs.
 Place après ED (socle).
+Embarquement, 17 h 05 : le 503 nommé du service vert, rouge d'abord (service-503 : e9874c1f8 rouges, 20487cfb7 correctif, 8a3af2b66 docs) :
+une panique de calcul répond 503 nommé, le poison noté sous le verrou de la passe (une vraie course trouvée par le témoin
+réécrit), les requêtes en vol toutes répondues, puis arrêt dit avec le code 70 (jamais Ok) ; plafond par texte 12 000 caractères
+(413 nommé) sur les quatre routes ; l'activation dit la cause lue au journal. Ticket du 7879 fermé ; deux ouverts (plafond en
+jetons ; cause d'arrêt d'un service posé à la main). Lib 2 373. Place : après hotfixs (ci-docs), avant archi (branchement) ;
+le binaire du service à poser au 7879 et 7878 par G après l'atterrissage.
