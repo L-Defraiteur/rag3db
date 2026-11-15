@@ -41,3 +41,17 @@ il faut qu'un modèle décide, et soit pas trop strict ».
    action hors de la demande, hors du bac ou vers le réseau non déclaré demande. Le décideur est un
    modèle qui lit la demande, le plan et l'action, et penche vers « passe » dans le doute ; le journal
    des passes et des refus le règle. La métrique : le taux de demandes inutiles, pas le taux de refus.
+
+## Ajout de 21 h 0x : l'index prêt, sans bruit
+
+Lucie : « faut peut-être pas non plus le re-notifier à chaque petit changement qu'il cause lui-même ; quand il
+fait une recherche, on estime si le temps d'attente est supérieur à 6 secondes d'indexation ; si oui il sera
+notifié et il reçoit que les index ne sont pas prêts ; si non son retour est immédiat et on attend le temps
+qu'il faut en synchrone ».
+
+7. **Une recherche attend l'index si c'est court, sinon elle le dit une fois.** L'agent n'est pas notifié de
+   chaque réindexation que ses propres écritures provoquent. À la recherche, l'hôte estime le reste à indexer
+   pour ce worktree : sous le seuil (6 s par défaut, réglable), la recherche attend en synchrone et répond
+   complète, sans un mot ; au-dessus, elle répond tout de suite « index pas prêt » avec l'estimation, et une
+   seule notification vient quand l'index est prêt. L'estimation se mesure sur le journal d'index (lignes
+   restantes, débit observé), pas sur une constante.
