@@ -7168,8 +7168,9 @@ mod tests {
     }
 
     /// **Une recherche lexicale sans filtre ne perd pas la ligne visible au profit de l'histoire** (ED,
-    /// 16 novembre : `allowed_ids_in` ne passait aucun ensemble à lucivy sans filtre de l'utilisateur, et la
-    /// visibilité ôtait ensuite, après le top-k, les parents fermés). `depart` mentionne d'abord « zorglub »
+    /// 16 novembre, la question de c7 : un filtre après coup ôte, il ne promeut pas). La visibilité arrive
+    /// au nœud BM25 en condition de filtre explicite, et descend donc en `allowed_ids`, avant le top-k. Le
+    /// témoin la garde. `depart` mentionne d'abord « zorglub »
     /// quatre fois, en un corps court, sous trois générations publiées ; à la quatrième, il le mentionne une
     /// fois dans un long corps. La version fermée classe mieux ; la recherche lexicale sans filtre à un résultat rend la
     /// ligne ouverte, pas zéro.
@@ -7194,17 +7195,12 @@ mod tests {
             crate::code_tools::reingest_file(&mut cat, source.as_ref(), "outils.rs", &texte).expect("la réindexation");
             cat.publier_la_generation(rang, 0).expect("publier");
         }
-        {
-            let cat = backend.catalog.lock().unwrap();
-            let morceaux = cat.conn().execute("MATCH (c:ScopeContent_Chunk) WHERE c.content CONTAINS 'zorglub' RETURN count(*)").map(|r| format!("{:?}", r.rows)).unwrap_or_else(|e| e.to_string());
-            let fermees = cat.conn().execute("MATCH (s:Scope) WHERE s.name = 'depart' RETURN s._depuis, s._jusqu_a").map(|r| format!("{:?}", r.rows)).unwrap_or_else(|e| e.to_string());
-            eprintln!("[témoin lexical] morceaux « zorglub » : {morceaux} ; lignes de depart : {fermees} ; tout visible : {:?}", cat.generations.as_ref().map(|v| v.tout_visible));
-        }
+        let fermees = backend.catalog.lock().unwrap().conn().execute("MATCH (s:Scope) WHERE s.name = 'depart' AND s._jusqu_a IS NOT NULL RETURN count(*)").unwrap().rows[0][0].as_i64();
+        assert_eq!(fermees, Some(3), "trois lignes fermées de depart : le témoin a de quoi perdre");
         let r = backend
-            .call("search_code", json!({"query": "zorglub", "options": {"signals": ["bm25"], "limit": 1, "diagnostics": true}}))
+            .call("search_code", json!({"query": "zorglub", "options": {"signals": ["bm25"], "limit": 1}}))
             .expect("search_code");
         let rendu = r.to_string();
-        eprintln!("[témoin lexical] réponse : {rendu}");
         assert!(rendu.contains("allongent"), "la recherche sans filtre rend la ligne ouverte de depart : {rendu}");
     }
 
