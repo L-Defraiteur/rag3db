@@ -124,6 +124,13 @@ print(" ".join(sorted({p["name"] for p in m["packages"] if p["source"] is None})
   [ -n "$paquets" ] || { echo "✗ ménage au plafond : la liste des paquets locaux est vide (cargo metadata dans $arbre)"; return 1; }
   echo "▸ le target $target pèse ${avant} Mio, au-delà du plafond de ${plafond} Mio : ménage des paquets locaux ($paquets)"
   args=""; for p in $paquets; do args="$args -p $p"; done
+  # **L'étiquette du cache** (15 novembre 2026, relevé d'archi) : `cargo clean` refuse un target sans `CACHEDIR.TAG`
+  # (« cleaning has been aborted to prevent accidental deletion of unrelated files »). Nos targets naissent de la garde
+  # (`mkdir -p`, puis le marqueur) avant que cargo ne les voie, et cargo n'y écrit alors jamais son étiquette. Le target
+  # est à nous (il porte notre marqueur) : la garde la pose, au contenu de cargo.
+  if [ ! -f "$target/CACHEDIR.TAG" ]; then
+    printf 'Signature: 8a477f597d28d172789f06886806bc55\n# This file is a cache directory tag created by cargo.\n# For information about cache directory tags see https://bford.info/cachedir/\n' > "$target/CACHEDIR.TAG"
+  fi
   for d in "$target" "$target"/*/; do
     d="${d%/}"; nom=$(basename "$d")
     if [ "$d" != "$target" ]; then
@@ -133,9 +140,11 @@ print(" ".join(sorted({p["name"] for p in m["packages"] if p["source"] is None})
     for prof in debug release; do
       [ -d "$d/$prof" ] || continue
       if [ "$d" = "$target" ]; then
-        (cd "$arbre" && cargo clean -q --target-dir "$target" $([ $prof = release ] && echo --release) $args) || return 1
+        (cd "$arbre" && cargo clean -q --target-dir "$target" $([ $prof = release ] && echo --release) $args) \
+          || { echo "✗ ménage au plafond : cargo clean a échoué dans $d ($prof), voir ci-dessus"; return 1; }
       else
-        (cd "$arbre" && cargo clean -q --target-dir "$target" --target "$nom" $([ $prof = release ] && echo --release) $args) || return 1
+        (cd "$arbre" && cargo clean -q --target-dir "$target" --target "$nom" $([ $prof = release ] && echo --release) $args) \
+          || { echo "✗ ménage au plafond : cargo clean a échoué dans $d ($prof), voir ci-dessus"; return 1; }
       fi
     done
   done
