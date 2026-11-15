@@ -25,12 +25,29 @@ void Alter::initLocalStateInternal(ResultSet* resultSet, ExecutionContext* conte
     }
 }
 
+// Les tables de stockage d'une entrée du catalogue : la table elle-même pour un nœud, chaque table
+// du groupe pour une relation. Le verrou de schéma de chacune, en exclusif.
+static void lockTablesOf(const transaction::Transaction& transaction,
+    const TableCatalogEntry& entry) {
+    if (entry.getType() == CatalogEntryType::REL_GROUP_ENTRY) {
+        for (const auto& info : entry.constCast<RelGroupCatalogEntry>().getRelEntryInfos()) {
+            transaction.lockTableForSchemaChange(info.oid);
+        }
+        return;
+    }
+    transaction.lockTableForSchemaChange(entry.getTableID());
+}
+
 void Alter::executeInternal(ExecutionContext* context) {
     auto clientContext = context->clientContext;
     auto catalog = Catalog::Get(*clientContext);
     auto transaction = Transaction::Get(*clientContext);
     if (catalog->containsTable(transaction, info.tableName)) {
         auto entry = catalog->getTableCatalogEntry(transaction, info.tableName);
+        // Le verrou de schéma, en exclusif : l'ALTER attend la fin des écrivains ouverts sur la
+        // table, et ceux qui arrivent l'attendent (ticket de l'ADD COLUMN sous une écriture
+        // ouverte, 15 novembre 2026).
+        lockTablesOf(*transaction, *entry);
         alterTable(clientContext, *entry, info);
     } else {
         throw BinderException("Table " + info.tableName + " does not exist.");

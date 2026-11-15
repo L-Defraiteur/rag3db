@@ -42,6 +42,10 @@ enum class LockResourceKind : uint8_t {
     ROW = 0,
     // L'index d'une table, quand sa maintenance ne supporte qu'un écrivain à la fois.
     INDEX = 1,
+    // Une table entière, pour son schéma (le ticket de l'ADD COLUMN sous une écriture ouverte,
+    // 15 novembre 2026). Un écrivain la tient en partagé de sa première écriture dans la table à sa
+    // fin ; un ALTER, un DROP TABLE ou un CREATE INDEX la prend en exclusif, et attend.
+    TABLE = 2,
     // Un genre s'ajoute ici sans rien changer d'autre : la ressource est comparée champ à
     // champ. Règle à tenir (PostgreSQL) : toute attente qui peut entrer dans un cycle doit
     // passer par ce gestionnaire, sinon la détection d'interblocage est aveugle.
@@ -61,6 +65,9 @@ struct RAG3DB_API LockResource {
     }
     static LockResource index(common::table_id_t tableID) {
         return LockResource{LockResourceKind::INDEX, tableID, {}};
+    }
+    static LockResource table(common::table_id_t tableID) {
+        return LockResource{LockResourceKind::TABLE, tableID, {}};
     }
 
     auto operator<=>(const LockResource&) const = default;
@@ -129,6 +136,8 @@ public:
 
     // Pour les tests et le diagnostic.
     uint64_t getNumLocksHeld(common::transaction_t transactionID) const;
+    // Les transactions qui tiennent la ressource (pour le message d'un refus après attente).
+    std::vector<common::transaction_t> getHolders(const LockResource& resource) const;
     uint64_t getNumResources() const;
     bool isWaiting(common::transaction_t transactionID) const;
 

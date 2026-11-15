@@ -238,6 +238,7 @@ void RelTable::lockEndpoints(Transaction* transaction, const ValueVector& srcNod
 }
 
 void RelTable::insert(Transaction* transaction, TableInsertState& insertState) {
+    transaction->lockTableForWrite(tableID);
     const auto& relInsertState = insertState.constCast<RelTableInsertState>();
     if (insertState.takesLocks) {
         lockEndpoints(transaction, relInsertState.srcNodeIDVector, relInsertState.dstNodeIDVector,
@@ -257,6 +258,7 @@ void RelTable::insert(Transaction* transaction, TableInsertState& insertState) {
 }
 
 void RelTable::update(Transaction* transaction, TableUpdateState& updateState) {
+    transaction->lockTableForWrite(tableID);
     const auto& relUpdateState = updateState.cast<RelTableUpdateState>();
     KU_ASSERT(relUpdateState.relIDVector.state->getSelVector().getSelSize() == 1);
     const auto relIDPos = relUpdateState.relIDVector.state->getSelVector()[0];
@@ -289,6 +291,7 @@ void RelTable::update(Transaction* transaction, TableUpdateState& updateState) {
 }
 
 bool RelTable::delete_(Transaction* transaction, TableDeleteState& deleteState) {
+    transaction->lockTableForWrite(tableID);
     const auto& relDeleteState = deleteState.cast<RelTableDeleteState>();
     KU_ASSERT(relDeleteState.relIDVector.state->getSelVector().getSelSize() == 1);
     const auto relIDPos = relDeleteState.relIDVector.state->getSelVector()[0];
@@ -346,6 +349,7 @@ bool RelTable::delete_(Transaction* transaction, TableDeleteState& deleteState) 
 }
 
 void RelTable::detachDelete(Transaction* transaction, RelTableDeleteState* deleteState) {
+    transaction->lockTableForWrite(tableID);
     auto direction = deleteState->detachDeleteDirection;
     if (std::ranges::count(getStorageDirections(), direction) == 0) {
         throw RuntimeException(
