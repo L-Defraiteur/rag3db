@@ -1676,3 +1676,6 @@ Archi, 18 h 55 : le rouge du branchement est un effet du lot (2 sur 4 sous Gemin
 report et dit « rédigé ») ; correctif dans l'invite (« une demande de fichier s'écrit dans le fichier, la réponse dit ce qui est
 écrit ») vu rouge ; 4 tirages Gemini puis repose sur f85977d09, vert vers 19 h 30. Décision : **la pose du soir attend le branchement
 jusqu'à 19 h 35** (c'est lui qui met le socle dans la tâche de Lucie) ; sinon elle part sans lui.
+Banc, 18 h 55 : le verdict de c5ec47cc4 vers 20 h 50 — le parent ne compilait pas (la coupe de la sonde emportait la fonction de la vue
+2b′ ajoutée après), une heure perdue ; corrigé (la coupe s'arrête à la fonction suivante), relancé 18 h 55 sur copies et P0 neuves.
+L'écrivain et la montée passent après la pose du soir.
