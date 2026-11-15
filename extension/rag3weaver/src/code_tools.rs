@@ -503,14 +503,15 @@ fn narrowest<'a>(scopes: &'a [ScopeRef], line: usize) -> Option<&'a ScopeRef> {
 /// `File.content_hash` tel qu'indexé, si le fichier est connu du catalogue.
 fn indexed_hash(catalog: Option<&dyn crate::read_view::ReadCatalog>, source: &str, path: &str) -> Result<Option<String>, String> {
     let Some(catalog) = catalog else { return Ok(None) };
-    let uuid = catalog
-        .entity_uuid(FILE, &BTreeMap::from([
-            ("source".to_string(), CypherValue::String(source.to_string())),
-            ("path".to_string(), CypherValue::String(path.to_string())),
-        ]))
+    // Par ses champs, pas par l'uuid de sa clé : sous les générations, une ligne née après la première a
+    // un uuid qui porte sa couche et son rang (`uuid_for_in`), et la lecture garde la seule visible.
+    let lignes = catalog
+        .find_by_field(FILE, "path", CypherValue::String(path.to_string()), &["source", "content_hash"])
         .map_err(erreur_du_catalogue)?;
-    let row = catalog.get(FILE, &uuid).map_err(erreur_du_catalogue)?;
-    Ok(row.and_then(|r| col(&r, "content_hash").and_then(|v| v.as_str().map(String::from))))
+    Ok(lignes
+        .iter()
+        .find(|r| col(r, "source").and_then(|v| v.as_str()) == Some(source))
+        .and_then(|r| col(r, "content_hash").and_then(|v| v.as_str().map(String::from))))
 }
 
 // ─── read ────────────────────────────────────────────────────────────────────
