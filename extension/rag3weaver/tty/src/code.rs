@@ -365,6 +365,18 @@ mod tests {
         assert_eq!(rendu(Genre::Texte, "abcdefghijklmnop qr", 0, 8), vec!["abcdefgh", "ijklmnop", "qr"], "un mot trop long se coupe");
     }
 
+    /// Un remplacement (`diff`) se lit : les lignes retirées dans la teinte des
+    /// commentaires, les ajoutées dans celle des chaînes.
+    #[test]
+    fn a_diff_block_tints_removed_and_added_lines() {
+        let t = Theme::daemon();
+        let v = Validee { genre: Genre::Code, texte: "- let a = 1;\n+ let a = 3;\n  pareil".into(), langue: "diff".into(), tete: 0 };
+        let l = lignes(&v, &t, cap(), 80, None);
+        assert_eq!(l[1].spans[0].style.fg, Some(rgb_de(&t, "comment")));
+        assert_eq!(l[2].spans[0].style.fg, Some(rgb_de(&t, "string")));
+        assert_eq!(l[3].spans[0].style.fg, None);
+    }
+
     #[test]
     fn inline_code_is_tinted_and_the_backticks_stay() {
         let t = Theme::daemon();

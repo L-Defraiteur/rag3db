@@ -30,4 +30,6 @@ pub mod theme;
 #[cfg(feature = "vue")]
 pub mod tui;
 #[cfg(feature = "vue")]
+pub mod visionneuse;
+#[cfg(feature = "vue")]
 pub mod vue;
