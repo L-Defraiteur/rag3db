@@ -47,7 +47,9 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
   liste de JavaScript, où c'est un mot-clé) : aucun appel à un constructeur `new` n'était relevé, et
   `usages` de `Inner::new` ne rendait rien. Sur le code de rag3weaver, les relations vers un `new` passent
   de 542 à 2 894, et les scopes qui en appellent un de 403 à 1 596 ; un échantillon trouve le `new` du bon
-  type à chaque appel. Le même correctif vaut pour Python et C (codeparsers `87126e4`).
+  type à chaque appel. Le même correctif vaut pour Python et C. Et `fmt/format.h` retrouve ses parents :
+  une macro seule sur sa ligne (`FMT_BEGIN_NAMESPACE`) n'ouvre plus une fonction anonyme, ses 45 fonctions
+  sont de nouveau sous leur namespace, 481 scopes au lieu de 455 (codeparsers `5f7c837`).
 - **15 nov. — Les dépendances d'un vieux projet Python se lisent aussi.** `setup.cfg` (`install_requires`
   en lignes de continuation, `extras_require`), `setup.py` (la liste `install_requires=[…]` écrite en
   littéral), le `Pipfile` (`[packages]`, `[dev-packages]`) et les groupes de PEP 735
