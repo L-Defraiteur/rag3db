@@ -1636,3 +1636,5 @@ tty, 18 h 24 : correction sur tty-14 — son rejeu du crate partageait un target
 binaire de test bâti depuis l'arbre de tty-15 (un test de tty-15 au journal de tty-14, aucune ligne Compiling). Tiennent : la lib
 entière et check_features dans leur target ; master rejoué dans un target à lui : crate 97 + 19 vert. Le script de rejeu a
 maintenant un target par worktree et rougit si le crate n'a pas été compilé depuis l'arbre du lot ; tty-15 rejoué ainsi.
+tty, 18 h 26 : **tty-15 sur master à 677d361ad** (7 commits : sous un tmux qui permet les touches étendues en CSI u, le terminal demande
+le mode 1 ; l'indication garde son début ; les nouveautés retrouvent leurs lignes vides ; gmail, 0 attribution). tty-16 suit.
