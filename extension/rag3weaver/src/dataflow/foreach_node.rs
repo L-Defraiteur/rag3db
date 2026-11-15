@@ -187,7 +187,7 @@ fn materialiser(config: &Value, registre: &NodeRegistry, qui: &str) -> Result<(S
 }
 
 /// Les clés de la configuration propres au nœud, qui ne sont pas des paramètres du graphe cité.
-const CLES_DU_NOEUD: [&str; 7] = ["graph", "element", "result", "on_error", "parallelism", "carry", "report_results"];
+const CLES_DU_NOEUD: [&str; 9] = ["graph", "element", "result", "on_error", "parallelism", "carry", "report_results", "when", "flatten"];
 
 /// Les paramètres du graphe cité, lus dans la configuration (hors l'élément).
 fn parametres(outil: &GraphTool, config: &Value, sauf: Option<&str>, qui: &str) -> Result<Map<String, Value>, String> {
