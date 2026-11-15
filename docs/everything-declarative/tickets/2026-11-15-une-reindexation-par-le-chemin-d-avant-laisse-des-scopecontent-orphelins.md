@@ -53,6 +53,11 @@ rouge attendu sur master.
 
 ## Ce qu'il faut pour le fermer
 
+La lecture de c7 (15 novembre 2026, nuit, rapportée par banc) : le ticket est pour ED. La bascule
+d'une base vers les générations met fin à ses orphelines ; d'ici là, un ménage sur une copie se fait
+seulement si une mesure l'exige.
+
+
 Soit la fin d'instantané reprend une version quand sa dernière occurrence part, ou la retire du plein
 texte avec elle, avec le témoin ci-dessus vert et les comptes du plein texte des versions égaux aux
 lignes. Soit toutes les bases à versions passent aux générations, et le chemin d'avant n'écrit
