@@ -42,6 +42,23 @@ Une ligne retirée, d'une autre couche ou posée après le rang lu le rend faux.
 **Ce qui reste à juger** : banc rejoue ses 30 cas sur la tête corrigée. Si les rangs reviennent, ce ticket ne garde que
 la longueur moyenne du champ, et peut-être rien ; lucivy attend ce rejeu avant de dessiner (c7).
 
+## Pas de perte sur search_code : la visibilité descend en pré-filtre (ED, 16 novembre, 0 h 50)
+
+Une sonde dans `BM25SearchNode` (branche `sonde-masque-lexical`, hors push) le montre. Sur une base à générations,
+la visibilité arrive au nœud **en condition de filtre explicite** : `Must[Scope._couche = backend, _depuis <= rang,
+_jusqu_a nul ou > rang, _uuid non nul]`. `allowed_ids_in` la résout, et lucivy reçoit l'ensemble avant le top-k. La
+perte supposée, où un filtre après coup ôterait sans promouvoir, n'a donc pas lieu sur ce chemin.
+
+Le témoin
+`backend::tests::une_recherche_lexicale_sans_filtre_ne_perd_pas_la_ligne_visible` le garde : trois versions fermées de
+`depart` mieux classées, k = 1, et la ligne ouverte rendue.
+
+Le correctif de « tout visible » (cause première ci-dessus) reste juste pour les lecteurs sans filtre qui ne passent
+pas par ce chemin. Mais le classement de `search_code` avait déjà son masque. **L'écart des 23 cas vient donc de la
+longueur moyenne du champ**, comptée sur le corpus : lucivy mesure 31,6 M tokens avec l'histoire contre 9,4 M visibles.
+Sa moyenne sur le corpus donne 11 classements différents sur 15, et sa moyenne sur les admis 4 sur 15, à un écart de
+score d'au plus 2,6 %.
+
 ## Ce que le code fait déjà, et ce qui reste
 
 - **Le masque est un pré-filtre, pas un filtre après coup.** `search_filtered` de lucivy 4.3.7 prend les k premiers
