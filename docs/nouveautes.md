@@ -61,6 +61,13 @@ le reste de la ligne dit en une phrase ce que ça change ; le hash dit où.
 
 ## Novembre 2026
 
+- **15 nov. — Chaque surcharge garde ses arêtes, et un paramètre C++ son nom.** Des homonymes de même
+  signature (les constructeurs d'une classe, deux `impl Trait for …`) avaient un seul identifiant dans
+  l'analyse, et leurs arêtes se rabattaient sur le dernier : sur le code de rag3weaver, 65 scopes n'avaient
+  pas de `DEFINED_IN`, il n'en reste aucun. Un paramètre C++ par pointeur ou par référence (`Foo* p`,
+  `const Foo& r`) n'était pas lu : les signatures le montrent maintenant, et son nom n'est plus pris pour une
+  référence (22 177 fausses références en moins sur le moteur). **Toutes les bases repassent une fois**
+  (pointeur codeparsers : homonymes et paramètres C++, `ff82d22`).
 - **15 nov. — Les appels à `T::new()` se voient enfin.** `new` était un mot vide en Rust (copié de la
   liste de JavaScript, où c'est un mot-clé) : aucun appel à un constructeur `new` n'était relevé, et
   `usages` de `Inner::new` ne rendait rien. Sur le code de rag3weaver, les relations vers un `new` passent
