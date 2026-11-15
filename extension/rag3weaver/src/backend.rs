@@ -931,6 +931,14 @@ fn lire_le_nom_de_l_agent<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Opti
 /// Le nom de l'agent quand rien ne le déclare.
 pub const NOM_DE_L_AGENT_PAR_DEFAUT: &str = "équipier";
 
+impl BackendManifest {
+    /// La persona de l'agent (à venir).
+    pub fn persona_de_l_agent(&self, surcharges: &Surcharges) -> Option<String> {
+        let _ = surcharges;
+        None
+    }
+}
+
 /// **Le nom de l'agent d'un backend** : la surcharge de la tâche, sinon `agent.name` du manifeste, sinon
 /// « équipier ».
 pub fn nom_de_l_agent(manifest: &BackendManifest, surcharges: &Surcharges) -> String {
@@ -967,6 +975,8 @@ pub struct Surcharges {
     pub racine_principale: Option<PathBuf>,
     /// Le nom de l'agent pour cette tâche, à la place de `agent.name` du manifeste.
     pub nom_de_l_agent: Option<String>,
+    /// La persona de l'agent pour cette tâche, à la place de `agent.persona` du manifeste.
+    pub persona_de_l_agent: Option<String>,
 }
 
 /// **Un champ inconnu dit quel binaire le lit** (8 novembre 2026 : un hôte rendu
@@ -8723,6 +8733,22 @@ mod tests {
         assert_eq!(nom_de_l_agent(&nomme, &Surcharges::default()), "Algareth");
         let tache = Surcharges { nom_de_l_agent: Some("Ombre".into()), ..Default::default() };
         assert_eq!(nom_de_l_agent(&nomme, &tache), "Ombre", "la tâche surcharge le manifeste");
+        // La persona : un texte court, plusieurs lignes permises, 600 caractères au plus ; vide ou absente,
+        // rien. La tâche la surcharge comme le nom.
+        assert_eq!(nomme.persona_de_l_agent(&Surcharges::default()), None, "sans persona, rien");
+        let mut avec = base.clone();
+        avec["agent"] = json!({"name": "Algareth", "persona": "Bref et précis.\nUn brin d'ironie."});
+        let avec: BackendManifest = serde_json::from_value(avec).unwrap();
+        assert_eq!(avec.persona_de_l_agent(&Surcharges::default()).as_deref(), Some("Bref et précis.\nUn brin d'ironie."));
+        let autre = Surcharges { persona_de_l_agent: Some("Solennel.".into()), ..Default::default() };
+        assert_eq!(avec.persona_de_l_agent(&autre).as_deref(), Some("Solennel."), "la tâche surcharge la persona");
+        let mut vide = base.clone();
+        vide["agent"] = json!({"persona": "   "});
+        assert_eq!(serde_json::from_value::<BackendManifest>(vide).unwrap().persona_de_l_agent(&Surcharges::default()), None, "une persona vide n'ajoute rien");
+        let mut longue = base.clone();
+        longue["agent"] = json!({"persona": "x".repeat(601)});
+        let e = serde_json::from_value::<BackendManifest>(longue).expect_err("trop longue").to_string();
+        assert!(e.contains("agent.persona") && e.contains("600"), "le refus nomme le champ et le plafond : {e}");
         for faux in [json!(""), json!("   "), json!("deux\nlignes")] {
             let mut m = base.clone();
             m["agent"] = json!({"name": faux});
