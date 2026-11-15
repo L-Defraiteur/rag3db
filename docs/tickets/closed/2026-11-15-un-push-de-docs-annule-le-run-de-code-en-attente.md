@@ -1,7 +1,6 @@
 # Un push de docs annule le run de code en attente : la CI de master ne joue que dans un creux
 
-- **État** : ouvert (15 novembre 2026, hotfixs, relevé par c7). Corrigé par le lot `ci-docs-sans-run` ; se ferme
-  au premier run de code de master qui joue malgré des pushes de docs derrière lui.
+- **État** : fermé (15 novembre 2026, 18 h 31, hotfixs) — corrigé par 6c59d5c78. La preuve est en fin de page.
 - **Famille** : moteur
 - **Gravité** : la CI ne dit rien. Un commit de code reste sans verdict tant qu'un push de docs le suit dans les vingt
   minutes.
@@ -29,3 +28,15 @@ et sur a8b3b25bb sont « cancelled » sans job.
 
 Un run de master sur un commit de code qui joue ses jobs jusqu'au bout, alors que des pushes de docs seules l'ont suivi
 pendant qu'il tournait ou attendait.
+
+## La fermeture (hotfixs, 15 novembre 2026, 18 h 31)
+
+- **Un push de docs seules ne lance plus rien.** 3b4ba3cb7 (c7, 17 h 51) n'a lancé ni CI Workflow ni rag3weaver.
+  Après f85977d09, dix commits de docs seules sont venus sans créer de run.
+- **Un run de code joue jusqu'au bout malgré des docs derrière lui.** Le run 43739124130 sur f85977d09 (le lot
+  service-503 d'embarquement) est vert : sanity checks, python lint check, code format et shell test.
+- **Le run du lot lui-même**, 43737760344 sur 6c59d5c78, a été remplacé, mais par un push de code (f85977d09). C'est
+  le comportement voulu : le code le plus récent passe devant.
+- **Les deux runs créés ensuite** (43740369684 sur e9e47391a, 43741129343 sur 677d361ad) viennent de pushes qui
+  portaient du code de tty et de l'hôte, sous un dernier commit de docs. GitHub juge le filtre sur les fichiers de tout
+  le push, pas sur le dernier commit.
