@@ -1850,6 +1850,8 @@ mod tests {
     fn the_teammate_prompt_says_the_supervisor_is_the_user() {
         assert!(SYSTEM_PROMPT.contains("the supervisor is the user"), "{SYSTEM_PROMPT}");
         assert!(SYSTEM_PROMPT.contains("once per turn") && SYSTEM_PROMPT.contains("report done"), "{SYSTEM_PROMPT}");
+        // La réponse est du texte libre, qui streame (c7, 15 novembre) ; report n'en est plus la voie.
+        assert!(SYSTEM_PROMPT.contains("write your answer as text, not inside report"), "{SYSTEM_PROMPT}");
     }
 
     #[test]
