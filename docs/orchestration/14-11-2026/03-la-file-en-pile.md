@@ -1614,3 +1614,6 @@ dans le manifeste de Lucie qu'après l'atterrissage (deny_unknown_fields avant).
 Lucie, 18 h 04 : « et une persona, un personnage assez bref à incarner, comme un ton de réponse ? » — `agent.persona` à côté de
 `agent.name` (texte court, plafond réglé, défaut vide, surcharge par tâche) ; dans l'invite après le nom, après les règles du socle,
 pour colorer le ton sans défaire une règle. Même lot, chez ED et archi.
+Embarquement, 18 h 06 : **le 503 nommé du service sur master à f85977d09e** (5 commits, gmail, 0 attribution ; passe sur 2dfcdad5f :
+embarqueur à la demande, lectures 27, code 36, features 8/8, lib 2 516, navigateur 45). « À toi » à archi pour le branchement dès sa
+passe verte ; G bâtit le binaire du service sur f85977d09e. Restent avant le hash de l'hôte : tty-14/15/16, 96, ED (nom + persona).
