@@ -9,6 +9,9 @@ H=$D/home; W=$H/git_workspaces/wt/extension/rag3weaver; mkdir -p $W/scripts $W/s
 git -C $H/git_workspaces/wt init -q 2>/dev/null || { mkdir -p $H/git_workspaces/wt && git -C $H/git_workspaces/wt init -q; }
 echo 'fn f() {}' > $W/src/lib.rs
 git -C $H/git_workspaces/wt -c user.email=t@t -c user.name=t add -A > /dev/null && git -C $H/git_workspaces/wt -c user.email=t@t -c user.name=t commit -qm base
+# master sous la tête : la base, puis un commit du lot par-dessus
+git -C $H/git_workspaces/wt update-ref refs/remotes/origin/master HEAD; BASE_JOUET=$(git -C $H/git_workspaces/wt rev-parse HEAD)
+echo '// lot' >> $W/src/lib.rs; git -C $H/git_workspaces/wt -c user.email=t@t -c user.name=t commit -qam lot
 # Les faux : FAUX_ROUGE=<suite> fait échouer cette suite ; FAUX_NON_JOUEES=<suite> y écrit « NON JOUÉES » ;
 # FAUX_CHECK=rouge rend check_features sans sa dernière ligne verte ; FAUX_PREUVE=muette ne recompile rien.
 cat > $W/run_e2e.sh <<'F'
@@ -41,6 +44,7 @@ R=$H/.cache/rag3weaver-build/j/resume.log
 passe VERT "la passe entière, tout vert"
 grep -q '^commit [0-9a-f]\{7,\} — .* — lib 373b5477b' $R && echo "vert   la première ligne dit le commit et la lib" || { echo "ROUGE  première ligne : $(head -1 $R)"; rouge=1; }
 [ "$(cut -d' ' -f1 $D/trace | tr '\n' ' ')" = "e2e_lectures e2e_lectures e2e_code " ] && echo "vert   le témoin, puis e2e_lectures et e2e_code" || { echo "ROUGE  suites jouées : $(cut -d' ' -f1 $D/trace | tr '\n' ' ')"; rouge=1; }
+[ "$(cat $H/.cache/rag3weaver-build/j/base 2>/dev/null)" = "$BASE_JOUET" ] && echo "vert   la base testée est écrite pour la garde (<journaux>/base = master sous la tête)" || { echo "ROUGE  base testée : « $(cat $H/.cache/rag3weaver-build/j/base 2>/dev/null) », attendu $BASE_JOUET"; rouge=1; }
 passe VERT "sous RAG3WEAVER_MOTEUR_ANCIEN=1" RAG3WEAVER_MOTEUR_ANCIEN=1
 grep -q '^RAG3WEAVER_MOTEUR_ANCIEN=1 : le C++ du lot est plus neuf que la lib 373b5477b' $R && echo "vert   RAG3WEAVER_MOTEUR_ANCIEN est dit au résumé" || { echo "ROUGE  RAG3WEAVER_MOTEUR_ANCIEN n'est pas dit au résumé"; rouge=1; }
 : > $D/trace; HOME=$H PATH=$D/bin:$PATH FAUX_TRACE=$D/trace bash "$X" wt j filtre temoins > /dev/null 2>&1
