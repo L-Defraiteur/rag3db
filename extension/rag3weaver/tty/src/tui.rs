@@ -562,6 +562,11 @@ fn lancer_une_commande(cmd: &str, terminal: &mut ratatui::DefaultTerminal, vue: 
 }
 
 /// Les lignes de `/model` : les modèles déclarés, le nom et le modèle d'abord.
+/// Le nom que l'hôte a gardé pour l'agent, selon sa réponse à `/nom <n>`.
+pub fn nom_garde(_n: &str, _r: &Result<Value, String>) -> Option<String> {
+    None
+}
+
 /// Ce que `/nom <n>` dit, selon la réponse de l'hôte (`POST /ide/teammate/name`, chez ED) : le nom
 /// gardé, celui du dépôt pour un nom vide, un refus tel quel, et un hôte qui n'a pas encore la route.
 pub fn nom_dit(n: &str, r: Result<Value, String>) -> String {
@@ -934,6 +939,14 @@ mod tests {
         assert_eq!(nom_dit("Om bre", Err("POST /ide/teammate/name : agent_name : un nom sans blanc (400)".into())), "/nom Om bre : POST /ide/teammate/name : agent_name : un nom sans blanc (400)");
         assert_eq!(nom_dit("Ombre", Err("POST /ide/teammate/name : route inconnue : POST /ide/teammate/name (404)".into())), "cet hôte ne sait pas encore renommer l'agent (POST /ide/teammate/name arrive chez ED)");
         assert_eq!(nom_dit("Ombre", Err("POST /ide/teammate/name : tâche inconnue : doc (404)".into())), "/nom Ombre : POST /ide/teammate/name : tâche inconnue : doc (404)", "un autre 404 se dit tel quel");
+    }
+
+    /// Le nom que l'hôte a gardé, que la vue retient (`/nom` seul le dit ensuite) ; un refus n'en garde aucun.
+    #[test]
+    fn the_name_kept_by_the_host_is_the_one_the_view_keeps() {
+        assert_eq!(nom_garde("Ombre", &Ok(json!({ "agent_name": "Ombre" }))), Some("Ombre".to_string()));
+        assert_eq!(nom_garde("", &Ok(json!({ "agent_name": "Algareth" }))), Some("Algareth".to_string()), "un nom vide : celui du dépôt");
+        assert_eq!(nom_garde("Ombre", &Err("POST /ide/teammate/name : route inconnue : POST /ide/teammate/name (404)".into())), None);
     }
 
     /// `/model` dit les modèles déclarés : le nom et le modèle d'abord, la manière d'y

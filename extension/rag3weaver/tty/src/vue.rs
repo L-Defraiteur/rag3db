@@ -1675,6 +1675,24 @@ mod tests {
         assert_eq!(v.nom_de_l_agent(), Some("Algareth"), "seules les lignes de l'agent le nomment");
     }
 
+    /// **Une demande s'écrit une fois** (essai réel de /nom, 16 nov.) : ce que tu envoies s'écrit tout
+    /// de suite (« › … ») ; la ligne que la boîte en rend ne se réécrit pas. Une ligne de toi venue
+    /// d'ailleurs (l'IDE), qui n'a pas été tapée ici, s'écrit.
+    #[test]
+    fn what_you_send_is_written_once_even_when_the_mailbox_gives_it_back() {
+        let mut v = Vue::new(120, false);
+        let ecrites = |v: &mut Vue| v.prendre_lignes().into_iter().map(|l| l.texte).collect::<Vec<_>>();
+        for c in "lis a.rs".chars() {
+            v.touche(Touche::Car(c));
+        }
+        assert_eq!(v.touche(Touche::Entree), Some(Action::Envoyer("lis a.rs".into(), "request")));
+        assert_eq!(ecrites(&mut v), vec!["› lis a.rs".to_string()]);
+        v.ligne_de_boite(&json!({ "id": "d/t:0", "from": "supervisor", "kind": "request", "text": "lis a.rs" }));
+        assert_eq!(ecrites(&mut v), Vec::<String>::new(), "la boîte la rend : déjà écrite");
+        v.ligne_de_boite(&json!({ "id": "d/t:1", "from": "supervisor", "kind": "instruction", "text": "depuis l'IDE" }));
+        assert_eq!(ecrites(&mut v), vec!["[toi · consigne] depuis l'IDE".to_string()], "venue d'ailleurs, elle s'écrit");
+    }
+
     fn ligne_b(n: usize, from: &str, kind: &str, extra: Value) -> Value {
         let mut l = json!({ "id": format!("a1/doc:{n}"), "from": from, "kind": kind, "text": format!("texte {n}") });
         if let (Some(o), Some(e)) = (l.as_object_mut(), extra.as_object()) {
