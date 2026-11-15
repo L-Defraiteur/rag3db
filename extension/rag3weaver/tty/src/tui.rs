@@ -530,6 +530,9 @@ pub fn modeles_dits(v: &Value) -> Vec<String> {
         return vec!["le manifeste de la tâche ne déclare aucun modèle de langage (models.llm)".to_string()];
     }
     let mut out = vec!["les modèles de la tâche (/model <nom> en change) :".to_string()];
+    if v["current_unknown"] == true {
+        out.push(format!("  ▸ {} (inconnu) — le choix de la tâche ne désigne plus aucun modèle déclaré", v["current"].as_str().unwrap_or("?")));
+    }
     for m in modeles {
         let acces: Vec<&str> = [m["provider"].as_str(), m["protocol"].as_str()].into_iter().flatten().collect();
         let acces = if acces.is_empty() { String::new() } else { format!(" ({})", acces.join(", ")) };
@@ -852,6 +855,8 @@ mod tests {
             "    fin — claude-opus-5-5 (compatible, anthropic) · par défaut".to_string(),
         ]);
         assert_eq!(modeles_dits(&json!({ "models": [] })), vec!["le manifeste de la tâche ne déclare aucun modèle de langage (models.llm)".to_string()]);
+        let inconnu = json!({ "models": [{ "name": "vite", "model": "m", "default": true, "current": false }], "current": "rapide", "current_unknown": true });
+        assert_eq!(modeles_dits(&inconnu)[1], "  ▸ rapide (inconnu) — le choix de la tâche ne désigne plus aucun modèle déclaré", "le choix inconnu se dit (ED)");
     }
 
     /// `/context` dit le remplissage du contexte du modèle, en jetons et en
