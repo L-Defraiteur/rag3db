@@ -1000,7 +1000,9 @@ mod tests {
         assert_eq!(dessin(&v, 60, 3).0[2], "› x", "l'indication part dès qu'on tape");
         let mut t = Vue::new(60, true);
         t.sous_tmux = true;
-        assert_eq!(dessin(&t, 60, 3).0[2], "› sous tmux, Maj-Entrée envoie : Alt-Entrée pour la ligne", "sous tmux, Maj-Entrée devient Entrée : le dire");
+        let mut t = Vue::new(140, true);
+        t.sous_tmux = true;
+        assert_eq!(dessin(&t, 140, 3).0[2], "› sous tmux, Maj-Entrée envoie : Alt-Entrée pour la ligne (ou, dans tmux : set -g extended-keys on ; set -g extended-keys-format csi-u)", "sous tmux, le dire, et dire le réglage qui l'ouvre");
     }
 
     /// **tty-11** : un appel d'outil se numérote, garde ce qu'il a fait, et son
