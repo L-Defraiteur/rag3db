@@ -967,3 +967,7 @@ tty, 12 h 4x : tty-11 prêt (cx-tty-11 67323f97e, 12 commits, crate tty seul : a
 colorés, .md en prose, écritures en retraits/ajouts, « extrait, 4 Ko sur 16 Ko », Ctrl-O visionneuse en écran
 alterné avec l'écran principal identique avant/après ; crate 80/80, 14/14 ; un commit rouge intermédiaire ne
 compile pas seul, dit dans la page). Attend le « poussé » du cœur. Archi : l'équipier silencieux, après le relai.
+ED, 12 h 5x : deux lots verts — (2) models.llm en liste + restart_budget_tokens (2b3340520, 7 témoins rouges
+d'abord, passe épinglée verte) ; (1) l'écrivain avec le correctif (A) (f3e2a6f54, passe épinglée verte, attend
+les deux parités de banc). **Ordre de la file** : cœur (ALTER) → tty-11 → ED (2) → G (garde-cpp-transferable)
+→ archi (relai) → 96 (compaction) → ED (1) au vert de banc.
