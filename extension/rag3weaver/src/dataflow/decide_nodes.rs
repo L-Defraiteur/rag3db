@@ -517,9 +517,10 @@ impl DecideNode {
         // pas une mauvaise étiquette, ni un défaut du graphe.
         let (finish, u) = rendu.map_err(|e| format!("Decide ({}) : {e}", llm.name()))?;
         let mut usage = json!({"ms": if u.ms > 0 { u.ms } else { debut.elapsed().as_millis() as u64 }});
-        // Un appel qui a rendu une étiquette a au moins un jeton de sortie : deux compteurs à zéro
-        // disent un fournisseur qui n'a pas envoyé de bloc usage, pas un appel gratuit.
-        if u.prompt_tokens > 0 || u.completion_tokens > 0 {
+        // Un appel envoie toujours une invite : `prompt_tokens` à zéro dit un fournisseur qui n'a pas
+        // envoyé de bloc usage (le client compte alors les fragments reçus en sortie, et rien en
+        // entrée), pas un appel gratuit.
+        if u.prompt_tokens > 0 {
             usage["prompt_tokens"] = json!(u.prompt_tokens);
             usage["cached_prompt_tokens"] = json!(u.cached_prompt_tokens);
             usage["completion_tokens"] = json!(u.completion_tokens);
