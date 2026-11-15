@@ -26,19 +26,66 @@ impl Visionneuse {
 
     /// Une touche, pour `n_appels` appels dont celui montré a `n_lignes` lignes,
     /// sur un écran de `hauteur` lignes. Rend `false` quand elle ferme.
-    pub fn touche(&mut self, _t: &Touche, _n_appels: usize, _n_lignes: usize, _hauteur: usize) -> bool {
+    pub fn touche(&mut self, t: &Touche, n_appels: usize, n_lignes: usize, hauteur: usize) -> bool {
+        let corps = hauteur.saturating_sub(2).max(1);
+        let max = n_lignes.saturating_sub(corps);
+        let d = &mut self.defilement;
+        match t {
+            Touche::Echap | Touche::Car('q') | Touche::CtrlO | Touche::CtrlC => return false,
+            Touche::Bas => *d = (*d + 1).min(max),
+            Touche::Haut => *d = d.saturating_sub(1),
+            Touche::PageBas | Touche::Car(' ') => *d = (*d + corps).min(max),
+            Touche::PageHaut => *d = d.saturating_sub(corps),
+            Touche::Debut => *d = 0,
+            Touche::Fin => *d = max,
+            Touche::Gauche if self.index > 0 => {
+                self.index -= 1;
+                self.defilement = 0;
+            }
+            Touche::Droite if self.index + 1 < n_appels => {
+                self.index += 1;
+                self.defilement = 0;
+            }
+            _ => {}
+        }
         true
     }
 }
 
 /// Les lignes d'écran d'un appel, à `largeur` colonnes.
-pub fn lignes(_appel: &Appel, _theme: &Theme, _cap: Capacites, _largeur: usize, _colorer: Colorer) -> Vec<Line<'static>> {
-    Vec::new()
+pub fn lignes(appel: &Appel, theme: &Theme, cap: Capacites, largeur: usize, colorer: Colorer) -> Vec<Line<'static>> {
+    let mut out = Vec::new();
+    for v in appel.complet() {
+        let spans = if v.genre == crate::vue::Genre::Code && !v.langue.is_empty() && v.langue != "diff" { colorer(&v.texte, &v.langue) } else { None };
+        out.extend(crate::code::lignes(&v, theme, cap, largeur, spans.as_deref()));
+    }
+    out
 }
 
 /// Dessine l'appel montré : son rang en tête, ses lignes depuis le défilement,
 /// et les touches en pied.
-pub fn dessiner(_f: &mut Frame, _v: &Visionneuse, _n_appels: usize, _lignes: &[Line<'static>], _theme: &Theme, _cap: Capacites) {}
+pub fn dessiner(f: &mut Frame, v: &Visionneuse, n_appels: usize, lignes: &[Line<'static>], theme: &Theme, cap: Capacites) {
+    use ratatui::layout::Rect;
+    use ratatui::style::{Modifier, Style};
+    use ratatui::text::Span;
+    use ratatui::widgets::Paragraph;
+    let zone = f.area();
+    if zone.height < 3 {
+        return;
+    }
+    let style = |hex: &str| crate::anim::couleur(hex, cap.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
+    let accent = style(&theme.couleurs.texte).add_modifier(Modifier::BOLD);
+    let sourdine = style(&theme.couleurs.sourdine);
+    let corps = zone.height as usize - 2;
+    let fin = (v.defilement + corps).min(lignes.len());
+    let tete = format!("⟨{}/{}⟩ appel d'outil · lignes {}-{} sur {}", v.index + 1, n_appels, (v.defilement + 1).min(fin), fin, lignes.len());
+    f.render_widget(Paragraph::new(Line::from(Span::styled(tete, accent))), Rect { height: 1, ..zone });
+    let montrees: Vec<Line> = lignes.get(v.defilement..fin).unwrap_or(&[]).to_vec();
+    f.render_widget(Paragraph::new(montrees), Rect { y: zone.y + 1, height: corps as u16, ..zone });
+    // La touche qui ferme d'abord : un écran étroit coupe la fin du pied.
+    let pied = "Échap fermer · ↑ ↓ défiler · Pg préc. Pg suiv. une page · ← → appel d'avant, d'après";
+    f.render_widget(Paragraph::new(Line::from(Span::styled(pied, sourdine))), Rect { y: zone.y + zone.height - 1, height: 1, ..zone });
+}
 
 #[cfg(test)]
 mod tests {
