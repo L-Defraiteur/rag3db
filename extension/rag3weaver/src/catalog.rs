@@ -393,6 +393,8 @@ pub struct Catalog {
     /// **La naissance des clés de `Scope` de l'écriture en cours** (2a′-2) : clé → rang de naissance de
     /// la ligne à écrire, décidé par l'écrivain avant l'ingestion. Les calculs d'uuid par clé de
     /// l'ingestion la lisent ; vide hors d'une écriture.
+    // Lu par l'écrivain du code (`code`, `code_sync`) seul : sans la feature, personne n'y écrit ni ne le lit.
+    #[cfg_attr(not(feature = "code"), allow(dead_code))]
     pub(crate) naissances: std::collections::HashMap<String, i64>,
     /// Les arêtes entrantes recopiées depuis la dernière publication (page 06, § 9).
     pub(crate) recopies_en_attente: usize,
