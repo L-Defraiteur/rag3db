@@ -1696,3 +1696,7 @@ Embarquement, 19 h 12 : **master rouge sur la lib entière**, déterministe à l
 (modele_de_tache.rs:42, la tâche ne se rouvre pas sur son manifeste changé), 6/6 rouge sur master 6c6e421cdf ; les commits sont de
 tty-14 (4399be2c8, 39d81457c, 3d829b2b9). tty corrige devant tout ; ED et 96 ne poussent pas un rouge. Embarquement : repli par
 activation nommée vert (646556c26, 47 témoins), en attente.
+tty, 19 h 14 : le témoin était vert dans son rejeu de lib à e9e47391a (journal, ligne 1138) ; il rougit depuis : le code arrivé entre est
+celui d'embarquement (f85977d09e). Piste de c7 : la garde `query_max_chars` au chargement avec un `models.embed` sans
+`context_tokens` (plafond haut 0 → 6 000 refusé). tty rend le refus exact ; embarquement vérifie sa garde ; ED, 96, G prévenus :
+rien ne pousse avant le correctif.
