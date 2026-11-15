@@ -62,6 +62,12 @@ pub struct TeammatePolicy {
     /// épuisé (par jour, de dépense) arrête tout de suite. Défaut : 10.
     #[serde(default = "TeammatePolicy::dix")]
     pub max_unavailable_steps: u32,
+    /// **L'attente du superviseur est bornée** (c7, 15 novembre 2026) : une demande restée
+    /// sans ligne de l'équipier après sa relance attend le superviseur au plus ces secondes ;
+    /// au-delà, la tâche finit « sans réponse de l'équipier », un échec nommé. Un équipier
+    /// muet ne suspend pas son superviseur pour toujours. Défaut : 1800.
+    #[serde(default = "TeammatePolicy::mille_huit_cents")]
+    pub reply_wait_s: u64,
 }
 
 impl TeammatePolicy {
@@ -80,6 +86,9 @@ impl TeammatePolicy {
     fn dix() -> u32 {
         10
     }
+    fn mille_huit_cents() -> u64 {
+        1800
+    }
 }
 
 impl Default for TeammatePolicy {
@@ -90,6 +99,7 @@ impl Default for TeammatePolicy {
             resume_after_restart: Self::oui(),
             quota_wait_s: Self::soixante(),
             max_unavailable_steps: Self::dix(),
+            reply_wait_s: Self::mille_huit_cents(),
         }
     }
 }
