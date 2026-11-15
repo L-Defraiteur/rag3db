@@ -1,7 +1,7 @@
 # Une passe confinée reçoit un SIGTERM sans cause dite, deux à trois minutes après le début d'une grosse analyse
 
-- **État** : ouvert (15 novembre 2026) — cause confirmée par G sur une portée jouet ; le remède vient avec son lot du confineur
-- **Famille** : outillage
+- **État** : fait (15 novembre 2026, branche confineur-enveloppe d86628f55) : au signal, le confineur lit memory.peak et memory.events de la portée qui porte le plafond, écrit `enveloppe` au verdict et dit « enveloppe mémoire crevée (N Gio, plafond M Gio, k oom_kill dans <portée>) » ; trois témoins rouges d'abord, dont une vraie portée systemd-run ; test_confiner_validation 24 tests, aucun sauté
+- **Famille** : produit (outillage : le confineur et `poste`)
 - **Gravité** : mesure empêchée. Une passe s'arrête sans verdict, et rien ne dit pourquoi.
 - **Atteignable en service** : non (les passes et les bancs, sous `poste lourd` et `confiner_validation.py`)
 - **Touche rag3weaver** : oui (`scripts/confiner_validation.py`, et `poste` au cache)
