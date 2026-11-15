@@ -1618,3 +1618,28 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   relai : une demande sans `expects` attend au moins une ligne dans la boîte, sinon un step_done qui la
   finirait est refusé une fois en disant ce qui manque ; `expects: "none"` pour une demande silencieuse voulue ;
   changement de défaut aux nouveautés.
+
+## 13 h – 15 h 29 (15 novembre) : l'après-midi en pile — la chronologie est sur la page 03
+
+Le détail horodaté de l'après-midi est tenu sur `03-la-file-en-pile.md` (une ligne par événement). Ce qui compte :
+- **Lucie tranche à 13 h 4x** : les défauts du cœur restent prioritaires, et en parallèle on termine les vues par couche
+  (parités, écrivain 2a′-2, mesure, 2a′-3, 2b′, 2b-C, bascule des bases). Fiche mémoire `priorites-15-novembre-…`.
+- **Atterris** : ALTER attend les écrivains (cœur, 101ff50a6), tty-11 (abfe6f92e), models.llm en liste (ED, f9e894f36),
+  garde-cpp-transferable + passe_epinglee écrit la base (G, 5b8f8994f), tty-12 (87795452d), tty-13 (ccfa7efea).
+- **Hôtes** : les deux postes sur 5b8f8994f / 373b5477b (luciepc 14 h 40, portable 15 h 09) ; le correctif des orphelins
+  prouvé en service (32 et 4, mêmes ids à une heure d'écart, 18 effacés sans un orphelin de plus).
+- **Cœur** : la bissection du CREATE lent trouve f42d90d13 (le CREATE en deux transactions) ; le SIGSEGV de la colonne
+  ajoutée a sa cause (un ADD refusé à mi-chemin laisse la colonne au stockage) et son correctif vert (ee598e074) ;
+  DdlEveryMinute ×10 en cours pour fermer les Note perdues.
+- **CI de master** : aucun verdict depuis le 14 à 15 h 27 (un run en file sur des machines self-hosted absentes tient le
+  groupe) ; mon annulation des runs refusée par ma garde — à Lucie ; le lot de hotfixs sort les jobs self-hosted du chemin,
+  retire le commit du robot, corrige cinq agrégats/avertissements GCC et des tests périmés ; la dette de format réelle est
+  de 25 fichiers, fenêtre juste après.
+- **Banc de compaction** : F 50 k contre N (doublons 11,5 % → 3,3 %, P1 0,81, « rien » ×2 : 34 aide / 22 endort) ; la mesure
+  arrêtée parce qu'une requête longue de l'archiviste tue le 7879 (26 redémarrages) : `query_chars` chez 96, plafond
+  `query_max_chars` chez embarquement, 503 côté service.
+- **Décisions de conception** : segment par LlmNode(response_schema) + ForEach(when, flatten) ; usage devant segment ;
+  relance de l'équipier en forme étroite (B) avec trace durable ; repli d'embarquement par `fallback {service}` seul ;
+  (a) l'écrivain atterrit malgré le repassage à 10 × ; (1) LlmNode générique.
+- **Tickets** : 195 ouverts / 354 fermés au relevé de 13 h 40 ; vocabulaire des modèles (provider/protocol) chez ED.
+- **À Lucie** : annuler les cinq runs CI, la fenêtre de bascule et la semaine de garde, `access` et deux semaines d'alias.
