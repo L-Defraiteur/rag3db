@@ -1974,6 +1974,9 @@ fn a_code_backend_speaks_first_as_a_code_agent() {
     assert!(code.contains("declare"), "les déclarations restent dites, après : {code}");
     // « par offset » (Lucie, 15 novembre) : les deux façons de modifier, dites.
     assert!(code.contains("replace_text") && code.contains("replace_lines") && code.contains("insert_lines"), "un texte unique ou les lignes a à b : {code}");
+    // Une demande de fichier s'écrit dans le fichier (e2e_equipier sur Gemini, 15 novembre : le
+    // README rendu dans un report, « README.md rédigé », et aucun fichier).
+    assert!(code.contains("s'écrit dans le fichier"), "une demande de fichier s'écrit dans le fichier : {code}");
     let projet = super::system_prompt_du_backend(Some(BackendKind::Project), ModeDeclarations::Auto, true);
     assert!(projet.starts_with("You work on a declared backend"), "{projet}");
 }
