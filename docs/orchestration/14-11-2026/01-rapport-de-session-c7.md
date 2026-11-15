@@ -1556,3 +1556,6 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   /ide/chat/compact?backend=…, refusé pendant un tour en vol ; passe synchrone ≤ 120 s (réglage) avec repli ;
   rangement en fond à chaque section close, « rangé jusqu'au tour N » dans le ChatFile ; un échange rangé ne se
   range pas deux fois. Va : témoin rouge d'abord, gabarit et témoin à 96, hôte à archi.
+- Archi, 12 h 4x : l'identité de l'extension posée dans le fork (0f9e2a5 : nom, com.rag3weaver.pont_navigateur,
+  identifiant amleopmgbfaknijhmkefmghlgnoimibj, privé dans .vault/pont-navigateur/ du dépôt), build à 0, vitest
+  39/39 ; rien d'installé chez Lucie. Suite : le relai Rust, lot à part, rouge d'abord.
