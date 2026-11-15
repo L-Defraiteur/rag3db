@@ -1612,3 +1612,9 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   les tours coupés de même pour cette mesure, (a) le plafond levé en variante ensuite ; le plafond lui-même
   est un défaut du produit (ticket chez 96, remède = l'étape `segment`). Cache : cached_prompt_tokens mesuré
   sur la première fenêtre avant d'extrapoler.
+- Archi, 12 h 4x : le ticket de l'équipier rouvert sur un relevé de tty (binaire 26a091474) : après deux read_file
+  refusés et huit explorations, aucun texte, et un step_done réussi dit « exemple TypeScript fourni » sans
+  rien dans le run ; la garde missing_deliverable ne joue que sous expects: "report". Lot validé, après le
+  relai : une demande sans `expects` attend au moins une ligne dans la boîte, sinon un step_done qui la
+  finirait est refusé une fois en disant ce qui manque ; `expects: "none"` pour une demande silencieuse voulue ;
+  changement de défaut aux nouveautés.

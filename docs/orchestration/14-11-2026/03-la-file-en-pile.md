@@ -963,3 +963,7 @@ seul du Rust a atterri est au ticket de G.
 G, 12 h 4x : garde-cpp-transferable 660586fab prêt (hors pile : si le lot ne touche que src/, test/,
 extension/vector/, tools/rust_api/ et que `git diff base..master` est vide sous ces chemins, la garde accepte
 en le disant ; en pile, (b) reste un arrêt ; rouge sur la garde de master, 39 vert). Push après le cœur.
+tty, 12 h 4x : tty-11 prêt (cx-tty-11 67323f97e, 12 commits, crate tty seul : appels numérotés, aperçus
+colorés, .md en prose, écritures en retraits/ajouts, « extrait, 4 Ko sur 16 Ko », Ctrl-O visionneuse en écran
+alterné avec l'écran principal identique avant/après ; crate 80/80, 14/14 ; un commit rouge intermédiaire ne
+compile pas seul, dit dans la page). Attend le « poussé » du cœur. Archi : l'équipier silencieux, après le relai.
