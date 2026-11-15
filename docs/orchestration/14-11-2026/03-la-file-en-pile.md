@@ -1074,3 +1074,11 @@ Recherche, 13 h 56 : premier relevé par la route au dépôt : Lucivy_Scope 81 7
 et un petit lot chez lucivy : `/backend/maintain` en `dry_run` qui lit le graphe lui-même et rend l'écart.
 Hotfixs, 13 h 56 : PR L-Defraiteur/rag3db#1 ouverte (gmail, sans mention), run 43716213065 en cours dans son groupe ; la pose
 du binaire de luciepc attend la place de G (sa chaîne preparer/poser-binaire, sa cible).
+CI, 13 h 57 : le run de la PR 1 (43716213065) rend un verdict dans son groupe : 18 self-hosted sautés, sanity checks vert,
+code format rouge (connu), shell test en cours, python lint annulé (à lire). Recherche ferme code-rag3db au portable à
+14 h 00 et vers 15 h 00 pour ses deux instantanés ; relayé à toutes les sessions.
+14 h 00 : codeparsers (sans lot depuis son rapport) prend `new` mot vide en Rust (usages des constructeurs), puis fmt/format.h
+(macro lue comme un corps), puis les scopes sans DEFINED_IN ; embarquement prend la conception du repli d'embarquement
+vers un service déclaré quand la carte est pleine (mesuré, dit, réversible ; réglages au manifeste). Lucivy : le relevé à
+blanc (`/backend/maintain` dry_run, lit le graphe lui-même, reprend si le jeton bouge) prêt sur lucivy-releve-a-blanc
+7a684087d7, en file après ED (1). Le run de la PR 1 complet : sanity vert, code format et shell test rouges (hotfixs lit).
