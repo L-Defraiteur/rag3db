@@ -20,7 +20,7 @@
 Un manifeste d'aujourd'hui, avec un seul objet `models.llm`, se lit comme une liste à un élément par
 défaut : aucun manifeste de Lucie ne change.
 
-## La forme proposée (à confirmer avec archi avant de la coder)
+## La forme, confirmée par archi (15 novembre 2026, midi)
 
 - `models.llm` accepte un **objet** (la forme d'aujourd'hui, `ModelSource`) ou une **liste**
   d'objets. Chaque élément est un `ModelSource` plus trois champs : `name` (obligatoire dans une
@@ -36,6 +36,13 @@ défaut : aucun manifeste de Lucie ne change.
 - Une API de lecture : la liste résolue, `(nom, ModelSource, max_output_tokens, défaut)`, et une
   recherche par nom qui refuse un nom inconnu en listant les autres (archi s'en sert pour la
   surcharge de tâche).
+
+**Une conséquence, dite** (archi) : le nom replié n'est pas stable. Il change si Lucie ajoute plus tard
+un `name` à l'objet unique, ou si elle change de `model`. Une surcharge de tâche qui retenait l'ancien
+nom tombe alors sur le refus « nom inconnu, voici les noms déclarés ». C'est le bon comportement, à
+deux conditions : le refus se dit à la lecture de la tâche, et il ne retombe jamais en silence sur le
+défaut. archi tient sa part : une surcharge au nom inconnu refuse le tour et le dit, sans prendre le
+défaut.
 
 ## Le témoin
 
