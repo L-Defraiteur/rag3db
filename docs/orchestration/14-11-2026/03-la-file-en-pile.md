@@ -1435,3 +1435,7 @@ Codeparsers, 16 h 49 : (a) vert (defined-in-homonymes d024118) : sur rag3weaver/
 inchangés ; l'arbre entier (code-lourd, third_party compris) en passe confinée par lots de 300. REGLES_DE_L_ANALYSE n'est pas
 encore sur master (elle arrive avec l'écrivain d'ED) : le pointeur DEFINED_IN fait un troisième lot après ED (1), avec la montée.
 96, 16 h 49 : pile du second tour prête (cbe5ba25c : usage, query_chars, variante context_title, description de trace), après tty-16.
+Hotfixs, 16 h 55 : **la fenêtre de formatage est close** — un commit pur sous gmail, 9ea2e2408, 25 fichiers (+191/−155), prouvé format pur
+deux fois ; bâti Release vert et une suite par cible touchée, toutes vertes. Le run de master 43730682329 (a6d49b99b) a rendu
+l'attendu : sanity, python lint, shell test verts, format rouge ; le run de 9ea2e2408 doit être le premier tout vert, et le
+ticket de la CI (ouvert depuis le 25 octobre) se fermera dessus. « À toi » à lucivy pour le relevé à blanc.
