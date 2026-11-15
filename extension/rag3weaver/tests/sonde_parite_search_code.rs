@@ -289,6 +289,10 @@ fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
 /// **Le relevé du jeu** : pour chaque requête et chaque forme (sans filtre, chemin, langage), les k
 /// premiers de search_code et le temps de l'appel.
 fn releve_du_jeu(backend: &rag3weaver::backend::Backend, jeu: &Value, k: usize) -> Vec<Value> {
+    // **Des arguments de plus, à la demande** (`RAG3WEAVER_PARITE_ARGS`, un objet JSON fusionné dans
+    // chaque appel ; la vue de 2b′, 15 nov.) : le champ `view` de la réponse est relevé à part, hors
+    // des résultats comparés.
+    let plus: Value = std::env::var("RAG3WEAVER_PARITE_ARGS").ok().and_then(|v| serde_json::from_str(&v).ok()).unwrap_or(Value::Null);
     let formes = [
         ("sans filtre".to_string(), json!({"options": {}})),
         (format!("chemin {}", jeu["chemin"].as_str().unwrap_or("")), json!({"options": {}, "scope": jeu["chemin"]})),
@@ -299,6 +303,11 @@ fn releve_du_jeu(backend: &rag3weaver::backend::Backend, jeu: &Value, k: usize) 
         for (nom, extra) in &formes {
             let mut args = extra.clone();
             args["query"] = q.clone();
+            if let Some(o) = extra_de(&plus) {
+                for (cle, v) in o {
+                    args[cle] = v.clone();
+                }
+            }
             // Le temps d'un seul appel, à titre indicatif : pas de chauffe ni de répétition, ce n'est
             // pas une mesure (la sonde de la recherche en est une).
             let debut = std::time::Instant::now();
@@ -336,7 +345,11 @@ fn releve_du_jeu(backend: &rag3weaver::backend::Backend, jeu: &Value, k: usize) 
             } else {
                 eprintln!("[parité] {q} · {nom} : aucun résultat");
             }
-            releve.push(json!({"requete": q, "forme": nom, "ms": ms, "resultats": resultats}));
+            let mut vue = &r;
+            while vue.get("view").is_none() && vue.get("result").is_some_and(Value::is_object) {
+                vue = &vue["result"];
+            }
+            releve.push(json!({"requete": q, "forme": nom, "ms": ms, "resultats": resultats, "view": vue.get("view").cloned().unwrap_or(Value::Null)}));
         }
     }
     releve
@@ -600,4 +613,9 @@ fn releve_des_lignes_par_cypher() {
     doc.insert("requetes".into(), json!(sorties));
     std::fs::write(&sortie, serde_json::to_string_pretty(&Value::Object(doc)).unwrap()).expect("écrire le relevé");
     eprintln!("[cypher] relevé écrit : {}", sortie.to_string_lossy());
+}
+
+/// Les arguments de plus du relevé, s'il y en a (un objet JSON).
+fn extra_de(v: &Value) -> Option<&serde_json::Map<String, Value>> {
+    v.as_object()
 }
