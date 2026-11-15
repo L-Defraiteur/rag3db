@@ -894,3 +894,11 @@ tête. B (scinder, rejoindre) sur A ensuite.
 
 **02 h 3x — soixante-deux atterris** : le filtre par défaut et l'état recopied (96, f553c2b2a). Il ne reste
 qu'ED (sur fd33c5f06), tête vers 3 h.
+ED, 02 h 50 : ecrivain-2a-prime-2-pile 26641b686 sur fd33c5f06 (« = » sur 17 commits de code ; le plan de la
+page sorti du lot, en § 12 sur master) ; rejeu court vert (e2e_code 36, e2e_lectures 27, check_features 8/8,
+lib 2 463/0, navigateur 45) ; e2e_demon_hote 14/14 et e2e_postgres 36/36 sur les têtes d'avant la repose ;
+huit défauts corrigés. Attend le verdict de banc ; « à toi » au vert de banc, PILE_AVANT=fd33c5f06.
+Banc, 02 h 51 : le verdict de l'écrivain (parent 1105a2590 contre 7ddedb026, même code que 26641b686) vers
+3 h 45 — deux passes en parallèle à luciepc : A le parent (parité + usages), B la tête (retrait et remise
+d'arbre.rs avec la visibilité des Symbol au rang, parité, usages, aretes_recopiees). Recherche a le « va »
+pour sa sonde sous mesure.
