@@ -1746,3 +1746,33 @@ fn without_a_persona_the_prompt_adds_only_the_name() {
     let invite = invites.lock().unwrap().first().cloned().unwrap_or_default();
     assert!(invite.contains("Your name is Algareth") && !invite.contains("persona"), "le nom seul : {invite}");
 }
+
+/// **Sans nom choisi, l'équipier ne se présente pas par le défaut** (e2e_equipier sur Gemini, 15
+/// novembre : « Bonjour, je m'appelle équipier ») : l'invite ne dit un nom que s'il est déclaré.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn an_unnamed_teammate_is_not_told_the_default_name() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let invites = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let invites = invites.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let invites = invites.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                if let Some(t) = turns.iter().find(|t| t.role == "system") {
+                    invites.lock().unwrap().push(t.content.clone());
+                }
+                answer(turns, opts, sink, "Bonjour.", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "salué", "remaining": "" }))]))
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "lucie", "request", None, "Bonjour.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    attendre_dans(&files, "la fin", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    let invite = invites.lock().unwrap().first().cloned().unwrap_or_default();
+    assert!(!invite.contains("Your name is"), "aucun nom n'est choisi : rien à dire : {invite}");
+}
