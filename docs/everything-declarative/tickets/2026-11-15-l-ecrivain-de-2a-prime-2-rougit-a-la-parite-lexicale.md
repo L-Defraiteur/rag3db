@@ -51,7 +51,11 @@ Ce qui est vert à côté :
 ## Ce qu'il faut pour le fermer
 
 La cause établie par les relevés, les témoins rouges puis verts, et le correctif :
-- (A) : une version de l'analyse notée par source, dont le changement fait tout repasser, ou le retrait
-  du saut ;
+- (A), décidé par c7 (15 novembre, 3 h 1x) : ni retirer le saut, ni une version par source seule.
+  **La version de l'analyse (parseur, règles d'import, gabarit) entre dans l'empreinte indexée** d'un
+  fichier, et un fichier n'est « inchangé » que si son contenu et cette version coïncident ; sinon il
+  repasse. Le témoin a deux branches : la version change, et un fichier au contenu identique est
+  réanalysé ; la version ne change pas, et il est sauté. C'est ce qui rend applicable sans réindexer à
+  la main un changement de parseur comme le passage function → method de codeparsers ;
 - (B) : selon le relevé.
 Puis une parité de banc verte sur les 30 cas.
