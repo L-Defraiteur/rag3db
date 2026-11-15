@@ -262,6 +262,9 @@ pub fn file_config() -> EntityConfig {
     // C et C++ seulement. Ils disent ce que le fichier voit (`Inclusions`) ; nul pour une base
     // d'avant le champ, et la visibilité ne filtre alors rien.
     fields.insert("includes".into(), field(FieldType::String));
+    // **La version de l'analyse** qui a écrit la ligne (page 06, § 13) : avec `content_hash`, l'empreinte
+    // indexée du fichier. '' sur une ligne d'avant le champ : tout y repasse une fois.
+    fields.insert("analyse".into(), field(FieldType::String));
     EntityConfig {
         fields,
         // La politique par défaut : **copie de travail**. Un fichier, un
@@ -2501,6 +2504,13 @@ impl Catalog {
     /// **Les données d'identité d'une clé, avec sa naissance** (2a′-2, page 06, § 11) : celles de
     /// `key_data`, plus la couche et le rang de naissance d'un `Scope` que l'écrivain a décidés pour
     /// l'écriture en cours. Hors d'une écriture, ou pour une autre entité, c'est `key_data` tel quel.
+    /// La rangée `File` d'un fichier analysé, avec la version de l'analyse qui l'écrit.
+    pub(crate) fn donnees_du_fichier(&self, f: &FileRecord) -> BTreeMap<String, CypherValue> {
+        let mut d = f.data();
+        d.insert("analyse".into(), CypherValue::String(self.version_de_l_analyse.clone()));
+        d
+    }
+
     pub(crate) fn donnees_de_cle(&self, entity: &str, key: &str, source: &str) -> BTreeMap<String, CypherValue> {
         let mut d = key_data(entity, key, source);
         match entity {
@@ -2623,7 +2633,7 @@ impl Catalog {
             .files
             .iter()
             .map(|f| {
-                let mut d = f.data();
+                let mut d = self.donnees_du_fichier(f);
                 self.poser_la_naissance(&cle_de_naissance_du_fichier(&f.path), &mut d);
                 d
             })
