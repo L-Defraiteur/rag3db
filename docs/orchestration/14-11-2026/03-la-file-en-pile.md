@@ -1765,3 +1765,12 @@ ED, 20 h 08 : le miroir corrigé (5ed5d1fc9 ; témoin 18 rouge d'abord : `recopi
 entrante, alors que c'est le miroir d'un CONSUMES sortant que l'ingestion repose ; la boucle le saute). Passe épinglée puis le banc
 rejuge. Banc : sa sonde de structure contrôle désormais les miroirs directement (0 et 0 attendus) ; « va » à G vers 20 h 50, va-du-banc
 à embarquement après le « fini » de G vers 21 h 05.
+
+## 20 h 15 — l'hôte 23dc8efd47 posé aux deux postes ; Algareth
+
+G : verdict vert (e2e_code 36, lectures 27, demon_hote 24), hôte posé à luciepc 20 h 13 m 03 s (réveil vert) et au portable 20 h 13 m 07 s →
+25 s (18 s de coupure, cinq bases rouvertes) ; binaire f8ce107c, lib 373b5477b ; l'atelier expose 23 outils dont le socle. Les services
+7879 puis 7878 aux « va ». **`agent: {name: "Algareth"}` écrit** dans le manifeste du dépôt de Lucie et la copie de sa tâche atelier
+(sauvegardes .avant-algareth-*), backends rouverts par l'hôte (session neuve, l'ancienne fermée par la relance). 96 : segment vert au
+portable (voie 2 : LlmNode admis dans un outil seulement avec response_schema sous call_models ; un rouge de charge Text file busy en
+ticket), en pile derrière le second tour pour la pose d'après.
