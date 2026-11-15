@@ -94,13 +94,88 @@ struct Fermeture {
     jusqu_a: Option<String>,
     jusqu_a_instant: Option<jiff::Timestamp>,
     par: String,
+    /// L'heure de la fermeture, que le refus d'une écriture rangée dit (« depuis »).
+    depuis: jiff::Timestamp,
+    /// La borne d'âge des écritures rangées sous elle (`queue_max_age_s`) : au-delà, le rejeu
+    /// les refuse. [`QUEUE_MAX_AGE`] par défaut.
+    max_age_s: u64,
+}
+
+/// La borne d'âge d'une écriture rangée, par défaut : une écriture d'hier ne s'applique pas sans
+/// qu'on l'ait redemandée.
+const QUEUE_MAX_AGE: u64 = 24 * 3600;
+/// La borne en nombre de la file d'un backend : au-delà, le refus nommé d'avant.
+const QUEUE_MAX_LEN: usize = 1000;
+
+/// **Une écriture reçue sous une fermeture qui tient** (c7, 15 novembre 2026) : l'appel tel qu'il
+/// est arrivé, et de quoi le rejouer au nom de qui l'a fait (la cellule de sa session, l'humain).
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct EcritureEnFile {
+    outil: String,
+    arguments: Value,
+    cellule: Option<Value>,
+    humain: bool,
+    client: String,
+    session: String,
+    /// L'heure de réception (un horodatage), d'où l'âge au rejeu.
+    recue: String,
+    max_age_s: u64,
+}
+
+/// **La file des écritures d'un backend** : celles qui attendent, ce que le dernier rejeu a fait.
+/// `rejeu` : un rejeu court ; une écriture reçue pendant ce temps se range derrière les autres,
+/// pour que l'ordre d'arrivée soit l'ordre appliqué (ED, 15 novembre 2026).
+#[derive(Default)]
+struct FileDesEcritures {
+    attente: std::collections::VecDeque<EcritureEnFile>,
+    rejouees: usize,
+    perimees: usize,
+    echecs: Vec<String>,
+    rejeu: bool,
+}
+
+/// Ce qui tient sur disque, dans le dossier d'état du manifeste : la fermeture et sa file, pour
+/// qu'un redémarrage de l'hôte ne rouvre pas la base ni ne perde les écritures rangées.
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+struct FermetureSurDisque {
+    fermeture: Option<Value>,
+    file: Vec<EcritureEnFile>,
+}
+
+fn fichier_de_fermeture(manifest: &Path) -> PathBuf {
+    crate::builtin_templates::state_dir_of(manifest).join("fermeture.json")
+}
+
+impl Fermeture {
+    fn en_json(&self) -> Value {
+        json!({
+            "raison": self.raison,
+            "jusqu_a": self.jusqu_a,
+            "jusqu_a_instant": self.jusqu_a_instant.map(|t| t.to_string()),
+            "par": self.par,
+            "depuis": self.depuis.to_string(),
+            "max_age_s": self.max_age_s,
+        })
+    }
+
+    fn de_json(v: &Value) -> Option<Fermeture> {
+        Some(Fermeture {
+            raison: v["raison"].as_str()?.to_string(),
+            jusqu_a: v["jusqu_a"].as_str().map(str::to_string),
+            jusqu_a_instant: v["jusqu_a_instant"].as_str().and_then(|t| t.parse().ok()),
+            par: v["par"].as_str().unwrap_or("un hôte d'avant").to_string(),
+            depuis: v["depuis"].as_str().and_then(|t| t.parse().ok()).unwrap_or_else(jiff::Timestamp::now),
+            max_age_s: v["max_age_s"].as_u64().unwrap_or(QUEUE_MAX_AGE),
+        })
+    }
 }
 
 impl Fermeture {
     /// « fermé : <raison>[, jusqu'à <quand>[ — au-delà de l'heure annoncée]], par <qui> » : l'heure
     /// annoncée n'ouvre rien d'elle-même, une passe en retard garde sa base fermée.
     fn dire(&self) -> String {
-        let mut dit = format!("fermé : {}", self.raison);
+        let depuis = self.depuis.to_zoned(jiff::tz::TimeZone::system()).strftime("%H:%M:%S");
+        let mut dit = format!("fermé : {}, depuis {depuis}", self.raison);
         if let Some(j) = &self.jusqu_a {
             dit.push_str(&format!(", jusqu'à {j}"));
             if self.jusqu_a_instant.is_some_and(|t| jiff::Timestamp::now() > t) {
@@ -154,6 +229,9 @@ struct Hosted {
     /// backend (un appel d'outil, un hook, un juge, l'ancienne route `/open`) ; seul
     /// `POST /backend/open` la lève.
     held_closed: Mutex<Option<Fermeture>>,
+    /// **La file des écritures reçues sous cette fermeture** (c7, 15 novembre 2026), rejouée dans
+    /// l'ordre à `POST /backend/open`. Ordre des verrous : la file, puis `held_closed`.
+    file: Mutex<FileDesEcritures>,
     /// L'empreinte du manifeste lu à la dernière ouverture : un manifeste
     /// modifié depuis se voit, se dit dans les réponses, et se relit à
     /// `POST /backend/open`.
@@ -504,6 +582,16 @@ impl DaemonHost {
             .entry(canonical.clone())
             .or_insert_with(|| {
                 let id = blake3::hash(canonical.to_string_lossy().as_bytes()).to_hex()[..12].to_string();
+                // **La fermeture et la file d'un hôte d'avant** : un redémarrage ne rouvre pas la
+                // base qu'on avait fermée, ni ne perd les écritures rangées.
+                let disque: FermetureSurDisque = std::fs::read(fichier_de_fermeture(&canonical))
+                    .ok()
+                    .and_then(|b| serde_json::from_slice(&b).ok())
+                    .unwrap_or_default();
+                let tenue = disque.fermeture.as_ref().and_then(Fermeture::de_json);
+                if let Some(f) = &tenue {
+                    eprintln!("[démon] {} : {} (reprise d'un hôte d'avant, {} écriture(s) en file)", canonical.display(), f.dire(), disque.file.len());
+                }
                 Arc::new(Hosted {
                     id,
                     manifest: canonical,
@@ -512,7 +600,8 @@ impl DaemonHost {
                     rattrapage: Default::default(),
                     opened: Default::default(),
                     closed: Default::default(),
-                    held_closed: Default::default(),
+                    held_closed: Mutex::new(tenue),
+                    file: Mutex::new(FileDesEcritures { attente: disque.file.into(), ..Default::default() }),
                     print: Mutex::new(None),
                     refused: Mutex::new(None),
                 })
@@ -785,9 +874,17 @@ impl DaemonHost {
                 return Err(format!("{MANIFEST_MISSING} : {}", manifest.display()));
             }
             let hosted = self.hosted(manifest)?;
-            if explicite && hosted.held_closed.lock().unwrap_or_else(|p| p.into_inner()).take().is_some() {
-                eprintln!("[démon] {} : la fermeture est levée par POST /backend/open", hosted.manifest.display());
-            }
+            // Lever la fermeture et marquer le rejeu sous le verrou de la file : une écriture qui
+            // arrive voit l'un ou l'autre, et se range derrière celles qui attendent.
+            let a_rejouer = explicite && {
+                let mut file = hosted.file.lock().unwrap_or_else(|p| p.into_inner());
+                if hosted.held_closed.lock().unwrap_or_else(|p| p.into_inner()).take().is_some() {
+                    eprintln!("[démon] {} : la fermeture est levée par POST /backend/open", hosted.manifest.display());
+                }
+                file.rejeu = !file.attente.is_empty();
+                persister_la_fermeture(&hosted, &file);
+                file.rejeu
+            };
             let relu = {
                 let mut slot = self.ecrire_le_slot(&hosted)?;
                 let relu = slot.is_some() && self.manifest_changed(&hosted);
@@ -798,6 +895,9 @@ impl DaemonHost {
                 self.open_slot(&hosted, &mut slot)?;
                 relu
             };
+            if a_rejouer {
+                self.rejouer_la_file(&hosted);
+            }
             self.with_backend(&hosted, |b| {
                 json!({
                     "id": hosted.id,
@@ -816,13 +916,14 @@ impl DaemonHost {
     /// backend jamais hébergé est un refus nommé ; un backend déjà fermé
     /// rend `closed: false`.
     pub fn close(&self, session: Option<&str>, manifest: &Path) -> Value {
-        self.close_avec(session, manifest, None, None)
+        self.close_avec(session, manifest, None, None, None)
     }
 
     /// [`Self::close`] ; une `raison` (et un `jusqu_a` facultatif) fait tenir la fermeture
     /// jusqu'à un `POST /backend/open` explicite (c7, 14 novembre 2026 : « l'annonce n'est pas un
     /// verrou »). Sans raison, le prochain appel rouvre, comme avant.
-    pub fn close_avec(&self, session: Option<&str>, manifest: &Path, raison: Option<&str>, jusqu_a: Option<&str>) -> Value {
+    /// `max_age_s` (`queue_max_age_s`) borne l'âge des écritures rangées sous elle.
+    pub fn close_avec(&self, session: Option<&str>, manifest: &Path, raison: Option<&str>, jusqu_a: Option<&str>, max_age_s: Option<u64>) -> Value {
         let result = self.check_session(session).and_then(|_| {
             let hosted = self
                 .hosted_existing(manifest)
@@ -834,7 +935,14 @@ impl DaemonHost {
                 .unwrap_or_else(|| "un appel sans session".to_string());
             let tenue = raison.map(str::trim).filter(|r| !r.is_empty()).map(|r| {
                 let jusqu_a = jusqu_a.map(str::trim).filter(|j| !j.is_empty()).map(str::to_string);
-                Fermeture { raison: r.to_string(), jusqu_a_instant: jusqu_a.as_deref().and_then(instant_annonce), jusqu_a, par }
+                Fermeture {
+                    raison: r.to_string(),
+                    jusqu_a_instant: jusqu_a.as_deref().and_then(instant_annonce),
+                    jusqu_a,
+                    par,
+                    depuis: jiff::Timestamp::now(),
+                    max_age_s: max_age_s.unwrap_or(QUEUE_MAX_AGE),
+                }
             });
             let tenue = tenue.map(|f| {
                 let dit = f.dire();
@@ -842,6 +950,10 @@ impl DaemonHost {
                 eprintln!("[démon] {} : {dit}", hosted.manifest.display());
                 dit
             });
+            if tenue.is_some() {
+                let file = hosted.file.lock().unwrap_or_else(|p| p.into_inner());
+                persister_la_fermeture(&hosted, &file);
+            }
             let ferme = self.close_slot(&hosted, &mut slot)?;
             Ok(json!({ "id": hosted.id, "manifest": hosted.manifest, "closed": ferme, "held_closed": tenue }))
         });
@@ -906,6 +1018,9 @@ impl DaemonHost {
             let humain = self.ide_session.get().is_some_and(|ide| *ide == s.id);
             // L'auteur des lignes du journal que cet appel fait naître (le crochet).
             let _appelant = crate::host_log::enter_call(&client, &s.id, &hosted.id);
+            if let Some(rangee) = self.ranger_une_ecriture(&hosted, &s, humain, name, &arguments)? {
+                return Ok(rangee);
+            }
             self.with_backend(&hosted, |b| match (&cell, humain) {
                 // La cellule de la session (marche 1 bis) : elle passe par la
                 // requête, jamais par le catalogue.
@@ -917,7 +1032,122 @@ impl DaemonHost {
             .and_then(|r| r)
             .inspect(|r| self.journaliser_l_appel(&hosted.id, &client, humain, name, &appel, r))
         });
-        op_response(result)
+        match result {
+            // Une écriture rangée : un refus qui dit son rang, `queued: true`.
+            Ok(v) if v.get("queued") == Some(&json!(true)) => v,
+            autre => op_response(autre),
+        }
+    }
+
+    /// **Ranger une écriture sous une fermeture qui tient** (c7, 15 novembre 2026), ou pendant le
+    /// rejeu de la file : `Some(refus)` qui dit son rang, `None` pour un appel qui suit son cours
+    /// (aucune fermeture, ou une lecture, que la fermeture refuse comme avant). Une écriture est un
+    /// appel que [`PreparedBackend::reads_only`] ne prouve pas en lecture.
+    fn ranger_une_ecriture(&self, hosted: &Hosted, s: &Session, humain: bool, name: &str, arguments: &Value) -> Result<Option<Value>, String> {
+        let tient = |file: &FileDesEcritures| file.rejeu || hosted.held_closed.lock().unwrap_or_else(|p| p.into_inner()).is_some();
+        if !tient(&hosted.file.lock().unwrap_or_else(|p| p.into_inner())) {
+            return Ok(None);
+        }
+        // Le manifeste se lit sans ouvrir la base (fermée) ; illisible, l'appel est une écriture.
+        if PreparedBackend::load(&hosted.manifest).is_ok_and(|p| p.reads_only(name, arguments)) {
+            return Ok(None);
+        }
+        let mut file = hosted.file.lock().unwrap_or_else(|p| p.into_inner());
+        if !tient(&file) {
+            return Ok(None);
+        }
+        let fermeture = hosted.held_closed.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        if file.attente.len() >= QUEUE_MAX_LEN {
+            return Err(format!(
+                "{} : {} — la file des écritures est pleine ({QUEUE_MAX_LEN}) ; « {name} » n'est pas rangé",
+                hosted.manifest.display(),
+                fermeture.as_ref().map(Fermeture::dire).unwrap_or_else(|| "rejeu en cours".into())
+            ));
+        }
+        file.attente.push_back(EcritureEnFile {
+            outil: name.to_string(),
+            arguments: arguments.clone(),
+            cellule: s.cell.clone(),
+            humain,
+            client: s.client.clone(),
+            session: s.id.clone(),
+            recue: jiff::Timestamp::now().to_string(),
+            max_age_s: fermeture.as_ref().map_or(QUEUE_MAX_AGE, |f| f.max_age_s),
+        });
+        let rang = file.attente.len();
+        persister_la_fermeture(hosted, &file);
+        let pourquoi = match &fermeture {
+            Some(f) => f.dire(),
+            None => "le rejeu de la file est en cours".to_string(),
+        };
+        let dit = format!("{} : {pourquoi} ; ton écriture « {name} » est en attente, rang {rang} — elle se rejoue à POST /backend/open", hosted.manifest.display());
+        eprintln!("[démon] {dit}");
+        Ok(Some(json!({ "ok": false, "queued": true, "rank": rang, "error": dit })))
+    }
+
+    /// **Rejouer la file dans l'ordre** sur la base rouverte : chaque écriture dit son sort au
+    /// journal de l'hôte ; une trop vieille (sa borne d'âge) ne s'applique pas ; un échec n'arrête
+    /// pas les suivantes. Celles reçues pendant le rejeu passent derrière, dans la même boucle.
+    fn rejouer_la_file(&self, hosted: &Hosted) {
+        {
+            let mut file = hosted.file.lock().unwrap_or_else(|p| p.into_inner());
+            file.echecs.clear();
+        }
+        loop {
+            let ecriture = {
+                let mut file = hosted.file.lock().unwrap_or_else(|p| p.into_inner());
+                match file.attente.front().cloned() {
+                    Some(e) => e,
+                    None => {
+                        file.rejeu = false;
+                        persister_la_fermeture(hosted, &file);
+                        return;
+                    }
+                }
+            };
+            let age = ecriture
+                .recue
+                .parse::<jiff::Timestamp>()
+                .map(|t| jiff::Timestamp::now().duration_since(t).as_secs())
+                .unwrap_or(0);
+            let sort = if age > ecriture.max_age_s as i64 {
+                Err(format!("trop vieille ({age} s, borne {} s) : elle ne s'applique pas", ecriture.max_age_s))
+            } else {
+                let cellule = match &ecriture.cellule {
+                    Some(v) => serde_json::from_value::<crate::scope::Scope>(v.clone()).map(Some).map_err(|e| format!("la cellule de sa session : {e}")),
+                    None => Ok(None),
+                };
+                cellule.and_then(|cell| {
+                    let _appelant = crate::host_log::enter_call(&ecriture.client, &ecriture.session, &hosted.id);
+                    let (name, args) = (ecriture.outil.as_str(), ecriture.arguments.clone());
+                    self.with_backend(hosted, |b| match (&cell, ecriture.humain) {
+                        (Some(cell), false) => b.call_in(cell, name, args),
+                        (Some(cell), true) => b.call_in_humain(cell, name, args),
+                        (None, false) => b.call(name, args),
+                        (None, true) => b.call_humain(name, args),
+                    })
+                    .and_then(|r| r)
+                    .and_then(|r| if r["ok"] == json!(false) { Err(r["error"].as_str().unwrap_or("refusé").to_string()) } else { Ok(r) })
+                })
+            };
+            let mut file = hosted.file.lock().unwrap_or_else(|p| p.into_inner());
+            file.attente.pop_front();
+            match sort {
+                Ok(_) => {
+                    file.rejouees += 1;
+                    eprintln!("[démon] {} : rejouée, « {} » de {} reçue à {}", hosted.manifest.display(), ecriture.outil, ecriture.client, ecriture.recue);
+                }
+                Err(e) => {
+                    if e.starts_with("trop vieille") {
+                        file.perimees += 1;
+                    }
+                    let dit = format!("« {} » de {} reçue à {} : {e}", ecriture.outil, ecriture.client, ecriture.recue);
+                    eprintln!("[démon] {} : rejeu refusé, {dit}", hosted.manifest.display());
+                    file.echecs.push(dit);
+                }
+            }
+            persister_la_fermeture(hosted, &file);
+        }
     }
 
     /// **Ce qu'un appel d'outil a rendu à son appelant**, dans le journal de son
@@ -1172,6 +1402,18 @@ impl DaemonHost {
                     .as_ref()
                     .filter(|r| !r.is_dir())
                     .map(|r| format!("racine absente : {}", r.display()));
+                // La file des écritures rangées sous une fermeture (c7, 15 novembre 2026).
+                let file_des_ecritures = {
+                    let file = h.file.lock().unwrap_or_else(|p| p.into_inner());
+                    json!({
+                        "pending": file.attente.len(),
+                        "oldest": file.attente.front().map(|e| e.recue.clone()),
+                        "replaying": file.rejeu,
+                        "replayed": file.rejouees,
+                        "expired": file.perimees,
+                        "last_replay_failures": file.echecs,
+                    })
+                };
                 let mut b_json = json!({
                     "id": h.id,
                     "manifest": h.manifest,
@@ -1181,6 +1423,7 @@ impl DaemonHost {
                     "opened": h.opened.load(std::sync::atomic::Ordering::SeqCst),
                     "closed": h.closed.load(std::sync::atomic::Ordering::SeqCst),
                     "held_closed": h.held_closed.lock().unwrap_or_else(|p| p.into_inner()).as_ref().map(Fermeture::dire),
+                    "write_queue": file_des_ecritures,
                     "manifest_changed": self.manifest_changed(h),
                     "refused": *h.refused.lock().unwrap_or_else(|p| p.into_inner()),
                     "tache": self.tache_de(&h.manifest),
@@ -1516,7 +1759,7 @@ impl DaemonHost {
                 let mut reponse = match path {
                     "/open" => self.open_avec(session, &m, false),
                     "/backend/open" => self.open(session, &m),
-                    "/backend/close" => self.close_avec(session, &m, v["reason"].as_str(), v["until"].as_str()),
+                    "/backend/close" => self.close_avec(session, &m, v["reason"].as_str(), v["until"].as_str(), v["queue_max_age_s"].as_u64()),
                     "/describe" => self.describe(session, &m),
                     _ => match v["name"].as_str() {
                         Some(name) => self.call_with_deadline(session, &m, name, v.get("arguments").cloned().unwrap_or(json!({})), v["deadline_ms"].as_u64()),
@@ -1553,6 +1796,29 @@ fn cell_of(session: &Session) -> Result<Option<crate::scope::Scope>, String> {
 
 /// La réponse d'un message `op` : `{ok, result}` ou `{ok: false, error}`. Une
 /// session manquante ou inconnue se marque, pour le statut 401.
+/// **La fermeture et sa file sur disque** ; rien à garder, le fichier part. Appelé sous le verrou de
+/// la file. Une écriture impossible se dit, et la file reste en mémoire.
+fn persister_la_fermeture(hosted: &Hosted, file: &FileDesEcritures) {
+    let chemin = fichier_de_fermeture(&hosted.manifest);
+    let fermeture = hosted.held_closed.lock().unwrap_or_else(|p| p.into_inner()).as_ref().map(Fermeture::en_json);
+    if fermeture.is_none() && file.attente.is_empty() {
+        let _ = std::fs::remove_file(&chemin);
+        return;
+    }
+    let disque = FermetureSurDisque { fermeture, file: file.attente.iter().cloned().collect() };
+    let ecrit = (|| -> std::io::Result<()> {
+        if let Some(d) = chemin.parent() {
+            std::fs::create_dir_all(d)?;
+        }
+        let tmp = chemin.with_extension("json.tmp");
+        std::fs::write(&tmp, serde_json::to_vec_pretty(&disque).map_err(std::io::Error::other)?)?;
+        std::fs::rename(&tmp, &chemin)
+    })();
+    if let Err(e) = ecrit {
+        eprintln!("[démon] {} : la fermeture et sa file ne s'écrivent pas ({}) : {e} — elles tiennent en mémoire seulement", hosted.manifest.display(), chemin.display());
+    }
+}
+
 fn op_response(result: Result<Value, String>) -> Value {
     match result {
         Ok(v) => json!({ "ok": true, "result": v }),

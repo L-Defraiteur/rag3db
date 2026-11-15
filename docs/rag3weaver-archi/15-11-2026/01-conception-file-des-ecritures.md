@@ -6,11 +6,14 @@ la fenêtre d'hotfixs sur code-lourd, c'est un vrai manque pour Lucie.
 
 ## La conception, en quatre lignes
 
-1. **Ce qu'est une écriture** : un outil dont le graphe porte un nœud qui écrit la base
-   (`InsertRecordNode`, `UpdateRecordNode`, `DeleteRecordNode`, `LinkRecordNode`, l'index), ou
-   `policy.write_files`. Le code n'a pas ce marqueur aujourd'hui : il se déclare **dans le schéma du
-   nœud** (un drapeau « écrit », posé par sa fabrique), pas dans une liste de noms. Une lecture reste
-   refusée comme aujourd'hui.
+1. **Ce qu'est une écriture** : un appel que `PreparedBackend::reads_only` ne prouve pas en lecture —
+   son graphe instancié (liaisons comprises) et son crochet après sont `snapshot_safe` (L6), sa
+   politique n'écrit ni ne lance rien, il n'a pas de harnais. *Changé au code (c7, 15 novembre,
+   00 h 5x)* : le drapeau « écrit » à part que je proposais est retiré ; `snapshot_safe` est déjà posé
+   par chaque fabrique et prouvé par son test (graph_tool.rs), un seul rédacteur d'un fait déjà prouvé
+   vaut mieux qu'un second marqueur qui pourrait le contredire. Le défaut est prudent : un nœud non
+   marqué, un outil inconnu ou un graphe qui ne s'instancie pas est rangé, jamais servi comme une
+   lecture. Une lecture reste refusée comme aujourd'hui.
 2. **La file** : sous une fermeture qui tient, une écriture se range dans la file du backend (outil,
    arguments, client, heure), bornée en nombre et en durée (réglables, horizon le `until` de la
    fermeture) ; le refus dit « fermé : <raison>, depuis <heure de fermeture>, jusqu'à <quand> ; ton
