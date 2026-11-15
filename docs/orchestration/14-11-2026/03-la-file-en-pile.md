@@ -956,3 +956,7 @@ le cœur rejoue son ALTER sur 36ee817a7 et pousse ensuite.
 **12 h 0x — soixante-huit atterris** : tty-10, la saisie multiligne (tty, d187aec6a, mode simple ; crate 66/66 et
 14/14, check_features 8/8). A3 d'embarquement est sorti (course du fil de calcul sous llvmpipe, ticket). Reste :
 le cœur (ALTER, rejeu sur 36ee817a7, ~12 h 30), puis tty-11 et tty-12 à leur vert.
+
+**12 h 3x — la file est tenue pour le cœur** : son lot C++ (l'ALTER qui attend) se repose sur master et rejoue
+40 min ; personne n'atterrit d'ici son « poussé ». La voie de la garde qui transférerait des suites C++ quand
+seul du Rust a atterri est au ticket de G.

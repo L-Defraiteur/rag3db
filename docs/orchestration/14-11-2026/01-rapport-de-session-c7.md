@@ -1567,3 +1567,8 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   portent chaque frontière de compaction et le résumé de Claude Code ; à chaque frontière, l'archiviste compose
   le contexte dans 100 k et se juge contre ce résumé sur les tours qui suivent (vérité de terrain). Confié à
   banc avec 96, conception d'abord.
+- **Lucie, 12 h 3x** : le but du banc est de faire mieux que la compaction de Claude Code ; les L1 du contexte
+  d'après s'affichent dans l'ordre où ils ont été pris dans la session, la fiche en marge. Dit à 96 et banc.
+  **Le cœur** : passe sur c69603859 verte sauf e2e_test en cours, mais la garde refusera (tty-10 et les scripts
+  de G ont atterri) ; décision (b) : repose sur master et rejeu de 40 min, **la file est tenue** jusqu'à son
+  « poussé » ; DdlEveryMinute ne se rejoue pas (son SIGSEGV est de master).
