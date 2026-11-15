@@ -48,31 +48,46 @@ fenêtre. Chaque fenêtre lui arrive avec deux choses :
 
 Puis on recommence avec la fenêtre suivante.
 
-L'outil `archive` décide section par section. Une fenêtre lui est donc donnée comme **une seule
-section** de tous ses tours (`## turns a-b`). Les résumés et le chevauchement lui arrivent **en
-contexte**, non comme contenu à ranger. C'est l'argument à demander à la session mémoire (§ 5).
+**Ce qu'est une fenêtre** (c7, validé le 15 nov. à 12 h 5x, avec une précision de Lucie) :
+- **la fenêtre n'est pas une section : c'est le budget de ce que le modèle voit.** Dedans, les
+  sections restent par tour, comme au fil de l'eau, avec une décision chacune. Chaque décision
+  reçoit en contexte les résumés des fenêtres d'avant, le chevauchement, et le bout de la fenêtre
+  en cours qui précède sa section. Sinon, le plafond de 4 096 jetons de sortie de Decide casserait
+  la fenêtre unique pour une mauvaise raison : on mesurerait la sortie, pas la vue ;
+- **l'archiviste sait où il est** : le contexte de chaque fenêtre dit sa place (« fenêtre 2 sur 3,
+  tours a-b ; voici ce qui est déjà rangé »), et qu'une fenêtre suit. Il ne conclut pas la
+  séance ;
+- **ce qu'on mesure** : ce que le contexte large (les résumés et le chevauchement) change au
+  rangement par section, contre le rangement sans contexte.
+- **Ce qu'il faut de la session mémoire** : l'entrée de contexte de l'outil archive (§ 5), et le
+  composeur des résumés. L'étape `segment` n'est pas nécessaire à cette mesure.
 
 ## 3. Les variantes
 
-Les tailles sont comptées en jetons du corpus, par tours entiers. Le corpus en fait 880 233.
+Les tailles sont comptées en jetons du corpus, par tours entiers. Le corpus en fait 880 233. Dans
+chaque variante, les 244 tours sont rangés un par section, avec une décision chacun : seul change ce
+que chaque décision voit en contexte.
 
-| variante | fenêtre | chevauchement | résumés d'avant |
-|---|---|---|---|
-| **F, la forme de Lucie** | 300 k (trois fenêtres) | 10 % puis 25 % | oui |
-| F, à d'autres tailles | 50 k, 100 k, 200 k | 10 % et 25 % | oui |
-| **U, la fenêtre unique** | 880 k (le segment entier) | aucun | aucun |
-| **S, sans chevauchement** | aux mêmes tailles que F | 0 | oui |
-| **N, nues** | aux mêmes tailles que F | 0 | non |
+| variante | ce que voit chaque décision, en plus de sa section | budget de la fenêtre |
+|---|---|---|
+| **N, au fil de l'eau** (la référence) | rien | — |
+| **F, la forme de Lucie** | sa place ; les résumés des fenêtres d'avant ; le chevauchement (10 % puis 25 % de la fenêtre d'avant) ; le bout de la fenêtre en cours | 300 k (trois fenêtres) |
+| F, à d'autres tailles | la même chose | 50 k, 100 k, 200 k |
+| **S, sans chevauchement** | sa place ; les résumés d'avant ; le bout de la fenêtre en cours | aux mêmes tailles que F |
+| **U, la fenêtre unique** | tout ce qui précède sa section dans le segment | 880 k |
 
-- **La référence** : le rangement au fil de l'eau, une section par tour (244 sections closes). Ses
-  sujets, c'est-à-dire les fiches qui reçoivent au moins un L1, sont la liste de référence des
-  sujets du corpus. Cette liste est relue à la main avant de servir de juge (§ 5). Elle dit aussi
-  le coût du rangement le plus fin.
+- **La liste des sujets** : celle de N, relue à la main avant de servir de juge (§ 5). Chaque
+  variante est jugée contre elle, et N contre la relecture.
 - **Les copies** : chaque variante, à chaque taille, a sa propre copie neuve du gabarit memory,
   vide, sans la mémoire de Lucie. Une copie de son instantané rendrait les candidates réalistes,
   mais c'est une base durable : seulement sur son mot.
-- **L'ordre** : F à 300 k d'abord, avec ses deux chevauchements, puis U, puis S et N à 300 k. Les
+- **L'ordre** : N, puis F à 300 k avec ses deux chevauchements, puis S et U à 300 k et 880 k. Les
   autres tailles viennent ensuite, si F à 300 k tient ou pour trouver où il casse.
+- **Le coût de la vue** : chaque décision reçoit jusqu'au budget en contexte. F à 300 k envoie de
+  l'ordre de 244 × 150 k ≈ 37 millions de jetons d'entrée. U en envoie de l'ordre de
+  244 × 440 k ≈ 107 millions, sauf cache de contexte chez Gemini. Le contexte d'une fenêtre ne
+  change qu'au bout en cours : le cache de préfixe de Vertex le rend bon marché. C'est à vérifier
+  sur les deux premières fenêtres avant le reste.
 
 ## 4. Les métriques, par variante et par taille
 
@@ -94,8 +109,10 @@ Les tailles sont comptées en jetons du corpus, par tours entiers. Le corpus en 
 
   On en tire **la plus grande fenêtre qui tient**, à chaque chevauchement.
 
-**La question de Lucie y répond ainsi** : jusqu'où l'archiviste voit, c'est la casse de N et de U.
-Avec quelle fenêtre et quel chevauchement il tient, c'est F contre S et N, à la même taille.
+**La question de Lucie y répond ainsi** :
+- **jusqu'où l'archiviste voit** : la plus grande fenêtre où F tient encore, et ce que devient U ;
+- **avec quel chevauchement** : F à 10 % et à 25 %, contre S ;
+- **ce que le contexte apporte** : F et S contre N, le rangement sans contexte.
 
 ## 5. La validation et les bornes
 
@@ -126,8 +143,8 @@ Avec quelle fenêtre et quel chevauchement il tient, c'est F contre S et N, à l
     la décision d'aujourd'hui.
   - **Ces deux ajouts changent la conception de l'archiviste** : 96 ne les pose qu'au mot de
     l'orchestration, après le composeur.
-- **Ce que la mesure juge donc** : la question « jusqu'où l'archiviste voit » est d'abord celle de
-  l'étape `segment`. À quelle taille de fenêtre, avec quel chevauchement et quels résumés, le
-  modèle rend-il encore les sujets de sa fenêtre sans en perdre, sans en doubler, sans oublier le
-  milieu ? La décision par sujet, elle, ne change pas.
-- **Rien n'est lancé** avant que l'orchestration ait validé, et avant ces trois réponses.
+  - **ce qui en sort pour cette mesure** (c7, 12 h 5x) : les sections restent par tour, donc l'étape
+    `segment` n'est pas nécessaire. Il faut seulement l'entrée de contexte, et c'est un changement
+    de l'archiviste, que l'orchestration a validé.
+- **Rien n'est lancé** avant le composeur vu vert et l'entrée de contexte de l'archive. La conception
+  est validée par l'orchestration (15 nov., 12 h 5x).
