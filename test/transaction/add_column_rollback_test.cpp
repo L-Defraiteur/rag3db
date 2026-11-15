@@ -7,8 +7,9 @@
 // suivant, rangé en N + 1, se lisait et s'écrivait dans la colonne morte — sa valeur par défaut,
 // son type. Le point de reprise gardait la morte et jetait la vraie. Désormais l'ADD laisse un
 // enregistrement dans le tampon d'annulation et le ROLLBACK retire la colonne du stockage ; et
-// deux ALTER d'une même table ne se chevauchent plus (le second attend le premier, sous le verrou
-// de schéma de la table depuis le 15 novembre 2026 ; il était refusé avant).
+// deux ALTER d'une même table ne se chevauchent plus (le second attend le premier sous le verrou de
+// schéma de la table depuis le 15 novembre 2026, puis il est refusé par un nom ; il l'était sans
+// attendre avant).
 //
 // Le banc joue la même chose à vingt clients (minute 6 du scénario des migrations) : ses
 // contrôles `added-column-reads-its-default` et `added-column-reads-what-was-set`.
@@ -150,8 +151,8 @@ TEST_F(AddColumnRollback, TwoAltersOfOneTableDoNotOverlap) {
     ok("BEGIN TRANSACTION;");
     ok("ALTER TABLE T ADD b INT64 DEFAULT 1;");
     // Depuis le verrou de schéma (le ticket de l'ADD COLUMN sous une écriture ouverte, 15 novembre
-    // 2026), le second ALTER n'est plus refusé : il ATTEND que le premier ait validé, comme sous
-    // PostgreSQL, puis passe sur le schéma qui porte b. Les deux ne se chevauchent toujours pas.
+    // 2026), le second ALTER ATTEND que le premier ait validé, comme sous PostgreSQL. Lié sur le
+    // schéma d'avant b, il est alors refusé par un nom, et passe quand on le relance.
     std::string secondResult;
     std::thread second([&] {
         auto r = other->query("ALTER TABLE T ADD c INT64 DEFAULT 3;");
@@ -161,7 +162,9 @@ TEST_F(AddColumnRollback, TwoAltersOfOneTableDoNotOverlap) {
     EXPECT_TRUE(secondResult.empty()) << "the second ALTER did not wait: " << secondResult;
     ok("COMMIT;");
     second.join();
-    EXPECT_EQ(secondResult, "OK");
+    EXPECT_NE(secondResult.find("The schema of table T changed"), std::string::npos)
+        << secondResult;
+    ok(*other, "ALTER TABLE T ADD c INT64 DEFAULT 3;");
     EXPECT_EQ(first("MATCH (t:T) RETURN t.b + t.c;"), "4");
     other.reset();
 }
