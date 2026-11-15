@@ -33,6 +33,9 @@ pub struct Manifestes {
     /// Les `replace` de `go.mod` (`ancien => nouveau`), tels qu'écrits (ils sont suivis : voir `lire_go_mod`).
     #[serde(default)]
     pub remplacements_go: BTreeSet<String>,
+    /// Les dossiers que `go.work` met dans le workspace (`use ./a`), tels qu'écrits.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub workspace_go: BTreeSet<String>,
     /// **Les alias de résolution du dépôt, par langue** (les `paths` de tsconfig : `@app/*` → `@app/`) : un
     /// import qui commence par l'un d'eux est du projet.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -62,8 +65,10 @@ pub struct Renommages {
 /// Un nom de fichier de manifeste reconnu.
 pub fn est_un_manifeste(chemin: &str) -> bool {
     let nom = chemin.rsplit('/').next().unwrap_or(chemin);
-    matches!(nom, "Cargo.toml" | "Cargo.lock" | "package.json" | "pyproject.toml" | "vcpkg.json" | "go.mod" | "packages.config" | "Directory.Packages.props")
+    matches!(nom, "Cargo.toml" | "Cargo.lock" | "package.json" | "pyproject.toml" | "vcpkg.json" | "go.mod" | "go.work" | "packages.config" | "Directory.Packages.props")
         || nom.ends_with(".csproj")
+        // C/C++ : les dépendances de conan et celles que CMake va chercher.
+        || matches!(nom, "conanfile.txt" | "conanfile.py" | "CMakeLists.txt")
         // `tsconfig.json`, `jsconfig.json`, `tsconfig.base.json` : leurs `paths` sont des alias du dépôt.
         || nom == "jsconfig.json"
         || (nom.starts_with("tsconfig") && nom.ends_with(".json"))
@@ -89,7 +94,11 @@ impl Manifestes {
                 "package.json" => { un.lire_package_json(&texte); &["javascript"] }
                 "pyproject.toml" => { un.lire_pyproject(&texte); &["python"] }
                 "vcpkg.json" => { un.lire_vcpkg(&texte); &["c", "cpp"] }
-                "go.mod" => { un.lire_go_mod(&texte); &["go"] }
+                // `go.work` a la forme de `go.mod` : ses `replace` se suivent de même, ses `use` se notent
+                // (les modules du workspace sont déjà du projet par la ligne `module` de leur `go.mod`).
+                "go.mod" | "go.work" => { un.lire_go_mod(&texte); &["go"] }
+                "conanfile.txt" | "conanfile.py" => { un.dependances.extend(dependances_conan(&texte)); &["c", "cpp"] }
+                "CMakeLists.txt" => { un.dependances.extend(dependances_cmake(&texte)); &["c", "cpp"] }
                 "packages.config" | "Directory.Packages.props" => { un.lire_dotnet(&texte, None); &["csharp"] }
                 n if n.ends_with(".csproj") => { un.lire_dotnet(&texte, n.strip_suffix(".csproj")); &["csharp"] }
                 n if n.ends_with(".json") && (n == "jsconfig.json" || n.starts_with("tsconfig")) => {
@@ -108,6 +117,7 @@ impl Manifestes {
             m.dependances.extend(un.dependances);
             m.paquets_du_projet.extend(un.paquets_du_projet);
             m.remplacements_go.extend(un.remplacements_go);
+            m.workspace_go.extend(un.workspace_go);
             m.lus.push(chemin.clone());
         }
         // Une crate du workspace figure aussi dans le Cargo.lock : elle est du projet, pas une dépendance.
@@ -194,6 +204,9 @@ impl Manifestes {
             }
             "require" => {
                 self.dependances.insert(premier.to_string());
+            }
+            "use" => {
+                self.workspace_go.insert(premier.to_string());
             }
             "replace" => {
                 let argument = argument.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -363,6 +376,68 @@ fn alias_de_tsconfig(texte: &str) -> (Vec<String>, Vec<String>) {
         }
     }
     (prefixes, exacts)
+}
+
+/// Les paquets que demande un conanfile : la section `[requires]` d'un `conanfile.txt` (`fmt/10.1.0`), et
+/// dans un `conanfile.py` les chaînes `requires = "a/1", "b/2"` (une ligne, une liste ou un tuple) et
+/// `self.requires("a/1")`. Le nom est ce qui précède le `/` de la référence.
+fn dependances_conan(texte: &str) -> Vec<String> {
+    let reference = |s: &str| -> Option<String> {
+        let s = s.trim().trim_matches(|c| c == '"' || c == '\'');
+        let nom = s.split('/').next()?.trim();
+        (!nom.is_empty() && s.contains('/') && nom.chars().all(|c| c.is_alphanumeric() || "-_.+".contains(c))).then(|| nom.to_string())
+    };
+    let mut noms = Vec::new();
+    let mut section = String::new();
+    for ligne in texte.lines() {
+        let l = ligne.split('#').next().unwrap_or("").trim();
+        if l.starts_with('[') && l.ends_with(']') {
+            section = l.to_string();
+            continue;
+        }
+        if section == "[requires]" {
+            noms.extend(reference(l));
+            continue;
+        }
+        // conanfile.py : `requires = "a/1", "b/2"` ou `self.requires("a/1")`.
+        let python = l.starts_with("requires") && l.contains('=') || l.contains("self.requires(");
+        if python {
+            let mut reste = l;
+            while let Some(i) = reste.find(|c| c == '"' || c == '\'') {
+                let guillemet = reste[i..].chars().next().unwrap();
+                let apres = &reste[i + 1..];
+                let Some(fin) = apres.find(guillemet) else { break };
+                noms.extend(reference(&apres[..fin]));
+                reste = &apres[fin + 1..];
+            }
+        }
+    }
+    noms
+}
+
+/// Les paquets qu'un `CMakeLists.txt` va chercher : `find_package(OpenSSL REQUIRED)` donne `OpenSSL`,
+/// `FetchContent_Declare(fmt GIT_REPOSITORY …)` donne `fmt`. La casse de CMake ne compte pas pour le nom de
+/// la commande ; le nom du paquet se compare ensuite par les variantes de la langue (casse ignorée).
+fn dependances_cmake(texte: &str) -> Vec<String> {
+    let mut noms = Vec::new();
+    let bas = texte.to_lowercase();
+    for commande in ["find_package(", "fetchcontent_declare("] {
+        let mut depart = 0;
+        while let Some(i) = bas[depart..].find(commande) {
+            let debut = depart + i + commande.len();
+            // Une commande, pas la fin d'un autre mot (`my_find_package(`).
+            let avant = bas[..depart + i].chars().last();
+            depart = debut;
+            if avant.is_some_and(|c| c.is_alphanumeric() || c == '_') {
+                continue;
+            }
+            let nom: String = texte[debut..].trim_start().chars().take_while(|c| c.is_alphanumeric() || "-_.+".contains(*c)).collect();
+            if !nom.is_empty() && !nom.starts_with("${") {
+                noms.push(nom);
+            }
+        }
+    }
+    noms
 }
 
 /// La valeur d'un attribut XML (`Include="Newtonsoft.Json"`) dans le texte d'une balise.
@@ -673,6 +748,37 @@ mod tests {
         assert_eq!(provenance("~/lib/b"), Some(Some("project".to_string())), "{:?}", a.libraries);
         assert_eq!(provenance("@vite/v"), Some(Some("project".to_string())), "{:?}", a.libraries);
         assert_eq!(provenance("lodash"), Some(Some("dependency".to_string())), "{:?}", a.libraries);
+    }
+
+    /// `go.work` : ses `use` (en ligne et en bloc) se notent, ses `replace` vers un chemin local font du
+    /// module un paquet du projet, comme dans `go.mod`.
+    #[test]
+    fn go_work_ses_use_et_ses_replace() {
+        let m = lire(&[
+            ("go.work", "go 1.23\n\nuse ./outil\n\nuse (\n\t./service\n\t../commun\n)\n\nreplace github.com/x/externe => ./vendored/externe\n"),
+            ("outil/go.mod", "module example.com/moi/outil\n\nrequire github.com/x/externe v1.0.0\n"),
+        ]);
+        assert_eq!(m.lus, vec!["go.work", "outil/go.mod"]);
+        assert_eq!(m.workspace_go.iter().map(String::as_str).collect::<Vec<_>>(), vec!["../commun", "./outil", "./service"]);
+        let projet = &m.paquets_par_langue["go"];
+        assert!(projet.contains("github.com/x/externe"), "remplacé par un chemin local au workspace : du projet ({projet:?})");
+        assert!(projet.contains("example.com/moi/outil"), "{projet:?}");
+        assert!(!m.dependances_par_langue["go"].contains("github.com/x/externe"), "{:?}", m.dependances_par_langue);
+    }
+
+    /// C/C++ : conan (`[requires]` d'un conanfile.txt, `requires =` et `self.requires(…)` d'un
+    /// conanfile.py) et CMake (`find_package`, `FetchContent_Declare`), rangés sous c et cpp.
+    #[test]
+    fn cpp_conan_et_cmake() {
+        let m = lire(&[
+            ("conanfile.txt", "[requires]\nfmt/10.1.0\nzlib/1.3 # la compression\n\n[generators]\nCMakeDeps\n"),
+            ("outil/conanfile.py", "class Outil(ConanFile):\n    requires = \"spdlog/1.12.0\", \"boost/1.83.0\"\n    def requirements(self):\n        self.requires(\"openssl/3.2.0\")\n"),
+            ("CMakeLists.txt", "cmake_minimum_required(VERSION 3.20)\nfind_package(Threads REQUIRED)\nFIND_PACKAGE(OpenSSL)\ninclude(FetchContent)\nFetchContent_Declare(googletest GIT_REPOSITORY https://github.com/google/googletest)\nmy_find_package(Faux)\n"),
+        ]);
+        let cpp: Vec<&str> = m.dependances_par_langue["cpp"].iter().map(String::as_str).collect();
+        assert_eq!(cpp, vec!["OpenSSL", "Threads", "boost", "fmt", "googletest", "openssl", "spdlog", "zlib"]);
+        assert_eq!(m.dependances_par_langue["c"], m.dependances_par_langue["cpp"]);
+        assert!(!cpp.contains(&"Faux"), "my_find_package n'est pas find_package");
     }
 
     #[test]
