@@ -515,6 +515,11 @@ impl Vue {
         }
     }
 
+    /// Reprend les envois des séances d'avant (tty-13).
+    pub fn reprendre_historique(&mut self, historique: Vec<String>) {
+        self.saisie = crate::saisie::Saisie::avec_historique(historique);
+    }
+
     /// Une édition de la saisie : aucune action.
     fn edite(&mut self, f: impl FnOnce(&mut crate::saisie::Saisie)) -> Option<Action> {
         f(&mut self.saisie);

@@ -174,6 +174,10 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
     vue.capacites = Capacites::du_terminal();
     vue.theme = theme;
     vue.maj_entree = maj_entree;
+    // L'historique des envois d'une séance à l'autre (tty-13).
+    if let Some(h) = crate::historique::chemin() {
+        vue.reprendre_historique(crate::historique::charger(&h));
+    }
     vue.sous_tmux = std::env::var_os("TMUX").is_some_and(|v| !v.is_empty());
     if let (true, Some(j)) = (mosh, &journal) {
         vue.repli = Some(crate::vue::Repli { phrase: "sous mosh, l'historique ne se relit pas au défilement".into(), commande: j.relecture() });
@@ -260,11 +264,16 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
                     sale = true;
                 }
                 Some(Action::Envoyer(texte, kind)) => {
+                    garder(&texte);
                     if let Err(e) = client::poster(agent, ep, "/ide/teammate/mailbox", &json!({ "backend": tache.depot.id, "task": tache.task, "kind": kind, "text": texte })) {
                         vue.note(&format!("refusé : {e}"));
                     }
                 }
                 Some(Action::Repondre { attente, texte, accord }) => {
+                    // Un o ou un n d'accord ne s'écrit pas dans l'historique.
+                    if accord.is_none() {
+                        garder(&texte);
+                    }
                     if let Err(e) = client::poster(agent, ep, "/ide/teammate/mailbox", &crate::boite::reponse(&tache.depot.id, &tache.task, &attente, &texte, accord)) {
                         vue.note(&format!("la réponse est refusée : {e}"));
                     }
@@ -279,6 +288,13 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
                 None => {}
             }
         }
+    }
+}
+
+/// Ajoute un envoi à l'historique gardé ; une erreur ne coupe pas la séance.
+fn garder(texte: &str) {
+    if let Some(h) = crate::historique::chemin() {
+        let _ = crate::historique::ajouter(&h, texte);
     }
 }
 
