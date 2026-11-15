@@ -37,11 +37,11 @@ graph LR
     decide -->|report:value| rapport
     decide -->|report:value| sourcer
     sourcer -->|result:record| source
-    marquer["ForEachNode(graph='@builtin:backends/memory/graphs/archive_mark.mmd', segment_over=$segment_over)"]
-    decouper["ForEachNode(graph='@builtin:backends/memory/graphs/archive_segment.mmd', when='long', flatten=true)"]
-    split -->|element:elements| marquer
-    marquer -->|results:elements| decouper
-    decouper -->|results:elements| decide
+    mark["ForEachNode(graph='@builtin:backends/memory/graphs/archive_mark.mmd', segment_over=$segment_over)"]
+    split_long["ForEachNode(graph='@builtin:backends/memory/graphs/archive_segment.mmd', when='long', flatten=true)"]
+    split -->|element:elements| mark
+    mark -->|results:elements| split_long
+    split_long -->|results:elements| decide
     decide -->|results:element| decided
     decided -->|decided:elements| subject
     subject -->|results:element| route
