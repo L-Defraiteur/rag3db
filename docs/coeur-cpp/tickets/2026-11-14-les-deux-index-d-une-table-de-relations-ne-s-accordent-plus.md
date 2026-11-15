@@ -252,3 +252,28 @@ Deux observations sous l'ancienne lib, à garder :
 - **Un balayage non ancré qui lit mal.** Sous `f41c0ba5b`, `MATCH ()-[r:R]->() RETURN r.line
   ORDER BY r.line` ne rend qu'une ligne (line 0) sur cette base. Ce n'est pas expliqué. À rejouer
   sous `373b5477b` ; si le défaut y reste, il faut lui ouvrir un ticket à part.
+
+## Le miroir n'est pas obtenu : une perte des deux côtés reste à lire (15 nov., 1 h 30)
+
+On a voulu fabriquer pour G la base miroir de « un seul sens » : une relation présente au sens
+avant et absente du sens arrière. Sous `f41c0ba5b`, avec un refus en fin de COMMIT (le journal ne
+se synchronise pas, `CutFileSystem`, 200 ms sous le verrou) :
+
+- A verse ses relations du groupe de nœuds 2 vers le groupe 1 ;
+- B valide une relation du groupe 0 vers le groupe 1.
+
+**10 tours sur 10, la relation de B est perdue des deux côtés.** Au sens avant, elle était seule
+dans son groupe CSR (le groupe 0), et elle y disparaît quand même. La règle « la troncature
+emporte, dans chaque sens, le groupe que A partage avec B » est donc fausse pour un refus en fin de
+COMMIT. Elle ne vaut que pour le refus entre les deux sens.
+
+Le premier témoin (`BothDirectionsKeepTheRelationsOfAnotherWriter`) montre la même perte des deux
+côtés. Le mécanisme reste à lire. Les suspects :
+
+- `rollbackGroupCollectionInsert`, qui fait reculer le compte de lignes de toute la table ;
+- le décalage des relations, `updateRelOffsets`, que le COMMIT de A a déjà avancé, et que B
+  réemploie ou chevauche.
+
+Rien n'a été déposé, et le dossier `un-seul-sens-avant` est effacé. Le journal de la fabrication
+est à luciepc, dans `~/.cache/rag3db-moteur-notes/deux-sens/miroir-echec/`. Sur master, le
+correctif de `373b5477b` couvre aussi ce cas : le témoin est vert 3/3.
