@@ -11,7 +11,8 @@ Un dossier par identifiant, immuable une fois publié, sous
     courant -> <id>          (les passes le résolvent une fois au départ)
 
 Sous-commandes :
-    publier <dossier de bâti> [--racine <arbre>] [--sans-courant]
+    publier <dossier de bâti> [--racine <arbre>] [--poser-courant]
+                             (sans `--poser-courant`, `courant` ne bouge pas : 15 nov. 2026)
     courant [--poser <id>]   rend le dossier résolu, ou change le lien
     verifier <dossier|id>    la lib contient-elle les planchers (planchers-de-la-lib) ?
     liste                    les identifiants, et ce qui retient chacun
@@ -379,6 +380,11 @@ def main() -> None:
     pp = sub.add_parser("publier")
     pp.add_argument("bati", type=Path)
     pp.add_argument("--racine", type=Path, default=Path(__file__).resolve().parents[3])
+    # **`courant` ne bouge plus à la publication** (15 novembre 2026) : un `run_e2e.sh --build-only` dans un worktree de pile
+    # publiait sa lib et la posait en `courant` d'un poste partagé, trois heures durant, sous les passes qui lisent
+    # `courant`. Seule la bascule pose `courant` (`courant --poser`, courant-bascule.sh), ou une publication qui le
+    # demande par `--poser-courant`. `--sans-courant` reste accepté, et ne change plus rien.
+    pp.add_argument("--poser-courant", action="store_true")
     pp.add_argument("--sans-courant", action="store_true")
     pc = sub.add_parser("courant")
     pc.add_argument("--poser")
@@ -390,7 +396,7 @@ def main() -> None:
     pm.add_argument("--simuler", action="store_true")
     a = p.parse_args()
     if a.cmd == "publier":
-        publier(a.bati, a.racine, not a.sans_courant)
+        publier(a.bati, a.racine, a.poser_courant and not a.sans_courant)
     elif a.cmd == "courant":
         if a.poser:
             poser(a.poser)

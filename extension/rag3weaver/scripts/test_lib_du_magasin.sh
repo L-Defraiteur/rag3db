@@ -22,7 +22,7 @@ bati() { # $1 nom, $2 identifiant
   objcopy --add-section=.rag3db_build_id="$T/$1.section" "$src/librag3db.so"
   echo "// en-tête" > "$src/rag3db.hpp"
   printf '#define RAG3DB_BUILD_ID "%s"\n' "$2" > "$src/include/common/build_id.h"
-  python3 "$ICI/rag3db_libs.py" publier "$T/$1" --racine "$T/$1/arbre" > /dev/null
+  python3 "$ICI/rag3db_libs.py" publier "$T/$1" --racine "$T/$1/arbre" --poser-courant > /dev/null
 }
 
 lib_du_magasin courant > /dev/null 2>&1
