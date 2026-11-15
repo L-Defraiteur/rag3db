@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 15 novembre2026 — Le terminal de l'agent ne garde dans l'historique que la demande et la réponse : les appels d'outil, les étapes faites et les mots de l'hôte défilent sur une ligne discrète de la zone vivante, et restent lisibles par Ctrl-O et le journal ; `--etapes` ou `/etapes` remontrent tout.
+
 - 15 novembre2026 — Sous tmux, Maj-Entrée passe à la ligne dans le terminal de l'agent si tmux est réglé pour les touches étendues en CSI u (`set -g extended-keys on`, `set -g extended-keys-format csi-u`) ; le terminal lit le réglage et le dit quand il manque. Le tmux par défaut garde son repli dit, Alt-Entrée.
 
 - 15 novembre2026 — `/model` dans le terminal de l'agent : la liste des modèles de langage que déclare le manifeste de la tâche (le défaut et celui de la tâche marqués), et `/model <nom>` pour en changer ; l'hôte garde le choix avec la tâche et son chat le suit (`GET /ide/teammate/models`, `POST /ide/teammate/model`) ; un choix devenu inconnu se voit, et le chat refuse alors en disant de choisir.
