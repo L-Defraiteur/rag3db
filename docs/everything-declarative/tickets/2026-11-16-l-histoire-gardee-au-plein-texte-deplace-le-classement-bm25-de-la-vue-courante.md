@@ -59,6 +59,10 @@ longueur moyenne du champ**, comptée sur le corpus : lucivy mesure 31,6 M token
 Sa moyenne sur le corpus donne 11 classements différents sur 15, et sa moyenne sur les admis 4 sur 15, à un écart de
 score d'au plus 2,6 %.
 
+**Le correctif** est dans lucivy 4.3.9 : la longueur moyenne se compte sur les admis, sous `allowed_ids`. rag3weaver le
+reprend par son pointeur. La bascule des bases de Lucie attend ce pointeur (c7, 16 novembre, 1 h). Banc rejoue ses
+30 cas sur master après l'atterrissage de l'écrivain, comme mesure de référence pour lucivy.
+
 ## Ce que le code fait déjà, et ce qui reste
 
 - **Le masque est un pré-filtre, pas un filtre après coup.** `search_filtered` de lucivy 4.3.7 prend les k premiers
