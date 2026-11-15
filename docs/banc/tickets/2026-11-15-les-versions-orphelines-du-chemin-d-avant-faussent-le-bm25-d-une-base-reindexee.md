@@ -8,8 +8,9 @@
   quand une édition ou une suppression laisse un contenu sans occurrence.
 - **Touche rag3weaver** : oui. L'effacement à la fin d'instantané (`apply_snapshot_finish`) exclut
   les versions à identité de contenu (`ScopeContent`).
-- **Pour** : à attribuer par l'orchestration. Everything declarative met fin aux orphelines pour les
-  bases à générations, par l'écrivain de 2a′-2 ; les autres bases restent.
+- **Pour** : everything declarative (au mot de c7, 15 nov. 3 h 4x). C'est le chemin d'avant des
+  versions, et son écrivain n'en laisse aucune : la bascule des bases de Lucie vers les
+  générations l'efface de fait. D'ici là, un ménage sur copie si une mesure l'exige.
 - **Signalé par** : banc, départage de la parité de l'écrivain, nuit du 15 novembre (au mot
   d'everything declarative).
 - **Ouvert le** : 15 novembre 2026
