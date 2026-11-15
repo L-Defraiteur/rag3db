@@ -543,6 +543,11 @@ impl DaemonHost {
         self.ouvrir_une_tache_nommee(parent, nom, None, None)
     }
 
+    /// **Renomme l'agent d'une tâche ouverte** (tty-18) : bouchon du témoin, qui refuse.
+    pub fn renommer_l_agent_d_une_tache(&self, _parent: &str, _nom: &str, _agent_name: &str) -> Result<Value, String> {
+        Err("pas encore".into())
+    }
+
     /// **Ouvrir une tâche dont l'agent porte un nom** (`agent_name` de `POST /ide/taches`) : le nom est
     /// validé avant toute ouverture, puis gardé au registre (`Tache::nom_de_l_agent`), et le backend de la
     /// tâche le lit par ses surcharges. Sans nom, celui du backend.
