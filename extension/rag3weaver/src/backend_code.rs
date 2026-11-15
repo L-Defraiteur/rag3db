@@ -37,6 +37,20 @@ impl GitIdentity {
     }
 }
 
+/// **Le refus d'écrire d'une source en lecture seule.** `task_writes` : les écritures se font
+/// dans les tâches ; `dans_une_tache` : ce backend EST une tâche (sa surcharge), et le refus ne
+/// lui conseille donc pas d'en ouvrir une.
+pub fn refus_d_ecriture(path: &str, cursor: &str, task_writes: bool, _dans_une_tache: bool) -> String {
+    if task_writes {
+        format!(
+            "{path} : l'arbre principal est en lecture seule ; l'agent écrit dans une tâche \
+             (POST /ide/taches : sa branche agent/<nom>, relue puis fusionnée)"
+        )
+    } else {
+        format!("{cursor} is read-only")
+    }
+}
+
 /// La clé `workspace` d'un `backend.json`.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -853,6 +867,60 @@ pub use monte::{build_garde, build_source};
 
 #[cfg(all(test, feature = "code"))]
 mod tests {
+
+    /// **Dans une tâche, le refus d'écrire ne conseille pas d'ouvrir une tâche** (les quinze
+    /// « oui » de Lucie, 15 novembre 2026 : le modèle, lisant « l'agent écrit dans une tâche
+    /// (POST /ide/taches …) », croyait ne pas en être une et passait par les commandes).
+    #[test]
+    fn dans_une_tache_le_refus_d_ecrire_dit_le_droit_de_la_tache() {
+        let dans = super::refus_d_ecriture("docs/a.md", "arbre", true, true);
+        assert!(!dans.contains("POST /ide/taches"), "{dans}");
+        assert!(dans.contains("cette tâche n'a pas le droit d'écrire") && dans.contains("task_writes"), "{dans}");
+        let principal = super::refus_d_ecriture("docs/a.md", "arbre", true, false);
+        assert!(principal.contains("POST /ide/taches"), "le principal garde son conseil : {principal}");
+    }
+
+    /// **`git status` passe sous le bac d'un worktree** (même relevé : rendu 128, « impossible
+    /// d'accéder à …/.git/info/exclude ») : le bac lit `info/` du dossier git commun.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn le_bac_git_laisse_git_status_lire_info_exclude() {
+        use crate::commande::{Atelier, Commande, Contexte, Garde, Mode};
+        let d = tempfile::tempdir().unwrap();
+        let principal = d.path().join("principal");
+        let lie = d.path().join("lie");
+        std::fs::create_dir(&principal).unwrap();
+        let git = |racine: &std::path::Path, args: &[&str]| {
+            let o = std::process::Command::new("git").arg("-C").arg(racine).args(args).output().unwrap();
+            assert!(o.status.success(), "git {args:?} : {}", String::from_utf8_lossy(&o.stderr));
+        };
+        git(&principal, &["init", "-q"]);
+        std::fs::write(principal.join("fichier"), "avant\n").unwrap();
+        git(&principal, &["add", "fichier"]);
+        git(&principal, &["-c", "user.name=Fixture", "-c", "user.email=fixture@example.org", "commit", "-qm", "fixture"]);
+        git(&principal, &["worktree", "add", "-qb", "lie", lie.to_str().unwrap()]);
+        std::fs::create_dir_all(principal.join(".git/info")).unwrap();
+        std::fs::write(principal.join(".git/info/exclude"), "*.tmp\n").unwrap();
+        std::fs::write(lie.join("fichier"), "apres\n").unwrap();
+        let bac = avec_lecture_git(crate::commande::BacASable::autour(&lie), &lie, &principal);
+        bac.ruleset().expect("Landlock effectif");
+        let atelier = Atelier::dans(&lie).avec_bac_a_sable(bac);
+        let garde = Garde::new(Mode::Approbation);
+        let commande = Commande::new("git", ["status", "--porcelain"]);
+        let sortie = crate::commande::executer(garde.autoriser(&commande, &Contexte::default()).unwrap(), &atelier).unwrap();
+        assert!(sortie.a_reussi(), "git status sous le bac : {sortie:?}");
+        assert!(!sortie.stderr.contains("info/exclude") && !sortie.stderr.contains("git/ignore"), "aucun fichier d'exclusion refusé : {sortie:?}");
+        assert!(sortie.stdout.contains("fichier"), "le changement est vu : {sortie:?}");
+    }
+
+    /// **`run_command` dit de lancer `git status` nu** (même relevé : l'équipier inventait
+    /// `git -c core.excludesFile=/dev/null status`).
+    #[test]
+    fn run_command_dit_de_lancer_git_status_nu() {
+        let m: serde_json::Value = serde_json::from_slice(crate::builtin_templates::get("backends/code/backend.json").expect("le gabarit code")).unwrap();
+        let d = m["tools"]["run_command"]["description"].as_str().unwrap_or_default();
+        assert!(d.contains("git status") && d.contains("git -c"), "elle nomme git status et écarte git -c : {d}");
+    }
 
     /// **Decide se déclare** (M4, 7 novembre 2026) : sans `call_models`, un outil qui
     /// contient `Decide` est refusé au chargement, et le refus dit la ligne à ajouter ;
