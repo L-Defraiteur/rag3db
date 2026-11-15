@@ -211,6 +211,10 @@ public:
     // le graphe d'attente ne voit pas). Un changement de schéma la prend en exclusif, et attend.
     void lockTableForWrite(common::table_id_t tableID) const;
     void lockTableForSchemaChange(common::table_id_t tableID) const;
+    // Le début stable du refus d'une écriture dont la table a changé de schéma depuis le départ de
+    // sa transaction : un client le reconnaît et recommence la transaction, qui se lie alors sur
+    // le nouveau schéma.
+    static constexpr const char* SCHEMA_CHANGED_RETRY = "Schema changed, retry:";
     void throwIfSchemaChangedAfterSnapshot(common::table_id_t tableID) const;
     // Marche V2, l'annonce en tête (CALL acquire_locks) : la transaction a-t-elle déjà écrit
     // (une ligne, une version, le catalogue) ? a-t-elle déjà annoncé ?

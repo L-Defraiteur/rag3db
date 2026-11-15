@@ -162,7 +162,8 @@ TEST_F(AddColumnRollback, TwoAltersOfOneTableDoNotOverlap) {
     EXPECT_TRUE(secondResult.empty()) << "the second ALTER did not wait: " << secondResult;
     ok("COMMIT;");
     second.join();
-    EXPECT_NE(secondResult.find("The schema of table T changed"), std::string::npos)
+    EXPECT_NE(secondResult.find("Schema changed, retry: the schema of table T changed"),
+        std::string::npos)
         << secondResult;
     ok(*other, "ALTER TABLE T ADD c INT64 DEFAULT 3;");
     EXPECT_EQ(first("MATCH (t:T) RETURN t.b + t.c;"), "4");
