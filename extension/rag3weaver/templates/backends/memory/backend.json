@@ -691,6 +691,8 @@
     "whois": "scripts/whois.rhai",
     "archive_rapport": "scripts/archive_rapport.rhai",
     "archive_query": "scripts/archive_query.rhai",
+    "archive_segment_prompt": "scripts/archive_segment_prompt.rhai",
+    "archive_segment_build": "scripts/archive_segment_build.rhai",
     "archive_params": "scripts/archive_params.rhai",
     "archive_candidates": "scripts/archive_candidates.rhai",
     "archive_decided": "scripts/archive_decided.rhai",
