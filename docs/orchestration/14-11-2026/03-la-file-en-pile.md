@@ -1234,3 +1234,15 @@ G, 15 h 11 : pose au portable faite (5b8f8994f, f7133291 ; 26a091474 en .avant),
 le tunnel 7980 → 7879 de luciepc étant injoignable — **le 7879 est tombé et a redémarré (NRestarts 21 depuis 11 h 39)**, l'hôte
 coupé 55 s au lieu de 15. Deux tickets chez embarquement : pourquoi le 7879 meurt (journal muet) ; un hôte ne doit jamais
 refuser de démarrer parce qu'un service d'embarquement distant est injoignable (dire, servir le lexical, retenter).
+Codeparsers, 15 h 12 : `new` vert (new-rust 87126e4 ; 3 témoins rouges d'abord, 330 passés) ; banc sur rag3weaver/src (288 fichiers) :
+références 263 402 → 271 732, relations vers un scope `new` 542 → 2 894 (×5,3), scopes appelant un `new` 403 → 1 596 ; 20/20
+CONSUMES de l'échantillon au bon type. Lot rag3db (pointeur, tickets, nouveauté) à monter ; place après lucivy. Ordre : CI →
+format → archi → 96 (+usage) → lucivy → codeparsers → ED (1) → embarquement → arbre. Puis fmt/format.h (sonde rouge : 45 scopes).
+Embarquement, 15 h 13 : (1) le 7879 meurt sur « failed to reserve N bytes of device memory » (2,4 à 4,1 Go, cubecl-wgpu), puis sort
+avec un code 0 que systemd relance ; douze tailles refusées reviennent dans le même ordre, cycle après cycle (la passe F du
+banc, 13 h 53 → 15 h 08) ; ticket 565715be0 : refuser la demande trop grosse (503 nommé) au lieu de mourir, recouper les lots.
+(2) Le réveil refusé n'est pas l'hôte (`embedder_or_absent` ouvre en plein texte seul et le dit) : c'est la garde de la chaîne de
+pose de G, qui a attendu le tunnel — à G : la garde dit, elle ne retient pas le réveil. Pas de ticket chez embarquement.
+15 h 13 : correction — la garde du réveil de G (`bascule-reveil.sh`) est **voulue** : elle évite qu'un hôte se rouvre en plein texte seul
+et pose 0 vecteur sans bruit (ticket du 25 octobre) ; elle a attendu le 7879 et réveillé à son retour. Rien à changer chez G
+ni chez l'hôte ; les 55 s sont le temps de redémarrage du 7879 (ticket 565715be0).
