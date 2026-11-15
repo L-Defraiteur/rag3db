@@ -140,6 +140,44 @@ TEST_F(AlterWaitsForWriters, AWriterArrivingDuringTheAlterWaitsForIt) {
     EXPECT_EQ(one(*conn, "MATCH (n:T) WHERE n.id = 2 RETURN n.s, n.note;"), "c|n\n");
 }
 
+// Un écrivain qui arrive pendant l'ALTER a été lié sur le schéma d'avant (sa requête est liée et
+// planifiée avant de prendre le verrou de la table, à l'exécution). Après son attente, le schéma a
+// une colonne de plus : il ne doit pas écrire une ligne sur l'ancien nombre de colonnes. Il passe
+// sur le nouveau schéma, ou il est refusé par un nom ; jamais une ligne illisible.
+TEST_F(AlterWaitsForWriters, AWriterCreatingDuringTheAlterWritesNoRowOfTheOldSchema) {
+    Connection b(database.get());
+    Connection c(database.get());
+    run(*conn, "BEGIN TRANSACTION;");
+    run(*conn, "MATCH (n:T) WHERE n.id = 1 SET n.s = 'a';");
+    std::string ddlResult, cResult;
+    std::thread tb([&] {
+        auto r = b.query("ALTER TABLE T ADD note STRING DEFAULT 'n';");
+        ddlResult = r->isSuccess() ? "OK" : "REFUS " + r->getErrorMessage();
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    std::thread tc([&] {
+        auto r = c.query("UNWIND range(5000, 5099) AS i CREATE (:T {id: i, s: 'pendant', c: 'c'});");
+        cResult = r->isSuccess() ? "OK" : "REFUS " + r->getErrorMessage();
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    run(*conn, "COMMIT;");
+    tb.join();
+    tc.join();
+    EXPECT_EQ(ddlResult, "OK");
+    const auto expected = cResult == "OK" ? "100\n" : "0\n";
+    EXPECT_TRUE(cResult == "OK" || cResult.find("schema") != std::string::npos)
+        << "[check: a-writer-of-the-old-schema-passes-or-is-refused-by-name] " << cResult;
+    EXPECT_EQ(one(*conn, "MATCH (n:T) WHERE n.id >= 5000 AND n.note = 'n' RETURN count(*);"),
+        expected)
+        << "[check: a-row-written-after-the-alter-reads-the-new-column] " << cResult;
+    run(*conn, "CHECKPOINT;");
+    createDBAndConn();
+    EXPECT_EQ(one(*conn, "MATCH (n:T) WHERE n.id >= 5000 AND n.note = 'n' RETURN count(*);"),
+        expected)
+        << "[check: a-row-written-after-the-alter-survives-a-reopening] " << cResult;
+    EXPECT_EQ(one(*conn, "MATCH (n:T) RETURN count(*);"), cResult == "OK" ? "1100\n" : "1000\n");
+}
+
 TEST_F(AlterWaitsForWriters, AnAlterThatWaitsTooLongSaysWhichWriterItWaitedFor) {
     Connection b(database.get());
     run(b, "CALL lock_timeout=300;");
