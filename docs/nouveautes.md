@@ -1,5 +1,13 @@
 # Nouveautés
 
+- 15 novembre2026 — **Le service d'embarquement ne meurt plus en silence.** Un calcul qui panique sur la carte (une
+  réservation de mémoire refusée) rend un 503 nommé au client, au lieu d'une connexion coupée. Le service répond
+  ensuite à toutes ses requêtes en vol, puis s'arrête avec le code 70 en disant sa cause en dernière ligne de son
+  journal. Il ne sort plus jamais avec un 0 muet que systemd relançait sans rien dire, vingt et une fois en une
+  après-midi pour le bge-m3 de luciepc. Un texte de plus de 12 000 caractères (`RAG3WEAVER_EMBED_MAX_CHARS`, dit dans
+  l'identité) est refusé par un 413 nommé, sans calcul. Un fournisseur lancé par une activation, arrêté ainsi, est
+  dit « service d'embarquement arrêté : <cause> ».
+
 - 15 novembre2026 — **Une requête trop longue ne fait plus tomber le service d'embarquement.** Avant d'être
   embarquée, une requête de recherche est coupée à `models.embed.query_max_chars` caractères (6 000 par
   défaut), sur une frontière de mot, que ce soit en dense, en dual ou en creux. La recherche dit la coupe, et
