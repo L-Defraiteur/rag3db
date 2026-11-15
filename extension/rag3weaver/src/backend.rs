@@ -305,6 +305,7 @@ impl EmbeddingService {
             reasoning: None,
             name: None,
             max_output_tokens: None,
+            restart_budget_tokens: None,
             default: false,
         }
     }
