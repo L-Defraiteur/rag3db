@@ -1,7 +1,7 @@
 # Une passe confinée reçoit un SIGTERM sans cause dite, deux à trois minutes après le début d'une grosse analyse
 
 - **État** : ouvert (15 novembre 2026) — cause confirmée par G sur une portée jouet ; le remède vient avec son lot du confineur
-- **Famille** : outillage
+- **Famille** : produit (l'outillage des passes de rag3weaver)
 - **Gravité** : mesure empêchée. Une passe s'arrête sans verdict, et rien ne dit pourquoi.
 - **Atteignable en service** : non (les passes et les bancs, sous `poste lourd` et `confiner_validation.py`)
 - **Touche rag3weaver** : oui (`scripts/confiner_validation.py`, et `poste` au cache)
