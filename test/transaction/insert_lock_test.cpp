@@ -107,9 +107,11 @@ TEST_F(InsertLockTest, AnInsertHoldsTheIndexSharedAndItsKeyExclusiveUntilTheEnd)
         mustRun(*conn, "BEGIN TRANSACTION;");
         mustRun(*conn, "CREATE (:Item {id: 7, v: 0});");
         const auto id = transactionIDOf(*conn);
-        EXPECT_EQ(locks().getNumLocksHeld(id), 2u) << "the index, shared, and the key";
+        // Plus le verrou de schéma de la table, en partagé, une fois par transaction (le ticket de
+        // l'ADD COLUMN sous une écriture ouverte, 15 novembre 2026).
+        EXPECT_EQ(locks().getNumLocksHeld(id), 3u) << "the table and the index, shared, and the key";
         mustRun(*conn, "CREATE (:Item {id: 8, v: 0});");
-        EXPECT_EQ(locks().getNumLocksHeld(id), 3u) << "the index again, and a second key";
+        EXPECT_EQ(locks().getNumLocksHeld(id), 4u) << "the table and the index again, and a second key";
         mustRun(*conn, end);
         EXPECT_EQ(locks().getNumLocksHeld(id), 0u) << end;
         EXPECT_EQ(locks().getNumResources(), 0u) << end;
@@ -122,9 +124,9 @@ TEST_F(InsertLockTest, ACopyHoldsTheIndexExclusiveUntilTheEnd) {
     mustRun(*conn, "BEGIN TRANSACTION;");
     mustRun(*conn, copyOfKeys(100, 10));
     const auto id = transactionIDOf(*conn);
-    EXPECT_EQ(locks().getNumLocksHeld(id), 1u) << "the index, exclusive";
+    EXPECT_EQ(locks().getNumLocksHeld(id), 2u) << "the index, exclusive, and the table, shared";
     mustRun(*conn, "CREATE (:Item {id: 7, v: 0});");
-    EXPECT_EQ(locks().getNumLocksHeld(id), 2u) << "the index is already held; plus the key";
+    EXPECT_EQ(locks().getNumLocksHeld(id), 3u) << "the index and the table are already held; plus the key";
     mustRun(*conn, "ROLLBACK;");
     EXPECT_EQ(locks().getNumResources(), 0u);
 }
@@ -141,8 +143,8 @@ TEST_F(InsertLockTest, ASecondInsertOfTheSameKeyWaitsForTheFirstTransaction) {
     // La même clé attend, ici jusqu'au délai : l'erreur nommée, et la transaction est annulée.
     const auto error = failureOf(other, "CREATE (:Item {id: 7, v: 1});");
     EXPECT_NE(error.find(LockManager::LOCK_TIMEOUT), std::string::npos) << error;
-    EXPECT_EQ(locks().getNumLocksHeld(transactionIDOf(*conn)), 2u)
-        << "the first transaction still holds what it took";
+    EXPECT_EQ(locks().getNumLocksHeld(transactionIDOf(*conn)), 3u)
+        << "the first transaction still holds what it took (the table, the index, the key)";
     mustRun(other, "ROLLBACK;");
     mustRun(*conn, "COMMIT;");
     EXPECT_EQ(locks().getNumResources(), 0u);
