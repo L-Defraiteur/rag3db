@@ -1582,3 +1582,8 @@ Ordre restant : embarquement → archi (branchement) → tty-14/15/16 → 96 →
 tty abonné) ; seul l'argument de `report` arrive entier → validé : la réponse de l'équipier en texte libre, `report` pour la
 boîte seulement ; phrase d'invite + témoin dans le branchement ; tty affiche mot à mot. Arbre : la montée reposée sur l'écrivain
 corrigé (migration-generations-2 4b28027c8) ; répétition complète relancée sur c5ec47cc4 avec des copies neuves.
+G, 17 h 52 : copies d'essai de la pose du soir faites — l'hôte (b82af880a, 373b5477b) vert aux deux postes sur 7991 (bâti final incrémental
+~5 min) ; le binaire d'embarquement (daemon, burn-embedder, burn-ocr) bâti vert, mais pas d'essai à côté possible (burn en CPU
+panique sur un tampon de 384 Mo ; card2 interdite aux essais) : la preuve se fera en place, 7878 puis 7879, vecteur témoin au bit
+près, retour automatique à l'ancien si rouge ; coupure 10 à 30 s par service ; le défaut 12 000 de max_chars vaudra. Un ticket
+d'archi (gabarits d'un autre arbre au target quand build.rs n'est pas rejoué), remède chez G plus tard.
