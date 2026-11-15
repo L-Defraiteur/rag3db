@@ -1800,3 +1800,7 @@ bout à bout après le « fini » de G. Archi : un témoin de temps rougi sous c
 tranché en rapport (≤ 4 × sans écrivain, garde 500 ms) dans son lot de gardes (ba6963b45), après le nom d'archi. tty : lot /nom et
 l'affichage de name. Chaîne post-96 : archi (nom) → cœur → ED (llm) → hotfixs → recherche → G ×4 → arbre 2b′ + recherche 2b-C →
 codeparsers (3 lots) → embarquement (repli-activation) ; l'écrivain au vert du banc ; segment de 96 au troisième tour.
+96, 20 h 34 : **la pile du second tour sur master à 0653a6aeff** (8 commits, b0482fa2d → 0653a6aef : usage par section et total, absence =
+prompt_tokens == 0, query_chars 4 000, context_title et l'instruction de la variante, la trace ; gmail, 0 attribution). « À toi » à archi
+(nom), puis le cœur, ED, hotfixs, recherche, G ×4 à la suite. G pose les services (tous les « va » donnés). Le banc reprend F 25 % sur
+0653a6aeff après la mesure d'embarquement.
