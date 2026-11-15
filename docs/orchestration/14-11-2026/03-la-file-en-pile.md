@@ -1335,3 +1335,8 @@ tâche quel que soit le manifeste, homonyme du backend qui gagne, déclaratif en
 sur le modèle de run_command, Landlock) ; un témoin commun sur un manifeste sans outil d'écriture. Ordre : primitives d'ED
 **devant la mesure 2a′-3** (Lucie l'a demandé), branchement d'archi après (B). Porte des commandes de Lucie passée en
 `approval` (o/n dans tty), backends rouverts 15 h 55.
+Lucie, 15 h 56 : second essai — le report est bien rendu, mais signé « réponse apportée au superviseur », suivi de « étape faite :
+fait : … » et « fait sans plan » : « faut toujours une réponse à l'user ». Pour le socle (archi) : l'invite dit à qui l'équipier
+parle (dans une tâche du terminal ou du chat, le superviseur est l'utilisateur), une réponse par tour, le résumé de step_done
+reste une ligne d'état ; pour tty : replier étape faite / fini en une ligne discrète. La porte des commandes est déjà dans le
+terminal (o/n) ; edit_file écrit dans le worktree de la tâche sans porte (voulu) ; tty-16 = o/n sur une proposition.
