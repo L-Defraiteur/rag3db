@@ -1487,3 +1487,7 @@ Codeparsers, 17 h 24 : le second chiffre (arbre entier) résiste — trois passe
 sans cause trouvée ; décision : le banc le mesure sur sa copie de code-lourd avec sa sonde (3 814 avant) après la pose du lot ;
 le SIGTERM en ticket (piste : l'enveloppe mémoire du confineur ou de poste). Recherche : témoin « exclusion après coup »
 (réindexer sous la règle retire un fichier déjà indexé) en cours avant la fenêtre d'arbre.
+Codeparsers et G, 17 h 26 : le ticket des trois SIGTERM (16 h 53, 16 h 59, 17 h 23) rédigé ; piste : OOMPolicy=stop sur la portée
+`systemd-run --scope -p MemoryMax` de poste lourd, ni confirmée ni infirmée (journal systemd muet). Lot court à G : le confineur
+écrit memory.peak et memory.events de sa portée quand il reçoit un signal, et dit « enveloppe mémoire crevée » au lieu de
+« signal reçu : 15 ».
