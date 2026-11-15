@@ -429,7 +429,9 @@ void ChunkedNodeGroup::addColumn(MemoryManager& mm, const TableAddColumnState& a
     // 15 novembre 2026).
     auto chunk = std::make_unique<ColumnChunk>(mm, dataType.copy(), capacity, enableCompression,
         ResidencyState::IN_MEMORY);
-    chunk->populateWithDefaultVal(addColumnState.defaultEvaluator, getNumRows(), newColumnStats);
+    auto numExistingRows = getNumRows();
+    chunk->populateWithDefaultVal(addColumnState.defaultEvaluator, numExistingRows,
+        newColumnStats);
     if (residencyState == ResidencyState::ON_DISK) {
         KU_ASSERT(pageAllocator);
         chunk->flush(*pageAllocator);
