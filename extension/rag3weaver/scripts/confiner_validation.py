@@ -15,6 +15,7 @@ import tempfile
 import time
 
 MAX_MEMOIRE = 32 * 1024**3
+CGROUPS = Path('/sys/fs/cgroup')
 RECU = 'RAG3WEAVER_VALIDATION_RECU'
 JETON = 'RAG3WEAVER_VALIDATION_JETON'
 
@@ -63,6 +64,45 @@ def plafond(cgroup, racine=Path('/sys/fs/cgroup')):
     if effectif is None or effectif <= 0 or effectif > MAX_MEMOIRE:
         raise Refus('aucun plafond effectif <= 32 Gio')
     return dict(direct=direct, effectif=effectif)
+
+
+def enveloppe(cgroup):
+    """Le pic et les oom_kill de la portée qui porte le plafond effectif (le plus bas memory.max).
+
+    Sous DefaultOOMPolicy=stop, systemd arrête la portée de poste (SIGTERM à tous) après l'oom_kill
+    d'un enfant, sans rien écrire au journal : memory.events est la seule preuve qui reste."""
+    p = CGROUPS / cgroup.lstrip('/')
+    porteur = None
+    while p != CGROUPS and sous(str(p), str(CGROUPS)):
+        try:
+            valeur = (p / 'memory.max').read_text().strip()
+        except OSError:
+            break
+        if valeur != 'max' and (porteur is None or int(valeur) < porteur[1]):
+            porteur = (p, int(valeur))
+        p = p.parent
+    if porteur is None:
+        return None
+    p, maxi = porteur
+    def lire(nom):
+        try:
+            return (p / nom).read_text()
+        except OSError:
+            return ''
+    events = dict(l.split() for l in lire('memory.events').splitlines() if len(l.split()) == 2)
+    pic = lire('memory.peak').strip()
+    return dict(cgroup='/' + str(p.relative_to(CGROUPS)), plafond=maxi, pic=int(pic) if pic.isdigit() else None,
+                oom_kill=int(events.get('oom_kill', 0)), max=int(events.get('max', 0)))
+
+
+def dire_signal(sig, env):
+    if env is None:
+        return 'signal reçu : ' + str(sig)
+    gio = lambda n: '?' if n is None else f'{n / 1024**3:.1f}'
+    if env['oom_kill'] > 0:
+        return (f"enveloppe mémoire crevée ({gio(env['pic'])} Gio, plafond {gio(env['plafond'])} Gio, "
+                f"{env['oom_kill']} oom_kill dans {env['cgroup']}) : la portée arrêtée, signal {sig}")
+    return f"signal reçu : {sig} (pic {gio(env['pic'])} Gio, plafond {gio(env['plafond'])} Gio, aucun oom_kill)"
 
 
 def ancetres(pid, table):
@@ -267,8 +307,13 @@ def superviser(command, delai, preuves):
     erreur = None
     code = 1
     ancien = {}
+    releve = {}
     def interrompre(sig, frame):
-        raise Refus('signal reçu : ' + str(sig))
+        try:
+            releve['enveloppe'] = enveloppe(cg)
+        except (OSError, ValueError):
+            releve['enveloppe'] = None
+        raise Refus(dire_signal(sig, releve['enveloppe']))
     for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         ancien[sig] = signal.signal(sig, interrompre)
     try:
@@ -327,10 +372,12 @@ def superviser(command, delai, preuves):
                 erreur = (erreur + '; ' if erreur else '') + 'nettoyage refusé : ' + str(e)
         verdict = dict(verdict='VERT' if code == 0 and not erreur and not restes else 'ROUGE',
                        code=code, erreur=erreur, restes=restes, prive=str(prive), nettoye=not prive.exists())
+        if 'enveloppe' in releve:
+            verdict['enveloppe'] = releve['enveloppe']
         (evidence / 'verdict.json').write_text(json.dumps(verdict, indent=2))
         for sig, handler in ancien.items():
             signal.signal(sig, handler)
-    print('validation : ' + verdict['verdict'] + ' ; preuves : ' + str(evidence), file=sys.stderr)
+    print('validation : ' + verdict['verdict'] + (' (' + verdict['erreur'] + ')' if verdict['erreur'] else '') + ' ; preuves : ' + str(evidence), file=sys.stderr)
     return 0 if verdict['verdict'] == 'VERT' else 1
 
 
