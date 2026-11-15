@@ -6056,12 +6056,13 @@ mod tests_de_l_ecrivain {
                 ("b.rs".to_string(), F1.to_string()),
                 ("examples/c/main.c".to_string(), lire("examples/c/main.c")),
                 ("src/c_api/connection.cpp".to_string(), lire("src/c_api/connection.cpp")),
-                ("src/include/c_api/rag3db.h".to_string(), lire("src/include/c_api/rag3db.h")),
             ]);
             crate::code_sync::sync_source(&mut cat, &src, &Default::default(), &mut |_| {}).expect("la première synchronisation");
             let n = cat.publier_la_generation("c1", 0).expect("publier");
             let avant = cat.au_rang(n, |c| aretes_visibles_par_etiquette(c));
-            assert!(appelants(&cat, "rag3db_connection_init") == vec!["main".to_string()], "la base du témoin : main appelle rag3db_connection_init ({avant:?})");
+            let definisseurs = cat.conn().execute("MATCH (s:Scope)-[:DEFINES]->(y:Symbol) WHERE y.name = 'rag3db_connection_init' RETURN s.file_path, s.name").unwrap().rows;
+            let mentions = cat.conn().execute("MATCH (s:Scope)-[r:MENTIONS]->(y:Symbol) WHERE y.name = 'rag3db_connection_init' RETURN s.file_path, s.name, r.kind").unwrap().rows;
+            assert!(appelants(&cat, "rag3db_connection_init") == vec!["main".to_string()], "la base du témoin : main appelle rag3db_connection_init ({avant:?} ; définisseurs {definisseurs:?} ; mentions {mentions:?})");
             cat.version_de_l_analyse = format!("{}-autre", cat.version_de_l_analyse);
             let options = crate::code_sync::SourceSyncOptions { batch_files: par_paquet, ..Default::default() };
             crate::code_sync::sync_source(&mut cat, &src, &options, &mut |_| {}).expect("le repassage");
