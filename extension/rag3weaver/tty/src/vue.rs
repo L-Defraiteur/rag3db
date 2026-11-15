@@ -196,6 +196,8 @@ pub struct Vue {
     pub discret: Option<String>,
     /// Les propositions de déclarations qui attendent un accord, par leur backend et leur id (tty-16).
     pub propositions_en_attente: Vec<PropositionEnAttente>,
+    /// L'accord dont le bouton choisi est Non, par sa clé ; tout autre est sur Oui.
+    non_pour: Option<String>,
     /// Les lignes de boîte déjà écrites, par leur `id` : la relecture et le flux
     /// peuvent rendre la même (tty-9, vu à l'essai sous tmux).
     vues_de_boite: std::collections::HashSet<String>,
@@ -236,6 +238,7 @@ impl Vue {
             montrer_etapes: false,
             discret: None,
             propositions_en_attente: Vec::new(),
+            non_pour: None,
             vues_de_boite: std::collections::HashSet::new(),
             bloc: None,
             boite: crate::boite::Boite::default(),
@@ -549,20 +552,20 @@ impl Vue {
             self.propositions = None;
         }
         match t {
-            // Une approbation en attente et rien de tapé : `o` accorde, `n` refuse.
-            Touche::Car(c @ ('o' | 'O' | 'y' | 'Y' | 'n' | 'N')) if self.saisie.est_vide() && self.boite.premiere().is_some_and(|a| a.kind == "approval") => {
-                let attente = self.boite.premiere().cloned()?;
-                let oui = matches!(c, 'o' | 'O' | 'y' | 'Y');
-                self.clore();
-                Some(Action::Repondre { attente, texte: if oui { "oui".into() } else { "non".into() }, accord: Some(oui) })
+            // Un accord attend et rien n'est tapé : `o` accorde, `n` refuse, ← → choisissent le
+            // bouton, Entrée valide le choix (Oui d'avance).
+            Touche::Car(c @ ('o' | 'O' | 'y' | 'Y' | 'n' | 'N')) if self.saisie.est_vide() && self.accord_en_cours().is_some() => self.repondre_accord(matches!(c, 'o' | 'O' | 'y' | 'Y')),
+            Touche::Gauche if self.saisie.est_vide() && self.accord_en_cours().is_some() => {
+                self.non_pour = None;
+                None
             }
-            // Une proposition de déclarations, rien d'autre n'attendant et rien de tapé : o l'applique, n la rejette.
-            Touche::Car(c @ ('o' | 'O' | 'y' | 'Y' | 'n' | 'N')) if self.saisie.est_vide() && self.boite.premiere().is_none() && !self.propositions_en_attente.is_empty() => {
-                let p = self.propositions_en_attente.remove(0);
-                let oui = matches!(c, 'o' | 'O' | 'y' | 'Y');
-                self.clore();
-                self.valider_avec_tete(Genre::Boite, "› ", &format!("proposition ⟨{}⟩ : {}", p.id, if oui { "appliquer" } else { "rejeter" }));
-                Some(Action::Proposition { backend: p.backend, id: p.id, appliquer: oui })
+            Touche::Droite if self.saisie.est_vide() && self.accord_en_cours().is_some() => {
+                self.non_pour = self.accord_en_cours();
+                None
+            }
+            Touche::Entree if self.saisie.est_vide() && self.accord_en_cours().is_some() => {
+                let oui = self.non_pour != self.accord_en_cours();
+                self.repondre_accord(oui)
             }
             Touche::Car(c) => {
                 self.saisie.inserer(c.encode_utf8(&mut [0; 4]));
@@ -653,6 +656,38 @@ impl Vue {
         self.saisie = crate::saisie::Saisie::avec_historique(historique);
     }
 
+    /// **L'accord qui attend une réponse**, par sa clé : la demande de la boîte en tête si c'en
+    /// est une, sinon la première proposition de déclarations quand la boîte n'attend rien.
+    fn accord_en_cours(&self) -> Option<String> {
+        if let Some(a) = self.boite.premiere() {
+            return (a.kind == "approval").then(|| format!("boite:{}", a.id));
+        }
+        self.propositions_en_attente.first().map(|p| format!("proposition:{}:{}", p.backend, p.id))
+    }
+
+    /// Répond à l'accord en cours ; le prochain repartira sur Oui.
+    fn repondre_accord(&mut self, oui: bool) -> Option<Action> {
+        let cle = self.accord_en_cours()?;
+        self.non_pour = None;
+        self.clore();
+        if cle.starts_with("boite:") {
+            let attente = self.boite.premiere().cloned()?;
+            return Some(Action::Repondre { attente, texte: if oui { "oui".into() } else { "non".into() }, accord: Some(oui) });
+        }
+        let p = self.propositions_en_attente.remove(0);
+        self.valider_avec_tete(Genre::Boite, "› ", &format!("proposition ⟨{}⟩ : {}", p.id, if oui { "appliquer" } else { "rejeter" }));
+        Some(Action::Proposition { backend: p.backend, id: p.id, appliquer: oui })
+    }
+
+    /// Les deux boutons d'un accord, le choisi entre crochets.
+    fn boutons(&self) -> &'static str {
+        if self.non_pour.is_some() && self.non_pour == self.accord_en_cours() {
+            "  Oui   [ Non ]"
+        } else {
+            "[ Oui ]   Non  "
+        }
+    }
+
     /// Une édition de la saisie : aucune action.
     fn edite(&mut self, f: impl FnOnce(&mut crate::saisie::Saisie)) -> Option<Action> {
         f(&mut self.saisie);
@@ -682,21 +717,22 @@ impl Vue {
 
     /// Quelque chose attend ta réponse : la ligne d'état le dit, sans animation.
     fn attend_de_toi(&self) -> bool {
-        !matches!(self.etat, Etat::Fini(_)) && self.boite.premiere().is_some() || !self.propositions_en_attente.is_empty()
+        !matches!(self.etat, Etat::Fini(_)) && self.boite.premiere().is_some() || self.accord_en_cours().is_some()
     }
 
     /// Le texte de la ligne d'état, sans son animation.
     pub fn ligne_d_etat(&self) -> String {
         let c = self.coeur();
         // Ce que l'équipier attend de toi passe avant tout autre état.
-        if !matches!(self.etat, Etat::Fini(_)) {
+        // Un accord demandé se dit même le pas fini : la commande attend toujours.
+        if !matches!(self.etat, Etat::Fini(_)) || self.accord_en_cours().is_some_and(|k| k.starts_with("boite:")) {
             if let Some(a) = self.boite.premiere() {
                 let reste = match self.boite.attentes().len() {
                     1 => String::new(),
                     n => format!(" (+{})", n - 1),
                 };
                 return match (a.kind.as_str(), &a.command) {
-                    ("approval", Some(cmd)) => format!("{c} attend ton accord : {cmd} — o / n{reste}"),
+                    ("approval", Some(cmd)) => format!("{c} attend ton accord : {cmd}  {}  ← → Entrée, ou o / n{reste}", self.boutons()),
                     _ => format!("{c} attend ta réponse : {}{reste}", a.text.lines().next().unwrap_or_default()),
                 };
             }
@@ -708,7 +744,7 @@ impl Vue {
                 n => format!(" (+{})", n - 1),
             };
             let refus = if p.acceptee { "" } else { " — refusée par la validation" };
-            return format!("{c} attend ton accord : proposition ⟨{}⟩ ({}){refus} — o / n{reste}", p.id, p.chemins.join(", "));
+            return format!("{c} attend ton accord : proposition ⟨{}⟩ ({}){refus}  {}  ← → Entrée, ou o / n{reste}", p.id, p.chemins.join(", "), self.boutons());
         }
         match &self.etat {
             Etat::Attend if self.etat_hote.as_deref() == Some("waiting") => format!("{c} attend la boîte"),
@@ -731,7 +767,15 @@ impl Vue {
             }
             None => {
                 let rouge = anim::couleur(&self.theme.couleurs.texte, self.capacites.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default().add_modifier(Modifier::BOLD);
-                Line::from(Span::styled(self.ligne_d_etat(), rouge))
+                let texte = self.ligne_d_etat();
+                match ["[ Oui ]", "[ Non ]"].iter().find_map(|b| texte.find(b).map(|i| (i, i + b.len()))) {
+                    Some((i, j)) if self.accord_en_cours().is_some() => Line::from(vec![
+                        Span::styled(texte[..i].to_string(), rouge),
+                        Span::styled(texte[i..j].to_string(), rouge.add_modifier(Modifier::REVERSED)),
+                        Span::styled(texte[j..].to_string(), rouge),
+                    ]),
+                    _ => Line::from(Span::styled(texte, rouge)),
+                }
             }
         };
         let occupe: usize = ligne.spans.iter().map(|s| colonnes(&s.content)).sum();
@@ -1279,7 +1323,7 @@ mod tests {
         let mut v = Vue::new(120, true);
         let ev = |change: &str, id: u64| json!({ "kind": "PropositionChanged", "id": id, "change": change, "paths": ["backends/code/backend.json", "nodes/n.js"], "accepted": true });
         v.proposition("principal", &ev("proposed", 7));
-        assert_eq!(v.ligne_d_etat(), "⛧ attend ton accord : proposition ⟨7⟩ (backends/code/backend.json, nodes/n.js) — o / n");
+        assert_eq!(v.ligne_d_etat(), "⛧ attend ton accord : proposition ⟨7⟩ (backends/code/backend.json, nodes/n.js)  [ Oui ]   Non    ← → Entrée, ou o / n");
         assert_eq!(v.touche(Touche::Car('o')), Some(Action::Proposition { backend: "principal".into(), id: 7, appliquer: true }));
         assert!(v.propositions_en_attente.is_empty(), "répondue, elle ne s'attend plus");
         v.proposition("principal", &ev("proposed", 8));
@@ -1374,7 +1418,7 @@ mod tests {
         ecrites(&mut v);
         v.ligne_de_boite(&ligne_b(1, "teammate", "approval", json!({ "command": "git status" })));
         assert_eq!(ecrites(&mut v), Vec::<String>::new(), "la demande ne s'écrit pas");
-        assert!(vivante(&v).starts_with("⛧ attend ton accord : git status — o / n"), "l'animation ne la recouvre pas : {}", vivante(&v));
+        assert!(vivante(&v).starts_with("⛧ attend ton accord : git status  [ Oui ]"), "l'animation ne la recouvre pas : {}", vivante(&v));
         let Some(Action::Repondre { accord, .. }) = v.touche(Touche::Car('o')) else { panic!("o accorde") };
         assert_eq!(accord, Some(true));
         v.ligne_de_boite(&ligne_b(2, "supervisor", "answer", json!({ "reply_to": "a1/doc:1", "approved": true, "text": "oui" })));
@@ -1388,6 +1432,41 @@ mod tests {
         let ailleurs = ecrites(&mut v);
         assert_eq!(ailleurs.len(), 1, "{ailleurs:?}");
         assert!(ailleurs[0].ends_with("refusé : rm -rf build"), "{ailleurs:?}");
+    }
+
+    /// **Des boutons d'accord au clavier** (Lucie, 15 nov. : « faut pouvoir avoir "boutons" de
+    /// validation qu'on peut accéder aux flèches du clavier, avec pré-sélectionné oui quand y a un
+    /// choix ») : Oui est choisi d'avance, ← et → changent le choix, Entrée le valide ; `o` et `n`
+    /// restent des raccourcis ; le bouton choisi est en vidéo inverse ; une nouvelle demande repart
+    /// sur Oui. Une proposition de déclarations a les mêmes boutons.
+    #[test]
+    fn approval_buttons_answer_with_the_arrows_and_enter_yes_preselected() {
+        let mut v = Vue::new(120, true);
+        v.ligne_de_boite(&ligne_b(1, "teammate", "approval", json!({ "command": "cargo build" })));
+        assert_eq!(v.ligne_d_etat(), "⛧ attend ton accord : cargo build  [ Oui ]   Non    ← → Entrée, ou o / n");
+        let inverse = |v: &Vue| v.ligne_vivante(120, v.depuis).spans.iter().filter(|s| s.style.add_modifier.contains(Modifier::REVERSED)).map(|s| s.content.to_string()).collect::<Vec<_>>();
+        assert_eq!(inverse(&v), vec!["[ Oui ]".to_string()]);
+        assert_eq!(v.touche(Touche::Droite), None);
+        assert!(v.ligne_d_etat().contains("  Oui   [ Non ]"), "{}", v.ligne_d_etat());
+        assert_eq!(inverse(&v), vec!["[ Non ]".to_string()]);
+        let Some(Action::Repondre { accord, .. }) = v.touche(Touche::Entree) else { panic!("Entrée valide le choix") };
+        assert_eq!(accord, Some(false));
+        v.ligne_de_boite(&ligne_b(2, "supervisor", "answer", json!({ "reply_to": "a1/doc:1", "approved": false })));
+        v.ligne_de_boite(&ligne_b(3, "teammate", "approval", json!({ "command": "ls" })));
+        assert!(v.ligne_d_etat().contains("[ Oui ]"), "une nouvelle demande repart sur Oui : {}", v.ligne_d_etat());
+        v.ligne_de_boite(&json!({ "id": "a1/doc:3b", "from": "host", "kind": "ended", "text": "fait sans plan" }));
+        assert!(v.ligne_d_etat().contains("attend ton accord : ls"), "le pas fini, la demande se dit encore : {}", v.ligne_d_etat());
+        v.touche(Touche::Droite);
+        v.touche(Touche::Gauche);
+        let Some(Action::Repondre { accord, .. }) = v.touche(Touche::Entree) else { panic!("Entrée valide le choix") };
+        assert_eq!(accord, Some(true));
+        v.ligne_de_boite(&ligne_b(4, "supervisor", "answer", json!({ "reply_to": "a1/doc:3", "approved": true })));
+        // Une proposition : les mêmes boutons, Entrée sur Oui l'applique.
+        v.proposition("principal", &json!({ "kind": "PropositionChanged", "id": 7, "change": "proposed", "paths": ["nodes/n.js"], "accepted": true }));
+        assert_eq!(v.ligne_d_etat(), "⛧ attend ton accord : proposition ⟨7⟩ (nodes/n.js)  [ Oui ]   Non    ← → Entrée, ou o / n");
+        assert_eq!(v.touche(Touche::Entree), Some(Action::Proposition { backend: "principal".into(), id: 7, appliquer: true }));
+        // Sans rien qui attende, les flèches sont celles de la saisie.
+        assert_eq!(v.touche(Touche::Entree), None);
     }
 
     fn ligne_b(n: usize, from: &str, kind: &str, extra: Value) -> Value {
@@ -1409,7 +1488,7 @@ mod tests {
         let mut v = Vue::new(120, true);
         v.ligne_de_boite(&ligne_b(1, "teammate", "approval", json!({ "command": "cargo build" })));
         v.ligne_de_boite(&ligne_b(2, "teammate", "question", json!({})));
-        assert_eq!(v.ligne_d_etat(), "⛧ attend ton accord : cargo build — o / n (+1)");
+        assert_eq!(v.ligne_d_etat(), "⛧ attend ton accord : cargo build  [ Oui ]   Non    ← → Entrée, ou o / n (+1)");
         let Some(Action::Repondre { attente, texte, accord }) = v.touche(Touche::Car('o')) else { panic!("o accorde") };
         assert_eq!((attente.id.as_str(), texte.as_str(), accord), ("a1/doc:1", "oui", Some(true)));
         // L'hôte rend la réponse : la boîte la voit, la question passe devant.
