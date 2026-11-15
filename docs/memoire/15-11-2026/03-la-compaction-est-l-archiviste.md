@@ -111,6 +111,30 @@ Le témoin de la ligne 4 prend un cas de plus : **un échange déjà rangé ne s
 fois**. Il n'y a pas de seconde passe du Decide sur les tours déjà couverts par « rangé jusqu'au
 tour N ».
 
+## Le budget du contexte d'après
+
+Une borne de Lucie (par c7, à 12 h 3x) : le contexte qui repart après la compaction vise
+**environ 100 000 jetons** pour un modèle cloud, ce avec quoi Claude Code redémarre après sa
+compression, et moins pour un modèle local.
+
+- **Le réglage** est par modèle, dans le manifeste : `models.llm.restart_budget_tokens`, avec un
+  défaut de 100 000 pour un modèle cloud.
+- **La composition**, par priorité, jusqu'au budget :
+  1. l'identité ;
+  2. la fiche de tâche ;
+  3. le bilan ordonné ;
+  4. les L1 de la session, les siens en entier ;
+  5. les L1 des autres sur les mêmes sujets, les plus récents d'abord.
+
+  Ce qui ne tient pas reste au rappel.
+- **Le témoin** mesure le contexte rendu et refuse au-dessus du budget. Il compte les jetons
+  par le tokenizer du modèle, ou par une estimation qu'il nomme : sur le faux modèle, c'est
+  `llm::fragments`, ce que `MockLlm` rend en `prompt_tokens`.
+
+Le seuil (`compaction.ratio`, 0.8), la borne (`compaction.timeout_s`, 120) et le budget se
+lisent dans `chat_state()["context"]["compaction"]`. Le témoin est
+`tests/e2e_compaction_archiviste.rs`.
+
 ## Ce qui suit
 
 1. Le mot de c7 sur cette page, puis Lucie, à qui c7 la montre.
