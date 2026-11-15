@@ -1,7 +1,6 @@
 # fmt/format.h : depuis tree-sitter 0.27, une macro est lue comme un corps de fonction
 
-- **État** : ouvert — recul accepté par Lucie (25 octobre 2026) avec le passage à tree-sitter
-  0.27, contre ses gains ; aucun correctif.
+- **État** : corrigé (15 novembre 2026) — codeparsers 5f7c837 (`macro-format-h-2`) : une `function_definition` sans `function_declarator` n'est plus un scope ; témoin `tests/macro_format_h.rs` sur le vrai fichier, rouge sur le code d'avant
 - **Gravité** : réponse fausse (parents et noms de scopes faux dans un fichier tiers).
 - **Atteignable en service** : oui, sur toute base qui indexe `third_party/spdlog`.
 - **Touche rag3weaver** : oui, par codeparsers (l'extraction des scopes C++).
@@ -34,3 +33,22 @@ une définition de fonction ; codeparsers en fait un scope anonyme, parent de ce
 
 Écrire le témoin, puis soit reconnaître ce motif dans codeparsers (une « fonction » sans nom dont
 le déclarateur est une macro ne devient pas parent), soit le signaler à la grammaire et attendre.
+
+## La correction
+
+**La cause**, lue dans l'arbre de tree-sitter-cpp 0.23.4 : `FMT_BEGIN_NAMESPACE namespace detail { … }`
+arrive en `function_definition` — la macro pour type, `detail` pour déclarateur (un `identifier`), le corps
+du namespace pour corps — **sans `function_declarator`**, ce qu'aucune vraie fonction n'est. codeparsers
+n'y trouvait pas de nom et en faisait un `AnonymousFunction`, parent de tout ce qu'il contenait. Quatre cas
+dans le fichier : `FMT_BEGIN_NAMESPACE` trois fois (l. 83, 173, 242), `FMT_CLASS_API` une fois (l. 956).
+
+**Le correctif** : une telle définition n'est plus un scope ; son contenu prend pour parent le namespace
+écrit dans sa tête s'il y en a un, sinon le parent d'au-dessus.
+
+**Le compte de `format.h`**, avant → après : 455 → 481 scopes ; 4 → 0 `AnonymousFunction` ; 45 → 0 scopes
+sous l'un d'eux ; `do_throw` et `abort_fuzzing_if` sous `detail`. Les 4 faux scopes partent, 30 scopes que
+leur corps cachait sont relevés.
+
+**La limite** : sous `FMT_CLASS_API`, la grammaire lit `class FMT_API format_error : …` comme un nom qualifié
+fautif ; les membres de la classe sont relevés, la classe n'a pas de scope. C'est la grammaire, pas
+codeparsers : [ticket du même jour](../../codeparsers/tickets/2026-11-15-une-classe-derriere-une-macro-d-export-n-a-pas-de-scope.md).
