@@ -1483,3 +1483,7 @@ l'index ferait 0,76 Go au lieu de 1,39 sans lui. Le manifeste de Lucie n'avait p
 {minified_line_max_bytes: 5000, code_file_max_bytes: 1048576}` posé sur les trois manifestes (dépôt, code-lourd, code-principal ;
 sauvegardes), backend du dépôt rouvert ; réindexation et compact dans la fenêtre d'arbre. Ticket codeparsers : le contenu d'un
 scope doit être sa portion de ligne.
+Codeparsers, 17 h 24 : le second chiffre (arbre entier) résiste — trois passes confinées coupées par un SIGTERM 2-3 min après le début,
+sans cause trouvée ; décision : le banc le mesure sur sa copie de code-lourd avec sa sonde (3 814 avant) après la pose du lot ;
+le SIGTERM en ticket (piste : l'enveloppe mémoire du confineur ou de poste). Recherche : témoin « exclusion après coup »
+(réindexer sous la règle retire un fichier déjà indexé) en cours avant la fenêtre d'arbre.
