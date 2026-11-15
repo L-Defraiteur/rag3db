@@ -103,6 +103,10 @@ pub enum Fallback {
     /// son débit tombe sous le seuil déclaré, l'embarqueur sert par ce service,
     /// modèle et dimension vérifiés, et le dit. Sans activation, il vaut refus.
     Service(String),
+    /// **Une activation de repli** (`{"activation": "<nom>"}`, résolue au
+    /// chargement en son bloc nommé) : même fournisseur que l'activation
+    /// principale au placement près, sur sa propre carte, mesurée elle aussi.
+    Activation(Box<activation::Activation>),
 }
 
 /// Une adresse, ou plusieurs — au manifeste, une chaîne ou une liste.
@@ -503,7 +507,7 @@ pub fn resolve<T>(
     };
     match (remote, &source.fallback) {
         (Ok(found), _) => Ok(found),
-        (Err(e), Fallback::Refuse | Fallback::Service(_)) => Err(format!("{what} : {e}")),
+        (Err(e), Fallback::Refuse | Fallback::Service(_) | Fallback::Activation(_)) => Err(format!("{what} : {e}")),
         // Le repli n'arrive que parce qu'on l'a écrit, et il se dit.
         (Err(e), Fallback::Local) => {
             eprintln!("[rag3weaver] {what} : {e} — repli sur le modèle local, comme déclaré (`fallback: local`)");

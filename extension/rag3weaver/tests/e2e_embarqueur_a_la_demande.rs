@@ -68,6 +68,8 @@ fn une_lecture_par_les_mots_n_active_rien_une_lecture_dense_active() {
         min_throughput: None,
         window_secs: None,
         fallback_hold_secs: None,
+        fallback_hold_max_factor: None,
+        address: None,
     });
     let (embarqueur, _) = connect_embedder(&source).expect("embarqueur à la demande");
     assert_eq!(evenements(&journal, "constructeur_demarre"), 0, "ouvrir ne lance rien");
