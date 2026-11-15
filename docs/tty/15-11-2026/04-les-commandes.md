@@ -76,5 +76,9 @@ Il vérifie l'invite et le retour à l'écran, une seule consigne qui porte le r
 
 | Passe | Binaire | Verdict |
 |---|---|---|
-| `mesures/bang-ssh-rouge-avant.json` (ssh) | tty-11 | ROUGE : le `!sh` part comme du texte à l'équipier, sans consigne, et le mot de passe tapé reste à l'écran et dans le journal |
+| `mesures/bang-ssh-rouge-avant.log` (ssh ; les lignes ROUGE, la passe ayant ensuite buté sur un défaut du harnais) | tty-11 | ROUGE : le `!sh` part comme du texte à l'équipier, sans consigne, et le mot de passe tapé reste à l'écran et dans le journal |
 | `mesures/bang-ssh.json` | tty-13 | VERT |
+| `mesures/bang-tmux-ssh.json`, `bang-tmux-local.json` | tty-13 | VERT |
+| `mesures/bang-mosh.json` | tty-13 | VERT |
+
+Les autres séances du harnais restent vertes sous ces lanceurs. Deux défauts du harnais lui-même ont été corrigés en route : il comptait la ligne posée par `/faux/ligne` parmi ce que poste le terminal, et une variable de la séance écrasait la liste des séances (la passe rouge en a buté après ses verdicts).
