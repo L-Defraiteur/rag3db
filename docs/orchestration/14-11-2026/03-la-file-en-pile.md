@@ -1721,3 +1721,8 @@ avec RAG3WEAVER_EMBED_SERVICE posé) ; il rougit en jeu isolé sans service, san
 burn-embedder, avec ou sans service). Les pushes repartent : ED (nom + persona, vert sur 5f0472603, repose sur b5de98d3b), 96 (pile du
 second tour), lucivy, puis le hash. tty rend le témoin indépendant de l'environnement en lot à part, et le produit si une réouverture
 échoue sans service sous burn-embedder. Hotfixs : extension-non-chargee-dite rouge puis vert, passe en file.
+ED, 19 h 42 : **le nom et la persona de l'agent sur master à 76f1d44ed** (7 commits, 9813019fc → 76f1d44ed : `agent: {name, persona}` au
+manifeste, défaut « équipier », surcharge par tâche, création nommée d'une tâche ; témoins vus rouges sur un faux non commité ;
+gmail, 0 attribution). `agent: {name: "Algareth"}` se pose dans le manifeste de Lucie **après la pose de l'hôte** (le binaire en
+place refuse un champ inconnu). tty : diagnostic vert à luciepc aussi sans service sous le jeu courant ; reste la piste des
+features (burn-embedder), en cours au portable. Restent 96 et lucivy, puis le hash.
