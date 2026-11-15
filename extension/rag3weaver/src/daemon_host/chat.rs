@@ -153,7 +153,10 @@ pub fn system_prompt_du_backend(kind: Option<crate::backend::BackendKind>, mode:
         .and_then(|o| serde_json::from_slice::<Value>(o).ok())
         .and_then(|v| v["system_prompt"].as_str().map(str::to_string))
         .unwrap_or_else(|| "Tu es un agent de code sur un dépôt indexé.".to_string());
-    format!("{agent}\n\n{declare}")
+    // « par offset » (Lucie, 15 novembre 2026) : les deux façons de modifier un fichier.
+    let modifier = "Pour modifier un fichier : un texte unique (edit_file, replace_text), ou les lignes a à b \
+                    (replace_lines, insert_lines) après les avoir lues ; un fichier neuf : write.";
+    format!("{agent} {modifier}\n\n{declare}")
 }
 
 pub fn system_prompt(mode: ModeDeclarations, dans_une_tache: bool) -> String {
@@ -628,7 +631,7 @@ impl DaemonHost {
             // au modèle.
             Some(s) => {
                 let mut neuve = ChatSession::default();
-                let r = self.run_teammate_turn(&hosted, backend_id, &run_id, &mut neuve, message, annule, arrete_par, s);
+                let r = self.run_teammate_turn(&hosted, backend_id, &run_id, &mut neuve, message, annule, arrete_par, s, (empreintes.clone(), numero_du_tour));
                 session.turns.extend(neuve.turns.into_iter().filter(|t| t.role != "system"));
                 r
             }
