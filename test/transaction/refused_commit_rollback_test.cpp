@@ -62,9 +62,9 @@ protected:
                 auto say = [&](const std::string& what, Connection& c, const std::string& q) {
                     auto r = c.query(q);
                     steps << what << " "
-                          << (r->isSuccess() ? "accepted" :
-                                               "refused « " + r->getErrorMessage().substr(0, 160) +
-                                                   " »")
+                          << (r->isSuccess() ?
+                                     "accepted" :
+                                     "refused « " + r->getErrorMessage().substr(0, 160) + " »")
                           << std::endl;
                     return r->isSuccess();
                 };
@@ -172,9 +172,8 @@ static int playConcurrent(const std::string& databasePath, rag3db::main::SystemC
         CutFileSystem::failSyncOf() = nullptr;
         refused += aRefused ? 1 : 0;
         auto r = b.query("MATCH (n:Note) WHERE n.s = 'b' RETURN count(n);");
-        const auto seen = r->isSuccess() && r->hasNext() ?
-                              r->getNext()->getValue(0)->getValue<int64_t>() :
-                              -1;
+        const auto seen =
+            r->isSuccess() && r->hasNext() ? r->getNext()->getValue(0)->getValue<int64_t>() : -1;
         auto key = b.query("MATCH (n:Note {id: " + bKey + "}) RETURN count(n);");
         const auto byKey = key->isSuccess() && key->hasNext() ?
                                key->getNext()->getValue(0)->getValue<int64_t>() :

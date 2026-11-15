@@ -1,11 +1,10 @@
 #include "common/test_hooks.h"
 
+#include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-
-#include <atomic>
-#include <chrono>
 #include <thread>
 
 #include "common/exception/runtime.h"
@@ -71,9 +70,8 @@ void TestHooks::armFailPoint(TestFailPoint point, uint32_t delayMs) {
 
 void TestHooks::failOnceIfArmed(TestFailPoint point) {
     auto expected = static_cast<uint8_t>(point);
-    if (point != TestFailPoint::NONE &&
-        armedFailPoint.compare_exchange_strong(expected,
-            static_cast<uint8_t>(TestFailPoint::NONE))) {
+    if (point != TestFailPoint::NONE && armedFailPoint.compare_exchange_strong(expected,
+                                            static_cast<uint8_t>(TestFailPoint::NONE))) {
         if (const auto delay = armedFailDelayMs.load(); delay > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(delay));
         }

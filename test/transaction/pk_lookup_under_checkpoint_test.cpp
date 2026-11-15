@@ -51,7 +51,7 @@ protected:
                 Connection reader(&db);
                 writer.query("CALL auto_checkpoint=false;");
                 if (!writer.query("CREATE NODE TABLE Doc(id INT64, name STRING, PRIMARY KEY(id));")
-                        ->isSuccess()) {
+                         ->isSuccess()) {
                     _exit(4);
                 }
                 std::atomic<bool> stop{false};
@@ -91,10 +91,10 @@ protected:
                     writer.query("BEGIN TRANSACTION;");
                     const auto from = rollBack ? 10'000'000 + batch * 100 : next;
                     if (!writer
-                            .query("UNWIND range(" + std::to_string(from) + ", " +
-                                   std::to_string(from + 99) +
-                                   ") AS i CREATE (:Doc {id: i, name: 'n' + CAST(i AS STRING)});")
-                            ->isSuccess()) {
+                             .query("UNWIND range(" + std::to_string(from) + ", " +
+                                    std::to_string(from + 99) +
+                                    ") AS i CREATE (:Doc {id: i, name: 'n' + CAST(i AS STRING)});")
+                             ->isSuccess()) {
                         status = 4;
                     }
                     if (rollBack) {

@@ -548,7 +548,8 @@ void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntr
     bool firstDirection = true;
     for (auto& relData : directedRelData) {
         if (!firstDirection) {
-            common::TestHooks::failOnceIfArmed(common::TestFailPoint::REL_COMMIT_BETWEEN_DIRECTIONS);
+            common::TestHooks::failOnceIfArmed(
+                common::TestFailPoint::REL_COMMIT_BETWEEN_DIRECTIONS);
         }
         firstDirection = false;
         const auto direction = relData->getDirection();

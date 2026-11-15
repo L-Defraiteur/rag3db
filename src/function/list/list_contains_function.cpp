@@ -29,11 +29,11 @@ struct ListContains {
 
 // **Un IN sur une liste constante ne parcourt plus la liste à chaque ligne** (ticket
 // docs/everything-declarative/tickets/2026-11-14-un-in-sur-la-cle-primaire-balaie-toute-la-table.md).
-// `n.k IN $l` se planifie en balayage puis LIST_CONTAINS($l, n.k) : avec un parcours de la liste par
-// ligne, N clés sur N lignes coûtaient N². Quand la liste est un littéral ou un paramètre, elle ne
-// change pas pendant la requête : l'évaluateur (qui a sa propre copie de cette donnée liée) en bâtit
-// un ensemble haché au premier appel, puis chaque ligne y est cherchée en O(1). Les entiers et les
-// chaînes seulement, dont l'égalité est celle des octets ; les autres types, et les petites
+// `n.k IN $l` se planifie en balayage puis LIST_CONTAINS($l, n.k) : avec un parcours de la liste
+// par ligne, N clés sur N lignes coûtaient N². Quand la liste est un littéral ou un paramètre, elle
+// ne change pas pendant la requête : l'évaluateur (qui a sa propre copie de cette donnée liée) en
+// bâtit un ensemble haché au premier appel, puis chaque ligne y est cherchée en O(1). Les entiers
+// et les chaînes seulement, dont l'égalité est celle des octets ; les autres types, et les petites
 // listes, gardent le parcours.
 struct ListContainsBindData final : FunctionBindData {
     static constexpr uint64_t MIN_LIST_SIZE_FOR_SET = 16;
@@ -54,8 +54,8 @@ struct ListContainsBindData final : FunctionBindData {
     std::unordered_set<std::string, StringHash, std::equal_to<>> strings;
 
     ListContainsBindData(std::vector<LogicalType> paramTypes, bool constantList)
-        : FunctionBindData{std::move(paramTypes), LogicalType::BOOL()},
-          constantList{constantList} {}
+        : FunctionBindData{std::move(paramTypes), LogicalType::BOOL()}, constantList{constantList} {
+    }
 
     std::unique_ptr<FunctionBindData> copy() const override {
         // L'ensemble ne se copie pas : chaque évaluateur bâtit le sien.
@@ -121,8 +121,8 @@ struct ListContainsWithSet {
 struct ListContainsWrapper {
     template<typename LEFT_TYPE, typename RIGHT_TYPE, typename RESULT_TYPE, typename OP>
     static void operation(LEFT_TYPE& left, RIGHT_TYPE& right, RESULT_TYPE& result,
-        ValueVector* leftValueVector, ValueVector* rightValueVector,
-        ValueVector* resultValueVector, uint64_t /*resultPos*/, void* dataPtr) {
+        ValueVector* leftValueVector, ValueVector* rightValueVector, ValueVector* resultValueVector,
+        uint64_t /*resultPos*/, void* dataPtr) {
         OP::operation(left, right, result, *leftValueVector, *rightValueVector, *resultValueVector,
             dataPtr);
     }
@@ -134,8 +134,8 @@ static void execListContains(const std::vector<std::shared_ptr<ValueVector>>& pa
     SelectionVector* resultSelVector, void* dataPtr) {
     KU_ASSERT(params.size() == 2);
     BinaryFunctionExecutor::executeSwitch<list_entry_t, T, uint8_t, ListContainsWithSet,
-        ListContainsWrapper>(*params[0], paramSelVectors[0], *params[1], paramSelVectors[1],
-        result, resultSelVector, dataPtr);
+        ListContainsWrapper>(*params[0], paramSelVectors[0], *params[1], paramSelVectors[1], result,
+        resultSelVector, dataPtr);
 }
 
 static std::unique_ptr<FunctionBindData> bindFunc(const ScalarBindFuncInput& input) {

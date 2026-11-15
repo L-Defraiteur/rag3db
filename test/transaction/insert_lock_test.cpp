@@ -109,9 +109,11 @@ TEST_F(InsertLockTest, AnInsertHoldsTheIndexSharedAndItsKeyExclusiveUntilTheEnd)
         const auto id = transactionIDOf(*conn);
         // Plus le verrou de schéma de la table, en partagé, une fois par transaction (le ticket de
         // l'ADD COLUMN sous une écriture ouverte, 15 novembre 2026).
-        EXPECT_EQ(locks().getNumLocksHeld(id), 3u) << "the table and the index, shared, and the key";
+        EXPECT_EQ(locks().getNumLocksHeld(id), 3u)
+            << "the table and the index, shared, and the key";
         mustRun(*conn, "CREATE (:Item {id: 8, v: 0});");
-        EXPECT_EQ(locks().getNumLocksHeld(id), 4u) << "the table and the index again, and a second key";
+        EXPECT_EQ(locks().getNumLocksHeld(id), 4u)
+            << "the table and the index again, and a second key";
         mustRun(*conn, end);
         EXPECT_EQ(locks().getNumLocksHeld(id), 0u) << end;
         EXPECT_EQ(locks().getNumResources(), 0u) << end;
@@ -126,7 +128,8 @@ TEST_F(InsertLockTest, ACopyHoldsTheIndexExclusiveUntilTheEnd) {
     const auto id = transactionIDOf(*conn);
     EXPECT_EQ(locks().getNumLocksHeld(id), 2u) << "the index, exclusive, and the table, shared";
     mustRun(*conn, "CREATE (:Item {id: 7, v: 0});");
-    EXPECT_EQ(locks().getNumLocksHeld(id), 3u) << "the index and the table are already held; plus the key";
+    EXPECT_EQ(locks().getNumLocksHeld(id), 3u)
+        << "the index and the table are already held; plus the key";
     mustRun(*conn, "ROLLBACK;");
     EXPECT_EQ(locks().getNumResources(), 0u);
 }

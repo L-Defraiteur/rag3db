@@ -13,9 +13,9 @@
 #include <atomic>
 #include <fstream>
 #include <iostream>
-#include <thread>
 #include <sstream>
 #include <string>
+#include <thread>
 
 #include "common/string_format.h"
 #include "graph_test/private_graph_test.h"
@@ -138,10 +138,10 @@ TEST_F(StringRewrite, MergeSetSurvivesCheckpointAndReopen) {
 // reprise.
 //
 // **Ce sont des non-régressions, pas le témoin de ce plantage** : ils chassaient le core 3980144 et
-// ne l'ont pas reproduit (verts sous ASAN le 14 novembre 2026, 4 sur 4). Il leur manque, par rapport
-// au scénario, les vingt écrivains simultanés, les MERGE avec relations et vecteur, et
-// CREATE_VECTOR_INDEX. AnOpenWriterCommitsAfterAnAdd montre en passant qu'un ADD COLUMN aboutit sous
-// une transaction d'écriture ouverte (ticket
+// ne l'ont pas reproduit (verts sous ASAN le 14 novembre 2026, 4 sur 4). Il leur manque, par
+// rapport au scénario, les vingt écrivains simultanés, les MERGE avec relations et vecteur, et
+// CREATE_VECTOR_INDEX. AnOpenWriterCommitsAfterAnAdd montre en passant qu'un ADD COLUMN aboutit
+// sous une transaction d'écriture ouverte (ticket
 // docs/coeur-cpp-hotfixs-tickets/tickets/2026-11-14-un-add-column-passe-sous-une-transaction-d-ecriture-ouverte.md).
 class StringRewriteAcrossAddColumn : public StringRewrite {
 protected:
