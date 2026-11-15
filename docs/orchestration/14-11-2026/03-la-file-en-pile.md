@@ -1757,3 +1757,7 @@ sans leur CONSUMES** (0 avant ; le CONSUMED_BY entrant recopié sur le scope ren
 plus la cible) ; impact et appelants faux sur ~2 %. **Décision : la vraie bascule attend** le correctif d'ED (témoin 18) et
 l'atterrissage de l'écrivain ; pas ce soir avec un défaut connu (un second repassage coûterait 45 min par base). code-lourd au
 paquet 2/4, finit vers 21 h ; 7878 ne se coupe qu'à son mot.
+Embarquement, 20 h 03 : la mesure « carte réellement pleine » prête (nuit.sh : garde carte < 13 548 Mio lue + va-du-banc + 7879 qui sert,
+bâti de l'hôte sur master, marge 2048, fragment de résultat) ; card2 est réellement pleine ce soir (11 844 Mio libres à 20 h 03, la
+parité et la répétition tournent). Mot de c7 : après le « fini » de la pose de G (~21 h 05), au « va » du banc, pas pendant la pose.
+Ticket (b) : compter les jetons avant la troncature du tokenizer.
