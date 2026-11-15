@@ -978,7 +978,7 @@ Extrait :
     let stockage = reel.lock().unwrap().vector_storage("Scope_Chunk").expect("stockage du modèle courant");
     let mut m2 = Mesure::default();
     for (q, attendus) in QUESTIONS {
-        let (qvec, _) = reel.lock().unwrap().embarquer_la_requete(q, true, false).expect("embarquer la requête");
+        let (qvec, _) = reel.lock().unwrap().embarquer_la_requete(q, true, false, &mut Vec::new()).expect("embarquer la requête");
         let cypher = format!(
             "MATCH (c:Scope_Chunk) WHERE c.{col} IS NOT NULL \
              WITH c, array_cosine_similarity(c.{col}, $q) AS sim ORDER BY sim DESC LIMIT 20 \
@@ -997,7 +997,7 @@ Extrait :
     let mut m3 = Mesure::default();
     let mut bon_parent_dans_les_20 = 0usize;
     for (q, attendus) in QUESTIONS {
-        let (qvec, _) = reel.lock().unwrap().embarquer_la_requete(q, true, false).expect("embarquer la requête");
+        let (qvec, _) = reel.lock().unwrap().embarquer_la_requete(q, true, false, &mut Vec::new()).expect("embarquer la requête");
         let hits = backend
             .vector_search("Scope_Chunk", &stockage.index, &stockage.column, &qvec, 20)
             .expect("HNSW brut");
