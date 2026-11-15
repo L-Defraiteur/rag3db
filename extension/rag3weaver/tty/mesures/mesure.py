@@ -303,8 +303,11 @@ try:
         t.ecrire(b"\x1b")
         time.sleep(1.5)
         t0 = t.ecrire(b"o")
-        if t.attendre("fini".encode(), apres=t0, borne=15) is None:
-            rouge("après o, la fin ne paraît pas")
+        # La fin ne se dit plus par un mot (Lucie, 15 nov.) : l'invite de repos du thème respire, ou
+        # une phrase dit qu'il a fini sans répondre.
+        repos = themes["daemon"]["animations"]["repos"]["gabarits"][0].rsplit("}", 1)[-1].strip()
+        if t.attendre(repos.encode(), apres=t0, borne=15) is None and t.attendre("fini sans répondre".encode(), apres=t0, borne=1) is None:
+            rouge(f"après o, la fin ne paraît pas (ni « {repos} », ni « fini sans répondre »)")
         t0 = t.ecrire(b"\x03")
         fin = time.monotonic() + 10
         while t.p.poll() is None and time.monotonic() < fin:
