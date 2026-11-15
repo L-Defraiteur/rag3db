@@ -1491,3 +1491,8 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 - Embarquement, 11 h 4x : la mesure écrite (74492dc4b) ; le témoin A3 du repli `cpu` vert à luciepc avec llvmpipe
   (repli-cpu-a3 6f6519b10, 11 lignes de test, e2e 5/5) — il rougirait au portable sans le paquet : il entre
   dans la pile quand Lucie aura posé vulkan-swrast au portable, derrière le lot ALTER du cœur.
+- **tty, 11 h 4x — deux lots au mot de Lucie** : tty-10 (édition multiligne, Maj-Entrée sous le protocole clavier
+  de kitty, Alt-Entrée en repli sous tmux et mosh, zone qui grandit jusqu'à huit lignes) et tty-11 (palettes
+  OKLCH : couleurs nommées déroulées en nuances, carte des rôles commune, coloration par la couleur la plus
+  proche décalée au contraste ; le format des thèmes change pour l'IDE, mot d'archi d'abord). Validés, rouges
+  d'abord, en pile à leur vert.
