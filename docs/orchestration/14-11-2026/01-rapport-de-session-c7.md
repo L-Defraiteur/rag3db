@@ -1559,3 +1559,7 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
 - Archi, 12 h 4x : l'identité de l'extension posée dans le fork (0f9e2a5 : nom, com.rag3weaver.pont_navigateur,
   identifiant amleopmgbfaknijhmkefmghlgnoimibj, privé dans .vault/pont-navigateur/ du dépôt), build à 0, vitest
   39/39 ; rien d'installé chez Lucie. Suite : le relai Rust, lot à part, rouge d'abord.
+- **Lucie, 12 h 3x** : le contexte d'après compaction vise ~100 000 jetons pour un modèle cloud (comme la
+  reprise de Claude Code), moins pour un local — réglage par modèle, défaut 100 k ; l'archiviste compose dans le
+  budget par priorité (identité, tâche, bilan, L1 de la session, L1 des autres les plus récents), le reste au
+  rappel ; le témoin mesure. Dit à 96 et archi.
