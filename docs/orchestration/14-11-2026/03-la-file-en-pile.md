@@ -1679,3 +1679,7 @@ jusqu'à 19 h 35** (c'est lui qui met le socle dans la tâche de Lucie) ; sinon 
 Banc, 18 h 55 : le verdict de c5ec47cc4 vers 20 h 50 — le parent ne compilait pas (la coupe de la sonde emportait la fonction de la vue
 2b′ ajoutée après), une heure perdue ; corrigé (la coupe s'arrête à la fonction suivante), relancé 18 h 55 sur copies et P0 neuves.
 L'écrivain et la montée passent après la pose du soir.
+Cœur, 19 h 02 : **verdict de l'alerte** — aucun tour bloqué depuis le tour 7 (17 tours sous la sonde, aucune tête non validée vue) : 1
+tour bloqué sur 27 sur ee598e074 ; rare, cause non lue ; ticket ouvert avec l'établi et la sonde (f32b0687f) ; pas de garde sans la
+cause. La lib peut basculer. Le lot du SIGSEGV (ee598e074, vert : transaction_test 387, ×10 sans SIGSEGV) se repose sur master
+(le format est atterri) ; « à toi » après le hash de la pose.
