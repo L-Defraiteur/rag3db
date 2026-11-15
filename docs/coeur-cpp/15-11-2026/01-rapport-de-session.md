@@ -90,8 +90,29 @@ Je recommande l'attente.
   - Note d'ABI pour la prochaine bascule : `Transaction` gagne un mutex, un ensemble de tables et
     un booléen ; `LockResource` gagne le genre `TABLE` ; `Catalog` et `CatalogSet` gagnent des
     méthodes.
+- **Bissection du CREATE_VECTOR_INDEX lent** : faite, le premier commit lent est `f42d90d13` (le
+  CREATE en deux transactions), 36 s avant, 165 s après. Ticket
+  `2026-11-15-un-create-vector-index-sous-quarante-ecrivains-dure-quatre-minutes.md`. Reste la
+  mesure de c7 avant le correctif : où attend l'écrivain le plus long, par eu-stack échantillonné.
+- **En cours : le SIGSEGV de la colonne ajoutée**, branche `colonne-ajoutee-se-relit`, tête
+  `ee598e074`, base master `8de0ec2c1`.
+  - La cause : un ADD COLUMN refusé à mi-chemin (le pool plein) laissait la colonne au stockage.
+    Point de faute `add-column-between-chunked-groups` (`e444ee491`), témoin
+    `AddColumnRefusedMidway` (`db7eed64c`, rouge : SIGSEGV, 100 lignes au lieu de 3 100),
+    correctif tout ou rien (`6d557d826` + `ee598e074`).
+  - Vert : le témoin, transaction_test entier (387) ; `DdlEveryMinute` ×10 sans SIGSEGV (contre
+    4 sur 12 avant).
+  - Témoin d'avant, vert sans le pool plein et gardé : `AddColumnAfterRollback` (`f10788146`).
+  - Le push : après le commit de format d'hotfixs, à la place que donne c7 ; reposer sur master
+    d'abord.
+- **Ouvert ce soir** : le refus « Schema changed, retry: » sans fin après un CHECKPOINT, vu une fois
+  en 27 tours, non reproduit (ticket
+  `2026-11-15-apres-un-checkpoint-les-ecrivains-sont-refuses-schema-changed-sans-fin.md`, sonde
+  `sonde-diag.py` dans le scratchpad, journaux `~/.cache/rag3db-moteur-notes/sonde-diag/`).
+- **Les Note perdues** restent ouvertes : sur les ×10, 2 tours vont jusqu'aux comptes (justes), et
+  8 s'arrêtent sur le pool plein. Elles attendent le ticket du pool qui sature.
 - **Ensuite, dans l'ordre** :
-  - en cours : la bissection du CREATE_VECTOR_INDEX à quatre minutes (ticket
+  - la mesure du CREATE_VECTOR_INDEX à quatre minutes, puis son correctif (ticket
     `2026-11-15-un-create-vector-index-sous-quarante-ecrivains-dure-quatre-minutes.md`) ;
   - le SIGSEGV de la relecture d'une colonne ajoutée sous écrivains (ticket
     `2026-11-15-ddl-every-minute-meurt-d-un-sigsegv-pile-perdue.md`, sur master) et le rang déplacé
