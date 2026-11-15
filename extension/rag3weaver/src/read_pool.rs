@@ -202,7 +202,7 @@ impl ReadPool {
 
     /// Pour les témoins : les `n` prochaines ouvertures refusées, la base dite à
     /// rouvrir (ce que `must_reopen` dirait d'une base empoisonnée).
-    #[cfg(all(test, feature = "rag3db-native"))]
+    #[cfg(all(test, feature = "rag3db-native", feature = "code"))]
     pub(crate) fn rompre_sur_une_base_a_rouvrir(&self, n: u64) {
         self.a_rouvrir.store(true, Ordering::SeqCst);
         self.a_rompre.store(n, Ordering::SeqCst);
