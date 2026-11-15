@@ -59,6 +59,14 @@ fi
 if ! python3 "$ICI/scripts/test_check_tickets.py" > /dev/null 2>&1; then
   refuser test_check_tickets
 fi
+# Les règles de l'analyse (page 06 d'everything declarative, § 13) : un lot qui change l'analyse monte
+# REGLES_DE_L_ANALYSE ou dit « sans effet sur l'analyse » ; puis le témoin de la garde.
+if ! python3 "$ICI/scripts/check_regles_de_l_analyse.py" --depot "$ICI/../.."; then
+  refuser regles_de_l_analyse
+fi
+if ! python3 "$ICI/scripts/test_check_regles_de_l_analyse.py" > /dev/null 2>&1; then
+  refuser test_check_regles_de_l_analyse
+fi
 # Le lanceur possède et libère son état de fixture ; le garde doit rester
 # rouge pour les résidus étrangers et les défauts de nettoyage.
 if ! timeout 60 bash "$ICI/scripts/test_etat_suite_e2e.sh"; then
