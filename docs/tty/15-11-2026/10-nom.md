@@ -23,9 +23,6 @@ Quatre tests, vus rouges sur leurs assertions, sur des coquilles vides (366bf87c
 
 Le crate passe 109 et 20 tests, et clippy `-D warnings` ne signale rien.
 
-## Ce qui attend
+## Sur master
 
-- La route d'ED.
-- Le `name` des lignes, chez archi.
-
-Le lot ne va sur master qu'au mot de c7.
+La route d'ED est sur master (a178fb923) : un refus y arrive en 200 avec `ok: false`, que le terminal dit tel quel. Le `name` des lignes de l'agent est chez archi ; d'ici là, les lignes gardent « équipier ».
