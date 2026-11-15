@@ -28,8 +28,8 @@ mod tests {
         // Deux modèles déclarés, le second par défaut : la tâche en copie les déclarations à son ouverture.
         let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
         m["models"]["llm"] = json!([
-            { "name": "rapide", "model": "m-rapide", "context_tokens": 1000 },
-            { "name": "fin", "model": "m-fin", "context_tokens": 2000, "default": true }
+            { "name": "rapide", "provider": "compatible", "protocol": "openai", "address": "http://127.0.0.1:9", "model": "m-rapide", "context_tokens": 1000 },
+            { "name": "fin", "provider": "compatible", "protocol": "openai", "address": "http://127.0.0.1:9", "model": "m-fin", "context_tokens": 2000, "default": true }
         ]);
         std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
         let host = hote(d.path(), defaut()).with_modele_nomme(nomme());
