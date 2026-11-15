@@ -69,8 +69,9 @@ fn une_lecture_fautive_ne_defait_pas_la_transaction_de_l_ecrivain() {
 ///
 /// **Les deux bornes** (ticket recherche du 15 novembre 2026 : 107 ms pour
 /// 100 sous une charge moyenne de 5, vert seul juste après). Attendre
-/// l'écrivain coûterait au moins le reste de ses 2 000 ms, et la garde
-/// absolue est donc de 500 ms. La vitesse se juge contre `usages` sans
+/// l'écrivain coûte au moins le délai d'occupation du catalogue : sans la vue
+/// de lecture, `usages` rend « Catalogue occupé » au bout de 1 001 ms (vu le
+/// 15 novembre). La garde absolue est donc de 500 ms. La vitesse se juge contre `usages` sans
 /// écrivain, mesuré dans ce même témoin et sous la même charge : au plus
 /// 4 fois cette référence, jamais moins que les 100 ms d'avant. Sur une
 /// machine au repos, la borne reste donc 100 ms.
@@ -135,7 +136,7 @@ fn usages_repond_pendant_qu_un_ecrivain_tient_le_catalogue() {
     let borne = (reference * 4).max(100);
     eprintln!("[lecture] usages pendant l'écriture : {ms} ms (sans écrivain : {reference} ms, borne {borne} ms)\n{out}");
     ecrivain.join().unwrap();
-    assert!(ms < 500, "usages n'attend pas l'écrivain, qui tient 2 000 ms : {ms} ms");
+    assert!(ms < 500, "usages n'attend pas l'écrivain (l'attendre coûte le délai d'occupation, 1 s) : {ms} ms");
     assert!(ms <= borne, "usages pendant l'écrivain, au plus 4 fois usages sans lui ({reference} ms) : {ms} ms");
     assert!(out.contains("table.rs"), "l'état d'avant : la définition est là : {out}");
     assert!(out.contains("écriture de l'index est en cours"), "la réponse le dit : {out}");
