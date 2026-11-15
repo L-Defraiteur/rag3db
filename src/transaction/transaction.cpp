@@ -1,5 +1,6 @@
 #include "transaction/transaction.h"
 
+#include "catalog/catalog.h"
 #include "common/exception/runtime.h"
 #include "common/exception/transaction_manager.h"
 #include "common/string_format.h"
@@ -124,8 +125,28 @@ void Transaction::lockTableForWrite(common::table_id_t tableID) const {
         }
     }
     acquireLock(LockResource::table(tableID), LockMode::SHARED);
+    throwIfSchemaChangedAfterSnapshot(tableID);
     std::unique_lock lck{tableLocksMtx};
     tablesLockedForWrite.insert(tableID);
+}
+
+// La requête a été liée et planifiée sur le schéma de l'instantané, avant de prendre le verrou de
+// sa table. Si un ALTER (ou un DROP) a validé depuis le départ de la transaction, qu'elle l'ait
+// attendu ou non, elle écrirait sur l'ancien schéma : refusée par un nom, elle recommence et se lie
+// sur le nouveau. PostgreSQL prend son verrou à l'analyse et n'a pas ce cas (ticket de la lecture
+// PostgreSQL, 15 novembre 2026).
+void Transaction::throwIfSchemaChangedAfterSnapshot(common::table_id_t tableID) const {
+    if (clientContext == nullptr) {
+        return;
+    }
+    const auto name =
+        catalog::Catalog::Get(*clientContext)->tableChangedAfterSnapshotOf(this, tableID);
+    if (!name.empty()) {
+        throw TransactionManagerException(common::stringFormat(
+            "The schema of table {} changed after this transaction started (an ALTER or a DROP it "
+            "waited for, or that committed meanwhile); retry the transaction.",
+            name));
+    }
 }
 
 void Transaction::lockTableForSchemaChange(common::table_id_t tableID) const {
@@ -133,6 +154,7 @@ void Transaction::lockTableForSchemaChange(common::table_id_t tableID) const {
         return;
     }
     acquireLock(LockResource::table(tableID), LockMode::EXCLUSIVE);
+    throwIfSchemaChangedAfterSnapshot(tableID);
 }
 
 bool Transaction::shouldLogToWAL() const {
