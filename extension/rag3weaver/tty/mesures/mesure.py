@@ -579,7 +579,8 @@ try:
     t.ecrire(b"\x03")
     time.sleep(0.5)
     t.arreter()
-    corps = [e["corps"] for e in journal()]
+    # Ce que le terminal a posté à la boîte, seulement (le journal du faux hôte garde aussi /faux/ligne).
+    corps = [e["corps"] for e in journal() if e.get("chemin") == "/ide/teammate/mailbox"]
     consignes = [c.get("text", "") for c in corps if str(c.get("text", "")).startswith("L'utilisateur a lancé la commande")]
     textes_bang = [c.get("text", "") for c in corps if str(c.get("text", "")).startswith("!")]
     seance = ssh(f"cat {DOSSIER}/seance-bang.txt 2>/dev/null")
