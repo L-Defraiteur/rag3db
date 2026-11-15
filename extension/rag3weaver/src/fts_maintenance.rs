@@ -2,6 +2,10 @@
 //! documents vivants avec un jeton, puis la purge d'une liste et la compaction
 //! (`lucivy_core::maintenance`), refusée si la table a changé depuis le relevé.
 //!
+//! **Le relevé à blanc** (`dry_run`, 15 novembre 2026, demande de c7) : la route lit elle-même les
+//! lignes de la table et rend les orphelins sans rien effacer (`releve_a_blanc`) ; c'est le relevé
+//! de l'état d'index, et la preuve en service que le correctif des orphelins tient.
+//!
 //! **L'ordre que l'appelant doit tenir** (14 novembre 2026, avec hotfixs) :
 //! 1. `POST /backend/fts-live-ids` : les vivants et le jeton ;
 //! 2. la lecture du graphe, **après** le relevé : les orphelins sont les vivants
@@ -139,6 +143,50 @@ pub fn maintain(handle: &Handle, demande: &Demande) -> Result<serde_json::Value,
     }))
 }
 
+/// Les textes des dictionnaires de la table (un par shard et par champ, partagé
+/// par ses segments) : ce que la compaction du dictionnaire fait baisser.
+pub fn dictionary_texts(handle: &Handle) -> u64 {
+    let mut texts = 0u64;
+    for i in 0..handle.num_shards() {
+        let Some(shard) = handle.shard(i) else { continue };
+        let searcher = shard.reader.searcher();
+        let Some(segment) = searcher.segment_readers().first() else { continue };
+        for field in segment.sfx_fields().collect::<Vec<_>>() {
+            if let Some(texts_reader) = segment.sfx_dictionary_field(field).and_then(|d| d.termtexts_reader()) {
+                texts += texts_reader.num_terms() as u64;
+            }
+        }
+    }
+    texts
+}
+
+/// **Le relevé à blanc** (`dry_run`) : les vivants du plein texte, les lignes de la
+/// table (`lignes`, les décalages que le graphe porte) et les orphelins — les
+/// vivants qu'aucune ligne ne porte —, sans rien effacer. Les vivants et le jeton
+/// viennent du même lecteur, et le jeton est relu après la lecture des lignes :
+/// une écriture entre les deux recommence le relevé. Le jeton rendu sert à la
+/// purge qui suit (`maintain`).
+pub fn releve_a_blanc(handle: &Handle, lignes: impl Fn() -> Result<Vec<u64>, String>) -> Result<serde_json::Value, String> {
+    for _ in 0..5 {
+        let (vivants, jeton) = live_ids(handle)?;
+        let mut graphe = lignes()?;
+        graphe.sort_unstable();
+        graphe.dedup();
+        if token(handle)? != jeton {
+            continue;
+        }
+        let orphelins: Vec<u64> = vivants.iter().copied().filter(|id| graphe.binary_search(id).is_err()).collect();
+        return Ok(serde_json::json!({
+            "live_docs": vivants.len(),
+            "graph_docs": graphe.len(),
+            "orphans": orphelins,
+            "dictionary_texts": dictionary_texts(handle),
+            "token": jeton,
+        }));
+    }
+    Err("la table change sans cesse pendant le relevé : réessayer dans une fenêtre calme".into())
+}
+
 /// Les documents vivants que dit un jeton (somme des `max_doc − supprimés`).
 pub fn live_count_of(jeton: &str) -> u64 {
     jeton.split(['|', ','])
@@ -197,6 +245,24 @@ mod tests {
         assert_eq!(ids.len(), 250);
         assert_eq!(live_count_of(&jeton), 250);
         assert!(releves > 0, "au moins un relevé pendant les commits");
+    }
+
+    /// Le relevé à blanc : un vivant qu'aucune ligne ne porte est un orphelin, compté, pas effacé.
+    #[test]
+    fn le_releve_a_blanc_compte_les_orphelins() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = index(dir.path());
+        for i in [1u64, 2, 3, 7] {
+            handle.add_document_json(i, &serde_json::json!({ "content": format!("doc {i}") })).unwrap();
+        }
+        handle.commit().unwrap();
+        let r = releve_a_blanc(&handle, || Ok(vec![3, 1, 2])).unwrap();
+        assert_eq!(r["live_docs"], 4);
+        assert_eq!(r["graph_docs"], 3);
+        assert_eq!(r["orphans"], serde_json::json!([7]), "[check: l-orphelin-compte]");
+        assert!(r["dictionary_texts"].as_u64().unwrap() > 0, "[check: les-textes-du-dictionnaire]");
+        assert_eq!(handle.num_docs(), 4, "[check: rien-n-est-efface]");
+        assert_eq!(r["token"].as_str().unwrap(), token(&handle).unwrap(), "[check: le-jeton-du-meme-lecteur]");
     }
 
     /// Le jeton change quand la table change, et pas autrement.

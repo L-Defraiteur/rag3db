@@ -1409,6 +1409,23 @@ fn read_threads() -> u64 {
         crate::fts_maintenance::live_ids(&self.fts_handle_nomme(table)?)
     }
 
+    /// **Le relevé à blanc** du plein texte d'une table (`fts_maintenance::releve_a_blanc`) :
+    /// ses vivants, ses lignes (les décalages que le graphe porte, toutes cellules) et ses
+    /// orphelins, sans rien effacer.
+    pub fn fts_releve_a_blanc(&self, table: &str) -> Result<serde_json::Value, String> {
+        let handle = self.fts_handle_nomme(table)?;
+        let nom = table.strip_prefix(crate::fts_handle::INDEX_PREFIX).unwrap_or(table);
+        let decalage = self.dialect.node_offset_expr("n");
+        let lignes = || -> Result<Vec<u64>, String> {
+            let rendu = self.conn.execute(&format!("MATCH (n:{nom}) RETURN {decalage}")).map_err(|e| e.to_string())?;
+            rendu.rows.iter()
+                .map(|r| r.first().and_then(|v| v.as_i64()).and_then(|n| u64::try_from(n).ok())
+                    .ok_or_else(|| format!("décalage illisible dans les lignes de {nom}")))
+                .collect()
+        };
+        crate::fts_maintenance::releve_a_blanc(&handle, lignes)
+    }
+
     /// La purge et la compaction du plein texte d'une table
     /// (`fts_maintenance::maintain`), refusée dans une transaction ouverte.
     /// L'appelant tient le slot du backend en écriture : avec ce `&mut self`,

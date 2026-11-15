@@ -1101,3 +1101,40 @@ fn le_mauvais_ordre_effacerait_un_vivant_c_est_la_regle_de_l_appelant() {
     host.shutdown();
     let _ = std::fs::remove_dir_all(d);
 }
+
+#[test]
+#[ignore]
+fn le_releve_a_blanc_compte_un_orphelin_sans_le_purger() {
+    // `dry_run: true` : maintain lit lui-même les lignes de la table et rend les vivants, les lignes et les
+    // orphelins, sans rien effacer. L'orphelin est posé à la main : un document du plein texte à un décalage
+    // qu'aucune ligne ne porte (ce que laissait l'effacement d'un Scope avant son correctif).
+    let d = dossier("maintenance-releve");
+    let m = manifeste_plein_texte(&d);
+    let host = DaemonHost::new();
+    let s = host.open_session("témoin", None, vec![], None);
+    let id = ok(&host.open(Some(&s), &m))["id"].as_str().unwrap().to_string();
+    for titre in ["une", "deux", "trois"] {
+        ok(&put(&host, &s, &m, "put_fiche", titre));
+    }
+    const ORPHELIN: u64 = 999_999;
+    host.with_backend_id(&id, |b| {
+        let catalog = b.catalog.lock().unwrap();
+        let handle = catalog.fts_handle("Fiche").expect("le plein texte de la fiche");
+        handle.add_document_json(ORPHELIN, &json!({"titre": "orpheline", "corps": "sans ligne dans le graphe"})).unwrap();
+        handle.commit().unwrap();
+    }).unwrap();
+    let r = route_maintenance(&host, &s, "/backend/maintain", json!({"manifest": m, "table": "Fiche", "dry_run": true}));
+    let r = ok(&r);
+    assert_eq!((r["live_docs"].as_u64(), r["graph_docs"].as_u64()), (Some(4), Some(3)), "[check: vivants-et-lignes] {r}");
+    assert_eq!(r["orphans"], json!([ORPHELIN]), "[check: l-orphelin-est-compte] {r}");
+    assert!(r["dictionary_texts"].as_u64().is_some_and(|n| n > 0), "[check: les-textes-du-dictionnaire] {r}");
+    assert!(r["token"].as_str().is_some_and(|t| !t.is_empty()), "[check: le-jeton-du-releve] {r}");
+    assert_eq!(r.get("purged"), None, "[check: rien-n-est-purge] {r}");
+    let (vivants, _) = releve(&host, &s, &m);
+    assert!(vivants.contains(&ORPHELIN) && vivants.len() == 4, "[check: l-orphelin-reste] {vivants:?}");
+    // Le jeton du relevé à blanc sert à la purge qui suit : seul l'orphelin part.
+    let purge = maintain(&host, &s, &m, r["token"].as_str().unwrap(), &[ORPHELIN]);
+    assert_eq!(ok(&purge)["purged"], json!(1), "[check: la-purge-par-le-jeton-du-releve] {purge}");
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}
