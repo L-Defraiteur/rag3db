@@ -23,6 +23,8 @@ pub enum Commande {
     Etapes,
     /// `/model` : les modèles de la tâche, ou en choisir un par son nom (tty-14).
     Modele(Option<String>),
+    /// `/nom` : le nom de l'agent de la tâche, ou le changer (c7, 15 nov.).
+    Nom(Option<String>),
     /// `!…` : une commande lancée là où tourne le terminal.
     Shell(String),
     Inconnue(String),
@@ -193,6 +195,8 @@ mod tests {
         assert_eq!(c("/etapes"), Some(Commande::Etapes));
         assert_eq!(c("/model"), Some(Commande::Modele(None)));
         assert_eq!(c("/model rapide"), Some(Commande::Modele(Some("rapide".into()))));
+        assert_eq!(c("/nom Ombre"), Some(Commande::Nom(Some("Ombre".into()))), "c7 : nommer l'agent de la tâche");
+        assert_eq!(c("/nom"), Some(Commande::Nom(None)));
         assert_eq!(c("/arreter"), Some(Commande::Arreter));
         assert_eq!(c("/journal"), Some(Commande::Journal));
         assert_eq!(c("/nimporte"), Some(Commande::Inconnue("nimporte".into())));

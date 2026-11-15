@@ -500,6 +500,7 @@ fn executer(c: crate::commandes::Commande, terminal: &mut ratatui::DefaultTermin
             }
             Err(e) => vue.note(&format!("/model {n} : {e}")),
         },
+        Commande::Nom(_) => vue.note("/nom : pas encore"),
         Commande::Etapes => {
             vue.montrer_etapes = !vue.montrer_etapes;
             vue.note(if vue.montrer_etapes { "les étapes de l'équipier s'écrivent dans l'historique (/etapes les cache)" } else { "les étapes de l'équipier défilent dans la zone vivante (/etapes les montre)" });
@@ -553,6 +554,11 @@ fn lancer_une_commande(cmd: &str, terminal: &mut ratatui::DefaultTerminal, vue: 
 }
 
 /// Les lignes de `/model` : les modèles déclarés, le nom et le modèle d'abord.
+/// Ce que `/nom <n>` dit, selon la réponse de l'hôte.
+pub fn nom_dit(_n: &str, _r: Result<Value, String>) -> String {
+    String::new()
+}
+
 pub fn modeles_dits(v: &Value) -> Vec<String> {
     let modeles = v["models"].as_array().cloned().unwrap_or_default();
     if modeles.is_empty() {
@@ -897,6 +903,16 @@ mod tests {
         ];
         let faux: Vec<_> = attendus.iter().enumerate().filter(|(_, (vu, attendu))| vu != attendu).map(|(i, (vu, attendu))| format!("#{i} : {vu:?} au lieu de {attendu:?}")).collect();
         assert!(faux.is_empty(), "{faux:#?}");
+    }
+
+    /// `/nom <x>` dit le nom que l'hôte rend (un nom vide rend celui du backend) ; un refus le dit ; un
+    /// hôte qui n'a pas encore la route (404) le dit en clair.
+    #[test]
+    fn nom_says_the_name_the_host_kept_or_why_not() {
+        assert_eq!(nom_dit("Ombre", Ok(json!({ "agent_name": "Ombre" }))), "l'agent de la tâche s'appelle maintenant « Ombre »");
+        assert_eq!(nom_dit("", Ok(json!({ "agent_name": "Algareth" }))), "l'agent de la tâche reprend le nom de son dépôt : « Algareth »");
+        assert_eq!(nom_dit("Om bre", Err("POST /ide/teammate/name : agent_name : un nom sans blanc (400)".into())), "/nom Om bre : POST /ide/teammate/name : agent_name : un nom sans blanc (400)");
+        assert_eq!(nom_dit("Ombre", Err("POST /ide/teammate/name : réponse illisible (404, expected value) : Not Found".into())), "cet hôte ne sait pas encore renommer l'agent (POST /ide/teammate/name arrive chez ED)");
     }
 
     /// `/model` dit les modèles déclarés : le nom et le modèle d'abord, la manière d'y
