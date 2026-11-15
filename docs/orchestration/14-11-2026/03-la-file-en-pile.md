@@ -1461,3 +1461,8 @@ réécrit), les requêtes en vol toutes répondues, puis arrêt dit avec le code
 (413 nommé) sur les quatre routes ; l'activation dit la cause lue au journal. Ticket du 7879 fermé ; deux ouverts (plafond en
 jetons ; cause d'arrêt d'un service posé à la main). Lib 2 373. Place : après hotfixs (ci-docs), avant archi (branchement) ;
 le binaire du service à poser au 7879 et 7878 par G après l'atterrissage.
+Banc, 17 h 13 : **l'écrivain bff6c7409 n'a pas le vert du juge étendu** — réponses 30/30 au bit près, mais le graphe : DEFINED_IN en double
+sur 72 798 couples ouverts (146 138 contre 73 340 au parent), CONSUMES −4 084, CONSUMED_BY −3 857 (miroir rompu), MENTIONS −983.
+Le cas visé : réponses égales, graphe différent. Retenu ; témoin 16 (comptes par étiquette vers le visible = parent) rouge
+d'abord ; le grain (d57b28c80) rejugé sur la même base. Repassage : parent 243 s, bff6c7409 2 476 s. La répétition d'arbre mesure
+la part fermée seule en attendant.
