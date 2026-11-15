@@ -368,6 +368,8 @@ public:
 
     std::vector<Journal> journals;
     std::vector<Ddl> ddls;
+    // Les écritures recommencées après un refus « Schema changed, retry: ».
+    std::atomic<int64_t> retries{0};
     ErrorCatalog errors;
     // La migration de la minute 6 : le message du second ADD a, celui du COMMIT qui suit.
     std::string secondAddError;
@@ -530,7 +532,6 @@ private:
         }
     }
 
-    std::atomic<int64_t> retries{0};
     rag3db::main::Database& database;
     std::chrono::milliseconds period;
     CommitLog* commitLog;
