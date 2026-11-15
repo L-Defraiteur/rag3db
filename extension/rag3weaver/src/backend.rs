@@ -7208,6 +7208,26 @@ mod tests {
     /// (période courte), la réaction `reindex_on_change` du gabarit code et
     /// l'outil `usages`. `sources/outils.rs` définit `depart`, `main.rs`
     /// l'appelle.
+    /// **Un modèle de langage dont le fournisseur n'est pas compilé ne refuse pas l'ouverture** (décision de
+    /// c7, ticket d'embarquement du 15 novembre 2026) : sans la feature `openai-llm`, un backend qui déclare
+    /// `models.llm` en `compatible/openai` s'ouvre, et ses avertissements disent le modèle indisponible et la
+    /// feature absente. C'est le tour de chat qui refuse, pas l'ouverture.
+    #[cfg(all(feature = "code", feature = "rag3db-native", not(feature = "openai-llm")))]
+    #[test]
+    fn un_modele_de_langage_sans_sa_feature_n_empeche_pas_l_ouverture() {
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["models"]["llm"] = json!({"name": "m-fin", "provider": "compatible", "protocol": "openai", "model": "m-fin", "address": "http://127.0.0.1:1/v1"});
+        });
+        let prepared = p.expect("le manifeste se charge");
+        let ouvert = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| backend_de_code(dir.path(), prepared)));
+        let backend = ouvert.expect("le backend s'ouvre sans la feature du fournisseur");
+        let avertissements = backend.avertissements();
+        assert!(
+            avertissements.iter().any(|a| a.contains("m-fin") && a.contains("indisponible") && a.contains("openai-llm")),
+            "l'avertissement dit le modèle et la feature : {avertissements:?}"
+        );
+    }
+
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     fn backend_qui_surveille() -> (tempfile::TempDir, Backend) {
         let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
