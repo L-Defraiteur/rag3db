@@ -1667,3 +1667,8 @@ fichiers — tel quel, elle perdrait ~950 liens justes sur rag3weaver (méthodes
 seules les méthodes de la bibliothèque standard du langage (liste en données par langue) s'abstiennent, abstention dite ; le reste
 au ticket 2 (lire le type de la locale). ED : les témoins du nom vus rouges sur une méthode faussée, puis verts. 96 : pile du second
 tour reposée (447bb495b), rejeu sous 90 min.
+96, 18 h 54 : segment vert partout (llm_nodes 17, foreach 16, archiviste 25 dont 3 sujets → 3 L1 §a-b et le non-JSON refusé) sauf le
+témoin de M4 (« LlmNode reste hors de toute politique ») : LlmNode mis sous call_models pour charger archive_segment.mmd. Tranché
+**voie 2** : LlmNode admis sous call_models seulement avec `response_schema` déclaré (borné par son schéma, comme Decide par ses
+candidates) ; validate_tool_policy lit la configuration du nœud. Aveu de 96 : les deux e2e de segment commités sans avoir été vus
+rouges ; rejoués rouges sur 1224f80a6 avant tout push.
