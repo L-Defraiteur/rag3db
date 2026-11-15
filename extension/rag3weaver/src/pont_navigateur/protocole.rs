@@ -7,8 +7,8 @@ use serde_json::Value;
 
 /// La révision du protocole que cet hôte parle.
 pub const REVISION: u32 = 5;
-/// Le nom de l'hôte Native Messaging de l'extension amont.
-pub const NOM_HOTE: &str = "com.browsermcp.host";
+/// Le nom de l'hôte Native Messaging de l'extension du fork (l'amont disait `com.browsermcp.host`).
+pub const NOM_HOTE: &str = super::hote_natif::NOM_HOTE_NATIF;
 
 /// **Une commande** de l'hôte vers l'extension. `id` est posé par le [`crate::pont_navigateur::pont::Pont`].
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]

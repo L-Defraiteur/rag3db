@@ -16,11 +16,16 @@ pub const NOM_DU_RELAI: &str = "rag3weaver-pont-navigateur";
 
 /// Le chemin stable du relai, sous `~/.local/bin`.
 pub fn chemin_du_relai(home: &Path) -> PathBuf {
-    let _ = home;
-    PathBuf::new()
+    home.join(".local").join("bin").join(NOM_DU_RELAI)
 }
 
 /// Le manifeste d'hôte natif, prêt à écrire.
-pub fn manifeste_d_hote(_home: &Path) -> Value {
-    Value::Null
+pub fn manifeste_d_hote(home: &Path) -> Value {
+    serde_json::json!({
+        "name": NOM_HOTE_NATIF,
+        "description": "rag3weaver : le relai entre l'extension « rag3weaver pont navigateur » et l'hôte du poste",
+        "path": chemin_du_relai(home),
+        "type": "stdio",
+        "allowed_origins": [format!("chrome-extension://{ID_EXTENSION}/")],
+    })
 }
