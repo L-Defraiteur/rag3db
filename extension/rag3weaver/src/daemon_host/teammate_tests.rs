@@ -755,7 +755,9 @@ fn a_step_without_step_done_reports_and_the_request_says_where_the_task_starts()
     let ouverte = boite.iter().find(|l| l["from"] == "host" && l["text"].as_str().unwrap_or_default().starts_with("tâche ouverte")).expect("la boîte dit d'où part la tâche");
     assert!(ouverte["text"].as_str().unwrap().contains(&depart[..9]), "{ouverte}");
     let rapport = boite.iter().find(|l| l["kind"] == "report" && l["from"] == "teammate").unwrap();
-    assert!(rapport["text"].as_str().unwrap().contains("sans step_done") && rapport["text"].as_str().unwrap().contains("Je n'ai pas d'outil d'écriture"), "{rapport}");
+    // La réponse seule, en copie de l'hôte (16 novembre 2026 : plus de préfixe « le pas N s'est
+    // terminé sans step_done », que tty devait reconnaître pour ne pas l'afficher).
+    assert_eq!((&rapport["text"], &rapport["origin"]), (&json!("Je n'ai pas d'outil d'écriture : je m'arrête là."), &json!("host_copy")), "{rapport}");
     // Le superviseur le voit.
     assert!(files.pending_for("c7").iter().any(|l| l["id"] == rapport["id"]), "le report attend c7");
 }
