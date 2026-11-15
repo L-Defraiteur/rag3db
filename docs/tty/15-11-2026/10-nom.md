@@ -6,7 +6,7 @@ Session tty, 15 novembre 2026, lot demandé par c7. La surcharge du nom par tâc
 
 - **`/nom <x>`** nomme l'agent de la tâche par `POST /ide/teammate/name {backend, task, agent_name}`. La forme a été convenue avec ED, qui code la route.
   - Réponse : `{ok, result: {agent_name}}`. Un nom vide rend celui du backend.
-  - Le registre se relit à chaque tour, sans réouverture.
+  - La route met à jour le registre, puis recharge le `prepared` du backend ouvert avec la nouvelle surcharge (le geste d'`apply_reload`, sans rouvrir la base) : les surcharges n'entrent qu'à l'ouverture (`surcharges_de`). Le témoin d'ED vérifiera que l'invite suivante porte le nouveau nom.
   - `/nom -` envoie un nom vide : l'agent reprend le nom de son dépôt.
   - `/nom` seul dit le dernier nom vu sur les lignes de l'agent.
   - Un refus se dit tel quel.
