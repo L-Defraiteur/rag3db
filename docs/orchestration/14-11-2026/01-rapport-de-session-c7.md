@@ -1538,3 +1538,7 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   avec références (la section `bilan` de la fiche de tâche, une ligne par pas) ; dit à 96 et archi. **tty-10**
   prêt (97d9cde75 : saisie multiligne jusqu'à huit lignes, Maj-Entrée sous kitty, Alt-Entrée en repli, la garde
   CSI u prouvée, dégradation sous tmux dite et ticketée ; 66/66, 14/14) : « à toi » en mode simple.
+- tty, 12 h 1x — l'ordre change au mot de Lucie : tty-11 = les outils qu'on lit (blocs de code colorés dans la
+  boîte, extrait de read_file coloré par extension, .md en prose, les écritures en ajouts/retraits, appels
+  numérotés, Ctrl-O ouvre un appel en grand dans un écran alterné) ; tty-12 = les palettes ; tty-13 = « ! » et
+  « / ». Rien côté hôte ; le résultat entier au-delà de 4 Ko sera une route plus tard.
