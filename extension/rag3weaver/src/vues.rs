@@ -52,15 +52,97 @@ impl Default for ReglagesDesVues {
 /// **Les réglages des vues** depuis `tracked` (la clé `views`) ; absents, les défauts. Toute clé inconnue
 /// est un refus qui la nomme.
 pub fn reglages_des_vues(tracked: Option<&Value>) -> Result<ReglagesDesVues, String> {
-    let _ = tracked;
-    Err("les réglages des vues ne se lisent pas encore".into())
+    let mut r = ReglagesDesVues::default();
+    let Some(vues) = tracked.and_then(|t| t.get("views")) else { return Ok(r) };
+    let objet = vues.as_object().ok_or_else(|| format!("tracked.views : un objet {{max_depth?, load_timeout_ms?}} attendu, pas {vues}"))?;
+    for (cle, v) in objet {
+        let entier = v.as_u64().filter(|n| *n > 0);
+        match (cle.as_str(), entier) {
+            ("max_depth", Some(n)) => r.max_depth = n as usize,
+            ("load_timeout_ms", Some(n)) => r.load_timeout_ms = n,
+            ("max_depth" | "load_timeout_ms", None) => return Err(format!("tracked.views.{cle} : un entier positif attendu, pas {v}")),
+            _ => return Err(format!("tracked.views : clé inconnue « {cle} » (max_depth, load_timeout_ms)")),
+        }
+    }
+    Ok(r)
+}
+
+/// Les tombstones d'une génération : `[]` ou une liste de clés (l'écriture de la génération 0), ou
+/// `{"keys": [...], "files": [...]}`.
+fn lire_les_tombstones(couche: &str, rang: i64, texte: &str) -> Result<(BTreeSet<String>, BTreeSet<String>), String> {
+    let refus = || format!("vue {couche}:{rang} : tombstones illisibles ({texte})");
+    let liste = |v: Option<&Value>| -> Result<BTreeSet<String>, String> {
+        match v {
+            None => Ok(BTreeSet::new()),
+            Some(Value::Array(a)) => a.iter().map(|x| x.as_str().map(str::to_string).ok_or_else(refus)).collect(),
+            Some(_) => Err(refus()),
+        }
+    };
+    let v: Value = serde_json::from_str(texte).map_err(|_| refus())?;
+    match &v {
+        Value::Array(_) => Ok((liste(Some(&v))?, BTreeSet::new())),
+        Value::Object(o) if o.keys().all(|k| k == "keys" || k == "files") => Ok((liste(o.get("keys"))?, liste(o.get("files"))?)),
+        _ => Err(refus()),
+    }
 }
 
 /// **Charger la pile d'une vue** depuis `_generation`. Refus nommés : couche inconnue, rang absent, parente
 /// manquante, cycle, profondeur au-delà du réglage.
 pub fn charger_la_pile(catalog: &crate::catalog::Catalog, vue: &VueDemandee, reglages: &ReglagesDesVues) -> Result<PileDeLecture, String> {
-    let _ = (catalog, vue, reglages);
-    Err("le chargeur des vues n'existe pas encore".into())
+    use crate::connection::{CypherValue, QueryParam};
+    let dialecte = catalog.dialect_arc();
+    let (Some(lire), Some(dernier)) = (dialecte.read_generation(), dialecte.latest_generation_rank()) else {
+        return Err("vues : ce dialecte n'a pas de générations".into());
+    };
+    let debut = std::time::Instant::now();
+    let texte = |nom: &str, v: &str| QueryParam::new(nom, CypherValue::String(v.to_string()));
+    let executer = |cypher: &str, params: &[QueryParam]| catalog.execute_raw_with_params(cypher, params).map_err(|e| format!("vues : lecture de _generation : {e}"));
+    let rang = match vue.rang {
+        Some(r) => r,
+        None => {
+            let lu = executer(&dernier, &[texte("couche", &vue.couche)])?;
+            match lu.rows.first().and_then(|r| r.first()) {
+                Some(CypherValue::Int(r)) => *r,
+                _ => return Err(format!("vue « {} » : couche inconnue (couche sans génération, 2a′-3)", vue.couche)),
+            }
+        }
+    };
+    let mut etages: Vec<Etage> = Vec::new();
+    let mut vus = BTreeSet::new();
+    let (mut couche, mut rang) = (vue.couche.clone(), rang);
+    loop {
+        if !vus.insert((couche.clone(), rang)) {
+            return Err(format!("vue {} : cycle de parentes en {couche}:{rang}", vue.couche));
+        }
+        if etages.len() >= reglages.max_depth {
+            return Err(format!("vue {} : profondeur au-delà de {} étages (tracked.views.max_depth)", vue.couche, reglages.max_depth));
+        }
+        if debut.elapsed().as_millis() as u64 > reglages.load_timeout_ms {
+            return Err(format!("vue {} : chargement au-delà de {} ms (tracked.views.load_timeout_ms)", vue.couche, reglages.load_timeout_ms));
+        }
+        let lu = executer(&lire, &[texte("couche", &couche), QueryParam::new("rang", CypherValue::Int(rang))])?;
+        let Some(ligne) = lu.rows.first() else {
+            return Err(match etages.last() {
+                None if vue.rang.is_some() => format!("vue {couche} : rang {rang} absent de _generation"),
+                None => format!("vue « {couche} » : couche inconnue"),
+                Some(enfant) => format!("vue {} : parente manquante {couche}:{rang} (de {}:{})", vue.couche, enfant.couche, enfant.rang),
+            });
+        };
+        let tombstones = match ligne.get(2) {
+            Some(CypherValue::String(t)) => t.clone(),
+            _ => "[]".to_string(),
+        };
+        let (cles_retirees, fichiers_retires) = lire_les_tombstones(&couche, rang, &tombstones)?;
+        etages.push(Etage { couche: couche.clone(), rang, cles_retirees, fichiers_retires });
+        match (ligne.first(), ligne.get(1)) {
+            (Some(CypherValue::String(pc)), Some(CypherValue::Int(pr))) if !pc.is_empty() => {
+                couche = pc.clone();
+                rang = *pr;
+            }
+            // Une génération sans parente écrite se relit comme racine (promesse 7).
+            _ => return Ok(PileDeLecture { etages, racine_sans_parente: true }),
+        }
+    }
 }
 
 #[cfg(all(test, feature = "rag3db-native"))]
