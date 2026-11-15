@@ -172,3 +172,32 @@ que chaque décision voit en contexte.
   du portable a fait son dernier appel à gemini-3.8-flash à 12 h 46.
 - **Rien n'est lancé** avant le composeur vu vert et l'entrée de contexte de l'archive. La conception
   est validée par l'orchestration (15 nov., 12 h 5x).
+
+## 6. Les premiers chiffres, provisoires (15 novembre, 15 h)
+
+**Provisoires** : le juge n'est pas encore relu à la main (§ 5). Rien n'est conclu avant.
+
+| variante | décisions : créer, rejoindre, rien | fiches | P1, rappel des sujets de N | P2, doublons | s par décision (p50, p90) | passe | envoyé au modèle |
+|---|---|---|---|---|---|---|---|
+| **N**, sans contexte | 82, 124, 38 | 78 | (référence) | **9 (0,115)** | 6,2 ; 13,5 | 30 min | les sections seules |
+| **F à 50 k**, chevauchement 10 %, résumés 10 k | 66, 106, **72** | 30 | **0,81** (63 sur 78) | 1 (0,033) | 7,9 ; 15,6 | 38 min | 14 788 793 car. de contexte et 722 399 de sections, soit un plafond de **3 877 798 jetons** à 4 caractères, sans cache, instruction et candidates en plus |
+
+- **Sans contexte, l'archiviste casse lui-même au critère des doublons** : 11,5 % des fiches de N
+  en doublent une autre, au-dessus du seuil de 10 %.
+- **Le contexte ôte presque tous les doublons** : F à 50 k regroupe le corpus en 30 fiches, avec un
+  seul doublon.
+- **Mais il fait dire « rien » deux fois plus souvent** : 72 tours contre 38. C'est peut-être de
+  là que vient la perte de rappel (0,81, à la limite de la casse). L'archiviste croirait déjà rangé
+  un sujet qu'il n'a pas rangé. C'est à départager à la relecture : lire les tours « rien » de F que
+  N a rangés.
+- **Le coût** : 3,9 millions de jetons au plafond pour F à 50 k. Le réel, cache compris, se lit
+  dans la console du projet.
+- **Une réserve sur les temps** : F à 50 k a tourné en partie pendant les parités de l'écrivain, à
+  côté d'un index qui chargeait 7879.
+- **La suite** :
+  1. relire le juge à la main, puis les tours « rien » de F ;
+  2. F à 50 k avec 25 % de chevauchement, et S à 50 k ;
+  3. 300 k quand le lot `usage` de la session mémoire sera posé.
+- **Les sorties**, à luciepc, dans `~/.cache/rag3db-banc-notes/compaction/long/` :
+  `ref-N-20261115-1351/`, `F50-ov10-20261115-1422/`, `juge-F50-contre-N.json`,
+  `juge-N-contre-N.json`.
