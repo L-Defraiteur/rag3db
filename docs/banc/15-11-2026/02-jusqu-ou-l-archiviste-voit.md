@@ -146,5 +146,18 @@ que chaque décision voit en contexte.
   - **ce qui en sort pour cette mesure** (c7, 12 h 5x) : les sections restent par tour, donc l'étape
     `segment` n'est pas nécessaire. Il faut seulement l'entrée de contexte, et c'est un changement
     de l'archiviste, que l'orchestration a validé.
+- **Deux faits de l'archiviste, pour lire la mesure** (96, 15 nov.) :
+  - **la section est coupée à 4 000 caractères** dans ce que voit la décision
+    (`archive_candidates.rhai`, un plafond ancien). Le L1 garde la section entière, et le contexte
+    n'est pas coupé. Ici, un tour fait en médiane 4 132 caractères (p90 15 236), et 130 tours sur 245 dépassent
+    4 000. Sans contexte (N), la décision ne voit que le début de ces tours ; avec contexte (F, S, U), elle voit en entier les tours d'avant,
+    mais son propre tour en partie. Le biais n'est pas le même d'une variante à l'autre : à
+    trancher avant de lancer. Soit le plafond est levé pour la mesure, soit chaque section est
+    coupée à 4 000 caractères aussi dans le contexte ;
+  - **le cache** : aucun cache explicite n'est demandé à l'appel (API compatible OpenAI). Seul le
+    cache implicite de Vertex joue, sur un préfixe identique. L'instruction vient d'abord, puis le
+    contexte : ce qui ne change pas dans la fenêtre d'abord, le bout en cours à la fin. La part
+    servie par le cache se lit dans l'usage de chaque appel (`cached_prompt_tokens`), à mesurer sur
+    la première fenêtre avant d'extrapoler le coût.
 - **Rien n'est lancé** avant le composeur vu vert et l'entrée de contexte de l'archive. La conception
   est validée par l'orchestration (15 nov., 12 h 5x).
