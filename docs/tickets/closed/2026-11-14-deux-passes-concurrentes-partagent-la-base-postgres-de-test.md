@@ -1,6 +1,6 @@
 # Deux passes concurrentes partagent la base Postgres de test, et l'une rougit l'autre
 
-- **État** : ouvert (14 novembre 2026, session recherche).
+- **État** : corrigé (15 novembre 2026, 552299bec, G au mot de c7) : une base par passe, créée et effacée par chaque processus de suite.
 - **Gravité** : faux rouge. Une passe verte peut tomber sans rien de fautif dans son lot, et elle
   coûte alors un rejeu entier.
 - **Atteignable en service** : non (tests seulement).
@@ -52,3 +52,18 @@ La même suite, rejouée seule sur le même commit, est le verdict de la passe (
 **La forme attendue** (c7) : un schéma par passe, pas un verrou. Il serait nommé par le worktree, ou
 par un `RAG3WEAVER_PG_SCHEMA` posé par défaut et dérivé de la passe, et effacé à la fin.
 
+
+## La correction (552299bec, 15 novembre 2026, 0 h 56)
+
+Le schéma `rag3weaver` est fixé par le produit (le dialecte) : c'est la base qui se sépare. `tests/common/base_pg.rs` fait
+créer à chaque processus de suite (e2e_postgres, e2e_contrat_transactions) sa base `rag3weaver_test_<poste>_<pid>` sur le
+service de `RAG3WEAVER_PG`. Le processus l'efface à sa sortie (`atexit`, `DROP DATABASE … WITH (FORCE)`), et efface au
+départ les bases de son poste dont le pid n'existe plus. `RAG3WEAVER_PG_BASE_FIXE=1` garde la base donnée.
+
+**Rouge puis vert, à luciepc, deux e2e_postgres en parallèle sur 5433** :
+- sur 270b6284d, la base d'avant le lot, à 1 h 00 : **ROUGE**, 2 passés et 34 échoués, puis 5 passés et 31 échoués ;
+  90 « referenced schema was concurrently dropped » et 20 « does not exist » ;
+- sur 7950c4789, le lot, à 0 h 53 : **39/39 chacun**, chacun dans sa base (`rag3weaver_test_luciepc_1377915`, `…_1377989`),
+  aucune base restante.
+
+Les deux occurrences vraies du 14 au soir : recherche 9/36, ED 7/36 à 23 h 24 (le doublon d'ED est fermé).
