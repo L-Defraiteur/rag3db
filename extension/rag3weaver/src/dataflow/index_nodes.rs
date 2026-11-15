@@ -439,6 +439,7 @@ fn run_index(
 
     // Premier temps : les lignes et le plein texte, les vecteurs en dette.
     let options = SourceSyncOptions { exige: Disponibilites::RECHERCHE_TEXTE, generated, stop: Some(stop.clone()), ..Default::default() };
+    let debut_des_noeuds = std::time::Instant::now();
     let report = {
         let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
         guard.note_indexing_started(&ENTITIES).map_err(|e| e.to_string())?;
@@ -452,6 +453,22 @@ fn run_index(
                 }
                 if p.files_to_resume > 0 {
                     line.push_str(&format!(" — {} édités après leur passage, repris à la fin", p.files_to_resume));
+                }
+                // **Le rattrapage de la version de l'analyse, dit** (page 06, § 13) : une base d'avant, ou une
+                // montée des règles, repasse tous ses fichiers ; un index de trois quarts d'heure ne doit pas
+                // ressembler à une panne.
+                if p.repasses_pour_l_analyse > 0 {
+                    let reste = p.files_total.saturating_sub(p.files_done);
+                    let estimation = if p.files_done > 0 {
+                        let par_fichier = debut_des_noeuds.elapsed().as_secs_f64() / p.files_done as f64;
+                        format!(", ~{} min au rythme observé", ((par_fichier * reste as f64) / 60.0).ceil() as u64)
+                    } else {
+                        String::new()
+                    };
+                    line.push_str(&format!(
+                        " — première synchronisation par l'écrivain (version de l'analyse changée) : {} fichiers à repasser{estimation}",
+                        p.repasses_pour_l_analyse
+                    ));
                 }
                 log(journal, &line);
             }
