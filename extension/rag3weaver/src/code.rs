@@ -5910,9 +5910,12 @@ mod tests_de_l_ecrivain {
         let (mut cat, src) = base();
         let n = cat.publier_la_generation("c1", 0).expect("publier");
         assert_eq!(recopiees_a(&cat, n), 0, "rien de recopié avant le premier changement");
+        // Une arête vers f que la résolution des symboles ne repose pas (ses CONSUMES, eux, se reposent par
+        // le DEFINES du f neuf) : seule la recopie la fait suivre.
+        cat.conn().execute("MATCH (x:Scope {name: 'a'}), (y:Scope {name: 'f'}) CREATE (x)-[:INHERITS_FROM]->(y)").unwrap();
         sauver(&mut cat, &src, "b.rs", F2);
         let m = cat.publier_la_generation("c2", 0).expect("publier");
-        assert!(recopiees_a(&cat, m) >= 1, "l'arête de a vers f recopiée : {}", recopiees_a(&cat, m));
+        assert_eq!(recopiees_a(&cat, m), 1, "l'arête INHERITS_FROM de a vers f recopiée, et elle seule : {}", recopiees_a(&cat, m));
         let o = cat.publier_la_generation("c3", 0).expect("publier");
         assert_eq!(recopiees_a(&cat, o), 0, "le compte repart de zéro à chaque publication");
     }
