@@ -1734,3 +1734,12 @@ tty a cherché 30 min un rouge que personne ne reproduisait, faute d'avoir eu d�
 du rouge — un rouge se rapporte avec sa commande, son jeu et son environnement.
 Lucivy, 19 h 55 : **la maintenance nocturne sur master à f4131ed400** (gmail, 0 attribution ; rejeu vert) : avec un hôte ≥ f4131ed400, chaque
 base ouverte a sa maintenance à 03 h 30, l'état la dit demain. Il ne manque que la pile de 96 pour le hash (attendue jusqu'à 20 h 15).
+
+## 19 h 56 — le hash de la pose du soir : 23dc8efd47 (code f4131ed400)
+
+96 pas avant 20 h 45 (repose sur le socle d'archi puis rejeu) : la pose part sans sa pile (le plafond d'embarquement sur master
+protège déjà le 7879 ; query_chars ne concerne que l'archiviste). G bâtit l'hôte des deux postes sur 23dc8efd47, verdict des trois
+suites, puis pose hôte + services dans une même fenêtre (annonce, « va » du banc et d'arbre, preuve du service en place). Dedans :
+le socle (primitives + branchement), (B), nom + persona, /model, tty-15/16, plafond de requête, relevé à blanc, maintenance nocturne,
+service 503 ; lib 373b5477b. « À toi » au cœur pour le SIGSEGV au vert de son rejeu. Après la pose : Algareth dans le manifeste de
+Lucie ; la pose suivante avec 96 ; tty-17, ED (ouverture sans feature), repli-activation, G ×4, arbre + recherche, codeparsers.
