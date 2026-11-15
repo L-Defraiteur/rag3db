@@ -1379,6 +1379,27 @@ mod tests {
         assert_eq!(evenements(&f, "constructeur_demarre"), 2, "relancé une fois");
     }
 
+    /// **4. Un fournisseur qui s'arrête en le disant est dit arrêté, avec sa
+    /// cause** (lot du 503, c7 : « service d'embarquement arrêté : <cause> »
+    /// au lieu d'« injoignable ») : la fixture rend un 503 nommé, écrit sa ligne
+    /// d'arrêt au journal de l'activation et sort ; relancée, elle sort aussitôt.
+    /// L'appel suivant dit la cause lue au journal.
+    #[test]
+    fn un_fournisseur_arrete_en_le_disant_est_dit_arrete_avec_sa_cause() {
+        let mut f = a_la_demande(4, 2);
+        let marqueur = f.dossier.path().join("carte-morte");
+        f.source.activation.as_mut().unwrap().args.extend(["--arret-nomme".to_string(), marqueur.display().to_string()]);
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        let e = client.embed(&["premier".into()]).err().expect("un 503 nommé").to_string();
+        assert!(e.contains("calcul en panique"), "{e}");
+        std::thread::sleep(std::time::Duration::from_millis(600));
+        let e = client.embed(&["second".into()]).err().expect("le fournisseur est arrêté").to_string();
+        assert!(
+            e.contains("service d'embarquement arrêté : le calcul a paniqué (failed to reserve 4102146304 bytes) : serveur de la carte empoisonné"),
+            "l'arrêt se dit avec sa cause : {e}"
+        );
+    }
+
     /// Le pid du fournisseur de la fixture démarré en `rang` (0 pour le premier).
     fn pid_demarre(f: &Fixture, rang: usize) -> i32 {
         let texte = std::fs::read_to_string(f.dossier.path().join("events.jsonl")).unwrap_or_default();
