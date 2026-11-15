@@ -589,6 +589,7 @@ void NodeTable::initInsertState(main::ClientContext* context, TableInsertState& 
 }
 
 void NodeTable::insert(Transaction* transaction, TableInsertState& insertState) {
+    transaction->lockTableForWrite(tableID);
     const auto& nodeInsertState = insertState.cast<NodeTableInsertState>();
     auto& nodeIDSelVector = nodeInsertState.nodeIDVector.state->getSelVector();
     KU_ASSERT(nodeInsertState.propertyVectors[0]->state->getSelVector().getSelSize() == 1);
@@ -686,6 +687,7 @@ void NodeTable::initUpdateState(main::ClientContext* context, TableUpdateState& 
 }
 
 void NodeTable::update(Transaction* transaction, TableUpdateState& updateState) {
+    transaction->lockTableForWrite(tableID);
     // NOTE: We assume all inputs are flattened now. This is to simplify the implementation.
     // We should optimize this to take unflattened input later.
     auto& nodeUpdateState = updateState.constCast<NodeTableUpdateState>();
@@ -776,6 +778,7 @@ void NodeTable::finalizeDelete(Transaction* transaction, TableDeleteState& delet
 }
 
 bool NodeTable::delete_(Transaction* transaction, TableDeleteState& deleteState) {
+    transaction->lockTableForWrite(tableID);
     auto& nodeDeleteState = ku_dynamic_cast<NodeTableDeleteState&>(deleteState);
     KU_ASSERT(nodeDeleteState.nodeIDVector.state->getSelVector().getSelSize() == 1);
     const auto pos = nodeDeleteState.nodeIDVector.state->getSelVector()[0];

@@ -43,6 +43,8 @@ void RelBatchInsert::initLocalStateInternal(ResultSet*, ExecutionContext* contex
     const auto catalogEntry = catalog->getTableCatalogEntry(transaction, info->tableName);
     const auto& relGroupEntry = catalogEntry->constCast<RelGroupCatalogEntry>();
     auto tableID = relGroupEntry.getRelEntryInfo(relInfo->fromTableID, relInfo->toTableID)->oid;
+    // Le verrou de schéma de la table, en partagé, avant d'y écrire.
+    transaction->lockTableForWrite(tableID);
     auto nbrTableID = RelDirectionUtils::getNbrTableID(relInfo->direction, relInfo->fromTableID,
         relInfo->toTableID);
     // TODO(Guodong): Get rid of the hard-coded nbr and rel column ID 0/1.

@@ -65,6 +65,8 @@ void NodeBatchInsert::acquireLocksBeforeExecution(ExecutionContext* context) {
                                     ->ptrCast<NodeTableCatalogEntry>();
     transaction->acquireLock(transaction::LockResource::index(nodeTableEntry->getTableID()),
         transaction::LockMode::EXCLUSIVE);
+    // Le verrou de schéma de la table, en partagé : un ALTER attend la fin de ce COPY.
+    transaction->lockTableForWrite(nodeTableEntry->getTableID());
 }
 
 void NodeBatchInsert::initGlobalStateInternal(ExecutionContext* context) {

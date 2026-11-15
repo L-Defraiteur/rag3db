@@ -74,6 +74,14 @@ void Drop::dropTable(const main::ClientContext* context) {
         }
     }
     auto entry = catalog->getTableCatalogEntry(transaction, dropInfo.name);
+    // Le verrou de schéma, en exclusif : le DROP attend la fin des écrivains ouverts sur la table.
+    if (entry->getType() == CatalogEntryType::REL_GROUP_ENTRY) {
+        for (const auto& info : entry->constCast<catalog::RelGroupCatalogEntry>().getRelEntryInfos()) {
+            transaction->lockTableForSchemaChange(info.oid);
+        }
+    } else {
+        transaction->lockTableForSchemaChange(entry->getTableID());
+    }
     switch (entry->getType()) {
     case CatalogEntryType::NODE_TABLE_ENTRY: {
         for (auto& indexEntry : catalog->getIndexEntries(transaction)) {
