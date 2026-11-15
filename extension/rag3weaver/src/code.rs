@@ -845,6 +845,7 @@ pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfi
     }
     if generations {
         catalog.poser_les_generations(&[FILE, SCOPE], COUCHE_DU_BACKEND)?;
+        catalog.dire_les_colonnes_de_fichier(&[(FILE, "path"), (SCOPE, "file_path")]);
     }
     Ok(())
 }
@@ -867,6 +868,7 @@ pub fn migrer_vers_les_generations(catalog: &mut Catalog) -> Result<(), CatalogE
         return Err(CatalogError::DbError("migration vers les générations : ce dialecte ne les sait pas".into()));
     }
     catalog.poser_les_generations(&[FILE, SCOPE], COUCHE_DU_BACKEND)?;
+    catalog.dire_les_colonnes_de_fichier(&[(FILE, "path"), (SCOPE, "file_path")]);
     catalog.persist_meta_key(SCOPE_FORM_KEY, SCOPE_FORM_GENERATIONS)
 }
 
