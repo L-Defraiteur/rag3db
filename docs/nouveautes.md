@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 15 novembre2026 — **Une requête trop longue ne fait plus tomber le service d'embarquement.** Avant d'être
+  embarquée, une requête de recherche est coupée à `models.embed.query_max_chars` caractères (6 000 par
+  défaut), sur une frontière de mot, que ce soit en dense, en dual ou en creux. La recherche dit la coupe, et
+  le plein texte garde la requête entière. Une requête de 8 000 jetons demandait 4 Go d'attention à la carte,
+  et avait fait redémarrer vingt et une fois le service bge-m3 de luciepc. Un plafond au-dessus de
+  `context_tokens × 3` est refusé au chargement, et l'état dit la valeur et sa source.
+
 - 15 novembre2026 — **Carte pleine, l'embarqueur se replie vers un service déclaré.** Une activation
   peut déclarer la mémoire qu'elle prend sur sa carte (`required_mib`, plus `margin_mib`) et un débit
   minimal (`min_throughput`, sur `window_secs`). Avec `fallback: {"service": "127.0.0.1:7879"}`, une

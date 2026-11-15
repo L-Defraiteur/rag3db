@@ -875,6 +875,11 @@ provider.
   reaches it through an `ssh -N -L` tunnel held by the client, and probes its identity through the
   tunnel. A failing ssh is refused at once, by name. Units named `rag3weaver-embeddings@…` are
   never touched.
+- **Query length cap.** Before it is embedded (dense, dual or sparse), a search query is cut to
+  `models.embed.query_max_chars` characters (6000 by default), on a word boundary. The search says
+  so in its warnings, and full-text search keeps the whole query. A query of 8000 tokens asks the
+  card for 4 GB of attention memory. A cap above `context_tokens × 3` is refused when the manifest
+  loads. The index state reports the value and whether it was declared or is the default.
 - **Falling back to a service when the card is full.** An activation can state the memory its
   provider takes, `required_mib` (plus `margin_mib`, 2048 by default), and a minimum throughput,
   `min_throughput` (texts per second, over `window_secs`, 60 by default). The card it names in
