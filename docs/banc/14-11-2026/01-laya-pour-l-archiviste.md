@@ -115,3 +115,61 @@ spécialisation plus 17 de calibrage ; cinq candidates et `create`, soit six opt
   - des options aux places fixes (`candidate_1` … `candidate_5`, `create`).
 
   Le vrai jeu suivra cette forme.
+
+## 9. Le vrai jeu, joué la nuit du 14 au 15 novembre
+
+**La trace** : celle de l'archiviste d'aujourd'hui, posée par la session mémoire (master d234d4d18)
+et rejouée sur copie (la passe de 52 documents, 432 sections ; le journal des chantiers, 152
+sections). Laya est jugée sur l'étiquette brute du modèle (`candidate_N`, `create` ou `none`).
+
+**Le jeu** (`q_vrai_jeu.py`, à luciepc dans `~/.cache/rag3db-banc-notes/laya/`) :
+- 582 décisions. Les 2 erreurs de troncature de Decide (le plafond de 2 048 jetons) sont comptées à
+  part ;
+- l'état : le titre de la section, puis ses candidates numérotées, puis le texte de la section,
+  coupé à 1 500 caractères. Le nom et le résumé de chaque candidate sont coupés à 160 caractères :
+  des fiches de bilan du juge ont tout le texte de leur tâche pour nom (ticket de la session
+  mémoire) ;
+- les options aux places fixes : `candidate_1` … `candidate_12`, `create`, `none`. Une section a
+  jusqu'à 66 candidates : les fiches de la recherche (au plus 5), puis les fiches proposées plus
+  haut dans le même document. Les 68 décisions dont la rejointe est au-delà du rang 12 sont
+  écartées ;
+- le découpage par fiche, graine 0 : 316 cas de mise au point (285 et 31 de calibrage), 198 de
+  test sur 83 groupes ;
+- **le piège de la place** : dans l'ordre présenté, `candidate_6` est la première fiche proposée du
+  document. Elle prend 173 des 377 rejointes. D'où une seconde variante, au mot de la session
+  mémoire : l'ordre des candidates mélangé pour chaque décision et l'étiquette renumérotée (321 et
+  201 cas).
+
+**Les chiffres** (CPU à luciepc, 8 fils, sous `poste lourd`, 4 époques) :
+
+| jeu | | exactitude | rejoindre | créer | rien | p50 par décision |
+|---|---|---|---|---|---|---|
+| ordre présenté | zéro-coup | 0,04 | 0,05 | 0,00 | 0,13 | 739 ms |
+| ordre présenté | spécialisé (68 min) | 0,36 | 0,18 | 0,77 | 0,00 | 710 ms |
+| mélangé | zéro-coup | 0,06 | 0,10 | 0,00 | 0,07 | 679 ms |
+| mélangé | spécialisé (68 min) | 0,33 | 0,08 | 0,85 | 0,00 | 658 ms |
+
+Par voie, pour Laya spécialisé :
+
+| rejointe attendue | ordre présenté | mélangé |
+|---|---|---|
+| une fiche de la recherche (voie `candidate`, 49 cas) | 1 / 49 | 2 / 49 |
+| une fiche proposée du document (`proposee_document`, 68 ou 71 cas) | 20 / 68 | 8 / 71 |
+
+**Ce que ça dit** :
+- spécialisé, Laya apprend à dire « créer ». C'est son premier choix 130 fois sur 198 dans l'ordre
+  présenté, et 144 fois sur 201 mélangé ;
+- ses rejointes d'une fiche proposée du document venaient de la place : 20 sur 68 quand elle est
+  toujours la sixième, 8 sur 71 une fois l'ordre mélangé ;
+- une section qui rejoint une fiche de la recherche n'est presque jamais reconnue : 1 ou 2 sur 49 ;
+- il ne dit jamais « rien » (0 sur 15).
+
+**Ce que ça ne dit pas** :
+- il n'y a pas de comparaison avec Gemini sur ce jeu : l'étiquette attendue est la sienne ;
+- la porte du rappel n'est pas mesurée.
+
+**La recommandation** : Laya n'est pas branchable pour cette décision, ni comme source de modèle
+déclarée derrière Decide, ni à un seuil de renvoi vers Gemini. Rien n'est branché.
+
+**Les sorties** : `sortie-vrai/` et `sortie-vrai-melange/` (zéro-coup, spécialisé, le modèle
+spécialisé), `r_par_voie.py` pour la découpe.
