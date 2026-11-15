@@ -1380,3 +1380,14 @@ tty-16 : trois commits (l'accord vivant 2504c33e4 : l'animation recouvrait « at
 Lucie, 16 h 12 : « insupportable, j'ai dû faire 15 fois oui » — l'équipier croit edit_file inactif et écrit par printf | tee, cp,
 git diff --no-index, python3 -c, chaque commande à la porte. Archi lit le run (edit_file dans les defs ? pourquoi ces commandes
 demandent ? correctif minimal aujourd'hui).
+Archi, 16 h 14 : les faits du run de Lucie — edit_file **était** dans les outils et le modèle l'a appelé ; l'outil a refusé (« l'arbre
+principal est en lecture seule ; l'agent écrit dans une tâche (POST /ide/taches…) »), ReadOnly(source, task_writes) : le backend
+de la tâche a ouvert sans sa surcharge d'écriture. **Cause probable, de ma main** : mes close/open par /backend/open sur le
+manifeste de la tâche (15 h 53, 15 h 55) ont rouvert un backend nu, sans la surcharge (read_only = !ecrit, root). Le modèle a
+répété le refus et s'est rabattu sur printf | tee, cp, python3 -c (qui demandent : python3 hors liste sûre, tee écrit). Second
+défaut : sous Landlock, le worktree de la tâche vit dans le .git de Lucie que le bac ne laisse pas lire (git status rend 128),
+d'où le `git -c core.excludesFile` inventé. À faire : rouvrir le backend de la tâche par le bon geste ; le bac lit le .git
+commun ; le refus de ReadOnly dans une tâche ne conseille plus POST /ide/taches.
+Archi : le lot (B) de l'équipier **vert** (une-demande-attend-une-ligne a1a74f661 ; 35 témoins, lib 2470, hooks 45, e2e_equipier
+sous Vertex 2/2) ; place après codeparsers, avant tty-14. Codeparsers : (a) seul dans le lot DEFINED_IN ; (b) les paramètres par
+pointeur/référence perdus pour toute fonction C++, lot à part avec banc, ticket.
