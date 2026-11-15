@@ -159,14 +159,6 @@ CheckpointNoStall.WriterCommittedWhileTheCheckpointWritesSurvivesItsDeath writer
 # connexions), que (A) règle toutes les deux. Joué rouge 2/2 sur luciepc le 19 octobre. Pour hotfixs.
 VectorIndexCreateUnderManyWriters.NoWriterWaitsLongDuringTheCreate no-writer-waits-long-during-create
 #
-# Sous vingt écrivains, le pool sature et ne se vide plus (ticket
-# docs/coeur-cpp/tickets/2026-11-13-sous-vingt-ecrivains-le-pool-sature-et-ne-se-vide-plus.md).
-# Cas long (long.txt). Depuis le correctif de l'annulation sous pool plein (13 novembre 2026),
-# aucune annulation n'échoue et la base n'est plus à rouvrir ; il reste rouge pour la saturation :
-# des lectures refusées pendant la création d'un index, et l'exception de fin (« Cannot find
-# property b », le ADD b refusé par le pool plein). Pour le cœur C++.
-TwentyWriters.DdlEveryMinute index-creation-refuses-no-reader,untagged
-#
 # Une suppression sous un index vectoriel rempli par SET coûte avec sa taille avant le point de
 # reprise (ticket docs/coeur-cpp/tickets/2026-11-13-une-suppression-sous-un-index-vectoriel-rempli-
 # par-set-coute-avec-sa-taille-avant-le-point-de-reprise.md). Rouges seuls sur master le 9 novembre
