@@ -67,7 +67,7 @@ if [ "${1:-}" = "--code-apporte" ]; then code_apporte "$2" "$3"; exit 0; fi
 #       « la pile a changé », et c'est un rejeu ;
 #   (a) `git range-diff <avant>..<testé> <master>..HEAD` : `=` pour tout commit ; un `!` toléré si ses deux
 #       versions ne diffèrent que par des `.md` (un conflit de nouveautes.md résolu au rebase) ; un `>` (commit
-#       ajouté) toléré s'il ne touche que des `.md` ; un `<` (commit perdu) refusé.
+#       ajouté) toléré s'il ne touche que des `.md` ; un `<` (commit perdu) refusé, sauf si son patch est déjà sur master.
 # Mode `--pile <avant> <testé> <master> <tête>`, joué par le témoin : rend 0 et « pile tenue », ou 1 et la raison.
 # **La tête déjà reposée à la main** (14 novembre 2026, c7, relevé d'embarquement) : quand le `rebase --onto` de la
 # garde bute (un conflit de nouveautes.md, où chaque lot ajoute sa ligne en tête), la session repose son lot à la
@@ -100,6 +100,14 @@ verifier_pile() {
           echo "ARRÊT : un commit du lot a changé hors des .md depuis le rejeu : $ligne"; return 1
         fi
         echo "  ! toléré, ne diffère que par des .md : $ligne" ;;
+      '<')
+        # **Un commit du lot déjà sur master** (15 novembre 2026, relevé de c7) : poussé par un autre lot, son patch tombe au
+        # rebase comme déjà appliqué, et le range-diff le dit perdu. Toléré si `git cherry` le marque « - » contre master.
+        if [ "$(git cherry "$maitre" "$ancien" "$ancien^" 2>/dev/null)" = "- $(git rev-parse "$ancien")" ]; then
+          echo "  < toléré, déjà sur master : $ligne"
+        else
+          echo "ARRÊT : un commit du lot manque, et son patch n'est pas sur master : $ligne"; return 1
+        fi ;;
       *) echo "ARRÊT : le lot n'est plus celui qui a été testé : $ligne"; return 1 ;;
     esac
   done < <(git range-diff --no-color --creation-factor=100 "$avant..$teste" "$maitre..$tete")
