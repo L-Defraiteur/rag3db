@@ -479,6 +479,9 @@ mod tests {
             (k(KeyCode::Char('B'), KeyModifiers::SHIFT), Some(Touche::Car('B'))),
             (k(KeyCode::Enter, rien), Some(Touche::Entree)),
             // AltGr d'un clavier français arrive comme Ctrl+Alt sous Windows : c'est un caractère.
+            (k(KeyCode::Char('o'), ctrl), Some(Touche::CtrlO)),
+            (k(KeyCode::PageUp, rien), Some(Touche::PageHaut)),
+            (k(KeyCode::PageDown, rien), Some(Touche::PageBas)),
             (k(KeyCode::Char('@'), ctrl | alt), Some(Touche::Car('@'))),
             (k(KeyCode::Char('{'), ctrl | alt), Some(Touche::Car('{'))),
         ];
