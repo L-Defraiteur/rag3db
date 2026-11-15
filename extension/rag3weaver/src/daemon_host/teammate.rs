@@ -1842,6 +1842,15 @@ mod tests {
 
     /// Sans plan, la frontière dit d'agir ; une demande pendant un plan actif
     /// demande une décision.
+    /// **L'équipier sait à qui il parle** (second essai de Lucie, 15 novembre 2026 : un report
+    /// signé « Réponse apportée au superviseur ») : dans une tâche ouverte par le terminal ou le
+    /// chat, le superviseur est l'utilisateur ; il lui répond directement, une fois par tour.
+    #[test]
+    fn the_teammate_prompt_says_the_supervisor_is_the_user() {
+        assert!(SYSTEM_PROMPT.contains("the supervisor is the user"), "{SYSTEM_PROMPT}");
+        assert!(SYSTEM_PROMPT.contains("once per turn") && SYSTEM_PROMPT.contains("report done"), "{SYSTEM_PROMPT}");
+    }
+
     #[test]
     fn the_frontier_says_what_the_step_expects() {
         let m = frontier_message(1, &[json!({ "kind": "request", "from": "c7", "text": "Bonjour" })], &Plans::default(), false, "", &[]);

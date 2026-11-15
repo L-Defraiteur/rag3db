@@ -1527,3 +1527,34 @@ fn expects_is_a_request_field_with_three_values() {
     assert!(e.contains("expects") && e.contains("report") && e.contains("approval") && e.contains("none"), "{e}");
     assert!(host.tache(&h.id, "doc").is_none(), "une request refusée n'ouvre pas de tâche");
 }
+
+/// **Le droit d'écrire d'une tâche se relit à chaque ouverture** (les quinze « oui » de Lucie, 15
+/// novembre 2026 : `essai-tty`, ouverte quand le parent n'écrivait pas, gardait `ecrit: false`
+/// au registre après que le manifeste a déclaré `task_writes`).
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_task_reads_its_write_right_from_its_parent_at_each_opening() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    // Le parent de Lucie à la création de la tâche : en lecture seule, sans task_writes, donc sans
+    // outil d'écriture (un manifeste qui en déclare un sous read_only est refusé au chargement).
+    let ecrire = |read_only: bool, task_writes: bool| {
+        let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+        m["workspace"]["read_only"] = json!(read_only);
+        m["workspace"]["task_writes"] = json!(task_writes);
+        if let Some(outils) = m["tools"].as_object_mut() {
+            outils.retain(|_, o| o["policy"]["write_files"] != json!(true));
+        }
+        std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    };
+    ecrire(true, false);
+    let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Err("pas de modèle ici".into()) });
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    let t = host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let droit = || host.surcharges_de(&t.manifest).and_then(|s| s.workspace).map(|(_, ecrit)| ecrit);
+    assert_eq!(droit(), Some(false), "le parent n'écrit pas : la tâche non plus");
+    ecrire(true, true);
+    assert_eq!(droit(), Some(true), "le parent déclare task_writes : la tâche écrit à sa prochaine ouverture");
+}

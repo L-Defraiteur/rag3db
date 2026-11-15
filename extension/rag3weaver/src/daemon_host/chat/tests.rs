@@ -1960,3 +1960,18 @@ fn le_navigateur_inventorie_les_outils_effectifs_atelier_depot_et_tache() {
     fil.join().unwrap();
     drop(atelier);
 }
+
+/// **Un backend de code parle d'abord comme un agent de code** (Lucie, 15 novembre 2026 : « là ça
+/// parle un peu trop de gabarits ») : dans une tâche, l'invite commence par celle de l'agent de
+/// code (`apps/code/chat.json`) et ne s'ouvre plus sur le manifeste ; un backend déclaratif garde
+/// la sienne.
+#[test]
+fn a_code_backend_speaks_first_as_a_code_agent() {
+    use crate::backend::BackendKind;
+    use crate::propositions::ModeDeclarations;
+    let code = super::system_prompt_du_backend(Some(BackendKind::Code), ModeDeclarations::Auto, true);
+    assert!(code.starts_with("Tu es un agent de code"), "l'agent de code d'abord : {code}");
+    assert!(code.contains("declare"), "les déclarations restent dites, après : {code}");
+    let projet = super::system_prompt_du_backend(Some(BackendKind::Project), ModeDeclarations::Auto, true);
+    assert!(projet.starts_with("You work on a declared backend"), "{projet}");
+}

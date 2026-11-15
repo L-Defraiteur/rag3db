@@ -104,6 +104,12 @@ pub(super) fn default_chat_model() -> ChatModel {
 /// déclaration (c7) — deux textes divergeraient à la première retouche. Une
 /// phrase sur le code suit le fait d'être, ou non, dans une tâche : le chat
 /// n'écrit jamais hors d'une tâche (page 03 du 25 octobre 2026).
+/// **L'invite d'un tour selon la sorte du backend** (le socle, 15 novembre 2026) : un backend de
+/// code parle d'abord comme un agent de code ; un backend déclaratif garde la sienne.
+pub fn system_prompt_du_backend(_kind: Option<crate::backend::BackendKind>, mode: ModeDeclarations, dans_une_tache: bool) -> String {
+    system_prompt(mode, dans_une_tache)
+}
+
 pub fn system_prompt(mode: ModeDeclarations, dans_une_tache: bool) -> String {
     let changer = match mode {
         ModeDeclarations::Approbation => {
