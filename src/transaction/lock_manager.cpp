@@ -16,6 +16,8 @@ std::string LockResource::toString() const {
     switch (kind) {
     case LockResourceKind::ROW:
         return stringFormat("row '{}' of table {}", value, tableID);
+    case LockResourceKind::TABLE:
+        return stringFormat("table {}", tableID);
     case LockResourceKind::INDEX:
     default:
         return stringFormat("the index of table {}", tableID);
@@ -254,6 +256,18 @@ uint64_t LockManager::getNumLocksHeld(transaction_t transactionID) const {
     std::unique_lock lck{mtx};
     const auto held = heldBy.find(transactionID);
     return held == heldBy.end() ? 0 : held->second.size();
+}
+
+std::vector<transaction_t> LockManager::getHolders(const LockResource& resource) const {
+    std::unique_lock lck{mtx};
+    std::vector<transaction_t> result;
+    const auto found = resources.find(resource);
+    if (found != resources.end()) {
+        for (const auto& [holder, mode] : found->second.holders) {
+            result.push_back(holder);
+        }
+    }
+    return result;
 }
 
 uint64_t LockManager::getNumResources() const {
