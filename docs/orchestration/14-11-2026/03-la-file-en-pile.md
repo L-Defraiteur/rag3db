@@ -1598,3 +1598,7 @@ hashes entiers → known-red-cas-longs → confineur-enveloppe → gabarits-autr
 Lucivy, 17 h 58 : lot suivant — la maintenance périodique par l'hôte (`fts.maintenance {at: "03:30", max_purge_ratio: 0,05, compact,
 enabled}`, relevé à blanc puis maintain sur chaque base ouverte hors de toute passe, refus nommé au-delà du ratio ou sous écriture
 continue, résultat à l'état d'index et au journal ; rouge d'abord sur e2e_demon_hote avec une horloge injectable). Tranché 0,05.
+Lucie, 17 h 59 : « je veux qu'on puisse donner des noms aux agents, et ce premier-là, je voudrais qu'il s'appelle **Algareth** »
+(un hommage à une période à elle, où elle avait les mêmes ambitions d'agents de code sans encore connaître le sujet). Pour le
+socle : `agent.name` déclaré (backend, surchargeable par tâche), l'invite qui dit son nom à l'équipier, la boîte et le journal au
+nom, la fiche d'identité `agent:<clé>` qui le porte, tty qui l'affiche et `/nom`. Dès que la clé existe, posée dans son manifeste.
