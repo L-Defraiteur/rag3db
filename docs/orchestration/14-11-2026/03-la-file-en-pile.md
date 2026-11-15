@@ -971,3 +971,7 @@ ED, 12 h 5x : deux lots verts — (2) models.llm en liste + restart_budget_token
 d'abord, passe épinglée verte) ; (1) l'écrivain avec le correctif (A) (f3e2a6f54, passe épinglée verte, attend
 les deux parités de banc). **Ordre de la file** : cœur (ALTER) → tty-11 → ED (2) → G (garde-cpp-transferable)
 → archi (relai) → 96 (compaction) → ED (1) au vert de banc.
+Archi, 13 h 0x : le relai du pont navigateur vert (pont-navigateur-relai 5c1035bcf : relai.rs Chrome ↔ hôte par
+socket Unix seulement, adresses réseau refusées ; ecoute.rs un Pont par browserId, dossier 0700, socket 0600,
+pas encore démarrée par l'hôte ; hote_natif.rs compose le manifeste d'hôte natif sans l'écrire dans le profil
+de Chrome — geste de Lucie ; 21/0, lib 2 474/0, hooks 45/0). En file après ED (2) et G.
