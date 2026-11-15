@@ -198,7 +198,14 @@ fn le_compte_des_reapparitions() {
     let n: usize = std::env::var("RAG3WEAVER_SONDE_COMMITS").ok().and_then(|v| v.parse().ok()).unwrap_or(50);
     let tete = std::env::var("RAG3WEAVER_SONDE_TETE").unwrap_or_else(|_| "HEAD".into());
     // Les commits de la première parente, du plus vieux au plus récent, et celui d'avant pour l'état de départ.
-    let liste = git(&depot, &["rev-list", "--first-parent", "-n", &(n + 1).to_string(), &tete]).expect("rev-list");
+    // `RAG3WEAVER_SONDE_CODE_SEUL=1` : les commits qui touchent du code seulement (sous src/, extension/ ou
+    // tools/), pour un échantillon qui ne soit pas fait de commits de docs.
+    let code_seul = std::env::var("RAG3WEAVER_SONDE_CODE_SEUL").as_deref() == Ok("1");
+    let mut args: Vec<String> = vec!["rev-list".into(), "--first-parent".into(), "-n".into(), (n + 1).to_string(), tete.clone()];
+    if code_seul {
+        args.extend(["--".into(), "src".into(), "extension".into(), "tools".into()]);
+    }
+    let liste = git(&depot, &args.iter().map(String::as_str).collect::<Vec<_>>()).expect("rev-list");
     let mut commits: Vec<String> = liste.lines().map(str::to_string).collect();
     commits.reverse();
     let admis = |p: &str| {
