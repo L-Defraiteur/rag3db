@@ -571,6 +571,28 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 /// Les configurations réelles du schéma nommé `code`, sans accès au catalogue.
 /// Le planificateur, l'ouverture du backend et l'enregistrement partagent ainsi
 /// les mêmes entités, extrémités et propriétés de relations.
+/// **Les règles de rag3weaver qui font une ligne à partir de l'analyse** (clés, imports, appartenance,
+/// provenance des manifestes) : à monter par tout lot qui les change. Une montée fait repasser toutes
+/// les bases à leur prochaine synchronisation, et les nouveautés du lot le disent (page 06, § 13).
+pub const REGLES_DE_L_ANALYSE: u32 = 1;
+
+/// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
+/// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
+pub fn version_de_l_analyse(chunking: &ChunkingConfig) -> String {
+    let champs = |c: EntityConfig| {
+        let mut v: Vec<String> = c.fields.iter().map(|(k, f)| format!("{k}:{:?}", f.field_type)).collect();
+        v.sort();
+        v.join(",")
+    };
+    let texte = format!(
+        "parseur={}|regles={REGLES_DE_L_ANALYSE}|decoupage={chunking:?}|file={}|scope={}",
+        option_env!("RAG3WEAVER_CODEPARSERS_COMMIT").unwrap_or("?"),
+        champs(file_config()),
+        champs(scope_config(chunking.clone())),
+    );
+    crate::hash::content_hash(&texte)
+}
+
 pub fn schema_configs(scope_chunking: ChunkingConfig) -> (BTreeMap<String, EntityConfig>, BTreeMap<String, RelationDef>) {
     let entities = [(FILE, file_config()), (SCOPE, scope_config(scope_chunking)), (LIBRARY, library_config()), (SYMBOL, symbol_config())]
         .into_iter()
@@ -816,6 +838,7 @@ pub const ENTITES_EN_MASSE: [&str; 4] = [FILE, SCOPE, LIBRARY, SCOPE_CONTENT];
 /// puis le schéma à versions ; une base de la forme d'avant garde son schéma et
 /// se dit [`SANS_VERSIONS`] (`index_state`). Aucune base ne change de forme ici.
 pub fn register_code_schema(catalog: &mut Catalog, scope_chunking: ChunkingConfig) -> Result<(), CatalogError> {
+    catalog.version_de_l_analyse = version_de_l_analyse(&scope_chunking);
     let form = scope_form(catalog)?;
     // **Une base neuve reçoit les générations** (2a′) si son dialecte les sait ; une base de la
     // forme d'avant garde la sienne, et se lit comme avant (« forme sans couches »).
@@ -5877,5 +5900,24 @@ mod tests_de_l_ecrivain {
         assert!(recopiees_a(&cat, m) >= 1, "l'arête de a vers f recopiée : {}", recopiees_a(&cat, m));
         let o = cat.publier_la_generation("c3", 0).expect("publier");
         assert_eq!(recopiees_a(&cat, o), 0, "le compte repart de zéro à chaque publication");
+    }
+
+    /// **Témoin 12 : la version de l'analyse entre dans l'empreinte** (page 06, § 13). Une
+    /// synchronisation sans changement saute tous les fichiers ; une fois la version de l'analyse
+    /// changée, elle réanalyse les fichiers au contenu identique, et les réponses restent les mêmes.
+    #[test]
+    fn la_version_de_l_analyse_fait_repasser_un_fichier_identique() {
+        let (mut cat, src) = base();
+        let n = cat.publier_la_generation("c1", 0).expect("publier");
+        let r = crate::code_sync::sync_source(&mut cat, &src, &Default::default(), &mut |_| {}).expect("la synchronisation");
+        assert_eq!(r.files_ingested, 0, "version et contenu égaux : tout est sauté ({r:?})");
+        cat.version_de_l_analyse = format!("{}-autre", cat.version_de_l_analyse);
+        let r = crate::code_sync::sync_source(&mut cat, &src, &Default::default(), &mut |_| {}).expect("la synchronisation");
+        assert_eq!(r.files_ingested, 2, "la version a changé : les deux fichiers au contenu identique repassent ({r:?})");
+        let m = cat.publier_la_generation("c2", 0).expect("publier");
+        assert_eq!(cat.au_rang(m, |c| fins_visibles(c, "f")), vec![3], "le même f");
+        assert_eq!(cat.au_rang(n, |c| fins_visibles(c, "f")), vec![3], "et à la génération d'avant");
+        let r = crate::code_sync::sync_source(&mut cat, &src, &Default::default(), &mut |_| {}).expect("la synchronisation");
+        assert_eq!(r.files_ingested, 0, "repassés une fois, sautés ensuite ({r:?})");
     }
 }
