@@ -10523,6 +10523,14 @@ fn read_threads() -> u64 {
         Ok(w)
     }
 
+    /// **La condition de visibilité d'une lecture sans vue** sur l'alias `alias` (le rang en attente de la
+    /// couche), pour une requête écrite à la main sur une table à générations : `None` sans générations.
+    /// Une lecture brute sans elle voit aussi l'histoire, lignes retirées et leurs arêtes comprises.
+    pub fn condition_visible(&self, alias: &str) -> Option<String> {
+        let v = self.generations.as_ref()?;
+        self.dialect.condition_visible_sur(alias, &v.couche, v.rang)
+    }
+
     pub fn marquer_des_lignes_invisibles(&mut self) {
         if let Some(v) = self.generations.as_mut() {
             v.tout_visible = false;
