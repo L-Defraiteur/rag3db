@@ -297,3 +297,34 @@ redémarrage du 7879.
 
 La reprise est partie à 0 h 04 min 54 s : F 25 % par défaut, puis avec la variante de consigne, puis
 S 50, puis 300 k.
+
+## 9. F à 50 k avec 25 % de chevauchement, sur 0653a6aeff (16 novembre, 0 h 51)
+
+Le juge est celui du § 6, déjà relu, contre la même référence N. N avait été jouée sur l'ancien binaire,
+avec les pannes du 7879 : c'est une réserve sur la comparaison. Le binaire et le chevauchement ont
+changé à la fois, donc la passe ne sépare pas leurs effets.
+
+| | F à 50 k, 10 % (le 15, ancien binaire) | F à 50 k, 25 % (0653a6aeff) |
+|---|---|---|
+| décisions : créer, rejoindre, rien | 66, 106, 72 | 40, **160**, 43, et 1 sans étiquette |
+| fiches | 30 | 31 |
+| P1, rappel des sujets de N | 0,81 | **0,77** |
+| P2, doublons | 1 (0,033) | 2 (0,065) |
+| « rien » : le contexte aide, endort, accord | 34, **22**, 16 | 19, **6**, 18 |
+| s par décision (p50, p90) | 7,9 ; 15,6 | 7,7 ; 18,4 |
+| passe | 38 min | 43,5 min |
+
+- **L'archiviste rejoint bien plus souvent**, 160 contre 106, et le contexte n'endort presque plus : 6
+  « rien » perdent un sujet, contre 22. Les sujets encore perdus sont « Banc des fiches classées »,
+  « Coordination des intégrations sur master », « Diagnostic des crashs du backend », « Indexation des
+  worktrees », « Utilisation des outils rag3weaver en session » et « Vision produit ».
+- **Mais le rappel passe juste sous le seuil**, 0,77 : 18 sujets de N ne sont pas couverts.
+- **L'usage du modèle, lu pour la première fois** (`usage_total`) : 6 197 085 jetons d'invite, dont
+  607 761 servis par le cache (10 %) ; 6 989 jetons de sortie ; une section sans compteurs.
+  - Mon plafond compté à 4 caractères par jeton n'en donnait que 4 275 599 : le français,
+    l'instruction et les candidates pèsent plus.
+  - Le cache implicite de Vertex sert peu, puisque le préfixe change avec le bout de fenêtre en cours.
+- **Aucun refus du 7879** pendant la passe, sous le veilleur.
+
+**La suite** : la même passe avec la variante de consigne (la page 05 de la session mémoire) tourne,
+puis S 50, puis 300 k. Une référence N rejouée sur le même binaire lèverait la réserve.
