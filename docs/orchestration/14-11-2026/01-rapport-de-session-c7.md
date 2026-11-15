@@ -1350,3 +1350,13 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   les trois gestes de Lucie (confirmer, scinder, rejoindre) sont sur master sur le socle recopied +
   default_filter. Ils ne lui arrivent qu'avec la montée M8 de son gabarit : répétée sur copie cette nuit, posée
   le matin dans une fenêtre annoncée (fermeture qui tient, instantané, montée, réouverture).
+- **96, 04 h 0x — M8** : la montée réelle n'existe pas sur master (seule la première tranche, un plan à blanc) ;
+  la mémoire de Lucie est une copie de templates/ du 25 octobre (database, files_root à part ; aucune donnée à
+  migrer) : la pose du matin se fait à la main (templates/ de master, deux réglages réécrits, pilote avec
+  RETOUR.sh), répétée cette nuit sur copie de avant-chantiers-14-nov-2 ; **un binaire ≥ 1f5d007b8 sur l'hôte du
+  portable d'abord** (les gestes citent des graphes intégrés), G le pose le matin ; models.llm absent de son
+  manifeste : son choix, non touché. Le ticket M8 reste ouvert.
+- **Embarquement, 04 h 03** : la mesure des 904 s n'est pas lançable — 12 228 Mio libres sur card2 est l'état de
+  repos à côté de 7878 et 7879 (20,4 Gio tenus), le seuil de 13 Gio ne sera jamais atteint. Décision : (a) le
+  7879 arrêté le temps de la mesure, dans la fenêtre du matin, par G, annoncé, relancé et vérifié ; pas de
+  seuil relevé. Page des règles 6d6b4821c ; card0 à 100 % relevé aux deux heures.
