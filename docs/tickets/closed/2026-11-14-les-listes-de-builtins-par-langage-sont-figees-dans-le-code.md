@@ -1,7 +1,6 @@
 # Les listes de builtins par langage sont figées dans le code
 
-- **État** : ouvert (14 novembre 2026) — le pas suivant du lot de la provenance des imports ; les
-  tableaux restent aujourd'hui.
+- **État** : corrigé (14 novembre 2026) — les sept langues en données (`data/imports/<langue>.toml`, codeparsers a1972c0, master 7215d18ad) ; plus aucune liste dans le code
 - **Gravité** : forme (une liste de données vit dans du Rust : la mettre à jour demande de recompiler et
   de relire du code).
 - **Atteignable en service** : non (aucune réponse fausse ; une version de langage plus récente rend
@@ -42,3 +41,11 @@ listes) sont à retirer ou à rebrancher sur les mêmes fichiers, pas les deux.
 3. Les résolveurs morts de `src/import_resolution/` retirés, ou rebranchés sur les fichiers.
 4. Le témoin `tests/provenance_imports.rs` inchangé et vert ; un témoin de plus : un nom ajouté au fichier
    devient `builtin` sans recompiler.
+
+## La correction
+
+Les listes vivent dans `data/imports/<langue>.toml` de codeparsers (Python, JavaScript et TypeScript, Rust,
+Go, C, C++, C#), compilées comme défaut et remplaçables par `import_rules_dir` sans recompiler. Chaque
+fichier dit en tête sa source, sa version, sa date et la commande qui la relit. `PYTHON_STDLIB_MODULES`,
+`NODE_BUILTINS`, `RUST_STD_CRATES`, `C_STDLIB_HEADERS`, `CPP_STDLIB_HEADERS` et `DOTNET_BCL_NAMESPACES`
+ont quitté le code.
