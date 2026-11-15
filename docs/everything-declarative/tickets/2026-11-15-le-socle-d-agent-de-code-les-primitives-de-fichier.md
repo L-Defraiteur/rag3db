@@ -39,6 +39,23 @@ déclarent. Il manque :
 - l'exigence de l'empreinte sur `replace_lines` et `insert_lines`, à vérifier ;
 - un nom de socle unique, les `atelier_*` gardés en alias pendant une période dite.
 
+## Où en est le lot (15 novembre 2026, 17 h)
+
+- Branche `socle-agent-de-code`, tête 8ef56dd5e, partie de master e0b3725ee.
+  - `write` {path, text, force} et `glob` {pattern, limit} : leurs témoins ont été vus rouges
+    (« unexposed tool … »), puis verts.
+  - La passe épinglée est verte sur a4697560e.
+- **Le run d'une écriture** (réserve de c7) : un appel passé par l'hôte (`DaemonHost::call`, le chemin
+  d'un client, de l'IDE ou du chat) garde son run au journal, avec le rendu entier, donc le diff
+  (`a_workshop_write_leaves_a_run_with_its_diff`). Ce n'est pas neuf, c'est vérifié. Un appel direct
+  au backend, celui des témoins, ne garde que les événements du run.
+- **L'empreinte** est tenue et exigée par la couche du chat, pas affichée. Le refus d'une empreinte
+  périmée dit « le fichier a changé depuis ta lecture (lignes a-b de <chemin> lues au tour t) :
+  relis-le avant d'écrire ; rien n'est écrit », et c7 juge que cela suffit.
+- **La limite de `glob`** : il ne parcourt que la racine de l'atelier, pas un worktree attaché hors de
+  la racine.
+- Sa place en file : après codeparsers, avant archi (B) (c7).
+
 ## Ce qu'il faut pour le fermer
 
 Les primitives au socle avec leurs témoins, rouges d'abord ; le branchement d'archi ; le témoin de bout
