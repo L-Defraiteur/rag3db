@@ -56,6 +56,12 @@ pub struct Activation {
     /// un repli (défaut 60 s).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub window_secs: Option<u64>,
+    /// **La tenue d'un repli** : le temps minimal avant qu'il ne revienne à la
+    /// carte (défaut 4 × `window_secs`), dit dans l'état (« replié jusqu'à
+    /// <heure> au plus tôt »). Une carte qui se libère un instant ne fait pas
+    /// alterner (décision de c7, 15 novembre 2026).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_hold_secs: Option<u64>,
 }
 
 // La racine drm des cartes factices d'un témoin, par fil (les témoins
@@ -1057,7 +1063,7 @@ mod tests {
                 env: Default::default(), profil: "fixture-cpu".into(), peripherique: "cpu".into(),
                 coordination: dossier.path().join("coordination"), journal: dossier.path().join("journaux"),
                 budget_activation_secs: 5, budget_attente_secs: 5, residence: Residence::Maintenir,
-                hote: None, adresse_distante: None, ssh: None, nom: None, modele: None, required_mib: None, margin_mib: None, min_throughput: None, window_secs: None,
+                hote: None, adresse_distante: None, ssh: None, nom: None, modele: None, required_mib: None, margin_mib: None, min_throughput: None, window_secs: None, fallback_hold_secs: None,
             });
             // Même chemin que le manifeste : la déclaration traverse serde.
             let source = serde_json::from_str(&serde_json::to_string(&source).unwrap()).unwrap();
@@ -1236,7 +1242,7 @@ mod tests {
             coordination: dossier.path().join("coordination"), journal: dossier.path().join("journaux"),
             budget_activation_secs: 180, budget_attente_secs: 180,
             residence: Residence::ADemande { inactivite_secs: inactivite, rendre_le_bail_secs: RENDRE_LE_BAIL_PAR_DEFAUT_SECS.min(inactivite.saturating_sub(1).max(1)) },
-            hote: Some(hote.clone()), adresse_distante: Some(format!("127.0.0.1:{port_distant}")), ssh: None, nom: None, modele: None, required_mib: None, margin_mib: None, min_throughput: None, window_secs: None,
+            hote: Some(hote.clone()), adresse_distante: Some(format!("127.0.0.1:{port_distant}")), ssh: None, nom: None, modele: None, required_mib: None, margin_mib: None, min_throughput: None, window_secs: None, fallback_hold_secs: None,
         });
         let unite = format!("{PREFIXE_UNITE}{modele}-{port_distant}");
         let ssh = |cmd: &str| {
@@ -1742,6 +1748,7 @@ mod tests {
         let mut f = sur_carte(1_000);
         let pose = poser_un_service(&f, "fixture-residence-384");
         replier_vers(&mut f, &pose);
+        f.source.activation.as_mut().unwrap().fallback_hold_secs = Some(1);
         let (client, _) = connect_embedder(&f.source).unwrap();
         client.embed(&["replié".into()]).unwrap();
         assert_eq!(evenements(&f, "constructeur_demarre"), 0);
@@ -1782,6 +1789,31 @@ mod tests {
         assert!(erreur.contains(&format!("repli {}", pose.adresse)) && erreur.contains("autre-modele")
             && erreur.contains("fixture-residence-384"), "{erreur}");
         assert_eq!(evenements(&f, "constructeur_demarre"), 0);
+    }
+
+    /// **La tenue du repli** (`fallback_hold_secs`, décision de c7) : la carte
+    /// libérée avant la fin de la tenue, le retour est refusé ; après, il se
+    /// fait. L'état dit jusqu'à quand le repli tient au moins.
+    #[test]
+    fn repli_tenu_ne_revient_pas_avant_sa_tenue() {
+        let mut f = sur_carte(1_000);
+        let pose = poser_un_service(&f, "fixture-residence-384");
+        replier_vers(&mut f, &pose);
+        f.source.activation.as_mut().unwrap().fallback_hold_secs = Some(3);
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        let debut = std::time::Instant::now();
+        client.embed(&["replié".into()]).unwrap();
+        let etat = client.provenance_state().expect("l'état dit le repli");
+        assert!(etat.contains("au plus tôt"), "l'état dit la tenue : {etat}");
+        ecrire_la_carte(&f, 20_000);
+        std::thread::sleep(std::time::Duration::from_millis(1_300));
+        client.embed(&["tenu".into()]).unwrap();
+        assert_eq!(evenements(&f, "constructeur_demarre"), 0, "avant la tenue, la carte libre ne reprend pas");
+        assert_eq!(client.provenance_counts(), vec![(format!("service {}", pose.adresse), 2)]);
+        std::thread::sleep(std::time::Duration::from_secs(3).saturating_sub(debut.elapsed()) + std::time::Duration::from_millis(300));
+        client.embed(&["après la tenue".into()]).unwrap();
+        assert_eq!(evenements(&f, "constructeur_demarre"), 1, "après la tenue, le fournisseur revient");
+        assert_eq!(client.provenance_counts(), vec![(format!("carte {CARTE}"), 1)]);
     }
 
     /// **6. Le débit sous le seuil pendant la fenêtre** : la fixture ralentie
