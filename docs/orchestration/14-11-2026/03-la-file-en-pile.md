@@ -1692,3 +1692,7 @@ Archi, 19 h 11 : **le branchement du socle sur master à b5de98d3b** (5 commits 
 d'agent de code, une demande de fichier s'écrit dans le fichier et la réponse est du texte ; gmail, 0 attribution ; Gemini 4/4). La
 tâche de Lucie aura write, glob, replace_lines, insert_lines, replace_text dès la pose. « À toi » à ED (nom + persona) ; 96 pousse
 en parallèle ; lucivy au « poussé » d'ED ; puis le hash.
+Embarquement, 19 h 12 : **master rouge sur la lib entière**, déterministe à luciepc — `modele_de_tache::tests::a_task_lists_its_declared_models…`
+(modele_de_tache.rs:42, la tâche ne se rouvre pas sur son manifeste changé), 6/6 rouge sur master 6c6e421cdf ; les commits sont de
+tty-14 (4399be2c8, 39d81457c, 3d829b2b9). tty corrige devant tout ; ED et 96 ne poussent pas un rouge. Embarquement : repli par
+activation nommée vert (646556c26, 47 témoins), en attente.
