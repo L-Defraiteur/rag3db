@@ -1,5 +1,14 @@
 # Nouveautés
 
+- 15 novembre2026 — **Carte pleine, l'embarqueur se replie vers un service déclaré.** Une activation
+  peut déclarer la mémoire qu'elle prend sur sa carte (`required_mib`, plus `margin_mib`) et un débit
+  minimal (`min_throughput`, sur `window_secs`). Avec `fallback: {"service": "127.0.0.1:7879"}`, une
+  carte pleine ou trop lente fait servir l'index par ce service, modèle et dimension vérifiés, au lieu
+  de charger une seconde copie du modèle sur une carte déjà prise (l'index de 904 s du 14 novembre).
+  Le repli tient au moins `fallback_hold_secs`, puis revient à la carte quand elle a la place. Le
+  journal d'index dit d'où vient chaque passe de vecteurs, et chaque repli ou retour avec sa cause.
+  L'état d'index le porte aussi.
+
 - 15 novembre2026 — **Plusieurs modèles de langage dans un manifeste** : `models.llm` peut être une liste de modèles nommés, chacun avec son fournisseur, sa fenêtre (`context_tokens`) et son plafond de sortie (`max_output_tokens`), un seul `default: true`, et le budget du contexte qui repart après une compaction (`restart_budget_tokens`, 100 000 jetons par défaut en cloud, la moitié de la fenêtre en local) ; la tâche retiendra un nom, `/model` les montrera. Un manifeste d'aujourd'hui, avec un seul objet, se lit comme une liste d'un modèle par défaut, nommé d'après son modèle : rien à changer. Les erreurs se disent à la lecture : nom manquant ou en double, aucun ou plusieurs défauts, une liste ailleurs que sous `llm`, un nom inconnu avec la liste des noms déclarés.
 
 - 15 novembre2026 — Le terminal de l'agent montre ce que l'équipier lit et écrit : chaque appel d'outil numéroté, l'aperçu coloré d'une lecture dans la langue du fichier (un .md en prose, ses blocs de code dans leur langue), une écriture en lignes retirées et ajoutées, les blocs de code de la boîte colorés, et un extrait coupé qui le dit ; Ctrl-O ouvre un appel en grand dans un écran à part, l'historique intact derrière.

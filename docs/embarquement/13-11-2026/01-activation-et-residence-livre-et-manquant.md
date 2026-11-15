@@ -386,3 +386,35 @@ donné par une variable de test, `RAG3WEAVER_DRM_RACINE`, défaut `/sys/class/dr
 **Le vrai jeu**, après le vert : le jeu du groupe du 14, avec `memoire_requise_mio: 11500` et
 `fallback: { "service": "127.0.0.1:7879" }`, sur card2 et ses 12,2 Gio libres. Le repli doit se dire, et
 l'index doit tourner au débit du 7879, jamais 904 s.
+
+### Livré (15 novembre, branche `repli-carte-pleine`)
+
+c7 a tranché trois points à la relecture :
+- **la recette du repli** : elle porte le périphérique, elle ne peut donc pas se comparer à un repli.
+  Sous `{service}`, modèle et dimension sont vérifiés, toujours. L'état dit « repli sans recette
+  vérifiée », toujours ;
+- **la forme `{activation: <nom>}`** est renvoyée à un lot suivant (ticket
+  `2026-11-15-le-repli-par-une-activation-nommee`) ;
+- **les clés sont en anglais** : `required_mib`, `margin_mib`, `min_throughput`, `window_secs`, et
+  `fallback_hold_secs`, la tenue ajoutée à la relecture du vert.
+
+Ce que le code fait :
+- **la mesure** : l'activation mesure la carte qu'elle nomme, avant chaque prise neuve. Pendant un
+  repli, elle la remesure après chaque fenêtre ;
+- **les deux causes du repli** : la VRAM, ou le débit tenu par fenêtre sur la carte. La première
+  fenêtre s'ouvre après le premier appel réussi : l'activation est alors chauffée ;
+- **les cas sans mesure** : une activation distante n'est pas mesurée, car sa carte est à l'autre
+  poste. Une carte illisible est dite une fois, et l'activation se fait ;
+- **ce qui se dit** : la provenance de chaque prise (« carte card2 », « service 127.0.0.1:7879 »)
+  compte les textes calculés. Le journal d'index dit, après chaque passe, ce que l'embarqueur a dit,
+  puis la provenance des morceaux ;
+- **l'état** : `embedding.fallback` dans l'état d'index, lu au suivi d'index quand le catalogue est
+  occupé, et à l'embarqueur sinon.
+
+Les témoins, tous rouges d'abord puis verts à luciepc, sous la lib 373b5477b :
+- **b25c373af**, les sept rouges : les six ci-dessus, et la provenance au journal d'index ;
+- **f26dc306d**, le correctif ;
+- **5d4c8193f**, le témoin de la tenue, puis son correctif.
+
+**Limite connue, au ticket.** Une carte qui a la place en VRAM mais calcule lentement alterne d'une
+tenue à l'autre. Le doublement de la tenue est renvoyé au lot `{activation}`.

@@ -875,6 +875,26 @@ provider.
   reaches it through an `ssh -N -L` tunnel held by the client, and probes its identity through the
   tunnel. A failing ssh is refused at once, by name. Units named `rag3weaver-embeddings@…` are
   never touched.
+- **Falling back to a service when the card is full.** An activation can state the memory its
+  provider takes, `required_mib` (plus `margin_mib`, 2048 by default), and a minimum throughput,
+  `min_throughput` (texts per second, over `window_secs`, 60 by default). The card it names in
+  `peripherique` is measured before activating, by its free VRAM
+  (`/sys/class/drm/<card>/device/mem_info_vram_*`, or the root given by `RAG3WEAVER_DRM_RACINE`).
+  A card that does not read is never guessed: the activation runs unmeasured, and says so once.
+  - **With `fallback: {"service": "127.0.0.1:7879"}`.** If the card is full, or the throughput
+    drops below the threshold, the embedder serves through that service. The service must serve
+    the declared model at the declared dimension, or it is refused by name. Its recipe is not
+    checked, and the state says so. The provider on the card returns its lease.
+  - **The return.** The fallback holds at least `fallback_hold_secs` (4 × `window_secs` by default).
+    After that, it goes back to the card once the card has room, and says so.
+  - **Without a fallback.** The activation runs anyway, and the state says « carte pleine, pas de
+    repli déclaré ».
+
+  Where this shows:
+  - **The index journal**, after each pass, says where the vectors came from (« provenance des
+    vecteurs : carte card2 : N morceau(x) ; service … : M morceau(x) »), and each fallback or return
+    with its cause.
+  - **The index state** carries it under `embedding.fallback`.
 
 See the
 [contract and qualification](https://github.com/L-Defraiteur/rag3db/blob/master/docs/embarquement/12-11-2026/03-activation-des-modeles.md).
