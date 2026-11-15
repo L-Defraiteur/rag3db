@@ -339,6 +339,11 @@ pub fn dossier_de_commande(manifeste: Option<&str>) -> std::path::PathBuf {
 /// Ce que Tab peut proposer pour `debut`.
 fn sources_de(debut: &str, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache) -> crate::commandes::Sources {
     let mut s = crate::commandes::Sources { themes: crate::theme::THEMES.iter().map(|(n, _)| n.to_string()).collect(), ..Default::default() };
+    if debut.starts_with("/model") {
+        if let Ok(v) = modeles_de_tache(agent, ep, tache) {
+            s.modeles = v["models"].as_array().into_iter().flatten().filter_map(|m| m["name"].as_str().map(str::to_string)).collect();
+        }
+    }
     if debut.starts_with("/tache") || debut.starts_with("/depot") {
         if let Ok(etat) = client::lire_brut(agent, ep, "/ide/etat") {
             for b in etat["backends"].as_array().cloned().unwrap_or_default() {
@@ -459,7 +464,17 @@ fn executer(c: crate::commandes::Commande, terminal: &mut ratatui::DefaultTermin
             Some(Err(e)) => vue.note(&format!("le contexte ne se lit pas : {e}")),
             None => vue.note("la tâche n'a pas encore de worktree : pas de contexte"),
         },
-        Commande::Modele(_) => vue.note("/model : pas encore"),
+        Commande::Modele(None) => match modeles_de_tache(agent, ep, tache) {
+            Ok(v) => modeles_dits(&v).iter().for_each(|l| vue.note(l)),
+            Err(e) => vue.note(&format!("les modèles ne se lisent pas : {e}")),
+        },
+        Commande::Modele(Some(n)) => match client::poster(agent, ep, "/ide/teammate/model", &json!({ "backend": tache.depot.id, "task": tache.task, "name": n })) {
+            Ok(v) => {
+                let modele = v["models"].as_array().into_iter().flatten().find(|m| m["current"] == true).and_then(|m| m["model"].as_str()).unwrap_or("?").to_string();
+                vue.note(&format!("la tâche emploie maintenant le modèle « {n} » ({modele})"));
+            }
+            Err(e) => vue.note(&format!("/model {n} : {e}")),
+        },
         Commande::Shell(cmd) => lancer_une_commande(&cmd, terminal, vue, agent, ep, tache, journal)?,
         Commande::Inconnue(n) => vue.note(&format!("commande inconnue : /{n} — /aide les liste")),
     }
@@ -509,8 +524,32 @@ fn lancer_une_commande(cmd: &str, terminal: &mut ratatui::DefaultTerminal, vue: 
 }
 
 /// Les lignes de `/model` : les modèles déclarés, le nom et le modèle d'abord.
-pub fn modeles_dits(_v: &Value) -> Vec<String> {
-    Vec::new()
+pub fn modeles_dits(v: &Value) -> Vec<String> {
+    let modeles = v["models"].as_array().cloned().unwrap_or_default();
+    if modeles.is_empty() {
+        return vec!["le manifeste de la tâche ne déclare aucun modèle de langage (models.llm)".to_string()];
+    }
+    let mut out = vec!["les modèles de la tâche (/model <nom> en change) :".to_string()];
+    for m in modeles {
+        let acces: Vec<&str> = [m["provider"].as_str(), m["protocol"].as_str()].into_iter().flatten().collect();
+        let acces = if acces.is_empty() { String::new() } else { format!(" ({})", acces.join(", ")) };
+        let mut marques = Vec::new();
+        if m["current"] == true {
+            marques.push("celui de la tâche");
+        }
+        if m["default"] == true {
+            marques.push("par défaut");
+        }
+        let marques = if marques.is_empty() { String::new() } else { format!(" · {}", marques.join(" · ")) };
+        let puce = if m["current"] == true { "  ▸ " } else { "    " };
+        out.push(format!("{puce}{} — {}{acces}{marques}", m["name"].as_str().unwrap_or("?"), m["model"].as_str().unwrap_or("?")));
+    }
+    out
+}
+
+/// Les modèles de la tâche, par `GET /ide/teammate/models`.
+fn modeles_de_tache(agent: &ureq::Agent, ep: &Endpoint, tache: &Tache) -> Result<Value, String> {
+    client::lire(agent, ep, &format!("/ide/teammate/models?backend={}&task={}", client::encoder(&tache.depot.id), client::encoder(&tache.task)))
 }
 
 /// « contexte : 12 345 / 1 048 576 jetons (1,2 %) — historique 60 %, outils 25 % ».

@@ -63,6 +63,7 @@ pub fn lire(texte: &str) -> (Option<Commande>, Option<String>) {
             "effacer" if arg.as_deref() == Some("historique") => Commande::EffacerHistorique,
             "effacer" => Commande::Effacer,
             "context" | "contexte" => Commande::Contexte,
+            "model" | "modele" => Commande::Modele(arg),
             autre => Commande::Inconnue(autre.to_string()),
         };
         return (Some(c), None);
@@ -140,6 +141,7 @@ pub fn completer(texte: &str, s: &Sources) -> Option<Completion> {
                 "theme" => s.themes.clone(),
                 "tache" => s.taches.clone(),
                 "depot" => s.depots.clone(),
+                "model" => s.modeles.clone(),
                 "effacer" => vec!["historique".to_string()],
                 _ => return None,
             };
