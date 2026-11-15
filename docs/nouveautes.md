@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 15 novembre2026 — Toute tâche reçoit le socle d'un agent de code, quel que soit le manifeste de son backend : lire par 200 lignes, remplacer un texte unique ou les lignes a à b, insérer, écrire un fichier neuf, chercher par motif, lancer une commande derrière la porte ; l'outil que le backend déclare sous le même nom gagne, et une tâche sans droit d'écrire n'en reçoit que la lecture.
+
 - 15 novembre2026 — **Le service d'embarquement ne meurt plus en silence.** Un calcul qui panique sur la carte (une
   réservation de mémoire refusée) rend un 503 nommé au client, au lieu d'une connexion coupée. Le service répond
   ensuite à toutes ses requêtes en vol, puis s'arrête avec le code 70 en disant sa cause en dernière ligne de son
