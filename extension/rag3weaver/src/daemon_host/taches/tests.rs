@@ -128,6 +128,41 @@ fn une_tache_se_nomme_a_sa_creation() {
     assert_eq!(host.with_backend(&h, |b| b.prepared().nom_de_l_agent()).unwrap(), "équipier", "sans nom, celui du backend");
 }
 
+/// **Une tâche ouverte se renomme sans se rouvrir** (tty-18, `/nom <x>` du terminal) : le nom va au
+/// registre et au backend ouvert de la tâche, que le tour suivant lit ; ni la base ni le backend ne se
+/// rouvrent. Un rechargement et une réouverture le gardent ; un nom vide rend celui du backend ; un nom de
+/// plusieurs lignes se refuse en nommant `agent_name`, sans rien changer ; une tâche absente se refuse.
+#[cfg(feature = "rag3db-native")]
+#[test]
+fn une_tache_ouverte_se_renomme_sans_se_rouvrir() {
+    let (d, host, _manifeste, parent) = banc();
+    let tache = host.ouvrir_une_tache_nommee(&parent, "ombre", Some("Ombre"), None).expect("la tâche s'ouvre nommée");
+    let h = host.hosted(&tache.manifest).unwrap();
+    let ouvert = host.with_backend(&h, |b| Arc::as_ptr(&b.catalog) as usize).unwrap();
+
+    let r = host.renommer_l_agent_d_une_tache(&parent, "ombre", "Lune").expect("le renommage");
+    assert_eq!(r["agent_name"], "Lune", "{r}");
+    assert_eq!(host.with_backend(&h, |b| b.prepared().nom_de_l_agent()).unwrap(), "Lune", "le backend ouvert dit le nom neuf");
+    assert_eq!(host.with_backend(&h, |b| Arc::as_ptr(&b.catalog) as usize).unwrap(), ouvert, "le backend ne s'est pas rouvert");
+    assert_eq!(host.tache(&parent, "ombre").unwrap().nom_de_l_agent.as_deref(), Some("Lune"), "gardé au registre");
+    let registre = std::fs::read_to_string(d.path().join("taches/registre.json")).unwrap();
+    assert!(registre.contains("Lune"), "écrit dans le registre : {registre}");
+    host.with_backend(&h, |b| b.reload().map(|_| ())).unwrap().expect("le rechargement");
+    assert_eq!(host.with_backend(&h, |b| b.prepared().nom_de_l_agent()).unwrap(), "Lune", "un rechargement garde le nom");
+
+    for faux in ["deux\nlignes", "  "] {
+        let e = host.renommer_l_agent_d_une_tache(&parent, "ombre", faux).expect_err("refusé");
+        assert!(e.starts_with("agent_name"), "le refus nomme le champ : {e}");
+    }
+    assert_eq!(host.with_backend(&h, |b| b.prepared().nom_de_l_agent()).unwrap(), "Lune", "un refus ne change rien");
+    assert!(host.renommer_l_agent_d_une_tache(&parent, "absente", "X").is_err(), "une tâche absente se refuse");
+
+    let r = host.renommer_l_agent_d_une_tache(&parent, "ombre", "").expect("le nom vide");
+    assert_eq!(r["agent_name"], "équipier", "un nom vide rend celui du backend : {r}");
+    assert_eq!(host.with_backend(&h, |b| b.prepared().nom_de_l_agent()).unwrap(), "équipier");
+    assert_eq!(host.tache(&parent, "ombre").unwrap().nom_de_l_agent, None, "le registre l'oublie");
+}
+
 #[test]
 fn une_declaration_dans_la_tache_commite_sur_sa_branche() {
     let (d, host, manifeste, parent) = banc();
