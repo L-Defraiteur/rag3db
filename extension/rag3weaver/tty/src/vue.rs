@@ -459,6 +459,11 @@ impl Vue {
                 return;
             }
         }
+        // Un accord répondu : sa commande, avant que la boîte ne l'oublie.
+        let resultat = match (l["reply_to"].as_str(), l["approved"].as_bool()) {
+            (Some(r), Some(oui)) => self.boite.attentes().iter().find(|a| a.id == r && a.kind == "approval").map(|a| format!("{} : {}", if oui { "accordé" } else { "refusé" }, a.command.clone().unwrap_or_default())),
+            _ => None,
+        };
         self.boite.ligne(l);
         // **La plomberie de l'équipier** (Lucie, 15 nov.) : une étape faite et la fin du pas ne
         // s'écrivent pas ; l'étape se dit en sourdine sur la ligne du haut, la fin change l'état.
@@ -485,6 +490,16 @@ impl Vue {
         // Une demande après la fin d'un run : l'équipier va repartir, ce n'est plus fini.
         if matches!(self.etat, Etat::Fini(_)) && l["from"] == "supervisor" && matches!(l["kind"].as_str(), Some("request" | "instruction" | "answer")) {
             self.changer(Etat::Attend);
+        }
+        // **Un accord demandé est un état vivant** (Lucie, 15 nov.) : la demande se dit sur la
+        // ligne d'état et ne s'écrit pas ; sa réponse laisse une ligne, d'où qu'elle vienne.
+        if l["from"] == "teammate" && l["kind"] == "approval" {
+            return;
+        }
+        if let Some(r) = resultat {
+            self.clore();
+            self.valider_avec_tete(Genre::Boite, "› ", &r);
+            return;
         }
         self.clore();
         let tete = crate::boite::en_tete(l);
@@ -539,7 +554,6 @@ impl Vue {
                 let attente = self.boite.premiere().cloned()?;
                 let oui = matches!(c, 'o' | 'O' | 'y' | 'Y');
                 self.clore();
-                self.valider_avec_tete(Genre::Boite, "› ", &format!("{} : {}", if oui { "accordé" } else { "refusé" }, attente.command.clone().unwrap_or_default()));
                 Some(Action::Repondre { attente, texte: if oui { "oui".into() } else { "non".into() }, accord: Some(oui) })
             }
             // Une proposition de déclarations, rien d'autre n'attendant et rien de tapé : o l'applique, n la rejette.
@@ -666,6 +680,11 @@ impl Vue {
         }
     }
 
+    /// Quelque chose attend ta réponse : la ligne d'état le dit, sans animation.
+    fn attend_de_toi(&self) -> bool {
+        !matches!(self.etat, Etat::Fini(_)) && self.boite.premiere().is_some() || !self.propositions_en_attente.is_empty()
+    }
+
     /// Le texte de la ligne d'état, sans son animation.
     pub fn ligne_d_etat(&self) -> String {
         let c = self.coeur();
@@ -705,7 +724,7 @@ impl Vue {
     /// La ligne d'état à `maintenant` : l'animation quand l'état en a une, puis
     /// l'en-tête en sourdine à droite s'il tient.
     pub fn ligne_vivante(&self, largeur: usize, maintenant: Instant) -> Line<'static> {
-        let mut ligne = match self.quelle() {
+        let mut ligne = match self.quelle().filter(|_| !self.attend_de_toi()) {
             Some(q) => {
                 let suite = if let Etat::Agit(o) = &self.etat { o.clone() } else { String::new() };
                 anim::ligne(&self.theme, q, self.image(maintenant), self.graine, self.capacites, &suite)
@@ -1340,6 +1359,35 @@ mod tests {
         assert_eq!(colonnes(&large), 60);
         assert_eq!(texte(&v, 20), "⛧ attend", "trop étroit : l'en-tête se tait");
         assert!(!large.contains("backend"));
+    }
+
+    /// **Un accord demandé est un état vivant** (Lucie, 15 nov. : « les accords demandés, je dois
+    /// pas les voir défiler comme ça, ça doit être vivant ») : la demande se dit dans la zone
+    /// vivante, même quand l'équipier s'anime, et ne s'écrit pas ; l'historique n'en garde qu'une
+    /// ligne de résultat quand la réponse revient, qu'elle vienne du terminal ou d'ailleurs.
+    #[test]
+    fn an_approval_request_lives_in_the_live_zone_and_leaves_one_result_line() {
+        let mut v = Vue::new(120, true);
+        let vivante = |v: &Vue| v.ligne_vivante(120, v.depuis).spans.iter().map(|s| s.content.to_string()).collect::<String>();
+        let ecrites = |v: &mut Vue| v.prendre_lignes().into_iter().map(|l| l.texte).collect::<Vec<_>>();
+        v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "run_command" } }));
+        ecrites(&mut v);
+        v.ligne_de_boite(&ligne_b(1, "teammate", "approval", json!({ "command": "git status" })));
+        assert_eq!(ecrites(&mut v), Vec::<String>::new(), "la demande ne s'écrit pas");
+        assert!(vivante(&v).starts_with("⛧ attend ton accord : git status — o / n"), "l'animation ne la recouvre pas : {}", vivante(&v));
+        let Some(Action::Repondre { accord, .. }) = v.touche(Touche::Car('o')) else { panic!("o accorde") };
+        assert_eq!(accord, Some(true));
+        v.ligne_de_boite(&ligne_b(2, "supervisor", "answer", json!({ "reply_to": "a1/doc:1", "approved": true, "text": "oui" })));
+        let apres = ecrites(&mut v);
+        assert_eq!(apres.len(), 1, "une ligne de résultat : {apres:?}");
+        assert!(apres[0].ends_with("accordé : git status"), "{apres:?}");
+        assert!(!vivante(&v).contains("accord"), "répondue, elle quitte la zone vivante : {}", vivante(&v));
+        // Répondue ailleurs (l'IDE) : la même ligne de résultat.
+        v.ligne_de_boite(&ligne_b(3, "teammate", "approval", json!({ "command": "rm -rf build" })));
+        v.ligne_de_boite(&ligne_b(4, "supervisor", "answer", json!({ "reply_to": "a1/doc:3", "approved": false, "text": "non" })));
+        let ailleurs = ecrites(&mut v);
+        assert_eq!(ailleurs.len(), 1, "{ailleurs:?}");
+        assert!(ailleurs[0].ends_with("refusé : rm -rf build"), "{ailleurs:?}");
     }
 
     fn ligne_b(n: usize, from: &str, kind: &str, extra: Value) -> Value {
