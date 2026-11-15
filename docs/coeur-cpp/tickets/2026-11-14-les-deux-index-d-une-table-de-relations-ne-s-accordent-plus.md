@@ -277,3 +277,34 @@ côtés. Le mécanisme reste à lire. Les suspects :
 Rien n'a été déposé, et le dossier `un-seul-sens-avant` est effacé. Le journal de la fabrication
 est à luciepc, dans `~/.cache/rag3db-moteur-notes/deux-sens/miroir-echec/`. Sur master, le
 correctif de `373b5477b` couvre aussi ce cas : le témoin est vert 3/3.
+
+## La perte des deux côtés, localisée (15 nov., 6 h 30)
+
+Une sonde hors du dépôt (`sonde_perte_deux_cotes_test.cpp`, à luciepc dans
+`~/.cache/rag3db-moteur-notes/deux-sens/`) rejoue, sous `f41c0ba5b` puis sous master `e8472e053`,
+le refus de A en fin de COMMIT (le journal ne se synchronise pas, 200 ms sous le verrou), 4 tours
+par cas. Les groupes de nœuds font 2 048 nœuds.
+
+| Cas | Ce que B écrit pendant la fenêtre | `f41c0ba5b` | master |
+|---|---|---|---|
+| G1 | une relation de R, avec un groupe partagé avec A au sens arrière | perdue des deux côtés, 3/4 | lisible des deux côtés |
+| G2 | une relation de R, sans **aucun** groupe partagé avec A | perdue des deux côtés, 4/4 | lisible |
+| G3 | comme G1, mais B valide **après** l'annulation de A | lisible, 4/4 | lisible |
+| P1 | une relation d'une **autre** table de relations (R2) | lisible, 4/4 | — |
+| P2 | un nœud (M) | lisible, 4/4 | — |
+
+Ce que la sonde établit :
+
+- la perte des deux côtés tient à la **fenêtre** (G3) ;
+- elle ne tient **pas aux groupes de nœuds** partagés (G2) ;
+- elle est propre à **la table de relations que A et B partagent** (P1, P2).
+
+Ce n'est donc pas la troncature d'un groupe CSR, mais un état commun à la table, que l'annulation
+hors du verrou de A défait après le COMMIT de B. Les suspects, lus mais pas prouvés :
+
+- `reserveRelOffsets` / `nextRelOffset`, les identifiants des relations ;
+- `rollbackGroupCollectionInsert`, avec le compte de lignes de la collection et `removeTrailingGroups`.
+
+**Cause localisée, pas expliquée.** Sur master, l'annulation sous le verrou couvre ce cas (vert
+partout). Le témoin `BothDirectionsKeepTheRelationsOfAnotherWriter` le garde. Il reste à
+instrumenter l'ancienne lib, si l'on veut le mécanisme exact.
