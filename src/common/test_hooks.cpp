@@ -58,9 +58,14 @@ void TestHooks::armFailPointFromEnvironment() {
         armedFailPoint = static_cast<uint8_t>(TestFailPoint::REL_COMMIT_BETWEEN_DIRECTIONS);
         return;
     }
+    if (std::strcmp(at, "add-column-between-chunked-groups") == 0) {
+        fprintf(stderr, "TEST HOOK: the next ADD COLUMN will fail after its first chunked group\n");
+        armedFailPoint = static_cast<uint8_t>(TestFailPoint::ADD_COLUMN_BETWEEN_CHUNKED_GROUPS);
+        return;
+    }
     fprintf(stderr,
         "TEST HOOK: unknown point RAG3DB_TEST_FAIL_AT=%s ignored (known: "
-        "rel-commit-between-directions)\n",
+        "rel-commit-between-directions, add-column-between-chunked-groups)\n",
         at);
 }
 
@@ -77,7 +82,10 @@ void TestHooks::failOnceIfArmed(TestFailPoint point) {
         if (const auto delay = armedFailDelayMs.load(); delay > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(delay));
         }
-        throw RuntimeException("TEST HOOK: failure injected at rel-commit-between-directions");
+        throw RuntimeException(std::string("TEST HOOK: failure injected at ") +
+                               (point == TestFailPoint::REL_COMMIT_BETWEEN_DIRECTIONS ?
+                                       "rel-commit-between-directions" :
+                                       "add-column-between-chunked-groups"));
     }
 }
 
