@@ -1412,3 +1412,7 @@ du 7879 ; compose, memoire_modele, idempotent_registration verts ; banc_fiches_c
 banc_etage_qui_perd rouge sur master aussi : 8a931f78d (11 nov.) refuse un changement de search_index sur une entité peuplée
 sans migration déclarée, le banc réenregistre Scope sur la base indexée — ticket chez 96, rien à relâcher. query_chars :
 rouge d'abord poussé (c0e9d8f1b). Arbre : répétition lancée 16 h 20 (binaire figé b2635b1b0, montée 6/6), en file derrière 4 lourds.
+Embarquement, 16 h 30 : la pile repli + plafond sur master à **73aa05511** (15 commits, gmail, 0 attribution ; passe sur f8b553928 toute
+verte : embarqueur à la demande, lectures 27, code 36, features 8/8, lib 2 495, navigateur 45 ; un premier rouge de check_features
+sur une famille de ticket « mesure » hors vocabulaire, corrigée et passe rejouée). « À toi » à G pour plafond-cachedir. 96 : query_chars
+rouge vu (aveu : le rouge a envoyé 40 000 caractères au vrai 7879, qui a tenu ; règle écrite), correctif cfa6d22fb en vert.
