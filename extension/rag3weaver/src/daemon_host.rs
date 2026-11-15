@@ -723,11 +723,14 @@ impl DaemonHost {
                 Ok(_) => {}
             }
             let print = manifest_print(&hosted.manifest)?;
-            let prepared = PreparedBackend::load(&hosted.manifest)?;
-            // **Une tâche** : sa base copiée et son mode, par-dessus le manifeste.
+            // **Une tâche** : le socle d'un agent de code greffé au chargement (page 09 du 15
+            // novembre 2026), puis sa base copiée et son mode, par-dessus le manifeste.
             let prepared = match self.surcharges_de(&hosted.manifest) {
-                Some(s) => prepared.avec_surcharges(s),
-                None => prepared,
+                Some(s) => {
+                    let ecrit = s.workspace.as_ref().is_some_and(|(_, ecrit)| *ecrit);
+                    PreparedBackend::load_pour_une_tache(&hosted.manifest, ecrit)?.avec_surcharges(s)
+                }
+                None => PreparedBackend::load(&hosted.manifest)?,
             };
             // **Un écrivain autonome tient la base** : l'ouvrir attendrait le
             // verrou du moteur pour échouer ; le refus le nomme tout de suite,
