@@ -141,7 +141,7 @@ fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
             let Some(p) = c.dialect_arc().condition_visible_sur("s", rag3weaver::code::COUCHE_DU_BACKEND, n) else {
                 return json!("refus : pas de condition de visibilité");
             };
-            let q = format!("MATCH (s:Symbol)<-[r]-(x:Scope) WHERE s._uuid IN [{liste}] AND {} RETURN s.name, type(r), x.file_path, x.start_line", p.replace("s.", "x."));
+            let q = format!("MATCH (s:Symbol)<-[r]-(x:Scope) WHERE s._uuid IN [{liste}] AND {} RETURN s.name, label(r), x.file_path, x.start_line", p.replace("s.", "x."));
             match c.conn().execute(&q) {
                 Ok(r) => json!(r.rows.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>()),
                 Err(e) => json!(format!("refus : {e} ; requête {q}")),
