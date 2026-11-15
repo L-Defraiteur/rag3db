@@ -2,8 +2,8 @@
 // docs/coeur-cpp-hotfixs-tickets/tickets/2026-11-14-un-add-column-passe-sous-une-transaction-d-
 // ecriture-ouverte.md ; conception docs/coeur-cpp/15-11-2026/01-rapport-de-session.md). Comme
 // PostgreSQL (ACCESS EXCLUSIVE) : un écrivain tient sa table en partagé, de sa première instruction
-// d'écriture jusqu'à sa fin ; un ALTER la prend en exclusif, et attend. L'écrivain ouvert ne voit donc
-// jamais le schéma changer sous lui, et un écrivain qui arrive pendant l'ALTER attend sa fin.
+// d'écriture jusqu'à sa fin ; un ALTER la prend en exclusif, et attend. L'écrivain ouvert ne voit
+// donc jamais le schéma changer sous lui, et un écrivain qui arrive pendant l'ALTER attend sa fin.
 #include <atomic>
 #include <chrono>
 #include <string>
@@ -44,7 +44,8 @@ protected:
         }
         createDBAndConn();
         run(*conn, "CREATE NODE TABLE T(id INT64, s STRING, c STRING, PRIMARY KEY(id));");
-        run(*conn, "COPY T FROM (UNWIND range(0, 999) AS i RETURN i, 's' + CAST(i AS STRING), 'c');");
+        run(*conn,
+            "COPY T FROM (UNWIND range(0, 999) AS i RETURN i, 's' + CAST(i AS STRING), 'c');");
     }
     static void run(Connection& c, const std::string& q) {
         auto r = c.query(q);
@@ -165,7 +166,8 @@ TEST_F(AlterWaitsForWriters, AWriterCreatingDuringTheAlterWritesNoRowOfTheOldSch
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
     std::thread tc([&] {
-        auto r = c.query("UNWIND range(5000, 5099) AS i CREATE (:T {id: i, s: 'pendant', c: 'c'});");
+        auto r =
+            c.query("UNWIND range(5000, 5099) AS i CREATE (:T {id: i, s: 'pendant', c: 'c'});");
         cResult = r->isSuccess() ? "OK" : "REFUS " + r->getErrorMessage();
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
@@ -195,8 +197,8 @@ TEST_F(AlterWaitsForWriters, AWriterOpenBeforeACommentFinishesWithoutRetrying) {
     EXPECT_EQ(one(*conn, "MATCH (n:T) RETURN count(*);"), "1000\n");
     run(b, "COMMENT ON TABLE T IS 'une table';");
     auto r = conn->query("MATCH (n:T) WHERE n.id = 3 SET n.s = 'après le commentaire';");
-    EXPECT_TRUE(r->isSuccess())
-        << "[check: a-change-that-keeps-the-columns-retries-no-writer] " << r->getErrorMessage();
+    EXPECT_TRUE(r->isSuccess()) << "[check: a-change-that-keeps-the-columns-retries-no-writer] "
+                                << r->getErrorMessage();
     run(*conn, "COMMIT;");
     EXPECT_EQ(one(*conn, "MATCH (n:T) WHERE n.id = 3 RETURN n.s;"), "après le commentaire\n");
 }

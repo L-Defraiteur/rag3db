@@ -320,8 +320,7 @@ void TransactionManager::rollBackRefusedCommitNoLock(Transaction* transaction,
             std::rethrow_exception(commitError);
         } catch (const std::exception& e) {
             commitMessage = e.what();
-        } catch (...) {
-        }
+        } catch (...) {}
         throw TransactionManagerException(common::stringFormat(
             "The commit failed ({}) and its rollback could not complete ({}). The transaction is "
             "closed and its locks are released{}",

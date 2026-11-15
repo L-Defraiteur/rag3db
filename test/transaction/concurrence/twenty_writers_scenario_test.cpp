@@ -721,7 +721,8 @@ protected:
         const auto duration = ddl->end - ddl->start;
         std::cerr << "  [scénario] attente de « " << ddl->name << " » : durée " << duration
                   << " ms, paquet le plus long " << longest
-                  << " ms, reste du plus long paquet ouvert à son départ " << openAtStart << " ms\n";
+                  << " ms, reste du plus long paquet ouvert à son départ " << openAtStart
+                  << " ms\n";
         EXPECT_LE(duration, longest + SLACK_MS)
             << "[check: ddl-waits-at-most-the-longest-packet] « " << ddl->name << " » lasted "
             << duration << " ms, the longest Doc writer packet " << longest << " ms";

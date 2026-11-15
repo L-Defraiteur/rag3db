@@ -25,20 +25,23 @@
 // écriture. Travailler sur une copie (reflink), jamais sur une base en service. Bâtir, contre une
 // bibliothèque du moteur et son en-tête unique :
 //   g++ -std=c++20 -O2 -I <build>/src check_rel_directions.cpp -L <build>/src -lrag3db
-// **Les bouts se parcourent par tranches ancrées** (14 novembre 2026, relevé d'hotfixs) : l'outil tirait ses sources
-// et ses destinations d'une seule lecture non ancrée, `MATCH (a)-[r:T]->(b)`, que le planificateur joue dans un seul
-// sens ; une source perdue par ce sens n'était jamais ancrée, et sa relation n'était relue par aucun sens, même par
-// celui qui l'avait encore (LOCKS de code-principal, lockIndexForWrite → acquireLock à la ligne 1173). Chaque nœud de
-// chaque étiquette de bout (`show_connection`) est désormais ancré, par tranches de 500 offsets : le sens avant
-// depuis les étiquettes sources, le sens arrière depuis les étiquettes destinations. `CHECK_REL_PLANS=1` imprime, pour chaque
-// étiquette et chaque sens, le plan d'une tranche (EXPLAIN) : il prouve le sens joué.
+// **Les bouts se parcourent par tranches ancrées** (14 novembre 2026, relevé d'hotfixs) : l'outil
+// tirait ses sources et ses destinations d'une seule lecture non ancrée, `MATCH (a)-[r:T]->(b)`,
+// que le planificateur joue dans un seul sens ; une source perdue par ce sens n'était jamais
+// ancrée, et sa relation n'était relue par aucun sens, même par celui qui l'avait encore (LOCKS de
+// code-principal, lockIndexForWrite → acquireLock à la ligne 1173). Chaque nœud de chaque étiquette
+// de bout (`show_connection`) est désormais ancré, par tranches de 500 offsets : le sens avant
+// depuis les étiquettes sources, le sens arrière depuis les étiquettes destinations.
+// `CHECK_REL_PLANS=1` imprime, pour chaque étiquette et chaque sens, le plan d'une tranche
+// (EXPLAIN) : il prouve le sens joué.
 //
-// **Quatre comptes par table** : les relations lues au sens avant, au sens arrière (identifiants distincts), leur
-// union, et celles perdues d'un seul sens. « égales » juge la cohérence des deux rangements, pas leur complétude ;
-// ces comptes, comparés à ceux d'avant une opération, montrent ce qui manque.
+// **Quatre comptes par table** : les relations lues au sens avant, au sens arrière (identifiants
+// distincts), leur union, et celles perdues d'un seul sens. « égales » juge la cohérence des deux
+// rangements, pas leur complétude ; ces comptes, comparés à ceux d'avant une opération, montrent ce
+// qui manque.
 //
-// Usage : [CHECK_REL_PLANS=1] check_rel_directions <base> [table…]   — toutes les tables de relations sans argument ;
-// code de sortie 1 si un écart est trouvé, 2 sur une erreur.
+// Usage : [CHECK_REL_PLANS=1] check_rel_directions <base> [table…]   — toutes les tables de
+// relations sans argument ; code de sortie 1 si un écart est trouvé, 2 sur une erreur.
 #include <cstdlib>
 #include <iostream>
 #include <map>
@@ -92,20 +95,25 @@ bool check(Connection& conn, const std::string& name) {
     constexpr uint64_t slice = 500;
     auto sliceQuery = [&](const std::string& label, bool forwardSide, uint64_t from) {
         const std::string node = forwardSide ? "a" : "b";
-        return "MATCH (" + node + ":`" + label + "`) WHERE offset(id(" + node + ")) >= " + std::to_string(from) +
-               " AND offset(id(" + node + ")) < " + std::to_string(from + slice) + " MATCH (a)-[r:`" + name +
-               "`]->(b) RETURN id(r), " + projection + ";";
+        return "MATCH (" + node + ":`" + label + "`) WHERE offset(id(" + node +
+               ")) >= " + std::to_string(from) + " AND offset(id(" + node + ")) < " +
+               std::to_string(from + slice) + " MATCH (a)-[r:`" + name + "`]->(b) RETURN id(r), " +
+               projection + ";";
     };
-    auto read = [&](const std::set<std::string>& labels, bool forwardSide, std::multimap<std::string, Reading>& out) {
+    auto read = [&](const std::set<std::string>& labels, bool forwardSide,
+                    std::multimap<std::string, Reading>& out) {
         for (auto& label : labels) {
             const std::string node = forwardSide ? "a" : "b";
-            // Le compte d'abord : sur une étiquette vide, max(offset) est NULL (relevé d'hotfixs) ; zéro tranche.
-            auto top = rows(conn, "MATCH (" + node + ":`" + label + "`) RETURN count(*), max(offset(id(" + node + ")));");
+            // Le compte d'abord : sur une étiquette vide, max(offset) est NULL (relevé d'hotfixs) ;
+            // zéro tranche.
+            auto top = rows(conn, "MATCH (" + node + ":`" + label +
+                                      "`) RETURN count(*), max(offset(id(" + node + ")));");
             if (top.empty() || top[0][0] == "0") {
                 continue;
             }
             if (showPlans) {
-                std::cout << "    plan " << (forwardSide ? "avant" : "arrière") << " depuis " << label << " :\n";
+                std::cout << "    plan " << (forwardSide ? "avant" : "arrière") << " depuis "
+                          << label << " :\n";
                 for (auto& line : rows(conn, "EXPLAIN " + sliceQuery(label, forwardSide, 0))) {
                     std::cout << "      " << line[0] << "\n";
                 }
@@ -181,10 +189,10 @@ bool check(Connection& conn, const std::string& name) {
         gap = gap || g > 0;
     }
     std::cout << name << " : " << fromLabels.size() << " étiquettes sources, " << toLabels.size()
-              << " destinations ; lectures avant " << forward.size() << ", arrière " << backward.size()
-              << (gap ? " — ÉCART" : " — égales") << "\n";
-    std::cout << "    comptes : avant " << forwardIds.size() << ", arrière " << backwardIds.size() << ", union "
-              << unionIds.size() << ", perdues d'un seul sens " << lost << "\n";
+              << " destinations ; lectures avant " << forward.size() << ", arrière "
+              << backward.size() << (gap ? " — ÉCART" : " — égales") << "\n";
+    std::cout << "    comptes : avant " << forwardIds.size() << ", arrière " << backwardIds.size()
+              << ", union " << unionIds.size() << ", perdues d'un seul sens " << lost << "\n";
     if (oneSide > 0) {
         std::cout << "    " << oneSide << " relations d'un seul côté\n";
     }

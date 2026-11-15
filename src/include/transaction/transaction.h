@@ -2,8 +2,8 @@
 
 #include <atomic>
 #include <functional>
-#include <unordered_set>
 #include <mutex>
+#include <unordered_set>
 #include <vector>
 
 #include "common/types/types.h"

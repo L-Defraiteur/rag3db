@@ -278,8 +278,8 @@ void Checkpointer::logCheckpointAndApplyShadowPages() {
         fprintf(stderr,
             "[checkpoint-profile]   cles-primaires (%lu index) : attente-exclusif=%.1f ms "
             "tenu=%.1f ms (application=%.1f publication=%.1f)\n",
-            static_cast<unsigned long>(pkIndexes.size()), lockWaitMs, applyMs + publishMs,
-            applyMs, publishMs);
+            static_cast<unsigned long>(pkIndexes.size()), lockWaitMs, applyMs + publishMs, applyMs,
+            publishMs);
     }
 }
 

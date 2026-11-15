@@ -97,8 +97,13 @@ fn build_bundled_cmake() -> Vec<PathBuf> {
     // si la source n'a aucun commit ; sans cela l'identifiant dirait « nogit »,
     // une marque que deux commits différents partageraient (11 octobre 2026).
     if cfg!(windows) && !rag3db_root.is_symlink() {
-        if let Ok(repo) = std::path::absolute(Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("../..")) {
-            build.define("RAG3DB_BUILD_ID_GIT_DIR", repo.to_string_lossy().replace('\\', "/"));
+        if let Ok(repo) = std::path::absolute(
+            Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("../.."),
+        ) {
+            build.define(
+                "RAG3DB_BUILD_ID_GIT_DIR",
+                repo.to_string_lossy().replace('\\', "/"),
+            );
         }
     }
     // GCC 13+ a resserré les includes transitifs : <memory>, <string> etc. ne
@@ -125,7 +130,10 @@ fn build_bundled_cmake() -> Vec<PathBuf> {
     let build_dir = build.build();
 
     let rag3db_lib_path = build_dir.join("build").join("src");
-    println!("cargo:rustc-link-search=native={}", rag3db_lib_path.display());
+    println!(
+        "cargo:rustc-link-search=native={}",
+        rag3db_lib_path.display()
+    );
 
     for dir in [
         "utf8proc",
@@ -230,11 +238,17 @@ fn main() {
     // (rag3weaver, page 07-le-magasin-de-libs, 11 octobre 2026).
     println!("cargo:rerun-if-env-changed=RAG3DB_LIBRARY_DIR");
     println!("cargo:rerun-if-env-changed=RAG3DB_INCLUDE_DIR");
-    if let (Ok(rag3db_lib_dir), Ok(rag3db_include)) =
-        (env::var("RAG3DB_LIBRARY_DIR"), env::var("RAG3DB_INCLUDE_DIR"))
-    {
+    if let (Ok(rag3db_lib_dir), Ok(rag3db_include)) = (
+        env::var("RAG3DB_LIBRARY_DIR"),
+        env::var("RAG3DB_INCLUDE_DIR"),
+    ) {
         println!("cargo:rerun-if-changed={rag3db_include}/rag3db.hpp");
-        for lib in ["librag3db.so", "librag3db.dylib", "rag3db_shared.lib", "librag3db.a"] {
+        for lib in [
+            "librag3db.so",
+            "librag3db.dylib",
+            "rag3db_shared.lib",
+            "librag3db.a",
+        ] {
             let path = Path::new(&rag3db_lib_dir).join(lib);
             if path.exists() {
                 println!("cargo:rerun-if-changed={}", path.display());

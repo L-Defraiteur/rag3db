@@ -81,7 +81,8 @@ bool PrimaryKeyScanNodeTable::getNextTupleFromList(ExecutionContext* context) {
             continue;
         }
         const auto nodeID = nodeID_t{nodeOffset, table.getTableID()};
-        const auto outPos = scanState->nodeIDVector->state->getSelVector().getSelectedPositions()[0];
+        const auto outPos =
+            scanState->nodeIDVector->state->getSelVector().getSelectedPositions()[0];
         scanState->nodeIDVector->setValue<nodeID_t>(outPos, nodeID);
         tableInfo.initScanState(*scanState, outVectors, context->clientContext);
         table.initScanState(transaction, *scanState, nodeID.tableID, nodeOffset);

@@ -2171,8 +2171,7 @@ TEST_F(VectorIndexCreateUnderManyWriters, AWriterOpenDuringACreateFinishesWithou
         created = result->isSuccess() ? "OK" : result->getErrorMessage();
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    auto r = writer.query(
-        stringFormat("MATCH (n:C {id: 5}) SET n.vec = {};", movedRowVector(5)));
+    auto r = writer.query(stringFormat("MATCH (n:C {id: 5}) SET n.vec = {};", movedRowVector(5)));
     EXPECT_TRUE(r->isSuccess()) << "[check: an-index-retries-no-writer] " << r->getErrorMessage();
     auto commit = writer.query("COMMIT;");
     EXPECT_TRUE(commit->isSuccess()) << commit->getErrorMessage();
