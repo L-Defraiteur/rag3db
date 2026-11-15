@@ -1,6 +1,6 @@
 # Une passe en file sous `poste lourd` disparaît sans trace à luciepc
 
-- **État** : ouvert (15 novembre 2026, hotfixs)
+- **État** : fermé (15 novembre 2026, 22 h, hotfixs) : faux constat. Les passes ne disparaissaient pas, elles écrivaient ailleurs : le dossier des journaux était passé en chemin absolu à `passe_epinglee.sh`, qui le préfixe.
 - **Famille** : produit
 - **Gravité** : une passe perdue sans rien dire. Le lot attend un verdict qui ne vient jamais, et la file avance sans
   lui.
@@ -53,7 +53,22 @@ c7 soupçonnait logind (KillUserProcesses). Relevé à luciepc :
 logind ne tue donc pas les processus d'une session fermée, et la cause reste ouverte. La règle de l'unité
 `systemd-run --user` reste en vigueur.
 
-## Pour fermer
+## La cause : le chemin des journaux (15 nov., 22 h)
+
+L'erreur était au lancement, pas dans `poste`. `passe_epinglee.sh` fait `J=$HOME/.cache/rag3weaver-build/$2`, et je lui
+passais `/home/lucied/.cache/rag3weaver-build/journaux-hotfixs-extension-dite`. Il a donc écrit son `resume.log` sous
+`~/.cache/rag3weaver-build/home/lucied/.cache/rag3weaver-build/journaux-hotfixs-extension-dite/`, pendant que je lisais
+le dossier d'à côté, resté vide. C'est l'unité systemd qui l'a montré : sortie en code 1, pas de signal ; scope
+`timeout 7200 ./passe_epinglee.sh` démarré à 21 h 55 min 11,21 s, fini à 11,39 s.
+
+Le verdict qu'elle a écrit : `ROUGE validation : aucun plafond effectif <= 32 Gio`.
+`scripts/confiner_validation.py` refuse le `MemoryMax=40G` que `poste lourd` pose par défaut. Il faut lancer la passe
+sous `POSTE_MEM_MAX=32G`, comme le font les autres sessions. C'est un piège de l'outil (le défaut de `poste` dépasse le
+plafond exigé par la validation), mais pas une disparition.
+
+Relancée à 21 h 58 dans l'unité `hotfixs-extension-dite-2`, sous `POSTE_MEM_MAX=32G`, avec le dossier en chemin relatif.
+
+
 
 1. La cause : qui tue un `poste lourd` en attente (le SIGHUP, la garde des worktrees, un ménage de la file), lue sur
    un cas reproduit, par exemple un `poste lourd sleep` en file lancé par un ssh puis fermé.
