@@ -932,3 +932,20 @@ fn une_variante_d_enum_ne_va_pas_a_un_homonyme() {
     let cat = catalog.lock().unwrap();
     assert_eq!(marques_vers(&cat, "cellule", "Float"), Vec::<String>::new(), "la variante Value::Float n'est pas le struct Float");
 }
+
+/// **Une méthode du projet sur une locale sans type lu garde son lien par le nom** (c7, 15 novembre
+/// 2026) : seule une méthode de la bibliothèque standard (`data/std_methods`) s'abstient entre
+/// fichiers. `n.aller()` va à la seule `aller` du projet, marquée « nom ».
+#[test]
+#[ignore]
+fn une_methode_du_projet_sur_une_locale_sans_type_garde_son_lien_par_le_nom() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/ctx.rs".to_string(), "pub struct PortValue;\npub struct NodeContext;\nimpl NodeContext {\n    pub fn take_input(&mut self, n: &str) -> Option<PortValue> { None }\n}\npub fn conv<T>(p: PortValue) -> Option<T> { None }\n".to_string()),
+        ("src/parcours.rs".to_string(), "use crate::ctx::{conv, NodeContext};\npub fn parcours(ctx: &mut NodeContext) -> Option<()> {\n    let n = ctx.take_input(\"n\").and_then(|pv| conv::<crate::nav::Navigateur>(pv))?;\n    n.aller();\n    Some(())\n}\n".to_string()),
+        ("src/nav.rs".to_string(), "pub struct Navigateur;\nimpl Navigateur {\n    pub fn aller(&self) {}\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(marques_vers(&cat, "parcours", "aller"), vec!["nom".to_string()], "aller : méthode du projet, liée par le nom");
+}
