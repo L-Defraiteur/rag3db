@@ -1523,3 +1523,14 @@ Suite du [rapport du 13](../13-11-2026/02-rapport-de-session-c7.md), qui court j
   rag3db fait mieux que PostgreSQL sur le lecteur d'instantané ; cinq pistes « plus cool » par rendement
   (verrou à la liaison, recommencement dans le moteur, délai court du DDL, deux versions de schéma, index
   peuplé en fond).
+- **12 h 1x — correction sur /compact** (rappel de Lucie) : la compaction d'un équipier est **l'archiviste**, pas un
+  pas de résumé — la conversation en sections jugées et rangées en fiches par sujet avec leurs L1, le L1
+  « compaction » du hook, les plans clos en L1 « plan », puis le contexte repart de l'identité `agent:<clé>`,
+  de la tâche courante et du rappel. Dit à tty, archi, 96 ; 96 et archi écrivent la conception. Embarquement :
+  A3 sort (le « vert » de 11 h 43 était une course : cubecl ne réserve pas 384 Mo sur llvmpipe, ticket
+  37ea4c439) ; le repli posé reste igpu:0.
+- **Lucie, 12 h 0x — la compaction par l'archiviste, précisée** : il range au fil de la session ; chaque L1 porte le
+  bout de conversation qu'il couvre (source + section = l'identité d'un Apport) ; à la compaction on ne
+  retraite pas ce qui est rangé, seuls les tours non couverts passent par le Decide, et le contexte repart des
+  L1 (identité, tâche, les sujets de la session, les siens en entier, ceux des autres bornés). « Ensuite faut
+  trouver l'intelligence, c'est tout le but de notre recherche. » Conception à 96 et archi.
