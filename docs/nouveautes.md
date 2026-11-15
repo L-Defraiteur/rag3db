@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 15 novembre2026 — Le terminal de l'agent montre ce que l'équipier lit et écrit : chaque appel d'outil numéroté, l'aperçu coloré d'une lecture dans la langue du fichier (un .md en prose, ses blocs de code dans leur langue), une écriture en lignes retirées et ajoutées, les blocs de code de la boîte colorés, et un extrait coupé qui le dit ; Ctrl-O ouvre un appel en grand dans un écran à part, l'historique intact derrière.
+
 - 15 novembre2026 — La saisie du terminal de l'agent s'écrit sur plusieurs lignes : la zone du bas grandit avec elle jusqu'à huit lignes, puis défile autour du curseur ; Maj-Entrée passe à la ligne là où l'émulateur sait la distinguer (kitty, WezTerm, foot, Ghostty), Alt-Entrée partout, et la saisie vide dit lequel. Sous tmux, qui fait de Maj-Entrée une Entrée, le terminal le dit ; ticket ouvert.
 
 - 15 novembre2026 — Le cœur Rust du pont navigateur : le protocole de l'extension Chrome (révision 5 du fork de jackwener/browsermcp), les baux d'onglet et deux gardes avant tout envoi, un onglet rendu à l'humain ne se reprenant que par un nouvel emprunt et les passe-partout restant fermés par défaut — sans extension ni route encore.
