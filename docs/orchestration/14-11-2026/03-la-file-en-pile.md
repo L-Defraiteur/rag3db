@@ -1407,3 +1407,8 @@ CHECKPOINT réussi qui suit des DDL refusés par le pool, les 20 écrivains reç
 jusqu'à l'arrêt) : un état du catalogue pris pour « changé » à jamais, possiblement le lot du verrou de schéma (101ff50a6, sur
 master). Sonde hors dépôt (P1–P4) en cours, verdict dans 20 min ; si c'est le lot, correctif devant la fenêtre de formatage.
 Les hôtes de Lucie sont sur 373b5477b : non exposés.
+96, 16 h 24 : `usage` (1c85fa06e) vert au compte juste (lib 2465/0 ; archiviste 21/21 rejoué seul après le rouge d'environnement
+du 7879 ; compose, memoire_modele, idempotent_registration verts ; banc_fiches_classees NON JOUÉ, banc à services) ;
+banc_etage_qui_perd rouge sur master aussi : 8a931f78d (11 nov.) refuse un changement de search_index sur une entité peuplée
+sans migration déclarée, le banc réenregistre Scope sur la base indexée — ticket chez 96, rien à relâcher. query_chars :
+rouge d'abord poussé (c0e9d8f1b). Arbre : répétition lancée 16 h 20 (binaire figé b2635b1b0, montée 6/6), en file derrière 4 lourds.
