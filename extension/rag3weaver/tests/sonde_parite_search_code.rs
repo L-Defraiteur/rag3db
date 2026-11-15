@@ -341,6 +341,48 @@ fn releve_du_jeu(backend: &rag3weaver::backend::Backend, jeu: &Value, k: usize) 
     releve
 }
 
+/// **Les usages d'un nom, en liste triée** : (fichier, nom de l'appelant) de chaque usage rendu par
+/// l'outil `usages` (format json), quel que soit son genre. Rend la liste et la réponse brute.
+fn usages_de(backend: &rag3weaver::backend::Backend, nom: &str) -> (Vec<(String, String)>, Value) {
+    let brut = backend.call("usages", json!({"name": nom, "format": "json", "limit": 200})).unwrap_or_else(|e| json!({"refus": e}));
+    fn cueillir(v: &Value, sous_usages: bool, out: &mut Vec<(String, String)>) {
+        match v {
+            Value::Object(o) => {
+                if sous_usages {
+                    let chemin = ["path", "file_path", "repo_path"].iter().find_map(|k| o.get(*k).and_then(Value::as_str));
+                    let qui = ["name", "caller", "qualified_name"].iter().find_map(|k| o.get(*k).and_then(Value::as_str));
+                    if let (Some(c), Some(n)) = (chemin, qui) {
+                        out.push((c.to_string(), n.to_string()));
+                    }
+                }
+                for (k, x) in o {
+                    cueillir(x, sous_usages || k == "usages", out);
+                }
+            }
+            Value::Array(a) => a.iter().for_each(|x| cueillir(x, sous_usages, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    cueillir(&brut, false, &mut out);
+    out.sort();
+    out.dedup();
+    (out, brut)
+}
+
+/// Les hash de contenu de tous les Scope, par (fichier, nom) : de quoi dire quels scopes un index a
+/// changés.
+fn hash_des_scopes(backend: &rag3weaver::backend::Backend) -> std::collections::BTreeMap<(String, String), std::collections::BTreeSet<String>> {
+    let conn = backend.catalog.lock().unwrap().conn_arc();
+    let r = conn.execute("MATCH (s:Scope) RETURN s.file_path, s.name, s._content_hash").expect("les hash des Scope");
+    let mut m: std::collections::BTreeMap<(String, String), std::collections::BTreeSet<String>> = Default::default();
+    for l in &r.rows {
+        let t = |i: usize| l.get(i).and_then(|v| v.as_str()).unwrap_or("").to_string();
+        m.entry((t(0), t(1))).or_default().insert(t(2));
+    }
+    m
+}
+
 /// **Un index de la source, attendu jusqu'à sa dernière ligne** : « indexation terminée » dans le
 /// journal que l'appel désigne. Rend les dernières lignes du journal.
 fn indexer_et_attendre(backend: &rag3weaver::backend::Backend, etape: &str) -> String {
@@ -404,6 +446,7 @@ fn releve_les_reponses_apres_une_reindexation_publiee() {
     };
     let avant = releve_du_jeu(&backend, &jeu, k);
     ecrire(&format!("{}.avant.json", sortie.to_string_lossy()), &avant, json!({}));
+    let hash_avant = hash_des_scopes(&backend);
     let fin_index = indexer_et_attendre(&backend, "source entière");
     // <publication>
     let publication = {
@@ -424,5 +467,39 @@ fn releve_les_reponses_apres_une_reindexation_publiee() {
         eprintln!("[parité] génération {g}");
     }
     let apres = releve_du_jeu(&backend, &jeu, k);
-    ecrire(&sortie.to_string_lossy(), &apres, json!({"publication": publication, "generations": generations, "fin_index": fin_index}));
+    // **Les usages de noms dont le scope a changé** (au mot d'ED, 15 nov.) : cinq noms dont un scope
+    // porte après l'index un contenu absent d'avant, et qui ont un appelant hors de leur fichier, ceux
+    // d'`arbre.rs` d'abord. Le premier relevé (le parent) les choisit et les écrit dans
+    // `RAG3WEAVER_PARITE_USAGES_NOMS` ; les suivants relisent ce fichier : les mêmes noms partout.
+    let fichier_noms = std::env::var("RAG3WEAVER_PARITE_USAGES_NOMS").unwrap_or_else(|_| format!("{}.noms", sortie.to_string_lossy()));
+    let noms: Vec<String> = match std::fs::read_to_string(&fichier_noms) {
+        Ok(t) => t.lines().map(str::to_string).filter(|l| !l.is_empty()).collect(),
+        Err(_) => {
+            let hash_apres = hash_des_scopes(&backend);
+            let mut changes: Vec<(String, String)> = hash_apres.iter()
+                .filter(|(cle, h)| hash_avant.get(*cle).is_some_and(|a| h.iter().any(|x| !a.contains(x))))
+                .map(|(cle, _)| cle.clone()).collect();
+            changes.sort_by_key(|(f, n)| (!f.ends_with("arbre.rs"), f.clone(), n.clone()));
+            eprintln!("[parité] scopes changés par l'index : {}", changes.len());
+            let mut pris = Vec::new();
+            for (f, n) in changes {
+                if pris.len() == 5 || n.is_empty() || pris.contains(&n) {
+                    continue;
+                }
+                let (u, _) = usages_de(&backend, &n);
+                if u.iter().any(|(c, _)| !c.ends_with(&f) && !f.ends_with(c.as_str())) {
+                    pris.push(n);
+                }
+            }
+            std::fs::write(&fichier_noms, pris.join("\n") + "\n").expect("écrire les noms");
+            pris
+        }
+    };
+    let mut usages = serde_json::Map::new();
+    for n in &noms {
+        let (liste, brut) = usages_de(&backend, n);
+        eprintln!("[parité] usages de {n} : {} appelants", liste.len());
+        usages.insert(n.clone(), json!({"liste": liste, "brut": brut}));
+    }
+    ecrire(&sortie.to_string_lossy(), &apres, json!({"publication": publication, "generations": generations, "fin_index": fin_index, "usages": usages}));
 }
