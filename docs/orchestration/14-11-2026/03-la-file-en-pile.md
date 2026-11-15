@@ -1683,3 +1683,5 @@ Cœur, 19 h 02 : **verdict de l'alerte** — aucun tour bloqué depuis le tour 7
 tour bloqué sur 27 sur ee598e074 ; rare, cause non lue ; ticket ouvert avec l'établi et la sonde (f32b0687f) ; pas de garde sans la
 cause. La lib peut basculer. Le lot du SIGSEGV (ee598e074, vert : transaction_test 387, ×10 sans SIGSEGV) se repose sur master
 (le format est atterri) ; « à toi » après le hash de la pose.
+Archi, 19 h 03 : le correctif de l'invite tient (Gemini 4/4, le report dit ce qui est écrit) ; repose sur master sous socle-branchement-3,
+témoins, rejeu court, push au vert vers 19 h 20. 96 et archi poussent dans la même fenêtre, sérialisés par poste push.
