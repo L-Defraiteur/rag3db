@@ -88,10 +88,9 @@ automatique ; 2 000 à 4 000 écritures d'une ligne ; le pool relevé par
 
 - Le même coût à une connexion et à vingt, avec ou sans table de relations, à 2 ou à 8 fils.
 - Le CHECKPOINT rend tout (le pool revient à 37 Mio).
-- **Un écart non expliqué** : la toute première sonde (une colonne `n INT64` en plus, les SET joués
-  dans l'ordre INT64, STRING, FLOAT[64]) mesurait +4 Kio pour 4 000 SET de chaque sorte. Les sondes
-  suivantes, au montage proche, mesurent les coûts ci-dessus, de façon répétable. L'écart reste à
-  comprendre avant le correctif.
+- **L'écart avec la toute première sonde, expliqué** : son COPY échouait (« Copy exception: Found
+  NULL, which violates the non-null constraint of the primary key column »), sa table était vide
+  (0 ligne), et ses SET ne modifiaient rien : d'où +4 Kio. Les mesures ci-dessus sont les bonnes.
 
 **La lecture** : de l'ordre de 25 Ko de pool pour 256 octets de donnée ressemble à des tampons
 d'une mise à jour arrondis à la page. Sous vingt écrivains à 42 Ko par écriture, 2 Gio sont pleins
@@ -104,3 +103,24 @@ ouvertes.
 - (a) une mise à jour garde un tampon à sa taille, et non à la page ;
 - (b) le point de reprise automatique se déclenche aussi sur la pression du pool, et non sur le seul
   journal.
+
+## La cause (15 novembre 2026, cœur c++)
+
+Lue dans `UpdateInfo::update` (`src/storage/table/update_info.cpp`). Chaque transaction qui met à
+jour une ligne déjà écrite crée une version du vecteur de 2 048 lignes de cette ligne
+(`VectorUpdateInfo`, chaînée aux versions d'avant jusqu'au point de reprise). Son tampon naissait à
+pleine capacité (`DEFAULT_VECTOR_CAPACITY`, 2 048 lignes) pour une seule ligne changée. Les petites
+allocations passent par `MemoryManager::mallocBuffer`, à leur taille exacte, que le pool réserve :
+une version gardait donc 2 048 lignes de pool. Cela donne 8,5 Ko pour une chaîne (2 048 × 4 octets
+de positions) et 25 Ko pour un FLOAT[64].
+
+**Le correctif** (branche `mise-a-jour-a-sa-taille`) : la version naît à 4 lignes et double à la
+demande, jusqu'au vecteur entier.
+
+**Le témoin** `UpdateMemory` (`test/transaction/update_memory_test.cpp`) : le pool gardé par mise à
+jour d'une ligne, sous 4 Kio pour un FLOAT[64] et sous 1 Kio pour une chaîne ; et une mise à jour
+d'un vecteur entier relue avant et après une réouverture. Rouge sur `abc5117fd` : 25 136 et
+8 528 octets. Vert sur `ec7a0bf30`, `transaction_test` entier vert (390).
+
+**(b), le point de reprise sous la pression du pool**, ne s'ajoute que si les ×10 de
+`DdlEveryMinute` le demandent, avec sa mesure (c7).
