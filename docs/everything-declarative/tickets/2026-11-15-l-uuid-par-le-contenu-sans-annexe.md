@@ -57,4 +57,4 @@ Oui, avec deux gardes qui règlent le point 1 :
 - **Les arêtes** gardent leur cible tant qu'elles n'ont pas de prédicat de génération à elles ; le jour où
   elles en ont, une arête née à g+1 entre deux lignes descendues descend avec elles, sous la même garde.
 
-arbre principal l'écrira en § 9 bis de sa page 03 de 2a′-3 si c7 dit oui.
+c7 a tranché (15 novembre, 20 h) : 2a′-3 se code sur (2) ; cette variante est un ticket à prouver, pas un préalable, et la page 03 d'arbre principal ne la porte pas.
