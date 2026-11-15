@@ -518,7 +518,7 @@ void RelTable::pushInsertInfo(const Transaction* transaction, RelDataDirection d
     getDirectedTableData(direction)->pushInsertInfo(transaction, nodeGroup, numRows_, source);
 }
 
-void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntry,
+void RelTable::commit(main::ClientContext* context, TableCatalogEntry* /*tableEntry*/,
     LocalTable* localTable) {
     auto& localRelTable = localTable->cast<LocalRelTable>();
     if (localRelTable.isEmpty()) {

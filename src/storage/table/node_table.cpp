@@ -866,7 +866,7 @@ DataChunk NodeTable::constructDataChunkForColumns(const std::vector<column_id_t>
     return constructDataChunk(memoryManager, std::move(types));
 }
 
-void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntry,
+void NodeTable::commit(main::ClientContext* context, TableCatalogEntry* /*tableEntry*/,
     LocalTable* localTable) {
     const auto startNodeOffset = nodeGroups->getNumTotalRows();
     auto& localNodeTable = localTable->cast<LocalNodeTable>();
