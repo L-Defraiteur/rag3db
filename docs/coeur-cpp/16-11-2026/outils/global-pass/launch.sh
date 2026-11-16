@@ -6,4 +6,4 @@ out="$HOME/.cache/rag3weaver-build/cx-dictionary-global-01"
 # entry.py reads that effective quota and applies the same bound to the private native child unit.
 unset POSTE_CPU_QUOTA POSTE_FILS POSTE_LOURDS_MAX POSTE_COEURS_LIBRES
 POSTE_MEM_MAX=32G POSTE_SWAP_MAX=0 exec "$HOME/.cache/rag3weaver-build/poste" lourd \
- /usr/bin/python3 "$out/entry.py" "$out"
+ /usr/bin/timeout --signal=TERM --kill-after=10s 10790s /usr/bin/python3 "$out/entry.py" "$out"

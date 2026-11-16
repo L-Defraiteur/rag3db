@@ -1,0 +1,19 @@
+{
+  "cpu_only": true,
+  "native_run": false,
+  "systemd_unit_invoked": false,
+  "old_revision": "f3190da3d47559822bfae238e9400b9621ed4eeb",
+  "old_drop_pool_prefix_wrongly_accepted": true,
+  "new_drop_pool_prefix_rejected": true,
+  "old_preflight_exit": 1,
+  "old_preflight_final_red": false,
+  "new_preflight_exit": 1,
+  "new_preflight_final_red": true,
+  "new_preflight_first_refusal": {
+    "stage": "execution",
+    "type": "FileNotFoundError",
+    "message": "[Errno 2] No such file or directory: '/tmp/tmpu0gpko70/after/missing.py'",
+    "elapsed_s": 0.0001547900028526783,
+    "retry": false
+  }
+}

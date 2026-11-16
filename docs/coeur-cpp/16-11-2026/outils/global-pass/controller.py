@@ -13,7 +13,7 @@ import time
 import xml.etree.ElementTree as ET
 
 from parse_receipt import (DROP_CASE, excluded_scope, inspect_outcomes,
-                           inspect_raw_identities, verify_attestation)
+                           inspect_raw_identities, parse_gtest_inventory, verify_attestation, verify_e2e_partition)
 
 scratch, out, reference = map(Path, sys.argv[1:4])
 jobs, deadline = int(sys.argv[4]), float(sys.argv[5])
@@ -24,7 +24,7 @@ process = None
 started = time.monotonic()
 marker = None
 raw = out/'raw'
-for name in ['configure','build','offsets','transaction','known-red','strings','e2e','artifacts','parsing','staging']:
+for name in ['configure','build','offsets','transaction','known-red','strings','e2e-inventory','e2e-positive','e2e-drop','artifacts','parsing','staging']:
     (raw/name).mkdir(parents=True,exist_ok=True)
 (out/'base').write_text(r['base']+'\n')
 (out/'resume.log').write_text('commit '+r['source_commit']+'\n')
@@ -36,16 +36,47 @@ def sha(path):
     with path.open('rb') as f:
         return hashlib.file_digest(f,'sha256').hexdigest()
 
+def group_exists(group):
+    try:
+        os.killpg(group,0)
+        return True
+    except ProcessLookupError:
+        return False
+
+
+def cgroup_pids():
+    return {int(x) for x in (cgp/'cgroup.procs').read_text().split()}
+
+
 def finish_child():
-    if process is not None and process.poll() is None:
-        os.killpg(process.pid,signal.SIGTERM)
+    if process is None:
+        return False
+    residue=process.poll() is not None and group_exists(process.pid)
+    if group_exists(process.pid):
         try:
-            process.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid,signal.SIGKILL);process.wait(timeout=3)
+            os.killpg(process.pid,signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        end=time.monotonic()+3
+        while group_exists(process.pid) and time.monotonic()<end:
+            process.poll()  # Reap an exited leader before interpreting killpg(0).
+            if not group_exists(process.pid):
+                break
+            time.sleep(.05)
+        if group_exists(process.pid):
+            try:
+                os.killpg(process.pid,signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+    if process.poll() is None:
+        process.wait(timeout=3)
+    return residue
+
 
 def run(argv, label, seconds, env=None, allowed=(0,), attestation=False, cwd=None):
     global process
+    process=None
+    baseline_pids=cgroup_pids()
     directory=raw/label
     directory.mkdir(parents=True,exist_ok=True)
     remaining=deadline-time.monotonic()
@@ -76,14 +107,23 @@ def run(argv, label, seconds, env=None, allowed=(0,), attestation=False, cwd=Non
         except subprocess.TimeoutExpired:
             timed_out=True;finish_child();code=process.returncode
         finally:
+            group_residue=finish_child()
+            settle=time.monotonic()+3
+            remaining_pids=cgroup_pids()-baseline_pids
+            while remaining_pids and time.monotonic()<settle:
+                time.sleep(.05)
+                remaining_pids=cgroup_pids()-baseline_pids
             if root_file is not None:
                 root_file.close()
             write(directory/'exit.json',{'code':process.returncode if process else None,
                   'timeout':timed_out,'pid':process.pid if process else None,
+                  'group_residue_after_leader':group_residue,'remaining_phase_pids':sorted(remaining_pids),
                   'waited':process is not None and process.poll() is not None,
                   'elapsed_s':time.monotonic()-begin})
     if timed_out:
         raise TimeoutError(label)
+    if group_residue or remaining_pids:
+        raise RuntimeError(label+' left attributed descendants')
     if code not in allowed:
         raise RuntimeError(label+' returned '+str(code))
     return code
@@ -124,7 +164,9 @@ try:
     for d in [build,tmp,home]:d.mkdir()
     os.environ.update({'HOME':str(home),'TMPDIR':str(tmp),'GIT_OPTIONAL_LOCKS':'0',
                        'GIT_TERMINAL_PROMPT':'0','GIT_ALLOW_PROTOCOL':'file','CCACHE_DISABLE':'1',
-                       'CMAKE_BUILD_PARALLEL_LEVEL':str(jobs)})
+                       'CMAKE_BUILD_PARALLEL_LEVEL':str(jobs),'GIT_CONFIG_COUNT':'2',
+                       'GIT_CONFIG_KEY_0':'gc.auto','GIT_CONFIG_VALUE_0':'0',
+                       'GIT_CONFIG_KEY_1':'maintenance.auto','GIT_CONFIG_VALUE_1':'false'})
     run(['git','clone','--shared','--no-checkout',str(reference),str(source)],'staging/clone',60)
     run(['git','-C',str(source),'fetch',str(out/'source.bundle'),r['source_ref']],'staging/fetch',60)
     run(['git','-C',str(source),'checkout','--detach',r['source_commit']],'staging/checkout',60)
@@ -179,10 +221,12 @@ try:
     for name in ['offsets','transaction','concurrence','e2e','vector','geo']:
         assert marker.encode() in files[name].read_bytes()
     results={}
+    identities={}
     phase='offsets'
     run(confined([str(files['offsets']),'--gtest_filter=DictionaryAppendException.OffsetAllocationFailureKeepsExistingStringsUnchanged',
                   '--gtest_color=no','--gtest_output=xml:'+str(raw/'offsets/result.xml')],True),
         'offsets',30,env=test_env,attestation=True)
+    identities['offsets']=inspect_raw_identities(raw/'offsets/stdout.log',marker)
     results['offsets']=inspect_outcomes(raw/'offsets/result.xml','offsets')
     assert results['offsets']['executed']==1
     results['attestation']=verify_attestation(raw/'offsets/stdout.log',out/'attestation.log',marker)
@@ -190,6 +234,7 @@ try:
     run(confined([str(files['transaction']),'--gtest_color=no','--gtest_fail_fast',
                   '--gtest_output=xml:'+str(raw/'transaction/result.xml')],True),
         'transaction',2400,env=test_env)
+    identities['transaction']=inspect_raw_identities(raw/'transaction/stdout.log',marker)
     results['transaction']=inspect_outcomes(raw/'transaction/result.xml','transaction')
     phase='known-red'
     # ctest needs to write discovery/result files under the private build; the actual
@@ -201,6 +246,7 @@ try:
     finally:
         for path in (build/'test/transaction/concurrence').glob('concurrence_test_result*'):
             if path.is_file():shutil.copy2(path,raw/'known-red'/path.name)
+    identities['known-red']=inspect_raw_identities(raw/'known-red/concurrence_test_result.json.log',marker)
     native=raw/'known-red/concurrence_test_result.json'
     result=json.loads(native.read_text())
     executed=[]
@@ -220,22 +266,35 @@ try:
     run(confined([str(files['concurrence']),'--gtest_filter=StringRewriteAcrossAddColumn.*',
                   '--gtest_color=no','--gtest_fail_fast','--gtest_output=xml:'+str(raw/'strings/result.xml')],True),
         'strings',600,env=test_env)
+    identities['strings']=inspect_raw_identities(raw/'strings/stdout.log',marker)
     results['strings']=inspect_outcomes(raw/'strings/result.xml','strings')
     assert results['strings']['executed']==3
-    phase='e2e'
-    e2e_code=run(confined([str(files['e2e']),"--gtest_filter=*",'--gtest_color=no',
-                          '--gtest_output=xml:'+str(raw/'e2e/result.xml')],True),
-                 'e2e',1800,env=test_env,allowed=(0,1))
-    text=(raw/'e2e/stdout.log').read_text()
-    start=text.find('[ RUN      ] '+DROP_CASE)
-    finish=text.find('[ RUN      ] ',start+1) if start>=0 else -1
-    drop_text=text[start:finish if finish>=0 else len(text)] if start>=0 else ''
-    results['e2e']=inspect_outcomes(raw/'e2e/result.xml','e2e',drop_text)
-    assert e2e_code==bool(results['e2e']['historical_failure_exceptions'])
-    identities={}
-    for label in ['offsets','transaction','known-red','strings','e2e']:
-        log=raw/label/('concurrence_test_result.json.log' if label=='known-red' else 'stdout.log')
-        identities[label]=inspect_raw_identities(log,marker)
+    e2e_end=min(time.monotonic()+1800,deadline-10)
+    phase='e2e-inventory'
+    run(confined([str(files['e2e']),'--gtest_filter=*','--gtest_list_tests','--gtest_color=no'],True),
+        'e2e-inventory',min(30,e2e_end-time.monotonic()),env=test_env)
+    identities['e2e-inventory']=inspect_raw_identities(raw/'e2e-inventory/stdout.log',marker)
+    expected_cases=parse_gtest_inventory((raw/'e2e-inventory/stdout.log').read_text())
+    write(raw/'parsing/e2e-inventory.json',sorted(expected_cases))
+    phase='e2e-positive'
+    run(confined([str(files['e2e']),'--gtest_filter=*-'+DROP_CASE,'--gtest_color=no',
+                  '--gtest_fail_fast','--gtest_output=xml:'+str(raw/'e2e-positive/result.xml')],True),
+        'e2e-positive',e2e_end-time.monotonic(),env=test_env)
+    identities['e2e-positive']=inspect_raw_identities(raw/'e2e-positive/stdout.log',marker)
+    results['e2e-positive']=inspect_outcomes(raw/'e2e-positive/result.xml','e2e-positive')
+    positive_cases=[x.get('classname')+'.'+x.get('name') for x in ET.parse(raw/'e2e-positive/result.xml').getroot().iter('testcase')]
+    assert len(positive_cases)==len(set(positive_cases))
+    assert set(positive_cases)==expected_cases-{DROP_CASE}
+    phase='e2e-drop'
+    drop_code=run(confined([str(files['e2e']),'--gtest_filter='+DROP_CASE,'--gtest_color=no',
+                           '--gtest_output=xml:'+str(raw/'e2e-drop/result.xml')],True),
+                  'e2e-drop',e2e_end-time.monotonic(),env=test_env,allowed=(0,1))
+    identities['e2e-drop']=inspect_raw_identities(raw/'e2e-drop/stdout.log',marker)
+    drop_text=(raw/'e2e-drop/stdout.log').read_text()
+    results['e2e-drop']=inspect_outcomes(raw/'e2e-drop/result.xml','e2e',drop_text)
+    assert drop_code==bool(results['e2e-drop']['historical_failure_exceptions'])
+    drop_cases=[x.get('classname')+'.'+x.get('name') for x in ET.parse(raw/'e2e-drop/result.xml').getroot().iter('testcase')]
+    results['e2e-union']=verify_e2e_partition(expected_cases,positive_cases,drop_cases)
     for name,path in files.items():assert sha(path)==inventory[name]['sha256']
     assert not subprocess.check_output(['git','-C',str(source),'status','--porcelain'])
     write(raw/'parsing/receipt.json',{'source':actual,'engine':r['engine_commit'],'results':results,

@@ -1,0 +1,12 @@
+{
+  "cpu_only": true,
+  "native_run": false,
+  "tests": 6,
+  "passed": 5,
+  "failed_test": "test_real_controller_timeout_reaps_its_own_process",
+  "observed_elapsed_s": 3.1554414150305092,
+  "assertion": "elapsed_s < 2",
+  "controller_sha256_before_fix": "e1b2f2e02a3e006dcdddb60da331e9f37e63941752b33699ee50ef4767552131",
+  "diagnosis": "TERM completed but unreaped leader kept process-group observable during3s loop; poll leader during group cleanup",
+  "helpers_reaped": true
+}

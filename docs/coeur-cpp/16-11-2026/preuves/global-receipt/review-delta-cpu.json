@@ -1,0 +1,20 @@
+{
+  "cpu_only": true,
+  "native_run": false,
+  "systemd_unit_invoked": false,
+  "parse_tests": 13,
+  "supervision_tests": 6,
+  "parse_failures": 0,
+  "supervision_failures": 0,
+  "scripts": {
+    "entry.py": "da4cdd6858b8ab04abb4fc267909efde620767f5ccbc3dba58ca70050e3b0891",
+    "controller.py": "ad385fcf8ff89f5b81e9cd156ee749b1447aa769478f379951239e9013cae4cc",
+    "parse_receipt.py": "cf17c6bc26a8333129c841782eb5e7c5c00063a9952754c65ab71c7c7022091e",
+    "launch.sh": "467113fe2f82b4dd3786a2a1e3bb94459984210b3963bee844c9f1ba0193dc0b"
+  },
+  "test_files": {
+    "test_parse_receipt.py": "863026822d57c9ab40f6185875de3d9fbff5879140b21e639f40f98badab09a3",
+    "test_supervision.py": "d04e706d25703ca1a18be86a2ab0d7d2be708faf35c41fdb40c20a58cd61cccc"
+  },
+  "limits": "real controller functions extracted from AST; actual tiny child processes for timeout/tee, mock process group for exited leader; real entry preflight abort before any systemctl; real GNU timeout on private TERM-ignoring child, no C++ native/runtime qualification"
+}

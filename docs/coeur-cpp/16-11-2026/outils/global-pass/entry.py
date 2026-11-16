@@ -1,89 +1,193 @@
-"""Enter a private native unit after real poste admission; publish final quiescence."""
-import json
+"""Poste-admitted entry, under an external10800s watchdog including finalization."""
 import hashlib
+import json
 import math
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import time
 
 from parse_receipt import admitted_cpu, verify_attestation
 
-out = Path(sys.argv[1])
-started = time.monotonic()
-raw = out/'raw/driver'
-raw.mkdir(parents=True, exist_ok=True)
-recipe = json.loads((out/'recipe.json').read_text())
-for filename, expected in recipe['scripts'].items():
-    assert hashlib.sha256((out/filename).read_bytes()).hexdigest()==expected
-unit = recipe['unit']+'.service'
-cg = next(x.split(':', 2)[2] for x in Path('/proc/self/cgroup').read_text().splitlines() if x.startswith('0::'))
-cgroup = Path('/sys/fs/cgroup')/cg.lstrip('/')
-quota_text = (cgroup/'cpu.max').read_text().strip()
-cpu=admitted_cpu(quota_text,os.environ['POSTE_FILS'])
-threads=cpu['jobs']
-assert (cgroup/'memory.max').read_text().strip() == '34359738368'
-assert (cgroup/'memory.swap.max').read_text().strip() == '0'
-admission = {'started_monotonic':started,'parent_cgroup':cg,'parent_cpu_max':quota_text,
-             'poste_threads':os.environ['POSTE_FILS'],'build_jobs':threads,
-             'child_cpu_quota_percent':cpu['quota_percent'], 'cap_s':10800}
-(raw/'admission.json').write_text(json.dumps(admission,indent=2)+'\n')
-remaining = 10800-(time.monotonic()-started)
-runtime = min(10790, math.floor(remaining-10))
-assert runtime>0
-scratch = Path.home()/'.cache/rag3weaver-build/cx-coeur-dictionary-global'
-assert scratch.is_dir() and not any(scratch.iterdir())
-cmd = ['systemd-run','--user','--wait','--pipe','--unit='+recipe['unit'],
-       '--property=MemoryMax=34359738368','--property=MemorySwapMax=0',
-       '--property=CPUQuota='+str(admission['child_cpu_quota_percent'])+'%',
-       '--property=RuntimeMaxSec='+str(runtime),'--property=TimeoutStopSec=10',
-       '--property=KillMode=control-group','--property=Nice=19','--property=IOSchedulingClass=idle',
-       'bwrap','--unshare-user','--unshare-net','--ro-bind','/','/','--proc','/proc','--dev','/dev',
-       '--size','34359738368','--tmpfs',str(scratch),'--bind',str(out),str(out),
-       '/usr/bin/env','-i','PATH=/usr/bin:/bin','LANG=C','LC_ALL=C','TZ=UTC',
-       '/usr/bin/python3',str(out/'controller.py'),str(scratch),str(out),
-       str(Path.home()/'git_workspaces/rag3db-colonnes'),str(threads),str(started+10770)]
-(raw/'argv.json').write_text(json.dumps(cmd,indent=2)+'\n')
+out=Path(sys.argv[1])
+started=time.monotonic()
+native_end=started+10730
+final_end=started+10780
+controller_end=started+10710
+unit='cx-coeur-dictionary-global-01.service'
+scratch=Path.home()/'.cache/rag3weaver-build/cx-coeur-dictionary-global'
+raw=out/'raw/driver'
+raw.mkdir(parents=True,exist_ok=True)
+first=None
+invoked=False
 code=1
-try:
-    with (raw/'unit.log').open('wb') as log:
-        code=subprocess.run(cmd,stdout=log,stderr=subprocess.STDOUT,timeout=max(1,10790-(time.monotonic()-started))).returncode
-except subprocess.TimeoutExpired:
-    subprocess.run(['systemctl','--user','stop',unit],timeout=max(1,min(10,10800-(time.monotonic()-started))),check=False)
-    code=124
-state=subprocess.check_output(['systemctl','--user','show',unit,'-p','ActiveState','-p','SubState',
-                              '-p','MainPID','-p','ControlGroup','-p','Result'],text=True)
-(raw/'unit-state.txt').write_text(state)
-fields=dict(x.split('=',1) for x in state.splitlines() if '=' in x)
-quiet=fields.get('MainPID')=='0' and not fields.get('ControlGroup') and fields.get('ActiveState') in ['inactive','failed']
+quiet=False
+state='not started\n'
 remaining_pids=[]
-for command_file in Path('/proc').glob('[0-9]*/cmdline'):
+recipe={}
+process=None
+
+
+def time_left(end, reserve=0):
+    value=end-time.monotonic()-reserve
+    if value<=0:
+        raise TimeoutError('entry deadline')
+    return value
+
+
+def write(path,value):
+    path.write_text(json.dumps(value,indent=2)+'\n')
+
+
+def failure(stage,exc):
+    global first
+    if first is None:
+        first={'stage':stage,'type':type(exc).__name__,'message':str(exc),
+               'elapsed_s':time.monotonic()-started,'retry':False}
+        write(raw/'first-refusal.json',first)
+
+
+def checksum(path):
+    h=hashlib.sha256()
+    with path.open('rb') as stream:
+        while True:
+            time_left(final_end)
+            block=stream.read(1024*1024)
+            if not block:
+                break
+            h.update(block)
+    return h.hexdigest()
+
+
+def command(argv,seconds=3):
+    return subprocess.run(argv,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,
+                          timeout=min(seconds,time_left(final_end)))
+
+
+def observe_unit():
+    result=command(['systemctl','--user','show',unit,'-p','ActiveState','-p','SubState',
+                    '-p','MainPID','-p','ControlGroup','-p','Result'])
+    (raw/'unit-state.txt').write_text(result.stdout)
+    if result.returncode:
+        raise RuntimeError('cannot observe private unit: '+result.stdout)
+    return result.stdout
+
+
+def interrupted(signum,frame):
+    raise TimeoutError('external watchdog requested stop')
+
+
+signal.signal(signal.SIGTERM,interrupted)
+try:
+    recipe=json.loads((out/'recipe.json').read_text())
+    assert recipe['unit']+'.service'==unit
+    for filename,expected in recipe['scripts'].items():
+        assert checksum(out/filename)==expected
+    # Refuse an already-existing unit; cleanup must never stop another invocation.
+    before=command(['systemctl','--user','show',unit,'-p','LoadState'])
+    (raw/'before-unit.txt').write_text(before.stdout)
+    assert 'LoadState=not-found' in before.stdout
+    cg=next(x.split(':',2)[2] for x in Path('/proc/self/cgroup').read_text().splitlines() if x.startswith('0::'))
+    parent=Path('/sys/fs/cgroup')/cg.lstrip('/')
+    quota_text=(parent/'cpu.max').read_text().strip()
+    cpu=admitted_cpu(quota_text,os.environ['POSTE_FILS'])
+    assert (parent/'memory.max').read_text().strip()=='34359738368'
+    assert (parent/'memory.swap.max').read_text().strip()=='0'
+    admission={'started_monotonic':started,'parent_cgroup':cg,'parent_cpu_max':quota_text,
+               'poste_threads':os.environ['POSTE_FILS'],'build_jobs':cpu['jobs'],
+               'child_cpu_quota_percent':cpu['quota_percent'],'cap_s':10800,
+               'native_end_monotonic':native_end,'final_end_monotonic':final_end,
+               'controller_end_monotonic':controller_end}
+    write(raw/'admission.json',admission)
+    assert scratch.is_dir() and not any(scratch.iterdir())
+    runtime=min(10720,math.floor(time_left(native_end,10)))
+    cmd=['systemd-run','--user','--wait','--pipe','--unit='+recipe['unit'],
+         '--property=MemoryMax=34359738368','--property=MemorySwapMax=0',
+         '--property=CPUQuota='+str(cpu['quota_percent'])+'%',
+         '--property=RuntimeMaxSec='+str(runtime),'--property=TimeoutStopSec=10',
+         '--property=KillMode=control-group','--property=Nice=19','--property=IOSchedulingClass=idle',
+         'bwrap','--unshare-user','--unshare-net','--ro-bind','/','/','--proc','/proc','--dev','/dev',
+         '--size','34359738368','--tmpfs',str(scratch),'--bind',str(out),str(out),
+         '/usr/bin/env','-i','PATH=/usr/bin:/bin','LANG=C','LC_ALL=C','TZ=UTC',
+         '/usr/bin/python3',str(out/'controller.py'),str(scratch),str(out),
+         str(Path.home()/'git_workspaces/rag3db-colonnes'),str(cpu['jobs']),str(controller_end)]
+    write(raw/'argv.json',cmd)
+    with (raw/'unit.log').open('wb') as log:
+        process=subprocess.Popen(cmd,stdout=log,stderr=subprocess.STDOUT)
+        invoked=True
+        code=process.wait(timeout=time_left(native_end))
+    if code:
+        raise RuntimeError('private native unit returned '+str(code))
+except BaseException as exc:
+    failure('execution',exc)
+finally:
+    # Reserve finalization time independently of all native phase deadlines.
+    if invoked:
+        try:
+            state=observe_unit()
+            fields=dict(x.split('=',1) for x in state.splitlines() if '=' in x)
+            if fields.get('MainPID')!='0' or fields.get('ControlGroup') or fields.get('ActiveState') not in ['inactive','failed']:
+                stopped=command(['systemctl','--user','stop',unit],10)
+                (raw/'stop-output.txt').write_text(stopped.stdout)
+                state=observe_unit()
+                fields=dict(x.split('=',1) for x in state.splitlines() if '=' in x)
+            quiet=fields.get('MainPID')=='0' and not fields.get('ControlGroup') and fields.get('ActiveState') in ['inactive','failed']
+            if process is not None and process.poll() is None:
+                process.wait(timeout=min(3,time_left(final_end)))
+            for path in Path('/proc').glob('[0-9]*/cmdline'):
+                time_left(final_end)
+                try:
+                    args=path.read_bytes().split(b'\0')
+                    if (args and args[0].startswith(str(scratch/'build').encode())) or str(out/'controller.py').encode() in args:
+                        remaining_pids.append(path.parent.name)
+                except OSError:
+                    pass
+            quiet=quiet and not remaining_pids
+            if not quiet:
+                raise RuntimeError('private native unit not quiescent')
+        except BaseException as exc:
+            quiet=False
+            failure('quiescence',exc)
+    else:
+        quiet=True
     try:
-        args=command_file.read_bytes().split(b'\0')
-        if (args and args[0].startswith(str(scratch/'build').encode())) or str(out/'controller.py').encode() in args:
-            remaining_pids.append(command_file.parent.name)
-    except OSError:
-        pass
-quiet = quiet and not remaining_pids
-receipt={'remaining_attributed_pids':remaining_pids,'unit':state,'quiescent':quiet,'systemd_returncode':code,'elapsed_s':time.monotonic()-started,
-         'cap_s':10800,'cpu_quota_percent':admission['child_cpu_quota_percent'],'jobs':threads}
-(raw/'quiescence.json').write_text(json.dumps(receipt,indent=2)+'\n')
-records=[]
-for path in sorted((out/'raw').rglob('*')):
-    if path.is_file():
-        with path.open('rb') as stream: checksum=hashlib.file_digest(stream,'sha256').hexdigest()
-        records.append({'path':str(path.relative_to(out)),'bytes':path.stat().st_size,'sha256':checksum})
-(out/'raw-inventory.json').write_text(json.dumps(records,indent=2)+'\n')
-accepted=code==0 and quiet and (out/'raw/parsing/receipt.json').is_file()
-if accepted:
-    manifest=json.loads((out/'raw/artifacts/manifest.json').read_text())
-    verify_attestation(out/'raw/offsets/stdout.log',out/'attestation.log',manifest['build_id_header'])
-    for filename, info in manifest['files'].items():
-        with (out/'raw/artifacts'/filename).open('rb') as stream:
-            assert hashlib.file_digest(stream,'sha256').hexdigest()==info['sha256']
-with (out/'resume.log').open('a') as log:
-    for row in records:log.write('RAW '+row['path']+' bytes '+str(row['bytes'])+' sha256 '+row['sha256']+'\n')
-    log.write('quiescence '+json.dumps(receipt)+'\n')
-    log.write('VERT\n' if accepted else 'ROUGE\n')
+        time_left(final_end)
+        accepted=first is None and code==0 and quiet and (out/'raw/parsing/receipt.json').is_file()
+        if accepted:
+            manifest=json.loads((out/'raw/artifacts/manifest.json').read_text())
+            verify_attestation(out/'raw/offsets/stdout.log',out/'attestation.log',manifest['build_id_header'])
+            time_left(final_end)
+            for filename,info in manifest['files'].items():
+                assert checksum(out/'raw/artifacts'/filename)==info['sha256']
+        elif first is None:
+            raise RuntimeError('missing native result receipt')
+        receipt={'unit':state,'invoked':invoked,'quiescent':quiet,
+                 'remaining_attributed_pids':remaining_pids,'systemd_returncode':code,
+                 'elapsed_s':time.monotonic()-started,'cap_s':10800,'first_refusal':first}
+        write(raw/'quiescence.json',receipt)
+        records=[]
+        for path in sorted((out/'raw').rglob('*')):
+            time_left(final_end)
+            if path.is_file():
+                records.append({'path':str(path.relative_to(out)),
+                                'bytes':path.stat().st_size,'sha256':checksum(path)})
+        write(out/'raw-inventory.json',records)
+        with (out/'resume.log').open('a') as summary:
+            for row in records:
+                time_left(final_end)
+                summary.write('RAW '+row['path']+' bytes '+str(row['bytes'])+' sha256 '+row['sha256']+'\n')
+            summary.write('quiescence '+json.dumps(receipt)+'\n')
+            time_left(final_end)
+            summary.write('VERT\n' if accepted else 'ROUGE\n')
+    except BaseException as exc:
+        failure('finalization',exc)
+        accepted=False
+        # This small refusal record is best effort under the external hard watchdog;
+        # missing/partial final evidence can never authorize a green push.
+        write(raw/'quiescence-incomplete.json',{'unit':state,'quiescent':quiet,
+              'first_refusal':first,'elapsed_s':time.monotonic()-started})
+        with (out/'resume.log').open('a') as summary:
+            summary.write('ROUGE finalization incomplete\nROUGE\n')
 raise SystemExit(0 if accepted else 1)

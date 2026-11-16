@@ -4,7 +4,7 @@ import unittest
 import xml.etree.ElementTree as ET
 
 from parse_receipt import (DROP_MESSAGE, DROP_QUERY, RECOVERY_FIXTURE, admit_drop_failure, admitted_cpu,
-                           excluded_scope, inspect_outcomes, inspect_raw_identities, verify_attestation)
+                           excluded_scope, inspect_outcomes, inspect_raw_identities, parse_gtest_inventory, verify_attestation, verify_e2e_partition)
 
 
 class ReceiptTests(unittest.TestCase):
@@ -90,6 +90,24 @@ class ReceiptTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 admitted_cpu(value, 8)
 
+    def test_drop_prefix_is_only_the_known_source_location(self):
+        self.assertEqual(admit_drop_failure(self.drop('/private/source/test/test_runner/test_runner.cpp:198\n'+DROP_MESSAGE), DROP_QUERY)['case'], 'transaction~ddl~ddl_empty.DropNodeTableReclaim')
+        with self.assertRaises(ValueError):
+            admit_drop_failure(self.drop('/private/source/test/test_runner/test_runner.cpp:199\n'+DROP_MESSAGE), DROP_QUERY)
+
+    def test_two_e2e_invocations_cover_exactly_native_inventory(self):
+        inventory = parse_gtest_inventory('Suite.\n  Positive\ntransaction~ddl~ddl_empty.\n  DropNodeTableReclaim\n')
+        drop = ['transaction~ddl~ddl_empty.DropNodeTableReclaim']
+        self.assertEqual(verify_e2e_partition(inventory, ['Suite.Positive'], drop)['inventory_count'], 2)
+        for positives in [[], ['Suite.Positive', 'Suite.Positive'], ['Other.Positive']]:
+            with self.assertRaises(ValueError):
+                verify_e2e_partition(inventory, positives, drop)
+
+    def test_inventory_keeps_existing_case_punctuation_and_spaces(self):
+        inventory = parse_gtest_inventory('cast~cast_bounds.\n  i128 / ui128\ntck~match.\n  Scenario3&4\ntransaction~ddl~ddl_empty.\n  DropNodeTableReclaim\n')
+        self.assertIn('cast~cast_bounds.i128 / ui128', inventory)
+        self.assertIn('tck~match.Scenario3&4', inventory)
+
     def drop(self, message):
         case = ET.Element('testcase', classname='transaction~ddl~ddl_empty', name='DropNodeTableReclaim')
         ET.SubElement(case, 'failure').text = message
@@ -98,7 +116,7 @@ class ReceiptTests(unittest.TestCase):
     def test_only_historical_drop_assertion_is_admitted(self):
         self.assertEqual(admit_drop_failure(self.drop(DROP_MESSAGE), DROP_QUERY)['case'],
                          'transaction~ddl~ddl_empty.DropNodeTableReclaim')
-        for message in ['pool full', DROP_MESSAGE+' additional failure', DROP_MESSAGE.replace('False', 'NULL')]:
+        for message in ['pool full', 'pool full\n'+DROP_MESSAGE, DROP_MESSAGE+' additional failure', DROP_MESSAGE.replace('False', 'NULL')]:
             with self.assertRaises(ValueError):
                 admit_drop_failure(self.drop(message), DROP_QUERY)
         with self.assertRaises(ValueError):

@@ -81,7 +81,9 @@ def admit_drop_failure(case, raw_case_text):
         raise ValueError('different failure count or outcome')
     message = failures[0].text or failures[0].get('message', '')
     start = message.find('Expected equality of these values:')
-    if start < 0 or ' '.join(message[start:].split()) != ' '.join(DROP_MESSAGE.split()):
+    prefix = message[:start] if start >= 0 else message
+    valid_prefix = not prefix or re.fullmatch(r'(?:/[^\n]+/)?test/test_runner/test_runner\.cpp:198\n', prefix) is not None
+    if start < 0 or not valid_prefix or ' '.join(message[start:].split()) != ' '.join(DROP_MESSAGE.split()):
         raise ValueError('different assertion, not historical False versus True')
     if DROP_QUERY not in raw_case_text:
         raise ValueError('missing historical page-reuse query or malformed raw case')
@@ -132,3 +134,32 @@ def admitted_cpu(cpu_max, poste_threads):
         raise ValueError('invalid CPU admission')
     return {'jobs': min(8, threads, max(1, quota//period)),
             'quota_percent': 100*quota/period}
+
+
+def parse_gtest_inventory(text):
+    suite = None
+    names = []
+    for line in text.splitlines():
+        content = line.split('#', 1)[0].rstrip()
+        if not content:
+            continue
+        if not content.startswith(' ') and content.endswith('.'):
+            suite = content[:-1]
+        elif content.startswith('  ') and suite:
+            case = content.strip()
+            if not case or '\x00' in case:
+                raise ValueError('ambiguous native gtest inventory case')
+            names.append(suite+'.'+case)
+    if not names or len(names) != len(set(names)) or DROP_CASE not in names:
+        raise ValueError('empty, duplicate or missing DROP native inventory')
+    return set(names)
+
+
+def verify_e2e_partition(inventory, positive_cases, drop_cases):
+    if len(positive_cases) != len(set(positive_cases)) or len(drop_cases) != len(set(drop_cases)):
+        raise ValueError('duplicate actual e2e cases')
+    positive, drop = set(positive_cases), set(drop_cases)
+    if drop != {DROP_CASE} or positive & drop or positive | drop != set(inventory):
+        raise ValueError('e2e invocation union is not exact native inventory')
+    return {'inventory_count': len(inventory), 'positive_count': len(positive),
+            'drop_count': len(drop), 'duplicates': [], 'missing': []}

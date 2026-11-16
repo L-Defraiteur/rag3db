@@ -1,5 +1,5 @@
 {
-  "status": "PUBLISHED FOR EXACT ADMISSION REVIEW; NOT EXECUTED",
+  "status": "REVISED AFTER HOTFIXS RESERVATIONS; HOLD UNTIL NEW RO AND EXACT ADMISSION; NOT EXECUTED",
   "source_commit": "888c81825e4cd6556261233f0e238af3b95375c9",
   "engine_commit": "888c81825e4cd6556261233f0e238af3b95375c9",
   "base": "68590270e21d00285b29800bd9cdecf0cb921461",
@@ -8,9 +8,9 @@
   "bundle_bytes": 319224,
   "unit": "cx-coeur-dictionary-global-01",
   "global_cap_s": 10800,
-  "unit_runtime_max_s": 10790,
+  "unit_runtime_max_s": 10720,
   "stop_s": 10,
-  "controller_s_after_acquisition": 10770,
+  "controller_s_after_acquisition": 10710,
   "phase_caps_s": {
     "configure": 120,
     "build": 1800,
@@ -71,9 +71,38 @@
     "source_rewritten": false
   },
   "scripts": {
-    "entry.py": "034149a319cd8c2346c98811a8401606beac0671a645794dd80fd3a4a2962c30",
-    "controller.py": "ba4d9b4aebd463bb13a340216aaca8ad0d1dd8ac368fd6ac1aa3fdc1cfdb1f77",
-    "parse_receipt.py": "502c49866d3f047f880a851d680ae04644c7a28078ace08b17348b3e8964b885",
-    "launch.sh": "4dbf358cd3987b1a9e4e05d64e308b1e5d125ce221b3d1c84b91c01e9d7028bd"
-  }
+    "entry.py": "da4cdd6858b8ab04abb4fc267909efde620767f5ccbc3dba58ca70050e3b0891",
+    "controller.py": "ad385fcf8ff89f5b81e9cd156ee749b1447aa769478f379951239e9013cae4cc",
+    "parse_receipt.py": "cf17c6bc26a8333129c841782eb5e7c5c00063a9952754c65ab71c7c7022091e",
+    "launch.sh": "467113fe2f82b4dd3786a2a1e3bb94459984210b3963bee844c9f1ba0193dc0b"
+  },
+  "watchdog": {
+    "command": "/usr/bin/timeout --signal=TERM --kill-after=10s 10790s /usr/bin/python3 <J>/entry.py <J>",
+    "after_real_poste": true,
+    "term_s": 10790,
+    "kill_grace_s": 10,
+    "hard_cap_s": 10800
+  },
+  "native_end_including_stop_s": 10730,
+  "finalization_soft_end_s": 10780,
+  "first_failure_policy": "offsets unique; tx/strings fail_fast; IDs validated each phase before next; known_red stop at first complete canonical phase verdict; e2e positive excluding DROP fail_fast then exact DROP, native inventory union checked",
+  "e2e_common_cap_s": 1800,
+  "e2e_commands": [
+    {
+      "purpose": "native inventory only",
+      "filter": "*",
+      "list_only": true
+    },
+    {
+      "purpose": "positive cases",
+      "filter": "*-transaction~ddl~ddl_empty.DropNodeTableReclaim",
+      "fail_fast": true
+    },
+    {
+      "purpose": "historical case exact",
+      "filter": "transaction~ddl~ddl_empty.DropNodeTableReclaim",
+      "fail_fast": false
+    }
+  ],
+  "incomplete_finalization": "ROUGE; missing quiescence never invented; external watchdog can terminate incomplete proof rather than authorize green"
 }
