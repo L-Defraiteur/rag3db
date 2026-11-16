@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 BASE = 'd395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6'
 LIB = 'rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
@@ -48,6 +49,49 @@ def verify(config):
     assert all(digest(worktree / name) == sha for name, sha in config['scripts'].items())
 
 
+def cache_quiet(config, root):
+    # Same OS attribution boundary as the reviewed ED pilot, never a user-manager query.
+    roots = [Path(config['worktree']), Path(config['target']), Path(config['previous_owner'])]
+    ancestors = set(); pid = os.getpid()
+    while pid > 1 and pid not in ancestors:
+        ancestors.add(pid)
+        pid = int((Path('/proc') / str(pid) / 'stat').read_text().rsplit(') ', 1)[1].split()[1])
+    found = []; unknown = []
+    for proc in Path('/proc').iterdir():
+        if not proc.name.isdigit():
+            continue
+        attributed = False; stamp = None
+        try:
+            fields = (proc / 'stat').read_text().rsplit(') ', 1)[1].split(); stamp = fields[19]
+            if fields[0] == 'Z':
+                continue
+            for field in ['exe', 'cwd']:
+                destination = os.readlink(proc / field)
+                if any(destination == str(path) or destination.startswith(str(path) + '/') for path in roots):
+                    attributed = True
+                    found.append({'pid': proc.name, 'starttime': stamp, 'field': field, 'path': destination})
+            for fd in (proc / 'fd').iterdir():
+                try:
+                    destination = os.readlink(fd)
+                except (FileNotFoundError, ProcessLookupError):
+                    continue
+                if destination.endswith('/scripts/poste') and int(proc.name) in ancestors and proc.stat().st_uid == os.getuid():
+                    assert digest(destination) == config['scripts']['extension/rag3weaver/scripts/poste']
+                    continue
+                if any(destination == str(path) or destination.startswith(str(path) + '/') for path in roots):
+                    attributed = True
+                    found.append({'pid': proc.name, 'starttime': stamp, 'field': 'fd', 'path': destination})
+        except PermissionError:
+            unknown.append({'pid': proc.name, 'starttime': stamp, 'attributed': attributed})
+            if attributed:
+                found.append(unknown[-1])
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+    (root / 'cache-quiet-after-poste.json').write_text(json.dumps({'observed': time.monotonic(),
+        'roots': list(map(str, roots)), 'found': found, 'unknown': unknown}, indent=2))
+    assert not found, 'attributed process still uses the source or target'
+
+
 def inside(config, root):
     worktree = Path(config['worktree']); crate = worktree / 'extension/rag3weaver'
     receipt = Path(os.environ['RAG3WEAVER_VALIDATION_RECU'])
@@ -73,9 +117,11 @@ def inside(config, root):
     (root / 'authority-path.json').write_text(json.dumps({'path': str(receipt), 'deadline': authority['echeance']}))
     (root / 'profile.json').write_text(json.dumps({'keys': sorted(env), 'library': library_environment(config),
         'features': env['RAG3WEAVER_E2E_FEATURES'], 'witnesses': NAMES, 'worktree': str(worktree)}))
+    cache_quiet(config, root)
     verify(config)
     rc = record(root, 'red-pair', ['bash', './run_e2e.sh', '--test', 'e2e_usages', 'on_the_same_line'], crate, env)
     # The common supervisor retains the actual nonzero outcome. No expected red is promoted to green.
+    verify(config)
     return rc
 
 
@@ -97,7 +143,14 @@ def main():
                   'store': str(Path.home() / '.cache/rag3db-libs'), 'budget': 1800,
                   'pilot_sha256': digest(__file__), 'scripts': {name: digest(worktree / name) for name in
                   ['extension/rag3weaver/scripts/confiner_validation.py', 'extension/rag3weaver/run_e2e.sh',
-                   'extension/rag3weaver/scripts/lib_du_magasin.sh', 'extension/rag3weaver/scripts/cargo_garde.py']}}
+                   'extension/rag3weaver/scripts/lib_du_magasin.sh', 'extension/rag3weaver/scripts/cargo_garde.py',
+                   'extension/rag3weaver/scripts/poste']}}
+        target = Path(config['target'])
+        assert target.is_dir() and target.resolve() == target and target.stat().st_uid == os.getuid()
+        marker = target / '.arbre-du-target'
+        assert marker.is_file() and not marker.is_symlink()
+        config['previous_owner'] = marker.read_text().strip()
+        assert Path(config['previous_owner']).is_absolute()
         (root / 'prepared.json').write_text(json.dumps(config, indent=2))
         verify(config)
         crate = worktree / 'extension/rag3weaver'
@@ -126,17 +179,20 @@ def main():
     env = os.environ.copy(); env.update(POSTE_MEM_MAX='32G', RAG3WEAVER_BUILD_MEMORY_HIGH='0')
     command = [sys.executable, str(common), 'lancer', '--delai', '1800', '--preuves', str(root / 'scope'),
                '--', sys.executable, str(Path(__file__).resolve()), 'inside', '--proofs', str(root)]
-    rc = record(root, 'common', command, worktree, env)
+    os.chdir(root)
+    rc = record(root, 'common', command, root, env)
     stdout = (root / 'red-pair.stdout').read_text(errors='replace') if (root / 'red-pair.stdout').exists() else ''
     stderr = (root / 'red-pair.stderr').read_text(errors='replace') if (root / 'red-pair.stderr').exists() else ''
     text = stdout + stderr
-    expected = (rc != 0 and all(('e2e_usages::' + name + ' ... FAILED') in text for name in NAMES)
+    expected = (rc != 0 and all(('    e2e_usages::' + name) in text for name in NAMES)
                 and '0 passed; 2 failed; 0 ignored' in text
                 and text.count('the project call must remain visible') == 2)
-    scope = json.loads((root / 'scope/verdict.json').read_text())
-    expected = expected and scope['nettoye'] and not scope['restes']
+    scope_path = root / 'scope/verdict.json'
+    scope = json.loads(scope_path.read_text()) if scope_path.exists() else {}
+    expected = (expected and scope.get('nettoye', False) and not scope.get('restes', ['unknown'])
+                and text.count('left: 0') == 2 and text.count('right: 1') == 2)
     (root / 'classification.json').write_text(json.dumps({'expected_red_pair': expected,
-        'common_rc': rc, 'scope_verdict': scope['verdict'], 'global_pass': False}))
+        'common_rc': rc, 'scope_verdict': scope.get('verdict', 'NOT_ADMITTED'), 'global_pass': False}))
     print('EXPECTED RED PAIR' if expected else 'UNEXPECTED RED; STOP AND DIAGNOSE')
     return 1
 

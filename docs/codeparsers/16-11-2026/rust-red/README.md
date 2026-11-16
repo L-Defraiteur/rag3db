@@ -29,3 +29,9 @@ required_suites impose e2e_code_sync à la future passe complète. PG réel doit
 être coordonné à cette phase : passe_epinglee force la base partagée, pas de
 fausse isolation par un export masqué. Ce pilote rouge n'utilise pas PostgreSQL.
 Les anciens budgets13,72h/7200s ou pilotes ED ne sont pas repris.
+
+PQS après acquisition : attribution OS exe/cwd/fd sur source, target et ancien
+propriétaire noté dans le marqueur du target, même frontière que le pilote ED.
+Le lanceur se place hors source avant poste ; aucune autorité manager personnelle
+n'est réinjectée dans le bus privé. Le reçu et le cgroup restent ceux du commun.
+La préparation refuse un target absent/non possédé ou sans marqueur connu.
