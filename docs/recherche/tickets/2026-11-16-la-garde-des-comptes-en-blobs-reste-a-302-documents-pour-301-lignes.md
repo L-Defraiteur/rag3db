@@ -114,3 +114,7 @@ API G validate_attestation(path,SHA,allocation,READYnormalisé,now,admission,adm
 ## Trois fichiers PG stricts et chargement différé, avant raccordfinal
 
 Gpg_receipt.py dépend identity.sql/backend-postcheck.sql :QfinaldoitcopierSTRICTles3 etconsumercompareclés pg_receipt_sha256/pg_identity_sql_sha256/pg_postcheck_sql_sha256 AVANTimportPG. Rendreownerchargementdifféréaprèsowner_pins (sixsources98ab/c530/owner/PGpy/2SQL), aucunelectureSQLimportanticipée. TestsCPUfixturefichiersàétendreaux2SQL+loaderfictif ; fichiersGfinaltoujoursabsents,aucunsubstitut. Embarprévenu,mêmeAPIobservations/PGownerartifactrevalidé etoutilPGHOLD.
+
+## Réserve RO Gf142 sur publication entière5, avant transmission
+
+Lecturestatique PGpg_receipt.py f142db8211fef0577de8c363ade058065f85f76d : publish_observation revalidate_current avantlink, puisattestation.sha256+dernier_sync_directory etretour(path,SHA) sansnouvellelectureclock/phase. Si dernièreécriture/fsyncretardés passentdeadlineoriginal5, APIpeutretourneruneobservationadmissiblehorsborne. PorterGavantdiffcorrectif : témoinpureclockavanceauDERNIERfsync (aprèslink), observerAPIdoitREFUSER/pasretouradmissible/RAWconservés ; recheckclock/phaseaprèsI/Oetjusteavantreturn,refusalimmutable/artifact_publishedhonnête. Clarifieraussivalidate_attestation faceàartifactayantrefusal.json aprèspublicationpartielle : aucunstatutROUGEnepeutdeveniradmissiblecarleseulJSONestprésent. AucunSQL/proc/runner exécutéparRecherche,PGTOOLréeltoujoursHOLD.
