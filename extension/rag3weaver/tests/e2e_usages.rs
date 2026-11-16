@@ -1266,3 +1266,19 @@ fn a_rust_call_named_like_a_javascript_keyword_is_a_reference() {
     assert_eq!(cibles_vers(&cat, "start", "default"), vec![("Settings".to_string(), "type".to_string())]);
 }
 
+/// **A path into the standard library is not a project homonym** (ticket « un chemin de la bibliothèque
+/// standard se relie à un homonyme du projet », 16 November 2026): `std::env::var("X")` is `std`'s, not the
+/// project's `pub fn var()` of another file.
+#[test]
+#[ignore]
+fn a_path_into_the_standard_library_is_not_a_project_homonym() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/clic.rs".to_string(), "pub fn var(name: &str) -> String { name.to_string() }\n".to_string()),
+        ("src/config.rs".to_string(), "pub fn home() -> String {\n    std::env::var(\"HOME\").unwrap_or_default()\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(marques_vers(&cat, "home", "var"), Vec::<String>::new(), "std::env::var is std's");
+}
+

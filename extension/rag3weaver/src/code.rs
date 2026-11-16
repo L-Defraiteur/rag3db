@@ -1861,6 +1861,28 @@ pub fn analyze_in_project_avec(
                 if r.import_origin.as_ref().is_some_and(|o| o.via_qualifier && libraries.contains(&o.source) && externes_sures.contains(&o.source)) {
                     continue;
                 }
+                // **A path into a library of certain provenance is not a project homonym** (16 November 2026):
+                // `std::env::var("X")`, written in full without a `use`, is `std`'s. The whole path reads on the
+                // line (the qualifier may keep only its last segment); its first segment is the standard library
+                // of the language (`data/imports/<langue>.toml`) or a library of certain provenance.
+                // Every `<path>::<id>` of the line, `id` ending on a word boundary (`::collect` is not in
+                // `::collections`); skipped only if all of them are such paths.
+                let chemins: Vec<String> = r.context.as_deref().map_or_else(Vec::new, |ctx| {
+                    let motif = format!("::{id}");
+                    ctx.match_indices(&motif)
+                        .filter(|(i, _)| !ctx[i + motif.len()..].starts_with(|c: char| c.is_alphanumeric() || c == '_'))
+                        .filter_map(|(fin, _)| {
+                            let debut = ctx[..fin].rfind(|c: char| !(c.is_alphanumeric() || c == '_' || c == ':')).map_or(0, |i| i + 1);
+                            Some(ctx[debut..fin].to_string()).filter(|c| !c.is_empty() && c.contains(|ch: char| ch.is_alphabetic()))
+                        })
+                        .collect()
+                });
+                let sur = |chemin: &String| {
+                    codeparsers::import_resolution::provenance::est_builtin(abs, chemin) || externes_sures.contains(chemin.split("::").next().unwrap_or(""))
+                };
+                if !chemins.is_empty() && chemins.iter().all(sur) {
+                    continue;
+                }
                 // **Un accès de champ ne prend pas de rendez-vous** avec une
                 // fonction homonyme (`r.chunk`, `self.config`) :
                 // le résolveur de codeparsers écarte déjà une référence
