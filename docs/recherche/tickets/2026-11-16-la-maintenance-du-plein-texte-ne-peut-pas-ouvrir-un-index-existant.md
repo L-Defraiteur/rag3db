@@ -77,3 +77,7 @@ Constructeur corrigé : les trois juges redirection appellent existing_fts_redir
 BasepréfixeContentc1b10a4993650a82e0cac9d40f4cb3567a0593d9, branche neuve cx-recherche-fts-existing-green-r1, application du SEUL diffproduit pendinga92e (pas de reprise d’ancien pilote). Les deux rouges sont attestés : ouverture187/rapport06/d193 et pending après schéma Content validé c1b/rapport09/83694d4d2a. Le rouge setup1f816/rapport08 reste non qualifiant et conservé. Neuf autres fonctions et vert final restent NON JOUÉS.
 
 Produit final = primitive1ff + pendinga92, seules fixtures des trois juges redirection corrigées par constructeurContent commun/validateurs réels ; aucun autre produit modifié. Counts WIP toujours isolé. Portée lecture froide seulement, purge froide non livrée/ticketgénéral ouvert. Parse rustfmt/diffcheck seuls ; RO finale à recueillir, nouvelle admission verte1200 proposée compil900→inventaire10/0→positif30→module120MINreste/premierrougestop, Tsessiongardé/reprisecommune/quotaPARPLACE/lib59ac/magasinso+vectorSHA. Aucun GO/Cargo vert déduit.
+
+## Lecture froide séparée de la maintenance générale
+
+Suivi précis désormais [ticket fils lecture sans writer](2026-11-16-lire-un-index-plein-texte-existant-sans-writer.md). Le parent présent reste OUVERT : purge/compact froids encore sans handle writer, aucune clôture globale déduite. Canonique union après EDties à préparer pour le fils ; counts WIP séparé, pas d’entrant caché.

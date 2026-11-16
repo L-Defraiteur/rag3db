@@ -1,0 +1,11 @@
+# Union neuve lecture FTS après ties
+
+Master frais `d395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6` après FINtourED, base de qualification046 `68590270e21d00285b29800bd9cdecf0cb921461`. Branche neuve cx-recherche-fts-existing-union-r1, W privé ~/git_workspaces/rag3db-cx-recherche-fts-existing-union-r1. Rebase sans conflit, dix patches `=` sur dix ; pas de force ni réécriture de branche distante existante.
+
+Audit JSON+range-diff dans ce dossier : les trois chemins produit propres (Catalog/lib/fts_existing) gardent mode+OID de046 ; tout autre produit garde masterd395, y compris C++/gitlinks/locks/templates/tests. Aucune sélection de changement counts. Les preuves historiques04–11 et manifeste vert sont copiés sans altération ; nouveau ticket fils de lecture séparé du parent maintenance encore ouvert. Diff documentaire après audit ne modifie pas ce produit.
+
+Proposition de recette C7, pas GO implicite : **6000s uniques après poste réel** (estimation20–45min, marge borne100min),32GiB/HIGHmax/swap0/quotaPARPLACE/j<=8/pool1GiB. Magasin réel explicite+SDK59ac+so/vectorSHA, pin canonique2150 vérifié source/cache. Même target Recherche repris via garde depuis source046/proofVERTterminé/hashELF+scan frais, source union figée, contrôleurs horsW.
+
+Commande canonique envisagée dans le confineur : `SUITE_DU_TEMOIN=lib SUITES=e2e_code_sync,e2e_lectures,e2e_code,e2e_tx CIBLE=cx-target-recherche-fts-counts-freshness bash ~/.cache/rag3weaver-build/passe_epinglee.sh rag3db-cx-recherche-fts-existing-union-r1 cx/recherche-fts-existing-canon-v1/official catalog::tests::existing_fts_live_ids_reads_closed_files_without_writer_or_changes`. Un seul témoin initial canonique ; pas de rejeu séparé des dix cibles déjà acquises. Suites exigées automatiquement vérifiées, F8/preuve/lib entière/NAV réellement joués, résumé officiel seul pour verdict. Superviseur6000/global/premierrougeSTOP sansretry ; watcher seulement journaux actifs incluant code_sync/TX.
+
+Coordonner modèle7879 au vrai départ, sans réservation durant préparation. Aucun déploiement hôte927, aucune baseLucie, aucun warmup/index/service nouveau. Cette préparation n’autorise aucun lancement ; pilote exact sera publié séparément avant GO.
